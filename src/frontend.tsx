@@ -2,8 +2,20 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { nostrService } from "./lib/nostr";
+import "./index.css";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  // defaultOptions: {
+  //   queries: {
+  //     staleTime: 1000 * 60 * 5, // Consider data stale after 5 minutes
+  //     gcTime: 1000 * 60 * 30, // Keep unused data in cache for 30 minutes
+  //   },
+  // },
+});
+
+// Start connecting to relays in the background
+nostrService.connect().catch(console.error);
 
 // Import the generated route tree
 import { routeTree } from "./routeTree.gen";
@@ -13,6 +25,7 @@ const router = createRouter({
   routeTree,
   context: {
     queryClient,
+    nostr: nostrService,
   },
   defaultPreload: "intent",
   // Since we're using React Query, we don't want loader calls to ever be stale
