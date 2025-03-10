@@ -1,4 +1,4 @@
-# bun-react-tailwind-shadcn-template
+# Market Frontend 
 
 To install dependencies:
 
@@ -19,3 +19,75 @@ bun start
 ```
 
 This project was created using `bun init` in bun v1.2.4. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
+
+## React Query
+
+This project uses TanStack React Query (v5) for data fetching, caching, and state management. React Query helps with:
+
+- Fetching, caching, and updating server state in your React applications
+- Automatic refetching when data becomes stale
+- Loading and error states handling
+- Pagination and infinite scrolling
+
+In our implementation, query functions and options are defined in the `src/queries` directory, using a pattern that separates query key factories and query functions.
+
+Example:
+```tsx
+// Query key factory pattern for organized cache management
+export const postKeys = {
+    all: ['posts'] as const,
+    details: (id: string) => [...postKeys.all, id] as const,
+}
+
+// Query options for use in routes and components
+export const postsQueryOptions = queryOptions({
+  queryKey: postKeys.all,
+  queryFn: fetchPosts,
+})
+```
+
+## Routing and Prefetching
+
+This project uses TanStack Router for file-based routing with built-in prefetching capabilities:
+
+- File-based routing: Routes are defined in the `src/routes` directory
+- Dynamic routes: Parameters in file names (e.g., `posts.$postId.tsx`)
+- Automatic route tree generation
+
+Data prefetching is implemented via loader functions in route files:
+
+```tsx
+export const Route = createFileRoute('/posts/')({
+  loader: ({ context: { queryClient } }) =>
+    queryClient.ensureQueryData(postsQueryOptions),
+  component: PostsRoute,
+})
+```
+
+The router is configured to prefetch data on "intent" (hovering over links) with zero stale time to ensure fresh data:
+
+```tsx
+const router = createRouter({
+  routeTree,
+  context: {
+    queryClient,
+    nostr: nostrService,
+  },
+  defaultPreload: "intent",
+  defaultPreloadStaleTime: 0,
+});
+```
+
+## Development Workflow
+
+### watch-routes Command
+
+During development, you should run the `watch-routes` command in a separate terminal:
+
+```bash
+bun run watch-routes
+```
+
+This command uses the TanStack Router CLI (`tsr watch`) to monitor your route files and automatically generate the route tree file (`src/routeTree.gen.ts`). This file connects all your route components into a coherent navigation structure.
+
+Without running this command, changes to route files or creating new routes won't be detected until you manually generate the route tree or restart the server.
