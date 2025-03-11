@@ -1,21 +1,21 @@
 {
-  "compilerOptions": {
-    "jsx": "react-jsx",
-    "allowJs": true,
-    "strict": true,
-    "strictNullChecks": true,
+	"compilerOptions": {
+		"jsx": "react-jsx",
+		"allowJs": true,
+		"strict": true,
+		"strictNullChecks": true,
 
-    // Bundler mode
-    "moduleResolution": "bundler",
-    "module": "preserve",
-    "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
-    "noEmit": true,
+		// Bundler mode
+		"moduleResolution": "bundler",
+		"module": "preserve",
+		"allowImportingTsExtensions": true,
+		"verbatimModuleSyntax": true,
+		"noEmit": true,
 
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./src/*"]
-    }
-  },
-  "include": ["**/*.ts", "**/*.tsx"]
+		"baseUrl": ".",
+		"paths": {
+			"@/*": ["./src/*"]
+		}
+	},
+	"include": ["**/*.ts", "**/*.tsx"]
 }

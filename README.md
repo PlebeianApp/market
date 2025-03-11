@@ -1,4 +1,4 @@
-# Market Frontend 
+# Market Frontend
 
 To install dependencies:
 
@@ -32,17 +32,18 @@ This project uses TanStack React Query (v5) for data fetching, caching, and stat
 In our implementation, query functions and options are defined in the `src/queries` directory, using a pattern that separates query key factories and query functions.
 
 Example:
+
 ```tsx
 // Query key factory pattern for organized cache management
 export const postKeys = {
-    all: ['posts'] as const,
-    details: (id: string) => [...postKeys.all, id] as const,
+	all: ['posts'] as const,
+	details: (id: string) => [...postKeys.all, id] as const,
 }
 
 // Query options for use in routes and components
 export const postsQueryOptions = queryOptions({
-  queryKey: postKeys.all,
-  queryFn: fetchPosts,
+	queryKey: postKeys.all,
+	queryFn: fetchPosts,
 })
 ```
 
@@ -58,9 +59,8 @@ Data prefetching is implemented via loader functions in route files:
 
 ```tsx
 export const Route = createFileRoute('/posts/')({
-  loader: ({ context: { queryClient } }) =>
-    queryClient.ensureQueryData(postsQueryOptions),
-  component: PostsRoute,
+	loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(postsQueryOptions),
+	component: PostsRoute,
 })
 ```
 
@@ -68,14 +68,14 @@ The router is configured to prefetch data on "intent" (hovering over links) with
 
 ```tsx
 const router = createRouter({
-  routeTree,
-  context: {
-    queryClient,
-    nostr: nostrService,
-  },
-  defaultPreload: "intent",
-  defaultPreloadStaleTime: 0,
-});
+	routeTree,
+	context: {
+		queryClient,
+		nostr: nostrService,
+	},
+	defaultPreload: 'intent',
+	defaultPreloadStaleTime: 0,
+})
 ```
 
 ## Development Workflow
