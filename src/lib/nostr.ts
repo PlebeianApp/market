@@ -1,5 +1,5 @@
-import NDK from "@nostr-dev-kit/ndk";
-import NDKCacheAdapterDexie from "@nostr-dev-kit/ndk-cache-dexie";
+import NDK from '@nostr-dev-kit/ndk'
+import NDKCacheAdapterDexie from '@nostr-dev-kit/ndk-cache-dexie'
 
 export class NostrService {
   private static instance: NostrService;

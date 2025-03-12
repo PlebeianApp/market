@@ -31,6 +31,7 @@
     "lucide-react": "^0.475.0",
     "nostr-tools": "^2.10.4",
     "react": "^19",
+    "prettier": "^3.5.3",
     "react-dom": "^19",
     "react-hook-form": "^7.54.2",
     "tailwind-merge": "^3.0.1",
