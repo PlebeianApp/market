@@ -80,6 +80,14 @@ const router = createRouter({
 
 ## Development Workflow
 
+### .env variables
+
+Set the .env variables by copying and renaming the `.env.example` file, then set your own values for the variables.
+
+### Development relay
+
+During development, you should spin up a relay to seed data and use it during the development cycle, you can use `nak serve` as a quick solution, or run another relay locally, then set it in your `.env` variables, and run `bun seed` to seed it.
+
 ### watch-routes Command
 
 During development, you should run the `watch-routes` command in a separate terminal:
