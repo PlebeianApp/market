@@ -2,8 +2,11 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { nostrService } from "./lib/nostr";
+import { routeTree } from "./routeTree.gen";
+import { NostrService } from "./lib/nostr";
 import "./index.css";
+
+export const nostrService = NostrService.getInstance(); 
 
 const queryClient = new QueryClient({
   // defaultOptions: {
@@ -17,8 +20,6 @@ const queryClient = new QueryClient({
 // Start connecting to relays in the background
 nostrService.connect().catch(console.error);
 
-// Import the generated route tree
-import { routeTree } from "./routeTree.gen";
 
 // Create a new router instance
 const router = createRouter({

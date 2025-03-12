@@ -1,8 +1,8 @@
 import { NDKEvent } from "@nostr-dev-kit/ndk";
 import type { NDKFilter } from "@nostr-dev-kit/ndk";
-import { nostrService } from "@/lib/nostr";
 import { postKeys } from "./queryKeyFactory";
 import { queryOptions } from "@tanstack/react-query";
+import { nostrService } from "@/frontend";
 
 export type NostrPost = {
   id: string;

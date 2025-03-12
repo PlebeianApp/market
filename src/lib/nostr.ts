@@ -11,7 +11,7 @@ export class NostrService {
     const dexieAdapter = new NDKCacheAdapterDexie({ dbName: 'nostr-cache' });
     this.ndk = new NDK({
       cacheAdapter: dexieAdapter,
-      explicitRelayUrls: relays?.length ? relays : ["wss://relay.nostr.net"],
+      explicitRelayUrls: relays?.length ? relays : ["ws://localhost:10547"],
     });
   }
 
@@ -48,11 +48,11 @@ export class NostrService {
     return this._isConnecting;
   }
 
-  // Expose NDK instance for direct access when needed
+  public get explicitRelayUrls(): string[] {
+    return this.ndk.explicitRelayUrls
+  }
+
   public get ndkInstance(): NDK {
     return this.ndk;
   }
 }
-
-// Export a singleton instance
-export const nostrService = NostrService.getInstance(); 
