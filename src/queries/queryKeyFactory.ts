@@ -17,3 +17,8 @@ export const authorKeys = {
 	all: ['authors'] as const,
 	details: (pubkey: string) => [...authorKeys.all, pubkey] as const,
 } as const
+
+export const configKeys = {
+	all: ['config'] as const,
+	appRelay: () => [...configKeys.all, 'appRelay'] as const,
+} as const
