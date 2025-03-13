@@ -1,26 +1,23 @@
 import NDK from '@nostr-dev-kit/ndk'
 import NDKCacheAdapterDexie from '@nostr-dev-kit/ndk-cache-dexie'
 
-class NostrService {
+export class NostrService {
 	private static instance: NostrService
 	private ndk: NDK
 	private _isConnecting: boolean = false
 	private _isConnected: boolean = false
 
-	private constructor() {
+	private constructor(relays?: string[]) {
 		const dexieAdapter = new NDKCacheAdapterDexie({ dbName: 'nostr-cache' })
 		this.ndk = new NDK({
-			// cacheAdapter: dexieAdapter,
-			explicitRelayUrls: [
-				'wss://relay.nostr.net',
-				// Add more default relays as needed
-			],
+			cacheAdapter: dexieAdapter,
+			explicitRelayUrls: relays && relays.length > 0 ? relays : [],
 		})
 	}
 
-	public static getInstance(): NostrService {
+	public static getInstance(relays?: string[]): NostrService {
 		if (!NostrService.instance) {
-			NostrService.instance = new NostrService()
+			NostrService.instance = new NostrService(relays)
 		}
 		return NostrService.instance
 	}
@@ -31,7 +28,12 @@ class NostrService {
 		this._isConnecting = true
 		try {
 			await this.ndk.connect()
-			this._isConnected = true
+			await new Promise<void>((resolve) => {
+				this.ndk.pool.on('connect', () => {
+					this._isConnected = true
+					resolve()
+				})
+			})
 		} finally {
 			this._isConnecting = false
 		}
@@ -45,11 +47,18 @@ class NostrService {
 		return this._isConnecting
 	}
 
-	// Expose NDK instance for direct access when needed
+	public get explicitRelayUrls(): string[] {
+		return this.ndk.explicitRelayUrls
+	}
+
+	public addExplicitRelay(relayUrls: string[]): string[] {
+		relayUrls.forEach((relayUrl) => {
+			this.ndk.addExplicitRelay(relayUrl)
+		})
+		return this.explicitRelayUrls
+	}
+
 	public get ndkInstance(): NDK {
 		return this.ndk
 	}
 }
-
-// Export a singleton instance
-export const nostrService = NostrService.getInstance()
