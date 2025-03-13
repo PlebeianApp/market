@@ -25,6 +25,8 @@ async function seedData() {
 	const COLLECTIONS_PER_USER = 2
 	const REVIEWS_PER_USER = 2
 
+	console.log('Connecting to Nostr...')
+	console.log(nostrService.explicitRelayUrls)
 	await nostrService.connect()
 	const productsByUser: Record<string, string[]> = {}
 	const allProductRefs: string[] = []

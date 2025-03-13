@@ -11,7 +11,7 @@ export class NostrService {
 		const dexieAdapter = new NDKCacheAdapterDexie({ dbName: 'nostr-cache' })
 		this.ndk = new NDK({
 			cacheAdapter: dexieAdapter,
-			explicitRelayUrls: [],
+			explicitRelayUrls: relays && relays.length > 0 ? relays : [],
 		})
 	}
 
