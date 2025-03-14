@@ -20,6 +20,68 @@ bun start
 
 This project was created using `bun init` in bun v1.2.4. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
 
+## Getting Started
+
+### Initial Setup
+
+1. Install dependencies with `bun install`
+2. Copy `.env.example` to `.env` and configure your environment variables:
+   - `APP_RELAY_URL`: Your relay URL
+   - `APP_PRIVATE_KEY`: Your private key for initialization
+3. Set up a development relay (required for local development)
+
+   - We recommend using [nak](https://github.com/fiatjaf/nak) for development:
+
+     ```bash
+     # Install nak
+     go install github.com/fiatjaf/nak@latest
+
+     # Start a local relay
+     nak serve
+     ```
+
+   - The relay will be available at `ws://localhost:10547`
+   - Update your `.env` file with this relay URL
+
+4. Initialize the application with default settings:
+   ```bash
+   bun run startup
+   ```
+   This will create:
+   - Default app settings
+   - User roles configuration
+   - Ban list
+   - Relay list
+
+### First Run
+
+When you first start the application:
+
+1. If no settings are found in the configured relay, you'll be automatically redirected to `/setup`
+2. The first user to complete the setup process becomes the administrator
+   - Skip this step if you've run the startup script, as it creates default admin users
+3. Complete the setup form to configure your marketplace settings
+   - Skip this if you've run the startup script and want to use the default configuration
+
+### Development Workflow
+
+1. Start the development server:
+
+   ```bash
+   bun dev
+   ```
+
+2. In a separate terminal, run the route watcher:
+
+   ```bash
+   bun run watch-routes
+   ```
+
+3. Optional: Seed the relay with test data:
+   ```bash
+   bun seed
+   ```
+
 ## React Query
 
 This project uses TanStack React Query (v5) for data fetching, caching, and state management. React Query helps with:
