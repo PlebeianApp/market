@@ -2,28 +2,39 @@ import { serve } from 'bun'
 import index from './index.html'
 import { fetchAppSettings } from './lib/appSettings'
 import { config } from 'dotenv'
+import { NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 
 config()
 
 const RELAY_URL = process.env.APP_RELAY_URL
-const APP_PUBLIC_KEY = process.env.APP_PUBLIC_KEY
+const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
 
-if (!RELAY_URL || !APP_PUBLIC_KEY) {
-	console.error('Missing required environment variables: APP_RELAY_URL, APP_PUBLIC_KEY')
+if (!RELAY_URL || !APP_PRIVATE_KEY) {
+	console.error('Missing required environment variables: APP_RELAY_URL, APP_PRIVATE_KEY')
 	process.exit(1)
 }
+
+// Derive public key from private key
+const signer = new NDKPrivateKeySigner(APP_PRIVATE_KEY)
+let APP_PUBLIC_KEY: string
 
 // Fetch app settings on server startup
 let appSettings: Awaited<ReturnType<typeof fetchAppSettings>> = null
 
 async function initializeAppSettings() {
 	try {
+		// Get public key
+		await signer.blockUntilReady()
+		const user = await signer.user()
+		APP_PUBLIC_KEY = user.pubkey
+
+		// Try to fetch app settings
 		appSettings = await fetchAppSettings(RELAY_URL, APP_PUBLIC_KEY)
-		if (!appSettings) {
-			console.error('Failed to fetch app settings')
-			process.exit(1)
+		if (appSettings) {
+			console.log('App settings loaded successfully')
+		} else {
+			console.log('No app settings found - setup required')
 		}
-		console.log('App settings loaded successfully')
 	} catch (error) {
 		console.error('Failed to initialize app settings:', error)
 		process.exit(1)
@@ -43,6 +54,8 @@ const server = serve({
 				Response.json({
 					appRelay: RELAY_URL,
 					appSettings,
+					appPublicKey: APP_PUBLIC_KEY,
+					needsSetup: !appSettings,
 				}),
 		},
 	},
