@@ -1,15 +1,22 @@
 import { StrictMode, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { routeTree } from './routeTree.gen'
 import { NostrService } from './lib/nostr'
-import { appService } from './lib/services/appService'
+import { useConfigQuery } from './queries/config'
+import { queryClient } from './lib/queryClient'
 import './index.css'
 
-export const nostrService = NostrService.getInstance()
+declare global {
+	interface ImportMeta {
+		hot?: {
+			data: Record<string, any>
+		}
+	}
+}
 
-const queryClient = new QueryClient()
+export const nostrService = NostrService.getInstance()
 
 // Create a new router instance
 const router = createRouter({
@@ -24,37 +31,47 @@ const router = createRouter({
 	defaultPreloadStaleTime: 0,
 })
 
-// Register the router instance for type safety
 declare module '@tanstack/react-router' {
 	interface Register {
 		router: typeof router
 	}
 }
 
-function App() {
-	useEffect(() => {
-		appService.initialize().catch(console.error)
+function AppContent() {
+	const { data: config } = useConfigQuery()
 
-		const fetchConfigAndConnect = async () => {
-			const config = appService.getConfig()
+	useEffect(() => {
+		const connectToRelay = async () => {
 			if (config?.appRelay) {
 				console.log(`Adding relay from config: ${config.appRelay}`)
-				nostrService.addExplicitRelay([config.appRelay])
+				nostrService.addExplicitRelay([config.appRelay, 'wss://relay.nostr.net'])
 				await nostrService.connect()
 			}
 		}
 
-		fetchConfigAndConnect().catch(console.error)
-	}, [])
+		connectToRelay().catch(console.error)
+	}, [config])
 
+	return <RouterProvider router={router} />
+}
+
+function App() {
 	return (
 		<StrictMode>
 			<QueryClientProvider client={queryClient}>
-				<RouterProvider router={router} />
+				<AppContent />
 			</QueryClientProvider>
 		</StrictMode>
 	)
 }
 
 const elem = document.getElementById('root')!
-createRoot(elem).render(<App />)
+
+if (import.meta.hot) {
+	// With hot module reloading, `import.meta.hot.data` is persisted.
+	const root = (import.meta.hot.data.root ??= createRoot(elem))
+	root.render(<App />)
+} else {
+	// The hot module reloading API is not available in production.
+	createRoot(elem).render(<App />)
+}

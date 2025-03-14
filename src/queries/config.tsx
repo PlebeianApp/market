@@ -1,17 +1,27 @@
 import { useQuery } from '@tanstack/react-query'
 import { configKeys } from './queryKeyFactory'
+import type { AppSettings } from '../lib/schemas/app'
 
 interface Config {
 	appRelay: string
+	appSettings: AppSettings | null
+	appPublicKey: string
+	needsSetup: boolean
 }
+
+let cachedConfig: Config | null = null
 
 const fetchConfig = async (): Promise<Config> => {
 	const response = await fetch('/api/config')
 	if (!response.ok) {
 		throw new Error(`Failed to fetch config: ${response.status} ${response.statusText}`)
 	}
-	return response.json()
+	const config: Config = await response.json()
+	cachedConfig = config
+	return config
 }
+
+export const getConfig = () => cachedConfig
 
 export const useConfigQuery = () => {
 	return useQuery({

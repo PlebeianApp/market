@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useAppSettings } from '@/queries/appSettings'
+import { useConfigQuery } from '@/queries/config'
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
 
@@ -8,7 +8,7 @@ export const Route = createFileRoute('/setup')({
 })
 
 function SetupRoute() {
-	const { data: config } = useAppSettings()
+	const { data: config } = useConfigQuery()
 	const navigate = useNavigate()
 
 	useEffect(() => {
