@@ -7,15 +7,18 @@ import { AppSettingsSchema, ExtendedSettingsSchema, BanListSchema, UserRolesSche
 
 config()
 
-const RELAY_URL = 'ws://localhost:10547'
+const RELAY_URL = process.env.APP_RELAY_URL
 const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
 
-if (!APP_PRIVATE_KEY) {
-	console.error('Missing required environment variable: APP_PRIVATE_KEY')
+if (!RELAY_URL || !APP_PRIVATE_KEY) {
+	console.error('Missing required environment variables: APP_RELAY_URL, APP_PRIVATE_KEY')
 	process.exit(1)
 }
 
-const nostrService = NostrService.getInstance([RELAY_URL])
+const relay = RELAY_URL as string
+const privateKey = APP_PRIVATE_KEY as string
+
+const nostrService = NostrService.getInstance([relay])
 
 async function createAppSettingsEvent(signer: NDKPrivateKeySigner) {
 	const appId = randomUUID()
@@ -43,7 +46,7 @@ async function createAppSettingsEvent(signer: NDKPrivateKeySigner) {
 		['k', '30407'], // Review events
 		['web', 'https://plebeian.market/a/', 'nevent'],
 		['web', 'https://plebeian.market/p/', 'nprofile'],
-		['r', RELAY_URL],
+		['r', relay],
 	]
 
 	await appHandlerEvent.sign(signer)
@@ -69,7 +72,7 @@ async function createAppSettingsEvent(signer: NDKPrivateKeySigner) {
 	const relayListEvent = new NDKEvent(nostrService.ndkInstance)
 	relayListEvent.kind = 10002
 	relayListEvent.content = JSON.stringify({
-		relays: [RELAY_URL],
+		relays: [relay],
 	})
 	relayListEvent.tags = []
 
@@ -119,7 +122,7 @@ async function initializeEvents() {
 	await nostrService.connect()
 	console.log('Connected to Nostr')
 
-	const signer = new NDKPrivateKeySigner(APP_PRIVATE_KEY)
+	const signer = new NDKPrivateKeySigner(privateKey)
 	await signer.blockUntilReady()
 
 	console.log('Creating app settings events...')
