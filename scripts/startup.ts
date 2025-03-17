@@ -2,8 +2,7 @@ import { NostrService } from '@/lib/nostr'
 import { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { config } from 'dotenv'
 import { devUser1, devUser2, devUser3, devUser4, devUser5 } from '@/lib/fixtures'
-import { randomUUID } from 'crypto'
-import { AppSettingsSchema, ExtendedSettingsSchema, BanListSchema, UserRolesSchema } from '@/lib/schemas/app'
+import { AppSettingsSchema } from '@/lib/schemas/app'
 
 config()
 
@@ -21,7 +20,6 @@ const privateKey = APP_PRIVATE_KEY as string
 const nostrService = NostrService.getInstance([relay])
 
 async function createAppSettingsEvent(signer: NDKPrivateKeySigner) {
-	const appId = randomUUID()
 	const appSettings = AppSettingsSchema.parse({
 		name: 'Plebeian Market',
 		displayName: 'Plebeian Market',
@@ -39,7 +37,7 @@ async function createAppSettingsEvent(signer: NDKPrivateKeySigner) {
 	appHandlerEvent.kind = 31990
 	appHandlerEvent.content = JSON.stringify(appSettings)
 	appHandlerEvent.tags = [
-		['d', appId],
+		['d', 'app/settings'],
 		['k', '30402'], // Product events
 		['k', '30405'], // Collection events
 		['k', '30406'], // Shipping events
@@ -54,27 +52,25 @@ async function createAppSettingsEvent(signer: NDKPrivateKeySigner) {
 	console.log('Published app handler event')
 
 	// Create kind 30078 event for extended settings
-	const extendedSettings = ExtendedSettingsSchema.parse({
-		extended_field: 'Extended settings',
-		field_to_encrypt: 'Sensitive data',
-	})
+	// const extendedSettings = ExtendedSettingsSchema.parse({
+	// 	extended_field: 'Extended settings',
+	// 	field_to_encrypt: 'Sensitive data',
+	// })
 
-	const extendedSettingsEvent = new NDKEvent(nostrService.ndkInstance)
-	extendedSettingsEvent.kind = 30078
-	extendedSettingsEvent.content = JSON.stringify(extendedSettings)
-	extendedSettingsEvent.tags = [['d', appId]]
+	// const extendedSettingsEvent = new NDKEvent(nostrService.ndkInstance)
+	// extendedSettingsEvent.kind = 30078
+	// extendedSettingsEvent.content = JSON.stringify(extendedSettings)
+	// extendedSettingsEvent.tags = [['d', appId]]
 
-	await extendedSettingsEvent.sign(signer)
-	await extendedSettingsEvent.publish()
-	console.log('Published extended settings event')
+	// await extendedSettingsEvent.sign(signer)
+	// await extendedSettingsEvent.publish()
+	// console.log('Published extended settings event')
 
-	// Create kind 10002 event for relay list
+	// EXPECTD ITEMS: "r" (relays) tags
+	if (!RELAY_URL) return
 	const relayListEvent = new NDKEvent(nostrService.ndkInstance)
 	relayListEvent.kind = 10002
-	relayListEvent.content = JSON.stringify({
-		relays: [relay],
-	})
-	relayListEvent.tags = []
+	relayListEvent.tags.push(['r', RELAY_URL])
 
 	await relayListEvent.sign(signer)
 	await relayListEvent.publish()
@@ -82,16 +78,20 @@ async function createAppSettingsEvent(signer: NDKPrivateKeySigner) {
 }
 
 async function createBanListEvent(signer: NDKPrivateKeySigner) {
-	const banList = BanListSchema.parse({
-		pubkeys: [devUser5.pk],
-		words: [],
-		hashtags: [],
-	})
+	// EXPECTED ITEMS: "p" (pubkeys), "t" (hashtags), "word" (lowercase string), "e" (threads)
+	// const banList = BanListSchema.parse({
+	// 	pubkeys: [devUser5.pk],
+	// 	words: [],
+	// 	hashtags: [],
+	// })
 
 	const banListEvent = new NDKEvent(nostrService.ndkInstance)
 	banListEvent.kind = 10000
-	banListEvent.content = JSON.stringify(banList)
-	banListEvent.tags = [['d', 'banned']]
+	// banListEvent.content = JSON.stringify(banList)
+	banListEvent.tags.push(['d', 'banned'])
+	banListEvent.tags.push(['p', devUser5.pk])
+	banListEvent.tags.push(['t', 'test'])
+	banListEvent.tags.push(['word', 'test'])
 
 	await banListEvent.sign(signer)
 	await banListEvent.publish()
@@ -99,22 +99,40 @@ async function createBanListEvent(signer: NDKPrivateKeySigner) {
 }
 
 async function createUserRolesEvent(signer: NDKPrivateKeySigner) {
-	const userRoles = UserRolesSchema.parse({
-		roles: {
-			admins: [devUser1.pk, devUser2.pk],
-			editors: [],
-			plebs: [devUser3.pk, devUser4.pk, devUser5.pk],
-		},
-	})
+	// EXTECTED ITEMS: d tag `roles/admins`, `roles/editors`, `roles/plebs`
+	// const userRoles = UserRolesSchema.parse({
+	// 	roles: {
+	// 		admins: [devUser1.pk, devUser2.pk],
+	// 		editors: [],
+	// 		plebs: [devUser3.pk, devUser4.pk, devUser5.pk],
+	// 	},
+	// })
 
-	const userRolesEvent = new NDKEvent(nostrService.ndkInstance)
-	userRolesEvent.kind = 30000
-	userRolesEvent.content = JSON.stringify(userRoles)
-	userRolesEvent.tags = [['d', 'roles']]
+	const userRolesAdminsEvent = new NDKEvent(nostrService.ndkInstance)
+	userRolesAdminsEvent.kind = 30000
+	// userRolesAdminsEvent.content = JSON.stringify(userRoles)
+	userRolesAdminsEvent.tags.push(['d', 'roles/admins'])
+	userRolesAdminsEvent.tags.push(['p', devUser1.pk])
+	userRolesAdminsEvent.tags.push(['p', devUser2.pk])
+	await userRolesAdminsEvent.sign(signer)
+	await userRolesAdminsEvent.publish()
+	console.log('Published user admin roles event')
 
-	await userRolesEvent.sign(signer)
-	await userRolesEvent.publish()
-	console.log('Published user roles event')
+	const userRolesEditorsEvent = new NDKEvent(nostrService.ndkInstance)
+	userRolesEditorsEvent.kind = 30000
+	userRolesEditorsEvent.tags.push(['d', 'roles/editors'])
+	userRolesEditorsEvent.tags.push(['p', devUser3.pk])
+	await userRolesEditorsEvent.sign(signer)
+	await userRolesEditorsEvent.publish()
+	console.log('Published user editor roles event')
+
+	const userRolesPlebsEvent = new NDKEvent(nostrService.ndkInstance)
+	userRolesPlebsEvent.kind = 30000
+	userRolesPlebsEvent.tags.push(['d', 'roles/plebs'])
+	userRolesPlebsEvent.tags.push(['p', devUser4.pk])
+	await userRolesPlebsEvent.sign(signer)
+	await userRolesPlebsEvent.publish()
+	console.log('Published user plebs roles event')
 }
 
 async function initializeEvents() {
