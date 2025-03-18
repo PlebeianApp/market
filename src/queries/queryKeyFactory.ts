@@ -6,7 +6,7 @@ export const productKeys = {
 export const postKeys = {
 	all: ['posts'] as const,
 	details: (id: string) => [...postKeys.all, id] as const,
-}
+} as const
 
 export const userKeys = {
 	all: ['users'] as const,
@@ -15,10 +15,14 @@ export const userKeys = {
 
 export const authorKeys = {
 	all: ['authors'] as const,
-	details: (pubkey: string) => [...authorKeys.all, pubkey] as const,
+	details: (id: string) => [...authorKeys.all, id] as const,
 } as const
 
 export const configKeys = {
 	all: ['config'] as const,
 	appRelay: () => [...configKeys.all, 'appRelay'] as const,
+} as const
+
+export const appSettingsKeys = {
+	all: ['appSettings'] as const,
 } as const
