@@ -1,10 +1,36 @@
-import { createRootRoute, Link, Outlet } from '@tanstack/react-router'
+import { useConfigQuery } from '@/queries/config'
+import { createRootRoute, Link, Outlet, useNavigate } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/router-devtools'
+import { useEffect } from 'react'
 
 export const Route = createRootRoute({
-	component: () => (
+	component: RootComponent,
+})
+
+function RootComponent() {
+	return <RootLayout />
+}
+
+function RootLayout() {
+	const { data: config } = useConfigQuery()
+	const navigate = useNavigate()
+
+	useEffect(() => {
+		if (config?.needsSetup && window.location.pathname !== '/setup') {
+			navigate({ to: '/setup' })
+		}
+	}, [config, navigate])
+
+	if (window.location.pathname === '/setup') {
+		return <Outlet />
+	}
+
+	return (
 		<>
-			<div className="p-2 flex gap-2">
+			<div className="p-2 flex gap-2 items-center">
+				{config?.appSettings?.picture && (
+					<img src={config.appSettings.picture} alt={config.appSettings.displayName} className="h-8 w-8 rounded-full" />
+				)}
 				<Link to="/" className="[&.active]:font-bold">
 					Home
 				</Link>{' '}
@@ -16,5 +42,5 @@ export const Route = createRootRoute({
 			<Outlet />
 			<TanStackRouterDevtools />
 		</>
-	),
-})
+	)
+}

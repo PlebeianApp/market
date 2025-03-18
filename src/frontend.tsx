@@ -1,22 +1,22 @@
 import { StrictMode, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { routeTree } from './routeTree.gen'
 import { NostrService } from './lib/nostr'
-import './index.css'
 import { useConfigQuery } from './queries/config'
+import { queryClient } from './lib/queryClient'
+import './index.css'
+
+declare global {
+	interface ImportMeta {
+		hot?: {
+			data: Record<string, any>
+		}
+	}
+}
 
 export const nostrService = NostrService.getInstance()
-
-const queryClient = new QueryClient({
-	// defaultOptions: {
-	//   queries: {
-	//     staleTime: 1000 * 60 * 5, // Consider data stale after 5 minutes
-	//     gcTime: 1000 * 60 * 30, // Keep unused data in cache for 30 minutes
-	//   },
-	// },
-})
 
 // Create a new router instance
 const router = createRouter({
@@ -31,52 +31,41 @@ const router = createRouter({
 	defaultPreloadStaleTime: 0,
 })
 
-// Register the router instance for type safety
 declare module '@tanstack/react-router' {
 	interface Register {
 		router: typeof router
 	}
 }
 
-const elem = document.getElementById('root')!
-const App = () => {
-	// Fetch config and add relay when component mounts
-	// TODO: use react query to keep the app relay across the app
+function AppContent() {
+	const { data: config } = useConfigQuery()
+
 	useEffect(() => {
-		const fetchConfigAndConnect = async () => {
-			try {
-				// Fetch config from the API
-				const response = await fetch('/api/config')
-				if (!response.ok) {
-					throw new Error(`Failed to fetch config: ${response.status} ${response.statusText}`)
-				}
-				const config = await response.json()
-
-				// Add the relay URL from config
-				if (config.appRelay) {
-					console.log(`Adding relay from config: ${config.appRelay}`)
-					nostrService.addExplicitRelay([config.appRelay, 'wss://relay.nostr.net'])
-					await nostrService.connect()
-				}
-
-				// Connect to relays
-				nostrService.connect().catch(console.error)
-			} catch (error) {
-				console.error('Failed to fetch config or connect to relay:', error)
+		const connectToRelay = async () => {
+			if (config?.appRelay) {
+				console.log(`Adding relay from config: ${config.appRelay}`)
+				nostrService.addExplicitRelay([config.appRelay, 'wss://relay.nostr.net'])
+				await nostrService.connect()
 			}
 		}
 
-		fetchConfigAndConnect()
-	}, [])
+		connectToRelay().catch(console.error)
+	}, [config])
 
+	return <RouterProvider router={router} />
+}
+
+function App() {
 	return (
 		<StrictMode>
 			<QueryClientProvider client={queryClient}>
-				<RouterProvider router={router} />
+				<AppContent />
 			</QueryClientProvider>
 		</StrictMode>
 	)
 }
+
+const elem = document.getElementById('root')!
 
 if (import.meta.hot) {
 	// With hot module reloading, `import.meta.hot.data` is persisted.
