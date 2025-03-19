@@ -37,7 +37,7 @@ describe('WebSocket Server', () => {
 				kind: 1,
 				created_at: Math.floor(Date.now() / 1000),
 				tags: [],
-				content: 'hello',
+				content: 'hello from non-admin',
 			},
 			generateSecretKey(),
 		)

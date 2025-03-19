@@ -60,6 +60,7 @@ export const server = serve({
 		}
 		return new Response('Upgrade failed', { status: 500 })
 	},
+	// @ts-ignore
 	websocket: {
 		message(ws, message) {
 			try {
@@ -97,7 +98,7 @@ export const server = serve({
 		open() {
 			console.log('WebSocket connection opened')
 		},
-		close(code, message) {
+		close() {
 			console.log('WebSocket connection closed')
 		},
 	},
