@@ -27,7 +27,8 @@ export const useConfigQuery = () => {
 	return useQuery({
 		queryKey: configKeys.all,
 		queryFn: fetchConfig,
-		staleTime: Infinity,
+		staleTime: cachedConfig?.needsSetup ? 0 : Infinity,
 		retry: 3,
+		refetchOnWindowFocus: cachedConfig?.needsSetup ? true : false,
 	})
 }
