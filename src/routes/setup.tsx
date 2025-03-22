@@ -28,10 +28,6 @@ function SetupRoute() {
 	const { data: config } = useConfigQuery()
 	const navigate = useNavigate()
 
-	// Default relay URL if environment variable isn't available
-	const defaultRelayUrl = 'ws://localhost:10547'
-
-	// Form state
 	const [checked, setChecked] = useState(true)
 	const [selectedCurrency, setSelectedCurrency] = useState(currencies[0])
 	const [adminsList, setAdminsList] = useState<string[]>([])
@@ -41,7 +37,7 @@ function SetupRoute() {
 		instanceName: '',
 		contactEmail: '',
 		ownerPk: '',
-		relayUrl: defaultRelayUrl,
+		relayUrl: config?.appRelay || '',
 	})
 
 	useEffect(() => {
@@ -50,16 +46,8 @@ function SetupRoute() {
 		}
 	}, [config, navigate])
 
-	const copyToClipboard = async (text: string) => {
-		try {
-			await navigator.clipboard.writeText(text)
-			toast.success('Copied to clipboard')
-		} catch (err) {
-			toast.error('Failed to copy')
-		}
-	}
-
-	const getOwnerPubkey = async () => {
+	const getOwnerPubkey = async (event: React.FormEvent) => {
+		event.preventDefault()
 		try {
 			// @ts-ignore - assuming window.nostr is available from extension
 			const user = await window.nostr?.getPublicKey()
@@ -78,6 +66,16 @@ function SetupRoute() {
 		event.preventDefault()
 
 		try {
+			if (!formValues.relayUrl) {
+				toast.error('Please enter a relay URL')
+				return
+			}
+
+			if (!formValues.relayUrl.startsWith('ws://') && !formValues.relayUrl.startsWith('wss://')) {
+				toast.error('Relay URL must start with ws:// or wss://')
+				return
+			}
+
 			const formData = {
 				instanceName: formValues.instanceName,
 				ownerPk: formValues.ownerPk,
@@ -91,10 +89,7 @@ function SetupRoute() {
 
 			await submitAppSettings(formData)
 
-			// Invalidate the config query to force a refresh
 			await queryClient.invalidateQueries({ queryKey: configKeys.all })
-
-			// Optionally wait for the query to settle to ensure we have fresh data
 			await queryClient.refetchQueries({ queryKey: configKeys.all })
 
 			toast.success('App settings successfully updated!')
@@ -208,7 +203,7 @@ function SetupRoute() {
 										required
 										className="border-2"
 										name="relayUrl"
-										placeholder={defaultRelayUrl}
+										placeholder={formValues.relayUrl}
 										value={formValues.relayUrl}
 										onChange={(e) => setFormValues({ ...formValues, relayUrl: e.target.value })}
 									/>

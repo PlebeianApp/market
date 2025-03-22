@@ -3,12 +3,9 @@ import { nip19 } from 'nostr-tools'
 import { NostrService } from './nostr'
 import { AppSettingsSchema, type AppSettings } from './schemas/app'
 
-const DEFAULT_RELAY = 'ws://localhost:10547'
-
-const RELAY_URL =
-	typeof import.meta.env !== 'undefined' && import.meta.env.VITE_APP_RELAY_URL ? import.meta.env.VITE_APP_RELAY_URL : DEFAULT_RELAY
-
 export async function fetchAppSettings(relayUrl: string, appPubkey: string): Promise<AppSettings | null> {
+	console.log(`Fetching app settings from relay: ${relayUrl} for pubkey: ${appPubkey}`)
+
 	const nostrService = NostrService.getInstance([relayUrl])
 	await nostrService.connect()
 
@@ -26,6 +23,7 @@ export async function fetchAppSettings(relayUrl: string, appPubkey: string): Pro
 		return null
 	}
 
+	console.log(`Found ${eventArray.length} app settings events`)
 	const latestEvent = eventArray.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
 
 	try {
@@ -76,58 +74,77 @@ export async function submitAppSettings(data: AppSettingsSubmitData): Promise<vo
 			contactEmail: data.contactEmail,
 		})
 
-		const response = await fetch('/api/config', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-			},
-			body: JSON.stringify({
-				appSettings,
-				adminsList: data.adminsList,
-				relayUrl: data.relayUrl || RELAY_URL,
-			}),
+		const setupData = {
+			type: 'APP_SETUP',
+			appSettings,
+			adminsList: data.adminsList,
+			relayUrl: data.relayUrl,
+		}
+
+		const wsUrl = window.location.protocol === 'https:' ? 'wss://localhost:3000' : 'ws://localhost:3000'
+		console.log(`Connecting to WebSocket at ${wsUrl}`)
+		const socket = new WebSocket(wsUrl)
+
+		console.log('Sending setup data', socket)
+
+		return new Promise((resolve, reject) => {
+			let hasResponded = false
+
+			socket.onopen = () => {
+				const message = JSON.stringify(['SETUP', setupData])
+				socket.send(message)
+			}
+
+			socket.onmessage = (event) => {
+				try {
+					const message = JSON.parse(event.data)
+					hasResponded = true
+
+					if (Array.isArray(message) && message[0] === 'OK') {
+						const [_, eventId, success, errorMessage] = message
+
+						if (success) {
+							console.log('Setup data successfully processed by server')
+							socket.close()
+							resolve()
+						} else {
+							socket.close()
+							reject(new Error(errorMessage || 'Server rejected the setup data'))
+						}
+					} else {
+						console.warn('Unexpected response format:', message)
+						socket.close()
+						reject(new Error('Received unrecognized response format from server'))
+					}
+				} catch (e) {
+					console.error('Failed to process WebSocket message', e)
+					socket.close()
+					reject(e)
+				}
+			}
+
+			socket.onerror = (error) => {
+				console.error('WebSocket error:', error)
+				reject(new Error('WebSocket connection failed'))
+			}
+
+			socket.onclose = (event) => {
+				console.log(`WebSocket closed: ${event.code}`, event)
+				if (!hasResponded) {
+					reject(new Error(`WebSocket closed without response, code: ${event.code}`))
+				}
+			}
+
+			setTimeout(() => {
+				if (socket.readyState === WebSocket.OPEN) {
+					console.error('WebSocket timeout after 30 seconds')
+					socket.close()
+					reject(new Error('WebSocket operation timed out'))
+				}
+			}, 30000)
 		})
-
-		if (!response.ok) {
-			const errorData = await response.json().catch(() => ({ message: 'Failed to parse error response' }))
-			throw new Error(errorData.message || `Server responded with status: ${response.status}`)
-		}
-
-		const result = await response.json()
-
-		if (!result.success) {
-			throw new Error(result.message || 'Unknown error occurred')
-		}
 	} catch (error) {
 		console.error('Failed to submit app settings:', error)
 		throw error
-	}
-}
-
-export async function fetchAnyAppSettings(relayUrl: string): Promise<AppSettings | null> {
-	const nostrService = NostrService.getInstance([relayUrl])
-	await nostrService.connect()
-	const filter: NDKFilter = {
-		kinds: [31990],
-		limit: 10,
-	}
-
-	const events = await nostrService.ndkInstance.fetchEvents(filter)
-	const eventArray = Array.from(events)
-
-	if (eventArray.length === 0) {
-		console.log('No app settings events found at all')
-		return null
-	}
-
-	const latestEvent = eventArray.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
-
-	try {
-		const parsedContent = JSON.parse(latestEvent.content)
-		const validatedSettings = AppSettingsSchema.parse(parsedContent)
-		return validatedSettings
-	} catch (error) {
-		console.error('Failed to parse or validate app settings:', error)
-		return null
 	}
 }
