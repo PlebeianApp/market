@@ -8,15 +8,13 @@ import { submitAppSettings } from '@/lib/appSettings'
 import { queryClient } from '@/lib/queryClient'
 import { useConfigQuery } from '@/queries/config'
 import { configKeys } from '@/queries/queryKeyFactory'
-import { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { useForm, useStore } from '@tanstack/react-form'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { finalizeEvent, generateSecretKey, nip19, type UnsignedEvent } from 'nostr-tools'
+import { finalizeEvent, generateSecretKey, nip19 } from 'nostr-tools'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { AppSettingsSchema } from '@/lib/schemas/app'
 import { z } from 'zod'
-import { nostrService } from '@/frontend'
 
 export const Route = createFileRoute('/setup')({
 	component: SetupRoute,
@@ -112,7 +110,7 @@ function SetupRoute() {
 	}
 
 	const formErrorMap = useStore(form.store, (state) => state.errorMap)
-	
+
 	useEffect(() => {
 		if (config?.appSettings) {
 			navigate({ to: '/' })
