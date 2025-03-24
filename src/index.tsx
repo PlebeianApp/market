@@ -8,6 +8,8 @@ import { eventHandler } from './lib/wsSignerEventHandler'
 import { join } from 'path'
 import { file } from 'bun'
 
+import.meta.hot.accept();
+
 config()
 
 const RELAY_URL = process.env.APP_RELAY_URL

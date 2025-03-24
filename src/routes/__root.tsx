@@ -4,7 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import { useConfigQuery } from '@/queries/config'
 import { createRootRoute, Outlet, useNavigate } from '@tanstack/react-router'
-import { TanStackRouterDevtools } from '@tanstack/router-devtools'
+import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { useEffect, useState } from 'react'
 
 export const Route = createRootRoute({
@@ -51,7 +51,8 @@ function RootLayout() {
 
 			<Footer />
 
-			<TanStackRouterDevtools />
+			{/* Having some build error with this rn */}
+			{/* <TanStackRouterDevtools /> */}
 			<DecryptPasswordDialog />
 			<LoginDialog open={showLoginDialog} onOpenChange={setShowLoginDialog} />
 		</div>
