@@ -3,6 +3,7 @@ import { getPublicKey } from 'nostr-tools'
 import { finalizeEvent, type UnsignedEvent } from 'nostr-tools/pure'
 import NDK from '@nostr-dev-kit/ndk'
 import { nip19 } from 'nostr-tools'
+import { bytesFromHex } from './utils/keyConversion'
 
 export class EventHandler {
 	private static instance: EventHandler
@@ -88,7 +89,7 @@ export class EventHandler {
 		const isSetupEvent = event.kind === 31990 && event.content.includes('"name":')
 
 		if (isSetupEvent) {
-			const appPubkey = getPublicKey(Buffer.from(this.appPrivateKey, 'hex'))
+			const appPubkey = getPublicKey(bytesFromHex(this.appPrivateKey))
 			if (!this.bootstrapMode && event.pubkey !== appPubkey && !this.adminPubkeys.has(event.pubkey)) {
 				console.log('Setup event rejected: not in bootstrap mode and not signed by app or admin')
 				return null

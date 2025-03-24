@@ -9,12 +9,14 @@ import { queryClient } from '@/lib/queryClient'
 import { useConfigQuery } from '@/queries/config'
 import { configKeys } from '@/queries/queryKeyFactory'
 import { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
-import { useForm } from '@tanstack/react-form'
+import { useForm, useStore } from '@tanstack/react-form'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { nip19 } from 'nostr-tools'
+import { finalizeEvent, generateSecretKey, nip19, type UnsignedEvent } from 'nostr-tools'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { AppSettingsSchema } from '@/lib/schemas/app'
+import { z } from 'zod'
+import { nostrService } from '@/frontend'
 
 export const Route = createFileRoute('/setup')({
 	component: SetupRoute,
@@ -30,12 +32,8 @@ const currencies = ['USD', 'EUR', 'BTC', 'SATS']
 function SetupRoute() {
 	const { data: config } = useConfigQuery()
 	const navigate = useNavigate()
-
 	const [adminsList, setAdminsList] = useState<string[]>([])
 	const [inputValue, setInputValue] = useState('')
-	const [logoUrl, setLogoUrl] = useState(availableLogos[0].value)
-	const [selectedCurrency, setSelectedCurrency] = useState(currencies[0])
-	const [checked, setChecked] = useState(true)
 
 	const form = useForm({
 		defaultValues: {
@@ -47,9 +45,19 @@ function SetupRoute() {
 			contactEmail: '',
 			allowRegister: true,
 			defaultCurrency: currencies[0],
-		},
+		} satisfies z.infer<typeof AppSettingsSchema>,
 		validators: {
-			onChange: AppSettingsSchema,
+			onSubmit: ({ value }) => {
+				const result = AppSettingsSchema.safeParse(value)
+				if (!result.success) {
+					return result.error.errors.reduce<Record<string, string>>((acc, curr) => {
+						const path = curr.path.join('.')
+						acc[path] = curr.message
+						return acc
+					}, {})
+				}
+				return undefined
+			},
 		},
 		onSubmit: async ({ value }) => {
 			try {
@@ -58,21 +66,20 @@ function SetupRoute() {
 					return
 				}
 
-				const formDataNostrEvent = new NDKEvent(undefined, {
+				let newEvent = {
+					kind: 31990,
+					created_at: Math.floor(Date.now() / 1000),
+					tags: [] as string[][],
 					content: JSON.stringify({
 						...value,
 						adminsList,
 						relayUrl: config.appRelay,
 					}),
-					kind: 31990,
 					pubkey: value.ownerPk,
-					created_at: Math.floor(Date.now() / 1000),
-					tags: [],
-				})
+				}
 
-				const pkSigner = NDKPrivateKeySigner.generate()
-
-				await submitAppSettings(formDataNostrEvent, pkSigner)
+				newEvent = finalizeEvent(newEvent, generateSecretKey())
+				await submitAppSettings(newEvent)
 				await queryClient.invalidateQueries({ queryKey: configKeys.all })
 				await queryClient.refetchQueries({ queryKey: configKeys.all })
 
@@ -95,13 +102,17 @@ function SetupRoute() {
 			// @ts-ignore - assuming window.nostr is available from extension
 			const user = await window.nostr?.getPublicKey()
 			if (user) {
-				form.setFieldValue('ownerPk', nip19.npubEncode(user))
+				const npub = nip19.npubEncode(user)
+				form.setFieldValue('ownerPk', npub)
+				setInputValue(npub)
 			}
 		} catch (error) {
 			toast.error('Failed to get public key from extension')
 		}
 	}
 
+	const formErrorMap = useStore(form.store, (state) => state.errorMap)
+	
 	useEffect(() => {
 		if (config?.appSettings) {
 			navigate({ to: '/' })
@@ -134,109 +145,174 @@ function SetupRoute() {
 									</div>
 								</div>
 
-								<div>
-									<Label className="font-bold">Owner npub</Label>
-									<div className="flex flex-row gap-2">
-										<Input
-											className="border-2"
-											name="ownerPk"
-											onChange={(e) => {
-												form.setFieldValue('ownerPk', e.target.value)
-											}}
-											placeholder="Owner npub"
-										/>
-										<Button type="button" variant="outline" onClick={getOwnerPubkey}>
-											<span className="text-black">Get Key</span>
-										</Button>
-									</div>
-									{form.getFieldMeta('ownerPk')?.errors && (
-										<div className="text-red-500 text-sm mt-1">{form.getFieldMeta('ownerPk')?.errors.join(', ')}</div>
+								<form.Field
+									name="ownerPk"
+									validators={{
+										onChange: (field) => {
+											if (!field.value) return 'Owner public key is required'
+											if (!field.value.startsWith('npub')) return 'Must be a valid npub'
+											return undefined
+										},
+									}}
+								>
+									{(field) => (
+										<div>
+											<Label className="font-bold" htmlFor={field.name}>
+												Owner npub
+											</Label>
+											<div className="flex flex-row gap-2">
+												<Input
+													id={field.name}
+													className="border-2"
+													name={field.name}
+													value={field.state.value}
+													onChange={(e) => field.handleChange(e.target.value)}
+													onBlur={field.handleBlur}
+													placeholder="Owner npub"
+												/>
+												<Button type="button" variant="outline" onClick={getOwnerPubkey}>
+													<span className="text-black">Get Key</span>
+												</Button>
+											</div>
+											{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
+												<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>
+											)}
+										</div>
 									)}
-								</div>
+								</form.Field>
 
-								<div>
-									<Label className="font-bold" htmlFor="name">
-										<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Instance name</span>
-									</Label>
-									<Input
-										required
-										className="border-2"
-										name="name"
-										onChange={(e) => form.setFieldValue('name', e.target.value)}
-										placeholder="Instance name"
-									/>
-									{form.getFieldMeta('name')?.errors && (
-										<div className="text-red-500 text-sm mt-1">{form.getFieldMeta('name')?.errors.join(', ')}</div>
-									)}
-								</div>
-
-								<div>
-									<Label className="font-bold" htmlFor="displayName">
-										<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Display name</span>
-									</Label>
-									<Input
-										required
-										className="border-2"
-										name="displayName"
-										onChange={(e) => form.setFieldValue('displayName', e.target.value)}
-										placeholder="Display name"
-									/>
-									{form.getFieldMeta('displayName')?.errors && (
-										<div className="text-red-500 text-sm mt-1">{form.getFieldMeta('displayName')?.errors.join(', ')}</div>
-									)}
-								</div>
-
-								<div className="flex flex-col gap-2">
-									<div>
-										<Label className="font-bold">Logo URL</Label>
-										<Select
-											onValueChange={(value) => {
-												setLogoUrl(value)
-												form.setFieldValue('picture', value)
-											}}
-											defaultValue={logoUrl}
-										>
-											<SelectTrigger className="border-2">
-												<SelectValue placeholder="Select logo" />
-											</SelectTrigger>
-											<SelectContent>
-												{availableLogos.map((logo) => (
-													<SelectItem key={logo.value} value={logo.value}>
-														{logo.label}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
-									</div>
-									<div className="self-center">
-										{logoUrl && (
-											<img
-												className="max-w-28"
-												src={logoUrl}
-												alt="logo preview"
-												onError={(e) => {
-													if (e.target instanceof HTMLImageElement) {
-														e.target.src = availableLogos[0].value
-													}
-												}}
+								<form.Field
+									name="name"
+									validators={{
+										onChange: (field) => {
+											if (!field.value) return 'Instance name is required'
+											return undefined
+										},
+									}}
+								>
+									{(field) => (
+										<div>
+											<Label className="font-bold" htmlFor={field.name}>
+												<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Instance name</span>
+											</Label>
+											<Input
+												id={field.name}
+												required
+												className="border-2"
+												name={field.name}
+												value={field.state.value}
+												onChange={(e) => field.handleChange(e.target.value)}
+												onBlur={field.handleBlur}
+												placeholder="Instance name"
 											/>
-										)}
-									</div>
-								</div>
-
-								<div>
-									<Label className="font-bold">Contact email</Label>
-									<Input
-										className="border-2"
-										name="contactEmail"
-										onChange={(e) => form.setFieldValue('contactEmail', e.target.value)}
-										placeholder="Contact email"
-										type="email"
-									/>
-									{form.getFieldMeta('contactEmail')?.errors && (
-										<div className="text-red-500 text-sm mt-1">{form.getFieldMeta('contactEmail')?.errors.join(', ')}</div>
+											{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
+												<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>
+											)}
+										</div>
 									)}
-								</div>
+								</form.Field>
+
+								<form.Field
+									name="displayName"
+									validators={{
+										onChange: (field) => {
+											if (!field.value) return 'Display name is required'
+											return undefined
+										},
+									}}
+								>
+									{(field) => (
+										<div>
+											<Label className="font-bold" htmlFor={field.name}>
+												<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Display name</span>
+											</Label>
+											<Input
+												id={field.name}
+												required
+												className="border-2"
+												name={field.name}
+												value={field.state.value}
+												onChange={(e) => field.handleChange(e.target.value)}
+												onBlur={field.handleBlur}
+												placeholder="Display name"
+											/>
+											{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
+												<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>
+											)}
+										</div>
+									)}
+								</form.Field>
+
+								<form.Field name="picture">
+									{(field) => (
+										<div className="flex flex-col gap-2">
+											<div>
+												<Label className="font-bold" htmlFor={field.name}>
+													Logo URL
+												</Label>
+												<Select onValueChange={(value) => field.handleChange(value)} defaultValue={field.state.value}>
+													<SelectTrigger className="border-2">
+														<SelectValue placeholder="Select logo" />
+													</SelectTrigger>
+													<SelectContent>
+														{availableLogos.map((logo) => (
+															<SelectItem key={logo.value} value={logo.value}>
+																{logo.label}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+											</div>
+											<div className="self-center">
+												{field.state.value && (
+													<img
+														className="max-w-28"
+														src={field.state.value}
+														alt="logo preview"
+														onError={(e) => {
+															if (e.target instanceof HTMLImageElement) {
+																e.target.src = availableLogos[0].value
+															}
+														}}
+													/>
+												)}
+											</div>
+										</div>
+									)}
+								</form.Field>
+
+								<form.Field
+									name="contactEmail"
+									validators={{
+										onChange: (field) => {
+											if (field.value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(field.value)) {
+												return 'Please enter a valid email address'
+											}
+											return undefined
+										},
+									}}
+								>
+									{(field) => (
+										<div>
+											<Label className="font-bold" htmlFor={field.name}>
+												Contact email
+											</Label>
+											<Input
+												id={field.name}
+												className="border-2"
+												name={field.name}
+												value={field.state.value}
+												onChange={(e) => field.handleChange(e.target.value)}
+												onBlur={field.handleBlur}
+												placeholder="Contact email"
+												type="email"
+											/>
+											{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
+												<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>
+											)}
+										</div>
+									)}
+								</form.Field>
 
 								<Separator className="my-2" />
 
@@ -270,49 +346,57 @@ function SetupRoute() {
 
 								<h3 className="text-xl font-semibold">Miscellanea</h3>
 								<div className="flex flex-col gap-4">
-									<div>
-										<Label className="font-bold">Default currency</Label>
-										<Select
-											onValueChange={(value) => {
-												setSelectedCurrency(value)
-												form.setFieldValue('defaultCurrency', value)
-											}}
-											defaultValue={selectedCurrency}
-										>
-											<SelectTrigger className="border-2">
-												<SelectValue placeholder="Currency" />
-											</SelectTrigger>
-											<SelectContent>
-												{currencies.map((currency) => (
-													<SelectItem key={currency} value={currency}>
-														{currency}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
-									</div>
-									<div className="flex items-center space-x-2">
-										<Checkbox
-											id="allowRegister"
-											checked={checked}
-											onCheckedChange={(value) => {
-												setChecked(value === true)
-												form.setFieldValue('allowRegister', value === true)
-											}}
-											name="allowRegister"
-										/>
-										<Label htmlFor="allowRegister" className="font-bold">
-											Allow registration
-										</Label>
-									</div>
+									<form.Field name="defaultCurrency">
+										{(field) => (
+											<div>
+												<Label className="font-bold" htmlFor={field.name}>
+													Default currency
+												</Label>
+												<Select onValueChange={(value) => field.handleChange(value)} defaultValue={field.state.value}>
+													<SelectTrigger className="border-2">
+														<SelectValue placeholder="Currency" />
+													</SelectTrigger>
+													<SelectContent>
+														{currencies.map((currency) => (
+															<SelectItem key={currency} value={currency}>
+																{currency}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+											</div>
+										)}
+									</form.Field>
+
+									<form.Field name="allowRegister">
+										{(field) => (
+											<div className="flex items-center space-x-2">
+												<Checkbox
+													id={field.name}
+													checked={field.state.value}
+													onCheckedChange={(value) => field.handleChange(value === true)}
+													name={field.name}
+												/>
+												<Label htmlFor={field.name} className="font-bold">
+													Allow registration
+												</Label>
+											</div>
+										)}
+									</form.Field>
 								</div>
 
 								<Separator className="my-8" />
 
+								{formErrorMap.onSubmit ? (
+									<div>
+										<em>There was an error on the form: {Object.values(formErrorMap.onSubmit).join(', ')}</em>
+									</div>
+								) : null}
+
 								<form.Subscribe
 									selector={(state) => [state.canSubmit, state.isSubmitting]}
 									children={([canSubmit, isSubmitting]) => (
-										<Button type="submit" className="w-full" disabled={!canSubmit}>
+										<Button type="submit" className="w-full" disabled={isSubmitting || !canSubmit}>
 											{isSubmitting ? 'Submitting...' : 'Submit'}
 										</Button>
 									)}
