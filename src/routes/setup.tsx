@@ -102,19 +102,6 @@ function SetupRoute() {
 		}
 	}
 
-	const fillDebugData = () => {
-		const fakeOwnerSk = 'nsec1n5xwddq9yrpnvy229cnfmplyzzcqjq4ndm9w79mlwdl83r2d5juqqcu3g9'
-		form.setFieldValue('name', 'test-market')
-		form.setFieldValue('displayName', 'Test Market')
-		form.setFieldValue('picture', availableLogos[0].value)
-		form.setFieldValue('banner', 'https://plebeian.market/banner.svg')
-		form.setFieldValue('ownerPk', 'npub10g6zk8la7ay9p4zszdt65xlfacn9hkanrkzl6k6g7p0e3xcjvtkqqppkqj')
-		form.setFieldValue('contactEmail', 'test@example.com')
-		form.setFieldValue('allowRegister', true)
-		form.setFieldValue('defaultCurrency', 'USD')
-		setAdminsList(['npub1mjj4n95c6usl0kvpwwlqlm8pwg99fnrpqajun88pjqx5qgd2k92qq4pujq'])
-	}
-
 	useEffect(() => {
 		if (config?.appSettings) {
 			navigate({ to: '/' })
@@ -129,9 +116,6 @@ function SetupRoute() {
 						<div className="container">
 							<div className="flex justify-between items-center mb-4">
 								<h2 className="text-2xl font-bold">Instance Setup</h2>
-								<Button variant="outline" onClick={fillDebugData}>
-									Fill Debug Data
-								</Button>
 							</div>
 							<Separator className="my-2" />
 							<form
@@ -156,11 +140,12 @@ function SetupRoute() {
 										<Input
 											className="border-2"
 											name="ownerPk"
-											value={form.getFieldValue('ownerPk')}
-											onChange={(e) => form.setFieldValue('ownerPk', e.target.value)}
+											onChange={(e) => {
+												form.setFieldValue('ownerPk', e.target.value)
+											}}
 											placeholder="Owner npub"
 										/>
-										<Button variant="outline" onClick={getOwnerPubkey}>
+										<Button type="button" variant="outline" onClick={getOwnerPubkey}>
 											<span className="text-black">Get Key</span>
 										</Button>
 									</div>
@@ -177,7 +162,6 @@ function SetupRoute() {
 										required
 										className="border-2"
 										name="name"
-										value={form.getFieldValue('name')}
 										onChange={(e) => form.setFieldValue('name', e.target.value)}
 										placeholder="Instance name"
 									/>
@@ -194,7 +178,6 @@ function SetupRoute() {
 										required
 										className="border-2"
 										name="displayName"
-										value={form.getFieldValue('displayName')}
 										onChange={(e) => form.setFieldValue('displayName', e.target.value)}
 										placeholder="Display name"
 									/>
@@ -246,7 +229,6 @@ function SetupRoute() {
 									<Input
 										className="border-2"
 										name="contactEmail"
-										value={form.getFieldValue('contactEmail')}
 										onChange={(e) => form.setFieldValue('contactEmail', e.target.value)}
 										placeholder="Contact email"
 										type="email"
