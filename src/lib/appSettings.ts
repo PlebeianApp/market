@@ -1,4 +1,4 @@
-import type { NDKFilter } from '@nostr-dev-kit/ndk'
+import type { NDKEvent, NDKFilter, NDKSigner } from '@nostr-dev-kit/ndk'
 import { nip19 } from 'nostr-tools'
 import { NostrService } from './nostr'
 import { AppSettingsSchema, type AppSettings } from './schemas/app'
@@ -48,12 +48,12 @@ export interface AppSettingsSubmitData {
 	relayUrl?: string
 }
 
-export async function submitAppSettings(data: AppSettingsSubmitData): Promise<void> {
+export async function submitAppSettings(data: NDKEvent, signer?: NDKSigner): Promise<void> {
 	try {
-		let ownerPubkey = data.ownerPk
-		if (data.ownerPk.startsWith('npub')) {
+		let ownerPubkey = data.pubkey
+		if (data.pubkey.startsWith('npub')) {
 			try {
-				const { type, data: ownerData } = nip19.decode(data.ownerPk)
+				const { type, data: ownerData } = nip19.decode(data.pubkey)
 				if (type === 'npub') {
 					ownerPubkey = ownerData.toString()
 					console.log(`Decoded owner npub to pubkey: ${ownerPubkey}`)
@@ -63,22 +63,8 @@ export async function submitAppSettings(data: AppSettingsSubmitData): Promise<vo
 			}
 		}
 
-		const appSettings = AppSettingsSchema.parse({
-			name: data.instanceName,
-			displayName: data.instanceName,
-			picture: data.logoUrl || 'https://plebeian.market/logo.svg',
-			banner: 'https://plebeian.market/banner.png',
-			ownerPk: ownerPubkey,
-			allowRegister: data.allowRegister,
-			defaultCurrency: data.defaultCurrency,
-			contactEmail: data.contactEmail,
-		})
-
-		const setupData = {
-			type: 'APP_SETUP',
-			appSettings,
-			adminsList: data.adminsList,
-			relayUrl: data.relayUrl,
+		if (signer) {
+			data.sign(signer)
 		}
 
 		const wsUrl = window.location.protocol === 'https:' ? 'wss://localhost:3000' : 'ws://localhost:3000'
@@ -91,7 +77,7 @@ export async function submitAppSettings(data: AppSettingsSubmitData): Promise<vo
 			let hasResponded = false
 
 			socket.onopen = () => {
-				const message = JSON.stringify(['SETUP', setupData])
+				const message = JSON.stringify(['EVENT', data])
 				socket.send(message)
 			}
 

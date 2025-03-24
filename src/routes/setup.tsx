@@ -8,10 +8,13 @@ import { submitAppSettings } from '@/lib/appSettings'
 import { queryClient } from '@/lib/queryClient'
 import { useConfigQuery } from '@/queries/config'
 import { configKeys } from '@/queries/queryKeyFactory'
+import { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
+import { useForm } from '@tanstack/react-form'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { nip19 } from 'nostr-tools'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { AppSettingsSchema } from '@/lib/schemas/app'
 
 export const Route = createFileRoute('/setup')({
 	component: SetupRoute,
@@ -28,23 +31,63 @@ function SetupRoute() {
 	const { data: config } = useConfigQuery()
 	const navigate = useNavigate()
 
-	const [checked, setChecked] = useState(true)
-	const [selectedCurrency, setSelectedCurrency] = useState(currencies[0])
 	const [adminsList, setAdminsList] = useState<string[]>([])
 	const [inputValue, setInputValue] = useState('')
 	const [logoUrl, setLogoUrl] = useState(availableLogos[0].value)
-	const [formValues, setFormValues] = useState({
-		instanceName: '',
-		contactEmail: '',
-		ownerPk: '',
-		relayUrl: config?.appRelay || '',
-	})
+	const [selectedCurrency, setSelectedCurrency] = useState(currencies[0])
+	const [checked, setChecked] = useState(true)
 
-	useEffect(() => {
-		if (config?.appSettings) {
-			navigate({ to: '/' })
-		}
-	}, [config, navigate])
+	const form = useForm({
+		defaultValues: {
+			name: '',
+			displayName: '',
+			picture: availableLogos[0].value,
+			banner: 'https://plebeian.market/banner.svg',
+			ownerPk: '',
+			contactEmail: '',
+			allowRegister: true,
+			defaultCurrency: currencies[0],
+		},
+		validators: {
+			onChange: AppSettingsSchema,
+		},
+		onSubmit: async ({ value }) => {
+			try {
+				if (!config?.appRelay) {
+					toast.error('Please enter a relay URL')
+					return
+				}
+
+				const formDataNostrEvent = new NDKEvent(undefined, {
+					content: JSON.stringify({
+						...value,
+						adminsList,
+						relayUrl: config.appRelay,
+					}),
+					kind: 31990,
+					pubkey: value.ownerPk,
+					created_at: Math.floor(Date.now() / 1000),
+					tags: [],
+				})
+
+				const pkSigner = NDKPrivateKeySigner.generate()
+
+				await submitAppSettings(formDataNostrEvent, pkSigner)
+				await queryClient.invalidateQueries({ queryKey: configKeys.all })
+				await queryClient.refetchQueries({ queryKey: configKeys.all })
+
+				toast.success('App settings successfully updated!')
+				navigate({ to: '/' })
+			} catch (e) {
+				console.error('Failed to submit form', e)
+				if (e instanceof Error) {
+					toast.error(e.message)
+				} else {
+					toast.error('An unknown error occurred')
+				}
+			}
+		},
+	})
 
 	const getOwnerPubkey = async (event: React.FormEvent) => {
 		event.preventDefault()
@@ -52,57 +95,31 @@ function SetupRoute() {
 			// @ts-ignore - assuming window.nostr is available from extension
 			const user = await window.nostr?.getPublicKey()
 			if (user) {
-				setFormValues({
-					...formValues,
-					ownerPk: nip19.npubEncode(user),
-				})
+				form.setFieldValue('ownerPk', nip19.npubEncode(user))
 			}
 		} catch (error) {
 			toast.error('Failed to get public key from extension')
 		}
 	}
 
-	async function handleSubmit(event: React.FormEvent) {
-		event.preventDefault()
-
-		try {
-			if (!formValues.relayUrl) {
-				toast.error('Please enter a relay URL')
-				return
-			}
-
-			if (!formValues.relayUrl.startsWith('ws://') && !formValues.relayUrl.startsWith('wss://')) {
-				toast.error('Relay URL must start with ws:// or wss://')
-				return
-			}
-
-			const formData = {
-				instanceName: formValues.instanceName,
-				ownerPk: formValues.ownerPk,
-				contactEmail: formValues.contactEmail || undefined,
-				logoUrl: logoUrl,
-				allowRegister: checked,
-				defaultCurrency: selectedCurrency,
-				adminsList: adminsList,
-				relayUrl: formValues.relayUrl,
-			}
-
-			await submitAppSettings(formData)
-
-			await queryClient.invalidateQueries({ queryKey: configKeys.all })
-			await queryClient.refetchQueries({ queryKey: configKeys.all })
-
-			toast.success('App settings successfully updated!')
-			navigate({ to: '/' })
-		} catch (e) {
-			console.error('Failed to submit form', e)
-			if (e instanceof Error) {
-				toast.error(e.message)
-			} else {
-				toast.error('An unknown error occurred')
-			}
-		}
+	const fillDebugData = () => {
+		const fakeOwnerSk = 'nsec1n5xwddq9yrpnvy229cnfmplyzzcqjq4ndm9w79mlwdl83r2d5juqqcu3g9'
+		form.setFieldValue('name', 'test-market')
+		form.setFieldValue('displayName', 'Test Market')
+		form.setFieldValue('picture', availableLogos[0].value)
+		form.setFieldValue('banner', 'https://plebeian.market/banner.svg')
+		form.setFieldValue('ownerPk', 'npub10g6zk8la7ay9p4zszdt65xlfacn9hkanrkzl6k6g7p0e3xcjvtkqqppkqj')
+		form.setFieldValue('contactEmail', 'test@example.com')
+		form.setFieldValue('allowRegister', true)
+		form.setFieldValue('defaultCurrency', 'USD')
+		setAdminsList(['npub1mjj4n95c6usl0kvpwwlqlm8pwg99fnrpqajun88pjqx5qgd2k92qq4pujq'])
 	}
+
+	useEffect(() => {
+		if (config?.appSettings) {
+			navigate({ to: '/' })
+		}
+	}, [config, navigate])
 
 	return (
 		<div className="container mx-auto px-4 py-10">
@@ -110,9 +127,21 @@ function SetupRoute() {
 				<main>
 					<div>
 						<div className="container">
-							<h2 className="text-2xl font-bold mb-4">Instance Setup</h2>
+							<div className="flex justify-between items-center mb-4">
+								<h2 className="text-2xl font-bold">Instance Setup</h2>
+								<Button variant="outline" onClick={fillDebugData}>
+									Fill Debug Data
+								</Button>
+							</div>
 							<Separator className="my-2" />
-							<form onSubmit={handleSubmit} className="flex flex-col gap-4">
+							<form
+								onSubmit={(e) => {
+									e.preventDefault()
+									e.stopPropagation()
+									form.handleSubmit()
+								}}
+								className="flex flex-col gap-4"
+							>
 								<h3 className="text-xl font-semibold">Identity</h3>
 								<div>
 									<Label className="font-bold">Instance Identity</Label>
@@ -127,36 +156,63 @@ function SetupRoute() {
 										<Input
 											className="border-2"
 											name="ownerPk"
+											value={form.getFieldValue('ownerPk')}
+											onChange={(e) => form.setFieldValue('ownerPk', e.target.value)}
 											placeholder="Owner npub"
-											type="text"
-											value={formValues.ownerPk}
-											onChange={(e) => setFormValues({ ...formValues, ownerPk: e.target.value })}
 										/>
 										<Button variant="outline" onClick={getOwnerPubkey}>
 											<span className="text-black">Get Key</span>
 										</Button>
 									</div>
+									{form.getFieldMeta('ownerPk')?.errors && (
+										<div className="text-red-500 text-sm mt-1">{form.getFieldMeta('ownerPk')?.errors.join(', ')}</div>
+									)}
 								</div>
 
 								<div>
-									<Label className="font-bold" htmlFor="instanceName">
+									<Label className="font-bold" htmlFor="name">
 										<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Instance name</span>
 									</Label>
 									<Input
 										required
 										className="border-2"
-										name="instanceName"
+										name="name"
+										value={form.getFieldValue('name')}
+										onChange={(e) => form.setFieldValue('name', e.target.value)}
 										placeholder="Instance name"
-										id="instanceName"
-										value={formValues.instanceName}
-										onChange={(e) => setFormValues({ ...formValues, instanceName: e.target.value })}
 									/>
+									{form.getFieldMeta('name')?.errors && (
+										<div className="text-red-500 text-sm mt-1">{form.getFieldMeta('name')?.errors.join(', ')}</div>
+									)}
+								</div>
+
+								<div>
+									<Label className="font-bold" htmlFor="displayName">
+										<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Display name</span>
+									</Label>
+									<Input
+										required
+										className="border-2"
+										name="displayName"
+										value={form.getFieldValue('displayName')}
+										onChange={(e) => form.setFieldValue('displayName', e.target.value)}
+										placeholder="Display name"
+									/>
+									{form.getFieldMeta('displayName')?.errors && (
+										<div className="text-red-500 text-sm mt-1">{form.getFieldMeta('displayName')?.errors.join(', ')}</div>
+									)}
 								</div>
 
 								<div className="flex flex-col gap-2">
 									<div>
 										<Label className="font-bold">Logo URL</Label>
-										<Select onValueChange={setLogoUrl} defaultValue={logoUrl}>
+										<Select
+											onValueChange={(value) => {
+												setLogoUrl(value)
+												form.setFieldValue('picture', value)
+											}}
+											defaultValue={logoUrl}
+										>
 											<SelectTrigger className="border-2">
 												<SelectValue placeholder="Select logo" />
 											</SelectTrigger>
@@ -190,23 +246,14 @@ function SetupRoute() {
 									<Input
 										className="border-2"
 										name="contactEmail"
+										value={form.getFieldValue('contactEmail')}
+										onChange={(e) => form.setFieldValue('contactEmail', e.target.value)}
 										placeholder="Contact email"
 										type="email"
-										value={formValues.contactEmail}
-										onChange={(e) => setFormValues({ ...formValues, contactEmail: e.target.value })}
 									/>
-								</div>
-
-								<div>
-									<Label className="font-bold required-mark">Relay URL</Label>
-									<Input
-										required
-										className="border-2"
-										name="relayUrl"
-										placeholder={formValues.relayUrl}
-										value={formValues.relayUrl}
-										onChange={(e) => setFormValues({ ...formValues, relayUrl: e.target.value })}
-									/>
+									{form.getFieldMeta('contactEmail')?.errors && (
+										<div className="text-red-500 text-sm mt-1">{form.getFieldMeta('contactEmail')?.errors.join(', ')}</div>
+									)}
 								</div>
 
 								<Separator className="my-2" />
@@ -243,7 +290,13 @@ function SetupRoute() {
 								<div className="flex flex-col gap-4">
 									<div>
 										<Label className="font-bold">Default currency</Label>
-										<Select onValueChange={setSelectedCurrency} defaultValue={selectedCurrency}>
+										<Select
+											onValueChange={(value) => {
+												setSelectedCurrency(value)
+												form.setFieldValue('defaultCurrency', value)
+											}}
+											defaultValue={selectedCurrency}
+										>
 											<SelectTrigger className="border-2">
 												<SelectValue placeholder="Currency" />
 											</SelectTrigger>
@@ -260,7 +313,10 @@ function SetupRoute() {
 										<Checkbox
 											id="allowRegister"
 											checked={checked}
-											onCheckedChange={(value) => setChecked(value === true)}
+											onCheckedChange={(value) => {
+												setChecked(value === true)
+												form.setFieldValue('allowRegister', value === true)
+											}}
 											name="allowRegister"
 										/>
 										<Label htmlFor="allowRegister" className="font-bold">
@@ -271,9 +327,14 @@ function SetupRoute() {
 
 								<Separator className="my-8" />
 
-								<Button type="submit" className="w-full">
-									Submit
-								</Button>
+								<form.Subscribe
+									selector={(state) => [state.canSubmit, state.isSubmitting]}
+									children={([canSubmit, isSubmitting]) => (
+										<Button type="submit" className="w-full" disabled={!canSubmit}>
+											{isSubmitting ? 'Submitting...' : 'Submit'}
+										</Button>
+									)}
+								/>
 							</form>
 						</div>
 					</div>

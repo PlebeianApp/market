@@ -2,7 +2,7 @@ import { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import type { ServerWebSocket } from 'bun'
 import { serve } from 'bun'
 import { config } from 'dotenv'
-import { nip19 } from 'nostr-tools'
+import { nip19, Relay } from 'nostr-tools'
 import { getPublicKey, verifyEvent, type Event } from 'nostr-tools/pure'
 import index from './index.html'
 import { fetchAppSettings } from './lib/appSettings'
@@ -40,16 +40,8 @@ async function initializeAppSettings() {
 	}
 }
 ;(async () => await initializeAppSettings())()
+
 export type NostrMessage = ['EVENT', Event]
-export type SetupMessage = [
-	'SETUP',
-	{
-		type: string
-		appSettings: any
-		adminsList: string[]
-		relayUrl?: string
-	},
-]
 
 eventHandler.initialize(process.env.APP_PRIVATE_KEY || '', []).catch((error) => console.error(error))
 
@@ -74,24 +66,22 @@ export const server = serve({
 	},
 	// @ts-ignore
 	websocket: {
-		message(ws, message) {
+		async message(ws, message) {
 			try {
 				const messageStr = String(message)
 				const data = JSON.parse(messageStr)
 
-				if (Array.isArray(data) && data[0] === 'SETUP') {
-					handleSetupMessage(ws as ServerWebSocket<unknown>, data as SetupMessage)
-					return
-				}
-
 				if (Array.isArray(data) && data[0] === 'EVENT' && data[1].sig) {
 					console.log('Processing EVENT message')
+
 					if (!verifyEvent(data[1] as Event)) throw Error('Unable to verify event')
 
 					const resignedEvent = eventHandler.handleEvent(data[1])
 
 					if (resignedEvent) {
 						// If event was from admin and successfully resigned
+						const relay = await Relay.connect(RELAY_URL as string)
+						await relay.publish(resignedEvent as Event)
 						const okResponse = ['OK', resignedEvent.id, true, '']
 						ws.send(JSON.stringify(okResponse))
 					} else {
