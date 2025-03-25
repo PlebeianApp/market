@@ -5,6 +5,7 @@ import { ndkActions } from './ndk'
 export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
 export const NOSTR_LOCAL_SIGNER_KEY = 'nostr_local_signer_key'
 export const NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY = 'nostr_local_encrypted_signer_key'
+export const NOSTR_AUTO_LOGIN = 'nostr_auto_login'
 
 interface AuthState {
 	user: NDKUser | null
@@ -25,6 +26,9 @@ export const authStore = new Store<AuthState>(initialState)
 export const authActions = {
 	getAuthFromLocalStorageAndLogin: async () => {
 		try {
+			const autoLogin = localStorage.getItem(NOSTR_AUTO_LOGIN)
+			if (autoLogin !== 'true') return
+
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 			const privateKey = localStorage.getItem(NOSTR_LOCAL_SIGNER_KEY)
 			const bunkerUrl = localStorage.getItem(NOSTR_CONNECT_KEY)
@@ -164,6 +168,7 @@ export const authActions = {
 		localStorage.removeItem(NOSTR_LOCAL_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_CONNECT_KEY)
 		localStorage.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
+		localStorage.removeItem(NOSTR_AUTO_LOGIN)
 		authStore.setState(() => initialState)
 	},
 }

@@ -11,22 +11,18 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { authActions, authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
 import { cn } from '@/lib/utils'
+import type { NDKUserProfile } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
 import { Loader2, LogOut, Shield, UserCircle2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+
 interface ProfileProps {
 	compact?: boolean
 }
 
-interface NDKProfile {
-	name?: string
-	about?: string
-	picture?: string
-}
-
 export function Profile({ compact = false }: ProfileProps) {
 	const authState = useStore(authStore)
-	const [profile, setProfile] = useState<NDKProfile | null>(null)
+	const [profile, setProfile] = useState<NDKUserProfile | null>(null)
 	const [isLoading, setIsLoading] = useState(true)
 
 	useEffect(() => {
