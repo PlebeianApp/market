@@ -1,47 +1,59 @@
 import { NDKNip07Signer, NDKNip46Signer, NDKPrivateKeySigner, NDKUser } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { ndkActions } from './ndk'
-import { decrypt } from 'nostr-tools/nip04'
-
-type NDKSigner = NDKPrivateKeySigner | NDKNip07Signer | NDKNip46Signer
 
 export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
 export const NOSTR_LOCAL_SIGNER_KEY = 'nostr_local_signer_key'
+export const NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY = 'nostr_local_encrypted_signer_key'
 
 interface AuthState {
 	user: NDKUser | null
 	isAuthenticated: boolean
-	isAuthenticating: boolean
+	needsDecryptionPassword: boolean
 }
 
 const initialState: AuthState = {
 	user: null,
 	isAuthenticated: false,
-	isAuthenticating: false,
+	needsDecryptionPassword: false,
 }
 
 export const authStore = new Store<AuthState>(initialState)
 
 export const authActions = {
 	getAuthFromLocalStorageAndLogin: async () => {
-		const privateKey = localStorage.getItem(NOSTR_LOCAL_SIGNER_KEY)
-		const bunkerUrl = localStorage.getItem(NOSTR_CONNECT_KEY)
-
-		console.log('getAuthFromLocalStorageAndLogin')
-
-		const encryptedPrivateKey = localStorage.getItem(NOSTR_LOCAL_SIGNER_KEY)
-
-		if (privateKey && bunkerUrl) {
-			await authActions.loginWithNip46(bunkerUrl, privateKey)
-		} else if (encryptedPrivateKey) {
-			const decryptedPrivateKey = 'derp'
-			await authActions.loginWithPrivateKey(decryptedPrivateKey)
-		} else {
-			try {
-				await authActions.loginWithExtension()
-			} catch (error) {
-				console.error('Error logging in with extension:', error)
+		try {
+			const privateKey = localStorage.getItem(NOSTR_LOCAL_SIGNER_KEY)
+			const bunkerUrl = localStorage.getItem(NOSTR_CONNECT_KEY)
+			if (privateKey && bunkerUrl) {
+				await authActions.loginWithNip46(bunkerUrl, new NDKPrivateKeySigner(privateKey))
+				return
 			}
+
+			const encryptedPrivateKey = localStorage.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
+			if (encryptedPrivateKey) {
+				authStore.setState((state) => ({ ...state, needsDecryptionPassword: true }))
+				return
+			}
+
+			await authActions.loginWithExtension()
+		} catch (error) {
+			console.error('Authentication failed:', error)
+		}
+	},
+
+	decryptAndLogin: async (password: string) => {
+		try {
+			const encryptedPrivateKey = localStorage.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
+			if (!encryptedPrivateKey) {
+				throw new Error('No encrypted key found')
+			}
+
+			const [, key] = encryptedPrivateKey.split(':')
+			await authActions.loginWithPrivateKey(key)
+			authStore.setState((state) => ({ ...state, needsDecryptionPassword: false }))
+		} catch (error) {
+			throw error
 		}
 	},
 
@@ -49,43 +61,36 @@ export const authActions = {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
 
-		authStore.setState((state) => ({ ...state, isAuthenticating: true }))
-
 		try {
 			const signer = new NDKPrivateKeySigner(privateKey)
 			await signer.blockUntilReady()
 			ndkActions.setSigner(signer)
 
 			const user = await signer.user()
-			const publicKey = user.pubkey
 
 			authStore.setState((state) => ({
 				...state,
 				user,
-				signer,
-				signerType: 'privateKey',
-				publicKey,
-				privateKey,
 				isAuthenticated: true,
 			}))
 
 			return user
-		} finally {
-			authStore.setState((state) => ({ ...state, isAuthenticating: false }))
+		} catch (error) {
+			authStore.setState((state) => ({
+				...state,
+				isAuthenticated: false,
+			}))
+			throw error
 		}
 	},
 
 	loginWithExtension: async () => {
-		console.log('loginWithExtension')
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
 
-		authStore.setState((state) => ({ ...state, isAuthenticating: true }))
-
-		console.log('loginWithExtension 2')
-
 		try {
 			const signer = new NDKNip07Signer()
+			await signer.blockUntilReady()
 			ndkActions.setSigner(signer)
 
 			const user = await signer.user()
@@ -97,19 +102,21 @@ export const authActions = {
 			}))
 
 			return user
-		} finally {
-			authStore.setState((state) => ({ ...state, isAuthenticating: false }))
+		} catch (error) {
+			authStore.setState((state) => ({
+				...state,
+				isAuthenticated: false,
+			}))
+			throw error
 		}
 	},
 
-	loginWithNip46: async (bunkerUrl: string, localSigner: NDKNip46Signer) => {
+	loginWithNip46: async (bunkerUrl: string, localSigner: NDKPrivateKeySigner) => {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
 
-		localStorage.setItem(NOSTR_LOCAL_SIGNER_KEY, localSigner.bunkerPubkey || '')
+		localStorage.setItem(NOSTR_LOCAL_SIGNER_KEY, localSigner.privateKey || '')
 		localStorage.setItem(NOSTR_CONNECT_KEY, bunkerUrl)
-
-		authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 
 		try {
 			const signer = new NDKNip46Signer(ndk, bunkerUrl, localSigner)
@@ -124,8 +131,12 @@ export const authActions = {
 			}))
 
 			return user
-		} finally {
-			authStore.setState((state) => ({ ...state, isAuthenticating: false }))
+		} catch (error) {
+			authStore.setState((state) => ({
+				...state,
+				isAuthenticated: false,
+			}))
+			throw error
 		}
 	},
 
@@ -133,6 +144,9 @@ export const authActions = {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) return
 		ndkActions.removeSigner()
+		localStorage.removeItem(NOSTR_LOCAL_SIGNER_KEY)
+		localStorage.removeItem(NOSTR_CONNECT_KEY)
+		localStorage.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
 		authStore.setState(() => initialState)
 	},
 }

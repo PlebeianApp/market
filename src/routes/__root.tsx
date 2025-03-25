@@ -1,8 +1,13 @@
-import { AuthButton } from '@/components/auth/AuthButton'
+import { DecryptPasswordDialog } from '@/components/auth/DecryptPasswordDialog'
+import { LoginDialog } from '@/components/auth/LoginDialog'
+import { Profile } from '@/components/Profile'
+import { Button } from '@/components/ui/button'
+import { authStore } from '@/lib/stores/auth'
 import { useConfigQuery } from '@/queries/config'
 import { createRootRoute, Link, Outlet, useNavigate } from '@tanstack/react-router'
+import { useStore } from '@tanstack/react-store'
 import { TanStackRouterDevtools } from '@tanstack/router-devtools'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 export const Route = createRootRoute({
 	component: RootComponent,
@@ -14,6 +19,8 @@ function RootComponent() {
 
 function RootLayout() {
 	const { data: config, isLoading, isError } = useConfigQuery()
+	const { isAuthenticated } = useStore(authStore)
+	const [showLoginDialog, setShowLoginDialog] = useState(false)
 	const navigate = useNavigate()
 
 	useEffect(() => {
@@ -43,12 +50,13 @@ function RootLayout() {
 						Posts
 					</Link>
 				</div>
-
-				<AuthButton />
+				{isAuthenticated ? <Profile /> : <Button onClick={() => setShowLoginDialog(true)}>Login</Button>}
 			</div>
 			<hr />
 			<Outlet />
 			<TanStackRouterDevtools />
+			<DecryptPasswordDialog />
+			<LoginDialog open={showLoginDialog} onOpenChange={setShowLoginDialog} />
 		</>
 	)
 }

@@ -7,6 +7,7 @@ import { queryClient } from './lib/queryClient'
 import { ndkActions } from './lib/stores/ndk'
 import { useConfigQuery } from './queries/config'
 import { routeTree } from './routeTree.gen'
+import { authActions } from './lib/stores/auth'
 
 declare global {
 	interface ImportMeta {
@@ -43,6 +44,7 @@ function AppContent() {
 				console.log(`Adding relay from config: ${config.appRelay}`)
 				ndkActions.initialize([config.appRelay, 'wss://relay.nostr.net'])
 				ndkActions.connect()
+				authActions.getAuthFromLocalStorageAndLogin()
 			}
 		}
 

@@ -1,12 +1,10 @@
-import { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import type { ServerWebSocket } from 'bun'
 import { serve } from 'bun'
 import { config } from 'dotenv'
-import { nip19, Relay } from 'nostr-tools'
+import { Relay } from 'nostr-tools'
 import { getPublicKey, verifyEvent, type Event } from 'nostr-tools/pure'
 import index from './index.html'
 import { fetchAppSettings } from './lib/appSettings'
-import { NostrService } from './lib/nostr'
 import { eventHandler } from './lib/wsSignerEventHandler'
 
 config()
