@@ -53,8 +53,6 @@
 		"@tanstack/router-plugin": "^1.113.0",
 		"@types/bun": "latest",
 		"@types/react": "^19",
-		"@types/react-dom": "^19",
-		"@vitejs/plugin-react": "^4.3.4",
-		"vite": "^6.2.2"
+		"@types/react-dom": "^19"
 	}
 }
