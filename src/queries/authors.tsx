@@ -2,7 +2,7 @@ import { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { authorKeys } from './queryKeyFactory'
 import { queryOptions } from '@tanstack/react-query'
-import { nostrService } from '@/frontend'
+import { ndkActions } from '@/lib/stores/ndk'
 
 export type NostrAuthor = {
 	id: string
@@ -21,17 +21,15 @@ const transformEvent = (event: NDKEvent): NostrAuthor => ({
 })
 
 export const fetchAuthor = async (pubkey: string) => {
-	// Wait for connection if not already connected
-	if (!nostrService.isConnected) {
-		await nostrService.connect()
-	}
-
 	const filter: NDKFilter = {
 		kinds: [0], // kind 0 is metadata
 		authors: [pubkey],
 	}
 
-	const events = await nostrService.ndkInstance.fetchEvents(filter)
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	const events = await ndk.fetchEvents(filter)
 	const eventArray = Array.from(events)
 
 	if (eventArray.length === 0) {

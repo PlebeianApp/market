@@ -1,3 +1,4 @@
+import { AuthButton } from '@/components/auth/AuthButton'
 import { useConfigQuery } from '@/queries/config'
 import { createRootRoute, Link, Outlet, useNavigate } from '@tanstack/react-router'
 import { TanStackRouterDevtools } from '@tanstack/router-devtools'
@@ -30,16 +31,20 @@ function RootLayout() {
 
 	return (
 		<>
-			<div className="p-2 flex gap-2 items-center">
-				{config?.appSettings?.picture && (
-					<img src={config.appSettings.picture} alt={config.appSettings.displayName} className="h-8 w-8 rounded-full" />
-				)}
-				<Link to="/" className="[&.active]:font-bold">
-					Home
-				</Link>{' '}
-				<Link to="/posts" className="[&.active]:font-bold">
-					Posts
-				</Link>
+			<div className="p-2 flex justify-between gap-2 items-center">
+				<div className="flex gap-2 items-center">
+					{config?.appSettings?.picture && (
+						<img src={config.appSettings.picture} alt={config.appSettings.displayName} className="h-8 w-8 rounded-full" />
+					)}
+					<Link to="/" className="[&.active]:font-bold">
+						Home
+					</Link>{' '}
+					<Link to="/posts" className="[&.active]:font-bold">
+						Posts
+					</Link>
+				</div>
+
+				<AuthButton />
 			</div>
 			<hr />
 			<Outlet />

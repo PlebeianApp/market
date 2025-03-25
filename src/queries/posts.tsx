@@ -2,7 +2,7 @@ import { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { postKeys } from './queryKeyFactory'
 import { queryOptions } from '@tanstack/react-query'
-import { nostrService } from '@/frontend'
+import { ndkActions } from '@/lib/stores/ndk'
 
 export type NostrPost = {
 	id: string
@@ -19,17 +19,15 @@ const transformEvent = (event: NDKEvent): NostrPost => ({
 })
 
 export const fetchPosts = async () => {
-	// Wait for connection if not already connected
-	if (!nostrService.isConnected) {
-		await nostrService.connect()
-	}
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
 
 	const filter: NDKFilter = {
 		kinds: [1], // kind 1 is text notes
 		limit: 20,
 	}
 
-	const events = await nostrService.ndkInstance.fetchEvents(filter)
+	const events = await ndk.fetchEvents(filter)
 	const posts = Array.from(events).map(transformEvent)
 
 	// Sort by newest first
@@ -37,12 +35,10 @@ export const fetchPosts = async () => {
 }
 
 export const fetchPost = async (id: string) => {
-	// Wait for connection if not already connected
-	if (!nostrService.isConnected) {
-		await nostrService.connect()
-	}
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
 
-	const event = await nostrService.ndkInstance.fetchEvent(id)
+	const event = await ndk.fetchEvent(id)
 	if (!event) {
 		throw new Error('Post not found')
 	}
