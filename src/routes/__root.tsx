@@ -8,6 +8,7 @@ import { createRootRoute, Link, Outlet, useNavigate } from '@tanstack/react-rout
 import { useStore } from '@tanstack/react-store'
 import { TanStackRouterDevtools } from '@tanstack/router-devtools'
 import { useEffect, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 
 export const Route = createRootRoute({
 	component: RootComponent,
@@ -19,7 +20,7 @@ function RootComponent() {
 
 function RootLayout() {
 	const { data: config, isLoading, isError } = useConfigQuery()
-	const { isAuthenticated } = useStore(authStore)
+	const { isAuthenticated, isAuthenticating } = useStore(authStore)
 	const [showLoginDialog, setShowLoginDialog] = useState(false)
 	const navigate = useNavigate()
 
@@ -50,7 +51,13 @@ function RootLayout() {
 						Posts
 					</Link>
 				</div>
-				{isAuthenticated ? <Profile /> : <Button onClick={() => setShowLoginDialog(true)}>Login</Button>}
+				{isAuthenticating ? (
+					<Loader2 className="h-4 w-4 animate-spin" />
+				) : isAuthenticated ? (
+					<Profile />
+				) : (
+					<Button onClick={() => setShowLoginDialog(true)}>Login</Button>
+				)}
 			</div>
 			<hr />
 			<Outlet />

@@ -10,12 +10,14 @@ interface AuthState {
 	user: NDKUser | null
 	isAuthenticated: boolean
 	needsDecryptionPassword: boolean
+	isAuthenticating: boolean
 }
 
 const initialState: AuthState = {
 	user: null,
 	isAuthenticated: false,
 	needsDecryptionPassword: false,
+	isAuthenticating: false,
 }
 
 export const authStore = new Store<AuthState>(initialState)
@@ -23,6 +25,7 @@ export const authStore = new Store<AuthState>(initialState)
 export const authActions = {
 	getAuthFromLocalStorageAndLogin: async () => {
 		try {
+			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 			const privateKey = localStorage.getItem(NOSTR_LOCAL_SIGNER_KEY)
 			const bunkerUrl = localStorage.getItem(NOSTR_CONNECT_KEY)
 			if (privateKey && bunkerUrl) {
@@ -39,11 +42,14 @@ export const authActions = {
 			await authActions.loginWithExtension()
 		} catch (error) {
 			console.error('Authentication failed:', error)
+		} finally {
+			authStore.setState((state) => ({ ...state, isAuthenticating: false }))
 		}
 	},
 
 	decryptAndLogin: async (password: string) => {
 		try {
+			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 			const encryptedPrivateKey = localStorage.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
 			if (!encryptedPrivateKey) {
 				throw new Error('No encrypted key found')
@@ -54,6 +60,8 @@ export const authActions = {
 			authStore.setState((state) => ({ ...state, needsDecryptionPassword: false }))
 		} catch (error) {
 			throw error
+		} finally {
+			authStore.setState((state) => ({ ...state, isAuthenticating: false }))
 		}
 	},
 
@@ -62,6 +70,7 @@ export const authActions = {
 		if (!ndk) throw new Error('NDK not initialized')
 
 		try {
+			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 			const signer = new NDKPrivateKeySigner(privateKey)
 			await signer.blockUntilReady()
 			ndkActions.setSigner(signer)
@@ -81,6 +90,8 @@ export const authActions = {
 				isAuthenticated: false,
 			}))
 			throw error
+		} finally {
+			authStore.setState((state) => ({ ...state, isAuthenticating: false }))
 		}
 	},
 
@@ -89,6 +100,7 @@ export const authActions = {
 		if (!ndk) throw new Error('NDK not initialized')
 
 		try {
+			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 			const signer = new NDKNip07Signer()
 			await signer.blockUntilReady()
 			ndkActions.setSigner(signer)
@@ -108,6 +120,8 @@ export const authActions = {
 				isAuthenticated: false,
 			}))
 			throw error
+		} finally {
+			authStore.setState((state) => ({ ...state, isAuthenticating: false }))
 		}
 	},
 
@@ -119,6 +133,7 @@ export const authActions = {
 		localStorage.setItem(NOSTR_CONNECT_KEY, bunkerUrl)
 
 		try {
+			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 			const signer = new NDKNip46Signer(ndk, bunkerUrl, localSigner)
 			await signer.blockUntilReady()
 			ndkActions.setSigner(signer)
@@ -137,6 +152,8 @@ export const authActions = {
 				isAuthenticated: false,
 			}))
 			throw error
+		} finally {
+			authStore.setState((state) => ({ ...state, isAuthenticating: false }))
 		}
 	},
 

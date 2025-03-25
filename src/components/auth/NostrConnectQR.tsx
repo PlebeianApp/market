@@ -285,7 +285,7 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 						return
 					}
 
-					processedAckIds.add(event.id)s
+					processedAckIds.add(event.id)
 
 					console.log('Received ACK response, processing login...')
 					await handleLoginWithNip46Signer(event)
