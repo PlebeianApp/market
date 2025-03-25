@@ -8,6 +8,10 @@ export const AppSettingsSchema = z.object({
 	ownerPk: z.string(),
 	allowRegister: z.boolean(),
 	defaultCurrency: z.string(),
+	contactEmail: z
+		.string()
+		.optional()
+		.transform((val) => val || undefined),
 	blossom_server: z.string().url().optional(),
 	nip96_server: z.string().url().optional(),
 })

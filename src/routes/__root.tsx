@@ -12,16 +12,19 @@ function RootComponent() {
 }
 
 function RootLayout() {
-	const { data: config } = useConfigQuery()
+	const { data: config, isLoading, isError } = useConfigQuery()
 	const navigate = useNavigate()
 
 	useEffect(() => {
+		if (isLoading || isError) return
 		if (config?.needsSetup && window.location.pathname !== '/setup') {
 			navigate({ to: '/setup' })
+		} else if (!config?.needsSetup && window.location.pathname === '/setup') {
+			navigate({ to: '/' })
 		}
-	}, [config, navigate])
+	}, [config, navigate, isLoading, isError])
 
-	if (window.location.pathname === '/setup') {
+	if (isLoading || window.location.pathname === '/setup') {
 		return <Outlet />
 	}
 

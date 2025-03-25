@@ -17,6 +17,7 @@ const fetchConfig = async (): Promise<Config> => {
 		throw new Error(`Failed to fetch config: ${response.status} ${response.statusText}`)
 	}
 	const config: Config = await response.json()
+	console.log('Fetched config:', config)
 	cachedConfig = config
 	return config
 }
@@ -27,7 +28,8 @@ export const useConfigQuery = () => {
 	return useQuery({
 		queryKey: configKeys.all,
 		queryFn: fetchConfig,
-		staleTime: Infinity,
+		staleTime: cachedConfig?.needsSetup ? 0 : Infinity,
 		retry: 3,
+		refetchOnWindowFocus: cachedConfig?.needsSetup ? true : false,
 	})
 }

@@ -1,12 +1,15 @@
+import { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
+import type { ServerWebSocket } from 'bun'
 import { serve } from 'bun'
 import { config } from 'dotenv'
-import { getPublicKey } from 'nostr-tools/pure'
+import { nip19, Relay } from 'nostr-tools'
+import { getPublicKey, verifyEvent, type Event } from 'nostr-tools/pure'
 import index from './index.html'
 import { fetchAppSettings } from './lib/appSettings'
+import { NostrService } from './lib/nostr'
+import { eventHandler } from './lib/wsSignerEventHandler'
 
 config()
-import { verifyEvent, type Event } from 'nostr-tools/pure'
-import { eventHandler } from './lib/wsSignerEventHandler'
 
 const RELAY_URL = process.env.APP_RELAY_URL
 const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
@@ -36,7 +39,8 @@ async function initializeAppSettings() {
 		process.exit(1)
 	}
 }
-;async () => await initializeAppSettings()
+;(async () => await initializeAppSettings())()
+
 export type NostrMessage = ['EVENT', Event]
 
 eventHandler.initialize(process.env.APP_PRIVATE_KEY || '', []).catch((error) => console.error(error))
@@ -62,19 +66,23 @@ export const server = serve({
 	},
 	// @ts-ignore
 	websocket: {
-		message(ws, message) {
+		async message(ws, message) {
 			try {
-				const data = JSON.parse(String(message)) as NostrMessage
-				console.log('Received WebSocket message:', data)
+				const messageStr = String(message)
+				const data = JSON.parse(messageStr)
 
-				if (!verifyEvent(data[1] as Event)) throw Error('Unable to verify event')
+				if (Array.isArray(data) && data[0] === 'EVENT' && data[1].sig) {
+					console.log('Processing EVENT message')
 
-				if (data[0] === 'EVENT' && data[1].sig) {
+					if (!verifyEvent(data[1] as Event)) throw Error('Unable to verify event')
+
 					const resignedEvent = eventHandler.handleEvent(data[1])
 
 					if (resignedEvent) {
 						// If event was from admin and successfully resigned
-						const okResponse = ['OK', resignedEvent.id, true, '']
+						const relay = await Relay.connect(RELAY_URL as string)
+						await relay.publish(resignedEvent as Event)
+						const okResponse = ['OK', data[1].id, true, '']
 						ws.send(JSON.stringify(okResponse))
 					} else {
 						// If event was not from admin
@@ -89,20 +97,20 @@ export const server = serve({
 					if (failedData.id) {
 						const errorResponse = ['OK', failedData.id, false, `error: Invalid message format ${error}`]
 						ws.send(JSON.stringify(errorResponse))
+						return
 					}
 				} catch {
 					ws.send(JSON.stringify(['NOTICE', 'error: Invalid JSON']))
 				}
 			}
 		},
-		open() {
+		open(ws: ServerWebSocket<unknown>) {
 			console.log('WebSocket connection opened')
 		},
-		close() {
+		close(ws: ServerWebSocket<unknown>) {
 			console.log('WebSocket connection closed')
 		},
 	},
-
 	development: process.env.NODE_ENV !== 'production',
 })
 
