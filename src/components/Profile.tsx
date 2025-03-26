@@ -80,15 +80,12 @@ export function Profile({ compact = false }: ProfileProps) {
 					<TooltipTrigger asChild>
 						<DropdownMenuTrigger asChild>
 							<Button
-								variant={authState.isAuthenticated ? 'ghost' : 'outline'}
+								variant={authState.isAuthenticated ? 'primary' : 'outline'}
 								size={compact ? 'icon' : 'default'}
-								className={cn('relative', !authState.isAuthenticated && 'text-muted-foreground hover:text-foreground')}
+								icon={authState.isAuthenticated ? <span className="i-log-out w-6 h-6" /> : <span className="i-account w-6 h-6" />}
+								
+								className={cn('p-2 w-full relative rounded-md', !authState.isAuthenticated && 'text-muted-foreground hover:text-foreground')}
 							>
-								{authState.isAuthenticated ? (
-									<Shield className={cn('h-4 w-4', !compact && 'mr-2')} />
-								) : (
-									<UserCircle2 className={cn('h-4 w-4', !compact && 'mr-2')} />
-								)}
 								{!compact && displayName}
 							</Button>
 						</DropdownMenuTrigger>

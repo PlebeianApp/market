@@ -38,8 +38,6 @@ function RootLayout() {
 	return (
 		<div className="flex flex-col min-h-screen">
 			<Header
-				appPicture={config?.appSettings?.picture}
-				appDisplayName={config?.appSettings?.displayName}
 				onLoginClick={() => setShowLoginDialog(true)}
 			/>
 
