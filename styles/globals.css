@@ -153,8 +153,26 @@
 	--color-popover-foreground: var(--popover-foreground);
 	--color-primary: var(--primary);
 	--color-primary-foreground: var(--primary-foreground);
+	--color-primary-foreground-hover: var(--primary-foreground-hover);
+	--color-primary-border: var(--primary-border);
+	--color-primary-border-hover: var(--primary-border-hover);
 	--color-secondary: var(--secondary);
 	--color-secondary-foreground: var(--secondary-foreground);
+	--color-secondary-foreground-hover: var(--secondary-foreground-hover);
+	--color-secondary-border: var(--secondary-border);
+	--color-secondary-border-hover: var(--secondary-border-hover);
+	--color-tertiary: var(--tertiary);
+	--color-tertiary-hover: var(--tertiary-hover);
+	--color-tertiary-foreground: var(--tertiary-foreground);
+	--color-tertiary-foreground-hover: var(--tertiary-foreground-hover);
+	--color-tertiary-border: var(--tertiary-border);
+	--color-tertiary-border-hover: var(--tertiary-border-hover);
+	--color-focus: var(--focus);
+	--color-focus-hover: var(--focus-hover);
+	--color-focus-foreground: var(--focus-foreground);
+	--color-focus-foreground-hover: var(--focus-foreground-hover);
+	--color-focus-border: var(--focus-border);
+	--color-focus-border-hover: var(--focus-border-hover);
 	--color-muted: var(--muted);
 	--color-muted-foreground: var(--muted-foreground);
 	--color-accent: var(--accent);
@@ -204,9 +222,6 @@
 }
 
 @layer base {
-	* {
-		@apply border-border outline-ring/50;
-	}
 	body {
 		@apply bg-background text-foreground;
 	}
