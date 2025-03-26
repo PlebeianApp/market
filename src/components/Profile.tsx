@@ -83,8 +83,10 @@ export function Profile({ compact = false }: ProfileProps) {
 								variant={authState.isAuthenticated ? 'primary' : 'outline'}
 								size={compact ? 'icon' : 'default'}
 								icon={authState.isAuthenticated ? <span className="i-log-out w-6 h-6" /> : <span className="i-account w-6 h-6" />}
-								
-								className={cn('p-2 w-full relative rounded-md', !authState.isAuthenticated && 'text-muted-foreground hover:text-foreground')}
+								className={cn(
+									'p-2 w-full relative rounded-md',
+									!authState.isAuthenticated && 'text-muted-foreground hover:text-foreground',
+								)}
 							>
 								{!compact && displayName}
 							</Button>

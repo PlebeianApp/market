@@ -62,25 +62,25 @@ export function Header({ onLoginClick }: HeaderProps) {
 						<ProductSearch />
 					</div>
 					<div className="flex gap-2">
-					<Button 
-						variant="primary" 
-						className="p-2 relative rounded-md hover:[&>span]:text-secondary"
-						icon={<span className="i-basket w-6 h-6" />}
-					/>
-					{isAuthenticating ? (
-						<Button variant="primary" className="p-2 relative rounded-md">
-							<Loader2 className="h-4 w-4 animate-spin" />
-						</Button>
-					) : isAuthenticated ? (
-						<Profile compact />
-					) : (
-						<Button 
-							variant="primary" 
+						<Button
+							variant="primary"
 							className="p-2 relative rounded-md hover:[&>span]:text-secondary"
-							icon={<span className="i-account w-6 h-6" />}
-							onClick={onLoginClick}
+							icon={<span className="i-basket w-6 h-6" />}
 						/>
-					)}
+						{isAuthenticating ? (
+							<Button variant="primary" className="p-2 relative rounded-md">
+								<Loader2 className="h-4 w-4 animate-spin" />
+							</Button>
+						) : isAuthenticated ? (
+							<Profile compact />
+						) : (
+							<Button
+								variant="primary"
+								className="p-2 relative rounded-md hover:[&>span]:text-secondary"
+								icon={<span className="i-account w-6 h-6" />}
+								onClick={onLoginClick}
+							/>
+						)}
 					</div>
 				</div>
 			</div>

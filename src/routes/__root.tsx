@@ -37,9 +37,7 @@ function RootLayout() {
 
 	return (
 		<div className="flex flex-col min-h-screen">
-			<Header
-				onLoginClick={() => setShowLoginDialog(true)}
-			/>
+			<Header onLoginClick={() => setShowLoginDialog(true)} />
 
 			<main className="flex-grow">
 				<div className="max-w-7xl mx-auto p-4">
