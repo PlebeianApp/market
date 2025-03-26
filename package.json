@@ -14,7 +14,8 @@
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
 		"seed": "bun run scripts/seed.ts",
-		"startup": "bun run scripts/startup.ts"
+		"startup": "bun run scripts/startup.ts",
+		"build-icons": "bun run scripts/build-icons.ts"
 	},
 	"dependencies": {
 		"@faker-js/faker": "^9.6.0",
@@ -60,6 +61,8 @@
 		"@tanstack/router-plugin": "^1.114.27",
 		"@types/bun": "^1.2.6",
 		"@types/react": "^19.0.12",
-		"@types/react-dom": "^19.0.4"
+		"@types/react-dom": "^19.0.4",
+		"mini-svg-data-uri": "^1.4.4",
+		"svgo": "^3.3.2"
 	}
 }

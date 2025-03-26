@@ -4,12 +4,12 @@
 
 @font-face {
 	font-family: 'reglisse';
-	src: url('assets/fonts/Reglisse_Fill.otf') format('opentype');
+	src: url('../src/assets/fonts/Reglisse_Fill.otf') format('opentype');
 }
 
 @font-face {
 	font-family: 'IBM Plex Mono';
-	src: url('assets/fonts/IBMPlexMono-Regular.ttf') format('truetype');
+	src: url('../src/assets/fonts/IBMPlexMono-Regular.ttf') format('truetype');
 	font-weight: 400;
 	font-style: normal;
 	font-display: swap;
@@ -17,7 +17,7 @@
 
 @font-face {
 	font-family: 'IBM Plex Mono';
-	src: url('assets/fonts/IBMPlexMono-Medium.ttf') format('truetype');
+	src: url('../src/assets/fonts/IBMPlexMono-Medium.ttf') format('truetype');
 	font-weight: 500;
 	font-style: normal;
 	font-display: swap;
@@ -25,7 +25,7 @@
 
 @font-face {
 	font-family: 'IBM Plex Mono';
-	src: url('assets/fonts/IBMPlexMono-SemiBold.ttf') format('truetype');
+	src: url('../src/assets/fonts/IBMPlexMono-SemiBold.ttf') format('truetype');
 	font-weight: 600;
 	font-style: normal;
 	font-display: swap;
@@ -33,7 +33,7 @@
 
 @font-face {
 	font-family: 'IBM Plex Mono';
-	src: url('assets/fonts/IBMPlexMono-Bold.ttf') format('truetype');
+	src: url('../src/assets/fonts/IBMPlexMono-Bold.ttf') format('truetype');
 	font-weight: 700;
 	font-style: normal;
 	font-display: swap;
