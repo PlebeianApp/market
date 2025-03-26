@@ -1,4 +1,3 @@
-import type { ServerWebSocket } from 'bun'
 import { serve } from 'bun'
 import { config } from 'dotenv'
 import { Relay } from 'nostr-tools'
@@ -6,13 +5,13 @@ import { getPublicKey, verifyEvent, type Event } from 'nostr-tools/pure'
 import index from './index.html'
 import { fetchAppSettings } from './lib/appSettings'
 import { eventHandler } from './lib/wsSignerEventHandler'
+import { join } from 'path'
+import { file } from 'bun'
 
 config()
 
 const RELAY_URL = process.env.APP_RELAY_URL
 const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
-
-const relay = RELAY_URL as string
 
 let appSettings: Awaited<ReturnType<typeof fetchAppSettings>> = null
 let APP_PUBLIC_KEY: string
@@ -26,7 +25,7 @@ async function initializeAppSettings() {
 	try {
 		const privateKeyBytes = new Uint8Array(Buffer.from(APP_PRIVATE_KEY, 'hex'))
 		APP_PUBLIC_KEY = getPublicKey(privateKeyBytes)
-		appSettings = await fetchAppSettings(relay, APP_PUBLIC_KEY)
+		appSettings = await fetchAppSettings(RELAY_URL as string, APP_PUBLIC_KEY)
 		if (appSettings) {
 			console.log('App settings loaded successfully')
 		} else {
@@ -43,19 +42,51 @@ export type NostrMessage = ['EVENT', Event]
 
 eventHandler.initialize(process.env.APP_PRIVATE_KEY || '', []).catch((error) => console.error(error))
 
+// Handle static files from the public directory
+const serveStatic = async (path: string) => {
+	const filePath = join(process.cwd(), 'public', path)
+	try {
+		const f = file(filePath)
+		if (!f.exists()) {
+			return new Response('File not found', { status: 404 })
+		}
+		// Determine content type based on file extension
+		const contentType = path.endsWith('.svg')
+			? 'image/svg+xml'
+			: path.endsWith('.png')
+				? 'image/png'
+				: path.endsWith('.jpg') || path.endsWith('.jpeg')
+					? 'image/jpeg'
+					: path.endsWith('.css')
+						? 'text/css'
+						: path.endsWith('.js')
+							? 'application/javascript'
+							: 'application/octet-stream'
+
+		return new Response(f, {
+			headers: { 'Content-Type': contentType },
+		})
+	} catch (error) {
+		console.error(`Error serving static file ${path}:`, error)
+		return new Response('Internal server error', { status: 500 })
+	}
+}
+
 export const server = serve({
 	routes: {
 		'/*': index,
 		'/api/config': {
 			GET: () =>
 				Response.json({
-					appRelay: relay,
+					appRelay: RELAY_URL,
 					appSettings,
 					appPublicKey: APP_PUBLIC_KEY,
 					needsSetup: !appSettings,
 				}),
 		},
+		'/images/:file': ({ params }) => serveStatic(`images/${params.file}`),
 	},
+	development: process.env.NODE_ENV !== 'production',
 	fetch(req, server) {
 		if (server.upgrade(req)) {
 			return new Response()
@@ -102,14 +133,7 @@ export const server = serve({
 				}
 			}
 		},
-		open(ws: ServerWebSocket<unknown>) {
-			console.log('WebSocket connection opened')
-		},
-		close(ws: ServerWebSocket<unknown>) {
-			console.log('WebSocket connection closed')
-		},
 	},
-	development: process.env.NODE_ENV !== 'production',
 })
 
 console.log(`🚀 Server running at ${server.url}`)
