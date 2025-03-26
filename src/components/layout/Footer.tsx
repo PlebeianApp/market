@@ -1,8 +1,6 @@
-import { Link } from '@tanstack/react-router'
-
 export function Footer() {
 	return (
-		<footer className="sticky top-0 bg-black p-4 font-bold text-white lg:px-12">
+		<footer className="sticky top-0 bg-black p-4 font-bold text-white lg:px-12 flex justify-center">
 			<div className="container flex justify-between items-center flex-col gap-4 md:gap-0 md:flex-row">
 				<div className="flex gap-4 flex-col md:flex-row items-center">
 					<span>Plug into the bitcoin economy. Powered by Nostr.</span>

@@ -2,10 +2,8 @@ import { DecryptPasswordDialog } from '@/components/auth/DecryptPasswordDialog'
 import { LoginDialog } from '@/components/auth/LoginDialog'
 import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
-import { authStore } from '@/lib/stores/auth'
 import { useConfigQuery } from '@/queries/config'
 import { createRootRoute, Outlet, useNavigate } from '@tanstack/react-router'
-import { useStore } from '@tanstack/react-store'
 import { TanStackRouterDevtools } from '@tanstack/router-devtools'
 import { useEffect, useState } from 'react'
 
@@ -19,7 +17,6 @@ function RootComponent() {
 
 function RootLayout() {
 	const { data: config, isLoading, isError } = useConfigQuery()
-	const { isAuthenticated, isAuthenticating } = useStore(authStore)
 	const [showLoginDialog, setShowLoginDialog] = useState(false)
 	const navigate = useNavigate()
 	const isSetupPage = window.location.pathname === '/setup'
