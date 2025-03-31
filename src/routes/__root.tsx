@@ -4,7 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
 import { useConfigQuery } from '@/queries/config'
 import { createRootRoute, Outlet, useNavigate } from '@tanstack/react-router'
-import { TanStackRouterDevtools } from '@tanstack/router-devtools'
+import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { useEffect, useState } from 'react'
 
 export const Route = createRootRoute({
@@ -37,11 +37,7 @@ function RootLayout() {
 
 	return (
 		<div className="flex flex-col min-h-screen">
-			<Header
-				appPicture={config?.appSettings?.picture}
-				appDisplayName={config?.appSettings?.displayName}
-				onLoginClick={() => setShowLoginDialog(true)}
-			/>
+			<Header onLoginClick={() => setShowLoginDialog(true)} />
 
 			<main className="flex-grow">
 				<div className="max-w-7xl mx-auto p-4">
@@ -51,7 +47,8 @@ function RootLayout() {
 
 			<Footer />
 
-			<TanStackRouterDevtools />
+			{/* Having some build error with this rn */}
+			{/* <TanStackRouterDevtools /> */}
 			<DecryptPasswordDialog />
 			<LoginDialog open={showLoginDialog} onOpenChange={setShowLoginDialog} />
 		</div>

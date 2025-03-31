@@ -13,7 +13,10 @@
 import { Route as rootRoute } from './routes/__root'
 import { Route as SetupImport } from './routes/setup'
 import { Route as IndexImport } from './routes/index'
+import { Route as ProductsIndexImport } from './routes/products.index'
 import { Route as PostsIndexImport } from './routes/posts.index'
+import { Route as NostrIndexImport } from './routes/nostr.index'
+import { Route as CommunityIndexImport } from './routes/community.index'
 import { Route as PostsPostIdImport } from './routes/posts.$postId'
 
 // Create/Update Routes
@@ -30,9 +33,27 @@ const IndexRoute = IndexImport.update({
 	getParentRoute: () => rootRoute,
 } as any)
 
+const ProductsIndexRoute = ProductsIndexImport.update({
+	id: '/products/',
+	path: '/products/',
+	getParentRoute: () => rootRoute,
+} as any)
+
 const PostsIndexRoute = PostsIndexImport.update({
 	id: '/posts/',
 	path: '/posts/',
+	getParentRoute: () => rootRoute,
+} as any)
+
+const NostrIndexRoute = NostrIndexImport.update({
+	id: '/nostr/',
+	path: '/nostr/',
+	getParentRoute: () => rootRoute,
+} as any)
+
+const CommunityIndexRoute = CommunityIndexImport.update({
+	id: '/community/',
+	path: '/community/',
 	getParentRoute: () => rootRoute,
 } as any)
 
@@ -67,11 +88,32 @@ declare module '@tanstack/react-router' {
 			preLoaderRoute: typeof PostsPostIdImport
 			parentRoute: typeof rootRoute
 		}
+		'/community/': {
+			id: '/community/'
+			path: '/community'
+			fullPath: '/community'
+			preLoaderRoute: typeof CommunityIndexImport
+			parentRoute: typeof rootRoute
+		}
+		'/nostr/': {
+			id: '/nostr/'
+			path: '/nostr'
+			fullPath: '/nostr'
+			preLoaderRoute: typeof NostrIndexImport
+			parentRoute: typeof rootRoute
+		}
 		'/posts/': {
 			id: '/posts/'
 			path: '/posts'
 			fullPath: '/posts'
 			preLoaderRoute: typeof PostsIndexImport
+			parentRoute: typeof rootRoute
+		}
+		'/products/': {
+			id: '/products/'
+			path: '/products'
+			fullPath: '/products'
+			preLoaderRoute: typeof ProductsIndexImport
 			parentRoute: typeof rootRoute
 		}
 	}
@@ -83,14 +125,20 @@ export interface FileRoutesByFullPath {
 	'/': typeof IndexRoute
 	'/setup': typeof SetupRoute
 	'/posts/$postId': typeof PostsPostIdRoute
+	'/community': typeof CommunityIndexRoute
+	'/nostr': typeof NostrIndexRoute
 	'/posts': typeof PostsIndexRoute
+	'/products': typeof ProductsIndexRoute
 }
 
 export interface FileRoutesByTo {
 	'/': typeof IndexRoute
 	'/setup': typeof SetupRoute
 	'/posts/$postId': typeof PostsPostIdRoute
+	'/community': typeof CommunityIndexRoute
+	'/nostr': typeof NostrIndexRoute
 	'/posts': typeof PostsIndexRoute
+	'/products': typeof ProductsIndexRoute
 }
 
 export interface FileRoutesById {
@@ -98,15 +146,18 @@ export interface FileRoutesById {
 	'/': typeof IndexRoute
 	'/setup': typeof SetupRoute
 	'/posts/$postId': typeof PostsPostIdRoute
+	'/community/': typeof CommunityIndexRoute
+	'/nostr/': typeof NostrIndexRoute
 	'/posts/': typeof PostsIndexRoute
+	'/products/': typeof ProductsIndexRoute
 }
 
 export interface FileRouteTypes {
 	fileRoutesByFullPath: FileRoutesByFullPath
-	fullPaths: '/' | '/setup' | '/posts/$postId' | '/posts'
+	fullPaths: '/' | '/setup' | '/posts/$postId' | '/community' | '/nostr' | '/posts' | '/products'
 	fileRoutesByTo: FileRoutesByTo
-	to: '/' | '/setup' | '/posts/$postId' | '/posts'
-	id: '__root__' | '/' | '/setup' | '/posts/$postId' | '/posts/'
+	to: '/' | '/setup' | '/posts/$postId' | '/community' | '/nostr' | '/posts' | '/products'
+	id: '__root__' | '/' | '/setup' | '/posts/$postId' | '/community/' | '/nostr/' | '/posts/' | '/products/'
 	fileRoutesById: FileRoutesById
 }
 
@@ -114,14 +165,20 @@ export interface RootRouteChildren {
 	IndexRoute: typeof IndexRoute
 	SetupRoute: typeof SetupRoute
 	PostsPostIdRoute: typeof PostsPostIdRoute
+	CommunityIndexRoute: typeof CommunityIndexRoute
+	NostrIndexRoute: typeof NostrIndexRoute
 	PostsIndexRoute: typeof PostsIndexRoute
+	ProductsIndexRoute: typeof ProductsIndexRoute
 }
 
 const rootRouteChildren: RootRouteChildren = {
 	IndexRoute: IndexRoute,
 	SetupRoute: SetupRoute,
 	PostsPostIdRoute: PostsPostIdRoute,
+	CommunityIndexRoute: CommunityIndexRoute,
+	NostrIndexRoute: NostrIndexRoute,
 	PostsIndexRoute: PostsIndexRoute,
+	ProductsIndexRoute: ProductsIndexRoute,
 }
 
 export const routeTree = rootRoute._addFileChildren(rootRouteChildren)._addFileTypes<FileRouteTypes>()
@@ -135,7 +192,10 @@ export const routeTree = rootRoute._addFileChildren(rootRouteChildren)._addFileT
         "/",
         "/setup",
         "/posts/$postId",
-        "/posts/"
+        "/community/",
+        "/nostr/",
+        "/posts/",
+        "/products/"
       ]
     },
     "/": {
@@ -147,8 +207,17 @@ export const routeTree = rootRoute._addFileChildren(rootRouteChildren)._addFileT
     "/posts/$postId": {
       "filePath": "posts.$postId.tsx"
     },
+    "/community/": {
+      "filePath": "community.index.tsx"
+    },
+    "/nostr/": {
+      "filePath": "nostr.index.tsx"
+    },
     "/posts/": {
       "filePath": "posts.index.tsx"
+    },
+    "/products/": {
+      "filePath": "products.index.tsx"
     }
   }
 }

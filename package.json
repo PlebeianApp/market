@@ -14,7 +14,8 @@
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
 		"seed": "bun run scripts/seed.ts",
-		"startup": "bun run scripts/startup.ts"
+		"startup": "bun run scripts/startup.ts",
+		"build-icons": "bun run scripts/build-icons.ts"
 	},
 	"dependencies": {
 		"@faker-js/faker": "^9.6.0",
@@ -47,7 +48,6 @@
 		"qrcode.react": "^4.2.0",
 		"react": "^19.0.0",
 		"react-dom": "^19.0.0",
-		"react-hook-form": "^7.54.2",
 		"sonner": "^2.0.1",
 		"tailwind-merge": "^3.0.2",
 		"tailwindcss": "^4.0.15",
@@ -55,11 +55,13 @@
 		"zod": "^3.24.2"
 	},
 	"devDependencies": {
+		"@tanstack/react-router-devtools": "^1.114.27",
 		"@tanstack/router-cli": "^1.114.27",
-		"@tanstack/router-devtools": "^1.114.27",
 		"@tanstack/router-plugin": "^1.114.27",
 		"@types/bun": "^1.2.6",
 		"@types/react": "^19.0.12",
-		"@types/react-dom": "^19.0.4"
+		"@types/react-dom": "^19.0.4",
+		"mini-svg-data-uri": "^1.4.4",
+		"svgo": "^3.3.2"
 	}
 }
