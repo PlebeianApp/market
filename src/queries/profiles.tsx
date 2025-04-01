@@ -3,7 +3,7 @@ import { type NDKUserProfile, NDKUser } from '@nostr-dev-kit/ndk'
 import { queryOptions } from '@tanstack/react-query'
 import { profileKeys } from './queryKeyFactory'
 
-export const fetchProfile = async (npub: string): Promise<NDKUserProfile | null> => {
+export const fetchProfileByNpub = async (npub: string): Promise<NDKUserProfile | null> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -16,10 +16,30 @@ export const fetchProfile = async (npub: string): Promise<NDKUserProfile | null>
 	}
 }
 
+export const fetchProfileByNip05 = async (nip05: string): Promise<NDKUserProfile | null> => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	try {
+		const user = await ndk.getUserFromNip05(nip05)
+		if (!user) throw new Error('User not found')
+		return await user.fetchProfile()
+	} catch (e) {
+		console.error('Failed to fetch profile with NDK user method', e)
+		return null
+	}
+}
+
 export const profileQueryOptions = (npub: string) =>
 	queryOptions({
 		queryKey: profileKeys.details(npub),
-		queryFn: () => fetchProfile(npub),
+		queryFn: () => fetchProfileByNpub(npub),
+	})
+
+export const profileByNip05QueryOptions = (nip05: string) =>
+	queryOptions({
+		queryKey: profileKeys.detailsByNip05(nip05),
+		queryFn: () => fetchProfileByNip05(nip05),
 	})
 
 export const validateNip05 = async (npub: string): Promise<boolean | null> => {
