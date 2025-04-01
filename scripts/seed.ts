@@ -1,5 +1,5 @@
 // seed.ts
-import { NostrService } from '@/lib/nostr'
+import { ndkActions } from '@/lib/stores/ndk'
 import { NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { config } from 'dotenv'
 import { createCollectionEvent, createProductReference, generateCollectionData } from './gen_collections'
@@ -16,7 +16,8 @@ if (!RELAY_URL) {
 	process.exit(1)
 }
 
-const nostrService = NostrService.getInstance([RELAY_URL])
+// Initialize NDK with the relay URL
+const ndk = ndkActions.initialize([RELAY_URL])
 const devUsers = [devUser1, devUser2, devUser3, devUser4, devUser5]
 
 async function seedData() {
@@ -26,8 +27,8 @@ async function seedData() {
 	const REVIEWS_PER_USER = 2
 
 	console.log('Connecting to Nostr...')
-	console.log(nostrService.explicitRelayUrls)
-	await nostrService.connect()
+	console.log(ndkActions.getNDK()?.explicitRelayUrls)
+	await ndkActions.connect()
 	const productsByUser: Record<string, string[]> = {}
 	const allProductRefs: string[] = []
 	const shippingsByUser: Record<string, string[]> = {}
@@ -46,7 +47,7 @@ async function seedData() {
 		// Create products
 		for (let i = 0; i < PRODUCTS_PER_USER; i++) {
 			const product = generateProductData()
-			const success = await createProductEvent(signer, nostrService.ndkInstance, product)
+			const success = await createProductEvent(signer, ndk, product)
 			if (success) {
 				const productId = product.tags.find((tag) => tag[0] === 'd')?.[1]
 				if (productId) {
@@ -63,7 +64,7 @@ async function seedData() {
 
 		for (let i = 0; i < SHIPPING_OPTIONS_PER_USER; i++) {
 			const shipping = generateShippingData()
-			const success = await createShippingEvent(signer, nostrService.ndkInstance, shipping)
+			const success = await createShippingEvent(signer, ndk, shipping)
 			if (success) {
 				const shippingId = shipping.tags.find((tag) => tag[0] === 'd')?.[1]
 				if (shippingId) {
@@ -85,7 +86,7 @@ async function seedData() {
 		for (let i = 0; i < COLLECTIONS_PER_USER; i++) {
 			const collectionProducts = productsByUser[pubkey] || []
 			const collection = generateCollectionData(collectionProducts)
-			await createCollectionEvent(signer, nostrService.ndkInstance, collection)
+			await createCollectionEvent(signer, ndk, collection)
 		}
 	}
 
@@ -107,7 +108,7 @@ async function seedData() {
 		for (let i = 0; i < REVIEWS_PER_USER; i++) {
 			if (productsToReview[i]) {
 				const review = generateReviewData([productsToReview[i]])
-				await createReviewEvent(signer, nostrService.ndkInstance, review)
+				await createReviewEvent(signer, ndk, review)
 			}
 		}
 	}

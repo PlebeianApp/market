@@ -1,4 +1,4 @@
-import { NostrService } from '@/lib/nostr'
+import { ndkActions } from '@/lib/stores/ndk'
 import { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { config } from 'dotenv'
 import { devUser1, devUser2, devUser3, devUser4, devUser5 } from '@/lib/fixtures'
@@ -17,7 +17,8 @@ if (!RELAY_URL || !APP_PRIVATE_KEY) {
 const relay = RELAY_URL as string
 const privateKey = APP_PRIVATE_KEY as string
 
-const nostrService = NostrService.getInstance([relay])
+// Initialize NDK with the relay URL
+const ndk = ndkActions.initialize([relay])
 
 async function createAppSettingsEvent(signer: NDKPrivateKeySigner) {
 	const appSettings = AppSettingsSchema.parse({
@@ -33,7 +34,7 @@ async function createAppSettingsEvent(signer: NDKPrivateKeySigner) {
 	})
 
 	// Create kind 31990 event
-	const appHandlerEvent = new NDKEvent(nostrService.ndkInstance)
+	const appHandlerEvent = new NDKEvent(ndk)
 	appHandlerEvent.kind = 31990
 	appHandlerEvent.content = JSON.stringify(appSettings)
 	appHandlerEvent.tags = [
@@ -57,7 +58,7 @@ async function createAppSettingsEvent(signer: NDKPrivateKeySigner) {
 	// 	field_to_encrypt: 'Sensitive data',
 	// })
 
-	// const extendedSettingsEvent = new NDKEvent(nostrService.ndkInstance)
+	// const extendedSettingsEvent = new NDKEvent(ndk)
 	// extendedSettingsEvent.kind = 30078
 	// extendedSettingsEvent.content = JSON.stringify(extendedSettings)
 	// extendedSettingsEvent.tags = [['d', appId]]
@@ -68,7 +69,7 @@ async function createAppSettingsEvent(signer: NDKPrivateKeySigner) {
 
 	// EXPECTD ITEMS: "r" (relays) tags
 	if (!RELAY_URL) return
-	const relayListEvent = new NDKEvent(nostrService.ndkInstance)
+	const relayListEvent = new NDKEvent(ndk)
 	relayListEvent.kind = 10002
 	relayListEvent.tags.push(['r', RELAY_URL])
 
@@ -85,7 +86,7 @@ async function createBanListEvent(signer: NDKPrivateKeySigner) {
 	// 	hashtags: [],
 	// })
 
-	const banListEvent = new NDKEvent(nostrService.ndkInstance)
+	const banListEvent = new NDKEvent(ndk)
 	banListEvent.kind = 10000
 	// banListEvent.content = JSON.stringify(banList)
 	banListEvent.tags.push(['d', 'banned'])
@@ -108,7 +109,7 @@ async function createUserRolesEvent(signer: NDKPrivateKeySigner) {
 	// 	},
 	// })
 
-	const userRolesAdminsEvent = new NDKEvent(nostrService.ndkInstance)
+	const userRolesAdminsEvent = new NDKEvent(ndk)
 	userRolesAdminsEvent.kind = 30000
 	// userRolesAdminsEvent.content = JSON.stringify(userRoles)
 	userRolesAdminsEvent.tags.push(['d', 'roles/admins'])
@@ -118,7 +119,7 @@ async function createUserRolesEvent(signer: NDKPrivateKeySigner) {
 	await userRolesAdminsEvent.publish()
 	console.log('Published user admin roles event')
 
-	const userRolesEditorsEvent = new NDKEvent(nostrService.ndkInstance)
+	const userRolesEditorsEvent = new NDKEvent(ndk)
 	userRolesEditorsEvent.kind = 30000
 	userRolesEditorsEvent.tags.push(['d', 'roles/editors'])
 	userRolesEditorsEvent.tags.push(['p', devUser3.pk])
@@ -126,7 +127,7 @@ async function createUserRolesEvent(signer: NDKPrivateKeySigner) {
 	await userRolesEditorsEvent.publish()
 	console.log('Published user editor roles event')
 
-	const userRolesPlebsEvent = new NDKEvent(nostrService.ndkInstance)
+	const userRolesPlebsEvent = new NDKEvent(ndk)
 	userRolesPlebsEvent.kind = 30000
 	userRolesPlebsEvent.tags.push(['d', 'roles/plebs'])
 	userRolesPlebsEvent.tags.push(['p', devUser4.pk])
@@ -137,7 +138,7 @@ async function createUserRolesEvent(signer: NDKPrivateKeySigner) {
 
 async function initializeEvents() {
 	console.log('Connecting to Nostr...')
-	await nostrService.connect()
+	await ndkActions.connect()
 	console.log('Connected to Nostr')
 
 	const signer = new NDKPrivateKeySigner(privateKey)

@@ -1,8 +1,7 @@
 import NDK from '@nostr-dev-kit/ndk'
 import NDKCacheAdapterDexie from '@nostr-dev-kit/ndk-cache-dexie'
 import { Store } from '@tanstack/store'
-import type { NDKSigner } from '@nostr-dev-kit/ndk'
-import { authActions } from './auth'
+import type { NDKCacheAdapter, NDKSigner } from '@nostr-dev-kit/ndk'
 
 interface NDKState {
 	ndk: NDK | null
@@ -25,9 +24,13 @@ export const ndkActions = {
 		const state = ndkStore.state
 		if (state.ndk) return state.ndk
 
-		const dexieAdapter = new NDKCacheAdapterDexie({ dbName: 'nostr-cache' })
+		const isBrowser = typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined'
+		const cacheAdapter: NDKCacheAdapter | undefined = isBrowser
+			? (new NDKCacheAdapterDexie({ dbName: 'nostr-cache' }) as unknown as NDKCacheAdapter)
+			: undefined
+
 		const ndk = new NDK({
-			cacheAdapter: dexieAdapter,
+			cacheAdapter: cacheAdapter,
 			explicitRelayUrls: relays && relays.length > 0 ? relays : [],
 		})
 
