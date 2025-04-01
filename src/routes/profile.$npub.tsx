@@ -1,3 +1,5 @@
+import { Nip05Badge } from '@/components/Nip05Badge'
+
 import { Button } from '@/components/ui/button'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { getHexColorFingerprintFromHexPubkey, truncateText } from '@/lib/utils'
@@ -5,7 +7,7 @@ import { profileQueryOptions } from '@/queries/profiles'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { ArrowLeft, Zap, MessageCircle, Minus, Plus, Share2 } from 'lucide-react'
+import { ArrowLeft, MessageCircle, Minus, Plus, Share2, Zap } from 'lucide-react'
 import { useState } from 'react'
 
 interface Stall {
@@ -50,10 +52,8 @@ function RouteComponent() {
 	]
 	const products: Product[] = []
 
-	const isVerified = profile?.nip05 !== undefined
-
 	return (
-		<div className="relative  text-white min-h-screen">
+		<div className="relative text-white min-h-screen">
 			<div className="flex flex-col pb-4 relative z-10">
 				<div className="relative">
 					<Button
@@ -99,18 +99,14 @@ function RouteComponent() {
 					</div>
 				)}
 
-				{/* Profile header */}
 				<div className="flex flex-row justify-between px-8 py-4 bg-black items-center">
 					<div className="flex flex-row items-center gap-4">
 						{profile?.picture && (
 							<img src={profile.picture} alt={profile.name || 'Profile picture'} className="rounded-full w-12 h-12 border-2 border-white" />
 						)}
-						<div className="flex flex-col">
-							<div className="flex items-center gap-2">
-								<h2 className="text-2xl font-bold text-white">{truncateText(profile?.name ?? 'Unnamed user', isSmallScreen ? 10 : 50)}</h2>
-								{isVerified && <span className="bg-blue-500 text-white text-xs rounded-full px-2 py-1">✓ Verified</span>}
-							</div>
-							{profile?.nip05 && <span className="text-sm text-gray-400">NIP-05: {profile.nip05}</span>}
+						<div className="flex items-center gap-2">
+							<h2 className="text-2xl font-bold text-white">{truncateText(profile?.name ?? 'Unnamed user', isSmallScreen ? 10 : 50)}</h2>
+							<Nip05Badge userId={params.npub} />
 						</div>
 					</div>
 					{!isSmallScreen && (
@@ -128,7 +124,6 @@ function RouteComponent() {
 					)}
 				</div>
 
-				{/* Shops section */}
 				<div className="px-8 py-6">
 					<h3 className="text-2xl font-bold mb-6 uppercase">Shops</h3>
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -160,7 +155,6 @@ function RouteComponent() {
 					</div>
 				</div>
 
-				{/* Products section, only shown if there are products */}
 				{products.length > 0 && (
 					<div className="px-8 py-6">
 						<h3 className="text-2xl font-bold mb-6 uppercase">Products</h3>

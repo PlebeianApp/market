@@ -1,11 +1,11 @@
-import { Link } from '@tanstack/react-router'
-import { Loader2 } from 'lucide-react'
-import { useConfigQuery } from '@/queries/config'
-import { Button } from '@/components/ui/button'
-import { ProductSearch } from '@/components/product-search'
+import { ProductSearch } from '@/components/ProductSearch'
 import { Profile } from '@/components/Profile'
-import { useStore } from '@tanstack/react-store'
+import { Button } from '@/components/ui/button'
 import { authStore } from '@/lib/stores/auth'
+import { useConfigQuery } from '@/queries/config'
+import { Link } from '@tanstack/react-router'
+import { useStore } from '@tanstack/react-store'
+import { Loader2 } from 'lucide-react'
 
 type HeaderProps = {
 	onLoginClick: () => void
