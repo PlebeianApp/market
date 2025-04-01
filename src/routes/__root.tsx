@@ -2,6 +2,7 @@ import { DecryptPasswordDialog } from '@/components/auth/DecryptPasswordDialog'
 import { LoginDialog } from '@/components/auth/LoginDialog'
 import { Footer } from '@/components/layout/Footer'
 import { Header } from '@/components/layout/Header'
+import { Pattern } from '@/components/pattern'
 import { defaulRelaysUrls } from '@/lib/constants'
 import { authActions } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
@@ -65,15 +66,15 @@ function RootLayout() {
 			<Header onLoginClick={() => setShowLoginDialog(true)} />
 
 			<main className="flex-grow">
-				<div className="max-w-7xl mx-auto p-4">
-					<Outlet />
-				</div>
+				<Outlet />
 			</main>
 
 			<Footer />
 
 			{/* Having some build error with this rn */}
 			{/* <TanStackRouterDevtools /> */}
+			<Pattern pattern="page" />
+
 			<DecryptPasswordDialog />
 			<LoginDialog open={showLoginDialog} onOpenChange={setShowLoginDialog} />
 		</div>

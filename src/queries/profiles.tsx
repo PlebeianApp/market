@@ -9,7 +9,6 @@ export const fetchProfile = async (npub: string): Promise<NDKUserProfile | null>
 
 	try {
 		const user = ndk.getUser({ npub })
-		console.log('user', user)
 		return await user.fetchProfile()
 	} catch (e) {
 		console.error('Failed to fetch profile with NDK user method', e)
