@@ -3,6 +3,11 @@ export const productKeys = {
 	details: (id: string) => [...productKeys.all, id] as const,
 }
 
+export const profileKeys = {
+	all: ['profiles'] as const,
+	details: (p: string) => [...profileKeys.all, p] as const,
+} as const
+
 export const postKeys = {
 	all: ['posts'] as const,
 	details: (id: string) => [...postKeys.all, id] as const,

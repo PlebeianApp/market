@@ -1,10 +1,12 @@
 import { DecryptPasswordDialog } from '@/components/auth/DecryptPasswordDialog'
 import { LoginDialog } from '@/components/auth/LoginDialog'
-import { Header } from '@/components/layout/Header'
 import { Footer } from '@/components/layout/Footer'
+import { Header } from '@/components/layout/Header'
+import { defaulRelaysUrls } from '@/lib/constants'
+import { authActions } from '@/lib/stores/auth'
+import { ndkActions } from '@/lib/stores/ndk'
 import { useConfigQuery } from '@/queries/config'
 import { createRootRoute, Outlet, useNavigate } from '@tanstack/react-router'
-import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import { useEffect, useState } from 'react'
 
 export const Route = createRootRoute({
@@ -18,6 +20,7 @@ function RootComponent() {
 function RootLayout() {
 	const { data: config, isLoading, isError } = useConfigQuery()
 	const [showLoginDialog, setShowLoginDialog] = useState(false)
+	const [ndkInitialized, setNdkInitialized] = useState(false)
 	const navigate = useNavigate()
 	const isSetupPage = window.location.pathname === '/setup'
 
@@ -30,8 +33,30 @@ function RootLayout() {
 		}
 	}, [config, navigate, isLoading, isError, isSetupPage])
 
-	// If loading or on setup page, render only the outlet without header/footer
-	if (isLoading || isSetupPage) {
+	useEffect(() => {
+		const initializeNDK = async () => {
+			if (config?.appRelay) {
+				console.log(`Adding relay from config: ${config.appRelay}`)
+				ndkActions.initialize([config.appRelay, ...defaulRelaysUrls])
+				await ndkActions.connect()
+				await authActions.getAuthFromLocalStorageAndLogin()
+				console.log('NDK initialized')
+				setNdkInitialized(true)
+			}
+		}
+
+		if (config && !ndkInitialized) {
+			initializeNDK().catch(console.error)
+		}
+	}, [config, ndkInitialized])
+
+	// If loading or NDK not yet initialized, don't render routes
+	if (isLoading || (config?.appRelay && !ndkInitialized)) {
+		return <div className="flex justify-center items-center h-screen">Loading...</div>
+	}
+
+	// If on setup page, render only the outlet without header/footer
+	if (isSetupPage) {
 		return <Outlet />
 	}
 

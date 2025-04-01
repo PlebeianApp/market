@@ -17,171 +17,217 @@ import { Route as ProductsIndexImport } from './routes/products.index'
 import { Route as PostsIndexImport } from './routes/posts.index'
 import { Route as NostrIndexImport } from './routes/nostr.index'
 import { Route as CommunityIndexImport } from './routes/community.index'
+import { Route as ProfileNpubImport } from './routes/profile.$npub'
 import { Route as PostsPostIdImport } from './routes/posts.$postId'
 
 // Create/Update Routes
 
 const SetupRoute = SetupImport.update({
-	id: '/setup',
-	path: '/setup',
-	getParentRoute: () => rootRoute,
+  id: '/setup',
+  path: '/setup',
+  getParentRoute: () => rootRoute,
 } as any)
 
 const IndexRoute = IndexImport.update({
-	id: '/',
-	path: '/',
-	getParentRoute: () => rootRoute,
+  id: '/',
+  path: '/',
+  getParentRoute: () => rootRoute,
 } as any)
 
 const ProductsIndexRoute = ProductsIndexImport.update({
-	id: '/products/',
-	path: '/products/',
-	getParentRoute: () => rootRoute,
+  id: '/products/',
+  path: '/products/',
+  getParentRoute: () => rootRoute,
 } as any)
 
 const PostsIndexRoute = PostsIndexImport.update({
-	id: '/posts/',
-	path: '/posts/',
-	getParentRoute: () => rootRoute,
+  id: '/posts/',
+  path: '/posts/',
+  getParentRoute: () => rootRoute,
 } as any)
 
 const NostrIndexRoute = NostrIndexImport.update({
-	id: '/nostr/',
-	path: '/nostr/',
-	getParentRoute: () => rootRoute,
+  id: '/nostr/',
+  path: '/nostr/',
+  getParentRoute: () => rootRoute,
 } as any)
 
 const CommunityIndexRoute = CommunityIndexImport.update({
-	id: '/community/',
-	path: '/community/',
-	getParentRoute: () => rootRoute,
+  id: '/community/',
+  path: '/community/',
+  getParentRoute: () => rootRoute,
+} as any)
+
+const ProfileNpubRoute = ProfileNpubImport.update({
+  id: '/profile/$npub',
+  path: '/profile/$npub',
+  getParentRoute: () => rootRoute,
 } as any)
 
 const PostsPostIdRoute = PostsPostIdImport.update({
-	id: '/posts/$postId',
-	path: '/posts/$postId',
-	getParentRoute: () => rootRoute,
+  id: '/posts/$postId',
+  path: '/posts/$postId',
+  getParentRoute: () => rootRoute,
 } as any)
 
 // Populate the FileRoutesByPath interface
 
 declare module '@tanstack/react-router' {
-	interface FileRoutesByPath {
-		'/': {
-			id: '/'
-			path: '/'
-			fullPath: '/'
-			preLoaderRoute: typeof IndexImport
-			parentRoute: typeof rootRoute
-		}
-		'/setup': {
-			id: '/setup'
-			path: '/setup'
-			fullPath: '/setup'
-			preLoaderRoute: typeof SetupImport
-			parentRoute: typeof rootRoute
-		}
-		'/posts/$postId': {
-			id: '/posts/$postId'
-			path: '/posts/$postId'
-			fullPath: '/posts/$postId'
-			preLoaderRoute: typeof PostsPostIdImport
-			parentRoute: typeof rootRoute
-		}
-		'/community/': {
-			id: '/community/'
-			path: '/community'
-			fullPath: '/community'
-			preLoaderRoute: typeof CommunityIndexImport
-			parentRoute: typeof rootRoute
-		}
-		'/nostr/': {
-			id: '/nostr/'
-			path: '/nostr'
-			fullPath: '/nostr'
-			preLoaderRoute: typeof NostrIndexImport
-			parentRoute: typeof rootRoute
-		}
-		'/posts/': {
-			id: '/posts/'
-			path: '/posts'
-			fullPath: '/posts'
-			preLoaderRoute: typeof PostsIndexImport
-			parentRoute: typeof rootRoute
-		}
-		'/products/': {
-			id: '/products/'
-			path: '/products'
-			fullPath: '/products'
-			preLoaderRoute: typeof ProductsIndexImport
-			parentRoute: typeof rootRoute
-		}
-	}
+  interface FileRoutesByPath {
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexImport
+      parentRoute: typeof rootRoute
+    }
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupImport
+      parentRoute: typeof rootRoute
+    }
+    '/posts/$postId': {
+      id: '/posts/$postId'
+      path: '/posts/$postId'
+      fullPath: '/posts/$postId'
+      preLoaderRoute: typeof PostsPostIdImport
+      parentRoute: typeof rootRoute
+    }
+    '/profile/$npub': {
+      id: '/profile/$npub'
+      path: '/profile/$npub'
+      fullPath: '/profile/$npub'
+      preLoaderRoute: typeof ProfileNpubImport
+      parentRoute: typeof rootRoute
+    }
+    '/community/': {
+      id: '/community/'
+      path: '/community'
+      fullPath: '/community'
+      preLoaderRoute: typeof CommunityIndexImport
+      parentRoute: typeof rootRoute
+    }
+    '/nostr/': {
+      id: '/nostr/'
+      path: '/nostr'
+      fullPath: '/nostr'
+      preLoaderRoute: typeof NostrIndexImport
+      parentRoute: typeof rootRoute
+    }
+    '/posts/': {
+      id: '/posts/'
+      path: '/posts'
+      fullPath: '/posts'
+      preLoaderRoute: typeof PostsIndexImport
+      parentRoute: typeof rootRoute
+    }
+    '/products/': {
+      id: '/products/'
+      path: '/products'
+      fullPath: '/products'
+      preLoaderRoute: typeof ProductsIndexImport
+      parentRoute: typeof rootRoute
+    }
+  }
 }
 
 // Create and export the route tree
 
 export interface FileRoutesByFullPath {
-	'/': typeof IndexRoute
-	'/setup': typeof SetupRoute
-	'/posts/$postId': typeof PostsPostIdRoute
-	'/community': typeof CommunityIndexRoute
-	'/nostr': typeof NostrIndexRoute
-	'/posts': typeof PostsIndexRoute
-	'/products': typeof ProductsIndexRoute
+  '/': typeof IndexRoute
+  '/setup': typeof SetupRoute
+  '/posts/$postId': typeof PostsPostIdRoute
+  '/profile/$npub': typeof ProfileNpubRoute
+  '/community': typeof CommunityIndexRoute
+  '/nostr': typeof NostrIndexRoute
+  '/posts': typeof PostsIndexRoute
+  '/products': typeof ProductsIndexRoute
 }
 
 export interface FileRoutesByTo {
-	'/': typeof IndexRoute
-	'/setup': typeof SetupRoute
-	'/posts/$postId': typeof PostsPostIdRoute
-	'/community': typeof CommunityIndexRoute
-	'/nostr': typeof NostrIndexRoute
-	'/posts': typeof PostsIndexRoute
-	'/products': typeof ProductsIndexRoute
+  '/': typeof IndexRoute
+  '/setup': typeof SetupRoute
+  '/posts/$postId': typeof PostsPostIdRoute
+  '/profile/$npub': typeof ProfileNpubRoute
+  '/community': typeof CommunityIndexRoute
+  '/nostr': typeof NostrIndexRoute
+  '/posts': typeof PostsIndexRoute
+  '/products': typeof ProductsIndexRoute
 }
 
 export interface FileRoutesById {
-	__root__: typeof rootRoute
-	'/': typeof IndexRoute
-	'/setup': typeof SetupRoute
-	'/posts/$postId': typeof PostsPostIdRoute
-	'/community/': typeof CommunityIndexRoute
-	'/nostr/': typeof NostrIndexRoute
-	'/posts/': typeof PostsIndexRoute
-	'/products/': typeof ProductsIndexRoute
+  __root__: typeof rootRoute
+  '/': typeof IndexRoute
+  '/setup': typeof SetupRoute
+  '/posts/$postId': typeof PostsPostIdRoute
+  '/profile/$npub': typeof ProfileNpubRoute
+  '/community/': typeof CommunityIndexRoute
+  '/nostr/': typeof NostrIndexRoute
+  '/posts/': typeof PostsIndexRoute
+  '/products/': typeof ProductsIndexRoute
 }
 
 export interface FileRouteTypes {
-	fileRoutesByFullPath: FileRoutesByFullPath
-	fullPaths: '/' | '/setup' | '/posts/$postId' | '/community' | '/nostr' | '/posts' | '/products'
-	fileRoutesByTo: FileRoutesByTo
-	to: '/' | '/setup' | '/posts/$postId' | '/community' | '/nostr' | '/posts' | '/products'
-	id: '__root__' | '/' | '/setup' | '/posts/$postId' | '/community/' | '/nostr/' | '/posts/' | '/products/'
-	fileRoutesById: FileRoutesById
+  fileRoutesByFullPath: FileRoutesByFullPath
+  fullPaths:
+    | '/'
+    | '/setup'
+    | '/posts/$postId'
+    | '/profile/$npub'
+    | '/community'
+    | '/nostr'
+    | '/posts'
+    | '/products'
+  fileRoutesByTo: FileRoutesByTo
+  to:
+    | '/'
+    | '/setup'
+    | '/posts/$postId'
+    | '/profile/$npub'
+    | '/community'
+    | '/nostr'
+    | '/posts'
+    | '/products'
+  id:
+    | '__root__'
+    | '/'
+    | '/setup'
+    | '/posts/$postId'
+    | '/profile/$npub'
+    | '/community/'
+    | '/nostr/'
+    | '/posts/'
+    | '/products/'
+  fileRoutesById: FileRoutesById
 }
 
 export interface RootRouteChildren {
-	IndexRoute: typeof IndexRoute
-	SetupRoute: typeof SetupRoute
-	PostsPostIdRoute: typeof PostsPostIdRoute
-	CommunityIndexRoute: typeof CommunityIndexRoute
-	NostrIndexRoute: typeof NostrIndexRoute
-	PostsIndexRoute: typeof PostsIndexRoute
-	ProductsIndexRoute: typeof ProductsIndexRoute
+  IndexRoute: typeof IndexRoute
+  SetupRoute: typeof SetupRoute
+  PostsPostIdRoute: typeof PostsPostIdRoute
+  ProfileNpubRoute: typeof ProfileNpubRoute
+  CommunityIndexRoute: typeof CommunityIndexRoute
+  NostrIndexRoute: typeof NostrIndexRoute
+  PostsIndexRoute: typeof PostsIndexRoute
+  ProductsIndexRoute: typeof ProductsIndexRoute
 }
 
 const rootRouteChildren: RootRouteChildren = {
-	IndexRoute: IndexRoute,
-	SetupRoute: SetupRoute,
-	PostsPostIdRoute: PostsPostIdRoute,
-	CommunityIndexRoute: CommunityIndexRoute,
-	NostrIndexRoute: NostrIndexRoute,
-	PostsIndexRoute: PostsIndexRoute,
-	ProductsIndexRoute: ProductsIndexRoute,
+  IndexRoute: IndexRoute,
+  SetupRoute: SetupRoute,
+  PostsPostIdRoute: PostsPostIdRoute,
+  ProfileNpubRoute: ProfileNpubRoute,
+  CommunityIndexRoute: CommunityIndexRoute,
+  NostrIndexRoute: NostrIndexRoute,
+  PostsIndexRoute: PostsIndexRoute,
+  ProductsIndexRoute: ProductsIndexRoute,
 }
 
-export const routeTree = rootRoute._addFileChildren(rootRouteChildren)._addFileTypes<FileRouteTypes>()
+export const routeTree = rootRoute
+  ._addFileChildren(rootRouteChildren)
+  ._addFileTypes<FileRouteTypes>()
 
 /* ROUTE_MANIFEST_START
 {
@@ -192,6 +238,7 @@ export const routeTree = rootRoute._addFileChildren(rootRouteChildren)._addFileT
         "/",
         "/setup",
         "/posts/$postId",
+        "/profile/$npub",
         "/community/",
         "/nostr/",
         "/posts/",
@@ -206,6 +253,9 @@ export const routeTree = rootRoute._addFileChildren(rootRouteChildren)._addFileT
     },
     "/posts/$postId": {
       "filePath": "posts.$postId.tsx"
+    },
+    "/profile/$npub": {
+      "filePath": "profile.$npub.tsx"
     },
     "/community/": {
       "filePath": "community.index.tsx"
