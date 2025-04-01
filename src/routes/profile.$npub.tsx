@@ -10,7 +10,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { ArrowLeft, MessageCircle, Minus, Plus, Share2, Zap } from 'lucide-react'
 import { useState } from 'react'
 
-interface Stall {
+interface ProductCollection {
 	id: string
 	name: string
 	description?: string
@@ -41,7 +41,7 @@ function RouteComponent() {
 	const breakpoint = useBreakpoint()
 	const isSmallScreen = breakpoint === 'sm'
 
-	const stalls: Stall[] = [
+	const stalls: ProductCollection[] = [
 		{
 			id: '1',
 			name: 'HODLR.ROCKS',
@@ -114,7 +114,7 @@ function RouteComponent() {
 							<Button variant="primary" size="icon">
 								<Zap className="w-5 h-5" />
 							</Button>
-							<Button variant="secondary" size="icon">
+							<Button variant="focus" size="icon">
 								<MessageCircle className="w-5 h-5" />
 							</Button>
 							<Button variant="secondary" size="icon">
