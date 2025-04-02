@@ -30,6 +30,27 @@ export const fetchProfileByNip05 = async (nip05: string): Promise<NDKUserProfile
 	}
 }
 
+export const fetchProfileByIdentifier = async (identifier: string): Promise<NDKUserProfile | null> => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	try {
+		if (identifier.includes('@')) {
+			return await fetchProfileByNip05(identifier)
+		}
+
+		if (identifier.startsWith('npub')) {
+			return await fetchProfileByNpub(identifier)
+		}
+
+		const user = ndk.getUser({ hexpubkey: identifier })
+		return await user.fetchProfile()
+	} catch (e) {
+		console.error('Failed to fetch profile with identifier:', e)
+		return null
+	}
+}
+
 export const profileQueryOptions = (npub: string) =>
 	queryOptions({
 		queryKey: profileKeys.details(npub),
@@ -40,6 +61,12 @@ export const profileByNip05QueryOptions = (nip05: string) =>
 	queryOptions({
 		queryKey: profileKeys.detailsByNip05(nip05),
 		queryFn: () => fetchProfileByNip05(nip05),
+	})
+
+export const profileByIdentifierQueryOptions = (identifier: string) =>
+	queryOptions({
+		queryKey: profileKeys.details(identifier),
+		queryFn: () => fetchProfileByIdentifier(identifier),
 	})
 
 export const validateNip05 = async (npub: string): Promise<boolean | null> => {

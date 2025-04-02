@@ -3,12 +3,12 @@ import { Nip05Badge } from '@/components/Nip05Badge'
 import { Button } from '@/components/ui/button'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { getHexColorFingerprintFromHexPubkey, truncateText } from '@/lib/utils'
-import { profileQueryOptions } from '@/queries/profiles'
+import { profileByIdentifierQueryOptions } from '@/queries/profiles'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { ArrowLeft, MessageCircle, Minus, Plus, Share2, Zap } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 
 interface ProductCollection {
 	id: string
@@ -28,25 +28,29 @@ interface Product {
 	stall_id?: string
 }
 
-export const Route = createFileRoute('/profile/$npub')({
+export const Route = createFileRoute('/profile/$profileId')({
 	component: RouteComponent,
 })
 
 function RouteComponent() {
-	type Params = { npub: string }
+	type Params = { profileId: string }
 	const params = Route.useParams() as Params
 	const [animationParent] = useAutoAnimate()
-	const { data: profile } = useSuspenseQuery(profileQueryOptions(params.npub))
+	const { data: profile } = useSuspenseQuery(profileByIdentifierQueryOptions(params.profileId))
 	const [showFullAbout, setShowFullAbout] = useState(false)
 	const breakpoint = useBreakpoint()
 	const isSmallScreen = breakpoint === 'sm'
+
+	useEffect(() => {
+		console.log('Profile ID:', params.profileId)
+	}, [params.profileId])
 
 	const stalls: ProductCollection[] = [
 		{
 			id: '1',
 			name: 'HODLR.ROCKS',
 			description: 'Laser cut bitcoin, nostr and freedom tech art',
-			owner: params.npub,
+			owner: params.profileId,
 			currency: 'GBP',
 		},
 	]
@@ -73,7 +77,7 @@ function RouteComponent() {
 						<div
 							className="w-full aspect-[5/1] relative overflow-hidden"
 							style={{
-								background: `linear-gradient(45deg, ${getHexColorFingerprintFromHexPubkey(params.npub)} 0%, #000 100%)`,
+								background: `linear-gradient(45deg, ${getHexColorFingerprintFromHexPubkey(params.profileId)} 0%, #000 100%)`,
 								opacity: 0.8,
 							}}
 						/>
@@ -106,7 +110,7 @@ function RouteComponent() {
 						)}
 						<div className="flex items-center gap-2">
 							<h2 className="text-2xl font-bold text-white">{truncateText(profile?.name ?? 'Unnamed user', isSmallScreen ? 10 : 50)}</h2>
-							<Nip05Badge userId={params.npub} />
+							<Nip05Badge userId={params.profileId} />
 						</div>
 					</div>
 					{!isSmallScreen && (

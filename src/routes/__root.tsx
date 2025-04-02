@@ -68,13 +68,10 @@ function RootLayout() {
 			<main className="flex-grow">
 				<Outlet />
 			</main>
-
+			<Pattern pattern="page" />
 			<Footer />
-
 			{/* Having some build error with this rn */}
 			{/* <TanStackRouterDevtools /> */}
-			<Pattern pattern="page" />
-
 			<DecryptPasswordDialog />
 			<LoginDialog open={showLoginDialog} onOpenChange={setShowLoginDialog} />
 		</div>
