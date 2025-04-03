@@ -12,10 +12,7 @@ export function truncateText(text: string, maxLength: number): string {
 
 export function getHexColorFingerprintFromHexPubkey(pubkey: string): string {
 	// Simple hash function to generate a color from the pubkey
-	let hash = 0
-	for (let i = 0; i < pubkey.length; i++) {
-		hash = pubkey.charCodeAt(i) + ((hash << 5) - hash)
-	}
+	const hash = parseInt(pubkey.slice(0, 6), 16)
 
 	// Convert to HSL color
 	const hue = hash % 360
