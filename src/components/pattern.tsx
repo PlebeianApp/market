@@ -8,7 +8,7 @@ interface PatternProps {
 export function Pattern({ pattern = 'dots', className }: PatternProps) {
 	return (
 		<div
-			className={cn('fixed inset-0 -z-0 min-h-full w-full', className)}
+			className={cn('fixed inset-0 -z-10 min-h-full w-full opacity-25', className)}
 			style={{
 				background: `url(/images/${pattern}-min.png)`,
 				backgroundRepeat: 'repeat',
