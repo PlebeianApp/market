@@ -17,6 +17,7 @@ import { Route as ProductsIndexImport } from './routes/products.index'
 import { Route as PostsIndexImport } from './routes/posts.index'
 import { Route as NostrIndexImport } from './routes/nostr.index'
 import { Route as CommunityIndexImport } from './routes/community.index'
+import { Route as ProfileProfileIdImport } from './routes/profile.$profileId'
 import { Route as PostsPostIdImport } from './routes/posts.$postId'
 
 // Create/Update Routes
@@ -57,6 +58,12 @@ const CommunityIndexRoute = CommunityIndexImport.update({
 	getParentRoute: () => rootRoute,
 } as any)
 
+const ProfileProfileIdRoute = ProfileProfileIdImport.update({
+	id: '/profile/$profileId',
+	path: '/profile/$profileId',
+	getParentRoute: () => rootRoute,
+} as any)
+
 const PostsPostIdRoute = PostsPostIdImport.update({
 	id: '/posts/$postId',
 	path: '/posts/$postId',
@@ -86,6 +93,13 @@ declare module '@tanstack/react-router' {
 			path: '/posts/$postId'
 			fullPath: '/posts/$postId'
 			preLoaderRoute: typeof PostsPostIdImport
+			parentRoute: typeof rootRoute
+		}
+		'/profile/$profileId': {
+			id: '/profile/$profileId'
+			path: '/profile/$profileId'
+			fullPath: '/profile/$profileId'
+			preLoaderRoute: typeof ProfileProfileIdImport
 			parentRoute: typeof rootRoute
 		}
 		'/community/': {
@@ -125,6 +139,7 @@ export interface FileRoutesByFullPath {
 	'/': typeof IndexRoute
 	'/setup': typeof SetupRoute
 	'/posts/$postId': typeof PostsPostIdRoute
+	'/profile/$profileId': typeof ProfileProfileIdRoute
 	'/community': typeof CommunityIndexRoute
 	'/nostr': typeof NostrIndexRoute
 	'/posts': typeof PostsIndexRoute
@@ -135,6 +150,7 @@ export interface FileRoutesByTo {
 	'/': typeof IndexRoute
 	'/setup': typeof SetupRoute
 	'/posts/$postId': typeof PostsPostIdRoute
+	'/profile/$profileId': typeof ProfileProfileIdRoute
 	'/community': typeof CommunityIndexRoute
 	'/nostr': typeof NostrIndexRoute
 	'/posts': typeof PostsIndexRoute
@@ -146,6 +162,7 @@ export interface FileRoutesById {
 	'/': typeof IndexRoute
 	'/setup': typeof SetupRoute
 	'/posts/$postId': typeof PostsPostIdRoute
+	'/profile/$profileId': typeof ProfileProfileIdRoute
 	'/community/': typeof CommunityIndexRoute
 	'/nostr/': typeof NostrIndexRoute
 	'/posts/': typeof PostsIndexRoute
@@ -154,10 +171,10 @@ export interface FileRoutesById {
 
 export interface FileRouteTypes {
 	fileRoutesByFullPath: FileRoutesByFullPath
-	fullPaths: '/' | '/setup' | '/posts/$postId' | '/community' | '/nostr' | '/posts' | '/products'
+	fullPaths: '/' | '/setup' | '/posts/$postId' | '/profile/$profileId' | '/community' | '/nostr' | '/posts' | '/products'
 	fileRoutesByTo: FileRoutesByTo
-	to: '/' | '/setup' | '/posts/$postId' | '/community' | '/nostr' | '/posts' | '/products'
-	id: '__root__' | '/' | '/setup' | '/posts/$postId' | '/community/' | '/nostr/' | '/posts/' | '/products/'
+	to: '/' | '/setup' | '/posts/$postId' | '/profile/$profileId' | '/community' | '/nostr' | '/posts' | '/products'
+	id: '__root__' | '/' | '/setup' | '/posts/$postId' | '/profile/$profileId' | '/community/' | '/nostr/' | '/posts/' | '/products/'
 	fileRoutesById: FileRoutesById
 }
 
@@ -165,6 +182,7 @@ export interface RootRouteChildren {
 	IndexRoute: typeof IndexRoute
 	SetupRoute: typeof SetupRoute
 	PostsPostIdRoute: typeof PostsPostIdRoute
+	ProfileProfileIdRoute: typeof ProfileProfileIdRoute
 	CommunityIndexRoute: typeof CommunityIndexRoute
 	NostrIndexRoute: typeof NostrIndexRoute
 	PostsIndexRoute: typeof PostsIndexRoute
@@ -175,6 +193,7 @@ const rootRouteChildren: RootRouteChildren = {
 	IndexRoute: IndexRoute,
 	SetupRoute: SetupRoute,
 	PostsPostIdRoute: PostsPostIdRoute,
+	ProfileProfileIdRoute: ProfileProfileIdRoute,
 	CommunityIndexRoute: CommunityIndexRoute,
 	NostrIndexRoute: NostrIndexRoute,
 	PostsIndexRoute: PostsIndexRoute,
@@ -192,6 +211,7 @@ export const routeTree = rootRoute._addFileChildren(rootRouteChildren)._addFileT
         "/",
         "/setup",
         "/posts/$postId",
+        "/profile/$profileId",
         "/community/",
         "/nostr/",
         "/posts/",
@@ -206,6 +226,9 @@ export const routeTree = rootRoute._addFileChildren(rootRouteChildren)._addFileT
     },
     "/posts/$postId": {
       "filePath": "posts.$postId.tsx"
+    },
+    "/profile/$profileId": {
+      "filePath": "profile.$profileId.tsx"
     },
     "/community/": {
       "filePath": "community.index.tsx"

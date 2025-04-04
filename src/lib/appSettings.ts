@@ -1,13 +1,12 @@
-import type { NDKEvent, NDKFilter, NDKSigner, NostrEvent } from '@nostr-dev-kit/ndk'
-import { nip19, Relay, type Event } from 'nostr-tools'
-import { NostrService } from './nostr'
+import type { NDKFilter, NostrEvent } from '@nostr-dev-kit/ndk'
+import { Relay, type Event } from 'nostr-tools'
 import { AppSettingsSchema, type AppSettings } from './schemas/app'
+import { ndkActions } from './stores/ndk'
 
 export async function fetchAppSettings(relayUrl: string, appPubkey: string): Promise<AppSettings | null> {
 	console.log(`Fetching app settings from relay: ${relayUrl} for pubkey: ${appPubkey}`)
-
-	const nostrService = NostrService.getInstance([relayUrl])
-	await nostrService.connect()
+	const ndk = ndkActions.initialize([relayUrl])
+	await ndk.connect()
 
 	const filter: NDKFilter = {
 		kinds: [31990],
@@ -15,7 +14,7 @@ export async function fetchAppSettings(relayUrl: string, appPubkey: string): Pro
 		limit: 1,
 	}
 
-	const events = await nostrService.ndkInstance.fetchEvents(filter)
+	const events = await ndk.fetchEvents(filter)
 	const eventArray = Array.from(events)
 
 	if (eventArray.length === 0) {
