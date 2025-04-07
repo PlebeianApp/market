@@ -7,10 +7,10 @@ import { addressableFormat, geohash, iso4217Currency, iso8601Duration } from './
 
 // Required Tags
 const ProductIdTagSchema = z.tuple([z.literal('d'), z.string()])
-const ProductTitleTagSchema = z.tuple([z.literal('title'), z.string()])
+export const ProductTitleTagSchema = z.tuple([z.literal('title'), z.string()])
 
 // Price tag with optional frequency
-const ProductPriceTagSchema = z.union([
+export const ProductPriceTagSchema = z.union([
 	// Three-element array, sans-frequency
 	z.tuple([z.literal('price'), z.string().regex(/^\d+(\.\d+)?$/, 'Must be a valid decimal number'), iso4217Currency]),
 	// Three-element array, with frequency
@@ -23,34 +23,38 @@ const ProductPriceTagSchema = z.union([
 ])
 
 // Optional Tags
-const ProductTypeTagSchema = z.tuple([z.literal('type'), z.enum(['simple', 'variable', 'variation']), z.enum(['digital', 'physical'])])
+export const ProductTypeTagSchema = z.tuple([
+	z.literal('type'),
+	z.enum(['simple', 'variable', 'variation']),
+	z.enum(['digital', 'physical']),
+])
 
-const ProductVisibilityTagSchema = z.tuple([z.literal('visibility'), z.enum(['hidden', 'on-sale', 'pre-order'])])
+export const ProductVisibilityTagSchema = z.tuple([z.literal('visibility'), z.enum(['hidden', 'on-sale', 'pre-order'])])
 
-const ProductStockTagSchema = z.tuple([z.literal('stock'), z.string().regex(/^\d+$/, 'Must be an integer')])
+export const ProductStockTagSchema = z.tuple([z.literal('stock'), z.string().regex(/^\d+$/, 'Must be an integer')])
 
 const ProductSummaryTagSchema = z.tuple([z.literal('summary'), z.string()])
 
-const ProductSpecTagSchema = z.tuple([
+export const ProductSpecTagSchema = z.tuple([
 	z.literal('spec'),
 	z.string(), // key
 	z.string(), // value
 ])
 
-const ProductImageTagSchema = z.tuple([
+export const ProductImageTagSchema = z.tuple([
 	z.literal('image'),
 	z.string().url(), // URL
 	z.string().optional(), // Optional dimensions
 	z.string().regex(/^\d+$/, 'Must be an integer').optional(), // Optional sorting order
 ])
 
-const ProductWeightTagSchema = z.tuple([
+export const ProductWeightTagSchema = z.tuple([
 	z.literal('weight'),
 	z.string().regex(/^\d+(\.\d+)?$/, 'Must be a valid decimal number'), // value
 	z.string(), // unit
 ])
 
-const ProductDimensionsTagSchema = z.tuple([
+export const ProductDimensionsTagSchema = z.tuple([
 	z.literal('dim'),
 	z.string().regex(/^\d+(\.\d+)?x\d+(\.\d+)?x\d+(\.\d+)?$/, 'Must be in format LxWxH'), // dimensions
 	z.string(), // unit
@@ -60,7 +64,7 @@ const ProductLocationTagSchema = z.tuple([z.literal('location'), z.string()])
 
 const ProductGeohashTagSchema = z.tuple([z.literal('g'), geohash])
 
-const ProductCategoryTagSchema = z.tuple([z.literal('t'), z.string()])
+export const ProductCategoryTagSchema = z.tuple([z.literal('t'), z.string()])
 
 const ProductReferenceTagSchema = z.tuple([
 	z.literal('a'),

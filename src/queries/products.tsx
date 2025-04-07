@@ -1,163 +1,192 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { productKeys } from './queryKeyFactory'
-import { queryOptions } from '@tanstack/react-query'
+import { queryOptions, useQuery } from '@tanstack/react-query'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import type { NDKFilter } from '@nostr-dev-kit/ndk'
-import { ProductListingSchema } from '@/lib/schemas/productListing'
+import {
+	ProductListingSchema,
+	ProductTitleTagSchema,
+	ProductPriceTagSchema,
+	ProductImageTagSchema,
+	ProductSpecTagSchema,
+	ProductTypeTagSchema,
+	ProductVisibilityTagSchema,
+	ProductStockTagSchema,
+	ProductWeightTagSchema,
+	ProductDimensionsTagSchema,
+	ProductCategoryTagSchema,
+} from '@/lib/schemas/productListing'
+import { z } from 'zod'
 
-// Define a simpler Product type for our UI
-export type NostrProduct = {
-	pubkey: string
-	id: string
-	title: string
-	description: string
-	price?: {
-		amount: string
-		currency: string
-		frequency?: string
-	}
-	images?: Array<{
-		url: string
-		dimensions?: string
-		order?: number
-	}>
-	specs?: Array<{
-		key: string
-		value: string
-	}>
-	type?: {
-		productType: 'simple' | 'variable' | 'variation'
-		physicalType: 'digital' | 'physical'
-	}
-	visibility?: 'hidden' | 'on-sale' | 'pre-order'
-	stock?: number
-	weight?: {
-		value: string
-		unit: string
-	}
-	dimensions?: {
-		dimensions: string
-		unit: string
-	}
-	categories?: string[]
-	createdAt: number
+// Helper functions to extract data from product events
+
+// Basic product information
+export const getProductTitle = (event: NDKEvent): z.infer<typeof ProductTitleTagSchema>[1] =>
+	event.tags.find((t) => t[0] === 'title')?.[1] || 'Untitled Product'
+
+export const getProductDescription = (event: NDKEvent): string => event.content || ''
+
+// Product attributes
+/**
+ * Gets the price tag from a product event
+ * @param event The product event
+ * @returns A tuple with the format:
+ * - [0]: 'price' (literal)
+ * - [1]: amount (string)
+ * - [2]: currency (string)
+ * - [3]: frequency (optional string)
+ */
+export const getProductPrice = (event: NDKEvent): z.infer<typeof ProductPriceTagSchema> | undefined => {
+	const priceTag = event.tags.find((t) => t[0] === 'price')
+	if (!priceTag) return undefined
+
+	// Return the tuple directly to match the schema
+	return priceTag as z.infer<typeof ProductPriceTagSchema>
 }
 
-const transformEvent = (event: NDKEvent): NostrProduct => {
+/**
+ * Gets the image tags from a product event
+ * @param event The product event
+ * @returns An array of tuples with the format:
+ * - [0]: 'image' (literal)
+ * - [1]: url (string)
+ * - [2]: dimensions (optional string)
+ * - [3]: order (optional string - numeric)
+ */
+export const getProductImages = (event: NDKEvent): z.infer<typeof ProductImageTagSchema>[] => {
+	return event.tags
+		.filter((t) => t[0] === 'image')
+		.map((t) => t as z.infer<typeof ProductImageTagSchema>)
+		.sort((a, b) => {
+			// Sort by order if available
+			if (a[3] && b[3]) {
+				return parseInt(a[3]) - parseInt(b[3])
+			}
+			return 0
+		})
+}
+
+/**
+ * Gets the spec tags from a product event
+ * @param event The product event
+ * @returns An array of tuples with the format:
+ * - [0]: 'spec' (literal)
+ * - [1]: key (string)
+ * - [2]: value (string)
+ */
+export const getProductSpecs = (event: NDKEvent): z.infer<typeof ProductSpecTagSchema>[] => {
+	return event.tags.filter((t) => t[0] === 'spec').map((t) => t as z.infer<typeof ProductSpecTagSchema>)
+}
+
+/**
+ * Gets the type tag from a product event
+ * @param event The product event
+ * @returns A tuple with the format:
+ * - [0]: 'type' (literal)
+ * - [1]: productType ('simple' | 'variable' | 'variation')
+ * - [2]: physicalType ('digital' | 'physical')
+ */
+export const getProductType = (event: NDKEvent): z.infer<typeof ProductTypeTagSchema> | undefined => {
+	const typeTag = event.tags.find((t) => t[0] === 'type')
+	if (!typeTag) return undefined
+
+	return typeTag as z.infer<typeof ProductTypeTagSchema>
+}
+
+/**
+ * Gets the visibility tag from a product event
+ * @param event The product event
+ * @returns A tuple with the format:
+ * - [0]: 'visibility' (literal)
+ * - [1]: visibility ('hidden' | 'on-sale' | 'pre-order')
+ */
+export const getProductVisibility = (event: NDKEvent): z.infer<typeof ProductVisibilityTagSchema> | undefined => {
+	const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
+	return visibilityTag ? (visibilityTag as z.infer<typeof ProductVisibilityTagSchema>) : undefined
+}
+
+/**
+ * Gets the stock tag from a product event
+ * @param event The product event
+ * @returns A tuple with the format:
+ * - [0]: 'stock' (literal)
+ * - [1]: stock (string - numeric)
+ */
+export const getProductStock = (event: NDKEvent): z.infer<typeof ProductStockTagSchema> | undefined => {
+	const stockTag = event.tags.find((t) => t[0] === 'stock')
+	return stockTag ? (stockTag as z.infer<typeof ProductStockTagSchema>) : undefined
+}
+
+/**
+ * Gets the weight tag from a product event
+ * @param event The product event
+ * @returns A tuple with the format:
+ * - [0]: 'weight' (literal)
+ * - [1]: value (string - numeric)
+ * - [2]: unit (string)
+ */
+export const getProductWeight = (event: NDKEvent): z.infer<typeof ProductWeightTagSchema> | undefined => {
+	const weightTag = event.tags.find((t) => t[0] === 'weight')
+	if (!weightTag) return undefined
+
+	return weightTag as z.infer<typeof ProductWeightTagSchema>
+}
+
+/**
+ * Gets the dimensions tag from a product event
+ * @param event The product event
+ * @returns A tuple with the format:
+ * - [0]: 'dim' (literal)
+ * - [1]: dimensions (string - in format LxWxH)
+ * - [2]: unit (string)
+ */
+export const getProductDimensions = (event: NDKEvent): z.infer<typeof ProductDimensionsTagSchema> | undefined => {
+	const dimensionsTag = event.tags.find((t) => t[0] === 'dim')
+	if (!dimensionsTag) return undefined
+
+	return dimensionsTag as z.infer<typeof ProductDimensionsTagSchema>
+}
+
+/**
+ * Gets the category tags from a product event
+ * @param event The product event
+ * @returns An array of category strings (the second element of each 't' tag)
+ */
+export const getProductCategories = (event: NDKEvent): z.infer<typeof ProductCategoryTagSchema>[] => {
+	return event.tags.filter((t) => t[0] === 't').map((t) => t as z.infer<typeof ProductCategoryTagSchema>)
+}
+
+// Metadata
+/**
+ * Gets the creation timestamp from a product event
+ * @param event The product event
+ * @returns The creation timestamp (number)
+ */
+export const getProductCreatedAt = (event: NDKEvent): number => event.created_at || 0
+
+/**
+ * Gets the pubkey from a product event
+ * @param event The product event
+ * @returns The pubkey (string)
+ */
+export const getProductPubkey = (event: NDKEvent): string => event.pubkey
+
+// Validate event with schema and log errors
+export const validateProductEvent = (event: NDKEvent): boolean => {
 	try {
-		// Try to validate with schema
-		try {
-			ProductListingSchema.parse(event)
-		} catch (e) {
-			// We'll just log failed products but still show them
-			console.error('Error parsing product event:', e)
-		}
-
-		// Get the main product details
-		const title = event.tags.find((t) => t[0] === 'title')?.[1] || 'Untitled Product'
-		const description = event.content || ''
-
-		// Handle price
-		const priceTag = event.tags.find((t) => t[0] === 'price')
-		const price = priceTag
-			? {
-					amount: priceTag[1],
-					currency: priceTag[2],
-					frequency: priceTag[3],
-				}
-			: undefined
-
-		// Handle images
-		const images = event.tags
-			.filter((t) => t[0] === 'image')
-			.map((t) => ({
-				url: t[1],
-				dimensions: t[2],
-				order: t[3] ? parseInt(t[3]) : undefined,
-			}))
-			.sort((a, b) => {
-				// Sort by order if available
-				if (a.order !== undefined && b.order !== undefined) {
-					return a.order - b.order
-				}
-				return 0
-			})
-
-		// Parse specs
-		const specs = event.tags
-			.filter((t) => t[0] === 'spec')
-			.map((t) => ({
-				key: t[1],
-				value: t[2],
-			}))
-
-		// Parse type
-		const typeTag = event.tags.find((t) => t[0] === 'type')
-		const type = typeTag
-			? {
-					productType: typeTag[1] as 'simple' | 'variable' | 'variation',
-					physicalType: typeTag[2] as 'digital' | 'physical',
-				}
-			: undefined
-
-		// Parse visibility
-		const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
-		const visibility = visibilityTag ? (visibilityTag[1] as 'hidden' | 'on-sale' | 'pre-order') : undefined
-
-		// Parse stock
-		const stockTag = event.tags.find((t) => t[0] === 'stock')
-		const stock = stockTag ? parseInt(stockTag[1]) : undefined
-
-		// Parse weight
-		const weightTag = event.tags.find((t) => t[0] === 'weight')
-		const weight = weightTag
-			? {
-					value: weightTag[1],
-					unit: weightTag[2],
-				}
-			: undefined
-
-		// Parse dimensions
-		const dimensionsTag = event.tags.find((t) => t[0] === 'dim')
-		const dimensions = dimensionsTag
-			? {
-					dimensions: dimensionsTag[1],
-					unit: dimensionsTag[2],
-				}
-			: undefined
-
-		// Parse categories
-		const categories = event.tags.filter((t) => t[0] === 't').map((t) => t[1])
-
-		return {
-			pubkey: event.pubkey,
-			id: event.id,
-			title,
-			description,
-			price,
-			images,
-			specs,
-			type,
-			visibility,
-			stock,
-			weight,
-			dimensions,
-			categories,
-			createdAt: event.created_at || 0,
-		}
+		ProductListingSchema.parse(event)
+		return true
 	} catch (e) {
-		console.error('Error transforming product event:', e)
-		// Return a minimal valid product
-		return {
-			pubkey: event.pubkey,
-			id: event.id,
-			title: 'Error parsing product',
-			description: 'There was an error parsing this product',
-			createdAt: event.created_at || 0,
-		}
+		console.error('Error parsing product event:', e)
+		return false
 	}
 }
 
+// Data fetching functions
+/**
+ * Fetches all product listings
+ * @returns Array of product events sorted by creation date (newest first)
+ */
 export const fetchProducts = async () => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
@@ -168,10 +197,15 @@ export const fetchProducts = async () => {
 	}
 
 	const events = await ndk.fetchEvents(filter)
-	const products = Array.from(events).map(transformEvent)
+
+	// Validate each event and log errors, but still include all events
+	const validatedEvents = Array.from(events).map((event) => {
+		validateProductEvent(event)
+		return event
+	})
 
 	// Sort by newest first
-	return products.sort((a, b) => b.createdAt - a.createdAt)
+	return validatedEvents
 }
 
 export const fetchProduct = async (id: string) => {
@@ -182,9 +216,13 @@ export const fetchProduct = async (id: string) => {
 	if (!event) {
 		throw new Error('Product not found')
 	}
-	return transformEvent(event)
+
+	// Validate but don't transform
+	validateProductEvent(event)
+	return event
 }
 
+// React Query options
 export const productQueryOptions = (id: string) =>
 	queryOptions({
 		queryKey: productKeys.details(id),
@@ -195,3 +233,115 @@ export const productsQueryOptions = queryOptions({
 	queryKey: productKeys.all,
 	queryFn: fetchProducts,
 })
+
+// React Query hooks with selectors
+/**
+ * Hook to get the product title
+ * @param id Product ID
+ * @returns Query result with the product title (string)
+ */
+export const useProductTitle = (id: string) => {
+	return useQuery({
+		...productQueryOptions(id),
+		select: getProductTitle,
+	})
+}
+
+export const useProductDescription = (id: string) => {
+	return useQuery({
+		...productQueryOptions(id),
+		select: getProductDescription,
+	})
+}
+
+/**
+ * Hook to get the product price
+ * @param id Product ID
+ * @returns Query result with the product price tuple
+ */
+export const useProductPrice = (id: string) => {
+	return useQuery({
+		...productQueryOptions(id),
+		select: getProductPrice,
+	})
+}
+
+/**
+ * Hook to get the product images
+ * @param id Product ID
+ * @returns Query result with an array of image tuples
+ */
+export const useProductImages = (id: string) => {
+	return useQuery({
+		...productQueryOptions(id),
+		select: getProductImages,
+	})
+}
+
+/**
+ * Hook to get the product specs
+ * @param id Product ID
+ * @returns Query result with an array of spec tuples
+ */
+export const useProductSpecs = (id: string) => {
+	return useQuery({
+		...productQueryOptions(id),
+		select: getProductSpecs,
+	})
+}
+
+export const useProductType = (id: string) => {
+	return useQuery({
+		...productQueryOptions(id),
+		select: getProductType,
+	})
+}
+
+export const useProductVisibility = (id: string) => {
+	return useQuery({
+		...productQueryOptions(id),
+		select: getProductVisibility,
+	})
+}
+
+export const useProductStock = (id: string) => {
+	return useQuery({
+		...productQueryOptions(id),
+		select: getProductStock,
+	})
+}
+
+export const useProductWeight = (id: string) => {
+	return useQuery({
+		...productQueryOptions(id),
+		select: getProductWeight,
+	})
+}
+
+export const useProductDimensions = (id: string) => {
+	return useQuery({
+		...productQueryOptions(id),
+		select: getProductDimensions,
+	})
+}
+
+export const useProductCategories = (id: string) => {
+	return useQuery({
+		...productQueryOptions(id),
+		select: getProductCategories,
+	})
+}
+
+export const useProductCreatedAt = (id: string) => {
+	return useQuery({
+		...productQueryOptions(id),
+		select: getProductCreatedAt,
+	})
+}
+
+export const useProductPubkey = (id: string) => {
+	return useQuery({
+		...productQueryOptions(id),
+		select: getProductPubkey,
+	})
+}
