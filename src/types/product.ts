@@ -6,7 +6,10 @@ import type {
 	ProductSpecTagSchema,
 	ProductPriceTagSchema,
 } from '@/lib/schemas/productListing'
+import type { NDKKind } from '@nostr-dev-kit/ndk'
 import type { z } from 'zod'
+
+export const PRODUCT_KIND = 30402 as NDKKind
 
 // Inferred types from schemas
 export type ProductListing = z.infer<typeof ProductListingSchema>
