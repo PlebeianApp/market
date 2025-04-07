@@ -29,7 +29,7 @@ function App() {
 		const initialize = async () => {
 			try {
 				setIsLoading(true)
-				
+
 				// First fetch the config
 				const response = await fetch('/api/config')
 				if (!response.ok) {
@@ -37,15 +37,14 @@ function App() {
 				}
 				const config = await response.json()
 				console.log('Fetched config:', config)
-				
+
 				// Create queryClient with NDK initialization
 				const client = await createQueryClient(config.appRelay)
 				setQueryClient(client)
-				
+
 				// Create router with the queryClient
 				const appRouter = createAppRouter(client)
 				setRouter(appRouter)
-				
 			} catch (err) {
 				console.error('Initialization error:', err)
 				setError(err instanceof Error ? err.message : 'Unknown error during initialization')
@@ -58,27 +57,22 @@ function App() {
 	}, [])
 
 	if (isLoading) {
-		return <div className="flex justify-center items-center h-screen">
-			Initializing application...
-		</div>
+		return <div className="flex justify-center items-center h-screen">Initializing application...</div>
 	}
 
 	if (error) {
-		return <div className="flex justify-center items-center h-screen flex-col gap-2">
-			<div className="text-red-500">Error: {error}</div>
-			<button 
-				className="px-4 py-2 bg-blue-500 text-white rounded"
-				onClick={() => window.location.reload()}
-			>
-				Retry
-			</button>
-		</div>
+		return (
+			<div className="flex justify-center items-center h-screen flex-col gap-2">
+				<div className="text-red-500">Error: {error}</div>
+				<button className="px-4 py-2 bg-blue-500 text-white rounded" onClick={() => window.location.reload()}>
+					Retry
+				</button>
+			</div>
+		)
 	}
 
 	if (!queryClient || !router) {
-		return <div className="flex justify-center items-center h-screen">
-			Failed to initialize application
-		</div>
+		return <div className="flex justify-center items-center h-screen">Failed to initialize application</div>
 	}
 
 	return (
@@ -100,4 +94,3 @@ if (import.meta.hot) {
 	// The hot module reloading API is not available in production.
 	createRoot(elem).render(<App />)
 }
-

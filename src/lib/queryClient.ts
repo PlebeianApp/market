@@ -5,14 +5,14 @@ import { defaulRelaysUrls } from './constants'
 
 // Initialize NDK and create a queryClient only after initialization
 export async function createQueryClient(relayUrl?: string): Promise<QueryClient> {
-  if (relayUrl) {
-    console.log(`Initializing NDK with relay: ${relayUrl}`)
-    ndkActions.initialize([relayUrl, ...defaulRelaysUrls])
-    await ndkActions.connect()
-    await authActions.getAuthFromLocalStorageAndLogin()
-    console.log('NDK initialized successfully')
-  }
-  
-  // Create and return a new QueryClient only after NDK is initialized
-  return new QueryClient()
+	if (relayUrl) {
+		console.log(`Initializing NDK with relay: ${relayUrl}`)
+		ndkActions.initialize([relayUrl, ...defaulRelaysUrls])
+		await ndkActions.connect()
+		await authActions.getAuthFromLocalStorageAndLogin()
+		console.log('NDK initialized successfully')
+	}
+
+	// Create and return a new QueryClient only after NDK is initialized
+	return new QueryClient()
 }

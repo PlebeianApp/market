@@ -204,7 +204,6 @@ export const fetchProducts = async () => {
 		return event
 	})
 
-	// Sort by newest first
 	return validatedEvents
 }
 
