@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client'
 import '../styles/index.css'
 import { createQueryClient } from './lib/queryClient'
 import { routeTree } from './routeTree.gen'
+import type { AppRouterContext } from './lib/router-utils'
 
 // Function to create a router once we have a queryClient
 function createAppRouter(queryClient: QueryClient) {
@@ -12,7 +13,7 @@ function createAppRouter(queryClient: QueryClient) {
 		routeTree,
 		context: {
 			queryClient,
-		},
+		} as AppRouterContext,
 		defaultPreload: 'intent',
 		defaultPreloadStaleTime: 0,
 	})

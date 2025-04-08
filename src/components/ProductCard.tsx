@@ -8,13 +8,13 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 	const stock = getProductStock(product)
 
 	return (
-		<div className="border border-zinc-800 rounded-lg overflow-hidden bg-white shadow-sm flex flex-col">
+		<div className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col">
 			{/* Square aspect ratio container for image */}
-			<div className="relative aspect-square border-b border-zinc-800">
+			<div className="relative aspect-square overflow-hidden border-b border-zinc-800">
 				{images && images.length > 0 ? (
-					<img src={images[0][1]} alt={title} className="w-full h-full object-cover" />
+					<img src={images[0][1]} alt={title} className="w-full h-full object-cover rounded-t-[calc(var(--radius)-1px)]" />
 				) : (
-					<div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400">No image</div>
+					<div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400 rounded-lg">No image</div>
 				)}
 			</div>
 

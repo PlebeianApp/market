@@ -18,15 +18,80 @@ import {
 } from '@/lib/schemas/productListing'
 import { z } from 'zod'
 
-// Helper functions to extract data from product events
+// --- DATA FETCHING FUNCTIONS ---
 
-// Basic product information
+/**
+ * Fetches all product listings
+ * @returns Array of product events sorted by creation date
+ */
+export const fetchProducts = async () => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	const filter: NDKFilter = {
+		kinds: [30402], // Product listings in Nostr
+		limit: 50,
+	}
+
+	const events = await ndk.fetchEvents(filter)
+	return Array.from(events)
+}
+
+/**
+ * Fetches a single product listing
+ * @param id The ID of the product listing
+ * @returns The product listing event
+ */
+export const fetchProduct = async (id: string) => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	const event = await ndk.fetchEvent(id)
+	if (!event) {
+		throw new Error('Product not found')
+	}
+
+	return event
+}
+
+// --- REACT QUERY OPTIONS ---
+
+/**
+ * React Query options for fetching a single product
+ * @param id Product ID
+ * @returns Query options object
+ */
+export const productQueryOptions = (id: string) =>
+	queryOptions({
+		queryKey: productKeys.details(id),
+		queryFn: () => fetchProduct(id),
+	})
+
+/**
+ * React Query options for fetching all products
+ */
+export const productsQueryOptions = queryOptions({
+	queryKey: productKeys.all,
+	queryFn: fetchProducts,
+})
+
+// --- HELPER FUNCTIONS (DATA EXTRACTION) ---
+
+/**
+ * Gets the product title from a product event
+ * @param event The product event
+ * @returns The product title string
+ */
 export const getProductTitle = (event: NDKEvent): z.infer<typeof ProductTitleTagSchema>[1] =>
 	event.tags.find((t) => t[0] === 'title')?.[1] || 'Untitled Product'
 
+/**
+ * Gets the product description from a product event
+ * @param event The product event
+ * @returns The product description string
+ */
 export const getProductDescription = (event: NDKEvent): string => event.content || ''
 
-// Product attributes
 /**
  * Gets the price tag from a product event
  * @param event The product event
@@ -150,13 +215,12 @@ export const getProductDimensions = (event: NDKEvent): z.infer<typeof ProductDim
 /**
  * Gets the category tags from a product event
  * @param event The product event
- * @returns An array of category strings (the second element of each 't' tag)
+ * @returns An array of category tuples
  */
 export const getProductCategories = (event: NDKEvent): z.infer<typeof ProductCategoryTagSchema>[] => {
 	return event.tags.filter((t) => t[0] === 't').map((t) => t as z.infer<typeof ProductCategoryTagSchema>)
 }
 
-// Metadata
 /**
  * Gets the creation timestamp from a product event
  * @param event The product event
@@ -171,73 +235,12 @@ export const getProductCreatedAt = (event: NDKEvent): number => event.created_at
  */
 export const getProductPubkey = (event: NDKEvent): string => event.pubkey
 
-// Validate event with schema and log errors
-export const validateProductEvent = (event: NDKEvent): boolean => {
-	try {
-		ProductListingSchema.parse(event)
-		return true
-	} catch (e) {
-		console.error('Error parsing product event:', e)
-		return false
-	}
-}
+// --- REACT QUERY HOOKS ---
 
-// Data fetching functions
-/**
- * Fetches all product listings
- * @returns Array of product events sorted by creation date (newest first)
- */
-export const fetchProducts = async () => {
-	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
-
-	const filter: NDKFilter = {
-		kinds: [30402], // Product listings in Nostr
-		limit: 50,
-	}
-
-	const events = await ndk.fetchEvents(filter)
-
-	// Validate each event and log errors, but still include all events
-	const validatedEvents = Array.from(events).map((event) => {
-		validateProductEvent(event)
-		return event
-	})
-
-	return validatedEvents
-}
-
-export const fetchProduct = async (id: string) => {
-	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
-
-	const event = await ndk.fetchEvent(id)
-	if (!event) {
-		throw new Error('Product not found')
-	}
-
-	// Validate but don't transform
-	validateProductEvent(event)
-	return event
-}
-
-// React Query options
-export const productQueryOptions = (id: string) =>
-	queryOptions({
-		queryKey: productKeys.details(id),
-		queryFn: () => fetchProduct(id),
-	})
-
-export const productsQueryOptions = queryOptions({
-	queryKey: productKeys.all,
-	queryFn: fetchProducts,
-})
-
-// React Query hooks with selectors
 /**
  * Hook to get the product title
  * @param id Product ID
- * @returns Query result with the product title (string)
+ * @returns Query result with the product title
  */
 export const useProductTitle = (id: string) => {
 	return useQuery({
@@ -246,6 +249,11 @@ export const useProductTitle = (id: string) => {
 	})
 }
 
+/**
+ * Hook to get the product description
+ * @param id Product ID
+ * @returns Query result with the product description
+ */
 export const useProductDescription = (id: string) => {
 	return useQuery({
 		...productQueryOptions(id),
@@ -289,6 +297,11 @@ export const useProductSpecs = (id: string) => {
 	})
 }
 
+/**
+ * Hook to get the product type
+ * @param id Product ID
+ * @returns Query result with the product type tuple
+ */
 export const useProductType = (id: string) => {
 	return useQuery({
 		...productQueryOptions(id),
@@ -296,6 +309,11 @@ export const useProductType = (id: string) => {
 	})
 }
 
+/**
+ * Hook to get the product visibility
+ * @param id Product ID
+ * @returns Query result with the product visibility tuple
+ */
 export const useProductVisibility = (id: string) => {
 	return useQuery({
 		...productQueryOptions(id),
@@ -303,6 +321,11 @@ export const useProductVisibility = (id: string) => {
 	})
 }
 
+/**
+ * Hook to get the product stock
+ * @param id Product ID
+ * @returns Query result with the product stock tuple
+ */
 export const useProductStock = (id: string) => {
 	return useQuery({
 		...productQueryOptions(id),
@@ -310,6 +333,11 @@ export const useProductStock = (id: string) => {
 	})
 }
 
+/**
+ * Hook to get the product weight
+ * @param id Product ID
+ * @returns Query result with the product weight tuple
+ */
 export const useProductWeight = (id: string) => {
 	return useQuery({
 		...productQueryOptions(id),
@@ -317,6 +345,11 @@ export const useProductWeight = (id: string) => {
 	})
 }
 
+/**
+ * Hook to get the product dimensions
+ * @param id Product ID
+ * @returns Query result with the product dimensions tuple
+ */
 export const useProductDimensions = (id: string) => {
 	return useQuery({
 		...productQueryOptions(id),
@@ -324,6 +357,11 @@ export const useProductDimensions = (id: string) => {
 	})
 }
 
+/**
+ * Hook to get the product categories
+ * @param id Product ID
+ * @returns Query result with an array of category tuples
+ */
 export const useProductCategories = (id: string) => {
 	return useQuery({
 		...productQueryOptions(id),
@@ -331,6 +369,11 @@ export const useProductCategories = (id: string) => {
 	})
 }
 
+/**
+ * Hook to get the product creation timestamp
+ * @param id Product ID
+ * @returns Query result with the creation timestamp
+ */
 export const useProductCreatedAt = (id: string) => {
 	return useQuery({
 		...productQueryOptions(id),
@@ -338,6 +381,11 @@ export const useProductCreatedAt = (id: string) => {
 	})
 }
 
+/**
+ * Hook to get the product pubkey
+ * @param id Product ID
+ * @returns Query result with the pubkey
+ */
 export const useProductPubkey = (id: string) => {
 	return useQuery({
 		...productQueryOptions(id),

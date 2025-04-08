@@ -3,9 +3,10 @@ import { useSuspenseQuery } from '@tanstack/react-query'
 import { productsQueryOptions } from '../queries/products'
 import { ProductCard } from '@/components/ProductCard'
 import { ItemGrid } from '@/components/ItemGrid'
+import { getQueryClient } from '@/lib/router-utils'
 
 export const Route = createFileRoute('/products/')({
-	loader: ({ context: { queryClient } }) => queryClient.ensureQueryData(productsQueryOptions),
+	loader: ({ context }) => getQueryClient(context).ensureQueryData(productsQueryOptions),
 	component: ProductsRoute,
 })
 
