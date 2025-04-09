@@ -39,55 +39,37 @@ export function ImageCarousel({ images, title, className }: ImageCarouselProps) 
 	}
 
 	return (
-		<div className="flex h-full">
-			{/* Thumbnails */}
-			<div className="w-16 mr-4">
-				<div className="flex flex-col gap-2">
+		<div className="flex h-full lg:flex-row flex-col gap-4">
+			<div className="flex flex-col gap-2">
+				{images.map((image, index) => (
+					<button
+						key={index}
+						className={cn(
+							'relative w-16 p-1 transition-all',
+							index === currentIndex ? 'ring-2 ring-primary' : 'hover:ring-1 hover:ring-primary/50',
+						)}
+						onClick={() => {
+							api?.scrollTo(index)
+							setCurrentIndex(index)
+						}}
+					>
+						<div className="aspect-square w-full overflow-hidden relative bg-black border border-gray-800">
+							<img className="h-full w-full object-cover" src={image.url} alt={`${title} thumbnail ${index + 1}`} />
+						</div>
+						{index === currentIndex && <div className="absolute bottom-1 right-1 w-2 h-2 bg-primary rounded-full" />}
+					</button>
+				))}
+			</div>
+
+			<Carousel setApi={setApi} className="w-full aspect-square">
+				<CarouselContent>
 					{images.map((image, index) => (
-						<button
-							key={index}
-							className={cn(
-								'relative w-16 p-1 transition-all',
-								index === currentIndex ? 'ring-2 ring-primary' : 'hover:ring-1 hover:ring-primary/50',
-							)}
-							onClick={() => {
-								api?.scrollTo(index)
-								setCurrentIndex(index)
-							}}
-						>
-							<div className="aspect-square w-full overflow-hidden relative bg-black border border-gray-800">
-								<img className="h-full w-full object-cover" src={image.url} alt={`${title} thumbnail ${index + 1}`} />
-							</div>
-							{index === currentIndex && <div className="absolute bottom-1 right-1 w-2 h-2 bg-primary rounded-full" />}
-						</button>
+						<CarouselItem key={index} className="flex items-center justify-center">
+							<img src={image.url} alt={`${title} - Image ${index + 1}`} className="max-h-[45vh] max-w-full" />
+						</CarouselItem>
 					))}
-				</div>
-			</div>
-			
-			{/* Main carousel */}
-			<div className="flex-1 h-full">
-				<Carousel setApi={setApi} className="h-full">
-					<CarouselContent className="h-full">
-						{images.map((image, index) => (
-							<CarouselItem key={index} className="h-full">
-								<div className="h-full flex items-center justify-center">
-									<img
-										src={image.url}
-										alt={`${title} - Image ${index + 1}`}
-										className="object-cover max-h-full max-w-full"
-									/>
-								</div>
-							</CarouselItem>
-						))}
-					</CarouselContent>
-					{images.length > 1 && (
-						<>
-							<CarouselPrevious />
-							<CarouselNext />
-						</>
-					)}
-				</Carousel>
-			</div>
+				</CarouselContent>
+			</Carousel>
 		</div>
 	)
 }

@@ -1,6 +1,7 @@
 import { ImageCarousel } from '@/components/ImageCarousel'
 import { ItemGrid } from '@/components/ItemGrid'
 import { ProductCard } from '@/components/ProductCard'
+import { ProfileName } from '@/components/ProfileName'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,11 +9,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { UserNameWithBadge } from '@/components/UserNameWithBadge'
 import { ZapButton } from '@/components/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
-import { cn } from '@/lib/utils'
 import {
 	productQueryOptions,
 	productsByPubkeyQueryOptions,
-	productsQueryOptions,
 	useProductCategories,
 	useProductCreatedAt,
 	useProductDescription,
@@ -30,9 +29,8 @@ import {
 import { useSuspenseQuery } from '@tanstack/react-query'
 import type { FileRoutesByPath } from '@tanstack/react-router'
 import { createFileRoute } from '@tanstack/react-router'
-import { ArrowLeft, Minus, Plus, Share2 } from 'lucide-react'
+import { ArrowLeft, Minus, Plus } from 'lucide-react'
 import { useState } from 'react'
-import { ProfileName } from '@/components/ProfileName'
 
 declare module '@tanstack/react-router' {
 	interface FileRoutesByPath {
@@ -52,6 +50,18 @@ export const Route = createFileRoute('/products/$productId')({
 function RouteComponent() {
 	const { productId } = Route.useLoaderData()
 
+	// Original product query to keep the suspense behavior
+	const { data: product } = useSuspenseQuery(productQueryOptions(productId))
+
+	if (!product) {
+		return (
+			<div className="flex h-[50vh] flex-col items-center justify-center gap-4">
+				<h1 className="text-2xl font-bold">Product Not Found</h1>
+				<p className="text-gray-600">The product you're looking for doesn't exist.</p>
+			</div>
+		)
+	}
+
 	// Get all product data using hooks
 	const { data: title = 'Untitled Product' } = useProductTitle(productId)
 	const { data: description = '' } = useProductDescription(productId)
@@ -67,14 +77,7 @@ function RouteComponent() {
 	const { data: createdAt = 0 } = useProductCreatedAt(productId)
 	const { data: pubkey = '' } = useProductPubkey(productId)
 
-	const productsQuery = useSuspenseQuery({
-		...productsByPubkeyQueryOptions(pubkey),
-	})
-
-	// Original product query to keep the suspense behavior
-	const { data: product } = useSuspenseQuery({
-		...productQueryOptions(productId),
-	})
+	const { data: sellerProducts = [] } = useSuspenseQuery(productsByPubkeyQueryOptions(pubkey || 'placeholder'))
 
 	const breakpoint = useBreakpoint()
 	const isSmallScreen = breakpoint === 'sm'
@@ -91,21 +94,6 @@ function RouteComponent() {
 			}
 		: undefined
 
-	if (!product) {
-		return (
-			<div className="flex h-[50vh] flex-col items-center justify-center gap-4">
-				<h1 className="text-2xl font-bold">Product Not Found</h1>
-				<p className="text-gray-600">The product you're looking for doesn't exist.</p>
-			</div>
-		)
-	}
-
-	// Transform specs into key-value objects for easier display
-	const specsFormatted = specs.map((spec) => ({
-		key: spec[1],
-		value: spec[2],
-	}))
-
 	// Format product images for the ImageCarousel component
 	const formattedImages = images.map((image) => ({
 		url: image[1],
@@ -113,18 +101,15 @@ function RouteComponent() {
 		order: image[3] ? parseInt(image[3]) : undefined,
 	}))
 
-	// Seller mock data (should be replaced with proper profile data)
-	const seller = {
-		id: pubkey,
-		name: pubkey.slice(0, 8) + '...',
-	}
-
 	// Get location from tags if exists
 	const location = product.tags.find((t) => t[0] === 'location')?.[1]
 
+	// Filter out the current product from seller's products
+	const otherProducts = sellerProducts.filter((p) => p.id !== productId)
+
 	return (
 		<div className="flex flex-col gap-4">
-			<div className="relative min-h-screen">
+			<div className="relative">
 				<Button
 					variant="ghost"
 					onClick={() => window.history.back()}
@@ -133,9 +118,9 @@ function RouteComponent() {
 					<ArrowLeft className="h-4 w-4" />
 					<span>Back to results</span>
 				</Button>
-				<div className=" bg-black">
+				<div className="bg-black">
 					<div className="container mx-auto grid grid-cols-1 lg:grid-cols-2 mx-auto gap-16 p-16">
-						<div className="max-h-[60vh] lg:h-[40vh] overflow-hidden">
+						<div className="max-h-[65vh] lg:h-[45vh]">
 							<ImageCarousel images={formattedImages} title={title} />
 						</div>
 
@@ -143,7 +128,7 @@ function RouteComponent() {
 							<div className="flex items-center justify-between">
 								<h1 className="text-3xl font-bold">{title}</h1>
 								<div className="flex items-center gap-2">
-									<ZapButton recipientId={seller.id} />
+									<ZapButton recipientId={pubkey} />
 									<Button
 										variant="primary"
 										size="icon"
@@ -152,9 +137,10 @@ function RouteComponent() {
 									/>
 								</div>
 							</div>
+
 							<div className="space-y-1">
 								<p className="text-2xl font-bold">{price.toLocaleString()} sats</p>
-								<p className="text-sm text-gray-400">€{price.toFixed(2)} EUR</p>
+								<p className="text-sm text-gray-400">€{(price * 0.0004).toFixed(2)} EUR</p>
 							</div>
 
 							<Badge variant="primary">{stock !== undefined ? `${stock} in stock` : 'Out of stock'}</Badge>
@@ -180,20 +166,6 @@ function RouteComponent() {
 								}
 							})()}
 
-							<div className="flex items-center gap-2">
-								<span className="text-sm text-gray-400">Status:</span>
-								<span
-									className={cn(
-										'inline-block rounded-full px-3 py-1 text-xs font-medium',
-										status === 'on-sale' && 'bg-green-500/20 text-green-300',
-										status === 'hidden' && 'bg-red-500/20 text-red-300',
-										status === 'pre-order' && 'bg-gray-500/20 text-gray-300',
-									)}
-								>
-									{status.charAt(0).toUpperCase() + status.slice(1)}
-								</span>
-							</div>
-
 							{stock !== undefined && (
 								<div className="flex items-center gap-4">
 									<div className="flex items-center gap-2">
@@ -216,7 +188,7 @@ function RouteComponent() {
 
 							<div className="flex items-center gap-2">
 								<span>Sold by:</span>
-								<UserNameWithBadge userId={seller.id} />
+								<UserNameWithBadge userId={pubkey} />
 							</div>
 						</div>
 					</div>
@@ -236,7 +208,7 @@ function RouteComponent() {
 						</TabsList>
 
 						<TabsContent value="description" className="mt-4 border-t-3 border-secondary bg-tertiary">
-							<div className="rounded-lg bg-white p-6 shadow-md ">
+							<div className="rounded-lg bg-white p-6 shadow-md">
 								<p className="whitespace-pre-wrap text-gray-700">{description}</p>
 							</div>
 						</TabsContent>
@@ -244,13 +216,13 @@ function RouteComponent() {
 						<TabsContent value="specs" className="mt-4">
 							<div className="rounded-lg bg-white p-6 shadow-md">
 								<div className="grid grid-cols-2 gap-4">
-									{specsFormatted.map((spec, index) => (
+									{specs.map((spec, index) => (
 										<div key={index} className="flex flex-col">
-											<span className="text-sm font-medium text-gray-500">{spec.key}</span>
-											<span className="text-gray-900">{spec.value}</span>
+											<span className="text-sm font-medium text-gray-500">{spec[1]}</span>
+											<span className="text-gray-900">{spec[2]}</span>
 										</div>
 									))}
-									{specsFormatted.length === 0 && <p className="text-gray-700 col-span-2">No specifications available</p>}
+									{specs.length === 0 && <p className="text-gray-700 col-span-2">No specifications available</p>}
 								</div>
 							</div>
 						</TabsContent>
@@ -263,19 +235,21 @@ function RouteComponent() {
 					</Tabs>
 				</div>
 			</div>
-			<div className=" px-4 py-6">
-				<ItemGrid
-					title={
-						<div className="flex items-center gap-2">
-							<span className="text-2xl font-heading">More products from</span>
-							<ProfileName pubkey={seller.id} className="text-2xl font-heading" />
-						</div>
-					}
-				>
-					{productsQuery.data.map((product) => (
-						<ProductCard key={product.id} product={product} />
-					))}
-				</ItemGrid>
+			<div className="px-4 py-6">
+				{otherProducts.length > 0 && (
+					<ItemGrid
+						title={
+							<div className="flex items-center gap-2">
+								<span className="text-2xl font-heading">More products from</span>
+								<ProfileName pubkey={pubkey} className="text-2xl font-heading" />
+							</div>
+						}
+					>
+						{otherProducts.map((product) => (
+							<ProductCard key={product.id} product={product} />
+						))}
+					</ItemGrid>
+				)}
 			</div>
 		</div>
 	)
