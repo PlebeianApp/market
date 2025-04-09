@@ -1,16 +1,17 @@
 import type { ReactNode } from 'react'
+import { cn } from '@/lib/utils'
 
 interface ItemGridProps {
 	children: ReactNode
 	className?: string
-	title?: string
+	title?: ReactNode
 }
 
-export function ItemGrid({ children, className = '', title }: ItemGridProps) {
+export function ItemGrid({ children, className, title }: ItemGridProps) {
 	return (
 		<div>
-			{title && <h1 className="text-2xl mb-4 font-heading">{title}</h1>}
-			<div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-16 ${className}`}>{children}</div>
+			{title && <div className="mb-4">{typeof title === 'string' ? <h1 className="text-2xl font-heading">{title}</h1> : title}</div>}
+			<div className={cn('grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-16', className)}>{children}</div>
 		</div>
 	)
 }

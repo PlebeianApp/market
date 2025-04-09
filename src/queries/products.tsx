@@ -54,6 +54,25 @@ export const fetchProduct = async (id: string) => {
 	return event
 }
 
+/**
+ * Fetches all products from a specific pubkey
+ * @param pubkey The pubkey of the seller
+ * @returns Array of product events sorted by creation date
+ */
+export const fetchProductsByPubkey = async (pubkey: string) => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	const filter: NDKFilter = {
+		kinds: [30402],
+		authors: [pubkey],
+		limit: 50,
+	}
+
+	const events = await ndk.fetchEvents(filter)
+	return Array.from(events)
+}
+
 // --- REACT QUERY OPTIONS ---
 
 /**
@@ -74,6 +93,16 @@ export const productsQueryOptions = queryOptions({
 	queryKey: productKeys.all,
 	queryFn: fetchProducts,
 })
+
+/**
+ * React Query options for fetching products by pubkey
+ * @param pubkey Seller's pubkey
+ */
+export const productsByPubkeyQueryOptions = (pubkey: string) =>
+	queryOptions({
+		queryKey: productKeys.byPubkey(pubkey),
+		queryFn: () => fetchProductsByPubkey(pubkey),
+	})
 
 // --- HELPER FUNCTIONS (DATA EXTRACTION) ---
 
@@ -390,5 +419,16 @@ export const useProductPubkey = (id: string) => {
 	return useQuery({
 		...productQueryOptions(id),
 		select: getProductPubkey,
+	})
+}
+
+/**
+ * Hook to get products by pubkey
+ * @param pubkey Seller's pubkey
+ * @returns Query result with an array of product events
+ */
+export const useProductsByPubkey = (pubkey: string) => {
+	return useQuery({
+		...productsByPubkeyQueryOptions(pubkey),
 	})
 }

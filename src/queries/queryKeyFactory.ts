@@ -1,7 +1,8 @@
 export const productKeys = {
 	all: ['products'] as const,
 	details: (id: string) => [...productKeys.all, id] as const,
-}
+	byPubkey: (pubkey: string) => [...productKeys.all, 'byPubkey', pubkey] as const,
+} as const
 
 export const profileKeys = {
 	all: ['profiles'] as const,

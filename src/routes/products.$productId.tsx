@@ -1,30 +1,38 @@
-import { Button } from '@/components/ui/button'
 import { ImageCarousel } from '@/components/ImageCarousel'
+import { ItemGrid } from '@/components/ItemGrid'
+import { ProductCard } from '@/components/ProductCard'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { UserNameWithBadge } from '@/components/UserNameWithBadge'
+import { ZapButton } from '@/components/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { cn } from '@/lib/utils'
 import {
 	productQueryOptions,
-	useProductDescription,
-	useProductImages,
-	useProductTitle,
-	useProductPrice,
-	useProductType,
-	useProductStock,
-	useProductVisibility,
-	useProductSpecs,
-	useProductWeight,
-	useProductDimensions,
+	productsByPubkeyQueryOptions,
+	productsQueryOptions,
 	useProductCategories,
 	useProductCreatedAt,
+	useProductDescription,
+	useProductDimensions,
+	useProductImages,
+	useProductPrice,
 	useProductPubkey,
+	useProductSpecs,
+	useProductStock,
+	useProductTitle,
+	useProductType,
+	useProductVisibility,
+	useProductWeight,
 } from '@/queries/products'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import type { FileRoutesByPath } from '@tanstack/react-router'
 import { createFileRoute } from '@tanstack/react-router'
 import { ArrowLeft, Minus, Plus, Share2 } from 'lucide-react'
-import { ZapButton } from '@/components/ZapButton'
 import { useState } from 'react'
+import { ProfileName } from '@/components/ProfileName'
 
 declare module '@tanstack/react-router' {
 	interface FileRoutesByPath {
@@ -58,6 +66,10 @@ function RouteComponent() {
 	const { data: categories = [] } = useProductCategories(productId)
 	const { data: createdAt = 0 } = useProductCreatedAt(productId)
 	const { data: pubkey = '' } = useProductPubkey(productId)
+
+	const productsQuery = useSuspenseQuery({
+		...productsByPubkeyQueryOptions(pubkey),
+	})
 
 	// Original product query to keep the suspense behavior
 	const { data: product } = useSuspenseQuery({
@@ -111,72 +123,63 @@ function RouteComponent() {
 	const location = product.tags.find((t) => t[0] === 'location')?.[1]
 
 	return (
-		<div className="relative min-h-screen">
-			<Button
-				variant="ghost"
-				onClick={() => window.history.back()}
-				className="absolute left-4 top-4 z-10 flex items-center gap-2 text-white hover:bg-white/10"
-			>
-				<ArrowLeft className="h-4 w-4" />
-				<span>Back to results</span>
-			</Button>
-			<div className=" bg-black">
-				<div className="container mx-auto grid grid-cols-1 lg:grid-cols-2 mx-auto">
-					<div className="max-h-[60vh] lg:h-[40vh] overflow-hidden">
-						<ImageCarousel images={formattedImages} title={title} />
-					</div>
-
-					<div className="flex flex-col gap-6 p-8 text-white">
-						<div className="space-y-4">
-							<h1 className="text-3xl font-bold">{title}</h1>
-							<p className="text-lg text-gray-300">{description}</p>
+		<div className="flex flex-col gap-4">
+			<div className="relative min-h-screen">
+				<Button
+					variant="ghost"
+					onClick={() => window.history.back()}
+					className="absolute left-4 top-4 z-10 flex items-center gap-2 text-white hover:bg-white/10"
+				>
+					<ArrowLeft className="h-4 w-4" />
+					<span>Back to results</span>
+				</Button>
+				<div className=" bg-black">
+					<div className="container mx-auto grid grid-cols-1 lg:grid-cols-2 mx-auto gap-16 p-16">
+						<div className="max-h-[60vh] lg:h-[40vh] overflow-hidden">
+							<ImageCarousel images={formattedImages} title={title} />
 						</div>
 
-						<div className="flex items-center justify-between">
+						<div className="flex flex-col gap-8 text-white">
+							<div className="flex items-center justify-between">
+								<h1 className="text-3xl font-bold">{title}</h1>
+								<div className="flex items-center gap-2">
+									<ZapButton recipientId={seller.id} />
+									<Button
+										variant="primary"
+										size="icon"
+										className="bg-white/10 hover:bg-white/20"
+										icon={<span className="i-sharing w-6 h-6" />}
+									/>
+								</div>
+							</div>
 							<div className="space-y-1">
 								<p className="text-2xl font-bold">{price.toLocaleString()} sats</p>
 								<p className="text-sm text-gray-400">€{price.toFixed(2)} EUR</p>
 							</div>
-							<div className="flex items-center gap-2">
-								<Button variant="secondary" size="icon" className="bg-white/10 hover:bg-white/20">
-									<Share2 className="h-5 w-5" />
-								</Button>
-								<ZapButton recipientId={seller.id} />
-							</div>
-						</div>
 
-						{stock !== undefined && (
-							<div className="flex items-center gap-4">
-								<span className="text-sm text-gray-300">{stock} in stock</span>
-								<div className="flex items-center gap-2">
-									<Button
-										variant="outline"
-										size="icon"
-										onClick={() => setQuantity(Math.max(1, quantity - 1))}
-										disabled={quantity <= 1}
-										className="border-white/20 bg-white/10 hover:bg-white/20"
-									>
-										<Minus className="h-4 w-4" />
-									</Button>
-									<span className="w-8 text-center">{quantity}</span>
-									<Button
-										variant="outline"
-										size="icon"
-										onClick={() => setQuantity(Math.min(stock || quantity + 1, quantity + 1))}
-										disabled={quantity >= (stock || quantity)}
-										className="border-white/20 bg-white/10 hover:bg-white/20"
-									>
-										<Plus className="h-4 w-4" />
-									</Button>
-								</div>
-							</div>
-						)}
+							<Badge variant="primary">{stock !== undefined ? `${stock} in stock` : 'Out of stock'}</Badge>
 
-						<Button size="lg" className="w-full bg-white text-black hover:bg-white/90">
-							Add to cart
-						</Button>
+							{(() => {
+								switch (productType?.product) {
+									case 'simple':
+										return (
+											<div>
+												{productType.product.charAt(0).toUpperCase() + productType.product.slice(1)} /{' '}
+												{productType.delivery.charAt(0).toUpperCase() + productType.delivery.slice(1)}
+											</div>
+										)
+									case 'variable':
+										return (
+											<div>
+												{productType.product.charAt(0).toUpperCase() + productType.product.slice(1)} /{' '}
+												{productType.delivery.charAt(0).toUpperCase() + productType.delivery.slice(1)}
+											</div>
+										)
+									default:
+										return null
+								}
+							})()}
 
-						<div className="flex flex-col gap-2 text-gray-300">
 							<div className="flex items-center gap-2">
 								<span className="text-sm text-gray-400">Status:</span>
 								<span
@@ -191,79 +194,88 @@ function RouteComponent() {
 								</span>
 							</div>
 
-							{productType && (
-								<div className="flex items-center gap-2">
-									<span className="text-sm text-gray-400">Type:</span>
-									<span className="text-sm">
-										{productType.product.charAt(0).toUpperCase() + productType.product.slice(1)} /{' '}
-										{productType.delivery.charAt(0).toUpperCase() + productType.delivery.slice(1)}
-									</span>
+							{stock !== undefined && (
+								<div className="flex items-center gap-4">
+									<div className="flex items-center gap-2">
+										<Button variant="tertiary" size="icon" onClick={() => setQuantity(Math.max(1, quantity - 1))} disabled={quantity <= 1}>
+											<Minus className="h-6 w-6" />
+										</Button>
+										<Input className="w-10 text-center text-black" value={quantity} />
+										<Button
+											variant="tertiary"
+											size="icon"
+											onClick={() => setQuantity(Math.min(stock || quantity + 1, quantity + 1))}
+											disabled={quantity >= (stock || quantity)}
+										>
+											<Plus className="h-6 w-6" />
+										</Button>
+										<Button variant="secondary">Add to cart</Button>
+									</div>
 								</div>
 							)}
 
 							<div className="flex items-center gap-2">
-								<span className="text-sm text-gray-400">Listed:</span>
-								<span className="text-sm">{new Date(createdAt * 1000).toLocaleDateString()}</span>
+								<span>Sold by:</span>
+								<UserNameWithBadge userId={seller.id} />
 							</div>
 						</div>
 					</div>
+				</div>
+				<div className="mx-auto max-w-7xl px-4 py-6 -mt-12">
+					<Tabs defaultValue="description" className="w-full">
+						<TabsList className="w-full flex flex-row gap-3 bg-transparent justify-start">
+							<TabsTrigger value="description">Description</TabsTrigger>
+							<TabsTrigger value="specs">Spec</TabsTrigger>
+							<TabsTrigger value="shipping">Shipping</TabsTrigger>
+							<TabsTrigger value="comments" disabled>
+								Comments
+							</TabsTrigger>
+							<TabsTrigger value="reviews" disabled>
+								Reviews
+							</TabsTrigger>
+						</TabsList>
+
+						<TabsContent value="description" className="mt-4 border-t-3 border-secondary bg-tertiary">
+							<div className="rounded-lg bg-white p-6 shadow-md ">
+								<p className="whitespace-pre-wrap text-gray-700">{description}</p>
+							</div>
+						</TabsContent>
+
+						<TabsContent value="specs" className="mt-4">
+							<div className="rounded-lg bg-white p-6 shadow-md">
+								<div className="grid grid-cols-2 gap-4">
+									{specsFormatted.map((spec, index) => (
+										<div key={index} className="flex flex-col">
+											<span className="text-sm font-medium text-gray-500">{spec.key}</span>
+											<span className="text-gray-900">{spec.value}</span>
+										</div>
+									))}
+									{specsFormatted.length === 0 && <p className="text-gray-700 col-span-2">No specifications available</p>}
+								</div>
+							</div>
+						</TabsContent>
+
+						<TabsContent value="shipping" className="mt-4">
+							<div className="rounded-lg bg-white p-6 shadow-md">
+								<p className="text-gray-700">Shipping information not available</p>
+							</div>
+						</TabsContent>
+					</Tabs>
 				</div>
 			</div>
-			<div className="mx-auto max-w-7xl px-4 py-6">
-				<Tabs defaultValue="description" className="w-full">
-					<TabsList className="w-full flex flex-row gap-3 bg-transparent justify-start">
-						<TabsTrigger value="description">Description</TabsTrigger>
-						<TabsTrigger value="specs">Specifications</TabsTrigger>
-						<TabsTrigger value="shipping">Shipping</TabsTrigger>
-						<TabsTrigger value="comments" disabled>
-							Comments
-						</TabsTrigger>
-						<TabsTrigger value="reviews" disabled>
-							Reviews
-						</TabsTrigger>
-					</TabsList>
-
-					<TabsContent value="description" className="mt-4">
-						<div className="rounded-lg bg-white p-6 shadow-md">
-							<p className="whitespace-pre-wrap text-gray-700">{description}</p>
+			<div className=" px-4 py-6">
+				<ItemGrid
+					title={
+						<div className="flex items-center gap-2">
+							<span className="text-2xl font-heading">More products from</span>
+							<ProfileName pubkey={seller.id} className="text-2xl font-heading" />
 						</div>
-					</TabsContent>
-
-					<TabsContent value="specs" className="mt-4">
-						<div className="rounded-lg bg-white p-6 shadow-md">
-							<div className="grid grid-cols-2 gap-4">
-								{specsFormatted.map((spec, index) => (
-									<div key={index} className="flex flex-col">
-										<span className="text-sm font-medium text-gray-500">{spec.key}</span>
-										<span className="text-gray-900">{spec.value}</span>
-									</div>
-								))}
-								{specsFormatted.length === 0 && <p className="text-gray-700 col-span-2">No specifications available</p>}
-							</div>
-						</div>
-					</TabsContent>
-
-					<TabsContent value="shipping" className="mt-4">
-						<div className="rounded-lg bg-white p-6 shadow-md">
-							<p className="text-gray-700">Shipping information not available</p>
-						</div>
-					</TabsContent>
-				</Tabs>
-
-				<div className="mt-8 rounded-lg bg-white p-6 shadow-md">
-					<div className="flex flex-col gap-6">
-						<div className="flex items-center justify-between">
-							<div>
-								<h3 className="text-lg font-semibold">Seller</h3>
-								<p className="text-gray-600">{seller.name}</p>
-								{location && <p className="text-sm text-gray-500">{location}</p>}
-							</div>
-							<Button variant="outline" className="gap-2">
-								<span>Contact</span>
-							</Button>
-						</div>
-					</div>
-				</div>
+					}
+				>
+					{productsQuery.data.map((product) => (
+						<ProductCard key={product.id} product={product} />
+					))}
+				</ItemGrid>
 			</div>
 		</div>
 	)

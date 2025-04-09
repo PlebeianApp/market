@@ -1,6 +1,6 @@
-import { useProfileName } from '@/queries/profiles'
 import { Nip05Badge } from './Nip05Badge'
-import { Skeleton } from './ui/skeleton'
+import { ProfileName } from './ProfileName'
+import { cn } from '@/lib/utils'
 
 interface UserNameWithBadgeProps {
 	userId: string
@@ -8,21 +8,10 @@ interface UserNameWithBadgeProps {
 }
 
 export function UserNameWithBadge({ userId, className = '' }: UserNameWithBadgeProps) {
-	const { data: name, isLoading } = useProfileName(userId)
-
-	if (isLoading) {
-		return (
-			<div className={`flex items-center gap-2 ${className}`}>
-				<Skeleton className="h-4 w-24" />
-				<Skeleton className="h-6 w-6" />
-			</div>
-		)
-	}
-
 	return (
-		<div className={`flex items-center gap-2 ${className}`}>
+		<div className={cn('flex items-center gap-2', className)}>
 			<Nip05Badge userId={userId} />
-			<span className="underline">{name || userId.slice(0, 8) + '...'}</span>
+			<ProfileName pubkey={userId} className="underline" />
 		</div>
 	)
 }

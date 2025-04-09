@@ -31,9 +31,8 @@ export function ZapButton({ recipientId, className, ...props }: ZapButtonProps) 
 			className={cn('gap-2', isZapping && 'animate-pulse', className)}
 			onClick={handleZap}
 			disabled={isZapping}
+			icon={<span className={cn('i-lightning w-6 h-6', isZapping && 'animate-bounce')} />}
 			{...props}
-		>
-			<Zap className={cn('h-4 w-4', isZapping && 'animate-bounce text-yellow-400')} />
-		</Button>
+		></Button>
 	)
 }
