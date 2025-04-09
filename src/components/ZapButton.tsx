@@ -5,11 +5,9 @@ import { cn } from '@/lib/utils'
 
 interface ZapButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 	recipientId: string
-	size?: 'default' | 'sm' | 'lg'
-	variant?: 'default' | 'secondary' | 'ghost'
 }
 
-export function ZapButton({ recipientId, size = 'default', variant = 'default', className, ...props }: ZapButtonProps) {
+export function ZapButton({ recipientId, className, ...props }: ZapButtonProps) {
 	const [isZapping, setIsZapping] = React.useState(false)
 
 	const handleZap = async () => {
@@ -28,8 +26,8 @@ export function ZapButton({ recipientId, size = 'default', variant = 'default', 
 
 	return (
 		<Button
-			variant={variant}
-			size={size}
+			variant="focus"
+			size="icon"
 			className={cn('gap-2', isZapping && 'animate-pulse', className)}
 			onClick={handleZap}
 			disabled={isZapping}
