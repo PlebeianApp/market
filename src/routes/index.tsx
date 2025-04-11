@@ -1,15 +1,21 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { Hero } from '../components/Hero'
 import { Button } from '@/components/ui/button'
+import { uiActions } from '@/lib/stores/ui'
+import { authStore, useAuth } from '@/lib/stores/auth'
+import { useStore } from '@tanstack/react-store'
 
 export const Route = createFileRoute('/')({
 	component: Index,
 })
 
 function Index() {
+	const { isAuthenticated } = useStore(authStore)
 	const handleStartSelling = () => {
-		if (window.openNewProductDialog) {
-			window.openNewProductDialog()
+		if (isAuthenticated) {
+			uiActions.openDrawer('createProduct')
+		} else {
+			uiActions.openDialog('login')
 		}
 	}
 

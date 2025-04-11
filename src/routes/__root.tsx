@@ -1,13 +1,12 @@
-import { DecryptPasswordDialog } from '@/components/auth/DecryptPasswordDialog'
-import { LoginDialog } from '@/components/auth/LoginDialog'
 import { Footer } from '@/components/layout/Footer'
 import { Header } from '@/components/layout/Header'
-import { NewProductDialog } from '@/components/NewProductDialog'
 import { Pattern } from '@/components/pattern'
 import { SheetRegistry } from '@/components/SheetRegistry'
+import { DialogRegistry } from '@/components/DialogRegistry'
 import { useConfigQuery } from '@/queries/config'
 import { createRootRoute, Outlet, useNavigate } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
+import { DecryptPasswordDialog } from '@/components/auth/DecryptPasswordDialog'
 
 export const Route = createRootRoute({
 	component: RootComponent,
@@ -19,15 +18,8 @@ function RootComponent() {
 
 function RootLayout() {
 	const { data: config, isLoading, isError } = useConfigQuery()
-	const [showLoginDialog, setShowLoginDialog] = useState(false)
-	const [showNewProductDialog, setShowNewProductDialog] = useState(false)
 	const navigate = useNavigate()
 	const isSetupPage = window.location.pathname === '/setup'
-
-	// Expose the new product dialog state to the window so it can be accessed from any route
-	useEffect(() => {
-		window.openNewProductDialog = () => setShowNewProductDialog(true)
-	}, [])
 
 	useEffect(() => {
 		if (isLoading || isError) return
@@ -50,7 +42,7 @@ function RootLayout() {
 
 	return (
 		<div className="flex flex-col min-h-screen">
-			<Header onLoginClick={() => setShowLoginDialog(true)} />
+			<Header />
 
 			<main className="flex-grow">
 				<Outlet />
@@ -61,15 +53,7 @@ function RootLayout() {
 			{/* <TanStackRouterDevtools /> */}
 			<DecryptPasswordDialog />
 			<SheetRegistry />
-			<LoginDialog open={showLoginDialog} onOpenChange={setShowLoginDialog} />
-			<NewProductDialog open={showNewProductDialog} onOpenChange={setShowNewProductDialog} />
+			<DialogRegistry />
 		</div>
 	)
-}
-
-// Add TypeScript interface for window object
-declare global {
-	interface Window {
-		openNewProductDialog: () => void
-	}
 }

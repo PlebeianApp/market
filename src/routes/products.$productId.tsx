@@ -136,7 +136,7 @@ function RouteComponent() {
 					<span>Back to results</span>
 				</Button>
 				<div className="bg-black">
-					<div className="container mx-auto grid grid-cols-1 lg:grid-cols-2 mx-auto gap-16 p-16">
+					<div className="container mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 p-16">
 						<div className="max-h-[65vh] lg:h-[45vh]">
 							<ImageCarousel images={formattedImages} title={title} />
 						</div>
