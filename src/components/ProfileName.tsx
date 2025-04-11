@@ -18,7 +18,7 @@ export function ProfileName({ pubkey, truncate = true, className, ...props }: Pr
 	const displayName = name || (truncate ? pubkey.slice(0, 8) + '...' : pubkey)
 
 	return (
-		<Link to="/p/$pubkey" params={{ pubkey }} className={cn(className)} {...props}>
+		<Link to="/profile/$profileId" params={{ profileId: pubkey }} className={cn(className)} {...props}>
 			<span>{displayName}</span>
 		</Link>
 	)

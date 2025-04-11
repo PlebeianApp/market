@@ -103,9 +103,6 @@ function RouteComponent() {
 	// Get location from tags if exists
 	const location = product.tags.find((t) => t[0] === 'location')?.[1]
 
-	// Filter out the current product from seller's products
-	const otherProducts = sellerProducts.filter((p) => p.id !== productId)
-
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="relative">
@@ -235,7 +232,7 @@ function RouteComponent() {
 				</div>
 			</div>
 			<div className="px-4 py-6">
-				{otherProducts.length > 0 && (
+				{sellerProducts.length > 0 && (
 					<ItemGrid
 						title={
 							<div className="flex items-center gap-2">
@@ -244,7 +241,7 @@ function RouteComponent() {
 							</div>
 						}
 					>
-						{otherProducts.map((product) => (
+						{sellerProducts.map((product) => (
 							<ProductCard key={product.id} product={product} />
 						))}
 					</ItemGrid>

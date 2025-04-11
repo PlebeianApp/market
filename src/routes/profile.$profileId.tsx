@@ -1,32 +1,20 @@
+import { ItemGrid } from '@/components/ItemGrid'
 import { Nip05Badge } from '@/components/Nip05Badge'
+import { ProductCard } from '@/components/ProductCard'
+import { ProfileName } from '@/components/ProfileName'
 
 import { Button } from '@/components/ui/button'
+import { ZapButton } from '@/components/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
-import { getHexColorFingerprintFromHexPubkey, truncateText } from '@/lib/utils'
+import { getHexColorFingerprintFromHexPubkey, truncateText, userFromIdentifier } from '@/lib/utils'
+import { fetchProductsByPubkey, productsByPubkeyQueryOptions } from '@/queries/products'
 import { profileByIdentifierQueryOptions } from '@/queries/profiles'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
+import type { NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { ArrowLeft, MessageCircle, Minus, Plus, Share2, Zap } from 'lucide-react'
+import { ArrowLeft, MessageCircle, Minus, Plus, Share2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-
-interface ProductCollection {
-	id: string
-	name: string
-	description?: string
-	image?: string
-	owner?: string
-	currency?: string
-}
-
-interface Product {
-	id: string
-	name: string
-	image?: string
-	price?: number
-	currency?: string
-	stall_id?: string
-}
 
 export const Route = createFileRoute('/profile/$profileId')({
 	component: RouteComponent,
@@ -37,24 +25,23 @@ function RouteComponent() {
 	const params = Route.useParams() as Params
 	const [animationParent] = useAutoAnimate()
 	const { data: profile } = useSuspenseQuery(profileByIdentifierQueryOptions(params.profileId))
+	const [user, setUser] = useState<NDKUser | undefined>(undefined)
 	const [showFullAbout, setShowFullAbout] = useState(false)
+	const [sellerProducts, setSellerProducts] = useState<NDKEvent[]>([])
 	const breakpoint = useBreakpoint()
 	const isSmallScreen = breakpoint === 'sm'
 
 	useEffect(() => {
-		console.log('Profile ID:', params.profileId)
+		const fetchUser = async () => {
+			const user = await userFromIdentifier(params.profileId)
+			if (user) {
+				setUser(user)
+				const products = await fetchProductsByPubkey(user.pubkey)
+				setSellerProducts(products)
+			}
+		}
+		fetchUser()
 	}, [params.profileId])
-
-	const stalls: ProductCollection[] = [
-		{
-			id: '1',
-			name: 'HODLR.ROCKS',
-			description: 'Laser cut bitcoin, nostr and freedom tech art',
-			owner: params.profileId,
-			currency: 'GBP',
-		},
-	]
-	const products: Product[] = []
 
 	return (
 		<div className="relative text-white min-h-screen">
@@ -115,9 +102,7 @@ function RouteComponent() {
 					</div>
 					{!isSmallScreen && (
 						<div className="flex gap-2">
-							<Button variant="primary" size="icon">
-								<Zap className="w-5 h-5" />
-							</Button>
+							{user && <ZapButton event={user} />}
 							<Button variant="focus" size="icon">
 								<MessageCircle className="w-5 h-5" />
 							</Button>
@@ -128,61 +113,22 @@ function RouteComponent() {
 					)}
 				</div>
 
-				<div className="px-8 py-6">
-					<h3 className="text-2xl font-bold mb-6 uppercase">Shops</h3>
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-						{stalls.map((stall) => (
-							<div key={stall.id} className="border border-zinc-800 rounded-lg overflow-hidden bg-zinc-900">
-								<div className="aspect-video bg-gradient-to-br from-purple-600 to-pink-500 flex items-center justify-center">
-									{stall.image ? (
-										<img src={stall.image} alt={stall.name} className="w-full h-full object-cover" />
-									) : (
-										<span className="text-2xl font-bold">{stall.name}</span>
-									)}
-								</div>
-								<div className="p-4">
-									<h4 className="text-xl font-bold">{stall.name}</h4>
-									{stall.description && <p className="text-sm text-gray-400 mt-2">{stall.description}</p>}
-									<div className="mt-4 pt-4 border-t border-zinc-800 flex justify-between">
-										<div className="text-sm">
-											<div>
-												Currency: <span className="font-bold">{stall.currency}</span>
-											</div>
-											<div>
-												Owner: <span className="font-bold">{truncateText(profile?.name || 'Anonymous', 15)}</span>
-											</div>
-										</div>
-									</div>
-								</div>
+				{sellerProducts.length > 0 ? (
+					<ItemGrid
+						title={
+							<div className="flex items-center gap-2">
+								<span className="text-2xl font-heading">More products from</span>
+								<ProfileName pubkey={user?.pubkey || ''} className="text-2xl font-heading" />
 							</div>
+						}
+					>
+						{sellerProducts.map((product) => (
+							<ProductCard key={product.id} product={product} />
 						))}
-					</div>
-				</div>
-
-				{products.length > 0 && (
-					<div className="px-8 py-6">
-						<h3 className="text-2xl font-bold mb-6 uppercase">Products</h3>
-						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-							{products.map((product) => (
-								<div key={product.id} className="border border-zinc-800 rounded-lg overflow-hidden bg-zinc-900">
-									<div className="aspect-square bg-gradient-to-r from-zinc-800 to-zinc-900 flex items-center justify-center">
-										{product.image ? (
-											<img src={product.image} alt={product.name} className="w-full h-full object-cover" />
-										) : (
-											<span className="text-lg font-bold">{product.name}</span>
-										)}
-									</div>
-									<div className="p-4">
-										<h4 className="text-lg font-bold">{product.name}</h4>
-										{product.price && (
-											<p className="text-sm font-bold text-yellow-500 mt-2">
-												{product.price} {product.currency}
-											</p>
-										)}
-									</div>
-								</div>
-							))}
-						</div>
+					</ItemGrid>
+				) : (
+					<div className="flex flex-col items-center justify-center h-full">
+						<span className="text-2xl font-heading">No products found</span>
 					</div>
 				)}
 			</div>

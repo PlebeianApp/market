@@ -1,14 +1,14 @@
 import { ZapDialog } from '@/components/ZapDialog'
 import { ndkActions } from '@/lib/stores/ndk'
 import { cn } from '@/lib/utils'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
 import * as React from 'react'
 import { useEffect, useState } from 'react'
 import { Button } from './ui/button'
 import { Spinner } from './ui/spinner'
 
 interface ZapButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-	event: NDKEvent
+	event: NDKEvent | NDKUser
 }
 
 export function ZapButton({ event, className, ...props }: ZapButtonProps) {
@@ -18,6 +18,7 @@ export function ZapButton({ event, className, ...props }: ZapButtonProps) {
 	const [canAuthorReceiveZaps, setCanAuthorReceiveZaps] = useState(false)
 	useEffect(() => {
 		const checkZapCapability = async () => {
+			console.log('Checking zap capability for:', event)
 			if (!event?.pubkey) return
 
 			try {
@@ -25,9 +26,14 @@ export function ZapButton({ event, className, ...props }: ZapButtonProps) {
 				const ndk = ndkActions.getNDK()
 				if (!ndk) throw new Error('NDK not available')
 
-				const userToZap = ndk.getUser({ pubkey: event.pubkey })
-				const zapInfo = await userToZap.getZapInfo()
-				setCanAuthorReceiveZaps(zapInfo.size > 0)
+				if (event instanceof NDKUser) {
+					const zapInfo = await event.getZapInfo()
+					setCanAuthorReceiveZaps(zapInfo.size > 0)
+				} else {
+					const userToZap = ndk.getUser({ pubkey: event.pubkey })
+					const zapInfo = await userToZap.getZapInfo()
+					setCanAuthorReceiveZaps(zapInfo.size > 0)
+				}
 			} catch (error) {
 				console.error('Failed to check zap capability:', error)
 				setCanAuthorReceiveZaps(false)
@@ -59,7 +65,14 @@ export function ZapButton({ event, className, ...props }: ZapButtonProps) {
 	return (
 		<>
 			{checkingZapCapability ? (
-				<Spinner />
+				<Button
+					variant="focus"
+					size="icon"
+					className={cn('gap-2', isZapping && 'animate-pulse', className)}
+					disabled={true}
+					icon={<Spinner />}
+					{...props}
+				/>
 			) : canAuthorReceiveZaps ? (
 				<Button
 					variant="focus"
