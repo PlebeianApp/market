@@ -15,7 +15,7 @@ function ProductsRoute() {
 	const products = productsQuery.data
 
 	return (
-		<div className="p-4 max-w-7xl mx-auto">
+		<div className="p-4">
 			<ItemGrid title="Nostr Products">
 				{products.map((product) => (
 					<ProductCard key={product.id} product={product} />

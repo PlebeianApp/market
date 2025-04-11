@@ -13,7 +13,7 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { cn } from '@/lib/utils'
 import type { NDKUserProfile } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
-import { Loader2, LogOut, Shield, UserCircle2 } from 'lucide-react'
+import { Loader2, LogOut } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 interface ProfileProps {

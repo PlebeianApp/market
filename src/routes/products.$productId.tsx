@@ -1,0 +1,256 @@
+import { ImageCarousel } from '@/components/ImageCarousel'
+import { ItemGrid } from '@/components/ItemGrid'
+import { ProductCard } from '@/components/ProductCard'
+import { ProfileName } from '@/components/ProfileName'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { UserNameWithBadge } from '@/components/UserNameWithBadge'
+import { ZapButton } from '@/components/ZapButton'
+import { useBreakpoint } from '@/hooks/useBreakpoint'
+import {
+	productQueryOptions,
+	productsByPubkeyQueryOptions,
+	useProductCategories,
+	useProductCreatedAt,
+	useProductDescription,
+	useProductDimensions,
+	useProductImages,
+	useProductPrice,
+	useProductPubkey,
+	useProductSpecs,
+	useProductStock,
+	useProductTitle,
+	useProductType,
+	useProductVisibility,
+	useProductWeight,
+} from '@/queries/products'
+import { useSuspenseQuery } from '@tanstack/react-query'
+import type { FileRoutesByPath } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
+import { ArrowLeft, Minus, Plus } from 'lucide-react'
+import { useState } from 'react'
+
+declare module '@tanstack/react-router' {
+	interface FileRoutesByPath {
+		'/products/$productId': {
+			loader: (params: { productId: string }) => { productId: string }
+		}
+	}
+}
+
+export const Route = createFileRoute('/products/$productId')({
+	component: RouteComponent,
+	loader: ({ params: { productId } }) => {
+		return { productId }
+	},
+})
+
+function RouteComponent() {
+	const { productId } = Route.useLoaderData()
+
+	// Original product query to keep the suspense behavior
+	const { data: product } = useSuspenseQuery(productQueryOptions(productId))
+
+	if (!product) {
+		return (
+			<div className="flex h-[50vh] flex-col items-center justify-center gap-4">
+				<h1 className="text-2xl font-bold">Product Not Found</h1>
+				<p className="text-gray-600">The product you're looking for doesn't exist.</p>
+			</div>
+		)
+	}
+
+	// Get all product data using hooks
+	const { data: title = 'Untitled Product' } = useProductTitle(productId)
+	const { data: description = '' } = useProductDescription(productId)
+	const { data: images = [] } = useProductImages(productId)
+	const { data: priceTag } = useProductPrice(productId)
+	const { data: typeTag } = useProductType(productId)
+	const { data: stockTag } = useProductStock(productId)
+	const { data: visibilityTag } = useProductVisibility(productId)
+	const { data: specs = [] } = useProductSpecs(productId)
+	const { data: weightTag } = useProductWeight(productId)
+	const { data: dimensionsTag } = useProductDimensions(productId)
+	const { data: categories = [] } = useProductCategories(productId)
+	const { data: createdAt = 0 } = useProductCreatedAt(productId)
+	const { data: pubkey = '' } = useProductPubkey(productId)
+
+	const { data: sellerProducts = [] } = useSuspenseQuery(productsByPubkeyQueryOptions(pubkey || 'placeholder'))
+
+	const breakpoint = useBreakpoint()
+	const isSmallScreen = breakpoint === 'sm'
+	const [quantity, setQuantity] = useState(1)
+
+	// Derived data from tags
+	const price = priceTag ? parseFloat(priceTag[1]) : 0
+	const stock = stockTag ? parseInt(stockTag[1]) : undefined
+	const status = visibilityTag ? visibilityTag[1] : 'active'
+	const productType = typeTag
+		? {
+				product: typeTag[1],
+				delivery: typeTag[2],
+			}
+		: undefined
+
+	// Format product images for the ImageCarousel component
+	const formattedImages = images.map((image) => ({
+		url: image[1],
+		dimensions: image[2],
+		order: image[3] ? parseInt(image[3]) : undefined,
+	}))
+
+	// Get location from tags if exists
+	const location = product.tags.find((t) => t[0] === 'location')?.[1]
+
+	// Filter out the current product from seller's products
+	const otherProducts = sellerProducts.filter((p) => p.id !== productId)
+
+	return (
+		<div className="flex flex-col gap-4">
+			<div className="relative">
+				<Button
+					variant="ghost"
+					onClick={() => window.history.back()}
+					className="absolute left-4 top-4 z-10 flex items-center gap-2 text-white hover:bg-white/10"
+				>
+					<ArrowLeft className="h-4 w-4" />
+					<span>Back to results</span>
+				</Button>
+				<div className="bg-black">
+					<div className="container mx-auto grid grid-cols-1 lg:grid-cols-2 mx-auto gap-16 p-16">
+						<div className="max-h-[65vh] lg:h-[45vh]">
+							<ImageCarousel images={formattedImages} title={title} />
+						</div>
+
+						<div className="flex flex-col gap-8 text-white">
+							<div className="flex items-center justify-between">
+								<h1 className="text-3xl font-bold">{title}</h1>
+								<div className="flex items-center gap-2">
+									<ZapButton recipientId={pubkey} />
+									<Button
+										variant="primary"
+										size="icon"
+										className="bg-white/10 hover:bg-white/20"
+										icon={<span className="i-sharing w-6 h-6" />}
+									/>
+								</div>
+							</div>
+
+							<div className="space-y-1">
+								<p className="text-2xl font-bold">{price.toLocaleString()} sats</p>
+								<p className="text-sm text-gray-400">€{(price * 0.0004).toFixed(2)} EUR</p>
+							</div>
+
+							<Badge variant="primary">{stock !== undefined ? `${stock} in stock` : 'Out of stock'}</Badge>
+
+							{(() => {
+								switch (productType?.product) {
+									case 'simple':
+										return (
+											<div>
+												{productType.product.charAt(0).toUpperCase() + productType.product.slice(1)} /{' '}
+												{productType.delivery.charAt(0).toUpperCase() + productType.delivery.slice(1)}
+											</div>
+										)
+									case 'variable':
+										return (
+											<div>
+												{productType.product.charAt(0).toUpperCase() + productType.product.slice(1)} /{' '}
+												{productType.delivery.charAt(0).toUpperCase() + productType.delivery.slice(1)}
+											</div>
+										)
+									default:
+										return null
+								}
+							})()}
+
+							{stock !== undefined && (
+								<div className="flex items-center gap-4">
+									<div className="flex items-center gap-2">
+										<Button variant="tertiary" size="icon" onClick={() => setQuantity(Math.max(1, quantity - 1))} disabled={quantity <= 1}>
+											<Minus className="h-6 w-6" />
+										</Button>
+										<Input className="w-10 text-center text-black" value={quantity} />
+										<Button
+											variant="tertiary"
+											size="icon"
+											onClick={() => setQuantity(Math.min(stock || quantity + 1, quantity + 1))}
+											disabled={quantity >= (stock || quantity)}
+										>
+											<Plus className="h-6 w-6" />
+										</Button>
+										<Button variant="secondary">Add to cart</Button>
+									</div>
+								</div>
+							)}
+
+							<div className="flex items-center gap-2">
+								<span>Sold by:</span>
+								<UserNameWithBadge userId={pubkey} />
+							</div>
+						</div>
+					</div>
+				</div>
+				<div className="mx-auto max-w-7xl px-4 py-6 -mt-12">
+					<Tabs defaultValue="description" className="w-full">
+						<TabsList className="w-full flex flex-row gap-3 bg-transparent justify-start">
+							<TabsTrigger value="description">Description</TabsTrigger>
+							<TabsTrigger value="specs">Spec</TabsTrigger>
+							<TabsTrigger value="shipping">Shipping</TabsTrigger>
+							<TabsTrigger value="comments" disabled>
+								Comments
+							</TabsTrigger>
+							<TabsTrigger value="reviews" disabled>
+								Reviews
+							</TabsTrigger>
+						</TabsList>
+
+						<TabsContent value="description" className="mt-4 border-t-3 border-secondary bg-tertiary">
+							<div className="rounded-lg bg-white p-6 shadow-md">
+								<p className="whitespace-pre-wrap text-gray-700">{description}</p>
+							</div>
+						</TabsContent>
+
+						<TabsContent value="specs" className="mt-4">
+							<div className="rounded-lg bg-white p-6 shadow-md">
+								<div className="grid grid-cols-2 gap-4">
+									{specs.map((spec, index) => (
+										<div key={index} className="flex flex-col">
+											<span className="text-sm font-medium text-gray-500">{spec[1]}</span>
+											<span className="text-gray-900">{spec[2]}</span>
+										</div>
+									))}
+									{specs.length === 0 && <p className="text-gray-700 col-span-2">No specifications available</p>}
+								</div>
+							</div>
+						</TabsContent>
+
+						<TabsContent value="shipping" className="mt-4">
+							<div className="rounded-lg bg-white p-6 shadow-md">
+								<p className="text-gray-700">Shipping information not available</p>
+							</div>
+						</TabsContent>
+					</Tabs>
+				</div>
+			</div>
+			<div className="px-4 py-6">
+				{otherProducts.length > 0 && (
+					<ItemGrid
+						title={
+							<div className="flex items-center gap-2">
+								<span className="text-2xl font-heading">More products from</span>
+								<ProfileName pubkey={pubkey} className="text-2xl font-heading" />
+							</div>
+						}
+					>
+						{otherProducts.map((product) => (
+							<ProductCard key={product.id} product={product} />
+						))}
+					</ItemGrid>
+				)}
+			</div>
+		</div>
+	)
+}

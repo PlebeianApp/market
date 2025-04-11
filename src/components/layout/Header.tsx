@@ -20,12 +20,9 @@ export function Header({ onLoginClick }: HeaderProps) {
 			<div className="container flex h-full max-w-full items-center justify-between">
 				<section className="inline-flex items-center">
 					<Link to="/">
-						<div className="flex items-center">
-							{config?.appSettings?.picture && (
-								<img src={config.appSettings.picture} alt={config.appSettings.displayName} className="w-16 px-2" />
-							)}
-							<span className="hidden lg:block lg:text-2xl">{config?.appSettings?.displayName || 'Market'}</span>
-						</div>
+						{config?.appSettings?.picture && (
+							<img src={config.appSettings.picture} alt={config.appSettings.displayName} className="w-16 px-2" />
+						)}
 					</Link>
 					<div className="hidden sm:flex mx-8 gap-8">
 						<Link

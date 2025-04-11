@@ -10,7 +10,7 @@ const buttonVariants = cva(
 		variants: {
 			variant: {
 				primary:
-					'bg-primary text-primary-foreground border-primary-border hover:bg-transparent hover:text-primary-foreground-hover hover:border-primary-border-hover',
+					'bg-primary text-primary-foreground border-primary-border hover:bg-transparent hover:text-primary-foreground-hover hover:border-primary-border-hover active:ho',
 				secondary:
 					'bg-secondary text-secondary-foreground border-secondary-border hover:bg-transparent hover:text-secondary-foreground-hover hover:border-secondary-border-hover',
 				tertiary:
@@ -18,6 +18,7 @@ const buttonVariants = cva(
 				focus:
 					'bg-focus text-focus-foreground border-focus-border hover:bg-transparent hover:text-focus-foreground-hover hover:border-focus-border-hover',
 				destructive: 'bg-destructive text-destructive-foreground hover:bg-transparent hover:text-destructive-foreground',
+
 				outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
 				ghost: 'hover:border-primary-border border-none',
 				link: 'text-secondary border-none underline-offset-4 hover:underline',
@@ -26,8 +27,8 @@ const buttonVariants = cva(
 			size: {
 				default: 'h-10 px-4 py-2',
 				sm: 'h-9 px-3',
-				lg: 'h-11 px-8',
-				icon: 'h-10 w-10',
+				lg: 'h-11  px-8',
+				icon: 'h-10 aspect-square',
 				none: 'h-6 w-fit',
 			},
 		},

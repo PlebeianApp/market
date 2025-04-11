@@ -1,5 +1,6 @@
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { getProductTitle, getProductImages, getProductPrice, getProductStock } from '@/queries/products'
+import { Link } from '@tanstack/react-router'
 
 export function ProductCard({ product }: { product: NDKEvent }) {
 	const title = getProductTitle(product)
@@ -20,7 +21,9 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 
 			<div className="p-2 flex flex-col gap-2 flex-grow">
 				{/* Product title */}
-				<h2 className="text-sm font-medium border-b border-[var(--light-gray)] pb-2">{title}</h2>
+				<Link to={`/products/${product.id}`}>
+					<h2 className="text-sm font-medium border-b border-[var(--light-gray)] pb-2">{title}</h2>
+				</Link>
 
 				{/* Pricing section */}
 				<div className="flex justify-between items-center">

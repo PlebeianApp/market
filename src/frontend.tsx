@@ -45,6 +45,7 @@ function App() {
 
 				// Create router with the queryClient
 				const appRouter = createAppRouter(client)
+
 				setRouter(appRouter)
 			} catch (err) {
 				console.error('Initialization error:', err)

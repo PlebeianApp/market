@@ -1,6 +1,6 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { type NDKUserProfile, NDKUser } from '@nostr-dev-kit/ndk'
-import { queryOptions } from '@tanstack/react-query'
+import { queryOptions, useQuery } from '@tanstack/react-query'
 import { profileKeys } from './queryKeyFactory'
 
 export const fetchProfileByNpub = async (npub: string): Promise<NDKUserProfile | null> => {
@@ -103,3 +103,31 @@ export const nip05ValidationQueryOptions = (npub: string) =>
 		queryKey: profileKeys.nip05(npub),
 		queryFn: () => validateNip05(npub),
 	})
+
+// --- DATA EXTRACTION FUNCTIONS ---
+
+export const getProfileName = (profile: NDKUserProfile | null): string => {
+	if (!profile) return ''
+	return profile.name || profile.displayName || ''
+}
+
+export const getProfileNip05 = (profile: NDKUserProfile | null): string | undefined => {
+	if (!profile) return undefined
+	return profile.nip05
+}
+
+// --- REACT QUERY HOOKS ---
+
+export const useProfileName = (pubkey: string) => {
+	return useQuery({
+		...profileByIdentifierQueryOptions(pubkey),
+		select: getProfileName,
+	})
+}
+
+export const useProfileNip05 = (pubkey: string) => {
+	return useQuery({
+		...profileByIdentifierQueryOptions(pubkey),
+		select: getProfileNip05,
+	})
+}
