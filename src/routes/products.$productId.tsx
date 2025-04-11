@@ -50,7 +50,6 @@ export const Route = createFileRoute('/products/$productId')({
 function RouteComponent() {
 	const { productId } = Route.useLoaderData()
 
-	// Original product query to keep the suspense behavior
 	const { data: product } = useSuspenseQuery(productQueryOptions(productId))
 
 	if (!product) {
@@ -128,7 +127,7 @@ function RouteComponent() {
 							<div className="flex items-center justify-between">
 								<h1 className="text-3xl font-bold">{title}</h1>
 								<div className="flex items-center gap-2">
-									<ZapButton recipientId={pubkey} />
+									<ZapButton event={product} />
 									<Button
 										variant="primary"
 										size="icon"
