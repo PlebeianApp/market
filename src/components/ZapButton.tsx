@@ -18,7 +18,6 @@ export function ZapButton({ event, className, ...props }: ZapButtonProps) {
 	const [canAuthorReceiveZaps, setCanAuthorReceiveZaps] = useState(false)
 	useEffect(() => {
 		const checkZapCapability = async () => {
-			console.log('Checking zap capability for:', event)
 			if (!event?.pubkey) return
 
 			try {

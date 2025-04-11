@@ -97,7 +97,7 @@ function RouteComponent() {
 						)}
 						<div className="flex items-center gap-2">
 							<h2 className="text-2xl font-bold text-white">{truncateText(profile?.name ?? 'Unnamed user', isSmallScreen ? 10 : 50)}</h2>
-							<Nip05Badge userId={params.profileId} />
+							<Nip05Badge userId={user?.npub || ''} />
 						</div>
 					</div>
 					{!isSmallScreen && (
