@@ -77,62 +77,43 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 		const ndk = ndkActions.getNDK()
 		if (!ndk) return null
 
-		if (event instanceof NDKEvent && event.id) {
-			startTimeRef.current = Math.floor(Date.now() / 1000)
+		startTimeRef.current = Math.floor(Date.now() / 1000)
 
-			const filter = {
-				kinds: [9735],
-				'#e': [event.id],
-				since: startTimeRef.current - 5,
+		const eOrPToFilter = event instanceof NDKEvent ? { '#e': [event.id] } : { '#p': [event.pubkey] }
+
+		const filter = {
+			kinds: [9735],
+			...eOrPToFilter,
+			since: startTimeRef.current - 5,
+		}
+
+		const sub = ndk.subscribe(filter, {
+			closeOnEose: false,
+			cacheUsage: NDKSubscriptionCacheUsage.ONLY_RELAY,
+		})
+
+		sub.on('event', (zapEvent: NDKEvent) => {
+			setPaymentComplete(true)
+			setPaymentPending(false)
+
+			if (resolvePaymentRef.current) {
+				const confirmation: NDKPaymentConfirmationLN = {
+					preimage: zapEvent.tags.find((t) => t[0] === 'preimage')?.[1] || 'unknown',
+				}
+				resolvePaymentRef.current(confirmation)
+				resolvePaymentRef.current = null
 			}
 
-			const sub = ndk.subscribe(filter, {
-				closeOnEose: false,
-				cacheUsage: NDKSubscriptionCacheUsage.ONLY_RELAY,
-			})
+			onZapComplete?.(zapEvent)
+			toast.success('Zap successful! 🤙')
 
-			sub.on('event', (zapEvent: NDKEvent) => {
-				const descriptionTag = zapEvent.tags.find((t) => t[0] === 'description')?.[1]
-				let isOurZap = false
+			setTimeout(() => {
+				onOpenChange(false)
+				sub.stop()
+			}, 1500)
+		})
 
-				if (descriptionTag) {
-					try {
-						const zapRequest = JSON.parse(descriptionTag)
-						isOurZap = zapRequest.tags?.some(
-							(tag: string[]) => (tag[0] === 'e' && tag[1] === event.id) || (tag[0] === 'a' && tag[1]?.includes(event.id)),
-						)
-					} catch (error) {
-						console.error('Failed to parse zap request:', error)
-					}
-				}
-
-				const isRecentZap = zapEvent.created_at && zapEvent.created_at >= startTimeRef.current - 10
-
-				if (isOurZap || isRecentZap) {
-					setPaymentComplete(true)
-					setPaymentPending(false)
-
-					if (resolvePaymentRef.current) {
-						const confirmation: NDKPaymentConfirmationLN = {
-							preimage: zapEvent.tags.find((t) => t[0] === 'preimage')?.[1] || 'unknown',
-						}
-						resolvePaymentRef.current(confirmation)
-						resolvePaymentRef.current = null
-					}
-
-					onZapComplete?.(zapEvent)
-					toast.success('Zap successful! 🤙')
-
-					setTimeout(() => {
-						onOpenChange(false)
-						sub.stop()
-					}, 1500)
-				}
-			})
-
-			return sub
-		}
-		return null
+		return sub
 	}, [event, onZapComplete, onOpenChange])
 
 	const generateInvoice = async () => {
