@@ -19,7 +19,7 @@ export function ZapButton({ event, className, ...props }: ZapButtonProps) {
 
 	const { data: canAuthorReceiveZaps, isLoading: checkingZapCapability } = useZapCapability(event)
 
-	const handleZapComplete = (zapEvent?: NDKEvent) => {
+	const handleZapComplete = () => {
 		setIsZapping(false)
 		setDialogOpen(false)
 	}
