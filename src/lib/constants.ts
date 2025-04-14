@@ -10,3 +10,6 @@ export const DEFAULT_ZAP_AMOUNTS = [
 	{ displayText: '🔥 100,000 sats', amount: 100000 },
 	{ displayText: '🤯 1,000,000 sats', amount: 1000000 },
 ]
+
+export const HEX_KEYS_REGEX = /^(?:[0-9a-fA-F]{64})$/
+export const EMAIL_REGEX = /^[^@\s]+@[^@\s]+\.[^@\s]+$/

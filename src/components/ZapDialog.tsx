@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { DEFAULT_ZAP_AMOUNTS } from '@/lib/constants'
 import { ndkActions } from '@/lib/stores/ndk'
+import { copyToClipboard } from '@/lib/utils'
 import {
 	NDKEvent,
 	NDKSubscription,
@@ -176,11 +177,6 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 				cleanupSubscription()
 			}
 		}, 10000)
-	}
-
-	const copyToClipboard = (text: string) => {
-		navigator.clipboard.writeText(text)
-		toast.success('Copied to clipboard')
 	}
 
 	const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
