@@ -1,6 +1,7 @@
 import { useProfileName } from '@/queries/profiles'
 import { Skeleton } from './ui/skeleton'
 import { cn } from '@/lib/utils'
+import { Link } from '@tanstack/react-router'
 
 interface ProfileNameProps extends React.HTMLAttributes<HTMLSpanElement> {
 	pubkey: string
@@ -17,8 +18,8 @@ export function ProfileName({ pubkey, truncate = true, className, ...props }: Pr
 	const displayName = name || (truncate ? pubkey.slice(0, 8) + '...' : pubkey)
 
 	return (
-		<span className={cn(className)} {...props}>
-			{displayName}
-		</span>
+		<Link to="/profile/$profileId" params={{ profileId: pubkey }} className={cn(className)} {...props}>
+			<span>{displayName}</span>
+		</Link>
 	)
 }

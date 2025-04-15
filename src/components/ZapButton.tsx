@@ -1,38 +1,73 @@
-import * as React from 'react'
-import { Zap } from 'lucide-react'
-import { Button } from './ui/button'
+import { ZapDialog } from '@/components/ZapDialog'
+import { ndkActions } from '@/lib/stores/ndk'
 import { cn } from '@/lib/utils'
+import { NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
+import * as React from 'react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useZapCapability, zapCapabilityQueryOptions } from '@/queries/profiles'
+import { Button } from './ui/button'
+import { Spinner } from './ui/spinner'
 
 interface ZapButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-	recipientId: string
+	event: NDKEvent | NDKUser
 }
 
-export function ZapButton({ recipientId, className, ...props }: ZapButtonProps) {
-	const [isZapping, setIsZapping] = React.useState(false)
+export function ZapButton({ event, className, ...props }: ZapButtonProps) {
+	const [isZapping, setIsZapping] = useState(false)
+	const [dialogOpen, setDialogOpen] = useState(false)
 
-	const handleZap = async () => {
+	const { data: canAuthorReceiveZaps, isLoading: checkingZapCapability } = useZapCapability(event)
+
+	const handleZapComplete = () => {
+		setIsZapping(false)
+		setDialogOpen(false)
+	}
+
+	const handleClick = async () => {
 		setIsZapping(true)
-		try {
-			// Here you would implement the actual zap functionality
-			// using your Nostr client/library
-			console.log(`Zapping 1000 sats to ${recipientId}`)
-			await new Promise((resolve) => setTimeout(resolve, 1000)) // Simulated delay
-		} catch (error) {
-			console.error('Failed to zap:', error)
-		} finally {
+		setDialogOpen(true)
+	}
+
+	const handleOpenChange = (open: boolean) => {
+		if (!open) {
 			setIsZapping(false)
 		}
+		setDialogOpen(open)
 	}
 
 	return (
-		<Button
-			variant="focus"
-			size="icon"
-			className={cn('gap-2', isZapping && 'animate-pulse', className)}
-			onClick={handleZap}
-			disabled={isZapping}
-			icon={<span className={cn('i-lightning w-6 h-6', isZapping && 'animate-bounce')} />}
-			{...props}
-		></Button>
+		<>
+			{checkingZapCapability ? (
+				<Button
+					variant="focus"
+					size="icon"
+					className={cn('gap-2', isZapping && 'animate-pulse', className)}
+					disabled={true}
+					icon={<Spinner />}
+					{...props}
+				/>
+			) : canAuthorReceiveZaps ? (
+				<Button
+					variant="focus"
+					size="icon"
+					className={cn('gap-2', isZapping && 'animate-pulse', className)}
+					onClick={handleClick}
+					disabled={isZapping || !canAuthorReceiveZaps}
+					icon={<span className={cn('i-lightning w-6 h-6', isZapping && 'animate-bounce')} />}
+					{...props}
+				/>
+			) : (
+				<Button
+					variant="focus"
+					size="icon"
+					className={cn('gap-2', isZapping && 'animate-pulse', className)}
+					disabled={true}
+					icon={<span className={cn('i-lightning w-6 h-6', isZapping && 'animate-bounce')} />}
+					{...props}
+				/>
+			)}
+			<ZapDialog isOpen={dialogOpen} onOpenChange={handleOpenChange} event={event} onZapComplete={handleZapComplete} />
+		</>
 	)
 }

@@ -1,6 +1,8 @@
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { getProductTitle, getProductImages, getProductPrice, getProductStock } from '@/queries/products'
 import { Link } from '@tanstack/react-router'
+import { Button } from './ui/button'
+import { ZapButton } from './ZapButton'
 
 export function ProductCard({ product }: { product: NDKEvent }) {
 	const title = getProductTitle(product)
@@ -48,7 +50,8 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 
 				{/* Add to cart button */}
 				<div className="flex gap-2">
-					<button className="bg-black text-white py-3 px-4 rounded-lg flex-grow font-medium">Add to Cart</button>
+					<Button className="bg-black text-white py-3 px-4 rounded-lg flex-grow font-medium">Add to Cart</Button>
+					<ZapButton event={product} />
 				</div>
 			</div>
 		</div>

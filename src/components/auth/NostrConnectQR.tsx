@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { authActions } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
+import { copyToClipboard } from '@/lib/utils'
 import { useConfigQuery } from '@/queries/config'
 import { NDKEvent, NDKKind, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { CopyIcon, Loader2 } from 'lucide-react'
@@ -312,12 +313,6 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 			cleanup()
 		}
 	}, [connectionUrl, localPubkey, localSigner, onError, onSuccess, tempSecret])
-
-	const copyToClipboard = (text: string) => {
-		navigator.clipboard.writeText(text).catch((err) => {
-			console.warn('Failed to copy:', err)
-		})
-	}
 
 	return (
 		<div className="flex flex-col items-center gap-4 py-4">

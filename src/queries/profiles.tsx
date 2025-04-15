@@ -2,6 +2,7 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { type NDKUserProfile, NDKUser } from '@nostr-dev-kit/ndk'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { profileKeys } from './queryKeyFactory'
+import { NDKEvent } from '@nostr-dev-kit/ndk'
 
 export const fetchProfileByNpub = async (npub: string): Promise<NDKUserProfile | null> => {
 	const ndk = ndkActions.getNDK()
@@ -129,5 +130,37 @@ export const useProfileNip05 = (pubkey: string) => {
 	return useQuery({
 		...profileByIdentifierQueryOptions(pubkey),
 		select: getProfileNip05,
+	})
+}
+
+export const checkZapCapability = async (event: NDKEvent | NDKUser): Promise<boolean> => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	try {
+		if (event instanceof NDKUser) {
+			const zapInfo = await event.getZapInfo()
+			return zapInfo.size > 0
+		} else {
+			const userToZap = ndk.getUser({ pubkey: event.pubkey })
+			const zapInfo = await userToZap.getZapInfo()
+			return zapInfo.size > 0
+		}
+	} catch (e) {
+		console.error('Failed to check zap capability:', e)
+		return false
+	}
+}
+
+export const zapCapabilityQueryOptions = (event: NDKEvent | NDKUser) =>
+	queryOptions({
+		queryKey: profileKeys.zapCapability(event.pubkey),
+		queryFn: () => checkZapCapability(event),
+	})
+
+export const useZapCapability = (event: NDKEvent | NDKUser) => {
+	return useQuery({
+		...zapCapabilityQueryOptions(event),
+		select: (data) => data,
 	})
 }
