@@ -37,537 +37,510 @@ import { Route as DashboardLayoutDashboardAccountMakingPaymentsImport } from './
 // Create/Update Routes
 
 const SetupRoute = SetupImport.update({
-  id: '/setup',
-  path: '/setup',
-  getParentRoute: () => rootRoute,
+	id: '/setup',
+	path: '/setup',
+	getParentRoute: () => rootRoute,
 } as any)
 
 const DashboardLayoutRoute = DashboardLayoutImport.update({
-  id: '/_dashboard-layout',
-  getParentRoute: () => rootRoute,
+	id: '/_dashboard-layout',
+	getParentRoute: () => rootRoute,
 } as any)
 
 const IndexRoute = IndexImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRoute,
+	id: '/',
+	path: '/',
+	getParentRoute: () => rootRoute,
 } as any)
 
 const ProductsIndexRoute = ProductsIndexImport.update({
-  id: '/products/',
-  path: '/products/',
-  getParentRoute: () => rootRoute,
+	id: '/products/',
+	path: '/products/',
+	getParentRoute: () => rootRoute,
 } as any)
 
 const PostsIndexRoute = PostsIndexImport.update({
-  id: '/posts/',
-  path: '/posts/',
-  getParentRoute: () => rootRoute,
+	id: '/posts/',
+	path: '/posts/',
+	getParentRoute: () => rootRoute,
 } as any)
 
 const NostrIndexRoute = NostrIndexImport.update({
-  id: '/nostr/',
-  path: '/nostr/',
-  getParentRoute: () => rootRoute,
+	id: '/nostr/',
+	path: '/nostr/',
+	getParentRoute: () => rootRoute,
 } as any)
 
 const CommunityIndexRoute = CommunityIndexImport.update({
-  id: '/community/',
-  path: '/community/',
-  getParentRoute: () => rootRoute,
+	id: '/community/',
+	path: '/community/',
+	getParentRoute: () => rootRoute,
 } as any)
 
 const ProfileProfileIdRoute = ProfileProfileIdImport.update({
-  id: '/profile/$profileId',
-  path: '/profile/$profileId',
-  getParentRoute: () => rootRoute,
+	id: '/profile/$profileId',
+	path: '/profile/$profileId',
+	getParentRoute: () => rootRoute,
 } as any)
 
 const ProductsProductIdRoute = ProductsProductIdImport.update({
-  id: '/products/$productId',
-  path: '/products/$productId',
-  getParentRoute: () => rootRoute,
+	id: '/products/$productId',
+	path: '/products/$productId',
+	getParentRoute: () => rootRoute,
 } as any)
 
 const PostsPostIdRoute = PostsPostIdImport.update({
-  id: '/posts/$postId',
-  path: '/posts/$postId',
-  getParentRoute: () => rootRoute,
+	id: '/posts/$postId',
+	path: '/posts/$postId',
+	getParentRoute: () => rootRoute,
 } as any)
 
-const DashboardLayoutDashboardIndexRoute =
-  DashboardLayoutDashboardIndexImport.update({
-    id: '/dashboard/',
-    path: '/dashboard/',
-    getParentRoute: () => DashboardLayoutRoute,
-  } as any)
+const DashboardLayoutDashboardIndexRoute = DashboardLayoutDashboardIndexImport.update({
+	id: '/dashboard/',
+	path: '/dashboard/',
+	getParentRoute: () => DashboardLayoutRoute,
+} as any)
 
-const DashboardLayoutDashboardSalesSalesRoute =
-  DashboardLayoutDashboardSalesSalesImport.update({
-    id: '/dashboard/sales/sales',
-    path: '/dashboard/sales/sales',
-    getParentRoute: () => DashboardLayoutRoute,
-  } as any)
+const DashboardLayoutDashboardSalesSalesRoute = DashboardLayoutDashboardSalesSalesImport.update({
+	id: '/dashboard/sales/sales',
+	path: '/dashboard/sales/sales',
+	getParentRoute: () => DashboardLayoutRoute,
+} as any)
 
-const DashboardLayoutDashboardSalesMessagesRoute =
-  DashboardLayoutDashboardSalesMessagesImport.update({
-    id: '/dashboard/sales/messages',
-    path: '/dashboard/sales/messages',
-    getParentRoute: () => DashboardLayoutRoute,
-  } as any)
+const DashboardLayoutDashboardSalesMessagesRoute = DashboardLayoutDashboardSalesMessagesImport.update({
+	id: '/dashboard/sales/messages',
+	path: '/dashboard/sales/messages',
+	getParentRoute: () => DashboardLayoutRoute,
+} as any)
 
-const DashboardLayoutDashboardSalesCircularEconomyRoute =
-  DashboardLayoutDashboardSalesCircularEconomyImport.update({
-    id: '/dashboard/sales/circular-economy',
-    path: '/dashboard/sales/circular-economy',
-    getParentRoute: () => DashboardLayoutRoute,
-  } as any)
+const DashboardLayoutDashboardSalesCircularEconomyRoute = DashboardLayoutDashboardSalesCircularEconomyImport.update({
+	id: '/dashboard/sales/circular-economy',
+	path: '/dashboard/sales/circular-economy',
+	getParentRoute: () => DashboardLayoutRoute,
+} as any)
 
-const DashboardLayoutDashboardProductsShippingOptionsRoute =
-  DashboardLayoutDashboardProductsShippingOptionsImport.update({
-    id: '/dashboard/products/shipping-options',
-    path: '/dashboard/products/shipping-options',
-    getParentRoute: () => DashboardLayoutRoute,
-  } as any)
+const DashboardLayoutDashboardProductsShippingOptionsRoute = DashboardLayoutDashboardProductsShippingOptionsImport.update({
+	id: '/dashboard/products/shipping-options',
+	path: '/dashboard/products/shipping-options',
+	getParentRoute: () => DashboardLayoutRoute,
+} as any)
 
-const DashboardLayoutDashboardProductsReceivingPaymentsRoute =
-  DashboardLayoutDashboardProductsReceivingPaymentsImport.update({
-    id: '/dashboard/products/receiving-payments',
-    path: '/dashboard/products/receiving-payments',
-    getParentRoute: () => DashboardLayoutRoute,
-  } as any)
+const DashboardLayoutDashboardProductsReceivingPaymentsRoute = DashboardLayoutDashboardProductsReceivingPaymentsImport.update({
+	id: '/dashboard/products/receiving-payments',
+	path: '/dashboard/products/receiving-payments',
+	getParentRoute: () => DashboardLayoutRoute,
+} as any)
 
-const DashboardLayoutDashboardProductsProductsRoute =
-  DashboardLayoutDashboardProductsProductsImport.update({
-    id: '/dashboard/products/products',
-    path: '/dashboard/products/products',
-    getParentRoute: () => DashboardLayoutRoute,
-  } as any)
+const DashboardLayoutDashboardProductsProductsRoute = DashboardLayoutDashboardProductsProductsImport.update({
+	id: '/dashboard/products/products',
+	path: '/dashboard/products/products',
+	getParentRoute: () => DashboardLayoutRoute,
+} as any)
 
-const DashboardLayoutDashboardProductsCollectionsRoute =
-  DashboardLayoutDashboardProductsCollectionsImport.update({
-    id: '/dashboard/products/collections',
-    path: '/dashboard/products/collections',
-    getParentRoute: () => DashboardLayoutRoute,
-  } as any)
+const DashboardLayoutDashboardProductsCollectionsRoute = DashboardLayoutDashboardProductsCollectionsImport.update({
+	id: '/dashboard/products/collections',
+	path: '/dashboard/products/collections',
+	getParentRoute: () => DashboardLayoutRoute,
+} as any)
 
-const DashboardLayoutDashboardAccountYourPurchasesRoute =
-  DashboardLayoutDashboardAccountYourPurchasesImport.update({
-    id: '/dashboard/account/your-purchases',
-    path: '/dashboard/account/your-purchases',
-    getParentRoute: () => DashboardLayoutRoute,
-  } as any)
+const DashboardLayoutDashboardAccountYourPurchasesRoute = DashboardLayoutDashboardAccountYourPurchasesImport.update({
+	id: '/dashboard/account/your-purchases',
+	path: '/dashboard/account/your-purchases',
+	getParentRoute: () => DashboardLayoutRoute,
+} as any)
 
-const DashboardLayoutDashboardAccountProfileRoute =
-  DashboardLayoutDashboardAccountProfileImport.update({
-    id: '/dashboard/account/profile',
-    path: '/dashboard/account/profile',
-    getParentRoute: () => DashboardLayoutRoute,
-  } as any)
+const DashboardLayoutDashboardAccountProfileRoute = DashboardLayoutDashboardAccountProfileImport.update({
+	id: '/dashboard/account/profile',
+	path: '/dashboard/account/profile',
+	getParentRoute: () => DashboardLayoutRoute,
+} as any)
 
-const DashboardLayoutDashboardAccountNetworkRoute =
-  DashboardLayoutDashboardAccountNetworkImport.update({
-    id: '/dashboard/account/network',
-    path: '/dashboard/account/network',
-    getParentRoute: () => DashboardLayoutRoute,
-  } as any)
+const DashboardLayoutDashboardAccountNetworkRoute = DashboardLayoutDashboardAccountNetworkImport.update({
+	id: '/dashboard/account/network',
+	path: '/dashboard/account/network',
+	getParentRoute: () => DashboardLayoutRoute,
+} as any)
 
-const DashboardLayoutDashboardAccountMakingPaymentsRoute =
-  DashboardLayoutDashboardAccountMakingPaymentsImport.update({
-    id: '/dashboard/account/making-payments',
-    path: '/dashboard/account/making-payments',
-    getParentRoute: () => DashboardLayoutRoute,
-  } as any)
+const DashboardLayoutDashboardAccountMakingPaymentsRoute = DashboardLayoutDashboardAccountMakingPaymentsImport.update({
+	id: '/dashboard/account/making-payments',
+	path: '/dashboard/account/making-payments',
+	getParentRoute: () => DashboardLayoutRoute,
+} as any)
 
 // Populate the FileRoutesByPath interface
 
 declare module '@tanstack/react-router' {
-  interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexImport
-      parentRoute: typeof rootRoute
-    }
-    '/_dashboard-layout': {
-      id: '/_dashboard-layout'
-      path: ''
-      fullPath: ''
-      preLoaderRoute: typeof DashboardLayoutImport
-      parentRoute: typeof rootRoute
-    }
-    '/setup': {
-      id: '/setup'
-      path: '/setup'
-      fullPath: '/setup'
-      preLoaderRoute: typeof SetupImport
-      parentRoute: typeof rootRoute
-    }
-    '/posts/$postId': {
-      id: '/posts/$postId'
-      path: '/posts/$postId'
-      fullPath: '/posts/$postId'
-      preLoaderRoute: typeof PostsPostIdImport
-      parentRoute: typeof rootRoute
-    }
-    '/products/$productId': {
-      id: '/products/$productId'
-      path: '/products/$productId'
-      fullPath: '/products/$productId'
-      preLoaderRoute: typeof ProductsProductIdImport
-      parentRoute: typeof rootRoute
-    }
-    '/profile/$profileId': {
-      id: '/profile/$profileId'
-      path: '/profile/$profileId'
-      fullPath: '/profile/$profileId'
-      preLoaderRoute: typeof ProfileProfileIdImport
-      parentRoute: typeof rootRoute
-    }
-    '/community/': {
-      id: '/community/'
-      path: '/community'
-      fullPath: '/community'
-      preLoaderRoute: typeof CommunityIndexImport
-      parentRoute: typeof rootRoute
-    }
-    '/nostr/': {
-      id: '/nostr/'
-      path: '/nostr'
-      fullPath: '/nostr'
-      preLoaderRoute: typeof NostrIndexImport
-      parentRoute: typeof rootRoute
-    }
-    '/posts/': {
-      id: '/posts/'
-      path: '/posts'
-      fullPath: '/posts'
-      preLoaderRoute: typeof PostsIndexImport
-      parentRoute: typeof rootRoute
-    }
-    '/products/': {
-      id: '/products/'
-      path: '/products'
-      fullPath: '/products'
-      preLoaderRoute: typeof ProductsIndexImport
-      parentRoute: typeof rootRoute
-    }
-    '/_dashboard-layout/dashboard/': {
-      id: '/_dashboard-layout/dashboard/'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof DashboardLayoutDashboardIndexImport
-      parentRoute: typeof DashboardLayoutImport
-    }
-    '/_dashboard-layout/dashboard/account/making-payments': {
-      id: '/_dashboard-layout/dashboard/account/making-payments'
-      path: '/dashboard/account/making-payments'
-      fullPath: '/dashboard/account/making-payments'
-      preLoaderRoute: typeof DashboardLayoutDashboardAccountMakingPaymentsImport
-      parentRoute: typeof DashboardLayoutImport
-    }
-    '/_dashboard-layout/dashboard/account/network': {
-      id: '/_dashboard-layout/dashboard/account/network'
-      path: '/dashboard/account/network'
-      fullPath: '/dashboard/account/network'
-      preLoaderRoute: typeof DashboardLayoutDashboardAccountNetworkImport
-      parentRoute: typeof DashboardLayoutImport
-    }
-    '/_dashboard-layout/dashboard/account/profile': {
-      id: '/_dashboard-layout/dashboard/account/profile'
-      path: '/dashboard/account/profile'
-      fullPath: '/dashboard/account/profile'
-      preLoaderRoute: typeof DashboardLayoutDashboardAccountProfileImport
-      parentRoute: typeof DashboardLayoutImport
-    }
-    '/_dashboard-layout/dashboard/account/your-purchases': {
-      id: '/_dashboard-layout/dashboard/account/your-purchases'
-      path: '/dashboard/account/your-purchases'
-      fullPath: '/dashboard/account/your-purchases'
-      preLoaderRoute: typeof DashboardLayoutDashboardAccountYourPurchasesImport
-      parentRoute: typeof DashboardLayoutImport
-    }
-    '/_dashboard-layout/dashboard/products/collections': {
-      id: '/_dashboard-layout/dashboard/products/collections'
-      path: '/dashboard/products/collections'
-      fullPath: '/dashboard/products/collections'
-      preLoaderRoute: typeof DashboardLayoutDashboardProductsCollectionsImport
-      parentRoute: typeof DashboardLayoutImport
-    }
-    '/_dashboard-layout/dashboard/products/products': {
-      id: '/_dashboard-layout/dashboard/products/products'
-      path: '/dashboard/products/products'
-      fullPath: '/dashboard/products/products'
-      preLoaderRoute: typeof DashboardLayoutDashboardProductsProductsImport
-      parentRoute: typeof DashboardLayoutImport
-    }
-    '/_dashboard-layout/dashboard/products/receiving-payments': {
-      id: '/_dashboard-layout/dashboard/products/receiving-payments'
-      path: '/dashboard/products/receiving-payments'
-      fullPath: '/dashboard/products/receiving-payments'
-      preLoaderRoute: typeof DashboardLayoutDashboardProductsReceivingPaymentsImport
-      parentRoute: typeof DashboardLayoutImport
-    }
-    '/_dashboard-layout/dashboard/products/shipping-options': {
-      id: '/_dashboard-layout/dashboard/products/shipping-options'
-      path: '/dashboard/products/shipping-options'
-      fullPath: '/dashboard/products/shipping-options'
-      preLoaderRoute: typeof DashboardLayoutDashboardProductsShippingOptionsImport
-      parentRoute: typeof DashboardLayoutImport
-    }
-    '/_dashboard-layout/dashboard/sales/circular-economy': {
-      id: '/_dashboard-layout/dashboard/sales/circular-economy'
-      path: '/dashboard/sales/circular-economy'
-      fullPath: '/dashboard/sales/circular-economy'
-      preLoaderRoute: typeof DashboardLayoutDashboardSalesCircularEconomyImport
-      parentRoute: typeof DashboardLayoutImport
-    }
-    '/_dashboard-layout/dashboard/sales/messages': {
-      id: '/_dashboard-layout/dashboard/sales/messages'
-      path: '/dashboard/sales/messages'
-      fullPath: '/dashboard/sales/messages'
-      preLoaderRoute: typeof DashboardLayoutDashboardSalesMessagesImport
-      parentRoute: typeof DashboardLayoutImport
-    }
-    '/_dashboard-layout/dashboard/sales/sales': {
-      id: '/_dashboard-layout/dashboard/sales/sales'
-      path: '/dashboard/sales/sales'
-      fullPath: '/dashboard/sales/sales'
-      preLoaderRoute: typeof DashboardLayoutDashboardSalesSalesImport
-      parentRoute: typeof DashboardLayoutImport
-    }
-  }
+	interface FileRoutesByPath {
+		'/': {
+			id: '/'
+			path: '/'
+			fullPath: '/'
+			preLoaderRoute: typeof IndexImport
+			parentRoute: typeof rootRoute
+		}
+		'/_dashboard-layout': {
+			id: '/_dashboard-layout'
+			path: ''
+			fullPath: ''
+			preLoaderRoute: typeof DashboardLayoutImport
+			parentRoute: typeof rootRoute
+		}
+		'/setup': {
+			id: '/setup'
+			path: '/setup'
+			fullPath: '/setup'
+			preLoaderRoute: typeof SetupImport
+			parentRoute: typeof rootRoute
+		}
+		'/posts/$postId': {
+			id: '/posts/$postId'
+			path: '/posts/$postId'
+			fullPath: '/posts/$postId'
+			preLoaderRoute: typeof PostsPostIdImport
+			parentRoute: typeof rootRoute
+		}
+		'/products/$productId': {
+			id: '/products/$productId'
+			path: '/products/$productId'
+			fullPath: '/products/$productId'
+			preLoaderRoute: typeof ProductsProductIdImport
+			parentRoute: typeof rootRoute
+		}
+		'/profile/$profileId': {
+			id: '/profile/$profileId'
+			path: '/profile/$profileId'
+			fullPath: '/profile/$profileId'
+			preLoaderRoute: typeof ProfileProfileIdImport
+			parentRoute: typeof rootRoute
+		}
+		'/community/': {
+			id: '/community/'
+			path: '/community'
+			fullPath: '/community'
+			preLoaderRoute: typeof CommunityIndexImport
+			parentRoute: typeof rootRoute
+		}
+		'/nostr/': {
+			id: '/nostr/'
+			path: '/nostr'
+			fullPath: '/nostr'
+			preLoaderRoute: typeof NostrIndexImport
+			parentRoute: typeof rootRoute
+		}
+		'/posts/': {
+			id: '/posts/'
+			path: '/posts'
+			fullPath: '/posts'
+			preLoaderRoute: typeof PostsIndexImport
+			parentRoute: typeof rootRoute
+		}
+		'/products/': {
+			id: '/products/'
+			path: '/products'
+			fullPath: '/products'
+			preLoaderRoute: typeof ProductsIndexImport
+			parentRoute: typeof rootRoute
+		}
+		'/_dashboard-layout/dashboard/': {
+			id: '/_dashboard-layout/dashboard/'
+			path: '/dashboard'
+			fullPath: '/dashboard'
+			preLoaderRoute: typeof DashboardLayoutDashboardIndexImport
+			parentRoute: typeof DashboardLayoutImport
+		}
+		'/_dashboard-layout/dashboard/account/making-payments': {
+			id: '/_dashboard-layout/dashboard/account/making-payments'
+			path: '/dashboard/account/making-payments'
+			fullPath: '/dashboard/account/making-payments'
+			preLoaderRoute: typeof DashboardLayoutDashboardAccountMakingPaymentsImport
+			parentRoute: typeof DashboardLayoutImport
+		}
+		'/_dashboard-layout/dashboard/account/network': {
+			id: '/_dashboard-layout/dashboard/account/network'
+			path: '/dashboard/account/network'
+			fullPath: '/dashboard/account/network'
+			preLoaderRoute: typeof DashboardLayoutDashboardAccountNetworkImport
+			parentRoute: typeof DashboardLayoutImport
+		}
+		'/_dashboard-layout/dashboard/account/profile': {
+			id: '/_dashboard-layout/dashboard/account/profile'
+			path: '/dashboard/account/profile'
+			fullPath: '/dashboard/account/profile'
+			preLoaderRoute: typeof DashboardLayoutDashboardAccountProfileImport
+			parentRoute: typeof DashboardLayoutImport
+		}
+		'/_dashboard-layout/dashboard/account/your-purchases': {
+			id: '/_dashboard-layout/dashboard/account/your-purchases'
+			path: '/dashboard/account/your-purchases'
+			fullPath: '/dashboard/account/your-purchases'
+			preLoaderRoute: typeof DashboardLayoutDashboardAccountYourPurchasesImport
+			parentRoute: typeof DashboardLayoutImport
+		}
+		'/_dashboard-layout/dashboard/products/collections': {
+			id: '/_dashboard-layout/dashboard/products/collections'
+			path: '/dashboard/products/collections'
+			fullPath: '/dashboard/products/collections'
+			preLoaderRoute: typeof DashboardLayoutDashboardProductsCollectionsImport
+			parentRoute: typeof DashboardLayoutImport
+		}
+		'/_dashboard-layout/dashboard/products/products': {
+			id: '/_dashboard-layout/dashboard/products/products'
+			path: '/dashboard/products/products'
+			fullPath: '/dashboard/products/products'
+			preLoaderRoute: typeof DashboardLayoutDashboardProductsProductsImport
+			parentRoute: typeof DashboardLayoutImport
+		}
+		'/_dashboard-layout/dashboard/products/receiving-payments': {
+			id: '/_dashboard-layout/dashboard/products/receiving-payments'
+			path: '/dashboard/products/receiving-payments'
+			fullPath: '/dashboard/products/receiving-payments'
+			preLoaderRoute: typeof DashboardLayoutDashboardProductsReceivingPaymentsImport
+			parentRoute: typeof DashboardLayoutImport
+		}
+		'/_dashboard-layout/dashboard/products/shipping-options': {
+			id: '/_dashboard-layout/dashboard/products/shipping-options'
+			path: '/dashboard/products/shipping-options'
+			fullPath: '/dashboard/products/shipping-options'
+			preLoaderRoute: typeof DashboardLayoutDashboardProductsShippingOptionsImport
+			parentRoute: typeof DashboardLayoutImport
+		}
+		'/_dashboard-layout/dashboard/sales/circular-economy': {
+			id: '/_dashboard-layout/dashboard/sales/circular-economy'
+			path: '/dashboard/sales/circular-economy'
+			fullPath: '/dashboard/sales/circular-economy'
+			preLoaderRoute: typeof DashboardLayoutDashboardSalesCircularEconomyImport
+			parentRoute: typeof DashboardLayoutImport
+		}
+		'/_dashboard-layout/dashboard/sales/messages': {
+			id: '/_dashboard-layout/dashboard/sales/messages'
+			path: '/dashboard/sales/messages'
+			fullPath: '/dashboard/sales/messages'
+			preLoaderRoute: typeof DashboardLayoutDashboardSalesMessagesImport
+			parentRoute: typeof DashboardLayoutImport
+		}
+		'/_dashboard-layout/dashboard/sales/sales': {
+			id: '/_dashboard-layout/dashboard/sales/sales'
+			path: '/dashboard/sales/sales'
+			fullPath: '/dashboard/sales/sales'
+			preLoaderRoute: typeof DashboardLayoutDashboardSalesSalesImport
+			parentRoute: typeof DashboardLayoutImport
+		}
+	}
 }
 
 // Create and export the route tree
 
 interface DashboardLayoutRouteChildren {
-  DashboardLayoutDashboardIndexRoute: typeof DashboardLayoutDashboardIndexRoute
-  DashboardLayoutDashboardAccountMakingPaymentsRoute: typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
-  DashboardLayoutDashboardAccountNetworkRoute: typeof DashboardLayoutDashboardAccountNetworkRoute
-  DashboardLayoutDashboardAccountProfileRoute: typeof DashboardLayoutDashboardAccountProfileRoute
-  DashboardLayoutDashboardAccountYourPurchasesRoute: typeof DashboardLayoutDashboardAccountYourPurchasesRoute
-  DashboardLayoutDashboardProductsCollectionsRoute: typeof DashboardLayoutDashboardProductsCollectionsRoute
-  DashboardLayoutDashboardProductsProductsRoute: typeof DashboardLayoutDashboardProductsProductsRoute
-  DashboardLayoutDashboardProductsReceivingPaymentsRoute: typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
-  DashboardLayoutDashboardProductsShippingOptionsRoute: typeof DashboardLayoutDashboardProductsShippingOptionsRoute
-  DashboardLayoutDashboardSalesCircularEconomyRoute: typeof DashboardLayoutDashboardSalesCircularEconomyRoute
-  DashboardLayoutDashboardSalesMessagesRoute: typeof DashboardLayoutDashboardSalesMessagesRoute
-  DashboardLayoutDashboardSalesSalesRoute: typeof DashboardLayoutDashboardSalesSalesRoute
+	DashboardLayoutDashboardIndexRoute: typeof DashboardLayoutDashboardIndexRoute
+	DashboardLayoutDashboardAccountMakingPaymentsRoute: typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
+	DashboardLayoutDashboardAccountNetworkRoute: typeof DashboardLayoutDashboardAccountNetworkRoute
+	DashboardLayoutDashboardAccountProfileRoute: typeof DashboardLayoutDashboardAccountProfileRoute
+	DashboardLayoutDashboardAccountYourPurchasesRoute: typeof DashboardLayoutDashboardAccountYourPurchasesRoute
+	DashboardLayoutDashboardProductsCollectionsRoute: typeof DashboardLayoutDashboardProductsCollectionsRoute
+	DashboardLayoutDashboardProductsProductsRoute: typeof DashboardLayoutDashboardProductsProductsRoute
+	DashboardLayoutDashboardProductsReceivingPaymentsRoute: typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
+	DashboardLayoutDashboardProductsShippingOptionsRoute: typeof DashboardLayoutDashboardProductsShippingOptionsRoute
+	DashboardLayoutDashboardSalesCircularEconomyRoute: typeof DashboardLayoutDashboardSalesCircularEconomyRoute
+	DashboardLayoutDashboardSalesMessagesRoute: typeof DashboardLayoutDashboardSalesMessagesRoute
+	DashboardLayoutDashboardSalesSalesRoute: typeof DashboardLayoutDashboardSalesSalesRoute
 }
 
 const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
-  DashboardLayoutDashboardIndexRoute: DashboardLayoutDashboardIndexRoute,
-  DashboardLayoutDashboardAccountMakingPaymentsRoute:
-    DashboardLayoutDashboardAccountMakingPaymentsRoute,
-  DashboardLayoutDashboardAccountNetworkRoute:
-    DashboardLayoutDashboardAccountNetworkRoute,
-  DashboardLayoutDashboardAccountProfileRoute:
-    DashboardLayoutDashboardAccountProfileRoute,
-  DashboardLayoutDashboardAccountYourPurchasesRoute:
-    DashboardLayoutDashboardAccountYourPurchasesRoute,
-  DashboardLayoutDashboardProductsCollectionsRoute:
-    DashboardLayoutDashboardProductsCollectionsRoute,
-  DashboardLayoutDashboardProductsProductsRoute:
-    DashboardLayoutDashboardProductsProductsRoute,
-  DashboardLayoutDashboardProductsReceivingPaymentsRoute:
-    DashboardLayoutDashboardProductsReceivingPaymentsRoute,
-  DashboardLayoutDashboardProductsShippingOptionsRoute:
-    DashboardLayoutDashboardProductsShippingOptionsRoute,
-  DashboardLayoutDashboardSalesCircularEconomyRoute:
-    DashboardLayoutDashboardSalesCircularEconomyRoute,
-  DashboardLayoutDashboardSalesMessagesRoute:
-    DashboardLayoutDashboardSalesMessagesRoute,
-  DashboardLayoutDashboardSalesSalesRoute:
-    DashboardLayoutDashboardSalesSalesRoute,
+	DashboardLayoutDashboardIndexRoute: DashboardLayoutDashboardIndexRoute,
+	DashboardLayoutDashboardAccountMakingPaymentsRoute: DashboardLayoutDashboardAccountMakingPaymentsRoute,
+	DashboardLayoutDashboardAccountNetworkRoute: DashboardLayoutDashboardAccountNetworkRoute,
+	DashboardLayoutDashboardAccountProfileRoute: DashboardLayoutDashboardAccountProfileRoute,
+	DashboardLayoutDashboardAccountYourPurchasesRoute: DashboardLayoutDashboardAccountYourPurchasesRoute,
+	DashboardLayoutDashboardProductsCollectionsRoute: DashboardLayoutDashboardProductsCollectionsRoute,
+	DashboardLayoutDashboardProductsProductsRoute: DashboardLayoutDashboardProductsProductsRoute,
+	DashboardLayoutDashboardProductsReceivingPaymentsRoute: DashboardLayoutDashboardProductsReceivingPaymentsRoute,
+	DashboardLayoutDashboardProductsShippingOptionsRoute: DashboardLayoutDashboardProductsShippingOptionsRoute,
+	DashboardLayoutDashboardSalesCircularEconomyRoute: DashboardLayoutDashboardSalesCircularEconomyRoute,
+	DashboardLayoutDashboardSalesMessagesRoute: DashboardLayoutDashboardSalesMessagesRoute,
+	DashboardLayoutDashboardSalesSalesRoute: DashboardLayoutDashboardSalesSalesRoute,
 }
 
-const DashboardLayoutRouteWithChildren = DashboardLayoutRoute._addFileChildren(
-  DashboardLayoutRouteChildren,
-)
+const DashboardLayoutRouteWithChildren = DashboardLayoutRoute._addFileChildren(DashboardLayoutRouteChildren)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute
-  '': typeof DashboardLayoutRouteWithChildren
-  '/setup': typeof SetupRoute
-  '/posts/$postId': typeof PostsPostIdRoute
-  '/products/$productId': typeof ProductsProductIdRoute
-  '/profile/$profileId': typeof ProfileProfileIdRoute
-  '/community': typeof CommunityIndexRoute
-  '/nostr': typeof NostrIndexRoute
-  '/posts': typeof PostsIndexRoute
-  '/products': typeof ProductsIndexRoute
-  '/dashboard': typeof DashboardLayoutDashboardIndexRoute
-  '/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
-  '/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
-  '/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
-  '/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
-  '/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRoute
-  '/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRoute
-  '/dashboard/products/receiving-payments': typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
-  '/dashboard/products/shipping-options': typeof DashboardLayoutDashboardProductsShippingOptionsRoute
-  '/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
-  '/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRoute
-  '/dashboard/sales/sales': typeof DashboardLayoutDashboardSalesSalesRoute
+	'/': typeof IndexRoute
+	'': typeof DashboardLayoutRouteWithChildren
+	'/setup': typeof SetupRoute
+	'/posts/$postId': typeof PostsPostIdRoute
+	'/products/$productId': typeof ProductsProductIdRoute
+	'/profile/$profileId': typeof ProfileProfileIdRoute
+	'/community': typeof CommunityIndexRoute
+	'/nostr': typeof NostrIndexRoute
+	'/posts': typeof PostsIndexRoute
+	'/products': typeof ProductsIndexRoute
+	'/dashboard': typeof DashboardLayoutDashboardIndexRoute
+	'/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
+	'/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
+	'/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
+	'/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
+	'/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRoute
+	'/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRoute
+	'/dashboard/products/receiving-payments': typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
+	'/dashboard/products/shipping-options': typeof DashboardLayoutDashboardProductsShippingOptionsRoute
+	'/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
+	'/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRoute
+	'/dashboard/sales/sales': typeof DashboardLayoutDashboardSalesSalesRoute
 }
 
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute
-  '': typeof DashboardLayoutRouteWithChildren
-  '/setup': typeof SetupRoute
-  '/posts/$postId': typeof PostsPostIdRoute
-  '/products/$productId': typeof ProductsProductIdRoute
-  '/profile/$profileId': typeof ProfileProfileIdRoute
-  '/community': typeof CommunityIndexRoute
-  '/nostr': typeof NostrIndexRoute
-  '/posts': typeof PostsIndexRoute
-  '/products': typeof ProductsIndexRoute
-  '/dashboard': typeof DashboardLayoutDashboardIndexRoute
-  '/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
-  '/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
-  '/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
-  '/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
-  '/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRoute
-  '/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRoute
-  '/dashboard/products/receiving-payments': typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
-  '/dashboard/products/shipping-options': typeof DashboardLayoutDashboardProductsShippingOptionsRoute
-  '/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
-  '/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRoute
-  '/dashboard/sales/sales': typeof DashboardLayoutDashboardSalesSalesRoute
+	'/': typeof IndexRoute
+	'': typeof DashboardLayoutRouteWithChildren
+	'/setup': typeof SetupRoute
+	'/posts/$postId': typeof PostsPostIdRoute
+	'/products/$productId': typeof ProductsProductIdRoute
+	'/profile/$profileId': typeof ProfileProfileIdRoute
+	'/community': typeof CommunityIndexRoute
+	'/nostr': typeof NostrIndexRoute
+	'/posts': typeof PostsIndexRoute
+	'/products': typeof ProductsIndexRoute
+	'/dashboard': typeof DashboardLayoutDashboardIndexRoute
+	'/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
+	'/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
+	'/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
+	'/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
+	'/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRoute
+	'/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRoute
+	'/dashboard/products/receiving-payments': typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
+	'/dashboard/products/shipping-options': typeof DashboardLayoutDashboardProductsShippingOptionsRoute
+	'/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
+	'/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRoute
+	'/dashboard/sales/sales': typeof DashboardLayoutDashboardSalesSalesRoute
 }
 
 export interface FileRoutesById {
-  __root__: typeof rootRoute
-  '/': typeof IndexRoute
-  '/_dashboard-layout': typeof DashboardLayoutRouteWithChildren
-  '/setup': typeof SetupRoute
-  '/posts/$postId': typeof PostsPostIdRoute
-  '/products/$productId': typeof ProductsProductIdRoute
-  '/profile/$profileId': typeof ProfileProfileIdRoute
-  '/community/': typeof CommunityIndexRoute
-  '/nostr/': typeof NostrIndexRoute
-  '/posts/': typeof PostsIndexRoute
-  '/products/': typeof ProductsIndexRoute
-  '/_dashboard-layout/dashboard/': typeof DashboardLayoutDashboardIndexRoute
-  '/_dashboard-layout/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
-  '/_dashboard-layout/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
-  '/_dashboard-layout/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
-  '/_dashboard-layout/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
-  '/_dashboard-layout/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRoute
-  '/_dashboard-layout/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRoute
-  '/_dashboard-layout/dashboard/products/receiving-payments': typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
-  '/_dashboard-layout/dashboard/products/shipping-options': typeof DashboardLayoutDashboardProductsShippingOptionsRoute
-  '/_dashboard-layout/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
-  '/_dashboard-layout/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRoute
-  '/_dashboard-layout/dashboard/sales/sales': typeof DashboardLayoutDashboardSalesSalesRoute
+	__root__: typeof rootRoute
+	'/': typeof IndexRoute
+	'/_dashboard-layout': typeof DashboardLayoutRouteWithChildren
+	'/setup': typeof SetupRoute
+	'/posts/$postId': typeof PostsPostIdRoute
+	'/products/$productId': typeof ProductsProductIdRoute
+	'/profile/$profileId': typeof ProfileProfileIdRoute
+	'/community/': typeof CommunityIndexRoute
+	'/nostr/': typeof NostrIndexRoute
+	'/posts/': typeof PostsIndexRoute
+	'/products/': typeof ProductsIndexRoute
+	'/_dashboard-layout/dashboard/': typeof DashboardLayoutDashboardIndexRoute
+	'/_dashboard-layout/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
+	'/_dashboard-layout/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
+	'/_dashboard-layout/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
+	'/_dashboard-layout/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
+	'/_dashboard-layout/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRoute
+	'/_dashboard-layout/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRoute
+	'/_dashboard-layout/dashboard/products/receiving-payments': typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
+	'/_dashboard-layout/dashboard/products/shipping-options': typeof DashboardLayoutDashboardProductsShippingOptionsRoute
+	'/_dashboard-layout/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
+	'/_dashboard-layout/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRoute
+	'/_dashboard-layout/dashboard/sales/sales': typeof DashboardLayoutDashboardSalesSalesRoute
 }
 
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | ''
-    | '/setup'
-    | '/posts/$postId'
-    | '/products/$productId'
-    | '/profile/$profileId'
-    | '/community'
-    | '/nostr'
-    | '/posts'
-    | '/products'
-    | '/dashboard'
-    | '/dashboard/account/making-payments'
-    | '/dashboard/account/network'
-    | '/dashboard/account/profile'
-    | '/dashboard/account/your-purchases'
-    | '/dashboard/products/collections'
-    | '/dashboard/products/products'
-    | '/dashboard/products/receiving-payments'
-    | '/dashboard/products/shipping-options'
-    | '/dashboard/sales/circular-economy'
-    | '/dashboard/sales/messages'
-    | '/dashboard/sales/sales'
-  fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | ''
-    | '/setup'
-    | '/posts/$postId'
-    | '/products/$productId'
-    | '/profile/$profileId'
-    | '/community'
-    | '/nostr'
-    | '/posts'
-    | '/products'
-    | '/dashboard'
-    | '/dashboard/account/making-payments'
-    | '/dashboard/account/network'
-    | '/dashboard/account/profile'
-    | '/dashboard/account/your-purchases'
-    | '/dashboard/products/collections'
-    | '/dashboard/products/products'
-    | '/dashboard/products/receiving-payments'
-    | '/dashboard/products/shipping-options'
-    | '/dashboard/sales/circular-economy'
-    | '/dashboard/sales/messages'
-    | '/dashboard/sales/sales'
-  id:
-    | '__root__'
-    | '/'
-    | '/_dashboard-layout'
-    | '/setup'
-    | '/posts/$postId'
-    | '/products/$productId'
-    | '/profile/$profileId'
-    | '/community/'
-    | '/nostr/'
-    | '/posts/'
-    | '/products/'
-    | '/_dashboard-layout/dashboard/'
-    | '/_dashboard-layout/dashboard/account/making-payments'
-    | '/_dashboard-layout/dashboard/account/network'
-    | '/_dashboard-layout/dashboard/account/profile'
-    | '/_dashboard-layout/dashboard/account/your-purchases'
-    | '/_dashboard-layout/dashboard/products/collections'
-    | '/_dashboard-layout/dashboard/products/products'
-    | '/_dashboard-layout/dashboard/products/receiving-payments'
-    | '/_dashboard-layout/dashboard/products/shipping-options'
-    | '/_dashboard-layout/dashboard/sales/circular-economy'
-    | '/_dashboard-layout/dashboard/sales/messages'
-    | '/_dashboard-layout/dashboard/sales/sales'
-  fileRoutesById: FileRoutesById
+	fileRoutesByFullPath: FileRoutesByFullPath
+	fullPaths:
+		| '/'
+		| ''
+		| '/setup'
+		| '/posts/$postId'
+		| '/products/$productId'
+		| '/profile/$profileId'
+		| '/community'
+		| '/nostr'
+		| '/posts'
+		| '/products'
+		| '/dashboard'
+		| '/dashboard/account/making-payments'
+		| '/dashboard/account/network'
+		| '/dashboard/account/profile'
+		| '/dashboard/account/your-purchases'
+		| '/dashboard/products/collections'
+		| '/dashboard/products/products'
+		| '/dashboard/products/receiving-payments'
+		| '/dashboard/products/shipping-options'
+		| '/dashboard/sales/circular-economy'
+		| '/dashboard/sales/messages'
+		| '/dashboard/sales/sales'
+	fileRoutesByTo: FileRoutesByTo
+	to:
+		| '/'
+		| ''
+		| '/setup'
+		| '/posts/$postId'
+		| '/products/$productId'
+		| '/profile/$profileId'
+		| '/community'
+		| '/nostr'
+		| '/posts'
+		| '/products'
+		| '/dashboard'
+		| '/dashboard/account/making-payments'
+		| '/dashboard/account/network'
+		| '/dashboard/account/profile'
+		| '/dashboard/account/your-purchases'
+		| '/dashboard/products/collections'
+		| '/dashboard/products/products'
+		| '/dashboard/products/receiving-payments'
+		| '/dashboard/products/shipping-options'
+		| '/dashboard/sales/circular-economy'
+		| '/dashboard/sales/messages'
+		| '/dashboard/sales/sales'
+	id:
+		| '__root__'
+		| '/'
+		| '/_dashboard-layout'
+		| '/setup'
+		| '/posts/$postId'
+		| '/products/$productId'
+		| '/profile/$profileId'
+		| '/community/'
+		| '/nostr/'
+		| '/posts/'
+		| '/products/'
+		| '/_dashboard-layout/dashboard/'
+		| '/_dashboard-layout/dashboard/account/making-payments'
+		| '/_dashboard-layout/dashboard/account/network'
+		| '/_dashboard-layout/dashboard/account/profile'
+		| '/_dashboard-layout/dashboard/account/your-purchases'
+		| '/_dashboard-layout/dashboard/products/collections'
+		| '/_dashboard-layout/dashboard/products/products'
+		| '/_dashboard-layout/dashboard/products/receiving-payments'
+		| '/_dashboard-layout/dashboard/products/shipping-options'
+		| '/_dashboard-layout/dashboard/sales/circular-economy'
+		| '/_dashboard-layout/dashboard/sales/messages'
+		| '/_dashboard-layout/dashboard/sales/sales'
+	fileRoutesById: FileRoutesById
 }
 
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute
-  DashboardLayoutRoute: typeof DashboardLayoutRouteWithChildren
-  SetupRoute: typeof SetupRoute
-  PostsPostIdRoute: typeof PostsPostIdRoute
-  ProductsProductIdRoute: typeof ProductsProductIdRoute
-  ProfileProfileIdRoute: typeof ProfileProfileIdRoute
-  CommunityIndexRoute: typeof CommunityIndexRoute
-  NostrIndexRoute: typeof NostrIndexRoute
-  PostsIndexRoute: typeof PostsIndexRoute
-  ProductsIndexRoute: typeof ProductsIndexRoute
+	IndexRoute: typeof IndexRoute
+	DashboardLayoutRoute: typeof DashboardLayoutRouteWithChildren
+	SetupRoute: typeof SetupRoute
+	PostsPostIdRoute: typeof PostsPostIdRoute
+	ProductsProductIdRoute: typeof ProductsProductIdRoute
+	ProfileProfileIdRoute: typeof ProfileProfileIdRoute
+	CommunityIndexRoute: typeof CommunityIndexRoute
+	NostrIndexRoute: typeof NostrIndexRoute
+	PostsIndexRoute: typeof PostsIndexRoute
+	ProductsIndexRoute: typeof ProductsIndexRoute
 }
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
-  DashboardLayoutRoute: DashboardLayoutRouteWithChildren,
-  SetupRoute: SetupRoute,
-  PostsPostIdRoute: PostsPostIdRoute,
-  ProductsProductIdRoute: ProductsProductIdRoute,
-  ProfileProfileIdRoute: ProfileProfileIdRoute,
-  CommunityIndexRoute: CommunityIndexRoute,
-  NostrIndexRoute: NostrIndexRoute,
-  PostsIndexRoute: PostsIndexRoute,
-  ProductsIndexRoute: ProductsIndexRoute,
+	IndexRoute: IndexRoute,
+	DashboardLayoutRoute: DashboardLayoutRouteWithChildren,
+	SetupRoute: SetupRoute,
+	PostsPostIdRoute: PostsPostIdRoute,
+	ProductsProductIdRoute: ProductsProductIdRoute,
+	ProfileProfileIdRoute: ProfileProfileIdRoute,
+	CommunityIndexRoute: CommunityIndexRoute,
+	NostrIndexRoute: NostrIndexRoute,
+	PostsIndexRoute: PostsIndexRoute,
+	ProductsIndexRoute: ProductsIndexRoute,
 }
 
-export const routeTree = rootRoute
-  ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>()
+export const routeTree = rootRoute._addFileChildren(rootRouteChildren)._addFileTypes<FileRouteTypes>()
 
 /* ROUTE_MANIFEST_START
 {
