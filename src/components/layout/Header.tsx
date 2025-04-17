@@ -64,19 +64,21 @@ export function Header({ onLoginClick }: HeaderProps) {
 							className="p-2 relative rounded-md hover:[&>span]:text-secondary"
 							icon={<span className="i-basket w-6 h-6" />}
 						/>
-						<Link to="/dashboard">
-							<Button
-								variant="primary"
-								className="p-2 relative rounded-md hover:[&>span]:text-secondary"
-								icon={<span className="i-dashboard w-6 h-6" />}
-							/>
-						</Link>
 						{isAuthenticating ? (
 							<Button variant="primary" className="p-2 relative rounded-md">
 								<Loader2 className="h-4 w-4 animate-spin" />
 							</Button>
 						) : isAuthenticated ? (
-							<Profile compact />
+							<>
+								<Link to="/dashboard">
+									<Button
+										variant="primary"
+										className="p-2 relative rounded-md hover:[&>span]:text-secondary"
+										icon={<span className="i-dashboard w-6 h-6" />}
+									/>
+								</Link>
+								<Profile compact />
+							</>
 						) : (
 							<Button
 								variant="primary"
