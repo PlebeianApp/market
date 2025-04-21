@@ -94,10 +94,10 @@ export const ndkActions = {
 		return ndkStore.state.ndk
 	},
 
-	getUser: () => {
+	getUser: async () => {
 		const state = ndkStore.state
 		if (!state.ndk || !state.ndk.signer) return null
-		return state.ndk.signer.user
+		return await state.ndk.signer.user()
 	},
 
 	getSigner: () => {
