@@ -300,14 +300,46 @@ export const cartActions = {
 
 			switch (action) {
 				case 'increment':
-					cart.products[productId].amount = Math.min(cart.products[productId].amount + 1, cart.products[productId].stockQuantity)
+					if (cart.products[productId]) {
+						cart.products[productId].amount = Math.min(cart.products[productId].amount + 1, cart.products[productId].stockQuantity)
+					}
 					break
 				case 'decrement':
-					cart.products[productId].amount = Math.max(cart.products[productId].amount - 1, 0)
+					if (cart.products[productId]) {
+						const newAmount = Math.max(cart.products[productId].amount - 1, 0)
+
+						// If the amount would be zero, remove the product instead
+						if (newAmount === 0) {
+							// Handle removal (same logic as 'remove' case)
+							if (user) {
+								user.productIds = user.productIds.filter((id) => id !== productId)
+								delete cart.products[productId]
+
+								if (user.productIds.length === 0) {
+									delete cart.users[userPubkey]
+								}
+							}
+						} else {
+							cart.products[productId].amount = newAmount
+						}
+					}
 					break
 				case 'setAmount':
-					if (amount !== undefined) {
-						cart.products[productId].amount = Math.min(amount, cart.products[productId].stockQuantity)
+					if (amount !== undefined && cart.products[productId]) {
+						// If setting to zero or less, remove the product
+						if (amount <= 0) {
+							// Handle removal (same logic as 'remove' case)
+							if (user) {
+								user.productIds = user.productIds.filter((id) => id !== productId)
+								delete cart.products[productId]
+
+								if (user.productIds.length === 0) {
+									delete cart.users[userPubkey]
+								}
+							}
+						} else {
+							cart.products[productId].amount = Math.min(amount, cart.products[productId].stockQuantity)
+						}
 					}
 					break
 				case 'remove': {
@@ -558,6 +590,46 @@ export const cartActions = {
 		// Create a debounced version of updateTotals
 		const debouncedUpdate = debounce(updateTotals, 250)
 		debouncedUpdate()
+	},
+
+	calculateTotalItems: () => {
+		const state = cartStore.state
+		return Object.values(state.cart.products).reduce((total, product) => {
+			return total + product.amount
+		}, 0)
+	},
+
+	calculateAmountsByCurrency: () => {
+		const state = cartStore.state
+		return Object.values(state.cart.products).reduce(
+			(acc, product) => {
+				const currency = product.currency
+				if (!acc[currency]) {
+					acc[currency] = 0
+				}
+				acc[currency] += product.price * product.amount
+				return acc
+			},
+			{} as Record<string, number>,
+		)
+	},
+
+	getUserPubkey: () => {
+		const state = cartStore.state
+		// Get the first user pubkey (assuming there's only one user for now)
+		return Object.keys(state.cart.users)[0] || null
+	},
+
+	calculateProductSubtotal: (productId: string): { value: number; currency: string } => {
+		const state = cartStore.state
+		const product = state.cart.products[productId]
+		if (!product) {
+			return { value: 0, currency: 'USD' }
+		}
+		return {
+			value: product.price * product.amount,
+			currency: product.currency,
+		}
 	},
 }
 
