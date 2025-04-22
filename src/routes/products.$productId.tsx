@@ -125,12 +125,7 @@ function RouteComponent() {
 			shippingCost: 0,
 		}
 
-		// Get the current user's pubkey or use a default one
-		// In a real app, you would get this from authentication
-		const userPubkey = pubkey || 'default-user'
-
-		// Add to cart with the specified quantity
-		await cartActions.addProduct(userPubkey, cartProduct)
+		await cartActions.addProduct(pubkey, cartProduct)
 
 		// Open the cart drawer
 		uiActions.openDrawer('cart')

@@ -3,7 +3,6 @@ import { debounce } from '../utils'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { getProductImages, getProductPrice, getProductStock, getProductTitle } from '@/queries/products'
 
-// Mock types that would be imported from @plebeian/database
 export interface ProductImage {
 	url: string
 	alt?: string
@@ -29,7 +28,6 @@ export interface OrderMessage {
 
 export type OrderStatus = 'pending' | 'paid' | 'shipped' | 'delivered' | 'cancelled'
 
-// Mock types from v4v.queries
 export interface V4VDTO {
 	id: string
 	name: string
@@ -37,7 +35,6 @@ export interface V4VDTO {
 	percentage: number
 }
 
-// Mock RichShippingInfo from shipping.service
 export interface RichShippingInfo {
 	id: string
 	name?: string
@@ -190,7 +187,6 @@ export const cartActions = {
 	},
 
 	addProduct: async (userPubkey: string, productData: CartProduct | NDKEvent) => {
-		// Convert NDKEvent to CartProduct if needed
 		const product = productData instanceof NDKEvent ? cartActions.convertNDKEventToCartProduct(productData) : productData
 
 		cartStore.setState((state) => {
