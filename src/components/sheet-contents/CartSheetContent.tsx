@@ -5,6 +5,8 @@ import { useStore } from '@tanstack/react-store'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import CartItem from '@/components/CartItem'
 import { useEffect } from 'react'
+import { UserWithAvatar } from '@/components/UserWithAvatar'
+import { Separator } from '@/components/ui/separator'
 
 export default function CartSheetContent() {
 	const { cart } = useStore(cartStore)
@@ -18,6 +20,9 @@ export default function CartSheetContent() {
 	const totalItems = cartActions.calculateTotalItems()
 	const amountsByCurrency = cartActions.calculateAmountsByCurrency()
 	const userPubkey = cartActions.getUserPubkey()
+
+	// Group products by seller using the cart store function
+	const productsBySeller = cartActions.groupProductsBySeller()
 
 	// Handle quantity change for a product
 	const handleQuantityChange = (productId: string, newAmount: number) => {
@@ -60,18 +65,35 @@ export default function CartSheetContent() {
 
 			{/* Cart Items - Scrollable Area */}
 			<div className="flex-1 overflow-y-auto py-4 px-6 mt-6">
-				<ul className="space-y-6" ref={parent}>
-					{Object.values(cart.products).map((product) => (
-						<CartItem
-							key={product.id}
-							productId={product.id}
-							amount={product.amount}
-							stockQuantity={product.stockQuantity}
-							onQuantityChange={handleQuantityChange}
-							onRemove={handleRemoveProduct}
-						/>
+				<div className="space-y-8" ref={parent}>
+					{Object.entries(productsBySeller).map(([sellerPubkey, products]) => (
+						<div key={sellerPubkey} className="space-y-4">
+							{/* Seller information */}
+							<div className="flex items-center justify-between">
+								<UserWithAvatar pubkey={sellerPubkey} size="sm" showBadge={false} />
+								<span className="text-sm text-muted-foreground">
+									{products.length} {products.length === 1 ? 'item' : 'items'}
+								</span>
+							</div>
+
+							<Separator />
+
+							{/* Products from this seller */}
+							<ul className="space-y-6">
+								{products.map((product) => (
+									<CartItem
+										key={product.id}
+										productId={product.id}
+										amount={product.amount}
+										stockQuantity={product.stockQuantity}
+										onQuantityChange={handleQuantityChange}
+										onRemove={handleRemoveProduct}
+									/>
+								))}
+							</ul>
+						</div>
 					))}
-				</ul>
+				</div>
 			</div>
 
 			{/* Cart Footer */}

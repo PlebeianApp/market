@@ -27,6 +27,7 @@
 		"@nostr-dev-kit/ndk-cache-dexie": "^2.5.15",
 		"@nostr-dev-kit/ndk-wallet": "^0.5.3-1",
 		"@radix-ui/react-accordion": "^1.2.3",
+		"@radix-ui/react-avatar": "^1.1.6",
 		"@radix-ui/react-checkbox": "^1.1.4",
 		"@radix-ui/react-collapsible": "^1.1.4",
 		"@radix-ui/react-dialog": "^1.1.10",

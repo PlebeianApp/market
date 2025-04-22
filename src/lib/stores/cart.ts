@@ -63,6 +63,7 @@ export interface CartProduct {
 	shippingMethodName: string | null
 	shippingCost: number
 	originalEventId?: string // Store only the ID instead of the full event
+	sellerPubkey?: string // Add seller pubkey to store who's selling it
 }
 
 export interface CartUser {
@@ -173,6 +174,7 @@ export const cartActions = {
 			shippingMethodName: null,
 			shippingCost: 0,
 			originalEventId: event.id, // Store only the ID
+			sellerPubkey: event.pubkey, // Store the seller's pubkey
 		}
 	},
 
@@ -631,6 +633,41 @@ export const cartActions = {
 			currency: product.currency,
 		}
 	},
+
+	// Group products by seller
+	groupProductsBySeller: () => {
+		const state = cartStore.state
+		const grouped: Record<string, CartProduct[]> = {}
+
+		// Default group for products without seller info
+		const unknownSeller = 'unknown'
+		grouped[unknownSeller] = []
+
+		// Group products by seller pubkey
+		Object.values(state.cart.products).forEach((product) => {
+			// Use the sellerPubkey property if available
+			if (product.sellerPubkey) {
+				const sellerPubkey = product.sellerPubkey
+				if (!grouped[sellerPubkey]) {
+					grouped[sellerPubkey] = []
+				}
+				grouped[sellerPubkey].push(product)
+			}
+			// Otherwise add to unknown group
+			else {
+				grouped[unknownSeller].push(product)
+			}
+		})
+
+		// Remove empty groups
+		Object.keys(grouped).forEach((key) => {
+			if (grouped[key].length === 0) {
+				delete grouped[key]
+			}
+		})
+
+		return grouped
+	},
 }
 
 export const useCart = () => {
@@ -670,6 +707,8 @@ export async function handleAddToCart(userId: string, product: Partial<CartProdu
 				shippingMethodId: null,
 				shippingMethodName: null,
 				shippingCost: 0,
+				originalEventId: product.originalEventId,
+				sellerPubkey: product.sellerPubkey,
 			})
 			return true
 		}

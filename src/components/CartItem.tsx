@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input'
 import { Minus, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useProductTitle, useProductPrice, useProductImages } from '@/queries/products'
+import { Skeleton } from '@/components/ui/skeleton'
 
 interface CartItemProps {
 	productId: string
@@ -16,9 +17,11 @@ export default function CartItem({ productId, amount, stockQuantity, onQuantityC
 	const [quantity, setQuantity] = useState(amount)
 
 	// Fetch product data
-	const { data: title } = useProductTitle(productId)
-	const { data: priceTag } = useProductPrice(productId)
-	const { data: images } = useProductImages(productId)
+	const { data: title, isLoading: isTitleLoading } = useProductTitle(productId)
+	const { data: priceTag, isLoading: isPriceLoading } = useProductPrice(productId)
+	const { data: images, isLoading: isImagesLoading } = useProductImages(productId)
+
+	const isLoading = isTitleLoading || isPriceLoading || isImagesLoading
 
 	// Calculate subtotal
 	const price = priceTag ? parseFloat(priceTag[1]) : 0
@@ -45,19 +48,45 @@ export default function CartItem({ productId, amount, stockQuantity, onQuantityC
 		setQuantity(amount)
 	}, [amount])
 
+	if (isLoading) {
+		return (
+			<li className="flex gap-4 pb-4 border-b">
+				<Skeleton className="h-20 w-20 rounded-md" />
+				<div className="flex flex-1 flex-col justify-between">
+					<div>
+						<Skeleton className="h-5 w-24 mb-1" />
+						<Skeleton className="h-4 w-16" />
+					</div>
+					<div className="flex items-center justify-between mt-2">
+						<div className="flex items-center space-x-2">
+							<Skeleton className="h-8 w-8 rounded" />
+							<Skeleton className="h-8 w-12 rounded" />
+							<Skeleton className="h-8 w-8 rounded" />
+						</div>
+					</div>
+				</div>
+				<Skeleton className="h-5 w-16 self-center" />
+			</li>
+		)
+	}
+
 	return (
 		<li className="flex gap-4 pb-4 border-b">
 			{/* Product Image */}
-			{images && images.length > 0 && (
+			{images && images.length > 0 ? (
 				<div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-md border">
 					<img src={images[0][1]} alt={title || 'Product image'} className="h-full w-full object-cover object-center" />
+				</div>
+			) : (
+				<div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-md border bg-gray-100 flex items-center justify-center text-gray-400">
+					No image
 				</div>
 			)}
 
 			{/* Product Details */}
 			<div className="flex flex-1 flex-col justify-between">
 				<div>
-					<h3 className="text-base font-medium">{title}</h3>
+					<h3 className="text-base font-medium">{title || 'Untitled Product'}</h3>
 					<p className="mt-1 text-sm text-muted-foreground">
 						{price} {currency}
 					</p>
