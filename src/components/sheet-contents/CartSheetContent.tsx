@@ -178,11 +178,20 @@ export default function CartSheetContent() {
 						<Button className="w-full" size="lg">
 							Checkout ({totalItems} {totalItems === 1 ? 'item' : 'items'})
 						</Button>
-						<SheetClose asChild>
-							<Button variant="outline" className="w-full">
-								Continue Shopping
+						<div className="flex gap-2">
+							<SheetClose asChild>
+								<Button variant="outline" className="flex-1">
+									Continue Shopping
+								</Button>
+							</SheetClose>
+							<Button
+								variant="outline"
+								className="flex-1 text-red-500 hover:bg-red-50 hover:text-red-600 border-red-200"
+								onClick={() => cartActions.clear()}
+							>
+								Clear Cart
 							</Button>
-						</SheetClose>
+						</div>
 					</div>
 				</div>
 			</SheetFooter>
