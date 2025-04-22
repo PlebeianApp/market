@@ -1,25 +1,22 @@
-import { Button } from '@/components/ui/button'
-import { SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetClose } from '@/components/ui/sheet'
-import { cartActions, cartStore } from '@/lib/stores/cart'
-import { useStore } from '@tanstack/react-store'
-import { useAutoAnimate } from '@formkit/auto-animate/react'
 import CartItem from '@/components/CartItem'
-import { useEffect } from 'react'
 import { UserWithAvatar } from '@/components/UserWithAvatar'
+import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { cartActions, cartStore, useCartTotals } from '@/lib/stores/cart'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
+import { useStore } from '@tanstack/react-store'
+import { useEffect } from 'react'
 
 export default function CartSheetContent() {
 	const { cart } = useStore(cartStore)
 	const [parent, enableAnimations] = useAutoAnimate()
+	const { totalItems, subtotalByCurrency } = useCartTotals()
+	const userPubkey = cartActions.getUserPubkey()
 
 	useEffect(() => {
 		enableAnimations(true)
 	}, [parent, enableAnimations])
-
-	// Get calculated values from cart store
-	const totalItems = cartActions.calculateTotalItems()
-	const amountsByCurrency = cartActions.calculateAmountsByCurrency()
-	const userPubkey = cartActions.getUserPubkey()
 
 	// Group products by seller using the cart store function
 	const productsBySeller = cartActions.groupProductsBySeller()
@@ -85,7 +82,6 @@ export default function CartSheetContent() {
 										key={product.id}
 										productId={product.id}
 										amount={product.amount}
-										stockQuantity={product.stockQuantity}
 										onQuantityChange={handleQuantityChange}
 										onRemove={handleRemoveProduct}
 									/>
@@ -101,7 +97,7 @@ export default function CartSheetContent() {
 				<div className="space-y-4 w-full">
 					{/* Subtotal per currency */}
 					<div className="space-y-2">
-						{Object.entries(amountsByCurrency).map(([currency, amount]) => (
+						{Object.entries(subtotalByCurrency).map(([currency, amount]) => (
 							<div key={currency} className="flex justify-between">
 								<p className="text-sm text-muted-foreground">Subtotal ({currency})</p>
 								<p className="text-sm font-medium">

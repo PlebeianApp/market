@@ -1,7 +1,8 @@
+import { fetchProduct, getProductPrice, getProductSellerPubkey } from '@/queries/products'
+import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { debounce } from '../utils'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
-import { getProductImages, getProductPrice, getProductStock, getProductTitle } from '@/queries/products'
+import { useEffect, useState } from 'react'
 
 export interface ProductImage {
 	url: string
@@ -48,19 +49,12 @@ export const v4VForUserQuery = async (userPubkey: string): Promise<V4VDTO[]> => 
 }
 
 export interface CartProduct {
-	id: string
-	name: string
+	id: string // Product ID (the only required field)
 	amount: number
-	price: number
-	currency: string
-	stockQuantity: number
-	images?: ProductImage[]
-	shipping: ProductShipping[]
 	shippingMethodId: string | null
 	shippingMethodName: string | null
 	shippingCost: number
-	originalEventId?: string // Store only the ID instead of the full event
-	sellerPubkey?: string // Add seller pubkey to store who's selling it
+	sellerPubkey?: string // Keep seller's pubkey for grouping
 }
 
 export interface CartUser {
@@ -122,6 +116,26 @@ const CONVERSION_RATES: Record<string, number> = {
 
 export const cartStore = new Store<CartState>(initialCartState)
 
+// Cache for product events to reduce API calls
+const productEventCache: Record<string, NDKEvent | null> = {}
+
+// Helper function to get product event, with caching
+const getProductEvent = async (id: string): Promise<NDKEvent | null> => {
+	if (productEventCache[id] !== undefined) {
+		return productEventCache[id]
+	}
+
+	try {
+		const event = await fetchProduct(id)
+		productEventCache[id] = event
+		return event
+	} catch (error) {
+		console.error(`Failed to fetch product event: ${id}`, error)
+		productEventCache[id] = null
+		return null
+	}
+}
+
 export const cartActions = {
 	saveToStorage: async (cart: NormalizedCart) => {
 		if (typeof sessionStorage !== 'undefined') {
@@ -140,38 +154,13 @@ export const cartActions = {
 	},
 
 	convertNDKEventToCartProduct: (event: NDKEvent, amount: number = 1): CartProduct => {
-		const title = getProductTitle(event)
-		const priceTag = getProductPrice(event)
-		const stockTag = getProductStock(event)
-		const images = getProductImages(event)
-
-		// Format price to number and get currency
-		const price = priceTag ? parseFloat(priceTag[1]) : 0
-		const currency = priceTag ? priceTag[2] : 'USD'
-
-		// Get stock quantity
-		const stockQuantity = stockTag ? parseInt(stockTag[1]) : 0
-
-		// Format images
-		const formattedImages: ProductImage[] = images.map((img) => ({
-			url: img[1],
-			alt: title,
-		}))
-
 		return {
 			id: event.id,
-			name: title,
 			amount: amount,
-			price: price,
-			currency: currency,
-			stockQuantity: stockQuantity,
-			images: formattedImages,
-			shipping: [],
 			shippingMethodId: null,
 			shippingMethodName: null,
 			shippingCost: 0,
-			originalEventId: event.id, // Store only the ID
-			sellerPubkey: event.pubkey, // Store the seller's pubkey
+			sellerPubkey: event.pubkey,
 		}
 	},
 
@@ -186,18 +175,51 @@ export const cartActions = {
 		return { user, product }
 	},
 
-	addProduct: async (userPubkey: string, productData: CartProduct | NDKEvent) => {
-		const product = productData instanceof NDKEvent ? cartActions.convertNDKEventToCartProduct(productData) : productData
+	addProduct: async (userPubkey: string, productData: CartProduct | NDKEvent | string) => {
+		let productId: string
+		let sellerPubkey: string | undefined
+		let amount = 1
+
+		// Handle different input types
+		if (typeof productData === 'string') {
+			// If just an ID is provided
+			productId = productData
+			// We'll fetch the seller pubkey
+			try {
+				const pubkey = await getProductSellerPubkey(productId)
+				sellerPubkey = pubkey || undefined
+			} catch (error) {
+				console.error('Failed to fetch seller pubkey:', error)
+			}
+		} else if (productData instanceof NDKEvent) {
+			// If an NDK event is provided
+			productId = productData.id
+			sellerPubkey = productData.pubkey
+		} else {
+			// If a CartProduct object is provided
+			productId = productData.id
+			sellerPubkey = productData.sellerPubkey
+			amount = productData.amount
+		}
 
 		cartStore.setState((state) => {
 			const cart = { ...state.cart }
 			const { user } = cartActions.findOrCreateUserProduct(cart, userPubkey)
 
-			if (cart.products[product.id]) {
-				cart.products[product.id].amount = Math.min(cart.products[product.id].amount + product.amount, product.stockQuantity)
+			if (cart.products[productId]) {
+				// Simply update the amount
+				cart.products[productId].amount += amount
 			} else {
-				cart.products[product.id] = { ...product }
-				user.productIds.push(product.id)
+				// Add minimal product info
+				cart.products[productId] = {
+					id: productId,
+					amount: amount,
+					shippingMethodId: null,
+					shippingMethodName: null,
+					shippingCost: 0,
+					sellerPubkey,
+				}
+				user.productIds.push(productId)
 			}
 
 			cartActions.saveToStorage(cart)
@@ -214,7 +236,7 @@ export const cartActions = {
 			const cart = { ...state.cart }
 			const product = cart.products[productId]
 			if (product) {
-				product.amount = Math.min(amount, product.stockQuantity)
+				product.amount = amount
 			}
 			cartActions.saveToStorage(cart)
 			return { ...state, cart }
@@ -292,6 +314,7 @@ export const cartActions = {
 	},
 
 	handleProductUpdate: async (action: string, userPubkey: string, productId: string, amount?: number) => {
+		// First update the state synchronously
 		cartStore.setState((state) => {
 			const cart = { ...state.cart }
 			const user = cart.users[userPubkey]
@@ -299,7 +322,7 @@ export const cartActions = {
 			switch (action) {
 				case 'increment':
 					if (cart.products[productId]) {
-						cart.products[productId].amount = Math.min(cart.products[productId].amount + 1, cart.products[productId].stockQuantity)
+						cart.products[productId].amount += 1
 					}
 					break
 				case 'decrement':
@@ -336,7 +359,7 @@ export const cartActions = {
 								}
 							}
 						} else {
-							cart.products[productId].amount = Math.min(amount, cart.products[productId].stockQuantity)
+							cart.products[productId].amount = amount
 						}
 					}
 					break
@@ -357,6 +380,7 @@ export const cartActions = {
 			return { ...state, cart }
 		})
 
+		// Then update the cart totals asynchronously
 		await cartActions.updateCartTotals()
 	},
 
@@ -366,9 +390,9 @@ export const cartActions = {
 		return Math.round(amount * rate)
 	},
 
-	calculateProductTotal: (
+	calculateProductTotal: async (
 		productId: string,
-	): {
+	): Promise<{
 		subtotalInSats: number
 		shippingInSats: number
 		totalInSats: number
@@ -376,7 +400,7 @@ export const cartActions = {
 		shippingInCurrency: number
 		totalInCurrency: number
 		currency: string
-	} => {
+	}> => {
 		const state = cartStore.state
 		const product = state.cart.products[productId]
 
@@ -392,25 +416,48 @@ export const cartActions = {
 			}
 		}
 
-		const productTotalInCurrency = product.price * product.amount
-		const shippingCost = product.shippingCost || 0
+		try {
+			// Get product price information from the product query functions
+			const event = await getProductEvent(productId)
+			if (!event) {
+				throw new Error(`Product not found: ${productId}`)
+			}
 
-		// Use our simple conversion function
-		const productTotalInSats = cartActions.convertToSats(product.currency, productTotalInCurrency)
-		const shippingInSats = cartActions.convertToSats(product.currency, shippingCost)
+			const priceTag = getProductPrice(event)
+			const price = priceTag ? parseFloat(priceTag[1]) : 0
+			const currency = priceTag ? priceTag[2] : 'USD'
 
-		return {
-			subtotalInSats: productTotalInSats,
-			shippingInSats: shippingInSats,
-			totalInSats: productTotalInSats + shippingInSats,
-			subtotalInCurrency: productTotalInCurrency,
-			shippingInCurrency: shippingCost,
-			totalInCurrency: productTotalInCurrency + shippingCost,
-			currency: product.currency,
+			const productTotalInCurrency = price * product.amount
+			const shippingCost = product.shippingCost || 0
+
+			// Use our simple conversion function
+			const productTotalInSats = cartActions.convertToSats(currency, productTotalInCurrency)
+			const shippingInSats = cartActions.convertToSats(currency, shippingCost)
+
+			return {
+				subtotalInSats: productTotalInSats,
+				shippingInSats: shippingInSats,
+				totalInSats: productTotalInSats + shippingInSats,
+				subtotalInCurrency: productTotalInCurrency,
+				shippingInCurrency: shippingCost,
+				totalInCurrency: productTotalInCurrency + shippingCost,
+				currency: currency,
+			}
+		} catch (error) {
+			console.error(`Error calculating product total for ${productId}:`, error)
+			return {
+				subtotalInSats: 0,
+				shippingInSats: 0,
+				totalInSats: 0,
+				subtotalInCurrency: 0,
+				shippingInCurrency: 0,
+				totalInCurrency: 0,
+				currency: 'USD',
+			}
 		}
 	},
 
-	calculateUserTotal: (userPubkey: string): CartTotals | null => {
+	calculateUserTotal: async (userPubkey: string): Promise<CartTotals | null> => {
 		const state = cartStore.state
 		const user = state.cart.users[userPubkey]
 		if (!user) return null
@@ -420,9 +467,8 @@ export const cartActions = {
 		let totalInSats = 0
 		const currencyTotals: Record<string, { subtotal: number; shipping: number; total: number }> = {}
 
-		const productTotals = user.productIds.map((productId) => {
-			return cartActions.calculateProductTotal(productId)
-		})
+		// Use Promise.all to wait for all product totals
+		const productTotals = await Promise.all(user.productIds.map((productId) => cartActions.calculateProductTotal(productId)))
 
 		for (const productTotal of productTotals) {
 			subtotalInSats += productTotal.subtotalInSats
@@ -440,7 +486,7 @@ export const cartActions = {
 		return { subtotalInSats, shippingInSats, totalInSats, currencyTotals }
 	},
 
-	calculateGrandTotal: () => {
+	calculateGrandTotal: async () => {
 		const state = cartStore.state
 		if (Object.keys(state.cart.users).length === 0) {
 			return {
@@ -456,9 +502,12 @@ export const cartActions = {
 		let grandTotalInSats = 0
 		const currencyTotals: Record<string, { subtotal: number; shipping: number; total: number }> = {}
 
-		const userTotals = Object.keys(state.cart.users).map((userPubkey) => {
+		// Wait for all user totals
+		const userTotalsPromises = Object.keys(state.cart.users).map((userPubkey) => {
 			return cartActions.calculateUserTotal(userPubkey)
 		})
+
+		const userTotals = await Promise.all(userTotalsPromises)
 
 		for (const userTotal of userTotals) {
 			if (userTotal) {
@@ -558,7 +607,7 @@ export const cartActions = {
 	},
 
 	updateCartTotals: async () => {
-		const updateTotals = () => {
+		const updateTotals = async () => {
 			// Calculate cart total in sats
 			const state = cartStore.state
 			const userTotals: Record<string, number> = {}
@@ -568,9 +617,12 @@ export const cartActions = {
 					let userTotalSats = 0
 
 					for (const productId of user.productIds) {
-						const product = state.cart.products[productId]
-						const productTotal = cartActions.calculateProductTotal(productId)
-						userTotalSats += productTotal.totalInSats
+						try {
+							const productTotal = await cartActions.calculateProductTotal(productId)
+							userTotalSats += productTotal.totalInSats
+						} catch (error) {
+							console.error(`Error calculating total for product ${productId}:`, error)
+						}
 					}
 
 					userTotals[user.pubkey] = userTotalSats
@@ -586,7 +638,10 @@ export const cartActions = {
 		}
 
 		// Create a debounced version of updateTotals
-		const debouncedUpdate = debounce(updateTotals, 250)
+		const debouncedUpdate = debounce(() => {
+			updateTotals().catch((err) => console.error('Error in updateCartTotals:', err))
+		}, 250)
+
 		debouncedUpdate()
 	},
 
@@ -597,19 +652,31 @@ export const cartActions = {
 		}, 0)
 	},
 
-	calculateAmountsByCurrency: () => {
+	calculateAmountsByCurrency: async () => {
 		const state = cartStore.state
-		return Object.values(state.cart.products).reduce(
-			(acc, product) => {
-				const currency = product.currency
-				if (!acc[currency]) {
-					acc[currency] = 0
+		const result: Record<string, number> = {}
+
+		for (const product of Object.values(state.cart.products)) {
+			try {
+				const event = await getProductEvent(product.id)
+				if (!event) continue
+
+				const priceTag = getProductPrice(event)
+				if (!priceTag) continue
+
+				const currency = priceTag[2]
+				const price = parseFloat(priceTag[1])
+
+				if (!result[currency]) {
+					result[currency] = 0
 				}
-				acc[currency] += product.price * product.amount
-				return acc
-			},
-			{} as Record<string, number>,
-		)
+				result[currency] += price * product.amount
+			} catch (error) {
+				console.error(`Error getting product details for ${product.id}:`, error)
+			}
+		}
+
+		return result
 	},
 
 	getUserPubkey: () => {
@@ -618,15 +685,30 @@ export const cartActions = {
 		return Object.keys(state.cart.users)[0] || null
 	},
 
-	calculateProductSubtotal: (productId: string): { value: number; currency: string } => {
+	calculateProductSubtotal: async (productId: string): Promise<{ value: number; currency: string }> => {
 		const state = cartStore.state
 		const product = state.cart.products[productId]
 		if (!product) {
 			return { value: 0, currency: 'USD' }
 		}
-		return {
-			value: product.price * product.amount,
-			currency: product.currency,
+
+		try {
+			const event = await getProductEvent(productId)
+			if (!event) {
+				return { value: 0, currency: 'USD' }
+			}
+
+			const priceTag = getProductPrice(event)
+			const price = priceTag ? parseFloat(priceTag[1]) : 0
+			const currency = priceTag ? priceTag[2] : 'USD'
+
+			return {
+				value: price * product.amount,
+				currency: currency,
+			}
+		} catch (error) {
+			console.error(`Error calculating product subtotal for ${productId}:`, error)
+			return { value: 0, currency: 'USD' }
 		}
 	},
 
@@ -673,8 +755,14 @@ export const useCart = () => {
 	}
 }
 
-export async function handleAddToCart(userId: string, product: Partial<CartProduct> | NDKEvent | null) {
+export async function handleAddToCart(userId: string, product: Partial<CartProduct> | NDKEvent | string | null) {
 	if (!product) return false
+
+	// Handle string case (just ID)
+	if (typeof product === 'string') {
+		await cartActions.addProduct(userId, product)
+		return true
+	}
 
 	// Handle NDKEvent case
 	if (product instanceof NDKEvent) {
@@ -684,31 +772,52 @@ export async function handleAddToCart(userId: string, product: Partial<CartProdu
 
 	// Handle CartProduct case
 	if ('id' in product && product.id) {
-		const currentState = cartStore.state
-		const currentAmount = currentState.cart.products[product.id]?.amount || 0
-
-		const availableStock = product.stockQuantity ?? 0
-		const amountToAdd = Math.min(1, availableStock - currentAmount)
-
-		if (amountToAdd > 0 && product.price !== undefined && product.name !== undefined) {
-			await cartActions.addProduct(userId, {
-				id: product.id,
-				name: product.name,
-				amount: amountToAdd,
-				price: Number(product.price) || 0,
-				stockQuantity: availableStock,
-				images: product.images,
-				currency: product.currency as string,
-				shipping: product.shipping || [],
-				shippingMethodId: null,
-				shippingMethodName: null,
-				shippingCost: 0,
-				originalEventId: product.originalEventId,
-				sellerPubkey: product.sellerPubkey,
-			})
-			return true
+		// Create a complete CartProduct from the partial one
+		const cartProduct: CartProduct = {
+			id: product.id,
+			amount: product.amount || 1,
+			shippingMethodId: product.shippingMethodId || null,
+			shippingMethodName: product.shippingMethodName || null,
+			shippingCost: product.shippingCost || 0,
+			sellerPubkey: product.sellerPubkey,
 		}
+
+		await cartActions.addProduct(userId, cartProduct)
+		return true
 	}
 
 	return false
+}
+
+// New hook to access real-time cart totals
+export function useCartTotals() {
+	const { cart } = useCart()
+	const [totals, setTotals] = useState({
+		totalItems: 0,
+		subtotalByCurrency: {} as Record<string, number>,
+	})
+
+	// Create a signature to detect changes to cart amounts
+	const cartSignature = Object.values(cart.products)
+		.map((p) => `${p.id}:${p.amount}`)
+		.join(',')
+
+	useEffect(() => {
+		const calculateTotals = async () => {
+			// Get total item count
+			const itemCount = cartActions.calculateTotalItems()
+
+			// Get subtotals by currency
+			const subtotals = await cartActions.calculateAmountsByCurrency()
+
+			setTotals({
+				totalItems: itemCount,
+				subtotalByCurrency: subtotals,
+			})
+		}
+
+		calculateTotals()
+	}, [cartSignature, cart.products])
+
+	return totals
 }

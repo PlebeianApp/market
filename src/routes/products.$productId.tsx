@@ -107,25 +107,18 @@ function RouteComponent() {
 
 	// Handle adding product to cart
 	const handleAddToCartClick = async () => {
-		// Check if we have a valid product and quantity
-		if (!product || !price) return
+		// Check if we have a valid product
+		if (!product) return
 
-		// Create a cart product from the current product
-		const cartProduct = {
+		// Just add the product ID to the cart with the specified quantity
+		await cartActions.addProduct(pubkey, {
 			id: productId,
-			name: title,
-			amount: quantity, // This will actually be used now
-			price: price,
-			currency: priceTag ? priceTag[2] : 'USD',
-			stockQuantity: stock || 0,
-			images: formattedImages.map((img) => ({ url: img.url, alt: title })),
-			shipping: [], // We'll handle shipping options later
+			amount: quantity,
 			shippingMethodId: null,
 			shippingMethodName: null,
 			shippingCost: 0,
-		}
-
-		await cartActions.addProduct(pubkey, cartProduct)
+			sellerPubkey: pubkey,
+		})
 
 		// Open the cart drawer
 		uiActions.openDrawer('cart')
