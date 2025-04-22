@@ -1,16 +1,21 @@
 import { Button } from '@/components/ui/button'
-import { DrawerClose, DrawerContent, DrawerDescription, DrawerFooter, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
+import { SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetClose } from '@/components/ui/sheet'
 import { Input } from '@/components/ui/input'
 import { cartActions, cartStore } from '@/lib/stores/cart'
 import { useStore } from '@tanstack/react-store'
 import { Minus, Plus, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
 
-export default function CartDrawerContent() {
+export default function CartSheetContent() {
 	const { cart } = useStore(cartStore)
-	
-	// Track input quantity states for each product
+
 	const [quantities, setQuantities] = useState<Record<string, number>>({})
+	const [parent, enableAnimations] = useAutoAnimate()
+
+	useEffect(() => {
+		enableAnimations(true)
+	}, [parent, enableAnimations])
 
 	// Get calculated values from cart store
 	const totalItems = cartActions.calculateTotalItems()
@@ -42,30 +47,35 @@ export default function CartDrawerContent() {
 
 	if (Object.keys(cart.products).length === 0) {
 		return (
-			<DrawerContent>
+			<SheetContent side="right">
 				<div className="flex flex-col items-center justify-center h-full p-8 text-center">
-					<DrawerHeader>
-						<DrawerTitle>Your cart is empty</DrawerTitle>
-						<DrawerDescription>Looks like you haven't added any products to your cart yet.</DrawerDescription>
-					</DrawerHeader>
-					<DrawerFooter>
-						<DrawerClose asChild>
+					<SheetHeader>
+						<SheetTitle>Your cart is empty</SheetTitle>
+						<SheetDescription>Looks like you haven't added any products to your cart yet.</SheetDescription>
+					</SheetHeader>
+					<SheetFooter>
+						<SheetClose asChild>
 							<Button>Continue Shopping</Button>
-						</DrawerClose>
-					</DrawerFooter>
+						</SheetClose>
+					</SheetFooter>
 				</div>
-			</DrawerContent>
+			</SheetContent>
 		)
 	}
 
 	return (
-		<DrawerContent>
+		<SheetContent side="right" className="w-[400px] sm:w-[540px]">
+			<SheetHeader>
+				<SheetTitle>Your Cart</SheetTitle>
+				<SheetDescription>Review your items</SheetDescription>
+			</SheetHeader>
+
 			{/* Cart Items - Scrollable Area */}
-			<div className="flex-1 overflow-y-auto py-4 px-6">
-				<ul className="space-y-6">
+			<div className="flex-1 overflow-y-auto py-4 px-6 mt-6">
+				<ul className="space-y-6" ref={parent}>
 					{Object.values(cart.products).map((product) => {
 						const subtotal = cartActions.calculateProductSubtotal(product.id)
-						
+
 						return (
 							<li key={product.id} className="flex gap-4 pb-4 border-b">
 								{/* Product Image */}
@@ -100,7 +110,7 @@ export default function CartDrawerContent() {
 											>
 												<Minus size={14} />
 											</Button>
-											
+
 											<Input
 												type="number"
 												className="w-12 h-8 text-center p-0"
@@ -110,7 +120,7 @@ export default function CartDrawerContent() {
 												min={1}
 												max={product.stockQuantity}
 											/>
-											
+
 											<Button
 												variant="outline"
 												size="icon"
@@ -147,8 +157,8 @@ export default function CartDrawerContent() {
 			</div>
 
 			{/* Cart Footer */}
-			<DrawerFooter className="border-t p-6 bg-gray-50">
-				<div className="space-y-4">
+			<SheetFooter className="border-t p-6 bg-gray-50">
+				<div className="space-y-4 w-full">
 					{/* Subtotal per currency */}
 					<div className="space-y-2">
 						{Object.entries(amountsByCurrency).map(([currency, amount]) => (
@@ -168,14 +178,14 @@ export default function CartDrawerContent() {
 						<Button className="w-full" size="lg">
 							Checkout ({totalItems} {totalItems === 1 ? 'item' : 'items'})
 						</Button>
-						<DrawerClose asChild>
+						<SheetClose asChild>
 							<Button variant="outline" className="w-full">
 								Continue Shopping
 							</Button>
-						</DrawerClose>
+						</SheetClose>
 					</div>
 				</div>
-			</DrawerFooter>
-		</DrawerContent>
+			</SheetFooter>
+		</SheetContent>
 	)
 }

@@ -9,6 +9,7 @@
 		"generate-routes": "tsr generate",
 		"watch-routes": "tsr watch",
 		"dev": "bun --hot src/index.tsx --host 0.0.0.0",
+		"dev:seed": "bun run startup && bun run seed && bun --hot src/index.tsx --host 0.0.0.0",
 		"start": "NODE_ENV=production bun run generate-routes && bun src/index.tsx",
 		"build": "bun run generate-routes && bun run build.ts",
 		"format": "prettier --write .",

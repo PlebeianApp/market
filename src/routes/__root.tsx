@@ -1,9 +1,9 @@
 import { DecryptPasswordDialog } from '@/components/auth/DecryptPasswordDialog'
 import { LoginDialog } from '@/components/auth/LoginDialog'
-import { DrawerRegistry } from '@/components/DrawerRegistry'
 import { Footer } from '@/components/layout/Footer'
 import { Header } from '@/components/layout/Header'
 import { Pattern } from '@/components/pattern'
+import { SheetRegistry } from '@/components/SheetRegistry'
 import { useConfigQuery } from '@/queries/config'
 import { createRootRoute, Outlet, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
@@ -53,7 +53,7 @@ function RootLayout() {
 			{/* Having some build error with this rn */}
 			{/* <TanStackRouterDevtools /> */}
 			<DecryptPasswordDialog />
-			<DrawerRegistry />
+			<SheetRegistry />
 			<LoginDialog open={showLoginDialog} onOpenChange={setShowLoginDialog} />
 		</div>
 	)
