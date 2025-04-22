@@ -15,7 +15,7 @@ export function CartButton() {
 	}
 
 	return (
-		<Button variant="primary" className="p-2 relative rounded-md hover:[&>span]:text-secondary" onClick={handleClick}>
+		<Button variant="primary" className="p-2 relative" onClick={handleClick}>
 			<span className="i-basket w-6 h-6" />
 			{totalItems > 0 && (
 				<span className="absolute -top-1 -right-1 bg-secondary text-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
