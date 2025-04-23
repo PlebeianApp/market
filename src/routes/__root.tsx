@@ -3,6 +3,7 @@ import { LoginDialog } from '@/components/auth/LoginDialog'
 import { Footer } from '@/components/layout/Footer'
 import { Header } from '@/components/layout/Header'
 import { Pattern } from '@/components/pattern'
+import { SheetRegistry } from '@/components/SheetRegistry'
 import { useConfigQuery } from '@/queries/config'
 import { createRootRoute, Outlet, useNavigate } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
@@ -52,6 +53,7 @@ function RootLayout() {
 			{/* Having some build error with this rn */}
 			{/* <TanStackRouterDevtools /> */}
 			<DecryptPasswordDialog />
+			<SheetRegistry />
 			<LoginDialog open={showLoginDialog} onOpenChange={setShowLoginDialog} />
 		</div>
 	)

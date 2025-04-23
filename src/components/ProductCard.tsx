@@ -1,5 +1,7 @@
+import { cartActions } from '@/lib/stores/cart'
+import { ndkActions } from '@/lib/stores/ndk'
+import { getProductImages, getProductPrice, getProductStock, getProductTitle } from '@/queries/products'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
-import { getProductTitle, getProductImages, getProductPrice, getProductStock } from '@/queries/products'
 import { Link } from '@tanstack/react-router'
 import { Button } from './ui/button'
 import { ZapButton } from './ZapButton'
@@ -9,6 +11,12 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 	const images = getProductImages(product)
 	const price = getProductPrice(product)
 	const stock = getProductStock(product)
+
+	const handleAddToCart = async () => {
+		const userPubkey = await ndkActions.getUser()
+		if (!userPubkey) return
+		cartActions.addProduct(userPubkey.pubkey, product)
+	}
 
 	return (
 		<div className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col">
@@ -50,7 +58,9 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 
 				{/* Add to cart button */}
 				<div className="flex gap-2">
-					<Button className="bg-black text-white py-3 px-4 rounded-lg flex-grow font-medium">Add to Cart</Button>
+					<Button className="bg-black text-white py-3 px-4 rounded-lg flex-grow font-medium" onClick={handleAddToCart}>
+						Add to Cart
+					</Button>
 					<ZapButton event={product} />
 				</div>
 			</div>

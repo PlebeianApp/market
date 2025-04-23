@@ -1,4 +1,4 @@
-import { clsx, type ClassValue } from 'clsx'
+import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import { ndkActions } from './stores/ndk'
 import type { NDKUser } from '@nostr-dev-kit/ndk'
@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { HEX_KEYS_REGEX } from './constants'
 import { EMAIL_REGEX } from './constants'
 import { decode } from 'nostr-tools/nip19'
+
 export function cn(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs))
 }
@@ -92,5 +93,22 @@ export async function copyToClipboard(data: BlobPart, mimeType = 'text/plain') {
 	} catch (e) {
 		toast.error(`Error: ${e}`)
 		console.log(e)
+	}
+}
+
+export function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number): (...args: Parameters<F>) => Promise<ReturnType<F>> {
+	let timeout: ReturnType<typeof setTimeout> | null = null
+
+	return (...args: Parameters<F>): Promise<ReturnType<F>> => {
+		return new Promise((resolve) => {
+			if (timeout !== null) {
+				clearTimeout(timeout)
+			}
+
+			timeout = setTimeout(() => {
+				const result = func(...args)
+				resolve(result)
+			}, waitFor)
+		})
 	}
 }

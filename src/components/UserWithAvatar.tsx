@@ -1,0 +1,45 @@
+import { Nip05Badge } from './Nip05Badge'
+import { ProfileName } from './ProfileName'
+import { cn } from '@/lib/utils'
+import { useQuery } from '@tanstack/react-query'
+import { profileKeys } from '@/queries/queryKeyFactory'
+import { fetchProfileByIdentifier } from '@/queries/profiles'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+
+interface UserWithAvatarProps {
+	pubkey: string
+	className?: string
+	size?: 'sm' | 'md' | 'lg'
+	showBadge?: boolean
+}
+
+export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge = true }: UserWithAvatarProps) {
+	// Fetch the user's profile
+	const { data: profile, isLoading } = useQuery({
+		queryKey: profileKeys.details(pubkey),
+		queryFn: () => fetchProfileByIdentifier(pubkey),
+	})
+
+	// Determine avatar size
+	const avatarSizeClass = {
+		sm: 'h-6 w-6',
+		md: 'h-8 w-8',
+		lg: 'h-10 w-10',
+	}[size]
+
+	// Get first letter of name or use fallback
+	const nameInitial = profile?.name || profile?.displayName || pubkey.slice(0, 1).toUpperCase()
+
+	return (
+		<div className={cn('flex items-center gap-2', className)}>
+			<Avatar className={avatarSizeClass}>
+				<AvatarImage src={profile?.picture} />
+				<AvatarFallback>{nameInitial}</AvatarFallback>
+			</Avatar>
+			<div className="flex flex-col">
+				<ProfileName pubkey={pubkey} className="font-medium" truncate={true} />
+				{showBadge && <Nip05Badge userId={pubkey} />}
+			</div>
+		</div>
+	)
+}

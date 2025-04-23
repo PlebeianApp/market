@@ -104,6 +104,17 @@ export const productsByPubkeyQueryOptions = (pubkey: string) =>
 		queryFn: () => fetchProductsByPubkey(pubkey),
 	})
 
+/**
+ * React Query options for getting a product seller's pubkey
+ * @param id Product ID
+ * @returns Query options object
+ */
+export const productSellerQueryOptions = (id: string) =>
+	queryOptions({
+		queryKey: productKeys.seller(id),
+		queryFn: () => getProductSellerPubkey(id),
+	})
+
 // --- HELPER FUNCTIONS (DATA EXTRACTION) ---
 
 /**
@@ -263,6 +274,30 @@ export const getProductCreatedAt = (event: NDKEvent): number => event.created_at
  * @returns The pubkey (string)
  */
 export const getProductPubkey = (event: NDKEvent): string => event.pubkey
+
+/**
+ * Gets the event that created a product based on its ID
+ * @param id The product event ID
+ * @returns A promise that resolves to the NDKEvent or null if not found
+ */
+export const getProductEvent = async (id: string) => {
+	try {
+		return await fetchProduct(id)
+	} catch (error) {
+		console.error(`Failed to fetch product event: ${id}`, error)
+		return null
+	}
+}
+
+/**
+ * Gets the pubkey of the seller for a product
+ * @param id The product event ID
+ * @returns A promise that resolves to the seller's pubkey or null if not found
+ */
+export const getProductSellerPubkey = async (id: string) => {
+	const event = await getProductEvent(id)
+	return event ? event.pubkey : null
+}
 
 // --- REACT QUERY HOOKS ---
 
@@ -430,5 +465,16 @@ export const useProductPubkey = (id: string) => {
 export const useProductsByPubkey = (pubkey: string) => {
 	return useQuery({
 		...productsByPubkeyQueryOptions(pubkey),
+	})
+}
+
+/**
+ * Hook to get the seller's pubkey for a product
+ * @param id Product ID
+ * @returns Query result with the seller's pubkey
+ */
+export const useProductSeller = (id: string) => {
+	return useQuery({
+		...productSellerQueryOptions(id),
 	})
 }

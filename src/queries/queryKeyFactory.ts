@@ -2,6 +2,7 @@ export const productKeys = {
 	all: ['products'] as const,
 	details: (id: string) => [...productKeys.all, id] as const,
 	byPubkey: (pubkey: string) => [...productKeys.all, 'byPubkey', pubkey] as const,
+	seller: (id: string) => [...productKeys.all, 'seller', id] as const,
 } as const
 
 export const profileKeys = {
@@ -35,3 +36,11 @@ export const configKeys = {
 export const appSettingsKeys = {
 	all: ['appSettings'] as const,
 } as const
+
+export const currencyKeys = {
+	all: ['currency'] as const,
+	rates: () => [...currencyKeys.all, 'rates'] as const,
+	btc: () => [...currencyKeys.rates(), 'BTC'] as const,
+	forCurrency: (currency: string) => [...currencyKeys.rates(), currency] as const,
+	conversion: (currency: string, amount: number) => [...currencyKeys.all, 'conversion', currency, amount.toString()] as const,
+}

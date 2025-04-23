@@ -9,6 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { UserNameWithBadge } from '@/components/UserNameWithBadge'
 import { ZapButton } from '@/components/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
+import { cartActions, useCart } from '@/lib/stores/cart'
+import { uiActions } from '@/lib/stores/ui'
 import {
 	productQueryOptions,
 	productsByPubkeyQueryOptions,
@@ -49,8 +51,8 @@ export const Route = createFileRoute('/products/$productId')({
 
 function RouteComponent() {
 	const { productId } = Route.useLoaderData()
-
 	const { data: product } = useSuspenseQuery(productQueryOptions(productId))
+	const { cart } = useCart()
 
 	if (!product) {
 		return (
@@ -102,6 +104,25 @@ function RouteComponent() {
 
 	// Get location from tags if exists
 	const location = product.tags.find((t) => t[0] === 'location')?.[1]
+
+	// Handle adding product to cart
+	const handleAddToCartClick = async () => {
+		// Check if we have a valid product
+		if (!product) return
+
+		// Just add the product ID to the cart with the specified quantity
+		await cartActions.addProduct(pubkey, {
+			id: productId,
+			amount: quantity,
+			shippingMethodId: null,
+			shippingMethodName: null,
+			shippingCost: 0,
+			sellerPubkey: pubkey,
+		})
+
+		// Open the cart drawer
+		uiActions.openDrawer('cart')
+	}
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -168,7 +189,19 @@ function RouteComponent() {
 										<Button variant="tertiary" size="icon" onClick={() => setQuantity(Math.max(1, quantity - 1))} disabled={quantity <= 1}>
 											<Minus className="h-6 w-6" />
 										</Button>
-										<Input className="w-10 text-center text-black" value={quantity} />
+										<Input
+											className="w-12 text-center font-medium bg-white text-black"
+											value={quantity}
+											onChange={(e) => {
+												const value = parseInt(e.target.value)
+												if (!isNaN(value) && value > 0 && value <= (stock || Infinity)) {
+													setQuantity(value)
+												}
+											}}
+											min={1}
+											max={stock}
+											type="number"
+										/>
 										<Button
 											variant="tertiary"
 											size="icon"
@@ -177,7 +210,9 @@ function RouteComponent() {
 										>
 											<Plus className="h-6 w-6" />
 										</Button>
-										<Button variant="secondary">Add to cart</Button>
+										<Button variant="secondary" onClick={handleAddToCartClick} disabled={stock === 0}>
+											Add to cart
+										</Button>
 									</div>
 								</div>
 							)}
