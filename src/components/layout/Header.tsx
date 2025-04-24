@@ -7,13 +7,15 @@ import { Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { Loader2 } from 'lucide-react'
 import { CartButton } from '@/components/CartButton'
-type HeaderProps = {
-	onLoginClick: () => void
-}
+import { uiActions } from '@/lib/stores/ui'
 
-export function Header({ onLoginClick }: HeaderProps) {
+export function Header() {
 	const { data: config } = useConfigQuery()
 	const { isAuthenticated, isAuthenticating } = useStore(authStore)
+
+	function handleLoginClick() {
+		uiActions.openDialog('login')
+	}
 
 	return (
 		<header className="sticky top-0 z-30 bg-black py-4 text-white px-4">
@@ -80,7 +82,7 @@ export function Header({ onLoginClick }: HeaderProps) {
 								variant="primary"
 								className="p-2 relative rounded-md hover:[&>span]:text-secondary"
 								icon={<span className="i-account w-6 h-6" />}
-								onClick={onLoginClick}
+								onClick={handleLoginClick}
 							/>
 						)}
 					</div>

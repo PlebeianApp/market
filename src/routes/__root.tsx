@@ -1,12 +1,12 @@
-import { DecryptPasswordDialog } from '@/components/auth/DecryptPasswordDialog'
-import { LoginDialog } from '@/components/auth/LoginDialog'
 import { Footer } from '@/components/layout/Footer'
 import { Header } from '@/components/layout/Header'
 import { Pattern } from '@/components/pattern'
 import { SheetRegistry } from '@/components/SheetRegistry'
+import { DialogRegistry } from '@/components/DialogRegistry'
 import { useConfigQuery } from '@/queries/config'
 import { createRootRoute, Outlet, useNavigate } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
+import { DecryptPasswordDialog } from '@/components/auth/DecryptPasswordDialog'
 
 export const Route = createRootRoute({
 	component: RootComponent,
@@ -18,7 +18,6 @@ function RootComponent() {
 
 function RootLayout() {
 	const { data: config, isLoading, isError } = useConfigQuery()
-	const [showLoginDialog, setShowLoginDialog] = useState(false)
 	const navigate = useNavigate()
 	const isSetupPage = window.location.pathname === '/setup'
 
@@ -43,7 +42,7 @@ function RootLayout() {
 
 	return (
 		<div className="flex flex-col min-h-screen">
-			<Header onLoginClick={() => setShowLoginDialog(true)} />
+			<Header />
 
 			<main className="flex-grow">
 				<Outlet />
@@ -54,7 +53,7 @@ function RootLayout() {
 			{/* <TanStackRouterDevtools /> */}
 			<DecryptPasswordDialog />
 			<SheetRegistry />
-			<LoginDialog open={showLoginDialog} onOpenChange={setShowLoginDialog} />
+			<DialogRegistry />
 		</div>
 	)
 }

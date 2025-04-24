@@ -54,7 +54,7 @@ export default function CartSheetContent() {
 	}
 
 	return (
-		<SheetContent side="right" className="w-[400px] sm:w-[540px]">
+		<SheetContent side="right">
 			<SheetHeader>
 				<SheetTitle>Your Cart</SheetTitle>
 				<SheetDescription>Review your items</SheetDescription>

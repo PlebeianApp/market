@@ -1,4 +1,5 @@
 import CartSheetContent from '@/components/sheet-contents/CartSheetContent'
+import { NewProductContent } from '@/components/sheet-contents/NewProductContent'
 import { Sheet } from '@/components/ui/sheet'
 import { useStore } from '@tanstack/react-store'
 import { uiStore } from '@/lib/stores/ui'
@@ -22,7 +23,7 @@ export function SheetRegistry() {
 		},
 		createProduct: {
 			side: 'right' as const,
-			content: <>{/* Content will be refactored separately */}</>,
+			content: <NewProductContent />,
 		},
 	}
 

@@ -1,8 +1,10 @@
+// npub1s65ze2cck2fl20964t5vmjlw8alvgflal8uujv7mw7qqhd008zsqd2nnah
 export const devUser1 = {
 	pk: '86a82cab18b293f53cbaaae8cdcbee3f7ec427fdf9f9c933db77800bb5ef38a0',
 	sk: '5c81bffa8303bbd7726d6a5a1170f3ee46de2addabefd6a735845166af01f5c0',
 }
 
+// npub1m9p7jmtzd9dnrz5uqev280fl4740gsdqd8vtl5zde8lnn35uc7pqkxtwzu
 export const devUser2 = {
 	pk: 'd943e96d62695b318a9c0658a3bd3fafaaf441a069d8bfd04dc9ff39c69cc782',
 	sk: '08a475839723c79f2993ad000289670eb737d34bc9d72d43128f898713fc3fb3',
