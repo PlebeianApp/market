@@ -2,6 +2,7 @@ import { Store } from '@tanstack/store'
 import type { RichShippingInfo } from './cart'
 import { ProductImageTagSchema, ProductCategoryTagSchema } from '@/lib/schemas/productListing'
 import type { z } from 'zod'
+import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
 
 // TODO: is this right?
 export type Category = z.infer<typeof ProductCategoryTagSchema>
@@ -118,6 +119,80 @@ export const productFormActions = {
 			...state,
 			images,
 		}))
+	},
+
+	publishProduct: async (signer: NDKSigner, ndk: NDK): Promise<boolean> => {
+		const state = productFormStore.state
+
+		// Validate required fields
+		if (!state.name.trim()) {
+			console.error('Product name is required')
+			return false
+		}
+
+		if (!state.description.trim()) {
+			console.error('Product description is required')
+			return false
+		}
+
+		if (!state.price.trim() || isNaN(Number(state.price))) {
+			console.error('Valid product price is required')
+			return false
+		}
+
+		if (!state.quantity.trim() || isNaN(Number(state.quantity))) {
+			console.error('Valid product quantity is required')
+			return false
+		}
+
+		if (state.images.length === 0) {
+			console.error('At least one product image is required')
+			return false
+		}
+
+		// Generate unique product ID
+		const productId = `product_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+
+		// Transform images to the correct format
+		const imagesTags = state.images.map((img) => ['image', img.imageUrl, '800x600', img.imageOrder.toString()] as NDKTag)
+
+		// Transform categories to the correct format
+		const categoryTags = state.categories.filter((cat) => cat.checked && cat.name.trim() !== '').map((cat) => ['t', cat.name] as NDKTag)
+
+		// Create the product data in the format expected by Nostr
+		const productData = {
+			kind: 30402,
+			created_at: Math.floor(Date.now() / 1000),
+			content: state.description,
+			tags: [
+				['d', productId],
+				['title', state.name],
+				['price', state.price, state.currency],
+				['type', state.productType === 'single' ? 'simple' : 'variable', 'physical'],
+				['visibility', state.status],
+				['stock', state.quantity],
+				['summary', state.description],
+				...imagesTags,
+				...categoryTags,
+			] as NDKTag[],
+		}
+
+		// Create and publish the event
+		const event = new NDKEvent(ndk)
+		event.kind = productData.kind
+		event.content = productData.content
+		event.tags = productData.tags
+		event.created_at = productData.created_at
+
+		try {
+			await event.sign(signer)
+			await event.publish()
+			console.log(`Published product: ${state.name}`)
+			return true
+		} catch (error) {
+			console.error(`Failed to publish product`, error)
+			return false
+		}
 	},
 }
 

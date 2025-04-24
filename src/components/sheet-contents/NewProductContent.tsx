@@ -11,6 +11,7 @@ import { toast } from 'sonner'
 import { useStore } from '@tanstack/react-store'
 import { productFormStore, productFormActions } from '@/lib/stores/product'
 import { CURRENCIES } from '@/queries/external'
+import { ndkActions } from '@/lib/stores/ndk'
 
 function NameTab() {
 	const { name, description, productType } = useStore(productFormStore)
@@ -470,6 +471,7 @@ function ShippingTab() {
 
 export function NewProductContent() {
 	const [showForm, setShowForm] = useState(false)
+	const [isPublishing, setIsPublishing] = useState(false)
 
 	// Get form state from store
 	const { mainTab, productSubTab } = useStore(productFormStore)
@@ -479,12 +481,37 @@ export function NewProductContent() {
 		onSubmit: async () => {
 			try {
 				console.log('Submitting product data')
-				toast.success('Product created successfully!')
-				productFormActions.reset()
-				setShowForm(false)
+				setIsPublishing(true)
+
+				// Get NDK instance and signer
+				const ndk = ndkActions.getNDK()
+				const signer = ndkActions.getSigner()
+
+				if (!ndk) {
+					toast.error('NDK not initialized')
+					return
+				}
+
+				if (!signer) {
+					toast.error('You need to connect your wallet first')
+					return
+				}
+
+				// Publish product to Nostr
+				const success = await productFormActions.publishProduct(signer, ndk)
+
+				if (success) {
+					toast.success('Product published successfully!')
+					productFormActions.reset()
+					setShowForm(false)
+				} else {
+					toast.error('Failed to publish product')
+				}
 			} catch (error) {
 				console.error('Error creating product:', error)
 				toast.error('Failed to create product')
+			} finally {
+				setIsPublishing(false)
 			}
 		},
 	})
@@ -651,8 +678,13 @@ export function NewProductContent() {
 							<form.Subscribe
 								selector={(state) => [state.canSubmit, state.isSubmitting]}
 								children={([canSubmit, isSubmitting]) => (
-									<Button type="submit" variant="secondary" className="flex-1 uppercase" disabled={isSubmitting || !canSubmit}>
-										{isSubmitting ? 'Submitting...' : 'Save'}
+									<Button
+										type="submit"
+										variant="secondary"
+										className="flex-1 uppercase"
+										disabled={isSubmitting || isPublishing || !canSubmit}
+									>
+										{isSubmitting || isPublishing ? 'Publishing...' : 'Save'}
 									</Button>
 								)}
 							/>
