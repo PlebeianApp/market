@@ -44,3 +44,9 @@ export const currencyKeys = {
 	forCurrency: (currency: string) => [...currencyKeys.rates(), currency] as const,
 	conversion: (currency: string, amount: number) => [...currencyKeys.all, 'conversion', currency, amount.toString()] as const,
 }
+
+export const v4vKeys = {
+	all: ['v4v'] as const,
+	userShares: (pubkey: string) => [...v4vKeys.all, 'shares', pubkey] as const,
+	publishShare: () => [...v4vKeys.all, 'publish'] as const,
+} as const
