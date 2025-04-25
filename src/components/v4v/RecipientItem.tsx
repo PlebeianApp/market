@@ -44,7 +44,7 @@ export function RecipientItem({ share, onRemove, onPercentageChange }: Recipient
 	}
 
 	return (
-		<Collapsible open={isOpen} onOpenChange={setIsOpen} className="border rounded-md overflow-hidden">
+		<Collapsible open={isOpen} onOpenChange={setIsOpen} className="border rounded-md overflow-hidden border-l-4 border-l-pink-500">
 			<div className="flex items-center gap-2 p-3">
 				<UserWithAvatar pubkey={pubkey} size="sm" showBadge={false} />
 				<div className="flex-grow" />
@@ -55,7 +55,7 @@ export function RecipientItem({ share, onRemove, onPercentageChange }: Recipient
 					</Button>
 				</CollapsibleTrigger>
 				<Button variant="ghost" size="sm" onClick={() => onRemove(share.id)}>
-					<span className="i-hide w-5 h-5"></span>
+					<span className="i-delete w-5 h-5"></span>
 				</Button>
 			</div>
 			<CollapsibleContent>

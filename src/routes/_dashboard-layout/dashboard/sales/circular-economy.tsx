@@ -412,11 +412,7 @@ function CircularEconomyComponent() {
 
 				{/* Save button */}
 				<div className="mt-6">
-					<Button
-						className="w-full py-6 text-lg bg-yellow-400 hover:bg-yellow-500 text-black"
-						onClick={handleSave}
-						disabled={publishMutation.isPending}
-					>
+					<Button variant="focus" className="w-full" onClick={handleSave} disabled={publishMutation.isPending}>
 						{publishMutation.isPending ? 'Saving...' : 'Save'}
 					</Button>
 				</div>
