@@ -14,6 +14,7 @@ import { RecipientItem } from '@/components/v4v/RecipientItem'
 import { RecipientPreview } from '@/components/v4v/RecipientPreview'
 import { ProfileSearch } from '@/components/v4v/ProfileSearch'
 import { Slider } from '@/components/ui/slider'
+import './emoji-animations.css'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/circular-economy')({
 	component: CircularEconomyComponent,
@@ -32,26 +33,19 @@ function CircularEconomyComponent() {
 	const [newRecipientShare, setNewRecipientShare] = useState(10)
 	const [localShares, setLocalShares] = useState<V4VDTO[]>([])
 	const [isChecking, setIsChecking] = useState(false)
-	// Total V4V percentage (out of 100%) that goes to all recipients
 	const [totalV4VPercentage, setTotalV4VPercentage] = useState(10)
 
 	const { data: canReceiveZaps, isLoading: isCheckingZap } = useZapCapabilityByNpub(newRecipientNpub || '')
 
-	// Initialize local shares from fetched data
 	useEffect(() => {
 		if (v4vShares.length > 0) {
-			// Calculate the total percentage to normalize
 			const totalPercentage = v4vShares.reduce((total, share) => total + share.percentage, 0)
 
-			// We need to normalize the percentages to get the total V4V percentage
 			if (totalPercentage > 0) {
-				// Set the total V4V percentage based on the first recipient's raw percentage
 				setTotalV4VPercentage(Math.round(totalPercentage * 100))
 
-				// Normalize shares so they add up to 100% of the V4V portion
 				const normalizedShares = v4vShares.map((share) => ({
 					...share,
-					// When we save, we'll convert back to portions of the total
 					percentage: share.percentage / totalPercentage,
 				}))
 				setLocalShares(normalizedShares)
@@ -61,22 +55,29 @@ function CircularEconomyComponent() {
 		}
 	}, [v4vShares])
 
-	// Seller gets the remaining percentage
 	const sellerPercentage = 100 - totalV4VPercentage
 	const formattedSellerPercentage = sellerPercentage.toFixed(0)
 	const formattedTotalV4V = totalV4VPercentage.toFixed(0)
 
-	// Handle the total V4V percentage change
+	const v4vDecimal = totalV4VPercentage / 100
+	const emojiSize = 16 + v4vDecimal * 100
+	const shouldWiggle = v4vDecimal > 0.04
+	const shouldShake = v4vDecimal > 0.09
+	const shouldGlow = v4vDecimal > 0.14
+	let emojiClass = ''
+	if (shouldGlow) emojiClass = 'wiggle-shake-glow'
+	else if (shouldShake) emojiClass = 'wiggle-shake'
+	else if (shouldWiggle) emojiClass = 'wiggle'
+	const emoji = v4vDecimal > 0.14 ? '🤙' : v4vDecimal > 0.09 ? '🤙' : v4vDecimal > 0.04 ? '🤙' : v4vDecimal < 0.01 ? '💩' : '🎁'
+
 	const handleTotalV4VPercentageChange = (value: number[]) => {
 		setTotalV4VPercentage(value[0])
 	}
 
-	// Handle profile selection from search
 	const handleProfileSelect = (npub: string) => {
 		setNewRecipientNpub(npub)
 	}
 
-	// Handle adding a new recipient
 	const handleAddRecipient = async () => {
 		if (!newRecipientNpub) {
 			toast.error('Please enter a valid npub')
@@ -86,46 +87,37 @@ function CircularEconomyComponent() {
 		setIsChecking(true)
 
 		try {
-			// Check if recipient can receive zaps
 			if (!canReceiveZaps) {
 				toast.error('This user cannot receive zaps')
 				setIsChecking(false)
 				return
 			}
 
-			// Calculate percentages for V4V recipients
-			// If this is the first recipient, they get 100% of the V4V portion
-			// Otherwise, they get the specified percentage and we redistribute
 			let newSharePercentage = 0
 			let updatedShares = []
 
 			if (localShares.length === 0) {
-				// First recipient gets 100% of V4V
 				newSharePercentage = 1
 				updatedShares = [
 					{
 						id: `new-${Date.now()}`,
 						name: newRecipientNpub,
 						pubkey: newRecipientNpub,
-						percentage: newSharePercentage, // 100% of V4V portion
+						percentage: newSharePercentage,
 					},
 				]
 			} else {
-				// Convert input percentage to decimal for V4V portion
 				newSharePercentage = newRecipientShare / 100
 
-				// Calculate how much to reduce existing shares
 				const totalExistingPercentage = localShares.reduce((sum, share) => sum + share.percentage, 0)
 				const remainingPercentage = 1 - newSharePercentage
 				const ratio = remainingPercentage / totalExistingPercentage
 
-				// Update existing shares proportionally
 				updatedShares = localShares.map((share) => ({
 					...share,
 					percentage: share.percentage * ratio,
 				}))
 
-				// Add new recipient
 				updatedShares.push({
 					id: `new-${Date.now()}`,
 					name: newRecipientNpub,
@@ -136,7 +128,6 @@ function CircularEconomyComponent() {
 
 			setLocalShares(updatedShares)
 
-			// Reset input fields
 			setNewRecipientNpub('')
 			setNewRecipientShare(10)
 			setShowAddForm(false)
@@ -148,44 +139,34 @@ function CircularEconomyComponent() {
 		}
 	}
 
-	// Handle removing a recipient
 	const handleRemoveRecipient = (id: string) => {
-		// Get the share we're removing
 		const shareToRemove = localShares.find((share) => share.id === id)
 		if (!shareToRemove) return
 
-		// Calculate how to redistribute the percentage
 		const remainingShares = localShares.filter((share) => share.id !== id)
 
 		if (remainingShares.length === 0) {
-			// If no shares left, just clear the array
 			setLocalShares([])
 		} else {
-			// Redistribute the removed share's percentage proportionally
 			const totalRemainingPercentage = remainingShares.reduce((sum, share) => sum + share.percentage, 0)
 			const ratio = 1 / totalRemainingPercentage
 
-			// Update shares with redistributed percentages
 			const updatedShares = remainingShares.map((share) => ({
 				...share,
-				percentage: share.percentage * ratio, // Normalize to sum to 1
+				percentage: share.percentage * ratio,
 			}))
 
 			setLocalShares(updatedShares)
 		}
 	}
 
-	// Handle updating recipient percentage
 	const handleUpdatePercentage = (id: string, newPercentage: number) => {
-		// Find the share we're updating
 		const shareToUpdate = localShares.find((share) => share.id === id)
 		if (!shareToUpdate) return
 
-		// Calculate the change in percentage
 		const oldPercentage = shareToUpdate.percentage
 		const percentageDiff = newPercentage - oldPercentage
 
-		// If only one recipient, they always get 100%
 		if (localShares.length === 1) {
 			setLocalShares([
 				{
@@ -196,13 +177,10 @@ function CircularEconomyComponent() {
 			return
 		}
 
-		// For multiple recipients, redistribute the remaining percentage
 		const otherShares = localShares.filter((share) => share.id !== id)
 		const totalOtherPercentage = otherShares.reduce((sum, share) => sum + share.percentage, 0)
 
-		// Ensure we don't go below minimum values for other shares
 		if (totalOtherPercentage - percentageDiff <= 0.01 && percentageDiff > 0) {
-			// Set this share to maximum while ensuring others have minimum values
 			const minPerShare = 0.01
 			const totalMinForOthers = minPerShare * otherShares.length
 			const maxForUpdated = 1 - totalMinForOthers
@@ -215,24 +193,17 @@ function CircularEconomyComponent() {
 			return
 		}
 
-		// Maintain the original order of shares while updating percentages
 		const updatedShares = localShares.map((share) => {
 			if (share.id === id) {
-				// This is the share being updated directly
 				return { ...share, percentage: newPercentage }
 			} else {
-				// Other shares should be adjusted proportionally
-				// Calculate factor to reduce other shares by
 				const adjustmentFactor = (totalOtherPercentage - percentageDiff) / totalOtherPercentage
 				return { ...share, percentage: share.percentage * adjustmentFactor }
 			}
 		})
 
-		// Ensure the total is exactly 1 (100%)
 		const total = updatedShares.reduce((sum, share) => sum + share.percentage, 0)
 		if (Math.abs(total - 1) > 0.0001) {
-			// Small threshold for floating point errors
-			// Normalize to exactly 100%
 			const normalizedShares = updatedShares.map((share) => ({
 				...share,
 				percentage: share.percentage / total,
@@ -243,11 +214,24 @@ function CircularEconomyComponent() {
 		}
 	}
 
-	// Handle saving the V4V shares
 	const handleSave = async () => {
 		try {
-			// Convert normalized percentages (which add up to 1) back to actual percentages of the total
-			// If the total V4V is 10%, and a recipient has 50% of that, their actual percentage is 0.05
+			if (totalV4VPercentage === 0 || localShares.length === 0) {
+				const result = await publishMutation.mutateAsync({
+					shares: [],
+					userPubkey,
+					appPubkey,
+				})
+
+				if (result) {
+					toast.success('V4V shares cleared')
+					refetch()
+				} else {
+					toast.error('Failed to clear V4V shares')
+				}
+				return
+			}
+
 			const sharesToSave = localShares.map((share) => ({
 				...share,
 				percentage: share.percentage * (totalV4VPercentage / 100),
@@ -271,14 +255,13 @@ function CircularEconomyComponent() {
 		}
 	}
 
-	// Handle equalizing all shares
 	const handleEqualizeAll = () => {
 		if (localShares.length === 0) return
 
 		const equalShare = 1 / localShares.length
 		const updatedShares = localShares.map((share) => ({
 			...share,
-			percentage: equalShare, // Equal share of V4V percentage
+			percentage: equalShare,
 		}))
 
 		setLocalShares(updatedShares)
@@ -308,7 +291,21 @@ function CircularEconomyComponent() {
 						<span>Seller: {formattedSellerPercentage}%</span>
 						<span>V4V: {formattedTotalV4V}%</span>
 					</div>
-					<Slider value={[totalV4VPercentage]} min={1} max={100} step={1} onValueChange={handleTotalV4VPercentageChange} />
+					<Slider value={[totalV4VPercentage]} min={0} max={100} step={1} onValueChange={handleTotalV4VPercentageChange} />
+				</div>
+
+				{/* Emoji animation section */}
+				<div className="text-center my-8">
+					<div
+						className={`p-4 rounded-full bg-gray-200 inline-flex items-center justify-center ${emojiClass}`}
+						style={{
+							fontSize: `${emojiSize}px`,
+							width: `${emojiSize * 1.5}px`,
+							height: `${emojiSize * 1.5}px`,
+						}}
+					>
+						{emoji}
+					</div>
 				</div>
 
 				{/* First bar - Total split between seller and V4V */}
@@ -319,18 +316,20 @@ function CircularEconomyComponent() {
 					>
 						{formattedSellerPercentage}%
 					</div>
-					<div
-						className="bg-fuchsia-500 flex items-center justify-center text-white font-medium"
-						style={{ width: `${totalV4VPercentage}%` }}
-					>
-						V4V
-					</div>
+					{totalV4VPercentage > 0 && (
+						<div
+							className="bg-fuchsia-500 flex items-center justify-center text-white font-medium"
+							style={{ width: `${totalV4VPercentage}%` }}
+						>
+							V4V
+						</div>
+					)}
 				</div>
 
 				<h2 className="text-xl font-semibold mt-6">V4V split between recipients</h2>
 
 				{/* Second bar - Split between V4V recipients - always fills 100% of bar */}
-				{localShares.length > 0 ? (
+				{localShares.length > 0 && totalV4VPercentage > 0 ? (
 					<div className="w-full h-12 flex rounded-md overflow-hidden">
 						{localShares.map((share, index) => (
 							<div
@@ -390,7 +389,7 @@ function CircularEconomyComponent() {
 							<Button
 								className="flex-grow sm:flex-grow-0"
 								onClick={handleAddRecipient}
-								disabled={isChecking || isCheckingZap || !newRecipientNpub || !canReceiveZaps}
+								disabled={isChecking || isCheckingZap || !newRecipientNpub || !canReceiveZaps || totalV4VPercentage === 0}
 							>
 								+ V4V Recipient
 							</Button>
@@ -401,10 +400,10 @@ function CircularEconomyComponent() {
 					</div>
 				) : (
 					<div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
-						<Button variant="outline" onClick={() => setShowAddForm(true)}>
+						<Button variant="outline" onClick={() => setShowAddForm(true)} disabled={totalV4VPercentage === 0}>
 							+ V4V Recipient
 						</Button>
-						<Button variant="outline" onClick={handleEqualizeAll} disabled={localShares.length === 0}>
+						<Button variant="outline" onClick={handleEqualizeAll} disabled={localShares.length === 0 || totalV4VPercentage === 0}>
 							<span className="i-sharing w-5 h-5 mr-2"></span>
 							Equal All
 						</Button>
