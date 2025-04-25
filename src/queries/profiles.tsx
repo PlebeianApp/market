@@ -3,6 +3,7 @@ import { type NDKUserProfile, NDKUser } from '@nostr-dev-kit/ndk'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { profileKeys } from './queryKeyFactory'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { nip19 } from 'nostr-tools'
 
 export const fetchProfileByNpub = async (npub: string): Promise<NDKUserProfile | null> => {
 	const ndk = ndkActions.getNDK()
@@ -161,6 +162,42 @@ export const zapCapabilityQueryOptions = (event: NDKEvent | NDKUser) =>
 export const useZapCapability = (event: NDKEvent | NDKUser) => {
 	return useQuery({
 		...zapCapabilityQueryOptions(event),
+		select: (data) => data,
+	})
+}
+
+export const checkZapCapabilityByNpub = async (npub: string): Promise<boolean> => {
+	try {
+		const ndk = ndkActions.getNDK()
+		if (!ndk) throw new Error('NDK not initialized')
+		
+		// Convert npub to hex pubkey
+		const { data: pubkey } = nip19.decode(npub)
+		if (typeof pubkey !== 'string') {
+			throw new Error('Invalid npub format')
+		}
+		
+		// Create a user from the pubkey
+		const user = new NDKUser({ pubkey })
+		user.ndk = ndk
+		
+		// Check zap capability using existing function
+		return await checkZapCapability(user)
+	} catch (error) {
+		console.error('Error checking zap capability by npub:', error)
+		return false
+	}
+}
+
+export const zapCapabilityByNpubQueryOptions = (npub: string) =>
+	queryOptions({
+		queryKey: profileKeys.zapCapability(npub),
+		queryFn: () => checkZapCapabilityByNpub(npub),
+	})
+
+export const useZapCapabilityByNpub = (npub: string) => {
+	return useQuery({
+		...zapCapabilityByNpubQueryOptions(npub),
 		select: (data) => data,
 	})
 }
