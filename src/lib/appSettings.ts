@@ -31,7 +31,7 @@ export async function fetchAppSettings(relayUrl: string, appPubkey: string): Pro
 
 		return validatedSettings
 	} catch (error) {
-		console.error('Failed to parse or validate app settings:', error) 
+		console.error('Failed to parse or validate app settings:', error)
 		return null
 	}
 }

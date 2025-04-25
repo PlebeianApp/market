@@ -170,17 +170,17 @@ export const checkZapCapabilityByNpub = async (npub: string): Promise<boolean> =
 	try {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
-		
+
 		// Convert npub to hex pubkey
 		const { data: pubkey } = nip19.decode(npub)
 		if (typeof pubkey !== 'string') {
 			throw new Error('Invalid npub format')
 		}
-		
+
 		// Create a user from the pubkey
 		const user = new NDKUser({ pubkey })
 		user.ndk = ndk
-		
+
 		// Check zap capability using existing function
 		return await checkZapCapability(user)
 	} catch (error) {
