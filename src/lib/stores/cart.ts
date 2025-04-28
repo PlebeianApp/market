@@ -3,6 +3,7 @@ import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { debounce } from '../utils'
 import { useEffect, useState } from 'react'
+import { fetchV4VShares } from '@/queries/v4v'
 
 export interface ProductImage {
 	url: string
@@ -44,8 +45,7 @@ export interface RichShippingInfo {
 }
 
 export const v4VForUserQuery = async (userPubkey: string): Promise<V4VDTO[]> => {
-	// Mock implementation
-	return []
+	return fetchV4VShares(userPubkey)
 }
 
 export interface CartProduct {

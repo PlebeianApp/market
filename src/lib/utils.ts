@@ -25,6 +25,23 @@ export function getHexColorFingerprintFromHexPubkey(pubkey: string): string {
 	return `hsl(${hue}, 70%, 50%)`
 }
 
+export function getColorFromNpub(npub: string): string {
+	if (!isValidNpub(npub)) {
+		console.warn('Invalid npub provided to getColorFromNpub')
+		return 'hsl(0, 0%, 50%)' // Default gray color for invalid npubs
+	}
+
+	try {
+		const { data } = decode(npub)
+		if (typeof data === 'string' && isValidHexKey(data)) {
+			return getHexColorFingerprintFromHexPubkey(data)
+		}
+		return 'hsl(0, 0%, 50%)' // Fallback gray
+	} catch {
+		return 'hsl(0, 0%, 50%)' // Fallback gray
+	}
+}
+
 export function isValidNip05(input: string): boolean {
 	return EMAIL_REGEX.test(input)
 }
