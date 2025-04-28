@@ -13,6 +13,7 @@ import { productFormStore, productFormActions } from '@/lib/stores/product'
 import { CURRENCIES } from '@/queries/external'
 import { ndkActions } from '@/lib/stores/ndk'
 import { useNavigate } from '@tanstack/react-router'
+import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 
 // Helper function to check if form has been started
 function hasStartedFillingForm(formState: typeof productFormStore.state) {
@@ -356,37 +357,55 @@ function CategoryTab() {
 
 function ImagesTab() {
 	const { images } = useStore(productFormStore)
-	const [tempImageUrl, setTempImageUrl] = useState('')
+	// Just tracking if we need an uploader, not URLs
+	const [needsUploader, setNeedsUploader] = useState(true)
 
-	const addImage = () => {
-		if (tempImageUrl) {
+	const handleSaveImage = ({ url, index }: { url: string; index: number }) => {
+		if (index >= 0) {
+			// Update existing image
+			const newImages = [...images]
+			newImages[index] = { ...newImages[index], imageUrl: url }
+			productFormActions.updateImages(newImages)
+		} else {
+			// Add new image from a pending URL
 			productFormActions.updateImages([
 				...images,
 				{
-					imageUrl: tempImageUrl,
+					imageUrl: url,
 					imageOrder: images.length,
 				},
 			])
-			setTempImageUrl('')
+
+			// We always need a fresh uploader after saving
+			setNeedsUploader(true)
 		}
 	}
 
-	const removeImage = (index: number) => {
+	const handleDeleteImage = (index: number) => {
 		productFormActions.updateImages(images.filter((_, i) => i !== index).map((img, i) => ({ ...img, imageOrder: i })))
 	}
 
-	const moveImage = (currentIndex: number, direction: 'up' | 'down') => {
-		if ((direction === 'up' && currentIndex === 0) || (direction === 'down' && currentIndex === images.length - 1)) {
-			return
-		}
+	const handlePromoteImage = (index: number) => {
+		if (index <= 0) return
 
-		const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
 		const newImages = [...images]
+		// Swap positions
+		const temp = newImages[index]
+		newImages[index] = newImages[index - 1]
+		newImages[index - 1] = temp
 
-		// Swap images
-		const temp = newImages[currentIndex]
-		newImages[currentIndex] = newImages[targetIndex]
-		newImages[targetIndex] = temp
+		// Update orders
+		productFormActions.updateImages(newImages.map((img, i) => ({ ...img, imageOrder: i })))
+	}
+
+	const handleDemoteImage = (index: number) => {
+		if (index >= images.length - 1) return
+
+		const newImages = [...images]
+		// Swap positions
+		const temp = newImages[index]
+		newImages[index] = newImages[index + 1]
+		newImages[index + 1] = temp
 
 		// Update orders
 		productFormActions.updateImages(newImages.map((img, i) => ({ ...img, imageOrder: i })))
@@ -399,71 +418,30 @@ function ImagesTab() {
 			<div className="flex flex-col gap-4">
 				<Label>Image Upload</Label>
 
+				{/* Display existing saved images */}
 				{images.map((image, i) => (
-					<div
-						key={image.imageUrl}
-						className="border-2 border-dashed rounded-lg text-center relative flex items-center justify-center h-[300px]"
-						style={{
-							backgroundImage: `linear-gradient(rgba(29, 29, 29, 1), rgba(29, 29, 29, 1)), url(/images/image-bg-pattern.png)`,
-							backgroundBlendMode: 'overlay',
-						}}
-					>
-						<img
-							src={image.imageUrl}
-							alt={`Image ${i + 1}`}
-							className="max-h-full w-auto object-contain"
-							onError={(e) => {
-								;(e.target as HTMLImageElement).src = 'https://placehold.co/400x400/png?text=Image+Error'
-							}}
-						/>
-						<div className="absolute top-4 left-4 text-white">
-							<p className="text-lg font-semibold">{i === 0 ? 'Cover Image' : `Image ${i + 1}`}</p>
-						</div>
-						<div className="absolute left-4 bottom-4 flex gap-2">
-							<Button
-								type="button"
-								variant="outline"
-								size="icon"
-								onClick={() => moveImage(i, 'up')}
-								disabled={i === 0}
-								className="bg-white hover:bg-white/90"
-							>
-								<span className="i-up w-4 h-4" />
-							</Button>
-							<Button
-								type="button"
-								variant="outline"
-								size="icon"
-								onClick={() => moveImage(i, 'down')}
-								disabled={i === images.length - 1}
-								className="bg-white hover:bg-white/90"
-							>
-								<span className="i-down w-4 h-4" />
-							</Button>
-						</div>
-						<div className="absolute right-4 bottom-4">
-							<Button type="button" variant="outline" size="icon" onClick={() => removeImage(i)} className="bg-white hover:bg-white/90">
-								<span className="i-delete w-4 h-4" />
-							</Button>
-						</div>
-					</div>
+					<ImageUploader
+						src={image.imageUrl}
+						index={i}
+						imagesLength={images.length}
+						onSave={handleSaveImage}
+						onDelete={handleDeleteImage}
+						onPromote={handlePromoteImage}
+						onDemote={handleDemoteImage}
+					/>
 				))}
 
-				<div className="flex flex-col gap-2">
-					<Label>Set a remote image URL</Label>
-					<div className="flex gap-2">
-						<Input
-							type="text"
-							placeholder="https:// ... bear-1.png"
-							className="flex-1"
-							value={tempImageUrl}
-							onChange={(e) => setTempImageUrl(e.target.value)}
-						/>
-						<Button type="button" variant="secondary" onClick={addImage}>
-							Save
-						</Button>
-					</div>
-				</div>
+				{/* Empty image uploader - always just show one */}
+				{needsUploader && (
+					<ImageUploader
+						src={null}
+						index={-1}
+						imagesLength={0}
+						onSave={handleSaveImage}
+						onDelete={() => setNeedsUploader(false)}
+						initialUrl=""
+					/>
+				)}
 			</div>
 		</div>
 	)
