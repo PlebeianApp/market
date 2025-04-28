@@ -28,6 +28,7 @@ export interface ProductFormState {
 	currency: string
 	status: 'hidden' | 'on-sale' | 'pre-order'
 	productType: 'single' | 'variable'
+	spec: string
 	categories: Array<{ key: string; name: string; checked: boolean }>
 	images: Array<{ imageUrl: string; imageOrder: number }>
 	shippings: ProductShippingForm[]
@@ -43,6 +44,7 @@ export const DEFAULT_FORM_STATE: ProductFormState = {
 	currency: 'SATS',
 	status: 'hidden',
 	productType: 'single',
+	spec: '',
 	categories: [],
 	images: [],
 	shippings: [],
@@ -121,7 +123,7 @@ export const productFormActions = {
 		}))
 	},
 
-	publishProduct: async (signer: NDKSigner, ndk: NDK): Promise<boolean> => {
+	publishProduct: async (signer: NDKSigner, ndk: NDK): Promise<boolean | string> => {
 		const state = productFormStore.state
 
 		// Validate required fields
@@ -188,7 +190,7 @@ export const productFormActions = {
 			await event.sign(signer)
 			await event.publish()
 			console.log(`Published product: ${state.name}`)
-			return true
+			return event.id // Return the event ID on success
 		} catch (error) {
 			console.error(`Failed to publish product`, error)
 			return false

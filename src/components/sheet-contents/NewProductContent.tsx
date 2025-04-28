@@ -12,9 +12,24 @@ import { useStore } from '@tanstack/react-store'
 import { productFormStore, productFormActions } from '@/lib/stores/product'
 import { CURRENCIES } from '@/queries/external'
 import { ndkActions } from '@/lib/stores/ndk'
+import { useNavigate } from '@tanstack/react-router'
+
+// Helper function to check if form has been started
+function hasStartedFillingForm(formState: typeof productFormStore.state) {
+	// Check if any essential fields have been filled
+	return !!(
+		formState.name ||
+		formState.description ||
+		formState.price ||
+		formState.quantity ||
+		formState.spec ||
+		formState.categories.length > 0 ||
+		formState.images.length > 0
+	)
+}
 
 function NameTab() {
-	const { name, description, productType } = useStore(productFormStore)
+	const { productType } = useStore(productFormStore)
 
 	const form = useForm({
 		defaultValues: {
@@ -267,6 +282,7 @@ function DetailTab() {
 	)
 }
 
+// TODO: we need to discuss categories more I think?
 function CategoryTab() {
 	const { categories } = useStore(productFormStore)
 
@@ -378,6 +394,8 @@ function ImagesTab() {
 
 	return (
 		<div className="space-y-4">
+			<p className="text-gray-600">We recommend using square images of 1600x1600 and under 2mb.</p>
+
 			<div className="flex flex-col gap-4">
 				<Label>Image Upload</Label>
 
@@ -469,12 +487,37 @@ function ShippingTab() {
 	)
 }
 
+function SpecTab() {
+	const { spec } = useStore(productFormStore)
+
+	return (
+		<div className="space-y-4">
+			<div className="grid w-full gap-1.5">
+				<Label>Specifications</Label>
+				<textarea
+					className="border-2 min-h-24 p-2 rounded-md"
+					placeholder="e.g 10 Kg, 30x40cm"
+					value={spec}
+					onChange={(e) => productFormActions.updateValues({ spec: e.target.value })}
+				/>
+				<p className="text-xs text-gray-500">Enter product specifications like weight, dimensions, etc.</p>
+			</div>
+		</div>
+	)
+}
+
 export function NewProductContent() {
-	const [showForm, setShowForm] = useState(false)
 	const [isPublishing, setIsPublishing] = useState(false)
+	const navigate = useNavigate()
 
 	// Get form state from store
-	const { mainTab, productSubTab } = useStore(productFormStore)
+	const formState = useStore(productFormStore)
+	const { mainTab, productSubTab } = formState
+
+	// Check if the user has started filling in the form
+	const hasStartedForm = hasStartedFillingForm(formState)
+	// For now, we only check if form has been started since we don't track user products yet
+	const [showForm, setShowForm] = useState(hasStartedForm)
 
 	const form = useForm({
 		defaultValues: {},
@@ -498,12 +541,26 @@ export function NewProductContent() {
 				}
 
 				// Publish product to Nostr
-				const success = await productFormActions.publishProduct(signer, ndk)
+				const result = await productFormActions.publishProduct(signer, ndk)
 
-				if (success) {
+				if (result) {
 					toast.success('Product published successfully!')
 					productFormActions.reset()
 					setShowForm(false)
+
+					// Navigate to the product page if we have an event ID
+					if (typeof result === 'string') {
+						// Close any open modal/sheet first
+						document.body.dispatchEvent(
+							new KeyboardEvent('keydown', {
+								key: 'Escape',
+								bubbles: true,
+							}),
+						)
+
+						// Navigate to the product page
+						navigate({ to: `/products/${result}` })
+					}
 				} else {
 					toast.error('Failed to publish product')
 				}
@@ -639,13 +696,7 @@ export function NewProductContent() {
 								</TabsContent>
 
 								<TabsContent value="spec" className="mt-4">
-									<div className="space-y-4">
-										<div className="grid w-full gap-1.5">
-											<Label>Specifications</Label>
-											<textarea className="border-2 min-h-24 p-2 rounded-md" placeholder="e.g 10 Kg, 30x40cm" />
-											<p className="text-xs text-gray-500">Enter product specifications like weight, dimensions, etc.</p>
-										</div>
-									</div>
+									<SpecTab />
 								</TabsContent>
 
 								<TabsContent value="category" className="mt-4">
