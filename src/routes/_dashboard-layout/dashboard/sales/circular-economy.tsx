@@ -376,22 +376,19 @@ function CircularEconomyComponent() {
 								/>
 							)}
 						</div>
-						<div className="flex flex-wrap gap-2 items-center">
-							<div className="w-20">
-								<Input
-									type="number"
-									min="1"
-									max="100"
-									value={newRecipientShare}
-									onChange={(e) => setNewRecipientShare(Number(e.target.value))}
-								/>
+						<div className="space-y-2">
+							<div className="flex justify-between text-sm text-muted-foreground">
+								<span>Share percentage: {newRecipientShare}%</span>
 							</div>
+							<Slider value={[newRecipientShare]} min={1} max={100} step={1} onValueChange={(value) => setNewRecipientShare(value[0])} />
+						</div>
+						<div className="flex flex-wrap gap-2 items-center">
 							<Button
 								className="flex-grow sm:flex-grow-0"
 								onClick={handleAddRecipient}
 								disabled={isChecking || isCheckingZap || !newRecipientNpub || !canReceiveZaps || totalV4VPercentage === 0}
 							>
-								+ V4V Recipient
+								Add
 							</Button>
 							<Button variant="outline" onClick={() => setShowAddForm(false)}>
 								Cancel
