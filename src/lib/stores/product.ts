@@ -28,6 +28,7 @@ export interface ProductFormState {
 	currency: string
 	status: 'hidden' | 'on-sale' | 'pre-order'
 	productType: 'single' | 'variable'
+	mainCategory: string | null
 	spec: string
 	categories: Array<{ key: string; name: string; checked: boolean }>
 	images: Array<{ imageUrl: string; imageOrder: number }>
@@ -44,6 +45,7 @@ export const DEFAULT_FORM_STATE: ProductFormState = {
 	currency: 'SATS',
 	status: 'hidden',
 	productType: 'single',
+	mainCategory: null,
 	spec: '',
 	categories: [],
 	images: [],
@@ -152,6 +154,11 @@ export const productFormActions = {
 			return false
 		}
 
+		if (!state.mainCategory) {
+			console.error('Main category is required')
+			return false
+		}
+
 		// Generate unique product ID
 		const productId = `product_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
 
@@ -159,7 +166,18 @@ export const productFormActions = {
 		const imagesTags = state.images.map((img) => ['image', img.imageUrl, '800x600', img.imageOrder.toString()] as NDKTag)
 
 		// Transform categories to the correct format
-		const categoryTags = state.categories.filter((cat) => cat.checked && cat.name.trim() !== '').map((cat) => ['t', cat.name] as NDKTag)
+		// Main category goes first, then sub-categories
+		const categoryTags = []
+		
+		// Add main category
+		categoryTags.push(['t', state.mainCategory] as NDKTag)
+		
+		// Add sub categories
+		state.categories
+			.filter((cat) => cat.checked && cat.name.trim() !== '')
+			.forEach((cat) => {
+				categoryTags.push(['t', cat.name] as NDKTag)
+			})
 
 		// Create the product data in the format expected by Nostr
 		const productData = {

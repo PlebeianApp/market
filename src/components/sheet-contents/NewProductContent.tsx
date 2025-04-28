@@ -283,73 +283,138 @@ function DetailTab() {
 	)
 }
 
-// TODO: we need to discuss categories more I think?
 function CategoryTab() {
-	const { categories } = useStore(productFormStore)
+	const { categories, mainCategory } = useStore(productFormStore)
 
-	const addCategory = () => {
+	// Available main categories
+	// TODO: define this somewhere globally
+	const mainCategories = [
+		"Bitcoin",
+		"Art",
+		"Clothing",
+		"Food & Drink",
+		"Home & Technology",
+		"Health & Beauty",
+		"Sports & Outside",
+		"Services",
+		"Other"
+	]
+
+	// Handle main category selection
+	const handleMainCategorySelect = (value: string) => {
+		productFormActions.updateValues({ mainCategory: value })
+	}
+
+	// Handle adding a new sub category
+	const addSubCategory = () => {
 		productFormActions.updateCategories([
 			...categories,
 			{
 				key: `category-${Date.now()}`,
 				name: '',
 				checked: true,
-			},
+			}
 		])
 	}
 
-	const updateCategory = (index: number, name: string) => {
+	// Handle removing a sub category
+	const removeSubCategory = (index: number) => {
+		productFormActions.updateCategories(categories.filter((_, i) => i !== index))
+	}
+
+	// Update category name
+	const updateCategoryName = (index: number, name: string) => {
 		const newCategories = [...categories]
 		newCategories[index] = { ...newCategories[index], name }
 		productFormActions.updateCategories(newCategories)
 	}
 
-	const removeCategory = (index: number) => {
-		productFormActions.updateCategories(categories.filter((_, i) => i !== index))
-	}
-
-	const toggleCategoryChecked = (index: number, checked: boolean) => {
-		const newCategories = [...categories]
-		newCategories[index] = { ...newCategories[index], checked }
-		productFormActions.updateCategories(newCategories)
-	}
-
 	return (
 		<div className="space-y-4">
-			<div className="flex justify-between items-center">
-				<Label>Categories</Label>
-				{/* TODO: add categories */}
-				<Button type="button" variant="outline" onClick={addCategory} disabled>
-					Add Category
-				</Button>
+			<div className="grid w-full gap-1.5">
+				<Label>
+					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Main Category</span>
+				</Label>
+				<Select 
+					value={mainCategory || ''} 
+					onValueChange={handleMainCategorySelect}
+				>
+					<SelectTrigger className="border-2">
+						<SelectValue placeholder="Select a Main Category" />
+					</SelectTrigger>
+					<SelectContent>
+						{mainCategories.map((category) => (
+							<SelectItem key={category} value={category}>
+								{category}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
 			</div>
 
-			{categories.length === 0 ? (
-				<div className="text-center text-gray-500 my-8">
-					<p>No categories added yet.</p>
-					<p>Click the button above to add your first category.</p>
-				</div>
-			) : (
-				<div className="space-y-2">
-					{categories.map((category, index) => (
-						<div key={category.key} className="flex items-center space-x-2">
-							<Checkbox
-								id={`category-${index}`}
-								checked={category.checked}
-								onCheckedChange={(checked) => toggleCategoryChecked(index, !!checked)}
-							/>
-							<Input
-								value={category.name}
-								onChange={(e) => updateCategory(index, e.target.value)}
-								className="flex-1"
-								placeholder="Category name"
-							/>
-							<Button type="button" variant="destructive" onClick={() => removeCategory(index)}>
-								Remove
-							</Button>
+			{mainCategory && (
+				<>
+					<p className="text-gray-600">
+						Pick a sub category that better represents the nature of your product
+					</p>
+
+					{categories.length > 0 && (
+						<div className="space-y-2">
+							{categories.map((category, index) => (
+								<div key={category.key} className="grid w-full gap-1.5">
+									<Label>{index === 0 ? 'Sub Category 1' : `Sub Category ${index + 1}`}</Label>
+									<div className="relative">
+										<Input
+											value={category.name}
+											onChange={(e) => updateCategoryName(index, e.target.value)}
+											className="flex-1 border-2 pr-10"
+											placeholder="e.g Bitcoin Miners"
+										/>
+										<Button 
+											type="button" 
+											variant="ghost" 
+											className="absolute right-0 top-0 h-full px-2 text-black"
+											onClick={() => removeSubCategory(index)}
+										>
+											<span className="i-delete w-5 h-5"></span>
+										</Button>
+									</div>
+								</div>
+							))}
 						</div>
-					))}
-				</div>
+					)}
+
+					{categories.length === 0 && (
+						<div className="grid w-full gap-1.5">
+							<Label>Sub Category 1</Label>
+							<Input
+								className="flex-1 border-2"
+								placeholder="e.g Bitcoin Miners"
+								value=""
+								onChange={(e) => {
+									// If there are no categories yet, add one when user starts typing
+									if (e.target.value) {
+										productFormActions.updateCategories([{
+											key: `category-${Date.now()}`,
+											name: e.target.value,
+											checked: true,
+										}])
+									}
+								}}
+							/>
+						</div>
+					)}
+
+					<Button 
+						type="button" 
+						variant="outline" 
+						className="w-full flex gap-2 justify-center mt-4" 
+						onClick={addSubCategory}
+					>
+						<span className="i-plus w-5 h-5"></span>
+						New Sub Category
+					</Button>
+				</>
 			)}
 		</div>
 	)
