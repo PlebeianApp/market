@@ -55,6 +55,16 @@ function CircularEconomyComponent() {
 		}
 	}, [v4vShares])
 
+	useEffect(() => {
+		if (showAddForm) {
+			if (localShares.length === 0) {
+				setNewRecipientShare(100)
+			} else {
+				setNewRecipientShare(10)
+			}
+		}
+	}, [showAddForm, localShares.length])
+
 	const sellerPercentage = 100 - totalV4VPercentage
 	const formattedSellerPercentage = sellerPercentage.toFixed(0)
 	const formattedTotalV4V = totalV4VPercentage.toFixed(0)
@@ -380,7 +390,14 @@ function CircularEconomyComponent() {
 							<div className="flex justify-between text-sm text-muted-foreground">
 								<span>Share percentage: {newRecipientShare}%</span>
 							</div>
-							<Slider value={[newRecipientShare]} min={1} max={100} step={1} onValueChange={(value) => setNewRecipientShare(value[0])} />
+							<Slider
+								value={[newRecipientShare]}
+								min={1}
+								max={100}
+								step={1}
+								onValueChange={(value) => setNewRecipientShare(value[0])}
+								disabled={localShares.length === 0}
+							/>
 						</div>
 						<div className="flex flex-wrap gap-2 items-center">
 							<Button
