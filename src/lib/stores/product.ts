@@ -168,10 +168,10 @@ export const productFormActions = {
 		// Transform categories to the correct format
 		// Main category goes first, then sub-categories
 		const categoryTags = []
-		
+
 		// Add main category
 		categoryTags.push(['t', state.mainCategory] as NDKTag)
-		
+
 		// Add sub categories
 		state.categories
 			.filter((cat) => cat.checked && cat.name.trim() !== '')

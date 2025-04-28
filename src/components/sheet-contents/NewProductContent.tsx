@@ -289,15 +289,15 @@ function CategoryTab() {
 	// Available main categories
 	// TODO: define this somewhere globally
 	const mainCategories = [
-		"Bitcoin",
-		"Art",
-		"Clothing",
-		"Food & Drink",
-		"Home & Technology",
-		"Health & Beauty",
-		"Sports & Outside",
-		"Services",
-		"Other"
+		'Bitcoin',
+		'Art',
+		'Clothing',
+		'Food & Drink',
+		'Home & Technology',
+		'Health & Beauty',
+		'Sports & Outside',
+		'Services',
+		'Other',
 	]
 
 	// Handle main category selection
@@ -313,7 +313,7 @@ function CategoryTab() {
 				key: `category-${Date.now()}`,
 				name: '',
 				checked: true,
-			}
+			},
 		])
 	}
 
@@ -335,10 +335,7 @@ function CategoryTab() {
 				<Label>
 					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Main Category</span>
 				</Label>
-				<Select 
-					value={mainCategory || ''} 
-					onValueChange={handleMainCategorySelect}
-				>
+				<Select value={mainCategory || ''} onValueChange={handleMainCategorySelect}>
 					<SelectTrigger className="border-2">
 						<SelectValue placeholder="Select a Main Category" />
 					</SelectTrigger>
@@ -354,9 +351,7 @@ function CategoryTab() {
 
 			{mainCategory && (
 				<>
-					<p className="text-gray-600">
-						Pick a sub category that better represents the nature of your product
-					</p>
+					<p className="text-gray-600">Pick a sub category that better represents the nature of your product</p>
 
 					{categories.length > 0 && (
 						<div className="space-y-2">
@@ -370,9 +365,9 @@ function CategoryTab() {
 											className="flex-1 border-2 pr-10"
 											placeholder="e.g Bitcoin Miners"
 										/>
-										<Button 
-											type="button" 
-											variant="ghost" 
+										<Button
+											type="button"
+											variant="ghost"
 											className="absolute right-0 top-0 h-full px-2 text-black"
 											onClick={() => removeSubCategory(index)}
 										>
@@ -394,23 +389,20 @@ function CategoryTab() {
 								onChange={(e) => {
 									// If there are no categories yet, add one when user starts typing
 									if (e.target.value) {
-										productFormActions.updateCategories([{
-											key: `category-${Date.now()}`,
-											name: e.target.value,
-											checked: true,
-										}])
+										productFormActions.updateCategories([
+											{
+												key: `category-${Date.now()}`,
+												name: e.target.value,
+												checked: true,
+											},
+										])
 									}
 								}}
 							/>
 						</div>
 					)}
 
-					<Button 
-						type="button" 
-						variant="outline" 
-						className="w-full flex gap-2 justify-center mt-4" 
-						onClick={addSubCategory}
-					>
+					<Button type="button" variant="outline" className="w-full flex gap-2 justify-center mt-4" onClick={addSubCategory}>
 						<span className="i-plus w-5 h-5"></span>
 						New Sub Category
 					</Button>
@@ -651,7 +643,7 @@ export function NewProductContent() {
 	}
 
 	return (
-		<SheetContent side="right">
+		<SheetContent side="right" className="flex flex-col max-h-screen overflow-hidden">
 			<SheetHeader>
 				<SheetTitle className="text-center">Add A Product</SheetTitle>
 				<SheetDescription className="hidden">Create a new product to sell in your shop</SheetDescription>
@@ -663,7 +655,7 @@ export function NewProductContent() {
 					e.stopPropagation()
 					form.handleSubmit()
 				}}
-				className="flex flex-col h-full"
+				className="flex flex-col h-full overflow-hidden"
 			>
 				<div className="flex-1 overflow-y-auto py-4 px-6">
 					{/* Main Tabs: Product and Shipping */}
@@ -759,7 +751,7 @@ export function NewProductContent() {
 					</Tabs>
 				</div>
 
-				<SheetFooter className="p-6">
+				<SheetFooter className="p-6 mt-auto sticky bottom-0 bg-white">
 					<div className="flex gap-2 w-full">
 						{(productSubTab !== 'name' || mainTab === 'shipping') && (
 							<Button type="button" variant="outline" className="flex-1 gap-2 uppercase" onClick={productFormActions.previousTab}>

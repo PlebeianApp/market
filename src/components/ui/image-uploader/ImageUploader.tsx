@@ -209,11 +209,11 @@ export function ImageUploader({
               
               <div className="absolute bottom-2 right-2 flex gap-2">
                 {inputEditable && (
-                  <Button variant="outline" size="icon" className="bg-white" onClick={handleEditByUpload}>
+                  <Button type="button" variant="outline" size="icon" className="bg-white" onClick={handleEditByUpload}>
                     <span className="i-upload w-6 h-6" />
                   </Button>
                 )}
-                <Button variant="outline" size="icon" className="bg-white" onClick={() => onDelete(index)}>
+                <Button type="button" variant="outline" size="icon" className="bg-white" onClick={() => onDelete(index)}>
                   <span className="i-delete w-4 h-4" />
                 </Button>
               </div>
@@ -221,6 +221,7 @@ export function ImageUploader({
               {index !== -1 && (
                 <div className="absolute left-2 bottom-2 flex flex-row gap-2">
                   <Button 
+                    type="button"
                     variant="outline" 
                     size="icon" 
                     className="bg-white"
@@ -230,6 +231,7 @@ export function ImageUploader({
                     <span className="i-up w-4 h-4" />
                   </Button>
                   <Button 
+                    type="button"
                     variant="outline" 
                     size="icon" 
                     className="bg-white"
@@ -275,6 +277,7 @@ export function ImageUploader({
             {localSrc ? (
               inputEditable ? (
                 <Button 
+                  type="button"
                   variant="primary" 
                   className="absolute right-1 top-1 bottom-1 h-10" 
                   onClick={handleSaveImage}
@@ -283,6 +286,7 @@ export function ImageUploader({
                 </Button>
               ) : (
                 <Button 
+                  type="button"
                   variant="outline" 
                   className="absolute right-1 top-1 bottom-1 h-10 bg-white" 
                   onClick={() => setInputEditable(true)}
@@ -292,6 +296,7 @@ export function ImageUploader({
               )
             ) : (
               <Button 
+                type="button"
                 variant="primary" 
                 className="absolute right-1 top-1 bottom-1 h-10" 
                 onClick={handleSaveImage}
