@@ -1,19 +1,20 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { Button } from '@/components/ui/button'
-import { useV4VShares, usePublishV4VShares } from '@/queries/v4v'
-import { useConfigQuery } from '@/queries/config'
-import { useState, useEffect } from 'react'
-import { Input } from '@/components/ui/input'
-import { useZapCapabilityByNpub } from '@/queries/profiles'
-import { toast } from 'sonner'
-import type { V4VDTO } from '@/lib/stores/cart'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { authStore } from '@/lib/stores/auth'
-import { useStore } from '@tanstack/react-store'
+import { Button } from '@/components/ui/button'
+import { Slider } from '@/components/ui/slider'
+import { ProfileSearch } from '@/components/v4v/ProfileSearch'
 import { RecipientItem } from '@/components/v4v/RecipientItem'
 import { RecipientPreview } from '@/components/v4v/RecipientPreview'
-import { ProfileSearch } from '@/components/v4v/ProfileSearch'
-import { Slider } from '@/components/ui/slider'
+import { authStore } from '@/lib/stores/auth'
+import type { V4VDTO } from '@/lib/stores/cart'
+import { getHexColorFingerprintFromHexPubkey } from '@/lib/utils'
+import { useConfigQuery } from '@/queries/config'
+import { useZapCapabilityByNpub } from '@/queries/profiles'
+import { usePublishV4VShares, useV4VShares } from '@/queries/v4v'
+import { createFileRoute } from '@tanstack/react-router'
+import { useStore } from '@tanstack/react-store'
+import { nip19 } from 'nostr-tools'
+import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import './emoji-animations.css'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/circular-economy')({
@@ -88,6 +89,21 @@ function CircularEconomyComponent() {
 		setNewRecipientNpub(npub)
 	}
 
+	// Convert npub to hex pubkey
+	const getNormalizedPubkey = (input: string): string => {
+		if (input.startsWith('npub')) {
+			try {
+				const { data } = nip19.decode(input)
+				if (typeof data === 'string') {
+					return data
+				}
+			} catch (error) {
+				console.error('Error decoding npub:', error)
+			}
+		}
+		return input
+	}
+
 	const handleAddRecipient = async () => {
 		if (!newRecipientNpub) {
 			toast.error('Please enter a valid npub')
@@ -103,6 +119,7 @@ function CircularEconomyComponent() {
 				return
 			}
 
+			const hexPubkey = getNormalizedPubkey(newRecipientNpub)
 			let newSharePercentage = 0
 			let updatedShares = []
 
@@ -112,7 +129,7 @@ function CircularEconomyComponent() {
 					{
 						id: `new-${Date.now()}`,
 						name: newRecipientNpub,
-						pubkey: newRecipientNpub,
+						pubkey: hexPubkey,
 						percentage: newSharePercentage,
 					},
 				]
@@ -131,7 +148,7 @@ function CircularEconomyComponent() {
 				updatedShares.push({
 					id: `new-${Date.now()}`,
 					name: newRecipientNpub,
-					pubkey: newRecipientNpub,
+					pubkey: hexPubkey,
 					percentage: newSharePercentage,
 				})
 			}
@@ -345,7 +362,10 @@ function CircularEconomyComponent() {
 							<div
 								key={share.id}
 								className={`${index === 0 ? 'bg-rose-500' : 'bg-gray-500'} flex items-center justify-center text-white font-medium`}
-								style={{ width: `${share.percentage * 100}%` }}
+								style={{
+									width: `${share.percentage * 100}%`,
+									backgroundColor: getHexColorFingerprintFromHexPubkey(share.pubkey),
+								}}
 							>
 								{(share.percentage * 100).toFixed(1)}%
 							</div>
@@ -362,7 +382,6 @@ function CircularEconomyComponent() {
 							key={share.id}
 							share={{
 								...share,
-								// Convert to percentage for the RecipientItem display
 								percentage: share.percentage,
 							}}
 							onRemove={handleRemoveRecipient}

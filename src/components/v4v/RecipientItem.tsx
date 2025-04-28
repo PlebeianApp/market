@@ -6,6 +6,7 @@ import { Slider } from '@/components/ui/slider'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { ChevronDown } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import { getColorFromNpub, getHexColorFingerprintFromHexPubkey } from '@/lib/utils'
 
 interface RecipientItemProps {
 	share: V4VDTO
@@ -16,6 +17,7 @@ interface RecipientItemProps {
 export function RecipientItem({ share, onRemove, onPercentageChange }: RecipientItemProps) {
 	const [isOpen, setIsOpen] = useState(false)
 	const [percentage, setPercentage] = useState(share.percentage * 100)
+	const [color, setColor] = useState(getHexColorFingerprintFromHexPubkey(share.pubkey))
 
 	// Update local percentage when parent component updates the share
 	useEffect(() => {
@@ -44,7 +46,12 @@ export function RecipientItem({ share, onRemove, onPercentageChange }: Recipient
 	}
 
 	return (
-		<Collapsible open={isOpen} onOpenChange={setIsOpen} className="border rounded-md overflow-hidden border-l-4 border-l-pink-500">
+		<Collapsible
+			open={isOpen}
+			onOpenChange={setIsOpen}
+			className="border rounded-md overflow-hidden"
+			style={{ borderLeftWidth: '4px', borderLeftColor: color }}
+		>
 			<div className="flex items-center gap-2 p-3">
 				<UserWithAvatar pubkey={pubkey} size="sm" showBadge={false} />
 				<div className="flex-grow" />
