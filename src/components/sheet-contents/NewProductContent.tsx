@@ -324,6 +324,21 @@ function CategoryTab() {
 
 	// Update category name
 	const updateCategoryName = (index: number, name: string) => {
+		// If we're dealing with a non-existent category, create it
+		if (index >= categories.length) {
+			if (name.trim()) {
+				productFormActions.updateCategories([
+					...categories,
+					{
+						key: `category-${Date.now()}`,
+						name,
+						checked: true,
+					},
+				])
+			}
+			return
+		}
+
 		const newCategories = [...categories]
 		newCategories[index] = { ...newCategories[index], name }
 		productFormActions.updateCategories(newCategories)
@@ -353,54 +368,53 @@ function CategoryTab() {
 				<>
 					<p className="text-gray-600">Pick a sub category that better represents the nature of your product</p>
 
-					{categories.length > 0 && (
-						<div className="space-y-2">
-							{categories.map((category, index) => (
-								<div key={category.key} className="grid w-full gap-1.5">
-									<Label>{index === 0 ? 'Sub Category 1' : `Sub Category ${index + 1}`}</Label>
-									<div className="relative">
-										<Input
-											value={category.name}
-											onChange={(e) => updateCategoryName(index, e.target.value)}
-											className="flex-1 border-2 pr-10"
-											placeholder="e.g Bitcoin Miners"
-										/>
-										<Button
-											type="button"
-											variant="ghost"
-											className="absolute right-0 top-0 h-full px-2 text-black"
-											onClick={() => removeSubCategory(index)}
-										>
-											<span className="i-delete w-5 h-5"></span>
-										</Button>
-									</div>
-								</div>
-							))}
-						</div>
-					)}
-
-					{categories.length === 0 && (
+					<div className="space-y-2">
+						{/* First category input - always show */}
 						<div className="grid w-full gap-1.5">
 							<Label>Sub Category 1</Label>
-							<Input
-								className="flex-1 border-2"
-								placeholder="e.g Bitcoin Miners"
-								value=""
-								onChange={(e) => {
-									// If there are no categories yet, add one when user starts typing
-									if (e.target.value) {
-										productFormActions.updateCategories([
-											{
-												key: `category-${Date.now()}`,
-												name: e.target.value,
-												checked: true,
-											},
-										])
-									}
-								}}
-							/>
+							<div className="relative">
+								<Input
+									value={categories[0]?.name || ''}
+									onChange={(e) => updateCategoryName(0, e.target.value)}
+									className="flex-1 border-2 pr-10"
+									placeholder="e.g Bitcoin Miners"
+								/>
+								{categories.length > 0 && (
+									<Button
+										type="button"
+										variant="ghost"
+										className="absolute right-0 top-0 h-full px-2 text-black"
+										onClick={() => removeSubCategory(0)}
+									>
+										<span className="i-delete w-5 h-5"></span>
+									</Button>
+								)}
+							</div>
 						</div>
-					)}
+
+						{/* Additional categories */}
+						{categories.slice(1).map((category, index) => (
+							<div key={category.key} className="grid w-full gap-1.5">
+								<Label>Sub Category {index + 2}</Label>
+								<div className="relative">
+									<Input
+										value={category.name}
+										onChange={(e) => updateCategoryName(index + 1, e.target.value)}
+										className="flex-1 border-2 pr-10"
+										placeholder="e.g Bitcoin Miners"
+									/>
+									<Button
+										type="button"
+										variant="ghost"
+										className="absolute right-0 top-0 h-full px-2 text-black"
+										onClick={() => removeSubCategory(index + 1)}
+									>
+										<span className="i-delete w-5 h-5"></span>
+									</Button>
+								</div>
+							</div>
+						))}
+					</div>
 
 					<Button type="button" variant="outline" className="w-full flex gap-2 justify-center mt-4" onClick={addSubCategory}>
 						<span className="i-plus w-5 h-5"></span>
