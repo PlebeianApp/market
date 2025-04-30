@@ -35,6 +35,7 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 
 	// Get current shipping method
 	const currentShippingId = cartActions.getShippingMethod(productId)
+	const hasShipping = Boolean(currentShippingId)
 
 	// Handle quantity input change
 	const handleQuantityChange = (value: string) => {
@@ -101,8 +102,8 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 	}
 
 	return (
-		<li className="flex flex-col gap-4 pb-4 border-b">
-			<div className="flex gap-4">
+		<li className="flex flex-col py-6 border-b">
+			<div className="flex items-start space-x-4">
 				{/* Product Image */}
 				{images && images.length > 0 ? (
 					<div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-md border">
@@ -169,14 +170,23 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 			{!hideShipping && (
 				<div className="ml-24 flex flex-col gap-2">
 					<button 
-						className="text-sm text-blue-600 hover:text-blue-800 text-left w-fit"
+						className={`text-sm ${!hasShipping 
+							? 'text-red-600 hover:text-red-800 font-medium' 
+							: 'text-blue-600 hover:text-blue-800'} text-left w-fit flex items-center gap-2`}
 						onClick={() => setShowShipping(!showShipping)}
 					>
-						{showShipping ? 'Hide shipping options' : 'Select shipping'}
+						{!hasShipping && (
+							<span className="i-warning w-4 h-4" />
+						)}
+						{showShipping 
+							? 'Hide shipping options' 
+							: hasShipping 
+								? 'Change shipping' 
+								: 'Select shipping (required)'}
 					</button>
 					
 					{showShipping && (
-						<div className="flex flex-col gap-2">
+						<div className={`flex flex-col gap-2 ${!hasShipping ? 'border-l-2 border-red-200 pl-2' : ''}`}>
 							<ShippingSelector 
 								productId={productId} 
 								className="w-full max-w-xs"
