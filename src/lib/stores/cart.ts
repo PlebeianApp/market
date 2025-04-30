@@ -321,20 +321,29 @@ export const cartActions = {
 		
 		// Update the cart state with new shipping data
 		cartStore.setState((state) => {
-			const cart = { ...state.cart }
-			const product = cart.products[productId]
+			const newCart = { 
+				...state.cart,
+				products: {
+					...state.cart.products,
+					[productId]: {
+						...state.cart.products[productId],
+						shippingMethodId: shipping.id || null,
+						shippingCost: Number(shipping.cost || 0),
+						shippingMethodName: shipping.name ?? null
+					}
+				}
+			};
+			
+			// Save to storage
+			cartActions.saveToStorage(newCart);
+			
+			return {
+				...state,
+				cart: newCart
+			};
+		});
 
-			if (product && shipping.id) {
-				product.shippingMethodId = shipping.id
-				product.shippingCost = Number(shipping.cost || 0)
-				product.shippingMethodName = shipping.name ?? null
-			}
-
-			cartActions.saveToStorage(cart)
-			return { ...state, cart }
-		})
-
-		// Immediately recalculate cart totals
+		// Force an immediate cart totals update
 		await cartActions.updateCartTotals();
 		
 		// Also force a full recalculation of product totals

@@ -8,7 +8,7 @@ import type { RichShippingInfo } from '@/lib/stores/cart'
 import { cartActions, cartStore, useCartTotals } from '@/lib/stores/cart'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useStore } from '@tanstack/react-store'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 
 export default function CartSheetContent() {
 	const { cart } = useStore(cartStore)
@@ -18,6 +18,18 @@ export default function CartSheetContent() {
 	const [sellerShippingOptions, setSellerShippingOptions] = useState<Record<string, RichShippingInfo[]>>({})
 	const [selectedShippingByUser, setSelectedShippingByUser] = useState<Record<string, string>>({})
 	
+	// Add validation for shipping methods
+	const hasAllShippingMethods = useMemo(() => {
+		return Object.values(cart.products).every(product => product.shippingMethodId !== null)
+	}, [cart.products])
+
+	// Get products missing shipping - make this reactive with useMemo
+	const missingShippingCount = useMemo(() => {
+		return Object.values(cart.products)
+			.filter(product => !product.shippingMethodId)
+			.length
+	}, [cart.products])
+
 	// Fetch shipping options for each seller
 	useEffect(() => {
 		const fetchShippingForSellers = async () => {
@@ -75,18 +87,32 @@ export default function CartSheetContent() {
 	
 	// Handle shipping option selection for a seller
 	const handleShippingSelect = async (sellerPubkey: string, shippingOption: RichShippingInfo) => {
+		// Log current state for debugging
+		console.log('Before shipping update:', {
+			sellerPubkey,
+			shippingOption,
+			products: productsBySeller[sellerPubkey]
+		});
+
 		const products = productsBySeller[sellerPubkey] || []
 		
-		// Apply the selected shipping option to all products from this seller
-		for (const product of products) {
-			await cartActions.setShippingMethod(product.id, shippingOption)
-		}
+		// Use Promise.all to wait for all shipping updates to complete
+		await Promise.all(products.map(product => 
+			cartActions.setShippingMethod(product.id, shippingOption)
+		));
 		
 		// Update selected shipping state
-		setSelectedShippingByUser({
-			...selectedShippingByUser,
+		setSelectedShippingByUser(prev => ({
+			...prev,
 			[sellerPubkey]: shippingOption.id
-		})
+		}));
+
+		// Log updated state for debugging
+		console.log('After shipping update:', {
+			sellerPubkey,
+			shippingOption,
+			updatedProducts: cartStore.state.cart.products
+		});
 	}
 
 	if (Object.keys(cart.products).length === 0) {
@@ -108,11 +134,24 @@ export default function CartSheetContent() {
 	}
 
 	return (
-		<SheetContent side="right" className="w-[90%]">
+		<SheetContent className="flex flex-col w-full sm:max-w-lg">
 			<SheetHeader>
 				<SheetTitle>Your Cart</SheetTitle>
 				<SheetDescription>Review your items</SheetDescription>
 			</SheetHeader>
+
+			{/* Update warning message to use memoized value */}
+			{missingShippingCount > 0 && (
+				<div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+					<div className="flex">
+						<div className="ml-3">
+							<p className="text-sm text-yellow-700">
+								Please select shipping options for {missingShippingCount} {missingShippingCount === 1 ? 'item' : 'items'} before checkout.
+							</p>
+						</div>
+					</div>
+				</div>
+			)}
 
 			{/* Cart Items - Scrollable Area */}
 			<div className="flex-1 overflow-y-auto py-4 px-6 mt-6">
@@ -127,15 +166,12 @@ export default function CartSheetContent() {
 								</span>
 							</div>
 							
-							{/* Shipping Selector for this seller */}
-							<div className="w-full">
 								<ShippingSelector 
 									options={sellerShippingOptions[sellerPubkey] || []}
 									selectedId={selectedShippingByUser[sellerPubkey]}
 									onSelect={(option) => handleShippingSelect(sellerPubkey, option)}
 									className="w-full"
 								/>
-							</div>
 
 							<Separator />
 
@@ -196,8 +232,19 @@ export default function CartSheetContent() {
 
 					{/* Action Buttons */}
 					<div className="space-y-2">
-						<Button className="w-full" size="lg">
-							Checkout ({totalItems} {totalItems === 1 ? 'item' : 'items'})
+						<Button 
+							className="w-full" 
+							size="lg" 
+							disabled={!hasAllShippingMethods || totalItems === 0}
+							title={!hasAllShippingMethods ? "Please select shipping options for all items" : ""}
+						>
+							{totalItems === 0 ? (
+								"Cart is empty"
+							) : missingShippingCount > 0 ? (
+								`Select shipping for ${missingShippingCount} more ${missingShippingCount === 1 ? 'item' : 'items'}`
+							) : (
+								`Checkout (${totalItems} ${totalItems === 1 ? 'item' : 'items'})`
+							)}
 						</Button>
 						<div className="flex gap-2">
 							<SheetClose asChild>
@@ -209,6 +256,7 @@ export default function CartSheetContent() {
 								variant="outline"
 								className="flex-1 text-red-500 hover:bg-red-50 hover:text-red-600 border-red-200"
 								onClick={() => cartActions.clear()}
+								disabled={totalItems === 0}
 							>
 								Clear Cart
 							</Button>
