@@ -1,22 +1,21 @@
-import { ndkActions } from '@/lib/stores/ndk'
-import { productKeys } from './queryKeyFactory'
-import { queryOptions, useQuery } from '@tanstack/react-query'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
-import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import {
-	ProductListingSchema,
-	ProductTitleTagSchema,
-	ProductPriceTagSchema,
+	ProductCategoryTagSchema,
+	ProductDimensionsTagSchema,
 	ProductImageTagSchema,
+	ProductPriceTagSchema,
 	ProductSpecTagSchema,
+	ProductStockTagSchema,
+	ProductTitleTagSchema,
 	ProductTypeTagSchema,
 	ProductVisibilityTagSchema,
-	ProductStockTagSchema,
-	ProductWeightTagSchema,
-	ProductDimensionsTagSchema,
-	ProductCategoryTagSchema,
+	ProductWeightTagSchema
 } from '@/lib/schemas/productListing'
+import { ndkActions } from '@/lib/stores/ndk'
+import type { NDKFilter } from '@nostr-dev-kit/ndk'
+import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { queryOptions, useQuery } from '@tanstack/react-query'
 import { z } from 'zod'
+import { productKeys } from './queryKeyFactory'
 
 // --- DATA FETCHING FUNCTIONS ---
 
