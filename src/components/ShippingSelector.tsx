@@ -16,7 +16,7 @@ import {
   createShippingReference
 } from '@/queries/shipping'
 import { useProductPubkey } from '@/queries/products'
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 
 interface ShippingSelectorProps {
   productId?: string;
@@ -29,10 +29,20 @@ interface ShippingSelectorProps {
 export function ShippingSelector({ 
   productId, 
   options: propOptions, 
-  selectedId, 
+  selectedId: propSelectedId, 
   onSelect, 
   className 
 }: ShippingSelectorProps) {
+  // State to track local selection
+  const [selectedId, setSelectedId] = useState<string | undefined>(propSelectedId);
+  
+  // Update local state when prop changes
+  useEffect(() => {
+    if (propSelectedId) {
+      setSelectedId(propSelectedId);
+    }
+  }, [propSelectedId]);
+  
   // Get seller's pubkey from product if we have a productId
   const { data: sellerPubkey } = useProductPubkey(productId || '') || { data: undefined };
   
@@ -67,12 +77,14 @@ export function ShippingSelector({
   // Use provided options or options from the hook
   const options = propOptions || hookOptions;
   
-  const handleSelect = (id: string) => {
+  const handleSelect = async (id: string) => {
+    setSelectedId(id);
     const option = options.find((o: RichShippingInfo) => o.id === id);
+    
     if (option) {
       // If we have a productId, update the cart directly
       if (productId) {
-        cartActions.setShippingMethod(productId, option);
+        await cartActions.setShippingMethod(productId, option);
       }
       
       // Call the callback
@@ -97,8 +109,14 @@ export function ShippingSelector({
     return <div className="text-sm text-muted-foreground">No shipping options available</div>;
   }
 
+  // If there's only one option, auto-select it
+  if (options.length === 1 && !selectedId) {
+    // Trigger selection on next render
+    setTimeout(() => handleSelect(options[0].id), 0);
+  }
+
   return (
-    <Select onValueChange={handleSelect} defaultValue={selectedId}>
+    <Select onValueChange={handleSelect} value={selectedId}>
       <SelectTrigger className={className}>
         <SelectValue placeholder="Select shipping method" />
       </SelectTrigger>

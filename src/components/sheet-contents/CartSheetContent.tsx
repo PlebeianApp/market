@@ -13,10 +13,8 @@ import { useEffect, useState } from 'react'
 export default function CartSheetContent() {
 	const { cart } = useStore(cartStore)
 	const [parent, enableAnimations] = useAutoAnimate()
-	const { totalItems, subtotalByCurrency } = useCartTotals()
+	const { totalItems, subtotalByCurrency, shippingByCurrency, totalByCurrency } = useCartTotals()
 	const userPubkey = cartActions.getUserPubkey()
-	const [shippingByCurrency, setShippingByCurrency] = useState<Record<string, number>>({})
-	const [totalByCurrency, setTotalByCurrency] = useState<Record<string, number>>({})
 	const [sellerShippingOptions, setSellerShippingOptions] = useState<Record<string, RichShippingInfo[]>>({})
 	const [selectedShippingByUser, setSelectedShippingByUser] = useState<Record<string, string>>({})
 	
@@ -25,6 +23,7 @@ export default function CartSheetContent() {
 		const fetchShippingForSellers = async () => {
 			const productsBySeller = cartActions.groupProductsBySeller()
 			const newSellerShippingOptions: Record<string, RichShippingInfo[]> = {}
+			const newSelectedShipping: Record<string, string> = {}
 			
 			// For each seller, fetch shipping options using the first product
 			for (const [sellerPubkey, products] of Object.entries(productsBySeller)) {
@@ -33,6 +32,11 @@ export default function CartSheetContent() {
 						const firstProductId = products[0].id
 						const options = await cartActions.fetchAvailableShippingOptions(firstProductId)
 						newSellerShippingOptions[sellerPubkey] = options
+						
+						// Initialize selected shipping with what's already in the cart
+						if (products[0].shippingMethodId) {
+							newSelectedShipping[sellerPubkey] = products[0].shippingMethodId
+						}
 					} catch (error) {
 						console.error(`Failed to fetch shipping options for seller ${sellerPubkey}:`, error)
 						newSellerShippingOptions[sellerPubkey] = []
@@ -41,42 +45,12 @@ export default function CartSheetContent() {
 			}
 			
 			setSellerShippingOptions(newSellerShippingOptions)
+			// Update selected shipping, but keep existing selections
+			setSelectedShippingByUser(prev => ({...newSelectedShipping, ...prev}))
 		}
 		
 		fetchShippingForSellers()
 	}, [cart.products])
-	
-	// Calculate shipping and total amounts
-	useEffect(() => {
-		const calculateCartDetails = async () => {
-			// Calculate shipping totals by currency
-			const shipping: Record<string, number> = {}
-			const totals: Record<string, number> = {}
-			
-			// Process all products
-			for (const productId in cart.products) {
-				const product = cart.products[productId]
-				const result = await cartActions.calculateProductTotal(productId)
-				
-				// Add shipping to the appropriate currency
-				if (result.currency) {
-					shipping[result.currency] = (shipping[result.currency] || 0) + result.shippingInCurrency
-				}
-			}
-			
-			// Calculate totals
-			for (const currency in subtotalByCurrency) {
-				const subtotal = subtotalByCurrency[currency] || 0
-				const shippingCost = shipping[currency] || 0
-				totals[currency] = subtotal + shippingCost
-			}
-			
-			setShippingByCurrency(shipping)
-			setTotalByCurrency(totals)
-		}
-		
-		calculateCartDetails()
-	}, [cart.products, subtotalByCurrency])
 
 	useEffect(() => {
 		enableAnimations(true)
@@ -134,7 +108,7 @@ export default function CartSheetContent() {
 	}
 
 	return (
-		<SheetContent side="right">
+		<SheetContent side="right" className="w-[90%]">
 			<SheetHeader>
 				<SheetTitle>Your Cart</SheetTitle>
 				<SheetDescription>Review your items</SheetDescription>
