@@ -22,7 +22,7 @@ const devUsers = [devUser1, devUser2, devUser3, devUser4, devUser5]
 
 async function seedData() {
 	const PRODUCTS_PER_USER = 6
-	const SHIPPING_OPTIONS_PER_USER = 2
+	const SHIPPING_OPTIONS_PER_USER = 4
 	const COLLECTIONS_PER_USER = 2
 	const REVIEWS_PER_USER = 2
 
