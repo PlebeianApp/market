@@ -2,9 +2,8 @@ import { fetchProduct, getProductPrice, getProductSellerPubkey } from '@/queries
 import { fetchShippingOptionsByPubkey, getShippingInfo, getShippingPrice } from '@/queries/shipping'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
-import { debounce } from '../utils'
-import { useEffect, useState } from 'react'
 import { fetchV4VShares } from '@/queries/v4v'
+import { useEffect, useState, useMemo } from 'react'
 
 export interface ProductImage {
 	url: string
@@ -152,13 +151,13 @@ const getShippingEvent = async (id: string): Promise<NDKEvent | null> => {
 			const [_, pubkey, eventId] = id.split(':')
 			const events = await fetchShippingOptionsByPubkey(pubkey)
 			const event = events.find(e => e.tags.some(t => t[0] === 'd' && t[1] === eventId))
-			
+
 			if (event) {
 				shippingEventCache[id] = event
 				return event
 			}
 		}
-		
+
 		shippingEventCache[id] = null
 		return null
 	} catch (error) {
@@ -301,6 +300,25 @@ export const cartActions = {
 	},
 
 	setShippingMethod: async (productId: string, shipping: Partial<RichShippingInfo>) => {
+		// Get previous shipping data for comparison
+		const prevState = cartStore.state;
+		const prevProduct = prevState.cart.products[productId];
+		const prevShippingId = prevProduct?.shippingMethodId;
+
+		// Clear shipping cache if shipping method changed
+		if (prevShippingId !== shipping.id && shipping.id) {
+			// Clear our shipping event cache to force a refresh
+			if (shippingEventCache[shipping.id] !== undefined) {
+				delete shippingEventCache[shipping.id];
+			}
+		}
+
+		// Clear product cache to force price refresh
+		if (productEventCache[productId] !== undefined) {
+			delete productEventCache[productId];
+		}
+
+		// Update the cart state with new shipping data
 		cartStore.setState((state) => {
 			const cart = { ...state.cart }
 			const product = cart.products[productId]
@@ -315,7 +333,18 @@ export const cartActions = {
 			return { ...state, cart }
 		})
 
-		await cartActions.updateCartTotals()
+		// Immediately recalculate cart totals
+		await cartActions.updateCartTotals();
+
+		// Also force a full recalculation of product totals
+		try {
+			const product = cartStore.state.cart.products[productId];
+			if (product) {
+				await cartActions.calculateProductTotal(productId);
+			}
+		} catch (error) {
+			console.error(`Error recalculating product total after shipping change: ${productId}`, error);
+		}
 	},
 
 	getShippingMethod: (productId: string): string | null => {
@@ -460,10 +489,10 @@ export const cartActions = {
 			const currency = priceTag ? priceTag[2] : 'USD'
 
 			const productTotalInCurrency = price * product.amount
-			
+
 			// Get shipping cost - either from product or fetch if needed
 			let shippingCost = product.shippingCost || 0
-			
+
 			// If a shipping method is selected but cost is not set, try to fetch it
 			if (product.shippingMethodId && !product.shippingCost) {
 				const shippingEvent = await getShippingEvent(product.shippingMethodId)
@@ -474,7 +503,7 @@ export const cartActions = {
 						const shippingCurrency = priceTag[2]
 						if (shippingCurrency === currency) {
 							shippingCost = parseFloat(priceTag[1])
-							
+
 							// Update the product with the fetched shipping cost
 							cartStore.setState((state) => {
 								const cart = { ...state.cart }
@@ -666,42 +695,33 @@ export const cartActions = {
 	},
 
 	updateCartTotals: async () => {
-		const updateTotals = async () => {
-			// Calculate cart total in sats
-			const state = cartStore.state
-			const userTotals: Record<string, number> = {}
+		// Calculate cart total in sats
+		const state = cartStore.state
+		const userTotals: Record<string, number> = {}
 
-			try {
-				for (const user of Object.values(state.cart.users)) {
-					let userTotalSats = 0
+		try {
+			for (const user of Object.values(state.cart.users)) {
+				let userTotalSats = 0
 
-					for (const productId of user.productIds) {
-						try {
-							const productTotal = await cartActions.calculateProductTotal(productId)
-							userTotalSats += productTotal.totalInSats
-						} catch (error) {
-							console.error(`Error calculating total for product ${productId}:`, error)
-						}
+				for (const productId of user.productIds) {
+					try {
+						const productTotal = await cartActions.calculateProductTotal(productId)
+						userTotalSats += productTotal.totalInSats
+					} catch (error) {
+						console.error(`Error calculating total for product ${productId}:`, error)
 					}
-
-					userTotals[user.pubkey] = userTotalSats
 				}
 
-				cartStore.setState((state) => ({
-					...state,
-					userCartTotalInSats: userTotals,
-				}))
-			} catch (error) {
-				console.error('Error updating cart totals:', error)
+				userTotals[user.pubkey] = userTotalSats
 			}
+
+			cartStore.setState((state) => ({
+				...state,
+				userCartTotalInSats: userTotals,
+			}))
+		} catch (error) {
+			console.error('Error updating cart totals:', error)
 		}
-
-		// Create a debounced version of updateTotals
-		const debouncedUpdate = debounce(() => {
-			updateTotals().catch((err) => console.error('Error in updateCartTotals:', err))
-		}, 250)
-
-		debouncedUpdate()
 	},
 
 	calculateTotalItems: () => {
@@ -813,12 +833,12 @@ export const cartActions = {
 
 			const sellerPubkey = productEvent.pubkey
 			const shippingEvents = await fetchShippingOptionsByPubkey(sellerPubkey)
-			
+
 			// Map shipping events to user-friendly format
 			return shippingEvents.map(event => {
 				const info = getShippingInfo(event)
 				if (!info) return null
-				
+
 				return {
 					id: `30406:${sellerPubkey}:${info.id}`, // Create a shipping reference
 					name: info.title,
@@ -883,29 +903,84 @@ export function useCartTotals() {
 	const [totals, setTotals] = useState({
 		totalItems: 0,
 		subtotalByCurrency: {} as Record<string, number>,
+		shippingByCurrency: {} as Record<string, number>,
+		totalByCurrency: {} as Record<string, number>,
 	})
 
-	// Create a signature to detect changes to cart amounts
-	const cartSignature = Object.values(cart.products)
-		.map((p) => `${p.id}:${p.amount}`)
-		.join(',')
+	// Create a signature to detect changes to cart amounts and shipping
+	const cartSignature = useMemo(() => {
+		return Object.values(cart.products)
+			.map((p) => `${p.id}:${p.amount}:${p.shippingMethodId}:${p.shippingCost}`)
+			.join(',')
+	}, [cart.products])
 
 	useEffect(() => {
+		let isMounted = true;
+
 		const calculateTotals = async () => {
-			// Get total item count
-			const itemCount = cartActions.calculateTotalItems()
+			try {
+				// Get total item count
+				const itemCount = cartActions.calculateTotalItems()
 
-			// Get subtotals by currency
-			const subtotals = await cartActions.calculateAmountsByCurrency()
+				// Initialize accumulators
+				const subtotals: Record<string, number> = {}
+				const shipping: Record<string, number> = {}
+				const totals: Record<string, number> = {}
 
-			setTotals({
-				totalItems: itemCount,
-				subtotalByCurrency: subtotals,
-			})
+				// Clear product event cache to ensure fresh data
+				Object.keys(productEventCache).forEach(key => {
+					delete productEventCache[key];
+				});
+
+				// Process each product
+				await Promise.all(Object.values(cart.products).map(async (product) => {
+					try {
+						const event = await getProductEvent(product.id)
+						if (!event) return
+
+						const priceTag = getProductPrice(event)
+						if (!priceTag) return
+
+						const currency = priceTag[2]
+						const price = parseFloat(priceTag[1])
+
+						// Calculate subtotal for this product
+						const productSubtotal = price * product.amount
+						subtotals[currency] = (subtotals[currency] || 0) + productSubtotal
+
+						// Add shipping cost if available
+						if (product.shippingCost) {
+							shipping[currency] = (shipping[currency] || 0) + product.shippingCost
+						}
+
+						// Calculate total for this currency
+						totals[currency] = (subtotals[currency] || 0) + (shipping[currency] || 0)
+					} catch (error) {
+						console.error(`Error processing product ${product.id}:`, error)
+					}
+				}))
+
+				// Only update state if component is still mounted
+				if (isMounted) {
+					setTotals({
+						totalItems: itemCount,
+						subtotalByCurrency: subtotals,
+						shippingByCurrency: shipping,
+						totalByCurrency: totals,
+					})
+				}
+			} catch (error) {
+				console.error('Error calculating cart totals:', error)
+			}
 		}
 
 		calculateTotals()
-	}, [cartSignature, cart.products])
+
+		// Cleanup function
+		return () => {
+			isMounted = false
+		}
+	}, [cartSignature, cart])
 
 	return totals
 }
