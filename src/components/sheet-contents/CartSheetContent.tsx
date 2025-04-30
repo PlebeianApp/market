@@ -1,18 +1,82 @@
 import CartItem from '@/components/CartItem'
+import { ShippingSelector } from '@/components/ShippingSelector'
 import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import type { RichShippingInfo } from '@/lib/stores/cart'
 import { cartActions, cartStore, useCartTotals } from '@/lib/stores/cart'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useStore } from '@tanstack/react-store'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 export default function CartSheetContent() {
 	const { cart } = useStore(cartStore)
 	const [parent, enableAnimations] = useAutoAnimate()
 	const { totalItems, subtotalByCurrency } = useCartTotals()
 	const userPubkey = cartActions.getUserPubkey()
+	const [shippingByCurrency, setShippingByCurrency] = useState<Record<string, number>>({})
+	const [totalByCurrency, setTotalByCurrency] = useState<Record<string, number>>({})
+	const [sellerShippingOptions, setSellerShippingOptions] = useState<Record<string, RichShippingInfo[]>>({})
+	const [selectedShippingByUser, setSelectedShippingByUser] = useState<Record<string, string>>({})
+	
+	// Fetch shipping options for each seller
+	useEffect(() => {
+		const fetchShippingForSellers = async () => {
+			const productsBySeller = cartActions.groupProductsBySeller()
+			const newSellerShippingOptions: Record<string, RichShippingInfo[]> = {}
+			
+			// For each seller, fetch shipping options using the first product
+			for (const [sellerPubkey, products] of Object.entries(productsBySeller)) {
+				if (products.length > 0) {
+					try {
+						const firstProductId = products[0].id
+						const options = await cartActions.fetchAvailableShippingOptions(firstProductId)
+						newSellerShippingOptions[sellerPubkey] = options
+					} catch (error) {
+						console.error(`Failed to fetch shipping options for seller ${sellerPubkey}:`, error)
+						newSellerShippingOptions[sellerPubkey] = []
+					}
+				}
+			}
+			
+			setSellerShippingOptions(newSellerShippingOptions)
+		}
+		
+		fetchShippingForSellers()
+	}, [cart.products])
+	
+	// Calculate shipping and total amounts
+	useEffect(() => {
+		const calculateCartDetails = async () => {
+			// Calculate shipping totals by currency
+			const shipping: Record<string, number> = {}
+			const totals: Record<string, number> = {}
+			
+			// Process all products
+			for (const productId in cart.products) {
+				const product = cart.products[productId]
+				const result = await cartActions.calculateProductTotal(productId)
+				
+				// Add shipping to the appropriate currency
+				if (result.currency) {
+					shipping[result.currency] = (shipping[result.currency] || 0) + result.shippingInCurrency
+				}
+			}
+			
+			// Calculate totals
+			for (const currency in subtotalByCurrency) {
+				const subtotal = subtotalByCurrency[currency] || 0
+				const shippingCost = shipping[currency] || 0
+				totals[currency] = subtotal + shippingCost
+			}
+			
+			setShippingByCurrency(shipping)
+			setTotalByCurrency(totals)
+		}
+		
+		calculateCartDetails()
+	}, [cart.products, subtotalByCurrency])
 
 	useEffect(() => {
 		enableAnimations(true)
@@ -33,6 +97,22 @@ export default function CartSheetContent() {
 		if (userPubkey) {
 			cartActions.handleProductUpdate('remove', userPubkey, productId)
 		}
+	}
+	
+	// Handle shipping option selection for a seller
+	const handleShippingSelect = async (sellerPubkey: string, shippingOption: RichShippingInfo) => {
+		const products = productsBySeller[sellerPubkey] || []
+		
+		// Apply the selected shipping option to all products from this seller
+		for (const product of products) {
+			await cartActions.setShippingMethod(product.id, shippingOption)
+		}
+		
+		// Update selected shipping state
+		setSelectedShippingByUser({
+			...selectedShippingByUser,
+			[sellerPubkey]: shippingOption.id
+		})
 	}
 
 	if (Object.keys(cart.products).length === 0) {
@@ -72,6 +152,16 @@ export default function CartSheetContent() {
 									{products.length} {products.length === 1 ? 'item' : 'items'}
 								</span>
 							</div>
+							
+							{/* Shipping Selector for this seller */}
+							<div className="w-full">
+								<ShippingSelector 
+									options={sellerShippingOptions[sellerPubkey] || []}
+									selectedId={selectedShippingByUser[sellerPubkey]}
+									onSelect={(option) => handleShippingSelect(sellerPubkey, option)}
+									className="w-full"
+								/>
+							</div>
 
 							<Separator />
 
@@ -84,6 +174,7 @@ export default function CartSheetContent() {
 										amount={product.amount}
 										onQuantityChange={handleQuantityChange}
 										onRemove={handleRemoveProduct}
+										hideShipping={true}
 									/>
 								))}
 							</ul>
@@ -95,19 +186,39 @@ export default function CartSheetContent() {
 			{/* Cart Footer */}
 			<SheetFooter className="border-t p-6 bg-gray-50">
 				<div className="space-y-4 w-full">
-					{/* Subtotal per currency */}
+					{/* Subtotal, Shipping, and Total per currency */}
 					<div className="space-y-2">
 						{Object.entries(subtotalByCurrency).map(([currency, amount]) => (
-							<div key={currency} className="flex justify-between">
+							<div key={`subtotal-${currency}`} className="flex justify-between">
 								<p className="text-sm text-muted-foreground">Subtotal ({currency})</p>
 								<p className="text-sm font-medium">
 									{amount.toFixed(2)} {currency}
 								</p>
 							</div>
 						))}
+						
+						{Object.entries(shippingByCurrency).filter(([_, amount]) => amount > 0).map(([currency, amount]) => (
+							<div key={`shipping-${currency}`} className="flex justify-between">
+								<p className="text-sm text-muted-foreground">Shipping ({currency})</p>
+								<p className="text-sm font-medium">
+									{amount.toFixed(2)} {currency}
+								</p>
+							</div>
+						))}
+						
+						<Separator className="my-2" />
+						
+						{Object.entries(totalByCurrency).map(([currency, amount]) => (
+							<div key={`total-${currency}`} className="flex justify-between">
+								<p className="text-sm font-semibold">Total ({currency})</p>
+								<p className="text-sm font-bold">
+									{amount.toFixed(2)} {currency}
+								</p>
+							</div>
+						))}
 					</div>
 
-					<div className="text-xs text-muted-foreground">Shipping and taxes calculated at checkout</div>
+					<div className="text-xs text-muted-foreground">Taxes calculated at checkout</div>
 
 					{/* Action Buttons */}
 					<div className="space-y-2">

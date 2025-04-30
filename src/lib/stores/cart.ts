@@ -1,4 +1,5 @@
 import { fetchProduct, getProductPrice, getProductSellerPubkey } from '@/queries/products'
+import { fetchShippingOptionsByPubkey, getShippingInfo, getShippingPrice } from '@/queries/shipping'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { debounce } from '../utils'
@@ -119,6 +120,9 @@ export const cartStore = new Store<CartState>(initialCartState)
 // Cache for product events to reduce API calls
 const productEventCache: Record<string, NDKEvent | null> = {}
 
+// Cache for shipping events to reduce API calls
+const shippingEventCache: Record<string, NDKEvent | null> = {}
+
 // Helper function to get product event, with caching
 const getProductEvent = async (id: string): Promise<NDKEvent | null> => {
 	if (productEventCache[id] !== undefined) {
@@ -132,6 +136,34 @@ const getProductEvent = async (id: string): Promise<NDKEvent | null> => {
 	} catch (error) {
 		console.error(`Failed to fetch product event: ${id}`, error)
 		productEventCache[id] = null
+		return null
+	}
+}
+
+// Helper function to get shipping event, with caching
+const getShippingEvent = async (id: string): Promise<NDKEvent | null> => {
+	if (shippingEventCache[id] !== undefined) {
+		return shippingEventCache[id]
+	}
+
+	try {
+		// Extract pubkey from id if it's a shipping reference
+		if (id.startsWith('30406:')) {
+			const [_, pubkey, eventId] = id.split(':')
+			const events = await fetchShippingOptionsByPubkey(pubkey)
+			const event = events.find(e => e.tags.some(t => t[0] === 'd' && t[1] === eventId))
+			
+			if (event) {
+				shippingEventCache[id] = event
+				return event
+			}
+		}
+		
+		shippingEventCache[id] = null
+		return null
+	} catch (error) {
+		console.error(`Failed to fetch shipping event: ${id}`, error)
+		shippingEventCache[id] = null
 		return null
 	}
 }
@@ -275,7 +307,7 @@ export const cartActions = {
 
 			if (product && shipping.id) {
 				product.shippingMethodId = shipping.id
-				product.shippingCost = Number(shipping.cost)
+				product.shippingCost = Number(shipping.cost || 0)
 				product.shippingMethodName = shipping.name ?? null
 			}
 
@@ -428,7 +460,34 @@ export const cartActions = {
 			const currency = priceTag ? priceTag[2] : 'USD'
 
 			const productTotalInCurrency = price * product.amount
-			const shippingCost = product.shippingCost || 0
+			
+			// Get shipping cost - either from product or fetch if needed
+			let shippingCost = product.shippingCost || 0
+			
+			// If a shipping method is selected but cost is not set, try to fetch it
+			if (product.shippingMethodId && !product.shippingCost) {
+				const shippingEvent = await getShippingEvent(product.shippingMethodId)
+				if (shippingEvent) {
+					const priceTag = getShippingPrice(shippingEvent)
+					if (priceTag) {
+						// Only update if currencies match
+						const shippingCurrency = priceTag[2]
+						if (shippingCurrency === currency) {
+							shippingCost = parseFloat(priceTag[1])
+							
+							// Update the product with the fetched shipping cost
+							cartStore.setState((state) => {
+								const cart = { ...state.cart }
+								if (cart.products[productId]) {
+									cart.products[productId].shippingCost = shippingCost
+								}
+								cartActions.saveToStorage(cart)
+								return { ...state, cart }
+							})
+						}
+					}
+				}
+			}
 
 			// Use our simple conversion function
 			const productTotalInSats = cartActions.convertToSats(currency, productTotalInCurrency)
@@ -745,6 +804,35 @@ export const cartActions = {
 		})
 
 		return grouped
+	},
+
+	fetchAvailableShippingOptions: async (productId: string): Promise<RichShippingInfo[]> => {
+		try {
+			const productEvent = await getProductEvent(productId)
+			if (!productEvent) return []
+
+			const sellerPubkey = productEvent.pubkey
+			const shippingEvents = await fetchShippingOptionsByPubkey(sellerPubkey)
+			
+			// Map shipping events to user-friendly format
+			return shippingEvents.map(event => {
+				const info = getShippingInfo(event)
+				if (!info) return null
+				
+				return {
+					id: `30406:${sellerPubkey}:${info.id}`, // Create a shipping reference
+					name: info.title,
+					cost: parseFloat(info.price.amount),
+					currency: info.price.currency,
+					country: info.country,
+					service: info.service,
+					carrier: info.carrier
+				}
+			}).filter(Boolean) as RichShippingInfo[]
+		} catch (error) {
+			console.error(`Failed to fetch shipping options for product ${productId}:`, error)
+			return []
+		}
 	},
 }
 
