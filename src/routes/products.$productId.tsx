@@ -247,13 +247,35 @@ function RouteComponent() {
 						<TabsContent value="specs" className="mt-4">
 							<div className="rounded-lg bg-white p-6 shadow-md">
 								<div className="grid grid-cols-2 gap-4">
+									{weightTag && (
+										<div className="flex flex-col">
+											<span className="text-sm font-medium text-gray-500">Weight</span>
+											<span className="text-gray-900">
+												{weightTag[1]} {weightTag[2]}
+											</span>
+										</div>
+									)}
+									{dimensionsTag && (
+										<div className="flex flex-col">
+											<span className="text-sm font-medium text-gray-500">Dimensions (L×W×H)</span>
+											<span className="text-gray-900">
+												{dimensionsTag[1]
+													.split('x')
+													.map((num) => parseFloat(num).toFixed(1))
+													.join('×')}{' '}
+												{dimensionsTag[2]}
+											</span>
+										</div>
+									)}
 									{specs.map((spec, index) => (
 										<div key={index} className="flex flex-col">
 											<span className="text-sm font-medium text-gray-500">{spec[1]}</span>
 											<span className="text-gray-900">{spec[2]}</span>
 										</div>
 									))}
-									{specs.length === 0 && <p className="text-gray-700 col-span-2">No specifications available</p>}
+									{specs.length === 0 && !weightTag && !dimensionsTag && (
+										<p className="text-gray-700 col-span-2">No specifications available</p>
+									)}
 								</div>
 							</div>
 						</TabsContent>

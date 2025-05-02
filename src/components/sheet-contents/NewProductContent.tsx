@@ -15,6 +15,19 @@ import { useNavigate } from '@tanstack/react-router'
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 import { authStore, authActions } from '@/lib/stores/auth'
 
+/**
+ * IMPORTANT IMPLEMENTATION PATTERN:
+ *
+ * This form persists all user input to the product store in real-time.
+ * For all field values:
+ *
+ * 1. ALWAYS read initial values from the store (not local state)
+ * 2. ALWAYS update the store immediately on user input (don't wait for form submission)
+ *
+ * This ensures that if a user starts filling out the form, navigates away,
+ * and returns later, all their progress is preserved.
+ */
+
 // Helper function to check if form has been started
 function hasStartedFillingForm(formState: typeof productFormStore.state) {
 	// Compare current state with default state for essential fields
@@ -25,7 +38,9 @@ function hasStartedFillingForm(formState: typeof productFormStore.state) {
 		formState.quantity !== DEFAULT_FORM_STATE.quantity ||
 		formState.specs.length > 0 ||
 		formState.categories.length > 0 ||
-		formState.images.length > 0
+		formState.images.length > 0 ||
+		formState.weight !== DEFAULT_FORM_STATE.weight ||
+		formState.dimensions !== DEFAULT_FORM_STATE.dimensions
 	)
 }
 
@@ -537,9 +552,22 @@ function ShippingTab() {
 }
 
 function SpecTab() {
-	const { specs } = useStore(productFormStore)
+	const { specs, weight, dimensions } = useStore(productFormStore)
 	const [newSpecKey, setNewSpecKey] = useState('')
 	const [newSpecValue, setNewSpecValue] = useState('')
+
+	// Form for weight and dimensions
+	const form = useForm({
+		defaultValues: {
+			weightValue: weight?.value || '',
+			weightUnit: weight?.unit || 'kg',
+			dimensionsValue: dimensions?.value || '',
+			dimensionsUnit: dimensions?.unit || 'cm',
+		},
+		onSubmit: async ({ value }) => {
+			// This is handled by the onChange handlers
+		},
+	})
 
 	const addSpec = () => {
 		if (newSpecKey.trim() && newSpecValue.trim()) {
@@ -558,62 +586,231 @@ function SpecTab() {
 	}
 
 	return (
-		<div className="space-y-4">
-			<p className="text-gray-600">Add product specifications like weight, dimensions, etc.</p>
+		<div className="space-y-6">
+			<div className="space-y-4">
+				<h3 className="text-sm font-medium">Product Specifications</h3>
 
-			{/* Display existing specs */}
-			{specs.length > 0 && (
-				<div className="space-y-2 mb-4">
-					<Label>Current Specifications</Label>
-					{specs.map((spec, index) => (
-						<div key={index} className="flex items-center gap-2 p-2 border rounded-md">
-							<div className="flex-1">
-								<span className="font-medium">{spec.key}: </span>
-								<span>{spec.value}</span>
+				{/* Display existing specs */}
+				{specs.length > 0 && (
+					<div className="space-y-2 mb-4">
+						{specs.map((spec, index) => (
+							<div key={index} className="flex items-center gap-2 p-2 border rounded-md">
+								<div className="flex-1">
+									<span className="font-medium">{spec.key}: </span>
+									<span>{spec.value}</span>
+								</div>
+								<Button type="button" variant="ghost" className="h-8 w-8 p-0" onClick={() => removeSpec(index)}>
+									<span className="i-delete w-5 h-5"></span>
+								</Button>
 							</div>
-							<Button type="button" variant="ghost" className="h-8 w-8 p-0" onClick={() => removeSpec(index)}>
-								<span className="i-delete w-5 h-5"></span>
-							</Button>
-						</div>
-					))}
-				</div>
-			)}
+						))}
+					</div>
+				)}
 
-			{/* Add new spec */}
-			<div className="grid grid-cols-2 gap-3">
-				<div className="grid w-full gap-1.5">
-					<Label htmlFor="spec-key">Property</Label>
-					<Input
-						id="spec-key"
-						value={newSpecKey}
-						onChange={(e) => setNewSpecKey(e.target.value)}
-						className="border-2"
-						placeholder="e.g. Weight"
-					/>
+				{/* Add new spec */}
+				<div className="grid grid-cols-2 gap-3">
+					<div className="grid w-full gap-1.5">
+						<Label htmlFor="spec-key">Property</Label>
+						<Input
+							id="spec-key"
+							value={newSpecKey}
+							onChange={(e) => setNewSpecKey(e.target.value)}
+							className="border-2"
+							placeholder="e.g. Material"
+						/>
+					</div>
+
+					<div className="grid w-full gap-1.5">
+						<Label htmlFor="spec-value">Value</Label>
+						<Input
+							id="spec-value"
+							value={newSpecValue}
+							onChange={(e) => setNewSpecValue(e.target.value)}
+							className="border-2"
+							placeholder="e.g. Cotton"
+						/>
+					</div>
 				</div>
 
-				<div className="grid w-full gap-1.5">
-					<Label htmlFor="spec-value">Value</Label>
-					<Input
-						id="spec-value"
-						value={newSpecValue}
-						onChange={(e) => setNewSpecValue(e.target.value)}
-						className="border-2"
-						placeholder="e.g. 10 Kg"
-					/>
+				<Button
+					type="button"
+					variant="outline"
+					className="w-full flex gap-2 justify-center"
+					onClick={addSpec}
+					disabled={!newSpecKey.trim() || !newSpecValue.trim()}
+				>
+					<span className="i-plus w-5 h-5"></span>
+					Add Specification
+				</Button>
+			</div>
+
+			{/* Weight section */}
+			<div className="space-y-3 pt-4 border-t">
+				<h3 className="text-sm font-medium">Product Weight</h3>
+				<div className="grid grid-cols-5 gap-3">
+					<form.Field
+						name="weightValue"
+						validators={{
+							onChange: (field) => {
+								if (field.value && !/^\d*\.?\d*$/.test(field.value)) {
+									return 'Please enter a valid number'
+								}
+								return undefined
+							},
+						}}
+					>
+						{(field) => (
+							<div className="col-span-3 grid w-full gap-1.5">
+								<Label htmlFor={field.name}>Weight</Label>
+								<Input
+									id={field.name}
+									name={field.name}
+									value={field.state.value}
+									onBlur={field.handleBlur}
+									onChange={(e) => {
+										field.handleChange(e.target.value)
+										// Update the store immediately
+										if (e.target.value.trim()) {
+											productFormActions.updateValues({
+												weight: {
+													value: e.target.value,
+													unit: form.getFieldValue('weightUnit'),
+												},
+											})
+										} else {
+											productFormActions.updateValues({ weight: null })
+										}
+									}}
+									className="border-2"
+									placeholder="e.g. 1.5"
+								/>
+								{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
+									<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>
+								)}
+							</div>
+						)}
+					</form.Field>
+
+					<form.Field name="weightUnit">
+						{(field) => (
+							<div className="col-span-2 grid w-full gap-1.5">
+								<Label htmlFor={field.name}>Unit</Label>
+								<Select
+									value={field.state.value}
+									onValueChange={(value) => {
+										field.handleChange(value)
+										// Update the store immediately
+										const weightValue = form.getFieldValue('weightValue')
+										if (weightValue.trim()) {
+											productFormActions.updateValues({
+												weight: {
+													value: weightValue,
+													unit: value,
+												},
+											})
+										}
+									}}
+								>
+									<SelectTrigger id={field.name} className="border-2 h-10">
+										<SelectValue placeholder="Unit" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="g">g</SelectItem>
+										<SelectItem value="kg">kg</SelectItem>
+										<SelectItem value="oz">oz</SelectItem>
+										<SelectItem value="lb">lb</SelectItem>
+									</SelectContent>
+								</Select>
+							</div>
+						)}
+					</form.Field>
 				</div>
 			</div>
 
-			<Button
-				type="button"
-				variant="outline"
-				className="w-full flex gap-2 justify-center mt-4"
-				onClick={addSpec}
-				disabled={!newSpecKey.trim() || !newSpecValue.trim()}
-			>
-				<span className="i-plus w-5 h-5"></span>
-				Add Specification
-			</Button>
+			{/* Dimensions section */}
+			<div className="space-y-3 pt-4 border-t">
+				<h3 className="text-sm font-medium">Product Dimensions</h3>
+				<div className="grid grid-cols-5 gap-3">
+					<form.Field
+						name="dimensionsValue"
+						validators={{
+							onChange: (field) => {
+								if (field.value && !/^\d+x\d+x\d+$/.test(field.value)) {
+									return 'Format should be like 10x20x30'
+								}
+								return undefined
+							},
+						}}
+					>
+						{(field) => (
+							<div className="col-span-3 grid w-full gap-1.5">
+								<Label htmlFor={field.name}>Dimensions (L×W×H)</Label>
+								<Input
+									id={field.name}
+									name={field.name}
+									value={field.state.value}
+									onBlur={field.handleBlur}
+									onChange={(e) => {
+										field.handleChange(e.target.value)
+										// Update the store immediately
+										if (e.target.value.trim()) {
+											productFormActions.updateValues({
+												dimensions: {
+													value: e.target.value,
+													unit: form.getFieldValue('dimensionsUnit'),
+												},
+											})
+										} else {
+											productFormActions.updateValues({ dimensions: null })
+										}
+									}}
+									className="border-2"
+									placeholder="e.g. 10x20x30"
+								/>
+								{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
+									<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>
+								)}
+								<p className="text-xs text-gray-500">Format: Length × Width × Height</p>
+							</div>
+						)}
+					</form.Field>
+
+					<form.Field name="dimensionsUnit">
+						{(field) => (
+							<div className="col-span-2 grid w-full gap-1.5 self-start">
+								<Label htmlFor={field.name}>Unit</Label>
+								<Select
+									value={field.state.value}
+									onValueChange={(value) => {
+										field.handleChange(value)
+										// Update the store immediately
+										const dimensionsValue = form.getFieldValue('dimensionsValue')
+										if (dimensionsValue.trim()) {
+											productFormActions.updateValues({
+												dimensions: {
+													value: dimensionsValue,
+													unit: value,
+												},
+											})
+										}
+									}}
+								>
+									<SelectTrigger id={field.name} className="border-2 h-10">
+										<SelectValue placeholder="Unit" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="mm">mm</SelectItem>
+										<SelectItem value="cm">cm</SelectItem>
+										<SelectItem value="m">m</SelectItem>
+										<SelectItem value="in">in</SelectItem>
+										<SelectItem value="ft">ft</SelectItem>
+									</SelectContent>
+								</Select>
+							</div>
+						)}
+					</form.Field>
+				</div>
+			</div>
 		</div>
 	)
 }

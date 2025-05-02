@@ -22,6 +22,16 @@ export type ProductSpec = {
 	value: string
 }
 
+export type ProductWeight = {
+	value: string
+	unit: string
+}
+
+export type ProductDimensions = {
+	value: string // format: LxWxH (e.g. "10x20x30")
+	unit: string
+}
+
 export interface ProductFormState {
 	mainTab: 'product' | 'shipping'
 	productSubTab: 'name' | 'detail' | 'spec' | 'category' | 'images'
@@ -37,6 +47,8 @@ export interface ProductFormState {
 	categories: Array<{ key: string; name: string; checked: boolean }>
 	images: Array<{ imageUrl: string; imageOrder: number }>
 	shippings: ProductShippingForm[]
+	weight: ProductWeight | null
+	dimensions: ProductDimensions | null
 }
 
 export const DEFAULT_FORM_STATE: ProductFormState = {
@@ -54,6 +66,8 @@ export const DEFAULT_FORM_STATE: ProductFormState = {
 	categories: [],
 	images: [],
 	shippings: [],
+	weight: null,
+	dimensions: null,
 }
 
 // Create the store
@@ -186,6 +200,21 @@ export const productFormActions = {
 		// Transform specs to the correct format
 		const specTags = state.specs.map((spec) => ['spec', spec.key, spec.value] as NDKTag)
 
+		// Transform shipping options to the correct format
+		const shippingTags = state.shippings
+			.filter((ship) => ship.shipping && ship.shipping.id)
+			.map((ship) => {
+				// Format: ['shipping_option', '30406:pubkey:identifier', 'extra_cost']
+				const shippingRef = `30406:${ship.shipping!.id}`
+				return ship.extraCost ? (['shipping_option', shippingRef, ship.extraCost] as NDKTag) : (['shipping_option', shippingRef] as NDKTag)
+			})
+
+		// Add weight tag if present
+		const weightTag = state.weight ? [['weight', state.weight.value, state.weight.unit] as NDKTag] : []
+
+		// Add dimensions tag if present
+		const dimensionsTag = state.dimensions ? [['dim', state.dimensions.value, state.dimensions.unit] as NDKTag] : []
+
 		// Create the product data in the format expected by Nostr
 		const productData = {
 			kind: 30402,
@@ -202,6 +231,9 @@ export const productFormActions = {
 				...imagesTags,
 				...categoryTags,
 				...specTags,
+				...shippingTags,
+				...weightTag,
+				...dimensionsTag,
 			] as NDKTag[],
 		}
 
