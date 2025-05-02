@@ -4,40 +4,40 @@ import { Label } from '@/components/ui/label'
 import { SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Checkbox } from '@/components/ui/checkbox'
 import { useForm } from '@tanstack/react-form'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 import { useStore } from '@tanstack/react-store'
-import { productFormStore, productFormActions } from '@/lib/stores/product'
+import { productFormStore, productFormActions, DEFAULT_FORM_STATE } from '@/lib/stores/product'
 import { CURRENCIES } from '@/queries/external'
 import { ndkActions } from '@/lib/stores/ndk'
 import { useNavigate } from '@tanstack/react-router'
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
+import { authStore, authActions } from '@/lib/stores/auth'
 
 // Helper function to check if form has been started
 function hasStartedFillingForm(formState: typeof productFormStore.state) {
-	// Check if any essential fields have been filled
-	return !!(
-		formState.name ||
-		formState.description ||
-		formState.price ||
-		formState.quantity ||
-		formState.spec ||
+	// Compare current state with default state for essential fields
+	return (
+		formState.name !== DEFAULT_FORM_STATE.name ||
+		formState.description !== DEFAULT_FORM_STATE.description ||
+		formState.price !== DEFAULT_FORM_STATE.price ||
+		formState.quantity !== DEFAULT_FORM_STATE.quantity ||
+		formState.spec !== DEFAULT_FORM_STATE.spec ||
 		formState.categories.length > 0 ||
 		formState.images.length > 0
 	)
 }
 
 function NameTab() {
-	const { productType } = useStore(productFormStore)
+	const { productType, name, description } = useStore(productFormStore)
 
 	const form = useForm({
 		defaultValues: {
-			name: '',
-			description: '',
+			name: name,
+			description: description,
 			collection: '',
-			productType: 'single',
+			productType: productType,
 		},
 		onSubmit: async ({ value }) => {
 			productFormActions.updateValues({
@@ -152,10 +152,10 @@ function DetailTab() {
 
 	const form = useForm({
 		defaultValues: {
-			price: '',
-			quantity: '',
-			currency: 'SATS',
-			status: 'hidden' as const,
+			price: price,
+			quantity: quantity,
+			currency: currency,
+			status: status,
 		},
 		onSubmit: async ({ value }) => {
 			productFormActions.updateValues({
@@ -558,15 +558,39 @@ function SpecTab() {
 export function NewProductContent() {
 	const [isPublishing, setIsPublishing] = useState(false)
 	const navigate = useNavigate()
+	const [hasProducts, setHasProducts] = useState(false)
 
 	// Get form state from store
 	const formState = useStore(productFormStore)
 	const { mainTab, productSubTab } = formState
 
+	// Get user and authentication status from auth store
+	const { user, isAuthenticated } = useStore(authStore)
+
 	// Check if the user has started filling in the form
 	const hasStartedForm = hasStartedFillingForm(formState)
-	// For now, we only check if form has been started since we don't track user products yet
+
+	// Update showForm whenever hasStartedForm or hasProducts changes
 	const [showForm, setShowForm] = useState(hasStartedForm)
+
+	// Check if user has products when component mounts
+	useEffect(() => {
+		const checkUserProducts = async () => {
+			if (isAuthenticated && user) {
+				const hasUserProducts = await authActions.userHasProducts()
+				setHasProducts(hasUserProducts)
+			}
+		}
+
+		checkUserProducts()
+	}, [isAuthenticated, user])
+
+	// Update showForm whenever hasStartedForm or hasProducts changes
+	useEffect(() => {
+		if ((hasStartedForm || hasProducts) && !showForm) {
+			setShowForm(true)
+		}
+	}, [hasStartedForm, hasProducts, showForm])
 
 	const form = useForm({
 		defaultValues: {},
