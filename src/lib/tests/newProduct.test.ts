@@ -52,6 +52,9 @@ describe('Product Publishing', () => {
 		const ndk = ndkActions.getNDK()
 		expect(ndk).not.toBeNull()
 
+		// Verify we're only using the local relay
+		expect(ndk!.explicitRelayUrls).toEqual([RELAY_URL])
+
 		// Set up a test product in the product form store
 		productFormStore.setState((state) => ({
 			...state,
@@ -60,7 +63,10 @@ describe('Product Publishing', () => {
 
 		// Publish the product
 		const publishResult = await productFormActions.publishProduct(signer, ndk!)
-		expect(publishResult).toBe(true)
+		expect(typeof publishResult).toBe('string')
+
+		// Use the event ID from publishResult
+		const productId = publishResult as string
 
 		// Get all products by the user's pubkey to find our newly created product
 		const userPubkey = (await signer.user()).pubkey
@@ -74,9 +80,6 @@ describe('Product Publishing', () => {
 		const productEvent = Array.from(userEvents).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))[0]
 
 		expect(productEvent).toBeDefined()
-
-		// Get the product ID from the event
-		const productId = productEvent.id
 
 		// Fetch the product using the query functions
 		const retrievedProduct = await fetchProduct(productId)

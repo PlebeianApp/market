@@ -1,5 +1,4 @@
-// export const defaulRelaysUrls: string[] = ['wss://relay.nostr.band', 'wss://nos.lol', 'wss://relay.nostr.net', 'wss://relay.damus.io']
-export const defaulRelaysUrls: string[] = []
+export const defaultRelaysUrls: string[] = ['wss://relay.nostr.band', 'wss://nos.lol', 'wss://relay.nostr.net', 'wss://relay.damus.io']
 
 export const DEFAULT_ZAP_AMOUNTS = [
 	{ displayText: '😊 10 sats', amount: 10 },

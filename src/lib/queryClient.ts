@@ -1,13 +1,13 @@
 import { QueryClient } from '@tanstack/react-query'
 import { ndkActions } from './stores/ndk'
 import { authActions } from './stores/auth'
-import { defaulRelaysUrls } from './constants'
+import { defaultRelaysUrls } from './constants'
 
 // Initialize NDK and create a queryClient only after initialization
 export async function createQueryClient(relayUrl?: string): Promise<QueryClient> {
 	if (relayUrl) {
 		console.log(`Initializing NDK with relay: ${relayUrl}`)
-		ndkActions.initialize([relayUrl, ...defaulRelaysUrls])
+		ndkActions.initialize([relayUrl, ...defaultRelaysUrls])
 		await ndkActions.connect()
 		await authActions.getAuthFromLocalStorageAndLogin()
 		console.log('NDK initialized successfully')
