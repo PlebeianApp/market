@@ -4,7 +4,6 @@ import { ProductImageTagSchema, ProductCategoryTagSchema } from '@/lib/schemas/p
 import type { z } from 'zod'
 import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
 
-// TODO: is this right?
 export type Category = z.infer<typeof ProductCategoryTagSchema>
 export type ProductImage = z.infer<typeof ProductImageTagSchema>
 
@@ -18,6 +17,11 @@ export type ProductShippingForm = {
 	extraCost: string
 }
 
+export type ProductSpec = {
+	key: string
+	value: string
+}
+
 export interface ProductFormState {
 	mainTab: 'product' | 'shipping'
 	productSubTab: 'name' | 'detail' | 'spec' | 'category' | 'images'
@@ -29,7 +33,7 @@ export interface ProductFormState {
 	status: 'hidden' | 'on-sale' | 'pre-order'
 	productType: 'single' | 'variable'
 	mainCategory: string | null
-	spec: string
+	specs: ProductSpec[]
 	categories: Array<{ key: string; name: string; checked: boolean }>
 	images: Array<{ imageUrl: string; imageOrder: number }>
 	shippings: ProductShippingForm[]
@@ -46,7 +50,7 @@ export const DEFAULT_FORM_STATE: ProductFormState = {
 	status: 'hidden',
 	productType: 'single',
 	mainCategory: null,
-	spec: '',
+	specs: [],
 	categories: [],
 	images: [],
 	shippings: [],
@@ -179,6 +183,9 @@ export const productFormActions = {
 				categoryTags.push(['t', cat.name] as NDKTag)
 			})
 
+		// Transform specs to the correct format
+		const specTags = state.specs.map((spec) => ['spec', spec.key, spec.value] as NDKTag)
+
 		// Create the product data in the format expected by Nostr
 		const productData = {
 			kind: 30402,
@@ -194,6 +201,7 @@ export const productFormActions = {
 				['summary', state.description],
 				...imagesTags,
 				...categoryTags,
+				...specTags,
 			] as NDKTag[],
 		}
 

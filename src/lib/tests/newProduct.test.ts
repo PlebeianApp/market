@@ -20,6 +20,7 @@ const TEST_PRODUCT = {
 	status: 'on-sale' as const,
 	productType: 'single' as const,
 	mainCategory: 'Bitcoin',
+	specs: [{ key: 'Weight', value: '5 kg' }],
 	images: [{ imageUrl: 'https://cdn.satellite.earth/f8f1513ec22f966626dc05342a3bb1f36096d28dd0e6eeae640b5df44f2c7c84.png', imageOrder: 0 }],
 	categories: [{ key: 'cat1', name: 'Bitcoin Miners', checked: true }],
 }

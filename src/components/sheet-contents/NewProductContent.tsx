@@ -23,7 +23,7 @@ function hasStartedFillingForm(formState: typeof productFormStore.state) {
 		formState.description !== DEFAULT_FORM_STATE.description ||
 		formState.price !== DEFAULT_FORM_STATE.price ||
 		formState.quantity !== DEFAULT_FORM_STATE.quantity ||
-		formState.spec !== DEFAULT_FORM_STATE.spec ||
+		formState.specs.length > 0 ||
 		formState.categories.length > 0 ||
 		formState.images.length > 0
 	)
@@ -537,20 +537,83 @@ function ShippingTab() {
 }
 
 function SpecTab() {
-	const { spec } = useStore(productFormStore)
+	const { specs } = useStore(productFormStore)
+	const [newSpecKey, setNewSpecKey] = useState('')
+	const [newSpecValue, setNewSpecValue] = useState('')
+
+	const addSpec = () => {
+		if (newSpecKey.trim() && newSpecValue.trim()) {
+			productFormActions.updateValues({
+				specs: [...specs, { key: newSpecKey, value: newSpecValue }],
+			})
+			setNewSpecKey('')
+			setNewSpecValue('')
+		}
+	}
+
+	const removeSpec = (index: number) => {
+		productFormActions.updateValues({
+			specs: specs.filter((_, i) => i !== index),
+		})
+	}
 
 	return (
 		<div className="space-y-4">
-			<div className="grid w-full gap-1.5">
-				<Label>Specifications</Label>
-				<textarea
-					className="border-2 min-h-24 p-2 rounded-md"
-					placeholder="e.g 10 Kg, 30x40cm"
-					value={spec}
-					onChange={(e) => productFormActions.updateValues({ spec: e.target.value })}
-				/>
-				<p className="text-xs text-gray-500">Enter product specifications like weight, dimensions, etc.</p>
+			<p className="text-gray-600">Add product specifications like weight, dimensions, etc.</p>
+
+			{/* Display existing specs */}
+			{specs.length > 0 && (
+				<div className="space-y-2 mb-4">
+					<Label>Current Specifications</Label>
+					{specs.map((spec, index) => (
+						<div key={index} className="flex items-center gap-2 p-2 border rounded-md">
+							<div className="flex-1">
+								<span className="font-medium">{spec.key}: </span>
+								<span>{spec.value}</span>
+							</div>
+							<Button type="button" variant="ghost" className="h-8 w-8 p-0" onClick={() => removeSpec(index)}>
+								<span className="i-delete w-5 h-5"></span>
+							</Button>
+						</div>
+					))}
+				</div>
+			)}
+
+			{/* Add new spec */}
+			<div className="grid grid-cols-2 gap-3">
+				<div className="grid w-full gap-1.5">
+					<Label htmlFor="spec-key">Property</Label>
+					<Input
+						id="spec-key"
+						value={newSpecKey}
+						onChange={(e) => setNewSpecKey(e.target.value)}
+						className="border-2"
+						placeholder="e.g. Weight"
+					/>
+				</div>
+
+				<div className="grid w-full gap-1.5">
+					<Label htmlFor="spec-value">Value</Label>
+					<Input
+						id="spec-value"
+						value={newSpecValue}
+						onChange={(e) => setNewSpecValue(e.target.value)}
+						className="border-2"
+						placeholder="e.g. 10 Kg"
+					/>
+				</div>
 			</div>
+
+			<Button
+				type="button"
+				variant="outline"
+				className="w-full flex gap-2 justify-center mt-4"
+				onClick={addSpec}
+				disabled={!newSpecKey.trim() || !newSpecValue.trim()}
+			>
+				<span className="i-plus w-5 h-5"></span>
+				Add Specification
+			</Button>
 		</div>
 	)
 }
