@@ -28,22 +28,6 @@ import { authStore, authActions } from '@/lib/stores/auth'
  * and returns later, all their progress is preserved.
  */
 
-// Helper function to check if form has been started
-function hasStartedFillingForm(formState: typeof productFormStore.state) {
-	// Compare current state with default state for essential fields
-	return (
-		formState.name !== DEFAULT_FORM_STATE.name ||
-		formState.description !== DEFAULT_FORM_STATE.description ||
-		formState.price !== DEFAULT_FORM_STATE.price ||
-		formState.quantity !== DEFAULT_FORM_STATE.quantity ||
-		formState.specs.length > 0 ||
-		formState.categories.length > 0 ||
-		formState.images.length > 0 ||
-		formState.weight !== DEFAULT_FORM_STATE.weight ||
-		formState.dimensions !== DEFAULT_FORM_STATE.dimensions
-	)
-}
-
 function NameTab() {
 	const { productType, name, description } = useStore(productFormStore)
 
@@ -827,8 +811,23 @@ export function NewProductContent() {
 	// Get user and authentication status from auth store
 	const { user, isAuthenticated } = useStore(authStore)
 
+	// Function to check if the form has been modified from its default state
+	const isFormModified = (currentState: typeof productFormStore.state) => {
+		return (
+			currentState.name !== DEFAULT_FORM_STATE.name ||
+			currentState.description !== DEFAULT_FORM_STATE.description ||
+			currentState.price !== DEFAULT_FORM_STATE.price ||
+			currentState.quantity !== DEFAULT_FORM_STATE.quantity ||
+			currentState.specs.length > 0 ||
+			currentState.categories.length > 0 ||
+			currentState.images.length > 0 ||
+			currentState.weight !== DEFAULT_FORM_STATE.weight ||
+			currentState.dimensions !== DEFAULT_FORM_STATE.dimensions
+		)
+	}
+
 	// Check if the user has started filling in the form
-	const hasStartedForm = hasStartedFillingForm(formState)
+	const hasStartedForm = isFormModified(formState)
 
 	// Update showForm whenever hasStartedForm or hasProducts changes
 	const [showForm, setShowForm] = useState(hasStartedForm)
