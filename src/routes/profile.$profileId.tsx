@@ -44,8 +44,8 @@ function RouteComponent() {
 	}, [params.profileId])
 
 	return (
-		<div className="relative text-white min-h-screen">
-			<div className="flex flex-col pb-4 relative z-10">
+		<div className="relative min-h-screen">
+			<div className="flex flex-col relative z-10">
 				<div className="relative">
 					<Button
 						variant="ghost"
@@ -113,24 +113,26 @@ function RouteComponent() {
 					)}
 				</div>
 
-				{sellerProducts.length > 0 ? (
-					<ItemGrid
-						title={
-							<div className="flex items-center gap-2">
-								<span className="text-2xl font-heading">More products from</span>
-								<ProfileName pubkey={user?.pubkey || ''} className="text-2xl font-heading" />
-							</div>
-						}
-					>
-						{sellerProducts.map((product) => (
-							<ProductCard key={product.id} product={product} />
-						))}
-					</ItemGrid>
-				) : (
-					<div className="flex flex-col items-center justify-center h-full">
-						<span className="text-2xl font-heading">No products found</span>
-					</div>
-				)}
+				<div className="p-4">
+					{sellerProducts.length > 0 ? (
+						<ItemGrid
+							title={
+								<div className="flex items-center gap-2">
+									<span className="text-2xl font-heading">More products from</span>
+									<ProfileName pubkey={user?.pubkey || ''} className="text-2xl font-heading" />
+								</div>
+							}
+						>
+							{sellerProducts.map((product) => (
+								<ProductCard key={product.id} product={product} />
+							))}
+						</ItemGrid>
+					) : (
+						<div className="flex flex-col items-center justify-center h-full">
+							<span className="text-2xl font-heading">No products found</span>
+						</div>
+					)}
+				</div>
 			</div>
 		</div>
 	)

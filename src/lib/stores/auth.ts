@@ -1,6 +1,7 @@
-import { NDKNip07Signer, NDKNip46Signer, NDKPrivateKeySigner, NDKUser } from '@nostr-dev-kit/ndk'
+import { NDKNip07Signer, NDKNip46Signer, NDKPrivateKeySigner, NDKUser, NDKEvent } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { ndkActions } from './ndk'
+import { fetchProductsByPubkey } from '@/queries/products'
 
 export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
 export const NOSTR_LOCAL_SIGNER_KEY = 'nostr_local_signer_key'
@@ -170,6 +171,19 @@ export const authActions = {
 		localStorage.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_AUTO_LOGIN)
 		authStore.setState(() => initialState)
+	},
+
+	userHasProducts: async (): Promise<boolean> => {
+		const state = authStore.state
+		if (!state.user) return false
+
+		try {
+			const products = await fetchProductsByPubkey(state.user.pubkey)
+			return products.length > 0
+		} catch (error) {
+			console.error('Failed to check user products:', error)
+			return false
+		}
 	},
 }
 

@@ -40,12 +40,12 @@ function TabsTrigger({
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "font-bold text-black bg-muted",
+        // "font-bold text-black bg-muted",
         "inline-flex items-center justify-center whitespace-nowrap rounded-none px-4 py-2.5 text-sm font-medium",
         "ring-offset-background transition-all",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         "disabled:pointer-events-none disabled:opacity-50",
-        "data-[state=active]:bg-secondary data-[state=active]:shadow-sm",
+        // "data-[state=active]:bg-secondary data-[state=active]:shadow-sm",
         "data-[state=active]:text-white",
         "disabled:border-0 disabled:opacity-100",
         className

@@ -2,6 +2,9 @@ import NDK from '@nostr-dev-kit/ndk'
 import NDKCacheAdapterDexie from '@nostr-dev-kit/ndk-cache-dexie'
 import { Store } from '@tanstack/store'
 import type { NDKCacheAdapter, NDKSigner } from '@nostr-dev-kit/ndk'
+import { defaultRelaysUrls } from '@/lib/constants'
+
+const LOCAL_ONLY = process.env.NODE_ENV === 'test' ? true : false
 
 interface NDKState {
 	ndk: NDK | null
@@ -29,15 +32,22 @@ export const ndkActions = {
 			? (new NDKCacheAdapterDexie({ dbName: 'nostr-cache' }) as unknown as NDKCacheAdapter)
 			: undefined
 
+		// If LOCAL_ONLY is true, only use APP_RELAY_URL and ignore default relays
+		const explicitRelays = LOCAL_ONLY
+			? ([process.env.APP_RELAY_URL].filter(Boolean) as string[])
+			: relays && relays.length > 0
+				? relays
+				: defaultRelaysUrls
+
 		const ndk = new NDK({
 			cacheAdapter: cacheAdapter,
-			explicitRelayUrls: relays && relays.length > 0 ? relays : [],
+			explicitRelayUrls: explicitRelays,
 		})
 
 		ndkStore.setState((state) => ({
 			...state,
 			ndk,
-			explicitRelayUrls: relays || [],
+			explicitRelayUrls: explicitRelays,
 		}))
 
 		return ndk
