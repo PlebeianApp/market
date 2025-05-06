@@ -5,19 +5,34 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import type { RichShippingInfo } from '@/lib/stores/cart'
-import { cartActions, cartStore, useCartTotals } from '@/lib/stores/cart'
+import { cartActions, cartStore } from '@/lib/stores/cart'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useStore } from '@tanstack/react-store'
-import { useEffect, useState, useMemo } from 'react'
+import { ChevronDown } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ScrollArea } from '../ui/scroll-area'
 
 export default function CartSheetContent() {
-	const { cart } = useStore(cartStore)
+	// Use store directly for better reactivity
+	const { 
+		cart, 
+		sellerData, 
+		productsBySeller, 
+		totalInSats, 
+		totalByCurrency 
+	} = useStore(cartStore)
+	
 	const [parent, enableAnimations] = useAutoAnimate()
-	const { totalItems, subtotalByCurrency, shippingByCurrency, totalByCurrency } = useCartTotals()
 	const userPubkey = cartActions.getUserPubkey()
 	const [sellerShippingOptions, setSellerShippingOptions] = useState<Record<string, RichShippingInfo[]>>({})
 	const [selectedShippingByUser, setSelectedShippingByUser] = useState<Record<string, string>>({})
+	const [detailsExpanded, setDetailsExpanded] = useState(false)
 
+	// Calculate totals that aren't stored
+	const totalItems = useMemo(() => {
+		return Object.values(cart.products).reduce((sum, product) => sum + product.amount, 0)
+	}, [cart.products])
+	
 	// Add validation for shipping methods
 	const hasAllShippingMethods = useMemo(() => {
 		return Object.values(cart.products).every((product) => product.shippingMethodId !== null)
@@ -28,10 +43,23 @@ export default function CartSheetContent() {
 		return Object.values(cart.products).filter((product) => !product.shippingMethodId).length
 	}, [cart.products])
 
+	// Format SATs with commas for thousands
+	const formatSats = (sats: number): string => {
+		return Math.round(sats).toLocaleString()
+	}
+	
+	// Ensure cart data is updated on mount
+	useEffect(() => {
+		if (Object.keys(cart.products).length > 0) {
+			// Initialize all cart data
+			cartActions.groupProductsBySeller()
+			cartActions.updateSellerData()
+		}
+	}, [])
+
 	// Fetch shipping options for each seller
 	useEffect(() => {
 		const fetchShippingForSellers = async () => {
-			const productsBySeller = cartActions.groupProductsBySeller()
 			const newSellerShippingOptions: Record<string, RichShippingInfo[]> = {}
 			const newSelectedShipping: Record<string, string> = {}
 
@@ -60,14 +88,11 @@ export default function CartSheetContent() {
 		}
 
 		fetchShippingForSellers()
-	}, [cart.products])
+	}, [productsBySeller])
 
 	useEffect(() => {
 		enableAnimations(true)
 	}, [parent, enableAnimations])
-
-	// Group products by seller using the cart store function
-	const productsBySeller = cartActions.groupProductsBySeller()
 
 	// Handle quantity change for a product
 	const handleQuantityChange = (productId: string, newAmount: number) => {
@@ -85,13 +110,6 @@ export default function CartSheetContent() {
 
 	// Handle shipping option selection for a seller
 	const handleShippingSelect = async (sellerPubkey: string, shippingOption: RichShippingInfo) => {
-		// Log current state for debugging
-		console.log('Before shipping update:', {
-			sellerPubkey,
-			shippingOption,
-			products: productsBySeller[sellerPubkey],
-		})
-
 		const products = productsBySeller[sellerPubkey] || []
 
 		// Use Promise.all to wait for all shipping updates to complete
@@ -102,13 +120,6 @@ export default function CartSheetContent() {
 			...prev,
 			[sellerPubkey]: shippingOption.id,
 		}))
-
-		// Log updated state for debugging
-		console.log('After shipping update:', {
-			sellerPubkey,
-			shippingOption,
-			updatedProducts: cartStore.state.cart.products,
-		})
 	}
 
 	if (Object.keys(cart.products).length === 0) {
@@ -130,10 +141,9 @@ export default function CartSheetContent() {
 	}
 
 	return (
-		<SheetContent className="flex flex-col w-full sm:max-w-lg">
+		<SheetContent side="right" className="flex flex-col max-h-screen overflow-hidden w-[100vw] sm:min-w-[85vw] md:min-w-[55vw] xl:min-w-[35vw] py-4 px-6">
 			<SheetHeader>
-				<SheetTitle>Your Cart</SheetTitle>
-				<SheetDescription>Review your items</SheetDescription>
+				<SheetTitle>YOUR CART</SheetTitle>
 			</SheetHeader>
 
 			{/* Update warning message to use memoized value */}
@@ -150,116 +160,184 @@ export default function CartSheetContent() {
 			)}
 
 			{/* Cart Items - Scrollable Area */}
-			<div className="flex-1 overflow-y-auto py-4 px-6 mt-6">
+			<ScrollArea className="flex-1 overflow-y-auto py-2">
 				<div className="space-y-8" ref={parent}>
-					{Object.entries(productsBySeller).map(([sellerPubkey, products]) => (
-						<div key={sellerPubkey} className="space-y-4">
-							{/* Seller information */}
-							<div className="flex items-center justify-between">
-								<UserWithAvatar pubkey={sellerPubkey} size="sm" showBadge={false} />
-								<span className="text-sm text-muted-foreground">
-									{products.length} {products.length === 1 ? 'item' : 'items'}
-								</span>
-							</div>
-
-							<ShippingSelector
-								options={sellerShippingOptions[sellerPubkey] || []}
-								selectedId={selectedShippingByUser[sellerPubkey]}
-								onSelect={(option) => handleShippingSelect(sellerPubkey, option)}
-								className="w-full"
-							/>
-
-							<Separator />
-
-							{/* Products from this seller */}
-							<ul className="space-y-6">
-								{products.map((product) => (
-									<CartItem
-										key={product.id}
-										productId={product.id}
-										amount={product.amount}
-										onQuantityChange={handleQuantityChange}
-										onRemove={handleRemoveProduct}
-										hideShipping={true}
+					{Object.entries(productsBySeller).map(([sellerPubkey, products]) => {
+						// Get the pre-calculated data for this seller
+						const data = sellerData[sellerPubkey] || {
+							satsTotal: 0,
+							currencyTotals: {},
+							shares: { sellerAmount: 0, communityAmount: 0, sellerPercentage: 90 },
+							shippingSats: 0
+						};
+						
+						return (
+							<div key={sellerPubkey} className="border-b pb-8">
+								{/* Seller information */}
+								<div className="mb-4">
+									<UserWithAvatar pubkey={sellerPubkey} size="sm" showBadge={false} />
+								</div>
+								
+								{/* Products from this seller */}
+								<ul className="space-y-6">
+									{products.map((product) => (
+										<CartItem
+											key={product.id}
+											productId={product.id}
+											amount={product.amount}
+											onQuantityChange={handleQuantityChange}
+											onRemove={handleRemoveProduct}
+											hideShipping={true}
+										/>
+									))}
+								</ul>
+								
+								{/* Shipping selector */}
+								<div className="mt-4">
+									<ShippingSelector
+										options={sellerShippingOptions[sellerPubkey] || []}
+										selectedId={selectedShippingByUser[sellerPubkey]}
+										onSelect={(option) => handleShippingSelect(sellerPubkey, option)}
+										className="w-full"
 									/>
+								</div>
+								
+								{/* Currency Totals for this seller */}
+								{Object.entries(data.currencyTotals).map(([currency, amount]) => (
+									<div key={`${sellerPubkey}-${currency}`} className="flex justify-between mt-4">
+										<p className="text-sm">{currency} Total:</p>
+										<p className="text-sm">{amount.toFixed(2)} {currency}</p>
+									</div>
 								))}
-							</ul>
-						</div>
-					))}
+								
+								{/* Shipping */}
+								<div className="flex justify-between mt-1">
+									<p className="text-sm">Shipping:</p>
+									<p className="text-sm">{formatSats(data.shippingSats)} sat</p>
+								</div>
+								
+								{/* Total in sats for this seller */}
+								<div className="flex justify-between mt-1 font-semibold">
+									<p className="text-sm">Total:</p>
+									<p className="text-sm">{formatSats(data.satsTotal)} sat</p>
+								</div>
+								
+								{/* Payment breakdown for this seller */}
+								<div className="mt-3">
+									<p className="text-sm font-semibold">Payment Breakdown</p>
+									
+									{/* Progress bar */}
+									<div className="h-2 w-full bg-gray-800 mt-1 rounded-full overflow-hidden">
+										<div 
+											className="h-full bg-blue-500" 
+											style={{ width: `${data.shares.sellerPercentage}%` }} 
+										/>
+									</div>
+									
+									{/* Merchant amount */}
+									<div className="flex justify-between mt-1">
+										<p className="text-sm">Merchant: </p>
+										<p className="text-sm">{formatSats(data.shares.sellerAmount)} sat ({data.shares.sellerPercentage.toFixed(2)}%)</p>
+									</div>
+									
+									{/* Community share */}
+									{data.shares.communityAmount > 0 && (
+										<div className="flex justify-between">
+											<p className="text-sm">Community Share: </p>
+											<p className="text-sm">{formatSats(data.shares.communityAmount)} sat ({(100 - data.shares.sellerPercentage).toFixed(2)}%)</p>
+										</div>
+									)}
+								</div>
+							</div>
+						)
+					})}
 				</div>
-			</div>
+			</ScrollArea>
 
 			{/* Cart Footer */}
-			<SheetFooter className="border-t p-6 bg-gray-50">
-				<div className="space-y-4 w-full">
-					{/* Subtotal, Shipping, and Total per currency */}
-					<div className="space-y-2">
-						{Object.entries(subtotalByCurrency).map(([currency, amount]) => (
-							<div key={`subtotal-${currency}`} className="flex justify-between">
-								<p className="text-sm text-muted-foreground">Subtotal ({currency})</p>
-								<p className="text-sm font-medium">
-									{amount.toFixed(2)} {currency}
-								</p>
-							</div>
-						))}
-
-						{Object.entries(shippingByCurrency)
-							.filter(([_, amount]) => amount > 0)
-							.map(([currency, amount]) => (
-								<div key={`shipping-${currency}`} className="flex justify-between">
-									<p className="text-sm text-muted-foreground">Shipping ({currency})</p>
-									<p className="text-sm font-medium">
-										{amount.toFixed(2)} {currency}
-									</p>
+			<div className="border-t pt-4 mt-auto">
+				<div className="space-y-3 w-full">
+					{/* Total in sats */}
+					<div className="flex justify-between text-lg font-bold">
+						<p>Total:</p>
+						<p>{formatSats(totalInSats)} sat</p>
+					</div>
+					
+					{/* Collapsible Details */}
+					<button
+						className="w-full flex items-center justify-between p-2 border rounded-lg bg-gray-50"
+						onClick={() => setDetailsExpanded(!detailsExpanded)}
+					>
+						<span className="text-sm">View Details</span>
+						<ChevronDown className={`w-4 h-4 transition-transform ${detailsExpanded ? 'rotate-180' : ''}`} />
+					</button>
+					
+					{detailsExpanded && (
+						<div className="space-y-2 p-2 bg-gray-50 rounded-lg">
+							{/* Show original currency totals */}
+							{Object.entries(totalByCurrency).map(([currency, amount]) => (
+								<div key={`total-${currency}`} className="flex justify-between">
+									<p className="text-sm">{currency} Total:</p>
+									<p className="text-sm">{amount.toFixed(2)}</p>
 								</div>
 							))}
-
-						<Separator className="my-2" />
-
-						{Object.entries(totalByCurrency).map(([currency, amount]) => (
-							<div key={`total-${currency}`} className="flex justify-between">
-								<p className="text-sm font-semibold">Total ({currency})</p>
-								<p className="text-sm font-bold">
-									{amount.toFixed(2)} {currency}
-								</p>
-							</div>
-						))}
-					</div>
-
-					<div className="text-xs text-muted-foreground">Taxes calculated at checkout</div>
+							
+							{/* Calculate total shipping in sats */}
+							{(() => {
+								const totalShipping = Object.values(sellerData).reduce(
+									(sum, data) => sum + data.shippingSats, 
+									0
+								);
+								const subtotalSats = totalInSats - totalShipping;
+								
+								return (
+									<>
+										<Separator className="my-2" />
+										<div className="flex justify-between">
+											<p className="text-sm">Subtotal:</p>
+											<p className="text-sm">{formatSats(subtotalSats)} sat</p>
+										</div>
+										
+										<div className="flex justify-between">
+											<p className="text-sm">Shipping:</p>
+											<p className="text-sm">{formatSats(totalShipping)} sat</p>
+										</div>
+										
+										<Separator className="my-2" />
+										
+										<div className="flex justify-between font-semibold">
+											<p className="text-sm">Grand Total:</p>
+											<p className="text-sm">{formatSats(totalInSats)} sat</p>
+										</div>
+									</>
+								);
+							})()}
+						</div>
+					)}
 
 					{/* Action Buttons */}
-					<div className="space-y-2">
-						<Button
-							className="w-full"
-							size="lg"
-							disabled={!hasAllShippingMethods || totalItems === 0}
-							title={!hasAllShippingMethods ? 'Please select shipping options for all items' : ''}
-						>
-							{totalItems === 0
-								? 'Cart is empty'
-								: missingShippingCount > 0
-									? `Select shipping for ${missingShippingCount} more ${missingShippingCount === 1 ? 'item' : 'items'}`
-									: `Checkout (${totalItems} ${totalItems === 1 ? 'item' : 'items'})`}
-						</Button>
-						<div className="flex gap-2">
-							<SheetClose asChild>
-								<Button variant="outline" className="flex-1">
-									Continue Shopping
-								</Button>
-							</SheetClose>
+					<div className="space-y-3 mt-4">
+						<div className="flex gap-3">
 							<Button
 								variant="outline"
 								className="flex-1 text-red-500 hover:bg-red-50 hover:text-red-600 border-red-200"
 								onClick={() => cartActions.clear()}
 								disabled={totalItems === 0}
 							>
-								Clear Cart
+								Clear
+							</Button>
+							
+							<Button
+								className="flex-1 bg-black text-white hover:bg-gray-800"
+								disabled={!hasAllShippingMethods || totalItems === 0}
+								title={!hasAllShippingMethods ? 'Please select shipping options for all items' : ''}
+							>
+								Checkout
 							</Button>
 						</div>
 					</div>
 				</div>
-			</SheetFooter>
+			</div>
 		</SheetContent>
 	)
 }

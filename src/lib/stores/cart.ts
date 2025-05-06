@@ -1,9 +1,16 @@
+import { CURRENCIES } from '@/lib/constants'
+import {
+	currencyConversionQueryOptions,
+	currencyExchangeRateQueryOptions
+} from '@/queries/external'
 import { fetchProduct, getProductPrice, getProductSellerPubkey } from '@/queries/products'
 import { fetchShippingOptionsByPubkey, getShippingInfo, getShippingPrice } from '@/queries/shipping'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
-import { Store } from '@tanstack/store'
 import { fetchV4VShares } from '@/queries/v4v'
-import { useEffect, useState, useMemo } from 'react'
+import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { QueryClient } from '@tanstack/react-query'
+import { useStore } from '@tanstack/react-store'
+import { Store } from '@tanstack/store'
+import { useEffect } from 'react'
 import { SHIPPING_KIND } from '../schemas/shippingOption'
 
 export interface ProductImage {
@@ -82,12 +89,29 @@ interface CartState {
 	cart: NormalizedCart
 	v4vShares: Record<string, V4VDTO[]>
 	userCartTotalInSats: Record<string, number>
+	sellerData: Record<string, {
+		satsTotal: number,
+		currencyTotals: Record<string, number>,
+		shares: { sellerAmount: number, communityAmount: number, sellerPercentage: number },
+		shippingSats: number
+	}>
+	productsBySeller: Record<string, CartProduct[]>
+	totalInSats: number
+	subtotalByCurrency: Record<string, number>
+	shippingByCurrency: Record<string, number>
+	totalByCurrency: Record<string, number>
 }
 
 const initialState: CartState = {
 	cart: { users: {}, products: {}, orders: {}, invoices: {} },
 	v4vShares: {},
 	userCartTotalInSats: {},
+	sellerData: {},
+	productsBySeller: {},
+	totalInSats: 0,
+	subtotalByCurrency: {},
+	shippingByCurrency: {},
+	totalByCurrency: {}
 }
 
 function loadInitialCart(): NormalizedCart {
@@ -106,14 +130,8 @@ const initialCartState: CartState = {
 	cart: loadInitialCart(),
 }
 
-// Simple conversion rate for calculation without hooks
-// In a real app, you would use a more sophisticated approach
-const CONVERSION_RATES: Record<string, number> = {
-	USD: 40000, // 1 USD = 40,000 sats (for example)
-	EUR: 43000,
-	GBP: 50000,
-	// Add more currencies as needed
-}
+// Constants
+const numSatsInBtc = 100000000 // 100 million sats in 1 BTC
 
 export const cartStore = new Store<CartState>(initialCartState)
 
@@ -122,6 +140,17 @@ const productEventCache: Record<string, NDKEvent | null> = {}
 
 // Cache for shipping events to reduce API calls
 const shippingEventCache: Record<string, NDKEvent | null> = {}
+
+// Create a lightweight query client for non-component code
+const cartQueryClient = new QueryClient({
+	defaultOptions: {
+		queries: {
+			staleTime: 1000 * 60 * 5, // 5 minutes
+			retry: 2,
+			retryDelay: 1000,
+		},
+	},
+})
 
 // Helper function to get product event, with caching
 const getProductEvent = async (id: string): Promise<NDKEvent | null> => {
@@ -260,7 +289,8 @@ export const cartActions = {
 
 		// Update v4v shares and cart totals
 		await cartActions.updateV4VShares()
-		await cartActions.updateCartTotals()
+		await cartActions.groupProductsBySeller()
+		await cartActions.updateSellerData()
 	},
 
 	updateProductAmount: async (userPubkey: string, productId: string, amount: number) => {
@@ -274,7 +304,7 @@ export const cartActions = {
 			return { ...state, cart }
 		})
 
-		await cartActions.updateCartTotals()
+		await cartActions.updateSellerData()
 	},
 
 	removeProduct: async (userPubkey: string, productId: string) => {
@@ -297,7 +327,8 @@ export const cartActions = {
 		})
 
 		await cartActions.updateV4VShares()
-		await cartActions.updateCartTotals()
+		await cartActions.groupProductsBySeller()
+		await cartActions.updateSellerData()
 	},
 
 	setShippingMethod: async (productId: string, shipping: Partial<RichShippingInfo>) => {
@@ -343,18 +374,8 @@ export const cartActions = {
 			}
 		})
 
-		// Force an immediate cart totals update
-		await cartActions.updateCartTotals()
-
-		// Also force a full recalculation of product totals
-		try {
-			const product = cartStore.state.cart.products[productId]
-			if (product) {
-				await cartActions.calculateProductTotal(productId)
-			}
-		} catch (error) {
-			console.error(`Error recalculating product total after shipping change: ${productId}`, error)
-		}
+		// Update seller data and cart totals after shipping change
+		await cartActions.updateSellerData()
 	},
 
 	getShippingMethod: (productId: string): string | null => {
@@ -366,6 +387,14 @@ export const cartActions = {
 		cartStore.setState((state) => ({
 			...state,
 			cart: { users: {}, products: {}, orders: {}, invoices: {} },
+			v4vShares: {},
+			userCartTotalInSats: {},
+			sellerData: {},
+			productsBySeller: {},
+			totalInSats: 0,
+			subtotalByCurrency: {},
+			shippingByCurrency: {},
+			totalByCurrency: {}
 		}))
 
 		if (typeof sessionStorage !== 'undefined') {
@@ -451,14 +480,42 @@ export const cartActions = {
 			return { ...state, cart }
 		})
 
-		// Then update the cart totals asynchronously
-		await cartActions.updateCartTotals()
+		// Update seller data and cart totals
+		await cartActions.groupProductsBySeller()
+		await cartActions.updateSellerData()
 	},
 
-	// Convert currency to sats using a simple conversion rate
-	convertToSats: (currency: string, amount: number): number => {
-		const rate = CONVERSION_RATES[currency] || CONVERSION_RATES.USD // Default to USD if currency not found
-		return Math.round(amount * rate)
+	// Convert currency to sats using real-time exchange rates
+	convertToSats: async (currency: string, amount: number): Promise<number> => {
+		// Skip conversion if amount is too small or currency is not provided
+		if (!currency || !amount || amount <= 0.0001) return 0
+
+		// If already in sats, return directly
+		if (['sats', 'sat'].includes(currency.toLowerCase())) {
+			return amount
+		}
+
+		// If BTC, convert directly using numSatsInBtc
+		if (currency.toUpperCase() === 'BTC') {
+			return amount * numSatsInBtc
+		}
+
+		try {
+			// Use the query options with caching for conversion
+			if (CURRENCIES.includes(currency as any)) {
+				const queryOptions = currencyConversionQueryOptions(currency, amount);
+				const result = await cartQueryClient.fetchQuery(queryOptions);
+				
+				// Return the converted amount, or 0 if conversion failed
+				return result || 0;
+			} else {
+				console.warn(`Unsupported currency: ${currency}`);
+				return 0;
+			}
+		} catch (error) {
+			console.error(`Currency conversion failed for ${currency}:`, error)
+			return 0 // Return 0 if conversion failed
+		}
 	},
 
 	calculateProductTotal: async (
@@ -528,9 +585,38 @@ export const cartActions = {
 				}
 			}
 
-			// Use our simple conversion function
-			const productTotalInSats = cartActions.convertToSats(currency, productTotalInCurrency)
-			const shippingInSats = cartActions.convertToSats(currency, shippingCost)
+			// Get exchange rate using React Query's caching mechanism
+			if (CURRENCIES.includes(currency as any)) {
+				try {
+					// Use the query options to fetch with caching
+					const queryOptions = currencyExchangeRateQueryOptions(currency as any);
+					const result = await cartQueryClient.fetchQuery(queryOptions);
+					
+					if (result) {
+						// Convert using the direct exchange rate: (amount / rate) * numSatsInBtc
+						const productTotalInSats = Math.round((productTotalInCurrency / result) * numSatsInBtc);
+						const shippingInSats = Math.round((shippingCost / result) * numSatsInBtc);
+
+						return {
+							subtotalInSats: productTotalInSats,
+							shippingInSats: shippingInSats,
+							totalInSats: productTotalInSats + shippingInSats,
+							subtotalInCurrency: productTotalInCurrency,
+							shippingInCurrency: shippingCost,
+							totalInCurrency: productTotalInCurrency + shippingCost,
+							currency: currency,
+						};
+					}
+				} catch (error) {
+					console.warn(`Query-based exchange rate fetch failed for ${currency}:`, error);
+					// Continue to fallback method
+				}
+			}
+
+			// Use standard conversion function as fallback
+			// This could also be wrapped in a query, but keeping as direct call for fallback
+			const productTotalInSats = await cartActions.convertToSats(currency, productTotalInCurrency)
+			const shippingInSats = await cartActions.convertToSats(currency, shippingCost)
 
 			return {
 				subtotalInSats: productTotalInSats,
@@ -705,11 +791,19 @@ export const cartActions = {
 	},
 
 	updateCartTotals: async () => {
-		// Calculate cart total in sats
 		const state = cartStore.state
+		const sellerData = state.sellerData
+		
+		let totalInSats = 0
+		const subtotalByCurrency: Record<string, number> = {}
+		const shippingByCurrency: Record<string, number> = {}
+		const totalByCurrency: Record<string, number> = {}
+		
+		// Calculate cart total in sats
 		const userTotals: Record<string, number> = {}
 
 		try {
+			// Sum up product totals and update user totals
 			for (const user of Object.values(state.cart.users)) {
 				let userTotalSats = 0
 
@@ -717,17 +811,36 @@ export const cartActions = {
 					try {
 						const productTotal = await cartActions.calculateProductTotal(productId)
 						userTotalSats += productTotal.totalInSats
+						
+						// Add to currency totals
+						const currency = productTotal.currency
+						if (currency) {
+							// Add to subtotals by currency
+							subtotalByCurrency[currency] = (subtotalByCurrency[currency] || 0) + productTotal.subtotalInCurrency
+							
+							// Add shipping to shipping by currency
+							shippingByCurrency[currency] = (shippingByCurrency[currency] || 0) + productTotal.shippingInCurrency
+							
+							// Calculate total by currency
+							totalByCurrency[currency] = (subtotalByCurrency[currency] || 0) + (shippingByCurrency[currency] || 0)
+						}
 					} catch (error) {
 						console.error(`Error calculating total for product ${productId}:`, error)
 					}
 				}
 
 				userTotals[user.pubkey] = userTotalSats
+				totalInSats += userTotalSats
 			}
 
+			// Update state with new totals
 			cartStore.setState((state) => ({
 				...state,
 				userCartTotalInSats: userTotals,
+				totalInSats,
+				subtotalByCurrency,
+				shippingByCurrency,
+				totalByCurrency
 			}))
 		} catch (error) {
 			console.error('Error updating cart totals:', error)
@@ -833,7 +946,163 @@ export const cartActions = {
 			}
 		})
 
+		// Update store with grouped products
+		cartStore.setState((state) => ({
+			...state,
+			productsBySeller: grouped
+		}))
+
 		return grouped
+	},
+
+	// Calculate share distribution for a seller
+	calculateShares: (sellerPubkey: string, totalSats: number): { sellerAmount: number, communityAmount: number, sellerPercentage: number } => {
+		const state = cartStore.state
+		const shares = state.v4vShares[sellerPubkey] || []
+		
+		// If no V4V shares, seller gets 100%
+		if (shares.length === 0) {
+			return { sellerAmount: totalSats, communityAmount: 0, sellerPercentage: 100 }
+		}
+		
+		// Calculate community share total percentage
+		const communitySharePercentage = shares.reduce((total, share) => total + share.percentage, 0)
+		
+		// Ensure it doesn't exceed 100%
+		const normalizedCommunityPercentage = Math.min(communitySharePercentage, 100)
+		const sellerPercentage = 100 - normalizedCommunityPercentage
+		
+		// Calculate amounts
+		const sellerAmount = (totalSats * sellerPercentage) / 100
+		const communityAmount = (totalSats * normalizedCommunityPercentage) / 100
+		
+		return { sellerAmount, communityAmount, sellerPercentage }
+	},
+
+	// Convert currency amount to sats using exchange rates
+	convertWithExchangeRate: (amount: number, currency: string, exchangeRates: any): number => {
+		if (!exchangeRates || !amount) return 0
+		
+		const upperCurrency = currency.toUpperCase()
+		
+		// Handle special cases
+		if (upperCurrency === 'SATS') return amount
+		if (upperCurrency === 'BTC') return amount * numSatsInBtc
+		
+		// Get exchange rate if it exists for this currency
+		const rate = exchangeRates[upperCurrency]
+		if (!rate) return 0
+		
+		// Convert amount to sats: (amount / rate) * satsInBtc
+		return (amount / rate) * numSatsInBtc
+	},
+
+	// Update seller data calculations
+	updateSellerData: async () => {
+		// Get current state
+		const state = cartStore.state
+		const { productsBySeller, v4vShares } = state
+		const newSellerData: Record<string, any> = {}
+
+		// Make sure products are grouped by seller
+		if (Object.keys(productsBySeller).length === 0) {
+			cartActions.groupProductsBySeller()
+		}
+
+		// Try to get exchange rates from the cache if available
+		let exchangeRates
+		try {
+			const queryOptions = currencyExchangeRateQueryOptions('USD' as any)
+			const result = await cartQueryClient.fetchQuery(queryOptions)
+			if (result) {
+				// If we successfully fetched one rate, try to get all rates
+				const btcRatesOptions = currencyExchangeRateQueryOptions('BTC' as any)
+				exchangeRates = await cartQueryClient.fetchQuery(btcRatesOptions)
+			}
+		} catch (error) {
+			console.warn('Failed to get exchange rates for seller data calculations:', error)
+		}
+
+		// Process each seller
+		for (const [sellerPubkey, products] of Object.entries(state.productsBySeller)) {
+			if (products.length > 0) {
+				let sellerTotal = 0
+				const currencyTotals: Record<string, number> = {}
+				let shippingSats = 0
+
+				// Calculate totals for each product
+				for (const product of products) {
+					try {
+						// Get product details
+						const productTotal = await cartActions.calculateProductTotal(product.id)
+						sellerTotal += productTotal.totalInSats
+
+						// Add to currency totals
+						if (productTotal.currency) {
+							const currency = productTotal.currency
+							currencyTotals[currency] = (currencyTotals[currency] || 0) + productTotal.subtotalInCurrency
+						}
+
+						// Calculate shipping in sats
+						if (product.shippingMethodId && product.shippingCost > 0) {
+							if (exchangeRates && product.shippingMethodName) {
+								// Try to extract currency from shipping method name
+								const shippingCurrency = product.shippingMethodName.split(' - ')[1]?.split(' ')[0]
+								if (shippingCurrency && CURRENCIES.includes(shippingCurrency as any)) {
+									shippingSats += cartActions.convertWithExchangeRate(
+										product.shippingCost, 
+										shippingCurrency, 
+										exchangeRates
+									)
+								} else {
+									// Use product currency as fallback
+									for (const currency of Object.keys(currencyTotals)) {
+										if (CURRENCIES.includes(currency as any)) {
+											shippingSats += cartActions.convertWithExchangeRate(
+												product.shippingCost, 
+												currency, 
+												exchangeRates
+											)
+											break
+										}
+									}
+								}
+							} else {
+								// Fallback to direct conversion
+								const productEvent = await getProductEvent(product.id)
+								if (productEvent) {
+									const priceTag = getProductPrice(productEvent)
+									const currency = priceTag ? priceTag[2] : 'USD'
+									shippingSats += await cartActions.convertToSats(currency, product.shippingCost)
+								}
+							}
+						}
+					} catch (error) {
+						console.error(`Error calculating totals for product ${product.id}:`, error)
+					}
+				}
+
+				// Calculate value sharing for this seller
+				const shares = cartActions.calculateShares(sellerPubkey, sellerTotal)
+
+				// Store seller data
+				newSellerData[sellerPubkey] = {
+					satsTotal: sellerTotal,
+					currencyTotals,
+					shares,
+					shippingSats
+				}
+			}
+		}
+
+		// Update state with new seller data
+		cartStore.setState((state) => ({
+			...state,
+			sellerData: newSellerData
+		}))
+
+		// Also update cart totals
+		await cartActions.updateCartTotals()
 	},
 
 	fetchAvailableShippingOptions: async (productId: string): Promise<RichShippingInfo[]> => {
@@ -868,10 +1137,46 @@ export const cartActions = {
 	},
 }
 
-export const useCart = () => {
+// New hook to access cart state in a reactive way
+export function useCart() {
+	const storeState = useStore(cartStore)
+	
+	// When component mounts, ensure calculations are up to date
+	useEffect(() => {
+		// Calculate seller data if it hasn't been calculated yet
+		if (Object.keys(storeState.productsBySeller).length === 0 && 
+			Object.keys(storeState.cart.products).length > 0) {
+			cartActions.groupProductsBySeller()
+			cartActions.updateSellerData()
+		}
+	}, [storeState.cart.products])
+	
 	return {
-		...cartStore.state,
+		...storeState,
 		...cartActions,
+	}
+}
+
+// This ensures backward compatibility but shouldn't be used in new code
+export function useCartTotals() {
+	const state = useStore(cartStore)
+	
+	// Trigger recalculation when the cart changes
+	useEffect(() => {
+		// Only calculate if cart has products and store data is empty
+		if (Object.keys(state.cart.products).length > 0 && 
+			(state.totalInSats === 0 || Object.keys(state.sellerData).length === 0)) {
+			cartActions.groupProductsBySeller()
+			cartActions.updateSellerData()
+		}
+	}, [state.cart.products])
+	
+	return {
+		totalItems: Object.values(state.cart.products).reduce((sum, product) => sum + product.amount, 0),
+		subtotalByCurrency: state.subtotalByCurrency,
+		shippingByCurrency: state.shippingByCurrency,
+		totalByCurrency: state.totalByCurrency,
+		totalInSats: state.totalInSats
 	}
 }
 
@@ -907,94 +1212,4 @@ export async function handleAddToCart(userId: string, product: Partial<CartProdu
 	}
 
 	return false
-}
-
-// New hook to access real-time cart totals
-export function useCartTotals() {
-	const { cart } = useCart()
-	const [totals, setTotals] = useState({
-		totalItems: 0,
-		subtotalByCurrency: {} as Record<string, number>,
-		shippingByCurrency: {} as Record<string, number>,
-		totalByCurrency: {} as Record<string, number>,
-	})
-
-	// Create a signature to detect changes to cart amounts and shipping
-	const cartSignature = useMemo(() => {
-		return Object.values(cart.products)
-			.map((p) => `${p.id}:${p.amount}:${p.shippingMethodId}:${p.shippingCost}`)
-			.join(',')
-	}, [cart.products])
-
-	useEffect(() => {
-		let isMounted = true
-
-		const calculateTotals = async () => {
-			try {
-				// Get total item count
-				const itemCount = cartActions.calculateTotalItems()
-
-				// Initialize accumulators
-				const subtotals: Record<string, number> = {}
-				const shipping: Record<string, number> = {}
-				const totals: Record<string, number> = {}
-
-				// Clear product event cache to ensure fresh data
-				Object.keys(productEventCache).forEach((key) => {
-					delete productEventCache[key]
-				})
-
-				// Process each product
-				await Promise.all(
-					Object.values(cart.products).map(async (product) => {
-						try {
-							const event = await getProductEvent(product.id)
-							if (!event) return
-
-							const priceTag = getProductPrice(event)
-							if (!priceTag) return
-
-							const currency = priceTag[2]
-							const price = parseFloat(priceTag[1])
-
-							// Calculate subtotal for this product
-							const productSubtotal = price * product.amount
-							subtotals[currency] = (subtotals[currency] || 0) + productSubtotal
-
-							// Add shipping cost if available
-							if (product.shippingCost) {
-								shipping[currency] = (shipping[currency] || 0) + product.shippingCost
-							}
-
-							// Calculate total for this currency
-							totals[currency] = (subtotals[currency] || 0) + (shipping[currency] || 0)
-						} catch (error) {
-							console.error(`Error processing product ${product.id}:`, error)
-						}
-					}),
-				)
-
-				// Only update state if component is still mounted
-				if (isMounted) {
-					setTotals({
-						totalItems: itemCount,
-						subtotalByCurrency: subtotals,
-						shippingByCurrency: shipping,
-						totalByCurrency: totals,
-					})
-				}
-			} catch (error) {
-				console.error('Error calculating cart totals:', error)
-			}
-		}
-
-		calculateTotals()
-
-		// Cleanup function
-		return () => {
-			isMounted = false
-		}
-	}, [cartSignature, cart])
-
-	return totals
 }
