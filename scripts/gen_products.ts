@@ -1,3 +1,4 @@
+import { CURRENCIES } from '@/lib/constants'
 import type { ProductListingSchema } from '@/lib/schemas/productListing'
 import { faker } from '@faker-js/faker'
 import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev-kit/ndk'
@@ -16,7 +17,7 @@ export function generateProductData(): Omit<z.infer<typeof ProductListingSchema>
 		tags: [
 			['d', productId],
 			['title', faker.commerce.productName()],
-			['price', price, 'USD'],
+			['price', price, faker.helpers.arrayElement(CURRENCIES)],
 			['type', 'simple', 'physical'],
 			['visibility', 'on-sale'],
 			['stock', faker.number.int({ min: 1, max: 100 }).toString()],

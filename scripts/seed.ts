@@ -1,15 +1,17 @@
 // seed.ts
+import { devUser1, devUser2, devUser3, devUser4, devUser5 } from '@/lib/fixtures'
 import { ndkActions } from '@/lib/stores/ndk'
 import { NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { config } from 'dotenv'
 import { createCollectionEvent, createProductReference, generateCollectionData } from './gen_collections'
 import { createProductEvent, generateProductData } from './gen_products'
-import { createShippingEvent, generateShippingData } from './gen_shipping'
 import { createReviewEvent, generateReviewData } from './gen_review'
-import { devUser1, devUser2, devUser3, devUser4, devUser5 } from '@/lib/fixtures'
+import { createShippingEvent, generateShippingData } from './gen_shipping'
+import { createV4VSharesEvent } from './gen_v4v'
 import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 
 config()
+
 
 const RELAY_URL = process.env.APP_RELAY_URL
 if (!RELAY_URL) {
@@ -20,6 +22,8 @@ if (!RELAY_URL) {
 // Initialize NDK with the relay URL
 const ndk = ndkActions.initialize([RELAY_URL])
 const devUsers = [devUser1, devUser2, devUser3, devUser4, devUser5]
+
+
 
 async function seedData() {
 	const PRODUCTS_PER_USER = 6
@@ -73,6 +77,10 @@ async function seedData() {
 				}
 			}
 		}
+		
+		// Create V4V shares for each user
+		console.log(`Creating V4V shares for user ${pubkey.substring(0, 8)}...`)
+		await createV4VSharesEvent(signer, ndk);
 	}
 
 	// Create collections
