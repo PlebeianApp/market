@@ -940,7 +940,7 @@ export function NewProductContent() {
 	}
 
 	return (
-		<SheetContent side="right" className="flex flex-col max-h-screen overflow-hidden">
+		<SheetContent side="right" className="flex flex-col max-h-screen overflow-hidden w-[100vw] sm:min-w-[85vw] md:min-w-[55vw] xl:min-w-[35vw]">
 			<SheetHeader>
 				<SheetTitle className="text-center">Add A Product</SheetTitle>
 				<SheetDescription className="hidden">Create a new product to sell in your shop</SheetDescription>
