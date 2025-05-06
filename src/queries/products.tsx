@@ -44,7 +44,6 @@ export const fetchProducts = async () => {
 export const fetchProduct = async (id: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
-
 	const event = await ndk.fetchEvent(id)
 	if (!event) {
 		throw new Error('Product not found')

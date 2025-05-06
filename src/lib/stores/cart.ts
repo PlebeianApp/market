@@ -4,6 +4,7 @@ import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { fetchV4VShares } from '@/queries/v4v'
 import { useEffect, useState, useMemo } from 'react'
+import { SHIPPING_KIND } from '../schemas/shippingOption'
 
 export interface ProductImage {
 	url: string
@@ -850,7 +851,7 @@ export const cartActions = {
 					if (!info) return null
 
 					return {
-						id: `30406:${sellerPubkey}:${info.id}`, // Create a shipping reference
+						id: `${SHIPPING_KIND}:${sellerPubkey}:${info.id}`, // Create a shipping reference
 						name: info.title,
 						cost: parseFloat(info.price.amount),
 						currency: info.price.currency,

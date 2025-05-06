@@ -73,7 +73,7 @@ export const ShippingPriceDistanceTagSchema = z.tuple([
 
 // Complete Shipping Option Schema
 export const ShippingOptionSchema = z.object({
-	kind: z.literal(30406),
+	kind: z.literal(SHIPPING_KIND),
 	created_at: z.number().int().positive(),
 	content: z.string(),
 	tags: z

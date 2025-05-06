@@ -3,6 +3,7 @@ import type { RichShippingInfo } from './cart'
 import { ProductImageTagSchema, ProductCategoryTagSchema } from '@/lib/schemas/productListing'
 import type { z } from 'zod'
 import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
+import { SHIPPING_KIND } from '../schemas/shippingOption'
 
 export type Category = z.infer<typeof ProductCategoryTagSchema>
 export type ProductImage = z.infer<typeof ProductImageTagSchema>
@@ -205,7 +206,7 @@ export const productFormActions = {
 			.filter((ship) => ship.shipping && ship.shipping.id)
 			.map((ship) => {
 				// Format: ['shipping_option', '30406:pubkey:identifier', 'extra_cost']
-				const shippingRef = `30406:${ship.shipping!.id}`
+				const shippingRef = `${SHIPPING_KIND}:${ship.shipping!.id}`
 				return ship.extraCost ? (['shipping_option', shippingRef, ship.extraCost] as NDKTag) : (['shipping_option', shippingRef] as NDKTag)
 			})
 

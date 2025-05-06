@@ -7,6 +7,7 @@ import { createProductEvent, generateProductData } from './gen_products'
 import { createShippingEvent, generateShippingData } from './gen_shipping'
 import { createReviewEvent, generateReviewData } from './gen_review'
 import { devUser1, devUser2, devUser3, devUser4, devUser5 } from '@/lib/fixtures'
+import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 
 config()
 
@@ -68,7 +69,7 @@ async function seedData() {
 			if (success) {
 				const shippingId = shipping.tags.find((tag) => tag[0] === 'd')?.[1]
 				if (shippingId) {
-					shippingsByUser[pubkey].push(`30406:${pubkey}:${shippingId}`)
+					shippingsByUser[pubkey].push(`${SHIPPING_KIND}:${pubkey}:${shippingId}`)
 				}
 			}
 		}

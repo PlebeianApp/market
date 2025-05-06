@@ -32,7 +32,6 @@ export const fetchShippingOptions = async () => {
 export const fetchShippingOption = async (id: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
-
 	const event = await ndk.fetchEvent(id)
 	if (!event) {
 		throw new Error('Shipping option not found')
@@ -241,7 +240,7 @@ export const getShippingId = (event: NDKEvent): string | undefined => {
  * @returns A string in the format "30406:pubkey:id"
  */
 export const createShippingReference = (pubkey: string, id: string): string => {
-	return `30406:${pubkey}:${id}`
+	return `${SHIPPING_KIND}:${pubkey}:${id}`
 }
 
 /**
