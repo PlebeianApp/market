@@ -17,17 +17,15 @@ export default function CartSheetContent() {
 	const userPubkey = cartActions.getUserPubkey()
 	const [sellerShippingOptions, setSellerShippingOptions] = useState<Record<string, RichShippingInfo[]>>({})
 	const [selectedShippingByUser, setSelectedShippingByUser] = useState<Record<string, string>>({})
-	
+
 	// Add validation for shipping methods
 	const hasAllShippingMethods = useMemo(() => {
-		return Object.values(cart.products).every(product => product.shippingMethodId !== null)
+		return Object.values(cart.products).every((product) => product.shippingMethodId !== null)
 	}, [cart.products])
 
 	// Get products missing shipping - make this reactive with useMemo
 	const missingShippingCount = useMemo(() => {
-		return Object.values(cart.products)
-			.filter(product => !product.shippingMethodId)
-			.length
+		return Object.values(cart.products).filter((product) => !product.shippingMethodId).length
 	}, [cart.products])
 
 	// Fetch shipping options for each seller
@@ -36,7 +34,7 @@ export default function CartSheetContent() {
 			const productsBySeller = cartActions.groupProductsBySeller()
 			const newSellerShippingOptions: Record<string, RichShippingInfo[]> = {}
 			const newSelectedShipping: Record<string, string> = {}
-			
+
 			// For each seller, fetch shipping options using the first product
 			for (const [sellerPubkey, products] of Object.entries(productsBySeller)) {
 				if (products.length > 0) {
@@ -44,7 +42,7 @@ export default function CartSheetContent() {
 						const firstProductId = products[0].id
 						const options = await cartActions.fetchAvailableShippingOptions(firstProductId)
 						newSellerShippingOptions[sellerPubkey] = options
-						
+
 						// Initialize selected shipping with what's already in the cart
 						if (products[0].shippingMethodId) {
 							newSelectedShipping[sellerPubkey] = products[0].shippingMethodId
@@ -55,12 +53,12 @@ export default function CartSheetContent() {
 					}
 				}
 			}
-			
+
 			setSellerShippingOptions(newSellerShippingOptions)
 			// Update selected shipping, but keep existing selections
-			setSelectedShippingByUser(prev => ({...newSelectedShipping, ...prev}))
+			setSelectedShippingByUser((prev) => ({ ...newSelectedShipping, ...prev }))
 		}
-		
+
 		fetchShippingForSellers()
 	}, [cart.products])
 
@@ -84,35 +82,33 @@ export default function CartSheetContent() {
 			cartActions.handleProductUpdate('remove', userPubkey, productId)
 		}
 	}
-	
+
 	// Handle shipping option selection for a seller
 	const handleShippingSelect = async (sellerPubkey: string, shippingOption: RichShippingInfo) => {
 		// Log current state for debugging
 		console.log('Before shipping update:', {
 			sellerPubkey,
 			shippingOption,
-			products: productsBySeller[sellerPubkey]
-		});
+			products: productsBySeller[sellerPubkey],
+		})
 
 		const products = productsBySeller[sellerPubkey] || []
-		
+
 		// Use Promise.all to wait for all shipping updates to complete
-		await Promise.all(products.map(product => 
-			cartActions.setShippingMethod(product.id, shippingOption)
-		));
-		
+		await Promise.all(products.map((product) => cartActions.setShippingMethod(product.id, shippingOption)))
+
 		// Update selected shipping state
-		setSelectedShippingByUser(prev => ({
+		setSelectedShippingByUser((prev) => ({
 			...prev,
-			[sellerPubkey]: shippingOption.id
-		}));
+			[sellerPubkey]: shippingOption.id,
+		}))
 
 		// Log updated state for debugging
 		console.log('After shipping update:', {
 			sellerPubkey,
 			shippingOption,
-			updatedProducts: cartStore.state.cart.products
-		});
+			updatedProducts: cartStore.state.cart.products,
+		})
 	}
 
 	if (Object.keys(cart.products).length === 0) {
@@ -165,13 +161,13 @@ export default function CartSheetContent() {
 									{products.length} {products.length === 1 ? 'item' : 'items'}
 								</span>
 							</div>
-							
-								<ShippingSelector 
-									options={sellerShippingOptions[sellerPubkey] || []}
-									selectedId={selectedShippingByUser[sellerPubkey]}
-									onSelect={(option) => handleShippingSelect(sellerPubkey, option)}
-									className="w-full"
-								/>
+
+							<ShippingSelector
+								options={sellerShippingOptions[sellerPubkey] || []}
+								selectedId={selectedShippingByUser[sellerPubkey]}
+								onSelect={(option) => handleShippingSelect(sellerPubkey, option)}
+								className="w-full"
+							/>
 
 							<Separator />
 
@@ -206,18 +202,20 @@ export default function CartSheetContent() {
 								</p>
 							</div>
 						))}
-						
-						{Object.entries(shippingByCurrency).filter(([_, amount]) => amount > 0).map(([currency, amount]) => (
-							<div key={`shipping-${currency}`} className="flex justify-between">
-								<p className="text-sm text-muted-foreground">Shipping ({currency})</p>
-								<p className="text-sm font-medium">
-									{amount.toFixed(2)} {currency}
-								</p>
-							</div>
-						))}
-						
+
+						{Object.entries(shippingByCurrency)
+							.filter(([_, amount]) => amount > 0)
+							.map(([currency, amount]) => (
+								<div key={`shipping-${currency}`} className="flex justify-between">
+									<p className="text-sm text-muted-foreground">Shipping ({currency})</p>
+									<p className="text-sm font-medium">
+										{amount.toFixed(2)} {currency}
+									</p>
+								</div>
+							))}
+
 						<Separator className="my-2" />
-						
+
 						{Object.entries(totalByCurrency).map(([currency, amount]) => (
 							<div key={`total-${currency}`} className="flex justify-between">
 								<p className="text-sm font-semibold">Total ({currency})</p>
@@ -232,19 +230,17 @@ export default function CartSheetContent() {
 
 					{/* Action Buttons */}
 					<div className="space-y-2">
-						<Button 
-							className="w-full" 
-							size="lg" 
+						<Button
+							className="w-full"
+							size="lg"
 							disabled={!hasAllShippingMethods || totalItems === 0}
-							title={!hasAllShippingMethods ? "Please select shipping options for all items" : ""}
+							title={!hasAllShippingMethods ? 'Please select shipping options for all items' : ''}
 						>
-							{totalItems === 0 ? (
-								"Cart is empty"
-							) : missingShippingCount > 0 ? (
-								`Select shipping for ${missingShippingCount} more ${missingShippingCount === 1 ? 'item' : 'items'}`
-							) : (
-								`Checkout (${totalItems} ${totalItems === 1 ? 'item' : 'items'})`
-							)}
+							{totalItems === 0
+								? 'Cart is empty'
+								: missingShippingCount > 0
+									? `Select shipping for ${missingShippingCount} more ${missingShippingCount === 1 ? 'item' : 'items'}`
+									: `Checkout (${totalItems} ${totalItems === 1 ? 'item' : 'items'})`}
 						</Button>
 						<div className="flex gap-2">
 							<SheetClose asChild>

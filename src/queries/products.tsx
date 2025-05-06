@@ -8,7 +8,7 @@ import {
 	ProductTitleTagSchema,
 	ProductTypeTagSchema,
 	ProductVisibilityTagSchema,
-	ProductWeightTagSchema
+	ProductWeightTagSchema,
 } from '@/lib/schemas/productListing'
 import { ndkActions } from '@/lib/stores/ndk'
 import type { NDKFilter } from '@nostr-dev-kit/ndk'

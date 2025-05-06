@@ -74,9 +74,9 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 
 	// Get shipping cost from the cart state
 	const getShippingCost = () => {
-		const cart = cartStore.state.cart;
-		const product = cart.products[productId];
-		return product?.shippingCost || 0;
+		const cart = cartStore.state.cart
+		const product = cart.products[productId]
+		return product?.shippingCost || 0
 	}
 
 	if (isLoading) {
@@ -169,30 +169,24 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 			{/* Shipping Section - only show if not hidden */}
 			{!hideShipping && (
 				<div className="ml-24 flex flex-col gap-2">
-					<button 
-						className={`text-sm ${!hasShipping 
-							? 'text-red-600 hover:text-red-800 font-medium' 
-							: 'text-blue-600 hover:text-blue-800'} text-left w-fit flex items-center gap-2`}
+					<button
+						className={`text-sm ${
+							!hasShipping ? 'text-red-600 hover:text-red-800 font-medium' : 'text-blue-600 hover:text-blue-800'
+						} text-left w-fit flex items-center gap-2`}
 						onClick={() => setShowShipping(!showShipping)}
 					>
-						{!hasShipping && (
-							<span className="i-warning w-4 h-4" />
-						)}
-						{showShipping 
-							? 'Hide shipping options' 
-							: hasShipping 
-								? 'Change shipping' 
-								: 'Select shipping (required)'}
+						{!hasShipping && <span className="i-warning w-4 h-4" />}
+						{showShipping ? 'Hide shipping options' : hasShipping ? 'Change shipping' : 'Select shipping (required)'}
 					</button>
-					
+
 					{showShipping && (
 						<div className={`flex flex-col gap-2 ${!hasShipping ? 'border-l-2 border-red-200 pl-2' : ''}`}>
-							<ShippingSelector 
-								productId={productId} 
+							<ShippingSelector
+								productId={productId}
 								className="w-full max-w-xs"
 								onSelect={() => {}} // No-op since we handle selection inside ShippingSelector
 							/>
-							
+
 							{getShippingCost() > 0 && (
 								<div className="text-sm text-muted-foreground">
 									Shipping cost: {getShippingCost()} {currency}
@@ -200,7 +194,7 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 							)}
 						</div>
 					)}
-					
+
 					{!showShipping && currentShippingId && getShippingCost() > 0 && (
 						<div className="text-sm text-muted-foreground">
 							Shipping: {getShippingCost()} {currency}

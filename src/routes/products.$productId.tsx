@@ -288,15 +288,13 @@ function RouteComponent() {
 										<Truck className="h-6 w-6 text-gray-500" />
 										<h3 className="text-lg font-medium">Shipping Options</h3>
 									</div>
-									
+
 									<div className="grid md:grid-cols-2 gap-6">
 										<div>
-											<p className="text-sm text-gray-500 mb-4">
-												Select a shipping method to see estimated costs and delivery times.
-											</p>
-											
+											<p className="text-sm text-gray-500 mb-4">Select a shipping method to see estimated costs and delivery times.</p>
+
 											<div className="w-full">
-												<ShippingSelector 
+												<ShippingSelector
 													productId={productId}
 													onSelect={(option: RichShippingInfo) => {
 														// Optional notification could go here
@@ -304,38 +302,34 @@ function RouteComponent() {
 													className="w-full"
 												/>
 											</div>
-											
+
 											<div className="mt-4">
-												<p className="text-sm text-gray-500">
-													Shipping costs will be added to the final price in the cart.
-												</p>
+												<p className="text-sm text-gray-500">Shipping costs will be added to the final price in the cart.</p>
 											</div>
 										</div>
-										
+
 										<div className="bg-gray-50 p-4 rounded-md">
 											<h4 className="font-medium mb-2">Shipping Information</h4>
-											
+
 											{weightTag && (
 												<div className="text-sm text-gray-600 mb-2">
 													<span className="font-medium">Weight:</span> {weightTag[1]} {weightTag[2]}
 												</div>
 											)}
-											
+
 											{dimensionsTag && (
 												<div className="text-sm text-gray-600 mb-2">
 													<span className="font-medium">Dimensions:</span> {dimensionsTag[1]} {dimensionsTag[2]}
 												</div>
 											)}
-											
+
 											{location && (
 												<div className="text-sm text-gray-600 mb-2">
 													<span className="font-medium">Ships from:</span> {location}
 												</div>
 											)}
-											
-											<div className="mt-3 text-sm text-gray-500">
-												Delivery times are estimates and may vary based on your location.
-											</div>
+
+											<div className="mt-3 text-sm text-gray-500">Delivery times are estimates and may vary based on your location.</div>
 										</div>
 									</div>
 								</div>

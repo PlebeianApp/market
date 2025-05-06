@@ -150,7 +150,7 @@ const getShippingEvent = async (id: string): Promise<NDKEvent | null> => {
 		if (id.startsWith('30406:')) {
 			const [_, pubkey, eventId] = id.split(':')
 			const events = await fetchShippingOptionsByPubkey(pubkey)
-			const event = events.find(e => e.tags.some(t => t[0] === 'd' && t[1] === eventId))
+			const event = events.find((e) => e.tags.some((t) => t[0] === 'd' && t[1] === eventId))
 
 			if (event) {
 				shippingEventCache[id] = event
@@ -301,26 +301,26 @@ export const cartActions = {
 
 	setShippingMethod: async (productId: string, shipping: Partial<RichShippingInfo>) => {
 		// Get previous shipping data for comparison
-		const prevState = cartStore.state;
-		const prevProduct = prevState.cart.products[productId];
-		const prevShippingId = prevProduct?.shippingMethodId;
+		const prevState = cartStore.state
+		const prevProduct = prevState.cart.products[productId]
+		const prevShippingId = prevProduct?.shippingMethodId
 
 		// Clear shipping cache if shipping method changed
 		if (prevShippingId !== shipping.id && shipping.id) {
 			// Clear our shipping event cache to force a refresh
 			if (shippingEventCache[shipping.id] !== undefined) {
-				delete shippingEventCache[shipping.id];
+				delete shippingEventCache[shipping.id]
 			}
 		}
 
 		// Clear product cache to force price refresh
 		if (productEventCache[productId] !== undefined) {
-			delete productEventCache[productId];
+			delete productEventCache[productId]
 		}
 
 		// Update the cart state with new shipping data
 		cartStore.setState((state) => {
-			const newCart = { 
+			const newCart = {
 				...state.cart,
 				products: {
 					...state.cart.products,
@@ -328,31 +328,31 @@ export const cartActions = {
 						...state.cart.products[productId],
 						shippingMethodId: shipping.id || null,
 						shippingCost: Number(shipping.cost || 0),
-						shippingMethodName: shipping.name ?? null
-					}
-				}
-			};
-			
+						shippingMethodName: shipping.name ?? null,
+					},
+				},
+			}
+
 			// Save to storage
-			cartActions.saveToStorage(newCart);
-			
+			cartActions.saveToStorage(newCart)
+
 			return {
 				...state,
-				cart: newCart
-			};
-		});
+				cart: newCart,
+			}
+		})
 
 		// Force an immediate cart totals update
-		await cartActions.updateCartTotals();
+		await cartActions.updateCartTotals()
 
 		// Also force a full recalculation of product totals
 		try {
-			const product = cartStore.state.cart.products[productId];
+			const product = cartStore.state.cart.products[productId]
 			if (product) {
-				await cartActions.calculateProductTotal(productId);
+				await cartActions.calculateProductTotal(productId)
 			}
 		} catch (error) {
-			console.error(`Error recalculating product total after shipping change: ${productId}`, error);
+			console.error(`Error recalculating product total after shipping change: ${productId}`, error)
 		}
 	},
 
@@ -844,20 +844,22 @@ export const cartActions = {
 			const shippingEvents = await fetchShippingOptionsByPubkey(sellerPubkey)
 
 			// Map shipping events to user-friendly format
-			return shippingEvents.map(event => {
-				const info = getShippingInfo(event)
-				if (!info) return null
+			return shippingEvents
+				.map((event) => {
+					const info = getShippingInfo(event)
+					if (!info) return null
 
-				return {
-					id: `30406:${sellerPubkey}:${info.id}`, // Create a shipping reference
-					name: info.title,
-					cost: parseFloat(info.price.amount),
-					currency: info.price.currency,
-					country: info.country,
-					service: info.service,
-					carrier: info.carrier
-				}
-			}).filter(Boolean) as RichShippingInfo[]
+					return {
+						id: `30406:${sellerPubkey}:${info.id}`, // Create a shipping reference
+						name: info.title,
+						cost: parseFloat(info.price.amount),
+						currency: info.price.currency,
+						country: info.country,
+						service: info.service,
+						carrier: info.carrier,
+					}
+				})
+				.filter(Boolean) as RichShippingInfo[]
 		} catch (error) {
 			console.error(`Failed to fetch shipping options for product ${productId}:`, error)
 			return []
@@ -924,7 +926,7 @@ export function useCartTotals() {
 	}, [cart.products])
 
 	useEffect(() => {
-		let isMounted = true;
+		let isMounted = true
 
 		const calculateTotals = async () => {
 			try {
@@ -937,37 +939,39 @@ export function useCartTotals() {
 				const totals: Record<string, number> = {}
 
 				// Clear product event cache to ensure fresh data
-				Object.keys(productEventCache).forEach(key => {
-					delete productEventCache[key];
-				});
+				Object.keys(productEventCache).forEach((key) => {
+					delete productEventCache[key]
+				})
 
 				// Process each product
-				await Promise.all(Object.values(cart.products).map(async (product) => {
-					try {
-						const event = await getProductEvent(product.id)
-						if (!event) return
+				await Promise.all(
+					Object.values(cart.products).map(async (product) => {
+						try {
+							const event = await getProductEvent(product.id)
+							if (!event) return
 
-						const priceTag = getProductPrice(event)
-						if (!priceTag) return
+							const priceTag = getProductPrice(event)
+							if (!priceTag) return
 
-						const currency = priceTag[2]
-						const price = parseFloat(priceTag[1])
+							const currency = priceTag[2]
+							const price = parseFloat(priceTag[1])
 
-						// Calculate subtotal for this product
-						const productSubtotal = price * product.amount
-						subtotals[currency] = (subtotals[currency] || 0) + productSubtotal
+							// Calculate subtotal for this product
+							const productSubtotal = price * product.amount
+							subtotals[currency] = (subtotals[currency] || 0) + productSubtotal
 
-						// Add shipping cost if available
-						if (product.shippingCost) {
-							shipping[currency] = (shipping[currency] || 0) + product.shippingCost
+							// Add shipping cost if available
+							if (product.shippingCost) {
+								shipping[currency] = (shipping[currency] || 0) + product.shippingCost
+							}
+
+							// Calculate total for this currency
+							totals[currency] = (subtotals[currency] || 0) + (shipping[currency] || 0)
+						} catch (error) {
+							console.error(`Error processing product ${product.id}:`, error)
 						}
-
-						// Calculate total for this currency
-						totals[currency] = (subtotals[currency] || 0) + (shipping[currency] || 0)
-					} catch (error) {
-						console.error(`Error processing product ${product.id}:`, error)
-					}
-				}))
+					}),
+				)
 
 				// Only update state if component is still mounted
 				if (isMounted) {
