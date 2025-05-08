@@ -14,6 +14,27 @@ interface ShippingSelectorProps {
 	className?: string
 }
 
+const getBestShippingOptions = (options: RichShippingInfo[], selectedId?: string): RichShippingInfo[] => {
+	if (options.length <= 4) return options
+
+	const selectedOption = selectedId ? options.find((opt) => opt.id === selectedId) : undefined
+
+	let remainingOptions = options.filter((opt) => opt.id !== selectedId)
+
+	remainingOptions = remainingOptions.sort((a, b) => {
+		const aIsStandard = a.name?.toLowerCase().includes('standard') || false
+		const bIsStandard = b.name?.toLowerCase().includes('standard') || false
+		if (aIsStandard && !bIsStandard) return -1
+		if (!aIsStandard && bIsStandard) return 1
+
+		return (a.cost || 0) - (b.cost || 0)
+	})
+
+	const limitedOptions = selectedOption ? [selectedOption, ...remainingOptions.slice(0, 3)] : remainingOptions.slice(0, 4)
+
+	return limitedOptions
+}
+
 export function ShippingSelector({
 	productId,
 	options: propOptions,
@@ -21,33 +42,25 @@ export function ShippingSelector({
 	onSelect,
 	className,
 }: ShippingSelectorProps) {
-	// State to track local selection
 	const [selectedId, setSelectedId] = useState<string | undefined>(propSelectedId)
 
-	// Update local state when prop changes
 	useEffect(() => {
 		if (propSelectedId) {
 			setSelectedId(propSelectedId)
 		}
 	}, [propSelectedId])
 
-	// Get seller's pubkey from product if we have a productId
-	const { data: sellerPubkey } = useProductPubkey(productId || '') || { data: undefined }
+	const { data: sellerPubkey = '' } = useProductPubkey(productId || '') || { data: '' }
+	const { data: shippingEvents = [], isLoading, error } = useShippingOptionsByPubkey(sellerPubkey)
 
-	// Fetch shipping options by seller pubkey
-	const { data: shippingEvents = [], isLoading, error } = useShippingOptionsByPubkey(sellerPubkey || '')
-
-	// Transform shipping events to RichShippingInfo format
 	const hookOptions = useMemo(() => {
 		if (!shippingEvents.length || !sellerPubkey) return []
 
 		return shippingEvents
 			.map((event) => {
-				// Use the comprehensive helper function to extract all shipping info
 				const info = getShippingInfo(event)
 				if (!info) return null
 
-				// Create a reference ID in the format used by the cart
 				const id = createShippingReference(sellerPubkey, info.id)
 
 				return {
@@ -63,62 +76,72 @@ export function ShippingSelector({
 			.filter(Boolean) as RichShippingInfo[]
 	}, [shippingEvents, sellerPubkey])
 
-	// Use provided options or options from the hook
-	const options = propOptions || hookOptions
+	const rawOptions = propOptions || hookOptions
+
+	const options = useMemo(() => {
+		return getBestShippingOptions(rawOptions, selectedId)
+	}, [rawOptions, selectedId])
+
+	const hasValidOptions = useMemo(() => {
+		return options && options.length > 0
+	}, [options])
+
+	useEffect(() => {
+		if (options.length === 1 && !selectedId) {
+			handleSelect(options[0].id)
+		}
+	}, [options, selectedId])
 
 	const handleSelect = async (id: string) => {
 		setSelectedId(id)
-		const option = options.find((o: RichShippingInfo) => o.id === id)
+
+		const option = rawOptions.find((o: RichShippingInfo) => o.id === id)
 
 		if (option) {
-			// If we have a productId, update the cart directly
 			if (productId) {
 				await cartActions.setShippingMethod(productId, option)
 			}
 
-			// Call the callback
 			onSelect(option)
 		}
 	}
 
-	if (isLoading && !propOptions) {
+	const renderContent = () => {
+		if (isLoading && !propOptions) {
+			return (
+				<div className="flex items-center gap-2 text-sm text-muted-foreground">
+					<Loader2 className="h-4 w-4 animate-spin" />
+					<span>Loading shipping options...</span>
+				</div>
+			)
+		}
+
+		if (error && !propOptions) {
+			return <div className="text-sm text-red-500">Error loading shipping options</div>
+		}
+
+		if (!hasValidOptions) {
+			return <div className="text-sm text-muted-foreground">No shipping options available</div>
+		}
+
 		return (
-			<div className="flex items-center gap-2 text-sm text-muted-foreground">
-				<Loader2 className="h-4 w-4 animate-spin" />
-				<span>Loading shipping options...</span>
-			</div>
+			<Select onValueChange={handleSelect} value={selectedId}>
+				<SelectTrigger className={className}>
+					<SelectValue placeholder="Select shipping method" />
+				</SelectTrigger>
+				<SelectContent>
+					<SelectGroup>
+						<SelectLabel>Shipping Options</SelectLabel>
+						{options.map((option: RichShippingInfo) => (
+							<SelectItem key={option.id} value={option.id}>
+								{option.name} - {option.cost} {option.currency}
+							</SelectItem>
+						))}
+					</SelectGroup>
+				</SelectContent>
+			</Select>
 		)
 	}
 
-	if (error && !propOptions) {
-		return <div className="text-sm text-red-500">Error loading shipping options</div>
-	}
-
-	if (!options || options.length === 0) {
-		return <div className="text-sm text-muted-foreground">No shipping options available</div>
-	}
-
-	// If there's only one option, auto-select it
-	if (options.length === 1 && !selectedId) {
-		// Trigger selection on next render
-		setTimeout(() => handleSelect(options[0].id), 0)
-	}
-
-	return (
-		<Select onValueChange={handleSelect} value={selectedId}>
-			<SelectTrigger className={className}>
-				<SelectValue placeholder="Select shipping method" />
-			</SelectTrigger>
-			<SelectContent>
-				<SelectGroup>
-					<SelectLabel>Shipping Options</SelectLabel>
-					{options.map((option: RichShippingInfo) => (
-						<SelectItem key={option.id} value={option.id}>
-							{option.name} - {option.cost} {option.currency}
-						</SelectItem>
-					))}
-				</SelectGroup>
-			</SelectContent>
-		</Select>
-	)
+	return renderContent()
 }

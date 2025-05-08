@@ -54,6 +54,7 @@ export const fetchV4VShares = async (pubkey: string): Promise<V4VDTO[]> => {
 		})
 
 		if (!events || events.size === 0) {
+			console.log('No V4V events found for pubkey:', pubkey)
 			return []
 		}
 
@@ -61,6 +62,7 @@ export const fetchV4VShares = async (pubkey: string): Promise<V4VDTO[]> => {
 		let mostRecentTimestamp = 0
 
 		const eventsArray = Array.from(events)
+
 		for (const event of eventsArray) {
 			if (event.created_at && event.created_at > mostRecentTimestamp) {
 				mostRecentEvent = event
@@ -74,31 +76,72 @@ export const fetchV4VShares = async (pubkey: string): Promise<V4VDTO[]> => {
 
 		try {
 			const content = JSON.parse(mostRecentEvent.content)
-			if (!Array.isArray(content)) return []
 
-			return content
-				.map((zapTag, index) => {
-					if (zapTag[0] === 'zap' && zapTag[1] && zapTag[2]) {
-						const pubkeyValue = zapTag[1]
-						const percentage = parseFloat(zapTag[2])
+			if (!Array.isArray(content)) {
+				return []
+			}
 
-						// Handle different pubkey formats
-						const normalized = normalizeAndEncodePubkey(pubkeyValue)
-						if (!normalized) return null
+			const shares = await Promise.all(
+				content
+					.map(async (zapTag, index) => {
+						if (zapTag[0] === 'zap' && zapTag[1] && zapTag[2]) {
+							const pubkeyValue = zapTag[1]
+							const percentage = parseFloat(zapTag[2]) || 5 // Default to 5% if invalid
 
-						return {
-							id: `${index}`,
-							pubkey: normalized.pubkey,
-							percentage,
+							const normalized = normalizeAndEncodePubkey(pubkeyValue)
+							if (!normalized) {
+								return null
+							}
+
+							let name = 'Community Member'
+							try {
+								if (ndk) {
+									const user = ndk.getUser({
+										pubkey: normalized.pubkey,
+									})
+									await user.fetchProfile()
+									if (user.profile?.name) {
+										name = user.profile.name
+										console.log('Using profile name:', name)
+									} else if (user.profile?.displayName) {
+										name = user.profile.displayName
+									} else {
+										console.log('No profile name or displayName found, using default')
+									}
+								}
+							} catch (error) {
+								console.warn('Error fetching profile for V4V share:', error)
+							}
+
+							const shareObj = {
+								id: `v4v-${index}-${normalized.pubkey.substring(0, 8)}`,
+								pubkey: normalized.pubkey,
+								name,
+								percentage,
+							}
+
+							return shareObj
 						}
-					}
-					return null
-				})
-				.filter(Boolean) as V4VDTO[]
+						return null
+					})
+					.filter(Boolean),
+			)
+
+			return shares.filter(Boolean) as V4VDTO[]
 		} catch (error) {
 			console.error('Error parsing V4V share content:', error)
 			return []
 		}
+	} catch (error) {
+		console.error('Error fetching V4V shares:', error)
+		return []
+	}
+}
+
+export const v4VForUserQuery = async (userPubkey: string): Promise<V4VDTO[]> => {
+	try {
+		const shares = await fetchV4VShares(userPubkey)
+		return shares
 	} catch (error) {
 		console.error('Error fetching V4V shares:', error)
 		return []

@@ -12,18 +12,16 @@ import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 
 config()
 
-
 const RELAY_URL = process.env.APP_RELAY_URL
+const APP_PUBKEY = process.env.APP_PUBKEY
+
 if (!RELAY_URL) {
 	console.error('Missing required environment variables')
 	process.exit(1)
 }
 
-// Initialize NDK with the relay URL
 const ndk = ndkActions.initialize([RELAY_URL])
 const devUsers = [devUser1, devUser2, devUser3, devUser4, devUser5]
-
-
 
 async function seedData() {
 	const PRODUCTS_PER_USER = 6
@@ -77,10 +75,10 @@ async function seedData() {
 				}
 			}
 		}
-		
+
 		// Create V4V shares for each user
 		console.log(`Creating V4V shares for user ${pubkey.substring(0, 8)}...`)
-		await createV4VSharesEvent(signer, ndk);
+		await createV4VSharesEvent(signer, ndk, APP_PUBKEY)
 	}
 
 	// Create collections
