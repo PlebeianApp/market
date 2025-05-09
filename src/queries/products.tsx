@@ -41,9 +41,11 @@ export const fetchProducts = async () => {
  * @param id The ID of the product listing
  * @returns The product listing event
  */
+// TODO: this subscription still beign fired every time you open the cart
 export const fetchProduct = async (id: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
+	if (!id) return null
 	const event = await ndk.fetchEvent(id)
 	if (!event) {
 		throw new Error('Product not found')
@@ -117,29 +119,30 @@ export const productSellerQueryOptions = (id: string) =>
 
 /**
  * Gets the product title from a product event
- * @param event The product event
+ * @param event The product event or null
  * @returns The product title string
  */
-export const getProductTitle = (event: NDKEvent): z.infer<typeof ProductTitleTagSchema>[1] =>
-	event.tags.find((t) => t[0] === 'title')?.[1] || 'Untitled Product'
+export const getProductTitle = (event: NDKEvent | null): z.infer<typeof ProductTitleTagSchema>[1] =>
+	event?.tags.find((t) => t[0] === 'title')?.[1] || 'Untitled Product'
 
 /**
  * Gets the product description from a product event
- * @param event The product event
+ * @param event The product event or null
  * @returns The product description string
  */
-export const getProductDescription = (event: NDKEvent): string => event.content || ''
+export const getProductDescription = (event: NDKEvent | null): string => event?.content || ''
 
 /**
  * Gets the price tag from a product event
- * @param event The product event
+ * @param event The product event or null
  * @returns A tuple with the format:
  * - [0]: 'price' (literal)
  * - [1]: amount (string)
  * - [2]: currency (string)
  * - [3]: frequency (optional string)
  */
-export const getProductPrice = (event: NDKEvent): z.infer<typeof ProductPriceTagSchema> | undefined => {
+export const getProductPrice = (event: NDKEvent | null): z.infer<typeof ProductPriceTagSchema> | undefined => {
+	if (!event) return undefined
 	const priceTag = event.tags.find((t) => t[0] === 'price')
 	if (!priceTag) return undefined
 
@@ -149,14 +152,15 @@ export const getProductPrice = (event: NDKEvent): z.infer<typeof ProductPriceTag
 
 /**
  * Gets the image tags from a product event
- * @param event The product event
+ * @param event The product event or null
  * @returns An array of tuples with the format:
  * - [0]: 'image' (literal)
  * - [1]: url (string)
  * - [2]: dimensions (optional string)
  * - [3]: order (optional string - numeric)
  */
-export const getProductImages = (event: NDKEvent): z.infer<typeof ProductImageTagSchema>[] => {
+export const getProductImages = (event: NDKEvent | null): z.infer<typeof ProductImageTagSchema>[] => {
+	if (!event) return []
 	return event.tags
 		.filter((t) => t[0] === 'image')
 		.map((t) => t as z.infer<typeof ProductImageTagSchema>)
@@ -171,25 +175,27 @@ export const getProductImages = (event: NDKEvent): z.infer<typeof ProductImageTa
 
 /**
  * Gets the spec tags from a product event
- * @param event The product event
+ * @param event The product event or null
  * @returns An array of tuples with the format:
  * - [0]: 'spec' (literal)
  * - [1]: key (string)
  * - [2]: value (string)
  */
-export const getProductSpecs = (event: NDKEvent): z.infer<typeof ProductSpecTagSchema>[] => {
+export const getProductSpecs = (event: NDKEvent | null): z.infer<typeof ProductSpecTagSchema>[] => {
+	if (!event) return []
 	return event.tags.filter((t) => t[0] === 'spec').map((t) => t as z.infer<typeof ProductSpecTagSchema>)
 }
 
 /**
  * Gets the type tag from a product event
- * @param event The product event
+ * @param event The product event or null
  * @returns A tuple with the format:
  * - [0]: 'type' (literal)
  * - [1]: productType ('simple' | 'variable' | 'variation')
  * - [2]: physicalType ('digital' | 'physical')
  */
-export const getProductType = (event: NDKEvent): z.infer<typeof ProductTypeTagSchema> | undefined => {
+export const getProductType = (event: NDKEvent | null): z.infer<typeof ProductTypeTagSchema> | undefined => {
+	if (!event) return undefined
 	const typeTag = event.tags.find((t) => t[0] === 'type')
 	if (!typeTag) return undefined
 
@@ -198,37 +204,40 @@ export const getProductType = (event: NDKEvent): z.infer<typeof ProductTypeTagSc
 
 /**
  * Gets the visibility tag from a product event
- * @param event The product event
+ * @param event The product event or null
  * @returns A tuple with the format:
  * - [0]: 'visibility' (literal)
  * - [1]: visibility ('hidden' | 'on-sale' | 'pre-order')
  */
-export const getProductVisibility = (event: NDKEvent): z.infer<typeof ProductVisibilityTagSchema> | undefined => {
+export const getProductVisibility = (event: NDKEvent | null): z.infer<typeof ProductVisibilityTagSchema> | undefined => {
+	if (!event) return undefined
 	const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
 	return visibilityTag ? (visibilityTag as z.infer<typeof ProductVisibilityTagSchema>) : undefined
 }
 
 /**
  * Gets the stock tag from a product event
- * @param event The product event
+ * @param event The product event or null
  * @returns A tuple with the format:
  * - [0]: 'stock' (literal)
  * - [1]: stock (string - numeric)
  */
-export const getProductStock = (event: NDKEvent): z.infer<typeof ProductStockTagSchema> | undefined => {
+export const getProductStock = (event: NDKEvent | null): z.infer<typeof ProductStockTagSchema> | undefined => {
+	if (!event) return undefined
 	const stockTag = event.tags.find((t) => t[0] === 'stock')
 	return stockTag ? (stockTag as z.infer<typeof ProductStockTagSchema>) : undefined
 }
 
 /**
  * Gets the weight tag from a product event
- * @param event The product event
+ * @param event The product event or null
  * @returns A tuple with the format:
  * - [0]: 'weight' (literal)
  * - [1]: value (string - numeric)
  * - [2]: unit (string)
  */
-export const getProductWeight = (event: NDKEvent): z.infer<typeof ProductWeightTagSchema> | undefined => {
+export const getProductWeight = (event: NDKEvent | null): z.infer<typeof ProductWeightTagSchema> | undefined => {
+	if (!event) return undefined
 	const weightTag = event.tags.find((t) => t[0] === 'weight')
 	if (!weightTag) return undefined
 
@@ -237,13 +246,14 @@ export const getProductWeight = (event: NDKEvent): z.infer<typeof ProductWeightT
 
 /**
  * Gets the dimensions tag from a product event
- * @param event The product event
+ * @param event The product event or null
  * @returns A tuple with the format:
  * - [0]: 'dim' (literal)
  * - [1]: dimensions (string - in format LxWxH)
  * - [2]: unit (string)
  */
-export const getProductDimensions = (event: NDKEvent): z.infer<typeof ProductDimensionsTagSchema> | undefined => {
+export const getProductDimensions = (event: NDKEvent | null): z.infer<typeof ProductDimensionsTagSchema> | undefined => {
+	if (!event) return undefined
 	const dimensionsTag = event.tags.find((t) => t[0] === 'dim')
 	if (!dimensionsTag) return undefined
 
@@ -252,26 +262,27 @@ export const getProductDimensions = (event: NDKEvent): z.infer<typeof ProductDim
 
 /**
  * Gets the category tags from a product event
- * @param event The product event
+ * @param event The product event or null
  * @returns An array of category tuples
  */
-export const getProductCategories = (event: NDKEvent): z.infer<typeof ProductCategoryTagSchema>[] => {
+export const getProductCategories = (event: NDKEvent | null): z.infer<typeof ProductCategoryTagSchema>[] => {
+	if (!event) return []
 	return event.tags.filter((t) => t[0] === 't').map((t) => t as z.infer<typeof ProductCategoryTagSchema>)
 }
 
 /**
  * Gets the creation timestamp from a product event
- * @param event The product event
+ * @param event The product event or null
  * @returns The creation timestamp (number)
  */
-export const getProductCreatedAt = (event: NDKEvent): number => event.created_at || 0
+export const getProductCreatedAt = (event: NDKEvent | null): number => event?.created_at || 0
 
 /**
  * Gets the pubkey from a product event
- * @param event The product event
+ * @param event The product event or null
  * @returns The pubkey (string)
  */
-export const getProductPubkey = (event: NDKEvent): string => event.pubkey
+export const getProductPubkey = (event: NDKEvent | null): string => event?.pubkey || ''
 
 /**
  * Gets the event that created a product based on its ID
@@ -280,7 +291,7 @@ export const getProductPubkey = (event: NDKEvent): string => event.pubkey
  */
 export const getProductEvent = async (id: string) => {
 	try {
-		return await fetchProduct(id)
+		return id ? await fetchProduct(id) : null
 	} catch (error) {
 		console.error(`Failed to fetch product event: ${id}`, error)
 		return null

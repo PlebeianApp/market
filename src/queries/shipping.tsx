@@ -45,6 +45,7 @@ export const fetchShippingOption = async (id: string) => {
  * @param pubkey The pubkey of the seller
  * @returns Array of shipping option events sorted by creation date
  */
+// TODO: this subscription still beign fired every time you open the cart
 export const fetchShippingOptionsByPubkey = async (pubkey: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
