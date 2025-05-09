@@ -45,7 +45,6 @@ export const fetchShippingOption = async (id: string) => {
  * @param pubkey The pubkey of the seller
  * @returns Array of shipping option events sorted by creation date
  */
-// TODO: this subscription still beign fired every time you open the cart
 export const fetchShippingOptionsByPubkey = async (pubkey: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
@@ -88,6 +87,7 @@ export const shippingOptionsByPubkeyQueryOptions = (pubkey: string) =>
 	queryOptions({
 		queryKey: shippingKeys.byPubkey(pubkey),
 		queryFn: () => fetchShippingOptionsByPubkey(pubkey),
+		staleTime: 300000, // Added staleTime of 5 minutes (300,000 ms)
 	})
 
 // --- HELPER FUNCTIONS (DATA EXTRACTION) ---

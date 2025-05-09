@@ -41,7 +41,6 @@ export const fetchProducts = async () => {
  * @param id The ID of the product listing
  * @returns The product listing event
  */
-// TODO: this subscription still beign fired every time you open the cart
 export const fetchProduct = async (id: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
@@ -84,6 +83,7 @@ export const productQueryOptions = (id: string) =>
 	queryOptions({
 		queryKey: productKeys.details(id),
 		queryFn: () => fetchProduct(id),
+		staleTime: 300000, // Added staleTime of 5 minutes (300,000 ms)
 	})
 
 /**
