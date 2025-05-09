@@ -18,7 +18,11 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/products/prod
 function ProductsOverviewComponent() {
 	const { user, isAuthenticated } = useStore(authStore)
 
-	const { data: products, isLoading, error } = useQuery({
+	const {
+		data: products,
+		isLoading,
+		error,
+	} = useQuery({
 		...productsByPubkeyQueryOptions(user?.pubkey ?? ''),
 		enabled: !!user?.pubkey && isAuthenticated,
 	})
@@ -55,14 +59,8 @@ function ProductsOverviewComponent() {
 					Add A Product
 				</Button>
 
-				{isLoading && (
-					<div className="p-6 text-center text-gray-500">Loading your products...</div>
-				)}
-				{error && (
-					<div className="p-6 text-center text-red-600">
-						Failed to load products: {error.message}
-					</div>
-				)}
+				{isLoading && <div className="p-6 text-center text-gray-500">Loading your products...</div>}
+				{error && <div className="p-6 text-center text-red-600">Failed to load products: {error.message}</div>}
 
 				{!isLoading && !error && (
 					<>
@@ -75,9 +73,7 @@ function ProductsOverviewComponent() {
 									>
 										<div className="flex items-center gap-3">
 											<CubeIcon />
-											<span className="text-sm font-medium text-gray-800">
-												{getProductTitle(product)}
-											</span>
+											<span className="text-sm font-medium text-gray-800">{getProductTitle(product)}</span>
 										</div>
 										<Button
 											variant="ghost"
@@ -95,9 +91,7 @@ function ProductsOverviewComponent() {
 							<div className="text-center text-gray-500 py-10 px-6">
 								<CubeIcon />
 								<h3 className="mt-2 text-lg font-semibold text-gray-700">No products yet</h3>
-								<p className="mt-1 text-sm">
-									Click the "Add A Product" button to create your first one.
-								</p>
+								<p className="mt-1 text-sm">Click the "Add A Product" button to create your first one.</p>
 							</div>
 						)}
 					</>

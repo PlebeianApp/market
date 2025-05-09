@@ -120,9 +120,9 @@ export const productFormActions = {
 			const weightTag = getProductWeight(event)
 			const dimensionsTag = getProductDimensions(event)
 
-			const mainCategoryFromTags = categories.find(tag => tag.length === 2 && tag[0] === 't')?.[1]
+			const mainCategoryFromTags = categories.find((tag) => tag.length === 2 && tag[0] === 't')?.[1]
 			const subCategoriesFromTags = categories
-				.filter(tag => tag.length > 2 && tag[0] === 't')
+				.filter((tag) => tag.length > 2 && tag[0] === 't')
 				.map((tag, index) => ({
 					key: `category-${Date.now()}-${index}`,
 					name: tag[1],
@@ -145,7 +145,7 @@ export const productFormActions = {
 					imageUrl: img[1],
 					imageOrder: parseInt(img[3] || index.toString(), 10),
 				})),
-				specs: specs.map(spec => ({ key: spec[1], value: spec[2] })),
+				specs: specs.map((spec) => ({ key: spec[1], value: spec[2] })),
 				weight: weightTag ? { value: weightTag[1], unit: weightTag[2] } : null,
 				dimensions: dimensionsTag ? { value: dimensionsTag[1], unit: dimensionsTag[2] } : null,
 				shippings: [],

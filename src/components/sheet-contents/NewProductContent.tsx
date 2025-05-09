@@ -179,11 +179,12 @@ function DetailTab() {
 					</SelectTrigger>
 					<SelectContent>
 						<SelectItem value="SATS">SATS</SelectItem>
-						{Array.isArray(CURRENCIES) && CURRENCIES.map((curr: string) => (
-							<SelectItem key={curr} value={curr}>
-								{curr}
-							</SelectItem>
-						))}
+						{Array.isArray(CURRENCIES) &&
+							CURRENCIES.map((curr: string) => (
+								<SelectItem key={curr} value={curr}>
+									{curr}
+								</SelectItem>
+							))}
 					</SelectContent>
 				</Select>
 			</div>
@@ -816,7 +817,7 @@ export function NewProductContent() {
 	const isFormModified = (currentState: ProductFormState) => {
 		// When editing, the form is pre-filled, so it will always appear "modified" compared to DEFAULT_FORM_STATE.
 		// If we are editing, we consider the form as needing to be shown if an ID is present.
-		if (currentState.editingProductId) return true 
+		if (currentState.editingProductId) return true
 
 		return (
 			currentState.name !== DEFAULT_FORM_STATE.name ||
@@ -849,7 +850,8 @@ export function NewProductContent() {
 
 	// Update showForm based on form modification, existing products, or if editing an existing product
 	useEffect(() => {
-		if (editingProductId) { // If editing, always show the form
+		if (editingProductId) {
+			// If editing, always show the form
 			setShowForm(true)
 		} else if ((hasStartedFormOrIsEditing || hasProducts) && !showForm) {
 			setShowForm(true)
@@ -939,9 +941,7 @@ export function NewProductContent() {
 		>
 			<SheetHeader>
 				{/* Change title based on edit mode */}
-				<SheetTitle className="text-center">
-					{editingProductId ? 'Edit Product' : 'Add A Product'}
-				</SheetTitle>
+				<SheetTitle className="text-center">{editingProductId ? 'Edit Product' : 'Add A Product'}</SheetTitle>
 				<SheetDescription className="hidden">
 					{editingProductId ? 'Modify the details of your product.' : 'Create a new product to sell in your shop'}
 				</SheetDescription>
@@ -1068,9 +1068,13 @@ export function NewProductContent() {
 										className="flex-1 uppercase"
 										disabled={isSubmitting || isPublishing || !canSubmit}
 									>
-										{isSubmitting || isPublishing 
-											? (editingProductId ? 'Updating...' : 'Publishing...') 
-											: (editingProductId ? 'Update Product' : 'Save')}
+										{isSubmitting || isPublishing
+											? editingProductId
+												? 'Updating...'
+												: 'Publishing...'
+											: editingProductId
+												? 'Update Product'
+												: 'Save'}
 									</Button>
 								)}
 							/>
