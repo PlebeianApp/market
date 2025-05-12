@@ -1,5 +1,4 @@
 import NDK from '@nostr-dev-kit/ndk'
-import NDKCacheAdapterDexie from '@nostr-dev-kit/ndk-cache-dexie'
 import { Store } from '@tanstack/store'
 import type { NDKCacheAdapter, NDKSigner } from '@nostr-dev-kit/ndk'
 import { defaultRelaysUrls } from '@/lib/constants'
@@ -27,10 +26,7 @@ export const ndkActions = {
 		const state = ndkStore.state
 		if (state.ndk) return state.ndk
 
-		const isBrowser = typeof window !== 'undefined' && typeof window.indexedDB !== 'undefined'
-		const cacheAdapter: NDKCacheAdapter | undefined = isBrowser
-			? (new NDKCacheAdapterDexie({ dbName: 'nostr-cache' }) as unknown as NDKCacheAdapter)
-			: undefined
+
 
 		// If LOCAL_ONLY is true, only use APP_RELAY_URL and ignore default relays
 		const explicitRelays = LOCAL_ONLY
@@ -39,7 +35,6 @@ export const ndkActions = {
 				? relays
 				: defaultRelaysUrls
 		const ndk = new NDK({
-			cacheAdapter: cacheAdapter,
 			explicitRelayUrls: explicitRelays,
 		})
 

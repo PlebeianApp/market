@@ -9,6 +9,7 @@ import { createReviewEvent, generateReviewData } from './gen_review'
 import { createShippingEvent, generateShippingData } from './gen_shipping'
 import { createV4VSharesEvent } from './gen_v4v'
 import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
+import { createUserProfileEvent, generateUserProfileData } from './gen_user'
 
 config()
 
@@ -38,17 +39,23 @@ async function seedData() {
 
 	console.log('Starting seeding...')
 
-	// Create products and shipping options for each user
-	for (const user of devUsers) {
+	// Create user profiles, products and shipping options for each user
+	for (let i = 0; i < devUsers.length; i++) {
+		const user = devUsers[i]
 		const signer = new NDKPrivateKeySigner(user.sk)
 		await signer.blockUntilReady()
 		const pubkey = (await signer.user()).pubkey
+
+		// Create user profile with user index for more personalized data
+		console.log(`Creating profile for user ${pubkey.substring(0, 8)}...`)
+		const userProfile = generateUserProfileData(i)
+		await createUserProfileEvent(signer, ndk, userProfile)
 
 		console.log(`Creating products for user ${pubkey.substring(0, 8)}...`)
 		productsByUser[pubkey] = []
 
 		// Create products
-		for (let i = 0; i < PRODUCTS_PER_USER; i++) {
+		for (let j = 0; j < PRODUCTS_PER_USER; j++) {
 			const product = generateProductData()
 			const success = await createProductEvent(signer, ndk, product)
 			if (success) {
@@ -65,7 +72,7 @@ async function seedData() {
 		console.log(`Creating shipping options for user ${pubkey.substring(0, 8)}...`)
 		shippingsByUser[pubkey] = []
 
-		for (let i = 0; i < SHIPPING_OPTIONS_PER_USER; i++) {
+		for (let j = 0; j < SHIPPING_OPTIONS_PER_USER; j++) {
 			const shipping = generateShippingData()
 			const success = await createShippingEvent(signer, ndk, shipping)
 			if (success) {
