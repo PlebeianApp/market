@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { submitAppSettings } from '@/lib/appSettings'
-import { queryClient } from '@/lib/queryClient'
+import { createQueryClient } from '@/lib/queryClient'
 import { useConfigQuery } from '@/queries/config'
 import { configKeys } from '@/queries/queryKeyFactory'
 import { useForm, useStore } from '@tanstack/react-form'
@@ -78,6 +78,7 @@ function SetupRoute() {
 
 				newEvent = finalizeEvent(newEvent, generateSecretKey())
 				await submitAppSettings(newEvent)
+				const queryClient = await createQueryClient(config.appRelay)
 				await queryClient.invalidateQueries({ queryKey: configKeys.all })
 				await queryClient.refetchQueries({ queryKey: configKeys.all })
 
