@@ -38,7 +38,6 @@ export const ndkActions = {
 			: relays && relays.length > 0
 				? relays
 				: defaultRelaysUrls
-
 		const ndk = new NDK({
 			cacheAdapter: cacheAdapter,
 			explicitRelayUrls: explicitRelays,
@@ -61,12 +60,13 @@ export const ndkActions = {
 
 		try {
 			await state.ndk.connect()
-			await new Promise<void>((resolve) => {
-				state.ndk!.pool.on('connect', () => {
-					ndkStore.setState((state) => ({ ...state, isConnected: true }))
-					resolve()
-				})
-			})
+			// await new Promise<void>((resolve) => {
+			// 	state.ndk!.pool.on('connect', () => {
+			// 		ndkStore.setState((state) => ({ ...state, isConnected: true }))
+			// 		resolve()
+			// 	})
+			// })
+			console.log('Connected to Nostr')
 		} finally {
 			ndkStore.setState((state) => ({ ...state, isConnecting: false }))
 		}

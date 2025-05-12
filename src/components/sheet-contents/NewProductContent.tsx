@@ -1,19 +1,20 @@
 import { Button } from '@/components/ui/button'
+import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { useForm } from '@tanstack/react-form'
-import { useState, useEffect } from 'react'
-import { toast } from 'sonner'
-import { useStore } from '@tanstack/react-store'
-import { productFormStore, productFormActions, DEFAULT_FORM_STATE } from '@/lib/stores/product'
-import { CURRENCIES } from '@/queries/external'
+import { SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { authActions, authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
+import type { ProductFormState } from '@/lib/stores/product'
+import { DEFAULT_FORM_STATE, productFormActions, productFormStore } from '@/lib/stores/product'
+import { CURRENCIES } from '@/queries/external'
+import { useForm } from '@tanstack/react-form'
 import { useNavigate } from '@tanstack/react-router'
-import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
-import { authStore, authActions } from '@/lib/stores/auth'
+import { useStore } from '@tanstack/react-store'
+import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 
 /**
  * IMPORTANT IMPLEMENTATION PATTERN:
@@ -178,11 +179,12 @@ function DetailTab() {
 					</SelectTrigger>
 					<SelectContent>
 						<SelectItem value="SATS">SATS</SelectItem>
-						{CURRENCIES.map((curr) => (
-							<SelectItem key={curr} value={curr}>
-								{curr}
-							</SelectItem>
-						))}
+						{Array.isArray(CURRENCIES) &&
+							CURRENCIES.map((curr: string) => (
+								<SelectItem key={curr} value={curr}>
+									{curr}
+								</SelectItem>
+							))}
 					</SelectContent>
 				</Select>
 			</div>
@@ -804,15 +806,19 @@ export function NewProductContent() {
 	const navigate = useNavigate()
 	const [hasProducts, setHasProducts] = useState(false)
 
-	// Get form state from store
+	// Get form state from store, including editingProductId
 	const formState = useStore(productFormStore)
-	const { mainTab, productSubTab } = formState
+	const { mainTab, productSubTab, editingProductId } = formState
 
 	// Get user and authentication status from auth store
 	const { user, isAuthenticated } = useStore(authStore)
 
 	// Function to check if the form has been modified from its default state
-	const isFormModified = (currentState: typeof productFormStore.state) => {
+	const isFormModified = (currentState: ProductFormState) => {
+		// When editing, the form is pre-filled, so it will always appear "modified" compared to DEFAULT_FORM_STATE.
+		// If we are editing, we consider the form as needing to be shown if an ID is present.
+		if (currentState.editingProductId) return true
+
 		return (
 			currentState.name !== DEFAULT_FORM_STATE.name ||
 			currentState.description !== DEFAULT_FORM_STATE.description ||
@@ -826,79 +832,68 @@ export function NewProductContent() {
 		)
 	}
 
-	// Check if the user has started filling in the form
-	const hasStartedForm = isFormModified(formState)
+	// Check if the user has started filling in the form or is editing
+	const hasStartedFormOrIsEditing = isFormModified(formState)
 
-	// Update showForm whenever hasStartedForm or hasProducts changes
-	const [showForm, setShowForm] = useState(hasStartedForm)
+	const [showForm, setShowForm] = useState(hasStartedFormOrIsEditing)
 
-	// Check if user has products when component mounts
+	// Check if user has products when component mounts or user changes
 	useEffect(() => {
 		const checkUserProducts = async () => {
 			if (isAuthenticated && user) {
-				const hasUserProducts = await authActions.userHasProducts()
-				setHasProducts(hasUserProducts)
+				const userHasExistingProducts = await authActions.userHasProducts()
+				setHasProducts(userHasExistingProducts)
 			}
 		}
-
 		checkUserProducts()
 	}, [isAuthenticated, user])
 
-	// Update showForm whenever hasStartedForm or hasProducts changes
+	// Update showForm based on form modification, existing products, or if editing an existing product
 	useEffect(() => {
-		if ((hasStartedForm || hasProducts) && !showForm) {
+		if (editingProductId) {
+			// If editing, always show the form
+			setShowForm(true)
+		} else if ((hasStartedFormOrIsEditing || hasProducts) && !showForm) {
 			setShowForm(true)
 		}
-	}, [hasStartedForm, hasProducts, showForm])
+	}, [hasStartedFormOrIsEditing, hasProducts, showForm, editingProductId])
 
 	const form = useForm({
 		defaultValues: {},
 		onSubmit: async () => {
 			try {
-				console.log('Submitting product data')
 				setIsPublishing(true)
-
-				// Get NDK instance and signer
 				const ndk = ndkActions.getNDK()
 				const signer = ndkActions.getSigner()
 
 				if (!ndk) {
 					toast.error('NDK not initialized')
+					setIsPublishing(false)
 					return
 				}
-
 				if (!signer) {
 					toast.error('You need to connect your wallet first')
+					setIsPublishing(false)
 					return
 				}
 
-				// Publish product to Nostr
 				const result = await productFormActions.publishProduct(signer, ndk)
 
 				if (result) {
-					toast.success('Product published successfully!')
+					toast.success(editingProductId ? 'Product updated successfully!' : 'Product published successfully!')
 					productFormActions.reset()
-					setShowForm(false)
+					setShowForm(false) // Reset to initial welcome screen state if not editing next
 
-					// Navigate to the product page if we have an event ID
 					if (typeof result === 'string') {
-						// Close any open modal/sheet first
-						document.body.dispatchEvent(
-							new KeyboardEvent('keydown', {
-								key: 'Escape',
-								bubbles: true,
-							}),
-						)
-
-						// Navigate to the product page
+						document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
 						navigate({ to: `/products/${result}` })
 					}
 				} else {
-					toast.error('Failed to publish product')
+					toast.error(editingProductId ? 'Failed to update product' : 'Failed to publish product')
 				}
 			} catch (error) {
-				console.error('Error creating product:', error)
-				toast.error('Failed to create product')
+				console.error(editingProductId ? 'Error updating product:' : 'Error creating product:', error)
+				toast.error(editingProductId ? 'Failed to update product' : 'Failed to create product')
 			} finally {
 				setIsPublishing(false)
 			}
@@ -940,10 +935,16 @@ export function NewProductContent() {
 	}
 
 	return (
-		<SheetContent side="right" className="flex flex-col max-h-screen overflow-hidden">
+		<SheetContent
+			side="right"
+			className="flex flex-col max-h-screen overflow-hidden w-[100vw] sm:min-w-[85vw] md:min-w-[55vw] xl:min-w-[35vw]"
+		>
 			<SheetHeader>
-				<SheetTitle className="text-center">Add A Product</SheetTitle>
-				<SheetDescription className="hidden">Create a new product to sell in your shop</SheetDescription>
+				{/* Change title based on edit mode */}
+				<SheetTitle className="text-center">{editingProductId ? 'Edit Product' : 'Add A Product'}</SheetTitle>
+				<SheetDescription className="hidden">
+					{editingProductId ? 'Modify the details of your product.' : 'Create a new product to sell in your shop'}
+				</SheetDescription>
 			</SheetHeader>
 
 			<form
@@ -1057,7 +1058,7 @@ export function NewProductContent() {
 							</Button>
 						)}
 
-						{mainTab === 'shipping' ? (
+						{mainTab === 'shipping' || editingProductId ? (
 							<form.Subscribe
 								selector={(state) => [state.canSubmit, state.isSubmitting]}
 								children={([canSubmit, isSubmitting]) => (
@@ -1067,7 +1068,13 @@ export function NewProductContent() {
 										className="flex-1 uppercase"
 										disabled={isSubmitting || isPublishing || !canSubmit}
 									>
-										{isSubmitting || isPublishing ? 'Publishing...' : 'Save'}
+										{isSubmitting || isPublishing
+											? editingProductId
+												? 'Updating...'
+												: 'Publishing...'
+											: editingProductId
+												? 'Update Product'
+												: 'Save'}
 									</Button>
 								)}
 							/>

@@ -1,4 +1,4 @@
-import type { ShippingOptionSchema } from '@/lib/schemas/shippingOption'
+import { SHIPPING_KIND, type ShippingOptionSchema } from '@/lib/schemas/shippingOption'
 import { faker } from '@faker-js/faker'
 import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import type { z } from 'zod'
@@ -75,7 +75,7 @@ export function generateShippingData(): Omit<z.infer<typeof ShippingOptionSchema
 	])
 
 	return {
-		kind: 30406,
+		kind: SHIPPING_KIND,
 		created_at: Math.floor(Date.now() / 1000),
 		content: faker.commerce.productDescription(),
 		tags: tags,

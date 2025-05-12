@@ -3,6 +3,7 @@ import { NDKEvent, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { config } from 'dotenv'
 import { devUser1, devUser2, devUser3, devUser4, devUser5 } from '@/lib/fixtures'
 import { AppSettingsSchema } from '@/lib/schemas/app'
+import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 
 config()
 
@@ -41,7 +42,7 @@ async function createAppSettingsEvent(signer: NDKPrivateKeySigner) {
 		['d', 'app/settings'],
 		['k', '30402'], // Product events
 		['k', '30405'], // Collection events
-		['k', '30406'], // Shipping events
+		['k', String(SHIPPING_KIND)], // Shipping events
 		['k', '30407'], // Review events
 		['web', 'https://plebeian.market/a/', 'nevent'],
 		['web', 'https://plebeian.market/p/', 'nprofile'],

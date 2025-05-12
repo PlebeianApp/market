@@ -1,9 +1,15 @@
-import { fetchProduct, getProductPrice, getProductSellerPubkey } from '@/queries/products'
+import { CURRENCIES } from '@/lib/constants'
+import type { SupportedCurrency } from '@/queries/external'
+import { btcExchangeRatesQueryOptions, currencyConversionQueryOptions } from '@/queries/external'
+import { getProductPrice, getProductSellerPubkey, productQueryOptions } from '@/queries/products'
+import { getShippingInfo, getShippingPrice, shippingOptionQueryOptions, shippingOptionsByPubkeyQueryOptions } from '@/queries/shipping'
+import { v4VForUserQuery } from '@/queries/v4v'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { QueryClient } from '@tanstack/react-query'
+import { useStore } from '@tanstack/react-store'
 import { Store } from '@tanstack/store'
-import { debounce } from '../utils'
-import { useEffect, useState } from 'react'
-import { fetchV4VShares } from '@/queries/v4v'
+import { useEffect } from 'react'
+import { SHIPPING_KIND } from '../schemas/shippingOption'
 
 export interface ProductImage {
 	url: string
@@ -44,17 +50,14 @@ export interface RichShippingInfo {
 	[key: string]: any
 }
 
-export const v4VForUserQuery = async (userPubkey: string): Promise<V4VDTO[]> => {
-	return fetchV4VShares(userPubkey)
-}
-
 export interface CartProduct {
-	id: string // Product ID (the only required field)
+	id: string
 	amount: number
 	shippingMethodId: string | null
 	shippingMethodName: string | null
 	shippingCost: number
-	sellerPubkey?: string // Keep seller's pubkey for grouping
+	shippingCostCurrency: string | null
+	sellerPubkey?: string
 }
 
 export interface CartUser {
@@ -81,12 +84,36 @@ interface CartState {
 	cart: NormalizedCart
 	v4vShares: Record<string, V4VDTO[]>
 	userCartTotalInSats: Record<string, number>
+	sellerData: Record<
+		string,
+		{
+			satsTotal: number
+			currencyTotals: Record<string, number>
+			shares: { sellerAmount: number; communityAmount: number; sellerPercentage: number }
+			shippingSats: number
+		}
+	>
+	productsBySeller: Record<string, CartProduct[]>
+	totalInSats: number
+	totalShippingInSats: number
+	subtotalByCurrency: Record<string, number>
+	shippingByCurrency: Record<string, number>
+	totalByCurrency: Record<string, number>
+	sellerShippingOptions: Record<string, RichShippingInfo[]>
 }
 
 const initialState: CartState = {
 	cart: { users: {}, products: {}, orders: {}, invoices: {} },
 	v4vShares: {},
 	userCartTotalInSats: {},
+	sellerData: {},
+	productsBySeller: {},
+	totalInSats: 0,
+	totalShippingInSats: 0,
+	subtotalByCurrency: {},
+	shippingByCurrency: {},
+	totalByCurrency: {},
+	sellerShippingOptions: {},
 }
 
 function loadInitialCart(): NormalizedCart {
@@ -99,39 +126,51 @@ function loadInitialCart(): NormalizedCart {
 	return { users: {}, products: {}, orders: {}, invoices: {} }
 }
 
-// Initialize state with saved cart
 const initialCartState: CartState = {
 	...initialState,
 	cart: loadInitialCart(),
 }
 
-// Simple conversion rate for calculation without hooks
-// In a real app, you would use a more sophisticated approach
-const CONVERSION_RATES: Record<string, number> = {
-	USD: 40000, // 1 USD = 40,000 sats (for example)
-	EUR: 43000,
-	GBP: 50000,
-	// Add more currencies as needed
-}
+const numSatsInBtc = 100000000 // 100 million sats in 1 BTC
 
 export const cartStore = new Store<CartState>(initialCartState)
 
-// Cache for product events to reduce API calls
-const productEventCache: Record<string, NDKEvent | null> = {}
+const cartQueryClient = new QueryClient({
+	defaultOptions: {
+		queries: {
+			staleTime: 1000 * 60 * 5, // 5 minutes
+			retry: 2,
+			retryDelay: 1000,
+		},
+	},
+})
 
-// Helper function to get product event, with caching
 const getProductEvent = async (id: string): Promise<NDKEvent | null> => {
-	if (productEventCache[id] !== undefined) {
-		return productEventCache[id]
-	}
-
 	try {
-		const event = await fetchProduct(id)
-		productEventCache[id] = event
+		const event = (await cartQueryClient.fetchQuery(productQueryOptions(id))) as NDKEvent | null
 		return event
 	} catch (error) {
-		console.error(`Failed to fetch product event: ${id}`, error)
-		productEventCache[id] = null
+		console.error(`Failed to fetch product event ${id} via queryClient:`, error)
+		return null
+	}
+}
+
+const getShippingEvent = async (shippingReferenceId: string): Promise<NDKEvent | null> => {
+	try {
+		if (shippingReferenceId.startsWith(`${SHIPPING_KIND}:`)) {
+			const parts = shippingReferenceId.split(':')
+			if (parts.length === 3) {
+				const eventDTag = parts[2]
+				const event = (await cartQueryClient.fetchQuery(shippingOptionQueryOptions(eventDTag))) as NDKEvent | null
+				return event
+			} else {
+				console.warn(`Invalid shipping reference format: ${shippingReferenceId}`)
+				return null
+			}
+		}
+		return null
+	} catch (error) {
+		console.error(`Failed to fetch shipping event ${shippingReferenceId} via queryClient:`, error)
 		return null
 	}
 }
@@ -139,7 +178,6 @@ const getProductEvent = async (id: string): Promise<NDKEvent | null> => {
 export const cartActions = {
 	saveToStorage: async (cart: NormalizedCart) => {
 		if (typeof sessionStorage !== 'undefined') {
-			// Create a serializable copy without circular references
 			const serializableCart = JSON.parse(
 				JSON.stringify({
 					users: cart.users,
@@ -160,6 +198,7 @@ export const cartActions = {
 			shippingMethodId: null,
 			shippingMethodName: null,
 			shippingCost: 0,
+			shippingCostCurrency: null,
 			sellerPubkey: event.pubkey,
 		}
 	},
@@ -180,11 +219,8 @@ export const cartActions = {
 		let sellerPubkey: string | undefined
 		let amount = 1
 
-		// Handle different input types
 		if (typeof productData === 'string') {
-			// If just an ID is provided
 			productId = productData
-			// We'll fetch the seller pubkey
 			try {
 				const pubkey = await getProductSellerPubkey(productId)
 				sellerPubkey = pubkey || undefined
@@ -192,11 +228,9 @@ export const cartActions = {
 				console.error('Failed to fetch seller pubkey:', error)
 			}
 		} else if (productData instanceof NDKEvent) {
-			// If an NDK event is provided
 			productId = productData.id
 			sellerPubkey = productData.pubkey
 		} else {
-			// If a CartProduct object is provided
 			productId = productData.id
 			sellerPubkey = productData.sellerPubkey
 			amount = productData.amount
@@ -207,16 +241,15 @@ export const cartActions = {
 			const { user } = cartActions.findOrCreateUserProduct(cart, userPubkey)
 
 			if (cart.products[productId]) {
-				// Simply update the amount
 				cart.products[productId].amount += amount
 			} else {
-				// Add minimal product info
 				cart.products[productId] = {
 					id: productId,
 					amount: amount,
 					shippingMethodId: null,
 					shippingMethodName: null,
 					shippingCost: 0,
+					shippingCostCurrency: null,
 					sellerPubkey,
 				}
 				user.productIds.push(productId)
@@ -226,9 +259,9 @@ export const cartActions = {
 			return { ...state, cart }
 		})
 
-		// Update v4v shares and cart totals
 		await cartActions.updateV4VShares()
-		await cartActions.updateCartTotals()
+		await cartActions.groupProductsBySeller()
+		await cartActions.updateSellerData()
 	},
 
 	updateProductAmount: async (userPubkey: string, productId: string, amount: number) => {
@@ -242,7 +275,7 @@ export const cartActions = {
 			return { ...state, cart }
 		})
 
-		await cartActions.updateCartTotals()
+		await cartActions.updateSellerData()
 	},
 
 	removeProduct: async (userPubkey: string, productId: string) => {
@@ -254,7 +287,6 @@ export const cartActions = {
 				user.productIds = user.productIds.filter((id) => id !== productId)
 				delete cart.products[productId]
 
-				// Clean up empty users
 				if (user.productIds.length === 0) {
 					delete cart.users[userPubkey]
 				}
@@ -265,25 +297,34 @@ export const cartActions = {
 		})
 
 		await cartActions.updateV4VShares()
-		await cartActions.updateCartTotals()
+		await cartActions.groupProductsBySeller()
+		await cartActions.updateSellerData()
 	},
 
 	setShippingMethod: async (productId: string, shipping: Partial<RichShippingInfo>) => {
+		const prevState = cartStore.state
+		const prevProduct = prevState.cart.products[productId]
+
 		cartStore.setState((state) => {
-			const cart = { ...state.cart }
-			const product = cart.products[productId]
-
-			if (product && shipping.id) {
-				product.shippingMethodId = shipping.id
-				product.shippingCost = Number(shipping.cost)
-				product.shippingMethodName = shipping.name ?? null
+			const newCart = {
+				...state.cart,
+				products: {
+					...state.cart.products,
+					[productId]: {
+						...state.cart.products[productId],
+						shippingMethodId: shipping.id || null,
+						shippingCost: Number(shipping.cost || 0),
+						shippingMethodName: shipping.name ?? null,
+						shippingCostCurrency: shipping.currency || null,
+					},
+				},
 			}
-
-			cartActions.saveToStorage(cart)
-			return { ...state, cart }
+			cartActions.saveToStorage(newCart)
+			return {
+				...state,
+				cart: newCart,
+			}
 		})
-
-		await cartActions.updateCartTotals()
 	},
 
 	getShippingMethod: (productId: string): string | null => {
@@ -295,6 +336,16 @@ export const cartActions = {
 		cartStore.setState((state) => ({
 			...state,
 			cart: { users: {}, products: {}, orders: {}, invoices: {} },
+			v4vShares: {},
+			userCartTotalInSats: {},
+			sellerData: {},
+			productsBySeller: {},
+			totalInSats: 0,
+			totalShippingInSats: 0,
+			subtotalByCurrency: {},
+			shippingByCurrency: {},
+			totalByCurrency: {},
+			sellerShippingOptions: {},
 		}))
 
 		if (typeof sessionStorage !== 'undefined') {
@@ -314,7 +365,6 @@ export const cartActions = {
 	},
 
 	handleProductUpdate: async (action: string, userPubkey: string, productId: string, amount?: number) => {
-		// First update the state synchronously
 		cartStore.setState((state) => {
 			const cart = { ...state.cart }
 			const user = cart.users[userPubkey]
@@ -329,9 +379,7 @@ export const cartActions = {
 					if (cart.products[productId]) {
 						const newAmount = Math.max(cart.products[productId].amount - 1, 0)
 
-						// If the amount would be zero, remove the product instead
 						if (newAmount === 0) {
-							// Handle removal (same logic as 'remove' case)
 							if (user) {
 								user.productIds = user.productIds.filter((id) => id !== productId)
 								delete cart.products[productId]
@@ -347,9 +395,7 @@ export const cartActions = {
 					break
 				case 'setAmount':
 					if (amount !== undefined && cart.products[productId]) {
-						// If setting to zero or less, remove the product
 						if (amount <= 0) {
-							// Handle removal (same logic as 'remove' case)
 							if (user) {
 								user.productIds = user.productIds.filter((id) => id !== productId)
 								delete cart.products[productId]
@@ -380,14 +426,35 @@ export const cartActions = {
 			return { ...state, cart }
 		})
 
-		// Then update the cart totals asynchronously
-		await cartActions.updateCartTotals()
+		await cartActions.groupProductsBySeller()
+		await cartActions.updateSellerData()
 	},
 
-	// Convert currency to sats using a simple conversion rate
-	convertToSats: (currency: string, amount: number): number => {
-		const rate = CONVERSION_RATES[currency] || CONVERSION_RATES.USD // Default to USD if currency not found
-		return Math.round(amount * rate)
+	convertToSats: async (currency: string, amount: number): Promise<number> => {
+		if (!currency || !amount || amount <= 0.0001) return 0
+
+		if (['sats', 'sat'].includes(currency.toLowerCase())) {
+			return Math.round(amount)
+		}
+
+		if (currency.toUpperCase() === 'BTC') {
+			return Math.round(amount * numSatsInBtc)
+		}
+
+		try {
+			if (CURRENCIES.includes(currency as any)) {
+				const queryOptions = currencyConversionQueryOptions(currency, amount)
+				const result = await cartQueryClient.fetchQuery(queryOptions)
+
+				return Math.round(result || 0)
+			} else {
+				console.warn(`Unsupported currency: ${currency}`)
+				return 0
+			}
+		} catch (error) {
+			console.error(`Currency conversion failed for ${currency}:`, error)
+			return 0
+		}
 	},
 
 	calculateProductTotal: async (
@@ -417,7 +484,6 @@ export const cartActions = {
 		}
 
 		try {
-			// Get product price information from the product query functions
 			const event = await getProductEvent(productId)
 			if (!event) {
 				throw new Error(`Product not found: ${productId}`)
@@ -425,23 +491,42 @@ export const cartActions = {
 
 			const priceTag = getProductPrice(event)
 			const price = priceTag ? parseFloat(priceTag[1]) : 0
-			const currency = priceTag ? priceTag[2] : 'USD'
+			const productCurrency = priceTag ? priceTag[2] : 'USD'
 
 			const productTotalInCurrency = price * product.amount
-			const shippingCost = product.shippingCost || 0
 
-			// Use our simple conversion function
-			const productTotalInSats = cartActions.convertToSats(currency, productTotalInCurrency)
-			const shippingInSats = cartActions.convertToSats(currency, shippingCost)
+			let shippingCostInFiat = product.shippingCost || 0
+			const actualShippingCostCurrency = product.shippingCostCurrency || productCurrency
+
+			if (product.shippingMethodId && !product.shippingCost) {
+				const shippingEvent = await getShippingEvent(product.shippingMethodId)
+				if (shippingEvent) {
+					const shippingPriceTag = getShippingPrice(shippingEvent)
+					if (shippingPriceTag) {
+						shippingCostInFiat = parseFloat(shippingPriceTag[1])
+						cartStore.setState((state) => {
+							const cart = { ...state.cart }
+							if (cart.products[productId]) {
+								cart.products[productId].shippingCost = shippingCostInFiat
+							}
+							cartActions.saveToStorage(cart)
+							return { ...state, cart }
+						})
+					}
+				}
+			}
+
+			const subtotalInSats = await cartActions.convertToSats(productCurrency, productTotalInCurrency)
+			const shippingInSats = await cartActions.convertToSats(actualShippingCostCurrency, shippingCostInFiat)
 
 			return {
-				subtotalInSats: productTotalInSats,
-				shippingInSats: shippingInSats,
-				totalInSats: productTotalInSats + shippingInSats,
+				subtotalInSats: Math.round(subtotalInSats),
+				shippingInSats: Math.round(shippingInSats),
+				totalInSats: Math.round(subtotalInSats + shippingInSats),
 				subtotalInCurrency: productTotalInCurrency,
-				shippingInCurrency: shippingCost,
-				totalInCurrency: productTotalInCurrency + shippingCost,
-				currency: currency,
+				shippingInCurrency: shippingCostInFiat,
+				totalInCurrency: productTotalInCurrency + shippingCostInFiat,
+				currency: productCurrency,
 			}
 		} catch (error) {
 			console.error(`Error calculating product total for ${productId}:`, error)
@@ -467,7 +552,6 @@ export const cartActions = {
 		let totalInSats = 0
 		const currencyTotals: Record<string, { subtotal: number; shipping: number; total: number }> = {}
 
-		// Use Promise.all to wait for all product totals
 		const productTotals = await Promise.all(user.productIds.map((productId) => cartActions.calculateProductTotal(productId)))
 
 		for (const productTotal of productTotals) {
@@ -502,7 +586,6 @@ export const cartActions = {
 		let grandTotalInSats = 0
 		const currencyTotals: Record<string, { subtotal: number; shipping: number; total: number }> = {}
 
-		// Wait for all user totals
 		const userTotalsPromises = Object.keys(state.cart.users).map((userPubkey) => {
 			return cartActions.calculateUserTotal(userPubkey)
 		})
@@ -590,59 +673,108 @@ export const cartActions = {
 		const state = cartStore.state
 		const shares: Record<string, V4VDTO[]> = {}
 
-		for (const userPubkey of Object.keys(state.cart.users)) {
-			try {
-				const userShares = await v4VForUserQuery(userPubkey)
-				shares[userPubkey] = userShares || []
-			} catch (error) {
-				console.error(`Failed to fetch v4v shares for user ${userPubkey}:`, error)
-				shares[userPubkey] = []
-			}
-		}
+		try {
+			const uniqueSellerPubkeys = new Set<string>()
 
-		cartStore.setState((state) => ({
-			...state,
-			v4vShares: shares,
-		}))
+			Object.values(state.cart.products).forEach((product) => {
+				if (product.sellerPubkey) {
+					uniqueSellerPubkeys.add(product.sellerPubkey)
+				}
+			})
+
+			for (const sellerPubkey of Array.from(uniqueSellerPubkeys)) {
+				try {
+					const sellerShares = await v4VForUserQuery(sellerPubkey)
+					shares[sellerPubkey] = (sellerShares || []).map((share) => ({
+						...share,
+						percentage: isNaN(share.percentage) ? 5 : share.percentage,
+					}))
+				} catch (error) {
+					console.error(`Failed to fetch v4v shares for seller ${sellerPubkey}:`, error)
+					shares[sellerPubkey] = []
+				}
+			}
+
+			for (const userPubkey of Object.keys(state.cart.users)) {
+				if (!shares[userPubkey]) {
+					try {
+						const userShares = await v4VForUserQuery(userPubkey)
+						shares[userPubkey] = (userShares || []).map((share) => ({
+							...share,
+							percentage: isNaN(share.percentage) ? 5 : share.percentage,
+						}))
+					} catch (error) {
+						console.error(`Failed to fetch v4v shares for user ${userPubkey}:`, error)
+						shares[userPubkey] = []
+					}
+				}
+			}
+
+			cartStore.setState((state) => ({
+				...state,
+				v4vShares: shares,
+			}))
+
+			await cartActions.updateSellerData()
+		} catch (error) {
+			console.error('Error updating V4V shares:', error)
+		}
 	},
 
 	updateCartTotals: async () => {
-		const updateTotals = async () => {
-			// Calculate cart total in sats
-			const state = cartStore.state
-			const userTotals: Record<string, number> = {}
+		const state = cartStore.state
+		const sellerData = state.sellerData
 
-			try {
-				for (const user of Object.values(state.cart.users)) {
-					let userTotalSats = 0
+		let subtotalInSats = 0
+		let totalShippingInSats = 0
+		const subtotalByCurrency: Record<string, number> = {}
+		const shippingByCurrency: Record<string, number> = {}
+		const totalByCurrency: Record<string, number> = {}
 
-					for (const productId of user.productIds) {
-						try {
-							const productTotal = await cartActions.calculateProductTotal(productId)
-							userTotalSats += productTotal.totalInSats
-						} catch (error) {
-							console.error(`Error calculating total for product ${productId}:`, error)
+		try {
+			for (const [sellerPubkey, data] of Object.entries(sellerData)) {
+				if (data.shippingSats > 0) {
+					totalShippingInSats += Math.round(data.shippingSats)
+				}
+			}
+
+			for (const productId of Object.values(state.cart.products).map((p) => p.id)) {
+				try {
+					const productTotal = await cartActions.calculateProductTotal(productId)
+
+					subtotalInSats += productTotal.subtotalInSats
+
+					const currency = productTotal.currency
+					if (currency) {
+						subtotalByCurrency[currency] = (subtotalByCurrency[currency] || 0) + productTotal.subtotalInCurrency
+						if (productTotal.shippingInCurrency > 0) {
+							shippingByCurrency[currency] = (shippingByCurrency[currency] || 0) + productTotal.shippingInCurrency
 						}
 					}
-
-					userTotals[user.pubkey] = userTotalSats
+				} catch (error) {
+					console.error(`Error calculating totals for product ${productId}:`, error)
 				}
-
-				cartStore.setState((state) => ({
-					...state,
-					userCartTotalInSats: userTotals,
-				}))
-			} catch (error) {
-				console.error('Error updating cart totals:', error)
 			}
+
+			const totalInSats = subtotalInSats + totalShippingInSats
+
+			for (const currency of Object.keys(subtotalByCurrency)) {
+				const subtotal = subtotalByCurrency[currency] || 0
+				const shipping = shippingByCurrency[currency] || 0
+				totalByCurrency[currency] = subtotal + shipping
+			}
+
+			cartStore.setState((state) => ({
+				...state,
+				totalInSats,
+				totalShippingInSats,
+				subtotalByCurrency,
+				shippingByCurrency,
+				totalByCurrency,
+			}))
+		} catch (error) {
+			console.error('Error updating cart totals:', error)
 		}
-
-		// Create a debounced version of updateTotals
-		const debouncedUpdate = debounce(() => {
-			updateTotals().catch((err) => console.error('Error in updateCartTotals:', err))
-		}, 250)
-
-		debouncedUpdate()
 	},
 
 	calculateTotalItems: () => {
@@ -681,7 +813,6 @@ export const cartActions = {
 
 	getUserPubkey: () => {
 		const state = cartStore.state
-		// Get the first user pubkey (assuming there's only one user for now)
 		return Object.keys(state.cart.users)[0] || null
 	},
 
@@ -712,73 +843,334 @@ export const cartActions = {
 		}
 	},
 
-	// Group products by seller
 	groupProductsBySeller: () => {
 		const state = cartStore.state
 		const grouped: Record<string, CartProduct[]> = {}
 
-		// Default group for products without seller info
 		const unknownSeller = 'unknown'
 		grouped[unknownSeller] = []
 
-		// Group products by seller pubkey
 		Object.values(state.cart.products).forEach((product) => {
-			// Use the sellerPubkey property if available
 			if (product.sellerPubkey) {
 				const sellerPubkey = product.sellerPubkey
 				if (!grouped[sellerPubkey]) {
 					grouped[sellerPubkey] = []
 				}
 				grouped[sellerPubkey].push(product)
-			}
-			// Otherwise add to unknown group
-			else {
+			} else {
 				grouped[unknownSeller].push(product)
 			}
 		})
 
-		// Remove empty groups
 		Object.keys(grouped).forEach((key) => {
 			if (grouped[key].length === 0) {
 				delete grouped[key]
 			}
 		})
 
+		cartStore.setState((state) => ({
+			...state,
+			productsBySeller: grouped,
+		}))
+
 		return grouped
+	},
+
+	calculateShares: (
+		sellerPubkey: string,
+		totalSats: number,
+	): { sellerAmount: number; communityAmount: number; sellerPercentage: number } => {
+		const state = cartStore.state
+		const shares = state.v4vShares[sellerPubkey] || []
+
+		if (!shares || shares.length === 0) {
+			return { sellerAmount: Math.round(totalSats), communityAmount: 0, sellerPercentage: 100 }
+		}
+
+		const communitySharePercentage = shares.reduce((total, share) => {
+			const percentage = Number(share.percentage)
+			if (isNaN(percentage) || percentage <= 0 || percentage > 100) {
+				console.warn(`Invalid share percentage for ${share.name}: ${share.percentage}`)
+				return total
+			}
+			return total + percentage
+		}, 0)
+
+		const normalizedCommunityPercentage = Math.min(communitySharePercentage, 100)
+		const sellerPercentage = Math.max(0, 100 - normalizedCommunityPercentage)
+
+		const sellerAmount = Math.floor((totalSats * sellerPercentage) / 100)
+		const communityAmount = totalSats - sellerAmount
+
+		return { sellerAmount, communityAmount, sellerPercentage }
+	},
+
+	convertWithExchangeRate: (amount: number, currency: string, exchangeRates: any): number => {
+		if (!exchangeRates || !amount) return 0
+
+		const upperCurrency = currency.toUpperCase()
+
+		if (upperCurrency === 'SATS') return Math.round(amount)
+		if (upperCurrency === 'BTC') return Math.round(amount * numSatsInBtc)
+
+		const rate = exchangeRates[upperCurrency]
+		if (!rate) {
+			console.warn(`Exchange rate not found for ${upperCurrency}`)
+			return 0
+		}
+
+		const sats = (amount / rate) * numSatsInBtc
+		return Math.round(sats)
+	},
+
+	updateSellerData: async () => {
+		const state = cartStore.state
+		const { productsBySeller } = state
+		const newSellerData: Record<string, any> = {}
+
+		if (Object.keys(productsBySeller).length === 0) {
+			cartActions.groupProductsBySeller()
+		}
+
+		let exchangeRates: Record<SupportedCurrency, number> | undefined
+		try {
+			exchangeRates = await cartQueryClient.fetchQuery(btcExchangeRatesQueryOptions)
+		} catch (error) {
+			console.warn('Failed to get exchange rates for seller data calculations:', error)
+		}
+
+		for (const [sellerPubkey, products] of Object.entries(state.productsBySeller)) {
+			if (products.length > 0) {
+				let sellerTotal = 0
+				const currencyTotals: Record<string, number> = {}
+				let shippingSats = 0
+
+				for (const product of products) {
+					try {
+						const productTotal = await cartActions.calculateProductTotal(product.id)
+						sellerTotal += productTotal.subtotalInSats
+
+						if (productTotal.currency) {
+							const currency = productTotal.currency
+							currencyTotals[currency] = (currencyTotals[currency] || 0) + productTotal.subtotalInCurrency
+						}
+
+						if (product.shippingMethodId && product.shippingCost > 0) {
+							const fiatShippingCost = product.shippingCost
+							const actualShippingCostCurrency = product.shippingCostCurrency
+
+							if (actualShippingCostCurrency && CURRENCIES.includes(actualShippingCostCurrency as SupportedCurrency)) {
+								try {
+									let convertedShippingSats = 0
+									const upperShippingCurrency = actualShippingCostCurrency.toUpperCase() as SupportedCurrency
+
+									if (exchangeRates) {
+										if (exchangeRates[upperShippingCurrency] !== undefined) {
+											convertedShippingSats = cartActions.convertWithExchangeRate(
+												fiatShippingCost,
+												actualShippingCostCurrency,
+												exchangeRates,
+											)
+										} else {
+											convertedShippingSats = await cartActions.convertToSats(actualShippingCostCurrency, fiatShippingCost)
+										}
+									} else {
+										convertedShippingSats = await cartActions.convertToSats(actualShippingCostCurrency, fiatShippingCost)
+									}
+									shippingSats += convertedShippingSats
+								} catch (error) {
+									console.error(`Failed to convert shipping cost in updateSellerData for product ${product.id}: ${error}`)
+								}
+							} else {
+								console.log(
+									`Cannot convert shipping cost for seller - no valid currency found or currency not supported for product ${product.id}. actualShippingCostCurrency: ${actualShippingCostCurrency}`,
+								)
+							}
+						}
+					} catch (error) {
+						console.error(`Error processing product ${product.id} in updateSellerData:`, error)
+					}
+				}
+
+				const totalWithShipping = sellerTotal + shippingSats
+				const shares = cartActions.calculateShares(sellerPubkey, totalWithShipping)
+
+				newSellerData[sellerPubkey] = {
+					satsTotal: totalWithShipping,
+					currencyTotals,
+					shares,
+					shippingSats,
+				}
+			}
+		}
+
+		cartStore.setState((state) => ({
+			...state,
+			sellerData: newSellerData,
+		}))
+
+		await cartActions.updateCartTotals()
+	},
+
+	fetchAvailableShippingOptions: async (productId: string): Promise<RichShippingInfo[]> => {
+		try {
+			const productEvent = await getProductEvent(productId)
+			if (!productEvent) return []
+
+			const sellerPubkey = productEvent.pubkey
+			const shippingEvents = (await cartQueryClient.fetchQuery(shippingOptionsByPubkeyQueryOptions(sellerPubkey))) as NDKEvent[]
+
+			const allOptions = shippingEvents
+				.map((event) => {
+					const info = getShippingInfo(event)
+					if (!info) return null
+
+					return {
+						id: `${SHIPPING_KIND}:${sellerPubkey}:${info.id}`,
+						name: info.title,
+						cost: parseFloat(info.price.amount),
+						currency: info.price.currency,
+						country: info.country,
+						service: info.service,
+						carrier: info.carrier,
+					}
+				})
+				.filter(Boolean) as RichShippingInfo[]
+
+			const sortedOptions = allOptions.sort((a, b) => {
+				const aIsStandard = a.name?.toLowerCase().includes('standard') || false
+				const bIsStandard = b.name?.toLowerCase().includes('standard') || false
+				if (aIsStandard && !bIsStandard) return -1
+				if (!aIsStandard && bIsStandard) return 1
+				return (a.cost || 0) - (b.cost || 0)
+			})
+
+			return sortedOptions.slice(0, 4)
+		} catch (error) {
+			console.error(`Failed to fetch shipping options for product ${productId}:`, error)
+			return []
+		}
+	},
+
+	fetchAndSetSellerShippingOptions: async () => {
+		const state = cartStore.state
+		const { productsBySeller, cart } = state
+		const newSellerShippingOptions: Record<string, RichShippingInfo[]> = {}
+
+		if (Object.keys(productsBySeller).length === 0) {
+			return
+		}
+
+		for (const [sellerPubkey, products] of Object.entries(productsBySeller)) {
+			if (products.length > 0) {
+				try {
+					const shippingEvents = (await cartQueryClient.fetchQuery(shippingOptionsByPubkeyQueryOptions(sellerPubkey))) as NDKEvent[]
+
+					const allOptions = shippingEvents
+						.map((event) => {
+							const info = getShippingInfo(event)
+							if (!info) return null
+							return {
+								id: `${SHIPPING_KIND}:${sellerPubkey}:${info.id}`,
+								name: info.title,
+								cost: parseFloat(info.price.amount),
+								currency: info.price.currency,
+								country: info.country,
+								service: info.service,
+								carrier: info.carrier,
+							}
+						})
+						.filter(Boolean) as RichShippingInfo[]
+
+					const uniqueOptions: RichShippingInfo[] = []
+					const addedKeys = new Set<string>()
+					for (const option of allOptions) {
+						const uniqueKey = `${option.name}-${option.country || ''}`
+						if (!addedKeys.has(uniqueKey)) {
+							addedKeys.add(uniqueKey)
+							uniqueOptions.push(option)
+						}
+					}
+
+					const sortedOptions = uniqueOptions.sort((a, b) => {
+						const aIsStandard = a.name?.toLowerCase().includes('standard') || false
+						const bIsStandard = b.name?.toLowerCase().includes('standard') || false
+						if (aIsStandard && !bIsStandard) return -1
+						if (!aIsStandard && bIsStandard) return 1
+						return (a.cost || 0) - (b.cost || 0)
+					})
+
+					newSellerShippingOptions[sellerPubkey] = sortedOptions.slice(0, 4)
+				} catch (error) {
+					console.error(`Failed to fetch/process shipping options for seller ${sellerPubkey}:`, error)
+					newSellerShippingOptions[sellerPubkey] = []
+				}
+			}
+		}
+
+		cartStore.setState((state) => ({
+			...state,
+			sellerShippingOptions: newSellerShippingOptions,
+		}))
 	},
 }
 
-export const useCart = () => {
+export function useCart() {
+	const storeState = useStore(cartStore)
+
+	useEffect(() => {
+		if (Object.keys(storeState.productsBySeller).length === 0 && Object.keys(storeState.cart.products).length > 0) {
+			cartActions.groupProductsBySeller()
+			cartActions.updateSellerData()
+		}
+	}, [storeState.cart.products])
+
 	return {
-		...cartStore.state,
+		...storeState,
 		...cartActions,
+	}
+}
+
+export function useCartTotals() {
+	const state = useStore(cartStore)
+
+	useEffect(() => {
+		if (Object.keys(state.cart.products).length > 0 && (state.totalInSats === 0 || Object.keys(state.sellerData).length === 0)) {
+			cartActions.groupProductsBySeller()
+			cartActions.updateSellerData()
+		}
+	}, [state.cart.products])
+
+	return {
+		totalItems: Object.values(state.cart.products).reduce((sum, product) => sum + product.amount, 0),
+		subtotalByCurrency: state.subtotalByCurrency,
+		shippingByCurrency: state.shippingByCurrency,
+		totalByCurrency: state.totalByCurrency,
+		totalInSats: state.totalInSats,
 	}
 }
 
 export async function handleAddToCart(userId: string, product: Partial<CartProduct> | NDKEvent | string | null) {
 	if (!product) return false
 
-	// Handle string case (just ID)
 	if (typeof product === 'string') {
 		await cartActions.addProduct(userId, product)
 		return true
 	}
 
-	// Handle NDKEvent case
 	if (product instanceof NDKEvent) {
 		await cartActions.addProduct(userId, product)
 		return true
 	}
 
-	// Handle CartProduct case
 	if ('id' in product && product.id) {
-		// Create a complete CartProduct from the partial one
 		const cartProduct: CartProduct = {
 			id: product.id,
 			amount: product.amount || 1,
 			shippingMethodId: product.shippingMethodId || null,
 			shippingMethodName: product.shippingMethodName || null,
 			shippingCost: product.shippingCost || 0,
+			shippingCostCurrency: product.shippingCostCurrency || null,
 			sellerPubkey: product.sellerPubkey,
 		}
 
@@ -787,37 +1179,4 @@ export async function handleAddToCart(userId: string, product: Partial<CartProdu
 	}
 
 	return false
-}
-
-// New hook to access real-time cart totals
-export function useCartTotals() {
-	const { cart } = useCart()
-	const [totals, setTotals] = useState({
-		totalItems: 0,
-		subtotalByCurrency: {} as Record<string, number>,
-	})
-
-	// Create a signature to detect changes to cart amounts
-	const cartSignature = Object.values(cart.products)
-		.map((p) => `${p.id}:${p.amount}`)
-		.join(',')
-
-	useEffect(() => {
-		const calculateTotals = async () => {
-			// Get total item count
-			const itemCount = cartActions.calculateTotalItems()
-
-			// Get subtotals by currency
-			const subtotals = await cartActions.calculateAmountsByCurrency()
-
-			setTotals({
-				totalItems: itemCount,
-				subtotalByCurrency: subtotals,
-			})
-		}
-
-		calculateTotals()
-	}, [cartSignature, cart.products])
-
-	return totals
 }

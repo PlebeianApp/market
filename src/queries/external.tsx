@@ -1,9 +1,9 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { currencyKeys } from './queryKeyFactory'
+import { CURRENCIES } from '@/lib/constants'
 
 // Constants
 const numSatsInBtc = 100000000
-export const CURRENCIES = ['BTC', 'USD', 'EUR', 'CHF', 'GBP', 'JPY'] as const
 export type SupportedCurrency = (typeof CURRENCIES)[number]
 
 // Configuration for currency exchange rate fetching
@@ -21,7 +21,6 @@ export const CURRENCY_CACHE_CONFIG = {
  * @returns Record of currency exchange rates with BTC
  */
 export const fetchBtcExchangeRates = async (): Promise<Record<SupportedCurrency, number>> => {
-	console.log('Fetching BTC exchange rates')
 	try {
 		const response = await fetch('https://api.yadio.io/exrates/BTC')
 		if (!response.ok) {
