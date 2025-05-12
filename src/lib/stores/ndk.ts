@@ -26,8 +26,6 @@ export const ndkActions = {
 		const state = ndkStore.state
 		if (state.ndk) return state.ndk
 
-
-
 		// If LOCAL_ONLY is true, only use APP_RELAY_URL and ignore default relays
 		const explicitRelays = LOCAL_ONLY
 			? ([process.env.APP_RELAY_URL].filter(Boolean) as string[])

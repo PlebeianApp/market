@@ -20,16 +20,16 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/account/profi
 function ProfileComponent() {
 	const ndk = ndkActions.getNDK()
 	const pubkey = ndk?.activeUser?.pubkey
-	
+
 	// Fetch profile data with Tanstack Query
 	const { data: fetchedProfile, isLoading: isLoadingProfile } = useQuery({
 		...profileByIdentifierQueryOptions(pubkey || ''),
 		enabled: !!pubkey,
 	})
-	
+
 	// Manage local state for profile data
 	const [profile, setProfile] = useState<NDKUserProfile>({})
-	
+
 	// Update profile mutation
 	const updateProfileMutation = useUpdateProfileMutation()
 	const isLoading = isLoadingProfile || updateProfileMutation.isPending
@@ -58,9 +58,9 @@ function ProfileComponent() {
 				toast.error('No active user')
 				return
 			}
-			
+
 			updateProfileMutation.mutate(value)
-		}
+		},
 	})
 
 	// Update form values when profile changes
@@ -79,11 +79,11 @@ function ProfileComponent() {
 	}, [profile])
 
 	const handleHeaderImageSave = (data: { url: string; index: number }) => {
-		setProfile(prev => ({ ...prev, banner: data.url }))
+		setProfile((prev) => ({ ...prev, banner: data.url }))
 	}
 
 	const handleProfileImageSave = (data: { url: string; index: number }) => {
-		setProfile(prev => ({ ...prev, image: data.url }))
+		setProfile((prev) => ({ ...prev, image: data.url }))
 	}
 
 	const handleImageDelete = (index: number) => {
@@ -104,16 +104,19 @@ function ProfileComponent() {
 	return (
 		<div className="space-y-6">
 			<h1 className="text-2xl font-bold">Profile</h1>
-			
+
 			{isLoadingProfile ? (
 				<div className="flex items-center justify-center p-8">
 					<div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
 				</div>
 			) : (
-				<form onSubmit={(e: React.FormEvent<HTMLFormElement>) => {
-					e.preventDefault()
-					form.handleSubmit()
-				}} className="space-y-6">
+				<form
+					onSubmit={(e: React.FormEvent<HTMLFormElement>) => {
+						e.preventDefault()
+						form.handleSubmit()
+					}}
+					className="space-y-6"
+				>
 					<div className="space-y-4">
 						<div className="space-y-2">
 							<Label htmlFor="headerImage">Header Image</Label>
@@ -127,7 +130,7 @@ function ProfileComponent() {
 								onDelete={handleImageDelete}
 							/>
 						</div>
-						
+
 						<div className="space-y-2">
 							<Label htmlFor="profileImage">Profile Image</Label>
 							<ImageUploader
@@ -140,14 +143,14 @@ function ProfileComponent() {
 								onDelete={handleImageDelete}
 							/>
 						</div>
-						
+
 						<form.Field
 							name="name"
 							validators={{
 								onChange: (field) => {
 									if (!field.value) return 'Name is required'
 									return undefined
-								}
+								},
 							}}
 						>
 							{(field) => (
@@ -170,14 +173,14 @@ function ProfileComponent() {
 								</div>
 							)}
 						</form.Field>
-						
+
 						<form.Field
 							name="displayName"
 							validators={{
 								onChange: (field) => {
 									if (!field.value) return 'Display Name is required'
 									return undefined
-								}
+								},
 							}}
 						>
 							{(field) => (
@@ -200,10 +203,8 @@ function ProfileComponent() {
 								</div>
 							)}
 						</form.Field>
-						
-						<form.Field
-							name="about"
-						>
+
+						<form.Field name="about">
 							{(field) => (
 								<div className="space-y-2">
 									<Label htmlFor={field.name}>About</Label>
@@ -219,7 +220,7 @@ function ProfileComponent() {
 								</div>
 							)}
 						</form.Field>
-						
+
 						<form.Field
 							name="nip05"
 							validators={{
@@ -228,7 +229,7 @@ function ProfileComponent() {
 										return 'NIP05 address should include @ symbol'
 									}
 									return undefined
-								}
+								},
 							}}
 						>
 							{(field) => (
@@ -248,10 +249,8 @@ function ProfileComponent() {
 								</div>
 							)}
 						</form.Field>
-						
-						<form.Field
-							name="lud16"
-						>
+
+						<form.Field name="lud16">
 							{(field) => (
 								<div className="space-y-2">
 									<Label htmlFor={field.name}>Lightning Address (LUD16)</Label>
@@ -266,10 +265,8 @@ function ProfileComponent() {
 								</div>
 							)}
 						</form.Field>
-						
-						<form.Field
-							name="lud06"
-						>
+
+						<form.Field name="lud06">
 							{(field) => (
 								<div className="space-y-2">
 									<Label htmlFor={field.name}>LNURL (LUD06)</Label>
@@ -284,7 +281,7 @@ function ProfileComponent() {
 								</div>
 							)}
 						</form.Field>
-						
+
 						<form.Field
 							name="website"
 							validators={{
@@ -293,7 +290,7 @@ function ProfileComponent() {
 										return 'Website should start with http:// or https://'
 									}
 									return undefined
-								}
+								},
 							}}
 						>
 							{(field) => (
@@ -313,12 +310,8 @@ function ProfileComponent() {
 								</div>
 							)}
 						</form.Field>
-						
-						<Button 
-							type="submit" 
-							disabled={isLoading}
-							className="w-full"
-						>
+
+						<Button type="submit" disabled={isLoading} className="w-full">
 							{isLoading ? 'Saving...' : 'Save'}
 						</Button>
 					</div>
