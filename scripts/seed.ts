@@ -11,7 +11,7 @@ import { createV4VSharesEvent } from './gen_v4v'
 import { ORDER_STATUS } from '@/lib/schemas/order'
 import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 import { createUserProfileEvent, generateUserProfileData } from './gen_user'
-import { 
+import {
 	createOrderEvent,
 	createOrderStatusEvent,
 	createPaymentRequestEvent,
@@ -21,7 +21,7 @@ import {
 	generateOrderStatusData,
 	generatePaymentRequestData,
 	generatePaymentReceiptData,
-	generateShippingUpdateData
+	generateShippingUpdateData,
 } from './gen_orders'
 
 config()
@@ -145,46 +145,46 @@ async function seedData() {
 
 	// Create orders between all users
 	console.log('Creating orders between all users...')
-	
+
 	// For each pair of users
 	for (let buyerIndex = 0; buyerIndex < userPubkeys.length; buyerIndex++) {
 		const buyerPubkey = userPubkeys[buyerIndex]
 		const buyerUser = devUsers[buyerIndex]
 		const buyerSigner = new NDKPrivateKeySigner(buyerUser.sk)
 		await buyerSigner.blockUntilReady()
-		
+
 		console.log(`Creating orders for buyer ${buyerPubkey.substring(0, 8)}...`)
-		
+
 		// Loop through all other users as sellers
 		for (let sellerIndex = 0; sellerIndex < userPubkeys.length; sellerIndex++) {
 			// Skip self (can't buy from yourself)
-			if (sellerIndex === buyerIndex) continue;
-			
+			if (sellerIndex === buyerIndex) continue
+
 			const sellerPubkey = userPubkeys[sellerIndex]
 			const sellerUser = devUsers[sellerIndex]
 			const sellerSigner = new NDKPrivateKeySigner(sellerUser.sk)
 			await sellerSigner.blockUntilReady()
-			
+
 			console.log(`  Creating orders from ${buyerPubkey.substring(0, 8)} to ${sellerPubkey.substring(0, 8)}...`)
-			
+
 			// Get products from this seller
 			const sellerProducts = productsByUser[sellerPubkey] || []
-			if (sellerProducts.length === 0) continue;
-			
+			if (sellerProducts.length === 0) continue
+
 			// Create multiple orders for each buyer-seller pair
 			for (let i = 0; i < ORDERS_PER_PAIR; i++) {
 				// Randomly select a product from seller
 				const productRef = sellerProducts[Math.floor(Math.random() * sellerProducts.length)]
-				
+
 				// Create order (buyer to merchant)
 				const orderData = generateOrderCreationData(buyerPubkey, sellerPubkey, productRef)
 				const orderEventId = await createOrderEvent(buyerSigner, ndk, orderData)
-				
+
 				if (orderEventId) {
 					// Get order id from tags
-					const orderId = orderData.tags.find(tag => tag[0] === 'order')?.[1]
-					const totalAmount = orderData.tags.find(tag => tag[0] === 'amount')?.[1] || '0'
-					
+					const orderId = orderData.tags.find((tag) => tag[0] === 'order')?.[1]
+					const totalAmount = orderData.tags.find((tag) => tag[0] === 'amount')?.[1] || '0'
+
 					if (orderId) {
 						// Create payment request (merchant to buyer)
 						const paymentRequestData = generatePaymentRequestData(buyerPubkey, orderId, totalAmount)
@@ -204,10 +204,10 @@ async function seedData() {
 							// Second order: confirmed and processing
 							const statusData1 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED)
 							await createOrderStatusEvent(sellerSigner, ndk, statusData1)
-							
+
 							const statusData2 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.PROCESSING)
 							await createOrderStatusEvent(sellerSigner, ndk, statusData2)
-							
+
 							// Add shipping update
 							const shippingData = generateShippingUpdateData(buyerPubkey, orderId, 'processing')
 							await createShippingUpdateEvent(sellerSigner, ndk, shippingData)
@@ -215,13 +215,13 @@ async function seedData() {
 							// Third order: complete flow
 							const statusData1 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED)
 							await createOrderStatusEvent(sellerSigner, ndk, statusData1)
-							
+
 							const statusData2 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.PROCESSING)
 							await createOrderStatusEvent(sellerSigner, ndk, statusData2)
-							
+
 							const shippingData = generateShippingUpdateData(buyerPubkey, orderId, 'shipped')
 							await createShippingUpdateEvent(sellerSigner, ndk, shippingData)
-							
+
 							const statusData3 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.COMPLETED)
 							await createOrderStatusEvent(sellerSigner, ndk, statusData3)
 						}

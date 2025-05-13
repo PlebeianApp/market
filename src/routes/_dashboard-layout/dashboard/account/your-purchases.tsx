@@ -14,16 +14,16 @@ function YourPurchasesComponent() {
 	const currentUser = ndk?.activeUser
 	const [statusFilter, setStatusFilter] = useState<string>('any')
 	const { data: purchases, isLoading } = useOrdersByBuyer(currentUser?.pubkey || '')
-	
+
 	// Filter orders by status if needed
 	const filteredPurchases = useMemo(() => {
 		if (!purchases) return []
-		
+
 		if (statusFilter === 'any') {
 			return purchases
 		}
 
-		return purchases.filter(order => {
+		return purchases.filter((order) => {
 			const status = getOrderStatus(order).toLowerCase()
 			return status === statusFilter.toLowerCase()
 		})
@@ -32,8 +32,8 @@ function YourPurchasesComponent() {
 	return (
 		<div className="space-y-6">
 			<h1 className="text-2xl font-bold">Your Purchases</h1>
-			
-			<OrderDataTable 
+
+			<OrderDataTable
 				data={filteredPurchases}
 				columns={purchaseColumns}
 				isLoading={isLoading}

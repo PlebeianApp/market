@@ -18,12 +18,12 @@ function SalesComponent() {
 	// Filter orders by status if needed
 	const filteredSales = useMemo(() => {
 		if (!sales) return []
-		
+
 		if (statusFilter === 'any') {
 			return sales
 		}
-		
-		return sales.filter(order => {
+
+		return sales.filter((order) => {
 			const status = getOrderStatus(order).toLowerCase()
 			return status === statusFilter.toLowerCase()
 		})
@@ -32,8 +32,8 @@ function SalesComponent() {
 	return (
 		<div className="space-y-6">
 			<h1 className="text-2xl font-bold">Sales</h1>
-			
-			<OrderDataTable 
+
+			<OrderDataTable
 				data={filteredSales}
 				columns={salesColumns}
 				isLoading={isLoading}
