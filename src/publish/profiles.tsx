@@ -37,8 +37,6 @@ export const useUpdateProfileMutation = () => {
 			const ndk = ndkActions.getNDK()
 			const pubkey = ndk?.activeUser?.pubkey
 
-			console.log('ON SUCCESS', pubkey, profile)
-
 			if (pubkey) {
 				// Invalidate relevant queries to trigger refetching
 				await queryClient.invalidateQueries({ queryKey: profileKeys.details(pubkey) })
