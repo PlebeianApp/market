@@ -8,8 +8,21 @@ import { createProductEvent, generateProductData } from './gen_products'
 import { createReviewEvent, generateReviewData } from './gen_review'
 import { createShippingEvent, generateShippingData } from './gen_shipping'
 import { createV4VSharesEvent } from './gen_v4v'
+import { ORDER_STATUS } from '@/lib/schemas/order'
 import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 import { createUserProfileEvent, generateUserProfileData } from './gen_user'
+import { 
+	createOrderEvent,
+	createOrderStatusEvent,
+	createPaymentRequestEvent,
+	createPaymentReceiptEvent,
+	createShippingUpdateEvent,
+	generateOrderCreationData,
+	generateOrderStatusData,
+	generatePaymentRequestData,
+	generatePaymentReceiptData,
+	generateShippingUpdateData
+} from './gen_orders'
 
 config()
 
@@ -29,6 +42,7 @@ async function seedData() {
 	const SHIPPING_OPTIONS_PER_USER = 4
 	const COLLECTIONS_PER_USER = 2
 	const REVIEWS_PER_USER = 2
+	const ORDERS_PER_PAIR = 3 // Each user will place this many orders with each other user
 
 	console.log('Connecting to Nostr...')
 	console.log(ndkActions.getNDK()?.explicitRelayUrls)
@@ -36,6 +50,7 @@ async function seedData() {
 	const productsByUser: Record<string, string[]> = {}
 	const allProductRefs: string[] = []
 	const shippingsByUser: Record<string, string[]> = {}
+	const userPubkeys: string[] = []
 
 	console.log('Starting seeding...')
 
@@ -45,6 +60,7 @@ async function seedData() {
 		const signer = new NDKPrivateKeySigner(user.sk)
 		await signer.blockUntilReady()
 		const pubkey = (await signer.user()).pubkey
+		userPubkeys.push(pubkey)
 
 		// Create user profile with user index for more personalized data
 		console.log(`Creating profile for user ${pubkey.substring(0, 8)}...`)
@@ -123,6 +139,94 @@ async function seedData() {
 			if (productsToReview[i]) {
 				const review = generateReviewData([productsToReview[i]])
 				await createReviewEvent(signer, ndk, review)
+			}
+		}
+	}
+
+	// Create orders between all users
+	console.log('Creating orders between all users...')
+	
+	// For each pair of users
+	for (let buyerIndex = 0; buyerIndex < userPubkeys.length; buyerIndex++) {
+		const buyerPubkey = userPubkeys[buyerIndex]
+		const buyerUser = devUsers[buyerIndex]
+		const buyerSigner = new NDKPrivateKeySigner(buyerUser.sk)
+		await buyerSigner.blockUntilReady()
+		
+		console.log(`Creating orders for buyer ${buyerPubkey.substring(0, 8)}...`)
+		
+		// Loop through all other users as sellers
+		for (let sellerIndex = 0; sellerIndex < userPubkeys.length; sellerIndex++) {
+			// Skip self (can't buy from yourself)
+			if (sellerIndex === buyerIndex) continue;
+			
+			const sellerPubkey = userPubkeys[sellerIndex]
+			const sellerUser = devUsers[sellerIndex]
+			const sellerSigner = new NDKPrivateKeySigner(sellerUser.sk)
+			await sellerSigner.blockUntilReady()
+			
+			console.log(`  Creating orders from ${buyerPubkey.substring(0, 8)} to ${sellerPubkey.substring(0, 8)}...`)
+			
+			// Get products from this seller
+			const sellerProducts = productsByUser[sellerPubkey] || []
+			if (sellerProducts.length === 0) continue;
+			
+			// Create multiple orders for each buyer-seller pair
+			for (let i = 0; i < ORDERS_PER_PAIR; i++) {
+				// Randomly select a product from seller
+				const productRef = sellerProducts[Math.floor(Math.random() * sellerProducts.length)]
+				
+				// Create order (buyer to merchant)
+				const orderData = generateOrderCreationData(buyerPubkey, sellerPubkey, productRef)
+				const orderEventId = await createOrderEvent(buyerSigner, ndk, orderData)
+				
+				if (orderEventId) {
+					// Get order id from tags
+					const orderId = orderData.tags.find(tag => tag[0] === 'order')?.[1]
+					const totalAmount = orderData.tags.find(tag => tag[0] === 'amount')?.[1] || '0'
+					
+					if (orderId) {
+						// Create payment request (merchant to buyer)
+						const paymentRequestData = generatePaymentRequestData(buyerPubkey, orderId, totalAmount)
+						await createPaymentRequestEvent(sellerSigner, ndk, paymentRequestData)
+
+						// Create payment receipt (buyer to merchant)
+						const paymentReceiptData = generatePaymentReceiptData(sellerPubkey, orderId, totalAmount)
+						await createPaymentReceiptEvent(buyerSigner, ndk, paymentReceiptData)
+
+						// Create status updates (merchant to buyer)
+						// Create different status updates based on order number to have variety
+						if (i === 0) {
+							// First order: confirmed only
+							const statusData = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED)
+							await createOrderStatusEvent(sellerSigner, ndk, statusData)
+						} else if (i === 1) {
+							// Second order: confirmed and processing
+							const statusData1 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED)
+							await createOrderStatusEvent(sellerSigner, ndk, statusData1)
+							
+							const statusData2 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.PROCESSING)
+							await createOrderStatusEvent(sellerSigner, ndk, statusData2)
+							
+							// Add shipping update
+							const shippingData = generateShippingUpdateData(buyerPubkey, orderId, 'processing')
+							await createShippingUpdateEvent(sellerSigner, ndk, shippingData)
+						} else {
+							// Third order: complete flow
+							const statusData1 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED)
+							await createOrderStatusEvent(sellerSigner, ndk, statusData1)
+							
+							const statusData2 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.PROCESSING)
+							await createOrderStatusEvent(sellerSigner, ndk, statusData2)
+							
+							const shippingData = generateShippingUpdateData(buyerPubkey, orderId, 'shipped')
+							await createShippingUpdateEvent(sellerSigner, ndk, shippingData)
+							
+							const statusData3 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.COMPLETED)
+							await createOrderStatusEvent(sellerSigner, ndk, statusData3)
+						}
+					}
+				}
 			}
 		}
 	}
