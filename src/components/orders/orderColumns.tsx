@@ -1,11 +1,10 @@
-import { OrderStatusBadge } from '@/components/orders/OrderStatusBadge'
+import { ndkActions } from '@/lib/stores/ndk'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
-import { formatSats, getBuyerPubkey, getEventDate, getOrderAmount, getOrderId, getOrderStatus, getSellerPubkey } from '@/queries/orders'
+import { formatSats, getBuyerPubkey, getEventDate, getOrderAmount, getOrderId, getSellerPubkey } from '@/queries/orders'
 import { Link } from '@tanstack/react-router'
 import type { ColumnDef } from '@tanstack/react-table'
 import { UserWithAvatar } from '../UserWithAvatar'
 import { OrderActions } from './OrderActions'
-import { ndkActions } from '@/lib/stores/ndk'
 
 // Base columns that are common to all order lists
 export const baseOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
