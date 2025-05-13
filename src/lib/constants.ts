@@ -1,5 +1,5 @@
-// export const defaultRelaysUrls: string[] = ['wss://relay.nostr.band', 'wss://nos.lol', 'wss://relay.nostr.net', 'wss://relay.damus.io']
-export const defaultRelaysUrls: string[] = []
+export const defaultRelaysUrls: string[] = ['wss://relay.nostr.band', 'wss://nos.lol', 'wss://relay.nostr.net', 'wss://relay.damus.io']
+// export const defaultRelaysUrls: string[] = []
 
 export const CURRENCIES = [
 	'SATS', // Satoshis

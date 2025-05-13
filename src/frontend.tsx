@@ -37,10 +37,12 @@ function App() {
 					throw new Error(`Failed to fetch config: ${response.status} ${response.statusText}`)
 				}
 				const config = await response.json()
+
+				// TODO: do we need this config if we don't need the app relay?
 				console.log('Fetched config:', config)
 
 				// Create queryClient with NDK initialization
-				const client = await createQueryClient(config.appRelay)
+				const client = await createQueryClient()
 				setQueryClient(client)
 
 				// Create router with the queryClient
