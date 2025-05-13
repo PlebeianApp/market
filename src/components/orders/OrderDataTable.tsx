@@ -43,6 +43,11 @@ export function OrderDataTable<TData>({
     getSortedRowModel: getSortedRowModel(),
     onColumnFiltersChange: setColumnFilters,
     getFilteredRowModel: getFilteredRowModel(),
+    initialState: {
+      pagination: {
+        pageSize: 7, // Show 7 items per page
+      },
+    },
     state: {
       sorting,
       columnFilters,
@@ -75,63 +80,37 @@ export function OrderDataTable<TData>({
         )}
       </div>
       
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder ? null : (
-                      <div
-                        {...{
-                          className: header.column.getCanSort() ? 'cursor-pointer select-none' : '',
-                          onClick: header.column.getToggleSortingHandler(),
-                        }}
-                      >
-                        {flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                      </div>
-                    )}
-                  </TableHead>
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array(7).fill(0).map((_, i) => (
+            <div key={i} className="rounded-md border border-gray-200 p-6 text-center">
+              Loading...
+            </div>
+          ))}
+        </div>
+      ) : table.getRowModel().rows?.length ? (
+        <div className="space-y-2">
+          {table.getRowModel().rows.map((row) => (
+            <div 
+              key={row.id} 
+              className="rounded-md border border-gray-200 hover:bg-gray-50"
+              data-state={row.getIsSelected() && "selected"}
+            >
+              <div className="grid grid-cols-[auto_auto_auto_auto_auto] gap-4 p-4 items-center">
+                {row.getVisibleCells().map((cell) => (
+                  <div key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </div>
                 ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              Array(5).fill(0).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell colSpan={columns.length} className="h-24 text-center">
-                    Loading...
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center">
-                  No orders found.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-md border border-gray-200 p-6 text-center">
+          No orders found.
+        </div>
+      )}
       
       <div className="flex items-center justify-end space-x-2 py-4">
         <div className="flex-1 text-sm text-muted-foreground">

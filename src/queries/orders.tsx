@@ -1,14 +1,14 @@
-import { useQuery } from '@tanstack/react-query'
-import { ndkActions } from '@/lib/stores/ndk'
-import { orderKeys } from './queryKeyFactory'
-import type { NDKEvent, NDKFilter, NDKTag } from '@nostr-dev-kit/ndk'
-import { 
-  ORDER_GENERAL_KIND, 
-  ORDER_PROCESS_KIND, 
-  PAYMENT_RECEIPT_KIND,
+import {
+  ORDER_GENERAL_KIND,
   ORDER_MESSAGE_TYPE,
-  ORDER_STATUS
+  ORDER_PROCESS_KIND,
+  ORDER_STATUS,
+  PAYMENT_RECEIPT_KIND
 } from '@/lib/schemas/order'
+import { ndkActions } from '@/lib/stores/ndk'
+import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
+import { useQuery } from '@tanstack/react-query'
+import { orderKeys } from './queryKeyFactory'
 
 export type OrderWithRelatedEvents = {
   order: NDKEvent                  // The original order creation event (kind 16, type 1)
@@ -609,7 +609,13 @@ export const getOrderStatus = (order: OrderWithRelatedEvents): string => {
  */
 export const getEventDate = (event?: NDKEvent): string => {
   if (!event || !event.created_at) return '-'
-  return new Date(event.created_at * 1000).toLocaleString()
+  return new Date(event.created_at * 1000).toLocaleString('de-DE', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 /**
