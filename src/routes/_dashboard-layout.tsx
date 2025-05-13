@@ -19,7 +19,7 @@ function DashboardLayout() {
 					<div className="space-y-8">
 						{dashboardNavigation.map((section) => (
 							<div key={section.title}>
-								<h2 className="text-md font-heading mb-4 bg-black text-white px-4 py-2">{section.title}</h2>
+								<h2 className="text-md font-heading mb-2 bg-black text-white px-4 py-2">{section.title}</h2>
 								<nav className="space-y-2">
 									{section.items.map((item) => {
 										const isActive = matchRoute({
@@ -45,8 +45,8 @@ function DashboardLayout() {
 				{/* Main Content - limited to 33vh height */}
 				<ScrollArea className="flex-1 p-8 border-2 border-black">
 					<div className="mb-4">
-						<Link to="/dashboard" className="inline-block px-4 py-4 bg-black text-white hover:bg-gray-800 transition-colors">
-							<span className="i-back w-8 h-8" />
+						<Link to="/dashboard" className="inline-block px-2 py-2 bg-black text-white hover:bg-gray-800 transition-colors">
+							<span className="i-back w-6 h-6" />
 						</Link>
 					</div>
 					<Outlet />
