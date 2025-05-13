@@ -45,6 +45,7 @@
 		"@tanstack/react-query": "^5.75.4",
 		"@tanstack/react-router": "^1.119.0",
 		"@tanstack/react-store": "^0.7.0",
+		"@tanstack/react-table": "^8.21.3",
 		"@types/uuid": "^10.0.0",
 		"@yudiel/react-qr-scanner": "^2.3.0",
 		"bun-plugin-tailwind": "^0.0.15",
