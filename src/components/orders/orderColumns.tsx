@@ -4,12 +4,14 @@ import { formatSats, getBuyerPubkey, getEventDate, getOrderAmount, getOrderId, g
 import { Link } from '@tanstack/react-router'
 import type { ColumnDef } from '@tanstack/react-table'
 import { UserWithAvatar } from '../UserWithAvatar'
+import { OrderActions } from './OrderActions'
+import { ndkActions } from '@/lib/stores/ndk'
 
 // Base columns that are common to all order lists
 export const baseOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 	{
 		accessorKey: 'orderId',
-		header: 'Order I.D',
+		header: 'Order ID',
 		cell: ({ row }) => {
 			const orderId = getOrderId(row.original.order)
 			return (
@@ -37,15 +39,35 @@ export const baseOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 			return <div className="text-right font-medium">{formatSats(amount)}</div>
 		},
 	},
-	{
-		accessorKey: 'status',
-		header: 'Status',
-		cell: ({ row }) => {
-			const status = getOrderStatus(row.original)
-			return <OrderStatusBadge status={status} />
-		},
-	},
 ]
+
+// Actions column for purchases (buyer's perspective)
+const purchaseActionsColumn: ColumnDef<OrderWithRelatedEvents> = {
+	accessorKey: 'actions',
+	header: 'Actions',
+	cell: ({ row }) => {
+		const ndk = ndkActions.getNDK()
+		const currentUserPubkey = ndk?.activeUser?.pubkey
+
+		if (!currentUserPubkey) return null
+
+		return <OrderActions order={row.original} userPubkey={currentUserPubkey} />
+	},
+}
+
+// Actions column for sales (seller's perspective)
+const salesActionsColumn: ColumnDef<OrderWithRelatedEvents> = {
+	accessorKey: 'actions',
+	header: 'Actions',
+	cell: ({ row }) => {
+		const ndk = ndkActions.getNDK()
+		const currentUserPubkey = ndk?.activeUser?.pubkey
+
+		if (!currentUserPubkey) return null
+
+		return <OrderActions order={row.original} userPubkey={currentUserPubkey} />
+	},
+}
 
 // Columns for purchases (buyer's perspective)
 export const purchaseColumns: ColumnDef<OrderWithRelatedEvents>[] = [
@@ -60,7 +82,7 @@ export const purchaseColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 	},
 	baseOrderColumns[1], // Date
 	baseOrderColumns[2], // Amount
-	baseOrderColumns[3], // Status (now at the end)
+	purchaseActionsColumn, // Actions
 ]
 
 // Columns for sales (seller's perspective)
@@ -76,7 +98,7 @@ export const salesColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 	},
 	baseOrderColumns[1], // Date
 	baseOrderColumns[2], // Amount
-	baseOrderColumns[3], // Status (now at the end)
+	salesActionsColumn, // Actions
 ]
 
 // Full columns (showing both buyer and seller)
@@ -100,5 +122,4 @@ export const fullOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 	},
 	baseOrderColumns[1], // Date
 	baseOrderColumns[2], // Amount
-	baseOrderColumns[3], // Status (now at the end)
 ]

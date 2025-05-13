@@ -1,4 +1,4 @@
-import { ORDER_GENERAL_KIND, ORDER_PROCESS_KIND, ORDER_STATUS, PAYMENT_RECEIPT_KIND } from '@/lib/schemas/order'
+import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, ORDER_STATUS, PAYMENT_RECEIPT_KIND } from '@/lib/schemas/order'
 import { ndkActions } from '@/lib/stores/ndk'
 import { orderKeys } from '@/queries/queryKeyFactory'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -7,227 +7,250 @@ import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
 
 export type OrderCreateParams = {
-  productRef: string  // Product reference
-  sellerPubkey: string // Seller pubkey
-  quantity: number
-  price: number
-  currency?: string
-  shippingRef?: string
-  shippingAddress?: string
-  notes?: string
+	productRef: string // Product reference
+	sellerPubkey: string // Seller pubkey
+	quantity: number
+	price: number
+	currency?: string
+	shippingRef?: string
+	shippingAddress?: string
+	notes?: string
 }
 
 /**
  * Creates a new order on the Nostr network
  */
 export const createOrder = async (params: OrderCreateParams): Promise<string> => {
-  const ndk = ndkActions.getNDK()
-  if (!ndk) throw new Error('NDK not initialized')
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
 
-  const signer = ndkActions.getSigner()
-  if (!signer) throw new Error('No active user')
+	const signer = ndkActions.getSigner()
+	if (!signer) throw new Error('No active user')
 
-  const user = ndk.activeUser
-  if (!user) throw new Error('No active user')
+	const user = ndk.activeUser
+	if (!user) throw new Error('No active user')
 
-  const currency = params.currency || 'USD'
-  const total = (params.price * params.quantity).toFixed(2)
-  const orderId = uuidv4()
+	const currency = params.currency || 'USD'
+	const total = (params.price * params.quantity).toFixed(2)
+	const orderId = uuidv4()
 
-  // Create the order event
-  const event = new NDKEvent(ndk)
-  event.kind = ORDER_GENERAL_KIND
-  event.content = params.notes || ''
-  event.tags = [
-    ['d', orderId],
-    ['p', params.productRef],
-    ['buyer', user.pubkey],
-    ['seller', params.sellerPubkey],
-    ['qty', params.quantity.toString()],
-    ['price', params.price.toFixed(2), currency],
-    ['total', total, currency],
-  ]
+	// Create the order event
+	const event = new NDKEvent(ndk)
+	event.kind = ORDER_GENERAL_KIND
+	event.content = params.notes || ''
+	event.tags = [
+		['d', orderId],
+		['p', params.productRef],
+		['buyer', user.pubkey],
+		['seller', params.sellerPubkey],
+		['qty', params.quantity.toString()],
+		['price', params.price.toFixed(2), currency],
+		['total', total, currency],
+	]
 
-  // Add optional tags
-  if (params.shippingRef) {
-    event.tags.push(['shipping', params.shippingRef])
-  }
-  
-  if (params.shippingAddress) {
-    event.tags.push(['address', params.shippingAddress])
-  }
+	// Add optional tags
+	if (params.shippingRef) {
+		event.tags.push(['shipping', params.shippingRef])
+	}
 
-  if (params.notes) {
-    event.tags.push(['notes', params.notes])
-  }
+	if (params.shippingAddress) {
+		event.tags.push(['address', params.shippingAddress])
+	}
 
-  // Sign and publish the event
-  await event.sign(signer)
-  await event.publish()
-  
-  return event.id
+	if (params.notes) {
+		event.tags.push(['notes', params.notes])
+	}
+
+	// Sign and publish the event
+	await event.sign(signer)
+	await event.publish()
+
+	return event.id
 }
 
 /**
  * Mutation hook for creating a new order
  */
 export const useCreateOrderMutation = () => {
-  const queryClient = useQueryClient()
+	const queryClient = useQueryClient()
 
-  return useMutation({
-    mutationFn: createOrder,
-    onSuccess: async (orderId) => {
-      // Invalidate relevant queries to trigger refetching
-      await queryClient.invalidateQueries({ queryKey: orderKeys.all })
-      
-      // Optionally invalidate specific user order queries
-      const ndk = ndkActions.getNDK()
-      const pubkey = ndk?.activeUser?.pubkey
-      if (pubkey) {
-        await queryClient.invalidateQueries({ queryKey: orderKeys.byPubkey(pubkey) })
-      }
+	return useMutation({
+		mutationFn: createOrder,
+		onSuccess: async (orderId) => {
+			// Invalidate relevant queries to trigger refetching
+			await queryClient.invalidateQueries({ queryKey: orderKeys.all })
 
-      toast.success('Order created successfully')
-      return orderId
-    },
-    onError: (error) => {
-      console.error('Failed to create order:', error)
-      toast.error('Failed to create order')
-    },
-  })
+			// Optionally invalidate specific user order queries
+			const ndk = ndkActions.getNDK()
+			const pubkey = ndk?.activeUser?.pubkey
+			if (pubkey) {
+				await queryClient.invalidateQueries({ queryKey: orderKeys.byPubkey(pubkey) })
+			}
+
+			toast.success('Order created successfully')
+			return orderId
+		},
+		onError: (error) => {
+			console.error('Failed to create order:', error)
+			toast.error('Failed to create order')
+		},
+	})
 }
 
 export type OrderStatusUpdateParams = {
-  orderEventId: string
-  status: (typeof ORDER_STATUS)[keyof typeof ORDER_STATUS]
-  tracking?: string
-  reason?: string
+	orderEventId: string
+	status: (typeof ORDER_STATUS)[keyof typeof ORDER_STATUS]
+	tracking?: string
+	reason?: string
 }
 
 /**
  * Updates the status of an order on the Nostr network
  */
 export const updateOrderStatus = async (params: OrderStatusUpdateParams): Promise<string> => {
-  const ndk = ndkActions.getNDK()
-  if (!ndk) throw new Error('NDK not initialized')
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
 
-  const signer = ndkActions.getSigner()
-  if (!signer) throw new Error('No active user')
+	const signer = ndkActions.getSigner()
+	if (!signer) throw new Error('No active user')
 
-  // Create the order status event
-  const event = new NDKEvent(ndk)
-  event.kind = ORDER_STATUS_KIND
-  event.content = ''
-  event.tags = [
-    ['e', params.orderEventId],
-    ['status', params.status],
-  ]
+	// Fetch the original order to get the counterparty pubkey
+	const originalOrder = await ndk.fetchEvent({
+		ids: [params.orderEventId],
+	})
 
-  // Add optional tags
-  if (params.tracking) {
-    event.tags.push(['tracking', params.tracking])
-  }
-  
-  if (params.reason) {
-    event.tags.push(['reason', params.reason])
-  }
+	if (!originalOrder) throw new Error('Original order not found')
 
-  // Sign and publish the event
-  await event.sign(signer)
-  await event.publish()
-  
-  return event.id
+	// Determine the recipient based on who's sending the update
+	// If current user is the buyer, send to seller (recipient in original order)
+	// If current user is the seller, send to buyer (author of original order)
+	const currentUserPubkey = ndk.activeUser?.pubkey
+	let recipientPubkey: string
+
+	if (currentUserPubkey === originalOrder.pubkey) {
+		// Current user is the buyer, send to seller
+		const recipientTag = originalOrder.tags.find((tag) => tag[0] === 'p')
+		recipientPubkey = recipientTag?.[1] || ''
+	} else {
+		// Current user is the seller, send to buyer
+		recipientPubkey = originalOrder.pubkey
+	}
+
+	if (!recipientPubkey) throw new Error('Recipient pubkey not found')
+
+	// Create the order status event
+	const event = new NDKEvent(ndk)
+	event.kind = ORDER_PROCESS_KIND
+	event.content = params.reason || `Order status updated to ${params.status}`
+	event.tags = [
+		['p', recipientPubkey],
+		['subject', 'order-info'],
+		['type', ORDER_MESSAGE_TYPE.STATUS_UPDATE],
+		['order', params.orderEventId],
+		['status', params.status],
+	]
+
+	// Add optional tracking information if provided
+	if (params.tracking) {
+		event.tags.push(['tracking', params.tracking])
+	}
+
+	// Sign and publish the event
+	await event.sign(signer)
+	await event.publish()
+
+	return event.id
 }
 
 /**
  * Mutation hook for updating order status
  */
 export const useUpdateOrderStatusMutation = () => {
-  const queryClient = useQueryClient()
+	const queryClient = useQueryClient()
 
-  return useMutation({
-    mutationFn: updateOrderStatus,
-    onSuccess: async (_, params) => {
-      // Invalidate relevant queries to trigger refetching
-      await queryClient.invalidateQueries({ queryKey: orderKeys.all })
-      await queryClient.invalidateQueries({ queryKey: orderKeys.details(params.orderEventId) })
-      
-      toast.success(`Order status updated to ${params.status}`)
-    },
-    onError: (error) => {
-      console.error('Failed to update order status:', error)
-      toast.error('Failed to update order status')
-    },
-  })
+	return useMutation({
+		mutationFn: updateOrderStatus,
+		onSuccess: async (_, params) => {
+			// Invalidate relevant queries to trigger refetching
+			await queryClient.invalidateQueries({ queryKey: orderKeys.all })
+			await queryClient.invalidateQueries({ queryKey: orderKeys.details(params.orderEventId) })
+
+			toast.success(`Order status updated to ${params.status}`)
+		},
+		onError: (error) => {
+			console.error('Failed to update order status:', error)
+			toast.error('Failed to update order status')
+		},
+	})
 }
 
 export type PaymentReceiptParams = {
-  orderEventId: string
-  method: 'lightning' | 'onchain' | 'bolt11' | 'fiat' | 'other'
-  amount: number
-  currency?: string
-  status: 'pending' | 'completed' | 'failed' | 'refunded'
-  txid?: string
-  proof?: string
+	orderEventId: string
+	method: 'lightning' | 'onchain' | 'bolt11' | 'fiat' | 'other'
+	amount: number
+	currency?: string
+	status: 'pending' | 'completed' | 'failed' | 'refunded'
+	txid?: string
+	proof?: string
 }
 
 /**
  * Creates a payment receipt for an order on the Nostr network
  */
 export const createPaymentReceipt = async (params: PaymentReceiptParams): Promise<string> => {
-  const ndk = ndkActions.getNDK()
-  if (!ndk) throw new Error('NDK not initialized')
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
 
-  const signer = ndkActions.getSigner()
-  if (!signer) throw new Error('No active user')
+	const signer = ndkActions.getSigner()
+	if (!signer) throw new Error('No active user')
 
-  const currency = params.currency || 'USD'
+	const currency = params.currency || 'USD'
 
-  // Create the payment receipt event
-  const event = new NDKEvent(ndk)
-  event.kind = PAYMENT_RECEIPT_KIND
-  event.content = `Payment ${params.status} for order`
-  event.tags = [
-    ['e', params.orderEventId],
-    ['method', params.method],
-    ['amount', params.amount.toFixed(2), currency],
-    ['status', params.status],
-  ]
+	// Create the payment receipt event
+	const event = new NDKEvent(ndk)
+	event.kind = PAYMENT_RECEIPT_KIND
+	event.content = `Payment ${params.status} for order`
+	event.tags = [
+		['e', params.orderEventId],
+		['method', params.method],
+		['amount', params.amount.toFixed(2), currency],
+		['status', params.status],
+	]
 
-  // Add optional tags
-  if (params.txid) {
-    event.tags.push(['txid', params.txid])
-  }
-  
-  if (params.proof) {
-    event.tags.push(['proof', params.proof])
-  }
+	// Add optional tags
+	if (params.txid) {
+		event.tags.push(['txid', params.txid])
+	}
 
-  // Sign and publish the event
-  await event.sign(signer)
-  await event.publish()
-  
-  return event.id
+	if (params.proof) {
+		event.tags.push(['proof', params.proof])
+	}
+
+	// Sign and publish the event
+	await event.sign(signer)
+	await event.publish()
+
+	return event.id
 }
 
 /**
  * Mutation hook for creating a payment receipt
  */
 export const useCreatePaymentReceiptMutation = () => {
-  const queryClient = useQueryClient()
+	const queryClient = useQueryClient()
 
-  return useMutation({
-    mutationFn: createPaymentReceipt,
-    onSuccess: async (_, params) => {
-      // Invalidate relevant queries
-      await queryClient.invalidateQueries({ queryKey: orderKeys.all })
-      await queryClient.invalidateQueries({ queryKey: orderKeys.details(params.orderEventId) })
-      
-      toast.success('Payment receipt created')
-    },
-    onError: (error) => {
-      console.error('Failed to create payment receipt:', error)
-      toast.error('Failed to create payment receipt')
-    },
-  })
-} 
+	return useMutation({
+		mutationFn: createPaymentReceipt,
+		onSuccess: async (_, params) => {
+			// Invalidate relevant queries
+			await queryClient.invalidateQueries({ queryKey: orderKeys.all })
+			await queryClient.invalidateQueries({ queryKey: orderKeys.details(params.orderEventId) })
+
+			toast.success('Payment receipt created')
+		},
+		onError: (error) => {
+			console.error('Failed to create payment receipt:', error)
+			toast.error('Failed to create payment receipt')
+		},
+	})
+}
