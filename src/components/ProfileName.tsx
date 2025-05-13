@@ -19,7 +19,11 @@ export function ProfileName({ pubkey, truncate = true, disableLink = false, clas
 	const displayName = name || (truncate ? pubkey.slice(0, 8) + '...' : pubkey)
 
 	if (disableLink) {
-		return <span className={cn(className)} {...props}>{displayName}</span>
+		return (
+			<span className={cn(className)} {...props}>
+				{displayName}
+			</span>
+		)
 	}
 
 	return (
