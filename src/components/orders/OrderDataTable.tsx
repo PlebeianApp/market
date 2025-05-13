@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import type { ColumnDef, ColumnFiltersState, SortingState } from "@tanstack/react-table"
 import {
   flexRender,

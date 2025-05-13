@@ -1,7 +1,7 @@
 import { OrderDataTable } from '@/components/orders/OrderDataTable'
 import { purchaseColumns } from '@/components/orders/orderColumns'
 import { ndkActions } from '@/lib/stores/ndk'
-import { getBuyerPubkey, useOrders } from '@/queries/orders'
+import { getOrderStatus, useOrdersByBuyer } from '@/queries/orders'
 import { createFileRoute } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 
@@ -13,25 +13,28 @@ function YourPurchasesComponent() {
 	const ndk = ndkActions.getNDK()
 	const currentUser = ndk?.activeUser
 	const [statusFilter, setStatusFilter] = useState<string>('any')
-	// Fetch all orders
-	const { data: orders, isLoading } = useOrders()
+	const { data: purchases, isLoading } = useOrdersByBuyer(currentUser?.pubkey || '')
 	
-	// Filter orders to only include purchases (where current user is the buyer)
-	const purchases = useMemo(() => {
-		if (!orders || !currentUser) return []
+	// Filter orders by status if needed
+	const filteredPurchases = useMemo(() => {
+		if (!purchases) return []
 		
-		return orders.filter(order => {
-			const buyerPubkey = getBuyerPubkey(order.order)
-			return buyerPubkey === currentUser.pubkey
+		if (statusFilter === 'any') {
+			return purchases
+		}
+
+		return purchases.filter(order => {
+			const status = getOrderStatus(order).toLowerCase()
+			return status === statusFilter.toLowerCase()
 		})
-	}, [orders, currentUser])
+	}, [purchases, statusFilter])
 
 	return (
 		<div className="space-y-6">
 			<h1 className="text-2xl font-bold">Your Purchases</h1>
 			
 			<OrderDataTable 
-				data={purchases}
+				data={filteredPurchases}
 				columns={purchaseColumns}
 				isLoading={isLoading}
 				filterColumn="status"

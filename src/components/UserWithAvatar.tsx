@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { profileKeys } from '@/queries/queryKeyFactory'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Link } from '@tanstack/react-router'
 
 interface UserWithAvatarProps {
 	pubkey: string
@@ -31,7 +32,7 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 	const nameInitial = profile?.name || profile?.displayName || pubkey.slice(0, 1).toUpperCase()
 
 	return (
-		<div className={cn('flex items-center gap-2', className)}>
+		<Link to="/profile/$profileId" params={{ profileId: pubkey }} className={cn('flex items-center gap-2', className)}>
 			<Avatar className={avatarSizeClass}>
 				<AvatarImage src={profile?.picture} />
 				<AvatarFallback>{nameInitial}</AvatarFallback>
@@ -40,6 +41,6 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 				<ProfileName pubkey={pubkey} className="font-medium" truncate={true} />
 				{showBadge && <Nip05Badge userId={pubkey} />}
 			</div>
-		</div>
+		</Link>
 	)
 }

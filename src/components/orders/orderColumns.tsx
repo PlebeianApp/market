@@ -4,6 +4,7 @@ import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { formatSats, getBuyerPubkey, getEventDate, getOrderAmount, getOrderId, getOrderStatus, getSellerPubkey } from '@/queries/orders'
 import type { ColumnDef } from '@tanstack/react-table'
 import { Link } from '@tanstack/react-router'
+import { UserWithAvatar } from '../UserWithAvatar'
 
 // Base columns that are common to all order lists
 export const baseOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
@@ -59,7 +60,7 @@ export const purchaseColumns: ColumnDef<OrderWithRelatedEvents>[] = [
     header: 'Seller',
     cell: ({ row }) => {
       const sellerPubkey = getSellerPubkey(row.original.order)
-      return <UserDisplay pubkey={sellerPubkey} />
+      return <UserWithAvatar pubkey={sellerPubkey || ''} showBadge={false} />
     },
   },
   baseOrderColumns[1], // Date
@@ -75,7 +76,7 @@ export const salesColumns: ColumnDef<OrderWithRelatedEvents>[] = [
     header: 'Buyer',
     cell: ({ row }) => {
       const buyerPubkey = getBuyerPubkey(row.original.order)
-      return <UserDisplay pubkey={buyerPubkey} />
+      return <UserWithAvatar pubkey={buyerPubkey || ''} showBadge={false} />
     },
   },
   baseOrderColumns[1], // Date
@@ -91,7 +92,7 @@ export const fullOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
     header: 'Seller',
     cell: ({ row }) => {
       const sellerPubkey = getSellerPubkey(row.original.order)
-      return <UserDisplay pubkey={sellerPubkey} />
+      return <UserWithAvatar pubkey={sellerPubkey || ''} showBadge={false} />
     },
   },
   {
@@ -99,7 +100,7 @@ export const fullOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
     header: 'Buyer',
     cell: ({ row }) => {
       const buyerPubkey = getBuyerPubkey(row.original.order)
-      return <UserDisplay pubkey={buyerPubkey} />
+      return <UserWithAvatar pubkey={buyerPubkey || ''} showBadge={false} />
     },
   },
   baseOrderColumns[1], // Date
