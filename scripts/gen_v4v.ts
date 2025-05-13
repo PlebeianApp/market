@@ -7,8 +7,9 @@ const POTENTIAL_V4V_RECIPEINTS = [
 	'npub12rv5lskctqxxs2c8rf2zlzc7xx3qpvzs3w4etgemauy9thegr43sf485vg',
 ]
 
-function getRandomInt(min: number, max: number): number {
-	return Math.floor(Math.random() * (max - min + 1)) + min
+function getRandomFloat(min: number, max: number, decimals: number = 4): number {
+	const rand = Math.random() * (max - min) + min
+	return parseFloat(rand.toFixed(decimals))
 }
 
 function shuffleArray<T>(array: T[]): T[] {
@@ -23,8 +24,8 @@ function shuffleArray<T>(array: T[]): T[] {
 export async function createV4VSharesEvent(signer: NDKPrivateKeySigner, ndk: any, appPubkey: string = '') {
 	try {
 		const uuid = Buffer.from(randomBytes(16)).toString('hex')
-		const totalPercentage = getRandomInt(5, 20)
-		const recipientCount = getRandomInt(1, Math.min(POTENTIAL_V4V_RECIPEINTS.length, 3))
+		const totalPercentage = getRandomFloat(0.05, 0.20)
+		const recipientCount = Math.floor(Math.random() * Math.min(POTENTIAL_V4V_RECIPEINTS.length, 3)) + 1
 
 		const selectedRecipients = shuffleArray(POTENTIAL_V4V_RECIPEINTS).slice(0, recipientCount)
 
@@ -35,13 +36,12 @@ export async function createV4VSharesEvent(signer: NDKPrivateKeySigner, ndk: any
 			if (i === selectedRecipients.length - 1) {
 				zapTags.push(['zap', selectedRecipients[i], remainingPercentage.toString()])
 			} else {
-				const percentage =
-					i === selectedRecipients.length - 1
-						? remainingPercentage
-						: getRandomInt(1, remainingPercentage - (selectedRecipients.length - i - 1))
-
+				const minAllocation = 0.01
+				const maxForThisRecipient = remainingPercentage - (minAllocation * (selectedRecipients.length - i - 1))
+				
+				const percentage = getRandomFloat(minAllocation, maxForThisRecipient)
 				zapTags.push(['zap', selectedRecipients[i], percentage.toString()])
-				remainingPercentage -= percentage
+				remainingPercentage = parseFloat((remainingPercentage - percentage).toFixed(4))
 			}
 		}
 
