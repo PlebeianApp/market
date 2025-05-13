@@ -20,7 +20,7 @@ export const baseOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
             params={{ orderId: orderId || 'unknown' }}
             className="font-mono text-xs hover:underline"
           >
-            {orderId ? `${orderId.substring(0, 8)}...` : 'Unknown'}
+           Order ID: {orderId ? `${orderId.substring(0, 8)}...` : 'Unknown'}
           </Link>
         </div>
       )
@@ -60,7 +60,7 @@ export const purchaseColumns: ColumnDef<OrderWithRelatedEvents>[] = [
     header: 'Seller',
     cell: ({ row }) => {
       const sellerPubkey = getSellerPubkey(row.original.order)
-      return <UserWithAvatar pubkey={sellerPubkey || ''} showBadge={false} />
+      return <UserWithAvatar pubkey={sellerPubkey || ''} showBadge={false} size="sm" />
     },
   },
   baseOrderColumns[1], // Date
@@ -76,7 +76,7 @@ export const salesColumns: ColumnDef<OrderWithRelatedEvents>[] = [
     header: 'Buyer',
     cell: ({ row }) => {
       const buyerPubkey = getBuyerPubkey(row.original.order)
-      return <UserWithAvatar pubkey={buyerPubkey || ''} showBadge={false} />
+      return <UserWithAvatar pubkey={buyerPubkey || ''} showBadge={false} size="sm" />
     },
   },
   baseOrderColumns[1], // Date
@@ -92,7 +92,7 @@ export const fullOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
     header: 'Seller',
     cell: ({ row }) => {
       const sellerPubkey = getSellerPubkey(row.original.order)
-      return <UserWithAvatar pubkey={sellerPubkey || ''} showBadge={false} />
+      return <UserWithAvatar pubkey={sellerPubkey || ''} showBadge={false} size="sm" />
     },
   },
   {
@@ -100,7 +100,7 @@ export const fullOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
     header: 'Buyer',
     cell: ({ row }) => {
       const buyerPubkey = getBuyerPubkey(row.original.order)
-      return <UserWithAvatar pubkey={buyerPubkey || ''} showBadge={false} />
+      return <UserWithAvatar pubkey={buyerPubkey || ''} showBadge={false} size="sm" />
     },
   },
   baseOrderColumns[1], // Date

@@ -28,6 +28,12 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 		lg: 'h-10 w-10',
 	}[size]
 
+	const textSizeClass = {
+		sm: 'text-xs',
+		md: 'text-sm',
+		lg: 'text-base',
+	}[size]
+
 	// Get first letter of name or use fallback
 	const nameInitial = profile?.name || profile?.displayName || pubkey.slice(0, 1).toUpperCase()
 
@@ -38,7 +44,7 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 				<AvatarFallback>{nameInitial}</AvatarFallback>
 			</Avatar>
 			<div className="flex flex-col">
-				<ProfileName pubkey={pubkey} className="font-medium" truncate={true} />
+				<ProfileName pubkey={pubkey} className={textSizeClass} truncate={true} />
 				{showBadge && <Nip05Badge userId={pubkey} />}
 			</div>
 		</Link>
