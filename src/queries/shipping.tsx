@@ -348,9 +348,6 @@ export const useUpdateShippingStatusMutation = () => {
 				return // Exit early if the client is handling the refresh
 			}
 
-			// Allow event propagation time
-			await new Promise((resolve) => setTimeout(resolve, 500))
-
 			// Invalidate all relevant queries
 			await queryClient.invalidateQueries({ queryKey: orderKeys.all })
 			await queryClient.invalidateQueries({ queryKey: orderKeys.details(params.orderEventId) })

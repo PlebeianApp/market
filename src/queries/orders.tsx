@@ -573,8 +573,21 @@ export const fetchOrderById = async (orderId: string): Promise<OrderWithRelatedE
 
 	const statusByEventId = await ndk.fetchEvents(statusByEventIdFilter)
 
-	// Combine both sets of events
+	// Also check for shipping updates referencing this order's event ID
+	const shippingByEventIdFilter: NDKFilter = {
+		kinds: [ORDER_PROCESS_KIND],
+		'#type': [ORDER_MESSAGE_TYPE.SHIPPING_UPDATE],
+		'#order': [eventId], // Using the event ID as order reference
+	}
+
+	const shippingByEventId = await ndk.fetchEvents(shippingByEventIdFilter)
+
+	// Combine all sets of events
 	for (const event of Array.from(statusByEventId)) {
+		relatedEvents.add(event)
+	}
+
+	for (const event of Array.from(shippingByEventId)) {
 		relatedEvents.add(event)
 	}
 
@@ -651,6 +664,7 @@ export const useOrderById = (orderId: string) => {
 	useEffect(() => {
 		if (!orderId || !ndk) return
 
+		// Subscription for all related events
 		const relatedEventsFilter = {
 			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
 			'#order': [orderId],
@@ -660,11 +674,12 @@ export const useOrderById = (orderId: string) => {
 			closeOnEose: false, // Keep subscription open
 		})
 
+		// Event handler for all events
 		subscription.on('event', (newEvent) => {
-			// If we get a status update, invalidate the query to refresh the data
+			// If we get a status update or shipping update, invalidate the query to refresh the data
 			if (newEvent.kind === ORDER_PROCESS_KIND) {
 				const typeTag = newEvent.tags.find((tag) => tag[0] === 'type')
-				if (typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.STATUS_UPDATE) {
+				if (typeTag && (typeTag[1] === ORDER_MESSAGE_TYPE.STATUS_UPDATE || typeTag[1] === ORDER_MESSAGE_TYPE.SHIPPING_UPDATE)) {
 					queryClient.invalidateQueries({ queryKey: orderKeys.details(orderId) })
 				}
 			}
@@ -696,7 +711,44 @@ export const getOrderStatus = (order: OrderWithRelatedEvents): string => {
 	const statusUpdates = [...order.statusUpdates]
 	const shippingUpdates = [...order.shippingUpdates]
 
-	// Check status updates first - make sure they're sorted newest first
+	// First, check if there are any shipping updates that should influence status
+	if (shippingUpdates.length > 0) {
+		// Sort newest first
+		shippingUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+		const latestShippingUpdate = shippingUpdates[0]
+		const shippingStatusTag = latestShippingUpdate.tags.find((tag) => tag[0] === 'status')
+
+		// If an item has been shipped, it should be at least in processing state
+		if (shippingStatusTag?.[1] === 'shipped') {
+			// Check if we have newer status updates that might override this
+			if (statusUpdates.length > 0) {
+				statusUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+				const latestStatusUpdate = statusUpdates[0]
+
+				// Only process if the status update is newer than the shipping update
+				if (
+					latestStatusUpdate.created_at &&
+					latestShippingUpdate.created_at &&
+					latestStatusUpdate.created_at > latestShippingUpdate.created_at
+				) {
+					const statusTag = latestStatusUpdate.tags.find((tag) => tag[0] === 'status')
+					if (statusTag?.[1]) {
+						return statusTag[1]
+					}
+				}
+			}
+
+			// If no newer status updates, return PROCESSING state for shipped items
+			return ORDER_STATUS.PROCESSING
+		}
+
+		// If delivered, mark as completed
+		if (shippingStatusTag?.[1] === 'delivered') {
+			return ORDER_STATUS.COMPLETED
+		}
+	}
+
+	// Next, check status updates if no shipping rules applied
 	if (statusUpdates.length > 0) {
 		// Re-sort to ensure newest first
 		statusUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
@@ -711,21 +763,6 @@ export const getOrderStatus = (order: OrderWithRelatedEvents): string => {
 	// If there are payment receipts but no status, consider it confirmed
 	if (order.paymentReceipts.length > 0) {
 		return ORDER_STATUS.CONFIRMED
-	}
-
-	// If there are shipping updates
-	if (shippingUpdates.length > 0) {
-		// Re-sort to ensure newest first
-		shippingUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-		const latestShippingUpdate = shippingUpdates[0]
-		const statusTag = latestShippingUpdate.tags.find((tag) => tag[0] === 'status')
-
-		if (statusTag?.[1] === 'delivered') {
-			return ORDER_STATUS.COMPLETED
-		}
-		if (statusTag?.[1]) {
-			return ORDER_STATUS.PROCESSING
-		}
 	}
 
 	// Default to pending if no other status is found

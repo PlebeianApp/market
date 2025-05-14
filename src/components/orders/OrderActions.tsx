@@ -50,10 +50,13 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 	const canCancel =
 		(status === ORDER_STATUS.PENDING || status === ORDER_STATUS.CONFIRMED) && (isBuyer || (isSeller && status === ORDER_STATUS.PENDING))
 
+	// Check if the order has been shipped
+	const hasBeenShipped = order.shippingUpdates.some((update) => update.tags.find((tag) => tag[0] === 'status')?.[1] === 'shipped')
+
 	// Seller actions
 	const canConfirm = isSeller && status === ORDER_STATUS.PENDING
 	const canProcess = isSeller && status === ORDER_STATUS.CONFIRMED
-	const canShip = isSeller && status === ORDER_STATUS.PROCESSING
+	const canShip = isSeller && status === ORDER_STATUS.PROCESSING && !hasBeenShipped
 	const canComplete = isSeller && status === ORDER_STATUS.PROCESSING
 
 	// Buyer actions
@@ -85,7 +88,16 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 			return
 		}
 
-		// Use shipping update instead of status update
+		// Use a normal status update instead of a shipping update
+		// This ensures it's processed the same way as other status changes
+		updateOrderStatus.mutate({
+			orderEventId: order.order.id,
+			status: ORDER_STATUS.PROCESSING, // Keep as processing but with shipping info
+			tracking: trackingNumber,
+			reason: 'Order has been shipped',
+		})
+
+		// Also send a shipping update for record keeping, but don't rely on it for UI updates
 		updateShippingStatus.mutate({
 			orderEventId: order.order.id,
 			status: SHIPPING_STATUS.SHIPPED,
@@ -103,30 +115,47 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 
 	// Get status styles based on the current status
 	const getStatusStyles = () => {
+		// Check if the order has been shipped (has shipping updates with shipped status)
+		const hasBeenShipped = order.shippingUpdates.some((update) => update.tags.find((tag) => tag[0] === 'status')?.[1] === 'shipped')
+
+		// Special case for processing + shipped
+		if (status === ORDER_STATUS.PROCESSING && hasBeenShipped) {
+			return {
+				bgColor: 'bg-orange-100',
+				textColor: 'text-orange-800',
+				icon: <Truck className="mr-2 h-4 w-4 text-orange-500" />,
+				label: 'Shipped', // Override display label
+			}
+		}
+
 		switch (status) {
 			case ORDER_STATUS.CONFIRMED:
 				return {
 					bgColor: 'bg-blue-100',
 					textColor: 'text-blue-800',
 					icon: <Check className="mr-2 h-4 w-4 text-blue-500" />,
+					label: 'Confirmed',
 				}
 			case ORDER_STATUS.PROCESSING:
 				return {
 					bgColor: 'bg-yellow-100',
 					textColor: 'text-yellow-800',
-					icon: <Truck className="mr-2 h-4 w-4 text-yellow-500" />,
+					icon: <ShoppingBag className="mr-2 h-4 w-4 text-yellow-500" />,
+					label: 'Processing',
 				}
 			case ORDER_STATUS.COMPLETED:
 				return {
 					bgColor: 'bg-green-100',
 					textColor: 'text-green-800',
 					icon: <PackageCheck className="mr-2 h-4 w-4 text-green-500" />,
+					label: 'Completed',
 				}
 			case ORDER_STATUS.CANCELLED:
 				return {
 					bgColor: 'bg-red-100',
 					textColor: 'text-red-800',
 					icon: <PackageX className="mr-2 h-4 w-4 text-red-500" />,
+					label: 'Cancelled',
 				}
 			case ORDER_STATUS.PENDING:
 			default:
@@ -134,17 +163,18 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 					bgColor: 'bg-gray-100',
 					textColor: 'text-gray-800',
 					icon: <Clock className="mr-2 h-4 w-4 text-gray-500" />,
+					label: 'Pending',
 				}
 		}
 	}
 
-	const { bgColor, textColor, icon } = getStatusStyles()
+	const { bgColor, textColor, icon, label } = getStatusStyles()
 
 	return (
 		<div className="flex items-center justify-end">
 			<div className={cn('flex items-center rounded-md px-3 py-1', bgColor, textColor)}>
 				{icon}
-				<span className="font-medium capitalize">{status}</span>
+				<span className="font-medium capitalize">{label}</span>
 			</div>
 
 			<DropdownMenu>
@@ -192,7 +222,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 					{isSeller && canComplete && (
 						<DropdownMenuItem onClick={() => handleStatusUpdate(ORDER_STATUS.COMPLETED)}>
 							<PackageCheck className="mr-2 h-4 w-4" />
-							Complete Order
+							{hasBeenShipped ? 'Mark as Delivered' : 'Complete Order'}
 						</DropdownMenuItem>
 					)}
 
