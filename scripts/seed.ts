@@ -8,7 +8,7 @@ import { createProductEvent, generateProductData } from './gen_products'
 import { createReviewEvent, generateReviewData } from './gen_review'
 import { createShippingEvent, generateShippingData } from './gen_shipping'
 import { createV4VSharesEvent } from './gen_v4v'
-import { ORDER_STATUS } from '@/lib/schemas/order'
+import { ORDER_STATUS, SHIPPING_STATUS } from '@/lib/schemas/order'
 import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 import { createUserProfileEvent, generateUserProfileData } from './gen_user'
 import {
@@ -42,7 +42,7 @@ async function seedData() {
 	const SHIPPING_OPTIONS_PER_USER = 4
 	const COLLECTIONS_PER_USER = 2
 	const REVIEWS_PER_USER = 2
-	const ORDERS_PER_PAIR = 3 // Each user will place this many orders with each other user
+	const ORDERS_PER_PAIR = 6 // Increased to demonstrate all order states
 
 	console.log('Connecting to Nostr...')
 	console.log(ndkActions.getNDK()?.explicitRelayUrls)
@@ -186,44 +186,143 @@ async function seedData() {
 					const totalAmount = orderData.tags.find((tag) => tag[0] === 'amount')?.[1] || '0'
 
 					if (orderId) {
-						// Create payment request (merchant to buyer)
-						const paymentRequestData = generatePaymentRequestData(buyerPubkey, orderId, totalAmount)
-						await createPaymentRequestEvent(sellerSigner, ndk, paymentRequestData)
+						// Create different status flows based on order number to show full spectrum
+						switch (i) {
+							case 0:
+								// PENDING state: Just create the order with no further updates
+								console.log(`    Order ${i + 1}: PENDING state (awaiting payment)`)
 
-						// Create payment receipt (buyer to merchant)
-						const paymentReceiptData = generatePaymentReceiptData(sellerPubkey, orderId, totalAmount)
-						await createPaymentReceiptEvent(buyerSigner, ndk, paymentReceiptData)
+								// Just create a payment request without receipt or status updates
+								const paymentRequestData = generatePaymentRequestData(buyerPubkey, orderId, totalAmount)
+								await createPaymentRequestEvent(sellerSigner, ndk, paymentRequestData)
+								break
 
-						// Create status updates (merchant to buyer)
-						// Create different status updates based on order number to have variety
-						if (i === 0) {
-							// First order: confirmed only
-							const statusData = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED)
-							await createOrderStatusEvent(sellerSigner, ndk, statusData)
-						} else if (i === 1) {
-							// Second order: confirmed and processing
-							const statusData1 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED)
-							await createOrderStatusEvent(sellerSigner, ndk, statusData1)
+							case 1:
+								// CONFIRMED state: Order with payment and confirmation
+								console.log(`    Order ${i + 1}: CONFIRMED state`)
 
-							const statusData2 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.PROCESSING)
-							await createOrderStatusEvent(sellerSigner, ndk, statusData2)
+								// Create payment request and receipt
+								const paymentReqData = generatePaymentRequestData(buyerPubkey, orderId, totalAmount)
+								await createPaymentRequestEvent(sellerSigner, ndk, paymentReqData)
 
-							// Add shipping update
-							const shippingData = generateShippingUpdateData(buyerPubkey, orderId, 'processing')
-							await createShippingUpdateEvent(sellerSigner, ndk, shippingData)
-						} else {
-							// Third order: complete flow
-							const statusData1 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED)
-							await createOrderStatusEvent(sellerSigner, ndk, statusData1)
+								const paymentReceiptData = generatePaymentReceiptData(sellerPubkey, orderId, totalAmount)
+								await createPaymentReceiptEvent(buyerSigner, ndk, paymentReceiptData)
 
-							const statusData2 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.PROCESSING)
-							await createOrderStatusEvent(sellerSigner, ndk, statusData2)
+								// Confirm the order
+								const statusConfirmed = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED)
+								await createOrderStatusEvent(sellerSigner, ndk, statusConfirmed)
+								break
 
-							const shippingData = generateShippingUpdateData(buyerPubkey, orderId, 'shipped')
-							await createShippingUpdateEvent(sellerSigner, ndk, shippingData)
+							case 2:
+								// PROCESSING state: Confirmed and now processing
+								console.log(`    Order ${i + 1}: PROCESSING state`)
 
-							const statusData3 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.COMPLETED)
-							await createOrderStatusEvent(sellerSigner, ndk, statusData3)
+								// Create payment request and receipt
+								const paymentReqData2 = generatePaymentRequestData(buyerPubkey, orderId, totalAmount)
+								await createPaymentRequestEvent(sellerSigner, ndk, paymentReqData2)
+
+								const paymentReceiptData2 = generatePaymentReceiptData(sellerPubkey, orderId, totalAmount)
+								await createPaymentReceiptEvent(buyerSigner, ndk, paymentReceiptData2)
+
+								// Confirm and then process the order
+								const statusConfirmed2 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED)
+								await createOrderStatusEvent(sellerSigner, ndk, statusConfirmed2)
+
+								const statusProcessing = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.PROCESSING)
+								await createOrderStatusEvent(sellerSigner, ndk, statusProcessing)
+								break
+
+							case 3:
+								// SHIPPED state: Processing with shipping update
+								console.log(`    Order ${i + 1}: SHIPPED state (processing + shipping)`)
+
+								// Create payment request and receipt
+								const paymentReqData3 = generatePaymentRequestData(buyerPubkey, orderId, totalAmount)
+								await createPaymentRequestEvent(sellerSigner, ndk, paymentReqData3)
+
+								const paymentReceiptData3 = generatePaymentReceiptData(sellerPubkey, orderId, totalAmount)
+								await createPaymentReceiptEvent(buyerSigner, ndk, paymentReceiptData3)
+
+								// Confirm and then process the order
+								const statusConfirmed3 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED)
+								await createOrderStatusEvent(sellerSigner, ndk, statusConfirmed3)
+
+								const statusProcessing2 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.PROCESSING)
+								await createOrderStatusEvent(sellerSigner, ndk, statusProcessing2)
+
+								// Add shipping update
+								const shippingData = generateShippingUpdateData(buyerPubkey, orderId, SHIPPING_STATUS.SHIPPED)
+								await createShippingUpdateEvent(sellerSigner, ndk, shippingData)
+								break
+
+							case 4:
+								// COMPLETED state: Full order flow to completion
+								console.log(`    Order ${i + 1}: COMPLETED state`)
+
+								// Create payment request and receipt
+								const paymentReqData4 = generatePaymentRequestData(buyerPubkey, orderId, totalAmount)
+								await createPaymentRequestEvent(sellerSigner, ndk, paymentReqData4)
+
+								const paymentReceiptData4 = generatePaymentReceiptData(sellerPubkey, orderId, totalAmount)
+								await createPaymentReceiptEvent(buyerSigner, ndk, paymentReceiptData4)
+
+								// Complete order flow
+								const statusConfirmed4 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED)
+								await createOrderStatusEvent(sellerSigner, ndk, statusConfirmed4)
+
+								const statusProcessing3 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.PROCESSING)
+								await createOrderStatusEvent(sellerSigner, ndk, statusProcessing3)
+
+								const shippingData2 = generateShippingUpdateData(buyerPubkey, orderId, SHIPPING_STATUS.SHIPPED)
+								await createShippingUpdateEvent(sellerSigner, ndk, shippingData2)
+
+								const statusCompleted = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.COMPLETED)
+								await createOrderStatusEvent(sellerSigner, ndk, statusCompleted)
+								break
+
+							case 5:
+								// CANCELLED state: Order that got cancelled
+								console.log(`    Order ${i + 1}: CANCELLED state`)
+
+								// Randomly choose when the cancellation happens
+								const cancelStage = Math.floor(Math.random() * 3) // 0: pending, 1: confirmed, 2: processing
+
+								if (cancelStage >= 1) {
+									// Create payment request and receipt
+									const paymentReqData5 = generatePaymentRequestData(buyerPubkey, orderId, totalAmount)
+									await createPaymentRequestEvent(sellerSigner, ndk, paymentReqData5)
+
+									const paymentReceiptData5 = generatePaymentReceiptData(sellerPubkey, orderId, totalAmount)
+									await createPaymentReceiptEvent(buyerSigner, ndk, paymentReceiptData5)
+
+									// Add confirmation
+									const statusConfirmed5 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED)
+									await createOrderStatusEvent(sellerSigner, ndk, statusConfirmed5)
+								} else {
+									// Just create a payment request for pending orders
+									const paymentReqData5 = generatePaymentRequestData(buyerPubkey, orderId, totalAmount)
+									await createPaymentRequestEvent(sellerSigner, ndk, paymentReqData5)
+								}
+
+								if (cancelStage >= 2) {
+									// Add processing state before cancellation
+									const statusProcessing4 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.PROCESSING)
+									await createOrderStatusEvent(sellerSigner, ndk, statusProcessing4)
+								}
+
+								// Finally cancel the order
+								// Randomize who cancels (buyer or seller)
+								const isBuyerCancelling = Math.random() > 0.5
+								const canceller = isBuyerCancelling ? buyerSigner : sellerSigner
+								const recipient = isBuyerCancelling ? sellerPubkey : buyerPubkey
+
+								const statusCancelled = generateOrderStatusData(recipient, orderId, ORDER_STATUS.CANCELLED)
+								await createOrderStatusEvent(canceller, ndk, statusCancelled)
+								break
+
+							default:
+								// Shouldn't reach here with our setup
+								break
 						}
 					}
 				}
