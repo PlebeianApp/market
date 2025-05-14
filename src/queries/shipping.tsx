@@ -1,9 +1,11 @@
+import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, SHIPPING_STATUS } from '@/lib/schemas/order'
 import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 import { ndkActions } from '@/lib/stores/ndk'
 import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
-import { queryOptions, useQuery } from '@tanstack/react-query'
-import { shippingKeys } from './queryKeyFactory'
+import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { toast } from 'sonner'
+import { orderKeys, shippingKeys } from './queryKeyFactory'
 
 // --- DATA FETCHING FUNCTIONS ---
 
@@ -242,6 +244,132 @@ export const getShippingId = (event: NDKEvent): string | undefined => {
  */
 export const createShippingReference = (pubkey: string, id: string): string => {
 	return `${SHIPPING_KIND}:${pubkey}:${id}`
+}
+
+export type ShippingUpdateParams = {
+	orderEventId: string
+	status: (typeof SHIPPING_STATUS)[keyof typeof SHIPPING_STATUS]
+	tracking?: string
+	carrier?: string
+	eta?: number
+	reason?: string
+	onSuccess?: () => void // Optional callback for client-side refresh
+}
+
+/**
+ * Updates the shipping status of an order on the Nostr network
+ */
+export const updateShippingStatus = async (params: ShippingUpdateParams): Promise<string> => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	const signer = ndkActions.getSigner()
+	if (!signer) throw new Error('No active user')
+
+	// Fetch the original order to get the counterparty pubkey
+	const originalOrder = await ndk.fetchEvent({
+		ids: [params.orderEventId],
+	})
+
+	if (!originalOrder) throw new Error('Original order not found')
+
+	// Extract the original order ID from the order tag
+	const originalOrderIdTag = originalOrder.tags.find((tag) => tag[0] === 'order')
+	const originalOrderId = originalOrderIdTag?.[1]
+
+	// Determine the recipient based on who's sending the update
+	// If current user is the buyer, send to seller (recipient in original order)
+	// If current user is the seller, send to buyer (author of original order)
+	const currentUserPubkey = ndk.activeUser?.pubkey
+	let recipientPubkey: string
+
+	if (currentUserPubkey === originalOrder.pubkey) {
+		// Current user is the buyer, send to seller
+		const recipientTag = originalOrder.tags.find((tag) => tag[0] === 'p')
+		recipientPubkey = recipientTag?.[1] || ''
+	} else {
+		// Current user is the seller, send to buyer
+		recipientPubkey = originalOrder.pubkey
+	}
+
+	if (!recipientPubkey) throw new Error('Recipient pubkey not found')
+
+	// Create the shipping update event
+	const event = new NDKEvent(ndk)
+	event.kind = ORDER_PROCESS_KIND
+	event.content = params.reason || `Shipping status updated to ${params.status}`
+	event.tags = [
+		['p', recipientPubkey],
+		['subject', 'shipping-info'],
+		['type', ORDER_MESSAGE_TYPE.SHIPPING_UPDATE], // Type 4 for shipping updates
+		['order', originalOrderId || params.orderEventId], // Use the original order ID when available
+		['status', params.status],
+	]
+
+	// Add optional tracking information if provided
+	if (params.tracking) {
+		event.tags.push(['tracking', params.tracking])
+	}
+
+	// Add optional carrier information if provided
+	if (params.carrier) {
+		event.tags.push(['carrier', params.carrier])
+	}
+
+	// Add optional ETA information if provided
+	if (params.eta) {
+		event.tags.push(['eta', params.eta.toString()])
+	}
+
+	// Sign and publish the event
+	await event.sign(signer)
+	await event.publish()
+
+	return event.id
+}
+
+/**
+ * Mutation hook for updating shipping status
+ */
+export const useUpdateShippingStatusMutation = () => {
+	const queryClient = useQueryClient()
+	const ndk = ndkActions.getNDK()
+	const currentUserPubkey = ndk?.activeUser?.pubkey
+
+	return useMutation({
+		mutationFn: updateShippingStatus,
+		onSuccess: async (eventId, params) => {
+			// Show toast first for immediate feedback
+			toast.success(`Order shipping status updated to ${params.status}`)
+
+			// Call the onSuccess callback if provided (for client-side refresh)
+			if (params.onSuccess) {
+				params.onSuccess()
+				return // Exit early if the client is handling the refresh
+			}
+
+			// Allow event propagation time
+			await new Promise((resolve) => setTimeout(resolve, 500))
+
+			// Invalidate all relevant queries
+			await queryClient.invalidateQueries({ queryKey: orderKeys.all })
+			await queryClient.invalidateQueries({ queryKey: orderKeys.details(params.orderEventId) })
+
+			// If we have the current user's pubkey, invalidate user specific queries
+			if (currentUserPubkey) {
+				await queryClient.invalidateQueries({ queryKey: orderKeys.byPubkey(currentUserPubkey) })
+				await queryClient.invalidateQueries({ queryKey: orderKeys.byBuyer(currentUserPubkey) })
+				await queryClient.invalidateQueries({ queryKey: orderKeys.bySeller(currentUserPubkey) })
+			}
+
+			// Trigger a refetch to show updated status
+			queryClient.refetchQueries({ queryKey: orderKeys.details(params.orderEventId) })
+		},
+		onError: (error) => {
+			console.error('Failed to update shipping status:', error)
+			toast.error('Failed to update shipping status')
+		},
+	})
 }
 
 /**

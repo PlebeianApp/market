@@ -1,7 +1,8 @@
 import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, ORDER_STATUS, PAYMENT_RECEIPT_KIND } from '@/lib/schemas/order'
 import { ndkActions } from '@/lib/stores/ndk'
 import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import { orderKeys } from './queryKeyFactory'
 
 export type OrderWithRelatedEvents = {
@@ -494,17 +495,32 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 }
 
 /**
- * Fetches a specific order by its order ID, along with all related events
+ * Fetches a specific order by its ID
  */
 export const fetchOrderById = async (orderId: string): Promise<OrderWithRelatedEvents | null> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
+	// Check if we have a UUID format or a hash format
+	const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(orderId)
+	const isHash = /^[0-9a-f]{64}$/.test(orderId)
+
 	// Fetch order creation event
 	const orderFilter: NDKFilter = {
 		kinds: [ORDER_PROCESS_KIND],
 		'#type': [ORDER_MESSAGE_TYPE.ORDER_CREATION],
-		'#order': [orderId],
+	}
+
+	// Add the appropriate filter depending on what type of ID we have
+	if (isUuid) {
+		// If it's a UUID, it's in the order tag
+		orderFilter['#order'] = [orderId]
+	} else if (isHash) {
+		// If it's a hash, it could be the event ID
+		orderFilter.ids = [orderId]
+	} else {
+		// Try both just in case
+		orderFilter['#order'] = [orderId]
 	}
 
 	const orderEvents = await ndk.fetchEvents(orderFilter)
@@ -515,21 +531,69 @@ export const fetchOrderById = async (orderId: string): Promise<OrderWithRelatedE
 	// Fetch all related events for this order
 	const relatedEventsFilter: NDKFilter = {
 		kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
-		'#order': [orderId],
 	}
 
+	// Get the order ID from the order tag
+	const orderIdFromTag = orderEvent.tags.find((tag) => tag[0] === 'order')?.[1]
+	const eventId = orderEvent.id
+
+	// Add the appropriate filters
+	if (orderIdFromTag) {
+		relatedEventsFilter['#order'] = [orderIdFromTag]
+	}
+
+	// Create a subscription to make sure we're getting real-time updates
+	const sub = ndk.subscribe(relatedEventsFilter, {
+		closeOnEose: false, // Keep subscription open
+	})
+
+	// Set up event handler for new status updates
+	sub.on('event', (event) => {
+		// Process updates if needed
+	})
+
+	// Wait for at least the initial batch of events
+	await new Promise<void>((resolve) => {
+		const timeout = setTimeout(() => resolve(), 2000) // Max 2 seconds wait
+		sub.on('eose', () => {
+			clearTimeout(timeout)
+			resolve()
+		})
+	})
+
+	// Get all events from the subscription
 	const relatedEvents = await ndk.fetchEvents(relatedEventsFilter)
 
-	// Group by type
+	// Also check for status updates referencing this order's event ID
+	const statusByEventIdFilter: NDKFilter = {
+		kinds: [ORDER_PROCESS_KIND],
+		'#type': [ORDER_MESSAGE_TYPE.STATUS_UPDATE],
+		'#order': [eventId], // Using the event ID as order reference
+	}
+
+	const statusByEventId = await ndk.fetchEvents(statusByEventIdFilter)
+
+	// Combine both sets of events
+	for (const event of Array.from(statusByEventId)) {
+		relatedEvents.add(event)
+	}
+
+	// Group by type with improved deduplication
 	const paymentRequests: NDKEvent[] = []
 	const statusUpdates: NDKEvent[] = []
 	const shippingUpdates: NDKEvent[] = []
 	const generalMessages: NDKEvent[] = []
 	const paymentReceipts: NDKEvent[] = []
 
+	// Create a Set to track processed event IDs for deduplication
+	const processedEventIds = new Set<string>()
+
 	for (const event of Array.from(relatedEvents)) {
-		// Skip the order creation event as we already have it
-		if (event.id === orderEvent.id) continue
+		// Skip the order creation event and any duplicate events
+		if (event.id === orderEvent.id || processedEventIds.has(event.id)) continue
+
+		// Mark this event as processed
+		processedEventIds.add(event.id)
 
 		// Categorize by kind and type
 		if (event.kind === ORDER_PROCESS_KIND) {
@@ -580,10 +644,47 @@ export const fetchOrderById = async (orderId: string): Promise<OrderWithRelatedE
  * Hook to fetch a specific order by its ID
  */
 export const useOrderById = (orderId: string) => {
+	const queryClient = useQueryClient()
+	const ndk = ndkActions.getNDK()
+
+	// Set up a live subscription to monitor events for this order
+	useEffect(() => {
+		if (!orderId || !ndk) return
+
+		const relatedEventsFilter = {
+			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			'#order': [orderId],
+		}
+
+		const subscription = ndk.subscribe(relatedEventsFilter, {
+			closeOnEose: false, // Keep subscription open
+		})
+
+		subscription.on('event', (newEvent) => {
+			// If we get a status update, invalidate the query to refresh the data
+			if (newEvent.kind === ORDER_PROCESS_KIND) {
+				const typeTag = newEvent.tags.find((tag) => tag[0] === 'type')
+				if (typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.STATUS_UPDATE) {
+					queryClient.invalidateQueries({ queryKey: orderKeys.details(orderId) })
+				}
+			}
+		})
+
+		// Clean up subscription when unmounting
+		return () => {
+			subscription.stop()
+		}
+	}, [orderId, ndk, queryClient])
+
 	return useQuery({
 		queryKey: orderKeys.details(orderId),
 		queryFn: () => fetchOrderById(orderId),
 		enabled: !!orderId,
+		refetchInterval: 3000, // Poll every 3 seconds to ensure we get status updates
+		staleTime: 1000, // Consider data stale after just 1 second
+		refetchOnMount: true,
+		refetchOnWindowFocus: true,
+		refetchOnReconnect: true,
 	})
 }
 
@@ -591,10 +692,20 @@ export const useOrderById = (orderId: string) => {
  * Get the current status of an order based on its related events
  */
 export const getOrderStatus = (order: OrderWithRelatedEvents): string => {
-	// Check status updates first
-	if (order.latestStatus) {
-		const statusTag = order.latestStatus.tags.find((tag) => tag[0] === 'status')
-		if (statusTag?.[1]) return statusTag[1]
+	// Deep clone the status updates to avoid modifying the original
+	const statusUpdates = [...order.statusUpdates]
+	const shippingUpdates = [...order.shippingUpdates]
+
+	// Check status updates first - make sure they're sorted newest first
+	if (statusUpdates.length > 0) {
+		// Re-sort to ensure newest first
+		statusUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+		const latestStatusUpdate = statusUpdates[0]
+		const statusTag = latestStatusUpdate.tags.find((tag) => tag[0] === 'status')
+
+		if (statusTag?.[1]) {
+			return statusTag[1]
+		}
 	}
 
 	// If there are payment receipts but no status, consider it confirmed
@@ -603,10 +714,18 @@ export const getOrderStatus = (order: OrderWithRelatedEvents): string => {
 	}
 
 	// If there are shipping updates
-	if (order.latestShipping) {
-		const statusTag = order.latestShipping.tags.find((tag) => tag[0] === 'status')
-		if (statusTag?.[1] === 'delivered') return ORDER_STATUS.COMPLETED
-		if (statusTag?.[1]) return ORDER_STATUS.PROCESSING
+	if (shippingUpdates.length > 0) {
+		// Re-sort to ensure newest first
+		shippingUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+		const latestShippingUpdate = shippingUpdates[0]
+		const statusTag = latestShippingUpdate.tags.find((tag) => tag[0] === 'status')
+
+		if (statusTag?.[1] === 'delivered') {
+			return ORDER_STATUS.COMPLETED
+		}
+		if (statusTag?.[1]) {
+			return ORDER_STATUS.PROCESSING
+		}
 	}
 
 	// Default to pending if no other status is found

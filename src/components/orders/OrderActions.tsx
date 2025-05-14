@@ -1,15 +1,5 @@
 import { Button } from '@/components/ui/button'
-import { getBuyerPubkey, getOrderStatus, getSellerPubkey } from '@/queries/orders'
-import type { OrderWithRelatedEvents } from '@/queries/orders'
-import { ORDER_STATUS } from '@/lib/schemas/order'
-import { Check, Clock, MoreHorizontal, PackageCheck, PackageX, ShoppingBag, Truck, X } from 'lucide-react'
-import { useUpdateOrderStatusMutation } from '@/publish/orders'
-import { toast } from 'sonner'
-import { useState } from 'react'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { Textarea } from '../ui/textarea'
-import { Input } from '../ui/input'
-import { Label } from '../ui/label'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -18,7 +8,18 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { ORDER_STATUS, SHIPPING_STATUS } from '@/lib/schemas/order'
 import { cn } from '@/lib/utils'
+import { useUpdateOrderStatusMutation } from '@/publish/orders'
+import type { OrderWithRelatedEvents } from '@/queries/orders'
+import { getBuyerPubkey, getOrderStatus, getSellerPubkey } from '@/queries/orders'
+import { useUpdateShippingStatusMutation } from '@/queries/shipping'
+import { Check, Clock, MoreHorizontal, PackageCheck, PackageX, ShoppingBag, Truck, X } from 'lucide-react'
+import { useState } from 'react'
+import { toast } from 'sonner'
+import { Input } from '../ui/input'
+import { Label } from '../ui/label'
+import { Textarea } from '../ui/textarea'
 
 interface OrderActionsProps {
 	order: OrderWithRelatedEvents
@@ -35,8 +36,10 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 	const [isShippingOpen, setIsShippingOpen] = useState(false)
 
 	const updateOrderStatus = useUpdateOrderStatusMutation()
+	const updateShippingStatus = useUpdateShippingStatusMutation()
 
 	const status = getOrderStatus(order)
+
 	const buyerPubkey = getBuyerPubkey(order.order)
 	const sellerPubkey = getSellerPubkey(order.order)
 
@@ -77,8 +80,19 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 	}
 
 	const handleShipped = () => {
-		// Keep status as processing but add tracking information
-		handleStatusUpdate(ORDER_STATUS.PROCESSING, 'Order has been shipped', trackingNumber)
+		if (!order.order.id) {
+			toast.error('Order ID not found')
+			return
+		}
+
+		// Use shipping update instead of status update
+		updateShippingStatus.mutate({
+			orderEventId: order.order.id,
+			status: SHIPPING_STATUS.SHIPPED,
+			tracking: trackingNumber,
+			reason: 'Order has been shipped',
+		})
+
 		setIsShippingOpen(false)
 		setTrackingNumber('')
 	}
