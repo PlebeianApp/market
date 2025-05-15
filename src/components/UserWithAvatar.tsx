@@ -5,15 +5,17 @@ import { useQuery } from '@tanstack/react-query'
 import { profileKeys } from '@/queries/queryKeyFactory'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Link } from '@tanstack/react-router'
 
 interface UserWithAvatarProps {
 	pubkey: string
 	className?: string
 	size?: 'sm' | 'md' | 'lg'
 	showBadge?: boolean
+	disableLink?: boolean
 }
 
-export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge = true }: UserWithAvatarProps) {
+export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge = true, disableLink = false }: UserWithAvatarProps) {
 	// Fetch the user's profile
 	const { data: profile, isLoading } = useQuery({
 		queryKey: profileKeys.details(pubkey),
@@ -27,19 +29,35 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 		lg: 'h-10 w-10',
 	}[size]
 
+	const textSizeClass = {
+		sm: 'text-xs',
+		md: 'text-sm',
+		lg: 'text-base',
+	}[size]
+
 	// Get first letter of name or use fallback
 	const nameInitial = profile?.name || profile?.displayName || pubkey.slice(0, 1).toUpperCase()
 
-	return (
-		<div className={cn('flex items-center gap-2', className)}>
+	const content = (
+		<>
 			<Avatar className={avatarSizeClass}>
 				<AvatarImage src={profile?.picture} />
 				<AvatarFallback>{nameInitial}</AvatarFallback>
 			</Avatar>
 			<div className="flex flex-col">
-				<ProfileName pubkey={pubkey} className="font-medium" truncate={true} />
+				<ProfileName pubkey={pubkey} className={textSizeClass} truncate={true} disableLink={true} />
 				{showBadge && <Nip05Badge userId={pubkey} />}
 			</div>
-		</div>
+		</>
+	)
+
+	if (disableLink) {
+		return <div className={cn('flex items-center gap-2', className)}>{content}</div>
+	}
+
+	return (
+		<Link to="/profile/$profileId" params={{ profileId: pubkey }} className={cn('flex items-center gap-2', className)}>
+			{content}
+		</Link>
 	)
 }

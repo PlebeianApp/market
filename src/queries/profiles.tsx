@@ -1,5 +1,5 @@
 import { ndkActions } from '@/lib/stores/ndk'
-import { type NDKUserProfile, NDKUser } from '@nostr-dev-kit/ndk'
+import { type NDKUserProfile, NDKSubscriptionCacheUsage, NDKUser } from '@nostr-dev-kit/ndk'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { profileKeys } from './queryKeyFactory'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
