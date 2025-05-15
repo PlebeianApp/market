@@ -24,6 +24,17 @@ jobs:
           source: './*'
           target: '~/market.3000'
           rm: true
+      - name: Write .env file from secrets
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USER }}
+          password: ${{ secrets.REMOTE_PASSWORD }}
+          script: |
+            cat <<EOF > ~/market.3000/.env
+            APP_RELAY_URL=${{ secrets.APP_RELAY_URL }}
+            APP_PRIVATE_KEY=${{ secrets.APP_PRIVATE_KEY }}
+            EOF
       - name: Restart market-dev.service
         uses: appleboy/ssh-action@master
         with:
