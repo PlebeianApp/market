@@ -49,7 +49,7 @@ export interface AppSettingsSubmitData {
 
 export async function submitAppSettings(data: NostrEvent): Promise<void> {
 	try {
-		const wsUrl = window.location.protocol === 'https:' ? 'wss://localhost:3000' : 'ws://localhost:3000'
+		const wsUrl = `${window.location.protocol === 'https:' ? `wss://${window.location.hostname}` : `ws://${window.location.hostname}:3000`}`
 		console.log(`Connecting to WebSocket at ${wsUrl}`)
 		const relay = await Relay.connect(wsUrl as string)
 		await relay.publish(data as Event)
