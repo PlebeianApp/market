@@ -139,6 +139,7 @@ async function createUserRolesEvent(signer: NDKPrivateKeySigner) {
 
 async function initializeEvents() {
 	console.log('Connecting to Nostr...')
+	ndkActions.initialize([relay])
 	await ndkActions.connect()
 	console.log('Connected to Nostr')
 

@@ -1,9 +1,8 @@
+import { defaultRelaysUrls } from '@/lib/constants'
+import type { NDKSigner } from '@nostr-dev-kit/ndk'
 import NDK from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
-import type { NDKCacheAdapter, NDKSigner } from '@nostr-dev-kit/ndk'
-import { defaultRelaysUrls } from '@/lib/constants'
-
-const LOCAL_ONLY = process.env.NODE_ENV === 'test' ? true : false
+import { configStore } from './config'
 
 interface NDKState {
 	ndk: NDK | null
@@ -26,12 +25,16 @@ export const ndkActions = {
 		const state = ndkStore.state
 		if (state.ndk) return state.ndk
 
-		// If LOCAL_ONLY is true, only use APP_RELAY_URL and ignore default relays
+		const LOCAL_ONLY = configStore.state.config.appRelay
+
+		// If LOCAL_ONLY is true, only use appRelay from config and ignore default relays
+		const appRelay = configStore.state.config.appRelay
 		const explicitRelays = LOCAL_ONLY
-			? ([process.env.APP_RELAY_URL].filter(Boolean) as string[])
+			? ([appRelay].filter(Boolean) as string[])
 			: relays && relays.length > 0
 				? relays
 				: defaultRelaysUrls
+
 		const ndk = new NDK({
 			explicitRelayUrls: explicitRelays,
 		})
