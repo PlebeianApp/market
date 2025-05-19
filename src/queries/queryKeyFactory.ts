@@ -64,3 +64,18 @@ export const v4vKeys = {
 	userShares: (pubkey: string) => [...v4vKeys.all, 'shares', pubkey] as const,
 	publishShare: () => [...v4vKeys.all, 'publish'] as const,
 } as const
+
+export const walletKeys = {
+	all: ['wallet'] as const,
+	details: (paymentDetailsEvent: string) => [...walletKeys.all, 'details', paymentDetailsEvent] as const,
+	byPubkey: (pubkey: string) => [...walletKeys.all, 'byPubkey', pubkey] as const,
+	publish: () => [...walletKeys.all, 'publish'] as const,
+} as const
+
+export const paymentDetailsKeys = {
+	all: ['paymentDetails'] as const,
+	details: (id: string) => [...paymentDetailsKeys.all, id] as const,
+	byPubkey: (pubkey: string) => [...paymentDetailsKeys.all, 'byPubkey', pubkey] as const,
+	byProductOrCollection: (coordinates: string) => [...paymentDetailsKeys.all, 'byCoordinates', coordinates] as const,
+	publish: () => [...paymentDetailsKeys.all, 'publish'] as const,
+} as const

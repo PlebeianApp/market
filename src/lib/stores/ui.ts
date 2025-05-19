@@ -2,7 +2,7 @@ import { Store } from '@tanstack/store'
 
 // Define types for different UI elements
 export type DrawerType = 'cart' | 'createProduct'
-export type DialogType = 'login' | 'signup' | 'checkout' | 'product-details'
+export type DialogType = 'login' | 'signup' | 'checkout' | 'product-details' | 'scan-qr'
 export type ToastType = 'success' | 'error' | 'warning' | 'info'
 
 // Toast notification structure
@@ -19,6 +19,7 @@ export interface UIState {
 	dialogs: Record<DialogType, boolean>
 	toasts: Toast[]
 	activeElement?: string
+	dialogCallbacks?: Partial<Record<DialogType, any>>
 }
 
 // Initial state
@@ -32,8 +33,10 @@ const initialState: UIState = {
 		signup: false,
 		checkout: false,
 		'product-details': false,
+		'scan-qr': false,
 	},
 	toasts: [],
+	dialogCallbacks: {},
 }
 
 // Create the store
@@ -76,12 +79,16 @@ export const uiActions = {
 	},
 
 	// Dialog actions
-	openDialog: (dialog: DialogType) => {
+	openDialog: (dialog: DialogType, callback?: any) => {
 		uiStore.setState((state) => ({
 			...state,
 			dialogs: {
 				...state.dialogs,
 				[dialog]: true,
+			},
+			dialogCallbacks: {
+				...state.dialogCallbacks,
+				[dialog]: callback,
 			},
 			activeElement: `dialog-${dialog}`,
 		}))
