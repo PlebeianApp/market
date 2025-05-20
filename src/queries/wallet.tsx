@@ -426,12 +426,6 @@ export interface NwcBalance {
 	timestamp: number
 }
 
-// Type for the data received from NWC 'balance_updated' event (if specific typing is needed)
-interface NwcBalanceEventData {
-	amount: number // typically in msats from NWC, might need conversion
-	created_at?: number
-}
-
 /**
  * Fetches the balance from an NWC wallet URI.
  * This function creates a temporary NDKNWCWallet instance.
@@ -467,6 +461,8 @@ export const fetchNwcWalletBalance = async (nwcUri: string): Promise<NwcBalance 
 		})
 
 		await readyPromise
+
+		// console.log('nwcWalletInstance balance property:', nwcWalletInstance.balance) // Keep for debugging if needed, or remove
 
 		const balanceResponse = nwcWalletInstance.balance
 

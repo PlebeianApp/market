@@ -67,9 +67,9 @@ export const parseNwcUri: NwcUriParser = (uri: string) => {
 	}
 }
 
-// Nostr tag constants for wallet events
-const WALLET_LIST_KIND = NDKKind.AppSpecificData
-const WALLET_LIST_LABEL = 'wallet_list'
+// Nostr tag constants for wallet events - These seem orphaned as Nostr ops moved to queries
+// const WALLET_LIST_KIND = NDKKind.AppSpecificData
+// const WALLET_LIST_LABEL = 'wallet_list'
 
 // Actions for the wallet store
 export const walletActions = {

@@ -29,11 +29,7 @@ export const ndkActions = {
 
 		// If LOCAL_ONLY is true, only use appRelay from config and ignore default relays
 		const appRelay = configStore.state.config.appRelay
-		const explicitRelays = LOCAL_ONLY
-			? ([appRelay].filter(Boolean) as string[])
-			: relays && relays.length > 0
-				? relays
-				: defaultRelaysUrls
+		const explicitRelays = LOCAL_ONLY ? ([appRelay].filter(Boolean) as string[]) : relays && relays.length > 0 ? relays : defaultRelaysUrls
 
 		const ndk = new NDK({
 			explicitRelayUrls: explicitRelays,
