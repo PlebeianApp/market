@@ -67,10 +67,10 @@ export const v4vKeys = {
 
 export const walletKeys = {
 	all: ['wallet'] as const,
-	details: (paymentDetailsEvent: string) => [...walletKeys.all, 'details', paymentDetailsEvent] as const,
-	byPubkey: (pubkey: string) => [...walletKeys.all, 'byPubkey', pubkey] as const,
+	// details: (paymentDetailsEvent: string) => [...walletKeys.all, 'details', paymentDetailsEvent] as const,
+	// byPubkey: (pubkey: string) => [...walletKeys.all, 'byPubkey', pubkey] as const,
 	userNwcWallets: (userPubkey: string) => [...walletKeys.all, 'userNwcWallets', userPubkey] as const,
-	publish: () => [...walletKeys.all, 'publish'] as const,
+	// publish: () => [...walletKeys.all, 'publish'] as const,
 	nwcBalance: (nwcUri: string) => [...walletKeys.all, 'nwcBalance', nwcUri] as const,
 } as const
 

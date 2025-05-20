@@ -1,247 +1,9 @@
-import { configStore } from '@/lib/stores/config'
 import { ndkActions } from '@/lib/stores/ndk'
 import { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk'
-import { NDKNWCWallet } from '@nostr-dev-kit/ndk-wallet'
+import { NDKNWCWallet, NDKWalletStatus } from '@nostr-dev-kit/ndk-wallet'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { nip04 } from 'nostr-tools'
 import { toast } from 'sonner'
-import { v4 as uuidv4 } from 'uuid'
 import { walletKeys } from './queryKeyFactory'
-
-/**
- * Interface for wallet details as per SPEC.md
- */
-export interface WalletDetail {
-	id: string // Event ID
-	key: string // For tracking use case (e.g., "on-chain-index")
-	value: string // Value for the key (e.g., "1")
-	createdAt: number // When the wallet detail was created
-	paymentDetailsEvent: string // Related payment details event coordinates
-}
-
-/**
- * Fetches wallet details for a specific payment details event
- */
-export const fetchWalletDetails = async (paymentDetailsEvent: string): Promise<WalletDetail | null> => {
-	try {
-		const ndk = ndkActions.getNDK()
-		if (!ndk) throw new Error('NDK not initialized')
-
-		const appPubkey = configStore.state.config.appPublicKey
-		if (!appPubkey) throw new Error('App public key not available')
-
-		// Fetch wallet detail events related to the payment details event
-		const events = await ndk.fetchEvents({
-			kinds: [NDKKind.AppSpecificData],
-			authors: [appPubkey], // Wallet details are signed by the app
-			'#a': [paymentDetailsEvent], // Related to this payment details event
-			'#l': ['wallet_detail'],
-		})
-
-		if (!events || events.size === 0) {
-			console.log('No wallet detail events found for payment details:', paymentDetailsEvent)
-			return null
-		}
-
-		// Find most recent wallet detail event
-		let mostRecentEvent: NDKEvent | null = null
-		let mostRecentTimestamp = 0
-
-		// Convert the Set to Array to avoid iteration issues
-		const eventsArray = Array.from(events)
-		for (const event of eventsArray) {
-			if (event.created_at && event.created_at > mostRecentTimestamp) {
-				mostRecentEvent = event
-				mostRecentTimestamp = event.created_at
-			}
-		}
-
-		if (!mostRecentEvent) return null
-
-		// Decrypt the content if the user has a signer
-		const signer = ndkActions.getSigner()
-		if (!signer) {
-			console.warn('No signer available to decrypt wallet details')
-			return null
-		}
-
-		const user = await signer.user()
-		if (!user) return null
-
-		// Decrypt the content - need to use nip04 directly since it's encrypted to the user
-		let content
-		try {
-			content = await nip04.decrypt(
-				mostRecentEvent.pubkey, // App public key
-				user.pubkey, // User public key
-				mostRecentEvent.content,
-			)
-			const parsedContent = JSON.parse(content)
-
-			return {
-				id: mostRecentEvent.id,
-				key: parsedContent.key || '',
-				value: parsedContent.value || '',
-				createdAt: mostRecentEvent.created_at || 0,
-				paymentDetailsEvent,
-			}
-		} catch (error) {
-			console.error('Error decrypting wallet details:', error)
-			return null
-		}
-	} catch (error) {
-		console.error('Error fetching wallet details:', error)
-		return null
-	}
-}
-
-/**
- * React query hook for fetching wallet details
- */
-export const useWalletDetails = (paymentDetailsEvent: string) => {
-	return useQuery({
-		queryKey: walletKeys.details(paymentDetailsEvent),
-		queryFn: () => fetchWalletDetails(paymentDetailsEvent),
-		enabled: !!paymentDetailsEvent,
-	})
-}
-
-/**
- * Interface for publishing wallet details
- */
-export interface PublishWalletDetailParams {
-	key: string // For tracking use case (e.g., "on-chain-index")
-	value: string // Value for the key (e.g., "1")
-	paymentDetailsEvent: string // Related payment details event coordinates
-	userPubkey: string // User's public key to encrypt content for
-}
-
-/**
- * Publishes wallet details
- */
-export const publishWalletDetail = async (params: PublishWalletDetailParams): Promise<string> => {
-	try {
-		const ndk = ndkActions.getNDK()
-		if (!ndk) throw new Error('NDK not initialized')
-
-		const signer = ndkActions.getSigner()
-		if (!signer) throw new Error('No signer available to publish wallet details')
-
-		// Ensure we have the app's public key
-		const appPubkey = configStore.state.config.appPublicKey
-		if (!appPubkey) throw new Error('App public key not available')
-
-		// We need to sign this as the app, which means we need to have the app's private key
-		// For development, the signer might just be the app's key
-		// In production, this would be handled by a server
-
-		// Create the content object
-		const contentObj = {
-			key: params.key,
-			value: params.value,
-		}
-
-		// Encrypt content for the user
-		const contentStr = JSON.stringify(contentObj)
-		let encryptedContent
-
-		// Encrypt to user's pubkey - need to use nip04 directly
-		encryptedContent = await nip04.encrypt(appPubkey, params.userPubkey, contentStr)
-
-		// Create the event
-		const event = new NDKEvent(ndk)
-		event.kind = NDKKind.AppSpecificData
-		event.content = encryptedContent
-		event.tags = [
-			['d', uuidv4()],
-			['l', 'wallet_detail'],
-			['a', params.paymentDetailsEvent], // Reference to the payment details event
-		]
-
-		// Sign and publish
-		await event.sign(signer)
-		await event.publish()
-
-		return event.id
-	} catch (error) {
-		console.error('Error publishing wallet details:', error)
-		throw new Error(`Failed to publish wallet details: ${error instanceof Error ? error.message : String(error)}`)
-	}
-}
-
-/**
- * React query mutation hook for publishing wallet details
- */
-export const usePublishWalletDetail = () => {
-	return useMutation({
-		mutationKey: walletKeys.publish(),
-		mutationFn: publishWalletDetail,
-		onSuccess: (eventId) => {
-			toast.success('Wallet details saved successfully')
-			return eventId
-		},
-		onError: (error) => {
-			console.error('Failed to publish wallet details:', error)
-			toast.error('Failed to save wallet details')
-		},
-	})
-}
-
-/**
- * Fetches all wallet details for a user
- */
-export const fetchUserWalletDetails = async (userPubkey: string): Promise<WalletDetail[]> => {
-	try {
-		const ndk = ndkActions.getNDK()
-		if (!ndk) throw new Error('NDK not initialized')
-
-		const appPubkey = configStore.state.config.appPublicKey
-		if (!appPubkey) throw new Error('App public key not available')
-
-		// First, find all payment detail events for this user
-		const paymentDetailEvents = await ndk.fetchEvents({
-			kinds: [NDKKind.AppSpecificData],
-			authors: [userPubkey],
-			'#l': ['payment_detail'],
-		})
-
-		if (!paymentDetailEvents || paymentDetailEvents.size === 0) {
-			console.log('No payment detail events found for user:', userPubkey)
-			return []
-		}
-
-		// For each payment detail event, fetch related wallet details
-		const walletDetails: WalletDetail[] = []
-
-		// Convert the Set to Array to avoid iteration issues
-		const eventsArray = Array.from(paymentDetailEvents)
-		for (const event of eventsArray) {
-			const aTag = `30078:${event.pubkey}:${event.id}`
-			const walletDetail = await fetchWalletDetails(aTag)
-			if (walletDetail) {
-				walletDetails.push(walletDetail)
-			}
-		}
-
-		return walletDetails
-	} catch (error) {
-		console.error('Error fetching user wallet details:', error)
-		return []
-	}
-}
-
-/**
- * React query hook for fetching all wallet details for a user
- */
-export const useUserWalletDetails = (userPubkey: string) => {
-	return useQuery({
-		queryKey: walletKeys.byPubkey(userPubkey),
-		queryFn: () => fetchUserWalletDetails(userPubkey),
-		enabled: !!userPubkey,
-	})
-}
-
-// --- New NWC Wallet List Code ---
 
 // Constants for User's NWC Wallet List event
 export const USER_NWC_WALLET_LIST_KIND = NDKKind.AppSpecificData // Using a common kind, distinguished by label
@@ -253,6 +15,7 @@ export type UserNwcWallet = import('@/lib/stores/wallet').Wallet
 
 /**
  * Fetches the user's NWC wallet list from Nostr.
+ * This event is encrypted by the user for themselves.
  */
 export const fetchUserNwcWallets = async (userPubkey: string): Promise<UserNwcWallet[]> => {
 	const ndk = ndkActions.getNDK()
@@ -309,7 +72,7 @@ export const fetchUserNwcWallets = async (userPubkey: string): Promise<UserNwcWa
 
 		const wallets = JSON.parse(decryptedContentJson) as UserNwcWallet[]
 		return wallets.map((wallet: any) => ({
-			id: wallet.id || uuidv4(),
+			id: wallet.id || '', // Ensure id is always a string, use uuidv4 if it were imported and needed for new ones
 			name: wallet.name || `Wallet ${Math.floor(Math.random() * 1000)}`,
 			nwcUri: wallet.nwcUri,
 			pubkey: wallet.pubkey || '',
@@ -420,7 +183,6 @@ export const useSaveUserNwcWalletsMutation = () => {
 	})
 }
 
-// --- NWC Wallet Balance ---
 export interface NwcBalance {
 	balance: number // in satoshis
 	timestamp: number
@@ -443,26 +205,44 @@ export const fetchNwcWalletBalance = async (nwcUri: string): Promise<NwcBalance 
 	}
 
 	let nwcWalletInstance: NDKNWCWallet | null = null
-	const nwcTimeoutDuration = 15000 // Define timeout duration
+	const nwcConnectionTimeoutDuration = 20000 // 20 seconds timeout
 
 	try {
-		nwcWalletInstance = new NDKNWCWallet(ndkInstance, { pairingCode: nwcUri, timeout: nwcTimeoutDuration })
+		nwcWalletInstance = new NDKNWCWallet(ndkInstance, { pairingCode: nwcUri })
 
 		const readyPromise = new Promise<void>((resolve, reject) => {
 			const timeoutId = setTimeout(() => {
-				reject(new Error(`Timeout waiting for NWC wallet to be ready (${nwcTimeoutDuration}ms)`))
-			}, nwcTimeoutDuration)
+				reject(
+					new Error(
+						`NWC wallet connection timed out after ${nwcConnectionTimeoutDuration / 1000} seconds for URI: ${nwcUri.substring(0, 30)}...`,
+					),
+				)
+			}, nwcConnectionTimeoutDuration)
 
-			nwcWalletInstance?.once('ready', async () => {
+			const onReady = async () => {
 				clearTimeout(timeoutId)
-				await nwcWalletInstance?.updateBalance()
-				resolve()
-			})
+				;(nwcWalletInstance as any)?.removeAllListeners('statusChanged') // Clean up status listener once ready
+				try {
+					await nwcWalletInstance?.updateBalance()
+					resolve()
+				} catch (updateBalanceError) {
+					reject(updateBalanceError)
+				}
+			}
+
+			const onStatusChanged = (newStatus: NDKWalletStatus) => {
+				if (newStatus === ('error' as NDKWalletStatus) || newStatus === ('disconnected' as NDKWalletStatus)) {
+					clearTimeout(timeoutId)
+					nwcWalletInstance?.removeAllListeners('ready') // Clean up ready listener if status changes to error/disconnect
+					reject(new Error(`NWC wallet status changed to ${newStatus} before becoming ready.`))
+				}
+			}
+
+			nwcWalletInstance?.once('ready', onReady)
+			;(nwcWalletInstance as any)?.on('statusChanged', onStatusChanged)
 		})
 
 		await readyPromise
-
-		// console.log('nwcWalletInstance balance property:', nwcWalletInstance.balance) // Keep for debugging if needed, or remove
 
 		const balanceResponse = nwcWalletInstance.balance
 
@@ -492,6 +272,7 @@ export const fetchNwcWalletBalance = async (nwcUri: string): Promise<NwcBalance 
 	} finally {
 		if (nwcWalletInstance) {
 			nwcWalletInstance.removeAllListeners('ready')
+			;(nwcWalletInstance as any)?.removeAllListeners('statusChanged')
 		}
 	}
 }
@@ -507,7 +288,7 @@ export const useNwcWalletBalanceQuery = (nwcUri: string | undefined, enabled: bo
 			return fetchNwcWalletBalance(nwcUri)
 		},
 		enabled: !!nwcUri && enabled,
-		staleTime: 1000 * 60 * 5,
+		staleTime: 1000 * 60 * 5, // 5 minutes
 		refetchOnWindowFocus: false,
 	})
 }

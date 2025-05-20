@@ -9,18 +9,7 @@ import { uiStore } from '@/lib/stores/ui'
 import { parseNwcUri, useWallets, walletActions, type Wallet } from '@/lib/stores/wallet'
 import { useNwcWalletBalanceQuery, useSaveUserNwcWalletsMutation, useUserNwcWalletsQuery, type UserNwcWallet } from '@/queries/wallet'
 import { createFileRoute } from '@tanstack/react-router'
-import {
-	ArrowLeftIcon,
-	ChevronDownIcon,
-	EditIcon,
-	EyeIcon,
-	EyeOffIcon,
-	PlusIcon,
-	RefreshCwIcon,
-	ScanIcon,
-	TrashIcon,
-	WalletIcon,
-} from 'lucide-react'
+import { ArrowLeftIcon, ChevronDownIcon, EyeIcon, EyeOffIcon, PlusIcon, RefreshCwIcon, ScanIcon, TrashIcon, WalletIcon } from 'lucide-react'
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { toast } from 'sonner'
 
@@ -103,30 +92,16 @@ function MakingPaymentsComponent() {
 		setIsAddingWallet(true)
 	}
 
-	const handleEditWalletClick = (wallet: Wallet) => {
-		setEditingWallet(wallet)
-		setEditWalletName(wallet.name)
-		const parsedUri = parseNwcUri(wallet.nwcUri)
-		setEditNwcPubkey(wallet.pubkey)
-		setEditNwcRelays(wallet.relays.join(', '))
-		setEditNwcSecret(parsedUri?.secret || '')
-		setEditStoreOnNostr(wallet.storedOnNostr || false)
-		setOpenCollapsibleId(wallet.id)
-	}
-
 	const handleCancelEdit = () => {
 		if (editingWallet) {
-			// Reset form fields to the original values of the currently editing wallet
 			setEditWalletName(editingWallet.name)
 			const parsedUri = parseNwcUri(editingWallet.nwcUri)
 			setEditNwcPubkey(editingWallet.pubkey)
 			setEditNwcRelays(editingWallet.relays.join(', '))
 			setEditNwcSecret(parsedUri?.secret || '')
 			setEditStoreOnNostr(editingWallet.storedOnNostr || false)
-			setShowEditSecret(false) // Reset visibility of secret
-			// Note: editingWallet and openCollapsibleId remain set. User can choose to close.
+			setShowEditSecret(false)
 		} else {
-			// This case should ideally not be reached if a cancel button is only visible when a wallet is open
 			resetEditForm()
 		}
 	}
@@ -249,7 +224,6 @@ function MakingPaymentsComponent() {
 						}
 
 						setIsAddingWallet(false)
-						// resetForm() is not needed here as AddWalletForm has its own state and will unmount
 						toast.success('Wallet added successfully!')
 					} catch (error) {
 						console.error('Error saving new wallet:', error)
@@ -292,8 +266,6 @@ function MakingPaymentsComponent() {
 								wallet.nwcUri,
 								!!wallet.nwcUri, // Always enable if nwcUri is present
 							)
-
-							// console.log('balanceQuery', balanceQuery)
 
 							return (
 								<WalletListItem

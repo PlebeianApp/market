@@ -67,10 +67,6 @@ export const parseNwcUri: NwcUriParser = (uri: string) => {
 	}
 }
 
-// Nostr tag constants for wallet events - These seem orphaned as Nostr ops moved to queries
-// const WALLET_LIST_KIND = NDKKind.AppSpecificData
-// const WALLET_LIST_LABEL = 'wallet_list'
-
 // Actions for the wallet store
 export const walletActions = {
 	// Initialize the wallet store - only loads from local storage now
@@ -104,8 +100,6 @@ export const walletActions = {
 				const walletWithNostrFlag = { ...nostrWallet, storedOnNostr: true }
 				const existingIndex = mergedWallets.findIndex((w) => w.id === walletWithNostrFlag.id)
 				if (existingIndex >= 0) {
-					// Nostr wallet takes precedence if timestamps are newer or equal,
-					// or if local one wasn't marked as stored on nostr
 					if (walletWithNostrFlag.updatedAt >= mergedWallets[existingIndex].updatedAt || !mergedWallets[existingIndex].storedOnNostr) {
 						mergedWallets[existingIndex] = walletWithNostrFlag
 					}
@@ -113,8 +107,6 @@ export const walletActions = {
 					mergedWallets.push(walletWithNostrFlag)
 				}
 			})
-			// Also, update local wallets that might now be confirmed on Nostr
-			// This ensures `storedOnNostr` is true if a local wallet matches one from Nostr.
 			const finalWallets = mergedWallets.map((mw) => {
 				const presentInNostr = nostrWallets.some((nw) => nw.id === mw.id)
 				if (presentInNostr && !mw.storedOnNostr) {

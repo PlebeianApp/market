@@ -1,14 +1,18 @@
 import { defaultRelaysUrls } from '@/lib/constants'
-import type { NDKSigner } from '@nostr-dev-kit/ndk'
+import type { NDKSigner, NDKUser } from '@nostr-dev-kit/ndk'
 import NDK from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { configStore } from './config'
+import { walletActions, type Wallet } from './wallet'
+import { fetchUserNwcWallets, fetchNwcWalletBalance } from '@/queries/wallet'
 
 interface NDKState {
 	ndk: NDK | null
 	isConnecting: boolean
 	isConnected: boolean
 	explicitRelayUrls: string[]
+	activeNwcWalletUri: string | null
+	signer?: NDKSigner
 }
 
 const initialState: NDKState = {
@@ -16,6 +20,8 @@ const initialState: NDKState = {
 	isConnecting: false,
 	isConnected: false,
 	explicitRelayUrls: [],
+	activeNwcWalletUri: null,
+	signer: undefined,
 }
 
 export const ndkStore = new Store<NDKState>(initialState)
@@ -27,7 +33,6 @@ export const ndkActions = {
 
 		const LOCAL_ONLY = configStore.state.config.appRelay
 
-		// If LOCAL_ONLY is true, only use appRelay from config and ignore default relays
 		const appRelay = configStore.state.config.appRelay
 		const explicitRelays = LOCAL_ONLY ? ([appRelay].filter(Boolean) as string[]) : relays && relays.length > 0 ? relays : defaultRelaysUrls
 
@@ -41,6 +46,10 @@ export const ndkActions = {
 			explicitRelayUrls: explicitRelays,
 		}))
 
+		if (ndk.signer) {
+			ndkActions.selectAndSetInitialNwcWallet()
+		}
+
 		return ndk
 	},
 
@@ -52,13 +61,7 @@ export const ndkActions = {
 
 		try {
 			await state.ndk.connect()
-			// await new Promise<void>((resolve) => {
-			// 	state.ndk!.pool.on('connect', () => {
-			// 		ndkStore.setState((state) => ({ ...state, isConnected: true }))
-			// 		resolve()
-			// 	})
-			// })
-			console.log('Connected to Nostr')
+			ndkStore.setState((state) => ({ ...state, isConnected: true }))
 		} finally {
 			ndkStore.setState((state) => ({ ...state, isConnecting: false }))
 		}
@@ -72,34 +75,128 @@ export const ndkActions = {
 			state.ndk!.addExplicitRelay(relayUrl)
 		})
 
-		const updatedUrls = [...state.explicitRelayUrls, ...relayUrls]
+		const updatedUrls = Array.from(new Set([...state.explicitRelayUrls, ...relayUrls]))
 		ndkStore.setState((state) => ({ ...state, explicitRelayUrls: updatedUrls }))
 		return updatedUrls
 	},
 
-	setSigner: (signer: NDKSigner | undefined) => {
+	setSigner: async (signer: NDKSigner | undefined) => {
 		const state = ndkStore.state
-		if (!state.ndk) return
+		if (!state.ndk) {
+			console.warn('Attempted to set signer before NDK was initialized. Initializing NDK now.')
+			ndkActions.initialize()
+			if (!ndkStore.state.ndk) {
+				console.error('NDK initialization failed. Cannot set signer.')
+				return
+			}
+			const newState = ndkStore.state
+			newState.ndk!.signer = signer
+		} else {
+			state.ndk.signer = signer
+		}
 
-		state.ndk.signer = signer
-		ndkStore.setState((state) => ({ ...state, signer }))
+		ndkStore.setState((s) => ({ ...s, signer }))
+
+		if (signer) {
+			await ndkActions.selectAndSetInitialNwcWallet()
+		} else {
+			ndkActions.setActiveNwcWalletUri(null)
+		}
 	},
 
 	removeSigner: () => {
-		const state = ndkStore.state
-		if (!state.ndk) return
-		state.ndk.signer = undefined
-		ndkStore.setState((state) => ({ ...state, signer: undefined }))
+		ndkActions.setSigner(undefined)
+	},
+
+	setActiveNwcWalletUri: (uri: string | null) => {
+		ndkStore.setState((state) => ({ ...state, activeNwcWalletUri: uri }))
+	},
+
+	selectAndSetInitialNwcWallet: async () => {
+		const ndk = ndkStore.state.ndk
+		if (!ndk || !ndk.signer) {
+			console.warn('NDK or signer not available for NWC wallet selection.')
+			return
+		}
+
+		let user: NDKUser | null = null
+		try {
+			user = await ndk.signer.user()
+		} catch (e) {
+			console.error('Error getting user from signer:', e)
+			return
+		}
+
+		if (!user || !user.pubkey) {
+			console.warn('User or user pubkey not available from signer.')
+			return
+		}
+
+		const userPubkey = user.pubkey
+
+		await walletActions.initialize()
+
+		try {
+			const nostrWallets = await fetchUserNwcWallets(userPubkey)
+			if (nostrWallets && nostrWallets.length > 0) {
+				walletActions.setNostrWallets(nostrWallets as Wallet[])
+			}
+		} catch (error) {
+			console.error('Failed to fetch or merge Nostr NWC wallets during initial setup:', error)
+		}
+
+		const allWallets = walletActions.getWallets()
+
+		if (allWallets.length === 0) {
+			ndkActions.setActiveNwcWalletUri(null)
+			return
+		}
+
+		let highestBalance = -1
+		let bestWallet: Wallet | null = null
+
+		const balancePromises = allWallets
+			.filter((wallet) => wallet.nwcUri)
+			.map(async (wallet) => {
+				try {
+					const balanceInfo = await fetchNwcWalletBalance(wallet.nwcUri)
+					const currentBalance = balanceInfo?.balance ?? -1
+					return { ...wallet, balance: currentBalance }
+				} catch (error) {
+					console.error(`Failed to fetch balance for wallet ${wallet.name} (ID: ${wallet.id}):`, error)
+					return { ...wallet, balance: -1 }
+				}
+			})
+
+		const walletsWithBalances = await Promise.all(balancePromises)
+
+		for (const wallet of walletsWithBalances) {
+			if (wallet.balance > highestBalance) {
+				highestBalance = wallet.balance
+				bestWallet = wallet
+			}
+		}
+
+		if (bestWallet && bestWallet.nwcUri) {
+			ndkActions.setActiveNwcWalletUri(bestWallet.nwcUri)
+		} else {
+			ndkActions.setActiveNwcWalletUri(null)
+		}
 	},
 
 	getNDK: () => {
 		return ndkStore.state.ndk
 	},
 
-	getUser: async () => {
+	getUser: async (): Promise<NDKUser | null> => {
 		const state = ndkStore.state
 		if (!state.ndk || !state.ndk.signer) return null
-		return await state.ndk.signer.user()
+		try {
+			return await state.ndk.signer.user()
+		} catch (e) {
+			console.error('Error fetching user from signer in getUser:', e)
+			return null
+		}
 	},
 
 	getSigner: () => {
@@ -107,7 +204,6 @@ export const ndkActions = {
 	},
 }
 
-// React hook for consuming the store
 export const useNDK = () => {
 	return {
 		...ndkStore.state,
