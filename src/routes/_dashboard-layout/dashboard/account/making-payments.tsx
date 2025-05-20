@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label'
 import { ndkActions } from '@/lib/stores/ndk'
 import { uiStore } from '@/lib/stores/ui'
 import { parseNwcUri, useWallets, walletActions, type Wallet } from '@/lib/stores/wallet'
-import { useNwcWalletBalanceQuery, useSaveUserNwcWalletsMutation, useUserNwcWalletsQuery, type UserNwcWallet } from '@/queries/wallet'
+import { useNwcWalletBalanceQuery, useUserNwcWalletsQuery, type UserNwcWallet } from '@/queries/wallet'
+import { useSaveUserNwcWalletsMutation } from '@/publish/wallet'
 import { createFileRoute } from '@tanstack/react-router'
 import { ArrowLeftIcon, ChevronDownIcon, EyeIcon, EyeOffIcon, PlusIcon, RefreshCwIcon, ScanIcon, TrashIcon, WalletIcon } from 'lucide-react'
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
@@ -190,7 +191,7 @@ function MakingPaymentsComponent() {
 		return (
 			<AddWalletForm
 				onSave={(formData) => {
-					// Adapted from saveNewWallet
+					// Logic for saving a new wallet
 					try {
 						if (!formData.nwcPubkey) {
 							toast.error('Wallet pubkey is required')
