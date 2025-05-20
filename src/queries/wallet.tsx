@@ -6,6 +6,7 @@ import { configStore } from '@/lib/stores/config'
 import { v4 as uuidv4 } from 'uuid'
 import { toast } from 'sonner'
 import { nip04 } from 'nostr-tools'
+import { useQueryClient } from '@tanstack/react-query'
 
 /**
  * Interface for wallet details as per SPEC.md
@@ -241,5 +242,177 @@ export const useUserWalletDetails = (userPubkey: string) => {
     queryKey: walletKeys.byPubkey(userPubkey),
     queryFn: () => fetchUserWalletDetails(userPubkey),
     enabled: !!userPubkey,
+  })
+}
+
+// --- New NWC Wallet List Code ---
+
+// Constants for User's NWC Wallet List event
+export const USER_NWC_WALLET_LIST_KIND = NDKKind.AppSpecificData // Typically 30078
+export const USER_NWC_WALLET_LIST_LABEL = 'wallet_list' // Matches what was in wallet.ts
+
+// Using the Wallet interface from the local store for now.
+// If it diverges, we might need a separate UserNwcWallet interface here.
+export type UserNwcWallet = import('@/lib/stores/wallet').Wallet;
+
+/**
+ * Fetches the user's NWC wallet list from Nostr.
+ */
+export const fetchUserNwcWallets = async (
+  userPubkey: string,
+): Promise<UserNwcWallet[]> => {
+  const ndk = ndkActions.getNDK()
+  const signer = ndkActions.getSigner()
+
+  if (!ndk) throw new Error('NDK not initialized for fetching NWC wallets')
+  if (!userPubkey) throw new Error('User pubkey is required to fetch NWC wallets')
+
+  try {
+    const events = await ndk.fetchEvents({
+      kinds: [USER_NWC_WALLET_LIST_KIND],
+      authors: [userPubkey],
+      '#l': [USER_NWC_WALLET_LIST_LABEL],
+    })
+
+    if (events.size === 0) {
+      return []
+    }
+
+    let mostRecentEvent: NDKEvent | undefined
+    let mostRecentTimestamp = 0
+    events.forEach((event) => {
+      if (event.created_at && event.created_at > mostRecentTimestamp) {
+        mostRecentEvent = event
+        mostRecentTimestamp = event.created_at
+      }
+    })
+
+    if (!mostRecentEvent) {
+      return []
+    }
+
+    let decryptedContentJson = mostRecentEvent.content
+    const user = signer ? await signer.user() : null
+
+    if (user && mostRecentEvent.pubkey === user.pubkey && signer) { // Check if it's self-encrypted
+      try {
+        // Decrypt content encrypted by the user for themselves
+        decryptedContentJson = await signer.decrypt(user, mostRecentEvent.content)
+      } catch (e) {
+        console.error('Failed to decrypt NWC wallet list, attempting to parse as plaintext:', e)
+        // Fallback to trying to parse directly if decryption fails (e.g. was stored unencrypted)
+      }
+    } else if (signer) {
+        // If it was encrypted by the app for the user, or other scenarios,
+        // this part might need adjustment based on actual encryption scheme.
+        // For now, assuming self-encryption by the user as per wallet.ts logic.
+        console.warn("NWC Wallet event not encrypted by current user or signer mismatch.")
+    }
+
+
+    const wallets = JSON.parse(decryptedContentJson) as UserNwcWallet[]
+    return wallets.map((wallet: any) => ({
+      id: wallet.id || uuidv4(),
+      name: wallet.name || `Wallet ${Math.floor(Math.random() * 1000)}`,
+      nwcUri: wallet.nwcUri,
+      pubkey: wallet.pubkey || '',
+      relays: wallet.relays || [],
+      storedOnNostr: true, // Fetched from Nostr, so this is true
+      createdAt: wallet.createdAt || Date.now(),
+      updatedAt: wallet.updatedAt || Date.now(),
+    }))
+  } catch (error) {
+    console.error('Failed to fetch or parse NWC wallets from Nostr:', error)
+    toast.error('Could not load your wallets from Nostr.')
+    return [] // Return empty array on error to prevent breaking UI
+  }
+}
+
+/**
+ * React Query hook for fetching the user's NWC wallet list.
+ */
+export const useUserNwcWalletsQuery = (userPubkey: string | undefined) => {
+  return useQuery<UserNwcWallet[], Error>({
+    queryKey: walletKeys.userNwcWallets(userPubkey || ''),
+    queryFn: () => {
+      if (!userPubkey) return Promise.resolve([])
+      return fetchUserNwcWallets(userPubkey)
+    },
+    enabled: !!userPubkey,
+    // Consider staleTime or refetchOnWindowFocus based on app needs
+  })
+}
+
+/**
+ * Parameters for saving the user's NWC wallet list.
+ */
+export interface SaveUserNwcWalletsParams {
+  wallets: UserNwcWallet[]
+  userPubkey: string
+}
+
+/**
+ * Saves the user's NWC wallet list to Nostr.
+ */
+export const saveUserNwcWallets = async (
+  params: SaveUserNwcWalletsParams,
+): Promise<string> => {
+  const ndk = ndkActions.getNDK()
+  const signer = ndkActions.getSigner()
+
+  if (!ndk) throw new Error('NDK not initialized for saving NWC wallets')
+  if (!signer) throw new Error('Signer not available for saving NWC wallets')
+  if (!params.userPubkey) throw new Error('User pubkey is required for saving NWC wallets')
+
+  const user = await signer.user()
+  if (user.pubkey !== params.userPubkey) {
+    throw new Error("Signer's pubkey does not match params.userPubkey")
+  }
+
+  // Prepare wallets for storage (e.g., remove any client-only flags if necessary)
+  const walletsToStore = params.wallets.map(wallet => {
+    const { storedOnNostr, ...rest } = wallet // Example: remove storedOnNostr if it's client-only
+    return rest
+  })
+  const content = JSON.stringify(walletsToStore)
+  // Encrypt content by the user for themselves
+  const encryptedContent = await signer.encrypt(user, content)
+
+  const event = new NDKEvent(ndk)
+  event.kind = USER_NWC_WALLET_LIST_KIND
+  event.created_at = Math.floor(Date.now() / 1000)
+  event.content = encryptedContent
+  event.tags = [
+    ['l', USER_NWC_WALLET_LIST_LABEL],
+    ['client', 'plebeian.market'], // Or your app identifier
+  ]
+
+  await event.sign(signer) // Signer here should be the user's signer
+  const publishedToRelays = await event.publish()
+  
+  if (publishedToRelays.size === 0) throw new Error('Failed to publish NWC wallet list event to any relay.')
+  
+  return event.id // Return the ID of the event that was constructed and published
+}
+
+/**
+ * React Query mutation hook for saving the user's NWC wallet list.
+ */
+export const useSaveUserNwcWalletsMutation = () => {
+  const queryClient = useQueryClient() // Corrected: Import useQueryClient
+
+  return useMutation<string, Error, SaveUserNwcWalletsParams>({
+    // mutationKey: walletKeys.saveUserNwcWallets(), // Optional: define in queryKeyFactory
+    mutationFn: saveUserNwcWallets,
+    onSuccess: (eventId, variables) => {
+      toast.success('Wallets saved to Nostr successfully!')
+      // Invalidate the query to refetch the latest list
+      queryClient.invalidateQueries({ queryKey: walletKeys.userNwcWallets(variables.userPubkey) })
+      return eventId
+    },
+    onError: (error) => {
+      console.error('Failed to save NWC wallets to Nostr:', error)
+      toast.error(`Error saving wallets to Nostr: ${error.message}`)
+    },
   })
 } 

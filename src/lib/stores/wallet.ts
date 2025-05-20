@@ -53,7 +53,11 @@ export const parseNwcUri: NwcUriParser = (uri: string) => {
 			const params = new URLSearchParams('?' + (queryPart || ''))
 			const relay = params.get('relay') || ''
 			const secret = params.get('secret') || ''
-
+			// Ensure pubkey is not empty after parsing
+			if (!pubkey) {
+				console.warn('Parsed NWC URI resulted in empty pubkey')
+				return null
+			}
 			return { pubkey, relay, secret }
 		}
 		return null
@@ -69,53 +73,59 @@ const WALLET_LIST_LABEL = 'wallet_list'
 
 // Actions for the wallet store
 export const walletActions = {
-	// Initialize the wallet store
+	// Initialize the wallet store - only loads from local storage now
 	initialize: async (): Promise<void> => {
-		if (walletStore.state.isInitialized) return
+		if (walletStore.state.isInitialized && walletStore.state.wallets.length > 0) return
 
 		walletStore.setState((state) => ({ ...state, isLoading: true }))
 
 		try {
-			// Load wallets from local storage first
 			const localWallets = await walletActions.loadWalletsFromLocalStorage()
-
-			// Check if user is logged in to fetch encrypted wallets from Nostr
-			const user = await ndkActions.getUser()
-			if (user) {
-				const nostrWallets = await walletActions.loadWalletsFromNostr()
-
-				// Merge wallets, preferring Nostr wallets over local ones with the same ID
-				const mergedWallets = [...localWallets]
-
-				nostrWallets.forEach((nostrWallet) => {
-					const existingIndex = mergedWallets.findIndex((w) => w.id === nostrWallet.id)
-					if (existingIndex >= 0) {
-						mergedWallets[existingIndex] = nostrWallet
-					} else {
-						mergedWallets.push(nostrWallet)
-					}
-				})
-
-				walletStore.setState((state) => ({
-					...state,
-					wallets: mergedWallets,
-					isInitialized: true,
-					isLoading: false,
-				}))
-			} else {
-				// Just use local wallets if not logged in
-				walletStore.setState((state) => ({
-					...state,
-					wallets: localWallets,
-					isInitialized: true,
-					isLoading: false,
-				}))
-			}
+			walletStore.setState((state) => ({
+				...state,
+				wallets: localWallets,
+				isInitialized: true,
+				isLoading: false,
+			}))
 		} catch (error) {
-			console.error('Error initializing wallet store:', error)
-			toast.error('Failed to load wallets')
-			walletStore.setState((state) => ({ ...state, isLoading: false, isInitialized: true }))
+			console.error('Error initializing wallet store from local storage:', error)
+			toast.error('Failed to load wallets from local storage')
+			walletStore.setState((state) => ({ ...state, isLoading: false, isInitialized: true })) // Still initialized, but empty/failed
 		}
+	},
+
+	// New action to set/merge wallets, typically from a Nostr source
+	setNostrWallets: (nostrWallets: Wallet[]): void => {
+		walletStore.setState((state) => {
+			const mergedWallets = [...state.wallets]
+
+			nostrWallets.forEach((nostrWallet) => {
+				// Ensure all Nostr wallets are marked as storedOnNostr: true
+				const walletWithNostrFlag = { ...nostrWallet, storedOnNostr: true }
+				const existingIndex = mergedWallets.findIndex((w) => w.id === walletWithNostrFlag.id)
+				if (existingIndex >= 0) {
+					// Nostr wallet takes precedence if timestamps are newer or equal,
+					// or if local one wasn't marked as stored on nostr
+					if (walletWithNostrFlag.updatedAt >= mergedWallets[existingIndex].updatedAt || !mergedWallets[existingIndex].storedOnNostr) {
+						mergedWallets[existingIndex] = walletWithNostrFlag
+					}
+				} else {
+					mergedWallets.push(walletWithNostrFlag)
+				}
+			})
+			// Also, update local wallets that might now be confirmed on Nostr
+			// This ensures `storedOnNostr` is true if a local wallet matches one from Nostr.
+			const finalWallets = mergedWallets.map((mw) => {
+				const presentInNostr = nostrWallets.some((nw) => nw.id === mw.id)
+				if (presentInNostr && !mw.storedOnNostr) {
+					return { ...mw, storedOnNostr: true, updatedAt: Math.max(mw.updatedAt, Date.now()) }
+				}
+				return mw
+			})
+
+			walletActions.saveWalletsToLocalStorage(finalWallets) // Persist merged list
+			return { ...state, wallets: finalWallets }
+		})
 	},
 
 	// Load wallets from localStorage
@@ -142,70 +152,6 @@ export const walletActions = {
 		return []
 	},
 
-	// Load wallets from Nostr
-	loadWalletsFromNostr: async (): Promise<Wallet[]> => {
-		try {
-			const ndk = ndkActions.getNDK()
-			const user = await ndkActions.getUser()
-
-			if (!ndk || !user) {
-				console.warn('Cannot load wallets from Nostr: NDK or user not available')
-				return []
-			}
-
-			// Fetch encrypted wallet list events
-			const walletEvents = await ndk.fetchEvents({
-				kinds: [WALLET_LIST_KIND],
-				authors: [user.pubkey],
-				'#l': [WALLET_LIST_LABEL],
-			})
-
-			if (walletEvents.size === 0) {
-				return []
-			}
-
-			// Find the most recent wallet list event
-			let mostRecentEvent: NDKEvent | undefined
-			let mostRecentTimestamp = 0
-
-			walletEvents.forEach((event) => {
-				if (event.created_at && event.created_at > mostRecentTimestamp) {
-					mostRecentEvent = event
-					mostRecentTimestamp = event.created_at
-				}
-			})
-
-			if (!mostRecentEvent) {
-				return []
-			}
-
-			// Get the content
-			try {
-				// Most recent event should already have the content from the fetch
-				const content = mostRecentEvent.content || '[]'
-				const wallets = JSON.parse(content)
-
-				// Validate and sanitize the data
-				return wallets.map((wallet: any) => ({
-					id: wallet.id || uuidv4(),
-					name: wallet.name || `Wallet ${Math.floor(Math.random() * 1000)}`,
-					nwcUri: wallet.nwcUri,
-					pubkey: wallet.pubkey || '',
-					relays: wallet.relays || [],
-					storedOnNostr: true,
-					createdAt: wallet.createdAt || Date.now(),
-					updatedAt: wallet.updatedAt || Date.now(),
-				}))
-			} catch (e) {
-				console.error('Failed to parse wallet list:', e)
-				return []
-			}
-		} catch (error) {
-			console.error('Failed to load wallets from Nostr:', error)
-			return []
-		}
-	},
-
 	// Save wallets to local storage
 	saveWalletsToLocalStorage: (wallets: Wallet[]): void => {
 		try {
@@ -216,143 +162,61 @@ export const walletActions = {
 		}
 	},
 
-	// Save wallets to Nostr (encrypted)
-	saveWalletsToNostr: async (wallets: Wallet[]): Promise<boolean> => {
-		try {
-			const ndk = ndkActions.getNDK()
-			const user = await ndkActions.getUser()
-
-			if (!ndk || !user) {
-				console.warn('Cannot save wallets to Nostr: NDK or user not available')
-				return false
-			}
-
-			// Create a new event to store the wallet list
-			const event = new NDKEvent(ndk)
-			event.kind = WALLET_LIST_KIND
-			event.created_at = Math.floor(Date.now() / 1000)
-
-			// Add tags
-			event.tags = [
-				['l', WALLET_LIST_LABEL],
-				['client', 'plebeian.market'],
-			]
-
-			// Only include necessary fields for each wallet
-			const walletsToStore = wallets.map((wallet) => ({
-				id: wallet.id,
-				name: wallet.name,
-				nwcUri: wallet.nwcUri,
-				pubkey: wallet.pubkey,
-				relays: wallet.relays,
-				createdAt: wallet.createdAt,
-				updatedAt: wallet.updatedAt,
-			}))
-
-			// Encrypt the wallet list for the user - NDKEvent content property
-			event.content = JSON.stringify(walletsToStore)
-
-			// Sign and publish the event
-			await event.sign()
-			await event.publish()
-
-			return true
-		} catch (error) {
-			console.error('Failed to save wallets to Nostr:', error)
-			toast.error('Failed to encrypt and save wallets to Nostr')
-			return false
-		}
-	},
-
-	// Add a new wallet
-	addWallet: async (wallet: Omit<Wallet, 'id' | 'createdAt' | 'updatedAt'>, storeOnNostr: boolean): Promise<Wallet> => {
+	// Add a new wallet (does not save to Nostr directly anymore)
+	addWallet: (walletData: Omit<Wallet, 'id' | 'createdAt' | 'updatedAt'>, intendedStoreOnNostr: boolean): Wallet => {
 		const timestamp = Date.now()
 
 		const newWallet: Wallet = {
 			id: uuidv4(),
-			...wallet,
-			storedOnNostr: storeOnNostr,
+			...walletData,
+			storedOnNostr: intendedStoreOnNostr, // Reflects intent, actual save by mutation
 			createdAt: timestamp,
 			updatedAt: timestamp,
 		}
 
 		walletStore.setState((state) => {
 			const updatedWallets = [...state.wallets, newWallet]
-
-			// Save to localStorage
 			walletActions.saveWalletsToLocalStorage(updatedWallets)
-
-			// If requested, save to Nostr
-			if (storeOnNostr) {
-				walletActions.saveWalletsToNostr(updatedWallets).then((success) => {
-					if (!success) {
-						// Fallback if Nostr save fails
-						newWallet.storedOnNostr = false
-						toast.warning('Wallet saved locally only. Nostr storage failed.')
-					}
-				})
-			}
-
+			// UI component will handle calling the Nostr mutation if intendedStoreOnNostr is true
 			return { ...state, wallets: updatedWallets }
 		})
-
 		return newWallet
 	},
 
-	// Remove a wallet
-	removeWallet: async (walletId: string): Promise<void> => {
+	// Remove a wallet (does not save to Nostr directly anymore)
+	removeWallet: (walletId: string): void => {
 		walletStore.setState((state) => {
 			const updatedWallets = state.wallets.filter((wallet) => wallet.id !== walletId)
-
-			// Save to localStorage
 			walletActions.saveWalletsToLocalStorage(updatedWallets)
-
-			// Check if any wallet was stored on Nostr and update there too
-			const hadNostrWallets = state.wallets.some((wallet) => wallet.storedOnNostr)
-			if (hadNostrWallets) {
-				walletActions.saveWalletsToNostr(updatedWallets).catch((error) => {
-					console.error('Failed to update wallet list on Nostr after deletion:', error)
-					toast.warning('Wallet removed locally, but could not update Nostr storage')
-				})
-			}
-
+			// UI component will handle calling the Nostr mutation
 			return { ...state, wallets: updatedWallets }
 		})
 	},
 
-	// Update a wallet
-	updateWallet: async (walletId: string, updates: Partial<Omit<Wallet, 'id' | 'createdAt'>>): Promise<void> => {
+	// Update a wallet (does not save to Nostr directly anymore)
+	updateWallet: (walletId: string, updates: Partial<Omit<Wallet, 'id' | 'createdAt'>>): Wallet | undefined => {
+		let updatedWallet: Wallet | undefined
 		walletStore.setState((state) => {
 			const walletIndex = state.wallets.findIndex((wallet) => wallet.id === walletId)
 
 			if (walletIndex === -1) {
-				console.error(`Wallet with ID ${walletId} not found`)
+				console.error(`Wallet with ID ${walletId} not found for update`)
 				return state
 			}
 
-			const updatedWallets = [...state.wallets]
-			updatedWallets[walletIndex] = {
-				...updatedWallets[walletIndex],
+			const newWallets = [...state.wallets]
+			newWallets[walletIndex] = {
+				...newWallets[walletIndex],
 				...updates,
 				updatedAt: Date.now(),
 			}
+			updatedWallet = newWallets[walletIndex]
 
-			// Save to localStorage
-			walletActions.saveWalletsToLocalStorage(updatedWallets)
-
-			// Update Nostr if the wallet or any in the collection is stored there
-			const shouldUpdateNostr =
-				updatedWallets[walletIndex].storedOnNostr || 'storedOnNostr' in updates || state.wallets.some((wallet) => wallet.storedOnNostr)
-
-			if (shouldUpdateNostr) {
-				walletActions.saveWalletsToNostr(updatedWallets).catch((error) => {
-					console.error('Failed to update wallet on Nostr:', error)
-					toast.warning('Wallet updated locally, but could not update Nostr storage')
-				})
-			}
-
-			return { ...state, wallets: updatedWallets }
+			walletActions.saveWalletsToLocalStorage(newWallets)
+			// UI component will handle calling the Nostr mutation if needed
+			return { ...state, wallets: newWallets }
 		})
+		return updatedWallet
 	},
 
 	// Get wallets

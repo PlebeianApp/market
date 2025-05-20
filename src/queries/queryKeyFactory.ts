@@ -69,6 +69,7 @@ export const walletKeys = {
 	all: ['wallet'] as const,
 	details: (paymentDetailsEvent: string) => [...walletKeys.all, 'details', paymentDetailsEvent] as const,
 	byPubkey: (pubkey: string) => [...walletKeys.all, 'byPubkey', pubkey] as const,
+	userNwcWallets: (userPubkey: string) => [...walletKeys.all, 'userNwcWallets', userPubkey] as const,
 	publish: () => [...walletKeys.all, 'publish'] as const,
 } as const
 

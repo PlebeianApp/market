@@ -5,10 +5,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ndkActions } from '@/lib/stores/ndk'
 import { uiStore } from '@/lib/stores/ui'
-import { parseNwcUri, useWallets, type Wallet } from '@/lib/stores/wallet'
+import { parseNwcUri, useWallets, type Wallet, walletActions } from '@/lib/stores/wallet'
+import { useUserNwcWalletsQuery, useSaveUserNwcWalletsMutation, type UserNwcWallet } from '@/queries/wallet'
 import { createFileRoute } from '@tanstack/react-router'
 import { ArrowLeftIcon, ChevronDownIcon, EditIcon, EyeIcon, EyeOffIcon, PlusIcon, ScanIcon, TrashIcon, WalletIcon } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { toast } from 'sonner'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 
@@ -17,17 +18,52 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/account/makin
 })
 
 function MakingPaymentsComponent() {
-	// Use the wallet store instead of local state
-	const { wallets, addWallet, removeWallet, updateWallet, isLoading, isInitialized } = useWallets()
+	// Local store state and actions
+	const { wallets: localWallets, isLoading: localLoading, isInitialized } = useWallets()
 
-	// Form state for adding a new wallet
+	// NDK User for Nostr operations
+	const [userPubkey, setUserPubkey] = useState<string | undefined>(undefined)
+	const signer = ndkActions.getSigner()
+
+	useEffect(() => {
+		const getUserPubkey = async () => {
+			if (signer) {
+				const user = await signer.user()
+				if (user && user.pubkey) {
+					setUserPubkey(user.pubkey)
+					// Initialize local store once user is available if not already done
+					if (!isInitialized) {
+						walletActions.initialize()
+					}
+				}
+			} else if (!isInitialized) {
+				// If no signer, still initialize from local storage
+				walletActions.initialize()
+			}
+		}
+		getUserPubkey()
+	}, [signer, isInitialized])
+
+	// TanStack Query for Nostr wallets
+	const { data: nostrWallets, isLoading: nostrLoading, refetch: refetchNostrWallets } = useUserNwcWalletsQuery(userPubkey)
+	const saveNostrWalletsMutation = useSaveUserNwcWalletsMutation()
+
+	// Effect to merge Nostr wallets into local store when fetched/changed
+	useEffect(() => {
+		if (nostrWallets && userPubkey) {
+			walletActions.setNostrWallets(nostrWallets as Wallet[]) // Type assertion if UserNwcWallet is compatible
+		}
+	}, [nostrWallets, userPubkey])
+
+	// Form state for adding/editing a new wallet - remains largely the same
 	const [isAddingWallet, setIsAddingWallet] = useState(false)
 	const [nwcUri, setNwcUri] = useState('')
-	const [nwcPubkey, setNwcPubkey] = useState('')
-	const [nwcRelays, setNwcRelays] = useState('')
-	const [nwcSecret, setNwcSecret] = useState('')
+	const [nwcPubkeyInput, setNwcPubkeyInput] = useState('') // Renamed to avoid clash with wallet.pubkey
+	const [nwcRelaysInput, setNwcRelaysInput] = useState('')
+	const [nwcSecretInput, setNwcSecretInput] = useState('')
 	const [showSecret, setShowSecret] = useState(false)
 	const [storeOnNostr, setStoreOnNostr] = useState(false)
+
 	const [editingWallet, setEditingWallet] = useState<Wallet | null>(null)
 	const [editWalletName, setEditWalletName] = useState('')
 	const [editNwcPubkey, setEditNwcPubkey] = useState('')
@@ -37,22 +73,10 @@ function MakingPaymentsComponent() {
 	const [editStoreOnNostr, setEditStoreOnNostr] = useState(false)
 	const [openCollapsibleId, setOpenCollapsibleId] = useState<string | null>(null)
 
-	// Get current user's pubkey (to check if Nostr storage is available)
-	const [userPubkey, setUserPubkey] = useState<string | null>(null)
-	const signer = ndkActions.getSigner()
-
-	useEffect(() => {
-		const getUser = async () => {
-			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					setUserPubkey(user.pubkey)
-				}
-			}
-		}
-
-		getUser()
-	}, [signer])
+	const combinedWallets = useMemo(() => {
+		// This acts as the primary source of wallets for the UI
+		return localWallets
+	}, [localWallets])
 
 	const handleCancelAdd = () => {
 		setIsAddingWallet(false)
@@ -61,14 +85,25 @@ function MakingPaymentsComponent() {
 
 	const resetForm = () => {
 		setNwcUri('')
-		setNwcPubkey('')
-		setNwcRelays('')
-		setNwcSecret('')
+		setNwcPubkeyInput('')
+		setNwcRelaysInput('')
+		setNwcSecretInput('')
 		setShowSecret(false)
 		setStoreOnNostr(false)
 	}
 
-	const handleAddWallet = () => {
+	const resetEditForm = () => {
+		setEditingWallet(null)
+		setEditWalletName('')
+		setEditNwcPubkey('')
+		setEditNwcRelays('')
+		setEditNwcSecret('')
+		setShowEditSecret(false)
+		setEditStoreOnNostr(false)
+		// setOpenCollapsibleId(null) // Keep collapsible open if user cancels edit inside it
+	}
+
+	const handleAddWalletClick = () => {
 		setIsAddingWallet(true)
 		resetForm()
 	}
@@ -77,9 +112,9 @@ function MakingPaymentsComponent() {
 		setNwcUri(uri)
 		const parsed = parseNwcUri(uri)
 		if (parsed) {
-			setNwcPubkey(parsed.pubkey)
-			setNwcRelays(parsed.relay)
-			setNwcSecret(parsed.secret)
+			setNwcPubkeyInput(parsed.pubkey)
+			setNwcRelaysInput(parsed.relay)
+			setNwcSecretInput(parsed.secret)
 		}
 	}
 
@@ -94,13 +129,9 @@ function MakingPaymentsComponent() {
 	}
 
 	const handleScan = () => {
-		// Open the QR scanner dialog with a callback
 		uiStore.setState((state) => ({
 			...state,
-			dialogs: {
-				...state.dialogs,
-				'scan-qr': true,
-			},
+			dialogs: { ...state.dialogs, 'scan-qr': true },
 			dialogCallbacks: {
 				...state.dialogCallbacks,
 				'scan-qr': (scannedUri: string) => {
@@ -113,74 +144,49 @@ function MakingPaymentsComponent() {
 		}))
 	}
 
-	const saveWallet = async () => {
+	const saveNewWallet = async () => {
 		try {
-			// Validate inputs
-			if (!nwcPubkey) {
+			if (!nwcPubkeyInput) {
 				toast.error('Wallet pubkey is required')
 				return
 			}
-
-			if (!nwcRelays) {
+			if (!nwcRelaysInput) {
 				toast.error('At least one relay is required')
 				return
 			}
 
-			// Check if we're logged in (required for Nostr storage)
-			if (storeOnNostr && !userPubkey) {
-				toast.warning('You need to be logged in to store wallets on Nostr. Wallet will be saved locally only.')
-				setStoreOnNostr(false)
-			}
-
-			// Create full NWC URI if we only have components
 			let finalNwcUri = nwcUri
 			if (!finalNwcUri || !finalNwcUri.startsWith('nostr+walletconnect://')) {
-				finalNwcUri = `nostr+walletconnect://${nwcPubkey}?relay=${encodeURIComponent(nwcRelays)}&secret=${nwcSecret}`
+				finalNwcUri = `nostr+walletconnect://${nwcPubkeyInput}?relay=${encodeURIComponent(nwcRelaysInput)}&secret=${nwcSecretInput}`
 			}
 
-			// Create the wallet object
-			const newWallet: Omit<Wallet, 'id' | 'createdAt' | 'updatedAt'> = {
-				name: `Wallet ${wallets.length + 1}`,
+			const newWalletData: Omit<Wallet, 'id' | 'createdAt' | 'updatedAt'> = {
+				name: `Wallet ${combinedWallets.length + 1}`,
 				nwcUri: finalNwcUri,
-				pubkey: nwcPubkey,
-				relays: nwcRelays.split(',').map((r) => r.trim()),
+				pubkey: nwcPubkeyInput,
+				relays: nwcRelaysInput.split(',').map((r) => r.trim()),
+				storedOnNostr: storeOnNostr, // Initial intent
 			}
 
-			// Add the wallet using the store
-			await addWallet(newWallet, storeOnNostr)
+			const addedWallet = walletActions.addWallet(newWalletData, storeOnNostr)
 
-			// Reset form and close
+			if (storeOnNostr && userPubkey) {
+				const walletsToSaveToNostr = walletActions.getWallets().filter((w) => w.storedOnNostr || w.id === addedWallet.id)
+				saveNostrWalletsMutation.mutate({ wallets: walletsToSaveToNostr as UserNwcWallet[], userPubkey })
+			} else if (storeOnNostr && !userPubkey) {
+				toast.warning('Cannot save to Nostr: User not logged in. Wallet saved locally.')
+			}
+
 			setIsAddingWallet(false)
 			resetForm()
 			toast.success('Wallet added successfully!')
 		} catch (error) {
-			console.error('Error saving wallet:', error)
-			toast.error('Failed to save wallet')
+			console.error('Error saving new wallet:', error)
+			toast.error('Failed to save new wallet')
 		}
 	}
 
-	const handleDeleteWallet = async (walletId: string) => {
-		try {
-			await removeWallet(walletId)
-			toast.success('Wallet removed successfully!')
-		} catch (error) {
-			console.error('Error removing wallet:', error)
-			toast.error('Failed to remove wallet')
-		}
-	}
-
-	const resetEditForm = () => {
-		setEditingWallet(null)
-		setEditWalletName('')
-		setEditNwcPubkey('')
-		setEditNwcRelays('')
-		setEditNwcSecret('')
-		setShowEditSecret(false)
-		setEditStoreOnNostr(false)
-		setOpenCollapsibleId(null)
-	}
-
-	const handleEditWallet = (wallet: Wallet) => {
+	const handleEditWalletClick = (wallet: Wallet) => {
 		setEditingWallet(wallet)
 		setEditWalletName(wallet.name)
 		const parsedUri = parseNwcUri(wallet.nwcUri)
@@ -193,12 +199,17 @@ function MakingPaymentsComponent() {
 
 	const handleCancelEdit = () => {
 		resetEditForm()
+		// Optionally close the collapsible or leave it to the user: setOpenCollapsibleId(null)
 	}
 
 	const handleSaveWalletUpdate = async () => {
-		if (!editingWallet) return
+		if (!editingWallet || !userPubkey) {
+			toast.error('Cannot update wallet: Missing context.')
+			return
+		}
 
 		try {
+			// Validations for edit form
 			if (!editWalletName.trim()) {
 				toast.error('Wallet name cannot be empty')
 				return
@@ -212,12 +223,6 @@ function MakingPaymentsComponent() {
 				return
 			}
 
-			// Check if we're logged in (required for Nostr storage)
-			if (editStoreOnNostr && !userPubkey) {
-				toast.warning('You need to be logged in to store wallets on Nostr. Wallet will be saved locally only.')
-				setEditStoreOnNostr(false) //  Ensure it's saved locally
-			}
-
 			const finalNwcUri = `nostr+walletconnect://${editNwcPubkey}?relay=${encodeURIComponent(editNwcRelays)}&secret=${editNwcSecret}`
 
 			const walletUpdates: Partial<Omit<Wallet, 'id' | 'createdAt'>> = {
@@ -228,16 +233,44 @@ function MakingPaymentsComponent() {
 				storedOnNostr: editStoreOnNostr,
 			}
 
-			await updateWallet(editingWallet.id, walletUpdates)
+			const updatedWallet = walletActions.updateWallet(editingWallet.id, walletUpdates)
+
+			if (updatedWallet && (updatedWallet.storedOnNostr || editingWallet.storedOnNostr) && userPubkey) {
+				const walletsToSaveToNostr = walletActions.getWallets().filter((w) => w.storedOnNostr)
+				saveNostrWalletsMutation.mutate({ wallets: walletsToSaveToNostr as UserNwcWallet[], userPubkey })
+			} else if (editStoreOnNostr && !userPubkey) {
+				toast.warning('Cannot save changes to Nostr: User not logged in. Changes saved locally.')
+			}
+
 			toast.success('Wallet updated successfully!')
 			resetEditForm()
+			setOpenCollapsibleId(null) // Close collapsible after successful save
 		} catch (error) {
 			console.error('Error updating wallet:', error)
 			toast.error('Failed to update wallet')
 		}
 	}
 
-	if (isLoading) {
+	const handleDeleteWallet = async (walletId: string) => {
+		try {
+			const walletToDelete = combinedWallets.find((w) => w.id === walletId)
+			walletActions.removeWallet(walletId)
+			toast.success('Wallet removed successfully!')
+
+			if (walletToDelete && walletToDelete.storedOnNostr && userPubkey) {
+				const walletsToSaveToNostr = walletActions.getWallets().filter((w) => w.storedOnNostr)
+				saveNostrWalletsMutation.mutate({ wallets: walletsToSaveToNostr as UserNwcWallet[], userPubkey })
+			}
+		} catch (error) {
+			console.error('Error removing wallet:', error)
+			toast.error('Failed to remove wallet')
+		}
+	}
+
+	const isLoading = localLoading || (nostrLoading && !isInitialized) || saveNostrWalletsMutation.isPending
+
+	if (isLoading && !isInitialized) {
+		// Show initial loading screen
 		return (
 			<div className="flex items-center justify-center h-64">
 				<div className="flex flex-col items-center gap-2">
@@ -248,6 +281,7 @@ function MakingPaymentsComponent() {
 		)
 	}
 
+	// Add Wallet View
 	if (isAddingWallet) {
 		return (
 			<div className="space-y-6">
@@ -279,8 +313,8 @@ function MakingPaymentsComponent() {
 								<Input
 									id="wallet-pubkey"
 									placeholder="e.g 60b37aeb4c521316374bab549c074abc..."
-									value={nwcPubkey}
-									onChange={(e) => setNwcPubkey(e.target.value)}
+									value={nwcPubkeyInput}
+									onChange={(e) => setNwcPubkeyInput(e.target.value)}
 								/>
 							</div>
 
@@ -289,8 +323,8 @@ function MakingPaymentsComponent() {
 								<Input
 									id="wallet-relays"
 									placeholder="e.g wss://relay.nostr.band"
-									value={nwcRelays}
-									onChange={(e) => setNwcRelays(e.target.value)}
+									value={nwcRelaysInput}
+									onChange={(e) => setNwcRelaysInput(e.target.value)}
 								/>
 							</div>
 
@@ -301,8 +335,8 @@ function MakingPaymentsComponent() {
 										id="wallet-secret"
 										type={showSecret ? 'text' : 'password'}
 										placeholder="Secret"
-										value={nwcSecret}
-										onChange={(e) => setNwcSecret(e.target.value)}
+										value={nwcSecretInput}
+										onChange={(e) => setNwcSecretInput(e.target.value)}
 										className="flex-1"
 									/>
 									<Button variant="outline" size="icon" onClick={() => setShowSecret(!showSecret)} className="ml-2">
@@ -323,29 +357,32 @@ function MakingPaymentsComponent() {
 						<Button variant="outline" onClick={handleCancelAdd}>
 							Cancel
 						</Button>
-						<Button onClick={saveWallet}>Save Wallet</Button>
+						<Button onClick={saveNewWallet} disabled={saveNostrWalletsMutation.isPending || isLoading}>
+							{saveNostrWalletsMutation.isPending ? 'Saving...' : 'Save Wallet'}
+						</Button>
 					</CardFooter>
 				</Card>
 			</div>
 		)
 	}
 
+	// Main View (List Wallets)
 	return (
 		<div className="space-y-6">
 			<div className="flex justify-between items-center">
 				<h1 className="text-2xl font-bold">Making Payments</h1>
-				{wallets.length > 0 && !isAddingWallet && (
-					<Button onClick={handleAddWallet} className="hidden sm:flex">
+				{combinedWallets.length > 0 && !isAddingWallet && (
+					<Button onClick={handleAddWalletClick} className="hidden sm:flex">
 						<PlusIcon className="h-4 w-4 mr-2" /> Add Another Wallet
 					</Button>
 				)}
 			</div>
 
-			{wallets.length === 0 && !isAddingWallet ? (
+			{combinedWallets.length === 0 && !isAddingWallet ? (
 				<Card>
 					<CardContent className="py-10 flex flex-col items-center justify-center">
 						<p className="text-center text-muted-foreground mb-4">No wallets configured yet. Add a wallet to make payments.</p>
-						<Button onClick={handleAddWallet}>
+						<Button onClick={handleAddWalletClick}>
 							<PlusIcon className="h-4 w-4 mr-2" /> Add Wallet
 						</Button>
 					</CardContent>
@@ -353,21 +390,20 @@ function MakingPaymentsComponent() {
 			) : (
 				!isAddingWallet && (
 					<>
-						{wallets.map((wallet) => (
+						{combinedWallets.map((wallet) => (
 							<Collapsible
 								key={wallet.id}
 								className="space-y-2"
 								open={openCollapsibleId === wallet.id}
 								onOpenChange={(isOpen) => {
 									if (isOpen) {
-										// If opening this one, and it's not already the one being edited, set it for editing
 										if (editingWallet?.id !== wallet.id) {
-											handleEditWallet(wallet)
+											handleEditWalletClick(wallet)
 										}
 									} else {
-										// If closing, and it was the one being edited, reset edit form
 										if (editingWallet?.id === wallet.id) {
-											resetEditForm()
+											// If closing the one being edited, decide if to reset or not.
+											// resetEditForm() // Or simply allow it to stay for quick re-open
 										}
 									}
 									setOpenCollapsibleId(isOpen ? wallet.id : null)
@@ -382,33 +418,23 @@ function MakingPaymentsComponent() {
 													<CardTitle>{wallet.name}</CardTitle>
 													<CardDescription className="text-xs">
 														{wallet.storedOnNostr ? 'Stored on Nostr (encrypted)' : 'Stored locally'}
+														{saveNostrWalletsMutation.isPending &&
+															localWallets.find((lw) => lw.id === wallet.id)?.storedOnNostr &&
+															' (Syncing...)'}
 													</CardDescription>
 												</div>
 											</div>
 											<div className="flex items-center">
-												{editingWallet?.id !== wallet.id && ( // Show edit icon only if not currently editing this wallet
-													<Button
-														variant="ghost"
-														size="icon"
-														onClick={(e) => {
-															e.stopPropagation()
-															handleEditWallet(wallet)
-														}}
-														className="h-8 w-8"
-														aria-label="Edit wallet"
-													>
-														<EditIcon className="h-4 w-4" />
-													</Button>
-												)}
 												<Button
 													variant="ghost"
 													size="icon"
 													onClick={(e) => {
-														e.stopPropagation() // Prevent collapsible from toggling
+														e.stopPropagation()
 														handleDeleteWallet(wallet.id)
 													}}
 													className="h-8 w-8 text-destructive"
 													aria-label="Delete wallet"
+													disabled={saveNostrWalletsMutation.isPending}
 												>
 													<TrashIcon className="h-4 w-4" />
 												</Button>
@@ -473,14 +499,16 @@ function MakingPaymentsComponent() {
 																checked={editStoreOnNostr}
 																onCheckedChange={(checked) => setEditStoreOnNostr(checked === true)}
 															/>
-															<Label htmlFor={`store-wallet-edit-${wallet.id}`}>Re-save on Nostr (encrypted)</Label>
+															<Label htmlFor={`store-wallet-edit-${wallet.id}`}>Store on Nostr (encrypted)</Label>
 														</div>
 													)}
 													<div className="flex justify-end space-x-2 pt-2">
-														<Button variant="outline" onClick={handleCancelEdit}>
+														<Button variant="outline" onClick={handleCancelEdit} disabled={saveNostrWalletsMutation.isPending}>
 															Cancel
 														</Button>
-														<Button onClick={handleSaveWalletUpdate}>Save Changes</Button>
+														<Button onClick={handleSaveWalletUpdate} disabled={saveNostrWalletsMutation.isPending}>
+															{saveNostrWalletsMutation.isPending ? 'Saving...' : 'Save Changes'}
+														</Button>
 													</div>
 												</div>
 											) : (
@@ -501,9 +529,11 @@ function MakingPaymentsComponent() {
 															</p>
 														</div>
 													)}
-													<Button variant="outline" size="sm" className="mt-2" onClick={() => handleEditWallet(wallet)}>
-														<EditIcon className="h-3 w-3 mr-2" /> Edit Wallet
-													</Button>
+													{!editingWallet || editingWallet.id !== wallet.id ? (
+														<Button variant="outline" size="sm" className="mt-2" onClick={() => handleEditWalletClick(wallet)}>
+															<EditIcon className="h-3 w-3 mr-2" /> Edit Wallet
+														</Button>
+													) : null}
 												</div>
 											)}
 										</CardContent>
@@ -511,8 +541,8 @@ function MakingPaymentsComponent() {
 								</Card>
 							</Collapsible>
 						))}
-						{wallets.length > 0 && (
-							<Button onClick={handleAddWallet} className="w-full mt-4 sm:hidden">
+						{combinedWallets.length > 0 && (
+							<Button onClick={handleAddWalletClick} className="w-full mt-4 sm:hidden">
 								<PlusIcon className="h-4 w-4 mr-2" /> Add Another Wallet
 							</Button>
 						)}
