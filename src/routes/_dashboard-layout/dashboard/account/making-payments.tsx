@@ -6,9 +6,20 @@ import { Label } from '@/components/ui/label'
 import { ndkActions } from '@/lib/stores/ndk'
 import { uiStore } from '@/lib/stores/ui'
 import { parseNwcUri, useWallets, type Wallet, walletActions } from '@/lib/stores/wallet'
-import { useUserNwcWalletsQuery, useSaveUserNwcWalletsMutation, type UserNwcWallet } from '@/queries/wallet'
+import { useUserNwcWalletsQuery, useSaveUserNwcWalletsMutation, type UserNwcWallet, useNwcWalletBalanceQuery } from '@/queries/wallet'
 import { createFileRoute } from '@tanstack/react-router'
-import { ArrowLeftIcon, ChevronDownIcon, EditIcon, EyeIcon, EyeOffIcon, PlusIcon, ScanIcon, TrashIcon, WalletIcon } from 'lucide-react'
+import {
+	ArrowLeftIcon,
+	ChevronDownIcon,
+	EditIcon,
+	EyeIcon,
+	EyeOffIcon,
+	PlusIcon,
+	ScanIcon,
+	TrashIcon,
+	WalletIcon,
+	RefreshCwIcon,
+} from 'lucide-react'
 import { useEffect, useState, useMemo } from 'react'
 import { toast } from 'sonner'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -390,157 +401,208 @@ function MakingPaymentsComponent() {
 			) : (
 				!isAddingWallet && (
 					<>
-						{combinedWallets.map((wallet) => (
-							<Collapsible
-								key={wallet.id}
-								className="space-y-2"
-								open={openCollapsibleId === wallet.id}
-								onOpenChange={(isOpen) => {
-									if (isOpen) {
-										if (editingWallet?.id !== wallet.id) {
-											handleEditWalletClick(wallet)
+						{combinedWallets.map((wallet) => {
+							const balanceQuery = useNwcWalletBalanceQuery(
+								wallet.nwcUri,
+								!!wallet.nwcUri, // Always enable if nwcUri is present
+							)
+
+							return (
+								<Collapsible
+									key={wallet.id}
+									className="space-y-2"
+									open={openCollapsibleId === wallet.id}
+									onOpenChange={(isOpen) => {
+										if (isOpen) {
+											if (editingWallet?.id !== wallet.id) {
+												handleEditWalletClick(wallet)
+											}
+										} else {
+											if (editingWallet?.id === wallet.id) {
+												// If closing the one being edited, decide if to reset or not.
+												// resetEditForm() // Or simply allow it to stay for quick re-open
+											}
 										}
-									} else {
-										if (editingWallet?.id === wallet.id) {
-											// If closing the one being edited, decide if to reset or not.
-											// resetEditForm() // Or simply allow it to stay for quick re-open
-										}
-									}
-									setOpenCollapsibleId(isOpen ? wallet.id : null)
-								}}
-							>
-								<Card>
-									<CollapsibleTrigger asChild>
-										<CardHeader className="pb-2 flex flex-row items-center justify-between cursor-pointer group">
-											<div className="flex items-center gap-3">
-												<WalletIcon className="h-6 w-6 text-muted-foreground" />
-												<div>
-													<CardTitle>{wallet.name}</CardTitle>
-													<CardDescription className="text-xs">
-														{wallet.storedOnNostr ? 'Stored on Nostr (encrypted)' : 'Stored locally'}
-														{saveNostrWalletsMutation.isPending &&
-															localWallets.find((lw) => lw.id === wallet.id)?.storedOnNostr &&
-															' (Syncing...)'}
-													</CardDescription>
+										setOpenCollapsibleId(isOpen ? wallet.id : null)
+									}}
+								>
+									<Card>
+										<CollapsibleTrigger asChild>
+											<CardHeader className="pb-2 flex flex-row items-center justify-between cursor-pointer group">
+												<div className="flex items-center gap-3">
+													<WalletIcon className="h-6 w-6 text-muted-foreground" />
+													<div>
+														<CardTitle>{wallet.name}</CardTitle>
+														<CardDescription className="text-xs">
+															{wallet.storedOnNostr ? 'Stored on Nostr (encrypted)' : 'Stored locally'}
+															{saveNostrWalletsMutation.isPending &&
+																localWallets.find((lw) => lw.id === wallet.id)?.storedOnNostr &&
+																' (Syncing...)'}
+														</CardDescription>
+														{/* Compact Balance Display in Trigger */}
+														<div className="text-xs mt-0.5">
+															{balanceQuery.isLoading && <span className="text-muted-foreground">Balance: Loading...</span>}
+															{balanceQuery.isError && <span className="text-red-500">Balance: Error</span>}
+															{balanceQuery.data && (
+																<span className="text-primary font-medium">Balance: {balanceQuery.data.balance.toLocaleString()} sats</span>
+															)}
+														</div>
+													</div>
 												</div>
-											</div>
-											<div className="flex items-center">
-												<Button
-													variant="ghost"
-													size="icon"
-													onClick={(e) => {
-														e.stopPropagation()
-														handleDeleteWallet(wallet.id)
-													}}
-													className="h-8 w-8 text-destructive"
-													aria-label="Delete wallet"
-													disabled={saveNostrWalletsMutation.isPending}
-												>
-													<TrashIcon className="h-4 w-4" />
-												</Button>
-												<ChevronDownIcon className="h-4 w-4 ml-1 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
-											</div>
-										</CardHeader>
-									</CollapsibleTrigger>
-									<CollapsibleContent>
-										<CardContent className="pt-2 pb-4">
-											{editingWallet && editingWallet.id === wallet.id ? (
-												<div className="space-y-4">
-													<div>
-														<Label htmlFor={`wallet-name-${wallet.id}`}>Wallet Name</Label>
-														<Input
-															id={`wallet-name-${wallet.id}`}
-															placeholder="e.g. My Main Wallet"
-															value={editWalletName}
-															onChange={(e) => setEditWalletName(e.target.value)}
-														/>
-													</div>
-													<div>
-														<Label htmlFor={`wallet-pubkey-edit-${wallet.id}`}>Wallet Connect Pubkey</Label>
-														<Input
-															id={`wallet-pubkey-edit-${wallet.id}`}
-															placeholder="e.g 60b37aeb4c521316374bab549c074abc..."
-															value={editNwcPubkey}
-															onChange={(e) => setEditNwcPubkey(e.target.value)}
-														/>
-													</div>
-
-													<div>
-														<Label htmlFor={`wallet-relays-edit-${wallet.id}`}>Wallet Connect Relays</Label>
-														<Input
-															id={`wallet-relays-edit-${wallet.id}`}
-															placeholder="e.g wss://relay.nostr.band, wss://another.relay"
-															value={editNwcRelays}
-															onChange={(e) => setEditNwcRelays(e.target.value)}
-														/>
-													</div>
-
-													<div>
-														<Label htmlFor={`wallet-secret-edit-${wallet.id}`}>Wallet Connect Secret</Label>
-														<div className="flex">
+												<div className="flex items-center">
+													<Button
+														variant="ghost"
+														size="icon"
+														onClick={(e) => {
+															e.stopPropagation()
+															handleDeleteWallet(wallet.id)
+														}}
+														className="h-8 w-8 text-destructive"
+														aria-label="Delete wallet"
+														disabled={saveNostrWalletsMutation.isPending}
+													>
+														<TrashIcon className="h-4 w-4" />
+													</Button>
+													<ChevronDownIcon className="h-4 w-4 ml-1 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+												</div>
+											</CardHeader>
+										</CollapsibleTrigger>
+										<CollapsibleContent>
+											<CardContent className="pt-2 pb-4 space-y-4">
+												{editingWallet && editingWallet.id === wallet.id ? (
+													<div className="space-y-4">
+														<div>
+															<Label htmlFor={`wallet-name-${wallet.id}`}>Wallet Name</Label>
 															<Input
-																id={`wallet-secret-edit-${wallet.id}`}
-																type={showEditSecret ? 'text' : 'password'}
-																placeholder="Secret"
-																value={editNwcSecret}
-																onChange={(e) => setEditNwcSecret(e.target.value)}
-																className="flex-1"
+																id={`wallet-name-${wallet.id}`}
+																placeholder="e.g. My Main Wallet"
+																value={editWalletName}
+																onChange={(e) => setEditWalletName(e.target.value)}
 															/>
-															<Button variant="outline" size="icon" onClick={() => setShowEditSecret(!showEditSecret)} className="ml-2">
-																{showEditSecret ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+														</div>
+														<div>
+															<Label htmlFor={`wallet-pubkey-edit-${wallet.id}`}>Wallet Connect Pubkey</Label>
+															<Input
+																id={`wallet-pubkey-edit-${wallet.id}`}
+																placeholder="e.g 60b37aeb4c521316374bab549c074abc..."
+																value={editNwcPubkey}
+																onChange={(e) => setEditNwcPubkey(e.target.value)}
+															/>
+														</div>
+
+														<div>
+															<Label htmlFor={`wallet-relays-edit-${wallet.id}`}>Wallet Connect Relays</Label>
+															<Input
+																id={`wallet-relays-edit-${wallet.id}`}
+																placeholder="e.g wss://relay.nostr.band, wss://another.relay"
+																value={editNwcRelays}
+																onChange={(e) => setEditNwcRelays(e.target.value)}
+															/>
+														</div>
+
+														<div>
+															<Label htmlFor={`wallet-secret-edit-${wallet.id}`}>Wallet Connect Secret</Label>
+															<div className="flex">
+																<Input
+																	id={`wallet-secret-edit-${wallet.id}`}
+																	type={showEditSecret ? 'text' : 'password'}
+																	placeholder="Secret"
+																	value={editNwcSecret}
+																	onChange={(e) => setEditNwcSecret(e.target.value)}
+																	className="flex-1"
+																/>
+																<Button variant="outline" size="icon" onClick={() => setShowEditSecret(!showEditSecret)} className="ml-2">
+																	{showEditSecret ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+																</Button>
+															</div>
+														</div>
+
+														{userPubkey && (
+															<div className="flex items-center space-x-2 pt-2">
+																<Checkbox
+																	id={`store-wallet-edit-${wallet.id}`}
+																	checked={editStoreOnNostr}
+																	onCheckedChange={(checked) => setEditStoreOnNostr(checked === true)}
+																/>
+																<Label htmlFor={`store-wallet-edit-${wallet.id}`}>Store on Nostr (encrypted)</Label>
+															</div>
+														)}
+														<div className="flex justify-end space-x-2 pt-2">
+															<Button variant="outline" onClick={handleCancelEdit} disabled={saveNostrWalletsMutation.isPending}>
+																Cancel
+															</Button>
+															<Button onClick={handleSaveWalletUpdate} disabled={saveNostrWalletsMutation.isPending}>
+																{saveNostrWalletsMutation.isPending ? 'Saving...' : 'Save Changes'}
 															</Button>
 														</div>
 													</div>
-
-													{userPubkey && (
-														<div className="flex items-center space-x-2 pt-2">
-															<Checkbox
-																id={`store-wallet-edit-${wallet.id}`}
-																checked={editStoreOnNostr}
-																onCheckedChange={(checked) => setEditStoreOnNostr(checked === true)}
-															/>
-															<Label htmlFor={`store-wallet-edit-${wallet.id}`}>Store on Nostr (encrypted)</Label>
+												) : (
+													<div className="space-y-3 text-sm">
+														<div>
+															<p className="font-medium">NWC URI:</p>
+															<p className="text-muted-foreground truncate">{wallet.nwcUri}</p>
 														</div>
-													)}
-													<div className="flex justify-end space-x-2 pt-2">
-														<Button variant="outline" onClick={handleCancelEdit} disabled={saveNostrWalletsMutation.isPending}>
-															Cancel
-														</Button>
-														<Button onClick={handleSaveWalletUpdate} disabled={saveNostrWalletsMutation.isPending}>
-															{saveNostrWalletsMutation.isPending ? 'Saving...' : 'Save Changes'}
-														</Button>
-													</div>
-												</div>
-											) : (
-												<div className="text-sm space-y-2">
-													<div>
-														<p className="font-medium">Public Key:</p>
-														<p className="text-muted-foreground font-mono text-xs truncate">{wallet.pubkey}</p>
-													</div>
-													{wallet.relays && wallet.relays.length > 0 && (
+														<div>
+															<p className="font-medium">Pubkey:</p>
+															<p className="text-muted-foreground truncate">{wallet.pubkey}</p>
+														</div>
 														<div>
 															<p className="font-medium">Relays:</p>
-															<p className="text-muted-foreground font-mono text-xs truncate">
-																{Array.isArray(wallet.relays)
-																	? wallet.relays.join(', ')
-																	: typeof wallet.relays === 'string'
-																		? wallet.relays
-																		: 'Unknown'}
-															</p>
+															<p className="text-muted-foreground">{wallet.relays.join(', ')}</p>
 														</div>
-													)}
-													{!editingWallet || editingWallet.id !== wallet.id ? (
-														<Button variant="outline" size="sm" className="mt-2" onClick={() => handleEditWalletClick(wallet)}>
-															<EditIcon className="h-3 w-3 mr-2" /> Edit Wallet
-														</Button>
-													) : null}
-												</div>
-											)}
-										</CardContent>
-									</CollapsibleContent>
-								</Card>
-							</Collapsible>
-						))}
+														<hr className="my-3" />
+														<div>
+															<p className="font-medium mb-1">Balance Details:</p>
+															{balanceQuery.isLoading && <p className="text-muted-foreground">Loading balance...</p>}
+															{balanceQuery.isError && (
+																<div className="text-red-500">
+																	<p>Error fetching balance: {balanceQuery.error?.message || 'Unknown error'}</p>
+																	<Button
+																		variant="link"
+																		size="sm"
+																		onClick={() => balanceQuery.refetch()}
+																		className="p-0 h-auto text-red-500 hover:text-red-600"
+																	>
+																		Try again
+																	</Button>
+																</div>
+															)}
+															{balanceQuery.data && (
+																<div>
+																	<p className="text-lg font-semibold">{balanceQuery.data.balance.toLocaleString()} sats</p>
+																	<p className="text-xs text-muted-foreground">
+																		Last updated: {new Date(balanceQuery.data.timestamp).toLocaleString()}
+																	</p>
+																</div>
+															)}
+															{openCollapsibleId === wallet.id &&
+																!balanceQuery.isLoading && ( // Show refresh only if open and not already loading
+																	<Button
+																		variant="outline"
+																		size="sm"
+																		onClick={() => balanceQuery.refetch()}
+																		className="mt-2"
+																		aria-label="Refresh balance"
+																	>
+																		<RefreshCwIcon className="h-3 w-3 mr-1.5" />
+																		Refresh
+																	</Button>
+																)}
+														</div>
+														<div className="mt-4 flex justify-end">
+															<Button variant="outline" size="sm" onClick={() => handleEditWalletClick(wallet)}>
+																<EditIcon className="h-3 w-3 mr-1.5" /> Edit Wallet
+															</Button>
+														</div>
+													</div>
+												)}
+											</CardContent>
+										</CollapsibleContent>
+									</Card>
+								</Collapsible>
+							)
+						})}
+
 						{combinedWallets.length > 0 && (
 							<Button onClick={handleAddWalletClick} className="w-full mt-4 sm:hidden">
 								<PlusIcon className="h-4 w-4 mr-2" /> Add Another Wallet

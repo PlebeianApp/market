@@ -71,6 +71,7 @@ export const walletKeys = {
 	byPubkey: (pubkey: string) => [...walletKeys.all, 'byPubkey', pubkey] as const,
 	userNwcWallets: (userPubkey: string) => [...walletKeys.all, 'userNwcWallets', userPubkey] as const,
 	publish: () => [...walletKeys.all, 'publish'] as const,
+	nwcBalance: (nwcUri: string) => [...walletKeys.all, 'nwcBalance', nwcUri] as const,
 } as const
 
 export const paymentDetailsKeys = {
