@@ -1,9 +1,12 @@
 // seed.ts
-import { devUser1, devUser2, devUser3, devUser4, devUser5 } from '@/lib/fixtures'
+import { devUser1, devUser2, devUser3, devUser4, devUser5, XPUB, WALLETED_USER_LUD16 } from '@/lib/fixtures'
 import { ndkActions } from '@/lib/stores/ndk'
 import { NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { config } from 'dotenv'
+import { getPublicKey } from 'nostr-tools/pure'
+import { hexToBytes } from '@noble/hashes/utils'
 import { createCollectionEvent, createProductReference, generateCollectionData } from './gen_collections'
+import { createPaymentDetailEvent, generateLightningPaymentDetail, generateOnChainPaymentDetail } from './gen_payment_details'
 import { createProductEvent, generateProductData } from './gen_products'
 import { createReviewEvent, generateReviewData } from './gen_review'
 import { createShippingEvent, generateShippingData } from './gen_shipping'
@@ -27,12 +30,21 @@ import {
 config()
 
 const RELAY_URL = process.env.APP_RELAY_URL
-const APP_PUBKEY = process.env.APP_PUBKEY
+const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
 
 if (!RELAY_URL) {
 	console.error('Missing required environment variables')
 	process.exit(1)
 }
+
+if (!APP_PRIVATE_KEY) {
+	console.error('APP_PRIVATE_KEY environment variable is required for seeding payment details')
+	console.error('Please set APP_PRIVATE_KEY in your .env file')
+	process.exit(1)
+}
+
+// Derive the public key from the private key
+const APP_PUBKEY = getPublicKey(hexToBytes(APP_PRIVATE_KEY))
 
 const ndk = ndkActions.initialize([RELAY_URL])
 const devUsers = [devUser1, devUser2, devUser3, devUser4, devUser5]
@@ -66,6 +78,17 @@ async function seedData() {
 		console.log(`Creating profile for user ${pubkey.substring(0, 8)}...`)
 		const userProfile = generateUserProfileData(i)
 		await createUserProfileEvent(signer, ndk, userProfile)
+
+		// Create payment details for each user (one Lightning, one On-chain)
+		console.log(`Creating payment details for user ${pubkey.substring(0, 8)}...`)
+
+		// Create Lightning Network payment detail
+		const lightningPaymentDetail = generateLightningPaymentDetail(WALLETED_USER_LUD16)
+		await createPaymentDetailEvent(signer, ndk, lightningPaymentDetail, APP_PUBKEY!)
+
+		// Create On-chain payment detail (using the same XPUB for all users)
+		const onChainPaymentDetail = generateOnChainPaymentDetail(XPUB)
+		await createPaymentDetailEvent(signer, ndk, onChainPaymentDetail, APP_PUBKEY!)
 
 		console.log(`Creating products for user ${pubkey.substring(0, 8)}...`)
 		productsByUser[pubkey] = []

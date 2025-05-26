@@ -1,16 +1,17 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ndkActions } from '@/lib/stores/ndk'
-import { paymentDetailsKeys } from './queryKeyFactory'
+import { paymentDetailsKeys, walletDetailsKeys } from './queryKeyFactory'
 import { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk'
 import { configStore } from '@/lib/stores/config'
 import { v4 as uuidv4 } from 'uuid'
 import { toast } from 'sonner'
 import { nip04 } from 'nostr-tools'
+import { type PaymentDetailsMethod } from '@/lib/constants'
 
 /**
  * Payment method types as defined in the spec
  */
-export type PaymentMethod = 'ln' | 'on-chain' | 'cashu' | 'other'
+export type PaymentMethod = PaymentDetailsMethod
 
 /**
  * Interface for payment details as per SPEC.md
@@ -21,6 +22,34 @@ export interface PaymentDetail {
 	paymentDetail: string // Could be bolt11, btc address, cashu token, etc.
 	createdAt: number
 	coordinates?: string // Optional product/collection coordinates
+}
+
+/**
+ * Scope types for payment details
+ */
+export type PaymentScope = 'global' | 'collection' | 'product'
+
+/**
+ * Enhanced payment detail interface for receiving payments UI
+ */
+export interface RichPaymentDetail extends PaymentDetail {
+	userId: string
+	scope: PaymentScope
+	scopeId?: string | null // Collection or product ID
+	scopeName?: string // Collection or product name
+	isDefault: boolean
+}
+
+/**
+ * Wallet detail interface for tracking on-chain indices
+ */
+export interface WalletDetail {
+	id: string
+	key: string
+	valueNumeric: number
+	valueString: string
+	updatedAt: Date
+	paymentDetailId: string
 }
 
 /**
@@ -302,5 +331,297 @@ export const usePublishPaymentDetail = () => {
 			console.error('Failed to publish payment details:', error)
 			toast.error('Failed to save payment details')
 		},
+	})
+}
+
+// ===============================
+// ENHANCED PAYMENT DETAILS FOR RECEIVING PAYMENTS UI
+// ===============================
+
+/**
+ * Interface for enhanced publishing payment details
+ */
+export interface PublishRichPaymentDetailParams extends PublishPaymentDetailParams {
+	scope?: PaymentScope
+	scopeId?: string | null
+	scopeName?: string
+	isDefault?: boolean
+}
+
+/**
+ * Interface for updating payment details
+ */
+export interface UpdatePaymentDetailParams extends PublishRichPaymentDetailParams {
+	paymentDetailId: string
+}
+
+/**
+ * Interface for deleting payment details
+ */
+export interface DeletePaymentDetailParams {
+	paymentDetailId: string
+	userPubkey: string
+}
+
+/**
+ * Parses scope information from coordinates
+ */
+const parseScopeFromCoordinates = (coordinates?: string): { scope: PaymentScope; scopeId: string | null; scopeName: string } => {
+	if (!coordinates) {
+		return { scope: 'global', scopeId: null, scopeName: 'Global' }
+	}
+
+	const parts = coordinates.split(':')
+	if (parts.length !== 3) {
+		return { scope: 'global', scopeId: null, scopeName: 'Global' }
+	}
+
+	const [kind, pubkey, dTag] = parts
+
+	if (kind === '30405') {
+		// Collection scope
+		return { scope: 'collection', scopeId: dTag, scopeName: `Collection ${dTag.substring(0, 8)}...` }
+	} else if (kind === '30402') {
+		// Product scope
+		return { scope: 'product', scopeId: dTag, scopeName: `Product ${dTag.substring(0, 8)}...` }
+	}
+
+	return { scope: 'global', scopeId: null, scopeName: 'Global' }
+}
+
+/**
+ * Fetches enhanced payment details for receiving payments UI
+ */
+export const fetchRichUserPaymentDetails = async (userPubkey: string): Promise<RichPaymentDetail[]> => {
+	try {
+		const basicDetails = await fetchUserPaymentDetails(userPubkey)
+
+		// Enhance the basic details with scope information from coordinates
+		return basicDetails.map((detail, index) => {
+			const scopeInfo = parseScopeFromCoordinates(detail.coordinates)
+
+			return {
+				...detail,
+				userId: userPubkey,
+				...scopeInfo,
+				isDefault: index === 0, // Make first one default
+			}
+		})
+	} catch (error) {
+		console.error('Error fetching rich user payment details:', error)
+		return []
+	}
+}
+
+/**
+ * React query hook for fetching enhanced payment details
+ */
+export const useRichUserPaymentDetails = (userPubkey: string) => {
+	return useQuery({
+		queryKey: paymentDetailsKeys.byPubkey(userPubkey),
+		queryFn: () => fetchRichUserPaymentDetails(userPubkey),
+		enabled: !!userPubkey,
+	})
+}
+
+/**
+ * Publishes enhanced payment details
+ */
+export const publishRichPaymentDetail = async (params: PublishRichPaymentDetailParams): Promise<string> => {
+	try {
+		// For now, we just publish the basic payment detail
+		// In a full implementation, you might store additional metadata
+		const eventId = await publishPaymentDetail({
+			paymentMethod: params.paymentMethod,
+			paymentDetail: params.paymentDetail,
+			coordinates: params.coordinates,
+			appPubkey: params.appPubkey,
+		})
+
+		return eventId
+	} catch (error) {
+		console.error('Error publishing rich payment details:', error)
+		throw error
+	}
+}
+
+/**
+ * React query mutation hook for publishing enhanced payment details
+ */
+export const usePublishRichPaymentDetail = () => {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		mutationKey: paymentDetailsKeys.publish(),
+		mutationFn: publishRichPaymentDetail,
+		onSuccess: (eventId, variables) => {
+			toast.success('Payment details saved successfully')
+			// Invalidate relevant queries
+			queryClient.invalidateQueries({ queryKey: paymentDetailsKeys.byPubkey(variables.appPubkey || '') })
+			return eventId
+		},
+		onError: (error) => {
+			console.error('Failed to publish payment details:', error)
+			toast.error('Failed to save payment details')
+		},
+	})
+}
+
+/**
+ * Updates payment details
+ */
+export const updatePaymentDetail = async (params: UpdatePaymentDetailParams): Promise<string> => {
+	try {
+		// For updates, we publish a new event that replaces the old one
+		return await publishRichPaymentDetail(params)
+	} catch (error) {
+		console.error('Error updating payment details:', error)
+		throw error
+	}
+}
+
+/**
+ * React query mutation hook for updating payment details
+ */
+export const useUpdatePaymentDetail = () => {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		mutationKey: paymentDetailsKeys.updatePaymentDetail(),
+		mutationFn: updatePaymentDetail,
+		onSuccess: (eventId, variables) => {
+			toast.success('Payment details updated successfully')
+			// Invalidate relevant queries
+			queryClient.invalidateQueries({ queryKey: paymentDetailsKeys.all })
+			return eventId
+		},
+		onError: (error) => {
+			console.error('Failed to update payment details:', error)
+			toast.error('Failed to update payment details')
+		},
+	})
+}
+
+/**
+ * Deletes payment details by publishing a deletion event
+ */
+export const deletePaymentDetail = async (params: DeletePaymentDetailParams): Promise<string> => {
+	try {
+		const ndk = ndkActions.getNDK()
+		if (!ndk) throw new Error('NDK not initialized')
+
+		const signer = ndkActions.getSigner()
+		if (!signer) throw new Error('No signer available')
+
+		// Create a deletion event (NIP-09)
+		const event = new NDKEvent(ndk)
+		event.kind = 5 // Deletion event
+		event.content = 'Deleted payment detail'
+		event.tags = [
+			['e', params.paymentDetailId], // Event to delete
+		]
+
+		await event.sign(signer)
+		await event.publish()
+
+		return event.id
+	} catch (error) {
+		console.error('Error deleting payment details:', error)
+		throw error
+	}
+}
+
+/**
+ * React query mutation hook for deleting payment details
+ */
+export const useDeletePaymentDetail = () => {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		mutationKey: paymentDetailsKeys.deletePaymentDetail(),
+		mutationFn: deletePaymentDetail,
+		onSuccess: (eventId, variables) => {
+			toast.success('Payment details deleted successfully')
+			// Invalidate relevant queries
+			queryClient.invalidateQueries({ queryKey: paymentDetailsKeys.byPubkey(variables.userPubkey) })
+			return eventId
+		},
+		onError: (error) => {
+			console.error('Failed to delete payment details:', error)
+			toast.error('Failed to delete payment details')
+		},
+	})
+}
+
+// ===============================
+// WALLET DETAILS FOR ON-CHAIN INDEX TRACKING
+// ===============================
+
+/**
+ * Fetches wallet details for on-chain index tracking
+ */
+export const fetchWalletDetail = async (userPubkey: string, paymentDetailId: string): Promise<WalletDetail | null> => {
+	try {
+		const ndk = ndkActions.getNDK()
+		if (!ndk) throw new Error('NDK not initialized')
+
+		// Fetch wallet detail events
+		const events = await ndk.fetchEvents({
+			kinds: [NDKKind.AppSpecificData],
+			'#l': ['wallet_detail'],
+			'#a': [`30078:${userPubkey}:${paymentDetailId}`],
+		})
+
+		if (!events || events.size === 0) {
+			return null
+		}
+
+		// Get the most recent event
+		const eventArray = Array.from(events)
+		const mostRecentEvent = eventArray.reduce((latest, current) =>
+			(current.created_at || 0) > (latest.created_at || 0) ? current : latest,
+		)
+
+		// Decrypt and parse the content
+		const signer = ndkActions.getSigner()
+		if (!signer) return null
+
+		const user = await signer.user()
+		if (!user) return null
+
+		const appPubkey = configStore.state.config.appPublicKey
+		if (!appPubkey) return null
+
+		let content
+		try {
+			content = await nip04.decrypt(user.pubkey, appPubkey, mostRecentEvent.content)
+			const parsedContent = JSON.parse(content)
+
+			return {
+				id: mostRecentEvent.id,
+				key: parsedContent.key || 'on-chain-index',
+				valueNumeric: parseInt(parsedContent.value || '0'),
+				valueString: parsedContent.value || '0',
+				updatedAt: new Date((mostRecentEvent.created_at || 0) * 1000),
+				paymentDetailId,
+			}
+		} catch (error) {
+			console.error('Error decrypting wallet details:', error)
+			return null
+		}
+	} catch (error) {
+		console.error('Error fetching wallet detail:', error)
+		return null
+	}
+}
+
+/**
+ * React query hook for fetching wallet details
+ */
+export const useWalletDetail = (userPubkey: string, paymentDetailId: string) => {
+	return useQuery({
+		queryKey: walletDetailsKeys.onChainIndex(userPubkey, paymentDetailId),
+		queryFn: () => fetchWalletDetail(userPubkey, paymentDetailId),
+		enabled: !!userPubkey && !!paymentDetailId,
 	})
 }

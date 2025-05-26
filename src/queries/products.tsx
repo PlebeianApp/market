@@ -118,6 +118,16 @@ export const productSellerQueryOptions = (id: string) =>
 // --- HELPER FUNCTIONS (DATA EXTRACTION) ---
 
 /**
+ * Gets the product ID from a product event
+ * @param event The product event or null
+ * @returns The product ID string
+ */
+export const getProductId = (event: NDKEvent | null): string => {
+	const dTag = event?.tags.find((t) => t[0] === 'd')
+	return dTag?.[1] || ''
+}
+
+/**
  * Gets the product title from a product event
  * @param event The product event or null
  * @returns The product title string

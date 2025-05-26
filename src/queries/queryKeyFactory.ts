@@ -19,6 +19,12 @@ export const shippingKeys = {
 	byPubkey: (pubkey: string) => [...shippingKeys.all, 'byPubkey', pubkey] as const,
 } as const
 
+export const collectionsKeys = {
+	all: ['collections'] as const,
+	details: (id: string) => [...collectionsKeys.all, id] as const,
+	byPubkey: (pubkey: string) => [...collectionsKeys.all, 'byPubkey', pubkey] as const,
+} as const
+
 export const profileKeys = {
 	all: ['profiles'] as const,
 	details: (p: string) => [...profileKeys.all, p] as const,
@@ -80,4 +86,14 @@ export const paymentDetailsKeys = {
 	byPubkey: (pubkey: string) => [...paymentDetailsKeys.all, 'byPubkey', pubkey] as const,
 	byProductOrCollection: (coordinates: string) => [...paymentDetailsKeys.all, 'byCoordinates', coordinates] as const,
 	publish: () => [...paymentDetailsKeys.all, 'publish'] as const,
+	updatePaymentDetail: () => [...paymentDetailsKeys.all, 'update'] as const,
+	deletePaymentDetail: () => [...paymentDetailsKeys.all, 'delete'] as const,
+} as const
+
+export const walletDetailsKeys = {
+	all: ['walletDetails'] as const,
+	onChainIndex: (userPubkey: string, paymentDetailId: string) =>
+		[...walletDetailsKeys.all, 'onChainIndex', userPubkey, paymentDetailId] as const,
+	publish: () => [...walletDetailsKeys.all, 'publish'] as const,
+	delete: () => [...walletDetailsKeys.all, 'delete'] as const,
 } as const
