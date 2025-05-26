@@ -26,6 +26,29 @@ function MakingPaymentsComponent() {
 	const [userPubkey, setUserPubkey] = useState<string | undefined>(undefined)
 	const signer = ndkActions.getSigner()
 
+	// TanStack Query for Nostr wallets - moved up to ensure consistent hook calls
+	const { data: nostrWallets, isLoading: nostrLoading, refetch: refetchNostrWallets } = useUserNwcWalletsQuery(userPubkey)
+	const saveNostrWalletsMutation = useSaveUserNwcWalletsMutation()
+
+	// Form state for adding/editing a new wallet - moved up to ensure consistent hook calls
+	const [isAddingWallet, setIsAddingWallet] = useState(false)
+	const [showSecret, setShowSecret] = useState(false)
+	const [storeOnNostr, setStoreOnNostr] = useState(false)
+
+	const [editingWallet, setEditingWallet] = useState<Wallet | null>(null)
+	const [editWalletName, setEditWalletName] = useState('')
+	const [editNwcPubkey, setEditNwcPubkey] = useState('')
+	const [editNwcRelays, setEditNwcRelays] = useState('')
+	const [editNwcSecret, setEditNwcSecret] = useState('')
+	const [showEditSecret, setShowEditSecret] = useState(false)
+	const [editStoreOnNostr, setEditStoreOnNostr] = useState(false)
+	const [openCollapsibleId, setOpenCollapsibleId] = useState<string | null>(null)
+
+	const combinedWallets = useMemo(() => {
+		// This acts as the primary source of wallets for the UI
+		return localWallets
+	}, [localWallets])
+
 	useEffect(() => {
 		const getUserPubkey = async () => {
 			if (signer) {
@@ -45,35 +68,12 @@ function MakingPaymentsComponent() {
 		getUserPubkey()
 	}, [signer, isInitialized])
 
-	// TanStack Query for Nostr wallets
-	const { data: nostrWallets, isLoading: nostrLoading, refetch: refetchNostrWallets } = useUserNwcWalletsQuery(userPubkey)
-	const saveNostrWalletsMutation = useSaveUserNwcWalletsMutation()
-
 	// Effect to merge Nostr wallets into local store when fetched/changed
 	useEffect(() => {
 		if (nostrWallets && userPubkey) {
 			walletActions.setNostrWallets(nostrWallets as Wallet[]) // Type assertion if UserNwcWallet is compatible
 		}
 	}, [nostrWallets, userPubkey])
-
-	// Form state for adding/editing a new wallet - remains largely the same
-	const [isAddingWallet, setIsAddingWallet] = useState(false)
-	const [showSecret, setShowSecret] = useState(false)
-	const [storeOnNostr, setStoreOnNostr] = useState(false)
-
-	const [editingWallet, setEditingWallet] = useState<Wallet | null>(null)
-	const [editWalletName, setEditWalletName] = useState('')
-	const [editNwcPubkey, setEditNwcPubkey] = useState('')
-	const [editNwcRelays, setEditNwcRelays] = useState('')
-	const [editNwcSecret, setEditNwcSecret] = useState('')
-	const [showEditSecret, setShowEditSecret] = useState(false)
-	const [editStoreOnNostr, setEditStoreOnNostr] = useState(false)
-	const [openCollapsibleId, setOpenCollapsibleId] = useState<string | null>(null)
-
-	const combinedWallets = useMemo(() => {
-		// This acts as the primary source of wallets for the UI
-		return localWallets
-	}, [localWallets])
 
 	const handleCancelAdd = () => {
 		setIsAddingWallet(false)
@@ -262,62 +262,54 @@ function MakingPaymentsComponent() {
 			) : (
 				!isAddingWallet && (
 					<>
-						{combinedWallets.map((wallet) => {
-							const balanceQuery = useNwcWalletBalanceQuery(
-								wallet.nwcUri,
-								!!wallet.nwcUri, // Always enable if nwcUri is present
-							)
-
-							return (
-								<WalletListItem
-									key={wallet.id}
-									wallet={wallet}
-									balanceQuery={balanceQuery}
-									isOpen={openCollapsibleId === wallet.id}
-									onToggleOpen={() => {
-										const isCurrentlyOpen = openCollapsibleId === wallet.id
-										if (isCurrentlyOpen) {
-											setOpenCollapsibleId(null)
-											resetEditForm() // Clear form when closing
-											setEditingWallet(null)
-										} else {
-											// If another wallet was open and being edited, reset that form first
-											if (openCollapsibleId && openCollapsibleId !== wallet.id) {
-												resetEditForm()
-											}
-											setOpenCollapsibleId(wallet.id)
-											// Populate form with this wallet's data
-											setEditingWallet(wallet)
-											setEditWalletName(wallet.name)
-											const parsedUri = parseNwcUri(wallet.nwcUri)
-											setEditNwcPubkey(wallet.pubkey)
-											setEditNwcRelays(wallet.relays.join(', '))
-											setEditNwcSecret(parsedUri?.secret || '')
-											setEditStoreOnNostr(wallet.storedOnNostr || false)
-											setShowEditSecret(false) // Reset visibility of secret
+						{combinedWallets.map((wallet) => (
+							<WalletListItemWithBalance
+								key={wallet.id}
+								wallet={wallet}
+								isOpen={openCollapsibleId === wallet.id}
+								onToggleOpen={() => {
+									const isCurrentlyOpen = openCollapsibleId === wallet.id
+									if (isCurrentlyOpen) {
+										setOpenCollapsibleId(null)
+										resetEditForm() // Clear form when closing
+										setEditingWallet(null)
+									} else {
+										// If another wallet was open and being edited, reset that form first
+										if (openCollapsibleId && openCollapsibleId !== wallet.id) {
+											resetEditForm()
 										}
-									}}
-									onCancelEdit={handleCancelEdit}
-									onSaveEdit={handleSaveWalletUpdate}
-									onDeleteWallet={() => handleDeleteWallet(wallet.id)}
-									editWalletName={editWalletName}
-									setEditWalletName={setEditWalletName}
-									editNwcPubkey={editNwcPubkey}
-									setEditNwcPubkey={setEditNwcPubkey}
-									editNwcRelays={editNwcRelays}
-									setEditNwcRelays={setEditNwcRelays}
-									editNwcSecret={editNwcSecret}
-									setEditNwcSecret={setEditNwcSecret}
-									showEditSecret={showEditSecret}
-									setShowEditSecret={setShowEditSecret}
-									editStoreOnNostr={editStoreOnNostr}
-									setEditStoreOnNostr={setEditStoreOnNostr}
-									isSavingNostr={saveNostrWalletsMutation.isPending}
-									userPubkeyPresent={!!userPubkey}
-									isWalletSyncing={saveNostrWalletsMutation.isPending && localWallets.find((lw) => lw.id === wallet.id)?.storedOnNostr}
-								/>
-							)
-						})}
+										setOpenCollapsibleId(wallet.id)
+										// Populate form with this wallet's data
+										setEditingWallet(wallet)
+										setEditWalletName(wallet.name)
+										const parsedUri = parseNwcUri(wallet.nwcUri)
+										setEditNwcPubkey(wallet.pubkey)
+										setEditNwcRelays(wallet.relays.join(', '))
+										setEditNwcSecret(parsedUri?.secret || '')
+										setEditStoreOnNostr(wallet.storedOnNostr || false)
+										setShowEditSecret(false) // Reset visibility of secret
+									}
+								}}
+								onCancelEdit={handleCancelEdit}
+								onSaveEdit={handleSaveWalletUpdate}
+								onDeleteWallet={() => handleDeleteWallet(wallet.id)}
+								editWalletName={editWalletName}
+								setEditWalletName={setEditWalletName}
+								editNwcPubkey={editNwcPubkey}
+								setEditNwcPubkey={setEditNwcPubkey}
+								editNwcRelays={editNwcRelays}
+								setEditNwcRelays={setEditNwcRelays}
+								editNwcSecret={editNwcSecret}
+								setEditNwcSecret={setEditNwcSecret}
+								showEditSecret={showEditSecret}
+								setShowEditSecret={setShowEditSecret}
+								editStoreOnNostr={editStoreOnNostr}
+								setEditStoreOnNostr={setEditStoreOnNostr}
+								isSavingNostr={saveNostrWalletsMutation.isPending}
+								userPubkeyPresent={!!userPubkey}
+								isWalletSyncing={saveNostrWalletsMutation.isPending && localWallets.find((lw) => lw.id === wallet.id)?.storedOnNostr}
+							/>
+						))}
 
 						{combinedWallets.length > 0 && (
 							<Button onClick={handleAddWalletClick} className="w-full mt-4 sm:hidden">
@@ -329,6 +321,16 @@ function MakingPaymentsComponent() {
 			)}
 		</div>
 	)
+}
+
+// Wrapper component that handles the balance query to avoid hook rule violations
+function WalletListItemWithBalance(props: Omit<WalletListItemProps, 'balanceQuery'>) {
+	const balanceQuery = useNwcWalletBalanceQuery(
+		props.wallet.nwcUri,
+		!!props.wallet.nwcUri, // Always enable if nwcUri is present
+	)
+
+	return <WalletListItem {...props} balanceQuery={balanceQuery} />
 }
 
 interface WalletListItemProps {
