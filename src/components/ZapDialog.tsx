@@ -12,7 +12,6 @@ import {
 	NDKPrivateKeySigner,
 	NDKRelaySet,
 	NDKSubscription,
-	NDKSubscriptionCacheUsage,
 	NDKUser,
 	NDKZapper,
 	type LnPaymentInfo,
@@ -132,7 +131,6 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 
 		const sub = ndk.subscribe(filter, {
 			closeOnEose: false,
-			cacheUsage: NDKSubscriptionCacheUsage.ONLY_RELAY,
 			relaySet: relaySet,
 		})
 
