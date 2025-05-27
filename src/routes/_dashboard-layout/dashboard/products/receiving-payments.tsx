@@ -11,23 +11,23 @@ import { useNDK } from '@/lib/stores/ndk'
 import { isValidNip05 } from '@/lib/utils'
 import {
 	checkAddress,
-	checkExtendedPublicKey,
 	deriveAddresses,
 	isExtendedPublicKey,
 	parsePaymentDetailsFromClipboard,
 	paymentMethodLabels,
+	validateExtendedPublicKey,
 } from '@/lib/utils/paymentDetails'
+import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
 import {
 	useDeletePaymentDetail,
 	usePublishRichPaymentDetail,
 	useRichUserPaymentDetails,
 	useUpdatePaymentDetail,
 	useWalletDetail,
-	type RichPaymentDetail,
 	type PaymentScope,
+	type RichPaymentDetail,
 } from '@/queries/payment'
-import { useProductsByPubkey, getProductTitle, getProductId } from '@/queries/products'
-import { useCollectionsByPubkey, getCollectionTitle, getCollectionId } from '@/queries/collections'
+import { getProductId, getProductTitle, useProductsByPubkey } from '@/queries/products'
 import { createFileRoute } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import {
@@ -35,12 +35,12 @@ import {
 	ChevronDownIcon,
 	ClipboardIcon,
 	GlobeIcon,
+	PackageIcon,
 	PlusIcon,
 	StarIcon,
 	StoreIcon,
 	TrashIcon,
 	ZapIcon,
-	PackageIcon,
 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
@@ -158,20 +158,46 @@ function PaymentDetailConfirmationCard({ value, type, onConfirm, onCancel }: Pay
 					<p className="text-sm font-mono break-all">{value}</p>
 				</div>
 
-				{type === 'extended_public_key' && (
-					<div className="space-y-2">
-						<Label className="text-sm font-medium">Preview of derived addresses:</Label>
-						<div className="space-y-1">
-							{deriveAddresses(value, numAddresses)
-								?.slice(0, numAddresses)
-								.map((address, index) => (
-									<div key={index} className="text-xs font-mono p-2 bg-gray-50 rounded">
-										{index}: {address}
+				{type === 'extended_public_key' &&
+					(() => {
+						try {
+							const derivedAddresses = deriveAddresses(value, numAddresses)
+
+							if (!derivedAddresses || derivedAddresses.length === 0) {
+								return (
+									<div className="space-y-2">
+										<Label className="text-sm font-medium text-red-700">Error:</Label>
+										<div className="text-sm text-red-600 p-2 bg-red-50 rounded">
+											Unable to derive addresses from this extended public key. Please check the format.
+										</div>
 									</div>
-								))}
-						</div>
-					</div>
-				)}
+								)
+							}
+
+							return (
+								<div className="space-y-2">
+									<Label className="text-sm font-medium">Preview of derived addresses:</Label>
+									<div className="space-y-1">
+										{derivedAddresses.slice(0, numAddresses).map((address, index) => (
+											<div key={index} className="text-xs font-mono p-2 bg-gray-50 rounded">
+												{index}: {address}
+											</div>
+										))}
+									</div>
+								</div>
+							)
+						} catch (error) {
+							console.error('Error previewing derived addresses:', error)
+							return (
+								<div className="space-y-2">
+									<Label className="text-sm font-medium text-red-700">Error:</Label>
+									<div className="text-sm text-red-600 p-2 bg-red-50 rounded">
+										Invalid extended public key format. Please verify the key is correct.
+									</div>
+								</div>
+							)
+						}
+					})()}
 			</CardContent>
 			<CardFooter className="flex justify-end gap-2">
 				<Button variant="outline" onClick={onCancel}>
@@ -275,7 +301,12 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 			case PAYMENT_DETAILS_METHOD.ON_CHAIN: {
 				if (isExtendedPublicKey(value)) {
 					setConfirmationType('extended_public_key')
-					return checkExtendedPublicKey(value) ? 'needsConfirmation' : false
+					const validation = validateExtendedPublicKey(value)
+					if (!validation.isValid) {
+						setValidationMessage(validation.error || 'Invalid extended public key')
+						return false
+					}
+					return 'needsConfirmation'
 				}
 				if (value.startsWith('bc1')) {
 					setConfirmationType('single_address')
@@ -438,6 +469,7 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 
 					{isEditing && (
 						<div className="flex items-center gap-2">
+							{editedPaymentDetail.isDefault && <StarIcon className="w-6 h-6 text-yellow-400 fill-current" />}
 							{editedPaymentDetail.scope === 'global' ? (
 								<>
 									<span className="font-bold">Global</span>
@@ -445,9 +477,8 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 								</>
 							) : (
 								<>
-									{editedPaymentDetail.isDefault && <StarIcon className="w-6 h-6 text-yellow-400 fill-current" />}
 									<span className="font-bold">{editedPaymentDetail.scopeName}</span>
-									{editedPaymentDetail.scope === 'collection' ? <StoreIcon className="w-6 h-6" /> : <StoreIcon className="w-6 h-6" />}
+									{editedPaymentDetail.scope === 'collection' ? <StoreIcon className="w-6 h-6" /> : <PackageIcon className="w-6 h-6" />}
 								</>
 							)}
 						</div>
@@ -521,7 +552,6 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 												scope,
 												scopeId,
 												scopeName,
-												isDefault: false,
 											}))
 										}}
 									/>
@@ -540,18 +570,44 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 									className="w-full"
 								/>
 
-								{walletDetailQuery.data && paymentDetail?.paymentDetail && isExtendedPublicKey(paymentDetail.paymentDetail) && (
-									<div className="bg-gray-50 p-3 rounded-md space-y-2">
-										<Label className="font-medium">Current address</Label>
-										<div className="space-y-1">
-											<small className="font-mono">
-												Index: {walletDetailQuery.data.valueNumeric} -{' '}
-												{deriveAddresses(paymentDetail.paymentDetail, 1, walletDetailQuery.data.valueNumeric)?.[0]}
-											</small>
-											<small>Last updated: {format(walletDetailQuery.data.updatedAt, 'PPp')}</small>
-										</div>
-									</div>
-								)}
+								{walletDetailQuery.data &&
+									paymentDetail?.paymentDetail &&
+									isExtendedPublicKey(paymentDetail.paymentDetail) &&
+									(() => {
+										try {
+											const derivedAddresses = deriveAddresses(paymentDetail.paymentDetail, 1, walletDetailQuery.data.valueNumeric)
+											const currentAddress = derivedAddresses?.[0]
+
+											if (!currentAddress) {
+												return (
+													<div className="bg-red-50 p-3 rounded-md space-y-2">
+														<Label className="font-medium text-red-700">Error</Label>
+														<small className="text-red-600">Unable to derive address from extended public key</small>
+													</div>
+												)
+											}
+
+											return (
+												<div className="bg-gray-50 p-3 rounded-md space-y-2">
+													<Label className="font-medium">Current address</Label>
+													<div className="space-y-1">
+														<small className="font-mono">
+															Index: {walletDetailQuery.data.valueNumeric} - {currentAddress}
+														</small>
+														<small>Last updated: {format(walletDetailQuery.data.updatedAt, 'PPp')}</small>
+													</div>
+												</div>
+											)
+										} catch (error) {
+											console.error('Error displaying current address:', error)
+											return (
+												<div className="bg-red-50 p-3 rounded-md space-y-2">
+													<Label className="font-medium text-red-700">Error</Label>
+													<small className="text-red-600">Invalid extended public key format</small>
+												</div>
+											)
+										}
+									})()}
 							</div>
 
 							{validationMessage && formState === 'idle' && <p className="text-red-500 text-sm">{validationMessage}</p>}

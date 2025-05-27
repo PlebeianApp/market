@@ -22,6 +22,7 @@ export interface PaymentDetail {
 	paymentDetail: string // Could be bolt11, btc address, cashu token, etc.
 	createdAt: number
 	coordinates?: string // Optional product/collection coordinates
+	isDefault?: boolean // Whether this is the default payment method
 }
 
 /**
@@ -121,6 +122,7 @@ export const fetchPaymentDetail = async (id: string): Promise<PaymentDetail | nu
 				paymentDetail: parsedContent.payment_detail || '',
 				createdAt: event.created_at || 0,
 				coordinates,
+				isDefault: parsedContent.is_default === true || parsedContent.is_default === 'true',
 			}
 		} catch (error) {
 			console.error('Error decrypting payment details:', error)
@@ -163,11 +165,25 @@ export const fetchUserPaymentDetails = async (userPubkey: string): Promise<Payme
 			return []
 		}
 
-		// Convert events to payment details
-		const paymentDetails: PaymentDetail[] = []
+		// Group events by d tag and keep only the most recent for each
 		const eventsArray = Array.from(events)
+		const eventsByDTag = new Map<string, any>()
 
 		for (const event of eventsArray) {
+			const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
+			if (!dTag) continue
+
+			const existingEvent = eventsByDTag.get(dTag)
+			if (!existingEvent || (event.created_at || 0) > (existingEvent.created_at || 0)) {
+				eventsByDTag.set(dTag, event)
+			}
+		}
+
+		// Convert the most recent events to payment details
+		const paymentDetails: PaymentDetail[] = []
+		const latestEvents = Array.from(eventsByDTag.values())
+
+		for (const event of latestEvents) {
 			const detail = await fetchPaymentDetail(event.id)
 			if (detail) {
 				paymentDetails.push(detail)
@@ -219,11 +235,25 @@ export const fetchProductPaymentDetails = async (coordinates: string, userPubkey
 			return []
 		}
 
-		// Convert events to payment details
-		const paymentDetails: PaymentDetail[] = []
+		// Group events by d tag and keep only the most recent for each
 		const eventsArray = Array.from(events)
+		const eventsByDTag = new Map<string, any>()
 
 		for (const event of eventsArray) {
+			const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
+			if (!dTag) continue
+
+			const existingEvent = eventsByDTag.get(dTag)
+			if (!existingEvent || (event.created_at || 0) > (existingEvent.created_at || 0)) {
+				eventsByDTag.set(dTag, event)
+			}
+		}
+
+		// Convert the most recent events to payment details
+		const paymentDetails: PaymentDetail[] = []
+		const latestEvents = Array.from(eventsByDTag.values())
+
+		for (const event of latestEvents) {
 			const detail = await fetchPaymentDetail(event.id)
 			if (detail) {
 				paymentDetails.push(detail)
@@ -256,6 +286,8 @@ export interface PublishPaymentDetailParams {
 	paymentDetail: string
 	coordinates?: string // Optional product/collection coordinates
 	appPubkey?: string // Optional app pubkey
+	dTag?: string // Optional d tag for replaceable events (for updates)
+	isDefault?: boolean // Whether this is the default payment method
 }
 
 /**
@@ -281,6 +313,7 @@ export const publishPaymentDetail = async (params: PublishPaymentDetailParams): 
 		const contentObj = {
 			payment_method: params.paymentMethod,
 			payment_detail: params.paymentDetail,
+			is_default: params.isDefault || false,
 		}
 
 		// Encrypt content for the app
@@ -295,7 +328,7 @@ export const publishPaymentDetail = async (params: PublishPaymentDetailParams): 
 		event.kind = NDKKind.AppSpecificData
 		event.content = encryptedContent
 		event.tags = [
-			['d', uuidv4()],
+			['d', params.dTag || uuidv4()],
 			['l', 'payment_detail'],
 			['p', appPubkey], // Reference to the app
 		]
@@ -397,16 +430,23 @@ export const fetchRichUserPaymentDetails = async (userPubkey: string): Promise<R
 		const basicDetails = await fetchUserPaymentDetails(userPubkey)
 
 		// Enhance the basic details with scope information from coordinates
-		return basicDetails.map((detail, index) => {
+		const richDetails = basicDetails.map((detail) => {
 			const scopeInfo = parseScopeFromCoordinates(detail.coordinates)
 
 			return {
 				...detail,
 				userId: userPubkey,
 				...scopeInfo,
-				isDefault: index === 0, // Make first one default
+				isDefault: detail.isDefault || false,
 			}
 		})
+
+		// If no payment detail is marked as default, make the first one default
+		if (richDetails.length > 0 && !richDetails.some((detail) => detail.isDefault)) {
+			richDetails[0].isDefault = true
+		}
+
+		return richDetails
 	} catch (error) {
 		console.error('Error fetching rich user payment details:', error)
 		return []
@@ -436,6 +476,8 @@ export const publishRichPaymentDetail = async (params: PublishRichPaymentDetailP
 			paymentDetail: params.paymentDetail,
 			coordinates: params.coordinates,
 			appPubkey: params.appPubkey,
+			dTag: params.dTag,
+			isDefault: params.isDefault,
 		})
 
 		return eventId
@@ -472,8 +514,38 @@ export const usePublishRichPaymentDetail = () => {
  */
 export const updatePaymentDetail = async (params: UpdatePaymentDetailParams): Promise<string> => {
 	try {
-		// For updates, we publish a new event that replaces the old one
-		return await publishRichPaymentDetail(params)
+		// First, we need to get the original event to extract its d tag
+		const originalEvent = await fetchPaymentDetail(params.paymentDetailId)
+		if (!originalEvent) {
+			throw new Error('Original payment detail not found')
+		}
+
+		// Get the d tag from the original event
+		const ndk = ndkActions.getNDK()
+		if (!ndk) throw new Error('NDK not initialized')
+
+		const originalNDKEvent = await ndk.fetchEvent({
+			ids: [params.paymentDetailId],
+		})
+
+		if (!originalNDKEvent) {
+			throw new Error('Original event not found')
+		}
+
+		const dTag = originalNDKEvent.tags.find((tag) => tag[0] === 'd')?.[1]
+		if (!dTag) {
+			throw new Error('Original event does not have a d tag')
+		}
+
+		// For updates, we publish a new event with the same d tag to replace the old one
+		return await publishPaymentDetail({
+			paymentMethod: params.paymentMethod,
+			paymentDetail: params.paymentDetail,
+			coordinates: params.coordinates,
+			appPubkey: params.appPubkey,
+			dTag: dTag, // Use the same d tag to replace the event
+			isDefault: params.isDefault,
+		})
 	} catch (error) {
 		console.error('Error updating payment details:', error)
 		throw error
@@ -485,14 +557,32 @@ export const updatePaymentDetail = async (params: UpdatePaymentDetailParams): Pr
  */
 export const useUpdatePaymentDetail = () => {
 	const queryClient = useQueryClient()
+	const ndk = ndkActions.getNDK()
+	const signer = ndkActions.getSigner()
 
 	return useMutation({
 		mutationKey: paymentDetailsKeys.updatePaymentDetail(),
 		mutationFn: updatePaymentDetail,
-		onSuccess: (eventId, variables) => {
-			toast.success('Payment details updated successfully')
+		onSuccess: async (eventId, variables) => {
+			// Get current user pubkey
+			let userPubkey = ''
+			if (signer) {
+				const user = await signer.user()
+				if (user && user.pubkey) {
+					userPubkey = user.pubkey
+				}
+			}
+
 			// Invalidate relevant queries
-			queryClient.invalidateQueries({ queryKey: paymentDetailsKeys.all })
+			if (userPubkey) {
+				queryClient.invalidateQueries({ queryKey: paymentDetailsKeys.byPubkey(userPubkey) })
+			}
+
+			if (variables.coordinates) {
+				queryClient.invalidateQueries({ queryKey: paymentDetailsKeys.byProductOrCollection(variables.coordinates) })
+			}
+
+			toast.success('Payment details updated successfully')
 			return eventId
 		},
 		onError: (error) => {
