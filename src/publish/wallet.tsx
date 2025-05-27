@@ -75,17 +75,17 @@ export const useSaveUserNwcWalletsMutation = () => {
 			toast.success('Wallets saved to Nostr successfully!')
 			// Invalidate the query to refetch the latest list
 			queryClient.invalidateQueries({ queryKey: walletKeys.userNwcWallets(variables.userPubkey) })
-			
+
 			// Invalidate all balance queries for the wallets being saved
 			variables.wallets.forEach((wallet) => {
 				if (wallet.nwcUri) {
 					queryClient.invalidateQueries({ queryKey: walletKeys.nwcBalance(wallet.nwcUri) })
 				}
 			})
-			
+
 			// Also invalidate all balance queries to ensure fresh data
 			queryClient.invalidateQueries({ queryKey: walletKeys.all })
-			
+
 			return eventId
 		},
 		onError: (error) => {
