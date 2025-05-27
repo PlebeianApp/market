@@ -83,13 +83,13 @@ export function isExtendedPublicKey(input: string): boolean {
 	if (!input || typeof input !== 'string') {
 		return false
 	}
-	
+
 	const trimmed = input.trim()
-	
+
 	// Check if it starts with xpub or zpub and has reasonable length
 	const hasValidPrefix = trimmed.startsWith('xpub') || trimmed.startsWith('zpub')
 	const hasValidLength = trimmed.length >= 100 && trimmed.length <= 120 // Extended keys are typically 111 characters
-	
+
 	return hasValidPrefix && hasValidLength
 }
 
@@ -97,26 +97,26 @@ export function validateExtendedPublicKey(input: string): { isValid: boolean; er
 	if (!input || typeof input !== 'string') {
 		return { isValid: false, error: 'Input is required and must be a string' }
 	}
-	
+
 	const trimmed = input.trim()
-	
+
 	// Check basic format
 	if (!trimmed.startsWith('xpub') && !trimmed.startsWith('zpub')) {
 		return { isValid: false, error: 'Extended public key must start with "xpub" or "zpub"' }
 	}
-	
+
 	// Check length
 	if (trimmed.length < 100 || trimmed.length > 120) {
 		return { isValid: false, error: 'Extended public key has invalid length' }
 	}
-	
+
 	// Try to decode with bs58check
 	try {
 		bs58check.default.decode(trimmed)
 	} catch (error) {
 		return { isValid: false, error: 'Invalid base58 encoding in extended public key' }
 	}
-	
+
 	// If it's a zpub, try converting to xpub
 	if (trimmed.startsWith('zpub')) {
 		const xpub = zpubToXpub(trimmed)
@@ -124,7 +124,7 @@ export function validateExtendedPublicKey(input: string): { isValid: boolean; er
 			return { isValid: false, error: 'Failed to convert zpub to xpub format' }
 		}
 	}
-	
+
 	return { isValid: true }
 }
 

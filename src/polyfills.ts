@@ -27,14 +27,14 @@ const nodeUtilFunctions = {
 	isNull: (value: any): boolean => value === null,
 	isUndefined: (value: any): boolean => value === undefined,
 	isObject: (value: any): boolean => value !== null && typeof value === 'object',
-	isFunction: (value: any): boolean => typeof value === 'function'
+	isFunction: (value: any): boolean => typeof value === 'function',
 }
 
 // Set all Node.js globals
 if (typeof globalThis !== 'undefined') {
 	// Add individual functions as globals (this is what Node.js does)
 	Object.assign(globalThis, nodeUtilFunctions)
-	
+
 	// process polyfill
 	if (typeof (globalThis as any).process === 'undefined') {
 		;(globalThis as any).process = {
@@ -42,7 +42,7 @@ if (typeof globalThis !== 'undefined') {
 			version: '',
 			versions: { node: '18.0.0' },
 			platform: 'browser',
-			browser: true
+			browser: true,
 		}
 	}
 }
@@ -50,7 +50,7 @@ if (typeof globalThis !== 'undefined') {
 if (typeof window !== 'undefined') {
 	// Add individual functions as globals to window
 	Object.assign(window, nodeUtilFunctions)
-	
+
 	// process polyfill for window
 	if (typeof (window as any).process === 'undefined') {
 		;(window as any).process = {
@@ -58,10 +58,10 @@ if (typeof window !== 'undefined') {
 			version: '',
 			versions: { node: '18.0.0' },
 			platform: 'browser',
-			browser: true
+			browser: true,
 		}
 	}
-	
+
 	// global polyfill for window
 	if (typeof (window as any).global === 'undefined') {
 		;(window as any).global = window

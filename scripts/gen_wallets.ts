@@ -19,31 +19,9 @@ const generateWalletName = (): string => {
 		'Savings Wallet',
 	]
 
-	const adjectives = [
-		'Primary',
-		'Secondary',
-		'Main',
-		'Backup',
-		'Personal',
-		'Business',
-		'Travel',
-		'Emergency',
-		'Daily',
-		'Secure',
-	]
+	const adjectives = ['Primary', 'Secondary', 'Main', 'Backup', 'Personal', 'Business', 'Travel', 'Emergency', 'Daily', 'Secure']
 
-	const brands = [
-		'Alby',
-		'Phoenix',
-		'Breez',
-		'Zeus',
-		'BlueWallet',
-		'Muun',
-		'Wallet of Satoshi',
-		'Strike',
-		'Cash App',
-		'River',
-	]
+	const brands = ['Alby', 'Phoenix', 'Breez', 'Zeus', 'BlueWallet', 'Muun', 'Wallet of Satoshi', 'Strike', 'Cash App', 'River']
 
 	const nameType = faker.number.int({ min: 1, max: 3 })
 
@@ -66,7 +44,7 @@ const generateWalletName = (): string => {
 const generateNwcUri = (): { uri: string; pubkey: string; relays: string[] } => {
 	// Generate a fake pubkey (64 hex characters)
 	const pubkey = faker.string.hexadecimal({ length: 64, prefix: '' })
-	
+
 	// Common relay URLs used in the ecosystem
 	const commonRelays = [
 		'wss://relay.getalby.com/v1',
@@ -84,14 +62,14 @@ const generateNwcUri = (): { uri: string; pubkey: string; relays: string[] } => 
 	// Pick 1-3 random relays
 	const numRelays = faker.number.int({ min: 1, max: 3 })
 	const selectedRelays = faker.helpers.arrayElements(commonRelays, numRelays)
-	
+
 	// Generate a fake secret (32 hex characters)
 	const secret = faker.string.hexadecimal({ length: 64, prefix: '' })
-	
+
 	// Build the NWC URI
-	const relayParam = selectedRelays.map(relay => `relay=${encodeURIComponent(relay)}`).join('&')
+	const relayParam = selectedRelays.map((relay) => `relay=${encodeURIComponent(relay)}`).join('&')
 	const uri = `nostr+walletconnect://${pubkey}?${relayParam}&secret=${secret}`
-	
+
 	return {
 		uri,
 		pubkey,
@@ -102,7 +80,7 @@ const generateNwcUri = (): { uri: string; pubkey: string; relays: string[] } => 
 // Generate a fake NWC wallet
 export const generateFakeNwcWallet = (): Omit<Wallet, 'id' | 'createdAt' | 'updatedAt'> => {
 	const { uri, pubkey, relays } = generateNwcUri()
-	
+
 	return {
 		name: generateWalletName(),
 		nwcUri: uri,
@@ -113,11 +91,7 @@ export const generateFakeNwcWallet = (): Omit<Wallet, 'id' | 'createdAt' | 'upda
 }
 
 // Create and save NWC wallets for a user
-export const createUserNwcWallets = async (
-	signer: NDKPrivateKeySigner,
-	userPubkey: string,
-	count: number = 2
-): Promise<boolean> => {
+export const createUserNwcWallets = async (signer: NDKPrivateKeySigner, userPubkey: string, count: number = 2): Promise<boolean> => {
 	try {
 		const wallets: Wallet[] = []
 		const timestamp = Date.now()
@@ -135,15 +109,15 @@ export const createUserNwcWallets = async (
 
 		// Save wallets to Nostr using the existing function
 		await saveUserNwcWallets({ wallets, userPubkey })
-		
+
 		console.log(`Created ${count} NWC wallets for user ${userPubkey.substring(0, 8)}...`)
 		wallets.forEach((wallet, index) => {
 			console.log(`  ${index + 1}. ${wallet.name} (${wallet.relays.length} relays)`)
 		})
-		
+
 		return true
 	} catch (error) {
 		console.error(`Failed to create NWC wallets for user ${userPubkey.substring(0, 8)}...`, error)
 		return false
 	}
-} 
+}
