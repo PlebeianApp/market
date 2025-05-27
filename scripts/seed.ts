@@ -8,6 +8,7 @@ import { hexToBytes } from '@noble/hashes/utils'
 import { createCollectionEvent, createProductReference, generateCollectionData } from './gen_collections'
 import { createPaymentDetailEvent, generateLightningPaymentDetail, generateOnChainPaymentDetail } from './gen_payment_details'
 import { createProductEvent, generateProductData } from './gen_products'
+import { createUserNwcWallets } from './gen_wallets'
 import { createReviewEvent, generateReviewData } from './gen_review'
 import { createShippingEvent, generateShippingData } from './gen_shipping'
 import { createV4VSharesEvent } from './gen_v4v'
@@ -89,6 +90,10 @@ async function seedData() {
 		// Create On-chain payment detail (using the same XPUB for all users)
 		const onChainPaymentDetail = generateOnChainPaymentDetail(XPUB)
 		await createPaymentDetailEvent(signer, ndk, onChainPaymentDetail, APP_PUBKEY!)
+
+		// Create NWC wallets for each user (2 wallets with organic names)
+		console.log(`Creating NWC wallets for user ${pubkey.substring(0, 8)}...`)
+		await createUserNwcWallets(signer, pubkey, 2)
 
 		console.log(`Creating products for user ${pubkey.substring(0, 8)}...`)
 		productsByUser[pubkey] = []

@@ -1,8 +1,7 @@
-import { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
-import { ndkActions } from './ndk'
+import { useEffect, useState } from 'react'
 
 // Wallet interface
 export interface Wallet {
@@ -219,8 +218,19 @@ export const walletActions = {
 
 // React hook for consuming the store
 export const useWallets = () => {
+	const [state, setState] = useState(walletStore.state)
+
+	useEffect(() => {
+		const unsubscribe = walletStore.subscribe(() => {
+			setState(walletStore.state)
+		})
+		return unsubscribe
+	}, [])
+
 	return {
-		...walletStore.state,
+		wallets: state.wallets,
+		isLoading: state.isLoading,
+		isInitialized: state.isInitialized,
 		...walletActions,
 	}
 }

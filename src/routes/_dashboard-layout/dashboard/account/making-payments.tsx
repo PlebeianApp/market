@@ -43,6 +43,7 @@ function MakingPaymentsComponent() {
 	const [showEditSecret, setShowEditSecret] = useState(false)
 	const [editStoreOnNostr, setEditStoreOnNostr] = useState(false)
 	const [openCollapsibleId, setOpenCollapsibleId] = useState<string | null>(null)
+	const [deletingWalletId, setDeletingWalletId] = useState<string | null>(null)
 
 	const combinedWallets = useMemo(() => {
 		// This acts as the primary source of wallets for the UI
@@ -159,16 +160,49 @@ function MakingPaymentsComponent() {
 	const handleDeleteWallet = async (walletId: string) => {
 		try {
 			const walletToDelete = combinedWallets.find((w) => w.id === walletId)
-			walletActions.removeWallet(walletId)
-			toast.success('Wallet removed successfully!')
+			if (!walletToDelete) {
+				toast.error('Wallet not found')
+				return
+			}
 
-			if (walletToDelete && walletToDelete.storedOnNostr && userPubkey) {
+			setDeletingWalletId(walletId)
+
+			toast.loading('Removing wallet...', { id: `delete-${walletId}` })
+
+			walletActions.removeWallet(walletId)
+
+			if (openCollapsibleId === walletId) {
+				setOpenCollapsibleId(null)
+				resetEditForm()
+				setEditingWallet(null)
+			}
+
+			if (walletToDelete.storedOnNostr && userPubkey) {
 				const walletsToSaveToNostr = walletActions.getWallets().filter((w) => w.storedOnNostr)
-				saveNostrWalletsMutation.mutate({ wallets: walletsToSaveToNostr as UserNwcWallet[], userPubkey })
+				saveNostrWalletsMutation.mutate(
+					{ wallets: walletsToSaveToNostr as UserNwcWallet[], userPubkey },
+					{
+						onSuccess: () => {
+							toast.success('Wallet removed successfully!', { id: `delete-${walletId}` })
+							setDeletingWalletId(null)
+						},
+						onError: (error) => {
+							console.error('Error syncing wallet deletion to Nostr:', error)
+							toast.error('Wallet removed locally, but failed to sync to Nostr', { id: `delete-${walletId}` })
+							setDeletingWalletId(null)
+						},
+					},
+				)
+			} else {
+				setTimeout(() => {
+					toast.success('Wallet removed successfully!', { id: `delete-${walletId}` })
+					setDeletingWalletId(null)
+				}, 100)
 			}
 		} catch (error) {
 			console.error('Error removing wallet:', error)
-			toast.error('Failed to remove wallet')
+			toast.error('Failed to remove wallet', { id: `delete-${walletId}` })
+			setDeletingWalletId(null)
 		}
 	}
 
@@ -308,6 +342,7 @@ function MakingPaymentsComponent() {
 								isSavingNostr={saveNostrWalletsMutation.isPending}
 								userPubkeyPresent={!!userPubkey}
 								isWalletSyncing={saveNostrWalletsMutation.isPending && localWallets.find((lw) => lw.id === wallet.id)?.storedOnNostr}
+								isDeleting={deletingWalletId === wallet.id}
 							/>
 						))}
 
@@ -356,6 +391,7 @@ interface WalletListItemProps {
 	isSavingNostr: boolean
 	userPubkeyPresent: boolean
 	isWalletSyncing?: boolean // Make optional as it might not always be calculable if localWallets is out of scope
+	isDeleting?: boolean // Whether this wallet is currently being deleted
 }
 
 function WalletListItem({
@@ -381,10 +417,11 @@ function WalletListItem({
 	isSavingNostr,
 	userPubkeyPresent,
 	isWalletSyncing,
+	isDeleting,
 }: WalletListItemProps) {
 	return (
 		<Collapsible open={isOpen} onOpenChange={onToggleOpen} className="space-y-2">
-			<Card>
+			<Card className={isDeleting ? 'opacity-50 pointer-events-none' : ''}>
 				<CollapsibleTrigger asChild>
 					<CardHeader className="pb-2 flex flex-row items-center justify-between cursor-pointer group">
 						<div className="flex items-center gap-3">
@@ -392,8 +429,8 @@ function WalletListItem({
 							<div>
 								<CardTitle>{wallet.name}</CardTitle>
 								<CardDescription className="text-xs">
-									{wallet.storedOnNostr ? 'Stored on Nostr (encrypted)' : 'Stored locally'}
-									{isWalletSyncing && ' (Syncing...)'}
+									{isDeleting ? 'Removing...' : wallet.storedOnNostr ? 'Stored on Nostr (encrypted)' : 'Stored locally'}
+									{isWalletSyncing && !isDeleting && ' (Syncing...)'}
 								</CardDescription>
 								{/* Compact Balance Display in Trigger */}
 								<div className="text-xs mt-0.5">
@@ -413,11 +450,15 @@ function WalletListItem({
 									e.stopPropagation() // Prevent collapsible trigger
 									onDeleteWallet()
 								}}
-								className="h-8 w-8 text-destructive"
+								className="h-8 w-8 text-destructive hover:bg-destructive/10"
 								aria-label="Delete wallet"
-								disabled={isSavingNostr}
+								disabled={isSavingNostr || isDeleting}
 							>
-								<TrashIcon className="h-4 w-4" />
+								{isDeleting ? (
+									<div className="animate-spin h-4 w-4 border-2 border-destructive border-t-transparent rounded-full" />
+								) : (
+									<TrashIcon className="h-4 w-4" />
+								)}
 							</Button>
 							<ChevronDownIcon className="h-4 w-4 ml-1 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
 						</div>
