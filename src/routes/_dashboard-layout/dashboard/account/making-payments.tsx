@@ -8,8 +8,10 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { uiStore } from '@/lib/stores/ui'
 import { parseNwcUri, useWallets, walletActions, type Wallet } from '@/lib/stores/wallet'
 import { useNwcWalletBalanceQuery, useUserNwcWalletsQuery, type UserNwcWallet } from '@/queries/wallet'
+import { walletKeys } from '@/queries/queryKeyFactory'
 import { useSaveUserNwcWalletsMutation } from '@/publish/wallet'
 import { createFileRoute } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeftIcon, ChevronDownIcon, EyeIcon, EyeOffIcon, PlusIcon, RefreshCwIcon, ScanIcon, TrashIcon, WalletIcon } from 'lucide-react'
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { toast } from 'sonner'
@@ -21,6 +23,7 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/account/makin
 function MakingPaymentsComponent() {
 	// Local store state and actions
 	const { wallets: localWallets, isLoading: localLoading, isInitialized } = useWallets()
+	const queryClient = useQueryClient()
 
 	// NDK User for Nostr operations
 	const [userPubkey, setUserPubkey] = useState<string | undefined>(undefined)
@@ -32,8 +35,6 @@ function MakingPaymentsComponent() {
 
 	// Form state for adding/editing a new wallet - moved up to ensure consistent hook calls
 	const [isAddingWallet, setIsAddingWallet] = useState(false)
-	const [showSecret, setShowSecret] = useState(false)
-	const [storeOnNostr, setStoreOnNostr] = useState(false)
 
 	const [editingWallet, setEditingWallet] = useState<Wallet | null>(null)
 	const [editWalletName, setEditWalletName] = useState('')
@@ -75,6 +76,23 @@ function MakingPaymentsComponent() {
 			walletActions.setNostrWallets(nostrWallets as Wallet[]) // Type assertion if UserNwcWallet is compatible
 		}
 	}, [nostrWallets, userPubkey])
+
+	useEffect(() => {
+		const handleWalletChange = (wallets: Wallet[]) => {
+			wallets.forEach((wallet) => {
+				if (wallet.nwcUri) {
+					queryClient.invalidateQueries({ queryKey: walletKeys.nwcBalance(wallet.nwcUri) })
+				}
+			})
+		}
+
+		walletActions.setOnWalletChange(handleWalletChange)
+
+		// Cleanup
+		return () => {
+			walletActions.setOnWalletChange(() => {})
+		}
+	}, [queryClient])
 
 	const handleCancelAdd = () => {
 		setIsAddingWallet(false)

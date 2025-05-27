@@ -116,7 +116,6 @@ export const fetchNwcWalletBalance = async (nwcUri: string): Promise<NwcBalance 
 	const ndkInstance = ndkActions.getNDK()
 	if (!ndkInstance || !ndkInstance.signer) {
 		console.error('NDK instance or signer not available for NWC balance fetch')
-		toast.error('NDK setup incomplete. Cannot fetch balance.')
 		return null
 	}
 	if (!nwcUri) {
@@ -125,74 +124,43 @@ export const fetchNwcWalletBalance = async (nwcUri: string): Promise<NwcBalance 
 	}
 
 	let nwcWalletInstance: NDKNWCWallet | null = null
-	const nwcConnectionTimeoutDuration = 20000 // 20 seconds timeout
 
 	try {
-		nwcWalletInstance = new NDKNWCWallet(ndkInstance, { pairingCode: nwcUri })
-
-		const readyPromise = new Promise<void>((resolve, reject) => {
-			const timeoutId = setTimeout(() => {
-				reject(
-					new Error(
-						`NWC wallet connection timed out after ${nwcConnectionTimeoutDuration / 1000} seconds for URI: ${nwcUri.substring(0, 30)}...`,
-					),
-				)
-			}, nwcConnectionTimeoutDuration)
-
-			const onReady = async () => {
-				clearTimeout(timeoutId)
-				;(nwcWalletInstance as any)?.removeAllListeners('statusChanged') // Clean up status listener once ready
-				try {
-					await nwcWalletInstance?.updateBalance()
-					resolve()
-				} catch (updateBalanceError) {
-					reject(updateBalanceError)
-				}
-			}
-
-			const onStatusChanged = (newStatus: NDKWalletStatus) => {
-				if (newStatus === ('error' as NDKWalletStatus) || newStatus === ('disconnected' as NDKWalletStatus)) {
-					clearTimeout(timeoutId)
-					nwcWalletInstance?.removeAllListeners('ready') // Clean up ready listener if status changes to error/disconnect
-					reject(new Error(`NWC wallet status changed to ${newStatus} before becoming ready.`))
-				}
-			}
-
-			nwcWalletInstance?.once('ready', onReady)
-			;(nwcWalletInstance as any)?.on('statusChanged', onStatusChanged)
-		})
-
-		await readyPromise
+		nwcWalletInstance = new NDKNWCWallet(ndkInstance as any, { pairingCode: nwcUri })
+		await nwcWalletInstance.updateBalance()
 
 		const balanceResponse = nwcWalletInstance.balance
 
 		if (balanceResponse && typeof balanceResponse === 'object' && typeof balanceResponse.amount === 'number') {
-			const balanceInSats = balanceResponse.amount // Use amount directly as sats
+			const balanceInSats = balanceResponse.amount
+			console.log('✅ Balance fetched successfully:', balanceInSats, 'sats')
 			return {
 				balance: balanceInSats,
 				timestamp: Date.now(),
 			}
 		} else if (typeof balanceResponse === 'number') {
-			// If it's a direct number, assume it's already in sats based on new info
 			const balanceInSats = balanceResponse
+			console.log('✅ Balance fetched successfully (number):', balanceInSats, 'sats')
 			return {
 				balance: balanceInSats,
 				timestamp: Date.now(),
 			}
 		} else {
 			console.error('Failed to get balance or balance is not in expected format. Received:', balanceResponse)
-			toast.error('Failed to retrieve a valid balance from the wallet.')
 			return null
 		}
 	} catch (error: any) {
-		console.error('Error fetching NWC wallet balance:', error)
+		console.error('❌ Error fetching NWC wallet balance:', error)
 		const errorMessage = error?.message || (typeof error === 'string' ? error : 'Failed to fetch balance')
 		toast.error(`Balance fetch failed: ${errorMessage}`)
 		return null
 	} finally {
 		if (nwcWalletInstance) {
-			nwcWalletInstance.removeAllListeners('ready')
-			;(nwcWalletInstance as any)?.removeAllListeners('statusChanged')
+			try {
+				nwcWalletInstance.removeAllListeners?.()
+			} catch (e) {
+				// Ignore cleanup errors
+			}
 		}
 	}
 }
@@ -208,7 +176,16 @@ export const useNwcWalletBalanceQuery = (nwcUri: string | undefined, enabled: bo
 			return fetchNwcWalletBalance(nwcUri)
 		},
 		enabled: !!nwcUri && enabled,
-		staleTime: 1000 * 60 * 5, // 5 minutes
+		staleTime: 1000 * 60 * 2, // 2 minutes (reduced from 5 for more frequent updates)
 		refetchOnWindowFocus: false,
+		retry: (failureCount, error) => {
+			// Retry up to 2 times for network errors, but not for wallet connection errors
+			if (failureCount >= 2) return false
+			if (error?.message?.includes('timed out') || error?.message?.includes('connection')) {
+				return false // Don't retry connection timeouts
+			}
+			return true
+		},
+		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff, max 5s
 	})
 }

@@ -20,6 +20,7 @@ interface WalletState {
 	wallets: Wallet[]
 	isInitialized: boolean
 	isLoading: boolean
+	onWalletChange?: (wallets: Wallet[]) => void // Callback for when wallets change
 }
 
 // Initial state
@@ -68,6 +69,11 @@ export const parseNwcUri: NwcUriParser = (uri: string) => {
 
 // Actions for the wallet store
 export const walletActions = {
+	// Set callback for wallet changes
+	setOnWalletChange: (callback: (wallets: Wallet[]) => void): void => {
+		walletStore.setState((state) => ({ ...state, onWalletChange: callback }))
+	},
+
 	// Initialize the wallet store - only loads from local storage now
 	initialize: async (): Promise<void> => {
 		if (walletStore.state.isInitialized && walletStore.state.wallets.length > 0) return
@@ -115,6 +121,12 @@ export const walletActions = {
 			})
 
 			walletActions.saveWalletsToLocalStorage(finalWallets) // Persist merged list
+
+			// Call the callback if it exists
+			if (state.onWalletChange) {
+				state.onWalletChange(finalWallets)
+			}
+
 			return { ...state, wallets: finalWallets }
 		})
 	},
@@ -168,6 +180,12 @@ export const walletActions = {
 		walletStore.setState((state) => {
 			const updatedWallets = [...state.wallets, newWallet]
 			walletActions.saveWalletsToLocalStorage(updatedWallets)
+
+			// Call the callback if it exists
+			if (state.onWalletChange) {
+				state.onWalletChange(updatedWallets)
+			}
+
 			// UI component will handle calling the Nostr mutation if intendedStoreOnNostr is true
 			return { ...state, wallets: updatedWallets }
 		})
@@ -179,6 +197,12 @@ export const walletActions = {
 		walletStore.setState((state) => {
 			const updatedWallets = state.wallets.filter((wallet) => wallet.id !== walletId)
 			walletActions.saveWalletsToLocalStorage(updatedWallets)
+
+			// Call the callback if it exists
+			if (state.onWalletChange) {
+				state.onWalletChange(updatedWallets)
+			}
+
 			// UI component will handle calling the Nostr mutation
 			return { ...state, wallets: updatedWallets }
 		})
@@ -204,6 +228,12 @@ export const walletActions = {
 			updatedWallet = newWallets[walletIndex]
 
 			walletActions.saveWalletsToLocalStorage(newWallets)
+
+			// Call the callback if it exists
+			if (state.onWalletChange) {
+				state.onWalletChange(newWallets)
+			}
+
 			// UI component will handle calling the Nostr mutation if needed
 			return { ...state, wallets: newWallets }
 		})

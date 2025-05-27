@@ -117,31 +117,3 @@ export const useOnChainPaymentDetailMutation = () => {
 		},
 	})
 }
-
-/**
- * Helper function for creating cashu payment details
- */
-export const useCashuPaymentDetailMutation = () => {
-	const publishPaymentDetailMutation = usePublishPaymentDetailMutation()
-
-	return useMutation({
-		mutationFn: async (params: { cashuToken: string; coordinates?: string; appPubkey?: string }) => {
-			return publishPaymentDetailMutation.mutateAsync({
-				paymentMethod: 'cashu',
-				paymentDetail: params.cashuToken,
-				coordinates: params.coordinates,
-				appPubkey: params.appPubkey,
-			})
-		},
-
-		onSuccess: (eventId) => {
-			toast.success('Ecash payment details saved')
-			return eventId
-		},
-
-		onError: (error) => {
-			console.error('Failed to save ecash payment details:', error)
-			toast.error('Failed to save ecash payment details')
-		},
-	})
-}
