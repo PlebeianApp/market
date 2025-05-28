@@ -47,7 +47,7 @@ function DashboardLayout() {
 		return (
 			<DashboardTitleContext.Provider value={{ title, setTitle }}>
 				<div>
-					<h1 className="text-2xl font-heading p-4 bg-black text-secondary flex items-center gap-2 justify-center text-center">
+					<h1 className="font-heading p-4 bg-black text-secondary flex items-center gap-2 justify-center text-center" style={{ fontSize: '2rem' }}>
 						{!showSidebar && (
 							<button
 								onClick={handleBackToSidebar}
@@ -70,10 +70,8 @@ function DashboardLayout() {
 											<h2 className="text-md font-heading mb-2 bg-black text-white px-4 py-2">{section.title}</h2>
 											<nav className="space-y-2">
 												{section.items.map((item) => {
-													const isActive = matchRoute({
-														to: item.path,
-														fuzzy: true,
-													})
+													// On mobile sidebar view, never show active status
+													const isActive = !showSidebar ? matchRoute({ to: item.path, fuzzy: true }) : false
 													return (
 														<Link
 															key={item.path}
