@@ -6,6 +6,7 @@ import { getProductTitle, productsByPubkeyQueryOptions } from '@/queries/product
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
+import { useDashboardTitle } from '@/routes/_dashboard-layout'
 
 // Placeholder icon components - replace with your actual icon library
 const CubeIcon = () => <span className="i-product w-5 h-5" />
@@ -16,7 +17,9 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/products/prod
 })
 
 function ProductsOverviewComponent() {
+	useDashboardTitle('Products')
 	const { user, isAuthenticated } = useStore(authStore)
+	const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
 
 	const {
 		data: products,
@@ -50,6 +53,7 @@ function ProductsOverviewComponent() {
 
 	return (
 		<div className="space-y-6">
+			{!isMobile && <h1 className="text-2xl font-bold">Products</h1>}
 			<div className="bg-white rounded-md shadow-sm">
 				<Button
 					onClick={handleAddProductClick}

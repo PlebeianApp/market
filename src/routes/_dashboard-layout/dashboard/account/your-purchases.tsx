@@ -4,12 +4,14 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { getOrderStatus, useOrdersByBuyer } from '@/queries/orders'
 import { createFileRoute } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
+import { useDashboardTitle } from '@/routes/_dashboard-layout'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/your-purchases')({
 	component: YourPurchasesComponent,
 })
 
 function YourPurchasesComponent() {
+	useDashboardTitle('Your Purchases')
 	const ndk = ndkActions.getNDK()
 	const currentUser = ndk?.activeUser
 	const [statusFilter, setStatusFilter] = useState<string>('any')
