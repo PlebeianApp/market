@@ -505,9 +505,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 							) : (
 								<Wallet className="h-4 w-4 mr-2" />
 							)}
-							<span>
-								{walletState.isLoading ? 'Loading...' : !ndkState.activeNwcWalletUri ? 'No wallet' : 'Zap with NWC'}
-							</span>
+							<span>{walletState.isLoading ? 'Loading...' : !ndkState.activeNwcWalletUri ? 'No wallet' : 'Zap with NWC'}</span>
 						</Button>
 						<Button variant="outline" onClick={generateInvoice} disabled={loading || paymentPending} className="flex-grow">
 							{loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <QrCodeIcon className="h-4 w-4 mr-2" />}
