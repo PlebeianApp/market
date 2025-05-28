@@ -247,3 +247,11 @@ h2.font-heading {
 		@apply bg-background text-foreground;
 	}
 }
+
+.bg-dashboard-header {
+	background-color: #131313;
+}
+
+.bg-dashboard-section {
+	background-color: #1D1D1D;
+}

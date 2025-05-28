@@ -1,7 +1,7 @@
 import React, { useState, createContext, useContext } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { dashboardNavigation } from '@/config/dashboardNavigation'
-import { createFileRoute, Link, Outlet, useMatchRoute } from '@tanstack/react-router'
+import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 
@@ -21,6 +21,7 @@ export function useDashboardTitle(title: string) {
 
 function DashboardLayout() {
 	const matchRoute = useMatchRoute()
+	const navigate = useNavigate()
 	const breakpoint = useBreakpoint()
 	const isMobile = breakpoint === 'sm'
 	const [showSidebar, setShowSidebar] = useState(true)
@@ -40,14 +41,17 @@ function DashboardLayout() {
 	}
 
 	const handleBackToSidebar = () => {
-		if (isMobile) setShowSidebar(true)
+		if (isMobile) {
+			setShowSidebar(true)
+			navigate({ to: '/dashboard' })
+		}
 	}
 
 	if (isMobile) {
 		return (
 			<DashboardTitleContext.Provider value={{ title, setTitle }}>
 				<div>
-					<h1 className="font-heading p-4 bg-black text-secondary flex items-center gap-2 justify-center text-center" style={{ fontSize: '2rem' }}>
+					<h1 className="font-heading p-2 bg-dashboard-header text-secondary flex items-center gap-2 justify-center text-center" style={{ fontSize: '2rem' }}>
 						{!showSidebar && (
 							<button
 								onClick={handleBackToSidebar}
@@ -63,12 +67,12 @@ function DashboardLayout() {
 					<div className="container" ref={parent}>
 						{showSidebar ? (
 							// Sidebar only
-							<aside className="w-full p-6 overflow-auto">
-								<div className="space-y-8">
+							<aside className="w-full overflow-auto">
+								<div>
 									{dashboardNavigation.map((section) => (
 										<div key={section.title}>
-											<h2 className="text-md font-heading mb-2 bg-black text-white px-4 py-2">{section.title}</h2>
-											<nav className="space-y-2">
+											<h2 className="text-md font-heading mb-2 bg-dashboard-section text-white px-4 py-2" style={{ fontSize: '1.5rem' }}>{section.title}</h2>
+											<nav className="space-y-2 p-4">
 												{section.items.map((item) => {
 													// On mobile sidebar view, never show active status
 													const isActive = !showSidebar ? matchRoute({ to: item.path, fuzzy: true }) : false
@@ -103,7 +107,7 @@ function DashboardLayout() {
 	// Desktop layout (unchanged)
 	return (
 		<div>
-			<h1 className="text-2xl font-heading p-4 bg-black text-secondary">DASHBOARD</h1>
+			<h1 className="text-2xl font-heading p-4 bg-dashboard-header text-secondary">DASHBOARD</h1>
 
 			<div className="flex m-6 gap-6 container max-h-[77vh] overflow-auto">
 				{/* Sidebar */}
@@ -111,7 +115,7 @@ function DashboardLayout() {
 					<div className="space-y-8">
 						{dashboardNavigation.map((section) => (
 							<div key={section.title}>
-								<h2 className="text-md font-heading mb-2 bg-black text-white px-4 py-2">{section.title}</h2>
+								<h2 className="text-md font-heading mb-2 bg-dashboard-section text-white px-4 py-2" style={{ fontSize: '1.5rem' }}>{section.title}</h2>
 								<nav className="space-y-2">
 									{section.items.map((item) => {
 										const isActive = matchRoute({
