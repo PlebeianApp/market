@@ -1,13 +1,16 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { useDashboardTitle } from '@/routes/_dashboard-layout'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/')({
 	component: DashboardInnerComponent,
 })
 
 function DashboardInnerComponent() {
+	useDashboardTitle('Dashboard')
+	const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
 	return (
 		<div className="space-y-6">
-			<h1 className="text-2xl font-bold">Dashboard</h1>
+			{!isMobile && <h1 className="text-2xl font-bold">Dashboard</h1>}
 			<p>Dashboard</p>
 		</div>
 	)

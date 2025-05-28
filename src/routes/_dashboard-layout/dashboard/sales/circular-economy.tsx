@@ -16,12 +16,14 @@ import { nip19 } from 'nostr-tools'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import './emoji-animations.css'
+import { useDashboardTitle } from '@/routes/_dashboard-layout'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/circular-economy')({
 	component: CircularEconomyComponent,
 })
 
 function CircularEconomyComponent() {
+	useDashboardTitle('Circular Economy')
 	const { data: config } = useConfigQuery()
 	const authState = useStore(authStore)
 	const userPubkey = authState.user?.pubkey || ''
@@ -37,6 +39,8 @@ function CircularEconomyComponent() {
 	const [totalV4VPercentage, setTotalV4VPercentage] = useState(10)
 
 	const { data: canReceiveZaps, isLoading: isCheckingZap } = useZapCapabilityByNpub(newRecipientNpub || '')
+
+	const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
 
 	useEffect(() => {
 		if (v4vShares.length > 0) {
@@ -300,7 +304,7 @@ function CircularEconomyComponent() {
 
 	return (
 		<div className="space-y-6 max-w-4xl mx-auto">
-			<h1 className="text-2xl font-bold">Circular Economy</h1>
+			{!isMobile && <h1 className="text-2xl font-bold">Circular Economy</h1>}
 
 			<Alert className="bg-blue-100 text-blue-800 border-blue-200">
 				<AlertDescription>

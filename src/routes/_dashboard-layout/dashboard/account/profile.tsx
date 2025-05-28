@@ -12,12 +12,15 @@ import { useForm } from '@tanstack/react-form'
 import { useUpdateProfileMutation } from '@/publish/profiles'
 import { useQuery } from '@tanstack/react-query'
 import { profileByIdentifierQueryOptions } from '@/queries/profiles'
+import { useDashboardTitle } from '@/routes/_dashboard-layout'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/profile')({
 	component: ProfileComponent,
 })
 
 function ProfileComponent() {
+	useDashboardTitle('Profile')
+	const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
 	const ndk = ndkActions.getNDK()
 	const pubkey = ndk?.activeUser?.pubkey
 
@@ -103,7 +106,7 @@ function ProfileComponent() {
 
 	return (
 		<div className="space-y-6">
-			<h1 className="text-2xl font-bold">Profile</h1>
+			{!isMobile && <h1 className="text-2xl font-bold">Profile</h1>}
 
 			{isLoadingProfile ? (
 				<div className="flex items-center justify-center p-8">

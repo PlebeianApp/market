@@ -4,12 +4,14 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { OrderDataTable } from '@/components/orders/OrderDataTable'
 import { salesColumns } from '@/components/orders/orderColumns'
 import { useMemo, useState } from 'react'
+import { useDashboardTitle } from '@/routes/_dashboard-layout'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/sales')({
 	component: SalesComponent,
 })
 
 function SalesComponent() {
+	useDashboardTitle('Sales')
 	const ndk = ndkActions.getNDK()
 	const currentUser = ndk?.activeUser
 	const [statusFilter, setStatusFilter] = useState<string>('any')
@@ -29,9 +31,11 @@ function SalesComponent() {
 		})
 	}, [sales, statusFilter])
 
+	const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
+
 	return (
 		<div className="space-y-6">
-			<h1 className="text-2xl font-bold">Sales</h1>
+			{!isMobile && <h1 className="text-2xl font-bold">Sales</h1>}
 
 			<OrderDataTable
 				data={filteredSales}
