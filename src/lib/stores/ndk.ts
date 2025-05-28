@@ -5,8 +5,9 @@ import { Store } from '@tanstack/store'
 import { configStore } from './config'
 import { walletActions, type Wallet } from './wallet'
 import { fetchUserNwcWallets, fetchNwcWalletBalance } from '@/queries/wallet'
+import { walletStore } from './wallet'
 
-interface NDKState {
+export interface NDKState {
 	ndk: NDK | null
 	isConnecting: boolean
 	isConnected: boolean
@@ -134,6 +135,9 @@ export const ndkActions = {
 
 		const userPubkey = user.pubkey
 
+		// Set loading state for wallet operations
+		walletStore.setState((state) => ({ ...state, isLoading: true }))
+
 		await walletActions.initialize()
 
 		try {
@@ -149,6 +153,8 @@ export const ndkActions = {
 
 		if (allWallets.length === 0) {
 			ndkActions.setActiveNwcWalletUri(null)
+			// Clear loading state when done
+			walletStore.setState((state) => ({ ...state, isLoading: false }))
 			return
 		}
 
@@ -182,6 +188,9 @@ export const ndkActions = {
 		} else {
 			ndkActions.setActiveNwcWalletUri(null)
 		}
+
+		// Clear loading state when done
+		walletStore.setState((state) => ({ ...state, isLoading: false }))
 	},
 
 	getNDK: () => {

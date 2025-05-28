@@ -16,7 +16,7 @@ export interface Wallet {
 }
 
 // Wallet store state interface
-interface WalletState {
+export interface WalletState {
 	wallets: Wallet[]
 	isInitialized: boolean
 	isLoading: boolean

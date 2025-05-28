@@ -6,7 +6,10 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { DEFAULT_ZAP_AMOUNTS } from '@/lib/constants'
 import { ndkActions, ndkStore } from '@/lib/stores/ndk'
+import { walletStore } from '@/lib/stores/wallet'
 import { copyToClipboard } from '@/lib/utils'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import {
 	NDKEvent,
 	NDKPrivateKeySigner,
@@ -21,8 +24,9 @@ import {
 import { NDKNWCWallet, NDKWalletStatus } from '@nostr-dev-kit/ndk-wallet'
 import { ChevronDown, Copy, Loader2, QrCodeIcon, Wallet } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { toast } from 'sonner'
+import { useStore } from '@tanstack/react-store'
+import type { NDKState } from '@/lib/stores/ndk'
+import type { WalletState } from '@/lib/stores/wallet'
 
 interface ZapDialogProps {
 	isOpen: boolean
@@ -32,6 +36,11 @@ interface ZapDialogProps {
 }
 
 export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDialogProps) {
+	// Reactive store state
+
+	const ndkState = useStore<NDKState>(ndkStore)
+	const walletState = useStore<WalletState>(walletStore)
+
 	const [amount, setAmount] = useState<number>(21)
 	const [loading, setLoading] = useState<boolean>(false)
 	const [invoice, setInvoice] = useState<string | null>(null)
@@ -248,7 +257,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 		setPaymentComplete(false)
 
 		const ndk = ndkActions.getNDK()
-		const activeNwcUri = ndkStore.state.activeNwcWalletUri
+		const activeNwcUri = ndkState.activeNwcWalletUri
 
 		if (!ndk) {
 			setErrorMessage('NDK not initialized.')
@@ -486,15 +495,19 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 						<Button
 							variant="primary"
 							onClick={handleNwcZap}
-							disabled={nwcZapLoading || paymentPending || !ndkStore.state.activeNwcWalletUri}
+							disabled={nwcZapLoading || paymentPending || !ndkState.activeNwcWalletUri || walletState.isLoading}
 							className="flex-grow"
 						>
 							{nwcZapLoading || (paymentPending && !invoice) ? (
 								<Loader2 className="h-4 w-4 mr-2 animate-spin" />
+							) : walletState.isLoading ? (
+								<Loader2 className="h-4 w-4 mr-2 animate-spin" />
 							) : (
 								<Wallet className="h-4 w-4 mr-2" />
 							)}
-							<span>Zap with NWC</span>
+							<span>
+								{walletState.isLoading ? 'Loading...' : !ndkState.activeNwcWalletUri ? 'No wallet' : 'Zap with NWC'}
+							</span>
 						</Button>
 						<Button variant="outline" onClick={generateInvoice} disabled={loading || paymentPending} className="flex-grow">
 							{loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <QrCodeIcon className="h-4 w-4 mr-2" />}
