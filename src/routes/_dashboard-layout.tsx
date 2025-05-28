@@ -19,6 +19,20 @@ export function useDashboardTitle(title: string) {
 	}, [title])
 }
 
+// Helper to get emoji for current route
+function getCurrentEmoji(showSidebar: boolean, currentPath: string): string | null {
+	if (showSidebar) return null
+	for (const section of dashboardNavigation) {
+		for (const item of section.items) {
+			if (currentPath.startsWith(item.path)) {
+				const match = item.title.match(/^([^ ]+) /)
+				return match ? match[1] : null
+			}
+		}
+	}
+	return null
+}
+
 function DashboardLayout() {
 	const matchRoute = useMatchRoute()
 	const navigate = useNavigate()
@@ -48,14 +62,15 @@ function DashboardLayout() {
 	}
 
 	if (isMobile) {
+		const emoji = getCurrentEmoji(showSidebar, typeof window !== 'undefined' ? window.location.pathname : '')
 		return (
 			<DashboardTitleContext.Provider value={{ title, setTitle }}>
-				<div>
-					<h1 className="font-heading p-2 bg-dashboard-header text-secondary flex items-center gap-2 justify-center text-center" style={{ fontSize: '2rem' }}>
+				<div className="relative">
+					<h1 className="font-heading p-2 bg-dashboard-header text-secondary flex items-center gap-2 justify-center text-center relative" style={{ fontSize: '2rem' }}>
 						{!showSidebar && (
 							<button
 								onClick={handleBackToSidebar}
-								className="flex items-center justify-center text-secondary focus:outline-none absolute left-2"
+								className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 top-1/2 -translate-y-1/2"
 								style={{ width: 48, height: 48 }}
 								aria-label="Back to sidebar"
 							>
@@ -63,6 +78,9 @@ function DashboardLayout() {
 							</button>
 						)}
 						<span className="w-full">{showSidebar ? 'DASHBOARD' : title}</span>
+						{!showSidebar && emoji && (
+							<span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xl select-none" style={{ width: 48, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{emoji}</span>
+						)}
 					</h1>
 					<div className="container" ref={parent}>
 						{showSidebar ? (
