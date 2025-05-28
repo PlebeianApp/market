@@ -60,10 +60,10 @@ function DashboardLayout() {
 						)}
 						<span className="w-full">{showSidebar ? 'DASHBOARD' : title}</span>
 					</h1>
-					<div className="container max-h-[77vh] overflow-auto" ref={parent}>
+					<div className="container" ref={parent}>
 						{showSidebar ? (
 							// Sidebar only
-							<aside className="w-full p-6">
+							<aside className="w-full p-6 overflow-auto">
 								<div className="space-y-8">
 									{dashboardNavigation.map((section) => (
 										<div key={section.title}>
