@@ -89,7 +89,7 @@ function DashboardLayout() {
 								<div>
 									{dashboardNavigation.map((section) => (
 										<div key={section.title}>
-											<h2 className="text-md font-heading mb-2 bg-dashboard-section text-white px-4 py-2" style={{ fontSize: '1.5rem' }}>{section.title}</h2>
+											<h2 className="text-md font-heading bg-dashboard-section text-white px-4 py-2" style={{ fontSize: '1.5rem' }}>{section.title}</h2>
 											<nav className="space-y-2 p-4">
 												{section.items.map((item) => {
 													// On mobile sidebar view, never show active status
@@ -98,7 +98,7 @@ function DashboardLayout() {
 														<Link
 															key={item.path}
 															to={item.path}
-															className={`block p-2 transition-colors font-bold ${isActive ? 'bg-gray-200 text-black' : 'hover:text-pink-500'}`}
+															className={`block ${isMobile ? 'p-4' : 'p-2'} transition-colors font-bold${isMobile ? ' border border-black bg-white' : ''} ${isActive ? 'bg-gray-200 text-black' : 'hover:text-pink-500'}`}
 															onClick={handleSidebarItemClick}
 														>
 															{item.title}
@@ -130,10 +130,10 @@ function DashboardLayout() {
 			<div className="flex m-6 gap-6 container max-h-[77vh] overflow-auto">
 				{/* Sidebar */}
 				<aside className="w-[25%] p-6 border-2 border-black">
-					<div className="space-y-8">
+					<div className="space-y-2">
 						{dashboardNavigation.map((section) => (
 							<div key={section.title}>
-								<h2 className="text-md font-heading mb-2 bg-dashboard-section text-white px-4 py-2" style={{ fontSize: '1.5rem' }}>{section.title}</h2>
+								<h2 className="text-md font-heading bg-dashboard-section text-white px-4 py-2" style={{ fontSize: '1.5rem' }}>{section.title}</h2>
 								<nav className="space-y-2">
 									{section.items.map((item) => {
 										const isActive = matchRoute({
@@ -144,7 +144,7 @@ function DashboardLayout() {
 											<Link
 												key={item.path}
 												to={item.path}
-												className={`block p-2 transition-colors font-bold ${isActive ? 'bg-gray-200 text-black' : 'hover:text-pink-500'}`}
+												className={`block ${isMobile ? 'p-4' : 'p-2'} transition-colors font-bold${isMobile ? ' border border-black bg-white' : ''} ${isActive ? 'bg-gray-200 text-black' : 'hover:text-pink-500'}`}
 											>
 												{item.title}
 											</Link>
