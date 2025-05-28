@@ -1,7 +1,7 @@
 import React, { useState, createContext, useContext } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { dashboardNavigation } from '@/config/dashboardNavigation'
-import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate, useLocation } from '@tanstack/react-router'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 
@@ -36,19 +36,24 @@ function getCurrentEmoji(showSidebar: boolean, currentPath: string): string | nu
 function DashboardLayout() {
 	const matchRoute = useMatchRoute()
 	const navigate = useNavigate()
+	const location = useLocation()
 	const breakpoint = useBreakpoint()
 	const isMobile = breakpoint === 'sm'
 	const [showSidebar, setShowSidebar] = useState(true)
 	const [parent] = useAutoAnimate()
 	const [title, setTitle] = useState('DASHBOARD')
 
-	// When route changes on mobile, show main content
+	// When route changes on mobile, show sidebar for /dashboard, main content otherwise
 	React.useEffect(() => {
 		if (isMobile) {
-			setShowSidebar(false)
+			if (location.pathname === '/dashboard') {
+				setShowSidebar(true)
+			} else {
+				setShowSidebar(false)
+			}
 		}
 	// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [matchRoute])
+	}, [location.pathname, isMobile])
 
 	const handleSidebarItemClick = () => {
 		if (isMobile) setShowSidebar(false)
@@ -89,7 +94,7 @@ function DashboardLayout() {
 								<div>
 									{dashboardNavigation.map((section) => (
 										<div key={section.title}>
-											<h2 className="text-md font-heading bg-dashboard-section text-white px-4 py-2" style={{ fontSize: '1.5rem' }}>{section.title}</h2>
+											<h2 className={`text-md font-heading bg-dashboard-section text-white px-4 py-2${!isMobile ? ' mb-2' : ''}`} style={{ fontSize: '1.5rem' }}>{section.title}</h2>
 											<nav className="space-y-2 p-4">
 												{section.items.map((item) => {
 													// On mobile sidebar view, never show active status
@@ -133,7 +138,7 @@ function DashboardLayout() {
 					<div className="space-y-2">
 						{dashboardNavigation.map((section) => (
 							<div key={section.title}>
-								<h2 className="text-md font-heading bg-dashboard-section text-white px-4 py-2" style={{ fontSize: '1.5rem' }}>{section.title}</h2>
+								<h2 className={`text-md font-heading bg-dashboard-section text-white px-4 py-2${!isMobile ? ' mb-2' : ''}`} style={{ fontSize: '1.5rem' }}>{section.title}</h2>
 								<nav className="space-y-2">
 									{section.items.map((item) => {
 										const isActive = matchRoute({
