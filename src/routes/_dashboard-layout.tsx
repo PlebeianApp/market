@@ -1,6 +1,8 @@
+import React, { useState } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { dashboardNavigation } from '@/config/dashboardNavigation'
 import { createFileRoute, Link, Outlet, useMatchRoute } from '@tanstack/react-router'
+import { useBreakpoint } from '@/hooks/useBreakpoint'
 
 export const Route = createFileRoute('/_dashboard-layout')({
 	component: DashboardLayout,
@@ -8,10 +10,83 @@ export const Route = createFileRoute('/_dashboard-layout')({
 
 function DashboardLayout() {
 	const matchRoute = useMatchRoute()
+	const breakpoint = useBreakpoint()
+	const isMobile = breakpoint === 'sm'
+	const [showSidebar, setShowSidebar] = useState(true)
 
+	// When route changes on mobile, show main content
+	React.useEffect(() => {
+		if (isMobile) {
+			setShowSidebar(false)
+		}
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [matchRoute])
+
+	const handleSidebarItemClick = () => {
+		if (isMobile) setShowSidebar(false)
+	}
+
+	const handleBackToSidebar = () => {
+		if (isMobile) setShowSidebar(true)
+	}
+
+	if (isMobile) {
+		return (
+			<div>
+				<h1 className="text-2xl font-heading p-4 bg-black text-secondary">DASHBOARD</h1>
+				<div className="container max-h-[77vh] overflow-auto">
+					{showSidebar ? (
+						// Sidebar only
+						<aside className="w-full p-6 border-2 border-black">
+							<div className="space-y-8">
+								{dashboardNavigation.map((section) => (
+									<div key={section.title}>
+										<h2 className="text-md font-heading mb-2 bg-black text-white px-4 py-2">{section.title}</h2>
+										<nav className="space-y-2">
+											{section.items.map((item) => {
+												const isActive = matchRoute({
+													to: item.path,
+													fuzzy: true,
+												})
+												return (
+													<Link
+														key={item.path}
+														to={item.path}
+														className={`block p-2 transition-colors font-bold ${isActive ? 'bg-gray-200 text-black' : 'hover:text-pink-500'}`}
+														onClick={handleSidebarItemClick}
+													>
+														{item.title}
+													</Link>
+												)
+											})}
+										</nav>
+									</div>
+								))}
+							</div>
+						</aside>
+					) : (
+						// Main content only
+						<ScrollArea className="w-full p-8 border-2 border-black">
+							<div className="mb-4">
+								<button
+									onClick={handleBackToSidebar}
+									className="inline-block px-2 py-2 bg-black text-white hover:bg-gray-800 transition-colors mb-4"
+								>
+									<span className="i-back w-6 h-6" /> Back
+								</button>
+							</div>
+							<Outlet />
+						</ScrollArea>
+					)}
+				</div>
+			</div>
+		)
+	}
+
+	// Desktop layout (unchanged)
 	return (
 		<div>
-			<h1 className="text-2xl font-heading mb-4 p-4 bg-black text-secondary">DASHBOARD</h1>
+			<h1 className="text-2xl font-heading p-4 bg-black text-secondary">DASHBOARD</h1>
 
 			<div className="flex m-6 gap-6 container max-h-[77vh] overflow-auto">
 				{/* Sidebar */}
