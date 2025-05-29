@@ -53,7 +53,7 @@ function ProductsOverviewComponent() {
 
 	return (
 		<div className="space-y-6">
-			{!isMobile && <h1 className="text-2xl font-bold">Products</h1>}
+			{!isMobile && <h1 className="text-[1.6rem] font-bold">Products</h1>}
 			<div className="bg-white rounded-md shadow-sm">
 				<Button
 					onClick={handleAddProductClick}

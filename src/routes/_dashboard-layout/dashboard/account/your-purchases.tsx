@@ -5,6 +5,7 @@ import { getOrderStatus, useOrdersByBuyer } from '@/queries/orders'
 import { createFileRoute } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
+import { useBreakpoint } from '@/hooks/useBreakpoint'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/your-purchases')({
 	component: YourPurchasesComponent,
@@ -16,6 +17,8 @@ function YourPurchasesComponent() {
 	const currentUser = ndk?.activeUser
 	const [statusFilter, setStatusFilter] = useState<string>('any')
 	const { data: purchases, isLoading } = useOrdersByBuyer(currentUser?.pubkey || '')
+	const breakpoint = useBreakpoint()
+	const isMobile = breakpoint === 'sm' || breakpoint === 'md'
 
 	// Filter orders by status if needed
 	const filteredPurchases = useMemo(() => {
@@ -33,7 +36,7 @@ function YourPurchasesComponent() {
 
 	return (
 		<div className="space-y-6">
-			<h1 className="text-2xl font-bold">Your Purchases</h1>
+			{!isMobile && <h1 className="text-[1.6rem] font-bold">Your Purchases</h1>}
 
 			<OrderDataTable
 				data={filteredPurchases}

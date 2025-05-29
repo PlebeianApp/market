@@ -304,7 +304,7 @@ function CircularEconomyComponent() {
 
 	return (
 		<div className="space-y-6 max-w-4xl mx-auto">
-			{!isMobile && <h1 className="text-2xl font-bold">Circular Economy</h1>}
+			{!isMobile && <h1 className="text-[1.6rem] font-bold">Circular Economy</h1>}
 
 			<Alert className="bg-blue-100 text-blue-800 border-blue-200">
 				<AlertDescription>

@@ -106,7 +106,7 @@ function ProfileComponent() {
 
 	return (
 		<div className="space-y-6">
-			{!isMobile && <h1 className="text-2xl font-bold">Profile</h1>}
+			{!isMobile && <h1 className="text-[1.6rem] font-bold">Profile</h1>}
 
 			{isLoadingProfile ? (
 				<div className="flex items-center justify-center p-8">

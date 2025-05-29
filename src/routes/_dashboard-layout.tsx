@@ -52,7 +52,7 @@ function DashboardLayout() {
 				setShowSidebar(false)
 			}
 		}
-	// eslint-disable-next-line react-hooks/exhaustive-deps
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [location.pathname, isMobile])
 
 	const handleSidebarItemClick = () => {
@@ -71,7 +71,10 @@ function DashboardLayout() {
 		return (
 			<DashboardTitleContext.Provider value={{ title, setTitle }}>
 				<div className="relative">
-					<h1 className="font-heading p-2 bg-dashboard-header text-secondary flex items-center gap-2 justify-center text-center relative" style={{ fontSize: '2rem' }}>
+					<h1
+						className="font-heading p-2 bg-dashboard-header text-secondary flex items-center gap-2 justify-center text-center relative"
+						style={{ fontSize: '2rem' }}
+					>
 						{!showSidebar && (
 							<button
 								onClick={handleBackToSidebar}
@@ -84,7 +87,12 @@ function DashboardLayout() {
 						)}
 						<span className="w-full">{showSidebar ? 'Admin Area' : title}</span>
 						{!showSidebar && emoji && (
-							<span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xl select-none" style={{ width: 48, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{emoji}</span>
+							<span
+								className="absolute right-2 top-1/2 -translate-y-1/2 text-2xl select-none"
+								style={{ width: 48, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+							>
+								{emoji}
+							</span>
 						)}
 					</h1>
 					<div ref={parent}>
@@ -94,7 +102,12 @@ function DashboardLayout() {
 								<div>
 									{dashboardNavigation.map((section) => (
 										<div key={section.title}>
-											<h2 className={`text-md font-heading bg-dashboard-section text-white px-4 py-2${!isMobile ? ' mb-2' : ''}`} style={{ fontSize: '1.5rem' }}>{section.title}</h2>
+											<h2
+												className={`text-md font-heading bg-dashboard-section text-white px-4 py-2${!isMobile ? ' mb-2' : ''}`}
+												style={{ fontSize: '1.5rem' }}
+											>
+												{section.title}
+											</h2>
 											<nav className="space-y-2 p-4">
 												{section.title === 'SALES' && (
 													<Link
@@ -149,7 +162,12 @@ function DashboardLayout() {
 					<div className="space-y-2">
 						{dashboardNavigation.map((section) => (
 							<div key={section.title}>
-								<h2 className={`text-md font-heading bg-dashboard-section text-white px-4 py-2${!isMobile ? ' mb-2' : ''}`} style={{ fontSize: '1.5rem' }}>{section.title}</h2>
+								<h2
+									className={`text-md font-heading bg-dashboard-section text-white px-4 py-2${!isMobile ? ' mb-2' : ''}`}
+									style={{ fontSize: '1.5rem' }}
+								>
+									{section.title}
+								</h2>
 								<nav className="space-y-2">
 									{section.title === 'SALES' && (
 										<Link

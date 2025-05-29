@@ -10,7 +10,7 @@ function CollectionsComponent() {
 	const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
 	return (
 		<div className="space-y-6">
-			{!isMobile && <h1 className="text-2xl font-bold">Collections</h1>}
+			{!isMobile && <h1 className="text-[1.6rem] font-bold">Collections</h1>}
 			<p>Manage your product collections here</p>
 		</div>
 	)

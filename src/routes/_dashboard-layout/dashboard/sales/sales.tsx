@@ -35,7 +35,7 @@ function SalesComponent() {
 
 	return (
 		<div className="space-y-6">
-			{!isMobile && <h1 className="text-2xl font-bold">Sales</h1>}
+			{!isMobile && <h1 className="text-[1.6rem] font-bold">Sales</h1>}
 
 			<OrderDataTable
 				data={filteredSales}
