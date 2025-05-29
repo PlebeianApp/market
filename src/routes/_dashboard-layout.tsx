@@ -82,7 +82,7 @@ function DashboardLayout() {
 								<span className="i-back w-6 h-6" />
 							</button>
 						)}
-						<span className="w-full">{showSidebar ? 'DASHBOARD' : title}</span>
+						<span className="w-full">{showSidebar ? 'Admin Area' : title}</span>
 						{!showSidebar && emoji && (
 							<span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xl select-none" style={{ width: 48, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{emoji}</span>
 						)}
@@ -96,6 +96,15 @@ function DashboardLayout() {
 										<div key={section.title}>
 											<h2 className={`text-md font-heading bg-dashboard-section text-white px-4 py-2${!isMobile ? ' mb-2' : ''}`} style={{ fontSize: '1.5rem' }}>{section.title}</h2>
 											<nav className="space-y-2 p-4">
+												{section.title === 'SALES' && (
+													<Link
+														to="/dashboard"
+														className={`block ${isMobile ? 'p-4' : 'p-2'} transition-colors font-bold${isMobile ? ' border border-black bg-white' : ''} ${location.pathname === '/dashboard' ? 'bg-gray-200 text-black' : 'hover:text-pink-500'}`}
+														onClick={handleSidebarItemClick}
+													>
+														🛞 Dashboard
+													</Link>
+												)}
 												{section.items.map((item) => {
 													// On mobile sidebar view, never show active status
 													const isActive = !showSidebar ? matchRoute({ to: item.path, fuzzy: true }) : false
@@ -117,8 +126,10 @@ function DashboardLayout() {
 							</aside>
 						) : (
 							// Main content only
-							<ScrollArea className="w-full p-8">
-								<Outlet />
+							<ScrollArea className="w-full p-4">
+								<div className="p-4 bg-white border border-black rounded-[4px]">
+									<Outlet />
+								</div>
 							</ScrollArea>
 						)}
 					</div>
@@ -130,16 +141,24 @@ function DashboardLayout() {
 	// Desktop layout (unchanged)
 	return (
 		<div>
-			<h1 className="text-2xl font-heading p-4 bg-dashboard-header text-secondary">DASHBOARD</h1>
+			<h1 className="text-2xl font-heading p-4 bg-dashboard-header text-secondary">Admin Area</h1>
 
 			<div className="flex m-6 gap-6 container max-h-[77vh] overflow-auto">
 				{/* Sidebar */}
-				<aside className="w-[25%] p-6 border-2 border-black">
+				<aside className="w-[25%] p-6 border-2 border-black overflow-y-auto max-h-full bg-white">
 					<div className="space-y-2">
 						{dashboardNavigation.map((section) => (
 							<div key={section.title}>
 								<h2 className={`text-md font-heading bg-dashboard-section text-white px-4 py-2${!isMobile ? ' mb-2' : ''}`} style={{ fontSize: '1.5rem' }}>{section.title}</h2>
 								<nav className="space-y-2">
+									{section.title === 'SALES' && (
+										<Link
+											to="/dashboard"
+											className={`block ${isMobile ? 'p-4' : 'p-2'} transition-colors font-bold${isMobile ? ' border border-black bg-white' : ''} ${location.pathname === '/dashboard' ? 'bg-gray-200 text-black' : 'hover:text-pink-500'}`}
+										>
+											🛞 Dashboard
+										</Link>
+									)}
 									{section.items.map((item) => {
 										const isActive = matchRoute({
 											to: item.path,
@@ -162,12 +181,7 @@ function DashboardLayout() {
 				</aside>
 
 				{/* Main Content - limited to 33vh height */}
-				<ScrollArea className="flex-1 p-8 border-2 border-black">
-					<div className="mb-4">
-						<Link to="/dashboard" className="inline-block px-2 py-2 bg-black text-white hover:bg-gray-800 transition-colors">
-							<span className="i-back w-6 h-6" />
-						</Link>
-					</div>
+				<ScrollArea className="flex-1 p-8 border-2 border-black bg-white">
 					<Outlet />
 				</ScrollArea>
 			</div>
