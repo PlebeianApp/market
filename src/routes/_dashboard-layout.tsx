@@ -112,7 +112,7 @@ function DashboardLayout() {
 												{section.title === 'SALES' && (
 													<Link
 														to="/dashboard"
-														className={`block ${isMobile ? 'p-4' : 'p-2'} transition-colors font-bold${isMobile ? ' border border-black bg-white' : ''} ${location.pathname === '/dashboard' ? 'bg-gray-200 text-black' : 'hover:text-pink-500'}`}
+														className={`block ${isMobile ? 'p-4' : 'p-2'} transition-colors font-bold${isMobile ? ' border border-black bg-white rounded-[4px]' : ''} ${location.pathname === '/dashboard' ? 'bg-gray-200 text-black' : 'hover:text-pink-500'}`}
 														onClick={handleSidebarItemClick}
 													>
 														🛞 Dashboard
@@ -125,7 +125,7 @@ function DashboardLayout() {
 														<Link
 															key={item.path}
 															to={item.path}
-															className={`block ${isMobile ? 'p-4' : 'p-2'} transition-colors font-bold${isMobile ? ' border border-black bg-white' : ''} ${isActive ? 'bg-gray-200 text-black' : 'hover:text-pink-500'}`}
+															className={`block ${isMobile ? 'p-4' : 'p-2'} transition-colors font-bold${isMobile ? ' border border-black bg-white rounded-[4px]' : ''} ${isActive ? 'bg-gray-200 text-black' : 'hover:text-pink-500'}`}
 															onClick={handleSidebarItemClick}
 														>
 															{item.title}
@@ -172,7 +172,8 @@ function DashboardLayout() {
 									{section.title === 'SALES' && (
 										<Link
 											to="/dashboard"
-											className={`block ${isMobile ? 'p-4' : 'p-2'} transition-colors font-bold${isMobile ? ' border border-black bg-white' : ''} ${location.pathname === '/dashboard' ? 'bg-gray-200 text-black' : 'hover:text-pink-500'}`}
+											className={`block ${isMobile ? 'p-4' : 'p-2'} transition-colors font-bold${isMobile ? ' border border-black bg-white rounded-[4px]' : ''} ${location.pathname === '/dashboard' ? 'bg-gray-200 text-black' : 'hover:text-pink-500'}`}
+											onClick={handleSidebarItemClick}
 										>
 											🛞 Dashboard
 										</Link>
@@ -186,7 +187,7 @@ function DashboardLayout() {
 											<Link
 												key={item.path}
 												to={item.path}
-												className={`block ${isMobile ? 'p-4' : 'p-2'} transition-colors font-bold${isMobile ? ' border border-black bg-white' : ''} ${isActive ? 'bg-gray-200 text-black' : 'hover:text-pink-500'}`}
+												className={`block ${isMobile ? 'p-4' : 'p-2'} transition-colors font-bold${isMobile ? ' border border-black bg-white rounded-[4px]' : ''} ${isActive ? 'bg-gray-200 text-black' : 'hover:text-pink-500'}`}
 											>
 												{item.title}
 											</Link>
