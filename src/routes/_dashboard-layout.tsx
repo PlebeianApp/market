@@ -38,7 +38,7 @@ function DashboardLayout() {
 	const navigate = useNavigate()
 	const location = useLocation()
 	const breakpoint = useBreakpoint()
-	const isMobile = breakpoint === 'sm'
+	const isMobile = breakpoint === 'sm' || breakpoint === 'md'
 	const [showSidebar, setShowSidebar] = useState(true)
 	const [parent] = useAutoAnimate()
 	const [title, setTitle] = useState('DASHBOARD')
@@ -87,7 +87,7 @@ function DashboardLayout() {
 							<span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xl select-none" style={{ width: 48, height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{emoji}</span>
 						)}
 					</h1>
-					<div className="container" ref={parent}>
+					<div ref={parent}>
 						{showSidebar ? (
 							// Sidebar only
 							<aside className="w-full overflow-auto">
