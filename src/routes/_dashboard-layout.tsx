@@ -145,7 +145,7 @@ function DashboardLayout() {
 
 			<div className="flex m-6 gap-6 container max-h-[77vh] overflow-auto">
 				{/* Sidebar */}
-				<aside className="w-[25%] p-6 border-2 border-black overflow-y-auto max-h-full bg-white">
+				<aside className="w-[25%] p-6 border border-black rounded-[4px] overflow-y-auto max-h-full bg-white">
 					<div className="space-y-2">
 						{dashboardNavigation.map((section) => (
 							<div key={section.title}>
@@ -181,7 +181,7 @@ function DashboardLayout() {
 				</aside>
 
 				{/* Main Content - limited to 33vh height */}
-				<ScrollArea className="flex-1 p-8 border-2 border-black bg-white">
+				<ScrollArea className="flex-1 p-8 border border-black rounded-[4px] bg-white">
 					<Outlet />
 				</ScrollArea>
 			</div>
