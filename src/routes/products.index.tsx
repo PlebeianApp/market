@@ -42,8 +42,8 @@ function ProductsRoute() {
 					</span>
 				</Button>
 			</Hero>
-			<div className="p-4">
-				<ItemGrid title="Nostr Products">
+			<div className="px-8 py-4">
+				<ItemGrid title="Products">
 					{products.map((product) => (
 						<ProductCard key={product.id} product={product} />
 					))}
