@@ -32,7 +32,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 			<div className="p-2 flex flex-col gap-2 flex-grow">
 				{/* Product title */}
 				<Link to={`/products/${product.id}`}>
-					<h2 className="text-sm font-medium border-b border-[var(--light-gray)] pb-2">{title}</h2>
+					<h2 className="text-sm font-medium border-b border-[var(--light-gray)] pb-2 overflow-hidden text-ellipsis whitespace-nowrap">{title}</h2>
 				</Link>
 
 				{/* Pricing section */}
