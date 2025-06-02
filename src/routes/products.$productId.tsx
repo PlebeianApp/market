@@ -83,6 +83,7 @@ function RouteComponent() {
 
 	const breakpoint = useBreakpoint()
 	const isSmallScreen = breakpoint === 'sm'
+	const isMobileOrTablet = breakpoint === 'sm' || breakpoint === 'md'
 	const [quantity, setQuantity] = useState(1)
 
 	// Derived data from tags
@@ -227,147 +228,254 @@ function RouteComponent() {
 					</div>
 				</div>
 				<div className="mx-auto max-w-7xl px-4 py-6 -mt-12">
-					<Tabs defaultValue="description" className="w-full">
-						<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-4 justify-start">
-							<TabsTrigger
-								value="description"
-								className="flex-1 px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
-							>
-								Description
-							</TabsTrigger>
-							<TabsTrigger
-								value="specs"
-								className="flex-1 px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
-							>
-								Spec
-							</TabsTrigger>
-							<TabsTrigger
-								value="shipping"
-								className="flex-1 px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
-							>
-								Shipping
-							</TabsTrigger>
-							<TabsTrigger
-								value="comments"
-								className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
-								disabled
-							>
-								Comments
-							</TabsTrigger>
-							<TabsTrigger
-								value="reviews"
-								className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
-								disabled
-							>
-								Reviews
-							</TabsTrigger>
-						</TabsList>
-
-						<TabsContent value="description" className="mt-4 border-t-3 border-secondary bg-tertiary">
-							<div className="rounded-lg bg-white p-6 shadow-md">
-								<p className="whitespace-pre-wrap text-gray-700">{description}</p>
-							</div>
-						</TabsContent>
-
-						<TabsContent value="specs" className="mt-4">
-							<div className="rounded-lg bg-white p-6 shadow-md">
-								<div className="grid grid-cols-2 gap-4">
-									{weightTag && (
-										<div className="flex flex-col">
-											<span className="text-sm font-medium text-gray-500">Weight</span>
-											<span className="text-gray-900">
-												{weightTag[1]} {weightTag[2]}
-											</span>
-										</div>
-									)}
-									{dimensionsTag && (
-										<div className="flex flex-col">
-											<span className="text-sm font-medium text-gray-500">Dimensions (L×W×H)</span>
-											<span className="text-gray-900">
-												{dimensionsTag[1]
-													.split('x')
-													.map((num) => parseFloat(num).toFixed(1))
-													.join('×')}{' '}
-												{dimensionsTag[2]}
-											</span>
-										</div>
-									)}
-									{specs.map((spec, index) => (
-										<div key={index} className="flex flex-col">
-											<span className="text-sm font-medium text-gray-500">{spec[1]}</span>
-											<span className="text-gray-900">{spec[2]}</span>
-										</div>
-									))}
-									{specs.length === 0 && !weightTag && !dimensionsTag && (
-										<p className="text-gray-700 col-span-2">No specifications available</p>
-									)}
+					{isMobileOrTablet ? (
+						<div className="flex flex-col gap-6">
+							{/* Description Section */}
+							<div>
+								<div className="bg-secondary text-white px-4 py-2 text-sm font-medium rounded-t-md">Description</div>
+								<div className="rounded-lg bg-white p-6 shadow-md rounded-t-none">
+									<p className="whitespace-pre-wrap text-gray-700">{description}</p>
 								</div>
 							</div>
-						</TabsContent>
 
-						<TabsContent value="shipping" className="mt-4">
-							<div className="rounded-lg bg-white p-6 shadow-md">
-								<div className="flex flex-col gap-6">
-									<div className="flex items-center gap-3">
-										<Truck className="h-6 w-6 text-gray-500" />
-										<h3 className="text-lg font-medium">Shipping Options</h3>
+							{/* Specs Section */}
+							<div>
+								<div className="bg-secondary text-white px-4 py-2 text-sm font-medium rounded-t-md">Spec</div>
+								<div className="rounded-lg bg-white p-6 shadow-md rounded-t-none">
+									<div className="grid grid-cols-2 gap-4">
+										{weightTag && (
+											<div className="flex flex-col">
+												<span className="text-sm font-medium text-gray-500">Weight</span>
+												<span className="text-gray-900">
+													{weightTag[1]} {weightTag[2]}
+												</span>
+											</div>
+										)}
+										{dimensionsTag && (
+											<div className="flex flex-col">
+												<span className="text-sm font-medium text-gray-500">Dimensions (L×W×H)</span>
+												<span className="text-gray-900">
+													{dimensionsTag[1]
+														.split('x')
+														.map((num) => parseFloat(num).toFixed(1))
+														.join('×')}{' '}
+													{dimensionsTag[2]}
+												</span>
+											</div>
+										)}
+										{specs.map((spec, index) => (
+											<div key={index} className="flex flex-col">
+												<span className="text-sm font-medium text-gray-500">{spec[1]}</span>
+												<span className="text-gray-900">{spec[2]}</span>
+											</div>
+										))}
+										{specs.length === 0 && !weightTag && !dimensionsTag && (
+											<p className="text-gray-700 col-span-2">No specifications available</p>
+										)}
 									</div>
+								</div>
+							</div>
 
-									<div className="grid md:grid-cols-2 gap-6">
-										<div>
-											<p className="text-sm text-gray-500 mb-4">Select a shipping method to see estimated costs and delivery times.</p>
-
-											<div className="w-full">
-												<ShippingSelector
-													productId={productId}
-													onSelect={(option: RichShippingInfo) => {
-														// Optional notification could go here
-													}}
-													className="w-full"
-												/>
-											</div>
-
-											<div className="mt-4">
-												<p className="text-sm text-gray-500">Shipping costs will be added to the final price in the cart.</p>
-											</div>
+							{/* Shipping Section */}
+							<div>
+								<div className="bg-secondary text-white px-4 py-2 text-sm font-medium rounded-t-md">Shipping</div>
+								<div className="rounded-lg bg-white p-6 shadow-md rounded-t-none">
+									<div className="flex flex-col gap-6">
+										<div className="flex items-center gap-3">
+											<Truck className="h-6 w-6 text-gray-500" />
+											<h3 className="text-lg font-medium">Shipping Options</h3>
 										</div>
 
-										<div className="bg-gray-50 p-4 rounded-md">
-											<h4 className="font-medium mb-2">Shipping Information</h4>
+										<div className="grid md:grid-cols-2 gap-6">
+											<div>
+												<p className="text-sm text-gray-500 mb-4">Select a shipping method to see estimated costs and delivery times.</p>
 
-											{weightTag && (
-												<div className="text-sm text-gray-600 mb-2">
-													<span className="font-medium">Weight:</span> {weightTag[1]} {weightTag[2]}
+												<div className="w-full">
+													<ShippingSelector
+														productId={productId}
+														onSelect={(option: RichShippingInfo) => {
+															// Optional notification could go here
+														}}
+														className="w-full"
+													/>
 												</div>
-											)}
 
-											{dimensionsTag && (
-												<div className="text-sm text-gray-600 mb-2">
-													<span className="font-medium">Dimensions:</span> {dimensionsTag[1]} {dimensionsTag[2]}
+												<div className="mt-4">
+													<p className="text-sm text-gray-500">Shipping costs will be added to the final price in the cart.</p>
 												</div>
-											)}
+											</div>
 
-											{location && (
-												<div className="text-sm text-gray-600 mb-2">
-													<span className="font-medium">Ships from:</span> {location}
-												</div>
-											)}
+											<div className="bg-gray-50 p-4 rounded-md">
+												<h4 className="font-medium mb-2">Shipping Information</h4>
 
-											<div className="mt-3 text-sm text-gray-500">Delivery times are estimates and may vary based on your location.</div>
+												{weightTag && (
+													<div className="text-sm text-gray-600 mb-2">
+														<span className="font-medium">Weight:</span> {weightTag[1]} {weightTag[2]}
+													</div>
+												)}
+
+												{dimensionsTag && (
+													<div className="text-sm text-gray-600 mb-2">
+														<span className="font-medium">Dimensions:</span> {dimensionsTag[1]} {dimensionsTag[2]}
+													</div>
+												)}
+
+												{location && (
+													<div className="text-sm text-gray-600 mb-2">
+														<span className="font-medium">Ships from:</span> {location}
+													</div>
+												)}
+
+												<div className="mt-3 text-sm text-gray-500">Delivery times are estimates and may vary based on your location.</div>
+											</div>
 										</div>
 									</div>
 								</div>
 							</div>
-						</TabsContent>
-					</Tabs>
+						</div>
+					) : (
+						<Tabs defaultValue="description" className="w-full">
+							<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-2 justify-start">
+								<TabsTrigger
+									value="description"
+									className="px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+								>
+									Description
+								</TabsTrigger>
+								<TabsTrigger
+									value="specs"
+									className="px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+								>
+									Spec
+								</TabsTrigger>
+								<TabsTrigger
+									value="shipping"
+									className="px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+								>
+									Shipping
+								</TabsTrigger>
+								<TabsTrigger
+									value="comments"
+									className="px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+									disabled
+								>
+									Comments
+								</TabsTrigger>
+								<TabsTrigger
+									value="reviews"
+									className="px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+									disabled
+								>
+									Reviews
+								</TabsTrigger>
+							</TabsList>
+
+							<TabsContent value="description" className="mt-4 border-t-3 border-secondary bg-tertiary">
+								<div className="rounded-lg bg-white p-6 shadow-md">
+									<p className="whitespace-pre-wrap text-gray-700">{description}</p>
+								</div>
+							</TabsContent>
+
+							<TabsContent value="specs" className="mt-4 border-t-3 border-secondary bg-tertiary">
+								<div className="rounded-lg bg-white p-6 shadow-md">
+									<div className="grid grid-cols-2 gap-4">
+										{weightTag && (
+											<div className="flex flex-col">
+												<span className="text-sm font-medium text-gray-500">Weight</span>
+												<span className="text-gray-900">
+													{weightTag[1]} {weightTag[2]}
+												</span>
+											</div>
+										)}
+										{dimensionsTag && (
+											<div className="flex flex-col">
+												<span className="text-sm font-medium text-gray-500">Dimensions (L×W×H)</span>
+												<span className="text-gray-900">
+													{dimensionsTag[1]
+														.split('x')
+														.map((num) => parseFloat(num).toFixed(1))
+														.join('×')}{' '}
+													{dimensionsTag[2]}
+												</span>
+											</div>
+										)}
+										{specs.map((spec, index) => (
+											<div key={index} className="flex flex-col">
+												<span className="text-sm font-medium text-gray-500">{spec[1]}</span>
+												<span className="text-gray-900">{spec[2]}</span>
+											</div>
+										))}
+										{specs.length === 0 && !weightTag && !dimensionsTag && (
+											<p className="text-gray-700 col-span-2">No specifications available</p>
+										)}
+									</div>
+								</div>
+							</TabsContent>
+
+							<TabsContent value="shipping" className="mt-4 border-t-3 border-secondary bg-tertiary">
+								<div className="rounded-lg bg-white p-6 shadow-md">
+									<div className="flex flex-col gap-6">
+										<div className="flex items-center gap-3">
+											<Truck className="h-6 w-6 text-gray-500" />
+											<h3 className="text-lg font-medium">Shipping Options</h3>
+										</div>
+
+										<div className="grid md:grid-cols-2 gap-6">
+											<div>
+												<p className="text-sm text-gray-500 mb-4">Select a shipping method to see estimated costs and delivery times.</p>
+
+												<div className="w-full">
+													<ShippingSelector
+														productId={productId}
+														onSelect={(option: RichShippingInfo) => {
+															// Optional notification could go here
+														}}
+														className="w-full"
+													/>
+												</div>
+
+												<div className="mt-4">
+													<p className="text-sm text-gray-500">Shipping costs will be added to the final price in the cart.</p>
+												</div>
+											</div>
+
+											<div className="bg-gray-50 p-4 rounded-md">
+												<h4 className="font-medium mb-2">Shipping Information</h4>
+
+												{weightTag && (
+													<div className="text-sm text-gray-600 mb-2">
+														<span className="font-medium">Weight:</span> {weightTag[1]} {weightTag[2]}
+													</div>
+												)}
+
+												{dimensionsTag && (
+													<div className="text-sm text-gray-600 mb-2">
+														<span className="font-medium">Dimensions:</span> {dimensionsTag[1]} {dimensionsTag[2]}
+													</div>
+												)}
+
+												{location && (
+													<div className="text-sm text-gray-600 mb-2">
+														<span className="font-medium">Ships from:</span> {location}
+													</div>
+												)}
+
+												<div className="mt-3 text-sm text-gray-500">Delivery times are estimates and may vary based on your location.</div>
+											</div>
+										</div>
+									</div>
+								</div>
+							</TabsContent>
+						</Tabs>
+					)}
 				</div>
 			</div>
 			<div className="px-4 py-6">
 				{sellerProducts.length > 0 && (
 					<ItemGrid
 						title={
-							<div className="flex items-center gap-2">
-								<span className="text-2xl font-heading">More products from</span>
+							<div className="flex flex-col items-center gap-2">
+								<span className="text-2xl font-heading">More products from </span>
 								<ProfileName pubkey={pubkey} className="text-2xl font-heading" />
 							</div>
 						}
