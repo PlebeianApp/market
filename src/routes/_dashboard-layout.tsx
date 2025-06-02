@@ -22,6 +22,10 @@ export function useDashboardTitle(title: string) {
 // Helper to get emoji for current route
 function getCurrentEmoji(showSidebar: boolean, currentPath: string): string | null {
 	if (showSidebar) return null
+	
+	// Handle dashboard route specifically
+	if (currentPath === '/dashboard') return '🛞'
+	
 	for (const section of dashboardNavigation) {
 		for (const item of section.items) {
 			if (currentPath.startsWith(item.path)) {
@@ -85,7 +89,9 @@ function DashboardLayout() {
 				
 				{/* Title */}
 				<span className="w-full lg:w-auto">
-					{showSidebar || !isMobile ? 'Admin Area' : dashboardTitle}
+					{showSidebar || !isMobile ? 'Admin Area' : (
+						location.pathname === '/dashboard' ? 'Dashboard' : dashboardTitle
+					)}
 				</span>
 				
 				{/* Mobile emoji - only visible on small screens when not showing sidebar */}
@@ -105,14 +111,18 @@ function DashboardLayout() {
 							<div className="lg:space-y-2">
 								{dashboardNavigation.map((section) => (
 									<div key={section.title}>
-										<h2 className="text-md font-heading bg-secondary-black lg:bg-tertiary-black text-white px-4 py-2 text-[1.5rem] mb-0 lg:mb-2">
+										<h2 className="text-md font-heading bg-tertiary-black text-white px-4 py-2 text-[1.5rem] mb-0 lg:mb-2">
 											{section.title}
 										</h2>
 										<nav className="space-y-2 p-4 lg:p-0">
 											{section.title === 'SALES' && (
 												<Link
 													to="/dashboard"
-													className={`block p-4 lg:p-2 transition-colors font-bold border border-black bg-white rounded lg:border-0 lg:bg-transparent lg:rounded-none ${location.pathname === '/dashboard' ? 'bg-gray-200 text-black' : 'hover:text-pink-500'}`}
+													className={`block p-4 lg:p-2 transition-colors font-bold border border-black bg-white rounded lg:border-0 lg:bg-transparent lg:rounded-none ${
+														location.pathname === '/dashboard' 
+															? 'bg-gray-200 text-black' 
+															: 'hover:text-pink-500'
+													}`}
 													onClick={handleSidebarItemClick}
 												>
 													🛞 Dashboard
@@ -124,7 +134,11 @@ function DashboardLayout() {
 													<Link
 														key={item.path}
 														to={item.path}
-														className={`block p-4 lg:p-2 transition-colors font-bold border border-black bg-white rounded lg:border-0 lg:bg-transparent lg:rounded-none ${isActive ? 'bg-gray-200 text-black' : 'hover:text-pink-500'}`}
+														className={`block p-4 lg:p-2 transition-colors font-bold border border-black bg-white rounded lg:border-0 lg:bg-transparent lg:rounded-none ${
+															isActive 
+																? 'bg-gray-200 text-black' 
+																: 'hover:text-pink-500'
+														}`}
 														onClick={handleSidebarItemClick}
 													>
 														{item.title}
