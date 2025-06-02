@@ -13,6 +13,7 @@ import { useUpdateProfileMutation } from '@/publish/profiles'
 import { useQuery } from '@tanstack/react-query'
 import { profileByIdentifierQueryOptions } from '@/queries/profiles'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
+import { useBreakpoint } from '@/hooks/useBreakpoint'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/profile')({
 	component: ProfileComponent,
@@ -20,7 +21,8 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/account/profi
 
 function ProfileComponent() {
 	useDashboardTitle('Profile')
-	const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
+	const breakpoint = useBreakpoint()
+	const isMobile = breakpoint === 'sm' || breakpoint === 'md'
 	const ndk = ndkActions.getNDK()
 	const pubkey = ndk?.activeUser?.pubkey
 
