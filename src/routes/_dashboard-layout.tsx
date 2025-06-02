@@ -42,7 +42,7 @@ function DashboardLayout() {
 	const navigate = useNavigate()
 	const location = useLocation()
 	const breakpoint = useBreakpoint()
-	const isMobile = breakpoint === 'sm' || breakpoint === 'md'
+	const isMobile = breakpoint === 'sm' || breakpoint === 'md' || breakpoint === 'lg'
 	const [showSidebar, setShowSidebar] = useState(true)
 	const [parent] = useAutoAnimate()
 	const { dashboardTitle } = useStore(uiStore)
