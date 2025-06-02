@@ -1,21 +1,21 @@
-import React, { useState, createContext, useContext } from 'react'
+import React, { useState } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { dashboardNavigation } from '@/config/dashboardNavigation'
 import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate, useLocation } from '@tanstack/react-router'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
+import { useStore } from '@tanstack/react-store'
+import { uiStore, uiActions } from '@/lib/stores/ui'
 
 export const Route = createFileRoute('/_dashboard-layout')({
 	component: DashboardLayout,
 })
 
-// Dashboard title context
-const DashboardTitleContext = createContext({ title: 'DASHBOARD', setTitle: (t: string) => {} })
+// Custom hook to manage dashboard title using uiStore
 export function useDashboardTitle(title: string) {
-	const ctx = useContext(DashboardTitleContext)
 	React.useEffect(() => {
-		ctx.setTitle(title)
-		return () => ctx.setTitle('DASHBOARD')
+		uiActions.setDashboardTitle(title)
+		return () => uiActions.setDashboardTitle('DASHBOARD') // Reset to default on unmount
 	}, [title])
 }
 
@@ -41,7 +41,7 @@ function DashboardLayout() {
 	const isMobile = breakpoint === 'sm' || breakpoint === 'md'
 	const [showSidebar, setShowSidebar] = useState(true)
 	const [parent] = useAutoAnimate()
-	const [title, setTitle] = useState('DASHBOARD')
+	const { dashboardTitle } = useStore(uiStore)
 
 	// When route changes on mobile, show sidebar for /dashboard, main content otherwise
 	React.useEffect(() => {
@@ -69,7 +69,6 @@ function DashboardLayout() {
 	if (isMobile) {
 		const emoji = getCurrentEmoji(showSidebar, typeof window !== 'undefined' ? window.location.pathname : '')
 		return (
-			<DashboardTitleContext.Provider value={{ title, setTitle }}>
 				<div className="relative">
 					<h1
 						className="font-heading p-2 bg-dashboard-header text-secondary flex items-center gap-2 justify-center text-center relative"
@@ -85,7 +84,7 @@ function DashboardLayout() {
 								<span className="i-back w-6 h-6" />
 							</button>
 						)}
-						<span className="w-full">{showSidebar ? 'Admin Area' : title}</span>
+						<span className="w-full">{showSidebar ? 'Admin Area' : dashboardTitle}</span>
 						{!showSidebar && emoji && (
 							<span
 								className="absolute right-2 top-1/2 -translate-y-1/2 text-2xl select-none"
@@ -147,7 +146,6 @@ function DashboardLayout() {
 						)}
 					</div>
 				</div>
-			</DashboardTitleContext.Provider>
 		)
 	}
 
