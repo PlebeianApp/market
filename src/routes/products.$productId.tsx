@@ -133,13 +133,13 @@ function RouteComponent() {
 				<Button
 					variant="ghost"
 					onClick={() => window.history.back()}
-					className="absolute left-4 top-4 z-10 flex items-center gap-2 text-white hover:bg-white/10"
+					className="absolute left-0 top-0 z-10 flex items-center gap-2 text-white hover:bg-white/10"
 				>
 					<ArrowLeft className="h-4 w-4" />
 					<span>Back to results</span>
 				</Button>
 				<div className="bg-black">
-					<div className="container mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 p-16">
+					<div className="container mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 p-4">
 						<div className="max-h-[65vh] lg:h-[45vh]">
 							<ImageCarousel images={formattedImages} title={title} />
 						</div>

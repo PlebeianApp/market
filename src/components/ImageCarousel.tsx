@@ -39,13 +39,25 @@ export function ImageCarousel({ images, title, className }: ImageCarouselProps) 
 	}
 
 	return (
-		<div className="flex h-full lg:flex-row flex-col gap-4">
-			<div className="flex flex-col gap-2">
+		<div className="h-full flex flex-col lg:flex-row gap-4">
+			{/* Main Carousel */}
+			<Carousel setApi={setApi} className="w-full aspect-square lg:order-2">
+				<CarouselContent>
+					{images.map((image, index) => (
+						<CarouselItem key={index} className="flex items-center justify-center">
+							<img src={image.url} alt={`${title} - Image ${index + 1}`} className="max-h-[45vh] max-w-full" />
+						</CarouselItem>
+					))}
+				</CarouselContent>
+			</Carousel>
+
+			{/* Preview Images */}
+			<div className="flex flex-row overflow-x-auto gap-2 justify-center lg:flex-col lg:order-1">
 				{images.map((image, index) => (
 					<button
 						key={index}
 						className={cn(
-							'relative w-16 p-1 transition-all',
+							'relative w-16 p-1 transition-all flex-shrink-0',
 							index === currentIndex ? 'ring-2 ring-primary' : 'hover:ring-1 hover:ring-primary/50',
 						)}
 						onClick={() => {
@@ -60,16 +72,6 @@ export function ImageCarousel({ images, title, className }: ImageCarouselProps) 
 					</button>
 				))}
 			</div>
-
-			<Carousel setApi={setApi} className="w-full aspect-square">
-				<CarouselContent>
-					{images.map((image, index) => (
-						<CarouselItem key={index} className="flex items-center justify-center">
-							<img src={image.url} alt={`${title} - Image ${index + 1}`} className="max-h-[45vh] max-w-full" />
-						</CarouselItem>
-					))}
-				</CarouselContent>
-			</Carousel>
 		</div>
 	)
 }
