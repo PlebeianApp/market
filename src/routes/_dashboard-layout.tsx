@@ -22,10 +22,10 @@ export function useDashboardTitle(title: string) {
 // Helper to get emoji for current route
 function getCurrentEmoji(showSidebar: boolean, currentPath: string): string | null {
 	if (showSidebar) return null
-	
+
 	// Handle dashboard route specifically
 	if (currentPath === '/dashboard') return '🛞'
-	
+
 	for (const section of dashboardNavigation) {
 		for (const item of section.items) {
 			if (currentPath.startsWith(item.path)) {
@@ -86,14 +86,12 @@ function DashboardLayout() {
 						<span className="i-back w-6 h-6" />
 					</button>
 				)}
-				
+
 				{/* Title */}
 				<span className="w-full lg:w-auto">
-					{showSidebar || !isMobile ? 'Admin Area' : (
-						location.pathname === '/dashboard' ? 'Dashboard' : dashboardTitle
-					)}
+					{showSidebar || !isMobile ? 'Admin Area' : location.pathname === '/dashboard' ? 'Dashboard' : dashboardTitle}
 				</span>
-				
+
 				{/* Mobile emoji - only visible on small screens when not showing sidebar */}
 				{!showSidebar && emoji && (
 					<span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xl select-none w-12 h-12 flex items-center justify-center lg:hidden">
@@ -119,9 +117,7 @@ function DashboardLayout() {
 												<Link
 													to="/dashboard"
 													className={`block p-4 lg:p-2 transition-colors font-bold border border-black bg-white rounded lg:border-0 lg:bg-transparent lg:rounded-none ${
-														location.pathname === '/dashboard' 
-															? 'bg-gray-200 text-black' 
-															: 'hover:text-pink-500'
+														location.pathname === '/dashboard' ? 'bg-gray-200 text-black' : 'hover:text-pink-500'
 													}`}
 													onClick={handleSidebarItemClick}
 												>
@@ -135,9 +131,7 @@ function DashboardLayout() {
 														key={item.path}
 														to={item.path}
 														className={`block p-4 lg:p-2 transition-colors font-bold border border-black bg-white rounded lg:border-0 lg:bg-transparent lg:rounded-none ${
-															isActive 
-																? 'bg-gray-200 text-black' 
-																: 'hover:text-pink-500'
+															isActive ? 'bg-gray-200 text-black' : 'hover:text-pink-500'
 														}`}
 														onClick={handleSidebarItemClick}
 													>

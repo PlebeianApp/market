@@ -46,7 +46,7 @@
 @theme {
 	--font-sans: 'IBM Plex Mono', monospace;
 	--font-heading: 'reglisse', sans-serif;
-	
+
 	/* Custom colors */
 	--color-secondary-black: var(--secondary-black);
 	--color-tertiary-black: var(--tertiary-black);
