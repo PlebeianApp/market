@@ -119,7 +119,8 @@ h2.font-heading {
 	--light-gray: #ebebeb;
 	--off-black: #0a0a0a;
 	--neo-purple: #ff3eb5;
-	--lighter-black: #1d1d1d;
+	--secondary-black: #131313;
+	--tertiary-black: #1d1d1d;
 	--neo-blue: #18b9fe;
 	--neo-gray: #f8f8f8;
 
@@ -246,12 +247,4 @@ h2.font-heading {
 	body {
 		@apply bg-background text-foreground;
 	}
-}
-
-.bg-dashboard-header {
-	background-color: #131313;
-}
-
-.bg-dashboard-section {
-	background-color: #1d1d1d;
 }
