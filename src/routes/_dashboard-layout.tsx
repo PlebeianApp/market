@@ -42,8 +42,7 @@ function DashboardLayout() {
 	const navigate = useNavigate()
 	const location = useLocation()
 	const breakpoint = useBreakpoint()
-	const isMobile = breakpoint !== 'xl'
-	const isDesktop = breakpoint === 'xl'
+	const isMobile = breakpoint === 'sm' || breakpoint === 'md' || breakpoint === 'lg'
 	const [showSidebar, setShowSidebar] = useState(true)
 	const [parent] = useAutoAnimate()
 	const { dashboardTitle } = useStore(uiStore)
@@ -51,8 +50,13 @@ function DashboardLayout() {
 	// When route changes on mobile, show sidebar for /dashboard, main content otherwise
 	React.useEffect(() => {
 		if (isMobile) {
-			setShowSidebar(location.pathname === '/dashboard')
+			if (location.pathname === '/dashboard') {
+				setShowSidebar(true)
+			} else {
+				setShowSidebar(false)
+			}
 		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [location.pathname, isMobile])
 
 	const handleSidebarItemClick = () => {
@@ -68,52 +72,15 @@ function DashboardLayout() {
 
 	const emoji = getCurrentEmoji(showSidebar, typeof window !== 'undefined' ? window.location.pathname : '')
 
-	// Computed styles based on breakpoint
-	const headerClasses = `font-heading ${isDesktop ? 'p-4' : 'p-2'} bg-secondary-black text-secondary flex items-center gap-2 ${isDesktop ? 'justify-start text-2xl' : 'justify-center text-center text-[2rem]'} relative`
-	
-	const mainContainerClasses = isDesktop 
-		? 'flex m-6 gap-6 container max-h-[77vh] overflow-auto' 
-		: ''
-	
-	const innerContainerClasses = isDesktop ? 'flex w-full gap-6' : ''
-	
-	const sidebarClasses = isDesktop 
-		? 'w-[25%] overflow-auto p-6 border border-black rounded max-h-full bg-white' 
-		: 'w-full overflow-auto'
-	
-	const sidebarInnerClasses = isDesktop ? 'space-y-2' : ''
-	
-	const sectionHeaderClasses = `text-md font-heading bg-tertiary-black text-white px-4 py-2 text-[1.5rem] ${isDesktop ? 'mb-2' : 'mb-0'}`
-	
-	const navClasses = isDesktop ? 'space-y-2' : 'space-y-2 p-4'
-	
-	const getLinkClasses = (isActive: boolean) => {
-		const baseClasses = 'block transition-colors font-bold'
-		const mobileClasses = 'p-4 border border-black bg-white rounded'
-		const desktopClasses = 'p-2 border-0 bg-transparent rounded-none'
-		const activeClasses = 'bg-gray-200 text-black'
-		const inactiveClasses = 'hover:text-pink-500'
-		
-		return `${baseClasses} ${isDesktop ? desktopClasses : mobileClasses} ${isActive ? activeClasses : inactiveClasses}`
-	}
-	
-	const scrollAreaClasses = isDesktop 
-		? 'w-full flex-1 p-8 border border-black rounded bg-white' 
-		: 'w-full p-4'
-	
-	const contentWrapperClasses = isDesktop 
-		? 'p-0 bg-transparent border-0 rounded-none' 
-		: 'p-4 bg-white border border-black rounded'
-
 	return (
-		<div>
+		<div className="lg:block">
 			{/* Header - responsive for mobile/desktop */}
-			<h1 className={headerClasses}>
-				{/* Mobile back button */}
-				{!showSidebar && !isDesktop && (
+			<h1 className="font-heading p-2 lg:p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center relative text-[2rem] lg:text-2xl lg:justify-start">
+				{/* Mobile back button - only visible on small screens when not showing sidebar */}
+				{!showSidebar && (
 					<button
 						onClick={handleBackToSidebar}
-						className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 top-1/2 -translate-y-1/2 w-12 h-12"
+						className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 top-1/2 -translate-y-1/2 w-12 h-12 lg:hidden"
 						aria-label="Back to sidebar"
 					>
 						<span className="i-back w-6 h-6" />
@@ -121,35 +88,37 @@ function DashboardLayout() {
 				)}
 
 				{/* Title */}
-				<span className={isDesktop ? 'w-auto' : 'w-full'}>
+				<span className="w-full lg:w-auto">
 					{showSidebar || !isMobile ? 'Admin Area' : location.pathname === '/dashboard' ? 'Dashboard' : dashboardTitle}
 				</span>
 
-				{/* Mobile emoji */}
-				{!showSidebar && emoji && !isDesktop && (
-					<span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xl select-none w-12 h-12 flex items-center justify-center">
+				{/* Mobile emoji - only visible on small screens when not showing sidebar */}
+				{!showSidebar && emoji && (
+					<span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xl select-none w-12 h-12 flex items-center justify-center lg:hidden">
 						{emoji}
 					</span>
 				)}
 			</h1>
 
-			{/* Main container */}
-			<div className={mainContainerClasses}>
-				<div ref={parent} className={innerContainerClasses}>
-					{/* Sidebar */}
+			{/* Main container - responsive layout */}
+			<div className="lg:flex lg:m-6 lg:gap-6 lg:container lg:max-h-[77vh] lg:overflow-auto">
+				<div ref={parent} className="lg:flex lg:w-full lg:gap-6">
+					{/* Sidebar - responsive behavior */}
 					{(showSidebar || !isMobile) && (
-						<aside className={sidebarClasses}>
-							<div className={sidebarInnerClasses}>
+						<aside className="w-full lg:w-[25%] overflow-auto lg:p-6 lg:border lg:border-black lg:rounded lg:max-h-full lg:bg-white">
+							<div className="lg:space-y-2">
 								{dashboardNavigation.map((section) => (
 									<div key={section.title}>
-										<h2 className={sectionHeaderClasses}>
+										<h2 className="text-md font-heading bg-tertiary-black text-white px-4 py-2 text-[1.5rem] mb-0 lg:mb-2">
 											{section.title}
 										</h2>
-										<nav className={navClasses}>
+										<nav className="space-y-2 p-4 lg:p-0">
 											{section.title === 'SALES' && (
 												<Link
 													to="/dashboard"
-													className={getLinkClasses(location.pathname === '/dashboard')}
+													className={`block p-4 lg:p-2 transition-colors font-bold border border-black bg-white rounded lg:border-0 lg:bg-transparent lg:rounded-none ${
+														location.pathname === '/dashboard' ? 'bg-gray-200 text-black' : 'hover:text-pink-500'
+													}`}
 													onClick={handleSidebarItemClick}
 												>
 													🛞 Dashboard
@@ -161,7 +130,9 @@ function DashboardLayout() {
 													<Link
 														key={item.path}
 														to={item.path}
-														className={getLinkClasses(isActive)}
+														className={`block p-4 lg:p-2 transition-colors font-bold border border-black bg-white rounded lg:border-0 lg:bg-transparent lg:rounded-none ${
+															isActive ? 'bg-gray-200 text-black' : 'hover:text-pink-500'
+														}`}
 														onClick={handleSidebarItemClick}
 													>
 														{item.title}
@@ -175,10 +146,10 @@ function DashboardLayout() {
 						</aside>
 					)}
 
-					{/* Main content */}
+					{/* Main content - responsive behavior */}
 					{(!showSidebar || !isMobile) && (
-						<ScrollArea className={scrollAreaClasses}>
-							<div className={contentWrapperClasses}>
+						<ScrollArea className="w-full p-4 lg:flex-1 lg:p-8 lg:border lg:border-black lg:rounded lg:bg-white">
+							<div className="p-4 bg-white border border-black rounded lg:p-0 lg:bg-transparent lg:border-0 lg:rounded-none">
 								<Outlet />
 							</div>
 						</ScrollArea>
