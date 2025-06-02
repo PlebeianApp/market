@@ -144,9 +144,9 @@ function RouteComponent() {
 							<ImageCarousel images={formattedImages} title={title} />
 						</div>
 
-						<div className="flex flex-col gap-8 text-white">
+						<div className="flex flex-col gap-8 text-white lg:justify-center">
 							<div className="flex items-center justify-between">
-								<h1 className="text-3xl font-semibold pl-0 lg:pl-4">{title}</h1>
+								<h1 className="text-3xl font-semibold lg:pl-0">{title}</h1>
 								<div className="flex items-center gap-2">
 									<ZapButton event={product} />
 									<Button
