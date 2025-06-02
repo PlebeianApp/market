@@ -20,6 +20,7 @@ export interface UIState {
 	toasts: Toast[]
 	activeElement?: string
 	dialogCallbacks?: Partial<Record<DialogType, any>>
+	dashboardTitle: string
 }
 
 // Initial state
@@ -38,6 +39,7 @@ const initialState: UIState = {
 	},
 	toasts: [],
 	dialogCallbacks: {},
+	dashboardTitle: 'DASHBOARD',
 }
 
 // Create the store
@@ -174,6 +176,14 @@ export const uiActions = {
 		uiStore.setState((state) => ({
 			...state,
 			toasts: [],
+		}))
+	},
+
+	// Dashboard title action
+	setDashboardTitle: (title: string) => {
+		uiStore.setState((state) => ({
+			...state,
+			dashboardTitle: title,
 		}))
 	},
 }
