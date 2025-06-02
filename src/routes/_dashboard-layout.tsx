@@ -71,7 +71,7 @@ function DashboardLayout() {
 		return (
 				<div className="relative">
 					<h1
-						className="font-heading p-2 bg-dashboard-header text-secondary flex items-center gap-2 justify-center text-center relative"
+						className="font-heading p-2 bg-[var(--secondary-black)] text-secondary flex items-center gap-2 justify-center text-center relative"
 						style={{ fontSize: '2rem' }}
 					>
 						{!showSidebar && (
@@ -152,7 +152,7 @@ function DashboardLayout() {
 	// Desktop layout (unchanged)
 	return (
 		<div>
-			<h1 className="text-2xl font-heading p-4 bg-dashboard-header text-secondary">Admin Area</h1>
+			<h1 className="text-2xl font-heading p-4 bg-[var(--secondary-black)] text-secondary">Admin Area</h1>
 
 			<div className="flex m-6 gap-6 container max-h-[77vh] overflow-auto">
 				{/* Sidebar */}
@@ -161,7 +161,7 @@ function DashboardLayout() {
 						{dashboardNavigation.map((section) => (
 							<div key={section.title}>
 								<h2
-									className={`text-md font-heading bg-dashboard-section text-white px-4 py-2${!isMobile ? ' mb-2' : ''}`}
+									className={`text-md font-heading bg-[var(--tertiary-black)] text-white px-4 py-2${!isMobile ? ' mb-2' : ''}`}
 									style={{ fontSize: '1.5rem' }}
 								>
 									{section.title}
