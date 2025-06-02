@@ -52,13 +52,13 @@ export function ImageCarousel({ images, title, className }: ImageCarouselProps) 
 			</Carousel>
 
 			{/* Preview Images */}
-			<div className="flex flex-row overflow-x-auto gap-2 justify-center lg:flex-col lg:order-1">
+			<div className="flex flex-row overflow-x-auto gap-2 justify-center lg:flex-col lg:order-1 p-4">
 				{images.map((image, index) => (
 					<button
 						key={index}
 						className={cn(
 							'relative w-16 p-1 transition-all flex-shrink-0',
-							index === currentIndex ? 'ring-2 ring-primary' : 'hover:ring-1 hover:ring-primary/50',
+							index === currentIndex ? 'ring-2 ring-secondary' : 'hover:ring-1 hover:ring-primary/50',
 						)}
 						onClick={() => {
 							api?.scrollTo(index)

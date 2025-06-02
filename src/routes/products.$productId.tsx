@@ -133,7 +133,7 @@ function RouteComponent() {
 				<Button
 					variant="ghost"
 					onClick={() => window.history.back()}
-					className="absolute left-0 top-0 z-10 flex items-center gap-2 text-white hover:bg-white/10"
+					className="absolute left-0 lg:left-2 top-0 z-10 flex items-center gap-2 text-white hover:bg-white/10"
 				>
 					<ArrowLeft className="h-4 w-4" />
 					<span>Back to results</span>
@@ -146,7 +146,7 @@ function RouteComponent() {
 
 						<div className="flex flex-col gap-8 text-white">
 							<div className="flex items-center justify-between">
-								<h1 className="text-3xl font-bold">{title}</h1>
+								<h1 className="text-3xl font-semibold pl-0 lg:pl-4">{title}</h1>
 								<div className="flex items-center gap-2">
 									<ZapButton event={product} />
 									<Button
@@ -470,11 +470,11 @@ function RouteComponent() {
 					)}
 				</div>
 			</div>
-			<div className="px-4 py-6">
+			<div className="lg:px-8 px-4 py-6">
 				{sellerProducts.length > 0 && (
 					<ItemGrid
 						title={
-							<div className="flex flex-col items-center gap-2">
+							<div className="flex flex-col items-center lg:flex-row lg:items-center lg:gap-2">
 								<span className="text-2xl font-heading">More products from </span>
 								<ProfileName pubkey={pubkey} className="text-2xl font-heading" />
 							</div>
