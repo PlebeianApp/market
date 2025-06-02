@@ -118,6 +118,7 @@ function RouteComponent() {
 			shippingMethodId: null,
 			shippingMethodName: null,
 			shippingCost: 0,
+			shippingCostCurrency: priceTag?.[2] || '',
 			sellerPubkey: pubkey,
 		})
 
@@ -227,14 +228,37 @@ function RouteComponent() {
 				</div>
 				<div className="mx-auto max-w-7xl px-4 py-6 -mt-12">
 					<Tabs defaultValue="description" className="w-full">
-						<TabsList className="w-full flex flex-row gap-3 bg-transparent justify-start">
-							<TabsTrigger value="description">Description</TabsTrigger>
-							<TabsTrigger value="specs">Spec</TabsTrigger>
-							<TabsTrigger value="shipping">Shipping</TabsTrigger>
-							<TabsTrigger value="comments" disabled>
+						<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-4 justify-start">
+							<TabsTrigger
+								value="description"
+								className="flex-1 px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+							>
+								Description
+							</TabsTrigger>
+							<TabsTrigger
+								value="specs"
+								className="flex-1 px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+							>
+								Spec
+							</TabsTrigger>
+							<TabsTrigger
+								value="shipping"
+								className="flex-1 px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+							>
+								Shipping
+							</TabsTrigger>
+							<TabsTrigger
+								value="comments"
+								className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+								disabled
+							>
 								Comments
 							</TabsTrigger>
-							<TabsTrigger value="reviews" disabled>
+							<TabsTrigger
+								value="reviews"
+								className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+								disabled
+							>
 								Reviews
 							</TabsTrigger>
 						</TabsList>
