@@ -116,9 +116,9 @@ function DashboardLayout() {
 											{section.title === 'SALES' && (
 												<Link
 													to="/dashboard"
-													className="block p-4 xl:p-2 transition-colors font-bold border border-black bg-white rounded xl:border-0 xl:bg-transparent xl:rounded-none data-[status=active]:bg-gray-200 data-[status=active]:text-black hover:text-pink-500"
+													className="block p-4 xl:p-2 transition-colors font-bold border border-black bg-white rounded xl:border-0 xl:bg-transparent xl:rounded-none [aria-current='page']:bg-gray-200 [aria-current='page']:text-black hover:text-pink-500"
 													onClick={handleSidebarItemClick}
-													data-status={location.pathname === '/dashboard' ? 'active' : 'inactive'}
+													aria-current={matchRoute({ to: '/dashboard', fuzzy: true }) ? 'page' : undefined}
 												>
 													🛞 Dashboard
 												</Link>
