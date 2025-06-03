@@ -24,3 +24,6 @@ export const devUser5 = {
 	pk: '96c727f4d1ea18a80d03621520ebfe3c9be1387033009a4f5b65959d09222eec',
 	sk: 'ee40a2dc441238f241d1728af9507147e9b5ed18c1c61d84876d4f2502c044b3',
 }
+
+export const XPUB = 'xpub6CK51df37SEz9q2EztLtHX6mE1NoAGBAKaQamafguE2vPq6pBuW5i9KVeb1SeJuhTsgD4ED8L8y66ocN68WEVc7BHYxHU6dmxHVJBHPLkYa'
+export const WALLETED_USER_LUD16 = 'plebeianuser@coinos.io'

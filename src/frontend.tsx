@@ -6,6 +6,7 @@ import '../styles/index.css'
 import { createQueryClient } from './lib/queryClient'
 import { routeTree } from './routeTree.gen'
 import type { AppRouterContext } from './lib/router-utils'
+import { configActions } from './lib/stores/config'
 
 // Function to create a router once we have a queryClient
 function createAppRouter(queryClient: QueryClient) {
@@ -38,7 +39,8 @@ function App() {
 				}
 				const config = await response.json()
 
-				// TODO: do we need this config if we don't need the app relay?
+				// Store the config in the configStore
+				configActions.setConfig(config)
 				console.log('Fetched config:', config)
 
 				// Create queryClient with NDK initialization

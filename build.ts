@@ -150,6 +150,8 @@ const result = await build({
 	sourcemap: 'linked',
 	define: {
 		'process.env.NODE_ENV': JSON.stringify('production'),
+		global: 'globalThis',
+		process: 'globalThis.process',
 	},
 	...cliConfig, // Merge in any CLI-provided options
 })
