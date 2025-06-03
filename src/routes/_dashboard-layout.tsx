@@ -109,9 +109,9 @@ function DashboardLayout() {
 							<div className="lg:space-y-2">
 								{dashboardNavigation.map((section) => (
 									<div key={section.title}>
-										<h2 className="text-xl font-heading bg-tertiary-black text-white px-4 py-2  mb-0 lg:mb-2">
+										<h3 className="font-heading bg-tertiary-black text-white px-4 py-2 mb-0 lg:mb-2">
 											{section.title}
-										</h2>
+										</h3>
 										<nav className="space-y-2 p-4 lg:p-0 text-xl lg:text-base">
 											{section.title === 'SALES' && (
 												<Link

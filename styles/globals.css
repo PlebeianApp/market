@@ -68,6 +68,9 @@ h1.font-heading {
 h2.font-heading {
 	font-size: 2rem;
 }
+h3.font-heading {
+	font-size: 1.6rem;
+}
 
 :root {
 	--background: #ffffff;
