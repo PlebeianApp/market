@@ -75,7 +75,7 @@ function DashboardLayout() {
 	return (
 		<div className="lg:block">
 			{/* Header - responsive for mobile/desktop */}
-			<h1 className="font-heading p-2 lg:p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center lg:justify-start lg:text-2xl relative text-[2rem]">
+			<h1 className="font-heading p-2 lg:p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center lg:justify-start relative">
 				{/* Mobile back button - only visible on small screens when not showing sidebar */}
 				{!showSidebar && breakpoint !== 'xl' && (
 					<button
@@ -88,7 +88,7 @@ function DashboardLayout() {
 				)}
 
 				{/* Title */}
-				<span className="w-full lg:w-auto">
+				<span className="w-full lg:w-auto text-md">
 					{showSidebar || !isMobile ? 'Admin Area' : location.pathname === '/dashboard' ? 'Dashboard' : dashboardTitle}
 				</span>
 
@@ -109,10 +109,10 @@ function DashboardLayout() {
 							<div className="lg:space-y-2">
 								{dashboardNavigation.map((section) => (
 									<div key={section.title}>
-										<h2 className="text-md font-heading bg-tertiary-black text-white px-4 py-2 text-[1.5rem] mb-0 lg:mb-2">
+										<h2 className="text-md font-heading bg-tertiary-black text-white px-4 py-2  mb-0 lg:mb-2">
 											{section.title}
 										</h2>
-										<nav className="space-y-2 p-4 lg:p-0">
+										<nav className="space-y-2 p-4 lg:p-0 text-md">
 											{section.title === 'SALES' && (
 												<Link
 													to="/dashboard"
