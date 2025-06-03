@@ -75,7 +75,7 @@ function DashboardLayout() {
 	return (
 		<div className="lg:block">
 			{/* Header - responsive for mobile/desktop */}
-			<h1 className="font-heading p-2 lg:p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center lg:justify-start relative">
+			<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center lg:justify-start relative">
 				{/* Mobile back button - only visible on small screens when not showing sidebar */}
 				{!showSidebar && breakpoint !== 'xl' && (
 					<button
@@ -88,7 +88,7 @@ function DashboardLayout() {
 				)}
 
 				{/* Title */}
-				<span className="w-full lg:w-auto text-xl">
+				<span className="w-full lg:w-auto text-3xl lg:text-3xl">
 					{showSidebar || !isMobile ? 'Admin Area' : location.pathname === '/dashboard' ? 'Dashboard' : dashboardTitle}
 				</span>
 
