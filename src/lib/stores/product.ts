@@ -59,6 +59,7 @@ export interface ProductFormState {
 	status: 'hidden' | 'on-sale' | 'pre-order'
 	productType: 'single' | 'variable'
 	mainCategory: string | null
+	selectedCollection: string | null
 	specs: ProductSpec[]
 	categories: Array<{ key: string; name: string; checked: boolean }>
 	images: Array<{ imageUrl: string; imageOrder: number }>
@@ -79,6 +80,7 @@ export const DEFAULT_FORM_STATE: ProductFormState = {
 	status: 'hidden',
 	productType: 'single',
 	mainCategory: null,
+	selectedCollection: null,
 	specs: [],
 	categories: [],
 	images: [],
