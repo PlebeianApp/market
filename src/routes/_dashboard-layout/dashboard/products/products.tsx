@@ -3,12 +3,13 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { authStore } from '@/lib/stores/auth'
 import { productFormActions } from '@/lib/stores/product'
 import { uiActions } from '@/lib/stores/ui'
-import { getProductTitle, getProductImages, productsByPubkeyQueryOptions } from '@/queries/products'
+import { getProductTitle, getProductImages, getProductId, productsByPubkeyQueryOptions } from '@/queries/products'
+import { useDeleteProductMutation } from '@/publish/products'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Trash } from 'lucide-react'
 
 // Component to show basic product information
 function ProductBasicInfo({ product }: { product: any }) {
@@ -73,6 +74,9 @@ function ProductsOverviewComponent() {
 		enabled: !!user?.pubkey && isAuthenticated,
 	})
 
+	// Delete mutation
+	const deleteMutation = useDeleteProductMutation()
+
 	const handleAddProductClick = () => {
 		productFormActions.reset()
 		productFormActions.setEditingProductId(null)
@@ -88,6 +92,15 @@ function ProductsOverviewComponent() {
 
 	const handleToggleExpanded = (productId: string) => {
 		setExpandedProduct(expandedProduct === productId ? null : productId)
+	}
+
+	const handleDeleteProductClick = async (product: any) => {
+		if (confirm(`Are you sure you want to delete "${getProductTitle(product)}"?`)) {
+			const productDTag = getProductId(product)
+			if (productDTag) {
+				deleteMutation.mutate(productDTag)
+			}
+		}
 	}
 
 	if (!isAuthenticated || !user) {
@@ -143,6 +156,19 @@ function ProductsOverviewComponent() {
 															className="text-gray-500 hover:text-gray-700"
 														>
 															<span className="i-edit w-5 h-5" />{' '}
+														</Button>
+														<Button
+															variant="ghost"
+															size="sm"
+															onClick={(e) => {
+																e.stopPropagation()
+																handleDeleteProductClick(product)
+															}}
+															aria-label={`Delete ${getProductTitle(product)}`}
+															className="text-gray-500 hover:text-red-600"
+															disabled={deleteMutation.isPending}
+														>
+															<Trash className="w-4 h-4" />{' '}
 														</Button>
 														<CollapsibleTrigger asChild>
 															<Button

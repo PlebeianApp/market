@@ -1,60 +1,60 @@
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ndkActions } from '@/lib/stores/ndk'
-import { collectionFormStore, collectionFormActions } from '@/lib/stores/collection'
+import { collectionFormActions, collectionFormStore } from '@/lib/stores/collection'
+import { usePublishCollectionMutation, useUpdateCollectionMutation, type CollectionFormData } from '@/publish/collections'
 import { useForm } from '@tanstack/react-form'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useState } from 'react'
-import { toast } from 'sonner'
 import { InfoTab } from './InfoTab'
 import { ProductsTab } from './ProductsTab'
 
 export function CollectionFormContent({ className = '', showFooter = true }: { className?: string; showFooter?: boolean }) {
-	const [isPublishing, setIsPublishing] = useState(false)
 	const navigate = useNavigate()
 	const [activeTab, setActiveTab] = useState<'info' | 'products'>('info')
 
 	// Get form state from store
 	const formState = useStore(collectionFormStore)
-	const { isEditing, name, description } = formState
+	const { isEditing, editingCollectionId, name, description, headerImageUrl, selectedProducts } = formState
+
+	// Get mutation hooks
+	const publishMutation = usePublishCollectionMutation()
+	const updateMutation = useUpdateCollectionMutation()
+
+	const isPublishing = publishMutation.isPending || updateMutation.isPending
 
 	const form = useForm({
 		defaultValues: {},
 		onSubmit: async () => {
 			try {
-				setIsPublishing(true)
-				const ndk = ndkActions.getNDK()
-				const signer = ndkActions.getSigner()
-
-				if (!ndk) {
-					toast.error('NDK not initialized')
-					setIsPublishing(false)
-					return
-				}
-				if (!signer) {
-					toast.error('You need to connect your wallet first')
-					setIsPublishing(false)
-					return
+				// Prepare form data
+				const formData: CollectionFormData = {
+					name,
+					description,
+					headerImageUrl: headerImageUrl || undefined,
+					products: selectedProducts,
 				}
 
-				const result = await collectionFormActions.publishCollection(signer, ndk)
+				let result: string | null = null
+
+				if (isEditing && editingCollectionId) {
+					// Update existing collection
+					result = await updateMutation.mutateAsync({ collectionId: editingCollectionId, formData })
+				} else {
+					// Create new collection
+					result = await publishMutation.mutateAsync(formData)
+				}
 
 				if (result) {
-					toast.success(isEditing ? 'Collection updated successfully!' : 'Collection created successfully!')
 					collectionFormActions.reset()
 
 					// Close the sheet and navigate
 					document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
 					navigate({ to: '/dashboard/products/collections' })
-				} else {
-					toast.error(isEditing ? 'Failed to update collection' : 'Failed to create collection')
 				}
 			} catch (error) {
+				// Error handling is done by the mutation hooks
 				console.error(isEditing ? 'Error updating collection:' : 'Error creating collection:', error)
-				toast.error(isEditing ? 'Failed to update collection' : 'Failed to create collection')
-			} finally {
-				setIsPublishing(false)
 			}
 		},
 	})

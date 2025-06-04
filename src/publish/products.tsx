@@ -174,6 +174,31 @@ export const updateProduct = async (
 }
 
 /**
+ * Deletes a product by publishing a deletion event
+ */
+export const deleteProduct = async (productDTag: string, signer: NDKSigner, ndk: NDK): Promise<boolean> => {
+	try {
+		// Create a deletion event (kind 5)
+		const deleteEvent = new NDKEvent(ndk)
+		deleteEvent.kind = 5
+		deleteEvent.content = 'Product deleted'
+
+		// Reference the product to delete
+		const pubkey = await signer.user().then((user) => user.pubkey)
+		deleteEvent.tags = [['a', `30402:${pubkey}:${productDTag}`]]
+
+		await deleteEvent.sign(signer)
+		await deleteEvent.publish()
+
+		console.log(`Deleted product: ${productDTag}`)
+		return true
+	} catch (error) {
+		console.error('Error deleting product:', error)
+		throw error
+	}
+}
+
+/**
  * Mutation hook for publishing a new product
  */
 export const usePublishProductMutation = () => {
@@ -260,6 +285,49 @@ export const useUpdateProductMutation = () => {
 		onError: (error) => {
 			console.error('Failed to update product:', error)
 			toast.error(`Failed to update product: ${error instanceof Error ? error.message : String(error)}`)
+		},
+	})
+}
+
+/**
+ * Mutation hook for deleting a product
+ */
+export const useDeleteProductMutation = () => {
+	const queryClient = useQueryClient()
+	const ndk = ndkActions.getNDK()
+	const signer = ndkActions.getSigner()
+
+	return useMutation({
+		mutationFn: async (productDTag: string) => {
+			if (!ndk) throw new Error('NDK not initialized')
+			if (!signer) throw new Error('No signer available')
+
+			return deleteProduct(productDTag, signer, ndk)
+		},
+
+		onSuccess: async (success, productDTag) => {
+			// Get current user pubkey
+			let userPubkey = ''
+			if (signer) {
+				const user = await signer.user()
+				if (user && user.pubkey) {
+					userPubkey = user.pubkey
+				}
+			}
+
+			// Invalidate relevant queries
+			queryClient.invalidateQueries({ queryKey: productKeys.all })
+			if (userPubkey) {
+				queryClient.invalidateQueries({ queryKey: productKeys.byPubkey(userPubkey) })
+			}
+
+			toast.success('Product deleted successfully')
+			return success
+		},
+
+		onError: (error) => {
+			console.error('Failed to delete product:', error)
+			toast.error(`Failed to delete product: ${error instanceof Error ? error.message : String(error)}`)
 		},
 	})
 }

@@ -1,4 +1,8 @@
 import NDK, { NDKEvent, type NDKSigner } from '@nostr-dev-kit/ndk'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { collectionsKeys } from '@/queries/queryKeyFactory'
+import { toast } from 'sonner'
+import { ndkActions } from '@/lib/stores/ndk'
 
 export interface CollectionFormData {
 	name: string
@@ -98,4 +102,133 @@ export const deleteCollection = async (collectionId: string, signer: NDKSigner, 
 		console.error('Error deleting collection:', error)
 		throw error
 	}
+}
+
+/**
+ * Mutation hook for publishing a new collection
+ */
+export const usePublishCollectionMutation = () => {
+	const queryClient = useQueryClient()
+	const ndk = ndkActions.getNDK()
+	const signer = ndkActions.getSigner()
+
+	return useMutation({
+		mutationFn: async (formData: CollectionFormData) => {
+			if (!ndk) throw new Error('NDK not initialized')
+			if (!signer) throw new Error('No signer available')
+
+			return publishCollection(formData, signer, ndk)
+		},
+
+		onSuccess: async (collectionId) => {
+			// Get current user pubkey
+			let userPubkey = ''
+			if (signer) {
+				const user = await signer.user()
+				if (user && user.pubkey) {
+					userPubkey = user.pubkey
+				}
+			}
+
+			// Invalidate relevant queries
+			queryClient.invalidateQueries({ queryKey: collectionsKeys.all })
+			if (userPubkey) {
+				queryClient.invalidateQueries({ queryKey: collectionsKeys.byPubkey(userPubkey) })
+			}
+
+			toast.success('Collection published successfully')
+			return collectionId
+		},
+
+		onError: (error) => {
+			console.error('Failed to publish collection:', error)
+			toast.error(`Failed to publish collection: ${error instanceof Error ? error.message : String(error)}`)
+		},
+	})
+}
+
+/**
+ * Mutation hook for updating an existing collection
+ */
+export const useUpdateCollectionMutation = () => {
+	const queryClient = useQueryClient()
+	const ndk = ndkActions.getNDK()
+	const signer = ndkActions.getSigner()
+
+	return useMutation({
+		mutationFn: async ({ collectionId, formData }: { collectionId: string; formData: CollectionFormData }) => {
+			if (!ndk) throw new Error('NDK not initialized')
+			if (!signer) throw new Error('No signer available')
+
+			return updateCollection(collectionId, formData, signer, ndk)
+		},
+
+		onSuccess: async (collectionId) => {
+			// Get current user pubkey
+			let userPubkey = ''
+			if (signer) {
+				const user = await signer.user()
+				if (user && user.pubkey) {
+					userPubkey = user.pubkey
+				}
+			}
+
+			// Invalidate relevant queries
+			queryClient.invalidateQueries({ queryKey: collectionsKeys.all })
+			if (userPubkey) {
+				queryClient.invalidateQueries({ queryKey: collectionsKeys.byPubkey(userPubkey) })
+			}
+
+			toast.success('Collection updated successfully')
+			return collectionId
+		},
+
+		onError: (error) => {
+			console.error('Failed to update collection:', error)
+			toast.error(`Failed to update collection: ${error instanceof Error ? error.message : String(error)}`)
+		},
+	})
+}
+
+/**
+ * Mutation hook for deleting a collection
+ */
+export const useDeleteCollectionMutation = () => {
+	const queryClient = useQueryClient()
+	const ndk = ndkActions.getNDK()
+	const signer = ndkActions.getSigner()
+
+	return useMutation({
+		mutationFn: async (collectionId: string) => {
+			if (!ndk) throw new Error('NDK not initialized')
+			if (!signer) throw new Error('No signer available')
+
+			return deleteCollection(collectionId, signer, ndk)
+		},
+
+		onSuccess: async (success, collectionId) => {
+			// Get current user pubkey
+			let userPubkey = ''
+			if (signer) {
+				const user = await signer.user()
+				if (user && user.pubkey) {
+					userPubkey = user.pubkey
+				}
+			}
+
+			// Invalidate relevant queries
+			queryClient.invalidateQueries({ queryKey: collectionsKeys.all })
+			if (userPubkey) {
+				queryClient.invalidateQueries({ queryKey: collectionsKeys.byPubkey(userPubkey) })
+			}
+
+			toast.success('Collection deleted successfully')
+			return success
+		},
+
+		onError: (error) => {
+			console.error('Failed to delete collection:', error)
+			toast.error(`Failed to delete collection: ${error instanceof Error ? error.message : String(error)}`)
+		},
+	})
 }

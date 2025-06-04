@@ -4,10 +4,11 @@ import { authStore } from '@/lib/stores/auth'
 import { collectionFormActions } from '@/lib/stores/collection'
 import { uiActions } from '@/lib/stores/ui'
 import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
+import { useDeleteCollectionMutation } from '@/publish/collections'
 import { createFileRoute, useNavigate, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Trash } from 'lucide-react'
 
 // Component to show basic collection information
 function CollectionBasicInfo({ collection }: { collection: any }) {
@@ -56,6 +57,9 @@ function CollectionsComponent() {
 	// Fetch user's collections
 	const { data: collections = [], isLoading, error } = useCollectionsByPubkey(user?.pubkey || '')
 
+	// Delete mutation
+	const deleteMutation = useDeleteCollectionMutation()
+
 	const handleAddCollectionClick = () => {
 		collectionFormActions.reset()
 		uiActions.openDrawer('createCollection')
@@ -71,6 +75,15 @@ function CollectionsComponent() {
 
 	const handleToggleExpanded = (collectionId: string) => {
 		setExpandedCollection(expandedCollection === collectionId ? null : collectionId)
+	}
+
+	const handleDeleteCollectionClick = async (collection: any) => {
+		if (confirm(`Are you sure you want to delete "${getCollectionTitle(collection)}"?`)) {
+			const collectionDTag = getCollectionId(collection)
+			if (collectionDTag) {
+				deleteMutation.mutate(collectionDTag)
+			}
+		}
 	}
 
 	if (!isAuthenticated || !user) {
@@ -128,6 +141,19 @@ function CollectionsComponent() {
 															className="text-gray-500 hover:text-gray-700"
 														>
 															<span className="i-edit w-5 h-5" />
+														</Button>
+														<Button
+															variant="ghost"
+															size="sm"
+															onClick={(e) => {
+																e.stopPropagation()
+																handleDeleteCollectionClick(collection)
+															}}
+															aria-label={`Delete ${getCollectionTitle(collection)}`}
+															className="text-gray-500 hover:text-red-600"
+															disabled={deleteMutation.isPending}
+														>
+															<Trash className="w-4 h-4" />
 														</Button>
 														<CollapsibleTrigger asChild>
 															<Button
