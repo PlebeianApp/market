@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { OrderDetailComponent } from '@/components/orders/OrderDetailComponent'
 
-export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/messages/$orderId')({
+export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/messages/$pubkey')({
 	component: OrderDetailRouteComponent,
 })
 

@@ -29,11 +29,12 @@ import { Route as DashboardLayoutDashboardProductsShippingOptionsImport } from '
 import { Route as DashboardLayoutDashboardProductsReceivingPaymentsImport } from './routes/_dashboard-layout/dashboard/products/receiving-payments'
 import { Route as DashboardLayoutDashboardProductsProductsImport } from './routes/_dashboard-layout/dashboard/products/products'
 import { Route as DashboardLayoutDashboardProductsCollectionsImport } from './routes/_dashboard-layout/dashboard/products/collections'
+import { Route as DashboardLayoutDashboardOrdersOrderIdImport } from './routes/_dashboard-layout/dashboard/orders/$orderId'
 import { Route as DashboardLayoutDashboardAccountYourPurchasesImport } from './routes/_dashboard-layout/dashboard/account/your-purchases'
 import { Route as DashboardLayoutDashboardAccountProfileImport } from './routes/_dashboard-layout/dashboard/account/profile'
 import { Route as DashboardLayoutDashboardAccountNetworkImport } from './routes/_dashboard-layout/dashboard/account/network'
 import { Route as DashboardLayoutDashboardAccountMakingPaymentsImport } from './routes/_dashboard-layout/dashboard/account/making-payments'
-import { Route as DashboardLayoutDashboardSalesMessagesOrderIdImport } from './routes/_dashboard-layout/dashboard/sales/messages/$orderId'
+import { Route as DashboardLayoutDashboardSalesMessagesPubkeyImport } from './routes/_dashboard-layout/dashboard/sales/messages/$pubkey'
 import { Route as DashboardLayoutDashboardProductsProductsProductIdImport } from './routes/_dashboard-layout/dashboard/products/products/$productId'
 import { Route as DashboardLayoutDashboardProductsCollectionsCollectionIdImport } from './routes/_dashboard-layout/dashboard/products/collections/$collectionId'
 
@@ -154,6 +155,13 @@ const DashboardLayoutDashboardProductsCollectionsRoute =
     getParentRoute: () => DashboardLayoutRoute,
   } as any)
 
+const DashboardLayoutDashboardOrdersOrderIdRoute =
+  DashboardLayoutDashboardOrdersOrderIdImport.update({
+    id: '/dashboard/orders/$orderId',
+    path: '/dashboard/orders/$orderId',
+    getParentRoute: () => DashboardLayoutRoute,
+  } as any)
+
 const DashboardLayoutDashboardAccountYourPurchasesRoute =
   DashboardLayoutDashboardAccountYourPurchasesImport.update({
     id: '/dashboard/account/your-purchases',
@@ -182,10 +190,10 @@ const DashboardLayoutDashboardAccountMakingPaymentsRoute =
     getParentRoute: () => DashboardLayoutRoute,
   } as any)
 
-const DashboardLayoutDashboardSalesMessagesOrderIdRoute =
-  DashboardLayoutDashboardSalesMessagesOrderIdImport.update({
-    id: '/$orderId',
-    path: '/$orderId',
+const DashboardLayoutDashboardSalesMessagesPubkeyRoute =
+  DashboardLayoutDashboardSalesMessagesPubkeyImport.update({
+    id: '/$pubkey',
+    path: '/$pubkey',
     getParentRoute: () => DashboardLayoutDashboardSalesMessagesRoute,
   } as any)
 
@@ -312,6 +320,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardLayoutDashboardAccountYourPurchasesImport
       parentRoute: typeof DashboardLayoutImport
     }
+    '/_dashboard-layout/dashboard/orders/$orderId': {
+      id: '/_dashboard-layout/dashboard/orders/$orderId'
+      path: '/dashboard/orders/$orderId'
+      fullPath: '/dashboard/orders/$orderId'
+      preLoaderRoute: typeof DashboardLayoutDashboardOrdersOrderIdImport
+      parentRoute: typeof DashboardLayoutImport
+    }
     '/_dashboard-layout/dashboard/products/collections': {
       id: '/_dashboard-layout/dashboard/products/collections'
       path: '/dashboard/products/collections'
@@ -375,11 +390,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardLayoutDashboardProductsProductsProductIdImport
       parentRoute: typeof DashboardLayoutDashboardProductsProductsImport
     }
-    '/_dashboard-layout/dashboard/sales/messages/$orderId': {
-      id: '/_dashboard-layout/dashboard/sales/messages/$orderId'
-      path: '/$orderId'
-      fullPath: '/dashboard/sales/messages/$orderId'
-      preLoaderRoute: typeof DashboardLayoutDashboardSalesMessagesOrderIdImport
+    '/_dashboard-layout/dashboard/sales/messages/$pubkey': {
+      id: '/_dashboard-layout/dashboard/sales/messages/$pubkey'
+      path: '/$pubkey'
+      fullPath: '/dashboard/sales/messages/$pubkey'
+      preLoaderRoute: typeof DashboardLayoutDashboardSalesMessagesPubkeyImport
       parentRoute: typeof DashboardLayoutDashboardSalesMessagesImport
     }
   }
@@ -418,13 +433,13 @@ const DashboardLayoutDashboardProductsProductsRouteWithChildren =
   )
 
 interface DashboardLayoutDashboardSalesMessagesRouteChildren {
-  DashboardLayoutDashboardSalesMessagesOrderIdRoute: typeof DashboardLayoutDashboardSalesMessagesOrderIdRoute
+  DashboardLayoutDashboardSalesMessagesPubkeyRoute: typeof DashboardLayoutDashboardSalesMessagesPubkeyRoute
 }
 
 const DashboardLayoutDashboardSalesMessagesRouteChildren: DashboardLayoutDashboardSalesMessagesRouteChildren =
   {
-    DashboardLayoutDashboardSalesMessagesOrderIdRoute:
-      DashboardLayoutDashboardSalesMessagesOrderIdRoute,
+    DashboardLayoutDashboardSalesMessagesPubkeyRoute:
+      DashboardLayoutDashboardSalesMessagesPubkeyRoute,
   }
 
 const DashboardLayoutDashboardSalesMessagesRouteWithChildren =
@@ -438,6 +453,7 @@ interface DashboardLayoutRouteChildren {
   DashboardLayoutDashboardAccountNetworkRoute: typeof DashboardLayoutDashboardAccountNetworkRoute
   DashboardLayoutDashboardAccountProfileRoute: typeof DashboardLayoutDashboardAccountProfileRoute
   DashboardLayoutDashboardAccountYourPurchasesRoute: typeof DashboardLayoutDashboardAccountYourPurchasesRoute
+  DashboardLayoutDashboardOrdersOrderIdRoute: typeof DashboardLayoutDashboardOrdersOrderIdRoute
   DashboardLayoutDashboardProductsCollectionsRoute: typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
   DashboardLayoutDashboardProductsProductsRoute: typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
   DashboardLayoutDashboardProductsReceivingPaymentsRoute: typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
@@ -457,6 +473,8 @@ const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
     DashboardLayoutDashboardAccountProfileRoute,
   DashboardLayoutDashboardAccountYourPurchasesRoute:
     DashboardLayoutDashboardAccountYourPurchasesRoute,
+  DashboardLayoutDashboardOrdersOrderIdRoute:
+    DashboardLayoutDashboardOrdersOrderIdRoute,
   DashboardLayoutDashboardProductsCollectionsRoute:
     DashboardLayoutDashboardProductsCollectionsRouteWithChildren,
   DashboardLayoutDashboardProductsProductsRoute:
@@ -493,6 +511,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
   '/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
   '/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
+  '/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
   '/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
   '/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
   '/dashboard/products/receiving-payments': typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
@@ -502,7 +521,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/sales/sales': typeof DashboardLayoutDashboardSalesSalesRoute
   '/dashboard/products/collections/$collectionId': typeof DashboardLayoutDashboardProductsCollectionsCollectionIdRoute
   '/dashboard/products/products/$productId': typeof DashboardLayoutDashboardProductsProductsProductIdRoute
-  '/dashboard/sales/messages/$orderId': typeof DashboardLayoutDashboardSalesMessagesOrderIdRoute
+  '/dashboard/sales/messages/$pubkey': typeof DashboardLayoutDashboardSalesMessagesPubkeyRoute
 }
 
 export interface FileRoutesByTo {
@@ -521,6 +540,7 @@ export interface FileRoutesByTo {
   '/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
   '/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
   '/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
+  '/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
   '/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
   '/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
   '/dashboard/products/receiving-payments': typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
@@ -530,7 +550,7 @@ export interface FileRoutesByTo {
   '/dashboard/sales/sales': typeof DashboardLayoutDashboardSalesSalesRoute
   '/dashboard/products/collections/$collectionId': typeof DashboardLayoutDashboardProductsCollectionsCollectionIdRoute
   '/dashboard/products/products/$productId': typeof DashboardLayoutDashboardProductsProductsProductIdRoute
-  '/dashboard/sales/messages/$orderId': typeof DashboardLayoutDashboardSalesMessagesOrderIdRoute
+  '/dashboard/sales/messages/$pubkey': typeof DashboardLayoutDashboardSalesMessagesPubkeyRoute
 }
 
 export interface FileRoutesById {
@@ -550,6 +570,7 @@ export interface FileRoutesById {
   '/_dashboard-layout/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
   '/_dashboard-layout/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
   '/_dashboard-layout/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
+  '/_dashboard-layout/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
   '/_dashboard-layout/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
   '/_dashboard-layout/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
   '/_dashboard-layout/dashboard/products/receiving-payments': typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
@@ -559,7 +580,7 @@ export interface FileRoutesById {
   '/_dashboard-layout/dashboard/sales/sales': typeof DashboardLayoutDashboardSalesSalesRoute
   '/_dashboard-layout/dashboard/products/collections/$collectionId': typeof DashboardLayoutDashboardProductsCollectionsCollectionIdRoute
   '/_dashboard-layout/dashboard/products/products/$productId': typeof DashboardLayoutDashboardProductsProductsProductIdRoute
-  '/_dashboard-layout/dashboard/sales/messages/$orderId': typeof DashboardLayoutDashboardSalesMessagesOrderIdRoute
+  '/_dashboard-layout/dashboard/sales/messages/$pubkey': typeof DashboardLayoutDashboardSalesMessagesPubkeyRoute
 }
 
 export interface FileRouteTypes {
@@ -580,6 +601,7 @@ export interface FileRouteTypes {
     | '/dashboard/account/network'
     | '/dashboard/account/profile'
     | '/dashboard/account/your-purchases'
+    | '/dashboard/orders/$orderId'
     | '/dashboard/products/collections'
     | '/dashboard/products/products'
     | '/dashboard/products/receiving-payments'
@@ -589,7 +611,7 @@ export interface FileRouteTypes {
     | '/dashboard/sales/sales'
     | '/dashboard/products/collections/$collectionId'
     | '/dashboard/products/products/$productId'
-    | '/dashboard/sales/messages/$orderId'
+    | '/dashboard/sales/messages/$pubkey'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -607,6 +629,7 @@ export interface FileRouteTypes {
     | '/dashboard/account/network'
     | '/dashboard/account/profile'
     | '/dashboard/account/your-purchases'
+    | '/dashboard/orders/$orderId'
     | '/dashboard/products/collections'
     | '/dashboard/products/products'
     | '/dashboard/products/receiving-payments'
@@ -616,7 +639,7 @@ export interface FileRouteTypes {
     | '/dashboard/sales/sales'
     | '/dashboard/products/collections/$collectionId'
     | '/dashboard/products/products/$productId'
-    | '/dashboard/sales/messages/$orderId'
+    | '/dashboard/sales/messages/$pubkey'
   id:
     | '__root__'
     | '/'
@@ -634,6 +657,7 @@ export interface FileRouteTypes {
     | '/_dashboard-layout/dashboard/account/network'
     | '/_dashboard-layout/dashboard/account/profile'
     | '/_dashboard-layout/dashboard/account/your-purchases'
+    | '/_dashboard-layout/dashboard/orders/$orderId'
     | '/_dashboard-layout/dashboard/products/collections'
     | '/_dashboard-layout/dashboard/products/products'
     | '/_dashboard-layout/dashboard/products/receiving-payments'
@@ -643,7 +667,7 @@ export interface FileRouteTypes {
     | '/_dashboard-layout/dashboard/sales/sales'
     | '/_dashboard-layout/dashboard/products/collections/$collectionId'
     | '/_dashboard-layout/dashboard/products/products/$productId'
-    | '/_dashboard-layout/dashboard/sales/messages/$orderId'
+    | '/_dashboard-layout/dashboard/sales/messages/$pubkey'
   fileRoutesById: FileRoutesById
 }
 
@@ -706,6 +730,7 @@ export const routeTree = rootRoute
         "/_dashboard-layout/dashboard/account/network",
         "/_dashboard-layout/dashboard/account/profile",
         "/_dashboard-layout/dashboard/account/your-purchases",
+        "/_dashboard-layout/dashboard/orders/$orderId",
         "/_dashboard-layout/dashboard/products/collections",
         "/_dashboard-layout/dashboard/products/products",
         "/_dashboard-layout/dashboard/products/receiving-payments",
@@ -759,6 +784,10 @@ export const routeTree = rootRoute
       "filePath": "_dashboard-layout/dashboard/account/your-purchases.tsx",
       "parent": "/_dashboard-layout"
     },
+    "/_dashboard-layout/dashboard/orders/$orderId": {
+      "filePath": "_dashboard-layout/dashboard/orders/$orderId.tsx",
+      "parent": "/_dashboard-layout"
+    },
     "/_dashboard-layout/dashboard/products/collections": {
       "filePath": "_dashboard-layout/dashboard/products/collections.tsx",
       "parent": "/_dashboard-layout",
@@ -789,7 +818,7 @@ export const routeTree = rootRoute
       "filePath": "_dashboard-layout/dashboard/sales/messages.tsx",
       "parent": "/_dashboard-layout",
       "children": [
-        "/_dashboard-layout/dashboard/sales/messages/$orderId"
+        "/_dashboard-layout/dashboard/sales/messages/$pubkey"
       ]
     },
     "/_dashboard-layout/dashboard/sales/sales": {
@@ -804,8 +833,8 @@ export const routeTree = rootRoute
       "filePath": "_dashboard-layout/dashboard/products/products/$productId.tsx",
       "parent": "/_dashboard-layout/dashboard/products/products"
     },
-    "/_dashboard-layout/dashboard/sales/messages/$orderId": {
-      "filePath": "_dashboard-layout/dashboard/sales/messages/$orderId.tsx",
+    "/_dashboard-layout/dashboard/sales/messages/$pubkey": {
+      "filePath": "_dashboard-layout/dashboard/sales/messages/$pubkey.tsx",
       "parent": "/_dashboard-layout/dashboard/sales/messages"
     }
   }
