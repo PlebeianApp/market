@@ -28,7 +28,7 @@ export function ConversationListItem({ conversation }: ConversationListItemProps
 			}}
 		>
 			<div className="mr-3 flex-shrink-0">
-				<UserWithAvatar pubkey={pubkey} size="md" />
+				<UserWithAvatar pubkey={pubkey} size="md" disableLink={true} />
 			</div>
 			<div className="flex-grow overflow-hidden">
 				<div className="flex justify-between items-center">

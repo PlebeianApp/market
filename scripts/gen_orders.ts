@@ -12,6 +12,20 @@ import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev
 import type { z } from 'zod'
 import { v4 as uuidv4 } from 'uuid'
 
+// Timestamps for seeding (seconds since epoch)
+const MIN_SEED_TIMESTAMP = 1704067200 // January 1, 2024, 00:00:00 UTC
+const MAX_SEED_TIMESTAMP = 1748927999 // June 3, 2025, 23:59:59 UTC
+
+// Helper to get a random timestamp within the defined seeding range
+function getRandomPastTimestamp(min = MIN_SEED_TIMESTAMP, max = MAX_SEED_TIMESTAMP): number {
+	return faker.number.int({ min, max })
+}
+
+// Helper to create a small random time increment (e.g., 1 to 300 seconds)
+function getRandomTimeIncrement(minSeconds = 1, maxSeconds = 300): number {
+	return faker.number.int({ min: minSeconds, max: maxSeconds })
+}
+
 /**
  * Generates random data for an order creation event (kind 16, type 1)
  */
@@ -19,11 +33,21 @@ export function generateOrderCreationData(
 	buyerPubkey: string,
 	sellerPubkey: string,
 	productRef: string,
-): Omit<z.infer<typeof OrderCreationSchema>, 'tags'> & { tags: NDKTag[] } {
+	baseTimestamp?: number, // Optional base timestamp for sequential creation
+): Omit<z.infer<typeof OrderCreationSchema>, 'tags'> & { tags: NDKTag[]; created_at: number } {
 	const orderId = uuidv4()
 	const quantity = faker.number.int({ min: 1, max: 5 }).toString()
 	const priceInSats = faker.number.int({ min: 1000, max: 100000 }).toString() // Price in satoshis
 	const totalAmount = (parseInt(priceInSats) * parseInt(quantity)).toString()
+
+	let createdAt: number
+	if (baseTimestamp) {
+		createdAt = Math.min(baseTimestamp + getRandomTimeIncrement(1, 5), MAX_SEED_TIMESTAMP)
+	} else {
+		createdAt = getRandomPastTimestamp()
+	}
+	// Ensure it's not before MIN_SEED_TIMESTAMP, especially if baseTimestamp was very low (though unlikely with current setup)
+	createdAt = Math.max(createdAt, MIN_SEED_TIMESTAMP)
 
 	const tags: NDKTag[] = [
 		// Required tags
@@ -42,7 +66,7 @@ export function generateOrderCreationData(
 
 	return {
 		kind: ORDER_PROCESS_KIND,
-		created_at: Math.floor(Date.now() / 1000),
+		created_at: createdAt,
 		content: faker.commerce.productDescription(),
 		tags,
 	}
@@ -55,7 +79,8 @@ export async function createOrderEvent(
 	signer: NDKPrivateKeySigner,
 	ndk: NDK,
 	orderData: ReturnType<typeof generateOrderCreationData>,
-): Promise<string | null> {
+): Promise<{ eventId: string | null; createdAt: number }> {
+	// Return createdAt
 	const event = new NDKEvent(ndk)
 	event.kind = orderData.kind
 	event.content = orderData.content
@@ -65,11 +90,11 @@ export async function createOrderEvent(
 	try {
 		await event.sign(signer)
 		await event.publish()
-		console.log(`Published order creation: ${orderData.tags.find((tag) => tag[0] === 'order')?.[1]}`)
-		return event.id
+		console.log(`Published order creation: ${orderData.tags.find((tag) => tag[0] === 'order')?.[1]} at ${orderData.created_at}`)
+		return { eventId: event.id, createdAt: orderData.created_at }
 	} catch (error) {
 		console.error(`Failed to publish order creation`, error)
-		return null
+		return { eventId: null, createdAt: orderData.created_at }
 	}
 }
 
@@ -80,8 +105,18 @@ export function generatePaymentRequestData(
 	buyerPubkey: string,
 	orderId: string,
 	amount: string,
+	baseTimestamp?: number, // Optional base timestamp
 	isManualProcessing: boolean = true,
 ): { kind: typeof ORDER_PROCESS_KIND; created_at: number; content: string; tags: NDKTag[] } {
+	let createdAt: number
+	if (baseTimestamp) {
+		createdAt = Math.min(baseTimestamp + getRandomTimeIncrement(), MAX_SEED_TIMESTAMP)
+	} else {
+		// This case should ideally not happen if seed.ts provides a baseTimestamp from the order creation
+		createdAt = getRandomPastTimestamp()
+	}
+	createdAt = Math.max(createdAt, MIN_SEED_TIMESTAMP)
+
 	// Payment methods
 	const paymentMethods: ['lightning' | 'bitcoin' | 'ecash' | 'fiat' | 'other', string][] = [
 		['lightning', faker.string.alphanumeric(64)], // Simulating a lightning invoice
@@ -106,13 +141,13 @@ export function generatePaymentRequestData(
 
 	// Add expiration if it's a lightning payment
 	if (paymentMethod === 'lightning') {
-		const expirationTime = Math.floor(Date.now() / 1000) + 3600 // 1 hour from now
+		const expirationTime = createdAt + 3600 // 1 hour from now
 		tags.push(['expiration', expirationTime.toString()])
 	}
 
 	return {
 		kind: ORDER_PROCESS_KIND,
-		created_at: Math.floor(Date.now() / 1000),
+		created_at: createdAt,
 		content: `Please pay ${amount} sats using the provided ${paymentMethod} details.`,
 		tags,
 	}
@@ -125,7 +160,8 @@ export async function createPaymentRequestEvent(
 	signer: NDKPrivateKeySigner,
 	ndk: NDK,
 	paymentData: ReturnType<typeof generatePaymentRequestData>,
-): Promise<string | null> {
+): Promise<{ eventId: string | null; createdAt: number }> {
+	// Return createdAt
 	const event = new NDKEvent(ndk)
 	event.kind = paymentData.kind
 	event.content = paymentData.content
@@ -135,11 +171,13 @@ export async function createPaymentRequestEvent(
 	try {
 		await event.sign(signer)
 		await event.publish()
-		console.log(`Published payment request for order: ${paymentData.tags.find((tag) => tag[0] === 'order')?.[1]}`)
-		return event.id
+		console.log(
+			`Published payment request for order: ${paymentData.tags.find((tag) => tag[0] === 'order')?.[1]} at ${paymentData.created_at}`,
+		)
+		return { eventId: event.id, createdAt: paymentData.created_at }
 	} catch (error) {
 		console.error(`Failed to publish payment request`, error)
-		return null
+		return { eventId: null, createdAt: paymentData.created_at }
 	}
 }
 
@@ -150,7 +188,16 @@ export function generateOrderStatusData(
 	buyerPubkey: string,
 	orderId: string,
 	status: (typeof ORDER_STATUS)[keyof typeof ORDER_STATUS] = ORDER_STATUS.PENDING,
+	baseTimestamp?: number, // Optional base timestamp
 ): { kind: typeof ORDER_PROCESS_KIND; created_at: number; content: string; tags: NDKTag[] } {
+	let createdAt: number
+	if (baseTimestamp) {
+		createdAt = Math.min(baseTimestamp + getRandomTimeIncrement(), MAX_SEED_TIMESTAMP)
+	} else {
+		createdAt = getRandomPastTimestamp()
+	}
+	createdAt = Math.max(createdAt, MIN_SEED_TIMESTAMP)
+
 	const tags: NDKTag[] = [
 		// Required tags
 		['p', buyerPubkey],
@@ -170,7 +217,7 @@ export function generateOrderStatusData(
 
 	return {
 		kind: ORDER_PROCESS_KIND,
-		created_at: Math.floor(Date.now() / 1000),
+		created_at: createdAt,
 		content: statusMessages[status] || `Order status updated to: ${status}`,
 		tags,
 	}
@@ -183,7 +230,8 @@ export async function createOrderStatusEvent(
 	signer: NDKPrivateKeySigner,
 	ndk: NDK,
 	statusData: ReturnType<typeof generateOrderStatusData>,
-): Promise<string | null> {
+): Promise<{ eventId: string | null; createdAt: number }> {
+	// Return createdAt
 	const event = new NDKEvent(ndk)
 	event.kind = statusData.kind
 	event.content = statusData.content
@@ -193,11 +241,13 @@ export async function createOrderStatusEvent(
 	try {
 		await event.sign(signer)
 		await event.publish()
-		console.log(`Published order status update: ${statusData.tags.find((tag) => tag[0] === 'status')?.[1]}`)
-		return event.id
+		console.log(
+			`Published order status update: ${statusData.tags.find((tag) => tag[0] === 'status')?.[1]} for order ${statusData.tags.find((tag) => tag[0] === 'order')?.[1]} at ${statusData.created_at}`,
+		)
+		return { eventId: event.id, createdAt: statusData.created_at }
 	} catch (error) {
 		console.error(`Failed to publish order status update`, error)
-		return null
+		return { eventId: null, createdAt: statusData.created_at }
 	}
 }
 
@@ -208,7 +258,16 @@ export function generateShippingUpdateData(
 	buyerPubkey: string,
 	orderId: string,
 	status: (typeof SHIPPING_STATUS)[keyof typeof SHIPPING_STATUS] = SHIPPING_STATUS.PROCESSING,
+	baseTimestamp?: number, // Optional base timestamp
 ): { kind: typeof ORDER_PROCESS_KIND; created_at: number; content: string; tags: NDKTag[] } {
+	let createdAt: number
+	if (baseTimestamp) {
+		createdAt = Math.min(baseTimestamp + getRandomTimeIncrement(), MAX_SEED_TIMESTAMP)
+	} else {
+		createdAt = getRandomPastTimestamp()
+	}
+	createdAt = Math.max(createdAt, MIN_SEED_TIMESTAMP)
+
 	const tags: NDKTag[] = [
 		// Required tags
 		['p', buyerPubkey],
@@ -229,7 +288,7 @@ export function generateShippingUpdateData(
 
 		// Add ETA for shipped status
 		if (status === SHIPPING_STATUS.SHIPPED) {
-			const etaTimestamp = Math.floor(Date.now() / 1000) + faker.number.int({ min: 86400, max: 604800 }) // 1-7 days from now
+			const etaTimestamp = createdAt + faker.number.int({ min: 86400, max: 604800 }) // 1-7 days from now
 			tags.push(['eta', etaTimestamp.toString()])
 		}
 	}
@@ -243,7 +302,7 @@ export function generateShippingUpdateData(
 
 	return {
 		kind: ORDER_PROCESS_KIND,
-		created_at: Math.floor(Date.now() / 1000),
+		created_at: createdAt,
 		content: statusMessages[status] || `Shipping status updated to: ${status}`,
 		tags,
 	}
@@ -256,7 +315,8 @@ export async function createShippingUpdateEvent(
 	signer: NDKPrivateKeySigner,
 	ndk: NDK,
 	shippingData: ReturnType<typeof generateShippingUpdateData>,
-): Promise<string | null> {
+): Promise<{ eventId: string | null; createdAt: number }> {
+	// Return createdAt
 	const event = new NDKEvent(ndk)
 	event.kind = shippingData.kind
 	event.content = shippingData.content
@@ -266,11 +326,13 @@ export async function createShippingUpdateEvent(
 	try {
 		await event.sign(signer)
 		await event.publish()
-		console.log(`Published shipping update: ${shippingData.tags.find((tag) => tag[0] === 'status')?.[1]}`)
-		return event.id
+		console.log(
+			`Published shipping update: ${shippingData.tags.find((tag) => tag[0] === 'status')?.[1]} for order ${shippingData.tags.find((tag) => tag[0] === 'order')?.[1]} at ${shippingData.created_at}`,
+		)
+		return { eventId: event.id, createdAt: shippingData.created_at }
 	} catch (error) {
 		console.error(`Failed to publish shipping update`, error)
-		return null
+		return { eventId: null, createdAt: shippingData.created_at }
 	}
 }
 
@@ -280,7 +342,16 @@ export async function createShippingUpdateEvent(
 export function generateGeneralCommunicationData(
 	recipientPubkey: string,
 	orderId?: string,
+	baseTimestamp?: number, // Optional base timestamp
 ): { kind: typeof ORDER_GENERAL_KIND; created_at: number; content: string; tags: NDKTag[] } {
+	let createdAt: number
+	if (baseTimestamp) {
+		createdAt = Math.min(baseTimestamp + getRandomTimeIncrement(), MAX_SEED_TIMESTAMP)
+	} else {
+		createdAt = getRandomPastTimestamp()
+	}
+	createdAt = Math.max(createdAt, MIN_SEED_TIMESTAMP)
+
 	const tags: NDKTag[] = [
 		// Required tags
 		['p', recipientPubkey],
@@ -293,7 +364,7 @@ export function generateGeneralCommunicationData(
 
 	return {
 		kind: ORDER_GENERAL_KIND,
-		created_at: Math.floor(Date.now() / 1000),
+		created_at: createdAt,
 		content: faker.lorem.paragraph(),
 		tags,
 	}
@@ -306,7 +377,8 @@ export async function createGeneralCommunicationEvent(
 	signer: NDKPrivateKeySigner,
 	ndk: NDK,
 	communicationData: ReturnType<typeof generateGeneralCommunicationData>,
-): Promise<string | null> {
+): Promise<{ eventId: string | null; createdAt: number }> {
+	// Return createdAt
 	const event = new NDKEvent(ndk)
 	event.kind = communicationData.kind
 	event.content = communicationData.content
@@ -316,11 +388,13 @@ export async function createGeneralCommunicationEvent(
 	try {
 		await event.sign(signer)
 		await event.publish()
-		console.log(`Published general communication to: ${communicationData.tags.find((tag) => tag[0] === 'p')?.[1].substring(0, 8)}`)
-		return event.id
+		console.log(
+			`Published general communication to: ${communicationData.tags.find((tag) => tag[0] === 'p')?.[1].substring(0, 8)} at ${communicationData.created_at}`,
+		)
+		return { eventId: event.id, createdAt: communicationData.created_at }
 	} catch (error) {
 		console.error(`Failed to publish general communication`, error)
-		return null
+		return { eventId: null, createdAt: communicationData.created_at }
 	}
 }
 
@@ -331,7 +405,16 @@ export function generatePaymentReceiptData(
 	merchantPubkey: string,
 	orderId: string,
 	amount: string,
+	baseTimestamp?: number, // Optional base timestamp
 ): { kind: typeof PAYMENT_RECEIPT_KIND; created_at: number; content: string; tags: NDKTag[] } {
+	let createdAt: number
+	if (baseTimestamp) {
+		createdAt = Math.min(baseTimestamp + getRandomTimeIncrement(), MAX_SEED_TIMESTAMP)
+	} else {
+		createdAt = getRandomPastTimestamp()
+	}
+	createdAt = Math.max(createdAt, MIN_SEED_TIMESTAMP)
+
 	// Payment methods with their reference and proof formats
 	const paymentOptions = [
 		{
@@ -374,7 +457,7 @@ export function generatePaymentReceiptData(
 
 	return {
 		kind: PAYMENT_RECEIPT_KIND,
-		created_at: Math.floor(Date.now() / 1000),
+		created_at: createdAt,
 		content: `Payment confirmation for order ${orderId}`,
 		tags,
 	}
@@ -387,7 +470,8 @@ export async function createPaymentReceiptEvent(
 	signer: NDKPrivateKeySigner,
 	ndk: NDK,
 	receiptData: ReturnType<typeof generatePaymentReceiptData>,
-): Promise<string | null> {
+): Promise<{ eventId: string | null; createdAt: number }> {
+	// Return createdAt
 	const event = new NDKEvent(ndk)
 	event.kind = receiptData.kind
 	event.content = receiptData.content
@@ -397,10 +481,12 @@ export async function createPaymentReceiptEvent(
 	try {
 		await event.sign(signer)
 		await event.publish()
-		console.log(`Published payment receipt for order: ${receiptData.tags.find((tag) => tag[0] === 'order')?.[1]}`)
-		return event.id
+		console.log(
+			`Published payment receipt for order: ${receiptData.tags.find((tag) => tag[0] === 'order')?.[1]} at ${receiptData.created_at}`,
+		)
+		return { eventId: event.id, createdAt: receiptData.created_at }
 	} catch (error) {
 		console.error(`Failed to publish payment receipt`, error)
-		return null
+		return { eventId: null, createdAt: receiptData.created_at }
 	}
 }

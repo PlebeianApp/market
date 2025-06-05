@@ -1,10 +1,10 @@
-import { createFileRoute, Outlet, useMatchRoute } from '@tanstack/react-router'
-import { useConversationsList } from '@/queries/messages'
 import { ConversationListItem, type ConversationItemData } from '@/components/messages/ConversationListItem'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { authStore } from '@/lib/stores/auth'
+import { useConversationsList } from '@/queries/messages'
+import { createFileRoute, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { Loader2, MessageSquareText } from 'lucide-react'
-import { ScrollArea } from '@/components/ui/scroll-area'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/messages')({
 	component: MessagesParentComponent,
@@ -19,9 +19,6 @@ function MessagesParentComponent() {
 		to: '/dashboard/sales/messages/$pubkey',
 		fuzzy: true,
 	})
-
-	console.log('Current Path:', window.location.pathname)
-	console.log('isChatDetailActive:', isChatDetailActive)
 
 	if (!currentUser) {
 		return (
