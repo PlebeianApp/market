@@ -22,4 +22,4 @@ export function CollectionWelcomeScreen({ onGetStarted }: { onGetStarted: () => 
 			</Button>
 		</div>
 	)
-} 
+}

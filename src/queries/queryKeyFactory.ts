@@ -97,3 +97,10 @@ export const walletDetailsKeys = {
 	publish: () => [...walletDetailsKeys.all, 'publish'] as const,
 	delete: () => [...walletDetailsKeys.all, 'delete'] as const,
 } as const
+
+export const messageKeys = {
+	all: ['messages'] as const,
+	conversationsList: (currentUserPubkey: string | undefined) => [...messageKeys.all, 'conversations', currentUserPubkey || 'all'] as const,
+	conversationMessages: (currentUserPubkey: string | undefined, otherUserPubkey: string | undefined) =>
+		[...messageKeys.all, 'conversation', currentUserPubkey || 'na', otherUserPubkey || 'na'] as const,
+} as const

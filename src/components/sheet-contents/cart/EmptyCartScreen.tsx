@@ -15,4 +15,4 @@ export function EmptyCartScreen() {
 			</div>
 		</div>
 	)
-} 
+}

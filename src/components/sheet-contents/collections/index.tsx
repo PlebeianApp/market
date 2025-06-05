@@ -8,11 +8,11 @@ import { CollectionWelcomeScreen } from './CollectionWelcomeScreen'
 export function NewCollectionContent({
 	title,
 	description,
-	showWelcome = true
+	showWelcome = true,
 }: {
-	title?: string;
-	description?: string;
-	showWelcome?: boolean;
+	title?: string
+	description?: string
+	showWelcome?: boolean
 }) {
 	// Get form state from store
 	const formState = useStore(collectionFormStore)
@@ -21,7 +21,7 @@ export function NewCollectionContent({
 	// Check if the form has been modified from its default state
 	const isFormModified = () => {
 		if (isEditing) return true
-		
+
 		return (
 			formState.name !== DEFAULT_COLLECTION_FORM_STATE.name ||
 			formState.description !== DEFAULT_COLLECTION_FORM_STATE.description ||
@@ -62,9 +62,7 @@ export function NewCollectionContent({
 		>
 			<SheetHeader>
 				<SheetTitle className="text-center">{title || defaultTitle}</SheetTitle>
-				<SheetDescription className="hidden">
-					{description || defaultDescription}
-				</SheetDescription>
+				<SheetDescription className="hidden">{description || defaultDescription}</SheetDescription>
 			</SheetHeader>
 
 			<CollectionFormContent />
@@ -76,4 +74,4 @@ export function NewCollectionContent({
 export { InfoTab } from './InfoTab'
 export { ProductsTab } from './ProductsTab'
 export { CollectionWelcomeScreen } from './CollectionWelcomeScreen'
-export { CollectionFormContent } from './CollectionFormContent' 
+export { CollectionFormContent } from './CollectionFormContent'

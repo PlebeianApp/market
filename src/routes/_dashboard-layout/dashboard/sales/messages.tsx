@@ -1,40 +1,27 @@
-import { createFileRoute, useMatchRoute, Outlet } from '@tanstack/react-router'
-import { OrderDataTable } from '@/components/orders/OrderDataTable'
-import { fullOrderColumns } from '@/components/orders/orderColumns'
-import { ndkActions } from '@/lib/stores/ndk'
-import { getOrderStatus, useOrders } from '@/queries/orders'
-import { useMemo, useState } from 'react'
+import { createFileRoute, Outlet, useMatchRoute } from '@tanstack/react-router'
+import { useConversationsList } from '@/queries/messages'
+import { ConversationListItem, type ConversationItemData } from '@/components/messages/ConversationListItem'
+import { authStore } from '@/lib/stores/auth'
+import { useStore } from '@tanstack/react-store'
+import { Loader2, MessageSquareText } from 'lucide-react'
+import { ScrollArea } from '@/components/ui/scroll-area'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/messages')({
-	component: MessagesComponent,
+	component: MessagesParentComponent,
 })
 
-function MessagesComponent() {
-	const ndk = ndkActions.getNDK()
-	const currentUser = ndk?.activeUser
+function MessagesParentComponent() {
+	const { user: currentUser } = useStore(authStore)
+	const { data: conversations, isLoading, error } = useConversationsList()
 	const matchRoute = useMatchRoute()
-	const [statusFilter, setStatusFilter] = useState<string>('any')
-	const { data: orders, isLoading } = useOrders()
 
-	// Check if we're on a child route (viewing an order detail)
-	const isViewingOrder = matchRoute({
-		to: '/dashboard/sales/messages/$orderId',
+	const isChatDetailActive = matchRoute({
+		to: '/dashboard/sales/messages/$pubkey',
 		fuzzy: true,
 	})
 
-	// Filter orders by status if needed
-	const filteredOrders = useMemo(() => {
-		if (!orders) return []
-
-		if (statusFilter === 'any') {
-			return orders
-		}
-
-		return orders.filter((order) => {
-			const status = getOrderStatus(order).toLowerCase()
-			return status === statusFilter.toLowerCase()
-		})
-	}, [orders, statusFilter])
+	console.log('Current Path:', window.location.pathname)
+	console.log('isChatDetailActive:', isChatDetailActive)
 
 	if (!currentUser) {
 		return (
@@ -44,25 +31,46 @@ function MessagesComponent() {
 		)
 	}
 
-	// If we're viewing an order detail, render the child route
-	if (isViewingOrder) {
+	// If a specific chat detail is active, render only the Outlet for it
+	if (isChatDetailActive) {
 		return <Outlet />
 	}
 
+	// Otherwise, render the list of conversations
 	return (
-		<div className="space-y-6">
-			<h1 className="text-2xl font-bold">Order Messages</h1>
-			<p className="text-gray-600">All your order communications in one place</p>
+		<div className="flex flex-col border bg-card rounded-md shadow-sm p-1 h-[calc(100vh-var(--header-height)-var(--page-padding)-2px)]">
+			<div className="flex items-center justify-between p-3 pb-2 border-b mb-2">
+				<h1 className="text-xl font-bold flex items-center">
+					<MessageSquareText className="w-6 h-6 mr-2" />
+					Chats
+				</h1>
+				{/* Placeholder for New Message button or actions */}
+			</div>
 
-			<OrderDataTable
-				data={filteredOrders}
-				columns={fullOrderColumns}
-				isLoading={isLoading}
-				filterColumn="orderId"
-				showStatusFilter={true}
-				onStatusFilterChange={setStatusFilter}
-				statusFilter={statusFilter}
-			/>
+			{isLoading && (
+				<div className="flex flex-col justify-center items-center flex-grow">
+					<Loader2 className="w-8 h-8 animate-spin text-primary" />
+					<p className="ml-2 mt-2">Loading conversations...</p>
+				</div>
+			)}
+			{error && <p className="text-destructive p-4 text-center flex-grow">Error loading conversations: {error.message}</p>}
+			{!isLoading && !error && conversations?.length === 0 && (
+				<div className="p-8 text-center text-muted-foreground border bg-background rounded-md min-h-[200px] flex flex-col justify-center items-center flex-grow">
+					<MessageSquareText size={48} className="mb-4" />
+					<p>No conversations yet.</p>
+					<p className="text-sm">Your conversations will appear here.</p>
+				</div>
+			)}
+
+			{!isLoading && !error && conversations && conversations.length > 0 && (
+				<ScrollArea className="flex-grow">
+					<div className="space-y-1.5 pr-2">
+						{conversations.map((convo: ConversationItemData) => (
+							<ConversationListItem key={convo.pubkey} conversation={convo} />
+						))}
+					</div>
+				</ScrollArea>
+			)}
 		</div>
 	)
 }

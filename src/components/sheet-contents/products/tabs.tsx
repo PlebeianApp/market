@@ -468,4 +468,4 @@ export function SpecTab() {
 			{/* Weight and dimensions sections would continue here... */}
 		</div>
 	)
-} 
+}

@@ -35,7 +35,7 @@ export function InfoTab() {
 				<div className="space-y-2">
 					<Label>Header Image</Label>
 					<p className="text-sm text-gray-600">We recommend using images of 1500x500 and under 2mb.</p>
-					
+
 					<ImageUploader
 						src={headerImageUrl || null}
 						index={0}
@@ -110,4 +110,4 @@ export function InfoTab() {
 			</form.Field>
 		</div>
 	)
-} 
+}

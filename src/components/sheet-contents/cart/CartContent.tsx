@@ -12,7 +12,7 @@ import { ChevronDown } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { EmptyCartScreen } from './EmptyCartScreen'
 
-export function CartContent({ className = "" }: { className?: string }) {
+export function CartContent({ className = '' }: { className?: string }) {
 	const {
 		cart,
 		sellerData,
@@ -290,4 +290,4 @@ export function CartContent({ className = "" }: { className?: string }) {
 			</div>
 		</div>
 	)
-} 
+}
