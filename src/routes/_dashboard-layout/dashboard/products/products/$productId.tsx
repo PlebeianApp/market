@@ -1,10 +1,9 @@
 import { ProductFormContent } from '@/components/sheet-contents/NewProductContent'
-import { Button } from '@/components/ui/button'
 import { authStore } from '@/lib/stores/auth'
 import { productFormActions } from '@/lib/stores/product'
-import { getProductTitle, productsByPubkeyQueryOptions } from '@/queries/products'
+import { productsByPubkeyQueryOptions } from '@/queries/products'
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useEffect } from 'react'
 
@@ -15,7 +14,6 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/products/prod
 function EditProductComponent() {
 	const { productId } = Route.useParams()
 	const { user } = useStore(authStore)
-	const navigate = useNavigate()
 
 	// Fetch user's products to find the one being edited
 	const { data: products = [] } = useQuery({

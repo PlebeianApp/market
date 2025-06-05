@@ -1,9 +1,8 @@
 import { CollectionFormContent } from '@/components/sheet-contents/NewCollectionContent'
-import { Button } from '@/components/ui/button'
 import { authStore } from '@/lib/stores/auth'
 import { collectionFormActions } from '@/lib/stores/collection'
 import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useEffect } from 'react'
 
@@ -14,7 +13,6 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/products/coll
 function EditCollectionComponent() {
 	const { collectionId } = Route.useParams()
 	const { user } = useStore(authStore)
-	const navigate = useNavigate()
 
 	// Fetch user's collections to find the one being edited
 	const { data: collections = [] } = useCollectionsByPubkey(user?.pubkey || '')

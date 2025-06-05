@@ -33,6 +33,7 @@ import { Route as DashboardLayoutDashboardAccountYourPurchasesImport } from './r
 import { Route as DashboardLayoutDashboardAccountProfileImport } from './routes/_dashboard-layout/dashboard/account/profile'
 import { Route as DashboardLayoutDashboardAccountNetworkImport } from './routes/_dashboard-layout/dashboard/account/network'
 import { Route as DashboardLayoutDashboardAccountMakingPaymentsImport } from './routes/_dashboard-layout/dashboard/account/making-payments'
+import { Route as DashboardLayoutDashboardSalesMessagesOrderIdImport } from './routes/_dashboard-layout/dashboard/sales/messages/$orderId'
 import { Route as DashboardLayoutDashboardProductsProductsProductIdImport } from './routes/_dashboard-layout/dashboard/products/products/$productId'
 import { Route as DashboardLayoutDashboardProductsCollectionsCollectionIdImport } from './routes/_dashboard-layout/dashboard/products/collections/$collectionId'
 
@@ -179,6 +180,13 @@ const DashboardLayoutDashboardAccountMakingPaymentsRoute =
     id: '/dashboard/account/making-payments',
     path: '/dashboard/account/making-payments',
     getParentRoute: () => DashboardLayoutRoute,
+  } as any)
+
+const DashboardLayoutDashboardSalesMessagesOrderIdRoute =
+  DashboardLayoutDashboardSalesMessagesOrderIdImport.update({
+    id: '/$orderId',
+    path: '/$orderId',
+    getParentRoute: () => DashboardLayoutDashboardSalesMessagesRoute,
   } as any)
 
 const DashboardLayoutDashboardProductsProductsProductIdRoute =
@@ -367,6 +375,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardLayoutDashboardProductsProductsProductIdImport
       parentRoute: typeof DashboardLayoutDashboardProductsProductsImport
     }
+    '/_dashboard-layout/dashboard/sales/messages/$orderId': {
+      id: '/_dashboard-layout/dashboard/sales/messages/$orderId'
+      path: '/$orderId'
+      fullPath: '/dashboard/sales/messages/$orderId'
+      preLoaderRoute: typeof DashboardLayoutDashboardSalesMessagesOrderIdImport
+      parentRoute: typeof DashboardLayoutDashboardSalesMessagesImport
+    }
   }
 }
 
@@ -402,6 +417,21 @@ const DashboardLayoutDashboardProductsProductsRouteWithChildren =
     DashboardLayoutDashboardProductsProductsRouteChildren,
   )
 
+interface DashboardLayoutDashboardSalesMessagesRouteChildren {
+  DashboardLayoutDashboardSalesMessagesOrderIdRoute: typeof DashboardLayoutDashboardSalesMessagesOrderIdRoute
+}
+
+const DashboardLayoutDashboardSalesMessagesRouteChildren: DashboardLayoutDashboardSalesMessagesRouteChildren =
+  {
+    DashboardLayoutDashboardSalesMessagesOrderIdRoute:
+      DashboardLayoutDashboardSalesMessagesOrderIdRoute,
+  }
+
+const DashboardLayoutDashboardSalesMessagesRouteWithChildren =
+  DashboardLayoutDashboardSalesMessagesRoute._addFileChildren(
+    DashboardLayoutDashboardSalesMessagesRouteChildren,
+  )
+
 interface DashboardLayoutRouteChildren {
   DashboardLayoutDashboardIndexRoute: typeof DashboardLayoutDashboardIndexRoute
   DashboardLayoutDashboardAccountMakingPaymentsRoute: typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
@@ -413,7 +443,7 @@ interface DashboardLayoutRouteChildren {
   DashboardLayoutDashboardProductsReceivingPaymentsRoute: typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
   DashboardLayoutDashboardProductsShippingOptionsRoute: typeof DashboardLayoutDashboardProductsShippingOptionsRoute
   DashboardLayoutDashboardSalesCircularEconomyRoute: typeof DashboardLayoutDashboardSalesCircularEconomyRoute
-  DashboardLayoutDashboardSalesMessagesRoute: typeof DashboardLayoutDashboardSalesMessagesRoute
+  DashboardLayoutDashboardSalesMessagesRoute: typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
   DashboardLayoutDashboardSalesSalesRoute: typeof DashboardLayoutDashboardSalesSalesRoute
 }
 
@@ -438,7 +468,7 @@ const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
   DashboardLayoutDashboardSalesCircularEconomyRoute:
     DashboardLayoutDashboardSalesCircularEconomyRoute,
   DashboardLayoutDashboardSalesMessagesRoute:
-    DashboardLayoutDashboardSalesMessagesRoute,
+    DashboardLayoutDashboardSalesMessagesRouteWithChildren,
   DashboardLayoutDashboardSalesSalesRoute:
     DashboardLayoutDashboardSalesSalesRoute,
 }
@@ -468,10 +498,11 @@ export interface FileRoutesByFullPath {
   '/dashboard/products/receiving-payments': typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
   '/dashboard/products/shipping-options': typeof DashboardLayoutDashboardProductsShippingOptionsRoute
   '/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
-  '/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRoute
+  '/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
   '/dashboard/sales/sales': typeof DashboardLayoutDashboardSalesSalesRoute
   '/dashboard/products/collections/$collectionId': typeof DashboardLayoutDashboardProductsCollectionsCollectionIdRoute
   '/dashboard/products/products/$productId': typeof DashboardLayoutDashboardProductsProductsProductIdRoute
+  '/dashboard/sales/messages/$orderId': typeof DashboardLayoutDashboardSalesMessagesOrderIdRoute
 }
 
 export interface FileRoutesByTo {
@@ -495,10 +526,11 @@ export interface FileRoutesByTo {
   '/dashboard/products/receiving-payments': typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
   '/dashboard/products/shipping-options': typeof DashboardLayoutDashboardProductsShippingOptionsRoute
   '/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
-  '/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRoute
+  '/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
   '/dashboard/sales/sales': typeof DashboardLayoutDashboardSalesSalesRoute
   '/dashboard/products/collections/$collectionId': typeof DashboardLayoutDashboardProductsCollectionsCollectionIdRoute
   '/dashboard/products/products/$productId': typeof DashboardLayoutDashboardProductsProductsProductIdRoute
+  '/dashboard/sales/messages/$orderId': typeof DashboardLayoutDashboardSalesMessagesOrderIdRoute
 }
 
 export interface FileRoutesById {
@@ -523,10 +555,11 @@ export interface FileRoutesById {
   '/_dashboard-layout/dashboard/products/receiving-payments': typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
   '/_dashboard-layout/dashboard/products/shipping-options': typeof DashboardLayoutDashboardProductsShippingOptionsRoute
   '/_dashboard-layout/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
-  '/_dashboard-layout/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRoute
+  '/_dashboard-layout/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
   '/_dashboard-layout/dashboard/sales/sales': typeof DashboardLayoutDashboardSalesSalesRoute
   '/_dashboard-layout/dashboard/products/collections/$collectionId': typeof DashboardLayoutDashboardProductsCollectionsCollectionIdRoute
   '/_dashboard-layout/dashboard/products/products/$productId': typeof DashboardLayoutDashboardProductsProductsProductIdRoute
+  '/_dashboard-layout/dashboard/sales/messages/$orderId': typeof DashboardLayoutDashboardSalesMessagesOrderIdRoute
 }
 
 export interface FileRouteTypes {
@@ -556,6 +589,7 @@ export interface FileRouteTypes {
     | '/dashboard/sales/sales'
     | '/dashboard/products/collections/$collectionId'
     | '/dashboard/products/products/$productId'
+    | '/dashboard/sales/messages/$orderId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -582,6 +616,7 @@ export interface FileRouteTypes {
     | '/dashboard/sales/sales'
     | '/dashboard/products/collections/$collectionId'
     | '/dashboard/products/products/$productId'
+    | '/dashboard/sales/messages/$orderId'
   id:
     | '__root__'
     | '/'
@@ -608,6 +643,7 @@ export interface FileRouteTypes {
     | '/_dashboard-layout/dashboard/sales/sales'
     | '/_dashboard-layout/dashboard/products/collections/$collectionId'
     | '/_dashboard-layout/dashboard/products/products/$productId'
+    | '/_dashboard-layout/dashboard/sales/messages/$orderId'
   fileRoutesById: FileRoutesById
 }
 
@@ -751,7 +787,10 @@ export const routeTree = rootRoute
     },
     "/_dashboard-layout/dashboard/sales/messages": {
       "filePath": "_dashboard-layout/dashboard/sales/messages.tsx",
-      "parent": "/_dashboard-layout"
+      "parent": "/_dashboard-layout",
+      "children": [
+        "/_dashboard-layout/dashboard/sales/messages/$orderId"
+      ]
     },
     "/_dashboard-layout/dashboard/sales/sales": {
       "filePath": "_dashboard-layout/dashboard/sales/sales.tsx",
@@ -764,6 +803,10 @@ export const routeTree = rootRoute
     "/_dashboard-layout/dashboard/products/products/$productId": {
       "filePath": "_dashboard-layout/dashboard/products/products/$productId.tsx",
       "parent": "/_dashboard-layout/dashboard/products/products"
+    },
+    "/_dashboard-layout/dashboard/sales/messages/$orderId": {
+      "filePath": "_dashboard-layout/dashboard/sales/messages/$orderId.tsx",
+      "parent": "/_dashboard-layout/dashboard/sales/messages"
     }
   }
 }
