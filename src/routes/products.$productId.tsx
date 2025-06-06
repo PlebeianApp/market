@@ -234,7 +234,7 @@ function RouteComponent() {
 							<div>
 								<div className="bg-secondary text-white px-4 py-2 text-sm font-medium rounded-t-md">Description</div>
 								<div className="rounded-lg bg-white p-6 shadow-md rounded-t-none">
-									<p className="whitespace-pre-wrap text-gray-700">{description}</p>
+									<p className="whitespace-pre-wrap break-words text-gray-700">{description}</p>
 								</div>
 							</div>
 
@@ -372,7 +372,7 @@ function RouteComponent() {
 
 							<TabsContent value="description" className="mt-4 border-t-3 border-secondary bg-tertiary">
 								<div className="rounded-lg bg-white p-6 shadow-md">
-									<p className="whitespace-pre-wrap text-gray-700">{description}</p>
+									<p className="whitespace-pre-wrap break-words text-gray-700">{description}</p>
 								</div>
 							</TabsContent>
 
