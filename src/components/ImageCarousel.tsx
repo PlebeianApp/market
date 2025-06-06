@@ -41,7 +41,7 @@ export function ImageCarousel({ images, title, className }: ImageCarouselProps) 
 	return (
 		<div className="h-full flex flex-col lg:flex-row gap-4">
 			{/* Main Carousel */}
-			<Carousel setApi={setApi} className="w-full aspect-square lg:order-2">
+			<Carousel setApi={setApi} className="w-full xl:aspect-square lg:order-2">
 				<CarouselContent>
 					{images.map((image, index) => (
 						<CarouselItem key={index} className="flex items-center justify-center">
