@@ -121,7 +121,6 @@ export const publishProduct = async (formData: ProductFormData, signer: NDKSigne
 	await event.sign(signer)
 	await event.publish()
 
-	console.log(`Published product: ${formData.name}`)
 	return event.id
 }
 
@@ -169,7 +168,6 @@ export const updateProduct = async (
 	await event.sign(signer)
 	await event.publish()
 
-	console.log(`Updated product: ${formData.name}`)
 	return event.id
 }
 
@@ -190,7 +188,6 @@ export const deleteProduct = async (productDTag: string, signer: NDKSigner, ndk:
 		await deleteEvent.sign(signer)
 		await deleteEvent.publish()
 
-		console.log(`Deleted product: ${productDTag}`)
 		return true
 	} catch (error) {
 		console.error('Error deleting product:', error)
