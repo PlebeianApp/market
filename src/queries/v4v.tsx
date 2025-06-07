@@ -102,7 +102,6 @@ export const fetchV4VShares = async (pubkey: string): Promise<V4VDTO[]> => {
 									await user.fetchProfile()
 									if (user.profile?.name) {
 										name = user.profile.name
-										console.log('Using profile name:', name)
 									} else if (user.profile?.displayName) {
 										name = user.profile.displayName
 									} else {

@@ -133,14 +133,12 @@ export const fetchNwcWalletBalance = async (nwcUri: string): Promise<NwcBalance 
 
 		if (balanceResponse && typeof balanceResponse === 'object' && typeof balanceResponse.amount === 'number') {
 			const balanceInSats = balanceResponse.amount
-			console.log('✅ Balance fetched successfully:', balanceInSats, 'sats')
 			return {
 				balance: balanceInSats,
 				timestamp: Date.now(),
 			}
 		} else if (typeof balanceResponse === 'number') {
 			const balanceInSats = balanceResponse
-			console.log('✅ Balance fetched successfully (number):', balanceInSats, 'sats')
 			return {
 				balance: balanceInSats,
 				timestamp: Date.now(),

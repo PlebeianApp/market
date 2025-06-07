@@ -18,7 +18,7 @@ export const dashboardNavigation: NavSection[] = [
 			},
 			{
 				title: '✉️ Messages',
-				path: '/dashboard/sales/messages',
+				path: '/dashboard/sales/messages/',
 			},
 			{
 				title: '♻️ Circular Economy',

@@ -8,6 +8,7 @@ import {
 	getProductCategories,
 	getProductDescription,
 	getProductDimensions,
+	getProductId,
 	getProductImages,
 	getProductPrice,
 	getProductSpecs,
@@ -18,6 +19,7 @@ import {
 	getProductWeight,
 	fetchProduct,
 } from '@/queries/products'
+import { publishProduct, updateProduct, type ProductFormData } from '@/publish/products'
 
 export type Category = z.infer<typeof ProductCategoryTagSchema>
 export type ProductImage = z.infer<typeof ProductImageTagSchema>
@@ -59,6 +61,7 @@ export interface ProductFormState {
 	status: 'hidden' | 'on-sale' | 'pre-order'
 	productType: 'single' | 'variable'
 	mainCategory: string | null
+	selectedCollection: string | null
 	specs: ProductSpec[]
 	categories: Array<{ key: string; name: string; checked: boolean }>
 	images: Array<{ imageUrl: string; imageOrder: number }>
@@ -79,6 +82,7 @@ export const DEFAULT_FORM_STATE: ProductFormState = {
 	status: 'hidden',
 	productType: 'single',
 	mainCategory: null,
+	selectedCollection: null,
 	specs: [],
 	categories: [],
 	images: [],
@@ -108,6 +112,14 @@ export const productFormActions = {
 				return
 			}
 
+			// Extract the d tag value - this is what we need to preserve for updates!
+			const productDTag = getProductId(event)
+			if (!productDTag) {
+				console.error('Product has no d tag, cannot edit:', productId)
+				productFormActions.reset()
+				return
+			}
+
 			const title = getProductTitle(event)
 			const description = getProductDescription(event)
 			const priceTag = getProductPrice(event)
@@ -131,7 +143,7 @@ export const productFormActions = {
 
 			productFormStore.setState((state) => ({
 				...DEFAULT_FORM_STATE,
-				editingProductId: productId,
+				editingProductId: productDTag, // Use the d tag value, not the event ID!
 				name: title,
 				description: description,
 				price: priceTag?.[1] || '',
@@ -229,97 +241,36 @@ export const productFormActions = {
 	publishProduct: async (signer: NDKSigner, ndk: NDK): Promise<boolean | string> => {
 		const state = productFormStore.state
 
-		if (!state.name.trim()) {
-			console.error('Product name is required')
-			return false
+		// Convert state to ProductFormData format
+		const formData: ProductFormData = {
+			name: state.name,
+			description: state.description,
+			price: state.price,
+			quantity: state.quantity,
+			currency: state.currency,
+			status: state.status,
+			productType: state.productType,
+			mainCategory: state.mainCategory || '',
+			categories: state.categories,
+			images: state.images,
+			specs: state.specs,
+			shippings: state.shippings,
+			weight: state.weight,
+			dimensions: state.dimensions,
 		}
-
-		if (!state.description.trim()) {
-			console.error('Product description is required')
-			return false
-		}
-
-		if (!state.price.trim() || isNaN(Number(state.price))) {
-			console.error('Valid product price is required')
-			return false
-		}
-
-		if (!state.quantity.trim() || isNaN(Number(state.quantity))) {
-			console.error('Valid product quantity is required')
-			return false
-		}
-
-		if (state.images.length === 0) {
-			console.error('At least one product image is required')
-			return false
-		}
-
-		if (!state.mainCategory) {
-			console.error('Main category is required')
-			return false
-		}
-
-		const productId = state.editingProductId || `product_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
-
-		const imagesTags = state.images.map((img) => ['image', img.imageUrl, '800x600', img.imageOrder.toString()] as NDKTag)
-
-		const categoryTags = []
-
-		categoryTags.push(['t', state.mainCategory] as NDKTag)
-
-		state.categories
-			.filter((cat) => cat.checked && cat.name.trim() !== '')
-			.forEach((cat) => {
-				categoryTags.push(['t', cat.name] as NDKTag)
-			})
-
-		const specTags = state.specs.map((spec) => ['spec', spec.key, spec.value] as NDKTag)
-
-		const shippingTags = state.shippings
-			.filter((ship) => ship.shipping && ship.shipping.id)
-			.map((ship) => {
-				const shippingRef = `${SHIPPING_KIND}:${ship.shipping!.id}`
-				return ship.extraCost ? (['shipping_option', shippingRef, ship.extraCost] as NDKTag) : (['shipping_option', shippingRef] as NDKTag)
-			})
-
-		const weightTag = state.weight ? [['weight', state.weight.value, state.weight.unit] as NDKTag] : []
-
-		const dimensionsTag = state.dimensions ? [['dim', state.dimensions.value, state.dimensions.unit] as NDKTag] : []
-
-		const productData = {
-			kind: 30402,
-			created_at: Math.floor(Date.now() / 1000),
-			content: state.description,
-			tags: [
-				['d', productId],
-				['title', state.name],
-				['price', state.price, state.currency],
-				['type', state.productType === 'single' ? 'simple' : 'variable', 'physical'],
-				['visibility', state.status],
-				['stock', state.quantity],
-				['summary', state.description],
-				...imagesTags,
-				...categoryTags,
-				...specTags,
-				...shippingTags,
-				...weightTag,
-				...dimensionsTag,
-			] as NDKTag[],
-		}
-
-		const event = new NDKEvent(ndk)
-		event.kind = productData.kind
-		event.content = productData.content
-		event.tags = productData.tags
-		event.created_at = Math.floor(Date.now() / 1000)
 
 		try {
-			await event.sign(signer)
-			await event.publish()
-			console.log(state.editingProductId ? `Updated product: ${state.name}` : `Published product: ${state.name}`)
-			return event.id
+			if (state.editingProductId) {
+				// Update existing product using the d tag
+				const result = await updateProduct(state.editingProductId, formData, signer, ndk)
+				return result
+			} else {
+				// Create new product
+				const result = await publishProduct(formData, signer, ndk)
+				return result
+			}
 		} catch (error) {
-			console.error(state.editingProductId ? `Failed to update product` : `Failed to publish product`, error)
+			console.error(state.editingProductId ? 'Failed to update product:' : 'Failed to publish product:', error)
 			return false
 		}
 	},
