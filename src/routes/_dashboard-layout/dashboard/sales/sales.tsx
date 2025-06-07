@@ -31,10 +31,8 @@ function SalesComponent() {
 		})
 	}, [sales, statusFilter])
 
-
 	return (
 		<div className="space-y-6">
-
 			<OrderDataTable
 				data={filteredSales}
 				columns={salesColumns}
