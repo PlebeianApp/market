@@ -304,8 +304,6 @@ function CircularEconomyComponent() {
 
 	return (
 		<div className="space-y-6 max-w-4xl mx-auto">
-			{!isMobile && <h1 className="text-[1.6rem] font-bold">Circular Economy</h1>}
-
 			<Alert className="bg-blue-100 text-blue-800 border-blue-200">
 				<AlertDescription>
 					PM (Beta) Is Powered By Your Generosity. Your Contribution Is The Only Thing That Enables Us To Continue Creating Free And Open

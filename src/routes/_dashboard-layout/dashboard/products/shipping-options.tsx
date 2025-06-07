@@ -7,10 +7,8 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/products/ship
 
 function ShippingOptionsComponent() {
 	useDashboardTitle('Shipping Options')
-	const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
 	return (
 		<div className="space-y-6">
-			{!isMobile && <h1 className="text-[1.6rem] font-bold">Shipping Options</h1>}
 			<p>Shipping Options</p>
 		</div>
 	)

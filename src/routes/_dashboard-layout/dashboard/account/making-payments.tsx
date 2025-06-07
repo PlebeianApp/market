@@ -15,6 +15,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeftIcon, ChevronDownIcon, EyeIcon, EyeOffIcon, PlusIcon, RefreshCwIcon, ScanIcon, TrashIcon, WalletIcon } from 'lucide-react'
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { toast } from 'sonner'
+import { useDashboardTitle } from '@/routes/_dashboard-layout'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/making-payments')({
 	component: MakingPaymentsComponent,
@@ -24,6 +25,7 @@ function MakingPaymentsComponent() {
 	// Local store state and actions
 	const { wallets: localWallets, isLoading: localLoading, isInitialized } = useWallets()
 	const queryClient = useQueryClient()
+	useDashboardTitle('Making Payments')
 
 	// NDK User for Nostr operations
 	const [userPubkey, setUserPubkey] = useState<string | undefined>(undefined)
@@ -294,7 +296,6 @@ function MakingPaymentsComponent() {
 	return (
 		<div className="space-y-6">
 			<div className="flex justify-between items-center">
-				<h1 className="text-2xl font-bold">Making Payments</h1>
 				{combinedWallets.length > 0 && !isAddingWallet && (
 					<Button onClick={handleAddWalletClick} className="hidden sm:flex">
 						<PlusIcon className="h-4 w-4 mr-2" /> Add Another Wallet

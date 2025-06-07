@@ -2,6 +2,7 @@ import { CollectionFormContent } from '@/components/sheet-contents/NewCollection
 import { authStore } from '@/lib/stores/auth'
 import { collectionFormActions } from '@/lib/stores/collection'
 import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
+import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useEffect } from 'react'
@@ -13,6 +14,8 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/products/coll
 function EditCollectionComponent() {
 	const { collectionId } = Route.useParams()
 	const { user } = useStore(authStore)
+
+	useDashboardTitle('Edit Collection')
 
 	// Fetch user's collections to find the one being edited
 	const { data: collections = [] } = useCollectionsByPubkey(user?.pubkey || '')
@@ -48,7 +51,6 @@ function EditCollectionComponent() {
 
 	return (
 		<div className="space-y-6">
-			<h1 className="text-2xl font-bold">Edit Collection</h1>
 			<div className="bg-white rounded-md shadow-sm">
 				<CollectionFormContent showFooter={true} />
 			</div>

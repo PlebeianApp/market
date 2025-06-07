@@ -9,6 +9,7 @@ import { createFileRoute, useNavigate, Outlet, useMatchRoute } from '@tanstack/r
 import { useStore } from '@tanstack/react-store'
 import { useState } from 'react'
 import { ChevronDown, Trash } from 'lucide-react'
+import { useDashboardTitle } from '@/routes/_dashboard-layout'
 
 // Component to show basic collection information
 function CollectionBasicInfo({ collection }: { collection: any }) {
@@ -47,6 +48,7 @@ function CollectionsComponent() {
 	const navigate = useNavigate()
 	const matchRoute = useMatchRoute()
 	const [expandedCollection, setExpandedCollection] = useState<string | null>(null)
+	useDashboardTitle('Collections')
 
 	// Check if we're on a child route (editing a collection)
 	const isEditingCollection = matchRoute({

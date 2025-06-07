@@ -1,10 +1,10 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { getOrderStatus, useOrdersBySeller } from '@/queries/orders'
-import { ndkActions } from '@/lib/stores/ndk'
 import { OrderDataTable } from '@/components/orders/OrderDataTable'
 import { salesColumns } from '@/components/orders/orderColumns'
-import { useMemo, useState } from 'react'
+import { ndkActions } from '@/lib/stores/ndk'
+import { getOrderStatus, useOrdersBySeller } from '@/queries/orders'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
+import { createFileRoute } from '@tanstack/react-router'
+import { useMemo, useState } from 'react'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/sales')({
 	component: SalesComponent,
@@ -31,11 +31,9 @@ function SalesComponent() {
 		})
 	}, [sales, statusFilter])
 
-	const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
 
 	return (
 		<div className="space-y-6">
-			{!isMobile && <h1 className="text-[1.6rem] font-bold">Sales</h1>}
 
 			<OrderDataTable
 				data={filteredSales}

@@ -1,15 +1,16 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useConversationMessages, sendChatMessage } from '@/queries/messages'
+import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { ChatMessageBubble } from '@/components/messages/ChatMessageBubble'
 import { MessageInput } from '@/components/messages/MessageInput'
-import { authStore } from '@/lib/stores/auth'
-import { useStore } from '@tanstack/react-store'
-import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Loader2 } from 'lucide-react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { authStore } from '@/lib/stores/auth'
+import { sendChatMessage, useConversationMessages } from '@/queries/messages'
 import { messageKeys } from '@/queries/queryKeyFactory'
-import { useRef, useEffect, useState } from 'react'
+import { useDashboardTitle } from '@/routes/_dashboard-layout'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useStore } from '@tanstack/react-store'
+import { ArrowLeft, Loader2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/messages/$pubkey')({
 	component: ConversationDetailComponent,
@@ -22,6 +23,7 @@ function ConversationDetailComponent() {
 	const queryClient = useQueryClient()
 	const messagesEndRef = useRef<HTMLDivElement | null>(null)
 	const [isSending, setIsSending] = useState(false)
+	useDashboardTitle('Messages')
 
 	const { data: messages, isLoading, error, refetch } = useConversationMessages(otherUserPubkey)
 
