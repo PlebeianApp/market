@@ -2,6 +2,7 @@ import { ProductFormContent } from '@/components/sheet-contents/NewProductConten
 import { authStore } from '@/lib/stores/auth'
 import { productFormActions } from '@/lib/stores/product'
 import { productsByPubkeyQueryOptions } from '@/queries/products'
+import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
@@ -14,6 +15,8 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/products/prod
 function EditProductComponent() {
 	const { productId } = Route.useParams()
 	const { user } = useStore(authStore)
+
+	useDashboardTitle('Edit Product')
 
 	// Fetch user's products to find the one being edited
 	const { data: products = [] } = useQuery({
@@ -44,7 +47,6 @@ function EditProductComponent() {
 
 	return (
 		<div className="space-y-6">
-			<h1 className="text-2xl font-bold">Edit Product</h1>
 			<div className="bg-white rounded-md shadow-sm">
 				<ProductFormContent showFooter={true} />
 			</div>

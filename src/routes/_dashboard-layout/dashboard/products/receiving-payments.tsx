@@ -28,6 +28,7 @@ import {
 	type RichPaymentDetail,
 } from '@/queries/payment'
 import { getProductId, getProductTitle, useProductsByPubkey } from '@/queries/products'
+import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import {
@@ -228,6 +229,8 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 	const publishMutation = usePublishRichPaymentDetail()
 	const updateMutation = useUpdatePaymentDetail()
 	const deleteMutation = useDeletePaymentDetail()
+
+	useDashboardTitle('Receiving Payments')
 
 	const isEditing = !!paymentDetail
 
@@ -690,7 +693,6 @@ function ReceivingPaymentsComponent() {
 		<div className="space-y-6">
 			<div className="flex justify-between items-center">
 				<div>
-					<h1 className="text-2xl font-bold">Receiving Payments</h1>
 					<p className="text-muted-foreground">Manage your payment receiving options here</p>
 				</div>
 				<div className="flex items-center gap-4">

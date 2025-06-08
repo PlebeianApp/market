@@ -46,6 +46,10 @@
 @theme {
 	--font-sans: 'IBM Plex Mono', monospace;
 	--font-heading: 'reglisse', sans-serif;
+
+	/* Custom colors */
+	--color-secondary-black: var(--secondary-black);
+	--color-tertiary-black: var(--tertiary-black);
 }
 
 /* Add specific styling for headings using the reglisse font */
@@ -63,6 +67,9 @@ h1.font-heading {
 
 h2.font-heading {
 	font-size: 2rem;
+}
+h3.font-heading {
+	font-size: 1.6rem;
 }
 
 :root {
@@ -119,7 +126,8 @@ h2.font-heading {
 	--light-gray: #ebebeb;
 	--off-black: #0a0a0a;
 	--neo-purple: #ff3eb5;
-	--lighter-black: #1d1d1d;
+	--secondary-black: #131313;
+	--tertiary-black: #1d1d1d;
 	--neo-blue: #18b9fe;
 	--neo-gray: #f8f8f8;
 

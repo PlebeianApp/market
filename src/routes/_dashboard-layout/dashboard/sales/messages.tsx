@@ -2,6 +2,7 @@ import { ConversationListItem, type ConversationItemData } from '@/components/me
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { authStore } from '@/lib/stores/auth'
 import { useConversationsList } from '@/queries/messages'
+import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { createFileRoute, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { Loader2, MessageSquareText } from 'lucide-react'
@@ -14,7 +15,7 @@ function MessagesParentComponent() {
 	const { user: currentUser } = useStore(authStore)
 	const { data: conversations, isLoading, error } = useConversationsList()
 	const matchRoute = useMatchRoute()
-
+	useDashboardTitle('Messages')
 	const isChatDetailActive = matchRoute({
 		to: '/dashboard/sales/messages/$pubkey',
 		fuzzy: true,

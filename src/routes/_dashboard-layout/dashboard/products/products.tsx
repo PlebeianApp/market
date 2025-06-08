@@ -10,6 +10,7 @@ import { createFileRoute, useNavigate, Outlet, useMatchRoute } from '@tanstack/r
 import { useStore } from '@tanstack/react-store'
 import { useState } from 'react'
 import { ChevronDown, Trash } from 'lucide-react'
+import { useDashboardTitle } from '@/routes/_dashboard-layout'
 
 // Component to show basic product information
 function ProductBasicInfo({ product }: { product: any }) {
@@ -58,7 +59,7 @@ function ProductsOverviewComponent() {
 	const navigate = useNavigate()
 	const matchRoute = useMatchRoute()
 	const [expandedProduct, setExpandedProduct] = useState<string | null>(null)
-
+	useDashboardTitle('Products')
 	// Check if we're on a child route (editing a product)
 	const isEditingProduct = matchRoute({
 		to: '/dashboard/products/products/$productId',
