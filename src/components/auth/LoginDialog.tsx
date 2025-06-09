@@ -32,9 +32,15 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 				</DialogHeader>
 				<Tabs defaultValue="extension" className="w-full" value={activeTab} onValueChange={setActiveTab}>
 					<TabsList className="grid w-full grid-cols-3">
-						<TabsTrigger value="extension" data-testid="extension-tab">Extension</TabsTrigger>
-						<TabsTrigger value="connect" data-testid="connect-tab">Nostr Connect</TabsTrigger>
-						<TabsTrigger value="private-key" data-testid="private-key-tab">Private Key</TabsTrigger>
+						<TabsTrigger value="extension" data-testid="extension-tab">
+							Extension
+						</TabsTrigger>
+						<TabsTrigger value="connect" data-testid="connect-tab">
+							Nostr Connect
+						</TabsTrigger>
+						<TabsTrigger value="private-key" data-testid="private-key-tab">
+							Private Key
+						</TabsTrigger>
 					</TabsList>
 					<TabsContent value="private-key">
 						<PrivateKeyLogin onError={handleError} onSuccess={() => onOpenChange(false)} />

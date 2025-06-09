@@ -20,7 +20,9 @@ The e2e tests are automatically configured to:
 ## Running Tests
 
 ### Quick Start (Recommended)
+
 1. **Start test environment:**
+
    ```bash
    ./scripts/start-test-env.sh
    ```
@@ -33,6 +35,7 @@ The e2e tests are automatically configured to:
 ### All Available Commands
 
 #### With Manual Environment Control
+
 ```bash
 # Start test environment first
 ./scripts/start-test-env.sh
@@ -43,9 +46,10 @@ bun run test:e2e:manual:debug        # Debug mode (step-by-step)
 ```
 
 #### With Automatic Environment Setup
+
 ```bash
 bun run test:e2e                     # Headless mode (CI/automated testing)
-bun run test:e2e:headed              # Headed mode (visible browser) 
+bun run test:e2e:headed              # Headed mode (visible browser)
 bun run test:e2e:ui                  # Interactive UI mode
 bun run test:e2e:debug               # Debug mode (step through tests)
 ```
@@ -53,6 +57,7 @@ bun run test:e2e:debug               # Debug mode (step through tests)
 ## Test Structure
 
 ### Files
+
 - `setup.spec.ts` - Tests the initial app setup flow
 - `navigation.spec.ts` - Tests basic navigation after setup
 - `utils/test-utils.ts` - Utility functions for tests
@@ -116,19 +121,22 @@ The tests are configured to work in CI environments:
 The test suite runs sequentially and covers:
 
 ### 1. Setup Flow (`setup.spec.ts`)
+
 - ✅ Initial setup form submission and validation
-- ✅ App configuration persistence 
+- ✅ App configuration persistence
 - ✅ Redirect behavior after setup completion
 - ✅ Navigation after successful setup
 
 ### 2. Navigation (`navigation.spec.ts`)
+
 - ✅ Products page navigation
-- ✅ Posts page navigation  
+- ✅ Posts page navigation
 - ✅ Community page navigation
 - ✅ Dashboard navigation
 - ✅ Basic error detection
 
 ### 3. User Profile Flow (`user-profile.spec.ts`)
+
 - ✅ Private key generation and login
 - ✅ Password encryption and storage
 - ✅ Profile form completion and submission
@@ -137,15 +145,17 @@ The test suite runs sequentially and covers:
 - ✅ Authentication state management
 
 ### Infrastructure (`test-setup.spec.ts`)
+
 - ✅ Relay connectivity
 - ✅ App server health
 - ✅ Environment variable validation
 
 ### Debug Tools (`debug-setup.spec.ts`)
+
 - ✅ Step-by-step setup analysis
 - ✅ Config endpoint validation
 - ✅ State persistence testing
 
-**Total: 13+ passing tests** 🎉 
+**Total: 13+ passing tests** 🎉
 
-All tests run in sequence to ensure proper state flow from app setup → navigation → user authentication → profile management. 
+All tests run in sequence to ensure proper state flow from app setup → navigation → user authentication → profile management.

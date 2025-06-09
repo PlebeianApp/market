@@ -111,10 +111,10 @@ export function CollectionFormContent({ className = '', showFooter = true }: { c
 				<div className="p-6 mt-auto sticky bottom-0 bg-white border-t">
 					<div className="flex gap-2 w-full">
 						{(activeTab === 'products' || activeTab === 'shipping') && (
-							<Button 
-								type="button" 
-								variant="outline" 
-								className="flex-1 gap-2 uppercase" 
+							<Button
+								type="button"
+								variant="outline"
+								className="flex-1 gap-2 uppercase"
 								onClick={() => {
 									if (activeTab === 'products') {
 										setActiveTab('info')

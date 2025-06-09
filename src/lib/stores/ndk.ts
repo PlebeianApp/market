@@ -87,12 +87,10 @@ export const ndkActions = {
 
 		try {
 			// Normalize the URL (add wss:// if missing)
-			const normalizedUrl = relayUrl.startsWith('ws://') || relayUrl.startsWith('wss://') 
-				? relayUrl 
-				: `wss://${relayUrl}`
-			
+			const normalizedUrl = relayUrl.startsWith('ws://') || relayUrl.startsWith('wss://') ? relayUrl : `wss://${relayUrl}`
+
 			state.ndk.addExplicitRelay(normalizedUrl)
-			
+
 			const updatedUrls = Array.from(new Set([...state.explicitRelayUrls, normalizedUrl]))
 			ndkStore.setState((state) => ({ ...state, explicitRelayUrls: updatedUrls }))
 			return true
@@ -114,7 +112,7 @@ export const ndkActions = {
 			}
 
 			// Update state
-			const updatedUrls = state.explicitRelayUrls.filter(url => url !== relayUrl)
+			const updatedUrls = state.explicitRelayUrls.filter((url) => url !== relayUrl)
 			ndkStore.setState((state) => ({ ...state, explicitRelayUrls: updatedUrls }))
 			return true
 		} catch (error) {
@@ -129,7 +127,7 @@ export const ndkActions = {
 
 		return {
 			explicit: Array.from(state.ndk.pool.relays.values()),
-			outbox: state.ndk.outboxPool ? Array.from(state.ndk.outboxPool.relays.values()) : []
+			outbox: state.ndk.outboxPool ? Array.from(state.ndk.outboxPool.relays.values()) : [],
 		}
 	},
 

@@ -47,7 +47,7 @@ export function ShippingTab() {
 
 	const addShippingOption = (option: RichShippingInfo) => {
 		// Check if shipping option is already added
-		const isAlreadyAdded = shippings.some(s => s.shipping?.id === option.id)
+		const isAlreadyAdded = shippings.some((s) => s.shipping?.id === option.id)
 		if (isAlreadyAdded) {
 			toast.error('This shipping option is already added')
 			return
@@ -107,7 +107,7 @@ export function ShippingTab() {
 					<h3 className="font-medium">Selected Shipping Options</h3>
 					<div className="space-y-3">
 						{shippings.map((shipping, index) => {
-							const option = availableShippingOptions.find(opt => opt.id === shipping.shipping?.id)
+							const option = availableShippingOptions.find((opt) => opt.id === shipping.shipping?.id)
 							return (
 								<div key={index} className="flex items-center gap-3 p-3 border rounded-md bg-gray-50">
 									{option && <ServiceIcon service={option.service} />}
@@ -129,12 +129,7 @@ export function ShippingTab() {
 											placeholder="Extra cost"
 											className="w-24 text-sm"
 										/>
-										<Button
-											type="button"
-											variant="ghost"
-											size="sm"
-											onClick={() => removeShippingOption(index)}
-										>
+										<Button type="button" variant="ghost" size="sm" onClick={() => removeShippingOption(index)}>
 											<span className="i-delete w-4 h-4" />
 										</Button>
 									</div>
@@ -156,11 +151,9 @@ export function ShippingTab() {
 					<div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-md">
 						<TruckIcon className="w-12 h-12 text-gray-400 mx-auto mb-3" />
 						<p className="text-gray-500 mb-4">No shipping options found</p>
-						<p className="text-sm text-gray-400 mb-4">
-							You need to create shipping options first before adding them to collections
-						</p>
-						<Button 
-							type="button" 
+						<p className="text-sm text-gray-400 mb-4">You need to create shipping options first before adding them to collections</p>
+						<Button
+							type="button"
 							variant="outline"
 							onClick={() => {
 								// Navigate to shipping options page
@@ -175,7 +168,7 @@ export function ShippingTab() {
 				{availableShippingOptions.length > 0 && (
 					<div className="space-y-2">
 						{availableShippingOptions.map((option) => {
-							const isAdded = shippings.some(s => s.shipping?.id === option.id)
+							const isAdded = shippings.some((s) => s.shipping?.id === option.id)
 							return (
 								<div key={option.id} className="flex items-center gap-3 p-3 border rounded-md hover:bg-gray-50">
 									<ServiceIcon service={option.service} />
@@ -188,9 +181,9 @@ export function ShippingTab() {
 									</div>
 									<Button
 										type="button"
-										variant={isAdded ? "outline" : "secondary"}
+										variant={isAdded ? 'outline' : 'secondary'}
 										size="sm"
-										onClick={() => isAdded ? null : addShippingOption(option)}
+										onClick={() => (isAdded ? null : addShippingOption(option))}
 										disabled={isAdded}
 									>
 										{isAdded ? (
@@ -213,4 +206,4 @@ export function ShippingTab() {
 			</div>
 		</div>
 	)
-} 
+}

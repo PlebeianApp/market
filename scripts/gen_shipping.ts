@@ -5,7 +5,9 @@ import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev
 import type { z } from 'zod'
 
 // Get a subset of country codes for shipping
-const COUNTRIES = Object.values(COUNTRIES_ISO).slice(0, 20).map(c => c.iso3)
+const COUNTRIES = Object.values(COUNTRIES_ISO)
+	.slice(0, 20)
+	.map((c) => c.iso3)
 const REGIONS = {
 	USA: ['US-CA', 'US-NY', 'US-TX', 'US-FL'],
 	CAN: ['CA-BC', 'CA-ON', 'CA-QC'],

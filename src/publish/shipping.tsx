@@ -324,4 +324,4 @@ export const useDeleteShippingOptionMutation = () => {
 			toast.error(error instanceof Error ? error.message : 'Failed to delete shipping option')
 		},
 	})
-} 
+}

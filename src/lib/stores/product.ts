@@ -287,7 +287,7 @@ export const productFormActions = {
 
 		try {
 			let result: string
-			
+
 			if (state.editingProductId) {
 				// Update existing product using the d tag
 				result = await updateProduct(state.editingProductId, formData, signer, ndk)

@@ -61,7 +61,9 @@ export const createProductEvent = (
 		.filter((ship) => ship.shipping && ship.shipping.id)
 		.map((ship) => {
 			// shipping.id is already a full reference like "30406:pubkey:id"
-			return ship.extraCost ? (['shipping_option', ship.shipping!.id, ship.extraCost] as NDKTag) : (['shipping_option', ship.shipping!.id] as NDKTag)
+			return ship.extraCost
+				? (['shipping_option', ship.shipping!.id, ship.extraCost] as NDKTag)
+				: (['shipping_option', ship.shipping!.id] as NDKTag)
 		})
 
 	const weightTag = formData.weight ? [['weight', formData.weight.value, formData.weight.unit] as NDKTag] : []
