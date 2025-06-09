@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test'
 
-test.describe('App Navigation', () => {
+test.describe.serial('2. App Navigation', () => {
   test.beforeEach(async ({ page }) => {
     // Start at home page and ensure we're not in setup mode
     await page.goto('/')

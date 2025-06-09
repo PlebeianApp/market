@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { generateTestUser, fillSetupForm, expectToBeOnSetupPage, expectToBeOnHomePage, mockNostrExtension } from './utils/test-utils'
 
-test.describe.serial('App Setup Flow', () => {
+test.describe.serial('1. App Setup Flow', () => {
   // Use .serial to run tests in order and share context
   
   test('should redirect to setup page on first visit and complete setup flow', async ({ page }) => {

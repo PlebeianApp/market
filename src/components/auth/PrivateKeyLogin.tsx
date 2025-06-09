@@ -137,10 +137,11 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 								handleStoredKeyLogin()
 							}
 						}}
+						data-testid="stored-password-input"
 					/>
 					{passwordError && <p className="text-sm text-red-500">{passwordError}</p>}
 				</div>
-				<Button onClick={handleStoredKeyLogin} disabled={isLoading} className="w-full">
+				<Button onClick={handleStoredKeyLogin} disabled={isLoading} className="w-full" data-testid="stored-key-login-button">
 					{isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Login'}
 				</Button>
 
@@ -150,7 +151,7 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 					<div className="flex-grow h-px bg-muted"></div>
 				</div>
 
-				<Button onClick={clearStoredKey} variant="outline" className="w-full">
+				<Button onClick={clearStoredKey} variant="outline" className="w-full" data-testid="clear-stored-key-button">
 					Remove Stored Key & Continue Anonymously
 				</Button>
 			</div>
@@ -169,6 +170,7 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 						placeholder="Password"
 						value={encryptionPassword}
 						onChange={(e) => setEncryptionPassword(e.target.value)}
+						data-testid="new-password-input"
 					/>
 					<Input
 						id="confirm-password"
@@ -176,10 +178,11 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 						placeholder="Confirm Password"
 						value={confirmPassword}
 						onChange={(e) => setConfirmPassword(e.target.value)}
+						data-testid="confirm-password-input"
 					/>
 					{passwordError && <p className="text-sm text-red-500">{passwordError}</p>}
 				</div>
-				<Button onClick={handleEncryptAndStore} disabled={isLoading} className="w-full">
+				<Button onClick={handleEncryptAndStore} disabled={isLoading} className="w-full" data-testid="encrypt-continue-button">
 					{isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Encrypt & Continue'}
 				</Button>
 			</div>
@@ -198,6 +201,7 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 							const newPrivateKey = generateSecretKey()
 							setPrivateKey(nip19.nsecEncode(newPrivateKey))
 						}}
+						data-testid="generate-key-button"
 					>
 						Generate New Key
 					</Button>
@@ -213,9 +217,10 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 							handleContinue()
 						}
 					}}
+					data-testid="private-key-input"
 				/>
 			</div>
-			<Button onClick={handleContinue} disabled={isLoading || !privateKey} className="w-full">
+			<Button onClick={handleContinue} disabled={isLoading || !privateKey} className="w-full" data-testid="continue-button">
 				{isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Continue'}
 			</Button>
 		</div>

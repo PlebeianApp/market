@@ -113,20 +113,28 @@ The tests are configured to work in CI environments:
 
 ## ✅ Current Test Coverage
 
-The test suite currently covers:
+The test suite runs sequentially and covers:
 
-### Setup Flow (`setup.spec.ts`)
+### 1. Setup Flow (`setup.spec.ts`)
 - ✅ Initial setup form submission and validation
 - ✅ App configuration persistence 
 - ✅ Redirect behavior after setup completion
 - ✅ Navigation after successful setup
 
-### Navigation (`navigation.spec.ts`)
+### 2. Navigation (`navigation.spec.ts`)
 - ✅ Products page navigation
 - ✅ Posts page navigation  
 - ✅ Community page navigation
 - ✅ Dashboard navigation
 - ✅ Basic error detection
+
+### 3. User Profile Flow (`user-profile.spec.ts`)
+- ✅ Private key generation and login
+- ✅ Password encryption and storage
+- ✅ Profile form completion and submission
+- ✅ Profile data persistence verification
+- ✅ Relay event monitoring and verification
+- ✅ Authentication state management
 
 ### Infrastructure (`test-setup.spec.ts`)
 - ✅ Relay connectivity
@@ -138,4 +146,6 @@ The test suite currently covers:
 - ✅ Config endpoint validation
 - ✅ State persistence testing
 
-**Total: 11 passing tests** 🎉 
+**Total: 13+ passing tests** 🎉 
+
+All tests run in sequence to ensure proper state flow from app setup → navigation → user authentication → profile management. 

@@ -25,16 +25,16 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-[425px]">
+			<DialogContent className="sm:max-w-[425px]" data-testid="login-dialog">
 				<DialogHeader>
 					<DialogTitle>Login</DialogTitle>
 					<DialogDescription>Choose your preferred login method below.</DialogDescription>
 				</DialogHeader>
 				<Tabs defaultValue="extension" className="w-full" value={activeTab} onValueChange={setActiveTab}>
 					<TabsList className="grid w-full grid-cols-3">
-						<TabsTrigger value="extension">Extension</TabsTrigger>
-						<TabsTrigger value="connect">Nostr Connect</TabsTrigger>
-						<TabsTrigger value="private-key">Private Key</TabsTrigger>
+						<TabsTrigger value="extension" data-testid="extension-tab">Extension</TabsTrigger>
+						<TabsTrigger value="connect" data-testid="connect-tab">Nostr Connect</TabsTrigger>
+						<TabsTrigger value="private-key" data-testid="private-key-tab">Private Key</TabsTrigger>
 					</TabsList>
 					<TabsContent value="private-key">
 						<PrivateKeyLogin onError={handleError} onSuccess={() => onOpenChange(false)} />
@@ -63,6 +63,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 										.finally(() => onOpenChange(false))
 								}
 								className="w-full"
+								data-testid="connect-extension-button"
 							>
 								Connect to Extension
 							</Button>
@@ -78,6 +79,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 								setEnableAutoLogin(checked === true)
 								localStorage.setItem(NOSTR_AUTO_LOGIN, checked === true ? 'true' : 'false')
 							}}
+							data-testid="auto-login-checkbox"
 						/>
 						Auto-login
 					</Label>
