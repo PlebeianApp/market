@@ -15,6 +15,7 @@ export interface ProductFormData {
 	status: 'hidden' | 'on-sale' | 'pre-order'
 	productType: 'single' | 'variable'
 	mainCategory: string
+	selectedCollection: string | null
 	categories: Array<{ key: string; name: string; checked: boolean }>
 	images: Array<{ imageUrl: string; imageOrder: number }>
 	specs: Array<{ key: string; value: string }>
@@ -59,13 +60,15 @@ export const createProductEvent = (
 	const shippingTags = formData.shippings
 		.filter((ship) => ship.shipping && ship.shipping.id)
 		.map((ship) => {
-			const shippingRef = `${SHIPPING_KIND}:${ship.shipping!.id}`
-			return ship.extraCost ? (['shipping_option', shippingRef, ship.extraCost] as NDKTag) : (['shipping_option', shippingRef] as NDKTag)
+			// shipping.id is already a full reference like "30406:pubkey:id"
+			return ship.extraCost ? (['shipping_option', ship.shipping!.id, ship.extraCost] as NDKTag) : (['shipping_option', ship.shipping!.id] as NDKTag)
 		})
 
 	const weightTag = formData.weight ? [['weight', formData.weight.value, formData.weight.unit] as NDKTag] : []
 
 	const dimensionsTag = formData.dimensions ? [['dim', formData.dimensions.value, formData.dimensions.unit] as NDKTag] : []
+
+	const collectionTag = formData.selectedCollection ? [['collection', formData.selectedCollection] as NDKTag] : []
 
 	// Required tags
 	event.tags = [
@@ -82,6 +85,7 @@ export const createProductEvent = (
 		...shippingTags,
 		...weightTag,
 		...dimensionsTag,
+		...collectionTag,
 	]
 
 	return event

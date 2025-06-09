@@ -42,6 +42,16 @@ export const getCollectionId = (event: NDKEvent): string => {
 }
 
 /**
+ * Gets the shipping option tags from a collection event
+ * @param event The collection event or null
+ * @returns An array of shipping option tuples with format [tag, shipping_reference, extra_cost?]
+ */
+export const getCollectionShippingOptions = (event: NDKEvent | null): Array<string[]> => {
+	if (!event) return []
+	return event.tags.filter((t) => t[0] === 'shipping_option')
+}
+
+/**
  * Creates collection coordinates string
  */
 export const getCollectionCoordinates = (event: NDKEvent): string => {

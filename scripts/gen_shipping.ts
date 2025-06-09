@@ -1,13 +1,15 @@
 import { SHIPPING_KIND, type ShippingOptionSchema } from '@/lib/schemas/shippingOption'
+import { COUNTRIES_ISO } from '@/lib/constants'
 import { faker } from '@faker-js/faker'
 import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import type { z } from 'zod'
 
-const COUNTRIES = ['US', 'CA', 'GB', 'DE', 'FR', 'ES', 'IT', 'JP', 'AU']
+// Get a subset of country codes for shipping
+const COUNTRIES = Object.values(COUNTRIES_ISO).slice(0, 20).map(c => c.iso3)
 const REGIONS = {
-	US: ['US-CA', 'US-NY', 'US-TX', 'US-FL'],
-	CA: ['CA-BC', 'CA-ON', 'CA-QC'],
-	GB: ['GB-ENG', 'GB-SCT', 'GB-WLS'],
+	USA: ['US-CA', 'US-NY', 'US-TX', 'US-FL'],
+	CAN: ['CA-BC', 'CA-ON', 'CA-QC'],
+	GBR: ['GB-ENG', 'GB-SCT', 'GB-WLS'],
 	// Add more as needed
 }
 const CARRIERS = ['FedEx', 'UPS', 'DHL', 'USPS', 'Royal Mail']

@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ndkActions } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore } from '@/lib/stores/product'
 import { useForm } from '@tanstack/react-form'
+import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useState } from 'react'
@@ -13,6 +14,7 @@ import { DetailTab, CategoryTab, ImagesTab, ShippingTab, SpecTab } from './tabs'
 export function ProductFormContent({ className = '', showFooter = true }: { className?: string; showFooter?: boolean }) {
 	const [isPublishing, setIsPublishing] = useState(false)
 	const navigate = useNavigate()
+	const queryClient = useQueryClient()
 
 	// Get form state from store, including editingProductId
 	const formState = useStore(productFormStore)
@@ -37,7 +39,7 @@ export function ProductFormContent({ className = '', showFooter = true }: { clas
 					return
 				}
 
-				const result = await productFormActions.publishProduct(signer, ndk)
+				const result = await productFormActions.publishProduct(signer, ndk, queryClient)
 
 				if (result) {
 					toast.success(editingProductId ? 'Product updated successfully!' : 'Product published successfully!')
@@ -45,7 +47,13 @@ export function ProductFormContent({ className = '', showFooter = true }: { clas
 
 					if (typeof result === 'string') {
 						document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-						navigate({ to: `/products/${result}` })
+
+						// Navigate to product list when updating, to specific product when creating
+						if (editingProductId) {
+							navigate({ to: '/dashboard/products/products' })
+						} else {
+							navigate({ to: `/products/${result}` })
+						}
 					}
 				} else {
 					toast.error(editingProductId ? 'Failed to update product' : 'Failed to publish product')

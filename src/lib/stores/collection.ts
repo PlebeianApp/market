@@ -1,7 +1,14 @@
 import { publishCollection, updateCollection, type CollectionFormData } from '@/publish/collections'
+import { getCollectionShippingOptions } from '@/queries/collections'
+import type { RichShippingInfo } from '@/lib/stores/cart'
 import type NDK from '@nostr-dev-kit/ndk'
-import type { NDKSigner } from '@nostr-dev-kit/ndk'
+import type { NDKSigner, NDKEvent } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/react-store'
+
+export type CollectionShippingForm = {
+	shipping: Pick<RichShippingInfo, 'id' | 'name'> | null
+	extraCost: string
+}
 
 export interface CollectionFormState {
 	// Form data
@@ -9,6 +16,7 @@ export interface CollectionFormState {
 	description: string
 	headerImageUrl: string
 	selectedProducts: string[] // Array of product coordinates
+	shippings: CollectionShippingForm[]
 
 	// UI state
 	isEditing: boolean
@@ -28,6 +36,7 @@ export const DEFAULT_COLLECTION_FORM_STATE: CollectionFormState = {
 	description: '',
 	headerImageUrl: '',
 	selectedProducts: [],
+	shippings: [],
 	isEditing: false,
 	editingCollectionId: null,
 	availableProducts: [],
@@ -62,6 +71,39 @@ export const collectionFormActions = {
 			...collectionData,
 			isEditing: true,
 			editingCollectionId: collectionId,
+		}))
+	},
+
+	/**
+	 * Load collection for editing from an NDKEvent
+	 */
+	loadCollectionForEdit: (event: NDKEvent) => {
+		const titleTag = event.tags.find((tag) => tag[0] === 'title')
+		const imageTag = event.tags.find((tag) => tag[0] === 'image')
+		const dTag = event.tags.find((tag) => tag[0] === 'd')
+		const productTags = event.tags.filter((tag) => tag[0] === 'a')
+		const shippingTags = getCollectionShippingOptions(event)
+
+		// Convert shipping tags to collection shipping form
+		const shippingOptions: CollectionShippingForm[] = shippingTags.map((tag) => {
+			return {
+				shipping: {
+					id: tag[1], // The shipping reference
+					name: `Shipping Option (${tag[1].split(':')[2] || 'unknown'})`, // Extract ID from reference for display
+				},
+				extraCost: tag[2] || '',
+			}
+		})
+
+		collectionFormStore.setState(() => ({
+			...DEFAULT_COLLECTION_FORM_STATE,
+			isEditing: true,
+			editingCollectionId: dTag?.[1] || '',
+			name: titleTag?.[1] || '',
+			description: event.content || '',
+			headerImageUrl: imageTag?.[1] || '',
+			selectedProducts: productTags.map((tag) => tag[1]),
+			shippings: shippingOptions,
 		}))
 	},
 
@@ -106,6 +148,7 @@ export const collectionFormActions = {
 			description: state.description,
 			headerImageUrl: state.headerImageUrl || undefined,
 			products: state.selectedProducts,
+			shippings: state.shippings,
 		}
 
 		try {

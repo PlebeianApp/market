@@ -8,14 +8,15 @@ import { useStore } from '@tanstack/react-store'
 import { useState } from 'react'
 import { InfoTab } from './InfoTab'
 import { ProductsTab } from './ProductsTab'
+import { ShippingTab } from './ShippingTab'
 
 export function CollectionFormContent({ className = '', showFooter = true }: { className?: string; showFooter?: boolean }) {
 	const navigate = useNavigate()
-	const [activeTab, setActiveTab] = useState<'info' | 'products'>('info')
+	const [activeTab, setActiveTab] = useState<'info' | 'products' | 'shipping'>('info')
 
 	// Get form state from store
 	const formState = useStore(collectionFormStore)
-	const { isEditing, editingCollectionId, name, description, headerImageUrl, selectedProducts } = formState
+	const { isEditing, editingCollectionId, name, description, headerImageUrl, selectedProducts, shippings } = formState
 
 	// Get mutation hooks
 	const publishMutation = usePublishCollectionMutation()
@@ -33,6 +34,7 @@ export function CollectionFormContent({ className = '', showFooter = true }: { c
 					description,
 					headerImageUrl: headerImageUrl || undefined,
 					products: selectedProducts,
+					shippings,
 				}
 
 				let result: string | null = null
@@ -69,7 +71,7 @@ export function CollectionFormContent({ className = '', showFooter = true }: { c
 			className={`flex flex-col h-full overflow-hidden ${className}`}
 		>
 			<div className="flex-1 overflow-y-auto py-4 px-6">
-				<Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'info' | 'products')} className="w-full">
+				<Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'info' | 'products' | 'shipping')} className="w-full">
 					<TabsList className="w-full rounded-none bg-transparent h-auto p-0 flex">
 						<TabsTrigger
 							value="info"
@@ -83,6 +85,12 @@ export function CollectionFormContent({ className = '', showFooter = true }: { c
 						>
 							Products
 						</TabsTrigger>
+						<TabsTrigger
+							value="shipping"
+							className="flex-1 px-4 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
+						>
+							Shipping
+						</TabsTrigger>
 					</TabsList>
 
 					<TabsContent value="info" className="mt-4">
@@ -92,20 +100,35 @@ export function CollectionFormContent({ className = '', showFooter = true }: { c
 					<TabsContent value="products" className="mt-4">
 						<ProductsTab />
 					</TabsContent>
+
+					<TabsContent value="shipping" className="mt-4">
+						<ShippingTab />
+					</TabsContent>
 				</Tabs>
 			</div>
 
 			{showFooter && (
 				<div className="p-6 mt-auto sticky bottom-0 bg-white border-t">
 					<div className="flex gap-2 w-full">
-						{activeTab === 'products' && (
-							<Button type="button" variant="outline" className="flex-1 gap-2 uppercase" onClick={() => setActiveTab('info')}>
+						{(activeTab === 'products' || activeTab === 'shipping') && (
+							<Button 
+								type="button" 
+								variant="outline" 
+								className="flex-1 gap-2 uppercase" 
+								onClick={() => {
+									if (activeTab === 'products') {
+										setActiveTab('info')
+									} else if (activeTab === 'shipping') {
+										setActiveTab('products')
+									}
+								}}
+							>
 								<span className="i-back w-6 h-6"></span>
 								Back
 							</Button>
 						)}
 
-						{activeTab === 'products' || isEditing ? (
+						{activeTab === 'shipping' || isEditing ? (
 							<form.Subscribe
 								selector={(state) => [state.canSubmit, state.isSubmitting]}
 								children={([canSubmit, isSubmitting]) => (
@@ -130,7 +153,13 @@ export function CollectionFormContent({ className = '', showFooter = true }: { c
 								type="button"
 								variant="secondary"
 								className="flex-1 uppercase"
-								onClick={() => setActiveTab('products')}
+								onClick={() => {
+									if (activeTab === 'info') {
+										setActiveTab('products')
+									} else if (activeTab === 'products') {
+										setActiveTab('shipping')
+									}
+								}}
 								disabled={!name || !description}
 							>
 								Next

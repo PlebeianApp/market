@@ -3,12 +3,17 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { collectionsKeys } from '@/queries/queryKeyFactory'
 import { toast } from 'sonner'
 import { ndkActions } from '@/lib/stores/ndk'
+import type { RichShippingInfo } from '@/lib/stores/cart'
 
 export interface CollectionFormData {
 	name: string
 	description: string
 	headerImageUrl?: string
 	products: string[] // Array of product coordinates
+	shippings: Array<{
+		shipping: Pick<RichShippingInfo, 'id' | 'name'> | null
+		extraCost: string
+	}>
 }
 
 /**
@@ -37,6 +42,16 @@ export const createCollectionEvent = (formData: CollectionFormData, signer: NDKS
 	formData.products.forEach((productCoords) => {
 		event.tags.push(['a', productCoords])
 	})
+
+	// Add shipping option references
+	const shippingTags = formData.shippings
+		.filter((ship) => ship.shipping && ship.shipping.id)
+		.map((ship) => {
+			// shipping.id is already a full reference like "30406:pubkey:id"
+			return ship.extraCost ? ['shipping_option', ship.shipping!.id, ship.extraCost] : ['shipping_option', ship.shipping!.id]
+		})
+
+	event.tags.push(...shippingTags)
 
 	return event
 }
@@ -174,9 +189,13 @@ export const useUpdateCollectionMutation = () => {
 			}
 
 			// Invalidate relevant queries
-			queryClient.invalidateQueries({ queryKey: collectionsKeys.all })
+			await queryClient.invalidateQueries({ queryKey: collectionsKeys.all })
 			if (userPubkey) {
-				queryClient.invalidateQueries({ queryKey: collectionsKeys.byPubkey(userPubkey) })
+				await queryClient.invalidateQueries({ queryKey: collectionsKeys.byPubkey(userPubkey) })
+				// Force a refetch after a short delay to ensure the new data is loaded
+				setTimeout(() => {
+					queryClient.refetchQueries({ queryKey: collectionsKeys.byPubkey(userPubkey) })
+				}, 1000)
 			}
 
 			toast.success('Collection updated successfully')

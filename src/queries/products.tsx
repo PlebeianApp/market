@@ -271,6 +271,27 @@ export const getProductDimensions = (event: NDKEvent | null): z.infer<typeof Pro
 }
 
 /**
+ * Gets the shipping option tags from a product event
+ * @param event The product event or null
+ * @returns An array of shipping option tuples with format [tag, shipping_reference, extra_cost?]
+ */
+export const getProductShippingOptions = (event: NDKEvent | null): Array<string[]> => {
+	if (!event) return []
+	return event.tags.filter((t) => t[0] === 'shipping_option')
+}
+
+/**
+ * Gets the collection tag from a product event
+ * @param event The product event or null
+ * @returns The collection reference string or null
+ */
+export const getProductCollection = (event: NDKEvent | null): string | null => {
+	if (!event) return null
+	const collectionTag = event.tags.find((t) => t[0] === 'collection')
+	return collectionTag?.[1] || null
+}
+
+/**
  * Gets the category tags from a product event
  * @param event The product event or null
  * @returns An array of category tuples
