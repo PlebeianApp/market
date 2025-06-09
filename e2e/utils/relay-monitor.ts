@@ -25,16 +25,12 @@ export class RelayMonitor {
 		this.page.on('websocket', (ws) => {
 			ws.on('framereceived', (payload) => {
 				try {
-					const text = payload.toString()
-
-					// Skip if this is the HMR WebSocket
-					if (ws.url().includes('_bun/hmr')) {
+					// The payload from Playwright is an object like { payload: '...' }
+					const frameDataString = (payload as any).payload
+					if (ws.url().includes('_bun/hmr') || !frameDataString) {
 						return
 					}
-
-					// Try to parse as JSON array (Nostr format)
-					const data = JSON.parse(text)
-
+					const data = JSON.parse(frameDataString)
 					this.events.push({
 						timestamp: Date.now(),
 						type: 'received',
@@ -47,16 +43,12 @@ export class RelayMonitor {
 
 			ws.on('framesent', (payload) => {
 				try {
-					const text = payload.toString()
-
-					// Skip if this is the HMR WebSocket
-					if (ws.url().includes('_bun/hmr')) {
+					// The payload from Playwright is an object like { payload: '...' }
+					const frameDataString = (payload as any).payload
+					if (ws.url().includes('_bun/hmr') || !frameDataString) {
 						return
 					}
-
-					// Try to parse as JSON array (Nostr format)
-					const data = JSON.parse(text)
-
+					const data = JSON.parse(frameDataString)
 					this.events.push({
 						timestamp: Date.now(),
 						type: 'sent',
