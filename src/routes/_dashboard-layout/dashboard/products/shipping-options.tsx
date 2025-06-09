@@ -210,7 +210,10 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 	return (
 		<Collapsible open={isOpen} onOpenChange={onOpenChange}>
 			<CollapsibleTrigger asChild>
-				<div className="flex w-full justify-between items-center gap-2 p-4 border rounded-md bg-white hover:bg-gray-50 cursor-pointer">
+				<div
+					className="flex w-full justify-between items-center gap-2 p-4 border rounded-md bg-white hover:bg-gray-50 cursor-pointer"
+					data-testid={isEditing ? `shipping-option-item-${getShippingId(shippingOption)}` : 'add-shipping-option-button'}
+				>
 					{isEditing ? (
 						<div className="flex items-center gap-3 min-w-0 flex-1">
 							<ServiceIcon service={formData.service} />
@@ -251,6 +254,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 									</Label>
 									<Input
 										id="title"
+										data-testid="shipping-title-input"
 										value={formData.title}
 										onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
 										placeholder="e.g., Standard Shipping to US"
@@ -263,7 +267,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 										Service Type *
 									</Label>
 									<Select value={formData.service} onValueChange={(value: any) => setFormData((prev) => ({ ...prev, service: value }))}>
-										<SelectTrigger>
+										<SelectTrigger data-testid="shipping-service-select">
 											<SelectValue placeholder="Select service type" />
 										</SelectTrigger>
 										<SelectContent>
@@ -286,6 +290,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 									<div className="flex gap-2">
 										<Input
 											id="price"
+											data-testid="shipping-price-input"
 											type="number"
 											step="0.01"
 											min="0"
@@ -296,7 +301,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 											required
 										/>
 										<Select value={formData.currency} onValueChange={(value) => setFormData((prev) => ({ ...prev, currency: value }))}>
-											<SelectTrigger className="w-20">
+											<SelectTrigger className="w-20" data-testid="shipping-currency-select">
 												<SelectValue />
 											</SelectTrigger>
 											<SelectContent>
@@ -315,7 +320,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 										Country *
 									</Label>
 									<Select value={formData.country} onValueChange={(value) => setFormData((prev) => ({ ...prev, country: value }))}>
-										<SelectTrigger>
+										<SelectTrigger data-testid="shipping-country-select">
 											<SelectValue placeholder="Select country" />
 										</SelectTrigger>
 										<SelectContent>
@@ -335,6 +340,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 								</Label>
 								<Textarea
 									id="description"
+									data-testid="shipping-description-input"
 									value={formData.description}
 									onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
 									placeholder="Describe your shipping option..."
@@ -660,7 +666,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 								</Button>
 							)}
 
-							<Button type="submit" disabled={isSubmitting}>
+							<Button type="submit" disabled={isSubmitting} data-testid="shipping-submit-button">
 								{isSubmitting && <Spinner />}
 								{isEditing ? 'Update' : 'Create'}
 							</Button>

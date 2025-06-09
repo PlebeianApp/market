@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { authStore } from '@/lib/stores/auth'
 import { collectionFormActions } from '@/lib/stores/collection'
-import { uiActions } from '@/lib/stores/ui'
+
 import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
 import { useDeleteCollectionMutation } from '@/publish/collections'
 import { createFileRoute, useNavigate, Outlet, useMatchRoute } from '@tanstack/react-router'
@@ -50,9 +50,12 @@ function CollectionsComponent() {
 	const [expandedCollection, setExpandedCollection] = useState<string | null>(null)
 	useDashboardTitle('Collections')
 
-	// Check if we're on a child route (editing a collection)
-	const isEditingCollection = matchRoute({
+	// Check if we're on a child route (editing or creating a collection)
+	const isOnChildRoute = matchRoute({
 		to: '/dashboard/products/collections/$collectionId',
+		fuzzy: true,
+	}) || matchRoute({
+		to: '/dashboard/products/collections/new',
 		fuzzy: true,
 	})
 
@@ -64,7 +67,9 @@ function CollectionsComponent() {
 
 	const handleAddCollectionClick = () => {
 		collectionFormActions.reset()
-		uiActions.openDrawer('createCollection')
+		navigate({
+			to: '/dashboard/products/collections/new',
+		})
 	}
 
 	const handleEditCollectionClick = (collection: any) => {
@@ -96,8 +101,8 @@ function CollectionsComponent() {
 		)
 	}
 
-	// If we're editing a collection, render the child route
-	if (isEditingCollection) {
+	// If we're on a child route, render the child route
+	if (isOnChildRoute) {
 		return <Outlet />
 	}
 
@@ -106,6 +111,7 @@ function CollectionsComponent() {
 			<div className="bg-white rounded-md shadow-sm">
 				<Button
 					onClick={handleAddCollectionClick}
+					data-testid="add-collection-button"
 					className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
 				>
 					<span className="i-market w-5 h-5" />
@@ -124,7 +130,11 @@ function CollectionsComponent() {
 									const isExpanded = expandedCollection === collectionId
 
 									return (
-										<li key={collection.id} className="border border-gray-300 rounded-md overflow-hidden">
+										<li
+											key={collection.id}
+											className="border border-gray-300 rounded-md overflow-hidden"
+											data-testid={`collection-item-${collectionId}`}
+										>
 											<Collapsible open={isExpanded} onOpenChange={() => handleToggleExpanded(collectionId)}>
 												<div className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors duration-150">
 													<div className="flex items-center gap-3">
@@ -141,6 +151,7 @@ function CollectionsComponent() {
 															}}
 															aria-label={`Edit ${getCollectionTitle(collection)}`}
 															className="text-gray-500 hover:text-gray-700"
+															data-testid={`edit-collection-button-${collectionId}`}
 														>
 															<span className="i-edit w-5 h-5" />
 														</Button>
@@ -154,6 +165,7 @@ function CollectionsComponent() {
 															aria-label={`Delete ${getCollectionTitle(collection)}`}
 															className="text-gray-500 hover:text-red-600"
 															disabled={deleteMutation.isPending}
+															data-testid={`delete-collection-button-${collectionId}`}
 														>
 															<Trash className="w-4 h-4" />
 														</Button>

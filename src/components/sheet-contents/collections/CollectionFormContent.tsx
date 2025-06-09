@@ -75,18 +75,21 @@ export function CollectionFormContent({ className = '', showFooter = true }: { c
 					<TabsList className="w-full rounded-none bg-transparent h-auto p-0 flex">
 						<TabsTrigger
 							value="info"
+							data-testid="collection-tab-info"
 							className="flex-1 px-4 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
 						>
 							Info
 						</TabsTrigger>
 						<TabsTrigger
 							value="products"
+							data-testid="collection-tab-products"
 							className="flex-1 px-4 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
 						>
 							Products
 						</TabsTrigger>
 						<TabsTrigger
 							value="shipping"
+							data-testid="collection-tab-shipping"
 							className="flex-1 px-4 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
 						>
 							Shipping
@@ -115,6 +118,7 @@ export function CollectionFormContent({ className = '', showFooter = true }: { c
 								type="button"
 								variant="outline"
 								className="flex-1 gap-2 uppercase"
+								data-testid="collection-form-back"
 								onClick={() => {
 									if (activeTab === 'products') {
 										setActiveTab('info')
@@ -137,6 +141,7 @@ export function CollectionFormContent({ className = '', showFooter = true }: { c
 										variant="secondary"
 										className="flex-1 uppercase"
 										disabled={isSubmitting || isPublishing || !canSubmit || !name || !description}
+										data-testid="collection-form-submit"
 									>
 										{isSubmitting || isPublishing
 											? isEditing
@@ -153,6 +158,7 @@ export function CollectionFormContent({ className = '', showFooter = true }: { c
 								type="button"
 								variant="secondary"
 								className="flex-1 uppercase"
+								data-testid="collection-form-next"
 								onClick={() => {
 									if (activeTab === 'info') {
 										setActiveTab('products')
