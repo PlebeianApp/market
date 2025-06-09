@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test'
 
+// Configure this test suite to run first and in serial mode
+test.describe.configure({ mode: 'serial' })
+
 test.describe('Test Setup Validation', () => {
 	test('should have relay and app running', async ({ page }) => {
 		console.log('🔍 Validating test setup...')

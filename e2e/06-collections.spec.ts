@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { skipIfInSetupMode, login } from './utils/test-utils'
 
-test.describe.serial('5. Collections Flow', () => {
+test.describe.serial('6. Collections Flow', () => {
 	test.beforeEach(async ({ page }) => {
 		await page.goto('/')
 		await skipIfInSetupMode(page, test)

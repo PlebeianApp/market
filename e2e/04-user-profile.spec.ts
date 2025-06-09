@@ -9,18 +9,18 @@ async function fillUserForm(page: any, userData: any) {
 	// Handle potential decrypt dialog that might appear when accessing profile
 	try {
 		const decryptDialog = page.locator('[data-testid="decrypt-password-dialog"]')
-		if (await decryptDialog.isVisible({ timeout: 2000 })) {
+		if (await decryptDialog.isVisible({ timeout: 200 })) {
 			console.log('🔑 Decrypt dialog appeared, entering password...')
 			await page.fill('[data-testid="decrypt-password-input"]', 'pass1234')
 			await page.click('[data-testid="decrypt-login-button"]')
-			await page.waitForTimeout(1000)
+			await page.waitForTimeout(100)
 		}
 	} catch (e) {
 		// No decrypt dialog needed
 	}
 
 	// Wait for profile form to be ready (looking for name field which is required)
-	await page.waitForSelector('input[name="name"]', { timeout: 10000 })
+	await page.waitForSelector('input[name="name"]', { timeout: 1000 })
 
 	// Fill all form fields using the correct TanStack Form field names
 	await page.fill('input[name="name"]', userData.name)
@@ -38,9 +38,9 @@ async function navigateWithUI(page: any, linkText: string): Promise<boolean> {
 	try {
 		// Look for navigation link with the specified text
 		const navLink = page.getByText(linkText, { exact: false })
-		if (await navLink.isVisible({ timeout: 3000 })) {
+		if (await navLink.isVisible({ timeout: 100 })) {
 			await navLink.click()
-			await page.waitForTimeout(1000)
+			await page.waitForTimeout(100)
 			return true
 		}
 		return false
@@ -59,7 +59,7 @@ const testProfileData = {
 	website: 'https://example.com',
 }
 
-test.describe.serial('3. User Profile Creation Flow', () => {
+test.describe.serial('4. User Profile Creation Flow', () => {
 	test.beforeEach(async ({ page }) => {
 		await page.goto('/')
 		await skipIfInSetupMode(page, test)
@@ -77,7 +77,7 @@ test.describe.serial('3. User Profile Creation Flow', () => {
 		await fillProfileForm(page, testProfileData)
 		await page.click('[data-testid="profile-save-button"]')
 		await expect(page.locator('[data-testid="profile-save-button"]:has-text("Save")')).toBeVisible({
-			timeout: 10000,
+			timeout: 5000, // Increased timeout
 		})
 
 		const profileEvent = await relayMonitor.waitForProfileEvent()

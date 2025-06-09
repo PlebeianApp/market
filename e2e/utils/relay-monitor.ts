@@ -225,6 +225,20 @@ export class RelayMonitor {
 		return null
 	}
 
+	async waitForSetupEvent(timeout = 10000): Promise<RelayEvent | null> {
+		const startTime = Date.now()
+
+		while (Date.now() - startTime < timeout) {
+			const setupEvents = this.findSetupEvents()
+			if (setupEvents.length > 0) {
+				return setupEvents[setupEvents.length - 1] // Return latest
+			}
+			await new Promise((resolve) => setTimeout(resolve, 500))
+		}
+
+		return null
+	}
+
 	async verifyProfileData(expectedData: any): Promise<boolean> {
 		console.log('🔍 Starting profile data verification...')
 
