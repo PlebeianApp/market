@@ -27,6 +27,6 @@ export class DashboardPage extends BasePage {
 	async navigateTo(item: DashboardNavItems) {
 		await this.goToDashboard()
 		await this.navLink(item).click()
-		await this.pause(500)
+		await this.pause(200)
 	}
 }

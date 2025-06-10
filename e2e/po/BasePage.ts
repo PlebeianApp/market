@@ -11,7 +11,7 @@ export class BasePage {
 		await this.page.goto(path)
 	}
 
-	async waitForURL(url: string | RegExp, timeout = 5000) {
+	async waitForURL(url: string | RegExp, timeout = 3000) {
 		await expect(this.page).toHaveURL(url, { timeout })
 	}
 

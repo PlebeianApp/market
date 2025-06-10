@@ -19,7 +19,6 @@ export class ProductsPage extends BasePage {
 	}) {
 		// Click Add A Product button
 		await this.page.click('[data-testid="add-product-button"]')
-		await this.page.waitForTimeout(500)
 
 		// --- Name Tab ---
 		await this.page.fill('[data-testid="product-name-input"]', productData.name)
@@ -27,43 +26,36 @@ export class ProductsPage extends BasePage {
 
 		if (productData.collection) {
 			await this.page.click('[data-testid="product-collection-select"]')
-			await this.page.waitForTimeout(500)
 			await this.page.click(`[data-testid="collection-option-${productData.collection.toLowerCase().replace(/\s+/g, '-')}"]`)
 		}
 
 		// Go to Detail tab
 		await this.page.click('[data-testid="product-next-button"]')
-		await this.page.waitForTimeout(500)
 
 		// --- Detail Tab ---
 		await this.page.fill('[data-testid="product-price-input"]', productData.price)
 		await this.page.fill('[data-testid="product-quantity-input"]', productData.quantity)
 
 		await this.page.click('[data-testid="product-status-select"]')
-		await this.page.waitForTimeout(500)
 		await this.page.click(`[data-testid="status-option-${productData.status.toLowerCase().replace(/\s+/g, '-')}"]`)
 
 		// Skip Spec tab
 		await this.page.click('[data-testid="product-next-button"]')
-		await this.page.waitForTimeout(500)
 		await this.page.click('[data-testid="product-next-button"]')
-		await this.page.waitForTimeout(500)
 
 		// --- Category Tab ---
 		await this.page.click('[data-testid="product-main-category-select"]')
-		await this.page.waitForTimeout(500)
 		await this.page.click(`[data-testid="main-category-${productData.mainCategory.toLowerCase().replace(/\s+/g, '-')}"]`)
 
 		// Go to Images tab
 		await this.page.click('[data-testid="product-next-button"]')
-		await this.page.waitForTimeout(500)
 
 		// --- Images Tab ---
 		if (productData.imageUrl) {
 			await this.page.fill('[data-testid="image-url-input"]', productData.imageUrl)
 			await this.page.click('[data-testid="image-save-button"]')
 			// Wait for the image to be saved - look for the image to appear or edit button to show
-			await this.page.waitForSelector('[data-testid="image-edit-button"]', { timeout: 5000 }).catch(() => {
+			await this.page.waitForSelector('[data-testid="image-edit-button"]', { timeout: 200 }).catch(() => {
 				console.log('Image save may have failed, continuing...')
 			})
 		}

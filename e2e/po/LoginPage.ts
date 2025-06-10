@@ -1,7 +1,7 @@
 import { type Page, expect } from '@playwright/test'
 import { BasePage } from './BasePage'
-import { FIXED_TEST_USER } from '../fixtures/users'
 import { nip19 } from 'nostr-tools'
+import { FIXED_TEST_USER } from 'e2e/fixtures/users'
 
 export class LoginPage extends BasePage {
 	private readonly loginButton = this.page.locator('[data-testid="login-button"]')
@@ -52,15 +52,15 @@ export class LoginPage extends BasePage {
 			await this.encryptContinueButton.click()
 		}
 
-		await expect(this.dashboardLink).toBeVisible({ timeout: 10000 })
+		await expect(this.dashboardLink).toBeVisible({ timeout: 1000 })
 	}
 
 	async handleDecryptDialog(password = 'a') {
 		try {
-			if (await this.decryptDialog.isVisible({ timeout: 2000 })) {
+			if (await this.decryptDialog.isVisible({ timeout: 300 })) {
 				await this.decryptPasswordInput.fill(password)
 				await this.decryptLoginButton.click()
-				await expect(this.decryptDialog).not.toBeVisible({ timeout: 5000 })
+				await expect(this.decryptDialog).not.toBeVisible({ timeout: 200 })
 			}
 		} catch (e) {
 			// No decrypt dialog

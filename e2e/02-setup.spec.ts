@@ -39,7 +39,7 @@ test.describe.serial('1. App Setup Flow', () => {
 	test('should confirm app is configured and not require setup', async ({ page }) => {
 		const basePage = new BasePage(page)
 		await basePage.goto()
-		await basePage.waitForURL(/\/$/, 5000) // Wait for home page, not setup
+		await basePage.waitForURL(/\/$/, 1000) // Wait for home page, not setup
 		await expect(page).not.toHaveURL(/\/setup/)
 	})
 

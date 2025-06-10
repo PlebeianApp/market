@@ -21,13 +21,10 @@ test.describe.serial('5. Shipping Options Flow', () => {
 
 		// --- Create Standard National using template ---
 		await page.click('[data-testid="add-shipping-option-button"]')
-		await page.waitForTimeout(500)
 
 		// Use North America template
 		await page.click('[data-testid="shipping-template-select"]')
-		await page.waitForTimeout(500)
 		await page.click('[data-testid="template-north-america"]')
-		await page.waitForTimeout(500)
 
 		// Verify template filled the form
 		await expect(page.locator('[data-testid="shipping-title-input"]')).toHaveValue('North America')
@@ -40,14 +37,14 @@ test.describe.serial('5. Shipping Options Flow', () => {
 
 		// Submit the form
 		await page.click('[data-testid="shipping-submit-button"]')
-		await page.waitForTimeout(1000)
+		await page.waitForTimeout(200)
 
 		// Verify the shipping option appears in the list
 		await expect(page.getByText('Standard North America').first()).toBeVisible()
 
 		// --- Create Express International with manual country selection ---
 		await page.click('[data-testid="add-shipping-option-button"]')
-		await page.waitForTimeout(500)
+		await page.waitForTimeout(200)
 
 		await page.fill('[data-testid="shipping-title-input"]', 'Express International')
 		await page.fill('[data-testid="shipping-price-input"]', '25.00')
@@ -55,25 +52,21 @@ test.describe.serial('5. Shipping Options Flow', () => {
 
 		// Select service type as Express
 		await page.click('[data-testid="shipping-service-select"]')
-		await page.waitForTimeout(500)
+		await page.waitForTimeout(200)
 		await page.click('[data-testid="service-express"]')
 
 		// Add multiple countries manually
 		await page.click('[data-testid="shipping-country-select"]')
-		await page.waitForTimeout(1000)
 		await page.click('[data-testid="country-usa"]')
 
 		await page.click('[data-testid="shipping-country-select"]')
-		await page.waitForTimeout(1000)
 		await page.click('[data-testid="country-can"]')
 
 		await page.click('[data-testid="shipping-country-select"]')
-		await page.waitForTimeout(1000)
 		await page.click('[data-testid="country-gbr"]')
 
 		// Submit the form
 		await page.click('[data-testid="shipping-submit-button"]')
-		await page.waitForTimeout(1000)
 
 		// Debug: Check what shipping options are visible
 		const shippingOptions = await page.locator('[data-testid^="shipping-option-item-"]').allTextContents()
