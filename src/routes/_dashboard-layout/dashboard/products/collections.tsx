@@ -51,13 +51,15 @@ function CollectionsComponent() {
 	useDashboardTitle('Collections')
 
 	// Check if we're on a child route (editing or creating a collection)
-	const isOnChildRoute = matchRoute({
-		to: '/dashboard/products/collections/$collectionId',
-		fuzzy: true,
-	}) || matchRoute({
-		to: '/dashboard/products/collections/new',
-		fuzzy: true,
-	})
+	const isOnChildRoute =
+		matchRoute({
+			to: '/dashboard/products/collections/$collectionId',
+			fuzzy: true,
+		}) ||
+		matchRoute({
+			to: '/dashboard/products/collections/new',
+			fuzzy: true,
+		})
 
 	// Fetch user's collections
 	const { data: collections = [], isLoading, error } = useCollectionsByPubkey(user?.pubkey || '')

@@ -64,20 +64,40 @@ function SetupRoute() {
 					return
 				}
 
+				// Convert npub to hex if needed
+				let ownerPubkeyHex = value.ownerPk
+				if (value.ownerPk.startsWith('npub')) {
+					try {
+						const { data } = nip19.decode(value.ownerPk)
+						ownerPubkeyHex = data as string
+					} catch (e) {
+						toast.error('Invalid npub format')
+						return
+					}
+				}
+
+				// Create the event with a temporary pubkey (will be re-signed by the app)
 				let newEvent = {
 					kind: 31990,
 					created_at: Math.floor(Date.now() / 1000),
 					tags: [] as string[][],
 					content: JSON.stringify({
 						...value,
+						ownerPk: value.ownerPk, // Keep original npub in content
 						adminsList,
 						relayUrl: config.appRelay,
 					}),
-					pubkey: value.ownerPk,
+					pubkey: ownerPubkeyHex, // Use hex format for pubkey
 				}
 
+				// Sign with a temporary key (the app will re-sign it)
 				newEvent = finalizeEvent(newEvent, generateSecretKey())
+
 				await submitAppSettings(newEvent)
+
+				// Wait a bit for the event to be processed
+				await new Promise((resolve) => setTimeout(resolve, 1000))
+
 				const queryClient = await createQueryClient(config.appRelay)
 				await queryClient.invalidateQueries({ queryKey: configKeys.all })
 				await queryClient.refetchQueries({ queryKey: configKeys.all })
@@ -373,7 +393,7 @@ function SetupRoute() {
 												<Checkbox
 													id={field.name}
 													checked={field.state.value}
-													onCheckedChange={(value) => field.handleChange(value === true)}
+													onCheckedChange={(value) => field.handleChange(!!value)}
 													name={field.name}
 												/>
 												<Label htmlFor={field.name} className="font-bold">

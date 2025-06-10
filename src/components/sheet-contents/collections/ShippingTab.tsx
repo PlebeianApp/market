@@ -185,6 +185,7 @@ export function ShippingTab() {
 										size="sm"
 										onClick={() => (isAdded ? null : addShippingOption(option))}
 										disabled={isAdded}
+										data-testid={`add-shipping-option-${option.name?.replace(/\s+/g, '-').toLowerCase() || 'unknown'}`}
 									>
 										{isAdded ? (
 											<>

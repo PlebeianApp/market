@@ -61,13 +61,15 @@ function ProductsOverviewComponent() {
 	const [expandedProduct, setExpandedProduct] = useState<string | null>(null)
 	useDashboardTitle('Products')
 	// Check if we're on a child route (editing or creating a product)
-	const isOnChildRoute = matchRoute({
-		to: '/dashboard/products/products/$productId',
-		fuzzy: true,
-	}) || matchRoute({
-		to: '/dashboard/products/products/new',
-		fuzzy: true,
-	})
+	const isOnChildRoute =
+		matchRoute({
+			to: '/dashboard/products/products/$productId',
+			fuzzy: true,
+		}) ||
+		matchRoute({
+			to: '/dashboard/products/products/new',
+			fuzzy: true,
+		})
 
 	const {
 		data: products,

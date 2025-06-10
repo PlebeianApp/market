@@ -23,4 +23,4 @@ function NewCollectionComponent() {
 			</div>
 		</div>
 	)
-} 
+}

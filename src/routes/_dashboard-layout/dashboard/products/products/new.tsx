@@ -24,4 +24,4 @@ function NewProductComponent() {
 			</div>
 		</div>
 	)
-} 
+}
