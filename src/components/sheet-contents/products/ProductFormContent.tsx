@@ -87,12 +87,14 @@ export function ProductFormContent({ className = '', showFooter = true }: { clas
 						<TabsTrigger
 							value="product"
 							className="flex-1 px-4 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
+							data-testid="main-tab-product"
 						>
 							Product
 						</TabsTrigger>
 						<TabsTrigger
 							value="shipping"
 							className="flex-1 px-4 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
+							data-testid="main-tab-shipping"
 						>
 							Shipping
 						</TabsTrigger>
@@ -112,30 +114,35 @@ export function ProductFormContent({ className = '', showFooter = true }: { clas
 								<TabsTrigger
 									value="name"
 									className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+									data-testid="product-tab-name"
 								>
 									Name
 								</TabsTrigger>
 								<TabsTrigger
 									value="detail"
 									className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+									data-testid="product-tab-detail"
 								>
 									Detail
 								</TabsTrigger>
 								<TabsTrigger
 									value="spec"
 									className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+									data-testid="product-tab-spec"
 								>
 									Spec
 								</TabsTrigger>
 								<TabsTrigger
 									value="category"
 									className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+									data-testid="product-tab-category"
 								>
 									Category
 								</TabsTrigger>
 								<TabsTrigger
 									value="images"
 									className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+									data-testid="product-tab-images"
 								>
 									Images
 								</TabsTrigger>
@@ -174,7 +181,13 @@ export function ProductFormContent({ className = '', showFooter = true }: { clas
 				<div className="p-6 mt-auto sticky bottom-0 bg-white border-t">
 					<div className="flex gap-2 w-full">
 						{(productSubTab !== 'name' || mainTab === 'shipping') && (
-							<Button type="button" variant="outline" className="flex-1 gap-2 uppercase" onClick={productFormActions.previousTab}>
+							<Button
+								type="button"
+								variant="outline"
+								className="flex-1 gap-2 uppercase"
+								onClick={productFormActions.previousTab}
+								data-testid="product-back-button"
+							>
 								<span className="i-back w-6 h-6"></span>
 								Back
 							</Button>
@@ -189,6 +202,7 @@ export function ProductFormContent({ className = '', showFooter = true }: { clas
 										variant="secondary"
 										className="flex-1 uppercase"
 										disabled={isSubmitting || isPublishing || !canSubmit}
+										data-testid="product-save-button"
 									>
 										{isSubmitting || isPublishing
 											? editingProductId
@@ -201,7 +215,13 @@ export function ProductFormContent({ className = '', showFooter = true }: { clas
 								)}
 							/>
 						) : (
-							<Button type="button" variant="secondary" className="flex-1 uppercase" onClick={productFormActions.nextTab}>
+							<Button
+								type="button"
+								variant="secondary"
+								className="flex-1 uppercase"
+								onClick={productFormActions.nextTab}
+								data-testid="product-next-button"
+							>
 								Next
 							</Button>
 						)}

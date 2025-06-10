@@ -33,25 +33,28 @@ export function NameTab() {
 	return (
 		<div className="space-y-4">
 			<div className="grid w-full gap-1.5">
-				<Label>Collection</Label>
+				<Label htmlFor="collection">Collection (Optional)</Label>
 				<Select
-					value={selectedCollection || 'not-in-collection'}
-					onValueChange={(value) => {
-						const collectionValue = value === 'not-in-collection' ? '' : value
-						productFormActions.updateValues({ selectedCollection: collectionValue })
-					}}
+					value={selectedCollection || 'none'}
+					onValueChange={(value) => productFormActions.updateValues({ selectedCollection: value === 'none' ? null : value })}
 				>
-					<SelectTrigger className="border-2">
-						<SelectValue placeholder="Not In A Collection" />
+					<SelectTrigger className="border-2" data-testid="product-collection-select">
+						<SelectValue placeholder="Select a collection" />
 					</SelectTrigger>
 					<SelectContent>
-						<SelectItem value="not-in-collection">Not In A Collection</SelectItem>
+						<SelectItem value="none" data-testid="collection-option-none">
+							Not In A Collection
+						</SelectItem>
 						{collections.map((collection) => {
-							const title = getCollectionTitle(collection)
-							const id = getCollectionId(collection)
+							const collectionId = getCollectionId(collection)
+							const collectionTitle = getCollectionTitle(collection)
 							return (
-								<SelectItem key={id} value={id}>
-									{title}
+								<SelectItem
+									key={collectionId}
+									value={collectionId}
+									data-testid={`collection-option-${collectionTitle?.toLowerCase().replace(/\s+/g, '-') || 'unknown'}`}
+								>
+									{collectionTitle}
 								</SelectItem>
 							)
 						})}
@@ -100,6 +103,7 @@ export function NameTab() {
 							}}
 							className="border-2"
 							placeholder="e.g Art Print"
+							data-testid="product-name-input"
 							required
 						/>
 						{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
@@ -131,6 +135,7 @@ export function NameTab() {
 							}}
 							className="border-2 min-h-24 p-2 rounded-md"
 							placeholder="More information about your product to help your customers"
+							data-testid="product-description-input"
 							required
 						/>
 						{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (

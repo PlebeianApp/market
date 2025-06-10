@@ -83,7 +83,8 @@ export function DetailTab() {
 								productFormActions.updateValues({ price: e.target.value })
 							}}
 							className="border-2"
-							placeholder="e.g. 100000"
+							placeholder="e.g. 10000"
+							data-testid="product-price-input"
 							required
 							pattern="[0-9]*"
 						/>
@@ -120,6 +121,7 @@ export function DetailTab() {
 							}}
 							className="border-2"
 							placeholder="e.g. 100"
+							data-testid="product-quantity-input"
 							required
 							pattern="[0-9]*"
 						/>
@@ -138,13 +140,19 @@ export function DetailTab() {
 					value={status}
 					onValueChange={(value) => productFormActions.updateValues({ status: value as 'hidden' | 'on-sale' | 'pre-order' })}
 				>
-					<SelectTrigger className="border-2">
+					<SelectTrigger className="border-2" data-testid="product-status-select">
 						<SelectValue placeholder="Select status" />
 					</SelectTrigger>
 					<SelectContent>
-						<SelectItem value="hidden">Hidden</SelectItem>
-						<SelectItem value="on-sale">On Sale</SelectItem>
-						<SelectItem value="pre-order">Pre-Order</SelectItem>
+						<SelectItem value="hidden" data-testid="status-option-hidden">
+							Hidden
+						</SelectItem>
+						<SelectItem value="on-sale" data-testid="status-option-on-sale">
+							On Sale
+						</SelectItem>
+						<SelectItem value="pre-order" data-testid="status-option-pre-order">
+							Pre-Order
+						</SelectItem>
 					</SelectContent>
 				</Select>
 			</div>
@@ -214,12 +222,12 @@ export function CategoryTab() {
 					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Main Category</span>
 				</Label>
 				<Select value={mainCategory || ''} onValueChange={handleMainCategorySelect}>
-					<SelectTrigger className="border-2">
+					<SelectTrigger className="border-2" data-testid="product-main-category-select">
 						<SelectValue placeholder="Select a Main Category" />
 					</SelectTrigger>
 					<SelectContent>
 						{mainCategories.map((category) => (
-							<SelectItem key={category} value={category}>
+							<SelectItem key={category} value={category} data-testid={`main-category-${category.toLowerCase().replace(/\s+/g, '-')}`}>
 								{category}
 							</SelectItem>
 						))}
@@ -541,6 +549,7 @@ export function ShippingTab() {
 										size="sm"
 										onClick={() => (isAdded ? null : addShippingOption(option))}
 										disabled={isAdded}
+										data-testid={`add-shipping-option-${option.name?.replace(/\s+/g, '-').toLowerCase() || 'unknown'}`}
 									>
 										{isAdded ? (
 											<>
