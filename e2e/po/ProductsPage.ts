@@ -62,7 +62,10 @@ export class ProductsPage extends BasePage {
 		if (productData.imageUrl) {
 			await this.page.fill('[data-testid="image-url-input"]', productData.imageUrl)
 			await this.page.click('[data-testid="image-save-button"]')
-			await this.page.waitForTimeout(1000)
+			// Wait for the image to be saved - look for the image to appear or edit button to show
+			await this.page.waitForSelector('[data-testid="image-edit-button"]', { timeout: 5000 }).catch(() => {
+				console.log('Image save may have failed, continuing...')
+			})
 		}
 
 		// Go to Shipping tab
@@ -79,7 +82,19 @@ export class ProductsPage extends BasePage {
 
 		// Save the product
 		await this.page.click('[data-testid="product-save-button"]')
-		await this.page.waitForTimeout(2000)
+		await this.page.waitForTimeout(1000)
+
+		// After creation, we get redirected to the product page
+		// Navigate back to products list for next creation
+		await this.navigateToProductsList()
+	}
+
+	async navigateToProductsList() {
+		// Navigate back to the products dashboard
+		await this.page.click('[data-testid="dashboard-link"]')
+		await this.page.waitForTimeout(500)
+		await this.page.click('a:has-text("📦 Products")')
+		await this.page.waitForTimeout(1000)
 	}
 
 	async editProduct(
@@ -89,9 +104,11 @@ export class ProductsPage extends BasePage {
 			price?: string
 		},
 	) {
-		// Find and click edit button for the product
-		const productRow = this.page.locator(`text=${currentName}`).locator('..').locator('..')
-		await productRow.locator('[aria-label*="Edit"]').click()
+		// Find and click edit button for the specific product using a more precise selector
+		await this.page
+			.getByRole('button', { name: `Edit ${currentName}` })
+			.first()
+			.click()
 		await this.page.waitForTimeout(1000)
 
 		// Update name (on Name tab)
@@ -113,21 +130,41 @@ export class ProductsPage extends BasePage {
 	}
 
 	async deleteProduct(productName: string) {
-		// Find and click delete button for the product
-		const productRow = this.page.locator(`text=${productName}`).locator('..').locator('..')
-
-		// Handle the confirmation dialog
+		// Set up dialog handler BEFORE clicking the delete button
 		this.page.on('dialog', (dialog) => dialog.accept())
 
-		await productRow.locator('[aria-label*="Delete"]').click()
+		// Find and click delete button for the specific product using a more precise selector
+		await this.page
+			.getByRole('button', { name: `Delete ${productName}` })
+			.first()
+			.click()
+
 		await this.page.waitForTimeout(2000)
 	}
 
 	async verifyProductExists(productName: string) {
-		await expect(this.page.getByText(productName).first()).toBeVisible({ timeout: 10000 })
+		// Look for the product title span in the products list
+		const productTitle = this.page.locator('span.text-sm.font-medium.text-gray-800').filter({ hasText: productName })
+		await expect(productTitle).toBeVisible({ timeout: 10000 })
 	}
 
 	async verifyProductNotExists(productName: string) {
-		await expect(this.page.getByText(productName)).not.toBeVisible({ timeout: 5000 })
+		// Check that the product title is not in the products list
+		const productTitle = this.page.locator('span.text-sm.font-medium.text-gray-800').filter({ hasText: productName })
+		await expect(productTitle).not.toBeVisible({ timeout: 5000 })
+	}
+
+	async getProductCount() {
+		// Count the number of product list items
+		return await this.page
+			.locator('li')
+			.filter({ has: this.page.locator('span.text-sm.font-medium.text-gray-800') })
+			.count()
+	}
+
+	async verifyProductCountIs(expectedCount: number) {
+		// Verify the exact number of products by counting list items with product titles
+		const productItems = this.page.locator('li').filter({ has: this.page.locator('span.text-sm.font-medium.text-gray-800') })
+		await expect(productItems).toHaveCount(expectedCount, { timeout: 10000 })
 	}
 }
