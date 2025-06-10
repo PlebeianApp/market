@@ -8,21 +8,71 @@ import { useStore } from '@tanstack/react-store'
 import { Loader2 } from 'lucide-react'
 import { CartButton } from '@/components/CartButton'
 import { uiActions } from '@/lib/stores/ui'
+import { useState, useEffect } from 'react'
 
 export function Header() {
 	const { data: config } = useConfigQuery()
 	const { isAuthenticated, isAuthenticating } = useStore(authStore)
 	const location = useLocation()
+	const [scrollY, setScrollY] = useState(0)
 	
 	// Check if we're on a product page
 	const isProductPage = location.pathname.startsWith('/products/') && location.pathname !== '/products'
+
+	// Scroll detection for product pages
+	useEffect(() => {
+		if (!isProductPage) return
+
+		const handleScroll = () => {
+			setScrollY(window.scrollY)
+		}
+
+		window.addEventListener('scroll', handleScroll, { passive: true })
+		return () => window.removeEventListener('scroll', handleScroll)
+	}, [isProductPage])
+
+	// Calculate background opacity based on scroll position
+	const getHeaderBackground = () => {
+		if (!isProductPage) return 'bg-black'
+		
+		if (scrollY < 80) {
+			// 0-80px: transparent
+			return 'bg-header-scroll-transition'
+		} else if (scrollY < 160) {
+			// 80-160px: transition from transparent to black
+			const progress = (scrollY - 80) / 80
+			const opacity = 0.3 + (0.7 * progress) // 0.3 to 1.0
+			return 'bg-header-scroll-transition'
+		} else {
+			// 160px+: full black
+			return 'bg-black'
+		}
+	}
+
+	// Calculate CSS variable for transitional background
+	const getHeaderStyle = () => {
+		if (!isProductPage) return {}
+		
+		if (scrollY < 80) {
+			return { '--header-bg-opacity': 'rgba(0, 0, 0, 0.3)' }
+		} else if (scrollY < 160) {
+			const progress = (scrollY - 80) / 80
+			const opacity = 0.3 + (0.7 * progress)
+			return { '--header-bg-opacity': `rgba(0, 0, 0, ${opacity})` }
+		} else {
+			return {}
+		}
+	}
 
 	function handleLoginClick() {
 		uiActions.openDialog('login')
 	}
 
 	return (
-		<header className={`sticky top-0 z-30 py-4 text-white px-4 ${isProductPage ? 'bg-header-transparent' : 'bg-black'}`}>
+		<header 
+			className={`sticky top-0 z-30 py-4 text-white px-4 ${getHeaderBackground()}`}
+			style={getHeaderStyle() as React.CSSProperties}
+		>
 			<div className="container flex h-full max-w-full items-center justify-between">
 				<section className="inline-flex items-center">
 					<Link to="/">
