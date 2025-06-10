@@ -151,22 +151,10 @@ function RouteComponent() {
 					}}
 				>
 					{/* Black radial gradient overlay */}
-					<div 
-						className="absolute inset-0"
-						style={{
-							background: 'radial-gradient(circle at center, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.8) 100%)'
-						}}
-					/>
+					<div className="absolute inset-0 bg-radial-overlay" />
 					
 					{/* Dots pattern overlay */}
-					<div 
-						className="absolute inset-0 opacity-30 pointer-events-none"
-						style={{
-							backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.8) 1px, transparent 1px)`,
-							backgroundSize: '20px 20px',
-							backgroundRepeat: 'repeat'
-						}}
-					/>
+					<div className="absolute inset-0 opacity-30 pointer-events-none bg-dots-overlay" />
 					
 					{/* Content container */}
 					<div className="relative z-10 container mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 p-4 pb-16 lg:p-16">
