@@ -1,24 +1,25 @@
 import { test, expect } from '@playwright/test'
-import { skipIfInSetupMode, login, navigateTo } from './utils/test-utils'
+import { skipIfInSetupMode } from './utils/test-utils'
+import { LoginPage } from './po/LoginPage'
+import { DashboardPage } from './po/DashboardPage'
 
 test.describe.serial('5. Shipping Options Flow', () => {
+	let loginPage: LoginPage
+	let dashboardPage: DashboardPage
+
 	test.beforeEach(async ({ page }) => {
-		await page.goto('/')
+		loginPage = new LoginPage(page)
+		dashboardPage = new DashboardPage(page)
+		await loginPage.goto()
 		await skipIfInSetupMode(page, test)
+		await loginPage.login()
 	})
 
-	test('should create shipping options for collections', async ({ page }) => {
-		await login(page)
-
-		// Navigate to shipping options
-		await navigateTo(page, 'Dashboard')
-		await page.waitForTimeout(500)
-		await page.click('a:has-text("📫 Shipping Options")')
-
-		// Wait for shipping options page to load
+	test('should create standard and express shipping options', async ({ page }) => {
+		await dashboardPage.navigateTo('Shipping Options')
 		await expect(page.locator('h1').filter({ hasText: 'Shipping Options' }).first()).toBeVisible()
 
-		// Create first shipping option - Standard National
+		// --- Create Standard National ---
 		await page.click('[data-testid="add-shipping-option-button"]')
 		await page.waitForTimeout(500)
 
@@ -42,9 +43,9 @@ test.describe.serial('5. Shipping Options Flow', () => {
 		await page.waitForTimeout(1000)
 
 		// Verify the shipping option appears in the list
-		await expect(page.locator('text=Standard National').first()).toBeVisible()
+		await expect(page.getByText('Standard National').first()).toBeVisible()
 
-		// Create second shipping option - Express International
+		// --- Create Express International ---
 		await page.click('[data-testid="add-shipping-option-button"]')
 		await page.waitForTimeout(500)
 
@@ -74,8 +75,8 @@ test.describe.serial('5. Shipping Options Flow', () => {
 		console.log('📋 Visible shipping options:', shippingOptions)
 
 		// Verify both shipping options are visible
-		await expect(page.locator('text=Standard National').first()).toBeVisible()
-		await expect(page.locator('text=Express International').first()).toBeVisible({ timeout: 10000 })
+		await expect(page.getByText('Standard National').first()).toBeVisible()
+		await expect(page.getByText('Express International').first()).toBeVisible({ timeout: 10000 })
 
 		console.log('✅ Created shipping options successfully')
 	})

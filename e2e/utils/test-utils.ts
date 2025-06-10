@@ -1,13 +1,7 @@
 import { type Page, expect } from '@playwright/test'
 import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
 import { waitForAppReady, checkAppConfiguration } from './relay-utils'
-
-// Use a fixed test user for consistency across all tests
-const FIXED_TEST_USER = {
-	privateKey: '5c81bffa8303bbd7726d6a5a1170f3ee46de2addabefd6a735845166af01f5c0', // devUser1.sk
-	publicKey: '86a82cab18b293f53cbaaae8cdcbee3f7ec427fdf9f9c933db77800bb5ef38a0', // devUser1.pk
-	npub: 'npub1s65ze2cck2fl20964t5vmjlw8alvgflal8uujv7mw7qqhd008zsqd2nnah',
-}
+import { FIXED_TEST_USER } from '../fixtures/users'
 
 export interface TestUser {
 	privateKey: string
@@ -75,22 +69,18 @@ export async function expectToBeOnHomePage(page: Page) {
 	await expect(page).toHaveURL('/')
 }
 
-export async function mockNostrExtension(page: Page, testUser?: TestUser) {
-	// Use fixed test user if no user provided
-	const userToUse = testUser || FIXED_TEST_USER
-
-	// Mock the window.nostr extension for testing
+export async function mockNostrExtension(page: Page) {
 	await page.addInitScript((user) => {
 		;(window as any).nostr = {
 			async getPublicKey() {
 				return user.publicKey
 			},
 			async signEvent(event: any) {
-				// Mock signing - in real tests you might want proper signing
+				// The signature is not verified in tests, so a mock one is sufficient.
 				return { ...event, sig: 'mock_signature' }
 			},
 		}
-	}, userToUse)
+	}, FIXED_TEST_USER)
 }
 
 export async function ensureAppState(page: Page, expectedState: 'setup' | 'ready'): Promise<boolean> {
@@ -105,6 +95,7 @@ export async function ensureAppState(page: Page, expectedState: 'setup' | 'ready
 
 export async function skipIfInSetupMode(page: Page, testContext: any) {
 	if (page.url().includes('/setup')) {
+		console.log('📋 App is in setup mode, skipping test...')
 		testContext.skip()
 		return true
 	}
@@ -204,25 +195,19 @@ export async function navigateTo(page: Page, item: 'Profile' | 'Products' | 'Hom
 	await page.waitForTimeout(1000) // Wait for page to settle
 }
 
-export async function fillProfileForm(page: Page, userData: Record<string, string>) {
-	await page.waitForSelector('input[name="name"]', { timeout: 10000 })
-	for (const [key, value] of Object.entries(userData)) {
+export async function fillProfileForm(page: Page, formData: Record<string, string>) {
+	await expect(page.locator('input[name="name"]')).toBeVisible({ timeout: 10000 })
+	for (const [key, value] of Object.entries(formData)) {
 		const selector = `[name="${key}"]`
-		if (key === 'about') {
-			await page.fill(`textarea${selector}`, value)
-		} else {
-			await page.fill(`input${selector}`, value)
-		}
+		const locator = key === 'about' ? page.locator(`textarea${selector}`) : page.locator(`input${selector}`)
+		await locator.fill(value)
 	}
 }
 
-export async function verifyProfileForm(page: Page, userData: Record<string, string>) {
-	for (const [key, value] of Object.entries(userData)) {
+export async function verifyProfileForm(page: Page, expectedData: Record<string, string>) {
+	for (const [key, value] of Object.entries(expectedData)) {
 		const selector = `[name="${key}"]`
-		if (key === 'about') {
-			await expect(page.locator(`textarea${selector}`)).toHaveValue(value)
-		} else {
-			await expect(page.locator(`input${selector}`)).toHaveValue(value)
-		}
+		const locator = key === 'about' ? page.locator(`textarea${selector}`) : page.locator(`input${selector}`)
+		await expect(locator).toHaveValue(value)
 	}
 }

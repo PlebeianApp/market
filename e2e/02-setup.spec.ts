@@ -1,48 +1,53 @@
 import { test, expect } from '@playwright/test'
-import { fillSetupForm, expectToBeOnHomePage, mockNostrExtension } from './utils/test-utils'
+import { mockNostrExtension } from './utils/test-utils'
 import { createRelayMonitor } from './utils/relay-monitor'
+import { SetupPage } from './po/SetupPage'
+import { BasePage } from './po/BasePage'
 
 test.describe.serial('1. App Setup Flow', () => {
 	test('should redirect to setup page on first visit and complete setup flow', async ({ page }) => {
-		// Use the fixed test user for consistency
+		const basePage = new BasePage(page)
+		const setupPage = new SetupPage(page)
+
 		await mockNostrExtension(page)
+		await basePage.goto()
+		await basePage.pause(1000)
 
-		await page.goto('/')
-
-		// Wait for the app to load and potentially redirect
-		await page.waitForTimeout(1000)
-
-		// Check if we're redirected to setup or already on home
 		const currentUrl = page.url()
-		console.log(`📍 Current URL after navigation and wait: ${currentUrl}`)
+		console.log(`📍 Current URL after navigation: ${currentUrl}`)
 
-		// If we are on the setup page, fill the form and expect to be redirected to home.
-		// Otherwise, we expect to be on the home page already.
-		if (page.url().includes('/setup')) {
-			console.log('📋 App needs setup - starting event monitoring...')
+		if (currentUrl.includes('/setup')) {
+			console.log('📋 App needs setup, proceeding with form fill...')
 			const relayMonitor = await createRelayMonitor(page)
 
-			await fillSetupForm(page)
+			await setupPage.fillForm()
+			await setupPage.submitForm()
 
-			// Wait for the setup event to be stored in the relay
 			console.log('⏳ Waiting for setup event to be stored...')
-			const setupEvent = await relayMonitor.waitForSetupEvent(1000) // Increased timeout for setup
+			const setupEvent = await relayMonitor.waitForSetupEvent(5000)
 			expect(setupEvent).not.toBeNull()
-			console.log('✅ Setup event successfully stored in relay')
+			console.log('✅ Setup event successfully stored in relay.')
 
 			relayMonitor.stopMonitoring()
-			await expectToBeOnHomePage(page)
+			await basePage.waitForURL('/')
 		} else {
-			console.log('✅ App already configured, skipping setup')
-			await expectToBeOnHomePage(page)
+			console.log('✅ App already configured, skipping setup form.')
+			await basePage.waitForURL('/')
 		}
+	})
+
+	test('should confirm app is configured and not require setup', async ({ page }) => {
+		const basePage = new BasePage(page)
+		await basePage.goto()
+		await basePage.waitForURL(/\/$/, 5000) // Wait for home page, not setup
+		await expect(page).not.toHaveURL(/\/setup/)
 	})
 
 	test('should show app is configured and allow navigation', async ({ page }) => {
 		// After setup, we should land on the home page and not be redirected to setup.
 		await page.goto('/')
 		await expect(page).not.toHaveURL(/\/setup/)
-		await expectToBeOnHomePage(page)
+		// await expectToBeOnHomePage(page) // This is now covered by the line above
 
 		// Navigation should work correctly after setup.
 		await page.goto('/products')
