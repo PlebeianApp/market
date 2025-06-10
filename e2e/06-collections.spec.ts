@@ -27,8 +27,8 @@ test.describe.serial('6. Collections Flow', () => {
 		// Products Tab - just click next
 		await page.click('[data-testid="collection-form-next"]')
 
-		// Shipping Tab
-		await page.check('text=Standard National')
+		// Shipping Tab - select shipping options by clicking the Add button
+		await page.locator('text=Standard National').locator('..').locator('button:has-text("Add")').click()
 		await page.click('[data-testid="collection-form-submit"]')
 
 		// Verify we're back on collections page and collection is visible
@@ -47,9 +47,9 @@ test.describe.serial('6. Collections Flow', () => {
 		// Products Tab - just click next
 		await page.click('[data-testid="collection-form-next"]')
 
-		// Shipping Tab
-		await page.check('text=Standard National')
-		await page.check('text=Express International')
+		// Shipping Tab - select shipping options by clicking the Add buttons
+		await page.locator('text=Standard National').locator('..').locator('button:has-text("Add")').click()
+		await page.locator('text=Express International').locator('..').locator('button:has-text("Add")').click()
 		await page.click('[data-testid="collection-form-submit"]')
 
 		// Verify we're back on collections page and both collections are visible

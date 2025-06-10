@@ -37,7 +37,7 @@ export async function waitForAppReady(page: Page, timeout = 10000): Promise<'set
 			// If we're on home page and not being redirected, app is ready
 			if (url === 'http://localhost:3000/' || url.endsWith('/')) {
 				// Wait a bit more to ensure no redirect happens
-				await page.waitForTimeout(2000)
+				await page.waitForTimeout(1000)
 				const finalUrl = page.url()
 				if (!finalUrl.includes('/setup')) {
 					console.log('✅ App is ready')

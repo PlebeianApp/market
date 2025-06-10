@@ -28,7 +28,7 @@ export function generateTestUser(): TestUser {
 	}
 }
 
-export async function waitForNavigation(page: Page, expectedUrl: string, timeout = 10000) {
+export async function waitForNavigation(page: Page, expectedUrl: string, timeout = 1000) {
 	await page.waitForURL(expectedUrl, { timeout })
 }
 
@@ -36,7 +36,7 @@ export async function fillSetupForm(page: Page, testUser?: TestUser) {
 	console.log('📝 Filling setup form...')
 
 	// Wait for form to be visible
-	await page.waitForSelector('input[name="name"]', { timeout: 10000 })
+	await page.waitForSelector('input[name="name"]', { timeout: 1000 })
 
 	// Use fixed test user if no user provided
 	const userToUse = testUser || FIXED_TEST_USER
@@ -55,14 +55,14 @@ export async function fillSetupForm(page: Page, testUser?: TestUser) {
 	// Wait for either success message or navigation to home page
 	try {
 		// Wait for success toast message
-		await page.waitForSelector('.sonner-toast:has-text("App settings successfully updated")', { timeout: 10000 })
+		await page.waitForSelector('.sonner-toast:has-text("App settings successfully updated")', { timeout: 1000 })
 		console.log('✅ Setup form submitted successfully')
 	} catch (e) {
 		console.log('⚠️  No success toast found, checking for navigation...')
 	}
 
 	// Wait for navigation to complete (either success or already navigated)
-	await page.waitForTimeout(2000)
+	await page.waitForTimeout(1000)
 	console.log('📍 Setup form submission completed')
 }
 

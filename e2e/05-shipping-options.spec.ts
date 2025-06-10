@@ -39,10 +39,10 @@ test.describe.serial('5. Shipping Options Flow', () => {
 		await page.click('[data-testid="shipping-submit-button"]')
 
 		// Wait for the shipping option to be created
-		await page.waitForTimeout(2000)
+		await page.waitForTimeout(1000)
 
 		// Verify the shipping option appears in the list
-		await expect(page.locator('text=Standard National')).toBeVisible()
+		await expect(page.locator('text=Standard National').first()).toBeVisible()
 
 		// Create second shipping option - Express International
 		await page.click('[data-testid="add-shipping-option-button"]')
@@ -50,10 +50,12 @@ test.describe.serial('5. Shipping Options Flow', () => {
 
 		await page.fill('[data-testid="shipping-title-input"]', 'Express International')
 		await page.fill('[data-testid="shipping-price-input"]', '25.00')
+		await page.fill('[data-testid="shipping-description-input"]', 'Express International shipping option')
 
 		// Select service type as Express
 		await page.click('[data-testid="shipping-service-select"]')
-		await page.click('text=Express Shipping')
+		await page.waitForTimeout(500)
+		await page.locator('[role="option"]').filter({ hasText: 'Express Shipping' }).click()
 
 		// Select country - Canada
 		await page.click('[data-testid="shipping-country-select"]')
@@ -65,11 +67,15 @@ test.describe.serial('5. Shipping Options Flow', () => {
 		await page.click('[data-testid="shipping-submit-button"]')
 
 		// Wait for the shipping option to be created
-		await page.waitForTimeout(2000)
+		await page.waitForTimeout(1000)
+
+		// Debug: Check what shipping options are visible
+		const shippingOptions = await page.locator('[data-testid^="shipping-option-item-"]').allTextContents()
+		console.log('📋 Visible shipping options:', shippingOptions)
 
 		// Verify both shipping options are visible
-		await expect(page.locator('text=Standard National')).toBeVisible()
-		await expect(page.locator('text=Express International')).toBeVisible()
+		await expect(page.locator('text=Standard National').first()).toBeVisible()
+		await expect(page.locator('text=Express International').first()).toBeVisible({ timeout: 10000 })
 
 		console.log('✅ Created shipping options successfully')
 	})

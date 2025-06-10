@@ -10,7 +10,7 @@ test.describe.serial('1. App Setup Flow', () => {
 		await page.goto('/')
 
 		// Wait for the app to load and potentially redirect
-		await page.waitForTimeout(3000)
+		await page.waitForTimeout(1000)
 
 		// Check if we're redirected to setup or already on home
 		const currentUrl = page.url()
@@ -26,7 +26,7 @@ test.describe.serial('1. App Setup Flow', () => {
 
 			// Wait for the setup event to be stored in the relay
 			console.log('⏳ Waiting for setup event to be stored...')
-			const setupEvent = await relayMonitor.waitForSetupEvent(15000) // Increased timeout for setup
+			const setupEvent = await relayMonitor.waitForSetupEvent(1000) // Increased timeout for setup
 			expect(setupEvent).not.toBeNull()
 			console.log('✅ Setup event successfully stored in relay')
 
