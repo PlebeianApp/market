@@ -3,7 +3,7 @@ import { Profile } from '@/components/Profile'
 import { Button } from '@/components/ui/button'
 import { authStore } from '@/lib/stores/auth'
 import { useConfigQuery } from '@/queries/config'
-import { Link } from '@tanstack/react-router'
+import { Link, useLocation } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { Loader2 } from 'lucide-react'
 import { CartButton } from '@/components/CartButton'
@@ -12,13 +12,17 @@ import { uiActions } from '@/lib/stores/ui'
 export function Header() {
 	const { data: config } = useConfigQuery()
 	const { isAuthenticated, isAuthenticating } = useStore(authStore)
+	const location = useLocation()
+	
+	// Check if we're on a product page
+	const isProductPage = location.pathname.startsWith('/products/') && location.pathname !== '/products'
 
 	function handleLoginClick() {
 		uiActions.openDialog('login')
 	}
 
 	return (
-		<header className="sticky top-0 z-30 bg-black py-4 text-white px-4">
+		<header className={`sticky top-0 z-30 py-4 text-white px-4 ${isProductPage ? 'bg-header-transparent' : 'bg-black'}`}>
 			<div className="container flex h-full max-w-full items-center justify-between">
 				<section className="inline-flex items-center">
 					<Link to="/">

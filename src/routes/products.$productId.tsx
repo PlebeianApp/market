@@ -141,14 +141,12 @@ function RouteComponent() {
 					<ArrowLeft className="h-4 w-4" />
 					<span>Back to results</span>
 				</Button>
+				
 				<div 
-					className={`relative min-h-[400px] ${!backgroundImageUrl ? 'bg-black' : ''}`}
+					className={`relative hero-container bg-hero-image ${!backgroundImageUrl ? 'bg-black' : ''}`}
 					style={{
-						backgroundImage: backgroundImageUrl ? `url(${backgroundImageUrl})` : undefined,
-						backgroundSize: 'cover',
-						backgroundPosition: 'center',
-						backgroundRepeat: 'no-repeat'
-					}}
+						'--hero-bg-image': backgroundImageUrl ? `url(${backgroundImageUrl})` : 'none'
+					} as React.CSSProperties}
 				>
 					{/* Black radial gradient overlay */}
 					<div className="absolute inset-0 bg-radial-overlay" />

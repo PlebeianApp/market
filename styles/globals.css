@@ -259,4 +259,29 @@ h2.font-heading {
 		background-size: 20px 20px;
 		background-repeat: repeat;
 	}
+	
+	.bg-header-transparent {
+		background-color: rgba(0, 0, 0, 0.3);
+	}
+	
+	.bg-hero-image {
+		background-image: var(--hero-bg-image, none);
+		background-size: cover;
+		background-position: center;
+		background-repeat: no-repeat;
+	}
+	
+	.hero-container {
+		margin-top: -8.5rem;
+		padding-top: 8rem;
+		min-height: calc(400px + 8rem);
+	}
+	
+	@media (min-width: 1024px) {
+		.hero-container {
+			margin-top: -6rem;
+			padding-top: 6rem;
+			min-height: calc(400px + 6rem);
+		}
+	}
 }
