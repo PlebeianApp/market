@@ -37,7 +37,7 @@ export function ShippingTab() {
 					name: info.title,
 					cost: parseFloat(info.price.amount),
 					currency: info.price.currency,
-					country: info.country,
+					countries: info.countries,
 					service: info.service,
 					carrier: info.carrier,
 				}
@@ -115,7 +115,9 @@ export function ShippingTab() {
 										<div className="font-medium">{shipping.shipping?.name}</div>
 										{option && (
 											<div className="text-sm text-gray-500">
-												{option.cost} {option.currency} • {option.country} • {option.service}
+												{option.cost} {option.currency} •{' '}
+												{option.countries?.length > 1 ? `${option.countries.length} countries` : option.countries?.[0] || 'No countries'} •{' '}
+												{option.service}
 											</div>
 										)}
 									</div>
@@ -175,7 +177,9 @@ export function ShippingTab() {
 									<div className="flex-1">
 										<div className="font-medium">{option.name}</div>
 										<div className="text-sm text-gray-500">
-											{option.cost} {option.currency} • {option.country} • {option.service}
+											{option.cost} {option.currency} •{' '}
+											{option.countries?.length > 1 ? `${option.countries.length} countries` : option.countries?.[0] || 'No countries'} •{' '}
+											{option.service}
 											{option.carrier && ` • ${option.carrier}`}
 										</div>
 									</div>

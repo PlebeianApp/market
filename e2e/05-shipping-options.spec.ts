@@ -15,37 +15,37 @@ test.describe.serial('5. Shipping Options Flow', () => {
 		await loginPage.login()
 	})
 
-	test('should create standard and express shipping options', async ({ page }) => {
+	test('should create shipping options using templates and manual selection', async ({ page }) => {
 		await dashboardPage.navigateTo('Shipping Options')
 		await expect(page.locator('h1').filter({ hasText: 'Shipping Options' }).first()).toBeVisible()
 
-		// --- Create Standard National ---
+		// --- Create Standard National using template ---
 		await page.click('[data-testid="add-shipping-option-button"]')
 		await page.waitForTimeout(500)
 
-		// Fill in the shipping option form
-		await page.fill('[data-testid="shipping-title-input"]', 'Standard National')
+		// Use North America template
+		await page.click('[data-testid="shipping-template-select"]')
+		await page.waitForTimeout(500)
+		await page.click('[data-testid="template-north-america"]')
+		await page.waitForTimeout(500)
+
+		// Verify template filled the form
+		await expect(page.locator('[data-testid="shipping-title-input"]')).toHaveValue('North America')
+		await expect(page.locator('[data-testid="shipping-price-input"]')).toHaveValue('0')
+
+		// Update the details
+		await page.fill('[data-testid="shipping-title-input"]', 'Standard North America')
 		await page.fill('[data-testid="shipping-price-input"]', '10.00')
-
-		// Fill in the shipping option form
-		await page.fill('[data-testid="shipping-description-input"]', 'Standard National shipping option')
-
-		// Select country - United States
-		await page.click('[data-testid="shipping-country-select"]')
-		await page.waitForTimeout(1000) // Wait for dropdown to open and populate
-		// Use a more specific selector for the dropdown item
-		await page.locator('[role="option"]').filter({ hasText: 'United States' }).click()
+		await page.fill('[data-testid="shipping-description-input"]', 'Standard shipping to North America')
 
 		// Submit the form
 		await page.click('[data-testid="shipping-submit-button"]')
-
-		// Wait for the shipping option to be created
 		await page.waitForTimeout(1000)
 
 		// Verify the shipping option appears in the list
-		await expect(page.getByText('Standard National').first()).toBeVisible()
+		await expect(page.getByText('Standard North America').first()).toBeVisible()
 
-		// --- Create Express International ---
+		// --- Create Express International with manual country selection ---
 		await page.click('[data-testid="add-shipping-option-button"]')
 		await page.waitForTimeout(500)
 
@@ -56,18 +56,23 @@ test.describe.serial('5. Shipping Options Flow', () => {
 		// Select service type as Express
 		await page.click('[data-testid="shipping-service-select"]')
 		await page.waitForTimeout(500)
-		await page.locator('[role="option"]').filter({ hasText: 'Express Shipping' }).click()
+		await page.click('[data-testid="service-express"]')
 
-		// Select country - Canada
+		// Add multiple countries manually
 		await page.click('[data-testid="shipping-country-select"]')
-		await page.waitForTimeout(1000) // Wait for dropdown to open and populate
-		// Use a more specific selector for the dropdown item
-		await page.locator('[role="option"]').filter({ hasText: 'Canada' }).click()
+		await page.waitForTimeout(1000)
+		await page.click('[data-testid="country-usa"]')
+
+		await page.click('[data-testid="shipping-country-select"]')
+		await page.waitForTimeout(1000)
+		await page.click('[data-testid="country-can"]')
+
+		await page.click('[data-testid="shipping-country-select"]')
+		await page.waitForTimeout(1000)
+		await page.click('[data-testid="country-gbr"]')
 
 		// Submit the form
 		await page.click('[data-testid="shipping-submit-button"]')
-
-		// Wait for the shipping option to be created
 		await page.waitForTimeout(1000)
 
 		// Debug: Check what shipping options are visible
@@ -75,7 +80,7 @@ test.describe.serial('5. Shipping Options Flow', () => {
 		console.log('📋 Visible shipping options:', shippingOptions)
 
 		// Verify both shipping options are visible
-		await expect(page.getByText('Standard National').first()).toBeVisible()
+		await expect(page.getByText('Standard North America').first()).toBeVisible()
 		await expect(page.getByText('Express International').first()).toBeVisible({ timeout: 10000 })
 
 		console.log('✅ Created shipping options successfully')

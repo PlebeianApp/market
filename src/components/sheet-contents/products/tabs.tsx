@@ -391,7 +391,7 @@ export function ShippingTab() {
 					name: info.title,
 					cost: parseFloat(info.price.amount),
 					currency: info.price.currency,
-					country: info.country,
+					countries: info.countries,
 					service: info.service,
 					carrier: info.carrier,
 				}
@@ -464,12 +464,13 @@ export function ShippingTab() {
 							const option = availableShippingOptions.find((opt) => opt.id === shipping.shipping?.id)
 							return (
 								<div key={index} className="flex items-center gap-3 p-3 border rounded-md bg-gray-50">
-									{option && <ServiceIcon service={option.service} />}
+									{option && <ServiceIcon service={option.service || 'standard'} />}
 									<div className="flex-1">
 										<div className="font-medium">{shipping.shipping?.name}</div>
 										{option && (
 											<div className="text-sm text-gray-500">
-												{option.cost} {option.currency} • {option.country} • {option.service}
+												{option.cost} {option.currency} • {option.countries?.join(', ') || 'No countries'} •{' '}
+												{option.service || 'Unknown service'}
 											</div>
 										)}
 									</div>
@@ -525,11 +526,12 @@ export function ShippingTab() {
 							const isAdded = shippings.some((s) => s.shipping?.id === option.id)
 							return (
 								<div key={option.id} className="flex items-center gap-3 p-3 border rounded-md hover:bg-gray-50">
-									<ServiceIcon service={option.service} />
+									<ServiceIcon service={option.service || 'standard'} />
 									<div className="flex-1">
 										<div className="font-medium">{option.name}</div>
 										<div className="text-sm text-gray-500">
-											{option.cost} {option.currency} • {option.country} • {option.service}
+											{option.cost} {option.currency} • {option.countries?.join(', ') || 'No countries'} •{' '}
+											{option.service || 'Unknown service'}
 											{option.carrier && ` • ${option.carrier}`}
 										</div>
 									</div>

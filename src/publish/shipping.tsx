@@ -10,8 +10,7 @@ export interface ShippingFormData {
 	description: string
 	price: string
 	currency: string
-	country: string
-	additionalCountries?: string[]
+	countries: string[]
 	service: 'standard' | 'express' | 'overnight' | 'pickup'
 	carrier?: string
 	region?: string
@@ -59,7 +58,7 @@ export const createShippingEvent = (
 		['d', id],
 		['title', formData.title],
 		['price', formData.price, formData.currency],
-		['country', formData.country, ...(formData.additionalCountries || [])],
+		['country', ...formData.countries],
 		['service', formData.service],
 	]
 
@@ -141,8 +140,8 @@ export const publishShippingOption = async (formData: ShippingFormData, signer: 
 		throw new Error('Currency is required')
 	}
 
-	if (!formData.country.trim()) {
-		throw new Error('Country is required')
+	if (!formData.countries.length) {
+		throw new Error('At least one country is required')
 	}
 
 	if (!formData.service) {
@@ -187,8 +186,8 @@ export const updateShippingOption = async (
 		throw new Error('Currency is required')
 	}
 
-	if (!formData.country.trim()) {
-		throw new Error('Country is required')
+	if (!formData.countries.length) {
+		throw new Error('At least one country is required')
 	}
 
 	if (!formData.service) {

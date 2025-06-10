@@ -47,6 +47,10 @@ export interface RichShippingInfo {
 	id: string
 	name?: string
 	cost?: number
+	currency?: string
+	countries?: string[]
+	service?: string
+	carrier?: string
 	[key: string]: any
 }
 
@@ -1030,7 +1034,7 @@ export const cartActions = {
 						name: info.title,
 						cost: parseFloat(info.price.amount),
 						currency: info.price.currency,
-						country: info.country,
+						countries: info.countries,
 						service: info.service,
 						carrier: info.carrier,
 					}
@@ -1075,7 +1079,7 @@ export const cartActions = {
 								name: info.title,
 								cost: parseFloat(info.price.amount),
 								currency: info.price.currency,
-								country: info.country,
+								countries: info.countries,
 								service: info.service,
 								carrier: info.carrier,
 							}
@@ -1085,7 +1089,7 @@ export const cartActions = {
 					const uniqueOptions: RichShippingInfo[] = []
 					const addedKeys = new Set<string>()
 					for (const option of allOptions) {
-						const uniqueKey = `${option.name}-${option.country || ''}`
+						const uniqueKey = `${option.name}-${option.countries?.join(',') || ''}`
 						if (!addedKeys.has(uniqueKey)) {
 							addedKeys.add(uniqueKey)
 							uniqueOptions.push(option)

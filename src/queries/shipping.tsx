@@ -388,6 +388,8 @@ export const getShippingInfo = (event: NDKEvent) => {
 		return null
 	}
 
+	const countries = countryTag.slice(1) // Remove the 'country' tag name, get all country codes
+
 	return {
 		id,
 		title,
@@ -396,8 +398,7 @@ export const getShippingInfo = (event: NDKEvent) => {
 			amount: priceTag[1],
 			currency: priceTag[2],
 		},
-		country: countryTag[1],
-		additionalCountries: countryTag[2],
+		countries,
 		service: serviceTag[1],
 		carrier: getShippingCarrier(event)?.[1],
 		location: getShippingLocation(event)?.[1],

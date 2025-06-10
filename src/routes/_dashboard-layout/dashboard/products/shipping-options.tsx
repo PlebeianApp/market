@@ -6,7 +6,8 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
-import { COUNTRIES_ISO, CURRENCIES } from '@/lib/constants'
+import { Badge } from '@/components/ui/badge'
+import { COUNTRIES_ISO, CURRENCIES, SHIPPING_TEMPLATES } from '@/lib/constants'
 import { useNDK } from '@/lib/stores/ndk'
 import {
 	useDeleteShippingOptionMutation,
@@ -31,7 +32,7 @@ import {
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { createFileRoute } from '@tanstack/react-router'
-import { ChevronDownIcon, GlobeIcon, PackageIcon, PlusIcon, TrashIcon, TruckIcon } from 'lucide-react'
+import { ChevronDownIcon, GlobeIcon, PackageIcon, PlusIcon, TrashIcon, TruckIcon, XIcon } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -84,8 +85,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 				description: getShippingDescription(shippingOption),
 				price: priceTag?.[1] || '',
 				currency: priceTag?.[2] || 'USD',
-				country: countryTag?.[1] || '',
-				additionalCountries: countryTag?.slice(2) || [],
+				countries: countryTag?.slice(1) || [],
 				service: (serviceTag?.[1] as any) || 'standard',
 				carrier: carrierTag?.[1] || '',
 				location: locationTag?.[1] || '',
@@ -111,7 +111,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 			description: '',
 			price: '',
 			currency: 'USD',
-			country: '',
+			countries: [],
 			service: 'standard',
 		}
 	})
@@ -127,7 +127,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 			description: '',
 			price: '',
 			currency: 'USD',
-			country: '',
+			countries: [],
 			service: 'standard',
 		})
 		setIsSubmitting(false)
@@ -136,7 +136,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
 
-		if (!formData.title.trim() || !formData.price.trim() || !formData.country) {
+		if (!formData.title.trim() || !formData.price.trim() || !formData.countries.length) {
 			toast.error('Please fill in all required fields')
 			return
 		}
@@ -220,7 +220,8 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 							<div className="min-w-0 flex-1">
 								<div className="font-medium truncate">{formData.title}</div>
 								<div className="text-sm text-muted-foreground">
-									{formData.price} {formData.currency} • {getCountryName(formData.country)} • {getServiceLabel(formData.service)}
+									{formData.price} {formData.currency} • {formData.countries.map(getCountryName).join(', ')} •{' '}
+									{getServiceLabel(formData.service)}
 								</div>
 							</div>
 						</div>
@@ -272,7 +273,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 										</SelectTrigger>
 										<SelectContent>
 											{SERVICE_TYPES.map((service) => (
-												<SelectItem key={service.value} value={service.value}>
+												<SelectItem key={service.value} value={service.value} data-testid={`service-${service.value}`}>
 													<div className="flex items-center gap-2">
 														<ServiceIcon service={service.value} />
 														{service.label}
@@ -316,21 +317,86 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 								</div>
 
 								<div className="space-y-2">
-									<Label htmlFor="country" className="font-medium">
-										Country *
+									<Label htmlFor="countries" className="font-medium">
+										Countries *
 									</Label>
-									<Select value={formData.country} onValueChange={(value) => setFormData((prev) => ({ ...prev, country: value }))}>
-										<SelectTrigger data-testid="shipping-country-select">
-											<SelectValue placeholder="Select country" />
-										</SelectTrigger>
-										<SelectContent>
-											{Object.values(COUNTRIES_ISO).map((country) => (
-												<SelectItem key={country.iso3} value={country.iso3}>
-													{country.name}
-												</SelectItem>
+
+									{/* Shipping Templates */}
+									<div className="space-y-2">
+										<Label className="text-sm font-medium">Quick Templates</Label>
+										<Select
+											onValueChange={(templateName) => {
+												const template = SHIPPING_TEMPLATES.find((t) => t.name === templateName)
+												if (template) {
+													setFormData((prev) => ({
+														...prev,
+														title: template.name,
+														price: template.cost,
+														countries: template.countries || [],
+													}))
+												}
+											}}
+										>
+											<SelectTrigger data-testid="shipping-template-select">
+												<SelectValue placeholder="Choose a template (optional)" />
+											</SelectTrigger>
+											<SelectContent>
+												{SHIPPING_TEMPLATES.map((template) => (
+													<SelectItem
+														key={template.name}
+														value={template.name}
+														data-testid={`template-${template.name.toLowerCase().replace(/\s+/g, '-')}`}
+													>
+														{template.name} {template.countries ? `(${template.countries.length} countries)` : '(Worldwide)'}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
+									</div>
+
+									{/* Country Selection */}
+									<div className="space-y-2">
+										<div className="flex flex-wrap gap-2 min-h-[40px] p-2 border rounded-md">
+											{formData.countries.map((countryCode) => (
+												<Badge key={countryCode} variant="secondary" className="flex items-center gap-1">
+													{getCountryName(countryCode)}
+													<XIcon
+														className="w-3 h-3 cursor-pointer"
+														onClick={() =>
+															setFormData((prev) => ({
+																...prev,
+																countries: prev.countries.filter((c) => c !== countryCode),
+															}))
+														}
+													/>
+												</Badge>
 											))}
-										</SelectContent>
-									</Select>
+											{formData.countries.length === 0 && <span className="text-muted-foreground text-sm">No countries selected</span>}
+										</div>
+										<Select
+											onValueChange={(countryCode) => {
+												if (!formData.countries.includes(countryCode)) {
+													setFormData((prev) => ({
+														...prev,
+														countries: [...prev.countries, countryCode],
+													}))
+												}
+											}}
+										>
+											<SelectTrigger data-testid="shipping-country-select">
+												<SelectValue placeholder="Add countries" />
+											</SelectTrigger>
+											<SelectContent>
+												{Object.values(COUNTRIES_ISO)
+													.filter((country) => !formData.countries.includes(country.iso3))
+													.map((country) => (
+														<SelectItem key={country.iso3} value={country.iso3} data-testid={`country-${country.iso3.toLowerCase()}`}>
+															{country.name}
+														</SelectItem>
+													))}
+											</SelectContent>
+										</Select>
+									</div>
 								</div>
 							</div>
 
