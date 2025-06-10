@@ -104,6 +104,9 @@ function RouteComponent() {
 		order: image[3] ? parseInt(image[3]) : undefined,
 	}))
 
+	// Get first image URL for background
+	const backgroundImageUrl = formattedImages[0]?.url || ''
+
 	// Get location from tags if exists
 	const location = product.tags.find((t) => t[0] === 'location')?.[1]
 
@@ -138,10 +141,40 @@ function RouteComponent() {
 					<ArrowLeft className="h-4 w-4" />
 					<span>Back to results</span>
 				</Button>
-				<div className="bg-black">
-					<div className="container mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 p-4 pb-16 lg:p-16">
+				<div 
+					className={`relative min-h-[400px] ${!backgroundImageUrl ? 'bg-black' : ''}`}
+					style={{
+						backgroundImage: backgroundImageUrl ? `url(${backgroundImageUrl})` : undefined,
+						backgroundSize: 'cover',
+						backgroundPosition: 'center',
+						backgroundRepeat: 'no-repeat'
+					}}
+				>
+					{/* Black radial gradient overlay */}
+					<div 
+						className="absolute inset-0"
+						style={{
+							background: 'radial-gradient(circle at center, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.8) 100%)'
+						}}
+					/>
+					
+					{/* Dots pattern overlay */}
+					<div 
+						className="absolute inset-0 opacity-30 pointer-events-none"
+						style={{
+							backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.8) 1px, transparent 1px)`,
+							backgroundSize: '20px 20px',
+							backgroundRepeat: 'repeat'
+						}}
+					/>
+					
+					{/* Content container */}
+					<div className="relative z-10 container mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 p-4 pb-16 lg:p-16">
 						<div className="max-h-[65vh] lg:h-[45vh] mt-8">
-							<ImageCarousel images={formattedImages} title={title} />
+							<ImageCarousel 
+								images={formattedImages} 
+								title={title}
+							/>
 						</div>
 
 						<div className="flex flex-col gap-8 text-white lg:justify-center">
@@ -227,7 +260,7 @@ function RouteComponent() {
 						</div>
 					</div>
 				</div>
-				<div className="mx-auto max-w-7xl px-4 py-6 -mt-12">
+				<div className="relative z-20 mx-auto max-w-7xl px-4 py-6 -mt-12">
 					{isMobileOrTablet ? (
 						<div className="flex flex-col gap-6">
 							{/* Description Section */}

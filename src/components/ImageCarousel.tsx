@@ -14,9 +14,10 @@ interface ImageCarouselProps {
 	images: ProductImage[]
 	title: string
 	className?: string
+	onImageChange?: (index: number) => void
 }
 
-export function ImageCarousel({ images, title, className }: ImageCarouselProps) {
+export function ImageCarousel({ images, title, className, onImageChange }: ImageCarouselProps) {
 	const [currentIndex, setCurrentIndex] = useState(0)
 	const [api, setApi] = useState<CarouselApi>()
 
@@ -24,9 +25,18 @@ export function ImageCarousel({ images, title, className }: ImageCarouselProps) 
 		if (!api) return
 
 		api.on('select', () => {
-			setCurrentIndex(api.selectedScrollSnap())
+			const newIndex = api.selectedScrollSnap()
+			setCurrentIndex(newIndex)
+			onImageChange?.(newIndex)
 		})
-	}, [api])
+	}, [api, onImageChange])
+
+	// Call onImageChange when component mounts or images change
+	useEffect(() => {
+		if (images.length > 0) {
+			onImageChange?.(0)
+		}
+	}, [images, onImageChange])
 
 	if (!images || images.length === 0) {
 		return (
@@ -63,6 +73,7 @@ export function ImageCarousel({ images, title, className }: ImageCarouselProps) 
 						onClick={() => {
 							api?.scrollTo(index)
 							setCurrentIndex(index)
+							onImageChange?.(index)
 						}}
 					>
 						<div className="aspect-square w-full overflow-hidden relative bg-black border border-gray-800">
