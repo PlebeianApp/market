@@ -314,7 +314,7 @@ function ProfileComponent() {
 							)}
 						</form.Field>
 
-						<Button type="submit" disabled={isLoading} className="w-full">
+						<Button type="submit" disabled={isLoading} className="w-full" data-testid="profile-save-button">
 							{isLoading ? 'Saving...' : 'Save'}
 						</Button>
 					</div>

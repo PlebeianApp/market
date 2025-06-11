@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { authStore } from '@/lib/stores/auth'
 import { productFormActions } from '@/lib/stores/product'
-import { uiActions } from '@/lib/stores/ui'
+
 import { getProductTitle, getProductImages, getProductId, productsByPubkeyQueryOptions } from '@/queries/products'
 import { useDeleteProductMutation } from '@/publish/products'
 import { useQuery } from '@tanstack/react-query'
@@ -60,11 +60,16 @@ function ProductsOverviewComponent() {
 	const matchRoute = useMatchRoute()
 	const [expandedProduct, setExpandedProduct] = useState<string | null>(null)
 	useDashboardTitle('Products')
-	// Check if we're on a child route (editing a product)
-	const isEditingProduct = matchRoute({
-		to: '/dashboard/products/products/$productId',
-		fuzzy: true,
-	})
+	// Check if we're on a child route (editing or creating a product)
+	const isOnChildRoute =
+		matchRoute({
+			to: '/dashboard/products/products/$productId',
+			fuzzy: true,
+		}) ||
+		matchRoute({
+			to: '/dashboard/products/products/new',
+			fuzzy: true,
+		})
 
 	const {
 		data: products,
@@ -81,7 +86,9 @@ function ProductsOverviewComponent() {
 	const handleAddProductClick = () => {
 		productFormActions.reset()
 		productFormActions.setEditingProductId(null)
-		uiActions.openDrawer('createProduct')
+		navigate({
+			to: '/dashboard/products/products/new',
+		})
 	}
 
 	const handleEditProductClick = (productId: string) => {
@@ -112,8 +119,8 @@ function ProductsOverviewComponent() {
 		)
 	}
 
-	// If we're editing a product, render the child route
-	if (isEditingProduct) {
+	// If we're on a child route, render the child route
+	if (isOnChildRoute) {
 		return <Outlet />
 	}
 
@@ -122,6 +129,7 @@ function ProductsOverviewComponent() {
 			<div className="bg-white rounded-md shadow-sm">
 				<Button
 					onClick={handleAddProductClick}
+					data-testid="add-product-button"
 					className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
 				>
 					<span className="i-product w-5 h-5" /> Add A Product

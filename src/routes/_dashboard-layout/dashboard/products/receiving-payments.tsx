@@ -525,12 +525,12 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 										value={editedPaymentDetail.paymentMethod}
 										onValueChange={(value: PaymentDetailsMethod) => setEditedPaymentDetail((prev) => ({ ...prev, paymentMethod: value }))}
 									>
-										<SelectTrigger>
+										<SelectTrigger data-testid="payment-method-selector">
 											<SelectValue placeholder="Payment method" />
 										</SelectTrigger>
 										<SelectContent>
 											{Object.values(PAYMENT_DETAILS_METHOD).map((method) => (
-												<SelectItem key={method} value={method}>
+												<SelectItem key={method} value={method} data-testid={`payment-method-${method}`}>
 													<div className="flex items-center gap-2">
 														<PaymentMethodIcon method={method} />
 														{paymentMethodLabels[method]}
@@ -567,6 +567,7 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 								</Label>
 								<Input
 									id="payment-details"
+									data-testid="payment-details-input"
 									value={editedPaymentDetail.paymentDetail}
 									onChange={(e) => setEditedPaymentDetail((prev) => ({ ...prev, paymentDetail: e.target.value }))}
 									placeholder="Enter payment details e.g. plebeian@getalby.com"
@@ -626,6 +627,7 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 								<div className="flex items-center gap-2">
 									<Checkbox
 										id="default-payment"
+										data-testid="default-payment-checkbox"
 										checked={editedPaymentDetail.isDefault}
 										onCheckedChange={(checked) => setEditedPaymentDetail((prev) => ({ ...prev, isDefault: !!checked }))}
 									/>
@@ -635,17 +637,29 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 								</div>
 
 								<div className="flex justify-end gap-2">
-									<Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={formState !== 'idle'}>
+									<Button
+										type="button"
+										variant="outline"
+										onClick={() => onOpenChange(false)}
+										disabled={formState !== 'idle'}
+										data-testid="cancel-payment-button"
+									>
 										Cancel
 									</Button>
 
 									{isEditing && (
-										<Button type="button" variant="destructive" onClick={handleDelete} disabled={formState !== 'idle'}>
+										<Button
+											type="button"
+											variant="destructive"
+											onClick={handleDelete}
+											disabled={formState !== 'idle'}
+											data-testid="delete-payment-button"
+										>
 											<TrashIcon className="w-4 h-4" />
 										</Button>
 									)}
 
-									<Button type="submit" disabled={formState !== 'idle'}>
+									<Button type="submit" disabled={formState !== 'idle'} data-testid="save-payment-button">
 										{formState === 'submitting' && <Spinner />}
 										{formState === 'validating'
 											? 'Validating...'

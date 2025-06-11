@@ -425,20 +425,31 @@ function CircularEconomyComponent() {
 								className="flex-grow sm:flex-grow-0"
 								onClick={handleAddRecipient}
 								disabled={isChecking || isCheckingZap || !newRecipientNpub || !canReceiveZaps || totalV4VPercentage === 0}
+								data-testid="add-v4v-recipient-button"
 							>
 								Add
 							</Button>
-							<Button variant="outline" onClick={() => setShowAddForm(false)}>
+							<Button variant="outline" onClick={() => setShowAddForm(false)} data-testid="cancel-v4v-recipient-button">
 								Cancel
 							</Button>
 						</div>
 					</div>
 				) : (
 					<div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
-						<Button variant="outline" onClick={() => setShowAddForm(true)} disabled={totalV4VPercentage === 0}>
+						<Button
+							variant="outline"
+							onClick={() => setShowAddForm(true)}
+							disabled={totalV4VPercentage === 0}
+							data-testid="add-v4v-recipient-form-button"
+						>
 							+ V4V Recipient
 						</Button>
-						<Button variant="outline" onClick={handleEqualizeAll} disabled={localShares.length === 0 || totalV4VPercentage === 0}>
+						<Button
+							variant="outline"
+							onClick={handleEqualizeAll}
+							disabled={localShares.length === 0 || totalV4VPercentage === 0}
+							data-testid="equal-all-v4v-button"
+						>
 							<span className="i-sharing w-5 h-5 mr-2"></span>
 							Equal All
 						</Button>
@@ -447,7 +458,13 @@ function CircularEconomyComponent() {
 
 				{/* Save button */}
 				<div className="mt-6">
-					<Button variant="focus" className="w-full" onClick={handleSave} disabled={publishMutation.isPending}>
+					<Button
+						variant="focus"
+						className="w-full"
+						onClick={handleSave}
+						disabled={publishMutation.isPending}
+						data-testid="save-v4v-button"
+					>
 						{publishMutation.isPending ? 'Saving...' : 'Save'}
 					</Button>
 				</div>

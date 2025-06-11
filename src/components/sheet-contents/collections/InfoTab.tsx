@@ -43,6 +43,7 @@ export function InfoTab() {
 						onSave={handleSaveImage}
 						onDelete={handleDeleteImage}
 						initialUrl=""
+						data-testid="collection-header-image-uploader"
 					/>
 				</div>
 			</div>
@@ -70,6 +71,7 @@ export function InfoTab() {
 							className="border-2"
 							placeholder="e.g. Clothes Collection"
 							required
+							data-testid="collection-name-input"
 						/>
 						{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
 							<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>
@@ -101,6 +103,7 @@ export function InfoTab() {
 							className="border-2 min-h-24 p-2 rounded-md"
 							placeholder="Bitaxe Miners"
 							required
+							data-testid="collection-description-input"
 						/>
 						{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
 							<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>

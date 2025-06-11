@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ndkActions } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore } from '@/lib/stores/product'
 import { useForm } from '@tanstack/react-form'
+import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useState } from 'react'
@@ -13,6 +14,7 @@ import { DetailTab, CategoryTab, ImagesTab, ShippingTab, SpecTab } from './tabs'
 export function ProductFormContent({ className = '', showFooter = true }: { className?: string; showFooter?: boolean }) {
 	const [isPublishing, setIsPublishing] = useState(false)
 	const navigate = useNavigate()
+	const queryClient = useQueryClient()
 
 	// Get form state from store, including editingProductId
 	const formState = useStore(productFormStore)
@@ -37,7 +39,7 @@ export function ProductFormContent({ className = '', showFooter = true }: { clas
 					return
 				}
 
-				const result = await productFormActions.publishProduct(signer, ndk)
+				const result = await productFormActions.publishProduct(signer, ndk, queryClient)
 
 				if (result) {
 					toast.success(editingProductId ? 'Product updated successfully!' : 'Product published successfully!')
@@ -45,7 +47,13 @@ export function ProductFormContent({ className = '', showFooter = true }: { clas
 
 					if (typeof result === 'string') {
 						document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
-						navigate({ to: `/products/${result}` })
+
+						// Navigate to product list when updating, to specific product when creating
+						if (editingProductId) {
+							navigate({ to: '/dashboard/products/products' })
+						} else {
+							navigate({ to: `/products/${result}` })
+						}
 					}
 				} else {
 					toast.error(editingProductId ? 'Failed to update product' : 'Failed to publish product')
@@ -79,12 +87,14 @@ export function ProductFormContent({ className = '', showFooter = true }: { clas
 						<TabsTrigger
 							value="product"
 							className="flex-1 px-4 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
+							data-testid="main-tab-product"
 						>
 							Product
 						</TabsTrigger>
 						<TabsTrigger
 							value="shipping"
 							className="flex-1 px-4 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
+							data-testid="main-tab-shipping"
 						>
 							Shipping
 						</TabsTrigger>
@@ -104,30 +114,35 @@ export function ProductFormContent({ className = '', showFooter = true }: { clas
 								<TabsTrigger
 									value="name"
 									className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+									data-testid="product-tab-name"
 								>
 									Name
 								</TabsTrigger>
 								<TabsTrigger
 									value="detail"
 									className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+									data-testid="product-tab-detail"
 								>
 									Detail
 								</TabsTrigger>
 								<TabsTrigger
 									value="spec"
 									className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+									data-testid="product-tab-spec"
 								>
 									Spec
 								</TabsTrigger>
 								<TabsTrigger
 									value="category"
 									className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+									data-testid="product-tab-category"
 								>
 									Category
 								</TabsTrigger>
 								<TabsTrigger
 									value="images"
 									className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+									data-testid="product-tab-images"
 								>
 									Images
 								</TabsTrigger>
@@ -166,7 +181,13 @@ export function ProductFormContent({ className = '', showFooter = true }: { clas
 				<div className="p-6 mt-auto sticky bottom-0 bg-white border-t">
 					<div className="flex gap-2 w-full">
 						{(productSubTab !== 'name' || mainTab === 'shipping') && (
-							<Button type="button" variant="outline" className="flex-1 gap-2 uppercase" onClick={productFormActions.previousTab}>
+							<Button
+								type="button"
+								variant="outline"
+								className="flex-1 gap-2 uppercase"
+								onClick={productFormActions.previousTab}
+								data-testid="product-back-button"
+							>
 								<span className="i-back w-6 h-6"></span>
 								Back
 							</Button>
@@ -181,6 +202,7 @@ export function ProductFormContent({ className = '', showFooter = true }: { clas
 										variant="secondary"
 										className="flex-1 uppercase"
 										disabled={isSubmitting || isPublishing || !canSubmit}
+										data-testid="product-save-button"
 									>
 										{isSubmitting || isPublishing
 											? editingProductId
@@ -193,7 +215,13 @@ export function ProductFormContent({ className = '', showFooter = true }: { clas
 								)}
 							/>
 						) : (
-							<Button type="button" variant="secondary" className="flex-1 uppercase" onClick={productFormActions.nextTab}>
+							<Button
+								type="button"
+								variant="secondary"
+								className="flex-1 uppercase"
+								onClick={productFormActions.nextTab}
+								data-testid="product-next-button"
+							>
 								Next
 							</Button>
 						)}

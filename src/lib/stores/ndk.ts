@@ -81,6 +81,66 @@ export const ndkActions = {
 		return updatedUrls
 	},
 
+	addSingleRelay: (relayUrl: string): boolean => {
+		const state = ndkStore.state
+		if (!state.ndk) return false
+
+		try {
+			// Normalize the URL (add wss:// if missing)
+			const normalizedUrl = relayUrl.startsWith('ws://') || relayUrl.startsWith('wss://') ? relayUrl : `wss://${relayUrl}`
+
+			state.ndk.addExplicitRelay(normalizedUrl)
+
+			const updatedUrls = Array.from(new Set([...state.explicitRelayUrls, normalizedUrl]))
+			ndkStore.setState((state) => ({ ...state, explicitRelayUrls: updatedUrls }))
+			return true
+		} catch (error) {
+			console.error('Failed to add relay:', error)
+			return false
+		}
+	},
+
+	removeRelay: (relayUrl: string): boolean => {
+		const state = ndkStore.state
+		if (!state.ndk) return false
+
+		try {
+			// Remove from NDK pool
+			const relay = state.ndk.pool.relays.get(relayUrl)
+			if (relay) {
+				state.ndk.pool.removeRelay(relayUrl)
+			}
+
+			// Update state
+			const updatedUrls = state.explicitRelayUrls.filter((url) => url !== relayUrl)
+			ndkStore.setState((state) => ({ ...state, explicitRelayUrls: updatedUrls }))
+			return true
+		} catch (error) {
+			console.error('Failed to remove relay:', error)
+			return false
+		}
+	},
+
+	getRelays: () => {
+		const state = ndkStore.state
+		if (!state.ndk) return { explicit: [], outbox: [] }
+
+		return {
+			explicit: Array.from(state.ndk.pool.relays.values()),
+			outbox: state.ndk.outboxPool ? Array.from(state.ndk.outboxPool.relays.values()) : [],
+		}
+	},
+
+	connectToDefaultRelays: (): boolean => {
+		try {
+			ndkActions.addExplicitRelay(defaultRelaysUrls)
+			return true
+		} catch (error) {
+			console.error('Failed to connect to default relays:', error)
+			return false
+		}
+	},
+
 	setSigner: async (signer: NDKSigner | undefined) => {
 		const state = ndkStore.state
 		if (!state.ndk) {

@@ -7,6 +7,7 @@ import { useConfigQuery } from '@/queries/config'
 import { createRootRoute, Outlet, useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { DecryptPasswordDialog } from '@/components/auth/DecryptPasswordDialog'
+import { Toaster } from 'sonner'
 
 export const Route = createRootRoute({
 	component: RootComponent,
@@ -54,6 +55,7 @@ function RootLayout() {
 			<DecryptPasswordDialog />
 			<SheetRegistry />
 			<DialogRegistry />
+			<Toaster />
 		</div>
 	)
 }

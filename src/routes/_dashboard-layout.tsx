@@ -23,9 +23,6 @@ export function useDashboardTitle(title: string) {
 function getCurrentEmoji(showSidebar: boolean, currentPath: string): string | null {
 	if (showSidebar) return null
 
-	// Handle dashboard route specifically
-	if (currentPath === '/dashboard') return '🛞'
-
 	for (const section of dashboardNavigation) {
 		for (const item of section.items) {
 			if (currentPath.startsWith(item.path)) {
@@ -88,9 +85,7 @@ function DashboardLayout() {
 				)}
 
 				{/* Title */}
-				<span className="w-full lg:w-auto text-3xl lg:text-3xl">
-					{showSidebar || !isMobile ? 'Admin Area' : location.pathname === '/dashboard' ? 'Dashboard' : dashboardTitle}
-				</span>
+				<span className="w-full lg:w-auto text-3xl lg:text-3xl">{showSidebar || !isMobile ? 'Admin Area' : dashboardTitle}</span>
 
 				{/* Mobile emoji - only visible on small screens when not showing sidebar */}
 				{!showSidebar && emoji && breakpoint !== 'xl' && (
@@ -111,16 +106,6 @@ function DashboardLayout() {
 									<div key={section.title}>
 										<h3 className="font-heading bg-tertiary-black text-white px-4 py-2 mb-0 lg:mb-2">{section.title}</h3>
 										<nav className="space-y-2 p-4 lg:p-0 text-xl lg:text-base">
-											{section.title === 'SALES' && (
-												<Link
-													to="/dashboard"
-													className="block p-4 lg:p-2 transition-colors font-bold border border-black bg-white rounded lg:border-0 lg:bg-transparent lg:rounded-none [aria-current='page']:bg-gray-200 [aria-current='page']:text-black hover:text-pink-500"
-													onClick={handleSidebarItemClick}
-													aria-current={matchRoute({ to: '/dashboard', fuzzy: true }) ? 'page' : undefined}
-												>
-													🛞 Dashboard
-												</Link>
-											)}
 											{section.items.map((item) => {
 												const isActive = matchRoute({ to: item.path, fuzzy: true })
 												return (

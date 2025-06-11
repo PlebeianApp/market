@@ -25,18 +25,8 @@ function EditCollectionComponent() {
 
 	useEffect(() => {
 		if (collection) {
-			const title = getCollectionTitle(collection)
-			const description = collection.content || ''
-			const headerImageUrl = collection.tags.find((tag: any) => tag[0] === 'image')?.[1] || ''
-			const selectedProducts = collection.tags.filter((tag: any) => tag[0] === 'a').map((tag: any) => tag[1])
-
-			// Set editing mode with collection data
-			collectionFormActions.setEditingCollection(collectionId, {
-				name: title,
-				description,
-				headerImageUrl,
-				selectedProducts,
-			})
+			// Load collection for editing (includes shipping options)
+			collectionFormActions.loadCollectionForEdit(collection)
 		}
 	}, [collection, collectionId])
 

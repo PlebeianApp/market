@@ -273,6 +273,7 @@ export function ImageUploader({
               name="imageRemoteInput"
               onChange={handleInput}
               onFocus={handleInputFocus}
+              data-testid="image-url-input"
             />
             {localSrc ? (
               inputEditable ? (
@@ -281,6 +282,7 @@ export function ImageUploader({
                   variant="primary" 
                   className="absolute right-1 top-1 bottom-1 h-10" 
                   onClick={handleSaveImage}
+                  data-testid="image-save-button"
                 >
                   Save
                 </Button>
@@ -290,6 +292,7 @@ export function ImageUploader({
                   variant="outline" 
                   className="absolute right-1 top-1 bottom-1 h-10 bg-white" 
                   onClick={() => setInputEditable(true)}
+                  data-testid="image-edit-button"
                 >
                   Edit
                 </Button>
@@ -300,6 +303,7 @@ export function ImageUploader({
                 variant="primary" 
                 className="absolute right-1 top-1 bottom-1 h-10" 
                 onClick={handleSaveImage}
+                data-testid="image-save-button"
               >
                 Save
               </Button>

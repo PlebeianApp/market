@@ -68,7 +68,7 @@ export function ShippingSelector({
 					name: info.title,
 					cost: parseFloat(info.price.amount),
 					currency: info.price.currency,
-					country: info.country,
+					countries: info.countries,
 					service: info.service,
 					carrier: info.carrier,
 				}

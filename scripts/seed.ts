@@ -109,24 +109,7 @@ async function seedData() {
 		console.log(`Creating NWC wallets for user ${pubkey.substring(0, 8)}...`)
 		await createUserNwcWallets(signer, pubkey, 2)
 
-		console.log(`Creating products for user ${pubkey.substring(0, 8)}...`)
-		productsByUser[pubkey] = []
-
-		// Create products
-		for (let j = 0; j < PRODUCTS_PER_USER; j++) {
-			const product = generateProductData()
-			const success = await createProductEvent(signer, ndk, product)
-			if (success) {
-				const productId = product.tags.find((tag) => tag[0] === 'd')?.[1]
-				if (productId) {
-					const productRef = createProductReference(pubkey, productId)
-					productsByUser[pubkey].push(productRef)
-					allProductRefs.push(productRef)
-				}
-			}
-		}
-
-		// Create shipping options
+		// Create shipping options first
 		console.log(`Creating shipping options for user ${pubkey.substring(0, 8)}...`)
 		shippingsByUser[pubkey] = []
 
@@ -137,6 +120,25 @@ async function seedData() {
 				const shippingId = shipping.tags.find((tag) => tag[0] === 'd')?.[1]
 				if (shippingId) {
 					shippingsByUser[pubkey].push(`${SHIPPING_KIND}:${pubkey}:${shippingId}`)
+				}
+			}
+		}
+
+		console.log(`Creating products for user ${pubkey.substring(0, 8)}...`)
+		productsByUser[pubkey] = []
+
+		// Create products with shipping options
+		for (let j = 0; j < PRODUCTS_PER_USER; j++) {
+			// Use the shipping options from this user for their products
+			const userShippingRefs = shippingsByUser[pubkey] || []
+			const product = generateProductData(userShippingRefs)
+			const success = await createProductEvent(signer, ndk, product)
+			if (success) {
+				const productId = product.tags.find((tag) => tag[0] === 'd')?.[1]
+				if (productId) {
+					const productRef = createProductReference(pubkey, productId)
+					productsByUser[pubkey].push(productRef)
+					allProductRefs.push(productRef)
 				}
 			}
 		}

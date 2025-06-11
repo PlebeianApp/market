@@ -1,25 +1,28 @@
-import { Store } from '@tanstack/store'
-import type { RichShippingInfo } from './cart'
-import { ProductImageTagSchema, ProductCategoryTagSchema } from '@/lib/schemas/productListing'
-import type { z } from 'zod'
-import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
-import { SHIPPING_KIND } from '../schemas/shippingOption'
+import { ProductCategoryTagSchema, ProductImageTagSchema } from '@/lib/schemas/productListing'
+import { publishProduct, updateProduct, type ProductFormData } from '@/publish/products'
 import {
+	fetchProduct,
 	getProductCategories,
+	getProductCollection,
 	getProductDescription,
 	getProductDimensions,
 	getProductId,
 	getProductImages,
 	getProductPrice,
+	getProductShippingOptions,
 	getProductSpecs,
 	getProductStock,
 	getProductTitle,
 	getProductType,
 	getProductVisibility,
 	getProductWeight,
-	fetchProduct,
 } from '@/queries/products'
-import { publishProduct, updateProduct, type ProductFormData } from '@/publish/products'
+import { productKeys } from '@/queries/queryKeyFactory'
+import NDK, { type NDKSigner } from '@nostr-dev-kit/ndk'
+import { QueryClient } from '@tanstack/react-query'
+import { Store } from '@tanstack/store'
+import type { z } from 'zod'
+import type { RichShippingInfo } from './cart'
 
 export type Category = z.infer<typeof ProductCategoryTagSchema>
 export type ProductImage = z.infer<typeof ProductImageTagSchema>
@@ -125,12 +128,14 @@ export const productFormActions = {
 			const priceTag = getProductPrice(event)
 			const images = getProductImages(event)
 			const categories = getProductCategories(event)
+			const collection = getProductCollection(event)
 			const specs = getProductSpecs(event)
 			const stockTag = getProductStock(event)
 			const typeTag = getProductType(event)
 			const visibilityTag = getProductVisibility(event)
 			const weightTag = getProductWeight(event)
 			const dimensionsTag = getProductDimensions(event)
+			const shippingTags = getProductShippingOptions(event)
 
 			const mainCategoryFromTags = categories.find((tag) => tag.length === 2 && tag[0] === 't')?.[1]
 			const subCategoriesFromTags = categories
@@ -140,6 +145,25 @@ export const productFormActions = {
 					name: tag[1],
 					checked: true,
 				}))
+
+			// Parse shipping options
+			const shippingOptions: ProductShippingForm[] = shippingTags.map((tag) => {
+				// tag format: ['shipping_option', 'shipping_reference', 'extra_cost?']
+				const shippingRef = tag[1] // e.g., "30406:pubkey:shippingId"
+				const extraCost = tag[2] || ''
+
+				// Extract shipping name from reference (we'll use a simplified version for now)
+				// In a real app, you'd want to fetch the actual shipping option details
+				const shippingName = `Shipping Option (${shippingRef.split(':')[2] || 'unknown'})`
+
+				return {
+					shipping: {
+						id: shippingRef,
+						name: shippingName,
+					},
+					extraCost,
+				}
+			})
 
 			productFormStore.setState((state) => ({
 				...DEFAULT_FORM_STATE,
@@ -152,6 +176,7 @@ export const productFormActions = {
 				status: visibilityTag?.[1] || 'hidden',
 				productType: typeTag?.[1] === 'simple' ? 'single' : 'variable',
 				mainCategory: mainCategoryFromTags || null,
+				selectedCollection: collection,
 				categories: subCategoriesFromTags || [],
 				images: images.map((img, index) => ({
 					imageUrl: img[1],
@@ -160,7 +185,7 @@ export const productFormActions = {
 				specs: specs.map((spec) => ({ key: spec[1], value: spec[2] })),
 				weight: weightTag ? { value: weightTag[1], unit: weightTag[2] } : null,
 				dimensions: dimensionsTag ? { value: dimensionsTag[1], unit: dimensionsTag[2] } : null,
-				shippings: [],
+				shippings: shippingOptions,
 				mainTab: 'product',
 				productSubTab: 'name',
 			}))
@@ -238,7 +263,7 @@ export const productFormActions = {
 		}))
 	},
 
-	publishProduct: async (signer: NDKSigner, ndk: NDK): Promise<boolean | string> => {
+	publishProduct: async (signer: NDKSigner, ndk: NDK, queryClient?: QueryClient): Promise<boolean | string> => {
 		const state = productFormStore.state
 
 		// Convert state to ProductFormData format
@@ -251,6 +276,7 @@ export const productFormActions = {
 			status: state.status,
 			productType: state.productType,
 			mainCategory: state.mainCategory || '',
+			selectedCollection: state.selectedCollection,
 			categories: state.categories,
 			images: state.images,
 			specs: state.specs,
@@ -260,15 +286,33 @@ export const productFormActions = {
 		}
 
 		try {
+			let result: string
+
 			if (state.editingProductId) {
 				// Update existing product using the d tag
-				const result = await updateProduct(state.editingProductId, formData, signer, ndk)
-				return result
+				result = await updateProduct(state.editingProductId, formData, signer, ndk)
 			} else {
 				// Create new product
-				const result = await publishProduct(formData, signer, ndk)
-				return result
+				result = await publishProduct(formData, signer, ndk)
 			}
+
+			// Invalidate queries if queryClient is provided
+			if (queryClient) {
+				// Get current user pubkey for targeted invalidation
+				const user = await signer.user()
+				const userPubkey = user?.pubkey
+
+				// Invalidate relevant queries
+				await queryClient.invalidateQueries({ queryKey: productKeys.all })
+				if (userPubkey) {
+					await queryClient.invalidateQueries({ queryKey: productKeys.byPubkey(userPubkey) })
+				}
+				if (result) {
+					await queryClient.invalidateQueries({ queryKey: productKeys.details(result) })
+				}
+			}
+
+			return result
 		} catch (error) {
 			console.error(state.editingProductId ? 'Failed to update product:' : 'Failed to publish product:', error)
 			return false
