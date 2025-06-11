@@ -20,7 +20,7 @@ export class LoginPage extends BasePage {
 	private readonly decryptLoginButton = this.page.locator('[data-testid="decrypt-login-button"]')
 	private readonly dashboardLink = this.page.locator('[data-testid="dashboard-link"]')
 
-	async login(password = 'a') {
+	async login(password = 'a', privateKeyHex?: string) {
 		if (await this.dashboardLink.isVisible()) {
 			return // Already logged in
 		}
@@ -41,9 +41,12 @@ export class LoginPage extends BasePage {
 			await this.autoLoginCheckbox.check()
 			await this.storedKeyLoginButton.click()
 		} else {
-			const privateKeyBytes = new Uint8Array(Buffer.from(FIXED_TEST_USER.privateKey, 'hex'))
-			const fixedPrivateKeyNsec = nip19.nsecEncode(privateKeyBytes)
-			await this.privateKeyInput.fill(fixedPrivateKeyNsec)
+			// Use provided private key or fall back to fixed test user
+			const keyToUse = privateKeyHex || FIXED_TEST_USER.privateKey
+			const privateKeyBytes = new Uint8Array(Buffer.from(keyToUse, 'hex'))
+			const privateKeyNsec = nip19.nsecEncode(privateKeyBytes)
+
+			await this.privateKeyInput.fill(privateKeyNsec)
 			await this.continueButton.click()
 
 			await this.newPasswordInput.fill(password)
@@ -52,7 +55,32 @@ export class LoginPage extends BasePage {
 			await this.encryptContinueButton.click()
 		}
 
-		await expect(this.dashboardLink).toBeVisible({ timeout: 1000 })
+		await expect(this.dashboardLink).toBeVisible({ timeout: 5000 })
+	}
+
+	async logout() {
+		// Check if user is logged in by looking for dashboard link
+		if (await this.dashboardLink.isVisible()) {
+			// Click on the profile/user menu
+			const userMenuButton = this.page.locator('[data-testid="user-menu-button"]')
+			if (await userMenuButton.isVisible()) {
+				await userMenuButton.click()
+				await this.pause(300)
+
+				// Look for logout button in the dropdown
+				const logoutButton = this.page.locator('button:has-text("Logout")')
+				if (await logoutButton.isVisible()) {
+					await logoutButton.click()
+					await this.pause(500)
+				}
+			}
+		}
+
+		// Clear storage to ensure clean state
+		await this.page.evaluate(() => {
+			localStorage.clear()
+			sessionStorage.clear()
+		})
 	}
 
 	async handleDecryptDialog(password = 'a') {
