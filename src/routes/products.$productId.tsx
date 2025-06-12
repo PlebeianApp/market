@@ -33,7 +33,26 @@ import { useSuspenseQuery } from '@tanstack/react-query'
 import type { FileRoutesByPath } from '@tanstack/react-router'
 import { createFileRoute } from '@tanstack/react-router'
 import { ArrowLeft, Minus, Plus, Truck } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+
+// Hook to inject dynamic CSS
+function useHeroBackground(imageUrl: string, className: string) {
+	useEffect(() => {
+		if (!imageUrl) return
+
+		const style = document.createElement('style')
+		style.textContent = `
+			.${className} {
+				background-image: url(${imageUrl}) !important;
+			}
+		`
+		document.head.appendChild(style)
+
+		return () => {
+			document.head.removeChild(style)
+		}
+	}, [imageUrl, className])
+}
 
 declare module '@tanstack/react-router' {
 	interface FileRoutesByPath {
@@ -106,6 +125,10 @@ function RouteComponent() {
 
 	// Get first image URL for background
 	const backgroundImageUrl = formattedImages[0]?.url || ''
+	
+	// Use the hook to inject dynamic CSS for the background image
+	const heroClassName = `hero-bg-${productId.replace(/[^a-zA-Z0-9]/g, '')}`
+	useHeroBackground(backgroundImageUrl, heroClassName)
 
 	// Get location from tags if exists
 	const location = product.tags.find((t) => t[0] === 'location')?.[1]
@@ -136,27 +159,22 @@ function RouteComponent() {
 				<Button
 					variant="ghost"
 					onClick={() => window.history.back()}
-					className="absolute left-2 lg:left-2 top-4 lg:top-0 z-50 flex items-center gap-2 text-white hover:bg-white/10 min-h-12 min-w-12 p-3 mb-4 lg:mb-0"
+					className="back-button hover:bg-white/10"
 				>
 					<ArrowLeft className="h-8 w-8 lg:h-4 lg:w-4" />
 					<span className="hidden sm:inline">Back to results</span>
 				</Button>
 				
 				<div 
-					className={`relative hero-container bg-hero-image ${!backgroundImageUrl ? 'bg-black' : ''}`}
-					style={{
-						'--hero-bg-image': backgroundImageUrl ? `url(${backgroundImageUrl})` : 'none'
-					} as React.CSSProperties}
+					className={`relative hero-container ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-black'}`}
 				>
-					{/* Black radial gradient overlay */}
-					<div className="absolute inset-0 bg-radial-overlay" />
+					<div className="hero-overlays">
+						<div className="absolute inset-0 bg-radial-overlay" />
+						<div className="absolute inset-0 opacity-30 bg-dots-overlay" />
+					</div>
 					
-					{/* Dots pattern overlay */}
-					<div className="absolute inset-0 opacity-30 pointer-events-none bg-dots-overlay" />
-					
-					{/* Content container */}
-					<div className="relative z-10 container mx-auto grid grid-cols-1 lg:grid-cols-2 gap-16 p-4 pb-16 lg:p-16">
-						<div className="max-h-[65vh] lg:h-[45vh] mt-16 lg:mt-8">
+					<div className="hero-content">
+						<div className="hero-image-container">
 							<ImageCarousel 
 								images={formattedImages} 
 								title={title}

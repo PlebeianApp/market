@@ -270,7 +270,6 @@ h2.font-heading {
 	}
 	
 	.bg-hero-image {
-		background-image: var(--hero-bg-image, none);
 		background-size: cover;
 		background-position: center;
 		background-repeat: no-repeat;
@@ -287,6 +286,65 @@ h2.font-heading {
 			margin-top: -6rem;
 			padding-top: 6rem;
 			min-height: calc(400px + 6rem);
+		}
+	}
+	
+	.back-button {
+		position: absolute;
+		left: 0.5rem;
+		top: 1rem;
+		z-index: 50;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		color: white;
+		min-height: 3rem;
+		min-width: 3rem;
+		padding: 0.75rem;
+		margin-bottom: 1rem;
+	}
+	
+	@media (min-width: 1024px) {
+		.back-button {
+			top: 0;
+			margin-bottom: 0;
+		}
+	}
+	
+	.hero-overlays {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+	}
+	
+	.hero-content {
+		position: relative;
+		z-index: 10;
+		container-type: inline-size;
+		max-width: 80rem;
+		margin: 0 auto;
+		display: grid;
+		grid-template-columns: 1fr;
+		gap: 4rem;
+		padding: 1rem 1rem 4rem 1rem;
+	}
+	
+	@media (min-width: 1024px) {
+		.hero-content {
+			grid-template-columns: 1fr 1fr;
+			padding: 4rem;
+		}
+	}
+	
+	.hero-image-container {
+		max-height: 65vh;
+		margin-top: 4rem;
+	}
+	
+	@media (min-width: 1024px) {
+		.hero-image-container {
+			height: 45vh;
+			margin-top: 2rem;
 		}
 	}
 }
