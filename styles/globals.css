@@ -251,36 +251,36 @@ h2.font-heading {
 /* Custom utility classes */
 @layer utilities {
 	.bg-radial-overlay {
-		background: radial-gradient(circle at center, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.9) 100%);
+		background: radial-gradient(circle at center, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0.9) 100%);
 	}
-	
+
 	.bg-dots-overlay {
-		background-image: radial-gradient(circle, rgba(255,255,255,0.3) 1px, transparent 1px);
+		background-image: radial-gradient(circle, rgba(255, 255, 255, 0.3) 1px, transparent 1px);
 		background-size: 10px 10px;
 		background-repeat: repeat;
 	}
-	
+
 	.bg-header-transparent {
 		background-color: rgba(0, 0, 0, 0.3);
 	}
-	
+
 	.bg-header-scroll-transition {
 		background-color: var(--header-bg-opacity, rgba(0, 0, 0, 0.3));
 		transition: background-color 0.2s ease-out;
 	}
-	
+
 	.bg-hero-image {
 		background-size: cover;
 		background-position: center;
 		background-repeat: no-repeat;
 	}
-	
+
 	.hero-container {
 		margin-top: -8.5rem;
 		padding-top: 8rem;
 		min-height: calc(400px + 8rem);
 	}
-	
+
 	@media (min-width: 1024px) {
 		.hero-container {
 			margin-top: -6rem;
@@ -288,7 +288,7 @@ h2.font-heading {
 			min-height: calc(400px + 6rem);
 		}
 	}
-	
+
 	.back-button {
 		position: absolute;
 		left: 0.5rem;
@@ -303,20 +303,20 @@ h2.font-heading {
 		padding: 0.75rem;
 		margin-bottom: 1rem;
 	}
-	
+
 	@media (min-width: 1024px) {
 		.back-button {
 			top: 0;
 			margin-bottom: 0;
 		}
 	}
-	
+
 	.hero-overlays {
 		position: absolute;
 		inset: 0;
 		pointer-events: none;
 	}
-	
+
 	.hero-content {
 		position: relative;
 		z-index: 10;
@@ -328,19 +328,19 @@ h2.font-heading {
 		gap: 4rem;
 		padding: 1rem 1rem 4rem 1rem;
 	}
-	
+
 	@media (min-width: 1024px) {
 		.hero-content {
 			grid-template-columns: 1fr 1fr;
 			padding: 4rem;
 		}
 	}
-	
+
 	.hero-image-container {
 		max-height: 65vh;
 		margin-top: 4rem;
 	}
-	
+
 	@media (min-width: 1024px) {
 		.hero-image-container {
 			height: 45vh;

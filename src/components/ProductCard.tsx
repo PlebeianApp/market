@@ -23,16 +23,24 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 			{/* Square aspect ratio container for image */}
 			<Link to={`/products/${product.id}`} className="relative aspect-square overflow-hidden border-b border-zinc-800 block">
 				{images && images.length > 0 ? (
-					<img src={images[0][1]} alt={title} className="w-full h-full object-cover rounded-t-[calc(var(--radius)-1px)] hover:scale-105 transition-transform duration-200" />
+					<img
+						src={images[0][1]}
+						alt={title}
+						className="w-full h-full object-cover rounded-t-[calc(var(--radius)-1px)] hover:scale-105 transition-transform duration-200"
+					/>
 				) : (
-					<div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400 rounded-lg hover:bg-gray-200 transition-colors duration-200">No image</div>
+					<div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400 rounded-lg hover:bg-gray-200 transition-colors duration-200">
+						No image
+					</div>
 				)}
 			</Link>
 
 			<div className="p-2 flex flex-col gap-2 flex-grow">
 				{/* Product title */}
 				<Link to={`/products/${product.id}`}>
-					<h2 className="text-sm font-medium border-b border-[var(--light-gray)] pb-2 overflow-hidden text-ellipsis whitespace-nowrap">{title}</h2>
+					<h2 className="text-sm font-medium border-b border-[var(--light-gray)] pb-2 overflow-hidden text-ellipsis whitespace-nowrap">
+						{title}
+					</h2>
 				</Link>
 
 				{/* Pricing section */}

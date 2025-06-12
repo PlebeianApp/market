@@ -125,7 +125,7 @@ function RouteComponent() {
 
 	// Get first image URL for background
 	const backgroundImageUrl = formattedImages[0]?.url || ''
-	
+
 	// Use the hook to inject dynamic CSS for the background image
 	const heroClassName = `hero-bg-${productId.replace(/[^a-zA-Z0-9]/g, '')}`
 	useHeroBackground(backgroundImageUrl, heroClassName)
@@ -156,29 +156,20 @@ function RouteComponent() {
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="relative">
-				<Button
-					variant="ghost"
-					onClick={() => window.history.back()}
-					className="back-button hover:bg-white/10"
-				>
+				<Button variant="ghost" onClick={() => window.history.back()} className="back-button hover:bg-white/10">
 					<ArrowLeft className="h-8 w-8 lg:h-4 lg:w-4" />
 					<span className="hidden sm:inline">Back to results</span>
 				</Button>
-				
-				<div 
-					className={`relative hero-container ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-black'}`}
-				>
+
+				<div className={`relative hero-container ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-black'}`}>
 					<div className="hero-overlays">
 						<div className="absolute inset-0 bg-radial-overlay" />
 						<div className="absolute inset-0 opacity-30 bg-dots-overlay" />
 					</div>
-					
+
 					<div className="hero-content">
 						<div className="hero-image-container">
-							<ImageCarousel 
-								images={formattedImages} 
-								title={title}
-							/>
+							<ImageCarousel images={formattedImages} title={title} />
 						</div>
 
 						<div className="flex flex-col gap-8 text-white lg:justify-center">
