@@ -52,11 +52,11 @@ export function ImageCarousel({ images, title, className, onImageChange }: Image
 		<div className="h-full flex flex-col lg:flex-row gap-4">
 			{/* Main Carousel */}
 			<Carousel setApi={setApi} className="w-full xl:aspect-square lg:order-2">
-				<CarouselContent className="relative">
-					<div className="absolute inset-0 bg-dots-image-overlay pointer-events-none" />
+				<CarouselContent>
 					{images.map((image, index) => (
-						<CarouselItem key={index} className="flex items-center justify-center">
-							<img src={image.url} alt={`${title} - Image ${index + 1}`} className="max-h-[45vh] max-w-full" />
+						<CarouselItem key={index} className="flex items-center justify-center relative">
+							{index === currentIndex && <div className="absolute inset-0 bg-dots-image-overlay pointer-events-none" />}
+							<img src={image.url} alt={`${title} - Image ${index + 1}`} className="max-h-[45vh] max-w-full relative z-10" />
 						</CarouselItem>
 					))}
 				</CarouselContent>
