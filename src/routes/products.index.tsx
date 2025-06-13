@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useSuspenseQuery } from '@tanstack/react-query'
-import { productsQueryOptions, useProductTitle, useProductImages } from '../queries/products'
+import { productsQueryOptions, useProductTitle, useProductImages, getProductTitle } from '../queries/products'
 import { ProductCard } from '@/components/ProductCard'
 import { ItemGrid } from '@/components/ItemGrid'
 import { getQueryClient } from '@/lib/router-utils'
@@ -49,52 +49,53 @@ function ProductsRoute() {
 		const hasImages = product.tags.some(tag => tag[0] === 'image' && tag[1])
 		return hasImages
 	})
-	const recentProducts = productsWithImages.slice(0, 4) // Limit to 4 products since homepage hero takes first slot
+	const recentProducts = productsWithImages.slice(0, 4) // Limit to 4 products
 	const totalSlides = 1 + recentProducts.length // Homepage + products
 
-	// Auto-slide functionality - change slide every 4 seconds
+	// Auto-slide functionality - change slide every 8 seconds
 	useEffect(() => {
 		if (totalSlides <= 1) return // Don't auto-slide if there's only one slide
 
 		const interval = setInterval(() => {
 			setCurrentSlideIndex(prev => (prev + 1) % totalSlides)
-		}, 4000) // 4 seconds
+		}, 8000) // 8 seconds
 
 		return () => clearInterval(interval)
 	}, [totalSlides])
 	
-	// Current slide data
-	const isHomepageSlide = currentSlideIndex === 0
-	const currentProduct = isHomepageSlide ? null : recentProducts[currentSlideIndex - 1]
+	// Current slide data - homepage banner is now at index 1
+	const isHomepageSlide = currentSlideIndex === 1
+	const currentProduct = isHomepageSlide ? null : (currentSlideIndex === 0 ? recentProducts[0] : recentProducts[currentSlideIndex - 1])
 	const currentProductId = currentProduct?.id
 
 	// Get current product data (only if not homepage slide)
-	const { data: currentTitle = 'Latest Product' } = useProductTitle(currentProductId || '')
+	const { data: currentTitle } = useProductTitle(currentProductId || '')
 	const { data: currentImages = [] } = useProductImages(currentProductId || '')
+
+	// Get the actual title from the product or fallback to empty string to avoid "Latest Product"
+	const displayTitle = currentTitle || (currentProduct ? getProductTitle(currentProduct) : '')
 
 	// Get background image from current product (only if not homepage slide)
 	const backgroundImageUrl = !isHomepageSlide && currentImages.length > 0 ? currentImages[0][1] : ''
 
-	// Get random product image for homepage background
-	const randomProduct = productsWithImages.length > 0 ? productsWithImages[Math.floor(Math.random() * productsWithImages.length)] : null
-	const randomProductImages = randomProduct?.tags.filter(tag => tag[0] === 'image') || []
-	const randomBackgroundImageUrl = randomProductImages.length > 0 ? randomProductImages[0][1] : ''
+	// Use the market image for homepage background instead of random product
+	const marketBackgroundImageUrl = '/images/market-background.jpg' // You'll need to save the attached image with this name
 
 	// Use the hook to inject dynamic CSS for the background image
 	const heroClassName = currentProductId ? `hero-bg-products-${currentProductId.replace(/[^a-zA-Z0-9]/g, '')}` : 'hero-bg-products-default'
-	const randomHeroClassName = `hero-bg-random-${randomProduct?.id?.replace(/[^a-zA-Z0-9]/g, '') || 'default'}`
+	const marketHeroClassName = 'hero-bg-market'
 	useHeroBackground(backgroundImageUrl, heroClassName)
-	useHeroBackground(randomBackgroundImageUrl, randomHeroClassName)
+	useHeroBackground(marketBackgroundImageUrl, marketHeroClassName)
 
 	// Debug logging
 	console.log('Total products:', products.length)
 	console.log('Products with images:', productsWithImages.length)
 	console.log('Recent products for banner:', recentProducts.length)
-	console.log('Random product for homepage:', randomProduct)
-	console.log('Random background image:', randomBackgroundImageUrl)
+	console.log('Market background image:', marketBackgroundImageUrl)
 	console.log('Current slide index:', currentSlideIndex)
 	console.log('Is homepage slide:', isHomepageSlide)
 	console.log('Current product:', currentProduct)
+	console.log('Display title:', displayTitle)
 	console.log('Current images:', currentImages)
 	console.log('Background image URL:', backgroundImageUrl)
 	console.log('Hero class name:', heroClassName)
@@ -113,9 +114,9 @@ function ProductsRoute() {
 
 	// Render homepage hero content
 	const renderHomepageHero = () => (
-		<div className="flex flex-col items-center justify-center text-white text-center gap-8 lg:col-span-2 relative z-20 mt-16">
-			<div className="space-y-4">
-				<h1 className="text-3xl lg:text-5xl font-theylive">Buy & Sell Stuff with sats</h1>
+		<div className="flex flex-col items-center justify-center text-white text-center gap-8 lg:col-span-2 relative z-20 mt-16 lg:mt-0">
+			<div className="flex items-center justify-center h-24 lg:h-32">
+				<h1 className="text-4xl lg:text-5xl font-theylive transition-opacity duration-500">Buy & Sell Stuff with sats</h1>
 			</div>
 			
 			<div className="flex flex-col gap-6">
@@ -137,7 +138,7 @@ function ProductsRoute() {
 										? 'bg-white scale-125' 
 										: 'bg-white/40 hover:bg-white/60'
 								}`}
-								aria-label={`View ${index === 0 ? 'homepage' : `product ${index}`}`}
+								aria-label={`View ${index === 1 ? 'homepage' : `product ${index === 0 ? 1 : index}`}`}
 							/>
 						))}
 					</div>
@@ -148,14 +149,16 @@ function ProductsRoute() {
 
 	// Render product hero content
 	const renderProductHero = () => (
-		<div className="flex flex-col items-center justify-center text-white text-center gap-8 lg:col-span-2 relative z-20 mt-16">
-			<div className="space-y-4">
-				<h1 className="text-4xl lg:text-6xl font-heading">{currentTitle}</h1>
+		<div className="flex flex-col items-center justify-center text-white text-center gap-8 lg:col-span-2 relative z-20 mt-16 lg:mt-0">
+			<div className="flex items-center justify-center h-24 lg:h-32">
+				<h1 className="text-4xl lg:text-5xl font-theylive transition-opacity duration-500">
+					{displayTitle || 'Loading...'}
+				</h1>
 			</div>
 			
 			<div className="flex flex-col gap-6">
 				<Link to={`/products/${currentProductId}`}>
-					<Button variant="focus" size="lg">
+					<Button variant="secondary" size="lg">
 						View Product
 					</Button>
 				</Link>
@@ -172,7 +175,7 @@ function ProductsRoute() {
 										? 'bg-white scale-125' 
 										: 'bg-white/40 hover:bg-white/60'
 								}`}
-								aria-label={`View ${index === 0 ? 'homepage' : `product ${index}`}`}
+								aria-label={`View ${index === 1 ? 'homepage' : `product ${index === 0 ? 1 : index}`}`}
 							/>
 						))}
 					</div>
@@ -185,7 +188,7 @@ function ProductsRoute() {
 		<div>
 			{isHomepageSlide ? (
 				// Homepage hero styling with random product background
-				<div className={`relative hero-container ${randomBackgroundImageUrl ? `bg-hero-image ${randomHeroClassName}` : 'bg-black'}`}>
+				<div className={`relative hero-container ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-black'}`}>
 					<div className="hero-overlays">
 						<div className="absolute inset-0 bg-radial-overlay z-10" />
 						<div className="absolute inset-0 opacity-30 bg-dots-overlay z-10" />

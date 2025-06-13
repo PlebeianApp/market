@@ -16,12 +16,14 @@ export function Header() {
 	const location = useLocation()
 	const [scrollY, setScrollY] = useState(0)
 
-	// Check if we're on any product page (index page or individual product)
+	// Check if we're on any product page (index page or individual product) or homepage
 	const isProductPage = location.pathname === '/products' || location.pathname.startsWith('/products/')
+	const isHomepage = location.pathname === '/'
+	const shouldUseTransparentHeader = isProductPage || isHomepage
 
-	// Scroll detection for product pages
+	// Scroll detection for product pages and homepage
 	useEffect(() => {
-		if (!isProductPage) return
+		if (!shouldUseTransparentHeader) return
 
 		const handleScroll = () => {
 			setScrollY(window.scrollY)
@@ -32,19 +34,19 @@ export function Header() {
 
 		window.addEventListener('scroll', handleScroll, { passive: true })
 		return () => window.removeEventListener('scroll', handleScroll)
-	}, [isProductPage])
+	}, [shouldUseTransparentHeader])
 
 	// Calculate background opacity based on scroll position
 	const getHeaderBackground = () => {
-		if (!isProductPage) return 'bg-black'
+		if (!shouldUseTransparentHeader) return 'bg-black'
 
-		// Always use transition class for product pages
+		// Always use transition class for product pages and homepage
 		return 'bg-header-scroll-transition'
 	}
 
 	// Calculate CSS variable for transitional background
 	const getHeaderStyle = () => {
-		if (!isProductPage) return {}
+		if (!shouldUseTransparentHeader) return {}
 
 		if (scrollY < 80) {
 			return { '--header-bg-opacity': 'rgba(0, 0, 0, 0)' }
