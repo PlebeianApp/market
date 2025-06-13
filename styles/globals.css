@@ -83,6 +83,11 @@ h2.font-heading {
 	font-size: 2rem;
 }
 
+/* Make all button text uppercase */
+button {
+	text-transform: uppercase;
+}
+
 :root {
 	--background: #ffffff;
 	--foreground: #1a1a1a;

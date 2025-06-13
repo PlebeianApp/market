@@ -47,10 +47,10 @@ export function Header() {
 		if (!isProductPage) return {}
 
 		if (scrollY < 80) {
-			return { '--header-bg-opacity': 'rgba(0, 0, 0, 0.3)' }
+			return { '--header-bg-opacity': 'rgba(0, 0, 0, 0)' }
 		} else if (scrollY < 160) {
 			const progress = (scrollY - 80) / 80
-			const opacity = 0.3 + 0.7 * progress
+			const opacity = 0 + 1.0 * progress
 			return { '--header-bg-opacity': `rgba(0, 0, 0, ${opacity})` }
 		} else {
 			return { '--header-bg-opacity': 'rgba(0, 0, 0, 1.0)' }
