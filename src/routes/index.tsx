@@ -22,9 +22,8 @@ function Index() {
 	return (
 		<div>
 			<Hero>
-				<div className="relative z-10 flex flex-col lg:flex-row items-center justify-center gap-4 lg:gap-4 mb-6 p-2">
-					<img src="/images/buy-sell.svg" alt="Buy Sell Stuff for Sats" className="lg:h-[45px] w-auto" />
-					<img src="/images/stuff-for-sats.svg" alt="Buy Sell Stuff for Sats" className="lg:h-[45px] w-auto" />
+				<div className="space-y-4 mb-6 px-6">
+					<h1 className="text-3xl lg:text-5xl font-theylive">Buy & Sell Stuff with sats</h1>
 				</div>
 				<Button variant="focus" onClick={handleStartSelling}>
 					<span className="flex items-center gap-2">

@@ -51,6 +51,17 @@ function ProductsRoute() {
 	})
 	const recentProducts = productsWithImages.slice(0, 4) // Limit to 4 products since homepage hero takes first slot
 	const totalSlides = 1 + recentProducts.length // Homepage + products
+
+	// Auto-slide functionality - change slide every 4 seconds
+	useEffect(() => {
+		if (totalSlides <= 1) return // Don't auto-slide if there's only one slide
+
+		const interval = setInterval(() => {
+			setCurrentSlideIndex(prev => (prev + 1) % totalSlides)
+		}, 4000) // 4 seconds
+
+		return () => clearInterval(interval)
+	}, [totalSlides])
 	
 	// Current slide data
 	const isHomepageSlide = currentSlideIndex === 0
@@ -104,7 +115,7 @@ function ProductsRoute() {
 	const renderHomepageHero = () => (
 		<div className="flex flex-col items-center justify-center text-white text-center gap-8 lg:col-span-2 relative z-20 mt-16">
 			<div className="space-y-4">
-				<h1 className="text-4xl lg:text-6xl font-heading">Buy & Sell Stuff with sats</h1>
+				<h1 className="text-3xl lg:text-5xl font-theylive">Buy & Sell Stuff with sats</h1>
 			</div>
 			
 			<div className="flex flex-col gap-6">
