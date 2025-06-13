@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { uiActions } from '@/lib/stores/ui'
 import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Pattern } from '@/components/pattern'
 
@@ -42,6 +42,11 @@ function ProductsRoute() {
 
 	const { isAuthenticated } = useStore(authStore)
 	const [currentSlideIndex, setCurrentSlideIndex] = useState(0)
+	
+	// Touch/swipe handling
+	const touchStartX = useRef<number>(0)
+	const touchEndX = useRef<number>(0)
+	const minSwipeDistance = 50
 
 	// Filter products that have images, then limit to 4 for pagination
 	const productsWithImages = products.filter(product => {
@@ -110,6 +115,37 @@ function ProductsRoute() {
 
 	const handleDotClick = (index: number) => {
 		setCurrentSlideIndex(index)
+	}
+
+	// Touch event handlers for swipe functionality
+	const handleTouchStart = (e: React.TouchEvent) => {
+		touchStartX.current = e.targetTouches[0].clientX
+	}
+
+	const handleTouchMove = (e: React.TouchEvent) => {
+		touchEndX.current = e.targetTouches[0].clientX
+	}
+
+	const handleTouchEnd = () => {
+		if (!touchStartX.current || !touchEndX.current) return
+		
+		const distance = touchStartX.current - touchEndX.current
+		const isLeftSwipe = distance > minSwipeDistance
+		const isRightSwipe = distance < -minSwipeDistance
+
+		if (isLeftSwipe && currentSlideIndex < totalSlides - 1) {
+			// Swipe left - go to next slide
+			setCurrentSlideIndex(prev => prev + 1)
+		}
+		
+		if (isRightSwipe && currentSlideIndex > 0) {
+			// Swipe right - go to previous slide
+			setCurrentSlideIndex(prev => prev - 1)
+		}
+
+		// Reset touch positions
+		touchStartX.current = 0
+		touchEndX.current = 0
 	}
 
 	// Render homepage hero content
@@ -188,7 +224,12 @@ function ProductsRoute() {
 		<div>
 			{isHomepageSlide ? (
 				// Homepage hero styling with random product background
-				<div className={`relative hero-container ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-black'}`}>
+				<div 
+					className={`relative hero-container ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-black'}`}
+					onTouchStart={handleTouchStart}
+					onTouchMove={handleTouchMove}
+					onTouchEnd={handleTouchEnd}
+				>
 					<div className="hero-overlays">
 						<div className="absolute inset-0 bg-radial-overlay z-10" />
 						<div className="absolute inset-0 opacity-30 bg-dots-overlay z-10" />
@@ -200,7 +241,12 @@ function ProductsRoute() {
 				</div>
 			) : (
 				// Product hero styling (existing product page style)
-				<div className={`relative hero-container ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-black'}`}>
+				<div 
+					className={`relative hero-container ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-black'}`}
+					onTouchStart={handleTouchStart}
+					onTouchMove={handleTouchMove}
+					onTouchEnd={handleTouchEnd}
+				>
 					<div className="hero-overlays">
 						<div className="absolute inset-0 bg-radial-overlay z-10" />
 						<div className="absolute inset-0 opacity-30 bg-dots-overlay z-10" />

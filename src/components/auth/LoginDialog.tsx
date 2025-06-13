@@ -32,9 +32,9 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 				</DialogHeader>
 				<Tabs defaultValue="extension" className="w-full" value={activeTab} onValueChange={setActiveTab}>
 					<TabsList className="grid w-full grid-cols-3">
-						<TabsTrigger value="extension">Extension</TabsTrigger>
-						<TabsTrigger value="connect">Nostr Connect</TabsTrigger>
-						<TabsTrigger value="private-key">Private Key</TabsTrigger>
+						<TabsTrigger value="extension" className="px-4 py-2 text-sm font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none">Extension</TabsTrigger>
+						<TabsTrigger value="connect" className="px-4 py-2 text-sm font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none">N-Connect</TabsTrigger>
+						<TabsTrigger value="private-key" className="px-4 py-2 text-sm font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none">Private Key</TabsTrigger>
 					</TabsList>
 					<TabsContent value="private-key">
 						<PrivateKeyLogin onError={handleError} onSuccess={() => onOpenChange(false)} />
@@ -42,8 +42,8 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 					<TabsContent value="connect">
 						<Tabs defaultValue="qr" className="w-full">
 							<TabsList className="grid w-full grid-cols-2">
-								<TabsTrigger value="qr">QR Code</TabsTrigger>
-								<TabsTrigger value="bunker">Bunker</TabsTrigger>
+								<TabsTrigger value="qr" className="px-4 py-2 text-sm font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none">QR Code</TabsTrigger>
+								<TabsTrigger value="bunker" className="px-4 py-2 text-sm font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none">Bunker</TabsTrigger>
 							</TabsList>
 
 							<TabsContent value="qr">
