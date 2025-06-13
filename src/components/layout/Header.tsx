@@ -16,8 +16,8 @@ export function Header() {
 	const location = useLocation()
 	const [scrollY, setScrollY] = useState(0)
 
-	// Check if we're on a product page
-	const isProductPage = location.pathname.startsWith('/products/') && location.pathname !== '/products'
+	// Check if we're on any product page (index page or individual product)
+	const isProductPage = location.pathname === '/products' || location.pathname.startsWith('/products/')
 
 	// Scroll detection for product pages
 	useEffect(() => {
@@ -27,6 +27,9 @@ export function Header() {
 			setScrollY(window.scrollY)
 		}
 
+		// Set initial scroll position
+		setScrollY(window.scrollY)
+
 		window.addEventListener('scroll', handleScroll, { passive: true })
 		return () => window.removeEventListener('scroll', handleScroll)
 	}, [isProductPage])
@@ -35,18 +38,8 @@ export function Header() {
 	const getHeaderBackground = () => {
 		if (!isProductPage) return 'bg-black'
 
-		if (scrollY < 80) {
-			// 0-80px: transparent
-			return 'bg-header-scroll-transition'
-		} else if (scrollY < 160) {
-			// 80-160px: transition from transparent to black
-			const progress = (scrollY - 80) / 80
-			const opacity = 0.3 + 0.7 * progress // 0.3 to 1.0
-			return 'bg-header-scroll-transition'
-		} else {
-			// 160px+: full black
-			return 'bg-black'
-		}
+		// Always use transition class for product pages
+		return 'bg-header-scroll-transition'
 	}
 
 	// Calculate CSS variable for transitional background
@@ -60,7 +53,7 @@ export function Header() {
 			const opacity = 0.3 + 0.7 * progress
 			return { '--header-bg-opacity': `rgba(0, 0, 0, ${opacity})` }
 		} else {
-			return {}
+			return { '--header-bg-opacity': 'rgba(0, 0, 0, 1.0)' }
 		}
 	}
 
