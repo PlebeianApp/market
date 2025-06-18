@@ -17,6 +17,8 @@ export interface LightningInvoiceData {
 		price: number
 	}>
 	status: 'pending' | 'processing' | 'paid' | 'expired' | 'failed'
+	invoiceType?: 'seller' | 'v4v'
+	originalSellerPubkey?: string // For V4V invoices, tracks which seller's order this relates to
 }
 
 interface InvoicePaymentComponentProps {
@@ -26,12 +28,7 @@ interface InvoicePaymentComponentProps {
 	totalInvoices: number
 }
 
-export function InvoicePaymentComponent({
-	invoice,
-	onPayInvoice,
-	invoiceNumber,
-	totalInvoices,
-}: InvoicePaymentComponentProps) {
+export function InvoicePaymentComponent({ invoice, onPayInvoice, invoiceNumber, totalInvoices }: InvoicePaymentComponentProps) {
 	const [copySuccess, setCopySuccess] = useState(false)
 
 	const formatSats = (sats: number): string => {
@@ -112,32 +109,24 @@ export function InvoicePaymentComponent({
 								{/* QR Code placeholder - in a real app, you'd generate the QR code from bolt11 */}
 								<div className="w-48 h-48 mx-auto bg-gray-100 rounded-lg flex items-center justify-center">
 									<div className="text-xs text-gray-500 text-center">
-										QR Code for<br/>Lightning Invoice<br/>
+										QR Code for
+										<br />
+										Lightning Invoice
+										<br />
 										<span className="font-mono text-xs">{invoice.bolt11.substring(0, 20)}...</span>
 									</div>
 								</div>
 							</div>
-							
+
 							<div className="space-y-2">
 								<p className="text-sm text-gray-600">Scan with your Lightning wallet or copy the invoice</p>
-								
+
 								{/* Invoice String */}
 								<div className="bg-gray-50 p-3 rounded-lg">
 									<div className="flex items-center gap-2">
-										<code className="text-xs font-mono flex-1 break-all text-gray-700">
-											{invoice.bolt11}
-										</code>
-										<Button
-											variant="outline"
-											size="sm"
-											onClick={copyToClipboard}
-											className="flex-shrink-0"
-										>
-											{copySuccess ? (
-												<Check className="w-4 h-4 text-green-600" />
-											) : (
-												<Copy className="w-4 h-4" />
-											)}
+										<code className="text-xs font-mono flex-1 break-all text-gray-700">{invoice.bolt11}</code>
+										<Button variant="outline" size="sm" onClick={copyToClipboard} className="flex-shrink-0">
+											{copySuccess ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
 										</Button>
 									</div>
 								</div>
@@ -165,19 +154,12 @@ export function InvoicePaymentComponent({
 			<div className="space-y-3">
 				{invoice.status === 'pending' && !isExpired && (
 					<>
-						<Button 
-							onClick={openInWallet} 
-							className="w-full bg-yellow-500 hover:bg-yellow-600 text-white"
-						>
+						<Button onClick={openInWallet} className="w-full bg-yellow-500 hover:bg-yellow-600 text-white">
 							<Zap className="w-4 h-4 mr-2" />
 							Open in Lightning Wallet
 						</Button>
-						
-						<Button 
-							onClick={() => onPayInvoice(invoice.id)} 
-							variant="outline" 
-							className="w-full"
-						>
+
+						<Button onClick={() => onPayInvoice(invoice.id)} variant="outline" className="w-full">
 							I've Paid - Check Status
 						</Button>
 					</>
@@ -203,15 +185,11 @@ export function InvoicePaymentComponent({
 				)}
 
 				{invoice.status === 'failed' && (
-					<Button 
-						onClick={() => onPayInvoice(invoice.id)} 
-						variant="outline" 
-						className="w-full border-red-300 text-red-600"
-					>
+					<Button onClick={() => onPayInvoice(invoice.id)} variant="outline" className="w-full border-red-300 text-red-600">
 						Payment Failed - Retry
 					</Button>
 				)}
 			</div>
 		</div>
 	)
-} 
+}

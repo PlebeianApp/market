@@ -29,7 +29,7 @@ const generateMockBolt11 = (amountSats: number, description: string): string => 
 
 function RouteComponent() {
 	const navigate = useNavigate()
-	const { cart, totalInSats, totalShippingInSats, productsBySeller, sellerData } = useStore(cartStore)
+	const { cart, totalInSats, totalShippingInSats, productsBySeller, sellerData, v4vShares } = useStore(cartStore)
 	const [currentStep, setCurrentStep] = useState<CheckoutStep>('shipping')
 	const [currentInvoiceIndex, setCurrentInvoiceIndex] = useState(0)
 	const [invoices, setInvoices] = useState<LightningInvoiceData[]>([])
@@ -48,10 +48,18 @@ function RouteComponent() {
 		return Object.keys(productsBySeller)
 	}, [productsBySeller])
 
+	const totalInvoicesNeeded = useMemo(() => {
+		return sellers.reduce((total, sellerPubkey) => {
+			// 1 invoice for the seller + 1 invoice for each V4V recipient
+			const v4vRecipients = v4vShares[sellerPubkey] || []
+			return total + 1 + v4vRecipients.length
+		}, 0)
+	}, [sellers, v4vShares])
+
 	const totalSteps = useMemo(() => {
-		// shipping + summary + (number of invoices) + complete
-		return 2 + invoices.length + 1
-	}, [invoices.length])
+		// shipping + summary + (total invoices needed) + complete
+		return 2 + totalInvoicesNeeded + 1
+	}, [totalInvoicesNeeded])
 
 	const currentStepNumber = useMemo(() => {
 		switch (currentStep) {
@@ -81,9 +89,10 @@ function RouteComponent() {
 			case 'payment':
 				const currentInvoice = invoices[currentInvoiceIndex]
 				if (currentInvoice) {
-					return `Lightning Payment ${currentInvoiceIndex + 1} of ${invoices.length}: ${currentInvoice.sellerName}`
+					const invoiceTypeLabel = currentInvoice.invoiceType === 'v4v' ? 'V4V Payment' : 'Payment'
+					return `${invoiceTypeLabel} ${currentInvoiceIndex + 1} of ${totalInvoicesNeeded}: ${currentInvoice.sellerName}`
 				}
-				return 'Processing Lightning payments'
+				return `Processing Lightning payments (${currentInvoiceIndex + 1} of ${totalInvoicesNeeded})`
 			case 'complete':
 				return 'Order complete'
 			default:
@@ -94,31 +103,70 @@ function RouteComponent() {
 	// Generate Lightning invoices when moving to payment step
 	useEffect(() => {
 		if (currentStep === 'payment' && invoices.length === 0 && sellers.length > 0) {
-			const newInvoices: LightningInvoiceData[] = sellers.map((sellerPubkey, index) => {
+			const newInvoices: LightningInvoiceData[] = []
+			let invoiceIndex = 0
+
+			sellers.forEach((sellerPubkey) => {
 				const sellerProducts = productsBySeller[sellerPubkey] || []
 				const data = sellerData[sellerPubkey]
-				const amount = data?.satsTotal || 0
-				const description = `Payment to ${sellerPubkey.substring(0, 8)}... for ${sellerProducts.length} items`
+				const totalAmount = data?.satsTotal || 0
+				const shares = data?.shares
+				const v4vRecipients = v4vShares[sellerPubkey] || []
 
-				return {
-					id: `invoice-${index}`,
+				// Create invoice for seller's share
+				const sellerAmount = shares?.sellerAmount || totalAmount
+				const sellerInvoice: LightningInvoiceData = {
+					id: `invoice-${invoiceIndex++}`,
 					sellerPubkey,
 					sellerName: `Seller ${sellerPubkey.substring(0, 8)}...`,
-					amount,
-					bolt11: generateMockBolt11(amount, description),
-					expiresAt: Math.floor(Date.now() / 1000) + 3600, // Expires in 1 hour
+					amount: sellerAmount,
+					bolt11: generateMockBolt11(sellerAmount, `Seller payment for ${sellerProducts.length} items`),
+					expiresAt: Math.floor(Date.now() / 1000) + 3600,
 					items: sellerProducts.map((product) => ({
 						productId: product.id,
 						name: `Product ${product.id.substring(0, 8)}...`,
 						amount: product.amount,
-						price: Math.floor((data?.satsTotal || 0) / sellerProducts.length), // Rough estimate
+						price: Math.floor(sellerAmount / sellerProducts.length),
 					})),
 					status: 'pending',
+					invoiceType: 'seller',
 				}
+				newInvoices.push(sellerInvoice)
+
+				// Create invoices for each V4V recipient
+				v4vRecipients.forEach((recipient) => {
+					// Calculate the recipient's amount based on their percentage
+					const recipientPercentage = recipient.percentage > 1 ? recipient.percentage / 100 : recipient.percentage
+					const recipientAmount = Math.floor(totalAmount * recipientPercentage)
+
+					if (recipientAmount > 0) {
+						const recipientInvoice: LightningInvoiceData = {
+							id: `invoice-${invoiceIndex++}`,
+							sellerPubkey: recipient.pubkey,
+							sellerName: recipient.name || `V4V ${recipient.pubkey.substring(0, 8)}...`,
+							amount: recipientAmount,
+							bolt11: generateMockBolt11(recipientAmount, `V4V payment to ${recipient.name}`),
+							expiresAt: Math.floor(Date.now() / 1000) + 3600,
+							items: [
+								{
+									productId: `v4v-${recipient.id}`,
+									name: `V4V Share (${recipientPercentage * 100}%)`,
+									amount: 1,
+									price: recipientAmount,
+								},
+							],
+							status: 'pending',
+							invoiceType: 'v4v',
+							originalSellerPubkey: sellerPubkey,
+						}
+						newInvoices.push(recipientInvoice)
+					}
+				})
 			})
+
 			setInvoices(newInvoices)
 		}
-	}, [currentStep, sellers, productsBySeller, sellerData, invoices.length])
+	}, [currentStep, sellers, productsBySeller, sellerData, v4vShares, invoices.length])
 
 	const form = useForm({
 		defaultValues: {
@@ -147,7 +195,7 @@ function RouteComponent() {
 			setInvoices((prev) => prev.map((invoice) => (invoice.id === invoiceId ? { ...invoice, status: 'paid' } : invoice)))
 
 			// Move to next invoice or complete
-			if (currentInvoiceIndex < invoices.length - 1) {
+			if (currentInvoiceIndex < totalInvoicesNeeded - 1) {
 				setCurrentInvoiceIndex((prev) => prev + 1)
 			} else {
 				setCurrentStep('complete')
@@ -170,7 +218,7 @@ function RouteComponent() {
 			}
 		} else if (currentStep === 'complete') {
 			setCurrentStep('payment')
-			setCurrentInvoiceIndex(invoices.length - 1)
+			setCurrentInvoiceIndex(totalInvoicesNeeded - 1)
 		}
 	}
 
@@ -235,7 +283,7 @@ function RouteComponent() {
 									invoice={invoices[currentInvoiceIndex]}
 									onPayInvoice={handlePayInvoice}
 									invoiceNumber={currentInvoiceIndex + 1}
-									totalInvoices={invoices.length}
+									totalInvoices={totalInvoicesNeeded}
 								/>
 							)}
 
