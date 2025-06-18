@@ -29,7 +29,6 @@ export function CartContent({ className = '' }: { className?: string }) {
 	const [parent, enableAnimations] = useAutoAnimate()
 	const [selectedShippingByUser, setSelectedShippingByUser] = useState<Record<string, string>>({})
 	const [detailsExpanded, setDetailsExpanded] = useState(false)
-	const userPubkey = cartActions.getUserPubkey()
 	const navigate = useNavigate()
 
 	const totalItems = useMemo(() => {
@@ -74,15 +73,13 @@ export function CartContent({ className = '' }: { className?: string }) {
 	}, [parent, enableAnimations])
 
 	const handleQuantityChange = (productId: string, newAmount: number) => {
-		if (userPubkey) {
-			cartActions.handleProductUpdate('setAmount', userPubkey, productId, newAmount)
-		}
+		// Updated function signature - no longer needs buyerPubkey
+		cartActions.handleProductUpdate('setAmount', productId, newAmount)
 	}
 
 	const handleRemoveProduct = (productId: string) => {
-		if (userPubkey) {
-			cartActions.handleProductUpdate('remove', userPubkey, productId)
-		}
+		// Updated function signature - no longer needs buyerPubkey
+		cartActions.handleProductUpdate('remove', productId)
 	}
 
 	const handleShippingSelect = async (sellerPubkey: string, shippingOption: RichShippingInfo) => {

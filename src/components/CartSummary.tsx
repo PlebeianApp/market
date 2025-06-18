@@ -36,7 +36,6 @@ export function CartSummary({
 	const [parent, enableAnimations] = useAutoAnimate()
 	const [selectedShippingByUser, setSelectedShippingByUser] = useState<Record<string, string>>({})
 	const [detailsExpanded, setDetailsExpanded] = useState(showExpandedDetails)
-	const userPubkey = cartActions.getUserPubkey()
 
 	const totalItems = useMemo(() => {
 		return Object.values(cart.products).reduce((sum, product) => sum + product.amount, 0)
@@ -75,14 +74,14 @@ export function CartSummary({
 	}, [parent, enableAnimations])
 
 	const handleQuantityChange = (productId: string, newAmount: number) => {
-		if (userPubkey && allowQuantityChanges) {
-			cartActions.handleProductUpdate('setAmount', userPubkey, productId, newAmount)
+		if (allowQuantityChanges) {
+			cartActions.handleProductUpdate('setAmount', productId, newAmount)
 		}
 	}
 
 	const handleRemoveProduct = (productId: string) => {
-		if (userPubkey && allowQuantityChanges) {
-			cartActions.handleProductUpdate('remove', userPubkey, productId)
+		if (allowQuantityChanges) {
+			cartActions.handleProductUpdate('remove', productId)
 		}
 	}
 
