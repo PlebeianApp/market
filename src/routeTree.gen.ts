@@ -12,6 +12,7 @@
 
 import { Route as rootRoute } from './routes/__root'
 import { Route as SetupImport } from './routes/setup'
+import { Route as CheckoutImport } from './routes/checkout'
 import { Route as DashboardLayoutImport } from './routes/_dashboard-layout'
 import { Route as IndexImport } from './routes/index'
 import { Route as ProductsIndexImport } from './routes/products.index'
@@ -45,6 +46,12 @@ import { Route as DashboardLayoutDashboardProductsCollectionsCollectionIdImport 
 const SetupRoute = SetupImport.update({
 	id: '/setup',
 	path: '/setup',
+	getParentRoute: () => rootRoute,
+} as any)
+
+const CheckoutRoute = CheckoutImport.update({
+	id: '/checkout',
+	path: '/checkout',
 	getParentRoute: () => rootRoute,
 } as any)
 
@@ -225,6 +232,13 @@ declare module '@tanstack/react-router' {
 			path: ''
 			fullPath: ''
 			preLoaderRoute: typeof DashboardLayoutImport
+			parentRoute: typeof rootRoute
+		}
+		'/checkout': {
+			id: '/checkout'
+			path: '/checkout'
+			fullPath: '/checkout'
+			preLoaderRoute: typeof CheckoutImport
 			parentRoute: typeof rootRoute
 		}
 		'/setup': {
@@ -491,6 +505,7 @@ const DashboardLayoutRouteWithChildren = DashboardLayoutRoute._addFileChildren(D
 export interface FileRoutesByFullPath {
 	'/': typeof IndexRoute
 	'': typeof DashboardLayoutRouteWithChildren
+	'/checkout': typeof CheckoutRoute
 	'/setup': typeof SetupRoute
 	'/posts/$postId': typeof PostsPostIdRoute
 	'/products/$productId': typeof ProductsProductIdRoute
@@ -522,6 +537,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
 	'/': typeof IndexRoute
 	'': typeof DashboardLayoutRouteWithChildren
+	'/checkout': typeof CheckoutRoute
 	'/setup': typeof SetupRoute
 	'/posts/$postId': typeof PostsPostIdRoute
 	'/products/$productId': typeof ProductsProductIdRoute
@@ -554,6 +570,7 @@ export interface FileRoutesById {
 	__root__: typeof rootRoute
 	'/': typeof IndexRoute
 	'/_dashboard-layout': typeof DashboardLayoutRouteWithChildren
+	'/checkout': typeof CheckoutRoute
 	'/setup': typeof SetupRoute
 	'/posts/$postId': typeof PostsPostIdRoute
 	'/products/$productId': typeof ProductsProductIdRoute
@@ -587,6 +604,7 @@ export interface FileRouteTypes {
 	fullPaths:
 		| '/'
 		| ''
+		| '/checkout'
 		| '/setup'
 		| '/posts/$postId'
 		| '/products/$productId'
@@ -617,6 +635,7 @@ export interface FileRouteTypes {
 	to:
 		| '/'
 		| ''
+		| '/checkout'
 		| '/setup'
 		| '/posts/$postId'
 		| '/products/$productId'
@@ -647,6 +666,7 @@ export interface FileRouteTypes {
 		| '__root__'
 		| '/'
 		| '/_dashboard-layout'
+		| '/checkout'
 		| '/setup'
 		| '/posts/$postId'
 		| '/products/$productId'
@@ -679,6 +699,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
 	IndexRoute: typeof IndexRoute
 	DashboardLayoutRoute: typeof DashboardLayoutRouteWithChildren
+	CheckoutRoute: typeof CheckoutRoute
 	SetupRoute: typeof SetupRoute
 	PostsPostIdRoute: typeof PostsPostIdRoute
 	ProductsProductIdRoute: typeof ProductsProductIdRoute
@@ -692,6 +713,7 @@ export interface RootRouteChildren {
 const rootRouteChildren: RootRouteChildren = {
 	IndexRoute: IndexRoute,
 	DashboardLayoutRoute: DashboardLayoutRouteWithChildren,
+	CheckoutRoute: CheckoutRoute,
 	SetupRoute: SetupRoute,
 	PostsPostIdRoute: PostsPostIdRoute,
 	ProductsProductIdRoute: ProductsProductIdRoute,
@@ -712,6 +734,7 @@ export const routeTree = rootRoute._addFileChildren(rootRouteChildren)._addFileT
       "children": [
         "/",
         "/_dashboard-layout",
+        "/checkout",
         "/setup",
         "/posts/$postId",
         "/products/$productId",
@@ -742,6 +765,9 @@ export const routeTree = rootRoute._addFileChildren(rootRouteChildren)._addFileT
         "/_dashboard-layout/dashboard/sales/messages",
         "/_dashboard-layout/dashboard/sales/sales"
       ]
+    },
+    "/checkout": {
+      "filePath": "checkout.tsx"
     },
     "/setup": {
       "filePath": "setup.tsx"
