@@ -675,7 +675,8 @@ export const cartActions = {
 
 	updateV4VShares: async () => {
 		const state = cartStore.state
-		const shares: Record<string, V4VDTO[]> = {}
+		// Start with existing shares to avoid losing data
+		const shares: Record<string, V4VDTO[]> = { ...state.v4vShares }
 
 		try {
 			const uniqueSellerPubkeys = new Set<string>()
@@ -686,21 +687,25 @@ export const cartActions = {
 				}
 			})
 
+			// Only fetch seller shares if we don't already have them or if they're empty
 			for (const sellerPubkey of Array.from(uniqueSellerPubkeys)) {
-				try {
-					const sellerShares = await v4VForUserQuery(sellerPubkey)
-					shares[sellerPubkey] = (sellerShares || []).map((share) => ({
-						...share,
-						percentage: isNaN(share.percentage) ? 5 : share.percentage,
-					}))
-				} catch (error) {
-					console.error(`Failed to fetch v4v shares for seller ${sellerPubkey}:`, error)
-					shares[sellerPubkey] = []
+				if (!shares[sellerPubkey] || shares[sellerPubkey].length === 0) {
+					try {
+						const sellerShares = await v4VForUserQuery(sellerPubkey)
+						shares[sellerPubkey] = (sellerShares || []).map((share) => ({
+							...share,
+							percentage: isNaN(share.percentage) ? 5 : share.percentage,
+						}))
+					} catch (error) {
+						console.error(`Failed to fetch v4v shares for seller ${sellerPubkey}:`, error)
+						shares[sellerPubkey] = []
+					}
 				}
 			}
 
+			// Only fetch user shares if we don't already have them or if they're empty
 			for (const userPubkey of Object.keys(state.cart.users)) {
-				if (!shares[userPubkey]) {
+				if (!shares[userPubkey] || shares[userPubkey].length === 0) {
 					try {
 						const userShares = await v4VForUserQuery(userPubkey)
 						shares[userPubkey] = (userShares || []).map((share) => ({
@@ -713,6 +718,15 @@ export const cartActions = {
 					}
 				}
 			}
+
+			// Clean up shares for users/sellers no longer in cart
+			const relevantPubkeys = new Set([...Array.from(uniqueSellerPubkeys), ...Object.keys(state.cart.users)])
+
+			Object.keys(shares).forEach((pubkey) => {
+				if (!relevantPubkeys.has(pubkey)) {
+					delete shares[pubkey]
+				}
+			})
 
 			cartStore.setState((state) => ({
 				...state,
@@ -892,7 +906,14 @@ export const cartActions = {
 		}
 
 		const communitySharePercentage = shares.reduce((total, share) => {
-			const percentage = Number(share.percentage)
+			let percentage = Number(share.percentage)
+
+			// Handle case where percentage might be stored as decimal (0.18) instead of whole number (18)
+			// If percentage is less than 1, assume it's in decimal format and convert to percentage
+			if (percentage > 0 && percentage < 1) {
+				percentage = percentage * 100
+			}
+
 			if (isNaN(percentage) || percentage <= 0 || percentage > 100) {
 				console.warn(`Invalid share percentage for ${share.name}: ${share.percentage}`)
 				return total

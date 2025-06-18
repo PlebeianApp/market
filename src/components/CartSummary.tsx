@@ -1,20 +1,27 @@
 import CartItem from '@/components/CartItem'
 import { ShippingSelector } from '@/components/ShippingSelector'
 import { UserWithAvatar } from '@/components/UserWithAvatar'
-import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import type { RichShippingInfo } from '@/lib/stores/cart'
 import { cartActions, cartStore } from '@/lib/stores/cart'
-import { uiActions } from '@/lib/stores/ui'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useStore } from '@tanstack/react-store'
-import { useNavigate } from '@tanstack/react-router'
 import { ChevronDown } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { EmptyCartScreen } from './EmptyCartScreen'
 
-export function CartContent({ className = '' }: { className?: string }) {
+interface CartSummaryProps {
+	className?: string
+	allowQuantityChanges?: boolean
+	allowShippingChanges?: boolean
+	showExpandedDetails?: boolean
+}
+
+export function CartSummary({
+	className = '',
+	allowQuantityChanges = true,
+	allowShippingChanges = true,
+	showExpandedDetails = false,
+}: CartSummaryProps) {
 	const {
 		cart,
 		sellerData,
@@ -28,9 +35,8 @@ export function CartContent({ className = '' }: { className?: string }) {
 
 	const [parent, enableAnimations] = useAutoAnimate()
 	const [selectedShippingByUser, setSelectedShippingByUser] = useState<Record<string, string>>({})
-	const [detailsExpanded, setDetailsExpanded] = useState(false)
+	const [detailsExpanded, setDetailsExpanded] = useState(showExpandedDetails)
 	const userPubkey = cartActions.getUserPubkey()
-	const navigate = useNavigate()
 
 	const totalItems = useMemo(() => {
 		return Object.values(cart.products).reduce((sum, product) => sum + product.amount, 0)
@@ -44,10 +50,6 @@ export function CartContent({ className = '' }: { className?: string }) {
 		return Object.values(cart.products).filter((product) => !product.shippingMethodId).length
 	}, [cart.products])
 
-	const isCartEmpty = useMemo(() => {
-		return Object.keys(cart.products).length === 0
-	}, [cart.products])
-
 	const formatSats = (sats: number): string => {
 		return Math.round(sats).toLocaleString()
 	}
@@ -56,7 +58,6 @@ export function CartContent({ className = '' }: { className?: string }) {
 		if (Object.keys(cart.products).length > 0) {
 			cartActions.groupProductsBySeller()
 			cartActions.updateSellerData()
-
 			cartActions.fetchAndSetSellerShippingOptions()
 		}
 
@@ -74,18 +75,20 @@ export function CartContent({ className = '' }: { className?: string }) {
 	}, [parent, enableAnimations])
 
 	const handleQuantityChange = (productId: string, newAmount: number) => {
-		if (userPubkey) {
+		if (userPubkey && allowQuantityChanges) {
 			cartActions.handleProductUpdate('setAmount', userPubkey, productId, newAmount)
 		}
 	}
 
 	const handleRemoveProduct = (productId: string) => {
-		if (userPubkey) {
+		if (userPubkey && allowQuantityChanges) {
 			cartActions.handleProductUpdate('remove', userPubkey, productId)
 		}
 	}
 
 	const handleShippingSelect = async (sellerPubkey: string, shippingOption: RichShippingInfo) => {
+		if (!allowShippingChanges) return
+
 		setSelectedShippingByUser((prev) => ({
 			...prev,
 			[sellerPubkey]: shippingOption.id,
@@ -98,16 +101,8 @@ export function CartContent({ className = '' }: { className?: string }) {
 		await cartActions.updateSellerData()
 	}
 
-	if (isCartEmpty) {
-		return <EmptyCartScreen />
-	}
-
 	return (
-		<div className={`flex flex-col max-h-screen overflow-hidden py-4 px-6 ${className}`}>
-			<div className="mb-4">
-				<h2 className="text-lg font-semibold">YOUR CART</h2>
-			</div>
-
+		<div className={`${className}`}>
 			{missingShippingCount > 0 && (
 				<div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
 					<div className="flex">
@@ -120,37 +115,37 @@ export function CartContent({ className = '' }: { className?: string }) {
 				</div>
 			)}
 
-			<ScrollArea className="flex-1 overflow-y-auto py-2">
-				<div className="space-y-8" ref={parent}>
-					{Object.entries(productsBySeller).map(([sellerPubkey, products]) => {
-						const data = sellerData[sellerPubkey] || {
-							satsTotal: 0,
-							currencyTotals: {},
-							shares: { sellerAmount: 0, communityAmount: 0, sellerPercentage: 90 },
-							shippingSats: 0,
-						}
+			<div className="space-y-8" ref={parent}>
+				{Object.entries(productsBySeller).map(([sellerPubkey, products]) => {
+					const data = sellerData[sellerPubkey] || {
+						satsTotal: 0,
+						currencyTotals: {},
+						shares: { sellerAmount: 0, communityAmount: 0, sellerPercentage: 90 },
+						shippingSats: 0,
+					}
 
-						const optionsForThisSeller = sellerShippingOptions[sellerPubkey] || []
+					const optionsForThisSeller = sellerShippingOptions[sellerPubkey] || []
 
-						return (
-							<div key={sellerPubkey} className="border-b pb-8">
-								<div className="mb-4">
-									<UserWithAvatar pubkey={sellerPubkey} size="sm" showBadge={false} />
-								</div>
+					return (
+						<div key={sellerPubkey} className="border-b pb-8">
+							<div className="mb-4">
+								<UserWithAvatar pubkey={sellerPubkey} size="sm" showBadge={false} />
+							</div>
 
-								<ul className="space-y-6">
-									{products.map((product) => (
-										<CartItem
-											key={product.id}
-											productId={product.id}
-											amount={product.amount}
-											onQuantityChange={handleQuantityChange}
-											onRemove={handleRemoveProduct}
-											hideShipping={true}
-										/>
-									))}
-								</ul>
+							<ul className="space-y-6">
+								{products.map((product) => (
+									<CartItem
+										key={product.id}
+										productId={product.id}
+										amount={product.amount}
+										onQuantityChange={allowQuantityChanges ? handleQuantityChange : () => {}}
+										onRemove={allowQuantityChanges ? handleRemoveProduct : () => {}}
+										hideShipping={true}
+									/>
+								))}
+							</ul>
 
+							{allowShippingChanges && (
 								<div className="mt-4">
 									<ShippingSelector
 										options={optionsForThisSeller}
@@ -159,56 +154,56 @@ export function CartContent({ className = '' }: { className?: string }) {
 										className="w-full"
 									/>
 								</div>
+							)}
 
-								{Object.entries(data.currencyTotals).map(([currency, amount]) => (
-									<div key={`${sellerPubkey}-${currency}`} className="flex justify-between mt-4">
-										<p className="text-sm">{currency} Total:</p>
-										<p className="text-sm">
-											{amount.toFixed(2)} {currency}
-										</p>
-									</div>
-								))}
+							{Object.entries(data.currencyTotals).map(([currency, amount]) => (
+								<div key={`${sellerPubkey}-${currency}`} className="flex justify-between mt-4">
+									<p className="text-sm">{currency} Total:</p>
+									<p className="text-sm">
+										{amount.toFixed(2)} {currency}
+									</p>
+								</div>
+							))}
+
+							<div className="flex justify-between mt-1">
+								<p className="text-sm">Shipping:</p>
+								<p className="text-sm font-semibold">{formatSats(data.shippingSats)} sat</p>
+							</div>
+
+							<div className="flex justify-between mt-1 font-semibold">
+								<p className="text-sm">Total:</p>
+								<p className="text-sm">{formatSats(data.satsTotal)} sat</p>
+							</div>
+
+							<div className="mt-3">
+								<p className="text-sm font-semibold">Payment Breakdown</p>
+
+								<div className="h-2 w-full bg-gray-800 mt-1 rounded-full overflow-hidden">
+									<div className="h-full bg-blue-500" style={{ width: `${data.shares.sellerPercentage}%` }} />
+								</div>
 
 								<div className="flex justify-between mt-1">
-									<p className="text-sm">Shipping:</p>
-									<p className="text-sm font-semibold">{formatSats(data.shippingSats)} sat</p>
+									<p className="text-sm">Merchant: </p>
+									<p className="text-sm">
+										{formatSats(data.shares.sellerAmount)} sat ({data.shares.sellerPercentage.toFixed(2)}%)
+									</p>
 								</div>
 
-								<div className="flex justify-between mt-1 font-semibold">
-									<p className="text-sm">Total:</p>
-									<p className="text-sm">{formatSats(data.satsTotal)} sat</p>
-								</div>
-
-								<div className="mt-3">
-									<p className="text-sm font-semibold">Payment Breakdown</p>
-
-									<div className="h-2 w-full bg-gray-800 mt-1 rounded-full overflow-hidden">
-										<div className="h-full bg-blue-500" style={{ width: `${data.shares.sellerPercentage}%` }} />
-									</div>
-
-									<div className="flex justify-between mt-1">
-										<p className="text-sm">Merchant: </p>
+								{data.shares.communityAmount > 0 && (
+									<div className="flex justify-between">
+										<p className="text-sm">Community Share: </p>
 										<p className="text-sm">
-											{formatSats(data.shares.sellerAmount)} sat ({data.shares.sellerPercentage.toFixed(2)}%)
+											{formatSats(data.shares.communityAmount)} sat ({(100 - data.shares.sellerPercentage).toFixed(2)}%)
 										</p>
 									</div>
-
-									{data.shares.communityAmount > 0 && (
-										<div className="flex justify-between">
-											<p className="text-sm">Community Share: </p>
-											<p className="text-sm">
-												{formatSats(data.shares.communityAmount)} sat ({(100 - data.shares.sellerPercentage).toFixed(2)}%)
-											</p>
-										</div>
-									)}
-								</div>
+								)}
 							</div>
-						)
-					})}
-				</div>
-			</ScrollArea>
+						</div>
+					)
+				})}
+			</div>
 
-			<div className="border-t pt-4 mt-auto">
+			<div className="border-t pt-4 mt-4">
 				<div className="space-y-3 w-full">
 					<div className="space-y-1 mb-2">
 						<div className="flex justify-between">
@@ -268,31 +263,6 @@ export function CartContent({ className = '' }: { className?: string }) {
 							</div>
 						</div>
 					)}
-
-					<div className="space-y-3 mt-4">
-						<div className="flex gap-3">
-							<Button
-								variant="outline"
-								className="flex-1 text-red-500 hover:bg-red-50 hover:text-red-600 border-red-200"
-								onClick={() => cartActions.clear()}
-								disabled={totalItems === 0}
-							>
-								Clear
-							</Button>
-
-							<Button
-								className="flex-1 bg-black text-white hover:bg-gray-800"
-								disabled={!hasAllShippingMethods || totalItems === 0}
-								title={!hasAllShippingMethods ? 'Please select shipping options for all items' : ''}
-								onClick={() => {
-									uiActions.closeDrawer('cart')
-									navigate({ to: '/checkout' })
-								}}
-							>
-								Checkout
-							</Button>
-						</div>
-					</div>
 				</div>
 			</div>
 		</div>
