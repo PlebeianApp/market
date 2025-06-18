@@ -10,23 +10,12 @@ interface CheckoutProgressProps {
 	onBackClick: () => void
 }
 
-export function CheckoutProgress({ 
-	currentStepNumber, 
-	totalSteps, 
-	progress, 
-	stepDescription, 
-	onBackClick 
-}: CheckoutProgressProps) {
+export function CheckoutProgress({ currentStepNumber, totalSteps, progress, stepDescription, onBackClick }: CheckoutProgressProps) {
 	return (
 		<div className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
 			<div className="max-w-4xl mx-auto px-4 py-4">
 				<div className="flex items-center gap-4 mb-4">
-					<Button
-						variant="ghost"
-						size="icon"
-						onClick={onBackClick}
-						className="flex-shrink-0"
-					>
+					<Button variant="ghost" size="icon" onClick={onBackClick} className="flex-shrink-0">
 						<ChevronLeft className="h-4 w-4" />
 					</Button>
 					<div className="flex-1">
@@ -43,4 +32,4 @@ export function CheckoutProgress({
 			</div>
 		</div>
 	)
-} 
+}
