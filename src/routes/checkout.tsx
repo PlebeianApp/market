@@ -12,6 +12,7 @@ import { useStore } from '@tanstack/react-store'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useForm } from '@tanstack/react-form'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
+import { ChevronLeft, ChevronRight, Zap, User, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 
 export const Route = createFileRoute('/checkout')({
@@ -23,7 +24,7 @@ type CheckoutStep = 'shipping' | 'summary' | 'payment' | 'complete'
 // Mock function to generate BOLT11 invoice
 const generateMockBolt11 = (amountSats: number, description: string): string => {
 	// This is a mock BOLT11 invoice - in production, this would come from a Lightning service
-	const mockInvoice = `lnbc${amountSats}u1pjkxyzt0zd9xksxzh9grrfvxsxgrsq27hv2xz6x9zpqfnwv4j8gctjq4s7w58rq3h7w2e8l9g8v3h7w2e8l9g8v3h7w2e8l9g8v3h7w2e8l9g8v3h7w2e8l9g8v3h7w2e8l9g8v3h7w2e8l9g8v`
+	const mockInvoice = `lnbc${amountSats}u1pjkxyzt0zd9xksxzh9grrfvxsxgrsq27hv2xz6x9zpqfnwv4j8gctjq4s7w58rq3h7w2e8l9g8v3h7w2e8l9g8v3h7w2e8l9g8v3h7w2e8l9g8v3h7w2e8l9g8v`
 	return mockInvoice + Math.random().toString(36).substring(2, 15)
 }
 
@@ -98,7 +99,7 @@ function RouteComponent() {
 			default:
 				return 'Checkout'
 		}
-	}, [currentStep, currentInvoiceIndex, invoices])
+	}, [currentStep, currentInvoiceIndex, invoices, totalInvoicesNeeded])
 
 	// Generate Lightning invoices when moving to payment step
 	useEffect(() => {
@@ -150,7 +151,7 @@ function RouteComponent() {
 							items: [
 								{
 									productId: `v4v-${recipient.id}`,
-									name: `V4V Share (${recipientPercentage * 100}%)`,
+									name: `V4V Share (${(recipientPercentage * 100).toFixed(1)}%)`,
 									amount: 1,
 									price: recipientAmount,
 								},
@@ -234,6 +235,16 @@ function RouteComponent() {
 		setCurrentStep('payment')
 	}
 
+	const navigateToInvoice = (index: number) => {
+		if (index >= 0 && index < invoices.length) {
+			setCurrentInvoiceIndex(index)
+		}
+	}
+
+	const formatSats = (sats: number): string => {
+		return Math.round(sats).toLocaleString()
+	}
+
 	// Redirect to home if cart is empty
 	if (isCartEmpty) {
 		return (
@@ -250,7 +261,7 @@ function RouteComponent() {
 	}
 
 	return (
-		<div>
+		<div className="flex-grow flex flex-col">
 			{/* Progress Bar */}
 			<CheckoutProgress
 				currentStepNumber={currentStepNumber}
@@ -261,9 +272,9 @@ function RouteComponent() {
 			/>
 
 			{/* Main Content */}
-			<div className="px-4 py-8 flex flex-row gap-4 w-full h-full">
+			<div className="px-4 py-8 flex flex-row gap-4 w-full flex-grow">
 				{/* Main Content Area */}
-				<Card className="flex-1 w-1/2">
+				<Card className="flex-1 w-1/2 flex-grow">
 					<CardContent className="p-6 h-full">
 						<div ref={animationParent}>
 							{currentStep === 'shipping' && <ShippingAddressForm form={form} hasAllShippingMethods={hasAllShippingMethods} />}
@@ -279,12 +290,52 @@ function RouteComponent() {
 							)}
 
 							{currentStep === 'payment' && invoices[currentInvoiceIndex] && (
-								<InvoicePaymentComponent
-									invoice={invoices[currentInvoiceIndex]}
-									onPayInvoice={handlePayInvoice}
-									invoiceNumber={currentInvoiceIndex + 1}
-									totalInvoices={totalInvoicesNeeded}
-								/>
+								<div className="space-y-4">
+									{/* Invoice Carousel Navigation */}
+									{invoices.length > 1 && (
+										<div className="flex items-center justify-between mb-4 p-4 bg-gray-50 rounded-lg">
+											<Button
+												variant="outline"
+												size="sm"
+												onClick={() => navigateToInvoice(currentInvoiceIndex - 1)}
+												disabled={currentInvoiceIndex === 0}
+											>
+												<ChevronLeft className="w-4 h-4 mr-1" />
+												Previous
+											</Button>
+
+											<div className="flex items-center space-x-2">
+												{invoices.map((_, index) => (
+													<button
+														key={index}
+														onClick={() => navigateToInvoice(index)}
+														className={`w-3 h-3 rounded-full transition-colors ${
+															index === currentInvoiceIndex ? 'bg-pink-500' : 'bg-gray-300 hover:bg-gray-400'
+														}`}
+													/>
+												))}
+											</div>
+
+											<Button
+												variant="outline"
+												size="sm"
+												onClick={() => navigateToInvoice(currentInvoiceIndex + 1)}
+												disabled={currentInvoiceIndex === invoices.length - 1}
+											>
+												Next
+												<ChevronRight className="w-4 h-4 ml-1" />
+											</Button>
+										</div>
+									)}
+
+									{/* Invoice Payment Component */}
+									<InvoicePaymentComponent
+										invoice={invoices[currentInvoiceIndex]}
+										onPayInvoice={handlePayInvoice}
+										invoiceNumber={currentInvoiceIndex + 1}
+										totalInvoices={totalInvoicesNeeded}
+									/>
+								</div>
 							)}
 
 							{currentStep === 'complete' && (
@@ -299,19 +350,119 @@ function RouteComponent() {
 					</CardContent>
 				</Card>
 
-				{/* Order Summary Sidebar */}
+				{/* Right Sidebar */}
 				<Card className="flex-1 w-1/2">
 					<CardHeader>
-						<CardTitle>Order Summary</CardTitle>
+						<CardTitle>{currentStep === 'payment' ? 'Payment Details' : 'Order Summary'}</CardTitle>
 					</CardHeader>
-					<CardContent>
-						<ScrollArea className="h-96">
-							<CartSummary
-								allowQuantityChanges={currentStep === 'shipping'}
-								allowShippingChanges={currentStep === 'shipping'}
-								showExpandedDetails={false}
-							/>
-						</ScrollArea>
+					<CardContent className="h-full">
+						{currentStep === 'payment' && invoices.length > 0 ? (
+							<div className="space-y-4 h-full">
+								{/* Current Invoice Summary */}
+								<div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-lg p-4 border-2 border-pink-200">
+									<div className="flex items-center gap-2 mb-2">
+										{invoices[currentInvoiceIndex].invoiceType === 'v4v' ? (
+											<Users className="w-5 h-5 text-purple-600" />
+										) : (
+											<User className="w-5 h-5 text-blue-600" />
+										)}
+										<span className="font-medium text-gray-900">Currently Paying: {invoices[currentInvoiceIndex].sellerName}</span>
+									</div>
+									<div className="flex items-center gap-2">
+										<Zap className="w-4 h-4 text-yellow-500" />
+										<span className="text-lg font-bold">{formatSats(invoices[currentInvoiceIndex].amount)} sats</span>
+										<span
+											className={`px-2 py-1 rounded-full text-xs font-medium ${
+												invoices[currentInvoiceIndex].invoiceType === 'v4v' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+											}`}
+										>
+											{invoices[currentInvoiceIndex].invoiceType === 'v4v' ? 'V4V Payment' : 'Merchant Payment'}
+										</span>
+									</div>
+								</div>
+
+								{/* Invoice List */}
+								<h4 className="font-medium text-gray-900 mb-3 flex items-center justify-between">
+									<span>All Payments ({invoices.length})</span>
+									<span className="text-sm text-gray-500">Click to select</span>
+								</h4>
+								<ScrollArea>
+									<div className="space-y-2">
+										{invoices.map((invoice, index) => (
+											<div
+												key={invoice.id}
+												onClick={() => navigateToInvoice(index)}
+												className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 hover:shadow-md ${
+													index === currentInvoiceIndex
+														? 'bg-pink-50 border-pink-300 shadow-md ring-2 ring-pink-200'
+														: 'bg-white hover:bg-gray-50 border-gray-200 hover:border-gray-300'
+												}`}
+											>
+												<div className="flex items-center justify-between">
+													{/* Left Side - Invoice Info */}
+													<div className="flex items-center gap-3 flex-1">
+														<div className="flex-shrink-0">
+															{invoice.invoiceType === 'v4v' ? (
+																<div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+																	<Users className="w-5 h-5 text-purple-600" />
+																</div>
+															) : (
+																<div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+																	<User className="w-5 h-5 text-blue-600" />
+																</div>
+															)}
+														</div>
+														<div className="flex-1 min-w-0">
+															<div className="flex items-center gap-2 mb-1">
+																<p className="font-medium text-gray-900 truncate">{invoice.sellerName}</p>
+																{index === currentInvoiceIndex && (
+																	<span className="bg-pink-500 text-white text-xs px-2 py-0.5 rounded-full">Current</span>
+																)}
+															</div>
+															<p className="text-sm text-gray-600 mb-1">{invoice.invoiceType === 'v4v' ? 'V4V Recipient' : 'Merchant'}</p>
+															<p className="text-xs text-gray-500 font-mono truncate">{invoice.sellerPubkey.substring(0, 20)}...</p>
+														</div>
+													</div>
+
+													{/* Right Side - Amount & Status */}
+													<div className="text-right flex-shrink-0 ml-4">
+														<div className="flex items-center gap-1 justify-end mb-1">
+															<Zap className="w-4 h-4 text-yellow-500" />
+															<span className="font-bold text-gray-900">{formatSats(invoice.amount)}</span>
+															<span className="text-sm text-gray-600">sats</span>
+														</div>
+														<div
+															className={`inline-block text-xs px-2 py-1 rounded-full font-medium ${
+																invoice.status === 'paid'
+																	? 'bg-green-100 text-green-800'
+																	: invoice.status === 'processing'
+																		? 'bg-yellow-100 text-yellow-800'
+																		: 'bg-gray-100 text-gray-800'
+															}`}
+														>
+															{invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+														</div>
+														{invoice.items.slice(0, 2).map((item, itemIndex) => (
+															<div key={itemIndex} className="flex justify-between text-xs">
+																<span className="text-gray-700 truncate mr-2">{item.name}</span>
+															</div>
+														))}
+													</div>
+												</div>
+											</div>
+										))}
+									</div>
+								</ScrollArea>
+							</div>
+						) : (
+							<ScrollArea className="h-full">
+								<CartSummary
+									allowQuantityChanges={currentStep === 'shipping'}
+									allowShippingChanges={currentStep === 'shipping'}
+									showExpandedDetails={false}
+								/>
+							</ScrollArea>
+						)}
 					</CardContent>
 				</Card>
 			</div>
