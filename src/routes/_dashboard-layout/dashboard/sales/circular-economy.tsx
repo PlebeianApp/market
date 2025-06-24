@@ -16,12 +16,14 @@ import { nip19 } from 'nostr-tools'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import './emoji-animations.css'
+import { useDashboardTitle } from '@/routes/_dashboard-layout'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/circular-economy')({
 	component: CircularEconomyComponent,
 })
 
 function CircularEconomyComponent() {
+	useDashboardTitle('Circular Economy')
 	const { data: config } = useConfigQuery()
 	const authState = useStore(authStore)
 	const userPubkey = authState.user?.pubkey || ''
@@ -37,6 +39,8 @@ function CircularEconomyComponent() {
 	const [totalV4VPercentage, setTotalV4VPercentage] = useState(10)
 
 	const { data: canReceiveZaps, isLoading: isCheckingZap } = useZapCapabilityByNpub(newRecipientNpub || '')
+
+	const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
 
 	useEffect(() => {
 		if (v4vShares.length > 0) {
@@ -300,8 +304,6 @@ function CircularEconomyComponent() {
 
 	return (
 		<div className="space-y-6 max-w-4xl mx-auto">
-			<h1 className="text-2xl font-bold">Circular Economy</h1>
-
 			<Alert className="bg-blue-100 text-blue-800 border-blue-200">
 				<AlertDescription>
 					PM (Beta) Is Powered By Your Generosity. Your Contribution Is The Only Thing That Enables Us To Continue Creating Free And Open
@@ -423,20 +425,31 @@ function CircularEconomyComponent() {
 								className="flex-grow sm:flex-grow-0"
 								onClick={handleAddRecipient}
 								disabled={isChecking || isCheckingZap || !newRecipientNpub || !canReceiveZaps || totalV4VPercentage === 0}
+								data-testid="add-v4v-recipient-button"
 							>
 								Add
 							</Button>
-							<Button variant="outline" onClick={() => setShowAddForm(false)}>
+							<Button variant="outline" onClick={() => setShowAddForm(false)} data-testid="cancel-v4v-recipient-button">
 								Cancel
 							</Button>
 						</div>
 					</div>
 				) : (
 					<div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
-						<Button variant="outline" onClick={() => setShowAddForm(true)} disabled={totalV4VPercentage === 0}>
+						<Button
+							variant="outline"
+							onClick={() => setShowAddForm(true)}
+							disabled={totalV4VPercentage === 0}
+							data-testid="add-v4v-recipient-form-button"
+						>
 							+ V4V Recipient
 						</Button>
-						<Button variant="outline" onClick={handleEqualizeAll} disabled={localShares.length === 0 || totalV4VPercentage === 0}>
+						<Button
+							variant="outline"
+							onClick={handleEqualizeAll}
+							disabled={localShares.length === 0 || totalV4VPercentage === 0}
+							data-testid="equal-all-v4v-button"
+						>
 							<span className="i-sharing w-5 h-5 mr-2"></span>
 							Equal All
 						</Button>
@@ -445,7 +458,13 @@ function CircularEconomyComponent() {
 
 				{/* Save button */}
 				<div className="mt-6">
-					<Button variant="focus" className="w-full" onClick={handleSave} disabled={publishMutation.isPending}>
+					<Button
+						variant="focus"
+						className="w-full"
+						onClick={handleSave}
+						disabled={publishMutation.isPending}
+						data-testid="save-v4v-button"
+					>
 						{publishMutation.isPending ? 'Saving...' : 'Save'}
 					</Button>
 				</div>

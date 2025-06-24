@@ -78,13 +78,16 @@ export const server = serve({
 	routes: {
 		'/*': index,
 		'/api/config': {
-			GET: () =>
-				Response.json({
+			GET: async () => {
+				// Always fetch fresh settings from relay
+				const currentSettings = await fetchAppSettings(RELAY_URL as string, APP_PUBLIC_KEY)
+				return Response.json({
 					appRelay: RELAY_URL,
-					appSettings,
+					appSettings: currentSettings,
 					appPublicKey: APP_PUBLIC_KEY,
-					needsSetup: !appSettings,
-				}),
+					needsSetup: !currentSettings,
+				})
+			},
 		},
 		'/images/:file': ({ params }) => serveStatic(`images/${params.file}`),
 	},

@@ -31,7 +31,7 @@ export function DecryptPasswordDialog() {
 
 	return (
 		<Dialog open={needsDecryptionPassword}>
-			<DialogContent className="sm:max-w-[425px]">
+			<DialogContent className="sm:max-w-[425px]" data-testid="decrypt-password-dialog">
 				<DialogHeader>
 					<DialogTitle>Decrypt Private Key</DialogTitle>
 					<DialogDescription>Enter your password to decrypt your stored private key.</DialogDescription>
@@ -50,10 +50,11 @@ export function DecryptPasswordDialog() {
 									handleSubmit()
 								}
 							}}
+							data-testid="decrypt-password-input"
 						/>
 						{error && <p className="text-sm text-red-500">{error}</p>}
 					</div>
-					<Button onClick={handleSubmit} disabled={isLoading} className="w-full">
+					<Button onClick={handleSubmit} disabled={isLoading} className="w-full" data-testid="decrypt-login-button">
 						{isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Decrypt & Login'}
 					</Button>
 				</div>

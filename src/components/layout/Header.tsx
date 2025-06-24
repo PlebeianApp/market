@@ -67,7 +67,7 @@ export function Header() {
 		<header className={`sticky top-0 z-30 py-4 text-white px-4 ${getHeaderBackground()}`} style={getHeaderStyle() as React.CSSProperties}>
 			<div className="container flex h-full max-w-full items-center justify-between">
 				<section className="inline-flex items-center">
-					<Link to="/">
+					<Link to="/" data-testid="home-link">
 						{config?.appSettings?.picture && (
 							<img src={config.appSettings.picture} alt={config.appSettings.displayName} className="w-16 px-2" />
 						)}
@@ -108,17 +108,18 @@ export function Header() {
 					</div>
 					<div className="flex gap-2">
 						{isAuthenticating ? (
-							<Button variant="primary" className="p-2 relative rounded-md">
+							<Button variant="primary" className="p-2 relative rounded-md" data-testid="auth-loading">
 								<Loader2 className="h-4 w-4 animate-spin" />
 							</Button>
 						) : isAuthenticated ? (
 							<>
 								<CartButton />
-								<Link to="/dashboard">
+								<Link to="/dashboard" data-testid="dashboard-link">
 									<Button
 										variant="primary"
 										className="p-2 relative rounded-md hover:[&>span]:text-secondary"
 										icon={<span className="i-dashboard w-6 h-6" />}
+										data-testid="dashboard-button"
 									/>
 								</Link>
 								<Profile compact />
@@ -129,6 +130,7 @@ export function Header() {
 								className="p-2 relative rounded-md hover:[&>span]:text-secondary"
 								icon={<span className="i-account w-6 h-6" />}
 								onClick={handleLoginClick}
+								data-testid="login-button"
 							/>
 						)}
 					</div>

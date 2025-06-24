@@ -197,6 +197,7 @@ export function ProfileSearch({ onSelect, placeholder = 'Search profiles or past
 											key={event.id}
 											className="flex items-center gap-2 p-2 hover:bg-gray-100 cursor-pointer rounded group"
 											onClick={() => handleSelect(npub)}
+											data-testid={`profile-search-result-${event.pubkey}`}
 										>
 											<UserWithAvatar pubkey={event.pubkey} size="sm" showBadge />
 											<span className="flex flex-col flex-1">

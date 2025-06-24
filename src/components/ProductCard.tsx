@@ -19,7 +19,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 	}
 
 	return (
-		<div className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col">
+		<div className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col" data-testid="product-card">
 			{/* Square aspect ratio container for image */}
 			<Link to={`/products/${product.id}`} className="relative aspect-square overflow-hidden border-b border-zinc-800 block">
 				{images && images.length > 0 ? (

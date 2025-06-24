@@ -86,6 +86,9 @@ h1.font-heading {
 h2.font-heading {
 	font-size: 2rem;
 }
+h3.font-heading {
+	font-size: 1.6rem;
+}
 
 /* Make all button text uppercase */
 button {
@@ -146,7 +149,8 @@ button {
 	--light-gray: #ebebeb;
 	--off-black: #0a0a0a;
 	--neo-purple: #ff3eb5;
-	--lighter-black: #1d1d1d;
+	--secondary-black: #131313;
+	--tertiary-black: #1d1d1d;
 	--neo-blue: #18b9fe;
 	--neo-gray: #f8f8f8;
 

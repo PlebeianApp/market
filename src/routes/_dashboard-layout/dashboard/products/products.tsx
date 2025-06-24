@@ -2,12 +2,14 @@ import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { authStore } from '@/lib/stores/auth'
 import { productFormActions } from '@/lib/stores/product'
-import { getProductTitle, getProductImages, productsByPubkeyQueryOptions } from '@/queries/products'
+import { getProductTitle, getProductImages, getProductId, productsByPubkeyQueryOptions } from '@/queries/products'
+import { useDeleteProductMutation } from '@/publish/products'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Trash } from 'lucide-react'
+import { useDashboardTitle } from '@/routes/_dashboard-layout'
 
 // Component to show basic product information
 function ProductBasicInfo({ product }: { product: any }) {
@@ -56,7 +58,7 @@ function ProductsOverviewComponent() {
 	const navigate = useNavigate()
 	const matchRoute = useMatchRoute()
 	const [expandedProduct, setExpandedProduct] = useState<string | null>(null)
-	
+	useDashboardTitle('Products')
 	// Check if we're on a child route (editing or creating a product)
 	const isOnChildRoute =
 		matchRoute({
@@ -77,6 +79,9 @@ function ProductsOverviewComponent() {
 		enabled: !!user?.pubkey && isAuthenticated,
 	})
 
+	// Delete mutation
+	const deleteMutation = useDeleteProductMutation()
+
 	const handleAddProductClick = () => {
 		productFormActions.reset()
 		productFormActions.setEditingProductId(null)
@@ -94,6 +99,13 @@ function ProductsOverviewComponent() {
 
 	const handleToggleExpanded = (productId: string) => {
 		setExpandedProduct(expandedProduct === productId ? null : productId)
+	const handleDeleteProductClick = async (product: any) => {
+		if (confirm(`Are you sure you want to delete "${getProductTitle(product)}"?`)) {
+			const productDTag = getProductId(product)
+			if (productDTag) {
+				deleteMutation.mutate(productDTag)
+			}
+		}
 	}
 
 	if (!isAuthenticated || !user) {
@@ -136,7 +148,7 @@ function ProductsOverviewComponent() {
 											<Collapsible open={isExpanded} onOpenChange={() => handleToggleExpanded(product.id)}>
 												<div className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors duration-150">
 													<div className="flex items-center gap-3">
-														<span className="i-product w-5 h-5" />
+														<span className="i-product w-5 h-5" />{' '}
 														<span className="text-sm font-medium text-gray-800">{getProductTitle(product)}</span>
 													</div>
 													<div className="flex items-center gap-2">
@@ -150,7 +162,20 @@ function ProductsOverviewComponent() {
 															aria-label={`Edit ${getProductTitle(product)}`}
 															className="text-gray-500 hover:text-gray-700"
 														>
-															<span className="i-edit w-5 h-5" />
+															<span className="i-edit w-5 h-5" />{' '}
+														</Button>
+														<Button
+															variant="ghost"
+															size="sm"
+															onClick={(e) => {
+																e.stopPropagation()
+																handleDeleteProductClick(product)
+															}}
+															aria-label={`Delete ${getProductTitle(product)}`}
+															className="text-gray-500 hover:text-red-600"
+															disabled={deleteMutation.isPending}
+														>
+															<Trash className="w-4 h-4" />{' '}
 														</Button>
 														<CollapsibleTrigger asChild>
 															<Button

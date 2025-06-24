@@ -12,12 +12,17 @@ import { useForm } from '@tanstack/react-form'
 import { useUpdateProfileMutation } from '@/publish/profiles'
 import { useQuery } from '@tanstack/react-query'
 import { profileByIdentifierQueryOptions } from '@/queries/profiles'
+import { useDashboardTitle } from '@/routes/_dashboard-layout'
+import { useBreakpoint } from '@/hooks/useBreakpoint'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/profile')({
 	component: ProfileComponent,
 })
 
 function ProfileComponent() {
+	useDashboardTitle('Profile')
+	const breakpoint = useBreakpoint()
+	const isMobile = breakpoint === 'sm' || breakpoint === 'md'
 	const ndk = ndkActions.getNDK()
 	const pubkey = ndk?.activeUser?.pubkey
 
@@ -103,8 +108,6 @@ function ProfileComponent() {
 
 	return (
 		<div className="space-y-6">
-			<h1 className="text-2xl font-bold">Profile</h1>
-
 			{isLoadingProfile ? (
 				<div className="flex items-center justify-center p-8">
 					<div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
@@ -311,7 +314,7 @@ function ProfileComponent() {
 							)}
 						</form.Field>
 
-						<Button type="submit" disabled={isLoading} className="w-full">
+						<Button type="submit" disabled={isLoading} className="w-full" data-testid="profile-save-button">
 							{isLoading ? 'Saving...' : 'Save'}
 						</Button>
 					</div>

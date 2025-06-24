@@ -29,10 +29,16 @@ import { Route as DashboardLayoutDashboardProductsShippingOptionsImport } from '
 import { Route as DashboardLayoutDashboardProductsReceivingPaymentsImport } from './routes/_dashboard-layout/dashboard/products/receiving-payments'
 import { Route as DashboardLayoutDashboardProductsProductsImport } from './routes/_dashboard-layout/dashboard/products/products'
 import { Route as DashboardLayoutDashboardProductsCollectionsImport } from './routes/_dashboard-layout/dashboard/products/collections'
+import { Route as DashboardLayoutDashboardOrdersOrderIdImport } from './routes/_dashboard-layout/dashboard/orders/$orderId'
 import { Route as DashboardLayoutDashboardAccountYourPurchasesImport } from './routes/_dashboard-layout/dashboard/account/your-purchases'
 import { Route as DashboardLayoutDashboardAccountProfileImport } from './routes/_dashboard-layout/dashboard/account/profile'
 import { Route as DashboardLayoutDashboardAccountNetworkImport } from './routes/_dashboard-layout/dashboard/account/network'
 import { Route as DashboardLayoutDashboardAccountMakingPaymentsImport } from './routes/_dashboard-layout/dashboard/account/making-payments'
+import { Route as DashboardLayoutDashboardSalesMessagesPubkeyImport } from './routes/_dashboard-layout/dashboard/sales/messages/$pubkey'
+import { Route as DashboardLayoutDashboardProductsProductsNewImport } from './routes/_dashboard-layout/dashboard/products/products/new'
+import { Route as DashboardLayoutDashboardProductsProductsProductIdImport } from './routes/_dashboard-layout/dashboard/products/products/$productId'
+import { Route as DashboardLayoutDashboardProductsCollectionsNewImport } from './routes/_dashboard-layout/dashboard/products/collections/new'
+import { Route as DashboardLayoutDashboardProductsCollectionsCollectionIdImport } from './routes/_dashboard-layout/dashboard/products/collections/$collectionId'
 
 // Create/Update Routes
 
@@ -143,6 +149,12 @@ const DashboardLayoutDashboardProductsCollectionsRoute = DashboardLayoutDashboar
 	getParentRoute: () => DashboardLayoutRoute,
 } as any)
 
+const DashboardLayoutDashboardOrdersOrderIdRoute = DashboardLayoutDashboardOrdersOrderIdImport.update({
+	id: '/dashboard/orders/$orderId',
+	path: '/dashboard/orders/$orderId',
+	getParentRoute: () => DashboardLayoutRoute,
+} as any)
+
 const DashboardLayoutDashboardAccountYourPurchasesRoute = DashboardLayoutDashboardAccountYourPurchasesImport.update({
 	id: '/dashboard/account/your-purchases',
 	path: '/dashboard/account/your-purchases',
@@ -165,6 +177,36 @@ const DashboardLayoutDashboardAccountMakingPaymentsRoute = DashboardLayoutDashbo
 	id: '/dashboard/account/making-payments',
 	path: '/dashboard/account/making-payments',
 	getParentRoute: () => DashboardLayoutRoute,
+} as any)
+
+const DashboardLayoutDashboardSalesMessagesPubkeyRoute = DashboardLayoutDashboardSalesMessagesPubkeyImport.update({
+	id: '/$pubkey',
+	path: '/$pubkey',
+	getParentRoute: () => DashboardLayoutDashboardSalesMessagesRoute,
+} as any)
+
+const DashboardLayoutDashboardProductsProductsNewRoute = DashboardLayoutDashboardProductsProductsNewImport.update({
+	id: '/new',
+	path: '/new',
+	getParentRoute: () => DashboardLayoutDashboardProductsProductsRoute,
+} as any)
+
+const DashboardLayoutDashboardProductsProductsProductIdRoute = DashboardLayoutDashboardProductsProductsProductIdImport.update({
+	id: '/$productId',
+	path: '/$productId',
+	getParentRoute: () => DashboardLayoutDashboardProductsProductsRoute,
+} as any)
+
+const DashboardLayoutDashboardProductsCollectionsNewRoute = DashboardLayoutDashboardProductsCollectionsNewImport.update({
+	id: '/new',
+	path: '/new',
+	getParentRoute: () => DashboardLayoutDashboardProductsCollectionsRoute,
+} as any)
+
+const DashboardLayoutDashboardProductsCollectionsCollectionIdRoute = DashboardLayoutDashboardProductsCollectionsCollectionIdImport.update({
+	id: '/$collectionId',
+	path: '/$collectionId',
+	getParentRoute: () => DashboardLayoutDashboardProductsCollectionsRoute,
 } as any)
 
 // Populate the FileRoutesByPath interface
@@ -276,6 +318,13 @@ declare module '@tanstack/react-router' {
 			preLoaderRoute: typeof DashboardLayoutDashboardAccountYourPurchasesImport
 			parentRoute: typeof DashboardLayoutImport
 		}
+		'/_dashboard-layout/dashboard/orders/$orderId': {
+			id: '/_dashboard-layout/dashboard/orders/$orderId'
+			path: '/dashboard/orders/$orderId'
+			fullPath: '/dashboard/orders/$orderId'
+			preLoaderRoute: typeof DashboardLayoutDashboardOrdersOrderIdImport
+			parentRoute: typeof DashboardLayoutImport
+		}
 		'/_dashboard-layout/dashboard/products/collections': {
 			id: '/_dashboard-layout/dashboard/products/collections'
 			path: '/dashboard/products/collections'
@@ -325,10 +374,85 @@ declare module '@tanstack/react-router' {
 			preLoaderRoute: typeof DashboardLayoutDashboardSalesSalesImport
 			parentRoute: typeof DashboardLayoutImport
 		}
+		'/_dashboard-layout/dashboard/products/collections/$collectionId': {
+			id: '/_dashboard-layout/dashboard/products/collections/$collectionId'
+			path: '/$collectionId'
+			fullPath: '/dashboard/products/collections/$collectionId'
+			preLoaderRoute: typeof DashboardLayoutDashboardProductsCollectionsCollectionIdImport
+			parentRoute: typeof DashboardLayoutDashboardProductsCollectionsImport
+		}
+		'/_dashboard-layout/dashboard/products/collections/new': {
+			id: '/_dashboard-layout/dashboard/products/collections/new'
+			path: '/new'
+			fullPath: '/dashboard/products/collections/new'
+			preLoaderRoute: typeof DashboardLayoutDashboardProductsCollectionsNewImport
+			parentRoute: typeof DashboardLayoutDashboardProductsCollectionsImport
+		}
+		'/_dashboard-layout/dashboard/products/products/$productId': {
+			id: '/_dashboard-layout/dashboard/products/products/$productId'
+			path: '/$productId'
+			fullPath: '/dashboard/products/products/$productId'
+			preLoaderRoute: typeof DashboardLayoutDashboardProductsProductsProductIdImport
+			parentRoute: typeof DashboardLayoutDashboardProductsProductsImport
+		}
+		'/_dashboard-layout/dashboard/products/products/new': {
+			id: '/_dashboard-layout/dashboard/products/products/new'
+			path: '/new'
+			fullPath: '/dashboard/products/products/new'
+			preLoaderRoute: typeof DashboardLayoutDashboardProductsProductsNewImport
+			parentRoute: typeof DashboardLayoutDashboardProductsProductsImport
+		}
+		'/_dashboard-layout/dashboard/sales/messages/$pubkey': {
+			id: '/_dashboard-layout/dashboard/sales/messages/$pubkey'
+			path: '/$pubkey'
+			fullPath: '/dashboard/sales/messages/$pubkey'
+			preLoaderRoute: typeof DashboardLayoutDashboardSalesMessagesPubkeyImport
+			parentRoute: typeof DashboardLayoutDashboardSalesMessagesImport
+		}
 	}
 }
 
 // Create and export the route tree
+
+interface DashboardLayoutDashboardProductsCollectionsRouteChildren {
+	DashboardLayoutDashboardProductsCollectionsCollectionIdRoute: typeof DashboardLayoutDashboardProductsCollectionsCollectionIdRoute
+	DashboardLayoutDashboardProductsCollectionsNewRoute: typeof DashboardLayoutDashboardProductsCollectionsNewRoute
+}
+
+const DashboardLayoutDashboardProductsCollectionsRouteChildren: DashboardLayoutDashboardProductsCollectionsRouteChildren = {
+	DashboardLayoutDashboardProductsCollectionsCollectionIdRoute: DashboardLayoutDashboardProductsCollectionsCollectionIdRoute,
+	DashboardLayoutDashboardProductsCollectionsNewRoute: DashboardLayoutDashboardProductsCollectionsNewRoute,
+}
+
+const DashboardLayoutDashboardProductsCollectionsRouteWithChildren = DashboardLayoutDashboardProductsCollectionsRoute._addFileChildren(
+	DashboardLayoutDashboardProductsCollectionsRouteChildren,
+)
+
+interface DashboardLayoutDashboardProductsProductsRouteChildren {
+	DashboardLayoutDashboardProductsProductsProductIdRoute: typeof DashboardLayoutDashboardProductsProductsProductIdRoute
+	DashboardLayoutDashboardProductsProductsNewRoute: typeof DashboardLayoutDashboardProductsProductsNewRoute
+}
+
+const DashboardLayoutDashboardProductsProductsRouteChildren: DashboardLayoutDashboardProductsProductsRouteChildren = {
+	DashboardLayoutDashboardProductsProductsProductIdRoute: DashboardLayoutDashboardProductsProductsProductIdRoute,
+	DashboardLayoutDashboardProductsProductsNewRoute: DashboardLayoutDashboardProductsProductsNewRoute,
+}
+
+const DashboardLayoutDashboardProductsProductsRouteWithChildren = DashboardLayoutDashboardProductsProductsRoute._addFileChildren(
+	DashboardLayoutDashboardProductsProductsRouteChildren,
+)
+
+interface DashboardLayoutDashboardSalesMessagesRouteChildren {
+	DashboardLayoutDashboardSalesMessagesPubkeyRoute: typeof DashboardLayoutDashboardSalesMessagesPubkeyRoute
+}
+
+const DashboardLayoutDashboardSalesMessagesRouteChildren: DashboardLayoutDashboardSalesMessagesRouteChildren = {
+	DashboardLayoutDashboardSalesMessagesPubkeyRoute: DashboardLayoutDashboardSalesMessagesPubkeyRoute,
+}
+
+const DashboardLayoutDashboardSalesMessagesRouteWithChildren = DashboardLayoutDashboardSalesMessagesRoute._addFileChildren(
+	DashboardLayoutDashboardSalesMessagesRouteChildren,
+)
 
 interface DashboardLayoutRouteChildren {
 	DashboardLayoutDashboardIndexRoute: typeof DashboardLayoutDashboardIndexRoute
@@ -336,12 +460,13 @@ interface DashboardLayoutRouteChildren {
 	DashboardLayoutDashboardAccountNetworkRoute: typeof DashboardLayoutDashboardAccountNetworkRoute
 	DashboardLayoutDashboardAccountProfileRoute: typeof DashboardLayoutDashboardAccountProfileRoute
 	DashboardLayoutDashboardAccountYourPurchasesRoute: typeof DashboardLayoutDashboardAccountYourPurchasesRoute
-	DashboardLayoutDashboardProductsCollectionsRoute: typeof DashboardLayoutDashboardProductsCollectionsRoute
-	DashboardLayoutDashboardProductsProductsRoute: typeof DashboardLayoutDashboardProductsProductsRoute
+	DashboardLayoutDashboardOrdersOrderIdRoute: typeof DashboardLayoutDashboardOrdersOrderIdRoute
+	DashboardLayoutDashboardProductsCollectionsRoute: typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
+	DashboardLayoutDashboardProductsProductsRoute: typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
 	DashboardLayoutDashboardProductsReceivingPaymentsRoute: typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
 	DashboardLayoutDashboardProductsShippingOptionsRoute: typeof DashboardLayoutDashboardProductsShippingOptionsRoute
 	DashboardLayoutDashboardSalesCircularEconomyRoute: typeof DashboardLayoutDashboardSalesCircularEconomyRoute
-	DashboardLayoutDashboardSalesMessagesRoute: typeof DashboardLayoutDashboardSalesMessagesRoute
+	DashboardLayoutDashboardSalesMessagesRoute: typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
 	DashboardLayoutDashboardSalesSalesRoute: typeof DashboardLayoutDashboardSalesSalesRoute
 }
 
@@ -351,12 +476,13 @@ const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
 	DashboardLayoutDashboardAccountNetworkRoute: DashboardLayoutDashboardAccountNetworkRoute,
 	DashboardLayoutDashboardAccountProfileRoute: DashboardLayoutDashboardAccountProfileRoute,
 	DashboardLayoutDashboardAccountYourPurchasesRoute: DashboardLayoutDashboardAccountYourPurchasesRoute,
-	DashboardLayoutDashboardProductsCollectionsRoute: DashboardLayoutDashboardProductsCollectionsRoute,
-	DashboardLayoutDashboardProductsProductsRoute: DashboardLayoutDashboardProductsProductsRoute,
+	DashboardLayoutDashboardOrdersOrderIdRoute: DashboardLayoutDashboardOrdersOrderIdRoute,
+	DashboardLayoutDashboardProductsCollectionsRoute: DashboardLayoutDashboardProductsCollectionsRouteWithChildren,
+	DashboardLayoutDashboardProductsProductsRoute: DashboardLayoutDashboardProductsProductsRouteWithChildren,
 	DashboardLayoutDashboardProductsReceivingPaymentsRoute: DashboardLayoutDashboardProductsReceivingPaymentsRoute,
 	DashboardLayoutDashboardProductsShippingOptionsRoute: DashboardLayoutDashboardProductsShippingOptionsRoute,
 	DashboardLayoutDashboardSalesCircularEconomyRoute: DashboardLayoutDashboardSalesCircularEconomyRoute,
-	DashboardLayoutDashboardSalesMessagesRoute: DashboardLayoutDashboardSalesMessagesRoute,
+	DashboardLayoutDashboardSalesMessagesRoute: DashboardLayoutDashboardSalesMessagesRouteWithChildren,
 	DashboardLayoutDashboardSalesSalesRoute: DashboardLayoutDashboardSalesSalesRoute,
 }
 
@@ -378,13 +504,19 @@ export interface FileRoutesByFullPath {
 	'/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
 	'/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
 	'/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
-	'/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRoute
-	'/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRoute
+	'/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
+	'/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
+	'/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
 	'/dashboard/products/receiving-payments': typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
 	'/dashboard/products/shipping-options': typeof DashboardLayoutDashboardProductsShippingOptionsRoute
 	'/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
-	'/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRoute
+	'/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
 	'/dashboard/sales/sales': typeof DashboardLayoutDashboardSalesSalesRoute
+	'/dashboard/products/collections/$collectionId': typeof DashboardLayoutDashboardProductsCollectionsCollectionIdRoute
+	'/dashboard/products/collections/new': typeof DashboardLayoutDashboardProductsCollectionsNewRoute
+	'/dashboard/products/products/$productId': typeof DashboardLayoutDashboardProductsProductsProductIdRoute
+	'/dashboard/products/products/new': typeof DashboardLayoutDashboardProductsProductsNewRoute
+	'/dashboard/sales/messages/$pubkey': typeof DashboardLayoutDashboardSalesMessagesPubkeyRoute
 }
 
 export interface FileRoutesByTo {
@@ -403,13 +535,19 @@ export interface FileRoutesByTo {
 	'/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
 	'/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
 	'/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
-	'/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRoute
-	'/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRoute
+	'/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
+	'/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
+	'/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
 	'/dashboard/products/receiving-payments': typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
 	'/dashboard/products/shipping-options': typeof DashboardLayoutDashboardProductsShippingOptionsRoute
 	'/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
-	'/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRoute
+	'/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
 	'/dashboard/sales/sales': typeof DashboardLayoutDashboardSalesSalesRoute
+	'/dashboard/products/collections/$collectionId': typeof DashboardLayoutDashboardProductsCollectionsCollectionIdRoute
+	'/dashboard/products/collections/new': typeof DashboardLayoutDashboardProductsCollectionsNewRoute
+	'/dashboard/products/products/$productId': typeof DashboardLayoutDashboardProductsProductsProductIdRoute
+	'/dashboard/products/products/new': typeof DashboardLayoutDashboardProductsProductsNewRoute
+	'/dashboard/sales/messages/$pubkey': typeof DashboardLayoutDashboardSalesMessagesPubkeyRoute
 }
 
 export interface FileRoutesById {
@@ -429,13 +567,19 @@ export interface FileRoutesById {
 	'/_dashboard-layout/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
 	'/_dashboard-layout/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
 	'/_dashboard-layout/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
-	'/_dashboard-layout/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRoute
-	'/_dashboard-layout/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRoute
+	'/_dashboard-layout/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
+	'/_dashboard-layout/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
+	'/_dashboard-layout/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
 	'/_dashboard-layout/dashboard/products/receiving-payments': typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
 	'/_dashboard-layout/dashboard/products/shipping-options': typeof DashboardLayoutDashboardProductsShippingOptionsRoute
 	'/_dashboard-layout/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
-	'/_dashboard-layout/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRoute
+	'/_dashboard-layout/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
 	'/_dashboard-layout/dashboard/sales/sales': typeof DashboardLayoutDashboardSalesSalesRoute
+	'/_dashboard-layout/dashboard/products/collections/$collectionId': typeof DashboardLayoutDashboardProductsCollectionsCollectionIdRoute
+	'/_dashboard-layout/dashboard/products/collections/new': typeof DashboardLayoutDashboardProductsCollectionsNewRoute
+	'/_dashboard-layout/dashboard/products/products/$productId': typeof DashboardLayoutDashboardProductsProductsProductIdRoute
+	'/_dashboard-layout/dashboard/products/products/new': typeof DashboardLayoutDashboardProductsProductsNewRoute
+	'/_dashboard-layout/dashboard/sales/messages/$pubkey': typeof DashboardLayoutDashboardSalesMessagesPubkeyRoute
 }
 
 export interface FileRouteTypes {
@@ -456,6 +600,7 @@ export interface FileRouteTypes {
 		| '/dashboard/account/network'
 		| '/dashboard/account/profile'
 		| '/dashboard/account/your-purchases'
+		| '/dashboard/orders/$orderId'
 		| '/dashboard/products/collections'
 		| '/dashboard/products/products'
 		| '/dashboard/products/receiving-payments'
@@ -463,6 +608,11 @@ export interface FileRouteTypes {
 		| '/dashboard/sales/circular-economy'
 		| '/dashboard/sales/messages'
 		| '/dashboard/sales/sales'
+		| '/dashboard/products/collections/$collectionId'
+		| '/dashboard/products/collections/new'
+		| '/dashboard/products/products/$productId'
+		| '/dashboard/products/products/new'
+		| '/dashboard/sales/messages/$pubkey'
 	fileRoutesByTo: FileRoutesByTo
 	to:
 		| '/'
@@ -480,6 +630,7 @@ export interface FileRouteTypes {
 		| '/dashboard/account/network'
 		| '/dashboard/account/profile'
 		| '/dashboard/account/your-purchases'
+		| '/dashboard/orders/$orderId'
 		| '/dashboard/products/collections'
 		| '/dashboard/products/products'
 		| '/dashboard/products/receiving-payments'
@@ -487,6 +638,11 @@ export interface FileRouteTypes {
 		| '/dashboard/sales/circular-economy'
 		| '/dashboard/sales/messages'
 		| '/dashboard/sales/sales'
+		| '/dashboard/products/collections/$collectionId'
+		| '/dashboard/products/collections/new'
+		| '/dashboard/products/products/$productId'
+		| '/dashboard/products/products/new'
+		| '/dashboard/sales/messages/$pubkey'
 	id:
 		| '__root__'
 		| '/'
@@ -504,6 +660,7 @@ export interface FileRouteTypes {
 		| '/_dashboard-layout/dashboard/account/network'
 		| '/_dashboard-layout/dashboard/account/profile'
 		| '/_dashboard-layout/dashboard/account/your-purchases'
+		| '/_dashboard-layout/dashboard/orders/$orderId'
 		| '/_dashboard-layout/dashboard/products/collections'
 		| '/_dashboard-layout/dashboard/products/products'
 		| '/_dashboard-layout/dashboard/products/receiving-payments'
@@ -511,6 +668,11 @@ export interface FileRouteTypes {
 		| '/_dashboard-layout/dashboard/sales/circular-economy'
 		| '/_dashboard-layout/dashboard/sales/messages'
 		| '/_dashboard-layout/dashboard/sales/sales'
+		| '/_dashboard-layout/dashboard/products/collections/$collectionId'
+		| '/_dashboard-layout/dashboard/products/collections/new'
+		| '/_dashboard-layout/dashboard/products/products/$productId'
+		| '/_dashboard-layout/dashboard/products/products/new'
+		| '/_dashboard-layout/dashboard/sales/messages/$pubkey'
 	fileRoutesById: FileRoutesById
 }
 
@@ -571,6 +733,7 @@ export const routeTree = rootRoute._addFileChildren(rootRouteChildren)._addFileT
         "/_dashboard-layout/dashboard/account/network",
         "/_dashboard-layout/dashboard/account/profile",
         "/_dashboard-layout/dashboard/account/your-purchases",
+        "/_dashboard-layout/dashboard/orders/$orderId",
         "/_dashboard-layout/dashboard/products/collections",
         "/_dashboard-layout/dashboard/products/products",
         "/_dashboard-layout/dashboard/products/receiving-payments",
@@ -624,13 +787,25 @@ export const routeTree = rootRoute._addFileChildren(rootRouteChildren)._addFileT
       "filePath": "_dashboard-layout/dashboard/account/your-purchases.tsx",
       "parent": "/_dashboard-layout"
     },
+    "/_dashboard-layout/dashboard/orders/$orderId": {
+      "filePath": "_dashboard-layout/dashboard/orders/$orderId.tsx",
+      "parent": "/_dashboard-layout"
+    },
     "/_dashboard-layout/dashboard/products/collections": {
       "filePath": "_dashboard-layout/dashboard/products/collections.tsx",
-      "parent": "/_dashboard-layout"
+      "parent": "/_dashboard-layout",
+      "children": [
+        "/_dashboard-layout/dashboard/products/collections/$collectionId",
+        "/_dashboard-layout/dashboard/products/collections/new"
+      ]
     },
     "/_dashboard-layout/dashboard/products/products": {
       "filePath": "_dashboard-layout/dashboard/products/products.tsx",
-      "parent": "/_dashboard-layout"
+      "parent": "/_dashboard-layout",
+      "children": [
+        "/_dashboard-layout/dashboard/products/products/$productId",
+        "/_dashboard-layout/dashboard/products/products/new"
+      ]
     },
     "/_dashboard-layout/dashboard/products/receiving-payments": {
       "filePath": "_dashboard-layout/dashboard/products/receiving-payments.tsx",
@@ -646,11 +821,34 @@ export const routeTree = rootRoute._addFileChildren(rootRouteChildren)._addFileT
     },
     "/_dashboard-layout/dashboard/sales/messages": {
       "filePath": "_dashboard-layout/dashboard/sales/messages.tsx",
-      "parent": "/_dashboard-layout"
+      "parent": "/_dashboard-layout",
+      "children": [
+        "/_dashboard-layout/dashboard/sales/messages/$pubkey"
+      ]
     },
     "/_dashboard-layout/dashboard/sales/sales": {
       "filePath": "_dashboard-layout/dashboard/sales/sales.tsx",
       "parent": "/_dashboard-layout"
+    },
+    "/_dashboard-layout/dashboard/products/collections/$collectionId": {
+      "filePath": "_dashboard-layout/dashboard/products/collections/$collectionId.tsx",
+      "parent": "/_dashboard-layout/dashboard/products/collections"
+    },
+    "/_dashboard-layout/dashboard/products/collections/new": {
+      "filePath": "_dashboard-layout/dashboard/products/collections/new.tsx",
+      "parent": "/_dashboard-layout/dashboard/products/collections"
+    },
+    "/_dashboard-layout/dashboard/products/products/$productId": {
+      "filePath": "_dashboard-layout/dashboard/products/products/$productId.tsx",
+      "parent": "/_dashboard-layout/dashboard/products/products"
+    },
+    "/_dashboard-layout/dashboard/products/products/new": {
+      "filePath": "_dashboard-layout/dashboard/products/products/new.tsx",
+      "parent": "/_dashboard-layout/dashboard/products/products"
+    },
+    "/_dashboard-layout/dashboard/sales/messages/$pubkey": {
+      "filePath": "_dashboard-layout/dashboard/sales/messages/$pubkey.tsx",
+      "parent": "/_dashboard-layout/dashboard/sales/messages"
     }
   }
 }
