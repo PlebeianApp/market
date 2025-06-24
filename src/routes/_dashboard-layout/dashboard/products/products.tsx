@@ -99,6 +99,8 @@ function ProductsOverviewComponent() {
 
 	const handleToggleExpanded = (productId: string) => {
 		setExpandedProduct(expandedProduct === productId ? null : productId)
+	}
+
 	const handleDeleteProductClick = async (product: any) => {
 		if (confirm(`Are you sure you want to delete "${getProductTitle(product)}"?`)) {
 			const productDTag = getProductId(product)
