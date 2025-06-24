@@ -30,12 +30,12 @@ export const Route = createFileRoute('/')({
 
 function Index() {
 	const { isAuthenticated } = useStore(authStore)
-	
+
 	// Use the market image for homepage background
 	const marketBackgroundImageUrl = '/images/market-background.jpg'
 	const marketHeroClassName = 'hero-bg-market-homepage'
 	useHeroBackground(marketBackgroundImageUrl, marketHeroClassName)
-	
+
 	const handleStartSelling = () => {
 		if (isAuthenticated) {
 			uiActions.openDrawer('createProduct')
@@ -58,7 +58,7 @@ function Index() {
 						<div className="flex items-center justify-center h-24 lg:h-32 px-6">
 							<h1 className="text-4xl lg:text-5xl font-theylive transition-opacity duration-500">Buy & Sell Stuff with sats</h1>
 						</div>
-						
+
 						<div className="flex flex-col gap-6">
 							<Button variant="focus" size="lg" onClick={handleStartSelling}>
 								<span className="flex items-center gap-2">
