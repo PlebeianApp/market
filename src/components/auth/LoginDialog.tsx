@@ -32,25 +32,13 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 				</DialogHeader>
 				<Tabs defaultValue="extension" className="w-full" value={activeTab} onValueChange={setActiveTab}>
 					<TabsList className="grid w-full grid-cols-3">
-						<TabsTrigger
-							value="extension"
-							className="px-4 py-2 text-sm font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
-							data-testid="extension-tab"
-						>
+						<TabsTrigger value="extension" data-testid="extension-tab">
 							Extension
 						</TabsTrigger>
-						<TabsTrigger
-							value="connect"
-							className="px-4 py-2 text-sm font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
-							data-testid="connect-tab"
-						>
+						<TabsTrigger value="connect" data-testid="connect-tab">
 							Nostr Connect
 						</TabsTrigger>
-						<TabsTrigger
-							value="private-key"
-							className="px-4 py-2 text-sm font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
-							data-testid="private-key-tab"
-						>
+						<TabsTrigger value="private-key" data-testid="private-key-tab">
 							Private Key
 						</TabsTrigger>
 					</TabsList>
