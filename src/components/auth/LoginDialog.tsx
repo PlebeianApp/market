@@ -25,7 +25,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-[425px]">
+			<DialogContent className="sm:max-w-[425px]" data-testid="login-dialog">
 				<DialogHeader>
 					<DialogTitle>Login</DialogTitle>
 					<DialogDescription>Choose your preferred login method below.</DialogDescription>
@@ -35,18 +35,21 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 						<TabsTrigger
 							value="extension"
 							className="px-4 py-2 text-sm font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+							data-testid="extension-tab"
 						>
 							Extension
 						</TabsTrigger>
 						<TabsTrigger
 							value="connect"
 							className="px-4 py-2 text-sm font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+							data-testid="connect-tab"
 						>
-							N-Connect
+							Nostr Connect
 						</TabsTrigger>
 						<TabsTrigger
 							value="private-key"
 							className="px-4 py-2 text-sm font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+							data-testid="private-key-tab"
 						>
 							Private Key
 						</TabsTrigger>
@@ -88,6 +91,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 										.finally(() => onOpenChange(false))
 								}
 								className="w-full"
+								data-testid="connect-extension-button"
 							>
 								Connect to Extension
 							</Button>
@@ -103,6 +107,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 								setEnableAutoLogin(checked === true)
 								localStorage.setItem(NOSTR_AUTO_LOGIN, checked === true ? 'true' : 'false')
 							}}
+							data-testid="auto-login-checkbox"
 						/>
 						Auto-login
 					</Label>
