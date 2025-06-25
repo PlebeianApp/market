@@ -211,7 +211,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 		<Collapsible open={isOpen} onOpenChange={onOpenChange}>
 			<CollapsibleTrigger asChild>
 				<div
-					className="flex w-full justify-between items-center gap-2 p-4 border rounded-md bg-white hover:bg-gray-50 cursor-pointer"
+					className="flex flex-col sm:flex-row w-full justify-between items-start sm:items-center gap-2 p-4 border rounded-md bg-white hover:bg-gray-50 cursor-pointer"
 					data-testid={isEditing ? `shipping-option-item-${getShippingId(shippingOption)}` : 'add-shipping-option-button'}
 				>
 					{isEditing ? (
@@ -219,9 +219,12 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 							<ServiceIcon service={formData.service} />
 							<div className="min-w-0 flex-1">
 								<div className="font-medium truncate">{formData.title}</div>
-								<div className="text-sm text-muted-foreground">
-									{formData.price} {formData.currency} • {formData.countries.map(getCountryName).join(', ')} •{' '}
-									{getServiceLabel(formData.service)}
+								<div className="text-sm text-muted-foreground flex flex-wrap gap-x-2">
+									<span>{formData.price} {formData.currency}</span>
+									<span className="hidden sm:inline">•</span>
+									<span>{formData.countries.map(getCountryName).join(', ')}</span>
+									<span className="hidden sm:inline">•</span>
+									<span>{getServiceLabel(formData.service)}</span>
 								</div>
 							</div>
 						</div>
@@ -233,12 +236,10 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 					)}
 
 					{isEditing && (
-						<div className="flex items-center gap-2">
+						<div className="flex items-center gap-2 mt-2 sm:mt-0">
 							<GlobeIcon className="w-5 h-5 text-muted-foreground" />
 						</div>
 					)}
-
-					<ChevronDownIcon className="w-4 h-4" />
 				</div>
 			</CollapsibleTrigger>
 
@@ -775,29 +776,27 @@ function ShippingOptionsComponent() {
 
 	return (
 		<div className="space-y-6">
-			<div className="flex justify-between items-center">
+			<div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
 				<div>
 					<p className="text-muted-foreground">Manage your shipping options for customers</p>
 				</div>
-				<div className="flex items-center gap-4">
-					<div className="flex items-center gap-2">
-						<Label htmlFor="service-filter" className="text-sm font-medium">
-							Filter:
-						</Label>
-						<Select value={serviceFilter} onValueChange={setServiceFilter}>
-							<SelectTrigger className="w-[180px]">
-								<SelectValue placeholder="All services" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">All services</SelectItem>
-								{SERVICE_TYPES.map((service) => (
-									<SelectItem key={service.value} value={service.value}>
-										{service.label}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</div>
+				<div className="flex items-center gap-2">
+					<Label htmlFor="service-filter" className="text-sm font-medium hidden sm:block">
+						Filter:
+					</Label>
+					<Select value={serviceFilter} onValueChange={setServiceFilter}>
+						<SelectTrigger className="w-full sm:w-[180px]">
+							<SelectValue placeholder="All services" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="all">All services</SelectItem>
+							{SERVICE_TYPES.map((service) => (
+								<SelectItem key={service.value} value={service.value}>
+									{service.label}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
 				</div>
 			</div>
 

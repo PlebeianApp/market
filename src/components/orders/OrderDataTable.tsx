@@ -57,7 +57,7 @@ export function OrderDataTable<TData>({
 		<div className="space-y-4">
 			<div className="flex items-center justify-between py-4">
 				{showStatusFilter && onStatusFilterChange && (
-					<div className="w-full">
+					<div className="w-full max-w-xs">
 						<Select defaultValue="any" value={statusFilter} onValueChange={onStatusFilterChange}>
 							<SelectTrigger>
 								<SelectValue placeholder="Any Status" />
@@ -89,7 +89,24 @@ export function OrderDataTable<TData>({
 				<div className="space-y-2">
 					{table.getRowModel().rows.map((row) => (
 						<div key={row.id} className="rounded-md border border-gray-200 hover:bg-gray-50" data-state={row.getIsSelected() && 'selected'}>
-							<div className="grid grid-cols-[auto_auto_auto_auto_auto_auto] gap-4 p-4 items-center">
+							{/* Mobile Card Layout */}
+							<div className="block lg:hidden p-4 space-y-3">
+								{row.getVisibleCells().map((cell, index) => (
+									<div key={cell.id} className="flex justify-between items-start">
+										<span className="text-sm font-medium text-gray-600 capitalize min-w-0 flex-shrink-0 mr-3">
+											{typeof cell.column.columnDef.header === 'string' 
+												? cell.column.columnDef.header 
+												: cell.column.id.replace(/([A-Z])/g, ' $1').trim()}:
+										</span>
+										<div className="text-sm text-right min-w-0 flex-1">
+											{flexRender(cell.column.columnDef.cell, cell.getContext())}
+										</div>
+									</div>
+								))}
+							</div>
+							
+							{/* Desktop Grid Layout */}
+							<div className="hidden lg:grid lg:grid-cols-5 gap-4 p-4 items-center">
 								{row.getVisibleCells().map((cell) => (
 									<div key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
 								))}
@@ -101,16 +118,18 @@ export function OrderDataTable<TData>({
 				<div className="rounded-md border border-gray-200 p-6 text-center">No orders found.</div>
 			)}
 
-			<div className="flex items-center justify-end space-x-2 py-4">
+			<div className="flex items-center justify-between space-x-2 py-4">
 				<div className="flex-1 text-sm text-muted-foreground">
 					Showing {table.getRowModel().rows.length} of {data.length} orders
 				</div>
-				<Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
-					Previous
-				</Button>
-				<Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
-					Next
-				</Button>
+				<div className="flex space-x-2">
+					<Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+						Previous
+					</Button>
+					<Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+						Next
+					</Button>
+				</div>
 			</div>
 		</div>
 	)
