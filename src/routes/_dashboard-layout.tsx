@@ -192,26 +192,28 @@ function DashboardLayout() {
 
 					{/* Main content - responsive behavior */}
 					{(!showSidebar || !isMobile) && (
-						<ScrollArea className="w-full p-4 lg:flex-1 lg:p-8 lg:border lg:border-black lg:rounded lg:bg-white">
-							<div className="p-4 bg-white border border-black rounded lg:p-0 lg:bg-transparent lg:border-0 lg:rounded-none">
-								{/* Desktop back button - shows above the title */}
-								{needsBackButton && (
-									<div className="mb-4">
-										<button
-											onClick={handleBackToParent}
-											className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
-											aria-label={`Back to ${backButtonInfo?.parentTitle}`}
-										>
-											<span className="i-back w-5 h-5" />
-											<span className="text-sm font-medium">Back to {backButtonInfo?.parentTitle}</span>
-										</button>
-									</div>
-								)}
-								
-								{!isMobile && <h1 className="text-[1.6rem] font-bold">{dashboardTitle}</h1>}
-								<Outlet />
-							</div>
-						</ScrollArea>
+						<div className="w-full p-4 lg:flex-1 lg:p-8 lg:border lg:border-black lg:rounded lg:bg-white flex flex-col">
+							{/* Desktop back button - fixed to top of container */}
+							{needsBackButton && (
+								<div className="sticky top-0 z-10 bg-white border-b border-gray-200 pb-4 mb-4 -mx-8 px-8 -mt-8 pt-8 flex-shrink-0">
+									<button
+										onClick={handleBackToParent}
+										className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
+										aria-label={`Back to ${backButtonInfo?.parentTitle}`}
+									>
+										<span className="i-back w-5 h-5" />
+										<span className="text-sm font-medium">Back to {backButtonInfo?.parentTitle}</span>
+									</button>
+								</div>
+							)}
+							
+							<ScrollArea className="flex-1 min-h-0">
+								<div className="p-4 bg-white border border-black rounded lg:p-0 lg:bg-transparent lg:border-0 lg:rounded-none">
+									{!isMobile && <h1 className="text-[1.6rem] font-bold">{dashboardTitle}</h1>}
+									<Outlet />
+								</div>
+							</ScrollArea>
+						</div>
 					)}
 				</div>
 			</div>
