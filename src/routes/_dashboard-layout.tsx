@@ -163,28 +163,37 @@ function DashboardLayout() {
 	return (
 		<div className="lg:block">
 			{/* Header - responsive for mobile/desktop */}
-			<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center lg:justify-start relative">
-				{/* Mobile back button - only visible on small screens when not showing sidebar */}
-				{!showSidebar && breakpoint !== 'xl' && (
-					<button
-						onClick={handleBackToSidebar}
-						className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 top-1/2 -translate-y-1/2 w-12 h-12 xl:hidden"
-						aria-label="Back to sidebar"
-					>
-						<span className="i-back w-6 h-6" />
-					</button>
-				)}
+			<div className="lg:hidden sticky top-[8.5rem] z-10">
+				<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center relative">
+					{/* Mobile back button - only visible on small screens when not showing sidebar */}
+					{!showSidebar && breakpoint !== 'xl' && (
+						<button
+							onClick={handleBackToSidebar}
+							className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 top-1/2 -translate-y-1/2 w-12 h-12"
+							aria-label="Back to sidebar"
+						>
+							<span className="i-back w-6 h-6" />
+						</button>
+					)}
 
-				{/* Title */}
-				<span className="w-full lg:w-auto text-3xl lg:text-3xl">{showSidebar || !isMobile ? 'Admin Area' : dashboardTitle}</span>
+					{/* Title */}
+					<span className="w-full lg:w-auto text-3xl">{showSidebar || !isMobile ? 'Admin Area' : dashboardTitle}</span>
 
-				{/* Mobile emoji - only visible on small screens when not showing sidebar */}
-				{!showSidebar && emoji && breakpoint !== 'xl' && (
-					<span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xl select-none w-12 h-12 flex items-center justify-center xl:hidden">
-						{emoji}
-					</span>
-				)}
-			</h1>
+					{/* Mobile emoji - only visible on small screens when not showing sidebar */}
+					{!showSidebar && emoji && breakpoint !== 'xl' && (
+						<span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xl select-none w-12 h-12 flex items-center justify-center">
+							{emoji}
+						</span>
+					)}
+				</h1>
+			</div>
+
+			<div className="hidden lg:block">
+				<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center lg:justify-start relative">
+					{/* Title */}
+					<span className="w-full lg:w-auto text-3xl lg:text-3xl">{'Admin Area'}</span>
+				</h1>
+			</div>
 
 			{/* Main container - responsive layout */}
 			<div className="lg:flex lg:m-6 lg:gap-6 lg:container lg:max-h-[77vh] lg:overflow-auto">

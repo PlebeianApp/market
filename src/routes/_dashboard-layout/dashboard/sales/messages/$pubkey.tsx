@@ -68,14 +68,19 @@ function ConversationDetailComponent() {
 
 
 	return (
-		<div className="flex flex-col h-[calc(100vh-var(--header-height)-var(--page-padding)-2px)] bg-card border rounded-md shadow-sm">
-			{/* Header */}
-			<div className="flex items-center p-3 border-b sticky top-0 bg-card z-10">
+		<div className="flex flex-col h-[calc(100vh-8rem)] lg:h-full lg:bg-card lg:border lg:rounded-md lg:shadow-sm">
+			{/* Chat Header - Fixed at top on mobile, integrated with layout */}
+			<div className="flex-shrink-0 p-4 bg-white border-b border-gray-200 lg:hidden sticky top-0 z-10">
+				{otherUserPubkey && <UserWithAvatar pubkey={otherUserPubkey} showBadge={true} size="md" />}
+			</div>
+
+			{/* Desktop Header - Only visible on desktop */}
+			<div className="hidden lg:flex items-center p-3 border-b bg-card flex-shrink-0">
 				{otherUserPubkey && <UserWithAvatar pubkey={otherUserPubkey} showBadge={true} size="md" />}
 			</div>
 
 			{/* Messages Area */}
-			<div className="flex-grow overflow-y-auto p-4 space-y-4">
+			<div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
 				{isLoading && (
 					<div className="flex justify-center items-center h-full">
 						<Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -101,8 +106,12 @@ function ConversationDetailComponent() {
 				<div ref={messagesEndRef} />
 			</div>
 
-			{/* Input Area */}
-			{otherUserPubkey && <MessageInput onSendMessage={handleSendMessage} isSending={isSending} />}
+			{/* Input Area - Fixed at bottom */}
+			{otherUserPubkey && (
+				<div className="flex-shrink-0 border-t bg-white sticky bottom-0">
+					<MessageInput onSendMessage={handleSendMessage} isSending={isSending} />
+				</div>
+			)}
 		</div>
 	)
 }
