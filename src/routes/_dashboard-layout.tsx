@@ -39,6 +39,16 @@ const backButtonRoutes: Record<string, { parentPath: string; parentTitle: string
 		parentPath: '/dashboard/products/collections',
 		parentTitle: '🗂️ Collections',
 	},
+	// Dynamic route for order details
+	'/dashboard/orders/': {
+		parentPath: '/dashboard/sales/sales',
+		parentTitle: '💰 Sales',
+	},
+	// Dynamic route for message details
+	'/dashboard/sales/messages/': {
+		parentPath: '/dashboard/sales/messages',
+		parentTitle: '✉️ Messages',
+	},
 }
 
 // Helper to check if current route needs a back button
@@ -56,6 +66,16 @@ function getBackButtonInfo(currentPath: string): { parentPath: string; parentTit
 	// Check for collection edit pages (pattern: /dashboard/products/collections/[collectionId])
 	if (currentPath.startsWith('/dashboard/products/collections/') && currentPath !== '/dashboard/products/collections') {
 		return backButtonRoutes['/dashboard/products/collections/']
+	}
+	
+	// Check for order detail pages (pattern: /dashboard/orders/[orderId])
+	if (currentPath.startsWith('/dashboard/orders/') && currentPath !== '/dashboard/orders') {
+		return backButtonRoutes['/dashboard/orders/']
+	}
+	
+	// Check for message detail pages (pattern: /dashboard/sales/messages/[pubkey])
+	if (currentPath.startsWith('/dashboard/sales/messages/') && currentPath !== '/dashboard/sales/messages') {
+		return backButtonRoutes['/dashboard/sales/messages/']
 	}
 	
 	return null
@@ -115,6 +135,14 @@ function DashboardLayout() {
 			// Check if we're on a collection creation/edit page and navigate accordingly
 			else if (location.pathname.startsWith('/dashboard/products/collections/')) {
 				navigate({ to: '/dashboard/products/collections' })
+			}
+			// Check if we're on an order detail page and navigate accordingly
+			else if (location.pathname.startsWith('/dashboard/orders/')) {
+				navigate({ to: '/dashboard/sales/sales' })
+			}
+			// Check if we're on a message detail page and navigate accordingly
+			else if (location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages') {
+				navigate({ to: '/dashboard/sales/messages' })
 			}
 			else {
 				// Default behavior - back to dashboard

@@ -19,9 +19,8 @@ import {
 import { productsByPubkeyQueryOptions } from '@/queries/products'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQueries } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router' // Removed useParams
 import { useStore } from '@tanstack/react-store'
-import { ArrowLeft, CreditCard, MessageSquare, Package, Receipt, Truck } from 'lucide-react'
+import { CreditCard, MessageSquare, Package, Receipt, Truck } from 'lucide-react'
 import { useMemo } from 'react'
 
 interface OrderDetailComponentProps {
@@ -31,7 +30,6 @@ interface OrderDetailComponentProps {
 export function OrderDetailComponent({ orderId }: OrderDetailComponentProps) {
 	// Accept orderId as a prop
 	const { user } = useStore(authStore)
-	const navigate = useNavigate()
 	const { data: orderData, isLoading, error } = useOrderById(orderId)
 
 	// ✅ Ensure all hooks are always run
@@ -83,34 +81,20 @@ export function OrderDetailComponent({ orderId }: OrderDetailComponentProps) {
 		})
 	}, [productReferences, allProducts])
 
-	const goBack = () => {
-		navigate({ to: '/dashboard/sales/messages/' })
-	}
+
 
 	return (
 		<div className="space-y-6">
 			{isLoading ? (
 				<div className="space-y-6">
-					<div className="flex items-center gap-3">
-						<Button variant="ghost" size="sm" onClick={goBack}>
-							<ArrowLeft className="w-4 h-4" />
-						</Button>
-						<h1 className="text-2xl font-bold">Loading Order...</h1>
-					</div>
 					<div className="bg-white rounded-md shadow-sm p-6">
 						<p className="text-gray-500">Loading order details...</p>
 					</div>
 				</div>
 			) : error || !orderData ? (
 				<div className="space-y-6">
-					<div className="flex items-center gap-3">
-						<Button variant="ghost" size="sm" onClick={goBack}>
-							<ArrowLeft className="w-4 h-4" />
-						</Button>
-						<h1 className="text-2xl font-bold">Order Not Found</h1>
-					</div>
 					<div className="bg-white rounded-md shadow-sm p-6">
-						<p className="text-gray-600">The order you\'re looking for doesn\'t exist or you don\'t have access to it.</p>
+						<p className="text-gray-600">The order you're looking for doesn't exist or you don't have access to it.</p>
 					</div>
 				</div>
 			) : (
@@ -233,12 +217,6 @@ export function OrderDetailComponent({ orderId }: OrderDetailComponentProps) {
 
 					return (
 						<>
-							<div className="flex items-center gap-3">
-								<Button variant="ghost" size="sm" onClick={goBack}>
-									<ArrowLeft className="w-4 h-4" />
-								</Button>
-							</div>
-
 							<Card>
 								<CardHeader>
 									<CardTitle>Order #{currentOrderId?.substring(0, 8)}...</CardTitle>
