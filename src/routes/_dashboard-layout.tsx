@@ -193,9 +193,9 @@ function DashboardLayout() {
 					{/* Main content - responsive behavior */}
 					{(!showSidebar || !isMobile) && (
 						<div className="w-full p-4 lg:flex-1 lg:p-8 lg:border lg:border-black lg:rounded lg:bg-white flex flex-col">
-							{/* Desktop back button - fixed to top of container */}
+							{/* Desktop back button and title - fixed to top of container */}
 							{needsBackButton && (
-								<div className="sticky top-0 z-10 bg-white border-b border-gray-200 pb-4 mb-4 -mx-8 px-8 -mt-8 pt-8 flex-shrink-0">
+								<div className="sticky top-0 z-10 bg-white border-b border-gray-200 pb-4 mb-4 -mx-8 px-8 -mt-8 pt-8 flex-shrink-0 flex items-center relative">
 									<button
 										onClick={handleBackToParent}
 										className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
@@ -204,12 +204,19 @@ function DashboardLayout() {
 										<span className="i-back w-5 h-5" />
 										<span className="text-sm font-medium">Back to {backButtonInfo?.parentTitle}</span>
 									</button>
+									
+									{!isMobile && (
+										<h1 className="absolute left-1/2 -translate-x-1/2 text-[1.6rem] font-bold">
+											{dashboardTitle}
+										</h1>
+									)}
 								</div>
 							)}
 							
 							<ScrollArea className="flex-1 min-h-0">
 								<div className="p-4 bg-white border border-black rounded lg:p-0 lg:bg-transparent lg:border-0 lg:rounded-none">
-									{!isMobile && <h1 className="text-[1.6rem] font-bold">{dashboardTitle}</h1>}
+									{/* Only show title here if there's no back button */}
+									{!isMobile && !needsBackButton && <h1 className="text-[1.6rem] font-bold">{dashboardTitle}</h1>}
 									<Outlet />
 								</div>
 							</ScrollArea>
