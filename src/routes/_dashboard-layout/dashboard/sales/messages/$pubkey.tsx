@@ -7,9 +7,9 @@ import { sendChatMessage, useConversationMessages } from '@/queries/messages'
 import { messageKeys } from '@/queries/queryKeyFactory'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { ArrowLeft, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/messages/$pubkey')({
@@ -19,7 +19,6 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/message
 function ConversationDetailComponent() {
 	const { pubkey: otherUserPubkey } = Route.useParams()
 	const { user: currentUser } = useStore(authStore)
-	const navigate = useNavigate()
 	const queryClient = useQueryClient()
 	const messagesEndRef = useRef<HTMLDivElement | null>(null)
 	const [isSending, setIsSending] = useState(false)
@@ -66,17 +65,12 @@ function ConversationDetailComponent() {
 		await sendMessageMutation.mutateAsync(content)
 	}
 
-	const handleGoBack = () => {
-		navigate({ to: '/dashboard/sales/messages/' })
-	}
+
 
 	return (
 		<div className="flex flex-col h-[calc(100vh-var(--header-height)-var(--page-padding)-2px)] bg-card border rounded-md shadow-sm">
 			{/* Header */}
 			<div className="flex items-center p-3 border-b sticky top-0 bg-card z-10">
-				<Button variant="ghost" size="icon" onClick={handleGoBack} className="mr-2">
-					<ArrowLeft className="w-5 h-5" />
-				</Button>
 				{otherUserPubkey && <UserWithAvatar pubkey={otherUserPubkey} showBadge={true} size="md" />}
 			</div>
 

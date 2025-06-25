@@ -1,5 +1,4 @@
 import { ConversationListItem, type ConversationItemData } from '@/components/messages/ConversationListItem'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { authStore } from '@/lib/stores/auth'
 import { useConversationsList } from '@/queries/messages'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
@@ -36,24 +35,16 @@ function MessagesParentComponent() {
 
 	// Otherwise, render the list of conversations
 	return (
-		<div className="flex flex-col border bg-card rounded-md shadow-sm p-1 h-[calc(100vh-var(--header-height)-var(--page-padding)-2px)]">
-			<div className="flex items-center justify-between p-3 pb-2 border-b mb-2">
-				<h1 className="text-xl font-bold flex items-center">
-					<MessageSquareText className="w-6 h-6 mr-2" />
-					Chats
-				</h1>
-				{/* Placeholder for New Message button or actions */}
-			</div>
-
+		<div className="space-y-4">
 			{isLoading && (
-				<div className="flex flex-col justify-center items-center flex-grow">
+				<div className="flex flex-col justify-center items-center py-12">
 					<Loader2 className="w-8 h-8 animate-spin text-primary" />
 					<p className="ml-2 mt-2">Loading conversations...</p>
 				</div>
 			)}
-			{error && <p className="text-destructive p-4 text-center flex-grow">Error loading conversations: {error.message}</p>}
+			{error && <p className="text-destructive p-4 text-center">Error loading conversations: {error.message}</p>}
 			{!isLoading && !error && conversations?.length === 0 && (
-				<div className="p-8 text-center text-muted-foreground border bg-background rounded-md min-h-[200px] flex flex-col justify-center items-center flex-grow">
+				<div className="p-8 text-center text-muted-foreground border bg-background rounded-md min-h-[200px] flex flex-col justify-center items-center">
 					<MessageSquareText size={48} className="mb-4" />
 					<p>No conversations yet.</p>
 					<p className="text-sm">Your conversations will appear here.</p>
@@ -61,13 +52,11 @@ function MessagesParentComponent() {
 			)}
 
 			{!isLoading && !error && conversations && conversations.length > 0 && (
-				<ScrollArea className="flex-grow">
-					<div className="space-y-1.5 pr-2">
-						{conversations.map((convo: ConversationItemData) => (
-							<ConversationListItem key={convo.pubkey} conversation={convo} />
-						))}
-					</div>
-				</ScrollArea>
+				<div className="space-y-1.5">
+					{conversations.map((convo: ConversationItemData) => (
+						<ConversationListItem key={convo.pubkey} conversation={convo} />
+					))}
+				</div>
 			)}
 		</div>
 	)
