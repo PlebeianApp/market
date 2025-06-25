@@ -9,7 +9,7 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/products/prod
 })
 
 function NewProductComponent() {
-	useDashboardTitle('Create Product')
+	useDashboardTitle('Add a Product')
 
 	useEffect(() => {
 		// Reset form and set to creation mode when component mounts

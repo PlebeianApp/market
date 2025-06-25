@@ -117,7 +117,7 @@ function CollectionsComponent() {
 					className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
 				>
 					<span className="i-market w-5 h-5" />
-					Add A Collection
+					Create A Collection
 				</Button>
 
 				{isLoading && <div className="p-6 text-center text-gray-500">Loading your collections...</div>}

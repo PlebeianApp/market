@@ -9,7 +9,7 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/products/coll
 })
 
 function NewCollectionComponent() {
-	useDashboardTitle('Create Collection')
+	useDashboardTitle('Create A Collection')
 
 	useEffect(() => {
 		// Reset form when component mounts

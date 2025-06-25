@@ -19,6 +19,48 @@ export function useDashboardTitle(title: string) {
 	}, [title])
 }
 
+// Configuration for pages that need back buttons
+const backButtonRoutes: Record<string, { parentPath: string; parentTitle: string }> = {
+	'/dashboard/products/products/new': {
+		parentPath: '/dashboard/products/products',
+		parentTitle: '📦 Products',
+	},
+	// Dynamic route for editing products
+	'/dashboard/products/products/': {
+		parentPath: '/dashboard/products/products',
+		parentTitle: '📦 Products',
+	},
+	'/dashboard/products/collections/new': {
+		parentPath: '/dashboard/products/collections',
+		parentTitle: '🗂️ Collections',
+	},
+	// Dynamic route for editing collections
+	'/dashboard/products/collections/': {
+		parentPath: '/dashboard/products/collections',
+		parentTitle: '🗂️ Collections',
+	},
+}
+
+// Helper to check if current route needs a back button
+function getBackButtonInfo(currentPath: string): { parentPath: string; parentTitle: string } | null {
+	// Check exact matches first
+	if (backButtonRoutes[currentPath]) {
+		return backButtonRoutes[currentPath]
+	}
+	
+	// Check for product edit pages (pattern: /dashboard/products/products/[productId])
+	if (currentPath.startsWith('/dashboard/products/products/') && currentPath !== '/dashboard/products/products') {
+		return backButtonRoutes['/dashboard/products/products/']
+	}
+	
+	// Check for collection edit pages (pattern: /dashboard/products/collections/[collectionId])
+	if (currentPath.startsWith('/dashboard/products/collections/') && currentPath !== '/dashboard/products/collections') {
+		return backButtonRoutes['/dashboard/products/collections/']
+	}
+	
+	return null
+}
+
 // Helper to get emoji for current route
 function getCurrentEmoji(showSidebar: boolean, currentPath: string): string | null {
 	if (showSidebar) return null
@@ -44,6 +86,10 @@ function DashboardLayout() {
 	const [parent] = useAutoAnimate()
 	const { dashboardTitle } = useStore(uiStore)
 
+	// Check if current route needs a back button
+	const backButtonInfo = getBackButtonInfo(location.pathname)
+	const needsBackButton = !!backButtonInfo && !isMobile
+
 	// When route changes on mobile, show sidebar for /dashboard, main content otherwise
 	React.useEffect(() => {
 		if (isMobile) {
@@ -62,8 +108,25 @@ function DashboardLayout() {
 
 	const handleBackToSidebar = () => {
 		if (isMobile) {
-			setShowSidebar(true)
-			navigate({ to: '/dashboard' })
+			// Check if we're on a product creation/edit page and navigate accordingly
+			if (location.pathname.startsWith('/dashboard/products/products/')) {
+				navigate({ to: '/dashboard/products/products' })
+			} 
+			// Check if we're on a collection creation/edit page and navigate accordingly
+			else if (location.pathname.startsWith('/dashboard/products/collections/')) {
+				navigate({ to: '/dashboard/products/collections' })
+			}
+			else {
+				// Default behavior - back to dashboard
+				setShowSidebar(true)
+				navigate({ to: '/dashboard' })
+			}
+		}
+	}
+
+	const handleBackToParent = () => {
+		if (backButtonInfo) {
+			navigate({ to: backButtonInfo.parentPath })
 		}
 	}
 
@@ -131,6 +194,20 @@ function DashboardLayout() {
 					{(!showSidebar || !isMobile) && (
 						<ScrollArea className="w-full p-4 lg:flex-1 lg:p-8 lg:border lg:border-black lg:rounded lg:bg-white">
 							<div className="p-4 bg-white border border-black rounded lg:p-0 lg:bg-transparent lg:border-0 lg:rounded-none">
+								{/* Desktop back button - shows above the title */}
+								{needsBackButton && (
+									<div className="mb-4">
+										<button
+											onClick={handleBackToParent}
+											className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
+											aria-label={`Back to ${backButtonInfo?.parentTitle}`}
+										>
+											<span className="i-back w-5 h-5" />
+											<span className="text-sm font-medium">Back to {backButtonInfo?.parentTitle}</span>
+										</button>
+									</div>
+								)}
+								
 								{!isMobile && <h1 className="text-[1.6rem] font-bold">{dashboardTitle}</h1>}
 								<Outlet />
 							</div>
