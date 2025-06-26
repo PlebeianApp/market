@@ -143,7 +143,7 @@ export function RelayManager() {
 					<CardDescription>Add a new relay to your network</CardDescription>
 				</CardHeader>
 				<CardContent>
-					<form onSubmit={handleAddRelay} className="flex gap-2">
+					<form onSubmit={handleAddRelay} className="flex flex-col sm:flex-row gap-2">
 						<div className="flex-1">
 							<Label htmlFor="relay-url" className="sr-only">
 								Relay URL
@@ -157,7 +157,7 @@ export function RelayManager() {
 								disabled={isLoading}
 							/>
 						</div>
-						<Button type="submit" disabled={!newRelayUrl.trim() || isLoading}>
+						<Button type="submit" disabled={!newRelayUrl.trim() || isLoading} className="w-full sm:w-auto">
 							<Plus className="w-4 h-4 mr-2" />
 							{isLoading ? 'Adding...' : 'Add'}
 						</Button>
@@ -172,7 +172,7 @@ export function RelayManager() {
 								variant="outline" 
 								size="sm" 
 								onClick={handleConnectToDefaults}
-								className="text-yellow-800 border-yellow-300 hover:bg-yellow-100"
+								className="text-yellow-800 border-yellow-300 hover:bg-yellow-100 w-full sm:w-auto"
 							>
 								<RefreshCw className="w-4 h-4 mr-2" />
 								Use Default Relays

@@ -81,32 +81,34 @@ export function RelayCard({ relay, onRemove, type }: RelayCardProps) {
 	}
 
 	return (
-		<div className="flex items-center justify-between p-3 border rounded-md hover:bg-gray-50 transition-colors">
-			<div className="flex items-center gap-3 flex-1">
+		<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border rounded-md hover:bg-gray-50 transition-colors gap-2">
+			<div className="flex items-center gap-3 flex-1 min-w-0 w-full sm:w-auto">
 				{getStatusIcon()}
-				<div className="flex-1 min-w-0">
-					<div className="flex items-center gap-2 mb-1">
-						<Globe className="w-3 h-3 text-gray-400" />
+				<div className="flex-1 min-w-0 overflow-hidden">
+					<div className="flex items-center gap-2 mb-1 flex-wrap">
+						<Globe className="w-3 h-3 text-gray-400 flex-shrink-0" />
 						<span className="font-medium text-sm truncate">{getRelayDomain(relay.url)}</span>
-						<Badge variant="secondary" className="text-xs">
+						<Badge variant="secondary" className="text-xs flex-shrink-0">
 							{type}
 						</Badge>
 					</div>
-					<div className="text-xs text-gray-500 truncate">{relay.url}</div>
+					<div className="text-xs text-gray-500 truncate break-all">{relay.url}</div>
 				</div>
-				{getStatusBadge()}
 			</div>
-			{type === 'explicit' && (
-				<Button
-					variant="ghost"
-					size="sm"
-					onClick={() => onRemove(relay.url)}
-					className="text-gray-500 hover:text-red-600 ml-2"
-					aria-label={`Remove ${relay.url}`}
-				>
-					<Trash2 className="w-4 h-4" />
-				</Button>
-			)}
+			<div className="flex items-center gap-2 self-end sm:self-auto flex-shrink-0">
+				{getStatusBadge()}
+				{type === 'explicit' && (
+					<Button
+						variant="ghost"
+						size="sm"
+						onClick={() => onRemove(relay.url)}
+						className="text-gray-500 hover:text-red-600"
+						aria-label={`Remove ${relay.url}`}
+					>
+						<Trash2 className="w-4 h-4" />
+					</Button>
+				)}
+			</div>
 		</div>
 	)
 }
