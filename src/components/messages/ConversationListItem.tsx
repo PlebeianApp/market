@@ -22,7 +22,7 @@ export function ConversationListItem({ conversation }: ConversationListItemProps
 		<Link
 			to="/dashboard/sales/messages/$pubkey"
 			params={{ pubkey }}
-			className="flex items-center p-3 hover:bg-muted/50 rounded-lg transition-colors duration-150 ease-in-out w-full border bg-card shadow-sm mb-2"
+			className="flex flex-col sm:flex-row items-start sm:items-center p-3 hover:bg-muted/50 rounded-lg transition-colors duration-150 ease-in-out w-full border bg-card shadow-sm mb-2"
 			activeProps={{
 				className: 'bg-muted font-semibold',
 			}}
@@ -30,11 +30,11 @@ export function ConversationListItem({ conversation }: ConversationListItemProps
 			<div className="mr-3 flex-shrink-0">
 				<UserWithAvatar pubkey={pubkey} size="md" disableLink={true} />
 			</div>
-			<div className="flex-grow overflow-hidden">
+			<div className="flex-grow overflow-hidden w-full mt-2 sm:mt-0">
 				<div className="flex justify-between items-center">
 					<h3 className="text-sm font-medium truncate">{displayName}</h3>
 					{lastMessageAt && (
-						<span className="text-xs text-gray-500 whitespace-nowrap">
+						<span className="text-xs text-gray-500 whitespace-nowrap ml-2">
 							{formatDistanceToNow(new Date(lastMessageAt * 1000), { addSuffix: true })}
 						</span>
 					)}
