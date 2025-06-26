@@ -456,10 +456,10 @@ export const fetchRichUserPaymentDetails = async (userPubkey: string): Promise<R
 /**
  * React query hook for fetching enhanced payment details
  */
-export const useRichUserPaymentDetails = (userPubkey: string) => {
+export const useRichUserPaymentDetails = (userPubkey: string | undefined) => {
 	return useQuery({
 		queryKey: paymentDetailsKeys.byPubkey(userPubkey),
-		queryFn: () => fetchRichUserPaymentDetails(userPubkey),
+		queryFn: () => fetchRichUserPaymentDetails(userPubkey!),
 		enabled: !!userPubkey,
 	})
 }
