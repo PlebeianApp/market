@@ -53,10 +53,10 @@ function MessagesParentComponent() {
 
 			{!isLoading && !error && conversations && conversations.length > 0 && (
 				<div className="space-y-1.5">
-					{conversations.map((convo: ConversationItemData) => (
-						<ConversationListItem key={convo.pubkey} conversation={convo} />
-					))}
-				</div>
+						{conversations.map((convo: ConversationItemData) => (
+							<ConversationListItem key={convo.pubkey} conversation={convo} />
+						))}
+					</div>
 			)}
 		</div>
 	)
