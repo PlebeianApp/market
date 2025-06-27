@@ -1,9 +1,6 @@
-import { CURRENCIES } from '@/lib/constants'
-import type { ProductListingSchema } from '@/lib/schemas/productListing'
 import { faker } from '@faker-js/faker'
-import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag, NDKUser } from '@nostr-dev-kit/ndk'
-import type { z } from 'zod'
 import type { NDKUserProfile } from '@nostr-dev-kit/ndk'
+import NDK, { type NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 
 const WALLETED_USER_LUD16 = 'plebeianuser@coinos.io'
 

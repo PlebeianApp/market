@@ -10,6 +10,7 @@ interface OrderFinalizeComponentProps {
 	totalInSats: number
 	onNewOrder: () => void
 	onContinueToPayment?: () => void
+	onViewOrders?: () => void
 }
 
 export function OrderFinalizeComponent({
@@ -18,6 +19,7 @@ export function OrderFinalizeComponent({
 	totalInSats,
 	onNewOrder,
 	onContinueToPayment,
+	onViewOrders,
 }: OrderFinalizeComponentProps) {
 	const formatSats = (sats: number): string => {
 		return Math.round(sats).toLocaleString()
@@ -97,6 +99,7 @@ export function OrderFinalizeComponent({
 							<h3 className="font-medium text-gray-900 mb-3">Shipping Address</h3>
 							<div className="text-sm text-gray-600 space-y-1">
 								<p className="font-medium text-gray-900">{shippingData.name}</p>
+								{shippingData.email && <p>Email: {shippingData.email}</p>}
 								<p>{shippingData.firstLineOfAddress}</p>
 								<p>
 									{shippingData.city}, {shippingData.zipPostcode}
@@ -201,7 +204,16 @@ export function OrderFinalizeComponent({
 
 						{isPostPayment && (
 							<>
-								<Button onClick={onNewOrder} className="w-full bg-black text-white hover:bg-gray-800">
+								{allInvoicesPaid && onViewOrders && (
+									<Button onClick={onViewOrders} className="w-full bg-black text-white hover:bg-gray-800">
+										View Your Purchases
+									</Button>
+								)}
+
+								<Button
+									onClick={onNewOrder}
+									className={`w-full ${allInvoicesPaid && onViewOrders ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-black text-white hover:bg-gray-800'}`}
+								>
 									{allInvoicesPaid ? 'Continue Shopping' : 'Back to Store'}
 								</Button>
 

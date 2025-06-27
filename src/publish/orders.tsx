@@ -1,10 +1,12 @@
-import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, ORDER_STATUS, PAYMENT_RECEIPT_KIND } from '@/lib/schemas/order'
+import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND, ORDER_STATUS } from '@/lib/schemas/order'
 import { ndkActions } from '@/lib/stores/ndk'
 import { orderKeys } from '@/queries/queryKeyFactory'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { NDKTag } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
+import type { CheckoutFormData } from '@/components/checkout/ShippingAddressForm'
 
 export type OrderCreateParams = {
 	productRef: string // Product reference in format 30402:<pubkey>:<d-tag>
@@ -223,7 +225,7 @@ export const useUpdateOrderStatusMutation = () => {
 
 export type PaymentReceiptParams = {
 	orderEventId: string
-	method: 'lightning' | 'bitcoin' | 'ecash' | 'fiat' | 'other'
+	method: 'lightning' | 'bitcoin' | 'fiat' | 'other'
 	amount: number
 	currency?: string
 	txid?: string
@@ -311,3 +313,329 @@ export const useCreatePaymentReceiptMutation = () => {
 		},
 	})
 }
+
+// Types based on gamma_spec.md
+export interface OrderCreationData {
+	merchantPubkey: string
+	buyerPubkey: string
+	orderItems: Array<{
+		productRef: string // "30402:<pubkey>:<d-tag>"
+		quantity: number
+	}>
+	totalAmountSats: number
+	shippingRef?: string // "30406:<pubkey>:<d-tag>"
+	shippingAddress?: CheckoutFormData
+	email?: string
+	phone?: string
+	notes?: string
+}
+
+export interface PaymentRequestData {
+	buyerPubkey: string
+	merchantPubkey: string
+	orderId: string
+	amountSats: number
+	paymentMethods: Array<{
+		type: 'lightning' | 'bitcoin' | 'other'
+		details: string // BOLT11, address, etc.
+	}>
+	expirationTime?: number
+	notes?: string
+}
+
+export interface StatusUpdateData {
+	recipientPubkey: string
+	senderPubkey: string
+	orderId: string
+	status: 'pending' | 'confirmed' | 'processing' | 'completed' | 'cancelled'
+	notes?: string
+}
+
+export interface PaymentReceiptData {
+	merchantPubkey: string
+	buyerPubkey: string
+	orderId: string
+	amountSats: number
+	paymentProof: {
+		medium: 'lightning' | 'bitcoin' | 'other'
+		reference: string // invoice, address, etc.
+		proof: string // preimage, txid, etc.
+	}
+	notes?: string
+}
+
+/**
+ * Creates a spec-compliant order creation event (Kind 16, type 1)
+ * Following gamma_spec.md section 4.1
+ */
+export async function createOrderCreationEvent(data: OrderCreationData): Promise<NDKEvent> {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	const orderId = uuidv4()
+	const now = Math.floor(Date.now() / 1000)
+
+	// Build tags according to spec
+	const tags: NDKTag[] = [
+		// Required tags
+		['p', data.merchantPubkey],
+		['subject', `Order ${orderId.substring(0, 8)}`],
+		['type', ORDER_MESSAGE_TYPE.ORDER_CREATION],
+		['order', orderId],
+		['amount', data.totalAmountSats.toString()],
+	]
+
+	// Add item tags
+	data.orderItems.forEach((item) => {
+		tags.push(['item', item.productRef, item.quantity.toString()])
+	})
+
+	// Optional tags
+	if (data.shippingRef) {
+		tags.push(['shipping', data.shippingRef])
+	}
+
+	if (data.shippingAddress) {
+		const addressString = [
+			data.shippingAddress.name,
+			data.shippingAddress.firstLineOfAddress,
+			`${data.shippingAddress.city}, ${data.shippingAddress.zipPostcode}`,
+			data.shippingAddress.country,
+		].join(', ')
+		tags.push(['address', addressString])
+	}
+
+	if (data.email) {
+		tags.push(['email', data.email])
+	}
+
+	if (data.phone) {
+		tags.push(['phone', data.phone])
+	}
+
+	// Create the event
+	const event = new NDKEvent(ndk)
+	event.kind = ORDER_PROCESS_KIND
+	event.created_at = now
+	event.content = data.notes || `Order for ${data.orderItems.length} items`
+	event.tags = tags
+
+	// Sign the event
+	await event.sign()
+
+	return event
+}
+
+/**
+ * Creates a spec-compliant payment request event (Kind 16, type 2)
+ * Following gamma_spec.md section 4.2
+ */
+export async function createPaymentRequestEvent(data: PaymentRequestData): Promise<NDKEvent> {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	const now = Math.floor(Date.now() / 1000)
+
+	// Build tags according to spec
+	const tags: NDKTag[] = [
+		// Required tags
+		['p', data.buyerPubkey],
+		['subject', 'order-payment'],
+		['type', ORDER_MESSAGE_TYPE.PAYMENT_REQUEST],
+		['order', data.orderId],
+		['amount', data.amountSats.toString()],
+	]
+
+	// Add payment method tags
+	data.paymentMethods.forEach((method) => {
+		tags.push(['payment', method.type, method.details])
+	})
+
+	// Optional expiration
+	if (data.expirationTime) {
+		tags.push(['expiration', data.expirationTime.toString()])
+	}
+
+	// Create the event
+	const event = new NDKEvent(ndk)
+	event.kind = ORDER_PROCESS_KIND
+	event.created_at = now
+	event.content = data.notes || 'Payment request for your order'
+	event.tags = tags
+
+	// Sign the event
+	await event.sign()
+
+	return event
+}
+
+/**
+ * Creates a spec-compliant status update event (Kind 16, type 3)
+ * Following gamma_spec.md section 4.3
+ */
+export async function createStatusUpdateEvent(data: StatusUpdateData): Promise<NDKEvent> {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	const now = Math.floor(Date.now() / 1000)
+
+	// Build tags according to spec
+	const tags: NDKTag[] = [
+		// Required tags
+		['p', data.recipientPubkey],
+		['subject', 'order-info'],
+		['type', ORDER_MESSAGE_TYPE.STATUS_UPDATE],
+		['order', data.orderId],
+		['status', data.status],
+	]
+
+	// Create the event
+	const event = new NDKEvent(ndk)
+	event.kind = ORDER_PROCESS_KIND
+	event.created_at = now
+	event.content = data.notes || `Order status updated to ${data.status}`
+	event.tags = tags
+
+	// Sign the event
+	await event.sign()
+
+	return event
+}
+
+/**
+ * Creates a spec-compliant payment receipt event (Kind 17)
+ * Following gamma_spec.md section 4.6
+ */
+export async function createPaymentReceiptEvent(data: PaymentReceiptData): Promise<NDKEvent> {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	const now = Math.floor(Date.now() / 1000)
+
+	// Build tags according to spec
+	const tags: NDKTag[] = [
+		// Required tags
+		['p', data.merchantPubkey],
+		['subject', 'order-receipt'],
+		['order', data.orderId],
+		['payment', data.paymentProof.medium, data.paymentProof.reference, data.paymentProof.proof],
+		['amount', data.amountSats.toString()],
+	]
+
+	// Create the event
+	const event = new NDKEvent(ndk)
+	event.kind = PAYMENT_RECEIPT_KIND
+	event.created_at = now
+	event.content = data.notes || 'Payment confirmation'
+	event.tags = tags
+
+	// Sign the event
+	await event.sign()
+
+	return event
+}
+
+/**
+ * Creates a general communication event (Kind 14)
+ * Following gamma_spec.md section 4.5
+ */
+export async function createGeneralCommunicationEvent(recipientPubkey: string, subject: string, message: string): Promise<NDKEvent> {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	const now = Math.floor(Date.now() / 1000)
+
+	// Build tags according to spec
+	const tags: NDKTag[] = [
+		['p', recipientPubkey],
+		['subject', subject],
+	]
+
+	// Create the event
+	const event = new NDKEvent(ndk)
+	event.kind = ORDER_GENERAL_KIND
+	event.created_at = now
+	event.content = message
+	event.tags = tags
+
+	// Sign the event
+	await event.sign()
+
+	return event
+}
+
+/**
+ * Publishes an order-related event to the network
+ */
+export async function publishOrderEvent(event: NDKEvent): Promise<boolean> {
+	try {
+		await event.publish()
+		console.log(`Published order event: ${event.kind}`)
+		return true
+	} catch (error) {
+		console.error('Failed to publish order event:', error)
+		return false
+	}
+}
+
+/**
+ * Complete order creation workflow - creates order and publishes it
+ */
+export async function createAndPublishOrder(data: OrderCreationData): Promise<{ orderId: string; success: boolean }> {
+	try {
+		const orderEvent = await createOrderCreationEvent(data)
+		const orderId = orderEvent.tags.find((tag) => tag[0] === 'order')?.[1] || ''
+
+		const success = await publishOrderEvent(orderEvent)
+
+		if (success) {
+			console.log(`Order ${orderId} created and published successfully`)
+		}
+
+		return { orderId, success }
+	} catch (error) {
+		console.error('Failed to create and publish order:', error)
+		return { orderId: '', success: false }
+	}
+}
+
+/**
+ * Merchant workflow: Create and send payment request
+ */
+export async function requestPayment(data: PaymentRequestData): Promise<boolean> {
+	try {
+		const paymentEvent = await createPaymentRequestEvent(data)
+		return await publishOrderEvent(paymentEvent)
+	} catch (error) {
+		console.error('Failed to request payment:', error)
+		return false
+	}
+}
+
+/**
+ * Update order status workflow (spec-compliant)
+ */
+export async function updateOrderStatusSpec(data: StatusUpdateData): Promise<boolean> {
+	try {
+		const statusEvent = await createStatusUpdateEvent(data)
+		return await publishOrderEvent(statusEvent)
+	} catch (error) {
+		console.error('Failed to update order status:', error)
+		return false
+	}
+}
+
+/**
+ * Buyer workflow: Send payment receipt
+ */
+export async function sendPaymentReceipt(data: PaymentReceiptData): Promise<boolean> {
+	try {
+		const receiptEvent = await createPaymentReceiptEvent(data)
+		return await publishOrderEvent(receiptEvent)
+	} catch (error) {
+		console.error('Failed to send payment receipt:', error)
+		return false
+	}
+}
+
+

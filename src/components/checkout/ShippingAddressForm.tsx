@@ -6,6 +6,7 @@ import { MapPin } from 'lucide-react'
 
 export interface CheckoutFormData {
 	name: string
+	email: string
 	phone: string
 	firstLineOfAddress: string
 	zipPostcode: string
@@ -69,6 +70,38 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 						)}
 					/>
 
+					<form.Field
+						name="email"
+						validators={{
+							onChange: ({ value }: { value: string }) => {
+								if (!value.trim()) return 'Email is required'
+								const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+								return !emailRegex.test(value) ? 'Please enter a valid email address' : undefined
+							},
+						}}
+						children={(field: any) => (
+							<div>
+								<Label htmlFor={field.name} className="text-sm font-medium">
+									Email Address <span className="text-red-500">*</span>
+								</Label>
+								<Input
+									id={field.name}
+									type="email"
+									placeholder="e.g. satoshi@example.com"
+									value={field.state.value}
+									onChange={(e) => field.handleChange(e.target.value)}
+									onBlur={field.handleBlur}
+									required
+								/>
+								{field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
+									<p className="text-xs text-red-500 mt-1">{field.state.meta.errors[0]}</p>
+								)}
+							</div>
+						)}
+					/>
+				</div>
+
+				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 					<form.Field
 						name="phone"
 						children={(field: any) => (

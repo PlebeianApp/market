@@ -44,7 +44,7 @@ echo ""
 echo "🛑 To stop the environment:"
 echo "   kill $RELAY_PID $APP_PID"
 
-bun run test:e2e
+bun run test:e2e:manual
 
 # Keep script running and handle cleanup on exit
 cleanup() {

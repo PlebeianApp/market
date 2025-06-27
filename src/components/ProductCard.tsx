@@ -5,14 +5,31 @@ import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Link } from '@tanstack/react-router'
 import { Button } from './ui/button'
 import { ZapButton } from './ZapButton'
+import { useEffect, useState } from 'react'
 
 export function ProductCard({ product }: { product: NDKEvent }) {
 	const title = getProductTitle(product)
 	const images = getProductImages(product)
 	const price = getProductPrice(product)
 	const stock = getProductStock(product)
+	const [isOwnProduct, setIsOwnProduct] = useState(false)
+	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(null)
+
+	// Check if current user is the seller of this product
+	useEffect(() => {
+		const checkIfOwnProduct = async () => {
+			const user = await ndkActions.getUser()
+			if (user?.pubkey) {
+				setCurrentUserPubkey(user.pubkey)
+				setIsOwnProduct(user.pubkey === product.pubkey)
+			}
+		}
+		checkIfOwnProduct()
+	}, [product.pubkey])
 
 	const handleAddToCart = async () => {
+		if (isOwnProduct) return // Don't allow adding own products to cart
+
 		const userPubkey = await ndkActions.getUser()
 		if (!userPubkey) return
 		cartActions.addProduct(userPubkey.pubkey, product)
@@ -58,8 +75,12 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 
 				{/* Add to cart button */}
 				<div className="flex gap-2">
-					<Button className="bg-black text-white py-3 px-4 rounded-lg flex-grow font-medium" onClick={handleAddToCart}>
-						Add to Cart
+					<Button
+						className="bg-black text-white py-3 px-4 rounded-lg flex-grow font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+						onClick={handleAddToCart}
+						disabled={isOwnProduct}
+					>
+						{isOwnProduct ? 'Your Product' : 'Add to Cart'}
 					</Button>
 					<ZapButton event={product} />
 				</div>
