@@ -372,6 +372,9 @@ export const cartActions = {
 				cart: newCart,
 			}
 		})
+
+		// Immediately update seller data to recalculate shipping costs
+		await cartActions.updateSellerData()
 	},
 
 	getShippingMethod: (productId: string): string | null => {
@@ -551,16 +554,18 @@ export const cartActions = {
 			let shippingCostInFiat = product.shippingCost || 0
 			const actualShippingCostCurrency = product.shippingCostCurrency || productCurrency
 
-			if (product.shippingMethodId && !product.shippingCost) {
+			if (product.shippingMethodId && product.shippingCost <= 0) {
 				const shippingEvent = await getShippingEvent(product.shippingMethodId)
 				if (shippingEvent) {
 					const shippingPriceTag = getShippingPrice(shippingEvent)
 					if (shippingPriceTag) {
 						shippingCostInFiat = parseFloat(shippingPriceTag[1])
+						const shippingCurrency = shippingPriceTag[2]
 						cartStore.setState((state) => {
 							const cart = { ...state.cart }
 							if (cart.products[productId]) {
 								cart.products[productId].shippingCost = shippingCostInFiat
+								cart.products[productId].shippingCostCurrency = shippingCurrency
 							}
 							cartActions.saveToStorage(cart)
 							return { ...state, cart }
@@ -1018,28 +1023,53 @@ export const cartActions = {
 							currencyTotals[currency] = (currencyTotals[currency] || 0) + productTotal.subtotalInCurrency
 						}
 
-						if (product.shippingMethodId && product.shippingCost > 0) {
-							const fiatShippingCost = product.shippingCost
-							const actualShippingCostCurrency = product.shippingCostCurrency
+						if (product.shippingMethodId) {
+							let fiatShippingCost = product.shippingCost
+							let actualShippingCostCurrency = product.shippingCostCurrency
 
-							if (actualShippingCostCurrency && CURRENCIES.includes(actualShippingCostCurrency as SupportedCurrency)) {
+							// If shipping cost is 0 or missing, try to fetch it from the shipping event
+							if (fiatShippingCost <= 0 && product.shippingMethodId) {
+								try {
+									const shippingEvent = await getShippingEvent(product.shippingMethodId)
+									if (shippingEvent) {
+										const shippingPriceTag = getShippingPrice(shippingEvent)
+										if (shippingPriceTag) {
+											fiatShippingCost = parseFloat(shippingPriceTag[1])
+											actualShippingCostCurrency = shippingPriceTag[2]
+										}
+									}
+								} catch (error) {
+									console.error(`Failed to fetch shipping event for ${product.shippingMethodId}:`, error)
+								}
+							}
+
+							// Only proceed if we have a valid shipping cost and currency
+							if (fiatShippingCost > 0 && actualShippingCostCurrency) {
 								try {
 									let convertedShippingSats = 0
-									const upperShippingCurrency = actualShippingCostCurrency.toUpperCase() as SupportedCurrency
+									const upperShippingCurrency = actualShippingCostCurrency.toUpperCase()
 
-									if (exchangeRates) {
-										if (exchangeRates[upperShippingCurrency] !== undefined) {
-											convertedShippingSats = cartActions.convertWithExchangeRate(
-												fiatShippingCost,
-												actualShippingCostCurrency,
-												exchangeRates,
-											)
+									// Handle sats currency directly
+									if (['SATS', 'SAT'].includes(upperShippingCurrency)) {
+										convertedShippingSats = Math.round(fiatShippingCost)
+									} else if (CURRENCIES.includes(upperShippingCurrency as SupportedCurrency)) {
+										if (exchangeRates) {
+											if (exchangeRates[upperShippingCurrency as SupportedCurrency] !== undefined) {
+												convertedShippingSats = cartActions.convertWithExchangeRate(
+													fiatShippingCost,
+													actualShippingCostCurrency,
+													exchangeRates,
+												)
+											} else {
+												convertedShippingSats = await cartActions.convertToSats(actualShippingCostCurrency, fiatShippingCost)
+											}
 										} else {
 											convertedShippingSats = await cartActions.convertToSats(actualShippingCostCurrency, fiatShippingCost)
 										}
 									} else {
-										convertedShippingSats = await cartActions.convertToSats(actualShippingCostCurrency, fiatShippingCost)
+										console.warn(`Unsupported shipping currency: ${actualShippingCostCurrency}`)
 									}
+
 									shippingSats += convertedShippingSats
 								} catch (error) {
 									console.error(`Failed to convert shipping cost in updateSellerData for product ${product.id}: ${error}`)
@@ -1051,13 +1081,22 @@ export const cartActions = {
 					}
 				}
 
+				// V4V shares are calculated ONLY from product price, not including shipping
+				const shares = cartActions.calculateShares(sellerPubkey, sellerTotal)
+
+				// Add shipping cost entirely to seller's amount (shipping is not shared with V4V)
+				const adjustedShares = {
+					sellerAmount: shares.sellerAmount + shippingSats,
+					communityAmount: shares.communityAmount, // V4V shares stay the same
+					sellerPercentage: shares.sellerPercentage, // Keep original percentage for display
+				}
+
 				const totalWithShipping = sellerTotal + shippingSats
-				const shares = cartActions.calculateShares(sellerPubkey, totalWithShipping)
 
 				newSellerData[sellerPubkey] = {
 					satsTotal: totalWithShipping,
 					currencyTotals,
-					shares,
+					shares: adjustedShares,
 					shippingSats,
 				}
 			}
