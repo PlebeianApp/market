@@ -50,10 +50,9 @@ function ProductsRoute() {
 
 	// Filter products that have images, then limit to 4 for pagination
 	const productsWithImages = products.filter((product) => {
-		// Check if product has image tags
-		const hasImages = product.tags.some((tag) => tag[0] === 'image' && tag[1])
-		return hasImages
+		return product.tags.some((tag) => tag[0] === 'image' && tag[1])
 	})
+
 	const recentProducts = productsWithImages.slice(0, 4) // Limit to 4 products
 	const totalSlides = 1 + recentProducts.length // Homepage + products
 
@@ -91,19 +90,6 @@ function ProductsRoute() {
 	const marketHeroClassName = 'hero-bg-market'
 	useHeroBackground(backgroundImageUrl, heroClassName)
 	useHeroBackground(marketBackgroundImageUrl, marketHeroClassName)
-
-	// Debug logging
-	console.log('Total products:', products.length)
-	console.log('Products with images:', productsWithImages.length)
-	console.log('Recent products for banner:', recentProducts.length)
-	console.log('Market background image:', marketBackgroundImageUrl)
-	console.log('Current slide index:', currentSlideIndex)
-	console.log('Is homepage slide:', isHomepageSlide)
-	console.log('Current product:', currentProduct)
-	console.log('Display title:', displayTitle)
-	console.log('Current images:', currentImages)
-	console.log('Background image URL:', backgroundImageUrl)
-	console.log('Hero class name:', heroClassName)
 
 	const handleStartSelling = () => {
 		if (isAuthenticated) {
