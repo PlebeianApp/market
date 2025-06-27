@@ -61,17 +61,22 @@ export interface CartProduct {
 	shippingMethodName: string | null
 	shippingCost: number
 	shippingCostCurrency: string | null
-	sellerPubkey?: string
+	sellerPubkey: string
 }
 
-export interface CartUser {
+export interface CartSeller {
 	pubkey: string
 	productIds: string[]
+	currency: string
+	shippingMethodId: string | null
+	shippingMethodName: string | null
+	shippingCost: number
+	shippingCostCurrency: string | null
 	v4vShares: V4VDTO[]
 }
 
 export interface NormalizedCart {
-	users: Record<string, CartUser>
+	sellers: Record<string, CartSeller>
 	products: Record<string, CartProduct>
 	orders: Record<string, OrderMessage>
 	invoices: Record<string, InvoiceMessage>
@@ -87,7 +92,6 @@ export interface CartTotals {
 interface CartState {
 	cart: NormalizedCart
 	v4vShares: Record<string, V4VDTO[]>
-	userCartTotalInSats: Record<string, number>
 	sellerData: Record<
 		string,
 		{
@@ -106,10 +110,23 @@ interface CartState {
 	sellerShippingOptions: Record<string, RichShippingInfo[]>
 }
 
+function loadInitialV4VShares(): Record<string, V4VDTO[]> {
+	if (typeof sessionStorage !== 'undefined') {
+		const storedShares = sessionStorage.getItem('v4vShares')
+		if (storedShares) {
+			try {
+				return JSON.parse(storedShares)
+			} catch (error) {
+				console.error('Failed to parse stored V4V shares:', error)
+			}
+		}
+	}
+	return {}
+}
+
 const initialState: CartState = {
-	cart: { users: {}, products: {}, orders: {}, invoices: {} },
+	cart: { sellers: {}, products: {}, orders: {}, invoices: {} },
 	v4vShares: {},
-	userCartTotalInSats: {},
 	sellerData: {},
 	productsBySeller: {},
 	totalInSats: 0,
@@ -127,12 +144,13 @@ function loadInitialCart(): NormalizedCart {
 			return JSON.parse(storedCart)
 		}
 	}
-	return { users: {}, products: {}, orders: {}, invoices: {} }
+	return { sellers: {}, products: {}, orders: {}, invoices: {} }
 }
 
 const initialCartState: CartState = {
 	...initialState,
 	cart: loadInitialCart(),
+	v4vShares: loadInitialV4VShares(),
 }
 
 const numSatsInBtc = 100000000 // 100 million sats in 1 BTC
@@ -184,7 +202,7 @@ export const cartActions = {
 		if (typeof sessionStorage !== 'undefined') {
 			const serializableCart = JSON.parse(
 				JSON.stringify({
-					users: cart.users,
+					sellers: cart.sellers,
 					products: cart.products,
 					orders: cart.orders,
 					invoices: cart.invoices,
@@ -192,6 +210,12 @@ export const cartActions = {
 			)
 
 			sessionStorage.setItem('cart', JSON.stringify(serializableCart))
+		}
+	},
+
+	saveV4VSharesToStorage: (shares: Record<string, V4VDTO[]>) => {
+		if (typeof sessionStorage !== 'undefined') {
+			sessionStorage.setItem('v4vShares', JSON.stringify(shares))
 		}
 	},
 
@@ -207,29 +231,38 @@ export const cartActions = {
 		}
 	},
 
-	findOrCreateUserProduct: (cart: NormalizedCart, userPubkey: string, productId?: string) => {
-		const user = cart.users[userPubkey] || { pubkey: userPubkey, productIds: [], v4vShares: [] }
-		if (!cart.users[userPubkey]) {
-			cart.users[userPubkey] = user
+	findOrCreateSeller: (cart: NormalizedCart, sellerPubkey: string) => {
+		// Ensure seller exists
+		const seller = cart.sellers[sellerPubkey] || {
+			pubkey: sellerPubkey,
+			productIds: [],
+			currency: '',
+			shippingMethodId: null,
+			shippingMethodName: null,
+			shippingCost: 0,
+			shippingCostCurrency: null,
+			v4vShares: [],
+		}
+		if (!cart.sellers[sellerPubkey]) {
+			cart.sellers[sellerPubkey] = seller
 		}
 
-		const product = productId ? cart.products[productId] : undefined
-
-		return { user, product }
+		return seller
 	},
 
-	addProduct: async (userPubkey: string, productData: CartProduct | NDKEvent | string) => {
+	addProduct: async (buyerPubkey: string, productData: CartProduct | NDKEvent | string) => {
 		let productId: string
-		let sellerPubkey: string | undefined
+		let sellerPubkey: string
 		let amount = 1
 
 		if (typeof productData === 'string') {
 			productId = productData
 			try {
 				const pubkey = await getProductSellerPubkey(productId)
-				sellerPubkey = pubkey || undefined
+				sellerPubkey = pubkey || ''
 			} catch (error) {
 				console.error('Failed to fetch seller pubkey:', error)
+				return
 			}
 		} else if (productData instanceof NDKEvent) {
 			productId = productData.id
@@ -240,9 +273,14 @@ export const cartActions = {
 			amount = productData.amount
 		}
 
+		if (!sellerPubkey) {
+			console.error('Cannot add product without seller pubkey')
+			return
+		}
+
 		cartStore.setState((state) => {
 			const cart = { ...state.cart }
-			const { user } = cartActions.findOrCreateUserProduct(cart, userPubkey)
+			const seller = cartActions.findOrCreateSeller(cart, sellerPubkey)
 
 			if (cart.products[productId]) {
 				cart.products[productId].amount += amount
@@ -256,7 +294,7 @@ export const cartActions = {
 					shippingCostCurrency: null,
 					sellerPubkey,
 				}
-				user.productIds.push(productId)
+				seller.productIds.push(productId)
 			}
 
 			cartActions.saveToStorage(cart)
@@ -268,7 +306,7 @@ export const cartActions = {
 		await cartActions.updateSellerData()
 	},
 
-	updateProductAmount: async (userPubkey: string, productId: string, amount: number) => {
+	updateProductAmount: async (buyerPubkey: string, productId: string, amount: number) => {
 		cartStore.setState((state) => {
 			const cart = { ...state.cart }
 			const product = cart.products[productId]
@@ -282,19 +320,24 @@ export const cartActions = {
 		await cartActions.updateSellerData()
 	},
 
-	removeProduct: async (userPubkey: string, productId: string) => {
+	removeProduct: async (buyerPubkey: string, productId: string) => {
 		cartStore.setState((state) => {
 			const cart = { ...state.cart }
-			const user = cart.users[userPubkey]
+			const product = cart.products[productId]
 
-			if (user) {
-				user.productIds = user.productIds.filter((id) => id !== productId)
-				delete cart.products[productId]
+			if (product && product.sellerPubkey) {
+				const seller = cart.sellers[product.sellerPubkey]
+				if (seller) {
+					seller.productIds = seller.productIds.filter((id) => id !== productId)
 
-				if (user.productIds.length === 0) {
-					delete cart.users[userPubkey]
+					// Clean up empty seller
+					if (seller.productIds.length === 0) {
+						delete cart.sellers[product.sellerPubkey]
+					}
 				}
 			}
+
+			delete cart.products[productId]
 
 			cartActions.saveToStorage(cart)
 			return { ...state, cart }
@@ -329,6 +372,9 @@ export const cartActions = {
 				cart: newCart,
 			}
 		})
+
+		// Immediately update seller data to recalculate shipping costs
+		await cartActions.updateSellerData()
 	},
 
 	getShippingMethod: (productId: string): string | null => {
@@ -339,9 +385,8 @@ export const cartActions = {
 	clear: () => {
 		cartStore.setState((state) => ({
 			...state,
-			cart: { users: {}, products: {}, orders: {}, invoices: {} },
+			cart: { sellers: {}, products: {}, orders: {}, invoices: {} },
 			v4vShares: {},
-			userCartTotalInSats: {},
 			sellerData: {},
 			productsBySeller: {},
 			totalInSats: 0,
@@ -354,6 +399,7 @@ export const cartActions = {
 
 		if (typeof sessionStorage !== 'undefined') {
 			sessionStorage.removeItem('cart')
+			sessionStorage.removeItem('v4vShares')
 		}
 	},
 
@@ -368,59 +414,64 @@ export const cartActions = {
 		})
 	},
 
-	handleProductUpdate: async (action: string, userPubkey: string, productId: string, amount?: number) => {
+	handleProductUpdate: async (action: string, productId: string, amount?: number) => {
 		cartStore.setState((state) => {
 			const cart = { ...state.cart }
-			const user = cart.users[userPubkey]
+			const product = cart.products[productId]
 
 			switch (action) {
 				case 'increment':
-					if (cart.products[productId]) {
-						cart.products[productId].amount += 1
+					if (product) {
+						product.amount += 1
 					}
 					break
 				case 'decrement':
-					if (cart.products[productId]) {
-						const newAmount = Math.max(cart.products[productId].amount - 1, 0)
+					if (product) {
+						const newAmount = Math.max(product.amount - 1, 0)
 
 						if (newAmount === 0) {
-							if (user) {
-								user.productIds = user.productIds.filter((id) => id !== productId)
-								delete cart.products[productId]
-
-								if (user.productIds.length === 0) {
-									delete cart.users[userPubkey]
+							// Remove product from seller's product list
+							const seller = cart.sellers[product.sellerPubkey]
+							if (seller) {
+								seller.productIds = seller.productIds.filter((id: string) => id !== productId)
+								if (seller.productIds.length === 0) {
+									delete cart.sellers[product.sellerPubkey]
 								}
 							}
+							delete cart.products[productId]
 						} else {
-							cart.products[productId].amount = newAmount
+							product.amount = newAmount
 						}
 					}
 					break
 				case 'setAmount':
-					if (amount !== undefined && cart.products[productId]) {
+					if (amount !== undefined && product) {
 						if (amount <= 0) {
-							if (user) {
-								user.productIds = user.productIds.filter((id) => id !== productId)
-								delete cart.products[productId]
-
-								if (user.productIds.length === 0) {
-									delete cart.users[userPubkey]
+							// Remove product from seller's product list
+							const seller = cart.sellers[product.sellerPubkey]
+							if (seller) {
+								seller.productIds = seller.productIds.filter((id: string) => id !== productId)
+								if (seller.productIds.length === 0) {
+									delete cart.sellers[product.sellerPubkey]
 								}
 							}
+							delete cart.products[productId]
 						} else {
-							cart.products[productId].amount = amount
+							product.amount = amount
 						}
 					}
 					break
 				case 'remove': {
-					if (user) {
-						user.productIds = user.productIds.filter((id) => id !== productId)
-						delete cart.products[productId]
-
-						if (user.productIds.length === 0) {
-							delete cart.users[userPubkey]
+					if (product) {
+						// Remove product from seller's product list
+						const seller = cart.sellers[product.sellerPubkey]
+						if (seller) {
+							seller.productIds = seller.productIds.filter((id: string) => id !== productId)
+							if (seller.productIds.length === 0) {
+								delete cart.sellers[product.sellerPubkey]
+							}
 						}
+						delete cart.products[productId]
 					}
 					break
 				}
@@ -430,6 +481,7 @@ export const cartActions = {
 			return { ...state, cart }
 		})
 
+		await cartActions.updateV4VShares()
 		await cartActions.groupProductsBySeller()
 		await cartActions.updateSellerData()
 	},
@@ -502,16 +554,18 @@ export const cartActions = {
 			let shippingCostInFiat = product.shippingCost || 0
 			const actualShippingCostCurrency = product.shippingCostCurrency || productCurrency
 
-			if (product.shippingMethodId && !product.shippingCost) {
+			if (product.shippingMethodId && product.shippingCost <= 0) {
 				const shippingEvent = await getShippingEvent(product.shippingMethodId)
 				if (shippingEvent) {
 					const shippingPriceTag = getShippingPrice(shippingEvent)
 					if (shippingPriceTag) {
 						shippingCostInFiat = parseFloat(shippingPriceTag[1])
+						const shippingCurrency = shippingPriceTag[2]
 						cartStore.setState((state) => {
 							const cart = { ...state.cart }
 							if (cart.products[productId]) {
 								cart.products[productId].shippingCost = shippingCostInFiat
+								cart.products[productId].shippingCostCurrency = shippingCurrency
 							}
 							cartActions.saveToStorage(cart)
 							return { ...state, cart }
@@ -546,17 +600,17 @@ export const cartActions = {
 		}
 	},
 
-	calculateUserTotal: async (userPubkey: string): Promise<CartTotals | null> => {
+	calculateBuyerTotal: async (): Promise<CartTotals | null> => {
 		const state = cartStore.state
-		const user = state.cart.users[userPubkey]
-		if (!user) return null
+		const products = Object.values(state.cart.products)
+		if (products.length === 0) return null
 
 		let subtotalInSats = 0
 		let shippingInSats = 0
 		let totalInSats = 0
 		const currencyTotals: Record<string, { subtotal: number; shipping: number; total: number }> = {}
 
-		const productTotals = await Promise.all(user.productIds.map((productId) => cartActions.calculateProductTotal(productId)))
+		const productTotals = await Promise.all(products.map((product) => cartActions.calculateProductTotal(product.id)))
 
 		for (const productTotal of productTotals) {
 			subtotalInSats += productTotal.subtotalInSats
@@ -576,7 +630,7 @@ export const cartActions = {
 
 	calculateGrandTotal: async () => {
 		const state = cartStore.state
-		if (Object.keys(state.cart.users).length === 0) {
+		if (Object.keys(state.cart.products).length === 0) {
 			return {
 				grandSubtotalInSats: 0,
 				grandShippingInSats: 0,
@@ -585,39 +639,23 @@ export const cartActions = {
 			}
 		}
 
-		let grandSubtotalInSats = 0
-		let grandShippingInSats = 0
-		let grandTotalInSats = 0
-		const currencyTotals: Record<string, { subtotal: number; shipping: number; total: number }> = {}
+		// Just use the buyer total since there's only one buyer (the logged-in user)
+		const buyerTotal = await cartActions.calculateBuyerTotal()
 
-		const userTotalsPromises = Object.keys(state.cart.users).map((userPubkey) => {
-			return cartActions.calculateUserTotal(userPubkey)
-		})
-
-		const userTotals = await Promise.all(userTotalsPromises)
-
-		for (const userTotal of userTotals) {
-			if (userTotal) {
-				grandSubtotalInSats += userTotal.subtotalInSats
-				grandShippingInSats += userTotal.shippingInSats
-				grandTotalInSats += userTotal.totalInSats
-
-				for (const [currency, amounts] of Object.entries(userTotal.currencyTotals)) {
-					if (!currencyTotals[currency]) {
-						currencyTotals[currency] = { subtotal: 0, shipping: 0, total: 0 }
-					}
-					currencyTotals[currency].subtotal += amounts.subtotal
-					currencyTotals[currency].shipping += amounts.shipping
-					currencyTotals[currency].total += amounts.total
-				}
+		if (!buyerTotal) {
+			return {
+				grandSubtotalInSats: 0,
+				grandShippingInSats: 0,
+				grandTotalInSats: 0,
+				currencyTotals: {},
 			}
 		}
 
 		return {
-			grandSubtotalInSats,
-			grandShippingInSats,
-			grandTotalInSats,
-			currencyTotals,
+			grandSubtotalInSats: buyerTotal.subtotalInSats,
+			grandShippingInSats: buyerTotal.shippingInSats,
+			grandTotalInSats: buyerTotal.totalInSats,
+			currencyTotals: buyerTotal.currencyTotals,
 		}
 	},
 
@@ -675,7 +713,8 @@ export const cartActions = {
 
 	updateV4VShares: async () => {
 		const state = cartStore.state
-		const shares: Record<string, V4VDTO[]> = {}
+		// Start with existing shares to avoid losing data
+		const shares: Record<string, V4VDTO[]> = { ...state.v4vShares }
 
 		try {
 			const uniqueSellerPubkeys = new Set<string>()
@@ -686,40 +725,57 @@ export const cartActions = {
 				}
 			})
 
+			// Only fetch seller shares if we don't already have them or if they're empty
 			for (const sellerPubkey of Array.from(uniqueSellerPubkeys)) {
-				try {
-					const sellerShares = await v4VForUserQuery(sellerPubkey)
-					shares[sellerPubkey] = (sellerShares || []).map((share) => ({
-						...share,
-						percentage: isNaN(share.percentage) ? 5 : share.percentage,
-					}))
-				} catch (error) {
-					console.error(`Failed to fetch v4v shares for seller ${sellerPubkey}:`, error)
-					shares[sellerPubkey] = []
-				}
-			}
-
-			for (const userPubkey of Object.keys(state.cart.users)) {
-				if (!shares[userPubkey]) {
+				if (!shares[sellerPubkey] || shares[sellerPubkey].length === 0) {
 					try {
-						const userShares = await v4VForUserQuery(userPubkey)
-						shares[userPubkey] = (userShares || []).map((share) => ({
+						const sellerShares = await v4VForUserQuery(sellerPubkey)
+						shares[sellerPubkey] = (sellerShares || []).map((share) => ({
 							...share,
 							percentage: isNaN(share.percentage) ? 5 : share.percentage,
 						}))
 					} catch (error) {
-						console.error(`Failed to fetch v4v shares for user ${userPubkey}:`, error)
-						shares[userPubkey] = []
+						console.error(`Failed to fetch v4v shares for seller ${sellerPubkey}:`, error)
+						shares[sellerPubkey] = []
 					}
 				}
 			}
 
+			// Fetch buyer shares from auth system (buyer is the logged-in user)
+			const buyerPubkey = cartActions.getBuyerPubkey()
+			if (buyerPubkey && (!shares[buyerPubkey] || shares[buyerPubkey].length === 0)) {
+				try {
+					const buyerShares = await v4VForUserQuery(buyerPubkey)
+					shares[buyerPubkey] = (buyerShares || []).map((share) => ({
+						...share,
+						percentage: isNaN(share.percentage) ? 5 : share.percentage,
+					}))
+				} catch (error) {
+					console.error(`Failed to fetch v4v shares for buyer ${buyerPubkey}:`, error)
+					shares[buyerPubkey] = []
+				}
+			}
+
+			// Be very conservative about cleanup - only remove shares for empty arrays
+			// Never remove shares that have actual data, even if they're not currently relevant
+			// This prevents losing shares on reload when cart hasn't been fully reconstructed yet
+			Object.keys(shares).forEach((pubkey) => {
+				// Only delete shares that are completely empty arrays
+				if (shares[pubkey] && shares[pubkey].length === 0) {
+					delete shares[pubkey]
+				}
+			})
+
+			// Save to both state and persistent storage
 			cartStore.setState((state) => ({
 				...state,
 				v4vShares: shares,
 			}))
 
-			await cartActions.updateSellerData()
+			cartActions.saveV4VSharesToStorage(shares)
+
+			// Don't call updateSellerData from here to avoid race conditions
+			// Let the caller handle it explicitly
 		} catch (error) {
 			console.error('Error updating V4V shares:', error)
 		}
@@ -815,9 +871,10 @@ export const cartActions = {
 		return result
 	},
 
-	getUserPubkey: () => {
-		const state = cartStore.state
-		return Object.keys(state.cart.users)[0] || null
+	getBuyerPubkey: () => {
+		// TODO: This should get the pubkey from the auth system
+		// For now, return null as a placeholder
+		return null
 	},
 
 	calculateProductSubtotal: async (productId: string): Promise<{ value: number; currency: string }> => {
@@ -892,7 +949,14 @@ export const cartActions = {
 		}
 
 		const communitySharePercentage = shares.reduce((total, share) => {
-			const percentage = Number(share.percentage)
+			let percentage = Number(share.percentage)
+
+			// Handle case where percentage might be stored as decimal (0.18) instead of whole number (18)
+			// If percentage is less than 1, assume it's in decimal format and convert to percentage
+			if (percentage > 0 && percentage < 1) {
+				percentage = percentage * 100
+			}
+
 			if (isNaN(percentage) || percentage <= 0 || percentage > 100) {
 				console.warn(`Invalid share percentage for ${share.name}: ${share.percentage}`)
 				return total
@@ -959,36 +1023,57 @@ export const cartActions = {
 							currencyTotals[currency] = (currencyTotals[currency] || 0) + productTotal.subtotalInCurrency
 						}
 
-						if (product.shippingMethodId && product.shippingCost > 0) {
-							const fiatShippingCost = product.shippingCost
-							const actualShippingCostCurrency = product.shippingCostCurrency
+						if (product.shippingMethodId) {
+							let fiatShippingCost = product.shippingCost
+							let actualShippingCostCurrency = product.shippingCostCurrency
 
-							if (actualShippingCostCurrency && CURRENCIES.includes(actualShippingCostCurrency as SupportedCurrency)) {
+							// If shipping cost is 0 or missing, try to fetch it from the shipping event
+							if (fiatShippingCost <= 0 && product.shippingMethodId) {
+								try {
+									const shippingEvent = await getShippingEvent(product.shippingMethodId)
+									if (shippingEvent) {
+										const shippingPriceTag = getShippingPrice(shippingEvent)
+										if (shippingPriceTag) {
+											fiatShippingCost = parseFloat(shippingPriceTag[1])
+											actualShippingCostCurrency = shippingPriceTag[2]
+										}
+									}
+								} catch (error) {
+									console.error(`Failed to fetch shipping event for ${product.shippingMethodId}:`, error)
+								}
+							}
+
+							// Only proceed if we have a valid shipping cost and currency
+							if (fiatShippingCost > 0 && actualShippingCostCurrency) {
 								try {
 									let convertedShippingSats = 0
-									const upperShippingCurrency = actualShippingCostCurrency.toUpperCase() as SupportedCurrency
+									const upperShippingCurrency = actualShippingCostCurrency.toUpperCase()
 
-									if (exchangeRates) {
-										if (exchangeRates[upperShippingCurrency] !== undefined) {
-											convertedShippingSats = cartActions.convertWithExchangeRate(
-												fiatShippingCost,
-												actualShippingCostCurrency,
-												exchangeRates,
-											)
+									// Handle sats currency directly
+									if (['SATS', 'SAT'].includes(upperShippingCurrency)) {
+										convertedShippingSats = Math.round(fiatShippingCost)
+									} else if (CURRENCIES.includes(upperShippingCurrency as SupportedCurrency)) {
+										if (exchangeRates) {
+											if (exchangeRates[upperShippingCurrency as SupportedCurrency] !== undefined) {
+												convertedShippingSats = cartActions.convertWithExchangeRate(
+													fiatShippingCost,
+													actualShippingCostCurrency,
+													exchangeRates,
+												)
+											} else {
+												convertedShippingSats = await cartActions.convertToSats(actualShippingCostCurrency, fiatShippingCost)
+											}
 										} else {
 											convertedShippingSats = await cartActions.convertToSats(actualShippingCostCurrency, fiatShippingCost)
 										}
 									} else {
-										convertedShippingSats = await cartActions.convertToSats(actualShippingCostCurrency, fiatShippingCost)
+										console.warn(`Unsupported shipping currency: ${actualShippingCostCurrency}`)
 									}
+
 									shippingSats += convertedShippingSats
 								} catch (error) {
 									console.error(`Failed to convert shipping cost in updateSellerData for product ${product.id}: ${error}`)
 								}
-							} else {
-								console.log(
-									`Cannot convert shipping cost for seller - no valid currency found or currency not supported for product ${product.id}. actualShippingCostCurrency: ${actualShippingCostCurrency}`,
-								)
 							}
 						}
 					} catch (error) {
@@ -996,13 +1081,22 @@ export const cartActions = {
 					}
 				}
 
+				// V4V shares are calculated ONLY from product price, not including shipping
+				const shares = cartActions.calculateShares(sellerPubkey, sellerTotal)
+
+				// Add shipping cost entirely to seller's amount (shipping is not shared with V4V)
+				const adjustedShares = {
+					sellerAmount: shares.sellerAmount + shippingSats,
+					communityAmount: shares.communityAmount, // V4V shares stay the same
+					sellerPercentage: shares.sellerPercentage, // Keep original percentage for display
+				}
+
 				const totalWithShipping = sellerTotal + shippingSats
-				const shares = cartActions.calculateShares(sellerPubkey, totalWithShipping)
 
 				newSellerData[sellerPubkey] = {
 					satsTotal: totalWithShipping,
 					currencyTotals,
-					shares,
+					shares: adjustedShares,
 					shippingSats,
 				}
 			}
@@ -1129,6 +1223,25 @@ export function useCart() {
 		}
 	}, [storeState.cart.products])
 
+	// Ensure V4V shares are loaded when cart has products but shares are missing
+	useEffect(() => {
+		if (Object.keys(storeState.cart.products).length > 0) {
+			const sellersInCart = new Set(Object.values(storeState.cart.products).map((p) => p.sellerPubkey))
+			const sellersWithShares = new Set(Object.keys(storeState.v4vShares))
+
+			// Check if any sellers are missing shares
+			const missingSellers = Array.from(sellersInCart).filter(
+				(seller) => seller && (!sellersWithShares.has(seller) || storeState.v4vShares[seller].length === 0),
+			)
+
+			if (missingSellers.length > 0) {
+				cartActions.updateV4VShares().then(() => {
+					cartActions.updateSellerData()
+				})
+			}
+		}
+	}, [storeState.cart.products, storeState.v4vShares])
+
 	return {
 		...storeState,
 		...cartActions,
@@ -1175,7 +1288,7 @@ export async function handleAddToCart(userId: string, product: Partial<CartProdu
 			shippingMethodName: product.shippingMethodName || null,
 			shippingCost: product.shippingCost || 0,
 			shippingCostCurrency: product.shippingCostCurrency || null,
-			sellerPubkey: product.sellerPubkey,
+			sellerPubkey: product.sellerPubkey || '',
 		}
 
 		await cartActions.addProduct(userId, cartProduct)

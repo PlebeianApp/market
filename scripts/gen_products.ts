@@ -8,7 +8,7 @@ export function generateProductData(
 	availableShippingRefs?: string[],
 ): Omit<z.infer<typeof ProductListingSchema>, 'tags'> & { tags: NDKTag[] } {
 	const productId = faker.string.alphanumeric(10)
-	const price = faker.number.float({ min: 1, max: 1000, fractionDigits: 2 }).toString()
+	const price = faker.number.int({ min: 1, max: 20 }).toString()
 	const numImages = faker.number.int({ min: 2, max: 5 })
 	const images = Array.from({ length: numImages }, (_, i) => ['image', faker.image.url(), '800x600', i.toString()] as NDKTag)
 
@@ -22,7 +22,7 @@ export function generateProductData(
 			// Randomly add extra cost for some shipping options
 			const hasExtraCost = faker.datatype.boolean(0.3) // 30% chance of extra cost
 			if (hasExtraCost) {
-				const extraCost = faker.number.float({ min: 5, max: 50, fractionDigits: 2 }).toString()
+				const extraCost = faker.number.int({ min: 1, max: 5 }).toString()
 				shippingTags.push(['shipping_option', shippingRef, extraCost])
 			} else {
 				shippingTags.push(['shipping_option', shippingRef])
@@ -37,7 +37,7 @@ export function generateProductData(
 		tags: [
 			['d', productId],
 			['title', faker.commerce.productName()],
-			['price', price, faker.helpers.arrayElement(CURRENCIES)],
+			['price', price, 'sats'],
 			['type', 'simple', 'physical'],
 			['visibility', 'on-sale'],
 			['stock', faker.number.int({ min: 1, max: 100 }).toString()],
