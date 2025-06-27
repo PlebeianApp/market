@@ -1,350 +1,520 @@
 import { ProductCard } from '@/components/ProductCard'
-import { UserWithAvatar } from '@/components/UserWithAvatar'
+import { SingleInvoicePayment, type SingleInvoiceData } from '@/components/checkout/SingleInvoicePayment'
 import { OrderActions } from '@/components/orders/OrderActions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Skeleton } from '@/components/ui/skeleton'
 import { authStore } from '@/lib/stores/auth'
-import {
-	formatSats,
-	getBuyerPubkey,
-	getEventDate,
-	getOrderAmount,
-	getOrderId,
-	getOrderStatus,
-	getSellerPubkey,
-	useOrderById,
-} from '@/queries/orders'
-import { productsByPubkeyQueryOptions } from '@/queries/products'
+import { getEventDate, type OrderWithRelatedEvents } from '@/queries/orders'
+import { productQueryOptions } from '@/queries/products'
+import { fetchV4VShares } from '@/queries/v4v'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { useQueries } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router' // Removed useParams
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
-import { ArrowLeft, CreditCard, MessageSquare, Package, Receipt, Truck } from 'lucide-react'
-import { useMemo } from 'react'
+import { AlertTriangle, CheckCircle, Clock, CreditCard, Package, RefreshCw, Users, XCircle, Zap } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { toast } from 'sonner'
 
 interface OrderDetailComponentProps {
-	orderId: string
+	order: OrderWithRelatedEvents
 }
 
-export function OrderDetailComponent({ orderId }: OrderDetailComponentProps) {
-	// Accept orderId as a prop
-	const { user } = useStore(authStore)
-	const navigate = useNavigate()
-	const { data: orderData, isLoading, error } = useOrderById(orderId)
+// Helper functions to extract data from order events
+const getOrderId = (orderEvent: NDKEvent): string => {
+	return orderEvent.tags.find((tag) => tag[0] === 'order')?.[1] || orderEvent.id
+}
 
-	// ✅ Ensure all hooks are always run
-	const orderItems = useMemo(() => {
-		return orderData?.order?.tags?.filter((tag) => tag[0] === 'item') || []
-	}, [orderData?.order?.tags])
+const getTotalAmount = (orderEvent: NDKEvent): number => {
+	return parseInt(orderEvent.tags.find((tag) => tag[0] === 'amount')?.[1] || '0')
+}
 
-	const productReferences = useMemo(() => {
-		return orderItems
-			.map((tag) => {
-				const productRef = tag[1] // Format: "30402:pubkey:d-tag"
-				const quantity = parseInt(tag[2] || '1')
-				const [kind, pubkey, dTag] = productRef.split(':')
-				return { productRef, quantity, pubkey, dTag }
-			})
-			.filter((item) => item.pubkey) // Only include valid references
-	}, [orderItems])
+const getProductRefs = (orderEvent: NDKEvent): string[] => {
+	return orderEvent.tags.filter((tag) => tag[0] === 'item').map((tag) => tag[1])
+}
 
-	const uniquePubkeys = useMemo(() => {
-		const pubkeySet = new Set(productReferences.map((item) => item.pubkey).filter(Boolean))
-		return Array.from(pubkeySet)
-	}, [productReferences])
+const getSellerPubkey = (orderEvent: NDKEvent): string => {
+	return orderEvent.tags.find((tag) => tag[0] === 'p')?.[1] || ''
+}
 
-	const queries = useMemo(() => {
-		return uniquePubkeys.length > 0
-			? uniquePubkeys.map((pubkey) => ({
-					...productsByPubkeyQueryOptions(pubkey),
-					enabled: !!pubkey && !!orderData,
-				}))
-			: []
-	}, [uniquePubkeys, orderData])
+// Extract payment methods from payment request events
+const extractPaymentMethods = (paymentRequest: NDKEvent) => {
+	const paymentTags = paymentRequest.tags.filter((tag) => tag[0] === 'payment')
+	return paymentTags.map((tag) => ({
+		type: tag[1] as 'lightning' | 'bitcoin' | 'other',
+		details: tag[2],
+		proof: tag[3] || undefined,
+	}))
+}
 
-	const productQueries = useQueries({
-		queries,
+// Check if payment has been completed based on receipts
+const isPaymentCompleted = (paymentRequestId: string, paymentReceipts: NDKEvent[]): boolean => {
+	return paymentReceipts.some((receipt) => {
+		const orderTag = receipt.tags.find((tag) => tag[0] === 'order')
+		return orderTag?.[1] === paymentRequestId
 	})
+}
 
-	const allProducts = productQueries.flatMap((query) => query.data || [])
+// Get payment receipt for a specific payment request
+const getPaymentReceipt = (paymentRequestId: string, paymentReceipts: NDKEvent[]): NDKEvent | undefined => {
+	return paymentReceipts.find((receipt) => {
+		const orderTag = receipt.tags.find((tag) => tag[0] === 'order')
+		return orderTag?.[1] === paymentRequestId
+	})
+}
 
-	const orderProducts = useMemo(() => {
-		return productReferences.map((item) => {
-			const product = allProducts.find((p) => {
-				const productDTag = p.tags.find((tag) => tag[0] === 'd')?.[1]
-				return p.pubkey === item.pubkey && productDTag === item.dTag
-			})
-			return {
-				...item,
-				product,
-			}
-		})
-	}, [productReferences, allProducts])
+export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
+	const { user } = useStore(authStore)
+	const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null)
 
-	const goBack = () => {
-		navigate({ to: '/dashboard/sales/messages/' })
+	if (!order) {
+		return (
+			<div className="container mx-auto px-4 py-8">
+				<Card>
+					<CardContent className="p-8 text-center">
+						<p className="text-gray-500">Order not found</p>
+					</CardContent>
+				</Card>
+			</div>
+		)
 	}
 
+	// Parse order data
+	const orderEvent = order.order
+	const orderId = getOrderId(orderEvent)
+	const buyerPubkey = orderEvent.pubkey
+	const sellerPubkey = getSellerPubkey(orderEvent)
+	const isBuyer = buyerPubkey === user?.pubkey
+	const totalAmount = getTotalAmount(orderEvent)
+
+	// Get order status from latest status update or default to pending
+	const orderStatus = order.latestStatus?.tags.find((tag) => tag[0] === 'status')?.[1] || 'pending'
+
+	// Get product references from order
+	const productRefs = getProductRefs(orderEvent)
+	const productIds = productRefs.map((ref) => {
+		const parts = ref.split(':')
+		return parts.length >= 3 ? parts[2] : ref
+	})
+
+	// Fetch products
+	const productQueries = useQueries({
+		queries: productIds.map((productId) => ({
+			...productQueryOptions(productId),
+			enabled: !!productId,
+		})),
+	})
+
+	// Fetch V4V shares for the seller
+	const { data: sellerV4VShares = [] } = useQuery({
+		queryKey: ['v4vShares', sellerPubkey],
+		queryFn: () => fetchV4VShares(sellerPubkey),
+		enabled: !!sellerPubkey,
+	})
+
+	const productQueriesReady = productQueries.every((query) => !query.isLoading)
+	const products = productQueries.map((query) => query.data).filter(Boolean) as NDKEvent[]
+
+	// Convert payment requests to individual payable invoices
+	const invoicesFromPaymentRequests = useMemo(() => {
+		if (!order.paymentRequests || order.paymentRequests.length === 0) {
+			return []
+		}
+
+		const invoices: SingleInvoiceData[] = []
+
+		// Each payment request represents a separate payable invoice
+		order.paymentRequests.forEach((paymentRequest, index) => {
+			const amountTag = paymentRequest.tags.find((tag) => tag[0] === 'amount')
+			const amount = amountTag?.[1] ? parseInt(amountTag[1], 10) : 0
+
+			if (amount <= 0) return
+
+			const paymentMethods = extractPaymentMethods(paymentRequest)
+			const lightningPayment = paymentMethods.find((p) => p.type === 'lightning')
+			const isCompleted = isPaymentCompleted(paymentRequest.id, order.paymentReceipts)
+
+			// Determine if this is a V4V payment or merchant payment
+			// Check if this payment request is to the order seller (merchant) or V4V recipient
+			const recipientPubkey = paymentRequest.pubkey
+			const isSellerPayment = recipientPubkey === sellerPubkey
+
+			// Find the V4V recipient name if applicable
+			let recipientName = 'Merchant'
+			if (!isSellerPayment) {
+				const v4vRecipient = sellerV4VShares.find((share) => share.pubkey === recipientPubkey)
+				recipientName = v4vRecipient ? v4vRecipient.name : 'V4V Recipient'
+			}
+
+			const expirationTag = paymentRequest.tags.find((tag) => tag[0] === 'expiration')
+			const expirationValue = expirationTag?.[1]
+			const expiresAt = expirationValue ? parseInt(expirationValue, 10) : Math.floor(Date.now() / 1000) + 3600
+
+			invoices.push({
+				id: paymentRequest.id,
+				bolt11: lightningPayment?.details || '',
+				amount,
+				description: isSellerPayment ? 'Merchant Payment' : 'V4V Community Payment',
+				recipientName,
+				status: isCompleted ? 'paid' : 'pending',
+				expiresAt,
+				createdAt: paymentRequest.created_at || Math.floor(Date.now() / 1000),
+			})
+		})
+
+		return invoices
+	}, [order.paymentRequests, order.paymentReceipts, totalAmount, orderId])
+
+	const handlePaymentComplete = (invoiceId: string, preimage?: string) => {
+		console.log(`Payment completed for invoice ${invoiceId}`, { preimage })
+		toast.success('Payment completed successfully!')
+		// TODO: Create and publish payment receipt event
+	}
+
+	const handlePaymentFailed = (invoiceId: string, error: string) => {
+		console.error(`Payment failed for invoice ${invoiceId}:`, error)
+		toast.error(`Payment failed: ${error}`)
+	}
+
+	// Calculate payment statistics
+	const incompleteInvoices = invoicesFromPaymentRequests.filter(
+		(invoice) => invoice.status === 'failed' || invoice.status === 'expired' || invoice.status === 'pending',
+	)
+
+	const paidInvoices = invoicesFromPaymentRequests.filter((invoice) => invoice.status === 'paid')
+	const totalInvoices = invoicesFromPaymentRequests.length
+	const paymentProgress = totalInvoices > 0 ? (paidInvoices.length / totalInvoices) * 100 : 0
+
+	const getStatusIcon = (status: string) => {
+		switch (status) {
+			case 'paid':
+				return <CheckCircle className="w-4 h-4 text-green-600" />
+			case 'pending':
+				return <Clock className="w-4 h-4 text-yellow-600" />
+			case 'processing':
+				return <RefreshCw className="w-4 h-4 text-blue-600 animate-spin" />
+			case 'failed':
+			case 'expired':
+				return <XCircle className="w-4 h-4 text-red-600" />
+			default:
+				return <AlertTriangle className="w-4 h-4 text-gray-600" />
+		}
+	}
+
+	const getStatusColor = (status: string) => {
+		switch (status) {
+			case 'paid':
+				return 'bg-green-100 text-green-800 border-green-300'
+			case 'pending':
+				return 'bg-yellow-100 text-yellow-800 border-yellow-300'
+			case 'processing':
+				return 'bg-blue-100 text-blue-800 border-blue-300'
+			case 'failed':
+			case 'expired':
+				return 'bg-red-100 text-red-800 border-red-300'
+			default:
+				return 'bg-gray-100 text-gray-800 border-gray-300'
+		}
+	}
+
+	const currentUserPubkey = user?.pubkey
+	const isOrderOwner = currentUserPubkey === buyerPubkey // The buyer is the order owner who created the order
+	const isOrderSeller = currentUserPubkey === sellerPubkey
+
+	if (!order.order) {
+		return (
+			<div className="text-center py-8">
+				<h2 className="text-xl font-semibold text-gray-900">Order not found</h2>
+				<p className="text-gray-600 mt-2">The requested order could not be found.</p>
+			</div>
+		)
+	}
+
+	const isLoading = productQueries.some((query) => query.isLoading)
+
 	return (
-		<div className="space-y-6">
-			{isLoading ? (
-				<div className="space-y-6">
-					<div className="flex items-center gap-3">
-						<Button variant="ghost" size="sm" onClick={goBack}>
-							<ArrowLeft className="w-4 h-4" />
-						</Button>
-						<h1 className="text-2xl font-bold">Loading Order...</h1>
-					</div>
-					<div className="bg-white rounded-md shadow-sm p-6">
-						<p className="text-gray-500">Loading order details...</p>
-					</div>
-				</div>
-			) : error || !orderData ? (
-				<div className="space-y-6">
-					<div className="flex items-center gap-3">
-						<Button variant="ghost" size="sm" onClick={goBack}>
-							<ArrowLeft className="w-4 h-4" />
-						</Button>
-						<h1 className="text-2xl font-bold">Order Not Found</h1>
-					</div>
-					<div className="bg-white rounded-md shadow-sm p-6">
-						<p className="text-gray-600">The order you\'re looking for doesn\'t exist or you don\'t have access to it.</p>
-					</div>
-				</div>
-			) : (
-				(() => {
-					// Now that isLoading, error, and !orderData are handled, we can safely use orderData
-					const order = orderData.order
-					const currentOrderId = getOrderId(order)
-					const status = getOrderStatus(orderData)
-					const amount = getOrderAmount(order)
-					const buyerPubkey = getBuyerPubkey(order)
-					const sellerPubkey = getSellerPubkey(order)
-					const orderDate = getEventDate(order)
-
-					const isBuyer = user?.pubkey === buyerPubkey
-					const isSeller = user?.pubkey === sellerPubkey
-
-					const renderEventCard = (event: NDKEvent, title: string, icon: React.ReactNode, type: string) => {
-						const eventDate = new Date((event.created_at || 0) * 1000).toLocaleString()
-						let content = event.content
-						let extraInfo = null
-
-						if (type === 'status') {
-							const statusTag = event.tags.find((tag) => tag[0] === 'status')
-							if (statusTag) {
-								extraInfo = <Badge variant="outline">{statusTag[1].charAt(0).toUpperCase() + statusTag[1].slice(1)}</Badge>
-							}
-						} else if (type === 'shipping') {
-							const statusTag = event.tags.find((tag) => tag[0] === 'status')
-							const trackingTag = event.tags.find((tag) => tag[0] === 'tracking')
-							const carrierTag = event.tags.find((tag) => tag[0] === 'carrier')
-
-							extraInfo = (
-								<div className="space-y-2">
-									{statusTag && <Badge variant="outline">Status: {statusTag[1]}</Badge>}
-									{trackingTag && (
-										<div className="text-sm">
-											<strong>Tracking:</strong> {trackingTag[1]}
-										</div>
-									)}
-									{carrierTag && (
-										<div className="text-sm">
-											<strong>Carrier:</strong> {carrierTag[1]}
-										</div>
-									)}
+		<div className="container mx-auto px-4 py-8">
+			<div className="space-y-6">
+				{/* Order Header */}
+				<Card>
+					<CardHeader>
+						<div className="flex items-center justify-between">
+							<CardTitle className="text-2xl">Order #{orderId.substring(0, 8)}...</CardTitle>
+							<Badge className={getStatusColor(orderStatus)} variant="outline">
+								{getStatusIcon(orderStatus)}
+								<span className="ml-1 capitalize">{orderStatus}</span>
+							</Badge>
+						</div>
+						<p className="text-gray-600 mt-1">Created {getEventDate(orderEvent)}</p>
+					</CardHeader>
+					<CardContent>
+						<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+							<div className="flex items-center space-x-2">
+								<Package className="w-5 h-5 text-gray-500" />
+								<div>
+									<p className="text-sm text-gray-500">Products</p>
+									<p className="font-semibold">{products.length} items</p>
 								</div>
-							)
-						} else if (type === 'payment') {
-							const paymentTags = event.tags.filter((tag) => tag[0] === 'payment')
-							const amountTag = event.tags.find((tag) => tag[0] === 'amount')
-
-							extraInfo = (
-								<div className="space-y-2">
-									{amountTag && (
-										<div className="text-sm">
-											<strong>Amount:</strong> {formatSats(amountTag[1])}
-										</div>
-									)}
-									{paymentTags.map((tag, idx) => (
-										<Badge key={idx} variant="outline">
-											{tag[1]}: {tag[2] ? `${tag[2].substring(0, 20)}...` : 'Verified'}
-										</Badge>
-									))}
+							</div>
+							<div className="flex items-center space-x-2">
+								<CreditCard className="w-5 h-5 text-gray-500" />
+								<div>
+									<p className="text-sm text-gray-500">Total Amount</p>
+									<p className="font-semibold">{totalAmount} sats</p>
 								</div>
-							)
-						}
+							</div>
+							<div className="flex items-center space-x-2">
+								<Users className="w-5 h-5 text-gray-500" />
+								<div>
+									<p className="text-sm text-gray-500">Role</p>
+									<p className="font-semibold">{isBuyer ? 'Buyer' : 'Seller'}</p>
+								</div>
+							</div>
+						</div>
+					</CardContent>
+				</Card>
 
-						return (
-							<Card key={event.id}>
-								<CardHeader className="pb-3">
-									<div className="flex items-center justify-between">
-										<div className="flex items-center gap-2">
-											{icon}
-											<CardTitle className="text-lg">{title}</CardTitle>
-										</div>
-										<span className="text-sm text-gray-500">{eventDate}</span>
+				{/* Products */}
+				{products.length > 0 && (
+					<Card>
+						<CardHeader>
+							<CardTitle>Products</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+								{products.map((product) => (
+									<ProductCard key={product.id} product={product} />
+								))}
+							</div>
+						</CardContent>
+					</Card>
+				)}
+
+				{/* Debug Information */}
+				{process.env.NODE_ENV === 'development' && (
+					<Card>
+						<CardHeader>
+							<CardTitle>Debug Info</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className="text-sm space-y-2">
+								<p>Current User: {currentUserPubkey}</p>
+								<p>Buyer Pubkey: {buyerPubkey}</p>
+								<p>Seller Pubkey: {sellerPubkey}</p>
+								<p>Is Buyer: {isBuyer ? 'Yes' : 'No'}</p>
+								<p>Is Order Owner: {isOrderOwner ? 'Yes' : 'No'}</p>
+								<p>Is Order Seller: {isOrderSeller ? 'Yes' : 'No'}</p>
+								<p>Total Invoices: {totalInvoices}</p>
+								<p>Payment Requests: {order.paymentRequests?.length || 0}</p>
+								<p>Payment Receipts: {order.paymentReceipts?.length || 0}</p>
+							</div>
+						</CardContent>
+					</Card>
+				)}
+
+				{/* Payment Processing - visible to both buyer and seller */}
+				{totalInvoices > 0 && (
+					<Card>
+						<CardHeader>
+							<CardTitle className="flex items-center gap-2">
+								<CreditCard className="w-5 h-5" />
+								Payment Details ({totalInvoices} invoices)
+							</CardTitle>
+							{/* Payment Summary */}
+							<div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+								<div className="flex items-center gap-2">
+									<CreditCard className="w-4 h-4 text-green-600" />
+									<div>
+										<p className="text-gray-500">Merchant</p>
+										<p className="font-semibold">
+											{invoicesFromPaymentRequests.filter((inv) => inv.description === 'Merchant Payment').length} invoice
+										</p>
 									</div>
-									{extraInfo && <div className="mt-2">{extraInfo}</div>}
-								</CardHeader>
-								{content && (
-									<CardContent className="pt-0">
-										<p className="text-gray-700">{content}</p>
-									</CardContent>
-								)}
-							</Card>
-						)
-					}
+								</div>
+								<div className="flex items-center gap-2">
+									<Users className="w-4 h-4 text-purple-600" />
+									<div>
+										<p className="text-gray-500">V4V Recipients</p>
+										<p className="font-semibold">
+											{invoicesFromPaymentRequests.filter((inv) => inv.description === 'V4V Community Payment').length} invoices
+										</p>
+									</div>
+								</div>
+								<div className="flex items-center gap-2">
+									<Package className="w-4 h-4 text-blue-600" />
+									<div>
+										<p className="text-gray-500">Total Amount</p>
+										<p className="font-semibold">
+											{invoicesFromPaymentRequests.reduce((sum, inv) => sum + inv.amount, 0).toLocaleString()} sats
+										</p>
+									</div>
+								</div>
+							</div>
+						</CardHeader>
+						<CardContent className="space-y-4">
+							{/* Reattempt All Button - only for buyers */}
+							{isBuyer && incompleteInvoices.length > 0 && (
+								<div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+									<div className="flex items-center justify-between">
+										<div className="flex items-center gap-2 text-yellow-800">
+											<AlertTriangle className="w-5 h-5" />
+											<div>
+												<p className="font-medium">
+													{incompleteInvoices.length} invoice{incompleteInvoices.length !== 1 ? 's' : ''} require payment
+												</p>
+												<p className="text-sm">Complete all payments to finalize your order</p>
+											</div>
+										</div>
+										<Button
+											variant="outline"
+											size="sm"
+											onClick={() => {
+												// Trigger refresh or reattempt logic for all incomplete invoices
+												toast.info('Refreshing payment status for all incomplete invoices...')
+											}}
+											className="text-yellow-700 border-yellow-300 hover:bg-yellow-100"
+										>
+											<RefreshCw className="w-4 h-4 mr-2" />
+											Refresh All
+										</Button>
+									</div>
+								</div>
+							)}
 
-					const allEvents = [
-						...orderData.statusUpdates.map((event) => ({
-							event,
-							type: 'status',
-							title: 'Status Update',
-							icon: <Package className="w-5 h-5" />,
-						})),
-						...orderData.shippingUpdates.map((event) => ({
-							event,
-							type: 'shipping',
-							title: 'Shipping Update',
-							icon: <Truck className="w-5 h-5" />,
-						})),
-						...orderData.paymentRequests.map((event) => ({
-							event,
-							type: 'payment_request',
-							title: 'Payment Request',
-							icon: <CreditCard className="w-5 h-5" />,
-						})),
-						...orderData.paymentReceipts.map((event) => ({
-							event,
-							type: 'payment',
-							title: 'Payment Receipt',
-							icon: <Receipt className="w-5 h-5" />,
-						})),
-						...orderData.generalMessages.map((event) => ({
-							event,
-							type: 'message',
-							title: 'Message',
-							icon: <MessageSquare className="w-5 h-5" />,
-						})),
-					].sort((a, b) => (b.event.created_at || 0) - (a.event.created_at || 0))
-
-					return (
-						<>
-							<div className="flex items-center gap-3">
-								<Button variant="ghost" size="sm" onClick={goBack}>
-									<ArrowLeft className="w-4 h-4" />
-								</Button>
+							{/* Payment Progress */}
+							<div className="space-y-2">
+								<div className="flex justify-between text-sm">
+									<span>Payment Progress</span>
+									<span>{Math.round(paymentProgress)}% Complete</span>
+								</div>
+								{/* Progress bar */}
+								<div className="w-full bg-gray-200 rounded-full h-2">
+									<div className="bg-green-600 h-2 rounded-full transition-all duration-300" style={{ width: `${paymentProgress}%` }} />
+								</div>
 							</div>
 
-							<Card>
-								<CardHeader>
-									<CardTitle>Order #{currentOrderId?.substring(0, 8)}...</CardTitle>
-								</CardHeader>
-								<CardContent className="space-y-4">
-									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-										<div>
-											<h4 className="font-medium text-gray-900">Order Information</h4>
-											<div className="mt-2 space-y-1 text-sm text-gray-600">
-												<div>Order ID: {currentOrderId}</div>
-												<div>Amount: {formatSats(amount)}</div>
-												<div>Date: {orderDate}</div>
-												<div>Role: {isBuyer ? 'Buyer' : isSeller ? 'Seller' : 'Observer'}</div>
-											</div>
-										</div>
-										<div>
-											<h4 className="font-medium text-gray-900">Participants</h4>
-											<div className="mt-2 space-y-2">
-												{buyerPubkey && (
-													<div className="flex items-center gap-2">
-														<span className="text-sm text-gray-600 w-12">Buyer:</span>
-														<UserWithAvatar pubkey={buyerPubkey} showBadge={false} size="sm" />
+							{/* Individual invoice payment buttons */}
+							<div className="grid gap-3">
+								{invoicesFromPaymentRequests.map((invoice) => {
+									const isComplete = invoice.status === 'paid'
+									const needsPayment = !isComplete && invoice.bolt11
+
+									return (
+										<div key={invoice.id} className="border rounded-lg p-4">
+											<div className="flex items-center justify-between">
+												<div className="flex items-center gap-3">
+													{/* Payment type icon */}
+													<div
+														className={`p-2 rounded-lg ${invoice.description === 'Merchant Payment' ? 'bg-green-100' : 'bg-purple-100'}`}
+													>
+														{invoice.description === 'Merchant Payment' ? (
+															<CreditCard className="w-4 h-4 text-green-600" />
+														) : (
+															<Users className="w-4 h-4 text-purple-600" />
+														)}
 													</div>
-												)}
-												{sellerPubkey && (
-													<div className="flex items-center gap-2">
-														<span className="text-sm text-gray-600 w-12">Seller:</span>
-														<UserWithAvatar pubkey={sellerPubkey} showBadge={false} size="sm" />
+
+													<Badge className={getStatusColor(invoice.status || 'pending')} variant="outline">
+														{getStatusIcon(invoice.status || 'pending')}
+														<span className="ml-1 capitalize">{invoice.status}</span>
+													</Badge>
+													<div>
+														<p className="font-semibold">{invoice.amount.toLocaleString()} sats</p>
+														<p className="text-sm text-gray-600">{invoice.description}</p>
+														<p className="text-xs text-gray-500">{invoice.recipientName}</p>
 													</div>
-												)}
-											</div>
-										</div>
-									</div>
-
-									{user?.pubkey && (isBuyer || isSeller) && (
-										<>
-											<Separator />
-											<div className="flex justify-center">
-												<OrderActions order={orderData} userPubkey={user.pubkey} />
-											</div>
-										</>
-									)}
-								</CardContent>
-							</Card>
-
-							<Card>
-								<CardHeader>
-									<CardTitle>Order Details</CardTitle>
-								</CardHeader>
-								<CardContent>
-									<p className="text-gray-700">{order.content || 'No order description provided.'}</p>
-								</CardContent>
-							</Card>
-
-							{orderProducts.length > 0 && (
-								<Card>
-									<CardHeader>
-										<CardTitle>Items Ordered</CardTitle>
-									</CardHeader>
-									<CardContent>
-										<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-											{orderProducts.map((item, idx) => (
-												<div key={idx} className="relative">
-													{item.product ? (
-														<>
-															<ProductCard product={item.product} />
-															{item.quantity > 1 && (
-																<div className="absolute top-2 right-2 bg-blue-600 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
-																	{item.quantity}
-																</div>
-															)}
-														</>
-													) : (
-														<div className="border border-gray-300 rounded-lg p-4 text-center">
-															<div className="text-gray-500 text-sm">Product not found</div>
-															<div className="text-xs text-gray-400 mt-1">{item.productRef}</div>
-															<div className="text-sm font-medium mt-2">Qty: {item.quantity}</div>
-														</div>
-													)}
 												</div>
-											))}
-										</div>
-									</CardContent>
-								</Card>
-							)}
 
-							{allEvents.length > 0 && (
-								<div>
-									<h2 className="text-xl font-bold mb-4">Order Timeline</h2>
-									<div className="space-y-4">
-										{allEvents.map(({ event, type, title, icon }) => renderEventCard(event, title, icon, type))}
+												{/* Payment button - only for buyers */}
+												{isBuyer && needsPayment && (
+													<Dialog>
+														<DialogTrigger asChild>
+															<Button size="sm">
+																<Zap className="w-4 h-4 mr-2" />
+																Pay Invoice
+															</Button>
+														</DialogTrigger>
+														<DialogContent className="max-w-md">
+															<DialogHeader>
+																<DialogTitle>Pay Invoice</DialogTitle>
+															</DialogHeader>
+															<SingleInvoicePayment
+																invoice={invoice}
+																onPaymentComplete={handlePaymentComplete}
+																onPaymentFailed={handlePaymentFailed}
+																showHeader={false}
+																nwcEnabled={true}
+															/>
+														</DialogContent>
+													</Dialog>
+												)}
+
+												{/* Status display for sellers or when payment not needed */}
+												{(!isBuyer || !needsPayment) && !isComplete && (
+													<div className="text-sm text-gray-500">
+														{needsPayment ? 'Awaiting buyer payment' : invoice.bolt11 ? 'Processing...' : 'Awaiting payment request'}
+													</div>
+												)}
+											</div>
+										</div>
+									)
+								})}
+							</div>
+
+							{/* V4V Information */}
+							{sellerV4VShares.length > 0 && (
+								<div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+									<div className="flex items-center gap-2 mb-2">
+										<Users className="w-5 h-5 text-blue-600" />
+										<h4 className="font-medium text-blue-900">Value-for-Value Recipients</h4>
+									</div>
+									<div className="text-sm text-blue-800">
+										This seller shares revenue with {sellerV4VShares.length} community recipient
+										{sellerV4VShares.length !== 1 ? 's' : ''}:
+									</div>
+									<div className="mt-2 space-y-1">
+										{sellerV4VShares.map((share, index) => (
+											<div key={index} className="flex justify-between text-sm">
+												<span className="text-blue-700">{share.name}</span>
+												<span className="text-blue-600 font-medium">{share.percentage}%</span>
+											</div>
+										))}
 									</div>
 								</div>
 							)}
+						</CardContent>
+					</Card>
+				)}
 
-							{allEvents.length === 0 && (
-								<Card>
-									<CardContent className="py-8 text-center">
-										<p className="text-gray-500">No additional order events yet.</p>
-									</CardContent>
-								</Card>
-							)}
-						</>
-					)
-				})()
-			)}
+				{/* Payment status when no invoices exist - visible to both buyer and seller */}
+				{totalInvoices === 0 && (
+					<Card>
+						<CardHeader>
+							<CardTitle className="flex items-center gap-2">
+								<CreditCard className="w-5 h-5" />
+								Payment Status
+							</CardTitle>
+						</CardHeader>
+						<CardContent>
+							<div className="text-center py-8">
+								<Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+								<p className="text-lg font-medium text-gray-900 mb-2">
+									{isBuyer ? 'Waiting for Payment Requests' : 'No Payment Requests Created'}
+								</p>
+								<p className="text-gray-600">
+									{isBuyer
+										? 'The seller has not yet created payment requests for this order.'
+										: 'Payment requests have not been created for this order yet.'}
+								</p>
+								<p className="text-sm text-gray-500 mt-2">
+									Payment requests: {order.paymentRequests?.length || 0} | Payment receipts: {order.paymentReceipts?.length || 0}
+								</p>
+							</div>
+						</CardContent>
+					</Card>
+				)}
+			</div>
 		</div>
 	)
 }

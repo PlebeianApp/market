@@ -1,19 +1,27 @@
 // @ts-nocheck
 import { CartSummary } from '@/components/CartSummary'
 import { CheckoutProgress } from '@/components/checkout/CheckoutProgress'
-import { InvoicePaymentComponent, type LightningInvoiceData } from '@/components/checkout/InvoicePaymentComponent'
+import { PaymentInterface, type PaymentInvoice } from '@/components/checkout/PaymentInterface'
+import { PaymentSummary } from '@/components/checkout/PaymentSummary'
 import { OrderFinalizeComponent } from '@/components/checkout/OrderFinalizeComponent'
 import { ShippingAddressForm, type CheckoutFormData } from '@/components/checkout/ShippingAddressForm'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { cartStore } from '@/lib/stores/cart'
+import { cartStore, cartActions } from '@/lib/stores/cart'
+import { useWallets, parseNwcUri } from '@/lib/stores/wallet'
 import { useStore } from '@tanstack/react-store'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useForm } from '@tanstack/react-form'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
-import { ChevronLeft, ChevronRight, Zap, User, Users } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Zap } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { useInvoiceGeneration } from '@/hooks/useInvoiceGeneration'
+import { createAndPublishOrder, createPaymentRequestEvent } from '@/publish/orders'
+import type { OrderCreationData, PaymentRequestData } from '@/publish/orders'
+import { createOrderInvoiceSet, updateInvoiceStatus } from '@/lib/utils/orderUtils'
+import type { OrderInvoiceSet } from '@/lib/utils/orderUtils'
+import { ndkActions } from '@/lib/stores/ndk'
 
 export const Route = createFileRoute('/checkout')({
 	component: RouteComponent,
@@ -21,21 +29,67 @@ export const Route = createFileRoute('/checkout')({
 
 type CheckoutStep = 'shipping' | 'summary' | 'payment' | 'complete'
 
-// Mock function to generate BOLT11 invoice
-const generateMockBolt11 = (amountSats: number, description: string): string => {
-	// This is a mock BOLT11 invoice - in production, this would come from a Lightning service
-	const mockInvoice = `lnbc${amountSats}u1pjkxyzt0zd9xksxzh9grrfvxsxgrsq27hv2xz6x9zpqfnwv4j8gctjq4s7w58rq3h7w2e8l9g8v3h7w2e8l9g8v3h7w2e8l9g8v3h7w2e8l9g8v3h7w2e8l9g8v`
-	return mockInvoice + Math.random().toString(36).substring(2, 15)
-}
-
 function RouteComponent() {
 	const navigate = useNavigate()
 	const { cart, totalInSats, totalShippingInSats, productsBySeller, sellerData, v4vShares } = useStore(cartStore)
+	const { wallets, isInitialized: walletsInitialized, initialize: initializeWallets } = useWallets()
 	const [currentStep, setCurrentStep] = useState<CheckoutStep>('shipping')
 	const [currentInvoiceIndex, setCurrentInvoiceIndex] = useState(0)
-	const [invoices, setInvoices] = useState<LightningInvoiceData[]>([])
+	const [invoices, setInvoices] = useState<PaymentInvoice[]>([])
 	const [shippingData, setShippingData] = useState<CheckoutFormData | null>(null)
+
+	// Initialize wallets on mount
+	useEffect(() => {
+		if (!walletsInitialized) {
+			initializeWallets()
+		}
+	}, [walletsInitialized, initializeWallets])
+
+	// Check for NWC availability based on configured wallets with valid URIs
+	const nwcEnabled = useMemo(() => {
+		if (!walletsInitialized) {
+			return false
+		}
+
+		// Check for wallets with valid NWC URIs
+		const validWallets = wallets.filter((wallet) => {
+			if (!wallet.nwcUri) return false
+
+			const parsed = parseNwcUri(wallet.nwcUri)
+			return parsed !== null && parsed.pubkey && parsed.relay && parsed.secret
+		})
+
+		const hasValidWallets = validWallets.length > 0
+		console.log(
+			`NWC Status: initialized=${walletsInitialized}, total_wallets=${wallets.length}, valid_wallets=${validWallets.length}, enabled=${hasValidWallets}`,
+		)
+
+		if (validWallets.length > 0) {
+			console.log(
+				'Valid NWC wallets:',
+				validWallets.map((w) => ({
+					name: w.name,
+					pubkey: w.pubkey.substring(0, 8) + '...',
+					relay: w.relays[0] || 'unknown',
+				})),
+			)
+		} else if (wallets.length > 0) {
+			console.log(
+				'Found wallets but none have valid NWC URIs:',
+				wallets.map((w) => ({
+					name: w.name,
+					hasUri: !!w.nwcUri,
+					uriValid: w.nwcUri ? parseNwcUri(w.nwcUri) !== null : false,
+				})),
+			)
+		}
+
+		return hasValidWallets
+	}, [walletsInitialized, wallets])
+	const [orderInvoiceSets, setOrderInvoiceSets] = useState<Record<string, OrderInvoiceSet>>({})
+	const [specOrderIds, setSpecOrderIds] = useState<string[]>([])
 	const [animationParent] = useAutoAnimate()
+	const { generateInvoiceForSeller, isGenerating: isGeneratingInvoices } = useInvoiceGeneration({ fallbackToMock: true })
 
 	const isCartEmpty = useMemo(() => {
 		return Object.keys(cart.products).length === 0
@@ -50,11 +104,15 @@ function RouteComponent() {
 	}, [productsBySeller])
 
 	const totalInvoicesNeeded = useMemo(() => {
-		return sellers.reduce((total, sellerPubkey) => {
+		const total = sellers.reduce((total, sellerPubkey) => {
 			// 1 invoice for the seller + 1 invoice for each V4V recipient
 			const v4vRecipients = v4vShares[sellerPubkey] || []
-			return total + 1 + v4vRecipients.length
+			const sellerTotal = 1 + v4vRecipients.length
+			console.log(`Seller ${sellerPubkey.substring(0, 8)}... needs ${sellerTotal} invoices (1 merchant + ${v4vRecipients.length} V4V)`)
+			return total + sellerTotal
 		}, 0)
+		console.log(`Total invoices needed: ${total}`)
+		return total
 	}, [sellers, v4vShares])
 
 	const totalSteps = useMemo(() => {
@@ -103,75 +161,138 @@ function RouteComponent() {
 
 	// Generate Lightning invoices when moving to payment step
 	useEffect(() => {
-		if (currentStep === 'payment' && invoices.length === 0 && sellers.length > 0) {
-			const newInvoices: LightningInvoiceData[] = []
-			let invoiceIndex = 0
+		if (currentStep === 'payment' && invoices.length === 0 && sellers.length > 0 && !isGeneratingInvoices) {
+			const generateInvoices = async () => {
+				const newInvoices: PaymentInvoice[] = []
+				let invoiceIndex = 0
 
-			sellers.forEach((sellerPubkey) => {
-				const sellerProducts = productsBySeller[sellerPubkey] || []
-				const data = sellerData[sellerPubkey]
-				const totalAmount = data?.satsTotal || 0
-				const shares = data?.shares
-				const v4vRecipients = v4vShares[sellerPubkey] || []
+				// Debug: Log all V4V shares data
+				console.log('📋 Current V4V shares data:', v4vShares)
+				console.log('🏪 Sellers:', sellers)
+				console.log('💰 Seller data:', sellerData)
 
-				// Create invoice for seller's share
-				const sellerAmount = shares?.sellerAmount || totalAmount
-				const sellerInvoice: LightningInvoiceData = {
-					id: `invoice-${invoiceIndex++}`,
-					sellerPubkey,
-					sellerName: `Seller ${sellerPubkey.substring(0, 8)}...`,
-					amount: sellerAmount,
-					bolt11: generateMockBolt11(sellerAmount, `Seller payment for ${sellerProducts.length} items`),
-					expiresAt: Math.floor(Date.now() / 1000) + 3600,
-					items: sellerProducts.map((product) => ({
-						productId: product.id,
-						name: `Product ${product.id.substring(0, 8)}...`,
-						amount: product.amount,
-						price: Math.floor(sellerAmount / sellerProducts.length),
-					})),
-					status: 'pending',
-					invoiceType: 'seller',
-				}
-				newInvoices.push(sellerInvoice)
+				try {
+					for (const sellerPubkey of sellers) {
+						const sellerProducts = productsBySeller[sellerPubkey] || []
+						const data = sellerData[sellerPubkey]
+						const totalAmount = data?.satsTotal || 0
+						const shares = data?.shares
+						const v4vRecipients = v4vShares[sellerPubkey] || []
 
-				// Create invoices for each V4V recipient
-				v4vRecipients.forEach((recipient) => {
-					// Calculate the recipient's amount based on their percentage
-					const recipientPercentage = recipient.percentage > 1 ? recipient.percentage / 100 : recipient.percentage
-					const recipientAmount = Math.floor(totalAmount * recipientPercentage)
+						// Debug: Log V4V recipients for this seller
+						console.log(
+							`Seller ${sellerPubkey.substring(0, 8)}... has ${v4vRecipients.length} V4V recipients:`,
+							v4vRecipients.map((r) => `${r.name} (${r.percentage}%)`),
+						)
 
-					if (recipientAmount > 0) {
-						const recipientInvoice: LightningInvoiceData = {
-							id: `invoice-${invoiceIndex++}`,
-							sellerPubkey: recipient.pubkey,
-							sellerName: recipient.name || `V4V ${recipient.pubkey.substring(0, 8)}...`,
-							amount: recipientAmount,
-							bolt11: generateMockBolt11(recipientAmount, `V4V payment to ${recipient.name}`),
-							expiresAt: Math.floor(Date.now() / 1000) + 3600,
-							items: [
-								{
-									productId: `v4v-${recipient.id}`,
-									name: `V4V Share (${(recipientPercentage * 100).toFixed(1)}%)`,
-									amount: 1,
-									price: recipientAmount,
-								},
-							],
-							status: 'pending',
-							invoiceType: 'v4v',
-							originalSellerPubkey: sellerPubkey,
+						// Create invoice for seller's share
+						const sellerAmount = shares?.sellerAmount || totalAmount
+						const sellerItems = sellerProducts.map((product) => ({
+							productId: product.id,
+							name: `Product ${product.id.substring(0, 8)}...`,
+							amount: product.amount,
+							price: Math.floor(sellerAmount / sellerProducts.length),
+						}))
+
+						console.log(`Generating invoice for seller ${sellerPubkey.substring(0, 8)}... (${sellerAmount} sats)`)
+
+						const sellerInvoice = await generateInvoiceForSeller(
+							sellerPubkey,
+							sellerAmount,
+							`Seller payment for ${sellerProducts.length} items`,
+							`invoice-${invoiceIndex++}`,
+							sellerItems,
+							'seller',
+						)
+
+						// Convert to simplified PaymentInvoice format
+						const paymentInvoice: PaymentInvoice = {
+							id: sellerInvoice.id,
+							sellerPubkey: sellerInvoice.sellerPubkey,
+							sellerName: sellerInvoice.sellerName,
+							amount: sellerInvoice.amount,
+							bolt11: sellerInvoice.bolt11 || '',
+							expiresAt: sellerInvoice.expiresAt,
+							status: sellerInvoice.status,
+							type: 'merchant',
 						}
-						newInvoices.push(recipientInvoice)
-					}
-				})
-			})
+						newInvoices.push(paymentInvoice)
 
-			setInvoices(newInvoices)
+						// Create invoices for each V4V recipient
+						for (const recipient of v4vRecipients) {
+							// Calculate the recipient's amount based on their percentage
+							const recipientPercentage = recipient.percentage > 1 ? recipient.percentage / 100 : recipient.percentage
+							const calculatedAmount = totalAmount * recipientPercentage
+
+							// Round up to ensure minimum 1 sat for any V4V recipient with > 0% share
+							const recipientAmount = recipientPercentage > 0 ? Math.max(1, Math.floor(calculatedAmount)) : 0
+
+							console.log(
+								`Processing V4V recipient ${recipient.name}: percentage=${recipient.percentage}%, calculated=${calculatedAmount.toFixed(2)}, final amount=${recipientAmount} sats`,
+							)
+
+							if (recipientAmount > 0) {
+								console.log(`Generating V4V invoice for ${recipient.name} (${recipientAmount} sats)`)
+
+								const recipientItems = [
+									{
+										productId: `v4v-${recipient.id}`,
+										name: `V4V Share (${(recipientPercentage * 100).toFixed(1)}%)`,
+										amount: 1,
+										price: recipientAmount,
+									},
+								]
+
+								try {
+									const recipientInvoice = await generateInvoiceForSeller(
+										recipient.pubkey,
+										recipientAmount,
+										`V4V payment to ${recipient.name}`,
+										`invoice-${invoiceIndex++}`,
+										recipientItems,
+										'v4v',
+									)
+
+									// Convert to simplified PaymentInvoice format
+									const v4vPaymentInvoice: PaymentInvoice = {
+										id: recipientInvoice.id,
+										sellerPubkey: recipient.pubkey,
+										sellerName: recipient.name,
+										amount: recipientAmount,
+										bolt11: recipientInvoice.bolt11 || '',
+										expiresAt: recipientInvoice.expiresAt,
+										status: recipientInvoice.status,
+										type: 'v4v',
+									}
+									newInvoices.push(v4vPaymentInvoice)
+									console.log(`✅ Successfully generated V4V invoice for ${recipient.name}`)
+								} catch (error) {
+									console.error(`❌ Failed to generate V4V invoice for ${recipient.name}:`, error)
+									// Continue processing other recipients instead of failing completely
+								}
+							} else {
+								console.log(`⚠️ Skipping V4V recipient ${recipient.name} due to zero percentage`)
+							}
+						}
+					}
+
+					console.log(`Generated ${newInvoices.length} invoices`)
+					setInvoices(newInvoices)
+				} catch (error) {
+					console.error('Failed to generate invoices:', error)
+					// Fallback to empty invoices - the user can retry
+					setInvoices([])
+				}
+			}
+
+			generateInvoices()
 		}
-	}, [currentStep, sellers, productsBySeller, sellerData, v4vShares, invoices.length])
+	}, [currentStep, sellers, productsBySeller, sellerData, v4vShares, invoices.length, isGeneratingInvoices, generateInvoiceForSeller])
 
 	const form = useForm({
 		defaultValues: {
 			name: '',
+			email: '',
 			phone: '',
 			firstLineOfAddress: '',
 			zipPostcode: '',
@@ -200,12 +321,61 @@ function RouteComponent() {
 				setCurrentInvoiceIndex((prev) => prev + 1)
 			} else {
 				setCurrentStep('complete')
+				// Clear the cart after all payments are complete
+				cartActions.clear()
 			}
 		}, 3000) // Slightly longer delay to simulate Lightning verification
 	}
 
+	const handlePaymentComplete = (invoiceId: string, method: 'lightning' | 'nwc') => {
+		console.log(`Payment completed for invoice ${invoiceId} via ${method}`)
+
+		setInvoices((prev) =>
+			prev.map((invoice) => {
+				if (invoice.id === invoiceId) {
+					return {
+						...invoice,
+						status: 'paid' as const,
+					}
+				}
+				return invoice
+			}),
+		)
+
+		// Auto-advance on successful payment
+		setTimeout(() => {
+			if (currentInvoiceIndex < totalInvoicesNeeded - 1) {
+				setCurrentInvoiceIndex((prev) => prev + 1)
+			} else {
+				setCurrentStep('complete')
+				// Clear the cart after all payments are complete
+				cartActions.clear()
+			}
+		}, 1500)
+	}
+
+	const handlePayAllInvoices = () => {
+		// Mark all remaining invoices as paid (simulating NWC batch payment)
+		setInvoices((prev) =>
+			prev.map((invoice) => ({
+				...invoice,
+				status: invoice.status === 'pending' ? ('paid' as const) : invoice.status,
+			})),
+		)
+
+		// Go to completion
+		setTimeout(() => {
+			setCurrentStep('complete')
+			cartActions.clear()
+		}, 2000)
+	}
+
 	const goBackToShopping = () => {
 		navigate({ to: '/' })
+	}
+
+	const goToOrders = () => {
+		navigate({ to: '/dashboard/account/your-purchases' })
 	}
 
 	const goBackToPreviousStep = () => {
@@ -231,13 +401,139 @@ function RouteComponent() {
 		}
 	}
 
-	const handleContinueToPayment = () => {
+	const handleContinueToPayment = async () => {
 		setCurrentStep('payment')
-	}
 
-	const navigateToInvoice = (index: number) => {
-		if (index >= 0 && index < invoices.length) {
-			setCurrentInvoiceIndex(index)
+		// Create spec-compliant orders - one per seller
+		if (shippingData && sellers.length > 0 && specOrderIds.length === 0) {
+			try {
+				const ndk = ndkActions.getNDK()
+				const currentUser = ndk?.activeUser
+				const buyerPubkey = currentUser?.pubkey
+
+				if (!buyerPubkey) {
+					console.error('No active user found for order creation')
+					// Continue with regular checkout flow
+					return
+				}
+
+				const newOrderIds: string[] = []
+				const newInvoiceSets: Record<string, OrderInvoiceSet> = {}
+
+				// Create one order per seller
+				for (const sellerPubkey of sellers) {
+					const sellerProducts = productsBySeller[sellerPubkey] || []
+					const data = sellerData[sellerPubkey]
+
+					if (sellerProducts.length === 0) continue
+
+					const sellerTotalSats = data?.satsTotal || 0
+					const sellerShippingSats = data?.shippingSats || 0
+
+					const orderData: OrderCreationData = {
+						merchantPubkey: sellerPubkey,
+						buyerPubkey: buyerPubkey,
+						orderItems: sellerProducts.map((product) => ({
+							productRef: `30402:${sellerPubkey}:${product.id}`,
+							quantity: product.amount,
+						})),
+						totalAmountSats: sellerTotalSats,
+						shippingAddress: shippingData,
+						email: shippingData?.email || 'customer@example.com',
+						notes: `Order for ${sellerProducts.length} item${sellerProducts.length !== 1 ? 's' : ''} from seller`,
+					}
+
+					const { orderId, success } = await createAndPublishOrder(orderData)
+
+					if (success && orderId) {
+						newOrderIds.push(orderId)
+
+						// Create comprehensive invoice set for this seller
+						const merchantAmount = data?.shares?.sellerAmount || sellerTotalSats
+						const v4vRecipients = v4vShares[sellerPubkey] || []
+
+						const invoiceSet = createOrderInvoiceSet(
+							orderId,
+							sellerPubkey,
+							merchantAmount,
+							v4vRecipients.map((recipient) => ({
+								pubkey: recipient.pubkey,
+								amount: Math.floor(sellerTotalSats * (recipient.percentage > 1 ? recipient.percentage / 100 : recipient.percentage)),
+							})),
+						)
+
+						newInvoiceSets[sellerPubkey] = invoiceSet
+						console.log(`Spec-compliant order created for seller ${sellerPubkey.substring(0, 8)}...:`, orderId)
+
+						// *** NEW: Create payment request events for each invoice ***
+						// This creates individual payment request events (Kind 16, type 2) for the merchant and each V4V recipient
+						console.log(`Creating payment request events for order ${orderId}...`)
+
+						// Create payment request for merchant
+						const merchantInvoice = invoices.find((inv) => inv.sellerPubkey === sellerPubkey && inv.invoiceType === 'seller')
+						if (merchantInvoice) {
+							const merchantPaymentData: PaymentRequestData = {
+								buyerPubkey: buyerPubkey,
+								merchantPubkey: sellerPubkey,
+								orderId: orderId,
+								amountSats: merchantInvoice.amount,
+								paymentMethods: [
+									{
+										type: 'lightning',
+										details: merchantInvoice.bolt11 || 'lnbc130n1p5947vzsp...',
+									},
+								],
+								expirationTime: merchantInvoice.expiresAt,
+								notes: `Payment request for merchant payment (${merchantInvoice.amount} sats)`,
+							}
+
+							try {
+								const paymentRequestEvent = await createPaymentRequestEvent(merchantPaymentData)
+								await paymentRequestEvent.publish()
+								console.log(`✅ Created payment request for merchant: ${merchantInvoice.amount} sats`)
+							} catch (error) {
+								console.error('Failed to create merchant payment request:', error)
+							}
+						}
+
+						// Create payment requests for V4V recipients
+						const v4vInvoicesForSeller = invoices.filter((inv) => inv.sellerPubkey === sellerPubkey && inv.invoiceType === 'v4v')
+						for (const v4vInvoice of v4vInvoicesForSeller) {
+							const v4vPaymentData: PaymentRequestData = {
+								buyerPubkey: buyerPubkey,
+								merchantPubkey: v4vInvoice.recipientPubkey, // V4V recipient is the "merchant" for this payment request
+								orderId: orderId,
+								amountSats: v4vInvoice.amount,
+								paymentMethods: [
+									{
+										type: 'lightning',
+										details: v4vInvoice.bolt11 || 'mock_v4v_invoice',
+									},
+								],
+								expirationTime: v4vInvoice.expiresAt,
+								notes: `Payment request for V4V recipient ${v4vInvoice.sellerName} (${v4vInvoice.amount} sats)`,
+							}
+
+							try {
+								const paymentRequestEvent = await createPaymentRequestEvent(v4vPaymentData)
+								await paymentRequestEvent.publish()
+								console.log(`✅ Created payment request for V4V recipient ${v4vInvoice.sellerName}: ${v4vInvoice.amount} sats`)
+							} catch (error) {
+								console.error(`Failed to create V4V payment request for ${v4vInvoice.sellerName}:`, error)
+							}
+						}
+
+						console.log(`Created ${1 + v4vInvoicesForSeller.length} payment request events for order ${orderId}`)
+					}
+				}
+
+				setSpecOrderIds(newOrderIds)
+				setOrderInvoiceSets(newInvoiceSets)
+				console.log(`Created ${newOrderIds.length} spec-compliant orders with payment requests`)
+			} catch (error) {
+				console.error('Failed to create spec-compliant orders:', error)
+				// Continue with regular checkout flow
+			}
 		}
 	}
 
@@ -289,53 +585,57 @@ function RouteComponent() {
 								/>
 							)}
 
-							{currentStep === 'payment' && invoices[currentInvoiceIndex] && (
-								<div className="space-y-4">
-									{/* Invoice Carousel Navigation */}
-									{invoices.length > 1 && (
-										<div className="flex items-center justify-between mb-4 p-4 bg-gray-50 rounded-lg">
-											<Button
-												variant="outline"
-												size="sm"
-												onClick={() => navigateToInvoice(currentInvoiceIndex - 1)}
-												disabled={currentInvoiceIndex === 0}
-											>
-												<ChevronLeft className="w-4 h-4 mr-1" />
-												Previous
-											</Button>
-
-											<div className="flex items-center space-x-2">
-												{invoices.map((_, index) => (
-													<button
-														key={index}
-														onClick={() => navigateToInvoice(index)}
-														className={`w-3 h-3 rounded-full transition-colors ${
-															index === currentInvoiceIndex ? 'bg-pink-500' : 'bg-gray-300 hover:bg-gray-400'
-														}`}
-													/>
-												))}
-											</div>
-
-											<Button
-												variant="outline"
-												size="sm"
-												onClick={() => navigateToInvoice(currentInvoiceIndex + 1)}
-												disabled={currentInvoiceIndex === invoices.length - 1}
-											>
-												Next
-												<ChevronRight className="w-4 h-4 ml-1" />
-											</Button>
-										</div>
-									)}
-
-									{/* Invoice Payment Component */}
-									<InvoicePaymentComponent
-										invoice={invoices[currentInvoiceIndex]}
-										onPayInvoice={handlePayInvoice}
-										invoiceNumber={currentInvoiceIndex + 1}
-										totalInvoices={totalInvoicesNeeded}
-									/>
+							{/* Loading State for Invoice Generation */}
+							{currentStep === 'payment' && isGeneratingInvoices && (
+								<div className="text-center py-12">
+									<div className="inline-flex items-center gap-2 text-gray-600 mb-4">
+										<div className="animate-spin w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full" />
+										<span className="text-lg font-medium">Generating Lightning invoices...</span>
+									</div>
+									<p className="text-sm text-gray-500 mb-2">Fetching seller Lightning addresses and creating payment requests</p>
+									<p className="text-xs text-gray-400">This may take a few seconds</p>
 								</div>
+							)}
+
+							{/* Error State - No Invoices Generated */}
+							{currentStep === 'payment' && !isGeneratingInvoices && invoices.length === 0 && (
+								<div className="text-center py-12">
+									<div className="text-gray-600 mb-6">
+										<Zap className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+										<h3 className="text-lg font-medium mb-2">Unable to generate payment invoices</h3>
+										<p className="text-sm text-gray-500 max-w-md mx-auto">
+											There may be an issue with the seller's Lightning configuration, or the Lightning service may be temporarily
+											unavailable.
+										</p>
+									</div>
+									<div className="space-y-2">
+										<Button
+											onClick={() => {
+												setInvoices([])
+												// This will trigger the useEffect to regenerate invoices
+											}}
+											variant="outline"
+											className="mr-2"
+										>
+											Try Again
+										</Button>
+										<Button onClick={goBackToPreviousStep} variant="ghost">
+											Go Back
+										</Button>
+									</div>
+								</div>
+							)}
+
+							{/* Payment Interface - Only show when invoices are ready */}
+							{currentStep === 'payment' && !isGeneratingInvoices && invoices.length > 0 && (
+								<PaymentInterface
+									invoices={invoices}
+									currentIndex={currentInvoiceIndex}
+									onPaymentComplete={handlePaymentComplete}
+									onNavigate={setCurrentInvoiceIndex}
+									onPayAll={handlePayAllInvoices}
+									nwcEnabled={nwcEnabled}
+								/>
 							)}
 
 							{currentStep === 'complete' && (
@@ -344,6 +644,7 @@ function RouteComponent() {
 									invoices={invoices}
 									totalInSats={totalInSats}
 									onNewOrder={goBackToShopping}
+									onViewOrders={goToOrders}
 								/>
 							)}
 						</div>
@@ -356,104 +657,41 @@ function RouteComponent() {
 						<CardTitle>{currentStep === 'payment' ? 'Payment Details' : 'Order Summary'}</CardTitle>
 					</CardHeader>
 					<CardContent className="h-full">
-						{currentStep === 'payment' && invoices.length > 0 ? (
-							<div className="space-y-4 h-full">
-								{/* Current Invoice Summary */}
-								<div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-lg p-4 border-2 border-pink-200">
-									<div className="flex items-center gap-2 mb-2">
-										{invoices[currentInvoiceIndex].invoiceType === 'v4v' ? (
-											<Users className="w-5 h-5 text-purple-600" />
-										) : (
-											<User className="w-5 h-5 text-blue-600" />
-										)}
-										<span className="font-medium text-gray-900">Currently Paying: {invoices[currentInvoiceIndex].sellerName}</span>
+						{currentStep === 'payment' && isGeneratingInvoices ? (
+							<div className="flex items-center justify-center h-full">
+								<div className="text-center">
+									<div className="animate-spin w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full mx-auto mb-4" />
+									<p className="text-gray-600">Loading payment details...</p>
+								</div>
+							</div>
+						) : currentStep === 'payment' && invoices.length > 0 ? (
+							<>
+								{/* NWC Status Indicator */}
+								<div className="mb-4 p-3 bg-gray-50 rounded-lg border">
+									<div className="flex items-center justify-between text-sm">
+										<span className="font-medium text-gray-700">Wallet Status:</span>
+										<div className="flex items-center gap-2">
+											{nwcEnabled ? (
+												<>
+													<div className="w-2 h-2 bg-green-500 rounded-full" />
+													<span className="text-green-700 font-medium">
+														{wallets.filter((w) => w.nwcUri && parseNwcUri(w.nwcUri)).length} NWC wallet
+														{wallets.filter((w) => w.nwcUri && parseNwcUri(w.nwcUri)).length !== 1 ? 's' : ''} connected
+													</span>
+												</>
+											) : (
+												<>
+													<div className="w-2 h-2 bg-gray-400 rounded-full" />
+													<span className="text-gray-600">No NWC wallets</span>
+												</>
+											)}
+										</div>
 									</div>
-									<div className="flex items-center gap-2">
-										<Zap className="w-4 h-4 text-yellow-500" />
-										<span className="text-lg font-bold">{formatSats(invoices[currentInvoiceIndex].amount)} sats</span>
-										<span
-											className={`px-2 py-1 rounded-full text-xs font-medium ${
-												invoices[currentInvoiceIndex].invoiceType === 'v4v' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
-											}`}
-										>
-											{invoices[currentInvoiceIndex].invoiceType === 'v4v' ? 'V4V Payment' : 'Merchant Payment'}
-										</span>
-									</div>
+									{nwcEnabled && <p className="text-xs text-gray-500 mt-1">Fast payments available • Configure more wallets in settings</p>}
 								</div>
 
-								{/* Invoice List */}
-								<h4 className="font-medium text-gray-900 mb-3 flex items-center justify-between">
-									<span>All Payments ({invoices.length})</span>
-									<span className="text-sm text-gray-500">Click to select</span>
-								</h4>
-								<ScrollArea>
-									<div className="space-y-2">
-										{invoices.map((invoice, index) => (
-											<div
-												key={invoice.id}
-												onClick={() => navigateToInvoice(index)}
-												className={`p-4 rounded-lg border-2 cursor-pointer transition-all duration-200 hover:shadow-md ${
-													index === currentInvoiceIndex
-														? 'bg-pink-50 border-pink-300 shadow-md ring-2 ring-pink-200'
-														: 'bg-white hover:bg-gray-50 border-gray-200 hover:border-gray-300'
-												}`}
-											>
-												<div className="flex items-center justify-between">
-													{/* Left Side - Invoice Info */}
-													<div className="flex items-center gap-3 flex-1">
-														<div className="flex-shrink-0">
-															{invoice.invoiceType === 'v4v' ? (
-																<div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-																	<Users className="w-5 h-5 text-purple-600" />
-																</div>
-															) : (
-																<div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-																	<User className="w-5 h-5 text-blue-600" />
-																</div>
-															)}
-														</div>
-														<div className="flex-1 min-w-0">
-															<div className="flex items-center gap-2 mb-1">
-																<p className="font-medium text-gray-900 truncate">{invoice.sellerName}</p>
-																{index === currentInvoiceIndex && (
-																	<span className="bg-pink-500 text-white text-xs px-2 py-0.5 rounded-full">Current</span>
-																)}
-															</div>
-															<p className="text-sm text-gray-600 mb-1">{invoice.invoiceType === 'v4v' ? 'V4V Recipient' : 'Merchant'}</p>
-															<p className="text-xs text-gray-500 font-mono truncate">{invoice.sellerPubkey.substring(0, 20)}...</p>
-														</div>
-													</div>
-
-													{/* Right Side - Amount & Status */}
-													<div className="text-right flex-shrink-0 ml-4">
-														<div className="flex items-center gap-1 justify-end mb-1">
-															<Zap className="w-4 h-4 text-yellow-500" />
-															<span className="font-bold text-gray-900">{formatSats(invoice.amount)}</span>
-															<span className="text-sm text-gray-600">sats</span>
-														</div>
-														<div
-															className={`inline-block text-xs px-2 py-1 rounded-full font-medium ${
-																invoice.status === 'paid'
-																	? 'bg-green-100 text-green-800'
-																	: invoice.status === 'processing'
-																		? 'bg-yellow-100 text-yellow-800'
-																		: 'bg-gray-100 text-gray-800'
-															}`}
-														>
-															{invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
-														</div>
-														{invoice.items.slice(0, 2).map((item, itemIndex) => (
-															<div key={itemIndex} className="flex justify-between text-xs">
-																<span className="text-gray-700 truncate mr-2">{item.name}</span>
-															</div>
-														))}
-													</div>
-												</div>
-											</div>
-										))}
-									</div>
-								</ScrollArea>
-							</div>
+								<PaymentSummary invoices={invoices} currentIndex={currentInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
+							</>
 						) : (
 							<ScrollArea className="h-full">
 								<CartSummary

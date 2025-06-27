@@ -113,7 +113,7 @@ export const OrderCreationSchema = z.object({
 // Additional tags for payment request
 export const PaymentMethodTagSchema = z.tuple([
 	z.literal('payment'),
-	z.enum(['lightning', 'bitcoin', 'ecash', 'fiat', 'other']),
+	z.enum(['lightning', 'bitcoin', 'fiat', 'other']),
 	z.string(), // Method details (invoice, address, etc.)
 	z.string().optional(), // Optional proof
 ])
@@ -288,8 +288,8 @@ export const GeneralCommunicationSchema = z.object({
 // Required tags for payment receipts
 export const PaymentProofTagSchema = z.tuple([
 	z.literal('payment'),
-	z.enum(['lightning', 'bitcoin', 'ecash', 'fiat', 'other']), // Payment medium
-	z.string(), // Medium reference (invoice, address, mint URL, etc.)
+	z.enum(['lightning', 'bitcoin', 'fiat', 'other']), // Payment medium
+	z.string(), // Medium reference (invoice, address, etc.)
 	z.string(), // Proof (preimage, txid, etc.)
 ])
 
