@@ -31,7 +31,7 @@ export function createInvoiceData(
 	bolt11?: string,
 ): InvoiceData {
 	const now = Math.floor(Date.now() / 1000)
-	
+
 	return {
 		id: `${orderId}-${type}-${sellerPubkey}`,
 		orderId,
@@ -55,22 +55,22 @@ export function createOrderInvoiceSet(
 	v4vRecipients: Array<{ pubkey: string; amount: number }> = [],
 ): OrderInvoiceSet {
 	const invoices: InvoiceData[] = []
-	
+
 	// Add merchant invoice
 	if (merchantAmount > 0) {
 		invoices.push(createInvoiceData(orderId, merchantPubkey, merchantAmount, 'merchant'))
 	}
-	
+
 	// Add V4V invoices
-	v4vRecipients.forEach(recipient => {
+	v4vRecipients.forEach((recipient) => {
 		if (recipient.amount > 0) {
 			invoices.push(createInvoiceData(orderId, recipient.pubkey, recipient.amount, 'v4v'))
 		}
 	})
-	
+
 	const totalAmount = merchantAmount + v4vRecipients.reduce((sum, r) => sum + r.amount, 0)
 	const v4vAmount = v4vRecipients.reduce((sum, r) => sum + r.amount, 0)
-	
+
 	return {
 		orderId,
 		invoices,
@@ -85,16 +85,14 @@ export function createOrderInvoiceSet(
  * Update the status of a specific invoice in an invoice set
  */
 export function updateInvoiceStatus(invoiceSet: OrderInvoiceSet, invoiceId: string, status: InvoiceData['status']): OrderInvoiceSet {
-	const updatedInvoices = invoiceSet.invoices.map(invoice => 
-		invoice.id === invoiceId ? { ...invoice, status } : invoice
-	)
-	
+	const updatedInvoices = invoiceSet.invoices.map((invoice) => (invoice.id === invoiceId ? { ...invoice, status } : invoice))
+
 	// Determine overall status
-	const paidInvoices = updatedInvoices.filter(inv => inv.status === 'paid')
-	const failedInvoices = updatedInvoices.filter(inv => inv.status === 'failed')
-	
+	const paidInvoices = updatedInvoices.filter((inv) => inv.status === 'paid')
+	const failedInvoices = updatedInvoices.filter((inv) => inv.status === 'failed')
+
 	let overallStatus: OrderInvoiceSet['status'] = 'pending'
-	
+
 	if (paidInvoices.length === updatedInvoices.length) {
 		overallStatus = 'complete'
 	} else if (failedInvoices.length === updatedInvoices.length) {
@@ -102,10 +100,10 @@ export function updateInvoiceStatus(invoiceSet: OrderInvoiceSet, invoiceId: stri
 	} else if (paidInvoices.length > 0) {
 		overallStatus = 'partial'
 	}
-	
+
 	return {
 		...invoiceSet,
 		invoices: updatedInvoices,
 		status: overallStatus,
 	}
-} 
+}

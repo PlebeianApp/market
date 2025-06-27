@@ -637,5 +637,3 @@ export async function sendPaymentReceipt(data: PaymentReceiptData): Promise<bool
 		return false
 	}
 }
-
-

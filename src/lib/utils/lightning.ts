@@ -247,7 +247,7 @@ export class LightningService {
 			const response = await fetch(lnurlPayUrl, {
 				method: 'GET',
 				headers: {
-					'Accept': 'application/json',
+					Accept: 'application/json',
 				},
 			})
 
@@ -305,4 +305,4 @@ export class LightningService {
 	}
 }
 
-export type { LightningInvoiceResult, PaymentVerificationResult } 
+export type { LightningInvoiceResult, PaymentVerificationResult }

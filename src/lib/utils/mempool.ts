@@ -159,4 +159,4 @@ export class MempoolService {
 
 		return patterns.some((pattern) => pattern.test(address))
 	}
-} 
+}
