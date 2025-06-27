@@ -57,7 +57,7 @@ export function OrderDataTable<TData>({
 		<div className="space-y-4">
 			<div className="flex items-center justify-between py-4">
 				{showStatusFilter && onStatusFilterChange && (
-					<div className="w-full max-w-xs">
+					<div className="w-full max-w-xs pr-0">
 						<Select defaultValue="any" value={statusFilter} onValueChange={onStatusFilterChange}>
 							<SelectTrigger>
 								<SelectValue placeholder="Any Status" />

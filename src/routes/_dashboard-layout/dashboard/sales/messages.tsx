@@ -7,33 +7,13 @@ import { useStore } from '@tanstack/react-store'
 import { Loader2, MessageSquareText } from 'lucide-react'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/messages')({
-	component: MessagesParentComponent,
+	component: MessagesRouterComponent,
 })
 
-function MessagesParentComponent() {
-	const { user: currentUser } = useStore(authStore)
-	const { data: conversations, isLoading, error } = useConversationsList()
-	const matchRoute = useMatchRoute()
+function MessagesListComponent() {
 	useDashboardTitle('Messages')
-	const isChatDetailActive = matchRoute({
-		to: '/dashboard/sales/messages/$pubkey',
-		fuzzy: true,
-	})
+	const { data: conversations, isLoading, error } = useConversationsList()
 
-	if (!currentUser) {
-		return (
-			<div className="p-6 text-center">
-				<p>Please log in to view your messages.</p>
-			</div>
-		)
-	}
-
-	// If a specific chat detail is active, render only the Outlet for it
-	if (isChatDetailActive) {
-		return <Outlet />
-	}
-
-	// Otherwise, render the list of conversations
 	return (
 		<div className="space-y-4">
 			{isLoading && (
@@ -53,11 +33,34 @@ function MessagesParentComponent() {
 
 			{!isLoading && !error && conversations && conversations.length > 0 && (
 				<div className="space-y-1.5">
-						{conversations.map((convo: ConversationItemData) => (
-							<ConversationListItem key={convo.pubkey} conversation={convo} />
-						))}
-					</div>
+					{conversations.map((convo: ConversationItemData) => (
+						<ConversationListItem key={convo.pubkey} conversation={convo} />
+					))}
+				</div>
 			)}
 		</div>
 	)
+}
+
+function MessagesRouterComponent() {
+	const { user: currentUser } = useStore(authStore)
+	const matchRoute = useMatchRoute()
+	const isChatDetailActive = matchRoute({
+		to: '/dashboard/sales/messages/$pubkey',
+		fuzzy: true,
+	})
+
+	if (!currentUser) {
+		return (
+			<div className="p-6 text-center">
+				<p>Please log in to view your messages.</p>
+			</div>
+		)
+	}
+
+	if (isChatDetailActive) {
+		return <Outlet />
+	}
+
+	return <MessagesListComponent />
 }

@@ -6,6 +6,7 @@ import { authStore } from '@/lib/stores/auth'
 import { sendChatMessage, useConversationMessages } from '@/queries/messages'
 import { messageKeys } from '@/queries/queryKeyFactory'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
+import { useProfileName } from '@/queries/profiles'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
@@ -22,7 +23,16 @@ function ConversationDetailComponent() {
 	const queryClient = useQueryClient()
 	const messagesEndRef = useRef<HTMLDivElement | null>(null)
 	const [isSending, setIsSending] = useState(false)
-	useDashboardTitle('Messages')
+	
+	// Get the user's profile name for the title
+	const { data: userName, isLoading: isLoadingName } = useProfileName(otherUserPubkey)
+	const displayTitle = isLoadingName 
+		? 'Messages' 
+		: userName 
+			? userName 
+			: `${otherUserPubkey.substring(0, 8)}...`
+	
+	useDashboardTitle(displayTitle)
 
 	const { data: messages, isLoading, error, refetch } = useConversationMessages(otherUserPubkey)
 
