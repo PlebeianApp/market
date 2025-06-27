@@ -3,22 +3,68 @@ import { Profile } from '@/components/Profile'
 import { Button } from '@/components/ui/button'
 import { authStore } from '@/lib/stores/auth'
 import { useConfigQuery } from '@/queries/config'
-import { Link } from '@tanstack/react-router'
+import { Link, useLocation } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { Loader2 } from 'lucide-react'
 import { CartButton } from '@/components/CartButton'
 import { uiActions } from '@/lib/stores/ui'
+import { useState, useEffect } from 'react'
 
 export function Header() {
 	const { data: config } = useConfigQuery()
 	const { isAuthenticated, isAuthenticating } = useStore(authStore)
+	const location = useLocation()
+	const [scrollY, setScrollY] = useState(0)
+
+	// Check if we're on any product page (index page or individual product) or homepage
+	const isProductPage = location.pathname === '/products' || location.pathname.startsWith('/products/')
+	const isHomepage = location.pathname === '/'
+	const shouldUseTransparentHeader = isProductPage || isHomepage
+
+	// Scroll detection for product pages and homepage
+	useEffect(() => {
+		if (!shouldUseTransparentHeader) return
+
+		const handleScroll = () => {
+			setScrollY(window.scrollY)
+		}
+
+		// Set initial scroll position
+		setScrollY(window.scrollY)
+
+		window.addEventListener('scroll', handleScroll, { passive: true })
+		return () => window.removeEventListener('scroll', handleScroll)
+	}, [shouldUseTransparentHeader])
+
+	// Calculate background opacity based on scroll position
+	const getHeaderBackground = () => {
+		if (!shouldUseTransparentHeader) return 'bg-black'
+
+		// Always use transition class for product pages and homepage
+		return 'bg-header-scroll-transition'
+	}
+
+	// Calculate CSS variable for transitional background
+	const getHeaderStyle = () => {
+		if (!shouldUseTransparentHeader) return {}
+
+		if (scrollY < 80) {
+			return { '--header-bg-opacity': 'rgba(0, 0, 0, 0)' }
+		} else if (scrollY < 160) {
+			const progress = (scrollY - 80) / 80
+			const opacity = 0 + 1.0 * progress
+			return { '--header-bg-opacity': `rgba(0, 0, 0, ${opacity})` }
+		} else {
+			return { '--header-bg-opacity': 'rgba(0, 0, 0, 1.0)' }
+		}
+	}
 
 	function handleLoginClick() {
 		uiActions.openDialog('login')
 	}
 
 	return (
-		<header className="sticky top-0 z-30 bg-black py-4 text-white px-4">
+		<header className={`sticky top-0 z-30 py-4 text-white px-4 ${getHeaderBackground()}`} style={getHeaderStyle() as React.CSSProperties}>
 			<div className="container flex h-full max-w-full items-center justify-between">
 				<section className="inline-flex items-center">
 					<Link to="/" data-testid="home-link">
