@@ -105,6 +105,7 @@ function DashboardLayout() {
 	const [showSidebar, setShowSidebar] = useState(true)
 	const [parent] = useAutoAnimate()
 	const { dashboardTitle } = useStore(uiStore)
+	const isMessageDetailView = location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages'
 
 	// Check if current route needs a back button
 	const backButtonInfo = getBackButtonInfo(location.pathname)
@@ -177,7 +178,7 @@ function DashboardLayout() {
 					)}
 
 					{/* Title */}
-					<span className="w-full lg:w-auto text-3xl">{showSidebar || !isMobile ? 'Admin Area' : dashboardTitle}</span>
+					<span className="w-full truncate px-14 text-3xl">{showSidebar || !isMobile ? 'Admin Area' : dashboardTitle}</span>
 
 					{/* Mobile emoji - only visible on small screens when not showing sidebar */}
 					{!showSidebar && emoji && breakpoint !== 'xl' && (
@@ -229,10 +230,14 @@ function DashboardLayout() {
 
 					{/* Main content - responsive behavior */}
 					{(!showSidebar || !isMobile) && (
-						<div className="w-full p-4 lg:flex-1 lg:p-8 lg:border lg:border-black lg:rounded lg:bg-white flex flex-col">
+						<div
+							className={`w-full lg:flex-1 lg:border lg:border-black lg:rounded lg:bg-white flex flex-col lg:max-h-full lg:overflow-hidden ${
+								isMessageDetailView && isMobile ? 'h-[calc(100vh-8.5rem)]' : ''
+							}`}
+						>
 							{/* Desktop back button and title - fixed to top of container */}
 							{needsBackButton && (
-								<div className="sticky top-0 z-10 bg-white border-b border-gray-200 pb-4 mb-4 -mx-8 px-8 -mt-8 pt-8 flex-shrink-0 flex items-center relative">
+								<div className="sticky top-0 z-10 bg-white border-b border-gray-200 pb-4 mb-0 p-4 lg:p-8 flex-shrink-0 flex items-center relative">
 									<button
 										onClick={handleBackToParent}
 										className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
@@ -250,13 +255,21 @@ function DashboardLayout() {
 								</div>
 							)}
 							
-							<ScrollArea className="flex-1 min-h-0">
-								<div className="p-4 bg-white border border-black rounded lg:p-0 lg:bg-transparent lg:border-0 lg:rounded-none">
-									{/* Only show title here if there's no back button */}
-									{!isMobile && !needsBackButton && <h1 className="text-[1.6rem] font-bold">{dashboardTitle}</h1>}
-									<Outlet />
-								</div>
-							</ScrollArea>
+							<div className="flex-1 min-h-0 lg:overflow-hidden">
+								{isMessageDetailView ? (
+									<div className="h-full">
+										<Outlet />
+									</div>
+								) : (
+									<ScrollArea className="h-full">
+										<div className="p-4 bg-white border border-black rounded lg:p-8 lg:bg-transparent lg:border-0 lg:rounded-none">
+											{/* Only show title here if there's no back button */}
+											{!isMobile && !needsBackButton && <h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>}
+											<Outlet />
+										</div>
+									</ScrollArea>
+								)}
+							</div>
 						</div>
 					)}
 				</div>

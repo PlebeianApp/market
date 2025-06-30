@@ -25,20 +25,27 @@ export function MessageInput({ onSendMessage, isSending }: MessageInputProps) {
 	}
 
 	return (
-		<div className="flex items-center gap-2 p-4 border-t bg-background sticky bottom-0">
-			<Textarea
-				value={message}
-				onChange={(e) => setMessage(e.target.value)}
-				onKeyPress={handleKeyPress}
-				placeholder="Type your message..."
-				className="flex-grow resize-none p-2 border rounded-lg focus:ring-2 focus:ring-primary"
-				rows={1} // Start with 1 row, expands with content or Shift+Enter
-				disabled={isSending}
-			/>
-			<Button onClick={handleSend} disabled={isSending || message.trim() === ''} size="icon">
-				<Send className="w-5 h-5" />
-				<span className="sr-only">Send message</span>
-			</Button>
+		<div className="flex-wrap items-center gap-2 p-4 border-t bg-background sticky bottom-0">
+			<div className="relative w-full">
+				<Textarea
+					value={message}
+					onChange={(e) => setMessage(e.target.value)}
+					onKeyPress={handleKeyPress}
+					placeholder="Type your message..."
+					className="w-full flex-grow resize-none p-2 pr-12 border rounded-lg focus:ring-2 focus:ring-primary"
+					rows={1}
+					disabled={isSending}
+				/>
+				<Button
+					onClick={handleSend}
+					disabled={isSending || message.trim() === ''}
+					size="icon"
+					className="absolute right-2.5 top-1/2 -translate-y-1/2 h-7 w-7"
+				>
+					<Send className="w-4 h-4" />
+					<span className="sr-only">Send message</span>
+				</Button>
+			</div>
 		</div>
 	)
 }

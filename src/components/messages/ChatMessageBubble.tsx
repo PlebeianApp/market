@@ -285,16 +285,16 @@ export function ChatMessageBubble({ event, isCurrentUser }: ChatMessageBubblePro
 	const hasContent = event.content && event.content.trim() !== ''
 
 	return (
-		<div className={`flex items-end gap-2 ${alignment} mb-2 w-full`}>
+		<div className={`flex flex-wrap items-end gap-2 ${alignment} mb-2 w-full`}>
 			{showAvatar && (
 				<div className="flex-shrink-0 self-start">
 					<UserWithAvatar pubkey={authorPubkey} size="sm" disableLink={true} />
 				</div>
 			)}
-			<div className={`flex flex-col max-w-[85%] sm:max-w-[75%] md:max-w-[65%] lg:max-w-[55%] min-w-0`}>
+			<div className="flex flex-col max-w-[85%] sm:max-w-[75%] md:max-w-[65%] lg:max-w-[55%] min-w-0">
 				<div className={`px-3 py-2 rounded-lg shadow ${bubbleStyles} break-words`}>
 					{structuredPart}
-					{event.kind === 14 && hasContent && <p className="text-sm break-words">{event.content}</p>}
+					{event.kind === 14 && hasContent && <p className="text-sm">{event.content}</p>}
 					{event.kind === 14 && !hasContent && (
 						<p className="text-sm italic text-muted-foreground/70 flex items-center">
 							<MessageSquareIcon className="w-3 h-3 mr-1 flex-shrink-0" />
@@ -302,7 +302,7 @@ export function ChatMessageBubble({ event, isCurrentUser }: ChatMessageBubblePro
 						</p>
 					)}
 					{event.kind !== 14 && hasContent && (
-						<p className={`text-sm break-words ${structuredPart ? 'mt-2 pt-2 border-t border-opacity-20' : ''}`}>
+						<p className={`text-sm ${structuredPart ? 'mt-2 pt-2 border-t border-opacity-20' : ''}`}>
 							{event.content} {/* Notes for Kind 16/17 */}
 						</p>
 					)}
