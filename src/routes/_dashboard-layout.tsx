@@ -178,7 +178,7 @@ function DashboardLayout() {
 					)}
 
 					{/* Title */}
-					<span className="w-full truncate px-14 text-3xl">{showSidebar || !isMobile ? 'Admin Area' : dashboardTitle}</span>
+					<span className="w-full truncate px-14 text-3xl">{showSidebar || !isMobile ? 'Dashboard' : dashboardTitle}</span>
 
 					{/* Mobile emoji - only visible on small screens when not showing sidebar */}
 					{!showSidebar && emoji && breakpoint !== 'xl' && (
@@ -192,7 +192,7 @@ function DashboardLayout() {
 			<div className="hidden lg:block">
 				<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center lg:justify-start relative">
 					{/* Title */}
-					<span className="w-full lg:w-auto text-3xl lg:text-3xl">{'Admin Area'}</span>
+					<span className="w-full lg:w-auto text-3xl lg:text-3xl">{'Dashboard'}</span>
 				</h1>
 			</div>
 
