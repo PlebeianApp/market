@@ -126,7 +126,7 @@ function ProductsOverviewComponent() {
 
 	return (
 		<div className="space-y-6">
-			<div className="bg-white rounded-md shadow-sm">
+			<div>
 				<Button
 					onClick={handleAddProductClick}
 					data-testid="add-product-button"
@@ -135,13 +135,13 @@ function ProductsOverviewComponent() {
 					<span className="i-product w-5 h-5" /> Add A Product
 				</Button>
 
-				{isLoading && <div className="p-6 text-center text-gray-500">Loading your products...</div>}
-				{error && <div className="p-6 text-center text-red-600">Failed to load products: {error.message}</div>}
+				{isLoading && <div className="p-6 text-center text-gray-500 mt-4">Loading your products...</div>}
+				{error && <div className="p-6 text-center text-red-600 mt-4">Failed to load products: {error.message}</div>}
 
 				{!isLoading && !error && (
 					<>
 						{products && products.length > 0 ? (
-							<ul className="p-4 flex flex-col gap-2">
+							<ul className="flex flex-col gap-2 mt-4">
 								{products.map((product) => {
 									const isExpanded = expandedProduct === product.id
 
@@ -200,7 +200,7 @@ function ProductsOverviewComponent() {
 								})}
 							</ul>
 						) : (
-							<div className="text-center text-gray-500 py-10 px-6">
+							<div className="text-center text-gray-500 py-10 mt-4">
 								<span className="i-product w-5 h-5" /> <h3 className="mt-2 text-lg font-semibold text-gray-700">No products yet</h3>
 								<p className="mt-1 text-sm">Click the "Add A Product" button to create your first one.</p>
 							</div>

@@ -1,11 +1,15 @@
 import React, { useState } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { dashboardNavigation } from '@/config/dashboardNavigation'
 import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate, useLocation } from '@tanstack/react-router'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useStore } from '@tanstack/react-store'
 import { uiStore, uiActions } from '@/lib/stores/ui'
+import { useQuery } from '@tanstack/react-query'
+import { profileKeys } from '@/queries/queryKeyFactory'
+import { fetchProfileByIdentifier } from '@/queries/profiles'
 
 export const Route = createFileRoute('/_dashboard-layout')({
 	component: DashboardLayout,
@@ -107,6 +111,16 @@ function DashboardLayout() {
 	const { dashboardTitle } = useStore(uiStore)
 	const isMessageDetailView = location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages'
 
+	// Extract pubkey from pathname for message detail views
+	const chatPubkey = isMessageDetailView ? location.pathname.split('/').pop() : null
+
+	// Fetch profile data for chat header avatar
+	const { data: chatProfile } = useQuery({
+		queryKey: profileKeys.details(chatPubkey || ''),
+		queryFn: () => fetchProfileByIdentifier(chatPubkey!),
+		enabled: !!chatPubkey,
+	})
+
 	// Check if current route needs a back button
 	const backButtonInfo = getBackButtonInfo(location.pathname)
 	const needsBackButton = !!backButtonInfo && !isMobile
@@ -178,7 +192,23 @@ function DashboardLayout() {
 					)}
 
 					{/* Title */}
-					<span className="w-full truncate px-14 text-3xl">{showSidebar || !isMobile ? 'Dashboard' : dashboardTitle}</span>
+					<span className="w-full truncate px-14 text-3xl flex items-center justify-center gap-2">
+						{showSidebar || !isMobile ? (
+							'Dashboard'
+						) : (
+							<>
+								{isMessageDetailView && chatProfile && (
+									<Avatar className="h-8 w-8 flex-shrink-0">
+										<AvatarImage src={chatProfile.picture} />
+										<AvatarFallback>
+											{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
+										</AvatarFallback>
+									</Avatar>
+								)}
+								<span className="truncate">{dashboardTitle}</span>
+							</>
+						)}
+					</span>
 
 					{/* Mobile emoji - only visible on small screens when not showing sidebar */}
 					{!showSidebar && emoji && breakpoint !== 'xl' && (
@@ -248,7 +278,15 @@ function DashboardLayout() {
 									</button>
 									
 									{!isMobile && (
-										<h1 className="absolute left-1/2 -translate-x-1/2 text-[1.6rem] font-bold">
+										<h1 className="absolute left-1/2 -translate-x-1/2 text-[1.6rem] font-bold flex items-center gap-2">
+											{isMessageDetailView && chatProfile && (
+												<Avatar className="h-8 w-8">
+													<AvatarImage src={chatProfile.picture} />
+													<AvatarFallback>
+														{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
+													</AvatarFallback>
+												</Avatar>
+											)}
 											{dashboardTitle}
 										</h1>
 									)}

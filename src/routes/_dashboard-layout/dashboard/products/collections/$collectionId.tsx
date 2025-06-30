@@ -41,9 +41,7 @@ function EditCollectionComponent() {
 
 	return (
 		<div className="space-y-6">
-			<div className="bg-white rounded-md shadow-sm">
-				<CollectionFormContent showFooter={true} />
-			</div>
+			<CollectionFormContent showFooter={true} />
 		</div>
 	)
 }

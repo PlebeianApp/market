@@ -286,11 +286,6 @@ export function ChatMessageBubble({ event, isCurrentUser }: ChatMessageBubblePro
 
 	return (
 		<div className={`flex flex-wrap items-end gap-2 ${alignment} mb-2 w-full`}>
-			{showAvatar && (
-				<div className="flex-shrink-0 self-start">
-					<UserWithAvatar pubkey={authorPubkey} size="sm" disableLink={true} />
-				</div>
-			)}
 			<div className="flex flex-col max-w-[85%] sm:max-w-[75%] md:max-w-[65%] lg:max-w-[55%] min-w-0">
 				<div className={`px-3 py-2 rounded-lg shadow ${bubbleStyles} break-words`}>
 					{structuredPart}
@@ -316,7 +311,6 @@ export function ChatMessageBubble({ event, isCurrentUser }: ChatMessageBubblePro
 					</span>
 				)}
 			</div>
-			{!showAvatar && <div className="flex-shrink-0 w-8"> {/* Placeholder for alignment with avatar messages */}</div>}
 		</div>
 	)
 }

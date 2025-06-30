@@ -76,7 +76,7 @@ export function ProductFormContent({ className = '', showFooter = true }: { clas
 			}}
 			className={`flex flex-col h-full overflow-hidden ${className}`}
 		>
-			<div className="flex-1 overflow-y-auto py-4 px-6">
+			<div className="flex-1 overflow-y-auto">
 				{/* Main Tabs: Product and Shipping */}
 				<Tabs
 					value={mainTab}
@@ -178,7 +178,7 @@ export function ProductFormContent({ className = '', showFooter = true }: { clas
 			</div>
 
 			{showFooter && (
-				<div className="p-6 mt-auto sticky bottom-0 bg-white border-t">
+				<div className="mt-auto sticky bottom-0 bg-white border-t pt-4">
 					<div className="flex gap-2 w-full">
 						{(productSubTab !== 'name' || mainTab === 'shipping') && (
 							<Button

@@ -70,7 +70,7 @@ export function CollectionFormContent({ className = '', showFooter = true }: { c
 			}}
 			className={`flex flex-col h-full overflow-hidden ${className}`}
 		>
-			<div className="flex-1 overflow-y-auto py-4 px-6">
+			<div className="flex-1 overflow-y-auto">
 				<Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'info' | 'products' | 'shipping')} className="w-full">
 					<TabsList className="w-full rounded-none bg-transparent h-auto p-0 flex">
 						<TabsTrigger
@@ -111,7 +111,7 @@ export function CollectionFormContent({ className = '', showFooter = true }: { c
 			</div>
 
 			{showFooter && (
-				<div className="p-6 mt-auto sticky bottom-0 bg-white border-t">
+				<div className="mt-auto sticky bottom-0 bg-white border-t pt-4">
 					<div className="flex gap-2 w-full">
 						{(activeTab === 'products' || activeTab === 'shipping') && (
 							<Button
