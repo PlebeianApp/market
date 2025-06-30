@@ -262,7 +262,7 @@ function DashboardLayout() {
 									</div>
 								) : (
 									<ScrollArea className="h-full">
-										<div className="p-4 bg-white border border-black rounded lg:p-8 lg:bg-transparent lg:border-0 lg:rounded-none">
+										<div className="p-4 bg-white lg:p-8 lg:bg-transparent">
 											{/* Only show title here if there's no back button */}
 											{!isMobile && !needsBackButton && <h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>}
 											<Outlet />
