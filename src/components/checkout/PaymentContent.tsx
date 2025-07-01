@@ -1,32 +1,34 @@
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Progress } from '@/components/ui/progress'
 import { QRCode } from '@/components/ui/qr-code'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Progress } from '@/components/ui/progress'
-import { useInvoiceGeneration } from '@/hooks/useInvoiceGeneration'
 import { authStore } from '@/lib/stores/auth'
-import { ndkActions, ndkStore } from '@/lib/stores/ndk'
+import { ndkStore } from '@/lib/stores/ndk'
+import {
+	useGenerateInvoiceMutation,
+	useNwcPaymentMutation,
+	usePaymentReceiptSubscription,
+	useWeblnPaymentMutation,
+} from '@/queries/payment'
 import { useStore } from '@tanstack/react-store'
 import {
-	Check,
-	Copy,
-	Zap,
-	ExternalLink,
-	RefreshCw,
 	AlertTriangle,
-	Wallet,
-	CreditCard,
-	Users,
+	Check,
+	CheckCircle,
 	ChevronLeft,
 	ChevronRight,
-	CheckCircle,
+	Copy,
+	CreditCard,
+	ExternalLink,
+	RefreshCw,
+	Users,
+	Wallet,
+	Zap,
 } from 'lucide-react'
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import type { NDKTag } from '@nostr-dev-kit/ndk'
-import { NDKEvent, NDKZapper } from '@nostr-dev-kit/ndk'
-import { NDKNWCWallet, NDKWalletStatus } from '@nostr-dev-kit/ndk-wallet'
 
 // WebLN types
 declare global {
@@ -85,7 +87,9 @@ export function PaymentContent({
 }: PaymentContentProps) {
 	const { user } = useStore(authStore)
 	const ndkState = useStore(ndkStore)
-	const { generateInvoiceForSeller } = useInvoiceGeneration({ fallbackToMock: true })
+	const { mutateAsync: generateInvoice, isPending: isGeneratingInvoice } = useGenerateInvoiceMutation()
+	const { mutateAsync: payWithWebln, isPending: isPayingWithWebln } = useWeblnPaymentMutation()
+	const { mutateAsync: payWithNwc, isPending: isPayingWithNwc } = useNwcPaymentMutation()
 
 	const [activeIndex, setActiveIndex] = useState(currentIndex)
 	const [invoiceStates, setInvoiceStates] = useState<Record<string, InvoiceState>>({})
@@ -95,22 +99,12 @@ export function PaymentContent({
 	const [timeoutIds, setTimeoutIds] = useState<Set<NodeJS.Timeout>>(new Set())
 
 	// Session management to prevent old receipt detection
-	const sessionIdRef = useRef<string>()
-	const sessionStartTimeRef = useRef<number>()
+	const sessionStartTimeRef = useRef<number>(Math.floor(Date.now() / 1000))
 
-	// Generate unique session ID when component initializes
-	if (!sessionIdRef.current) {
-		sessionIdRef.current = `checkout-${Date.now()}-${Math.random().toString(36).substring(2)}`
-		sessionStartTimeRef.current = Math.floor(Date.now() / 1000) // Unix timestamp
-		console.log('🔄 New checkout session started:', sessionIdRef.current, 'at', sessionStartTimeRef.current)
-	}
-
-	// Initialize invoice states - reset completely when invoices change (new checkout)
+	// Initialize invoice states
 	useEffect(() => {
-		// Generate new session for each new set of invoices
-		sessionIdRef.current = `checkout-${Date.now()}-${Math.random().toString(36).substring(2)}`
 		sessionStartTimeRef.current = Math.floor(Date.now() / 1000)
-		console.log('🔄 New checkout session for invoices:', sessionIdRef.current, 'at', sessionStartTimeRef.current)
+		console.log('🔄 New checkout session started at', sessionStartTimeRef.current)
 
 		const newStates: Record<string, InvoiceState> = {}
 		invoices.forEach((invoice) => {
@@ -120,22 +114,13 @@ export function PaymentContent({
 				errorMessage: null,
 				invoice: invoice.bolt11 || null,
 				lightningAddress: invoice.lightningAddress || null,
-				// Always start as pending for new checkout sessions to prevent false positives
-				paymentComplete: false,
+				paymentComplete: invoice.status === 'paid',
 				paymentPending: false,
 				awaitingPayment: false,
 			}
 		})
-
-		// Reset all states for new checkout session
 		setInvoiceStates(newStates)
-		setCopiedInvoices(new Set())
-		setActiveIndex(currentIndex)
-
-		// Clear any existing timeouts
-		timeoutIds.forEach(clearTimeout)
-		setTimeoutIds(new Set())
-	}, [invoices, currentIndex])
+	}, [invoices])
 
 	// Cleanup on unmount
 	useEffect(() => {
@@ -175,98 +160,36 @@ export function PaymentContent({
 	}
 
 	const currentInvoice = invoices[activeIndex]
-	const currentState = invoiceStates[currentInvoice?.id] || {
-		loading: false,
-		nwcLoading: false,
-		errorMessage: null,
-		invoice: null,
-		lightningAddress: null,
-		paymentComplete: false,
-		paymentPending: false,
-		awaitingPayment: false,
-	}
+	const currentState = invoiceStates[currentInvoice?.id]
 
-	// Monitor for payment receipts to detect QR code payments
+	// Subscribe to payment receipts
+	const { data: paymentPreimage } = usePaymentReceiptSubscription({
+		orderId: currentInvoice?.orderId,
+		invoiceId: currentInvoice?.id,
+		sessionStartTime: sessionStartTimeRef.current,
+		enabled: !!currentInvoice && !currentState?.paymentComplete && currentState?.awaitingPayment,
+	})
+
+	// Handle successful payment from subscription
 	useEffect(() => {
-		if (!currentInvoice || currentState.paymentComplete) return
-
-		let ndk = ndkActions.getNDK()
-		if (!ndk) return
-
-		// Add a grace period before starting receipt monitoring to prevent race conditions
-		const monitoringDelay = createTrackedTimeout(() => {
-			console.log('🔍 Starting payment receipt monitoring for invoice:', currentInvoice.id, 'session:', sessionIdRef.current)
-
-			const sessionStartTime = sessionStartTimeRef.current
-			if (!sessionStartTime) {
-				console.log('❌ No session start time available, skipping receipt monitoring')
-				return
-			}
-
-			// Subscribe to payment receipts for this invoice/order with timestamp filtering
-			const receiptFilter = {
-				kinds: [17], // Payment receipt kind
-				'#order': [currentInvoice.orderId],
-				'#payment-request': [currentInvoice.id],
-				// Only get receipts created after our session started (with 30 second buffer for clock skew)
-				since: sessionStartTime - 30,
-			}
-
-			const subscription = ndk.subscribe(receiptFilter, {
-				closeOnEose: false, // Keep subscription open for real-time updates
+		if (paymentPreimage && currentInvoice && !currentState.paymentComplete) {
+			console.log(`✅ Payment detected for ${currentInvoice.id} via subscription`)
+			updateInvoiceState(currentInvoice.id, {
+				paymentComplete: true,
+				paymentPending: false,
+				awaitingPayment: false,
 			})
+			onPaymentComplete?.(currentInvoice.id, paymentPreimage)
+			toast.success('Payment detected and confirmed!')
 
-			subscription.on('event', (receiptEvent) => {
-				console.log('💳 Payment receipt received for invoice:', currentInvoice.id, receiptEvent)
-				console.log('🕐 Receipt created_at:', receiptEvent.created_at, 'session started:', sessionStartTime)
-
-				// Double-check timestamp to prevent old receipts from triggering payments
-				if (receiptEvent.created_at && receiptEvent.created_at < sessionStartTime - 30) {
-					console.log('⏰ Ignoring old receipt from before session start')
-					return
+			// Auto-advance to the next invoice
+			createTrackedTimeout(() => {
+				if (activeIndex < invoices.length - 1) {
+					handleNavigate(activeIndex + 1)
 				}
-
-				// Check if this receipt is for our current invoice
-				const paymentRequestTag = receiptEvent.tags.find((tag) => tag[0] === 'payment-request')
-				if (paymentRequestTag?.[1] === currentInvoice.id) {
-					// Extract preimage from the payment tag
-					const paymentTag = receiptEvent.tags.find((tag) => tag[0] === 'payment')
-					const preimage = paymentTag?.[3] || 'external-payment'
-
-					console.log('✅ Valid payment receipt detected, marking invoice as complete')
-
-					// Mark payment as complete
-					updateInvoiceState(currentInvoice.id, {
-						paymentComplete: true,
-						paymentPending: false,
-						awaitingPayment: false,
-					})
-
-					// Notify parent component
-					onPaymentComplete?.(currentInvoice.id, preimage)
-					toast.success('Payment detected and confirmed!')
-
-					// Auto-advance to next invoice or close if this was the last one
-					createTrackedTimeout(() => {
-						if (activeIndex < invoices.length - 1) {
-							handleNavigate(activeIndex + 1)
-						}
-					}, 1500)
-				}
-			})
-
-			// Store subscription cleanup in the timeout cleanup
-			return () => {
-				console.log('🛑 Stopping payment receipt monitoring for invoice:', currentInvoice.id)
-				subscription.stop()
-			}
-		}, 1000) // 1 second delay before starting monitoring
-
-		return () => {
-			// This will be called if the effect cleanup runs before the timeout
-			clearTimeout(monitoringDelay)
+			}, 1500)
 		}
-	}, [currentInvoice?.id, currentState.paymentComplete, activeIndex, invoices.length, onPaymentComplete])
+	}, [paymentPreimage, currentInvoice?.id, currentState?.paymentComplete])
 
 	// Generate fresh BOLT11 invoice from lightning address
 	const generateInvoiceFromAddress = async (invoiceId: string) => {
@@ -282,84 +205,40 @@ export function PaymentContent({
 		})
 
 		try {
-			const mockInvoiceData = await generateInvoiceForSeller(
-				invoice.recipientPubkey,
-				invoice.amount,
-				invoice.description,
-				invoiceId,
-				[
-					{
-						productId: `payment-${invoiceId}`,
-						name: invoice.description,
-						amount: 1,
-						price: invoice.amount,
-					},
-				],
-				invoice.type === 'merchant' ? 'seller' : 'v4v',
-			)
+			const generated = await generateInvoice({
+				sellerPubkey: invoice.recipientPubkey,
+				amountSats: invoice.amount,
+				description: invoice.description,
+				invoiceId: invoice.id,
+				items: [], // Items are not needed for simple invoice regeneration
+				type: invoice.type === 'merchant' ? 'seller' : 'v4v',
+			})
+
+			if (generated.status === 'failed' || !generated.bolt11) {
+				throw new Error('Failed to generate new invoice.')
+			}
 
 			updateInvoiceState(invoiceId, {
-				invoice: mockInvoiceData.bolt11 || null,
+				invoice: generated.bolt11,
 				loading: false,
 			})
+			toast.success('New invoice generated')
 		} catch (error) {
-			console.error('Failed to generate invoice:', error)
+			console.error('Invoice regeneration failed:', error)
 			updateInvoiceState(invoiceId, {
-				errorMessage: error instanceof Error ? error.message : 'Failed to generate invoice',
+				errorMessage: 'Failed to generate new invoice.',
 				loading: false,
 			})
-			onPaymentFailed?.(invoiceId, error instanceof Error ? error.message : 'Failed to generate invoice')
+			toast.error('Could not generate a new invoice.')
 		}
-	}
-
-	// Create gamma spec compliant payment receipt (Kind 17)
-	const createPaymentReceipt = async (invoiceId: string, preimage: string, bolt11: string) => {
-		const invoice = invoices.find((inv) => inv.id === invoiceId)
-		if (!invoice || !user) return
-
-		let ndk = ndkActions.getNDK()
-		if (!ndk) {
-			console.warn('NDK not initialized for payment receipt, initializing now...')
-			ndk = ndkActions.initialize()
-			await ndkActions.connect()
-		}
-
-		if (!ndk) {
-			throw new Error('Failed to initialize NDK for payment receipt')
-		}
-
-		// Create gamma spec compliant Kind 17 payment receipt
-		const tags: NDKTag[] = [
-			['p', invoice.recipientPubkey], // Merchant's public key
-			['subject', 'order-receipt'], // Required by gamma spec
-			['order', invoice.orderId], // Original order identifier
-			['payment-request', invoiceId], // Payment request ID this receipt is for
-			['payment', 'lightning', bolt11, preimage], // Payment proof with preimage
-			['amount', invoice.amount.toString()], // Payment amount
-		]
-
-		const receiptEvent = new NDKEvent(ndk, {
-			kind: 17, // Payment receipt as per gamma spec
-			content: `Payment completed for ${invoice.description}. Amount: ${invoice.amount} sats.`,
-			tags,
-		})
-
-		// Sign and publish the payment receipt
-		await receiptEvent.sign()
-		await receiptEvent.publish()
-
-		console.log('✅ Payment receipt (Kind 17) created and published:', receiptEvent.id)
-		return receiptEvent
 	}
 
 	// Handle WebLN payment
 	const handleWebLNPayment = async (invoiceId: string) => {
 		const invoice = invoices.find((inv) => inv.id === invoiceId)
-		if (!invoice) return
-
-		const bolt11 = currentState.invoice
-		if (!bolt11) {
-			toast.error('No invoice available')
+		const bolt11 = invoiceStates[invoiceId]?.invoice
+		if (!invoice || !bolt11) {
+			toast.error('No invoice available to pay.')
 			return
 		}
 
@@ -369,186 +248,75 @@ export function PaymentContent({
 		})
 
 		try {
-			if (!window.webln) {
-				throw new Error('WebLN not available. Please install a WebLN-compatible wallet.')
-			}
-
-			await window.webln.enable()
-			const result = await window.webln.sendPayment(bolt11)
-
-			if (result.preimage) {
-				// Create gamma spec payment receipt
-				await createPaymentReceipt(invoiceId, result.preimage, bolt11)
-
-				updateInvoiceState(invoiceId, {
-					paymentComplete: true,
-					paymentPending: false,
-				})
-
-				onPaymentComplete?.(invoiceId, result.preimage)
-				toast.success('Payment completed successfully!')
-
-				// Auto-advance to next invoice or close if this was the last one
-				createTrackedTimeout(() => {
-					if (activeIndex < invoices.length - 1) {
-						handleNavigate(activeIndex + 1)
-					}
-				}, 1500)
-			} else {
-				throw new Error('Payment completed but no preimage received')
-			}
-		} catch (error) {
-			console.error('WebLN payment failed:', error)
-			const errorMessage = error instanceof Error ? error.message : 'WebLN payment failed'
-
-			updateInvoiceState(invoiceId, {
-				errorMessage,
-				paymentPending: false,
-			})
-
-			onPaymentFailed?.(invoiceId, errorMessage)
-			toast.error(errorMessage)
-		}
-	}
-
-	// Handle NWC payment using NDK Zapper (treating marketplace payment as a zap)
-	const handleNwcPayment = async (invoiceId: string) => {
-		const invoice = invoices.find((inv) => inv.id === invoiceId)
-		if (!invoice) return
-
-		updateInvoiceState(invoiceId, {
-			nwcLoading: true,
-			errorMessage: null,
-			paymentPending: true,
-		})
-
-		let ndk = ndkActions.getNDK()
-		if (!ndk) {
-			console.warn('NDK not initialized for NWC payment, initializing now...')
-			ndk = ndkActions.initialize()
-			await ndkActions.connect()
-		}
-
-		if (!ndk) {
-			const errorMessage = 'Failed to initialize NDK for NWC payment'
-			updateInvoiceState(invoiceId, {
-				errorMessage,
-				nwcLoading: false,
-				paymentPending: false,
-			})
-			onPaymentFailed?.(invoiceId, errorMessage)
-			return
-		}
-
-		const activeNwcUri = ndkState.activeNwcWalletUri
-		if (!activeNwcUri) {
-			const errorMessage = 'No active NWC wallet selected. Please configure one in settings.'
-			updateInvoiceState(invoiceId, {
-				errorMessage,
-				nwcLoading: false,
-				paymentPending: false,
-			})
-			onPaymentFailed?.(invoiceId, errorMessage)
-			toast.error(errorMessage)
-			return
-		}
-
-		let originalNdkWallet = ndk.wallet
-		let nwcWalletForPayment: NDKNWCWallet | undefined
-
-		try {
-			nwcWalletForPayment = new NDKNWCWallet(ndk, { pairingCode: activeNwcUri })
-			ndk.wallet = nwcWalletForPayment
-
-			// Wait for wallet to be ready
-			if (nwcWalletForPayment.status !== NDKWalletStatus.READY) {
-				await new Promise<void>((resolve, reject) => {
-					const readyTimeout = setTimeout(() => reject(new Error('NWC wallet connection timed out')), 20000)
-					nwcWalletForPayment!.once('ready', () => {
-						clearTimeout(readyTimeout)
-						resolve()
-					})
-				})
-			}
-
-			// Create a "user" object for zapping (the payment recipient)
-			const recipientUser = ndk.getUser({ pubkey: invoice.recipientPubkey })
-			const zapAmountMsats = invoice.amount * 1000
-
-			// Use NDKZapper for the payment (treating marketplace payment as a zap)
-			const zapper = new NDKZapper(recipientUser, zapAmountMsats, 'msats', {
-				comment: invoice.description,
-			})
-
-			console.log(`💸 Initiating NWC zap payment: ${invoice.amount} sats to ${invoice.recipientName}`)
-
-			// Execute the zap payment
-			const zapDetails = await zapper.zap()
-
-			if (zapDetails instanceof Map && zapDetails.size > 0) {
-				// Check if any payment confirmations contain a preimage
-				const values = Array.from(zapDetails.values())
-				for (const value of values) {
-					if (value && typeof value === 'object' && 'preimage' in value && value.preimage) {
-						const preimage = String(value.preimage)
-
-						// Create gamma spec payment receipt
-						await createPaymentReceipt(invoiceId, preimage, currentState.invoice || '')
-
-						updateInvoiceState(invoiceId, {
-							paymentComplete: true,
-							paymentPending: false,
-							nwcLoading: false,
-						})
-
-						onPaymentComplete?.(invoiceId, preimage)
-						toast.success('NWC payment completed successfully!')
-
-						// Auto-advance to next invoice or close if this was the last one
-						createTrackedTimeout(() => {
-							if (activeIndex < invoices.length - 1) {
-								handleNavigate(activeIndex + 1)
-							}
-						}, 1500)
-						return
-					}
-				}
-			}
-
-			// If we get here, the zap succeeded but we didn't get a preimage
-			// Still mark as complete but with a mock preimage
-			const mockPreimage = `nwc-payment-${Date.now()}`
-			await createPaymentReceipt(invoiceId, mockPreimage, currentState.invoice || '')
-
+			const preimage = await payWithWebln(bolt11)
 			updateInvoiceState(invoiceId, {
 				paymentComplete: true,
 				paymentPending: false,
-				nwcLoading: false,
 			})
+			onPaymentComplete?.(invoiceId, preimage)
 
-			onPaymentComplete?.(invoiceId, mockPreimage)
-			toast.success('NWC payment completed successfully!')
-
-			// Auto-advance to next invoice or close if this was the last one
+			// Auto-advance to the next invoice
 			createTrackedTimeout(() => {
 				if (activeIndex < invoices.length - 1) {
 					handleNavigate(activeIndex + 1)
 				}
 			}, 1500)
 		} catch (error) {
-			console.error('NWC payment failed:', error)
-			const errorMessage = error instanceof Error ? error.message : 'NWC payment failed'
-
+			// Error toast is handled by the mutation hook
 			updateInvoiceState(invoiceId, {
-				errorMessage,
-				nwcLoading: false,
 				paymentPending: false,
+				errorMessage: error instanceof Error ? error.message : 'Payment failed.',
+			})
+			onPaymentFailed?.(invoiceId, error instanceof Error ? error.message : 'Payment failed.')
+		}
+	}
+
+	// Handle NWC payment using NDK Zapper (treating marketplace payment as a zap)
+	const handleNwcPayment = async (invoiceId: string) => {
+		const invoice = invoices.find((inv) => inv.id === invoiceId)
+		const bolt11 = invoiceStates[invoiceId]?.invoice
+		const nwcUri = ndkState.activeNwcWalletUri
+
+		if (!invoice || !bolt11 || !nwcUri || !user) {
+			toast.error('User, NWC URI or invoice not available.')
+			return
+		}
+
+		updateInvoiceState(invoiceId, {
+			nwcLoading: true,
+			errorMessage: null,
+		})
+
+		try {
+			const preimage = await payWithNwc({
+				bolt11,
+				nwcUri,
+				userPubkey: user.pubkey,
+				recipientPubkey: invoice.recipientPubkey,
+				invoiceId: invoice.id,
+				amount: invoice.amount,
+				description: invoice.description,
 			})
 
-			onPaymentFailed?.(invoiceId, errorMessage)
-			toast.error(`NWC payment failed: ${errorMessage}`)
-		} finally {
-			if (ndk) ndk.wallet = originalNdkWallet
+			updateInvoiceState(invoiceId, {
+				paymentComplete: true,
+				nwcLoading: false,
+			})
+			onPaymentComplete?.(invoiceId, preimage)
+
+			// Auto-advance to the next invoice
+			createTrackedTimeout(() => {
+				if (activeIndex < invoices.length - 1) {
+					handleNavigate(activeIndex + 1)
+				}
+			}, 1500)
+		} catch (error) {
+			// Error toast is handled by the mutation hook
+			updateInvoiceState(invoiceId, {
+				nwcLoading: false,
+				errorMessage: error instanceof Error ? error.message : 'NWC payment failed.',
+			})
+			onPaymentFailed?.(invoiceId, error instanceof Error ? error.message : 'NWC payment failed.')
 		}
 	}
 
@@ -590,7 +358,7 @@ export function PaymentContent({
 		onNavigate?.(newIndex)
 	}
 
-	if (!currentInvoice) {
+	if (!currentInvoice || !currentState) {
 		return null
 	}
 

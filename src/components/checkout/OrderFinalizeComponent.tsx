@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Check, Receipt } from 'lucide-react'
 import type { CheckoutFormData } from './ShippingAddressForm'
-import type { LightningInvoiceData } from './InvoicePaymentComponent'
+import type { LightningInvoiceData } from '@/queries/payment'
 
 interface OrderFinalizeComponentProps {
 	shippingData: CheckoutFormData | null
@@ -166,14 +166,14 @@ export function OrderFinalizeComponent({
 									<div key={invoice.id}>
 										<div className="font-medium text-sm text-gray-800 mb-2">From {invoice.sellerName}:</div>
 										<div className="space-y-1 ml-4">
-											{invoice.items.map((item) => (
+											{invoice.items?.map((item) => (
 												<div key={item.productId} className="flex justify-between text-sm">
 													<span className="text-gray-600">
 														{item.name} x{item.amount}
 													</span>
 													<span className="font-medium">{formatSats(item.price)} sats</span>
 												</div>
-											))}
+											)) || <div className="text-sm text-gray-500">No items details available</div>}
 										</div>
 									</div>
 								))}
