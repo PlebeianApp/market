@@ -123,7 +123,7 @@ export function OrderDataTable<TData>({
 					{table.getRowModel().rows.map((row) => (
 						<div key={row.id} className="rounded-md border border-gray-200 hover:bg-gray-50" data-state={row.getIsSelected() && 'selected'}>
 							{/* Mobile Card Layout */}
-							<div className="block lg:hidden p-4 space-y-3">
+							<div className="block xl:hidden p-4 space-y-3">
 								{row.getVisibleCells().map((cell, index) => (
 									<div key={cell.id} className="flex justify-between items-start">
 										<span className="text-sm font-medium text-gray-600 capitalize min-w-0 flex-shrink-0 mr-3">
@@ -139,7 +139,7 @@ export function OrderDataTable<TData>({
 							</div>
 							
 							{/* Desktop Grid Layout */}
-							<div className="hidden lg:grid lg:grid-cols-5 gap-4 p-4 items-center">
+							<div className="hidden xl:grid xl:grid-cols-5 gap-4 p-4 items-center">
 								{row.getVisibleCells().map((cell) => (
 									<div key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
 								))}
