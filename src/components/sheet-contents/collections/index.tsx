@@ -45,7 +45,7 @@ export function NewCollectionContent({
 
 	if (!showForm && showWelcome) {
 		return (
-			<SheetContent side="right">
+			<SheetContent side="right" className="p-6">
 				<SheetHeader className="hidden">
 					<SheetTitle>Create Collection</SheetTitle>
 					<SheetDescription>Organize your products into collections</SheetDescription>
@@ -58,7 +58,7 @@ export function NewCollectionContent({
 	return (
 		<SheetContent
 			side="right"
-			className="flex flex-col max-h-screen overflow-hidden w-[100vw] sm:min-w-[85vw] md:min-w-[55vw] xl:min-w-[35vw]"
+			className="flex flex-col max-h-screen overflow-hidden w-[100vw] sm:min-w-[85vw] md:min-w-[55vw] xl:min-w-[35vw] p-6"
 		>
 			<SheetHeader>
 				<SheetTitle className="text-center">{title || defaultTitle}</SheetTitle>
