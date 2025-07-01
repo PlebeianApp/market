@@ -676,12 +676,17 @@ export const useOrderById = (orderId: string) => {
 
 		// Event handler for all events
 		subscription.on('event', (newEvent) => {
-			// If we get a status update or shipping update, invalidate the query to refresh the data
+			// If we get a status update, shipping update, or payment receipt, invalidate the query to refresh the data
 			if (newEvent.kind === ORDER_PROCESS_KIND) {
 				const typeTag = newEvent.tags.find((tag) => tag[0] === 'type')
 				if (typeTag && (typeTag[1] === ORDER_MESSAGE_TYPE.STATUS_UPDATE || typeTag[1] === ORDER_MESSAGE_TYPE.SHIPPING_UPDATE)) {
 					queryClient.invalidateQueries({ queryKey: orderKeys.details(orderId) })
 				}
+			} else if (newEvent.kind === PAYMENT_RECEIPT_KIND) {
+				// Payment receipt received - force immediate refetch to update payment status
+				console.log('Payment receipt received, forcing immediate refetch:', newEvent.id)
+				queryClient.invalidateQueries({ queryKey: orderKeys.details(orderId) })
+				queryClient.refetchQueries({ queryKey: orderKeys.details(orderId) })
 			}
 		})
 
@@ -695,8 +700,8 @@ export const useOrderById = (orderId: string) => {
 		queryKey: orderKeys.details(orderId),
 		queryFn: () => fetchOrderById(orderId),
 		enabled: !!orderId,
-		refetchInterval: 3000, // Poll every 3 seconds to ensure we get status updates
-		staleTime: 1000, // Consider data stale after just 1 second
+		refetchInterval: 2000, // Poll every 2 seconds to ensure we get status updates
+		staleTime: 500, // Consider data stale after just 500ms to ensure quick updates
 		refetchOnMount: true,
 		refetchOnWindowFocus: true,
 		refetchOnReconnect: true,

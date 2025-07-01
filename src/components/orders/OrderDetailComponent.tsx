@@ -77,8 +77,9 @@ const extractPaymentMethods = (paymentRequest: NDKEvent) => {
 // Check if payment has been completed based on receipts
 const isPaymentCompleted = (paymentRequestId: string, paymentReceipts: NDKEvent[]): boolean => {
 	return paymentReceipts.some((receipt) => {
-		const orderTag = receipt.tags.find((tag) => tag[0] === 'order')
-		return orderTag?.[1] === paymentRequestId
+		// Look for payment-request tag that matches this payment request ID
+		const paymentRequestTag = receipt.tags.find((tag) => tag[0] === 'payment-request')
+		return paymentRequestTag?.[1] === paymentRequestId
 	})
 }
 
@@ -255,9 +256,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	}
 
 	// Calculate payment statistics
-	const incompleteInvoices = invoicesFromPaymentRequests.filter(
-		(invoice) => invoice.status === 'failed' || invoice.status === 'expired' || invoice.status === 'pending',
-	)
+	const incompleteInvoices = invoicesFromPaymentRequests.filter((invoice) => invoice.status === 'expired' || invoice.status === 'pending')
 
 	const paidInvoices = invoicesFromPaymentRequests.filter((invoice) => invoice.status === 'paid')
 	const totalInvoices = invoicesFromPaymentRequests.length
@@ -271,7 +270,6 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				return <Clock className="w-4 h-4 text-yellow-600" />
 			case 'processing':
 				return <RefreshCw className="w-4 h-4 text-blue-600 animate-spin" />
-			case 'failed':
 			case 'expired':
 				return <XCircle className="w-4 h-4 text-red-600" />
 			default:
@@ -287,7 +285,6 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				return 'bg-yellow-100 text-yellow-800 border-yellow-300'
 			case 'processing':
 				return 'bg-blue-100 text-blue-800 border-blue-300'
-			case 'failed':
 			case 'expired':
 				return 'bg-red-100 text-red-800 border-red-300'
 			default:

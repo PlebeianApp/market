@@ -26,7 +26,7 @@ import { uiActions } from '@/lib/stores/ui'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { fetchV4VShares } from '@/queries/v4v'
 import { toast } from 'sonner'
-import { NDKZapper } from '@nostr-dev-kit/ndk'
+import { NDKZapper, NDKEvent, type NDKTag } from '@nostr-dev-kit/ndk'
 import { NDKNWCWallet, NDKWalletStatus } from '@nostr-dev-kit/ndk-wallet'
 
 export const Route = createFileRoute('/checkout')({
@@ -44,6 +44,16 @@ function RouteComponent() {
 	const [currentInvoiceIndex, setCurrentInvoiceIndex] = useState(0)
 	const [invoices, setInvoices] = useState<PaymentInvoiceData[]>([])
 	const [shippingData, setShippingData] = useState<CheckoutFormData | null>(null)
+
+	// Reset checkout state when component mounts or cart changes
+	useEffect(() => {
+		setCurrentStep('shipping')
+		setCurrentInvoiceIndex(0)
+		setInvoices([])
+		setShippingData(null)
+		setOrderInvoiceSets({})
+		setSpecOrderIds([])
+	}, [Object.keys(cart.products).join(',')]) // Reset when cart products change
 
 	// Initialize wallets on mount
 	useEffect(() => {
@@ -123,9 +133,9 @@ function RouteComponent() {
 	}, [sellers, v4vShares])
 
 	const totalSteps = useMemo(() => {
-		// shipping + summary + (total invoices needed) + complete
-		return 2 + totalInvoicesNeeded + 1
-	}, [totalInvoicesNeeded])
+		// shipping + summary + (actual invoices) + complete
+		return 2 + invoices.length + 1
+	}, [invoices.length])
 
 	const currentStepNumber = useMemo(() => {
 		switch (currentStep) {
@@ -155,16 +165,16 @@ function RouteComponent() {
 			case 'payment':
 				const currentInvoice = invoices[currentInvoiceIndex]
 				if (currentInvoice) {
-					const invoiceTypeLabel = currentInvoice.invoiceType === 'v4v' ? 'V4V Payment' : 'Payment'
-					return `${invoiceTypeLabel} ${currentInvoiceIndex + 1} of ${totalInvoicesNeeded}: ${currentInvoice.sellerName}`
+					const invoiceTypeLabel = currentInvoice.type === 'v4v' ? 'V4V Payment' : 'Payment'
+					return `${invoiceTypeLabel} ${currentInvoiceIndex + 1} of ${invoices.length}: ${currentInvoice.recipientName}`
 				}
-				return `Processing Lightning payments (${currentInvoiceIndex + 1} of ${totalInvoicesNeeded})`
+				return `Processing Lightning payments (${currentInvoiceIndex + 1} of ${invoices.length})`
 			case 'complete':
 				return 'Order complete'
 			default:
 				return 'Checkout'
 		}
-	}, [currentStep, currentInvoiceIndex, invoices, totalInvoicesNeeded])
+	}, [currentStep, currentInvoiceIndex, invoices])
 
 	// Generate Lightning invoices when moving to payment step
 	useEffect(() => {
@@ -332,7 +342,7 @@ function RouteComponent() {
 			setInvoices((prev) => prev.map((invoice) => (invoice.id === invoiceId ? { ...invoice, status: 'paid' } : invoice)))
 
 			// Move to next invoice or complete
-			if (currentInvoiceIndex < totalInvoicesNeeded - 1) {
+			if (currentInvoiceIndex < invoices.length - 1) {
 				setCurrentInvoiceIndex((prev) => prev + 1)
 			} else {
 				setCurrentStep('complete')
@@ -342,8 +352,62 @@ function RouteComponent() {
 		}, 3000) // Slightly longer delay to simulate Lightning verification
 	}
 
-	const handlePaymentComplete = (invoiceId: string, preimage: string) => {
+	// Create gamma spec compliant payment receipt (Kind 17)
+	const createPaymentReceipt = async (invoiceId: string, preimage: string, bolt11: string) => {
+		const invoice = invoices.find((inv) => inv.id === invoiceId)
+		if (!invoice) return
+
+		let ndk = ndkActions.getNDK()
+		if (!ndk) {
+			console.warn('NDK not initialized for payment receipt, initializing now...')
+			ndk = ndkActions.initialize()
+			await ndkActions.connect()
+		}
+
+		if (!ndk || !ndk.activeUser) {
+			console.warn('No active user found for payment receipt creation')
+			return
+		}
+
+		try {
+			// Create gamma spec compliant Kind 17 payment receipt
+			const orderId = invoice.orderId !== 'temp-order' ? invoice.orderId : specOrderIds[0] || 'unknown-order'
+			const tags: NDKTag[] = [
+				['p', invoice.recipientPubkey], // Merchant's public key
+				['subject', 'order-receipt'], // Required by gamma spec
+				['order', orderId], // Original order identifier
+				['payment-request', invoiceId], // Payment request ID this receipt is for
+				['payment', 'lightning', bolt11 || 'nwc-payment', preimage], // Payment proof with preimage
+				['amount', invoice.amount.toString()], // Payment amount
+			]
+
+			const receiptEvent = new NDKEvent(ndk, {
+				kind: 17, // Payment receipt as per gamma spec
+				content: `Payment completed for ${invoice.description}. Amount: ${invoice.amount} sats.`,
+				tags,
+			})
+
+			// Sign and publish the payment receipt
+			await receiptEvent.sign()
+			await receiptEvent.publish()
+
+			console.log('✅ Payment receipt (Kind 17) created and published:', receiptEvent.id)
+			return receiptEvent
+		} catch (error) {
+			console.error('Failed to create payment receipt:', error)
+		}
+	}
+
+	const handlePaymentComplete = async (invoiceId: string, preimage: string, skipAutoAdvance = false) => {
 		console.log(`Payment completed for invoice ${invoiceId} with preimage: ${preimage.substring(0, 16)}...`)
+
+		// Find the invoice to get bolt11 for receipt creation
+		const invoice = invoices.find((inv) => inv.id === invoiceId)
+
+		// Create payment receipt
+		if (invoice) {
+			await createPaymentReceipt(invoiceId, preimage, invoice.bolt11 || '')
+		}
 
 		setInvoices((prev) =>
 			prev.map((invoice) => {
@@ -357,16 +421,28 @@ function RouteComponent() {
 			}),
 		)
 
-		// Auto-advance on successful payment
-		setTimeout(() => {
-			if (currentInvoiceIndex < totalInvoicesNeeded - 1) {
-				setCurrentInvoiceIndex((prev) => prev + 1)
-			} else {
-				setCurrentStep('complete')
-				// Clear the cart after all payments are complete
-				cartActions.clear()
-			}
-		}, 1500)
+		// Auto-advance on successful payment (unless disabled for bulk operations)
+		if (!skipAutoAdvance) {
+			setTimeout(() => {
+				// Use the setter function to get fresh state
+				setInvoices((currentInvoices) => {
+					const allPaid = currentInvoices.every((inv) => inv.status === 'paid')
+
+					if (allPaid) {
+						setCurrentStep('complete')
+						// Clear the cart after all payments are complete
+						cartActions.clear()
+					} else if (currentInvoiceIndex < currentInvoices.length - 1) {
+						setCurrentInvoiceIndex((prev) => prev + 1)
+					} else {
+						// If we're at the last invoice but not all are paid, stay here
+						// This can happen with failed payments
+					}
+
+					return currentInvoices // Return unchanged state
+				})
+			}, 1500)
+		}
 	}
 
 	const handlePaymentFailed = (invoiceId: string, error: string) => {
@@ -476,8 +552,8 @@ function RouteComponent() {
 				// Use real NWC payment
 				const preimage = await handleNwcPaymentForInvoice(invoice)
 
-				// Mark as paid using the existing handler
-				handlePaymentComplete(invoice.id, preimage)
+				// Mark as paid using the existing handler but skip auto-advance
+				await handlePaymentComplete(invoice.id, preimage, true)
 
 				// Small delay between payments to avoid overwhelming the wallet
 				await new Promise((resolve) => setTimeout(resolve, 1000))
@@ -491,11 +567,19 @@ function RouteComponent() {
 			}
 		}
 
-		// Check if all payments succeeded
-		const remainingPending = invoices.filter((inv) => inv.status === 'pending').length
-		if (remainingPending === 0) {
-			toast.success('All payments completed successfully!')
-		}
+		// Check if all payments succeeded and manually transition to complete
+		setTimeout(() => {
+			setInvoices((currentInvoices) => {
+				const allPaid = currentInvoices.every((inv) => inv.status === 'paid')
+				if (allPaid) {
+					toast.success('All payments completed successfully!')
+					setCurrentStep('complete')
+					// Clear the cart after all payments are complete
+					cartActions.clear()
+				}
+				return currentInvoices // Return unchanged state
+			})
+		}, 1500)
 	}
 
 	const goBackToShopping = () => {
@@ -517,7 +601,7 @@ function RouteComponent() {
 			}
 		} else if (currentStep === 'complete') {
 			setCurrentStep('payment')
-			setCurrentInvoiceIndex(totalInvoicesNeeded - 1)
+			setCurrentInvoiceIndex(invoices.length - 1)
 		}
 	}
 
@@ -801,9 +885,9 @@ function RouteComponent() {
 								<div className="space-y-6">
 									<div className="flex items-center justify-between">
 										<h2 className="text-2xl font-bold">
-											Payment {currentInvoiceIndex + 1} of {totalInvoicesNeeded}
+											Payment {currentInvoiceIndex + 1} of {invoices.length}
 										</h2>
-										{totalInvoicesNeeded > 1 && (
+										{invoices.length > 1 && (
 											<div className="flex items-center gap-2">
 												<Button
 													variant="outline"
@@ -815,13 +899,13 @@ function RouteComponent() {
 													Previous
 												</Button>
 												<span className="text-sm text-gray-500">
-													{currentInvoiceIndex + 1} of {totalInvoicesNeeded}
+													{currentInvoiceIndex + 1} of {invoices.length}
 												</span>
 												<Button
 													variant="outline"
 													size="sm"
-													onClick={() => setCurrentInvoiceIndex(Math.min(totalInvoicesNeeded - 1, currentInvoiceIndex + 1))}
-													disabled={currentInvoiceIndex === totalInvoicesNeeded - 1}
+													onClick={() => setCurrentInvoiceIndex(Math.min(invoices.length - 1, currentInvoiceIndex + 1))}
+													disabled={currentInvoiceIndex === invoices.length - 1}
 												>
 													Next
 													<ChevronRight className="w-4 h-4" />

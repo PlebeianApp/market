@@ -22,7 +22,7 @@ import {
 	ChevronRight,
 	CheckCircle,
 } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import type { NDKTag } from '@nostr-dev-kit/ndk'
 import { NDKEvent, NDKZapper } from '@nostr-dev-kit/ndk'
@@ -71,6 +71,7 @@ interface InvoiceState {
 	lightningAddress: string | null
 	paymentComplete: boolean
 	paymentPending: boolean
+	awaitingPayment: boolean // For QR code payments - waiting for external payment
 }
 
 export function PaymentContent({
@@ -90,27 +91,59 @@ export function PaymentContent({
 	const [invoiceStates, setInvoiceStates] = useState<Record<string, InvoiceState>>({})
 	const [copiedInvoices, setCopiedInvoices] = useState<Set<string>>(new Set())
 
-	// Initialize invoice states
+	// Keep track of timeouts for cleanup
+	const [timeoutIds, setTimeoutIds] = useState<Set<NodeJS.Timeout>>(new Set())
+
+	// Session management to prevent old receipt detection
+	const sessionIdRef = useRef<string>()
+	const sessionStartTimeRef = useRef<number>()
+
+	// Generate unique session ID when component initializes
+	if (!sessionIdRef.current) {
+		sessionIdRef.current = `checkout-${Date.now()}-${Math.random().toString(36).substring(2)}`
+		sessionStartTimeRef.current = Math.floor(Date.now() / 1000) // Unix timestamp
+		console.log('🔄 New checkout session started:', sessionIdRef.current, 'at', sessionStartTimeRef.current)
+	}
+
+	// Initialize invoice states - reset completely when invoices change (new checkout)
 	useEffect(() => {
+		// Generate new session for each new set of invoices
+		sessionIdRef.current = `checkout-${Date.now()}-${Math.random().toString(36).substring(2)}`
+		sessionStartTimeRef.current = Math.floor(Date.now() / 1000)
+		console.log('🔄 New checkout session for invoices:', sessionIdRef.current, 'at', sessionStartTimeRef.current)
+
 		const newStates: Record<string, InvoiceState> = {}
 		invoices.forEach((invoice) => {
-			if (!invoiceStates[invoice.id]) {
-				newStates[invoice.id] = {
-					loading: false,
-					nwcLoading: false,
-					errorMessage: null,
-					invoice: invoice.bolt11 || null,
-					lightningAddress: invoice.lightningAddress || null,
-					paymentComplete: invoice.status === 'paid',
-					paymentPending: false,
-				}
+			newStates[invoice.id] = {
+				loading: false,
+				nwcLoading: false,
+				errorMessage: null,
+				invoice: invoice.bolt11 || null,
+				lightningAddress: invoice.lightningAddress || null,
+				// Always start as pending for new checkout sessions to prevent false positives
+				paymentComplete: false,
+				paymentPending: false,
+				awaitingPayment: false,
 			}
 		})
 
-		if (Object.keys(newStates).length > 0) {
-			setInvoiceStates((prev) => ({ ...prev, ...newStates }))
+		// Reset all states for new checkout session
+		setInvoiceStates(newStates)
+		setCopiedInvoices(new Set())
+		setActiveIndex(currentIndex)
+
+		// Clear any existing timeouts
+		timeoutIds.forEach(clearTimeout)
+		setTimeoutIds(new Set())
+	}, [invoices, currentIndex])
+
+	// Cleanup on unmount
+	useEffect(() => {
+		return () => {
+			// Clear all timeouts when component unmounts
+			timeoutIds.forEach(clearTimeout)
 		}
-	}, [invoices])
+	}, [])
 
 	// Update active index when currentIndex prop changes
 	useEffect(() => {
@@ -124,6 +157,23 @@ export function PaymentContent({
 		}))
 	}
 
+	// Helper to create tracked timeouts for cleanup
+	const createTrackedTimeout = (callback: () => void, delay: number) => {
+		const timeoutId = setTimeout(() => {
+			callback()
+			// Remove timeout from tracking set when it completes
+			setTimeoutIds((prev) => {
+				const newSet = new Set(prev)
+				newSet.delete(timeoutId)
+				return newSet
+			})
+		}, delay)
+
+		// Add timeout to tracking set
+		setTimeoutIds((prev) => new Set(prev).add(timeoutId))
+		return timeoutId
+	}
+
 	const currentInvoice = invoices[activeIndex]
 	const currentState = invoiceStates[currentInvoice?.id] || {
 		loading: false,
@@ -133,7 +183,90 @@ export function PaymentContent({
 		lightningAddress: null,
 		paymentComplete: false,
 		paymentPending: false,
+		awaitingPayment: false,
 	}
+
+	// Monitor for payment receipts to detect QR code payments
+	useEffect(() => {
+		if (!currentInvoice || currentState.paymentComplete) return
+
+		let ndk = ndkActions.getNDK()
+		if (!ndk) return
+
+		// Add a grace period before starting receipt monitoring to prevent race conditions
+		const monitoringDelay = createTrackedTimeout(() => {
+			console.log('🔍 Starting payment receipt monitoring for invoice:', currentInvoice.id, 'session:', sessionIdRef.current)
+
+			const sessionStartTime = sessionStartTimeRef.current
+			if (!sessionStartTime) {
+				console.log('❌ No session start time available, skipping receipt monitoring')
+				return
+			}
+
+			// Subscribe to payment receipts for this invoice/order with timestamp filtering
+			const receiptFilter = {
+				kinds: [17], // Payment receipt kind
+				'#order': [currentInvoice.orderId],
+				'#payment-request': [currentInvoice.id],
+				// Only get receipts created after our session started (with 30 second buffer for clock skew)
+				since: sessionStartTime - 30,
+			}
+
+			const subscription = ndk.subscribe(receiptFilter, {
+				closeOnEose: false, // Keep subscription open for real-time updates
+			})
+
+			subscription.on('event', (receiptEvent) => {
+				console.log('💳 Payment receipt received for invoice:', currentInvoice.id, receiptEvent)
+				console.log('🕐 Receipt created_at:', receiptEvent.created_at, 'session started:', sessionStartTime)
+
+				// Double-check timestamp to prevent old receipts from triggering payments
+				if (receiptEvent.created_at && receiptEvent.created_at < sessionStartTime - 30) {
+					console.log('⏰ Ignoring old receipt from before session start')
+					return
+				}
+
+				// Check if this receipt is for our current invoice
+				const paymentRequestTag = receiptEvent.tags.find((tag) => tag[0] === 'payment-request')
+				if (paymentRequestTag?.[1] === currentInvoice.id) {
+					// Extract preimage from the payment tag
+					const paymentTag = receiptEvent.tags.find((tag) => tag[0] === 'payment')
+					const preimage = paymentTag?.[3] || 'external-payment'
+
+					console.log('✅ Valid payment receipt detected, marking invoice as complete')
+
+					// Mark payment as complete
+					updateInvoiceState(currentInvoice.id, {
+						paymentComplete: true,
+						paymentPending: false,
+						awaitingPayment: false,
+					})
+
+					// Notify parent component
+					onPaymentComplete?.(currentInvoice.id, preimage)
+					toast.success('Payment detected and confirmed!')
+
+					// Auto-advance to next invoice or close if this was the last one
+					createTrackedTimeout(() => {
+						if (activeIndex < invoices.length - 1) {
+							handleNavigate(activeIndex + 1)
+						}
+					}, 1500)
+				}
+			})
+
+			// Store subscription cleanup in the timeout cleanup
+			return () => {
+				console.log('🛑 Stopping payment receipt monitoring for invoice:', currentInvoice.id)
+				subscription.stop()
+			}
+		}, 1000) // 1 second delay before starting monitoring
+
+		return () => {
+			// This will be called if the effect cleanup runs before the timeout
+			clearTimeout(monitoringDelay)
+		}
+	}, [currentInvoice?.id, currentState.paymentComplete, activeIndex, invoices.length, onPaymentComplete])
 
 	// Generate fresh BOLT11 invoice from lightning address
 	const generateInvoiceFromAddress = async (invoiceId: string) => {
@@ -200,6 +333,7 @@ export function PaymentContent({
 			['p', invoice.recipientPubkey], // Merchant's public key
 			['subject', 'order-receipt'], // Required by gamma spec
 			['order', invoice.orderId], // Original order identifier
+			['payment-request', invoiceId], // Payment request ID this receipt is for
 			['payment', 'lightning', bolt11, preimage], // Payment proof with preimage
 			['amount', invoice.amount.toString()], // Payment amount
 		]
@@ -253,6 +387,13 @@ export function PaymentContent({
 
 				onPaymentComplete?.(invoiceId, result.preimage)
 				toast.success('Payment completed successfully!')
+
+				// Auto-advance to next invoice or close if this was the last one
+				createTrackedTimeout(() => {
+					if (activeIndex < invoices.length - 1) {
+						handleNavigate(activeIndex + 1)
+					}
+				}, 1500)
 			} else {
 				throw new Error('Payment completed but no preimage received')
 			}
@@ -362,6 +503,13 @@ export function PaymentContent({
 
 						onPaymentComplete?.(invoiceId, preimage)
 						toast.success('NWC payment completed successfully!')
+
+						// Auto-advance to next invoice or close if this was the last one
+						createTrackedTimeout(() => {
+							if (activeIndex < invoices.length - 1) {
+								handleNavigate(activeIndex + 1)
+							}
+						}, 1500)
 						return
 					}
 				}
@@ -380,6 +528,13 @@ export function PaymentContent({
 
 			onPaymentComplete?.(invoiceId, mockPreimage)
 			toast.success('NWC payment completed successfully!')
+
+			// Auto-advance to next invoice or close if this was the last one
+			createTrackedTimeout(() => {
+				if (activeIndex < invoices.length - 1) {
+					handleNavigate(activeIndex + 1)
+				}
+			}, 1500)
 		} catch (error) {
 			console.error('NWC payment failed:', error)
 			const errorMessage = error instanceof Error ? error.message : 'NWC payment failed'
@@ -402,7 +557,7 @@ export function PaymentContent({
 			await navigator.clipboard.writeText(text)
 			setCopiedInvoices((prev) => new Set(prev).add(invoiceId))
 			toast.success('Copied to clipboard!')
-			setTimeout(() => {
+			createTrackedTimeout(() => {
 				setCopiedInvoices((prev) => {
 					const newSet = new Set(prev)
 					newSet.delete(invoiceId)
@@ -417,6 +572,17 @@ export function PaymentContent({
 	const openLightningWallet = (bolt11: string) => {
 		const lightningUrl = `lightning:${bolt11}`
 		window.open(lightningUrl, '_blank')
+
+		// Mark as awaiting payment since user opened external wallet
+		updateInvoiceState(currentInvoice.id, {
+			awaitingPayment: true,
+		})
+	}
+
+	const startAwaitingPayment = (invoiceId: string) => {
+		updateInvoiceState(invoiceId, {
+			awaitingPayment: true,
+		})
 	}
 
 	const handleNavigate = (newIndex: number) => {
@@ -499,6 +665,14 @@ export function PaymentContent({
 				</div>
 			)}
 
+			{/* Awaiting Payment State */}
+			{currentState.awaitingPayment && !currentState.paymentComplete && (
+				<div className="flex items-center gap-2 p-3 bg-blue-50 text-blue-700 rounded-lg">
+					<RefreshCw className="w-4 h-4 animate-spin" />
+					<span className="text-sm">Awaiting payment confirmation...</span>
+				</div>
+			)}
+
 			{/* Payment Interface */}
 			{!currentState.paymentComplete && (
 				<>
@@ -540,7 +714,14 @@ export function PaymentContent({
 									<QRCode value={currentState.invoice} size={256} />
 
 									<div className="flex gap-2 w-full">
-										<Button variant="outline" onClick={() => copyToClipboard(currentState.invoice!, currentInvoice.id)} className="flex-1">
+										<Button
+											variant="outline"
+											onClick={() => {
+												copyToClipboard(currentState.invoice!, currentInvoice.id)
+												startAwaitingPayment(currentInvoice.id)
+											}}
+											className="flex-1"
+										>
 											{copiedInvoices.has(currentInvoice.id) ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
 											{copiedInvoices.has(currentInvoice.id) ? 'Copied!' : 'Copy'}
 										</Button>
@@ -550,6 +731,13 @@ export function PaymentContent({
 											Open Wallet
 										</Button>
 									</div>
+
+									{!currentState.awaitingPayment && !currentState.paymentComplete && (
+										<Button variant="secondary" onClick={() => startAwaitingPayment(currentInvoice.id)} className="w-full">
+											<RefreshCw className="w-4 h-4 mr-2" />
+											I've made the payment
+										</Button>
+									)}
 								</div>
 							</TabsContent>
 
