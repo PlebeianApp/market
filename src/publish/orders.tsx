@@ -440,6 +440,7 @@ export async function createPaymentRequestEvent(data: PaymentRequestData): Promi
 	const tags: NDKTag[] = [
 		// Required tags
 		['p', data.buyerPubkey],
+		['recipient', data.merchantPubkey],
 		['subject', 'order-payment'],
 		['type', ORDER_MESSAGE_TYPE.PAYMENT_REQUEST],
 		['order', data.orderId],

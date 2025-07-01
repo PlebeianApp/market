@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react'
 import { copyToClipboard } from '@/lib/utils'
 import { toast } from 'sonner'
 import { LightningService } from '@/lib/utils/lightning'
+import { useInvoiceGeneration } from '@/hooks/useInvoiceGeneration'
 
 // WebLN types
 declare global {
@@ -29,6 +30,8 @@ export interface SingleInvoiceData {
 	expiresAt?: number
 	createdAt?: number
 	verificationUrl?: string
+	lightningAddress?: string // Lightning address for generating new invoices
+	recipientPubkey?: string // Pubkey of the payment recipient
 }
 
 interface SingleInvoicePaymentProps {
@@ -53,9 +56,53 @@ export function SingleInvoicePayment({
 	const [paymentStatus, setPaymentStatus] = useState(invoice.status || 'pending')
 	const [polling, setPolling] = useState(false)
 	const [nwcProcessing, setNwcProcessing] = useState(false)
+	const [generatedBolt11, setGeneratedBolt11] = useState<string>('')
+	const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false)
+	const { generateInvoiceForSeller } = useInvoiceGeneration({ fallbackToMock: true })
 
-	// Parse invoice details
-	const invoiceDetails = LightningService.parseBolt11Invoice(invoice.bolt11)
+	// Determine what payment data we have
+	const hasBolt11 = invoice.bolt11 && invoice.bolt11.length > 0
+	const hasLightningAddress = invoice.lightningAddress && invoice.lightningAddress.length > 0
+	const currentBolt11 = generatedBolt11 || invoice.bolt11
+
+	// Parse invoice details only if we have a BOLT11 invoice
+	const invoiceDetails = currentBolt11 ? LightningService.parseBolt11Invoice(currentBolt11) : null
+
+	// Generate BOLT11 invoice from lightning address if needed
+	const generateBolt11FromAddress = async () => {
+		if (!hasLightningAddress || !invoice.lightningAddress || !invoice.recipientPubkey) {
+			toast.error('No lightning address available for invoice generation')
+			return
+		}
+
+		setIsGeneratingInvoice(true)
+
+		try {
+			const invoiceData = await generateInvoiceForSeller(
+				invoice.recipientPubkey,
+				invoice.amount,
+				invoice.description || 'Payment',
+				invoice.id,
+				[], // Empty items array for order payments
+				invoice.description?.includes('V4V') ? 'v4v' : 'seller',
+			)
+
+			setGeneratedBolt11(invoiceData.bolt11)
+			toast.success('Fresh invoice generated!')
+		} catch (error) {
+			console.error('Failed to generate invoice from lightning address:', error)
+			toast.error(`Failed to generate invoice: ${error instanceof Error ? error.message : 'Unknown error'}`)
+		} finally {
+			setIsGeneratingInvoice(false)
+		}
+	}
+
+	// Auto-generate invoice if we only have lightning address
+	useEffect(() => {
+		if (!hasBolt11 && hasLightningAddress && !generatedBolt11 && !isGeneratingInvoice) {
+			generateBolt11FromAddress()
+		}
+	}, [hasBolt11, hasLightningAddress, generatedBolt11, isGeneratingInvoice])
 
 	// Update payment status when invoice prop changes
 	useEffect(() => {
@@ -104,9 +151,14 @@ export function SingleInvoicePayment({
 	}
 
 	const handleCopyInvoice = async () => {
+		if (!currentBolt11) {
+			toast.error('No invoice available to copy')
+			return
+		}
+
 		setCopying(true)
 		try {
-			await copyToClipboard(invoice.bolt11)
+			await copyToClipboard(currentBolt11)
 			toast.success('Invoice copied to clipboard!')
 		} catch (error) {
 			toast.error('Failed to copy invoice')
@@ -154,6 +206,11 @@ export function SingleInvoicePayment({
 	}
 
 	const handleNWCPayment = async () => {
+		if (!currentBolt11) {
+			toast.error('No invoice available for payment')
+			return
+		}
+
 		if (!window.webln) {
 			toast.error('No WebLN wallet found. Please install a WebLN-compatible wallet.')
 			return
@@ -162,7 +219,7 @@ export function SingleInvoicePayment({
 		setNwcProcessing(true)
 		try {
 			await window.webln.enable()
-			const response = await window.webln.sendPayment(invoice.bolt11)
+			const response = await window.webln.sendPayment(currentBolt11)
 
 			if (response.preimage) {
 				setPaymentStatus('paid')
@@ -227,7 +284,16 @@ export function SingleInvoicePayment({
 						{invoice.recipientName && <span className="text-sm text-gray-600 truncate">{invoice.recipientName}</span>}
 					</div>
 
-					{canPay && (
+					{/* Show loading state when generating invoice */}
+					{isGeneratingInvoice && (
+						<div className="flex items-center justify-center py-4">
+							<RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+							<span className="text-sm text-gray-600">Generating invoice...</span>
+						</div>
+					)}
+
+					{/* Show actions when we have an invoice and can pay */}
+					{currentBolt11 && canPay && !isGeneratingInvoice && (
 						<div className="flex gap-2">
 							<Button variant="outline" size="sm" onClick={handleCopyInvoice} disabled={copying} className="flex-1">
 								<Copy className="w-4 h-4 mr-1" />
@@ -242,6 +308,14 @@ export function SingleInvoicePayment({
 						</div>
 					)}
 
+					{/* Show refresh button if invoice generation failed */}
+					{!currentBolt11 && hasLightningAddress && !isGeneratingInvoice && (
+						<Button variant="outline" size="sm" onClick={generateBolt11FromAddress} className="w-full">
+							<RefreshCw className="w-4 h-4 mr-2" />
+							Generate Invoice
+						</Button>
+					)}
+
 					{timeLeft > 0 && <div className="text-xs text-gray-500 mt-2 text-center">Expires in: {formatTime(timeLeft)}</div>}
 				</CardContent>
 			</Card>
@@ -249,100 +323,113 @@ export function SingleInvoicePayment({
 	}
 
 	return (
-		<Card className="w-full">
+		<Card className="w-full max-w-md mx-auto">
 			{showHeader && (
-				<CardHeader className="pb-3">
-					<div className="flex items-center justify-between">
-						<CardTitle className="text-lg">Lightning Invoice</CardTitle>
-						<Badge className={getStatusColor(paymentStatus)} variant="outline">
-							{getStatusIcon(paymentStatus)}
-							<span className="ml-1 capitalize">{paymentStatus}</span>
-						</Badge>
-					</div>
-					{invoice.recipientName && <p className="text-sm text-gray-600">For: {invoice.recipientName}</p>}
+				<CardHeader className="text-center">
+					<CardTitle className="flex items-center justify-center gap-2">
+						<Zap className="w-5 h-5" />
+						Lightning Invoice
+					</CardTitle>
+					{invoice.recipientName && <p className="text-sm text-gray-600">Pay to: {invoice.recipientName}</p>}
 				</CardHeader>
 			)}
 
 			<CardContent className="space-y-4">
-				<div className="text-center">
-					<div className="text-2xl font-bold">{invoice.amount} sats</div>
-					{invoice.description && <div className="text-sm text-gray-600 mt-1">{invoice.description}</div>}
-					{timeLeft > 0 && <div className="text-sm text-gray-500 mt-1">Expires in: {formatTime(timeLeft)}</div>}
+				{/* Status and Amount */}
+				<div className="text-center space-y-2">
+					<Badge className={getStatusColor(paymentStatus)} variant="outline">
+						{getStatusIcon(paymentStatus)}
+						<span className="ml-1 capitalize">{paymentStatus}</span>
+					</Badge>
+					<div className="text-2xl font-bold font-mono">{invoice.amount} sats</div>
+					{invoice.description && <p className="text-sm text-gray-600">{invoice.description}</p>}
 				</div>
 
-				{canPay && (
+				{/* Loading state when generating invoice */}
+				{isGeneratingInvoice && (
+					<div className="flex flex-col items-center justify-center py-8 space-y-4">
+						<RefreshCw className="w-8 h-8 animate-spin text-blue-600" />
+						<p className="text-sm text-gray-600">Generating fresh invoice...</p>
+					</div>
+				)}
+
+				{/* QR Code and Invoice - only show when we have a BOLT11 invoice */}
+				{currentBolt11 && !isGeneratingInvoice && (
 					<Tabs defaultValue="qr" className="w-full">
 						<TabsList className="grid w-full grid-cols-2">
-							<TabsTrigger value="qr" className="flex items-center gap-2">
-								<CreditCard className="w-4 h-4" />
-								QR Code
-							</TabsTrigger>
-							{nwcEnabled && window.webln && (
-								<TabsTrigger value="nwc" className="flex items-center gap-2">
-									<Wallet className="w-4 h-4" />
-									NWC
-								</TabsTrigger>
-							)}
+							<TabsTrigger value="qr">QR Code</TabsTrigger>
+							<TabsTrigger value="invoice">Invoice</TabsTrigger>
 						</TabsList>
 
 						<TabsContent value="qr" className="space-y-4">
 							<div className="flex justify-center">
-								<QRCode value={`lightning:${invoice.bolt11}`} size={200} level="M" className="border rounded-lg" />
+								<QRCode value={currentBolt11} size={200} />
 							</div>
-
-							<div className="space-y-2">
-								<Button variant="outline" onClick={handleCopyInvoice} disabled={copying} className="w-full">
-									<Copy className="w-4 h-4 mr-2" />
-									{copying ? 'Copying...' : 'Copy Invoice'}
-								</Button>
-
-								<Button variant="ghost" size="sm" onClick={() => window.open(`lightning:${invoice.bolt11}`, '_blank')} className="w-full">
-									<ExternalLink className="w-4 h-4 mr-2" />
-									Open in Wallet
-								</Button>
-							</div>
+							<p className="text-xs text-center text-gray-500">Scan with Lightning wallet</p>
 						</TabsContent>
 
-						{nwcEnabled && window.webln && (
-							<TabsContent value="nwc" className="space-y-4">
-								<div className="text-center text-sm text-gray-600 mb-4">Pay instantly using your connected Lightning wallet</div>
-
-								<Button onClick={handleNWCPayment} disabled={nwcProcessing} className="w-full" size="lg">
-									<Zap className="w-4 h-4 mr-2" />
-									{nwcProcessing ? (
-										<>
-											<RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-											Processing Payment...
-										</>
-									) : (
-										'Pay with NWC'
-									)}
-								</Button>
-
-								{polling && (
-									<div className="text-center text-sm text-gray-600">
-										<RefreshCw className="w-4 h-4 mr-1 inline animate-spin" />
-										Verifying payment...
-									</div>
-								)}
-							</TabsContent>
-						)}
+						<TabsContent value="invoice" className="space-y-4">
+							<div className="bg-gray-50 p-3 rounded text-xs font-mono break-all border">{currentBolt11}</div>
+							<Button variant="outline" onClick={handleCopyInvoice} disabled={copying} className="w-full">
+								<Copy className="w-4 h-4 mr-2" />
+								{copying ? 'Copying...' : 'Copy Invoice'}
+							</Button>
+						</TabsContent>
 					</Tabs>
 				)}
 
-				{isPaid && (
-					<div className="text-center p-4 bg-green-50 rounded-lg">
-						<Check className="w-8 h-8 text-green-600 mx-auto mb-2" />
-						<div className="text-green-800 font-semibold">Payment Confirmed!</div>
+				{/* Show generate button if no invoice available */}
+				{!currentBolt11 && hasLightningAddress && !isGeneratingInvoice && (
+					<div className="text-center space-y-4">
+						<p className="text-sm text-gray-600">No invoice available. Generate a fresh one?</p>
+						<Button onClick={generateBolt11FromAddress} className="w-full">
+							<RefreshCw className="w-4 h-4 mr-2" />
+							Generate Invoice from {invoice.lightningAddress}
+						</Button>
 					</div>
 				)}
 
-				{(isFailed || isExpired) && (
-					<div className="text-center p-4 bg-red-50 rounded-lg">
-						<AlertTriangle className="w-8 h-8 text-red-600 mx-auto mb-2" />
-						<div className="text-red-800 font-semibold">{isExpired ? 'Invoice Expired' : 'Payment Failed'}</div>
+				{/* Payment Actions */}
+				{currentBolt11 && canPay && !isGeneratingInvoice && (
+					<div className="space-y-3">
+						{/* WebLN Payment */}
+						{nwcEnabled && window.webln && (
+							<Button onClick={handleNWCPayment} disabled={nwcProcessing} className="w-full" size="lg">
+								<Wallet className="w-4 h-4 mr-2" />
+								{nwcProcessing ? 'Processing Payment...' : 'Pay with Wallet'}
+							</Button>
+						)}
+
+						{/* Copy Invoice Button */}
+						<Button variant="outline" onClick={handleCopyInvoice} disabled={copying} className="w-full">
+							<Copy className="w-4 h-4 mr-2" />
+							{copying ? 'Copying...' : 'Copy Invoice'}
+						</Button>
+
+						{/* Refresh Invoice Button */}
+						{hasLightningAddress && (
+							<Button variant="outline" onClick={generateBolt11FromAddress} disabled={isGeneratingInvoice} className="w-full">
+								<RefreshCw className="w-4 h-4 mr-2" />
+								Generate Fresh Invoice
+							</Button>
+						)}
 					</div>
 				)}
+
+				{/* Timer */}
+				{timeLeft > 0 && (
+					<div className="text-center">
+						<p className="text-sm text-gray-600">
+							<Timer className="w-4 h-4 inline mr-1" />
+							Expires in: {formatTime(timeLeft)}
+						</p>
+					</div>
+				)}
+
+				{/* Payment Status Messages */}
+				{isPaid && <div className="text-center text-green-600 font-medium">✅ Payment Completed</div>}
+				{isFailed && <div className="text-center text-red-600 font-medium">❌ Payment Failed</div>}
+				{isExpired && <div className="text-center text-gray-600 font-medium">⏰ Invoice Expired</div>}
 			</CardContent>
 		</Card>
 	)
