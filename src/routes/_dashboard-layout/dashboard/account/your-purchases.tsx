@@ -11,7 +11,7 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/account/your-
 })
 
 function YourPurchasesComponent() {
-	useDashboardTitle('Your Purchases')
+	useDashboardTitle('')
 	const ndk = ndkActions.getNDK()
 	const currentUser = ndk?.activeUser
 	const [statusFilter, setStatusFilter] = useState<string>('any')
@@ -33,6 +33,11 @@ function YourPurchasesComponent() {
 
 	return (
 		<div className="space-y-6">
+			<div>
+				<h1 className="text-[1.6rem] font-bold">Your Purchases</h1>
+				<p className="text-muted-foreground">View and manage your purchase history</p>
+			</div>
+
 			<OrderDataTable
 				data={filteredPurchases}
 				columns={purchaseColumns}

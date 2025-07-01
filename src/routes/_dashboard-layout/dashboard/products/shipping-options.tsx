@@ -763,7 +763,7 @@ function ShippingOptionsComponent() {
 	const [openShippingOptionId, setOpenShippingOptionId] = useState<string | null>(null)
 	const [serviceFilter, setServiceFilter] = useState<string>('all')
 
-	useDashboardTitle('Shipping Options')
+	useDashboardTitle('') // Clear the dashboard title so we can create our own
 
 	useEffect(() => {
 		getUser().then(setUser)
@@ -784,27 +784,29 @@ function ShippingOptionsComponent() {
 
 	return (
 		<div className="space-y-6">
-			<div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+			{/* Title and Filter Row */}
+			<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
 				<div>
+					<h1 className="text-[1.6rem] font-bold">Shipping Options</h1>
 					<p className="text-muted-foreground">Manage your shipping options for customers</p>
 				</div>
-					<div className="flex items-center gap-2">
-					<Label htmlFor="service-filter" className="text-sm font-medium hidden sm:block">
-							Filter:
-						</Label>
-						<Select value={serviceFilter} onValueChange={setServiceFilter}>
-						<SelectTrigger className="w-full sm:w-[180px]">
-								<SelectValue placeholder="All services" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">All services</SelectItem>
-								{SERVICE_TYPES.map((service) => (
-									<SelectItem key={service.value} value={service.value}>
-										{service.label}
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
+				<div className="flex items-center gap-2 w-full lg:w-auto">
+					<Label htmlFor="service-filter" className="text-sm font-medium whitespace-nowrap">
+						Filter:
+					</Label>
+					<Select value={serviceFilter} onValueChange={setServiceFilter}>
+						<SelectTrigger className="w-full lg:w-64">
+							<SelectValue placeholder="All services" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="all">All services</SelectItem>
+							{SERVICE_TYPES.map((service) => (
+								<SelectItem key={service.value} value={service.value}>
+									{service.label}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
 				</div>
 			</div>
 

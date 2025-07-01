@@ -230,8 +230,6 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 	const updateMutation = useUpdatePaymentDetail()
 	const deleteMutation = useDeletePaymentDetail()
 
-	useDashboardTitle('Receiving Payments')
-
 	const isEditing = !!paymentDetail
 
 	const [editedPaymentDetail, setEditedPaymentDetail] = useState<RichPaymentDetail>(() => {
@@ -691,6 +689,8 @@ function ReceivingPaymentsComponent() {
 	const [openPaymentDetailId, setOpenPaymentDetailId] = useState<string | null>(null)
 	const [paymentMethodFilter, setPaymentMethodFilter] = useState<PaymentDetailsMethod | 'all'>('all')
 
+	useDashboardTitle('') // Clear the dashboard title so we can create our own
+
 	useEffect(() => {
 		getUser().then(setUser)
 	}, [getUser])
@@ -711,16 +711,18 @@ function ReceivingPaymentsComponent() {
 
 	return (
 		<div className="space-y-6">
-			<div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+			{/* Title and Filter Row */}
+			<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
 				<div>
+					<h1 className="text-[1.6rem] font-bold">Receiving Payments</h1>
 					<p className="text-muted-foreground">Manage your payment receiving options here</p>
 				</div>
-				<div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
+				<div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full lg:w-auto">
 					<Label htmlFor="payment-filter" className="text-sm font-medium whitespace-nowrap">
 						Filter:
 					</Label>
 					<Select value={paymentMethodFilter} onValueChange={(value: PaymentDetailsMethod | 'all') => setPaymentMethodFilter(value)}>
-						<SelectTrigger className="w-full sm:w-[180px]">
+						<SelectTrigger className="w-full sm:w-[180px] lg:w-64">
 							<SelectValue placeholder="All payment methods" />
 						</SelectTrigger>
 						<SelectContent>
