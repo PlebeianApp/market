@@ -2,10 +2,10 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Check, Clock, Zap, Users, CreditCard } from 'lucide-react'
-import type { PaymentInvoice } from './PaymentInterface'
+import type { PaymentInvoiceData } from './PaymentDialog'
 
 interface PaymentSummaryProps {
-	invoices: PaymentInvoice[]
+	invoices: PaymentInvoiceData[]
 	currentIndex: number
 	onSelectInvoice: (index: number) => void
 }
@@ -23,28 +23,30 @@ export function PaymentSummary({ invoices, currentIndex, onSelectInvoice }: Paym
 	return (
 		<div className="space-y-4">
 			{/* Current Payment */}
-			<Card className="border-pink-200 bg-pink-50">
-				<CardHeader className="pb-2">
-					<CardTitle className="text-sm">Currently Paying</CardTitle>
-				</CardHeader>
-				<CardContent>
-					<div className="flex items-center gap-2 mb-2">
-						{currentInvoice.type === 'v4v' ? (
-							<Users className="w-4 h-4 text-purple-600" />
-						) : (
-							<CreditCard className="w-4 h-4 text-blue-600" />
-						)}
-						<span className="font-medium">{currentInvoice.sellerName}</span>
-					</div>
-					<div className="flex items-center gap-2">
-						<Zap className="w-4 h-4 text-yellow-500" />
-						<span className="text-lg font-bold">{formatSats(currentInvoice.amount)} sats</span>
-						<Badge variant={currentInvoice.type === 'v4v' ? 'secondary' : 'outline'}>
-							{currentInvoice.type === 'v4v' ? 'V4V' : 'Merchant'}
-						</Badge>
-					</div>
-				</CardContent>
-			</Card>
+			{currentInvoice && (
+				<Card className="border-pink-200 bg-pink-50">
+					<CardHeader className="pb-2">
+						<CardTitle className="text-sm">Currently Paying</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<div className="flex items-center gap-2 mb-2">
+							{currentInvoice.type === 'v4v' ? (
+								<Users className="w-4 h-4 text-purple-600" />
+							) : (
+								<CreditCard className="w-4 h-4 text-blue-600" />
+							)}
+							<span className="font-medium">{currentInvoice.recipientName}</span>
+						</div>
+						<div className="flex items-center gap-2">
+							<Zap className="w-4 h-4 text-yellow-500" />
+							<span className="text-lg font-bold">{formatSats(currentInvoice.amount)} sats</span>
+							<Badge variant={currentInvoice.type === 'v4v' ? 'secondary' : 'outline'}>
+								{currentInvoice.type === 'v4v' ? 'V4V' : 'Merchant'}
+							</Badge>
+						</div>
+					</CardContent>
+				</Card>
+			)}
 
 			{/* Summary Stats */}
 			<Card>
@@ -100,7 +102,7 @@ export function PaymentSummary({ invoices, currentIndex, onSelectInvoice }: Paym
 											) : (
 												<CreditCard className="w-4 h-4 text-blue-600" />
 											)}
-											<span className="font-medium text-sm truncate">{invoice.sellerName}</span>
+											<span className="font-medium text-sm truncate">{invoice.recipientName}</span>
 											{invoice.status === 'paid' && <Check className="w-4 h-4 text-green-600" />}
 										</div>
 										{index === currentIndex && (

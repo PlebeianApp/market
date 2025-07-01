@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { CartSummary } from '@/components/CartSummary'
 import { CheckoutProgress } from '@/components/checkout/CheckoutProgress'
-import { PaymentInterface, type PaymentInvoice } from '@/components/checkout/PaymentInterface'
+import { PaymentContent, type PaymentInvoiceData } from '@/components/checkout/PaymentContent'
 import { PaymentSummary } from '@/components/checkout/PaymentSummary'
 import { OrderFinalizeComponent } from '@/components/checkout/OrderFinalizeComponent'
 import { ShippingAddressForm, type CheckoutFormData } from '@/components/checkout/ShippingAddressForm'
@@ -14,14 +14,20 @@ import { useStore } from '@tanstack/react-store'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useForm } from '@tanstack/react-form'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
-import { ChevronLeft, ChevronRight, Zap } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Zap, Loader2 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useInvoiceGeneration } from '@/hooks/useInvoiceGeneration'
 import { createAndPublishOrder, createPaymentRequestEvent } from '@/publish/orders'
 import type { OrderCreationData, PaymentRequestData } from '@/publish/orders'
 import { createOrderInvoiceSet, updateInvoiceStatus } from '@/lib/utils/orderUtils'
 import type { OrderInvoiceSet } from '@/lib/utils/orderUtils'
-import { ndkActions } from '@/lib/stores/ndk'
+import { ndkActions, ndkStore } from '@/lib/stores/ndk'
+import { uiActions } from '@/lib/stores/ui'
+import { fetchProfileByIdentifier } from '@/queries/profiles'
+import { fetchV4VShares } from '@/queries/v4v'
+import { toast } from 'sonner'
+import { NDKZapper } from '@nostr-dev-kit/ndk'
+import { NDKNWCWallet, NDKWalletStatus } from '@nostr-dev-kit/ndk-wallet'
 
 export const Route = createFileRoute('/checkout')({
 	component: RouteComponent,
@@ -33,9 +39,10 @@ function RouteComponent() {
 	const navigate = useNavigate()
 	const { cart, totalInSats, totalShippingInSats, productsBySeller, sellerData, v4vShares } = useStore(cartStore)
 	const { wallets, isInitialized: walletsInitialized, initialize: initializeWallets } = useWallets()
+	const ndkState = useStore(ndkStore)
 	const [currentStep, setCurrentStep] = useState<CheckoutStep>('shipping')
 	const [currentInvoiceIndex, setCurrentInvoiceIndex] = useState(0)
-	const [invoices, setInvoices] = useState<PaymentInvoice[]>([])
+	const [invoices, setInvoices] = useState<PaymentInvoiceData[]>([])
 	const [shippingData, setShippingData] = useState<CheckoutFormData | null>(null)
 
 	// Initialize wallets on mount
@@ -163,7 +170,7 @@ function RouteComponent() {
 	useEffect(() => {
 		if (currentStep === 'payment' && invoices.length === 0 && sellers.length > 0 && !isGeneratingInvoices) {
 			const generateInvoices = async () => {
-				const newInvoices: PaymentInvoice[] = []
+				const newInvoices: PaymentInvoiceData[] = []
 				let invoiceIndex = 0
 
 				// Debug: Log all V4V shares data
@@ -205,16 +212,20 @@ function RouteComponent() {
 							'seller',
 						)
 
-						// Convert to simplified PaymentInvoice format
-						const paymentInvoice: PaymentInvoice = {
+						// Convert to PaymentInvoiceData format
+						const paymentInvoice: PaymentInvoiceData = {
 							id: sellerInvoice.id,
-							sellerPubkey: sellerInvoice.sellerPubkey,
-							sellerName: sellerInvoice.sellerName,
+							orderId: specOrderIds.length > 0 ? specOrderIds[0] : 'temp-order',
+							recipientPubkey: sellerInvoice.sellerPubkey,
+							recipientName: sellerInvoice.sellerName,
 							amount: sellerInvoice.amount,
-							bolt11: sellerInvoice.bolt11 || '',
+							description: `Seller payment for ${sellerProducts.length} items`,
+							bolt11: sellerInvoice.bolt11 || null,
+							lightningAddress: sellerInvoice.lightningAddress || null,
 							expiresAt: sellerInvoice.expiresAt,
-							status: sellerInvoice.status,
+							status: sellerInvoice.status === 'failed' ? 'expired' : (sellerInvoice.status as 'pending' | 'paid' | 'expired'),
 							type: 'merchant',
+							createdAt: Date.now(),
 						}
 						newInvoices.push(paymentInvoice)
 
@@ -253,16 +264,20 @@ function RouteComponent() {
 										'v4v',
 									)
 
-									// Convert to simplified PaymentInvoice format
-									const v4vPaymentInvoice: PaymentInvoice = {
+									// Convert to PaymentInvoiceData format
+									const v4vPaymentInvoice: PaymentInvoiceData = {
 										id: recipientInvoice.id,
-										sellerPubkey: recipient.pubkey,
-										sellerName: recipient.name,
+										orderId: specOrderIds.length > 0 ? specOrderIds[0] : 'temp-order',
+										recipientPubkey: recipient.pubkey,
+										recipientName: recipient.name,
 										amount: recipientAmount,
-										bolt11: recipientInvoice.bolt11 || '',
+										description: `V4V payment to ${recipient.name}`,
+										bolt11: recipientInvoice.bolt11 || null,
+										lightningAddress: recipientInvoice.lightningAddress || null,
 										expiresAt: recipientInvoice.expiresAt,
-										status: recipientInvoice.status,
+										status: recipientInvoice.status === 'failed' ? 'expired' : (recipientInvoice.status as 'pending' | 'paid' | 'expired'),
 										type: 'v4v',
+										createdAt: Date.now(),
 									}
 									newInvoices.push(v4vPaymentInvoice)
 									console.log(`✅ Successfully generated V4V invoice for ${recipient.name}`)
@@ -327,8 +342,8 @@ function RouteComponent() {
 		}, 3000) // Slightly longer delay to simulate Lightning verification
 	}
 
-	const handlePaymentComplete = (invoiceId: string, method: 'lightning' | 'nwc') => {
-		console.log(`Payment completed for invoice ${invoiceId} via ${method}`)
+	const handlePaymentComplete = (invoiceId: string, preimage: string) => {
+		console.log(`Payment completed for invoice ${invoiceId} with preimage: ${preimage.substring(0, 16)}...`)
 
 		setInvoices((prev) =>
 			prev.map((invoice) => {
@@ -354,20 +369,133 @@ function RouteComponent() {
 		}, 1500)
 	}
 
-	const handlePayAllInvoices = () => {
-		// Mark all remaining invoices as paid (simulating NWC batch payment)
+	const handlePaymentFailed = (invoiceId: string, error: string) => {
+		console.error(`Payment failed for invoice ${invoiceId}:`, error)
+
 		setInvoices((prev) =>
-			prev.map((invoice) => ({
-				...invoice,
-				status: invoice.status === 'pending' ? ('paid' as const) : invoice.status,
-			})),
+			prev.map((invoice) => {
+				if (invoice.id === invoiceId) {
+					return {
+						...invoice,
+						status: 'expired' as const,
+					}
+				}
+				return invoice
+			}),
 		)
 
-		// Go to completion
-		setTimeout(() => {
-			setCurrentStep('complete')
-			cartActions.clear()
-		}, 2000)
+		toast.error(`Payment failed: ${error}`)
+	}
+
+	// Individual NWC payment function (similar to PaymentContent logic)
+	const handleNwcPaymentForInvoice = async (invoice: PaymentInvoiceData): Promise<string> => {
+		let ndk = ndkActions.getNDK()
+		if (!ndk) {
+			console.warn('NDK not initialized for NWC payment, initializing now...')
+			ndk = ndkActions.initialize()
+			await ndkActions.connect()
+		}
+
+		if (!ndk) {
+			throw new Error('Failed to initialize NDK for NWC payment')
+		}
+
+		const activeNwcUri = ndkState.activeNwcWalletUri
+		if (!activeNwcUri) {
+			throw new Error('No active NWC wallet selected. Please configure one in settings.')
+		}
+
+		let originalNdkWallet = ndk.wallet
+		let nwcWalletForPayment: NDKNWCWallet | undefined
+
+		try {
+			nwcWalletForPayment = new NDKNWCWallet(ndk, { pairingCode: activeNwcUri })
+			ndk.wallet = nwcWalletForPayment
+
+			// Wait for wallet to be ready
+			if (nwcWalletForPayment.status !== NDKWalletStatus.READY) {
+				await new Promise<void>((resolve, reject) => {
+					const readyTimeout = setTimeout(() => reject(new Error('NWC wallet connection timed out')), 20000)
+					nwcWalletForPayment!.once('ready', () => {
+						clearTimeout(readyTimeout)
+						resolve()
+					})
+				})
+			}
+
+			// Create a "user" object for zapping (the payment recipient)
+			const recipientUser = ndk.getUser({ pubkey: invoice.recipientPubkey })
+			const zapAmountMsats = invoice.amount * 1000
+
+			// Use NDKZapper for the payment (treating marketplace payment as a zap)
+			const zapper = new NDKZapper(recipientUser, zapAmountMsats, 'msats', {
+				comment: invoice.description,
+			})
+
+			console.log(`💸 Initiating NWC zap payment: ${invoice.amount} sats to ${invoice.recipientName}`)
+
+			// Execute the zap payment
+			const zapDetails = await zapper.zap()
+
+			if (zapDetails instanceof Map && zapDetails.size > 0) {
+				// Check if any payment confirmations contain a preimage
+				const values = Array.from(zapDetails.values())
+				for (const value of values) {
+					if (value && typeof value === 'object' && 'preimage' in value && value.preimage) {
+						return String(value.preimage)
+					}
+				}
+			}
+
+			// If we get here, the zap succeeded but we didn't get a preimage
+			// Still mark as complete but with a mock preimage
+			return `nwc-payment-${Date.now()}`
+		} finally {
+			if (ndk) ndk.wallet = originalNdkWallet
+		}
+	}
+
+	const handlePayAllInvoices = async () => {
+		if (!nwcEnabled) {
+			toast.error('NWC not available for bulk payments')
+			return
+		}
+
+		const pendingInvoices = invoices.filter((inv) => inv.status === 'pending')
+		if (pendingInvoices.length === 0) {
+			toast.info('No pending invoices to pay')
+			return
+		}
+
+		toast.info(`Starting bulk payment for ${pendingInvoices.length} invoices...`)
+
+		// Pay each invoice using real NWC payments
+		for (let i = 0; i < pendingInvoices.length; i++) {
+			const invoice = pendingInvoices[i]
+			try {
+				// Use real NWC payment
+				const preimage = await handleNwcPaymentForInvoice(invoice)
+
+				// Mark as paid using the existing handler
+				handlePaymentComplete(invoice.id, preimage)
+
+				// Small delay between payments to avoid overwhelming the wallet
+				await new Promise((resolve) => setTimeout(resolve, 1000))
+
+				toast.success(`Payment ${i + 1}/${pendingInvoices.length} completed: ${invoice.recipientName}`)
+			} catch (error) {
+				console.error(`Bulk payment failed for invoice ${invoice.id}:`, error)
+				handlePaymentFailed(invoice.id, error instanceof Error ? error.message : 'Bulk payment failed')
+				toast.error(`Payment failed for ${invoice.recipientName}`)
+				break // Stop on first failure
+			}
+		}
+
+		// Check if all payments succeeded
+		const remainingPending = invoices.filter((inv) => inv.status === 'pending').length
+		if (remainingPending === 0) {
+			toast.success('All payments completed successfully!')
+		}
 	}
 
 	const goBackToShopping = () => {
@@ -465,71 +593,113 @@ function RouteComponent() {
 						newInvoiceSets[sellerPubkey] = invoiceSet
 						console.log(`Spec-compliant order created for seller ${sellerPubkey.substring(0, 8)}...:`, orderId)
 
-						// *** NEW: Create payment request events for each invoice ***
+						// *** Create payment request events for each share ***
 						// This creates individual payment request events (Kind 16, type 2) for the merchant and each V4V recipient
-						console.log(`Creating payment request events for order ${orderId}...`)
+						const productSubtotal = sellerTotalSats - sellerShippingSats
+						console.log(`\n📋 Creating payment requests for order ${orderId}:`)
+						console.log(`   Total order: ${sellerTotalSats} sats (${productSubtotal} products + ${sellerShippingSats} shipping)`)
+						console.log(`   Merchant share: ${merchantAmount} sats (${((merchantAmount / sellerTotalSats) * 100).toFixed(1)}%)`)
+						if (v4vRecipients.length > 0) {
+							console.log(`   V4V recipients: ${v4vRecipients.length}`)
+							v4vRecipients.forEach((recipient, index) => {
+								const recipientPercentage = recipient.percentage > 1 ? recipient.percentage / 100 : recipient.percentage
+								const recipientAmount = Math.max(1, Math.floor(productSubtotal * recipientPercentage))
+								console.log(
+									`     ${index + 1}. ${recipient.name}: ${recipientAmount} sats (${(recipientPercentage * 100).toFixed(1)}% of products)`,
+								)
+							})
+						}
+						console.log(`   Total payment requests to create: ${1 + v4vRecipients.length}\n`)
 
-						// Create payment request for merchant
-						const merchantInvoice = invoices.find((inv) => inv.sellerPubkey === sellerPubkey && inv.invoiceType === 'seller')
-						if (merchantInvoice) {
-							const merchantPaymentData: PaymentRequestData = {
-								buyerPubkey: buyerPubkey,
-								merchantPubkey: sellerPubkey,
-								orderId: orderId,
-								amountSats: merchantInvoice.amount,
-								paymentMethods: [
-									{
-										type: 'lightning',
-										details: merchantInvoice.bolt11 || 'lnbc130n1p5947vzsp...',
-									},
-								],
-								expirationTime: merchantInvoice.expiresAt,
-								notes: `Payment request for merchant payment (${merchantInvoice.amount} sats)`,
-							}
+						const paymentRequests: PaymentRequestData[] = []
 
-							try {
-								const paymentRequestEvent = await createPaymentRequestEvent(merchantPaymentData)
-								await paymentRequestEvent.publish()
-								console.log(`✅ Created payment request for merchant: ${merchantInvoice.amount} sats`)
-							} catch (error) {
-								console.error('Failed to create merchant payment request:', error)
+						// Fetch seller profile to get lightning address
+						const sellerProfile = await fetchProfileByIdentifier(sellerPubkey)
+						const sellerLightningAddress = sellerProfile?.lud16 || sellerProfile?.lud06 || 'plebeianuser@coinos.io' // fallback
+
+						// 1. Create payment request for merchant share
+						const merchantShare = data?.shares?.sellerAmount || sellerTotalSats
+						const merchantPaymentData: PaymentRequestData = {
+							buyerPubkey: buyerPubkey,
+							merchantPubkey: sellerPubkey,
+							orderId: orderId,
+							amountSats: merchantShare,
+							paymentMethods: [
+								{
+									type: 'lightning',
+									details: sellerLightningAddress, // Use real lightning address
+								},
+							],
+							notes: `Payment request for merchant share (${merchantShare} sats)`,
+						}
+						paymentRequests.push(merchantPaymentData)
+
+						// 2. Create payment requests for each V4V recipient share
+						for (const recipient of v4vRecipients) {
+							// Calculate the recipient's amount based on their percentage of the PRODUCT total (excluding shipping)
+							const productSubtotal = sellerTotalSats - sellerShippingSats
+							const recipientPercentage = recipient.percentage > 1 ? recipient.percentage / 100 : recipient.percentage
+							const recipientAmount = Math.max(1, Math.floor(productSubtotal * recipientPercentage))
+
+							if (recipientAmount > 0) {
+								// Fetch V4V recipient profile to get their lightning address
+								const recipientProfile = await fetchProfileByIdentifier(recipient.pubkey)
+								const recipientLightningAddress = recipientProfile?.lud16 || recipientProfile?.lud06 || 'plebeianuser@coinos.io' // fallback
+
+								const v4vPaymentData: PaymentRequestData = {
+									buyerPubkey: buyerPubkey,
+									merchantPubkey: recipient.pubkey, // V4V recipient receives the payment
+									orderId: orderId,
+									amountSats: recipientAmount,
+									paymentMethods: [
+										{
+											type: 'lightning',
+											details: recipientLightningAddress, // Use real lightning address
+										},
+									],
+									notes: `Payment request for V4V recipient ${recipient.name} (${recipientAmount} sats, ${(recipientPercentage * 100).toFixed(1)}%)`,
+								}
+								paymentRequests.push(v4vPaymentData)
 							}
 						}
 
-						// Create payment requests for V4V recipients
-						const v4vInvoicesForSeller = invoices.filter((inv) => inv.sellerPubkey === sellerPubkey && inv.invoiceType === 'v4v')
-						for (const v4vInvoice of v4vInvoicesForSeller) {
-							const v4vPaymentData: PaymentRequestData = {
-								buyerPubkey: buyerPubkey,
-								merchantPubkey: v4vInvoice.recipientPubkey, // V4V recipient is the "merchant" for this payment request
-								orderId: orderId,
-								amountSats: v4vInvoice.amount,
-								paymentMethods: [
-									{
-										type: 'lightning',
-										details: v4vInvoice.bolt11 || 'mock_v4v_invoice',
-									},
-								],
-								expirationTime: v4vInvoice.expiresAt,
-								notes: `Payment request for V4V recipient ${v4vInvoice.sellerName} (${v4vInvoice.amount} sats)`,
-							}
-
+						// Create and publish all payment request events
+						let successfulRequests = 0
+						for (const paymentData of paymentRequests) {
 							try {
-								const paymentRequestEvent = await createPaymentRequestEvent(v4vPaymentData)
+								const paymentRequestEvent = await createPaymentRequestEvent(paymentData)
 								await paymentRequestEvent.publish()
-								console.log(`✅ Created payment request for V4V recipient ${v4vInvoice.sellerName}: ${v4vInvoice.amount} sats`)
+								successfulRequests++
+
+								const isV4V = paymentData.merchantPubkey !== sellerPubkey
+								console.log(
+									`✅ Created payment request ${successfulRequests}/${paymentRequests.length}: ${isV4V ? 'V4V' : 'Merchant'} (${paymentData.amountSats} sats)`,
+								)
 							} catch (error) {
-								console.error(`Failed to create V4V payment request for ${v4vInvoice.sellerName}:`, error)
+								console.error(`Failed to create payment request for ${paymentData.notes}:`, error)
 							}
 						}
 
-						console.log(`Created ${1 + v4vInvoicesForSeller.length} payment request events for order ${orderId}`)
+						console.log(`Created ${successfulRequests}/${paymentRequests.length} payment request events for order ${orderId}`)
+						if (successfulRequests !== paymentRequests.length) {
+							console.warn(`Only ${successfulRequests} out of ${paymentRequests.length} payment requests were created successfully`)
+						}
 					}
 				}
 
 				setSpecOrderIds(newOrderIds)
 				setOrderInvoiceSets(newInvoiceSets)
-				console.log(`Created ${newOrderIds.length} spec-compliant orders with payment requests`)
+
+				// Calculate total payment requests created
+				const totalPaymentRequests = sellers.reduce((total, sellerPubkey) => {
+					const v4vRecipients = v4vShares[sellerPubkey] || []
+					return total + 1 + v4vRecipients.length // 1 merchant + N v4v recipients
+				}, 0)
+
+				console.log(`\n🎉 Summary: Created ${newOrderIds.length} spec-compliant orders with ${totalPaymentRequests} total payment requests`)
+				console.log(`   ${newOrderIds.length} merchant payment requests`)
+				console.log(`   ${totalPaymentRequests - newOrderIds.length} V4V payment requests`)
+				console.log('   Each payment request follows gamma spec (Kind 16, type 2)\n')
 			} catch (error) {
 				console.error('Failed to create spec-compliant orders:', error)
 				// Continue with regular checkout flow
@@ -628,14 +798,63 @@ function RouteComponent() {
 
 							{/* Payment Interface - Only show when invoices are ready */}
 							{currentStep === 'payment' && !isGeneratingInvoices && invoices.length > 0 && (
-								<PaymentInterface
-									invoices={invoices}
-									currentIndex={currentInvoiceIndex}
-									onPaymentComplete={handlePaymentComplete}
-									onNavigate={setCurrentInvoiceIndex}
-									onPayAll={handlePayAllInvoices}
-									nwcEnabled={nwcEnabled}
-								/>
+								<div className="space-y-6">
+									<div className="flex items-center justify-between">
+										<h2 className="text-2xl font-bold">
+											Payment {currentInvoiceIndex + 1} of {totalInvoicesNeeded}
+										</h2>
+										{totalInvoicesNeeded > 1 && (
+											<div className="flex items-center gap-2">
+												<Button
+													variant="outline"
+													size="sm"
+													onClick={() => setCurrentInvoiceIndex(Math.max(0, currentInvoiceIndex - 1))}
+													disabled={currentInvoiceIndex === 0}
+												>
+													<ChevronLeft className="w-4 h-4" />
+													Previous
+												</Button>
+												<span className="text-sm text-gray-500">
+													{currentInvoiceIndex + 1} of {totalInvoicesNeeded}
+												</span>
+												<Button
+													variant="outline"
+													size="sm"
+													onClick={() => setCurrentInvoiceIndex(Math.min(totalInvoicesNeeded - 1, currentInvoiceIndex + 1))}
+													disabled={currentInvoiceIndex === totalInvoicesNeeded - 1}
+												>
+													Next
+													<ChevronRight className="w-4 h-4" />
+												</Button>
+											</div>
+										)}
+									</div>
+
+									{/* Pay All Button - Only show if NWC is enabled and there are unpaid invoices */}
+									{nwcEnabled && invoices.filter((inv) => inv.status === 'pending').length > 1 && (
+										<div className="flex justify-center mb-4">
+											<Button
+												onClick={handlePayAllInvoices}
+												className="bg-green-600 hover:bg-green-700 text-white font-medium px-6 py-2"
+												size="lg"
+											>
+												<Zap className="w-4 h-4 mr-2" />
+												Pay All with NWC ({invoices.filter((inv) => inv.status === 'pending').length} invoices)
+											</Button>
+										</div>
+									)}
+
+									{/* Payment Content - Inline instead of modal */}
+									<PaymentContent
+										invoices={invoices}
+										currentIndex={currentInvoiceIndex}
+										onPaymentComplete={handlePaymentComplete}
+										onPaymentFailed={handlePaymentFailed}
+										showNavigation={false} // We have our own navigation above
+										nwcEnabled={nwcEnabled}
+										onNavigate={setCurrentInvoiceIndex}
+									/>
+								</div>
 							)}
 
 							{currentStep === 'complete' && (

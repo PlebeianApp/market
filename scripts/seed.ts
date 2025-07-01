@@ -19,6 +19,7 @@ import {
 	createOrderEvent,
 	createOrderStatusEvent,
 	createPaymentRequestEvent,
+	createMultiplePaymentRequestEvents,
 	createPaymentReceiptEvent,
 	createShippingUpdateEvent,
 	generateOrderCreationData,
@@ -190,6 +191,10 @@ async function seedData() {
 
 	// Create orders between all users
 	console.log('Creating orders between all users...')
+	console.log('🔄 Each order will generate multiple payment requests according to V4V shares:')
+	console.log('   • 1 payment request for merchant share')
+	console.log('   • N payment requests for V4V recipient shares (if any)')
+	console.log('   • All following gamma marketplace spec (Kind 16, type 2)\n')
 
 	// For each pair of users
 	for (let buyerIndex = 0; buyerIndex < userPubkeys.length; buyerIndex++) {
@@ -217,6 +222,7 @@ async function seedData() {
 			if (sellerProducts.length === 0) continue
 
 			// Create multiple orders for each buyer-seller pair
+			// Each order demonstrates V4V-aware payment requests: 1 merchant + N V4V recipients
 			for (let i = 0; i < ORDERS_PER_PAIR; i++) {
 				// Randomly select a product from seller
 				const productRef = sellerProducts[Math.floor(Math.random() * sellerProducts.length)]
@@ -242,17 +248,36 @@ async function seedData() {
 						switch (i) {
 							case 0:
 								console.log(`    Order ${i + 1}: PENDING state (awaiting payment)`)
-								const paymentRequestData = generatePaymentRequestData(buyerPubkey, orderId, totalAmount, lastEventTimestamp)
-								;({ createdAt: currentTimestamp } = await createPaymentRequestEvent(sellerSigner, ndk, paymentRequestData))
-								lastEventTimestamp = currentTimestamp
+								const paymentRequestResults = await createMultiplePaymentRequestEvents(
+									sellerSigner,
+									ndk,
+									buyerPubkey,
+									sellerPubkey,
+									orderId,
+									totalAmount,
+									lastEventTimestamp,
+								)
+								if (paymentRequestResults.length > 0) {
+									lastEventTimestamp = Math.max(...paymentRequestResults.map((r) => r.createdAt))
+								}
 								break
 
 							case 1:
 								console.log(`    Order ${i + 1}: CONFIRMED state`)
-								let paymentReqData = generatePaymentRequestData(buyerPubkey, orderId, totalAmount, lastEventTimestamp)
-								;({ createdAt: currentTimestamp } = await createPaymentRequestEvent(sellerSigner, ndk, paymentReqData))
-								lastEventTimestamp = currentTimestamp
+								let paymentReqResults = await createMultiplePaymentRequestEvents(
+									sellerSigner,
+									ndk,
+									buyerPubkey,
+									sellerPubkey,
+									orderId,
+									totalAmount,
+									lastEventTimestamp,
+								)
+								if (paymentReqResults.length > 0) {
+									lastEventTimestamp = Math.max(...paymentReqResults.map((r) => r.createdAt))
+								}
 
+								// Create main payment receipt to merchant (simplified for seeding)
 								let paymentReceiptData = generatePaymentReceiptData(sellerPubkey, orderId, totalAmount, lastEventTimestamp)
 								;({ createdAt: currentTimestamp } = await createPaymentReceiptEvent(buyerSigner, ndk, paymentReceiptData))
 								lastEventTimestamp = currentTimestamp
@@ -268,9 +293,18 @@ async function seedData() {
 
 							case 2:
 								console.log(`    Order ${i + 1}: PROCESSING state`)
-								let paymentReqData2 = generatePaymentRequestData(buyerPubkey, orderId, totalAmount, lastEventTimestamp)
-								;({ createdAt: currentTimestamp } = await createPaymentRequestEvent(sellerSigner, ndk, paymentReqData2))
-								lastEventTimestamp = currentTimestamp
+								let paymentReqResults2 = await createMultiplePaymentRequestEvents(
+									sellerSigner,
+									ndk,
+									buyerPubkey,
+									sellerPubkey,
+									orderId,
+									totalAmount,
+									lastEventTimestamp,
+								)
+								if (paymentReqResults2.length > 0) {
+									lastEventTimestamp = Math.max(...paymentReqResults2.map((r) => r.createdAt))
+								}
 
 								let paymentReceiptData2 = generatePaymentReceiptData(sellerPubkey, orderId, totalAmount, lastEventTimestamp)
 								;({ createdAt: currentTimestamp } = await createPaymentReceiptEvent(buyerSigner, ndk, paymentReceiptData2))
@@ -286,9 +320,18 @@ async function seedData() {
 
 							case 3:
 								console.log(`    Order ${i + 1}: SHIPPED state (processing + shipping)`)
-								let paymentReqData3 = generatePaymentRequestData(buyerPubkey, orderId, totalAmount, lastEventTimestamp)
-								;({ createdAt: currentTimestamp } = await createPaymentRequestEvent(sellerSigner, ndk, paymentReqData3))
-								lastEventTimestamp = currentTimestamp
+								let paymentReqResults3 = await createMultiplePaymentRequestEvents(
+									sellerSigner,
+									ndk,
+									buyerPubkey,
+									sellerPubkey,
+									orderId,
+									totalAmount,
+									lastEventTimestamp,
+								)
+								if (paymentReqResults3.length > 0) {
+									lastEventTimestamp = Math.max(...paymentReqResults3.map((r) => r.createdAt))
+								}
 
 								let paymentReceiptData3 = generatePaymentReceiptData(sellerPubkey, orderId, totalAmount, lastEventTimestamp)
 								;({ createdAt: currentTimestamp } = await createPaymentReceiptEvent(buyerSigner, ndk, paymentReceiptData3))
@@ -313,9 +356,18 @@ async function seedData() {
 
 							case 4:
 								console.log(`    Order ${i + 1}: COMPLETED state`)
-								let paymentReqData4 = generatePaymentRequestData(buyerPubkey, orderId, totalAmount, lastEventTimestamp)
-								;({ createdAt: currentTimestamp } = await createPaymentRequestEvent(sellerSigner, ndk, paymentReqData4))
-								lastEventTimestamp = currentTimestamp
+								let paymentReqResults4 = await createMultiplePaymentRequestEvents(
+									sellerSigner,
+									ndk,
+									buyerPubkey,
+									sellerPubkey,
+									orderId,
+									totalAmount,
+									lastEventTimestamp,
+								)
+								if (paymentReqResults4.length > 0) {
+									lastEventTimestamp = Math.max(...paymentReqResults4.map((r) => r.createdAt))
+								}
 
 								let paymentReceiptData4 = generatePaymentReceiptData(sellerPubkey, orderId, totalAmount, lastEventTimestamp)
 								;({ createdAt: currentTimestamp } = await createPaymentReceiptEvent(buyerSigner, ndk, paymentReceiptData4))
@@ -347,9 +399,18 @@ async function seedData() {
 								const cancelStage = Math.floor(Math.random() * 3)
 
 								if (cancelStage >= 1) {
-									let paymentReqData5 = generatePaymentRequestData(buyerPubkey, orderId, totalAmount, lastEventTimestamp)
-									;({ createdAt: currentTimestamp } = await createPaymentRequestEvent(sellerSigner, ndk, paymentReqData5))
-									lastEventTimestamp = currentTimestamp
+									let paymentReqResults5 = await createMultiplePaymentRequestEvents(
+										sellerSigner,
+										ndk,
+										buyerPubkey,
+										sellerPubkey,
+										orderId,
+										totalAmount,
+										lastEventTimestamp,
+									)
+									if (paymentReqResults5.length > 0) {
+										lastEventTimestamp = Math.max(...paymentReqResults5.map((r) => r.createdAt))
+									}
 
 									let paymentReceiptData5 = generatePaymentReceiptData(sellerPubkey, orderId, totalAmount, lastEventTimestamp)
 									;({ createdAt: currentTimestamp } = await createPaymentReceiptEvent(buyerSigner, ndk, paymentReceiptData5))
@@ -359,9 +420,18 @@ async function seedData() {
 									;({ createdAt: currentTimestamp } = await createOrderStatusEvent(sellerSigner, ndk, statusConfirmed5))
 									lastEventTimestamp = currentTimestamp
 								} else {
-									let paymentReqData5 = generatePaymentRequestData(buyerPubkey, orderId, totalAmount, lastEventTimestamp)
-									;({ createdAt: currentTimestamp } = await createPaymentRequestEvent(sellerSigner, ndk, paymentReqData5))
-									lastEventTimestamp = currentTimestamp
+									let paymentReqResults5 = await createMultiplePaymentRequestEvents(
+										sellerSigner,
+										ndk,
+										buyerPubkey,
+										sellerPubkey,
+										orderId,
+										totalAmount,
+										lastEventTimestamp,
+									)
+									if (paymentReqResults5.length > 0) {
+										lastEventTimestamp = Math.max(...paymentReqResults5.map((r) => r.createdAt))
+									}
 								}
 
 								if (cancelStage >= 2) {
