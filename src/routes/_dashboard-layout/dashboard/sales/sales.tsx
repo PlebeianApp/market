@@ -12,7 +12,7 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/sales')
 })
 
 function SalesComponent() {
-	useDashboardTitle('')
+	useDashboardTitle('Sales')
 	const ndk = ndkActions.getNDK()
 	const currentUser = ndk?.activeUser
 	const [statusFilter, setStatusFilter] = useState<string>('any')
@@ -34,32 +34,12 @@ function SalesComponent() {
 
 	return (
 		<div className="space-y-6">
-			{/* Title and Filter Row */}
-			<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-				<h1 className="text-[1.6rem] font-bold">Sales</h1>
-				<div className="w-full lg:w-64">
-					<Select defaultValue="any" value={statusFilter} onValueChange={setStatusFilter}>
-						<SelectTrigger className="w-full">
-							<SelectValue placeholder="Any Status" />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="any">Any Status</SelectItem>
-							<SelectItem value="pending">Pending</SelectItem>
-							<SelectItem value="confirmed">Confirmed</SelectItem>
-							<SelectItem value="processing">Processing</SelectItem>
-							<SelectItem value="completed">Completed</SelectItem>
-							<SelectItem value="cancelled">Cancelled</SelectItem>
-						</SelectContent>
-					</Select>
-				</div>
-			</div>
-
 			<OrderDataTable
 				data={filteredSales}
 				columns={salesColumns}
 				isLoading={isLoading}
 				filterColumn="orderId"
-				showStatusFilter={false}
+				showStatusFilter={true}
 				onStatusFilterChange={setStatusFilter}
 				statusFilter={statusFilter}
 			/>

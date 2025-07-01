@@ -1,6 +1,8 @@
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { ColumnDef, ColumnFiltersState, SortingState } from '@tanstack/react-table'
+import type { OrderWithRelatedEvents } from '@/queries/orders'
+import type { ColumnDef, ColumnFiltersState, FilterFn, SortingState } from '@tanstack/react-table'
 import {
 	flexRender,
 	getCoreRowModel,
@@ -9,7 +11,27 @@ import {
 	getSortedRowModel,
 	useReactTable,
 } from '@tanstack/react-table'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+
+const fuzzyFilter: FilterFn<OrderWithRelatedEvents> = (row, columnId, value, addMeta) => {
+	const item = (row.getValue(columnId) as string) || ''
+	const lowerCaseValue = value.toLowerCase()
+
+	// This part is a bit of a hack to search the buyer's name which is rendered async in a child component.
+	// We get the cell and then check its rendered content.
+	const cell = row.getVisibleCells().find((c) => c.column.id === columnId)
+	const renderedCellValue = cell?.renderValue() as string
+	const itemInCell = renderedCellValue?.toString().toLowerCase() || ''
+
+	// Rank based on how good the match is
+	const itemRank = item.toLowerCase().includes(lowerCaseValue) ? 2 : itemInCell.includes(lowerCaseValue) ? 1 : 0
+
+	addMeta({
+		itemRank,
+	})
+
+	return itemRank > 0
+}
 
 interface OrderDataTableProps<TData> {
 	data: TData[]
@@ -32,16 +54,19 @@ export function OrderDataTable<TData>({
 }: OrderDataTableProps<TData>) {
 	const [sorting, setSorting] = useState<SortingState>([])
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+	const [globalFilter, setGlobalFilter] = useState('')
 
 	const table = useReactTable({
 		data,
 		columns,
+		globalFilterFn: fuzzyFilter as any,
 		getCoreRowModel: getCoreRowModel(),
 		getPaginationRowModel: getPaginationRowModel(),
 		onSortingChange: setSorting,
 		getSortedRowModel: getSortedRowModel(),
 		onColumnFiltersChange: setColumnFilters,
 		getFilteredRowModel: getFilteredRowModel(),
+		onGlobalFilterChange: setGlobalFilter,
 		initialState: {
 			pagination: {
 				pageSize: 7, // Show 7 items per page
@@ -50,14 +75,22 @@ export function OrderDataTable<TData>({
 		state: {
 			sorting,
 			columnFilters,
+			globalFilter,
 		},
 	})
 
 	return (
 		<div className="space-y-4">
-			{showStatusFilter && onStatusFilterChange && (
-				<div className="flex items-center justify-between py-4">
-					<div className="w-full max-w-xs pr-0">
+			<div className="flex flex-col lg:flex-row gap-4">
+				<Input
+					placeholder="Search by Order ID or Buyer..."
+					value={globalFilter}
+					onChange={(e) => setGlobalFilter(e.target.value)}
+					className="w-full lg:flex-1"
+				/>
+
+				{showStatusFilter && onStatusFilterChange && (
+					<div className="w-full lg:w-64">
 						<Select defaultValue="any" value={statusFilter} onValueChange={onStatusFilterChange}>
 							<SelectTrigger>
 								<SelectValue placeholder="Any Status" />
@@ -72,8 +105,8 @@ export function OrderDataTable<TData>({
 							</SelectContent>
 						</Select>
 					</div>
-				</div>
-			)}
+				)}
+			</div>
 
 			{isLoading ? (
 				<div className="space-y-2">

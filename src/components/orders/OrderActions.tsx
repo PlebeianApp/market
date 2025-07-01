@@ -14,7 +14,7 @@ import { useUpdateOrderStatusMutation } from '@/publish/orders'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { getBuyerPubkey, getOrderStatus, getSellerPubkey } from '@/queries/orders'
 import { useUpdateShippingStatusMutation } from '@/queries/shipping'
-import { Check, Clock, MoreHorizontal, PackageCheck, PackageX, ShoppingBag, Truck, X } from 'lucide-react'
+import { MoreHorizontal, PackageCheck, Truck, ShoppingBag } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Input } from '../ui/input'
@@ -123,7 +123,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 			return {
 				bgColor: 'bg-orange-100',
 				textColor: 'text-orange-800',
-				icon: <Truck className="mr-2 h-4 w-4 text-orange-500" />,
+				icon: <Truck className="h-4 w-4 text-orange-500" />,
 				label: 'Shipped', // Override display label
 			}
 		}
@@ -133,28 +133,28 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 				return {
 					bgColor: 'bg-blue-100',
 					textColor: 'text-blue-800',
-					icon: <Check className="mr-2 h-4 w-4 text-blue-500" />,
+					icon: <div className="i-tick h-4 w-4 text-blue-500" />,
 					label: 'Confirmed',
 				}
 			case ORDER_STATUS.PROCESSING:
 				return {
 					bgColor: 'bg-yellow-100',
 					textColor: 'text-yellow-800',
-					icon: <ShoppingBag className="mr-2 h-4 w-4 text-yellow-500" />,
+					icon: <div className="i-clock h-4 w-4 text-yellow-500" />,
 					label: 'Processing',
 				}
 			case ORDER_STATUS.COMPLETED:
 				return {
 					bgColor: 'bg-green-100',
 					textColor: 'text-green-800',
-					icon: <PackageCheck className="mr-2 h-4 w-4 text-green-500" />,
+					icon: <div className="i-tick h-4 w-4 text-green-500" />,
 					label: 'Completed',
 				}
 			case ORDER_STATUS.CANCELLED:
 				return {
 					bgColor: 'bg-red-100',
 					textColor: 'text-red-800',
-					icon: <PackageX className="mr-2 h-4 w-4 text-red-500" />,
+					icon: <div className="i-cross h-4 w-4 text-red-500" />,
 					label: 'Cancelled',
 				}
 			case ORDER_STATUS.PENDING:
@@ -162,7 +162,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 				return {
 					bgColor: 'bg-gray-100',
 					textColor: 'text-gray-800',
-					icon: <Clock className="mr-2 h-4 w-4 text-gray-500" />,
+					icon: <div className="i-clock h-4 w-4 text-gray-500" />,
 					label: 'Pending',
 				}
 		}
@@ -172,7 +172,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 
 	return (
 		<div className="flex items-center justify-end">
-			<div className={cn('flex items-center rounded-md px-3 py-1', bgColor, textColor)}>
+			<div className={cn('flex items-center justify-center gap-2 rounded-md px-3 py-1 w-32', bgColor, textColor)}>
 				{icon}
 				<span className="font-medium capitalize">{label}</span>
 			</div>
@@ -191,7 +191,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 					{/* Buyer Actions */}
 					{isBuyer && canReceive && (
 						<DropdownMenuItem onClick={() => handleStatusUpdate(ORDER_STATUS.COMPLETED)}>
-							<Check className="mr-2 h-4 w-4" />
+							<div className="i-tick mr-2 h-4 w-4" />
 							Confirm Receipt
 						</DropdownMenuItem>
 					)}
@@ -199,7 +199,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 					{/* Seller Actions */}
 					{isSeller && canConfirm && (
 						<DropdownMenuItem onClick={() => handleStatusUpdate(ORDER_STATUS.CONFIRMED)}>
-							<Check className="mr-2 h-4 w-4" />
+							<div className="i-tick mr-2 h-4 w-4" />
 							Confirm Order
 						</DropdownMenuItem>
 					)}
@@ -229,7 +229,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 					{/* Cancel action - open dialog */}
 					{canCancel && (
 						<DropdownMenuItem className="text-red-600" onClick={() => setIsCancelOpen(true)}>
-							<X className="mr-2 h-4 w-4" />
+							<div className="i-cross mr-2 h-4 w-4" />
 							Cancel Order
 						</DropdownMenuItem>
 					)}
