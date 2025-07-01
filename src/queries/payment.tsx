@@ -1,12 +1,15 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ndkActions } from '@/lib/stores/ndk'
-import { paymentDetailsKeys, walletDetailsKeys } from './queryKeyFactory'
-import { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk'
-import { configStore } from '@/lib/stores/config'
-import { v4 as uuidv4 } from 'uuid'
-import { toast } from 'sonner'
-import { nip04 } from 'nostr-tools'
 import { type PaymentDetailsMethod } from '@/lib/constants'
+import { configStore } from '@/lib/stores/config'
+import { ndkActions } from '@/lib/stores/ndk'
+import type { PayWithNwcParams } from '@/publish/payment'
+import { payInvoiceWithNwc, payInvoiceWithWebln } from '@/publish/payment'
+import { LightningAddress } from '@getalby/lightning-tools'
+import { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { nip04, nip19 } from 'nostr-tools'
+import { toast } from 'sonner'
+import { v4 as uuidv4 } from 'uuid'
+import { paymentDetailsKeys, walletDetailsKeys } from './queryKeyFactory'
 
 /**
  * Payment method types as defined in the spec
@@ -713,5 +716,224 @@ export const useWalletDetail = (userPubkey: string, paymentDetailId: string) => 
 		queryKey: walletDetailsKeys.onChainIndex(userPubkey, paymentDetailId),
 		queryFn: () => fetchWalletDetail(userPubkey, paymentDetailId),
 		enabled: !!userPubkey && !!paymentDetailId,
+	})
+}
+
+export interface GeneratedInvoice {
+	id: string
+	sellerPubkey: string
+	sellerName: string
+	amount: number
+	bolt11: string | null
+	lightningAddress: string | null
+	expiresAt: number | undefined
+	status: 'pending' | 'paid' | 'expired' | 'failed'
+}
+
+export interface GenerateInvoiceParams {
+	sellerPubkey: string
+	amountSats: number
+	description: string
+	invoiceId: string // A unique ID for this specific invoice generation attempt
+	items: Array<{ productId: string; name: string; amount: number; price: number }>
+	type: 'seller' | 'v4v'
+}
+
+/**
+ * Generates a BOLT11 invoice from a seller's lightning address.
+ * Fetches the seller's profile to find their lud16.
+ */
+export const generateInvoice = async (params: GenerateInvoiceParams): Promise<GeneratedInvoice> => {
+	const { sellerPubkey, amountSats, description } = params
+
+	// Fetch profile to get lightning address
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	const user = ndk.getUser({ pubkey: sellerPubkey })
+	await user.fetchProfile()
+	const sellerName = user.profile?.displayName || user.profile?.name || nip19.npubEncode(sellerPubkey).substring(0, 12)
+	const lnAddress = user.profile?.lud16 || user.profile?.lud06
+
+	if (!lnAddress) {
+		// No address found, return a 'failed' status so UI can handle it
+		return {
+			...params,
+			id: params.invoiceId,
+			sellerName,
+			amount: amountSats,
+			bolt11: null,
+			lightningAddress: null,
+			expiresAt: undefined,
+			status: 'failed',
+		}
+	}
+
+	try {
+		const ln = new LightningAddress(lnAddress)
+		await ln.fetch()
+
+		// NWC zapper requires msats
+		const invoice = await ln.requestInvoice({ satoshi: amountSats, comment: description })
+
+		if (!invoice.paymentRequest) {
+			throw new Error('Failed to retrieve BOLT11 invoice from lightning address.')
+		}
+
+		return {
+			...params,
+			id: params.invoiceId,
+			sellerName,
+			amount: amountSats,
+			bolt11: invoice.paymentRequest,
+			lightningAddress: lnAddress,
+			expiresAt: invoice.expiry,
+			status: 'pending',
+		}
+	} catch (error) {
+		console.error(`Failed to generate invoice for ${lnAddress}:`, error)
+		// Return failed status on error
+		return {
+			...params,
+			id: params.invoiceId,
+			sellerName,
+			amount: amountSats,
+			bolt11: null,
+			lightningAddress: lnAddress,
+			expiresAt: undefined,
+			status: 'failed',
+		}
+	}
+}
+
+/**
+ * Mutation hook for generating a new invoice.
+ */
+export const useGenerateInvoiceMutation = () => {
+	return useMutation({
+		mutationFn: generateInvoice,
+		onError: (error, variables) => {
+			toast.error(`Failed to generate invoice for ${variables.sellerPubkey}: ${error.message}`)
+		},
+	})
+}
+
+export interface LightningInvoiceData {
+	id: string
+	sellerPubkey: string
+	sellerName: string
+	amount: number
+	bolt11: string
+	expiresAt?: number
+	items: Array<{
+		productId: string
+		name: string
+		amount: number
+		price: number
+	}>
+	status: 'pending' | 'processing' | 'paid' | 'expired' | 'failed'
+	invoiceType?: 'seller' | 'v4v'
+	originalSellerPubkey?: string
+}
+
+export interface PaymentReceiptSubscriptionParams {
+	orderId: string
+	invoiceId: string
+	sessionStartTime: number
+	enabled: boolean
+}
+
+/**
+ * Subscribes to Kind 17 payment receipts for a specific invoice.
+ * @returns The payment preimage when a valid receipt is found.
+ */
+export const usePaymentReceiptSubscription = (params: PaymentReceiptSubscriptionParams) => {
+	const { orderId, invoiceId, sessionStartTime, enabled } = params
+
+	return useQuery<string | null>({
+		queryKey: paymentDetailsKeys.paymentReceipt(orderId!, invoiceId!),
+		queryFn: () => {
+			return new Promise((resolve) => {
+				if (!enabled) {
+					resolve(null)
+					return
+				}
+
+				const ndk = ndkActions.getNDK()
+				if (!ndk) {
+					resolve(null)
+					return
+				}
+
+				console.log(`🔍 Subscribing to payment receipts for invoice: ${invoiceId}`)
+
+				const receiptFilter = {
+					kinds: [17],
+					'#order': [orderId],
+					'#payment-request': [invoiceId],
+					since: sessionStartTime - 30, // 30-second buffer for clock skew
+				}
+
+				const subscription = ndk.subscribe(receiptFilter, {
+					closeOnEose: false,
+				})
+
+				subscription.on('event', (receiptEvent: NDKEvent) => {
+					console.log(`💳 Payment receipt received for invoice: ${invoiceId}`, receiptEvent)
+
+					if (receiptEvent.created_at && receiptEvent.created_at < sessionStartTime - 30) {
+						console.log('⏰ Ignoring old receipt from before session start')
+						return
+					}
+
+					const paymentRequestTag = receiptEvent.tags.find((tag) => tag[0] === 'payment-request')
+					if (paymentRequestTag?.[1] === invoiceId) {
+						const paymentTag = receiptEvent.tags.find((tag) => tag[0] === 'payment')
+						const preimage = paymentTag?.[3] || 'external-payment'
+
+						console.log(`✅ Valid payment receipt detected for ${invoiceId}`)
+						subscription.stop()
+						resolve(preimage)
+					}
+				})
+			})
+		},
+		enabled: enabled,
+		refetchOnWindowFocus: false,
+		refetchOnReconnect: true,
+	})
+}
+
+/**
+ * A mutation hook for paying an invoice using Nostr Wallet Connect (NWC).
+ */
+export const useNwcPaymentMutation = () => {
+	return useMutation({
+		mutationFn: async (params: PayWithNwcParams) => {
+			return payInvoiceWithNwc(params)
+		},
+		onSuccess: () => {
+			toast.success('NWC payment successful!')
+		},
+		onError: (error) => {
+			toast.error(`NWC Payment Failed: ${error.message}`)
+		},
+	})
+}
+
+/**
+ * A mutation hook for paying an invoice using WebLN.
+ */
+export const useWeblnPaymentMutation = () => {
+	return useMutation({
+		mutationFn: async (bolt11: string) => {
+			return payInvoiceWithWebln(bolt11)
+		},
+		onSuccess: () => {
+			toast.success('WebLN payment successful!')
+		},
+		onError: (error) => {
+			toast.error(`WebLN Payment Failed: ${error.message}`)
+		},
 	})
 }

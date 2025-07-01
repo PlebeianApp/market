@@ -2,14 +2,11 @@ import { ProductCard } from '@/components/ProductCard'
 import { PaymentDialog, type PaymentInvoiceData } from '@/components/checkout/PaymentDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { useInvoiceGeneration } from '@/hooks/useInvoiceGeneration'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { Separator } from '@/components/ui/separator'
-import { Skeleton } from '@/components/ui/skeleton'
 import { authStore } from '@/lib/stores/auth'
 import { getEventDate, type OrderWithRelatedEvents } from '@/queries/orders'
-import { productQueryOptions } from '@/queries/products'Ø
+import { productQueryOptions, productQueryOptions } from '@/queries/products'
+import { useGenerateInvoiceMutation } from '@/queries/payment'
 import { fetchV4VShares } from '@/queries/v4v'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQueries, useQuery } from '@tanstack/react-query'
@@ -75,17 +72,61 @@ const extractPaymentMethods = (paymentRequest: NDKEvent) => {
 }
 
 // Check if payment has been completed based on receipts
-const isPaymentCompleted = (paymentRequestId: string, paymentReceipts: NDKEvent[]): boolean => {
-	return paymentReceipts.some((receipt) => {
-		// Look for payment-request tag that matches this payment request ID
-		const paymentRequestTag = receipt.tags.find((tag) => tag[0] === 'payment-request')
-		return paymentRequestTag?.[1] === paymentRequestId
+const isPaymentCompleted = (paymentRequest: NDKEvent, paymentReceipts: NDKEvent[]): boolean => {
+	// Get payment request details
+	const requestAmount = paymentRequest.tags.find((tag) => tag[0] === 'amount')?.[1]
+	const requestRecipient = paymentRequest.tags.find((tag) => tag[0] === 'recipient')?.[1]
+
+	if (!requestAmount || !requestRecipient) {
+		console.log(`❌ Payment request missing required tags:`, { requestAmount, requestRecipient, id: paymentRequest.id })
+		return false
+	}
+
+	console.log(`🔍 Checking payment completion for request:`, {
+		id: paymentRequest.id,
+		amount: requestAmount,
+		recipient: requestRecipient,
 	})
+
+	const matchingReceipt = paymentReceipts.find((receipt) => {
+		// Look for order tag, amount tag, and p tag (recipient) in the receipt
+		const orderTag = receipt.tags.find((tag) => tag[0] === 'order')
+		const amountTag = receipt.tags.find((tag) => tag[0] === 'amount')
+		const recipientTag = receipt.tags.find((tag) => tag[0] === 'p')
+		const paymentTag = receipt.tags.find((tag) => tag[0] === 'payment')
+
+		// For exact recipient match, allow small amount variations (±2 sats for fees/rounding)
+		const requestAmountNum = parseInt(requestAmount, 10)
+		const receiptAmountNum = parseInt(amountTag?.[1] || '0', 10)
+		const amountDiff = Math.abs(requestAmountNum - receiptAmountNum)
+		const amountMatches = amountDiff <= 2 // Allow up to 2 sats difference
+
+		// Must have exact recipient match
+		const recipientMatches = recipientTag?.[1] === requestRecipient
+
+		// Match receipt to payment request by recipient and approximate amount
+		const matches = orderTag && amountTag && recipientTag && paymentTag && recipientMatches && amountMatches
+
+		if (matches) {
+			console.log(`✅ Found matching receipt for payment request ${paymentRequest.id} (amount diff: ${amountDiff} sats)`)
+		} else if (recipientMatches && !amountMatches) {
+			console.log(
+				`⚠️ Recipient matches but amount differs too much: request=${requestAmountNum}, receipt=${receiptAmountNum}, diff=${amountDiff}`,
+			)
+		}
+
+		return matches
+	})
+
+	const isCompleted = !!matchingReceipt
+	console.log(`🏁 Payment request ${paymentRequest.id} completion status:`, isCompleted)
+
+	return isCompleted
 }
 
 export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const { user } = useStore(authStore)
-	const { generateInvoiceForSeller, isGenerating } = useInvoiceGeneration({ fallbackToMock: true })
+	const { mutateAsync: generateInvoice } = useGenerateInvoiceMutation()
 	const [generatingInvoices, setGeneratingInvoices] = useState<Set<string>>(new Set())
 	const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
 	const [selectedInvoiceIndex, setSelectedInvoiceIndex] = useState(0)
@@ -164,7 +205,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 			const paymentMethods = extractPaymentMethods(paymentRequest)
 			const lightningPayment = paymentMethods.find((p) => p.type === 'lightning')
-			const isCompleted = isPaymentCompleted(paymentRequest.id, order.paymentReceipts)
+			const isCompleted = isPaymentCompleted(paymentRequest, order.paymentReceipts)
 
 			// Determine if this is a V4V payment or merchant payment
 			const recipientPubkey = paymentRequest.tags.find((tag) => tag[0] === 'recipient')?.[1] || paymentRequest.pubkey
@@ -219,14 +260,14 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 		try {
 			const recipientPubkey = invoice.recipientPubkey || sellerPubkey
-			const newInvoiceData = await generateInvoiceForSeller(
-				recipientPubkey, // Use recipient pubkey or seller as fallback
-				invoice.amount,
-				invoice.description || 'Payment',
-				invoice.id,
-				[], // Empty items array for order payments
-				invoice.description?.includes('V4V') ? 'v4v' : 'seller',
-			)
+			const newInvoiceData = await generateInvoice({
+				sellerPubkey: recipientPubkey,
+				amountSats: invoice.amount,
+				description: invoice.description || 'Payment',
+				invoiceId: invoice.id,
+				items: [], // Empty items array for order payments
+				type: invoice.type === 'merchant' ? 'seller' : invoice.type,
+			})
 
 			// TODO: Update the payment request with the new invoice
 			// This would require creating a new payment request event or updating the existing one
