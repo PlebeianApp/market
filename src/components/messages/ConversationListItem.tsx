@@ -28,12 +28,13 @@ export function ConversationListItem({ conversation }: ConversationListItemProps
 			}}
 		>
 			<div className="flex flex-col gap-2 w-full">
-				{/* First row: 3 columns - avatar, user's name, last message date */}
 				<div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 w-full">
 					<div className="flex-shrink-0">
 						<UserWithAvatar pubkey={pubkey} size="md" disableLink={true} />
 					</div>
+
 					<h3 className="text-sm font-medium truncate">{displayName}</h3>
+
 					{lastMessageAt && (
 						<span className="text-xs text-gray-500 whitespace-nowrap">
 							{new Date(lastMessageAt * 1000).toLocaleString()}
@@ -41,7 +42,7 @@ export function ConversationListItem({ conversation }: ConversationListItemProps
 					)}
 				</div>
 				{/* Second row: message preview spanning full width */}
-				<div className="w-full">
+				<div className="w-full pl-12">
 					<p className="text-sm text-gray-600 break-words">{lastMessageSnippet}</p>
 				</div>
 			</div>
