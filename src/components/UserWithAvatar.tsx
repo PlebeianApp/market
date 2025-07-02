@@ -42,7 +42,7 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 				<AvatarImage src={profile?.picture} />
 				<AvatarFallback>{nameInitial}</AvatarFallback>
 			</Avatar>
-			<div className="flex flex-col">
+			<div className="flex flex-row items-center gap-1">
 				<ProfileName pubkey={pubkey} className={textSizeClass} truncate={true} disableLink={true} />
 				{showBadge && <Nip05Badge userId={pubkey} />}
 			</div>
