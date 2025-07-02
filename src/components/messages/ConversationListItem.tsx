@@ -1,3 +1,4 @@
+import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { Link } from '@tanstack/react-router'
 
@@ -15,8 +16,15 @@ interface ConversationListItemProps {
 }
 
 export function ConversationListItem({ conversation }: ConversationListItemProps) {
-	const { pubkey, profile, lastMessageAt, lastMessageSnippet } = conversation
-	const displayName = profile?.displayName || profile?.name || ''
+	const { pubkey, lastMessageAt, lastMessageSnippet } = conversation
+	const breakpoint = useBreakpoint()
+	const isMobile = breakpoint === 'sm'
+
+	const dateElement = lastMessageAt && (
+		<span className="text-xs text-gray-500 whitespace-nowrap">
+			{new Date(lastMessageAt * 1000).toLocaleString()}
+		</span>
+	)
 
 	return (
 		<Link
@@ -28,23 +36,16 @@ export function ConversationListItem({ conversation }: ConversationListItemProps
 			}}
 		>
 			<div className="flex flex-col gap-2 w-full">
-				<div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 w-full">
-					<div className="flex-shrink-0">
-						<UserWithAvatar pubkey={pubkey} size="md" disableLink={true} />
-					</div>
-
-					<h3 className="text-sm font-medium truncate">{displayName}</h3>
-
-					{lastMessageAt && (
-						<span className="text-xs text-gray-500 whitespace-nowrap">
-							{new Date(lastMessageAt * 1000).toLocaleString()}
-						</span>
-					)}
+				<div className="flex items-center justify-between gap-3 w-full">
+					<UserWithAvatar pubkey={pubkey} size="md" disableLink={true} showBadge={false} />
+					{!isMobile && dateElement}
 				</div>
+
 				{/* Second row: message preview spanning full width */}
-				<div className="w-full pl-12">
+				<div className="w-full pl-10">
 					<p className="text-sm text-gray-600 break-words">{lastMessageSnippet}</p>
 				</div>
+				{isMobile && <div className="self-end">{dateElement}</div>}
 			</div>
 		</Link>
 	)
