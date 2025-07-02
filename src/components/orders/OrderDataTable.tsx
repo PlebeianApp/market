@@ -11,6 +11,7 @@ import {
 	getSortedRowModel,
 	useReactTable,
 } from '@tanstack/react-table'
+import { Link } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 
 const fuzzyFilter: FilterFn<OrderWithRelatedEvents> = (row, columnId, value, addMeta) => {
@@ -81,16 +82,16 @@ export function OrderDataTable<TData>({
 
 	return (
 		<div className="space-y-4">
-			<div className="flex flex-col lg:flex-row gap-4">
+			<div className="flex flex-col xl:flex-row gap-4">
 				<Input
 					placeholder="Search by Order ID or Buyer..."
 					value={globalFilter}
 					onChange={(e) => setGlobalFilter(e.target.value)}
-					className="w-full lg:flex-1"
+					className="w-full xl:flex-1"
 				/>
 
 				{showStatusFilter && onStatusFilterChange && (
-					<div className="w-full lg:w-64">
+					<div className="w-full xl:w-64">
 						<Select defaultValue="any" value={statusFilter} onValueChange={onStatusFilterChange}>
 							<SelectTrigger>
 								<SelectValue placeholder="Any Status" />
@@ -121,15 +122,22 @@ export function OrderDataTable<TData>({
 			) : table.getRowModel().rows?.length ? (
 				<div className="space-y-2">
 					{table.getRowModel().rows.map((row) => (
-						<div key={row.id} className="rounded-md border border-gray-200 hover:bg-gray-50" data-state={row.getIsSelected() && 'selected'}>
+						<Link
+							key={row.id}
+							to="/dashboard/orders/$orderId"
+							params={{ orderId: (row.original as any).order.id || 'unknown' }}
+							className="block rounded-md border border-gray-200 hover:bg-gray-50"
+							data-state={row.getIsSelected() && 'selected'}
+						>
 							{/* Mobile Card Layout */}
 							<div className="block xl:hidden p-4 space-y-3">
 								{row.getVisibleCells().map((cell, index) => (
 									<div key={cell.id} className="flex justify-between items-start">
 										<span className="text-sm font-medium text-gray-600 capitalize min-w-0 flex-shrink-0 mr-3">
-											{typeof cell.column.columnDef.header === 'string' 
-												? cell.column.columnDef.header 
-												: cell.column.id.replace(/([A-Z])/g, ' $1').trim()}:
+											{typeof cell.column.columnDef.header === 'string'
+												? cell.column.columnDef.header
+												: cell.column.id.replace(/([A-Z])/g, ' $1').trim()}
+											:
 										</span>
 										<div className="text-sm text-right min-w-0 flex-1">
 											{flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -137,14 +145,14 @@ export function OrderDataTable<TData>({
 									</div>
 								))}
 							</div>
-							
+
 							{/* Desktop Grid Layout */}
 							<div className="hidden xl:grid xl:grid-cols-5 gap-4 p-4 items-center">
 								{row.getVisibleCells().map((cell) => (
 									<div key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
 								))}
 							</div>
-						</div>
+						</Link>
 					))}
 				</div>
 			) : (
