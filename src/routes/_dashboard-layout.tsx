@@ -10,6 +10,7 @@ import { uiStore, uiActions } from '@/lib/stores/ui'
 import { useQuery } from '@tanstack/react-query'
 import { profileKeys } from '@/queries/queryKeyFactory'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
+import { MessageSquareText } from 'lucide-react'
 
 export const Route = createFileRoute('/_dashboard-layout')({
 	component: DashboardLayout,
@@ -111,6 +112,9 @@ function DashboardLayout() {
 	const { dashboardTitle } = useStore(uiStore)
 	const isMessageDetailView = location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages'
 
+	const dashboardTitleWithoutEmoji = dashboardTitle.replace(/^(\p{Emoji_Presentation}\s*)/u, '')
+	const dashboardEmoji = dashboardTitle.match(/^(\p{Emoji_Presentation})/u)?.[1]
+
 	// Extract pubkey from pathname for message detail views
 	const chatPubkey = isMessageDetailView ? location.pathname.split('/').pop() : null
 
@@ -197,21 +201,32 @@ function DashboardLayout() {
 							'Dashboard'
 						) : (
 							<>
-								{isMessageDetailView && chatProfile && (
-									<Avatar className="h-8 w-8 flex-shrink-0">
-										<AvatarImage src={chatProfile.picture} />
-										<AvatarFallback>
-											{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
-										</AvatarFallback>
-									</Avatar>
+								{isMessageDetailView && chatProfile ? (
+									<>
+										<Avatar className="h-8 w-8 flex-shrink-0">
+											<AvatarImage src={chatProfile.picture} />
+											<AvatarFallback>
+												{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
+											</AvatarFallback>
+										</Avatar>
+										<span className="truncate">{dashboardTitleWithoutEmoji}</span>
+									</>
+								) : (
+									<>
+										{dashboardTitle === 'Messages' ? (
+											<MessageSquareText className="h-8 w-8 flex-shrink-0" />
+										) : (
+											dashboardEmoji && <span className="text-2xl">{dashboardEmoji}</span>
+										)}
+										<span className="truncate">{dashboardTitleWithoutEmoji}</span>
+									</>
 								)}
-								<span className="truncate">{dashboardTitle}</span>
 							</>
 						)}
 					</span>
 
 					{/* Mobile emoji - only visible on small screens when not showing sidebar */}
-					{!showSidebar && emoji && breakpoint !== 'xl' && (
+					{!showSidebar && emoji && breakpoint !== 'xl' && !dashboardEmoji && (
 						<span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xl select-none w-12 h-12 flex items-center justify-center">
 							{emoji}
 						</span>
@@ -222,7 +237,12 @@ function DashboardLayout() {
 			<div className="hidden lg:block">
 				<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center lg:justify-start relative">
 					{/* Title */}
-					<span className="w-full lg:w-auto text-3xl lg:text-3xl">{'Dashboard'}</span>
+					{dashboardTitle === 'Messages' ? (
+						<MessageSquareText className="h-8 w-8 flex-shrink-0" />
+					) : (
+						dashboardEmoji && <span className="text-2xl">{dashboardEmoji}</span>
+					)}
+					<span className="w-full lg:w-auto text-3xl lg:text-3xl">{dashboardTitleWithoutEmoji}</span>
 				</h1>
 			</div>
 
