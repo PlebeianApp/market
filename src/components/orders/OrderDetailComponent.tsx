@@ -232,7 +232,7 @@ export function OrderDetailComponent({ orderId }: OrderDetailComponentProps) {
 									<Separator />
 									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 										<DetailField label="Order ID:" value={currentOrderId || 'N/A'} />
-										<DetailField label="Amount:" value={`${formatSats(amount)} sats`} />
+										<DetailField label="Amount:" value={formatSats(amount)} valueClassName="font-bold" />
 										<DetailField
 											label="Date:"
 											value={order.created_at ? format(new Date(order.created_at * 1000), 'dd.MM.yyyy, HH:mm') : 'N/A'}
