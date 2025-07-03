@@ -3,7 +3,7 @@ import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { OrderActions } from '@/components/orders/OrderActions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { authStore } from '@/lib/stores/auth'
 import {
@@ -169,7 +169,6 @@ export function OrderDetailComponent({ orderId }: OrderDetailComponentProps) {
 											{icon}
 											<CardTitle className="text-lg">{title}</CardTitle>
 										</div>
-										<span className="text-sm text-gray-500">{eventDate}</span>
 									</div>
 									{extraInfo && <div className="mt-2">{extraInfo}</div>}
 								</CardHeader>
@@ -178,6 +177,9 @@ export function OrderDetailComponent({ orderId }: OrderDetailComponentProps) {
 										<p className="text-gray-700">{content}</p>
 									</CardContent>
 								)}
+								<CardFooter className="flex justify-center">
+									<span className="text-xs text-muted-foreground">{eventDate}</span>
+								</CardFooter>
 							</Card>
 						)
 					}
