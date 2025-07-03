@@ -236,13 +236,7 @@ function DashboardLayout() {
 
 			<div className="hidden lg:block">
 				<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center lg:justify-start relative">
-					{/* Title */}
-					{dashboardTitle === 'Messages' ? (
-						<MessageSquareText className="h-8 w-8 flex-shrink-0" />
-					) : (
-						dashboardEmoji && <span className="text-2xl">{dashboardEmoji}</span>
-					)}
-					<span className="w-full lg:w-auto text-3xl lg:text-3xl">{dashboardTitleWithoutEmoji}</span>
+					<span className="w-full lg:w-auto text-3xl lg:text-3xl">Dashboard</span>
 				</h1>
 			</div>
 
