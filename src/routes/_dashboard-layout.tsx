@@ -62,27 +62,27 @@ function getBackButtonInfo(currentPath: string): { parentPath: string; parentTit
 	if (backButtonRoutes[currentPath]) {
 		return backButtonRoutes[currentPath]
 	}
-	
+
 	// Check for product edit pages (pattern: /dashboard/products/products/[productId])
 	if (currentPath.startsWith('/dashboard/products/products/') && currentPath !== '/dashboard/products/products') {
 		return backButtonRoutes['/dashboard/products/products/']
 	}
-	
+
 	// Check for collection edit pages (pattern: /dashboard/products/collections/[collectionId])
 	if (currentPath.startsWith('/dashboard/products/collections/') && currentPath !== '/dashboard/products/collections') {
 		return backButtonRoutes['/dashboard/products/collections/']
 	}
-	
+
 	// Check for order detail pages (pattern: /dashboard/orders/[orderId])
 	if (currentPath.startsWith('/dashboard/orders/') && currentPath !== '/dashboard/orders') {
 		return backButtonRoutes['/dashboard/orders/']
 	}
-	
+
 	// Check for message detail pages (pattern: /dashboard/sales/messages/[pubkey])
 	if (currentPath.startsWith('/dashboard/sales/messages/') && currentPath !== '/dashboard/sales/messages') {
 		return backButtonRoutes['/dashboard/sales/messages/']
 	}
-	
+
 	return null
 }
 
@@ -110,7 +110,8 @@ function DashboardLayout() {
 	const [showSidebar, setShowSidebar] = useState(true)
 	const [parent] = useAutoAnimate()
 	const { dashboardTitle } = useStore(uiStore)
-	const isMessageDetailView = location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages'
+	const isMessageDetailView =
+		location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages'
 
 	const dashboardTitleWithoutEmoji = dashboardTitle.replace(/^(\p{Emoji_Presentation}\s*)/u, '')
 	const dashboardEmoji = dashboardTitle.match(/^(\p{Emoji_Presentation})/u)?.[1]
@@ -150,7 +151,7 @@ function DashboardLayout() {
 			// Check if we're on a product creation/edit page and navigate accordingly
 			if (location.pathname.startsWith('/dashboard/products/products/')) {
 				navigate({ to: '/dashboard/products/products' })
-			} 
+			}
 			// Check if we're on a collection creation/edit page and navigate accordingly
 			else if (location.pathname.startsWith('/dashboard/products/collections/')) {
 				navigate({ to: '/dashboard/products/collections' })
@@ -162,8 +163,7 @@ function DashboardLayout() {
 			// Check if we're on a message detail page and navigate accordingly
 			else if (location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages') {
 				navigate({ to: '/dashboard/sales/messages' })
-			}
-			else {
+			} else {
 				// Default behavior - back to dashboard
 				setShowSidebar(true)
 				navigate({ to: '/dashboard' })
@@ -213,11 +213,7 @@ function DashboardLayout() {
 									</>
 								) : (
 									<>
-										{dashboardTitle === 'Messages' ? (
-											<MessageSquareText className="h-8 w-8 flex-shrink-0" />
-										) : (
-											dashboardEmoji && <span className="text-2xl">{dashboardEmoji}</span>
-										)}
+										{dashboardEmoji && <span className="text-2xl">{dashboardEmoji}</span>}
 										<span className="truncate">{dashboardTitleWithoutEmoji}</span>
 									</>
 								)}
@@ -290,7 +286,7 @@ function DashboardLayout() {
 										<span className="i-back w-5 h-5" />
 										<span className="text-sm font-medium">Back to {backButtonInfo?.parentTitle}</span>
 									</button>
-									
+
 									{!isMobile && (
 										<h1 className="absolute left-1/2 -translate-x-1/2 text-[1.6rem] font-bold flex items-center gap-2">
 											{isMessageDetailView && chatProfile && (
@@ -306,7 +302,7 @@ function DashboardLayout() {
 									)}
 								</div>
 							)}
-							
+
 							<div className="flex-1 min-h-0 lg:overflow-hidden">
 								{isMessageDetailView ? (
 									<div className="h-full">

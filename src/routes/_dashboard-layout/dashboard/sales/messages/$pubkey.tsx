@@ -23,15 +23,11 @@ function ConversationDetailComponent() {
 	const queryClient = useQueryClient()
 	const messagesEndRef = useRef<HTMLDivElement | null>(null)
 	const [isSending, setIsSending] = useState(false)
-	
+
 	// Get the user's profile name for the title
 	const { data: userName, isLoading: isLoadingName } = useProfileName(otherUserPubkey)
-	const displayTitle = isLoadingName 
-		? 'Messages' 
-		: userName 
-			? userName 
-			: `${otherUserPubkey.substring(0, 8)}...`
-	
+	const displayTitle = isLoadingName ? 'Messages' : userName ? userName : `${otherUserPubkey.substring(0, 8)}...`
+
 	useDashboardTitle(displayTitle)
 
 	const { data: messages, isLoading, error, refetch } = useConversationMessages(otherUserPubkey)

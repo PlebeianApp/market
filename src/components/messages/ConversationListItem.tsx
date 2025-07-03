@@ -21,9 +21,7 @@ export function ConversationListItem({ conversation }: ConversationListItemProps
 	const isMobile = breakpoint === 'sm'
 
 	const dateElement = lastMessageAt && (
-		<span className="text-xs text-gray-500 whitespace-nowrap">
-			{new Date(lastMessageAt * 1000).toLocaleString()}
-		</span>
+		<span className="text-xs text-gray-500 whitespace-nowrap">{new Date(lastMessageAt * 1000).toLocaleString()}</span>
 	)
 
 	return (

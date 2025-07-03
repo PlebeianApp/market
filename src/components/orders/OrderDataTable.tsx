@@ -139,9 +139,7 @@ export function OrderDataTable<TData>({
 												: cell.column.id.replace(/([A-Z])/g, ' $1').trim()}
 											:
 										</span>
-										<div className="text-sm text-right min-w-0 flex-1">
-											{flexRender(cell.column.columnDef.cell, cell.getContext())}
-										</div>
+										<div className="text-sm text-right min-w-0 flex-1">{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
 									</div>
 								))}
 							</div>
@@ -164,12 +162,12 @@ export function OrderDataTable<TData>({
 					Showing {table.getRowModel().rows.length} of {data.length} orders
 				</div>
 				<div className="flex space-x-2">
-				<Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
-					Previous
-				</Button>
-				<Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
-					Next
-				</Button>
+					<Button variant="outline" size="sm" onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}>
+						Previous
+					</Button>
+					<Button variant="outline" size="sm" onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}>
+						Next
+					</Button>
 				</div>
 			</div>
 		</div>

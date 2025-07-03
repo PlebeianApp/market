@@ -11,7 +11,7 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/message
 })
 
 function MessagesListComponent() {
-	useDashboardTitle('✉️ Messages')
+	useDashboardTitle('Messages')
 	const { data: conversations, isLoading, error } = useConversationsList()
 
 	return (
