@@ -242,13 +242,48 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 				</div>
 			</CollapsibleTrigger>
 
-			<CollapsibleContent className="px-4 pb-4">
-				<div className="pt-4">
+			<CollapsibleContent>
+				<div className="p-4 border border-t-0 rounded-b-md">
 					<form onSubmit={handleSubmit} className="space-y-6">
-						{/* Basic Information */}
+						{/* Use a template */}
 						<div className="space-y-4">
-							<h3 className="text-lg font-semibold">Basic Information</h3>
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<h3 className="text-lg font-semibold">Use a template</h3>
+							<div className="space-y-4">
+								{/* Templates - Renamed and restructured */}
+								<div className="space-y-2">
+									<Label className="font-medium">Templates</Label>
+									<Select
+										onValueChange={(templateName) => {
+											const template = SHIPPING_TEMPLATES.find((t) => t.name === templateName)
+											if (template) {
+												setFormData((prev) => ({
+													...prev,
+													title: template.name,
+													price: template.cost,
+													countries: template.countries || [],
+												}))
+											}
+										}}
+									>
+										<SelectTrigger data-testid="shipping-template-select">
+											<SelectValue placeholder="Choose a template (optional)" />
+										</SelectTrigger>
+										<SelectContent>
+											{SHIPPING_TEMPLATES.map((template) => (
+												<SelectItem
+													key={template.name}
+													value={template.name}
+													data-testid={`template-${template.name.toLowerCase().replace(/\s+/g, '-')}`}
+												>
+													{template.name} {template.countries ? `(${template.countries.length} countries)` : '(Worldwide)'}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
+								</div>
+
+								<h3 className="text-lg font-semibold pt-4">Shipping Option Details</h3>
+
 								<div className="space-y-2">
 									<Label htmlFor="title" className="font-medium">
 										Title *
@@ -321,41 +356,32 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 										Countries *
 									</Label>
 
-									{/* Shipping Templates */}
+									{/* Country Selection */}
 									<div className="space-y-2">
-										<Label className="text-sm font-medium">Quick Templates</Label>
 										<Select
-											onValueChange={(templateName) => {
-												const template = SHIPPING_TEMPLATES.find((t) => t.name === templateName)
-												if (template) {
+											onValueChange={(countryCode) => {
+												if (!formData.countries.includes(countryCode)) {
 													setFormData((prev) => ({
 														...prev,
-														title: template.name,
-														price: template.cost,
-														countries: template.countries || [],
+														countries: [...prev.countries, countryCode],
 													}))
 												}
 											}}
 										>
-											<SelectTrigger data-testid="shipping-template-select">
-												<SelectValue placeholder="Choose a template (optional)" />
+											<SelectTrigger data-testid="shipping-country-select">
+												<SelectValue placeholder="Select countries" />
 											</SelectTrigger>
 											<SelectContent>
-												{SHIPPING_TEMPLATES.map((template) => (
-													<SelectItem
-														key={template.name}
-														value={template.name}
-														data-testid={`template-${template.name.toLowerCase().replace(/\s+/g, '-')}`}
-													>
-														{template.name} {template.countries ? `(${template.countries.length} countries)` : '(Worldwide)'}
-													</SelectItem>
-												))}
+												{Object.values(COUNTRIES_ISO)
+													.filter((country) => !formData.countries.includes(country.iso3))
+													.map((country) => (
+														<SelectItem key={country.iso3} value={country.iso3} data-testid={`country-${country.iso3.toLowerCase()}`}>
+															{country.name}
+														</SelectItem>
+													))}
 											</SelectContent>
 										</Select>
-									</div>
 
-									{/* Country Selection */}
-									<div className="space-y-2">
 										<div className="flex flex-wrap gap-2 min-h-[40px] p-2 border rounded-md">
 											{formData.countries.map((countryCode) => (
 												<Badge key={countryCode} variant="secondary" className="flex items-center gap-1">
@@ -373,29 +399,6 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 											))}
 											{formData.countries.length === 0 && <span className="text-muted-foreground text-sm">No countries selected</span>}
 										</div>
-										<Select
-											onValueChange={(countryCode) => {
-												if (!formData.countries.includes(countryCode)) {
-													setFormData((prev) => ({
-														...prev,
-														countries: [...prev.countries, countryCode],
-													}))
-												}
-											}}
-										>
-											<SelectTrigger data-testid="shipping-country-select">
-												<SelectValue placeholder="Add countries" />
-											</SelectTrigger>
-											<SelectContent>
-												{Object.values(COUNTRIES_ISO)
-													.filter((country) => !formData.countries.includes(country.iso3))
-													.map((country) => (
-														<SelectItem key={country.iso3} value={country.iso3} data-testid={`country-${country.iso3.toLowerCase()}`}>
-															{country.name}
-														</SelectItem>
-													))}
-											</SelectContent>
-										</Select>
 									</div>
 								</div>
 							</div>
@@ -418,7 +421,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 						{/* Optional Details */}
 						<div className="space-y-4">
 							<h3 className="text-lg font-semibold">Optional Details</h3>
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<div className="space-y-4">
 								<div className="space-y-2">
 									<Label htmlFor="carrier" className="font-medium">
 										Carrier
@@ -516,9 +519,9 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 							{/* Weight Limits */}
 							<div className="space-y-2">
 								<Label className="font-medium">Weight Limits</Label>
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+								<div className="space-y-4">
 									<div className="flex gap-2 items-center">
-										<Label className="text-sm">Min:</Label>
+										<Label className="text-sm w-16">Min:</Label>
 										<Input
 											type="number"
 											step="0.1"
@@ -568,7 +571,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 									</div>
 
 									<div className="flex gap-2 items-center">
-										<Label className="text-sm">Max:</Label>
+										<Label className="text-sm w-16">Max:</Label>
 										<Input
 											type="number"
 											step="0.1"
@@ -622,9 +625,9 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 							{/* Dimension Limits */}
 							<div className="space-y-2">
 								<Label className="font-medium">Dimension Limits (LxWxH)</Label>
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+								<div className="space-y-4">
 									<div className="flex gap-2 items-center">
-										<Label className="text-sm">Min:</Label>
+										<Label className="text-sm w-16">Min:</Label>
 										<Input
 											value={formData.dimensionLimits?.min?.value || ''}
 											onChange={(e) =>
@@ -671,7 +674,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 									</div>
 
 									<div className="flex gap-2 items-center">
-										<Label className="text-sm">Max:</Label>
+										<Label className="text-sm w-16">Max:</Label>
 										<Input
 											value={formData.dimensionLimits?.max?.value || ''}
 											onChange={(e) =>

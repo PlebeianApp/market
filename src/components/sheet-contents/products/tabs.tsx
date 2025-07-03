@@ -471,30 +471,45 @@ export function ShippingTab() {
 						{shippings.map((shipping, index) => {
 							const option = availableShippingOptions.find((opt) => opt.id === shipping.shipping?.id)
 							return (
-								<div key={index} className="flex items-center gap-3 p-3 border rounded-md bg-gray-50">
-									{option && <ServiceIcon service={option.service || 'standard'} />}
-									<div className="flex-1">
-										<div className="font-medium">{shipping.shipping?.name}</div>
-										{option && (
+								<div key={index}>
+									<div className="flex flex-col gap-3 p-3 border rounded-md bg-gray-50">
+										<div className="flex items-center gap-3">
+											{option && <ServiceIcon service={option.service || 'standard'} />}
+											<div className="flex-1">
+												<div className="font-medium">{shipping.shipping?.name}</div>
+												{option && (
+													<div className="text-sm text-gray-500">
+														{option.cost} {option.currency} • {option.countries?.join(', ') || 'No countries'} •{' '}
+														{option.service || 'Unknown service'}
+													</div>
+												)}
+											</div>
+											<Button type="button" variant="ghost" size="sm" onClick={() => removeShippingOption(index)}>
+												<span className="i-delete w-4 h-4" />
+											</Button>
+										</div>
+										<div className="flex items-center gap-4">
+											<div className="flex-1 flex items-center gap-2">
+												<Label className="text-sm whitespace-nowrap">Extra cost:</Label>
+												<div className="flex-1 flex items-center gap-2">
+													<Input
+														type="number"
+														step="0.01"
+														min="0"
+														value={shipping.extraCost}
+														onChange={(e) => updateExtraCost(index, e.target.value)}
+														placeholder="Enter amount"
+														className="flex-1"
+													/>
+													<span className="text-sm text-gray-500 whitespace-nowrap">{option?.currency}</span>
+												</div>
+											</div>
+										</div>
+										{option && shipping.extraCost && (
 											<div className="text-sm text-gray-500">
-												{option.cost} {option.currency} • {option.countries?.join(', ') || 'No countries'} •{' '}
-												{option.service || 'Unknown service'}
+												Total with extra cost: {Number(option.cost) + Number(shipping.extraCost)} {option.currency}
 											</div>
 										)}
-									</div>
-									<div className="flex items-center gap-2">
-										<Input
-											type="number"
-											step="0.01"
-											min="0"
-											value={shipping.extraCost}
-											onChange={(e) => updateExtraCost(index, e.target.value)}
-											placeholder="Extra cost"
-											className="w-24 text-sm"
-										/>
-										<Button type="button" variant="ghost" size="sm" onClick={() => removeShippingOption(index)}>
-											<span className="i-delete w-4 h-4" />
-										</Button>
 									</div>
 								</div>
 							)
