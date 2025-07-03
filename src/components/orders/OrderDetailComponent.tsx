@@ -14,7 +14,20 @@ import { fetchV4VShares } from '@/queries/v4v'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
-import { AlertTriangle, CheckCircle, Clock, CreditCard, MessageSquare, Package, Receipt, RefreshCw, Truck, Users, XCircle, Zap } from 'lucide-react'
+import {
+	AlertTriangle,
+	CheckCircle,
+	Clock,
+	CreditCard,
+	MessageSquare,
+	Package,
+	Receipt,
+	RefreshCw,
+	Truck,
+	Users,
+	XCircle,
+	Zap,
+} from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import { DetailField } from '../ui/DetailField'
@@ -550,9 +563,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				{allEvents.length > 0 && (
 					<div>
 						<h2 className="text-xl font-bold mb-4">Order Timeline</h2>
-						<div className="space-y-4">
-							{allEvents.map(({ event, type, title, icon }) => renderEventCard(event, title, icon, type))}
-						</div>
+						<div className="space-y-4">{allEvents.map(({ event, type, title, icon }) => renderEventCard(event, title, icon, type))}</div>
 					</div>
 				)}
 			</div>
