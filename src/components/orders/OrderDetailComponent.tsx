@@ -3,7 +3,7 @@ import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { OrderActions } from '@/components/orders/OrderActions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { authStore } from '@/lib/stores/auth'
 import {
@@ -15,6 +15,7 @@ import {
 	getOrderStatus,
 	getSellerPubkey,
 	useOrderById,
+	type OrderWithRelatedEvents,
 } from '@/queries/orders'
 import { productsByPubkeyQueryOptions } from '@/queries/products'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -22,6 +23,8 @@ import { useQueries } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { CreditCard, MessageSquare, Package, Receipt, Truck } from 'lucide-react'
 import { useMemo } from 'react'
+import { format } from 'date-fns'
+import { DetailField } from '../ui/DetailField'
 
 interface OrderDetailComponentProps {
 	orderId: string
@@ -81,8 +84,6 @@ export function OrderDetailComponent({ orderId }: OrderDetailComponentProps) {
 		})
 	}, [productReferences, allProducts])
 
-
-
 	return (
 		<div className="space-y-6">
 			{isLoading ? (
@@ -106,7 +107,6 @@ export function OrderDetailComponent({ orderId }: OrderDetailComponentProps) {
 					const amount = getOrderAmount(order)
 					const buyerPubkey = getBuyerPubkey(order)
 					const sellerPubkey = getSellerPubkey(order)
-					const orderDate = getEventDate(order)
 
 					const isBuyer = user?.pubkey === buyerPubkey
 					const isSeller = user?.pubkey === sellerPubkey
@@ -219,46 +219,25 @@ export function OrderDetailComponent({ orderId }: OrderDetailComponentProps) {
 						<>
 							<Card>
 								<CardHeader>
-									<CardTitle>Order #{currentOrderId?.substring(0, 8)}...</CardTitle>
+									<div className="flex justify-between items-start">
+										<div>
+											<CardTitle>Order Details</CardTitle>
+										</div>
+										<OrderActions order={orderData} userPubkey={user?.pubkey || ''} />
+									</div>
 								</CardHeader>
 								<CardContent className="space-y-4">
+									<Separator />
 									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-										<div>
-											<h4 className="font-medium text-gray-900">Order Information</h4>
-											<div className="mt-2 space-y-1 text-sm text-gray-600">
-												<div>Order ID: {currentOrderId}</div>
-												<div>Amount: {formatSats(amount)}</div>
-												<div>Date: {orderDate}</div>
-												<div>Role: {isBuyer ? 'Buyer' : isSeller ? 'Seller' : 'Observer'}</div>
-											</div>
-										</div>
-										<div>
-											<h4 className="font-medium text-gray-900">Participants</h4>
-											<div className="mt-2 space-y-2">
-												{buyerPubkey && (
-													<div className="flex items-center gap-2">
-														<span className="text-sm text-gray-600 w-12">Buyer:</span>
-														<UserWithAvatar pubkey={buyerPubkey} showBadge={false} size="sm" />
-													</div>
-												)}
-												{sellerPubkey && (
-													<div className="flex items-center gap-2">
-														<span className="text-sm text-gray-600 w-12">Seller:</span>
-														<UserWithAvatar pubkey={sellerPubkey} showBadge={false} size="sm" />
-													</div>
-												)}
-											</div>
-										</div>
+										<DetailField label="Order ID:" value={currentOrderId || 'N/A'} />
+										<DetailField label="Amount:" value={`${formatSats(amount)} sats`} />
+										<DetailField
+											label="Date:"
+											value={order.created_at ? format(new Date(order.created_at * 1000), 'dd.MM.yyyy, HH:mm') : 'N/A'}
+										/>
+										<DetailField label="Role:" value={isBuyer ? 'Buyer' : isSeller ? 'Seller' : 'Observer'} />
 									</div>
-
-									{user?.pubkey && (isBuyer || isSeller) && (
-										<>
-											<Separator />
-											<div className="flex justify-center">
-												<OrderActions order={orderData} userPubkey={user.pubkey} />
-											</div>
-										</>
-									)}
+									<Separator />
 								</CardContent>
 							</Card>
 
