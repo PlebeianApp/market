@@ -59,7 +59,6 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 					</TabsContent>
 					<TabsContent value="connect">
 						<Tabs defaultValue="qr" className="w-full">
-
 							<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-[1px]">
 								<TabsTrigger
 									value="qr"

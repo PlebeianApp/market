@@ -453,10 +453,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 								</div>
 								{/* Progress bar */}
 								<div className="w-full bg-gray-200 rounded-full h-2">
-									<div
-										className="bg-green-600 h-2 rounded-full transition-all duration-300"
-										style={{ width: `${paymentProgress}%` }}
-									/>
+									<div className="bg-green-600 h-2 rounded-full transition-all duration-300" style={{ width: `${paymentProgress}%` }} />
 								</div>
 							</div>
 
@@ -472,9 +469,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 												<div className="flex items-center gap-3">
 													{/* Payment type icon */}
 													<div
-														className={`p-2 rounded-lg ${
-															invoice.description === 'Merchant Payment' ? 'bg-green-100' : 'bg-purple-100'
-														}`}
+														className={`p-2 rounded-lg ${invoice.description === 'Merchant Payment' ? 'bg-green-100' : 'bg-purple-100'}`}
 													>
 														{invoice.description === 'Merchant Payment' ? (
 															<CreditCard className="w-4 h-4 text-green-600" />
@@ -521,11 +516,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 												{/* Status display for sellers or when payment not needed */}
 												{(!isBuyer || !needsPayment) && !isComplete && (
 													<div className="text-sm text-gray-500">
-														{needsPayment
-															? 'Awaiting buyer payment'
-															: invoice.bolt11
-															? 'Processing...'
-															: 'Awaiting payment request'}
+														{needsPayment ? 'Awaiting buyer payment' : invoice.bolt11 ? 'Processing...' : 'Awaiting payment request'}
 													</div>
 												)}
 											</div>
