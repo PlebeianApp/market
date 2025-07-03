@@ -219,7 +219,7 @@ export function OrderDetailComponent({ orderId }: OrderDetailComponentProps) {
 						<>
 							<Card>
 								<CardHeader>
-									<div className="flex justify-between items-start">
+									<div className="flex justify-between items-center">
 										<div>
 											<CardTitle>Order Details</CardTitle>
 										</div>
@@ -237,7 +237,6 @@ export function OrderDetailComponent({ orderId }: OrderDetailComponentProps) {
 										/>
 										<DetailField label="Role:" value={isBuyer ? 'Buyer' : isSeller ? 'Seller' : 'Observer'} />
 									</div>
-									<Separator />
 								</CardContent>
 							</Card>
 
