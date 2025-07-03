@@ -1,11 +1,7 @@
 import { NDKEvent, type NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { randomBytes } from 'crypto'
 
-const POTENTIAL_V4V_RECIPEINTS = [
-	'npub10pensatlcfwktnvjjw2dtem38n6rvw8g6fv73h84cuacxn4c28eqyfn34f',
-	'npub1dergggklka99wwrs92yz8wdjs952h2ux2ha2ed598ngwu9w7a6fsh9xzpc',
-	'npub12rv5lskctqxxs2c8rf2zlzc7xx3qpvzs3w4etgemauy9thegr43sf485vg',
-]
+// No longer using fixed recipients - will be passed as parameter
 
 function getRandomFloat(min: number, max: number, decimals: number = 4): number {
 	const rand = Math.random() * (max - min) + min
@@ -21,26 +17,39 @@ function shuffleArray<T>(array: T[]): T[] {
 	return newArray
 }
 
-export async function createV4VSharesEvent(signer: NDKPrivateKeySigner, ndk: any, appPubkey: string = '') {
+export async function createV4VSharesEvent(
+	signer: NDKPrivateKeySigner,
+	ndk: any,
+	appPubkey: string = '',
+	availableUserPubkeys: string[] = [],
+) {
 	try {
 		const uuid = Buffer.from(randomBytes(16)).toString('hex')
 		const totalPercentage = getRandomFloat(0.05, 0.2)
-		const recipientCount = Math.floor(Math.random() * Math.min(POTENTIAL_V4V_RECIPEINTS.length, 3)) + 1
 
-		const selectedRecipients = shuffleArray(POTENTIAL_V4V_RECIPEINTS).slice(0, recipientCount)
+		// Use available user pubkeys instead of fixed recipients
+		const potentialRecipients = availableUserPubkeys.length > 0 ? availableUserPubkeys : []
+		if (potentialRecipients.length === 0) {
+			console.log('No potential V4V recipients available, skipping V4V shares creation')
+			return true
+		}
+
+		const recipientCount = Math.floor(Math.random() * Math.min(potentialRecipients.length, 3)) + 1
+		const selectedRecipients = shuffleArray(potentialRecipients).slice(0, recipientCount)
 
 		let remainingPercentage = totalPercentage
 		const zapTags: string[][] = []
 
 		for (let i = 0; i < selectedRecipients.length; i++) {
+			const recipient = selectedRecipients[i]
 			if (i === selectedRecipients.length - 1) {
-				zapTags.push(['zap', selectedRecipients[i], remainingPercentage.toString()])
+				zapTags.push(['zap', recipient, remainingPercentage.toString()])
 			} else {
 				const minAllocation = 0.01
 				const maxForThisRecipient = remainingPercentage - minAllocation * (selectedRecipients.length - i - 1)
 
 				const percentage = getRandomFloat(minAllocation, maxForThisRecipient)
-				zapTags.push(['zap', selectedRecipients[i], percentage.toString()])
+				zapTags.push(['zap', recipient, percentage.toString()])
 				remainingPercentage = parseFloat((remainingPercentage - percentage).toFixed(4))
 			}
 		}

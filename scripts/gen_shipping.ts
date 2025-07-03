@@ -22,7 +22,7 @@ const DISTANCE_UNITS = ['km', 'mi']
 export function generateShippingData(): Omit<z.infer<typeof ShippingOptionSchema>, 'tags'> & { tags: NDKTag[] } {
 	const shippingId = faker.string.alphanumeric(10)
 	const country = faker.helpers.arrayElement(COUNTRIES)
-	const price = faker.number.float({ min: 5, max: 100, fractionDigits: 2 }).toString()
+	const price = faker.number.int({ min: 1, max: 10 }).toString()
 	const service = faker.helpers.arrayElement(['standard', 'express', 'overnight', 'pickup'])
 	const weightUnit = faker.helpers.arrayElement(WEIGHT_UNITS)
 	const dimensionUnit = faker.helpers.arrayElement(DIMENSION_UNITS)
@@ -31,7 +31,7 @@ export function generateShippingData(): Omit<z.infer<typeof ShippingOptionSchema
 		// Required tags
 		['d', shippingId],
 		['title', `${faker.helpers.arrayElement(['Standard', 'Express', 'Premium'])} Shipping to ${country}`],
-		['price', price, 'USD'],
+		['price', price, 'sats'],
 		['country', country],
 		['service', service],
 
@@ -69,14 +69,10 @@ export function generateShippingData(): Omit<z.infer<typeof ShippingOptionSchema
 	tags.push(['dim-min', createDimensions(), dimensionUnit])
 	tags.push(['dim-max', createDimensions(), dimensionUnit])
 
-	// Add price calculations
-	tags.push(['price-weight', faker.number.float({ min: 0.5, max: 5, fractionDigits: 2 }).toString(), weightUnit])
-	tags.push(['price-volume', faker.number.float({ min: 0.1, max: 2, fractionDigits: 2 }).toString(), dimensionUnit])
-	tags.push([
-		'price-distance',
-		faker.number.float({ min: 0.1, max: 1, fractionDigits: 2 }).toString(),
-		faker.helpers.arrayElement(DISTANCE_UNITS),
-	])
+	// Add price calculations (in sats)
+	tags.push(['price-weight', faker.number.int({ min: 1, max: 3 }).toString(), weightUnit])
+	tags.push(['price-volume', faker.number.int({ min: 1, max: 2 }).toString(), dimensionUnit])
+	tags.push(['price-distance', faker.number.int({ min: 1, max: 2 }).toString(), faker.helpers.arrayElement(DISTANCE_UNITS)])
 
 	return {
 		kind: SHIPPING_KIND,

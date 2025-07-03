@@ -2,7 +2,6 @@ import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { authStore } from '@/lib/stores/auth'
 import { productFormActions } from '@/lib/stores/product'
-
 import { getProductTitle, getProductImages, getProductId, productsByPubkeyQueryOptions } from '@/queries/products'
 import { useDeleteProductMutation } from '@/publish/products'
 import { useQuery } from '@tanstack/react-query'
@@ -200,8 +199,9 @@ function ProductsOverviewComponent() {
 								})}
 							</ul>
 						) : (
-							<div className="text-center text-gray-500 py-10 mt-4">
-								<span className="i-product w-5 h-5" /> <h3 className="mt-2 text-lg font-semibold text-gray-700">No products yet</h3>
+							<div className="text-center text-gray-500 py-10 px-6">
+								<span className="i-product w-5 h-5" />
+								<h3 className="mt-2 text-lg font-semibold text-gray-700">No products yet</h3>
 								<p className="mt-1 text-sm">Click the "Add A Product" button to create your first one.</p>
 							</div>
 						)}

@@ -19,7 +19,7 @@ export type PaymentMethod = PaymentDetailsMethod
 export interface PaymentDetail {
 	id: string // Event ID
 	paymentMethod: PaymentMethod
-	paymentDetail: string // Could be bolt11, btc address, cashu token, etc.
+	paymentDetail: string // Could be bolt11, btc address, etc.
 	createdAt: number
 	coordinates?: string // Optional product/collection coordinates
 	isDefault?: boolean // Whether this is the default payment method

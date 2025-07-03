@@ -143,9 +143,10 @@ async function seedData() {
 			}
 		}
 
-		// Create V4V shares for each user
+		// Create V4V shares for each user (excluding themselves from potential recipients)
 		console.log(`Creating V4V shares for user ${pubkey.substring(0, 8)}...`)
-		await createV4VSharesEvent(signer, ndk, APP_PUBKEY)
+		const otherUserPubkeys = userPubkeys.filter((otherPubkey) => otherPubkey !== pubkey)
+		await createV4VSharesEvent(signer, ndk, APP_PUBKEY, otherUserPubkeys)
 	}
 
 	// Create collections

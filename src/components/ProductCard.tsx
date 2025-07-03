@@ -5,14 +5,31 @@ import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Link } from '@tanstack/react-router'
 import { Button } from './ui/button'
 import { ZapButton } from './ZapButton'
+import { useEffect, useState } from 'react'
 
 export function ProductCard({ product }: { product: NDKEvent }) {
 	const title = getProductTitle(product)
 	const images = getProductImages(product)
 	const price = getProductPrice(product)
 	const stock = getProductStock(product)
+	const [isOwnProduct, setIsOwnProduct] = useState(false)
+	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(null)
+
+	// Check if current user is the seller of this product
+	useEffect(() => {
+		const checkIfOwnProduct = async () => {
+			const user = await ndkActions.getUser()
+			if (user?.pubkey) {
+				setCurrentUserPubkey(user.pubkey)
+				setIsOwnProduct(user.pubkey === product.pubkey)
+			}
+		}
+		checkIfOwnProduct()
+	}, [product.pubkey])
 
 	const handleAddToCart = async () => {
+		if (isOwnProduct) return // Don't allow adding own products to cart
+
 		const userPubkey = await ndkActions.getUser()
 		if (!userPubkey) return
 		cartActions.addProduct(userPubkey.pubkey, product)
@@ -21,18 +38,26 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 	return (
 		<div className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col" data-testid="product-card">
 			{/* Square aspect ratio container for image */}
-			<div className="relative aspect-square overflow-hidden border-b border-zinc-800">
+			<Link to={`/products/${product.id}`} className="relative aspect-square overflow-hidden border-b border-zinc-800 block">
 				{images && images.length > 0 ? (
-					<img src={images[0][1]} alt={title} className="w-full h-full object-cover rounded-t-[calc(var(--radius)-1px)]" />
+					<img
+						src={images[0][1]}
+						alt={title}
+						className="w-full h-full object-cover rounded-t-[calc(var(--radius)-1px)] hover:scale-105 transition-transform duration-200"
+					/>
 				) : (
-					<div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400 rounded-lg">No image</div>
+					<div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400 rounded-lg hover:bg-gray-200 transition-colors duration-200">
+						No image
+					</div>
 				)}
-			</div>
+			</Link>
 
 			<div className="p-2 flex flex-col gap-2 flex-grow">
 				{/* Product title */}
 				<Link to={`/products/${product.id}`}>
-					<h2 className="text-sm font-medium border-b border-[var(--light-gray)] pb-2">{title}</h2>
+					<h2 className="text-sm font-medium border-b border-[var(--light-gray)] pb-2 overflow-hidden text-ellipsis whitespace-nowrap">
+						{title}
+					</h2>
 				</Link>
 
 				{/* Pricing section */}
@@ -58,8 +83,12 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 
 				{/* Add to cart button */}
 				<div className="flex gap-2">
-					<Button className="bg-black text-white py-3 px-4 rounded-lg flex-grow font-medium" onClick={handleAddToCart}>
-						Add to Cart
+					<Button
+						className="bg-black text-white py-3 px-4 rounded-lg flex-grow font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+						onClick={handleAddToCart}
+						disabled={isOwnProduct}
+					>
+						{isOwnProduct ? 'Your Product' : 'Add to Cart'}
 					</Button>
 					<ZapButton event={product} />
 				</div>
