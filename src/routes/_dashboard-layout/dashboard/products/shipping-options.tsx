@@ -384,10 +384,10 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 
 										<div className="flex flex-wrap gap-2 min-h-[40px] p-2 border rounded-md">
 											{formData.countries.map((countryCode) => (
-												<Badge key={countryCode} variant="secondary" className="flex items-center gap-1">
+												<Badge key={countryCode} variant="secondary" className="flex items-center gap-1 bg-black text-white">
 													{getCountryName(countryCode)}
 													<XIcon
-														className="w-3 h-3 cursor-pointer"
+														className="w-3 h-3 cursor-pointer pointer-events-auto"
 														onClick={() =>
 															setFormData((prev) => ({
 																...prev,
