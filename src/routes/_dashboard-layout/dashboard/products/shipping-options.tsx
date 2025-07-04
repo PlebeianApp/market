@@ -35,6 +35,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { ChevronLeftIcon, GlobeIcon, PackageIcon, PlusIcon, TrashIcon, TruckIcon, XIcon } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { DashboardListItem } from '@/components/layout/DashboardListItem'
 
 const SERVICE_TYPES = [
 	{ value: 'standard', label: 'Standard Shipping' },
@@ -208,546 +209,541 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 		return country?.name || code
 	}
 
-	return (
-		<Collapsible open={isOpen} onOpenChange={onOpenChange}>
-			<CollapsibleTrigger asChild>
-				<div
-					className="group flex w-full justify-between items-center gap-2 p-4 border rounded-md bg-white hover:bg-gray-50 cursor-pointer"
-					data-testid={isEditing ? `shipping-option-item-${getShippingId(shippingOption)}` : 'add-shipping-option-button'}
-				>
-					{isEditing ? (
-						<div className="flex items-center gap-3 min-w-0 flex-1">
-							<ServiceIcon service={formData.service} />
-							<div className="min-w-0 flex-1">
-								<div className="font-medium truncate">{formData.title}</div>
-								<div className="text-sm text-muted-foreground">
-									{formData.price} {formData.currency} • {formData.countries.map(getCountryName).join(', ')} •{' '}
-									{getServiceLabel(formData.service)}
-								</div>
-							</div>
-						</div>
-					) : (
-						<div className="flex items-center gap-2">
-							<PlusIcon className="w-6 h-6" />
-							<span>Add new shipping option</span>
-						</div>
-					)}
-
-					{isEditing && (
-						<div className="flex items-center gap-2">
-							<GlobeIcon className="w-5 h-5 text-muted-foreground" />
-						</div>
-					)}
-
-					<ChevronLeftIcon className="w-4 h-4 transition-transform duration-200 group-data-[state=open]:-rotate-90" />
+	const triggerContent = isEditing ? (
+		<div className="flex items-center gap-3 min-w-0 flex-1">
+			<ServiceIcon service={formData.service} />
+			<div className="min-w-0 flex-1">
+				<div className="font-medium truncate">{formData.title}</div>
+				<div className="text-sm text-muted-foreground">
+					{formData.price} {formData.currency} • {formData.countries.map(getCountryName).join(', ')} •{' '}
+					{getServiceLabel(formData.service)}
 				</div>
-			</CollapsibleTrigger>
+			</div>
+		</div>
+	) : (
+		<div className="flex items-center gap-2">
+			<PlusIcon className="w-6 h-6" />
+			<span>Add new shipping option</span>
+		</div>
+	)
 
-			<CollapsibleContent>
-				<div className="p-4 border border-t-0 rounded-b-md">
-					<form onSubmit={handleSubmit} className="space-y-6">
-						{/* Use a template */}
+	const triggerActions = isEditing ? (
+		<div className="flex items-center gap-2">
+			<GlobeIcon className="w-5 h-5 text-muted-foreground" />
+		</div>
+	) : null
+
+	return (
+		<DashboardListItem
+			isOpen={isOpen}
+			onOpenChange={onOpenChange}
+			triggerContent={triggerContent}
+			actions={triggerActions}
+			data-testid={isEditing ? `shipping-option-item-${getShippingId(shippingOption)}` : 'add-shipping-option-button'}
+		>
+			<div className="p-4 border-t">
+				<form onSubmit={handleSubmit} className="space-y-6">
+					{/* Use a template */}
+					<div className="space-y-4">
+						<h3 className="text-lg font-semibold">Use a template</h3>
 						<div className="space-y-4">
-							<h3 className="text-lg font-semibold">Use a template</h3>
-							<div className="space-y-4">
-								{/* Templates - Renamed and restructured */}
-								<div className="space-y-2">
-									<Label className="font-medium">Templates</Label>
-									<Select
-										onValueChange={(templateName) => {
-											const template = SHIPPING_TEMPLATES.find((t) => t.name === templateName)
-											if (template) {
-												setFormData((prev) => ({
-													...prev,
-													title: template.name,
-													price: template.cost,
-													countries: template.countries || [],
-												}))
-											}
-										}}
-									>
-										<SelectTrigger data-testid="shipping-template-select">
-											<SelectValue placeholder="Choose a template (optional)" />
-										</SelectTrigger>
-										<SelectContent>
-											{SHIPPING_TEMPLATES.map((template) => (
-												<SelectItem
-													key={template.name}
-													value={template.name}
-													data-testid={`template-${template.name.toLowerCase().replace(/\s+/g, '-')}`}
-												>
-													{template.name} {template.countries ? `(${template.countries.length} countries)` : '(Worldwide)'}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								</div>
+							{/* Templates - Renamed and restructured */}
+							<div className="space-y-2">
+								<Label className="font-medium">Templates</Label>
+								<Select
+									onValueChange={(templateName) => {
+										const template = SHIPPING_TEMPLATES.find((t) => t.name === templateName)
+										if (template) {
+											setFormData((prev) => ({
+												...prev,
+												title: template.name,
+												price: template.cost,
+												countries: template.countries || [],
+											}))
+										}
+									}}
+								>
+									<SelectTrigger data-testid="shipping-template-select">
+										<SelectValue placeholder="Choose a template (optional)" />
+									</SelectTrigger>
+									<SelectContent>
+										{SHIPPING_TEMPLATES.map((template) => (
+											<SelectItem
+												key={template.name}
+												value={template.name}
+												data-testid={`template-${template.name.toLowerCase().replace(/\s+/g, '-')}`}
+											>
+												{template.name} {template.countries ? `(${template.countries.length} countries)` : '(Worldwide)'}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
 
-								<h3 className="text-lg font-semibold pt-4">Shipping Option Details</h3>
+							<h3 className="text-lg font-semibold pt-4">Shipping Option Details</h3>
 
-								<div className="space-y-2">
-									<Label htmlFor="title" className="font-medium">
-										Title *
-									</Label>
+							<div className="space-y-2">
+								<Label htmlFor="title" className="font-medium">
+									Title *
+								</Label>
+								<Input
+									id="title"
+									data-testid="shipping-title-input"
+									value={formData.title}
+									onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
+									placeholder="e.g., Standard Shipping to US"
+									required
+								/>
+							</div>
+
+							<div className="space-y-2">
+								<Label htmlFor="service" className="font-medium">
+									Service Type *
+								</Label>
+								<Select value={formData.service} onValueChange={(value: any) => setFormData((prev) => ({ ...prev, service: value }))}>
+									<SelectTrigger data-testid="shipping-service-select">
+										<SelectValue placeholder="Select service type" />
+									</SelectTrigger>
+									<SelectContent>
+										{SERVICE_TYPES.map((service) => (
+											<SelectItem key={service.value} value={service.value} data-testid={`service-${service.value}`}>
+												<div className="flex items-center gap-2">
+													<ServiceIcon service={service.value} />
+													{service.label}
+												</div>
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+
+							<div className="space-y-2">
+								<Label htmlFor="price" className="font-medium">
+									Price *
+								</Label>
+								<div className="flex gap-2">
 									<Input
-										id="title"
-										data-testid="shipping-title-input"
-										value={formData.title}
-										onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
-										placeholder="e.g., Standard Shipping to US"
+										id="price"
+										data-testid="shipping-price-input"
+										type="number"
+										step="0.01"
+										min="0"
+										value={formData.price}
+										onChange={(e) => setFormData((prev) => ({ ...prev, price: e.target.value }))}
+										placeholder="0.00"
+										className="flex-1"
 										required
 									/>
-								</div>
-
-								<div className="space-y-2">
-									<Label htmlFor="service" className="font-medium">
-										Service Type *
-									</Label>
-									<Select value={formData.service} onValueChange={(value: any) => setFormData((prev) => ({ ...prev, service: value }))}>
-										<SelectTrigger data-testid="shipping-service-select">
-											<SelectValue placeholder="Select service type" />
+									<Select value={formData.currency} onValueChange={(value) => setFormData((prev) => ({ ...prev, currency: value }))}>
+										<SelectTrigger className="w-20" data-testid="shipping-currency-select">
+											<SelectValue>{formData.currency}</SelectValue>
 										</SelectTrigger>
 										<SelectContent>
-											{SERVICE_TYPES.map((service) => (
-												<SelectItem key={service.value} value={service.value} data-testid={`service-${service.value}`}>
-													<div className="flex items-center gap-2">
-														<ServiceIcon service={service.value} />
-														{service.label}
-													</div>
+											{CURRENCIES.map((currency) => (
+												<SelectItem key={currency} value={currency}>
+													{currency}
 												</SelectItem>
 											))}
 										</SelectContent>
 									</Select>
-								</div>
-
-								<div className="space-y-2">
-									<Label htmlFor="price" className="font-medium">
-										Price *
-									</Label>
-									<div className="flex gap-2">
-										<Input
-											id="price"
-											data-testid="shipping-price-input"
-											type="number"
-											step="0.01"
-											min="0"
-											value={formData.price}
-											onChange={(e) => setFormData((prev) => ({ ...prev, price: e.target.value }))}
-											placeholder="0.00"
-											className="flex-1"
-											required
-										/>
-										<Select value={formData.currency} onValueChange={(value) => setFormData((prev) => ({ ...prev, currency: value }))}>
-											<SelectTrigger className="w-20" data-testid="shipping-currency-select">
-												<SelectValue>{formData.currency}</SelectValue>
-											</SelectTrigger>
-											<SelectContent>
-												{CURRENCIES.map((currency) => (
-													<SelectItem key={currency} value={currency}>
-														{currency}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
-									</div>
-								</div>
-
-								<div className="space-y-2">
-									<Label htmlFor="countries" className="font-medium">
-										Countries *
-									</Label>
-
-									{/* Country Selection */}
-									<div className="space-y-2">
-										<Select
-											key={formData.countries.length}
-											onValueChange={(countryCode) => {
-												if (!formData.countries.includes(countryCode)) {
-													setFormData((prev) => ({
-														...prev,
-														countries: [...prev.countries, countryCode],
-													}))
-												}
-											}}
-										>
-											<SelectTrigger data-testid="shipping-country-select">
-												<SelectValue placeholder="Select countries" />
-											</SelectTrigger>
-											<SelectContent>
-												{Object.values(COUNTRIES_ISO)
-													.filter((country) => !formData.countries.includes(country.iso3))
-													.map((country) => (
-														<SelectItem key={country.iso3} value={country.iso3} data-testid={`country-${country.iso3.toLowerCase()}`}>
-															{country.name}
-														</SelectItem>
-													))}
-											</SelectContent>
-										</Select>
-
-										<div className="flex flex-wrap gap-2 min-h-[40px] p-2 border rounded-md">
-											{formData.countries.map((countryCode) => (
-												<Badge key={countryCode} variant="secondary" className="flex items-center gap-1 bg-black text-white">
-													{getCountryName(countryCode)}
-													<XIcon
-														className="w-3 h-3 cursor-pointer pointer-events-auto"
-														onClick={() =>
-															setFormData((prev) => ({
-																...prev,
-																countries: prev.countries.filter((c) => c !== countryCode),
-															}))
-														}
-													/>
-												</Badge>
-											))}
-											{formData.countries.length === 0 && <span className="text-muted-foreground text-sm">No countries selected</span>}
-										</div>
-									</div>
 								</div>
 							</div>
 
 							<div className="space-y-2">
-								<Label htmlFor="description" className="font-medium">
-									Description
+								<Label htmlFor="countries" className="font-medium">
+									Countries *
 								</Label>
-								<Textarea
-									id="description"
-									data-testid="shipping-description-input"
-									value={formData.description}
-									onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-									placeholder="Describe your shipping option..."
-									rows={3}
-								/>
+
+								{/* Country Selection */}
+								<div className="space-y-2">
+									<Select
+										key={formData.countries.length}
+										onValueChange={(countryCode) => {
+											if (!formData.countries.includes(countryCode)) {
+												setFormData((prev) => ({
+													...prev,
+													countries: [...prev.countries, countryCode],
+												}))
+											}
+										}}
+									>
+										<SelectTrigger data-testid="shipping-country-select">
+											<SelectValue placeholder="Select countries" />
+										</SelectTrigger>
+										<SelectContent>
+											{Object.values(COUNTRIES_ISO)
+												.filter((country) => !formData.countries.includes(country.iso3))
+												.map((country) => (
+													<SelectItem key={country.iso3} value={country.iso3} data-testid={`country-${country.iso3.toLowerCase()}`}>
+														{country.name}
+													</SelectItem>
+												))}
+										</SelectContent>
+									</Select>
+
+									<div className="flex flex-wrap gap-2 min-h-[40px] p-2 border rounded-md">
+										{formData.countries.map((countryCode) => (
+											<Badge key={countryCode} variant="secondary" className="flex items-center gap-1 bg-black text-white">
+												{getCountryName(countryCode)}
+												<XIcon
+													className="w-3 h-3 cursor-pointer pointer-events-auto"
+													onClick={() =>
+														setFormData((prev) => ({
+															...prev,
+															countries: prev.countries.filter((c) => c !== countryCode),
+														}))
+													}
+												/>
+											</Badge>
+										))}
+										{formData.countries.length === 0 && <span className="text-muted-foreground text-sm">No countries selected</span>}
+									</div>
+								</div>
 							</div>
 						</div>
 
-						{/* Optional Details */}
-						<Collapsible open={isOptionalDetailsOpen} onOpenChange={setIsOptionalDetailsOpen}>
-							<CollapsibleTrigger asChild>
-								<div className="group flex w-full justify-between items-center cursor-pointer">
-									<h3 className="text-lg font-semibold">Optional Details</h3>
-									<ChevronLeftIcon className="w-4 h-4 transition-transform duration-200 group-data-[state=open]:-rotate-90" />
+						<div className="space-y-2">
+							<Label htmlFor="description" className="font-medium">
+								Description
+							</Label>
+							<Textarea
+								id="description"
+								data-testid="shipping-description-input"
+								value={formData.description}
+								onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+								placeholder="Describe your shipping option..."
+								rows={3}
+							/>
+						</div>
+					</div>
+
+					{/* Optional Details */}
+					<Collapsible open={isOptionalDetailsOpen} onOpenChange={setIsOptionalDetailsOpen}>
+						<CollapsibleTrigger asChild>
+							<div className="group flex w-full justify-between items-center cursor-pointer">
+								<h3 className="text-lg font-semibold">Optional Details</h3>
+								<ChevronLeftIcon className="w-4 h-4 transition-transform duration-200 group-data-[state=open]:-rotate-90" />
+							</div>
+						</CollapsibleTrigger>
+						<CollapsibleContent>
+							<div className="space-y-4 pt-4">
+								<div className="space-y-2">
+									<Label htmlFor="carrier" className="font-medium">
+										Carrier
+									</Label>
+									<Input
+										id="carrier"
+										value={formData.carrier || ''}
+										onChange={(e) => setFormData((prev) => ({ ...prev, carrier: e.target.value }))}
+										placeholder="e.g., FedEx, UPS, DHL"
+									/>
 								</div>
-							</CollapsibleTrigger>
-							<CollapsibleContent>
-								<div className="space-y-4 pt-4">
-									<div className="space-y-2">
-										<Label htmlFor="carrier" className="font-medium">
-											Carrier
-										</Label>
+
+								<div className="space-y-2">
+									<Label htmlFor="location" className="font-medium">
+										Location
+									</Label>
+									<Input
+										id="location"
+										value={formData.location || ''}
+										onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
+										placeholder="e.g., New York, Tokyo"
+									/>
+								</div>
+
+								{/* Duration */}
+								<div className="space-y-2">
+									<Label className="font-medium">Delivery Duration</Label>
+									<div className="flex flex-col gap-2">
+										<Select
+											value={formData.duration?.unit || 'D'}
+											onValueChange={(value: any) =>
+												setFormData((prev) => ({
+													...prev,
+													duration: {
+														...prev.duration,
+														min: prev.duration?.min || '1',
+														max: prev.duration?.max || '1',
+														unit: value,
+													},
+												}))
+											}
+										>
+											<SelectTrigger className="w-full">
+												<SelectValue />
+											</SelectTrigger>
+											<SelectContent>
+												{DURATION_UNITS.map((unit) => (
+													<SelectItem key={unit.value} value={unit.value}>
+														{unit.label}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
 										<Input
-											id="carrier"
-											value={formData.carrier || ''}
-											onChange={(e) => setFormData((prev) => ({ ...prev, carrier: e.target.value }))}
-											placeholder="e.g., FedEx, UPS, DHL"
+											type="number"
+											min="1"
+											value={formData.duration?.min || ''}
+											onChange={(e) =>
+												setFormData((prev) => ({
+													...prev,
+													duration: {
+														...prev.duration,
+														min: e.target.value,
+														max: prev.duration?.max || e.target.value,
+														unit: prev.duration?.unit || 'D',
+													},
+												}))
+											}
+											placeholder="Min"
+											className="w-full"
+										/>
+										<Input
+											type="number"
+											min="1"
+											value={formData.duration?.max || ''}
+											onChange={(e) =>
+												setFormData((prev) => ({
+													...prev,
+													duration: {
+														...prev.duration,
+														min: prev.duration?.min || '1',
+														max: e.target.value,
+														unit: prev.duration?.unit || 'D',
+													},
+												}))
+											}
+											placeholder="Max"
+											className="w-full"
 										/>
 									</div>
+								</div>
 
-									<div className="space-y-2">
-										<Label htmlFor="location" className="font-medium">
-											Location
-										</Label>
-										<Input
-											id="location"
-											value={formData.location || ''}
-											onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
-											placeholder="e.g., New York, Tokyo"
-										/>
-									</div>
-
-									{/* Duration */}
-									<div className="space-y-2">
-										<Label className="font-medium">Delivery Duration</Label>
-										<div className="flex flex-col gap-2">
-											<Select
-												value={formData.duration?.unit || 'D'}
-												onValueChange={(value: any) =>
+								{/* Weight Limits */}
+								<div className="space-y-2">
+									<Label className="font-medium">Weight Limits</Label>
+									<div className="space-y-4">
+										<div className="flex gap-2 items-center">
+											<Input
+												type="number"
+												step="0.1"
+												min="0"
+												value={formData.weightLimits?.min?.value || ''}
+												onChange={(e) =>
 													setFormData((prev) => ({
 														...prev,
-														duration: {
-															...prev.duration,
-															min: prev.duration?.min || '1',
-															max: prev.duration?.max || '1',
-															unit: value,
+														weightLimits: {
+															...prev.weightLimits,
+															min: {
+																value: e.target.value,
+																unit: prev.weightLimits?.min?.unit || 'kg',
+															},
+														},
+													}))
+												}
+												placeholder="Min e.g. 0.0"
+												className="flex-1"
+											/>
+											<Select
+												value={formData.weightLimits?.min?.unit || 'kg'}
+												onValueChange={(value) =>
+													setFormData((prev) => ({
+														...prev,
+														weightLimits: {
+															...prev.weightLimits,
+															min: {
+																value: prev.weightLimits?.min?.value || '0',
+																unit: value,
+															},
 														},
 													}))
 												}
 											>
-												<SelectTrigger className="w-full">
+												<SelectTrigger className="w-20">
 													<SelectValue />
 												</SelectTrigger>
 												<SelectContent>
-													{DURATION_UNITS.map((unit) => (
-														<SelectItem key={unit.value} value={unit.value}>
-															{unit.label}
+													{WEIGHT_UNITS.map((unit) => (
+														<SelectItem key={unit} value={unit}>
+															{unit}
 														</SelectItem>
 													))}
 												</SelectContent>
 											</Select>
+										</div>
+
+										<div className="flex gap-2 items-center">
 											<Input
 												type="number"
-												min="1"
-												value={formData.duration?.min || ''}
+												step="0.1"
+												min="0"
+												value={formData.weightLimits?.max?.value || ''}
 												onChange={(e) =>
 													setFormData((prev) => ({
 														...prev,
-														duration: {
-															...prev.duration,
-															min: e.target.value,
-															max: prev.duration?.max || e.target.value,
-															unit: prev.duration?.unit || 'D',
+														weightLimits: {
+															...prev.weightLimits,
+															max: {
+																value: e.target.value,
+																unit: prev.weightLimits?.max?.unit || 'kg',
+															},
 														},
 													}))
 												}
-												placeholder="Min"
-												className="w-full"
+												placeholder="Max e.g. 0.0"
+												className="flex-1"
 											/>
-											<Input
-												type="number"
-												min="1"
-												value={formData.duration?.max || ''}
-												onChange={(e) =>
+											<Select
+												value={formData.weightLimits?.max?.unit || 'kg'}
+												onValueChange={(value) =>
 													setFormData((prev) => ({
 														...prev,
-														duration: {
-															...prev.duration,
-															min: prev.duration?.min || '1',
-															max: e.target.value,
-															unit: prev.duration?.unit || 'D',
+														weightLimits: {
+															...prev.weightLimits,
+															max: {
+																value: prev.weightLimits?.max?.value || '0',
+																unit: value,
+															},
 														},
 													}))
 												}
-												placeholder="Max"
-												className="w-full"
-											/>
-										</div>
-									</div>
-
-									{/* Weight Limits */}
-									<div className="space-y-2">
-										<Label className="font-medium">Weight Limits</Label>
-										<div className="space-y-4">
-											<div className="flex gap-2 items-center">
-												<Input
-													type="number"
-													step="0.1"
-													min="0"
-													value={formData.weightLimits?.min?.value || ''}
-													onChange={(e) =>
-														setFormData((prev) => ({
-															...prev,
-															weightLimits: {
-																...prev.weightLimits,
-																min: {
-																	value: e.target.value,
-																	unit: prev.weightLimits?.min?.unit || 'kg',
-																},
-															},
-														}))
-													}
-													placeholder="Min e.g. 0.0"
-													className="flex-1"
-												/>
-												<Select
-													value={formData.weightLimits?.min?.unit || 'kg'}
-													onValueChange={(value) =>
-														setFormData((prev) => ({
-															...prev,
-															weightLimits: {
-																...prev.weightLimits,
-																min: {
-																	value: prev.weightLimits?.min?.value || '0',
-																	unit: value,
-																},
-															},
-														}))
-													}
-												>
-													<SelectTrigger className="w-20">
-														<SelectValue />
-													</SelectTrigger>
-													<SelectContent>
-														{WEIGHT_UNITS.map((unit) => (
-															<SelectItem key={unit} value={unit}>
-																{unit}
-															</SelectItem>
-														))}
-													</SelectContent>
-												</Select>
-											</div>
-
-											<div className="flex gap-2 items-center">
-												<Input
-													type="number"
-													step="0.1"
-													min="0"
-													value={formData.weightLimits?.max?.value || ''}
-													onChange={(e) =>
-														setFormData((prev) => ({
-															...prev,
-															weightLimits: {
-																...prev.weightLimits,
-																max: {
-																	value: e.target.value,
-																	unit: prev.weightLimits?.max?.unit || 'kg',
-																},
-															},
-														}))
-													}
-													placeholder="Max e.g. 0.0"
-													className="flex-1"
-												/>
-												<Select
-													value={formData.weightLimits?.max?.unit || 'kg'}
-													onValueChange={(value) =>
-														setFormData((prev) => ({
-															...prev,
-															weightLimits: {
-																...prev.weightLimits,
-																max: {
-																	value: prev.weightLimits?.max?.value || '0',
-																	unit: value,
-																},
-															},
-														}))
-													}
-												>
-													<SelectTrigger className="w-20">
-														<SelectValue />
-													</SelectTrigger>
-													<SelectContent>
-														{WEIGHT_UNITS.map((unit) => (
-															<SelectItem key={unit} value={unit}>
-																{unit}
-															</SelectItem>
-														))}
-													</SelectContent>
-												</Select>
-											</div>
-										</div>
-									</div>
-
-									{/* Dimension Limits (LxWxH) */}
-									<div className="space-y-2">
-										<Label className="font-medium">Dimension Limits (LxWxH)</Label>
-										<div className="space-y-4">
-											<div className="flex gap-2 items-center">
-												<Input
-													value={formData.dimensionLimits?.min?.value || ''}
-													onChange={(e) =>
-														setFormData((prev) => ({
-															...prev,
-															dimensionLimits: {
-																...prev.dimensionLimits,
-																min: {
-																	value: e.target.value,
-																	unit: prev.dimensionLimits?.min?.unit || 'cm',
-																},
-															},
-														}))
-													}
-													placeholder="Min e.g. 10x10x10"
-													className="flex-1"
-												/>
-												<Select
-													value={formData.dimensionLimits?.min?.unit || 'cm'}
-													onValueChange={(value) =>
-														setFormData((prev) => ({
-															...prev,
-															dimensionLimits: {
-																...prev.dimensionLimits,
-																min: {
-																	value: prev.dimensionLimits?.min?.value || '',
-																	unit: value,
-																},
-															},
-														}))
-													}
-												>
-													<SelectTrigger className="w-20">
-														<SelectValue />
-													</SelectTrigger>
-													<SelectContent>
-														{DIMENSION_UNITS.map((unit) => (
-															<SelectItem key={unit} value={unit}>
-																{unit}
-															</SelectItem>
-														))}
-													</SelectContent>
-												</Select>
-											</div>
-
-											<div className="flex gap-2 items-center">
-												<Input
-													value={formData.dimensionLimits?.max?.value || ''}
-													onChange={(e) =>
-														setFormData((prev) => ({
-															...prev,
-															dimensionLimits: {
-																...prev.dimensionLimits,
-																max: {
-																	value: e.target.value,
-																	unit: prev.dimensionLimits?.max?.unit || 'cm',
-																},
-															},
-														}))
-													}
-													placeholder="Max e.g. 100x100x100"
-													className="flex-1"
-												/>
-												<Select
-													value={formData.dimensionLimits?.max?.unit || 'cm'}
-													onValueChange={(value) =>
-														setFormData((prev) => ({
-															...prev,
-															dimensionLimits: {
-																...prev.dimensionLimits,
-																max: {
-																	value: prev.dimensionLimits?.max?.value || '',
-																	unit: value,
-																},
-															},
-														}))
-													}
-												>
-													<SelectTrigger className="w-20">
-														<SelectValue />
-													</SelectTrigger>
-													<SelectContent>
-														{DIMENSION_UNITS.map((unit) => (
-															<SelectItem key={unit} value={unit}>
-																{unit}
-															</SelectItem>
-														))}
-													</SelectContent>
-												</Select>
-											</div>
+											>
+												<SelectTrigger className="w-20">
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													{WEIGHT_UNITS.map((unit) => (
+														<SelectItem key={unit} value={unit}>
+															{unit}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
 										</div>
 									</div>
 								</div>
-							</CollapsibleContent>
-						</Collapsible>
 
-						{/* Actions */}
-						<div className="flex justify-end gap-2 pt-4">
-							<Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-								Cancel
+								{/* Dimension Limits (LxWxH) */}
+								<div className="space-y-2">
+									<Label className="font-medium">Dimension Limits (LxWxH)</Label>
+									<div className="space-y-4">
+										<div className="flex gap-2 items-center">
+											<Input
+												value={formData.dimensionLimits?.min?.value || ''}
+												onChange={(e) =>
+													setFormData((prev) => ({
+														...prev,
+														dimensionLimits: {
+															...prev.dimensionLimits,
+															min: {
+																value: e.target.value,
+																unit: prev.dimensionLimits?.min?.unit || 'cm',
+															},
+														},
+													}))
+												}
+												placeholder="Min e.g. 10x10x10"
+												className="flex-1"
+											/>
+											<Select
+												value={formData.dimensionLimits?.min?.unit || 'cm'}
+												onValueChange={(value) =>
+													setFormData((prev) => ({
+														...prev,
+														dimensionLimits: {
+															...prev.dimensionLimits,
+															min: {
+																value: prev.dimensionLimits?.min?.value || '',
+																unit: value,
+															},
+														},
+													}))
+												}
+											>
+												<SelectTrigger className="w-20">
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													{DIMENSION_UNITS.map((unit) => (
+														<SelectItem key={unit} value={unit}>
+															{unit}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+										</div>
+
+										<div className="flex gap-2 items-center">
+											<Input
+												value={formData.dimensionLimits?.max?.value || ''}
+												onChange={(e) =>
+													setFormData((prev) => ({
+														...prev,
+														dimensionLimits: {
+															...prev.dimensionLimits,
+															max: {
+																value: e.target.value,
+																unit: prev.dimensionLimits?.max?.unit || 'cm',
+															},
+														},
+													}))
+												}
+												placeholder="Max e.g. 100x100x100"
+												className="flex-1"
+											/>
+											<Select
+												value={formData.dimensionLimits?.max?.unit || 'cm'}
+												onValueChange={(value) =>
+													setFormData((prev) => ({
+														...prev,
+														dimensionLimits: {
+															...prev.dimensionLimits,
+															max: {
+																value: prev.dimensionLimits?.max?.value || '',
+																unit: value,
+															},
+														},
+													}))
+												}
+											>
+												<SelectTrigger className="w-20">
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													{DIMENSION_UNITS.map((unit) => (
+														<SelectItem key={unit} value={unit}>
+															{unit}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+										</div>
+									</div>
+								</div>
+							</div>
+						</CollapsibleContent>
+					</Collapsible>
+
+					{/* Actions */}
+					<div className="flex justify-end gap-2 pt-4">
+						<Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+							Cancel
+						</Button>
+
+						{isEditing && (
+							<Button type="button" variant="destructive" onClick={handleDelete} disabled={isSubmitting}>
+								<TrashIcon className="w-4 h-4" />
 							</Button>
+						)}
 
-							{isEditing && (
-								<Button type="button" variant="destructive" onClick={handleDelete} disabled={isSubmitting}>
-									<TrashIcon className="w-4 h-4" />
-								</Button>
-							)}
-
-							<Button type="submit" disabled={isSubmitting} data-testid="shipping-submit-button">
-								{isSubmitting && <Spinner />}
-								{isEditing ? 'Update' : 'Create'}
-							</Button>
-						</div>
-					</form>
-				</div>
-			</CollapsibleContent>
-		</Collapsible>
+						<Button type="submit" disabled={isSubmitting} data-testid="shipping-submit-button">
+							{isSubmitting && <Spinner />}
+							{isEditing ? 'Update' : 'Create'}
+						</Button>
+					</div>
+				</form>
+			</div>
+		</DashboardListItem>
 	)
 }
 

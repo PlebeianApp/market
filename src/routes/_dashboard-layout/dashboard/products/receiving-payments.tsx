@@ -45,6 +45,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { DashboardListItem } from '@/components/layout/DashboardListItem'
 
 interface ScopeSelectorProps {
 	value: PaymentScope
@@ -450,62 +451,54 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 		}
 	}
 
+	const triggerContent = isEditing ? (
+		<div className="flex items-center gap-2 min-w-0 flex-1">
+			<PaymentMethodIcon method={editedPaymentDetail.paymentMethod} />
+			<span className="truncate">
+				{editedPaymentDetail.paymentDetail.length > 30
+					? editedPaymentDetail.paymentDetail.substring(0, 30) + '...'
+					: editedPaymentDetail.paymentDetail}
+			</span>
+		</div>
+	) : (
+		<div className="flex items-center gap-2">
+			<PlusIcon className="w-6 h-6" />
+			<span>Add new payment method</span>
+		</div>
+	)
+
+	const triggerActions = isEditing ? (
+		<div className="flex items-center gap-2">
+			{editedPaymentDetail.isDefault && <StarIcon className="w-6 h-6 text-yellow-400 fill-current" />}
+			{editedPaymentDetail.scope === 'global' ? (
+				<>
+					<span className="font-bold">Global</span>
+					<GlobeIcon className="w-6 h-6" />
+				</>
+			) : (
+				<>
+					<span className="font-bold">{editedPaymentDetail.scopeName}</span>
+					{editedPaymentDetail.scope === 'collection' ? <StoreIcon className="w-6 h-6" /> : <PackageIcon className="w-6 h-6" />}
+				</>
+			)}
+		</div>
+	) : (
+		<Button
+			variant="ghost"
+			size="icon"
+			onClick={(e) => {
+				e.stopPropagation()
+				handlePasteFromClipboard()
+			}}
+			className="text-black"
+		>
+			<ClipboardIcon className="w-6 h-6" />
+		</Button>
+	)
+
 	return (
-		<Collapsible open={isOpen} onOpenChange={onOpenChange}>
-			<CollapsibleTrigger asChild>
-				<div className="group flex w-full justify-between items-center gap-2 p-4 border rounded-md bg-white hover:bg-gray-50 cursor-pointer">
-					{isEditing ? (
-						<div className="flex items-center gap-2 min-w-0 flex-1">
-							<PaymentMethodIcon method={editedPaymentDetail.paymentMethod} />
-							<span className="truncate">
-								{editedPaymentDetail.paymentDetail.length > 30
-									? editedPaymentDetail.paymentDetail.substring(0, 30) + '...'
-									: editedPaymentDetail.paymentDetail}
-							</span>
-						</div>
-					) : (
-						<div className="flex items-center gap-2">
-							<PlusIcon className="w-6 h-6" />
-							<span>Add new payment method</span>
-						</div>
-					)}
-
-					{isEditing && (
-						<div className="flex items-center gap-2">
-							{editedPaymentDetail.isDefault && <StarIcon className="w-6 h-6 text-yellow-400 fill-current" />}
-							{editedPaymentDetail.scope === 'global' ? (
-								<>
-									<span className="font-bold">Global</span>
-									<GlobeIcon className="w-6 h-6" />
-								</>
-							) : (
-								<>
-									<span className="font-bold">{editedPaymentDetail.scopeName}</span>
-									{editedPaymentDetail.scope === 'collection' ? <StoreIcon className="w-6 h-6" /> : <PackageIcon className="w-6 h-6" />}
-								</>
-							)}
-						</div>
-					)}
-
-					{!isEditing && (
-						<Button
-							variant="ghost"
-							size="icon"
-							onClick={(e) => {
-								e.stopPropagation()
-								handlePasteFromClipboard()
-							}}
-							className="text-black"
-						>
-							<ClipboardIcon className="w-6 h-6" />
-						</Button>
-					)}
-
-					<ChevronLeftIcon className="w-4 h-4 transition-transform duration-200 group-data-[state=open]:-rotate-90" />
-				</div>
-			</CollapsibleTrigger>
-
-			<CollapsibleContent className="px-4 pb-4">
+		<DashboardListItem isOpen={isOpen} onOpenChange={onOpenChange} triggerContent={triggerContent} actions={triggerActions}>
+			<div className="px-4 pb-4 border-t">
 				<div className="pt-4">
 					{showConfirmation ? (
 						<PaymentDetailConfirmationCard
@@ -674,8 +667,8 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 						</form>
 					)}
 				</div>
-			</CollapsibleContent>
-		</Collapsible>
+			</div>
+		</DashboardListItem>
 	)
 }
 
