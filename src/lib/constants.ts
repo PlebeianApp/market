@@ -1569,12 +1569,22 @@ export const SHIPPING_TEMPLATES = [
 		countries: [],
 	},
 	{
-		name: 'Worldwide Standard',
+		name: 'Worldwide',
 		cost: '0',
 		countries: null,
 	},
 	{
-		name: 'Europe Standard',
+		name: 'Express Worldwide',
+		cost: '0',
+		countries: null,
+	},
+	{
+		name: 'North America',
+		cost: '0',
+		countries: ['USA', 'CAN', 'MEX'],
+	},
+	{
+		name: 'Europe',
 		cost: '8.00',
 		countries: [
 			'AUT',
@@ -1607,19 +1617,24 @@ export const SHIPPING_TEMPLATES = [
 		],
 	},
 	{
+		name: 'UK',
+		cost: '0',
+		countries: ['GBR'],
+	},
+	{
+		name: 'UK & Ireland',
+		cost: '0',
+		countries: ['GBR', 'IRL'],
+	},
+	{
+		name: 'Canada',
+		cost: '0',
+		countries: ['CAN'],
+	},
+	{
 		name: 'Digital Delivery',
 		cost: '0',
 		countries: null,
-	},
-	{
-		name: 'Express Worldwide',
-		cost: '0',
-		countries: null,
-	},
-	{
-		name: 'North America',
-		cost: '0',
-		countries: ['USA', 'CAN', 'MEX'],
 	},
 	{
 		name: 'South America',
@@ -1637,14 +1652,9 @@ export const SHIPPING_TEMPLATES = [
 		countries: ['ARE', 'SAU', 'BHR', 'OMN', 'QAT', 'KWT', 'IRN', 'IRQ', 'ISR', 'JOR', 'LBN', 'SYR'],
 	},
 	{
-		name: 'Africa Standard',
+		name: 'Africa',
 		cost: '0',
 		countries: ['ZAF', 'EGY', 'MAR', 'TUN', 'DZA', 'NGA', 'KEN', 'GHA', 'SEN', 'TZA', 'UGA', 'ETH'],
-	},
-	{
-		name: 'UK & Ireland',
-		cost: '0',
-		countries: ['GBR', 'IRL'],
 	},
 	{
 		name: 'Scandinavia',
