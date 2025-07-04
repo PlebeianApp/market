@@ -732,7 +732,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 						</div>
 
 						{/* Actions */}
-						<div className="flex justify-end gap-2 pt-4 border-t">
+						<div className="flex justify-end gap-2 pt-4">
 							<Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
 								Cancel
 							</Button>
