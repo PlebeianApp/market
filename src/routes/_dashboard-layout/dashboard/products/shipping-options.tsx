@@ -338,7 +338,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 										/>
 										<Select value={formData.currency} onValueChange={(value) => setFormData((prev) => ({ ...prev, currency: value }))}>
 											<SelectTrigger className="w-20" data-testid="shipping-currency-select">
-												<SelectValue />
+												<SelectValue>{formData.currency}</SelectValue>
 											</SelectTrigger>
 											<SelectContent>
 												{CURRENCIES.map((currency) => (
