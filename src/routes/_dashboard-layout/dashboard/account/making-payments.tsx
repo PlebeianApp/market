@@ -102,7 +102,7 @@ function MakingPaymentsComponent() {
 		} else {
 			setOpenWalletId(null)
 		}
-	}
+			}
 
 	const handleSuccess = () => {
 		setOpenWalletId(null)
@@ -231,6 +231,9 @@ function WalletForm({ wallet, onSuccess, onCancel, userPubkey }: WalletFormProps
 			setPubkey(parsed.pubkey)
 			setRelays(parsed.relay || '')
 			setSecret(parsed.secret || '')
+			if (parsed.name) {
+				setName(parsed.name)
+			}
 		}
 	}
 
@@ -305,40 +308,41 @@ function WalletForm({ wallet, onSuccess, onCancel, userPubkey }: WalletFormProps
 
 	return (
 		<form onSubmit={handleSubmit} className="p-4 border-t space-y-6">
-			<div className="space-y-2">
-				<Label htmlFor="nwc-uri">NWC Connection String</Label>
-				<div className="flex gap-2">
-					<Input id="nwc-uri" value={nwcUri} onChange={(e) => handleNwcUriChange(e.target.value)} placeholder="nostr+walletconnect://..." />
-					<Button type="button" variant="outline" size="icon" onClick={handlePaste}>
-						<ClipboardIcon className="h-4 w-4" />
-					</Button>
-					<Button type="button" variant="outline" size="icon" onClick={handleScan}>
-						<ScanIcon className="h-4 w-4" />
-				</Button>
+			{!isEditing && (
+				<div className="space-y-2">
+					<Label htmlFor="nwc-uri">NWC Connection String</Label>
+					<div className="flex gap-2">
+						<Input id="nwc-uri" value={nwcUri} onChange={(e) => handleNwcUriChange(e.target.value)} placeholder="nostr+walletconnect://..." />
+						<Button type="button" variant="outline" size="icon" onClick={handlePaste}>
+							<ClipboardIcon className="h-4 w-4" />
+						</Button>
+						<Button type="button" variant="outline" size="icon" onClick={handleScan}>
+							<ScanIcon className="h-4 w-4" />
+						</Button>
+					</div>
 				</div>
-			</div>
+			)}
 			<div className="space-y-2">
 				<Label htmlFor="wallet-name">Wallet Name</Label>
 				<Input id="wallet-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="My Awesome Wallet" />
-					</div>
+			</div>
 			<div className="space-y-2">
-				<Label htmlFor="nwc-pubkey">NWC Pubkey</Label>
-				<Input id="nwc-pubkey" value={pubkey} onChange={(e) => setPubkey(e.target.value)} placeholder="npub..." disabled />
-						</div>
+				<Label htmlFor="nwc-pubkey">Wallet Connect Pubkey</Label>
+				<Input id="nwc-pubkey" value={pubkey} onChange={(e) => setPubkey(e.target.value)} placeholder="npub..." />
+			</div>
 			<div className="space-y-2">
-				<Label htmlFor="nwc-relays">Relays</Label>
+				<Label htmlFor="nwc-relays">Wallet Connect Relays</Label>
 				<Input id="nwc-relays" value={relays} onChange={(e) => setRelays(e.target.value)} placeholder="wss://relay.one, wss://relay.two" />
-						</div>
+			</div>
 			<div className="space-y-2">
-				<Label htmlFor="nwc-secret">Secret</Label>
+				<Label htmlFor="nwc-secret">Wallet Connect Secret</Label>
 				<div className="relative">
-								<Input
+					<Input
 						id="nwc-secret"
-									type={showSecret ? 'text' : 'password'}
+						type={showSecret ? 'text' : 'password'}
 						value={secret}
 						onChange={(e) => setSecret(e.target.value)}
 						placeholder="nsec..."
-						disabled
 					/>
 					<Button
 						type="button"
@@ -347,25 +351,25 @@ function WalletForm({ wallet, onSuccess, onCancel, userPubkey }: WalletFormProps
 						className="absolute top-1/2 right-2 -translate-y-1/2 h-7 w-7"
 						onClick={() => setShowSecret(!showSecret)}
 					>
-									{showSecret ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
-								</Button>
-							</div>
-						</div>
+						{showSecret ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+					</Button>
+				</div>
+			</div>
 			{userPubkey && (
-							<div className="flex items-center space-x-2">
+				<div className="flex items-center space-x-2">
 					<Checkbox id="store-on-nostr" checked={storedOnNostr} onCheckedChange={(checked) => setStoredOnNostr(!!checked)} />
 					<Label htmlFor="store-on-nostr" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-						Save to your Nostr profile (kind:30009)
+						Store on Nostr (encrypted)
 					</Label>
-							</div>
-						)}
+				</div>
+			)}
 			<div className="flex justify-end gap-2">
 				<Button type="button" variant="outline" onClick={onCancel}>
-						Cancel
-					</Button>
+					Cancel
+				</Button>
 				<Button type="submit" disabled={saveNostrWalletsMutation.isPending}>
-					{saveNostrWalletsMutation.isPending ? 'Saving...' : 'Save Wallet'}
-					</Button>
+					{saveNostrWalletsMutation.isPending ? 'Saving...' : isEditing ? 'Save Changes' : 'Save Wallet'}
+				</Button>
 			</div>
 		</form>
 	)

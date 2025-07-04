@@ -38,6 +38,7 @@ type NwcUriParser = (uri: string) => {
 	pubkey: string
 	relay: string
 	secret: string
+	name?: string
 } | null
 
 // Helper to parse an NWC URI
@@ -53,12 +54,14 @@ export const parseNwcUri: NwcUriParser = (uri: string) => {
 			const params = new URLSearchParams('?' + (queryPart || ''))
 			const relay = params.get('relay') || ''
 			const secret = params.get('secret') || ''
+			const name = params.get('name') || undefined
+
 			// Ensure pubkey is not empty after parsing
 			if (!pubkey) {
 				console.warn('Parsed NWC URI resulted in empty pubkey')
 				return null
 			}
-			return { pubkey, relay, secret }
+			return { pubkey, relay, secret, name }
 		}
 		return null
 	} catch (e) {
