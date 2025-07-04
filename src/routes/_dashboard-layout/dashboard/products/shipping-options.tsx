@@ -450,7 +450,32 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 							{/* Duration */}
 							<div className="space-y-2">
 								<Label className="font-medium">Delivery Duration</Label>
-								<div className="flex gap-2 items-center">
+								<div className="flex flex-col gap-2">
+									<Select
+										value={formData.duration?.unit || 'D'}
+										onValueChange={(value: any) =>
+											setFormData((prev) => ({
+												...prev,
+												duration: {
+													...prev.duration,
+													min: prev.duration?.min || '1',
+													max: prev.duration?.max || '1',
+													unit: value,
+												},
+											}))
+										}
+									>
+										<SelectTrigger className="w-full">
+											<SelectValue />
+										</SelectTrigger>
+										<SelectContent>
+											{DURATION_UNITS.map((unit) => (
+												<SelectItem key={unit.value} value={unit.value}>
+													{unit.label}
+												</SelectItem>
+											))}
+										</SelectContent>
+									</Select>
 									<Input
 										type="number"
 										min="1"
@@ -467,9 +492,8 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 											}))
 										}
 										placeholder="Min"
-										className="w-20"
+										className="w-full"
 									/>
-									<span>-</span>
 									<Input
 										type="number"
 										min="1"
@@ -486,33 +510,8 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 											}))
 										}
 										placeholder="Max"
-										className="w-20"
+										className="w-full"
 									/>
-									<Select
-										value={formData.duration?.unit || 'D'}
-										onValueChange={(value: any) =>
-											setFormData((prev) => ({
-												...prev,
-												duration: {
-													...prev.duration,
-													min: prev.duration?.min || '1',
-													max: prev.duration?.max || '1',
-													unit: value,
-												},
-											}))
-										}
-									>
-										<SelectTrigger className="w-32">
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											{DURATION_UNITS.map((unit) => (
-												<SelectItem key={unit.value} value={unit.value}>
-													{unit.label}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
 								</div>
 							</div>
 
@@ -520,204 +519,212 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 							<div className="space-y-2">
 								<Label className="font-medium">Weight Limits</Label>
 								<div className="space-y-4">
-									<div className="flex gap-2 items-center">
-										<Label className="text-sm w-16">Min:</Label>
-										<Input
-											type="number"
-											step="0.1"
-											min="0"
-											value={formData.weightLimits?.min?.value || ''}
-											onChange={(e) =>
-												setFormData((prev) => ({
-													...prev,
-													weightLimits: {
-														...prev.weightLimits,
-														min: {
-															value: e.target.value,
-															unit: prev.weightLimits?.min?.unit || 'kg',
+									<div className="space-y-2">
+										<Label className="font-medium">Min</Label>
+										<div className="flex gap-2 items-center">
+											<Input
+												type="number"
+												step="0.1"
+												min="0"
+												value={formData.weightLimits?.min?.value || ''}
+												onChange={(e) =>
+													setFormData((prev) => ({
+														...prev,
+														weightLimits: {
+															...prev.weightLimits,
+															min: {
+																value: e.target.value,
+																unit: prev.weightLimits?.min?.unit || 'kg',
+															},
 														},
-													},
-												}))
-											}
-											placeholder="0.0"
-											className="flex-1"
-										/>
-										<Select
-											value={formData.weightLimits?.min?.unit || 'kg'}
-											onValueChange={(value) =>
-												setFormData((prev) => ({
-													...prev,
-													weightLimits: {
-														...prev.weightLimits,
-														min: {
-															value: prev.weightLimits?.min?.value || '0',
-															unit: value,
+													}))
+												}
+												placeholder="0.0"
+												className="flex-1"
+											/>
+											<Select
+												value={formData.weightLimits?.min?.unit || 'kg'}
+												onValueChange={(value) =>
+													setFormData((prev) => ({
+														...prev,
+														weightLimits: {
+															...prev.weightLimits,
+															min: {
+																value: prev.weightLimits?.min?.value || '0',
+																unit: value,
+															},
 														},
-													},
-												}))
-											}
-										>
-											<SelectTrigger className="w-20">
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												{WEIGHT_UNITS.map((unit) => (
-													<SelectItem key={unit} value={unit}>
-														{unit}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
+													}))
+												}
+											>
+												<SelectTrigger className="w-20">
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													{WEIGHT_UNITS.map((unit) => (
+														<SelectItem key={unit} value={unit}>
+															{unit}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+										</div>
 									</div>
 
-									<div className="flex gap-2 items-center">
-										<Label className="text-sm w-16">Max:</Label>
-										<Input
-											type="number"
-											step="0.1"
-											min="0"
-											value={formData.weightLimits?.max?.value || ''}
-											onChange={(e) =>
-												setFormData((prev) => ({
-													...prev,
-													weightLimits: {
-														...prev.weightLimits,
-														max: {
-															value: e.target.value,
-															unit: prev.weightLimits?.max?.unit || 'kg',
+									<div className="space-y-2">
+										<Label className="font-medium">Max</Label>
+										<div className="flex gap-2 items-center">
+											<Input
+												type="number"
+												step="0.1"
+												min="0"
+												value={formData.weightLimits?.max?.value || ''}
+												onChange={(e) =>
+													setFormData((prev) => ({
+														...prev,
+														weightLimits: {
+															...prev.weightLimits,
+															max: {
+																value: e.target.value,
+																unit: prev.weightLimits?.max?.unit || 'kg',
+															},
 														},
-													},
-												}))
-											}
-											placeholder="0.0"
-											className="flex-1"
-										/>
-										<Select
-											value={formData.weightLimits?.max?.unit || 'kg'}
-											onValueChange={(value) =>
-												setFormData((prev) => ({
-													...prev,
-													weightLimits: {
-														...prev.weightLimits,
-														max: {
-															value: prev.weightLimits?.max?.value || '0',
-															unit: value,
+													}))
+												}
+												placeholder="0.0"
+												className="flex-1"
+											/>
+											<Select
+												value={formData.weightLimits?.max?.unit || 'kg'}
+												onValueChange={(value) =>
+													setFormData((prev) => ({
+														...prev,
+														weightLimits: {
+															...prev.weightLimits,
+															max: {
+																value: prev.weightLimits?.max?.value || '0',
+																unit: value,
+															},
 														},
-													},
-												}))
-											}
-										>
-											<SelectTrigger className="w-20">
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												{WEIGHT_UNITS.map((unit) => (
-													<SelectItem key={unit} value={unit}>
-														{unit}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
+													}))
+												}
+											>
+												<SelectTrigger className="w-20">
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													{WEIGHT_UNITS.map((unit) => (
+														<SelectItem key={unit} value={unit}>
+															{unit}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+										</div>
 									</div>
 								</div>
 							</div>
 
-							{/* Dimension Limits */}
+							{/* Dimension Limits (LxWxH) */}
 							<div className="space-y-2">
 								<Label className="font-medium">Dimension Limits (LxWxH)</Label>
 								<div className="space-y-4">
-									<div className="flex gap-2 items-center">
-										<Label className="text-sm w-16">Min:</Label>
-										<Input
-											value={formData.dimensionLimits?.min?.value || ''}
-											onChange={(e) =>
-												setFormData((prev) => ({
-													...prev,
-													dimensionLimits: {
-														...prev.dimensionLimits,
-														min: {
-															value: e.target.value,
-															unit: prev.dimensionLimits?.min?.unit || 'cm',
+									<div className="space-y-2">
+										<Label className="font-medium">Min</Label>
+										<div className="flex gap-2 items-center">
+											<Input
+												value={formData.dimensionLimits?.min?.value || ''}
+												onChange={(e) =>
+													setFormData((prev) => ({
+														...prev,
+														dimensionLimits: {
+															...prev.dimensionLimits,
+															min: {
+																value: e.target.value,
+																unit: prev.dimensionLimits?.min?.unit || 'cm',
+															},
 														},
-													},
-												}))
-											}
-											placeholder="10x10x10"
-											className="flex-1"
-										/>
-										<Select
-											value={formData.dimensionLimits?.min?.unit || 'cm'}
-											onValueChange={(value) =>
-												setFormData((prev) => ({
-													...prev,
-													dimensionLimits: {
-														...prev.dimensionLimits,
-														min: {
-															value: prev.dimensionLimits?.min?.value || '',
-															unit: value,
+													}))
+												}
+												placeholder="10x10x10"
+												className="flex-1"
+											/>
+											<Select
+												value={formData.dimensionLimits?.min?.unit || 'cm'}
+												onValueChange={(value) =>
+													setFormData((prev) => ({
+														...prev,
+														dimensionLimits: {
+															...prev.dimensionLimits,
+															min: {
+																value: prev.dimensionLimits?.min?.value || '',
+																unit: value,
+															},
 														},
-													},
-												}))
-											}
-										>
-											<SelectTrigger className="w-20">
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												{DIMENSION_UNITS.map((unit) => (
-													<SelectItem key={unit} value={unit}>
-														{unit}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
+													}))
+												}
+											>
+												<SelectTrigger className="w-20">
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													{DIMENSION_UNITS.map((unit) => (
+														<SelectItem key={unit} value={unit}>
+															{unit}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+										</div>
 									</div>
 
-									<div className="flex gap-2 items-center">
-										<Label className="text-sm w-16">Max:</Label>
-										<Input
-											value={formData.dimensionLimits?.max?.value || ''}
-											onChange={(e) =>
-												setFormData((prev) => ({
-													...prev,
-													dimensionLimits: {
-														...prev.dimensionLimits,
-														max: {
-															value: e.target.value,
-															unit: prev.dimensionLimits?.max?.unit || 'cm',
+									<div className="space-y-2">
+										<Label className="font-medium">Max</Label>
+										<div className="flex gap-2 items-center">
+											<Input
+												value={formData.dimensionLimits?.max?.value || ''}
+												onChange={(e) =>
+													setFormData((prev) => ({
+														...prev,
+														dimensionLimits: {
+															...prev.dimensionLimits,
+															max: {
+																value: e.target.value,
+																unit: prev.dimensionLimits?.max?.unit || 'cm',
+															},
 														},
-													},
-												}))
-											}
-											placeholder="100x100x100"
-											className="flex-1"
-										/>
-										<Select
-											value={formData.dimensionLimits?.max?.unit || 'cm'}
-											onValueChange={(value) =>
-												setFormData((prev) => ({
-													...prev,
-													dimensionLimits: {
-														...prev.dimensionLimits,
-														max: {
-															value: prev.dimensionLimits?.max?.value || '',
-															unit: value,
+													}))
+												}
+												placeholder="100x100x100"
+												className="flex-1"
+											/>
+											<Select
+												value={formData.dimensionLimits?.max?.unit || 'cm'}
+												onValueChange={(value) =>
+													setFormData((prev) => ({
+														...prev,
+														dimensionLimits: {
+															...prev.dimensionLimits,
+															max: {
+																value: prev.dimensionLimits?.max?.value || '',
+																unit: value,
+															},
 														},
-													},
-												}))
-											}
-										>
-											<SelectTrigger className="w-20">
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												{DIMENSION_UNITS.map((unit) => (
-													<SelectItem key={unit} value={unit}>
-														{unit}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
+													}))
+												}
+											>
+												<SelectTrigger className="w-20">
+													<SelectValue />
+												</SelectTrigger>
+												<SelectContent>
+													{DIMENSION_UNITS.map((unit) => (
+														<SelectItem key={unit} value={unit}>
+															{unit}
+														</SelectItem>
+													))}
+												</SelectContent>
+											</Select>
+										</div>
 									</div>
 								</div>
 							</div>
