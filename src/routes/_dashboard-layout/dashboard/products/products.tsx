@@ -110,20 +110,17 @@ function ProductsOverviewComponent() {
 								toast.dismiss(t)
 								return
 							}
-							deleteMutation.mutate(
-								productId,
-								{
-									onSuccess: () => {
-										toast.success('Product deleted successfully.')
-									},
-									onError: (error) => {
-										toast.error(`Failed to delete product: ${error.message}`)
-									},
-									onSettled: () => {
-										toast.dismiss(t)
-									},
+							deleteMutation.mutate(productId, {
+								onSuccess: () => {
+									toast.success('Product deleted successfully.')
 								},
-							)
+								onError: (error) => {
+									toast.error(`Failed to delete product: ${error.message}`)
+								},
+								onSettled: () => {
+									toast.dismiss(t)
+								},
+							})
 						}}
 					>
 						Confirm

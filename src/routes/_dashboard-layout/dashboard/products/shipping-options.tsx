@@ -215,8 +215,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 			<div className="min-w-0 flex-1">
 				<div className="font-medium truncate">{formData.title}</div>
 				<div className="text-sm text-muted-foreground">
-					{formData.price} {formData.currency} • {formData.countries.map(getCountryName).join(', ')} •{' '}
-					{getServiceLabel(formData.service)}
+					{formData.price} {formData.currency} • {formData.countries.map(getCountryName).join(', ')} • {getServiceLabel(formData.service)}
 				</div>
 			</div>
 		</div>

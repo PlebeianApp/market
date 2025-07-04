@@ -29,7 +29,15 @@ import { toast } from 'sonner'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
 import { Spinner } from '@/components/ui/spinner'
-import { useDeletePaymentDetail, usePublishRichPaymentDetail, useRichUserPaymentDetails, useUpdatePaymentDetail, useWalletDetail, type PaymentScope, type RichPaymentDetail } from '@/queries/payment'
+import {
+	useDeletePaymentDetail,
+	usePublishRichPaymentDetail,
+	useRichUserPaymentDetails,
+	useUpdatePaymentDetail,
+	useWalletDetail,
+	type PaymentScope,
+	type RichPaymentDetail,
+} from '@/queries/payment'
 import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/making-payments')({
@@ -102,7 +110,7 @@ function MakingPaymentsComponent() {
 		} else {
 			setOpenWalletId(null)
 		}
-			}
+	}
 
 	const handleSuccess = () => {
 		setOpenWalletId(null)
@@ -168,7 +176,7 @@ function MakingPaymentsComponent() {
 		)
 	}
 
-		return (
+	return (
 		<div className="space-y-4">
 			<WalletListItem
 				wallet={null}
@@ -178,25 +186,25 @@ function MakingPaymentsComponent() {
 				userPubkey={userPubkey}
 			/>
 
-						{combinedWallets.map((wallet) => (
+			{combinedWallets.map((wallet) => (
 				<WalletListItem
-								key={wallet.id}
-								wallet={wallet}
+					key={wallet.id}
+					wallet={wallet}
 					isOpen={openWalletId === wallet.id}
 					onOpenChange={(open) => handleOpenChange(wallet.id, open)}
 					onDelete={() => handleDeleteWallet(wallet.id)}
-								isDeleting={deletingWalletId === wallet.id}
+					isDeleting={deletingWalletId === wallet.id}
 					onSuccess={handleSuccess}
 					userPubkey={userPubkey}
-							/>
-						))}
+				/>
+			))}
 
-						{combinedWallets.length > 0 && (
+			{combinedWallets.length > 0 && (
 				<div className="mt-4 flex justify-end">
 					<Button onClick={() => refetchNostrWallets()} disabled={nostrLoading || !userPubkey}>
 						<RefreshCwIcon className={`w-4 h-4 mr-2 ${nostrLoading ? 'animate-spin' : ''}`} />
 						Refresh Nostr Wallets
-							</Button>
+					</Button>
 				</div>
 			)}
 		</div>
@@ -211,6 +219,7 @@ interface WalletFormProps {
 }
 
 function WalletForm({ wallet, onSuccess, onCancel, userPubkey }: WalletFormProps) {
+	const { wallets } = useWallets()
 	const { data: nostrWallets, isLoading: nostrLoading, refetch: refetchNostrWallets } = useUserNwcWalletsQuery(userPubkey)
 	const saveNostrWalletsMutation = useSaveUserNwcWalletsMutation()
 
@@ -220,7 +229,7 @@ function WalletForm({ wallet, onSuccess, onCancel, userPubkey }: WalletFormProps
 	const [nwcUri, setNwcUri] = useState(wallet?.nwcUri || '')
 	const [pubkey, setPubkey] = useState(wallet?.pubkey || '')
 	const [relays, setRelays] = useState(wallet?.relays.join(', ') || '')
-	const [secret, setSecret] = useState(parseNwcUri(wallet?.nwcUri || '')?.secret || '')
+	const [secret, setSecret] = useState(wallet ? (parseNwcUri(wallet.nwcUri)?.secret ?? '') : '')
 	const [storedOnNostr, setStoredOnNostr] = useState(wallet?.storedOnNostr || false)
 	const [showSecret, setShowSecret] = useState(false)
 
@@ -262,15 +271,22 @@ function WalletForm({ wallet, onSuccess, onCancel, userPubkey }: WalletFormProps
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
 
-		if (!name.trim() || !pubkey) {
-			toast.error('Wallet name and pubkey are required')
+		const finalName = isEditing ? name.trim() : name.trim() || `Wallet ${wallets.length + 1}`
+
+		if (isEditing && !finalName) {
+			toast.error('Wallet name is required')
 			return
 		}
 
-		const finalNwcUri = `nostr+walletconnect://${pubkey}?relay=${encodeURIComponent(relays)}&secret=${secret}${name ? `&name=${encodeURIComponent(name)}` : ''}`
+		if (!pubkey.trim()) {
+			toast.error('Wallet Connect Pubkey is required')
+			return
+		}
+
+		const finalNwcUri = `nostr+walletconnect://${pubkey}?relay=${encodeURIComponent(relays)}&secret=${secret}${finalName ? `&name=${encodeURIComponent(finalName)}` : ''}`
 
 		const walletData: Omit<Wallet, 'id' | 'createdAt'> = {
-			name,
+			name: finalName,
 			nwcUri: finalNwcUri,
 			pubkey,
 			relays: relays.split(',').map((r) => r.trim()),
@@ -306,22 +322,78 @@ function WalletForm({ wallet, onSuccess, onCancel, userPubkey }: WalletFormProps
 		}
 	}
 
-	return (
-		<form onSubmit={handleSubmit} className="p-4 border-t space-y-6">
-			{!isEditing && (
+	if (!isEditing) {
+		return (
+			<form onSubmit={handleSubmit} className="p-4 border-t space-y-6">
 				<div className="space-y-2">
-					<Label htmlFor="nwc-uri">NWC Connection String</Label>
-					<div className="flex gap-2">
-						<Input id="nwc-uri" value={nwcUri} onChange={(e) => handleNwcUriChange(e.target.value)} placeholder="nostr+walletconnect://..." />
-						<Button type="button" variant="outline" size="icon" onClick={handlePaste}>
-							<ClipboardIcon className="h-4 w-4" />
-						</Button>
-						<Button type="button" variant="outline" size="icon" onClick={handleScan}>
-							<ScanIcon className="h-4 w-4" />
+					<p className="text-lg font-semibold">Add Nostr Wallet Connect</p>
+					<p className="text-sm text-muted-foreground">Paste your Nostr Wallet Connect URI or scan a QR code to connect your wallet.</p>
+				</div>
+				<div className="flex gap-2">
+					<Button type="button" onClick={handlePaste} className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-black">
+						PASTE
+					</Button>
+					<Button type="button" onClick={handleScan} className="flex-1 bg-black text-white hover:bg-gray-800">
+						<ScanIcon className="h-4 w-4 mr-2" />
+						SCAN
+					</Button>
+				</div>
+				<div className="space-y-2">
+					<Label htmlFor="nwc-pubkey-add">Wallet Connect Pubkey</Label>
+					<Input
+						id="nwc-pubkey-add"
+						value={pubkey}
+						onChange={(e) => setPubkey(e.target.value)}
+						placeholder="e.g. 60b37aeb4c521316374bab549c074abc..."
+					/>
+				</div>
+				<div className="space-y-2">
+					<Label htmlFor="nwc-relays-add">Wallet Connect Relays</Label>
+					<Input id="nwc-relays-add" value={relays} onChange={(e) => setRelays(e.target.value)} placeholder="e.g. wss://relay.nostr.band" />
+				</div>
+				<div className="space-y-2">
+					<Label htmlFor="nwc-secret-add">Wallet Connect Secret</Label>
+					<div className="relative">
+						<Input
+							id="nwc-secret-add"
+							type={showSecret ? 'text' : 'password'}
+							value={secret}
+							onChange={(e) => setSecret(e.target.value)}
+							placeholder="Secret"
+						/>
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon"
+							className="absolute top-1/2 right-2 -translate-y-1/2 h-7 w-7"
+							onClick={() => setShowSecret(!showSecret)}
+						>
+							{showSecret ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
 						</Button>
 					</div>
 				</div>
-			)}
+				{userPubkey && (
+					<div className="flex items-center space-x-2">
+						<Checkbox id="store-on-nostr-add" checked={storedOnNostr} onCheckedChange={(checked) => setStoredOnNostr(!!checked)} />
+						<Label htmlFor="store-on-nostr-add" className="text-sm font-medium leading-none">
+							Store wallet on Nostr (encrypted)
+						</Label>
+					</div>
+				)}
+				<div className="flex justify-end gap-2">
+					<Button type="button" variant="outline" onClick={onCancel}>
+						Cancel
+					</Button>
+					<Button type="submit" disabled={saveNostrWalletsMutation.isPending}>
+						{saveNostrWalletsMutation.isPending ? 'Saving...' : 'Save Wallet'}
+					</Button>
+				</div>
+			</form>
+		)
+	}
+
+	return (
+		<form onSubmit={handleSubmit} className="p-4 border-t space-y-6">
 			<div className="space-y-2">
 				<Label htmlFor="wallet-name">Wallet Name</Label>
 				<Input id="wallet-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="My Awesome Wallet" />
@@ -358,7 +430,10 @@ function WalletForm({ wallet, onSuccess, onCancel, userPubkey }: WalletFormProps
 			{userPubkey && (
 				<div className="flex items-center space-x-2">
 					<Checkbox id="store-on-nostr" checked={storedOnNostr} onCheckedChange={(checked) => setStoredOnNostr(!!checked)} />
-					<Label htmlFor="store-on-nostr" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+					<Label
+						htmlFor="store-on-nostr"
+						className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+					>
 						Store on Nostr (encrypted)
 					</Label>
 				</div>
@@ -368,7 +443,7 @@ function WalletForm({ wallet, onSuccess, onCancel, userPubkey }: WalletFormProps
 					Cancel
 				</Button>
 				<Button type="submit" disabled={saveNostrWalletsMutation.isPending}>
-					{saveNostrWalletsMutation.isPending ? 'Saving...' : isEditing ? 'Save Changes' : 'Save Wallet'}
+					{saveNostrWalletsMutation.isPending ? 'Saving...' : 'Save Changes'}
 				</Button>
 			</div>
 		</form>
@@ -453,12 +528,7 @@ function WalletListItem({
 			actions={triggerActions}
 			data-testid={isEditing ? `wallet-item-${wallet.id}` : 'add-wallet-button'}
 		>
-			<WalletForm
-				wallet={wallet}
-				onSuccess={onSuccess}
-				onCancel={() => onOpenChange(false)}
-				userPubkey={userPubkey}
-			/>
+			<WalletForm wallet={wallet} onSuccess={onSuccess} onCancel={() => onOpenChange(false)} userPubkey={userPubkey} />
 		</DashboardListItem>
 	)
 }

@@ -16,11 +16,7 @@ const DashboardListItem = React.forwardRef<HTMLDivElement, DashboardListItemProp
 	({ isOpen, onOpenChange, triggerContent, children, className, actions, isCollapsible = true, ...props }, ref) => {
 		if (!isCollapsible) {
 			return (
-				<div
-					ref={ref}
-					className={cn('p-4 border rounded-md bg-white', className)}
-					{...props}
-				>
+				<div ref={ref} className={cn('p-4 border rounded-md bg-white', className)} {...props}>
 					{children}
 				</div>
 			)
@@ -28,11 +24,7 @@ const DashboardListItem = React.forwardRef<HTMLDivElement, DashboardListItemProp
 
 		return (
 			<Collapsible open={isOpen} onOpenChange={onOpenChange}>
-				<div
-					ref={ref}
-					className={cn('border rounded-md bg-white', className)}
-					{...props}
-				>
+				<div ref={ref} className={cn('border rounded-md bg-white', className)} {...props}>
 					<CollapsibleTrigger asChild>
 						<div className="group flex w-full justify-between items-center gap-2 p-4 cursor-pointer hover:bg-gray-50">
 							<div className="flex-1 min-w-0">{triggerContent}</div>
@@ -51,4 +43,4 @@ const DashboardListItem = React.forwardRef<HTMLDivElement, DashboardListItemProp
 
 DashboardListItem.displayName = 'DashboardListItem'
 
-export { DashboardListItem } 
+export { DashboardListItem }
