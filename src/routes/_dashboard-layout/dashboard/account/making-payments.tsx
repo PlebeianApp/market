@@ -39,6 +39,7 @@ import {
 	type RichPaymentDetail,
 } from '@/queries/payment'
 import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
+import { uiActions } from '@/lib/stores/ui'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/making-payments')({
 	component: MakingPaymentsComponent,
@@ -257,13 +258,10 @@ function WalletForm({ wallet, onSuccess, onCancel, userPubkey }: WalletFormProps
 	}
 
 	const handleScan = () => {
-		uiStore.getState().showDialog({
-			component: 'qrScanner',
-			props: {
-				onScan: (result: string) => {
-					handleNwcUriChange(result)
-					uiStore.getState().hideDialog('qrScanner')
-				},
+		uiActions.openDialog('scan-qr', {
+			onScan: (result: string) => {
+				handleNwcUriChange(result)
+				uiActions.closeDialog('scan-qr')
 			},
 		})
 	}
