@@ -359,6 +359,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 									{/* Country Selection */}
 									<div className="space-y-2">
 										<Select
+											key={formData.countries.length}
 											onValueChange={(countryCode) => {
 												if (!formData.countries.includes(countryCode)) {
 													setFormData((prev) => ({
