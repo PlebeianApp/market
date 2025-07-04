@@ -12,7 +12,7 @@ import { walletKeys } from '@/queries/queryKeyFactory'
 import { useSaveUserNwcWalletsMutation } from '@/publish/wallet'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowLeftIcon, ChevronDownIcon, EyeIcon, EyeOffIcon, PlusIcon, RefreshCwIcon, ScanIcon, TrashIcon, WalletIcon } from 'lucide-react'
+import { ArrowLeftIcon, ChevronLeftIcon, EyeIcon, EyeOffIcon, PlusIcon, RefreshCwIcon, ScanIcon, TrashIcon, WalletIcon } from 'lucide-react'
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
@@ -479,7 +479,7 @@ function WalletListItem({
 									<TrashIcon className="h-4 w-4" />
 								)}
 							</Button>
-							<ChevronDownIcon className="h-4 w-4 ml-1 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+							<ChevronLeftIcon className="h-4 w-4 ml-1 shrink-0 transition-transform duration-200 group-data-[state=open]:-rotate-90" />
 						</div>
 					</CardHeader>
 				</CollapsibleTrigger>

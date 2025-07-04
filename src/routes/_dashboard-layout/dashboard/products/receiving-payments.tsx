@@ -33,7 +33,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import {
 	AnchorIcon,
-	ChevronDownIcon,
+	ChevronLeftIcon,
 	ClipboardIcon,
 	GlobeIcon,
 	PackageIcon,
@@ -453,7 +453,7 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 	return (
 		<Collapsible open={isOpen} onOpenChange={onOpenChange}>
 			<CollapsibleTrigger asChild>
-				<div className="flex w-full justify-between items-center gap-2 p-4 border rounded-md bg-white hover:bg-gray-50 cursor-pointer">
+				<div className="group flex w-full justify-between items-center gap-2 p-4 border rounded-md bg-white hover:bg-gray-50 cursor-pointer">
 					{isEditing ? (
 						<div className="flex items-center gap-2 min-w-0 flex-1">
 							<PaymentMethodIcon method={editedPaymentDetail.paymentMethod} />
@@ -501,7 +501,7 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 						</Button>
 					)}
 
-					<ChevronDownIcon className="w-4 h-4" />
+					<ChevronLeftIcon className="w-4 h-4 transition-transform duration-200 group-data-[state=open]:-rotate-90" />
 				</div>
 			</CollapsibleTrigger>
 
