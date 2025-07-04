@@ -7,9 +7,10 @@ import { useDeleteProductMutation } from '@/publish/products'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { ChevronDown, Trash } from 'lucide-react'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
+import { toast } from 'sonner'
 
 // Component to show basic product information
 function ProductBasicInfo({ product }: { product: any }) {
@@ -58,17 +59,6 @@ function ProductsOverviewComponent() {
 	const navigate = useNavigate()
 	const matchRoute = useMatchRoute()
 	const [expandedProduct, setExpandedProduct] = useState<string | null>(null)
-	useDashboardTitle('Products')
-	// Check if we're on a child route (editing or creating a product)
-	const isOnChildRoute =
-		matchRoute({
-			to: '/dashboard/products/products/$productId',
-			fuzzy: true,
-		}) ||
-		matchRoute({
-			to: '/dashboard/products/products/new',
-			fuzzy: true,
-		})
 
 	const {
 		data: products,
@@ -102,12 +92,45 @@ function ProductsOverviewComponent() {
 	}
 
 	const handleDeleteProductClick = async (product: any) => {
-		if (confirm(`Are you sure you want to delete "${getProductTitle(product)}"?`)) {
-			const productDTag = getProductId(product)
-			if (productDTag) {
-				deleteMutation.mutate(productDTag)
-			}
-		}
+		toast.custom((t) => (
+			<div className="bg-background border rounded-lg p-4 space-y-4">
+				<div className="font-semibold">Are you sure?</div>
+				<p>This will permanently delete the product: {getProductTitle(product)}.</p>
+				<div className="flex gap-2 justify-end">
+					<Button variant="outline" size="sm" onClick={() => toast.dismiss(t)}>
+						Cancel
+					</Button>
+					<Button
+						variant="destructive"
+						size="sm"
+						onClick={() => {
+							const productId = getProductId(product)
+							if (!productId) {
+								toast.error('Could not find product ID to delete.')
+								toast.dismiss(t)
+								return
+							}
+							deleteMutation.mutate(
+								productId,
+								{
+									onSuccess: () => {
+										toast.success('Product deleted successfully.')
+									},
+									onError: (error) => {
+										toast.error(`Failed to delete product: ${error.message}`)
+									},
+									onSettled: () => {
+										toast.dismiss(t)
+									},
+								},
+							)
+						}}
+					>
+						Confirm
+					</Button>
+				</div>
+			</div>
+		))
 	}
 
 	if (!isAuthenticated || !user) {
@@ -119,13 +142,22 @@ function ProductsOverviewComponent() {
 	}
 
 	// If we're on a child route, render the child route
+	const isOnChildRoute =
+		matchRoute({
+			to: '/dashboard/products/products/$productId',
+			fuzzy: true,
+		}) ||
+		matchRoute({
+			to: '/dashboard/products/products/new',
+			fuzzy: true,
+		})
 	if (isOnChildRoute) {
 		return <Outlet />
 	}
 
 	return (
 		<div className="space-y-6">
-			<h1 className="text-[1.6rem] font-bold">Products</h1>
+			<h1 className="text-2xl font-bold">Products</h1>
 			<div className="bg-white rounded-md shadow-sm">
 				<Button
 					onClick={handleAddProductClick}

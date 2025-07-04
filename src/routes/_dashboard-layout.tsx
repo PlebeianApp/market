@@ -131,7 +131,6 @@ function DashboardLayout() {
 					{(!showSidebar || !isMobile) && (
 						<ScrollArea className="w-full p-4 lg:flex-1 lg:p-8 lg:border lg:border-black lg:rounded lg:bg-white">
 							<div className="p-4 bg-white border border-black rounded lg:p-0 lg:bg-transparent lg:border-0 lg:rounded-none">
-								{!isMobile && <h1 className="text-[1.6rem] font-bold mb-6">{dashboardTitle}</h1>}
 								<Outlet />
 							</div>
 						</ScrollArea>
