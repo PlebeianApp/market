@@ -241,7 +241,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 			data-testid={isEditing ? `shipping-option-item-${getShippingId(shippingOption)}` : 'add-shipping-option-button'}
 		>
 			<div className="p-4 border-t">
-				<form onSubmit={handleSubmit} className="space-y-6">
+				<form onSubmit={handleSubmit} className="space-y-6 lg:w-1/2">
 					{/* Use a template */}
 					<div className="space-y-4">
 						<h3 className="text-lg font-semibold">Use a template</h3>
