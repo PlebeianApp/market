@@ -335,7 +335,6 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 	const currentUserPubkey = user?.pubkey
 	const isOrderOwner = currentUserPubkey === buyerPubkey // The buyer is the order owner who created the order
-	const isOrderSeller = currentUserPubkey === sellerPubkey
 
 	if (!order.order) {
 		return (
