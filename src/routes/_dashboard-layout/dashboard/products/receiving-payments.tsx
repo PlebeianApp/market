@@ -230,8 +230,6 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 	const updateMutation = useUpdatePaymentDetail()
 	const deleteMutation = useDeletePaymentDetail()
 
-	useDashboardTitle('Receiving Payments')
-
 	const isEditing = !!paymentDetail
 
 	const [editedPaymentDetail, setEditedPaymentDetail] = useState<RichPaymentDetail>(() => {
@@ -453,13 +451,13 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 	return (
 		<Collapsible open={isOpen} onOpenChange={onOpenChange}>
 			<CollapsibleTrigger asChild>
-				<div className="flex w-full justify-between items-center gap-2 p-4 border rounded-md bg-white hover:bg-gray-50 cursor-pointer">
+				<div className="flex flex-col sm:flex-row w-full justify-between items-start sm:items-center gap-2 p-4 border rounded-md bg-white hover:bg-gray-50 cursor-pointer">
 					{isEditing ? (
-						<div className="flex items-center gap-2 min-w-0 flex-1">
+						<div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
 							<PaymentMethodIcon method={editedPaymentDetail.paymentMethod} />
-							<span className="truncate">
-								{editedPaymentDetail.paymentDetail.length > 30
-									? editedPaymentDetail.paymentDetail.substring(0, 30) + '...'
+							<span className="truncate text-sm sm:text-base max-w-[200px] sm:max-w-none">
+								{editedPaymentDetail.paymentDetail.length > 20
+									? editedPaymentDetail.paymentDetail.substring(0, 20) + '...'
 									: editedPaymentDetail.paymentDetail}
 							</span>
 						</div>
@@ -470,38 +468,42 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 						</div>
 					)}
 
-					{isEditing && (
-						<div className="flex items-center gap-2">
-							{editedPaymentDetail.isDefault && <StarIcon className="w-6 h-6 text-yellow-400 fill-current" />}
-							{editedPaymentDetail.scope === 'global' ? (
-								<>
-									<span className="font-bold">Global</span>
-									<GlobeIcon className="w-6 h-6" />
-								</>
-							) : (
-								<>
-									<span className="font-bold">{editedPaymentDetail.scopeName}</span>
-									{editedPaymentDetail.scope === 'collection' ? <StoreIcon className="w-6 h-6" /> : <PackageIcon className="w-6 h-6" />}
-								</>
-							)}
-						</div>
-					)}
+					<div className="flex items-center gap-2 self-end sm:self-auto flex-shrink-0">
+						{isEditing && (
+							<div className="flex items-center gap-2 flex-wrap">
+								{editedPaymentDetail.isDefault && <StarIcon className="w-6 h-6 text-yellow-400 fill-current" />}
+								<div className="flex items-center gap-1">
+									{editedPaymentDetail.scope === 'global' ? (
+										<>
+											<span className="font-bold text-sm">Global</span>
+											<GlobeIcon className="w-5 h-5" />
+										</>
+									) : (
+										<>
+											<span className="font-bold text-sm truncate max-w-24">{editedPaymentDetail.scopeName}</span>
+											{editedPaymentDetail.scope === 'collection' ? <StoreIcon className="w-5 h-5" /> : <PackageIcon className="w-5 h-5" />}
+										</>
+									)}
+								</div>
+							</div>
+						)}
 
-					{!isEditing && (
-						<Button
-							variant="ghost"
-							size="icon"
-							onClick={(e) => {
-								e.stopPropagation()
-								handlePasteFromClipboard()
-							}}
-							className="text-black"
-						>
-							<ClipboardIcon className="w-6 h-6" />
-						</Button>
-					)}
+						{!isEditing && (
+							<Button
+								variant="ghost"
+								size="icon"
+								onClick={(e) => {
+									e.stopPropagation()
+									handlePasteFromClipboard()
+								}}
+								className="text-black"
+							>
+								<ClipboardIcon className="w-6 h-6" />
+							</Button>
+						)}
 
-					<ChevronDownIcon className="w-4 h-4" />
+						<ChevronDownIcon className="w-4 h-4 flex-shrink-0" />
+					</div>
 				</div>
 			</CollapsibleTrigger>
 
@@ -595,7 +597,7 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 												<div className="bg-gray-50 p-3 rounded-md space-y-2">
 													<Label className="font-medium">Current address</Label>
 													<div className="space-y-1">
-														<small className="font-mono">
+														<small className="font-mono break-all">
 															Index: {walletDetailQuery.data.valueNumeric} - {currentAddress}
 														</small>
 														<small>Last updated: {format(walletDetailQuery.data.updatedAt, 'PPp')}</small>
@@ -636,13 +638,14 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 									</Label>
 								</div>
 
-								<div className="flex justify-end gap-2">
+								<div className="flex flex-col sm:flex-row justify-end gap-2">
 									<Button
 										type="button"
 										variant="outline"
 										onClick={() => onOpenChange(false)}
 										disabled={formState !== 'idle'}
 										data-testid="cancel-payment-button"
+										className="w-full sm:w-auto"
 									>
 										Cancel
 									</Button>
@@ -654,12 +657,13 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 											onClick={handleDelete}
 											disabled={formState !== 'idle'}
 											data-testid="delete-payment-button"
+											className="w-full sm:w-auto"
 										>
 											<TrashIcon className="w-4 h-4" />
 										</Button>
 									)}
 
-									<Button type="submit" disabled={formState !== 'idle'} data-testid="save-payment-button">
+									<Button type="submit" disabled={formState !== 'idle'} data-testid="save-payment-button" className="w-full sm:w-auto">
 										{formState === 'submitting' && <Spinner />}
 										{formState === 'validating'
 											? 'Validating...'
@@ -685,6 +689,8 @@ function ReceivingPaymentsComponent() {
 	const [openPaymentDetailId, setOpenPaymentDetailId] = useState<string | null>(null)
 	const [paymentMethodFilter, setPaymentMethodFilter] = useState<PaymentDetailsMethod | 'all'>('all')
 
+	useDashboardTitle('') // Clear the dashboard title so we can create our own
+
 	useEffect(() => {
 		getUser().then(setUser)
 	}, [getUser])
@@ -705,36 +711,36 @@ function ReceivingPaymentsComponent() {
 
 	return (
 		<div className="space-y-6">
-			<div className="flex justify-between items-center">
+			{/* Title and Filter Row */}
+			<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
 				<div>
+					<h1 className="text-[1.6rem] font-bold">Receiving Payments</h1>
 					<p className="text-muted-foreground">Manage your payment receiving options here</p>
 				</div>
-				<div className="flex items-center gap-4">
-					<div className="flex items-center gap-2">
-						<Label htmlFor="payment-filter" className="text-sm font-medium">
-							Filter:
-						</Label>
-						<Select value={paymentMethodFilter} onValueChange={(value: PaymentDetailsMethod | 'all') => setPaymentMethodFilter(value)}>
-							<SelectTrigger className="w-[180px]">
-								<SelectValue placeholder="All payment methods" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">All payment methods</SelectItem>
-								{Object.values(PAYMENT_DETAILS_METHOD).map((method) => (
-									<SelectItem key={method} value={method}>
-										<div className="flex items-center gap-2">
-											{method === PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK ? (
-												<ZapIcon className="w-4 h-4" />
-											) : (
-												<AnchorIcon className="w-4 h-4" />
-											)}
-											{paymentMethodLabels[method]}
-										</div>
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
-					</div>
+				<div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full lg:w-auto">
+					<Label htmlFor="payment-filter" className="text-sm font-medium whitespace-nowrap">
+						Filter:
+					</Label>
+					<Select value={paymentMethodFilter} onValueChange={(value: PaymentDetailsMethod | 'all') => setPaymentMethodFilter(value)}>
+						<SelectTrigger className="w-full sm:w-[180px] lg:w-64">
+							<SelectValue placeholder="All payment methods" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="all">All payment methods</SelectItem>
+							{Object.values(PAYMENT_DETAILS_METHOD).map((method) => (
+								<SelectItem key={method} value={method}>
+									<div className="flex items-center gap-2">
+										{method === PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK ? (
+											<ZapIcon className="w-4 h-4" />
+										) : (
+											<AnchorIcon className="w-4 h-4" />
+										)}
+										{paymentMethodLabels[method]}
+									</div>
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
 				</div>
 			</div>
 

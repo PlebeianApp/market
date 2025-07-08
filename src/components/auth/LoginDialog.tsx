@@ -31,14 +31,26 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 					<DialogDescription>Choose your preferred login method below.</DialogDescription>
 				</DialogHeader>
 				<Tabs defaultValue="extension" className="w-full" value={activeTab} onValueChange={setActiveTab}>
-					<TabsList className="grid w-full grid-cols-3">
-						<TabsTrigger value="extension" data-testid="extension-tab">
+					<TabsList className="w-full rounded-none bg-transparent h-auto p-0 flex">
+						<TabsTrigger
+							value="extension"
+							data-testid="extension-tab"
+							className="flex-1 px-4 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
+						>
 							Extension
 						</TabsTrigger>
-						<TabsTrigger value="connect" data-testid="connect-tab">
+						<TabsTrigger
+							value="connect"
+							data-testid="connect-tab"
+							className="flex-1 px-4 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
+						>
 							Nostr Connect
 						</TabsTrigger>
-						<TabsTrigger value="private-key" data-testid="private-key-tab">
+						<TabsTrigger
+							value="private-key"
+							data-testid="private-key-tab"
+							className="flex-1 px-4 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
+						>
 							Private Key
 						</TabsTrigger>
 					</TabsList>
@@ -47,16 +59,16 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 					</TabsContent>
 					<TabsContent value="connect">
 						<Tabs defaultValue="qr" className="w-full">
-							<TabsList className="grid w-full grid-cols-2">
+							<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-[1px]">
 								<TabsTrigger
 									value="qr"
-									className="px-4 py-2 text-sm font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+									className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
 								>
 									QR Code
 								</TabsTrigger>
 								<TabsTrigger
 									value="bunker"
-									className="px-4 py-2 text-sm font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+									className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
 								>
 									Bunker
 								</TabsTrigger>

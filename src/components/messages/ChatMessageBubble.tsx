@@ -49,7 +49,7 @@ const OrderCreationMessage = ({ event }: { event: NDKEvent }) => {
 				Order Placed
 			</div>
 			{orderId && (
-				<p>
+				<p className="break-all">
 					<strong>Order ID:</strong> {orderId}
 				</p>
 			)}
@@ -61,30 +61,30 @@ const OrderCreationMessage = ({ event }: { event: NDKEvent }) => {
 			{items.length > 0 && (
 				<div>
 					<strong>Items:</strong>
-					<ul className="list-disc list-inside pl-2 text-xs">
+					<ul className="list-disc list-inside pl-2 text-xs space-y-0.5">
 						{items.map((item, idx) => (
-							<li key={idx}>{`${item[1]} (Qty: ${item[2] || '1'})`}</li>
+							<li key={idx} className="break-words">{`${item[1]} (Qty: ${item[2] || '1'})`}</li>
 						))}
 					</ul>
 				</div>
 			)}
 			{shipping && (
-				<p className="text-xs mt-1">
+				<p className="text-xs mt-1 break-words">
 					<strong>Shipping:</strong> {shipping}
 				</p>
 			)}
 			{address && (
-				<p className="text-xs">
+				<p className="text-xs break-words">
 					<strong>Address:</strong> {address}
 				</p>
 			)}
 			{email && (
-				<p className="text-xs">
+				<p className="text-xs break-all">
 					<strong>Email:</strong> {email}
 				</p>
 			)}
 			{phone && (
-				<p className="text-xs">
+				<p className="text-xs break-all">
 					<strong>Phone:</strong> {phone}
 				</p>
 			)}
@@ -285,14 +285,9 @@ export function ChatMessageBubble({ event, isCurrentUser }: ChatMessageBubblePro
 	const hasContent = event.content && event.content.trim() !== ''
 
 	return (
-		<div className={`flex items-end gap-2 ${alignment} mb-2`}>
-			{showAvatar && (
-				<div className="flex-shrink-0 self-start">
-					<UserWithAvatar pubkey={authorPubkey} size="sm" disableLink={true} />
-				</div>
-			)}
-			<div className={`flex flex-col max-w-xs sm:max-w-sm md:max-w-md lg:max-w-lg`}>
-				<div className={`px-3 py-2 rounded-lg shadow ${bubbleStyles}`}>
+		<div className={`flex flex-wrap items-end gap-2 ${alignment} mb-2 w-full`}>
+			<div className="flex flex-col max-w-[85%] sm:max-w-[75%] md:max-w-[65%] lg:max-w-[55%] min-w-0">
+				<div className={`px-3 py-2 rounded-lg shadow ${bubbleStyles} break-words`}>
 					{structuredPart}
 					{event.kind === 14 && hasContent && <p className="text-sm">{event.content}</p>}
 					{event.kind === 14 && !hasContent && (
@@ -316,7 +311,6 @@ export function ChatMessageBubble({ event, isCurrentUser }: ChatMessageBubblePro
 					</span>
 				)}
 			</div>
-			{!showAvatar && <div className="flex-shrink-0 w-8"> {/* Placeholder for alignment with avatar messages */}</div>}
 		</div>
 	)
 }

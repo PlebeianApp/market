@@ -12,6 +12,20 @@ import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev
 import type { z } from 'zod'
 import { v4 as uuidv4 } from 'uuid'
 
+// V4V share interface for seeding
+interface V4VRecipient {
+	pubkey: string
+	percentage: number
+}
+
+// Structure for payment request data with V4V support
+interface PaymentRequestWithRecipient {
+	recipientPubkey: string
+	amount: string
+	description: string
+	isV4V: boolean
+}
+
 // Timestamps for seeding (seconds since epoch)
 const MIN_SEED_TIMESTAMP = 1704067200 // January 1, 2024, 00:00:00 UTC
 const MAX_SEED_TIMESTAMP = 1748927999 // June 3, 2025, 23:59:59 UTC
@@ -107,6 +121,7 @@ export function generatePaymentRequestData(
 	amount: string,
 	baseTimestamp?: number, // Optional base timestamp
 	isManualProcessing: boolean = true,
+	recipientLightningAddress?: string, // Optional real lightning address
 ): { kind: typeof ORDER_PROCESS_KIND; created_at: number; content: string; tags: NDKTag[] } {
 	let createdAt: number
 	if (baseTimestamp) {
@@ -117,17 +132,8 @@ export function generatePaymentRequestData(
 	}
 	createdAt = Math.max(createdAt, MIN_SEED_TIMESTAMP)
 
-	// Payment methods
-	const paymentMethods: ['lightning' | 'bitcoin' | 'ecash' | 'fiat' | 'other', string][] = [
-		['lightning', faker.string.alphanumeric(64)], // Simulating a lightning invoice
-		['bitcoin', faker.string.hexadecimal({ length: 34 })], // Simulating a BTC address
-		['ecash', faker.string.alphanumeric(32)], // Simulating a cashu token
-		['fiat', faker.finance.accountNumber()], // Simulating a fiat payment reference
-		['other', faker.string.alphanumeric(16)], // Generic payment option
-	]
-
-	// Select a random payment method
-	const [paymentMethod, paymentInfo] = faker.helpers.arrayElement(paymentMethods)
+	// Use real lightning address if provided, otherwise use the fixture default
+	const lightningAddress = recipientLightningAddress || 'plebeianuser@coinos.io'
 
 	const tags: NDKTag[] = [
 		// Required tags
@@ -136,19 +142,17 @@ export function generatePaymentRequestData(
 		['type', ORDER_MESSAGE_TYPE.PAYMENT_REQUEST],
 		['order', orderId],
 		['amount', amount],
-		['payment', paymentMethod, paymentInfo],
+		['payment', 'lightning', lightningAddress], // Use real lightning address
 	]
 
-	// Add expiration if it's a lightning payment
-	if (paymentMethod === 'lightning') {
-		const expirationTime = createdAt + 3600 // 1 hour from now
-		tags.push(['expiration', expirationTime.toString()])
-	}
+	// Add expiration for lightning payments (1 hour from creation)
+	const expirationTime = createdAt + 3600
+	tags.push(['expiration', expirationTime.toString()])
 
 	return {
 		kind: ORDER_PROCESS_KIND,
 		created_at: createdAt,
-		content: `Please pay ${amount} sats using the provided ${paymentMethod} details.`,
+		content: `Please pay ${amount} sats using Lightning Network. Lightning address: ${lightningAddress}`,
 		tags,
 	}
 }
@@ -489,4 +493,187 @@ export async function createPaymentReceiptEvent(
 		console.error(`Failed to publish payment receipt`, error)
 		return { eventId: null, createdAt: receiptData.created_at }
 	}
+}
+
+/**
+ * Fetches V4V shares for a given seller pubkey
+ */
+export async function fetchV4VShares(ndk: NDK, sellerPubkey: string): Promise<V4VRecipient[]> {
+	try {
+		const v4vEvents = await ndk.fetchEvents({
+			kinds: [30078],
+			authors: [sellerPubkey],
+			'#l': ['v4v_share'],
+		})
+
+		if (v4vEvents.size === 0) {
+			return []
+		}
+
+		// Get the most recent V4V event
+		const latestEvent = Array.from(v4vEvents).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))[0]
+
+		if (!latestEvent.content) {
+			return []
+		}
+
+		// Parse the JSON content to get zap tags
+		const zapTags = JSON.parse(latestEvent.content) as string[][]
+
+		return zapTags
+			.filter((tag) => tag[0] === 'zap' && tag.length >= 3)
+			.map((tag) => ({
+				pubkey: tag[1],
+				percentage: parseFloat(tag[2]) || 0,
+			}))
+			.filter((recipient) => recipient.percentage > 0)
+	} catch (error) {
+		console.error(`Failed to fetch V4V shares for ${sellerPubkey.substring(0, 8)}:`, error)
+		return []
+	}
+}
+
+/**
+ * Calculates payment breakdown including V4V shares
+ */
+export function calculatePaymentBreakdown(
+	totalAmountSats: number,
+	v4vRecipients: V4VRecipient[],
+): { merchantAmount: number; v4vPayments: Array<{ pubkey: string; amount: number; percentage: number }> } {
+	if (v4vRecipients.length === 0) {
+		return { merchantAmount: totalAmountSats, v4vPayments: [] }
+	}
+
+	// Calculate total V4V percentage
+	const totalV4VPercentage = v4vRecipients.reduce((total, recipient) => {
+		// Handle both decimal (0.05) and percentage (5) formats
+		const percentage = recipient.percentage > 1 ? recipient.percentage / 100 : recipient.percentage
+		return total + percentage
+	}, 0)
+
+	// Ensure total V4V percentage doesn't exceed 100%
+	const normalizedV4VPercentage = Math.min(totalV4VPercentage, 1)
+
+	// Calculate V4V amounts
+	const v4vPayments = v4vRecipients.map((recipient) => {
+		const percentage = recipient.percentage > 1 ? recipient.percentage / 100 : recipient.percentage
+		const amount = Math.max(1, Math.floor(totalAmountSats * percentage))
+		return {
+			pubkey: recipient.pubkey,
+			amount,
+			percentage: percentage * 100, // Convert back to percentage for display
+		}
+	})
+
+	// Calculate merchant amount (total - V4V amounts)
+	const totalV4VAmount = v4vPayments.reduce((sum, payment) => sum + payment.amount, 0)
+	const merchantAmount = Math.max(0, totalAmountSats - totalV4VAmount)
+
+	return { merchantAmount, v4vPayments }
+}
+
+/**
+ * Generates multiple payment requests for an order (merchant + V4V recipients)
+ */
+export async function generateMultiplePaymentRequests(
+	ndk: NDK,
+	buyerPubkey: string,
+	sellerPubkey: string,
+	orderId: string,
+	totalAmount: string,
+	baseTimestamp?: number,
+): Promise<PaymentRequestWithRecipient[]> {
+	const totalAmountSats = parseInt(totalAmount)
+
+	// Fetch V4V shares for the seller
+	const v4vRecipients = await fetchV4VShares(ndk, sellerPubkey)
+
+	// Calculate payment breakdown
+	const { merchantAmount, v4vPayments } = calculatePaymentBreakdown(totalAmountSats, v4vRecipients)
+
+	const paymentRequests: PaymentRequestWithRecipient[] = []
+
+	// Add merchant payment request
+	paymentRequests.push({
+		recipientPubkey: sellerPubkey,
+		amount: merchantAmount.toString(),
+		description: `Merchant payment (${((merchantAmount / totalAmountSats) * 100).toFixed(1)}%)`,
+		isV4V: false,
+	})
+
+	// Add V4V payment requests
+	for (const v4vPayment of v4vPayments) {
+		if (v4vPayment.amount > 0) {
+			paymentRequests.push({
+				recipientPubkey: v4vPayment.pubkey,
+				amount: v4vPayment.amount.toString(),
+				description: `V4V payment (${v4vPayment.percentage.toFixed(1)}%)`,
+				isV4V: true,
+			})
+		}
+	}
+
+	console.log(`💰 Order ${orderId}: Generated ${paymentRequests.length} payment requests (1 merchant + ${v4vPayments.length} V4V)`)
+	console.log(`   Total: ${totalAmountSats} sats | Merchant: ${merchantAmount} sats | V4V: ${totalAmountSats - merchantAmount} sats`)
+
+	return paymentRequests
+}
+
+/**
+ * Creates and publishes multiple payment request events for an order
+ */
+export async function createMultiplePaymentRequestEvents(
+	signer: NDKPrivateKeySigner,
+	ndk: NDK,
+	buyerPubkey: string,
+	sellerPubkey: string,
+	orderId: string,
+	totalAmount: string,
+	baseTimestamp?: number,
+): Promise<Array<{ eventId: string | null; createdAt: number; isV4V: boolean; amount: string }>> {
+	const paymentRequests = await generateMultiplePaymentRequests(ndk, buyerPubkey, sellerPubkey, orderId, totalAmount, baseTimestamp)
+
+	const results: Array<{ eventId: string | null; createdAt: number; isV4V: boolean; amount: string }> = []
+	let currentTimestamp = baseTimestamp || getRandomPastTimestamp()
+
+	for (const request of paymentRequests) {
+		// Fetch the recipient's profile to get their lightning address (for testing, we use the fixture)
+		// In a real scenario, you'd fetch: const profile = await fetchProfileByIdentifier(request.recipientPubkey)
+		// const lightningAddress = profile?.lud16 || profile?.lud06 || 'plebeianuser@coinos.io'
+		const lightningAddress = 'plebeianuser@coinos.io' // Using fixture for seeding consistency
+
+		// Generate payment request data for this specific recipient
+		const paymentData = generatePaymentRequestData(
+			buyerPubkey,
+			orderId,
+			request.amount,
+			currentTimestamp,
+			true, // manual processing
+			lightningAddress,
+		)
+
+		// Override the recipient pubkey (p tag) for V4V payments
+		const pTagIndex = paymentData.tags.findIndex((tag) => tag[0] === 'p')
+		if (pTagIndex !== -1) {
+			paymentData.tags[pTagIndex][1] = request.recipientPubkey
+		}
+
+		// Update content to reflect the payment type
+		paymentData.content = `${request.description}: ${request.amount} sats using Lightning Network. Address: ${lightningAddress}`
+
+		// Create and publish the event
+		const { eventId, createdAt } = await createPaymentRequestEvent(signer, ndk, paymentData)
+
+		results.push({
+			eventId,
+			createdAt,
+			isV4V: request.isV4V,
+			amount: request.amount,
+		})
+
+		// Increment timestamp for next payment request
+		currentTimestamp = createdAt + getRandomTimeIncrement(1, 10)
+	}
+
+	return results
 }

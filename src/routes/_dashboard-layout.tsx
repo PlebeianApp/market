@@ -1,11 +1,16 @@
 import React, { useState } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { dashboardNavigation } from '@/config/dashboardNavigation'
 import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate, useLocation } from '@tanstack/react-router'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useStore } from '@tanstack/react-store'
 import { uiStore, uiActions } from '@/lib/stores/ui'
+import { useQuery } from '@tanstack/react-query'
+import { profileKeys } from '@/queries/queryKeyFactory'
+import { fetchProfileByIdentifier } from '@/queries/profiles'
+import { MessageSquareText } from 'lucide-react'
 
 export const Route = createFileRoute('/_dashboard-layout')({
 	component: DashboardLayout,
@@ -17,6 +22,68 @@ export function useDashboardTitle(title: string) {
 		uiActions.setDashboardTitle(title)
 		return () => uiActions.setDashboardTitle('DASHBOARD') // Reset to default on unmount
 	}, [title])
+}
+
+// Configuration for pages that need back buttons
+const backButtonRoutes: Record<string, { parentPath: string; parentTitle: string }> = {
+	'/dashboard/products/products/new': {
+		parentPath: '/dashboard/products/products',
+		parentTitle: '📦 Products',
+	},
+	// Dynamic route for editing products
+	'/dashboard/products/products/': {
+		parentPath: '/dashboard/products/products',
+		parentTitle: '📦 Products',
+	},
+	'/dashboard/products/collections/new': {
+		parentPath: '/dashboard/products/collections',
+		parentTitle: '🗂️ Collections',
+	},
+	// Dynamic route for editing collections
+	'/dashboard/products/collections/': {
+		parentPath: '/dashboard/products/collections',
+		parentTitle: '🗂️ Collections',
+	},
+	// Dynamic route for order details
+	'/dashboard/orders/': {
+		parentPath: '/dashboard/sales/sales',
+		parentTitle: '💰 Sales',
+	},
+	// Dynamic route for message details
+	'/dashboard/sales/messages/': {
+		parentPath: '/dashboard/sales/messages',
+		parentTitle: '✉️ Messages',
+	},
+}
+
+// Helper to check if current route needs a back button
+function getBackButtonInfo(currentPath: string): { parentPath: string; parentTitle: string } | null {
+	// Check exact matches first
+	if (backButtonRoutes[currentPath]) {
+		return backButtonRoutes[currentPath]
+	}
+
+	// Check for product edit pages (pattern: /dashboard/products/products/[productId])
+	if (currentPath.startsWith('/dashboard/products/products/') && currentPath !== '/dashboard/products/products') {
+		return backButtonRoutes['/dashboard/products/products/']
+	}
+
+	// Check for collection edit pages (pattern: /dashboard/products/collections/[collectionId])
+	if (currentPath.startsWith('/dashboard/products/collections/') && currentPath !== '/dashboard/products/collections') {
+		return backButtonRoutes['/dashboard/products/collections/']
+	}
+
+	// Check for order detail pages (pattern: /dashboard/orders/[orderId])
+	if (currentPath.startsWith('/dashboard/orders/') && currentPath !== '/dashboard/orders') {
+		return backButtonRoutes['/dashboard/orders/']
+	}
+
+	// Check for message detail pages (pattern: /dashboard/sales/messages/[pubkey])
+	if (currentPath.startsWith('/dashboard/sales/messages/') && currentPath !== '/dashboard/sales/messages') {
+		return backButtonRoutes['/dashboard/sales/messages/']
+	}
+
+	return null
 }
 
 // Helper to get emoji for current route
@@ -43,6 +110,25 @@ function DashboardLayout() {
 	const [showSidebar, setShowSidebar] = useState(true)
 	const [parent] = useAutoAnimate()
 	const { dashboardTitle } = useStore(uiStore)
+	const isMessageDetailView =
+		location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages'
+
+	const dashboardTitleWithoutEmoji = dashboardTitle.replace(/^(\p{Emoji_Presentation}\s*)/u, '')
+	const dashboardEmoji = dashboardTitle.match(/^(\p{Emoji_Presentation})/u)?.[1]
+
+	// Extract pubkey from pathname for message detail views
+	const chatPubkey = isMessageDetailView ? location.pathname.split('/').pop() : null
+
+	// Fetch profile data for chat header avatar
+	const { data: chatProfile } = useQuery({
+		queryKey: profileKeys.details(chatPubkey || ''),
+		queryFn: () => fetchProfileByIdentifier(chatPubkey!),
+		enabled: !!chatPubkey,
+	})
+
+	// Check if current route needs a back button
+	const backButtonInfo = getBackButtonInfo(location.pathname)
+	const needsBackButton = !!backButtonInfo && !isMobile
 
 	// When route changes on mobile, show sidebar for /dashboard, main content otherwise
 	React.useEffect(() => {
@@ -62,8 +148,32 @@ function DashboardLayout() {
 
 	const handleBackToSidebar = () => {
 		if (isMobile) {
-			setShowSidebar(true)
-			navigate({ to: '/dashboard' })
+			// Check if we're on a product creation/edit page and navigate accordingly
+			if (location.pathname.startsWith('/dashboard/products/products/')) {
+				navigate({ to: '/dashboard/products/products' })
+			}
+			// Check if we're on a collection creation/edit page and navigate accordingly
+			else if (location.pathname.startsWith('/dashboard/products/collections/')) {
+				navigate({ to: '/dashboard/products/collections' })
+			}
+			// Check if we're on an order detail page and navigate accordingly
+			else if (location.pathname.startsWith('/dashboard/orders/')) {
+				navigate({ to: '/dashboard/sales/sales' })
+			}
+			// Check if we're on a message detail page and navigate accordingly
+			else if (location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages') {
+				navigate({ to: '/dashboard/sales/messages' })
+			} else {
+				// Default behavior - back to dashboard
+				setShowSidebar(true)
+				navigate({ to: '/dashboard' })
+			}
+		}
+	}
+
+	const handleBackToParent = () => {
+		if (backButtonInfo) {
+			navigate({ to: backButtonInfo.parentPath })
 		}
 	}
 
@@ -72,28 +182,59 @@ function DashboardLayout() {
 	return (
 		<div className="lg:block">
 			{/* Header - responsive for mobile/desktop */}
-			<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center lg:justify-start relative">
-				{/* Mobile back button - only visible on small screens when not showing sidebar */}
-				{!showSidebar && breakpoint !== 'xl' && (
-					<button
-						onClick={handleBackToSidebar}
-						className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 top-1/2 -translate-y-1/2 w-12 h-12 xl:hidden"
-						aria-label="Back to sidebar"
-					>
-						<span className="i-back w-6 h-6" />
-					</button>
-				)}
+			<div className="lg:hidden sticky top-[8.5rem] z-10">
+				<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center relative">
+					{/* Mobile back button - only visible on small screens when not showing sidebar */}
+					{!showSidebar && breakpoint !== 'xl' && (
+						<button
+							onClick={handleBackToSidebar}
+							className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 top-1/2 -translate-y-1/2 w-12 h-12"
+							aria-label="Back to sidebar"
+						>
+							<span className="i-back w-6 h-6" />
+						</button>
+					)}
 
-				{/* Title */}
-				<span className="w-full lg:w-auto text-3xl lg:text-3xl">{showSidebar || !isMobile ? 'Admin Area' : dashboardTitle}</span>
-
-				{/* Mobile emoji - only visible on small screens when not showing sidebar */}
-				{!showSidebar && emoji && breakpoint !== 'xl' && (
-					<span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xl select-none w-12 h-12 flex items-center justify-center xl:hidden">
-						{emoji}
+					{/* Title */}
+					<span className="w-full truncate px-14 text-3xl flex items-center justify-center gap-2">
+						{showSidebar || !isMobile ? (
+							'Dashboard'
+						) : (
+							<>
+								{isMessageDetailView && chatProfile ? (
+									<>
+										<Avatar className="h-8 w-8 flex-shrink-0">
+											<AvatarImage src={chatProfile.picture} />
+											<AvatarFallback>
+												{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
+											</AvatarFallback>
+										</Avatar>
+										<span className="truncate">{dashboardTitleWithoutEmoji}</span>
+									</>
+								) : (
+									<>
+										{dashboardEmoji && <span className="text-2xl">{dashboardEmoji}</span>}
+										<span className="truncate">{dashboardTitleWithoutEmoji}</span>
+									</>
+								)}
+							</>
+						)}
 					</span>
-				)}
-			</h1>
+
+					{/* Mobile emoji - only visible on small screens when not showing sidebar */}
+					{!showSidebar && emoji && breakpoint !== 'xl' && !dashboardEmoji && (
+						<span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xl select-none w-12 h-12 flex items-center justify-center">
+							{emoji}
+						</span>
+					)}
+				</h1>
+			</div>
+
+			<div className="hidden lg:block">
+				<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center lg:justify-start relative">
+					<span className="w-full lg:w-auto text-3xl lg:text-3xl">Dashboard</span>
+				</h1>
+			</div>
 
 			{/* Main container - responsive layout */}
 			<div className="lg:flex lg:m-6 lg:gap-6 lg:container lg:max-h-[77vh] lg:overflow-auto">
@@ -129,12 +270,55 @@ function DashboardLayout() {
 
 					{/* Main content - responsive behavior */}
 					{(!showSidebar || !isMobile) && (
-						<ScrollArea className="w-full p-4 lg:flex-1 lg:p-8 lg:border lg:border-black lg:rounded lg:bg-white">
-							<div className="p-4 bg-white border border-black rounded lg:p-0 lg:bg-transparent lg:border-0 lg:rounded-none">
-								{!isMobile && <h1 className="text-[1.6rem] font-bold">{dashboardTitle}</h1>}
-								<Outlet />
+						<div
+							className={`w-full lg:flex-1 lg:border lg:border-black lg:rounded lg:bg-white flex flex-col lg:max-h-full lg:overflow-hidden ${
+								isMessageDetailView && isMobile ? 'h-[calc(100vh-8.5rem)]' : ''
+							}`}
+						>
+							{/* Desktop back button and title - fixed to top of container */}
+							{needsBackButton && (
+								<div className="sticky top-0 z-10 bg-white border-b border-gray-200 pb-4 mb-0 p-4 lg:p-8 flex-shrink-0 flex items-center relative">
+									<button
+										onClick={handleBackToParent}
+										className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
+										aria-label={`Back to ${backButtonInfo?.parentTitle}`}
+									>
+										<span className="i-back w-5 h-5" />
+										<span className="text-sm font-medium">Back to {backButtonInfo?.parentTitle}</span>
+									</button>
+
+									{!isMobile && (
+										<h1 className="absolute left-1/2 -translate-x-1/2 text-[1.6rem] font-bold flex items-center gap-2">
+											{isMessageDetailView && chatProfile && (
+												<Avatar className="h-8 w-8">
+													<AvatarImage src={chatProfile.picture} />
+													<AvatarFallback>
+														{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
+													</AvatarFallback>
+												</Avatar>
+											)}
+											{dashboardTitle}
+										</h1>
+									)}
+								</div>
+							)}
+
+							<div className="flex-1 min-h-0 lg:overflow-hidden">
+								{isMessageDetailView ? (
+									<div className="h-full">
+										<Outlet />
+									</div>
+								) : (
+									<ScrollArea className="h-full">
+										<div className="p-4 bg-white lg:p-8 lg:bg-transparent">
+											{/* Only show title here if there's no back button */}
+											{!isMobile && !needsBackButton && <h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>}
+											<Outlet />
+										</div>
+									</ScrollArea>
+								)}
 							</div>
-						</ScrollArea>
+						</div>
 					)}
 				</div>
 			</div>

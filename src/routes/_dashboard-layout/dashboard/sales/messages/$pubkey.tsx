@@ -6,10 +6,11 @@ import { authStore } from '@/lib/stores/auth'
 import { sendChatMessage, useConversationMessages } from '@/queries/messages'
 import { messageKeys } from '@/queries/queryKeyFactory'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
+import { useProfileName } from '@/queries/profiles'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { ArrowLeft, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/messages/$pubkey')({
@@ -19,11 +20,15 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/message
 function ConversationDetailComponent() {
 	const { pubkey: otherUserPubkey } = Route.useParams()
 	const { user: currentUser } = useStore(authStore)
-	const navigate = useNavigate()
 	const queryClient = useQueryClient()
 	const messagesEndRef = useRef<HTMLDivElement | null>(null)
 	const [isSending, setIsSending] = useState(false)
-	useDashboardTitle('Messages')
+
+	// Get the user's profile name for the title
+	const { data: userName, isLoading: isLoadingName } = useProfileName(otherUserPubkey)
+	const displayTitle = isLoadingName ? 'Messages' : userName ? userName : `${otherUserPubkey.substring(0, 8)}...`
+
+	useDashboardTitle(displayTitle)
 
 	const { data: messages, isLoading, error, refetch } = useConversationMessages(otherUserPubkey)
 
@@ -66,22 +71,10 @@ function ConversationDetailComponent() {
 		await sendMessageMutation.mutateAsync(content)
 	}
 
-	const handleGoBack = () => {
-		navigate({ to: '/dashboard/sales/messages/' })
-	}
-
 	return (
-		<div className="flex flex-col h-[calc(100vh-var(--header-height)-var(--page-padding)-2px)] bg-card border rounded-md shadow-sm">
-			{/* Header */}
-			<div className="flex items-center p-3 border-b sticky top-0 bg-card z-10">
-				<Button variant="ghost" size="icon" onClick={handleGoBack} className="mr-2">
-					<ArrowLeft className="w-5 h-5" />
-				</Button>
-				{otherUserPubkey && <UserWithAvatar pubkey={otherUserPubkey} showBadge={true} size="md" />}
-			</div>
-
+		<div className="flex flex-col h-full">
 			{/* Messages Area */}
-			<div className="flex-grow overflow-y-auto p-4 space-y-4">
+			<div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
 				{isLoading && (
 					<div className="flex justify-center items-center h-full">
 						<Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -108,7 +101,11 @@ function ConversationDetailComponent() {
 			</div>
 
 			{/* Input Area */}
-			{otherUserPubkey && <MessageInput onSendMessage={handleSendMessage} isSending={isSending} />}
+			{otherUserPubkey && (
+				<div className="flex-shrink-0 border-t bg-background">
+					<MessageInput onSendMessage={handleSendMessage} isSending={isSending} />
+				</div>
+			)}
 		</div>
 	)
 }

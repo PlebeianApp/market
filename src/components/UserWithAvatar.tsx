@@ -1,11 +1,12 @@
+import { Link } from '@tanstack/react-router'
 import { Nip05Badge } from './Nip05Badge'
 import { ProfileName } from './ProfileName'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { useQuery } from '@tanstack/react-query'
 import { profileKeys } from '@/queries/queryKeyFactory'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Link } from '@tanstack/react-router'
 
 interface UserWithAvatarProps {
 	pubkey: string
@@ -16,13 +17,11 @@ interface UserWithAvatarProps {
 }
 
 export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge = true, disableLink = false }: UserWithAvatarProps) {
-	// Fetch the user's profile
 	const { data: profile, isLoading } = useQuery({
 		queryKey: profileKeys.details(pubkey),
 		queryFn: () => fetchProfileByIdentifier(pubkey),
 	})
 
-	// Determine avatar size
 	const avatarSizeClass = {
 		sm: 'h-6 w-6',
 		md: 'h-8 w-8',
@@ -35,7 +34,6 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 		lg: 'text-base',
 	}[size]
 
-	// Get first letter of name or use fallback
 	const nameInitial = profile?.name || profile?.displayName || pubkey.slice(0, 1).toUpperCase()
 
 	const content = (
@@ -44,7 +42,7 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 				<AvatarImage src={profile?.picture} />
 				<AvatarFallback>{nameInitial}</AvatarFallback>
 			</Avatar>
-			<div className="flex flex-col">
+			<div className="flex flex-row items-center gap-1">
 				<ProfileName pubkey={pubkey} className={textSizeClass} truncate={true} disableLink={true} />
 				{showBadge && <Nip05Badge userId={pubkey} />}
 			</div>
@@ -56,7 +54,12 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 	}
 
 	return (
-		<Link to="/profile/$profileId" params={{ profileId: pubkey }} className={cn('flex items-center gap-2', className)}>
+		<Link
+			to="/profile/$profileId"
+			params={{ profileId: pubkey }}
+			className={cn('flex items-center gap-2', className)}
+			onClick={(e) => e.stopPropagation()}
+		>
 			{content}
 		</Link>
 	)

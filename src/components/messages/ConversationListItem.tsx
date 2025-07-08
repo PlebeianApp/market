@@ -1,5 +1,5 @@
+import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { UserWithAvatar } from '@/components/UserWithAvatar'
-import { formatDistanceToNow } from 'date-fns'
 import { Link } from '@tanstack/react-router'
 
 export interface ConversationItemData {
@@ -8,6 +8,7 @@ export interface ConversationItemData {
 	lastMessageAt: number | undefined
 	lastMessageSnippet: string
 	lastMessageKind: number | undefined
+	isUnread?: boolean
 }
 
 interface ConversationListItemProps {
@@ -15,31 +16,34 @@ interface ConversationListItemProps {
 }
 
 export function ConversationListItem({ conversation }: ConversationListItemProps) {
-	const { pubkey, profile, lastMessageAt, lastMessageSnippet } = conversation
-	const displayName = profile?.displayName || profile?.name || pubkey.substring(0, 10) + '...'
+	const { pubkey, lastMessageAt, lastMessageSnippet } = conversation
+	const breakpoint = useBreakpoint()
+	const isMobile = breakpoint === 'sm'
+
+	const dateElement = lastMessageAt && (
+		<span className="text-xs text-gray-500 whitespace-nowrap">{new Date(lastMessageAt * 1000).toLocaleString()}</span>
+	)
 
 	return (
 		<Link
 			to="/dashboard/sales/messages/$pubkey"
 			params={{ pubkey }}
-			className="flex items-center p-3 hover:bg-muted/50 rounded-lg transition-colors duration-150 ease-in-out w-full border bg-card shadow-sm mb-2"
+			className="block p-3 hover:bg-muted/50 rounded-lg transition-colors duration-150 ease-in-out w-full border bg-card shadow-sm mb-2"
 			activeProps={{
-				className: 'bg-muted font-semibold',
+				className: 'bg-muted',
 			}}
 		>
-			<div className="mr-3 flex-shrink-0">
-				<UserWithAvatar pubkey={pubkey} size="md" disableLink={true} />
-			</div>
-			<div className="flex-grow overflow-hidden">
-				<div className="flex justify-between items-center">
-					<h3 className="text-sm font-medium truncate">{displayName}</h3>
-					{lastMessageAt && (
-						<span className="text-xs text-gray-500 whitespace-nowrap">
-							{formatDistanceToNow(new Date(lastMessageAt * 1000), { addSuffix: true })}
-						</span>
-					)}
+			<div className="flex flex-col gap-2 w-full">
+				<div className="flex items-center justify-between gap-3 w-full">
+					<UserWithAvatar pubkey={pubkey} size="md" disableLink={true} showBadge={false} />
+					{!isMobile && dateElement}
 				</div>
-				<p className="text-xs text-gray-600 truncate mt-0.5">{lastMessageSnippet}</p>
+
+				{/* Second row: message preview spanning full width */}
+				<div className="w-full pl-10">
+					<p className="text-sm text-gray-600 break-words">{lastMessageSnippet}</p>
+				</div>
+				{isMobile && <div className="self-end">{dateElement}</div>}
 			</div>
 		</Link>
 	)

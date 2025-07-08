@@ -86,7 +86,10 @@ export const purchaseColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 
 // Columns for sales (seller's perspective)
 export const salesColumns: ColumnDef<OrderWithRelatedEvents>[] = [
-	baseOrderColumns[0], // Order ID
+	{
+		...baseOrderColumns[0], // Order ID
+		accessorFn: (row) => getOrderId(row.order),
+	},
 	{
 		accessorKey: 'buyer',
 		header: 'Buyer',
@@ -94,6 +97,7 @@ export const salesColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 			const buyerPubkey = getBuyerPubkey(row.original.order)
 			return <UserWithAvatar pubkey={buyerPubkey || ''} showBadge={false} size="sm" disableLink={false} />
 		},
+		accessorFn: (row) => getBuyerPubkey(row.order),
 	},
 	baseOrderColumns[1], // Date
 	baseOrderColumns[2], // Amount

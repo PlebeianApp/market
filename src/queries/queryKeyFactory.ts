@@ -83,11 +83,12 @@ export const walletKeys = {
 export const paymentDetailsKeys = {
 	all: ['paymentDetails'] as const,
 	details: (id: string) => [...paymentDetailsKeys.all, id] as const,
-	byPubkey: (pubkey: string) => [...paymentDetailsKeys.all, 'byPubkey', pubkey] as const,
-	byProductOrCollection: (coordinates: string) => [...paymentDetailsKeys.all, 'byCoordinates', coordinates] as const,
+	byPubkey: (pubkey: string | undefined) => [...paymentDetailsKeys.all, 'byPubkey', pubkey || ''] as const,
+	byProductOrCollection: (d: string) => [...paymentDetailsKeys.all, 'byCoordinates', d],
 	publish: () => [...paymentDetailsKeys.all, 'publish'] as const,
 	updatePaymentDetail: () => [...paymentDetailsKeys.all, 'update'] as const,
 	deletePaymentDetail: () => [...paymentDetailsKeys.all, 'delete'] as const,
+	paymentReceipt: (orderId: string, invoiceId: string) => [...paymentDetailsKeys.all, 'receipt', orderId, invoiceId],
 } as const
 
 export const walletDetailsKeys = {

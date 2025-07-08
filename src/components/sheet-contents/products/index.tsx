@@ -76,7 +76,7 @@ export function NewProductContent({
 
 	if (!showForm && showWelcome) {
 		return (
-			<SheetContent side="right">
+			<SheetContent side="right" className="p-6">
 				{/* This is for Accessibility but we don't need to show it */}
 				<SheetHeader className="hidden">
 					<SheetTitle>Welcome to Plebeian Market</SheetTitle>
@@ -90,7 +90,7 @@ export function NewProductContent({
 	return (
 		<SheetContent
 			side="right"
-			className="flex flex-col max-h-screen overflow-hidden w-[100vw] sm:min-w-[85vw] md:min-w-[55vw] xl:min-w-[35vw]"
+			className="flex flex-col max-h-screen overflow-hidden w-[100vw] sm:min-w-[85vw] md:min-w-[55vw] xl:min-w-[35vw] p-6"
 		>
 			<SheetHeader>
 				<SheetTitle className="text-center">{title || defaultTitle}</SheetTitle>

@@ -20,7 +20,9 @@ function RootComponent() {
 function RootLayout() {
 	const { data: config, isLoading, isError } = useConfigQuery()
 	const navigate = useNavigate()
-	const isSetupPage = window.location.pathname === '/setup'
+	const { pathname } = window.location
+	const isSetupPage = pathname === '/setup'
+	const isDashboardPage = pathname.startsWith('/dashboard')
 
 	useEffect(() => {
 		if (isLoading || isError) return
@@ -49,7 +51,7 @@ function RootLayout() {
 				<Outlet />
 			</main>
 			<Pattern pattern="page" />
-			<Footer />
+			{!isDashboardPage && <Footer />}
 			{/* Having some build error with this rn */}
 			{/* <TanStackRouterDevtools /> */}
 			<DecryptPasswordDialog />

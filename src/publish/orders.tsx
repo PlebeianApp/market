@@ -7,6 +7,26 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
 import type { CheckoutFormData } from '@/components/checkout/ShippingAddressForm'
+import { fetchProfileByIdentifier } from '@/queries/profiles'
+// import type { CartProduct, SellerData, V4VShare } from '@/lib/stores/cart'
+
+// Temporary type definitions - ideally these should be imported from a central types file
+interface CartProduct {
+	id: string
+	amount: number
+}
+interface V4VShare {
+	pubkey: string
+	name: string
+	percentage: number
+}
+interface SellerData {
+	satsTotal: number
+	shippingSats: number
+	shares: {
+		sellerAmount: number
+	}
+}
 
 export type OrderCreateParams = {
 	productRef: string // Product reference in format 30402:<pubkey>:<d-tag>
@@ -440,6 +460,7 @@ export async function createPaymentRequestEvent(data: PaymentRequestData): Promi
 	const tags: NDKTag[] = [
 		// Required tags
 		['p', data.buyerPubkey],
+		['recipient', data.merchantPubkey],
 		['subject', 'order-payment'],
 		['type', ORDER_MESSAGE_TYPE.PAYMENT_REQUEST],
 		['order', data.orderId],
@@ -636,4 +657,123 @@ export async function sendPaymentReceipt(data: PaymentReceiptData): Promise<bool
 		console.error('Failed to send payment receipt:', error)
 		return false
 	}
+}
+
+export interface PublishOrderDependenciesParams {
+	shippingData: CheckoutFormData
+	sellers: string[]
+	productsBySeller: Record<string, CartProduct[]>
+	sellerData: Record<string, SellerData>
+	v4vShares: Record<string, V4VShare[]>
+}
+
+/**
+ * Creates and publishes a spec-compliant order for each seller,
+ * then creates and publishes all necessary payment requests (merchant + V4V).
+ * This function orchestrates the entire order creation and payment setup process.
+ *
+ * @returns An array of the created spec-compliant order IDs.
+ */
+export async function publishOrderWithDependencies(params: PublishOrderDependenciesParams): Promise<string[]> {
+	const { shippingData, sellers, productsBySeller, sellerData, v4vShares } = params
+
+	const ndk = ndkActions.getNDK()
+	const currentUser = ndk?.activeUser
+	const buyerPubkey = currentUser?.pubkey
+
+	if (!buyerPubkey) {
+		throw new Error('No active user found for order creation')
+	}
+
+	const newOrderIds: string[] = []
+
+	for (const sellerPubkey of sellers) {
+		const sellerProducts = productsBySeller[sellerPubkey] || []
+		const data = sellerData[sellerPubkey]
+
+		if (sellerProducts.length === 0 || !data) continue
+
+		const orderData: OrderCreationData = {
+			merchantPubkey: sellerPubkey,
+			buyerPubkey: buyerPubkey,
+			orderItems: sellerProducts.map((product) => ({
+				productRef: `30402:${sellerPubkey}:${product.id}`,
+				quantity: product.amount,
+			})),
+			totalAmountSats: data.satsTotal,
+			shippingAddress: shippingData,
+			email: shippingData.email || 'customer@example.com',
+			notes: `Order for ${sellerProducts.length} item(s) from seller.`,
+		}
+
+		// 1. Create the main order event
+		const { orderId, success } = await createAndPublishOrder(orderData)
+		if (!success || !orderId) {
+			console.warn(`Failed to create order for seller ${sellerPubkey}. Skipping...`)
+			continue
+		}
+		newOrderIds.push(orderId)
+		console.log(`✅ Spec-compliant order created for seller ${sellerPubkey.substring(0, 8)}...:`, orderId)
+
+		// 2. Create payment requests for the order (merchant + V4V)
+		const paymentRequests: PaymentRequestData[] = []
+		const productSubtotal = data.satsTotal - data.shippingSats
+		const v4vRecipients = v4vShares[sellerPubkey] || []
+
+		// 2a. Payment request for the merchant's share
+		const merchantShare = data.shares.sellerAmount
+		const sellerProfile = await fetchProfileByIdentifier(sellerPubkey)
+		const sellerLnAddress = sellerProfile?.lud16 || sellerProfile?.lud06
+
+		if (!sellerLnAddress) {
+			console.warn(`Seller ${sellerPubkey} has no lightning address. Cannot create payment request.`)
+		} else {
+			paymentRequests.push({
+				buyerPubkey: buyerPubkey,
+				merchantPubkey: sellerPubkey,
+				orderId: orderId,
+				amountSats: merchantShare,
+				paymentMethods: [{ type: 'lightning', details: sellerLnAddress }],
+				notes: `Payment for order ${orderId}`,
+			})
+		}
+
+		// 2b. Payment requests for V4V shares
+		for (const recipient of v4vRecipients) {
+			const recipientPercentage = recipient.percentage > 1 ? recipient.percentage / 100 : recipient.percentage
+			const recipientAmount = Math.max(1, Math.floor(productSubtotal * recipientPercentage))
+
+			if (recipientAmount > 0) {
+				const recipientProfile = await fetchProfileByIdentifier(recipient.pubkey)
+				const recipientLnAddress = recipientProfile?.lud16 || recipientProfile?.lud06
+				if (!recipientLnAddress) {
+					console.warn(`V4V recipient ${recipient.name} has no lightning address. Skipping.`)
+					continue
+				}
+				paymentRequests.push({
+					buyerPubkey: buyerPubkey,
+					merchantPubkey: recipient.pubkey, // V4V recipient is the one getting paid
+					orderId: orderId,
+					amountSats: recipientAmount,
+					paymentMethods: [{ type: 'lightning', details: recipientLnAddress }],
+					notes: `V4V share for order ${orderId} (${(recipientPercentage * 100).toFixed(1)}%)`,
+				})
+			}
+		}
+
+		// 3. Publish all payment request events
+		let successfulRequests = 0
+		for (const req of paymentRequests) {
+			try {
+				const paymentRequestEvent = await createPaymentRequestEvent(req)
+				await paymentRequestEvent.publish()
+				successfulRequests++
+			} catch (error) {
+				console.error(`Failed to create payment request for ${req.notes}:`, error)
+			}
+		}
+		console.log(`✅ Created ${successfulRequests}/${paymentRequests.length} payment request events for order ${orderId}`)
+	}
+
+	return newOrderIds
 }

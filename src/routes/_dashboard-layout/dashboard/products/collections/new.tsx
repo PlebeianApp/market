@@ -9,7 +9,7 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/products/coll
 })
 
 function NewCollectionComponent() {
-	useDashboardTitle('Create Collection')
+	useDashboardTitle('Create A Collection')
 
 	useEffect(() => {
 		// Reset form when component mounts
@@ -18,9 +18,7 @@ function NewCollectionComponent() {
 
 	return (
 		<div className="space-y-6">
-			<div className="bg-white rounded-md shadow-sm">
-				<CollectionFormContent showFooter={true} />
-			</div>
+			<CollectionFormContent showFooter={true} />
 		</div>
 	)
 }

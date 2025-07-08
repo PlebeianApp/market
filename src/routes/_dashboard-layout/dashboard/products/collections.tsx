@@ -110,23 +110,23 @@ function CollectionsComponent() {
 
 	return (
 		<div className="space-y-6">
-			<div className="bg-white rounded-md shadow-sm">
+			<div>
 				<Button
 					onClick={handleAddCollectionClick}
 					data-testid="add-collection-button"
 					className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
 				>
 					<span className="i-market w-5 h-5" />
-					Add A Collection
+					Create A Collection
 				</Button>
 
-				{isLoading && <div className="p-6 text-center text-gray-500">Loading your collections...</div>}
-				{error && <div className="p-6 text-center text-red-600">Failed to load collections: {error.message}</div>}
+				{isLoading && <div className="p-6 text-center text-gray-500 mt-4">Loading your collections...</div>}
+				{error && <div className="p-6 text-center text-red-600 mt-4">Failed to load collections: {error.message}</div>}
 
 				{!isLoading && !error && (
 					<>
 						{collections && collections.length > 0 ? (
-							<ul className="p-4 flex flex-col gap-2">
+							<ul className="flex flex-col gap-2 mt-4">
 								{collections.map((collection) => {
 									const collectionId = getCollectionId(collection)
 									const isExpanded = expandedCollection === collectionId
@@ -192,7 +192,7 @@ function CollectionsComponent() {
 								})}
 							</ul>
 						) : (
-							<div className="text-center text-gray-500 py-10 px-6">
+							<div className="text-center text-gray-500 py-10 mt-4">
 								<span className="i-market w-5 h-5" />
 								<h3 className="mt-2 text-lg font-semibold text-gray-700">No collections yet</h3>
 								<p className="mt-1 text-sm">Click the "Add A Collection" button to create your first one.</p>
