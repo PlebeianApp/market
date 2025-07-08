@@ -67,6 +67,12 @@ When you first start the application:
 1. Start the development server:
 
    ```bash
+   bun dev:seed
+   ```
+
+   _start without seeding for a fresh start with no setup data_
+
+   ```bash
    bun dev
    ```
 
