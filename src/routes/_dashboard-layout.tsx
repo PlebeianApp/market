@@ -106,7 +106,7 @@ function DashboardLayout() {
 	const navigate = useNavigate()
 	const location = useLocation()
 	const breakpoint = useBreakpoint()
-	const isMobile = breakpoint === 'sm' || breakpoint === 'md' // Changed: treat anything below lg (1024px) as mobile
+	const isMobile = breakpoint === 'sm' || breakpoint === 'md' || breakpoint === 'lg' // Changed: treat anything below xl (1024px) as mobile
 	const [showSidebar, setShowSidebar] = useState(true)
 	const [parent] = useAutoAnimate()
 	const { dashboardTitle } = useStore(uiStore)
