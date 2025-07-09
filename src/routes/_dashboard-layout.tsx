@@ -11,6 +11,7 @@ import { useQuery } from '@tanstack/react-query'
 import { profileKeys } from '@/queries/queryKeyFactory'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { MessageSquareText } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/_dashboard-layout')({
 	component: DashboardLayout,
@@ -20,7 +21,7 @@ export const Route = createFileRoute('/_dashboard-layout')({
 export function useDashboardTitle(title: string) {
 	React.useEffect(() => {
 		uiActions.setDashboardTitle(title)
-		return () => uiActions.setDashboardTitle('DASHBOARD') // Reset to default on unmount
+		return () => uiActions.setDashboardTitle('') // Reset to default on unmount
 	}, [title])
 }
 
@@ -113,8 +114,8 @@ function DashboardLayout() {
 	const isMessageDetailView =
 		location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages'
 
-	const dashboardTitleWithoutEmoji = dashboardTitle.replace(/^(\p{Emoji_Presentation}\s*)/u, '')
-	const dashboardEmoji = dashboardTitle.match(/^(\p{Emoji_Presentation})/u)?.[1]
+	const dashboardTitleWithoutEmoji = dashboardTitle.replace(/^(\p{Emoji_Presentation}\s*)/, '')
+	const dashboardEmoji = dashboardTitle.match(/^(\p{Emoji_Presentation})/)?.[1]
 
 	// Extract pubkey from pathname for message detail views
 	const chatPubkey = isMessageDetailView ? location.pathname.split('/').pop() : null
@@ -197,9 +198,7 @@ function DashboardLayout() {
 
 					{/* Title */}
 					<span className="w-full truncate px-14 text-3xl flex items-center justify-center gap-2">
-						{showSidebar || !isMobile ? (
-							'Dashboard'
-						) : (
+						{showSidebar || !isMobile ? null : (
 							<>
 								{isMessageDetailView && chatProfile ? (
 									<>
@@ -231,9 +230,7 @@ function DashboardLayout() {
 			</div>
 
 			<div className="hidden lg:block">
-				<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center lg:justify-start relative">
-					<span className="w-full lg:w-auto text-3xl lg:text-3xl">Dashboard</span>
-				</h1>
+				<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center lg:justify-start relative" />
 			</div>
 
 			{/* Main container - responsive layout */}
@@ -310,9 +307,13 @@ function DashboardLayout() {
 									</div>
 								) : (
 									<ScrollArea className="h-full">
-										<div className="p-4 bg-white lg:p-8 lg:bg-transparent">
+										<div
+											className={cn(
+												'p-4 bg-white lg:p-8 lg:bg-transparent',
+												location.pathname === '/dashboard/sales/sales' && 'p-0 lg:p-0',
+											)}
+										>
 											{/* Only show title here if there's no back button */}
-											{!isMobile && !needsBackButton && <h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>}
 											<Outlet />
 										</div>
 									</ScrollArea>

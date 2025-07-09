@@ -38,6 +38,7 @@ const fuzzyFilter: FilterFn<OrderWithRelatedEvents> = (row, columnId, value, add
 interface OrderDataTableProps<TData> {
 	data: TData[]
 	columns: ColumnDef<TData, any>[]
+	heading?: React.ReactNode
 	isLoading?: boolean
 	filterColumn?: string
 	showStatusFilter?: boolean
@@ -48,6 +49,7 @@ interface OrderDataTableProps<TData> {
 export function OrderDataTable<TData>({
 	data,
 	columns,
+	heading,
 	isLoading = false,
 	filterColumn = 'orderId',
 	showStatusFilter = false,
@@ -84,35 +86,39 @@ export function OrderDataTable<TData>({
 
 	return (
 		<div className="space-y-4">
-			<div className="flex flex-col xl:flex-row gap-4">
-				<Input
-					placeholder="Search by Order ID or Buyer..."
-					value={globalFilter}
-					onChange={(e) => setGlobalFilter(e.target.value)}
-					className="w-full xl:flex-1"
-				/>
+			<div className="sticky top-0 z-10 bg-white border-b border-gray-200 dark:border-zinc-800 py-4 px-4 md:px-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+				{heading && <div className="flex-1">{heading}</div>}
 
-				{showStatusFilter && onStatusFilterChange && (
-					<div className="w-full xl:w-64">
-						<Select defaultValue="any" value={statusFilter} onValueChange={onStatusFilterChange}>
-							<SelectTrigger>
-								<SelectValue placeholder="Any Status" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="any">Any Status</SelectItem>
-								<SelectItem value="pending">Pending</SelectItem>
-								<SelectItem value="confirmed">Confirmed</SelectItem>
-								<SelectItem value="processing">Processing</SelectItem>
-								<SelectItem value="completed">Completed</SelectItem>
-								<SelectItem value="cancelled">Cancelled</SelectItem>
-							</SelectContent>
-						</Select>
-					</div>
-				)}
+				<div className="flex flex-col sm:flex-row sm:justify-end items-center gap-4 w-full md:w-auto">
+					<Input
+						placeholder="Search by Order ID or Buyer..."
+						value={globalFilter}
+						onChange={(e) => setGlobalFilter(e.target.value)}
+						className="w-full sm:max-w-xs"
+					/>
+
+					{showStatusFilter && onStatusFilterChange && (
+						<div className="w-full sm:w-auto sm:min-w-64">
+							<Select defaultValue="any" value={statusFilter} onValueChange={onStatusFilterChange}>
+								<SelectTrigger>
+									<SelectValue placeholder="Any Status" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="any">Any Status</SelectItem>
+									<SelectItem value="pending">Pending</SelectItem>
+									<SelectItem value="confirmed">Confirmed</SelectItem>
+									<SelectItem value="processing">Processing</SelectItem>
+									<SelectItem value="completed">Completed</SelectItem>
+									<SelectItem value="cancelled">Cancelled</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
+					)}
+				</div>
 			</div>
 
 			{isLoading ? (
-				<div className="space-y-4">
+				<div className="space-y-4 pt-4 px-4 md:px-8">
 					{Array(7)
 						.fill(0)
 						.map((_, i) => (
@@ -122,7 +128,7 @@ export function OrderDataTable<TData>({
 						))}
 				</div>
 			) : table.getRowModel().rows?.length ? (
-				<div className="space-y-4">
+				<div className="space-y-4 pt-4 px-4 md:px-8">
 					{table.getRowModel().rows.map((row) => {
 						const orderId = (row.original as any).order.id || 'unknown'
 						return (
@@ -158,10 +164,12 @@ export function OrderDataTable<TData>({
 					})}
 				</div>
 			) : (
-				<Card className="rounded-md border p-6 text-center">No orders found.</Card>
+				<div className="px-4 md:px-8">
+					<Card className="rounded-md border p-6 text-center mt-4">No orders found.</Card>
+				</div>
 			)}
 
-			<div className="flex items-center justify-between space-x-2 py-4">
+			<div className="flex items-center justify-between space-x-2 py-4 px-4 md:px-8">
 				<div className="flex-1 text-sm text-muted-foreground">
 					Showing {table.getRowModel().rows.length} of {data.length} orders
 				</div>
