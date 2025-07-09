@@ -1,6 +1,8 @@
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { Link } from '@tanstack/react-router'
+import { DashboardListItem } from '../layout/DashboardListItem'
+import { MessageSquareText } from 'lucide-react'
 
 export interface ConversationItemData {
 	pubkey: string
@@ -17,34 +19,37 @@ interface ConversationListItemProps {
 
 export function ConversationListItem({ conversation }: ConversationListItemProps) {
 	const { pubkey, lastMessageAt, lastMessageSnippet } = conversation
-	const breakpoint = useBreakpoint()
-	const isMobile = breakpoint === 'sm'
 
 	const dateElement = lastMessageAt && (
 		<span className="text-xs text-gray-500 whitespace-nowrap">{new Date(lastMessageAt * 1000).toLocaleString()}</span>
+	)
+
+	const triggerContent = <UserWithAvatar pubkey={pubkey} size="md" disableLink={true} showBadge={false} />
+	const content = (
+		<div className="w-full pl-10">
+			<p className="text-sm text-gray-600 break-words">{lastMessageSnippet}</p>
+		</div>
 	)
 
 	return (
 		<Link
 			to="/dashboard/sales/messages/$pubkey"
 			params={{ pubkey }}
-			className="block p-3 hover:bg-muted/50 rounded-lg transition-colors duration-150 ease-in-out w-full border bg-card shadow-sm mb-2"
+			className="block w-full"
 			activeProps={{
-				className: 'bg-muted',
+				className: 'bg-muted/20',
 			}}
 		>
-			<div className="flex flex-col gap-2 w-full">
-				<div className="flex items-center justify-between gap-3 w-full">
-					<UserWithAvatar pubkey={pubkey} size="md" disableLink={true} showBadge={false} />
-					{!isMobile && dateElement}
-				</div>
-
-				{/* Second row: message preview spanning full width */}
-				<div className="w-full pl-10">
-					<p className="text-sm text-gray-600 break-words">{lastMessageSnippet}</p>
-				</div>
-				{isMobile && <div className="self-end">{dateElement}</div>}
-			</div>
+			<DashboardListItem
+				isOpen={false}
+				onOpenChange={() => {}}
+				triggerContent={triggerContent}
+				actions={dateElement}
+				isCollapsible={false}
+				icon={<MessageSquareText className="h-6 w-6 text-muted-foreground" />}
+			>
+				{content}
+			</DashboardListItem>
 		</Link>
 	)
 }

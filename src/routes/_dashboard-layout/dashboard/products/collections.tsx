@@ -5,11 +5,17 @@ import { collectionFormActions } from '@/lib/stores/collection'
 
 import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
 import { useDeleteCollectionMutation } from '@/publish/collections'
-import { createFileRoute, useNavigate, Outlet, useMatchRoute } from '@tanstack/react-router'
+import {
+	createFileRoute,
+	useNavigate,
+	Outlet,
+	useMatchRoute,
+} from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useState } from 'react'
-import { ChevronDown, Trash } from 'lucide-react'
+import { ChevronDown, PlusIcon, StoreIcon, Trash } from 'lucide-react'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
+import { DashboardListItem } from '@/components/layout/DashboardListItem'
 
 // Component to show basic collection information
 function CollectionBasicInfo({ collection }: { collection: any }) {
@@ -39,7 +45,73 @@ function CollectionBasicInfo({ collection }: { collection: any }) {
 	)
 }
 
-export const Route = createFileRoute('/_dashboard-layout/dashboard/products/collections')({
+function CollectionListItem({
+	collection,
+	isExpanded,
+	onToggleExpanded,
+	onEdit,
+	onDelete,
+	isDeleting,
+}: {
+	collection: any
+	isExpanded: boolean
+	onToggleExpanded: () => void
+	onEdit: () => void
+	onDelete: () => void
+	isDeleting: boolean
+}) {
+	const triggerContent = (
+		<div>
+			<p className="font-semibold">{getCollectionTitle(collection)}</p>
+			<p className="text-sm text-muted-foreground">ID: {getCollectionId(collection).substring(0, 12)}...</p>
+		</div>
+	)
+
+	const actions = (
+		<>
+			<Button
+				variant="ghost"
+				size="sm"
+				onClick={(e) => {
+					e.stopPropagation()
+					onEdit()
+				}}
+				aria-label={`Edit ${getCollectionTitle(collection)}`}
+			>
+				<span className="i-edit w-5 h-5" />
+			</Button>
+			<Button
+				variant="ghost"
+				size="sm"
+				onClick={(e) => {
+					e.stopPropagation()
+					onDelete()
+				}}
+				aria-label={`Delete ${getCollectionTitle(collection)}`}
+				disabled={isDeleting}
+			>
+				{isDeleting ? <div className="animate-spin h-4 w-4 border-2 border-destructive border-t-transparent rounded-full" /> : <Trash className="w-4 h-4 text-destructive" />}
+			</Button>
+		</>
+	)
+
+	return (
+		<DashboardListItem
+			isOpen={isExpanded}
+			onOpenChange={onToggleExpanded}
+			triggerContent={triggerContent}
+			actions={actions}
+			isDeleting={isDeleting}
+			icon={<StoreIcon className="h-6 w-6 text-muted-foreground" />}
+		>
+			<CollectionBasicInfo collection={collection} />
+		</DashboardListItem>
+	)
+}
+
+export const Route = createFileRoute(
+	'/_dashboard-layout/dashboard/products/collections',
+)({
 	component: CollectionsComponent,
 })
 
@@ -129,73 +201,25 @@ function CollectionsComponent() {
 							<ul className="flex flex-col gap-2 mt-4">
 								{collections.map((collection) => {
 									const collectionId = getCollectionId(collection)
-									const isExpanded = expandedCollection === collectionId
-
 									return (
-										<li
-											key={collection.id}
-											className="border border-gray-300 rounded-md overflow-hidden"
-											data-testid={`collection-item-${collectionId}`}
-										>
-											<Collapsible open={isExpanded} onOpenChange={() => handleToggleExpanded(collectionId)}>
-												<div className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors duration-150">
-													<div className="flex items-center gap-3">
-														<span className="i-market w-5 h-5" />
-														<span className="text-sm font-medium text-gray-800">{getCollectionTitle(collection)}</span>
-													</div>
-													<div className="flex items-center gap-2">
-														<Button
-															variant="ghost"
-															size="sm"
-															onClick={(e) => {
-																e.stopPropagation()
-																handleEditCollectionClick(collection)
-															}}
-															aria-label={`Edit ${getCollectionTitle(collection)}`}
-															className="text-gray-500 hover:text-gray-700"
-															data-testid={`edit-collection-button-${collectionId}`}
-														>
-															<span className="i-edit w-5 h-5" />
-														</Button>
-														<Button
-															variant="ghost"
-															size="sm"
-															onClick={(e) => {
-																e.stopPropagation()
-																handleDeleteCollectionClick(collection)
-															}}
-															aria-label={`Delete ${getCollectionTitle(collection)}`}
-															className="text-gray-500 hover:text-red-600"
-															disabled={deleteMutation.isPending}
-															data-testid={`delete-collection-button-${collectionId}`}
-														>
-															<Trash className="w-4 h-4" />
-														</Button>
-														<CollapsibleTrigger asChild>
-															<Button
-																variant="ghost"
-																size="sm"
-																className="text-gray-500 hover:text-gray-700"
-																aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${getCollectionTitle(collection)}`}
-															>
-																<ChevronDown />
-															</Button>
-														</CollapsibleTrigger>
-													</div>
-												</div>
-												<CollapsibleContent>
-													<CollectionBasicInfo collection={collection} />
-												</CollapsibleContent>
-											</Collapsible>
+										<li key={collection.id} data-testid={`collection-item-${collectionId}`}>
+											<CollectionListItem
+												collection={collection}
+												isExpanded={expandedCollection === collectionId}
+												onToggleExpanded={() => handleToggleExpanded(collectionId)}
+												onEdit={() => handleEditCollectionClick(collection)}
+												onDelete={() => handleDeleteCollectionClick(collection)}
+												isDeleting={deleteMutation.isPending && deleteMutation.variables === collectionId}
+											/>
 										</li>
 									)
 								})}
 							</ul>
 						) : (
-							<div className="text-center text-gray-500 py-10 mt-4">
+							<div className="text-center text-gray-500 py-10">
 								<span className="i-market w-5 h-5" />
 								<h3 className="mt-2 text-lg font-semibold text-gray-700">No collections yet</h3>
-								<p className="mt-1 text-sm">Click the "Add A Collection" button to create your first one.</p>
+								<p className="mt-1 text-sm">Click the "Create A Collection" button to create your first one.</p>
 							</div>
 						)}
 					</>

@@ -443,6 +443,17 @@ function WalletForm({ wallet, onSuccess, onCancel, userPubkey }: WalletFormProps
 	)
 }
 
+interface WalletListItemProps {
+	wallet: Wallet | null
+	isOpen: boolean
+	onOpenChange: (isOpen: boolean) => void
+	onDelete?: () => void
+	isDeleting?: boolean
+	onSuccess: () => void
+	onCancel: () => void
+	userPubkey: string | undefined
+}
+
 function WalletListItem({
 	wallet,
 	isOpen,
@@ -452,73 +463,43 @@ function WalletListItem({
 	onSuccess,
 	onCancel,
 	userPubkey,
-}: {
-	wallet: Wallet | null
-	isOpen: boolean
-	onOpenChange: (isOpen: boolean) => void
-	onDelete?: () => void
-	isDeleting?: boolean
-	onSuccess: () => void
-	onCancel: () => void
-	userPubkey: string | undefined
-}) {
-	const breakpoint = useBreakpoint()
-	const isMobile = breakpoint === 'sm'
+}: WalletListItemProps) {
+	const triggerContent = (
+		<div>
+			<p className="font-semibold">{wallet?.name ?? 'Add a New Wallet'}</p>
+			<p className="text-sm text-muted-foreground">
+				{isDeleting ? 'Removing...' : wallet?.storedOnNostr ? 'Stored on Nostr (encrypted)' : 'Stored locally'}
+			</p>
+		</div>
+	)
+
+	const actions = wallet ? (
+		<Button
+			variant="ghost"
+			size="icon"
+			onClick={(e) => {
+				e.stopPropagation()
+				onDelete?.()
+			}}
+			className="h-8 w-8 text-destructive hover:bg-destructive/10"
+			aria-label="Delete wallet"
+			disabled={isDeleting}
+		>
+			{isDeleting ? <Spinner className="h-4 w-4" /> : <TrashIcon className="h-4 w-4" />}
+		</Button>
+	) : (
+		<PlusIcon className="h-6 w-6 text-muted-foreground" />
+	)
+
 	return (
-		<Collapsible open={isOpen} onOpenChange={onOpenChange} className="space-y-2">
-			<Card className={isDeleting ? 'opacity-50 pointer-events-none' : ''}>
-				<CollapsibleTrigger asChild>
-					<div className="p-4 flex flex-row items-center justify-between cursor-pointer group rounded-lg">
-						<div className="flex items-center gap-4">
-							<div className="p-2 bg-muted rounded-full">
-								<WalletIcon className="h-6 w-6 text-muted-foreground" />
-							</div>
-							<div>
-								<p className="font-semibold">{wallet?.name ?? 'Add a New Wallet'}</p>
-								<p className="text-sm text-muted-foreground">
-									{isDeleting
-										? 'Removing...'
-										: wallet?.storedOnNostr
-											? 'Stored on Nostr (encrypted)'
-											: 'Stored locally'}
-								</p>
-							</div>
-						</div>
-						<div className="flex items-center gap-2">
-							{!wallet && <PlusIcon className="h-6 w-6 text-muted-foreground" />}
-							{wallet && (
-								<Button
-									variant="ghost"
-									size="icon"
-									onClick={(e) => {
-										e.stopPropagation()
-										onDelete?.()
-									}}
-									className="h-8 w-8 text-destructive hover:bg-destructive/10"
-									aria-label="Delete wallet"
-									disabled={isDeleting}
-								>
-									{isDeleting ? (
-										<Spinner className="h-4 w-4" />
-									) : (
-										<TrashIcon className="h-4 w-4" />
-									)}
-								</Button>
-							)}
-							<ChevronLeftIcon
-								className={`h-5 w-5 shrink-0 transition-transform duration-200 text-muted-foreground ${
-									isOpen ? '-rotate-90' : 'rotate-0'
-								}`}
-							/>
-						</div>
-					</div>
-				</CollapsibleTrigger>
-				<CollapsibleContent>
-					<div className="p-4 pt-0">
-						<WalletForm wallet={wallet} onSuccess={onSuccess} onCancel={onCancel} userPubkey={userPubkey} />
-					</div>
-				</CollapsibleContent>
-			</Card>
-		</Collapsible>
+		<DashboardListItem
+			isOpen={isOpen}
+			onOpenChange={onOpenChange}
+			triggerContent={triggerContent}
+			actions={actions}
+			isDeleting={isDeleting}
+		>
+			<WalletForm wallet={wallet} onSuccess={onSuccess} onCancel={onCancel} userPubkey={userPubkey} />
+		</DashboardListItem>
 	)
 }

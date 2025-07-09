@@ -672,6 +672,84 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 	)
 }
 
+interface PaymentDetailListItemProps {
+	paymentDetail: RichPaymentDetail
+	isOpen: boolean
+	onOpenChange: (open: boolean) => void
+	isDeleting?: boolean
+	onSuccess?: () => void
+}
+
+function PaymentDetailListItem({ paymentDetail, isOpen, onOpenChange, isDeleting, onSuccess }: PaymentDetailListItemProps) {
+	const deleteMutation = useDeletePaymentDetail()
+
+	const handleDelete = () => {
+		if (paymentDetail) {
+			deleteMutation.mutate(
+				{ paymentDetailId: paymentDetail.id, userPubkey: paymentDetail.userId },
+				{
+					onSuccess: () => {
+						toast.success('Payment detail deleted successfully')
+						onOpenChange(false)
+					},
+					onError: (error) => {
+						toast.error(`Error deleting payment detail: ${error.message}`)
+					},
+				},
+			)
+		}
+	}
+
+	const PaymentMethodIcon = ({ method }: { method: PaymentDetailsMethod }) => {
+		switch (method) {
+			case PAYMENT_DETAILS_METHOD.ON_CHAIN:
+				return <AnchorIcon className="w-5 h-5 text-muted-foreground" />
+			case PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK:
+				return <ZapIcon className="w-5 h-5 text-muted-foreground" />
+			default:
+				return <GlobeIcon className="w-5 h-5 text-muted-foreground" />
+		}
+	}
+
+	const triggerContent = (
+		<div>
+			<p className="font-semibold">{paymentMethodLabels[paymentDetail.paymentMethod]}</p>
+			<p className="text-sm text-muted-foreground truncate">
+				{paymentDetail.paymentDetail} - {paymentDetail.scopeName}
+			</p>
+		</div>
+	)
+
+	const actions = (
+		<Button
+			variant="ghost"
+			size="icon"
+			onClick={(e) => {
+				e.stopPropagation()
+				handleDelete()
+			}}
+			className="h-8 w-8 text-destructive hover:bg-destructive/10"
+			aria-label="Delete payment detail"
+			disabled={deleteMutation.isPending}
+		>
+			{deleteMutation.isPending ? <Spinner className="h-4 w-4" /> : <TrashIcon className="h-4 w-4" />}
+		</Button>
+	)
+
+	return (
+		<DashboardListItem
+			isOpen={isOpen}
+			onOpenChange={onOpenChange}
+			triggerContent={triggerContent}
+			actions={actions}
+			isDeleting={deleteMutation.isPending}
+			icon={<PaymentMethodIcon method={paymentDetail.paymentMethod} />}
+		>
+			<PaymentDetailForm paymentDetail={paymentDetail} isOpen={isOpen} onOpenChange={onOpenChange} onSuccess={onSuccess} />
+		</DashboardListItem>
+	)
+}
+
 function ReceivingPaymentsComponent() {
 	const { getUser } = useNDK()
 	const [user, setUser] = useState<any>(null)
@@ -682,94 +760,63 @@ function ReceivingPaymentsComponent() {
 		getUser().then(setUser)
 	}, [getUser])
 
-	const paymentDetailsQuery = useRichUserPaymentDetails(user?.pubkey || '')
-
-	const filteredPaymentDetails =
-		paymentDetailsQuery.data?.filter((detail) => paymentMethodFilter === 'all' || detail.paymentMethod === paymentMethodFilter) || []
+	const {
+		data: paymentDetails,
+		isLoading,
+		isError,
+		error,
+	} = useRichUserPaymentDetails(user?.pubkey)
 
 	const handleOpenChange = (paymentDetailId: string | null, open: boolean) => {
-		setOpenPaymentDetailId(open ? paymentDetailId : null)
+		if (open) {
+			setOpenPaymentDetailId(paymentDetailId)
+		} else {
+			setOpenPaymentDetailId(null)
+		}
 	}
 
-	const truncateString = (str: string, maxLength: number = 30) => {
-		if (str.length <= maxLength) return str
-		return str.substring(0, maxLength) + '...'
+	const handleSuccess = () => {
+		setOpenPaymentDetailId(null)
+	}
+
+	if (isLoading) {
+		return <div>Loading payment details...</div>
+	}
+
+	if (isError) {
+		return <div>Error loading payment details: {error.message}</div>
 	}
 
 	return (
-		<div className="space-y-6">
-			<div className="flex justify-between items-center">
-				<div>
-					<p className="text-muted-foreground">Manage your payment receiving options here</p>
-				</div>
-				<div className="flex items-center gap-4">
-					<div className="flex items-center gap-2">
-						<Label htmlFor="payment-filter" className="text-sm font-medium">
-							Filter:
-						</Label>
-						<Select value={paymentMethodFilter} onValueChange={(value: PaymentDetailsMethod | 'all') => setPaymentMethodFilter(value)}>
-							<SelectTrigger className="w-[180px]">
-								<SelectValue placeholder="All payment methods" />
-							</SelectTrigger>
-							<SelectContent>
-								<SelectItem value="all">All payment methods</SelectItem>
-								{Object.values(PAYMENT_DETAILS_METHOD).map((method) => (
-									<SelectItem key={method} value={method}>
-										<div className="flex items-center gap-2">
-											{method === PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK ? (
-												<ZapIcon className="w-4 h-4" />
-											) : (
-												<AnchorIcon className="w-4 h-4" />
-											)}
-											{paymentMethodLabels[method]}
-										</div>
-									</SelectItem>
-								))}
-							</SelectContent>
-						</Select>
+		<div className="space-y-4">
+			<DashboardListItem
+				isOpen={openPaymentDetailId === 'new'}
+				onOpenChange={(open) => handleOpenChange('new', open)}
+				triggerContent={
+					<div>
+						<p className="font-semibold">Add New Payment Detail</p>
+						<p className="text-sm text-muted-foreground">Configure a new way to receive payments</p>
 					</div>
-				</div>
-			</div>
-
-			<div className="space-y-4">
-				{/* Add new payment method */}
+				}
+				icon={<PlusIcon className="w-6 h-6" />}
+			>
 				<PaymentDetailForm
 					paymentDetail={null}
 					isOpen={openPaymentDetailId === 'new'}
 					onOpenChange={(open) => handleOpenChange('new', open)}
-					onSuccess={() => paymentDetailsQuery.refetch()}
+					onSuccess={handleSuccess}
 				/>
+			</DashboardListItem>
 
-				{/* Existing payment methods */}
-				{filteredPaymentDetails.map((paymentDetail) => (
-					<PaymentDetailForm
-						key={paymentDetail.id}
-						paymentDetail={paymentDetail}
-						isOpen={openPaymentDetailId === paymentDetail.id}
-						onOpenChange={(open) => handleOpenChange(paymentDetail.id, open)}
-						onSuccess={() => paymentDetailsQuery.refetch()}
-					/>
-				))}
-
-				{paymentDetailsQuery.isLoading && (
-					<div className="flex items-center justify-center p-8">
-						<Spinner />
-						<span className="ml-2">Loading payment details...</span>
-					</div>
-				)}
-
-				{filteredPaymentDetails.length === 0 && !paymentDetailsQuery.isLoading && (
-					<Card>
-						<CardContent className="py-10 flex flex-col items-center justify-center">
-							<p className="text-center text-muted-foreground mb-4">
-								{paymentMethodFilter === 'all'
-									? 'No payment methods configured yet. Add a payment method to start receiving payments.'
-									: `No ${paymentMethodLabels[paymentMethodFilter as PaymentDetailsMethod]} payment methods found.`}
-							</p>
-						</CardContent>
-					</Card>
-				)}
-			</div>
+			{paymentDetails?.map((pd) => (
+				<PaymentDetailListItem
+					key={pd.id}
+					paymentDetail={pd}
+					isOpen={openPaymentDetailId === pd.id}
+					onOpenChange={(open) => handleOpenChange(pd.id, open)}
+					onSuccess={handleSuccess}
+				/>
+			))}
 		</div>
 	)
 }
