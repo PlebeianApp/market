@@ -3,6 +3,7 @@ import { salesColumns } from '@/components/orders/orderColumns'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ndkActions } from '@/lib/stores/ndk'
 import { getOrderStatus, useOrdersBySeller } from '@/queries/orders'
+import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 
@@ -11,6 +12,7 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/sales')
 })
 
 function SalesComponent() {
+	useDashboardTitle('Sales')
 	const ndk = ndkActions.getNDK()
 	const currentUser = ndk?.activeUser
 	const [statusFilter, setStatusFilter] = useState<string>('any')

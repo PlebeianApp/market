@@ -198,7 +198,9 @@ function DashboardLayout() {
 
 					{/* Title */}
 					<span className="w-full truncate px-14 text-3xl flex items-center justify-center gap-2">
-						{showSidebar || !isMobile ? null : (
+						{showSidebar || !isMobile ? (
+							'Dashboard'
+						) : (
 							<>
 								{isMessageDetailView && chatProfile ? (
 									<>
@@ -311,9 +313,16 @@ function DashboardLayout() {
 											className={cn(
 												'p-4 bg-white lg:p-8 lg:bg-transparent',
 												location.pathname === '/dashboard/sales/sales' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/sales/messages' && 'p-0 lg:p-0',
 											)}
 										>
 											{/* Only show title here if there's no back button */}
+											{!isMobile &&
+												!needsBackButton &&
+												location.pathname !== '/dashboard/sales/sales' &&
+												location.pathname !== '/dashboard/sales/messages' && (
+													<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>
+												)}
 											<Outlet />
 										</div>
 									</ScrollArea>

@@ -15,31 +15,36 @@ function MessagesListComponent() {
 	const { data: conversations, isLoading, error } = useConversationsList()
 
 	return (
-		<div className="space-y-4">
-			{isLoading && (
-				<div className="flex flex-col justify-center items-center py-12">
-					<Loader2 className="w-8 h-8 animate-spin text-primary" />
-					<p className="ml-2 mt-2">Loading conversations...</p>
-				</div>
-			)}
-			{error && <p className="text-destructive p-4 text-center">Error loading conversations: {error.message}</p>}
-			{!isLoading && !error && conversations?.length === 0 && (
-				<div className="p-8 text-center text-muted-foreground border bg-background rounded-md min-h-[200px] flex flex-col justify-center items-center">
-					<MessageSquareText size={48} className="mb-4" />
-					<p>No conversations yet.</p>
-					<p className="text-sm">Your conversations will appear here.</p>
-				</div>
-			)}
+		<div>
+			<div className="sticky top-0 z-10 bg-white border-b border-gray-200 py-4 px-4 md:px-8">
+				<h1 className="text-2xl font-bold hidden md:block">Messages</h1>
+			</div>
+			<div className="space-y-4 p-4 md:p-8">
+				{isLoading && (
+					<div className="flex flex-col justify-center items-center py-12">
+						<Loader2 className="w-8 h-8 animate-spin text-primary" />
+						<p className="ml-2 mt-2">Loading conversations...</p>
+					</div>
+				)}
+				{error && <p className="text-destructive p-4 text-center">Error loading conversations: {error.message}</p>}
+				{!isLoading && !error && conversations?.length === 0 && (
+					<div className="p-8 text-center text-muted-foreground border bg-background rounded-md min-h-[200px] flex flex-col justify-center items-center">
+						<MessageSquareText size={48} className="mb-4" />
+						<p>No conversations yet.</p>
+						<p className="text-sm">Your conversations will appear here.</p>
+					</div>
+				)}
 
-			{!isLoading && !error && conversations && conversations.length > 0 && (
-				<ul className="flex flex-col gap-4">
-					{conversations.map((convo: ConversationItemData) => (
-						<li key={convo.pubkey}>
-							<ConversationListItem conversation={convo} />
-						</li>
-					))}
-				</ul>
-			)}
+				{!isLoading && !error && conversations && conversations.length > 0 && (
+					<ul className="flex flex-col gap-4">
+						{conversations.map((convo: ConversationItemData) => (
+							<li key={convo.pubkey}>
+								<ConversationListItem conversation={convo} />
+							</li>
+						))}
+					</ul>
+				)}
+			</div>
 		</div>
 	)
 }
