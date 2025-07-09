@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { ndkActions } from '@/lib/stores/ndk'
 import { uiStore } from '@/lib/stores/ui'
 import { parseNwcUri, useWallets, walletActions, type Wallet } from '@/lib/stores/wallet'
-import { useNwcWalletBalanceQuery, useUserNwcWalletsQuery, type UserNwcWallet } from '@/queries/wallet'
+import { useUserNwcWalletsQuery, type UserNwcWallet } from '@/queries/wallet'
 import { walletKeys } from '@/queries/queryKeyFactory'
 import { useSaveUserNwcWalletsMutation } from '@/publish/wallet'
 import { createFileRoute } from '@tanstack/react-router'
@@ -29,6 +29,7 @@ import { toast } from 'sonner'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
 import { Spinner } from '@/components/ui/spinner'
+import { useBreakpoint } from '@/hooks/useBreakpoint'
 import {
 	useDeletePaymentDetail,
 	usePublishRichPaymentDetail,
@@ -56,7 +57,11 @@ function MakingPaymentsComponent() {
 	const signer = ndkActions.getSigner()
 
 	// TanStack Query for Nostr wallets
-	const { data: nostrWallets, isLoading: nostrLoading, refetch: refetchNostrWallets } = useUserNwcWalletsQuery(userPubkey)
+	const {
+		data: nostrWallets,
+		isLoading: nostrLoading,
+		refetch: refetchNostrWallets,
+	} = useUserNwcWalletsQuery(userPubkey)
 	const saveNostrWalletsMutation = useSaveUserNwcWalletsMutation()
 
 	const [openWalletId, setOpenWalletId] = useState<string | null>(null)
@@ -185,6 +190,7 @@ function MakingPaymentsComponent() {
 				onOpenChange={(open) => handleOpenChange('new', open)}
 				onSuccess={handleSuccess}
 				userPubkey={userPubkey}
+				onCancel={() => handleOpenChange('new', false)}
 			/>
 
 			{combinedWallets.map((wallet) => (
@@ -197,17 +203,9 @@ function MakingPaymentsComponent() {
 					isDeleting={deletingWalletId === wallet.id}
 					onSuccess={handleSuccess}
 					userPubkey={userPubkey}
+					onCancel={() => handleOpenChange(wallet.id, false)}
 				/>
 			))}
-
-			{combinedWallets.length > 0 && (
-				<div className="mt-4 flex justify-end">
-					<Button onClick={() => refetchNostrWallets()} disabled={nostrLoading || !userPubkey}>
-						<RefreshCwIcon className={`w-4 h-4 mr-2 ${nostrLoading ? 'animate-spin' : ''}`} />
-						Refresh Nostr Wallets
-					</Button>
-				</div>
-			)}
 		</div>
 	)
 }
@@ -241,9 +239,6 @@ function WalletForm({ wallet, onSuccess, onCancel, userPubkey }: WalletFormProps
 			setPubkey(parsed.pubkey)
 			setRelays(parsed.relay || '')
 			setSecret(parsed.secret || '')
-			if (parsed.name) {
-				setName(parsed.name)
-			}
 		}
 	}
 
@@ -455,6 +450,7 @@ function WalletListItem({
 	onDelete,
 	isDeleting,
 	onSuccess,
+	onCancel,
 	userPubkey,
 }: {
 	wallet: Wallet | null
@@ -463,70 +459,66 @@ function WalletListItem({
 	onDelete?: () => void
 	isDeleting?: boolean
 	onSuccess: () => void
+	onCancel: () => void
 	userPubkey: string | undefined
 }) {
-	const balanceQuery = useNwcWalletBalanceQuery(wallet?.nwcUri, !!wallet)
-	const isEditing = !!wallet
-
-	const triggerContent = isEditing ? (
-		<div className="flex items-center gap-3 min-w-0 flex-1">
-			<WalletIcon className="w-5 h-5 text-muted-foreground" />
-			<div className="min-w-0 flex-1">
-				<div className="font-medium truncate">{wallet.name}</div>
-				<div className="text-sm text-muted-foreground">
-					{balanceQuery.data ? (
-						`${(balanceQuery.data.balance / 1000).toLocaleString()} sats`
-					) : balanceQuery.isLoading ? (
-						'Loading balance...'
-					) : (
-						<span className="text-yellow-600">Could not fetch balance</span>
-					)}
-				</div>
-			</div>
-		</div>
-	) : (
-		<div className="flex items-center gap-2">
-			<PlusIcon className="w-6 h-6" />
-			<span>Add another wallet</span>
-		</div>
-	)
-
-	const triggerActions = isEditing ? (
-		<div className="flex items-center gap-2">
-			<Button
-				variant="ghost"
-				size="icon"
-				onClick={(e) => {
-					e.stopPropagation()
-					balanceQuery.refetch()
-				}}
-				disabled={balanceQuery.isFetching}
-			>
-				<RefreshCwIcon className={`w-4 h-4 ${balanceQuery.isFetching ? 'animate-spin' : ''}`} />
-			</Button>
-			<Button
-				variant="ghost"
-				size="icon"
-				onClick={(e) => {
-					e.stopPropagation()
-					if (onDelete) onDelete()
-				}}
-				disabled={isDeleting}
-			>
-				{isDeleting ? <Spinner className="w-4 h-4" /> : <TrashIcon className="w-4 h-4 text-destructive" />}
-			</Button>
-		</div>
-	) : null
-
+	const breakpoint = useBreakpoint()
+	const isMobile = breakpoint === 'sm'
 	return (
-		<DashboardListItem
-			isOpen={isOpen}
-			onOpenChange={onOpenChange}
-			triggerContent={triggerContent}
-			actions={triggerActions}
-			data-testid={isEditing ? `wallet-item-${wallet.id}` : 'add-wallet-button'}
-		>
-			<WalletForm wallet={wallet} onSuccess={onSuccess} onCancel={() => onOpenChange(false)} userPubkey={userPubkey} />
-		</DashboardListItem>
+		<Collapsible open={isOpen} onOpenChange={onOpenChange} className="space-y-2">
+			<Card className={isDeleting ? 'opacity-50 pointer-events-none' : ''}>
+				<CollapsibleTrigger asChild>
+					<div className="p-4 flex flex-row items-center justify-between cursor-pointer group rounded-lg">
+						<div className="flex items-center gap-4">
+							<div className="p-2 bg-muted rounded-full">
+								<WalletIcon className="h-6 w-6 text-muted-foreground" />
+							</div>
+							<div>
+								<p className="font-semibold">{wallet?.name ?? 'Add a New Wallet'}</p>
+								<p className="text-sm text-muted-foreground">
+									{isDeleting
+										? 'Removing...'
+										: wallet?.storedOnNostr
+											? 'Stored on Nostr (encrypted)'
+											: 'Stored locally'}
+								</p>
+							</div>
+						</div>
+						<div className="flex items-center gap-2">
+							{!wallet && <PlusIcon className="h-6 w-6 text-muted-foreground" />}
+							{wallet && (
+								<Button
+									variant="ghost"
+									size="icon"
+									onClick={(e) => {
+										e.stopPropagation()
+										onDelete?.()
+									}}
+									className="h-8 w-8 text-destructive hover:bg-destructive/10"
+									aria-label="Delete wallet"
+									disabled={isDeleting}
+								>
+									{isDeleting ? (
+										<Spinner className="h-4 w-4" />
+									) : (
+										<TrashIcon className="h-4 w-4" />
+									)}
+								</Button>
+							)}
+							<ChevronLeftIcon
+								className={`h-5 w-5 shrink-0 transition-transform duration-200 text-muted-foreground ${
+									isOpen ? '-rotate-90' : 'rotate-0'
+								}`}
+							/>
+						</div>
+					</div>
+				</CollapsibleTrigger>
+				<CollapsibleContent>
+					<div className="p-4 pt-0">
+						<WalletForm wallet={wallet} onSuccess={onSuccess} onCancel={onCancel} userPubkey={userPubkey} />
+					</div>
+				</CollapsibleContent>
+			</Card>
+		</Collapsible>
 	)
 }
