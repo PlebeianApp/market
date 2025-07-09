@@ -783,36 +783,70 @@ function ReceivingPaymentsComponent() {
 	}
 
 	return (
-		<div className="space-y-4">
-			<DashboardListItem
-				isOpen={openPaymentDetailId === 'new'}
-				onOpenChange={(open) => handleOpenChange('new', open)}
-				triggerContent={
-					<div>
-						<p className="font-semibold">Add New Payment Detail</p>
-						<p className="text-sm text-muted-foreground">Configure a new way to receive payments</p>
-					</div>
-				}
-				icon={<PlusIcon className="w-6 h-6" />}
-			>
-				<PaymentDetailForm
-					paymentDetail={null}
-					isOpen={openPaymentDetailId === 'new'}
-					onOpenChange={(open) => handleOpenChange('new', open)}
-					onSuccess={handleSuccess}
-				/>
-			</DashboardListItem>
+		<div>
+			<div className="hidden md:flex sticky top-0 z-10 bg-white border-b py-4 px-4 md:px-8 items-center justify-between">
+				<h1 className="text-2xl font-bold">Receiving Payments</h1>
+				<Button
+					onClick={() => handleOpenChange('new', true)}
+					className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+				>
+					<PlusIcon className="w-5 h-5" />
+					Add Payment Method
+				</Button>
+			</div>
+			<div className="space-y-4 p-4 md:p-8">
+				<div className="md:hidden">
+					<DashboardListItem
+						isOpen={openPaymentDetailId === 'new'}
+						onOpenChange={(open) => handleOpenChange('new', open)}
+						triggerContent={
+							<div>
+								<p className="font-semibold">Add New Payment Detail</p>
+								<p className="text-sm text-muted-foreground">Configure a new way to receive payments</p>
+							</div>
+						}
+						icon={<PlusIcon className="w-6 h-6" />}
+					>
+						<PaymentDetailForm
+							paymentDetail={null}
+							isOpen={openPaymentDetailId === 'new'}
+							onOpenChange={(open) => handleOpenChange('new', open)}
+							onSuccess={handleSuccess}
+						/>
+					</DashboardListItem>
+				</div>
 
-			<div className="space-y-4">
-				{paymentDetails?.map((pd) => (
-					<PaymentDetailListItem
-						key={pd.id}
-						paymentDetail={pd}
-						isOpen={openPaymentDetailId === pd.id}
-						onOpenChange={(open) => handleOpenChange(pd.id, open)}
-						onSuccess={handleSuccess}
-					/>
-				))}
+				<div className="space-y-4">
+					{paymentDetails?.map((pd) => (
+						<PaymentDetailListItem
+							key={pd.id}
+							paymentDetail={pd}
+							isOpen={openPaymentDetailId === pd.id}
+							onOpenChange={(open) => handleOpenChange(pd.id, open)}
+							onSuccess={handleSuccess}
+						/>
+					))}
+				</div>
+
+				{/* Hidden form for desktop header button */}
+				<div className="hidden md:block">
+					{openPaymentDetailId === 'new' && (
+						<Card className="mt-4">
+							<CardHeader>
+								<CardTitle>Add New Payment Detail</CardTitle>
+								<CardDescription>Configure a new way to receive payments</CardDescription>
+							</CardHeader>
+							<CardContent>
+								<PaymentDetailForm
+									paymentDetail={null}
+									isOpen={openPaymentDetailId === 'new'}
+									onOpenChange={(open) => handleOpenChange('new', open)}
+									onSuccess={handleSuccess}
+								/>
+							</CardContent>
+						</Card>
+					)}
+				</div>
 			</div>
 		</div>
 	)

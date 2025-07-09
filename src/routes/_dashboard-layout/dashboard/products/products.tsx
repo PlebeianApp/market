@@ -195,45 +195,59 @@ function ProductsOverviewComponent() {
 	}
 
 	return (
-		<div className="space-y-6">
-			<div>
+		<div>
+			<div className="hidden md:flex sticky top-0 z-10 bg-white border-b py-4 px-4 md:px-8 items-center justify-between">
+				<h1 className="text-2xl font-bold">Products</h1>
 				<Button
 					onClick={handleAddProductClick}
 					data-testid="add-product-button"
-					className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+					className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
 				>
 					<span className="i-product w-5 h-5" /> Add A Product
 				</Button>
+			</div>
+			<div className="space-y-6 p-4 md:p-8">
+				<div className="md:hidden">
+					<Button
+						onClick={handleAddProductClick}
+						data-testid="add-product-button-mobile"
+						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+					>
+						<span className="i-product w-5 h-5" /> Add A Product
+					</Button>
+				</div>
 
-				{isLoading && <div className="p-6 text-center text-gray-500 mt-4">Loading your products...</div>}
-				{error && <div className="p-6 text-center text-red-600 mt-4">Failed to load products: {error.message}</div>}
+				<div>
+					{isLoading && <div className="p-6 text-center text-gray-500 mt-4">Loading your products...</div>}
+					{error && <div className="p-6 text-center text-red-600 mt-4">Failed to load products: {error.message}</div>}
 
-				{!isLoading && !error && (
-					<>
-						{products && products.length > 0 ? (
-							<ul className="flex flex-col gap-4 mt-4">
-								{products.map((product) => (
-									<li key={product.id}>
-										<ProductListItem
-											product={product}
-											isExpanded={expandedProduct === product.id}
-											onToggleExpanded={() => handleToggleExpanded(product.id)}
-											onEdit={() => handleEditProductClick(product.id)}
-											onDelete={() => handleDeleteProductClick(product)}
-											isDeleting={deleteMutation.isPending && deleteMutation.variables === getProductId(product)}
-										/>
-									</li>
-								))}
-							</ul>
-						) : (
-							<div className="text-center text-gray-500 py-10 px-6">
-								<span className="i-product w-5 h-5" />
-								<h3 className="mt-2 text-lg font-semibold text-gray-700">No products yet</h3>
-								<p className="mt-1 text-sm">Click the "Add A Product" button to create your first one.</p>
-							</div>
-						)}
-					</>
-				)}
+					{!isLoading && !error && (
+						<>
+							{products && products.length > 0 ? (
+								<ul className="flex flex-col gap-4 mt-4">
+									{products.map((product) => (
+										<li key={product.id}>
+											<ProductListItem
+												product={product}
+												isExpanded={expandedProduct === product.id}
+												onToggleExpanded={() => handleToggleExpanded(product.id)}
+												onEdit={() => handleEditProductClick(product.id)}
+												onDelete={() => handleDeleteProductClick(product)}
+												isDeleting={deleteMutation.isPending && deleteMutation.variables === getProductId(product)}
+											/>
+										</li>
+									))}
+								</ul>
+							) : (
+								<div className="text-center text-gray-500 py-10 px-6">
+									<span className="i-product w-5 h-5" />
+									<h3 className="mt-2 text-lg font-semibold text-gray-700">No products yet</h3>
+									<p className="mt-1 text-sm">Click the "Add A Product" button to create your first one.</p>
+								</div>
+							)}
+						</>
+					)}
+				</div>
 			</div>
 		</div>
 	)
