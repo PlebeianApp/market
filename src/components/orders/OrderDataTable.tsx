@@ -88,10 +88,10 @@ export function OrderDataTable<TData>({
 
 	return (
 		<div className="space-y-4">
-			<div className="sticky top-[12.75rem] lg:top-0 z-20 bg-white border-b py-4 px-4 xl:px-6 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 shadow-sm">
-				{heading && <div className="hidden xl:block flex-1">{heading}</div>}
+			<div className="sticky top-[12.75rem] lg:top-0 z-20 bg-white border-b py-4 px-4 xl:px-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 shadow-sm">
+				{heading && <div className="hidden lg:block flex-1">{heading}</div>}
 
-				<div className="flex flex-col sm:flex-row sm:justify-end items-center gap-4 w-full xl:w-auto">
+				<div className="flex flex-col sm:flex-row sm:justify-end items-center gap-4 w-full lg:w-auto">
 					{showSearch && (
 						<Input
 							placeholder="Search by Order ID or Buyer..."
