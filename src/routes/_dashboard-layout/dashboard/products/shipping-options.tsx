@@ -32,9 +32,10 @@ import {
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { createFileRoute } from '@tanstack/react-router'
-import { ChevronDownIcon, GlobeIcon, PackageIcon, PlusIcon, TrashIcon, TruckIcon, XIcon } from 'lucide-react'
+import { ChevronLeftIcon, GlobeIcon, PackageIcon, PlusIcon, TrashIcon, TruckIcon, XIcon } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { DashboardListItem } from '@/components/layout/DashboardListItem'
 
 const SERVICE_TYPES = [
 	{ value: 'standard', label: 'Standard Shipping' },
@@ -62,6 +63,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 	const { getUser } = useNDK()
 	const [user, setUser] = useState<any>(null)
 	const [isSubmitting, setIsSubmitting] = useState(false)
+	const [isOptionalDetailsOpen, setIsOptionalDetailsOpen] = useState(false)
 
 	const publishMutation = usePublishShippingOptionMutation()
 	const updateMutation = useUpdateShippingOptionMutation()
@@ -207,221 +209,223 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 		return country?.name || code
 	}
 
-	return (
-		<Collapsible open={isOpen} onOpenChange={onOpenChange}>
-			<CollapsibleTrigger asChild>
-				<div
-					className="flex flex-col sm:flex-row w-full justify-between items-start sm:items-center gap-2 p-4 border rounded-md bg-white hover:bg-gray-50 cursor-pointer"
-					data-testid={isEditing ? `shipping-option-item-${getShippingId(shippingOption)}` : 'add-shipping-option-button'}
-				>
-					{isEditing ? (
-						<div className="flex items-center gap-3 min-w-0 flex-1">
-							<ServiceIcon service={formData.service} />
-							<div className="min-w-0 flex-1">
-								<div className="font-medium truncate">{formData.title}</div>
-								<div className="text-sm text-muted-foreground flex flex-wrap gap-x-2">
-									<span>
-										{formData.price} {formData.currency}
-									</span>
-									<span className="hidden sm:inline">•</span>
-									<span>{formData.countries.map(getCountryName).join(', ')}</span>
-									<span className="hidden sm:inline">•</span>
-									<span>{getServiceLabel(formData.service)}</span>
-								</div>
-							</div>
-						</div>
-					) : (
-						<div className="flex items-center gap-2">
-							<PlusIcon className="w-6 h-6" />
-							<span>Add new shipping option</span>
-						</div>
-					)}
-
-					{isEditing && (
-						<div className="flex items-center gap-2 mt-2 sm:mt-0">
-							<GlobeIcon className="w-5 h-5 text-muted-foreground" />
-						</div>
-					)}
+	const triggerContent = isEditing ? (
+		<div className="flex items-center gap-3 min-w-0 flex-1">
+			<ServiceIcon service={formData.service} />
+			<div className="min-w-0 flex-1">
+				<div className="font-medium truncate">{formData.title}</div>
+				<div className="text-sm text-muted-foreground">
+					{formData.price} {formData.currency} • {formData.countries.map(getCountryName).join(', ')} • {getServiceLabel(formData.service)}
 				</div>
-			</CollapsibleTrigger>
+			</div>
+		</div>
+	) : (
+		<div className="flex items-center gap-2">
+			<PlusIcon className="w-6 h-6" />
+			<span>Add new shipping option</span>
+		</div>
+	)
 
-			<CollapsibleContent className="px-4 pb-4">
-				<div className="pt-4">
-					<form onSubmit={handleSubmit} className="space-y-6">
-						{/* Basic Information */}
+	const triggerActions = isEditing ? (
+		<div className="flex items-center gap-2">
+			<GlobeIcon className="w-5 h-5 text-muted-foreground" />
+		</div>
+	) : null
+
+	return (
+		<DashboardListItem
+			isOpen={isOpen}
+			onOpenChange={onOpenChange}
+			triggerContent={triggerContent}
+			actions={triggerActions}
+			data-testid={isEditing ? `shipping-option-item-${getShippingId(shippingOption)}` : 'add-shipping-option-button'}
+		>
+			<div className="p-4 border-t">
+				<form onSubmit={handleSubmit} className="space-y-6 lg:w-1/2">
+					{/* Use a template */}
+					<div className="space-y-4">
+						<h3 className="text-lg font-semibold">Use a template</h3>
 						<div className="space-y-4">
-							<h3 className="text-lg font-semibold">Basic Information</h3>
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-								<div className="space-y-2">
-									<Label htmlFor="title" className="font-medium">
-										Title *
-									</Label>
+							{/* Templates - Renamed and restructured */}
+							<div className="space-y-2">
+								<Label className="font-medium">Templates</Label>
+								<Select
+									onValueChange={(templateName) => {
+										const template = SHIPPING_TEMPLATES.find((t) => t.name === templateName)
+										if (template) {
+											setFormData((prev) => ({
+												...prev,
+												title: template.name,
+												price: template.cost,
+												countries: template.countries || [],
+											}))
+										}
+									}}
+								>
+									<SelectTrigger data-testid="shipping-template-select">
+										<SelectValue placeholder="Choose a template (optional)" />
+									</SelectTrigger>
+									<SelectContent>
+										{SHIPPING_TEMPLATES.map((template) => (
+											<SelectItem
+												key={template.name}
+												value={template.name}
+												data-testid={`template-${template.name.toLowerCase().replace(/\s+/g, '-')}`}
+											>
+												{template.name} {template.countries ? `(${template.countries.length} countries)` : '(Worldwide)'}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+
+							<h3 className="text-lg font-semibold pt-4">Shipping Option Details</h3>
+
+							<div className="space-y-2">
+								<Label htmlFor="title" className="font-medium">
+									Title *
+								</Label>
+								<Input
+									id="title"
+									data-testid="shipping-title-input"
+									value={formData.title}
+									onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
+									placeholder="e.g., Standard Shipping to US"
+									required
+								/>
+							</div>
+
+							<div className="space-y-2">
+								<Label htmlFor="service" className="font-medium">
+									Service Type *
+								</Label>
+								<Select value={formData.service} onValueChange={(value: any) => setFormData((prev) => ({ ...prev, service: value }))}>
+									<SelectTrigger data-testid="shipping-service-select">
+										<SelectValue placeholder="Select service type" />
+									</SelectTrigger>
+									<SelectContent>
+										{SERVICE_TYPES.map((service) => (
+											<SelectItem key={service.value} value={service.value} data-testid={`service-${service.value}`}>
+												<div className="flex items-center gap-2">
+													<ServiceIcon service={service.value} />
+													{service.label}
+												</div>
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							</div>
+
+							<div className="space-y-2">
+								<Label htmlFor="price" className="font-medium">
+									Price *
+								</Label>
+								<div className="flex gap-2">
 									<Input
-										id="title"
-										data-testid="shipping-title-input"
-										value={formData.title}
-										onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
-										placeholder="e.g., Standard Shipping to US"
+										id="price"
+										data-testid="shipping-price-input"
+										type="number"
+										step="0.01"
+										min="0"
+										value={formData.price}
+										onChange={(e) => setFormData((prev) => ({ ...prev, price: e.target.value }))}
+										placeholder="0.00"
+										className="flex-1"
 										required
 									/>
-								</div>
-
-								<div className="space-y-2">
-									<Label htmlFor="service" className="font-medium">
-										Service Type *
-									</Label>
-									<Select value={formData.service} onValueChange={(value: any) => setFormData((prev) => ({ ...prev, service: value }))}>
-										<SelectTrigger data-testid="shipping-service-select">
-											<SelectValue placeholder="Select service type" />
+									<Select value={formData.currency} onValueChange={(value) => setFormData((prev) => ({ ...prev, currency: value }))}>
+										<SelectTrigger className="w-20" data-testid="shipping-currency-select">
+											<SelectValue>{formData.currency}</SelectValue>
 										</SelectTrigger>
 										<SelectContent>
-											{SERVICE_TYPES.map((service) => (
-												<SelectItem key={service.value} value={service.value} data-testid={`service-${service.value}`}>
-													<div className="flex items-center gap-2">
-														<ServiceIcon service={service.value} />
-														{service.label}
-													</div>
+											{CURRENCIES.map((currency) => (
+												<SelectItem key={currency} value={currency}>
+													{currency}
 												</SelectItem>
 											))}
 										</SelectContent>
 									</Select>
 								</div>
-
-								<div className="space-y-2">
-									<Label htmlFor="price" className="font-medium">
-										Price *
-									</Label>
-									<div className="flex gap-2">
-										<Input
-											id="price"
-											data-testid="shipping-price-input"
-											type="number"
-											step="0.01"
-											min="0"
-											value={formData.price}
-											onChange={(e) => setFormData((prev) => ({ ...prev, price: e.target.value }))}
-											placeholder="0.00"
-											className="flex-1"
-											required
-										/>
-										<Select value={formData.currency} onValueChange={(value) => setFormData((prev) => ({ ...prev, currency: value }))}>
-											<SelectTrigger className="w-20" data-testid="shipping-currency-select">
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												{CURRENCIES.map((currency) => (
-													<SelectItem key={currency} value={currency}>
-														{currency}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
-									</div>
-								</div>
-
-								<div className="space-y-2">
-									<Label htmlFor="countries" className="font-medium">
-										Countries *
-									</Label>
-
-									{/* Shipping Templates */}
-									<div className="space-y-2">
-										<Label className="text-sm font-medium">Quick Templates</Label>
-										<Select
-											onValueChange={(templateName) => {
-												const template = SHIPPING_TEMPLATES.find((t) => t.name === templateName)
-												if (template) {
-													setFormData((prev) => ({
-														...prev,
-														title: template.name,
-														price: template.cost,
-														countries: template.countries || [],
-													}))
-												}
-											}}
-										>
-											<SelectTrigger data-testid="shipping-template-select">
-												<SelectValue placeholder="Choose a template (optional)" />
-											</SelectTrigger>
-											<SelectContent>
-												{SHIPPING_TEMPLATES.map((template) => (
-													<SelectItem
-														key={template.name}
-														value={template.name}
-														data-testid={`template-${template.name.toLowerCase().replace(/\s+/g, '-')}`}
-													>
-														{template.name} {template.countries ? `(${template.countries.length} countries)` : '(Worldwide)'}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
-									</div>
-
-									{/* Country Selection */}
-									<div className="space-y-2">
-										<div className="flex flex-wrap gap-2 min-h-[40px] p-2 border rounded-md">
-											{formData.countries.map((countryCode) => (
-												<Badge key={countryCode} variant="secondary" className="flex items-center gap-1">
-													{getCountryName(countryCode)}
-													<XIcon
-														className="w-3 h-3 cursor-pointer"
-														onClick={() =>
-															setFormData((prev) => ({
-																...prev,
-																countries: prev.countries.filter((c) => c !== countryCode),
-															}))
-														}
-													/>
-												</Badge>
-											))}
-											{formData.countries.length === 0 && <span className="text-muted-foreground text-sm">No countries selected</span>}
-										</div>
-										<Select
-											onValueChange={(countryCode) => {
-												if (!formData.countries.includes(countryCode)) {
-													setFormData((prev) => ({
-														...prev,
-														countries: [...prev.countries, countryCode],
-													}))
-												}
-											}}
-										>
-											<SelectTrigger data-testid="shipping-country-select">
-												<SelectValue placeholder="Add countries" />
-											</SelectTrigger>
-											<SelectContent>
-												{Object.values(COUNTRIES_ISO)
-													.filter((country) => !formData.countries.includes(country.iso3))
-													.map((country) => (
-														<SelectItem key={country.iso3} value={country.iso3} data-testid={`country-${country.iso3.toLowerCase()}`}>
-															{country.name}
-														</SelectItem>
-													))}
-											</SelectContent>
-										</Select>
-									</div>
-								</div>
 							</div>
 
 							<div className="space-y-2">
-								<Label htmlFor="description" className="font-medium">
-									Description
+								<Label htmlFor="countries" className="font-medium">
+									Countries *
 								</Label>
-								<Textarea
-									id="description"
-									data-testid="shipping-description-input"
-									value={formData.description}
-									onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-									placeholder="Describe your shipping option..."
-									rows={3}
-								/>
+
+								{/* Country Selection */}
+								<div className="space-y-2">
+									<Select
+										key={formData.countries.length}
+										onValueChange={(countryCode) => {
+											if (!formData.countries.includes(countryCode)) {
+												setFormData((prev) => ({
+													...prev,
+													countries: [...prev.countries, countryCode],
+												}))
+											}
+										}}
+									>
+										<SelectTrigger data-testid="shipping-country-select">
+											<SelectValue placeholder="Select countries" />
+										</SelectTrigger>
+										<SelectContent>
+											{Object.values(COUNTRIES_ISO)
+												.filter((country) => !formData.countries.includes(country.iso3))
+												.map((country) => (
+													<SelectItem key={country.iso3} value={country.iso3} data-testid={`country-${country.iso3.toLowerCase()}`}>
+														{country.name}
+													</SelectItem>
+												))}
+										</SelectContent>
+									</Select>
+
+									<div className="flex flex-wrap gap-2 min-h-[40px] p-2 border rounded-md">
+										{formData.countries.map((countryCode) => (
+											<Badge key={countryCode} variant="secondary" className="flex items-center gap-1 bg-black text-white">
+												{getCountryName(countryCode)}
+												<XIcon
+													className="w-3 h-3 cursor-pointer pointer-events-auto"
+													onClick={() =>
+														setFormData((prev) => ({
+															...prev,
+															countries: prev.countries.filter((c) => c !== countryCode),
+														}))
+													}
+												/>
+											</Badge>
+										))}
+										{formData.countries.length === 0 && <span className="text-muted-foreground text-sm">No countries selected</span>}
+									</div>
+								</div>
 							</div>
 						</div>
 
-						{/* Optional Details */}
-						<div className="space-y-4">
-							<h3 className="text-lg font-semibold">Optional Details</h3>
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div className="space-y-2">
+							<Label htmlFor="description" className="font-medium">
+								Description
+							</Label>
+							<Textarea
+								id="description"
+								data-testid="shipping-description-input"
+								value={formData.description}
+								onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+								placeholder="Describe your shipping option..."
+								rows={3}
+							/>
+						</div>
+					</div>
+
+					{/* Optional Details */}
+					<Collapsible open={isOptionalDetailsOpen} onOpenChange={setIsOptionalDetailsOpen}>
+						<CollapsibleTrigger asChild>
+							<div className="group flex w-full justify-between items-center cursor-pointer">
+								<h3 className="text-lg font-semibold">Optional Details</h3>
+								<ChevronLeftIcon className="w-4 h-4 transition-transform duration-200 group-data-[state=open]:-rotate-90" />
+							</div>
+						</CollapsibleTrigger>
+						<CollapsibleContent>
+							<div className="space-y-4 pt-4">
 								<div className="space-y-2">
 									<Label htmlFor="carrier" className="font-medium">
 										Carrier
@@ -445,13 +449,36 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 										placeholder="e.g., New York, Tokyo"
 									/>
 								</div>
-							</div>
 
-							{/* Duration */}
-							<div className="space-y-2">
-								<Label className="font-medium">Delivery Duration</Label>
-								<div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-									<div className="flex-1 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+								{/* Duration */}
+								<div className="space-y-2">
+									<Label className="font-medium">Delivery Duration</Label>
+									<div className="flex flex-col gap-2">
+										<Select
+											value={formData.duration?.unit || 'D'}
+											onValueChange={(value: any) =>
+												setFormData((prev) => ({
+													...prev,
+													duration: {
+														...prev.duration,
+														min: prev.duration?.min || '1',
+														max: prev.duration?.max || '1',
+														unit: value,
+													},
+												}))
+											}
+										>
+											<SelectTrigger className="w-full">
+												<SelectValue />
+											</SelectTrigger>
+											<SelectContent>
+												{DURATION_UNITS.map((unit) => (
+													<SelectItem key={unit.value} value={unit.value}>
+														{unit.label}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
 										<Input
 											type="number"
 											min="1"
@@ -468,8 +495,8 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 												}))
 											}
 											placeholder="Min"
+											className="w-full"
 										/>
-										<span className="text-muted-foreground">-</span>
 										<Input
 											type="number"
 											min="1"
@@ -486,43 +513,16 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 												}))
 											}
 											placeholder="Max"
+											className="w-full"
 										/>
 									</div>
-									<Select
-										value={formData.duration?.unit || 'D'}
-										onValueChange={(value: any) =>
-											setFormData((prev) => ({
-												...prev,
-												duration: {
-													...prev.duration,
-													min: prev.duration?.min || '1',
-													max: prev.duration?.max || '1',
-													unit: value,
-												},
-											}))
-										}
-									>
-										<SelectTrigger className="w-full sm:w-32">
-											<SelectValue />
-										</SelectTrigger>
-										<SelectContent>
-											{DURATION_UNITS.map((unit) => (
-												<SelectItem key={unit.value} value={unit.value}>
-													{unit.label}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
 								</div>
-							</div>
 
-							{/* Weight Limits */}
-							<div className="space-y-2">
-								<Label className="font-medium">Weight Limits</Label>
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-									<div className="space-y-2">
-										<Label className="text-sm">Min:</Label>
-										<div className="flex gap-2">
+								{/* Weight Limits */}
+								<div className="space-y-2">
+									<Label className="font-medium">Weight Limits</Label>
+									<div className="space-y-4">
+										<div className="flex gap-2 items-center">
 											<Input
 												type="number"
 												step="0.1"
@@ -540,7 +540,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 														},
 													}))
 												}
-												placeholder="0.0"
+												placeholder="Min e.g. 0.0"
 												className="flex-1"
 											/>
 											<Select
@@ -570,11 +570,8 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 												</SelectContent>
 											</Select>
 										</div>
-									</div>
 
-									<div className="space-y-2">
-										<Label className="text-sm">Max:</Label>
-										<div className="flex gap-2">
+										<div className="flex gap-2 items-center">
 											<Input
 												type="number"
 												step="0.1"
@@ -592,7 +589,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 														},
 													}))
 												}
-												placeholder="0.0"
+												placeholder="Max e.g. 0.0"
 												className="flex-1"
 											/>
 											<Select
@@ -624,15 +621,12 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 										</div>
 									</div>
 								</div>
-							</div>
 
-							{/* Dimension Limits */}
-							<div className="space-y-2">
-								<Label className="font-medium">Dimension Limits (LxWxH)</Label>
-								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-									<div className="space-y-2">
-										<Label className="text-sm">Min:</Label>
-										<div className="flex gap-2">
+								{/* Dimension Limits (LxWxH) */}
+								<div className="space-y-2">
+									<Label className="font-medium">Dimension Limits (LxWxH)</Label>
+									<div className="space-y-4">
+										<div className="flex gap-2 items-center">
 											<Input
 												value={formData.dimensionLimits?.min?.value || ''}
 												onChange={(e) =>
@@ -647,7 +641,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 														},
 													}))
 												}
-												placeholder="10x10x10"
+												placeholder="Min e.g. 10x10x10"
 												className="flex-1"
 											/>
 											<Select
@@ -677,11 +671,8 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 												</SelectContent>
 											</Select>
 										</div>
-									</div>
 
-									<div className="space-y-2">
-										<Label className="text-sm">Max:</Label>
-										<div className="flex gap-2">
+										<div className="flex gap-2 items-center">
 											<Input
 												value={formData.dimensionLimits?.max?.value || ''}
 												onChange={(e) =>
@@ -696,7 +687,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 														},
 													}))
 												}
-												placeholder="100x100x100"
+												placeholder="Max e.g. 100x100x100"
 												className="flex-1"
 											/>
 											<Select
@@ -729,29 +720,29 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 									</div>
 								</div>
 							</div>
-						</div>
+						</CollapsibleContent>
+					</Collapsible>
 
-						{/* Actions */}
-						<div className="flex justify-end gap-2 pt-4 border-t">
-							<Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
-								Cancel
+					{/* Actions */}
+					<div className="flex justify-end gap-2 pt-4">
+						<Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
+							Cancel
+						</Button>
+
+						{isEditing && (
+							<Button type="button" variant="destructive" onClick={handleDelete} disabled={isSubmitting}>
+								<TrashIcon className="w-4 h-4" />
 							</Button>
+						)}
 
-							{isEditing && (
-								<Button type="button" variant="destructive" onClick={handleDelete} disabled={isSubmitting}>
-									<TrashIcon className="w-4 h-4" />
-								</Button>
-							)}
-
-							<Button type="submit" disabled={isSubmitting} data-testid="shipping-submit-button">
-								{isSubmitting && <Spinner />}
-								{isEditing ? 'Update' : 'Create'}
-							</Button>
-						</div>
-					</form>
-				</div>
-			</CollapsibleContent>
-		</Collapsible>
+						<Button type="submit" disabled={isSubmitting} data-testid="shipping-submit-button">
+							{isSubmitting && <Spinner />}
+							{isEditing ? 'Update' : 'Create'}
+						</Button>
+					</div>
+				</form>
+			</div>
+		</DashboardListItem>
 	)
 }
 
@@ -765,7 +756,7 @@ function ShippingOptionsComponent() {
 	const [openShippingOptionId, setOpenShippingOptionId] = useState<string | null>(null)
 	const [serviceFilter, setServiceFilter] = useState<string>('all')
 
-	useDashboardTitle('') // Clear the dashboard title so we can create our own
+	useDashboardTitle('Shipping Options')
 
 	useEffect(() => {
 		getUser().then(setUser)
@@ -786,29 +777,29 @@ function ShippingOptionsComponent() {
 
 	return (
 		<div className="space-y-6">
-			{/* Title and Filter Row */}
-			<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+			<div className="flex justify-between items-center">
 				<div>
-					<h1 className="text-[1.6rem] font-bold">Shipping Options</h1>
 					<p className="text-muted-foreground">Manage your shipping options for customers</p>
 				</div>
-				<div className="flex items-center gap-2 w-full lg:w-auto">
-					<Label htmlFor="service-filter" className="text-sm font-medium whitespace-nowrap">
-						Filter:
-					</Label>
-					<Select value={serviceFilter} onValueChange={setServiceFilter}>
-						<SelectTrigger className="w-full lg:w-64">
-							<SelectValue placeholder="All services" />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="all">All services</SelectItem>
-							{SERVICE_TYPES.map((service) => (
-								<SelectItem key={service.value} value={service.value}>
-									{service.label}
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
+				<div className="flex items-center gap-4">
+					<div className="flex items-center gap-2">
+						<Label htmlFor="service-filter" className="text-sm font-medium">
+							Filter:
+						</Label>
+						<Select value={serviceFilter} onValueChange={setServiceFilter}>
+							<SelectTrigger className="w-[180px]">
+								<SelectValue placeholder="All services" />
+							</SelectTrigger>
+							<SelectContent>
+								<SelectItem value="all">All services</SelectItem>
+								{SERVICE_TYPES.map((service) => (
+									<SelectItem key={service.value} value={service.value}>
+										{service.label}
+									</SelectItem>
+								))}
+							</SelectContent>
+						</Select>
+					</div>
 				</div>
 			</div>
 
