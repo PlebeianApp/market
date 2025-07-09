@@ -303,170 +303,175 @@ function CircularEconomyComponent() {
 	}
 
 	return (
-		<div className="space-y-6 max-w-4xl mx-auto">
-			<Alert className="bg-blue-100 text-blue-800 border-blue-200">
-				<AlertDescription>
-					PM (Beta) Is Powered By Your Generosity. Your Contribution Is The Only Thing That Enables Us To Continue Creating Free And Open
-					Source Solutions 🙏
-				</AlertDescription>
-			</Alert>
+		<div>
+			<div className="hidden md:block sticky top-0 z-10 bg-white border-b py-4 px-4 md:px-8">
+				<h1 className="text-2xl font-bold">Circular Economy</h1>
+			</div>
+			<div className="space-y-6 max-w-4xl mx-auto p-4 md:p-8">
+				<Alert className="bg-blue-100 text-blue-800 border-blue-200">
+					<AlertDescription>
+						PM (Beta) Is Powered By Your Generosity. Your Contribution Is The Only Thing That Enables Us To Continue Creating Free And Open
+						Source Solutions 🙏
+					</AlertDescription>
+				</Alert>
 
-			<div className="space-y-4">
-				<h2 className="text-xl font-semibold">Split of total sales</h2>
+				<div className="space-y-4">
+					<h2 className="text-xl font-semibold">Split of total sales</h2>
 
-				{/* Total V4V percentage slider */}
-				<div className="mt-4">
-					<div className="flex justify-between text-sm text-muted-foreground mb-2">
-						<span>Seller: {formattedSellerPercentage}%</span>
-						<span>V4V: {formattedTotalV4V}%</span>
-					</div>
-					<Slider value={[totalV4VPercentage]} min={0} max={100} step={1} onValueChange={handleTotalV4VPercentageChange} />
-				</div>
-
-				{/* Emoji animation section */}
-				<div className="text-center my-8">
-					<div
-						className={`p-4 rounded-full bg-gray-200 inline-flex items-center justify-center ${emojiClass}`}
-						style={{
-							fontSize: `${emojiSize}px`,
-							width: `${emojiSize * 1.5}px`,
-							height: `${emojiSize * 1.5}px`,
-						}}
-					>
-						{emoji}
-					</div>
-				</div>
-
-				{/* First bar - Total split between seller and V4V */}
-				<div className="w-full h-12 flex rounded-md overflow-hidden">
-					<div
-						className="bg-green-600 flex items-center justify-start pl-4 text-white font-medium"
-						style={{ width: `${sellerPercentage}%` }}
-					>
-						{formattedSellerPercentage}%
-					</div>
-					{totalV4VPercentage > 0 && (
-						<div
-							className="bg-fuchsia-500 flex items-center justify-center text-white font-medium"
-							style={{ width: `${totalV4VPercentage}%` }}
-						>
-							V4V
+					{/* Total V4V percentage slider */}
+					<div className="mt-4">
+						<div className="flex justify-between text-sm text-muted-foreground mb-2">
+							<span>Seller: {formattedSellerPercentage}%</span>
+							<span>V4V: {formattedTotalV4V}%</span>
 						</div>
-					)}
-				</div>
+						<Slider value={[totalV4VPercentage]} min={0} max={100} step={1} onValueChange={handleTotalV4VPercentageChange} />
+					</div>
 
-				<h2 className="text-xl font-semibold mt-6">V4V split between recipients</h2>
+					{/* Emoji animation section */}
+					<div className="text-center my-8">
+						<div
+							className={`p-4 rounded-full bg-gray-200 inline-flex items-center justify-center ${emojiClass}`}
+							style={{
+								fontSize: `${emojiSize}px`,
+								width: `${emojiSize * 1.5}px`,
+								height: `${emojiSize * 1.5}px`,
+							}}
+						>
+							{emoji}
+						</div>
+					</div>
 
-				{/* Second bar - Split between V4V recipients - always fills 100% of bar */}
-				{localShares.length > 0 && totalV4VPercentage > 0 ? (
+					{/* First bar - Total split between seller and V4V */}
 					<div className="w-full h-12 flex rounded-md overflow-hidden">
-						{localShares.map((share, index) => (
+						<div
+							className="bg-green-600 flex items-center justify-start pl-4 text-white font-medium"
+							style={{ width: `${sellerPercentage}%` }}
+						>
+							{formattedSellerPercentage}%
+						</div>
+						{totalV4VPercentage > 0 && (
 							<div
-								key={share.id}
-								className={`${index === 0 ? 'bg-rose-500' : 'bg-gray-500'} flex items-center justify-center text-white font-medium`}
-								style={{
-									width: `${share.percentage * 100}%`,
-									backgroundColor: getHexColorFingerprintFromHexPubkey(share.pubkey),
-								}}
+								className="bg-fuchsia-500 flex items-center justify-center text-white font-medium"
+								style={{ width: `${totalV4VPercentage}%` }}
 							>
-								{(share.percentage * 100).toFixed(1)}%
+								V4V
 							</div>
+						)}
+					</div>
+
+					<h2 className="text-xl font-semibold mt-6">V4V split between recipients</h2>
+
+					{/* Second bar - Split between V4V recipients - always fills 100% of bar */}
+					{localShares.length > 0 && totalV4VPercentage > 0 ? (
+						<div className="w-full h-12 flex rounded-md overflow-hidden">
+							{localShares.map((share, index) => (
+								<div
+									key={share.id}
+									className={`${index === 0 ? 'bg-rose-500' : 'bg-gray-500'} flex items-center justify-center text-white font-medium`}
+									style={{
+										width: `${share.percentage * 100}%`,
+										backgroundColor: getHexColorFingerprintFromHexPubkey(share.pubkey),
+									}}
+								>
+									{(share.percentage * 100).toFixed(1)}%
+								</div>
+							))}
+						</div>
+					) : (
+						<div className="text-gray-500">No V4V recipients added yet</div>
+					)}
+
+					{/* Recipients list */}
+					<div className="space-y-2 mt-4">
+						{localShares.map((share) => (
+							<RecipientItem
+								key={share.id}
+								share={{
+									...share,
+									percentage: share.percentage,
+								}}
+								onRemove={handleRemoveRecipient}
+								onPercentageChange={handleUpdatePercentage}
+							/>
 						))}
 					</div>
-				) : (
-					<div className="text-gray-500">No V4V recipients added yet</div>
-				)}
 
-				{/* Recipients list */}
-				<div className="space-y-2 mt-4">
-					{localShares.map((share) => (
-						<RecipientItem
-							key={share.id}
-							share={{
-								...share,
-								percentage: share.percentage,
-							}}
-							onRemove={handleRemoveRecipient}
-							onPercentageChange={handleUpdatePercentage}
-						/>
-					))}
-				</div>
+					{/* Add new recipient form */}
+					{showAddForm ? (
+						<div className="space-y-4 mt-6 border p-4 rounded-lg">
+							<div className="flex-1">
+								<ProfileSearch onSelect={handleProfileSelect} placeholder="Search profiles or paste npub..." />
 
-				{/* Add new recipient form */}
-				{showAddForm ? (
-					<div className="space-y-4 mt-6 border p-4 rounded-lg">
-						<div className="flex-1">
-							<ProfileSearch onSelect={handleProfileSelect} placeholder="Search profiles or paste npub..." />
-
-							{newRecipientNpub && (
-								<RecipientPreview
-									npub={newRecipientNpub}
-									percentage={newRecipientShare}
-									canReceiveZaps={canReceiveZaps}
-									isLoading={isCheckingZap}
-								/>
-							)}
-						</div>
-						<div className="space-y-2">
-							<div className="flex justify-between text-sm text-muted-foreground">
-								<span>Share percentage: {newRecipientShare}%</span>
+								{newRecipientNpub && (
+									<RecipientPreview
+										npub={newRecipientNpub}
+										percentage={newRecipientShare}
+										canReceiveZaps={canReceiveZaps}
+										isLoading={isCheckingZap}
+									/>
+								)}
 							</div>
-							<Slider
-								value={[newRecipientShare]}
-								min={1}
-								max={100}
-								step={1}
-								onValueChange={(value) => setNewRecipientShare(value[0])}
-								disabled={localShares.length === 0}
-							/>
+							<div className="space-y-2">
+								<div className="flex justify-between text-sm text-muted-foreground">
+									<span>Share percentage: {newRecipientShare}%</span>
+								</div>
+								<Slider
+									value={[newRecipientShare]}
+									min={1}
+									max={100}
+									step={1}
+									onValueChange={(value) => setNewRecipientShare(value[0])}
+									disabled={localShares.length === 0}
+								/>
+							</div>
+							<div className="flex flex-wrap gap-2 items-center">
+								<Button
+									className="flex-grow sm:flex-grow-0"
+									onClick={handleAddRecipient}
+									disabled={isChecking || isCheckingZap || !newRecipientNpub || !canReceiveZaps || totalV4VPercentage === 0}
+									data-testid="add-v4v-recipient-button"
+								>
+									Add
+								</Button>
+								<Button variant="outline" onClick={() => setShowAddForm(false)} data-testid="cancel-v4v-recipient-button">
+									Cancel
+								</Button>
+							</div>
 						</div>
-						<div className="flex flex-wrap gap-2 items-center">
+					) : (
+						<div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
 							<Button
-								className="flex-grow sm:flex-grow-0"
-								onClick={handleAddRecipient}
-								disabled={isChecking || isCheckingZap || !newRecipientNpub || !canReceiveZaps || totalV4VPercentage === 0}
-								data-testid="add-v4v-recipient-button"
+								variant="outline"
+								onClick={() => setShowAddForm(true)}
+								disabled={totalV4VPercentage === 0}
+								data-testid="add-v4v-recipient-form-button"
 							>
-								Add
+								+ V4V Recipient
 							</Button>
-							<Button variant="outline" onClick={() => setShowAddForm(false)} data-testid="cancel-v4v-recipient-button">
-								Cancel
+							<Button
+								variant="outline"
+								onClick={handleEqualizeAll}
+								disabled={localShares.length === 0 || totalV4VPercentage === 0}
+								data-testid="equal-all-v4v-button"
+							>
+								<span className="i-sharing w-5 h-5 mr-2"></span>
+								Equal All
 							</Button>
 						</div>
-					</div>
-				) : (
-					<div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
-						<Button
-							variant="outline"
-							onClick={() => setShowAddForm(true)}
-							disabled={totalV4VPercentage === 0}
-							data-testid="add-v4v-recipient-form-button"
-						>
-							+ V4V Recipient
-						</Button>
-						<Button
-							variant="outline"
-							onClick={handleEqualizeAll}
-							disabled={localShares.length === 0 || totalV4VPercentage === 0}
-							data-testid="equal-all-v4v-button"
-						>
-							<span className="i-sharing w-5 h-5 mr-2"></span>
-							Equal All
-						</Button>
-					</div>
-				)}
+					)}
 
-				{/* Save button */}
-				<div className="mt-6">
-					<Button
-						variant="focus"
-						className="w-full"
-						onClick={handleSave}
-						disabled={publishMutation.isPending}
-						data-testid="save-v4v-button"
-					>
-						{publishMutation.isPending ? 'Saving...' : 'Save'}
-					</Button>
+					{/* Save button */}
+					<div className="mt-6">
+						<Button
+							variant="focus"
+							className="w-full"
+							onClick={handleSave}
+							disabled={publishMutation.isPending}
+							data-testid="save-v4v-button"
+						>
+							{publishMutation.isPending ? 'Saving...' : 'Save'}
+						</Button>
+					</div>
 				</div>
 			</div>
 		</div>

@@ -314,13 +314,15 @@ function DashboardLayout() {
 												'p-4 bg-white lg:p-8 lg:bg-transparent',
 												location.pathname === '/dashboard/sales/sales' && 'p-0 lg:p-0',
 												location.pathname.startsWith('/dashboard/sales/messages') && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/sales/circular-economy' && 'p-0 lg:p-0',
 											)}
 										>
 											{/* Only show title here if there's no back button */}
 											{!isMobile &&
 												!needsBackButton &&
 												location.pathname !== '/dashboard/sales/sales' &&
-												!location.pathname.startsWith('/dashboard/sales/messages') && (
+												!location.pathname.startsWith('/dashboard/sales/messages') &&
+												location.pathname !== '/dashboard/sales/circular-economy' && (
 													<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>
 												)}
 											<Outlet />
