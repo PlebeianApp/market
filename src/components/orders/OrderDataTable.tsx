@@ -86,10 +86,10 @@ export function OrderDataTable<TData>({
 
 	return (
 		<div className="space-y-4">
-			<div className="sticky top-0 z-10 bg-white border-b py-4 px-4 md:px-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-				{heading && <div className="hidden md:block flex-1">{heading}</div>}
+			<div className="sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-8 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+				{heading && <div className="hidden lg:block flex-1">{heading}</div>}
 
-				<div className="flex flex-col sm:flex-row sm:justify-end items-center gap-4 w-full md:w-auto">
+				<div className="flex flex-col sm:flex-row sm:justify-end items-center gap-4 w-full lg:w-auto">
 					<Input
 						placeholder="Search by Order ID or Buyer..."
 						value={globalFilter}
@@ -117,8 +117,8 @@ export function OrderDataTable<TData>({
 				</div>
 			</div>
 
-			{isLoading ? (
-				<div className="space-y-4 pt-4 px-4 md:px-8">
+					{isLoading ? (
+			<div className="space-y-4 pt-4 px-4 lg:px-8">
 					{Array(7)
 						.fill(0)
 						.map((_, i) => (
@@ -127,8 +127,8 @@ export function OrderDataTable<TData>({
 							</div>
 						))}
 				</div>
-			) : table.getRowModel().rows?.length ? (
-				<div className="space-y-4 pt-4 px-4 md:px-8">
+					) : table.getRowModel().rows?.length ? (
+			<div className="space-y-4 pt-4 px-4 lg:px-8">
 					{table.getRowModel().rows.map((row) => {
 						const orderId = (row.original as any).order.id || 'unknown'
 						return (
@@ -138,8 +138,8 @@ export function OrderDataTable<TData>({
 								className="cursor-pointer hover:bg-muted/50"
 								data-state={row.getIsSelected() && 'selected'}
 							>
-								{/* Mobile Card Layout */}
-								<div className="block md:hidden p-4 space-y-3">
+															{/* Mobile Card Layout */}
+							<div className="block lg:hidden p-4 space-y-3">
 									{row.getVisibleCells().map((cell, index) => (
 										<div key={cell.id} className="flex justify-between items-start">
 											<span className="text-sm font-medium text-gray-600 capitalize min-w-0 flex-shrink-0 mr-3">
@@ -153,8 +153,8 @@ export function OrderDataTable<TData>({
 									))}
 								</div>
 
-								{/* Desktop Grid Layout */}
-								<div className="hidden md:grid md:grid-cols-5 gap-4 p-4 items-center">
+															{/* Desktop Grid Layout */}
+							<div className="hidden lg:grid lg:grid-cols-5 gap-4 p-4 items-center">
 									{row.getVisibleCells().map((cell) => (
 										<div key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
 									))}
@@ -164,12 +164,12 @@ export function OrderDataTable<TData>({
 					})}
 				</div>
 			) : (
-				<div className="px-4 md:px-8">
+				<div className="px-4 lg:px-8">
 					<Card className="rounded-md border p-6 text-center mt-4">No orders found.</Card>
 				</div>
 			)}
 
-			<div className="flex items-center justify-between space-x-2 py-4 px-4 md:px-8">
+			<div className="flex items-center justify-between space-x-2 py-4 px-4 lg:px-8">
 				<div className="flex-1 text-sm text-muted-foreground">
 					Showing {table.getRowModel().rows.length} of {data.length} orders
 				</div>

@@ -784,7 +784,7 @@ function ReceivingPaymentsComponent() {
 
 	return (
 		<div>
-			<div className="hidden md:flex sticky top-0 z-10 bg-white border-b py-4 px-4 md:px-8 items-center justify-between">
+			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-8 items-center justify-between">
 				<h1 className="text-2xl font-bold">Receiving Payments</h1>
 				<Button
 					onClick={() => handleOpenChange('new', true)}
@@ -794,27 +794,34 @@ function ReceivingPaymentsComponent() {
 					Add Payment Method
 				</Button>
 			</div>
-			<div className="space-y-4 p-4 md:p-8">
-				<div className="md:hidden">
-					<DashboardListItem
-						isOpen={openPaymentDetailId === 'new'}
-						onOpenChange={(open) => handleOpenChange('new', open)}
-						triggerContent={
-							<div>
-								<p className="font-semibold">Add New Payment Detail</p>
-								<p className="text-sm text-muted-foreground">Configure a new way to receive payments</p>
-							</div>
-						}
-						icon={<PlusIcon className="w-6 h-6" />}
+			<div className="space-y-4 p-4 lg:p-8">
+				<div className="lg:hidden">
+					<Button
+						onClick={() => handleOpenChange('new', true)}
+						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
 					>
-						<PaymentDetailForm
-							paymentDetail={null}
-							isOpen={openPaymentDetailId === 'new'}
-							onOpenChange={(open) => handleOpenChange('new', open)}
-							onSuccess={handleSuccess}
-						/>
-					</DashboardListItem>
+						<PlusIcon className="w-5 h-5" />
+						Add Payment Method
+					</Button>
 				</div>
+
+				{/* Payment form - shows at top when opened */}
+				{openPaymentDetailId === 'new' && (
+					<Card className="mt-4">
+						<CardHeader>
+							<CardTitle>Add New Payment Detail</CardTitle>
+							<CardDescription>Configure a new way to receive payments</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<PaymentDetailForm
+								paymentDetail={null}
+								isOpen={openPaymentDetailId === 'new'}
+								onOpenChange={(open) => handleOpenChange('new', open)}
+								onSuccess={handleSuccess}
+							/>
+						</CardContent>
+					</Card>
+				)}
 
 				<div className="space-y-4">
 					{paymentDetails?.map((pd) => (
@@ -826,26 +833,6 @@ function ReceivingPaymentsComponent() {
 							onSuccess={handleSuccess}
 						/>
 					))}
-				</div>
-
-				{/* Hidden form for desktop header button */}
-				<div className="hidden md:block">
-					{openPaymentDetailId === 'new' && (
-						<Card className="mt-4">
-							<CardHeader>
-								<CardTitle>Add New Payment Detail</CardTitle>
-								<CardDescription>Configure a new way to receive payments</CardDescription>
-							</CardHeader>
-							<CardContent>
-								<PaymentDetailForm
-									paymentDetail={null}
-									isOpen={openPaymentDetailId === 'new'}
-									onOpenChange={(open) => handleOpenChange('new', open)}
-									onSuccess={handleSuccess}
-								/>
-							</CardContent>
-						</Card>
-					)}
 				</div>
 			</div>
 		</div>

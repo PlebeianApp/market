@@ -1,7 +1,7 @@
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { ChevronLeftIcon } from 'lucide-react'
+import { ChevronLeftIcon, XIcon } from 'lucide-react'
 import * as React from 'react'
 import { WalletIcon } from 'lucide-react'
 
@@ -14,6 +14,7 @@ interface DashboardListItemProps extends React.HTMLAttributes<HTMLDivElement> {
 	isCollapsible?: boolean
 	isDeleting?: boolean
 	icon?: React.ReactNode
+	useCloseIcon?: boolean
 }
 
 const DashboardListItem = React.forwardRef<HTMLDivElement, DashboardListItemProps>(
@@ -28,6 +29,7 @@ const DashboardListItem = React.forwardRef<HTMLDivElement, DashboardListItemProp
 			isCollapsible = true,
 			isDeleting,
 			icon,
+			useCloseIcon,
 			...props
 		},
 		ref,
@@ -57,11 +59,19 @@ const DashboardListItem = React.forwardRef<HTMLDivElement, DashboardListItemProp
 							</div>
 							<div className="flex items-center gap-2">
 								{actions}
-								<ChevronLeftIcon
-									className={`h-5 w-5 shrink-0 transition-transform duration-200 text-muted-foreground ${
-										isOpen ? '-rotate-90' : 'rotate-0'
-									}`}
-								/>
+								{useCloseIcon ? (
+									isOpen ? (
+										<XIcon className="h-5 w-5 shrink-0 transition-transform duration-200 text-muted-foreground" />
+									) : (
+										<ChevronLeftIcon className="h-5 w-5 shrink-0 transition-transform duration-200 text-muted-foreground rotate-0" />
+									)
+								) : (
+									<ChevronLeftIcon
+										className={`h-5 w-5 shrink-0 transition-transform duration-200 text-muted-foreground ${
+											isOpen ? '-rotate-90' : 'rotate-0'
+										}`}
+									/>
+								)}
 							</div>
 						</div>
 					</CollapsibleTrigger>

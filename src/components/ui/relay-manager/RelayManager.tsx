@@ -123,18 +123,6 @@ export function RelayManager() {
 
 	return (
 		<div className="space-y-6">
-			{/* Header */}
-			<Card>
-				<CardHeader>
-					<CardTitle className="flex items-center gap-2">
-						<Globe className="w-5 h-5" />
-						Network Relays
-					</CardTitle>
-					<CardDescription>
-						Manage your Nostr relays. Connected to {totalRelays} relay{totalRelays !== 1 ? 's' : ''}.
-					</CardDescription>
-				</CardHeader>
-			</Card>
 
 			{/* Add Relay Form */}
 			<Card>

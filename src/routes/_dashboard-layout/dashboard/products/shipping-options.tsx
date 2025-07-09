@@ -210,11 +210,17 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 	}
 
 	const triggerContent = isEditing ? (
-		<div className="flex items-center gap-3 min-w-0 flex-1">
-			<div className="min-w-0 flex-1">
-				<div className="font-medium truncate">{formData.title}</div>
-				<div className="text-sm text-muted-foreground">
+		<div className="min-w-0 flex-1">
+			<div className="font-medium truncate">{formData.title}</div>
+			{/* Stack details vertically on mobile, inline on desktop */}
+			<div className="text-sm text-muted-foreground">
+				<div className="hidden md:block truncate">
 					{formData.price} {formData.currency} • {formData.countries.map(getCountryName).join(', ')} • {getServiceLabel(formData.service)}
+				</div>
+				<div className="md:hidden space-y-1">
+					<div className="truncate">{formData.price} {formData.currency}</div>
+					<div className="truncate">{formData.countries.map(getCountryName).join(', ')}</div>
+					<div className="truncate">{getServiceLabel(formData.service)}</div>
 				</div>
 			</div>
 		</div>
@@ -225,11 +231,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 		</div>
 	)
 
-	const triggerActions = isEditing ? (
-		<div className="flex items-center gap-2">
-			<GlobeIcon className="w-5 h-5 text-muted-foreground" />
-		</div>
-	) : null
+	const triggerActions = null
 
 	return (
 		<DashboardListItem
@@ -239,9 +241,11 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 			actions={triggerActions}
 			icon={<ServiceIcon service={formData.service} />}
 			data-testid={isEditing ? `shipping-option-item-${getShippingId(shippingOption)}` : 'add-shipping-option-button'}
+			className="w-full max-w-full overflow-hidden"
+			useCloseIcon={true}
 		>
 			<div className="p-4 border-t">
-				<form onSubmit={handleSubmit} className="space-y-6 lg:w-1/2">
+				<form onSubmit={handleSubmit} className="space-y-6 w-full max-w-2xl">
 					{/* Use a template */}
 					<div className="space-y-4">
 						<h3 className="text-lg font-semibold">Use a template</h3>
@@ -776,11 +780,9 @@ function ShippingOptionsComponent() {
 	}
 
 	return (
-		<div className="space-y-6">
-			<div className="flex justify-between items-center">
-				<div>
-					<p className="text-muted-foreground">Manage your shipping options for customers</p>
-				</div>
+		<div>
+			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-8 items-center justify-between">
+				<h1 className="text-2xl font-bold">Shipping Options</h1>
 				<div className="flex items-center gap-4">
 					<div className="flex items-center gap-2">
 						<Label htmlFor="service-filter" className="text-sm font-medium">
@@ -800,52 +802,94 @@ function ShippingOptionsComponent() {
 							</SelectContent>
 						</Select>
 					</div>
+					<Button
+						onClick={() => handleOpenChange('new', true)}
+						className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+					>
+						<PlusIcon className="w-5 h-5" />
+						Add Shipping Option
+					</Button>
 				</div>
 			</div>
-
-			<div className="space-y-4">
-				{/* Add new shipping option */}
-				<ShippingOptionForm
-					shippingOption={null}
-					isOpen={openShippingOptionId === 'new'}
-					onOpenChange={(open) => handleOpenChange('new', open)}
-					onSuccess={() => shippingOptionsQuery.refetch()}
-				/>
-
-				{/* Existing shipping options */}
-				{filteredShippingOptions.map((shippingOption) => {
-					const shippingId = getShippingId(shippingOption)
-					if (!shippingId) return null
-					return (
-						<ShippingOptionForm
-							key={shippingOption.id}
-							shippingOption={shippingOption}
-							isOpen={openShippingOptionId === shippingId}
-							onOpenChange={(open) => handleOpenChange(shippingId, open)}
-							onSuccess={() => shippingOptionsQuery.refetch()}
-						/>
-					)
-				})}
-
-				{shippingOptionsQuery.isLoading && (
-					<div className="flex items-center justify-center p-8">
-						<Spinner />
-						<span className="ml-2">Loading shipping options...</span>
+			<div className="space-y-6 p-4 lg:p-8">
+				<div className="lg:hidden space-y-4">
+					<div>
+						<p className="text-muted-foreground">Manage your shipping options for customers</p>
 					</div>
-				)}
+					
+					<Select value={serviceFilter} onValueChange={setServiceFilter}>
+						<SelectTrigger className="w-full">
+							<SelectValue placeholder="Filter by service type" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="all">All services</SelectItem>
+							{SERVICE_TYPES.map((service) => (
+								<SelectItem key={service.value} value={service.value}>
+									{service.label}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
 
-				{filteredShippingOptions.length === 0 && !shippingOptionsQuery.isLoading && (
-					<Card>
-						<CardContent className="py-10 flex flex-col items-center justify-center">
-							<TruckIcon className="w-16 h-16 text-muted-foreground mb-4" />
-							<p className="text-center text-muted-foreground mb-4">
-								{serviceFilter === 'all'
-									? 'No shipping options configured yet. Add a shipping option to start offering delivery to your customers.'
-									: `No ${SERVICE_TYPES.find((s) => s.value === serviceFilter)?.label.toLowerCase()} shipping options found.`}
-							</p>
+					<Button
+						onClick={() => handleOpenChange('new', true)}
+						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+					>
+						<PlusIcon className="w-5 h-5" />
+						Add Shipping Option
+					</Button>
+				</div>
+
+				{/* Shipping option form - shows at top when opened */}
+				{openShippingOptionId === 'new' && (
+					<Card className="mt-4">
+						<CardContent className="p-0">
+							<ShippingOptionForm
+								shippingOption={null}
+								isOpen={openShippingOptionId === 'new'}
+								onOpenChange={(open) => handleOpenChange('new', open)}
+								onSuccess={() => shippingOptionsQuery.refetch()}
+							/>
 						</CardContent>
 					</Card>
 				)}
+
+				<div className="space-y-4">
+					{/* Existing shipping options */}
+					{filteredShippingOptions.map((shippingOption) => {
+						const shippingId = getShippingId(shippingOption)
+						if (!shippingId) return null
+						return (
+							<ShippingOptionForm
+								key={shippingOption.id}
+								shippingOption={shippingOption}
+								isOpen={openShippingOptionId === shippingId}
+								onOpenChange={(open) => handleOpenChange(shippingId, open)}
+								onSuccess={() => shippingOptionsQuery.refetch()}
+							/>
+						)
+					})}
+
+					{shippingOptionsQuery.isLoading && (
+						<div className="flex items-center justify-center p-8">
+							<Spinner />
+							<span className="ml-2">Loading shipping options...</span>
+						</div>
+					)}
+
+					{filteredShippingOptions.length === 0 && !shippingOptionsQuery.isLoading && (
+						<Card>
+							<CardContent className="py-10 flex flex-col items-center justify-center">
+								<TruckIcon className="w-16 h-16 text-muted-foreground mb-4" />
+								<p className="text-center text-muted-foreground mb-4">
+									{serviceFilter === 'all'
+										? 'No shipping options configured yet. Add a shipping option to start offering delivery to your customers.'
+										: `No ${SERVICE_TYPES.find((s) => s.value === serviceFilter)?.label.toLowerCase()} shipping options found.`}
+								</p>
+							</CardContent>
+						</Card>
+					)}
+				</div>
 			</div>
 		</div>
 	)

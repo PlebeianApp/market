@@ -304,10 +304,10 @@ function CircularEconomyComponent() {
 
 	return (
 		<div>
-			<div className="hidden md:block sticky top-0 z-10 bg-white border-b py-4 px-4 md:px-8">
+			<div className="hidden lg:block sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-8">
 				<h1 className="text-2xl font-bold">Circular Economy</h1>
 			</div>
-			<div className="space-y-6 max-w-4xl mx-auto p-4 md:p-8">
+			<div className="space-y-6 max-w-4xl mx-auto p-4 lg:p-8">
 				<Alert className="bg-blue-100 text-blue-800 border-blue-200">
 					<AlertDescription>
 						PM (Beta) Is Powered By Your Generosity. Your Contribution Is The Only Thing That Enables Us To Continue Creating Free And Open

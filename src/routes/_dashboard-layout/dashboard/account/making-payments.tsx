@@ -183,29 +183,57 @@ function MakingPaymentsComponent() {
 	}
 
 	return (
-		<div className="space-y-4">
-			<WalletListItem
-				wallet={null}
-				isOpen={openWalletId === 'new'}
-				onOpenChange={(open) => handleOpenChange('new', open)}
-				onSuccess={handleSuccess}
-				userPubkey={userPubkey}
-				onCancel={() => handleOpenChange('new', false)}
-			/>
+		<div>
+			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-8 items-center justify-between">
+				<h1 className="text-2xl font-bold">Making Payments</h1>
+				<Button
+					onClick={() => handleOpenChange('new', true)}
+					className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+				>
+					<PlusIcon className="w-5 h-5" />
+					Add Wallet
+				</Button>
+			</div>
+			<div className="space-y-4 p-4 lg:p-8">
+				<div className="lg:hidden">
+					<Button
+						onClick={() => handleOpenChange('new', true)}
+						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+					>
+						<PlusIcon className="w-5 h-5" />
+						Add Wallet
+					</Button>
+				</div>
 
-			{combinedWallets.map((wallet) => (
-				<WalletListItem
-					key={wallet.id}
-					wallet={wallet}
-					isOpen={openWalletId === wallet.id}
-					onOpenChange={(open) => handleOpenChange(wallet.id, open)}
-					onDelete={() => handleDeleteWallet(wallet.id)}
-					isDeleting={deletingWalletId === wallet.id}
-					onSuccess={handleSuccess}
-					userPubkey={userPubkey}
-					onCancel={() => handleOpenChange(wallet.id, false)}
-				/>
-			))}
+				{/* Wallet form - shows at top when opened */}
+				{openWalletId === 'new' && (
+					<Card className="mt-4">
+						<CardHeader>
+							<CardTitle>Add New Wallet</CardTitle>
+							<CardDescription>Connect your Nostr Wallet to make payments</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<WalletForm wallet={null} onSuccess={handleSuccess} onCancel={() => handleOpenChange('new', false)} userPubkey={userPubkey} />
+						</CardContent>
+					</Card>
+				)}
+
+				<div className="space-y-4">
+					{combinedWallets.map((wallet) => (
+						<WalletListItem
+							key={wallet.id}
+							wallet={wallet}
+							isOpen={openWalletId === wallet.id}
+							onOpenChange={(open) => handleOpenChange(wallet.id, open)}
+							onDelete={() => handleDeleteWallet(wallet.id)}
+							isDeleting={deletingWalletId === wallet.id}
+							onSuccess={handleSuccess}
+							userPubkey={userPubkey}
+							onCancel={() => handleOpenChange(wallet.id, false)}
+						/>
+					))}
+				</div>
+			</div>
 		</div>
 	)
 }
@@ -317,7 +345,7 @@ function WalletForm({ wallet, onSuccess, onCancel, userPubkey }: WalletFormProps
 
 	if (!isEditing) {
 		return (
-			<form onSubmit={handleSubmit} className="p-4 border-t space-y-6">
+			<form onSubmit={handleSubmit} className="space-y-6">
 				<div className="space-y-2">
 					<p className="text-lg font-semibold">Add Nostr Wallet Connect</p>
 					<p className="text-sm text-muted-foreground">Paste your Nostr Wallet Connect URI or scan a QR code to connect your wallet.</p>
@@ -386,7 +414,7 @@ function WalletForm({ wallet, onSuccess, onCancel, userPubkey }: WalletFormProps
 	}
 
 	return (
-		<form onSubmit={handleSubmit} className="p-4 border-t space-y-6">
+		<form onSubmit={handleSubmit} className="space-y-6">
 			<div className="space-y-2">
 				<Label htmlFor="wallet-name">Wallet Name</Label>
 				<Input id="wallet-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="My Awesome Wallet" />

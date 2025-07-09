@@ -107,219 +107,233 @@ function ProfileComponent() {
 	}
 
 	return (
-		<div className="space-y-6">
-			{isLoadingProfile ? (
-				<div className="flex items-center justify-center p-8">
-					<div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
-				</div>
-			) : (
-				<form
-					onSubmit={(e: React.FormEvent<HTMLFormElement>) => {
-						e.preventDefault()
-						form.handleSubmit()
-					}}
-					className="space-y-6"
+		<div>
+			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-8 items-center justify-between">
+				<h1 className="text-2xl font-bold">Profile</h1>
+				<Button 
+					type="submit" 
+					disabled={isLoading} 
+					onClick={() => form.handleSubmit()}
+					className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+					data-testid="profile-save-button-desktop"
 				>
-					<div className="space-y-4">
-						<div className="space-y-2">
-							<Label htmlFor="headerImage">Header Image</Label>
-							<ImageUploader
-								src={profile.banner || null}
-								index={-1}
-								imagesLength={1}
-								forSingle={true}
-								initialUrl={profile.banner}
-								onSave={handleHeaderImageSave}
-								onDelete={handleImageDelete}
-							/>
-						</div>
-
-						<div className="space-y-2">
-							<Label htmlFor="profileImage">Profile Image</Label>
-							<ImageUploader
-								src={profile.image || null}
-								index={-1}
-								imagesLength={1}
-								forSingle={true}
-								initialUrl={profile.image}
-								onSave={handleProfileImageSave}
-								onDelete={handleImageDelete}
-							/>
-						</div>
-
-						<form.Field
-							name="name"
-							validators={{
-								onChange: (field) => {
-									if (!field.value) return 'Name is required'
-									return undefined
-								},
-							}}
-						>
-							{(field) => (
-								<div className="space-y-2">
-									<Label htmlFor={field.name}>
-										<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Name</span>
-									</Label>
-									<Input
-										id={field.name}
-										name={field.name}
-										value={field.state.value}
-										onBlur={field.handleBlur}
-										onChange={(e) => field.handleChange(e.target.value)}
-										placeholder="e.g Clothes Collection"
-										required
-									/>
-									{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
-										<div className="text-red-500 text-sm">{field.state.meta.errors.join(', ')}</div>
-									)}
-								</div>
-							)}
-						</form.Field>
-
-						<form.Field
-							name="displayName"
-							validators={{
-								onChange: (field) => {
-									if (!field.value) return 'Display Name is required'
-									return undefined
-								},
-							}}
-						>
-							{(field) => (
-								<div className="space-y-2">
-									<Label htmlFor={field.name}>
-										<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Display Name</span>
-									</Label>
-									<Input
-										id={field.name}
-										name={field.name}
-										value={field.state.value}
-										onBlur={field.handleBlur}
-										onChange={(e) => field.handleChange(e.target.value)}
-										placeholder="e.g Clothes Collection"
-										required
-									/>
-									{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
-										<div className="text-red-500 text-sm">{field.state.meta.errors.join(', ')}</div>
-									)}
-								</div>
-							)}
-						</form.Field>
-
-						<form.Field name="about">
-							{(field) => (
-								<div className="space-y-2">
-									<Label htmlFor={field.name}>About</Label>
-									<Textarea
-										id={field.name}
-										name={field.name}
-										value={field.state.value}
-										onBlur={field.handleBlur}
-										onChange={(e) => field.handleChange(e.target.value)}
-										placeholder="Write a short bio"
-										rows={4}
-									/>
-								</div>
-							)}
-						</form.Field>
-
-						<form.Field
-							name="nip05"
-							validators={{
-								onChange: (field) => {
-									if (field.value && !field.value.includes('@')) {
-										return 'NIP05 address should include @ symbol'
-									}
-									return undefined
-								},
-							}}
-						>
-							{(field) => (
-								<div className="space-y-2">
-									<Label htmlFor={field.name}>Nostr Address (NIP05)</Label>
-									<Input
-										id={field.name}
-										name={field.name}
-										value={field.state.value}
-										onBlur={field.handleBlur}
-										onChange={(e) => field.handleChange(e.target.value)}
-										placeholder="you@example.com"
-									/>
-									{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
-										<div className="text-red-500 text-sm">{field.state.meta.errors.join(', ')}</div>
-									)}
-								</div>
-							)}
-						</form.Field>
-
-						<form.Field name="lud16">
-							{(field) => (
-								<div className="space-y-2">
-									<Label htmlFor={field.name}>Lightning Address (LUD16)</Label>
-									<Input
-										id={field.name}
-										name={field.name}
-										value={field.state.value}
-										onBlur={field.handleBlur}
-										onChange={(e) => field.handleChange(e.target.value)}
-										placeholder="you@walletprovider.com"
-									/>
-								</div>
-							)}
-						</form.Field>
-
-						<form.Field name="lud06">
-							{(field) => (
-								<div className="space-y-2">
-									<Label htmlFor={field.name}>LNURL (LUD06)</Label>
-									<Input
-										id={field.name}
-										name={field.name}
-										value={field.state.value}
-										onBlur={field.handleBlur}
-										onChange={(e) => field.handleChange(e.target.value)}
-										placeholder="LNURL..."
-									/>
-								</div>
-							)}
-						</form.Field>
-
-						<form.Field
-							name="website"
-							validators={{
-								onChange: (field) => {
-									if (field.value && !field.value.startsWith('http')) {
-										return 'Website should start with http:// or https://'
-									}
-									return undefined
-								},
-							}}
-						>
-							{(field) => (
-								<div className="space-y-2">
-									<Label htmlFor={field.name}>Website</Label>
-									<Input
-										id={field.name}
-										name={field.name}
-										value={field.state.value}
-										onBlur={field.handleBlur}
-										onChange={(e) => field.handleChange(e.target.value)}
-										placeholder="https://yourwebsite.com"
-									/>
-									{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
-										<div className="text-red-500 text-sm">{field.state.meta.errors.join(', ')}</div>
-									)}
-								</div>
-							)}
-						</form.Field>
-
-						<Button type="submit" disabled={isLoading} className="w-full" data-testid="profile-save-button">
-							{isLoading ? 'Saving...' : 'Save'}
-						</Button>
+					{isLoading ? 'Saving...' : 'Save'}
+				</Button>
+			</div>
+			<div className="space-y-6 p-4 lg:p-8">
+				{isLoadingProfile ? (
+					<div className="flex items-center justify-center p-8">
+						<div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
 					</div>
-				</form>
-			)}
+				) : (
+					<form
+						onSubmit={(e: React.FormEvent<HTMLFormElement>) => {
+							e.preventDefault()
+							form.handleSubmit()
+						}}
+						className="space-y-6"
+					>
+						<div className="space-y-4">
+							<div className="space-y-2">
+								<Label htmlFor="headerImage">Header Image</Label>
+								<ImageUploader
+									src={profile.banner || null}
+									index={-1}
+									imagesLength={1}
+									forSingle={true}
+									initialUrl={profile.banner}
+									onSave={handleHeaderImageSave}
+									onDelete={handleImageDelete}
+								/>
+							</div>
+
+							<div className="space-y-2">
+								<Label htmlFor="profileImage">Profile Image</Label>
+								<ImageUploader
+									src={profile.image || null}
+									index={-1}
+									imagesLength={1}
+									forSingle={true}
+									initialUrl={profile.image}
+									onSave={handleProfileImageSave}
+									onDelete={handleImageDelete}
+								/>
+							</div>
+
+							<form.Field
+								name="name"
+								validators={{
+									onChange: (field) => {
+										if (!field.value) return 'Name is required'
+										return undefined
+									},
+								}}
+							>
+								{(field) => (
+									<div className="space-y-2">
+										<Label htmlFor={field.name}>
+											<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Name</span>
+										</Label>
+										<Input
+											id={field.name}
+											name={field.name}
+											value={field.state.value}
+											onBlur={field.handleBlur}
+											onChange={(e) => field.handleChange(e.target.value)}
+											placeholder="e.g Clothes Collection"
+											required
+										/>
+										{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
+											<div className="text-red-500 text-sm">{field.state.meta.errors.join(', ')}</div>
+										)}
+									</div>
+								)}
+							</form.Field>
+
+							<form.Field
+								name="displayName"
+								validators={{
+									onChange: (field) => {
+										if (!field.value) return 'Display Name is required'
+										return undefined
+									},
+								}}
+							>
+								{(field) => (
+									<div className="space-y-2">
+										<Label htmlFor={field.name}>
+											<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Display Name</span>
+										</Label>
+										<Input
+											id={field.name}
+											name={field.name}
+											value={field.state.value}
+											onBlur={field.handleBlur}
+											onChange={(e) => field.handleChange(e.target.value)}
+											placeholder="e.g Clothes Collection"
+											required
+										/>
+										{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
+											<div className="text-red-500 text-sm">{field.state.meta.errors.join(', ')}</div>
+										)}
+									</div>
+								)}
+							</form.Field>
+
+							<form.Field name="about">
+								{(field) => (
+									<div className="space-y-2">
+										<Label htmlFor={field.name}>About</Label>
+										<Textarea
+											id={field.name}
+											name={field.name}
+											value={field.state.value}
+											onBlur={field.handleBlur}
+											onChange={(e) => field.handleChange(e.target.value)}
+											placeholder="Write a short bio"
+											rows={4}
+										/>
+									</div>
+								)}
+							</form.Field>
+
+							<form.Field
+								name="nip05"
+								validators={{
+									onChange: (field) => {
+										if (field.value && !field.value.includes('@')) {
+											return 'NIP05 address should include @ symbol'
+										}
+										return undefined
+									},
+								}}
+							>
+								{(field) => (
+									<div className="space-y-2">
+										<Label htmlFor={field.name}>Nostr Address (NIP05)</Label>
+										<Input
+											id={field.name}
+											name={field.name}
+											value={field.state.value}
+											onBlur={field.handleBlur}
+											onChange={(e) => field.handleChange(e.target.value)}
+											placeholder="you@example.com"
+										/>
+										{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
+											<div className="text-red-500 text-sm">{field.state.meta.errors.join(', ')}</div>
+										)}
+									</div>
+								)}
+							</form.Field>
+
+							<form.Field name="lud16">
+								{(field) => (
+									<div className="space-y-2">
+										<Label htmlFor={field.name}>Lightning Address (LUD16)</Label>
+										<Input
+											id={field.name}
+											name={field.name}
+											value={field.state.value}
+											onBlur={field.handleBlur}
+											onChange={(e) => field.handleChange(e.target.value)}
+											placeholder="you@walletprovider.com"
+										/>
+									</div>
+								)}
+							</form.Field>
+
+							<form.Field name="lud06">
+								{(field) => (
+									<div className="space-y-2">
+										<Label htmlFor={field.name}>LNURL (LUD06)</Label>
+										<Input
+											id={field.name}
+											name={field.name}
+											value={field.state.value}
+											onBlur={field.handleBlur}
+											onChange={(e) => field.handleChange(e.target.value)}
+											placeholder="LNURL..."
+										/>
+									</div>
+								)}
+							</form.Field>
+
+							<form.Field
+								name="website"
+								validators={{
+									onChange: (field) => {
+										if (field.value && !field.value.startsWith('http')) {
+											return 'Website should start with http:// or https://'
+										}
+										return undefined
+									},
+								}}
+							>
+								{(field) => (
+									<div className="space-y-2">
+										<Label htmlFor={field.name}>Website</Label>
+										<Input
+											id={field.name}
+											name={field.name}
+											value={field.state.value}
+											onBlur={field.handleBlur}
+											onChange={(e) => field.handleChange(e.target.value)}
+											placeholder="https://yourwebsite.com"
+										/>
+										{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
+											<div className="text-red-500 text-sm">{field.state.meta.errors.join(', ')}</div>
+										)}
+									</div>
+								)}
+							</form.Field>
+
+							<Button type="submit" disabled={isLoading} className="w-full lg:hidden" data-testid="profile-save-button">
+								{isLoading ? 'Saving...' : 'Save'}
+							</Button>
+						</div>
+					</form>
+				)}
+			</div>
 		</div>
 	)
 }

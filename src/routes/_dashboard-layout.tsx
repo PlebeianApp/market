@@ -320,6 +320,11 @@ function DashboardLayout() {
 												location.pathname === '/dashboard/products/products' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/products/collections' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/products/receiving-payments' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/products/shipping-options' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/account/profile' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/account/making-payments' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/account/your-purchases' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/account/network' && 'p-0 lg:p-0',
 											)}
 										>
 											{/* Only show title here if there's no back button */}
@@ -330,7 +335,12 @@ function DashboardLayout() {
 												location.pathname !== '/dashboard/sales/circular-economy' &&
 												location.pathname !== '/dashboard/products/products' &&
 												location.pathname !== '/dashboard/products/collections' &&
-												location.pathname !== '/dashboard/products/receiving-payments' && (
+												location.pathname !== '/dashboard/products/receiving-payments' &&
+												location.pathname !== '/dashboard/products/shipping-options' &&
+												location.pathname !== '/dashboard/account/profile' &&
+												location.pathname !== '/dashboard/account/making-payments' &&
+												location.pathname !== '/dashboard/account/your-purchases' &&
+												location.pathname !== '/dashboard/account/network' && (
 													<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>
 												)}
 											<Outlet />

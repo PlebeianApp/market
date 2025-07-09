@@ -196,7 +196,7 @@ function ProductsOverviewComponent() {
 
 	return (
 		<div>
-			<div className="hidden md:flex sticky top-0 z-10 bg-white border-b py-4 px-4 md:px-8 items-center justify-between">
+			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-8 items-center justify-between">
 				<h1 className="text-2xl font-bold">Products</h1>
 				<Button
 					onClick={handleAddProductClick}
@@ -206,16 +206,16 @@ function ProductsOverviewComponent() {
 					<span className="i-product w-5 h-5" /> Add A Product
 				</Button>
 			</div>
-			<div className="space-y-6 p-4 md:p-8">
-				<div className="md:hidden">
-					<Button
-						onClick={handleAddProductClick}
-						data-testid="add-product-button-mobile"
-						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
-					>
-						<span className="i-product w-5 h-5" /> Add A Product
-					</Button>
-				</div>
+			<div className="space-y-6 p-4 lg:p-8">
+							<div className="lg:hidden">
+				<Button
+					onClick={handleAddProductClick}
+					data-testid="add-product-button-mobile"
+					className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+				>
+					<span className="i-product w-5 h-5" /> Add A Product
+				</Button>
+			</div>
 
 				<div>
 					{isLoading && <div className="p-6 text-center text-gray-500 mt-4">Loading your products...</div>}
