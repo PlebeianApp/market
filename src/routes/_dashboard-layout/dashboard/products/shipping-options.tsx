@@ -211,7 +211,6 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 
 	const triggerContent = isEditing ? (
 		<div className="flex items-center gap-3 min-w-0 flex-1">
-			<ServiceIcon service={formData.service} />
 			<div className="min-w-0 flex-1">
 				<div className="font-medium truncate">{formData.title}</div>
 				<div className="text-sm text-muted-foreground">
@@ -238,6 +237,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 			onOpenChange={onOpenChange}
 			triggerContent={triggerContent}
 			actions={triggerActions}
+			icon={<ServiceIcon service={formData.service} />}
 			data-testid={isEditing ? `shipping-option-item-${getShippingId(shippingOption)}` : 'add-shipping-option-button'}
 		>
 			<div className="p-4 border-t">
