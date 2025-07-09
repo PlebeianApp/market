@@ -35,21 +35,21 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 						<TabsTrigger
 							value="extension"
 							data-testid="extension-tab"
-							className="flex-1 px-4 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
+							className="flex-1 px-2 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
 						>
 							Extension
 						</TabsTrigger>
 						<TabsTrigger
 							value="connect"
 							data-testid="connect-tab"
-							className="flex-1 px-4 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
+							className="flex-1 px-2 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
 						>
-							Nostr Connect
+							N-Connect
 						</TabsTrigger>
 						<TabsTrigger
 							value="private-key"
 							data-testid="private-key-tab"
-							className="flex-1 px-4 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
+							className="flex-1 px-2 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
 						>
 							Private Key
 						</TabsTrigger>
