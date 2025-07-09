@@ -33,7 +33,7 @@ function YourPurchasesComponent() {
 	}, [purchases, statusFilter])
 
 	return (
-		<div className="space-y-6">
+		<div className="h-full">
 			<OrderDataTable
 				heading={<h1 className="text-2xl font-bold">Your Purchases</h1>}
 				data={filteredPurchases}
