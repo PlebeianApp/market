@@ -233,7 +233,9 @@ function DashboardLayout() {
 			</div>
 
 			<div className="hidden lg:block">
-				<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center lg:justify-start relative" />
+				<h1 className="font-heading py-2 px-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center lg:justify-start relative">
+					Dashboard
+				</h1>
 			</div>
 
 			{/* Main container - responsive layout */}
@@ -271,7 +273,7 @@ function DashboardLayout() {
 					{/* Main content - responsive behavior */}
 					{(!showSidebar || !isMobile) && (
 						<div
-							className={`w-full lg:flex-1 lg:border lg:border-black lg:rounded lg:bg-white flex flex-col lg:max-h-full lg:overflow-hidden ${
+							className={`w-full lg:flex-1 lg:max-w-4xl lg:border lg:border-black lg:rounded lg:bg-white flex flex-col lg:max-h-full lg:overflow-hidden ${
 								isMessageDetailView && isMobile ? 'h-[calc(100vh-8.5rem)]' : ''
 							}`}
 						>
