@@ -460,7 +460,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 								</div>
 							</div>
 							<div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:col-span-2">
-								<DetailField label="Order ID:" value={orderId || 'N/A'} />
+								<DetailField label="Order ID:" value={orderId || 'N/A'} valueClassName="break-all" />
 								<DetailField label="Amount:" value={`${totalAmount} sats`} valueClassName="font-bold" />
 								<DetailField
 									label="Date:"
@@ -509,9 +509,9 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 						</CardHeader>
 						<CardContent>
 							<div className="text-sm space-y-2">
-								<p>Current User: {currentUserPubkey}</p>
-								<p>Buyer Pubkey: {buyerPubkey}</p>
-								<p>Seller Pubkey: {sellerPubkey}</p>
+								<p className="break-all">Current User: {currentUserPubkey}</p>
+								<p className="break-all">Buyer Pubkey: {buyerPubkey}</p>
+								<p className="break-all">Seller Pubkey: {sellerPubkey}</p>
 								<p>Is Buyer: {isBuyer ? 'Yes' : 'No'}</p>
 								<p>Is Order Owner: {isOrderOwner ? 'Yes' : 'No'}</p>
 								<p>Is Order Seller: {isOrderSeller ? 'Yes' : 'No'}</p>

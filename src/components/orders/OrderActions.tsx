@@ -241,7 +241,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 				<DialogContent>
 					<DialogHeader>
 						<DialogTitle>Shipping Information</DialogTitle>
-						<DialogDescription>Add tracking information for this shipment</DialogDescription>
+						<DialogDescription className="break-words">Add tracking information for this shipment</DialogDescription>
 					</DialogHeader>
 
 					<div className="space-y-2 py-4">
