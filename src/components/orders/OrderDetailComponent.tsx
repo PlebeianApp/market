@@ -435,7 +435,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	].sort((a, b) => (b.event.created_at || 0) - (a.event.created_at || 0))
 
 	return (
-		<div className="container mx-auto px-4 py-8">
+		<div className="container mx-auto px-4 py-4">
 			<div className="space-y-6">
 				{/* Order Header */}
 				<Card>
