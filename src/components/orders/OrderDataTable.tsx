@@ -112,7 +112,7 @@ export function OrderDataTable<TData>({
 			</div>
 
 			{isLoading ? (
-				<div className="space-y-2">
+				<div className="space-y-4">
 					{Array(7)
 						.fill(0)
 						.map((_, i) => (
@@ -122,7 +122,7 @@ export function OrderDataTable<TData>({
 						))}
 				</div>
 			) : table.getRowModel().rows?.length ? (
-				<div className="space-y-2">
+				<div className="space-y-4">
 					{table.getRowModel().rows.map((row) => {
 						const orderId = (row.original as any).order.id || 'unknown'
 						return (

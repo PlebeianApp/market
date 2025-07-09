@@ -803,15 +803,17 @@ function ReceivingPaymentsComponent() {
 				/>
 			</DashboardListItem>
 
-			{paymentDetails?.map((pd) => (
-				<PaymentDetailListItem
-					key={pd.id}
-					paymentDetail={pd}
-					isOpen={openPaymentDetailId === pd.id}
-					onOpenChange={(open) => handleOpenChange(pd.id, open)}
-					onSuccess={handleSuccess}
-				/>
-			))}
+			<div className="space-y-4">
+				{paymentDetails?.map((pd) => (
+					<PaymentDetailListItem
+						key={pd.id}
+						paymentDetail={pd}
+						isOpen={openPaymentDetailId === pd.id}
+						onOpenChange={(open) => handleOpenChange(pd.id, open)}
+						onSuccess={handleSuccess}
+					/>
+				))}
+			</div>
 		</div>
 	)
 }

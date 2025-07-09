@@ -32,7 +32,7 @@ function MessagesListComponent() {
 			)}
 
 			{!isLoading && !error && conversations && conversations.length > 0 && (
-				<ul className="flex flex-col gap-2">
+				<ul className="flex flex-col gap-4">
 					{conversations.map((convo: ConversationItemData) => (
 						<li key={convo.pubkey}>
 							<ConversationListItem conversation={convo} />
