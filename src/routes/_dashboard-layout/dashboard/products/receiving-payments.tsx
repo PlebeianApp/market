@@ -231,8 +231,6 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 	const updateMutation = useUpdatePaymentDetail()
 	const deleteMutation = useDeletePaymentDetail()
 
-	useDashboardTitle('Receiving Payments')
-
 	const isEditing = !!paymentDetail
 
 	const [editedPaymentDetail, setEditedPaymentDetail] = useState<RichPaymentDetail>(() => {
@@ -497,178 +495,174 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 	)
 
 	return (
-		<DashboardListItem isOpen={isOpen} onOpenChange={onOpenChange} triggerContent={triggerContent} actions={triggerActions}>
-			<div className="px-4 pb-4 border-t">
-				<div className="pt-4">
-					{showConfirmation ? (
-						<PaymentDetailConfirmationCard
-							value={tempValidatedValue}
-							type={confirmationType}
-							onConfirm={handleConfirmation}
-							onCancel={handleCancellation}
+		<div className="border-t pt-4">
+			{showConfirmation ? (
+				<PaymentDetailConfirmationCard
+					value={tempValidatedValue}
+					type={confirmationType}
+					onConfirm={handleConfirmation}
+					onCancel={handleCancellation}
+				/>
+			) : (
+				<form onSubmit={handleValidateAndConfirm} className="space-y-4">
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div className="space-y-2">
+							<Label htmlFor="payment-method" className="font-medium">
+								Payment Method
+							</Label>
+							<Select
+								value={editedPaymentDetail.paymentMethod}
+								onValueChange={(value: PaymentDetailsMethod) => setEditedPaymentDetail((prev) => ({ ...prev, paymentMethod: value }))}
+							>
+								<SelectTrigger data-testid="payment-method-selector">
+									<SelectValue placeholder="Payment method" />
+								</SelectTrigger>
+								<SelectContent>
+									{Object.values(PAYMENT_DETAILS_METHOD).map((method) => (
+										<SelectItem key={method} value={method} data-testid={`payment-method-${method}`}>
+											<div className="flex items-center gap-2">
+												<PaymentMethodIcon method={method} />
+												{paymentMethodLabels[method]}
+											</div>
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+
+						<div className="space-y-2">
+							<Label htmlFor="scope" className="font-medium">
+								Scope
+							</Label>
+							<ScopeSelector
+								value={editedPaymentDetail.scope}
+								scopeId={editedPaymentDetail.scopeId}
+								userPubkey={user?.pubkey || ''}
+								onChange={(scope, scopeId, scopeName) => {
+									setEditedPaymentDetail((prev) => ({
+										...prev,
+										scope,
+										scopeId,
+										scopeName,
+									}))
+								}}
+							/>
+						</div>
+					</div>
+
+					<div className="space-y-2">
+						<Label htmlFor="payment-details" className="font-medium">
+							Payment details
+						</Label>
+						<Input
+							id="payment-details"
+							data-testid="payment-details-input"
+							value={editedPaymentDetail.paymentDetail}
+							onChange={(e) => setEditedPaymentDetail((prev) => ({ ...prev, paymentDetail: e.target.value }))}
+							placeholder="Enter payment details e.g. plebeian@getalby.com"
+							className="w-full"
 						/>
-					) : (
-						<form onSubmit={handleValidateAndConfirm} className="space-y-4">
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-								<div className="space-y-2">
-									<Label htmlFor="payment-method" className="font-medium">
-										Payment Method
-									</Label>
-									<Select
-										value={editedPaymentDetail.paymentMethod}
-										onValueChange={(value: PaymentDetailsMethod) => setEditedPaymentDetail((prev) => ({ ...prev, paymentMethod: value }))}
-									>
-										<SelectTrigger data-testid="payment-method-selector">
-											<SelectValue placeholder="Payment method" />
-										</SelectTrigger>
-										<SelectContent>
-											{Object.values(PAYMENT_DETAILS_METHOD).map((method) => (
-												<SelectItem key={method} value={method} data-testid={`payment-method-${method}`}>
-													<div className="flex items-center gap-2">
-														<PaymentMethodIcon method={method} />
-														{paymentMethodLabels[method]}
-													</div>
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								</div>
 
-								<div className="space-y-2">
-									<Label htmlFor="scope" className="font-medium">
-										Scope
-									</Label>
-									<ScopeSelector
-										value={editedPaymentDetail.scope}
-										scopeId={editedPaymentDetail.scopeId}
-										userPubkey={user?.pubkey || ''}
-										onChange={(scope, scopeId, scopeName) => {
-											setEditedPaymentDetail((prev) => ({
-												...prev,
-												scope,
-												scopeId,
-												scopeName,
-											}))
-										}}
-									/>
-								</div>
-							</div>
+						{walletDetailQuery.data &&
+							paymentDetail?.paymentDetail &&
+							isExtendedPublicKey(paymentDetail.paymentDetail) &&
+							(() => {
+								try {
+									const derivedAddresses = deriveAddresses(paymentDetail.paymentDetail, 1, walletDetailQuery.data.valueNumeric)
+									const currentAddress = derivedAddresses?.[0]
 
-							<div className="space-y-2">
-								<Label htmlFor="payment-details" className="font-medium">
-									Payment details
-								</Label>
-								<Input
-									id="payment-details"
-									data-testid="payment-details-input"
-									value={editedPaymentDetail.paymentDetail}
-									onChange={(e) => setEditedPaymentDetail((prev) => ({ ...prev, paymentDetail: e.target.value }))}
-									placeholder="Enter payment details e.g. plebeian@getalby.com"
-									className="w-full"
-								/>
+									if (!currentAddress) {
+										return (
+											<div className="bg-red-50 p-3 rounded-md space-y-2">
+												<Label className="font-medium text-red-700">Error</Label>
+												<small className="text-red-600">Unable to derive address from extended public key</small>
+											</div>
+										)
+									}
 
-								{walletDetailQuery.data &&
-									paymentDetail?.paymentDetail &&
-									isExtendedPublicKey(paymentDetail.paymentDetail) &&
-									(() => {
-										try {
-											const derivedAddresses = deriveAddresses(paymentDetail.paymentDetail, 1, walletDetailQuery.data.valueNumeric)
-											const currentAddress = derivedAddresses?.[0]
+									return (
+										<div className="bg-gray-50 p-3 rounded-md space-y-2">
+											<Label className="font-medium">Current address</Label>
+											<div className="space-y-1">
+												<small className="font-mono">
+													Index: {walletDetailQuery.data.valueNumeric} - {currentAddress}
+												</small>
+												<small>Last updated: {format(walletDetailQuery.data.updatedAt, 'PPp')}</small>
+											</div>
+										</div>
+									)
+								} catch (error) {
+									console.error('Error displaying current address:', error)
+									return (
+										<div className="bg-red-50 p-3 rounded-md space-y-2">
+											<Label className="font-medium text-red-700">Error</Label>
+											<small className="text-red-600">Invalid extended public key format</small>
+										</div>
+									)
+								}
+							})()}
+					</div>
 
-											if (!currentAddress) {
-												return (
-													<div className="bg-red-50 p-3 rounded-md space-y-2">
-														<Label className="font-medium text-red-700">Error</Label>
-														<small className="text-red-600">Unable to derive address from extended public key</small>
-													</div>
-												)
-											}
+					{validationMessage && formState === 'idle' && <p className="text-red-500 text-sm">{validationMessage}</p>}
 
-											return (
-												<div className="bg-gray-50 p-3 rounded-md space-y-2">
-													<Label className="font-medium">Current address</Label>
-													<div className="space-y-1">
-														<small className="font-mono">
-															Index: {walletDetailQuery.data.valueNumeric} - {currentAddress}
-														</small>
-														<small>Last updated: {format(walletDetailQuery.data.updatedAt, 'PPp')}</small>
-													</div>
-												</div>
-											)
-										} catch (error) {
-											console.error('Error displaying current address:', error)
-											return (
-												<div className="bg-red-50 p-3 rounded-md space-y-2">
-													<Label className="font-medium text-red-700">Error</Label>
-													<small className="text-red-600">Invalid extended public key format</small>
-												</div>
-											)
-										}
-									})()}
-							</div>
+					{formState !== 'idle' && (
+						<div className="flex items-center gap-2">
+							<Spinner />
+							<span className="text-sm">{formState === 'validating' ? 'Validating...' : 'Saving...'}</span>
+						</div>
+					)}
 
-							{validationMessage && formState === 'idle' && <p className="text-red-500 text-sm">{validationMessage}</p>}
+					<div className="space-y-4">
+						<div className="flex items-center gap-2">
+							<Checkbox
+								id="default-payment"
+								data-testid="default-payment-checkbox"
+								checked={editedPaymentDetail.isDefault}
+								onCheckedChange={(checked) => setEditedPaymentDetail((prev) => ({ ...prev, isDefault: !!checked }))}
+							/>
+							<Label htmlFor="default-payment" className="font-medium">
+								Default
+							</Label>
+						</div>
 
-							{formState !== 'idle' && (
-								<div className="flex items-center gap-2">
-									<Spinner />
-									<span className="text-sm">{formState === 'validating' ? 'Validating...' : 'Saving...'}</span>
-								</div>
+						<div className="flex justify-end gap-2">
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => onOpenChange(false)}
+								disabled={formState !== 'idle'}
+								data-testid="cancel-payment-button"
+							>
+								Cancel
+							</Button>
+
+							{isEditing && (
+								<Button
+									type="button"
+									variant="destructive"
+									onClick={handleDelete}
+									disabled={formState !== 'idle'}
+									data-testid="delete-payment-button"
+								>
+									<TrashIcon className="w-4 h-4" />
+								</Button>
 							)}
 
-							<div className="space-y-4">
-								<div className="flex items-center gap-2">
-									<Checkbox
-										id="default-payment"
-										data-testid="default-payment-checkbox"
-										checked={editedPaymentDetail.isDefault}
-										onCheckedChange={(checked) => setEditedPaymentDetail((prev) => ({ ...prev, isDefault: !!checked }))}
-									/>
-									<Label htmlFor="default-payment" className="font-medium">
-										Default
-									</Label>
-								</div>
-
-								<div className="flex justify-end gap-2">
-									<Button
-										type="button"
-										variant="outline"
-										onClick={() => onOpenChange(false)}
-										disabled={formState !== 'idle'}
-										data-testid="cancel-payment-button"
-									>
-										Cancel
-									</Button>
-
-									{isEditing && (
-										<Button
-											type="button"
-											variant="destructive"
-											onClick={handleDelete}
-											disabled={formState !== 'idle'}
-											data-testid="delete-payment-button"
-										>
-											<TrashIcon className="w-4 h-4" />
-										</Button>
-									)}
-
-									<Button type="submit" disabled={formState !== 'idle'} data-testid="save-payment-button">
-										{formState === 'submitting' && <Spinner />}
-										{formState === 'validating'
-											? 'Validating...'
-											: formState === 'submitting'
-												? 'Saving...'
-												: isEditing
-													? 'Update'
-													: 'Save'}
-									</Button>
-								</div>
-							</div>
-						</form>
-					)}
-				</div>
-			</div>
-		</DashboardListItem>
+							<Button type="submit" disabled={formState !== 'idle'} data-testid="save-payment-button">
+								{formState === 'submitting' && <Spinner />}
+								{formState === 'validating'
+									? 'Validating...'
+									: formState === 'submitting'
+										? 'Saving...'
+										: isEditing
+											? 'Update'
+											: 'Save'}
+							</Button>
+						</div>
+					</div>
+				</form>
+			)}
+		</div>
 	)
 }
 
@@ -714,7 +708,7 @@ function PaymentDetailListItem({ paymentDetail, isOpen, onOpenChange, isDeleting
 	const triggerContent = (
 		<div>
 			<p className="font-semibold">{paymentMethodLabels[paymentDetail.paymentMethod]}</p>
-			<p className="text-sm text-muted-foreground truncate">
+			<p className="text-sm text-muted-foreground break-all">
 				{paymentDetail.paymentDetail} - {paymentDetail.scopeName}
 			</p>
 		</div>
@@ -755,6 +749,7 @@ function ReceivingPaymentsComponent() {
 	const [user, setUser] = useState<any>(null)
 	const [openPaymentDetailId, setOpenPaymentDetailId] = useState<string | null>(null)
 	const [paymentMethodFilter, setPaymentMethodFilter] = useState<PaymentDetailsMethod | 'all'>('all')
+	useDashboardTitle('Receiving Payments')
 
 	useEffect(() => {
 		getUser().then(setUser)

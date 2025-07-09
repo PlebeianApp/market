@@ -1,7 +1,7 @@
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { Link } from '@tanstack/react-router'
-import { DashboardListItem } from '../layout/DashboardListItem'
+import { Card } from '@/components/ui/card'
 import { MessageSquareText } from 'lucide-react'
 
 export interface ConversationItemData {
@@ -19,37 +19,43 @@ interface ConversationListItemProps {
 
 export function ConversationListItem({ conversation }: ConversationListItemProps) {
 	const { pubkey, lastMessageAt, lastMessageSnippet } = conversation
+	const breakpoint = useBreakpoint()
+	const isMobile = breakpoint === 'sm'
 
 	const dateElement = lastMessageAt && (
-		<span className="text-xs text-gray-500 whitespace-nowrap">{new Date(lastMessageAt * 1000).toLocaleString()}</span>
-	)
-
-	const triggerContent = <UserWithAvatar pubkey={pubkey} size="md" disableLink={true} showBadge={false} />
-	const content = (
-		<div className="w-full pl-10">
-			<p className="text-sm text-gray-600 break-words">{lastMessageSnippet}</p>
-		</div>
+		<span className="text-xs text-muted-foreground whitespace-nowrap">{new Date(lastMessageAt * 1000).toLocaleString()}</span>
 	)
 
 	return (
 		<Link
-			to="/dashboard/sales/messages/$pubkey"
-			params={{ pubkey }}
+			to={`/dashboard/sales/messages/${pubkey}`}
 			className="block w-full"
 			activeProps={{
-				className: 'bg-muted/20',
+				className: 'bg-muted/20 rounded-lg',
 			}}
 		>
-			<DashboardListItem
-				isOpen={false}
-				onOpenChange={() => {}}
-				triggerContent={triggerContent}
-				actions={dateElement}
-				isCollapsible={false}
-				icon={<MessageSquareText className="h-6 w-6 text-muted-foreground" />}
-			>
-				{content}
-			</DashboardListItem>
+			<Card className="p-4 hover:bg-muted/50 transition-colors">
+				<div className="flex items-start gap-4">
+					{/* Icon */}
+					<div className="p-2 bg-muted rounded-full">
+						<MessageSquareText className="h-6 w-6 text-muted-foreground" />
+					</div>
+
+					{/* Content Block */}
+					<div className="flex-1 flex flex-col gap-1">
+						{/* Top Row: Avatar and Date */}
+						<div className="flex items-center justify-between">
+							<UserWithAvatar pubkey={pubkey} size="md" disableLink={true} showBadge={false} />
+							{!isMobile && dateElement}
+						</div>
+						{/* Bottom Row: Snippet */}
+						<div>
+							<p className="text-sm text-muted-foreground break-words">{lastMessageSnippet}</p>
+						</div>
+						{isMobile && <div className="self-end mt-1">{dateElement}</div>}
+					</div>
+				</div>
+			</Card>
 		</Link>
 	)
 }

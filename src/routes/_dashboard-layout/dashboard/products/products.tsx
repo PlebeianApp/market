@@ -73,7 +73,6 @@ function ProductListItem({
 	const triggerContent = (
 		<div>
 			<p className="font-semibold">{getProductTitle(product)}</p>
-			<p className="text-sm text-muted-foreground">ID: {getProductId(product).substring(0, 12)}...</p>
 		</div>
 	)
 

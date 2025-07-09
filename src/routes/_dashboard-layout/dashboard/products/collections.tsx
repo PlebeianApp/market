@@ -63,7 +63,6 @@ function CollectionListItem({
 	const triggerContent = (
 		<div>
 			<p className="font-semibold">{getCollectionTitle(collection)}</p>
-			<p className="text-sm text-muted-foreground">ID: {getCollectionId(collection).substring(0, 12)}...</p>
 		</div>
 	)
 
