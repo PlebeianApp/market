@@ -16,8 +16,8 @@ function MessagesListComponent() {
 
 	return (
 		<div>
-			<div className="sticky top-0 z-10 bg-white border-b border-gray-200 py-4 px-4 md:px-8">
-				<h1 className="text-2xl font-bold hidden md:block">Messages</h1>
+			<div className="hidden md:block sticky top-0 z-10 bg-white border-b py-4 px-4 md:px-8">
+				<h1 className="text-2xl font-bold">Messages</h1>
 			</div>
 			<div className="space-y-4 p-4 md:p-8">
 				{isLoading && (
