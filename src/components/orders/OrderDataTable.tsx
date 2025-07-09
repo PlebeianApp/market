@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
@@ -11,7 +12,7 @@ import {
 	getSortedRowModel,
 	useReactTable,
 } from '@tanstack/react-table'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 
 const fuzzyFilter: FilterFn<OrderWithRelatedEvents> = (row, columnId, value, addMeta) => {
@@ -56,6 +57,7 @@ export function OrderDataTable<TData>({
 	const [sorting, setSorting] = useState<SortingState>([])
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 	const [globalFilter, setGlobalFilter] = useState('')
+	const navigate = useNavigate()
 
 	const table = useReactTable({
 		data,
@@ -121,40 +123,42 @@ export function OrderDataTable<TData>({
 				</div>
 			) : table.getRowModel().rows?.length ? (
 				<div className="space-y-2">
-					{table.getRowModel().rows.map((row) => (
-						<Link
-							key={row.id}
-							to="/dashboard/orders/$orderId"
-							params={{ orderId: (row.original as any).order.id || 'unknown' }}
-							className="block rounded-md border border-gray-200 hover:bg-gray-50"
-							data-state={row.getIsSelected() && 'selected'}
-						>
-							{/* Mobile Card Layout */}
-							<div className="block md:hidden p-4 space-y-3">
-								{row.getVisibleCells().map((cell, index) => (
-									<div key={cell.id} className="flex justify-between items-start">
-										<span className="text-sm font-medium text-gray-600 capitalize min-w-0 flex-shrink-0 mr-3">
-											{typeof cell.column.columnDef.header === 'string'
-												? cell.column.columnDef.header
-												: cell.column.id.replace(/([A-Z])/g, ' $1').trim()}
-											:
-										</span>
-										<div className="text-sm text-right min-w-0 flex-1">{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
-									</div>
-								))}
-							</div>
+					{table.getRowModel().rows.map((row) => {
+						const orderId = (row.original as any).order.id || 'unknown'
+						return (
+							<Card
+								key={row.id}
+								onClick={() => navigate({ to: '/dashboard/orders/$orderId', params: { orderId } })}
+								className="cursor-pointer hover:bg-muted/50"
+								data-state={row.getIsSelected() && 'selected'}
+							>
+								{/* Mobile Card Layout */}
+								<div className="block md:hidden p-4 space-y-3">
+									{row.getVisibleCells().map((cell, index) => (
+										<div key={cell.id} className="flex justify-between items-start">
+											<span className="text-sm font-medium text-gray-600 capitalize min-w-0 flex-shrink-0 mr-3">
+												{typeof cell.column.columnDef.header === 'string'
+													? cell.column.columnDef.header
+													: cell.column.id.replace(/([A-Z])/g, ' $1').trim()}
+												:
+											</span>
+											<div className="text-sm text-right min-w-0 flex-1">{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
+										</div>
+									))}
+								</div>
 
-							{/* Desktop Grid Layout */}
-							<div className="hidden md:grid md:grid-cols-5 gap-4 p-4 items-center">
-								{row.getVisibleCells().map((cell) => (
-									<div key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
-								))}
-							</div>
-						</Link>
-					))}
+								{/* Desktop Grid Layout */}
+								<div className="hidden md:grid md:grid-cols-5 gap-4 p-4 items-center">
+									{row.getVisibleCells().map((cell) => (
+										<div key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
+									))}
+								</div>
+							</Card>
+						)
+					})}
 				</div>
 			) : (
-				<div className="rounded-md border border-gray-200 p-6 text-center">No orders found.</div>
+				<Card className="rounded-md border p-6 text-center">No orders found.</Card>
 			)}
 
 			<div className="flex items-center justify-between space-x-2 py-4">
