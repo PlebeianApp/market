@@ -43,6 +43,7 @@ function SalesComponent() {
 				showStatusFilter={true}
 				onStatusFilterChange={setStatusFilter}
 				statusFilter={statusFilter}
+				showSearch={false}
 			/>
 		</div>
 	)
