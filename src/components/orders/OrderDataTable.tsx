@@ -86,7 +86,7 @@ export function OrderDataTable<TData>({
 
 	return (
 		<div className="space-y-4">
-			<div className="sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-8 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+			<div className="sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
 				{heading && <div className="hidden lg:block flex-1">{heading}</div>}
 
 				<div className="flex flex-col sm:flex-row sm:justify-end items-center gap-4 w-full lg:w-auto">
@@ -118,7 +118,7 @@ export function OrderDataTable<TData>({
 			</div>
 
 					{isLoading ? (
-			<div className="space-y-4 pt-4 px-4 lg:px-8">
+			<div className="space-y-4 pt-4 px-4 lg:px-6">
 					{Array(7)
 						.fill(0)
 						.map((_, i) => (
@@ -128,7 +128,7 @@ export function OrderDataTable<TData>({
 						))}
 				</div>
 					) : table.getRowModel().rows?.length ? (
-			<div className="space-y-4 pt-4 px-4 lg:px-8">
+			<div className="space-y-4 pt-4 px-4 lg:px-6">
 					{table.getRowModel().rows.map((row) => {
 						const orderId = (row.original as any).order.id || 'unknown'
 						return (
@@ -164,12 +164,12 @@ export function OrderDataTable<TData>({
 					})}
 				</div>
 			) : (
-				<div className="px-4 lg:px-8">
+				<div className="px-4 lg:px-6">
 					<Card className="rounded-md border p-6 text-center mt-4">No orders found.</Card>
 				</div>
 			)}
 
-			<div className="flex items-center justify-between space-x-2 py-4 px-4 lg:px-8">
+			<div className="flex items-center justify-between space-x-2 py-4 px-4 lg:px-6">
 				<div className="flex-1 text-sm text-muted-foreground">
 					Showing {table.getRowModel().rows.length} of {data.length} orders
 				</div>

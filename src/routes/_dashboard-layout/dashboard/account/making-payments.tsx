@@ -184,7 +184,7 @@ function MakingPaymentsComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-8 items-center justify-between">
+			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
 				<h1 className="text-2xl font-bold">Making Payments</h1>
 				<Button
 					onClick={() => handleOpenChange('new', true)}

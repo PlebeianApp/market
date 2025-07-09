@@ -181,7 +181,7 @@ function CollectionsComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-8 items-center justify-between">
+			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
 				<h1 className="text-2xl font-bold">Collections</h1>
 				<Button
 					onClick={handleAddCollectionClick}
@@ -192,7 +192,7 @@ function CollectionsComponent() {
 					Create A Collection
 				</Button>
 			</div>
-			<div className="space-y-6 p-4 lg:p-8">
+			<div className="space-y-6 p-4 lg:p-6">
 							<div className="lg:hidden">
 				<Button
 					onClick={handleAddCollectionClick}

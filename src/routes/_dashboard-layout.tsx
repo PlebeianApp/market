@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { dashboardNavigation } from '@/config/dashboardNavigation'
 import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate, useLocation } from '@tanstack/react-router'
@@ -107,7 +106,7 @@ function DashboardLayout() {
 	const navigate = useNavigate()
 	const location = useLocation()
 	const breakpoint = useBreakpoint()
-	const isMobile = breakpoint !== 'xl' // Changed: treat anything below xl (1280px) as mobile
+	const isMobile = breakpoint === 'sm' || breakpoint === 'md' // Changed: treat anything below lg (1024px) as mobile
 	const [showSidebar, setShowSidebar] = useState(true)
 	const [parent] = useAutoAnimate()
 	const { dashboardTitle } = useStore(uiStore)
@@ -188,7 +187,7 @@ function DashboardLayout() {
 			<div className="lg:hidden sticky top-[8.5rem] z-10">
 				<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center relative">
 					{/* Mobile back button - only visible on small screens when not showing sidebar */}
-					{!showSidebar && breakpoint !== 'xl' && (
+					{!showSidebar && isMobile && (
 						<button
 							onClick={handleBackToSidebar}
 							className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 top-1/2 -translate-y-1/2 w-12 h-12"
@@ -225,7 +224,7 @@ function DashboardLayout() {
 					</span>
 
 					{/* Mobile emoji - only visible on small screens when not showing sidebar */}
-					{!showSidebar && emoji && breakpoint !== 'xl' && !dashboardEmoji && (
+					{!showSidebar && emoji && isMobile && !dashboardEmoji && (
 						<span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xl select-none w-12 h-12 flex items-center justify-center">
 							{emoji}
 						</span>
@@ -238,11 +237,11 @@ function DashboardLayout() {
 			</div>
 
 			{/* Main container - responsive layout */}
-			<div className="lg:flex lg:m-6 lg:gap-6 lg:container lg:max-h-[77vh] lg:overflow-auto">
+			<div className="lg:flex lg:p-6 lg:gap-6 lg:max-h-[calc(100vh-12rem)] lg:overflow-hidden lg:max-w-none">
 				<div ref={parent} className="lg:flex lg:w-full lg:gap-6">
 					{/* Sidebar - responsive behavior */}
 					{(showSidebar || !isMobile) && (
-						<aside className="w-full lg:w-[25%] overflow-auto lg:p-6 lg:border lg:border-black lg:rounded lg:max-h-full lg:bg-white">
+						<aside className="w-full lg:w-80 lg:overflow-y-auto lg:p-6 lg:border lg:border-black lg:rounded lg:max-h-full lg:bg-white lg:flex-shrink-0">
 							<div className="lg:space-y-2">
 								{dashboardNavigation.map((section) => (
 									<div key={section.title}>
@@ -304,13 +303,13 @@ function DashboardLayout() {
 								</div>
 							)}
 
-							<div className="flex-1 min-h-0 lg:overflow-hidden">
+							<div className="flex-1 min-h-0 lg:overflow-y-auto">
 								{isMessageDetailView ? (
 									<div className="h-full">
 										<Outlet />
 									</div>
 								) : (
-									<ScrollArea className="h-full">
+									<div className="h-full">
 										<div
 											className={cn(
 												'p-4 bg-white lg:p-8 lg:bg-transparent',
@@ -345,7 +344,7 @@ function DashboardLayout() {
 												)}
 											<Outlet />
 										</div>
-									</ScrollArea>
+									</div>
 								)}
 							</div>
 						</div>

@@ -11,7 +11,7 @@ function NetworkComponent() {
 	useDashboardTitle('Network')
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-8 items-center justify-between">
+			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
 				<div className="flex items-center gap-3">
 					<Globe className="w-6 h-6 text-muted-foreground" />
 					<div>

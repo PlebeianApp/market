@@ -784,7 +784,7 @@ function ReceivingPaymentsComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-8 items-center justify-between">
+			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
 				<h1 className="text-2xl font-bold">Receiving Payments</h1>
 				<Button
 					onClick={() => handleOpenChange('new', true)}
@@ -794,7 +794,7 @@ function ReceivingPaymentsComponent() {
 					Add Payment Method
 				</Button>
 			</div>
-			<div className="space-y-4 p-4 lg:p-8">
+			<div className="space-y-4 p-4 lg:p-6">
 				<div className="lg:hidden">
 					<Button
 						onClick={() => handleOpenChange('new', true)}
