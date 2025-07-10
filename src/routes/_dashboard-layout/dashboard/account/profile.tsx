@@ -110,9 +110,9 @@ function ProfileComponent() {
 		<div>
 			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
 				<h1 className="text-2xl font-bold">Profile</h1>
-				<Button 
-					type="submit" 
-					disabled={isLoading} 
+				<Button
+					type="submit"
+					disabled={isLoading}
 					onClick={() => form.handleSubmit()}
 					className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
 					data-testid="profile-save-button-desktop"

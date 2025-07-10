@@ -114,9 +114,12 @@ function DashboardLayout() {
 		location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages'
 
 	// Simple emoji detection - match common emoji patterns at start
-	const emojiRegex = /^([\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF]|[\uD83C][\uDF00-\uDFFF]|[\uD83D][\uDC00-\uDE4F]|[\uD83D][\uDE80-\uDEFF])\s*/
+	const emojiRegex =
+		/^([\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF]|[\uD83C][\uDF00-\uDFFF]|[\uD83D][\uDC00-\uDE4F]|[\uD83D][\uDE80-\uDEFF])\s*/
 	const dashboardTitleWithoutEmoji = dashboardTitle.replace(emojiRegex, '')
-	const dashboardEmoji = dashboardTitle.match(/^([\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF]|[\uD83C][\uDF00-\uDFFF]|[\uD83D][\uDC00-\uDE4F]|[\uD83D][\uDE80-\uDEFF])/)?.[1]
+	const dashboardEmoji = dashboardTitle.match(
+		/^([\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF]|[\uD83C][\uDF00-\uDFFF]|[\uD83D][\uDC00-\uDE4F]|[\uD83D][\uDE80-\uDEFF])/,
+	)?.[1]
 
 	// Extract pubkey from pathname for message detail views
 	const chatPubkey = isMessageDetailView ? location.pathname.split('/').pop() : null

@@ -4,13 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import type { ColumnDef, ColumnFiltersState, FilterFn, SortingState } from '@tanstack/react-table'
-import {
-	flexRender,
-	getCoreRowModel,
-	getFilteredRowModel,
-	getSortedRowModel,
-	useReactTable,
-} from '@tanstack/react-table'
+import { flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
 

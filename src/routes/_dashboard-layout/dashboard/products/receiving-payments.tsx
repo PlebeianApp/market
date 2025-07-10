@@ -650,13 +650,7 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 
 							<Button type="submit" disabled={formState !== 'idle'} data-testid="save-payment-button">
 								{formState === 'submitting' && <Spinner />}
-								{formState === 'validating'
-									? 'Validating...'
-									: formState === 'submitting'
-										? 'Saving...'
-										: isEditing
-											? 'Update'
-											: 'Save'}
+								{formState === 'validating' ? 'Validating...' : formState === 'submitting' ? 'Saving...' : isEditing ? 'Update' : 'Save'}
 							</Button>
 						</div>
 					</div>
@@ -755,12 +749,7 @@ function ReceivingPaymentsComponent() {
 		getUser().then(setUser)
 	}, [getUser])
 
-	const {
-		data: paymentDetails,
-		isLoading,
-		isError,
-		error,
-	} = useRichUserPaymentDetails(user?.pubkey)
+	const { data: paymentDetails, isLoading, isError, error } = useRichUserPaymentDetails(user?.pubkey)
 
 	const handleOpenChange = (paymentDetailId: string | null, open: boolean) => {
 		if (open) {

@@ -5,12 +5,7 @@ import { productFormActions } from '@/lib/stores/product'
 import { getProductTitle, getProductImages, getProductId, productsByPubkeyQueryOptions } from '@/queries/products'
 import { useDeleteProductMutation } from '@/publish/products'
 import { useQuery } from '@tanstack/react-query'
-import {
-	createFileRoute,
-	useNavigate,
-	Outlet,
-	useMatchRoute,
-} from '@tanstack/react-router'
+import { createFileRoute, useNavigate, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useState } from 'react'
 import { ChevronDown, PackageIcon, PlusIcon, Trash } from 'lucide-react'
@@ -99,7 +94,11 @@ function ProductListItem({
 				aria-label={`Delete ${getProductTitle(product)}`}
 				disabled={isDeleting}
 			>
-				{isDeleting ? <div className="animate-spin h-4 w-4 border-2 border-destructive border-t-transparent rounded-full" /> : <Trash className="w-4 h-4 text-destructive" />}
+				{isDeleting ? (
+					<div className="animate-spin h-4 w-4 border-2 border-destructive border-t-transparent rounded-full" />
+				) : (
+					<Trash className="w-4 h-4 text-destructive" />
+				)}
 			</Button>
 		</>
 	)
@@ -118,9 +117,7 @@ function ProductListItem({
 	)
 }
 
-export const Route = createFileRoute(
-	'/_dashboard-layout/dashboard/products/products',
-)({
+export const Route = createFileRoute('/_dashboard-layout/dashboard/products/products')({
 	component: ProductsOverviewComponent,
 })
 
@@ -207,15 +204,15 @@ function ProductsOverviewComponent() {
 				</Button>
 			</div>
 			<div className="space-y-6 p-4 lg:p-6">
-							<div className="lg:hidden">
-				<Button
-					onClick={handleAddProductClick}
-					data-testid="add-product-button-mobile"
-					className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
-				>
-					<span className="i-product w-5 h-5" /> Add A Product
-				</Button>
-			</div>
+				<div className="lg:hidden">
+					<Button
+						onClick={handleAddProductClick}
+						data-testid="add-product-button-mobile"
+						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+					>
+						<span className="i-product w-5 h-5" /> Add A Product
+					</Button>
+				</div>
 
 				<div>
 					{isLoading && <div className="p-6 text-center text-gray-500 mt-4">Loading your products...</div>}

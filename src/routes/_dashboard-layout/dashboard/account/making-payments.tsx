@@ -57,11 +57,7 @@ function MakingPaymentsComponent() {
 	const signer = ndkActions.getSigner()
 
 	// TanStack Query for Nostr wallets
-	const {
-		data: nostrWallets,
-		isLoading: nostrLoading,
-		refetch: refetchNostrWallets,
-	} = useUserNwcWalletsQuery(userPubkey)
+	const { data: nostrWallets, isLoading: nostrLoading, refetch: refetchNostrWallets } = useUserNwcWalletsQuery(userPubkey)
 	const saveNostrWalletsMutation = useSaveUserNwcWalletsMutation()
 
 	const [openWalletId, setOpenWalletId] = useState<string | null>(null)
@@ -482,16 +478,7 @@ interface WalletListItemProps {
 	userPubkey: string | undefined
 }
 
-function WalletListItem({
-	wallet,
-	isOpen,
-	onOpenChange,
-	onDelete,
-	isDeleting,
-	onSuccess,
-	onCancel,
-	userPubkey,
-}: WalletListItemProps) {
+function WalletListItem({ wallet, isOpen, onOpenChange, onDelete, isDeleting, onSuccess, onCancel, userPubkey }: WalletListItemProps) {
 	const triggerContent = (
 		<div>
 			<p className="font-semibold">{wallet?.name ?? 'Add a New Wallet'}</p>

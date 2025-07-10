@@ -218,7 +218,9 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 					{formData.price} {formData.currency} • {formData.countries.map(getCountryName).join(', ')} • {getServiceLabel(formData.service)}
 				</div>
 				<div className="md:hidden space-y-1">
-					<div className="truncate">{formData.price} {formData.currency}</div>
+					<div className="truncate">
+						{formData.price} {formData.currency}
+					</div>
 					<div className="truncate">{formData.countries.map(getCountryName).join(', ')}</div>
 					<div className="truncate">{getServiceLabel(formData.service)}</div>
 				</div>
@@ -816,7 +818,7 @@ function ShippingOptionsComponent() {
 					<div>
 						<p className="text-muted-foreground">Manage your shipping options for customers</p>
 					</div>
-					
+
 					<Select value={serviceFilter} onValueChange={setServiceFilter}>
 						<SelectTrigger className="w-full">
 							<SelectValue placeholder="Filter by service type" />

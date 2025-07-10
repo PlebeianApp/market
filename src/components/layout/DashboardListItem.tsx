@@ -19,19 +19,7 @@ interface DashboardListItemProps extends React.HTMLAttributes<HTMLDivElement> {
 
 const DashboardListItem = React.forwardRef<HTMLDivElement, DashboardListItemProps>(
 	(
-		{
-			isOpen,
-			onOpenChange,
-			triggerContent,
-			children,
-			className,
-			actions,
-			isCollapsible = true,
-			isDeleting,
-			icon,
-			useCloseIcon,
-			...props
-		},
+		{ isOpen, onOpenChange, triggerContent, children, className, actions, isCollapsible = true, isDeleting, icon, useCloseIcon, ...props },
 		ref,
 	) => {
 		const content = (
