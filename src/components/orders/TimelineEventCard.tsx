@@ -7,9 +7,10 @@ interface TimelineEventCardProps {
 	title: string
 	icon: React.ReactNode
 	type: string
+	timelineIndex: number
 }
 
-export function TimelineEventCard({ event, title, icon, type }: TimelineEventCardProps) {
+export function TimelineEventCard({ event, title, icon, type, timelineIndex }: TimelineEventCardProps) {
 	const eventDate = new Date((event.created_at || 0) * 1000).toLocaleString()
 	const content = event.content
 	let extraInfo = null
@@ -55,7 +56,7 @@ export function TimelineEventCard({ event, title, icon, type }: TimelineEventCar
 		if (statusTag) {
 			extraInfo = (
 				<Badge variant="outline" className="w-full justify-center sm:w-auto sm:justify-start">
-					Status: {statusTag[1]}
+					{statusTag[1].charAt(0).toUpperCase() + statusTag[1].slice(1)}
 				</Badge>
 			)
 		}
@@ -85,6 +86,9 @@ export function TimelineEventCard({ event, title, icon, type }: TimelineEventCar
 					<div className="bg-gray-50 p-4 rounded-t-xl">
 						<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 							<div className="flex items-center gap-2">
+								<div className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-600">
+									{timelineIndex}
+								</div>
 								{icon}
 								<CardTitle className="text-lg">{title}</CardTitle>
 							</div>
@@ -110,6 +114,9 @@ export function TimelineEventCard({ event, title, icon, type }: TimelineEventCar
 			<CardHeader className="pb-3">
 				<div className="flex items-center justify-between">
 					<div className="flex items-center gap-2">
+						<div className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-600">
+							{timelineIndex}
+						</div>
 						{icon}
 						<CardTitle className="text-lg">{title}</CardTitle>
 					</div>

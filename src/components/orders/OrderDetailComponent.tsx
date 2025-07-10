@@ -774,8 +774,15 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 					<div>
 						<h2 className="text-xl font-bold mb-4">Order Timeline</h2>
 						<div className="space-y-4">
-							{allEvents.map(({ event, type, title, icon }) => (
-								<TimelineEventCard key={event.id} event={event} type={type} title={title} icon={icon} />
+							{allEvents.map(({ event, type, title, icon }, index) => (
+								<TimelineEventCard
+									key={event.id}
+									event={event}
+									type={type}
+									title={title}
+									icon={icon}
+									timelineIndex={allEvents.length - index}
+								/>
 							))}
 						</div>
 					</div>
