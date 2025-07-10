@@ -601,7 +601,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 												<p className="font-medium">
 													{incompleteInvoices.length} invoice{incompleteInvoices.length !== 1 ? 's' : ''} require payment
 												</p>
-												<p className="text-sm">Complete all payments to finalize your order</p>
+												<p className="text-sm">Make all payments to complete the order</p>
 											</div>
 										</div>
 										<Button
