@@ -523,15 +523,13 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 							{/* Reattempt All Button - only for buyers */}
 							{isBuyer && incompleteInvoices.length > 0 && (
 								<div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-									<div className="flex items-center justify-between">
-										<div className="flex items-center gap-2 text-yellow-800">
-											<AlertTriangle className="w-5 h-5" />
-											<div>
-												<p className="font-medium">
-													{incompleteInvoices.length} invoice{incompleteInvoices.length !== 1 ? 's' : ''} require payment
-												</p>
-												<p className="text-sm">Complete all payments to finalize your order</p>
-											</div>
+									<div className="flex flex-col items-center text-center gap-2">
+										<AlertTriangle className="w-6 h-6 text-yellow-800" />
+										<div className="text-yellow-800">
+											<p className="font-medium">
+												{incompleteInvoices.length} invoice{incompleteInvoices.length !== 1 ? 's' : ''} require payment
+											</p>
+											<p className="text-sm">Complete all payments to finalize your order</p>
 										</div>
 										<Button
 											variant="outline"
@@ -540,7 +538,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 												// Trigger refresh or reattempt logic for all incomplete invoices
 												toast.info('Refreshing payment status for all incomplete invoices...')
 											}}
-											className="text-yellow-700 border-yellow-300 hover:bg-yellow-100"
+											className="w-full text-yellow-700 border-yellow-300 hover:bg-yellow-100 mt-2"
 										>
 											<RefreshCw className="w-4 h-4 mr-2" />
 											Refresh All
@@ -574,7 +572,12 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 										>
 											<div className="flex items-center justify-between mb-3">
 												<div className="flex items-center gap-3">
-													<div className={`p-2 rounded-full ${isComplete ? 'bg-green-100' : 'bg-gray-100'}`}>
+													{invoicesFromPaymentRequests.length > 1 && (
+														<div className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-600">
+															{index + 1}
+														</div>
+													)}
+													<div className={`p-1 rounded-full ${isComplete ? 'bg-green-100' : 'bg-gray-100'}`}>
 														{isComplete ? (
 															<CheckCircle className="w-4 h-4 text-green-600" />
 														) : (
