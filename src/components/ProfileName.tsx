@@ -5,29 +5,28 @@ import { Link } from '@tanstack/react-router'
 
 interface ProfileNameProps extends React.HTMLAttributes<HTMLSpanElement> {
 	pubkey: string
-	truncate?: boolean
 	disableLink?: boolean
 }
 
-export function ProfileName({ pubkey, truncate = true, disableLink = false, className, ...props }: ProfileNameProps) {
+export function ProfileName({ pubkey, disableLink = false, className, ...props }: ProfileNameProps) {
 	const { data: name, isLoading } = useProfileName(pubkey)
 
 	if (isLoading) {
 		return <Skeleton className={cn('h-4 w-24', className)} />
 	}
 
-	const displayName = name || (truncate ? pubkey.slice(0, 8) + '...' : pubkey)
+	const displayName = name || pubkey
 
 	if (disableLink) {
 		return (
-			<span className={cn(className)} {...props}>
+			<span className={cn('break-all', className)} {...props}>
 				{displayName}
 			</span>
 		)
 	}
 
 	return (
-		<Link to="/profile/$profileId" params={{ profileId: pubkey }} className={cn(className)} {...props}>
+		<Link to="/profile/$profileId" params={{ profileId: pubkey }} className={cn('break-all', className)} {...props}>
 			<span>{displayName}</span>
 		</Link>
 	)

@@ -8,8 +8,9 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useState } from 'react'
-import { ChevronDown, Trash } from 'lucide-react'
+import { ChevronDown, PackageIcon, PlusIcon, Trash } from 'lucide-react'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
+import { DashboardListItem } from '@/components/layout/DashboardListItem'
 
 // Component to show basic product information
 function ProductBasicInfo({ product }: { product: any }) {
@@ -46,6 +47,73 @@ function ProductBasicInfo({ product }: { product: any }) {
 				</div>
 			</div>
 		</div>
+	)
+}
+
+function ProductListItem({
+	product,
+	isExpanded,
+	onToggleExpanded,
+	onEdit,
+	onDelete,
+	isDeleting,
+}: {
+	product: any
+	isExpanded: boolean
+	onToggleExpanded: () => void
+	onEdit: () => void
+	onDelete: () => void
+	isDeleting: boolean
+}) {
+	const triggerContent = (
+		<div>
+			<p className="font-semibold">{getProductTitle(product)}</p>
+		</div>
+	)
+
+	const actions = (
+		<>
+			<Button
+				variant="ghost"
+				size="sm"
+				onClick={(e) => {
+					e.stopPropagation()
+					onEdit()
+				}}
+				aria-label={`Edit ${getProductTitle(product)}`}
+			>
+				<span className="i-edit w-5 h-5" />
+			</Button>
+			<Button
+				variant="ghost"
+				size="sm"
+				onClick={(e) => {
+					e.stopPropagation()
+					onDelete()
+				}}
+				aria-label={`Delete ${getProductTitle(product)}`}
+				disabled={isDeleting}
+			>
+				{isDeleting ? (
+					<div className="animate-spin h-4 w-4 border-2 border-destructive border-t-transparent rounded-full" />
+				) : (
+					<Trash className="w-4 h-4 text-destructive" />
+				)}
+			</Button>
+		</>
+	)
+
+	return (
+		<DashboardListItem
+			isOpen={isExpanded}
+			onOpenChange={onToggleExpanded}
+			triggerContent={triggerContent}
+			actions={actions}
+			isDeleting={isDeleting}
+			icon={<PackageIcon className="h-6 w-6 text-muted-foreground" />}
+		>
+			<ProductBasicInfo product={product} />
+		</DashboardListItem>
 	)
 }
 
@@ -124,89 +192,59 @@ function ProductsOverviewComponent() {
 	}
 
 	return (
-		<div className="space-y-6">
-			<div>
+		<div>
+			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+				<h1 className="text-2xl font-bold">Products</h1>
 				<Button
 					onClick={handleAddProductClick}
 					data-testid="add-product-button"
-					className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+					className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
 				>
 					<span className="i-product w-5 h-5" /> Add A Product
 				</Button>
+			</div>
+			<div className="space-y-6 p-4 lg:p-6">
+				<div className="lg:hidden">
+					<Button
+						onClick={handleAddProductClick}
+						data-testid="add-product-button-mobile"
+						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+					>
+						<span className="i-product w-5 h-5" /> Add A Product
+					</Button>
+				</div>
 
-				{isLoading && <div className="p-6 text-center text-gray-500 mt-4">Loading your products...</div>}
-				{error && <div className="p-6 text-center text-red-600 mt-4">Failed to load products: {error.message}</div>}
+				<div>
+					{isLoading && <div className="p-6 text-center text-gray-500 mt-4">Loading your products...</div>}
+					{error && <div className="p-6 text-center text-red-600 mt-4">Failed to load products: {error.message}</div>}
 
-				{!isLoading && !error && (
-					<>
-						{products && products.length > 0 ? (
-							<ul className="flex flex-col gap-2 mt-4">
-								{products.map((product) => {
-									const isExpanded = expandedProduct === product.id
-
-									return (
-										<li key={product.id} className="border border-gray-300 rounded-md overflow-hidden">
-											<Collapsible open={isExpanded} onOpenChange={() => handleToggleExpanded(product.id)}>
-												<div className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors duration-150">
-													<div className="flex items-center gap-3">
-														<span className="i-product w-5 h-5" />{' '}
-														<span className="text-sm font-medium text-gray-800">{getProductTitle(product)}</span>
-													</div>
-													<div className="flex items-center gap-2">
-														<Button
-															variant="ghost"
-															size="sm"
-															onClick={(e) => {
-																e.stopPropagation()
-																handleEditProductClick(product.id)
-															}}
-															aria-label={`Edit ${getProductTitle(product)}`}
-															className="text-gray-500 hover:text-gray-700"
-														>
-															<span className="i-edit w-5 h-5" />{' '}
-														</Button>
-														<Button
-															variant="ghost"
-															size="sm"
-															onClick={(e) => {
-																e.stopPropagation()
-																handleDeleteProductClick(product)
-															}}
-															aria-label={`Delete ${getProductTitle(product)}`}
-															className="text-gray-500 hover:text-red-600"
-															disabled={deleteMutation.isPending}
-														>
-															<Trash className="w-4 h-4" />{' '}
-														</Button>
-														<CollapsibleTrigger asChild>
-															<Button
-																variant="ghost"
-																size="sm"
-																className="text-gray-500 hover:text-gray-700"
-																aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${getProductTitle(product)}`}
-															>
-																<ChevronDown />
-															</Button>
-														</CollapsibleTrigger>
-													</div>
-												</div>
-												<CollapsibleContent>
-													<ProductBasicInfo product={product} />
-												</CollapsibleContent>
-											</Collapsible>
+					{!isLoading && !error && (
+						<>
+							{products && products.length > 0 ? (
+								<ul className="flex flex-col gap-4 mt-4">
+									{products.map((product) => (
+										<li key={product.id}>
+											<ProductListItem
+												product={product}
+												isExpanded={expandedProduct === product.id}
+												onToggleExpanded={() => handleToggleExpanded(product.id)}
+												onEdit={() => handleEditProductClick(product.id)}
+												onDelete={() => handleDeleteProductClick(product)}
+												isDeleting={deleteMutation.isPending && deleteMutation.variables === getProductId(product)}
+											/>
 										</li>
-									)
-								})}
-							</ul>
-						) : (
-							<div className="text-center text-gray-500 py-10 px-6">
-								<span className="i-product w-5 h-5" />
-								<h3 className="mt-2 text-lg font-semibold text-gray-700">No products yet</h3>
-								<p className="mt-1 text-sm">Click the "Add A Product" button to create your first one.</p>
-							</div>
-						)}
-					</>
-				)}
+									))}
+								</ul>
+							) : (
+								<div className="text-center text-gray-500 py-10 px-6">
+									<span className="i-product w-5 h-5" />
+									<h3 className="mt-2 text-lg font-semibold text-gray-700">No products yet</h3>
+									<p className="mt-1 text-sm">Click the "Add A Product" button to create your first one.</p>
+								</div>
+							)}
+						</>
+					)}
+				</div>
 			</div>
 		</div>
 	)

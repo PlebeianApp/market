@@ -33,8 +33,9 @@ function SalesComponent() {
 	}, [sales, statusFilter])
 
 	return (
-		<div className="space-y-6">
+		<div className="h-full">
 			<OrderDataTable
+				heading={<h1 className="text-2xl font-bold">Sales</h1>}
 				data={filteredSales}
 				columns={salesColumns}
 				isLoading={isLoading}
@@ -42,6 +43,7 @@ function SalesComponent() {
 				showStatusFilter={true}
 				onStatusFilterChange={setStatusFilter}
 				statusFilter={statusFilter}
+				showSearch={false}
 			/>
 		</div>
 	)

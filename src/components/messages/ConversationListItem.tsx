@@ -1,6 +1,8 @@
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { Link } from '@tanstack/react-router'
+import { Card } from '@/components/ui/card'
+import { MessageSquareText } from 'lucide-react'
 
 export interface ConversationItemData {
 	pubkey: string
@@ -21,30 +23,39 @@ export function ConversationListItem({ conversation }: ConversationListItemProps
 	const isMobile = breakpoint === 'sm'
 
 	const dateElement = lastMessageAt && (
-		<span className="text-xs text-gray-500 whitespace-nowrap">{new Date(lastMessageAt * 1000).toLocaleString()}</span>
+		<span className="text-xs text-muted-foreground whitespace-nowrap">{new Date(lastMessageAt * 1000).toLocaleString()}</span>
 	)
 
 	return (
 		<Link
-			to="/dashboard/sales/messages/$pubkey"
-			params={{ pubkey }}
-			className="block p-3 hover:bg-muted/50 rounded-lg transition-colors duration-150 ease-in-out w-full border bg-card shadow-sm mb-2"
+			to={`/dashboard/sales/messages/${pubkey}`}
+			className="block w-full"
 			activeProps={{
-				className: 'bg-muted',
+				className: 'bg-muted/20 rounded-lg',
 			}}
 		>
-			<div className="flex flex-col gap-2 w-full">
-				<div className="flex items-center justify-between gap-3 w-full">
-					<UserWithAvatar pubkey={pubkey} size="md" disableLink={true} showBadge={false} />
-					{!isMobile && dateElement}
-				</div>
+			<Card className="p-4 hover:bg-muted/50 transition-colors">
+				<div className="flex items-start gap-4">
+					{/* Icon */}
+					<div className="p-2 bg-muted rounded-full">
+						<MessageSquareText className="h-6 w-6 text-muted-foreground" />
+					</div>
 
-				{/* Second row: message preview spanning full width */}
-				<div className="w-full pl-10">
-					<p className="text-sm text-gray-600 break-words">{lastMessageSnippet}</p>
+					{/* Content Block */}
+					<div className="flex-1 flex flex-col gap-1">
+						{/* Top Row: Avatar and Date */}
+						<div className="flex items-center justify-between">
+							<UserWithAvatar pubkey={pubkey} size="md" disableLink={true} showBadge={false} />
+							{!isMobile && dateElement}
+						</div>
+						{/* Bottom Row: Snippet */}
+						<div>
+							<p className="text-sm text-muted-foreground break-words">{lastMessageSnippet}</p>
+						</div>
+						{isMobile && <div className="self-end mt-1">{dateElement}</div>}
+					</div>
 				</div>
-				{isMobile && <div className="self-end">{dateElement}</div>}
-			</div>
+			</Card>
 		</Link>
 	)
 }

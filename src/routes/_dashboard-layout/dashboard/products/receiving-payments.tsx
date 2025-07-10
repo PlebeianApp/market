@@ -33,7 +33,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import {
 	AnchorIcon,
-	ChevronDownIcon,
+	ChevronLeftIcon,
 	ClipboardIcon,
 	GlobeIcon,
 	PackageIcon,
@@ -45,6 +45,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { DashboardListItem } from '@/components/layout/DashboardListItem'
 
 interface ScopeSelectorProps {
 	value: PaymentScope
@@ -448,238 +449,292 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 		}
 	}
 
+	const triggerContent = isEditing ? (
+		<div className="flex items-center gap-2 min-w-0 flex-1">
+			<PaymentMethodIcon method={editedPaymentDetail.paymentMethod} />
+			<span className="truncate">
+				{editedPaymentDetail.paymentDetail.length > 30
+					? editedPaymentDetail.paymentDetail.substring(0, 30) + '...'
+					: editedPaymentDetail.paymentDetail}
+			</span>
+		</div>
+	) : (
+		<div className="flex items-center gap-2">
+			<PlusIcon className="w-6 h-6" />
+			<span>Add new payment method</span>
+		</div>
+	)
+
+	const triggerActions = isEditing ? (
+		<div className="flex items-center gap-2">
+			{editedPaymentDetail.isDefault && <StarIcon className="w-6 h-6 text-yellow-400 fill-current" />}
+			{editedPaymentDetail.scope === 'global' ? (
+				<>
+					<span className="font-bold">Global</span>
+					<GlobeIcon className="w-6 h-6" />
+				</>
+			) : (
+				<>
+					<span className="font-bold">{editedPaymentDetail.scopeName}</span>
+					{editedPaymentDetail.scope === 'collection' ? <StoreIcon className="w-6 h-6" /> : <PackageIcon className="w-6 h-6" />}
+				</>
+			)}
+		</div>
+	) : (
+		<Button
+			variant="ghost"
+			size="icon"
+			onClick={(e) => {
+				e.stopPropagation()
+				handlePasteFromClipboard()
+			}}
+			className="text-black"
+		>
+			<ClipboardIcon className="w-6 h-6" />
+		</Button>
+	)
+
 	return (
-		<Collapsible open={isOpen} onOpenChange={onOpenChange}>
-			<CollapsibleTrigger asChild>
-				<div className="flex flex-col sm:flex-row w-full justify-between items-start sm:items-center gap-2 p-4 border rounded-md bg-white hover:bg-gray-50 cursor-pointer">
-					{isEditing ? (
-						<div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
-							<PaymentMethodIcon method={editedPaymentDetail.paymentMethod} />
-							<span className="truncate text-sm sm:text-base max-w-[200px] sm:max-w-none">
-								{editedPaymentDetail.paymentDetail.length > 20
-									? editedPaymentDetail.paymentDetail.substring(0, 20) + '...'
-									: editedPaymentDetail.paymentDetail}
-							</span>
+		<div className="border-t pt-4">
+			{showConfirmation ? (
+				<PaymentDetailConfirmationCard
+					value={tempValidatedValue}
+					type={confirmationType}
+					onConfirm={handleConfirmation}
+					onCancel={handleCancellation}
+				/>
+			) : (
+				<form onSubmit={handleValidateAndConfirm} className="space-y-4">
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div className="space-y-2">
+							<Label htmlFor="payment-method" className="font-medium">
+								Payment Method
+							</Label>
+							<Select
+								value={editedPaymentDetail.paymentMethod}
+								onValueChange={(value: PaymentDetailsMethod) => setEditedPaymentDetail((prev) => ({ ...prev, paymentMethod: value }))}
+							>
+								<SelectTrigger data-testid="payment-method-selector">
+									<SelectValue placeholder="Payment method" />
+								</SelectTrigger>
+								<SelectContent>
+									{Object.values(PAYMENT_DETAILS_METHOD).map((method) => (
+										<SelectItem key={method} value={method} data-testid={`payment-method-${method}`}>
+											<div className="flex items-center gap-2">
+												<PaymentMethodIcon method={method} />
+												{paymentMethodLabels[method]}
+											</div>
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
 						</div>
-					) : (
+
+						<div className="space-y-2">
+							<Label htmlFor="scope" className="font-medium">
+								Scope
+							</Label>
+							<ScopeSelector
+								value={editedPaymentDetail.scope}
+								scopeId={editedPaymentDetail.scopeId}
+								userPubkey={user?.pubkey || ''}
+								onChange={(scope, scopeId, scopeName) => {
+									setEditedPaymentDetail((prev) => ({
+										...prev,
+										scope,
+										scopeId,
+										scopeName,
+									}))
+								}}
+							/>
+						</div>
+					</div>
+
+					<div className="space-y-2">
+						<Label htmlFor="payment-details" className="font-medium">
+							Payment details
+						</Label>
+						<Input
+							id="payment-details"
+							data-testid="payment-details-input"
+							value={editedPaymentDetail.paymentDetail}
+							onChange={(e) => setEditedPaymentDetail((prev) => ({ ...prev, paymentDetail: e.target.value }))}
+							placeholder="Enter payment details e.g. plebeian@getalby.com"
+							className="w-full"
+						/>
+
+						{walletDetailQuery.data &&
+							paymentDetail?.paymentDetail &&
+							isExtendedPublicKey(paymentDetail.paymentDetail) &&
+							(() => {
+								try {
+									const derivedAddresses = deriveAddresses(paymentDetail.paymentDetail, 1, walletDetailQuery.data.valueNumeric)
+									const currentAddress = derivedAddresses?.[0]
+
+									if (!currentAddress) {
+										return (
+											<div className="bg-red-50 p-3 rounded-md space-y-2">
+												<Label className="font-medium text-red-700">Error</Label>
+												<small className="text-red-600">Unable to derive address from extended public key</small>
+											</div>
+										)
+									}
+
+									return (
+										<div className="bg-gray-50 p-3 rounded-md space-y-2">
+											<Label className="font-medium">Current address</Label>
+											<div className="space-y-1">
+												<small className="font-mono">
+													Index: {walletDetailQuery.data.valueNumeric} - {currentAddress}
+												</small>
+												<small>Last updated: {format(walletDetailQuery.data.updatedAt, 'PPp')}</small>
+											</div>
+										</div>
+									)
+								} catch (error) {
+									console.error('Error displaying current address:', error)
+									return (
+										<div className="bg-red-50 p-3 rounded-md space-y-2">
+											<Label className="font-medium text-red-700">Error</Label>
+											<small className="text-red-600">Invalid extended public key format</small>
+										</div>
+									)
+								}
+							})()}
+					</div>
+
+					{validationMessage && formState === 'idle' && <p className="text-red-500 text-sm">{validationMessage}</p>}
+
+					{formState !== 'idle' && (
 						<div className="flex items-center gap-2">
-							<PlusIcon className="w-6 h-6" />
-							<span>Add new payment method</span>
+							<Spinner />
+							<span className="text-sm">{formState === 'validating' ? 'Validating...' : 'Saving...'}</span>
 						</div>
 					)}
 
-					<div className="flex items-center gap-2 self-end sm:self-auto flex-shrink-0">
-						{isEditing && (
-							<div className="flex items-center gap-2 flex-wrap">
-								{editedPaymentDetail.isDefault && <StarIcon className="w-6 h-6 text-yellow-400 fill-current" />}
-								<div className="flex items-center gap-1">
-									{editedPaymentDetail.scope === 'global' ? (
-										<>
-											<span className="font-bold text-sm">Global</span>
-											<GlobeIcon className="w-5 h-5" />
-										</>
-									) : (
-										<>
-											<span className="font-bold text-sm truncate max-w-24">{editedPaymentDetail.scopeName}</span>
-											{editedPaymentDetail.scope === 'collection' ? <StoreIcon className="w-5 h-5" /> : <PackageIcon className="w-5 h-5" />}
-										</>
-									)}
-								</div>
-							</div>
-						)}
+					<div className="space-y-4">
+						<div className="flex items-center gap-2">
+							<Checkbox
+								id="default-payment"
+								data-testid="default-payment-checkbox"
+								checked={editedPaymentDetail.isDefault}
+								onCheckedChange={(checked) => setEditedPaymentDetail((prev) => ({ ...prev, isDefault: !!checked }))}
+							/>
+							<Label htmlFor="default-payment" className="font-medium">
+								Default
+							</Label>
+						</div>
 
-						{!isEditing && (
+						<div className="flex justify-end gap-2">
 							<Button
-								variant="ghost"
-								size="icon"
-								onClick={(e) => {
-									e.stopPropagation()
-									handlePasteFromClipboard()
-								}}
-								className="text-black"
+								type="button"
+								variant="outline"
+								onClick={() => onOpenChange(false)}
+								disabled={formState !== 'idle'}
+								data-testid="cancel-payment-button"
 							>
-								<ClipboardIcon className="w-6 h-6" />
+								Cancel
 							</Button>
-						)}
 
-						<ChevronDownIcon className="w-4 h-4 flex-shrink-0" />
-					</div>
-				</div>
-			</CollapsibleTrigger>
-
-			<CollapsibleContent className="px-4 pb-4">
-				<div className="pt-4">
-					{showConfirmation ? (
-						<PaymentDetailConfirmationCard
-							value={tempValidatedValue}
-							type={confirmationType}
-							onConfirm={handleConfirmation}
-							onCancel={handleCancellation}
-						/>
-					) : (
-						<form onSubmit={handleValidateAndConfirm} className="space-y-4">
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-								<div className="space-y-2">
-									<Label htmlFor="payment-method" className="font-medium">
-										Payment Method
-									</Label>
-									<Select
-										value={editedPaymentDetail.paymentMethod}
-										onValueChange={(value: PaymentDetailsMethod) => setEditedPaymentDetail((prev) => ({ ...prev, paymentMethod: value }))}
-									>
-										<SelectTrigger data-testid="payment-method-selector">
-											<SelectValue placeholder="Payment method" />
-										</SelectTrigger>
-										<SelectContent>
-											{Object.values(PAYMENT_DETAILS_METHOD).map((method) => (
-												<SelectItem key={method} value={method} data-testid={`payment-method-${method}`}>
-													<div className="flex items-center gap-2">
-														<PaymentMethodIcon method={method} />
-														{paymentMethodLabels[method]}
-													</div>
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								</div>
-
-								<div className="space-y-2">
-									<Label htmlFor="scope" className="font-medium">
-										Scope
-									</Label>
-									<ScopeSelector
-										value={editedPaymentDetail.scope}
-										scopeId={editedPaymentDetail.scopeId}
-										userPubkey={user?.pubkey || ''}
-										onChange={(scope, scopeId, scopeName) => {
-											setEditedPaymentDetail((prev) => ({
-												...prev,
-												scope,
-												scopeId,
-												scopeName,
-											}))
-										}}
-									/>
-								</div>
-							</div>
-
-							<div className="space-y-2">
-								<Label htmlFor="payment-details" className="font-medium">
-									Payment details
-								</Label>
-								<Input
-									id="payment-details"
-									data-testid="payment-details-input"
-									value={editedPaymentDetail.paymentDetail}
-									onChange={(e) => setEditedPaymentDetail((prev) => ({ ...prev, paymentDetail: e.target.value }))}
-									placeholder="Enter payment details e.g. plebeian@getalby.com"
-									className="w-full"
-								/>
-
-								{walletDetailQuery.data &&
-									paymentDetail?.paymentDetail &&
-									isExtendedPublicKey(paymentDetail.paymentDetail) &&
-									(() => {
-										try {
-											const derivedAddresses = deriveAddresses(paymentDetail.paymentDetail, 1, walletDetailQuery.data.valueNumeric)
-											const currentAddress = derivedAddresses?.[0]
-
-											if (!currentAddress) {
-												return (
-													<div className="bg-red-50 p-3 rounded-md space-y-2">
-														<Label className="font-medium text-red-700">Error</Label>
-														<small className="text-red-600">Unable to derive address from extended public key</small>
-													</div>
-												)
-											}
-
-											return (
-												<div className="bg-gray-50 p-3 rounded-md space-y-2">
-													<Label className="font-medium">Current address</Label>
-													<div className="space-y-1">
-														<small className="font-mono break-all">
-															Index: {walletDetailQuery.data.valueNumeric} - {currentAddress}
-														</small>
-														<small>Last updated: {format(walletDetailQuery.data.updatedAt, 'PPp')}</small>
-													</div>
-												</div>
-											)
-										} catch (error) {
-											console.error('Error displaying current address:', error)
-											return (
-												<div className="bg-red-50 p-3 rounded-md space-y-2">
-													<Label className="font-medium text-red-700">Error</Label>
-													<small className="text-red-600">Invalid extended public key format</small>
-												</div>
-											)
-										}
-									})()}
-							</div>
-
-							{validationMessage && formState === 'idle' && <p className="text-red-500 text-sm">{validationMessage}</p>}
-
-							{formState !== 'idle' && (
-								<div className="flex items-center gap-2">
-									<Spinner />
-									<span className="text-sm">{formState === 'validating' ? 'Validating...' : 'Saving...'}</span>
-								</div>
+							{isEditing && (
+								<Button
+									type="button"
+									variant="destructive"
+									onClick={handleDelete}
+									disabled={formState !== 'idle'}
+									data-testid="delete-payment-button"
+								>
+									<TrashIcon className="w-4 h-4" />
+								</Button>
 							)}
 
-							<div className="space-y-4">
-								<div className="flex items-center gap-2">
-									<Checkbox
-										id="default-payment"
-										data-testid="default-payment-checkbox"
-										checked={editedPaymentDetail.isDefault}
-										onCheckedChange={(checked) => setEditedPaymentDetail((prev) => ({ ...prev, isDefault: !!checked }))}
-									/>
-									<Label htmlFor="default-payment" className="font-medium">
-										Default
-									</Label>
-								</div>
+							<Button type="submit" disabled={formState !== 'idle'} data-testid="save-payment-button">
+								{formState === 'submitting' && <Spinner />}
+								{formState === 'validating' ? 'Validating...' : formState === 'submitting' ? 'Saving...' : isEditing ? 'Update' : 'Save'}
+							</Button>
+						</div>
+					</div>
+				</form>
+			)}
+		</div>
+	)
+}
 
-								<div className="flex flex-col sm:flex-row justify-end gap-2">
-									<Button
-										type="button"
-										variant="outline"
-										onClick={() => onOpenChange(false)}
-										disabled={formState !== 'idle'}
-										data-testid="cancel-payment-button"
-										className="w-full sm:w-auto"
-									>
-										Cancel
-									</Button>
+interface PaymentDetailListItemProps {
+	paymentDetail: RichPaymentDetail
+	isOpen: boolean
+	onOpenChange: (open: boolean) => void
+	isDeleting?: boolean
+	onSuccess?: () => void
+}
 
-									{isEditing && (
-										<Button
-											type="button"
-											variant="destructive"
-											onClick={handleDelete}
-											disabled={formState !== 'idle'}
-											data-testid="delete-payment-button"
-											className="w-full sm:w-auto"
-										>
-											<TrashIcon className="w-4 h-4" />
-										</Button>
-									)}
+function PaymentDetailListItem({ paymentDetail, isOpen, onOpenChange, isDeleting, onSuccess }: PaymentDetailListItemProps) {
+	const deleteMutation = useDeletePaymentDetail()
 
-									<Button type="submit" disabled={formState !== 'idle'} data-testid="save-payment-button" className="w-full sm:w-auto">
-										{formState === 'submitting' && <Spinner />}
-										{formState === 'validating'
-											? 'Validating...'
-											: formState === 'submitting'
-												? 'Saving...'
-												: isEditing
-													? 'Update'
-													: 'Save'}
-									</Button>
-								</div>
-							</div>
-						</form>
-					)}
-				</div>
-			</CollapsibleContent>
-		</Collapsible>
+	const handleDelete = () => {
+		if (paymentDetail) {
+			deleteMutation.mutate(
+				{ paymentDetailId: paymentDetail.id, userPubkey: paymentDetail.userId },
+				{
+					onSuccess: () => {
+						toast.success('Payment detail deleted successfully')
+						onOpenChange(false)
+					},
+					onError: (error) => {
+						toast.error(`Error deleting payment detail: ${error.message}`)
+					},
+				},
+			)
+		}
+	}
+
+	const PaymentMethodIcon = ({ method }: { method: PaymentDetailsMethod }) => {
+		switch (method) {
+			case PAYMENT_DETAILS_METHOD.ON_CHAIN:
+				return <AnchorIcon className="w-5 h-5 text-muted-foreground" />
+			case PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK:
+				return <ZapIcon className="w-5 h-5 text-muted-foreground" />
+			default:
+				return <GlobeIcon className="w-5 h-5 text-muted-foreground" />
+		}
+	}
+
+	const triggerContent = (
+		<div>
+			<p className="font-semibold">{paymentMethodLabels[paymentDetail.paymentMethod]}</p>
+			<p className="text-sm text-muted-foreground break-all">
+				{paymentDetail.paymentDetail} - {paymentDetail.scopeName}
+			</p>
+		</div>
+	)
+
+	const actions = (
+		<Button
+			variant="ghost"
+			size="icon"
+			onClick={(e) => {
+				e.stopPropagation()
+				handleDelete()
+			}}
+			className="h-8 w-8 text-destructive hover:bg-destructive/10"
+			aria-label="Delete payment detail"
+			disabled={deleteMutation.isPending}
+		>
+			{deleteMutation.isPending ? <Spinner className="h-4 w-4" /> : <TrashIcon className="h-4 w-4" />}
+		</Button>
+	)
+
+	return (
+		<DashboardListItem
+			isOpen={isOpen}
+			onOpenChange={onOpenChange}
+			triggerContent={triggerContent}
+			actions={actions}
+			isDeleting={deleteMutation.isPending}
+			icon={<PaymentMethodIcon method={paymentDetail.paymentMethod} />}
+		>
+			<PaymentDetailForm paymentDetail={paymentDetail} isOpen={isOpen} onOpenChange={onOpenChange} onSuccess={onSuccess} />
+		</DashboardListItem>
 	)
 }
 
@@ -688,100 +743,86 @@ function ReceivingPaymentsComponent() {
 	const [user, setUser] = useState<any>(null)
 	const [openPaymentDetailId, setOpenPaymentDetailId] = useState<string | null>(null)
 	const [paymentMethodFilter, setPaymentMethodFilter] = useState<PaymentDetailsMethod | 'all'>('all')
-
-	useDashboardTitle('') // Clear the dashboard title so we can create our own
+	useDashboardTitle('Receiving Payments')
 
 	useEffect(() => {
 		getUser().then(setUser)
 	}, [getUser])
 
-	const paymentDetailsQuery = useRichUserPaymentDetails(user?.pubkey || '')
-
-	const filteredPaymentDetails =
-		paymentDetailsQuery.data?.filter((detail) => paymentMethodFilter === 'all' || detail.paymentMethod === paymentMethodFilter) || []
+	const { data: paymentDetails, isLoading, isError, error } = useRichUserPaymentDetails(user?.pubkey)
 
 	const handleOpenChange = (paymentDetailId: string | null, open: boolean) => {
-		setOpenPaymentDetailId(open ? paymentDetailId : null)
+		if (open) {
+			setOpenPaymentDetailId(paymentDetailId)
+		} else {
+			setOpenPaymentDetailId(null)
+		}
 	}
 
-	const truncateString = (str: string, maxLength: number = 30) => {
-		if (str.length <= maxLength) return str
-		return str.substring(0, maxLength) + '...'
+	const handleSuccess = () => {
+		setOpenPaymentDetailId(null)
+	}
+
+	if (isLoading) {
+		return <div>Loading payment details...</div>
+	}
+
+	if (isError) {
+		return <div>Error loading payment details: {error.message}</div>
 	}
 
 	return (
-		<div className="space-y-6">
-			{/* Title and Filter Row */}
-			<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-				<div>
-					<h1 className="text-[1.6rem] font-bold">Receiving Payments</h1>
-					<p className="text-muted-foreground">Manage your payment receiving options here</p>
-				</div>
-				<div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full lg:w-auto">
-					<Label htmlFor="payment-filter" className="text-sm font-medium whitespace-nowrap">
-						Filter:
-					</Label>
-					<Select value={paymentMethodFilter} onValueChange={(value: PaymentDetailsMethod | 'all') => setPaymentMethodFilter(value)}>
-						<SelectTrigger className="w-full sm:w-[180px] lg:w-64">
-							<SelectValue placeholder="All payment methods" />
-						</SelectTrigger>
-						<SelectContent>
-							<SelectItem value="all">All payment methods</SelectItem>
-							{Object.values(PAYMENT_DETAILS_METHOD).map((method) => (
-								<SelectItem key={method} value={method}>
-									<div className="flex items-center gap-2">
-										{method === PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK ? (
-											<ZapIcon className="w-4 h-4" />
-										) : (
-											<AnchorIcon className="w-4 h-4" />
-										)}
-										{paymentMethodLabels[method]}
-									</div>
-								</SelectItem>
-							))}
-						</SelectContent>
-					</Select>
-				</div>
+		<div>
+			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+				<h1 className="text-2xl font-bold">Receiving Payments</h1>
+				<Button
+					onClick={() => handleOpenChange('new', true)}
+					className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+				>
+					<PlusIcon className="w-5 h-5" />
+					Add Payment Method
+				</Button>
 			</div>
+			<div className="space-y-4 p-4 lg:p-6">
+				<div className="lg:hidden">
+					<Button
+						onClick={() => handleOpenChange('new', true)}
+						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+					>
+						<PlusIcon className="w-5 h-5" />
+						Add Payment Method
+					</Button>
+				</div>
 
-			<div className="space-y-4">
-				{/* Add new payment method */}
-				<PaymentDetailForm
-					paymentDetail={null}
-					isOpen={openPaymentDetailId === 'new'}
-					onOpenChange={(open) => handleOpenChange('new', open)}
-					onSuccess={() => paymentDetailsQuery.refetch()}
-				/>
-
-				{/* Existing payment methods */}
-				{filteredPaymentDetails.map((paymentDetail) => (
-					<PaymentDetailForm
-						key={paymentDetail.id}
-						paymentDetail={paymentDetail}
-						isOpen={openPaymentDetailId === paymentDetail.id}
-						onOpenChange={(open) => handleOpenChange(paymentDetail.id, open)}
-						onSuccess={() => paymentDetailsQuery.refetch()}
-					/>
-				))}
-
-				{paymentDetailsQuery.isLoading && (
-					<div className="flex items-center justify-center p-8">
-						<Spinner />
-						<span className="ml-2">Loading payment details...</span>
-					</div>
-				)}
-
-				{filteredPaymentDetails.length === 0 && !paymentDetailsQuery.isLoading && (
-					<Card>
-						<CardContent className="py-10 flex flex-col items-center justify-center">
-							<p className="text-center text-muted-foreground mb-4">
-								{paymentMethodFilter === 'all'
-									? 'No payment methods configured yet. Add a payment method to start receiving payments.'
-									: `No ${paymentMethodLabels[paymentMethodFilter as PaymentDetailsMethod]} payment methods found.`}
-							</p>
+				{/* Payment form - shows at top when opened */}
+				{openPaymentDetailId === 'new' && (
+					<Card className="mt-4">
+						<CardHeader>
+							<CardTitle>Add New Payment Detail</CardTitle>
+							<CardDescription>Configure a new way to receive payments</CardDescription>
+						</CardHeader>
+						<CardContent>
+							<PaymentDetailForm
+								paymentDetail={null}
+								isOpen={openPaymentDetailId === 'new'}
+								onOpenChange={(open) => handleOpenChange('new', open)}
+								onSuccess={handleSuccess}
+							/>
 						</CardContent>
 					</Card>
 				)}
+
+				<div className="space-y-4">
+					{paymentDetails?.map((pd) => (
+						<PaymentDetailListItem
+							key={pd.id}
+							paymentDetail={pd}
+							isOpen={openPaymentDetailId === pd.id}
+							onOpenChange={(open) => handleOpenChange(pd.id, open)}
+							onSuccess={handleSuccess}
+						/>
+					))}
+				</div>
 			</div>
 		</div>
 	)

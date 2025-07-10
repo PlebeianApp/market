@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { dashboardNavigation } from '@/config/dashboardNavigation'
 import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate, useLocation } from '@tanstack/react-router'
@@ -11,6 +10,7 @@ import { useQuery } from '@tanstack/react-query'
 import { profileKeys } from '@/queries/queryKeyFactory'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { MessageSquareText } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 export const Route = createFileRoute('/_dashboard-layout')({
 	component: DashboardLayout,
@@ -20,7 +20,7 @@ export const Route = createFileRoute('/_dashboard-layout')({
 export function useDashboardTitle(title: string) {
 	React.useEffect(() => {
 		uiActions.setDashboardTitle(title)
-		return () => uiActions.setDashboardTitle('DASHBOARD') // Reset to default on unmount
+		return () => uiActions.setDashboardTitle('') // Reset to default on unmount
 	}, [title])
 }
 
@@ -106,15 +106,20 @@ function DashboardLayout() {
 	const navigate = useNavigate()
 	const location = useLocation()
 	const breakpoint = useBreakpoint()
-	const isMobile = breakpoint !== 'xl' // Changed: treat anything below xl (1280px) as mobile
+	const isMobile = breakpoint === 'sm' || breakpoint === 'md' || breakpoint === 'lg' // Changed: treat anything below xl (1024px) as mobile
 	const [showSidebar, setShowSidebar] = useState(true)
 	const [parent] = useAutoAnimate()
 	const { dashboardTitle } = useStore(uiStore)
 	const isMessageDetailView =
 		location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages'
 
-	const dashboardTitleWithoutEmoji = dashboardTitle.replace(/^(\p{Emoji_Presentation}\s*)/u, '')
-	const dashboardEmoji = dashboardTitle.match(/^(\p{Emoji_Presentation})/u)?.[1]
+	// Simple emoji detection - match common emoji patterns at start
+	const emojiRegex =
+		/^([\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF]|[\uD83C][\uDF00-\uDFFF]|[\uD83D][\uDC00-\uDE4F]|[\uD83D][\uDE80-\uDEFF])\s*/
+	const dashboardTitleWithoutEmoji = dashboardTitle.replace(emojiRegex, '')
+	const dashboardEmoji = dashboardTitle.match(
+		/^([\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27BF]|[\uD83C][\uDF00-\uDFFF]|[\uD83D][\uDC00-\uDE4F]|[\uD83D][\uDE80-\uDEFF])/,
+	)?.[1]
 
 	// Extract pubkey from pathname for message detail views
 	const chatPubkey = isMessageDetailView ? location.pathname.split('/').pop() : null
@@ -180,12 +185,12 @@ function DashboardLayout() {
 	const emoji = getCurrentEmoji(showSidebar, typeof window !== 'undefined' ? window.location.pathname : '')
 
 	return (
-		<div className="lg:block">
+		<div className="lg:flex lg:flex-col lg:h-[calc(100vh-8.5rem)]">
 			{/* Header - responsive for mobile/desktop */}
 			<div className="lg:hidden sticky top-[8.5rem] z-10">
 				<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center relative">
 					{/* Mobile back button - only visible on small screens when not showing sidebar */}
-					{!showSidebar && breakpoint !== 'xl' && (
+					{!showSidebar && isMobile && (
 						<button
 							onClick={handleBackToSidebar}
 							className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 top-1/2 -translate-y-1/2 w-12 h-12"
@@ -222,7 +227,7 @@ function DashboardLayout() {
 					</span>
 
 					{/* Mobile emoji - only visible on small screens when not showing sidebar */}
-					{!showSidebar && emoji && breakpoint !== 'xl' && !dashboardEmoji && (
+					{!showSidebar && emoji && isMobile && !dashboardEmoji && (
 						<span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xl select-none w-12 h-12 flex items-center justify-center">
 							{emoji}
 						</span>
@@ -231,17 +236,17 @@ function DashboardLayout() {
 			</div>
 
 			<div className="hidden lg:block">
-				<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center lg:justify-start relative">
-					<span className="w-full lg:w-auto text-3xl lg:text-3xl">Dashboard</span>
+				<h1 className="font-heading py-2 px-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center lg:justify-start relative">
+					Dashboard
 				</h1>
 			</div>
 
 			{/* Main container - responsive layout */}
-			<div className="lg:flex lg:m-6 lg:gap-6 lg:container lg:max-h-[77vh] lg:overflow-auto">
+			<div className="lg:flex lg:p-6 lg:gap-6 lg:flex-1 lg:overflow-hidden lg:max-w-none lg:min-h-0">
 				<div ref={parent} className="lg:flex lg:w-full lg:gap-6">
 					{/* Sidebar - responsive behavior */}
 					{(showSidebar || !isMobile) && (
-						<aside className="w-full lg:w-[25%] overflow-auto lg:p-6 lg:border lg:border-black lg:rounded lg:max-h-full lg:bg-white">
+						<aside className="w-full lg:w-80 lg:overflow-y-auto lg:border lg:border-black lg:rounded lg:max-h-full lg:bg-white lg:flex-shrink-0">
 							<div className="lg:space-y-2">
 								{dashboardNavigation.map((section) => (
 									<div key={section.title}>
@@ -253,7 +258,7 @@ function DashboardLayout() {
 													<Link
 														key={item.path}
 														to={item.path}
-														className="block p-4 lg:p-2 transition-colors font-bold border border-black bg-white rounded lg:border-0 lg:bg-transparent lg:rounded-none data-[status=active]:bg-gray-200 data-[status=active]:text-black hover:text-pink-500"
+														className="block p-4 lg:px-6 lg:py-2 transition-colors font-bold border border-black bg-white rounded lg:border-0 lg:bg-transparent lg:rounded-none data-[status=active]:bg-gray-200 data-[status=active]:text-black hover:text-pink-500"
 														onClick={handleSidebarItemClick}
 														data-status={isActive ? 'active' : 'inactive'}
 													>
@@ -271,7 +276,7 @@ function DashboardLayout() {
 					{/* Main content - responsive behavior */}
 					{(!showSidebar || !isMobile) && (
 						<div
-							className={`w-full lg:flex-1 lg:border lg:border-black lg:rounded lg:bg-white flex flex-col lg:max-h-full lg:overflow-hidden ${
+							className={`w-full lg:flex-1 lg:max-w-4xl lg:border lg:border-black lg:rounded lg:bg-white flex flex-col lg:max-h-full lg:overflow-hidden ${
 								isMessageDetailView && isMobile ? 'h-[calc(100vh-8.5rem)]' : ''
 							}`}
 						>
@@ -303,19 +308,48 @@ function DashboardLayout() {
 								</div>
 							)}
 
-							<div className="flex-1 min-h-0 lg:overflow-hidden">
+							<div className="flex-1 min-h-0 lg:overflow-y-auto">
 								{isMessageDetailView ? (
 									<div className="h-full">
 										<Outlet />
 									</div>
 								) : (
-									<ScrollArea className="h-full">
-										<div className="p-4 bg-white lg:p-8 lg:bg-transparent">
+									<div className="h-full">
+										<div
+											className={cn(
+												'p-4 bg-white lg:p-8 lg:bg-transparent',
+												location.pathname === '/dashboard/sales/sales' && 'p-0 lg:p-0',
+												location.pathname.startsWith('/dashboard/sales/messages') && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/sales/circular-economy' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/products/products' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/products/collections' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/products/receiving-payments' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/products/shipping-options' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/account/profile' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/account/making-payments' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/account/your-purchases' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/account/network' && 'p-0 lg:p-0',
+											)}
+										>
 											{/* Only show title here if there's no back button */}
-											{!isMobile && !needsBackButton && <h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>}
+											{!isMobile &&
+												!needsBackButton &&
+												location.pathname !== '/dashboard/sales/sales' &&
+												!location.pathname.startsWith('/dashboard/sales/messages') &&
+												location.pathname !== '/dashboard/sales/circular-economy' &&
+												location.pathname !== '/dashboard/products/products' &&
+												location.pathname !== '/dashboard/products/collections' &&
+												location.pathname !== '/dashboard/products/receiving-payments' &&
+												location.pathname !== '/dashboard/products/shipping-options' &&
+												location.pathname !== '/dashboard/account/profile' &&
+												location.pathname !== '/dashboard/account/making-payments' &&
+												location.pathname !== '/dashboard/account/your-purchases' &&
+												location.pathname !== '/dashboard/account/network' && (
+													<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>
+												)}
 											<Outlet />
 										</div>
-									</ScrollArea>
+									</div>
 								)}
 							</div>
 						</div>

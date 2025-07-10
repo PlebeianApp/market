@@ -12,9 +12,9 @@ export function DetailField({
 	valueClassName?: string
 }) {
 	return (
-		<div className={cn('flex justify-between items-center text-sm gap-2', className)}>
+		<div className={cn('flex justify-between items-start text-sm gap-2', className)}>
 			<span className="text-muted-foreground whitespace-nowrap">{label}</span>
-			<span className={cn('font-mono text-right truncate', valueClassName)}>{value}</span>
+			<p className={cn('font-medium text-right break-all', valueClassName)}>{value}</p>
 		</div>
 	)
 } 

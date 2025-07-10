@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { authStore } from '@/lib/stores/auth'
 import { getEventDate, type OrderWithRelatedEvents } from '@/queries/orders'
-import { productQueryOptions, productQueryOptions } from '@/queries/products'
+import { productQueryOptions } from '@/queries/products'
 import { useGenerateInvoiceMutation } from '@/queries/payment'
 import { fetchV4VShares } from '@/queries/v4v'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -29,6 +29,7 @@ import { useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import { DetailField } from '../ui/DetailField'
 import { toast } from 'sonner'
+import { OrderActions } from './OrderActions'
 
 interface OrderDetailComponentProps {
 	order: OrderWithRelatedEvents
@@ -434,19 +435,21 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	].sort((a, b) => (b.event.created_at || 0) - (a.event.created_at || 0))
 
 	return (
-		<div className="container mx-auto px-4 py-8">
+		<div className="container mx-auto px-4 py-4">
 			<div className="space-y-6">
 				{/* Order Header */}
 				<Card>
 					<CardHeader>
-						<div className="flex items-center justify-between">
-							<CardTitle className="text-2xl">Order #{orderId.substring(0, 8)}...</CardTitle>
+						<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+							<div>
+								<CardTitle className="text-2xl">Order #{orderId.substring(0, 8)}...</CardTitle>
+								<p className="text-gray-600 mt-1">Created {getEventDate(orderEvent)}</p>
+							</div>
 							<OrderActions order={order} userPubkey={user?.pubkey || ''} />
 						</div>
-						<p className="text-gray-600 mt-1">Created {getEventDate(orderEvent)}</p>
 					</CardHeader>
 					<CardContent>
-						<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+						<div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 							<div className="flex items-center space-x-2">
 								<Package className="w-5 h-5 text-gray-500" />
 								<div>
@@ -456,8 +459,8 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 									</p>
 								</div>
 							</div>
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-								<DetailField label="Order ID:" value={orderId || 'N/A'} />
+							<div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:col-span-2">
+								<DetailField label="Order ID:" value={orderId || 'N/A'} valueClassName="break-all" />
 								<DetailField label="Amount:" value={`${totalAmount} sats`} valueClassName="font-bold" />
 								<DetailField
 									label="Date:"
@@ -477,16 +480,16 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 							<CardTitle>Products</CardTitle>
 						</CardHeader>
 						<CardContent>
-							<div className="space-y-4">
+							<div className="grid grid-cols-1 gap-4">
 								{products.map((product) => {
 									const productId = product.id
 									const quantity = quantityMap.get(productId) || 1
 									return (
 										<div key={product.id} className="flex items-center space-x-4 p-4 border rounded-lg">
-											<div className="flex-1">
+											<div className="flex-1 min-w-0">
 												<ProductCard product={product} />
 											</div>
-											<div className="text-right">
+											<div className="text-right flex-shrink-0">
 												<div className="text-sm text-gray-500">Quantity</div>
 												<div className="text-lg font-semibold">{quantity}</div>
 											</div>
@@ -506,9 +509,9 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 						</CardHeader>
 						<CardContent>
 							<div className="text-sm space-y-2">
-								<p>Current User: {currentUserPubkey}</p>
-								<p>Buyer Pubkey: {buyerPubkey}</p>
-								<p>Seller Pubkey: {sellerPubkey}</p>
+								<p className="break-all">Current User: {currentUserPubkey}</p>
+								<p className="break-all">Buyer Pubkey: {buyerPubkey}</p>
+								<p className="break-all">Seller Pubkey: {sellerPubkey}</p>
 								<p>Is Buyer: {isBuyer ? 'Yes' : 'No'}</p>
 								<p>Is Order Owner: {isOrderOwner ? 'Yes' : 'No'}</p>
 								<p>Is Order Seller: {isOrderSeller ? 'Yes' : 'No'}</p>
