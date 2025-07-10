@@ -34,6 +34,8 @@ import { DetailField } from '../ui/DetailField'
 import { OrderActions } from './OrderActions'
 import { Separator } from '../ui/separator'
 import { TimelineEventCard } from './TimelineEventCard'
+import { getStatusStyles } from '@/lib/utils/orderUtils'
+import { cn } from '@/lib/utils'
 
 interface OrderDetailComponentProps {
 	order: OrderWithRelatedEvents
@@ -159,6 +161,9 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const isBuyer = buyerPubkey === user?.pubkey
 	const isOrderSeller = sellerPubkey === user?.pubkey
 	const totalAmount = getTotalAmount(orderEvent)
+
+	// Get status styles for coloring the header
+	const { headerBgColor } = getStatusStyles(order)
 
 	// Get order status from latest status update or default to pending
 	const orderStatus = order.latestStatus?.tags.find((tag) => tag[0] === 'status')?.[1] || 'pending'
@@ -460,7 +465,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				{/* Order Header */}
 				<Card>
 					<CardHeader className="p-0">
-						<div className="bg-gray-50 p-4 rounded-t-xl">
+						<div className={cn('p-4 rounded-t-xl', headerBgColor)}>
 							<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
 								<div className="flex items-center space-x-2">
 									<Package className="w-5 h-5 text-gray-500" />

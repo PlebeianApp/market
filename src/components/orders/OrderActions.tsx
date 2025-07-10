@@ -10,11 +10,12 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ORDER_STATUS, SHIPPING_STATUS } from '@/lib/schemas/order'
 import { cn } from '@/lib/utils'
+import { getStatusStyles } from '@/lib/utils/orderUtils'
 import { useUpdateOrderStatusMutation } from '@/publish/orders'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { getBuyerPubkey, getOrderStatus, getSellerPubkey } from '@/queries/orders'
 import { useUpdateShippingStatusMutation } from '@/queries/shipping'
-import { MoreHorizontal, PackageCheck, Truck, ShoppingBag } from 'lucide-react'
+import { MoreHorizontal, PackageCheck, Truck, ShoppingBag, Clock, X, Check } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Input } from '../ui/input'
@@ -113,62 +114,22 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 		return null // Don't show actions if user is neither buyer nor seller
 	}
 
-	// Get status styles based on the current status
-	const getStatusStyles = () => {
-		// Check if the order has been shipped (has shipping updates with shipped status)
-		const hasBeenShipped = order.shippingUpdates.some((update) => update.tags.find((tag) => tag[0] === 'status')?.[1] === 'shipped')
+	const { bgColor, textColor, iconName, label } = getStatusStyles(order)
 
-		// Special case for processing + shipped
-		if (status === ORDER_STATUS.PROCESSING && hasBeenShipped) {
-			return {
-				bgColor: 'bg-orange-100',
-				textColor: 'text-orange-800',
-				icon: <Truck className="h-4 w-4 text-orange-500" />,
-				label: 'Shipped', // Override display label
-			}
-		}
-
-		switch (status) {
-			case ORDER_STATUS.CONFIRMED:
-				return {
-					bgColor: 'bg-blue-100',
-					textColor: 'text-blue-800',
-					icon: <div className="i-tick h-4 w-4 text-blue-500" />,
-					label: 'Confirmed',
-				}
-			case ORDER_STATUS.PROCESSING:
-				return {
-					bgColor: 'bg-yellow-100',
-					textColor: 'text-yellow-800',
-					icon: <div className="i-clock h-4 w-4 text-yellow-500" />,
-					label: 'Processing',
-				}
-			case ORDER_STATUS.COMPLETED:
-				return {
-					bgColor: 'bg-green-100',
-					textColor: 'text-green-800',
-					icon: <div className="i-tick h-4 w-4 text-green-500" />,
-					label: 'Completed',
-				}
-			case ORDER_STATUS.CANCELLED:
-				return {
-					bgColor: 'bg-red-100',
-					textColor: 'text-red-800',
-					icon: <div className="i-cross h-4 w-4 text-red-500" />,
-					label: 'Cancelled',
-				}
-			case ORDER_STATUS.PENDING:
+	const renderIcon = () => {
+		switch (iconName) {
+			case 'truck':
+				return <Truck className="h-4 w-4" />
+			case 'tick':
+				return <Check className="h-4 w-4" />
+			case 'clock':
+				return <Clock className="h-4 w-4" />
+			case 'cross':
+				return <X className="h-4 w-4" />
 			default:
-				return {
-					bgColor: 'bg-gray-100',
-					textColor: 'text-gray-800',
-					icon: <div className="i-clock h-4 w-4 text-gray-500" />,
-					label: 'Pending',
-				}
+				return null
 		}
 	}
-
-	const { bgColor, textColor, icon, label } = getStatusStyles()
 
 	return (
 		<div className="flex w-full items-center justify-between gap-2 md:w-auto md:justify-end">
@@ -179,7 +140,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 					textColor,
 				)}
 			>
-				{icon}
+				{renderIcon()}
 				<span className="font-medium capitalize">{label}</span>
 			</div>
 
@@ -197,7 +158,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 					{/* Buyer Actions */}
 					{isBuyer && canReceive && (
 						<DropdownMenuItem onClick={() => handleStatusUpdate(ORDER_STATUS.COMPLETED)}>
-							<div className="i-tick mr-2 h-4 w-4" />
+							<Check className="mr-2 h-4 w-4" />
 							Confirm Receipt
 						</DropdownMenuItem>
 					)}
@@ -205,7 +166,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 					{/* Seller Actions */}
 					{isSeller && canConfirm && (
 						<DropdownMenuItem onClick={() => handleStatusUpdate(ORDER_STATUS.CONFIRMED)}>
-							<div className="i-tick mr-2 h-4 w-4" />
+							<Check className="mr-2 h-4 w-4" />
 							Confirm Order
 						</DropdownMenuItem>
 					)}
@@ -235,7 +196,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 					{/* Cancel action - open dialog */}
 					{canCancel && (
 						<DropdownMenuItem className="text-red-600" onClick={() => setIsCancelOpen(true)}>
-							<div className="i-cross mr-2 h-4 w-4" />
+							<X className="mr-2 h-4 w-4" />
 							Cancel Order
 						</DropdownMenuItem>
 					)}
@@ -264,7 +225,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 						<Button variant="outline" onClick={() => setIsShippingOpen(false)}>
 							Cancel
 						</Button>
-						<Button onClick={handleShipped}>Mark as Shipped</Button>
+						<Button onClick={handleShipped}>Save</Button>
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
@@ -274,20 +235,27 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 				<DialogContent>
 					<DialogHeader>
 						<DialogTitle>Cancel Order</DialogTitle>
-						<DialogDescription>Are you sure you want to cancel this order? This action cannot be undone.</DialogDescription>
+						<DialogDescription className="break-words">
+							Are you sure you want to cancel this order? This action cannot be undone.
+						</DialogDescription>
 					</DialogHeader>
-					<Textarea
-						value={cancelReason}
-						onChange={(e) => setCancelReason(e.target.value)}
-						placeholder="Reason for cancellation (optional)"
-						className="min-h-[100px]"
-					/>
-					<DialogFooter className="mt-4">
+
+					<div className="space-y-2 py-4">
+						<Label htmlFor="reason">Reason (Optional)</Label>
+						<Textarea
+							id="reason"
+							value={cancelReason}
+							onChange={(e) => setCancelReason(e.target.value)}
+							placeholder="Enter reason for cancellation"
+						/>
+					</div>
+
+					<DialogFooter>
 						<Button variant="outline" onClick={() => setIsCancelOpen(false)}>
-							Go Back
+							Back
 						</Button>
 						<Button variant="destructive" onClick={handleCancel}>
-							Cancel Order
+							Confirm Cancellation
 						</Button>
 					</DialogFooter>
 				</DialogContent>

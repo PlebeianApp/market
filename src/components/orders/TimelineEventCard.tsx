@@ -20,7 +20,11 @@ export function TimelineEventCard({ event, title, icon, type }: TimelineEventCar
 	if (type === 'status') {
 		const statusTag = event.tags.find((tag) => tag[0] === 'status')
 		if (statusTag) {
-			extraInfo = <Badge variant="outline">{statusTag[1].charAt(0).toUpperCase() + statusTag[1].slice(1)}</Badge>
+			extraInfo = (
+				<Badge variant="outline" className="w-full justify-center sm:w-auto sm:justify-start">
+					{statusTag[1].charAt(0).toUpperCase() + statusTag[1].slice(1)}
+				</Badge>
+			)
 		}
 	} else if (type === 'payment' || type === 'payment_request') {
 		const amountTag = event.tags.find((tag) => tag[0] === 'amount')
@@ -28,12 +32,19 @@ export function TimelineEventCard({ event, title, icon, type }: TimelineEventCar
 		if (amount > 0) {
 			if (type === 'payment') {
 				extraInfo = (
-					<Badge variant="outline" className="border-green-300 bg-green-100 text-green-800">
+					<Badge
+						variant="outline"
+						className="w-full justify-center border-green-300 bg-green-100 text-green-800 sm:w-auto sm:justify-start"
+					>
 						Paid: {amount.toLocaleString()} sats
 					</Badge>
 				)
 			} else {
-				extraInfo = <Badge variant="outline">Request: {amount.toLocaleString()} sats</Badge>
+				extraInfo = (
+					<Badge variant="outline" className="w-full justify-center sm:w-auto sm:justify-start">
+						Request: {amount.toLocaleString()} sats
+					</Badge>
+				)
 			}
 		}
 	} else if (type === 'shipping') {
@@ -42,7 +53,11 @@ export function TimelineEventCard({ event, title, icon, type }: TimelineEventCar
 		const carrierTag = event.tags.find((tag) => tag[0] === 'carrier')
 
 		if (statusTag) {
-			extraInfo = <Badge variant="outline">Status: {statusTag[1]}</Badge>
+			extraInfo = (
+				<Badge variant="outline" className="w-full justify-center sm:w-auto sm:justify-start">
+					Status: {statusTag[1]}
+				</Badge>
+			)
 		}
 
 		if (trackingTag || carrierTag) {
@@ -68,7 +83,7 @@ export function TimelineEventCard({ event, title, icon, type }: TimelineEventCar
 			<Card key={event.id}>
 				<CardHeader className="p-0">
 					<div className="bg-gray-50 p-4 rounded-t-xl">
-						<div className="flex items-center justify-between">
+						<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 							<div className="flex items-center gap-2">
 								{icon}
 								<CardTitle className="text-lg">{title}</CardTitle>

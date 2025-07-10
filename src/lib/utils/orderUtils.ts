@@ -107,3 +107,66 @@ export function updateInvoiceStatus(invoiceSet: OrderInvoiceSet, invoiceId: stri
 		status: overallStatus,
 	}
 }
+
+import { ORDER_STATUS } from '../schemas/order'
+import type { OrderWithRelatedEvents } from '@/queries/orders'
+import { getOrderStatus } from '@/queries/orders'
+
+export const getStatusStyles = (order: OrderWithRelatedEvents) => {
+	const status = getOrderStatus(order)
+	const hasBeenShipped = order.shippingUpdates.some((update) => update.tags.find((tag) => tag[0] === 'status')?.[1] === 'shipped')
+
+	if (status === ORDER_STATUS.PROCESSING && hasBeenShipped) {
+		return {
+			bgColor: 'bg-orange-100',
+			headerBgColor: 'bg-orange-100/30',
+			textColor: 'text-orange-800',
+			iconName: 'truck',
+			label: 'Shipped',
+		}
+	}
+
+	switch (status) {
+		case ORDER_STATUS.CONFIRMED:
+			return {
+				bgColor: 'bg-blue-100',
+				headerBgColor: 'bg-blue-100/30',
+				textColor: 'text-blue-800',
+				iconName: 'tick',
+				label: 'Confirmed',
+			}
+		case ORDER_STATUS.PROCESSING:
+			return {
+				bgColor: 'bg-yellow-100',
+				headerBgColor: 'bg-yellow-100/30',
+				textColor: 'text-yellow-800',
+				iconName: 'clock',
+				label: 'Processing',
+			}
+		case ORDER_STATUS.COMPLETED:
+			return {
+				bgColor: 'bg-green-100',
+				headerBgColor: 'bg-green-100/30',
+				textColor: 'text-green-800',
+				iconName: 'tick',
+				label: 'Completed',
+			}
+		case ORDER_STATUS.CANCELLED:
+			return {
+				bgColor: 'bg-red-100',
+				headerBgColor: 'bg-red-100/30',
+				textColor: 'text-red-800',
+				iconName: 'cross',
+				label: 'Cancelled',
+			}
+		case ORDER_STATUS.PENDING:
+		default:
+			return {
+				bgColor: 'bg-gray-100',
+				headerBgColor: 'bg-gray-100/30',
+				textColor: 'text-gray-800',
+				iconName: 'clock',
+				label: 'Pending',
+			}
+	}
+}
