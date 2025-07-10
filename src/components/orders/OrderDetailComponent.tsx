@@ -527,43 +527,48 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				{/* Payment Processing - visible to both buyer and seller */}
 				{totalInvoices > 0 && (
 					<Card>
-						<CardHeader>
-							<CardTitle className="flex items-center gap-2">
-								<CreditCard className="w-5 h-5" />
-								Payment Details ({totalInvoices} invoices)
-							</CardTitle>
-							{/* Payment Summary */}
-							<div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-								<div className="flex items-center gap-2">
-									<CreditCard className="w-4 h-4 text-green-600" />
-									<div>
-										<p className="text-gray-500">Merchant</p>
-										<p className="font-semibold">
-											{invoicesFromPaymentRequests.filter((inv) => inv.description === 'Merchant Payment').length} invoice
-										</p>
+						<CardHeader className="p-0">
+							<div className="bg-gray-50 p-4 rounded-t-xl">
+								<div className="flex items-start gap-2">
+									<CreditCard className="w-5 h-5" />
+									<div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
+										<CardTitle>Payment Details</CardTitle>
+										<span className="text-muted-foreground">({totalInvoices} invoices)</span>
 									</div>
 								</div>
-								<div className="flex items-center gap-2">
-									<Users className="w-4 h-4 text-purple-600" />
-									<div>
-										<p className="text-gray-500">V4V Recipients</p>
-										<p className="font-semibold">
-											{invoicesFromPaymentRequests.filter((inv) => inv.description === 'V4V Community Payment').length} invoices
-										</p>
+								{/* Payment Summary */}
+								<div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+									<div className="flex items-center gap-2">
+										<CreditCard className="w-4 h-4 text-green-600" />
+										<div>
+											<p className="text-gray-500">Merchant</p>
+											<p className="font-semibold">
+												{invoicesFromPaymentRequests.filter((inv) => inv.description === 'Merchant Payment').length} invoice
+											</p>
+										</div>
 									</div>
-								</div>
-								<div className="flex items-center gap-2">
-									<Package className="w-4 h-4 text-blue-600" />
-									<div>
-										<p className="text-gray-500">Total Amount</p>
-										<p className="font-semibold">
-											{invoicesFromPaymentRequests.reduce((sum, inv) => sum + inv.amount, 0).toLocaleString()} sats
-										</p>
+									<div className="flex items-center gap-2">
+										<Users className="w-4 h-4 text-purple-600" />
+										<div>
+											<p className="text-gray-500">V4V Recipients</p>
+											<p className="font-semibold">
+												{invoicesFromPaymentRequests.filter((inv) => inv.description === 'V4V Community Payment').length} invoices
+											</p>
+										</div>
+									</div>
+									<div className="flex items-center gap-2">
+										<Package className="w-4 h-4 text-blue-600" />
+										<div>
+											<p className="text-gray-500">Total Amount</p>
+											<p className="font-semibold">
+												{invoicesFromPaymentRequests.reduce((sum, inv) => sum + inv.amount, 0).toLocaleString()} sats
+											</p>
+										</div>
 									</div>
 								</div>
 							</div>
 						</CardHeader>
-						<CardContent className="space-y-4">
+						<CardContent className="space-y-4 pt-4">
 							{/* Reattempt All Button - only for buyers */}
 							{isBuyer && incompleteInvoices.length > 0 && (
 								<div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
