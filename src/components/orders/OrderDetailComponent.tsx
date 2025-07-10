@@ -33,6 +33,7 @@ import { toast } from 'sonner'
 import { DetailField } from '../ui/DetailField'
 import { OrderActions } from './OrderActions'
 import { Separator } from '../ui/separator'
+import { TimelineEventCard } from './TimelineEventCard'
 
 interface OrderDetailComponentProps {
 	order: OrderWithRelatedEvents
@@ -420,61 +421,6 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		)
 	}
 
-	const renderEventCard = (event: NDKEvent, title: string, icon: React.ReactNode, type: string) => {
-		const eventDate = new Date((event.created_at || 0) * 1000).toLocaleString()
-		let content = event.content
-		let extraInfo = null
-
-		if (type === 'status') {
-			const statusTag = event.tags.find((tag) => tag[0] === 'status')
-			if (statusTag) {
-				extraInfo = <Badge variant="outline">{statusTag[1].charAt(0).toUpperCase() + statusTag[1].slice(1)}</Badge>
-			}
-		} else if (type === 'shipping') {
-			const statusTag = event.tags.find((tag) => tag[0] === 'status')
-			const trackingTag = event.tags.find((tag) => tag[0] === 'tracking')
-			const carrierTag = event.tags.find((tag) => tag[0] === 'carrier')
-
-			extraInfo = (
-				<div className="space-y-2">
-					{statusTag && <Badge variant="outline">Status: {statusTag[1]}</Badge>}
-					{trackingTag && (
-						<div className="text-sm">
-							<strong>Tracking:</strong> {trackingTag[1]}
-						</div>
-					)}
-					{carrierTag && (
-						<div className="text-sm">
-							<strong>Carrier:</strong> {carrierTag[1]}
-						</div>
-					)}
-				</div>
-			)
-		}
-
-		return (
-			<Card key={event.id}>
-				<CardHeader className="pb-3">
-					<div className="flex items-center justify-between">
-						<div className="flex items-center gap-2">
-							{icon}
-							<CardTitle className="text-lg">{title}</CardTitle>
-						</div>
-					</div>
-					{extraInfo && <div className="mt-2">{extraInfo}</div>}
-				</CardHeader>
-				{content && (
-					<CardContent className="pt-0">
-						<p className="text-gray-700">{content}</p>
-					</CardContent>
-				)}
-				<CardFooter className="flex justify-center">
-					<span className="text-xs text-muted-foreground">{eventDate}</span>
-				</CardFooter>
-			</Card>
-		)
-	}
-
 	const allEvents = [
 		...order.statusUpdates.map((event) => ({
 			event,
@@ -822,7 +768,11 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				{allEvents.length > 0 && (
 					<div>
 						<h2 className="text-xl font-bold mb-4">Order Timeline</h2>
-						<div className="space-y-4">{allEvents.map(({ event, type, title, icon }) => renderEventCard(event, title, icon, type))}</div>
+						<div className="space-y-4">
+							{allEvents.map(({ event, type, title, icon }) => (
+								<TimelineEventCard key={event.id} event={event} type={type} title={title} icon={icon} />
+							))}
+						</div>
 					</div>
 				)}
 			</div>
