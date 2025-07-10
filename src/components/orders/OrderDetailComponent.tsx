@@ -558,8 +558,9 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 										<span className="text-muted-foreground">({totalInvoices} invoices)</span>
 									</div>
 								</div>
+								<div className="my-3 border-b border-gray-300 sm:hidden" />
 								{/* Payment Summary */}
-								<div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+								<div className="sm:mt-3 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
 									<div className="flex items-center gap-2">
 										<CreditCard className="w-4 h-4 text-green-600" />
 										<div>
