@@ -171,15 +171,21 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 	const { bgColor, textColor, icon, label } = getStatusStyles()
 
 	return (
-		<div className="flex items-center justify-end">
-			<div className={cn('flex items-center justify-center gap-2 rounded-md px-3 py-1 w-32', bgColor, textColor)}>
+		<div className="flex w-full items-center justify-between gap-2 md:w-auto md:justify-end">
+			<div
+				className={cn(
+					'flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1 md:w-32 md:flex-none',
+					bgColor,
+					textColor,
+				)}
+			>
 				{icon}
 				<span className="font-medium capitalize">{label}</span>
 			</div>
 
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
-					<Button variant="ghost" size="sm" className="ml-2 h-8 w-8 p-0">
+					<Button variant="ghost" size="sm" className="h-8 w-8 p-0">
 						<span className="sr-only">Open menu</span>
 						<MoreHorizontal className="h-4 w-4" />
 					</Button>
