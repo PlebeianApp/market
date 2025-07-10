@@ -14,7 +14,7 @@ export function DetailField({
 	return (
 		<div className={cn('flex justify-between items-start text-sm gap-2', className)}>
 			<span className="text-muted-foreground whitespace-nowrap">{label}</span>
-			<p className={cn('font-medium text-right break-all', valueClassName)}>{value}</p>
+			<p className={cn('font-medium text-right', valueClassName)}>{value}</p>
 		</div>
 	)
 } 

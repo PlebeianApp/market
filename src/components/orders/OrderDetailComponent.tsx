@@ -30,6 +30,7 @@ import { format } from 'date-fns'
 import { DetailField } from '../ui/DetailField'
 import { toast } from 'sonner'
 import { OrderActions } from './OrderActions'
+import { Separator } from '../ui/separator'
 
 interface OrderDetailComponentProps {
 	order: OrderWithRelatedEvents
@@ -439,36 +440,36 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 			<div className="space-y-6">
 				{/* Order Header */}
 				<Card>
-					<CardHeader>
-						<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-							<div>
-								<CardTitle className="text-2xl">Order #{orderId.substring(0, 8)}...</CardTitle>
-								<p className="text-gray-600 mt-1">Created {getEventDate(orderEvent)}</p>
+					<CardHeader className="p-0">
+						<div className="bg-gray-50 p-4 rounded-t-xl">
+							<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+								<div className="flex items-center space-x-2">
+									<Package className="w-5 h-5 text-gray-500" />
+									<div>
+										<p className="text-sm text-gray-500">Products</p>
+										<p className="font-semibold">
+											{orderItems.reduce((total, item) => total + item.quantity, 0)} items ({products.length} unique)
+										</p>
+									</div>
+								</div>
+								<OrderActions order={order} userPubkey={user?.pubkey || ''} />
 							</div>
-							<OrderActions order={order} userPubkey={user?.pubkey || ''} />
 						</div>
 					</CardHeader>
-					<CardContent>
-						<div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-							<div className="flex items-center space-x-2">
-								<Package className="w-5 h-5 text-gray-500" />
-								<div>
-									<p className="text-sm text-gray-500">Products</p>
-									<p className="font-semibold">
-										{orderItems.reduce((total, item) => total + item.quantity, 0)} items ({products.length} unique)
-									</p>
-								</div>
-							</div>
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:col-span-2">
-								<DetailField label="Order ID:" value={orderId || 'N/A'} valueClassName="break-all" />
-								<DetailField label="Amount:" value={`${totalAmount} sats`} valueClassName="font-bold" />
-								<DetailField
-									label="Date:"
-									value={orderEvent.created_at ? format(new Date(orderEvent.created_at * 1000), 'dd.MM.yyyy, HH:mm') : 'N/A'}
-								/>
-								<DetailField label="Role:" value={isBuyer ? 'Buyer' : isOrderSeller ? 'Seller' : 'Observer'} />
-								<DetailField label="Status:" value={orderStatus.charAt(0).toUpperCase() + orderStatus.slice(1)} />
-							</div>
+					<CardContent className="pt-4">
+						<div className="text-sm">
+							<span className="text-muted-foreground">Order ID: </span>
+							<span className="font-medium break-all">{orderId || 'N/A'}</span>
+						</div>
+						<Separator className="my-4" />
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<DetailField label="Amount:" value={`${totalAmount} sats`} valueClassName="font-bold" />
+							<DetailField
+								label="Date:"
+								value={orderEvent.created_at ? format(new Date(orderEvent.created_at * 1000), 'dd.MM.yyyy, HH:mm') : 'N/A'}
+							/>
+							<DetailField label="Role:" value={isBuyer ? 'Buyer' : isOrderSeller ? 'Seller' : 'Observer'} />
+							<DetailField label="Status:" value={orderStatus.charAt(0).toUpperCase() + orderStatus.slice(1)} />
 						</div>
 					</CardContent>
 				</Card>
