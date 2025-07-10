@@ -647,7 +647,8 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 										>
 											<div
 												className={cn('flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between', {
-													'mb-3': (isBuyer && !isComplete) || isComplete,
+													'mb-3': isComplete || isBuyer,
+													'sm:mb-0': !isBuyer && !isComplete,
 												})}
 											>
 												<div className="flex items-center gap-3">
@@ -734,6 +735,20 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 															</Button>
 														)}
 													</div>
+												</div>
+											)}
+
+											{/* Seller mobile status badge for incomplete payments */}
+											{!isBuyer && !isComplete && (
+												<div className="pt-3 border-t border-gray-300 sm:hidden">
+													<Badge
+														className={`${getStatusColor(
+															invoice.status || 'pending',
+														)} w-full justify-center py-1`}
+														variant="outline"
+													>
+														{(invoice.status || 'pending').charAt(0).toUpperCase() + (invoice.status || 'pending').slice(1)}
+													</Badge>
 												</div>
 											)}
 
