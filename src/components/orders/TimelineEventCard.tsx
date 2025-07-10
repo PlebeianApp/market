@@ -10,6 +10,19 @@ interface TimelineEventCardProps {
 	timelineIndex: number
 }
 
+function getTimelineStatusLabel(status: string): string {
+	switch (status) {
+		case 'confirmed':
+			return 'Order Confirmed'
+		case 'processing':
+			return 'Order Processing'
+		case 'shipped':
+			return 'Order Shipped'
+		default:
+			return status.charAt(0).toUpperCase() + status.slice(1)
+	}
+}
+
 export function TimelineEventCard({ event, title, icon, type, timelineIndex }: TimelineEventCardProps) {
 	const eventDate = new Date((event.created_at || 0) * 1000).toLocaleString()
 	const content = event.content
@@ -23,7 +36,7 @@ export function TimelineEventCard({ event, title, icon, type, timelineIndex }: T
 		if (statusTag) {
 			extraInfo = (
 				<Badge variant="outline" className="w-full justify-center sm:w-auto sm:justify-start">
-					{statusTag[1].charAt(0).toUpperCase() + statusTag[1].slice(1)}
+					{getTimelineStatusLabel(statusTag[1])}
 				</Badge>
 			)
 		}
@@ -56,7 +69,7 @@ export function TimelineEventCard({ event, title, icon, type, timelineIndex }: T
 		if (statusTag) {
 			extraInfo = (
 				<Badge variant="outline" className="w-full justify-center sm:w-auto sm:justify-start">
-					{statusTag[1].charAt(0).toUpperCase() + statusTag[1].slice(1)}
+					{getTimelineStatusLabel(statusTag[1])}
 				</Badge>
 			)
 		}
