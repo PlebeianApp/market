@@ -523,13 +523,15 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 							{/* Reattempt All Button - only for buyers */}
 							{isBuyer && incompleteInvoices.length > 0 && (
 								<div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-									<div className="flex flex-col items-center text-center gap-2">
-										<AlertTriangle className="w-6 h-6 text-yellow-800" />
-										<div className="text-yellow-800">
-											<p className="font-medium">
-												{incompleteInvoices.length} invoice{incompleteInvoices.length !== 1 ? 's' : ''} require payment
-											</p>
-											<p className="text-sm">Complete all payments to finalize your order</p>
+									<div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:justify-between sm:text-left">
+										<div className="flex flex-col items-center gap-2 text-yellow-800 sm:flex-row sm:items-center">
+											<AlertTriangle className="w-6 h-6 text-yellow-800 sm:w-5 sm:h-5" />
+											<div>
+												<p className="font-medium">
+													{incompleteInvoices.length} invoice{incompleteInvoices.length !== 1 ? 's' : ''} require payment
+												</p>
+												<p className="text-sm">Complete all payments to finalize your order</p>
+											</div>
 										</div>
 										<Button
 											variant="outline"
@@ -538,7 +540,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 												// Trigger refresh or reattempt logic for all incomplete invoices
 												toast.info('Refreshing payment status for all incomplete invoices...')
 											}}
-											className="w-full text-yellow-700 border-yellow-300 hover:bg-yellow-100 mt-2"
+											className="w-full text-yellow-700 border-yellow-300 hover:bg-yellow-100 sm:w-auto"
 										>
 											<RefreshCw className="w-4 h-4 mr-2" />
 											Refresh All
@@ -551,7 +553,9 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 							<div className="space-y-2">
 								<div className="flex justify-between text-sm">
 									<span>Payment Progress</span>
-									<span>{Math.round(paymentProgress)}% Complete</span>
+									<span>
+										{paidInvoices.length}/{totalInvoices} Complete
+									</span>
 								</div>
 								{/* Progress bar */}
 								<div className="w-full bg-gray-200 rounded-full h-2">
@@ -566,11 +570,15 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 									const isGeneratingThis = generatingInvoices.has(invoice.id)
 
 									return (
-										<div
+										<Card
 											key={invoice.id}
-											className={`border rounded-lg p-4 ${isComplete ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}
+											className={`p-4 ${isComplete ? 'bg-green-50' : 'bg-card'}`}
 										>
-											<div className="flex items-center justify-between mb-3">
+											<div
+												className={cn('flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between', {
+													'mb-3': (isBuyer && !isComplete) || isComplete,
+												})}
+											>
 												<div className="flex items-center gap-3">
 													{invoicesFromPaymentRequests.length > 1 && (
 														<div className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-600">
@@ -585,64 +593,86 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 														)}
 													</div>
 													<div>
-														<h4 className="font-medium">{invoice.recipientName}</h4>
-														<p className="text-sm text-gray-500">{invoice.description}</p>
+														<h4 className="font-medium">
+															{invoice.type === 'merchant' ? 'Merchant Payment' : invoice.recipientName}
+														</h4>
+														{invoice.type !== 'merchant' && (
+															<p className="text-sm text-gray-500">{invoice.description}</p>
+														)}
 													</div>
 												</div>
 												<div className="text-right">
-													<p className="font-semibold">{invoice.amount.toLocaleString()} sats</p>
-													<Badge className={getStatusColor(invoice.status || 'pending')} variant="outline">
-														{(invoice.status || 'pending').charAt(0).toUpperCase() + (invoice.status || 'pending').slice(1)}
-													</Badge>
+													{/* Desktop-only badge */}
+													{!isComplete && (
+														<Badge
+															className={`hidden sm:inline-flex ${getStatusColor(invoice.status || 'pending')}`}
+															variant="outline"
+														>
+															{(invoice.status || 'pending').charAt(0).toUpperCase() + (invoice.status || 'pending').slice(1)}
+														</Badge>
+													)}
 												</div>
 											</div>
 
 											{/* Payment action buttons - only for buyers and incomplete payments */}
 											{isBuyer && !isComplete && (
-												<div className="flex gap-2">
-													<Button
+												<div className="flex flex-col gap-2 pt-3 border-t border-muted sm:pt-0 sm:border-t-0">
+													{/* Mobile-only badge */}
+													<Badge
+														className={`${getStatusColor(
+															invoice.status || 'pending',
+														)} w-full justify-center py-1 sm:hidden`}
 														variant="outline"
-														size="sm"
-														className="flex-1"
-														disabled={isGeneratingThis}
-														onClick={() => {
-															setSelectedInvoiceIndex(index)
-															setPaymentDialogOpen(true)
-														}}
 													>
-														{isGeneratingThis ? (
-															<>
-																<RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-																Generating...
-															</>
-														) : (
-															<>
-																<Zap className="w-4 h-4 mr-2" />
-																Pay Invoice
-															</>
-														)}
-													</Button>
-
-													{/* Generate new invoice button */}
-													{invoice.lightningAddress && (
+														{(invoice.status || 'pending').charAt(0).toUpperCase() + (invoice.status || 'pending').slice(1)}
+													</Badge>
+													<div className="flex gap-2">
 														<Button
 															variant="outline"
 															size="sm"
-															onClick={() => handleGenerateNewInvoice(invoice)}
+															className="flex-1"
 															disabled={isGeneratingThis}
-															title="Generate a new invoice with fresh expiration"
+															onClick={() => {
+																setSelectedInvoiceIndex(index)
+																setPaymentDialogOpen(true)
+															}}
 														>
-															{isGeneratingThis ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+															{isGeneratingThis ? (
+																<>
+																	<RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+																	Generating...
+																</>
+															) : (
+																<>
+																	<Zap className="w-4 h-4 mr-2" />
+																	Pay {invoice.amount.toLocaleString()} sats
+																</>
+															)}
 														</Button>
-													)}
+
+														{/* Generate new invoice button */}
+														{invoice.lightningAddress && (
+															<Button
+																variant="outline"
+																size="sm"
+																onClick={() => handleGenerateNewInvoice(invoice)}
+																disabled={isGeneratingThis}
+																title="Generate a new invoice with fresh expiration"
+															>
+																{isGeneratingThis ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+															</Button>
+														)}
+													</div>
 												</div>
 											)}
 
 											{/* Show payment completion status for completed payments */}
 											{isComplete && (
-												<div className="bg-green-100 text-green-800 p-2 rounded text-sm">✅ Payment completed successfully</div>
+												<div className="bg-green-100 text-green-800 p-2 rounded text-sm">
+													✅ Payment completed successfully
+												</div>
 											)}
-										</div>
+										</Card>
 									)
 								})}
 							</div>
