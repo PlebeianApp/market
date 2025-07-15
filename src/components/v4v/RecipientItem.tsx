@@ -12,12 +12,13 @@ interface RecipientItemProps {
 	share: V4VDTO
 	onRemove: (id: string) => void
 	onPercentageChange?: (id: string, percentage: number) => void
+	color?: string
 }
 
-export function RecipientItem({ share, onRemove, onPercentageChange }: RecipientItemProps) {
+export function RecipientItem({ share, onRemove, onPercentageChange, color: providedColor }: RecipientItemProps) {
 	const [isOpen, setIsOpen] = useState(false)
 	const [percentage, setPercentage] = useState(share.percentage * 100)
-	const [color, setColor] = useState(getHexColorFingerprintFromHexPubkey(share.pubkey))
+	const [color, setColor] = useState(providedColor || getHexColorFingerprintFromHexPubkey(share.pubkey))
 
 	// Update local percentage when parent component updates the share
 	useEffect(() => {

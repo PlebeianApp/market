@@ -6,7 +6,7 @@ import { RecipientItem } from '@/components/v4v/RecipientItem'
 import { RecipientPreview } from '@/components/v4v/RecipientPreview'
 import { authStore } from '@/lib/stores/auth'
 import type { V4VDTO } from '@/lib/stores/cart'
-import { getHexColorFingerprintFromHexPubkey } from '@/lib/utils'
+import { getDistinctColorsForRecipients } from '@/lib/utils'
 import { useConfigQuery } from '@/queries/config'
 import { useZapCapabilityByNpub } from '@/queries/profiles'
 import { usePublishV4VShares, useV4VShares } from '@/queries/v4v'
@@ -73,6 +73,9 @@ function CircularEconomyComponent() {
 	const sellerPercentage = 100 - totalV4VPercentage
 	const formattedSellerPercentage = sellerPercentage.toFixed(0)
 	const formattedTotalV4V = totalV4VPercentage.toFixed(0)
+
+	// Generate distinct colors for recipients
+	const recipientColors = getDistinctColorsForRecipients(localShares)
 
 	const v4vDecimal = totalV4VPercentage / 100
 	const emojiSize = 16 + v4vDecimal * 100
@@ -370,7 +373,7 @@ function CircularEconomyComponent() {
 									className={`${index === 0 ? 'bg-rose-500' : 'bg-gray-500'} flex items-center justify-center text-white font-medium`}
 									style={{
 										width: `${share.percentage * 100}%`,
-										backgroundColor: getHexColorFingerprintFromHexPubkey(share.pubkey),
+										backgroundColor: recipientColors[share.pubkey],
 									}}
 								>
 									{(share.percentage * 100).toFixed(1)}%
@@ -392,6 +395,7 @@ function CircularEconomyComponent() {
 								}}
 								onRemove={handleRemoveRecipient}
 								onPercentageChange={handleUpdatePercentage}
+								color={recipientColors[share.pubkey]}
 							/>
 						))}
 					</div>
@@ -411,19 +415,20 @@ function CircularEconomyComponent() {
 									/>
 								)}
 							</div>
-							<div className="space-y-2">
-								<div className="flex justify-between text-sm text-muted-foreground">
-									<span>Share percentage: {newRecipientShare}%</span>
+							{localShares.length > 0 && (
+								<div className="space-y-2">
+									<div className="flex justify-between text-sm text-muted-foreground">
+										<span>Share percentage: {newRecipientShare}%</span>
+									</div>
+									<Slider
+										value={[newRecipientShare]}
+										min={1}
+										max={100}
+										step={1}
+										onValueChange={(value) => setNewRecipientShare(value[0])}
+									/>
 								</div>
-								<Slider
-									value={[newRecipientShare]}
-									min={1}
-									max={100}
-									step={1}
-									onValueChange={(value) => setNewRecipientShare(value[0])}
-									disabled={localShares.length === 0}
-								/>
-							</div>
+							)}
 							<div className="flex flex-wrap gap-2 items-center">
 								<Button
 									className="flex-grow sm:flex-grow-0"
