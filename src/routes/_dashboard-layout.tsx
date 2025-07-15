@@ -110,11 +110,13 @@ function LoginPrompt() {
 	}
 
 	return (
-		<div className="flex flex-col items-center justify-center h-full min-h-[50vh] space-y-4">
-			<p className="text-lg text-muted-foreground">Please log in to view</p>
-			<Button onClick={handleLoginClick} className="bg-neutral-800 hover:bg-neutral-700 text-white">
-				Login
-			</Button>
+		<div className="flex items-center justify-center h-full">
+			<div className="flex flex-col items-center space-y-4">
+				<p className="text-lg text-muted-foreground">Please log in to view</p>
+				<Button onClick={handleLoginClick} className="bg-neutral-800 hover:bg-neutral-700 text-white">
+					Login
+				</Button>
+			</div>
 		</div>
 	)
 }
@@ -336,7 +338,7 @@ function DashboardLayout() {
 									<div className="h-full">
 										<div
 											className={cn(
-												'p-4 bg-white lg:p-8 lg:bg-transparent',
+												'p-4 bg-white lg:p-8 lg:bg-transparent h-full',
 												location.pathname === '/dashboard/sales/sales' && 'p-0 lg:p-0',
 												location.pathname.startsWith('/dashboard/sales/messages') && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/sales/circular-economy' && 'p-0 lg:p-0',
