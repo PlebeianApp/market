@@ -306,3 +306,59 @@ export class LightningService {
 }
 
 export type { LightningInvoiceResult, PaymentVerificationResult }
+
+// Lightning Address validation regex
+export const LN_ADDRESS_REGEX = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+
+/**
+ * Validates if a string is a valid Lightning Address
+ */
+export function isValidLightningAddress(address: string): boolean {
+	return LN_ADDRESS_REGEX.test(address)
+}
+
+/**
+ * Extracts lightning address from a profile (lud16 or lud06)
+ */
+export function extractLightningAddress(profile: any): string | null {
+	return profile?.lud16 || profile?.lud06 || null
+}
+
+/**
+ * Creates a lightning URI from an invoice
+ */
+export function createLightningUri(invoice: string): string {
+	return `lightning:${invoice}`
+}
+
+/**
+ * Formats seconds into a readable time format
+ */
+export function formatTime(totalSeconds: number | null): string {
+	if (totalSeconds === null) return '--:--'
+
+	const hours = Math.floor(totalSeconds / 3600)
+	const minutes = Math.floor((totalSeconds % 3600) / 60)
+	const seconds = totalSeconds % 60
+
+	if (hours > 0) {
+		return `${hours}h ${minutes}m ${seconds}s`
+	}
+	return `${minutes}:${seconds.toString().padStart(2, '0')}`
+}
+
+/**
+ * Checks if an invoice has expired based on its timestamp and expiry
+ */
+export function isInvoiceExpired(invoice: string): boolean {
+	try {
+		// This would need a proper lightning invoice parser
+		// For now, return false as a placeholder
+		return false
+	} catch {
+		return true
+	}
+}
+
+export * from './mempool'
+export * from './paymentDetails'

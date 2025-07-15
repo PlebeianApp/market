@@ -1,3 +1,4 @@
+import { LightningPaymentProcessor, type LightningPaymentData, type PaymentResult } from '@/components/lightning/LightningPaymentProcessor'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -5,14 +6,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { DEFAULT_ZAP_AMOUNTS } from '@/lib/constants'
-import { LightningPaymentProcessor, type LightningPaymentData, type PaymentResult } from '@/components/lightning/LightningPaymentProcessor'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { profileKeys } from '@/queries/queryKeyFactory'
-import { useCallback, useState } from 'react'
-import { toast } from 'sonner'
 import { NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
-import { ChevronDown, Loader2 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
+import { ChevronDown, Loader2, Zap } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 
 interface ZapDialogProps {
 	isOpen: boolean
@@ -26,6 +26,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 	const [zapMessage, setZapMessage] = useState<string>('Zap from Plebeian')
 	const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState<boolean>(false)
 	const [isAnonymousZap, setIsAnonymousZap] = useState<boolean>(false)
+	const [showPaymentProcessor, setShowPaymentProcessor] = useState<boolean>(false)
 
 	// Extract recipient information
 	const recipientPubkey = event instanceof NDKUser ? event.pubkey : event.pubkey
@@ -44,21 +45,27 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 	const lightningAddress = profile?.lud16 || profile?.lud06 || null
 
 	// Create payment data for the processor
-	const paymentData: LightningPaymentData = {
-		id: `zap-${event instanceof NDKUser ? event.pubkey : event.id}-${Date.now()}`,
-		amount,
-		description: zapMessage,
-		recipientName,
-		recipientPubkey,
-		lightningAddress,
-		type: 'zap',
-		orderId: event instanceof NDKUser ? undefined : event.id,
-	}
+	const paymentData: LightningPaymentData = useMemo(
+		() => ({
+			amount,
+			description: zapMessage,
+			recipient: event,
+			isZap: true,
+		}),
+		[amount, zapMessage, event],
+	)
 
 	const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const value = parseInt(e.target.value, 10)
 		if (!isNaN(value) && value > 0) {
 			setAmount(value)
+		}
+	}
+
+	const handleAmountButtonClick = (presetAmount: number) => {
+		setAmount(presetAmount)
+		if (!showPaymentProcessor) {
+			setShowPaymentProcessor(true)
 		}
 	}
 
@@ -85,6 +92,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 		setZapMessage('Zap from Plebeian')
 		setAdvancedSettingsOpen(false)
 		setIsAnonymousZap(false)
+		setShowPaymentProcessor(false)
 	}
 
 	const handleDialogOpenChange = (open: boolean) => {
@@ -137,7 +145,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 							key={presetAmount}
 							variant={amount === presetAmount ? 'tertiary' : 'outline'}
 							className="border-2 border-black"
-							onClick={() => setAmount(presetAmount)}
+							onClick={() => handleAmountButtonClick(presetAmount)}
 						>
 							{displayText}
 						</Button>
@@ -169,7 +177,19 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 							<Label htmlFor="zapAmount" className="font-bold">
 								Manual zap amount
 							</Label>
-							<Input id="zapAmount" type="number" value={amount} onChange={handleAmountChange} className="border-2 border-black" min={0} />
+							<Input
+								id="zapAmount"
+								type="number"
+								value={amount}
+								onChange={(e) => {
+									handleAmountChange(e)
+									if (!showPaymentProcessor && parseInt(e.target.value) > 0) {
+										setShowPaymentProcessor(true)
+									}
+								}}
+								className="border-2 border-black"
+								min={0}
+							/>
 
 							<Label htmlFor="isAnonymousZap" className="font-bold">
 								Anonymous zap
@@ -179,25 +199,31 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 					</CollapsibleContent>
 				</Collapsible>
 
-				{/* Lightning Payment Processor */}
+				{/* Payment Processor Section */}
 				{lightningAddress ? (
-					<LightningPaymentProcessor
-						paymentData={paymentData}
-						onPaymentComplete={handlePaymentComplete}
-						onPaymentFailed={handlePaymentFailed}
-						capabilities={{
-							allowManualProof: true,
-							allowRefresh: true,
-						}}
-						showHeader={false}
-						autoGenerate={true}
-					/>
+					<Collapsible open={showPaymentProcessor} onOpenChange={setShowPaymentProcessor}>
+						<CollapsibleTrigger asChild>
+							<Button variant="outline" className="w-full mb-2">
+								<Zap className="mr-2 h-4 w-4" />
+								{showPaymentProcessor ? 'Hide Payment Options' : 'Show Payment Options'}
+								<ChevronDown className="ml-2 h-4 w-4" />
+							</Button>
+						</CollapsibleTrigger>
+						<CollapsibleContent>
+							<div className="mt-4">
+								<LightningPaymentProcessor
+									data={paymentData}
+									onPaymentComplete={handlePaymentComplete}
+									onPaymentFailed={handlePaymentFailed}
+									showManualVerification={true}
+								/>
+							</div>
+						</CollapsibleContent>
+					</Collapsible>
 				) : (
-					<div className="py-6">
-						<p className="text-red-500">No Lightning address found</p>
-						<p className="text-sm text-muted-foreground mt-2">
-							{recipientName} needs to set up a Lightning address in their profile to receive zaps.
-						</p>
+					<div className="text-center py-8 text-muted-foreground">
+						<p>No Lightning address found</p>
+						<p className="text-sm">The creator needs to set up a Lightning address in their profile to receive zaps.</p>
 					</div>
 				)}
 

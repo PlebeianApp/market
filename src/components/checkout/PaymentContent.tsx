@@ -72,8 +72,8 @@ export function PaymentContent({
 	}
 
 	const handlePaymentComplete = (result: PaymentResult) => {
-		updateInvoiceState(result.paymentId, 'paid')
-		onPaymentComplete?.(result.paymentId, result.preimage || '')
+		updateInvoiceState(result.paymentHash || currentInvoice.id, 'paid')
+		onPaymentComplete?.(result.paymentHash || currentInvoice.id, result.preimage || '')
 
 		// Auto-advance to the next invoice
 		setTimeout(() => {
@@ -84,8 +84,8 @@ export function PaymentContent({
 	}
 
 	const handlePaymentFailed = (result: PaymentResult) => {
-		updateInvoiceState(result.paymentId, 'failed')
-		onPaymentFailed?.(result.paymentId, result.error || 'Payment failed')
+		updateInvoiceState(result.paymentHash || currentInvoice.id, 'failed')
+		onPaymentFailed?.(result.paymentHash || currentInvoice.id, result.error || 'Payment failed')
 	}
 
 	if (!currentInvoice) {
@@ -94,15 +94,12 @@ export function PaymentContent({
 
 	// Convert invoice data to LightningPaymentData format
 	const paymentData: LightningPaymentData = {
-		id: currentInvoice.id,
 		amount: currentInvoice.amount,
 		description: currentInvoice.description,
-		recipientName: currentInvoice.recipientName,
-		recipientPubkey: currentInvoice.recipientPubkey,
-		lightningAddress: currentInvoice.lightningAddress,
-		bolt11: currentInvoice.bolt11,
-		type: currentInvoice.type === 'merchant' ? 'payment' : 'zap',
+		bolt11: currentInvoice.bolt11 || undefined,
+		isZap: currentInvoice.type === 'v4v',
 		orderId: currentInvoice.orderId,
+		invoiceId: currentInvoice.id,
 	}
 
 	return (
@@ -160,16 +157,10 @@ export function PaymentContent({
 			{/* Lightning Payment Processor */}
 			{invoiceStates[currentInvoice.id] !== 'paid' && (
 				<LightningPaymentProcessor
-					paymentData={paymentData}
+					data={paymentData}
 					onPaymentComplete={handlePaymentComplete}
 					onPaymentFailed={handlePaymentFailed}
-					capabilities={{
-						hasNWC: nwcEnabled,
-						allowManualProof: true,
-						allowRefresh: true,
-					}}
-					showHeader={false}
-					autoGenerate={!currentInvoice.bolt11} // Only auto-generate if no bolt11 exists
+					showManualVerification={true}
 				/>
 			)}
 
