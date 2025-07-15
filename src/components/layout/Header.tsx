@@ -6,9 +6,9 @@ import { authActions, authStore } from '@/lib/stores/auth'
 import { useConfigQuery } from '@/queries/config'
 import { Link, useLocation } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Loader2, Menu, LogOut } from 'lucide-react'
+import { Loader2, Menu, LogOut, X } from 'lucide-react'
 import { CartButton } from '@/components/CartButton'
-import { uiActions } from '@/lib/stores/ui'
+import { uiActions, uiStore } from '@/lib/stores/ui'
 import { MobileMenu } from '@/components/layout/MobileMenu'
 import { ndkActions } from '@/lib/stores/ndk'
 import { useState, useEffect } from 'react'
@@ -18,6 +18,7 @@ import { useBreakpoint } from '@/hooks/useBreakpoint'
 export function Header() {
 	const { data: config } = useConfigQuery()
 	const { isAuthenticated, isAuthenticating, user } = useStore(authStore)
+	const { mobileMenuOpen } = useStore(uiStore)
 	const location = useLocation()
 	const [scrollY, setScrollY] = useState(0)
 	const [profile, setProfile] = useState<NDKUserProfile | null>(null)
@@ -46,6 +47,9 @@ export function Header() {
 
 	// Calculate background opacity based on scroll position
 	const getHeaderBackground = () => {
+		// Force black background when mobile menu is open
+		if (mobileMenuOpen) return 'bg-black'
+		
 		if (!shouldUseTransparentHeader) return 'bg-black'
 
 		// Always use transition class for product pages and homepage
@@ -54,6 +58,9 @@ export function Header() {
 
 	// Calculate CSS variable for transitional background
 	const getHeaderStyle = () => {
+		// No transition styles needed when mobile menu is open (solid black)
+		if (mobileMenuOpen) return {}
+		
 		if (!shouldUseTransparentHeader) return {}
 
 		if (scrollY < 80) {
@@ -172,7 +179,7 @@ export function Header() {
 									onClick={handleMobileMenuClick}
 									data-testid="mobile-menu-button"
 								>
-									<Menu className="w-6 h-6" />
+									{mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
 								</Button>
 							</>
 						) : (
