@@ -1,13 +1,15 @@
 import React, { useEffect } from 'react'
-import { Link } from '@tanstack/react-router'
+import { Link, useLocation } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { uiStore, uiActions } from '@/lib/stores/ui'
 import { authActions, authStore } from '@/lib/stores/auth'
 import { cn } from '@/lib/utils'
+import { Pattern } from '@/components/pattern'
 
 export function MobileMenu() {
 	const { mobileMenuOpen } = useStore(uiStore)
 	const { isAuthenticated } = useStore(authStore)
+	const location = useLocation()
 
 	// Close menu on escape key
 	useEffect(() => {
@@ -43,6 +45,14 @@ export function MobileMenu() {
 		uiActions.closeMobileMenu()
 	}
 
+	// Check if a menu item is active
+	const isActive = (path: string) => {
+		if (path === '/') {
+			return location.pathname === '/'
+		}
+		return location.pathname.startsWith(path)
+	}
+
 	if (!mobileMenuOpen) return null
 
 	const menuItems = [
@@ -56,34 +66,54 @@ export function MobileMenu() {
 	return (
 		<div 
 			className={cn(
-				'fixed inset-0 z-50 bg-black transition-opacity duration-300',
+				'fixed top-16 left-0 right-0 bottom-0 z-40 bg-black/90 transition-opacity duration-300',
 				mobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
 			)}
 			onClick={() => uiActions.closeMobileMenu()}
 		>
+			{/* Dots Pattern Overlay */}
+			<Pattern pattern="dots" className="opacity-30" />
+			
 			{/* Menu Content */}
 			<div 
-				className="flex flex-col items-center justify-center h-full"
+				className="flex flex-col items-center justify-center h-full relative z-10"
 				onClick={(e) => e.stopPropagation()}
 			>
-				<nav className="flex flex-col items-center gap-8">
-					{menuItems.map((item) => (
-						<Link
-							key={item.to}
-							to={item.to}
-							className="text-white text-2xl font-bold hover:text-secondary transition-colors"
-							onClick={handleLinkClick}
-						>
-							{item.label}
-						</Link>
-					))}
+				<nav className="flex flex-col items-stretch gap-4 w-full max-w-sm">
+					{menuItems.map((item) => {
+						const active = isActive(item.to)
+						return (
+							<div
+								key={item.to}
+								className={cn(
+									'py-3 px-6 rounded-lg',
+									active ? 'bg-black' : ''
+								)}
+							>
+								<Link
+									to={item.to}
+									className={cn(
+										'block text-center text-lg font-normal uppercase tracking-wider transition-colors',
+										active 
+											? 'text-secondary' 
+											: 'text-white hover:text-secondary'
+									)}
+									onClick={handleLinkClick}
+								>
+									{item.label}
+								</Link>
+							</div>
+						)
+					})}
 					{isAuthenticated && (
-						<button
-							onClick={handleLogout}
-							className="text-white text-2xl font-bold hover:text-secondary transition-colors"
-						>
-							Log out
-						</button>
+						<div className="py-3 px-8">
+							<button
+								onClick={handleLogout}
+								className="w-full text-center text-white text-lg font-normal uppercase tracking-wider hover:text-secondary transition-colors"
+							>
+								Log out
+							</button>
+						</div>
 					)}
 				</nav>
 			</div>
