@@ -21,6 +21,7 @@ export interface UIState {
 	activeElement?: string
 	dialogCallbacks?: Partial<Record<DialogType, any>>
 	dashboardTitle: string
+	mobileMenuOpen: boolean
 }
 
 // Initial state
@@ -40,6 +41,7 @@ const initialState: UIState = {
 	toasts: [],
 	dialogCallbacks: {},
 	dashboardTitle: 'DASHBOARD',
+	mobileMenuOpen: false,
 }
 
 // Create the store
@@ -176,6 +178,31 @@ export const uiActions = {
 		uiStore.setState((state) => ({
 			...state,
 			toasts: [],
+		}))
+	},
+
+	// Mobile menu actions
+	openMobileMenu: () => {
+		uiStore.setState((state) => ({
+			...state,
+			mobileMenuOpen: true,
+			activeElement: 'mobile-menu',
+		}))
+	},
+
+	closeMobileMenu: () => {
+		uiStore.setState((state) => ({
+			...state,
+			mobileMenuOpen: false,
+			activeElement: state.activeElement === 'mobile-menu' ? undefined : state.activeElement,
+		}))
+	},
+
+	toggleMobileMenu: () => {
+		uiStore.setState((state) => ({
+			...state,
+			mobileMenuOpen: !state.mobileMenuOpen,
+			activeElement: state.mobileMenuOpen ? undefined : 'mobile-menu',
 		}))
 	},
 

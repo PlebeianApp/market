@@ -1,20 +1,28 @@
 import { ProductSearch } from '@/components/ProductSearch'
 import { Profile } from '@/components/Profile'
 import { Button } from '@/components/ui/button'
-import { authStore } from '@/lib/stores/auth'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { authActions, authStore } from '@/lib/stores/auth'
 import { useConfigQuery } from '@/queries/config'
 import { Link, useLocation } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Menu, LogOut } from 'lucide-react'
 import { CartButton } from '@/components/CartButton'
 import { uiActions } from '@/lib/stores/ui'
+import { MobileMenu } from '@/components/layout/MobileMenu'
+import { ndkActions } from '@/lib/stores/ndk'
 import { useState, useEffect } from 'react'
+import type { NDKUserProfile } from '@nostr-dev-kit/ndk'
+import { useBreakpoint } from '@/hooks/useBreakpoint'
 
 export function Header() {
 	const { data: config } = useConfigQuery()
-	const { isAuthenticated, isAuthenticating } = useStore(authStore)
+	const { isAuthenticated, isAuthenticating, user } = useStore(authStore)
 	const location = useLocation()
 	const [scrollY, setScrollY] = useState(0)
+	const [profile, setProfile] = useState<NDKUserProfile | null>(null)
+	const breakpoint = useBreakpoint()
+	const isMobile = breakpoint === 'sm' || breakpoint === 'md'
 
 	// Check if we're on any product page (index page or individual product) or homepage
 	const isProductPage = location.pathname === '/products' || location.pathname.startsWith('/products/')
@@ -59,8 +67,35 @@ export function Header() {
 		}
 	}
 
+	// Fetch user profile when authenticated
+	useEffect(() => {
+		if (!user?.pubkey || !isAuthenticated) {
+			setProfile(null)
+			return
+		}
+
+		const fetchProfile = async () => {
+			try {
+				const ndk = ndkActions.getNDK()
+				if (!ndk) return
+
+				const ndkUser = ndk.getUser({ pubkey: user.pubkey })
+				const userProfile = await ndkUser.fetchProfile()
+				setProfile(userProfile)
+			} catch (error) {
+				console.error('Error fetching profile:', error)
+			}
+		}
+
+		fetchProfile()
+	}, [user?.pubkey, isAuthenticated])
+
 	function handleLoginClick() {
 		uiActions.openDialog('login')
+	}
+
+	function handleMobileMenuClick() {
+		uiActions.toggleMobileMenu()
 	}
 
 	return (
@@ -107,31 +142,81 @@ export function Header() {
 						<ProductSearch />
 					</div>
 					<div className="flex gap-2">
-						{isAuthenticating ? (
-							<Button variant="primary" className="p-2 relative rounded-md" data-testid="auth-loading">
-								<Loader2 className="h-4 w-4 animate-spin" />
-							</Button>
-						) : isAuthenticated ? (
+						{/* Mobile Layout */}
+						{isMobile ? (
 							<>
-								<CartButton />
-								<Link to="/dashboard" data-testid="dashboard-link">
+								{/* Account Button/Avatar - changes based on auth state - positioned first when logged in */}
+								{isAuthenticating ? (
+									<Button variant="primary" className="p-2 relative" data-testid="auth-loading">
+										<Loader2 className="h-4 w-4 animate-spin" />
+									</Button>
+								) : isAuthenticated ? (
+									<Profile compact />
+								) : (
 									<Button
 										variant="primary"
-										className="p-2 relative rounded-md hover:[&>span]:text-secondary"
-										icon={<span className="i-dashboard w-6 h-6" />}
-										data-testid="dashboard-button"
+										className="p-2 relative hover:[&>span]:text-secondary"
+										icon={<span className="i-account w-6 h-6" />}
+										onClick={handleLoginClick}
+										data-testid="login-button"
 									/>
-								</Link>
-								<Profile compact />
+								)}
+
+								{/* Cart Button - always visible on mobile */}
+								<CartButton />
+								
+								{/* Menu Button - always visible on mobile */}
+								<Button
+									variant="primary"
+									className="p-2 relative hover:[&>span]:text-secondary"
+									onClick={handleMobileMenuClick}
+									data-testid="mobile-menu-button"
+								>
+									<Menu className="w-6 h-6" />
+								</Button>
 							</>
 						) : (
-							<Button
-								variant="primary"
-								className="p-2 relative rounded-md hover:[&>span]:text-secondary"
-								icon={<span className="i-account w-6 h-6" />}
-								onClick={handleLoginClick}
-								data-testid="login-button"
-							/>
+							/* Desktop Layout - unchanged */
+							<>
+								{isAuthenticating ? (
+									<Button variant="primary" className="p-2 relative" data-testid="auth-loading">
+										<Loader2 className="h-4 w-4 animate-spin" />
+									</Button>
+								) : isAuthenticated ? (
+									<>
+										<CartButton />
+										<Link to="/dashboard" data-testid="dashboard-link">
+											<Button
+												variant="primary"
+												className={`p-2 relative hover:[&>span]:text-secondary ${
+													location.pathname.startsWith('/dashboard') 
+														? 'bg-secondary text-black [&>span]:text-black' 
+														: ''
+												}`}
+												icon={<span className="i-dashboard w-6 h-6" />}
+												data-testid="dashboard-button"
+											/>
+										</Link>
+										<Profile compact />
+										<Button
+											variant="primary"
+											className="p-2 relative hover:[&>span]:text-secondary"
+											onClick={() => authActions.logout()}
+											data-testid="logout-button"
+										>
+											<LogOut className="w-6 h-6" />
+										</Button>
+									</>
+								) : (
+									<Button
+										variant="primary"
+										className="p-2 relative hover:[&>span]:text-secondary"
+										icon={<span className="i-account w-6 h-6" />}
+										onClick={handleLoginClick}
+										data-testid="login-button"
+									/>
+								)}
+							</>
 						)}
 					</div>
 				</div>
@@ -139,6 +224,9 @@ export function Header() {
 			<div className="lg:hidden flex-1 pt-4">
 				<ProductSearch />
 			</div>
+			
+			{/* Mobile Menu */}
+			<MobileMenu />
 		</header>
 	)
 }
