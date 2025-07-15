@@ -2,43 +2,9 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
-import { QRCode } from '@/components/ui/qr-code'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { authStore } from '@/lib/stores/auth'
-import { ndkStore } from '@/lib/stores/ndk'
-import {
-	useGenerateInvoiceMutation,
-	useNwcPaymentMutation,
-	usePaymentReceiptSubscription,
-	useWeblnPaymentMutation,
-} from '@/queries/payment'
-import { useStore } from '@tanstack/react-store'
-import {
-	AlertTriangle,
-	Check,
-	CheckCircle,
-	ChevronLeft,
-	ChevronRight,
-	Copy,
-	CreditCard,
-	ExternalLink,
-	RefreshCw,
-	Users,
-	Wallet,
-	Zap,
-} from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
-import { toast } from 'sonner'
-
-// WebLN types
-declare global {
-	interface Window {
-		webln?: {
-			enable(): Promise<void>
-			sendPayment(paymentRequest: string): Promise<{ preimage: string }>
-		}
-	}
-}
+import { LightningPaymentProcessor, type LightningPaymentData, type PaymentResult } from '@/components/lightning/LightningPaymentProcessor'
+import { ChevronLeft, ChevronRight, CreditCard, Users } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 export interface PaymentInvoiceData {
 	id: string
@@ -65,17 +31,6 @@ interface PaymentContentProps {
 	onNavigate?: (index: number) => void
 }
 
-interface InvoiceState {
-	loading: boolean
-	nwcLoading: boolean
-	errorMessage: string | null
-	invoice: string | null
-	lightningAddress: string | null
-	paymentComplete: boolean
-	paymentPending: boolean
-	awaitingPayment: boolean // For QR code payments - waiting for external payment
-}
-
 export function PaymentContent({
 	invoices,
 	currentIndex = 0,
@@ -85,285 +40,70 @@ export function PaymentContent({
 	nwcEnabled = true,
 	onNavigate,
 }: PaymentContentProps) {
-	const { user } = useStore(authStore)
-	const ndkState = useStore(ndkStore)
-	const { mutateAsync: generateInvoice, isPending: isGeneratingInvoice } = useGenerateInvoiceMutation()
-	const { mutateAsync: payWithWebln, isPending: isPayingWithWebln } = useWeblnPaymentMutation()
-	const { mutateAsync: payWithNwc, isPending: isPayingWithNwc } = useNwcPaymentMutation()
-
 	const [activeIndex, setActiveIndex] = useState(currentIndex)
-	const [invoiceStates, setInvoiceStates] = useState<Record<string, InvoiceState>>({})
-	const [copiedInvoices, setCopiedInvoices] = useState<Set<string>>(new Set())
-
-	// Keep track of timeouts for cleanup
-	const [timeoutIds, setTimeoutIds] = useState<Set<NodeJS.Timeout>>(new Set())
-
-	// Session management to prevent old receipt detection
-	const sessionStartTimeRef = useRef<number>(Math.floor(Date.now() / 1000))
+	const [invoiceStates, setInvoiceStates] = useState<Record<string, 'pending' | 'paid' | 'failed'>>({})
 
 	// Initialize invoice states
 	useEffect(() => {
-		sessionStartTimeRef.current = Math.floor(Date.now() / 1000)
-		console.log('🔄 New checkout session started at', sessionStartTimeRef.current)
-
-		const newStates: Record<string, InvoiceState> = {}
+		const newStates: Record<string, 'pending' | 'paid' | 'failed'> = {}
 		invoices.forEach((invoice) => {
-			newStates[invoice.id] = {
-				loading: false,
-				nwcLoading: false,
-				errorMessage: null,
-				invoice: invoice.bolt11 || null,
-				lightningAddress: invoice.lightningAddress || null,
-				paymentComplete: invoice.status === 'paid',
-				paymentPending: false,
-				awaitingPayment: false,
-			}
+			newStates[invoice.id] = invoice.status === 'paid' ? 'paid' : 'pending'
 		})
 		setInvoiceStates(newStates)
 	}, [invoices])
-
-	// Cleanup on unmount
-	useEffect(() => {
-		return () => {
-			// Clear all timeouts when component unmounts
-			timeoutIds.forEach(clearTimeout)
-		}
-	}, [])
 
 	// Update active index when currentIndex prop changes
 	useEffect(() => {
 		setActiveIndex(currentIndex)
 	}, [currentIndex])
 
-	const updateInvoiceState = (invoiceId: string, updates: Partial<InvoiceState>) => {
+	const updateInvoiceState = (invoiceId: string, state: 'pending' | 'paid' | 'failed') => {
 		setInvoiceStates((prev) => ({
 			...prev,
-			[invoiceId]: { ...prev[invoiceId], ...updates },
+			[invoiceId]: state,
 		}))
 	}
 
-	// Helper to create tracked timeouts for cleanup
-	const createTrackedTimeout = (callback: () => void, delay: number) => {
-		const timeoutId = setTimeout(() => {
-			callback()
-			// Remove timeout from tracking set when it completes
-			setTimeoutIds((prev) => {
-				const newSet = new Set(prev)
-				newSet.delete(timeoutId)
-				return newSet
-			})
-		}, delay)
-
-		// Add timeout to tracking set
-		setTimeoutIds((prev) => new Set(prev).add(timeoutId))
-		return timeoutId
-	}
-
 	const currentInvoice = invoices[activeIndex]
-	const currentState = invoiceStates[currentInvoice?.id]
-
-	// Subscribe to payment receipts
-	const { data: paymentPreimage } = usePaymentReceiptSubscription({
-		orderId: currentInvoice?.orderId,
-		invoiceId: currentInvoice?.id,
-		sessionStartTime: sessionStartTimeRef.current,
-		enabled: !!currentInvoice && !currentState?.paymentComplete && currentState?.awaitingPayment,
-	})
-
-	// Handle successful payment from subscription
-	useEffect(() => {
-		if (paymentPreimage && currentInvoice && !currentState.paymentComplete) {
-			console.log(`✅ Payment detected for ${currentInvoice.id} via subscription`)
-			updateInvoiceState(currentInvoice.id, {
-				paymentComplete: true,
-				paymentPending: false,
-				awaitingPayment: false,
-			})
-			onPaymentComplete?.(currentInvoice.id, paymentPreimage)
-			toast.success('Payment detected and confirmed!')
-
-			// Auto-advance to the next invoice
-			createTrackedTimeout(() => {
-				if (activeIndex < invoices.length - 1) {
-					handleNavigate(activeIndex + 1)
-				}
-			}, 1500)
-		}
-	}, [paymentPreimage, currentInvoice?.id, currentState?.paymentComplete])
-
-	// Generate fresh BOLT11 invoice from lightning address
-	const generateInvoiceFromAddress = async (invoiceId: string) => {
-		const invoice = invoices.find((inv) => inv.id === invoiceId)
-		if (!invoice || !invoice.lightningAddress) return
-
-		updateInvoiceState(invoiceId, {
-			loading: true,
-			errorMessage: null,
-			invoice: null,
-			paymentComplete: false,
-			paymentPending: false,
-		})
-
-		try {
-			const generated = await generateInvoice({
-				sellerPubkey: invoice.recipientPubkey,
-				amountSats: invoice.amount,
-				description: invoice.description,
-				invoiceId: invoice.id,
-				items: [], // Items are not needed for simple invoice regeneration
-				type: invoice.type === 'merchant' ? 'seller' : 'v4v',
-			})
-
-			if (generated.status === 'failed' || !generated.bolt11) {
-				throw new Error('Failed to generate new invoice.')
-			}
-
-			updateInvoiceState(invoiceId, {
-				invoice: generated.bolt11,
-				loading: false,
-			})
-			toast.success('New invoice generated')
-		} catch (error) {
-			console.error('Invoice regeneration failed:', error)
-			updateInvoiceState(invoiceId, {
-				errorMessage: 'Failed to generate new invoice.',
-				loading: false,
-			})
-			toast.error('Could not generate a new invoice.')
-		}
-	}
-
-	// Handle WebLN payment
-	const handleWebLNPayment = async (invoiceId: string) => {
-		const invoice = invoices.find((inv) => inv.id === invoiceId)
-		const bolt11 = invoiceStates[invoiceId]?.invoice
-		if (!invoice || !bolt11) {
-			toast.error('No invoice available to pay.')
-			return
-		}
-
-		updateInvoiceState(invoiceId, {
-			paymentPending: true,
-			errorMessage: null,
-		})
-
-		try {
-			const preimage = await payWithWebln(bolt11)
-			updateInvoiceState(invoiceId, {
-				paymentComplete: true,
-				paymentPending: false,
-			})
-			onPaymentComplete?.(invoiceId, preimage)
-
-			// Auto-advance to the next invoice
-			createTrackedTimeout(() => {
-				if (activeIndex < invoices.length - 1) {
-					handleNavigate(activeIndex + 1)
-				}
-			}, 1500)
-		} catch (error) {
-			// Error toast is handled by the mutation hook
-			updateInvoiceState(invoiceId, {
-				paymentPending: false,
-				errorMessage: error instanceof Error ? error.message : 'Payment failed.',
-			})
-			onPaymentFailed?.(invoiceId, error instanceof Error ? error.message : 'Payment failed.')
-		}
-	}
-
-	// Handle NWC payment using NDK Zapper (treating marketplace payment as a zap)
-	const handleNwcPayment = async (invoiceId: string) => {
-		const invoice = invoices.find((inv) => inv.id === invoiceId)
-		const bolt11 = invoiceStates[invoiceId]?.invoice
-		const nwcUri = ndkState.activeNwcWalletUri
-
-		if (!invoice || !bolt11 || !nwcUri || !user) {
-			toast.error('User, NWC URI or invoice not available.')
-			return
-		}
-
-		updateInvoiceState(invoiceId, {
-			nwcLoading: true,
-			errorMessage: null,
-		})
-
-		try {
-			const preimage = await payWithNwc({
-				bolt11,
-				nwcUri,
-				userPubkey: user.pubkey,
-				recipientPubkey: invoice.recipientPubkey,
-				invoiceId: invoice.id,
-				amount: invoice.amount,
-				description: invoice.description,
-			})
-
-			updateInvoiceState(invoiceId, {
-				paymentComplete: true,
-				nwcLoading: false,
-			})
-			onPaymentComplete?.(invoiceId, preimage)
-
-			// Auto-advance to the next invoice
-			createTrackedTimeout(() => {
-				if (activeIndex < invoices.length - 1) {
-					handleNavigate(activeIndex + 1)
-				}
-			}, 1500)
-		} catch (error) {
-			// Error toast is handled by the mutation hook
-			updateInvoiceState(invoiceId, {
-				nwcLoading: false,
-				errorMessage: error instanceof Error ? error.message : 'NWC payment failed.',
-			})
-			onPaymentFailed?.(invoiceId, error instanceof Error ? error.message : 'NWC payment failed.')
-		}
-	}
-
-	const copyToClipboard = async (text: string, invoiceId: string) => {
-		try {
-			await navigator.clipboard.writeText(text)
-			setCopiedInvoices((prev) => new Set(prev).add(invoiceId))
-			toast.success('Copied to clipboard!')
-			createTrackedTimeout(() => {
-				setCopiedInvoices((prev) => {
-					const newSet = new Set(prev)
-					newSet.delete(invoiceId)
-					return newSet
-				})
-			}, 2000)
-		} catch (error) {
-			toast.error('Failed to copy to clipboard')
-		}
-	}
-
-	const openLightningWallet = (bolt11: string) => {
-		const lightningUrl = `lightning:${bolt11}`
-		window.open(lightningUrl, '_blank')
-
-		// Mark as awaiting payment since user opened external wallet
-		updateInvoiceState(currentInvoice.id, {
-			awaitingPayment: true,
-		})
-	}
-
-	const startAwaitingPayment = (invoiceId: string) => {
-		updateInvoiceState(invoiceId, {
-			awaitingPayment: true,
-		})
-	}
 
 	const handleNavigate = (newIndex: number) => {
 		setActiveIndex(newIndex)
 		onNavigate?.(newIndex)
 	}
 
-	if (!currentInvoice || !currentState) {
+	const handlePaymentComplete = (result: PaymentResult) => {
+		updateInvoiceState(result.paymentId, 'paid')
+		onPaymentComplete?.(result.paymentId, result.preimage || '')
+
+		// Auto-advance to the next invoice
+		setTimeout(() => {
+			if (activeIndex < invoices.length - 1) {
+				handleNavigate(activeIndex + 1)
+			}
+		}, 1500)
+	}
+
+	const handlePaymentFailed = (result: PaymentResult) => {
+		updateInvoiceState(result.paymentId, 'failed')
+		onPaymentFailed?.(result.paymentId, result.error || 'Payment failed')
+	}
+
+	if (!currentInvoice) {
 		return null
 	}
 
-	const hasWebLN = typeof window !== 'undefined' && window.webln
-	const hasNWC = ndkState.activeNwcWalletUri
+	// Convert invoice data to LightningPaymentData format
+	const paymentData: LightningPaymentData = {
+		id: currentInvoice.id,
+		amount: currentInvoice.amount,
+		description: currentInvoice.description,
+		recipientName: currentInvoice.recipientName,
+		recipientPubkey: currentInvoice.recipientPubkey,
+		lightningAddress: currentInvoice.lightningAddress,
+		bolt11: currentInvoice.bolt11,
+		type: currentInvoice.type === 'merchant' ? 'payment' : 'zap',
+		orderId: currentInvoice.orderId,
+	}
 
 	return (
 		<div className="space-y-4">
@@ -400,8 +140,8 @@ export function PaymentContent({
 							{currentInvoice.type === 'merchant' ? <CreditCard className="w-4 h-4" /> : <Users className="w-4 h-4" />}
 							{currentInvoice.recipientName}
 						</CardTitle>
-						<Badge variant={currentState.paymentComplete ? 'secondary' : 'outline'}>
-							{currentState.paymentComplete ? 'Paid' : 'Pending'}
+						<Badge variant={invoiceStates[currentInvoice.id] === 'paid' ? 'secondary' : 'outline'}>
+							{invoiceStates[currentInvoice.id] === 'paid' ? 'Paid' : 'Pending'}
 						</Badge>
 					</div>
 				</CardHeader>
@@ -417,158 +157,20 @@ export function PaymentContent({
 				</CardContent>
 			</Card>
 
-			{/* Error Display */}
-			{currentState.errorMessage && (
-				<div className="flex items-center gap-2 p-3 bg-red-50 text-red-700 rounded-lg">
-					<AlertTriangle className="w-4 h-4" />
-					<span className="text-sm">{currentState.errorMessage}</span>
-				</div>
-			)}
-
-			{/* Payment Complete State */}
-			{currentState.paymentComplete && (
-				<div className="flex items-center gap-2 p-3 bg-green-50 text-green-700 rounded-lg">
-					<CheckCircle className="w-4 h-4" />
-					<span className="text-sm">Payment completed successfully!</span>
-				</div>
-			)}
-
-			{/* Awaiting Payment State */}
-			{currentState.awaitingPayment && !currentState.paymentComplete && (
-				<div className="flex items-center gap-2 p-3 bg-blue-50 text-blue-700 rounded-lg">
-					<RefreshCw className="w-4 h-4 animate-spin" />
-					<span className="text-sm">Awaiting payment confirmation...</span>
-				</div>
-			)}
-
-			{/* Payment Interface */}
-			{!currentState.paymentComplete && (
-				<>
-					{/* Generate Invoice Button */}
-					{!currentState.invoice && currentInvoice.lightningAddress && (
-						<Button onClick={() => generateInvoiceFromAddress(currentInvoice.id)} disabled={currentState.loading} className="w-full">
-							{currentState.loading ? (
-								<>
-									<RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-									Generating Invoice...
-								</>
-							) : (
-								<>
-									<Zap className="w-4 h-4 mr-2" />
-									Generate Invoice
-								</>
-							)}
-						</Button>
-					)}
-
-					{/* Payment Methods */}
-					{currentState.invoice && (
-						<Tabs defaultValue="qr" className="w-full">
-							<TabsList
-								className={`grid w-full ${(() => {
-									const tabCount = 1 + (hasWebLN ? 1 : 0) + (hasNWC && nwcEnabled ? 1 : 0)
-									if (tabCount === 1) return 'grid-cols-1'
-									if (tabCount === 2) return 'grid-cols-2'
-									return 'grid-cols-3'
-								})()}`}
-							>
-								<TabsTrigger value="qr">QR Code</TabsTrigger>
-								{hasWebLN && <TabsTrigger value="webln">WebLN</TabsTrigger>}
-								{hasNWC && nwcEnabled && <TabsTrigger value="nwc">NWC</TabsTrigger>}
-							</TabsList>
-
-							<TabsContent value="qr" className="space-y-4">
-								<div className="flex flex-col items-center space-y-4">
-									<QRCode value={currentState.invoice} size={256} />
-
-									<div className="flex gap-2 w-full">
-										<Button
-											variant="outline"
-											onClick={() => {
-												copyToClipboard(currentState.invoice!, currentInvoice.id)
-												startAwaitingPayment(currentInvoice.id)
-											}}
-											className="flex-1"
-										>
-											{copiedInvoices.has(currentInvoice.id) ? <Check className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
-											{copiedInvoices.has(currentInvoice.id) ? 'Copied!' : 'Copy'}
-										</Button>
-
-										<Button variant="outline" onClick={() => openLightningWallet(currentState.invoice!)} className="flex-1">
-											<ExternalLink className="w-4 h-4 mr-2" />
-											Open Wallet
-										</Button>
-									</div>
-
-									{!currentState.awaitingPayment && !currentState.paymentComplete && (
-										<Button variant="secondary" onClick={() => startAwaitingPayment(currentInvoice.id)} className="w-full">
-											<RefreshCw className="w-4 h-4 mr-2" />
-											I've made the payment
-										</Button>
-									)}
-								</div>
-							</TabsContent>
-
-							{hasWebLN && (
-								<TabsContent value="webln">
-									<Button onClick={() => handleWebLNPayment(currentInvoice.id)} disabled={currentState.paymentPending} className="w-full">
-										{currentState.paymentPending ? (
-											<>
-												<RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-												Processing...
-											</>
-										) : (
-											<>
-												<Zap className="w-4 h-4 mr-2" />
-												Pay with WebLN
-											</>
-										)}
-									</Button>
-								</TabsContent>
-							)}
-
-							{hasNWC && nwcEnabled && (
-								<TabsContent value="nwc">
-									<Button onClick={() => handleNwcPayment(currentInvoice.id)} disabled={currentState.nwcLoading} className="w-full">
-										{currentState.nwcLoading ? (
-											<>
-												<RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-												Processing...
-											</>
-										) : (
-											<>
-												<Wallet className="w-4 h-4 mr-2" />
-												Pay with NWC
-											</>
-										)}
-									</Button>
-								</TabsContent>
-							)}
-						</Tabs>
-					)}
-
-					{/* Refresh Invoice Button */}
-					{currentState.invoice && currentInvoice.lightningAddress && (
-						<Button
-							variant="outline"
-							onClick={() => generateInvoiceFromAddress(currentInvoice.id)}
-							disabled={currentState.loading}
-							className="w-full"
-						>
-							{currentState.loading ? (
-								<>
-									<RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-									Generating...
-								</>
-							) : (
-								<>
-									<RefreshCw className="w-4 h-4 mr-2" />
-									Generate Fresh Invoice
-								</>
-							)}
-						</Button>
-					)}
-				</>
+			{/* Lightning Payment Processor */}
+			{invoiceStates[currentInvoice.id] !== 'paid' && (
+				<LightningPaymentProcessor
+					paymentData={paymentData}
+					onPaymentComplete={handlePaymentComplete}
+					onPaymentFailed={handlePaymentFailed}
+					capabilities={{
+						hasNWC: nwcEnabled,
+						allowManualProof: true,
+						allowRefresh: true,
+					}}
+					showHeader={false}
+					autoGenerate={!currentInvoice.bolt11} // Only auto-generate if no bolt11 exists
+				/>
 			)}
 
 			{/* Invoice Progress */}
@@ -577,11 +179,11 @@ export function PaymentContent({
 					<div className="flex justify-between text-sm">
 						<span>Payment Progress</span>
 						<span>
-							{invoices.filter((inv) => invoiceStates[inv.id]?.paymentComplete).length} of {invoices.length} completed
+							{Object.values(invoiceStates).filter((state) => state === 'paid').length} of {invoices.length} completed
 						</span>
 					</div>
 					<Progress
-						value={(invoices.filter((inv) => invoiceStates[inv.id]?.paymentComplete).length / invoices.length) * 100}
+						value={(Object.values(invoiceStates).filter((state) => state === 'paid').length / invoices.length) * 100}
 						className="w-full"
 					/>
 				</div>
