@@ -342,10 +342,6 @@ function WalletForm({ wallet, onSuccess, onCancel, userPubkey }: WalletFormProps
 	if (!isEditing) {
 		return (
 			<form onSubmit={handleSubmit} className="space-y-6">
-				<div className="space-y-2">
-					<p className="text-lg font-semibold">Add Nostr Wallet Connect</p>
-					<p className="text-sm text-muted-foreground">Paste your Nostr Wallet Connect URI or scan a QR code to connect your wallet.</p>
-				</div>
 				<div className="flex gap-2">
 					<Button type="button" onClick={handlePaste} className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-black">
 						PASTE
@@ -354,6 +350,15 @@ function WalletForm({ wallet, onSuccess, onCancel, userPubkey }: WalletFormProps
 						<ScanIcon className="h-4 w-4 mr-2" />
 						SCAN
 					</Button>
+				</div>
+				<div className="space-y-2">
+					<Label htmlFor="wallet-name-add">Wallet Name (optional)</Label>
+					<Input 
+						id="wallet-name-add" 
+						value={name} 
+						onChange={(e) => setName(e.target.value)} 
+						placeholder="My Lightning Wallet" 
+					/>
 				</div>
 				<div className="space-y-2">
 					<Label htmlFor="nwc-pubkey-add">Wallet Connect Pubkey</Label>
