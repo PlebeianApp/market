@@ -114,6 +114,9 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 		return null // Don't show actions if user is neither buyer nor seller
 	}
 
+	// Check if there are any available actions
+	const hasActions = canCancel || canConfirm || canProcess || canShip || canComplete || canReceive
+
 	const { bgColor, textColor, iconName, label } = getStatusStyles(order)
 
 	const renderIcon = () => {
@@ -144,6 +147,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 				<span className="font-medium capitalize">{label}</span>
 			</div>
 
+			{hasActions && (
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
 					<Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -202,6 +206,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 					)}
 				</DropdownMenuContent>
 			</DropdownMenu>
+			)}
 
 			{/* Shipping dialog */}
 			<Dialog open={isShippingOpen} onOpenChange={setIsShippingOpen}>
