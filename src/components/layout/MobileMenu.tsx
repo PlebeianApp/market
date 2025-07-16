@@ -1,15 +1,17 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { uiStore, uiActions } from '@/lib/stores/ui'
 import { authActions, authStore } from '@/lib/stores/auth'
 import { cn } from '@/lib/utils'
 import { Pattern } from '@/components/pattern'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
 
 export function MobileMenu() {
 	const { mobileMenuOpen } = useStore(uiStore)
 	const { isAuthenticated } = useStore(authStore)
 	const location = useLocation()
+	const [animationParent] = useAutoAnimate<HTMLDivElement>()
 
 	// Close menu on escape key
 	useEffect(() => {
@@ -53,8 +55,6 @@ export function MobileMenu() {
 		return location.pathname.startsWith(path)
 	}
 
-	if (!mobileMenuOpen) return null
-
 	const menuItems = [
 		{ to: '/', label: 'Home' },
 		{ to: '/products', label: 'Products' },
@@ -64,59 +64,62 @@ export function MobileMenu() {
 	]
 
 	return (
-		<div 
-			className={cn(
-				'fixed top-16 left-0 right-0 bottom-0 z-40 bg-black/90 transition-opacity duration-300',
-				mobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
-			)}
-			onClick={() => uiActions.closeMobileMenu()}
-		>
-			{/* Dots Pattern Overlay */}
-			<Pattern pattern="dots" className="opacity-30" />
-			
-			{/* Menu Content */}
-			<div 
-				className="flex flex-col items-center justify-center h-full relative z-10"
-				onClick={(e) => e.stopPropagation()}
-			>
-				<nav className="flex flex-col items-stretch gap-4 w-full max-w-sm">
-					{menuItems.map((item) => {
-						const active = isActive(item.to)
-						return (
-							<div
-								key={item.to}
-								className={cn(
-									'py-3 px-6 rounded-lg',
-									active ? 'bg-black' : ''
-								)}
-							>
-								<Link
-									to={item.to}
-									className={cn(
-										'block text-center text-lg font-normal uppercase tracking-wider transition-colors',
-										active 
-											? 'text-secondary' 
-											: 'text-white hover:text-secondary'
-									)}
-									onClick={handleLinkClick}
-								>
-									{item.label}
-								</Link>
-							</div>
-						)
-					})}
-					{isAuthenticated && (
-						<div className="py-3 px-8">
-							<button
-								onClick={handleLogout}
-								className="w-full text-center text-white text-lg font-normal uppercase tracking-wider hover:text-secondary transition-colors"
-							>
-								Log out
-							</button>
-						</div>
+		<div ref={animationParent}>
+			{mobileMenuOpen && (
+				<div 
+					className={cn(
+						'fixed top-16 left-0 right-0 bottom-0 z-40 bg-black/90'
 					)}
-				</nav>
-			</div>
+					onClick={() => uiActions.closeMobileMenu()}
+				>
+					{/* Dots Pattern Overlay */}
+					<Pattern pattern="dots" className="opacity-30" />
+					
+					{/* Menu Content */}
+					<div 
+						className="flex flex-col items-center justify-center h-full relative z-10"
+						onClick={(e) => e.stopPropagation()}
+					>
+						<nav className="flex flex-col items-stretch gap-4 w-full max-w-sm">
+							{menuItems.map((item) => {
+								const active = isActive(item.to)
+								return (
+									<div
+										key={item.to}
+										className={cn(
+											'py-3 px-6 rounded-lg',
+											active ? 'bg-black' : ''
+										)}
+									>
+										<Link
+											to={item.to}
+											className={cn(
+												'block text-center text-lg font-normal uppercase tracking-wider transition-colors',
+												active 
+													? 'text-secondary' 
+													: 'text-white hover:text-secondary'
+											)}
+											onClick={handleLinkClick}
+										>
+											{item.label}
+										</Link>
+									</div>
+								)
+							})}
+							{isAuthenticated && (
+								<div className="py-3 px-8">
+									<button
+										onClick={handleLogout}
+										className="w-full text-center text-white text-lg font-normal uppercase tracking-wider hover:text-secondary transition-colors"
+									>
+										Log out
+									</button>
+								</div>
+							)}
+						</nav>
+					</div>
+				</div>
+			)}
 		</div>
 	)
 } 
