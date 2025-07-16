@@ -175,11 +175,17 @@ export function Header() {
 								{/* Menu Button - always visible on mobile */}
 								<Button
 									variant="primary"
-									className="p-2 relative hover:[&>span]:text-secondary"
+									className="p-2 relative hover:bg-secondary/20"
 									onClick={handleMobileMenuClick}
 									data-testid="mobile-menu-button"
 								>
-									{mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+									<span className="sr-only">{mobileMenuOpen ? 'Close menu' : 'Open menu'}</span>
+									<Menu
+										className={`transition-transform duration-300 ease-in-out ${mobileMenuOpen ? 'rotate-90 scale-0' : 'rotate-0 scale-100'}`}
+									/>
+									<X
+										className={`absolute transition-transform duration-300 ease-in-out ${mobileMenuOpen ? 'rotate-0 scale-100' : '-rotate-90 scale-0'}`}
+									/>
 								</Button>
 							</>
 						) : (
