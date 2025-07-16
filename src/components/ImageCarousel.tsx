@@ -120,7 +120,7 @@ export function ImageCarousel({ images, title, className, onImageChange }: Image
 				>
 					<CarouselContent className="ml-1">
 						{images.map((image, index) => (
-							<CarouselItem key={index} className="basis-1/4 p-2">
+							<CarouselItem key={index} className="basis-1/4 sm:basis-1/5 md:basis-1/6 p-2">
 								<button
 									className={cn(
 										'relative w-full p-1 transition-all flex-shrink-0',
