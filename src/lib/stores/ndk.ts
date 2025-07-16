@@ -15,6 +15,7 @@ export const ZAP_RELAYS = [
 	'wss://relay.nostr.net',
 	'wss://relay.minibits.cash',
 	'wss://relay.coinos.io/',
+	// 'ws://localhost:10547',
 ]
 
 export interface NDKState {
@@ -299,6 +300,10 @@ export const ndkActions = {
 
 	getNDK: () => {
 		return ndkStore.state.ndk
+	},
+
+	getZapNdk: () => {
+		return ndkStore.state.zapNdk
 	},
 
 	getUser: async (): Promise<NDKUser | null> => {

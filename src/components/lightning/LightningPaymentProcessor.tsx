@@ -155,6 +155,7 @@ export function LightningPaymentProcessor({
 			onPaymentComplete?.({
 				success: true,
 				preimage,
+				paymentHash: data.invoiceId,
 			})
 		},
 		[paymentMonitoring, onPaymentComplete],
@@ -190,6 +191,7 @@ export function LightningPaymentProcessor({
 			onPaymentFailed?.({
 				success: false,
 				error: error instanceof Error ? error.message : 'Payment failed',
+				paymentHash: data.invoiceId,
 			})
 		}
 	}, [data, invoice, ndkState, handlePaymentSuccess, onPaymentFailed])
@@ -220,6 +222,7 @@ export function LightningPaymentProcessor({
 			onPaymentFailed?.({
 				success: false,
 				error: error instanceof Error ? error.message : 'Payment failed',
+				paymentHash: data.invoiceId,
 			})
 		}
 	}, [invoice, data.isZap, handlePaymentSuccess, onPaymentFailed])
