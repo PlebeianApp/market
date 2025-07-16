@@ -162,37 +162,39 @@ export function LightningPaymentProcessor({
 	)
 
 	const handleNwcPayment = useCallback(async () => {
-		if (!invoice || !ndkState.activeNwcWalletUri || !ndkState.ndk) {
-			console.error('❌ NWC payment failed - missing requirements')
+		if (!ndkState.activeNwcWalletUri || !ndkState.ndk) {
+			toast.error('NWC wallet not connected')
 			return
 		}
 
 		try {
 			setIsPaymentInProgress(true)
-			console.log('💳 Starting NWC payment')
 
-			const nwcWallet: any = new (NDKNWCWallet as any)(ndkState.ndk, { pairingCode: ndkState.activeNwcWalletUri })
+			const wallet = new NDKNWCWallet(ndkState.zapNdk as any, {
+				pairingCode: ndkState.activeNwcWalletUri,
+			})
+			// @ts-ignore – NDK types don’t include wallet property yet
+			ndkState.ndk.wallet = wallet
 
 			if (data.isZap) {
-				// For zaps, pay the existing invoice via NWC
-				const result = await nwcWallet.pay({ invoice })
-				console.log('✅ Zap invoice paid via NWC - monitoring will handle confirmation')
-				// For zaps, the monitoring system will detect the zap receipt
-				// Don't call handlePaymentSuccess here, let zap monitoring handle it
+				const zapper = new NDKZapper(data.recipient, data.amount * 1000, 'msat', { comment: data.description })
+
+				;(zapper as any).on?.('complete', (results: Map<any, any>) => {
+					handlePaymentSuccess('nwc-zap-complete')
+				})
+				;(zapper as any).on?.('ln_payment', ({ preimage }: { preimage: string }) => {
+					handlePaymentSuccess(preimage)
+				})
+
+				await zapper.zap()
 			} else {
-				// For regular payments, use wallet directly
-				const result = await nwcWallet.pay({ invoice })
-				console.log('✅ NWC payment completed')
-				handlePaymentSuccess(result?.preimage || 'nwc-payment-preimage')
+				await (wallet as any).pay({ invoice })
+				handlePaymentSuccess('nwc-payment-preimage')
 			}
-		} catch (error) {
-			console.error('NWC payment failed:', error)
+		} catch (err) {
+			console.error('NWC payment failed', err)
 			setIsPaymentInProgress(false)
-			onPaymentFailed?.({
-				success: false,
-				error: error instanceof Error ? error.message : 'Payment failed',
-				paymentHash: data.invoiceId,
-			})
+			onPaymentFailed?.({ success: false, error: (err as Error).message })
 		}
 	}, [data, invoice, ndkState, handlePaymentSuccess, onPaymentFailed])
 

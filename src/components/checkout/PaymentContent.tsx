@@ -4,7 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { LightningPaymentProcessor, type LightningPaymentData, type PaymentResult } from '@/components/lightning/LightningPaymentProcessor'
 import { ChevronLeft, ChevronRight, CreditCard, Users } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { ndkStore } from '@/lib/stores/ndk'
+import { useStore } from '@tanstack/react-store'
+import { NDKUser } from '@nostr-dev-kit/ndk'
 
 export interface PaymentInvoiceData {
 	id: string
@@ -57,12 +60,21 @@ export function PaymentContent({
 		setActiveIndex(currentIndex)
 	}, [currentIndex])
 
+	// Clamp activeIndex whenever invoices length changes
+	useEffect(() => {
+		if (activeIndex >= invoices.length) {
+			setActiveIndex(Math.max(0, invoices.length - 1))
+		}
+	}, [invoices.length])
+
 	const updateInvoiceState = (invoiceId: string, state: 'pending' | 'paid' | 'failed') => {
 		setInvoiceStates((prev) => ({
 			...prev,
 			[invoiceId]: state,
 		}))
 	}
+
+	const ndkState = useStore(ndkStore)
 
 	const currentInvoice = invoices[activeIndex]
 
@@ -77,9 +89,14 @@ export function PaymentContent({
 
 		// Auto-advance to the next invoice
 		setTimeout(() => {
-			if (activeIndex < invoices.length - 1) {
-				handleNavigate(activeIndex + 1)
-			}
+			setActiveIndex((prev) => {
+				const next = prev + 1
+				if (next < invoices.length) {
+					onNavigate?.(next)
+					return next
+				}
+				return prev
+			})
 		}, 1500)
 	}
 
@@ -89,18 +106,28 @@ export function PaymentContent({
 	}
 
 	if (!currentInvoice) {
-		return null
+		return <div className="text-sm text-muted-foreground">No invoice selected</div>
 	}
 
-	// Convert invoice data to LightningPaymentData format
-	const paymentData: LightningPaymentData = {
-		amount: currentInvoice.amount,
-		description: currentInvoice.description,
-		bolt11: currentInvoice.bolt11 || undefined,
-		isZap: currentInvoice.type === 'v4v',
-		orderId: currentInvoice.orderId,
-		invoiceId: currentInvoice.id,
-	}
+	// Build LightningPaymentData with recipient for V4V zaps
+	const paymentData: LightningPaymentData = useMemo(() => {
+		const isZap = currentInvoice.type === 'v4v' && !currentInvoice.bolt11
+
+		let recipient: NDKUser | undefined
+		if (isZap && ndkState.ndk) {
+			recipient = ndkState.ndk.getUser({ pubkey: currentInvoice.recipientPubkey })
+		}
+
+		return {
+			amount: currentInvoice.amount,
+			description: currentInvoice.description,
+			bolt11: currentInvoice.bolt11 || undefined,
+			isZap,
+			recipient: recipient || undefined,
+			orderId: currentInvoice.orderId,
+			invoiceId: currentInvoice.id,
+		} as LightningPaymentData
+	}, [currentInvoice, ndkState.ndk])
 
 	return (
 		<div className="space-y-4">

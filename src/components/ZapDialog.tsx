@@ -22,11 +22,11 @@ interface ZapDialogProps {
 }
 
 export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDialogProps) {
-	const [amount, setAmount] = useState<number>(21)
+	const [amount, setAmount] = useState<string>('21')
 	const [zapMessage, setZapMessage] = useState<string>('Zap from Plebeian')
 	const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState<boolean>(false)
 	const [isAnonymousZap, setIsAnonymousZap] = useState<boolean>(false)
-	const [showPaymentProcessor, setShowPaymentProcessor] = useState<boolean>(false)
+	const [showPaymentProcessor, setShowPaymentProcessor] = useState<boolean>(true)
 
 	// Extract recipient information
 	const recipientPubkey = event instanceof NDKUser ? event.pubkey : event.pubkey
@@ -44,29 +44,31 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 	const recipientName = profile?.displayName || profile?.name || 'Unknown User'
 	const lightningAddress = profile?.lud16 || profile?.lud06 || null
 
+	// Parse amount to number, handle empty/invalid values
+	const numericAmount = parseInt(amount, 10)
+	const isValidAmount = !isNaN(numericAmount) && numericAmount > 0
+
 	// Create payment data for the processor
 	const paymentData: LightningPaymentData = useMemo(
 		() => ({
-			amount,
+			amount: isValidAmount ? numericAmount : 0,
 			description: zapMessage,
 			recipient: event,
 			isZap: true,
 		}),
-		[amount, zapMessage, event],
+		[numericAmount, zapMessage, event, isValidAmount],
 	)
 
 	const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const value = parseInt(e.target.value, 10)
-		if (!isNaN(value) && value > 0) {
+		const value = e.target.value
+		// Allow empty string or valid numbers
+		if (value === '' || /^\d+$/.test(value)) {
 			setAmount(value)
 		}
 	}
 
 	const handleAmountButtonClick = (presetAmount: number) => {
-		setAmount(presetAmount)
-		if (!showPaymentProcessor) {
-			setShowPaymentProcessor(true)
-		}
+		setAmount(presetAmount.toString())
 	}
 
 	const handlePaymentComplete = useCallback(
@@ -88,11 +90,11 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 	}, [])
 
 	const resetState = () => {
-		setAmount(21)
+		setAmount('21')
 		setZapMessage('Zap from Plebeian')
 		setAdvancedSettingsOpen(false)
 		setIsAnonymousZap(false)
-		setShowPaymentProcessor(false)
+		setShowPaymentProcessor(true)
 	}
 
 	const handleDialogOpenChange = (open: boolean) => {
@@ -134,7 +136,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 						Zap {recipientName} {lightningAddress && <small>({lightningAddress})</small>}
 					</DialogTitle>
 					<DialogDescription>
-						Amount: <span className="font-bold">{amount} sats</span>
+						Amount: <span className="font-bold">{isValidAmount ? numericAmount : '0'} sats</span>
 					</DialogDescription>
 				</DialogHeader>
 
@@ -143,7 +145,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 					{DEFAULT_ZAP_AMOUNTS.map(({ displayText, amount: presetAmount }) => (
 						<Button
 							key={presetAmount}
-							variant={amount === presetAmount ? 'tertiary' : 'outline'}
+							variant={numericAmount === presetAmount ? 'tertiary' : 'outline'}
 							className="border-2 border-black"
 							onClick={() => handleAmountButtonClick(presetAmount)}
 						>
@@ -165,61 +167,37 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 				/>
 
 				{/* Advanced Settings */}
-				<Collapsible open={advancedSettingsOpen} onOpenChange={setAdvancedSettingsOpen}>
-					<CollapsibleTrigger asChild>
-						<Button variant="outline" className="w-full mb-2">
-							Advanced Settings
-							<ChevronDown className="ml-2 h-4 w-4" />
-						</Button>
-					</CollapsibleTrigger>
-					<CollapsibleContent>
-						<div className="space-y-2 mt-2 flex flex-col">
-							<Label htmlFor="zapAmount" className="font-bold">
-								Manual zap amount
-							</Label>
-							<Input
-								id="zapAmount"
-								type="number"
-								value={amount}
-								onChange={(e) => {
-									handleAmountChange(e)
-									if (!showPaymentProcessor && parseInt(e.target.value) > 0) {
-										setShowPaymentProcessor(true)
-									}
-								}}
-								className="border-2 border-black"
-								min={0}
-							/>
+				<div className="space-y-4 mt-4">
+					<Label htmlFor="zapAmount" className="font-bold">
+						Manual zap amount
+					</Label>
+					<Input
+						id="zapAmount"
+						type="text"
+						value={amount}
+						onChange={handleAmountChange}
+						className="border-2 border-black"
+						placeholder="Enter amount in sats"
+					/>
+					{!isValidAmount && amount !== '' && <span className="text-red-500 text-sm">Please enter a valid amount</span>}
+					{amount === '' && <span className="text-red-500 text-sm">Amount is required</span>}
 
-							<Label htmlFor="isAnonymousZap" className="font-bold">
-								Anonymous zap
-							</Label>
-							<Switch id="isAnonymousZap" checked={isAnonymousZap} onCheckedChange={setIsAnonymousZap} className="border-2 border-black" />
-						</div>
-					</CollapsibleContent>
-				</Collapsible>
+					<Label htmlFor="isAnonymousZap" className="font-bold">
+						Anonymous zap
+					</Label>
+					<Switch id="isAnonymousZap" checked={isAnonymousZap} onCheckedChange={setIsAnonymousZap} className="border-2 border-black" />
+				</div>
 
 				{/* Payment Processor Section */}
 				{lightningAddress ? (
-					<Collapsible open={showPaymentProcessor} onOpenChange={setShowPaymentProcessor}>
-						<CollapsibleTrigger asChild>
-							<Button variant="outline" className="w-full mb-2">
-								<Zap className="mr-2 h-4 w-4" />
-								{showPaymentProcessor ? 'Hide Payment Options' : 'Show Payment Options'}
-								<ChevronDown className="ml-2 h-4 w-4" />
-							</Button>
-						</CollapsibleTrigger>
-						<CollapsibleContent>
-							<div className="mt-4">
-								<LightningPaymentProcessor
-									data={paymentData}
-									onPaymentComplete={handlePaymentComplete}
-									onPaymentFailed={handlePaymentFailed}
-									showManualVerification={true}
-								/>
-							</div>
-						</CollapsibleContent>
-					</Collapsible>
+					<div className="mt-4">
+						<LightningPaymentProcessor
+							data={paymentData}
+							onPaymentComplete={handlePaymentComplete}
+							onPaymentFailed={handlePaymentFailed}
+							showManualVerification={true}
+						/>
+					</div>
 				) : (
 					<div className="text-center py-8 text-muted-foreground">
 						<p>No Lightning address found</p>
