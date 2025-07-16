@@ -104,10 +104,10 @@ export function ImageCarousel({ images, title, className, onImageChange }: Image
 							</CarouselItem>
 						))}
 					</CarouselContent>
-					<CarouselPrevious className="absolute -top-10 left-1/2 -translate-x-1/2 rotate-0 bg-transparent border-none hover:bg-transparent text-white hover:text-secondary disabled:hidden">
+					<CarouselPrevious className="absolute top-2 z-10 left-1/2 -translate-x-1/2 rotate-0 bg-black rounded-md p-1 border-none text-white hover:text-secondary disabled:hidden">
 						<ChevronUp className="h-6 w-6" />
 					</CarouselPrevious>
-					<CarouselNext className="absolute -bottom-10 left-1/2 -translate-x-1/2 rotate-0 bg-transparent border-none hover:bg-transparent text-white hover:text-secondary disabled:hidden">
+					<CarouselNext className="absolute bottom-2 z-10 left-1/2 -translate-x-1/2 rotate-0 bg-black rounded-md p-1 border-none text-white hover:text-secondary disabled:hidden">
 						<ChevronDown className="h-6 w-6" />
 					</CarouselNext>
 				</Carousel>

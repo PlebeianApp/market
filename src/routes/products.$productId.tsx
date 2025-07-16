@@ -1,7 +1,6 @@
 import { ImageCarousel } from '@/components/ImageCarousel'
 import { ItemGrid } from '@/components/ItemGrid'
 import { ProductCard } from '@/components/ProductCard'
-import { ProfileName } from '@/components/ProfileName'
 import { ShippingSelector } from '@/components/ShippingSelector'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -26,7 +25,6 @@ import {
 	useProductStock,
 	useProductTitle,
 	useProductType,
-	useProductVisibility,
 	useProductWeight,
 } from '@/queries/products'
 import { useSuspenseQuery } from '@tanstack/react-query'
@@ -92,7 +90,6 @@ function RouteComponent() {
 	const { data: priceTag } = useProductPrice(productId)
 	const { data: typeTag } = useProductType(productId)
 	const { data: stockTag } = useProductStock(productId)
-	const { data: visibilityTag } = useProductVisibility(productId)
 	const { data: specs = [] } = useProductSpecs(productId)
 	const { data: weightTag } = useProductWeight(productId)
 	const { data: dimensionsTag } = useProductDimensions(productId)
@@ -110,7 +107,6 @@ function RouteComponent() {
 	// Derived data from tags
 	const price = priceTag ? parseFloat(priceTag[1]) : 0
 	const stock = stockTag ? parseInt(stockTag[1]) : undefined
-	const status = visibilityTag ? visibilityTag[1] : 'active'
 	const productType = typeTag
 		? {
 				product: typeTag[1],
@@ -153,10 +149,6 @@ function RouteComponent() {
 
 		// Open the cart drawer
 		uiActions.openDrawer('cart')
-	}
-
-	const handleShippingSelect = (option: RichShippingInfo) => {
-		// Optional notification could go here
 	}
 
 	return (
