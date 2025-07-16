@@ -341,20 +341,27 @@ function RouteComponent() {
 												<h4 className="font-medium mb-2">Shipping Information</h4>
 
 												{weightTag && (
-													<div className="text-sm text-gray-600 mb-2">
-														<span className="font-medium">Weight:</span> {weightTag[1]} {weightTag[2]}
+													<div className="flex flex-col text-sm text-gray-600 mb-2">
+														<span className="font-medium">Weight:</span>
+														<span>
+															{weightTag[1]} {weightTag[2]}
+														</span>
 													</div>
 												)}
 
 												{dimensionsTag && (
-													<div className="text-sm text-gray-600 mb-2">
-														<span className="font-medium">Dimensions:</span> <span className="break-all">{dimensionsTag[1]}</span> {dimensionsTag[2]}
+													<div className="flex flex-col text-sm text-gray-600 mb-2">
+														<span className="font-medium">Dimensions:</span>
+														<span>
+															<span className="break-all">{dimensionsTag[1]}</span> {dimensionsTag[2]}
+														</span>
 													</div>
 												)}
 
 												{location && (
-													<div className="text-sm text-gray-600 mb-2">
-														<span className="font-medium">Ships from:</span> {location}
+													<div className="flex flex-col text-sm text-gray-600 mb-2">
+														<span className="font-medium">Ships from:</span>
+														<span>{location}</span>
 													</div>
 												)}
 
@@ -475,20 +482,27 @@ function RouteComponent() {
 												<h4 className="font-medium mb-2">Shipping Information</h4>
 
 												{weightTag && (
-													<div className="text-sm text-gray-600 mb-2">
-														<span className="font-medium">Weight:</span> {weightTag[1]} {weightTag[2]}
+													<div className="flex flex-col text-sm text-gray-600 mb-2">
+														<span className="font-medium">Weight:</span>
+														<span>
+															{weightTag[1]} {weightTag[2]}
+														</span>
 													</div>
 												)}
 
 												{dimensionsTag && (
-													<div className="text-sm text-gray-600 mb-2">
-														<span className="font-medium">Dimensions:</span> <span className="break-all">{dimensionsTag[1]}</span> {dimensionsTag[2]}
+													<div className="flex flex-col text-sm text-gray-600 mb-2">
+														<span className="font-medium">Dimensions:</span>
+														<span>
+															<span className="break-all">{dimensionsTag[1]}</span> {dimensionsTag[2]}
+														</span>
 													</div>
 												)}
 
 												{location && (
-													<div className="text-sm text-gray-600 mb-2">
-														<span className="font-medium">Ships from:</span> {location}
+													<div className="flex flex-col text-sm text-gray-600 mb-2">
+														<span className="font-medium">Ships from:</span>
+														<span>{location}</span>
 													</div>
 												)}
 
