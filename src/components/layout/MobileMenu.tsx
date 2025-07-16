@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react'
-import { Link, useLocation } from '@tanstack/react-router'
+import { Link, useLocation, useMatchRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { uiStore, uiActions } from '@/lib/stores/ui'
 import { authActions, authStore } from '@/lib/stores/auth'
@@ -10,7 +10,7 @@ import { useAutoAnimate } from '@formkit/auto-animate/react'
 export function MobileMenu() {
 	const { mobileMenuOpen } = useStore(uiStore)
 	const { isAuthenticated } = useStore(authStore)
-	const location = useLocation()
+	const matchRoute = useMatchRoute()
 	const [animationParent] = useAutoAnimate<HTMLDivElement>()
 
 	// Close menu on escape key
@@ -47,14 +47,6 @@ export function MobileMenu() {
 		uiActions.closeMobileMenu()
 	}
 
-	// Check if a menu item is active
-	const isActive = (path: string) => {
-		if (path === '/') {
-			return location.pathname === '/'
-		}
-		return location.pathname.startsWith(path)
-	}
-
 	const menuItems = [
 		{ to: '/', label: 'Home' },
 		{ to: '/products', label: 'Products' },
@@ -82,28 +74,19 @@ export function MobileMenu() {
 					>
 						<nav className="flex flex-col items-stretch gap-4 w-full max-w-sm">
 							{menuItems.map((item) => {
-								const active = isActive(item.to)
+								const isActive = matchRoute({ to: item.to, fuzzy: item.to !== '/' })
 								return (
-									<div
+									<Link
 										key={item.to}
+										to={item.to}
 										className={cn(
-											'py-3 px-6 rounded-lg',
-											active ? 'bg-black' : ''
+											'py-3 px-6 rounded-lg text-center text-lg font-normal uppercase tracking-wider transition-colors',
+											isActive ? 'bg-black text-secondary' : 'text-white hover:text-secondary',
 										)}
+										onClick={handleLinkClick}
 									>
-										<Link
-											to={item.to}
-											className={cn(
-												'block text-center text-lg font-normal uppercase tracking-wider transition-colors',
-												active 
-													? 'text-secondary' 
-													: 'text-white hover:text-secondary'
-											)}
-											onClick={handleLinkClick}
-										>
-											{item.label}
-										</Link>
-									</div>
+										{item.label}
+									</Link>
 								)
 							})}
 							{isAuthenticated && (
