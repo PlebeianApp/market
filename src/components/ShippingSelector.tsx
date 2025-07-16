@@ -133,7 +133,7 @@ export function ShippingSelector({
 					<SelectGroup>
 						<SelectLabel>Shipping Options</SelectLabel>
 						{options.map((option: RichShippingInfo) => (
-							<SelectItem key={option.id} value={option.id}>
+							<SelectItem key={option.id} value={option.id} className="break-all">
 								{option.name} - {option.cost} {option.currency}
 							</SelectItem>
 						))}
