@@ -274,7 +274,7 @@ function RouteComponent() {
 							<div>
 								<div className="bg-secondary text-white px-4 py-2 text-sm font-medium rounded-t-md">Spec</div>
 								<div className="rounded-lg bg-white p-6 shadow-md rounded-t-none">
-									<div className="grid grid-cols-2 gap-4">
+									<div className="grid grid-cols-1 gap-4">
 										{weightTag && (
 											<div className="flex flex-col">
 												<span className="text-sm font-medium text-gray-500">Weight</span>
@@ -297,7 +297,7 @@ function RouteComponent() {
 										)}
 										{specs.map((spec, index) => (
 											<div key={index} className="flex flex-col">
-												<span className="text-sm font-medium text-gray-500">{spec[1]}</span>
+												<span className="text-sm font-medium text-gray-500 capitalize">{spec[1]}</span>
 												<span className="text-gray-900 break-all">{spec[2]}</span>
 											</div>
 										))}
@@ -433,7 +433,7 @@ function RouteComponent() {
 										)}
 										{specs.map((spec, index) => (
 											<div key={index} className="flex flex-col">
-												<span className="text-sm font-medium text-gray-500">{spec[1]}</span>
+												<span className="text-sm font-medium text-gray-500 capitalize">{spec[1]}</span>
 												<span className="text-gray-900 break-all">{spec[2]}</span>
 											</div>
 										))}
