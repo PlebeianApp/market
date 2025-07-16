@@ -106,7 +106,7 @@ export function Header() {
 	}
 
 	return (
-		<header className={`sticky top-0 z-30 py-4 text-white px-4 ${getHeaderBackground()}`} style={getHeaderStyle() as React.CSSProperties}>
+		<header className={`sticky top-0 z-50 py-4 text-white px-4 ${getHeaderBackground()}`} style={getHeaderStyle() as React.CSSProperties}>
 			<div className="container flex h-full max-w-full items-center justify-between">
 				<section className="inline-flex items-center">
 					<Link to="/" data-testid="home-link">

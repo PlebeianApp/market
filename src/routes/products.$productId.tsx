@@ -153,12 +153,12 @@ function RouteComponent() {
 
 	return (
 		<div className="flex flex-col gap-4">
-			<div className="relative">
+			<div className="relative z-10">
 				{!mobileMenuOpen && (
 					<Button
 						variant="ghost"
 						onClick={() => window.history.back()}
-						className="back-button hover:bg-white/10 z-30"
+						className="back-button hover:bg-white/10"
 					>
 						<ArrowLeft className="h-8 w-8 lg:h-4 lg:w-4" />
 						<span className="hidden sm:inline">Back to results</span>
