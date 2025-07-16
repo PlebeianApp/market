@@ -72,7 +72,7 @@ export function MobileMenu() {
 			onClick={() => uiActions.closeMobileMenu()}
 		>
 			{/* Dots Pattern Overlay */}
-			<Pattern pattern="dots" className="opacity-50" />
+			<Pattern pattern="dots" className="opacity-30" />
 			
 			{/* Menu Content */}
 			<div 
