@@ -1,8 +1,14 @@
 import { cn } from '@/lib/utils'
-import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel'
-import { ImageOff } from 'lucide-react'
+import {
+	Carousel,
+	CarouselContent,
+	CarouselItem,
+	CarouselNext,
+	CarouselPrevious,
+	type CarouselApi,
+} from '@/components/ui/carousel'
+import { ImageOff, ChevronUp, ChevronDown } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import type { CarouselApi } from '@/components/ui/carousel'
 
 interface ProductImage {
 	url: string
@@ -71,18 +77,18 @@ export function ImageCarousel({ images, title, className, onImageChange }: Image
 			</Carousel>
 
 			{/* Preview Images */}
-			<div className="lg:order-1 lg:w-24 lg:flex lg:flex-col lg:justify-center">
+			<div className="lg:order-1 lg:w-24 lg:flex lg:flex-col">
 				<Carousel
 					setApi={setPreviewApiVertical}
 					opts={{
 						align: 'center',
 					}}
 					orientation="vertical"
-					className="hidden lg:block"
+					className="hidden lg:block w-full"
 				>
-					<CarouselContent className="-mt-1">
+					<CarouselContent className="-mt-1 max-h-[45vh]">
 						{images.map((image, index) => (
-							<CarouselItem key={index} className="pt-1 basis-auto p-2">
+							<CarouselItem key={index} className="pt-1 basis-1/3 p-2">
 								<button
 									className={cn(
 										'relative w-full p-1 transition-all flex-shrink-0',
@@ -98,6 +104,12 @@ export function ImageCarousel({ images, title, className, onImageChange }: Image
 							</CarouselItem>
 						))}
 					</CarouselContent>
+					<CarouselPrevious className="absolute -top-10 left-1/2 -translate-x-1/2 rotate-0 bg-transparent border-none hover:bg-transparent text-white hover:text-secondary disabled:hidden">
+						<ChevronUp className="h-6 w-6" />
+					</CarouselPrevious>
+					<CarouselNext className="absolute -bottom-10 left-1/2 -translate-x-1/2 rotate-0 bg-transparent border-none hover:bg-transparent text-white hover:text-secondary disabled:hidden">
+						<ChevronDown className="h-6 w-6" />
+					</CarouselNext>
 				</Carousel>
 
 				<Carousel
