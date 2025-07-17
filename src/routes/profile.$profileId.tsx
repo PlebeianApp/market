@@ -1,4 +1,4 @@
-reverimport { Header } from '@/components/layout/Header'
+import { Header } from '@/components/layout/Header'
 import { ItemGrid } from '@/components/ItemGrid'
 import { Nip05Badge } from '@/components/Nip05Badge'
 import { ProductCard } from '@/components/ProductCard'
