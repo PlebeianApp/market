@@ -47,15 +47,6 @@ function RouteComponent() {
 		<div className="relative min-h-screen">
 			<div className="flex flex-col relative z-10">
 				<div className="relative">
-					<Button
-						variant="ghost"
-						onClick={() => window.history.back()}
-						className="absolute top-4 left-4 z-10 flex items-center gap-2 text-white"
-					>
-						<ArrowLeft className="w-4 h-4" />
-						<span>Back</span>
-					</Button>
-
 					{profile?.banner ? (
 						<div className="w-full aspect-[5/1] overflow-hidden flex items-center justify-center">
 							<img src={profile.banner} alt="profile-banner" className="w-full h-full object-cover" />
