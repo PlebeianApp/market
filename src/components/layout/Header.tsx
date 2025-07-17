@@ -29,7 +29,8 @@ export function Header() {
 	const isProductPage = location.pathname === '/products' || location.pathname.startsWith('/products/')
 	const isProfilePage = location.pathname.startsWith('/profile/')
 	const isHomepage = location.pathname === '/'
-	const shouldUseTransparentHeader = isProductPage || isHomepage || isProfilePage
+	const isCommunityOrNostrPage = location.pathname === '/community' || location.pathname === '/nostr'
+	const shouldUseTransparentHeader = (isProductPage || isHomepage || isProfilePage) && !isCommunityOrNostrPage
 
 	// Scroll detection for product pages and homepage
 	useEffect(() => {
@@ -51,6 +52,9 @@ export function Header() {
 		// Force black background when mobile menu is open
 		if (mobileMenuOpen) return 'bg-black'
 		
+		// Force black background for community and nostr pages
+		if (isCommunityOrNostrPage) return 'bg-black'
+		
 		if (!shouldUseTransparentHeader) return 'bg-black'
 
 		// Always use transition class for product pages and homepage
@@ -61,6 +65,9 @@ export function Header() {
 	const getHeaderStyle = () => {
 		// No transition styles needed when mobile menu is open (solid black)
 		if (mobileMenuOpen) return {}
+		
+		// No transition styles needed for community and nostr pages
+		if (isCommunityOrNostrPage) return {}
 		
 		if (!shouldUseTransparentHeader) return {}
 
@@ -108,8 +115,8 @@ export function Header() {
 
 	return (
 		<header 
-			className={`sticky top-0 z-50 py-4 text-white px-4 ${getHeaderBackground()}`} 
-			style={{
+			className={`sticky top-0 z-50 py-4 text-white px-4 ${isCommunityOrNostrPage ? 'bg-black' : getHeaderBackground()}`} 
+			style={isCommunityOrNostrPage ? {} : {
 				...getHeaderStyle() as React.CSSProperties,
 				backgroundImage: scrollY < 80 ? 'var(--header-bg-opacity)' : 'none',
 				backgroundColor: scrollY >= 80 ? 'var(--header-bg-opacity)' : 'transparent'
