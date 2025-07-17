@@ -4,7 +4,7 @@ import { Pattern } from '@/components/pattern'
 import { SheetRegistry } from '@/components/SheetRegistry'
 import { DialogRegistry } from '@/components/DialogRegistry'
 import { useConfigQuery } from '@/queries/config'
-import { createRootRoute, Outlet, useNavigate } from '@tanstack/react-router'
+import { createRootRoute, Outlet, useNavigate, useLocation } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { DecryptPasswordDialog } from '@/components/auth/DecryptPasswordDialog'
 import { Toaster } from 'sonner'
@@ -20,9 +20,10 @@ function RootComponent() {
 function RootLayout() {
 	const { data: config, isLoading, isError } = useConfigQuery()
 	const navigate = useNavigate()
-	const { pathname } = window.location
-	const isSetupPage = pathname === '/setup'
-	const isDashboardPage = pathname.startsWith('/dashboard')
+	const location = useLocation()
+	const isSetupPage = location.pathname === '/setup'
+	const isDashboardPage = location.pathname.startsWith('/dashboard')
+	const isProfilePage = location.pathname.startsWith('/profile/')
 
 	useEffect(() => {
 		if (isLoading || isError) return
@@ -45,7 +46,7 @@ function RootLayout() {
 
 	return (
 		<div className="flex flex-col min-h-screen">
-			<Header />
+			{!isProfilePage && <Header />}
 
 			<main className="flex-grow flex flex-col">
 				<Outlet />

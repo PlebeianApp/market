@@ -27,8 +27,9 @@ export function Header() {
 
 	// Check if we're on any product page (index page or individual product) or homepage
 	const isProductPage = location.pathname === '/products' || location.pathname.startsWith('/products/')
+	const isProfilePage = location.pathname.startsWith('/profile/')
 	const isHomepage = location.pathname === '/'
-	const shouldUseTransparentHeader = isProductPage || isHomepage
+	const shouldUseTransparentHeader = isProductPage || isHomepage || isProfilePage
 
 	// Scroll detection for product pages and homepage
 	useEffect(() => {

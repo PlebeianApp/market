@@ -32,24 +32,32 @@ export const fetchProfileByNip05 = async (nip05: string): Promise<NDKUserProfile
 	}
 }
 
-export const fetchProfileByIdentifier = async (identifier: string): Promise<NDKUserProfile | null> => {
+export const fetchProfileByIdentifier = async (
+	identifier: string,
+): Promise<{ profile: NDKUserProfile | null; user: NDKUser | null }> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
 	try {
 		if (identifier.includes('@')) {
-			return await fetchProfileByNip05(identifier)
+			const user = await ndk.getUserFromNip05(identifier)
+			if (!user) return { profile: null, user: null }
+			const profile = await user.fetchProfile()
+			return { profile, user }
 		}
 
 		if (identifier.startsWith('npub')) {
-			return await fetchProfileByNpub(identifier)
+			const user = ndk.getUser({ npub: identifier })
+			const profile = await user.fetchProfile()
+			return { profile, user }
 		}
 
 		const user = ndk.getUser({ hexpubkey: identifier })
-		return await user.fetchProfile()
+		const profile = await user.fetchProfile()
+		return { profile, user }
 	} catch (e) {
 		console.error('Failed to fetch profile with identifier:', e)
-		return null
+		return { profile: null, user: null }
 	}
 }
 
@@ -108,12 +116,12 @@ export const nip05ValidationQueryOptions = (npub: string) =>
 
 // --- DATA EXTRACTION FUNCTIONS ---
 
-export const getProfileName = (profile: NDKUserProfile | null): string => {
+export const getProfileName = ({ profile }: { profile: NDKUserProfile | null }): string => {
 	if (!profile) return ''
 	return profile.name || profile.displayName || ''
 }
 
-export const getProfileNip05 = (profile: NDKUserProfile | null): string | undefined => {
+export const getProfileNip05 = ({ profile }: { profile: NDKUserProfile | null }): string | undefined => {
 	if (!profile) return undefined
 	return profile.nip05
 }
