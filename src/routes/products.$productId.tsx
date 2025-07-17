@@ -277,16 +277,16 @@ function RouteComponent() {
 									<div className="grid grid-cols-1 gap-4">
 										{weightTag && (
 											<div className="flex flex-col">
-												<span className="text-sm font-medium text-gray-500">Weight</span>
-												<span className="text-gray-900">
+												<span className="text-base font-medium text-gray-500">Weight</span>
+												<span className="text-base text-gray-900">
 													{weightTag[1]} {weightTag[2]}
 												</span>
 											</div>
 										)}
 										{dimensionsTag && (
 											<div className="flex flex-col">
-												<span className="text-sm font-medium text-gray-500">Dimensions (L×W×H)</span>
-												<span className="text-gray-900 break-all">
+												<span className="text-base font-medium text-gray-500">Dimensions (L×W×H)</span>
+												<span className="text-base text-gray-900 break-all">
 													{dimensionsTag[1]
 														.split('x')
 														.map((num) => parseFloat(num).toFixed(1))
@@ -297,8 +297,8 @@ function RouteComponent() {
 										)}
 										{specs.map((spec, index) => (
 											<div key={index} className="flex flex-col">
-												<span className="text-sm font-medium text-gray-500 capitalize">{spec[1]}</span>
-												<span className="text-gray-900 break-all">{spec[2]}</span>
+												<span className="text-base font-medium text-gray-500 capitalize">{spec[1]}</span>
+												<span className="text-base text-gray-900 break-all">{spec[2]}</span>
 											</div>
 										))}
 										{specs.length === 0 && !weightTag && !dimensionsTag && (
@@ -341,27 +341,27 @@ function RouteComponent() {
 												<h4 className="font-medium mb-2">Shipping Information</h4>
 
 												{weightTag && (
-													<div className="flex flex-col text-sm text-gray-600 mb-2">
-														<span className="font-medium">Weight:</span>
-														<span>
+													<div className="flex flex-col mb-2">
+														<span className="text-base font-medium text-gray-500">Weight:</span>
+														<span className="text-base text-gray-900">
 															{weightTag[1]} {weightTag[2]}
 														</span>
 													</div>
 												)}
 
 												{dimensionsTag && (
-													<div className="flex flex-col text-sm text-gray-600 mb-2">
-														<span className="font-medium">Dimensions:</span>
-														<span>
+													<div className="flex flex-col mb-2">
+														<span className="text-base font-medium text-gray-500">Dimensions:</span>
+														<span className="text-base text-gray-900">
 															<span className="break-all">{dimensionsTag[1]}</span> {dimensionsTag[2]}
 														</span>
 													</div>
 												)}
 
 												{location && (
-													<div className="flex flex-col text-sm text-gray-600 mb-2">
-														<span className="font-medium">Ships from:</span>
-														<span>{location}</span>
+													<div className="flex flex-col mb-2">
+														<span className="text-base font-medium text-gray-500">Ships from:</span>
+														<span className="text-base text-gray-900">{location}</span>
 													</div>
 												)}
 
@@ -420,16 +420,16 @@ function RouteComponent() {
 									<div className="grid grid-cols-2 gap-4">
 										{weightTag && (
 											<div className="flex flex-col">
-												<span className="text-sm font-medium text-gray-500">Weight</span>
-												<span className="text-gray-900">
+												<span className="text-base font-medium text-gray-500">Weight</span>
+												<span className="text-base text-gray-900">
 													{weightTag[1]} {weightTag[2]}
 												</span>
 											</div>
 										)}
 										{dimensionsTag && (
 											<div className="flex flex-col">
-												<span className="text-sm font-medium text-gray-500">Dimensions (L×W×H)</span>
-												<span className="text-gray-900 break-all">
+												<span className="text-base font-medium text-gray-500">Dimensions (L×W×H)</span>
+												<span className="text-base text-gray-900 break-all">
 													{dimensionsTag[1]
 														.split('x')
 														.map((num) => parseFloat(num).toFixed(1))
@@ -440,8 +440,8 @@ function RouteComponent() {
 										)}
 										{specs.map((spec, index) => (
 											<div key={index} className="flex flex-col">
-												<span className="text-sm font-medium text-gray-500 capitalize">{spec[1]}</span>
-												<span className="text-gray-900 break-all">{spec[2]}</span>
+												<span className="text-base font-medium text-gray-500 capitalize">{spec[1]}</span>
+												<span className="text-base text-gray-900 break-all">{spec[2]}</span>
 											</div>
 										))}
 										{specs.length === 0 && !weightTag && !dimensionsTag && (
@@ -482,27 +482,27 @@ function RouteComponent() {
 												<h4 className="font-medium mb-2">Shipping Information</h4>
 
 												{weightTag && (
-													<div className="flex flex-col text-sm text-gray-600 mb-2">
-														<span className="font-medium">Weight:</span>
-														<span>
+													<div className="flex flex-col mb-2">
+														<span className="text-base font-medium text-gray-500">Weight:</span>
+														<span className="text-base text-gray-900">
 															{weightTag[1]} {weightTag[2]}
 														</span>
 													</div>
 												)}
 
 												{dimensionsTag && (
-													<div className="flex flex-col text-sm text-gray-600 mb-2">
-														<span className="font-medium">Dimensions:</span>
-														<span>
+													<div className="flex flex-col mb-2">
+														<span className="text-base font-medium text-gray-500">Dimensions:</span>
+														<span className="text-base text-gray-900">
 															<span className="break-all">{dimensionsTag[1]}</span> {dimensionsTag[2]}
 														</span>
 													</div>
 												)}
 
 												{location && (
-													<div className="flex flex-col text-sm text-gray-600 mb-2">
-														<span className="font-medium">Ships from:</span>
-														<span>{location}</span>
+													<div className="flex flex-col mb-2">
+														<span className="text-base font-medium text-gray-500">Ships from:</span>
+														<span className="text-base text-gray-900">{location}</span>
 													</div>
 												)}
 
@@ -519,7 +519,7 @@ function RouteComponent() {
 
 			{/* More from this seller */}
 			<div className="flex flex-col gap-4 p-4">
-				<h2 className="text-2xl font-bold text-center lg:text-left">More from this seller</h2>
+				<h2 className="font-reglisse text-2xl font-bold text-center lg:text-left">More from this seller</h2>
 				<ItemGrid>
 					{sellerProducts.map((p) => (
 						<ProductCard key={p.id} product={p} />
