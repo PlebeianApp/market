@@ -4,6 +4,8 @@ import { uiActions } from '@/lib/stores/ui'
 import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
 import { useEffect } from 'react'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
+import { Link } from '@tanstack/react-router'
 
 // Hook to inject dynamic CSS for background image
 function useHeroBackground(imageUrl: string, className: string) {
@@ -25,11 +27,12 @@ function useHeroBackground(imageUrl: string, className: string) {
 }
 
 export const Route = createFileRoute('/')({
-	component: Index,
+	component: HomeRoute,
 })
 
-function Index() {
+function HomeRoute() {
 	const { isAuthenticated } = useStore(authStore)
+	const [animationParent] = useAutoAnimate()
 
 	// Use the market image for homepage background
 	const marketBackgroundImageUrl = '/images/market-background.jpg'
@@ -37,33 +40,33 @@ function Index() {
 	useHeroBackground(marketBackgroundImageUrl, marketHeroClassName)
 
 	const handleStartSelling = () => {
-		if (isAuthenticated) {
-			uiActions.openDrawer('createProduct')
-		} else {
+		if (!isAuthenticated) {
 			uiActions.openDialog('login')
+		} else {
+			uiActions.openDrawer('createProduct')
 		}
 	}
 
 	return (
-		<div>
-			{/* Use products page banner styling */}
-			<div className={`relative hero-container ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-black'}`}>
-				<div className="hero-overlays">
-					<div className="absolute inset-0 bg-radial-overlay z-10" />
-					<div className="absolute inset-0 opacity-30 bg-dots-overlay z-10" />
-				</div>
-
-				<div className="hero-content">
-					<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-16 lg:mt-0">
-						<div className="flex items-center justify-center h-24 lg:h-32 px-6">
-							<h1 className="text-4xl lg:text-5xl font-theylive transition-opacity duration-500">Buy & Sell Stuff with sats</h1>
-						</div>
-
-						<div className="flex flex-col gap-6">
+		<div className="flex flex-col min-h-screen">
+			<div className="flex-grow flex flex-col">
+				<div className="flex-grow flex flex-col items-center justify-center text-center px-4 py-16 bg-gradient-to-b from-black to-transparent">
+					<div className="max-w-3xl mx-auto">
+						<h1 className="text-4xl sm:text-6xl font-bold mb-6 text-white">
+							The Marketplace for <span className="text-focus">Bitcoiners</span>
+						</h1>
+						<p className="text-lg sm:text-xl mb-8 text-white/80">
+							Buy and sell products using Bitcoin and Lightning Network. Connect with other Bitcoiners and grow the circular economy.
+						</p>
+						<div className="flex flex-col sm:flex-row gap-4 justify-center">
 							<Button variant="focus" size="lg" onClick={handleStartSelling}>
-								<span className="flex items-center gap-2">
-									<span className="i-nostr w-6 h-6"></span>Start Selling
+								<span className="flex items-center gap-2" ref={animationParent}>
+									<span className="i-nostr w-6 h-6"></span>
+									{isAuthenticated ? 'Add A Product' : 'Start Selling'}
 								</span>
+							</Button>
+							<Button variant="secondary" size="lg" asChild>
+								<Link to="/products">Browse Products</Link>
 							</Button>
 						</div>
 					</div>
