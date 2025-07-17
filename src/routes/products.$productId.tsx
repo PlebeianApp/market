@@ -29,7 +29,7 @@ import {
 } from '@/queries/products'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import type { FileRoutesByPath } from '@tanstack/react-router'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, Minus, Plus, Truck } from 'lucide-react'
 import { useState, useEffect } from 'react'
@@ -73,6 +73,20 @@ function RouteComponent() {
 	const { data: product } = useSuspenseQuery(productQueryOptions(productId))
 	const { cart } = useCart()
 	const { mobileMenuOpen } = useStore(uiStore)
+	const navigate = useNavigate()
+	const { navigation } = useStore(uiStore)
+
+	const handleBackClick = () => {
+		if (navigation.originalResultsPath) {
+			// Navigate to the original results page
+			navigate({ to: navigation.originalResultsPath })
+			// Clear all product navigation state
+			uiActions.clearProductNavigation()
+		} else {
+			// Fallback to products page if no source path
+			navigate({ to: '/products' })
+		}
+	}
 
 	if (!product) {
 		return (
@@ -157,7 +171,7 @@ function RouteComponent() {
 				{!mobileMenuOpen && (
 					<Button
 						variant="ghost"
-						onClick={() => window.history.back()}
+						onClick={handleBackClick}
 						className="back-button"
 					>
 						<ArrowLeft className="h-8 w-8 lg:h-4 lg:w-4" />

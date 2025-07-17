@@ -7,10 +7,16 @@ export type ToastType = 'success' | 'error' | 'warning' | 'info'
 
 // Toast notification structure
 export interface Toast {
-	id: string
-	type: ToastType
-	message: string
-	duration?: number
+  id: string
+  type: ToastType
+  message: string
+  duration?: number
+}
+
+// Navigation state type
+export type NavigationState = {
+  productSourcePath: string | null;
+  originalResultsPath: string | null; // Track the first/original results page
 }
 
 // UI State interface
@@ -22,6 +28,7 @@ export interface UIState {
 	dialogCallbacks?: Partial<Record<DialogType, any>>
 	dashboardTitle: string
 	mobileMenuOpen: boolean
+	navigation: NavigationState
 }
 
 // Initial state
@@ -42,6 +49,10 @@ const initialState: UIState = {
 	dialogCallbacks: {},
 	dashboardTitle: 'DASHBOARD',
 	mobileMenuOpen: false,
+	navigation: {
+		productSourcePath: null,
+		originalResultsPath: null,
+	},
 }
 
 // Create the store
@@ -211,6 +222,29 @@ export const uiActions = {
 		uiStore.setState((state) => ({
 			...state,
 			dashboardTitle: title,
+		}))
+	},
+
+	// Navigation actions
+	setProductSourcePath: (path: string | null) => {
+		uiStore.setState((state) => ({
+			...state,
+			navigation: {
+				...state.navigation,
+				productSourcePath: path,
+				// Only set originalResultsPath if it's not already set and we're setting a new path
+				originalResultsPath: state.navigation.originalResultsPath || path,
+			},
+		}))
+	},
+
+	clearProductNavigation: () => {
+		uiStore.setState((state) => ({
+			...state,
+			navigation: {
+				productSourcePath: null,
+				originalResultsPath: null,
+			},
 		}))
 	},
 }
