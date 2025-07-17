@@ -519,7 +519,7 @@ function RouteComponent() {
 
 			{/* More from this seller */}
 			<div className="flex flex-col gap-4 p-4">
-				<h2 className="font-reglisse text-2xl font-bold text-center lg:text-left">More from this seller</h2>
+				<h2 className="font-heading text-2xl text-center lg:text-left">More from this seller</h2>
 				<ItemGrid>
 					{sellerProducts.map((p) => (
 						<ProductCard key={p.id} product={p} />
