@@ -41,9 +41,11 @@ function RouteComponent() {
 	return (
 		<div className="relative min-h-screen">
 			<Header />
-			<div className="absolute top-0 left-0 right-0 z-0 h-[50vh] overflow-hidden">
+			<div className="absolute top-0 left-0 right-0 z-0 h-[40vh] sm:h-[40vh] md:h-[50vh] overflow-hidden">
 				{profile?.banner ? (
-					<img src={profile.banner} alt="profile-banner" className="w-full h-full object-cover" />
+					<div className="w-[150%] sm:w-full h-full -ml-[25%] sm:ml-0">
+						<img src={profile.banner} alt="profile-banner" className="w-full h-full object-cover" />
+					</div>
 				) : (
 					<div
 						className="w-full h-full"
@@ -54,7 +56,7 @@ function RouteComponent() {
 					/>
 				)}
 			</div>
-			<div className="flex flex-col relative z-10 pt-[30vh]">
+			<div className="flex flex-col relative z-10 pt-[20vh] sm:pt-[22vh] md:pt-[30vh]">
 				<div className="flex flex-row justify-between px-8 py-4 bg-black items-center">
 					<div className="flex flex-row items-center gap-4">
 						{profile?.picture && (
