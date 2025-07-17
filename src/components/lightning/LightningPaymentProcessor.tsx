@@ -188,7 +188,7 @@ export function LightningPaymentProcessor({
 
 				await zapper.zap()
 			} else {
-				await (wallet as any).pay({ invoice })
+				await wallet.lnPay({ pr: invoice || '' })
 				handlePaymentSuccess('nwc-payment-preimage')
 			}
 		} catch (err) {

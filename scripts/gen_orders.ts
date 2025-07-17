@@ -630,10 +630,10 @@ export async function createMultiplePaymentRequestEvents(
 	orderId: string,
 	totalAmount: string,
 	baseTimestamp?: number,
-): Promise<Array<{ eventId: string | null; createdAt: number; isV4V: boolean; amount: string }>> {
+): Promise<Array<{ eventId: string | null; createdAt: number; isV4V: boolean; amount: string; recipientPubkey: string }>> {
 	const paymentRequests = await generateMultiplePaymentRequests(ndk, buyerPubkey, sellerPubkey, orderId, totalAmount, baseTimestamp)
 
-	const results: Array<{ eventId: string | null; createdAt: number; isV4V: boolean; amount: string }> = []
+	const results: Array<{ eventId: string | null; createdAt: number; isV4V: boolean; amount: string; recipientPubkey: string }> = []
 	let currentTimestamp = baseTimestamp || getRandomPastTimestamp()
 
 	for (const request of paymentRequests) {
@@ -658,6 +658,9 @@ export async function createMultiplePaymentRequestEvents(
 			paymentData.tags[pTagIndex][1] = request.recipientPubkey
 		}
 
+		// Add recipient tag for proper matching
+		paymentData.tags.push(['recipient', request.recipientPubkey])
+
 		// Update content to reflect the payment type
 		paymentData.content = `${request.description}: ${request.amount} sats using Lightning Network. Address: ${lightningAddress}`
 
@@ -669,11 +672,47 @@ export async function createMultiplePaymentRequestEvents(
 			createdAt,
 			isV4V: request.isV4V,
 			amount: request.amount,
+			recipientPubkey: request.recipientPubkey,
 		})
 
 		// Increment timestamp for next payment request
 		currentTimestamp = createdAt + getRandomTimeIncrement(1, 10)
 	}
 
+	return results
+}
+
+/**
+ * Creates payment receipts for all payment requests of an order
+ */
+export async function createPaymentReceiptsForOrder(
+	signer: NDKPrivateKeySigner,
+	ndk: NDK,
+	orderId: string,
+	paymentRequestResults: Array<{ eventId: string | null; createdAt: number; isV4V: boolean; amount: string; recipientPubkey?: string }>,
+	baseTimestamp?: number,
+): Promise<Array<{ eventId: string | null; createdAt: number }>> {
+	const results: Array<{ eventId: string | null; createdAt: number }> = []
+	let currentTimestamp = baseTimestamp || getRandomPastTimestamp()
+
+	for (const paymentRequest of paymentRequestResults) {
+		if (!paymentRequest.eventId) continue
+
+		// Use the recipient pubkey from the payment request, fallback to signer's pubkey
+		const recipientPubkey = paymentRequest.recipientPubkey || (await signer.user()).pubkey
+
+		// Generate payment receipt data
+		const receiptData = generatePaymentReceiptData(recipientPubkey, orderId, paymentRequest.amount, currentTimestamp)
+
+		// Create and publish the receipt
+		const { eventId, createdAt } = await createPaymentReceiptEvent(signer, ndk, receiptData)
+
+		results.push({ eventId, createdAt })
+
+		// Increment timestamp for next receipt
+		currentTimestamp = createdAt + getRandomTimeIncrement(1, 5)
+	}
+
+	console.log(`📄 Created ${results.length} payment receipts for order ${orderId}`)
 	return results
 }
