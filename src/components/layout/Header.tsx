@@ -65,11 +65,11 @@ export function Header() {
 		if (!shouldUseTransparentHeader) return {}
 
 		if (scrollY < 80) {
-			return { '--header-bg-opacity': 'rgba(0, 0, 0, 0)' }
+			return { '--header-bg-opacity': 'linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0) 100%)' }
 		} else if (scrollY < 160) {
 			const progress = (scrollY - 80) / 80
-			const opacity = 0 + 1.0 * progress
-			return { '--header-bg-opacity': `rgba(0, 0, 0, ${opacity})` }
+			// Transition from gradient to solid black
+			return { '--header-bg-opacity': `rgba(0, 0, 0, ${progress})` }
 		} else {
 			return { '--header-bg-opacity': 'rgba(0, 0, 0, 1.0)' }
 		}
@@ -107,7 +107,14 @@ export function Header() {
 	}
 
 	return (
-		<header className={`sticky top-0 z-50 py-4 text-white px-4 ${getHeaderBackground()}`} style={getHeaderStyle() as React.CSSProperties}>
+		<header 
+			className={`sticky top-0 z-50 py-4 text-white px-4 ${getHeaderBackground()}`} 
+			style={{
+				...getHeaderStyle() as React.CSSProperties,
+				backgroundImage: scrollY < 80 ? 'var(--header-bg-opacity)' : 'none',
+				backgroundColor: scrollY >= 80 ? 'var(--header-bg-opacity)' : 'transparent'
+			}}
+		>
 			<div className="container flex h-full max-w-full items-center justify-between">
 				<section className="inline-flex items-center">
 					<Link to="/" data-testid="home-link">
