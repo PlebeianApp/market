@@ -108,7 +108,7 @@ function RouteComponent() {
 					{sellerProducts && sellerProducts.length > 0 ? (
 						<ItemGrid
 							title={
-								<div className="flex items-center gap-2">
+								<div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 text-center sm:text-left">
 									<span className="text-2xl font-heading">More products from</span>
 									<ProfileName pubkey={user?.pubkey || ''} className="text-2xl font-heading" />
 								</div>
