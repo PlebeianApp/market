@@ -72,13 +72,23 @@ export function Header() {
 		if (!shouldUseTransparentHeader) return {}
 
 		if (scrollY < 80) {
-			return { '--header-bg-opacity': 'linear-gradient(to bottom, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0) 100%)' }
+			return { 
+				'--header-bg-opacity': 'linear-gradient(to bottom, rgba(0, 0, 0, 0.75) 0%, rgba(0, 0, 0, 0.5) 50%, rgba(0, 0, 0, 0) 100%)',
+				'background': 'var(--header-bg-opacity)',
+				'height': '100%'
+			}
 		} else if (scrollY < 160) {
 			const progress = (scrollY - 80) / 80
 			// Transition from gradient to solid black
-			return { '--header-bg-opacity': `rgba(0, 0, 0, ${progress})` }
+			return { 
+				'--header-bg-opacity': `rgba(0, 0, 0, ${progress})`,
+				'background': 'var(--header-bg-opacity)'
+			}
 		} else {
-			return { '--header-bg-opacity': 'rgba(0, 0, 0, 1.0)' }
+			return { 
+				'--header-bg-opacity': 'rgba(0, 0, 0, 1.0)',
+				'background': 'var(--header-bg-opacity)'
+			}
 		}
 	}
 
@@ -115,14 +125,10 @@ export function Header() {
 
 	return (
 		<header 
-			className={`sticky top-0 z-50 py-4 text-white px-4 ${isCommunityOrNostrPage ? 'bg-black' : getHeaderBackground()}`} 
-			style={isCommunityOrNostrPage ? {} : {
-				...getHeaderStyle() as React.CSSProperties,
-				backgroundImage: scrollY < 80 ? 'var(--header-bg-opacity)' : 'none',
-				backgroundColor: scrollY >= 80 ? 'var(--header-bg-opacity)' : 'transparent'
-			}}
+			className={`sticky top-0 z-50 text-white px-4 ${isCommunityOrNostrPage ? 'bg-black' : getHeaderBackground()}`} 
+			style={isCommunityOrNostrPage ? {} : getHeaderStyle() as React.CSSProperties}
 		>
-			<div className="container flex h-full max-w-full items-center justify-between">
+			<div className="container flex h-full max-w-full items-center justify-between py-4">
 				<section className="inline-flex items-center">
 					<Link to="/" data-testid="home-link">
 						{config?.appSettings?.picture && (
@@ -249,7 +255,7 @@ export function Header() {
 					</div>
 				</div>
 			</div>
-			<div className="lg:hidden flex-1 pt-4">
+			<div className="lg:hidden flex-1 pb-4">
 				<ProductSearch />
 			</div>
 			

@@ -56,14 +56,14 @@ function RouteComponent() {
 					/>
 				)}
 			</div>
-			<div className="flex flex-col relative z-10 pt-[20vh] sm:pt-[22vh] md:pt-[30vh]">
+			<div className="flex flex-col relative z-10 pt-[18vh] sm:pt-[22vh] md:pt-[30vh]">
 				<div className="flex flex-row justify-between px-8 py-4 bg-black items-center">
 					<div className="flex flex-row items-center gap-4">
 						{profile?.picture && (
 							<img
 								src={profile.picture}
 								alt={profile.name || 'Profile picture'}
-								className="rounded-full w-16 h-16 border-2 border-black"
+								className="rounded-full w-10 h-10 sm:w-16 sm:h-16 border-2 border-black"
 							/>
 						)}
 						<div className="flex items-center gap-2">
