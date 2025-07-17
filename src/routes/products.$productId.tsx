@@ -158,7 +158,7 @@ function RouteComponent() {
 					<Button
 						variant="ghost"
 						onClick={() => window.history.back()}
-						className="back-button hover:bg-white/10"
+						className="back-button"
 					>
 						<ArrowLeft className="h-8 w-8 lg:h-4 lg:w-4" />
 						<span className="hidden sm:inline">Back to results</span>
