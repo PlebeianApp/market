@@ -133,7 +133,7 @@ function ProductsRoute() {
 
   // Render homepage hero content
   const renderHomepageHero = () => (
-    <div className="flex flex-col items-center justify-center text-white text-center gap-8 lg:col-span-2 relative z-20 mt-16 lg:mt-0">
+    <div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-16 lg:mt-0">
       <div className="flex items-center justify-center h-24 lg:h-32">
         <h1 className="text-4xl lg:text-5xl font-theylive transition-opacity duration-500">Browse Products</h1>
       </div>
@@ -166,7 +166,7 @@ function ProductsRoute() {
 
   // Render product hero content
   const renderProductHero = () => (
-    <div className="flex flex-col items-center justify-center text-white text-center gap-8 lg:col-span-2 relative z-20 mt-16 lg:mt-0">
+    <div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-16 lg:mt-0">
       <div className="flex items-center justify-center h-24 lg:h-32">
         <h1 className="text-4xl lg:text-5xl font-theylive transition-opacity duration-500">{displayTitle || 'Loading...'}</h1>
       </div>
