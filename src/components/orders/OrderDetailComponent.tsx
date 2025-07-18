@@ -2,15 +2,18 @@ import { ProductCard } from '@/components/ProductCard'
 import { PaymentDialog, type PaymentInvoiceData } from '@/components/checkout/PaymentDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { authStore } from '@/lib/stores/auth'
+import { ndkActions } from '@/lib/stores/ndk'
+import { publishPaymentReceipt } from '@/publish/payment'
 import { getEventDate, type OrderWithRelatedEvents } from '@/queries/orders'
-import { productQueryOptions } from '@/queries/products'
 import { useGenerateInvoiceMutation } from '@/queries/payment'
+import { productQueryOptions } from '@/queries/products'
 import { fetchV4VShares } from '@/queries/v4v'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { useQueries, useQuery } from '@tanstack/react-query'
+import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
+import { format } from 'date-fns'
 import {
 	AlertTriangle,
 	CheckCircle,
@@ -25,10 +28,9 @@ import {
 	XCircle,
 	Zap,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
-import { format } from 'date-fns'
-import { DetailField } from '../ui/DetailField'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
+import { DetailField } from '../ui/DetailField'
 import { OrderActions } from './OrderActions'
 
 interface OrderDetailComponentProps {
@@ -75,19 +77,8 @@ const extractPaymentMethods = (paymentRequest: NDKEvent) => {
 // Check if payment has been completed based on receipts
 const isPaymentCompleted = (paymentRequest: NDKEvent, paymentReceipts: NDKEvent[]): boolean => {
 	// Get payment request details
-	const requestAmount = paymentRequest.tags.find((tag) => tag[0] === 'amount')?.[1]
-	const requestRecipient = paymentRequest.tags.find((tag) => tag[0] === 'recipient')?.[1]
-
-	if (!requestAmount || !requestRecipient) {
-		console.log(`❌ Payment request missing required tags:`, { requestAmount, requestRecipient, id: paymentRequest.id })
-		return false
-	}
-
-	console.log(`🔍 Checking payment completion for request:`, {
-		id: paymentRequest.id,
-		amount: requestAmount,
-		recipient: requestRecipient,
-	})
+	const requestAmount = paymentRequest.tags.find((tag) => tag[0] === 'amount')?.[1] || '0'
+	const requestRecipient = paymentRequest.tags.find((tag) => tag[0] === 'recipient')?.[1] || paymentRequest.pubkey
 
 	const matchingReceipt = paymentReceipts.find((receipt) => {
 		// Look for order tag, amount tag, and p tag (recipient) in the receipt
@@ -108,19 +99,27 @@ const isPaymentCompleted = (paymentRequest: NDKEvent, paymentReceipts: NDKEvent[
 		// Match receipt to payment request by recipient and approximate amount
 		const matches = orderTag && amountTag && recipientTag && paymentTag && recipientMatches && amountMatches
 
-		if (matches) {
-			console.log(`✅ Found matching receipt for payment request ${paymentRequest.id} (amount diff: ${amountDiff} sats)`)
-		} else if (recipientMatches && !amountMatches) {
-			console.log(
-				`⚠️ Recipient matches but amount differs too much: request=${requestAmountNum}, receipt=${receiptAmountNum}, diff=${amountDiff}`,
-			)
+		if (process.env.NODE_ENV === 'development') {
+			if (matches) {
+				console.log(`✅ Found matching receipt for payment request ${paymentRequest.id} (amount diff: ${amountDiff} sats)`)
+			} else if (recipientMatches && !amountMatches) {
+				console.log(
+					`⚠️ Recipient matches but amount differs too much: request=${requestAmountNum}, receipt=${receiptAmountNum}, diff=${amountDiff}`,
+				)
+			} else if (!recipientMatches && amountMatches) {
+				console.log(
+					`⚠️ Amount matches but recipient differs: request=${requestRecipient.substring(0, 8)}, receipt=${recipientTag?.[1]?.substring(0, 8)}`,
+				)
+			}
 		}
 
 		return matches
 	})
 
 	const isCompleted = !!matchingReceipt
-	console.log(`🏁 Payment request ${paymentRequest.id} completion status:`, isCompleted)
+	if (process.env.NODE_ENV === 'development') {
+		console.log(`🏁 Payment request ${paymentRequest.id} completion status:`, isCompleted)
+	}
 
 	return isCompleted
 }
@@ -128,9 +127,15 @@ const isPaymentCompleted = (paymentRequest: NDKEvent, paymentReceipts: NDKEvent[
 export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const { user } = useStore(authStore)
 	const { mutateAsync: generateInvoice } = useGenerateInvoiceMutation()
+	const queryClient = useQueryClient()
 	const [generatingInvoices, setGeneratingInvoices] = useState<Set<string>>(new Set())
 	const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
 	const [selectedInvoiceIndex, setSelectedInvoiceIndex] = useState(0)
+
+	// Live payment receipts received via Nostr subscription
+	const [livePaymentReceipts, setLivePaymentReceipts] = useState<NDKEvent[]>([])
+
+	// No extra local status map – status is derived directly from receipts/invoice data
 
 	if (!order) {
 		return (
@@ -189,8 +194,10 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 	const products = productQueries.map((query) => query.data).filter(Boolean) as NDKEvent[]
 
-	// Convert payment requests to individual payable invoices
+	// Combine receipts that came with the order and those observed live
 	const invoicesFromPaymentRequests = useMemo(() => {
+		const combinedReceipts = [...(order.paymentReceipts || []), ...livePaymentReceipts]
+
 		if (!order.paymentRequests || order.paymentRequests.length === 0) {
 			return []
 		}
@@ -206,7 +213,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 			const paymentMethods = extractPaymentMethods(paymentRequest)
 			const lightningPayment = paymentMethods.find((p) => p.type === 'lightning')
-			const isCompleted = isPaymentCompleted(paymentRequest, order.paymentReceipts)
+			const isCompleted = isPaymentCompleted(paymentRequest, combinedReceipts)
 
 			// Determine if this is a V4V payment or merchant payment
 			const recipientPubkey = paymentRequest.tags.find((tag) => tag[0] === 'recipient')?.[1] || paymentRequest.pubkey
@@ -238,7 +245,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				amount,
 				description: isSellerPayment ? 'Merchant Payment' : 'V4V Community Payment',
 				recipientName,
-				status: isCompleted ? 'paid' : 'pending',
+				status: isCompleted ? 'paid' : expiresAt < Math.floor(Date.now() / 1000) ? 'expired' : 'pending',
 				expiresAt,
 				createdAt: paymentRequest.created_at || Math.floor(Date.now() / 1000),
 				lightningAddress: actualLightningAddress, // Store lightning address separately for invoice generation
@@ -248,7 +255,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		})
 
 		return invoices
-	}, [order.paymentRequests, order.paymentReceipts, totalAmount, orderId, sellerV4VShares, sellerPubkey])
+	}, [order.paymentRequests, livePaymentReceipts, order.paymentReceipts, totalAmount, orderId, sellerV4VShares, sellerPubkey])
 
 	// Function to generate a new invoice for a payment request
 	const handleGenerateNewInvoice = async (invoice: PaymentInvoiceData) => {
@@ -286,19 +293,85 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		}
 	}
 
-	const handlePaymentComplete = (invoiceId: string, preimage: string) => {
+	const handlePaymentComplete = async (invoiceId: string, preimage: string) => {
 		console.log(`Payment completed for invoice ${invoiceId}`, { preimage })
 		toast.success('Payment completed successfully!')
-		// Note: Payment receipt is automatically created by PaymentDialog using zap infrastructure
+
+		// Publish payment receipt so that reload shows status
+		const invoice = invoicesFromPaymentRequests.find((inv) => inv.id === invoiceId)
+		if (invoice && invoice.bolt11) {
+			try {
+				const receiptId = await publishPaymentReceipt({
+					invoice: {
+						orderId,
+						recipientPubkey: invoice.recipientPubkey,
+						amount: invoice.amount,
+						description: invoice.description,
+						id: invoice.id,
+						bolt11: invoice.bolt11,
+					},
+					preimage,
+					bolt11: invoice.bolt11,
+				})
+
+				// Optimistically add the new receipt to the live list so UI updates instantly
+				if (receiptId) {
+					setLivePaymentReceipts((prev) => {
+						// Avoid duplicates
+						if (prev.find((e) => e.id === receiptId)) return prev
+						const placeholder: any = {
+							id: receiptId,
+							tags: [
+								['order', orderId],
+								['amount', invoice.amount.toString()],
+								['p', invoice.recipientPubkey || ''],
+								['payment', 'lightning', invoice.bolt11 || '', preimage],
+							],
+							content: invoice.description || 'Payment confirmation',
+							created_at: Math.floor(Date.now() / 1000),
+							pubkey: user?.pubkey || '',
+						} as unknown as NDKEvent
+						return [...prev, placeholder]
+					})
+				}
+
+				// Refresh order data
+				queryClient.invalidateQueries({ queryKey: ['order', orderId] })
+			} catch (err) {
+				console.error('Failed to publish payment receipt:', err)
+			}
+		}
 	}
 
-	const handlePaymentFailed = (invoiceId: string, error: string) => {
-		console.error(`Payment failed for invoice ${invoiceId}:`, error)
+	const handlePaymentFailed = (_invoiceId: string, error: string) => {
+		console.error(`Payment failed for invoice ${_invoiceId}:`, error)
 		toast.error(`Payment failed: ${error}`)
+		// no local state map; UI remains unchanged (still pending) until user retries or receipt arrives
 	}
+
+	// Subscribe to payment receipts for this order once component is mounted
+	useEffect(() => {
+		const ndk = ndkActions.getNDK()
+		if (!ndk || !orderId) return
+
+		const sub = ndk.subscribe({ kinds: [17 as any], '#order': [orderId] })
+
+		sub.on('event', (event: NDKEvent) => {
+			setLivePaymentReceipts((prev) => {
+				if (prev.find((e) => e.id === event.id)) return prev
+				return [...prev, event]
+			})
+		})
+
+		return () => {
+			sub.stop()
+		}
+	}, [orderId])
 
 	// Calculate payment statistics
-	const incompleteInvoices = invoicesFromPaymentRequests.filter((invoice) => invoice.status === 'expired' || invoice.status === 'pending')
+	const incompleteInvoices = invoicesFromPaymentRequests.filter((invoice) => {
+		return invoice.status === 'expired' || invoice.status === 'pending'
+	})
 
 	const paidInvoices = invoicesFromPaymentRequests.filter((invoice) => invoice.status === 'paid')
 	const totalInvoices = invoicesFromPaymentRequests.length
@@ -607,18 +680,17 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 							{/* Individual invoice payment buttons */}
 							<div className="grid gap-3">
 								{invoicesFromPaymentRequests.map((invoice, index) => {
-									const isComplete = invoice.status === 'paid'
 									const isGeneratingThis = generatingInvoices.has(invoice.id)
 
 									return (
 										<div
 											key={invoice.id}
-											className={`border rounded-lg p-4 ${isComplete ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}
+											className={`border rounded-lg p-4 ${invoice.status === 'paid' ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}
 										>
 											<div className="flex items-center justify-between mb-3">
 												<div className="flex items-center gap-3">
-													<div className={`p-2 rounded-full ${isComplete ? 'bg-green-100' : 'bg-gray-100'}`}>
-														{isComplete ? (
+													<div className={`p-2 rounded-full ${invoice.status === 'paid' ? 'bg-green-100' : 'bg-gray-100'}`}>
+														{invoice.status === 'paid' ? (
 															<CheckCircle className="w-4 h-4 text-green-600" />
 														) : (
 															<CreditCard className="w-4 h-4 text-gray-600" />
@@ -631,14 +703,14 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 												</div>
 												<div className="text-right">
 													<p className="font-semibold">{invoice.amount.toLocaleString()} sats</p>
-													<Badge className={getStatusColor(invoice.status || 'pending')} variant="outline">
+													<Badge className={getStatusColor(invoice.status)} variant="outline">
 														{(invoice.status || 'pending').charAt(0).toUpperCase() + (invoice.status || 'pending').slice(1)}
 													</Badge>
 												</div>
 											</div>
 
 											{/* Payment action buttons - only for buyers and incomplete payments */}
-											{isBuyer && !isComplete && (
+											{isBuyer && invoice.status !== 'paid' && (
 												<div className="flex gap-2">
 													<Button
 														variant="outline"
@@ -679,7 +751,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 											)}
 
 											{/* Show payment completion status for completed payments */}
-											{isComplete && (
+											{invoice.status === 'paid' && (
 												<div className="bg-green-100 text-green-800 p-2 rounded text-sm">✅ Payment completed successfully</div>
 											)}
 										</div>

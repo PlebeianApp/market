@@ -2,7 +2,7 @@
 import { CartSummary } from '@/components/CartSummary'
 import { CheckoutProgress } from '@/components/checkout/CheckoutProgress'
 import { OrderFinalizeComponent } from '@/components/checkout/OrderFinalizeComponent'
-import { PaymentContent, type PaymentInvoiceData } from '@/components/checkout/PaymentContent'
+import { PaymentContent, type PaymentContentRef, type PaymentInvoiceData } from '@/components/checkout/PaymentContent'
 import { PaymentSummary } from '@/components/checkout/PaymentSummary'
 import { ShippingAddressForm, type CheckoutFormData } from '@/components/checkout/ShippingAddressForm'
 import { Button } from '@/components/ui/button'
@@ -14,14 +14,14 @@ import { ndkStore } from '@/lib/stores/ndk'
 import { parseNwcUri, useWallets } from '@/lib/stores/wallet'
 import type { OrderInvoiceSet } from '@/lib/utils/orderUtils'
 import { publishOrderWithDependencies } from '@/publish/orders'
-import { payInvoiceWithNwc, publishPaymentReceipt } from '@/publish/payment'
+import { publishPaymentReceipt } from '@/publish/payment'
 import { useGenerateInvoiceMutation } from '@/queries/payment'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useForm } from '@tanstack/react-form'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ChevronLeft, ChevronRight, Zap } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 export const Route = createFileRoute('/checkout')({
@@ -40,6 +40,9 @@ function RouteComponent() {
 	const [currentInvoiceIndex, setCurrentInvoiceIndex] = useState(0)
 	const [invoices, setInvoices] = useState<PaymentInvoiceData[]>([])
 	const [shippingData, setShippingData] = useState<CheckoutFormData | null>(null)
+
+	// Ref to control PaymentContent
+	const paymentContentRef = useRef<PaymentContentRef>(null)
 
 	// Reset checkout state when component mounts or cart changes
 	useEffect(() => {
@@ -315,7 +318,7 @@ function RouteComponent() {
 
 			generateInvoices()
 		}
-	}, [currentStep, sellers, productsBySeller, sellerData, v4vShares, invoices.length, isGeneratingInvoices, generateInvoice])
+	}, [currentStep, sellers, productsBySeller, sellerData, v4vShares, invoices.length, isGeneratingInvoices, generateInvoice, specOrderIds])
 
 	const form = useForm({
 		defaultValues: {
@@ -426,76 +429,24 @@ function RouteComponent() {
 		toast.error(`Payment failed: ${error}`)
 	}
 
-	// Individual NWC payment function now wraps the extracted publish function
-	const handleNwcPaymentForInvoice = async (invoice: PaymentInvoiceData): Promise<string> => {
-		const activeNwcUri = ndkState.activeNwcWalletUri
-		if (!activeNwcUri) {
-			throw new Error('No active NWC wallet selected. Please configure one in settings.')
-		}
-		if (!user) {
-			throw new Error('User not logged in.')
-		}
-		if (!invoice.bolt11) {
-			throw new Error(`Invoice for ${invoice.recipientName} is missing a BOLT11 invoice.`)
-		}
-
-		return payInvoiceWithNwc({
-			bolt11: invoice.bolt11,
-			nwcUri: activeNwcUri,
-			userPubkey: user.pubkey,
-			recipientPubkey: invoice.recipientPubkey,
-			invoiceId: invoice.id,
-			amount: invoice.amount,
-			description: invoice.description,
-		})
-	}
-
+	// Simplified pay all function using PaymentContent ref
 	const handlePayAllInvoices = async () => {
 		if (!nwcEnabled) {
 			toast.error('NWC not available for bulk payments')
 			return
 		}
 
-		const pendingInvoices = invoices.filter((inv) => inv.status === 'pending')
-		if (pendingInvoices.length === 0) {
-			toast.info('No pending invoices to pay')
+		if (!paymentContentRef.current) {
+			toast.error('Payment interface not ready')
 			return
 		}
 
-		toast.info(`Starting bulk payment for ${pendingInvoices.length} invoices...`)
-
-		// Pay each invoice using the refactored NWC payment function
-		for (let i = 0; i < pendingInvoices.length; i++) {
-			const invoice = pendingInvoices[i]
-			try {
-				const preimage = await handleNwcPaymentForInvoice(invoice)
-
-				// Mark as paid using the existing handler but skip auto-advance
-				await handlePaymentComplete(invoice.id, preimage, true)
-
-				// Small delay between payments to avoid overwhelming the wallet
-				await new Promise((resolve) => setTimeout(resolve, 1000))
-
-				toast.success(`Payment ${i + 1}/${pendingInvoices.length} completed: ${invoice.recipientName}`)
-			} catch (error) {
-				console.error(`Bulk payment failed for invoice ${invoice.id}:`, error)
-				handlePaymentFailed(invoice.id, error instanceof Error ? error.message : 'Bulk payment failed')
-				toast.error(`Payment failed for ${invoice.recipientName}`)
-				break // Stop on first failure
-			}
+		try {
+			await paymentContentRef.current.payAllWithNwc()
+		} catch (error) {
+			console.error('Bulk payment failed:', error)
+			toast.error('Bulk payment failed')
 		}
-
-		// Check if all payments succeeded and manually transition to complete
-		setTimeout(() => {
-			setInvoices((currentInvoices) => {
-				const allPaid = currentInvoices.every((inv) => inv.status === 'paid')
-				if (allPaid) {
-					toast.success('All payments completed successfully!')
-					setCurrentStep('complete')
-				}
-				return currentInvoices // Return unchanged state
-			})
-		}, 1500)
 	}
 
 	const goBackToShopping = () => {
@@ -691,6 +642,7 @@ function RouteComponent() {
 
 									{/* Payment Content - Inline instead of modal */}
 									<PaymentContent
+										ref={paymentContentRef}
 										invoices={invoices}
 										currentIndex={currentInvoiceIndex}
 										onPaymentComplete={handlePaymentComplete}

@@ -113,7 +113,7 @@ export interface NwcBalance {
  * This function creates a temporary NDKNWCWallet instance.
  */
 export const fetchNwcWalletBalance = async (nwcUri: string): Promise<NwcBalance | null> => {
-	const ndkInstance = ndkActions.getNDK()
+	const ndkInstance = ndkActions.getZapNdk()
 	if (!ndkInstance || !ndkInstance.signer) {
 		console.error('NDK instance or signer not available for NWC balance fetch')
 		return null

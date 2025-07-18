@@ -1,3 +1,4 @@
+import { LightningPaymentProcessor, type LightningPaymentData, type PaymentResult } from '@/components/lightning/LightningPaymentProcessor'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -5,28 +6,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { DEFAULT_ZAP_AMOUNTS } from '@/lib/constants'
-import { ndkActions, ndkStore } from '@/lib/stores/ndk'
-import { walletStore } from '@/lib/stores/wallet'
-import { copyToClipboard } from '@/lib/utils'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { fetchProfileByIdentifier } from '@/queries/profiles'
+import { profileKeys } from '@/queries/queryKeyFactory'
+import { NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
+import { useQuery } from '@tanstack/react-query'
+import { ChevronDown, Loader2, Zap } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import {
-	NDKEvent,
-	NDKPrivateKeySigner,
-	NDKRelaySet,
-	NDKSubscription,
-	NDKUser,
-	NDKZapper,
-	type LnPaymentInfo,
-	type NDKPaymentConfirmationLN,
-	type NDKZapDetails,
-} from '@nostr-dev-kit/ndk'
-import { NDKNWCWallet, NDKWalletStatus } from '@nostr-dev-kit/ndk-wallet'
-import { ChevronDown, Copy, Loader2, QrCodeIcon, Wallet } from 'lucide-react'
-import { QRCodeSVG } from 'qrcode.react'
-import { useStore } from '@tanstack/react-store'
-import type { NDKState } from '@/lib/stores/ndk'
-import type { WalletState } from '@/lib/stores/wallet'
 
 interface ZapDialogProps {
 	isOpen: boolean
@@ -36,406 +22,139 @@ interface ZapDialogProps {
 }
 
 export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDialogProps) {
-	// Reactive store state
-
-	const ndkState = useStore<NDKState>(ndkStore)
-	const walletState = useStore<WalletState>(walletStore)
-
-	const [amount, setAmount] = useState<number>(21)
-	const [loading, setLoading] = useState<boolean>(false)
-	const [invoice, setInvoice] = useState<string | null>(null)
-	const [lightningAddress, setLightningAddress] = useState<string | null>(null)
-	const [zapperReady, setZapperReady] = useState<boolean>(false)
-	const [errorMessage, setErrorMessage] = useState<string | null>(null)
-	const [paymentPending, setPaymentPending] = useState<boolean>(false)
-	const [paymentComplete, setPaymentComplete] = useState<boolean>(false)
+	const [amount, setAmount] = useState<string>('21')
 	const [zapMessage, setZapMessage] = useState<string>('Zap from Plebeian')
 	const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState<boolean>(false)
 	const [isAnonymousZap, setIsAnonymousZap] = useState<boolean>(false)
-	const [nwcZapLoading, setNwcZapLoading] = useState<boolean>(false)
+	const [showPaymentProcessor, setShowPaymentProcessor] = useState<boolean>(true)
 
-	const zapSubscriptionRef = useRef<NDKSubscription | null>(null)
-	const startTimeRef = useRef<number>(0)
-	const resolvePaymentRef = useRef<((value: NDKPaymentConfirmationLN) => void) | null>(null)
+	// Extract recipient information
+	const recipientPubkey = event instanceof NDKUser ? event.pubkey : event.pubkey
 
-	useEffect(() => {
-		if (isOpen && event) {
-			setZapperReady(true)
-		} else {
-			resetState()
+	// Fetch profile data if needed
+	const { data: profileData, isLoading: isLoadingProfile } = useQuery({
+		queryKey: profileKeys.details(recipientPubkey),
+		queryFn: () => fetchProfileByIdentifier(recipientPubkey),
+		enabled: isOpen, // Only fetch when dialog is open
+	})
+
+	// Try to get profile from the event first, then fallback to fetched profile
+	const profile = (event instanceof NDKUser ? event.profile : event.author?.profile) || profileData
+
+	const recipientName = profile?.displayName || profile?.name || 'Unknown User'
+	const lightningAddress = profile?.lud16 || profile?.lud06 || null
+
+	// Parse amount to number, handle empty/invalid values
+	const numericAmount = parseInt(amount, 10)
+	const isValidAmount = !isNaN(numericAmount) && numericAmount > 0
+
+	// Create payment data for the processor
+	const paymentData: LightningPaymentData = useMemo(
+		() => ({
+			amount: isValidAmount ? numericAmount : 0,
+			description: zapMessage,
+			recipient: event,
+			isZap: true,
+		}),
+		[numericAmount, zapMessage, event, isValidAmount],
+	)
+
+	const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+		const value = e.target.value
+		// Allow empty string or valid numbers
+		if (value === '' || /^\d+$/.test(value)) {
+			setAmount(value)
 		}
-
-		return () => {
-			cleanupSubscription()
-		}
-	}, [isOpen, event])
-
-	const resetState = () => {
-		setInvoice(null)
-		setPaymentPending(false)
-		setPaymentComplete(false)
-		setErrorMessage(null)
-		cleanupSubscription()
-		resolvePaymentRef.current = null
 	}
 
-	const cleanupSubscription = () => {
-		if (zapSubscriptionRef.current) {
-			zapSubscriptionRef.current.stop()
-			zapSubscriptionRef.current = null
-		}
+	const handleAmountButtonClick = (presetAmount: number) => {
+		setAmount(presetAmount.toString())
 	}
 
-	const handleZapSuccess = useCallback(
-		(zapReceiptEvent?: NDKEvent) => {
-			setPaymentComplete(true)
-			setPaymentPending(false)
-			setLoading(false)
-			setNwcZapLoading(false)
-
-			if (resolvePaymentRef.current && zapReceiptEvent) {
-				const confirmation: NDKPaymentConfirmationLN = {
-					preimage: zapReceiptEvent.tags.find((t) => t[0] === 'preimage')?.[1] || 'unknown',
-				}
-				resolvePaymentRef.current(confirmation)
-				resolvePaymentRef.current = null
-			}
-
-			onZapComplete?.(zapReceiptEvent)
+	const handlePaymentComplete = useCallback(
+		(result: PaymentResult) => {
+			console.log('Zap payment completed:', result)
+			onZapComplete?.()
 			toast.success('Zap successful! 🤙')
 
 			setTimeout(() => {
 				onOpenChange(false)
-				cleanupSubscription()
 			}, 1500)
 		},
 		[onZapComplete, onOpenChange],
 	)
 
-	const subscribeToZapReceipts = useCallback(() => {
-		const ndk = ndkActions.getNDK()
-		if (!ndk) return null
+	const handlePaymentFailed = useCallback((result: PaymentResult) => {
+		console.error('Zap payment failed:', result)
+		toast.error(`Zap failed: ${result.error}`)
+	}, [])
 
-		const explicitRelays = ndkStore.state.explicitRelayUrls
-		let relaySet: NDKRelaySet | undefined = undefined
-		if (explicitRelays && explicitRelays.length > 0) {
-			relaySet = NDKRelaySet.fromRelayUrls(explicitRelays, ndk)
-		}
-
-		startTimeRef.current = Math.floor(Date.now() / 1000)
-
-		const isEventZap = event instanceof NDKEvent
-		const pTag = isEventZap ? event.tags.find((t) => t[0] === 'p')?.[1] : event.pubkey
-		const eTag = isEventZap ? event.id : undefined
-
-		const filterTags: Record<string, string[]> = {}
-		if (pTag) filterTags['#p'] = [pTag]
-		if (eTag) filterTags['#e'] = [eTag]
-
-		const filter = {
-			kinds: [9735],
-			...filterTags,
-			since: startTimeRef.current - 5,
-		}
-
-		const sub = ndk.subscribe(filter, {
-			closeOnEose: false,
-			relaySet: relaySet,
-		})
-
-		sub.on('event', (zapReceiptEvent: NDKEvent) => {
-			const descriptionTag = zapReceiptEvent.tags.find((t) => t[0] === 'description')?.[1]
-			let isOurZap = false
-
-			if (descriptionTag) {
-				try {
-					const originalZapRequest = JSON.parse(descriptionTag)
-					const eventToMatch = event instanceof NDKEvent ? event.id : event.pubkey
-					const targetIdentifier = event instanceof NDKEvent ? 'e' : 'p'
-
-					isOurZap = originalZapRequest.tags?.some((tag: string[]) => tag[0] === targetIdentifier && tag[1] === eventToMatch)
-					if (
-						!isOurZap &&
-						event instanceof NDKEvent &&
-						originalZapRequest.tags?.some((tag: string[]) => tag[0] === 'a' && tag[1]?.includes(event.id))
-					) {
-						isOurZap = true
-					}
-				} catch (error) {
-					console.error('Failed to parse original zap request from description tag:', error)
-				}
-			}
-
-			const isRecentZap = zapReceiptEvent.created_at && zapReceiptEvent.created_at >= startTimeRef.current - 10 // 10s window
-
-			if (isOurZap || isRecentZap) {
-				handleZapSuccess(zapReceiptEvent)
-			}
-		})
-
-		return sub
-	}, [event, handleZapSuccess])
-
-	const generateInvoice = async () => {
-		setLoading(true)
-		setErrorMessage(null)
-		setInvoice(null)
-		setPaymentComplete(false)
-		setPaymentPending(false)
-
-		const ndk = ndkActions.getNDK()
-		if (!ndk) {
-			setErrorMessage('NDK not initialized.')
-			setLoading(false)
-			return
-		}
-
-		let originalNdkWallet = ndk.wallet
-		try {
-			ndk.wallet = undefined
-
-			const zapAmountMsats = amount * 1000
-			let originalSigner = ndk.signer
-
-			const zapper = new NDKZapper(event, zapAmountMsats, 'msats', {
-				comment: zapMessage,
-				lnPay: async (paymentInfo: NDKZapDetails<LnPaymentInfo>) => {
-					setInvoice(paymentInfo.pr)
-					let lud16: string | null = null
-					if (event instanceof NDKUser) {
-						lud16 = event.profile?.lud16 || event.profile?.lud06 || null
-					} else if (event instanceof NDKEvent) {
-						// For events, profile might be on event.author
-					}
-					setLightningAddress(lud16)
-					setLoading(false)
-					setPaymentPending(true)
-
-					const sub = subscribeToZapReceipts()
-					if (!sub) {
-						throw new Error('Failed to subscribe to zap receipts for QR flow.')
-					}
-					zapSubscriptionRef.current = sub
-
-					return new Promise<NDKPaymentConfirmationLN>((resolve) => {
-						resolvePaymentRef.current = resolve
-					})
-				},
-			})
-
-			if (!zapper.ndk.signer && !isAnonymousZap) {
-				zapper.ndk.signer = NDKPrivateKeySigner.generate()
-			}
-
-			if (isAnonymousZap && originalSigner) {
-				ndk.signer = undefined
-			}
-
-			await zapper.zap()
-
-			if (isAnonymousZap) {
-				ndk.signer = originalSigner
-			}
-		} catch (error) {
-			console.error('Zap (QR) generation or payment confirmation failed:', error)
-			const errMessage = error instanceof Error ? error.message : String(error)
-			setErrorMessage(`Zap (QR) failed: ${errMessage}`)
-			toast.error(`Zap (QR) failed: ${errMessage}`)
-			setLoading(false)
-			setPaymentPending(false)
-			cleanupSubscription()
-		} finally {
-			ndk.wallet = originalNdkWallet
-		}
+	const resetState = () => {
+		setAmount('21')
+		setZapMessage('Zap from Plebeian')
+		setAdvancedSettingsOpen(false)
+		setIsAnonymousZap(false)
+		setShowPaymentProcessor(true)
 	}
 
-	const handleNwcZap = async () => {
-		setNwcZapLoading(true)
-		setErrorMessage(null)
-		setInvoice(null)
-		setPaymentPending(true)
-		setPaymentComplete(false)
-
-		const ndk = ndkActions.getNDK()
-		const activeNwcUri = ndkState.activeNwcWalletUri
-
-		if (!ndk) {
-			setErrorMessage('NDK not initialized.')
-			setNwcZapLoading(false)
-			return
+	const handleDialogOpenChange = (open: boolean) => {
+		if (!open) {
+			resetState()
 		}
-
-		if (!activeNwcUri) {
-			setErrorMessage('No active NWC wallet selected. Please select one in account settings.')
-			setNwcZapLoading(false)
-			toast.info('No active NWC wallet selected.')
-			return
-		}
-
-		let originalNdkWallet = ndk.wallet
-		let nwcWalletForZap: NDKNWCWallet | undefined
-
-		try {
-			nwcWalletForZap = new NDKNWCWallet(ndk, { pairingCode: activeNwcUri })
-			ndk.wallet = nwcWalletForZap
-
-			if (nwcWalletForZap.status !== NDKWalletStatus.READY) {
-				setPaymentPending(true)
-				await new Promise<void>((resolve, reject) => {
-					const readyTimeout = setTimeout(() => reject(new Error('NWC wallet connection timed out.')), 20000)
-					nwcWalletForZap!.once('ready', () => {
-						clearTimeout(readyTimeout)
-						resolve()
-					})
-				})
-			}
-
-			const zapAmountMsats = amount * 1000
-
-			let originalSigner = ndk.signer
-			try {
-				if (isAnonymousZap) {
-					ndk.signer = undefined
-				}
-				const zapper = new NDKZapper(event, zapAmountMsats, 'msats', {
-					comment: zapMessage,
-				})
-
-				zapper.on('complete', () => {
-					console.log("NDKZapper reported 'complete' for NWC zap. Waiting for kind 9735 receipt.")
-				})
-
-				const sub = subscribeToZapReceipts()
-				if (!sub) {
-					throw new Error('Failed to subscribe to zap receipts for NWC flow.')
-				}
-				zapSubscriptionRef.current = sub
-				setPaymentPending(true)
-
-				const zapDetails = await zapper.zap()
-				if (zapDetails instanceof Map && zapDetails.size > 0) {
-					const firstValue = zapDetails.values().next().value
-					if (firstValue && typeof firstValue === 'object' && firstValue.hasOwnProperty('preimage')) {
-						handleZapSuccess()
-						return
-					}
-				}
-			} finally {
-				if (isAnonymousZap) {
-					ndk.signer = originalSigner
-				}
-			}
-		} catch (error) {
-			console.error('NWC Zap failed:', error)
-			const errMessage = error instanceof Error ? error.message : String(error)
-			setErrorMessage(`NWC Zap failed: ${errMessage}`)
-			toast.error(`NWC Zap failed: ${errMessage}`)
-			setNwcZapLoading(false)
-			setPaymentPending(false)
-			cleanupSubscription()
-		} finally {
-			if (ndk) ndk.wallet = originalNdkWallet
-		}
+		onOpenChange(open)
 	}
 
-	const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const value = parseInt(e.target.value, 10)
-		if (!isNaN(value) && value > 0) {
-			setAmount(value)
-		}
+	// Show loading state while profile is being fetched
+	if (isOpen && isLoadingProfile) {
+		return (
+			<Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
+				<DialogContent className="max-w-[425px]">
+					<DialogHeader>
+						<DialogTitle>Loading Zap Information...</DialogTitle>
+					</DialogHeader>
+					<div className="flex items-center justify-center py-8">
+						<Loader2 className="h-8 w-8 animate-spin" />
+						<span className="ml-2">Fetching profile data...</span>
+					</div>
+					<DialogFooter>
+						<DialogClose asChild>
+							<Button type="button" variant="secondary">
+								Cancel
+							</Button>
+						</DialogClose>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+		)
 	}
-
-	const handleManualPaymentConfirmation = () => {
-		setPaymentComplete(true)
-		setPaymentPending(false)
-		setLoading(false)
-		setNwcZapLoading(false)
-
-		if (resolvePaymentRef.current) {
-			const mockConfirmation: NDKPaymentConfirmationLN = {
-				preimage: `manual-confirm-${Date.now()}`,
-			}
-			resolvePaymentRef.current(mockConfirmation)
-			resolvePaymentRef.current = null
-		}
-
-		onZapComplete?.() // Call without event
-		toast.info('Payment marked as complete. Closing dialog.') // Using info to differentiate from auto-confirmed
-
-		setTimeout(() => {
-			onOpenChange(false)
-			cleanupSubscription()
-		}, 1500)
-	}
-
-	const renderLoading = () => (
-		<div className="flex flex-col items-center justify-center py-8">
-			<Loader2 className="h-8 w-8 animate-spin text-primary" />
-			<p className="mt-2 text-sm text-muted-foreground">Loading payment information...</p>
-		</div>
-	)
-
-	const renderError = () => (
-		<div className="py-6">
-			<p className="text-red-500">{errorMessage}</p>
-			<p className="text-sm text-muted-foreground mt-2">
-				The creator needs to set up a Lightning address in their profile to receive zaps.
-			</p>
-		</div>
-	)
-
-	const renderInvoiceQR = () => (
-		<div className="flex flex-col items-center space-y-4">
-			<div className="bg-white p-6 rounded-lg">
-				<QRCodeSVG value={invoice || ''} size={240} level="H" includeMargin={true} className="mx-auto" />
-			</div>
-			<div className="flex flex-col w-full space-y-2">
-				<p className="text-center text-sm mb-2">Scan with your Lightning wallet</p>
-				<div className="flex items-center">
-					<Input value={invoice || ''} readOnly className="font-mono text-xs" />
-					<Button
-						variant="ghost"
-						size="icon"
-						onClick={() => invoice && copyToClipboard(invoice)}
-						className="ml-2"
-						title="Copy to clipboard"
-					>
-						<Copy className="h-4 w-4" />
-					</Button>
-				</div>
-				{lightningAddress && <p className="text-sm text-center text-muted-foreground mt-1">Zap to: {lightningAddress}</p>}
-				{paymentPending && !paymentComplete && (
-					<p className="text-sm text-center text-amber-500 mt-2 animate-pulse">Waiting for payment...</p>
-				)}
-				{paymentComplete && <p className="text-sm text-center text-green-500 mt-2">Payment detected! Processing zap...</p>}
-			</div>
-		</div>
-	)
 
 	return (
-		<Dialog open={isOpen} onOpenChange={onOpenChange}>
+		<Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
 			<DialogContent className="max-w-[425px]">
 				<DialogHeader>
-					<DialogTitle>Zap {lightningAddress && <small>({lightningAddress})</small>}</DialogTitle>
+					<DialogTitle>
+						Zap {recipientName} {lightningAddress && <small>({lightningAddress})</small>}
+					</DialogTitle>
 					<DialogDescription>
-						Amount: <span className="font-bold">{amount} sats</span>
+						Amount: <span className="font-bold">{isValidAmount ? numericAmount : '0'} sats</span>
 					</DialogDescription>
 				</DialogHeader>
 
+				{/* Amount Selection */}
 				<div className="grid grid-cols-2 gap-2 mb-4">
 					{DEFAULT_ZAP_AMOUNTS.map(({ displayText, amount: presetAmount }) => (
 						<Button
 							key={presetAmount}
-							variant={amount === presetAmount ? 'tertiary' : 'outline'}
+							variant={numericAmount === presetAmount ? 'tertiary' : 'outline'}
 							className="border-2 border-black"
-							onClick={() => setAmount(presetAmount)}
-							disabled={loading}
+							onClick={() => handleAmountButtonClick(presetAmount)}
 						>
 							{displayText}
 						</Button>
 					))}
 				</div>
 
+				{/* Message Input */}
 				<Label htmlFor="zapMessage" className="font-bold mt-4">
 					Message
 				</Label>
@@ -445,77 +164,46 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 					value={zapMessage}
 					onChange={(e) => setZapMessage(e.target.value)}
 					className="border-2 border-black"
-					disabled={loading}
 				/>
 
-				<Collapsible open={advancedSettingsOpen} onOpenChange={setAdvancedSettingsOpen}>
-					<CollapsibleTrigger asChild>
-						<Button variant="outline" className="w-full mb-2" disabled={loading}>
-							Advanced Settings
-							<ChevronDown className="ml-2 h-4 w-4" />
-						</Button>
-					</CollapsibleTrigger>
-					<CollapsibleContent>
-						<div className="space-y-2 mt-2 flex flex-col">
-							<Label htmlFor="zapAmount" className="font-bold">
-								Manual zap amount
-							</Label>
-							<Input
-								id="zapAmount"
-								type="number"
-								value={amount}
-								onChange={handleAmountChange}
-								className="border-2 border-black"
-								min={0}
-								disabled={loading}
-							/>
+				{/* Advanced Settings */}
+				<div className="space-y-4 mt-4">
+					<Label htmlFor="zapAmount" className="font-bold">
+						Manual zap amount
+					</Label>
+					<Input
+						id="zapAmount"
+						type="text"
+						value={amount}
+						onChange={handleAmountChange}
+						className="border-2 border-black"
+						placeholder="Enter amount in sats"
+					/>
+					{!isValidAmount && amount !== '' && <span className="text-red-500 text-sm">Please enter a valid amount</span>}
+					{amount === '' && <span className="text-red-500 text-sm">Amount is required</span>}
 
-							<Label htmlFor="isAnonymousZap" className="font-bold">
-								Anonymous zap
-							</Label>
-							<Switch
-								id="isAnonymousZap"
-								checked={isAnonymousZap}
-								onCheckedChange={setIsAnonymousZap}
-								className="border-2 border-black"
-								disabled={loading || nwcZapLoading}
-							/>
-						</div>
-					</CollapsibleContent>
-				</Collapsible>
+					<Label htmlFor="isAnonymousZap" className="font-bold">
+						Anonymous zap
+					</Label>
+					<Switch id="isAnonymousZap" checked={isAnonymousZap} onCheckedChange={setIsAnonymousZap} className="border-2 border-black" />
+				</div>
 
-				{loading && (
-					<div className="w-full flex justify-center mt-4">
-						<Loader2 className="h-8 w-8 animate-spin text-primary" />
+				{/* Payment Processor Section */}
+				{lightningAddress ? (
+					<div className="mt-4">
+						<LightningPaymentProcessor
+							data={paymentData}
+							onPaymentComplete={handlePaymentComplete}
+							onPaymentFailed={handlePaymentFailed}
+							showManualVerification={true}
+						/>
+					</div>
+				) : (
+					<div className="text-center py-8 text-muted-foreground">
+						<p>No Lightning address found</p>
+						<p className="text-sm">The creator needs to set up a Lightning address in their profile to receive zaps.</p>
 					</div>
 				)}
-
-				{!loading && !errorMessage && !invoice && (
-					<div className="flex flex-row gap-2 mt-4 w-full">
-						<Button
-							variant="primary"
-							onClick={handleNwcZap}
-							disabled={nwcZapLoading || paymentPending || !ndkState.activeNwcWalletUri || walletState.isLoading}
-							className="flex-grow"
-						>
-							{nwcZapLoading || (paymentPending && !invoice) ? (
-								<Loader2 className="h-4 w-4 mr-2 animate-spin" />
-							) : walletState.isLoading ? (
-								<Loader2 className="h-4 w-4 mr-2 animate-spin" />
-							) : (
-								<Wallet className="h-4 w-4 mr-2" />
-							)}
-							<span>{walletState.isLoading ? 'Loading...' : !ndkState.activeNwcWalletUri ? 'No wallet' : 'Zap with NWC'}</span>
-						</Button>
-						<Button variant="outline" onClick={generateInvoice} disabled={loading || paymentPending} className="flex-grow">
-							{loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <QrCodeIcon className="h-4 w-4 mr-2" />}
-							<span>Zap with QR</span>
-						</Button>
-					</div>
-				)}
-
-				{errorMessage && renderError()}
-				{invoice && !errorMessage && renderInvoiceQR()}
 
 				<DialogFooter className="sm:justify-between">
 					<DialogClose asChild>
@@ -523,11 +211,6 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 							Cancel
 						</Button>
 					</DialogClose>
-					{invoice && !paymentComplete && (
-						<Button type="button" onClick={handleManualPaymentConfirmation} disabled={paymentPending && paymentComplete}>
-							I've Paid
-						</Button>
-					)}
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>

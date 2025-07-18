@@ -21,6 +21,7 @@ import {
 	createPaymentRequestEvent,
 	createMultiplePaymentRequestEvents,
 	createPaymentReceiptEvent,
+	createPaymentReceiptsForOrder,
 	createShippingUpdateEvent,
 	generateOrderCreationData,
 	generateOrderStatusData,
@@ -277,10 +278,11 @@ async function seedData() {
 									lastEventTimestamp = Math.max(...paymentReqResults.map((r) => r.createdAt))
 								}
 
-								// Create main payment receipt to merchant (simplified for seeding)
-								let paymentReceiptData = generatePaymentReceiptData(sellerPubkey, orderId, totalAmount, lastEventTimestamp)
-								;({ createdAt: currentTimestamp } = await createPaymentReceiptEvent(buyerSigner, ndk, paymentReceiptData))
-								lastEventTimestamp = currentTimestamp
+								// Create payment receipts for all payment requests
+								const receiptResults = await createPaymentReceiptsForOrder(buyerSigner, ndk, orderId, paymentReqResults, lastEventTimestamp)
+								if (receiptResults.length > 0) {
+									lastEventTimestamp = Math.max(...receiptResults.map((r) => r.createdAt))
+								}
 
 								// Add a general message from seller after payment
 								kind14Data = generateGeneralCommunicationData(buyerPubkey, orderId, lastEventTimestamp)
@@ -306,9 +308,17 @@ async function seedData() {
 									lastEventTimestamp = Math.max(...paymentReqResults2.map((r) => r.createdAt))
 								}
 
-								let paymentReceiptData2 = generatePaymentReceiptData(sellerPubkey, orderId, totalAmount, lastEventTimestamp)
-								;({ createdAt: currentTimestamp } = await createPaymentReceiptEvent(buyerSigner, ndk, paymentReceiptData2))
-								lastEventTimestamp = currentTimestamp
+								// Create payment receipts for all payment requests
+								const receiptResults2 = await createPaymentReceiptsForOrder(
+									buyerSigner,
+									ndk,
+									orderId,
+									paymentReqResults2,
+									lastEventTimestamp,
+								)
+								if (receiptResults2.length > 0) {
+									lastEventTimestamp = Math.max(...receiptResults2.map((r) => r.createdAt))
+								}
 
 								const statusConfirmed2 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED, lastEventTimestamp)
 								;({ createdAt: currentTimestamp } = await createOrderStatusEvent(sellerSigner, ndk, statusConfirmed2))
@@ -333,9 +343,17 @@ async function seedData() {
 									lastEventTimestamp = Math.max(...paymentReqResults3.map((r) => r.createdAt))
 								}
 
-								let paymentReceiptData3 = generatePaymentReceiptData(sellerPubkey, orderId, totalAmount, lastEventTimestamp)
-								;({ createdAt: currentTimestamp } = await createPaymentReceiptEvent(buyerSigner, ndk, paymentReceiptData3))
-								lastEventTimestamp = currentTimestamp
+								// Create payment receipts for all payment requests
+								const receiptResults3 = await createPaymentReceiptsForOrder(
+									buyerSigner,
+									ndk,
+									orderId,
+									paymentReqResults3,
+									lastEventTimestamp,
+								)
+								if (receiptResults3.length > 0) {
+									lastEventTimestamp = Math.max(...receiptResults3.map((r) => r.createdAt))
+								}
 
 								const statusConfirmed3 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED, lastEventTimestamp)
 								;({ createdAt: currentTimestamp } = await createOrderStatusEvent(sellerSigner, ndk, statusConfirmed3))
@@ -369,9 +387,17 @@ async function seedData() {
 									lastEventTimestamp = Math.max(...paymentReqResults4.map((r) => r.createdAt))
 								}
 
-								let paymentReceiptData4 = generatePaymentReceiptData(sellerPubkey, orderId, totalAmount, lastEventTimestamp)
-								;({ createdAt: currentTimestamp } = await createPaymentReceiptEvent(buyerSigner, ndk, paymentReceiptData4))
-								lastEventTimestamp = currentTimestamp
+								// Create payment receipts for all payment requests
+								const receiptResults4 = await createPaymentReceiptsForOrder(
+									buyerSigner,
+									ndk,
+									orderId,
+									paymentReqResults4,
+									lastEventTimestamp,
+								)
+								if (receiptResults4.length > 0) {
+									lastEventTimestamp = Math.max(...receiptResults4.map((r) => r.createdAt))
+								}
 
 								const statusConfirmed4 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED, lastEventTimestamp)
 								;({ createdAt: currentTimestamp } = await createOrderStatusEvent(sellerSigner, ndk, statusConfirmed4))
@@ -398,40 +424,36 @@ async function seedData() {
 								console.log(`    Order ${i + 1}: CANCELLED state`)
 								const cancelStage = Math.floor(Math.random() * 3)
 
+								// Always create payment requests
+								let paymentReqResults5 = await createMultiplePaymentRequestEvents(
+									sellerSigner,
+									ndk,
+									buyerPubkey,
+									sellerPubkey,
+									orderId,
+									totalAmount,
+									lastEventTimestamp,
+								)
+								if (paymentReqResults5.length > 0) {
+									lastEventTimestamp = Math.max(...paymentReqResults5.map((r) => r.createdAt))
+								}
+
 								if (cancelStage >= 1) {
-									let paymentReqResults5 = await createMultiplePaymentRequestEvents(
-										sellerSigner,
+									// Create payment receipts for confirmed orders that got cancelled
+									const receiptResults5 = await createPaymentReceiptsForOrder(
+										buyerSigner,
 										ndk,
-										buyerPubkey,
-										sellerPubkey,
 										orderId,
-										totalAmount,
+										paymentReqResults5,
 										lastEventTimestamp,
 									)
-									if (paymentReqResults5.length > 0) {
-										lastEventTimestamp = Math.max(...paymentReqResults5.map((r) => r.createdAt))
+									if (receiptResults5.length > 0) {
+										lastEventTimestamp = Math.max(...receiptResults5.map((r) => r.createdAt))
 									}
-
-									let paymentReceiptData5 = generatePaymentReceiptData(sellerPubkey, orderId, totalAmount, lastEventTimestamp)
-									;({ createdAt: currentTimestamp } = await createPaymentReceiptEvent(buyerSigner, ndk, paymentReceiptData5))
-									lastEventTimestamp = currentTimestamp
 
 									const statusConfirmed5 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED, lastEventTimestamp)
 									;({ createdAt: currentTimestamp } = await createOrderStatusEvent(sellerSigner, ndk, statusConfirmed5))
 									lastEventTimestamp = currentTimestamp
-								} else {
-									let paymentReqResults5 = await createMultiplePaymentRequestEvents(
-										sellerSigner,
-										ndk,
-										buyerPubkey,
-										sellerPubkey,
-										orderId,
-										totalAmount,
-										lastEventTimestamp,
-									)
-									if (paymentReqResults5.length > 0) {
-										lastEventTimestamp = Math.max(...paymentReqResults5.map((r) => r.createdAt))
-									}
 								}
 
 								if (cancelStage >= 2) {
