@@ -425,18 +425,18 @@ async function seedData() {
 								const cancelStage = Math.floor(Math.random() * 3)
 
 								// Always create payment requests
-									let paymentReqResults5 = await createMultiplePaymentRequestEvents(
-										sellerSigner,
-										ndk,
-										buyerPubkey,
-										sellerPubkey,
-										orderId,
-										totalAmount,
-										lastEventTimestamp,
-									)
-									if (paymentReqResults5.length > 0) {
-										lastEventTimestamp = Math.max(...paymentReqResults5.map((r) => r.createdAt))
-									}
+								let paymentReqResults5 = await createMultiplePaymentRequestEvents(
+									sellerSigner,
+									ndk,
+									buyerPubkey,
+									sellerPubkey,
+									orderId,
+									totalAmount,
+									lastEventTimestamp,
+								)
+								if (paymentReqResults5.length > 0) {
+									lastEventTimestamp = Math.max(...paymentReqResults5.map((r) => r.createdAt))
+								}
 
 								if (cancelStage >= 1) {
 									// Create payment receipts for confirmed orders that got cancelled

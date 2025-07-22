@@ -100,7 +100,7 @@ async function createBanListEvent(signer: NDKPrivateKeySigner) {
 	console.log('Published ban list event')
 }
 
-async function createAdminListEvent(signer: NDKPrivateKeySigner) {
+async function createRoleListsEvent(signer: NDKPrivateKeySigner) {
 	// Create admin list event (kind 30000) with d tag 'admins'
 	// This follows the new admin structure where:
 	// - devUser1 is the owner (first admin in the list)
@@ -116,6 +116,16 @@ async function createAdminListEvent(signer: NDKPrivateKeySigner) {
 	await adminListEvent.sign(signer)
 	await adminListEvent.publish()
 	console.log('Published admin list event with devUser1 as owner and devUser2 as admin')
+
+	// Create editors list event (kind 30000) with d tag 'editors'
+	const editorsListEvent = new NDKEvent(ndk)
+	editorsListEvent.kind = 30000
+	editorsListEvent.tags.push(['d', 'editors'])
+	editorsListEvent.tags.push(['p', devUser3.pk]) // Editor
+
+	await editorsListEvent.sign(signer)
+	await editorsListEvent.publish()
+	console.log('Published editors list event with devUser3 as editor')
 }
 
 async function initializeEvents() {
@@ -133,8 +143,8 @@ async function initializeEvents() {
 	console.log('Creating ban list event...')
 	await createBanListEvent(signer)
 
-	console.log('Creating admin list event...')
-	await createAdminListEvent(signer)
+	console.log('Creating admin and editor lists...')
+	await createRoleListsEvent(signer)
 
 	console.log('Initialization complete!')
 	process.exit(0)

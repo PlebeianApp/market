@@ -61,7 +61,9 @@ function SetupRoute() {
 	const { data: config } = useConfigQuery()
 	const navigate = useNavigate()
 	const [adminsList, setAdminsList] = useState<string[]>([])
+	const [editorsList, setEditorsList] = useState<string[]>([])
 	const [inputValue, setInputValue] = useState('')
+	const [editorInputValue, setEditorInputValue] = useState('')
 
 	const form = useForm({
 		defaultValues: {
@@ -112,6 +114,16 @@ function SetupRoute() {
 					}
 				}
 
+				const allEditorsHex = new Set<string>()
+				for (const editor of editorsList) {
+					try {
+						allEditorsHex.add(npubToHex(editor))
+					} catch (e) {
+						toast.error(`Invalid editor public key: ${editor}`)
+						return
+					}
+				}
+
 				// Create 30000 event for admins - Submit this FIRST
 				const adminsTags: string[][] = [['d', 'admins'], ...Array.from(allAdminsHex).map((hex) => ['p', hex])]
 
@@ -126,7 +138,23 @@ function SetupRoute() {
 				adminsEvent = finalizeEvent(adminsEvent, generateSecretKey())
 				await submitAppSettings(adminsEvent)
 
-				// Create 31990 event - Submit this SECOND
+				// Create 30000 event for editors - Submit this SECOND (if there are any editors)
+				if (allEditorsHex.size > 0) {
+					const editorsTags: string[][] = [['d', 'editors'], ...Array.from(allEditorsHex).map((hex) => ['p', hex])]
+
+					let editorsEvent = {
+						kind: 30000,
+						created_at: Math.floor(Date.now() / 1000),
+						tags: editorsTags,
+						content: '',
+						pubkey: ownerPubkeyHex,
+					}
+
+					editorsEvent = finalizeEvent(editorsEvent, generateSecretKey())
+					await submitAppSettings(editorsEvent)
+				}
+
+				// Create 31990 event - Submit this THIRD
 				const appSettingsTags: string[][] = [
 					['d', crypto.randomUUID()],
 					['k', '30402'],
@@ -450,6 +478,43 @@ function SetupRoute() {
 											}}
 										>
 											Add Admin
+										</Button>
+									</div>
+								</div>
+
+								<div className="flex flex-col gap-2 mt-4">
+									<Label>Editors</Label>
+									{editorsList.map((editor, index) => (
+										<div key={index} className="grid grid-cols-[1fr_auto] items-center">
+											<span className="truncate">{formatPubkeyForDisplay(editor)}</span>
+											<Button type="button" variant="destructive" onClick={() => setEditorsList(editorsList.filter((_, i) => i !== index))}>
+												Remove
+											</Button>
+										</div>
+									))}
+									<div className="flex flex-row gap-2">
+										<Input
+											type="text"
+											value={editorInputValue}
+											onChange={(e) => setEditorInputValue(e.target.value)}
+											placeholder="Editor npub or hex pubkey"
+										/>
+										<Button
+											type="button"
+											onClick={() => {
+												const trimmed = editorInputValue.trim()
+												if (trimmed) {
+													try {
+														npubToHex(trimmed)
+														setEditorsList([...editorsList, trimmed])
+														setEditorInputValue('')
+													} catch (e) {
+														toast.error((e as Error).message)
+													}
+												}
+											}}
+										>
+											Add Editor
 										</Button>
 									</div>
 								</div>

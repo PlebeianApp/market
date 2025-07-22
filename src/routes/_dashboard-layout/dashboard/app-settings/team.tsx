@@ -4,12 +4,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { formatPubkeyForDisplay, hexToNpub, npubToHex } from '@/routes/setup'
-import { useAddAdminMutation, useRemoveAdminMutation } from '@/publish/app-settings'
-import { getFormattedAdmins, useAdminSettings, useAmIAdmin } from '@/queries/app-settings'
+import { useAddAdminMutation, useRemoveAdminMutation, useAddEditorMutation, useRemoveEditorMutation } from '@/publish/app-settings'
+import { getFormattedAdmins, useAdminSettings, useAmIAdmin, getFormattedEditors, useEditorSettings } from '@/queries/app-settings'
 import { useConfigQuery } from '@/queries/config'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
-import { Globe, Shield, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
+import { Globe, Shield, ShieldCheck, Trash2, UserPlus, Edit } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
@@ -21,14 +21,20 @@ function TeamComponent() {
 	useDashboardTitle('Team')
 	const { data: config } = useConfigQuery()
 	const { data: adminSettings, isLoading: isLoadingAdmins } = useAdminSettings(config?.appPublicKey)
+	const { data: editorSettings, isLoading: isLoadingEditors } = useEditorSettings(config?.appPublicKey)
 	const { amIAdmin, amIOwner, isLoading: isLoadingPermissions } = useAmIAdmin(config?.appPublicKey)
 	const [newAdminInput, setNewAdminInput] = useState('')
+	const [newEditorInput, setNewEditorInput] = useState('')
 	const [isAddingAdmin, setIsAddingAdmin] = useState(false)
+	const [isAddingEditor, setIsAddingEditor] = useState(false)
 
 	const addAdminMutation = useAddAdminMutation()
 	const removeAdminMutation = useRemoveAdminMutation()
+	const addEditorMutation = useAddEditorMutation()
+	const removeEditorMutation = useRemoveEditorMutation()
 
 	const formattedAdmins = getFormattedAdmins(adminSettings)
+	const formattedEditors = getFormattedEditors(editorSettings)
 
 	const handleAddAdmin = async () => {
 		if (!newAdminInput.trim()) {
@@ -61,7 +67,38 @@ function TeamComponent() {
 		}
 	}
 
-	if (isLoadingAdmins || isLoadingPermissions) {
+	const handleAddEditor = async () => {
+		if (!newEditorInput.trim()) {
+			toast.error('Please enter a valid npub or pubkey')
+			return
+		}
+
+		try {
+			setIsAddingEditor(true)
+			// Convert npub to hex if needed
+			const hexPubkey = npubToHex(newEditorInput.trim())
+			await addEditorMutation.mutateAsync(hexPubkey)
+			setNewEditorInput('')
+			toast.success('Editor added successfully')
+		} catch (error) {
+			console.error('Failed to add editor:', error)
+			toast.error(`Failed to add editor: ${error instanceof Error ? error.message : 'Unknown error'}`)
+		} finally {
+			setIsAddingEditor(false)
+		}
+	}
+
+	const handleRemoveEditor = async (pubkey: string) => {
+		try {
+			await removeEditorMutation.mutateAsync(pubkey)
+			toast.success('Editor removed successfully')
+		} catch (error) {
+			console.error('Failed to remove editor:', error)
+			toast.error(`Failed to remove editor: ${error instanceof Error ? error.message : 'Unknown error'}`)
+		}
+	}
+
+	if (isLoadingAdmins || isLoadingEditors || isLoadingPermissions) {
 		return (
 			<div className="space-y-6 p-6">
 				<div className="animate-pulse">
@@ -164,6 +201,49 @@ function TeamComponent() {
 					</CardContent>
 				</Card>
 
+				{/* Editors Section */}
+				<Card>
+					<CardHeader>
+						<CardTitle className="flex items-center gap-2">
+							<Edit className="w-5 h-5" />
+							Editors
+						</CardTitle>
+						<CardDescription>Users with editor privileges can manage content but have limited administrative access.</CardDescription>
+					</CardHeader>
+					<CardContent className="space-y-4">
+						{formattedEditors.length === 0 ? (
+							<div className="text-center py-8 text-gray-500">
+								<Edit className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+								<p>No editors found</p>
+							</div>
+						) : (
+							<div className="space-y-3">
+								{formattedEditors.map((editor) => (
+									<div key={editor.pubkey} className="flex items-center justify-between p-3 border rounded-lg">
+										<div className="flex items-center gap-3">
+											<Edit className="w-5 h-5 text-purple-600" />
+											<div>
+												<div className="font-mono text-sm">{formatPubkeyForDisplay(editor.pubkey)}</div>
+												<div className="text-xs text-purple-600 font-medium">Editor</div>
+											</div>
+										</div>
+										{amIAdmin && (
+											<Button
+												variant="outline"
+												size="sm"
+												onClick={() => handleRemoveEditor(editor.pubkey)}
+												disabled={removeEditorMutation.isPending}
+											>
+												<Trash2 className="w-4 h-4" />
+											</Button>
+										)}
+									</div>
+								))}
+							</div>
+						)}
+					</CardContent>
+				</Card>
+
 				{/* Add New Admin */}
 				{amIOwner && (
 					<Card>
@@ -197,6 +277,44 @@ function TeamComponent() {
 							</div>
 							<div className="text-xs text-gray-500">
 								Note: New administrators will have full access to manage the marketplace settings and content.
+							</div>
+						</CardContent>
+					</Card>
+				)}
+
+				{/* Add New Editor */}
+				{amIAdmin && (
+					<Card>
+						<CardHeader>
+							<CardTitle className="flex items-center gap-2">
+								<UserPlus className="w-5 h-5" />
+								Add Editor
+							</CardTitle>
+							<CardDescription>Add a new editor by entering their npub or public key.</CardDescription>
+						</CardHeader>
+						<CardContent className="space-y-4">
+							<div className="space-y-2">
+								<Label htmlFor="newEditor">Npub or Public Key</Label>
+								<div className="flex gap-2">
+									<Input
+										id="newEditor"
+										value={newEditorInput}
+										onChange={(e) => setNewEditorInput(e.target.value)}
+										placeholder="npub1... or hex pubkey"
+										className="flex-1"
+									/>
+									<Button onClick={handleAddEditor} disabled={isAddingEditor || addEditorMutation.isPending || !newEditorInput.trim()}>
+										{isAddingEditor || addEditorMutation.isPending ? (
+											<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+										) : (
+											<UserPlus className="w-4 h-4" />
+										)}
+										Add
+									</Button>
+								</div>
+							</div>
+							<div className="text-xs text-gray-500">
+								Note: New editors will have limited access to manage content but cannot modify administrative settings.
 							</div>
 						</CardContent>
 					</Card>
