@@ -4,6 +4,7 @@ import { Pattern } from '@/components/pattern'
 import { SheetRegistry } from '@/components/SheetRegistry'
 import { DialogRegistry } from '@/components/DialogRegistry'
 import { useConfigQuery } from '@/queries/config'
+import { useAmIAdmin } from '@/queries/app-settings'
 import { createRootRoute, Outlet, useNavigate } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { DecryptPasswordDialog } from '@/components/auth/DecryptPasswordDialog'
@@ -23,6 +24,10 @@ function RootLayout() {
 	const { pathname } = window.location
 	const isSetupPage = pathname === '/setup'
 	const isDashboardPage = pathname.startsWith('/dashboard')
+	const isAdminRoute = pathname.startsWith('/dashboard/app-settings')
+
+	// Admin checking for route protection
+	const { amIAdmin, isLoading: isLoadingAdmin } = useAmIAdmin(config?.appPublicKey)
 
 	useEffect(() => {
 		if (isLoading || isError) return
@@ -32,6 +37,15 @@ function RootLayout() {
 			navigate({ to: '/' })
 		}
 	}, [config, navigate, isLoading, isError, isSetupPage])
+
+	// Protect admin routes
+	useEffect(() => {
+		if (isLoadingAdmin || isLoading || isError) return
+		if (isAdminRoute && !amIAdmin) {
+			// Redirect non-admins away from admin routes
+			navigate({ to: '/dashboard' })
+		}
+	}, [isAdminRoute, amIAdmin, isLoadingAdmin, isLoading, isError, navigate])
 
 	// If loading, don't render routes
 	if (isLoading) {

@@ -1,16 +1,17 @@
-import React, { useState } from 'react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { dashboardNavigation } from '@/config/dashboardNavigation'
-import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate, useLocation } from '@tanstack/react-router'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
-import { useAutoAnimate } from '@formkit/auto-animate/react'
-import { useStore } from '@tanstack/react-store'
-import { uiStore, uiActions } from '@/lib/stores/ui'
-import { useQuery } from '@tanstack/react-query'
-import { profileKeys } from '@/queries/queryKeyFactory'
-import { fetchProfileByIdentifier } from '@/queries/profiles'
-import { MessageSquareText } from 'lucide-react'
+import { uiActions, uiStore } from '@/lib/stores/ui'
 import { cn } from '@/lib/utils'
+import { useAmIAdmin } from '@/queries/app-settings'
+import { useConfigQuery } from '@/queries/config'
+import { fetchProfileByIdentifier } from '@/queries/profiles'
+import { profileKeys } from '@/queries/queryKeyFactory'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
+import { useQuery } from '@tanstack/react-query'
+import { createFileRoute, Link, Outlet, useLocation, useMatchRoute, useNavigate } from '@tanstack/react-router'
+import { useStore } from '@tanstack/react-store'
+import React, { useState } from 'react'
 
 export const Route = createFileRoute('/_dashboard-layout')({
 	component: DashboardLayout,
@@ -112,6 +113,23 @@ function DashboardLayout() {
 	const { dashboardTitle } = useStore(uiStore)
 	const isMessageDetailView =
 		location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages'
+
+	// Admin checking
+	const { data: config } = useConfigQuery()
+	const { amIAdmin, isLoading: isLoadingAdmin } = useAmIAdmin(config?.appPublicKey)
+
+	// Filter navigation based on admin status
+	const filteredNavigation = React.useMemo(() => {
+		if (isLoadingAdmin) return dashboardNavigation // Show all while loading
+
+		return dashboardNavigation
+			.filter((section) => !section.adminOnly || amIAdmin) // Filter out admin-only sections for non-admins
+			.map((section) => ({
+				...section,
+				items: section.items.filter((item) => !item.adminOnly || amIAdmin), // Filter out admin-only items for non-admins
+			}))
+			.filter((section) => section.items.length > 0) // Remove empty sections
+	}, [amIAdmin, isLoadingAdmin])
 
 	// Simple emoji detection - match common emoji patterns at start
 	const emojiRegex =
@@ -248,7 +266,7 @@ function DashboardLayout() {
 					{(showSidebar || !isMobile) && (
 						<aside className="w-full lg:w-80 lg:overflow-y-auto lg:border lg:border-black lg:rounded lg:max-h-full lg:bg-white lg:flex-shrink-0">
 							<div className="lg:space-y-2">
-								{dashboardNavigation.map((section) => (
+								{filteredNavigation.map((section) => (
 									<div key={section.title}>
 										<h3 className="font-heading bg-tertiary-black text-white px-4 py-2 mb-0 lg:mb-2">{section.title}</h3>
 										<nav className="space-y-2 p-4 lg:p-0 text-xl lg:text-base">
@@ -329,6 +347,9 @@ function DashboardLayout() {
 												location.pathname === '/dashboard/account/making-payments' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/account/your-purchases' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/account/network' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/app-settings/app-miscelleneous' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/app-settings/team' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/app-settings/blacklists' && 'p-0 lg:p-0',
 											)}
 										>
 											{/* Only show title here if there's no back button */}
@@ -344,6 +365,9 @@ function DashboardLayout() {
 												location.pathname !== '/dashboard/account/profile' &&
 												location.pathname !== '/dashboard/account/making-payments' &&
 												location.pathname !== '/dashboard/account/your-purchases' &&
+												location.pathname !== '/dashboard/app-settings/app-miscelleneous' &&
+												location.pathname !== '/dashboard/app-settings/team' &&
+												location.pathname !== '/dashboard/app-settings/blacklists' &&
 												location.pathname !== '/dashboard/account/network' && (
 													<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>
 												)}

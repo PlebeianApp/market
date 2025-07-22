@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator'
 import { submitAppSettings } from '@/lib/appSettings'
 import { createQueryClient } from '@/lib/queryClient'
+import { AppSettingsSchema } from '@/lib/schemas/app'
 import { useConfigQuery } from '@/queries/config'
 import { configKeys } from '@/queries/queryKeyFactory'
 import { useForm, useStore } from '@tanstack/react-form'
@@ -13,8 +14,37 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { finalizeEvent, generateSecretKey, nip19 } from 'nostr-tools'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { AppSettingsSchema } from '@/lib/schemas/app'
 import { z } from 'zod'
+
+function npubToHex(pk: string): string {
+	if (pk.startsWith('npub1')) {
+		const { type, data } = nip19.decode(pk)
+		if (type === 'npub') return data as string
+		throw new Error('Invalid npub')
+	} else if (/^[0-9a-f]{64}$/i.test(pk)) {
+		return pk.toLowerCase()
+	}
+	throw new Error('Invalid public key: must be npub or 64 hex chars')
+}
+
+function hexToNpub(pk: string): string {
+	if (pk.startsWith('npub1')) {
+		return pk
+	} else if (/^[0-9a-f]{64}$/i.test(pk)) {
+		return nip19.npubEncode(pk)
+	}
+	throw new Error('Invalid public key: must be npub or 64 hex chars')
+}
+
+function formatPubkeyForDisplay(pk: string): string {
+	try {
+		return hexToNpub(pk)
+	} catch (e) {
+		return pk // Return as-is if invalid
+	}
+}
+
+export { npubToHex, hexToNpub, formatPubkeyForDisplay }
 
 export const Route = createFileRoute('/setup')({
 	component: SetupRoute,
@@ -41,7 +71,7 @@ function SetupRoute() {
 			banner: 'https://plebeian.market/banner.svg',
 			ownerPk: '',
 			contactEmail: '',
-			allowRegister: true,
+			allowRegister: true as boolean,
 			defaultCurrency: currencies[0],
 		} satisfies z.infer<typeof AppSettingsSchema>,
 		validators: {
@@ -64,41 +94,66 @@ function SetupRoute() {
 					return
 				}
 
-				// Convert npub to hex if needed
-				let ownerPubkeyHex = value.ownerPk
-				if (value.ownerPk.startsWith('npub')) {
+				let ownerPubkeyHex: string
+				try {
+					ownerPubkeyHex = npubToHex(value.ownerPk)
+				} catch (e) {
+					toast.error('Invalid owner public key')
+					return
+				}
+
+				const allAdminsHex = new Set<string>([ownerPubkeyHex])
+				for (const admin of adminsList) {
 					try {
-						const { data } = nip19.decode(value.ownerPk)
-						ownerPubkeyHex = data as string
+						allAdminsHex.add(npubToHex(admin))
 					} catch (e) {
-						toast.error('Invalid npub format')
+						toast.error(`Invalid admin public key: ${admin}`)
 						return
 					}
 				}
 
-				// Create the event with a temporary pubkey (will be re-signed by the app)
+				// Create 30000 event for admins - Submit this FIRST
+				const adminsTags: string[][] = [['d', 'admins'], ...Array.from(allAdminsHex).map((hex) => ['p', hex])]
+
+				let adminsEvent = {
+					kind: 30000,
+					created_at: Math.floor(Date.now() / 1000),
+					tags: adminsTags,
+					content: '',
+					pubkey: ownerPubkeyHex,
+				}
+
+				adminsEvent = finalizeEvent(adminsEvent, generateSecretKey())
+				await submitAppSettings(adminsEvent)
+
+				// Create 31990 event - Submit this SECOND
+				const appSettingsTags: string[][] = [
+					['d', crypto.randomUUID()],
+					['k', '30402'],
+					['k', '30405'],
+					['web', `${window.location.origin}/a/{bech32}`, 'nevent'],
+					['web', `${window.location.origin}/p/{bech32}`, 'nprofile'],
+					['r', config.appRelay],
+				]
+
 				let newEvent = {
 					kind: 31990,
 					created_at: Math.floor(Date.now() / 1000),
-					tags: [] as string[][],
+					tags: appSettingsTags,
 					content: JSON.stringify({
 						...value,
-						ownerPk: value.ownerPk, // Keep original npub in content
-						adminsList,
-						relayUrl: config.appRelay,
+						ownerPk: ownerPubkeyHex,
 					}),
-					pubkey: ownerPubkeyHex, // Use hex format for pubkey
+					pubkey: ownerPubkeyHex,
 				}
 
-				// Sign with a temporary key (the app will re-sign it)
 				newEvent = finalizeEvent(newEvent, generateSecretKey())
-
 				await submitAppSettings(newEvent)
 
-				// Wait a bit for the event to be processed
+				// Wait a bit for the events to be processed
 				await new Promise((resolve) => setTimeout(resolve, 1000))
 
-				const queryClient = await createQueryClient(config.appRelay)
+				const queryClient = await createQueryClient([config.appRelay])
 				await queryClient.invalidateQueries({ queryKey: configKeys.all })
 				await queryClient.refetchQueries({ queryKey: configKeys.all })
 
@@ -123,7 +178,6 @@ function SetupRoute() {
 			if (user) {
 				const npub = nip19.npubEncode(user)
 				form.setFieldValue('ownerPk', npub)
-				setInputValue(npub)
 			}
 		} catch (error) {
 			toast.error('Failed to get public key from extension')
@@ -169,8 +223,12 @@ function SetupRoute() {
 									validators={{
 										onChange: (field) => {
 											if (!field.value) return 'Owner public key is required'
-											if (!field.value.startsWith('npub')) return 'Must be a valid npub'
-											return undefined
+											try {
+												npubToHex(field.value)
+												return undefined
+											} catch (e) {
+												return (e as Error).message
+											}
 										},
 									}}
 								>
@@ -185,7 +243,19 @@ function SetupRoute() {
 													className="border-2"
 													name={field.name}
 													value={field.state.value}
-													onChange={(e) => field.handleChange(e.target.value)}
+													onChange={(e) => {
+														const value = e.target.value.trim()
+														// Always store the input value, but convert to npub if it's valid hex
+														try {
+															if (/^[0-9a-f]{64}$/i.test(value)) {
+																field.handleChange(nip19.npubEncode(value))
+															} else {
+																field.handleChange(value)
+															}
+														} catch {
+															field.handleChange(value)
+														}
+													}}
 													onBlur={field.handleBlur}
 													placeholder="Owner npub"
 												/>
@@ -336,29 +406,52 @@ function SetupRoute() {
 								<Separator className="my-2" />
 
 								<h3 className="text-xl font-semibold">Crew</h3>
-								{adminsList.map((admin, index) => (
-									<div key={index} className="grid grid-cols-[1fr_auto] items-center">
-										<span className="truncate">{admin}</span>
-										<Button type="button" variant="destructive" onClick={() => setAdminsList(adminsList.filter((_, i) => i !== index))}>
-											Remove
+								<div className="flex flex-col gap-2">
+									<Label>Admins</Label>
+									<form.Subscribe
+										selector={(state) => state.values.ownerPk}
+										children={(ownerPk) =>
+											ownerPk && (
+												<div className="grid grid-cols-[1fr_auto] items-center">
+													<span className="truncate">{formatPubkeyForDisplay(ownerPk)}</span>
+													<span>(owner)</span>
+												</div>
+											)
+										}
+									/>
+									{adminsList.map((admin, index) => (
+										<div key={index} className="grid grid-cols-[1fr_auto] items-center">
+											<span className="truncate">{formatPubkeyForDisplay(admin)}</span>
+											<Button type="button" variant="destructive" onClick={() => setAdminsList(adminsList.filter((_, i) => i !== index))}>
+												Remove
+											</Button>
+										</div>
+									))}
+									<div className="flex flex-row gap-2">
+										<Input
+											type="text"
+											value={inputValue}
+											onChange={(e) => setInputValue(e.target.value)}
+											placeholder="Admin npub or hex pubkey"
+										/>
+										<Button
+											type="button"
+											onClick={() => {
+												const trimmed = inputValue.trim()
+												if (trimmed) {
+													try {
+														npubToHex(trimmed)
+														setAdminsList([...adminsList, trimmed])
+														setInputValue('')
+													} catch (e) {
+														toast.error((e as Error).message)
+													}
+												}
+											}}
+										>
+											Add Admin
 										</Button>
 									</div>
-								))}
-
-								<div className="flex flex-row gap-2">
-									<Input type="text" value={inputValue} onChange={(e) => setInputValue(e.target.value)} placeholder="Admin npub" />
-									<Button
-										type="button"
-										onClick={() => {
-											const trimmed = inputValue.trim()
-											if (trimmed) {
-												setAdminsList([...adminsList, trimmed])
-												setInputValue('')
-											}
-										}}
-									>
-										Add Admin
-									</Button>
 								</div>
 
 								<Separator className="my-2" />
@@ -393,7 +486,7 @@ function SetupRoute() {
 												<Checkbox
 													id={field.name}
 													checked={field.state.value}
-													onCheckedChange={(value) => field.handleChange(!!value)}
+													onCheckedChange={(checked) => field.handleChange(checked as boolean)}
 													name={field.name}
 												/>
 												<Label htmlFor={field.name} className="font-bold">

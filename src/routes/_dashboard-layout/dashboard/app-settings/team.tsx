@@ -1,0 +1,227 @@
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Separator } from '@/components/ui/separator'
+import { formatPubkeyForDisplay, hexToNpub, npubToHex } from '@/routes/setup'
+import { useAddAdminMutation, useRemoveAdminMutation } from '@/publish/app-settings'
+import { getFormattedAdmins, useAdminSettings, useAmIAdmin } from '@/queries/app-settings'
+import { useConfigQuery } from '@/queries/config'
+import { useDashboardTitle } from '@/routes/_dashboard-layout'
+import { createFileRoute } from '@tanstack/react-router'
+import { Globe, Shield, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
+import { useState } from 'react'
+import { toast } from 'sonner'
+
+export const Route = createFileRoute('/_dashboard-layout/dashboard/app-settings/team')({
+	component: TeamComponent,
+})
+
+function TeamComponent() {
+	useDashboardTitle('Team')
+	const { data: config } = useConfigQuery()
+	const { data: adminSettings, isLoading: isLoadingAdmins } = useAdminSettings(config?.appPublicKey)
+	const { amIAdmin, amIOwner, isLoading: isLoadingPermissions } = useAmIAdmin(config?.appPublicKey)
+	const [newAdminInput, setNewAdminInput] = useState('')
+	const [isAddingAdmin, setIsAddingAdmin] = useState(false)
+
+	const addAdminMutation = useAddAdminMutation()
+	const removeAdminMutation = useRemoveAdminMutation()
+
+	const formattedAdmins = getFormattedAdmins(adminSettings)
+
+	const handleAddAdmin = async () => {
+		if (!newAdminInput.trim()) {
+			toast.error('Please enter a valid npub or pubkey')
+			return
+		}
+
+		try {
+			setIsAddingAdmin(true)
+			// Convert npub to hex if needed
+			const hexPubkey = npubToHex(newAdminInput.trim())
+			await addAdminMutation.mutateAsync(hexPubkey)
+			setNewAdminInput('')
+			toast.success('Admin added successfully')
+		} catch (error) {
+			console.error('Failed to add admin:', error)
+			toast.error(`Failed to add admin: ${error instanceof Error ? error.message : 'Unknown error'}`)
+		} finally {
+			setIsAddingAdmin(false)
+		}
+	}
+
+	const handleRemoveAdmin = async (pubkey: string) => {
+		try {
+			await removeAdminMutation.mutateAsync(pubkey)
+			toast.success('Admin removed successfully')
+		} catch (error) {
+			console.error('Failed to remove admin:', error)
+			toast.error(`Failed to remove admin: ${error instanceof Error ? error.message : 'Unknown error'}`)
+		}
+	}
+
+	if (isLoadingAdmins || isLoadingPermissions) {
+		return (
+			<div className="space-y-6 p-6">
+				<div className="animate-pulse">
+					<div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
+					<div className="space-y-3">
+						<div className="h-4 bg-gray-200 rounded w-1/2"></div>
+						<div className="h-4 bg-gray-200 rounded w-1/3"></div>
+					</div>
+				</div>
+			</div>
+		)
+	}
+
+	if (!amIAdmin) {
+		return (
+			<div className="space-y-6 p-6">
+				<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+					<div className="flex items-center gap-3">
+						<Shield className="w-6 h-6 text-muted-foreground" />
+						<div>
+							<h1 className="text-2xl font-bold">Team</h1>
+							<p className="text-muted-foreground text-sm">Manage your team settings</p>
+						</div>
+					</div>
+				</div>
+
+				<Card>
+					<CardContent className="p-6">
+						<div className="text-center">
+							<Shield className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+							<h3 className="text-lg font-medium mb-2">Access Denied</h3>
+							<p className="text-gray-600">You don't have permission to manage team settings.</p>
+						</div>
+					</CardContent>
+				</Card>
+			</div>
+		)
+	}
+
+	return (
+		<div>
+			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+				<div className="flex items-center gap-3">
+					<Globe className="w-6 h-6 text-muted-foreground" />
+					<div>
+						<h1 className="text-2xl font-bold">Team</h1>
+						<p className="text-muted-foreground text-sm">Manage your team settings</p>
+					</div>
+				</div>
+			</div>
+			<div className="space-y-6 p-4 lg:p-8">
+				<div className="lg:hidden mb-6">
+					<div className="flex items-center gap-3">
+						<Globe className="w-6 h-6 text-muted-foreground" />
+						<div>
+							<h1 className="text-2xl font-bold">Team</h1>
+							<p className="text-muted-foreground text-sm">Manage your team settings</p>
+						</div>
+					</div>
+				</div>
+				<Card>
+					<CardHeader>
+						<CardTitle className="flex items-center gap-2">
+							<ShieldCheck className="w-5 h-5" />
+							Administrators
+						</CardTitle>
+						<CardDescription>Users with administrative privileges can manage the marketplace, products, and settings.</CardDescription>
+					</CardHeader>
+					<CardContent className="space-y-4">
+						{formattedAdmins.length === 0 ? (
+							<div className="text-center py-8 text-gray-500">
+								<Shield className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+								<p>No administrators found</p>
+							</div>
+						) : (
+							<div className="space-y-3">
+								{formattedAdmins.map((admin) => (
+									<div key={admin.pubkey} className="flex items-center justify-between p-3 border rounded-lg">
+										<div className="flex items-center gap-3">
+											{admin.isOwner ? <ShieldCheck className="w-5 h-5 text-green-600" /> : <Shield className="w-5 h-5 text-blue-600" />}
+											<div>
+												<div className="font-mono text-sm">{formatPubkeyForDisplay(admin.pubkey)}</div>
+												{admin.isOwner && <div className="text-xs text-green-600 font-medium">Owner</div>}
+											</div>
+										</div>
+										{!admin.isOwner && amIOwner && (
+											<Button
+												variant="outline"
+												size="sm"
+												onClick={() => handleRemoveAdmin(admin.pubkey)}
+												disabled={removeAdminMutation.isPending}
+											>
+												<Trash2 className="w-4 h-4" />
+											</Button>
+										)}
+									</div>
+								))}
+							</div>
+						)}
+					</CardContent>
+				</Card>
+
+				{/* Add New Admin */}
+				{amIOwner && (
+					<Card>
+						<CardHeader>
+							<CardTitle className="flex items-center gap-2">
+								<UserPlus className="w-5 h-5" />
+								Add Administrator
+							</CardTitle>
+							<CardDescription>Add a new administrator by entering their npub or public key.</CardDescription>
+						</CardHeader>
+						<CardContent className="space-y-4">
+							<div className="space-y-2">
+								<Label htmlFor="newAdmin">Npub or Public Key</Label>
+								<div className="flex gap-2">
+									<Input
+										id="newAdmin"
+										value={newAdminInput}
+										onChange={(e) => setNewAdminInput(e.target.value)}
+										placeholder="npub1... or hex pubkey"
+										className="flex-1"
+									/>
+									<Button onClick={handleAddAdmin} disabled={isAddingAdmin || addAdminMutation.isPending || !newAdminInput.trim()}>
+										{isAddingAdmin || addAdminMutation.isPending ? (
+											<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+										) : (
+											<UserPlus className="w-4 h-4" />
+										)}
+										Add
+									</Button>
+								</div>
+							</div>
+							<div className="text-xs text-gray-500">
+								Note: New administrators will have full access to manage the marketplace settings and content.
+							</div>
+						</CardContent>
+					</Card>
+				)}
+
+				{/* Permissions Info */}
+				<Card>
+					<CardHeader>
+						<CardTitle>Your Permissions</CardTitle>
+					</CardHeader>
+					<CardContent className="space-y-3">
+						<div className="flex items-center gap-3">
+							{amIOwner ? <ShieldCheck className="w-5 h-5 text-green-600" /> : <Shield className="w-5 h-5 text-blue-600" />}
+							<div>
+								<div className="font-medium">{amIOwner ? 'Owner' : 'Administrator'}</div>
+								<div className="text-sm text-gray-600">
+									{amIOwner
+										? 'You have full control over the marketplace and can manage all administrators.'
+										: 'You can manage marketplace settings and content but cannot add/remove administrators.'}
+								</div>
+							</div>
+						</div>
+					</CardContent>
+				</Card>
+			</div>
+		</div>
+	)
+}
