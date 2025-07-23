@@ -10,7 +10,7 @@ import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { profileKeys } from '@/queries/queryKeyFactory'
 import { NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown, Loader2, Zap } from 'lucide-react'
+import { ChevronLeft, Loader2, X, Zap } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -21,12 +21,13 @@ interface ZapDialogProps {
 	onZapComplete?: (zapEvent?: NDKEvent) => void
 }
 
+type DialogStep = 'main' | 'generateInvoice'
+
 export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDialogProps) {
 	const [amount, setAmount] = useState<string>('21')
 	const [zapMessage, setZapMessage] = useState<string>('Zap from Plebeian')
-	const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState<boolean>(false)
 	const [isAnonymousZap, setIsAnonymousZap] = useState<boolean>(false)
-	const [showPaymentProcessor, setShowPaymentProcessor] = useState<boolean>(true)
+	const [step, setStep] = useState<DialogStep>('main')
 
 	// Extract recipient information
 	const recipientPubkey = event instanceof NDKUser ? event.pubkey : event.pubkey
@@ -92,9 +93,8 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 	const resetState = () => {
 		setAmount('21')
 		setZapMessage('Zap from Plebeian')
-		setAdvancedSettingsOpen(false)
 		setIsAnonymousZap(false)
-		setShowPaymentProcessor(true)
+		setStep('main')
 	}
 
 	const handleDialogOpenChange = (open: boolean) => {
@@ -130,88 +130,149 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 
 	return (
 		<Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
-			<DialogContent className="max-w-[425px]">
-				<DialogHeader>
-					<DialogTitle>
-						Zap {recipientName} {lightningAddress && <small>({lightningAddress})</small>}
-					</DialogTitle>
-					<DialogDescription>
-						Amount: <span className="font-bold">{isValidAmount ? numericAmount : '0'} sats</span>
-					</DialogDescription>
-				</DialogHeader>
-
-				{/* Amount Selection */}
-				<div className="grid grid-cols-2 gap-2 mb-4">
-					{DEFAULT_ZAP_AMOUNTS.map(({ displayText, amount: presetAmount }) => (
-						<Button
-							key={presetAmount}
-							variant={numericAmount === presetAmount ? 'tertiary' : 'outline'}
-							className="border-2 border-black"
-							onClick={() => handleAmountButtonClick(presetAmount)}
-						>
-							{displayText}
-						</Button>
-					))}
-				</div>
-
-				{/* Message Input */}
-				<Label htmlFor="zapMessage" className="font-bold mt-4">
-					Message
-				</Label>
-				<Input
-					id="zapMessage"
-					type="text"
-					value={zapMessage}
-					onChange={(e) => setZapMessage(e.target.value)}
-					className="border-2 border-black"
-				/>
-
-				{/* Advanced Settings */}
-				<div className="space-y-4 mt-4">
-					<Label htmlFor="zapAmount" className="font-bold">
-						Manual zap amount
-					</Label>
-					<Input
-						id="zapAmount"
-						type="text"
-						value={amount}
-						onChange={handleAmountChange}
-						className="border-2 border-black"
-						placeholder="Enter amount in sats"
-					/>
-					{!isValidAmount && amount !== '' && <span className="text-red-500 text-sm">Please enter a valid amount</span>}
-					{amount === '' && <span className="text-red-500 text-sm">Amount is required</span>}
-
-					<Label htmlFor="isAnonymousZap" className="font-bold">
-						Anonymous zap
-					</Label>
-					<Switch id="isAnonymousZap" checked={isAnonymousZap} onCheckedChange={setIsAnonymousZap} className="border-2 border-black" />
-				</div>
-
-				{/* Payment Processor Section */}
-				{lightningAddress ? (
-					<div className="mt-4">
-						<LightningPaymentProcessor
-							data={paymentData}
-							onPaymentComplete={handlePaymentComplete}
-							onPaymentFailed={handlePaymentFailed}
-							showManualVerification={true}
-						/>
+			<DialogContent className="max-w-[425px] w-[95vw] max-h-[90vh] overflow-y-auto [&>button]:hidden">
+				{/* Custom Header with three columns */}
+				<div className="flex items-center justify-between pb-4">
+					{/* Left: Back button (only visible on generateInvoice step) */}
+					<div className="flex items-center w-8">
+						{step === 'generateInvoice' && (
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={() => setStep('main')}
+								className="h-8 w-8 p-0"
+							>
+								<ChevronLeft className="h-4 w-4" />
+							</Button>
+						)}
 					</div>
-				) : (
-					<div className="text-center py-8 text-muted-foreground">
-						<p>No Lightning address found</p>
-						<p className="text-sm">The creator needs to set up a Lightning address in their profile to receive zaps.</p>
+
+					{/* Center: Profile name and address */}
+					<div className="flex-1 text-center px-2 min-w-0">
+						<h2 className="text-base font-semibold truncate">
+							Zap {recipientName}
+						</h2>
+						{lightningAddress && (
+							<p className="text-sm text-muted-foreground truncate">
+								{lightningAddress}
+							</p>
+						)}
+					</div>
+
+					{/* Right: Close button */}
+					<div className="flex items-center w-8">
+						<DialogClose asChild>
+							<Button
+								variant="ghost"
+								size="sm"
+								className="h-8 w-8 p-0"
+							>
+								<X className="h-4 w-4" />
+							</Button>
+						</DialogClose>
+					</div>
+				</div>
+
+				{step === 'main' && (
+					<div className="space-y-6">
+						{/* Amount Selection */}
+						<div className="grid grid-cols-2 gap-2">
+							{DEFAULT_ZAP_AMOUNTS.map(({ displayText, amount: presetAmount }) => (
+								<Button
+									key={presetAmount}
+									variant={numericAmount === presetAmount ? 'tertiary' : 'outline'}
+									className="text-sm"
+									onClick={() => handleAmountButtonClick(presetAmount)}
+								>
+									{displayText}
+								</Button>
+							))}
+						</div>
+
+						{/* Message Input */}
+						<div className="space-y-2">
+							<Label htmlFor="zapMessage" className="font-bold">
+								Message
+							</Label>
+							<Input
+								id="zapMessage"
+								type="text"
+								value={zapMessage}
+								onChange={(e) => setZapMessage(e.target.value)}
+								className="w-full"
+							/>
+						</div>
+
+						{/* Advanced Settings */}
+						<div className="space-y-4">
+							<div className="space-y-2">
+								<Label htmlFor="zapAmount" className="font-bold">
+									Manual zap amount
+								</Label>
+								<Input
+									id="zapAmount"
+									type="text"
+									value={amount}
+									onChange={handleAmountChange}
+									className="w-full"
+									placeholder="Enter amount in sats"
+								/>
+								{!isValidAmount && amount !== '' && <span className="text-red-500 text-sm">Please enter a valid amount</span>}
+								{amount === '' && <span className="text-red-500 text-sm">Amount is required</span>}
+							</div>
+
+							<div className="flex items-center justify-between gap-4">
+								<Label htmlFor="isAnonymousZap" className="font-bold">
+									Anonymous zap
+								</Label>
+								<Switch id="isAnonymousZap" checked={isAnonymousZap} onCheckedChange={setIsAnonymousZap} />
+							</div>
+						</div>
+
+						{/* No lightning address message */}
+						{!lightningAddress && (
+							<div className="text-center py-8 text-muted-foreground">
+								<p>No Lightning address found</p>
+								<p className="text-sm">The creator needs to set up a Lightning address in their profile to receive zaps.</p>
+							</div>
+						)}
+
+						{/* Footer */}
+						{lightningAddress && (
+							<div className="pt-2">
+								<Button onClick={() => setStep('generateInvoice')} className="w-full" variant="focus">
+									<Zap className="mr-2 h-4 w-4" />
+									Generate Invoice
+								</Button>
+							</div>
+						)}
 					</div>
 				)}
 
-				<DialogFooter className="sm:justify-between">
-					<DialogClose asChild>
-						<Button type="button" variant="secondary">
-							Cancel
-						</Button>
-					</DialogClose>
-				</DialogFooter>
+				{step === 'generateInvoice' && (
+					<>
+						{/* Amount and Message Info */}
+						<div className="text-center mb-4">
+							<p className="text-sm font-medium">
+								Amount: <span className="font-bold">{isValidAmount ? numericAmount : '0'} sats</span>
+							</p>
+							{zapMessage && (
+								<p className="text-sm text-muted-foreground mt-1">
+									Message: "{zapMessage}"
+								</p>
+							)}
+						</div>
+
+						<div className="w-full overflow-hidden">
+							<LightningPaymentProcessor
+								data={paymentData}
+								onPaymentComplete={handlePaymentComplete}
+								onPaymentFailed={handlePaymentFailed}
+								showManualVerification={true}
+							/>
+						</div>
+					</>
+				)}
 			</DialogContent>
 		</Dialog>
 	)

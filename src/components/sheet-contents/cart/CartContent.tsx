@@ -101,10 +101,6 @@ export function CartContent({ className = '' }: { className?: string }) {
 
 	return (
 		<div className={`flex flex-col max-h-screen overflow-hidden py-4 px-6 ${className}`}>
-			<div className="mb-4">
-				<h2 className="text-lg font-semibold">YOUR CART</h2>
-			</div>
-
 			{missingShippingCount > 0 && (
 				<div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
 					<div className="flex">
