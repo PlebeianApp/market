@@ -331,9 +331,7 @@ function DashboardLayout() {
 
 							<div className="flex-1 min-h-0 lg:overflow-y-auto">
 								{isMessageDetailView ? (
-									<div className="h-full">
-										{!isAuthenticated ? <LoginPrompt /> : <Outlet />}
-									</div>
+									<div className="h-full">{!isAuthenticated ? <LoginPrompt /> : <Outlet />}</div>
 								) : (
 									<div className="h-full">
 										<div

@@ -1,12 +1,5 @@
 import { cn } from '@/lib/utils'
-import {
-	Carousel,
-	CarouselContent,
-	CarouselItem,
-	CarouselNext,
-	CarouselPrevious,
-	type CarouselApi,
-} from '@/components/ui/carousel'
+import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious, type CarouselApi } from '@/components/ui/carousel'
 import { ImageOff, ChevronUp, ChevronDown } from 'lucide-react'
 import { useState, useEffect } from 'react'
 

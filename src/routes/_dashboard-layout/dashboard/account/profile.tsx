@@ -34,7 +34,7 @@ function ProfileComponent() {
 	// Manage local state for profile data
 	const [profile, setProfile] = useState<NDKUserProfile>({})
 	const [originalProfile, setOriginalProfile] = useState<NDKUserProfile>({})
-	
+
 	// Form state (separate from profile for controlled inputs)
 	const [formData, setFormData] = useState({
 		name: '',
@@ -55,7 +55,7 @@ function ProfileComponent() {
 		if (fetchedProfile) {
 			setProfile(fetchedProfile)
 			setOriginalProfile(fetchedProfile)
-			
+
 			// Update form data with fetched profile
 			setFormData({
 				name: fetchedProfile.name || '',
@@ -82,9 +82,9 @@ function ProfileComponent() {
 				banner: profile.banner,
 				image: profile.image,
 			}
-			
+
 			await updateProfileMutation.mutateAsync(profileData)
-			
+
 			// Update original profile after successful save
 			const updatedProfile = { ...originalProfile, ...profileData }
 			setOriginalProfile(updatedProfile)
@@ -100,9 +100,9 @@ function ProfileComponent() {
 		if (isLoadingProfile || !originalProfile || Object.keys(originalProfile).length === 0) {
 			return false
 		}
-		
+
 		// Check form field changes
-		const formFieldsChanged = 
+		const formFieldsChanged =
 			formData.name !== (originalProfile.name || '') ||
 			formData.displayName !== (originalProfile.displayName || '') ||
 			formData.about !== (originalProfile.about || '') ||
@@ -110,12 +110,10 @@ function ProfileComponent() {
 			formData.lud16 !== (originalProfile.lud16 || '') ||
 			formData.lud06 !== (originalProfile.lud06 || '') ||
 			formData.website !== (originalProfile.website || '')
-		
+
 		// Check image changes
-		const imageChanges =
-			profile.banner !== originalProfile.banner ||
-			profile.image !== originalProfile.image
-		
+		const imageChanges = profile.banner !== originalProfile.banner || profile.image !== originalProfile.image
+
 		return formFieldsChanged || imageChanges
 	}
 
@@ -200,7 +198,7 @@ function ProfileComponent() {
 									id="name"
 									name="name"
 									value={formData.name}
-									onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+									onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
 									placeholder="e.g John Doe"
 									required
 								/>
@@ -214,7 +212,7 @@ function ProfileComponent() {
 									id="displayName"
 									name="displayName"
 									value={formData.displayName}
-									onChange={(e) => setFormData(prev => ({ ...prev, displayName: e.target.value }))}
+									onChange={(e) => setFormData((prev) => ({ ...prev, displayName: e.target.value }))}
 									placeholder="e.g Bitcoin Merchant"
 									required
 								/>
@@ -226,7 +224,7 @@ function ProfileComponent() {
 									id="about"
 									name="about"
 									value={formData.about}
-									onChange={(e) => setFormData(prev => ({ ...prev, about: e.target.value }))}
+									onChange={(e) => setFormData((prev) => ({ ...prev, about: e.target.value }))}
 									placeholder="Write a short bio"
 									rows={4}
 								/>
@@ -238,7 +236,7 @@ function ProfileComponent() {
 									id="nip05"
 									name="nip05"
 									value={formData.nip05}
-									onChange={(e) => setFormData(prev => ({ ...prev, nip05: e.target.value }))}
+									onChange={(e) => setFormData((prev) => ({ ...prev, nip05: e.target.value }))}
 									placeholder="you@example.com"
 								/>
 							</div>
@@ -249,7 +247,7 @@ function ProfileComponent() {
 									id="lud16"
 									name="lud16"
 									value={formData.lud16}
-									onChange={(e) => setFormData(prev => ({ ...prev, lud16: e.target.value }))}
+									onChange={(e) => setFormData((prev) => ({ ...prev, lud16: e.target.value }))}
 									placeholder="you@walletprovider.com"
 								/>
 							</div>
@@ -260,7 +258,7 @@ function ProfileComponent() {
 									id="lud06"
 									name="lud06"
 									value={formData.lud06}
-									onChange={(e) => setFormData(prev => ({ ...prev, lud06: e.target.value }))}
+									onChange={(e) => setFormData((prev) => ({ ...prev, lud06: e.target.value }))}
 									placeholder="LNURL..."
 								/>
 							</div>
@@ -271,12 +269,18 @@ function ProfileComponent() {
 									id="website"
 									name="website"
 									value={formData.website}
-									onChange={(e) => setFormData(prev => ({ ...prev, website: e.target.value }))}
+									onChange={(e) => setFormData((prev) => ({ ...prev, website: e.target.value }))}
 									placeholder="https://yourwebsite.com"
 								/>
 							</div>
 
-							<Button type="button" disabled={isLoading || !changesExist} className="w-full lg:hidden" onClick={handleSave} data-testid="profile-save-button">
+							<Button
+								type="button"
+								disabled={isLoading || !changesExist}
+								className="w-full lg:hidden"
+								onClick={handleSave}
+								data-testid="profile-save-button"
+							>
 								{isLoading ? 'Saving...' : changesExist ? 'Save Changes' : 'Saved'}
 							</Button>
 						</div>

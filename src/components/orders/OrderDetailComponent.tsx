@@ -641,10 +641,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 									const isGeneratingThis = generatingInvoices.has(invoice.id)
 
 									return (
-										<Card
-											key={invoice.id}
-											className={`p-4 ${invoice.status === 'paid' ? 'bg-green-50' : 'bg-card'}`}
-										>
+										<Card key={invoice.id} className={`p-4 ${invoice.status === 'paid' ? 'bg-green-50' : 'bg-card'}`}>
 											<div
 												className={cn('flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between', {
 													'mb-3': isComplete || isBuyer,
@@ -665,21 +662,14 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 														)}
 													</div>
 													<div>
-														<h4 className="font-medium">
-															{invoice.type === 'merchant' ? 'Merchant Payment' : invoice.recipientName}
-														</h4>
-														{invoice.type !== 'merchant' && (
-															<p className="text-sm text-gray-500">{invoice.description}</p>
-														)}
+														<h4 className="font-medium">{invoice.type === 'merchant' ? 'Merchant Payment' : invoice.recipientName}</h4>
+														{invoice.type !== 'merchant' && <p className="text-sm text-gray-500">{invoice.description}</p>}
 													</div>
 												</div>
 												<div className="text-right">
 													{/* Desktop-only badge */}
 													{!isComplete && (
-														<Badge
-															className={`hidden sm:inline-flex ${getStatusColor(invoice.status)}`}
-															variant="outline"
-														>
+														<Badge className={`hidden sm:inline-flex ${getStatusColor(invoice.status)}`} variant="outline">
 															{(invoice.status || 'pending').charAt(0).toUpperCase() + (invoice.status || 'pending').slice(1)}
 														</Badge>
 													)}
@@ -691,9 +681,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 												<div className="flex flex-col gap-2 pt-3 border-t border-muted sm:pt-0 sm:border-t-0">
 													{/* Mobile-only badge */}
 													<Badge
-														className={`${getStatusColor(
-															invoice.status || 'pending',
-														)} w-full justify-center py-1 sm:hidden`}
+														className={`${getStatusColor(invoice.status || 'pending')} w-full justify-center py-1 sm:hidden`}
 														variant="outline"
 													>
 														{(invoice.status || 'pending').charAt(0).toUpperCase() + (invoice.status || 'pending').slice(1)}
@@ -741,12 +729,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 											{/* Seller mobile status badge for incomplete payments */}
 											{!isBuyer && !isComplete && (
 												<div className="pt-3 border-t border-gray-300 sm:hidden">
-													<Badge
-														className={`${getStatusColor(
-															invoice.status || 'pending',
-														)} w-full justify-center py-1`}
-														variant="outline"
-													>
+													<Badge className={`${getStatusColor(invoice.status || 'pending')} w-full justify-center py-1`} variant="outline">
 														{(invoice.status || 'pending').charAt(0).toUpperCase() + (invoice.status || 'pending').slice(1)}
 													</Badge>
 												</div>
@@ -754,9 +737,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 											{/* Show payment completion status for completed payments */}
 											{invoice.status === 'paid' && (
-												<div className="bg-green-100 text-green-800 p-2 rounded text-sm">
-													✅ Payment completed successfully
-												</div>
+												<div className="bg-green-100 text-green-800 p-2 rounded text-sm">✅ Payment completed successfully</div>
 											)}
 										</Card>
 									)

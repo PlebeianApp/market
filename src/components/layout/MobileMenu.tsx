@@ -20,7 +20,7 @@ export function MobileMenu() {
 				uiActions.closeMobileMenu()
 			}
 		}
-		
+
 		document.addEventListener('keydown', handleEscape)
 		return () => document.removeEventListener('keydown', handleEscape)
 	}, [mobileMenuOpen])
@@ -58,20 +58,12 @@ export function MobileMenu() {
 	return (
 		<div ref={animationParent}>
 			{mobileMenuOpen && (
-				<div 
-					className={cn(
-						'fixed top-16 left-0 right-0 bottom-0 z-40 bg-black/90'
-					)}
-					onClick={() => uiActions.closeMobileMenu()}
-				>
+				<div className={cn('fixed top-16 left-0 right-0 bottom-0 z-40 bg-black/90')} onClick={() => uiActions.closeMobileMenu()}>
 					{/* Dots Pattern Overlay */}
 					<Pattern pattern="dots" className="opacity-30" />
-					
+
 					{/* Menu Content */}
-					<div 
-						className="flex flex-col items-center justify-center h-full relative z-10"
-						onClick={(e) => e.stopPropagation()}
-					>
+					<div className="flex flex-col items-center justify-center h-full relative z-10" onClick={(e) => e.stopPropagation()}>
 						<nav className="flex flex-col items-stretch gap-4 w-full max-w-sm">
 							{menuItems.map((item) => {
 								const isActive = matchRoute({ to: item.to, fuzzy: item.to !== '/' })
@@ -105,4 +97,4 @@ export function MobileMenu() {
 			)}
 		</div>
 	)
-} 
+}

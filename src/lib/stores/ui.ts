@@ -7,16 +7,16 @@ export type ToastType = 'success' | 'error' | 'warning' | 'info'
 
 // Toast notification structure
 export interface Toast {
-  id: string
-  type: ToastType
-  message: string
-  duration?: number
+	id: string
+	type: ToastType
+	message: string
+	duration?: number
 }
 
 // Navigation state type
 export type NavigationState = {
-  productSourcePath: string | null;
-  originalResultsPath: string | null; // Track the first/original results page
+	productSourcePath: string | null
+	originalResultsPath: string | null // Track the first/original results page
 }
 
 // UI State interface

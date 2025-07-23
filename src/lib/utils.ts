@@ -138,18 +138,18 @@ export function getDistinctColorsForRecipients(recipients: { pubkey: string }[])
 
 	// Predefined distinct colors with good contrast
 	const distinctColors = [
-		'hsl(0, 70%, 50%)',     // Red
-		'hsl(240, 70%, 50%)',   // Blue  
-		'hsl(120, 70%, 50%)',   // Green
-		'hsl(300, 70%, 50%)',   // Magenta
-		'hsl(60, 70%, 50%)',    // Yellow
-		'hsl(180, 70%, 50%)',   // Cyan
-		'hsl(30, 70%, 50%)',    // Orange
-		'hsl(270, 70%, 50%)',   // Purple
-		'hsl(210, 70%, 50%)',   // Light Blue
-		'hsl(330, 70%, 50%)',   // Pink
-		'hsl(90, 70%, 50%)',    // Light Green
-		'hsl(150, 70%, 50%)',   // Teal
+		'hsl(0, 70%, 50%)', // Red
+		'hsl(240, 70%, 50%)', // Blue
+		'hsl(120, 70%, 50%)', // Green
+		'hsl(300, 70%, 50%)', // Magenta
+		'hsl(60, 70%, 50%)', // Yellow
+		'hsl(180, 70%, 50%)', // Cyan
+		'hsl(30, 70%, 50%)', // Orange
+		'hsl(270, 70%, 50%)', // Purple
+		'hsl(210, 70%, 50%)', // Light Blue
+		'hsl(330, 70%, 50%)', // Pink
+		'hsl(90, 70%, 50%)', // Light Green
+		'hsl(150, 70%, 50%)', // Teal
 	]
 
 	recipients.forEach((recipient, index) => {
@@ -160,23 +160,22 @@ export function getDistinctColorsForRecipients(recipients: { pubkey: string }[])
 			// Generate a unique hue that's sufficiently different from existing ones
 			const baseHash = parseInt(recipient.pubkey.slice(0, 6), 16)
 			let hue = baseHash % 360
-			
+
 			// Ensure minimum distance from used hues
 			let attempts = 0
 			while (attempts < 360) {
-				const tooClose = Array.from(usedHues).some(usedHue => 
-					Math.abs(hue - usedHue) < minHueDistance || 
-					Math.abs(hue - usedHue) > (360 - minHueDistance)
+				const tooClose = Array.from(usedHues).some(
+					(usedHue) => Math.abs(hue - usedHue) < minHueDistance || Math.abs(hue - usedHue) > 360 - minHueDistance,
 				)
-				
+
 				if (!tooClose) {
 					break
 				}
-				
+
 				hue = (hue + minHueDistance) % 360
 				attempts++
 			}
-			
+
 			usedHues.add(hue)
 			colorMap[recipient.pubkey] = `hsl(${hue}, 70%, 50%)`
 		}

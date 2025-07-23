@@ -146,4 +146,4 @@ export function TimelineEventCard({ event, title, icon, type, timelineIndex }: T
 			</CardFooter>
 		</Card>
 	)
-} 
+}

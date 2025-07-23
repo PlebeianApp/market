@@ -30,9 +30,7 @@ function RouteComponent() {
 	const { data: profileData } = useSuspenseQuery(profileByIdentifierQueryOptions(params.profileId))
 	const { profile, user } = profileData || {}
 
-	const { data: sellerProducts } = useSuspenseQuery(
-		productsByPubkeyQueryOptions(user?.pubkey || ''),
-	)
+	const { data: sellerProducts } = useSuspenseQuery(productsByPubkeyQueryOptions(user?.pubkey || ''))
 
 	const [showFullAbout, setShowFullAbout] = useState(false)
 	const breakpoint = useBreakpoint()

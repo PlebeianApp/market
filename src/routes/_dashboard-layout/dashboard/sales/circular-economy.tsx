@@ -95,19 +95,16 @@ function CircularEconomyComponent() {
 	const hasChanges = () => {
 		// Check if total percentage changed
 		if (totalV4VPercentage !== originalTotalPercentage) return true
-		
+
 		// Check if shares array length changed
 		if (localShares.length !== originalShares.length) return true
-		
+
 		// Check if any share details changed
 		return localShares.some((localShare, index) => {
 			const originalShare = originalShares[index]
 			if (!originalShare) return true
-			
-			return (
-				localShare.pubkey !== originalShare.pubkey ||
-				Math.abs(localShare.percentage - originalShare.percentage) > 0.001
-			)
+
+			return localShare.pubkey !== originalShare.pubkey || Math.abs(localShare.percentage - originalShare.percentage) > 0.001
 		})
 	}
 
@@ -295,11 +292,11 @@ function CircularEconomyComponent() {
 
 				if (result) {
 					toast.success('V4V shares cleared')
-					
+
 					// Update original values to reflect cleared state
 					setOriginalShares([])
 					setOriginalTotalPercentage(10)
-					
+
 					refetch()
 				} else {
 					toast.error('Failed to clear V4V shares')
@@ -320,14 +317,16 @@ function CircularEconomyComponent() {
 
 			if (result) {
 				toast.success('V4V shares saved successfully')
-				
+
 				// Update original values to reflect saved state
-				setOriginalShares(localShares.map((share) => ({
-					...share,
-					percentage: share.percentage * (totalV4VPercentage / 100),
-				})))
+				setOriginalShares(
+					localShares.map((share) => ({
+						...share,
+						percentage: share.percentage * (totalV4VPercentage / 100),
+					})),
+				)
 				setOriginalTotalPercentage(totalV4VPercentage)
-				
+
 				refetch()
 			} else {
 				toast.error('Failed to save V4V shares')

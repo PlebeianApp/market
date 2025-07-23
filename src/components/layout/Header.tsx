@@ -51,10 +51,10 @@ export function Header() {
 	const getHeaderBackground = () => {
 		// Force black background when mobile menu is open
 		if (mobileMenuOpen) return 'bg-black'
-		
+
 		// Force black background for community and nostr pages
 		if (isCommunityOrNostrPage) return 'bg-black'
-		
+
 		if (!shouldUseTransparentHeader) return 'bg-black'
 
 		// Always use transition class for product pages and homepage
@@ -65,29 +65,29 @@ export function Header() {
 	const getHeaderStyle = () => {
 		// No transition styles needed when mobile menu is open (solid black)
 		if (mobileMenuOpen) return {}
-		
+
 		// No transition styles needed for community and nostr pages
 		if (isCommunityOrNostrPage) return {}
-		
+
 		if (!shouldUseTransparentHeader) return {}
 
 		if (scrollY < 80) {
-			return { 
+			return {
 				'--header-bg-opacity': 'linear-gradient(to bottom, rgba(0, 0, 0, 0.75) 0%, rgba(0, 0, 0, 0.5) 50%, rgba(0, 0, 0, 0) 100%)',
-				'background': 'var(--header-bg-opacity)',
-				'height': '100%'
+				background: 'var(--header-bg-opacity)',
+				height: '100%',
 			}
 		} else if (scrollY < 160) {
 			const progress = (scrollY - 80) / 80
 			// Transition from gradient to solid black
-			return { 
+			return {
 				'--header-bg-opacity': `rgba(0, 0, 0, ${progress})`,
-				'background': 'var(--header-bg-opacity)'
+				background: 'var(--header-bg-opacity)',
 			}
 		} else {
-			return { 
+			return {
 				'--header-bg-opacity': 'rgba(0, 0, 0, 1.0)',
-				'background': 'var(--header-bg-opacity)'
+				background: 'var(--header-bg-opacity)',
 			}
 		}
 	}
@@ -124,9 +124,9 @@ export function Header() {
 	}
 
 	return (
-		<header 
-			className={`sticky top-0 z-50 text-white px-4 ${isCommunityOrNostrPage ? 'bg-black' : getHeaderBackground()}`} 
-			style={isCommunityOrNostrPage ? {} : getHeaderStyle() as React.CSSProperties}
+		<header
+			className={`sticky top-0 z-50 text-white px-4 ${isCommunityOrNostrPage ? 'bg-black' : getHeaderBackground()}`}
+			style={isCommunityOrNostrPage ? {} : (getHeaderStyle() as React.CSSProperties)}
 		>
 			<div className="container flex h-full max-w-full items-center justify-between py-4">
 				<section className="inline-flex items-center">
@@ -192,7 +192,7 @@ export function Header() {
 
 								{/* Cart Button - always visible on mobile */}
 								<CartButton />
-								
+
 								{/* Menu Button - always visible on mobile */}
 								<Button
 									variant="primary"
@@ -223,9 +223,7 @@ export function Header() {
 											<Button
 												variant="primary"
 												className={`p-2 relative hover:[&>span]:text-secondary ${
-													location.pathname.startsWith('/dashboard') 
-														? 'bg-secondary text-black [&>span]:text-black' 
-														: ''
+													location.pathname.startsWith('/dashboard') ? 'bg-secondary text-black [&>span]:text-black' : ''
 												}`}
 												icon={<span className="i-dashboard w-6 h-6" />}
 												data-testid="dashboard-button"
@@ -258,7 +256,7 @@ export function Header() {
 			<div className="lg:hidden flex-1 pb-4">
 				<ProductSearch />
 			</div>
-			
+
 			{/* Mobile Menu */}
 			<MobileMenu />
 		</header>

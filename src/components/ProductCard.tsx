@@ -46,8 +46,8 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 	return (
 		<div className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col" data-testid="product-card">
 			{/* Square aspect ratio container for image */}
-			<Link 
-				to={`/products/${product.id}`} 
+			<Link
+				to={`/products/${product.id}`}
 				className="relative aspect-square overflow-hidden border-b border-zinc-800 block"
 				onClick={handleProductClick}
 			>
@@ -66,10 +66,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 
 			<div className="p-2 flex flex-col gap-2 flex-grow">
 				{/* Product title */}
-				<Link 
-					to={`/products/${product.id}`}
-					onClick={handleProductClick}
-				>
+				<Link to={`/products/${product.id}`} onClick={handleProductClick}>
 					<h2 className="text-sm font-medium border-b border-[var(--light-gray)] pb-2 overflow-hidden text-ellipsis whitespace-nowrap">
 						{title}
 					</h2>

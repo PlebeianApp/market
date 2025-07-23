@@ -169,11 +169,7 @@ function RouteComponent() {
 		<div className="flex flex-col gap-4">
 			<div className="relative z-10">
 				{!mobileMenuOpen && (
-					<Button
-						variant="ghost"
-						onClick={handleBackClick}
-						className="back-button"
-					>
+					<Button variant="ghost" onClick={handleBackClick} className="back-button">
 						<ArrowLeft className="h-8 w-8 lg:h-4 lg:w-4" />
 						<span className="hidden sm:inline">Back to results</span>
 					</Button>

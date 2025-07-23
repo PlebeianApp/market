@@ -22,8 +22,7 @@ export function Profile({ compact = false }: ProfileProps) {
 	const location = useLocation()
 
 	// Check if we're on the user's own profile page
-	const isOnOwnProfile = authState.user?.pubkey && 
-		location.pathname === `/profile/${authState.user.pubkey}`
+	const isOnOwnProfile = authState.user?.pubkey && location.pathname === `/profile/${authState.user.pubkey}`
 
 	useEffect(() => {
 		if (!authState.user?.pubkey) {
@@ -97,17 +96,14 @@ export function Profile({ compact = false }: ProfileProps) {
 						{compact && authState.isAuthenticated ? (
 							<Avatar className="w-6 h-6">
 								<AvatarImage src={profile?.picture} />
-								<AvatarFallback className={cn(
-									"text-xs", 
-									isOnOwnProfile ? "bg-white text-secondary" : "bg-secondary text-black"
-								)}>
+								<AvatarFallback className={cn('text-xs', isOnOwnProfile ? 'bg-white text-secondary' : 'bg-secondary text-black')}>
 									{(profile?.name || profile?.displayName || authState.user?.pubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
 								</AvatarFallback>
 							</Avatar>
 						) : (
 							<>
 								{authState.isAuthenticated ? (
-									<span className={cn("i-account w-6 h-6", isOnOwnProfile && "text-black")} />
+									<span className={cn('i-account w-6 h-6', isOnOwnProfile && 'text-black')} />
 								) : (
 									<span className="i-account w-6 h-6" />
 								)}

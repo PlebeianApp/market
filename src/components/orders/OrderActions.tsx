@@ -136,76 +136,70 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 
 	return (
 		<div className="flex w-full items-center justify-between gap-2 md:w-auto md:justify-end">
-			<div
-				className={cn(
-					'flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1 md:w-32 md:flex-none',
-					bgColor,
-					textColor,
-				)}
-			>
+			<div className={cn('flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1 md:w-32 md:flex-none', bgColor, textColor)}>
 				{renderIcon()}
 				<span className="font-medium capitalize">{label}</span>
 			</div>
 
 			{hasActions && (
-			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
-					<Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-						<span className="sr-only">Open menu</span>
-						<MoreHorizontal className="h-4 w-4" />
-					</Button>
-				</DropdownMenuTrigger>
-				<DropdownMenuContent align="end">
-					<DropdownMenuLabel>Actions</DropdownMenuLabel>
-					<DropdownMenuSeparator />
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+							<span className="sr-only">Open menu</span>
+							<MoreHorizontal className="h-4 w-4" />
+						</Button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						<DropdownMenuLabel>Actions</DropdownMenuLabel>
+						<DropdownMenuSeparator />
 
-					{/* Buyer Actions */}
-					{isBuyer && canReceive && (
-						<DropdownMenuItem onClick={() => handleStatusUpdate(ORDER_STATUS.COMPLETED)}>
-							<Check className="mr-2 h-4 w-4" />
-							Confirm Receipt
-						</DropdownMenuItem>
-					)}
+						{/* Buyer Actions */}
+						{isBuyer && canReceive && (
+							<DropdownMenuItem onClick={() => handleStatusUpdate(ORDER_STATUS.COMPLETED)}>
+								<Check className="mr-2 h-4 w-4" />
+								Confirm Receipt
+							</DropdownMenuItem>
+						)}
 
-					{/* Seller Actions */}
-					{isSeller && canConfirm && (
-						<DropdownMenuItem onClick={() => handleStatusUpdate(ORDER_STATUS.CONFIRMED)}>
-							<Check className="mr-2 h-4 w-4" />
-							Confirm Order
-						</DropdownMenuItem>
-					)}
+						{/* Seller Actions */}
+						{isSeller && canConfirm && (
+							<DropdownMenuItem onClick={() => handleStatusUpdate(ORDER_STATUS.CONFIRMED)}>
+								<Check className="mr-2 h-4 w-4" />
+								Confirm Order
+							</DropdownMenuItem>
+						)}
 
-					{isSeller && canProcess && (
-						<DropdownMenuItem onClick={() => handleStatusUpdate(ORDER_STATUS.PROCESSING)}>
-							<ShoppingBag className="mr-2 h-4 w-4" />
-							Start Processing
-						</DropdownMenuItem>
-					)}
+						{isSeller && canProcess && (
+							<DropdownMenuItem onClick={() => handleStatusUpdate(ORDER_STATUS.PROCESSING)}>
+								<ShoppingBag className="mr-2 h-4 w-4" />
+								Start Processing
+							</DropdownMenuItem>
+						)}
 
-					{/* Shipping action - open dialog */}
-					{isSeller && canShip && (
-						<DropdownMenuItem onClick={() => setIsShippingOpen(true)}>
-							<Truck className="mr-2 h-4 w-4" />
-							Mark as Shipped
-						</DropdownMenuItem>
-					)}
+						{/* Shipping action - open dialog */}
+						{isSeller && canShip && (
+							<DropdownMenuItem onClick={() => setIsShippingOpen(true)}>
+								<Truck className="mr-2 h-4 w-4" />
+								Mark as Shipped
+							</DropdownMenuItem>
+						)}
 
-					{isSeller && canComplete && (
-						<DropdownMenuItem onClick={() => handleStatusUpdate(ORDER_STATUS.COMPLETED)}>
-							<PackageCheck className="mr-2 h-4 w-4" />
-							{hasBeenShipped ? 'Mark as Delivered' : 'Complete Order'}
-						</DropdownMenuItem>
-					)}
+						{isSeller && canComplete && (
+							<DropdownMenuItem onClick={() => handleStatusUpdate(ORDER_STATUS.COMPLETED)}>
+								<PackageCheck className="mr-2 h-4 w-4" />
+								{hasBeenShipped ? 'Mark as Delivered' : 'Complete Order'}
+							</DropdownMenuItem>
+						)}
 
-					{/* Cancel action - open dialog */}
-					{canCancel && (
-						<DropdownMenuItem className="text-red-600" onClick={() => setIsCancelOpen(true)}>
-							<X className="mr-2 h-4 w-4" />
-							Cancel Order
-						</DropdownMenuItem>
-					)}
-				</DropdownMenuContent>
-			</DropdownMenu>
+						{/* Cancel action - open dialog */}
+						{canCancel && (
+							<DropdownMenuItem className="text-red-600" onClick={() => setIsCancelOpen(true)}>
+								<X className="mr-2 h-4 w-4" />
+								Cancel Order
+							</DropdownMenuItem>
+						)}
+					</DropdownMenuContent>
+				</DropdownMenu>
 			)}
 
 			{/* Shipping dialog */}

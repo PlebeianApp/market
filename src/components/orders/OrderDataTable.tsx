@@ -146,9 +146,7 @@ export function OrderDataTable<TData>({
 															</div>
 														)}
 														{actionsCell && (
-															<div className="text-sm">
-																{flexRender(actionsCell.column.columnDef.cell, actionsCell.getContext())}
-															</div>
+															<div className="text-sm">{flexRender(actionsCell.column.columnDef.cell, actionsCell.getContext())}</div>
 														)}
 													</div>
 													<div className="space-y-3">

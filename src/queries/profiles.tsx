@@ -32,9 +32,7 @@ export const fetchProfileByNip05 = async (nip05: string): Promise<NDKUserProfile
 	}
 }
 
-export const fetchProfileByIdentifier = async (
-	identifier: string,
-): Promise<{ profile: NDKUserProfile | null; user: NDKUser | null }> => {
+export const fetchProfileByIdentifier = async (identifier: string): Promise<{ profile: NDKUserProfile | null; user: NDKUser | null }> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
