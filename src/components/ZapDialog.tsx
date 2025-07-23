@@ -39,7 +39,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 	})
 
 	// Try to get profile from the event first, then fallback to fetched profile
-	const profile = (event instanceof NDKUser ? event.profile : event.author?.profile) || profileData
+	const profile = (event instanceof NDKUser ? event.profile : event.author?.profile) || profileData?.profile
 
 	const recipientName = profile?.displayName || profile?.name || 'Unknown User'
 	const lightningAddress = profile?.lud16 || profile?.lud06 || null
