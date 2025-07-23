@@ -4,6 +4,7 @@ import { uiActions } from '@/lib/stores/ui'
 import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
 import { useEffect } from 'react'
+import { Link } from '@tanstack/react-router'
 
 // Hook to inject dynamic CSS for background image
 function useHeroBackground(imageUrl: string, className: string) {
@@ -12,10 +13,10 @@ function useHeroBackground(imageUrl: string, className: string) {
 
 		const style = document.createElement('style')
 		style.textContent = `
-			.${className} {
-				background-image: url(${imageUrl}) !important;
-			}
-		`
+      .${className} {
+        background-image: url(${imageUrl}) !important;
+      }
+    `
 		document.head.appendChild(style)
 
 		return () => {
@@ -33,7 +34,7 @@ function Index() {
 
 	// Use the market image for homepage background
 	const marketBackgroundImageUrl = '/images/market-background.jpg'
-	const marketHeroClassName = 'hero-bg-market-homepage'
+	const marketHeroClassName = 'hero-bg-market'
 	useHeroBackground(marketBackgroundImageUrl, marketHeroClassName)
 
 	const handleStartSelling = () => {
@@ -46,7 +47,6 @@ function Index() {
 
 	return (
 		<div>
-			{/* Use products page banner styling */}
 			<div className={`relative hero-container ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-black'}`}>
 				<div className="hero-overlays">
 					<div className="absolute inset-0 bg-radial-overlay z-10" />
@@ -54,8 +54,8 @@ function Index() {
 				</div>
 
 				<div className="hero-content">
-					<div className="flex flex-col items-center justify-center text-white text-center gap-8 lg:col-span-2 relative z-20 mt-16 lg:mt-0">
-						<div className="flex items-center justify-center h-24 lg:h-32 px-6">
+					<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-16 lg:mt-0">
+						<div className="flex items-center justify-center h-24 lg:h-32">
 							<h1 className="text-4xl lg:text-5xl font-theylive transition-opacity duration-500">Buy & Sell Stuff with sats</h1>
 						</div>
 

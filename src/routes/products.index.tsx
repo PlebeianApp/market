@@ -3,14 +3,12 @@ import { useSuspenseQuery } from '@tanstack/react-query'
 import { productsQueryOptions, useProductTitle, useProductImages, getProductTitle } from '../queries/products'
 import { ProductCard } from '@/components/ProductCard'
 import { ItemGrid } from '@/components/ItemGrid'
-import { getQueryClient } from '@/lib/router-utils'
 import { Button } from '@/components/ui/button'
 import { uiActions } from '@/lib/stores/ui'
 import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
 import { useState, useEffect, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Pattern } from '@/components/pattern'
 
 // Hook to inject dynamic CSS for background image
 function useHeroBackground(imageUrl: string, className: string) {
@@ -19,10 +17,10 @@ function useHeroBackground(imageUrl: string, className: string) {
 
 		const style = document.createElement('style')
 		style.textContent = `
-			.${className} {
-				background-image: url(${imageUrl}) !important;
-			}
-		`
+      .${className} {
+        background-image: url(${imageUrl}) !important;
+      }
+    `
 		document.head.appendChild(style)
 
 		return () => {
@@ -32,7 +30,6 @@ function useHeroBackground(imageUrl: string, className: string) {
 }
 
 export const Route = createFileRoute('/products/')({
-	loader: ({ context }) => getQueryClient(context).ensureQueryData(productsQueryOptions),
 	component: ProductsRoute,
 })
 
@@ -83,7 +80,7 @@ function ProductsRoute() {
 	const backgroundImageUrl = !isHomepageSlide && currentImages.length > 0 ? currentImages[0][1] : ''
 
 	// Use the market image for homepage background instead of random product
-	const marketBackgroundImageUrl = '/images/market-background.jpg' // You'll need to save the attached image with this name
+	const marketBackgroundImageUrl = '/images/market-background.jpg'
 
 	// Use the hook to inject dynamic CSS for the background image
 	const heroClassName = currentProductId ? `hero-bg-products-${currentProductId.replace(/[^a-zA-Z0-9]/g, '')}` : 'hero-bg-products-default'
@@ -136,9 +133,9 @@ function ProductsRoute() {
 
 	// Render homepage hero content
 	const renderHomepageHero = () => (
-		<div className="flex flex-col items-center justify-center text-white text-center gap-8 lg:col-span-2 relative z-20 mt-16 lg:mt-0">
+		<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-16 lg:mt-0">
 			<div className="flex items-center justify-center h-24 lg:h-32">
-				<h1 className="text-4xl lg:text-5xl font-theylive transition-opacity duration-500">Buy & Sell Stuff with sats</h1>
+				<h1 className="text-4xl lg:text-5xl font-theylive transition-opacity duration-500">Browse Products</h1>
 			</div>
 
 			<div className="flex flex-col gap-6">
@@ -169,7 +166,7 @@ function ProductsRoute() {
 
 	// Render product hero content
 	const renderProductHero = () => (
-		<div className="flex flex-col items-center justify-center text-white text-center gap-8 lg:col-span-2 relative z-20 mt-16 lg:mt-0">
+		<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-16 lg:mt-0">
 			<div className="flex items-center justify-center h-24 lg:h-32">
 				<h1 className="text-4xl lg:text-5xl font-theylive transition-opacity duration-500">{displayTitle || 'Loading...'}</h1>
 			</div>

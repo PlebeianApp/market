@@ -39,7 +39,7 @@ export function ProductSearch() {
 				value={search}
 				onChange={(e) => setSearch(e.target.value)}
 				onFocus={handleFocus}
-				className="px-4 w-full text-md bg-primary text-white border-none focus-visible:ring-offset-0 focus:ring-2 focus:ring-secondary rounded-[999px] [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
+				className="px-4 w-full text-md bg-primary/90 text-gray-100 placeholder:text-gray-300 border-none focus-visible:ring-offset-0 focus:ring-2 focus:ring-secondary rounded-[999px] [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
 			/>
 
 			<div className="absolute right-4 top-1/2 -translate-y-1/2 flex gap-2">

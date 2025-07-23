@@ -131,18 +131,42 @@ export function OrderDataTable<TData>({
 									data-state={row.getIsSelected() && 'selected'}
 								>
 									{/* Mobile/Tablet Card Layout */}
-									<div className="block xl:hidden p-4 space-y-3">
-										{row.getVisibleCells().map((cell, index) => (
-											<div key={cell.id} className="flex justify-between items-start">
-												<span className="text-sm font-medium text-gray-600 capitalize min-w-0 flex-shrink-0 mr-3">
-													{typeof cell.column.columnDef.header === 'string'
-														? cell.column.columnDef.header
-														: cell.column.id.replace(/([A-Z])/g, ' $1').trim()}
-													:
-												</span>
-												<div className="text-sm text-right min-w-0 flex-1">{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
-											</div>
-										))}
+									<div className="block xl:hidden p-4">
+										{(() => {
+											const orderIdCell = row.getVisibleCells().find((c) => c.column.id === 'orderId')
+											const actionsCell = row.getVisibleCells().find((c) => c.column.id === 'actions')
+											const otherCells = row.getVisibleCells().filter((c) => c.column.id !== 'orderId' && c.column.id !== 'actions')
+
+											return (
+												<>
+													<div className="flex justify-between items-center mb-4">
+														{orderIdCell && (
+															<div className="text-sm font-medium">
+																{flexRender(orderIdCell.column.columnDef.cell, orderIdCell.getContext())}
+															</div>
+														)}
+														{actionsCell && (
+															<div className="text-sm">{flexRender(actionsCell.column.columnDef.cell, actionsCell.getContext())}</div>
+														)}
+													</div>
+													<div className="space-y-3">
+														{otherCells.map((cell) => (
+															<div key={cell.id} className="flex justify-between items-start">
+																<span className="text-sm font-medium text-gray-600 capitalize min-w-0 flex-shrink-0 mr-3">
+																	{typeof cell.column.columnDef.header === 'string'
+																		? cell.column.columnDef.header
+																		: cell.column.id.replace(/([A-Z])/g, ' $1').trim()}
+																	:
+																</span>
+																<div className="text-sm text-right min-w-0 flex-1">
+																	{flexRender(cell.column.columnDef.cell, cell.getContext())}
+																</div>
+															</div>
+														))}
+													</div>
+												</>
+											)
+										})()}
 									</div>
 
 									{/* Desktop Grid Layout - only on xl screens and above */}
