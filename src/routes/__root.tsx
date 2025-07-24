@@ -4,6 +4,7 @@ import { Pattern } from '@/components/pattern'
 import { SheetRegistry } from '@/components/SheetRegistry'
 import { DialogRegistry } from '@/components/DialogRegistry'
 import { useConfigQuery } from '@/queries/config'
+import { useAmIAdmin } from '@/queries/app-settings'
 import { createRootRoute, Outlet, useNavigate, useLocation } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { DecryptPasswordDialog } from '@/components/auth/DecryptPasswordDialog'
@@ -20,7 +21,10 @@ function RootComponent() {
 function RootLayout() {
 	const { data: config, isLoading, isError } = useConfigQuery()
 	const navigate = useNavigate()
+	const { pathname } = window.location
+	const { amIAdmin, isLoading: isLoadingAdmin } = useAmIAdmin(config?.appPublicKey)
 	const location = useLocation()
+	const isAdminRoute = pathname.startsWith('/dashboard/app-settings')
 	const isSetupPage = location.pathname === '/setup'
 	const isDashboardPage = location.pathname.startsWith('/dashboard')
 	const isProfilePage = location.pathname.startsWith('/profile/')
@@ -33,6 +37,15 @@ function RootLayout() {
 			navigate({ to: '/' })
 		}
 	}, [config, navigate, isLoading, isError, isSetupPage])
+
+	// Protect admin routes
+	useEffect(() => {
+		if (isLoadingAdmin || isLoading || isError) return
+		if (isAdminRoute && !amIAdmin) {
+			// Redirect non-admins away from admin routes
+			navigate({ to: '/dashboard' })
+		}
+	}, [isAdminRoute, amIAdmin, isLoadingAdmin, isLoading, isError, navigate])
 
 	// If loading, don't render routes
 	if (isLoading) {
