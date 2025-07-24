@@ -174,72 +174,80 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 				</div>
 
 				{step === 'main' && (
-					<div className="space-y-6">
+					<div>
 						{/* Amount Selection */}
-						<div className="grid grid-cols-2 gap-2">
-							{DEFAULT_ZAP_AMOUNTS.map(({ displayText, amount: presetAmount }) => (
-								<Button
-									key={presetAmount}
-									variant={numericAmount === presetAmount ? 'tertiary' : 'outline'}
-									className="text-sm"
-									onClick={() => handleAmountButtonClick(presetAmount)}
-								>
-									{displayText}
-								</Button>
-							))}
+						<div className="py-2">
+							<div className="grid grid-cols-2 gap-2">
+								{DEFAULT_ZAP_AMOUNTS.map(({ displayText, amount: presetAmount }) => (
+									<Button
+										key={presetAmount}
+										variant={numericAmount === presetAmount ? 'tertiary' : 'outline'}
+										className="text-sm"
+										onClick={() => handleAmountButtonClick(presetAmount)}
+									>
+										{displayText}
+									</Button>
+								))}
+							</div>
 						</div>
 
 						{/* Message Input */}
-						<div className="space-y-2">
-							<Label htmlFor="zapMessage" className="font-bold">
-								Message
-							</Label>
-							<Input
-								id="zapMessage"
-								type="text"
-								value={zapMessage}
-								onChange={(e) => setZapMessage(e.target.value)}
-								className="w-full"
-							/>
+						<div className="py-2">
+							<div className="space-y-2">
+								<Label htmlFor="zapMessage" className="font-bold">
+									Message
+								</Label>
+								<Input
+									id="zapMessage"
+									type="text"
+									value={zapMessage}
+									onChange={(e) => setZapMessage(e.target.value)}
+									className="w-full"
+								/>
+							</div>
 						</div>
 
 						{/* Advanced Settings */}
-						<div className="space-y-4">
-							<div className="space-y-2">
-								<Label htmlFor="zapAmount" className="font-bold">
-									Manual zap amount
-								</Label>
-								<Input
-									id="zapAmount"
-									type="text"
-									value={amount}
-									onChange={handleAmountChange}
-									className="w-full"
-									placeholder="Enter amount in sats"
-								/>
-								{!isValidAmount && amount !== '' && <span className="text-red-500 text-sm">Please enter a valid amount</span>}
-								{amount === '' && <span className="text-red-500 text-sm">Amount is required</span>}
-							</div>
+						<div className="py-2">
+							<div className="space-y-4">
+								<div className="space-y-2">
+									<Label htmlFor="zapAmount" className="font-bold">
+										Manual zap amount
+									</Label>
+									<Input
+										id="zapAmount"
+										type="text"
+										value={amount}
+										onChange={handleAmountChange}
+										className="w-full"
+										placeholder="Enter amount in sats"
+									/>
+									{!isValidAmount && amount !== '' && <span className="text-red-500 text-sm">Please enter a valid amount</span>}
+									{amount === '' && <span className="text-red-500 text-sm">Amount is required</span>}
+								</div>
 
-							<div className="flex items-center justify-between gap-4">
-								<Label htmlFor="isAnonymousZap" className="font-bold">
-									Anonymous zap
-								</Label>
-								<Switch id="isAnonymousZap" checked={isAnonymousZap} onCheckedChange={setIsAnonymousZap} />
+								<div className="flex items-center justify-between gap-4">
+									<Label htmlFor="isAnonymousZap" className="font-bold">
+										Anonymous zap
+									</Label>
+									<Switch id="isAnonymousZap" checked={isAnonymousZap} onCheckedChange={setIsAnonymousZap} />
+								</div>
 							</div>
 						</div>
 
 						{/* No lightning address message */}
 						{!lightningAddress && (
-							<div className="text-center py-8 text-muted-foreground">
-								<p>No Lightning address found</p>
-								<p className="text-sm">The creator needs to set up a Lightning address in their profile to receive zaps.</p>
+							<div className="py-2">
+								<div className="text-center text-muted-foreground">
+									<p>No Lightning address found</p>
+									<p className="text-sm">The creator needs to set up a Lightning address in their profile to receive zaps.</p>
+								</div>
 							</div>
 						)}
 
 						{/* Footer */}
 						{lightningAddress && (
-							<div className="pt-2">
+							<div className="py-2">
 								<Button onClick={() => setStep('generateInvoice')} className="w-full" variant="focus">
 									<Zap className="mr-2 h-4 w-4" />
 									Generate Invoice

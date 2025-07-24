@@ -81,7 +81,7 @@ export function RelayCard({ relay, onRemove, type }: RelayCardProps) {
 	}
 
 	return (
-		<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border rounded-md hover:bg-gray-50 transition-colors gap-2">
+		<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 border rounded-md hover:bg-gray-50 transition-colors gap-2 sm:gap-0">
 			<div className="flex items-center gap-3 flex-1 min-w-0 w-full sm:w-auto">
 				{getStatusIcon()}
 				<div className="flex-1 min-w-0 overflow-hidden">
