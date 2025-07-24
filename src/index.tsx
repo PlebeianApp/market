@@ -113,10 +113,9 @@ export const server = serve({
 					const resignedEvent = eventHandler.handleEvent(data[1])
 
 					if (resignedEvent) {
-						// If event was from admin and successfully resigned
 						const relay = await Relay.connect(RELAY_URL as string)
 						await relay.publish(resignedEvent as Event)
-						const okResponse = ['OK', data[1].id, true, '']
+						const okResponse = ['OK', resignedEvent.id, true, '']
 						ws.send(JSON.stringify(okResponse))
 					} else {
 						// If event was not from admin

@@ -1,4 +1,4 @@
-import type { NostrEvent } from '@nostr-dev-kit/ndk'
+import type { NDKEvent, NostrEvent } from '@nostr-dev-kit/ndk'
 import { getPublicKey } from 'nostr-tools'
 import { finalizeEvent, type UnsignedEvent } from 'nostr-tools/pure'
 import NDK from '@nostr-dev-kit/ndk'
@@ -28,13 +28,14 @@ export class EventHandler {
 
 		try {
 			const appPubkey = getPublicKey(Buffer.from(this.appPrivateKey, 'hex'))
-			const events = await this.ndk.fetchEvents({
+
+			const setupEvents = await this.ndk.fetchEvents({
 				kinds: [31990],
 				authors: [appPubkey],
 				limit: 1,
 			})
 
-			const firstEvent = events.values().next().value
+			const firstEvent = setupEvents.values().next().value
 			if (firstEvent) {
 				this.hasSetupEvent = true
 				console.log('Found existing setup event')
@@ -48,12 +49,37 @@ export class EventHandler {
 					console.error('Failed to parse existing setup event', e)
 				}
 			}
+
+			await this.loadExistingAdminList()
 		} catch (e) {
 			console.error('Failed to check for existing setup event', e)
 		}
 	}
 
-	public async initialize(appPrivateKey: string, adminPubkeys: string[]) {
+	private async loadExistingAdminList() {
+		if (!this.ndk) return
+
+		try {
+			const appPubkey = getPublicKey(Buffer.from(this.appPrivateKey, 'hex'))
+
+			const adminEvents = await this.ndk.fetchEvents({
+				kinds: [30000],
+				authors: [appPubkey],
+				'#d': ['admins'],
+				limit: 1,
+			})
+
+			const latestAdminEvent = adminEvents.values().next().value
+			if (latestAdminEvent) {
+				console.log('Found existing admin list, updating internal list')
+				this.updateAdminListFromEvent(latestAdminEvent)
+			}
+		} catch (e) {
+			console.error('Failed to load existing admin list', e)
+		}
+	}
+
+	public async initialize(appPrivateKey: string, adminPubkeys: string[], relayUrl?: string) {
 		if (this.isInitialized) {
 			throw new Error('EventHandler is already initialized')
 		}
@@ -81,12 +107,30 @@ export class EventHandler {
 		this.adminPubkeys.add(pubkey)
 	}
 
+	private updateAdminListFromEvent(event: NostrEvent | NDKEvent): void {
+		try {
+			// Extract admin pubkeys from 'p' tags in the admin list event
+			const newAdmins = event.tags.filter((tag) => tag[0] === 'p' && tag[1] && tag[1].length === 64).map((tag) => tag[1])
+
+			// Replace the current admin list with the new one
+			this.adminPubkeys.clear()
+			newAdmins.forEach((pubkey) => this.adminPubkeys.add(pubkey))
+
+			console.log(`Updated admin list with ${newAdmins.length} admins:`, newAdmins)
+		} catch (error) {
+			console.error('Failed to update admin list from event:', error)
+		}
+	}
+
 	public handleEvent(event: NostrEvent): NostrEvent | null {
 		if (!this.isInitialized) {
 			throw new Error('EventHandler is not initialized')
 		}
 
 		const isSetupEvent = event.kind === 31990 && event.content.includes('"name":')
+		const isAdminListEvent = event.kind === 30000 && event.tags.some((tag) => tag[0] === 'd' && tag[1] === 'admins')
+		const isEditorListEvent = event.kind === 30000 && event.tags.some((tag) => tag[0] === 'd' && tag[1] === 'editors')
+		const isRoleListEvent = isAdminListEvent || isEditorListEvent
 
 		if (isSetupEvent) {
 			const appPubkey = getPublicKey(bytesFromHex(this.appPrivateKey))
@@ -103,7 +147,24 @@ export class EventHandler {
 			}
 		}
 
-		if (!isSetupEvent && !this.adminPubkeys.has(event.pubkey)) {
+		// Allow role list events (admins/editors) during bootstrap or from existing admins
+		if (isRoleListEvent) {
+			if (!this.bootstrapMode && !this.adminPubkeys.has(event.pubkey)) {
+				console.log('Role list event rejected: not in bootstrap mode and not from admin')
+				return null
+			}
+
+			// Update internal admin list when admin list events are processed
+			if (isAdminListEvent) {
+				console.log('Admin list event accepted, updating internal admin list')
+				this.updateAdminListFromEvent(event)
+			} else if (isEditorListEvent) {
+				console.log('Editor list event accepted')
+			}
+		}
+
+		// For other events, check admin status
+		if (!isSetupEvent && !isRoleListEvent && !this.adminPubkeys.has(event.pubkey)) {
 			return null
 		}
 

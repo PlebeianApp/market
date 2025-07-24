@@ -2,14 +2,30 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
-import { formatPubkeyForDisplay, hexToNpub, npubToHex } from '@/routes/setup'
-import { useAddAdminMutation, useRemoveAdminMutation, useAddEditorMutation, useRemoveEditorMutation } from '@/publish/app-settings'
-import { getFormattedAdmins, useAdminSettings, useAmIAdmin, getFormattedEditors, useEditorSettings } from '@/queries/app-settings'
+import {
+	useAddAdminMutation,
+	useAddEditorMutation,
+	useDemoteAdminToEditorMutation,
+	useDemoteEditorToUserMutation,
+	usePromoteEditorToAdminMutation,
+	usePromoteUserToEditorMutation,
+	useRemoveAdminMutation,
+	useRemoveEditorMutation,
+	useRemoveUserFromAllRolesMutation,
+} from '@/publish/app-settings'
+import {
+	getFormattedAdmins,
+	getFormattedEditors,
+	getUserRoleForPubkey,
+	useAdminSettings,
+	useEditorSettings,
+	useUserRole,
+} from '@/queries/app-settings'
 import { useConfigQuery } from '@/queries/config'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
+import { formatPubkeyForDisplay, npubToHex } from '@/routes/setup'
 import { createFileRoute } from '@tanstack/react-router'
-import { Globe, Shield, ShieldCheck, Trash2, UserPlus, Edit } from 'lucide-react'
+import { ArrowDown, ArrowUp, Edit, Globe, Shield, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 
@@ -22,16 +38,22 @@ function TeamComponent() {
 	const { data: config } = useConfigQuery()
 	const { data: adminSettings, isLoading: isLoadingAdmins } = useAdminSettings(config?.appPublicKey)
 	const { data: editorSettings, isLoading: isLoadingEditors } = useEditorSettings(config?.appPublicKey)
-	const { amIAdmin, amIOwner, isLoading: isLoadingPermissions } = useAmIAdmin(config?.appPublicKey)
+	const { userRole, amIAdmin, amIOwner, isLoading: isLoadingPermissions } = useUserRole(config?.appPublicKey)
 	const [newAdminInput, setNewAdminInput] = useState('')
 	const [newEditorInput, setNewEditorInput] = useState('')
 	const [isAddingAdmin, setIsAddingAdmin] = useState(false)
 	const [isAddingEditor, setIsAddingEditor] = useState(false)
 
+	// All the mutation hooks
 	const addAdminMutation = useAddAdminMutation()
 	const removeAdminMutation = useRemoveAdminMutation()
 	const addEditorMutation = useAddEditorMutation()
 	const removeEditorMutation = useRemoveEditorMutation()
+	const promoteEditorToAdminMutation = usePromoteEditorToAdminMutation()
+	const demoteAdminToEditorMutation = useDemoteAdminToEditorMutation()
+	const promoteUserToEditorMutation = usePromoteUserToEditorMutation()
+	const demoteEditorToUserMutation = useDemoteEditorToUserMutation()
+	const removeUserFromAllRolesMutation = useRemoveUserFromAllRolesMutation()
 
 	const formattedAdmins = getFormattedAdmins(adminSettings)
 	const formattedEditors = getFormattedEditors(editorSettings)
@@ -46,7 +68,10 @@ function TeamComponent() {
 			setIsAddingAdmin(true)
 			// Convert npub to hex if needed
 			const hexPubkey = npubToHex(newAdminInput.trim())
-			await addAdminMutation.mutateAsync(hexPubkey)
+			await addAdminMutation.mutateAsync({
+				userPubkey: hexPubkey,
+				appPubkey: config?.appPublicKey,
+			})
 			setNewAdminInput('')
 			toast.success('Admin added successfully')
 		} catch (error) {
@@ -59,7 +84,10 @@ function TeamComponent() {
 
 	const handleRemoveAdmin = async (pubkey: string) => {
 		try {
-			await removeAdminMutation.mutateAsync(pubkey)
+			await removeAdminMutation.mutateAsync({
+				userPubkey: pubkey,
+				appPubkey: config?.appPublicKey,
+			})
 			toast.success('Admin removed successfully')
 		} catch (error) {
 			console.error('Failed to remove admin:', error)
@@ -77,7 +105,10 @@ function TeamComponent() {
 			setIsAddingEditor(true)
 			// Convert npub to hex if needed
 			const hexPubkey = npubToHex(newEditorInput.trim())
-			await addEditorMutation.mutateAsync(hexPubkey)
+			await addEditorMutation.mutateAsync({
+				userPubkey: hexPubkey,
+				appPubkey: config?.appPublicKey,
+			})
 			setNewEditorInput('')
 			toast.success('Editor added successfully')
 		} catch (error) {
@@ -90,12 +121,130 @@ function TeamComponent() {
 
 	const handleRemoveEditor = async (pubkey: string) => {
 		try {
-			await removeEditorMutation.mutateAsync(pubkey)
+			await removeEditorMutation.mutateAsync({
+				userPubkey: pubkey,
+				appPubkey: config?.appPublicKey,
+			})
 			toast.success('Editor removed successfully')
 		} catch (error) {
 			console.error('Failed to remove editor:', error)
 			toast.error(`Failed to remove editor: ${error instanceof Error ? error.message : 'Unknown error'}`)
 		}
+	}
+
+	// Comprehensive role management handlers
+	const handlePromoteEditorToAdmin = async (pubkey: string) => {
+		try {
+			await promoteEditorToAdminMutation.mutateAsync({
+				userPubkey: pubkey,
+				appPubkey: config?.appPublicKey,
+			})
+		} catch (error) {
+			console.error('Failed to promote editor to admin:', error)
+		}
+	}
+
+	const handleDemoteAdminToEditor = async (pubkey: string) => {
+		try {
+			await demoteAdminToEditorMutation.mutateAsync({
+				userPubkey: pubkey,
+				appPubkey: config?.appPublicKey,
+			})
+		} catch (error) {
+			console.error('Failed to demote admin to editor:', error)
+		}
+	}
+
+	const handlePromoteUserToEditor = async (pubkey: string) => {
+		try {
+			await promoteUserToEditorMutation.mutateAsync({
+				userPubkey: pubkey,
+				appPubkey: config?.appPublicKey,
+			})
+		} catch (error) {
+			console.error('Failed to promote user to editor:', error)
+		}
+	}
+
+	const handleDemoteEditorToUser = async (pubkey: string) => {
+		try {
+			await demoteEditorToUserMutation.mutateAsync({
+				userPubkey: pubkey,
+				appPubkey: config?.appPublicKey,
+			})
+		} catch (error) {
+			console.error('Failed to demote editor to user:', error)
+		}
+	}
+
+	const handleRemoveUserFromAllRoles = async (pubkey: string) => {
+		try {
+			await removeUserFromAllRolesMutation.mutateAsync({
+				userPubkey: pubkey,
+				appPubkey: config?.appPublicKey,
+			})
+		} catch (error) {
+			console.error('Failed to remove user from all roles:', error)
+		}
+	}
+
+	// Helper function to get available actions for a user
+	const getAvailableActions = (targetPubkey: string) => {
+		const targetRole = getUserRoleForPubkey(adminSettings, editorSettings, targetPubkey)
+		const actions = []
+
+		// Promote actions
+		if (targetRole === 'editor' && amIOwner) {
+			actions.push({
+				type: 'promote',
+				label: 'Promote to Admin',
+				handler: () => handlePromoteEditorToAdmin(targetPubkey),
+				icon: ArrowUp,
+				color: 'text-green-600',
+			})
+		}
+		if (targetRole === 'user' && amIAdmin) {
+			actions.push({
+				type: 'promote',
+				label: 'Promote to Editor',
+				handler: () => handlePromoteUserToEditor(targetPubkey),
+				icon: ArrowUp,
+				color: 'text-green-600',
+			})
+		}
+
+		// Demote actions
+		if (targetRole === 'admin' && amIOwner && targetPubkey !== adminSettings?.owner) {
+			actions.push({
+				type: 'demote',
+				label: 'Demote to Editor',
+				handler: () => handleDemoteAdminToEditor(targetPubkey),
+				icon: ArrowDown,
+				color: 'text-orange-600',
+			})
+		}
+		if (targetRole === 'editor' && amIAdmin) {
+			actions.push({
+				type: 'demote',
+				label: 'Demote to User',
+				handler: () => handleDemoteEditorToUser(targetPubkey),
+				icon: ArrowDown,
+				color: 'text-orange-600',
+			})
+		}
+
+		// Remove actions
+		if (targetRole !== 'owner' && targetRole !== 'user' && amIAdmin) {
+			actions.push({
+				type: 'remove',
+				label: 'Remove All Roles',
+				handler: () => handleRemoveUserFromAllRoles(targetPubkey),
+				icon: Trash2,
+				color: 'text-red-600',
+			})
+		}
+
+		return actions
 	}
 
 	if (isLoadingAdmins || isLoadingEditors || isLoadingPermissions) {
@@ -175,27 +324,44 @@ function TeamComponent() {
 							</div>
 						) : (
 							<div className="space-y-3">
-								{formattedAdmins.map((admin) => (
-									<div key={admin.pubkey} className="flex items-center justify-between p-3 border rounded-lg">
-										<div className="flex items-center gap-3">
-											{admin.isOwner ? <ShieldCheck className="w-5 h-5 text-green-600" /> : <Shield className="w-5 h-5 text-blue-600" />}
-											<div>
-												<div className="font-mono text-sm">{formatPubkeyForDisplay(admin.pubkey)}</div>
-												{admin.isOwner && <div className="text-xs text-green-600 font-medium">Owner</div>}
+								{formattedAdmins.map((admin) => {
+									const actions = getAvailableActions(admin.pubkey)
+									return (
+										<div key={admin.pubkey} className="flex items-center justify-between p-3 border rounded-lg">
+											<div className="flex items-center gap-3">
+												{admin.isOwner ? <ShieldCheck className="w-5 h-5 text-green-600" /> : <Shield className="w-5 h-5 text-blue-600" />}
+												<div>
+													<div className="font-mono text-sm">{formatPubkeyForDisplay(admin.pubkey)}</div>
+													{admin.isOwner && <div className="text-xs text-green-600 font-medium">Owner</div>}
+												</div>
 											</div>
+											{actions.length > 0 && (
+												<div className="flex gap-2">
+													{actions.map((action, index) => {
+														const Icon = action.icon
+														return (
+															<Button
+																key={index}
+																variant="outline"
+																size="sm"
+																onClick={action.handler}
+																disabled={
+																	removeAdminMutation.isPending ||
+																	promoteEditorToAdminMutation.isPending ||
+																	demoteAdminToEditorMutation.isPending ||
+																	removeUserFromAllRolesMutation.isPending
+																}
+																title={action.label}
+															>
+																<Icon className={`w-4 h-4 ${action.color}`} />
+															</Button>
+														)
+													})}
+												</div>
+											)}
 										</div>
-										{!admin.isOwner && amIOwner && (
-											<Button
-												variant="outline"
-												size="sm"
-												onClick={() => handleRemoveAdmin(admin.pubkey)}
-												disabled={removeAdminMutation.isPending}
-											>
-												<Trash2 className="w-4 h-4" />
-											</Button>
-										)}
-									</div>
-								))}
+									)
+								})}
 							</div>
 						)}
 					</CardContent>
@@ -218,27 +384,44 @@ function TeamComponent() {
 							</div>
 						) : (
 							<div className="space-y-3">
-								{formattedEditors.map((editor) => (
-									<div key={editor.pubkey} className="flex items-center justify-between p-3 border rounded-lg">
-										<div className="flex items-center gap-3">
-											<Edit className="w-5 h-5 text-purple-600" />
-											<div>
-												<div className="font-mono text-sm">{formatPubkeyForDisplay(editor.pubkey)}</div>
-												<div className="text-xs text-purple-600 font-medium">Editor</div>
+								{formattedEditors.map((editor) => {
+									const actions = getAvailableActions(editor.pubkey)
+									return (
+										<div key={editor.pubkey} className="flex items-center justify-between p-3 border rounded-lg">
+											<div className="flex items-center gap-3">
+												<Edit className="w-5 h-5 text-purple-600" />
+												<div>
+													<div className="font-mono text-sm">{formatPubkeyForDisplay(editor.pubkey)}</div>
+													<div className="text-xs text-purple-600 font-medium">Editor</div>
+												</div>
 											</div>
+											{actions.length > 0 && (
+												<div className="flex gap-2">
+													{actions.map((action, index) => {
+														const Icon = action.icon
+														return (
+															<Button
+																key={index}
+																variant="outline"
+																size="sm"
+																onClick={action.handler}
+																disabled={
+																	removeEditorMutation.isPending ||
+																	promoteEditorToAdminMutation.isPending ||
+																	demoteEditorToUserMutation.isPending ||
+																	removeUserFromAllRolesMutation.isPending
+																}
+																title={action.label}
+															>
+																<Icon className={`w-4 h-4 ${action.color}`} />
+															</Button>
+														)
+													})}
+												</div>
+											)}
 										</div>
-										{amIAdmin && (
-											<Button
-												variant="outline"
-												size="sm"
-												onClick={() => handleRemoveEditor(editor.pubkey)}
-												disabled={removeEditorMutation.isPending}
-											>
-												<Trash2 className="w-4 h-4" />
-											</Button>
-										)}
-									</div>
-								))}
+									)
+								})}
 							</div>
 						)}
 					</CardContent>
