@@ -391,7 +391,6 @@ function DashboardLayout() {
 												location.pathname !== '/dashboard/account/network' && (
 													<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>
 												)}
-											<Outlet />
 											{!isAuthenticated ? (
 												<LoginPrompt />
 											) : (
@@ -401,9 +400,9 @@ function DashboardLayout() {
 														!needsBackButton &&
 														location.pathname !== '/dashboard/sales/sales' &&
 														!location.pathname.startsWith('/dashboard/sales/messages') &&
-												    location.pathname !== '/dashboard/app-settings/app-miscelleneous' &&
-												    location.pathname !== '/dashboard/app-settings/team' &&
-												    location.pathname !== '/dashboard/app-settings/blacklists' &&
+														location.pathname !== '/dashboard/app-settings/app-miscelleneous' &&
+														location.pathname !== '/dashboard/app-settings/team' &&
+														location.pathname !== '/dashboard/app-settings/blacklists' &&
 														location.pathname !== '/dashboard/sales/circular-economy' &&
 														location.pathname !== '/dashboard/products/products' &&
 														location.pathname !== '/dashboard/products/collections' &&
