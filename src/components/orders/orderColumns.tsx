@@ -16,7 +16,7 @@ export const baseOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 			return (
 				<div className="border border-gray-300 rounded px-3 py-1 inline-block">
 					<Link to="/dashboard/orders/$orderId" params={{ orderId: orderId || 'unknown' }} className="font-mono text-xs hover:underline">
-						Order ID: {orderId ? `${orderId.substring(0, 8)}...` : 'Unknown'}
+						{orderId ? `${orderId.substring(0, 8)}...` : 'Unknown'}
 					</Link>
 				</div>
 			)

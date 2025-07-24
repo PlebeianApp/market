@@ -1,8 +1,9 @@
 import { cartActions } from '@/lib/stores/cart'
 import { ndkActions } from '@/lib/stores/ndk'
+import { uiActions } from '@/lib/stores/ui'
 import { getProductImages, getProductPrice, getProductStock, getProductTitle } from '@/queries/products'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
-import { Link } from '@tanstack/react-router'
+import { Link, useLocation } from '@tanstack/react-router'
 import { Button } from './ui/button'
 import { ZapButton } from './ZapButton'
 import { useEffect, useState } from 'react'
@@ -14,6 +15,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 	const stock = getProductStock(product)
 	const [isOwnProduct, setIsOwnProduct] = useState(false)
 	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(null)
+	const location = useLocation()
 
 	// Check if current user is the seller of this product
 	useEffect(() => {
@@ -35,10 +37,20 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 		cartActions.addProduct(userPubkey.pubkey, product)
 	}
 
+	const handleProductClick = () => {
+		// Store the current path as the source path
+		// This will also store it as originalResultsPath if not already set
+		uiActions.setProductSourcePath(location.pathname)
+	}
+
 	return (
 		<div className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col" data-testid="product-card">
 			{/* Square aspect ratio container for image */}
-			<Link to={`/products/${product.id}`} className="relative aspect-square overflow-hidden border-b border-zinc-800 block">
+			<Link
+				to={`/products/${product.id}`}
+				className="relative aspect-square overflow-hidden border-b border-zinc-800 block"
+				onClick={handleProductClick}
+			>
 				{images && images.length > 0 ? (
 					<img
 						src={images[0][1]}
@@ -54,7 +66,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 
 			<div className="p-2 flex flex-col gap-2 flex-grow">
 				{/* Product title */}
-				<Link to={`/products/${product.id}`}>
+				<Link to={`/products/${product.id}`} onClick={handleProductClick}>
 					<h2 className="text-sm font-medium border-b border-[var(--light-gray)] pb-2 overflow-hidden text-ellipsis whitespace-nowrap">
 						{title}
 					</h2>

@@ -1,4 +1,5 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
 import { dashboardNavigation } from '@/config/dashboardNavigation'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { uiActions, uiStore } from '@/lib/stores/ui'
@@ -8,9 +9,11 @@ import { useConfigQuery } from '@/queries/config'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { profileKeys } from '@/queries/queryKeyFactory'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
+import { useStore } from '@tanstack/react-store'
+import { uiStore, uiActions } from '@/lib/stores/ui'
+import { authStore } from '@/lib/stores/auth'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useLocation, useMatchRoute, useNavigate } from '@tanstack/react-router'
-import { useStore } from '@tanstack/react-store'
 import React, { useState } from 'react'
 
 export const Route = createFileRoute('/_dashboard-layout')({
@@ -102,6 +105,24 @@ function getCurrentEmoji(showSidebar: boolean, currentPath: string): string | nu
 	return null
 }
 
+// Component to show when user is not authenticated
+function LoginPrompt() {
+	const handleLoginClick = () => {
+		uiActions.openDialog('login')
+	}
+
+	return (
+		<div className="flex items-center justify-center h-full">
+			<div className="flex flex-col items-center space-y-4">
+				<p className="text-lg text-muted-foreground">Please log in to view</p>
+				<Button onClick={handleLoginClick} className="bg-neutral-800 hover:bg-neutral-700 text-white">
+					Login
+				</Button>
+			</div>
+		</div>
+	)
+}
+
 function DashboardLayout() {
 	const matchRoute = useMatchRoute()
 	const navigate = useNavigate()
@@ -111,6 +132,7 @@ function DashboardLayout() {
 	const [showSidebar, setShowSidebar] = useState(true)
 	const [parent] = useAutoAnimate()
 	const { dashboardTitle } = useStore(uiStore)
+	const { isAuthenticated } = useStore(authStore)
 	const isMessageDetailView =
 		location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages'
 
@@ -328,14 +350,12 @@ function DashboardLayout() {
 
 							<div className="flex-1 min-h-0 lg:overflow-y-auto">
 								{isMessageDetailView ? (
-									<div className="h-full">
-										<Outlet />
-									</div>
+									<div className="h-full">{!isAuthenticated ? <LoginPrompt /> : <Outlet />}</div>
 								) : (
 									<div className="h-full">
 										<div
 											className={cn(
-												'p-4 bg-white lg:p-8 lg:bg-transparent',
+												'p-4 bg-white lg:p-8 lg:bg-transparent h-full',
 												location.pathname === '/dashboard/sales/sales' && 'p-0 lg:p-0',
 												location.pathname.startsWith('/dashboard/sales/messages') && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/sales/circular-economy' && 'p-0 lg:p-0',
@@ -372,7 +392,39 @@ function DashboardLayout() {
 													<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>
 												)}
 											<Outlet />
+											{!isAuthenticated ? (
+												<LoginPrompt />
+											) : (
+												<>
+													{/* Only show title here if there's no back button */}
+													{!isMobile &&
+														!needsBackButton &&
+														location.pathname !== '/dashboard/sales/sales' &&
+														!location.pathname.startsWith('/dashboard/sales/messages') &&
+												    location.pathname !== '/dashboard/app-settings/app-miscelleneous' &&
+												    location.pathname !== '/dashboard/app-settings/team' &&
+												    location.pathname !== '/dashboard/app-settings/blacklists' &&
+														location.pathname !== '/dashboard/sales/circular-economy' &&
+														location.pathname !== '/dashboard/products/products' &&
+														location.pathname !== '/dashboard/products/collections' &&
+														location.pathname !== '/dashboard/products/receiving-payments' &&
+														location.pathname !== '/dashboard/products/shipping-options' &&
+														location.pathname !== '/dashboard/account/profile' &&
+														location.pathname !== '/dashboard/account/making-payments' &&
+														location.pathname !== '/dashboard/account/your-purchases' &&
+														location.pathname !== '/dashboard/account/network' && (
+															<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>
+														)}
+													<Outlet />
+												</>
+											)}
 										</div>
+									</div>
+								)}
+								{/* Always render Outlet invisibly to ensure dashboard titles get set */}
+								{!isAuthenticated && (
+									<div className="hidden">
+										<Outlet />
 									</div>
 								)}
 							</div>

@@ -1,7 +1,6 @@
 import { ImageCarousel } from '@/components/ImageCarousel'
 import { ItemGrid } from '@/components/ItemGrid'
 import { ProductCard } from '@/components/ProductCard'
-import { ProfileName } from '@/components/ProfileName'
 import { ShippingSelector } from '@/components/ShippingSelector'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -11,7 +10,7 @@ import { UserNameWithBadge } from '@/components/UserNameWithBadge'
 import { ZapButton } from '@/components/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { cartActions, useCart, type RichShippingInfo } from '@/lib/stores/cart'
-import { uiActions } from '@/lib/stores/ui'
+import { uiActions, uiStore } from '@/lib/stores/ui'
 import {
 	productQueryOptions,
 	productsByPubkeyQueryOptions,
@@ -26,12 +25,12 @@ import {
 	useProductStock,
 	useProductTitle,
 	useProductType,
-	useProductVisibility,
 	useProductWeight,
 } from '@/queries/products'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import type { FileRoutesByPath } from '@tanstack/react-router'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, Minus, Plus, Truck } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
@@ -73,6 +72,21 @@ function RouteComponent() {
 	const { productId } = Route.useLoaderData()
 	const { data: product } = useSuspenseQuery(productQueryOptions(productId))
 	const { cart } = useCart()
+	const { mobileMenuOpen } = useStore(uiStore)
+	const navigate = useNavigate()
+	const { navigation } = useStore(uiStore)
+
+	const handleBackClick = () => {
+		if (navigation.originalResultsPath) {
+			// Navigate to the original results page
+			navigate({ to: navigation.originalResultsPath })
+			// Clear all product navigation state
+			uiActions.clearProductNavigation()
+		} else {
+			// Fallback to products page if no source path
+			navigate({ to: '/products' })
+		}
+	}
 
 	if (!product) {
 		return (
@@ -90,7 +104,6 @@ function RouteComponent() {
 	const { data: priceTag } = useProductPrice(productId)
 	const { data: typeTag } = useProductType(productId)
 	const { data: stockTag } = useProductStock(productId)
-	const { data: visibilityTag } = useProductVisibility(productId)
 	const { data: specs = [] } = useProductSpecs(productId)
 	const { data: weightTag } = useProductWeight(productId)
 	const { data: dimensionsTag } = useProductDimensions(productId)
@@ -108,7 +121,6 @@ function RouteComponent() {
 	// Derived data from tags
 	const price = priceTag ? parseFloat(priceTag[1]) : 0
 	const stock = stockTag ? parseInt(stockTag[1]) : undefined
-	const status = visibilityTag ? visibilityTag[1] : 'active'
 	const productType = typeTag
 		? {
 				product: typeTag[1],
@@ -155,11 +167,13 @@ function RouteComponent() {
 
 	return (
 		<div className="flex flex-col gap-4">
-			<div className="relative">
-				<Button variant="ghost" onClick={() => window.history.back()} className="back-button hover:bg-white/10">
-					<ArrowLeft className="h-8 w-8 lg:h-4 lg:w-4" />
-					<span className="hidden sm:inline">Back to results</span>
-				</Button>
+			<div className="relative z-10">
+				{!mobileMenuOpen && (
+					<Button variant="ghost" onClick={handleBackClick} className="back-button">
+						<ArrowLeft className="h-8 w-8 lg:h-4 lg:w-4" />
+						<span className="hidden sm:inline">Back to results</span>
+					</Button>
+				)}
 
 				<div className={`relative hero-container ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-black'}`}>
 					<div className="hero-overlays">
@@ -270,19 +284,19 @@ function RouteComponent() {
 							<div>
 								<div className="bg-secondary text-white px-4 py-2 text-sm font-medium rounded-t-md">Spec</div>
 								<div className="rounded-lg bg-white p-6 shadow-md rounded-t-none">
-									<div className="grid grid-cols-2 gap-4">
+									<div className="grid grid-cols-1 gap-4">
 										{weightTag && (
 											<div className="flex flex-col">
-												<span className="text-sm font-medium text-gray-500">Weight</span>
-												<span className="text-gray-900">
+												<span className="text-base font-medium text-gray-500">Weight</span>
+												<span className="text-base text-gray-900">
 													{weightTag[1]} {weightTag[2]}
 												</span>
 											</div>
 										)}
 										{dimensionsTag && (
 											<div className="flex flex-col">
-												<span className="text-sm font-medium text-gray-500">Dimensions (L×W×H)</span>
-												<span className="text-gray-900">
+												<span className="text-base font-medium text-gray-500">Dimensions (L×W×H)</span>
+												<span className="text-base text-gray-900 break-all">
 													{dimensionsTag[1]
 														.split('x')
 														.map((num) => parseFloat(num).toFixed(1))
@@ -293,8 +307,8 @@ function RouteComponent() {
 										)}
 										{specs.map((spec, index) => (
 											<div key={index} className="flex flex-col">
-												<span className="text-sm font-medium text-gray-500">{spec[1]}</span>
-												<span className="text-gray-900">{spec[2]}</span>
+												<span className="text-base font-medium text-gray-500 capitalize">{spec[1]}</span>
+												<span className="text-base text-gray-900 break-all">{spec[2]}</span>
 											</div>
 										))}
 										{specs.length === 0 && !weightTag && !dimensionsTag && (
@@ -314,8 +328,8 @@ function RouteComponent() {
 											<h3 className="text-lg font-medium">Shipping Options</h3>
 										</div>
 
-										<div className="grid md:grid-cols-2 gap-6">
-											<div>
+										<div className="flex flex-wrap md:flex-nowrap gap-6">
+											<div className="w-full md:w-1/2 min-w-0">
 												<p className="text-sm text-gray-500 mb-4">Select a shipping method to see estimated costs and delivery times.</p>
 
 												<div className="w-full">
@@ -333,24 +347,31 @@ function RouteComponent() {
 												</div>
 											</div>
 
-											<div className="bg-gray-50 p-4 rounded-md">
+											<div className="w-full md:w-1/2 min-w-0 bg-gray-50 p-4 rounded-md">
 												<h4 className="font-medium mb-2">Shipping Information</h4>
 
 												{weightTag && (
-													<div className="text-sm text-gray-600 mb-2">
-														<span className="font-medium">Weight:</span> {weightTag[1]} {weightTag[2]}
+													<div className="flex flex-col mb-2">
+														<span className="text-base font-medium text-gray-500">Weight:</span>
+														<span className="text-base text-gray-900">
+															{weightTag[1]} {weightTag[2]}
+														</span>
 													</div>
 												)}
 
 												{dimensionsTag && (
-													<div className="text-sm text-gray-600 mb-2">
-														<span className="font-medium">Dimensions:</span> {dimensionsTag[1]} {dimensionsTag[2]}
+													<div className="flex flex-col mb-2">
+														<span className="text-base font-medium text-gray-500">Dimensions:</span>
+														<span className="text-base text-gray-900">
+															<span className="break-all">{dimensionsTag[1]}</span> {dimensionsTag[2]}
+														</span>
 													</div>
 												)}
 
 												{location && (
-													<div className="text-sm text-gray-600 mb-2">
-														<span className="font-medium">Ships from:</span> {location}
+													<div className="flex flex-col mb-2">
+														<span className="text-base font-medium text-gray-500">Ships from:</span>
+														<span className="text-base text-gray-900">{location}</span>
 													</div>
 												)}
 
@@ -409,16 +430,16 @@ function RouteComponent() {
 									<div className="grid grid-cols-2 gap-4">
 										{weightTag && (
 											<div className="flex flex-col">
-												<span className="text-sm font-medium text-gray-500">Weight</span>
-												<span className="text-gray-900">
+												<span className="text-base font-medium text-gray-500">Weight</span>
+												<span className="text-base text-gray-900">
 													{weightTag[1]} {weightTag[2]}
 												</span>
 											</div>
 										)}
 										{dimensionsTag && (
 											<div className="flex flex-col">
-												<span className="text-sm font-medium text-gray-500">Dimensions (L×W×H)</span>
-												<span className="text-gray-900">
+												<span className="text-base font-medium text-gray-500">Dimensions (L×W×H)</span>
+												<span className="text-base text-gray-900 break-all">
 													{dimensionsTag[1]
 														.split('x')
 														.map((num) => parseFloat(num).toFixed(1))
@@ -429,8 +450,8 @@ function RouteComponent() {
 										)}
 										{specs.map((spec, index) => (
 											<div key={index} className="flex flex-col">
-												<span className="text-sm font-medium text-gray-500">{spec[1]}</span>
-												<span className="text-gray-900">{spec[2]}</span>
+												<span className="text-base font-medium text-gray-500 capitalize">{spec[1]}</span>
+												<span className="text-base text-gray-900 break-all">{spec[2]}</span>
 											</div>
 										))}
 										{specs.length === 0 && !weightTag && !dimensionsTag && (
@@ -448,8 +469,8 @@ function RouteComponent() {
 											<h3 className="text-lg font-medium">Shipping Options</h3>
 										</div>
 
-										<div className="grid md:grid-cols-2 gap-6">
-											<div>
+										<div className="flex flex-wrap md:flex-nowrap gap-6">
+											<div className="w-full md:w-1/2 min-w-0">
 												<p className="text-sm text-gray-500 mb-4">Select a shipping method to see estimated costs and delivery times.</p>
 
 												<div className="w-full">
@@ -467,24 +488,31 @@ function RouteComponent() {
 												</div>
 											</div>
 
-											<div className="bg-gray-50 p-4 rounded-md">
+											<div className="w-full md:w-1/2 min-w-0 bg-gray-50 p-4 rounded-md">
 												<h4 className="font-medium mb-2">Shipping Information</h4>
 
 												{weightTag && (
-													<div className="text-sm text-gray-600 mb-2">
-														<span className="font-medium">Weight:</span> {weightTag[1]} {weightTag[2]}
+													<div className="flex flex-col mb-2">
+														<span className="text-base font-medium text-gray-500">Weight:</span>
+														<span className="text-base text-gray-900">
+															{weightTag[1]} {weightTag[2]}
+														</span>
 													</div>
 												)}
 
 												{dimensionsTag && (
-													<div className="text-sm text-gray-600 mb-2">
-														<span className="font-medium">Dimensions:</span> {dimensionsTag[1]} {dimensionsTag[2]}
+													<div className="flex flex-col mb-2">
+														<span className="text-base font-medium text-gray-500">Dimensions:</span>
+														<span className="text-base text-gray-900">
+															<span className="break-all">{dimensionsTag[1]}</span> {dimensionsTag[2]}
+														</span>
 													</div>
 												)}
 
 												{location && (
-													<div className="text-sm text-gray-600 mb-2">
-														<span className="font-medium">Ships from:</span> {location}
+													<div className="flex flex-col mb-2">
+														<span className="text-base font-medium text-gray-500">Ships from:</span>
+														<span className="text-base text-gray-900">{location}</span>
 													</div>
 												)}
 
@@ -498,21 +526,15 @@ function RouteComponent() {
 					)}
 				</div>
 			</div>
-			<div className="lg:px-8 px-4 py-6">
-				{sellerProducts.length > 0 && (
-					<ItemGrid
-						title={
-							<div className="flex flex-col items-center lg:flex-row lg:items-center lg:gap-2">
-								<span className="text-2xl font-heading">More products from </span>
-								<ProfileName pubkey={pubkey} className="text-2xl font-heading" />
-							</div>
-						}
-					>
-						{sellerProducts.map((product) => (
-							<ProductCard key={product.id} product={product} />
-						))}
-					</ItemGrid>
-				)}
+
+			{/* More from this seller */}
+			<div className="flex flex-col gap-4 p-4">
+				<h2 className="font-heading text-2xl text-center lg:text-left">More from this seller</h2>
+				<ItemGrid>
+					{sellerProducts.map((p) => (
+						<ProductCard key={p.id} product={p} />
+					))}
+				</ItemGrid>
 			</div>
 		</div>
 	)

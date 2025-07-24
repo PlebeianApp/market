@@ -6,7 +6,7 @@ import { RecipientItem } from '@/components/v4v/RecipientItem'
 import { RecipientPreview } from '@/components/v4v/RecipientPreview'
 import { authStore } from '@/lib/stores/auth'
 import type { V4VDTO } from '@/lib/stores/cart'
-import { getHexColorFingerprintFromHexPubkey } from '@/lib/utils'
+import { getDistinctColorsForRecipients } from '@/lib/utils'
 import { useConfigQuery } from '@/queries/config'
 import { useZapCapabilityByNpub } from '@/queries/profiles'
 import { usePublishV4VShares, useV4VShares } from '@/queries/v4v'
@@ -37,6 +37,8 @@ function CircularEconomyComponent() {
 	const [localShares, setLocalShares] = useState<V4VDTO[]>([])
 	const [isChecking, setIsChecking] = useState(false)
 	const [totalV4VPercentage, setTotalV4VPercentage] = useState(10)
+	const [originalShares, setOriginalShares] = useState<V4VDTO[]>([])
+	const [originalTotalPercentage, setOriginalTotalPercentage] = useState(10)
 
 	const { data: canReceiveZaps, isLoading: isCheckingZap } = useZapCapabilityByNpub(newRecipientNpub || '')
 
@@ -47,16 +49,28 @@ function CircularEconomyComponent() {
 			const totalPercentage = v4vShares.reduce((total, share) => total + share.percentage, 0)
 
 			if (totalPercentage > 0) {
-				setTotalV4VPercentage(Math.round(totalPercentage * 100))
+				const roundedTotal = Math.round(totalPercentage * 100)
+				setTotalV4VPercentage(roundedTotal)
+				setOriginalTotalPercentage(roundedTotal)
 
 				const normalizedShares = v4vShares.map((share) => ({
 					...share,
 					percentage: share.percentage / totalPercentage,
 				}))
 				setLocalShares(normalizedShares)
+				setOriginalShares(normalizedShares)
 			} else {
 				setLocalShares(v4vShares)
+				setOriginalShares(v4vShares)
+				setTotalV4VPercentage(10)
+				setOriginalTotalPercentage(10)
 			}
+		} else {
+			// No shares exist - set defaults
+			setLocalShares([])
+			setOriginalShares([])
+			setTotalV4VPercentage(10)
+			setOriginalTotalPercentage(10)
 		}
 	}, [v4vShares])
 
@@ -73,6 +87,28 @@ function CircularEconomyComponent() {
 	const sellerPercentage = 100 - totalV4VPercentage
 	const formattedSellerPercentage = sellerPercentage.toFixed(0)
 	const formattedTotalV4V = totalV4VPercentage.toFixed(0)
+
+	// Generate distinct colors for recipients
+	const recipientColors = getDistinctColorsForRecipients(localShares)
+
+	// Check if there are any changes
+	const hasChanges = () => {
+		// Check if total percentage changed
+		if (totalV4VPercentage !== originalTotalPercentage) return true
+
+		// Check if shares array length changed
+		if (localShares.length !== originalShares.length) return true
+
+		// Check if any share details changed
+		return localShares.some((localShare, index) => {
+			const originalShare = originalShares[index]
+			if (!originalShare) return true
+
+			return localShare.pubkey !== originalShare.pubkey || Math.abs(localShare.percentage - originalShare.percentage) > 0.001
+		})
+	}
+
+	const changesExist = hasChanges()
 
 	const v4vDecimal = totalV4VPercentage / 100
 	const emojiSize = 16 + v4vDecimal * 100
@@ -256,6 +292,11 @@ function CircularEconomyComponent() {
 
 				if (result) {
 					toast.success('V4V shares cleared')
+
+					// Update original values to reflect cleared state
+					setOriginalShares([])
+					setOriginalTotalPercentage(10)
+
 					refetch()
 				} else {
 					toast.error('Failed to clear V4V shares')
@@ -276,6 +317,16 @@ function CircularEconomyComponent() {
 
 			if (result) {
 				toast.success('V4V shares saved successfully')
+
+				// Update original values to reflect saved state
+				setOriginalShares(
+					localShares.map((share) => ({
+						...share,
+						percentage: share.percentage * (totalV4VPercentage / 100),
+					})),
+				)
+				setOriginalTotalPercentage(totalV4VPercentage)
+
 				refetch()
 			} else {
 				toast.error('Failed to save V4V shares')
@@ -305,7 +356,18 @@ function CircularEconomyComponent() {
 	return (
 		<div>
 			<div className="hidden lg:block sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6">
-				<h1 className="text-2xl font-bold">Circular Economy</h1>
+				<div className="flex items-center justify-between">
+					<h1 className="text-2xl font-bold">Circular Economy</h1>
+					<Button
+						variant="outline"
+						className="bg-black text-white hover:bg-gray-800 border-black"
+						onClick={handleSave}
+						disabled={publishMutation.isPending || !changesExist}
+						data-testid="save-v4v-button-desktop"
+					>
+						{publishMutation.isPending ? 'Saving...' : changesExist ? 'Save Changes' : 'Saved'}
+					</Button>
+				</div>
 			</div>
 			<div className="space-y-6 max-w-4xl mx-auto p-4 lg:p-8">
 				<Alert className="bg-blue-100 text-blue-800 border-blue-200">
@@ -370,7 +432,7 @@ function CircularEconomyComponent() {
 									className={`${index === 0 ? 'bg-rose-500' : 'bg-gray-500'} flex items-center justify-center text-white font-medium`}
 									style={{
 										width: `${share.percentage * 100}%`,
-										backgroundColor: getHexColorFingerprintFromHexPubkey(share.pubkey),
+										backgroundColor: recipientColors[share.pubkey],
 									}}
 								>
 									{(share.percentage * 100).toFixed(1)}%
@@ -392,6 +454,7 @@ function CircularEconomyComponent() {
 								}}
 								onRemove={handleRemoveRecipient}
 								onPercentageChange={handleUpdatePercentage}
+								color={recipientColors[share.pubkey]}
 							/>
 						))}
 					</div>
@@ -411,19 +474,20 @@ function CircularEconomyComponent() {
 									/>
 								)}
 							</div>
-							<div className="space-y-2">
-								<div className="flex justify-between text-sm text-muted-foreground">
-									<span>Share percentage: {newRecipientShare}%</span>
+							{localShares.length > 0 && (
+								<div className="space-y-2">
+									<div className="flex justify-between text-sm text-muted-foreground">
+										<span>Share percentage: {newRecipientShare}%</span>
+									</div>
+									<Slider
+										value={[newRecipientShare]}
+										min={1}
+										max={100}
+										step={1}
+										onValueChange={(value) => setNewRecipientShare(value[0])}
+									/>
 								</div>
-								<Slider
-									value={[newRecipientShare]}
-									min={1}
-									max={100}
-									step={1}
-									onValueChange={(value) => setNewRecipientShare(value[0])}
-									disabled={localShares.length === 0}
-								/>
-							</div>
+							)}
 							<div className="flex flex-wrap gap-2 items-center">
 								<Button
 									className="flex-grow sm:flex-grow-0"
@@ -460,16 +524,16 @@ function CircularEconomyComponent() {
 						</div>
 					)}
 
-					{/* Save button */}
-					<div className="mt-6">
+					{/* Save button - Mobile only */}
+					<div className="mt-6 lg:hidden">
 						<Button
 							variant="focus"
 							className="w-full"
 							onClick={handleSave}
-							disabled={publishMutation.isPending}
-							data-testid="save-v4v-button"
+							disabled={publishMutation.isPending || !changesExist}
+							data-testid="save-v4v-button-mobile"
 						>
-							{publishMutation.isPending ? 'Saving...' : 'Save'}
+							{publishMutation.isPending ? 'Saving...' : changesExist ? 'Save Changes' : 'Saved'}
 						</Button>
 					</div>
 				</div>

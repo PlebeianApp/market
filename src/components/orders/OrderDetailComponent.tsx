@@ -32,6 +32,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { DetailField } from '../ui/DetailField'
 import { OrderActions } from './OrderActions'
+import { Separator } from '../ui/separator'
+import { TimelineEventCard } from './TimelineEventCard'
+import { getStatusStyles } from '@/lib/utils/orderUtils'
+import { cn } from '@/lib/utils'
 
 interface OrderDetailComponentProps {
 	order: OrderWithRelatedEvents
@@ -117,9 +121,7 @@ const isPaymentCompleted = (paymentRequest: NDKEvent, paymentReceipts: NDKEvent[
 	})
 
 	const isCompleted = !!matchingReceipt
-	if (process.env.NODE_ENV === 'development') {
-		console.log(`🏁 Payment request ${paymentRequest.id} completion status:`, isCompleted)
-	}
+	console.log(`🏁 Payment request ${paymentRequest.id} completion status:`, isCompleted)
 
 	return isCompleted
 }
@@ -157,6 +159,9 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const isBuyer = buyerPubkey === user?.pubkey
 	const isOrderSeller = sellerPubkey === user?.pubkey
 	const totalAmount = getTotalAmount(orderEvent)
+
+	// Get status styles for coloring the header
+	const { headerBgColor } = getStatusStyles(order)
 
 	// Get order status from latest status update or default to pending
 	const orderStatus = order.latestStatus?.tags.find((tag) => tag[0] === 'status')?.[1] || 'pending'
@@ -419,61 +424,6 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		)
 	}
 
-	const renderEventCard = (event: NDKEvent, title: string, icon: React.ReactNode, type: string) => {
-		const eventDate = new Date((event.created_at || 0) * 1000).toLocaleString()
-		let content = event.content
-		let extraInfo = null
-
-		if (type === 'status') {
-			const statusTag = event.tags.find((tag) => tag[0] === 'status')
-			if (statusTag) {
-				extraInfo = <Badge variant="outline">{statusTag[1].charAt(0).toUpperCase() + statusTag[1].slice(1)}</Badge>
-			}
-		} else if (type === 'shipping') {
-			const statusTag = event.tags.find((tag) => tag[0] === 'status')
-			const trackingTag = event.tags.find((tag) => tag[0] === 'tracking')
-			const carrierTag = event.tags.find((tag) => tag[0] === 'carrier')
-
-			extraInfo = (
-				<div className="space-y-2">
-					{statusTag && <Badge variant="outline">Status: {statusTag[1]}</Badge>}
-					{trackingTag && (
-						<div className="text-sm">
-							<strong>Tracking:</strong> {trackingTag[1]}
-						</div>
-					)}
-					{carrierTag && (
-						<div className="text-sm">
-							<strong>Carrier:</strong> {carrierTag[1]}
-						</div>
-					)}
-				</div>
-			)
-		}
-
-		return (
-			<Card key={event.id}>
-				<CardHeader className="pb-3">
-					<div className="flex items-center justify-between">
-						<div className="flex items-center gap-2">
-							{icon}
-							<CardTitle className="text-lg">{title}</CardTitle>
-						</div>
-					</div>
-					{extraInfo && <div className="mt-2">{extraInfo}</div>}
-				</CardHeader>
-				{content && (
-					<CardContent className="pt-0">
-						<p className="text-gray-700">{content}</p>
-					</CardContent>
-				)}
-				<CardFooter className="flex justify-center">
-					<span className="text-xs text-muted-foreground">{eventDate}</span>
-				</CardFooter>
-			</Card>
-		)
-	}
-
 	const allEvents = [
 		...order.statusUpdates.map((event) => ({
 			event,
@@ -512,36 +462,36 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 			<div className="space-y-6">
 				{/* Order Header */}
 				<Card>
-					<CardHeader>
-						<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-							<div>
-								<CardTitle className="text-2xl">Order #{orderId.substring(0, 8)}...</CardTitle>
-								<p className="text-gray-600 mt-1">Created {getEventDate(orderEvent)}</p>
+					<CardHeader className="p-0">
+						<div className={cn('p-4 rounded-t-xl', headerBgColor)}>
+							<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+								<div className="flex items-center space-x-2">
+									<Package className="w-5 h-5 text-gray-500" />
+									<div>
+										<p className="text-sm text-gray-500">Products</p>
+										<p className="font-semibold">
+											{orderItems.reduce((total, item) => total + item.quantity, 0)} items ({products.length} unique)
+										</p>
+									</div>
+								</div>
+								<OrderActions order={order} userPubkey={user?.pubkey || ''} />
 							</div>
-							<OrderActions order={order} userPubkey={user?.pubkey || ''} />
 						</div>
 					</CardHeader>
-					<CardContent>
-						<div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-							<div className="flex items-center space-x-2">
-								<Package className="w-5 h-5 text-gray-500" />
-								<div>
-									<p className="text-sm text-gray-500">Products</p>
-									<p className="font-semibold">
-										{orderItems.reduce((total, item) => total + item.quantity, 0)} items ({products.length} unique)
-									</p>
-								</div>
-							</div>
-							<div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:col-span-2">
-								<DetailField label="Order ID:" value={orderId || 'N/A'} valueClassName="break-all" />
-								<DetailField label="Amount:" value={`${totalAmount} sats`} valueClassName="font-bold" />
-								<DetailField
-									label="Date:"
-									value={orderEvent.created_at ? format(new Date(orderEvent.created_at * 1000), 'dd.MM.yyyy, HH:mm') : 'N/A'}
-								/>
-								<DetailField label="Role:" value={isBuyer ? 'Buyer' : isOrderSeller ? 'Seller' : 'Observer'} />
-								<DetailField label="Status:" value={orderStatus.charAt(0).toUpperCase() + orderStatus.slice(1)} />
-							</div>
+					<CardContent className="pt-4">
+						<div className="text-sm">
+							<span className="text-muted-foreground">Order ID: </span>
+							<span className="font-medium break-all">{orderId || 'N/A'}</span>
+						</div>
+						<Separator className="my-4" />
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<DetailField label="Amount:" value={`${totalAmount} sats`} valueClassName="font-bold" />
+							<DetailField
+								label="Date:"
+								value={orderEvent.created_at ? format(new Date(orderEvent.created_at * 1000), 'dd.MM.yyyy, HH:mm') : 'N/A'}
+							/>
+							<DetailField label="Role:" value={isBuyer ? 'Buyer' : isOrderSeller ? 'Seller' : 'Observer'} />
+							<DetailField label="Status:" value={orderStatus.charAt(0).toUpperCase() + orderStatus.slice(1)} />
 						</div>
 					</CardContent>
 				</Card>
@@ -599,54 +549,60 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				{/* Payment Processing - visible to both buyer and seller */}
 				{totalInvoices > 0 && (
 					<Card>
-						<CardHeader>
-							<CardTitle className="flex items-center gap-2">
-								<CreditCard className="w-5 h-5" />
-								Payment Details ({totalInvoices} invoices)
-							</CardTitle>
-							{/* Payment Summary */}
-							<div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-								<div className="flex items-center gap-2">
-									<CreditCard className="w-4 h-4 text-green-600" />
-									<div>
-										<p className="text-gray-500">Merchant</p>
-										<p className="font-semibold">
-											{invoicesFromPaymentRequests.filter((inv) => inv.description === 'Merchant Payment').length} invoice
-										</p>
+						<CardHeader className="p-0">
+							<div className="bg-gray-50 p-4 rounded-t-xl">
+								<div className="flex items-start gap-2">
+									<CreditCard className="w-5 h-5" />
+									<div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-2">
+										<CardTitle>Payment Details</CardTitle>
+										<span className="text-muted-foreground">({totalInvoices} invoices)</span>
 									</div>
 								</div>
-								<div className="flex items-center gap-2">
-									<Users className="w-4 h-4 text-purple-600" />
-									<div>
-										<p className="text-gray-500">V4V Recipients</p>
-										<p className="font-semibold">
-											{invoicesFromPaymentRequests.filter((inv) => inv.description === 'V4V Community Payment').length} invoices
-										</p>
+								<div className="my-3 border-b border-gray-300 sm:hidden" />
+								{/* Payment Summary */}
+								<div className="sm:mt-3 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+									<div className="flex items-center gap-2">
+										<CreditCard className="w-4 h-4 text-green-600" />
+										<div>
+											<p className="text-gray-500">Merchant</p>
+											<p className="font-semibold">
+												{invoicesFromPaymentRequests.filter((inv) => inv.description === 'Merchant Payment').length} invoice
+											</p>
+										</div>
 									</div>
-								</div>
-								<div className="flex items-center gap-2">
-									<Package className="w-4 h-4 text-blue-600" />
-									<div>
-										<p className="text-gray-500">Total Amount</p>
-										<p className="font-semibold">
-											{invoicesFromPaymentRequests.reduce((sum, inv) => sum + inv.amount, 0).toLocaleString()} sats
-										</p>
+									<div className="flex items-center gap-2">
+										<Users className="w-4 h-4 text-purple-600" />
+										<div>
+											<p className="text-gray-500">V4V Recipients</p>
+											<p className="font-semibold">
+												{invoicesFromPaymentRequests.filter((inv) => inv.description === 'V4V Community Payment').length} invoices
+											</p>
+										</div>
+									</div>
+									<div className="flex items-center gap-2">
+										<Package className="w-4 h-4 text-blue-600" />
+										<div>
+											<p className="text-gray-500">Total Amount</p>
+											<p className="font-semibold">
+												{invoicesFromPaymentRequests.reduce((sum, inv) => sum + inv.amount, 0).toLocaleString()} sats
+											</p>
+										</div>
 									</div>
 								</div>
 							</div>
 						</CardHeader>
-						<CardContent className="space-y-4">
+						<CardContent className="space-y-4 pt-4">
 							{/* Reattempt All Button - only for buyers */}
 							{isBuyer && incompleteInvoices.length > 0 && (
 								<div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-									<div className="flex items-center justify-between">
-										<div className="flex items-center gap-2 text-yellow-800">
-											<AlertTriangle className="w-5 h-5" />
+									<div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:justify-between sm:text-left">
+										<div className="flex flex-col items-center gap-2 text-yellow-800 sm:flex-row sm:items-center">
+											<AlertTriangle className="w-6 h-6 text-yellow-800 sm:w-5 sm:h-5" />
 											<div>
 												<p className="font-medium">
 													{incompleteInvoices.length} invoice{incompleteInvoices.length !== 1 ? 's' : ''} require payment
 												</p>
-												<p className="text-sm">Complete all payments to finalize your order</p>
+												<p className="text-sm">Make all payments to complete the order</p>
 											</div>
 										</div>
 										<Button
@@ -656,7 +612,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 												// Trigger refresh or reattempt logic for all incomplete invoices
 												toast.info('Refreshing payment status for all incomplete invoices...')
 											}}
-											className="text-yellow-700 border-yellow-300 hover:bg-yellow-100"
+											className="w-full text-yellow-700 border-yellow-300 hover:bg-yellow-100 sm:w-auto"
 										>
 											<RefreshCw className="w-4 h-4 mr-2" />
 											Refresh All
@@ -669,7 +625,9 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 							<div className="space-y-2">
 								<div className="flex justify-between text-sm">
 									<span>Payment Progress</span>
-									<span>{Math.round(paymentProgress)}% Complete</span>
+									<span>
+										{paidInvoices.length}/{totalInvoices} Complete
+									</span>
 								</div>
 								{/* Progress bar */}
 								<div className="w-full bg-gray-200 rounded-full h-2">
@@ -683,13 +641,20 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 									const isGeneratingThis = generatingInvoices.has(invoice.id)
 
 									return (
-										<div
-											key={invoice.id}
-											className={`border rounded-lg p-4 ${invoice.status === 'paid' ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}
-										>
-											<div className="flex items-center justify-between mb-3">
+										<Card key={invoice.id} className={`p-4 ${invoice.status === 'paid' ? 'bg-green-50' : 'bg-card'}`}>
+											<div
+												className={cn('flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between', {
+													'mb-3': isComplete || isBuyer,
+													'sm:mb-0': !isBuyer && !isComplete,
+												})}
+											>
 												<div className="flex items-center gap-3">
-													<div className={`p-2 rounded-full ${invoice.status === 'paid' ? 'bg-green-100' : 'bg-gray-100'}`}>
+													{invoicesFromPaymentRequests.length > 1 && (
+														<div className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-600">
+															{index + 1}
+														</div>
+													)}
+													<div className={`p-1 rounded-full ${invoice.status === 'paid' ? 'bg-green-100' : 'bg-gray-100'}`}>
 														{invoice.status === 'paid' ? (
 															<CheckCircle className="w-4 h-4 text-green-600" />
 														) : (
@@ -697,56 +662,76 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 														)}
 													</div>
 													<div>
-														<h4 className="font-medium">{invoice.recipientName}</h4>
-														<p className="text-sm text-gray-500">{invoice.description}</p>
+														<h4 className="font-medium">{invoice.type === 'merchant' ? 'Merchant Payment' : invoice.recipientName}</h4>
+														{invoice.type !== 'merchant' && <p className="text-sm text-gray-500">{invoice.description}</p>}
 													</div>
 												</div>
 												<div className="text-right">
-													<p className="font-semibold">{invoice.amount.toLocaleString()} sats</p>
-													<Badge className={getStatusColor(invoice.status)} variant="outline">
-														{(invoice.status || 'pending').charAt(0).toUpperCase() + (invoice.status || 'pending').slice(1)}
-													</Badge>
+													{/* Desktop-only badge */}
+													{!isComplete && (
+														<Badge className={`hidden sm:inline-flex ${getStatusColor(invoice.status)}`} variant="outline">
+															{(invoice.status || 'pending').charAt(0).toUpperCase() + (invoice.status || 'pending').slice(1)}
+														</Badge>
+													)}
 												</div>
 											</div>
 
 											{/* Payment action buttons - only for buyers and incomplete payments */}
 											{isBuyer && invoice.status !== 'paid' && (
-												<div className="flex gap-2">
-													<Button
+												<div className="flex flex-col gap-2 pt-3 border-t border-muted sm:pt-0 sm:border-t-0">
+													{/* Mobile-only badge */}
+													<Badge
+														className={`${getStatusColor(invoice.status || 'pending')} w-full justify-center py-1 sm:hidden`}
 														variant="outline"
-														size="sm"
-														className="flex-1"
-														disabled={isGeneratingThis}
-														onClick={() => {
-															setSelectedInvoiceIndex(index)
-															setPaymentDialogOpen(true)
-														}}
 													>
-														{isGeneratingThis ? (
-															<>
-																<RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-																Generating...
-															</>
-														) : (
-															<>
-																<Zap className="w-4 h-4 mr-2" />
-																Pay Invoice
-															</>
-														)}
-													</Button>
-
-													{/* Generate new invoice button */}
-													{invoice.lightningAddress && (
+														{(invoice.status || 'pending').charAt(0).toUpperCase() + (invoice.status || 'pending').slice(1)}
+													</Badge>
+													<div className="flex gap-2">
 														<Button
 															variant="outline"
 															size="sm"
-															onClick={() => handleGenerateNewInvoice(invoice)}
+															className="flex-1"
 															disabled={isGeneratingThis}
-															title="Generate a new invoice with fresh expiration"
+															onClick={() => {
+																setSelectedInvoiceIndex(index)
+																setPaymentDialogOpen(true)
+															}}
 														>
-															{isGeneratingThis ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+															{isGeneratingThis ? (
+																<>
+																	<RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+																	Generating...
+																</>
+															) : (
+																<>
+																	<Zap className="w-4 h-4 mr-2" />
+																	Pay {invoice.amount.toLocaleString()} sats
+																</>
+															)}
 														</Button>
-													)}
+
+														{/* Generate new invoice button */}
+														{invoice.lightningAddress && (
+															<Button
+																variant="outline"
+																size="sm"
+																onClick={() => handleGenerateNewInvoice(invoice)}
+																disabled={isGeneratingThis}
+																title="Generate a new invoice with fresh expiration"
+															>
+																{isGeneratingThis ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+															</Button>
+														)}
+													</div>
+												</div>
+											)}
+
+											{/* Seller mobile status badge for incomplete payments */}
+											{!isBuyer && !isComplete && (
+												<div className="pt-3 border-t border-gray-300 sm:hidden">
+													<Badge className={`${getStatusColor(invoice.status || 'pending')} w-full justify-center py-1`} variant="outline">
+														{(invoice.status || 'pending').charAt(0).toUpperCase() + (invoice.status || 'pending').slice(1)}
+													</Badge>
 												</div>
 											)}
 
@@ -754,7 +739,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 											{invoice.status === 'paid' && (
 												<div className="bg-green-100 text-green-800 p-2 rounded text-sm">✅ Payment completed successfully</div>
 											)}
-										</div>
+										</Card>
 									)
 								})}
 							</div>
@@ -816,7 +801,18 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				{allEvents.length > 0 && (
 					<div>
 						<h2 className="text-xl font-bold mb-4">Order Timeline</h2>
-						<div className="space-y-4">{allEvents.map(({ event, type, title, icon }) => renderEventCard(event, title, icon, type))}</div>
+						<div className="space-y-4">
+							{allEvents.map(({ event, type, title, icon }, index) => (
+								<TimelineEventCard
+									key={event.id}
+									event={event}
+									type={type}
+									title={title}
+									icon={icon}
+									timelineIndex={allEvents.length - index}
+								/>
+							))}
+						</div>
 					</div>
 				)}
 			</div>

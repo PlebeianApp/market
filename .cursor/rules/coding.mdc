@@ -1,7 +1,7 @@
 ---
-description: 
+description: coding rules
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
 You are an expert in React, TanStack ecosystem, Radix UI, Tailwind CSS, Nostr protocol, and TypeScript.
 
