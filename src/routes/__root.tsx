@@ -24,7 +24,7 @@ function RootLayout() {
 	const { pathname } = window.location
 	const { amIAdmin, isLoading: isLoadingAdmin } = useAmIAdmin(config?.appPublicKey)
 	const location = useLocation()
-  const isAdminRoute = pathname.startsWith('/dashboard/app-settings')
+	const isAdminRoute = pathname.startsWith('/dashboard/app-settings')
 	const isSetupPage = location.pathname === '/setup'
 	const isDashboardPage = location.pathname.startsWith('/dashboard')
 	const isProfilePage = location.pathname.startsWith('/profile/')
