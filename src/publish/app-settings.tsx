@@ -538,8 +538,13 @@ export const promoteEditorToAdmin = async (
 	const updatedAdmins = [...adminSettings.admins, userPubkey]
 
 	// Publish both events
+	console.log('Publishing admin list update...', { updatedAdmins })
 	const adminEventId = await publishAdminList({ admins: updatedAdmins }, signer, ndk)
+	console.log('Admin list published successfully:', adminEventId)
+
+	console.log('Publishing editor list update...', { updatedEditors })
 	const editorEventId = await publishEditorList({ editors: updatedEditors }, signer, ndk)
+	console.log('Editor list published successfully:', editorEventId)
 
 	return { adminEventId, editorEventId }
 }
@@ -593,8 +598,13 @@ export const demoteAdminToEditor = async (
 	const updatedEditors = currentEditors.includes(userPubkey) ? currentEditors : [...currentEditors, userPubkey]
 
 	// Publish both events
+	console.log('Publishing admin list update (demote)...', { updatedAdmins })
 	const adminEventId = await publishAdminList({ admins: updatedAdmins }, signer, ndk)
+	console.log('Admin list published successfully (demote):', adminEventId)
+
+	console.log('Publishing editor list update (demote)...', { updatedEditors })
 	const editorEventId = await publishEditorList({ editors: updatedEditors }, signer, ndk)
+	console.log('Editor list published successfully (demote):', editorEventId)
 
 	return { adminEventId, editorEventId }
 }
