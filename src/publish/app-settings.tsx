@@ -400,20 +400,18 @@ export const usePublishEditorListMutation = () => {
 			return publishEditorList(editorData, signer, ndk)
 		},
 
-		onSuccess: async (eventId) => {
-			// Get current user pubkey
-			let userPubkey = ''
-			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					userPubkey = user.pubkey
-				}
-			}
+		onSuccess: async (eventId, editorData) => {
+			// Note: Editor events are stored with app pubkey as author after re-signing
+			// We need to invalidate using app pubkey, not current user pubkey
+
+			// Get app pubkey from current config
+			const configQuery = queryClient.getQueryData(['config']) as { appPublicKey?: string } | undefined
+			const appPubkey = configQuery?.appPublicKey
 
 			// Invalidate relevant queries
 			queryClient.invalidateQueries({ queryKey: configKeys.all })
-			if (userPubkey) {
-				queryClient.invalidateQueries({ queryKey: configKeys.editors(userPubkey) })
+			if (appPubkey) {
+				queryClient.invalidateQueries({ queryKey: configKeys.editors(appPubkey) })
 			}
 
 			toast.success('Editor list updated successfully')
@@ -447,6 +445,7 @@ export const useAddEditorMutation = () => {
 			// Invalidate relevant queries
 			queryClient.invalidateQueries({ queryKey: configKeys.all })
 			if (appPubkey) {
+				queryClient.invalidateQueries({ queryKey: configKeys.admins(appPubkey) })
 				queryClient.invalidateQueries({ queryKey: configKeys.editors(appPubkey) })
 			}
 
@@ -481,6 +480,7 @@ export const useRemoveEditorMutation = () => {
 			// Invalidate relevant queries
 			queryClient.invalidateQueries({ queryKey: configKeys.all })
 			if (appPubkey) {
+				queryClient.invalidateQueries({ queryKey: configKeys.admins(appPubkey) })
 				queryClient.invalidateQueries({ queryKey: configKeys.editors(appPubkey) })
 			}
 
@@ -743,15 +743,6 @@ export const usePromoteEditorToAdminMutation = () => {
 		},
 
 		onSuccess: async (_, { appPubkey }) => {
-			// Get current user pubkey
-			let userPubkey = ''
-			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					userPubkey = user.pubkey
-				}
-			}
-
 			// Invalidate all role-related queries
 			queryClient.invalidateQueries({ queryKey: configKeys.all })
 			if (appPubkey) {
@@ -786,15 +777,6 @@ export const useDemoteAdminToEditorMutation = () => {
 		},
 
 		onSuccess: async (_, { appPubkey }) => {
-			// Get current user pubkey
-			let userPubkey = ''
-			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					userPubkey = user.pubkey
-				}
-			}
-
 			// Invalidate all role-related queries
 			queryClient.invalidateQueries({ queryKey: configKeys.all })
 			if (appPubkey) {
@@ -829,18 +811,10 @@ export const usePromoteUserToEditorMutation = () => {
 		},
 
 		onSuccess: async (_, { appPubkey }) => {
-			// Get current user pubkey
-			let userPubkey = ''
-			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					userPubkey = user.pubkey
-				}
-			}
-
-			// Invalidate editor queries
+			// Invalidate all role-related queries
 			queryClient.invalidateQueries({ queryKey: configKeys.all })
 			if (appPubkey) {
+				queryClient.invalidateQueries({ queryKey: configKeys.admins(appPubkey) })
 				queryClient.invalidateQueries({ queryKey: configKeys.editors(appPubkey) })
 			}
 
@@ -871,18 +845,10 @@ export const useDemoteEditorToUserMutation = () => {
 		},
 
 		onSuccess: async (_, { appPubkey }) => {
-			// Get current user pubkey
-			let userPubkey = ''
-			if (signer) {
-				const user = await signer.user()
-				if (user && user.pubkey) {
-					userPubkey = user.pubkey
-				}
-			}
-
-			// Invalidate editor queries
+			// Invalidate all role-related queries
 			queryClient.invalidateQueries({ queryKey: configKeys.all })
 			if (appPubkey) {
+				queryClient.invalidateQueries({ queryKey: configKeys.admins(appPubkey) })
 				queryClient.invalidateQueries({ queryKey: configKeys.editors(appPubkey) })
 			}
 

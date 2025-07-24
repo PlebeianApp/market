@@ -73,25 +73,11 @@ function TeamComponent() {
 				appPubkey: config?.appPublicKey,
 			})
 			setNewAdminInput('')
-			toast.success('Admin added successfully')
 		} catch (error) {
 			console.error('Failed to add admin:', error)
 			toast.error(`Failed to add admin: ${error instanceof Error ? error.message : 'Unknown error'}`)
 		} finally {
 			setIsAddingAdmin(false)
-		}
-	}
-
-	const handleRemoveAdmin = async (pubkey: string) => {
-		try {
-			await removeAdminMutation.mutateAsync({
-				userPubkey: pubkey,
-				appPubkey: config?.appPublicKey,
-			})
-			toast.success('Admin removed successfully')
-		} catch (error) {
-			console.error('Failed to remove admin:', error)
-			toast.error(`Failed to remove admin: ${error instanceof Error ? error.message : 'Unknown error'}`)
 		}
 	}
 
@@ -110,25 +96,11 @@ function TeamComponent() {
 				appPubkey: config?.appPublicKey,
 			})
 			setNewEditorInput('')
-			toast.success('Editor added successfully')
 		} catch (error) {
 			console.error('Failed to add editor:', error)
 			toast.error(`Failed to add editor: ${error instanceof Error ? error.message : 'Unknown error'}`)
 		} finally {
 			setIsAddingEditor(false)
-		}
-	}
-
-	const handleRemoveEditor = async (pubkey: string) => {
-		try {
-			await removeEditorMutation.mutateAsync({
-				userPubkey: pubkey,
-				appPubkey: config?.appPublicKey,
-			})
-			toast.success('Editor removed successfully')
-		} catch (error) {
-			console.error('Failed to remove editor:', error)
-			toast.error(`Failed to remove editor: ${error instanceof Error ? error.message : 'Unknown error'}`)
 		}
 	}
 

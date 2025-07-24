@@ -14,7 +14,7 @@ export interface AdminSettings {
 export interface EditorSettings {
 	editors: string[]
 	lastUpdated: number
-	event: NDKEvent
+	event: NDKEvent | null
 }
 
 /**
@@ -183,7 +183,12 @@ export const fetchEditorSettings = async (appPubkey?: string): Promise<EditorSet
 
 	if (eventArray.length === 0) {
 		console.log(`No editor settings found for app pubkey: ${targetPubkey}`)
-		return null
+		// Return empty editor list instead of null for consistency
+		return {
+			editors: [],
+			lastUpdated: 0,
+			event: null,
+		}
 	}
 
 	// Get the latest editor list event
@@ -256,7 +261,7 @@ export const isEditor = (editorSettings: EditorSettings | null | undefined, pubk
  * Get formatted editor data for display
  */
 export const getFormattedEditors = (editorSettings: EditorSettings | null | undefined) => {
-	if (!editorSettings) return []
+	if (!editorSettings || !editorSettings.editors) return []
 
 	return editorSettings.editors.map((pubkey) => ({
 		pubkey,
