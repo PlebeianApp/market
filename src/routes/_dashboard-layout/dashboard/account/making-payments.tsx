@@ -586,7 +586,12 @@ function WalletListItem({
 							)}
 							{balanceQuery.data && (
 								<div>
-									<p className="text-lg font-semibold">{balanceQuery.data.balance.toLocaleString()} sats</p>
+									<p className="text-lg font-semibold">
+										{balanceQuery.data.balance.toLocaleString()} sats
+										{balanceQuery.data.balance === 0 && (
+											<span className="text-xs text-yellow-600 ml-2">(Balance unavailable)</span>
+										)}
+									</p>
 									<p className="text-xs text-muted-foreground">Last updated: {new Date(balanceQuery.data.timestamp).toLocaleString()}</p>
 								</div>
 							)}

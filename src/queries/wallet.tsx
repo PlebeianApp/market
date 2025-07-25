@@ -123,11 +123,51 @@ export const fetchNwcWalletBalance = async (nwcUri: string): Promise<NwcBalance 
 		return null
 	}
 
+	console.log('🔍 Attempting to fetch balance for NWC URI:', nwcUri.substring(0, 20) + '...')
 	let nwcWalletInstance: NDKNWCWallet | null = null
 
 	try {
+		console.log('📱 Creating NWC wallet instance...')
 		nwcWalletInstance = new NDKNWCWallet(ndkInstance as any, { pairingCode: nwcUri })
-		await nwcWalletInstance.updateBalance()
+		
+		// Add more specific error handling for balance update with timeout
+		try {
+			console.log('⚖️ Updating wallet balance...')
+			
+			// Add a timeout to prevent hanging
+			const updatePromise = nwcWalletInstance.updateBalance()
+			const timeoutPromise = new Promise((_, reject) => 
+				setTimeout(() => reject(new Error('Balance update timed out')), 10000)
+			)
+			
+			await Promise.race([updatePromise, timeoutPromise])
+			console.log('✅ Balance update completed successfully')
+		} catch (balanceError: any) {
+			console.error('❌ Error during updateBalance():', balanceError)
+			console.error('Error stack:', balanceError?.stack)
+			
+			// Check for specific error types
+			if (balanceError?.message?.includes('square root') || balanceError?.message?.includes('Cannot find square root')) {
+				console.error('🔢 Mathematical error detected in wallet balance calculation:', balanceError)
+				console.log('🔧 This might be a temporary cryptographic issue with the wallet service')
+				
+				// Return a fallback response indicating the wallet exists but balance is unavailable
+				return {
+					balance: 0,
+					timestamp: Date.now(),
+				}
+			} else if (balanceError?.message?.includes('timed out')) {
+				console.error('⏰ Balance update timed out')
+				console.log('🔧 Wallet service may be slow or unresponsive')
+				
+				// Return a fallback for timeout
+				return {
+					balance: 0,
+					timestamp: Date.now(),
+				}
+			}
+			throw balanceError
+		}
 
 		const balanceResponse = nwcWalletInstance.balance
 
@@ -181,6 +221,10 @@ export const useNwcWalletBalanceQuery = (nwcUri: string | undefined, enabled: bo
 			if (failureCount >= 2) return false
 			if (error?.message?.includes('timed out') || error?.message?.includes('connection')) {
 				return false // Don't retry connection timeouts
+			}
+			// Don't retry mathematical/cryptographic errors like square root
+			if (error?.message?.includes('square root') || error?.message?.includes('calculation failed')) {
+				return false
 			}
 			return true
 		},
