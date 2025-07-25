@@ -662,6 +662,36 @@ function RouteComponent() {
 							{/* Payment Interface - Only show when invoices are ready */}
 							{currentStep === 'payment' && !isGeneratingInvoices && invoices.length > 0 && (
 								<div className="space-y-6">
+									<div className="flex items-center justify-between">
+										<h2 className="text-2xl font-bold">
+											Payment {currentInvoiceIndex + 1} of {invoices.length}
+										</h2>
+										{invoices.length > 1 && (
+											<div className="flex items-center gap-2">
+												<Button
+													variant="outline"
+													size="sm"
+													onClick={() => setCurrentInvoiceIndex(Math.max(0, currentInvoiceIndex - 1))}
+													disabled={currentInvoiceIndex === 0}
+												>
+													<ChevronLeft className="w-4 h-4" />
+													Previous
+												</Button>
+												<span className="text-sm text-gray-500">
+													{currentInvoiceIndex + 1} of {invoices.length}
+												</span>
+												<Button
+													variant="outline"
+													size="sm"
+													onClick={() => setCurrentInvoiceIndex(Math.min(invoices.length - 1, currentInvoiceIndex + 1))}
+													disabled={currentInvoiceIndex === invoices.length - 1}
+												>
+													Next
+													<ChevronRight className="w-4 h-4" />
+												</Button>
+											</div>
+										)}
+									</div>
 
 									{/* Pay All Button - Only show if NWC is enabled and there are unpaid invoices */}
 									{nwcEnabled && invoices.filter((inv) => inv.status === 'pending').length > 1 && (
@@ -709,7 +739,7 @@ function RouteComponent() {
 					<CardHeader>
 						<CardTitle>{currentStep === 'payment' ? 'Payment Details' : 'Order Summary'}</CardTitle>
 					</CardHeader>
-					<CardContent className="flex-1 overflow-y-auto p-6">
+					<CardContent className="flex-1 overflow-y-auto">
 						{currentStep === 'payment' && isGeneratingInvoices ? (
 							<div className="flex items-center justify-center h-full">
 								<div className="text-center">
