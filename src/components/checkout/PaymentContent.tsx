@@ -257,30 +257,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 					</div>
 				)}
 
-				{/* Invoice Details */}
-				<Card>
-					<CardHeader className="pb-3">
-						<div className="flex items-center justify-between">
-							<CardTitle className="text-base flex items-center gap-2">
-								{currentInvoice.type === 'merchant' ? <CreditCard className="w-4 h-4" /> : <Users className="w-4 h-4" />}
-								{currentInvoice.recipientName}
-							</CardTitle>
-							<Badge variant={invoiceStates[currentInvoice.id] === 'paid' ? 'secondary' : 'outline'}>
-								{invoiceStates[currentInvoice.id] === 'paid' ? 'Paid' : 'Pending'}
-							</Badge>
-						</div>
-					</CardHeader>
-					<CardContent className="space-y-3">
-						<div className="flex justify-between">
-							<span className="text-sm text-gray-600">Amount:</span>
-							<span className="font-semibold">{currentInvoice.amount.toLocaleString()} sats</span>
-						</div>
-						<div className="flex justify-between">
-							<span className="text-sm text-gray-600">Description:</span>
-							<span className="text-sm">{currentInvoice.description}</span>
-						</div>
-					</CardContent>
-				</Card>
+
 
 				{/* Render ALL Lightning Payment Processors (hidden except for current) */}
 				{allPaymentData.map(({ invoiceId, data }, index) => (
