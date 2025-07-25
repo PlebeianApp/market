@@ -537,9 +537,9 @@ function RouteComponent() {
 			</div>
 
 			{/* Main Content */}
-			<div className="px-4 py-8 flex flex-col lg:flex-row gap-4 w-full flex-grow">
+			<div className="px-4 py-8 flex flex-col lg:flex-row lg:gap-4 w-full flex-grow">
 				{/* Mobile Order Summary - Collapsible, shows above form */}
-				<div className="lg:hidden">
+				<div className="lg:hidden mb-4">
 					<Card>
 						<CardHeader>
 							<CardTitle className="flex items-center justify-between cursor-pointer" onClick={() => setMobileOrderSummaryOpen(!mobileOrderSummaryOpen)}>
