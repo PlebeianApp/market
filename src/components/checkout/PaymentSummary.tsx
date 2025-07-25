@@ -28,7 +28,7 @@ export function PaymentSummary({ invoices, currentIndex, onSelectInvoice }: Paym
 					<CardTitle className="text-sm">All Payments ({invoices.length})</CardTitle>
 				</CardHeader>
 				<CardContent className="p-0">
-					<ScrollArea className="max-h-64">
+					<ScrollArea className="max-h-80">
 						<div className="space-y-1 px-3 pt-3 pb-2">
 							{invoices.map((invoice, index) => (
 								<button
