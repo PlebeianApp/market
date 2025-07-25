@@ -276,6 +276,10 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 							onPaymentFailed={handlePaymentFailed}
 							showManualVerification={true}
 							active={index === activeIndex} // Only the current processor is active
+							showNavigation={invoices.length > 1}
+							currentIndex={activeIndex}
+							totalInvoices={invoices.length}
+							onNavigate={handleNavigate}
 						/>
 					</div>
 				))}

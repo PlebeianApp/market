@@ -11,7 +11,7 @@ import { copyToClipboard } from '@/lib/utils'
 import { NDKEvent, NDKUser, NDKZapper } from '@nostr-dev-kit/ndk'
 import { NDKNWCWallet } from '@nostr-dev-kit/ndk-wallet'
 import { useStore } from '@tanstack/react-store'
-import { Copy, CreditCard, Loader2, Zap } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Copy, CreditCard, Loader2, Zap } from 'lucide-react'
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react'
 import { toast } from 'sonner'
 
@@ -61,6 +61,10 @@ interface LightningPaymentProcessorProps {
 	showManualVerification?: boolean
 	title?: string
 	active?: boolean // New prop to control when processor should be active
+	showNavigation?: boolean
+	currentIndex?: number
+	totalInvoices?: number
+	onNavigate?: (newIndex: number) => void
 }
 
 export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef, LightningPaymentProcessorProps>(
@@ -74,6 +78,10 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			showManualVerification = false,
 			title,
 			active = true, // Default to true for backward compatibility
+			showNavigation = false,
+			currentIndex = 0,
+			totalInvoices = 1,
+			onNavigate,
 		},
 		ref,
 	) => {
@@ -332,10 +340,37 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 						{/* Invoice QR Code - Always visible when available */}
 						{invoice && (
 							<div className="space-y-3">
-								<div className="flex justify-center">
+								<div className="flex items-center justify-center gap-4">
+									{/* Previous Invoice Button */}
+									{showNavigation && (
+										<Button
+											variant="ghost"
+											size="icon"
+											onClick={() => onNavigate?.(Math.max(0, currentIndex - 1))}
+											disabled={currentIndex === 0}
+											className="h-12 w-12 rounded-full"
+										>
+											<ChevronLeft className="h-6 w-6" />
+										</Button>
+									)}
+
+									{/* QR Code */}
 									<a href={lightningUrl} className="block hover:opacity-90 transition-opacity" target="_blank" rel="noopener noreferrer">
 										<QRCode value={invoice} size={200} showBorder={false} />
 									</a>
+
+									{/* Next Invoice Button */}
+									{showNavigation && (
+										<Button
+											variant="ghost"
+											size="icon"
+											onClick={() => onNavigate?.(Math.min(totalInvoices - 1, currentIndex + 1))}
+											disabled={currentIndex === totalInvoices - 1}
+											className="h-12 w-12 rounded-full"
+										>
+											<ChevronRight className="h-6 w-6" />
+										</Button>
+									)}
 								</div>
 
 								{/* Invoice text with copy button */}
