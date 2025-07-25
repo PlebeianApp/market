@@ -294,85 +294,101 @@ function MakingPaymentsComponent() {
 
 	// Main View (List Wallets)
 	return (
-		<div className="space-y-6">
-			<div className="flex justify-between items-center">
-				{combinedWallets.length > 0 && !isAddingWallet && (
-					<Button onClick={handleAddWalletClick} className="hidden sm:flex">
-						<PlusIcon className="h-4 w-4 mr-2" /> Add Another Wallet
-					</Button>
+		<div>
+			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+				<h1 className="text-2xl font-bold">Making Payments</h1>
+				<Button
+					onClick={handleAddWalletClick}
+					className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+				>
+					<PlusIcon className="h-4 w-4" />
+					{combinedWallets.length === 0 ? 'Add Wallet' : 'Add Another Wallet'}
+				</Button>
+			</div>
+			<div className="space-y-6 p-4 lg:p-6">
+				<div className="lg:hidden">
+					{combinedWallets.length > 0 && (
+						<Button
+							onClick={handleAddWalletClick}
+							className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+						>
+							<PlusIcon className="h-4 w-4" />
+							Add Another Wallet
+						</Button>
+					)}
+				</div>
+
+				{combinedWallets.length === 0 && !isAddingWallet ? (
+					<Card>
+						<CardContent className="py-10 flex flex-col items-center justify-center">
+							<p className="text-center text-muted-foreground mb-4">No wallets configured yet. Add a wallet to make payments.</p>
+							<Button onClick={handleAddWalletClick}>
+								<PlusIcon className="h-4 w-4 mr-2" /> Add Wallet
+							</Button>
+						</CardContent>
+					</Card>
+				) : (
+					!isAddingWallet && (
+						<>
+							{combinedWallets.map((wallet) => (
+								<WalletListItemWithBalance
+									key={wallet.id}
+									wallet={wallet}
+									isOpen={openCollapsibleId === wallet.id}
+									onToggleOpen={() => {
+										const isCurrentlyOpen = openCollapsibleId === wallet.id
+										if (isCurrentlyOpen) {
+											setOpenCollapsibleId(null)
+											resetEditForm() // Clear form when closing
+											setEditingWallet(null)
+										} else {
+											// If another wallet was open and being edited, reset that form first
+											if (openCollapsibleId && openCollapsibleId !== wallet.id) {
+												resetEditForm()
+											}
+											setOpenCollapsibleId(wallet.id)
+											// Populate form with this wallet's data
+											setEditingWallet(wallet)
+											setEditWalletName(wallet.name)
+											const parsedUri = parseNwcUri(wallet.nwcUri)
+											setEditNwcPubkey(wallet.pubkey)
+											setEditNwcRelays(wallet.relays.join(', '))
+											setEditNwcSecret(parsedUri?.secret || '')
+											setEditStoreOnNostr(wallet.storedOnNostr || false)
+											setShowEditSecret(false) // Reset visibility of secret
+										}
+									}}
+									onCancelEdit={handleCancelEdit}
+									onSaveEdit={handleSaveWalletUpdate}
+									onDeleteWallet={() => handleDeleteWallet(wallet.id)}
+									editWalletName={editWalletName}
+									setEditWalletName={setEditWalletName}
+									editNwcPubkey={editNwcPubkey}
+									setEditNwcPubkey={setEditNwcPubkey}
+									editNwcRelays={editNwcRelays}
+									setEditNwcRelays={setEditNwcRelays}
+									editNwcSecret={editNwcSecret}
+									setEditNwcSecret={setEditNwcSecret}
+									showEditSecret={showEditSecret}
+									setShowEditSecret={setShowEditSecret}
+									editStoreOnNostr={editStoreOnNostr}
+									setEditStoreOnNostr={setEditStoreOnNostr}
+									isSavingNostr={saveNostrWalletsMutation.isPending}
+									userPubkeyPresent={!!userPubkey}
+									isWalletSyncing={saveNostrWalletsMutation.isPending && localWallets.find((lw) => lw.id === wallet.id)?.storedOnNostr}
+									isDeleting={deletingWalletId === wallet.id}
+								/>
+							))}
+
+							{combinedWallets.length > 0 && (
+								<Button onClick={handleAddWalletClick} className="w-full mt-4 sm:hidden">
+									<PlusIcon className="h-4 w-4 mr-2" /> Add Another Wallet
+								</Button>
+							)}
+						</>
+					)
 				)}
 			</div>
-
-			{combinedWallets.length === 0 && !isAddingWallet ? (
-				<Card>
-					<CardContent className="py-10 flex flex-col items-center justify-center">
-						<p className="text-center text-muted-foreground mb-4">No wallets configured yet. Add a wallet to make payments.</p>
-						<Button onClick={handleAddWalletClick}>
-							<PlusIcon className="h-4 w-4 mr-2" /> Add Wallet
-						</Button>
-					</CardContent>
-				</Card>
-			) : (
-				!isAddingWallet && (
-					<>
-						{combinedWallets.map((wallet) => (
-							<WalletListItemWithBalance
-								key={wallet.id}
-								wallet={wallet}
-								isOpen={openCollapsibleId === wallet.id}
-								onToggleOpen={() => {
-									const isCurrentlyOpen = openCollapsibleId === wallet.id
-									if (isCurrentlyOpen) {
-										setOpenCollapsibleId(null)
-										resetEditForm() // Clear form when closing
-										setEditingWallet(null)
-									} else {
-										// If another wallet was open and being edited, reset that form first
-										if (openCollapsibleId && openCollapsibleId !== wallet.id) {
-											resetEditForm()
-										}
-										setOpenCollapsibleId(wallet.id)
-										// Populate form with this wallet's data
-										setEditingWallet(wallet)
-										setEditWalletName(wallet.name)
-										const parsedUri = parseNwcUri(wallet.nwcUri)
-										setEditNwcPubkey(wallet.pubkey)
-										setEditNwcRelays(wallet.relays.join(', '))
-										setEditNwcSecret(parsedUri?.secret || '')
-										setEditStoreOnNostr(wallet.storedOnNostr || false)
-										setShowEditSecret(false) // Reset visibility of secret
-									}
-								}}
-								onCancelEdit={handleCancelEdit}
-								onSaveEdit={handleSaveWalletUpdate}
-								onDeleteWallet={() => handleDeleteWallet(wallet.id)}
-								editWalletName={editWalletName}
-								setEditWalletName={setEditWalletName}
-								editNwcPubkey={editNwcPubkey}
-								setEditNwcPubkey={setEditNwcPubkey}
-								editNwcRelays={editNwcRelays}
-								setEditNwcRelays={setEditNwcRelays}
-								editNwcSecret={editNwcSecret}
-								setEditNwcSecret={setEditNwcSecret}
-								showEditSecret={showEditSecret}
-								setShowEditSecret={setShowEditSecret}
-								editStoreOnNostr={editStoreOnNostr}
-								setEditStoreOnNostr={setEditStoreOnNostr}
-								isSavingNostr={saveNostrWalletsMutation.isPending}
-								userPubkeyPresent={!!userPubkey}
-								isWalletSyncing={saveNostrWalletsMutation.isPending && localWallets.find((lw) => lw.id === wallet.id)?.storedOnNostr}
-								isDeleting={deletingWalletId === wallet.id}
-							/>
-						))}
-
-						{combinedWallets.length > 0 && (
-							<Button onClick={handleAddWalletClick} className="w-full mt-4 sm:hidden">
-								<PlusIcon className="h-4 w-4 mr-2" /> Add Another Wallet
-							</Button>
-						)}
-					</>
-				)
-			)}
 		</div>
 	)
 }
