@@ -232,6 +232,22 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 
 		return (
 			<div className="space-y-4">
+				{/* Invoice Progress - Moved to top */}
+				{invoices.length > 1 && (
+					<div className="space-y-2">
+						<div className="flex justify-between text-sm">
+							<span>Payment Progress</span>
+							<span>
+								{Object.values(invoiceStates).filter((state) => state === 'paid').length} of {invoices.length} completed
+							</span>
+						</div>
+						<Progress
+							value={(Object.values(invoiceStates).filter((state) => state === 'paid').length / invoices.length) * 100}
+							className="w-full"
+						/>
+					</div>
+				)}
+
 				{/* Navigation Header */}
 				{showNavigation && invoices.length > 1 && (
 					<div className="flex items-center justify-between">
@@ -284,21 +300,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 					</div>
 				))}
 
-				{/* Invoice Progress */}
-				{invoices.length > 1 && (
-					<div className="space-y-2">
-						<div className="flex justify-between text-sm">
-							<span>Payment Progress</span>
-							<span>
-								{Object.values(invoiceStates).filter((state) => state === 'paid').length} of {invoices.length} completed
-							</span>
-						</div>
-						<Progress
-							value={(Object.values(invoiceStates).filter((state) => state === 'paid').length / invoices.length) * 100}
-							className="w-full"
-						/>
-					</div>
-				)}
+
 			</div>
 		)
 	},

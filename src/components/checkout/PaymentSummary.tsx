@@ -21,9 +21,36 @@ export function PaymentSummary({ invoices, currentIndex, onSelectInvoice }: Paym
 	const currentInvoice = invoices[currentIndex]
 
 	return (
-		<div className="space-y-4">
-			{/* All Payments - Combined with Currently Paying */}
-			<Card>
+		<div className="space-y-4 flex flex-col lg:flex-col-reverse">
+			{/* Payment Summary - Mobile first, Desktop second */}
+			<Card className="lg:order-2">
+				<CardHeader className="pb-2">
+					<CardTitle className="text-sm">Payment Summary</CardTitle>
+				</CardHeader>
+				<CardContent className="space-y-2">
+					<div className="flex justify-between text-sm">
+						<span>Paid</span>
+						<span className="font-medium">
+							{paidCount}/{invoices.length}
+						</span>
+					</div>
+					<div className="flex justify-between text-sm">
+						<span>Completed</span>
+						<span className="font-medium text-green-600">{formatSats(paidAmount)} sats</span>
+					</div>
+					<div className="flex justify-between text-sm">
+						<span>Remaining</span>
+						<span className="font-medium">{formatSats(remainingAmount)} sats</span>
+					</div>
+					<div className="border-t pt-2 flex justify-between font-medium">
+						<span>Total</span>
+						<span>{formatSats(totalAmount)} sats</span>
+					</div>
+				</CardContent>
+			</Card>
+
+			{/* All Payments - Mobile second, Desktop first */}
+			<Card className="lg:order-1">
 				<CardHeader className="pb-2">
 					<CardTitle className="text-sm">All Payments ({invoices.length})</CardTitle>
 				</CardHeader>
@@ -72,33 +99,6 @@ export function PaymentSummary({ invoices, currentIndex, onSelectInvoice }: Paym
 							))}
 						</div>
 					</ScrollArea>
-				</CardContent>
-			</Card>
-
-			{/* Payment Summary */}
-			<Card>
-				<CardHeader className="pb-2">
-					<CardTitle className="text-sm">Payment Summary</CardTitle>
-				</CardHeader>
-				<CardContent className="space-y-2">
-					<div className="flex justify-between text-sm">
-						<span>Paid</span>
-						<span className="font-medium">
-							{paidCount}/{invoices.length}
-						</span>
-					</div>
-					<div className="flex justify-between text-sm">
-						<span>Completed</span>
-						<span className="font-medium text-green-600">{formatSats(paidAmount)} sats</span>
-					</div>
-					<div className="flex justify-between text-sm">
-						<span>Remaining</span>
-						<span className="font-medium">{formatSats(remainingAmount)} sats</span>
-					</div>
-					<div className="border-t pt-2 flex justify-between font-medium">
-						<span>Total</span>
-						<span>{formatSats(totalAmount)} sats</span>
-					</div>
 				</CardContent>
 			</Card>
 		</div>
