@@ -34,27 +34,13 @@ export function OrderFinalizeComponent({
 	const isPostPayment = invoices.length > 0 && invoices.some((invoice) => invoice.status !== 'pending')
 
 	return (
-		<div className="h-full">
-			{/* Order Summary - Full Width */}
-			<Card className="h-full">
-				<CardHeader>
-					<div className="flex items-center gap-3">
-						<div className={`p-2 rounded-lg ${isPostPayment ? 'bg-green-100' : 'bg-blue-100'}`}>
-							<Receipt className={`h-5 w-5 ${isPostPayment ? 'text-green-600' : 'text-blue-600'}`} />
-						</div>
-						<div>
-							<CardTitle>{isPostPayment ? 'Order Complete!' : 'Order Summary'}</CardTitle>
-							<p className="text-sm text-gray-600">
-								{isPostPayment
-									? allInvoicesPaid
-										? 'Order completed successfully!'
-										: 'Processing your order...'
-									: 'Review your order details'}
-							</p>
-						</div>
-					</div>
-				</CardHeader>
-				<CardContent className="space-y-6">
+		<div className="h-full flex flex-col">
+			{/* Fixed Header */}
+			<div className="flex-shrink-0 mb-6">
+				<h1 className="font-semibold">{isPostPayment ? 'Order Complete!' : 'Order Summary'}</h1>
+			</div>
+			
+			<div className="flex-1 overflow-y-auto space-y-6 pr-2 pb-4">
 					{/* Payment Status - only show if invoices exist */}
 					{isPostPayment && (
 						<div className="space-y-3">
@@ -194,39 +180,41 @@ export function OrderFinalizeComponent({
 						</div>
 					)}
 
-					{/* Action Buttons */}
-					<div className="space-y-3 pt-4">
-						{!isPostPayment && onContinueToPayment && (
-							<Button onClick={onContinueToPayment} className="w-full bg-black text-white hover:bg-gray-800">
-								Continue to Payment
-							</Button>
-						)}
+			</div>
 
-						{isPostPayment && (
-							<>
-								{allInvoicesPaid && onViewOrders && (
-									<Button onClick={onViewOrders} className="w-full bg-black text-white hover:bg-gray-800">
-										View Your Purchases
-									</Button>
-								)}
+			{/* Fixed Action Buttons Footer */}
+			<div className="flex-shrink-0 bg-white border-t pt-4">
+				<div className="space-y-3">
+					{!isPostPayment && onContinueToPayment && (
+						<Button onClick={onContinueToPayment} className="w-full bg-black text-white hover:bg-gray-800">
+							Continue to Payment
+						</Button>
+					)}
 
-								<Button
-									onClick={onNewOrder}
-									className={`w-full ${allInvoicesPaid && onViewOrders ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-black text-white hover:bg-gray-800'}`}
-								>
-									{allInvoicesPaid ? 'Continue Shopping' : 'Back to Store'}
+					{isPostPayment && (
+						<>
+							{allInvoicesPaid && onViewOrders && (
+								<Button onClick={onViewOrders} className="w-full bg-black text-white hover:bg-gray-800">
+									View Your Purchases
 								</Button>
+							)}
 
-								{allInvoicesPaid && (
-									<Button variant="outline" className="w-full" onClick={() => window.print()}>
-										Print Order Summary
-									</Button>
-								)}
-							</>
-						)}
-					</div>
-				</CardContent>
-			</Card>
+							<Button
+								onClick={onNewOrder}
+								className={`w-full ${allInvoicesPaid && onViewOrders ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-black text-white hover:bg-gray-800'}`}
+							>
+								{allInvoicesPaid ? 'Continue Shopping' : 'Back to Store'}
+							</Button>
+
+							{allInvoicesPaid && (
+								<Button variant="outline" className="w-full" onClick={() => window.print()}>
+									Print Order Summary
+								</Button>
+							)}
+						</>
+					)}
+				</div>
+			</div>
 		</div>
 	)
 }

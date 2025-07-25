@@ -2,7 +2,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { MapPin } from 'lucide-react'
 
 export interface CheckoutFormData {
 	name: string
@@ -22,15 +21,13 @@ interface ShippingAddressFormProps {
 
 export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAddressFormProps) {
 	return (
-		<div className="space-y-6">
-			<div className="flex items-center gap-3 mb-6">
-				<div className="p-2 bg-blue-100 rounded-lg">
-					<MapPin className="h-5 w-5 text-blue-600" />
-				</div>
-				<div>
-					<h2 className="font-semibold">Shipping Address</h2>
-				</div>
+		<div className="flex flex-col h-full max-h-full">
+			{/* Fixed Header */}
+			<div className="flex-shrink-0 mb-6">
+				<h2 className="font-semibold">Shipping Address</h2>
 			</div>
+
+			<div className="flex-1 overflow-y-auto space-y-6 pr-2 pb-4">
 
 			<form
 				onSubmit={(e) => {
@@ -258,7 +255,11 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 					</div>
 				)}
 
-				{/* Submit Button */}
+				</form>
+			</div>
+
+			{/* Fixed Submit Button */}
+			<div className="flex-shrink-0 bg-white border-t pt-4">
 				<form.Subscribe
 					selector={(state: any) => [state.canSubmit, state.isSubmitting]}
 					children={([canSubmit, isSubmitting]: [boolean, boolean]) => (
@@ -266,12 +267,17 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 							type="submit"
 							className="w-full bg-black text-white hover:bg-gray-800"
 							disabled={!canSubmit || !hasAllShippingMethods || isSubmitting}
+							onClick={(e) => {
+								e.preventDefault()
+								e.stopPropagation()
+								form.handleSubmit()
+							}}
 						>
 							{isSubmitting ? 'Processing...' : 'Continue to Payment'}
 						</Button>
 					)}
 				/>
-			</form>
+			</div>
 		</div>
 	)
 }

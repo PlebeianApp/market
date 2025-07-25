@@ -526,7 +526,7 @@ function RouteComponent() {
 	return (
 		<div className="flex-grow flex flex-col">
 			{/* Fixed Progress Bar */}
-			<div className="sticky top-[8.5rem] lg:top-[6rem] z-20 bg-white border-b border-gray-200">
+			<div className="sticky top-[8.5rem] lg:top-[5rem] z-20 bg-white border-b border-gray-200">
 				<CheckoutProgress
 					currentStepNumber={currentStepNumber}
 					totalSteps={totalSteps}
@@ -537,7 +537,7 @@ function RouteComponent() {
 			</div>
 
 			{/* Main Content */}
-			<div className="px-4 py-8 flex flex-col lg:flex-row lg:gap-4 w-full flex-grow">
+			<div className="px-4 py-8 flex flex-col lg:flex-row lg:gap-4 w-full h-[calc(100vh-12rem)] lg:h-[calc(100vh-10rem)]">
 				{/* Mobile Order Summary - Collapsible, shows above form */}
 				<div className="lg:hidden mb-4">
 					<Card>
@@ -599,10 +599,14 @@ function RouteComponent() {
 				</div>
 
 				{/* Main Content Area */}
-				<Card className="flex-1 lg:w-1/2 flex-grow">
-					<CardContent className="p-6 h-full">
-						<div ref={animationParent}>
-							{currentStep === 'shipping' && <ShippingAddressForm form={form} hasAllShippingMethods={hasAllShippingMethods} />}
+				<Card className="flex-1 lg:w-1/2 flex flex-col h-full">
+					<CardContent className="p-6 flex-1 overflow-hidden">
+						<div ref={animationParent} className="h-full">
+							{currentStep === 'shipping' && (
+								<div className="h-full">
+									<ShippingAddressForm form={form} hasAllShippingMethods={hasAllShippingMethods} />
+								</div>
+							)}
 
 							{currentStep === 'summary' && (
 								<OrderFinalizeComponent
@@ -731,11 +735,11 @@ function RouteComponent() {
 				</Card>
 
 				{/* Right Sidebar - Desktop Only */}
-				<Card className="hidden lg:flex flex-1 lg:w-1/2 flex-col">
+				<Card className="hidden lg:flex flex-1 lg:w-1/2 flex-col h-full">
 					<CardHeader>
 						<CardTitle>{currentStep === 'payment' ? 'Payment Details' : 'Order Summary'}</CardTitle>
 					</CardHeader>
-					<CardContent className="h-full">
+					<CardContent className="flex-1 overflow-y-auto p-6">
 						{currentStep === 'payment' && isGeneratingInvoices ? (
 							<div className="flex items-center justify-center h-full">
 								<div className="text-center">
