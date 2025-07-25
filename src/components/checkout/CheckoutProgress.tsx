@@ -19,11 +19,9 @@ export function CheckoutProgress({ currentStepNumber, totalSteps, progress, step
 			<div className="flex-1">
 				<div className="flex items-center justify-between text-sm text-gray-600 mb-2">
 					<span>
-						Step {currentStepNumber} of {totalSteps}
+						{currentStepNumber}/{totalSteps}
 					</span>
-
 					<span>{stepDescription}</span>
-					<span>{Math.round(progress)}% complete</span>
 				</div>
 				<Progress value={progress} className="h-2" />
 			</div>
