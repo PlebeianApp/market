@@ -28,8 +28,7 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 					<MapPin className="h-5 w-5 text-blue-600" />
 				</div>
 				<div>
-					<h2 className="text-xl font-semibold">Shipping Address</h2>
-					<p className="text-gray-600">Where should we deliver your order?</p>
+					<h2 className="font-semibold">Shipping Address</h2>
 				</div>
 			</div>
 
@@ -42,7 +41,7 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 				className="space-y-4"
 			>
 				{/* Customer Information */}
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+				<div className="space-y-4">
 					<form.Field
 						name="name"
 						validators={{
@@ -101,26 +100,24 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 					/>
 				</div>
 
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-					<form.Field
-						name="phone"
-						children={(field: any) => (
-							<div>
-								<Label htmlFor={field.name} className="text-sm font-medium">
-									Phone Number
-								</Label>
-								<Input
-									id={field.name}
-									type="tel"
-									placeholder="e.g. +447751892718"
-									value={field.state.value}
-									onChange={(e) => field.handleChange(e.target.value)}
-									onBlur={field.handleBlur}
-								/>
-							</div>
-						)}
-					/>
-				</div>
+				<form.Field
+					name="phone"
+					children={(field: any) => (
+						<div>
+							<Label htmlFor={field.name} className="text-sm font-medium">
+								Phone Number
+							</Label>
+							<Input
+								id={field.name}
+								type="tel"
+								placeholder="e.g. +447751892718"
+								value={field.state.value}
+								onChange={(e) => field.handleChange(e.target.value)}
+								onBlur={field.handleBlur}
+							/>
+						</div>
+					)}
+				/>
 
 				{/* Address Fields */}
 				<form.Field
@@ -150,7 +147,7 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 					)}
 				/>
 
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+				<div className="space-y-4">
 					<form.Field
 						name="city"
 						validators={{

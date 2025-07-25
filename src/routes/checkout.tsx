@@ -40,6 +40,7 @@ function RouteComponent() {
 	const [currentInvoiceIndex, setCurrentInvoiceIndex] = useState(0)
 	const [invoices, setInvoices] = useState<PaymentInvoiceData[]>([])
 	const [shippingData, setShippingData] = useState<CheckoutFormData | null>(null)
+	const [mobileOrderSummaryOpen, setMobileOrderSummaryOpen] = useState(false)
 
 	// Ref to control PaymentContent
 	const paymentContentRef = useRef<PaymentContentRef>(null)
@@ -524,19 +525,81 @@ function RouteComponent() {
 
 	return (
 		<div className="flex-grow flex flex-col">
-			{/* Progress Bar */}
-			<CheckoutProgress
-				currentStepNumber={currentStepNumber}
-				totalSteps={totalSteps}
-				progress={progress}
-				stepDescription={stepDescription}
-				onBackClick={handleBackClick}
-			/>
+			{/* Fixed Progress Bar */}
+			<div className="sticky top-[8.5rem] lg:top-[6rem] z-20 bg-white border-b border-gray-200">
+				<CheckoutProgress
+					currentStepNumber={currentStepNumber}
+					totalSteps={totalSteps}
+					progress={progress}
+					stepDescription={stepDescription}
+					onBackClick={handleBackClick}
+				/>
+			</div>
 
 			{/* Main Content */}
-			<div className="px-4 py-8 flex flex-row gap-4 w-full flex-grow">
+			<div className="px-4 py-8 flex flex-col lg:flex-row gap-4 w-full flex-grow">
+				{/* Mobile Order Summary - Collapsible, shows above form */}
+				<div className="lg:hidden">
+					<Card>
+						<CardHeader>
+							<CardTitle className="flex items-center justify-between cursor-pointer" onClick={() => setMobileOrderSummaryOpen(!mobileOrderSummaryOpen)}>
+								<span>{currentStep === 'payment' ? 'Payment Details' : 'Order Summary'}</span>
+								<ChevronRight className={`w-5 h-5 transition-transform ${mobileOrderSummaryOpen ? 'rotate-90' : ''}`} />
+							</CardTitle>
+						</CardHeader>
+						{mobileOrderSummaryOpen && (
+							<CardContent>
+								{currentStep === 'payment' && isGeneratingInvoices ? (
+									<div className="flex items-center justify-center py-8">
+										<div className="text-center">
+											<div className="animate-spin w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full mx-auto mb-4" />
+											<p className="text-gray-600">Loading payment details...</p>
+										</div>
+									</div>
+								) : currentStep === 'payment' && invoices.length > 0 ? (
+									<>
+										{/* NWC Status Indicator */}
+										<div className="mb-4 p-3 bg-gray-50 rounded-lg border">
+											<div className="flex items-center justify-between text-sm">
+												<span className="font-medium text-gray-700">Wallet Status:</span>
+												<div className="flex items-center gap-2">
+													{nwcEnabled ? (
+														<>
+															<div className="w-2 h-2 bg-green-500 rounded-full" />
+															<span className="text-green-700 font-medium">
+																{wallets.filter((w) => w.nwcUri && parseNwcUri(w.nwcUri)).length} NWC wallet
+																{wallets.filter((w) => w.nwcUri && parseNwcUri(w.nwcUri)).length !== 1 ? 's' : ''} connected
+															</span>
+														</>
+													) : (
+														<>
+															<div className="w-2 h-2 bg-gray-400 rounded-full" />
+															<span className="text-gray-600">No NWC wallets</span>
+														</>
+													)}
+												</div>
+											</div>
+											{nwcEnabled && <p className="text-xs text-gray-500 mt-1">Fast payments available • Configure more wallets in settings</p>}
+										</div>
+
+										<PaymentSummary invoices={invoices} currentIndex={currentInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
+									</>
+								) : (
+									<div className="max-h-[50vh] overflow-y-auto">
+										<CartSummary
+											allowQuantityChanges={currentStep === 'shipping'}
+											allowShippingChanges={currentStep === 'shipping'}
+											showExpandedDetails={false}
+										/>
+									</div>
+								)}
+							</CardContent>
+						)}
+					</Card>
+				</div>
+
 				{/* Main Content Area */}
-				<Card className="flex-1 w-1/2 flex-grow">
+				<Card className="flex-1 lg:w-1/2 flex-grow">
 					<CardContent className="p-6 h-full">
 						<div ref={animationParent}>
 							{currentStep === 'shipping' && <ShippingAddressForm form={form} hasAllShippingMethods={hasAllShippingMethods} />}
@@ -667,8 +730,8 @@ function RouteComponent() {
 					</CardContent>
 				</Card>
 
-				{/* Right Sidebar */}
-				<Card className="flex-1 w-1/2">
+				{/* Right Sidebar - Desktop Only */}
+				<Card className="hidden lg:flex flex-1 lg:w-1/2 flex-col">
 					<CardHeader>
 						<CardTitle>{currentStep === 'payment' ? 'Payment Details' : 'Order Summary'}</CardTitle>
 					</CardHeader>

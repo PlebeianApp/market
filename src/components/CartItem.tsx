@@ -102,8 +102,8 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 	}
 
 	return (
-		<li className="flex flex-col py-6 border-b">
-			<div className="flex items-start space-x-4">
+		<li className="flex flex-col py-4 border-b">
+			<div className="flex items-center space-x-4">
 				{/* Product Image */}
 				{images && images.length > 0 ? (
 					<div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-md border">
@@ -128,7 +128,7 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 					</div>
 
 					{/* Quantity Controls */}
-					<div className="flex items-center justify-between mt-2">
+					<div className="flex items-center mt-2">
 						<div className="flex items-center space-x-2">
 							<Button variant="outline" size="icon" className="h-8 w-8" onClick={handleDecrementClick} disabled={amount <= 1}>
 								<Minus size={14} />
@@ -148,18 +148,18 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 								<Plus size={14} />
 							</Button>
 						</div>
-
-						{/* Delete Button */}
-						<Button
-							variant="ghost"
-							size="icon"
-							className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
-							onClick={() => onRemove(productId)}
-						>
-							<Trash2 size={16} />
-						</Button>
 					</div>
 				</div>
+
+				{/* Delete Button - Vertically Centered */}
+				<Button
+					variant="ghost"
+					size="icon"
+					className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
+					onClick={() => onRemove(productId)}
+				>
+					<Trash2 size={16} />
+				</Button>
 
 
 			</div>

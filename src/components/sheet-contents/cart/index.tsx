@@ -29,7 +29,7 @@ export default function CartSheetContent({
 	return (
 		<SheetContent
 			side="right"
-			className="flex flex-col max-h-screen overflow-hidden w-[100vw] sm:min-w-[85vw] md:min-w-[55vw] xl:min-w-[35vw]"
+			className="flex flex-col max-h-screen w-[100vw] sm:w-[85vw] md:w-[55vw] xl:w-[35vw]"
 		>
 			<SheetHeader>
 				<SheetTitle>{title}</SheetTitle>
