@@ -125,10 +125,12 @@ export function ShippingSelector({
 		}
 
 		return (
-			<Select onValueChange={handleSelect} value={selectedId}>
-				<SelectTrigger className={className}>
-					<SelectValue placeholder="Select shipping method" />
-				</SelectTrigger>
+			<div className={`${!selectedId ? 'flex items-center gap-2' : ''}`}>
+				{!selectedId && <div className="w-1 h-8 bg-yellow-400 rounded-sm flex-shrink-0" />}
+				<Select onValueChange={handleSelect} value={selectedId}>
+					<SelectTrigger className={className}>
+						<SelectValue placeholder="Select shipping method" />
+					</SelectTrigger>
 				<SelectContent>
 					<SelectGroup>
 						<SelectLabel>Shipping Options</SelectLabel>
@@ -140,6 +142,7 @@ export function ShippingSelector({
 					</SelectGroup>
 				</SelectContent>
 			</Select>
+		</div>
 		)
 	}
 

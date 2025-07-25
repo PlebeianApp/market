@@ -120,7 +120,10 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 					<div>
 						<h3 className="text-base font-medium">{title || 'Untitled Product'}</h3>
 						<p className="mt-1 text-sm text-muted-foreground">
-							{price} {currency}
+							{currency.toLowerCase() === 'sats' || currency.toLowerCase() === 'sat' 
+								? `${Math.round(price).toLocaleString()} sats`
+								: `${Math.round(price * 100).toLocaleString()} sats (${price.toFixed(2)} ${currency})`
+							}
 						</p>
 					</div>
 
@@ -158,12 +161,7 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 					</div>
 				</div>
 
-				{/* Product Total */}
-				<div className="flex items-center">
-					<p className="text-sm font-medium">
-						{subtotal.toFixed(2)} {currency}
-					</p>
-				</div>
+
 			</div>
 
 			{/* Shipping Section - only show if not hidden */}

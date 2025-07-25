@@ -107,7 +107,7 @@ export function CartSummary({
 					<div className="flex">
 						<div className="ml-3">
 							<p className="text-sm text-yellow-700">
-								Please select shipping options for {missingShippingCount} {missingShippingCount === 1 ? 'item' : 'items'} before checkout.
+								Please select shipping for {missingShippingCount} {missingShippingCount === 1 ? 'item' : 'items'} before checkout.
 							</p>
 						</div>
 					</div>
