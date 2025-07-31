@@ -231,7 +231,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 		}
 
 		return (
-			<div className="space-y-4">
+			<div className="space-y-4 pb-6">
 				{/* Invoice Progress - Moved to top */}
 				{invoices.length > 1 && (
 					<div className="space-y-2">
