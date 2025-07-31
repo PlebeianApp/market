@@ -727,7 +727,7 @@ function RouteComponent() {
 										<div className="flex justify-center mb-4">
 											<Button
 												onClick={handlePayAllInvoices}
-												className="bg-green-600 hover:bg-green-700 text-white font-medium px-6 py-2"
+												className="bg-secondary hover:bg-secondary/90 text-white font-medium px-6 py-2"
 												size="lg"
 											>
 												<Zap className="w-4 h-4 mr-2" />
