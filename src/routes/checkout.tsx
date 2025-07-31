@@ -543,7 +543,7 @@ function RouteComponent() {
 					<Card>
 						<CardHeader>
 							<CardTitle className="flex items-center justify-between cursor-pointer" onClick={() => setMobileOrderSummaryOpen(!mobileOrderSummaryOpen)}>
-								<span>{currentStep === 'payment' ? 'Payment Details' : 'Order Summary'}</span>
+								<span>{currentStep === 'payment' ? 'Invoices' : 'Order Summary'}</span>
 								<ChevronRight className={`w-5 h-5 transition-transform ${mobileOrderSummaryOpen ? 'rotate-90' : ''}`} />
 							</CardTitle>
 						</CardHeader>
@@ -598,120 +598,7 @@ function RouteComponent() {
 					</Card>
 				</div>
 
-				{/* Main Content Area */}
-				<Card className="flex-1 lg:w-1/2 flex flex-col lg:h-full">
-					<CardContent className="p-6 flex-1 lg:overflow-y-auto">
-						<div ref={animationParent} className="lg:h-full lg:min-h-full">
-							{currentStep === 'shipping' && (
-								<div className="h-full">
-									<ShippingAddressForm form={form} hasAllShippingMethods={hasAllShippingMethods} />
-								</div>
-							)}
-
-							{currentStep === 'summary' && (
-								<OrderFinalizeComponent
-									shippingData={shippingData}
-									invoices={[]} // No invoices yet in summary step
-									totalInSats={totalInSats}
-									onNewOrder={goBackToShopping}
-									onContinueToPayment={handleContinueToPayment}
-								/>
-							)}
-
-							{/* Loading State for Invoice Generation */}
-							{currentStep === 'payment' && isGeneratingInvoices && (
-								<div className="h-full flex flex-col">
-									<div className="mb-4">
-										<h3 className="text-lg font-semibold">Invoices</h3>
-									</div>
-									<div className="flex-1 flex items-center justify-center">
-										<div className="text-center">
-											<div className="inline-flex items-center gap-2 text-gray-600 mb-4">
-												<div className="animate-spin w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full" />
-												<span className="text-lg font-medium">Generating Lightning invoices...</span>
-											</div>
-											<p className="text-sm text-gray-500 mb-2">Fetching seller Lightning addresses and creating payment requests</p>
-											<p className="text-xs text-gray-400">This may take a few seconds</p>
-										</div>
-									</div>
-								</div>
-							)}
-
-							{/* Error State - No Invoices Generated */}
-							{currentStep === 'payment' && !isGeneratingInvoices && invoices.length === 0 && (
-								<div className="text-center py-12">
-									<div className="text-gray-600 mb-6">
-										<Zap className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-										<h3 className="text-lg font-medium mb-2">Unable to generate payment invoices</h3>
-										<p className="text-sm text-gray-500 max-w-md mx-auto">
-											There may be an issue with the seller's Lightning configuration, or the Lightning service may be temporarily
-											unavailable.
-										</p>
-									</div>
-									<div className="space-y-2">
-										<Button
-											onClick={() => {
-												setInvoices([])
-												// This will trigger the useEffect to regenerate invoices
-											}}
-											variant="outline"
-											className="mr-2"
-										>
-											Try Again
-										</Button>
-										<Button onClick={goBackToPreviousStep} variant="ghost">
-											Go Back
-										</Button>
-									</div>
-								</div>
-							)}
-
-							{/* Payment Interface - Only show when invoices are ready */}
-							{currentStep === 'payment' && !isGeneratingInvoices && invoices.length > 0 && (
-								<div className="space-y-6">
-
-									{/* Pay All Button - Only show if NWC is enabled and there are unpaid invoices */}
-									{nwcEnabled && invoices.filter((inv) => inv.status === 'pending').length > 1 && (
-										<div className="flex justify-center mb-4">
-											<Button
-												onClick={handlePayAllInvoices}
-												className="bg-green-600 hover:bg-green-700 text-white font-medium px-6 py-2"
-												size="lg"
-											>
-												<Zap className="w-4 h-4 mr-2" />
-												Pay All with NWC ({invoices.filter((inv) => inv.status === 'pending').length} invoices)
-											</Button>
-										</div>
-									)}
-
-									{/* Payment Content - Inline instead of modal */}
-									<PaymentContent
-										ref={paymentContentRef}
-										invoices={invoices}
-										currentIndex={currentInvoiceIndex}
-										onPaymentComplete={handlePaymentComplete}
-										onPaymentFailed={handlePaymentFailed}
-										showNavigation={false} // We have our own navigation above
-										nwcEnabled={nwcEnabled}
-										onNavigate={setCurrentInvoiceIndex}
-									/>
-								</div>
-							)}
-
-							{currentStep === 'complete' && (
-								<OrderFinalizeComponent
-									shippingData={shippingData}
-									invoices={invoices}
-									totalInSats={totalInSats}
-									onNewOrder={goBackToShopping}
-									onViewOrders={goToOrders}
-								/>
-							)}
-						</div>
-					</CardContent>
-				</Card>
-
-				{/* Right Sidebar - Desktop Only */}
+				{/* Left Sidebar - Desktop Only (Payment Details) */}
 				<Card className="hidden lg:flex flex-1 lg:w-1/2 flex-col h-full">
 					<CardHeader>
 						<CardTitle>{currentStep === 'payment' ? 'Payment Details' : 'Order Summary'}</CardTitle>
@@ -761,6 +648,118 @@ function RouteComponent() {
 								/>
 							</ScrollArea>
 						)}
+					</CardContent>
+				</Card>
+
+				{/* Main Content Area (Invoices) */}
+				<Card className="flex-1 lg:w-1/2 flex flex-col lg:h-full">
+					<CardHeader>
+						<CardTitle>{currentStep === 'payment' ? 'Invoices' : 'Order Summary'}</CardTitle>
+					</CardHeader>
+					<CardContent className="p-6 flex-1 lg:overflow-y-auto">
+						<div ref={animationParent} className="lg:h-full lg:min-h-full">
+							{currentStep === 'shipping' && (
+								<div className="h-full">
+									<ShippingAddressForm form={form} hasAllShippingMethods={hasAllShippingMethods} />
+								</div>
+							)}
+
+							{currentStep === 'summary' && (
+								<OrderFinalizeComponent
+									shippingData={shippingData}
+									invoices={[]} // No invoices yet in summary step
+									totalInSats={totalInSats}
+									onNewOrder={goBackToShopping}
+									onContinueToPayment={handleContinueToPayment}
+								/>
+							)}
+
+							{/* Loading State for Invoice Generation */}
+							{currentStep === 'payment' && isGeneratingInvoices && (
+								<div className="h-full flex flex-col">
+									<div className="flex-1 flex items-center justify-center">
+										<div className="text-center">
+											<div className="inline-flex items-center gap-2 text-gray-600 mb-4">
+												<div className="animate-spin w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full" />
+												<span className="text-lg font-medium">Generating Lightning invoices...</span>
+											</div>
+											<p className="text-sm text-gray-500 mb-2">Fetching seller Lightning addresses and creating payment requests</p>
+											<p className="text-xs text-gray-400">This may take a few seconds</p>
+										</div>
+									</div>
+								</div>
+							)}
+
+							{/* Error State - No Invoices Generated */}
+							{currentStep === 'payment' && !isGeneratingInvoices && invoices.length === 0 && (
+								<div className="text-center py-12">
+									<div className="text-gray-600 mb-6">
+										<Zap className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+										<h3 className="text-lg font-medium mb-2">Unable to generate payment invoices</h3>
+										<p className="text-sm text-gray-500 max-w-md mx-auto">
+											There may be an issue with the seller's Lightning configuration, or the Lightning service may be temporarily
+											unavailable.
+										</p>
+									</div>
+									<div className="space-y-2">
+										<Button
+											onClick={() => {
+												setInvoices([])
+												// This will trigger the useEffect to regenerate invoices
+											}}
+											variant="outline"
+											className="mr-2"
+										>
+											Try Again
+										</Button>
+										<Button onClick={goBackToPreviousStep} variant="ghost">
+											Go Back
+										</Button>
+									</div>
+								</div>
+							)}
+
+							{/* Payment Interface - Only show when invoices are ready */}
+							{currentStep === 'payment' && !isGeneratingInvoices && invoices.length > 0 && (
+								<div className="space-y-6">
+									{/* Pay All Button - Only show if NWC is enabled and there are unpaid invoices */}
+									{nwcEnabled && invoices.filter((inv) => inv.status === 'pending').length > 1 && (
+										<div className="flex justify-center mb-4">
+											<Button
+												onClick={handlePayAllInvoices}
+												className="bg-green-600 hover:bg-green-700 text-white font-medium px-6 py-2"
+												size="lg"
+											>
+												<Zap className="w-4 h-4 mr-2" />
+												Pay All with NWC ({invoices.filter((inv) => inv.status === 'pending').length} invoices)
+											</Button>
+										</div>
+									)}
+
+									{/* Payment Content - Inline instead of modal */}
+									<PaymentContent
+										ref={paymentContentRef}
+										invoices={invoices}
+										currentIndex={currentInvoiceIndex}
+										onPaymentComplete={handlePaymentComplete}
+										onPaymentFailed={handlePaymentFailed}
+										showNavigation={false} // We have our own navigation above
+										nwcEnabled={nwcEnabled}
+										onNavigate={setCurrentInvoiceIndex}
+									/>
+								</div>
+							)}
+
+							{currentStep === 'complete' && (
+								<OrderFinalizeComponent
+									shippingData={shippingData}
+									invoices={invoices}
+									totalInSats={totalInSats}
+									onNewOrder={goBackToShopping}
+									onViewOrders={goToOrders}
+								/>
+							)}
+						</div>
 					</CardContent>
 				</Card>
 			</div>
