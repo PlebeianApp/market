@@ -620,14 +620,19 @@ function RouteComponent() {
 
 							{/* Loading State for Invoice Generation */}
 							{currentStep === 'payment' && isGeneratingInvoices && (
-								<div className="flex items-center justify-center h-full">
-									<div className="text-center">
-										<div className="inline-flex items-center gap-2 text-gray-600 mb-4">
-											<div className="animate-spin w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full" />
-											<span className="text-lg font-medium">Generating Lightning invoices...</span>
+								<div className="h-full flex flex-col">
+									<div className="mb-4">
+										<h3 className="text-lg font-semibold">Invoices</h3>
+									</div>
+									<div className="flex-1 flex items-center justify-center">
+										<div className="text-center">
+											<div className="inline-flex items-center gap-2 text-gray-600 mb-4">
+												<div className="animate-spin w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full" />
+												<span className="text-lg font-medium">Generating Lightning invoices...</span>
+											</div>
+											<p className="text-sm text-gray-500 mb-2">Fetching seller Lightning addresses and creating payment requests</p>
+											<p className="text-xs text-gray-400">This may take a few seconds</p>
 										</div>
-										<p className="text-sm text-gray-500 mb-2">Fetching seller Lightning addresses and creating payment requests</p>
-										<p className="text-xs text-gray-400">This may take a few seconds</p>
 									</div>
 								</div>
 							)}
