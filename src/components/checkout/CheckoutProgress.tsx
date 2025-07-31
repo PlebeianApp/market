@@ -12,7 +12,7 @@ interface CheckoutProgressProps {
 
 export function CheckoutProgress({ currentStepNumber, totalSteps, progress, stepDescription, onBackClick }: CheckoutProgressProps) {
 	return (
-		<div className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm flex flex-row items-center gap-3 px-4 py-3 lg:gap-4 lg:p-4">
+		<div className="sticky top-0 z-50 bg-white flex flex-row items-center gap-3 px-4 py-3 lg:gap-4 lg:p-4">
 			<Button variant="ghost" size="icon" onClick={onBackClick} className="flex-shrink-0 h-8 w-8 lg:h-10 lg:w-10">
 				<ChevronLeft className="h-4 w-4" />
 			</Button>
