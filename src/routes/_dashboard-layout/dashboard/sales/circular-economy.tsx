@@ -360,7 +360,7 @@ function CircularEconomyComponent() {
 					<h1 className="text-2xl font-bold">Circular Economy</h1>
 					<Button
 						variant="outline"
-						className="bg-black text-white hover:bg-gray-800 border-black"
+						className="btn-black"
 						onClick={handleSave}
 						disabled={publishMutation.isPending || !changesExist}
 						data-testid="save-v4v-button-desktop"

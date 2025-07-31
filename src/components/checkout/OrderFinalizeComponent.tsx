@@ -186,7 +186,7 @@ export function OrderFinalizeComponent({
 			<div className="flex-shrink-0 bg-white border-t pt-4">
 				<div className="space-y-3">
 					{!isPostPayment && onContinueToPayment && (
-						<Button onClick={onContinueToPayment} className="w-full bg-black text-white hover-transparent-black">
+						<Button onClick={onContinueToPayment} className="w-full btn-black">
 							Continue to Payment
 						</Button>
 					)}
@@ -194,14 +194,14 @@ export function OrderFinalizeComponent({
 					{isPostPayment && (
 						<>
 							{allInvoicesPaid && onViewOrders && (
-								<Button onClick={onViewOrders} className="w-full bg-black text-white hover-transparent-black">
+								<Button onClick={onViewOrders} className="w-full btn-black">
 									View Your Purchases
 								</Button>
 							)}
 
 							<Button
 								onClick={onNewOrder}
-								className={`w-full ${allInvoicesPaid && onViewOrders ? 'bg-gray-800 text-white hover-transparent-black' : 'bg-black text-white hover-transparent-black'}`}
+								className={`w-full ${allInvoicesPaid && onViewOrders ? 'bg-gray-800 text-white hover-transparent-black' : 'btn-black'}`}
 							>
 								{allInvoicesPaid ? 'Continue Shopping' : 'Back to Store'}
 							</Button>

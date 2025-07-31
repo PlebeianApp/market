@@ -409,4 +409,32 @@ button {
 	.hover-transparent-white:hover {
 		background-color: rgba(255, 255, 255, 0.1) !important;
 	}
+
+	/* Product banner button utility */
+	.btn-product-banner {
+		background-color: var(--secondary);
+		color: var(--secondary-foreground);
+		border: 2px solid var(--secondary-border);
+		transition: all 0.2s ease-out;
+	}
+
+	.btn-product-banner:hover {
+		background-color: transparent;
+		color: var(--secondary-foreground-hover);
+		border-color: var(--secondary-border-hover);
+	}
+
+	/* Black button utility */
+	.btn-black {
+		background-color: black;
+		color: white;
+		border: 2px solid black;
+		transition: all 0.2s ease-out;
+	}
+
+	.btn-black:hover {
+		background-color: transparent;
+		color: black;
+		border-color: black;
+	}
 }

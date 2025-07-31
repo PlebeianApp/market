@@ -96,7 +96,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 				{/* Add to cart button */}
 				<div className="flex gap-2">
 					<Button
-						className="bg-black text-white py-3 px-4 rounded-lg flex-grow font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+						className="btn-black py-3 px-4 rounded-lg flex-grow font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
 						onClick={handleAddToCart}
 						disabled={isOwnProduct}
 					>

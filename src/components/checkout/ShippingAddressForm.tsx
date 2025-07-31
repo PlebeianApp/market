@@ -265,7 +265,7 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 					children={([canSubmit, isSubmitting]: [boolean, boolean]) => (
 						<Button
 							type="submit"
-							className="w-full bg-black text-white hover-transparent-black"
+							className="w-full btn-black"
 							disabled={!canSubmit || !hasAllShippingMethods || isSubmitting}
 							onClick={(e) => {
 								e.preventDefault()

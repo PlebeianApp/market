@@ -274,7 +274,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 							</Button>
 
 							<Button
-								className="flex-1 bg-black text-white hover:bg-gray-800"
+								className="flex-1 btn-product-banner"
 								disabled={!hasAllShippingMethods || totalItems === 0}
 								title={!hasAllShippingMethods ? 'Please select shipping options for all items' : ''}
 								onClick={() => {
