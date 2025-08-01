@@ -25,12 +25,14 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-[425px]" data-testid="login-dialog">
-				<DialogHeader>
-					<DialogTitle>Login</DialogTitle>
-					<DialogDescription>Choose your preferred login method below.</DialogDescription>
-				</DialogHeader>
-				<Tabs defaultValue="extension" className="w-full" value={activeTab} onValueChange={setActiveTab}>
+			<DialogContent className="sm:max-w-[425px] p-0" data-testid="login-dialog">
+				{/* Header Section */}
+				<div className="bg-black text-white p-6">
+					<h2 className="text-xl font-semibold mb-2">Login</h2>
+					<p className="text-sm text-gray-300">Choose your preferred login method below.</p>
+				</div>
+				<div className="px-6 pt-0 pb-6">
+					<Tabs defaultValue="extension" className="w-full" value={activeTab} onValueChange={setActiveTab}>
 					<TabsList className="w-full rounded-none bg-transparent h-auto p-0 flex">
 						<TabsTrigger
 							value="extension"
@@ -97,8 +99,8 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 							</Button>
 						</div>
 					</TabsContent>
-				</Tabs>
-				<div className="flex items-center space-x-2">
+					</Tabs>
+					<div className="flex items-center space-x-2">
 					<Label htmlFor="auto-login" className=" flex gap-2 text-sm text-muted-foreground items-center">
 						<Checkbox
 							id="auto-login"
@@ -112,7 +114,8 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 						Auto-login
 					</Label>
 				</div>
-			</DialogContent>
+			</div>
+		</DialogContent>
 		</Dialog>
 	)
 }
