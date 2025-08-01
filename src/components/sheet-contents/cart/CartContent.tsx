@@ -100,7 +100,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 	}
 
 	return (
-		<div className={`flex flex-col max-h-screen overflow-hidden py-4 px-6 ${className}`}>
+		<div className={`flex flex-col h-full overflow-hidden py-4 px-6 ${className}`}>
 			{missingShippingCount > 0 && (
 				<div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
 					<div className="flex">
@@ -113,7 +113,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 				</div>
 			)}
 
-			<ScrollArea className="flex-1 overflow-y-auto py-2">
+			<ScrollArea className="flex-1 overflow-y-auto py-2 min-h-0">
 				<div className="space-y-8" ref={parent}>
 					{Object.entries(productsBySeller).map(([sellerPubkey, products]) => {
 						const data = sellerData[sellerPubkey] || {
@@ -201,7 +201,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 				</div>
 			</ScrollArea>
 
-			<div className="border-t pt-4 mt-auto">
+			<div className="border-t pt-4 flex-shrink-0">
 				<div className="space-y-3 w-full">
 					<div className="space-y-1 mb-2">
 						<div className="flex justify-between">
