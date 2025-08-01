@@ -206,9 +206,9 @@ function DashboardLayout() {
 	const emoji = getCurrentEmoji(showSidebar, typeof window !== 'undefined' ? window.location.pathname : '')
 
 	return (
-		<div className="lg:flex lg:flex-col lg:h-[calc(100vh-8.5rem)]">
+		<div className="lg:flex lg:flex-col lg:h-[calc(100vh-5rem)]">
 			{/* Header - responsive for mobile/desktop */}
-			<div className="lg:hidden sticky top-[8.5rem] z-10">
+			<div className="lg:hidden sticky top-[5rem] z-10">
 				<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center relative">
 					{/* Mobile back button - only visible on small screens when not showing sidebar */}
 					{!showSidebar && isMobile && (
@@ -298,7 +298,7 @@ function DashboardLayout() {
 					{(!showSidebar || !isMobile) && (
 						<div
 							className={`w-full lg:flex-1 lg:max-w-4xl lg:border lg:border-black lg:rounded lg:bg-white flex flex-col lg:max-h-full lg:overflow-hidden ${
-								isMessageDetailView && isMobile ? 'h-[calc(100vh-8.5rem)]' : ''
+								isMessageDetailView && isMobile ? 'h-[calc(100vh-5rem)]' : ''
 							}`}
 						>
 							{/* Desktop back button and title - fixed to top of container */}
@@ -336,7 +336,7 @@ function DashboardLayout() {
 									<div className="h-full">
 										<div
 											className={cn(
-												'p-4 bg-white lg:p-8 lg:bg-transparent h-full',
+												'p-4 bg-white lg:pt-8 lg:px-8 lg:pb-6 lg:bg-transparent h-full',
 												location.pathname === '/dashboard/sales/sales' && 'p-0 lg:p-0',
 												location.pathname.startsWith('/dashboard/sales/messages') && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/sales/circular-economy' && 'p-0 lg:p-0',
