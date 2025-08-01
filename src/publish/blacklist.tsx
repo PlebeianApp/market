@@ -216,4 +216,4 @@ export const useRemoveFromBlacklistMutation = () => {
 			toast.error(`Failed to remove user from blacklist: ${error instanceof Error ? error.message : String(error)}`)
 		},
 	})
-} 
+}

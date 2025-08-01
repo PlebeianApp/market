@@ -30,4 +30,4 @@ export const BlacklistSettingsSchema = z.object({
 	lastUpdated: z.number().optional(),
 })
 
-export type BlacklistSettings = z.infer<typeof BlacklistSettingsSchema> 
+export type BlacklistSettings = z.infer<typeof BlacklistSettingsSchema>

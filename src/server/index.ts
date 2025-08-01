@@ -10,11 +10,4 @@ export { EventSigner } from './EventSigner'
 export { NDKService } from './NDKService'
 
 // Type exports
-export type {
-  EventHandlerConfig,
-  EventValidationResult,
-  ProcessedEvent,
-  AdminManager,
-  EditorManager,
-  BootstrapManager
-} from './types'
+export type { EventHandlerConfig, EventValidationResult, ProcessedEvent, AdminManager, EditorManager, BootstrapManager } from './types'

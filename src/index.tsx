@@ -42,11 +42,13 @@ async function initializeAppSettings() {
 
 export type NostrMessage = ['EVENT', Event]
 
-getEventHandler().initialize({
-	appPrivateKey: process.env.APP_PRIVATE_KEY || '',
-	adminPubkeys: [],
-	relayUrl: RELAY_URL
-}).catch((error) => console.error(error))
+getEventHandler()
+	.initialize({
+		appPrivateKey: process.env.APP_PRIVATE_KEY || '',
+		adminPubkeys: [],
+		relayUrl: RELAY_URL,
+	})
+	.catch((error) => console.error(error))
 
 // Handle static files from the public directory
 const serveStatic = async (path: string) => {
