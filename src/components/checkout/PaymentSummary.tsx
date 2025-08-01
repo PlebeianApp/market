@@ -25,7 +25,7 @@ export function PaymentSummary({ invoices, currentIndex, onSelectInvoice }: Paym
 				<CardHeader className="pb-2">
 					<CardTitle className="text-sm">Payment Summary</CardTitle>
 				</CardHeader>
-				<CardContent className="space-y-2">
+				<CardContent className="p-6 space-y-2">
 					<div className="flex justify-between text-sm">
 						<span>Paid</span>
 						<span className="font-medium">
@@ -52,7 +52,7 @@ export function PaymentSummary({ invoices, currentIndex, onSelectInvoice }: Paym
 				<CardHeader className="pb-2">
 					<CardTitle className="text-sm">All Payments ({invoices.length})</CardTitle>
 				</CardHeader>
-				<CardContent className="p-3">
+				<CardContent className="p-6">
 					<div className="space-y-1">
 						{invoices.map((invoice, index) => (
 							<button

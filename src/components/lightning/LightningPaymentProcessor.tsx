@@ -328,7 +328,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 							<h3 className="text-lg font-semibold">{title}</h3>
 						</div>
 					)}
-					<div className="space-y-4">
+					<div className="space-y-6">
 						{/* Loading state */}
 						{(isGeneratingInvoice || isPaymentInProgress) && (
 							<div className="flex items-center justify-center py-6">
@@ -339,7 +339,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 
 						{/* Invoice QR Code - Always visible when available */}
 						{invoice && (
-							<div className="space-y-3">
+															<div className="space-y-6">
 								<div className="flex items-center justify-center gap-4">
 									{/* Previous Invoice Button */}
 									{showNavigation && (
@@ -374,7 +374,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 								</div>
 
 								{/* Invoice text with copy button */}
-								<div className="space-y-2">
+								<div className="space-y-4">
 									<Label htmlFor="invoice">Lightning Invoice</Label>
 									<div className="flex gap-2">
 										<Input id="invoice" value={invoice} readOnly className="font-mono text-xs" />
@@ -388,7 +388,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 
 						{/* Payment buttons */}
 						{invoice && (
-							<div className="space-y-2">
+							<div className="space-y-6">
 								<div className="flex gap-2">
 									{/* NWC Payment Button */}
 									{!capabilities.hasNwc ? (
@@ -437,16 +437,16 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 
 								{/* Manual verification */}
 								{capabilities.canManualVerify && (
-									<div className="space-y-2">
+									<div className="space-y-4">
 										<Label htmlFor="preimage">Preimage (Manual Verification)</Label>
-										<div className="flex gap-2">
+										<div className="flex flex-col gap-2 lg:flex-row">
 											<Input
 												id="preimage"
 												placeholder="Enter payment preimage"
 												value={manualPreimage}
 												onChange={(e) => setManualPreimage(e.target.value)}
 											/>
-											<Button onClick={handleManualVerification} variant="secondary">
+											<Button onClick={handleManualVerification} variant="secondary" className="lg:w-auto">
 												Verify
 											</Button>
 										</div>
