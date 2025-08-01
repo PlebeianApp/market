@@ -1,0 +1,120 @@
+import { ndkActions } from '@/lib/stores/ndk'
+import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import { configKeys } from './queryKeyFactory'
+
+export interface BlacklistSettings {
+	blacklistedPubkeys: string[] // Array of blacklisted pubkeys in hex format
+	lastUpdated: number // Timestamp of last update
+	event: NDKEvent | null // Raw blacklist event
+}
+
+/**
+ * Fetches blacklist settings (kind 10000) for the app
+ */
+export const fetchBlacklistSettings = async (appPubkey?: string): Promise<BlacklistSettings | null> => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	// If no app pubkey provided, try to get it from config
+	let targetPubkey = appPubkey
+	if (!targetPubkey) {
+		// We could get this from config, but for now require it to be passed
+		throw new Error('App pubkey is required')
+	}
+
+	const blacklistFilter: NDKFilter = {
+		kinds: [10000], // NIP-51 mute list
+		authors: [targetPubkey],
+		limit: 1,
+	}
+
+	const events = await ndk.fetchEvents(blacklistFilter)
+	const eventArray = Array.from(events)
+
+	if (eventArray.length === 0) {
+		console.log(`No blacklist settings found for app pubkey: ${targetPubkey}`)
+		// Return empty blacklist instead of null for consistency
+		return {
+			blacklistedPubkeys: [],
+			lastUpdated: 0,
+			event: null,
+		}
+	}
+
+	// Get the latest blacklist event
+	const latestEvent = eventArray.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+
+	// Extract blacklisted pubkeys from 'p' tags
+	const blacklistedPubkeys = latestEvent.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1])
+
+	return {
+		blacklistedPubkeys,
+		lastUpdated: latestEvent.created_at ?? 0,
+		event: latestEvent,
+	}
+}
+
+/**
+ * Hook to fetch blacklist settings for the app
+ */
+export const useBlacklistSettings = (appPubkey?: string) => {
+	const queryClient = useQueryClient()
+	const ndk = ndkActions.getNDK()
+
+	// Set up a live subscription to monitor blacklist changes
+	useEffect(() => {
+		if (!appPubkey || !ndk) return
+
+		const blacklistFilter = {
+			kinds: [10000], // NIP-51 mute list
+			authors: [appPubkey],
+		}
+
+		const subscription = ndk.subscribe(blacklistFilter, {
+			closeOnEose: false, // Keep subscription open
+		})
+
+		// Event handler for blacklist updates
+		subscription.on('event', (newEvent) => {
+			console.log('Blacklist updated, invalidating queries:', newEvent.id)
+			queryClient.invalidateQueries({ queryKey: configKeys.blacklist(appPubkey) })
+		})
+
+		// Clean up subscription when unmounting
+		return () => {
+			subscription.stop()
+		}
+	}, [appPubkey, ndk, queryClient])
+
+	return useQuery({
+		queryKey: configKeys.blacklist(appPubkey || ''),
+		queryFn: () => fetchBlacklistSettings(appPubkey),
+		enabled: !!appPubkey,
+		staleTime: 30000, // Consider data stale after 30 seconds
+		refetchOnMount: true,
+		refetchOnWindowFocus: true,
+		refetchOnReconnect: true,
+	})
+}
+
+/**
+ * Check if a specific pubkey is blacklisted
+ */
+export const isBlacklisted = (blacklistSettings: BlacklistSettings | null | undefined, pubkey: string): boolean => {
+	if (!blacklistSettings || !pubkey) return false
+	return blacklistSettings.blacklistedPubkeys.includes(pubkey)
+}
+
+/**
+ * Get formatted blacklist data for display
+ */
+export const getFormattedBlacklist = (blacklistSettings: BlacklistSettings | null | undefined) => {
+	if (!blacklistSettings || !blacklistSettings.blacklistedPubkeys) return []
+
+	return blacklistSettings.blacklistedPubkeys.map((pubkey) => ({
+		pubkey,
+		status: 'blacklisted' as const,
+	}))
+}
