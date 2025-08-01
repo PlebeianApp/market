@@ -35,11 +35,6 @@ export function OrderFinalizeComponent({
 
 	return (
 		<div className="h-full flex flex-col">
-			{/* Fixed Header */}
-			<div className="flex-shrink-0 mb-6">
-				<h1 className="font-semibold">{isPostPayment ? 'Order Complete!' : 'Order Summary'}</h1>
-			</div>
-			
 			<div className="flex-1 overflow-y-auto space-y-6 pr-2 pb-4">
 					{/* Payment Status - only show if invoices exist */}
 					{isPostPayment && (
