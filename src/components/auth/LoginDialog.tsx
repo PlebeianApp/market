@@ -25,7 +25,10 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-[425px] p-0" data-testid="login-dialog">
+			<DialogContent 
+				className="sm:max-w-[425px] p-0 [&>button]:text-white [&>button]:hover:text-gray-300 [&>button]:top-6 [&>button]:right-6" 
+				data-testid="login-dialog"
+			>
 				{/* Header Section */}
 				<div className="bg-black text-white p-6">
 					<h2 className="text-xl font-semibold mb-2">Login</h2>

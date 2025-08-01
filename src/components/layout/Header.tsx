@@ -253,7 +253,7 @@ export function Header() {
 					</div>
 				</div>
 			</div>
-			<div className="lg:hidden flex-1 pb-4">
+			<div className="lg:hidden flex-1 py-4">
 				<ProductSearch />
 			</div>
 
