@@ -155,7 +155,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 
 								{Object.entries(data.currencyTotals).map(([currency, amount]) => (
 									<div key={`${sellerPubkey}-${currency}`} className="flex justify-between mt-4">
-										<p className="text-sm">{currency} Total:</p>
+										<p className="text-sm">Products ({currency}):</p>
 										<p className="text-sm">
 											{amount.toFixed(2)} {currency}
 										</p>
@@ -218,6 +218,8 @@ export function CartContent({ className = '' }: { className?: string }) {
 						</div>
 					</div>
 
+					{/* View Details section temporarily hidden for testing */}
+					{/* 
 					<button
 						className="w-full flex items-center justify-between p-2 border rounded-lg bg-gray-50"
 						onClick={() => setDetailsExpanded(!detailsExpanded)}
@@ -261,6 +263,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 							</div>
 						</div>
 					)}
+					*/}
 
 					<div className="space-y-3 mt-4">
 						<div className="flex gap-3">

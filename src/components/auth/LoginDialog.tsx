@@ -30,9 +30,19 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 				data-testid="login-dialog"
 			>
 				{/* Header Section */}
-				<div className="bg-black text-white p-6">
-					<h2 className="text-xl font-semibold mb-2">Login</h2>
-					<p className="text-sm text-gray-300">Choose your preferred login method below.</p>
+				<div className="relative bg-black text-white p-6 overflow-hidden">
+					<div 
+						className="absolute inset-0 opacity-80"
+						style={{
+							backgroundImage: 'radial-gradient(circle, rgba(255, 255, 255, 0.3) 1px, transparent 1px)',
+							backgroundSize: '10px 10px',
+							backgroundRepeat: 'repeat'
+						}}
+					/>
+					<div className="relative z-10">
+						<h2 className="text-xl font-semibold mb-2">Login</h2>
+						<p className="text-sm text-gray-300">Choose your preferred login method below.</p>
+					</div>
 				</div>
 				<div className="px-6 pt-0 pb-6">
 					<Tabs defaultValue="extension" className="w-full" value={activeTab} onValueChange={setActiveTab}>
