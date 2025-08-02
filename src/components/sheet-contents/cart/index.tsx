@@ -17,10 +17,6 @@ export default function CartSheetContent({
 	if (isCartEmpty) {
 		return (
 			<SheetContent side="right">
-				<SheetHeader>
-					<SheetTitle>Your cart is empty</SheetTitle>
-					<SheetDescription>Looks like you haven't added any products to your cart yet.</SheetDescription>
-				</SheetHeader>
 				<EmptyCartScreen />
 			</SheetContent>
 		)

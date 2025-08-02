@@ -204,7 +204,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 				</div>
 			</ScrollArea>
 
-			<div className="border-t pt-4 flex-shrink-0">
+			<div className="pt-4 flex-shrink-0">
 				<div className="space-y-3 w-full">
 					<div className="space-y-1 mb-2">
 						<div className="flex justify-between">
