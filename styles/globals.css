@@ -438,5 +438,92 @@ button {
 		border-color: black;
 	}
 
+	/* Psychedelic Mode Effects */
+	.psychedelic-mode {
+		--psychedelic-color-intensity: 0%;
+		--psychedelic-rotation-speed: 0s;
+		--psychedelic-pulse-rate: 0s;
+	}
+
+	.psychedelic-mode * {
+		transition: all 0.3s ease-in-out;
+	}
+
+	.psychedelic-mode .lg\\:border-black,
+	.psychedelic-mode .border-black {
+		border-color: hsl(calc(var(--psychedelic-color-intensity) * 3.6), 100%, 50%);
+		filter: hue-rotate(calc(var(--psychedelic-color-intensity) * 3.6deg));
+	}
+
+	.psychedelic-mode .bg-white {
+		background: linear-gradient(
+			45deg,
+			white,
+			hsl(calc(var(--psychedelic-color-intensity) * 1.8), 80%, 95%),
+			white,
+			hsl(calc(var(--psychedelic-color-intensity) * 2.7), 70%, 97%)
+		);
+		background-size: 200% 200%;
+		animation: psychedelic-bg var(--psychedelic-pulse-rate, 2s) ease-in-out infinite;
+	}
+
+	.psychedelic-mode .bg-primary {
+		background: linear-gradient(
+			90deg,
+			#1d1d1d,
+			hsl(calc(var(--psychedelic-color-intensity) * 2), 60%, 30%),
+			#1d1d1d,
+			hsl(calc(var(--psychedelic-color-intensity) * 3), 70%, 25%)
+		);
+		background-size: 300% 300%;
+		animation: psychedelic-bg var(--psychedelic-pulse-rate, 2s) ease-in-out infinite;
+	}
+
+	.psychedelic-mode .text-secondary {
+		color: hsl(calc(var(--psychedelic-color-intensity) * 2.5), 100%, 60%);
+		text-shadow: 0 0 10px hsl(calc(var(--psychedelic-color-intensity) * 2.5), 100%, 70%);
+	}
+
+	@keyframes psychedelic-bg {
+		0%, 100% { background-position: 0% 50%; }
+		50% { background-position: 100% 50%; }
+	}
+
+	.psychedelic-mode [class*="border"]:not(.border-none) {
+		animation: psychedelic-rotate var(--psychedelic-rotation-speed, 10s) linear infinite;
+		filter: hue-rotate(calc(var(--psychedelic-color-intensity) * 3.6deg)) saturate(calc(100% + var(--psychedelic-color-intensity)));
+	}
+
+	@keyframes psychedelic-rotate {
+		from { transform: rotate(0deg); }
+		to { transform: rotate(360deg); }
+	}
+
+	.psychedelic-mode .font-heading {
+		background: linear-gradient(
+			45deg,
+			#ff3eb5,
+			hsl(calc(var(--psychedelic-color-intensity) * 2), 100%, 60%),
+			#18b9fe,
+			hsl(calc(var(--psychedelic-color-intensity) * 3), 100%, 70%)
+		);
+		background-size: 300% 300%;
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
+		animation: psychedelic-text var(--psychedelic-pulse-rate, 2s) ease-in-out infinite;
+	}
+
+	@keyframes psychedelic-text {
+		0%, 100% { background-position: 0% 50%; }
+		50% { background-position: 100% 50%; }
+	}
+
+	.psychedelic-mode .shadow-md {
+		box-shadow: 
+			0 4px 6px -1px hsl(calc(var(--psychedelic-color-intensity) * 2), 50%, 60%),
+			0 2px 4px -1px hsl(calc(var(--psychedelic-color-intensity) * 3), 60%, 50%);
+	}
+
 
 }

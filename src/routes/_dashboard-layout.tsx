@@ -13,6 +13,7 @@ import { profileKeys } from '@/queries/queryKeyFactory'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { MessageSquareText } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { PsychedelicDials } from '@/components/PsychedelicDials'
 
 export const Route = createFileRoute('/_dashboard-layout')({
 	component: DashboardLayout,
@@ -235,6 +236,7 @@ function DashboardLayout() {
 												{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
 											</AvatarFallback>
 										</Avatar>
+										<span className="truncate min-w-0 flex-1 text-center">{dashboardTitleWithoutEmoji}</span>
 									</>
 								) : (
 									<>
@@ -250,13 +252,6 @@ function DashboardLayout() {
 					{!showSidebar && emoji && isMobile && !dashboardEmoji && (
 						<span className="absolute right-2 sm:right-3 md:right-4 top-1/2 -translate-y-1/2 text-2xl select-none w-12 h-12 flex items-center justify-center z-20">
 							{emoji}
-						</span>
-					)}
-
-					{/* Profile name on the right for message detail view */}
-					{!showSidebar && isMobile && isMessageDetailView && chatProfile && (
-						<span className="absolute right-2 sm:right-3 md:right-4 top-1/2 -translate-y-1/2 text-lg font-medium text-secondary truncate max-w-32 z-20">
-							{dashboardTitleWithoutEmoji}
 						</span>
 					)}
 				</h1>
@@ -300,6 +295,13 @@ function DashboardLayout() {
 						</aside>
 					)}
 
+					{/* Psychedelic Dials Container - only visible on desktop between sidebar and main content */}
+					{!isMobile && (showSidebar || !isMobile) && (
+						<div className="hidden lg:block lg:w-64 lg:flex-shrink-0">
+							<PsychedelicDials className="sticky top-6" />
+						</div>
+					)}
+
 					{/* Main content - responsive behavior */}
 					{(!showSidebar || !isMobile) && (
 						<div
@@ -309,7 +311,7 @@ function DashboardLayout() {
 						>
 							{/* Desktop back button and title - fixed to top of container */}
 							{needsBackButton && (
-								<div className="sticky top-0 z-10 bg-white border-b border-gray-200 pb-4 mb-0 p-4 lg:p-8 flex-shrink-0 flex items-center relative">
+								<div className="sticky top-0 z-10 bg-white border-b border-gray-200 pb-4 mb-0 p-4 lg:p-8 flex-shrink-0 flex items-center justify-between relative">
 									<button
 										onClick={handleBackToParent}
 										className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
@@ -319,18 +321,16 @@ function DashboardLayout() {
 										<span className="text-sm font-medium">Back to {backButtonInfo?.parentTitle}</span>
 									</button>
 
-									{!isMobile && (
-										<h1 className="absolute left-1/2 -translate-x-1/2 text-[1.6rem] font-bold flex items-center gap-2 min-w-0">
-											{isMessageDetailView && chatProfile && (
-												<Avatar className="h-8 w-8 flex-shrink-0">
-													<AvatarImage src={chatProfile.picture} />
-													<AvatarFallback>
-														{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
-													</AvatarFallback>
-												</Avatar>
-											)}
-											<span className="truncate min-w-0">{dashboardTitle}</span>
-										</h1>
+									{!isMobile && isMessageDetailView && chatProfile && (
+										<div className="flex items-center gap-2 min-w-0">
+											<Avatar className="h-6 w-6 flex-shrink-0">
+												<AvatarImage src={chatProfile.picture} />
+												<AvatarFallback>
+													{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
+												</AvatarFallback>
+											</Avatar>
+											<span className="text-sm font-medium truncate min-w-0">{dashboardTitleWithoutEmoji}</span>
+										</div>
 									)}
 								</div>
 							)}
