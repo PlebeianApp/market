@@ -129,7 +129,9 @@ export function ShippingSelector({
 				{!selectedId && <div className="w-1 h-8 bg-yellow-400 rounded-sm flex-shrink-0" />}
 				<Select onValueChange={handleSelect} value={selectedId}>
 					<SelectTrigger className={className}>
-						<SelectValue placeholder="Select shipping method" />
+						<SelectValue placeholder="Select shipping method">
+							{selectedId && options.find(opt => opt.id === selectedId)?.name}
+						</SelectValue>
 					</SelectTrigger>
 				<SelectContent>
 					<SelectGroup>

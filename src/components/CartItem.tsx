@@ -81,7 +81,7 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 
 	if (isLoading) {
 		return (
-			<li className="flex gap-4 pb-4 border-b">
+			<li className="flex gap-4 pb-4 border-b border-gray-300 [.bg-gray-100_&]:border-white">
 				<Skeleton className="h-20 w-20 rounded-md" />
 				<div className="flex flex-1 flex-col justify-between">
 					<div>
@@ -102,7 +102,7 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 	}
 
 	return (
-		<li className="flex flex-col py-4 border-b">
+		<li className="flex flex-col py-4 border-b border-gray-300 [.bg-gray-100_&]:border-white">
 			<div className="flex items-center space-x-4">
 				{/* Product Image */}
 				{images && images.length > 0 ? (
