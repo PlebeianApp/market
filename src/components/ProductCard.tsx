@@ -44,7 +44,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 	}
 
 	return (
-		<div className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col" data-testid="product-card">
+		<div className="border border-zinc-800 rounded-lg bg-white shadow-md flex flex-col" data-testid="product-card">
 			{/* Square aspect ratio container for image */}
 			<Link
 				to={`/products/${product.id}`}

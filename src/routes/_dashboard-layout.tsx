@@ -267,7 +267,7 @@ function DashboardLayout() {
 				<div ref={parent} className="lg:flex lg:w-full lg:gap-6">
 					{/* Sidebar - responsive behavior */}
 					{(showSidebar || !isMobile) && (
-						<aside className="w-full lg:w-80 lg:overflow-y-auto lg:border lg:border-black lg:rounded lg:max-h-full lg:bg-white lg:flex-shrink-0">
+						<aside className="w-full lg:w-80 lg:overflow-y-auto lg:border lg:border-black lg:rounded lg:max-h-full lg:bg-white lg:flex-shrink-0 lg:shadow-md">
 							<div className="lg:space-y-2">
 								{dashboardNavigation.map((section) => (
 									<div key={section.title}>
@@ -297,7 +297,7 @@ function DashboardLayout() {
 					{/* Main content - responsive behavior */}
 					{(!showSidebar || !isMobile) && (
 						<div
-							className={`w-full lg:flex-1 lg:max-w-4xl lg:border lg:border-black lg:rounded lg:bg-white flex flex-col lg:max-h-full lg:overflow-hidden ${
+							className={`w-full lg:flex-1 lg:max-w-4xl lg:border lg:border-black lg:rounded lg:bg-white flex flex-col lg:max-h-full lg:overflow-hidden lg:shadow-md ${
 								isMessageDetailView && isMobile ? 'h-[calc(100vh-5rem)]' : ''
 							}`}
 						>

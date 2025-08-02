@@ -128,7 +128,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 						return (
 							<div 
 								key={sellerPubkey} 
-								className={`p-4 rounded-lg border ${sellerIndex % 2 === 0 ? 'bg-gray-100 border-white' : 'bg-white border-gray-200'}`}
+								className={`p-4 rounded-lg border shadow-md ${sellerIndex % 2 === 0 ? 'bg-gray-100 border-white' : 'bg-white border-gray-200'}`}
 							>
 								<div className="mb-4">
 									<UserWithAvatar pubkey={sellerPubkey} size="sm" showBadge={false} />

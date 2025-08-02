@@ -599,7 +599,7 @@ function RouteComponent() {
 				</div>
 
 				{/* Left Sidebar - Desktop Only (Payment Details) */}
-				<Card className="hidden lg:flex flex-1 lg:w-1/2 flex-col h-full">
+				<Card className="hidden lg:flex flex-1 lg:w-1/2 flex-col h-full shadow-md">
 					<CardHeader>
 						<CardTitle>{currentStep === 'payment' ? 'Payment Details' : 'Order Summary'}</CardTitle>
 					</CardHeader>
@@ -652,7 +652,7 @@ function RouteComponent() {
 				</Card>
 
 				{/* Main Content Area (Invoices) */}
-				<Card className="flex-1 lg:w-1/2 flex flex-col lg:h-full">
+				<Card className="flex-1 lg:w-1/2 flex flex-col lg:h-full shadow-md">
 					{currentStep !== 'shipping' && (
 						<CardHeader>
 							<CardTitle>{currentStep === 'payment' ? 'Invoices' : 'Order Summary'}</CardTitle>

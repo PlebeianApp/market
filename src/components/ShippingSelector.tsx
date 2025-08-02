@@ -86,11 +86,12 @@ export function ShippingSelector({
 		return options && options.length > 0
 	}, [options])
 
-	useEffect(() => {
-		if (options.length === 1 && !selectedId) {
-			handleSelect(options[0].id)
-		}
-	}, [options, selectedId])
+	// Removed automatic selection to prevent DOM manipulation conflicts
+	// useEffect(() => {
+	// 	if (options.length === 1 && !selectedId) {
+	// 		handleSelect(options[0].id)
+	// 	}
+	// }, [options, selectedId])
 
 	const handleSelect = async (id: string) => {
 		setSelectedId(id)
