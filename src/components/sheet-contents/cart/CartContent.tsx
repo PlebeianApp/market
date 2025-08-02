@@ -115,7 +115,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 
 			<ScrollArea className="flex-1 overflow-y-auto py-2 min-h-0">
 				<div className="space-y-8" ref={parent}>
-					{Object.entries(productsBySeller).map(([sellerPubkey, products]) => {
+					{Object.entries(productsBySeller).map(([sellerPubkey, products], sellerIndex) => {
 						const data = sellerData[sellerPubkey] || {
 							satsTotal: 0,
 							currencyTotals: {},
@@ -126,7 +126,10 @@ export function CartContent({ className = '' }: { className?: string }) {
 						const optionsForThisSeller = sellerShippingOptions[sellerPubkey] || []
 
 						return (
-							<div key={sellerPubkey} className="border-b pb-8">
+							<div 
+								key={sellerPubkey} 
+								className={`p-4 rounded-lg border ${sellerIndex % 2 === 0 ? 'bg-gray-100 border-white' : 'bg-white border-gray-200'}`}
+							>
 								<div className="mb-4">
 									<UserWithAvatar pubkey={sellerPubkey} size="sm" showBadge={false} />
 								</div>
