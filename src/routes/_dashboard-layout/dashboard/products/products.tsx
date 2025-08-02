@@ -221,7 +221,7 @@ function ProductsOverviewComponent() {
 					{!isLoading && !error && (
 						<>
 							{products && products.length > 0 ? (
-								<ul className="flex flex-col gap-4 mt-4">
+								<ul className="flex flex-col gap-4">
 									{products.map((product) => (
 										<li key={product.id}>
 											<ProductListItem

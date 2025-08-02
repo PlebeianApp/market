@@ -13,7 +13,6 @@ import { profileKeys } from '@/queries/queryKeyFactory'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { MessageSquareText } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { PsychedelicDials } from '@/components/PsychedelicDials'
 
 export const Route = createFileRoute('/_dashboard-layout')({
 	component: DashboardLayout,
@@ -265,7 +264,7 @@ function DashboardLayout() {
 
 			{/* Main container - responsive layout */}
 			<div className="lg:flex lg:p-6 lg:gap-6 lg:flex-1 lg:overflow-hidden lg:max-w-none lg:min-h-0">
-				<div ref={parent} className="lg:flex lg:w-full lg:gap-6">
+				<div ref={parent} className="lg:flex lg:w-full lg:gap-6 lg:min-w-0">
 					{/* Sidebar - responsive behavior */}
 					{(showSidebar || !isMobile) && (
 						<aside className="w-full lg:w-80 lg:overflow-y-auto lg:border lg:border-black lg:rounded lg:max-h-full lg:bg-white lg:flex-shrink-0 lg:shadow-md">
@@ -295,12 +294,7 @@ function DashboardLayout() {
 						</aside>
 					)}
 
-					{/* Psychedelic Dials Container - only visible on desktop between sidebar and main content */}
-					{!isMobile && (showSidebar || !isMobile) && (
-						<div className="hidden lg:block lg:w-64 lg:flex-shrink-0">
-							<PsychedelicDials className="sticky top-6" />
-						</div>
-					)}
+
 
 					{/* Main content - responsive behavior */}
 					{(!showSidebar || !isMobile) && (
@@ -388,6 +382,15 @@ function DashboardLayout() {
 										<Outlet />
 									</div>
 								)}
+							</div>
+						</div>
+					)}
+
+					{/* Placeholder Container - responsive on desktop */}
+					{!isMobile && (
+						<div className="hidden min-[1470px]:block lg:min-w-0 lg:flex-1 lg:max-w-32 xl:max-w-48 2xl:max-w-64 lg:border lg:border-black lg:rounded lg:bg-white lg:max-h-full lg:overflow-hidden lg:shadow-md">
+							<div className="p-4 lg:px-6 lg:py-4 flex items-center justify-center h-full">
+								<span className="text-3xl">₿</span>
 							</div>
 						</div>
 					)}
