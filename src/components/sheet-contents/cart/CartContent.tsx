@@ -128,22 +128,26 @@ export function CartContent({ className = '' }: { className?: string }) {
 						return (
 							<div 
 								key={sellerPubkey} 
-								className={`p-4 rounded-lg border shadow-md ${sellerIndex % 2 === 0 ? 'bg-gray-100 border-white' : 'bg-white border-gray-200'}`}
+								className="p-4 rounded-lg border shadow-md bg-white"
 							>
 								<div className="mb-4">
 									<UserWithAvatar pubkey={sellerPubkey} size="sm" showBadge={false} />
 								</div>
 
 								<ul className="space-y-6">
-									{products.map((product) => (
-										<CartItem
+									{products.map((product, index) => (
+										<div
 											key={product.id}
-											productId={product.id}
-											amount={product.amount}
-											onQuantityChange={handleQuantityChange}
-											onRemove={handleRemoveProduct}
-											hideShipping={true}
-										/>
+											className={`p-3 rounded-lg ${index % 2 === 0 ? 'bg-gray-100' : 'bg-white'}`}
+										>
+											<CartItem
+												productId={product.id}
+												amount={product.amount}
+												onQuantityChange={handleQuantityChange}
+												onRemove={handleRemoveProduct}
+												hideShipping={true}
+											/>
+										</div>
 									))}
 								</ul>
 
