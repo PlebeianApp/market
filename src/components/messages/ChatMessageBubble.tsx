@@ -238,7 +238,7 @@ const PaymentReceiptMessage = ({ event }: { event: NDKEvent }) => {
 
 export function ChatMessageBubble({ event, isCurrentUser }: ChatMessageBubbleProps) {
 	const alignment = isCurrentUser ? 'justify-end' : 'justify-start'
-	const bubbleStyles = isCurrentUser ? 'bg-primary text-primary-foreground' : 'bg-muted'
+	const bubbleStyles = isCurrentUser ? 'bg-primary text-primary-foreground' : 'bg-white border border-black'
 	const authorPubkey = event.pubkey
 	const showAvatar = !isCurrentUser
 
@@ -287,7 +287,7 @@ export function ChatMessageBubble({ event, isCurrentUser }: ChatMessageBubblePro
 	return (
 		<div className={`flex flex-wrap items-end gap-2 ${alignment} mb-2 w-full`}>
 			<div className="flex flex-col max-w-[85%] sm:max-w-[75%] md:max-w-[65%] lg:max-w-[55%] min-w-0">
-				<div className={`px-3 py-2 rounded-lg shadow ${bubbleStyles} break-words`}>
+				<div className={`px-3 py-2 rounded-lg shadow ${bubbleStyles} break-words ${!isCurrentUser ? 'text-foreground' : ''}`}>
 					{structuredPart}
 					{event.kind === 14 && hasContent && <p className="text-sm">{event.content}</p>}
 					{event.kind === 14 && !hasContent && (

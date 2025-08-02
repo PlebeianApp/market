@@ -214,7 +214,7 @@ function DashboardLayout() {
 					{!showSidebar && isMobile && (
 						<button
 							onClick={handleBackToSidebar}
-							className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 top-1/2 -translate-y-1/2 w-12 h-12"
+							className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 sm:left-3 md:left-4 top-1/2 -translate-y-1/2 w-12 h-12 z-20"
 							aria-label="Back to sidebar"
 						>
 							<span className="i-back w-6 h-6" />
@@ -222,7 +222,7 @@ function DashboardLayout() {
 					)}
 
 					{/* Title */}
-					<span className="w-full truncate px-8 sm:px-14 text-3xl flex items-center justify-center gap-2">
+					<span className="w-full truncate px-8 sm:px-12 md:px-16 text-3xl flex items-center justify-center gap-2 min-w-0">
 						{showSidebar || !isMobile ? (
 							'Dashboard'
 						) : (
@@ -235,12 +235,11 @@ function DashboardLayout() {
 												{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
 											</AvatarFallback>
 										</Avatar>
-										<span className="truncate">{dashboardTitleWithoutEmoji}</span>
 									</>
 								) : (
 									<>
-										{dashboardEmoji && <span className="text-2xl">{dashboardEmoji}</span>}
-										<span className="truncate">{dashboardTitleWithoutEmoji}</span>
+										{dashboardEmoji && <span className="text-2xl flex-shrink-0">{dashboardEmoji}</span>}
+										<span className="truncate min-w-0 flex-1 text-center">{dashboardTitleWithoutEmoji}</span>
 									</>
 								)}
 							</>
@@ -249,8 +248,15 @@ function DashboardLayout() {
 
 					{/* Mobile emoji - only visible on small screens when not showing sidebar */}
 					{!showSidebar && emoji && isMobile && !dashboardEmoji && (
-						<span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xl select-none w-12 h-12 flex items-center justify-center">
+						<span className="absolute right-2 sm:right-3 md:right-4 top-1/2 -translate-y-1/2 text-2xl select-none w-12 h-12 flex items-center justify-center z-20">
 							{emoji}
+						</span>
+					)}
+
+					{/* Profile name on the right for message detail view */}
+					{!showSidebar && isMobile && isMessageDetailView && chatProfile && (
+						<span className="absolute right-2 sm:right-3 md:right-4 top-1/2 -translate-y-1/2 text-lg font-medium text-secondary truncate max-w-32 z-20">
+							{dashboardTitleWithoutEmoji}
 						</span>
 					)}
 				</h1>
@@ -314,16 +320,16 @@ function DashboardLayout() {
 									</button>
 
 									{!isMobile && (
-										<h1 className="absolute left-1/2 -translate-x-1/2 text-[1.6rem] font-bold flex items-center gap-2">
+										<h1 className="absolute left-1/2 -translate-x-1/2 text-[1.6rem] font-bold flex items-center gap-2 min-w-0">
 											{isMessageDetailView && chatProfile && (
-												<Avatar className="h-8 w-8">
+												<Avatar className="h-8 w-8 flex-shrink-0">
 													<AvatarImage src={chatProfile.picture} />
 													<AvatarFallback>
 														{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
 													</AvatarFallback>
 												</Avatar>
 											)}
-											{dashboardTitle}
+											<span className="truncate min-w-0">{dashboardTitle}</span>
 										</h1>
 									)}
 								</div>
