@@ -100,7 +100,7 @@ function CollectionListItem({
 			triggerContent={triggerContent}
 			actions={actions}
 			isDeleting={isDeleting}
-			icon={<StoreIcon className="h-6 w-6 text-muted-foreground" />}
+			icon={<StoreIcon className="h-5 w-5 text-black" />}
 		>
 			<CollectionBasicInfo collection={collection} />
 		</DashboardListItem>

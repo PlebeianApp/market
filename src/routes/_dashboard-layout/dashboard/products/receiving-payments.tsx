@@ -441,9 +441,9 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 	const PaymentMethodIcon = ({ method }: { method: PaymentDetailsMethod }) => {
 		switch (method) {
 			case PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK:
-				return <ZapIcon className="w-5 h-5" />
+				return <ZapIcon className="w-5 h-5 text-black" />
 			case PAYMENT_DETAILS_METHOD.ON_CHAIN:
-				return <AnchorIcon className="w-5 h-5" />
+				return <AnchorIcon className="w-5 h-5 text-black" />
 			default:
 				return null
 		}
@@ -691,11 +691,11 @@ function PaymentDetailListItem({ paymentDetail, isOpen, onOpenChange, isDeleting
 	const PaymentMethodIcon = ({ method }: { method: PaymentDetailsMethod }) => {
 		switch (method) {
 			case PAYMENT_DETAILS_METHOD.ON_CHAIN:
-				return <AnchorIcon className="w-5 h-5 text-muted-foreground" />
+				return <AnchorIcon className="w-5 h-5 text-black" />
 			case PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK:
-				return <ZapIcon className="w-5 h-5 text-muted-foreground" />
+				return <ZapIcon className="w-5 h-5 text-black" />
 			default:
-				return <GlobeIcon className="w-5 h-5 text-muted-foreground" />
+				return <GlobeIcon className="w-5 h-5 text-black" />
 		}
 	}
 

@@ -110,7 +110,7 @@ function ProductListItem({
 			triggerContent={triggerContent}
 			actions={actions}
 			isDeleting={isDeleting}
-			icon={<PackageIcon className="h-6 w-6 text-muted-foreground" />}
+			icon={<PackageIcon className="h-5 w-5 text-black" />}
 		>
 			<ProductBasicInfo product={product} />
 		</DashboardListItem>

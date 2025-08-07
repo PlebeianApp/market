@@ -191,11 +191,11 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 		switch (service) {
 			case 'express':
 			case 'overnight':
-				return <TruckIcon className="w-5 h-5 text-orange-500" />
+				return <TruckIcon className="w-5 h-5 text-black" />
 			case 'pickup':
-				return <PackageIcon className="w-5 h-5 text-blue-500" />
+				return <PackageIcon className="w-5 h-5 text-black" />
 			default:
-				return <TruckIcon className="w-5 h-5" />
+				return <TruckIcon className="w-5 h-5 text-black" />
 		}
 	}
 

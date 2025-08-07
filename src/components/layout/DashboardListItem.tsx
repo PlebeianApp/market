@@ -42,7 +42,7 @@ const DashboardListItem = React.forwardRef<HTMLDivElement, DashboardListItemProp
 					<CollapsibleTrigger asChild>
 						<div className="p-4 flex flex-row items-center justify-between cursor-pointer group rounded-lg">
 							<div className="flex items-center gap-4">
-								<div className="p-2 bg-muted rounded-full">{icon ?? <WalletIcon className="h-6 w-6" />}</div>
+								<div className="flex items-center justify-center w-10 h-10 border-2 border-black bg-transparent rounded-full shadow-md">{icon ?? <WalletIcon className="h-5 w-5 text-black" />}</div>
 								<div className="min-w-0 flex-1">{triggerContent}</div>
 							</div>
 							<div className="flex items-center gap-2">
