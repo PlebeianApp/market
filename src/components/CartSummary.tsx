@@ -36,6 +36,7 @@ export function CartSummary({
 	const [parent, enableAnimations] = useAutoAnimate()
 	const [selectedShippingByUser, setSelectedShippingByUser] = useState<Record<string, string>>({})
 	const [detailsExpanded, setDetailsExpanded] = useState(showExpandedDetails)
+	const [animationsEnabled, setAnimationsEnabled] = useState(true)
 
 	const totalItems = useMemo(() => {
 		return Object.values(cart.products).reduce((sum, product) => sum + product.amount, 0)
@@ -70,23 +71,43 @@ export function CartSummary({
 	}, [cart.products])
 
 	useEffect(() => {
+		// Enable animations when component mounts
 		enableAnimations(true)
-	}, [parent, enableAnimations])
+	}, [])
 
 	const handleQuantityChange = (productId: string, newAmount: number) => {
 		if (allowQuantityChanges) {
+			// Temporarily disable animations to prevent DOM manipulation conflicts
+			enableAnimations(false)
+			
 			cartActions.handleProductUpdate('setAmount', productId, newAmount)
+			
+			// Re-enable animations after state update
+			setTimeout(() => {
+				enableAnimations(true)
+			}, 100)
 		}
 	}
 
 	const handleRemoveProduct = (productId: string) => {
 		if (allowQuantityChanges) {
+			// Temporarily disable animations to prevent DOM manipulation conflicts
+			enableAnimations(false)
+			
 			cartActions.handleProductUpdate('remove', productId)
+			
+			// Re-enable animations after state update
+			setTimeout(() => {
+				enableAnimations(true)
+			}, 100)
 		}
 	}
 
 	const handleShippingSelect = async (sellerPubkey: string, shippingOption: RichShippingInfo) => {
 		if (!allowShippingChanges) return
+
+		// Temporarily disable animations to prevent DOM manipulation conflicts
+		enableAnimations(false)
 
 		setSelectedShippingByUser((prev) => ({
 			...prev,
@@ -98,6 +119,11 @@ export function CartSummary({
 			await cartActions.setShippingMethod(product.id, shippingOption)
 		}
 		await cartActions.updateSellerData()
+
+		// Re-enable animations after state updates are complete
+		setTimeout(() => {
+			enableAnimations(true)
+		}, 100)
 	}
 
 	return (

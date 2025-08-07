@@ -19,9 +19,9 @@ export function PaymentSummary({ invoices, currentIndex, onSelectInvoice }: Paym
 	const currentInvoice = invoices[currentIndex]
 
 	return (
-		<div className="space-y-4 flex flex-col lg:flex-col-reverse">
+		<div className="flex flex-col lg:flex-col-reverse gap-4">
 			{/* Payment Summary - Mobile first, Desktop second */}
-			<Card className="lg:order-2">
+			<Card className="lg:order-1">
 				<CardHeader className="pb-2">
 					<CardTitle className="text-sm">Payment Summary</CardTitle>
 				</CardHeader>
@@ -48,7 +48,7 @@ export function PaymentSummary({ invoices, currentIndex, onSelectInvoice }: Paym
 			</Card>
 
 			{/* All Payments - Mobile second, Desktop first */}
-			<Card className="lg:order-1">
+			<Card className="lg:order-2">
 				<CardHeader className="pb-2">
 					<CardTitle className="text-sm">All Payments ({invoices.length})</CardTitle>
 				</CardHeader>
