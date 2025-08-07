@@ -112,7 +112,15 @@ function RouteComponent() {
 	}, [walletsInitialized, wallets])
 	const [orderInvoiceSets, setOrderInvoiceSets] = useState<Record<string, OrderInvoiceSet>>({})
 	const [specOrderIds, setSpecOrderIds] = useState<string[]>([])
-	const [animationParent] = useAutoAnimate()
+	// Use auto-animate with error handling to prevent DOM manipulation errors
+	const [animationParent] = (() => {
+		try {
+			return useAutoAnimate()
+		} catch (error) {
+			console.warn('Auto-animate not available:', error)
+			return [null]
+		}
+	})()
 	const { mutateAsync: generateInvoice, isPending: isGeneratingInvoices } = useGenerateInvoiceMutation()
 
 	const isCartEmpty = useMemo(() => {

@@ -131,6 +131,9 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 	return (
 		<Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
 			<DialogContent className="max-w-[425px] w-[95vw] max-h-[90vh] overflow-y-auto [&>button]:hidden">
+				<DialogHeader className="sr-only">
+					<DialogTitle>Zap {recipientName}</DialogTitle>
+				</DialogHeader>
 				{/* Custom Header with three columns */}
 				<div className="flex items-center justify-between pb-4">
 					{/* Left: Back button (only visible on generateInvoice step) */}

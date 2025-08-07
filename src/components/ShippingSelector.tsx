@@ -12,6 +12,7 @@ interface ShippingSelectorProps {
 	selectedId?: string
 	onSelect: (option: RichShippingInfo) => void
 	className?: string
+	disabled?: boolean
 }
 
 const getBestShippingOptions = (options: RichShippingInfo[], selectedId?: string): RichShippingInfo[] => {
@@ -41,6 +42,7 @@ export function ShippingSelector({
 	selectedId: propSelectedId,
 	onSelect,
 	className,
+	disabled,
 }: ShippingSelectorProps) {
 	const [selectedId, setSelectedId] = useState<string | undefined>(propSelectedId)
 
@@ -94,6 +96,8 @@ export function ShippingSelector({
 	// }, [options, selectedId])
 
 	const handleSelect = async (id: string) => {
+		if (disabled) return
+		
 		setSelectedId(id)
 
 		const option = rawOptions.find((o: RichShippingInfo) => o.id === id)
@@ -128,9 +132,9 @@ export function ShippingSelector({
 		return (
 			<div className={`${!selectedId ? 'flex items-center gap-2' : ''}`}>
 				{!selectedId && <div className="w-1 h-8 bg-yellow-400 rounded-sm flex-shrink-0" />}
-				<Select onValueChange={handleSelect} value={selectedId}>
-					<SelectTrigger className={className}>
-						<SelectValue placeholder="Select shipping method">
+				<Select onValueChange={handleSelect} value={selectedId} disabled={disabled}>
+					<SelectTrigger className={className} disabled={disabled}>
+						<SelectValue placeholder={disabled ? "Updating..." : "Select shipping method"}>
 							{selectedId && options.find(opt => opt.id === selectedId)?.name}
 						</SelectValue>
 					</SelectTrigger>

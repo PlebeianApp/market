@@ -26,7 +26,15 @@ export function CartContent({ className = '' }: { className?: string }) {
 		sellerShippingOptions,
 	} = useStore(cartStore)
 
-	const [parent, enableAnimations] = useAutoAnimate()
+	// Use auto-animate with error handling to prevent DOM manipulation errors
+	const [parent, enableAnimations] = (() => {
+		try {
+			return useAutoAnimate()
+		} catch (error) {
+			console.warn('Auto-animate not available:', error)
+			return [null, () => {}]
+		}
+	})()
 	const [selectedShippingByUser, setSelectedShippingByUser] = useState<Record<string, string>>({})
 	const [detailsExpanded, setDetailsExpanded] = useState(false)
 	const navigate = useNavigate()
@@ -69,7 +77,11 @@ export function CartContent({ className = '' }: { className?: string }) {
 	}, [cart.products])
 
 	useEffect(() => {
-		enableAnimations(true)
+		try {
+			enableAnimations(true)
+		} catch (error) {
+			console.warn('Failed to enable animations:', error)
+		}
 	}, [parent, enableAnimations])
 
 	const handleQuantityChange = (productId: string, newAmount: number) => {
@@ -83,16 +95,26 @@ export function CartContent({ className = '' }: { className?: string }) {
 	}
 
 	const handleShippingSelect = async (sellerPubkey: string, shippingOption: RichShippingInfo) => {
-		setSelectedShippingByUser((prev) => ({
-			...prev,
-			[sellerPubkey]: shippingOption.id,
-		}))
+		try {
+			setSelectedShippingByUser((prev) => ({
+				...prev,
+				[sellerPubkey]: shippingOption.id,
+			}))
 
-		const products = productsBySeller[sellerPubkey] || []
-		for (const product of products) {
-			await cartActions.setShippingMethod(product.id, shippingOption)
+			const products = productsBySeller[sellerPubkey] || []
+			for (const product of products) {
+				await cartActions.setShippingMethod(product.id, shippingOption)
+			}
+			await cartActions.updateSellerData()
+		} catch (error) {
+			console.error('Error updating shipping method:', error)
+			// Revert local state on error
+			setSelectedShippingByUser((prev) => {
+				const newState = { ...prev }
+				delete newState[sellerPubkey]
+				return newState
+			})
 		}
-		await cartActions.updateSellerData()
 	}
 
 	if (isCartEmpty) {

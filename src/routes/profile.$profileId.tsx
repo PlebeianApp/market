@@ -25,7 +25,15 @@ function RouteComponent() {
 	type Params = { profileId: string }
 	const params = Route.useParams() as Params
 	const navigate = useNavigate()
-	const [animationParent] = useAutoAnimate()
+	// Use auto-animate with error handling to prevent DOM manipulation errors
+	const [animationParent] = (() => {
+		try {
+			return useAutoAnimate()
+		} catch (error) {
+			console.warn('Auto-animate not available:', error)
+			return [null]
+		}
+	})()
 
 	const { data: profileData } = useSuspenseQuery(profileByIdentifierQueryOptions(params.profileId))
 	const { profile, user } = profileData || {}

@@ -128,7 +128,15 @@ function DashboardLayout() {
 	const breakpoint = useBreakpoint()
 	const isMobile = breakpoint === 'sm' || breakpoint === 'md' || breakpoint === 'lg' // Changed: treat anything below xl (1024px) as mobile
 	const [showSidebar, setShowSidebar] = useState(true)
-	const [parent] = useAutoAnimate()
+	// Use auto-animate with error handling to prevent DOM manipulation errors
+	const [parent] = (() => {
+		try {
+			return useAutoAnimate()
+		} catch (error) {
+			console.warn('Auto-animate not available:', error)
+			return [null]
+		}
+	})()
 	const { dashboardTitle } = useStore(uiStore)
 	const { isAuthenticated } = useStore(authStore)
 	const isMessageDetailView =
