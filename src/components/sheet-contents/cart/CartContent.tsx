@@ -122,7 +122,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 	}
 
 	return (
-		<div className={`flex flex-col h-full overflow-hidden py-4 px-6 ${className}`}>
+		<div className={`flex flex-col h-full overflow-hidden px-6 ${className}`}>
 			{missingShippingCount > 0 && (
 				<div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
 					<div className="flex">
