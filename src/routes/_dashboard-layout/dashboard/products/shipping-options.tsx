@@ -36,6 +36,7 @@ import { ChevronLeftIcon, GlobeIcon, PackageIcon, PlusIcon, TrashIcon, TruckIcon
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
 
 const SERVICE_TYPES = [
 	{ value: 'standard', label: 'Standard Shipping' },
@@ -764,6 +765,16 @@ function ShippingOptionsComponent() {
 
 	useDashboardTitle('Shipping Options')
 
+	// Auto-animate for smooth list transitions
+	const [animationParent] = (() => {
+		try {
+			return useAutoAnimate()
+		} catch (error) {
+			console.warn('Auto-animate not available:', error)
+			return [null]
+		}
+	})()
+
 	useEffect(() => {
 		getUser().then(setUser)
 	}, [getUser])
@@ -856,7 +867,7 @@ function ShippingOptionsComponent() {
 					</Card>
 				)}
 
-				<div className="space-y-4">
+				<div ref={animationParent} className="space-y-4">
 					{/* Existing shipping options */}
 					{filteredShippingOptions.map((shippingOption) => {
 						const shippingId = getShippingId(shippingOption)

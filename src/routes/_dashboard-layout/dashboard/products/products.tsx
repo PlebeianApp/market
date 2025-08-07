@@ -11,6 +11,7 @@ import { useState } from 'react'
 import { ChevronDown, PackageIcon, PlusIcon, Trash } from 'lucide-react'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
 
 // Component to show basic product information
 function ProductBasicInfo({ product }: { product: any }) {
@@ -127,6 +128,16 @@ function ProductsOverviewComponent() {
 	const matchRoute = useMatchRoute()
 	const [expandedProduct, setExpandedProduct] = useState<string | null>(null)
 	useDashboardTitle('Products')
+
+	// Auto-animate for smooth list transitions
+	const [animationParent] = (() => {
+		try {
+			return useAutoAnimate()
+		} catch (error) {
+			console.warn('Auto-animate not available:', error)
+			return [null]
+		}
+	})()
 	// Check if we're on a child route (editing or creating a product)
 	const isOnChildRoute =
 		matchRoute({
@@ -221,7 +232,7 @@ function ProductsOverviewComponent() {
 					{!isLoading && !error && (
 						<>
 							{products && products.length > 0 ? (
-								<ul className="flex flex-col gap-4">
+								<ul ref={animationParent} className="flex flex-col gap-4">
 									{products.map((product) => (
 										<li key={product.id}>
 											<ProductListItem

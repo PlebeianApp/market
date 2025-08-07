@@ -11,6 +11,7 @@ import { useState } from 'react'
 import { ChevronDown, PlusIcon, StoreIcon, Trash } from 'lucide-react'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
 
 // Component to show basic collection information
 function CollectionBasicInfo({ collection }: { collection: any }) {
@@ -118,6 +119,16 @@ function CollectionsComponent() {
 	const [expandedCollection, setExpandedCollection] = useState<string | null>(null)
 	useDashboardTitle('Collections')
 
+	// Auto-animate for smooth list transitions
+	const [animationParent] = (() => {
+		try {
+			return useAutoAnimate()
+		} catch (error) {
+			console.warn('Auto-animate not available:', error)
+			return [null]
+		}
+	})()
+
 	// Check if we're on a child route (editing or creating a collection)
 	const isOnChildRoute =
 		matchRoute({
@@ -207,8 +218,8 @@ function CollectionsComponent() {
 
 					{!isLoading && !error && (
 						<>
-							{collections && collections.length > 0 ? (
-								<ul className="flex flex-col gap-4">
+													{collections && collections.length > 0 ? (
+							<ul ref={animationParent} className="flex flex-col gap-4">
 									{collections.map((collection) => {
 										const collectionId = getCollectionId(collection)
 										return (

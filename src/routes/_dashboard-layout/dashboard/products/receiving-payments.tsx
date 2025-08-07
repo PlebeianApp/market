@@ -46,6 +46,7 @@ import {
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
 
 interface ScopeSelectorProps {
 	value: PaymentScope
@@ -745,6 +746,16 @@ function ReceivingPaymentsComponent() {
 	const [paymentMethodFilter, setPaymentMethodFilter] = useState<PaymentDetailsMethod | 'all'>('all')
 	useDashboardTitle('Receiving Payments')
 
+	// Auto-animate for smooth list transitions
+	const [animationParent] = (() => {
+		try {
+			return useAutoAnimate()
+		} catch (error) {
+			console.warn('Auto-animate not available:', error)
+			return [null]
+		}
+	})()
+
 	useEffect(() => {
 		getUser().then(setUser)
 	}, [getUser])
@@ -812,7 +823,7 @@ function ReceivingPaymentsComponent() {
 					</Card>
 				)}
 
-				<div className="space-y-4">
+				<div ref={animationParent} className="space-y-4">
 					{paymentDetails?.map((pd) => (
 						<PaymentDetailListItem
 							key={pd.id}

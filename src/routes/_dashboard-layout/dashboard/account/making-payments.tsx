@@ -16,6 +16,7 @@ import { ArrowLeftIcon, ChevronDownIcon, EyeIcon, EyeOffIcon, PlusIcon, RefreshC
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/making-payments')({
 	component: MakingPaymentsComponent,
@@ -26,6 +27,16 @@ function MakingPaymentsComponent() {
 	const { wallets: localWallets, isLoading: localLoading, isInitialized } = useWallets()
 	const queryClient = useQueryClient()
 	useDashboardTitle('Making Payments')
+
+	// Auto-animate for smooth list transitions
+	const [animationParent] = (() => {
+		try {
+			return useAutoAnimate()
+		} catch (error) {
+			console.warn('Auto-animate not available:', error)
+			return [null]
+		}
+	})()
 
 	// NDK User for Nostr operations
 	const [userPubkey, setUserPubkey] = useState<string | undefined>(undefined)
@@ -329,7 +340,8 @@ function MakingPaymentsComponent() {
 					</Card>
 				) : (
 					<>
-						{combinedWallets.map((wallet) => (
+						<div ref={animationParent} className="space-y-4">
+							{combinedWallets.map((wallet) => (
 								<WalletListItemWithBalance
 									key={wallet.id}
 									wallet={wallet}
@@ -378,8 +390,9 @@ function MakingPaymentsComponent() {
 									isDeleting={deletingWalletId === wallet.id}
 								/>
 							))}
+						</div>
 
-													{combinedWallets.length > 0 && !isAddingWallet && (
+						{combinedWallets.length > 0 && !isAddingWallet && (
 							<Button onClick={handleAddWalletClick} className="w-full mt-4 sm:hidden">
 								<PlusIcon className="h-4 w-4 mr-2" /> Add Another Wallet
 							</Button>
