@@ -204,7 +204,7 @@ function ProductsOverviewComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<div className="hidden lg:flex sticky top-0 z-10 fg-layer-elevated border-b border-layer-subtle py-4 px-4 lg:px-6 items-center justify-between">
 				<h1 className="text-2xl font-bold">Products</h1>
 				<Button
 					onClick={handleAddProductClick}
@@ -214,7 +214,7 @@ function ProductsOverviewComponent() {
 					<span className="i-product w-5 h-5" /> Add A Product
 				</Button>
 			</div>
-			<div className="space-y-6 p-4 lg:p-6">
+			<div className="space-y-6 p-4 lg:p-6 bg-layer-base">
 				<div className="lg:hidden">
 					<Button
 						onClick={handleAddProductClick}
@@ -231,8 +231,8 @@ function ProductsOverviewComponent() {
 
 					{!isLoading && !error && (
 						<>
-							{products && products.length > 0 ? (
-								<ul ref={animationParent} className="flex flex-col gap-4">
+																{products && products.length > 0 ? (
+										<ul ref={animationParent} className="flex flex-col gap-4 space-y-0">
 									{products.map((product) => (
 										<li key={product.id}>
 											<ProductListItem

@@ -271,11 +271,11 @@ function DashboardLayout() {
 			</div>
 
 			{/* Main container - responsive layout */}
-			<div className="lg:flex lg:p-6 lg:gap-6 lg:flex-1 lg:overflow-hidden lg:max-w-none lg:min-h-0">
+			<div className="lg:flex lg:p-6 lg:gap-6 lg:flex-1 lg:overflow-hidden lg:max-w-none lg:min-h-0 bg-layer-base">
 				<div className="lg:flex lg:w-full lg:gap-6 lg:min-w-0">
 					{/* Sidebar - responsive behavior */}
 					{(showSidebar || !isMobile) && (
-						<aside className="w-full lg:w-80 lg:overflow-y-auto lg:border lg:border-black lg:rounded lg:max-h-full lg:bg-white lg:flex-shrink-0 lg:shadow-md">
+						<aside className="w-full lg:w-80 lg:overflow-y-auto lg:border lg:border-black lg:rounded lg:max-h-full bg-layer-elevated lg:flex-shrink-0 lg:shadow-md">
 							<div ref={parent} className="lg:space-y-2">
 								{dashboardNavigation.map((section) => (
 									<div key={section.title}>
@@ -287,7 +287,7 @@ function DashboardLayout() {
 													<Link
 														key={item.path}
 														to={item.path}
-														className="block p-4 lg:px-6 lg:py-2 transition-colors font-bold border border-black bg-white rounded lg:border-0 lg:bg-transparent lg:rounded-none data-[status=active]:bg-gray-200 data-[status=active]:text-black hover:text-pink-500"
+														className="block p-4 lg:px-6 lg:py-2 transition-colors font-bold border border-black fg-layer-elevated rounded lg:border-0 lg:bg-transparent lg:rounded-none data-[status=active]:bg-layer-interactive data-[status=active]:text-black hover:text-pink-500"
 														onClick={handleSidebarItemClick}
 														data-status={isActive ? 'active' : 'inactive'}
 													>
@@ -307,13 +307,13 @@ function DashboardLayout() {
 					{/* Main content - responsive behavior */}
 					{(!showSidebar || !isMobile) && (
 						<div
-							className={`w-full lg:flex-1 lg:max-w-4xl lg:border lg:border-black lg:rounded lg:bg-white flex flex-col lg:max-h-full lg:overflow-hidden lg:shadow-md ${
+							className={`w-full lg:flex-1 lg:max-w-4xl lg:border lg:border-black lg:rounded bg-layer-elevated flex flex-col lg:max-h-full lg:overflow-hidden lg:shadow-md ${
 								isMessageDetailView && isMobile ? 'h-[calc(100vh-5rem)]' : ''
 							}`}
 						>
 							{/* Desktop back button and title - fixed to top of container */}
-							{needsBackButton && (
-								<div className="sticky top-0 z-10 bg-white border-b border-gray-200 pb-4 mb-0 p-4 lg:p-8 flex-shrink-0 flex items-center justify-between relative">
+															{needsBackButton && (
+									<div className="sticky top-0 z-10 fg-layer-elevated border-b border-layer-subtle pb-4 mb-0 p-4 lg:p-8 flex-shrink-0 flex items-center justify-between relative">
 									<button
 										onClick={handleBackToParent}
 										className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
@@ -343,8 +343,8 @@ function DashboardLayout() {
 								) : (
 									<div className="h-full">
 										<div
-											className={cn(
-												'p-4 bg-white lg:pt-8 lg:px-8 lg:pb-6 lg:bg-transparent h-full',
+																								className={cn(
+														'p-4 bg-layer-elevated lg:pt-8 lg:px-8 lg:pb-6 lg:bg-transparent h-full',
 												location.pathname === '/dashboard/sales/sales' && 'p-0 lg:p-0',
 												location.pathname.startsWith('/dashboard/sales/messages') && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/sales/circular-economy' && 'p-0 lg:p-0',
@@ -396,7 +396,7 @@ function DashboardLayout() {
 
 					{/* Placeholder Container - responsive on desktop */}
 					{!isMobile && (
-						<div className="hidden min-[1470px]:block lg:min-w-0 lg:flex-1 lg:max-w-32 xl:max-w-48 2xl:max-w-64 lg:border lg:border-black lg:rounded lg:bg-white lg:max-h-full lg:overflow-hidden lg:shadow-md">
+						<div className="hidden min-[1470px]:block lg:min-w-0 lg:flex-1 lg:max-w-32 xl:max-w-48 2xl:max-w-64 lg:border lg:border-black lg:rounded bg-layer-elevated lg:max-h-full lg:overflow-hidden lg:shadow-md">
 							<div className="p-4 lg:px-6 lg:py-4 flex items-center justify-center h-full">
 								<span className="text-3xl">₿</span>
 							</div>

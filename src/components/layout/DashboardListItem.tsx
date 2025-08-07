@@ -23,26 +23,26 @@ const DashboardListItem = React.forwardRef<HTMLDivElement, DashboardListItemProp
 		ref,
 	) => {
 		const content = (
-			<CollapsibleContent>
-				<div className="p-4 pt-0">{children}</div>
-			</CollapsibleContent>
+								<CollapsibleContent>
+						<div className="p-4 pt-0 bg-layer-overlay rounded-b-lg border-t border-layer-medium">{children}</div>
+					</CollapsibleContent>
 		)
 
 		if (!isCollapsible) {
 			return (
-				<div ref={ref} className={cn('p-4 border rounded-md bg-white', className)} {...props}>
+				<div ref={ref} className={cn('p-4 border border-layer-subtle rounded-md fg-layer-elevated', className)} {...props}>
 					{children}
 				</div>
 			)
 		}
 
-		return (
-			<Collapsible open={isOpen} onOpenChange={onOpenChange} className="space-y-2">
-				<Card ref={ref} className={cn(isDeleting && 'opacity-50 pointer-events-none', className)} {...props}>
-					<CollapsibleTrigger asChild>
-						<div className="p-4 flex flex-row items-center justify-between cursor-pointer group rounded-lg">
+					return (
+				<Collapsible open={isOpen} onOpenChange={onOpenChange} className="space-y-2">
+					<Card ref={ref} className={cn('fg-layer-elevated border-layer-subtle', isDeleting && 'opacity-50 pointer-events-none', className)} {...props}>
+											<CollapsibleTrigger asChild>
+							<div className="p-4 flex flex-row items-center justify-between cursor-pointer group rounded-lg hover:bg-layer-overlay transition-colors">
 							<div className="flex items-center gap-4">
-								<div className="flex items-center justify-center w-10 h-10 border-2 border-black bg-transparent rounded-full shadow-md">{icon ?? <WalletIcon className="h-5 w-5 text-black" />}</div>
+																	<div className="flex items-center justify-center w-10 h-10 border-2 border-black fg-layer-overlay rounded-full shadow-md">{icon ?? <WalletIcon className="h-5 w-5 text-black" />}</div>
 								<div className="min-w-0 flex-1">{triggerContent}</div>
 							</div>
 							<div className="flex items-center gap-2">

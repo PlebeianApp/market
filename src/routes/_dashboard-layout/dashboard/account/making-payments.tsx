@@ -256,7 +256,7 @@ function MakingPaymentsComponent() {
 	// Main View (List Wallets)
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<div className="hidden lg:flex sticky top-0 z-10 fg-layer-elevated border-b border-layer-subtle py-4 px-4 lg:px-6 items-center justify-between">
 				<h1 className="text-2xl font-bold">Making Payments</h1>
 				<Button
 					onClick={handleAddWalletClick}
@@ -266,7 +266,7 @@ function MakingPaymentsComponent() {
 					{combinedWallets.length === 0 ? 'Add Wallet' : 'Add Another Wallet'}
 				</Button>
 			</div>
-			<div className="space-y-6 p-4 lg:p-6">
+			<div className="space-y-6 p-4 lg:p-6 bg-layer-base">
 				<div className="lg:hidden">
 					{combinedWallets.length > 0 && !isAddingWallet && (
 						<Button
@@ -330,7 +330,7 @@ function MakingPaymentsComponent() {
 				)}
 
 				{combinedWallets.length === 0 && !isAddingWallet ? (
-					<Card>
+					<Card className="fg-layer-elevated border-layer-subtle">
 						<CardContent className="py-10 flex flex-col items-center justify-center">
 							<p className="text-center text-muted-foreground mb-4">No wallets configured yet. Add a wallet to make payments.</p>
 							<Button onClick={handleAddWalletClick}>
@@ -467,7 +467,7 @@ function WalletListItem({
 }: WalletListItemProps) {
 	return (
 		<Collapsible open={isOpen} onOpenChange={onToggleOpen} className="space-y-2">
-			<Card className={isDeleting ? 'opacity-50 pointer-events-none' : ''}>
+			<Card className={`fg-layer-elevated border-layer-subtle ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}>
 				<CollapsibleTrigger asChild>
 					<CardHeader className="pb-4 flex flex-row items-center justify-between cursor-pointer group">
 						<div className="flex items-center gap-3">

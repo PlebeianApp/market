@@ -146,8 +146,8 @@ interface PaymentDetailConfirmationProps {
 function PaymentDetailConfirmationCard({ value, type, onConfirm, onCancel }: PaymentDetailConfirmationProps) {
 	const numAddresses = 5
 
-	return (
-		<Card className="border-yellow-200 bg-yellow-50">
+			return (
+			<Card className="border-yellow-200 bg-yellow-50 fg-layer-overlay">
 			<CardHeader>
 				<CardTitle className="text-yellow-800">Confirm Payment Details</CardTitle>
 				<CardDescription>
@@ -157,7 +157,7 @@ function PaymentDetailConfirmationCard({ value, type, onConfirm, onCancel }: Pay
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-4">
-				<div className="p-3 bg-white rounded border">
+				<div className="p-3 fg-layer-elevated rounded border border-layer-subtle">
 					<p className="text-sm font-mono break-all">{value}</p>
 				</div>
 
@@ -784,7 +784,7 @@ function ReceivingPaymentsComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<div className="hidden lg:flex sticky top-0 z-10 fg-layer-elevated border-b border-layer-subtle py-4 px-4 lg:px-6 items-center justify-between">
 				<h1 className="text-2xl font-bold">Receiving Payments</h1>
 				<Button
 					onClick={() => handleOpenChange('new', true)}
@@ -794,7 +794,7 @@ function ReceivingPaymentsComponent() {
 					Add Payment Method
 				</Button>
 			</div>
-			<div className="space-y-4 p-4 lg:p-6">
+			<div className="space-y-4 p-4 lg:p-6 bg-layer-base">
 				<div className="lg:hidden">
 					<Button
 						onClick={() => handleOpenChange('new', true)}
@@ -807,7 +807,7 @@ function ReceivingPaymentsComponent() {
 
 				{/* Payment form - shows at top when opened */}
 				{openPaymentDetailId === 'new' && (
-					<Card className="mt-4">
+					<Card className="mt-4 fg-layer-elevated border-layer-subtle">
 						<CardHeader>
 							<CardTitle>Add New Payment Detail</CardTitle>
 							<CardDescription>Configure a new way to receive payments</CardDescription>
