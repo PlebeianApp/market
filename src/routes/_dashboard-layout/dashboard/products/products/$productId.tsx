@@ -38,7 +38,7 @@ function EditProductComponent() {
 
 	if (!product) {
 		return (
-			<div className="space-y-6">
+			<div className="space-y-6 pb-8">
 				<h1 className="text-2xl font-bold">Product Not Found</h1>
 				<p className="text-gray-600">The product you're looking for doesn't exist or you don't have access to it.</p>
 			</div>
@@ -46,7 +46,7 @@ function EditProductComponent() {
 	}
 
 	return (
-		<div className="space-y-6">
+		<div className="space-y-6 pb-8">
 			<ProductFormContent showFooter={true} />
 		</div>
 	)
