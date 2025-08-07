@@ -183,7 +183,7 @@ function CollectionsComponent() {
 				<Button
 					onClick={handleAddCollectionClick}
 					data-testid="add-collection-button"
-					className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+					className="btn-black flex items-center gap-2 px-4 py-2 text-sm font-semibold"
 				>
 					<span className="i-market w-5 h-5" />
 					Create A Collection
@@ -194,7 +194,7 @@ function CollectionsComponent() {
 					<Button
 						onClick={handleAddCollectionClick}
 						data-testid="add-collection-button-mobile"
-						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+						className="w-full btn-black flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
 					>
 						<span className="i-market w-5 h-5" />
 						Create A Collection

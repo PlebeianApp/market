@@ -198,7 +198,7 @@ function ProductsOverviewComponent() {
 				<Button
 					onClick={handleAddProductClick}
 					data-testid="add-product-button"
-					className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+					className="btn-black flex items-center gap-2 px-4 py-2 text-sm font-semibold"
 				>
 					<span className="i-product w-5 h-5" /> Add A Product
 				</Button>
@@ -208,7 +208,7 @@ function ProductsOverviewComponent() {
 					<Button
 						onClick={handleAddProductClick}
 						data-testid="add-product-button-mobile"
-						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+						className="w-full btn-black flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
 					>
 						<span className="i-product w-5 h-5" /> Add A Product
 					</Button>

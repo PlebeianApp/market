@@ -777,7 +777,7 @@ function ReceivingPaymentsComponent() {
 				<h1 className="text-2xl font-bold">Receiving Payments</h1>
 				<Button
 					onClick={() => handleOpenChange('new', true)}
-					className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+					className="btn-black flex items-center gap-2 px-4 py-2 text-sm font-semibold"
 				>
 					<PlusIcon className="w-5 h-5" />
 					Add Payment Method
@@ -787,7 +787,7 @@ function ReceivingPaymentsComponent() {
 				<div className="lg:hidden">
 					<Button
 						onClick={() => handleOpenChange('new', true)}
-						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+						className="w-full btn-black flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
 					>
 						<PlusIcon className="w-5 h-5" />
 						Add Payment Method

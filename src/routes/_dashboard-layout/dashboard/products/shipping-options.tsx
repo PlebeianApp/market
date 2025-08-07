@@ -806,7 +806,7 @@ function ShippingOptionsComponent() {
 					</div>
 					<Button
 						onClick={() => handleOpenChange('new', true)}
-						className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+						className="btn-black flex items-center gap-2 px-4 py-2 text-sm font-semibold"
 					>
 						<PlusIcon className="w-5 h-5" />
 						Add Shipping Option
@@ -835,7 +835,7 @@ function ShippingOptionsComponent() {
 
 					<Button
 						onClick={() => handleOpenChange('new', true)}
-						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+						className="w-full btn-black flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
 					>
 						<PlusIcon className="w-5 h-5" />
 						Add Shipping Option

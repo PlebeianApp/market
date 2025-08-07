@@ -249,7 +249,7 @@ function MakingPaymentsComponent() {
 				<h1 className="text-2xl font-bold">Making Payments</h1>
 				<Button
 					onClick={handleAddWalletClick}
-					className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+					className="btn-black flex items-center gap-2 px-4 py-2 text-sm font-semibold"
 				>
 					<PlusIcon className="h-4 w-4" />
 					{combinedWallets.length === 0 ? 'Add Wallet' : 'Add Another Wallet'}
@@ -260,7 +260,7 @@ function MakingPaymentsComponent() {
 					{combinedWallets.length > 0 && !isAddingWallet && (
 						<Button
 							onClick={handleAddWalletClick}
-							className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+							className="w-full btn-black flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
 						>
 							<PlusIcon className="h-4 w-4" />
 							Add Another Wallet
