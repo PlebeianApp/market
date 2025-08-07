@@ -53,13 +53,13 @@ function ProductsRoute() {
 	const recentProducts = productsWithImages.slice(0, 4) // Limit to 4 products
 	const totalSlides = 1 + recentProducts.length // Homepage + products
 
-	// Auto-slide functionality - change slide every 8 seconds
+	// Auto-slide functionality - change slide every 5 seconds
 	useEffect(() => {
 		if (totalSlides <= 1) return // Don't auto-slide if there's only one slide
 
 		const interval = setInterval(() => {
 			setCurrentSlideIndex((prev) => (prev + 1) % totalSlides)
-		}, 8000) // 8 seconds
+		}, 5000) // 5 seconds
 
 		return () => clearInterval(interval)
 	}, [totalSlides])
@@ -180,16 +180,32 @@ function ProductsRoute() {
 
 				{/* Pagination dots */}
 				{totalSlides > 1 && (
-					<div className="flex justify-center gap-2">
+					<div className="flex justify-center gap-3">
 						{Array.from({ length: totalSlides }).map((_, index) => (
 							<button
 								key={index}
 								onClick={() => handleDotClick(index)}
-								className={`w-3 h-3 rounded-full transition-all duration-300 ${
-									index === currentSlideIndex ? 'bg-white scale-125' : 'bg-white/40 hover:bg-white/60'
+								className={`relative group transition-all duration-500 ease-out ${
+									index === currentSlideIndex 
+										? 'w-8 h-3' 
+										: 'w-3 h-3 hover:scale-110'
 								}`}
 								aria-label={`View ${index === 1 ? 'homepage' : `product ${index === 0 ? 1 : index}`}`}
-							/>
+							>
+								<div className={`w-full h-full rounded-full transition-all duration-500 ease-out ${
+									index === currentSlideIndex
+										? 'bg-white shadow-lg shadow-white/50'
+										: 'bg-white/30 group-hover:bg-white/60 backdrop-blur-sm'
+								}`} />
+								{index === currentSlideIndex && (
+									<div className="absolute inset-0 rounded-full bg-gradient-to-r from-white/80 to-white animate-pulse" />
+								)}
+								<div className={`absolute inset-0 rounded-full border transition-all duration-500 ${
+									index === currentSlideIndex
+										? 'border-white/80 shadow-md'
+										: 'border-white/20 group-hover:border-white/40'
+								}`} />
+							</button>
 						))}
 					</div>
 				)}
