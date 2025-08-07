@@ -306,19 +306,7 @@ button {
 		transition: background-color 0.2s ease-out;
 	}
 
-	/* Ensure header is fully transparent on mobile screens when over hero */
-	@media (max-width: 639px) {
-		.bg-header-scroll-transition,
-		.bg-header-transparent,
-		.bg-black {
-			background: transparent !important;
-		}
-		
-		/* Target the header element directly on product and profile pages */
-		header.sticky {
-			background: transparent !important;
-		}
-	}
+
 
 	.bg-hero-image {
 		background-size: cover;
@@ -328,37 +316,10 @@ button {
 	}
 
 	.hero-container {
-		margin-top: -8rem;
-		padding-top: 8rem;
-		min-height: calc(400px + 8rem);
+		margin-top: -100vh;
+		padding-top: 100vh;
+		min-height: 100vh;
 		position: relative;
-	}
-
-	.hero-container::before {
-		content: '';
-		position: absolute;
-		top: -100vh;
-		left: 0;
-		right: 0;
-		height: 100vh;
-		background: inherit;
-		z-index: -1;
-	}
-
-	@media (min-width: 640px) and (max-width: 1023px) {
-		.hero-container {
-			margin-top: -12rem;
-			padding-top: 12rem;
-			min-height: calc(400px + 12rem);
-		}
-	}
-
-	@media (min-width: 1024px) {
-		.hero-container {
-			margin-top: -6rem;
-			padding-top: 6rem;
-			min-height: calc(400px + 6rem);
-		}
 	}
 
 	.back-button {
