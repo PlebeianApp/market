@@ -75,7 +75,7 @@ export function OrderDataTable<TData>({
 
 	return (
 		<div className="flex h-full flex-col">
-			<div className="sticky top-[12.75rem] lg:top-0 z-20 bg-white border-b py-4 px-4 xl:px-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 shadow-sm">
+			<div className="sticky top-[13.75rem] lg:top-0 z-20 bg-white border-b py-4 px-4 xl:px-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 shadow-sm">
 				{heading && <div className="hidden lg:block flex-1">{heading}</div>}
 
 				<div className="flex flex-col sm:flex-row sm:justify-end items-center gap-4 w-full lg:w-auto">

@@ -216,7 +216,7 @@ function DashboardLayout() {
 	return (
 		<div className="lg:flex lg:flex-col lg:h-[calc(100vh-5rem)]">
 			{/* Header - responsive for mobile/desktop */}
-			<div className="lg:hidden sticky top-[5rem] z-10">
+			<div className="lg:hidden sticky top-[9.5rem] lg:top-[5rem] z-10">
 				<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center relative">
 					{/* Mobile back button - only visible on small screens when not showing sidebar */}
 					{!showSidebar && isMobile && (
@@ -272,11 +272,11 @@ function DashboardLayout() {
 
 			{/* Main container - responsive layout */}
 			<div className="lg:flex lg:p-6 lg:gap-6 lg:flex-1 lg:overflow-hidden lg:max-w-none lg:min-h-0">
-				<div ref={parent} className="lg:flex lg:w-full lg:gap-6 lg:min-w-0">
+				<div className="lg:flex lg:w-full lg:gap-6 lg:min-w-0">
 					{/* Sidebar - responsive behavior */}
 					{(showSidebar || !isMobile) && (
 						<aside className="w-full lg:w-80 lg:overflow-y-auto lg:border lg:border-black lg:rounded lg:max-h-full lg:bg-white lg:flex-shrink-0 lg:shadow-md">
-							<div className="lg:space-y-2">
+							<div ref={parent} className="lg:space-y-2">
 								{dashboardNavigation.map((section) => (
 									<div key={section.title}>
 										<h3 className="font-heading bg-tertiary-black text-white px-4 py-2 mb-0 lg:mb-2">{section.title}</h3>
