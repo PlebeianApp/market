@@ -369,11 +369,12 @@ button {
 		position: absolute;
 		inset: 0;
 		pointer-events: none;
+		z-index: 10;
 	}
 
 	.hero-content {
 		position: relative;
-		z-index: 10;
+		z-index: 50; /* ensure content is always above overlays and background on mobile */
 		container-type: inline-size;
 		max-width: 80rem;
 		margin: 0 auto;
