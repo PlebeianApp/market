@@ -106,12 +106,17 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 			<div className="flex flex-col sm:flex-row sm:items-center gap-4">
 				{/* Product Image */}
 				{images && images.length > 0 ? (
-					<div className="h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 overflow-hidden rounded-md border">
-						<img src={images[0][1]} alt={title || 'Product image'} className="h-full w-full object-cover object-center" />
+					<div className="h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 rounded-md border overflow-hidden">
+						<img 
+							src={images[0][1]} 
+							alt={title || 'Product image'} 
+							className="h-full w-full object-cover object-center" 
+							style={{ maxWidth: '100%', maxHeight: '100%' }}
+						/>
 					</div>
 				) : (
-					<div className="h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 overflow-hidden rounded-md border bg-gray-100 flex items-center justify-center text-gray-400">
-						No image
+					<div className="h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 rounded-md border bg-gray-100 flex items-center justify-center text-gray-400 overflow-hidden">
+						<span className="text-xs text-center px-1">No image</span>
 					</div>
 				)}
 
