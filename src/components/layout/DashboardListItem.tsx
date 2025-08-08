@@ -30,7 +30,7 @@ const DashboardListItem = React.forwardRef<HTMLDivElement, DashboardListItemProp
 
 		if (!isCollapsible) {
 			return (
-				<div ref={ref} className={cn('p-4 border border-layer-subtle rounded-md fg-layer-elevated', className)} {...props}>
+				<div ref={ref} className={cn('p-4 border border-black rounded-md fg-layer-elevated', className)} {...props}>
 					{children}
 				</div>
 			)
@@ -38,7 +38,7 @@ const DashboardListItem = React.forwardRef<HTMLDivElement, DashboardListItemProp
 
 					return (
 				<Collapsible open={isOpen} onOpenChange={onOpenChange} className="space-y-2">
-					<Card ref={ref} className={cn('fg-layer-elevated border-layer-subtle', isDeleting && 'opacity-50 pointer-events-none', className)} {...props}>
+					<Card ref={ref} className={cn('fg-layer-elevated border border-black', isDeleting && 'opacity-50 pointer-events-none', className)} {...props}>
 											<CollapsibleTrigger asChild>
 							<div className="p-4 flex flex-row items-center justify-between cursor-pointer group rounded-lg hover:bg-layer-overlay transition-colors">
 							<div className="flex items-center gap-4">
