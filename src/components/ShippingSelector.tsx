@@ -95,19 +95,31 @@ export function ShippingSelector({
 	// 	}
 	// }, [options, selectedId])
 
-	const handleSelect = async (id: string) => {
+	const handleSelect = (id: string) => {
 		if (disabled) return
 		
+		// Update local state immediately
 		setSelectedId(id)
 
 		const option = rawOptions.find((o: RichShippingInfo) => o.id === id)
 
 		if (option) {
-			if (productId) {
-				await cartActions.setShippingMethod(productId, option)
-			}
-
+			// Call onSelect immediately
 			onSelect(option)
+			
+			// Handle cart update asynchronously but don't block the UI
+			if (productId) {
+				// Use setTimeout to avoid blocking the current execution
+				setTimeout(async () => {
+					try {
+						await cartActions.setShippingMethod(productId, option)
+					} catch (error) {
+						console.error('Error updating shipping method:', error)
+						// Optionally revert the selection on error
+						// setSelectedId(prevSelectedId)
+					}
+				}, 0)
+			}
 		}
 	}
 
@@ -132,24 +144,29 @@ export function ShippingSelector({
 		return (
 			<div className={`${!selectedId ? 'flex items-center gap-2' : ''}`}>
 				{!selectedId && <div className="w-1 h-8 bg-yellow-400 rounded-sm flex-shrink-0" />}
-				<Select onValueChange={handleSelect} value={selectedId} disabled={disabled}>
+				<Select 
+					onValueChange={handleSelect} 
+					value={selectedId} 
+					disabled={disabled}
+					key={`shipping-selector-${productId || 'no-product'}`}
+				>
 					<SelectTrigger className={className} disabled={disabled}>
 						<SelectValue placeholder={disabled ? "Updating..." : "Select shipping method"}>
 							{selectedId && options.find(opt => opt.id === selectedId)?.name}
 						</SelectValue>
 					</SelectTrigger>
-				<SelectContent>
-					<SelectGroup>
-						<SelectLabel>Shipping Options</SelectLabel>
-						{options.map((option: RichShippingInfo) => (
-							<SelectItem key={option.id} value={option.id} className="break-all">
-								{option.name} - {option.cost} {option.currency}
-							</SelectItem>
-						))}
-					</SelectGroup>
-				</SelectContent>
-			</Select>
-		</div>
+					<SelectContent>
+						<SelectGroup>
+							<SelectLabel>Shipping Options</SelectLabel>
+							{options.map((option: RichShippingInfo) => (
+								<SelectItem key={option.id} value={option.id} className="break-all">
+									{option.name} - {option.cost} {option.currency}
+								</SelectItem>
+							))}
+						</SelectGroup>
+					</SelectContent>
+				</Select>
+			</div>
 		)
 	}
 
