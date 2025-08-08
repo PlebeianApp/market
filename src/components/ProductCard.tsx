@@ -1,26 +1,31 @@
-import { cartActions } from '@/lib/stores/cart'
-import { ndkActions } from '@/lib/stores/ndk'
-import { uiActions } from '@/lib/stores/ui'
-import { getProductImages, getProductPrice, getProductStock, getProductTitle } from '@/queries/products'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { useState, useEffect } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
-import { Button } from './ui/button'
-import { ZapButton } from './ZapButton'
-import { useEffect, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { ZapButton } from '@/components/ZapButton'
+import { useNDK } from '@/lib/stores/ndk'
+import { useCart } from '@/lib/stores/cart'
+import { useUI } from '@/lib/stores/ui'
+import { getProductTitle, getProductImages, getProductPrice, getProductStock } from '@/queries/products'
+import { NDKEvent } from '@nostr-dev-kit/ndk'
 
 export function ProductCard({ product }: { product: NDKEvent }) {
+	const ndk = useNDK()
+	const cart = useCart()
+	const { uiActions } = useUI()
 	const title = getProductTitle(product)
 	const images = getProductImages(product)
 	const price = getProductPrice(product)
 	const stock = getProductStock(product)
 	const [isOwnProduct, setIsOwnProduct] = useState(false)
 	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(null)
+	const [isAddingToCart, setIsAddingToCart] = useState(false)
+	const [showConfirmation, setShowConfirmation] = useState(false)
 	const location = useLocation()
 
 	// Check if current user is the seller of this product
 	useEffect(() => {
 		const checkIfOwnProduct = async () => {
-			const user = await ndkActions.getUser()
+			const user = await ndk.getUser()
 			if (user?.pubkey) {
 				setCurrentUserPubkey(user.pubkey)
 				setIsOwnProduct(user.pubkey === product.pubkey)
@@ -32,9 +37,19 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 	const handleAddToCart = async () => {
 		if (isOwnProduct) return // Don't allow adding own products to cart
 
-		const userPubkey = await ndkActions.getUser()
-		if (!userPubkey) return
-		cartActions.addProduct(userPubkey.pubkey, product)
+		setIsAddingToCart(true)
+		
+		try {
+			const userPubkey = await ndk.getUser()
+			if (!userPubkey) return
+			cart.addProduct(userPubkey.pubkey, product)
+			
+			// Show confirmation animation
+			setShowConfirmation(true)
+			setTimeout(() => setShowConfirmation(false), 1500) // Hide after 1.5 seconds
+		} finally {
+			setIsAddingToCart(false)
+		}
 	}
 
 	const handleProductClick = () => {
@@ -96,11 +111,21 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 				{/* Add to cart button */}
 				<div className="flex gap-2">
 					<Button
-						className="btn-black py-3 px-4 rounded-lg flex-grow font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+						variant={isOwnProduct ? 'own-product' : 'primary'}
+						className={`py-3 px-4 rounded-lg flex-grow font-medium transition-all duration-300 ${
+							isAddingToCart ? 'opacity-75 scale-95' : ''
+						}`}
 						onClick={handleAddToCart}
-						disabled={isOwnProduct}
+						disabled={isOwnProduct || isAddingToCart}
 					>
-						{isOwnProduct ? 'Your Product' : 'Add to Cart'}
+						{isOwnProduct 
+							? 'Your Product' 
+							: showConfirmation 
+								? '✓ Added!' 
+								: isAddingToCart 
+									? 'Adding...' 
+									: 'Add to Cart'
+						}
 					</Button>
 					<ZapButton event={product} />
 				</div>

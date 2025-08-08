@@ -18,6 +18,7 @@ const buttonVariants = cva(
 				focus:
 					'bg-focus text-focus-foreground border-focus-border hover:bg-transparent hover:text-focus-foreground-hover hover:border-focus-border-hover',
 				destructive: 'bg-destructive text-destructive-foreground hover:bg-transparent hover:text-destructive-foreground',
+				'own-product': 'bg-transparent text-gray-500 border-gray-400 hover:bg-gray-100 hover:text-gray-600 hover:border-gray-500',
 
 				outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
 				ghost: 'hover:border-primary-border border-none',
