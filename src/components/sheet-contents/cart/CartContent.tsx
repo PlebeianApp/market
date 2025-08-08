@@ -122,7 +122,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 	}
 
 	return (
-		<div className={`flex flex-col h-full overflow-hidden px-6 ${className}`}>
+		<div className={`flex flex-col h-full overflow-hidden px-4 sm:px-6 ${className}`}>
 			{missingShippingCount > 0 && (
 				<div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
 					<div className="flex">
@@ -230,7 +230,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 				</div>
 			</ScrollArea>
 
-			<div className="pt-4 flex-shrink-0">
+			<div className="pt-4 pb-6 sm:pb-4 flex-shrink-0">
 				<div className="space-y-3 w-full">
 					<div className="space-y-1 mb-2">
 						<div className="flex justify-between">

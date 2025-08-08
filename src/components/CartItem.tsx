@@ -103,14 +103,14 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 
 	return (
 		<li className="flex flex-col py-4 border-b border-gray-300 [.bg-gray-100_&]:border-white">
-			<div className="flex items-center space-x-4">
+			<div className="flex flex-col sm:flex-row sm:items-center gap-4">
 				{/* Product Image */}
 				{images && images.length > 0 ? (
-					<div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-md border">
+					<div className="h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 overflow-hidden rounded-md border">
 						<img src={images[0][1]} alt={title || 'Product image'} className="h-full w-full object-cover object-center" />
 					</div>
 				) : (
-					<div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-md border bg-gray-100 flex items-center justify-center text-gray-400">
+					<div className="h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 overflow-hidden rounded-md border bg-gray-100 flex items-center justify-center text-gray-400">
 						No image
 					</div>
 				)}
@@ -127,7 +127,7 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 						</p>
 					</div>
 
-					{/* Quantity Controls */}
+				{/* Quantity Controls */}
 					<div className="flex items-center mt-2">
 						<div className="flex items-center space-x-2">
 							<Button variant="outline" size="icon" className="h-8 w-8" onClick={handleDecrementClick} disabled={amount <= 1}>
@@ -151,11 +151,11 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 					</div>
 				</div>
 
-				{/* Delete Button - Vertically Centered */}
+				{/* Delete Button */}
 				<Button
 					variant="ghost"
 					size="icon"
-					className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 flex-shrink-0"
+					className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 sm:self-center sm:ml-auto self-start"
 					onClick={() => onRemove(productId)}
 				>
 					<Trash2 size={16} />
@@ -166,7 +166,7 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 
 			{/* Shipping Section - only show if not hidden */}
 			{!hideShipping && (
-				<div className="ml-24 flex flex-col gap-2">
+				<div className="sm:ml-24 ml-0 mt-3 flex flex-col gap-2">
 					<button
 						className={`text-sm ${
 							!hasShipping ? 'text-red-600 hover:text-red-800 font-medium' : 'text-blue-600 hover:text-blue-800'
