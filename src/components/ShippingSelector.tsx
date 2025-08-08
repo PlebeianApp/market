@@ -116,14 +116,14 @@ export function ShippingSelector({
 			
 			// Handle cart update asynchronously but don't block the UI
 			if (productId) {
-				// Use requestAnimationFrame to ensure DOM updates are complete
-				requestAnimationFrame(async () => {
+				// Use setTimeout with 0 delay to ensure it runs after current execution
+				setTimeout(async () => {
 					try {
 						await cartActions.setShippingMethod(productId, option)
 					} catch (error) {
 						console.error('Error updating shipping method:', error)
 					}
-				})
+				}, 0)
 			}
 		}
 	}
@@ -150,14 +150,13 @@ export function ShippingSelector({
 			<div className={`${!selectedId ? 'flex items-center gap-2' : ''}`}>
 				{!selectedId && <div className="w-1 h-8 bg-yellow-400 rounded-sm flex-shrink-0" />}
 				<Select 
+					key={`shipping-select-${productId || 'no-product'}-${selectedId || 'no-selection'}`}
 					onValueChange={handleSelect} 
 					value={selectedId} 
 					disabled={disabled}
 				>
 					<SelectTrigger className={className} disabled={disabled}>
-						<SelectValue placeholder={disabled ? "Updating..." : "Select shipping method"}>
-							{selectedId && options.find(opt => opt.id === selectedId)?.name}
-						</SelectValue>
+						<SelectValue placeholder={disabled ? "Updating..." : "Select shipping method"} />
 					</SelectTrigger>
 					<SelectContent>
 						<SelectGroup>
