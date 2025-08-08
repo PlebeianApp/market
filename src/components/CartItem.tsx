@@ -116,7 +116,13 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 					</div>
 				) : (
 					<div className="h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 rounded-md border bg-gray-100 flex items-center justify-center text-gray-400 overflow-hidden">
-						<span className="text-xs text-center px-1">No image</span>
+						<span className="text-xs text-center px-1 leading-tight" style={{ lineHeight: '1.1' }}>
+							{title ? (
+								title.split(' ').slice(0, 2).join(' ')
+							) : (
+								'No image'
+							)}
+						</span>
 					</div>
 				)}
 

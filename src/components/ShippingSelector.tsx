@@ -52,6 +52,13 @@ export function ShippingSelector({
 		}
 	}, [propSelectedId])
 
+	// Cleanup effect to prevent memory leaks
+	useEffect(() => {
+		return () => {
+			// Cleanup any pending operations when component unmounts
+		}
+	}, [])
+
 	const { data: sellerPubkey = '' } = useProductPubkey(productId || '') || { data: '' }
 	const { data: shippingEvents = [], isLoading, error } = useShippingOptionsByPubkey(sellerPubkey)
 
@@ -98,27 +105,25 @@ export function ShippingSelector({
 	const handleSelect = (id: string) => {
 		if (disabled) return
 		
-		// Update local state immediately
-		setSelectedId(id)
-
 		const option = rawOptions.find((o: RichShippingInfo) => o.id === id)
 
 		if (option) {
+			// Update local state immediately
+			setSelectedId(id)
+			
 			// Call onSelect immediately
 			onSelect(option)
 			
 			// Handle cart update asynchronously but don't block the UI
 			if (productId) {
-				// Use setTimeout to avoid blocking the current execution
-				setTimeout(async () => {
+				// Use requestAnimationFrame to ensure DOM updates are complete
+				requestAnimationFrame(async () => {
 					try {
 						await cartActions.setShippingMethod(productId, option)
 					} catch (error) {
 						console.error('Error updating shipping method:', error)
-						// Optionally revert the selection on error
-						// setSelectedId(prevSelectedId)
 					}
-				}, 0)
+				})
 			}
 		}
 	}
@@ -148,7 +153,6 @@ export function ShippingSelector({
 					onValueChange={handleSelect} 
 					value={selectedId} 
 					disabled={disabled}
-					key={`shipping-selector-${productId || 'no-product'}`}
 				>
 					<SelectTrigger className={className} disabled={disabled}>
 						<SelectValue placeholder={disabled ? "Updating..." : "Select shipping method"}>

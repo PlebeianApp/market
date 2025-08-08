@@ -181,12 +181,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 										className="w-full"
 										disabled={false}
 									/>
-									{/* Debug info */}
-									{process.env.NODE_ENV === 'development' && (
-										<div className="text-xs text-gray-500 mt-1">
-											Options: {optionsForThisSeller.length} | Selected: {selectedShippingByUser[sellerPubkey] || 'none'}
-										</div>
-									)}
+
 								</div>
 
 								{Object.entries(data.currencyTotals).map(([currency, amount]) => (
