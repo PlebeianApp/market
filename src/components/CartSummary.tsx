@@ -147,42 +147,45 @@ export function CartSummary({
 		if (!allowShippingChanges || isUpdating || isLoading) return
 
 		setIsUpdating(true)
-		setIsLoading(true)
 		clearTimeouts()
 
 		try {
-			// Update local state first
+			// Update local state immediately
 			setSelectedShippingByUser((prev) => ({
 				...prev,
 				[sellerPubkey]: shippingOption.id,
 			}))
 
-			// Add a small delay to allow React to process the state update
-			await new Promise(resolve => setTimeout(resolve, 50))
-
-			// Update cart state
-			const products = productsBySeller[sellerPubkey] || []
-			for (const product of products) {
-				await cartActions.setShippingMethod(product.id, shippingOption)
-			}
-			
-			// Add another delay before updating seller data
-			await new Promise(resolve => setTimeout(resolve, 50))
-			
-			// Update seller data
-			await cartActions.updateSellerData()
-		} catch (error) {
-			console.error('Error updating shipping method:', error)
-			// Revert local state on error
-			setSelectedShippingByUser((prev) => {
-				const newState = { ...prev }
-				delete newState[sellerPubkey]
-				return newState
+			// Use requestAnimationFrame to ensure DOM updates are complete
+			await new Promise<void>((resolve) => {
+				requestAnimationFrame(async () => {
+					try {
+						// Update cart state
+						const products = productsBySeller[sellerPubkey] || []
+						for (const product of products) {
+							await cartActions.setShippingMethod(product.id, shippingOption)
+						}
+						
+						// Update seller data
+						await cartActions.updateSellerData()
+						resolve()
+					} catch (error) {
+						console.error('Error updating shipping method:', error)
+						// Revert local state on error
+						setSelectedShippingByUser((prev) => {
+							const newState = { ...prev }
+							delete newState[sellerPubkey]
+							return newState
+						})
+						resolve()
+					}
+				})
 			})
+		} catch (error) {
+			console.error('Error in shipping selection:', error)
 		} finally {
-			// Reset states after all updates are complete
-			updateTimeoutRef.current = setTimeout(() => {
-				setIsLoading(false)
+			// Reset updating state after a delay
+			animationTimeoutRef.current = setTimeout(() => {
 				setIsUpdating(false)
 			}, 300)
 		}
@@ -252,6 +255,7 @@ export function CartSummary({
 								{allowShippingChanges && (
 									<div className="mt-4">
 										<ShippingSelector
+											key={`shipping-${sellerPubkey}-${isUpdating}`}
 											options={optionsForThisSeller}
 											selectedId={selectedShippingByUser[sellerPubkey]}
 											onSelect={(option) => handleShippingSelect(sellerPubkey, option)}

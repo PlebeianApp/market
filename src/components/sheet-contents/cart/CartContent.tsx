@@ -7,7 +7,6 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import type { RichShippingInfo } from '@/lib/stores/cart'
 import { cartActions, cartStore } from '@/lib/stores/cart'
 import { uiActions } from '@/lib/stores/ui'
-import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useStore } from '@tanstack/react-store'
 import { useNavigate } from '@tanstack/react-router'
 import { ChevronDown } from 'lucide-react'
@@ -25,16 +24,6 @@ export function CartContent({ className = '' }: { className?: string }) {
 		shippingByCurrency,
 		sellerShippingOptions,
 	} = useStore(cartStore)
-
-	// Use auto-animate with error handling to prevent DOM manipulation errors
-	const [parent, enableAnimations] = (() => {
-		try {
-			return useAutoAnimate()
-		} catch (error) {
-			console.warn('Auto-animate not available:', error)
-			return [null, () => {}]
-		}
-	})()
 	const [selectedShippingByUser, setSelectedShippingByUser] = useState<Record<string, string>>({})
 	const [detailsExpanded, setDetailsExpanded] = useState(false)
 	const navigate = useNavigate()
@@ -76,13 +65,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 		setSelectedShippingByUser(initialSelected)
 	}, [cart.products])
 
-	useEffect(() => {
-		try {
-			enableAnimations(true)
-		} catch (error) {
-			console.warn('Failed to enable animations:', error)
-		}
-	}, [parent, enableAnimations])
+
 
 	const handleQuantityChange = (productId: string, newAmount: number) => {
 		// Updated function signature - no longer needs buyerPubkey
@@ -136,7 +119,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 			)}
 
 			<ScrollArea className="flex-1 overflow-y-auto py-2 min-h-0">
-				<div className="space-y-8" ref={parent}>
+				<div className="space-y-8">
 					{Object.entries(productsBySeller).map(([sellerPubkey, products], sellerIndex) => {
 						const data = sellerData[sellerPubkey] || {
 							satsTotal: 0,
