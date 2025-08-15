@@ -126,7 +126,7 @@ export function OrderDataTable<TData>({
 							return (
 								<Card
 									key={row.id}
-									onClick={() => navigate({ to: '/dashboard/orders/$orderId', params: { orderId } })}
+									onClick={() => navigate({ to: '/dashboard/orders/$orderId', params: { orderId }, search: { from: 'sales' } as any })}
 									className="cursor-pointer hover:bg-muted/50"
 									data-state={row.getIsSelected() && 'selected'}
 								>

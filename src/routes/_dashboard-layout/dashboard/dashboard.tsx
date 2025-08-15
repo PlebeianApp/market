@@ -313,7 +313,7 @@ function DashboardInnerComponent() {
 			{/* Unified 2x2 grid for symmetrical layout with inner scrolls */}
 			<div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-2 gap-4 flex-1 min-h-0 overflow-hidden">
 				<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded">
-					<CardHeader className="p-4">
+					<CardHeader className="px-4 py-2">
 						<CardTitle className="flex items-center justify-between gap-3">
 							<span>Sales</span>
 							<div className="flex items-center gap-2">
@@ -379,7 +379,7 @@ function DashboardInnerComponent() {
 				</Card>
 
 				<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded">
-					<CardHeader className="p-4">
+					<CardHeader className="px-4 py-4">
 						<CardTitle className="flex items-center justify-between">
 							<span>Latest Messages</span>
 							<span className="text-sm text-muted-foreground">{convLoading ? 'Loading…' : `${conversations.length}`}</span>
@@ -445,7 +445,7 @@ function DashboardInnerComponent() {
 				</Card>
 
 				<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded">
-					<CardHeader className="p-4">
+					<CardHeader className="px-4 py-4">
 						<CardTitle className="flex items-center justify-between">
 							<span>Latest Nostr Posts</span>
 							<span className="text-sm text-muted-foreground">{postsLoading ? 'Loading…' : `${posts.length}`}</span>
