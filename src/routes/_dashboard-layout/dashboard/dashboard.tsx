@@ -268,6 +268,17 @@ function DashboardInnerComponent() {
 
 	// (moved above) Measure container width/height so uPlot sizes correctly and place tooltip
 
+	// Lock body scroll while dashboard is mounted (prevents page scroll when data loads)
+	React.useEffect(() => {
+		const prev = typeof document !== 'undefined' ? document.body.style.overflow : ''
+		if (typeof document !== 'undefined') {
+			document.body.style.overflow = 'hidden'
+		}
+		return () => {
+			if (typeof document !== 'undefined') document.body.style.overflow = prev
+		}
+	}, [])
+
 	return (
 		<div className="h-full min-h-0 flex flex-col overflow-hidden">
 			{/* Unified 2x2 grid for symmetrical layout with inner scrolls */}
