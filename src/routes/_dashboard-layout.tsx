@@ -214,7 +214,7 @@ function DashboardLayout() {
 	const emoji = getCurrentEmoji(showSidebar, typeof window !== 'undefined' ? window.location.pathname : '')
 
 	return (
-		<div className="lg:flex lg:flex-col lg:h-[calc(100vh-5rem)]">
+		<div className="lg:flex lg:flex-col lg:h-[calc(100vh-5rem)] lg:overflow-hidden">
 			{/* Header - responsive for mobile/desktop */}
 			<div className="lg:hidden sticky top-[9.5rem] lg:top-[5rem] z-10">
 				<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center relative">
@@ -333,7 +333,7 @@ function DashboardLayout() {
 								</div>
 							)}
 
-                            <div className={cn('flex-1 min-h-0', location.pathname === '/dashboard/dashboard' ? 'lg:overflow-hidden' : 'lg:overflow-y-auto')}>
+                            <div className={cn('flex-1 min-h-0', location.pathname === '/dashboard/dashboard' ? 'overflow-hidden' : 'lg:overflow-y-auto')}>
 								{isMessageDetailView ? (
 									<div className="h-full">{!isAuthenticated ? <LoginPrompt /> : <Outlet />}</div>
 								) : (

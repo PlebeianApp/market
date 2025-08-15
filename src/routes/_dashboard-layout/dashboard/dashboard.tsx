@@ -269,9 +269,9 @@ function DashboardInnerComponent() {
 	// (moved above) Measure container width/height so uPlot sizes correctly and place tooltip
 
 	return (
-		<div className="h-full min-h-0 flex flex-col">
+		<div className="h-full min-h-0 flex flex-col overflow-hidden">
 			{/* Unified 2x2 grid for symmetrical layout with inner scrolls */}
-			<div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-2 gap-4 h-full min-h-0 overflow-hidden">
+			<div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-2 gap-4 flex-1 min-h-0 overflow-hidden">
 				<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded">
 					<CardHeader className="p-4">
 						<CardTitle className="flex items-center justify-between gap-3">
