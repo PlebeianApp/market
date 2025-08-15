@@ -190,23 +190,32 @@ function DashboardLayout() {
 
 	const handleBackToSidebar = () => {
 		if (isMobile) {
-			// Check if we're on a product creation/edit page and navigate accordingly
+			// Prefer explicit source state when available
+			const searchState = (location.search as unknown as { from?: string }) || {}
+			if (searchState?.from === 'sales') {
+				navigate({ to: '/dashboard/sales/sales' })
+				return
+			}
+			if (searchState?.from === 'messages') {
+				navigate({ to: '/dashboard/sales/messages' })
+				return
+			}
+			if (searchState?.from === 'dashboard') {
+				setShowSidebar(true)
+				navigate({ to: '/dashboard/dashboard' })
+				return
+			}
+
+			// Fallback to path-based heuristics
 			if (location.pathname.startsWith('/dashboard/products/products/')) {
 				navigate({ to: '/dashboard/products/products' })
-			}
-			// Check if we're on a collection creation/edit page and navigate accordingly
-			else if (location.pathname.startsWith('/dashboard/products/collections/')) {
+			} else if (location.pathname.startsWith('/dashboard/products/collections/')) {
 				navigate({ to: '/dashboard/products/collections' })
-			}
-			// Check if we're on an order detail page and navigate accordingly
-			else if (location.pathname.startsWith('/dashboard/orders/')) {
+			} else if (location.pathname.startsWith('/dashboard/orders/')) {
 				navigate({ to: '/dashboard/sales/sales' })
-			}
-			// Check if we're on a message detail page and navigate accordingly
-			else if (location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages') {
+			} else if (location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages') {
 				navigate({ to: '/dashboard/sales/messages' })
 			} else {
-				// Default behavior - back to dashboard
 				setShowSidebar(true)
 				navigate({ to: '/dashboard/dashboard' })
 			}

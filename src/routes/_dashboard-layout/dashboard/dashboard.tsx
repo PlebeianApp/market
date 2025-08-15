@@ -392,6 +392,7 @@ function DashboardInnerComponent() {
 									key={c.pubkey}
 									to="/dashboard/sales/messages/$pubkey"
 									params={{ pubkey: c.pubkey }}
+									search={{ from: 'dashboard' } as any}
 									className="flex items-center justify-between rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay"
 								>
 									<div className="min-w-0">
