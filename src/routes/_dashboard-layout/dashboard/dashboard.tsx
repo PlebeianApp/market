@@ -236,20 +236,40 @@ function DashboardInnerComponent() {
 			},
 			width: 300, // overridden by measured container width
 			height: 180, // overridden by measured container height
-			// Tighten plot padding: [top, right, bottom, left]
-			padding: [4, 6, 14, 6],
+			// Adjusted padding: [top, right, bottom, left]
+			padding: [8, 10, 8, 10],
 			scales: { x: { time: false }, y: { auto: true } },
 			axes: [
+				// Bottom X axis with labels
 				{
 					grid: { show: true, stroke: gridColor },
 					gap: 2,
+					size: 28,
 					values: (u: any, splits: number[]) => splits.map((v) => salesSeries[Math.round(v)]?.label ?? ''),
 				},
+				// Left Y axis with labels
 				{
 					side: 3,
 					grid: { show: true, stroke: gridColor },
 					gap: 2,
+					size: 36,
 					values: (u: any, splits: number[]) => splits.map((v) => String(Math.round(v))),
+				},
+				// Top axis (no labels) to mirror bottom gutter
+				{
+					side: 0,
+					size: 28,
+					grid: { show: false },
+					ticks: { show: false },
+					values: () => [],
+				},
+				// Right axis (no labels) to mirror left gutter
+				{
+					side: 1,
+					size: 36,
+					grid: { show: false },
+					ticks: { show: false },
+					values: () => [],
 				},
 			],
 			legend: { show: false },
@@ -304,7 +324,7 @@ function DashboardInnerComponent() {
 							</div>
 						</CardTitle>
 					</CardHeader>
-					<CardContent className="flex-1 min-h-0 overflow-y-auto">
+					<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
 						<div className="mt-2 space-y-3 pr-2">
 							{filteredOrders.map((o) => {
 								const orderId = getOrderId(o.order) || o.order.id
@@ -348,7 +368,7 @@ function DashboardInnerComponent() {
 							<span className="text-sm text-muted-foreground">{convLoading ? 'Loading…' : `${conversations.length}`}</span>
 						</CardTitle>
 					</CardHeader>
-					<CardContent className="flex-1 min-h-0 overflow-y-auto">
+					<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
 						<div className="space-y-3 pr-2">
 							{conversations.map((c) => (
 								<Link
@@ -389,9 +409,9 @@ function DashboardInnerComponent() {
 							</Select>
 						</CardTitle>
 					</CardHeader>
-					<CardContent className="flex-1 min-h-0 overflow-hidden pb-4">
+					<CardContent className="flex-1 min-h-0 overflow-hidden px-4 pb-4">
 						<div className="mt-1 h-56 lg:h-full">
-							<div ref={chartContainerRef} className="relative h-full rounded border border-black fg-layer-overlay">
+							<div ref={chartContainerRef} className="relative h-full rounded border border-black fg-layer-overlay px-0">
 								<UplotReact options={{ ...(uplotOpts as any), width: chartWidth, height: chartHeight }} data={uplotData as any} />
 								{tooltip.show && (
 									<div
@@ -414,7 +434,7 @@ function DashboardInnerComponent() {
 							<span className="text-sm text-muted-foreground">{postsLoading ? 'Loading…' : `${posts.length}`}</span>
 						</CardTitle>
 					</CardHeader>
-					<CardContent className="flex-1 min-h-0 overflow-y-auto">
+					<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
 						<div className="space-y-3 pr-2">
 							{posts.slice(0, visiblePostsCount).map((p) => (
 								<div key={p.id} className="rounded border border-black p-3 fg-layer-overlay">
