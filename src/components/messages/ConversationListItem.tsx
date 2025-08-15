@@ -29,6 +29,7 @@ export function ConversationListItem({ conversation }: ConversationListItemProps
 	return (
 		<Link
 			to={`/dashboard/sales/messages/${pubkey}`}
+			search={{ from: 'messages' } as any}
 			className="block w-full"
 			activeProps={{
 				className: 'bg-muted/20 rounded-lg',

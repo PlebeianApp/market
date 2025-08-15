@@ -17,6 +17,7 @@ import { useConversationsList } from '@/queries/messages'
 import { postsQueryOptions } from '@/queries/posts'
 import { useQuery } from '@tanstack/react-query'
 import * as React from 'react'
+import { useBreakpoint } from '@/hooks/useBreakpoint'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/dashboard')({
 	component: DashboardInnerComponent,
@@ -28,6 +29,8 @@ function DashboardInnerComponent() {
 	const { data: conversations = [], isLoading: convLoading } = useConversationsList()
 	const { data: posts = [], isLoading: postsLoading } = useQuery(postsQueryOptions)
 	const { user } = useStore(authStore)
+	const breakpoint = useBreakpoint()
+	const isMobile = breakpoint === 'sm' || breakpoint === 'md' || breakpoint === 'lg'
 
 	const [salesTab, setSalesTab] = React.useState<'all' | keyof typeof ORDER_STATUS>(
 		'all',
@@ -85,6 +88,12 @@ function DashboardInnerComponent() {
 		if (salesTab === 'all') return orders
 		return orders.filter((o) => getOrderStatus(o) === salesTab)
 	}, [orders, salesTab])
+
+	const [showAllMobileSales, setShowAllMobileSales] = React.useState(false)
+	const visibleOrders = React.useMemo(() => {
+		if (!isMobile || showAllMobileSales) return filteredOrders
+		return filteredOrders.slice(-4)
+	}, [filteredOrders, isMobile, showAllMobileSales])
 
 	const salesSeries = React.useMemo(() => {
 		const list = timeRangeFilteredOrders
@@ -290,12 +299,12 @@ function DashboardInnerComponent() {
 
 	// Lock body scroll while dashboard is mounted (prevents page scroll when data loads)
 	React.useEffect(() => {
-		const prev = typeof document !== 'undefined' ? document.body.style.overflow : ''
-		if (typeof document !== 'undefined') {
-			document.body.style.overflow = 'hidden'
-		}
+		if (typeof window === 'undefined' || typeof document === 'undefined') return
+		const prev = document.body.style.overflow
+		const isDesktop = window.matchMedia('(min-width: 1024px)').matches
+		if (isDesktop) document.body.style.overflow = 'hidden'
 		return () => {
-			if (typeof document !== 'undefined') document.body.style.overflow = prev
+			document.body.style.overflow = prev
 		}
 	}, [])
 
@@ -326,7 +335,7 @@ function DashboardInnerComponent() {
 					</CardHeader>
 					<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
 						<div className="mt-2 space-y-3 pr-2">
-							{filteredOrders.map((o) => {
+							{visibleOrders.map((o) => {
 								const orderId = getOrderId(o.order) || o.order.id
 								const amount = formatSats(getOrderAmount(o.order))
 								const date = getEventDate(o.order)
@@ -337,6 +346,7 @@ function DashboardInnerComponent() {
 										<Link
 											to="/dashboard/orders/$orderId"
 											params={{ orderId }}
+											search={{ from: 'dashboard' } as any}
 											className="flex min-w-0 items-center gap-3"
 										>
 											<div className="h-8 w-8 rounded bg-muted flex items-center justify-center text-xs font-mono">{orderId.slice(0, 4)}</div>
@@ -356,6 +366,13 @@ function DashboardInnerComponent() {
 							})}
 							{!ordersLoading && orders.length === 0 && (
 								<div className="text-sm text-muted-foreground">No sales yet.</div>
+							)}
+							{isMobile && filteredOrders.length > 4 && (
+								<div className="pt-2">
+									<Button className="w-full bg-black text-white hover:bg-black/90" onClick={() => setShowAllMobileSales((v) => !v)}>
+										{showAllMobileSales ? 'View less' : 'View all'}
+									</Button>
+								</div>
 							)}
 						</div>
 					</CardContent>

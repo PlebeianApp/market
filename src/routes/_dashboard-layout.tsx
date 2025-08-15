@@ -48,13 +48,13 @@ const backButtonRoutes: Record<string, { parentPath: string; parentTitle: string
 	},
 	// Dynamic route for order details
 	'/dashboard/orders/': {
-		parentPath: '/dashboard/sales/sales',
-		parentTitle: '💰 Sales',
+		parentPath: '/dashboard/dashboard',
+		parentTitle: '📊 Dashboard',
 	},
 	// Dynamic route for message details
 	'/dashboard/sales/messages/': {
-		parentPath: '/dashboard/sales/messages',
-		parentTitle: '✉️ Messages',
+		parentPath: '/dashboard/dashboard',
+		parentTitle: '📊 Dashboard',
 	},
 }
 
@@ -160,9 +160,17 @@ function DashboardLayout() {
 		enabled: !!chatPubkey,
 	})
 
-	// Check if current route needs a back button
-	const backButtonInfo = getBackButtonInfo(location.pathname)
-	const needsBackButton = !!backButtonInfo && !isMobile
+	// Determine back target
+	const searchState = (location.search as unknown as { from?: string }) || {}
+	let backInfoToUse = getBackButtonInfo(location.pathname)
+	if (searchState?.from === 'sales') {
+		backInfoToUse = { parentPath: '/dashboard/sales/sales', parentTitle: '💰 Sales' }
+	} else if (searchState?.from === 'messages') {
+		backInfoToUse = { parentPath: '/dashboard/sales/messages', parentTitle: '✉️ Messages' }
+	} else if (searchState?.from === 'dashboard') {
+		backInfoToUse = { parentPath: '/dashboard/dashboard', parentTitle: '📊 Dashboard' }
+	}
+	const needsBackButton = !!backInfoToUse && !isMobile
 
 	// When route changes on mobile, show sidebar for /dashboard, main content otherwise
 	React.useEffect(() => {
@@ -206,8 +214,8 @@ function DashboardLayout() {
 	}
 
 	const handleBackToParent = () => {
-		if (backButtonInfo) {
-			navigate({ to: backButtonInfo.parentPath })
+		if (backInfoToUse) {
+			navigate({ to: backInfoToUse.parentPath })
 		}
 	}
 
@@ -309,31 +317,36 @@ function DashboardLayout() {
 						>
 							{/* Desktop back button and title - fixed to top of container */}
 															{needsBackButton && (
-									<div className="sticky top-0 z-10 fg-layer-elevated border-b border-layer-subtle pb-4 mb-0 p-4 lg:p-8 flex-shrink-0 flex items-center justify-between relative">
-									<button
-										onClick={handleBackToParent}
-										className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
-										aria-label={`Back to ${backButtonInfo?.parentTitle}`}
-									>
-										<span className="i-back w-5 h-5" />
-										<span className="text-sm font-medium">Back to {backButtonInfo?.parentTitle}</span>
-									</button>
+							<div className="sticky top-0 z-10 fg-layer-elevated border-b border-layer-subtle pb-4 mb-0 p-4 lg:p-8 flex-shrink-0 flex items-center justify-between relative">
+							<button
+								onClick={() => navigate({ to: backInfoToUse!.parentPath })}
+								className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
+								aria-label={`Back to ${backInfoToUse?.parentTitle}`}
+							>
+								<span className="i-back w-5 h-5" />
+								<span className="text-sm font-medium">Back to {backInfoToUse?.parentTitle}</span>
+							</button>
 
-									{!isMobile && isMessageDetailView && chatProfile && (
-										<div className="flex items-center gap-2 min-w-0">
-											<Avatar className="h-6 w-6 flex-shrink-0">
-																							<AvatarImage src={chatProfile.profile?.picture} />
-											<AvatarFallback>
-												{(chatProfile.profile?.name || chatProfile.profile?.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
-												</AvatarFallback>
-											</Avatar>
-											<span className="text-sm font-medium truncate min-w-0">{dashboardTitleWithoutEmoji}</span>
-										</div>
-									)}
+							{!isMobile && isMessageDetailView && chatProfile && (
+								<div className="flex items-center gap-2 min-w-0">
+									<Avatar className="h-6 w-6 flex-shrink-0">
+										<AvatarImage src={chatProfile.profile?.picture} />
+										<AvatarFallback>
+											{(chatProfile.profile?.name || chatProfile.profile?.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
+										</AvatarFallback>
+									</Avatar>
+									<span className="text-sm font-medium truncate min-w-0">{dashboardTitleWithoutEmoji}</span>
 								</div>
 							)}
+						</div>
+					)}
 
-                            <div className={cn('flex-1 min-h-0', location.pathname === '/dashboard/dashboard' ? 'overflow-hidden' : 'lg:overflow-y-auto')}>
+                            <div className={cn(
+                                'flex-1 min-h-0',
+                                location.pathname === '/dashboard/dashboard'
+                                    ? 'lg:overflow-hidden overflow-y-auto'
+                                    : 'lg:overflow-y-auto',
+                            )}>
 								{isMessageDetailView ? (
 									<div className="h-full">{!isAuthenticated ? <LoginPrompt /> : <Outlet />}</div>
 								) : (
