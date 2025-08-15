@@ -15,7 +15,7 @@ import { useUpdateOrderStatusMutation } from '@/publish/orders'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { getBuyerPubkey, getOrderStatus, getSellerPubkey } from '@/queries/orders'
 import { useUpdateShippingStatusMutation } from '@/queries/shipping'
-import { MoreHorizontal, PackageCheck, Truck, ShoppingBag, Clock, X, Check } from 'lucide-react'
+import { MoreHorizontal, PackageCheck, Truck, ShoppingBag, Clock, X, Check, Ban } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Input } from '../ui/input'
@@ -27,9 +27,10 @@ interface OrderActionsProps {
 	userPubkey: string
 	variant?: 'primary' | 'outline' | 'ghost' | 'link' | 'secondary' | 'destructive'
 	className?: string
+	showStatusBadge?: boolean
 }
 
-export function OrderActions({ order, userPubkey, variant = 'outline', className = '' }: OrderActionsProps) {
+export function OrderActions({ order, userPubkey, variant = 'outline', className = '', showStatusBadge = true }: OrderActionsProps) {
 	const [cancelReason, setCancelReason] = useState('')
 	const [isCancelOpen, setIsCancelOpen] = useState(false)
 
@@ -110,12 +111,10 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 		setTrackingNumber('')
 	}
 
-	if (!isBuyer && !isSeller) {
-		return null // Don't show actions if user is neither buyer nor seller
-	}
+    // Even if user cannot act, we render a disabled placeholder to keep layout consistent
 
 	// Check if there are any available actions
-	const hasActions = canCancel || canConfirm || canProcess || canShip || canComplete || canReceive
+	const hasActions = (isBuyer || isSeller) && (canCancel || canConfirm || canProcess || canShip || canComplete || canReceive)
 
 	const { bgColor, textColor, iconName, label } = getStatusStyles(order)
 
@@ -134,17 +133,21 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 		}
 	}
 
-	return (
-		<div className="flex w-full items-center justify-between gap-2 md:w-auto md:justify-end">
-			<div className={cn('flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1 md:w-32 md:flex-none', bgColor, textColor)}>
-				{renderIcon()}
-				<span className="font-medium capitalize">{label}</span>
-			</div>
+	const BADGE_WIDTH_CLASS = 'w-28'
 
-			{hasActions && (
+	return (
+		<div className={showStatusBadge ? "flex w-full items-center justify-between gap-2 md:w-auto md:justify-end" : "flex items-center gap-2"}>
+			{showStatusBadge && (
+				<div className={cn('flex items-center justify-center gap-2 rounded-md px-3 py-1', BADGE_WIDTH_CLASS, bgColor, textColor)}>
+					{renderIcon()}
+					<span className="font-medium capitalize">{label}</span>
+				</div>
+			)}
+
+			{hasActions ? (
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
-						<Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+						<Button variant={variant} size="sm" className={cn('h-8 w-8 p-0', className)}>
 							<span className="sr-only">Open menu</span>
 							<MoreHorizontal className="h-4 w-4" />
 						</Button>
@@ -200,6 +203,10 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 						)}
 					</DropdownMenuContent>
 				</DropdownMenu>
+			) : (
+				<Button variant={variant} size="sm" className={cn('h-8 w-8 p-0', className)} disabled>
+					<Ban className="h-4 w-4 text-muted-foreground" />
+				</Button>
 			)}
 
 			{/* Shipping dialog */}

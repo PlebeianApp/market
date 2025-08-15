@@ -24,14 +24,49 @@ export const fetchPosts = async () => {
 
 	const filter: NDKFilter = {
 		kinds: [1], // kind 1 is text notes
-		limit: 20,
+		limit: 200,
+		// Expand time window to surface more results for the dashboard feed
+		since: Math.floor(Date.now() / 1000) - 60 * 60 * 24 * 30, // last 30 days
 	}
 
-	const events = await ndk.fetchEvents(filter)
-	const posts = Array.from(events).map(transformEvent)
+	let posts: NostrPost[] = []
+	try {
+		const events = await ndk.fetchEvents(filter)
+		posts = Array.from(events).map(transformEvent)
+	} catch (error) {
+		console.warn('Failed to fetch Nostr posts:', error)
+		posts = []
+	}
 
 	// Sort by newest first
-	return posts.sort((a, b) => b.createdAt - a.createdAt)
+	const sorted = posts.sort((a, b) => b.createdAt - a.createdAt)
+
+	// Fallback content: show helpful placeholders if nothing was returned
+	if (sorted.length === 0) {
+		const now = Math.floor(Date.now() / 1000)
+		return [
+			{
+				id: 'placeholder-1',
+				content: 'Welcome to your Nostr Dashboard. Once your relays are connected, latest notes will appear here.',
+				author: '0000000000000000000000000000000000000000000000000000000000000000',
+				createdAt: now,
+			},
+			{
+				id: 'placeholder-2',
+				content: 'Tip: Add or verify relays in Settings → Network to improve feed freshness.',
+				author: '0000000000000000000000000000000000000000000000000000000000000000',
+				createdAt: now - 60,
+			},
+			{
+				id: 'placeholder-3',
+				content: 'You can still browse products and messages while relays sync.',
+				author: '0000000000000000000000000000000000000000000000000000000000000000',
+				createdAt: now - 120,
+			},
+		]
+	}
+
+	return sorted
 }
 
 export const fetchPost = async (id: string) => {
@@ -54,4 +89,6 @@ export const postQueryOptions = (id: string) =>
 export const postsQueryOptions = queryOptions({
 	queryKey: postKeys.all,
 	queryFn: fetchPosts,
+	staleTime: 10000,
+	gcTime: 5 * 60 * 1000,
 })

@@ -59,6 +59,8 @@
         "tailwind-merge": "^3.3.1",
         "tailwindcss": "^4.1.11",
         "tailwindcss-animate": "^1.0.7",
+        "uplot": "^1.6.32",
+        "uplot-react": "^1.2.1",
         "use-debounce": "^10.0.5",
         "util": "^0.12.5",
         "uuid": "^11.1.0",
@@ -726,6 +728,10 @@
     "unplugin": ["unplugin@2.2.2", "", { "dependencies": { "acorn": "^8.14.1", "webpack-virtual-modules": "^0.6.2" } }, ""],
 
     "update-browserslist-db": ["update-browserslist-db@1.1.3", "", { "dependencies": { "escalade": "^3.2.0", "picocolors": "^1.1.1" }, "peerDependencies": { "browserslist": ">= 4.21.0" }, "bin": "cli.js" }, ""],
+
+    "uplot": ["uplot@1.6.32", "", {}, "sha512-KIMVnG68zvu5XXUbC4LQEPnhwOxBuLyW1AHtpm6IKTXImkbLgkMy+jabjLgSLMasNuGGzQm/ep3tOkyTxpiQIw=="],
+
+    "uplot-react": ["uplot-react@1.2.4", "", { "peerDependencies": { "react": ">=16.8.6", "uplot": "^1.6.32" } }, "sha512-mDe/mqD9KtXeHDR8llSJaUFpDcEJvYpHNS+cyUhJ2qvkbT9GPKod1BVXG+hNegRqYiV1ldsFBlI5+OKSi/yPNA=="],
 
     "use-callback-ref": ["use-callback-ref@1.3.3", "", { "dependencies": { "tslib": "^2.0.0" }, "peerDependencies": { "@types/react": "*", "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc" } }, ""],
 

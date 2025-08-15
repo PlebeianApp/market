@@ -28,7 +28,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const user = ndk.activeUser
+	const user = await ndkActions.getUser()
 	if (!user) throw new Error('No active user')
 
 	// Fetch orders where the current user is involved (either as sender or recipient of encrypted DMs)
@@ -189,7 +189,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
  */
 export const useOrders = () => {
 	const ndk = ndkActions.getNDK()
-	const isConnected = !!ndk?.activeUser
+	const isConnected = !!ndk?.signer
 
 	return useQuery({
 		queryKey: orderKeys.all,
@@ -339,10 +339,13 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string): Promise<OrderWith
  * Hook to fetch orders where the specified user is the buyer
  */
 export const useOrdersByBuyer = (buyerPubkey: string) => {
-	return useQuery({
+    const ndk = ndkActions.getNDK()
+    const isConnected = !!ndk?.signer
+
+    return useQuery({
 		queryKey: orderKeys.byBuyer(buyerPubkey),
 		queryFn: () => fetchOrdersByBuyer(buyerPubkey),
-		enabled: !!buyerPubkey,
+        enabled: !!buyerPubkey && isConnected,
 	})
 }
 
@@ -487,10 +490,13 @@ export const fetchOrdersBySeller = async (sellerPubkey: string): Promise<OrderWi
  * Hook to fetch orders where the specified user is the seller
  */
 export const useOrdersBySeller = (sellerPubkey: string) => {
-	return useQuery({
+    const ndk = ndkActions.getNDK()
+    const isConnected = !!ndk?.signer
+
+    return useQuery({
 		queryKey: orderKeys.bySeller(sellerPubkey),
 		queryFn: () => fetchOrdersBySeller(sellerPubkey),
-		enabled: !!sellerPubkey,
+        enabled: !!sellerPubkey && isConnected,
 	})
 }
 

@@ -167,7 +167,7 @@ function DashboardLayout() {
 	// When route changes on mobile, show sidebar for /dashboard, main content otherwise
 	React.useEffect(() => {
 		if (isMobile) {
-			if (location.pathname === '/dashboard') {
+			if (location.pathname === '/dashboard' || location.pathname === '/dashboard/dashboard') {
 				setShowSidebar(true)
 			} else {
 				setShowSidebar(false)
@@ -200,7 +200,7 @@ function DashboardLayout() {
 			} else {
 				// Default behavior - back to dashboard
 				setShowSidebar(true)
-				navigate({ to: '/dashboard' })
+				navigate({ to: '/dashboard/dashboard' })
 			}
 		}
 	}
@@ -264,11 +264,7 @@ function DashboardLayout() {
 				</h1>
 			</div>
 
-			<div className="hidden lg:block">
-				<h1 className="font-heading py-2 px-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center lg:justify-start relative">
-					Dashboard
-				</h1>
-			</div>
+			{/* Desktop title intentionally omitted on dashboard */}
 
 			{/* Main container - responsive layout */}
 			<div className="lg:flex lg:p-6 lg:gap-6 lg:flex-1 lg:overflow-hidden lg:max-w-none lg:min-h-0 bg-layer-base">
@@ -284,10 +280,10 @@ function DashboardLayout() {
 											{section.items.map((item) => {
 												const isActive = matchRoute({ to: item.path, fuzzy: true })
 												return (
-													<Link
+                                                    <Link
 														key={item.path}
 														to={item.path}
-														className="block p-4 lg:px-6 lg:py-2 transition-colors font-bold border border-black fg-layer-elevated rounded lg:border-0 lg:bg-transparent lg:rounded-none data-[status=active]:bg-secondary data-[status=active]:text-white data-[status=active]:border-secondary hover:text-pink-500"
+                                                        className="block p-4 lg:px-6 lg:py-2 transition-colors font-bold border border-black fg-layer-elevated rounded lg:border-0 lg:bg-transparent lg:rounded-none lg:data-[status=active]:bg-secondary lg:data-[status=active]:text-white lg:data-[status=active]:border-secondary hover:text-pink-500"
 														onClick={handleSidebarItemClick}
 														data-status={isActive ? 'active' : 'inactive'}
 													>
@@ -306,8 +302,8 @@ function DashboardLayout() {
 
 					{/* Main content - responsive behavior */}
 					{(!showSidebar || !isMobile) && (
-						<div
-							className={`w-full lg:flex-1 lg:max-w-4xl border border-black lg:rounded bg-layer-elevated flex flex-col lg:max-h-full lg:overflow-hidden lg:shadow-md ${
+                        <div
+                            className={`w-full lg:flex-1 lg:max-w-4xl lg:h-[calc(100vh-5rem-1.5rem)] border border-black lg:rounded bg-layer-elevated flex flex-col lg:max-h-full lg:overflow-hidden lg:shadow-md ${
 								isMessageDetailView && isMobile ? 'h-[calc(100vh-5rem)]' : ''
 							}`}
 						>
@@ -337,7 +333,7 @@ function DashboardLayout() {
 								</div>
 							)}
 
-							<div className="flex-1 min-h-0 lg:overflow-y-auto">
+                            <div className={cn('flex-1 min-h-0', location.pathname === '/dashboard/dashboard' ? 'lg:overflow-hidden' : 'lg:overflow-y-auto')}>
 								{isMessageDetailView ? (
 									<div className="h-full">{!isAuthenticated ? <LoginPrompt /> : <Outlet />}</div>
 								) : (
@@ -365,7 +361,8 @@ function DashboardLayout() {
 													{/* Only show title here if there's no back button */}
 													{!isMobile &&
 														!needsBackButton &&
-														location.pathname !== '/dashboard/sales/sales' &&
+												location.pathname !== '/dashboard/sales/sales' &&
+												location.pathname !== '/dashboard/dashboard' &&
 														!location.pathname.startsWith('/dashboard/sales/messages') &&
 														location.pathname !== '/dashboard/sales/circular-economy' &&
 														location.pathname !== '/dashboard/products/products' &&

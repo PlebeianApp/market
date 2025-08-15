@@ -73,9 +73,9 @@ async function seedData() {
 	const REVIEWS_PER_USER = 2
 	const ORDERS_PER_PAIR = 6 // Increased to demonstrate all order states
 
-	console.log('Connecting to Nostr...')
-	console.log(ndkActions.getNDK()?.explicitRelayUrls)
-	await ndkActions.connect()
+    console.log('Connecting to Nostr...')
+    console.log(ndkActions.getNDK()?.explicitRelayUrls)
+    await ndkActions.connect()
 	const productsByUser: Record<string, string[]> = {}
 	const allProductRefs: string[] = []
 	const shippingsByUser: Record<string, string[]> = {}

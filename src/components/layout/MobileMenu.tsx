@@ -60,7 +60,7 @@ export function MobileMenu() {
 		{ to: '/products', label: 'Products' },
 		{ to: '/community', label: 'Community' },
 		{ to: '/nostr', label: 'Nostr' },
-		...(isAuthenticated ? [{ to: '/dashboard', label: 'Dashboard' }] : []),
+		...(isAuthenticated ? [{ to: '/dashboard/dashboard', label: 'Dashboard' }] : []),
 	]
 
 	return (

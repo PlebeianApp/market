@@ -48,9 +48,7 @@ const purchaseActionsColumn: ColumnDef<OrderWithRelatedEvents> = {
 		const ndk = ndkActions.getNDK()
 		const currentUserPubkey = ndk?.activeUser?.pubkey
 
-		if (!currentUserPubkey) return null
-
-		return <OrderActions order={row.original} userPubkey={currentUserPubkey} />
+		return <OrderActions order={row.original} userPubkey={currentUserPubkey || ''} />
 	},
 }
 
@@ -62,9 +60,7 @@ const salesActionsColumn: ColumnDef<OrderWithRelatedEvents> = {
 		const ndk = ndkActions.getNDK()
 		const currentUserPubkey = ndk?.activeUser?.pubkey
 
-		if (!currentUserPubkey) return null
-
-		return <OrderActions order={row.original} userPubkey={currentUserPubkey} />
+		return <OrderActions order={row.original} userPubkey={currentUserPubkey || ''} />
 	},
 }
 

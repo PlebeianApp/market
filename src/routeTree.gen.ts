@@ -21,6 +21,7 @@ import { Route as ProfileProfileIdRouteImport } from './routes/profile.$profileI
 import { Route as ProductsProductIdRouteImport } from './routes/products.$productId'
 import { Route as PostsPostIdRouteImport } from './routes/posts.$postId'
 import { Route as DashboardLayoutDashboardIndexRouteImport } from './routes/_dashboard-layout/dashboard/index'
+import { Route as DashboardLayoutDashboardDashboardRouteImport } from './routes/_dashboard-layout/dashboard/dashboard'
 import { Route as DashboardLayoutDashboardSalesSalesRouteImport } from './routes/_dashboard-layout/dashboard/sales/sales'
 import { Route as DashboardLayoutDashboardSalesMessagesRouteImport } from './routes/_dashboard-layout/dashboard/sales/messages'
 import { Route as DashboardLayoutDashboardSalesCircularEconomyRouteImport } from './routes/_dashboard-layout/dashboard/sales/circular-economy'
@@ -97,6 +98,12 @@ const DashboardLayoutDashboardIndexRoute =
   DashboardLayoutDashboardIndexRouteImport.update({
     id: '/dashboard/',
     path: '/dashboard/',
+    getParentRoute: () => DashboardLayoutRoute,
+  } as any)
+const DashboardLayoutDashboardDashboardRoute =
+  DashboardLayoutDashboardDashboardRouteImport.update({
+    id: '/dashboard/dashboard',
+    path: '/dashboard/dashboard',
     getParentRoute: () => DashboardLayoutRoute,
   } as any)
 const DashboardLayoutDashboardSalesSalesRoute =
@@ -213,6 +220,7 @@ export interface FileRoutesByFullPath {
   '/nostr': typeof NostrIndexRoute
   '/posts': typeof PostsIndexRoute
   '/products': typeof ProductsIndexRoute
+  '/dashboard/dashboard': typeof DashboardLayoutDashboardDashboardRoute
   '/dashboard': typeof DashboardLayoutDashboardIndexRoute
   '/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
   '/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
@@ -243,6 +251,7 @@ export interface FileRoutesByTo {
   '/nostr': typeof NostrIndexRoute
   '/posts': typeof PostsIndexRoute
   '/products': typeof ProductsIndexRoute
+  '/dashboard/dashboard': typeof DashboardLayoutDashboardDashboardRoute
   '/dashboard': typeof DashboardLayoutDashboardIndexRoute
   '/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
   '/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
@@ -275,6 +284,7 @@ export interface FileRoutesById {
   '/nostr/': typeof NostrIndexRoute
   '/posts/': typeof PostsIndexRoute
   '/products/': typeof ProductsIndexRoute
+  '/_dashboard-layout/dashboard/dashboard': typeof DashboardLayoutDashboardDashboardRoute
   '/_dashboard-layout/dashboard/': typeof DashboardLayoutDashboardIndexRoute
   '/_dashboard-layout/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
   '/_dashboard-layout/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
@@ -307,6 +317,7 @@ export interface FileRouteTypes {
     | '/nostr'
     | '/posts'
     | '/products'
+    | '/dashboard/dashboard'
     | '/dashboard'
     | '/dashboard/account/making-payments'
     | '/dashboard/account/network'
@@ -337,6 +348,7 @@ export interface FileRouteTypes {
     | '/nostr'
     | '/posts'
     | '/products'
+    | '/dashboard/dashboard'
     | '/dashboard'
     | '/dashboard/account/making-payments'
     | '/dashboard/account/network'
@@ -368,6 +380,7 @@ export interface FileRouteTypes {
     | '/nostr/'
     | '/posts/'
     | '/products/'
+    | '/_dashboard-layout/dashboard/dashboard'
     | '/_dashboard-layout/dashboard/'
     | '/_dashboard-layout/dashboard/account/making-payments'
     | '/_dashboard-layout/dashboard/account/network'
@@ -486,6 +499,13 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof DashboardLayoutDashboardIndexRouteImport
+      parentRoute: typeof DashboardLayoutRoute
+    }
+    '/_dashboard-layout/dashboard/dashboard': {
+      id: '/_dashboard-layout/dashboard/dashboard'
+      path: '/dashboard/dashboard'
+      fullPath: '/dashboard/dashboard'
+      preLoaderRoute: typeof DashboardLayoutDashboardDashboardRouteImport
       parentRoute: typeof DashboardLayoutRoute
     }
     '/_dashboard-layout/dashboard/sales/sales': {
@@ -662,6 +682,7 @@ const DashboardLayoutDashboardSalesMessagesRouteWithChildren =
   )
 
 interface DashboardLayoutRouteChildren {
+  DashboardLayoutDashboardDashboardRoute: typeof DashboardLayoutDashboardDashboardRoute
   DashboardLayoutDashboardIndexRoute: typeof DashboardLayoutDashboardIndexRoute
   DashboardLayoutDashboardAccountMakingPaymentsRoute: typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
   DashboardLayoutDashboardAccountNetworkRoute: typeof DashboardLayoutDashboardAccountNetworkRoute
@@ -678,6 +699,8 @@ interface DashboardLayoutRouteChildren {
 }
 
 const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
+  DashboardLayoutDashboardDashboardRoute:
+    DashboardLayoutDashboardDashboardRoute,
   DashboardLayoutDashboardIndexRoute: DashboardLayoutDashboardIndexRoute,
   DashboardLayoutDashboardAccountMakingPaymentsRoute:
     DashboardLayoutDashboardAccountMakingPaymentsRoute,

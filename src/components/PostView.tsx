@@ -9,12 +9,19 @@ interface PostViewProps {
 }
 
 export function PostView({ post, showJson = false }: PostViewProps) {
-	const { data: author, isLoading: isLoadingAuthor } = useQuery(authorQueryOptions(post.author))
+	const isPlaceholder = post.id.startsWith('placeholder-')
+	const { data: author, isLoading: isLoadingAuthor } = useQuery({
+		...authorQueryOptions(post.author),
+		// Do not attempt profile fetch for placeholders
+		enabled: !isPlaceholder,
+	})
 
 	return (
 		<div className="border p-4 rounded-lg">
 			<div className="flex items-center mb-3">
-				{isLoadingAuthor ? (
+				{isPlaceholder ? (
+					<div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">📝</div>
+				) : isLoadingAuthor ? (
 					<div className="w-10 h-10 rounded-full bg-gray-200 animate-pulse"></div>
 				) : author?.picture ? (
 					<img src={author.picture} alt={author.name || 'Profile'} className="w-10 h-10 rounded-full object-cover" />
@@ -25,7 +32,9 @@ export function PostView({ post, showJson = false }: PostViewProps) {
 				)}
 				<div className="ml-3">
 					<div className="font-medium">
-						{isLoadingAuthor ? (
+						{isPlaceholder ? (
+							'System'
+						) : isLoadingAuthor ? (
 							<div className="w-24 h-4 bg-gray-200 rounded animate-pulse"></div>
 						) : (
 							author?.name || post.author.slice(0, 8) + '...'
@@ -35,9 +44,11 @@ export function PostView({ post, showJson = false }: PostViewProps) {
 				</div>
 			</div>
 			<p>{post.content}</p>
-			<Link to="/posts/$postId" params={{ postId: post.id }} className="text-sm text-blue-500 underline mb-2 block mt-2">
-				{post.id.slice(0, 8)}...
-			</Link>
+			{!isPlaceholder && (
+				<Link to="/posts/$postId" params={{ postId: post.id }} className="text-sm text-blue-500 underline mb-2 block mt-2">
+					{post.id.slice(0, 8)}...
+				</Link>
+			)}
 			{showJson && <pre className="bg-gray-100 p-4 rounded-lg whitespace-pre-wrap mt-4">{JSON.stringify(post, null, 2)}</pre>}
 		</div>
 	)

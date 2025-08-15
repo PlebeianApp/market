@@ -13,6 +13,10 @@ export const dashboardNavigation: NavSection[] = [
 		title: 'SALES',
 		items: [
 			{
+				title: '📊 Dashboard',
+				path: '/dashboard/dashboard',
+			},
+			{
 				title: '💰 Sales',
 				path: '/dashboard/sales/sales',
 			},

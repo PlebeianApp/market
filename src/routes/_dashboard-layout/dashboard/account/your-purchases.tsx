@@ -2,6 +2,8 @@ import { OrderDataTable } from '@/components/orders/OrderDataTable'
 import { purchaseColumns } from '@/components/orders/orderColumns'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ndkActions } from '@/lib/stores/ndk'
+import { authStore } from '@/lib/stores/auth'
+import { useStore } from '@tanstack/react-store'
 import { getOrderStatus, useOrdersByBuyer } from '@/queries/orders'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
@@ -13,10 +15,9 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/account/your-
 
 function YourPurchasesComponent() {
 	useDashboardTitle('Your Purchases')
-	const ndk = ndkActions.getNDK()
-	const currentUser = ndk?.activeUser
+    const { user } = useStore(authStore)
 	const [statusFilter, setStatusFilter] = useState<string>('any')
-	const { data: purchases, isLoading } = useOrdersByBuyer(currentUser?.pubkey || '')
+    const { data: purchases, isLoading } = useOrdersByBuyer(user?.pubkey || '')
 
 	// Filter orders by status if needed
 	const filteredPurchases = useMemo(() => {
