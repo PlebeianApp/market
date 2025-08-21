@@ -337,7 +337,7 @@ function DashboardInnerComponent() {
 							</CardTitle>
 						</CardHeader>
 						<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
-							<div className="mt-2 space-y-3 pr-2">
+							<div className="mt-2 space-y-3">
 								{visibleOrders.map((o) => {
 									const orderId = getOrderId(o.order) || o.order.id
 									const amount = formatSats(getOrderAmount(o.order))
@@ -392,7 +392,7 @@ function DashboardInnerComponent() {
 							</CardTitle>
 						</CardHeader>
 						<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
-							<div className="space-y-3 pr-2">
+							<div className="space-y-3">
 								{/* Placeholder for future top products implementation */}
 								<div className="space-y-3">
 									{Array.from({ length: 5 }).map((_, i) => (
@@ -464,7 +464,7 @@ function DashboardInnerComponent() {
 							</CardTitle>
 						</CardHeader>
 						<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
-							<div className="space-y-3 pr-2">
+							<div className="space-y-3">
 								{conversations.map((c) => (
 									<Link
 										key={c.pubkey}
@@ -497,7 +497,7 @@ function DashboardInnerComponent() {
 						</CardTitle>
 					</CardHeader>
 					<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
-						<div className="space-y-3 pr-2">
+						<div className="space-y-3">
 							{posts.slice(0, visiblePostsCount).map((p) => (
 								<div key={p.id} className="rounded border border-black p-3 fg-layer-overlay">
 									<div className="text-sm font-medium mb-1">{p.author.slice(0, 8)}</div>
