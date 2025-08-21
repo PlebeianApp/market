@@ -113,8 +113,8 @@ function LoginPrompt() {
 		<div className="flex items-center justify-center h-full">
 			<div className="flex flex-col items-center space-y-4">
 				<p className="text-lg text-muted-foreground">Please log in to view</p>
-				<Button onClick={handleLoginClick} className="bg-neutral-800 hover:bg-neutral-700 text-white">
-					Login
+				<Button onClick={handleLoginClick} variant="primary">
+					LOGIN
 				</Button>
 			</div>
 		</div>

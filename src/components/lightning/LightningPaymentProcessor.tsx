@@ -14,6 +14,7 @@ import { useStore } from '@tanstack/react-store'
 import { ChevronLeft, ChevronRight, Copy, CreditCard, Loader2, Zap } from 'lucide-react'
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react'
 import { toast } from 'sonner'
+import { Link } from '@tanstack/react-router'
 
 // WebLN types
 declare global {
