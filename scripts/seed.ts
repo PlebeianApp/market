@@ -75,7 +75,14 @@ async function seedData() {
 
     console.log('Connecting to Nostr...')
     console.log(ndkActions.getNDK()?.explicitRelayUrls)
-    await ndkActions.connect()
+    // Fail fast if the relay is unreachable to avoid hanging the dev:seed script
+    const connectWithTimeout = async (timeoutMs: number = 8000) => {
+        const timeout = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`Timeout connecting to relay: ${RELAY_URL}. Make sure your relay is running (e.g. 'nak serve --port 10547') and APP_RELAY_URL is set.`)), timeoutMs),
+        )
+        await Promise.race([ndkActions.connect(), timeout])
+    }
+    await connectWithTimeout()
 	const productsByUser: Record<string, string[]> = {}
 	const allProductRefs: string[] = []
 	const shippingsByUser: Record<string, string[]> = {}

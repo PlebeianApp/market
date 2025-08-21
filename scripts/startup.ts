@@ -140,8 +140,22 @@ async function createUserRolesEvent(signer: NDKPrivateKeySigner) {
 async function initializeEvents() {
     console.log('Connecting to Nostr...')
     ndkActions.initialize([relay])
-    await ndkActions.connect()
-    console.log('Connected to Nostr')
+
+    // Fail fast if the relay is unreachable to avoid hanging the dev:seed script
+    const connectWithTimeout = async (timeoutMs: number = 8000) => {
+        const timeout = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`Timeout connecting to relay: ${relay}. Make sure your relay is running (e.g. 'nak serve --port 10547') and APP_RELAY_URL is set.`)), timeoutMs),
+        )
+        await Promise.race([ndkActions.connect(), timeout])
+    }
+
+    try {
+        await connectWithTimeout()
+        console.log('Connected to Nostr')
+    } catch (error) {
+        console.error('Failed to connect to Nostr relay:', error)
+        process.exit(1)
+    }
 
 	const signer = new NDKPrivateKeySigner(privateKey)
 	await signer.blockUntilReady()
