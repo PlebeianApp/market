@@ -393,24 +393,25 @@ function DashboardInnerComponent() {
 						</CardHeader>
 						<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
 							<div className="space-y-3 pr-2">
-								<div className="text-sm text-muted-foreground">
-									Top selling products will be displayed here based on marketplace performance.
-								</div>
 								{/* Placeholder for future top products implementation */}
 								<div className="space-y-3">
 									{Array.from({ length: 5 }).map((_, i) => (
-										<div key={i} className="rounded border border-black p-3 fg-layer-overlay">
+										<Link
+											key={i}
+											to="/products/placeholder-product-id"
+											className="block rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay transition-colors"
+										>
 											<div className="flex items-center gap-3">
-												<div className="h-12 w-12 rounded bg-muted flex items-center justify-center text-xs">
+												<div className="h-12 w-12 rounded bg-muted flex items-center justify-center text-xs flex-shrink-0">
 													📦
 												</div>
 												<div className="flex-1 min-w-0">
 													<div className="text-sm font-medium truncate">Product {i + 1}</div>
 													<div className="text-xs text-muted-foreground">0 sales</div>
 												</div>
-												<div className="text-xs text-muted-foreground">0 sats</div>
+												<div className="text-xs text-muted-foreground text-right">0 sats</div>
 											</div>
-										</div>
+										</Link>
 									))}
 								</div>
 							</div>
