@@ -153,7 +153,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 									disabled={isOwnProduct || isAddingToCart}
 								>
 									{isOwnProduct
-										? 'Your Product'
+										? 'Your Item'
 										: showConfirmation
 											? '✓ Added!'
 											: isAddingToCart
