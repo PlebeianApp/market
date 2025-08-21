@@ -315,7 +315,7 @@ function DashboardInnerComponent() {
 				{/* Left side: 2x2 grid */}
 				<div className="lg:col-span-2 grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-0">
 					{/* Top Left: Sales Overview */}
-					<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded">
+					<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
 						<CardHeader className="px-4 py-2">
 							<CardTitle className="flex items-center justify-between gap-3">
 								<span>Sales</span>
@@ -382,7 +382,7 @@ function DashboardInnerComponent() {
 					</Card>
 
 					{/* Top Right: Top Products */}
-					<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded">
+					<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
 						<CardHeader className="px-4 py-4">
 							<CardTitle className="flex items-center justify-between">
 								<span>Top Products</span>
@@ -419,7 +419,7 @@ function DashboardInnerComponent() {
 					</Card>
 
 					{/* Bottom Left: Sales Chart */}
-					<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded">
+					<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
 						<CardHeader className="p-4">
 							<CardTitle className="flex items-center justify-between gap-3">
 								<span>Sales Trend</span>
@@ -456,7 +456,7 @@ function DashboardInnerComponent() {
 					</Card>
 
 					{/* Bottom Right: Latest Messages */}
-					<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded">
+					<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
 						<CardHeader className="px-4 py-4">
 							<CardTitle className="flex items-center justify-between">
 								<span>Latest Messages</span>
@@ -489,7 +489,7 @@ function DashboardInnerComponent() {
 				</div>
 
 				{/* Right side: Nostr Posts - Full Height */}
-				<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded">
+				<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
 					<CardHeader className="px-4 py-4">
 						<CardTitle className="flex items-center justify-between">
 							<span>Latest Nostr Posts</span>
@@ -512,7 +512,8 @@ function DashboardInnerComponent() {
 								<div className="pt-2">
 									<Button
 										onClick={() => setVisiblePostsCount((n) => n + 20)}
-										className="w-full bg-black text-white hover:bg-black/90"
+										className="w-full"
+										variant="primary"
 									>
 										Load more
 									</Button>
