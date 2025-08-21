@@ -523,7 +523,7 @@ function RouteComponent() {
 				<div className="max-w-md mx-auto text-center">
 					<h1 className="text-2xl font-bold text-gray-900 mb-4">Your cart is empty</h1>
 					<p className="text-gray-600 mb-6">Add some products to your cart before checking out.</p>
-											<Button onClick={goBackToShopping} className="btn-black">
+					<Button onClick={goBackToShopping} className="btn-black">
 						Continue Shopping
 					</Button>
 				</div>
@@ -550,7 +550,10 @@ function RouteComponent() {
 				<div className="lg:hidden mb-4">
 					<Card>
 						<CardHeader>
-							<CardTitle className="flex items-center justify-between cursor-pointer" onClick={() => setMobileOrderSummaryOpen(!mobileOrderSummaryOpen)}>
+							<CardTitle
+								className="flex items-center justify-between cursor-pointer"
+								onClick={() => setMobileOrderSummaryOpen(!mobileOrderSummaryOpen)}
+							>
 								<span>{currentStep === 'payment' ? 'Invoices' : 'Order Summary'}</span>
 								<ChevronRight className={`w-5 h-5 transition-transform ${mobileOrderSummaryOpen ? 'rotate-90' : ''}`} />
 							</CardTitle>
@@ -587,7 +590,9 @@ function RouteComponent() {
 													)}
 												</div>
 											</div>
-											{nwcEnabled && <p className="text-xs text-gray-500 mt-1">Fast payments available • Configure more wallets in settings</p>}
+											{nwcEnabled && (
+												<p className="text-xs text-gray-500 mt-1">Fast payments available • Configure more wallets in settings</p>
+											)}
 										</div>
 
 										<PaymentSummary invoices={invoices} currentIndex={currentInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
@@ -735,11 +740,7 @@ function RouteComponent() {
 									{/* Pay All Button - Only show if NWC is enabled and there are unpaid invoices */}
 									{nwcEnabled && invoices.filter((inv) => inv.status === 'pending').length > 1 && (
 										<div className="flex justify-center mb-4">
-											<Button
-												onClick={handlePayAllInvoices}
-												className="btn-product-banner font-medium px-6 py-2"
-												size="lg"
-											>
+											<Button onClick={handlePayAllInvoices} className="btn-product-banner font-medium px-6 py-2" size="lg">
 												<Zap className="w-4 h-4 mr-2" />
 												Pay All with NWC ({invoices.filter((inv) => inv.status === 'pending').length} invoices)
 											</Button>

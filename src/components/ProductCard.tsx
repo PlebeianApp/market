@@ -7,11 +7,14 @@ import { useCart } from '@/lib/stores/cart'
 import { useUI } from '@/lib/stores/ui'
 import { getProductTitle, getProductImages, getProductPrice, getProductStock } from '@/queries/products'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { ShoppingCart } from 'lucide-react'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
 
 export function ProductCard({ product }: { product: NDKEvent }) {
 	const ndk = useNDK()
 	const cart = useCart()
-	const { uiActions } = useUI()
+	const ui = useUI()
+	const [parent] = useAutoAnimate()
 	const title = getProductTitle(product)
 	const images = getProductImages(product)
 	const price = getProductPrice(product)
@@ -34,8 +37,12 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 		checkIfOwnProduct()
 	}, [product.pubkey])
 
+	// Check if product is already in cart
+	const isInCart = cart.isProductInCart(product.id)
+	const cartQuantity = isInCart ? cart.cart.products[product.id]?.amount || 0 : 0
+
 	const handleAddToCart = async () => {
-		if (isOwnProduct) return // Don't allow adding own products to cart
+		if (isOwnProduct) return // Don't allow adding own products
 
 		setIsAddingToCart(true)
 		
@@ -55,7 +62,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 	const handleProductClick = () => {
 		// Store the current path as the source path
 		// This will also store it as originalResultsPath if not already set
-		uiActions.setProductSourcePath(location.pathname)
+		ui.setProductSourcePath(location.pathname)
 	}
 
 	return (
@@ -110,23 +117,52 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 
 				{/* Add to cart button */}
 				<div className="flex gap-2">
-					<Button
-						variant={isOwnProduct ? 'own-product' : 'primary'}
-						className={`py-3 px-4 rounded-lg flex-grow font-medium transition-all duration-300 ${
-							isAddingToCart ? 'opacity-75 scale-95' : ''
-						}`}
-						onClick={handleAddToCart}
-						disabled={isOwnProduct || isAddingToCart}
-					>
-						{isOwnProduct 
-							? 'Your Product' 
-							: showConfirmation 
-								? '✓ Added!' 
-								: isAddingToCart 
-									? 'Adding...' 
-									: 'Add to Cart'
-						}
-					</Button>
+					<div ref={parent} className="flex-grow transition-all duration-300 ease-in-out">
+						{isInCart ? (
+							<div
+								key="cart-state"
+								className="flex gap-2 w-full"
+							>
+								{/* Show current quantity */}
+								<div
+									className="flex items-center justify-center px-2 h-10 bg-green-100 text-green-800 border-2 border-green-300 rounded-lg text-sm font-medium transition-all duration-200 ease-in-out"
+								>
+									{cartQuantity}
+								</div>
+								{/* Add more button */}
+								<Button
+									variant="primary"
+									className="py-3 px-4 rounded-lg flex-grow font-medium transition-all duration-200 ease-in-out"
+									onClick={handleAddToCart}
+									disabled={isAddingToCart}
+								>
+									{isAddingToCart ? 'Adding...' : 'Add'}
+								</Button>
+							</div>
+						) : (
+							<div
+								key="add-state"
+								className="w-full"
+							>
+								<Button
+									variant={isOwnProduct ? 'own-product' : 'primary'}
+									className={`py-3 px-4 rounded-lg w-full font-medium transition-all duration-300 ${
+										isAddingToCart ? 'opacity-75 scale-95' : ''
+									}`}
+									onClick={handleAddToCart}
+									disabled={isOwnProduct || isAddingToCart}
+								>
+									{isOwnProduct
+										? 'Your Product'
+										: showConfirmation
+											? '✓ Added!'
+											: isAddingToCart
+												? 'Adding...'
+												: 'Add to Cart'}
+								</Button>
+							</div>
+						)}
+					</div>
 					<ZapButton event={product} />
 				</div>
 			</div>

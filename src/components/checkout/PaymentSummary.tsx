@@ -76,7 +76,6 @@ export function PaymentSummary({ invoices, currentIndex, onSelectInvoice }: Paym
 										<span className="font-medium text-sm truncate">{invoice.recipientName}</span>
 										{invoice.status === 'paid' && <Check className="w-4 h-4 text-green-600" />}
 									</div>
-
 								</div>
 
 								<div className="flex items-center justify-between">

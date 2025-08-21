@@ -59,7 +59,7 @@ export function SheetRegistry() {
 					// Start closing animation
 					setIsClosing(true)
 					setClosingDrawer(activeDrawer)
-					
+
 					// Close the active drawer after animation completes
 					setTimeout(() => {
 						if (activeDrawer) {

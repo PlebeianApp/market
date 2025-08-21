@@ -251,17 +251,12 @@ function MakingPaymentsComponent() {
 		)
 	}
 
-
-
 	// Main View (List Wallets)
 	return (
 		<div>
-		<div className="hidden lg:flex sticky top-0 z-10 fg-layer-elevated border-b border-black py-4 px-4 lg:px-6 items-center justify-between">
+			<div className="hidden lg:flex sticky top-0 z-10 fg-layer-elevated border-b border-black py-4 px-4 lg:px-6 items-center justify-between">
 				<h1 className="text-2xl font-bold">Making Payments</h1>
-				<Button
-					onClick={handleAddWalletClick}
-					className="btn-black flex items-center gap-2 px-4 py-2 text-sm font-semibold"
-				>
+				<Button onClick={handleAddWalletClick} className="btn-black flex items-center gap-2 px-4 py-2 text-sm font-semibold">
 					<PlusIcon className="h-4 w-4" />
 					{combinedWallets.length === 0 ? 'Add Wallet' : 'Add Another Wallet'}
 				</Button>
@@ -601,9 +596,7 @@ function WalletListItem({
 								<div>
 									<p className="text-lg font-semibold">
 										{balanceQuery.data.balance.toLocaleString()} sats
-										{balanceQuery.data.balance === 0 && (
-											<span className="text-xs text-yellow-600 ml-2">(Balance unavailable)</span>
-										)}
+										{balanceQuery.data.balance === 0 && <span className="text-xs text-yellow-600 ml-2">(Balance unavailable)</span>}
 									</p>
 									<p className="text-xs text-muted-foreground">Last updated: {new Date(balanceQuery.data.timestamp).toLocaleString()}</p>
 								</div>
@@ -694,74 +687,74 @@ function AddWalletForm({ onSave, onCancel, userPubkeyPresent, isSaving }: AddWal
 
 	return (
 		<Card>
-				<CardHeader>
-					<CardTitle>Add Nostr Wallet Connect</CardTitle>
-					<CardDescription>Paste your Nostr Wallet Connect URI or scan a QR code to connect your wallet.</CardDescription>
-				</CardHeader>
-				<CardContent className="space-y-4">
-					<div className="flex space-x-2">
-						<Button onClick={handlePaste} className="flex-1 bg-yellow-500 hover:bg-yellow-600">
-							Paste
-						</Button>
-						<Button onClick={handleScan} className="flex-1">
-							<ScanIcon className="h-4 w-4 mr-2" /> Scan
-						</Button>
+			<CardHeader>
+				<CardTitle>Add Nostr Wallet Connect</CardTitle>
+				<CardDescription>Paste your Nostr Wallet Connect URI or scan a QR code to connect your wallet.</CardDescription>
+			</CardHeader>
+			<CardContent className="space-y-4">
+				<div className="flex space-x-2">
+					<Button onClick={handlePaste} className="flex-1 bg-yellow-500 hover:bg-yellow-600">
+						Paste
+					</Button>
+					<Button onClick={handleScan} className="flex-1">
+						<ScanIcon className="h-4 w-4 mr-2" /> Scan
+					</Button>
+				</div>
+
+				<div className="space-y-4 mt-4">
+					<div>
+						<Label htmlFor="wallet-pubkey-add">Wallet Connect Pubkey</Label>
+						<Input
+							id="wallet-pubkey-add"
+							placeholder="e.g 60b37aeb4c521316374bab549c074abc..."
+							value={nwcPubkeyInput}
+							onChange={(e) => setNwcPubkeyInput(e.target.value)}
+						/>
 					</div>
 
-					<div className="space-y-4 mt-4">
-						<div>
-							<Label htmlFor="wallet-pubkey-add">Wallet Connect Pubkey</Label>
-							<Input
-								id="wallet-pubkey-add"
-								placeholder="e.g 60b37aeb4c521316374bab549c074abc..."
-								value={nwcPubkeyInput}
-								onChange={(e) => setNwcPubkeyInput(e.target.value)}
-							/>
-						</div>
-
-						<div>
-							<Label htmlFor="wallet-relays-add">Wallet Connect Relays</Label>
-							<Input
-								id="wallet-relays-add"
-								placeholder="e.g wss://relay.nostr.band"
-								value={nwcRelaysInput}
-								onChange={(e) => setNwcRelaysInput(e.target.value)}
-							/>
-						</div>
-
-						<div>
-							<Label htmlFor="wallet-secret-add">Wallet Connect Secret</Label>
-							<div className="flex">
-								<Input
-									id="wallet-secret-add"
-									type={showSecret ? 'text' : 'password'}
-									placeholder="Secret"
-									value={nwcSecretInput}
-									onChange={(e) => setNwcSecretInput(e.target.value)}
-									className="flex-1"
-								/>
-								<Button variant="outline" size="icon" onClick={() => setShowSecret(!showSecret)} className="ml-2">
-									{showSecret ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
-								</Button>
-							</div>
-						</div>
-
-						{userPubkeyPresent && (
-							<div className="flex items-center space-x-2">
-								<Checkbox id="store-wallet-add" checked={storeOnNostr} onCheckedChange={(checked) => setStoreOnNostr(checked === true)} />
-								<Label htmlFor="store-wallet-add">Store wallet on Nostr (encrypted)</Label>
-							</div>
-						)}
+					<div>
+						<Label htmlFor="wallet-relays-add">Wallet Connect Relays</Label>
+						<Input
+							id="wallet-relays-add"
+							placeholder="e.g wss://relay.nostr.band"
+							value={nwcRelaysInput}
+							onChange={(e) => setNwcRelaysInput(e.target.value)}
+						/>
 					</div>
-				</CardContent>
-				<CardFooter className="flex justify-between">
-					<Button variant="outline" onClick={onCancel}>
-						Cancel
-					</Button>
-					<Button onClick={handleSubmit} disabled={isSaving}>
-						{isSaving ? 'Saving...' : 'Save Wallet'}
-					</Button>
-				</CardFooter>
-			</Card>
+
+					<div>
+						<Label htmlFor="wallet-secret-add">Wallet Connect Secret</Label>
+						<div className="flex">
+							<Input
+								id="wallet-secret-add"
+								type={showSecret ? 'text' : 'password'}
+								placeholder="Secret"
+								value={nwcSecretInput}
+								onChange={(e) => setNwcSecretInput(e.target.value)}
+								className="flex-1"
+							/>
+							<Button variant="outline" size="icon" onClick={() => setShowSecret(!showSecret)} className="ml-2">
+								{showSecret ? <EyeOffIcon className="h-4 w-4" /> : <EyeIcon className="h-4 w-4" />}
+							</Button>
+						</div>
+					</div>
+
+					{userPubkeyPresent && (
+						<div className="flex items-center space-x-2">
+							<Checkbox id="store-wallet-add" checked={storeOnNostr} onCheckedChange={(checked) => setStoreOnNostr(checked === true)} />
+							<Label htmlFor="store-wallet-add">Store wallet on Nostr (encrypted)</Label>
+						</div>
+					)}
+				</div>
+			</CardContent>
+			<CardFooter className="flex justify-between">
+				<Button variant="outline" onClick={onCancel}>
+					Cancel
+				</Button>
+				<Button onClick={handleSubmit} disabled={isSaving}>
+					{isSaving ? 'Saving...' : 'Save Wallet'}
+				</Button>
+			</CardFooter>
+		</Card>
 	)
 }

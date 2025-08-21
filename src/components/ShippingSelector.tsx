@@ -104,16 +104,16 @@ export function ShippingSelector({
 
 	const handleSelect = (id: string) => {
 		if (disabled) return
-		
+
 		const option = rawOptions.find((o: RichShippingInfo) => o.id === id)
 
 		if (option) {
 			// Update local state immediately
 			setSelectedId(id)
-			
+
 			// Call onSelect immediately
 			onSelect(option)
-			
+
 			// Handle cart update asynchronously but don't block the UI
 			if (productId) {
 				// Use setTimeout with 0 delay to ensure it runs after current execution
@@ -149,14 +149,14 @@ export function ShippingSelector({
 		return (
 			<div className={`${!selectedId ? 'flex items-center gap-2' : ''}`}>
 				{!selectedId && <div className="w-1 h-8 bg-yellow-400 rounded-sm flex-shrink-0" />}
-				<Select 
+				<Select
 					key={`shipping-select-${productId || 'no-product'}-${selectedId || 'no-selection'}`}
-					onValueChange={handleSelect} 
-					value={selectedId} 
+					onValueChange={handleSelect}
+					value={selectedId}
 					disabled={disabled}
 				>
 					<SelectTrigger className={className} disabled={disabled}>
-						<SelectValue placeholder={disabled ? "Updating..." : "Select shipping method"} />
+						<SelectValue placeholder={disabled ? 'Updating...' : 'Select shipping method'} />
 					</SelectTrigger>
 					<SelectContent>
 						<SelectGroup>

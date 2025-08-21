@@ -85,7 +85,7 @@ export function CartSummary({
 			Promise.all([
 				cartActions.groupProductsBySeller(),
 				cartActions.updateSellerData(),
-				cartActions.fetchAndSetSellerShippingOptions()
+				cartActions.fetchAndSetSellerShippingOptions(),
 			]).finally(() => {
 				setIsLoading(false)
 			})
@@ -107,89 +107,98 @@ export function CartSummary({
 		}
 	}, [clearTimeouts])
 
-	const handleQuantityChange = useCallback((productId: string, newAmount: number) => {
-		if (allowQuantityChanges && !isUpdating && !isLoading) {
+	const handleQuantityChange = useCallback(
+		(productId: string, newAmount: number) => {
+			if (allowQuantityChanges && !isUpdating && !isLoading) {
+				setIsUpdating(true)
+				clearTimeouts()
+
+				try {
+					cartActions.handleProductUpdate('setAmount', productId, newAmount)
+				} catch (error) {
+					console.error('Error updating quantity:', error)
+				}
+
+				// Reset updating state after a delay
+				animationTimeoutRef.current = setTimeout(() => {
+					setIsUpdating(false)
+				}, 300)
+			}
+		},
+		[allowQuantityChanges, isUpdating, isLoading, clearTimeouts],
+	)
+
+	const handleRemoveProduct = useCallback(
+		(productId: string) => {
+			if (allowQuantityChanges && !isUpdating && !isLoading) {
+				setIsUpdating(true)
+				clearTimeouts()
+
+				try {
+					cartActions.handleProductUpdate('remove', productId)
+				} catch (error) {
+					console.error('Error removing product:', error)
+				}
+
+				// Reset updating state after a delay
+				animationTimeoutRef.current = setTimeout(() => {
+					setIsUpdating(false)
+				}, 300)
+			}
+		},
+		[allowQuantityChanges, isUpdating, isLoading, clearTimeouts],
+	)
+
+	const handleShippingSelect = useCallback(
+		async (sellerPubkey: string, shippingOption: RichShippingInfo) => {
+			if (!allowShippingChanges || isUpdating || isLoading) return
+
 			setIsUpdating(true)
 			clearTimeouts()
-			
+
 			try {
-				cartActions.handleProductUpdate('setAmount', productId, newAmount)
-			} catch (error) {
-				console.error('Error updating quantity:', error)
-			}
-			
-			// Reset updating state after a delay
-			animationTimeoutRef.current = setTimeout(() => {
-				setIsUpdating(false)
-			}, 300)
-		}
-	}, [allowQuantityChanges, isUpdating, isLoading, clearTimeouts])
+				// Update local state immediately
+				setSelectedShippingByUser((prev) => ({
+					...prev,
+					[sellerPubkey]: shippingOption.id,
+				}))
 
-	const handleRemoveProduct = useCallback((productId: string) => {
-		if (allowQuantityChanges && !isUpdating && !isLoading) {
-			setIsUpdating(true)
-			clearTimeouts()
-			
-			try {
-				cartActions.handleProductUpdate('remove', productId)
-			} catch (error) {
-				console.error('Error removing product:', error)
-			}
-			
-			// Reset updating state after a delay
-			animationTimeoutRef.current = setTimeout(() => {
-				setIsUpdating(false)
-			}, 300)
-		}
-	}, [allowQuantityChanges, isUpdating, isLoading, clearTimeouts])
+				// Use requestAnimationFrame to ensure DOM updates are complete
+				await new Promise<void>((resolve) => {
+					requestAnimationFrame(async () => {
+						try {
+							// Update cart state
+							const products = productsBySeller[sellerPubkey] || []
+							for (const product of products) {
+								await cartActions.setShippingMethod(product.id, shippingOption)
+							}
 
-	const handleShippingSelect = useCallback(async (sellerPubkey: string, shippingOption: RichShippingInfo) => {
-		if (!allowShippingChanges || isUpdating || isLoading) return
-
-		setIsUpdating(true)
-		clearTimeouts()
-
-		try {
-			// Update local state immediately
-			setSelectedShippingByUser((prev) => ({
-				...prev,
-				[sellerPubkey]: shippingOption.id,
-			}))
-
-			// Use requestAnimationFrame to ensure DOM updates are complete
-			await new Promise<void>((resolve) => {
-				requestAnimationFrame(async () => {
-					try {
-						// Update cart state
-						const products = productsBySeller[sellerPubkey] || []
-						for (const product of products) {
-							await cartActions.setShippingMethod(product.id, shippingOption)
+							// Update seller data
+							await cartActions.updateSellerData()
+							resolve()
+						} catch (error) {
+							console.error('Error updating shipping method:', error)
+							// Revert local state on error
+							setSelectedShippingByUser((prev) => {
+								const newState = { ...prev }
+								delete newState[sellerPubkey]
+								return newState
+							})
+							resolve()
 						}
-						
-						// Update seller data
-						await cartActions.updateSellerData()
-						resolve()
-					} catch (error) {
-						console.error('Error updating shipping method:', error)
-						// Revert local state on error
-						setSelectedShippingByUser((prev) => {
-							const newState = { ...prev }
-							delete newState[sellerPubkey]
-							return newState
-						})
-						resolve()
-					}
+					})
 				})
-			})
-		} catch (error) {
-			console.error('Error in shipping selection:', error)
-		} finally {
-			// Reset updating state after a delay
-			animationTimeoutRef.current = setTimeout(() => {
-				setIsUpdating(false)
-			}, 300)
-		}
-	}, [allowShippingChanges, isUpdating, isLoading, clearTimeouts, productsBySeller])
+			} catch (error) {
+				console.error('Error in shipping selection:', error)
+			} finally {
+				// Reset updating state after a delay
+				animationTimeoutRef.current = setTimeout(() => {
+					setIsUpdating(false)
+				}, 300)
+			}
+		},
+		[allowShippingChanges, isUpdating, isLoading, clearTimeouts, productsBySeller],
+	)
 
 	// Show loading state if updating or loading
 	if (isLoading) {
@@ -227,20 +236,14 @@ export function CartSummary({
 						const optionsForThisSeller = sellerShippingOptions[sellerPubkey] || []
 
 						return (
-							<div 
-								key={sellerPubkey} 
-								className="p-4 rounded-lg border shadow-md bg-white"
-							>
+							<div key={sellerPubkey} className="p-4 rounded-lg border shadow-md bg-white">
 								<div className="mb-4">
 									<UserWithAvatar pubkey={sellerPubkey} size="sm" showBadge={false} />
 								</div>
 
 								<ul className="space-y-6">
 									{products.map((product, index) => (
-										<div
-											key={product.id}
-											className={`p-3 rounded-lg ${index % 2 === 0 ? 'bg-gray-100' : 'bg-white'}`}
-										>
+										<div key={product.id} className={`p-3 rounded-lg ${index % 2 === 0 ? 'bg-gray-100' : 'bg-white'}`}>
 											<CartItem
 												productId={product.id}
 												amount={product.amount}

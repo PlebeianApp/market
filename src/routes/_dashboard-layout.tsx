@@ -240,7 +240,9 @@ function DashboardLayout() {
 										<Avatar className="h-8 w-8 flex-shrink-0">
 											<AvatarImage src={chatProfile.profile?.picture} />
 											<AvatarFallback>
-												{(chatProfile.profile?.name || chatProfile.profile?.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
+												{(chatProfile.profile?.name || chatProfile.profile?.displayName || chatPubkey?.slice(0, 1))
+													?.charAt(0)
+													.toUpperCase()}
 											</AvatarFallback>
 										</Avatar>
 										<span className="truncate min-w-0 flex-1 text-center">{dashboardTitleWithoutEmoji}</span>
@@ -302,8 +304,6 @@ function DashboardLayout() {
 						</aside>
 					)}
 
-
-
 					{/* Main content - responsive behavior */}
 					{(!showSidebar || !isMobile) && (
 						<div
@@ -312,8 +312,8 @@ function DashboardLayout() {
 							}`}
 						>
 							{/* Desktop back button and title - fixed to top of container */}
-															{needsBackButton && (
-									<div className="sticky top-0 z-10 fg-layer-elevated border-b border-layer-subtle pb-4 mb-0 p-4 lg:p-8 flex-shrink-0 flex items-center justify-between relative">
+							{needsBackButton && (
+								<div className="sticky top-0 z-10 fg-layer-elevated border-b border-layer-subtle pb-4 mb-0 p-4 lg:p-8 flex-shrink-0 flex items-center justify-between relative">
 									<button
 										onClick={handleBackToParent}
 										className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
@@ -326,9 +326,11 @@ function DashboardLayout() {
 									{!isMobile && isMessageDetailView && chatProfile && (
 										<div className="flex items-center gap-2 min-w-0">
 											<Avatar className="h-6 w-6 flex-shrink-0">
-																							<AvatarImage src={chatProfile.profile?.picture} />
-											<AvatarFallback>
-												{(chatProfile.profile?.name || chatProfile.profile?.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
+												<AvatarImage src={chatProfile.profile?.picture} />
+												<AvatarFallback>
+													{(chatProfile.profile?.name || chatProfile.profile?.displayName || chatPubkey?.slice(0, 1))
+														?.charAt(0)
+														.toUpperCase()}
 												</AvatarFallback>
 											</Avatar>
 											<span className="text-sm font-medium truncate min-w-0">{dashboardTitleWithoutEmoji}</span>
@@ -343,8 +345,8 @@ function DashboardLayout() {
 								) : (
 									<div className="h-full">
 										<div
-																								className={cn(
-														'p-4 bg-layer-elevated lg:pt-8 lg:px-8 lg:pb-6 lg:bg-transparent h-full',
+											className={cn(
+												'p-4 bg-layer-elevated lg:pt-8 lg:px-8 lg:pb-6 lg:bg-transparent h-full',
 												location.pathname === '/dashboard/sales/sales' && 'p-0 lg:p-0',
 												location.pathname.startsWith('/dashboard/sales/messages') && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/sales/circular-economy' && 'p-0 lg:p-0',

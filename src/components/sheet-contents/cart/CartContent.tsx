@@ -65,8 +65,6 @@ export function CartContent({ className = '' }: { className?: string }) {
 		setSelectedShippingByUser(initialSelected)
 	}, [cart.products])
 
-
-
 	const handleQuantityChange = (productId: string, newAmount: number) => {
 		// Updated function signature - no longer needs buyerPubkey
 		cartActions.handleProductUpdate('setAmount', productId, newAmount)
@@ -131,20 +129,14 @@ export function CartContent({ className = '' }: { className?: string }) {
 						const optionsForThisSeller = sellerShippingOptions[sellerPubkey] || []
 
 						return (
-							<div 
-								key={sellerPubkey} 
-								className="p-4 rounded-lg border shadow-md bg-white"
-							>
+							<div key={sellerPubkey} className="p-4 rounded-lg border shadow-md bg-white">
 								<div className="mb-4">
 									<UserWithAvatar pubkey={sellerPubkey} size="sm" showBadge={false} />
 								</div>
 
 								<ul className="space-y-6">
 									{products.map((product, index) => (
-										<div
-											key={product.id}
-											className={`p-3 rounded-lg ${index % 2 === 0 ? 'bg-gray-100' : 'bg-white'}`}
-										>
+										<div key={product.id} className={`p-3 rounded-lg ${index % 2 === 0 ? 'bg-gray-100' : 'bg-white'}`}>
 											<CartItem
 												productId={product.id}
 												amount={product.amount}
@@ -164,7 +156,6 @@ export function CartContent({ className = '' }: { className?: string }) {
 										className="w-full"
 										disabled={false}
 									/>
-
 								</div>
 
 								{Object.entries(data.currencyTotals).map(([currency, amount]) => (

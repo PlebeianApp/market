@@ -386,6 +386,11 @@ export const cartActions = {
 		return state.cart.products[productId]?.shippingMethodId || null
 	},
 
+	isProductInCart: (productId: string): boolean => {
+		const state = cartStore.state
+		return productId in state.cart.products
+	},
+
 	clear: () => {
 		cartStore.setState((state) => ({
 			...state,
@@ -633,7 +638,7 @@ export const cartActions = {
 		for (let i = 0; i < products.length; i++) {
 			const product = products[i]
 			const productTotal = productTotals[i]
-			
+
 			// Check if product should be removed
 			if (productTotal.shouldRemove) {
 				productsToRemove.push(product.id)
@@ -655,7 +660,7 @@ export const cartActions = {
 		// Remove products that no longer exist
 		if (productsToRemove.length > 0) {
 			console.log(`Removing ${productsToRemove.length} products that no longer exist:`, productsToRemove)
-			productsToRemove.forEach(productId => {
+			productsToRemove.forEach((productId) => {
 				cartActions.handleProductUpdate('remove', productId)
 			})
 		}
@@ -836,7 +841,7 @@ export const cartActions = {
 			for (const productId of Object.values(state.cart.products).map((p) => p.id)) {
 				try {
 					const productTotal = await cartActions.calculateProductTotal(productId)
-					
+
 					// Skip products that should be removed
 					if (productTotal.shouldRemove) {
 						continue
@@ -1056,12 +1061,12 @@ export const cartActions = {
 				for (const product of products) {
 					try {
 						const productTotal = await cartActions.calculateProductTotal(product.id)
-						
+
 						// Skip products that should be removed
 						if (productTotal.shouldRemove) {
 							continue
 						}
-						
+
 						sellerTotal += productTotal.subtotalInSats
 
 						if (productTotal.currency) {

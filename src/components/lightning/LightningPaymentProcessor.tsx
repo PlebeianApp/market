@@ -339,7 +339,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 
 						{/* Invoice QR Code - Always visible when available */}
 						{invoice && (
-															<div className="space-y-6">
+							<div className="space-y-6">
 								<div className="flex items-center justify-center gap-4">
 									{/* Previous Invoice Button */}
 									{showNavigation && (

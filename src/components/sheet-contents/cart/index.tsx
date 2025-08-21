@@ -16,20 +16,14 @@ export default function CartSheetContent({
 
 	if (isCartEmpty) {
 		return (
-			<SheetContent 
-				side="right"
-				className="flex flex-col max-h-screen w-[100vw] sm:w-[85vw] md:w-[55vw] xl:w-[35vw]"
-			>
+			<SheetContent side="right" className="flex flex-col max-h-screen w-[100vw] sm:w-[85vw] md:w-[55vw] xl:w-[35vw]">
 				<EmptyCartScreen />
 			</SheetContent>
 		)
 	}
 
 	return (
-		<SheetContent
-			side="right"
-			className="flex flex-col max-h-screen w-[100vw] sm:w-[85vw] md:w-[55vw] xl:w-[35vw]"
-		>
+		<SheetContent side="right" className="flex flex-col max-h-screen w-[100vw] sm:w-[85vw] md:w-[55vw] xl:w-[35vw]">
 			<SheetHeader>
 				<SheetTitle>{title}</SheetTitle>
 				<SheetDescription className="hidden">{description}</SheetDescription>
