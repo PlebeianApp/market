@@ -8,8 +8,10 @@ import { Switch } from '@/components/ui/switch'
 import { DEFAULT_ZAP_AMOUNTS } from '@/lib/constants'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { profileKeys } from '@/queries/queryKeyFactory'
+import { ndkStore } from '@/lib/stores/ndk'
 import { NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
 import { useQuery } from '@tanstack/react-query'
+import { useStore } from '@tanstack/react-store'
 import { ChevronLeft, Loader2, X, Zap } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
@@ -28,6 +30,10 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 	const [zapMessage, setZapMessage] = useState<string>('Zap from Plebeian')
 	const [isAnonymousZap, setIsAnonymousZap] = useState<boolean>(false)
 	const [step, setStep] = useState<DialogStep>('main')
+	const ndkState = useStore(ndkStore)
+
+	// Check if NWC is available
+	const hasNwc = !!ndkState.activeNwcWalletUri
 
 	// Extract recipient information
 	const recipientPubkey = event instanceof NDKUser ? event.pubkey : event.pubkey
@@ -230,10 +236,18 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 						{/* Footer */}
 						{lightningAddress && (
 							<div className="py-2">
-								<Button onClick={() => setStep('generateInvoice')} className="w-full" variant="focus">
-									<Zap className="mr-2 h-4 w-4" />
-									Generate Invoice
-								</Button>
+								<div className="flex gap-2">
+									{hasNwc && (
+										<Button onClick={() => setStep('generateInvoice')} className="flex-1" variant="primary">
+											<Zap className="mr-2 h-4 w-4" />
+											Pay with NWC
+										</Button>
+									)}
+									<Button onClick={() => setStep('generateInvoice')} className={hasNwc ? "flex-1" : "w-full"} variant="focus">
+										<Zap className="mr-2 h-4 w-4" />
+										Generate Invoice
+									</Button>
+								</div>
 							</div>
 						)}
 					</div>

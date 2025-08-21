@@ -125,7 +125,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 							>
 								{/* Show current quantity */}
 								<div
-									className="flex items-center justify-center px-2 h-10 bg-green-100 text-green-800 border-2 border-green-300 rounded-lg text-sm font-medium transition-all duration-200 ease-in-out"
+									className="flex items-center justify-center px-2 h-10 bg-pink-100 text-pink-800 border-2 border-pink-300 rounded-lg text-sm font-medium transition-all duration-200 ease-in-out"
 								>
 									{cartQuantity}
 								</div>
