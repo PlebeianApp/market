@@ -693,7 +693,7 @@ function AddWalletForm({ onSave, onCancel, userPubkeyPresent, isSaving }: AddWal
 			</CardHeader>
 			<CardContent className="space-y-4">
 				<div className="flex space-x-2">
-					<Button onClick={handlePaste} className="flex-1 bg-yellow-500 hover:bg-yellow-600">
+					<Button onClick={handlePaste} className="flex-1 bg-[var(--focus)] hover:bg-transparent text-[var(--focus-foreground)] hover:text-black border-2 border-[var(--focus-border)] hover:border-black transition-all duration-200">
 						Paste
 					</Button>
 					<Button onClick={handleScan} className="flex-1">
