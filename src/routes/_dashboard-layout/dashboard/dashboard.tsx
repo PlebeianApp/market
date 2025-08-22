@@ -18,6 +18,7 @@ import { postsQueryOptions } from '@/queries/posts'
 import { useQuery } from '@tanstack/react-query'
 import * as React from 'react'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
+import { productsQueryOptions, getProductTitle, getProductImages, getProductPrice } from '@/queries/products'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/dashboard')({
 	component: DashboardInnerComponent,
@@ -28,6 +29,7 @@ function DashboardInnerComponent() {
 	const { data: orders = [], isLoading: ordersLoading } = useOrders()
 	const { data: conversations = [], isLoading: convLoading } = useConversationsList()
 	const { data: posts = [], isLoading: postsLoading } = useQuery(postsQueryOptions)
+	const { data: products = [], isLoading: productsLoading } = useQuery(productsQueryOptions)
 	const { user } = useStore(authStore)
 	const breakpoint = useBreakpoint()
 	const isMobile = breakpoint === 'sm' || breakpoint === 'md' || breakpoint === 'lg'
@@ -393,27 +395,49 @@ function DashboardInnerComponent() {
 						</CardHeader>
 						<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
 							<div className="space-y-3">
-								{/* Placeholder for future top products implementation */}
-								<div className="space-y-3">
-									{Array.from({ length: 5 }).map((_, i) => (
-										<Link
-											key={i}
-											to="/products/placeholder-product-id"
-											className="block rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay transition-colors"
-										>
-											<div className="flex items-center gap-3">
-												<div className="h-12 w-12 rounded bg-muted flex items-center justify-center text-xs flex-shrink-0">
-													📦
-												</div>
-												<div className="flex-1 min-w-0">
-													<div className="text-sm font-medium truncate">Product {i + 1}</div>
-													<div className="text-xs text-muted-foreground">0 sales</div>
-												</div>
-												<div className="text-xs text-muted-foreground text-right">0 sats</div>
-											</div>
-										</Link>
-									))}
-								</div>
+								{productsLoading ? (
+									<div className="text-sm text-muted-foreground">Loading products...</div>
+								) : products.length === 0 ? (
+									<div className="text-sm text-muted-foreground">No products found.</div>
+								) : (
+									<div className="space-y-3">
+										{products.slice(0, 5).map((p) => {
+											const title = getProductTitle(p)
+											const images = getProductImages(p)
+											const price = getProductPrice(p)
+											return (
+												<Link
+													key={p.id}
+													to={`/products/${p.id}`}
+													className="block rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay transition-colors"
+												>
+													<div className="flex items-center gap-3">
+														<div className="h-12 w-12 rounded bg-muted flex items-center justify-center text-xs flex-shrink-0 overflow-hidden">
+															{images && images.length > 0 ? (
+																<img 
+																	src={images[0][1]} 
+																	alt={title || 'Product'} 
+																	className="w-full h-full object-cover"
+																/>
+															) : (
+																'📦'
+															)}
+														</div>
+														<div className="flex-1 min-w-0">
+															<div className="text-sm font-medium truncate">{title || 'Untitled Product'}</div>
+															<div className="text-xs text-muted-foreground">
+																0 sales
+															</div>
+														</div>
+														<div className="text-xs text-muted-foreground text-right">
+															{price ? `${price[1]} ${price[2]}` : '0 sats'}
+														</div>
+													</div>
+												</Link>
+											)
+										})}
+									</div>
+								)}
 							</div>
 						</CardContent>
 					</Card>
@@ -499,13 +523,19 @@ function DashboardInnerComponent() {
 					<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
 						<div className="space-y-3">
 							{posts.slice(0, visiblePostsCount).map((p) => (
-								<div key={p.id} className="rounded border border-black p-3 fg-layer-overlay">
+								<Link
+									key={p.id}
+									to={`https://njump.me/${p.id}`}
+									target="_blank"
+									rel="noopener noreferrer"
+									className="block rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay transition-colors"
+								>
 									<div className="text-sm font-medium mb-1">{p.author.slice(0, 8)}</div>
 									<div className="text-sm line-clamp-3 whitespace-pre-wrap break-words">{p.content}</div>
 									<div className="text-xs text-muted-foreground mt-2">
 										{new Date(p.createdAt * 1000).toLocaleString()}
 									</div>
-								</div>
+								</Link>
 							))}
 							{!postsLoading && posts.length === 0 && <div className="text-sm text-muted-foreground">No posts found.</div>}
 							{posts.length > visiblePostsCount && (
