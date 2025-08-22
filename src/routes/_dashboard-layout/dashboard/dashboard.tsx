@@ -7,7 +7,7 @@ import { OrderActions } from '@/components/orders/OrderActions'
 import { getStatusStyles } from '@/lib/utils/orderUtils'
 import { useStore } from '@tanstack/react-store'
 import { authStore } from '@/lib/stores/auth'
-import { dashboardStore, getLayoutWidgets } from '@/lib/stores/dashboard'
+import { dashboardStore, dashboardActions } from '@/lib/stores/dashboard'
 import UplotReact from 'uplot-react'
 import 'uplot/dist/uPlot.min.css'
 import { cn } from '@/lib/utils'
@@ -378,31 +378,15 @@ function DashboardInnerComponent() {
 	}, [])
 
 	const dashboardState = useStore(dashboardStore)
-	const layoutWidgets = getLayoutWidgets(dashboardState)
-	
-	// Calculate smart column spans based on widget placement
-	const getGridColSpans = () => {
-		const hasTopLeft = !!layoutWidgets.topLeft
-		const hasTopRight = !!layoutWidgets.topRight
-		const hasBottomLeft = !!layoutWidgets.bottomLeft
-		const hasBottomRight = !!layoutWidgets.bottomRight
-		const hasRight = !!layoutWidgets.right
-		
-		return {
-			// If no right column widget, main grid takes full width
-			mainCols: hasRight ? 'lg:col-span-2' : 'lg:col-span-3',
-			// If only one widget in a row, it takes full width of that row
-			topLeftSpan: hasTopRight ? 'lg:col-span-1' : 'lg:col-span-2',
-			topRightSpan: hasTopLeft ? 'lg:col-span-1' : 'lg:col-span-2',
-			bottomLeftSpan: hasBottomRight ? 'lg:col-span-1' : 'lg:col-span-2',
-			bottomRightSpan: hasBottomLeft ? 'lg:col-span-1' : 'lg:col-span-2',
-		}
+	const layoutWidgets = {
+		top: dashboardActions.getLayoutWidgets('top'),
+		bottom: dashboardActions.getLayoutWidgets('bottom'),
+		right: dashboardActions.getLayoutWidgets('right'),
+		hidden: dashboardActions.getLayoutWidgets('hidden')
 	}
 	
-	const colSpans = getGridColSpans()
-
 	// Widget component renderer
-	const renderWidget = (widget: typeof layoutWidgets.topLeft, spanClass?: string) => {
+	const renderWidget = (widget: any, spanClass?: string) => {
 		if (!widget || !widget.id || !widget.component) return null
 		
 		const baseClasses = cn(spanClass, "min-h-0 h-full")
@@ -685,20 +669,30 @@ function DashboardInnerComponent() {
 			{/* Dynamic Layout based on widget configuration */}
 			<div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0 overflow-hidden">
 				{/* Main grid area */}
-				<div className={cn(colSpans.mainCols, "grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-2 gap-4 min-h-0")}>
+				<div className="lg:col-span-2 grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-2 gap-4 min-h-0">
 					{/* Top Row */}
-					{renderWidget(layoutWidgets.topLeft, colSpans.topLeftSpan)}
-					{renderWidget(layoutWidgets.topRight, colSpans.topRightSpan)}
+					{layoutWidgets.top.map((widget, index) => (
+						<div key={widget.id} className={layoutWidgets.top.length === 1 ? 'lg:col-span-2' : 'lg:col-span-1'}>
+							{renderWidget(widget)}
+						</div>
+					))}
 					
 					{/* Bottom Row */}
-					{renderWidget(layoutWidgets.bottomLeft, colSpans.bottomLeftSpan)}
-					{renderWidget(layoutWidgets.bottomRight, colSpans.bottomRightSpan)}
+					{layoutWidgets.bottom.map((widget, index) => (
+						<div key={widget.id} className={layoutWidgets.bottom.length === 1 ? 'lg:col-span-2' : 'lg:col-span-1'}>
+							{renderWidget(widget)}
+						</div>
+					))}
 				</div>
 
 				{/* Right Column */}
-				{layoutWidgets.right && (
-					<div className="min-h-0 h-full">
-						{renderWidget(layoutWidgets.right)}
+				{layoutWidgets.right.length > 0 && (
+					<div className="min-h-0 h-full space-y-4">
+						{layoutWidgets.right.map((widget) => (
+							<div key={widget.id}>
+								{renderWidget(widget)}
+							</div>
+						))}
 					</div>
 				)}
 			</div>
