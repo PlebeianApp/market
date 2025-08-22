@@ -490,13 +490,56 @@ export const fetchOrdersBySeller = async (sellerPubkey: string): Promise<OrderWi
  * Hook to fetch orders where the specified user is the seller
  */
 export const useOrdersBySeller = (sellerPubkey: string) => {
-    const ndk = ndkActions.getNDK()
-    const isConnected = !!ndk?.signer
+	const ndk = ndkActions.getNDK()
+	const isConnected = !!ndk?.signer
 
-    return useQuery({
+	return useQuery({
 		queryKey: orderKeys.bySeller(sellerPubkey),
 		queryFn: () => fetchOrdersBySeller(sellerPubkey),
         enabled: !!sellerPubkey && isConnected,
+	})
+}
+
+/**
+ * Fetches all marketplace orders (for analytics like top sellers)
+ */
+export const fetchMarketplaceOrders = async (): Promise<OrderWithRelatedEvents[]> => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	// Fetch all order creation events from the marketplace
+	const orderCreationFilter: NDKFilter = {
+		kinds: [ORDER_PROCESS_KIND],
+		'#type': [ORDER_MESSAGE_TYPE.ORDER_CREATION],
+		limit: 500, // Get more orders for better analytics
+	}
+
+	const allOrders = await ndk.fetchEvents(orderCreationFilter)
+	if (allOrders.size === 0) return []
+
+	// Return just the order creation events without related events for performance
+	return Array.from(allOrders).map((order) => ({
+		order,
+		paymentRequests: [],
+		statusUpdates: [],
+		shippingUpdates: [],
+		generalMessages: [],
+		paymentReceipts: [],
+	}))
+}
+
+/**
+ * Hook to fetch marketplace orders for analytics
+ */
+export const useMarketplaceOrders = () => {
+	const ndk = ndkActions.getNDK()
+	const isConnected = !!ndk?.signer
+
+	return useQuery({
+		queryKey: ['marketplace-orders'],
+		queryFn: fetchMarketplaceOrders,
+		enabled: isConnected,
+		staleTime: 5 * 60 * 1000, // 5 minutes
 	})
 }
 
