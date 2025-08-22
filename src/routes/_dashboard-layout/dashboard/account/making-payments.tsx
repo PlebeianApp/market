@@ -325,14 +325,14 @@ function MakingPaymentsComponent() {
 				)}
 
 				{combinedWallets.length === 0 && !isAddingWallet ? (
-					<Card className="fg-layer-elevated border-layer-subtle">
-						<CardContent className="py-10 flex flex-col items-center justify-center">
-							<p className="text-center text-muted-foreground mb-4">No wallets configured yet. Add a wallet to make payments.</p>
-							<Button onClick={handleAddWalletClick}>
-								<PlusIcon className="h-4 w-4 mr-2" /> Add Wallet
-							</Button>
-						</CardContent>
-					</Card>
+									<Card className="fg-layer-elevated border border-black">
+					<CardContent className="py-10 flex flex-col items-center justify-center">
+						<p className="text-center text-muted-foreground mb-4">No wallets configured yet. Add a wallet to make payments.</p>
+						<Button onClick={handleAddWalletClick}>
+							<PlusIcon className="h-4 w-4 mr-2" /> Add Wallet
+						</Button>
+					</CardContent>
+				</Card>
 				) : (
 					<>
 						<div ref={animationParent} className="space-y-4">
@@ -462,7 +462,7 @@ function WalletListItem({
 }: WalletListItemProps) {
 	return (
 		<Collapsible open={isOpen} onOpenChange={onToggleOpen} className="space-y-2">
-			<Card className={`fg-layer-elevated border-layer-subtle ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}>
+			<Card className={`fg-layer-elevated border border-black ${isDeleting ? 'opacity-50 pointer-events-none' : ''}`}>
 				<CollapsibleTrigger asChild>
 					<CardHeader className="pb-4 flex flex-row items-center justify-between cursor-pointer group">
 						<div className="flex items-center gap-3">
@@ -686,7 +686,7 @@ function AddWalletForm({ onSave, onCancel, userPubkeyPresent, isSaving }: AddWal
 	}
 
 	return (
-		<Card>
+		<Card className="fg-layer-elevated border border-black">
 			<CardHeader>
 				<CardTitle>Add Nostr Wallet Connect</CardTitle>
 				<CardDescription>Paste your Nostr Wallet Connect URI or scan a QR code to connect your wallet.</CardDescription>
