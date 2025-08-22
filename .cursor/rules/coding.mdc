@@ -11,6 +11,18 @@ Key Principles
 - Follow functional programming patterns and declarative code style.
 - Prioritize type safety and use TypeScript extensively.
 
+Scope Management & Change Discipline (CRITICAL)
+- NEVER modify, refactor, or change code that is not directly related to the specific task at hand.
+- Only touch files, functions, or components that are explicitly required for the current feature/fix.
+- When adding new functionality, create new files/components rather than modifying existing working ones unless explicitly required.
+- If you must modify existing code, make the minimal change necessary to accomplish the task.
+- Do not "improve" or "clean up" unrelated code while working on a specific feature.
+- Do not change import statements, file structure, or component organization unless it's part of the explicit requirement.
+- If you see potential improvements in unrelated code, note them but do not implement them unless specifically asked.
+- When working on a specific component/feature, do not modify its siblings, parents, or unrelated children.
+- Preserve existing working functionality at all costs - breaking working features is unacceptable.
+- Before making any change, ask yourself: "Is this change absolutely necessary for the current task?"
+
 Error Handling and Validation
 - Handle errors and edge cases at the beginning of functions using guard clauses.
 - Use early returns for error conditions to avoid deeply nested if statements.

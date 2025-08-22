@@ -37,8 +37,8 @@ const defaultWidgets: DashboardWidget[] = [
 	},
 	{
 		id: 'sales-chart',
-		title: 'Sales Chart',
-		description: 'Visual representation of sales data',
+		title: 'Sales Trend',
+		description: 'Visual representation of sales data over time',
 		component: 'SalesChart',
 		position: 'bottom-left',
 		enabled: true,
@@ -53,7 +53,7 @@ const defaultWidgets: DashboardWidget[] = [
 	},
 	{
 		id: 'nostr-posts',
-		title: 'Nostr Posts',
+		title: 'Latest Nostr Posts',
 		description: 'Recent posts from the network',
 		component: 'NostrPosts',
 		position: 'right',

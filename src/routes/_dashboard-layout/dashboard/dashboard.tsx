@@ -206,30 +206,165 @@ function DashboardInnerComponent() {
 			.slice(0, 5)
 	}, [products])
 
-	// Placeholder chart data
-	const chartData = React.useMemo(() => {
-		if (orders.length === 0) return null
-		return [
-			[0, 1, 2, 3, 4, 5, 6],
-			[1, 3, 2, 5, 4, 6, 7]
-		]
-	}, [orders])
+	// Sales graph time range
+	const [salesRange, setSalesRange] = React.useState<'today' | 'week' | 'month' | 'year' | 'all'>('all')
 
-	const chartOptions = React.useMemo(() => ({
-		title: undefined,
-		width: 400,
-		height: 200,
-		series: [
-			{},
-			{
-				label: 'Sales',
-				stroke: '#ff2ebd',
-				width: 2,
-				points: { size: 4 },
-				spanGaps: true,
+	// Posts pagination
+	const [visiblePostsCount, setVisiblePostsCount] = React.useState(20)
+
+	const isWithinRange = React.useCallback(
+		(tsSeconds?: number | null) => {
+			if (!tsSeconds) return false
+			if (salesRange === 'all') return true
+			const ts = tsSeconds * 1000
+			const now = Date.now()
+			const day = 24 * 60 * 60 * 1000
+			switch (salesRange) {
+				case 'today':
+					return ts > now - day
+				case 'week':
+					return ts > now - 7 * day
+				case 'month':
+					return ts > now - 30 * day
+				case 'year':
+					return ts > now - 365 * day
+				default:
+					return true
+			}
+		},
+		[salesRange]
+	)
+
+	const salesSeries = React.useMemo(() => {
+		const filteredOrders = orders.filter((o) => isWithinRange(o.order.created_at))
+		if (filteredOrders.length === 0) return []
+
+		// Group by day
+		const dayGroups: Record<string, number> = {}
+		filteredOrders.forEach((o) => {
+			const ts = o.order.created_at
+			if (!ts) return
+			const dayKey = new Date(ts * 1000).toDateString()
+			dayGroups[dayKey] = (dayGroups[dayKey] || 0) + 1
+		})
+
+		const sorted = Object.entries(dayGroups).sort(([a], [b]) => new Date(a).getTime() - new Date(b).getTime())
+		return sorted.map(([day, count], index) => ({
+			label: new Date(day).toLocaleDateString(),
+			value: count,
+			index: index
+		}))
+	}, [orders, isWithinRange])
+
+	// Chart container refs and dimensions for proper uPlot sizing
+	const chartContainerRef = React.useRef<HTMLDivElement>(null)
+	const [chartWidth, setChartWidth] = React.useState(300)
+	const [chartHeight, setChartHeight] = React.useState(180)
+	const [tooltip, setTooltip] = React.useState({ show: false, left: 0, top: 0, value: '', label: '' })
+	const lastCursorUpdateRef = React.useRef(0)
+
+	React.useEffect(() => {
+		if (!chartContainerRef.current) return
+		const el = chartContainerRef.current
+		const ro = new ResizeObserver(() => {
+			const w = Math.max(200, el.clientWidth)
+			// Clamp height on small screens to avoid growth loops
+			const isSmallScreen = window.matchMedia('(max-width: 1023px)').matches
+			const measured = Math.max(150, el.clientHeight)
+			const h = isSmallScreen ? Math.min(measured, 240) : measured
+			setChartWidth(w)
+			setChartHeight(h)
+		})
+		ro.observe(el)
+		setChartWidth(Math.max(200, el.clientWidth))
+		const initialMeasured = Math.max(150, el.clientHeight)
+		setChartHeight(window.matchMedia('(max-width: 1023px)').matches ? Math.min(initialMeasured, 240) : initialMeasured)
+		return () => ro.disconnect()
+	}, [])
+
+	const uplotData = React.useMemo(() => {
+		if (salesSeries.length === 0) return [[0, 1], [0, 0]]
+		return [
+			salesSeries.map((_, i) => i),
+			salesSeries.map(s => s.value)
+		]
+	}, [salesSeries])
+
+	const uplotOpts = React.useMemo(() => {
+		const gridColor = 'rgba(0,0,0,0.15)'
+		return {
+			title: undefined,
+			hooks: {
+				setCursor: [
+					(u: any) => {
+						const now = performance.now()
+						if (now - lastCursorUpdateRef.current < 30) return
+						lastCursorUpdateRef.current = now
+						const idx = u.cursor.idx
+						if (idx == null || idx < 0 || !salesSeries[idx]) {
+							setTooltip((t) => ({ ...t, show: false }))
+							return
+						}
+						const xPx = u.cursor.left
+						const yVal = u.data[1][idx]
+						const yPx = u.cursor.top
+						const left = u.bbox.left + xPx
+						const top = u.bbox.top + yPx
+						setTooltip({ show: true, left, top, label: salesSeries[idx].label, value: yVal })
+					},
+				],
 			},
-		],
-	}), [])
+			width: 300, // overridden by measured container width
+			height: 180, // overridden by measured container height
+			// Adjusted padding: [top, right, bottom, left]
+			padding: [8, 10, 8, 10],
+			scales: { x: { time: false }, y: { auto: true } },
+			axes: [
+				// Bottom X axis with labels
+				{
+					grid: { show: true, stroke: gridColor },
+					gap: 2,
+					size: 28,
+					values: (u: any, splits: number[]) => splits.map((v) => salesSeries[Math.round(v)]?.label ?? ''),
+				},
+				// Left Y axis with labels
+				{
+					side: 3,
+					grid: { show: true, stroke: gridColor },
+					gap: 2,
+					size: 36,
+					values: (u: any, splits: number[]) => splits.map((v) => String(Math.round(v))),
+				},
+				// Top axis (no labels) to mirror bottom gutter
+				{
+					side: 0,
+					size: 28,
+					grid: { show: false },
+					ticks: { show: false },
+					values: () => [],
+				},
+				// Right axis (no labels) to mirror left gutter
+				{
+					side: 1,
+					size: 36,
+					grid: { show: false },
+					ticks: { show: false },
+					values: () => [],
+				},
+			],
+			legend: { show: false },
+			series: [
+				{},
+				{
+					label: 'Sales',
+					stroke: '#ff2ebd',
+					width: 2,
+					points: { size: 4 },
+					spanGaps: true,
+				},
+			],
+		}
+	}, [salesSeries])
 
 	// Lock body scroll while dashboard is mounted (prevents page scroll when data loads)
 	React.useEffect(() => {
@@ -392,7 +527,7 @@ function DashboardInnerComponent() {
 															</div>
 															<div className="min-w-0">
 																<div className="text-sm font-medium truncate">{title}</div>
-																<div className="text-xs text-muted-foreground truncate">{price ? `${formatSats(price)}` : 'No price'}</div>
+																<div className="text-xs text-muted-foreground truncate">{price ? `${price[1]} ${price[2]}` : 'No price'}</div>
 															</div>
 														</Link>
 													</div>
@@ -413,16 +548,37 @@ function DashboardInnerComponent() {
 							<SalesChartLoader />
 						) : (
 							<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
-								<CardHeader className="px-4 py-3">
-									<CardTitle>Sales Chart</CardTitle>
+								<CardHeader className="p-4">
+									<CardTitle className="flex items-center justify-between gap-3">
+										<span>Sales Trend</span>
+										<Select value={salesRange} onValueChange={(v) => setSalesRange(v as any)}>
+											<SelectTrigger className="w-40">
+												<SelectValue placeholder="All Time" />
+											</SelectTrigger>
+											<SelectContent>
+												<SelectItem value="today">Today</SelectItem>
+												<SelectItem value="week">Last Week</SelectItem>
+												<SelectItem value="month">Last Month</SelectItem>
+												<SelectItem value="year">Last Year</SelectItem>
+												<SelectItem value="all">All Time</SelectItem>
+											</SelectContent>
+										</Select>
+									</CardTitle>
 								</CardHeader>
-								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
-									<div className="h-full flex items-center justify-center">
-										{chartData ? (
-											<UplotReact options={chartOptions} data={chartData} />
-										) : (
-											<div className="text-sm text-muted-foreground">No sales data available</div>
-										)}
+								<CardContent className="flex-1 min-h-0 overflow-hidden p-2">
+									<div className="h-full">
+										<div ref={chartContainerRef} className="relative h-full w-full">
+											<UplotReact options={{ ...(uplotOpts as any), width: chartWidth, height: chartHeight }} data={uplotData as any} />
+											{tooltip.show && (
+												<div
+													className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full bg-black text-white text-xs px-2 py-1 rounded shadow"
+													style={{ left: tooltip.left, top: tooltip.top - 8 }}
+												>
+													<div className="font-semibold">{tooltip.value}</div>
+													<div className="opacity-80">{tooltip.label}</div>
+												</div>
+											)}
+										</div>
 									</div>
 								</CardContent>
 							</Card>
@@ -437,52 +593,32 @@ function DashboardInnerComponent() {
 							<LatestMessagesLoader />
 						) : (
 							<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
-								<CardHeader className="px-4 py-3">
+								<CardHeader className="px-4 py-4">
 									<CardTitle className="flex items-center justify-between">
 										<span>Latest Messages</span>
-										<Link to="/dashboard/sales/messages" className="text-sm text-muted-foreground hover:text-pink-500 transition-colors">
-											View All
-										</Link>
+										<span className="text-sm text-muted-foreground">{conversationsLoading ? 'Loading…' : `${conversations.length}`}</span>
 									</CardTitle>
 								</CardHeader>
 								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
 									<div className="space-y-3">
-										{conversationsLoading ? (
-											<div className="text-sm text-muted-foreground">Loading conversations...</div>
-										) : conversations.length === 0 ? (
-											<div className="text-sm text-muted-foreground">No messages yet.</div>
-										) : (
-											(conversations || []).slice(0, 4).map((conv, index) => {
-												if (!conv?.pubkey) return null
-												return (
-													<div key={conv.pubkey || `conv-${index}`} className="flex items-center justify-between rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay">
-														<Link
-														to="/dashboard/sales/messages/$pubkey"
-														params={{ pubkey: conv.pubkey }}
-														search={{ from: 'dashboard' } as any}
-														className="flex min-w-0 items-center gap-3"
-													>
-														<div className="h-8 w-8 rounded bg-muted flex items-center justify-center text-xs font-mono">
-															{conv.profile?.picture ? (
-																<img src={conv.profile.picture} alt={conv.profile.name} className="h-full w-full object-cover rounded" />
-															) : (
-																((conv.profile?.name || conv.pubkey) && typeof (conv.profile?.name || conv.pubkey) === 'string' ? (conv.profile?.name || conv.pubkey).slice(0, 2) : '??')
-															)}
-														</div>
-														<div className="min-w-0">
-															<div className="text-sm font-medium truncate">{conv.profile?.name || conv.profile?.displayName || `${(conv.pubkey && typeof conv.pubkey === 'string' ? conv.pubkey.slice(0, 8) : 'Unknown')}...`}</div>
-															<div className="text-xs text-muted-foreground truncate">{conv.lastMessage?.content || 'No messages'}</div>
-														</div>
-													</Link>
-													<div className="flex items-center gap-2">
-														<svg className="h-4 w-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-															<path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-														</svg>
-													</div>
+										{conversations.map((c) => (
+											<Link
+												key={c.pubkey}
+												to="/dashboard/sales/messages/$pubkey"
+												params={{ pubkey: c.pubkey }}
+												search={{ from: 'dashboard' } as any}
+												className="flex items-center justify-between rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay"
+											>
+												<div className="min-w-0">
+													<div className="text-sm font-medium truncate">{c.profile?.name || c.profile?.displayName || c.pubkey.slice(0, 8)}</div>
+													<div className="text-xs text-muted-foreground truncate">{c.lastMessageSnippet}</div>
 												</div>
-												)
-											})
-										)}
+												<div className="text-xs text-muted-foreground ml-4 whitespace-nowrap">
+													{c.lastMessageAt ? new Date(c.lastMessageAt * 1000).toLocaleTimeString() : ''}
+												</div>
+											</Link>
+										))}
+										{!conversationsLoading && conversations.length === 0 && <div className="text-sm text-muted-foreground">No messages yet.</div>}
 									</div>
 								</CardContent>
 							</Card>
@@ -497,38 +633,40 @@ function DashboardInnerComponent() {
 							<NostrPostsLoader />
 						) : (
 							<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
-								<CardHeader className="px-4 py-3">
+								<CardHeader className="px-4 py-4">
 									<CardTitle className="flex items-center justify-between">
-										<span>Nostr Posts</span>
-										<Link to="/posts" className="text-sm text-muted-foreground hover:text-pink-500 transition-colors">
-											View All
-										</Link>
+										<span>Latest Nostr Posts</span>
+										<span className="text-sm text-muted-foreground">{postsLoading ? 'Loading…' : `${posts.length}`}</span>
 									</CardTitle>
 								</CardHeader>
 								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
 									<div className="space-y-3">
-										{postsLoading ? (
-											<div className="text-sm text-muted-foreground">Loading posts...</div>
-										) : posts.length === 0 ? (
-											<div className="text-sm text-muted-foreground">No posts found.</div>
-										) : (
-											(posts || []).slice(0, 6).map((post, index) => {
-												if (!post?.id) return null
-												return (
-													<div key={post.id || `post-${index}`} className="rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay">
-														<Link
-														to="/posts/$postId"
-														params={{ postId: post.id }}
-														className="block"
-													>
-														<div className="text-sm truncate mb-1">{post.content}</div>
-														<div className="text-xs text-muted-foreground">
-															{post.author?.profile?.name || `${(post.pubkey && typeof post.pubkey === 'string' ? post.pubkey.slice(0, 8) : 'Unknown')}...`} • {post.created_at ? new Date(post.created_at * 1000).toLocaleDateString() : 'Unknown date'}
-														</div>
-													</Link>
+										{posts.slice(0, visiblePostsCount).map((p) => (
+											<Link
+												key={p.id}
+												to={`https://njump.me/${p.id}`}
+												target="_blank"
+												rel="noopener noreferrer"
+												className="block rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay transition-colors"
+											>
+												<div className="text-sm font-medium mb-1">{p.author.slice(0, 8)}</div>
+												<div className="text-sm line-clamp-3 whitespace-pre-wrap break-words">{p.content}</div>
+												<div className="text-xs text-muted-foreground mt-2">
+													{new Date(p.createdAt * 1000).toLocaleString()}
 												</div>
-												)
-											})
+											</Link>
+										))}
+										{!postsLoading && posts.length === 0 && <div className="text-sm text-muted-foreground">No posts found.</div>}
+										{posts.length > visiblePostsCount && (
+											<div className="pt-2">
+												<Button
+													onClick={() => setVisiblePostsCount((n) => n + 20)}
+													className="w-full"
+													variant="primary"
+												>
+													Load more
+												</Button>
+											</div>
 										)}
 									</div>
 								</CardContent>
