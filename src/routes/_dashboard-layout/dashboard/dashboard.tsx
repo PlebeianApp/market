@@ -20,6 +20,143 @@ import * as React from 'react'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { productsQueryOptions, getProductTitle, getProductImages, getProductPrice } from '@/queries/products'
 
+// Wireframe Loader Components
+function SalesOverviewLoader() {
+	return (
+		<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
+			<CardHeader className="px-4 py-2">
+				<div className="flex items-center justify-between gap-3">
+					<div className="h-6 w-16 bg-gray-200 rounded animate-pulse"></div>
+					<div className="h-8 w-40 bg-gray-200 rounded animate-pulse"></div>
+				</div>
+			</CardHeader>
+			<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
+				<div className="mt-2 space-y-3">
+					{Array.from({ length: 4 }).map((_, i) => (
+						<div key={i} className="flex items-center justify-between rounded border border-gray-200 p-3 bg-gray-50">
+							<div className="flex items-center gap-3">
+								<div className="h-8 w-8 bg-gray-200 rounded animate-pulse"></div>
+								<div className="space-y-2">
+									<div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+									<div className="h-3 w-16 bg-gray-200 rounded animate-pulse"></div>
+								</div>
+							</div>
+							<div className="flex items-center gap-2">
+								<div className="h-5 w-28 bg-gray-200 rounded animate-pulse"></div>
+								<div className="h-8 w-8 bg-gray-200 rounded animate-pulse"></div>
+							</div>
+						</div>
+					))}
+				</div>
+			</CardContent>
+		</Card>
+	)
+}
+
+function TopProductsLoader() {
+	return (
+		<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
+			<CardHeader className="px-4 py-4">
+				<div className="flex items-center justify-between">
+					<div className="h-6 w-24 bg-gray-200 rounded animate-pulse"></div>
+					<div className="h-4 w-16 bg-gray-200 rounded animate-pulse"></div>
+				</div>
+			</CardHeader>
+			<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
+				<div className="space-y-3">
+					{Array.from({ length: 5 }).map((_, i) => (
+						<div key={i} className="flex items-center gap-3 p-3 border border-gray-200 rounded bg-gray-50">
+							<div className="h-12 w-12 bg-gray-200 rounded animate-pulse flex-shrink-0"></div>
+							<div className="flex-1 space-y-2">
+								<div className="h-4 w-32 bg-gray-200 rounded animate-pulse"></div>
+								<div className="h-3 w-16 bg-gray-200 rounded animate-pulse"></div>
+							</div>
+							<div className="h-3 w-16 bg-gray-200 rounded animate-pulse"></div>
+						</div>
+					))}
+				</div>
+			</CardContent>
+		</Card>
+	)
+}
+
+function SalesChartLoader() {
+	return (
+		<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
+			<CardHeader className="p-4">
+				<div className="flex items-center justify-between gap-3">
+					<div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
+					<div className="h-8 w-40 bg-gray-200 rounded animate-pulse"></div>
+				</div>
+			</CardHeader>
+			<CardContent className="flex-1 min-h-0 overflow-hidden px-4 pb-4">
+				<div className="mt-1 h-full">
+					<div className="relative h-full rounded border border-gray-200 bg-gray-50 px-0 flex items-center justify-center">
+						<div className="space-y-3">
+							<div className="h-32 w-48 bg-gray-200 rounded animate-pulse"></div>
+							<div className="h-4 w-24 bg-gray-200 rounded animate-pulse mx-auto"></div>
+						</div>
+					</div>
+				</div>
+			</CardContent>
+		</Card>
+	)
+}
+
+function LatestMessagesLoader() {
+	return (
+		<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
+			<CardHeader className="px-4 py-4">
+				<div className="flex items-center justify-between">
+					<div className="h-6 w-28 bg-gray-200 rounded animate-pulse"></div>
+					<div className="h-4 w-12 bg-gray-200 rounded animate-pulse"></div>
+				</div>
+			</CardHeader>
+			<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
+				<div className="space-y-3">
+					{Array.from({ length: 4 }).map((_, i) => (
+						<div key={i} className="flex items-center justify-between p-3 border border-gray-200 rounded bg-gray-50">
+							<div className="space-y-2">
+								<div className="h-4 w-24 bg-gray-200 rounded animate-pulse"></div>
+								<div className="h-3 w-32 bg-gray-200 rounded animate-pulse"></div>
+							</div>
+							<div className="h-3 w-16 bg-gray-200 rounded animate-pulse"></div>
+						</div>
+					))}
+				</div>
+			</CardContent>
+		</Card>
+	)
+}
+
+function NostrPostsLoader() {
+	return (
+		<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
+			<CardHeader className="px-4 py-4">
+				<div className="flex items-center justify-between">
+					<div className="h-6 w-32 bg-gray-200 rounded animate-pulse"></div>
+					<div className="h-4 w-12 bg-gray-200 rounded animate-pulse"></div>
+				</div>
+			</CardHeader>
+			<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
+				<div className="space-y-3">
+					{Array.from({ length: 5 }).map((_, i) => (
+						<div key={i} className="p-3 border border-gray-200 rounded bg-gray-50 space-y-2">
+							<div className="h-4 w-20 bg-gray-200 rounded animate-pulse"></div>
+							<div className="space-y-1">
+								<div className="h-3 w-full bg-gray-200 rounded animate-pulse"></div>
+								<div className="h-3 w-3/4 bg-gray-200 rounded animate-pulse"></div>
+								<div className="h-3 w-1/2 bg-gray-200 rounded animate-pulse"></div>
+							</div>
+							<div className="h-3 w-24 bg-gray-200 rounded animate-pulse"></div>
+						</div>
+					))}
+				</div>
+			</CardContent>
+		</Card>
+	)
+}
+
 export const Route = createFileRoute('/_dashboard-layout/dashboard/dashboard')({
 	component: DashboardInnerComponent,
 })
@@ -33,6 +170,9 @@ function DashboardInnerComponent() {
 	const { user } = useStore(authStore)
 	const breakpoint = useBreakpoint()
 	const isMobile = breakpoint === 'sm' || breakpoint === 'md' || breakpoint === 'lg'
+
+	// Check if any data is still loading
+	const isLoading = ordersLoading || convLoading || postsLoading || productsLoading
 
 	const [salesTab, setSalesTab] = React.useState<'all' | keyof typeof ORDER_STATUS>(
 		'all',
@@ -317,241 +457,261 @@ function DashboardInnerComponent() {
 				{/* Left side: 2x2 grid */}
 				<div className="lg:col-span-2 grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-0">
 					{/* Top Left: Sales Overview */}
-					<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
-						<CardHeader className="px-4 py-2">
-							<CardTitle className="flex items-center justify-between gap-3">
-								<span>Sales</span>
-								<div className="flex items-center gap-2">
-									<Select value={salesTab} onValueChange={(v) => setSalesTab(v as any)}>
+					{isLoading ? (
+						<SalesOverviewLoader />
+					) : (
+						<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
+							<CardHeader className="px-4 py-2">
+								<CardTitle className="flex items-center justify-between gap-3">
+									<span>Sales</span>
+									<div className="flex items-center gap-2">
+										<Select value={salesTab} onValueChange={(v) => setSalesTab(v as any)}>
+											<SelectTrigger className="w-40">
+												<SelectValue placeholder="All statuses" />
+											</SelectTrigger>
+											<SelectContent>
+												<SelectItem value="all">All ({salesByStatus['all'] ?? 0})</SelectItem>
+												{Object.values(ORDER_STATUS).map((key) => (
+													<SelectItem key={key} value={key}>
+														<span className="capitalize">{key}</span> ({salesByStatus[key] ?? 0})
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
+									</div>
+								</CardTitle>
+							</CardHeader>
+							<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
+								<div className="mt-2 space-y-3">
+									{visibleOrders.map((o) => {
+										const orderId = getOrderId(o.order) || o.order.id
+										const amount = formatSats(getOrderAmount(o.order))
+										const date = getEventDate(o.order)
+										const status = getOrderStatus(o)
+										const { bgColor, textColor } = getStatusStyles(o)
+										return (
+											<div key={orderId} className="flex items-center justify-between rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay">
+												<Link
+													to="/dashboard/orders/$orderId"
+													params={{ orderId }}
+													search={{ from: 'dashboard' } as any}
+													className="flex min-w-0 items-center gap-3"
+												>
+													<div className="h-8 w-8 rounded bg-muted flex items-center justify-center text-xs font-mono">{orderId.slice(0, 4)}</div>
+													<div className="min-w-0">
+														<div className="text-sm font-medium truncate">{amount}</div>
+														<div className="text-xs text-muted-foreground truncate">{date}</div>
+													</div>
+												</Link>
+												<div className="flex items-center gap-2 flex-shrink-0">
+													<span className={cn('text-xs capitalize rounded px-2 py-0.5 border w-28 text-center', bgColor, textColor)}>{status}</span>
+													{user?.pubkey && (
+														<OrderActions order={o} userPubkey={user.pubkey} variant="ghost" className="h-8 w-8 p-0" showStatusBadge={false} />
+													)}
+												</div>
+											</div>
+										)
+									})}
+									{!ordersLoading && orders.length === 0 && (
+										<div className="text-sm text-muted-foreground">No sales yet.</div>
+									)}
+									{isMobile && filteredOrders.length > 4 && (
+										<div className="pt-2">
+											<Button className="w-full bg-black text-white hover:bg-black/90" onClick={() => setShowAllMobileSales((v) => !v)}>
+												{showAllMobileSales ? 'View less' : 'View all'}
+											</Button>
+										</div>
+									)}
+								</div>
+							</CardContent>
+						</Card>
+					)}
+
+					{/* Top Right: Top Products */}
+					{isLoading ? (
+						<TopProductsLoader />
+					) : (
+						<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
+							<CardHeader className="px-4 py-4">
+								<CardTitle className="flex items-center justify-between">
+									<span>Top Products</span>
+									<Link to="/dashboard/products/products" className="text-sm text-muted-foreground hover:text-pink-500 transition-colors">
+										View All
+									</Link>
+								</CardTitle>
+							</CardHeader>
+							<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
+								<div className="space-y-3">
+									{productsLoading ? (
+										<div className="text-sm text-muted-foreground">Loading products...</div>
+									) : products.length === 0 ? (
+										<div className="text-sm text-muted-foreground">No products found.</div>
+									) : (
+										<div className="space-y-3">
+											{products.slice(0, 5).map((p) => {
+												const title = getProductTitle(p)
+												const images = getProductImages(p)
+												const price = getProductPrice(p)
+												return (
+													<Link
+														key={p.id}
+														to={`/products/${p.id}`}
+														className="block rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay transition-colors"
+													>
+														<div className="flex items-center gap-3">
+															<div className="h-12 w-12 rounded bg-muted flex items-center justify-center text-xs flex-shrink-0 overflow-hidden">
+																{images && images.length > 0 ? (
+																	<img 
+																		src={images[0][1]} 
+																		alt={title || 'Product'} 
+																		className="w-full h-full object-cover"
+																	/>
+																) : (
+																	'📦'
+																)}
+															</div>
+															<div className="flex-1 min-w-0">
+																<div className="text-sm font-medium truncate">{title || 'Untitled Product'}</div>
+																<div className="text-xs text-muted-foreground">
+																	0 sales
+																</div>
+															</div>
+															<div className="text-xs text-muted-foreground text-right">
+																{price ? `${price[1]} ${price[2]}` : '0 sats'}
+															</div>
+														</div>
+													</Link>
+												)
+											})}
+										</div>
+									)}
+								</div>
+							</CardContent>
+						</Card>
+					)}
+
+					{/* Bottom Left: Sales Chart */}
+					{isLoading ? (
+						<SalesChartLoader />
+					) : (
+						<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
+							<CardHeader className="p-4">
+								<CardTitle className="flex items-center justify-between gap-3">
+									<span>Sales Trend</span>
+									<Select value={salesRange} onValueChange={(v) => setSalesRange(v as any)}>
 										<SelectTrigger className="w-40">
-											<SelectValue placeholder="All statuses" />
+											<SelectValue placeholder="All Time" />
 										</SelectTrigger>
 										<SelectContent>
-											<SelectItem value="all">All ({salesByStatus['all'] ?? 0})</SelectItem>
-											{Object.values(ORDER_STATUS).map((key) => (
-												<SelectItem key={key} value={key}>
-													<span className="capitalize">{key}</span> ({salesByStatus[key] ?? 0})
-												</SelectItem>
-											))}
+											<SelectItem value="today">Today</SelectItem>
+											<SelectItem value="week">Last Week</SelectItem>
+											<SelectItem value="month">Last Month</SelectItem>
+											<SelectItem value="year">Last Year</SelectItem>
+											<SelectItem value="all">All Time</SelectItem>
 										</SelectContent>
 									</Select>
+								</CardTitle>
+							</CardHeader>
+							<CardContent className="flex-1 min-h-0 overflow-hidden px-4 pb-4">
+								<div className="mt-1 h-full">
+									<div ref={chartContainerRef} className="relative h-full rounded border border-black fg-layer-overlay px-0">
+										<UplotReact options={{ ...(uplotOpts as any), width: chartWidth, height: chartHeight }} data={uplotData as any} />
+										{tooltip.show && (
+											<div
+												className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full bg-black text-white text-xs px-2 py-1 rounded shadow"
+												style={{ left: tooltip.left, top: tooltip.top - 8 }}
+											>
+												<div className="font-semibold">{tooltip.value}</div>
+												<div className="opacity-80">{tooltip.label}</div>
+											</div>
+										)}
+									</div>
 								</div>
+							</CardContent>
+						</Card>
+					)}
+
+					{/* Bottom Right: Latest Messages */}
+					{isLoading ? (
+						<LatestMessagesLoader />
+					) : (
+						<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
+							<CardHeader className="px-4 py-4">
+								<CardTitle className="flex items-center justify-between">
+									<span>Latest Messages</span>
+									<span className="text-sm text-muted-foreground">{convLoading ? 'Loading…' : `${conversations.length}`}</span>
+								</CardTitle>
+							</CardHeader>
+							<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
+								<div className="space-y-3">
+									{conversations.map((c) => (
+										<Link
+											key={c.pubkey}
+											to="/dashboard/sales/messages/$pubkey"
+											params={{ pubkey: c.pubkey }}
+											search={{ from: 'dashboard' } as any}
+											className="flex items-center justify-between rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay"
+										>
+											<div className="min-w-0">
+												<div className="text-sm font-medium truncate">{c.profile?.name || c.profile?.displayName || c.pubkey.slice(0, 8)}</div>
+												<div className="text-xs text-muted-foreground truncate">{c.lastMessageSnippet}</div>
+											</div>
+											<div className="text-xs text-muted-foreground ml-4 whitespace-nowrap">
+												{c.lastMessageAt ? new Date(c.lastMessageAt * 1000).toLocaleTimeString() : ''}
+											</div>
+										</Link>
+									))}
+									{!convLoading && conversations.length === 0 && <div className="text-sm text-muted-foreground">No messages yet.</div>}
+								</div>
+							</CardContent>
+						</Card>
+					)}
+				</div>
+
+				{/* Right side: Nostr Posts - Full Height */}
+				{isLoading ? (
+					<NostrPostsLoader />
+				) : (
+					<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
+						<CardHeader className="px-4 py-4">
+							<CardTitle className="flex items-center justify-between">
+								<span>Latest Nostr Posts</span>
+								<span className="text-sm text-muted-foreground">{postsLoading ? 'Loading…' : `${posts.length}`}</span>
 							</CardTitle>
 						</CardHeader>
 						<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
-							<div className="mt-2 space-y-3">
-								{visibleOrders.map((o) => {
-									const orderId = getOrderId(o.order) || o.order.id
-									const amount = formatSats(getOrderAmount(o.order))
-									const date = getEventDate(o.order)
-									const status = getOrderStatus(o)
-									const { bgColor, textColor } = getStatusStyles(o)
-									return (
-										<div key={orderId} className="flex items-center justify-between rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay">
-											<Link
-												to="/dashboard/orders/$orderId"
-												params={{ orderId }}
-												search={{ from: 'dashboard' } as any}
-												className="flex min-w-0 items-center gap-3"
-											>
-												<div className="h-8 w-8 rounded bg-muted flex items-center justify-center text-xs font-mono">{orderId.slice(0, 4)}</div>
-												<div className="min-w-0">
-													<div className="text-sm font-medium truncate">{amount}</div>
-													<div className="text-xs text-muted-foreground truncate">{date}</div>
-												</div>
-											</Link>
-											<div className="flex items-center gap-2 flex-shrink-0">
-												<span className={cn('text-xs capitalize rounded px-2 py-0.5 border w-28 text-center', bgColor, textColor)}>{status}</span>
-												{user?.pubkey && (
-													<OrderActions order={o} userPubkey={user.pubkey} variant="ghost" className="h-8 w-8 p-0" showStatusBadge={false} />
-												)}
-											</div>
+							<div className="space-y-3">
+								{posts.slice(0, visiblePostsCount).map((p) => (
+									<Link
+										key={p.id}
+										to={`https://njump.me/${p.id}`}
+										target="_blank"
+										rel="noopener noreferrer"
+										className="block rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay transition-colors"
+									>
+										<div className="text-sm font-medium mb-1">{p.author.slice(0, 8)}</div>
+										<div className="text-sm line-clamp-3 whitespace-pre-wrap break-words">{p.content}</div>
+										<div className="text-xs text-muted-foreground mt-2">
+											{new Date(p.createdAt * 1000).toLocaleString()}
 										</div>
-									)
-								})}
-								{!ordersLoading && orders.length === 0 && (
-									<div className="text-sm text-muted-foreground">No sales yet.</div>
-								)}
-								{isMobile && filteredOrders.length > 4 && (
+									</Link>
+								))}
+								{!postsLoading && posts.length === 0 && <div className="text-sm text-muted-foreground">No posts found.</div>}
+								{posts.length > visiblePostsCount && (
 									<div className="pt-2">
-										<Button className="w-full bg-black text-white hover:bg-black/90" onClick={() => setShowAllMobileSales((v) => !v)}>
-											{showAllMobileSales ? 'View less' : 'View all'}
+										<Button
+											onClick={() => setVisiblePostsCount((n) => n + 20)}
+											className="w-full"
+											variant="primary"
+										>
+											Load more
 										</Button>
 									</div>
 								)}
 							</div>
 						</CardContent>
 					</Card>
-
-					{/* Top Right: Top Products */}
-					<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
-						<CardHeader className="px-4 py-4">
-							<CardTitle className="flex items-center justify-between">
-								<span>Top Products</span>
-								<Link to="/dashboard/products/products" className="text-sm text-muted-foreground hover:text-pink-500 transition-colors">
-									View All
-								</Link>
-							</CardTitle>
-						</CardHeader>
-						<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
-							<div className="space-y-3">
-								{productsLoading ? (
-									<div className="text-sm text-muted-foreground">Loading products...</div>
-								) : products.length === 0 ? (
-									<div className="text-sm text-muted-foreground">No products found.</div>
-								) : (
-									<div className="space-y-3">
-										{products.slice(0, 5).map((p) => {
-											const title = getProductTitle(p)
-											const images = getProductImages(p)
-											const price = getProductPrice(p)
-											return (
-												<Link
-													key={p.id}
-													to={`/products/${p.id}`}
-													className="block rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay transition-colors"
-												>
-													<div className="flex items-center gap-3">
-														<div className="h-12 w-12 rounded bg-muted flex items-center justify-center text-xs flex-shrink-0 overflow-hidden">
-															{images && images.length > 0 ? (
-																<img 
-																	src={images[0][1]} 
-																	alt={title || 'Product'} 
-																	className="w-full h-full object-cover"
-																/>
-															) : (
-																'📦'
-															)}
-														</div>
-														<div className="flex-1 min-w-0">
-															<div className="text-sm font-medium truncate">{title || 'Untitled Product'}</div>
-															<div className="text-xs text-muted-foreground">
-																0 sales
-															</div>
-														</div>
-														<div className="text-xs text-muted-foreground text-right">
-															{price ? `${price[1]} ${price[2]}` : '0 sats'}
-														</div>
-													</div>
-												</Link>
-											)
-										})}
-									</div>
-								)}
-							</div>
-						</CardContent>
-					</Card>
-
-					{/* Bottom Left: Sales Chart */}
-					<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
-						<CardHeader className="p-4">
-							<CardTitle className="flex items-center justify-between gap-3">
-								<span>Sales Trend</span>
-								<Select value={salesRange} onValueChange={(v) => setSalesRange(v as any)}>
-									<SelectTrigger className="w-40">
-										<SelectValue placeholder="All Time" />
-									</SelectTrigger>
-									<SelectContent>
-										<SelectItem value="today">Today</SelectItem>
-										<SelectItem value="week">Last Week</SelectItem>
-										<SelectItem value="month">Last Month</SelectItem>
-										<SelectItem value="year">Last Year</SelectItem>
-										<SelectItem value="all">All Time</SelectItem>
-									</SelectContent>
-								</Select>
-							</CardTitle>
-						</CardHeader>
-						<CardContent className="flex-1 min-h-0 overflow-hidden px-4 pb-4">
-							<div className="mt-1 h-full">
-								<div ref={chartContainerRef} className="relative h-full rounded border border-black fg-layer-overlay px-0">
-									<UplotReact options={{ ...(uplotOpts as any), width: chartWidth, height: chartHeight }} data={uplotData as any} />
-									{tooltip.show && (
-										<div
-											className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full bg-black text-white text-xs px-2 py-1 rounded shadow"
-											style={{ left: tooltip.left, top: tooltip.top - 8 }}
-										>
-											<div className="font-semibold">{tooltip.value}</div>
-											<div className="opacity-80">{tooltip.label}</div>
-										</div>
-									)}
-								</div>
-							</div>
-						</CardContent>
-					</Card>
-
-					{/* Bottom Right: Latest Messages */}
-					<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
-						<CardHeader className="px-4 py-4">
-							<CardTitle className="flex items-center justify-between">
-								<span>Latest Messages</span>
-								<span className="text-sm text-muted-foreground">{convLoading ? 'Loading…' : `${conversations.length}`}</span>
-							</CardTitle>
-						</CardHeader>
-						<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
-							<div className="space-y-3">
-								{conversations.map((c) => (
-									<Link
-										key={c.pubkey}
-										to="/dashboard/sales/messages/$pubkey"
-										params={{ pubkey: c.pubkey }}
-										search={{ from: 'dashboard' } as any}
-										className="flex items-center justify-between rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay"
-									>
-										<div className="min-w-0">
-											<div className="text-sm font-medium truncate">{c.profile?.name || c.profile?.displayName || c.pubkey.slice(0, 8)}</div>
-											<div className="text-xs text-muted-foreground truncate">{c.lastMessageSnippet}</div>
-										</div>
-										<div className="text-xs text-muted-foreground ml-4 whitespace-nowrap">
-											{c.lastMessageAt ? new Date(c.lastMessageAt * 1000).toLocaleTimeString() : ''}
-										</div>
-									</Link>
-								))}
-								{!convLoading && conversations.length === 0 && <div className="text-sm text-muted-foreground">No messages yet.</div>}
-							</div>
-						</CardContent>
-					</Card>
-				</div>
-
-				{/* Right side: Nostr Posts - Full Height */}
-				<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
-					<CardHeader className="px-4 py-4">
-						<CardTitle className="flex items-center justify-between">
-							<span>Latest Nostr Posts</span>
-							<span className="text-sm text-muted-foreground">{postsLoading ? 'Loading…' : `${posts.length}`}</span>
-						</CardTitle>
-					</CardHeader>
-					<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
-						<div className="space-y-3">
-							{posts.slice(0, visiblePostsCount).map((p) => (
-								<Link
-									key={p.id}
-									to={`https://njump.me/${p.id}`}
-									target="_blank"
-									rel="noopener noreferrer"
-									className="block rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay transition-colors"
-								>
-									<div className="text-sm font-medium mb-1">{p.author.slice(0, 8)}</div>
-									<div className="text-sm line-clamp-3 whitespace-pre-wrap break-words">{p.content}</div>
-									<div className="text-xs text-muted-foreground mt-2">
-										{new Date(p.createdAt * 1000).toLocaleString()}
-									</div>
-								</Link>
-							))}
-							{!postsLoading && posts.length === 0 && <div className="text-sm text-muted-foreground">No posts found.</div>}
-							{posts.length > visiblePostsCount && (
-								<div className="pt-2">
-									<Button
-										onClick={() => setVisiblePostsCount((n) => n + 20)}
-										className="w-full"
-										variant="primary"
-									>
-										Load more
-									</Button>
-								</div>
-							)}
-						</div>
-					</CardContent>
-				</Card>
+				)}
 			</div>
 		</div>
 	)
