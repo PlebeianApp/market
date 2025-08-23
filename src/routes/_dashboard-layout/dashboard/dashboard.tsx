@@ -420,7 +420,7 @@ function DashboardInnerComponent() {
 									</CardTitle>
 								</CardHeader>
 								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
-									<div className="mt-2 space-y-3">
+									<div className="mt-2 space-y-3 h-full">
 										{visibleOrders.map((o, index) => {
 											const orderId = getOrderId(o.order) || o.order?.id || `order-${index}`
 											const amount = formatSats(getOrderAmount(o.order))
@@ -451,7 +451,9 @@ function DashboardInnerComponent() {
 											)
 										})}
 										{!ordersLoading && orders.length === 0 && (
-											<div className="text-sm text-muted-foreground">No sales yet.</div>
+											<div className="text-sm text-muted-foreground h-full flex items-center justify-center">
+												No sales yet.
+											</div>
 										)}
 										{isMobile && filteredOrders.length > 4 && (
 											<div className="pt-2">
@@ -483,11 +485,11 @@ function DashboardInnerComponent() {
 									</CardTitle>
 								</CardHeader>
 								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
-									<div className="space-y-3">
+									<div className="space-y-3 h-full">
 										{productsLoading ? (
-											<div className="text-sm text-muted-foreground">Loading products...</div>
+											<div className="text-sm text-muted-foreground h-full flex items-center justify-center">Loading products...</div>
 										) : products.length === 0 ? (
-											<div className="text-sm text-muted-foreground">No products found.</div>
+											<div className="text-sm text-muted-foreground h-full flex items-center justify-center">No products found.</div>
 										) : (
 											topProducts.map((product, index) => {
 												if (!product?.id) return null
@@ -584,7 +586,7 @@ function DashboardInnerComponent() {
 									</CardTitle>
 								</CardHeader>
 								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
-									<div className="space-y-3">
+									<div className="space-y-3 h-full">
 										{conversations.map((c) => (
 											<Link
 												key={c.pubkey}
@@ -602,7 +604,11 @@ function DashboardInnerComponent() {
 												</div>
 											</Link>
 										))}
-										{!conversationsLoading && conversations.length === 0 && <div className="text-sm text-muted-foreground">No messages yet.</div>}
+										{!conversationsLoading && conversations.length === 0 && (
+											<div className="text-sm text-muted-foreground h-full flex items-center justify-center">
+												No messages yet.
+											</div>
+										)}
 									</div>
 								</CardContent>
 							</Card>
@@ -624,7 +630,7 @@ function DashboardInnerComponent() {
 									</CardTitle>
 								</CardHeader>
 								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
-									<div className="space-y-3">
+									<div className="space-y-3 h-full">
 										{posts.slice(0, visiblePostsCount).map((p) => (
 											<Link
 												key={p.id}
@@ -640,7 +646,11 @@ function DashboardInnerComponent() {
 												</div>
 											</Link>
 										))}
-										{!postsLoading && posts.length === 0 && <div className="text-sm text-muted-foreground">No posts found.</div>}
+										{!postsLoading && posts.length === 0 && (
+											<div className="text-sm text-muted-foreground h-full flex items-center justify-center">
+												No posts found.
+											</div>
+										)}
 										{posts.length > visiblePostsCount && (
 											<div className="pt-2">
 												<Button
@@ -687,9 +697,9 @@ function DashboardInnerComponent() {
 
 				{/* Right Column */}
 				{layoutWidgets.right.length > 0 && (
-					<div className="min-h-0 h-full space-y-4">
+					<div className="min-h-0 h-full flex flex-col gap-4">
 						{layoutWidgets.right.map((widget) => (
-							<div key={widget.id}>
+							<div key={widget.id} className="flex-1 min-h-0">
 								{renderWidget(widget)}
 							</div>
 						))}

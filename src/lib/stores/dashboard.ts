@@ -66,13 +66,60 @@ export interface DashboardState {
 	isOpen: boolean
 }
 
-const initialState: DashboardState = {
+const STORAGE_KEY = 'dashboard:state:v2'
+
+function loadPersistedState(): DashboardState | null {
+	if (typeof window === 'undefined') return null
+	try {
+		const raw = localStorage.getItem(STORAGE_KEY)
+		if (!raw) return null
+		const parsed = JSON.parse(raw)
+		if (!parsed || typeof parsed !== 'object') return null
+		// Minimal shape validation
+		if (!parsed.widgets || !parsed.layout) return null
+		return parsed as DashboardState
+	} catch {
+		return null
+	}
+}
+
+const initialState: DashboardState = loadPersistedState() ?? {
 	widgets: defaultWidgets,
 	layout: defaultLayout,
 	isOpen: false,
 }
 
 export const dashboardStore = new Store<DashboardState>(initialState)
+
+// Persist on changes (browser only)
+if (typeof window !== 'undefined') {
+	// eslint-disable-next-line @typescript-eslint/no-misused-promises
+	dashboardStore.subscribe(() => {
+		try {
+			localStorage.setItem(STORAGE_KEY, JSON.stringify(dashboardStore.state))
+		} catch {
+			// ignore write errors
+		}
+	})
+}
+
+function isInAnySection(layout: DashboardLayout, id: string): boolean {
+	return (
+		layout.top.includes(id) ||
+		layout.bottom.includes(id) ||
+		layout.right.includes(id) ||
+		layout.hidden.includes(id)
+	)
+}
+
+function removeFromAllSections(layout: DashboardLayout, id: string): DashboardLayout {
+	return {
+		top: layout.top.filter((x) => x !== id),
+		bottom: layout.bottom.filter((x) => x !== id),
+		right: layout.right.filter((x) => x !== id),
+		hidden: layout.hidden.filter((x) => x !== id),
+	}
+}
 
 export const dashboardActions = {
 	openSettings: () => {
@@ -91,60 +138,56 @@ export const dashboardActions = {
 
 	addWidget: (widgetId: string, section: keyof DashboardLayout) => {
 		dashboardStore.setState((state) => {
-			const updatedLayout = { ...state.layout }
-			updatedLayout[section] = [...updatedLayout[section], widgetId]
-			return {
-				...state,
-				layout: updatedLayout,
-			}
+			const updated: DashboardLayout = removeFromAllSections(state.layout, widgetId)
+			// Prevent duplicates; then add to target section
+			updated[section] = [...updated[section], widgetId]
+			return { ...state, layout: updated }
 		})
 	},
 
 	moveWidget: (sourceSection: string, destSection: string, sourceIndex: number, destIndex: number) => {
 		dashboardStore.setState((state) => {
-			const updatedLayout = { ...state.layout }
-			
-			// Remove from source
-			const sourceWidgets = [...updatedLayout[sourceSection as keyof DashboardLayout]]
-			const [movedWidget] = sourceWidgets.splice(sourceIndex, 1)
-			updatedLayout[sourceSection as keyof DashboardLayout] = sourceWidgets
-			
-			// Add to destination
-			const destWidgets = [...updatedLayout[destSection as keyof DashboardLayout]]
-			destWidgets.splice(destIndex, 0, movedWidget)
-			updatedLayout[destSection as keyof DashboardLayout] = destWidgets
-			
-			return {
-				...state,
-				layout: updatedLayout,
-			}
+			const updatedLayout: DashboardLayout = { ...state.layout }
+			const sourceArr = [...updatedLayout[sourceSection as keyof DashboardLayout]]
+			if (sourceIndex < 0 || sourceIndex >= sourceArr.length) return state
+			const [movedWidget] = sourceArr.splice(sourceIndex, 1)
+			updatedLayout[sourceSection as keyof DashboardLayout] = sourceArr
+			if (!movedWidget) return { ...state, layout: updatedLayout }
+			const destArr = [...updatedLayout[destSection as keyof DashboardLayout]]
+			destArr.splice(destIndex, 0, movedWidget)
+			updatedLayout[destSection as keyof DashboardLayout] = destArr
+			return { ...state, layout: updatedLayout }
 		})
 	},
 
 	removeWidget: (section: keyof DashboardLayout, index: number) => {
 		dashboardStore.setState((state) => {
-			const updatedLayout = { ...state.layout }
-			const [removedWidget] = updatedLayout[section].splice(index, 1)
-			updatedLayout.hidden = [...updatedLayout.hidden, removedWidget]
-			
-			return {
-				...state,
-				layout: updatedLayout,
-			}
+			const updatedLayout: DashboardLayout = { ...state.layout }
+			const arr = [...updatedLayout[section]]
+			if (index < 0 || index >= arr.length) return state
+			const [removedWidget] = arr.splice(index, 1)
+			updatedLayout[section] = arr
+			if (removedWidget) updatedLayout.hidden = [...updatedLayout.hidden, removedWidget]
+			return { ...state, layout: updatedLayout }
 		})
 	},
 
 	resetToDefaults: () => {
-		dashboardStore.setState(initialState)
+		dashboardStore.setState({ widgets: defaultWidgets, layout: defaultLayout, isOpen: false })
 	},
 
 	getWidgetById: (widgetId: string) => {
 		const state = dashboardStore.state
-		return state.widgets.find(w => w.id === widgetId)
+		return state.widgets.find((w) => w.id === widgetId)
 	},
 
 	getLayoutWidgets: (section: keyof DashboardLayout) => {
 		const state = dashboardStore.state
-		return state.layout[section].map(id => state.widgets.find(w => w.id === id)).filter(Boolean) as DashboardWidget[]
+		return state.layout[section].map((id) => state.widgets.find((w) => w.id === id)).filter(Boolean) as DashboardWidget[]
+	},
+
+	getAvailableWidgets: (): DashboardWidget[] => {
+		const state = dashboardStore.state
+		return state.widgets.filter((w) => !isInAnySection(state.layout, w.id))
 	},
 }

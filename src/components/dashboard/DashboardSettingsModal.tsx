@@ -47,21 +47,23 @@ const DraggableWidget: React.FC<DraggableWidgetProps> = ({
 			onDragStart={(e) => onDragStart(e, section, index)}
 			onDragOver={onDragOver}
 			onDrop={(e) => onDrop(e, section, index)}
-			className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-move"
+			className="flex items-center justify-between p-3 bg-white border border-black rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-move"
 		>
-			<div className="flex items-center gap-3">
-				<div className="text-gray-400 hover:text-gray-600">
+			<div className="flex items-center gap-3 min-w-0">
+				<span className="font-medium text-gray-900 truncate">{widget.title}</span>
+			</div>
+			<div className="flex items-center gap-2">
+				<button
+					onClick={onRemove}
+					className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+					title="Hide widget"
+				>
+					<CloseIcon />
+				</button>
+				<div className="text-gray-400 hover:text-gray-700 cursor-grab">
 					<DragIcon />
 				</div>
-				<span className="font-medium text-gray-900">{widget.title}</span>
 			</div>
-			<button
-				onClick={onRemove}
-				className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-				title="Remove widget"
-			>
-				<CloseIcon />
-			</button>
 		</div>
 	)
 }
@@ -73,63 +75,9 @@ const SectionHeading: React.FC<{ title: string; description?: string }> = ({ tit
 	</div>
 )
 
-const AddWidgetButton: React.FC<{ onAdd: (widget: any) => void }> = ({ onAdd }) => {
-	const [showWidgetList, setShowWidgetList] = React.useState(false)
-	
-	const availableWidgets = [
-		{ id: 'sales-overview', title: 'Sales Overview', description: 'Display sales data and trends' },
-		{ id: 'top-products', title: 'Top Products', description: 'Show your latest products' },
-		{ id: 'latest-messages', title: 'Latest Messages', description: 'Recent conversations' },
-		{ id: 'nostr-posts', title: 'Nostr Posts', description: 'Latest posts from the network' },
-		{ id: 'sales-chart', title: 'Sales Chart', description: 'Visual sales analytics' }
-	]
-
-	return (
-		<>
-			<Button 
-				onClick={() => setShowWidgetList(true)}
-				className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-			>
-				+ Add Widget
-			</Button>
-
-			{showWidgetList && (
-				<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-					<div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto">
-						<div className="flex items-center justify-between mb-4">
-							<h3 className="text-lg font-semibold">Select Widget to Add</h3>
-							<button
-								onClick={() => setShowWidgetList(false)}
-								className="text-gray-400 hover:text-gray-600"
-							>
-								<CloseIcon />
-							</button>
-						</div>
-						<div className="space-y-3">
-							{availableWidgets.map((widget) => (
-								<div
-									key={widget.id}
-									onClick={() => {
-										onAdd(widget)
-										setShowWidgetList(false)
-									}}
-									className="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-								>
-									<div className="font-medium text-gray-900">{widget.title}</div>
-									<div className="text-sm text-gray-600">{widget.description}</div>
-								</div>
-							))}
-						</div>
-					</div>
-				</div>
-			)}
-		</>
-	)
-}
-
 export const DashboardSettingsModal: React.FC = () => {
 	const dashboardState = useStore(dashboardStore)
-	const { isOpen, widgets, layout } = dashboardState
+	const { isOpen, layout } = dashboardState
 	const [draggedWidget, setDraggedWidget] = React.useState<{ section: string; index: number } | null>(null)
 
 	const handleDragStart = (e: React.DragEvent, section: string, index: number) => {
@@ -145,15 +93,9 @@ export const DashboardSettingsModal: React.FC = () => {
 	const handleDrop = (e: React.DragEvent, destSection: string, destIndex: number) => {
 		e.preventDefault()
 		if (!draggedWidget) return
-
 		const { section: sourceSection, index: sourceIndex } = draggedWidget
 		dashboardActions.moveWidget(sourceSection, destSection, sourceIndex, destIndex)
 		setDraggedWidget(null)
-	}
-
-	const handleAddWidget = (widget: any) => {
-		// Add to hidden section first
-		dashboardActions.addWidget(widget.id, 'hidden')
 	}
 
 	const handleRemoveWidget = (section: string, index: number) => {
@@ -163,34 +105,29 @@ export const DashboardSettingsModal: React.FC = () => {
 		}
 	}
 
-	const getSectionWidgets = (section: string) => {
-		return layout[section as keyof typeof layout] || []
-	}
+	const getSectionWidgets = (section: string) => layout[section as keyof typeof layout] || []
 
 	if (!isOpen) return null
 
 	return (
 		<Dialog open={isOpen} onOpenChange={() => dashboardActions.closeSettings()}>
-			<DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0">
+			<DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] flex flex-col p-0 overflow-hidden [&>button]:top-4 [&>button]:right-4">
 				{/* Fixed Header */}
-				<DialogHeader className="px-6 py-4 border-b border-gray-200 flex-shrink-0">
+				<DialogHeader className="px-6 py-4 border-b border-black flex-shrink-0 bg-white">
 					<DialogTitle className="text-xl font-semibold">Dashboard Widget Settings</DialogTitle>
 				</DialogHeader>
 
 				{/* Scrollable Content */}
-				<div className="flex-1 overflow-y-auto px-6 py-4">
+				<div className="flex-1 overflow-y-auto px-6 py-4 bg-white">
 					<div className="space-y-6">
 						{/* Top 2 columns */}
 						<div>
-							<SectionHeading 
-								title="Top 2 columns" 
-								description="Widgets span full width in top row"
-							/>
+							<SectionHeading title="Top 2 columns" description="Widgets span full width in top row" />
 							<div className="space-y-2">
 								{getSectionWidgets('top').map((widget, index) => (
 									<DraggableWidget
 										key={`top-${index}`}
-										widget={widget}
+										widget={dashboardActions.getWidgetById(widget)}
 										index={index}
 										section="top"
 										onRemove={() => handleRemoveWidget('top', index)}
@@ -204,15 +141,12 @@ export const DashboardSettingsModal: React.FC = () => {
 
 						{/* Bottom 2 columns */}
 						<div>
-							<SectionHeading 
-								title="Bottom 2 columns" 
-								description="Widgets span full width in bottom row"
-							/>
+							<SectionHeading title="Bottom 2 columns" description="Widgets span full width in bottom row" />
 							<div className="space-y-2">
 								{getSectionWidgets('bottom').map((widget, index) => (
 									<DraggableWidget
 										key={`bottom-${index}`}
-										widget={widget}
+										widget={dashboardActions.getWidgetById(widget)}
 										index={index}
 										section="bottom"
 										onRemove={() => handleRemoveWidget('bottom', index)}
@@ -226,15 +160,12 @@ export const DashboardSettingsModal: React.FC = () => {
 
 						{/* Right column */}
 						<div>
-							<SectionHeading 
-								title="Right column" 
-								description="Widgets in narrow right sidebar"
-							/>
+							<SectionHeading title="Right column" description="Widgets in narrow right sidebar" />
 							<div className="space-y-2">
 								{getSectionWidgets('right').map((widget, index) => (
 									<DraggableWidget
 										key={`right-${index}`}
-										widget={widget}
+										widget={dashboardActions.getWidgetById(widget)}
 										index={index}
 										section="right"
 										onRemove={() => handleRemoveWidget('right', index)}
@@ -248,15 +179,12 @@ export const DashboardSettingsModal: React.FC = () => {
 
 						{/* Hidden */}
 						<div>
-							<SectionHeading 
-								title="Hidden" 
-								description="Widgets not currently displayed"
-							/>
+							<SectionHeading title="Hidden" description="Widgets not currently displayed" />
 							<div className="space-y-2">
 								{getSectionWidgets('hidden').map((widget, index) => (
 									<DraggableWidget
 										key={`hidden-${index}`}
-										widget={widget}
+										widget={dashboardActions.getWidgetById(widget)}
 										index={index}
 										section="hidden"
 										onRemove={() => handleRemoveWidget('hidden', index)}
@@ -271,15 +199,10 @@ export const DashboardSettingsModal: React.FC = () => {
 				</div>
 
 				{/* Fixed Footer */}
-				<div className="px-6 py-4 border-t border-gray-200 flex-shrink-0">
-					<div className="flex items-center justify-between">
-						<AddWidgetButton onAdd={handleAddWidget} />
-						<Button
-							onClick={() => dashboardActions.closeSettings()}
-							variant="outline"
-						>
-							Done
-						</Button>
+				<div className="px-6 py-4 border-t border-black flex-shrink-0 bg-white">
+					<div className="flex items-center justify-end gap-2">
+						<Button onClick={dashboardActions.resetToDefaults} variant="outline" className="border border-black">Reset</Button>
+						<Button onClick={() => dashboardActions.closeSettings()} variant="outline" className="border border-black">Done</Button>
 					</div>
 				</div>
 			</DialogContent>
