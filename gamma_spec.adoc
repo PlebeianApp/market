@@ -32,7 +32,7 @@ These features MAY be implemented based on specific marketplace needs:
 
 ==== Watch-only clients
 
-Watch-only clients are applications that allow users to display products without implementing full e-commerce capabilities. These clients don't need to support all required components - product rendering alone can be sufficient. However, ideally, they should also handle logic for looking up collections, reviews, and shipping options. Support for order communication using link:17.md[NIP-17] is optional.
+Watch-only clients are applications that allow users to display products without implementing full e-commerce capabilities. These clients don't need to support all required components - product rendering alone can be sufficient. However, ideally, they should also handle logic for looking up collections, reviews, and shipping options. Support for order communication using link:https://github.com/nostr-protocol/nips/blob/master/17.md[NIP-17] is optional.
 
 == 2. Core Protocol Components
 
@@ -61,15 +61,39 @@ Standard e-commerce flow:
 . Order confirmation
 . Encrypted message follow-up
 
+[#_payment_method_preferences]
+==== Payment Method Preferences
+
+Payment method related kind 0 fields in use and respected by most clients are the following two:
+
+[source,jsonc]
+{
+    ...
+    "lnurl": "lnurl1dp683skmn4wfk8qt...09emk2mrgtmq7n5",
+    "lud16": "user@example.com",
+    ...
+}
+
+This specification adds a new field:
+
+[source,jsonc]
+{
+    ...
+    "payment_preference": "manual | ecash | lud16",
+    ...
+}
+
+In the event that the user overwrites their kind 0 event using another client that doesn't retain their payment preferences, they will find previously set preference overwritten. __TODO: how to deal with this - is this even a problem? perhaps can be resolved by application specific relays?__
+
 === Merchant Preferences
 
 Merchants MAY specify preferences for how they want users to interact with them, including which applications to use and payment methods to accept. These preferences ensure a consistent experience and streamline operations. Merchants indicate their preferences through two mechanisms:
 
 . Application Preferences (link:https://github.com/nostr-protocol/nips/blob/master/89.md[NIP-89]):
-* The recommended application MUST publish a kind `31990` event
-* The merchant MUST publish a kind `31989` event recommending that application
+* The recommended application MUST publish a kind link:https://github.com/nostr-protocol/nips/blob/master/89.md#handler-information[`31990`] event
+* The merchant MUST publish a kind link:https://github.com/nostr-protocol/nips/blob/master/89.md#recommendation-event[`31989`] event recommending that application
 . Payment Preferences:
-* Set via `payment_preference` tag in the merchant's kind `0` event
+* Set via `payment_preference` tag in the merchant's kind link:#_payment_method_preferences[`0`] event
 * Valid values: `manual | ecash | lud16`
 * Defaults to `manual` if not specified
 
@@ -88,8 +112,8 @@ Applications implementing this NIP MUST handle preferences as follows:
 
 Buyers can verify merchant preferences by:
 
-* Checking kind `31990` events for recommended applications
-* Checking kind `0` events for payment preferences
+* Checking kind link:https://github.com/nostr-protocol/nips/blob/master/89.md#handler-information[`31990`] events for recommended applications
+* Checking kind link:#_payment_method_preferences[`0`] events for payment preferences
 
 This verification helps buyers follow merchant-approved paths and avoid potential scams or poor experiences.
 
@@ -105,9 +129,9 @@ Products are the core element in a marketplace. Each product listing MUST contai
 * `d`: Unique product identifier for referencing the listing
 * `title`: Product name/title for display
 * `price`: Price information array `[<amount>, <currency>, <optional frequency>]`
-* amount: Decimal number (e.g., "10.99")
-* currency: ISO 4217 code (e.g., "USD", "EUR")
-* frequency: Optional subscription interval using ISO 8601 duration units (e.g. 'D' for daily, 'W' for weekly, 'Y' for yearly).
+* `amount`: Decimal number (e.g., "10.99")
+* `currency`: ISO 4217 code (e.g., "USD", "EUR")
+* `frequency`: _Optional_ subscription interval using ISO 8601 duration units (e.g. 'D' for daily, 'W' for weekly, 'Y' for yearly).
 
 *Optional tags*:
 
@@ -120,29 +144,33 @@ Products are the core element in a marketplace. Each product listing MUST contai
 * `stock`: Available quantity as integer
 * `summary`: Short product description
 * `spec`: Product specifications `[<key>, <value>]`, can appear multiple times
+
 * Media:
 
-* `image`: Product images `[<url>, <dimensions>, <sorting-order>]`, MAY appear multiple times
-** url: Direct image URL
-** dimensions: Optional, in pixels, "<width>x<height>" format, if not present the place in the array should be respected by using an empty string `""`
-** sorting order: Optional integer for order sorting. Values are sorted from lowest to highest, independent of starting value (not restricted to start with 0 or 1)
+** `image`: Product images `[<url>, <dimensions>, <sorting-order>]`, MAY appear multiple times
+*** url: Direct image URL
+*** dimensions: Optional, in pixels, "<width>x<height>" format, if not present the place in the array should be respected by using an empty string `""`
+*** sorting order: Optional integer for order sorting. Values are sorted from lowest to highest, independent of starting value (not restricted to start with 0 or 1)
+
 * Physical Properties:
 
-* `weight`: Product weight `[<value>, <unit>]` using ISO 80000-1
-* `dim`: Dimensions `[<l>x<w>x<h>, <unit>]` using ISO 80000-1
-* Location:
+** `weight`: Product weight `[<value>, <unit>]` using ISO 80000-1
+** `dim`: Dimensions `[<l>x<w>x<h>, <unit>]` using ISO 80000-1
+** Location:
 
-* `location`: Human-readable location string or collection coordinates
-* `g`: Geohash for precise location lookup or collection coordinates
+*** `location`: Human-readable location string or collection coordinates
+*** `g`: Geohash for precise location lookup or collection coordinates
+
 * Organization:
 
-* `t`: Product categories/tags, MAY appear multiple times
-* `a`: Product reference "30402:<pubkey>:<d-tag>", MUST appear only once to reference parent products in a variable/variation configuration
-* `a`: Collection reference "30405:<pubkey>:<d-tag>", MAY appear multiple times
-* `shipping_option`: Shipping options, MAY appear multiple times
-** Format: "30406:<pubkey>:<d-tag>" for direct options
-** Format: "30405:<pubkey>:<d-tag>" for collection shipping
-** `extra-cost`: Optional third element in the array, to add extra cost (in the product's currency) for the shipping method. In case of reference a collection the extra cost should be applied to all shipping options from the collection.
+** `t`: Product categories/tags, MAY appear multiple times
+** `a`: Product reference "30402:<pubkey>:<d-tag>", MUST appear only once to reference parent products in a variable/variation configuration
+** `a`: Collection reference "30405:<pubkey>:<d-tag>", MAY appear multiple times
+** `shipping_option`: Shipping options, MAY appear multiple times
+*** Format: "30406:<pubkey>:<d-tag>" for direct options
+*** Format: "30405:<pubkey>:<d-tag>" for collection shipping
+*** `extra-cost`: _Optional_ third element in the array, to add extra cost (in the product's currency) for the shipping method. In case of reference a collection the extra cost should be applied to all shipping options from the collection.
+
 [source,jsonc]
 ----
 {
@@ -408,7 +436,7 @@ Standard Shipping:
 
 == 4. Order Communication Flow and Payment Processing
 
-Order processing and status updates use link:17.md[NIP-17] encrypted direct messages, with three event kinds serving different purposes:
+Order processing and status updates use link:https://github.com/nostr-protocol/nips/blob/master/17.md[NIP-17] encrypted direct messages, with three event kinds serving different purposes:
 
 * Kind `14`: Regular communication between parties
 * General inquiries and responses
@@ -517,6 +545,7 @@ Important considerations:
 * Bitcoin format: `["payment", "bitcoin", "<btc-address>"]`
 * eCash format: `["payment", "ecash", "<cashu-req>"]`
 * `expiration`: Include if the payment format has a defined expiration time
+
 [source,jsonc]
 ----
 {
@@ -643,6 +672,7 @@ Sent by merchant to provide delivery tracking and status information.
 * `tracking`: Carrier's tracking number
 * `carrier`: Name of shipping carrier
 * `eta`: Expected delivery time as unix timestamp
+
 [source,jsonc]
 ----
 {
@@ -700,6 +730,7 @@ Sent by buyer to confirm payment completion. The receipt can include proof of pa
 ** eCash: `["payment", "ecash", "<mint-url>", "<proof>"]`
 ** Fiat: `["payment", "fiat", "<some-id>", "<some-proof>"]`
 * `amount`: Payment amount
+
 [source,jsonc]
 ----
 {
@@ -760,6 +791,7 @@ Product reviews follow https://github.com/nostr-protocol/nips/blob/b1432b705f553
 ** "quality": Product quality
 ** "delivery": Shipping experience
 ** "communication": Merchant responsiveness
+
 [source,jsonc]
 ----
 {
@@ -780,7 +812,7 @@ Product reviews follow https://github.com/nostr-protocol/nips/blob/b1432b705f553
 }
 ----
 
-==== Rating Calculation
+=== Rating Calculation
 
 The final score combines the primary "thumb" rating (50% weight) with additional category ratings (50% combined weight):
 
@@ -788,7 +820,7 @@ The final score combines the primary "thumb" rating (50% weight) with additional
 Total Score = (Thumb × 0.5) + (0.5 × (∑(Category Ratings) ÷ Number of Categories))
 ----
 
-==== Notes
+=== Notes
 
 . Rating System:
 * Primary thumb rating is required, it determines the overall an overall rating.
@@ -832,7 +864,7 @@ If not present, it defaults to `manual`. The preferences are processed in this o
 ** Lightning (using merchant's `lud16` address)
 . *Service-Based Processing*
 * Merchant MUST set `payment_preference` to `manual`
-* Merchant SHOULD have a link:https://github.com/nostr-protocol/nips/blob/master/89.md[NIP-89] kind `31989` event recommending their preferred service
+* Merchant SHOULD have a link:https://github.com/nostr-protocol/nips/blob/master/89.md[NIP-89] kind link:https://github.com/nostr-protocol/nips/blob/master/89.md#recommendation-event[31989] event recommending their preferred service
 * Buyers can immediately request payment using the service
 * Service handles payment details and completion monitoring
 
