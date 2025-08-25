@@ -1,4 +1,4 @@
-== Marketplace Protocol
+= Marketplace Protocol
 :toc:
 :note-caption: note 👉
 
