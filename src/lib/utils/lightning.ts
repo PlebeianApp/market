@@ -48,7 +48,7 @@ export class LightningService {
 		'wss://nos.lol',
 		'wss://relay.nostr.net',
 		'wss://relay.minibits.cash',
-		'wss://relay.coinos.io/',
+		// 'wss://relay.coinos.io/',
 	]
 
 	/**
