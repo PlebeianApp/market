@@ -17,7 +17,7 @@ Implementations MUST support the following core features:
 * Product listing events (Kind: 30402)
 * Product collection events (Kind: 30405) for product-to-collection references
 * Merchant's preferences
-* Order communication and processing via link:17.md[NIP-17] encrypted messages
+* Order communication and processing via link:https://github.com/nostr-protocol/nips/blob/master/17.md[NIP-17] encrypted messages
 
 === Optional Components
 
@@ -26,7 +26,7 @@ These features MAY be implemented based on specific marketplace needs:
 * Extended product metadata
 * Shipping options (Kind: 30406)
 * Product collections (Kind: 30405)
-* Drafts following link:37.md[NIP-37]
+* Drafts following link:https://github.com/nostr-protocol/nips/blob/master/37.md[NIP-37]
 * Product reviews (Kind: 31555)
 * Service assisted order and payment processing
 
@@ -39,7 +39,7 @@ Watch-only clients are applications that allow users to display products without
 === Core Flows
 
 . Merchant Preferences
-* Application preferences via link:89.md[NIP-89]
+* Application preferences via link:https://github.com/nostr-protocol/nips/blob/master/89.md[NIP-89]
 * Payment method preferences via kind `0` tags
 . Order Processing
 * Encrypted buyer-seller communication
@@ -65,7 +65,7 @@ Standard e-commerce flow:
 
 Merchants MAY specify preferences for how they want users to interact with them, including which applications to use and payment methods to accept. These preferences ensure a consistent experience and streamline operations. Merchants indicate their preferences through two mechanisms:
 
-. Application Preferences (link:89.md[NIP-89]):
+. Application Preferences (link:https://github.com/nostr-protocol/nips/blob/master/89.md[NIP-89]):
 * The recommended application MUST publish a kind `31990` event
 * The merchant MUST publish a kind `31989` event recommending that application
 . Payment Preferences:
@@ -205,7 +205,7 @@ Products are the core element in a marketplace. Each product listing MUST contai
 
 === Product Collection (Kind: 30405)
 
-A specialized event type using link:51.md[NIP-51] like list format to organize related products into groups. Collections allow merchants or any user to create meaningful product groupings and share common attributes that products can also reference, establishing one-to-many relationships.
+A specialized event type using link:https://github.com/nostr-protocol/nips/blob/master/51.md[NIP-51] like list format to organize related products into groups. Collections allow merchants or any user to create meaningful product groupings and share common attributes that products can also reference, establishing one-to-many relationships.
 
 *Content*: Optional collection description
 
@@ -541,7 +541,7 @@ Important considerations:
 
 ===== Automatic Processing (buyer → merchant)
 
-In this mode, the merchant MUST set valid payment options in their kind:`0` event (such as `cashu` or `lud16`). The key difference is that the buyer initiates the payment request using information provided by the merchant. For merchants using `manual` payment preference, they SHOULD use link:89.md[NIP-89] to specify their preferred payment processing service, which can then automatically handle payment requests on their behalf, as described in the merchant preferences section above.
+In this mode, the merchant MUST set valid payment options in their kind:`0` event (such as `cashu` or `lud16`). The key difference is that the buyer initiates the payment request using information provided by the merchant. For merchants using `manual` payment preference, they SHOULD use link:https://github.com/nostr-protocol/nips/blob/master/89.md[NIP-89] to specify their preferred payment processing service, which can then automatically handle payment requests on their behalf, as described in the merchant preferences section above.
 
 [source,jsonc]
 ----
@@ -832,7 +832,7 @@ If not present, it defaults to `manual`. The preferences are processed in this o
 ** Lightning (using merchant's `lud16` address)
 . *Service-Based Processing*
 * Merchant MUST set `payment_preference` to `manual`
-* Merchant SHOULD have a link:89.md[NIP-89] kind `31989` event recommending their preferred service
+* Merchant SHOULD have a link:https://github.com/nostr-protocol/nips/blob/master/89.md[NIP-89] kind `31989` event recommending their preferred service
 * Buyers can immediately request payment using the service
 * Service handles payment details and completion monitoring
 
@@ -840,7 +840,7 @@ For all scenarios:
 
 * Buyer MUST send payment receipt after completion
 * Message direction is determined by `p` tag
-* Merchant's link:89.md[NIP-89] application preferences SHOULD be respected
+* Merchant's link:https://github.com/nostr-protocol/nips/blob/master/89.md[NIP-89] application preferences SHOULD be respected
 
 === Marketplace Application Role
 
@@ -864,4 +864,4 @@ This provides a smoother user experience while maintaining the ability for direc
 
 . Order IDs should be used consistently across all related messages.
 
-. Message threading should follow link:10.md[NIP-10] conventions when replies are needed.
+. Message threading should follow link:https://github.com/nostr-protocol/nips/blob/master/10.md[NIP-10] conventions when replies are needed.
