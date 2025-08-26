@@ -420,8 +420,8 @@ function DashboardInnerComponent() {
 										</div>
 									</CardTitle>
 								</CardHeader>
-								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
-									<div className="mt-2 space-y-3 h-full">
+								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
+									<div className="mt-2 space-y-3 h-full pb-6">
 										{visibleOrders.map((o, index) => {
 											const orderId = getOrderId(o.order) || o.order?.id || `order-${index}`
 											const amount = formatSats(getOrderAmount(o.order))
@@ -463,6 +463,7 @@ function DashboardInnerComponent() {
 												</Button>
 											</div>
 										)}
+										<div className="h-4" />
 									</div>
 								</CardContent>
 							</Card>
@@ -485,8 +486,8 @@ function DashboardInnerComponent() {
 										</Link>
 									</CardTitle>
 								</CardHeader>
-								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
-									<div className="space-y-3 h-full">
+								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
+									<div className="space-y-3 h-full pb-6">
 										{productsLoading ? (
 											<div className="text-sm text-muted-foreground h-full flex items-center justify-center">Loading products...</div>
 										) : products.length === 0 ? (
@@ -521,6 +522,7 @@ function DashboardInnerComponent() {
 												)
 											})
 										)}
+										<div className="h-4" />
 									</div>
 								</CardContent>
 							</Card>
@@ -586,8 +588,8 @@ function DashboardInnerComponent() {
 										<span className="text-sm text-muted-foreground">{conversationsLoading ? 'Loading…' : `${conversations.length}`}</span>
 									</CardTitle>
 								</CardHeader>
-								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
-									<div className="space-y-3 h-full">
+								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
+									<div className="space-y-3 h-full pb-6">
 										{conversations.map((c) => (
 											<Link
 												key={c.pubkey}
@@ -610,6 +612,7 @@ function DashboardInnerComponent() {
 												No messages yet.
 											</div>
 										)}
+										<div className="h-4" />
 									</div>
 								</CardContent>
 							</Card>
@@ -630,8 +633,8 @@ function DashboardInnerComponent() {
 										<span className="text-sm text-muted-foreground">{postsLoading ? 'Loading…' : `${posts.length}`}</span>
 									</CardTitle>
 								</CardHeader>
-								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
-									<div className="space-y-3 h-full">
+								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
+									<div className="space-y-3 h-full pb-6">
 										{posts.slice(0, visiblePostsCount).map((p) => (
 											<Link
 												key={p.id}
@@ -663,6 +666,7 @@ function DashboardInnerComponent() {
 												</Button>
 											</div>
 										)}
+										<div className="h-4" />
 									</div>
 								</CardContent>
 							</Card>
