@@ -300,7 +300,7 @@ function DashboardLayout() {
 						<button
 							onClick={dashboardActions.openSettings}
 							aria-label="Customize dashboard widgets"
-							className="absolute right-2 sm:right-3 md:right-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center text-black hover:opacity-70 transition-opacity z-20"
+							className="absolute right-2 sm:right-3 md:right-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center text-secondary hover:opacity-70 transition-opacity z-20"
 						>
 							<GearIcon className="w-6 h-6" />
 						</button>

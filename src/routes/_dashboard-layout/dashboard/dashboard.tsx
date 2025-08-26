@@ -679,7 +679,11 @@ function DashboardInnerComponent() {
 			{/* Dynamic Layout based on widget configuration */}
 			<div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0 overflow-hidden">
 				{/* Main grid area */}
-				<div className="lg:col-span-2 grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-2 gap-4 min-h-0">
+				<div className={cn(
+					// If right column is empty, let main grid span all 3 columns on desktop
+					layoutWidgets.right.length === 0 ? 'lg:col-span-3' : 'lg:col-span-2',
+					'grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-2 gap-4 min-h-0'
+				)}>
 					{/* Top Row */}
 					{layoutWidgets.top.map((widget, index) => (
 						<div key={widget.id} className={layoutWidgets.top.length === 1 ? 'lg:col-span-2' : 'lg:col-span-1'}>

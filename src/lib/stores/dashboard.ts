@@ -148,14 +148,34 @@ export const dashboardActions = {
 	moveWidget: (sourceSection: string, destSection: string, sourceIndex: number, destIndex: number) => {
 		dashboardStore.setState((state) => {
 			const updatedLayout: DashboardLayout = { ...state.layout }
-			const sourceArr = [...updatedLayout[sourceSection as keyof DashboardLayout]]
+			const isValidSection = (s: string): s is keyof DashboardLayout => ['top','bottom','right','hidden'].includes(s)
+			if (!isValidSection(sourceSection) || !isValidSection(destSection)) return state
+			const sourceArr = [...updatedLayout[sourceSection]]
 			if (sourceIndex < 0 || sourceIndex >= sourceArr.length) return state
 			const [movedWidget] = sourceArr.splice(sourceIndex, 1)
-			updatedLayout[sourceSection as keyof DashboardLayout] = sourceArr
+			updatedLayout[sourceSection] = sourceArr
 			if (!movedWidget) return { ...state, layout: updatedLayout }
-			const destArr = [...updatedLayout[destSection as keyof DashboardLayout]]
-			destArr.splice(destIndex, 0, movedWidget)
-			updatedLayout[destSection as keyof DashboardLayout] = destArr
+
+			let destArr = [...updatedLayout[destSection]]
+			// Clamp destIndex into range
+			const clampedIndex = Math.max(0, Math.min(destIndex, destArr.length))
+
+			const capacity = (destSection === 'top' || destSection === 'bottom') ? 2 : Infinity
+			if (destArr.length >= capacity && capacity !== Infinity) {
+				// Replace at index; push replaced to hidden
+				const replaceIndex = Math.max(0, Math.min(clampedIndex, capacity - 1))
+				const replaced = destArr[replaceIndex]
+				destArr[replaceIndex] = movedWidget
+				updatedLayout[destSection] = destArr
+				if (replaced) {
+					updatedLayout.hidden = [...updatedLayout.hidden, replaced]
+				}
+			} else {
+				// Insert at target position
+				destArr.splice(clampedIndex, 0, movedWidget)
+				updatedLayout[destSection] = destArr
+			}
+
 			return { ...state, layout: updatedLayout }
 		})
 	},
@@ -174,6 +194,10 @@ export const dashboardActions = {
 
 	resetToDefaults: () => {
 		dashboardStore.setState({ widgets: defaultWidgets, layout: defaultLayout, isOpen: false })
+	},
+
+	replaceLayout: (layout: DashboardLayout) => {
+		dashboardStore.setState((state) => ({ ...state, layout }))
 	},
 
 	getWidgetById: (widgetId: string) => {
