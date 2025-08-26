@@ -1,15 +1,22 @@
 import { NDKEvent } from '@nostr-dev-kit/ndk'
-import { getCollectionImages, getCollectionTitle } from '@/queries/collections.tsx'
+import { getCollectionImages, getCollectionSummary, getCollectionTitle } from '@/queries/collections.tsx'
 import { useEffect, useState } from 'react'
 import { ndkActions } from '@/lib/stores/ndk.ts'
 import { uiActions } from '@/lib/stores/ui'
 import { Link, useLocation } from '@tanstack/react-router'
+import { useProfileName } from '@/queries/profiles'
+import { UserWithAvatar } from '@/components/UserWithAvatar.tsx'
+import { profileByIdentifierQueryOptions } from '@/queries/profiles'
+import { useSuspenseQuery } from '@tanstack/react-query'
 
 export function CollectionCard({ collection }: { collection: NDKEvent }) {
 	const title = getCollectionTitle(collection)
+	const pubkey = collection.pubkey
+	const summary = getCollectionSummary(collection)
 	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(null)
 	const [isOwnCollection, setIsOwnCollection] = useState(false)
 	const images = getCollectionImages(collection)
+	const { data: name, isLoading } = useProfileName(pubkey)
 
 	// Check if current user is the creator of the collection
 	useEffect(() => {
@@ -27,6 +34,8 @@ export function CollectionCard({ collection }: { collection: NDKEvent }) {
 		// This will also store it as originalResultsPath if not already set
 		uiActions.setCollectionSourcePath(location.pathname)
 	}
+	const { data: profileData } = useSuspenseQuery(profileByIdentifierQueryOptions(pubkey))
+	const { profile, user } = profileData || {}
 
 	return (
 		<div className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col" data-testid="product-card">
@@ -49,16 +58,30 @@ export function CollectionCard({ collection }: { collection: NDKEvent }) {
 				)}
 			</Link>
 
-			<div className="p-2 flex flex-col gap-2 flex-grow">
+			<div className="p-4 flex flex-col gap-2 flex-grow">
 				{/* Product title */}
-				<Link to={`/products/${collection.id}`} onClick={handleCollectionClick}>
-					<h2 className="text-sm font-medium border-b border-[var(--light-gray)] pb-2 overflow-hidden text-ellipsis whitespace-nowrap">
+				<Link to={`/collection/${collection.id}`} onClick={handleCollectionClick}>
+					<h2 className="text-lg font-black border-b border-[var(--light-gray)] pb-2 overflow-hidden text-ellipsis whitespace-nowrap">
 						{title}
 					</h2>
+					<div className="text-md font-medium">{summary}</div>
 				</Link>
 
-				{/*/!* Add a flex spacer to push the button to the bottom *!/*/}
-				{/*<div className="flex-grow"></div>*/}
+				{/* Add a flex spacer to push the button to the bottom */}
+				<div className="flex-grow"></div>
+				<Link to={`/profile/${pubkey}`}>
+					<div className="text-sm flex flex-row items-center gap-2">
+						by{' '}
+						{profile?.picture && (
+							<img
+								src={profile.picture}
+								alt={profile.name || 'Profile picture'}
+								className="rounded-full w-1 h-1 sm:w-6 sm:h-6 border-2 border-black"
+							/>
+						)}
+						{profile?.name && <div>{profile.name}</div>}
+					</div>
+				</Link>
 			</div>
 		</div>
 	)

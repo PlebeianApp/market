@@ -18,7 +18,7 @@ const CollectionProductReferenceTagSchema = z.tuple([
 // Optional Tags
 export const CollectionImageTagSchema = z.tuple([z.literal('image'), z.string().url()])
 
-const CollectionSummaryTagSchema = z.tuple([z.literal('summary'), z.string()])
+export const CollectionSummaryTagSchema = z.tuple([z.literal('summary'), z.string()])
 
 const CollectionLocationTagSchema = z.tuple([z.literal('location'), z.string()])
 

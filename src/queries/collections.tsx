@@ -1,4 +1,4 @@
-import { CollectionTitleTagSchema, CollectionImageTagSchema } from '@/lib/schemas/productCollection.ts'
+import { CollectionTitleTagSchema, CollectionImageTagSchema, CollectionSummaryTagSchema } from '@/lib/schemas/productCollection.ts'
 import { ndkActions } from '@/lib/stores/ndk'
 import type { NDKFilter, NDKKind } from '@nostr-dev-kit/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -65,6 +65,12 @@ export const fetchCollection = async (id: string) => {
  */
 export const getCollectionTitle = (event: NDKEvent | null): z.infer<typeof CollectionTitleTagSchema>[1] =>
 	event?.tags.find((t) => t[0] === 'title')?.[1] || 'Untitled Collection'
+
+/**
+ * Get the collection summary from an event
+ */
+export const getCollectionSummary = (event: NDKEvent | null): z.infer<typeof CollectionSummaryTagSchema>[1] =>
+	event?.tags.find((t) => t[0] === 'summary')?.[1] || 'No summary available.'
 
 /**
  * Gets the collection ID from an event

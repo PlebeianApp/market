@@ -239,11 +239,14 @@ function CommunityRoute() {
 			)}
 
 			<div className="px-8 py-4">
-				<ItemGrid title="Community">
+				<ItemGrid title="Collections">
 					{collections.map((collection) => (
 						<CollectionCard key={collection.id} collection={collection} />
 					))}
-				</ItemGrid>
+					<ItemGrid title="Merchants">
+						insert merchants here
+					</ItemGrid>
+		</ItemGrid>
 			</div>
 		</div>
 	)
