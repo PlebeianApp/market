@@ -268,17 +268,18 @@ function DashboardInnerComponent() {
 		const el = chartContainerRef.current
 		const ro = new ResizeObserver(() => {
 			const w = Math.max(200, el.clientWidth)
-			// Clamp height on small screens to avoid growth loops
-			const isSmallScreen = window.matchMedia('(max-width: 1023px)').matches
 			const measured = Math.max(150, el.clientHeight)
-			const h = isSmallScreen ? Math.min(measured, 240) : measured
+			const fallbackH = Math.max(200, Math.round(w * 0.5))
+			const h = measured > 0 ? measured : fallbackH
 			setChartWidth(w)
 			setChartHeight(h)
 		})
 		ro.observe(el)
-		setChartWidth(Math.max(200, el.clientWidth))
+		const initW = Math.max(200, el.clientWidth)
 		const initialMeasured = Math.max(150, el.clientHeight)
-		setChartHeight(window.matchMedia('(max-width: 1023px)').matches ? Math.min(initialMeasured, 240) : initialMeasured)
+		const initFallbackH = Math.max(200, Math.round(initW * 0.5))
+		setChartWidth(initW)
+		setChartHeight(initialMeasured > 0 ? initialMeasured : initFallbackH)
 		return () => ro.disconnect()
 	}, [])
 
@@ -553,7 +554,7 @@ function DashboardInnerComponent() {
 								</CardHeader>
 								<CardContent className="flex-1 min-h-0 overflow-hidden p-2">
 									<div className="h-full">
-										<div ref={chartContainerRef} className="relative h-full w-full">
+										<div ref={chartContainerRef} className="relative h-full w-full min-h-[220px]">
 											<UplotReact options={{ ...(uplotOpts as any), width: chartWidth, height: chartHeight }} data={uplotData as any} />
 											{tooltip.show && (
 												<div

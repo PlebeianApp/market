@@ -147,8 +147,8 @@ export const DashboardSettingsModal: React.FC = () => {
 				{/* Scrollable Content */}
 				<div className="flex-1 overflow-y-auto px-6 py-4 bg-white">
 					<div className="space-y-6">
-						{/* Global instruction heading */}
-						<SectionHeading title="Top to bottom" />
+						{/* Global instruction heading (mobile only) */}
+						{isMobile && <SectionHeading title="Top to bottom" />}
 						{/* Top 2 columns */}
 						<div>
 							{!isMobile && <SectionHeading title="Top 2 columns" />}
