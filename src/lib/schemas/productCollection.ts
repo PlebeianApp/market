@@ -7,7 +7,7 @@ import { addressableFormat, geohash } from './common'
 
 // Required Tags
 const CollectionIdTagSchema = z.tuple([z.literal('d'), z.string()])
-const CollectionTitleTagSchema = z.tuple([z.literal('title'), z.string()])
+export const CollectionTitleTagSchema = z.tuple([z.literal('title'), z.string()])
 const CollectionProductReferenceTagSchema = z.tuple([
 	z.literal('a'),
 	addressableFormat.refine((val) => val.startsWith('30402:'), {
@@ -16,7 +16,7 @@ const CollectionProductReferenceTagSchema = z.tuple([
 ])
 
 // Optional Tags
-const CollectionImageTagSchema = z.tuple([z.literal('image'), z.string().url()])
+export const CollectionImageTagSchema = z.tuple([z.literal('image'), z.string().url()])
 
 const CollectionSummaryTagSchema = z.tuple([z.literal('summary'), z.string()])
 
