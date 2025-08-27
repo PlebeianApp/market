@@ -243,10 +243,8 @@ function CommunityRoute() {
 					{collections.map((collection) => (
 						<CollectionCard key={collection.id} collection={collection} />
 					))}
-					<ItemGrid title="Merchants">
-						insert merchants here
-					</ItemGrid>
-		</ItemGrid>
+				</ItemGrid>
+				<ItemGrid title="Merchants">insert merchants here</ItemGrid>
 			</div>
 		</div>
 	)

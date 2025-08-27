@@ -41,7 +41,7 @@ export function CollectionCard({ collection }: { collection: NDKEvent }) {
 		<div className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col" data-testid="product-card">
 			{/* Square aspect ratio container for image */}
 			<Link
-				to={`/collections/${collection.id}`}
+				to={`/collection/${collection.id}`}
 				className="relative aspect-square overflow-hidden border-b border-zinc-800 block"
 				onClick={handleCollectionClick}
 			>
@@ -67,7 +67,7 @@ export function CollectionCard({ collection }: { collection: NDKEvent }) {
 					<div className="text-md font-medium">{summary}</div>
 				</Link>
 
-				{/* Add a flex spacer to push the button to the bottom */}
+				{/* Add a flex spacer to push the collection author to the bottom */}
 				<div className="flex-grow"></div>
 				<Link to={`/profile/${pubkey}`}>
 					<div className="text-sm flex flex-row items-center gap-2">
@@ -79,7 +79,7 @@ export function CollectionCard({ collection }: { collection: NDKEvent }) {
 								className="rounded-full w-1 h-1 sm:w-6 sm:h-6 border-2 border-black"
 							/>
 						)}
-						{profile?.name && <div>{profile.name}</div>}
+						{profile?.name && <div className="truncate">{profile.name}</div>}
 					</div>
 				</Link>
 			</div>

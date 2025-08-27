@@ -14,11 +14,13 @@ import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as DashboardLayoutRouteImport } from './routes/_dashboard-layout'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProductsIndexRouteImport } from './routes/products.index'
+import { Route as CollectionIndexRouteImport } from './routes/collection.index'
 import { Route as PostsIndexRouteImport } from './routes/posts.index'
 import { Route as NostrIndexRouteImport } from './routes/nostr.index'
 import { Route as CommunityIndexRouteImport } from './routes/community.index'
 import { Route as ProfileProfileIdRouteImport } from './routes/profile.$profileId'
 import { Route as ProductsProductIdRouteImport } from './routes/products.$productId'
+import { Route as CollectionCollectionIdRouteImport } from './routes/collection.$collectionId'
 import { Route as PostsPostIdRouteImport } from './routes/posts.$postId'
 import { Route as DashboardLayoutDashboardIndexRouteImport } from './routes/_dashboard-layout/dashboard/index'
 import { Route as DashboardLayoutDashboardSalesSalesRouteImport } from './routes/_dashboard-layout/dashboard/sales/sales'
@@ -89,6 +91,11 @@ const ProfileProfileIdRoute = ProfileProfileIdRouteImport.update({
 const ProductsProductIdRoute = ProductsProductIdRouteImport.update({
 	id: '/products/$productId',
 	path: '/products/$productId',
+	getParentRoute: () => rootRouteImport,
+} as any)
+const CollectionCollectionIdRoute = CollectionCollectionIdRouteImport.update({
+	id: '/collection/$collectionId',
+	path: '/collection/$collectionId',
 	getParentRoute: () => rootRouteImport,
 } as any)
 const PostsPostIdRoute = PostsPostIdRouteImport.update({
@@ -209,6 +216,7 @@ export interface FileRoutesByFullPath {
 	'/setup': typeof SetupRoute
 	'/posts/$postId': typeof PostsPostIdRoute
 	'/products/$productId': typeof ProductsProductIdRoute
+	'/collection/$collectionId': typeof CollectionCollectionIdRoute
 	'/profile/$profileId': typeof ProfileProfileIdRoute
 	'/community': typeof CommunityIndexRoute
 	'/nostr': typeof NostrIndexRoute
@@ -242,6 +250,7 @@ export interface FileRoutesByTo {
 	'/setup': typeof SetupRoute
 	'/posts/$postId': typeof PostsPostIdRoute
 	'/products/$productId': typeof ProductsProductIdRoute
+	'/collection/$collectionId': typeof CollectionCollectionIdRoute
 	'/profile/$profileId': typeof ProfileProfileIdRoute
 	'/community': typeof CommunityIndexRoute
 	'/nostr': typeof NostrIndexRoute
@@ -277,6 +286,7 @@ export interface FileRoutesById {
 	'/setup': typeof SetupRoute
 	'/posts/$postId': typeof PostsPostIdRoute
 	'/products/$productId': typeof ProductsProductIdRoute
+	'/collection/$collectionId': typeof CollectionCollectionIdRoute
 	'/profile/$profileId': typeof ProfileProfileIdRoute
 	'/community/': typeof CommunityIndexRoute
 	'/nostr/': typeof NostrIndexRoute
@@ -414,6 +424,7 @@ export interface RootRouteChildren {
 	SetupRoute: typeof SetupRoute
 	PostsPostIdRoute: typeof PostsPostIdRoute
 	ProductsProductIdRoute: typeof ProductsProductIdRoute
+	CollectionCollectionIdRoute: typeof CollectionCollectionIdRoute
 	ProfileProfileIdRoute: typeof ProfileProfileIdRoute
 	CommunityIndexRoute: typeof CommunityIndexRoute
 	NostrIndexRoute: typeof NostrIndexRoute
@@ -737,6 +748,7 @@ const rootRouteChildren: RootRouteChildren = {
 	SetupRoute: SetupRoute,
 	PostsPostIdRoute: PostsPostIdRoute,
 	ProductsProductIdRoute: ProductsProductIdRoute,
+	CollectionCollectionIdRoute: CollectionCollectionIdRoute,
 	ProfileProfileIdRoute: ProfileProfileIdRoute,
 	CommunityIndexRoute: CommunityIndexRoute,
 	NostrIndexRoute: NostrIndexRoute,
