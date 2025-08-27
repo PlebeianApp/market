@@ -243,7 +243,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 											Pay with NWC
 										</Button>
 									)}
-									<Button onClick={() => setStep('generateInvoice')} className={hasNwc ? "flex-1" : "w-full"} variant="focus">
+									<Button onClick={() => setStep('generateInvoice')} className={hasNwc ? 'flex-1' : 'w-full'} variant="focus">
 										<Zap className="mr-2 h-4 w-4" />
 										Generate Invoice
 									</Button>

@@ -325,14 +325,14 @@ function MakingPaymentsComponent() {
 				)}
 
 				{combinedWallets.length === 0 && !isAddingWallet ? (
-									<Card className="fg-layer-elevated border border-black">
-					<CardContent className="py-10 flex flex-col items-center justify-center">
-						<p className="text-center text-muted-foreground mb-4">No wallets configured yet. Add a wallet to make payments.</p>
-						<Button onClick={handleAddWalletClick}>
-							<PlusIcon className="h-4 w-4 mr-2" /> Add Wallet
-						</Button>
-					</CardContent>
-				</Card>
+					<Card className="fg-layer-elevated border border-black">
+						<CardContent className="py-10 flex flex-col items-center justify-center">
+							<p className="text-center text-muted-foreground mb-4">No wallets configured yet. Add a wallet to make payments.</p>
+							<Button onClick={handleAddWalletClick}>
+								<PlusIcon className="h-4 w-4 mr-2" /> Add Wallet
+							</Button>
+						</CardContent>
+					</Card>
 				) : (
 					<>
 						<div ref={animationParent} className="space-y-4">
@@ -693,7 +693,10 @@ function AddWalletForm({ onSave, onCancel, userPubkeyPresent, isSaving }: AddWal
 			</CardHeader>
 			<CardContent className="space-y-4">
 				<div className="flex space-x-2">
-					<Button onClick={handlePaste} className="flex-1 bg-[var(--focus)] hover:bg-transparent text-[var(--focus-foreground)] hover:text-black border-2 border-[var(--focus-border)] hover:border-black transition-all duration-200">
+					<Button
+						onClick={handlePaste}
+						className="flex-1 bg-[var(--focus)] hover:bg-transparent text-[var(--focus-foreground)] hover:text-black border-2 border-[var(--focus-border)] hover:border-black transition-all duration-200"
+					>
 						Paste
 					</Button>
 					<Button onClick={handleScan} className="flex-1">

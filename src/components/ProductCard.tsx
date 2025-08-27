@@ -45,12 +45,12 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 		if (isOwnProduct) return // Don't allow adding own products
 
 		setIsAddingToCart(true)
-		
+
 		try {
 			const userPubkey = await ndk.getUser()
 			if (!userPubkey) return
 			cart.addProduct(userPubkey.pubkey, product)
-			
+
 			// Show confirmation animation
 			setShowConfirmation(true)
 			setTimeout(() => setShowConfirmation(false), 1500) // Hide after 1.5 seconds
@@ -119,14 +119,9 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 				<div className="flex gap-2">
 					<div ref={parent} className="flex-grow transition-all duration-300 ease-in-out">
 						{isInCart ? (
-							<div
-								key="cart-state"
-								className="flex gap-2 w-full"
-							>
+							<div key="cart-state" className="flex gap-2 w-full">
 								{/* Show current quantity */}
-								<div
-									className="flex items-center justify-center px-2 h-10 bg-pink-100 text-pink-800 border-2 border-pink-300 rounded-lg text-sm font-medium transition-all duration-200 ease-in-out"
-								>
+								<div className="flex items-center justify-center px-2 h-10 bg-pink-100 text-pink-800 border-2 border-pink-300 rounded-lg text-sm font-medium transition-all duration-200 ease-in-out">
 									{cartQuantity}
 								</div>
 								{/* Add more button */}
@@ -140,10 +135,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 								</Button>
 							</div>
 						) : (
-							<div
-								key="add-state"
-								className="w-full"
-							>
+							<div key="add-state" className="w-full">
 								<Button
 									variant={isOwnProduct ? 'own-product' : 'primary'}
 									className={`py-3 px-4 rounded-lg w-full font-medium transition-all duration-300 ${
@@ -152,13 +144,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 									onClick={handleAddToCart}
 									disabled={isOwnProduct || isAddingToCart}
 								>
-									{isOwnProduct
-										? 'Your Item'
-										: showConfirmation
-											? '✓ Added!'
-											: isAddingToCart
-												? 'Adding...'
-												: 'Add to Cart'}
+									{isOwnProduct ? 'Your Item' : showConfirmation ? '✓ Added!' : isAddingToCart ? 'Adding...' : 'Add to Cart'}
 								</Button>
 							</div>
 						)}

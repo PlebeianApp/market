@@ -585,14 +585,17 @@ function RouteComponent() {
 													) : (
 														<>
 															<div className="w-2 h-2 bg-gray-400 rounded-full" />
-															<span className="text-gray-600">Fast Payments available with NWC, setup in <Link to="/dashboard/account/making-payments" className="text-blue-600 hover:underline">settings</Link></span>
+															<span className="text-gray-600">
+																Fast Payments available with NWC, setup in{' '}
+																<Link to="/dashboard/account/making-payments" className="text-blue-600 hover:underline">
+																	settings
+																</Link>
+															</span>
 														</>
 													)}
 												</div>
 											</div>
-											{nwcEnabled && (
-												<p className="text-xs text-gray-500 mt-1">Use NWC to action all payments at once</p>
-											)}
+											{nwcEnabled && <p className="text-xs text-gray-500 mt-1">Use NWC to action all payments at once</p>}
 										</div>
 
 										<PaymentSummary invoices={invoices} currentIndex={currentInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
@@ -642,7 +645,12 @@ function RouteComponent() {
 											) : (
 												<>
 													<div className="w-2 h-2 bg-gray-400 rounded-full" />
-													<span className="text-gray-600">Fast Payments available with NWC, setup in <Link to="/dashboard/account/making-payments" className="text-blue-600 hover:underline">settings</Link></span>
+													<span className="text-gray-600">
+														Fast Payments available with NWC, setup in{' '}
+														<Link to="/dashboard/account/making-payments" className="text-blue-600 hover:underline">
+															settings
+														</Link>
+													</span>
 												</>
 											)}
 										</div>
