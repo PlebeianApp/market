@@ -481,9 +481,6 @@ function DashboardInnerComponent() {
 								<CardHeader className="px-4 py-3">
 									<CardTitle className="flex items-center justify-between">
 										<span>Top Products</span>
-										<Link to="/dashboard/products/products" className="text-sm text-muted-foreground hover:text-pink-500 transition-colors">
-											View All
-										</Link>
 									</CardTitle>
 								</CardHeader>
 								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
