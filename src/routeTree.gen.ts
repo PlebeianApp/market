@@ -222,6 +222,7 @@ export interface FileRoutesByFullPath {
 	'/nostr': typeof NostrIndexRoute
 	'/posts': typeof PostsIndexRoute
 	'/products': typeof ProductsIndexRoute
+	'/collection': typeof CollectionIndexRoute
 	'/dashboard': typeof DashboardLayoutDashboardIndexRoute
 	'/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
 	'/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
@@ -256,6 +257,7 @@ export interface FileRoutesByTo {
 	'/nostr': typeof NostrIndexRoute
 	'/posts': typeof PostsIndexRoute
 	'/products': typeof ProductsIndexRoute
+	'/collection': typeof ProductsIndexRoute
 	'/dashboard': typeof DashboardLayoutDashboardIndexRoute
 	'/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
 	'/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
@@ -292,6 +294,7 @@ export interface FileRoutesById {
 	'/nostr/': typeof NostrIndexRoute
 	'/posts/': typeof PostsIndexRoute
 	'/products/': typeof ProductsIndexRoute
+	'/collection/': typeof CollectionIndexRoute
 	'/_dashboard-layout/dashboard/': typeof DashboardLayoutDashboardIndexRoute
 	'/_dashboard-layout/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
 	'/_dashboard-layout/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
@@ -430,6 +433,7 @@ export interface RootRouteChildren {
 	NostrIndexRoute: typeof NostrIndexRoute
 	PostsIndexRoute: typeof PostsIndexRoute
 	ProductsIndexRoute: typeof ProductsIndexRoute
+	CollectionIndexRoute: typeof CollectionIndexRoute
 }
 
 declare module '@tanstack/react-router' {

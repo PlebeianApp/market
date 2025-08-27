@@ -179,7 +179,7 @@ function CommunityRoute() {
 			</div>
 
 			<div className="flex flex-col gap-6">
-				<Link to={`/collections/${currentCollectionId}`}>
+				<Link to={`/collection/${currentCollectionId}`}>
 					<Button variant="secondary" size="lg">
 						View Collection
 					</Button>
