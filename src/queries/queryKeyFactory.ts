@@ -51,6 +51,9 @@ export const authorKeys = {
 export const configKeys = {
 	all: ['config'] as const,
 	appRelay: () => [...configKeys.all, 'appRelay'] as const,
+	admins: (appPubkey: string) => [...configKeys.all, 'admins', appPubkey] as const,
+	editors: (appPubkey: string) => [...configKeys.all, 'editors', appPubkey] as const,
+	blacklist: (appPubkey: string) => [...configKeys.all, 'blacklist', appPubkey] as const,
 } as const
 
 export const appSettingsKeys = {

@@ -100,41 +100,32 @@ async function createBanListEvent(signer: NDKPrivateKeySigner) {
 	console.log('Published ban list event')
 }
 
-async function createUserRolesEvent(signer: NDKPrivateKeySigner) {
-	// EXTECTED ITEMS: d tag `roles/admins`, `roles/editors`, `roles/plebs`
-	// const userRoles = UserRolesSchema.parse({
-	// 	roles: {
-	// 		admins: [devUser1.pk, devUser2.pk],
-	// 		editors: [],
-	// 		plebs: [devUser3.pk, devUser4.pk, devUser5.pk],
-	// 	},
-	// })
+async function createRoleListsEvent(signer: NDKPrivateKeySigner) {
+	// Create admin list event (kind 30000) with d tag 'admins'
+	// This follows the new admin structure where:
+	// - devUser1 is the owner (first admin in the list)
+	// - devUser2 is an admin
+	// - No plebs role needed
 
-	const userRolesAdminsEvent = new NDKEvent(ndk)
-	userRolesAdminsEvent.kind = 30000
-	// userRolesAdminsEvent.content = JSON.stringify(userRoles)
-	userRolesAdminsEvent.tags.push(['d', 'roles/admins'])
-	userRolesAdminsEvent.tags.push(['p', devUser1.pk])
-	userRolesAdminsEvent.tags.push(['p', devUser2.pk])
-	await userRolesAdminsEvent.sign(signer)
-	await userRolesAdminsEvent.publish()
-	console.log('Published user admin roles event')
+	const adminListEvent = new NDKEvent(ndk)
+	adminListEvent.kind = 30000
+	adminListEvent.tags.push(['d', 'admins'])
+	adminListEvent.tags.push(['p', devUser1.pk]) // Owner (first admin)
+	adminListEvent.tags.push(['p', devUser2.pk]) // Admin
 
-	const userRolesEditorsEvent = new NDKEvent(ndk)
-	userRolesEditorsEvent.kind = 30000
-	userRolesEditorsEvent.tags.push(['d', 'roles/editors'])
-	userRolesEditorsEvent.tags.push(['p', devUser3.pk])
-	await userRolesEditorsEvent.sign(signer)
-	await userRolesEditorsEvent.publish()
-	console.log('Published user editor roles event')
+	await adminListEvent.sign(signer)
+	await adminListEvent.publish()
+	console.log('Published admin list event with devUser1 as owner and devUser2 as admin')
 
-	const userRolesPlebsEvent = new NDKEvent(ndk)
-	userRolesPlebsEvent.kind = 30000
-	userRolesPlebsEvent.tags.push(['d', 'roles/plebs'])
-	userRolesPlebsEvent.tags.push(['p', devUser4.pk])
-	await userRolesPlebsEvent.sign(signer)
-	await userRolesPlebsEvent.publish()
-	console.log('Published user plebs roles event')
+	// Create editors list event (kind 30000) with d tag 'editors'
+	const editorsListEvent = new NDKEvent(ndk)
+	editorsListEvent.kind = 30000
+	editorsListEvent.tags.push(['d', 'editors'])
+	editorsListEvent.tags.push(['p', devUser3.pk]) // Editor
+
+	await editorsListEvent.sign(signer)
+	await editorsListEvent.publish()
+	console.log('Published editors list event with devUser3 as editor')
 }
 
 async function initializeEvents() {
@@ -152,8 +143,8 @@ async function initializeEvents() {
 	console.log('Creating ban list event...')
 	await createBanListEvent(signer)
 
-	console.log('Creating user roles event...')
-	await createUserRolesEvent(signer)
+	console.log('Creating admin and editor lists...')
+	await createRoleListsEvent(signer)
 
 	console.log('Initialization complete!')
 	process.exit(0)

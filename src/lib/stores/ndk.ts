@@ -1,22 +1,10 @@
-import { defaultRelaysUrls } from '@/lib/constants'
-import type { NDKSigner, NDKUser, NDKEvent, NDKSubscription } from '@nostr-dev-kit/ndk'
-import NDK, { NDKKind, NDKRelay } from '@nostr-dev-kit/ndk'
+import { defaultRelaysUrls, ZAP_RELAYS } from '@/lib/constants'
+import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
+import type { NDKEvent, NDKSigner, NDKUser } from '@nostr-dev-kit/ndk'
+import NDK, { NDKKind } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { configStore } from './config'
-import { walletActions, type Wallet } from './wallet'
-import { fetchUserNwcWallets, fetchNwcWalletBalance } from '@/queries/wallet'
-import { walletStore } from './wallet'
-
-// Dedicated zap detection relays
-export const ZAP_RELAYS = [
-	'wss://relay.damus.io',
-	'wss://relay.nostr.band',
-	'wss://nos.lol',
-	'wss://relay.nostr.net',
-	'wss://relay.minibits.cash',
-	'wss://relay.coinos.io/',
-	// 'ws://localhost:10547',
-]
+import { walletActions, walletStore, type Wallet } from './wallet'
 
 export interface NDKState {
 	ndk: NDK | null
@@ -56,7 +44,6 @@ export const ndkActions = {
 			explicitRelayUrls: explicitRelays,
 		})
 
-		// Initialize zap NDK with dedicated zap relays
 		const zapNdk = new NDK({
 			explicitRelayUrls: ZAP_RELAYS,
 		})

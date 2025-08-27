@@ -4,7 +4,7 @@ import { Relay } from 'nostr-tools'
 import { getPublicKey, verifyEvent, type Event } from 'nostr-tools/pure'
 import index from './index.html'
 import { fetchAppSettings } from './lib/appSettings'
-import { eventHandler } from './lib/wsSignerEventHandler'
+import { getEventHandler } from './server'
 import { join } from 'path'
 import { file } from 'bun'
 
@@ -42,7 +42,13 @@ async function initializeAppSettings() {
 
 export type NostrMessage = ['EVENT', Event]
 
-eventHandler.initialize(process.env.APP_PRIVATE_KEY || '', []).catch((error) => console.error(error))
+getEventHandler()
+	.initialize({
+		appPrivateKey: process.env.APP_PRIVATE_KEY || '',
+		adminPubkeys: [],
+		relayUrl: RELAY_URL,
+	})
+	.catch((error) => console.error(error))
 
 // Handle static files from the public directory
 const serveStatic = async (path: string) => {
@@ -110,13 +116,12 @@ export const server = serve({
 
 					if (!verifyEvent(data[1] as Event)) throw Error('Unable to verify event')
 
-					const resignedEvent = eventHandler.handleEvent(data[1])
+					const resignedEvent = getEventHandler().handleEvent(data[1])
 
 					if (resignedEvent) {
-						// If event was from admin and successfully resigned
 						const relay = await Relay.connect(RELAY_URL as string)
 						await relay.publish(resignedEvent as Event)
-						const okResponse = ['OK', data[1].id, true, '']
+						const okResponse = ['OK', resignedEvent.id, true, '']
 						ws.send(JSON.stringify(okResponse))
 					} else {
 						// If event was not from admin

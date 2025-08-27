@@ -1,11 +1,13 @@
 type NavItem = {
 	title: string
 	path: string
+	adminOnly?: boolean // New optional property to mark admin-only items
 }
 
 type NavSection = {
 	title: string
 	items: NavItem[]
+	adminOnly?: boolean // New optional property to mark admin-only sections
 }
 
 export const dashboardNavigation: NavSection[] = [
@@ -65,6 +67,27 @@ export const dashboardNavigation: NavSection[] = [
 			{
 				title: '🌐 Network',
 				path: '/dashboard/account/network',
+			},
+		],
+	},
+	{
+		title: 'APP SETTINGS',
+		adminOnly: true, // Only show this section to admins
+		items: [
+			{
+				title: '⚙️ App Miscellaneous',
+				path: '/dashboard/app-settings/app-miscelleneous',
+				adminOnly: true,
+			},
+			{
+				title: '👥 Team',
+				path: '/dashboard/app-settings/team',
+				adminOnly: true,
+			},
+			{
+				title: '🚫 Blacklists',
+				path: '/dashboard/app-settings/blacklists',
+				adminOnly: true,
 			},
 		],
 	},

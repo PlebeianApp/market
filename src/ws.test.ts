@@ -1,30 +1,29 @@
 import { expect, test, describe, beforeEach, afterEach } from 'bun:test'
 import { finalizeEvent, generateSecretKey } from 'nostr-tools/pure'
-import { WebSocket } from 'ws'
 import { devUser1 } from './lib/fixtures'
-import { eventHandler } from './lib/wsSignerEventHandler'
+import { getEventHandler } from './server'
 import { server, type NostrMessage } from './index.tsx'
 
 describe('WebSocket Server', () => {
 	const WS_URL = 'ws://localhost:3000'
 	const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
 
-	let ws: WebSocket
+	let ws: any
 
 	const waitForMessage = () => {
 		return new Promise<any>((resolve) => {
-			ws.once('message', (data) => {
+			ws.once('message', (data: any) => {
 				resolve(JSON.parse(data.toString()))
 			})
 		})
 	}
 
 	beforeEach(async () => {
-		ws = new WebSocket(WS_URL)
+		ws = new globalThis.WebSocket(WS_URL)
 		await new Promise((resolve) => ws.once('open', resolve))
 		await new Promise((resolve) => setTimeout(resolve, 1000))
 		server.ref
-		eventHandler.addAdmin(devUser1.pk)
+		getEventHandler().addAdmin(devUser1.pk)
 	})
 
 	afterEach(() => {
