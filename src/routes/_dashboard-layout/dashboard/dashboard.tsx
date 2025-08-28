@@ -496,7 +496,7 @@ function DashboardInnerComponent() {
 												</Button>
 											</div>
 										)}
-										<div className="h-2 lg:h-4" />
+										<div className="h-0 lg:h-4" />
 									</div>
 								</CardContent>
 							</Card>
@@ -517,7 +517,7 @@ function DashboardInnerComponent() {
 									</CardTitle>
 								</CardHeader>
 								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
-									<div className="space-y-3 h-full pb-6">
+									<div className="space-y-3 h-full">
 										{productsLoading ? (
 											<div className="text-sm text-muted-foreground h-full flex items-center justify-center">Loading products...</div>
 										) : products.length === 0 ? (
@@ -552,7 +552,7 @@ function DashboardInnerComponent() {
 												)
 											})
 										)}
-										<div className="h-4" />
+										<div className="h-0 lg:h-4" />
 									</div>
 								</CardContent>
 							</Card>
@@ -619,7 +619,7 @@ function DashboardInnerComponent() {
 									</CardTitle>
 								</CardHeader>
 								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
-									<div className="space-y-3 h-full pb-6">
+									<div className="space-y-3 h-full">
 										{conversations.map((c) => (
 											<Link
 												key={c.pubkey}
@@ -642,7 +642,7 @@ function DashboardInnerComponent() {
 												No messages yet.
 											</div>
 										)}
-										<div className="h-4" />
+										<div className="h-0 lg:h-4" />
 									</div>
 								</CardContent>
 							</Card>
@@ -664,7 +664,7 @@ function DashboardInnerComponent() {
 									</CardTitle>
 								</CardHeader>
 								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
-									<div className="space-y-3 h-full pb-6">
+									<div className="space-y-3 h-full">
 										{posts.slice(0, visiblePostsCount).map((p) => (
 											<Link
 												key={p.id}
@@ -696,7 +696,7 @@ function DashboardInnerComponent() {
 												</Button>
 											</div>
 										)}
-										<div className="h-4" />
+										<div className="h-0 lg:h-4" />
 									</div>
 								</CardContent>
 							</Card>
@@ -718,7 +718,7 @@ function DashboardInnerComponent() {
 									</CardTitle>
 								</CardHeader>
 								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
-									<div className="space-y-3 h-full pb-6">
+									<div className="space-y-3 h-full">
 										{(() => {
 											const withStock = (myProducts || []).map((p) => ({
 												product: p,
@@ -758,7 +758,7 @@ function DashboardInnerComponent() {
 												)
 											})
 										})()}
-										<div className="h-4" />
+										<div className="h-0 lg:h-4" />
 									</div>
 								</CardContent>
 							</Card>
