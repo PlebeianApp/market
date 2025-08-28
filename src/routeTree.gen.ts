@@ -257,7 +257,7 @@ export interface FileRoutesByTo {
 	'/nostr': typeof NostrIndexRoute
 	'/posts': typeof PostsIndexRoute
 	'/products': typeof ProductsIndexRoute
-	'/collection': typeof ProductsIndexRoute
+	'/collection': typeof CollectionIndexRoute
 	'/dashboard': typeof DashboardLayoutDashboardIndexRoute
 	'/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
 	'/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
@@ -290,7 +290,6 @@ export interface FileRoutesById {
 	'/products/$productId': typeof ProductsProductIdRoute
 	'/collection/$collectionId': typeof CollectionCollectionIdRoute
 	'/profile/$profileId': typeof ProfileProfileIdRoute
-	'/community/': typeof CommunityIndexRoute
 	'/nostr/': typeof NostrIndexRoute
 	'/posts/': typeof PostsIndexRoute
 	'/products/': typeof ProductsIndexRoute
@@ -325,6 +324,7 @@ export interface FileRouteTypes {
 		| '/setup'
 		| '/posts/$postId'
 		| '/products/$productId'
+		| '/collection/$collectionId'
 		| '/profile/$profileId'
 		| '/community'
 		| '/nostr'
@@ -358,6 +358,7 @@ export interface FileRouteTypes {
 		| '/setup'
 		| '/posts/$postId'
 		| '/products/$productId'
+		| '/collection/$collectionId'
 		| '/profile/$profileId'
 		| '/community'
 		| '/nostr'
@@ -392,6 +393,7 @@ export interface FileRouteTypes {
 		| '/setup'
 		| '/posts/$postId'
 		| '/products/$productId'
+		| '/collection/$collectionId'
 		| '/profile/$profileId'
 		| '/community/'
 		| '/nostr/'
@@ -492,6 +494,13 @@ declare module '@tanstack/react-router' {
 			path: '/community'
 			fullPath: '/community'
 			preLoaderRoute: typeof CommunityIndexRouteImport
+			parentRoute: typeof rootRouteImport
+		}
+		'/collection/&collectionId': {
+			id: '/collection/$collectionId'
+			path: '/collection/$collectionId'
+			fullPath: '/collection/$collectionId'
+			preLoaderRoute: typeof CollectionCollectionIdRouteImport
 			parentRoute: typeof rootRouteImport
 		}
 		'/profile/$profileId': {

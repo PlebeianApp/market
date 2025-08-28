@@ -1,19 +1,27 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { collectionQueryOptions, useCollectionTitle } from '@/queries/collections.tsx'
-import { getCollectionImages, getCollectionSummary, getCollectionTitle } from '@/queries/collections.tsx'
-import { useSuspenseQuery } from '@tanstack/react-query'
-import { useEffect } from 'react'
-import { useStore } from '@tanstack/react-store'
-import { uiActions, uiStore } from '@/lib/stores/ui'
-import { Button } from '@/components/ui/button'
 import { ArrowLeft, MessageCircle, Minus, Plus, Share2, Truck } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { ItemGrid } from '@/components/ItemGrid'
-import { truncateText } from '@/lib/utils.ts'
 import { Nip05Badge } from '@/components/Nip05Badge.tsx'
 import { ZapButton } from '@/components/ZapButton.tsx'
+// import { collectionQueryOptions, useCollectionTitle } from '@/queries/collections.tsx'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
+// import { getCollectionImages, getCollectionSummary, getCollectionTitle } from '@/queries/collections'
 import { profileByIdentifierQueryOptions } from '@/queries/profiles'
+import { truncateText } from '@/lib/utils.ts'
+import { uiActions, uiStore } from '@/lib/stores/ui'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
+import { useEffect } from 'react'
 import { useProfileName } from '@/queries/profiles'
+import { useStore } from '@tanstack/react-store'
+import { useSuspenseQuery } from '@tanstack/react-query'
+import {
+	getCollectionImages,
+	getCollectionSummary,
+	collectionQueryOptions,
+	useCollectionTitle,
+	useCollectionImages,
+	getCollectionTitle,
+} from '@/queries/collections'
 
 // Hook to inject dynamic CSS for background image
 function useHeroBackground(imageUrl: string, className: string) {
@@ -52,7 +60,7 @@ export const Route = createFileRoute('/collection/$collectionId')({
 function RouteComponent() {
 	const { collectionId } = Route.useLoaderData()
 	const collectionQuery = useSuspenseQuery(collectionQueryOptions(collectionId))
-	console.log(collectionQuery)
+	// todo: handle this event not existing
 	const collection = collectionQuery.data
 	const pubkey = collection.pubkey
 	const { mobileMenuOpen } = useStore(uiStore)
@@ -60,6 +68,7 @@ function RouteComponent() {
 	const navigate = useNavigate()
 	const title = getCollectionTitle(collection)
 	const summary = getCollectionSummary(collection)
+	const images = getCollectionImages(collection)
 	type Params = { profileId: string }
 	const params = Route.useParams() as Params
 	const { data: name, isLoading } = useProfileName(pubkey)
@@ -67,10 +76,13 @@ function RouteComponent() {
 	const { profile, user } = profileData || {}
 	const breakpoint = useBreakpoint()
 	const isSmallScreen = breakpoint === 'sm'
+	const currentImages = getCollectionImages(collection)
 
 	// Use the market image for homepage background
-	const marketBackgroundImageUrl = '/images/market-background.jpg'
+	// const marketBackgroundImageUrl = '/images/market-background.jpg'
+	const marketBackgroundImageUrl = currentImages.length > 0 ? currentImages[0][1] : '/images/market-background.jpg'
 	const marketHeroClassName = 'hero-bg-market'
+	// Get background image from current collection (only if not homepage slide)
 	useHeroBackground(marketBackgroundImageUrl, marketHeroClassName)
 
 	const handleBackClick = () => {
@@ -80,8 +92,8 @@ function RouteComponent() {
 			// Clear all product navigation state
 			uiActions.clearProductNavigation()
 		} else {
-			// Fallback to products page if no source path
-			navigate({ to: '/products' })
+			// Fallback to community page if no source path
+			navigate({ to: '/community' })
 		}
 	}
 
@@ -118,33 +130,33 @@ function RouteComponent() {
 						</div>
 					</div>
 				</div>
-					<div className="flex flex-row justify-between px-4 py-2 bg-black items-center">
-						<div className="flex flex-row items-center gap-4">
-							{profile?.picture && (
-								<img
-									src={profile.picture}
-									alt={profile.name || 'Profile picture'}
-									className="rounded-full w-10 h-10 sm:w-8 sm:h-8 border-2 border-black"
-								/>
-							)}
-							<div className="flex items-center gap-2">
-								<h2 className="text-1xl font-bold text-white">{truncateText(profile?.name ?? 'Unnamed user', isSmallScreen ? 10 : 50)}</h2>
-								<Nip05Badge userId={user?.npub || ''} />
-							</div>
-						</div>
-						{!isSmallScreen && (
-							<div className="flex gap-2">
-								{user && <ZapButton event={user} />}
-								<Button variant="focus" size="icon">
-									<MessageCircle className="w-5 h-5" />
-								</Button>
-								<Button variant="secondary" size="icon">
-									<Share2 className="w-5 h-5" />
-								</Button>
-							</div>
+				<div className="flex flex-row justify-between px-4 py-2 bg-black items-center">
+					<div className="flex flex-row items-center gap-4">
+						{profile?.picture && (
+							<img
+								src={profile.picture}
+								alt={profile.name || 'Profile picture'}
+								className="rounded-full w-10 h-10 sm:w-8 sm:h-8 border-2 border-black"
+							/>
 						)}
+						<div className="flex items-center gap-2">
+							<h2 className="text-1xl font-bold text-white">{truncateText(profile?.name ?? 'Unnamed user', isSmallScreen ? 10 : 50)}</h2>
+							<Nip05Badge userId={user?.npub || ''} />
+						</div>
 					</div>
+					{!isSmallScreen && (
+						<div className="flex gap-2">
+							{user && <ZapButton event={user} />}
+							<Button variant="focus" size="icon">
+								<MessageCircle className="w-5 h-5" />
+							</Button>
+							<Button variant="secondary" size="icon">
+								<Share2 className="w-5 h-5" />
+							</Button>
+						</div>
+					)}
 				</div>
+			</div>
 		</div>
 	)
 }
