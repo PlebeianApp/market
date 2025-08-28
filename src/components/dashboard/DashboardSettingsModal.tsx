@@ -138,10 +138,20 @@ export const DashboardSettingsModal: React.FC = () => {
 
 	return (
 		<Sheet open={isOpen} onOpenChange={() => dashboardActions.closeSettings()}>
-			<SheetContent side="left" className="flex flex-col max-h-screen w-[100vw] sm:w-[85vw] md:w-[55vw] xl:w-[35vw] p-0">
+			<SheetContent side="left" className="flex flex-col max-h-screen w-[100vw] sm:w-[85vw] md:w-[55vw] xl:w-[35vw] p-0 [&>button]:text-white [&>button]:hover:text-gray-300">
 				{/* Fixed Header */}
-				<SheetHeader className="px-6 py-4 border-b border-black flex-shrink-0 bg-white">
-					<SheetTitle className="font-semibold font-heading text-[16px] sm:text-lg">Dashboard Layout</SheetTitle>
+				<SheetHeader className="relative px-6 py-4 border-b border-black flex-shrink-0 bg-black text-white overflow-hidden">
+					<div 
+						className="absolute inset-0 opacity-80"
+						style={{
+							backgroundImage: 'radial-gradient(circle, rgba(255, 255, 255, 0.3) 1px, transparent 1px)',
+							backgroundSize: '10px 10px',
+							backgroundRepeat: 'repeat'
+						}}
+					/>
+					<div className="relative z-10 flex items-center min-h-[24px]">
+						<SheetTitle className="font-semibold font-heading text-[20px] leading-6 !text-white">Dashboard Layout</SheetTitle>
+					</div>
 				</SheetHeader>
 
 				{/* Scrollable Content */}
