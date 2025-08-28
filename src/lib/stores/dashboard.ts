@@ -58,13 +58,20 @@ const defaultWidgets: DashboardWidget[] = [
 		component: 'LowStock',
 		enabled: true,
 	},
+	{
+		id: 'popular-categories',
+		title: 'Popular Categories',
+		description: 'Most active categories by number of listings',
+		component: 'PopularCategories',
+		enabled: true,
+	},
 ]
 
 const defaultLayout: DashboardLayout = {
 	top: ['sales-overview', 'top-products'],
 	bottom: ['sales-chart', 'latest-messages'],
 	right: ['nostr-posts'],
-	hidden: ['low-stock'],
+	hidden: ['low-stock','popular-categories'],
 }
 
 export interface DashboardState {

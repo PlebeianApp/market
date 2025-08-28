@@ -19,7 +19,7 @@ import { postsQueryOptions } from '@/queries/posts'
 import { useQuery } from '@tanstack/react-query'
 import * as React from 'react'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
-import { productsQueryOptions, productsByPubkeyQueryOptions, getProductTitle, getProductImages, getProductPrice, getProductStock } from '@/queries/products'
+import { productsQueryOptions, productsByPubkeyQueryOptions, getProductTitle, getProductImages, getProductPrice, getProductStock, getProductCategories } from '@/queries/products'
 
 // Wireframe Loader Components
 function SalesOverviewLoader() {
@@ -757,6 +757,49 @@ function DashboardInnerComponent() {
 													</div>
 												)
 											})
+										})()}
+										<div className="h-0 lg:h-4" />
+									</div>
+								</CardContent>
+							</Card>
+						)}
+					</div>
+				)
+			
+			case 'PopularCategories':
+				return (
+					<div key={widget.id} className={baseClasses}>
+						{isLoading ? (
+							<NostrPostsLoader />
+						) : (
+							<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
+								<CardHeader className="px-4 py-4">
+									<CardTitle className="flex items-center justify-between">
+										<span>Popular Categories</span>
+									</CardTitle>
+								</CardHeader>
+								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
+									<div className="space-y-3 h-full">
+										{(() => {
+											const counts = new Map<string, number>()
+											for (const p of products || []) {
+												const cats = getProductCategories(p)
+												for (const c of cats) {
+													const name = c[1]
+													counts.set(name, (counts.get(name) || 0) + 1)
+												}
+											}
+											const sorted = Array.from(counts.entries()).sort((a,b) => b[1]-a[1]).slice(0,8)
+											if (sorted.length === 0) return (<div className="text-sm text-muted-foreground h-full flex items-center justify-center">No categories yet.</div>)
+											return sorted.map(([name, count]) => (
+												<div key={name} className="flex items-center justify-between rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay">
+													<div className="min-w-0">
+														<div className="text-sm font-medium truncate">{name}</div>
+														<div className="text-xs text-muted-foreground truncate">{count} listings</div>
+													</div>
+													<div className="text-xs font-mono px-2 py-0.5 rounded border">{count}</div>
+												</div>
+											))
 										})()}
 										<div className="h-0 lg:h-4" />
 									</div>
