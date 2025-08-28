@@ -1,6 +1,6 @@
 import React from 'react'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { useStore } from '@tanstack/react-store'
 import { dashboardStore, dashboardActions } from '@/lib/stores/dashboard'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
@@ -137,12 +137,12 @@ export const DashboardSettingsModal: React.FC = () => {
 	if (!isOpen) return null
 
 	return (
-		<Dialog open={isOpen} onOpenChange={() => dashboardActions.closeSettings()}>
-			<DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] flex flex-col p-0 overflow-hidden [&>button]:top-4 [&>button]:right-4">
+		<Sheet open={isOpen} onOpenChange={() => dashboardActions.closeSettings()}>
+			<SheetContent side="left" className="flex flex-col max-h-screen w-[100vw] sm:w-[85vw] md:w-[55vw] xl:w-[35vw] p-0">
 				{/* Fixed Header */}
-				<DialogHeader className="px-6 py-4 border-b border-black flex-shrink-0 bg-white">
-					<DialogTitle className="font-semibold font-heading text-[16px] sm:text-lg">Dashboard Layout</DialogTitle>
-				</DialogHeader>
+				<SheetHeader className="px-6 py-4 border-b border-black flex-shrink-0 bg-white">
+					<SheetTitle className="font-semibold font-heading text-[16px] sm:text-lg">Dashboard Layout</SheetTitle>
+				</SheetHeader>
 
 				{/* Scrollable Content */}
 				<div className="flex-1 overflow-y-auto px-6 py-4 bg-white">
@@ -281,7 +281,7 @@ export const DashboardSettingsModal: React.FC = () => {
 						</div>
 					</div>
 				</div>
-			</DialogContent>
-		</Dialog>
+			</SheetContent>
+		</Sheet>
 	)
 }

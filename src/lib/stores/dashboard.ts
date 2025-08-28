@@ -51,13 +51,20 @@ const defaultWidgets: DashboardWidget[] = [
 		component: 'NostrPosts',
 		enabled: true,
 	},
+	{
+		id: 'low-stock',
+		title: 'Low Stock',
+		description: 'Products running low on inventory',
+		component: 'LowStock',
+		enabled: true,
+	},
 ]
 
 const defaultLayout: DashboardLayout = {
 	top: ['sales-overview', 'top-products'],
 	bottom: ['sales-chart', 'latest-messages'],
 	right: ['nostr-posts'],
-	hidden: [],
+	hidden: ['low-stock'],
 }
 
 export interface DashboardState {

@@ -19,7 +19,7 @@ import { postsQueryOptions } from '@/queries/posts'
 import { useQuery } from '@tanstack/react-query'
 import * as React from 'react'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
-import { productsQueryOptions, getProductTitle, getProductImages, getProductPrice } from '@/queries/products'
+import { productsQueryOptions, productsByPubkeyQueryOptions, getProductTitle, getProductImages, getProductPrice, getProductStock } from '@/queries/products'
 
 // Wireframe Loader Components
 function SalesOverviewLoader() {
@@ -158,6 +158,35 @@ function NostrPostsLoader() {
 	)
 }
 
+function LowStockLoader() {
+    return (
+        <Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
+            <CardHeader className="px-4 py-4">
+                <div className="flex items-center justify-between">
+                    <div className="h-6 w-28 bg-gray-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-12 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+            </CardHeader>
+            <CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
+                <div className="space-y-3">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                        <div key={i} className="flex items-center justify-between p-3 border border-gray-200 rounded bg-gray-50">
+                            <div className="flex items-center gap-3">
+                                <div className="h-8 w-8 bg-gray-200 rounded animate-pulse"></div>
+                                <div className="space-y-2">
+                                    <div className="h-4 w-28 bg-gray-200 rounded animate-pulse"></div>
+                                    <div className="h-3 w-16 bg-gray-200 rounded animate-pulse"></div>
+                                </div>
+                            </div>
+                            <div className="h-3 w-10 bg-gray-200 rounded animate-pulse"></div>
+                        </div>
+                    ))}
+                </div>
+            </CardContent>
+        </Card>
+    )
+}
+
 export const Route = createFileRoute('/_dashboard-layout/dashboard/dashboard')({
 	component: DashboardInnerComponent,
 })
@@ -169,6 +198,10 @@ function DashboardInnerComponent() {
 	const { data: posts = [], isLoading: postsLoading } = useQuery(postsQueryOptions)
 	const { data: products = [], isLoading: productsLoading } = useQuery(productsQueryOptions)
 	const { user } = useStore(authStore)
+	const { data: myProducts = [], isLoading: myProductsLoading } = useQuery({
+		...productsByPubkeyQueryOptions(user?.pubkey || ''),
+		enabled: !!user?.pubkey,
+	})
 	const breakpoint = useBreakpoint()
 	const isMobile = breakpoint === 'sm' || breakpoint === 'md' || breakpoint === 'lg'
 
@@ -663,6 +696,68 @@ function DashboardInnerComponent() {
 												</Button>
 											</div>
 										)}
+										<div className="h-4" />
+									</div>
+								</CardContent>
+							</Card>
+						)}
+					</div>
+				)
+			
+			case 'LowStock':
+				return (
+					<div key={widget.id} className={baseClasses}>
+						{isLoading ? (
+							<LowStockLoader />
+						) : (
+							<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
+								<CardHeader className="px-4 py-4">
+									<CardTitle className="flex items-center justify-between">
+										<span>Low Stock</span>
+										<span className="text-sm text-muted-foreground">{myProductsLoading ? 'Loading…' : `${myProducts.length}`}</span>
+									</CardTitle>
+								</CardHeader>
+								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
+									<div className="space-y-3 h-full pb-6">
+										{(() => {
+											const withStock = (myProducts || []).map((p) => ({
+												product: p,
+												stock: (() => { const s = getProductStock(p); return s ? parseInt(s[1] as string, 10) : Number.POSITIVE_INFINITY })(),
+											}))
+											.filter((x) => Number.isFinite(x.stock))
+											.sort((a, b) => a.stock - b.stock)
+											.slice(0, 8)
+											
+											if (withStock.length === 0) {
+												return (
+													<div className="text-sm text-muted-foreground h-full flex items-center justify-center">No low stock items.</div>
+												)
+											}
+
+											return withStock.map(({ product, stock }) => {
+												const images = getProductImages(product)
+												const imageUrl = images?.[0]?.[1]
+												const title = getProductTitle(product)
+												return (
+													<div key={product.id} className="flex items-center justify-between rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay">
+														<Link to="/products/$productId" params={{ productId: product.id }} className="flex min-w-0 items-center gap-3">
+															<div className="h-8 w-8 rounded bg-muted flex items-center justify-center text-xs font-mono overflow-hidden">
+																{imageUrl ? (
+																	<img src={imageUrl} alt={title} className="h-full w-full object-cover" />
+																) : (
+																	(title && typeof title === 'string' ? title.slice(0, 2) : '??')
+																)}
+															</div>
+															<div className="min-w-0">
+																<div className="text-sm font-medium truncate">{title}</div>
+																<div className="text-xs text-muted-foreground truncate">Stock: {stock}</div>
+															</div>
+														</Link>
+														<div className="text-xs font-mono px-2 py-0.5 rounded border">{stock}</div>
+													</div>
+												)
+											})
+										})()}
 										<div className="h-4" />
 									</div>
 								</CardContent>
