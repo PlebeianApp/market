@@ -454,7 +454,7 @@ function DashboardInnerComponent() {
 									</CardTitle>
 								</CardHeader>
 								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
-									<div className="mt-2 space-y-3 h-full pb-6">
+									<div className="mt-2 space-y-3 h-full pb-2 lg:pb-6">
 										{visibleOrders.map((o, index) => {
 											const orderId = getOrderId(o.order) || o.order?.id || `order-${index}`
 											const amount = formatSats(getOrderAmount(o.order))
@@ -496,7 +496,7 @@ function DashboardInnerComponent() {
 												</Button>
 											</div>
 										)}
-										<div className="h-4" />
+										<div className="h-2 lg:h-4" />
 									</div>
 								</CardContent>
 							</Card>
