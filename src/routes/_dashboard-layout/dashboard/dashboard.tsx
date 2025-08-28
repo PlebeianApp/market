@@ -354,12 +354,12 @@ function DashboardInnerComponent() {
 			padding: [8, 10, 8, 10],
 			scales: { x: { time: false }, y: { auto: true } },
 			axes: [
-				// Bottom X axis with labels
+				// Bottom X axis without labels (hide labels for clarity on mobile)
 				{
 					grid: { show: true, stroke: gridColor },
 					gap: 2,
-					size: 28,
-					values: (u: any, splits: number[]) => splits.map((v) => salesSeries[Math.round(v)]?.label ?? ''),
+					size: 16,
+					values: () => [],
 				},
 				// Left Y axis with labels
 				{
