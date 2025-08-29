@@ -243,7 +243,7 @@ export const DashboardSettingsModal: React.FC = () => {
 
 						{/* Hidden */}
 						<div>
-							{!isMobile && <SectionHeading title="Hidden" />}
+							{!isMobile && <SectionHeading title="Hidden/Available" />}
 							<div className="space-y-2">
 								{getSectionWidgets('hidden').length === 0 ? (
 									<DropSlot section="hidden" index={0} onDragOver={handleDragOver} onDrop={handleDrop} />

@@ -65,13 +65,20 @@ const defaultWidgets: DashboardWidget[] = [
 		component: 'PopularCategories',
 		enabled: true,
 	},
+	{
+		id: 'payments',
+		title: 'Payments',
+		description: 'Recent payments and wallet balance',
+		component: 'Payments',
+		enabled: true,
+	},
 ]
 
 const defaultLayout: DashboardLayout = {
 	top: ['sales-overview', 'top-products'],
 	bottom: ['sales-chart', 'latest-messages'],
 	right: ['nostr-posts'],
-	hidden: ['low-stock','popular-categories'],
+	hidden: ['low-stock','popular-categories','payments'],
 }
 
 export interface DashboardState {

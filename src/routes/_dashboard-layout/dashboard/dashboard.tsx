@@ -20,6 +20,8 @@ import { useQuery } from '@tanstack/react-query'
 import * as React from 'react'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { productsQueryOptions, productsByPubkeyQueryOptions, getProductTitle, getProductImages, getProductPrice, getProductStock, getProductCategories } from '@/queries/products'
+import { useNwcWalletBalanceQuery } from '@/queries/wallet'
+import { ndkStore } from '@/lib/stores/ndk'
 
 // Wireframe Loader Components
 function SalesOverviewLoader() {
@@ -208,6 +210,11 @@ function DashboardInnerComponent() {
 	// Check if any data is still loading
 	const isLoading = ordersLoading || conversationsLoading || postsLoading || productsLoading
 
+	// Wallet balance (NWC) - subscribe to ndk store so changes trigger re-render
+	const ndkState = useStore(ndkStore)
+	const activeNwcUri = ndkState.activeNwcWalletUri || undefined
+	const { data: nwcBalance } = useNwcWalletBalanceQuery(activeNwcUri, !!activeNwcUri)
+
 	const [salesTab, setSalesTab] = React.useState<'all' | keyof typeof ORDER_STATUS>('all')
 	const [showAllMobileSales, setShowAllMobileSales] = React.useState(false)
 
@@ -367,7 +374,7 @@ function DashboardInnerComponent() {
 					grid: { show: true, stroke: gridColor },
 					gap: 2,
 					size: 36,
-					values: (u: any, splits: number[]) => splits.map((v) => String(Math.round(v))),
+					values: (u: any, splits: number[]) => splits.map((v) => (Number.isInteger(v) ? String(v) : '')),
 				},
 				// Top axis (no labels) to mirror bottom gutter
 				{
@@ -426,6 +433,52 @@ function DashboardInnerComponent() {
 		const baseClasses = cn(spanClass, "min-h-0 h-full")
 		
 		switch (widget.component) {
+			case 'Payments':
+				return (
+					<div key={widget.id} className={baseClasses}>
+						<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
+							<CardHeader className="px-4 py-4">
+								<CardTitle className="flex items-center justify-between">
+									<span>Payments</span>
+									<span className="text-sm text-muted-foreground">{nwcBalance ? `${nwcBalance.balance.toLocaleString()} sats` : '—'}</span>
+								</CardTitle>
+							</CardHeader>
+							<CardContent className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
+								<div className="space-y-3 h-full">
+									{(() => {
+										const receipts = orders
+											.flatMap((o) => o.paymentReceipts || [])
+											.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+											.slice(0, 8)
+
+										if (receipts.length === 0) {
+											return (
+												<div className="text-sm text-muted-foreground h-full flex items-center justify-center">No payments yet.</div>
+											)
+										}
+
+										return receipts.map((r, idx) => {
+											const ts = r.created_at ? new Date(r.created_at * 1000).toLocaleString() : ''
+											const amountTag = r.tags.find((t) => t[0] === 'amount') as any
+											const amount = amountTag ? parseInt(amountTag[1] as string, 10) : undefined
+											return (
+												<div key={r.id || `receipt-${idx}`} className="flex items-center justify-between rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay">
+													<div className="min-w-0">
+														<div className="text-sm font-medium truncate">{amount ? `${amount.toLocaleString()} sats` : 'Payment'}</div>
+														<div className="text-xs text-muted-foreground truncate">{ts}</div>
+													</div>
+													<div className="text-xs font-mono px-2 py-0.5 rounded border">{r.kind}</div>
+												</div>
+											)
+										})
+									})()}
+									<div className="h-0 lg:h-4" />
+								</div>
+							</CardContent>
+						</Card>
+					</div>
+				)
+			
 			case 'SalesOverview':
 				return (
 					<div key={widget.id} className={baseClasses}>
