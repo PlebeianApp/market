@@ -72,13 +72,20 @@ const defaultWidgets: DashboardWidget[] = [
 		component: 'Payments',
 		enabled: true,
 	},
+	{
+		id: 'v4v-contributions',
+		title: 'V4V Contributions',
+		description: 'Who zapped you and how much (circular economy)',
+		component: 'V4VContributions',
+		enabled: true,
+	},
 ]
 
 const defaultLayout: DashboardLayout = {
 	top: ['sales-overview', 'top-products'],
 	bottom: ['sales-chart', 'latest-messages'],
 	right: ['nostr-posts'],
-	hidden: ['low-stock','popular-categories','payments'],
+	hidden: ['low-stock','popular-categories','payments','v4v-contributions'],
 }
 
 export interface DashboardState {

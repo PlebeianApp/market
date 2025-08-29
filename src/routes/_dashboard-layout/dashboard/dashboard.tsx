@@ -21,6 +21,7 @@ import * as React from 'react'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { productsQueryOptions, productsByPubkeyQueryOptions, getProductTitle, getProductImages, getProductPrice, getProductStock, getProductCategories } from '@/queries/products'
 import { useNwcWalletBalanceQuery } from '@/queries/wallet'
+import { useV4VShares } from '@/queries/v4v'
 import { ndkStore } from '@/lib/stores/ndk'
 
 // Wireframe Loader Components
@@ -206,6 +207,9 @@ function DashboardInnerComponent() {
 	})
 	const breakpoint = useBreakpoint()
 	const isMobile = breakpoint === 'sm' || breakpoint === 'md' || breakpoint === 'lg'
+
+	// V4V shares (contributors and intended percentages)
+	const { data: v4vShares = [] } = useV4VShares(user?.pubkey || '')
 
 	// Check if any data is still loading
 	const isLoading = ordersLoading || conversationsLoading || postsLoading || productsLoading
@@ -433,6 +437,79 @@ function DashboardInnerComponent() {
 		const baseClasses = cn(spanClass, "min-h-0 h-full")
 		
 		switch (widget.component) {
+			case 'V4VContributions':
+				return (
+					<div key={widget.id} className={baseClasses}>
+						<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
+							<CardHeader className="px-4 py-4">
+								<CardTitle className="flex items-center justify-between">
+									<span>V4V Contributions</span>
+									<span className="text-sm text-muted-foreground">Top supporters</span>
+								</CardTitle>
+							</CardHeader>
+							<CardContent className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
+								{/* Horizontal bar list - scrollable body with fixed header above */}
+								<div className="space-y-3 h-full">
+									{(() => {
+										// Aggregate received payments (receipts) by sender pubkey
+										const receiptSumBySender = new Map<string, number>()
+										for (const o of orders) {
+											for (const r of o.paymentReceipts || []) {
+												const sender = r.pubkey
+												const amtTag = r.tags.find((t) => t[0] === 'amount') as any
+												const amt = amtTag ? parseInt(amtTag[1] as string, 10) : 0
+												receiptSumBySender.set(sender, (receiptSumBySender.get(sender) || 0) + (isFinite(amt) ? amt : 0))
+											}
+										}
+
+										// Map to display entries enriched with v4v shares names if possible
+										const entries = Array.from(receiptSumBySender.entries()).map(([pubkey, total]) => {
+											const match = v4vShares.find((s: any) => s.pubkey === pubkey)
+											const name = match?.name || pubkey.slice(0, 8)
+											return { pubkey, name, total }
+										}).sort((a,b) => b.total - a.total)
+
+										const top = entries.slice(0, 10)
+										if (top.length === 0) return (<div className="text-sm text-muted-foreground h-full flex items-center justify-center">No V4V activity yet.</div>)
+
+										const maxVal = Math.max(...top.map(e => e.total), 1)
+										return (
+											<div className="space-y-2">
+												{/* Fixed amount axis header */}
+												<div className="sticky top-0 z-10 bg-white border-b border-black py-1">
+													<div className="flex text-[10px] text-muted-foreground">
+														<div className="w-24 flex-shrink-0" />
+														<div className="flex-1 relative">
+															<div className="absolute left-0 top-0 -translate-x-1/2">0</div>
+															<div className="absolute left-1/2 top-0 -translate-x-1/2">{Math.round(maxVal/2).toLocaleString()}</div>
+															<div className="absolute right-0 top-0 translate-x-1/2">{maxVal.toLocaleString()}</div>
+														</div>
+												</div>
+											</div>
+
+											{top.map((e) => {
+												const pct = Math.max(2, Math.round((e.total / maxVal) * 100))
+												return (
+													<div key={e.pubkey} className="flex items-center gap-2">
+														<div className="w-24 flex-shrink-0 text-xs truncate" title={e.name}>{e.name}</div>
+														<div className="flex-1">
+															<div className="h-6 border border-black bg-layer-overlay relative">
+																<div className="h-full bg-pink-500" style={{ width: pct + '%' }} />
+																<div className="absolute inset-0 flex items-center justify-end pr-2 text-xs font-mono">{e.total.toLocaleString()} sats</div>
+															</div>
+														</div>
+												</div>
+												)
+											})}
+										</div>
+									)
+									})()}
+								</div>
+							</CardContent>
+						</Card>
+					</div>
+				)
+
 			case 'Payments':
 				return (
 					<div key={widget.id} className={baseClasses}>
