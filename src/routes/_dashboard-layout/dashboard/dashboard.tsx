@@ -444,7 +444,6 @@ function DashboardInnerComponent() {
 							<CardHeader className="px-4 py-4">
 								<CardTitle className="flex items-center justify-between">
 									<span>V4V Contributions</span>
-									<span className="text-sm text-muted-foreground">Top supporters</span>
 								</CardTitle>
 							</CardHeader>
 							<CardContent className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
@@ -475,34 +474,22 @@ function DashboardInnerComponent() {
 										const maxVal = Math.max(...top.map(e => e.total), 1)
 										return (
 											<div className="space-y-2">
-												{/* Fixed amount axis header */}
-												<div className="sticky top-0 z-10 bg-white border-b border-black py-1">
-													<div className="flex text-[10px] text-muted-foreground">
-														<div className="w-24 flex-shrink-0" />
-														<div className="flex-1 relative">
-															<div className="absolute left-0 top-0 -translate-x-1/2">0</div>
-															<div className="absolute left-1/2 top-0 -translate-x-1/2">{Math.round(maxVal/2).toLocaleString()}</div>
-															<div className="absolute right-0 top-0 translate-x-1/2">{maxVal.toLocaleString()}</div>
-														</div>
-												</div>
-											</div>
-
-											{top.map((e) => {
-												const pct = Math.max(2, Math.round((e.total / maxVal) * 100))
-												return (
-													<div key={e.pubkey} className="flex items-center gap-2">
-														<div className="w-24 flex-shrink-0 text-xs truncate" title={e.name}>{e.name}</div>
-														<div className="flex-1">
-															<div className="h-6 border border-black bg-layer-overlay relative">
-																<div className="h-full bg-pink-500" style={{ width: pct + '%' }} />
-																<div className="absolute inset-0 flex items-center justify-end pr-2 text-xs font-mono">{e.total.toLocaleString()} sats</div>
+												{top.map((e) => {
+													const pct = Math.max(2, Math.round((e.total / maxVal) * 100))
+													return (
+														<div key={e.pubkey} className="flex items-center gap-2">
+															<div className="w-24 flex-shrink-0 text-xs truncate" title={e.name}>{e.name}</div>
+															<div className="flex-1">
+																<div className="h-6 border border-black bg-layer-overlay relative">
+																	<div className="h-full bg-pink-500" style={{ width: pct + '%' }} />
+																	<div className="absolute inset-0 flex items-center justify-end pr-2 text-xs font-mono">{e.total.toLocaleString()} sats</div>
+																</div>
 															</div>
-														</div>
-												</div>
-												)
-											})}
-										</div>
-									)
+													</div>
+													)
+												})}
+											</div>
+										)
 									})()}
 								</div>
 							</CardContent>
