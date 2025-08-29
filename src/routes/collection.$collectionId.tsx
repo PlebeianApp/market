@@ -160,12 +160,12 @@ function RouteComponent() {
 						</div>
 					) : products && products.length > 0 ? (
 						<ItemGrid
-							title={
-								<div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 text-center sm:text-left">
-									<span className="text-2xl font-heading">More products from</span>
-									<ProfileName pubkey={user?.pubkey || ''} className="text-2xl font-heading" />
-								</div>
-							}
+						// title={
+						// 	<div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 text-center sm:text-left">
+						// 		<span className="text-2xl font-heading">Products in collection</span>
+						// 		{/*<ProfileName pubkey={user?.pubkey || ''} className="text-2xl font-heading" />*/}
+						// 	</div>
+						// }
 						>
 							{products?.map((product: NDKEvent) => (
 								<ProductCard key={product.id} product={product} />
