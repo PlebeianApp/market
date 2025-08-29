@@ -1,15 +1,20 @@
 import { LoginDialog } from '@/components/auth/LoginDialog'
 import { QRScannerDialog } from '@/components/wallet/QRScannerDialog'
+import { V4VSetupDialog } from '@/components/dialogs/V4VSetupDialog'
 import { uiStore } from '@/lib/stores/ui'
 import { useStore } from '@tanstack/react-store'
 import { useMemo } from 'react'
+import { authStore } from '@/lib/stores/auth'
 
 export function DialogRegistry() {
 	const { dialogs, dialogCallbacks } = useStore(uiStore)
+	const authState = useStore(authStore)
+	const userPubkey = authState.user?.pubkey || ''
 
 	const activeDialog = useMemo(() => {
 		if (dialogs.login) return 'login'
 		if (dialogs['scan-qr']) return 'scan-qr'
+		if (dialogs['v4v-setup']) return 'v4v-setup'
 		return null
 	}, [dialogs])
 
@@ -53,6 +58,31 @@ export function DialogRegistry() {
 						const callback = dialogCallbacks?.['scan-qr']
 						if (callback && typeof callback === 'function') {
 							callback(data)
+						}
+					}}
+				/>
+			),
+		},
+		'v4v-setup': {
+			content: (
+				<V4VSetupDialog
+					open={true}
+					onOpenChange={(open) => {
+						if (!open) {
+							uiStore.setState((state) => ({
+								...state,
+								dialogs: {
+									...state.dialogs,
+									'v4v-setup': false,
+								},
+							}))
+						}
+					}}
+					userPubkey={userPubkey}
+					onConfirm={() => {
+						const callback = dialogCallbacks?.['v4v-setup']
+						if (callback && typeof callback === 'function') {
+							callback()
 						}
 					}}
 				/>

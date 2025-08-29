@@ -1,4 +1,5 @@
 import { ProductCategoryTagSchema, ProductImageTagSchema } from '@/lib/schemas/productListing'
+import { uiActions } from '@/lib/stores/ui'
 import { publishProduct, updateProduct, type ProductFormData } from '@/publish/products'
 import {
 	fetchProduct,
@@ -18,6 +19,7 @@ import {
 	getProductWeight,
 } from '@/queries/products'
 import { productKeys } from '@/queries/queryKeyFactory'
+import { fetchV4VShares } from '@/queries/v4v'
 import NDK, { type NDKSigner } from '@nostr-dev-kit/ndk'
 import { QueryClient } from '@tanstack/react-query'
 import { Store } from '@tanstack/store'
@@ -263,7 +265,7 @@ export const productFormActions = {
 		}))
 	},
 
-	publishProduct: async (signer: NDKSigner, ndk: NDK, queryClient?: QueryClient): Promise<boolean | string> => {
+	continuePublishing: async (signer: NDKSigner, ndk: NDK, queryClient?: QueryClient): Promise<boolean | string> => {
 		const state = productFormStore.state
 
 		// Convert state to ProductFormData format
@@ -317,6 +319,35 @@ export const productFormActions = {
 			console.error(state.editingProductId ? 'Failed to update product:' : 'Failed to publish product:', error)
 			return false
 		}
+	},
+
+	publishProduct: async (signer: NDKSigner, ndk: NDK, queryClient?: QueryClient): Promise<boolean | string> => {
+		const state = productFormStore.state
+
+		// Check for V4V shares before publishing (only for new products)
+		if (!state.editingProductId) {
+			try {
+				const user = await signer.user()
+				if (user?.pubkey) {
+					const v4vShares = await fetchV4VShares(user.pubkey)
+					if (!v4vShares || v4vShares.length === 0) {
+						// No V4V shares found, open the V4V setup dialog with callback
+						const publishCallback = () => {
+							// Continue with publishing after V4V setup
+							productFormActions.continuePublishing(signer, ndk, queryClient)
+						}
+						uiActions.openDialog('v4v-setup', publishCallback)
+						return false
+					}
+				}
+			} catch (error) {
+				console.error('Error checking V4V shares:', error)
+				// Continue with publishing even if V4V check fails
+			}
+		}
+
+		// Continue with normal publishing flow
+		return productFormActions.continuePublishing(signer, ndk, queryClient)
 	},
 }
 

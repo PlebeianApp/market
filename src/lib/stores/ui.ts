@@ -2,7 +2,7 @@ import { Store } from '@tanstack/store'
 
 // Define types for different UI elements
 export type DrawerType = 'cart' | 'createProduct' | 'createCollection'
-export type DialogType = 'login' | 'signup' | 'checkout' | 'product-details' | 'scan-qr'
+export type DialogType = 'login' | 'signup' | 'checkout' | 'product-details' | 'scan-qr' | 'v4v-setup'
 export type ToastType = 'success' | 'error' | 'warning' | 'info'
 
 // Toast notification structure
@@ -44,6 +44,7 @@ const initialState: UIState = {
 		checkout: false,
 		'product-details': false,
 		'scan-qr': false,
+		'v4v-setup': false,
 	},
 	toasts: [],
 	dialogCallbacks: {},
