@@ -1,27 +1,21 @@
-import { ArrowLeft, MessageCircle, Minus, Plus, Share2, Truck } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { ItemGrid } from '@/components/ItemGrid'
 import { Nip05Badge } from '@/components/Nip05Badge.tsx'
+import { ProductCard } from '@/components/ProductCard'
+import { ProfileName } from '@/components/ProfileName'
+import { Button } from '@/components/ui/button'
 import { ZapButton } from '@/components/ZapButton.tsx'
-// import { collectionQueryOptions, useCollectionTitle } from '@/queries/collections.tsx'
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-// import { getCollectionImages, getCollectionSummary, getCollectionTitle } from '@/queries/collections'
-import { profileByIdentifierQueryOptions } from '@/queries/profiles'
-import { truncateText } from '@/lib/utils.ts'
-import { uiActions, uiStore } from '@/lib/stores/ui'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
-import { useEffect } from 'react'
-import { useProfileName } from '@/queries/profiles'
-import { useStore } from '@tanstack/react-store'
+import { uiActions, uiStore } from '@/lib/stores/ui'
+import { truncateText } from '@/lib/utils.ts'
+import { collectionQueryOptions, getCollectionImages, getCollectionSummary, getCollectionTitle } from '@/queries/collections'
+import { useProductsByCollection } from '@/queries/products'
+import { profileByIdentifierQueryOptions, useProfileName } from '@/queries/profiles'
+import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useSuspenseQuery } from '@tanstack/react-query'
-import {
-	getCollectionImages,
-	getCollectionSummary,
-	collectionQueryOptions,
-	useCollectionTitle,
-	useCollectionImages,
-	getCollectionTitle,
-} from '@/queries/collections'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { useStore } from '@tanstack/react-store'
+import { ArrowLeft, MessageCircle, Share2 } from 'lucide-react'
+import { useEffect } from 'react'
 
 // Hook to inject dynamic CSS for background image
 function useHeroBackground(imageUrl: string, className: string) {
@@ -62,13 +56,22 @@ function RouteComponent() {
 	const collectionQuery = useSuspenseQuery(collectionQueryOptions(collectionId))
 	// todo: handle this event not existing
 	const collection = collectionQuery.data
+
+	if (!collection) {
+		return (
+			<div className="flex h-[50vh] flex-col items-center justify-center gap-4">
+				<h1 className="text-2xl font-bold">Collection Not Found</h1>
+				<p className="text-gray-600">The collection you're looking for doesn't exist.</p>
+			</div>
+		)
+	}
+
 	const pubkey = collection.pubkey
 	const { mobileMenuOpen } = useStore(uiStore)
 	const { navigation } = useStore(uiStore)
 	const navigate = useNavigate()
 	const title = getCollectionTitle(collection)
 	const summary = getCollectionSummary(collection)
-	const images = getCollectionImages(collection)
 	type Params = { profileId: string }
 	const params = Route.useParams() as Params
 	const { data: name, isLoading } = useProfileName(pubkey)
@@ -77,7 +80,7 @@ function RouteComponent() {
 	const breakpoint = useBreakpoint()
 	const isSmallScreen = breakpoint === 'sm'
 	const currentImages = getCollectionImages(collection)
-
+	const { data: products, isLoading: productsLoading } = useProductsByCollection(collection)
 	// Use the market image for homepage background
 	// const marketBackgroundImageUrl = '/images/market-background.jpg'
 	const marketBackgroundImageUrl = currentImages.length > 0 ? currentImages[0][1] : '/images/market-background.jpg'
@@ -95,15 +98,6 @@ function RouteComponent() {
 			// Fallback to community page if no source path
 			navigate({ to: '/community' })
 		}
-	}
-
-	if (!collection) {
-		return (
-			<div className="flex h-[50vh] flex-col items-center justify-center gap-4">
-				<h1 className="text-2xl font-bold">Product Not Found</h1>
-				<p className="text-gray-600">The product you're looking for doesn't exist.</p>
-			</div>
-		)
 	}
 
 	return (
@@ -143,7 +137,8 @@ function RouteComponent() {
 							<div className="flex items-center gap-2">
 								<h2 className="text-1xl font-bold text-white">{truncateText(profile?.name ?? 'Unnamed user', isSmallScreen ? 10 : 50)}</h2>
 								<Nip05Badge userId={user?.npub || ''} />
-							</div>						</div>
+							</div>{' '}
+						</div>
 					</Link>
 					{!isSmallScreen && (
 						<div className="flex gap-2">
@@ -154,6 +149,31 @@ function RouteComponent() {
 							<Button variant="secondary" size="icon">
 								<Share2 className="w-5 h-5" />
 							</Button>
+						</div>
+					)}
+				</div>
+
+				<div className="p-4">
+					{productsLoading ? (
+						<div className="flex flex-col items-center justify-center h-full">
+							<span className="text-xl">Loading products...</span>
+						</div>
+					) : products && products.length > 0 ? (
+						<ItemGrid
+							title={
+								<div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 text-center sm:text-left">
+									<span className="text-2xl font-heading">More products from</span>
+									<ProfileName pubkey={user?.pubkey || ''} className="text-2xl font-heading" />
+								</div>
+							}
+						>
+							{products?.map((product: NDKEvent) => (
+								<ProductCard key={product.id} product={product} />
+							))}
+						</ItemGrid>
+					) : (
+						<div className="flex flex-col items-center justify-center h-full">
+							<span className="text-2xl font-heading">No products found</span>
 						</div>
 					)}
 				</div>

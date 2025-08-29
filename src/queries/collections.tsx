@@ -6,6 +6,15 @@ import { queryOptions, useQuery } from '@tanstack/react-query'
 import { collectionsKeys } from './queryKeyFactory'
 import { collectionKeys } from './queryKeyFactory'
 import { z } from 'zod'
+import {
+	fetchProductByATag,
+	productByATagQueryOptions,
+	productKeys,
+	fetchProductsByCollection,
+	productsByCollectionQueryOptions,
+	useProductsByCollection,
+} from '@/queries/products.tsx'
+import { getCoordsForATag } from '@/lib/utils/coords.ts'
 
 // --- DATA FETCHING FUNCTIONS ---
 /**
@@ -44,9 +53,9 @@ export const fetchCollectionsByPubkey = async (pubkey: string) => {
 }
 
 /**
- * Fetches a single product listing
- * @param id The ID of the product listing
- * @returns The product listing event
+ * Fetches a single collection listing
+ * @param id The ID of the collection listing
+ * @returns The collection listing event
  */
 export const fetchCollection = async (id: string) => {
 	const ndk = ndkActions.getNDK()
@@ -56,7 +65,6 @@ export const fetchCollection = async (id: string) => {
 	if (!event) {
 		throw new Error('Product not found')
 	}
-
 	return event
 }
 

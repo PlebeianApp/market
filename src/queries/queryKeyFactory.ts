@@ -2,6 +2,8 @@ export const productKeys = {
 	all: ['products'] as const,
 	details: (id: string) => [...productKeys.all, id] as const,
 	byPubkey: (pubkey: string) => [...productKeys.all, 'byPubkey', pubkey] as const,
+	byATag: (pubkey: string, dTag: string) => [...productKeys.all, 'byATag', pubkey, dTag] as const,
+	byCollection: (collectionId: string) => [...productKeys.all, 'byCollection', collectionId] as const,
 	seller: (id: string) => [...productKeys.all, 'seller', id] as const,
 } as const
 
