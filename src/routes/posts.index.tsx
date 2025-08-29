@@ -13,8 +13,8 @@ export const Route = createFileRoute('/posts/')({
 function PostsRoute() {
 	const postsQuery = useSuspenseQuery(postsQueryOptions)
 	const posts = postsQuery.data
- 	const [visibleCount, setVisibleCount] = React.useState(20)
- 	const canLoadMore = posts.length > visibleCount
+	const [visibleCount, setVisibleCount] = React.useState(20)
+	const canLoadMore = posts.length > visibleCount
 
 	return (
 		<div className="p-4">
@@ -45,10 +45,7 @@ function PostsRoute() {
 					))}
 					{canLoadMore && (
 						<div className="flex justify-center pt-2">
-							<Button
-								onClick={() => setVisibleCount((n) => n + 20)}
-								className="bg-black text-white hover:bg-black/90"
-							>
+							<Button onClick={() => setVisibleCount((n) => n + 20)} className="bg-black text-white hover:bg-black/90">
 								Load more
 							</Button>
 						</div>

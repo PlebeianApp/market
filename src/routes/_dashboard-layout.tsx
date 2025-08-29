@@ -23,12 +23,7 @@ export const Route = createFileRoute('/_dashboard-layout')({
 // Settings gear icon
 function GearIcon({ className }: { className?: string }) {
 	return (
-		<svg
-			xmlns="http://www.w3.org/2000/svg"
-			viewBox="0 0 122.88 122.878"
-			className={className}
-			aria-hidden="true"
-		>
+		<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 122.88 122.878" className={className} aria-hidden="true">
 			<g>
 				<path
 					fill="currentColor"
@@ -280,7 +275,9 @@ function DashboardLayout() {
 										<Avatar className="h-8 w-8 flex-shrink-0">
 											<AvatarImage src={chatProfile.profile?.picture} />
 											<AvatarFallback>
-												{(chatProfile.profile?.name || chatProfile.profile?.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
+												{(chatProfile.profile?.name || chatProfile.profile?.displayName || chatPubkey?.slice(0, 1))
+													?.charAt(0)
+													.toUpperCase()}
 											</AvatarFallback>
 										</Avatar>
 										<span className="truncate min-w-0 flex-1 text-center">{dashboardTitleWithoutEmoji}</span>
@@ -331,10 +328,10 @@ function DashboardLayout() {
 											{section.items.map((item) => {
 												const isActive = matchRoute({ to: item.path, fuzzy: true })
 												return (
-                                                    <Link
+													<Link
 														key={item.path}
 														to={item.path}
-                                                        className="block p-4 lg:px-6 lg:py-2 transition-colors font-bold border border-black fg-layer-elevated rounded lg:border-0 lg:bg-transparent lg:rounded-none lg:data-[status=active]:bg-secondary lg:data-[status=active]:text-white lg:data-[status=active]:border-secondary hover:text-pink-500"
+														className="block p-4 lg:px-6 lg:py-2 transition-colors font-bold border border-black fg-layer-elevated rounded lg:border-0 lg:bg-transparent lg:rounded-none lg:data-[status=active]:bg-secondary lg:data-[status=active]:text-white lg:data-[status=active]:border-secondary hover:text-pink-500"
 														onClick={handleSidebarItemClick}
 														data-status={isActive ? 'active' : 'inactive'}
 													>
@@ -366,58 +363,56 @@ function DashboardLayout() {
 						</aside>
 					)}
 
-
-
 					{/* Main content - responsive behavior */}
 					{(!showSidebar || !isMobile) && (
-                        <div
-                            className={`w-full lg:flex-1 ${
-								location.pathname === '/dashboard/dashboard' 
-									? 'lg:max-w-none' 
-									: 'lg:max-w-4xl'
+						<div
+							className={`w-full lg:flex-1 ${
+								location.pathname === '/dashboard/dashboard' ? 'lg:max-w-none' : 'lg:max-w-4xl'
 							} lg:h-[calc(100vh-5rem-1.5rem)] border border-black lg:rounded bg-layer-elevated flex flex-col lg:max-h-full lg:overflow-hidden lg:shadow-md ${
 								isMessageDetailView && isMobile ? 'h-[calc(100vh-5rem)]' : ''
 							}`}
 						>
 							{/* Desktop back button and title - fixed to top of container */}
-															{needsBackButton && (
-							<div className="sticky top-0 z-10 fg-layer-elevated border-b border-layer-subtle pb-4 mb-0 p-4 lg:p-8 flex-shrink-0 flex items-center justify-between relative">
-							<button
-								onClick={() => navigate({ to: backInfoToUse!.parentPath })}
-								className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
-								aria-label={`Back to ${backInfoToUse?.parentTitle}`}
-							>
-								<span className="i-back w-5 h-5" />
-								<span className="text-sm font-medium">Back to {backInfoToUse?.parentTitle}</span>
-							</button>
+							{needsBackButton && (
+								<div className="sticky top-0 z-10 fg-layer-elevated border-b border-layer-subtle pb-4 mb-0 p-4 lg:p-8 flex-shrink-0 flex items-center justify-between relative">
+									<button
+										onClick={() => navigate({ to: backInfoToUse!.parentPath })}
+										className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
+										aria-label={`Back to ${backInfoToUse?.parentTitle}`}
+									>
+										<span className="i-back w-5 h-5" />
+										<span className="text-sm font-medium">Back to {backInfoToUse?.parentTitle}</span>
+									</button>
 
-							{!isMobile && isMessageDetailView && chatProfile && (
-								<div className="flex items-center gap-2 min-w-0">
-									<Avatar className="h-6 w-6 flex-shrink-0">
-										<AvatarImage src={chatProfile.profile?.picture} />
-										<AvatarFallback>
-											{(chatProfile.profile?.name || chatProfile.profile?.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
-										</AvatarFallback>
-									</Avatar>
-									<span className="text-sm font-medium truncate min-w-0">{dashboardTitleWithoutEmoji}</span>
+									{!isMobile && isMessageDetailView && chatProfile && (
+										<div className="flex items-center gap-2 min-w-0">
+											<Avatar className="h-6 w-6 flex-shrink-0">
+												<AvatarImage src={chatProfile.profile?.picture} />
+												<AvatarFallback>
+													{(chatProfile.profile?.name || chatProfile.profile?.displayName || chatPubkey?.slice(0, 1))
+														?.charAt(0)
+														.toUpperCase()}
+												</AvatarFallback>
+											</Avatar>
+											<span className="text-sm font-medium truncate min-w-0">{dashboardTitleWithoutEmoji}</span>
+										</div>
+									)}
 								</div>
 							)}
-						</div>
-					)}
 
-                            <div className={cn(
-                                'flex-1 min-h-0',
-                                location.pathname === '/dashboard/dashboard'
-                                    ? 'lg:overflow-hidden overflow-y-auto'
-                                    : 'lg:overflow-y-auto',
-                            )}>
+							<div
+								className={cn(
+									'flex-1 min-h-0',
+									location.pathname === '/dashboard/dashboard' ? 'lg:overflow-hidden overflow-y-auto' : 'lg:overflow-y-auto',
+								)}
+							>
 								{isMessageDetailView ? (
 									<div className="h-full">{!isAuthenticated ? <LoginPrompt /> : <Outlet />}</div>
 								) : (
 									<div className="h-full">
 										<div
-																								className={cn(
-														'p-4 bg-layer-elevated lg:pt-8 lg:px-8 lg:pb-6 lg:bg-transparent h-full',
+											className={cn(
+												'p-4 bg-layer-elevated lg:pt-8 lg:px-8 lg:pb-6 lg:bg-transparent h-full',
 												location.pathname === '/dashboard/sales/sales' && 'p-0 lg:p-0',
 												location.pathname.startsWith('/dashboard/sales/messages') && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/sales/circular-economy' && 'p-0 lg:p-0',
@@ -438,8 +433,8 @@ function DashboardLayout() {
 													{/* Only show title here if there's no back button */}
 													{!isMobile &&
 														!needsBackButton &&
-												location.pathname !== '/dashboard/sales/sales' &&
-												location.pathname !== '/dashboard/dashboard' &&
+														location.pathname !== '/dashboard/sales/sales' &&
+														location.pathname !== '/dashboard/dashboard' &&
 														!location.pathname.startsWith('/dashboard/sales/messages') &&
 														location.pathname !== '/dashboard/sales/circular-economy' &&
 														location.pathname !== '/dashboard/products/products' &&

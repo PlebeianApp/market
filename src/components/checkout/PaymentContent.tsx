@@ -273,8 +273,6 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 					</div>
 				)}
 
-
-
 				{/* Render ALL Lightning Payment Processors (hidden except for current) */}
 				{allPaymentData.map(({ invoiceId, data }, index) => (
 					<div
@@ -299,8 +297,6 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 						/>
 					</div>
 				))}
-
-
 			</div>
 		)
 	},

@@ -218,8 +218,8 @@ function CollectionsComponent() {
 
 					{!isLoading && !error && (
 						<>
-													{collections && collections.length > 0 ? (
-							<ul ref={animationParent} className="flex flex-col gap-4">
+							{collections && collections.length > 0 ? (
+								<ul ref={animationParent} className="flex flex-col gap-4">
 									{collections.map((collection) => {
 										const collectionId = getCollectionId(collection)
 										return (

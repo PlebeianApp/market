@@ -129,17 +129,17 @@ export const fetchNwcWalletBalance = async (nwcUri: string): Promise<NwcBalance 
 	try {
 		console.log('📱 Creating NWC wallet instance...')
 		nwcWalletInstance = new NDKNWCWallet(ndkInstance as any, { pairingCode: nwcUri })
-		
+
 		// Add more specific error handling for balance update with timeout
 		try {
 			console.log('⚖️ Updating wallet balance...')
-			
+
 			// Add a timeout to prevent hanging - reduced timeout for better UX
 			const updatePromise = nwcWalletInstance.updateBalance()
-			const timeoutPromise = new Promise((_, reject) => 
-				setTimeout(() => reject(new Error('Balance update timed out')), 5000) // Reduced from 10s to 5s
+			const timeoutPromise = new Promise(
+				(_, reject) => setTimeout(() => reject(new Error('Balance update timed out')), 5000), // Reduced from 10s to 5s
 			)
-			
+
 			await Promise.race([updatePromise, timeoutPromise])
 			console.log('✅ Balance update completed successfully')
 		} catch (balanceError: any) {
@@ -151,20 +151,20 @@ export const fetchNwcWalletBalance = async (nwcUri: string): Promise<NwcBalance 
 					timestamp: Date.now(),
 				}
 			}
-			
+
 			console.error('❌ Error during updateBalance():', balanceError)
-			
+
 			// Check for specific error types
 			if (balanceError?.message?.includes('square root') || balanceError?.message?.includes('Cannot find square root')) {
 				console.log('🔢 Mathematical error detected in wallet balance calculation')
-				
+
 				// Return a fallback response indicating the wallet exists but balance is unavailable
 				return {
 					balance: 0,
 					timestamp: Date.now(),
 				}
 			}
-			
+
 			// For other errors, return fallback instead of throwing
 			console.log('🔧 Returning fallback balance due to error')
 			return {

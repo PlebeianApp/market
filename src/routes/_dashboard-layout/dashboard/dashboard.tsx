@@ -19,7 +19,15 @@ import { postsQueryOptions } from '@/queries/posts'
 import { useQuery } from '@tanstack/react-query'
 import * as React from 'react'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
-import { productsQueryOptions, productsByPubkeyQueryOptions, getProductTitle, getProductImages, getProductPrice, getProductStock, getProductCategories } from '@/queries/products'
+import {
+	productsQueryOptions,
+	productsByPubkeyQueryOptions,
+	getProductTitle,
+	getProductImages,
+	getProductPrice,
+	getProductStock,
+	getProductCategories,
+} from '@/queries/products'
 import { useNwcWalletBalanceQuery } from '@/queries/wallet'
 import { useV4VShares } from '@/queries/v4v'
 import { ndkStore } from '@/lib/stores/ndk'
@@ -162,32 +170,32 @@ function NostrPostsLoader() {
 }
 
 function LowStockLoader() {
-    return (
-        <Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
-            <CardHeader className="px-4 py-4">
-                <div className="flex items-center justify-between">
-                    <div className="h-6 w-28 bg-gray-200 rounded animate-pulse"></div>
-                    <div className="h-4 w-12 bg-gray-200 rounded animate-pulse"></div>
-                </div>
-            </CardHeader>
-            <CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
-                <div className="space-y-3">
-                    {Array.from({ length: 4 }).map((_, i) => (
-                        <div key={i} className="flex items-center justify-between p-3 border border-gray-200 rounded bg-gray-50">
-                            <div className="flex items-center gap-3">
-                                <div className="h-8 w-8 bg-gray-200 rounded animate-pulse"></div>
-                                <div className="space-y-2">
-                                    <div className="h-4 w-28 bg-gray-200 rounded animate-pulse"></div>
-                                    <div className="h-3 w-16 bg-gray-200 rounded animate-pulse"></div>
-                                </div>
-                            </div>
-                            <div className="h-3 w-10 bg-gray-200 rounded animate-pulse"></div>
-                        </div>
-                    ))}
-                </div>
-            </CardContent>
-        </Card>
-    )
+	return (
+		<Card className="min-h-0 h-full flex flex-col overflow-hidden fg-layer-elevated border border-black rounded lg:shadow-xl">
+			<CardHeader className="px-4 py-4">
+				<div className="flex items-center justify-between">
+					<div className="h-6 w-28 bg-gray-200 rounded animate-pulse"></div>
+					<div className="h-4 w-12 bg-gray-200 rounded animate-pulse"></div>
+				</div>
+			</CardHeader>
+			<CardContent className="flex-1 min-h-0 overflow-y-auto px-4">
+				<div className="space-y-3">
+					{Array.from({ length: 4 }).map((_, i) => (
+						<div key={i} className="flex items-center justify-between p-3 border border-gray-200 rounded bg-gray-50">
+							<div className="flex items-center gap-3">
+								<div className="h-8 w-8 bg-gray-200 rounded animate-pulse"></div>
+								<div className="space-y-2">
+									<div className="h-4 w-28 bg-gray-200 rounded animate-pulse"></div>
+									<div className="h-3 w-16 bg-gray-200 rounded animate-pulse"></div>
+								</div>
+							</div>
+							<div className="h-3 w-10 bg-gray-200 rounded animate-pulse"></div>
+						</div>
+					))}
+				</div>
+			</CardContent>
+		</Card>
+	)
 }
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/dashboard')({
@@ -245,9 +253,7 @@ function DashboardInnerComponent() {
 
 	const topProducts = React.useMemo(() => {
 		if (!products || products.length === 0) return []
-		return [...products]
-			.sort((a, b) => ((b?.created_at || 0) - (a?.created_at || 0)))
-			.slice(0, 5)
+		return [...products].sort((a, b) => (b?.created_at || 0) - (a?.created_at || 0)).slice(0, 5)
 	}, [products])
 
 	// Sales graph time range
@@ -276,7 +282,7 @@ function DashboardInnerComponent() {
 					return true
 			}
 		},
-		[salesRange]
+		[salesRange],
 	)
 
 	const salesSeries = React.useMemo(() => {
@@ -296,7 +302,7 @@ function DashboardInnerComponent() {
 		return sorted.map(([day, count], index) => ({
 			label: new Date(day).toLocaleDateString(),
 			value: count,
-			index: index
+			index: index,
 		}))
 	}, [orders, isWithinRange])
 
@@ -328,11 +334,12 @@ function DashboardInnerComponent() {
 	}, [])
 
 	const uplotData = React.useMemo(() => {
-		if (salesSeries.length === 0) return [[0, 1], [0, 0]]
-		return [
-			salesSeries.map((_, i) => i),
-			salesSeries.map(s => s.value)
-		]
+		if (salesSeries.length === 0)
+			return [
+				[0, 1],
+				[0, 0],
+			]
+		return [salesSeries.map((_, i) => i), salesSeries.map((s) => s.value)]
 	}, [salesSeries])
 
 	const uplotOpts = React.useMemo(() => {
@@ -427,15 +434,15 @@ function DashboardInnerComponent() {
 		top: dashboardActions.getLayoutWidgets('top'),
 		bottom: dashboardActions.getLayoutWidgets('bottom'),
 		right: dashboardActions.getLayoutWidgets('right'),
-		hidden: dashboardActions.getLayoutWidgets('hidden')
+		hidden: dashboardActions.getLayoutWidgets('hidden'),
 	}
-	
+
 	// Widget component renderer
 	const renderWidget = (widget: any, spanClass?: string) => {
 		if (!widget || !widget.id || !widget.component) return null
-		
-		const baseClasses = cn(spanClass, "min-h-0 h-full")
-		
+
+		const baseClasses = cn(spanClass, 'min-h-0 h-full')
+
 		switch (widget.component) {
 			case 'V4VContributions':
 				return (
@@ -462,30 +469,39 @@ function DashboardInnerComponent() {
 										}
 
 										// Map to display entries enriched with v4v shares names if possible
-										const entries = Array.from(receiptSumBySender.entries()).map(([pubkey, total]) => {
-											const match = v4vShares.find((s: any) => s.pubkey === pubkey)
-											const name = match?.name || pubkey.slice(0, 8)
-											return { pubkey, name, total }
-										}).sort((a,b) => b.total - a.total)
+										const entries = Array.from(receiptSumBySender.entries())
+											.map(([pubkey, total]) => {
+												const match = v4vShares.find((s: any) => s.pubkey === pubkey)
+												const name = match?.name || pubkey.slice(0, 8)
+												return { pubkey, name, total }
+											})
+											.sort((a, b) => b.total - a.total)
 
 										const top = entries.slice(0, 10)
-										if (top.length === 0) return (<div className="text-sm text-muted-foreground h-full flex items-center justify-center">No V4V activity yet.</div>)
+										if (top.length === 0)
+											return (
+												<div className="text-sm text-muted-foreground h-full flex items-center justify-center">No V4V activity yet.</div>
+											)
 
-										const maxVal = Math.max(...top.map(e => e.total), 1)
+										const maxVal = Math.max(...top.map((e) => e.total), 1)
 										return (
 											<div className="space-y-2">
 												{top.map((e) => {
 													const pct = Math.max(2, Math.round((e.total / maxVal) * 100))
 													return (
 														<div key={e.pubkey} className="flex items-center gap-2">
-															<div className="w-24 flex-shrink-0 text-xs truncate" title={e.name}>{e.name}</div>
+															<div className="w-24 flex-shrink-0 text-xs truncate" title={e.name}>
+																{e.name}
+															</div>
 															<div className="flex-1">
 																<div className="h-6 border border-black bg-layer-overlay relative">
 																	<div className="h-full bg-pink-500" style={{ width: pct + '%' }} />
-																	<div className="absolute inset-0 flex items-center justify-end pr-2 text-xs font-mono">{e.total.toLocaleString()} sats</div>
+																	<div className="absolute inset-0 flex items-center justify-end pr-2 text-xs font-mono">
+																		{e.total.toLocaleString()} sats
+																	</div>
 																</div>
 															</div>
-													</div>
+														</div>
 													)
 												})}
 											</div>
@@ -516,9 +532,7 @@ function DashboardInnerComponent() {
 											.slice(0, 8)
 
 										if (receipts.length === 0) {
-											return (
-												<div className="text-sm text-muted-foreground h-full flex items-center justify-center">No payments yet.</div>
-											)
+											return <div className="text-sm text-muted-foreground h-full flex items-center justify-center">No payments yet.</div>
 										}
 
 										return receipts.map((r, idx) => {
@@ -526,7 +540,10 @@ function DashboardInnerComponent() {
 											const amountTag = r.tags.find((t) => t[0] === 'amount') as any
 											const amount = amountTag ? parseInt(amountTag[1] as string, 10) : undefined
 											return (
-												<div key={r.id || `receipt-${idx}`} className="flex items-center justify-between rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay">
+												<div
+													key={r.id || `receipt-${idx}`}
+													className="flex items-center justify-between rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay"
+												>
 													<div className="min-w-0">
 														<div className="text-sm font-medium truncate">{amount ? `${amount.toLocaleString()} sats` : 'Payment'}</div>
 														<div className="text-xs text-muted-foreground truncate">{ts}</div>
@@ -542,7 +559,7 @@ function DashboardInnerComponent() {
 						</Card>
 					</div>
 				)
-			
+
 			case 'SalesOverview':
 				return (
 					<div key={widget.id} className={baseClasses}>
@@ -579,32 +596,43 @@ function DashboardInnerComponent() {
 											const status = getOrderStatus(o)
 											const { bgColor, textColor } = getStatusStyles(o)
 											return (
-												<div key={orderId} className="flex items-center justify-between rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay">
+												<div
+													key={orderId}
+													className="flex items-center justify-between rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay"
+												>
 													<Link
 														to="/dashboard/orders/$orderId"
 														params={{ orderId }}
 														search={{ from: 'dashboard' } as any}
 														className="flex min-w-0 items-center gap-3"
 													>
-														<div className="h-8 w-8 rounded bg-muted flex items-center justify-center text-xs font-mono">{(orderId && typeof orderId === 'string' ? orderId.slice(0, 4) : '????')}</div>
+														<div className="h-8 w-8 rounded bg-muted flex items-center justify-center text-xs font-mono">
+															{orderId && typeof orderId === 'string' ? orderId.slice(0, 4) : '????'}
+														</div>
 														<div className="min-w-0">
 															<div className="text-sm font-medium truncate">{amount}</div>
 															<div className="text-xs text-muted-foreground truncate">{date}</div>
 														</div>
 													</Link>
 													<div className="flex items-center gap-2 flex-shrink-0">
-														<span className={cn('text-xs capitalize rounded px-2 py-0.5 border w-28 text-center', bgColor, textColor)}>{status}</span>
+														<span className={cn('text-xs capitalize rounded px-2 py-0.5 border w-28 text-center', bgColor, textColor)}>
+															{status}
+														</span>
 														{user?.pubkey && (
-															<OrderActions order={o} userPubkey={user.pubkey} variant="ghost" className="h-8 w-8 p-0" showStatusBadge={false} />
+															<OrderActions
+																order={o}
+																userPubkey={user.pubkey}
+																variant="ghost"
+																className="h-8 w-8 p-0"
+																showStatusBadge={false}
+															/>
 														)}
 													</div>
 												</div>
 											)
 										})}
 										{!ordersLoading && orders.length === 0 && (
-											<div className="text-sm text-muted-foreground h-full flex items-center justify-center">
-												No sales yet.
-											</div>
+											<div className="text-sm text-muted-foreground h-full flex items-center justify-center">No sales yet.</div>
 										)}
 										{isMobile && filteredOrders.length > 4 && (
 											<div className="pt-2">
@@ -620,7 +648,7 @@ function DashboardInnerComponent() {
 						)}
 					</div>
 				)
-			
+
 			case 'TopProducts':
 				return (
 					<div key={widget.id} className={baseClasses}>
@@ -647,22 +675,25 @@ function DashboardInnerComponent() {
 												const title = getProductTitle(product)
 												const price = getProductPrice(product)
 												return (
-													<div key={product.id || `product-${index}`} className="flex items-center justify-between rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay">
-														<Link
-															to="/products/$productId"
-															params={{ productId: product.id }}
-															className="flex min-w-0 items-center gap-3"
-														>
+													<div
+														key={product.id || `product-${index}`}
+														className="flex items-center justify-between rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay"
+													>
+														<Link to="/products/$productId" params={{ productId: product.id }} className="flex min-w-0 items-center gap-3">
 															<div className="h-8 w-8 rounded bg-muted flex items-center justify-center text-xs font-mono overflow-hidden">
 																{imageUrl ? (
 																	<img src={imageUrl} alt={title} className="h-full w-full object-cover" />
+																) : title && typeof title === 'string' ? (
+																	title.slice(0, 2)
 																) : (
-																	(title && typeof title === 'string' ? title.slice(0, 2) : '??')
+																	'??'
 																)}
 															</div>
 															<div className="min-w-0">
 																<div className="text-sm font-medium truncate">{title}</div>
-																<div className="text-xs text-muted-foreground truncate">{price ? `${price[1]} ${price[2]}` : 'No price'}</div>
+																<div className="text-xs text-muted-foreground truncate">
+																	{price ? `${price[1]} ${price[2]}` : 'No price'}
+																</div>
 															</div>
 														</Link>
 													</div>
@@ -676,7 +707,7 @@ function DashboardInnerComponent() {
 						)}
 					</div>
 				)
-			
+
 			case 'SalesChart':
 				return (
 					<div key={widget.id} className={baseClasses}>
@@ -721,7 +752,7 @@ function DashboardInnerComponent() {
 						)}
 					</div>
 				)
-			
+
 			case 'LatestMessages':
 				return (
 					<div key={widget.id} className={baseClasses}>
@@ -746,7 +777,9 @@ function DashboardInnerComponent() {
 												className="flex items-center justify-between rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay"
 											>
 												<div className="min-w-0">
-													<div className="text-sm font-medium truncate">{c.profile?.name || c.profile?.displayName || c.pubkey.slice(0, 8)}</div>
+													<div className="text-sm font-medium truncate">
+														{c.profile?.name || c.profile?.displayName || c.pubkey.slice(0, 8)}
+													</div>
 													<div className="text-xs text-muted-foreground truncate">{c.lastMessageSnippet}</div>
 												</div>
 												<div className="text-xs text-muted-foreground ml-4 whitespace-nowrap">
@@ -755,9 +788,7 @@ function DashboardInnerComponent() {
 											</Link>
 										))}
 										{!conversationsLoading && conversations.length === 0 && (
-											<div className="text-sm text-muted-foreground h-full flex items-center justify-center">
-												No messages yet.
-											</div>
+											<div className="text-sm text-muted-foreground h-full flex items-center justify-center">No messages yet.</div>
 										)}
 										<div className="h-0 lg:h-4" />
 									</div>
@@ -766,7 +797,7 @@ function DashboardInnerComponent() {
 						)}
 					</div>
 				)
-			
+
 			case 'NostrPosts':
 				return (
 					<div key={widget.id} className={baseClasses}>
@@ -792,23 +823,15 @@ function DashboardInnerComponent() {
 											>
 												<div className="text-sm font-medium mb-1">{p.author.slice(0, 8)}</div>
 												<div className="text-sm line-clamp-3 whitespace-pre-wrap break-words">{p.content}</div>
-												<div className="text-xs text-muted-foreground mt-2">
-													{new Date(p.createdAt * 1000).toLocaleString()}
-												</div>
+												<div className="text-xs text-muted-foreground mt-2">{new Date(p.createdAt * 1000).toLocaleString()}</div>
 											</Link>
 										))}
 										{!postsLoading && posts.length === 0 && (
-											<div className="text-sm text-muted-foreground h-full flex items-center justify-center">
-												No posts found.
-											</div>
+											<div className="text-sm text-muted-foreground h-full flex items-center justify-center">No posts found.</div>
 										)}
 										{posts.length > visiblePostsCount && (
 											<div className="pt-2">
-												<Button
-													onClick={() => setVisiblePostsCount((n) => n + 20)}
-													className="w-full"
-													variant="primary"
-												>
+												<Button onClick={() => setVisiblePostsCount((n) => n + 20)} className="w-full" variant="primary">
 													Load more
 												</Button>
 											</div>
@@ -820,7 +843,7 @@ function DashboardInnerComponent() {
 						)}
 					</div>
 				)
-			
+
 			case 'LowStock':
 				return (
 					<div key={widget.id} className={baseClasses}>
@@ -837,14 +860,18 @@ function DashboardInnerComponent() {
 								<CardContent className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
 									<div className="space-y-3 h-full">
 										{(() => {
-											const withStock = (myProducts || []).map((p) => ({
-												product: p,
-												stock: (() => { const s = getProductStock(p); return s ? parseInt(s[1] as string, 10) : Number.POSITIVE_INFINITY })(),
-											}))
-											.filter((x) => Number.isFinite(x.stock))
-											.sort((a, b) => a.stock - b.stock)
-											.slice(0, 8)
-											
+											const withStock = (myProducts || [])
+												.map((p) => ({
+													product: p,
+													stock: (() => {
+														const s = getProductStock(p)
+														return s ? parseInt(s[1] as string, 10) : Number.POSITIVE_INFINITY
+													})(),
+												}))
+												.filter((x) => Number.isFinite(x.stock))
+												.sort((a, b) => a.stock - b.stock)
+												.slice(0, 8)
+
 											if (withStock.length === 0) {
 												return (
 													<div className="text-sm text-muted-foreground h-full flex items-center justify-center">No low stock items.</div>
@@ -856,13 +883,18 @@ function DashboardInnerComponent() {
 												const imageUrl = images?.[0]?.[1]
 												const title = getProductTitle(product)
 												return (
-													<div key={product.id} className="flex items-center justify-between rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay">
+													<div
+														key={product.id}
+														className="flex items-center justify-between rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay"
+													>
 														<Link to="/products/$productId" params={{ productId: product.id }} className="flex min-w-0 items-center gap-3">
 															<div className="h-8 w-8 rounded bg-muted flex items-center justify-center text-xs font-mono overflow-hidden">
 																{imageUrl ? (
 																	<img src={imageUrl} alt={title} className="h-full w-full object-cover" />
+																) : title && typeof title === 'string' ? (
+																	title.slice(0, 2)
 																) : (
-																	(title && typeof title === 'string' ? title.slice(0, 2) : '??')
+																	'??'
 																)}
 															</div>
 															<div className="min-w-0">
@@ -882,7 +914,7 @@ function DashboardInnerComponent() {
 						)}
 					</div>
 				)
-			
+
 			case 'PopularCategories':
 				return (
 					<div key={widget.id} className={baseClasses}>
@@ -906,10 +938,18 @@ function DashboardInnerComponent() {
 													counts.set(name, (counts.get(name) || 0) + 1)
 												}
 											}
-											const sorted = Array.from(counts.entries()).sort((a,b) => b[1]-a[1]).slice(0,8)
-											if (sorted.length === 0) return (<div className="text-sm text-muted-foreground h-full flex items-center justify-center">No categories yet.</div>)
+											const sorted = Array.from(counts.entries())
+												.sort((a, b) => b[1] - a[1])
+												.slice(0, 8)
+											if (sorted.length === 0)
+												return (
+													<div className="text-sm text-muted-foreground h-full flex items-center justify-center">No categories yet.</div>
+												)
 											return sorted.map(([name, count]) => (
-												<div key={name} className="flex items-center justify-between rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay">
+												<div
+													key={name}
+													className="flex items-center justify-between rounded border border-black p-3 fg-layer-overlay hover:bg-layer-overlay"
+												>
 													<div className="min-w-0">
 														<div className="text-sm font-medium truncate">{name}</div>
 														<div className="text-xs text-muted-foreground truncate">{count} listings</div>
@@ -925,7 +965,7 @@ function DashboardInnerComponent() {
 						)}
 					</div>
 				)
-			
+
 			default:
 				return null
 		}
@@ -936,18 +976,20 @@ function DashboardInnerComponent() {
 			{/* Dynamic Layout based on widget configuration */}
 			<div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0 overflow-hidden">
 				{/* Main grid area */}
-				<div className={cn(
-					// If right column is empty, let main grid span all 3 columns on desktop
-					layoutWidgets.right.length === 0 ? 'lg:col-span-3' : 'lg:col-span-2',
-					'grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-2 gap-4 min-h-0'
-				)}>
+				<div
+					className={cn(
+						// If right column is empty, let main grid span all 3 columns on desktop
+						layoutWidgets.right.length === 0 ? 'lg:col-span-3' : 'lg:col-span-2',
+						'grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-2 gap-4 min-h-0',
+					)}
+				>
 					{/* Top Row */}
 					{layoutWidgets.top.map((widget, index) => (
 						<div key={widget.id} className={layoutWidgets.top.length === 1 ? 'lg:col-span-2' : 'lg:col-span-1'}>
 							{renderWidget(widget)}
 						</div>
 					))}
-					
+
 					{/* Bottom Row */}
 					{layoutWidgets.bottom.map((widget, index) => (
 						<div key={widget.id} className={layoutWidgets.bottom.length === 1 ? 'lg:col-span-2' : 'lg:col-span-1'}>

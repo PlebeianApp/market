@@ -50,7 +50,7 @@
 	color: #ffffff;
 	border: 2px solid transparent;
 	background-clip: padding-box;
-	box-shadow: 
+	box-shadow:
 		0 4px 15px 0 rgba(29, 29, 29, 0.3),
 		inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
@@ -59,7 +59,7 @@
 	background: linear-gradient(135deg, transparent 0%, transparent 100%);
 	color: #ff3eb5;
 	border-color: #ff3eb5;
-	box-shadow: 
+	box-shadow:
 		0 8px 25px 0 rgba(255, 62, 181, 0.25),
 		inset 0 0 20px rgba(255, 62, 181, 0.05);
 }
@@ -70,7 +70,7 @@
 	color: #0a0a0a;
 	border: 2px solid transparent;
 	background-clip: padding-box;
-	box-shadow: 
+	box-shadow:
 		0 4px 15px 0 rgba(255, 62, 181, 0.4),
 		inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
@@ -79,7 +79,7 @@
 	background: linear-gradient(135deg, transparent 0%, transparent 100%);
 	color: #ff3eb5;
 	border-color: #ff3eb5;
-	box-shadow: 
+	box-shadow:
 		0 8px 25px 0 rgba(255, 62, 181, 0.35),
 		inset 0 0 20px rgba(255, 62, 181, 0.1);
 }
@@ -89,7 +89,7 @@
 	background: linear-gradient(135deg, #ffffff 0%, #f8f8f8 100%);
 	color: #1d1d1d;
 	border: 2px solid #1d1d1d;
-	box-shadow: 
+	box-shadow:
 		0 4px 15px 0 rgba(29, 29, 29, 0.1),
 		inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
@@ -98,7 +98,7 @@
 	background: linear-gradient(135deg, #606060 0%, #404040 100%);
 	color: #ffffff;
 	border-color: #606060;
-	box-shadow: 
+	box-shadow:
 		0 8px 25px 0 rgba(96, 96, 96, 0.25),
 		inset 0 0 20px rgba(255, 255, 255, 0.05);
 }
@@ -109,7 +109,7 @@
 	color: #0a0a0a;
 	border: 2px solid transparent;
 	background-clip: padding-box;
-	box-shadow: 
+	box-shadow:
 		0 4px 15px 0 rgba(255, 213, 61, 0.4),
 		inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
@@ -118,7 +118,7 @@
 	background: linear-gradient(135deg, transparent 0%, transparent 100%);
 	color: #ffd53d;
 	border-color: #ffd53d;
-	box-shadow: 
+	box-shadow:
 		0 8px 25px 0 rgba(255, 213, 61, 0.35),
 		inset 0 0 20px rgba(255, 213, 61, 0.1);
 }
@@ -129,7 +129,7 @@
 	color: #ffffff;
 	border: 2px solid transparent;
 	background-clip: padding-box;
-	box-shadow: 
+	box-shadow:
 		0 4px 15px 0 rgba(191, 64, 64, 0.3),
 		inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
@@ -138,7 +138,7 @@
 	background: linear-gradient(135deg, transparent 0%, transparent 100%);
 	color: #bf4040;
 	border-color: #bf4040;
-	box-shadow: 
+	box-shadow:
 		0 8px 25px 0 rgba(191, 64, 64, 0.25),
 		inset 0 0 20px rgba(191, 64, 64, 0.05);
 }
@@ -149,7 +149,7 @@
 	color: #1d1d1d;
 	border: 2px solid rgba(29, 29, 29, 0.2);
 	backdrop-filter: blur(10px);
-	box-shadow: 
+	box-shadow:
 		0 4px 15px 0 rgba(0, 0, 0, 0.05),
 		inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
@@ -158,7 +158,7 @@
 	background: rgba(255, 62, 181, 0.1);
 	color: #ff3eb5;
 	border-color: #ff3eb5;
-	box-shadow: 
+	box-shadow:
 		0 8px 25px 0 rgba(255, 62, 181, 0.15),
 		inset 0 0 20px rgba(255, 62, 181, 0.05);
 }

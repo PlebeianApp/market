@@ -15,9 +15,9 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/sales')
 
 function SalesComponent() {
 	useDashboardTitle('Sales')
-    const { user } = useStore(authStore)
+	const { user } = useStore(authStore)
 	const [statusFilter, setStatusFilter] = useState<string>('any')
-    const { data: sales, isLoading } = useOrdersBySeller(user?.pubkey || '')
+	const { data: sales, isLoading } = useOrdersBySeller(user?.pubkey || '')
 
 	// Filter orders by status if needed
 	const filteredSales = useMemo(() => {

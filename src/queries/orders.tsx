@@ -339,13 +339,13 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string): Promise<OrderWith
  * Hook to fetch orders where the specified user is the buyer
  */
 export const useOrdersByBuyer = (buyerPubkey: string) => {
-    const ndk = ndkActions.getNDK()
-    const isConnected = !!ndk?.signer
+	const ndk = ndkActions.getNDK()
+	const isConnected = !!ndk?.signer
 
-    return useQuery({
+	return useQuery({
 		queryKey: orderKeys.byBuyer(buyerPubkey),
 		queryFn: () => fetchOrdersByBuyer(buyerPubkey),
-        enabled: !!buyerPubkey && isConnected,
+		enabled: !!buyerPubkey && isConnected,
 	})
 }
 
@@ -496,7 +496,7 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 	return useQuery({
 		queryKey: orderKeys.bySeller(sellerPubkey),
 		queryFn: () => fetchOrdersBySeller(sellerPubkey),
-        enabled: !!sellerPubkey && isConnected,
+		enabled: !!sellerPubkey && isConnected,
 	})
 }
 

@@ -158,19 +158,19 @@ button {
 	/* Base layer - Main page background */
 	--bg-base: #ffffff;
 	--fg-base: #fafafa;
-	
+
 	/* Elevated layer - Cards, panels, containers on base */
 	--bg-elevated: #fafafa;
 	--fg-elevated: #f5f5f5;
-	
+
 	/* Overlay layer - Dropdowns, tooltips, dialogs on elevated */
 	--bg-overlay: #f5f5f5;
 	--fg-overlay: #f0f0f0;
-	
+
 	/* Modal layer - Highest level modals, sheets */
 	--bg-modal: #f0f0f0;
 	--fg-modal: #ebebeb;
-	
+
 	/* Interactive layer - Hover states, active elements */
 	--bg-interactive: #ebebeb;
 	--fg-interactive: #e5e5e5;
@@ -327,8 +327,6 @@ button {
 		transition: background-color 0.2s ease-out;
 	}
 
-
-
 	.bg-hero-image {
 		background-size: cover;
 		background-position: center;
@@ -457,68 +455,63 @@ button {
 	}
 
 	/* Layered White System Utilities */
-	
+
 	/* Background Layer Classes */
-	.bg-layer-base { 
-		background-color: var(--bg-base); 
+	.bg-layer-base {
+		background-color: var(--bg-base);
 	}
-	.bg-layer-elevated { 
-		background-color: var(--bg-elevated); 
+	.bg-layer-elevated {
+		background-color: var(--bg-elevated);
 	}
-	.bg-layer-overlay { 
-		background-color: var(--bg-overlay); 
+	.bg-layer-overlay {
+		background-color: var(--bg-overlay);
 	}
-	.bg-layer-modal { 
-		background-color: var(--bg-modal); 
+	.bg-layer-modal {
+		background-color: var(--bg-modal);
 	}
-	.bg-layer-interactive { 
-		background-color: var(--bg-interactive); 
+	.bg-layer-interactive {
+		background-color: var(--bg-interactive);
 	}
 
 	/* Foreground Layer Classes (for elements on top of backgrounds) */
-	.fg-layer-base { 
-		background-color: var(--fg-base); 
+	.fg-layer-base {
+		background-color: var(--fg-base);
 	}
-	.fg-layer-elevated { 
-		background-color: var(--fg-elevated); 
+	.fg-layer-elevated {
+		background-color: var(--fg-elevated);
 	}
-	.fg-layer-overlay { 
-		background-color: var(--fg-overlay); 
+	.fg-layer-overlay {
+		background-color: var(--fg-overlay);
 	}
-	.fg-layer-modal { 
-		background-color: var(--fg-modal); 
+	.fg-layer-modal {
+		background-color: var(--fg-modal);
 	}
-	.fg-layer-interactive { 
-		background-color: var(--fg-interactive); 
+	.fg-layer-interactive {
+		background-color: var(--fg-interactive);
 	}
 
 	/* Hover States for Interactive Layering */
-	.bg-layer-base:hover { 
-		background-color: var(--fg-base); 
-		transition: background-color 0.2s ease; 
+	.bg-layer-base:hover {
+		background-color: var(--fg-base);
+		transition: background-color 0.2s ease;
 	}
-	.bg-layer-elevated:hover { 
-		background-color: var(--fg-elevated); 
-		transition: background-color 0.2s ease; 
+	.bg-layer-elevated:hover {
+		background-color: var(--fg-elevated);
+		transition: background-color 0.2s ease;
 	}
-	.bg-layer-overlay:hover { 
-		background-color: var(--fg-overlay); 
-		transition: background-color 0.2s ease; 
+	.bg-layer-overlay:hover {
+		background-color: var(--fg-overlay);
+		transition: background-color 0.2s ease;
 	}
 
 	/* Border utilities for layered interfaces */
-	.border-layer-subtle { 
-		border-color: var(--fg-elevated); 
+	.border-layer-subtle {
+		border-color: var(--fg-elevated);
 	}
-	.border-layer-medium { 
-		border-color: var(--fg-overlay); 
+	.border-layer-medium {
+		border-color: var(--fg-overlay);
 	}
-	.border-layer-strong { 
-		border-color: var(--fg-interactive); 
+	.border-layer-strong {
+		border-color: var(--fg-interactive);
 	}
-
-
-
-
 }
-

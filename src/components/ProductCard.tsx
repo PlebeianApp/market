@@ -38,12 +38,12 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 		if (isOwnProduct) return // Don't allow adding own products to cart
 
 		setIsAddingToCart(true)
-		
+
 		try {
 			const userPubkey = await ndk.getUser()
 			if (!userPubkey) return
 			cart.addProduct(userPubkey.pubkey, product)
-			
+
 			// Show confirmation animation
 			setShowConfirmation(true)
 			setTimeout(() => setShowConfirmation(false), 1500) // Hide after 1.5 seconds
@@ -118,14 +118,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 						onClick={handleAddToCart}
 						disabled={isOwnProduct || isAddingToCart}
 					>
-						{isOwnProduct 
-							? 'Your Product' 
-							: showConfirmation 
-								? '✓ Added!' 
-								: isAddingToCart 
-									? 'Adding...' 
-									: 'Add to Cart'
-						}
+						{isOwnProduct ? 'Your Product' : showConfirmation ? '✓ Added!' : isAddingToCart ? 'Adding...' : 'Add to Cart'}
 					</Button>
 					<ZapButton event={product} />
 				</div>

@@ -107,21 +107,17 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 				{/* Product Image */}
 				{images && images.length > 0 ? (
 					<div className="h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 rounded-md border overflow-hidden">
-						<img 
-							src={images[0][1]} 
-							alt={title || 'Product image'} 
-							className="h-full w-full object-cover object-center" 
+						<img
+							src={images[0][1]}
+							alt={title || 'Product image'}
+							className="h-full w-full object-cover object-center"
 							style={{ maxWidth: '100%', maxHeight: '100%' }}
 						/>
 					</div>
 				) : (
 					<div className="h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 rounded-md border bg-gray-100 flex items-center justify-center text-gray-400 overflow-hidden">
 						<span className="text-xs text-center px-1 leading-tight" style={{ lineHeight: '1.1' }}>
-							{title ? (
-								title.split(' ').slice(0, 2).join(' ')
-							) : (
-								'No image'
-							)}
+							{title ? title.split(' ').slice(0, 2).join(' ') : 'No image'}
 						</span>
 					</div>
 				)}
@@ -131,14 +127,13 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 					<div>
 						<h3 className="text-base font-medium">{title || 'Untitled Product'}</h3>
 						<p className="mt-1 text-sm text-muted-foreground">
-							{currency.toLowerCase() === 'sats' || currency.toLowerCase() === 'sat' 
+							{currency.toLowerCase() === 'sats' || currency.toLowerCase() === 'sat'
 								? `${Math.round(price).toLocaleString()} sats`
-								: `${Math.round(price * 100).toLocaleString()} sats (${price.toFixed(2)} ${currency})`
-							}
+								: `${Math.round(price * 100).toLocaleString()} sats (${price.toFixed(2)} ${currency})`}
 						</p>
 					</div>
 
-				{/* Quantity Controls */}
+					{/* Quantity Controls */}
 					<div className="flex items-center mt-2">
 						<div className="flex items-center space-x-2">
 							<Button variant="outline" size="icon" className="h-8 w-8" onClick={handleDecrementClick} disabled={amount <= 1}>
@@ -171,8 +166,6 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 				>
 					<Trash2 size={16} />
 				</Button>
-
-
 			</div>
 
 			{/* Shipping Section - only show if not hidden */}

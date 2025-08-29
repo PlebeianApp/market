@@ -34,15 +34,15 @@ const CloseIcon = () => (
 	</svg>
 )
 
-const DraggableWidget: React.FC<DraggableWidgetProps> = ({ 
-	widget, 
-	index, 
-	section, 
-	onRemove, 
-	onDragStart, 
-	onDragOver, 
-	onDrop, 
-	showRemove = true
+const DraggableWidget: React.FC<DraggableWidgetProps> = ({
+	widget,
+	index,
+	section,
+	onRemove,
+	onDragStart,
+	onDragOver,
+	onDrop,
+	showRemove = true,
 }) => {
 	return (
 		<div
@@ -138,15 +138,18 @@ export const DashboardSettingsModal: React.FC = () => {
 
 	return (
 		<Sheet open={isOpen} onOpenChange={() => dashboardActions.closeSettings()}>
-			<SheetContent side="left" className="flex flex-col max-h-screen w-[100vw] sm:w-[85vw] md:w-[55vw] xl:w-[35vw] p-0 [&>button]:text-white [&>button]:hover:text-gray-300 [&>button]:z-20">
+			<SheetContent
+				side="left"
+				className="flex flex-col max-h-screen w-[100vw] sm:w-[85vw] md:w-[55vw] xl:w-[35vw] p-0 [&>button]:text-white [&>button]:hover:text-gray-300 [&>button]:z-20"
+			>
 				{/* Fixed Header */}
 				<SheetHeader className="relative px-6 py-4 border-b border-black flex-shrink-0 bg-black text-white overflow-hidden">
-					<div 
+					<div
 						className="absolute inset-0 opacity-80 pointer-events-none"
 						style={{
 							backgroundImage: 'radial-gradient(circle, rgba(255, 255, 255, 0.3) 1px, transparent 1px)',
 							backgroundSize: '10px 10px',
-							backgroundRepeat: 'repeat'
+							backgroundRepeat: 'repeat',
 						}}
 					/>
 					<div className="relative z-10 flex items-center min-h-[24px]">
@@ -208,7 +211,12 @@ export const DashboardSettingsModal: React.FC = () => {
 											/>
 										))}
 										{getSectionWidgets('bottom').length < 2 && (
-											<DropSlot section="bottom" index={getSectionWidgets('bottom').length} onDragOver={handleDragOver} onDrop={handleDrop} />
+											<DropSlot
+												section="bottom"
+												index={getSectionWidgets('bottom').length}
+												onDragOver={handleDragOver}
+												onDrop={handleDrop}
+											/>
 										)}
 									</>
 								)}
@@ -286,8 +294,12 @@ export const DashboardSettingsModal: React.FC = () => {
 							</Button>
 						</div>
 						<div className="flex items-center gap-2">
-							<Button onClick={dashboardActions.resetToDefaults} variant="outline" className="btn-black">Reset</Button>
-							<Button onClick={() => dashboardActions.closeSettings()} variant="outline" className="btn-black">Done</Button>
+							<Button onClick={dashboardActions.resetToDefaults} variant="outline" className="btn-black">
+								Reset
+							</Button>
+							<Button onClick={() => dashboardActions.closeSettings()} variant="outline" className="btn-black">
+								Done
+							</Button>
 						</div>
 					</div>
 				</div>

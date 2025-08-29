@@ -139,12 +139,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 					{/* Left: Back button (only visible on generateInvoice step) */}
 					<div className="flex items-center w-8">
 						{step === 'generateInvoice' && (
-							<Button
-								variant="ghost"
-								size="sm"
-								onClick={() => setStep('main')}
-								className="h-8 w-8 p-0"
-							>
+							<Button variant="ghost" size="sm" onClick={() => setStep('main')} className="h-8 w-8 p-0">
 								<ChevronLeft className="h-4 w-4" />
 							</Button>
 						)}
@@ -152,24 +147,14 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 
 					{/* Center: Profile name and address */}
 					<div className="flex-1 text-center px-2 min-w-0">
-						<h2 className="text-base font-semibold truncate">
-							Zap {recipientName}
-						</h2>
-						{lightningAddress && (
-							<p className="text-sm text-muted-foreground truncate">
-								{lightningAddress}
-							</p>
-						)}
+						<h2 className="text-base font-semibold truncate">Zap {recipientName}</h2>
+						{lightningAddress && <p className="text-sm text-muted-foreground truncate">{lightningAddress}</p>}
 					</div>
 
 					{/* Right: Close button */}
 					<div className="flex items-center w-8">
 						<DialogClose asChild>
-							<Button
-								variant="ghost"
-								size="sm"
-								className="h-8 w-8 p-0"
-							>
+							<Button variant="ghost" size="sm" className="h-8 w-8 p-0">
 								<X className="h-4 w-4" />
 							</Button>
 						</DialogClose>
@@ -200,13 +185,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 								<Label htmlFor="zapMessage" className="font-bold">
 									Message
 								</Label>
-								<Input
-									id="zapMessage"
-									type="text"
-									value={zapMessage}
-									onChange={(e) => setZapMessage(e.target.value)}
-									className="w-full"
-								/>
+								<Input id="zapMessage" type="text" value={zapMessage} onChange={(e) => setZapMessage(e.target.value)} className="w-full" />
 							</div>
 						</div>
 
@@ -267,11 +246,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 							<p className="text-sm font-medium">
 								Amount: <span className="font-bold">{isValidAmount ? numericAmount : '0'} sats</span>
 							</p>
-							{zapMessage && (
-								<p className="text-sm text-muted-foreground mt-1">
-									Message: "{zapMessage}"
-								</p>
-							)}
+							{zapMessage && <p className="text-sm text-muted-foreground mt-1">Message: "{zapMessage}"</p>}
 						</div>
 
 						<div className="w-full overflow-hidden">

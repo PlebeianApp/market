@@ -16,4 +16,6 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/')({
 	},
 })
 
-function DashboardInnerComponent() { return null }
+function DashboardInnerComponent() {
+	return null
+}

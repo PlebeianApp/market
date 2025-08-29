@@ -111,7 +111,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 		setTrackingNumber('')
 	}
 
-    // Even if user cannot act, we render a disabled placeholder to keep layout consistent
+	// Even if user cannot act, we render a disabled placeholder to keep layout consistent
 
 	// Check if there are any available actions
 	const hasActions = (isBuyer || isSeller) && (canCancel || canConfirm || canProcess || canShip || canComplete || canReceive)
@@ -136,7 +136,9 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 	const BADGE_WIDTH_CLASS = 'w-28'
 
 	return (
-		<div className={showStatusBadge ? "flex w-full items-center justify-between gap-2 md:w-auto md:justify-end" : "flex items-center gap-2"}>
+		<div
+			className={showStatusBadge ? 'flex w-full items-center justify-between gap-2 md:w-auto md:justify-end' : 'flex items-center gap-2'}
+		>
 			{showStatusBadge && (
 				<div className={cn('flex items-center justify-center gap-2 rounded-md px-3 py-1', BADGE_WIDTH_CLASS, bgColor, textColor)}>
 					{renderIcon()}

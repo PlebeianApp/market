@@ -85,7 +85,7 @@ const defaultLayout: DashboardLayout = {
 	top: ['sales-overview', 'top-products'],
 	bottom: ['sales-chart', 'latest-messages'],
 	right: ['nostr-posts'],
-	hidden: ['low-stock','popular-categories','payments','v4v-contributions'],
+	hidden: ['low-stock', 'popular-categories', 'payments', 'v4v-contributions'],
 }
 
 export interface DashboardState {
@@ -132,12 +132,7 @@ if (typeof window !== 'undefined') {
 }
 
 function isInAnySection(layout: DashboardLayout, id: string): boolean {
-	return (
-		layout.top.includes(id) ||
-		layout.bottom.includes(id) ||
-		layout.right.includes(id) ||
-		layout.hidden.includes(id)
-	)
+	return layout.top.includes(id) || layout.bottom.includes(id) || layout.right.includes(id) || layout.hidden.includes(id)
 }
 
 function removeFromAllSections(layout: DashboardLayout, id: string): DashboardLayout {
@@ -176,7 +171,7 @@ export const dashboardActions = {
 	moveWidget: (sourceSection: string, destSection: string, sourceIndex: number, destIndex: number) => {
 		dashboardStore.setState((state) => {
 			const updatedLayout: DashboardLayout = { ...state.layout }
-			const isValidSection = (s: string): s is keyof DashboardLayout => ['top','bottom','right','hidden'].includes(s)
+			const isValidSection = (s: string): s is keyof DashboardLayout => ['top', 'bottom', 'right', 'hidden'].includes(s)
 			if (!isValidSection(sourceSection) || !isValidSection(destSection)) return state
 			const sourceArr = [...updatedLayout[sourceSection]]
 			if (sourceIndex < 0 || sourceIndex >= sourceArr.length) return state
@@ -188,7 +183,7 @@ export const dashboardActions = {
 			// Clamp destIndex into range
 			const clampedIndex = Math.max(0, Math.min(destIndex, destArr.length))
 
-			const capacity = (destSection === 'top' || destSection === 'bottom') ? 2 : Infinity
+			const capacity = destSection === 'top' || destSection === 'bottom' ? 2 : Infinity
 			if (destArr.length >= capacity && capacity !== Infinity) {
 				// Replace at index; push replaced to hidden
 				const replaceIndex = Math.max(0, Math.min(clampedIndex, capacity - 1))

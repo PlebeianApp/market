@@ -15,9 +15,9 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/account/your-
 
 function YourPurchasesComponent() {
 	useDashboardTitle('Your Purchases')
-    const { user } = useStore(authStore)
+	const { user } = useStore(authStore)
 	const [statusFilter, setStatusFilter] = useState<string>('any')
-    const { data: purchases, isLoading } = useOrdersByBuyer(user?.pubkey || '')
+	const { data: purchases, isLoading } = useOrdersByBuyer(user?.pubkey || '')
 
 	// Filter orders by status if needed
 	const filteredPurchases = useMemo(() => {

@@ -219,7 +219,7 @@ export function Header() {
 								) : isAuthenticated ? (
 									<>
 										<CartButton />
-								<Link to="/dashboard/dashboard" data-testid="dashboard-link">
+										<Link to="/dashboard/dashboard" data-testid="dashboard-link">
 											<Button
 												variant="primary"
 												className={`p-2 relative hover:[&>span]:text-secondary ${

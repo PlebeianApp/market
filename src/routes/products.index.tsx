@@ -131,43 +131,41 @@ function ProductsRoute() {
 		touchEndX.current = 0
 	}
 
-  // Render animated pagination indicators used across hero slides
-  const renderIndicators = () => (
-    <div className="flex justify-center gap-3">
-      {Array.from({ length: totalSlides }).map((_, index) => (
-        <button
-          key={index}
-          onClick={() => handleDotClick(index)}
-          className={`relative group transition-all duration-500 ease-out ${
-            index === currentSlideIndex ? 'w-8 h-3' : 'w-3 h-3 hover:scale-110'
-          }`}
-          aria-label={`View ${index === 1 ? 'homepage' : `product ${index === 0 ? 1 : index}`}`}
-        >
-          <div
-            className={`w-full h-full rounded-full transition-all duration-500 ease-out ${
-              index === currentSlideIndex
-                ? 'bg-white shadow-lg shadow-white/50'
-                : 'bg-white/30 group-hover:bg-white/60 backdrop-blur-sm'
-            }`}
-          />
-          {index === currentSlideIndex && (
-            <div className="absolute inset-0 rounded-full bg-gradient-to-r from-white/80 to-white animate-pulse" />
-          )}
-          <div
-            className={`absolute inset-0 rounded-full border transition-all duration-500 ${
-              index === currentSlideIndex ? 'border-white/80 shadow-md' : 'border-white/20 group-hover:border-white/40'
-            }`}
-          />
-        </button>
-      ))}
-    </div>
-  )
+	// Render animated pagination indicators used across hero slides
+	const renderIndicators = () => (
+		<div className="flex justify-center gap-3">
+			{Array.from({ length: totalSlides }).map((_, index) => (
+				<button
+					key={index}
+					onClick={() => handleDotClick(index)}
+					className={`relative group transition-all duration-500 ease-out ${
+						index === currentSlideIndex ? 'w-8 h-3' : 'w-3 h-3 hover:scale-110'
+					}`}
+					aria-label={`View ${index === 1 ? 'homepage' : `product ${index === 0 ? 1 : index}`}`}
+				>
+					<div
+						className={`w-full h-full rounded-full transition-all duration-500 ease-out ${
+							index === currentSlideIndex ? 'bg-white shadow-lg shadow-white/50' : 'bg-white/30 group-hover:bg-white/60 backdrop-blur-sm'
+						}`}
+					/>
+					{index === currentSlideIndex && (
+						<div className="absolute inset-0 rounded-full bg-gradient-to-r from-white/80 to-white animate-pulse" />
+					)}
+					<div
+						className={`absolute inset-0 rounded-full border transition-all duration-500 ${
+							index === currentSlideIndex ? 'border-white/80 shadow-md' : 'border-white/20 group-hover:border-white/40'
+						}`}
+					/>
+				</button>
+			))}
+		</div>
+	)
 
 	// Render homepage hero content
 	const renderHomepageHero = () => (
 		<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-16 lg:mt-0">
 			<div className="flex items-center justify-center h-32">
-        <h1 className="text-3xl lg:text-5xl font-theylive transition-opacity duration-500">Buy & Sell Stuff With Sats</h1>
+				<h1 className="text-3xl lg:text-5xl font-theylive transition-opacity duration-500">Buy & Sell Stuff With Sats</h1>
 			</div>
 
 			<div className="flex flex-col gap-6">
@@ -178,7 +176,7 @@ function ProductsRoute() {
 				</Button>
 
 				{/* Pagination dots */}
-        {totalSlides > 1 && renderIndicators()}
+				{totalSlides > 1 && renderIndicators()}
 			</div>
 		</div>
 	)
@@ -197,8 +195,8 @@ function ProductsRoute() {
 					</Button>
 				</Link>
 
-        {/* Pagination dots */}
-        {totalSlides > 1 && renderIndicators()}
+				{/* Pagination dots */}
+				{totalSlides > 1 && renderIndicators()}
 			</div>
 		</div>
 	)

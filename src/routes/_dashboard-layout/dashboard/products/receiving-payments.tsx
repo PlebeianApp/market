@@ -146,8 +146,8 @@ interface PaymentDetailConfirmationProps {
 function PaymentDetailConfirmationCard({ value, type, onConfirm, onCancel }: PaymentDetailConfirmationProps) {
 	const numAddresses = 5
 
-			return (
-			<Card className="border-yellow-200 bg-yellow-50 fg-layer-overlay">
+	return (
+		<Card className="border-yellow-200 bg-yellow-50 fg-layer-overlay">
 			<CardHeader>
 				<CardTitle className="text-yellow-800">Confirm Payment Details</CardTitle>
 				<CardDescription>
@@ -784,12 +784,9 @@ function ReceivingPaymentsComponent() {
 
 	return (
 		<div>
-		<div className="hidden lg:flex sticky top-0 z-10 fg-layer-elevated border-b border-black py-4 px-4 lg:px-6 items-center justify-between">
+			<div className="hidden lg:flex sticky top-0 z-10 fg-layer-elevated border-b border-black py-4 px-4 lg:px-6 items-center justify-between">
 				<h1 className="text-2xl font-bold">Receiving Payments</h1>
-				<Button
-					onClick={() => handleOpenChange('new', true)}
-					className="btn-black flex items-center gap-2 px-4 py-2 text-sm font-semibold"
-				>
+				<Button onClick={() => handleOpenChange('new', true)} className="btn-black flex items-center gap-2 px-4 py-2 text-sm font-semibold">
 					<PlusIcon className="w-5 h-5" />
 					Add Payment Method
 				</Button>
