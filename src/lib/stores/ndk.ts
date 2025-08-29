@@ -62,33 +62,56 @@ export const ndkActions = {
 		return ndk
 	},
 
-	connect: async (): Promise<void> => {
+	connect: async (timeoutMs: number = 10000): Promise<void> => {
 		const state = ndkStore.state
 		if (!state.ndk || state.isConnected || state.isConnecting) return
 
 		ndkStore.setState((state) => ({ ...state, isConnecting: true }))
 
 		try {
-			await state.ndk.connect()
-			ndkStore.setState((state) => ({ ...state, isConnected: true }))
+			// Add timeout to prevent hanging on unresponsive relays
+			const connectPromise = state.ndk.connect()
+			const timeoutPromise = new Promise<never>((_, reject) => {
+				setTimeout(() => reject(new Error('Connection timeout')), timeoutMs)
+			})
 
-			// Also connect zap NDK
-			await ndkActions.connectZapNdk()
+			await Promise.race([connectPromise, timeoutPromise])
+			ndkStore.setState((state) => ({ ...state, isConnected: true }))
+			console.log('✅ NDK connected to relays')
+
+			// Also connect zap NDK (with timeout)
+			await ndkActions.connectZapNdk(5000)
+		} catch (error) {
+			console.error('Failed to connect NDK:', error)
+			// Don't throw - allow app to continue even if some relays fail
+			// Mark as connected if we have any working relays
+			const connectedRelays = state.ndk?.pool?.connectedRelays() || []
+			if (connectedRelays.length > 0) {
+				ndkStore.setState((state) => ({ ...state, isConnected: true }))
+				console.log(`✅ NDK partially connected to ${connectedRelays.length} relays`)
+			}
 		} finally {
 			ndkStore.setState((state) => ({ ...state, isConnecting: false }))
 		}
 	},
 
-	connectZapNdk: async (): Promise<void> => {
+	connectZapNdk: async (timeoutMs: number = 10000): Promise<void> => {
 		const state = ndkStore.state
 		if (!state.zapNdk || state.isZapNdkConnected) return
 
 		try {
-			await state.zapNdk.connect()
+			// Add timeout to prevent hanging on unresponsive zap relays
+			const connectPromise = state.zapNdk.connect()
+			const timeoutPromise = new Promise<never>((_, reject) => {
+				setTimeout(() => reject(new Error('Zap connection timeout')), timeoutMs)
+			})
+
+			await Promise.race([connectPromise, timeoutPromise])
 			ndkStore.setState((state) => ({ ...state, isZapNdkConnected: true }))
 			console.log('✅ Zap NDK connected to relays:', ZAP_RELAYS)
 		} catch (error) {
 			console.error('Failed to connect Zap NDK:', error)
+			// Don't throw - allow app to continue even if zap relays fail
 		}
 	},
 

@@ -2,6 +2,8 @@ export const productKeys = {
 	all: ['products'] as const,
 	details: (id: string) => [...productKeys.all, id] as const,
 	byPubkey: (pubkey: string) => [...productKeys.all, 'byPubkey', pubkey] as const,
+	byATag: (pubkey: string, dTag: string) => [...productKeys.all, 'byATag', pubkey, dTag] as const,
+	byCollection: (collectionId: string) => [...productKeys.all, 'byCollection', collectionId] as const,
 	seller: (id: string) => [...productKeys.all, 'seller', id] as const,
 } as const
 
@@ -17,6 +19,12 @@ export const shippingKeys = {
 	all: ['shipping'] as const,
 	details: (id: string) => [...shippingKeys.all, id] as const,
 	byPubkey: (pubkey: string) => [...shippingKeys.all, 'byPubkey', pubkey] as const,
+} as const
+
+export const collectionKeys = {
+	all: ['collections'] as const,
+	details: (id: string) => [...collectionKeys.all, id] as const,
+	byPubkey: (pubkey: string) => [...collectionKeys.all, 'byPubkey', pubkey] as const,
 } as const
 
 export const collectionsKeys = {

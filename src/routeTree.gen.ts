@@ -20,6 +20,7 @@ import { Route as CommunityIndexRouteImport } from './routes/community.index'
 import { Route as ProfileProfileIdRouteImport } from './routes/profile.$profileId'
 import { Route as ProductsProductIdRouteImport } from './routes/products.$productId'
 import { Route as PostsPostIdRouteImport } from './routes/posts.$postId'
+import { Route as CollectionCollectionIdRouteImport } from './routes/collection.$collectionId'
 import { Route as DashboardLayoutDashboardIndexRouteImport } from './routes/_dashboard-layout/dashboard/index'
 import { Route as DashboardLayoutDashboardSalesSalesRouteImport } from './routes/_dashboard-layout/dashboard/sales/sales'
 import { Route as DashboardLayoutDashboardSalesMessagesRouteImport } from './routes/_dashboard-layout/dashboard/sales/messages'
@@ -94,6 +95,11 @@ const ProductsProductIdRoute = ProductsProductIdRouteImport.update({
 const PostsPostIdRoute = PostsPostIdRouteImport.update({
 	id: '/posts/$postId',
 	path: '/posts/$postId',
+	getParentRoute: () => rootRouteImport,
+} as any)
+const CollectionCollectionIdRoute = CollectionCollectionIdRouteImport.update({
+	id: '/collection/$collectionId',
+	path: '/collection/$collectionId',
 	getParentRoute: () => rootRouteImport,
 } as any)
 const DashboardLayoutDashboardIndexRoute = DashboardLayoutDashboardIndexRouteImport.update({
@@ -207,6 +213,7 @@ export interface FileRoutesByFullPath {
 	'/': typeof IndexRoute
 	'/checkout': typeof CheckoutRoute
 	'/setup': typeof SetupRoute
+	'/collection/$collectionId': typeof CollectionCollectionIdRoute
 	'/posts/$postId': typeof PostsPostIdRoute
 	'/products/$productId': typeof ProductsProductIdRoute
 	'/profile/$profileId': typeof ProfileProfileIdRoute
@@ -240,6 +247,7 @@ export interface FileRoutesByTo {
 	'/': typeof IndexRoute
 	'/checkout': typeof CheckoutRoute
 	'/setup': typeof SetupRoute
+	'/collection/$collectionId': typeof CollectionCollectionIdRoute
 	'/posts/$postId': typeof PostsPostIdRoute
 	'/products/$productId': typeof ProductsProductIdRoute
 	'/profile/$profileId': typeof ProfileProfileIdRoute
@@ -275,6 +283,7 @@ export interface FileRoutesById {
 	'/_dashboard-layout': typeof DashboardLayoutRouteWithChildren
 	'/checkout': typeof CheckoutRoute
 	'/setup': typeof SetupRoute
+	'/collection/$collectionId': typeof CollectionCollectionIdRoute
 	'/posts/$postId': typeof PostsPostIdRoute
 	'/products/$productId': typeof ProductsProductIdRoute
 	'/profile/$profileId': typeof ProfileProfileIdRoute
@@ -310,6 +319,7 @@ export interface FileRouteTypes {
 		| '/'
 		| '/checkout'
 		| '/setup'
+		| '/collection/$collectionId'
 		| '/posts/$postId'
 		| '/products/$productId'
 		| '/profile/$profileId'
@@ -343,6 +353,7 @@ export interface FileRouteTypes {
 		| '/'
 		| '/checkout'
 		| '/setup'
+		| '/collection/$collectionId'
 		| '/posts/$postId'
 		| '/products/$productId'
 		| '/profile/$profileId'
@@ -377,6 +388,7 @@ export interface FileRouteTypes {
 		| '/_dashboard-layout'
 		| '/checkout'
 		| '/setup'
+		| '/collection/$collectionId'
 		| '/posts/$postId'
 		| '/products/$productId'
 		| '/profile/$profileId'
@@ -412,6 +424,7 @@ export interface RootRouteChildren {
 	DashboardLayoutRoute: typeof DashboardLayoutRouteWithChildren
 	CheckoutRoute: typeof CheckoutRoute
 	SetupRoute: typeof SetupRoute
+	CollectionCollectionIdRoute: typeof CollectionCollectionIdRoute
 	PostsPostIdRoute: typeof PostsPostIdRoute
 	ProductsProductIdRoute: typeof ProductsProductIdRoute
 	ProfileProfileIdRoute: typeof ProfileProfileIdRoute
@@ -498,6 +511,13 @@ declare module '@tanstack/react-router' {
 			path: '/posts/$postId'
 			fullPath: '/posts/$postId'
 			preLoaderRoute: typeof PostsPostIdRouteImport
+			parentRoute: typeof rootRouteImport
+		}
+		'/collection/$collectionId': {
+			id: '/collection/$collectionId'
+			path: '/collection/$collectionId'
+			fullPath: '/collection/$collectionId'
+			preLoaderRoute: typeof CollectionCollectionIdRouteImport
 			parentRoute: typeof rootRouteImport
 		}
 		'/_dashboard-layout/dashboard/': {
@@ -735,6 +755,7 @@ const rootRouteChildren: RootRouteChildren = {
 	DashboardLayoutRoute: DashboardLayoutRouteWithChildren,
 	CheckoutRoute: CheckoutRoute,
 	SetupRoute: SetupRoute,
+	CollectionCollectionIdRoute: CollectionCollectionIdRoute,
 	PostsPostIdRoute: PostsPostIdRoute,
 	ProductsProductIdRoute: ProductsProductIdRoute,
 	ProfileProfileIdRoute: ProfileProfileIdRoute,

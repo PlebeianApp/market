@@ -16,6 +16,10 @@ import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { z } from 'zod'
 import { productKeys } from './queryKeyFactory'
+import { getCoordsFromATag, getATagFromCoords } from '@/lib/utils/coords.ts'
+
+// Re-export productKeys for use in other query files
+export { productKeys }
 
 // --- DATA FETCHING FUNCTIONS ---
 
@@ -72,6 +76,18 @@ export const fetchProductsByPubkey = async (pubkey: string) => {
 	return Array.from(events)
 }
 
+export const fetchProductByATag = async (pubkey: string, dTag: string) => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+	if (!pubkey || !dTag) return null
+	const filter: NDKFilter = {
+		kinds: [30402],
+		authors: [pubkey],
+		'#d': [dTag],
+	}
+	return await ndk.fetchEvent(filter)
+}
+
 // --- REACT QUERY OPTIONS ---
 
 /**
@@ -114,6 +130,79 @@ export const productSellerQueryOptions = (id: string) =>
 		queryKey: productKeys.seller(id),
 		queryFn: () => getProductSellerPubkey(id),
 	})
+
+/**
+ * React Query options for fetching a product by addressable tag (a-tag)
+ * @param pubkey The pubkey of the author
+ * @param dTag The d-tag identifier
+ * @returns Query options object
+ */
+export const productByATagQueryOptions = (pubkey: string, dTag: string) =>
+	queryOptions({
+		queryKey: productKeys.byATag(pubkey, dTag),
+		queryFn: () => fetchProductByATag(pubkey, dTag),
+		staleTime: 300000,
+	})
+
+/**
+ * Fetches products contained in a collection by parsing a-tags
+ * @param collectionEvent The collection event containing a-tags
+ * @returns Array of product events
+ */
+export const fetchProductsByCollection = async (collectionEvent: NDKEvent): Promise<NDKEvent[]> => {
+	if (!collectionEvent) return []
+
+	// Get a-tags from the collection event
+	const aTags = collectionEvent.getMatchingTags('a')
+
+	// Parse each a-tag and fetch the corresponding product
+	const productPromises = aTags.map(async (tag) => {
+		const aTagValue = tag[1] // Format: "kind:pubkey:identifier"
+		if (!aTagValue) return null
+
+		try {
+			// Use the improved coordinate parsing utility
+			const coords = getCoordsFromATag(aTagValue)
+
+			// Only process product events (kind 30402)
+			if (coords.kind !== 30402) {
+				console.warn(`Skipping non-product a-tag: ${aTagValue} (kind: ${coords.kind})`)
+				return null
+			}
+
+			return await fetchProductByATag(coords.pubkey, coords.identifier)
+		} catch (error) {
+			console.warn(`Failed to fetch product from a-tag ${aTagValue}:`, error)
+			return null
+		}
+	})
+
+	const results = await Promise.all(productPromises)
+	return results.filter((event) => event !== null) as NDKEvent[]
+}
+
+/**
+ * React Query options for fetching products by collection
+ * @param collectionEvent The collection event
+ * @returns Query options object
+ */
+export const productsByCollectionQueryOptions = (collectionEvent: NDKEvent | null) => {
+	// Generate a consistent query key using coordinate utilities
+	const collectionCoords = collectionEvent
+		? getATagFromCoords({
+				kind: collectionEvent.kind!,
+				pubkey: collectionEvent.pubkey,
+				identifier: collectionEvent.dTag || '',
+			})
+		: ''
+
+	return queryOptions({
+		queryKey: productKeys.byCollection(collectionCoords),
+		queryFn: () => fetchProductsByCollection(collectionEvent!),
+		enabled: !!collectionEvent,
+		staleTime: 300000,
+	})
+}
 
 // --- HELPER FUNCTIONS (DATA EXTRACTION) ---
 
@@ -516,5 +605,28 @@ export const useProductsByPubkey = (pubkey: string) => {
 export const useProductSeller = (id: string) => {
 	return useQuery({
 		...productSellerQueryOptions(id),
+	})
+}
+
+/**
+ * Hook to get products by collection
+ * @param collectionEvent The collection event
+ * @returns Query result with an array of product events
+ */
+export const useProductsByCollection = (collectionEvent: NDKEvent | null) => {
+	return useQuery({
+		...productsByCollectionQueryOptions(collectionEvent),
+	})
+}
+
+/**
+ * Hook to get a product by addressable tag (a-tag)
+ * @param pubkey The pubkey of the author
+ * @param dTag The d-tag identifier
+ * @returns Query result with the product event
+ */
+export const useProductByATag = (pubkey: string, dTag: string) => {
+	return useQuery({
+		...productByATagQueryOptions(pubkey, dTag),
 	})
 }

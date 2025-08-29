@@ -14,6 +14,7 @@ export function ProductsTab() {
 	const { data: products = [], isLoading } = useProductsByPubkey(user?.pubkey || '')
 
 	// Update available products when products are loaded
+	// TODO: Refactor this to use the new product query
 	useEffect(() => {
 		if (products.length > 0) {
 			const productData = products.map((product) => {

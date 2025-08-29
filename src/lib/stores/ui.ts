@@ -238,6 +238,18 @@ export const uiActions = {
 		}))
 	},
 
+	setCollectionSourcePath: (path: string | null) => {
+		uiStore.setState((state) => ({
+			...state,
+			navigation: {
+				...state.navigation,
+				collectionSourcePath: path,
+				// Only set originalResultsPath if it's not already set and we're setting a new path
+				originalResultsPath: state.navigation.originalResultsPath || path,
+			},
+		}))
+	},
+
 	clearProductNavigation: () => {
 		uiStore.setState((state) => ({
 			...state,
