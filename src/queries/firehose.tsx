@@ -7,12 +7,32 @@ import { noteKeys } from '@/queries/queryKeyFactory'
 import { ndkActions } from '@/lib/stores/ndk'
 import { defaultRelaysUrls } from '@/lib/constants'
 
-export const fetchNotes = async (): Promise<NDKEvent[]> => {
+// Wrapper type to include the timestamp of when the event was first fetched
+export type FetchedNDKEvent = {
+	event: NDKEvent
+	fetchedAt: number // ms since epoch
+}
+
+// Keep a module-level cache to preserve the first-fetched timestamp per event id
+const firstFetchTimestamps = new Map<string, number>()
+
+function withFirstFetchedAt(e: NDKEvent): FetchedNDKEvent {
+	const id = e.id as string
+	const existing = id ? firstFetchTimestamps.get(id) : undefined
+	const now = Date.now()
+	const ts = existing ?? now
+	if (id && existing === undefined) {
+		firstFetchTimestamps.set(id, ts)
+	}
+	return { event: e, fetchedAt: ts }
+}
+
+export const fetchNotes = async (): Promise<FetchedNDKEvent[]> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
 	const filter: NDKFilter = {
-		kinds: [1], // kind 1 is text notes
+		kinds: [1, 1111], // kind 1 is text notes, kind 1111 is replies
 		limit: 20,
 	}
 
@@ -20,10 +40,13 @@ export const fetchNotes = async (): Promise<NDKEvent[]> => {
 	const relaySet = NDKRelaySet.fromRelayUrls(defaultRelaysUrls, ndk)
 	const events = await ndk.fetchEvents(filter, undefined, relaySet)
 	const notes = Array.from(events)
-	return notes.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))
+	// Map to include first-fetched timestamps and then sort by fetchedAt desc
+	const wrapped = notes.map(withFirstFetchedAt)
+	wrapped.sort((a, b) => b.fetchedAt - a.fetchedAt)
+	return wrapped
 }
 
-export const fetchNote = async (id: string): Promise<NDKEvent> => {
+export const fetchNote = async (id: string): Promise<FetchedNDKEvent> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -31,7 +54,7 @@ export const fetchNote = async (id: string): Promise<NDKEvent> => {
 	if (!event) {
 		throw new Error('Post not found')
 	}
-	return event
+	return withFirstFetchedAt(event)
 }
 
 export const noteQueryOptions = (id: string) =>
