@@ -88,13 +88,21 @@ export function NoteView({ note }: NoteViewProps) {
 					</button>
 				</div>
 			</div>
-			<Link
-				to={threadRoot ? `/nostr/${threadRoot}${(note as any)?.id && (note as any).id !== threadRoot ? `?note=${(note as any).id}` : ''}` : `/nostr`}
-				className="p-3 break-words text-sm block hover:underline"
-				title="Open thread"
-			>
-				{note.content}
-			</Link>
+			{threadRoot ? (
+				<Link
+					to="/nostr/$threadRoot"
+					params={{ threadRoot }}
+					search={(note as any)?.id && (note as any).id !== threadRoot ? { note: (note as any).id } : undefined}
+					className="p-3 break-words text-sm block hover:underline"
+					title="Open thread"
+				>
+					{note.content}
+				</Link>
+			) : (
+				<Link to="/nostr" className="p-3 break-words text-sm block hover:underline" title="Open thread">
+					{note.content}
+				</Link>
+			)}
 			{/* Raw event pretty printed */}
 			{(() => {
 				let raw: any
