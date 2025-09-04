@@ -16,6 +16,19 @@ export type FetchedNDKEvent = {
 // Keep a module-level cache to preserve the first-fetched timestamp per event id
 const firstFetchTimestamps = new Map<string, number>()
 
+// Utility function to check if an event has a "client:Mostr" tag
+function hasClientMostrTag(event: NDKEvent): boolean {
+	const tags = (event as any)?.tags
+	if (!Array.isArray(tags)) return false
+	
+	return tags.some((tag) => 
+		Array.isArray(tag) && 
+		tag.length >= 2 && 
+		tag[0] === 'client' && 
+		tag[1] === 'Mostr'
+	)
+}
+
 function withFirstFetchedAt(e: NDKEvent): FetchedNDKEvent {
 	const id = e.id as string
 	const existing = id ? firstFetchTimestamps.get(id) : undefined
@@ -42,8 +55,10 @@ export const fetchNotes = async (): Promise<FetchedNDKEvent[]> => {
 	const notes = Array.from(events)
 	// Filter out any falsy events or events without an id to avoid downstream crashes
 	const validNotes = notes.filter((e) => !!e && !!(e as any).id)
+	// Filter out events with client:Mostr tags
+	const filteredNotes = validNotes.filter((e) => !hasClientMostrTag(e))
 	// Map to include first-fetched timestamps and then sort by fetchedAt desc
-	const wrapped = validNotes.map(withFirstFetchedAt)
+	const wrapped = filteredNotes.map(withFirstFetchedAt)
 	wrapped.sort((a, b) => b.fetchedAt - a.fetchedAt)
 	return wrapped
 }
@@ -55,6 +70,10 @@ export const fetchNote = async (id: string): Promise<FetchedNDKEvent> => {
 	const event = await ndk.fetchEvent(id)
 	if (!event) {
 		throw new Error('Post not found')
+	}
+	// Filter out events with client:Mostr tags
+	if (hasClientMostrTag(event)) {
+		throw new Error('Post filtered out due to client:Mostr tag')
 	}
 	return withFirstFetchedAt(event)
 }
