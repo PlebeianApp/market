@@ -1,6 +1,6 @@
 import { createFileRoute, useParams, useSearch, Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { threadQueryOptions } from '@/queries/thread-view'
+import { threadQueryOptions, type ThreadEvent } from '@/queries/thread-view'
 import { NoteView } from '@/NoteView'
 
 export const Route = createFileRoute('/nostr/$threadRoot')({
@@ -29,8 +29,14 @@ function NostrThreadComponent() {
 				<div>No events in this thread.</div>
 			) : (
 				<div className="space-y-2">
-					{ordered.map((fe) => (
-						<NoteView key={(fe.event as any).id as string} note={fe.event} />
+					{ordered.map((fe: ThreadEvent) => (
+						<div
+							key={(fe.event as any).id as string}
+							style={{ marginLeft: `${fe.depth * 20}px` }}
+							className={fe.depth > 0 ? 'border-l-2 border-gray-200 pl-3' : ''}
+						>
+							<NoteView note={fe.event} />
+						</div>
 					))}
 				</div>
 			)}
