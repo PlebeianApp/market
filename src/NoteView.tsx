@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { authorQueryOptions } from '@/queries/authors.tsx'
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
+import { threadQueryOptions } from '@/queries/thread-view'
 
 interface NoteViewProps {
 	note: NDKEvent
@@ -24,6 +25,20 @@ export function NoteView({ note }: NoteViewProps) {
 	const isReply = Array.isArray((note as any).tags)
 		? ((note as any).tags as any[]).some((t: any) => (Array.isArray(t) && t[0] === 'e' && t[3] === 'reply') || note.kind == 1111)
 		: false
+
+	// Thread root for this note (used to link to thread view)
+	const { data: threadData } = useQuery(threadQueryOptions((note as any)?.id ? (note as any).id : (note as any)))
+	const computedThreadRoot = threadData?.rootId || (note.id as string | undefined) || ''
+	// For display next to reply indicator, prefer the local 'e' tag with marker 'root' (index 3), using its index 1 as the id
+	const rootIdFromTags =
+		Array.isArray((note as any).tags)
+			? ((note as any).tags as any[]).find(
+					(t: any) => Array.isArray(t) && t[0] === 'e' && t[3] === 'root' && typeof t[1] === 'string',
+				)?.[1]
+			: undefined
+	const displayRootId = (rootIdFromTags as string | undefined) ?? computedThreadRoot
+	// Per requirement: threadRoot should be the same as the id displayRootId
+	const threadRoot = displayRootId
 
 	return (
 		<div className="border p-3 rounded-lg">
@@ -55,14 +70,17 @@ export function NoteView({ note }: NoteViewProps) {
 				</div>
 				<div className="ml-2 flex items-center gap-2">
 					{isReply && (
-						<div className="ml-2 text-lg" title="Reply" aria-label="Reply" role="img">
-							↩
+						<div className="ml-2 flex items-center gap-1">
+ 						<span className="text-xs text-gray-500 font-mono break-all" title="Thread root id">
+ 							{displayRootId}
+ 						</span>
+							<div className="text-lg" title="Reply" aria-label="Reply" role="img">↩</div>
 						</div>
 					)}
 					<button
 						className="px-2 py-1 text-xs border rounded hover:bg-gray-100 text-gray-600"
 						aria-pressed={showJson}
-						aria-controls={`note-json-${note.id || note.pubkey}`}
+ 					aria-controls={`note-json-${(note as any)?.id ?? note.pubkey ?? Math.random().toString(36).slice(2)}`}
 						onClick={() => setShowJson((v) => !v)}
 						title={showJson ? 'Hide raw JSON' : 'Show raw JSON'}
 					>
@@ -70,7 +88,13 @@ export function NoteView({ note }: NoteViewProps) {
 					</button>
 				</div>
 			</div>
-			<div className="p-3 break-words text-sm">{note.content}</div>
+			<Link
+				to={threadRoot ? `/nostr/${threadRoot}${(note as any)?.id && (note as any).id !== threadRoot ? `?note=${(note as any).id}` : ''}` : `/nostr`}
+				className="p-3 break-words text-sm block hover:underline"
+				title="Open thread"
+			>
+				{note.content}
+			</Link>
 			{/* Raw event pretty printed */}
 			{(() => {
 				let raw: any
@@ -87,7 +111,7 @@ export function NoteView({ note }: NoteViewProps) {
 				}
 				return showJson ? (
 					<pre
-						id={`note-json-${note.id || note.pubkey}`}
+						id={`note-json-${(note as any)?.id ?? note.pubkey ?? 'unknown'}`}
 						className="mt-2 p-3 bg-gray-50 border rounded text-xs overflow-auto max-h-80 whitespace-pre-wrap"
 					>
 						{json}

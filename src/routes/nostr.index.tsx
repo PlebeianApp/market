@@ -46,9 +46,11 @@ function FirehoseComponent() {
 			</div>
 			<div className="p-3">
 				<div className="space-y-2 text-sm">
-					{notes.map((wrapped: FetchedNDKEvent) => (
-						<NoteView key={wrapped.event.id} note={wrapped.event} />
-					))}
+					{notes
+						.filter((wrapped: FetchedNDKEvent | undefined) => !!wrapped && !!wrapped.event && !!(wrapped.event as any).id)
+						.map((wrapped: FetchedNDKEvent) => (
+							<NoteView key={(wrapped.event as any).id as string} note={wrapped.event} />
+						))}
 				</div>
 			</div>
 			<div className="w-full p-4 flex items-center justify-center">

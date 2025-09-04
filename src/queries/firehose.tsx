@@ -40,8 +40,10 @@ export const fetchNotes = async (): Promise<FetchedNDKEvent[]> => {
 	const relaySet = NDKRelaySet.fromRelayUrls(defaultRelaysUrls, ndk)
 	const events = await ndk.fetchEvents(filter, undefined, relaySet)
 	const notes = Array.from(events)
+	// Filter out any falsy events or events without an id to avoid downstream crashes
+	const validNotes = notes.filter((e) => !!e && !!(e as any).id)
 	// Map to include first-fetched timestamps and then sort by fetchedAt desc
-	const wrapped = notes.map(withFirstFetchedAt)
+	const wrapped = validNotes.map(withFirstFetchedAt)
 	wrapped.sort((a, b) => b.fetchedAt - a.fetchedAt)
 	return wrapped
 }
