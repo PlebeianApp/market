@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SetupRouteImport } from './routes/setup'
+import { Route as NostrRouteImport } from './routes/nostr'
 import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as DashboardLayoutRouteImport } from './routes/_dashboard-layout'
 import { Route as IndexRouteImport } from './routes/index'
@@ -49,6 +50,11 @@ const SetupRoute = SetupRouteImport.update({
 	path: '/setup',
 	getParentRoute: () => rootRouteImport,
 } as any)
+const NostrRoute = NostrRouteImport.update({
+	id: '/nostr',
+	path: '/nostr',
+	getParentRoute: () => rootRouteImport,
+} as any)
 const CheckoutRoute = CheckoutRouteImport.update({
 	id: '/checkout',
 	path: '/checkout',
@@ -74,9 +80,9 @@ const PostsIndexRoute = PostsIndexRouteImport.update({
 	getParentRoute: () => rootRouteImport,
 } as any)
 const NostrIndexRoute = NostrIndexRouteImport.update({
-	id: '/nostr/',
-	path: '/nostr/',
-	getParentRoute: () => rootRouteImport,
+	id: '/',
+	path: '/',
+	getParentRoute: () => NostrRoute,
 } as any)
 const CommunityIndexRoute = CommunityIndexRouteImport.update({
 	id: '/community/',
@@ -99,9 +105,9 @@ const PostsPostIdRoute = PostsPostIdRouteImport.update({
 	getParentRoute: () => rootRouteImport,
 } as any)
 const NostrThreadRoute = NostrThreadRouteImport.update({
-	id: '/nostr/$threadRoot',
-	path: '/nostr/$threadRoot',
-	getParentRoute: () => rootRouteImport,
+	id: '/thread',
+	path: '/thread',
+	getParentRoute: () => NostrRoute,
 } as any)
 const CollectionCollectionIdRoute = CollectionCollectionIdRouteImport.update({
 	id: '/collection/$collectionId',
@@ -218,6 +224,7 @@ const DashboardLayoutDashboardProductsCollectionsCollectionIdRoute =
 export interface FileRoutesByFullPath {
 	'/': typeof IndexRoute
 	'/checkout': typeof CheckoutRoute
+	'/nostr': typeof NostrRouteWithChildren
 	'/setup': typeof SetupRoute
 	'/collection/$collectionId': typeof CollectionCollectionIdRoute
 	'/nostr/$threadRoot': typeof NostrThreadRoute
@@ -225,7 +232,7 @@ export interface FileRoutesByFullPath {
 	'/products/$productId': typeof ProductsProductIdRoute
 	'/profile/$profileId': typeof ProfileProfileIdRoute
 	'/community': typeof CommunityIndexRoute
-	'/nostr': typeof NostrIndexRoute
+	'/nostr/': typeof NostrIndexRoute
 	'/posts': typeof PostsIndexRoute
 	'/products': typeof ProductsIndexRoute
 	'/dashboard': typeof DashboardLayoutDashboardIndexRoute
@@ -290,6 +297,7 @@ export interface FileRoutesById {
 	'/': typeof IndexRoute
 	'/_dashboard-layout': typeof DashboardLayoutRouteWithChildren
 	'/checkout': typeof CheckoutRoute
+	'/nostr': typeof NostrRouteWithChildren
 	'/setup': typeof SetupRoute
 	'/collection/$collectionId': typeof CollectionCollectionIdRoute
 	'/nostr/$threadRoot': typeof NostrThreadRoute
@@ -327,6 +335,7 @@ export interface FileRouteTypes {
 	fullPaths:
 		| '/'
 		| '/checkout'
+		| '/nostr'
 		| '/setup'
 		| '/collection/$collectionId'
 		| '/nostr/$threadRoot'
@@ -334,7 +343,7 @@ export interface FileRouteTypes {
 		| '/products/$productId'
 		| '/profile/$profileId'
 		| '/community'
-		| '/nostr'
+		| '/nostr/'
 		| '/posts'
 		| '/products'
 		| '/dashboard'
@@ -398,6 +407,7 @@ export interface FileRouteTypes {
 		| '/'
 		| '/_dashboard-layout'
 		| '/checkout'
+		| '/nostr'
 		| '/setup'
 		| '/collection/$collectionId'
 		| '/nostr/$threadRoot'
@@ -435,14 +445,13 @@ export interface RootRouteChildren {
 	IndexRoute: typeof IndexRoute
 	DashboardLayoutRoute: typeof DashboardLayoutRouteWithChildren
 	CheckoutRoute: typeof CheckoutRoute
+	NostrRoute: typeof NostrRouteWithChildren
 	SetupRoute: typeof SetupRoute
 	CollectionCollectionIdRoute: typeof CollectionCollectionIdRoute
-	NostrThreadRoute: typeof NostrThreadRoute
 	PostsPostIdRoute: typeof PostsPostIdRoute
 	ProductsProductIdRoute: typeof ProductsProductIdRoute
 	ProfileProfileIdRoute: typeof ProfileProfileIdRoute
 	CommunityIndexRoute: typeof CommunityIndexRoute
-	NostrIndexRoute: typeof NostrIndexRoute
 	PostsIndexRoute: typeof PostsIndexRoute
 	ProductsIndexRoute: typeof ProductsIndexRoute
 }
@@ -454,6 +463,13 @@ declare module '@tanstack/react-router' {
 			path: '/setup'
 			fullPath: '/setup'
 			preLoaderRoute: typeof SetupRouteImport
+			parentRoute: typeof rootRouteImport
+		}
+		'/nostr': {
+			id: '/nostr'
+			path: '/nostr'
+			fullPath: '/nostr'
+			preLoaderRoute: typeof NostrRouteImport
 			parentRoute: typeof rootRouteImport
 		}
 		'/checkout': {
@@ -493,10 +509,10 @@ declare module '@tanstack/react-router' {
 		}
 		'/nostr/': {
 			id: '/nostr/'
-			path: '/nostr'
-			fullPath: '/nostr'
+			path: '/'
+			fullPath: '/nostr/'
 			preLoaderRoute: typeof NostrIndexRouteImport
-			parentRoute: typeof rootRouteImport
+			parentRoute: typeof NostrRoute
 		}
 		'/community/': {
 			id: '/community/'
@@ -528,10 +544,10 @@ declare module '@tanstack/react-router' {
 		}
 		'/nostr/$threadRoot': {
 			id: '/nostr/$threadRoot'
-			path: '/nostr/$threadRoot'
+			path: '/thread'
 			fullPath: '/nostr/$threadRoot'
 			preLoaderRoute: typeof NostrThreadRouteImport
-			parentRoute: typeof rootRouteImport
+			parentRoute: typeof NostrRoute
 		}
 		'/collection/$collectionId': {
 			id: '/collection/$collectionId'
@@ -770,18 +786,29 @@ const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
 
 const DashboardLayoutRouteWithChildren = DashboardLayoutRoute._addFileChildren(DashboardLayoutRouteChildren)
 
+interface NostrRouteChildren {
+	NostrThreadRoute: typeof NostrThreadRoute
+	NostrIndexRoute: typeof NostrIndexRoute
+}
+
+const NostrRouteChildren: NostrRouteChildren = {
+	NostrThreadRoute: NostrThreadRoute,
+	NostrIndexRoute: NostrIndexRoute,
+}
+
+const NostrRouteWithChildren = NostrRoute._addFileChildren(NostrRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
 	IndexRoute: IndexRoute,
 	DashboardLayoutRoute: DashboardLayoutRouteWithChildren,
 	CheckoutRoute: CheckoutRoute,
+	NostrRoute: NostrRouteWithChildren,
 	SetupRoute: SetupRoute,
 	CollectionCollectionIdRoute: CollectionCollectionIdRoute,
-	NostrThreadRoute: NostrThreadRoute,
 	PostsPostIdRoute: PostsPostIdRoute,
 	ProductsProductIdRoute: ProductsProductIdRoute,
 	ProfileProfileIdRoute: ProfileProfileIdRoute,
 	CommunityIndexRoute: CommunityIndexRoute,
-	NostrIndexRoute: NostrIndexRoute,
 	PostsIndexRoute: PostsIndexRoute,
 	ProductsIndexRoute: ProductsIndexRoute,
 }
