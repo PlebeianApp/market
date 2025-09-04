@@ -5,6 +5,11 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { defaultRelaysUrls } from '@/lib/constants'
 import type { FetchedNDKEvent } from '@/queries/firehose'
 
+// Thread event with depth information for proper indentation display
+export type ThreadEvent = FetchedNDKEvent & {
+	depth: number
+}
+
 // Local first-fetched cache to keep consistent ordering with other queries
 const firstFetchTimestamps = new Map<string, number>()
 function withFirstFetchedAt(e: NDKEvent): FetchedNDKEvent {
@@ -42,12 +47,12 @@ function findAllReplyParentIds(ev: NDKEvent): string[] {
 
 export type ThreadFetchResult = {
 	rootId: string
-	ordered: FetchedNDKEvent[]
-	byId: Map<string, FetchedNDKEvent>
+	ordered: ThreadEvent[]
+	byId: Map<string, ThreadEvent>
 }
 
 // Build an ordered thread starting at a root id, placing replies immediately after their parent (depth-first)
-function orderThread(rootId: string, events: FetchedNDKEvent[]): FetchedNDKEvent[] {
+function orderThread(rootId: string, events: FetchedNDKEvent[]): ThreadEvent[] {
 	const byId = new Map<string, FetchedNDKEvent>()
 	for (const fe of events) if (fe.event.id) byId.set(fe.event.id as string, fe)
 
@@ -63,30 +68,30 @@ function orderThread(rootId: string, events: FetchedNDKEvent[]): FetchedNDKEvent
 		}
 	}
 
-	const ordered: FetchedNDKEvent[] = []
+	const ordered: ThreadEvent[] = []
 	const seen = new Set<string>()
 
-	function dfs(currentId: string) {
+	function dfs(currentId: string, depth: number = 0) {
 		const cur = byId.get(currentId)
 		if (cur && !seen.has(currentId)) {
 			seen.add(currentId)
-			ordered.push(cur)
+			ordered.push({ ...cur, depth })
 		}
 		const kids = children.get(currentId) || []
 		// Place replies immediately after parent in a stable order (by fetchedAt asc)
 		kids.sort((a, b) => a.fetchedAt - b.fetchedAt)
 		for (const child of kids) {
 			const cid = child.event.id as string | undefined
-			if (cid && !seen.has(cid)) dfs(cid)
+			if (cid && !seen.has(cid)) dfs(cid, depth + 1)
 		}
 	}
 
-	dfs(rootId)
+	dfs(rootId, 0)
 
 	// Append any remaining events that weren't reachable from root (safety)
 	for (const fe of events) {
 		const id = fe.event.id as string | undefined
-		if (id && !seen.has(id)) ordered.push(fe)
+		if (id && !seen.has(id)) ordered.push({ ...fe, depth: 0 })
 	}
 	return ordered
 }
