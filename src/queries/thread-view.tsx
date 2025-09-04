@@ -12,6 +12,15 @@ export type ThreadEvent = FetchedNDKEvent & {
 
 // Local first-fetched cache to keep consistent ordering with other queries
 const firstFetchTimestamps = new Map<string, number>()
+
+// Utility function to check if an event has a "client:Mostr" tag
+function hasClientMostrTag(event: NDKEvent): boolean {
+	const tags = (event as any)?.tags
+	if (!Array.isArray(tags)) return false
+
+	return tags.some((tag) => Array.isArray(tag) && tag.length >= 2 && tag[0] === 'client' && tag[1] === 'Mostr')
+}
+
 function withFirstFetchedAt(e: NDKEvent): FetchedNDKEvent {
 	const id = e.id as string
 	const existing = id ? firstFetchTimestamps.get(id) : undefined
@@ -45,6 +54,43 @@ function findAllReplyParentIds(ev: NDKEvent): string[] {
 	return ids
 }
 
+function hasRootTag(ev: NDKEvent, rootId?: string): boolean {
+	const tags = getETags(ev)
+	const rootTagId = findTagByMarker(tags, 'root')
+
+	// If no specific rootId is provided, just check if any root tag exists
+	if (rootId === undefined) return rootTagId !== undefined
+
+	// If rootId is provided, verify the root tag points to the correct root
+	return rootTagId === rootId
+}
+
+function isValidReply(ev: NDKEvent, rootId: string): boolean {
+	const eid = ev.id as string | undefined
+	if (!eid) return false
+
+	// Check if note's ID equals root ID (self-referencing)
+	if (eid === rootId) return false
+
+	// Check for traditional reply structure: BOTH root and reply tags
+	const hasRoot = hasRootTag(ev, rootId)
+	const replyParents = findAllReplyParentIds(ev)
+	const hasReply = replyParents.length > 0
+
+	// Allow traditional replies with both root and reply tags
+	if (hasRoot && hasReply) return true
+
+	// NEW: Allow notes with only reply tags where the reply target matches the root
+	// This handles cases where notes have only 'reply' tags and we designate their root
+	// parent as the event ID in the e tag index 1
+	if (!hasRoot && hasReply) {
+		// Check if any reply tag points to the current rootId
+		return replyParents.includes(rootId)
+	}
+
+	return false
+}
+
 export type ThreadFetchResult = {
 	rootId: string
 	ordered: ThreadEvent[]
@@ -58,10 +104,22 @@ function orderThread(rootId: string, events: FetchedNDKEvent[]): ThreadEvent[] {
 
 	// Build parent -> children mapping from reply tags
 	const children = new Map<string, FetchedNDKEvent[]>()
+	const filteredEventIds = new Set<string>() // Track events that should be completely excluded
+
 	for (const fe of events) {
 		const eid = fe.event.id as string | undefined
 		if (!eid) continue
 		const replyParents = findAllReplyParentIds(fe.event)
+		const eTags = getETags(fe.event)
+		const hasAnyETags = eTags.length > 0
+
+		// Filter out any event that has e tags but doesn't meet valid reply criteria
+		// OR has reply parents but isn't a valid reply
+		if (hasAnyETags && !isValidReply(fe.event, rootId) && eid !== rootId) {
+			filteredEventIds.add(eid) // Mark this event as filtered
+			continue // Skip this event as it doesn't meet reply requirements
+		}
+
 		for (const pid of replyParents) {
 			if (!children.has(pid)) children.set(pid, [])
 			children.get(pid)!.push(fe)
@@ -89,9 +147,12 @@ function orderThread(rootId: string, events: FetchedNDKEvent[]): ThreadEvent[] {
 	dfs(rootId, 0)
 
 	// Append any remaining events that weren't reachable from root (safety)
+	// BUT exclude events that were filtered out for lacking proper root tags
 	for (const fe of events) {
 		const id = fe.event.id as string | undefined
-		if (id && !seen.has(id)) ordered.push({ ...fe, depth: 0 })
+		if (id && !seen.has(id) && !filteredEventIds.has(id)) {
+			ordered.push({ ...fe, depth: 0 })
+		}
 	}
 	return ordered
 }
@@ -124,8 +185,11 @@ export async function fetchThread(input: FetchedNDKEvent | string): Promise<Thre
 	if (!baseEvent) throw new Error('Base event not found')
 
 	const eTags = getETags(baseEvent)
-	const rootId = findTagByMarker(eTags, 'root') || (baseEvent.id as string)
-	if (!rootId) throw new Error('Unable to determine root id')
+
+	// Only use proper 'root' marker - no fallback to reply targets or event ID
+	const rootId = findTagByMarker(eTags, 'root')
+	console.log('rootId', rootId)
+	if (!rootId) throw new Error('Unable to determine root id - no root tag found')
 
 	// Build filters: fetch the root event and all that reference it
 	// Standard Nostr threading uses kind 1 and potentially others like 1111; include both as in firehose
@@ -141,12 +205,13 @@ export async function fetchThread(input: FetchedNDKEvent | string): Promise<Thre
 
 	const all = new Map<string, NDKEvent>()
 	rootSet.forEach((e) => {
-		if (e?.id) all.set(e.id as string, e)
+		if (e?.id && !hasClientMostrTag(e)) all.set(e.id as string, e)
+		console.log('mostr root', hasClientMostrTag(e))
 	})
 	threadSet.forEach((e) => {
-		if (e?.id) all.set(e.id as string, e)
+		if (e?.id && !hasClientMostrTag(e)) all.set(e.id as string, e)
+		console.log('mostr reply', hasClientMostrTag(e))
 	})
-
 	// Wrap and order
 	const wrapped = Array.from(all.values()).map(withFirstFetchedAt)
 	const ordered = orderThread(rootId, wrapped)
@@ -156,6 +221,6 @@ export async function fetchThread(input: FetchedNDKEvent | string): Promise<Thre
 
 export const threadQueryOptions = (input: FetchedNDKEvent | string) =>
 	queryOptions({
-		queryKey: ['thread', typeof input === 'string' ? input : (input?.event as any)?.id ?? 'unknown'],
+		queryKey: ['thread', typeof input === 'string' ? input : ((input?.event as any)?.id ?? 'unknown')],
 		queryFn: () => fetchThread(input),
 	})
