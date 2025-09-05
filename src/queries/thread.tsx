@@ -40,14 +40,23 @@ export function findRootFromETags(event: NDKEvent): string | null {
 	const tags = (event as any)?.tags
 	if (!Array.isArray(tags)) return null
 
-	const rootTag = tags.find((tag: any) => 
-		Array.isArray(tag) && 
-		tag[0] === 'e' && 
-		tag[3] === 'root' && 
+	// Prefer explicit root marker when present per NIP-10
+	const rootTag = tags.find((tag: any) =>
+		Array.isArray(tag) &&
+		tag[0] === 'e' &&
+		tag[3] === 'root' &&
 		typeof tag[1] === 'string'
 	)
+	if (rootTag) return rootTag[1]
 
-	return rootTag ? rootTag[1] : null
+	// Fallbacks when marker index 3 is missing or different ordering used:
+	// - If there are 2+ e tags, the first is typically the root, last is the reply target
+	// - If there is only 1 e tag, many clients still put the root there
+	const eTags = tags.filter((t: any) => Array.isArray(t) && t[0] === 'e' && typeof t[1] === 'string')
+	if (eTags.length >= 1) {
+		return eTags[0][1]
+	}
+	return null
 }
 
 /**
@@ -58,14 +67,23 @@ export function findParentsFromETags(event: NDKEvent): string[] {
 	const tags = (event as any)?.tags
 	if (!Array.isArray(tags)) return []
 
-	const parentTags = tags.filter((tag: any) => 
-		Array.isArray(tag) && 
-		tag[0] === 'e' && 
-		tag[3] === 'reply' && 
-		typeof tag[1] === 'string'
-	)
-
-	return parentTags.map((tag: any) => tag[1])
+	// Per NIP-10: if markers are present, use reply markers as parents; otherwise,
+	// when there are multiple e tags without markers, the last one is typically the direct parent.
+	const eTags = tags.filter((tag: any) => Array.isArray(tag) && tag[0] === 'e' && typeof tag[1] === 'string')
+	// Prefer explicit reply markers first
+	const replyTagged = eTags.filter((tag: any) => tag[3] === 'reply')
+	if (replyTagged.length > 0) {
+		return replyTagged.map((tag: any) => tag[1])
+	}
+	// If no reply markers, but multiple e tags exist, consider the last as direct parent
+	if (eTags.length >= 2) {
+		return [eTags[eTags.length - 1][1]]
+	}
+	// If only one e tag exists and no markers, it's ambiguous; return it as parent to maintain linkage
+	if (eTags.length === 1) {
+		return [eTags[0][1]]
+	}
+	return []
 }
 
 /**
@@ -159,31 +177,52 @@ async function fetchThreadEvents(rootId: string): Promise<NDKEvent[]> {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	// Fetch all events that reference the root in their e tags
-	const filter: NDKFilter = {
-		kinds: [1, 1111], // text notes and replies
-		'#e': [rootId],
-		limit: 100, // Reasonable limit for thread size
-	}
-
 	const relaySet = NDKRelaySet.fromRelayUrls(defaultRelaysUrls, ndk)
-	const events = await ndk.fetchEvents(filter, undefined, relaySet)
-	const eventArray = Array.from(events)
 
-	// Also fetch the root event itself
+	// Iteratively fetch replies that reference the root or any known ancestor ids.
+	const maxIterations = 5
+	const maxTotal = 500
+	const knownEvents = new Map<string, NDKEvent>()
+	const frontier = new Set<string>([rootId])
+	const visitedFrontier = new Set<string>()
+
+	// Always include the root event
 	const rootEvent = await fetchEventById(rootId)
-	if (rootEvent) {
-		eventArray.push(rootEvent)
+	if (rootEvent && (rootEvent as any).id) {
+		knownEvents.set((rootEvent as any).id as string, rootEvent)
 	}
 
-	// Filter out duplicates and invalid events
-	const uniqueEvents = eventArray.filter((event, index, arr) => 
-		event && 
-		(event as any).id && 
-		arr.findIndex(e => (e as any).id === (event as any).id) === index
-	) as NDKEvent[]
+	for (let i = 0; i < maxIterations && knownEvents.size < maxTotal && frontier.size > 0; i++) {
+		// Build batch of ids to query this iteration (exclude those already used)
+		const batchIds = Array.from(frontier).filter((id) => !visitedFrontier.has(id)).slice(0, 30)
+		if (batchIds.length === 0) break
+		batchIds.forEach((id) => visitedFrontier.add(id))
 
-	return uniqueEvents
+		const filter: NDKFilter = {
+			kinds: [1, 1111],
+			"#e": batchIds,
+			limit: 200,
+		}
+		const events = await ndk.fetchEvents(filter, undefined, relaySet)
+		const fetched = Array.from(events) as NDKEvent[]
+
+		// Add to known and expand the frontier with their ids
+		for (const ev of fetched) {
+			const id = (ev as any).id as string | undefined
+			if (!id) continue
+			if (!knownEvents.has(id)) {
+				knownEvents.set(id, ev)
+				// Add to frontier so we can find replies to this reply in next iterations
+				frontier.add(id)
+			}
+		}
+
+		// Safety cap
+		if (knownEvents.size >= maxTotal) break
+	}
+
+	// Return unique list of events
+	return Array.from(knownEvents.values())
 }
 
 /**
@@ -220,12 +259,18 @@ function buildThreadTree(events: NDKEvent[], rootId: string): ThreadStructure {
 		if (!eventId) continue
 
 		const parents = findParentsFromETags(event)
-		const parentId = parents.length > 0 ? parents[0] : undefined // Use first parent
+		let parentId = parents.length > 0 ? parents[0] : undefined // Use first parent
+		
+		// For direct replies to root, keep the root as parent
+		// Only set to undefined if this IS the root event
+		if (eventId === rootId) {
+			parentId = undefined
+		}
 
 		const node: ThreadNode = {
 			event,
 			id: eventId,
-			parentId: parentId === rootId ? undefined : parentId, // Don't set root as parent of direct replies
+			parentId,
 			rootId,
 			children: [],
 			depth: 0, // Will be calculated later

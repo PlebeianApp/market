@@ -90,8 +90,8 @@ h3.font-heading {
 	font-size: 1.6rem;
 }
 
-/* Make all button text uppercase */
-button {
+/* Make all button text uppercase (scoped to .btn-uc to avoid affecting content buttons) */
+.btn-uc {
 	text-transform: uppercase;
 }
 
@@ -281,6 +281,19 @@ button {
 
 /* Custom utility classes */
 @layer utilities {
+	/* Thicker outline for only the highlighted node in thread view (no cascade to children) */
+	[data-highlighted] > .thread-node {
+		/* default border already present; make it thicker and colored */
+		border-left-width: 4px;
+		border-color: #f59e0b; /* amber-500 */
+		background-color: rgba(251, 191, 36, 0.08); /* amber-400 at low opacity */
+		border-radius: 0.375rem; /* rounded-md */
+		padding-left: 0.5rem; /* align content after thicker border */
+	}
+	/* Small extra padding for non-highlighted thread nodes */
+	:not([data-highlighted]) > .thread-node {
+		padding: 0.125rem; /* 2px around the non-highlighted note */
+	}
 	.bg-radial-overlay {
 		background: radial-gradient(circle at center, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0.9) 100%);
 	}
