@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { notesQueryOptions, type FetchedNDKEvent } from '@/queries/firehose'
-import { NoteView } from '@/NoteView'
+import { NoteView } from '@/components/NoteView.tsx'
 import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
 

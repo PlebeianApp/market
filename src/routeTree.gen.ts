@@ -21,7 +21,6 @@ import { Route as CommunityIndexRouteImport } from './routes/community.index'
 import { Route as ProfileProfileIdRouteImport } from './routes/profile.$profileId'
 import { Route as ProductsProductIdRouteImport } from './routes/products.$productId'
 import { Route as PostsPostIdRouteImport } from './routes/posts.$postId'
-import { Route as NostrThreadRootRouteImport } from './routes/nostr.$threadRoot'
 import { Route as CollectionCollectionIdRouteImport } from './routes/collection.$collectionId'
 import { Route as DashboardLayoutDashboardIndexRouteImport } from './routes/_dashboard-layout/dashboard/index'
 import { Route as DashboardLayoutDashboardSalesSalesRouteImport } from './routes/_dashboard-layout/dashboard/sales/sales'
@@ -103,11 +102,6 @@ const PostsPostIdRoute = PostsPostIdRouteImport.update({
   id: '/posts/$postId',
   path: '/posts/$postId',
   getParentRoute: () => rootRouteImport,
-} as any)
-const NostrThreadRootRoute = NostrThreadRootRouteImport.update({
-  id: '/$threadRoot',
-  path: '/$threadRoot',
-  getParentRoute: () => NostrRoute,
 } as any)
 const CollectionCollectionIdRoute = CollectionCollectionIdRouteImport.update({
   id: '/collection/$collectionId',
@@ -247,7 +241,6 @@ export interface FileRoutesByFullPath {
   '/nostr': typeof NostrRouteWithChildren
   '/setup': typeof SetupRoute
   '/collection/$collectionId': typeof CollectionCollectionIdRoute
-  '/nostr/$threadRoot': typeof NostrThreadRootRoute
   '/posts/$postId': typeof PostsPostIdRoute
   '/products/$productId': typeof ProductsProductIdRoute
   '/profile/$profileId': typeof ProfileProfileIdRoute
@@ -282,7 +275,6 @@ export interface FileRoutesByTo {
   '/checkout': typeof CheckoutRoute
   '/setup': typeof SetupRoute
   '/collection/$collectionId': typeof CollectionCollectionIdRoute
-  '/nostr/$threadRoot': typeof NostrThreadRootRoute
   '/posts/$postId': typeof PostsPostIdRoute
   '/products/$productId': typeof ProductsProductIdRoute
   '/profile/$profileId': typeof ProfileProfileIdRoute
@@ -320,7 +312,6 @@ export interface FileRoutesById {
   '/nostr': typeof NostrRouteWithChildren
   '/setup': typeof SetupRoute
   '/collection/$collectionId': typeof CollectionCollectionIdRoute
-  '/nostr/$threadRoot': typeof NostrThreadRootRoute
   '/posts/$postId': typeof PostsPostIdRoute
   '/products/$productId': typeof ProductsProductIdRoute
   '/profile/$profileId': typeof ProfileProfileIdRoute
@@ -358,7 +349,6 @@ export interface FileRouteTypes {
     | '/nostr'
     | '/setup'
     | '/collection/$collectionId'
-    | '/nostr/$threadRoot'
     | '/posts/$postId'
     | '/products/$productId'
     | '/profile/$profileId'
@@ -393,7 +383,6 @@ export interface FileRouteTypes {
     | '/checkout'
     | '/setup'
     | '/collection/$collectionId'
-    | '/nostr/$threadRoot'
     | '/posts/$postId'
     | '/products/$productId'
     | '/profile/$profileId'
@@ -430,7 +419,6 @@ export interface FileRouteTypes {
     | '/nostr'
     | '/setup'
     | '/collection/$collectionId'
-    | '/nostr/$threadRoot'
     | '/posts/$postId'
     | '/products/$productId'
     | '/profile/$profileId'
@@ -561,13 +549,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/posts/$postId'
       preLoaderRoute: typeof PostsPostIdRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/nostr/$threadRoot': {
-      id: '/nostr/$threadRoot'
-      path: '/$threadRoot'
-      fullPath: '/nostr/$threadRoot'
-      preLoaderRoute: typeof NostrThreadRootRouteImport
-      parentRoute: typeof NostrRoute
     }
     '/collection/$collectionId': {
       id: '/collection/$collectionId'
@@ -835,12 +816,10 @@ const DashboardLayoutRouteWithChildren = DashboardLayoutRoute._addFileChildren(
 )
 
 interface NostrRouteChildren {
-  NostrThreadRootRoute: typeof NostrThreadRootRoute
   NostrIndexRoute: typeof NostrIndexRoute
 }
 
 const NostrRouteChildren: NostrRouteChildren = {
-  NostrThreadRootRoute: NostrThreadRootRoute,
   NostrIndexRoute: NostrIndexRoute,
 }
 
