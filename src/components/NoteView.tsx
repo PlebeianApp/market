@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query'
 import { authorQueryOptions } from '@/queries/authors.tsx'
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
-import { threadQueryOptions } from '@/queries/thread-view'
 
 interface NoteViewProps {
 	note: NDKEvent
@@ -26,9 +25,6 @@ export function NoteView({ note }: NoteViewProps) {
 		? ((note as any).tags as any[]).some((t: any) => (Array.isArray(t) && t[0] === 'e' && t[3] === 'reply') || note.kind == 1111)
 		: false
 
-	// Thread root for this note (used to link to thread view)
-	const { data: threadData } = useQuery(threadQueryOptions((note as any)?.id ? (note as any).id : (note as any)))
-	const computedThreadRoot = threadData?.rootId || (note.id as string | undefined) || ''
 	// For display next to reply indicator, prefer the local 'e' tag with marker 'root' (index 3), using its index 1 as the id
 	const rootIdFromTags =
 		Array.isArray((note as any).tags)
@@ -36,9 +32,7 @@ export function NoteView({ note }: NoteViewProps) {
 					(t: any) => Array.isArray(t) && t[0] === 'e' && t[3] === 'root' && typeof t[1] === 'string',
 				)?.[1]
 			: undefined
-	const displayRootId = (rootIdFromTags as string | undefined) ?? computedThreadRoot
-	// Per requirement: threadRoot should be the same as the id displayRootId
-	const threadRoot = displayRootId
+	const displayRootId = rootIdFromTags || (note.id as string | undefined) || ''
 
 	return (
 		<div className="border p-3 rounded-lg">
@@ -88,21 +82,9 @@ export function NoteView({ note }: NoteViewProps) {
 					</button>
 				</div>
 			</div>
-			{threadRoot ? (
-				<Link
-					to="/nostr/$threadRoot"
-					params={{ threadRoot }}
-					search={(note as any)?.id && (note as any).id !== threadRoot ? { note: (note as any).id } : undefined}
-					className="p-3 break-words text-sm block hover:underline"
-					title="Open thread"
-				>
-					{note.content}
-				</Link>
-			) : (
-				<Link to="/nostr" className="p-3 break-words text-sm block hover:underline" title="Open thread">
-					{note.content}
-				</Link>
-			)}
+			<Link to="/nostr" className="p-3 break-words text-sm block hover:underline" title="Open thread">
+				{note.content}
+			</Link>
 			{/* Raw event pretty printed */}
 			{(() => {
 				let raw: any
