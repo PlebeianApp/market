@@ -6,6 +6,22 @@ import { queryOptions } from '@tanstack/react-query'
 import { ndkActions } from '@/lib/stores/ndk'
 import { defaultRelaysUrls } from '@/lib/constants'
 
+// Utility function to detect NSFW via t:nsfw tag or #nsfw in content
+function isNSFWEvent(event: NDKEvent): boolean {
+	try {
+		const tags = (event as any)?.tags
+		const content = (event as any)?.content
+		const hasTag = Array.isArray(tags)
+			? (tags as any[]).some((t: any) => Array.isArray(t) && t[0] === 't' && typeof t[1] === 'string' && t[1].toLowerCase() === 'nsfw')
+			: false
+		const contentStr = typeof content === 'string' ? (content as string) : ''
+		const hasHash = /(^|\W)#nsfw(\W|$)/i.test(contentStr)
+		return hasTag || hasHash
+	} catch {
+		return false
+	}
+}
+
 // Thread node structure for building tree
 export type ThreadNode = {
 	event: NDKEvent
@@ -186,9 +202,9 @@ async function fetchThreadEvents(rootId: string): Promise<NDKEvent[]> {
 	const frontier = new Set<string>([rootId])
 	const visitedFrontier = new Set<string>()
 
-	// Always include the root event
+	// Always include the root event (unless NSFW)
 	const rootEvent = await fetchEventById(rootId)
-	if (rootEvent && (rootEvent as any).id) {
+	if (rootEvent && (rootEvent as any).id && !isNSFWEvent(rootEvent)) {
 		knownEvents.set((rootEvent as any).id as string, rootEvent)
 	}
 
@@ -204,7 +220,7 @@ async function fetchThreadEvents(rootId: string): Promise<NDKEvent[]> {
 			limit: 200,
 		}
 		const events = await ndk.fetchEvents(filter, undefined, relaySet)
-		const fetched = Array.from(events) as NDKEvent[]
+		const fetched = (Array.from(events) as NDKEvent[]).filter((e) => !isNSFWEvent(e))
 
 		// Add to known and expand the frontier with their ids
 		for (const ev of fetched) {
@@ -306,7 +322,10 @@ export async function constructThreadStructure(noteId: string): Promise<ThreadSt
 		const rootInfo = await findRootEvent(noteId)
 		if (!rootInfo) return null
 
-		const { rootId } = rootInfo
+		const { rootId, rootEvent } = rootInfo as any
+
+		// If root is NSFW, drop the entire thread
+		if (rootEvent && isNSFWEvent(rootEvent)) return null
 
 		// Fetch all events in the thread
 		const threadEvents = await fetchThreadEvents(rootId)

@@ -24,6 +24,22 @@ function hasClientMostrTag(event: NDKEvent): boolean {
 	return tags.some((tag) => Array.isArray(tag) && tag.length >= 2 && tag[0] === 'client' && tag[1] === 'Mostr')
 }
 
+// Utility function to detect NSFW via t:nsfw tag or #nsfw in content
+function isNSFWEvent(event: NDKEvent): boolean {
+	try {
+		const tags = (event as any)?.tags
+		const content = (event as any)?.content
+		const hasTag = Array.isArray(tags)
+			? (tags as any[]).some((t: any) => Array.isArray(t) && t[0] === 't' && typeof t[1] === 'string' && t[1].toLowerCase() === 'nsfw')
+			: false
+		const contentStr = typeof content === 'string' ? (content as string) : ''
+		const hasHash = /(^|\W)#nsfw(\W|$)/i.test(contentStr)
+		return hasTag || hasHash
+	} catch {
+		return false
+	}
+}
+
 function withFirstFetchedAt(e: NDKEvent): FetchedNDKEvent {
 	const id = e.id as string
 	const existing = id ? firstFetchTimestamps.get(id) : undefined
@@ -50,8 +66,8 @@ export const fetchNotes = async (): Promise<FetchedNDKEvent[]> => {
 	const notes = Array.from(events)
 	// Filter out any falsy events or events without an id to avoid downstream crashes
 	const validNotes = notes.filter((e) => !!e && !!(e as any).id)
-	// Filter out events with client:Mostr tags
-	const filteredNotes = validNotes.filter((e) => !hasClientMostrTag(e))
+	// Filter out events with client:Mostr tags and NSFW
+	const filteredNotes = validNotes.filter((e) => !hasClientMostrTag(e) && !isNSFWEvent(e))
 	// Map to include first-fetched timestamps and then sort by fetchedAt desc
 	const wrapped = filteredNotes.map(withFirstFetchedAt)
 	wrapped.sort((a, b) => b.fetchedAt - a.fetchedAt)
@@ -66,9 +82,9 @@ export const fetchNote = async (id: string): Promise<FetchedNDKEvent> => {
 	if (!event) {
 		throw new Error('Post not found')
 	}
-	// Filter out events with client:Mostr tags
-	if (hasClientMostrTag(event)) {
-		throw new Error('Post filtered out due to client:Mostr tag')
+	// Filter out events with client:Mostr tags and NSFW
+	if (hasClientMostrTag(event) || isNSFWEvent(event)) {
+		throw new Error('Post filtered out')
 	}
 	return withFirstFetchedAt(event)
 }
