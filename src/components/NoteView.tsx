@@ -3,7 +3,46 @@ import { useQuery } from '@tanstack/react-query'
 import { authorQueryOptions } from '@/queries/authors.tsx'
 import { threadStructureQueryOptions, type ThreadNode, type ThreadStructure, findRootFromETags } from '@/queries/thread.tsx'
 import { Link } from '@tanstack/react-router'
-import { type JSX, useEffect, useRef, useState } from 'react'
+import { type JSX, type SVGProps, useEffect, useRef, useState } from 'react'
+
+function SpoolIcon(props: SVGProps<SVGSVGElement>) {
+	return (
+		<svg
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth={2}
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden="true"
+			{...props}
+		>
+			<path d="M12 3v18" />
+			<path d="M8 7l4-4 4 4" />
+			<path d="M8 17l4 4 4-4" />
+		</svg>
+	)
+}
+
+function CollapseVerticalIcon(props: SVGProps<SVGSVGElement>) {
+	return (
+		<svg
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth={2}
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden="true"
+			{...props}
+		>
+			<path d="M12 3v9" />
+			<path d="M8 8l4 4 4-4" />
+			<path d="M12 21v-9" />
+			<path d="M8 16l4-4 4 4" />
+		</svg>
+	)
+}
 
 function linkifyContent(content: string, opts?: { stopPropagation?: boolean }) {
 	// Basic URL regex for http/https, stop at whitespace or angle bracket
@@ -97,6 +136,55 @@ function linkifyContent(content: string, opts?: { stopPropagation?: boolean }) {
 		nodes.push(content.slice(lastIndex))
 	}
 	return nodes
+}
+
+function CollapsibleContent({ children, className }: { children: any; className?: string }) {
+	const containerRef = useRef<HTMLDivElement | null>(null)
+	const [needsClamp, setNeedsClamp] = useState(false)
+	const [expanded, setExpanded] = useState(false)
+
+	useEffect(() => {
+		const check = () => {
+			const el = containerRef.current
+			if (!el) return
+			const maxPx = Math.round(window.innerHeight * 0.25)
+			// If scrollHeight is larger than 25vh, we need to clamp
+			setNeedsClamp(el.scrollHeight > maxPx + 2)
+		}
+		check()
+		window.addEventListener('resize', check)
+		return () => window.removeEventListener('resize', check)
+	}, [children])
+
+	const onShowMore = (e: any) => {
+		e.preventDefault()
+		e.stopPropagation()
+		setExpanded(true)
+	}
+
+	const baseWrapStyle = { overflowWrap: 'anywhere' as const, wordBreak: 'break-word' as const }
+	const contentStyle = !expanded && needsClamp ? { maxHeight: '25vh', overflow: 'hidden' as const, ...baseWrapStyle } : baseWrapStyle
+
+	return (
+		<div>
+			<div ref={containerRef} style={contentStyle} className={className}>
+				{children}
+			</div>
+			{!expanded && needsClamp ? (
+				<div className="relative -mt-8 pt-8">
+					<div className="absolute inset-x-0 -top-8 h-16 bg-gradient-to-b from-transparent to-white pointer-events-none"></div>
+					<button
+						className="relative w-full text-sm text-blue-600 hover:underline bg-white/80 px-2 py-1 border rounded"
+						onClick={onShowMore}
+						title="Show more"
+						aria-expanded={expanded}
+					>
+						Show more
+					</button>
+				</div>
+			) : null}
+		</div>
+	)
 }
 
 interface NoteViewProps {
@@ -194,14 +282,15 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 	if (!readOnlyInThread && openThreadId === noteIdForThread) {
 		return (
 			<div>
-				<div className="p-3 bg-black text-white border border-gray-700 rounded-lg">
+				<div className="p-3 bg-white text-black border border-gray-700 rounded-lg">
 					<div className="mb-2 flex items-center justify-end">
 						<button
-							className="ml-auto text-xs px-2 py-1 border rounded hover:bg-gray-100"
+							className="h-8 w-8 inline-flex items-center justify-center text-xs rounded-full outline-none focus:outline-none focus:ring-0 border-0 transition-colors transition-shadow hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 hover:ring-offset-white bg-white text-gray-600 hover:bg-gray-100"
 							onClick={() => setOpenThreadId(null)}
-							title="Close thread"
+							title="Fold thread"
+							aria-label="Fold thread"
 						>
-							Close thread
+							<CollapseVerticalIcon className="h-4 w-4" />
 						</button>
 					</div>
 					{isLoadingThread ? (
@@ -220,34 +309,6 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 	return (
 		<div
 			className={`group border p-3 z-20 rounded-lg  transition-colors duration-150 ${isClickablePanel ? 'hover:bg-gray-100' : 'hover:bg-gray-100/50'}`}
-			role={isClickablePanel ? 'button' : undefined}
-			tabIndex={isClickablePanel ? 0 : undefined}
-			onClick={
-				isClickablePanel
-					? () => {
-							// Toggle the thread view when clicking anywhere on the panel (except header)
-							if (openThreadId === noteIdForThread) {
-								setOpenThreadId(null)
-							} else {
-								setOpenThreadId(noteIdForThread)
-							}
-						}
-					: undefined
-			}
-			onKeyDown={
-				isClickablePanel
-					? (e) => {
-							if (e.key === 'Enter' || e.key === ' ') {
-								e.preventDefault()
-								if (openThreadId === noteIdForThread) {
-									setOpenThreadId(null)
-								} else {
-									setOpenThreadId(noteIdForThread)
-								}
-							}
-						}
-					: undefined
-			}
 		>
 			<div className="flex items-center justify-between mb-1" onClick={(e) => e.stopPropagation()}>
 				{readOnlyInThread ? (
@@ -302,43 +363,74 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 					</Link>
 				)}
 				<div className="ml-2 flex items-center gap-2">
+					{isClickablePanel ? (
+						<button
+							className={`h-8 w-8 inline-flex items-center justify-center text-xs rounded-full outline-none focus:outline-none focus:ring-0 border-0 transition-colors transition-shadow hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 hover:ring-offset-white ${
+								showThread ? 'bg-blue-50 text-blue-600 hover:bg-blue-100' : 'bg-white text-gray-600 hover:bg-gray-100'
+							}`}
+							aria-pressed={showThread}
+							onClick={(e) => {
+								e.preventDefault()
+								e.stopPropagation()
+								if (openThreadId === noteIdForThread) {
+									setOpenThreadId(null)
+								} else {
+									setOpenThreadId(noteIdForThread)
+								}
+							}}
+							title={showThread ? 'Hide thread' : 'View thread'}
+							aria-label={showThread ? 'Hide thread' : 'View thread'}
+						>
+							<SpoolIcon className="h-4 w-4 hover:bg-grey-300" />
+						</button>
+					) : null}
+				</div>
+			</div>
+			<div className="flex gap-2">
+				<div className="flex-1">
+					{readOnlyInThread ? (
+						<CollapsibleContent className="px-2 py-1 text-md text-left break-words whitespace-pre-wrap align-text-top w-full hover:bg-grey-300">
+							{linkifyContent(note.content, { stopPropagation: true })}
+						</CollapsibleContent>
+					) : (
+						(() => {
+							const hasThreadItems = !!threadStructure && (threadStructure.nodes?.size || 0) > 1
+							const disabled = !isLoadingThread && !hasThreadItems
+							const handleClick = () => {
+								if (disabled) return
+								// Open this thread and implicitly close others by setting global openThreadId
+								if (openThreadId === noteIdForThread) {
+									setOpenThreadId(null)
+								} else {
+									setOpenThreadId(noteIdForThread)
+								}
+							}
+							return (
+								<CollapsibleContent
+									className={`px-2 py-1 text-md text-left break-words whitespace-pre-wrap align-text-top w-full rounded-md transition-colors duration-150 hover:bg-grey-300`}
+								>
+									{linkifyContent(note.content, { stopPropagation: true })}
+								</CollapsibleContent>
+							)
+						})()
+					)}
+				</div>
+				<div className="flex flex-col justify-end">
 					<button
 						className="h-8 w-8 inline-flex items-center justify-center text-xs rounded-full bg-white text-gray-600 hover:bg-gray-100 outline-none focus:outline-none focus:ring-0 border-0"
 						aria-pressed={showJson}
 						aria-controls={`note-json-${(note as any)?.id ?? note.pubkey ?? Math.random().toString(36).slice(2)}`}
-						onClick={() => setShowJson((v) => !v)}
+						onClick={(e) => {
+							e.preventDefault()
+							e.stopPropagation()
+							setShowJson((v) => !v)
+						}}
 						title={showJson ? 'Hide raw JSON' : 'Show raw JSON'}
 					>
 						&lt;/&gt;
 					</button>
 				</div>
 			</div>
-			{readOnlyInThread ? (
-				<div className="px-2 py-1 text-md text-left break-words whitespace-pre-wrap align-text-top w-full hover:bg-grey-300">
-					{note.content}
-				</div>
-			) : (
-				(() => {
-					const hasThreadItems = !!threadStructure && (threadStructure.nodes?.size || 0) > 1
-					const disabled = !isLoadingThread && !hasThreadItems
-					const handleClick = () => {
-						if (disabled) return
-						// Open this thread and implicitly close others by setting global openThreadId
-						if (openThreadId === noteIdForThread) {
-							setOpenThreadId(null)
-						} else {
-							setOpenThreadId(noteIdForThread)
-						}
-					}
-					return (
-						<div
-							className={`px-2 py-1 text-md text-left break-words whitespace-pre-wrap align-text-top w-full rounded-md transition-colors cursor-pointer duration-150`}
-						>
-							{linkifyContent(note.content, { stopPropagation: true })}
-						</div>
-					)
-				})()
-			)}
 			{/* Raw event pretty printed */}
 			{(() => {
 				let raw: any

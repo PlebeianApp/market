@@ -40,6 +40,15 @@ function isNSFWEvent(event: NDKEvent): boolean {
 	}
 }
 
+// Normalize user-provided tag filter text
+function normalizeTag(input?: string): string | undefined {
+	if (typeof input !== 'string') return undefined
+	const trimmed = input.trim()
+	if (!trimmed) return undefined
+	const withoutHash = trimmed.replace(/^#/, '')
+	return withoutHash.toLowerCase()
+}
+
 function withFirstFetchedAt(e: NDKEvent): FetchedNDKEvent {
 	const id = e.id as string
 	const existing = id ? firstFetchTimestamps.get(id) : undefined
@@ -51,13 +60,19 @@ function withFirstFetchedAt(e: NDKEvent): FetchedNDKEvent {
 	return { event: e, fetchedAt: ts }
 }
 
-export const fetchNotes = async (): Promise<FetchedNDKEvent[]> => {
+export const fetchNotes = async (opts?: { tag?: string }): Promise<FetchedNDKEvent[]> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
 	const filter: NDKFilter = {
 		kinds: [1, 1111], // kind 1 is text notes, kind 1111 is replies
 		limit: 200,
+	}
+
+	// If a tag filter is provided, constrain to events with that 't' tag
+	const normTag = normalizeTag(opts?.tag)
+	if (normTag) {
+		;(filter as any)['#t'] = [normTag]
 	}
 
 	// Ensure we query using the default relay URLs
@@ -95,8 +110,8 @@ export const noteQueryOptions = (id: string) =>
 		queryFn: () => fetchNote(id),
 	})
 
-export const notesQueryOptions = () =>
+export const notesQueryOptions = (opts?: { tag?: string }) =>
 	queryOptions({
-		queryKey: noteKeys.all,
-		queryFn: () => fetchNotes(),
+		queryKey: [...noteKeys.all, 'list', normalizeTag(opts?.tag) || ''],
+		queryFn: () => fetchNotes(opts),
 	})
