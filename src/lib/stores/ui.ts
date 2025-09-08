@@ -1,7 +1,7 @@
 import { Store } from '@tanstack/store'
 
 // Define types for different UI elements
-export type DrawerType = 'cart' | 'createProduct' | 'createCollection'
+export type DrawerType = 'cart' | 'createProduct' | 'createCollection' | 'filters'
 export type DialogType = 'login' | 'signup' | 'checkout' | 'product-details' | 'scan-qr' | 'v4v-setup'
 export type ToastType = 'success' | 'error' | 'warning' | 'info'
 
@@ -37,6 +37,7 @@ const initialState: UIState = {
 		cart: false,
 		createProduct: false,
 		createCollection: false,
+		filters: false,
 	},
 	dialogs: {
 		login: false,

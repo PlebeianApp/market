@@ -173,7 +173,7 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 				</div>
 				<div className="ml-2 flex items-center gap-2">
 					<button
-						className="px-2 py-4 text-xs border rounded hover:bg-gray-100 text-gray-600"
+						className="h-8 w-8 inline-flex items-center justify-center text-xs rounded-full bg-white text-gray-600 hover:bg-gray-100 outline-none focus:outline-none focus:ring-0 border-0"
 						aria-pressed={showJson}
 						aria-controls={`note-json-${(note as any)?.id ?? note.pubkey ?? Math.random().toString(36).slice(2)}`}
 						onClick={() => setShowJson((v) => !v)}

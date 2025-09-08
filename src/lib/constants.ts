@@ -6,6 +6,7 @@ export const defaultRelaysUrls: string[] = [
 	'wss://relay.nostr.net',
 	'wss://relay.damus.io',
 	'wss://relay.minibits.cash',
+	'wss://relay.orly.dev',
 	// 'ws://localhost:10547',
 ]
 

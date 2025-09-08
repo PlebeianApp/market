@@ -20,13 +20,8 @@ const firstFetchTimestamps = new Map<string, number>()
 function hasClientMostrTag(event: NDKEvent): boolean {
 	const tags = (event as any)?.tags
 	if (!Array.isArray(tags)) return false
-	
-	return tags.some((tag) => 
-		Array.isArray(tag) && 
-		tag.length >= 2 && 
-		tag[0] === 'client' && 
-		tag[1] === 'Mostr'
-	)
+
+	return tags.some((tag) => Array.isArray(tag) && tag.length >= 2 && tag[0] === 'client' && tag[1] === 'Mostr')
 }
 
 function withFirstFetchedAt(e: NDKEvent): FetchedNDKEvent {
@@ -46,7 +41,7 @@ export const fetchNotes = async (): Promise<FetchedNDKEvent[]> => {
 
 	const filter: NDKFilter = {
 		kinds: [1, 1111], // kind 1 is text notes, kind 1111 is replies
-		limit: 20,
+		limit: 200,
 	}
 
 	// Ensure we query using the default relay URLs
