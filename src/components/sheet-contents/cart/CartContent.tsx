@@ -159,7 +159,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 
 								{Object.entries(data.currencyTotals).map(([currency, amount]) => (
 									<div key={`${sellerPubkey}-${currency}`} className="flex justify-between mt-4">
-										<p className="text-sm">{currency} Total:</p>
+										<p className="text-sm">Products ({currency}):</p>
 										<p className="text-sm">
 											{amount.toFixed(2)} {currency}
 										</p>
@@ -234,7 +234,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 						<div className="space-y-2 p-2 bg-gray-50 rounded-lg">
 							{Object.entries(totalByCurrency).map(([currency, amount]) => (
 								<div key={`total-${currency}`} className="flex justify-between">
-									<p className="text-sm">{currency} Total:</p>
+									<p className="text-sm">Products ({currency}):</p>
 									<p className="text-sm">{amount.toFixed(2)}</p>
 								</div>
 							))}
