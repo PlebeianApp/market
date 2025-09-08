@@ -120,7 +120,9 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 					<div>
 						<h3 className="text-base font-medium">{title || 'Untitled Product'}</h3>
 						<p className="mt-1 text-sm text-muted-foreground">
-							{price} {currency}
+							{currency.toLowerCase() === 'sats' || currency.toLowerCase() === 'sat'
+								? `${Math.round(price).toLocaleString()} sats`
+								: `${Math.round(price * 100).toLocaleString()} sats (${price.toFixed(2)} ${currency})`}
 						</p>
 					</div>
 
