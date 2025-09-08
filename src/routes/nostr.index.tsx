@@ -51,12 +51,14 @@ function FirehoseComponent() {
 						<Button
 							variant="primary"
 							className="p-2 h-8 w-8 flex items-center justify-center"
-							onClick={() => {
-								if (typeof window !== 'undefined') {
-									window.scrollTo({ top: 0, behavior: 'smooth' })
-								}
-								refetch()
-							}}
+ 						onClick={() => {
+ 							if (typeof window !== 'undefined') {
+ 								window.scrollTo({ top: 0, behavior: 'smooth' })
+ 							}
+ 							// Also close any open thread when refreshing
+ 							setOpenThreadId(null)
+ 							refetch()
+ 						}}
 							title="Reload feed"
 						>
 							{isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <span className="i-refresh w-4 h-4" />}↻
