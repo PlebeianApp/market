@@ -127,7 +127,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 						const optionsForThisSeller = sellerShippingOptions[sellerPubkey] || []
 
 						return (
-							<div key={sellerPubkey} className="border-b pb-8">
+							<div key={sellerPubkey} className="p-4 rounded-lg border shadow-md bg-white">
 								<div className="mb-4">
 									<UserWithAvatar pubkey={sellerPubkey} size="sm" showBadge={false} />
 								</div>
