@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { notesQueryOptions, type FetchedNDKEvent } from '@/queries/firehose'
 import { NoteView } from '@/components/NoteView.tsx'
 import { Button } from '@/components/ui/button'
-import { Loader2 } from 'lucide-react'
+import { Loader2, X } from 'lucide-react'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter, DrawerClose } from '@/components/ui/drawer'
 import { uiActions } from '@/lib/stores/ui'
 import { useThreadOpen } from '@/state/threadOpenStore'
 import { findRootFromETags } from '@/queries/thread'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 export const Route = createFileRoute('/nostr/')({
 	component: FirehoseComponent,
@@ -18,10 +20,51 @@ function FirehoseComponent() {
 	const [isFiltersOpen, setIsFiltersOpen] = useState(false)
 	const [loadingMode, setLoadingMode] = useState<null | 'all' | 'threads' | 'originals'>(null)
 	const [spinnerSettled, setSpinnerSettled] = useState(false)
-	const { setOpenThreadId } = useThreadOpen()
-	const { data, isLoading, isError, error, refetch, isFetching } = useQuery(notesQueryOptions())
+ const { setOpenThreadId } = useThreadOpen()
+	const [tagFilter, setTagFilter] = useState('')
+	const [tagFilterInput, setTagFilterInput] = useState(tagFilter)
+	const { data, isLoading, isError, error, refetch, isFetching } = useQuery(notesQueryOptions({ tag: tagFilter }))
 	const [showTop, setShowTop] = useState(false)
 	const [filterMode, setFilterMode] = useState<'all' | 'threads' | 'originals'>('all')
+
+	const scrollToTop = () => {
+		if (typeof window === 'undefined') return
+		try {
+			const targets: (Element | null | undefined)[] = [
+				document.scrollingElement as Element | null,
+				document.documentElement,
+				document.body,
+			]
+			targets.forEach((t) => {
+				if (t && 'scrollTop' in t) {
+					;(t as any).scrollTop = 0
+				}
+			})
+			if (typeof window.scrollTo === 'function') {
+				// use instant jump to ensure top
+				window.scrollTo(0, 0)
+			}
+			// run a second pass on next frame to combat layout shifts
+			requestAnimationFrame(() => {
+				try {
+					targets.forEach((t) => {
+						if (t && 'scrollTop' in t) {
+							;(t as any).scrollTop = 0
+						}
+					})
+					if (typeof window.scrollTo === 'function') {
+						window.scrollTo(0, 0)
+					}
+				} catch {}
+			})
+		} catch (_) {
+			// noop
+		}
+	}
+
+	useEffect(() => {
+		scrollToTop()
+	}, [])
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return
@@ -123,17 +166,21 @@ function FirehoseComponent() {
 
 	return (
 		<div>
-			<div className="text-4xl font-heading sticky top-20 z-30 m-0 p-3 px-4 bg-secondary-black text-secondary flex items-center justify-between">
+			<div className="text-4xl font-heading sticky top-20 z-30 m-0 p-3 px-4 bg-secondary-black text-secondary flex items-center justify-between relative">
 				<span>Firehose</span>
+				{/* Centered active hashtag */}
+				{tagFilter?.trim() ? (
+					<span className="absolute left-1/2 -translate-x-1/2 text-base font-normal">
+						#{tagFilter.replace(/^#/, '')}
+					</span>
+				) : null}
 				<section className="text-base font-normal">
 					<div className="flex items-center gap-2">
 						<Button
 							variant="primary"
 							className="p-2 h-8 w-8 flex items-center justify-center"
 							onClick={() => {
-								if (typeof window !== 'undefined') {
-									window.scrollTo({ top: 0, behavior: 'smooth' })
-								}
+								scrollToTop()
 								// Also close any open thread when refreshing
 								setOpenThreadId(null)
 								refetch()
@@ -176,9 +223,47 @@ function FirehoseComponent() {
 						<DrawerTitle id="drawer-filters-title">Filters</DrawerTitle>
 						<DrawerClose className="text-secondary hover:bg-white/10" />
 					</DrawerHeader>
-					<div className="p-4 text-sm">
+     <div className="p-4 text-sm">
 						<div className="mb-2 text-xs text-gray-400">Feed mode</div>
 						<div className="flex flex-col gap-2">
+							<div className="mt-4">
+								<Label htmlFor="tag-filter">tag filter</Label>
+								<div className="flex gap-2 items-center">
+		  								<Input
+		  									id="tag-filter"
+		  									placeholder="#news or news"
+		  									value={tagFilterInput}
+		  									onChange={(e) => {
+		  										setTagFilterInput(e.target.value)
+		  									}}
+            	onKeyDown={(e) => {
+											if (e.key === 'Enter') {
+												scrollToTop()
+												setSpinnerSettled(false)
+												setLoadingMode('all')
+												setOpenThreadId(null)
+												setTagFilter(tagFilterInput)
+											}
+										}}
+		  									className="flex-1"
+		  								/>
+									<Button
+										variant="ghost"
+										className="p-2 h-9 w-9"
+										onClick={() => {
+											setTagFilterInput('')
+											const el = document.getElementById('tag-filter') as HTMLInputElement | null
+											el?.focus()
+										}}
+										title="Clear tag filter"
+										aria-label="Clear tag filter"
+										disabled={!tagFilterInput?.length}
+									>
+										<X className="h-4 w-4" />
+									</Button>
+								</div>
+		  							<div className="text-xs text-gray-500 mt-1">Only fetch events that contain this #t tag</div>
+							</div>
 							<Button
 								variant={filterMode === 'all' ? 'primary' : 'ghost'}
 								className="justify-start"
@@ -259,13 +344,11 @@ function FirehoseComponent() {
 			<Button
 				variant="primary"
 				className={`fixed bottom-14 right-14 z-40 h-10 w-10 rounded-full px-0 lg:w-auto lg:px-4 flex items-center justify-center shadow-lg transition-opacity transition-colors duration-200 ${showTop ? 'opacity-100' : 'opacity-0 pointer-events-none'} hover:text-pink-500 hover:bg-blend-luminosity hover:bg-black`}
-				onClick={() => {
-					// Close any open thread to prevent auto-scroll back down
-					setOpenThreadId(null)
-					if (typeof window !== 'undefined') {
-						window.scrollTo({ top: 0, behavior: 'smooth' })
-					}
-				}}
+   	onClick={() => {
+						// Close any open thread to prevent auto-scroll back down
+						setOpenThreadId(null)
+						scrollToTop()
+					}}
 				title="Back to top"
 				aria-label="Back to top"
 			>
