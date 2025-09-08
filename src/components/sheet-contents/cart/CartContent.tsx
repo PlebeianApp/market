@@ -220,49 +220,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 						</div>
 					</div>
 
-					<button
-						className="w-full flex items-center justify-between p-2 border rounded-lg bg-gray-50"
-						onClick={() => setDetailsExpanded(!detailsExpanded)}
-					>
-						<span className="text-sm">View Details</span>
-						<ChevronDown className={`w-4 h-4 transition-transform ${detailsExpanded ? 'rotate-180' : ''}`} />
-					</button>
-
-					{detailsExpanded && (
-						<div className="space-y-2 p-2 bg-gray-50 rounded-lg">
-							{Object.entries(totalByCurrency).map(([currency, amount]) => (
-								<div key={`total-${currency}`} className="flex justify-between">
-									<p className="text-sm">Products ({currency}):</p>
-									<p className="text-sm">{amount.toFixed(2)}</p>
-								</div>
-							))}
-
-							{Object.entries(shippingByCurrency).map(([currency, amount]) => (
-								<div key={`shipping-${currency}`} className="flex justify-between">
-									<p className="text-sm">{currency} Shipping:</p>
-									<p className="text-sm">{amount.toFixed(2)}</p>
-								</div>
-							))}
-
-							<Separator className="my-2" />
-							<div className="flex justify-between">
-								<p className="text-sm">Subtotal:</p>
-								<p className="text-sm">{formatSats(totalInSats - totalShippingInSats)} sat</p>
-							</div>
-
-							<div className="flex justify-between">
-								<p className="text-sm">Shipping:</p>
-								<p className="text-sm">{formatSats(totalShippingInSats)} sat</p>
-							</div>
-
-							<Separator className="my-2" />
-
-							<div className="flex justify-between font-semibold">
-								<p className="text-sm">Grand Total:</p>
-								<p className="text-sm">{formatSats(totalInSats)} sat</p>
-							</div>
-						</div>
-					)}
+					{/* View Details temporarily hidden for design sync */}
 
 					<div className="space-y-3 mt-4">
 						<div className="flex gap-3">
