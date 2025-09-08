@@ -35,9 +35,10 @@ export interface DrawerProps extends VariantProps<typeof drawerVariants> {
 	type: DrawerType
 	children: React.ReactNode
 	className?: string
+	onOpenChange?: (open: boolean) => void
 }
 
-export function Drawer({ type, children, side, className }: DrawerProps) {
+export function Drawer({ type, children, side, className, onOpenChange }: DrawerProps) {
 	const { drawers } = useStore(uiStore)
 	const isOpen = drawers[type]
 
@@ -56,6 +57,11 @@ export function Drawer({ type, children, side, className }: DrawerProps) {
 			document.body.style.overflow = 'hidden'
 		} else {
 			document.body.style.overflow = ''
+		}
+
+		// Notify open state changes
+		if (onOpenChange) {
+			onOpenChange(isOpen)
 		}
 
 		return () => {
