@@ -524,14 +524,16 @@ function RouteComponent() {
 
 	return (
 		<div className="flex-grow flex flex-col">
-			{/* Progress Bar */}
-			<CheckoutProgress
-				currentStepNumber={currentStepNumber}
-				totalSteps={totalSteps}
-				progress={progress}
-				stepDescription={stepDescription}
-				onBackClick={handleBackClick}
-			/>
+			{/* Fixed Progress Bar */}
+			<div className="sticky top-[8.5rem] lg:top-[5rem] z-20 bg-white border-b border-gray-200">
+				<CheckoutProgress
+					currentStepNumber={currentStepNumber}
+					totalSteps={totalSteps}
+					progress={progress}
+					stepDescription={stepDescription}
+					onBackClick={handleBackClick}
+				/>
+			</div>
 
 			{/* Main Content */}
 			<div className="px-4 py-8 flex flex-row gap-4 w-full flex-grow">
