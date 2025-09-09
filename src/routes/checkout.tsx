@@ -581,6 +581,11 @@ function RouteComponent() {
 				</div>
 				{/* Main Content Area */}
 				<Card className="flex-1 lg:w-1/2 flex flex-col lg:h-full shadow-md">
+					{currentStep !== 'shipping' && (
+						<CardHeader>
+							<CardTitle>{currentStep === 'payment' ? 'Invoices' : 'Order Summary'}</CardTitle>
+						</CardHeader>
+					)}
 					<CardContent className="p-6 flex-1 lg:overflow-y-auto">
 						<div ref={animationParent}>
 							{currentStep === 'shipping' && <ShippingAddressForm form={form} hasAllShippingMethods={hasAllShippingMethods} />}
