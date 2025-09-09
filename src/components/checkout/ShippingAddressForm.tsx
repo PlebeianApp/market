@@ -2,7 +2,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { MapPin } from 'lucide-react'
 
 export interface CheckoutFormData {
 	name: string
@@ -23,14 +22,8 @@ interface ShippingAddressFormProps {
 export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAddressFormProps) {
 	return (
 		<div className="space-y-6">
-			<div className="flex items-center gap-3 mb-6">
-				<div className="p-2 bg-blue-100 rounded-lg">
-					<MapPin className="h-5 w-5 text-blue-600" />
-				</div>
-				<div>
-					<h2 className="text-xl font-semibold">Shipping Address</h2>
-					<p className="text-gray-600">Where should we deliver your order?</p>
-				</div>
+			<div className="mb-6">
+				<h2 className="leading-none font-semibold tracking-tight">Shipping Address</h2>
 			</div>
 
 			<form
