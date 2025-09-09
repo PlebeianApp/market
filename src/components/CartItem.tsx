@@ -184,7 +184,7 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 					</button>
 
 					{showShipping && (
-						<div className={`flex flex-col gap-2 ${!hasShipping ? 'border-l-2 border-red-200 pl-2' : ''}`}>
+						<div className={`flex flex-col gap-2 ${!hasShipping ? 'border-l-2 border-yellow-400 pl-2' : ''}`}>
 							<ShippingSelector
 								productId={productId}
 								className="w-full max-w-xs"
