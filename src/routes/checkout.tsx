@@ -18,7 +18,7 @@ import { publishPaymentReceipt } from '@/publish/payment'
 import { useGenerateInvoiceMutation } from '@/queries/payment'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useForm } from '@tanstack/react-form'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ChevronLeft, ChevronRight, Zap } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -730,7 +730,7 @@ function RouteComponent() {
 											) : (
 												<>
 													<div className="w-2 h-2 bg-gray-400 rounded-full" />
-													<span className="text-gray-600">No NWC wallets</span>
+													<span className="text-gray-600">Fast Payments available with NWC, setup in <Link to="/dashboard/account/making-payments" className="text-blue-600 hover:underline">settings</Link></span>
 												</>
 											)}
 										</div>
