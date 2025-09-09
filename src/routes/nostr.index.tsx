@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { notesQueryOptions, type FetchedNDKEvent } from '@/queries/firehose'
 import { NoteView } from '@/components/NoteView.tsx'
 import { Button } from '@/components/ui/button'
-import { Loader2, X } from 'lucide-react'
+import { Loader2, X, Eraser } from 'lucide-react'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter, DrawerClose } from '@/components/ui/drawer'
 import { uiActions } from '@/lib/stores/ui'
 import { useThreadOpen } from '@/state/threadOpenStore'
@@ -170,8 +170,22 @@ function FirehoseComponent() {
 				<span>Firehose</span>
 				{/* Centered active hashtag */}
 				{tagFilter?.trim() ? (
-					<span className="absolute left-1/2 -translate-x-1/2 text-base font-normal">
+					<span className="absolute left-1/2 -translate-x-1/2 text-base font-normal inline-flex items-center gap-1">
 						#{tagFilter.replace(/^#/, '')}
+						<Button
+							variant="ghost"
+							className="p-1 h-6 w-6"
+							title="Clear tag filter"
+							aria-label="Clear tag filter"
+							onClick={() => {
+								setOpenThreadId(null)
+								setTagFilter('')
+								setTagFilterInput('')
+								scrollToTop()
+							}}
+						>
+							<Eraser className="h-4 w-4" />
+						</Button>
 					</span>
 				) : null}
 				<section className="text-base font-normal">
