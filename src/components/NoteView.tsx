@@ -63,6 +63,16 @@ function linkifyContent(content: string, opts?: { stopPropagation?: boolean }) {
 		}
 	}
 
+	function isMediaUrl(u: string): boolean {
+		const exts = /\.(jpg|jpeg|png|webp|gif|mp4|mov)(?:$|[?#])/i
+		try {
+			const urlObj = new URL(u)
+			return exts.test(urlObj.pathname)
+		} catch {
+			return exts.test(u)
+		}
+	}
+
 	while ((match = urlRegex.exec(content)) !== null) {
 		const url = match[1]
 		// push preceding text
@@ -93,42 +103,20 @@ function linkifyContent(content: string, opts?: { stopPropagation?: boolean }) {
 				}
 			: undefined
 
-		if (isImageUrl(actual)) {
-			// Render image inline within a separating block, clickable only on the image itself
-			nodes.push(
-				<div key={`img-${match.index}`} className="my-2 w-full">
-					<img
-						src={actual}
-						alt={actual}
-						className="max-w-full h-auto rounded border border-gray-200 max-h-[50vh] object-contain cursor-pointer"
-						loading="lazy"
-						onClick={(e) => {
-							if (opts?.stopPropagation) {
-								e.stopPropagation()
-								e.preventDefault()
-							}
-							try {
-								window.open(actual, '_blank', 'noopener,noreferrer')
-							} catch {}
-						}}
-					/>
-				</div>,
-			)
-		} else {
-			// Fallback to regular clickable link
-			nodes.push(
-				<a
-					key={`u-${match.index}`}
-					href={actual}
-					target="_blank"
-					rel="noopener noreferrer"
-					className="text-blue-600 hover:underline break-words"
-					onClick={onClick}
-				>
-					{actual}
-				</a>,
-			)
-		}
+		// Always render as a regular clickable link (no inline images)
+		nodes.push(
+			<a
+				key={`u-${match.index}`}
+				href={actual}
+				target="_blank"
+				rel="noopener noreferrer"
+				className="text-blue-600 hover:underline break-words"
+				onClick={onClick}
+				title={isMediaUrl(actual) ? 'This media could be NSFW' : undefined}
+			>
+				{actual}
+			</a>,
+		)
 
 		lastIndex = match.index + match[0].length
 	}
