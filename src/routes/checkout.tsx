@@ -560,12 +560,17 @@ function RouteComponent() {
 						</CardHeader>
 						{mobileOrderSummaryOpen && (
 							<CardContent>
-								{currentStep === 'payment' ? (
-									invoices.length > 0 ? (
-										<PaymentSummary invoices={invoices} currentIndex={currentInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
-									) : (
-										<div className="text-sm text-gray-500">No invoices yet</div>
-									)
+								{currentStep === 'payment' && isGeneratingInvoices ? (
+									<div className="flex items-center justify-center py-8">
+										<div className="text-center">
+											<div className="animate-spin w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full mx-auto mb-4" />
+											<p className="text-gray-600">Loading payment details...</p>
+										</div>
+									</div>
+								) : currentStep === 'payment' && invoices.length > 0 ? (
+									<PaymentSummary invoices={invoices} currentIndex={currentInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
+								) : currentStep === 'payment' ? (
+									<div className="text-sm text-gray-500">No invoices yet</div>
 								) : (
 									<div className="max-h-[50vh] overflow-y-auto">
 										<CartSummary
@@ -587,8 +592,12 @@ function RouteComponent() {
 						</CardHeader>
 					)}
 					<CardContent className="p-6 flex-1 lg:overflow-y-auto">
-						<div ref={animationParent}>
-							{currentStep === 'shipping' && <ShippingAddressForm form={form} hasAllShippingMethods={hasAllShippingMethods} />}
+						<div ref={animationParent} className="lg:h-full lg:min-h-full">
+							{currentStep === 'shipping' && (
+								<div className="h-full">
+									<ShippingAddressForm form={form} hasAllShippingMethods={hasAllShippingMethods} />
+								</div>
+							)}
 
 							{currentStep === 'summary' && (
 								<OrderFinalizeComponent
@@ -620,7 +629,7 @@ function RouteComponent() {
 										<h3 className="text-lg font-medium mb-2">Unable to generate payment invoices</h3>
 										<p className="text-sm text-gray-500 max-w-md mx-auto">
 											There may be an issue with the seller's Lightning configuration, or the Lightning service may be temporarily
-											unavailable.
+												unavailable.
 										</p>
 									</div>
 									<div className="space-y-2">
