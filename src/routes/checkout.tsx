@@ -572,8 +572,8 @@ function RouteComponent() {
 					</Card>
 				</div>
 				{/* Main Content Area */}
-				<Card className="flex-1 w-1/2 flex-grow">
-					<CardContent className="p-6 h-full">
+				<Card className="flex-1 lg:w-1/2 flex flex-col lg:h-full shadow-md">
+					<CardContent className="p-6 flex-1 lg:overflow-y-auto">
 						<div ref={animationParent}>
 							{currentStep === 'shipping' && <ShippingAddressForm form={form} hasAllShippingMethods={hasAllShippingMethods} />}
 
@@ -700,11 +700,11 @@ function RouteComponent() {
 				</Card>
 
 				{/* Right Sidebar */}
-				<Card className="flex-1 w-1/2">
+				<Card className="hidden lg:flex flex-1 lg:w-1/2 flex-col h-full shadow-md">
 					<CardHeader>
 						<CardTitle>{currentStep === 'payment' ? 'Payment Details' : 'Order Summary'}</CardTitle>
 					</CardHeader>
-					<CardContent className="h-full">
+					<CardContent className="flex-1 overflow-y-auto">
 						{currentStep === 'payment' && isGeneratingInvoices ? (
 							<div className="flex items-center justify-center h-full">
 								<div className="text-center">
