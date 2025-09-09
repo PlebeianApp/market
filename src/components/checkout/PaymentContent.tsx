@@ -231,14 +231,14 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 		}
 
 		return (
-			<div className="space-y-4">
+			<div className="space-y-4 lg:space-y-6 lg:px-6 lg:pb-6">
 				{/* Navigation Header */}
 				{showNavigation && invoices.length > 1 && (
 					<div className="flex items-center justify-between">
 						<h3 className="text-lg font-semibold">
 							Payment {activeIndex + 1} of {invoices.length}
 						</h3>
-						<div className="flex items-center gap-2">
+						<div className="flex items-center gap-6">
 							<Button variant="ghost" size="sm" onClick={() => handleNavigate(Math.max(0, activeIndex - 1))} disabled={activeIndex === 0}>
 								<ChevronLeft className="w-4 h-4" />
 							</Button>
