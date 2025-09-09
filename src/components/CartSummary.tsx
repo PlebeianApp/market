@@ -107,14 +107,14 @@ export function CartSummary({
 					<div className="flex">
 						<div className="ml-3">
 							<p className="text-sm text-yellow-700">
-								Please select shipping options for {missingShippingCount} {missingShippingCount === 1 ? 'item' : 'items'} before checkout.
+								Please select shipping for {missingShippingCount} {missingShippingCount === 1 ? 'item' : 'items'} before checkout.
 							</p>
 						</div>
 					</div>
 				</div>
 			)}
 
-			<div className="space-y-8" ref={parent}>
+			<div className="space-y-6" ref={parent}>
 				{Object.entries(productsBySeller).map(([sellerPubkey, products]) => {
 					const data = sellerData[sellerPubkey] || {
 						satsTotal: 0,
@@ -203,7 +203,7 @@ export function CartSummary({
 				})}
 			</div>
 
-			<div className="border-t pt-4 mt-4">
+			<div className="pt-4 mt-4">
 				<div className="space-y-3 w-full">
 					<div className="space-y-1 mb-2">
 						<div className="flex justify-between">
