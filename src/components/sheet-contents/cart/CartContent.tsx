@@ -7,12 +7,12 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import type { RichShippingInfo } from '@/lib/stores/cart'
 import { cartActions, cartStore } from '@/lib/stores/cart'
 import { uiActions } from '@/lib/stores/ui'
-import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useStore } from '@tanstack/react-store'
 import { useNavigate } from '@tanstack/react-router'
 import { ChevronDown } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { EmptyCartScreen } from './EmptyCartScreen'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
 
 export function CartContent({ className = '' }: { className?: string }) {
 	const {
@@ -52,6 +52,10 @@ export function CartContent({ className = '' }: { className?: string }) {
 	}
 
 	useEffect(() => {
+		enableAnimations(true)
+	}, [parent, enableAnimations])
+
+	useEffect(() => {
 		if (Object.keys(cart.products).length > 0) {
 			cartActions.groupProductsBySeller()
 			cartActions.updateSellerData()
@@ -67,10 +71,6 @@ export function CartContent({ className = '' }: { className?: string }) {
 		})
 		setSelectedShippingByUser(initialSelected)
 	}, [cart.products])
-
-	useEffect(() => {
-		enableAnimations(true)
-	}, [parent, enableAnimations])
 
 	const handleQuantityChange = (productId: string, newAmount: number) => {
 		// Updated function signature - no longer needs buyerPubkey
@@ -128,7 +128,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 
 						return (
 							<div key={sellerPubkey} className="p-4 rounded-lg border shadow-md bg-white">
-								<div className="mb-4">
+								<div className="mb-3">
 									<UserWithAvatar pubkey={sellerPubkey} size="sm" showBadge={false} />
 								</div>
 
