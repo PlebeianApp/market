@@ -536,7 +536,7 @@ function RouteComponent() {
 			</div>
 
 			{/* Main Content */}
-			<div className="px-4 py-8 flex flex-row gap-4 w-full flex-grow">
+			<div className="px-4 py-8 flex flex-col lg:flex-row lg:gap-4 w-full lg:h-[calc(100vh-10rem)]">
 				{/* Main Content Area */}
 				<Card className="flex-1 w-1/2 flex-grow">
 					<CardContent className="p-6 h-full">
