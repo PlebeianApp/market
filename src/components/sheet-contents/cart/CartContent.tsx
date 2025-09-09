@@ -146,7 +146,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 									))}
 								</ul>
 
-								<div className="mt-4">
+								<div className={`mt-4 ${!selectedShippingByUser[sellerPubkey] ? 'border-l-4 border-yellow-400 pl-2' : ''}`}>
 									<ShippingSelector
 										options={optionsForThisSeller}
 										selectedId={selectedShippingByUser[sellerPubkey]}
