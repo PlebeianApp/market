@@ -132,15 +132,16 @@ export function CartSummary({
 							</div>
 
 							<ul className="space-y-6">
-								{products.map((product) => (
-									<CartItem
-										key={product.id}
-										productId={product.id}
-										amount={product.amount}
-										onQuantityChange={allowQuantityChanges ? handleQuantityChange : () => {}}
-										onRemove={allowQuantityChanges ? handleRemoveProduct : () => {}}
-										hideShipping={true}
-									/>
+								{products.map((product, index) => (
+									<div key={product.id} className={`p-3 rounded-lg ${index % 2 === 0 ? 'bg-gray-100' : 'bg-white'}`}>
+										<CartItem
+											productId={product.id}
+											amount={product.amount}
+											onQuantityChange={allowQuantityChanges ? handleQuantityChange : () => {}}
+											onRemove={allowQuantityChanges ? handleRemoveProduct : () => {}}
+											hideShipping={true}
+										/>
+									</div>
 								))}
 							</ul>
 
