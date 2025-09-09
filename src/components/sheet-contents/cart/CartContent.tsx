@@ -226,7 +226,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 						<div className="flex gap-3">
 							<Button
 								variant="outline"
-								className="flex-1 text-gray-700 hover:bg-gray-100 hover:text-gray-900 border-gray-200"
+								className="flex-1 text-red-500 hover:bg-red-50 hover:text-red-600 border-red-200"
 								onClick={() => cartActions.clear()}
 								disabled={totalItems === 0}
 							>
