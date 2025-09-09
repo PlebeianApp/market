@@ -60,7 +60,7 @@ function withFirstFetchedAt(e: NDKEvent): FetchedNDKEvent {
 	return { event: e, fetchedAt: ts }
 }
 
-export const fetchNotes = async (opts?: { tag?: string }): Promise<FetchedNDKEvent[]> => {
+export const fetchNotes = async (opts?: { tag?: string; author?: string }): Promise<FetchedNDKEvent[]> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -69,10 +69,14 @@ export const fetchNotes = async (opts?: { tag?: string }): Promise<FetchedNDKEve
 		limit: 200,
 	}
 
-	// If a tag filter is provided, constrain to events with that 't' tag
+ // If a tag filter is provided, constrain to events with that 't' tag
 	const normTag = normalizeTag(opts?.tag)
 	if (normTag) {
 		;(filter as any)['#t'] = [normTag]
+	}
+	// If an author filter is provided (pubkey), constrain to that author
+	if (opts?.author && typeof opts.author === 'string' && opts.author.trim()) {
+		;(filter as any).authors = [opts.author.trim()]
 	}
 
 	// Ensure we query using the default relay URLs
@@ -110,8 +114,8 @@ export const noteQueryOptions = (id: string) =>
 		queryFn: () => fetchNote(id),
 	})
 
-export const notesQueryOptions = (opts?: { tag?: string }) =>
+export const notesQueryOptions = (opts?: { tag?: string; author?: string }) =>
 	queryOptions({
-		queryKey: [...noteKeys.all, 'list', normalizeTag(opts?.tag) || ''],
+		queryKey: [...noteKeys.all, 'list', normalizeTag(opts?.tag) || '', opts?.author?.trim() || ''],
 		queryFn: () => fetchNotes(opts),
 	})
