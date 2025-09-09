@@ -115,7 +115,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 			)}
 
 			<ScrollArea className="flex-1 overflow-y-auto py-2 min-h-0">
-				<div className="space-y-8" ref={parent}>
+				<div className="space-y-6" ref={parent}>
 					{Object.entries(productsBySeller).map(([sellerPubkey, products]) => {
 						const data = sellerData[sellerPubkey] || {
 							satsTotal: 0,
