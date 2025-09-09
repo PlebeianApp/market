@@ -300,7 +300,18 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 		>
 			<div className="flex items-center justify-between mb-1" onClick={(e) => e.stopPropagation()}>
 				{readOnlyInThread ? (
-					<Link to={`/profile/${note.pubkey}`} className="flex items-center  pr-2" onClick={(e) => e.stopPropagation()}>
+     <Link to={`/nostr?user=${note.pubkey}`} className="flex items-center  pr-2" onClick={(e) => {
+      						e.preventDefault()
+      						e.stopPropagation()
+      						try {
+      							const base = `${window.location.origin}/nostr`
+      							const url = `${base}?user=${encodeURIComponent(String(note.pubkey))}`
+      							window.history.pushState({}, '', url)
+      							window.dispatchEvent(new PopStateEvent('popstate'))
+      						} catch {
+      							window.location.href = `/nostr?user=${encodeURIComponent(String(note.pubkey))}`
+      						}
+      					}}>
 						<div className="flex items-center  pr-2 hover:bg-gray-100">
 							<div>
 								{isLoadingAuthor ? (
@@ -326,7 +337,18 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 						</div>
 					</Link>
 				) : (
-					<Link to={`/profile/${note.pubkey}`} className="flex items-center pr-2 hover:bg-grey-200" onClick={(e) => e.stopPropagation()}>
+     <Link to={`/nostr?user=${note.pubkey}`} className="flex items-center pr-2 hover:bg-grey-200" onClick={(e) => {
+      						e.preventDefault()
+      						e.stopPropagation()
+      						try {
+      							const base = `${window.location.origin}/nostr`
+      							const url = `${base}?user=${encodeURIComponent(String(note.pubkey))}`
+      							window.history.pushState({}, '', url)
+      							window.dispatchEvent(new PopStateEvent('popstate'))
+      						} catch {
+      							window.location.href = `/nostr?user=${encodeURIComponent(String(note.pubkey))}`
+      						}
+      					}}>
 						<div>
 							{isLoadingAuthor ? (
 								<div className="w-10 h-10 rounded-full bg-gray-200 animate-pulse"></div>
@@ -419,6 +441,52 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 					</button>
 				</div>
 			</div>
+			{/* Hashtags section */}
+			{(() => {
+				try {
+					const tagsArr = Array.isArray((note as any)?.tags) ? ((note as any).tags as any[]) : []
+					const tTags = tagsArr.filter((t) => Array.isArray(t) && t[0] === 't' && typeof t[1] === 'string')
+					const hashSet = new Set(
+						tTags
+							.map((t) => String(t[1]).replace(/^#/, '').trim())
+							.filter((v) => v.length > 0),
+					)
+					const hashtags = Array.from(hashSet)
+					if (hashtags.length === 0) return null
+					return (
+						<div className="mt-2 pt-2 border-t border-gray-200">
+							<div className="text-xs text-gray-600 flex flex-wrap items-center gap-2">
+								<span className="text-gray-500">Hashtags:</span>
+								{hashtags.map((tag) => (
+									<Link
+										key={tag}
+										to={`/nostr?tag=${encodeURIComponent(tag)}`}
+										className="text-blue-600 hover:underline"
+										onClick={(e) => {
+											e.preventDefault()
+											e.stopPropagation()
+											// Use window.location to ensure URL updates query param for the feed page
+											try {
+												const base = `${window.location.origin}/nostr`
+												const url = `${base}?tag=${encodeURIComponent(tag)}`
+												window.history.pushState({}, '', url)
+												window.dispatchEvent(new PopStateEvent('popstate'))
+											} catch {
+												// Fallback navigation
+												window.location.href = `/nostr?tag=${encodeURIComponent(tag)}`
+											}
+										}}
+									>
+										#{tag}
+									</Link>
+								))}
+							</div>
+						</div>
+					)
+				} catch {
+					return null
+				}
+			})()}
 			{/* Raw event pretty printed */}
 			{(() => {
 				let raw: any

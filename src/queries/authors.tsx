@@ -22,7 +22,8 @@ const transformEvent = (event: NDKEvent): NostrAuthor => {
 	}
 	return {
 		id: event.pubkey,
-		name: event.tags.find((t) => t[0] === 'name')?.[1] || parsed?.name,
+		// Prefer display_name (common in Nostr metadata) over name
+		name: event.tags.find((t) => t[0] === 'name')?.[1] || parsed?.display_name || parsed?.name,
 		about: parsed?.about,
 		picture: parsed?.picture,
 		nip05: parsed?.nip05,

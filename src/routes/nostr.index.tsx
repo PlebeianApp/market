@@ -1,7 +1,8 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useLocation } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
 import { notesQueryOptions, type FetchedNDKEvent } from '@/queries/firehose'
+import { authorQueryOptions } from '@/queries/authors'
 import { NoteView } from '@/components/NoteView.tsx'
 import { Button } from '@/components/ui/button'
 import { Loader2, X, Eraser } from 'lucide-react'
@@ -17,24 +18,33 @@ export const Route = createFileRoute('/nostr/')({
 })
 
 function FirehoseComponent() {
+	const location = useLocation()
 	const [isFiltersOpen, setIsFiltersOpen] = useState(false)
 	const [loadingMode, setLoadingMode] = useState<null | 'all' | 'threads' | 'originals'>(null)
 	const [spinnerSettled, setSpinnerSettled] = useState(false)
- const { setOpenThreadId } = useThreadOpen()
+	const { setOpenThreadId } = useThreadOpen()
 	const [tagFilter, setTagFilter] = useState('')
 	const [tagFilterInput, setTagFilterInput] = useState(tagFilter)
-	const { data, isLoading, isError, error, refetch, isFetching } = useQuery(notesQueryOptions({ tag: tagFilter }))
+	const [authorFilter, setAuthorFilter] = useState('')
+	const isBaseFeed = !tagFilter.trim() && !authorFilter.trim()
+	const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+		...notesQueryOptions({ tag: tagFilter, author: authorFilter }),
+		refetchOnWindowFocus: !isBaseFeed,
+		refetchOnReconnect: !isBaseFeed,
+		refetchInterval: false,
+		staleTime: isBaseFeed ? Infinity : 0,
+	})
+	const { data: authorMeta } = useQuery({ ...authorQueryOptions(authorFilter), enabled: !!authorFilter }) as any
 	const [showTop, setShowTop] = useState(false)
 	const [filterMode, setFilterMode] = useState<'all' | 'threads' | 'originals'>('all')
+	// Overlay state for loading a new tag
+	const [pendingTag, setPendingTag] = useState<string | null>(null)
+	const [showTagOverlay, setShowTagOverlay] = useState(false)
 
 	const scrollToTop = () => {
 		if (typeof window === 'undefined') return
 		try {
-			const targets: (Element | null | undefined)[] = [
-				document.scrollingElement as Element | null,
-				document.documentElement,
-				document.body,
-			]
+			const targets: (Element | null | undefined)[] = [document.scrollingElement as Element | null, document.documentElement, document.body]
 			targets.forEach((t) => {
 				if (t && 'scrollTop' in t) {
 					;(t as any).scrollTop = 0
@@ -65,6 +75,28 @@ function FirehoseComponent() {
 	useEffect(() => {
 		scrollToTop()
 	}, [])
+
+	// Apply tag/user from URL (?tag=...&user=...) when location changes
+	useEffect(() => {
+		try {
+			if (typeof window === 'undefined') return
+			const searchStr = window.location.search || ''
+			const sp = new URLSearchParams(searchStr)
+			const incomingTag = (sp.get('tag') || '').replace(/^#/, '').trim().toLowerCase()
+			const incomingUser = (sp.get('user') || '').trim()
+			setOpenThreadId(null)
+			if (incomingTag && incomingTag !== tagFilter.toLowerCase()) {
+				setPendingTag(incomingTag)
+				setTagFilter(incomingTag)
+				setTagFilterInput('#' + incomingTag)
+			}
+			if (incomingUser !== authorFilter) {
+				setAuthorFilter(incomingUser)
+			}
+			scrollToTop()
+		} catch {}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [location.href])
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return
@@ -156,16 +188,20 @@ function FirehoseComponent() {
 		}
 	}, [spinnerSettled, loadingMode, isFiltersOpen])
 
-	// Now that all hooks are called, we can return early based on state
-	if (isLoading) return <div className="flex justify-center items-center h-screen">Loading feed…</div>
-	if (isError) return <div className="text-red-600">Error loading feed: {(error as Error)?.message}</div>
+	// Clear pending tag marker once the fetch for it completes (no overlay)
+	useEffect(() => {
+		if (pendingTag === null) return
+		if (!isFetching && tagFilter.replace(/^#/, '') === pendingTag) {
+			setPendingTag(null)
+		}
+	}, [isFetching, tagFilter, pendingTag])
 
-	if (!isLoading && filtered.length === 0) {
-		return <div>No notes found.</div>
-	}
+	// Now that all hooks are called, avoid blanking the page; show inline messages only
+	const showInitialSpinner = isLoading && !data?.length
+	const showError = isError
 
 	return (
-		<div>
+		<div className="relative">
 			<div className="text-4xl font-heading sticky top-20 z-30 m-0 p-3 px-4 bg-secondary-black text-secondary flex items-center justify-between relative">
 				<span>Firehose</span>
 				{/* Centered active hashtag */}
@@ -173,14 +209,70 @@ function FirehoseComponent() {
 					<span className="absolute left-1/2 -translate-x-1/2 text-base font-normal inline-flex items-center gap-1">
 						#{tagFilter.replace(/^#/, '')}
 						<Button
-							variant="ghost"
-							className="p-1 h-6 w-6"
+							variant="primary"
+							className="p-1 h-6 w-6 flex items-center justify-center"
 							title="Clear tag filter"
 							aria-label="Clear tag filter"
 							onClick={() => {
 								setOpenThreadId(null)
+								try {
+									if (typeof window !== 'undefined') {
+										const url = new URL(window.location.href)
+										url.searchParams.delete('tag')
+										// If no other filters remain, normalize to /nostr path
+										const target = url.pathname.startsWith('/nostr')
+											? url.search
+												? `/nostr${url.search}`
+												: '/nostr'
+											: url.search
+												? `${url.pathname}${url.search}`
+												: url.pathname
+										window.history.pushState({}, '', target)
+										window.dispatchEvent(new PopStateEvent('popstate'))
+									}
+								} catch {
+									// Fallback
+									window.location.href = '/nostr'
+								}
 								setTagFilter('')
 								setTagFilterInput('')
+								setPendingTag(null)
+								scrollToTop()
+							}}
+						>
+							<Eraser className="h-4 w-4" />
+						</Button>
+					</span>
+				) : null}
+				{/* Centered active user filter (pubkey) */}
+				{!tagFilter?.trim() && authorFilter?.trim() ? (
+					<span className="absolute left-1/2 -translate-x-1/2 text-base font-normal inline-flex items-center gap-1">
+						@{(authorMeta?.name || authorFilter.slice(0, 8)) + (authorMeta?.name ? '' : '…')}
+						<Button
+							variant="primary"
+							className="p-1 h-6 w-6 flex items-center justify-center"
+							title="Clear user filter"
+							aria-label="Clear user filter"
+							onClick={() => {
+								setOpenThreadId(null)
+								try {
+									if (typeof window !== 'undefined') {
+										const url = new URL(window.location.href)
+										url.searchParams.delete('user')
+										const target = url.pathname.startsWith('/nostr')
+											? url.search
+												? `/nostr${url.search}`
+												: '/nostr'
+											: url.search
+												? `${url.pathname}${url.search}`
+												: url.pathname
+										window.history.pushState({}, '', target)
+										window.dispatchEvent(new PopStateEvent('popstate'))
+									}
+								} catch {
+									window.location.href = '/nostr'
+								}
+								setAuthorFilter('')
 								scrollToTop()
 							}}
 						>
@@ -218,6 +310,16 @@ function FirehoseComponent() {
 				</section>
 			</div>
 
+			{/* Inline status row below header */}
+			{showError && <div className="px-4 py-2 text-red-500">Error loading feed: {(error as Error)?.message}</div>}
+			{showInitialSpinner && (
+				<div className="px-4 py-2 text-gray-400 inline-flex items-center gap-2">
+					<Loader2 className="h-4 w-4 animate-spin" />
+					<span>Loading feed…</span>
+				</div>
+			)}
+			{!showInitialSpinner && filtered.length === 0 && <div className="px-4 py-2 text-gray-400">No notes found.</div>}
+
 			{/* Filters Drawer */}
 			<Drawer
 				type="filters"
@@ -237,30 +339,35 @@ function FirehoseComponent() {
 						<DrawerTitle id="drawer-filters-title">Filters</DrawerTitle>
 						<DrawerClose className="text-secondary hover:bg-white/10" />
 					</DrawerHeader>
-     <div className="p-4 text-sm">
+					<div className="p-4 text-sm">
 						<div className="mb-2 text-xs text-gray-400">Feed mode</div>
 						<div className="flex flex-col gap-2">
 							<div className="mt-4">
 								<Label htmlFor="tag-filter">tag filter</Label>
 								<div className="flex gap-2 items-center">
-		  								<Input
-		  									id="tag-filter"
-		  									placeholder="#news or news"
-		  									value={tagFilterInput}
-		  									onChange={(e) => {
-		  										setTagFilterInput(e.target.value)
-		  									}}
-            	onKeyDown={(e) => {
+									<Input
+										id="tag-filter"
+										placeholder="#news or news"
+										value={tagFilterInput}
+										onChange={(e) => {
+											setTagFilterInput(e.target.value)
+										}}
+										onKeyDown={(e) => {
 											if (e.key === 'Enter') {
+												const normalized = (tagFilterInput || '').replace(/^#/, '').trim()
+												// Always update the filter, but only show overlay if a non-empty tag
 												scrollToTop()
 												setSpinnerSettled(false)
 												setLoadingMode('all')
 												setOpenThreadId(null)
-												setTagFilter(tagFilterInput)
+												if (normalized.length > 0) {
+													setPendingTag(normalized)
+												}
+												setTagFilter(normalized)
 											}
 										}}
-		  									className="flex-1"
-		  								/>
+										className="flex-1"
+									/>
 									<Button
 										variant="ghost"
 										className="p-2 h-9 w-9"
@@ -276,7 +383,7 @@ function FirehoseComponent() {
 										<X className="h-4 w-4" />
 									</Button>
 								</div>
-		  							<div className="text-xs text-gray-500 mt-1">Only fetch events that contain this #t tag</div>
+								<div className="text-xs text-gray-500 mt-1">Only fetch events that contain this #t tag</div>
 							</div>
 							<Button
 								variant={filterMode === 'all' ? 'primary' : 'ghost'}
@@ -358,11 +465,11 @@ function FirehoseComponent() {
 			<Button
 				variant="primary"
 				className={`fixed bottom-14 right-14 z-40 h-10 w-10 rounded-full px-0 lg:w-auto lg:px-4 flex items-center justify-center shadow-lg transition-opacity transition-colors duration-200 ${showTop ? 'opacity-100' : 'opacity-0 pointer-events-none'} hover:text-pink-500 hover:bg-blend-luminosity hover:bg-black`}
-   	onClick={() => {
-						// Close any open thread to prevent auto-scroll back down
-						setOpenThreadId(null)
-						scrollToTop()
-					}}
+				onClick={() => {
+					// Close any open thread to prevent auto-scroll back down
+					setOpenThreadId(null)
+					scrollToTop()
+				}}
 				title="Back to top"
 				aria-label="Back to top"
 			>
