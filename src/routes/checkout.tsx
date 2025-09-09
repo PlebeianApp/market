@@ -568,7 +568,36 @@ function RouteComponent() {
 										</div>
 									</div>
 								) : currentStep === 'payment' && invoices.length > 0 ? (
-									<PaymentSummary invoices={invoices} currentIndex={currentInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
+									<>
+										{/* NWC Status Indicator */}
+										<div className="mb-4 p-3 bg-gray-50 rounded-lg border">
+											<div className="flex items-center justify-between text-sm">
+												<span className="font-medium text-gray-700">Wallet Status:</span>
+												<div className="flex items-center gap-2">
+													{nwcEnabled ? (
+														<>
+															<div className="w-2 h-2 bg-green-500 rounded-full" />
+															<span className="text-green-700 font-medium">
+																{wallets.filter((w) => w.nwcUri && parseNwcUri(w.nwcUri)).length} NWC wallet
+																{wallets.filter((w) => w.nwcUri && parseNwcUri(w.nwcUri)).length !== 1 ? 's' : ''} connected
+															</span>
+														</>
+													) : (
+														<>
+															<div className="w-2 h-2 bg-gray-400 rounded-full" />
+															<span className="text-gray-600">
+																Fast Payments available with NWC, setup in{' '}
+																<Link to="/dashboard/account/making-payments" className="text-blue-600 hover:underline">settings</Link>
+															</span>
+														</>
+													)}
+												</div>
+											</div>
+											{nwcEnabled && <p className="text-xs text-gray-500 mt-1">Use NWC to action all payments at once</p>}
+										</div>
+
+										<PaymentSummary invoices={invoices} currentIndex={currentInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
+									</>
 								) : currentStep === 'payment' ? (
 									<div className="text-sm text-gray-500">No invoices yet</div>
 								) : (
