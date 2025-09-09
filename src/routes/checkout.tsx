@@ -514,7 +514,7 @@ function RouteComponent() {
 				<div className="max-w-md mx-auto text-center">
 					<h1 className="text-2xl font-bold text-gray-900 mb-4">Your cart is empty</h1>
 					<p className="text-gray-600 mb-6">Add some products to your cart before checking out.</p>
-					<Button onClick={goBackToShopping} className="bg-black text-white hover:bg-gray-800">
+					<Button onClick={goBackToShopping} className="btn-black">
 						Continue Shopping
 					</Button>
 				</div>
