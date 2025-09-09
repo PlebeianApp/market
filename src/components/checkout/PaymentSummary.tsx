@@ -20,33 +20,7 @@ export function PaymentSummary({ invoices, currentIndex, onSelectInvoice }: Paym
 	const currentInvoice = invoices[currentIndex]
 
 	return (
-		<div className="space-y-4">
-			{/* Current Payment */}
-			{currentInvoice && (
-				<Card className="border-pink-200 bg-pink-50">
-					<CardHeader className="pb-2">
-						<CardTitle className="text-sm">Currently Paying</CardTitle>
-					</CardHeader>
-					<CardContent>
-						<div className="flex items-center gap-2 mb-2">
-							{currentInvoice.type === 'v4v' ? (
-								<Users className="w-4 h-4 text-purple-600" />
-							) : (
-								<CreditCard className="w-4 h-4 text-blue-600" />
-							)}
-							<span className="font-medium">{currentInvoice.recipientName}</span>
-						</div>
-						<div className="flex items-center gap-2">
-							<Zap className="w-4 h-4 text-yellow-500" />
-							<span className="text-lg font-bold">{formatSats(currentInvoice.amount)} sats</span>
-							<Badge variant={currentInvoice.type === 'v4v' ? 'secondary' : 'outline'}>
-								{currentInvoice.type === 'v4v' ? 'V4V' : 'Merchant'}
-							</Badge>
-						</div>
-					</CardContent>
-				</Card>
-			)}
-
+		<div className="flex flex-col lg:flex-col-reverse gap-4">
 			{/* Summary Stats */}
 			<Card>
 				<CardHeader className="pb-2">
@@ -91,7 +65,7 @@ export function PaymentSummary({ invoices, currentIndex, onSelectInvoice }: Paym
 										: invoice.status === 'paid'
 											? 'border-green-200 bg-green-50'
 											: 'border-gray-200 bg-white hover:bg-gray-50'
-									}`}
+								}`}
 							>
 								<div className="flex items-center justify-between mb-1">
 									<div className="flex items-center gap-2">
