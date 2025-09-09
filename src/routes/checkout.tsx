@@ -631,11 +631,7 @@ function RouteComponent() {
 									{/* Pay All Button - Only show if NWC is enabled and there are unpaid invoices */}
 									{nwcEnabled && invoices.filter((inv) => inv.status === 'pending').length > 1 && (
 										<div className="flex justify-center mb-4">
-											<Button
-												onClick={handlePayAllInvoices}
-												className="bg-green-600 hover:bg-green-700 text-white font-medium px-6 py-2"
-												size="lg"
-											>
+											<Button onClick={handlePayAllInvoices} className="btn-product-banner font-medium px-6 py-2" size="lg">
 												<Zap className="w-4 h-4 mr-2" />
 												Pay All with NWC ({invoices.filter((inv) => inv.status === 'pending').length} invoices)
 											</Button>
