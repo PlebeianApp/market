@@ -1,4 +1,3 @@
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Check, Clock, Zap, Users, CreditCard } from 'lucide-react'
 import type { PaymentInvoiceData } from './PaymentDialog'
@@ -77,11 +76,6 @@ export function PaymentSummary({ invoices, currentIndex, onSelectInvoice }: Paym
 										<span className="font-medium text-sm truncate">{invoice.recipientName}</span>
 										{invoice.status === 'paid' && <Check className="w-4 h-4 text-green-600" />}
 									</div>
-									{index === currentIndex && (
-										<Badge variant="outline" className="text-xs">
-											Current
-										</Badge>
-									)}
 								</div>
 
 								<div className="flex items-center justify-between">
