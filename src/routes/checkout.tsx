@@ -40,6 +40,7 @@ function RouteComponent() {
 	const [currentInvoiceIndex, setCurrentInvoiceIndex] = useState(0)
 	const [invoices, setInvoices] = useState<PaymentInvoiceData[]>([])
 	const [shippingData, setShippingData] = useState<CheckoutFormData | null>(null)
+	const [mobileOrderSummaryOpen, setMobileOrderSummaryOpen] = useState(false)
 
 	// Ref to control PaymentContent
 	const paymentContentRef = useRef<PaymentContentRef>(null)
@@ -537,6 +538,39 @@ function RouteComponent() {
 
 			{/* Main Content */}
 			<div className="px-4 py-8 flex flex-col lg:flex-row lg:gap-4 w-full lg:h-[calc(100vh-10rem)]">
+				{/* Mobile Order Summary / Invoices (collapsible) */}
+				<div className="lg:hidden mb-4">
+					<Card>
+						<CardHeader>
+							<CardTitle
+								className="flex items-center justify-between cursor-pointer"
+								onClick={() => setMobileOrderSummaryOpen(!mobileOrderSummaryOpen)}
+							>
+								<span>{currentStep === 'payment' ? 'Invoices' : 'Order Summary'}</span>
+								<ChevronRight className={`w-5 h-5 transition-transform ${mobileOrderSummaryOpen ? 'rotate-90' : ''}`} />
+							</CardTitle>
+						</CardHeader>
+						{mobileOrderSummaryOpen && (
+							<CardContent>
+								{currentStep === 'payment' ? (
+									invoices.length > 0 ? (
+										<PaymentSummary invoices={invoices} currentIndex={currentInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
+									) : (
+										<div className="text-sm text-gray-500">No invoices yet</div>
+									)
+								) : (
+									<div className="max-h-[50vh] overflow-y-auto">
+										<CartSummary
+											allowQuantityChanges={currentStep === 'shipping'}
+											allowShippingChanges={currentStep === 'shipping'}
+											showExpandedDetails={false}
+										/>
+									</div>
+								)}
+							</CardContent>
+						)}
+					</Card>
+				</div>
 				{/* Main Content Area */}
 				<Card className="flex-1 w-1/2 flex-grow">
 					<CardContent className="p-6 h-full">
