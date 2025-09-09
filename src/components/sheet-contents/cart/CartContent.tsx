@@ -132,7 +132,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 									<UserWithAvatar pubkey={sellerPubkey} size="sm" showBadge={false} />
 								</div>
 
-								<ul className="space-y-6">
+								<ul className="space-y-4">
 									{products.map((product, index) => (
 										<div key={product.id} className={`p-3 rounded-lg ${index % 2 === 0 ? 'bg-gray-100' : 'bg-white'}`}>
 											<CartItem
