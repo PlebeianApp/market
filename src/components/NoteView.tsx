@@ -127,7 +127,6 @@ function linkifyContent(content: string, opts?: { stopPropagation?: boolean }) {
 	return nodes
 }
 
-
 function CollapsibleContent({ children, className }: { children: any; className?: string }) {
 	const containerRef = useRef<HTMLDivElement | null>(null)
 	const [needsClamp, setNeedsClamp] = useState(false)
@@ -235,7 +234,6 @@ function ThreadView({ threadStructure, highlightedNoteId }: ThreadViewProps) {
 	)
 }
 
-
 export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 	// Remove a trailing hashtag-only line from the note content for display
 	const displayContent = (() => {
@@ -316,7 +314,7 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 			</div>
 		)
 	}
- return (
+	return (
 		<div
 			data-note-id={noteIdForThread}
 			className={`group border p-3 z-20 rounded-lg  transition-colors duration-150 ${isClickablePanel ? 'hover:bg-gray-100' : 'hover:bg-gray-100/50'}`}
@@ -329,10 +327,20 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 						onClick={(e) => {
 							e.preventDefault()
 							e.stopPropagation()
+							// Clear any open thread when switching to user view
+							setOpenThreadId(null)
 							try {
-								const base = `${window.location.origin}/nostr`
-								const url = `${base}?user=${encodeURIComponent(String(note.pubkey))}`
-								window.history.pushState({}, '', url)
+								const url = new URL(window.location.href)
+								url.searchParams.delete('threadview')
+								url.searchParams.set('user', String(note.pubkey))
+								const target = url.pathname.startsWith('/nostr')
+									? url.search
+										? `/nostr${url.search}`
+										: '/nostr'
+									: url.search
+										? `${url.pathname}${url.search}`
+										: url.pathname
+								window.history.pushState({}, '', target)
 								window.dispatchEvent(new PopStateEvent('popstate'))
 							} catch {
 								window.location.href = `/nostr?user=${encodeURIComponent(String(note.pubkey))}`
@@ -370,10 +378,20 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 						onClick={(e) => {
 							e.preventDefault()
 							e.stopPropagation()
+							// Clear any open thread when switching to user view
+							setOpenThreadId(null)
 							try {
-								const base = `${window.location.origin}/nostr`
-								const url = `${base}?user=${encodeURIComponent(String(note.pubkey))}`
-								window.history.pushState({}, '', url)
+								const url = new URL(window.location.href)
+								url.searchParams.delete('threadview')
+								url.searchParams.set('user', String(note.pubkey))
+								const target = url.pathname.startsWith('/nostr')
+									? url.search
+										? `/nostr${url.search}`
+										: '/nostr'
+									: url.search
+										? `${url.pathname}${url.search}`
+										: url.pathname
+								window.history.pushState({}, '', target)
 								window.dispatchEvent(new PopStateEvent('popstate'))
 							} catch {
 								window.location.href = `/nostr?user=${encodeURIComponent(String(note.pubkey))}`
@@ -410,29 +428,41 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 								showThread ? 'bg-blue-50 text-blue-600 hover:bg-blue-100' : 'bg-white text-gray-600 hover:bg-gray-100'
 							}`}
 							aria-pressed={showThread}
-       onClick={(e) => {
-									e.preventDefault()
-									e.stopPropagation()
-									if (openThreadId === noteIdForThread) {
-										setOpenThreadId(null)
-										try {
-											const url = new URL(window.location.href)
-											url.searchParams.delete('threadview')
-											const target = url.pathname.startsWith('/nostr') ? (url.search ? `/nostr${url.search}` : '/nostr') : (url.search ? `${url.pathname}${url.search}` : url.pathname)
-											window.history.pushState({}, '', target)
-											window.dispatchEvent(new PopStateEvent('popstate'))
-										} catch {}
-									} else {
-										setOpenThreadId(noteIdForThread)
-										try {
-											const url = new URL(window.location.href)
-											url.searchParams.set('threadview', noteIdForThread)
-											const target = url.pathname.startsWith('/nostr') ? (url.search ? `/nostr${url.search}` : '/nostr') : (url.search ? `${url.pathname}${url.search}` : url.pathname)
-											window.history.pushState({}, '', target)
-											window.dispatchEvent(new PopStateEvent('popstate'))
-										} catch {}
-									}
-								}}
+							onClick={(e) => {
+								e.preventDefault()
+								e.stopPropagation()
+								if (openThreadId === noteIdForThread) {
+									setOpenThreadId(null)
+									try {
+										const url = new URL(window.location.href)
+										url.searchParams.delete('threadview')
+										const target = url.pathname.startsWith('/nostr')
+											? url.search
+												? `/nostr${url.search}`
+												: '/nostr'
+											: url.search
+												? `${url.pathname}${url.search}`
+												: url.pathname
+										window.history.pushState({}, '', target)
+										window.dispatchEvent(new PopStateEvent('popstate'))
+									} catch {}
+								} else {
+									setOpenThreadId(noteIdForThread)
+									try {
+										const url = new URL(window.location.href)
+										url.searchParams.set('threadview', noteIdForThread)
+										const target = url.pathname.startsWith('/nostr')
+											? url.search
+												? `/nostr${url.search}`
+												: '/nostr'
+											: url.search
+												? `${url.pathname}${url.search}`
+												: url.pathname
+										window.history.pushState({}, '', target)
+										window.dispatchEvent(new PopStateEvent('popstate'))
+									} catch {}
+								}
+							}}
 							title={showThread ? 'Hide thread' : 'View thread'}
 							aria-label={showThread ? 'Hide thread' : 'View thread'}
 						>
@@ -444,7 +474,7 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 			<div className="flex gap-2">
 				<div className="flex-1">
 					{readOnlyInThread ? (
- 					<CollapsibleContent className="px-2 py-1 text-md text-left break-words whitespace-pre-wrap align-text-top w-full hover:bg-grey-300">
+						<CollapsibleContent className="px-2 py-1 text-md text-left break-words whitespace-pre-wrap align-text-top w-full hover:bg-grey-300">
 							{linkifyContent(displayContent, { stopPropagation: true })}
 						</CollapsibleContent>
 					) : (
@@ -464,7 +494,7 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 								<CollapsibleContent
 									className={`px-2 py-1 text-md text-left break-words whitespace-pre-wrap align-text-top w-full rounded-md transition-colors duration-150 hover:bg-grey-300`}
 								>
-  							{linkifyContent(displayContent, { stopPropagation: true })}
+									{linkifyContent(displayContent, { stopPropagation: true })}
 								</CollapsibleContent>
 							)
 						})()
@@ -506,11 +536,22 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 										onClick={(e) => {
 											e.preventDefault()
 											e.stopPropagation()
+											// Clear any open thread when switching to hashtag view
+											setOpenThreadId(null)
 											// Use window.location to ensure URL updates query param for the feed page
 											try {
-												const base = `${window.location.origin}/nostr`
-												const url = `${base}?tag=${encodeURIComponent(tag)}`
-												window.history.pushState({}, '', url)
+												const url = new URL(window.location.href)
+												url.searchParams.delete('threadview')
+												url.searchParams.set('tag', tag)
+												// Preserve existing author filter if present
+												const target = url.pathname.startsWith('/nostr')
+													? url.search
+														? `/nostr${url.search}`
+														: '/nostr'
+													: url.search
+														? `${url.pathname}${url.search}`
+														: url.pathname
+												window.history.pushState({}, '', target)
 												window.dispatchEvent(new PopStateEvent('popstate'))
 											} catch {
 												// Fallback navigation
