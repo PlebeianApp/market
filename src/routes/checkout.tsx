@@ -587,7 +587,9 @@ function RouteComponent() {
 															<div className="w-2 h-2 bg-gray-400 rounded-full" />
 															<span className="text-gray-600">
 																Fast Payments available with NWC, setup in{' '}
-																<Link to="/dashboard/account/making-payments" className="text-blue-600 hover:underline">settings</Link>
+																<Link to="/dashboard/account/making-payments" className="text-blue-600 hover:underline">
+																	settings
+																</Link>
 															</span>
 														</>
 													)}
@@ -680,7 +682,7 @@ function RouteComponent() {
 										<h3 className="text-lg font-medium mb-2">Unable to generate payment invoices</h3>
 										<p className="text-sm text-gray-500 max-w-md mx-auto">
 											There may be an issue with the seller's Lightning configuration, or the Lightning service may be temporarily
-												unavailable.
+											unavailable.
 										</p>
 									</div>
 									<div className="space-y-2">
@@ -704,31 +706,31 @@ function RouteComponent() {
 							{/* Payment Interface - Only show when invoices are ready */}
 							{currentStep === 'payment' && !isGeneratingInvoices && invoices.length > 0 && (
 								<div className="space-y-6">
-										{/* desktop header nav exists; mobile under-QR nav is handled inside LightningPaymentProcessor */}
+									{/* desktop header nav exists; mobile under-QR nav is handled inside LightningPaymentProcessor */}
 
-										{/* Pay All Button - Only show if NWC is enabled and there are unpaid invoices */}
-										{nwcEnabled && invoices.filter((inv) => inv.status === 'pending').length > 1 && (
-											<div className="flex justify-center mb-4">
-												<Button onClick={handlePayAllInvoices} className="btn-product-banner font-medium px-6 py-2" size="lg">
-													<Zap className="w-4 h-4 mr-2" />
-													Pay All with NWC ({invoices.filter((inv) => inv.status === 'pending').length} invoices)
-												</Button>
-											</div>
-										)}
+									{/* Pay All Button - Only show if NWC is enabled and there are unpaid invoices */}
+									{nwcEnabled && invoices.filter((inv) => inv.status === 'pending').length > 1 && (
+										<div className="flex justify-center mb-4">
+											<Button onClick={handlePayAllInvoices} className="btn-product-banner font-medium px-6 py-2" size="lg">
+												<Zap className="w-4 h-4 mr-2" />
+												Pay All with NWC ({invoices.filter((inv) => inv.status === 'pending').length} invoices)
+											</Button>
+										</div>
+									)}
 
-										{/* Payment Content - Inline instead of modal */}
-										<PaymentContent
-											ref={paymentContentRef}
-											invoices={invoices}
-											currentIndex={currentInvoiceIndex}
-											onPaymentComplete={handlePaymentComplete}
-											onPaymentFailed={handlePaymentFailed}
-											showNavigation={false} // We have our own navigation above
-											nwcEnabled={nwcEnabled}
-											onNavigate={setCurrentInvoiceIndex}
-										/>
-									</div>
-								)}
+									{/* Payment Content - Inline instead of modal */}
+									<PaymentContent
+										ref={paymentContentRef}
+										invoices={invoices}
+										currentIndex={currentInvoiceIndex}
+										onPaymentComplete={handlePaymentComplete}
+										onPaymentFailed={handlePaymentFailed}
+										showNavigation={false} // We have our own navigation above
+										nwcEnabled={nwcEnabled}
+										onNavigate={setCurrentInvoiceIndex}
+									/>
+								</div>
+							)}
 
 							{currentStep === 'complete' && (
 								<OrderFinalizeComponent
@@ -774,7 +776,12 @@ function RouteComponent() {
 											) : (
 												<>
 													<div className="w-2 h-2 bg-gray-400 rounded-full" />
-													<span className="text-gray-600">Fast Payments available with NWC, setup in <Link to="/dashboard/account/making-payments" className="text-blue-600 hover:underline">settings</Link></span>
+													<span className="text-gray-600">
+														Fast Payments available with NWC, setup in{' '}
+														<Link to="/dashboard/account/making-payments" className="text-blue-600 hover:underline">
+															settings
+														</Link>
+													</span>
 												</>
 											)}
 										</div>

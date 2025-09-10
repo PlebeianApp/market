@@ -362,7 +362,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 											variant="outline"
 											className="flex-1"
 											onClick={() => onNavigate?.(Math.min((totalInvoices || 0) - 1, (currentIndex || 0) + 1))}
-											disabled={(currentIndex || 0) >= ((totalInvoices || 0) - 1)}
+											disabled={(currentIndex || 0) >= (totalInvoices || 0) - 1}
 										>
 											Next
 											<ChevronRight className="w-4 h-4 ml-2" />
@@ -431,7 +431,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 										</Button>
 									)}
 								</div>
-								
+
 								{/* Manual verification */}
 								{capabilities.canManualVerify && (
 									<div className="space-y-2">

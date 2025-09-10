@@ -193,10 +193,7 @@ export function OrderFinalizeComponent({
 								</Button>
 							)}
 
-							<Button
-								onClick={onNewOrder}
-								className={`w-full ${allInvoicesPaid ? 'hover-transparent-black' : 'btn-black'}`}
-							>
+							<Button onClick={onNewOrder} className={`w-full ${allInvoicesPaid ? 'hover-transparent-black' : 'btn-black'}`}>
 								{allInvoicesPaid ? 'Continue Shopping' : 'Back to Store'}
 							</Button>
 
