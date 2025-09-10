@@ -354,12 +354,12 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 						{/* Payment buttons */}
 						{invoice && (
 							<div className="space-y-3">
-								<div className="flex gap-2">
+								<div className="flex flex-col gap-2 sm:flex-row">
 									{/* NWC Payment Button */}
 									{!capabilities.hasNwc ? (
 										<Tooltip>
 											<TooltipTrigger asChild>
-												<div className="flex-1">
+												<div className="w-full sm:flex-1">
 													<Button disabled={true} className="w-full" variant="outline">
 														<Zap className="h-4 w-4 mr-2" />
 														Pay with NWC
@@ -371,7 +371,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 											</TooltipContent>
 										</Tooltip>
 									) : (
-										<Button onClick={handleNwcPayment} disabled={isPaymentInProgress} className="flex-1" variant="outline">
+										<Button onClick={handleNwcPayment} disabled={isPaymentInProgress} className="w-full sm:flex-1" variant="outline">
 											<Zap className="h-4 w-4 mr-2" />
 											Pay with NWC
 										</Button>
@@ -381,7 +381,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 									{!capabilities.hasWebLn ? (
 										<Tooltip>
 											<TooltipTrigger asChild>
-												<div className="flex-1">
+												<div className="w-full sm:flex-1">
 													<Button disabled={true} className="w-full" variant="outline">
 														<CreditCard className="h-4 w-4 mr-2" />
 														Pay with WebLN
@@ -393,13 +393,13 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 											</TooltipContent>
 										</Tooltip>
 									) : (
-										<Button onClick={handleWebLnPayment} disabled={isPaymentInProgress} className="flex-1" variant="outline">
+										<Button onClick={handleWebLnPayment} disabled={isPaymentInProgress} className="w-full sm:flex-1" variant="outline">
 											<CreditCard className="h-4 w-4 mr-2" />
 											Pay with WebLN
 										</Button>
 									)}
 								</div>
-
+								
 								{/* Manual verification */}
 								{capabilities.canManualVerify && (
 									<div className="space-y-2">
