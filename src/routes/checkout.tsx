@@ -704,54 +704,31 @@ function RouteComponent() {
 							{/* Payment Interface - Only show when invoices are ready */}
 							{currentStep === 'payment' && !isGeneratingInvoices && invoices.length > 0 && (
 								<div className="space-y-6">
-									<div className="hidden sm:flex items-center justify-end">
-										{invoices.length > 1 && (
-											<div className="flex items-center gap-2">
-												<Button
-													variant="outline"
-													size="sm"
-													onClick={() => setCurrentInvoiceIndex(Math.max(0, currentInvoiceIndex - 1))}
-													disabled={currentInvoiceIndex === 0}
-												>
-													<ChevronLeft className="w-4 h-4" />
-													Previous
-												</Button>
-												<Button
-													variant="outline"
-													size="sm"
-													onClick={() => setCurrentInvoiceIndex(Math.min(invoices.length - 1, currentInvoiceIndex + 1))}
-													disabled={currentInvoiceIndex === invoices.length - 1}
-												>
-													Next
-													<ChevronRight className="w-4 h-4" />
+										{/* desktop header nav exists; mobile under-QR nav is handled inside LightningPaymentProcessor */}
+
+										{/* Pay All Button - Only show if NWC is enabled and there are unpaid invoices */}
+										{nwcEnabled && invoices.filter((inv) => inv.status === 'pending').length > 1 && (
+											<div className="flex justify-center mb-4">
+												<Button onClick={handlePayAllInvoices} className="btn-product-banner font-medium px-6 py-2" size="lg">
+													<Zap className="w-4 h-4 mr-2" />
+													Pay All with NWC ({invoices.filter((inv) => inv.status === 'pending').length} invoices)
 												</Button>
 											</div>
 										)}
+
+										{/* Payment Content - Inline instead of modal */}
+										<PaymentContent
+											ref={paymentContentRef}
+											invoices={invoices}
+											currentIndex={currentInvoiceIndex}
+											onPaymentComplete={handlePaymentComplete}
+											onPaymentFailed={handlePaymentFailed}
+											showNavigation={false} // We have our own navigation above
+											nwcEnabled={nwcEnabled}
+											onNavigate={setCurrentInvoiceIndex}
+										/>
 									</div>
-
-									{/* Pay All Button - Only show if NWC is enabled and there are unpaid invoices */}
-									{nwcEnabled && invoices.filter((inv) => inv.status === 'pending').length > 1 && (
-										<div className="flex justify-center mb-4">
-											<Button onClick={handlePayAllInvoices} className="btn-product-banner font-medium px-6 py-2" size="lg">
-												<Zap className="w-4 h-4 mr-2" />
-												Pay All with NWC ({invoices.filter((inv) => inv.status === 'pending').length} invoices)
-											</Button>
-										</div>
-									)}
-
-									{/* Payment Content - Inline instead of modal */}
-									<PaymentContent
-										ref={paymentContentRef}
-										invoices={invoices}
-										currentIndex={currentInvoiceIndex}
-										onPaymentComplete={handlePaymentComplete}
-										onPaymentFailed={handlePaymentFailed}
-										showNavigation={false} // We have our own navigation above
-										nwcEnabled={nwcEnabled}
-										onNavigate={setCurrentInvoiceIndex}
-									/>
-								</div>
-							)}
+								)}
 
 							{currentStep === 'complete' && (
 								<OrderFinalizeComponent
