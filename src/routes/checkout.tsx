@@ -680,10 +680,7 @@ function RouteComponent() {
 							{/* Payment Interface - Only show when invoices are ready */}
 							{currentStep === 'payment' && !isGeneratingInvoices && invoices.length > 0 && (
 								<div className="space-y-6">
-									<div className="flex items-center justify-between">
-										<h2 className="text-2xl font-bold">
-											Payment {currentInvoiceIndex + 1} of {invoices.length}
-										</h2>
+									<div className="flex items-center justify-end">
 										{invoices.length > 1 && (
 											<div className="flex items-center gap-2">
 												<Button
@@ -746,7 +743,7 @@ function RouteComponent() {
 				</Card>
 
 				{/* Right Sidebar */}
-				<Card className="hidden lg:flex flex-1 lg:w-1/2 flex-col h-full shadow-md lg:order-1">
+				<Card className="hidden lg:flex flex-1 lg:w-1/2 flex-col h-full shadow-md lg:order-2">
 					<CardHeader>
 						<CardTitle>{currentStep === 'payment' ? 'Invoices' : 'Order Summary'}</CardTitle>
 					</CardHeader>
