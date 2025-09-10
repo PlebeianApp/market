@@ -615,7 +615,31 @@ function RouteComponent() {
 				<Card className="flex-1 lg:w-1/2 flex flex-col lg:h-full shadow-md lg:order-2">
 					{currentStep !== 'shipping' && (
 						<CardHeader>
-							<CardTitle>{currentStep === 'payment' ? 'Payment Details' : 'Order Summary'}</CardTitle>
+							<div className="flex items-center justify-between">
+								<CardTitle>{currentStep === 'payment' ? 'Payment Details' : 'Order Summary'}</CardTitle>
+								{currentStep === 'payment' && invoices.length > 1 && (
+									<div className="hidden lg:flex items-center gap-2">
+										<Button
+											variant="outline"
+											size="sm"
+											onClick={() => setCurrentInvoiceIndex(Math.max(0, currentInvoiceIndex - 1))}
+											disabled={currentInvoiceIndex === 0}
+										>
+											<ChevronLeft className="w-4 h-4" />
+											Previous
+										</Button>
+										<Button
+											variant="outline"
+											size="sm"
+											onClick={() => setCurrentInvoiceIndex(Math.min(invoices.length - 1, currentInvoiceIndex + 1))}
+											disabled={currentInvoiceIndex === invoices.length - 1}
+										>
+											Next
+											<ChevronRight className="w-4 h-4" />
+										</Button>
+									</div>
+								)}
+							</div>
 						</CardHeader>
 					)}
 					<CardContent className="p-6 flex-1 lg:overflow-y-auto">
