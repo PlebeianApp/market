@@ -615,7 +615,7 @@ function RouteComponent() {
 				<Card className="flex-1 lg:w-1/2 flex flex-col lg:h-full shadow-md lg:order-2">
 					{currentStep !== 'shipping' && (
 						<CardHeader>
-							<CardTitle>{currentStep === 'payment' ? 'Invoices' : 'Order Summary'}</CardTitle>
+							<CardTitle>{currentStep === 'payment' ? 'Payment Details' : 'Order Summary'}</CardTitle>
 						</CardHeader>
 					)}
 					<CardContent className="p-6 flex-1 lg:overflow-y-auto">
