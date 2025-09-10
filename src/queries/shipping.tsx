@@ -184,6 +184,62 @@ export const getShippingDuration = (event: NDKEvent) => {
 }
 
 /**
+ * Gets the pickup address from a shipping event
+ * @param event The shipping event
+ * @returns The pickup address string or undefined
+ */
+export const getShippingPickupAddress = (event: NDKEvent) => {
+	// Try to get structured address first
+	const street = event.tags.find((t) => t[0] === 'pickup-street')?.[1]
+	const city = event.tags.find((t) => t[0] === 'pickup-city')?.[1]
+	const state = event.tags.find((t) => t[0] === 'pickup-state')?.[1]
+	const postalCode = event.tags.find((t) => t[0] === 'pickup-postal-code')?.[1]
+	const country = event.tags.find((t) => t[0] === 'pickup-country')?.[1]
+
+	// If we have structured data, return it
+	if (street || city || state || postalCode || country) {
+		return {
+			street: street || '',
+			city: city || '',
+			state: state || '',
+			postalCode: postalCode || '',
+			country: country || '',
+		}
+	}
+
+	// Fallback to legacy pickup-address tag for backward compatibility
+	const legacyAddress = event.tags.find((t) => t[0] === 'pickup-address')?.[1]
+	if (legacyAddress) {
+		// Return as a structured object with the full address in street field
+		return {
+			street: legacyAddress,
+			city: '',
+			state: '',
+			postalCode: '',
+			country: '',
+		}
+	}
+
+	return null
+}
+
+/**
+ * Get pickup address as a formatted string
+ */
+export const getShippingPickupAddressString = (event: NDKEvent) => {
+	const address = getShippingPickupAddress(event)
+	if (!address) return null
+
+	// If it's legacy format (all in street field), return as is
+	if (address.street && !address.city && !address.state && !address.postalCode && !address.country) {
+		return address.street
+	}
+
+	// Format structured address
+	return [address.street, address.city, address.state, address.postalCode, address.country].filter(Boolean).join(', ')
+}
+
+/**
  * Gets the weight min/max limits from a shipping event
  * @param event The shipping event
  * @returns Object with min and max weight limits
@@ -244,6 +300,23 @@ export const getShippingId = (event: NDKEvent): string | undefined => {
  */
 export const createShippingReference = (pubkey: string, id: string): string => {
 	return `${SHIPPING_KIND}:${pubkey}:${id}`
+}
+
+/**
+ * Parses a shipping reference to extract the event ID
+ * @param reference The shipping reference (either composite "30406:pubkey:id" or direct ID)
+ * @returns The event ID (d tag value)
+ */
+export const parseShippingReference = (reference: string): string => {
+	// If it's a composite reference (contains colons), extract the ID part
+	if (reference.includes(':')) {
+		const parts = reference.split(':')
+		if (parts.length === 3 && parts[0] === SHIPPING_KIND.toString()) {
+			return parts[2] // Return the ID part
+		}
+	}
+	// Otherwise, assume it's already a direct ID
+	return reference
 }
 
 export type ShippingUpdateParams = {

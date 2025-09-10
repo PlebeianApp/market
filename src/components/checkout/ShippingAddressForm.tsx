@@ -3,6 +3,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { MapPin } from 'lucide-react'
+import { cartStore } from '@/lib/stores/cart'
+import { useStore } from '@tanstack/react-store'
+import { getShippingEvent, getShippingService } from '@/queries/shipping'
+import { useEffect, useState } from 'react'
 
 export interface CheckoutFormData {
 	name: string
@@ -21,6 +25,40 @@ interface ShippingAddressFormProps {
 }
 
 export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAddressFormProps) {
+	const { cart } = useStore(cartStore)
+	const [isAllPickup, setIsAllPickup] = useState(false)
+
+	// Check if all shipping methods are pickup type
+	useEffect(() => {
+		const checkPickupStatus = async () => {
+			const products = Object.values(cart.products)
+			if (products.length === 0) {
+				setIsAllPickup(false)
+				return
+			}
+
+			const pickupChecks = await Promise.all(
+				products.map(async (product) => {
+					if (!product.shippingMethodId) return false
+
+					try {
+						const shippingEvent = await getShippingEvent(product.shippingMethodId)
+						if (!shippingEvent) return false
+
+						const serviceTag = getShippingService(shippingEvent)
+						return serviceTag?.[1] === 'pickup'
+					} catch (error) {
+						console.error('Error checking shipping service:', error)
+						return false
+					}
+				}),
+			)
+
+			setIsAllPickup(pickupChecks.every(Boolean))
+		}
+
+		checkPickupStatus()
+	}, [cart.products])
 	return (
 		<div className="space-y-6">
 			<div className="flex items-center gap-3 mb-6">
@@ -122,116 +160,147 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 					/>
 				</div>
 
-				{/* Address Fields */}
-				<form.Field
-					name="firstLineOfAddress"
-					validators={{
-						onChange: ({ value }: { value: string }) =>
-							!value.trim() ? 'Address is required' : value.trim().length < 5 ? 'Please enter a complete address' : undefined,
-					}}
-					children={(field: any) => (
-						<div>
-							<Label htmlFor={field.name} className="text-sm font-medium">
-								Street Address <span className="text-red-500">*</span>
-							</Label>
-							<Input
-								id={field.name}
-								type="text"
-								placeholder="e.g. 123 Main Street, Apt 4B"
-								value={field.state.value}
-								onChange={(e) => field.handleChange(e.target.value)}
-								onBlur={field.handleBlur}
-								required
-							/>
-							{field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
-								<p className="text-xs text-red-500 mt-1">{field.state.meta.errors[0]}</p>
-							)}
+				{/* Pickup notification */}
+				{isAllPickup && (
+					<div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+						<div className="flex items-center gap-2">
+							<MapPin className="h-4 w-4 text-blue-600" />
+							<h3 className="text-sm font-medium text-blue-800">Pickup Order</h3>
 						</div>
-					)}
-				/>
+						<p className="text-sm text-blue-700 mt-1">All items in your order are for pickup. No shipping address is required.</p>
+					</div>
+				)}
 
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-					<form.Field
-						name="city"
-						validators={{
-							onChange: ({ value }: { value: string }) =>
-								!value.trim() ? 'City is required' : value.trim().length < 2 ? 'Please enter a valid city name' : undefined,
-						}}
-						children={(field: any) => (
-							<div>
-								<Label htmlFor={field.name} className="text-sm font-medium">
-									City <span className="text-red-500">*</span>
-								</Label>
-								<Input
-									id={field.name}
-									type="text"
-									placeholder="e.g. San Francisco"
-									value={field.state.value}
-									onChange={(e) => field.handleChange(e.target.value)}
-									onBlur={field.handleBlur}
-									required
-								/>
-								{field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
-									<p className="text-xs text-red-500 mt-1">{field.state.meta.errors[0]}</p>
-								)}
-							</div>
-						)}
-					/>
-
-					<form.Field
-						name="zipPostcode"
-						validators={{
-							onChange: ({ value }: { value: string }) =>
-								!value.trim() ? 'ZIP/Postcode is required' : value.trim().length < 3 ? 'Please enter a valid ZIP/Postcode' : undefined,
-						}}
-						children={(field: any) => (
-							<div>
-								<Label htmlFor={field.name} className="text-sm font-medium">
-									ZIP/Postal Code <span className="text-red-500">*</span>
-								</Label>
-								<Input
-									id={field.name}
-									type="text"
-									placeholder="e.g. 90210"
-									value={field.state.value}
-									onChange={(e) => field.handleChange(e.target.value)}
-									onBlur={field.handleBlur}
-									required
-								/>
-								{field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
-									<p className="text-xs text-red-500 mt-1">{field.state.meta.errors[0]}</p>
-								)}
-							</div>
-						)}
-					/>
-				</div>
-
-				<form.Field
-					name="country"
-					validators={{
-						onChange: ({ value }: { value: string }) =>
-							!value.trim() ? 'Country is required' : value.trim().length < 2 ? 'Please enter a valid country name' : undefined,
-					}}
-					children={(field: any) => (
-						<div>
-							<Label htmlFor={field.name} className="text-sm font-medium">
-								Country <span className="text-red-500">*</span>
-							</Label>
-							<Input
-								id={field.name}
-								type="text"
-								placeholder="e.g. United Kingdom"
-								value={field.state.value}
-								onChange={(e) => field.handleChange(e.target.value)}
-								onBlur={field.handleBlur}
-								required
-							/>
-							{field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
-								<p className="text-xs text-red-500 mt-1">{field.state.meta.errors[0]}</p>
+				{/* Address - Only show if not all pickup */}
+				{!isAllPickup && (
+					<>
+						<form.Field
+							name="firstLineOfAddress"
+							validators={{
+								onChange: ({ value }: { value: string }) =>
+									!isAllPickup && !value.trim()
+										? 'Address is required'
+										: !isAllPickup && value.trim().length < 5
+											? 'Please enter a complete address'
+											: undefined,
+							}}
+							children={(field: any) => (
+								<div>
+									<Label htmlFor={field.name} className="text-sm font-medium">
+										Street Address <span className="text-red-500">*</span>
+									</Label>
+									<Input
+										id={field.name}
+										type="text"
+										placeholder="e.g. 123 Main Street, Apt 4B"
+										value={field.state.value}
+										onChange={(e) => field.handleChange(e.target.value)}
+										onBlur={field.handleBlur}
+										required={!isAllPickup}
+									/>
+									{field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
+										<p className="text-xs text-red-500 mt-1">{field.state.meta.errors[0]}</p>
+									)}
+								</div>
 							)}
+						/>
+
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<form.Field
+								name="city"
+								validators={{
+									onChange: ({ value }: { value: string }) =>
+										!isAllPickup && !value.trim()
+											? 'City is required'
+											: !isAllPickup && value.trim().length < 2
+												? 'Please enter a valid city name'
+												: undefined,
+								}}
+								children={(field: any) => (
+									<div>
+										<Label htmlFor={field.name} className="text-sm font-medium">
+											City <span className="text-red-500">*</span>
+										</Label>
+										<Input
+											id={field.name}
+											type="text"
+											placeholder="e.g. San Francisco"
+											value={field.state.value}
+											onChange={(e) => field.handleChange(e.target.value)}
+											onBlur={field.handleBlur}
+											required={!isAllPickup}
+										/>
+										{field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
+											<p className="text-xs text-red-500 mt-1">{field.state.meta.errors[0]}</p>
+										)}
+									</div>
+								)}
+							/>
+
+							<form.Field
+								name="zipPostcode"
+								validators={{
+									onChange: ({ value }: { value: string }) =>
+										!isAllPickup && !value.trim()
+											? 'ZIP/Postcode is required'
+											: !isAllPickup && value.trim().length < 3
+												? 'Please enter a valid ZIP/Postcode'
+												: undefined,
+								}}
+								children={(field: any) => (
+									<div>
+										<Label htmlFor={field.name} className="text-sm font-medium">
+											ZIP/Postal Code <span className="text-red-500">*</span>
+										</Label>
+										<Input
+											id={field.name}
+											type="text"
+											placeholder="e.g. 90210"
+											value={field.state.value}
+											onChange={(e) => field.handleChange(e.target.value)}
+											onBlur={field.handleBlur}
+											required={!isAllPickup}
+										/>
+										{field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
+											<p className="text-xs text-red-500 mt-1">{field.state.meta.errors[0]}</p>
+										)}
+									</div>
+								)}
+							/>
 						</div>
-					)}
-				/>
+
+						<form.Field
+							name="country"
+							validators={{
+								onChange: ({ value }: { value: string }) =>
+									!isAllPickup && !value.trim()
+										? 'Country is required'
+										: !isAllPickup && value.trim().length < 2
+											? 'Please enter a valid country name'
+											: undefined,
+							}}
+							children={(field: any) => (
+								<div>
+									<Label htmlFor={field.name} className="text-sm font-medium">
+										Country <span className="text-red-500">*</span>
+									</Label>
+									<Input
+										id={field.name}
+										type="text"
+										placeholder="e.g. United Kingdom"
+										value={field.state.value}
+										onChange={(e) => field.handleChange(e.target.value)}
+										onBlur={field.handleBlur}
+										required={!isAllPickup}
+									/>
+									{field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
+										<p className="text-xs text-red-500 mt-1">{field.state.meta.errors[0]}</p>
+									)}
+								</div>
+							)}
+						/>
+					</>
+				)}
 
 				{/* Additional Information */}
 				<form.Field

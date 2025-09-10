@@ -10,7 +10,7 @@ import { createPaymentDetailEvent, generateLightningPaymentDetail, generateOnCha
 import { createProductEvent, generateProductData } from './gen_products'
 import { createUserNwcWallets } from './gen_wallets'
 import { createReviewEvent, generateReviewData } from './gen_review'
-import { createShippingEvent, generateShippingData } from './gen_shipping'
+import { createShippingEvent, generateShippingData, generatePickupShippingData } from './gen_shipping'
 import { createV4VSharesEvent } from './gen_v4v'
 import { ORDER_STATUS, SHIPPING_STATUS } from '@/lib/schemas/order'
 import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
@@ -115,6 +115,17 @@ async function seedData() {
 		console.log(`Creating shipping options for user ${pubkey.substring(0, 8)}...`)
 		shippingsByUser[pubkey] = []
 
+		// Create one pickup shipping option for each user
+		const pickupShipping = generatePickupShippingData()
+		const pickupSuccess = await createShippingEvent(signer, ndk, pickupShipping)
+		if (pickupSuccess) {
+			const pickupShippingId = pickupShipping.tags.find((tag) => tag[0] === 'd')?.[1]
+			if (pickupShippingId) {
+				shippingsByUser[pubkey].push(`${SHIPPING_KIND}:${pubkey}:${pickupShippingId}`)
+			}
+		}
+
+		// Create regular shipping options
 		for (let j = 0; j < SHIPPING_OPTIONS_PER_USER; j++) {
 			const shipping = generateShippingData()
 			const success = await createShippingEvent(signer, ndk, shipping)
