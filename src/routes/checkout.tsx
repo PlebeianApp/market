@@ -695,9 +695,6 @@ function RouteComponent() {
 													<ChevronLeft className="w-4 h-4" />
 													Previous
 												</Button>
-												<span className="text-sm text-gray-500">
-													{currentInvoiceIndex + 1} of {invoices.length}
-												</span>
 												<Button
 													variant="outline"
 													size="sm"
