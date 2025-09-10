@@ -232,7 +232,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 			<div className="lg:space-y-6 lg:px-6 lg:pb-6">
 				{/* Invoice Progress - Moved to top */}
 				{invoices.length > 1 && (
-					<div className="space-y-2">
+					<div className="space-y-2 mb-4">
 						<div className="flex justify-between text-sm">
 							<span>Payment Progress</span>
 							<span>

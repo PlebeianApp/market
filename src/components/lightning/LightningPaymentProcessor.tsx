@@ -328,7 +328,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 							<CardTitle>{title}</CardTitle>
 						</CardHeader>
 					)}
-					<CardContent className="space-y-6">
+					<CardContent className="space-y-6 p-6">
 						{/* Loading state */}
 						{(isGeneratingInvoice || isPaymentInProgress) && (
 							<div className="flex items-center justify-center py-8">
