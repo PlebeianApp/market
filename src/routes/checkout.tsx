@@ -680,7 +680,7 @@ function RouteComponent() {
 							{/* Payment Interface - Only show when invoices are ready */}
 							{currentStep === 'payment' && !isGeneratingInvoices && invoices.length > 0 && (
 								<div className="space-y-6">
-									<div className="flex items-center justify-end">
+									<div className="hidden sm:flex items-center justify-end">
 										{invoices.length > 1 && (
 											<div className="flex items-center gap-2">
 												<Button

@@ -11,7 +11,7 @@ import { copyToClipboard } from '@/lib/utils'
 import { NDKEvent, NDKUser, NDKZapper } from '@nostr-dev-kit/ndk'
 import { NDKNWCWallet } from '@nostr-dev-kit/ndk-wallet'
 import { useStore } from '@tanstack/react-store'
-import { Copy, CreditCard, Loader2, Zap } from 'lucide-react'
+import { Copy, CreditCard, Loader2, Zap, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react'
 import { toast } from 'sonner'
 
@@ -61,6 +61,10 @@ interface LightningPaymentProcessorProps {
 	showManualVerification?: boolean
 	title?: string
 	active?: boolean // New prop to control when processor should be active
+	showNavigation?: boolean
+	currentIndex?: number
+	totalInvoices?: number
+	onNavigate?: (index: number) => void
 }
 
 export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef, LightningPaymentProcessorProps>(
@@ -74,6 +78,10 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			showManualVerification = false,
 			title,
 			active = true, // Default to true for backward compatibility
+			showNavigation,
+			currentIndex,
+			totalInvoices,
+			onNavigate,
 		},
 		ref,
 	) => {
@@ -337,6 +345,30 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 										<QRCode value={invoice} size={200} />
 									</a>
 								</div>
+
+								{/* Mobile navigation under QR code */}
+								{showNavigation && (totalInvoices || 0) > 1 && (
+									<div className="sm:hidden mt-3 flex gap-2">
+										<Button
+											variant="outline"
+											className="flex-1"
+											onClick={() => onNavigate?.(Math.max(0, (currentIndex || 0) - 1))}
+											disabled={(currentIndex || 0) === 0}
+										>
+											<ChevronLeft className="w-4 h-4 mr-2" />
+											Previous
+										</Button>
+										<Button
+											variant="outline"
+											className="flex-1"
+											onClick={() => onNavigate?.(Math.min((totalInvoices || 0) - 1, (currentIndex || 0) + 1))}
+											disabled={(currentIndex || 0) >= ((totalInvoices || 0) - 1)}
+										>
+											Next
+											<ChevronRight className="w-4 h-4 ml-2" />
+										</Button>
+									</div>
+								)}
 
 								{/* Invoice text with copy button */}
 								<div className="space-y-2">
