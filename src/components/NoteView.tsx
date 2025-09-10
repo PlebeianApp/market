@@ -4,6 +4,7 @@ import { authorQueryOptions } from '@/queries/authors.tsx'
 import { threadStructureQueryOptions, type ThreadNode, type ThreadStructure, findRootFromETags } from '@/queries/thread.tsx'
 import { Link } from '@tanstack/react-router'
 import { type JSX, type SVGProps, useEffect, useRef, useState } from 'react'
+import { useThreadOpen } from '@/state/threadOpenStore'
 
 function SpoolIcon(props: SVGProps<SVGSVGElement>) {
 	return (
@@ -126,6 +127,7 @@ function linkifyContent(content: string, opts?: { stopPropagation?: boolean }) {
 	return nodes
 }
 
+
 function CollapsibleContent({ children, className }: { children: any; className?: string }) {
 	const containerRef = useRef<HTMLDivElement | null>(null)
 	const [needsClamp, setNeedsClamp] = useState(false)
@@ -233,9 +235,29 @@ function ThreadView({ threadStructure, highlightedNoteId }: ThreadViewProps) {
 	)
 }
 
-import { useThreadOpen } from '@/state/threadOpenStore'
 
 export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
+	// Remove a trailing hashtag-only line from the note content for display
+	const displayContent = (() => {
+		try {
+			const raw = ((note as any)?.content || '') as string
+			if (!raw) return raw
+			const lines = raw.replace(/\r\n?/g, '\n').split('\n')
+			let i = lines.length - 1
+			while (i >= 0 && lines[i].trim() === '') i--
+			if (i < 0) return raw
+			const tokens = lines[i].trim().split(/\s+/)
+			if (tokens.length === 0) return raw
+			const hashRe = /^#([A-Za-z0-9_-]+)$/
+			const onlyHashes = tokens.every((t) => hashRe.test(t))
+			if (!onlyHashes) return raw
+			const newLines = lines.slice(0, i)
+			while (newLines.length > 0 && newLines[newLines.length - 1].trim() === '') newLines.pop()
+			return newLines.join('\n')
+		} catch {
+			return ((note as any)?.content || '') as string
+		}
+	})()
 	const [showJson, setShowJson] = useState(false)
 	const { openThreadId, setOpenThreadId } = useThreadOpen()
 	const noteIdForThread = ((note as any)?.id || findRootFromETags?.(note) || '') as string
@@ -269,18 +291,18 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 	// When thread is open (and not rendering inside thread), replace whole frame with a single combined thread panel
 	if (!readOnlyInThread && openThreadId === noteIdForThread) {
 		return (
-			<div>
+			<div className="relative">
+				{/*/!* Floating Close Thread button at top-right, matching Back-to-Top responsive text behavior *!/*/}
+				{/*<button*/}
+				{/*	className={`fixed top-24 right-14 z-40 h-10 w-10 rounded-full px-0 lg:w-auto lg:px-4 inline-flex items-center justify-center shadow-lg transition-opacity transition-colors duration-200 bg-white text-gray-700 hover:bg-gray-100 hover:text-blue-600`}*/}
+				{/*	onClick={() => setOpenThreadId(null)}*/}
+				{/*	title="Close thread"*/}
+				{/*	aria-label="Close thread"*/}
+				{/*>*/}
+				{/*	<span className="hidden lg:inline text-base leading-none p-0 m-0">close thread</span>*/}
+				{/*	<CollapseVerticalIcon className="h-5 w-5 ml-0 lg:ml-2" />*/}
+				{/*</button>*/}
 				<div className="p-3 bg-white text-black border border-gray-700 rounded-lg">
-					<div className="mb-2 flex items-center justify-end">
-						<button
-							className="h-8 w-8 inline-flex items-center justify-center text-xs rounded-full outline-none focus:outline-none focus:ring-0 border-0 transition-colors transition-shadow hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 hover:ring-offset-white bg-white text-gray-600 hover:bg-gray-100"
-							onClick={() => setOpenThreadId(null)}
-							title="Fold thread"
-							aria-label="Fold thread"
-						>
-							<CollapseVerticalIcon className="h-4 w-4" />
-						</button>
-					</div>
 					{isLoadingThread ? (
 						<div className="text-sm text-gray-500">Loading thread...</div>
 					) : threadStructure ? (
@@ -294,24 +316,29 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 			</div>
 		)
 	}
-	return (
+ return (
 		<div
+			data-note-id={noteIdForThread}
 			className={`group border p-3 z-20 rounded-lg  transition-colors duration-150 ${isClickablePanel ? 'hover:bg-gray-100' : 'hover:bg-gray-100/50'}`}
 		>
 			<div className="flex items-center justify-between mb-1" onClick={(e) => e.stopPropagation()}>
 				{readOnlyInThread ? (
-     <Link to={`/nostr?user=${note.pubkey}`} className="flex items-center  pr-2" onClick={(e) => {
-      						e.preventDefault()
-      						e.stopPropagation()
-      						try {
-      							const base = `${window.location.origin}/nostr`
-      							const url = `${base}?user=${encodeURIComponent(String(note.pubkey))}`
-      							window.history.pushState({}, '', url)
-      							window.dispatchEvent(new PopStateEvent('popstate'))
-      						} catch {
-      							window.location.href = `/nostr?user=${encodeURIComponent(String(note.pubkey))}`
-      						}
-      					}}>
+					<Link
+						to={`/nostr?user=${note.pubkey}`}
+						className="flex items-center  pr-2"
+						onClick={(e) => {
+							e.preventDefault()
+							e.stopPropagation()
+							try {
+								const base = `${window.location.origin}/nostr`
+								const url = `${base}?user=${encodeURIComponent(String(note.pubkey))}`
+								window.history.pushState({}, '', url)
+								window.dispatchEvent(new PopStateEvent('popstate'))
+							} catch {
+								window.location.href = `/nostr?user=${encodeURIComponent(String(note.pubkey))}`
+							}
+						}}
+					>
 						<div className="flex items-center  pr-2 hover:bg-gray-100">
 							<div>
 								{isLoadingAuthor ? (
@@ -337,18 +364,22 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 						</div>
 					</Link>
 				) : (
-     <Link to={`/nostr?user=${note.pubkey}`} className="flex items-center pr-2 hover:bg-grey-200" onClick={(e) => {
-      						e.preventDefault()
-      						e.stopPropagation()
-      						try {
-      							const base = `${window.location.origin}/nostr`
-      							const url = `${base}?user=${encodeURIComponent(String(note.pubkey))}`
-      							window.history.pushState({}, '', url)
-      							window.dispatchEvent(new PopStateEvent('popstate'))
-      						} catch {
-      							window.location.href = `/nostr?user=${encodeURIComponent(String(note.pubkey))}`
-      						}
-      					}}>
+					<Link
+						to={`/nostr?user=${note.pubkey}`}
+						className="flex items-center pr-2 hover:bg-grey-200"
+						onClick={(e) => {
+							e.preventDefault()
+							e.stopPropagation()
+							try {
+								const base = `${window.location.origin}/nostr`
+								const url = `${base}?user=${encodeURIComponent(String(note.pubkey))}`
+								window.history.pushState({}, '', url)
+								window.dispatchEvent(new PopStateEvent('popstate'))
+							} catch {
+								window.location.href = `/nostr?user=${encodeURIComponent(String(note.pubkey))}`
+							}
+						}}
+					>
 						<div>
 							{isLoadingAuthor ? (
 								<div className="w-10 h-10 rounded-full bg-gray-200 animate-pulse"></div>
@@ -379,15 +410,29 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 								showThread ? 'bg-blue-50 text-blue-600 hover:bg-blue-100' : 'bg-white text-gray-600 hover:bg-gray-100'
 							}`}
 							aria-pressed={showThread}
-							onClick={(e) => {
-								e.preventDefault()
-								e.stopPropagation()
-								if (openThreadId === noteIdForThread) {
-									setOpenThreadId(null)
-								} else {
-									setOpenThreadId(noteIdForThread)
-								}
-							}}
+       onClick={(e) => {
+									e.preventDefault()
+									e.stopPropagation()
+									if (openThreadId === noteIdForThread) {
+										setOpenThreadId(null)
+										try {
+											const url = new URL(window.location.href)
+											url.searchParams.delete('threadview')
+											const target = url.pathname.startsWith('/nostr') ? (url.search ? `/nostr${url.search}` : '/nostr') : (url.search ? `${url.pathname}${url.search}` : url.pathname)
+											window.history.pushState({}, '', target)
+											window.dispatchEvent(new PopStateEvent('popstate'))
+										} catch {}
+									} else {
+										setOpenThreadId(noteIdForThread)
+										try {
+											const url = new URL(window.location.href)
+											url.searchParams.set('threadview', noteIdForThread)
+											const target = url.pathname.startsWith('/nostr') ? (url.search ? `/nostr${url.search}` : '/nostr') : (url.search ? `${url.pathname}${url.search}` : url.pathname)
+											window.history.pushState({}, '', target)
+											window.dispatchEvent(new PopStateEvent('popstate'))
+										} catch {}
+									}
+								}}
 							title={showThread ? 'Hide thread' : 'View thread'}
 							aria-label={showThread ? 'Hide thread' : 'View thread'}
 						>
@@ -399,8 +444,8 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 			<div className="flex gap-2">
 				<div className="flex-1">
 					{readOnlyInThread ? (
-						<CollapsibleContent className="px-2 py-1 text-md text-left break-words whitespace-pre-wrap align-text-top w-full hover:bg-grey-300">
-							{linkifyContent(note.content, { stopPropagation: true })}
+ 					<CollapsibleContent className="px-2 py-1 text-md text-left break-words whitespace-pre-wrap align-text-top w-full hover:bg-grey-300">
+							{linkifyContent(displayContent, { stopPropagation: true })}
 						</CollapsibleContent>
 					) : (
 						(() => {
@@ -419,7 +464,7 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 								<CollapsibleContent
 									className={`px-2 py-1 text-md text-left break-words whitespace-pre-wrap align-text-top w-full rounded-md transition-colors duration-150 hover:bg-grey-300`}
 								>
-									{linkifyContent(note.content, { stopPropagation: true })}
+  							{linkifyContent(displayContent, { stopPropagation: true })}
 								</CollapsibleContent>
 							)
 						})()
@@ -446,11 +491,7 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 				try {
 					const tagsArr = Array.isArray((note as any)?.tags) ? ((note as any).tags as any[]) : []
 					const tTags = tagsArr.filter((t) => Array.isArray(t) && t[0] === 't' && typeof t[1] === 'string')
-					const hashSet = new Set(
-						tTags
-							.map((t) => String(t[1]).replace(/^#/, '').trim())
-							.filter((v) => v.length > 0),
-					)
+					const hashSet = new Set(tTags.map((t) => String(t[1]).replace(/^#/, '').trim()).filter((v) => v.length > 0))
 					const hashtags = Array.from(hashSet)
 					if (hashtags.length === 0) return null
 					return (

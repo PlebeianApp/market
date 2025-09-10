@@ -1,6 +1,6 @@
 import { createFileRoute, useLocation } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { type SVGProps, useEffect, useMemo, useState } from 'react'
 import { notesQueryOptions, type FetchedNDKEvent } from '@/queries/firehose'
 import { authorQueryOptions } from '@/queries/authors'
 import { NoteView } from '@/components/NoteView.tsx'
@@ -13,6 +13,26 @@ import { findRootFromETags } from '@/queries/thread'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
+function CollapseVerticalIcon(props: SVGProps<SVGSVGElement>) {
+	return (
+		<svg
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			strokeWidth={2}
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			aria-hidden="true"
+			{...props}
+		>
+			<path d="M12 3v9" />
+			<path d="M8 8l4 4 4-4" />
+			<path d="M12 21v-9" />
+			<path d="M8 16l4-4 4 4" />
+		</svg>
+	)
+}
+
 export const Route = createFileRoute('/nostr/')({
 	component: FirehoseComponent,
 })
@@ -22,7 +42,7 @@ function FirehoseComponent() {
 	const [isFiltersOpen, setIsFiltersOpen] = useState(false)
 	const [loadingMode, setLoadingMode] = useState<null | 'all' | 'threads' | 'originals'>(null)
 	const [spinnerSettled, setSpinnerSettled] = useState(false)
-	const { setOpenThreadId } = useThreadOpen()
+	const { openThreadId, setOpenThreadId } = useThreadOpen()
 	const [tagFilter, setTagFilter] = useState('')
 	const [tagFilterInput, setTagFilterInput] = useState(tagFilter)
 	const [authorFilter, setAuthorFilter] = useState('')
@@ -76,7 +96,7 @@ function FirehoseComponent() {
 		scrollToTop()
 	}, [])
 
-	// Apply tag/user from URL (?tag=...&user=...) when location changes
+ // Apply tag/user/view/threadview from URL when location changes
 	useEffect(() => {
 		try {
 			if (typeof window === 'undefined') return
@@ -84,7 +104,19 @@ function FirehoseComponent() {
 			const sp = new URLSearchParams(searchStr)
 			const incomingTag = (sp.get('tag') || '').replace(/^#/, '').trim().toLowerCase()
 			const incomingUser = (sp.get('user') || '').trim()
-			setOpenThreadId(null)
+   const incomingView = (sp.get('view') || '').trim().toLowerCase()
+   			const incomingThread = (sp.get('threadview') || '').trim()
+			// sync filter mode from URL (?view)
+			const desiredMode = incomingView === 'threads' ? 'threads' : incomingView === 'originals' ? 'originals' : 'all'
+			if (desiredMode !== filterMode) {
+				setFilterMode(desiredMode as any)
+			}
+			// Sync thread open state from ?threadview
+			if (incomingThread && incomingThread !== openThreadId) {
+				setOpenThreadId(incomingThread)
+			} else if (!incomingThread && openThreadId) {
+				setOpenThreadId(null)
+			}
 			if (incomingTag && incomingTag !== tagFilter.toLowerCase()) {
 				setPendingTag(incomingTag)
 				setTagFilter(incomingTag)
@@ -202,7 +234,7 @@ function FirehoseComponent() {
 
 	return (
 		<div className="relative">
-			<div className="text-4xl font-heading sticky top-20 z-30 m-0 p-3 px-4 bg-secondary-black text-secondary flex items-center justify-between relative">
+			<div className="text-4xl font-heading sticky top-28 lg:top-20 sm:top-30 z-30 m-0 p-3 px-4 bg-secondary-black text-secondary flex items-center justify-between relative">
 				<span>Firehose</span>
 				{/* Centered active hashtag */}
 				{tagFilter?.trim() ? (
@@ -282,6 +314,47 @@ function FirehoseComponent() {
 				) : null}
 				<section className="text-base font-normal">
 					<div className="flex items-center gap-2">
+      {openThreadId ? (
+							<Button
+								variant="primary"
+								className="px-4 py-1 h-8 flex items-center gap-1"
+        onClick={() => {
+									try {
+										const currentId = openThreadId
+										setOpenThreadId(null)
+										// Remove threadview from URL to support Back navigation
+										try {
+											const url = new URL(window.location.href)
+											url.searchParams.delete('threadview')
+											const target = url.pathname.startsWith('/nostr') ? (url.search ? `/nostr${url.search}` : '/nostr') : (url.search ? `${url.pathname}${url.search}` : url.pathname)
+											window.history.pushState({}, '', target)
+											window.dispatchEvent(new PopStateEvent('popstate'))
+										} catch {}
+										// Defer scroll until after DOM re-renders out of thread mode
+										let tries = 0
+										const step = () => {
+											tries++
+											try {
+												if (typeof window !== 'undefined' && currentId) {
+													const el = document.querySelector(`[data-note-id="${currentId}"]`) as HTMLElement | null
+													if (el) {
+														el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' })
+														return
+													}
+												}
+											} catch {}
+											if (tries < 3) requestAnimationFrame(step)
+										}
+										requestAnimationFrame(step)
+									} catch {}
+								}}
+								title="Close thread"
+								aria-label="Close thread"
+							>
+								<span className="hidden lg:inline">close thread</span>
+								<CollapseVerticalIcon className="h-5 w-5 ml-0 lg:ml-0" />
+							</Button>
+						) : null}
 						<Button
 							variant="primary"
 							className="p-2 h-8 w-8 flex items-center justify-center"
@@ -385,7 +458,7 @@ function FirehoseComponent() {
 								</div>
 								<div className="text-xs text-gray-500 mt-1">Only fetch events that contain this #t tag</div>
 							</div>
-							<Button
+    			<Button
 								variant={filterMode === 'all' ? 'primary' : 'ghost'}
 								className="justify-start"
 								onClick={() => {
@@ -393,6 +466,17 @@ function FirehoseComponent() {
 									setSpinnerSettled(false)
 									setFilterMode('all')
 									setOpenThreadId(null)
+									try {
+										if (typeof window !== 'undefined') {
+											const url = new URL(window.location.href)
+											url.searchParams.delete('view')
+											const target = url.pathname.startsWith('/nostr')
+												? (url.search ? `/nostr${url.search}` : '/nostr')
+												: (url.search ? `${url.pathname}${url.search}` : url.pathname)
+											window.history.pushState({}, '', target)
+											window.dispatchEvent(new PopStateEvent('popstate'))
+										}
+									} catch {}
 									// keep drawer open until spinner settles
 								}}
 							>
@@ -403,7 +487,7 @@ function FirehoseComponent() {
 									<span>All ({counts.all})</span>
 								</span>
 							</Button>
-							<Button
+    			<Button
 								variant={filterMode === 'threads' ? 'primary' : 'ghost'}
 								className="justify-start"
 								onClick={() => {
@@ -411,17 +495,28 @@ function FirehoseComponent() {
 									setSpinnerSettled(false)
 									setFilterMode('threads')
 									setOpenThreadId(null)
+									try {
+										if (typeof window !== 'undefined') {
+											const url = new URL(window.location.href)
+											url.searchParams.set('view', 'threads')
+											const target = url.pathname.startsWith('/nostr')
+												? (url.search ? `/nostr${url.search}` : '/nostr')
+												: (url.search ? `${url.pathname}${url.search}` : url.pathname)
+											window.history.pushState({}, '', target)
+											window.dispatchEvent(new PopStateEvent('popstate'))
+										}
+									} catch {}
 									// keep drawer open until spinner settles
 								}}
-							>
-								<span className="inline-flex items-center gap-2">
-									{loadingMode === 'threads' && isFiltersOpen ? (
-										<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
-									) : null}
-									<span>Threads ({counts.threads})</span>
-								</span>
-							</Button>
-							<Button
+						>
+							<span className="inline-flex items-center gap-2">
+								{loadingMode === 'threads' && isFiltersOpen ? (
+									<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
+								) : null}
+								<span>Threads ({counts.threads})</span>
+							</span>
+						</Button>
+    			<Button
 								variant={filterMode === 'originals' ? 'primary' : 'ghost'}
 								className="justify-start"
 								onClick={() => {
@@ -429,16 +524,27 @@ function FirehoseComponent() {
 									setSpinnerSettled(false)
 									setFilterMode('originals')
 									setOpenThreadId(null)
+									try {
+										if (typeof window !== 'undefined') {
+											const url = new URL(window.location.href)
+											url.searchParams.set('view', 'originals')
+											const target = url.pathname.startsWith('/nostr')
+												? (url.search ? `/nostr${url.search}` : '/nostr')
+												: (url.search ? `${url.pathname}${url.search}` : url.pathname)
+											window.history.pushState({}, '', target)
+											window.dispatchEvent(new PopStateEvent('popstate'))
+										}
+									} catch {}
 									// keep drawer open until spinner settles
 								}}
-							>
-								<span className="inline-flex items-center gap-2">
-									{loadingMode === 'originals' && isFiltersOpen ? (
-										<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
-									) : null}
-									<span>Original posts ({counts.originals})</span>
-								</span>
-							</Button>
+						>
+							<span className="inline-flex items-center gap-2">
+								{loadingMode === 'originals' && isFiltersOpen ? (
+									<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
+								) : null}
+								<span>Original posts ({counts.originals})</span>
+							</span>
+						</Button>
 						</div>
 					</div>
 					<DrawerFooter className="p-4 border-t border-gray-800">
