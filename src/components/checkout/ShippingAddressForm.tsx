@@ -5,7 +5,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { MapPin } from 'lucide-react'
 import { cartStore } from '@/lib/stores/cart'
 import { useStore } from '@tanstack/react-store'
-import { getShippingEvent, getShippingService } from '@/queries/shipping'
+import { getShippingEvent, getShippingService, getShippingPickupAddressString, getShippingTitle } from '@/queries/shipping'
 import { useEffect, useState } from 'react'
 
 export interface CheckoutFormData {
@@ -27,34 +27,65 @@ interface ShippingAddressFormProps {
 export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAddressFormProps) {
 	const { cart } = useStore(cartStore)
 	const [isAllPickup, setIsAllPickup] = useState(false)
+	const [pickupAddresses, setPickupAddresses] = useState<Array<{ title: string; address: string }>>([])
 
-	// Check if all shipping methods are pickup type
+	// Check if all shipping methods are pickup type and fetch pickup addresses
 	useEffect(() => {
 		const checkPickupStatus = async () => {
 			const products = Object.values(cart.products)
 			if (products.length === 0) {
 				setIsAllPickup(false)
+				setPickupAddresses([])
 				return
 			}
 
-			const pickupChecks = await Promise.all(
+			const pickupData = await Promise.all(
 				products.map(async (product) => {
-					if (!product.shippingMethodId) return false
+					if (!product.shippingMethodId) return { isPickup: false, title: '', address: '' }
 
 					try {
 						const shippingEvent = await getShippingEvent(product.shippingMethodId)
-						if (!shippingEvent) return false
+						if (!shippingEvent) return { isPickup: false, title: '', address: '' }
 
 						const serviceTag = getShippingService(shippingEvent)
-						return serviceTag?.[1] === 'pickup'
+						const isPickup = serviceTag?.[1] === 'pickup'
+
+						if (isPickup) {
+							const title = getShippingTitle(shippingEvent)
+							const address = getShippingPickupAddressString(shippingEvent)
+							return { isPickup: true, title, address: address || 'Address not specified' }
+						}
+
+						return { isPickup: false, title: '', address: '' }
 					} catch (error) {
 						console.error('Error checking shipping service:', error)
-						return false
+						return { isPickup: false, title: '', address: '' }
 					}
 				}),
 			)
 
-			setIsAllPickup(pickupChecks.every(Boolean))
+			const allPickup = pickupData.every((data) => data.isPickup)
+			setIsAllPickup(allPickup)
+
+			if (allPickup) {
+				// Get unique pickup addresses
+				const uniqueAddresses = pickupData
+					.filter((data) => data.isPickup)
+					.reduce(
+						(acc, data) => {
+							const key = `${data.title}-${data.address}`
+							if (!acc.some((item) => `${item.title}-${item.address}` === key)) {
+								acc.push({ title: data.title, address: data.address })
+							}
+							return acc
+						},
+						[] as Array<{ title: string; address: string }>,
+					)
+
+				setPickupAddresses(uniqueAddresses)
+			} else {
+				setPickupAddresses([])
+			}
 		}
 
 		checkPickupStatus()
@@ -66,8 +97,10 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 					<MapPin className="h-5 w-5 text-blue-600" />
 				</div>
 				<div>
-					<h2 className="text-xl font-semibold">Shipping Address</h2>
-					<p className="text-gray-600">Where should we deliver your order?</p>
+					<h2 className="text-xl font-semibold">{isAllPickup ? 'Contact Information' : 'Shipping Address'}</h2>
+					<p className="text-gray-600">
+						{isAllPickup ? 'Please provide your contact details for pickup coordination.' : 'Where should we deliver your order?'}
+					</p>
 				</div>
 			</div>
 
@@ -84,13 +117,17 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 					<form.Field
 						name="name"
 						validators={{
-							onChange: ({ value }: { value: string }) =>
-								!value.trim() ? 'Name is required' : value.trim().length < 2 ? 'Name must be at least 2 characters' : undefined,
+							onChange: ({ value }: { value: string }) => {
+								// Name is only required for non-pickup orders
+								if (!isAllPickup && !value.trim()) return 'Name is required'
+								if (value.trim() && value.trim().length < 2) return 'Name must be at least 2 characters'
+								return undefined
+							},
 						}}
 						children={(field: any) => (
 							<div>
 								<Label htmlFor={field.name} className="text-sm font-medium">
-									Full Name <span className="text-red-500">*</span>
+									Full Name {!isAllPickup && <span className="text-red-500">*</span>}
 								</Label>
 								<Input
 									id={field.name}
@@ -99,7 +136,7 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 									value={field.state.value}
 									onChange={(e) => field.handleChange(e.target.value)}
 									onBlur={field.handleBlur}
-									required
+									required={!isAllPickup}
 								/>
 								{field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
 									<p className="text-xs text-red-500 mt-1">{field.state.meta.errors[0]}</p>
@@ -112,15 +149,18 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 						name="email"
 						validators={{
 							onChange: ({ value }: { value: string }) => {
-								if (!value.trim()) return 'Email is required'
-								const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-								return !emailRegex.test(value) ? 'Please enter a valid email address' : undefined
+								// Email is always optional
+								if (value.trim()) {
+									const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+									return !emailRegex.test(value) ? 'Please enter a valid email address' : undefined
+								}
+								return undefined
 							},
 						}}
 						children={(field: any) => (
 							<div>
 								<Label htmlFor={field.name} className="text-sm font-medium">
-									Email Address <span className="text-red-500">*</span>
+									Email Address
 								</Label>
 								<Input
 									id={field.name}
@@ -129,7 +169,6 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 									value={field.state.value}
 									onChange={(e) => field.handleChange(e.target.value)}
 									onBlur={field.handleBlur}
-									required
 								/>
 								{field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
 									<p className="text-xs text-red-500 mt-1">{field.state.meta.errors[0]}</p>
@@ -163,11 +202,25 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 				{/* Pickup notification */}
 				{isAllPickup && (
 					<div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-						<div className="flex items-center gap-2">
+						<div className="flex items-center gap-2 mb-3">
 							<MapPin className="h-4 w-4 text-blue-600" />
 							<h3 className="text-sm font-medium text-blue-800">Pickup Order</h3>
 						</div>
-						<p className="text-sm text-blue-700 mt-1">All items in your order are for pickup. No shipping address is required.</p>
+						<p className="text-sm text-blue-700 mb-3">All items in your order are for pickup. No shipping address is required.</p>
+
+						{pickupAddresses.length > 0 && (
+							<div className="space-y-2">
+								<h4 className="text-xs font-medium text-blue-800 uppercase tracking-wide">
+									Pickup Location{pickupAddresses.length > 1 ? 's' : ''}:
+								</h4>
+								{pickupAddresses.map((pickup, index) => (
+									<div key={index} className="bg-white rounded-md p-3 border border-blue-100">
+										<div className="text-sm font-medium text-gray-900">{pickup.title}</div>
+										<div className="text-sm text-gray-600 mt-1">{pickup.address}</div>
+									</div>
+								))}
+							</div>
+						)}
 					</div>
 				)}
 

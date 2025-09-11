@@ -34,12 +34,39 @@ export const fetchShippingOptions = async () => {
 export const fetchShippingOption = async (id: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
+
 	const event = await ndk.fetchEvent(id)
 	if (!event) {
 		throw new Error('Shipping option not found')
 	}
 
 	return event
+}
+
+/**
+ * Fetches a single shipping option by coordinates (pubkey + d-tag)
+ * @param pubkey The pubkey of the seller
+ * @param dTag The d-tag of the shipping option
+ * @returns The shipping option event
+ */
+export const fetchShippingOptionByCoordinates = async (pubkey: string, dTag: string) => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	const filter: NDKFilter = {
+		kinds: [SHIPPING_KIND],
+		authors: [pubkey],
+		'#d': [dTag],
+	}
+
+	const events = await ndk.fetchEvents(filter)
+	const eventArray = Array.from(events)
+
+	if (eventArray.length === 0) {
+		throw new Error('Shipping option not found')
+	}
+
+	return eventArray[0]
 }
 
 /**
@@ -71,6 +98,18 @@ export const shippingOptionQueryOptions = (id: string) =>
 	queryOptions({
 		queryKey: shippingKeys.details(id),
 		queryFn: () => fetchShippingOption(id),
+	})
+
+/**
+ * React Query options for fetching a single shipping option by coordinates
+ * @param pubkey Seller's pubkey
+ * @param dTag Shipping option d-tag
+ * @returns Query options object
+ */
+export const shippingOptionByCoordinatesQueryOptions = (pubkey: string, dTag: string) =>
+	queryOptions({
+		queryKey: shippingKeys.byCoordinates(pubkey, dTag),
+		queryFn: () => fetchShippingOptionByCoordinates(pubkey, dTag),
 	})
 
 /**

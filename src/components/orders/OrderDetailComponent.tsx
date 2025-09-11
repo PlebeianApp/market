@@ -19,6 +19,7 @@ import {
 	CheckCircle,
 	Clock,
 	CreditCard,
+	MapPin,
 	MessageSquare,
 	Package,
 	Receipt,
@@ -36,6 +37,7 @@ import { Separator } from '../ui/separator'
 import { TimelineEventCard } from './TimelineEventCard'
 import { getStatusStyles } from '@/lib/utils/orderUtils'
 import { cn } from '@/lib/utils'
+import { getShippingInfo, getShippingPickupAddressString, getShippingService, shippingOptionQueryOptions } from '@/queries/shipping'
 
 interface OrderDetailComponentProps {
 	order: OrderWithRelatedEvents
@@ -66,6 +68,11 @@ const getOrderItems = (orderEvent: NDKEvent): Array<{ productRef: string; quanti
 
 const getSellerPubkey = (orderEvent: NDKEvent): string => {
 	return orderEvent.tags.find((tag) => tag[0] === 'p')?.[1] || ''
+}
+
+// Extract shipping reference from order event
+const getShippingRef = (orderEvent: NDKEvent): string | undefined => {
+	return orderEvent.tags.find((tag) => tag[0] === 'shipping')?.[1]
 }
 
 // Extract payment methods from payment request events
@@ -160,6 +167,10 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const isOrderSeller = sellerPubkey === user?.pubkey
 	const totalAmount = getTotalAmount(orderEvent)
 
+	// Extract shipping information
+	const shippingRef = getShippingRef(orderEvent)
+	const shippingAddress = orderEvent.tags.find((tag) => tag[0] === 'address')?.[1]
+
 	// Get status styles for coloring the header
 	const { headerBgColor } = getStatusStyles(order)
 
@@ -196,6 +207,17 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		queryFn: () => fetchV4VShares(sellerPubkey),
 		enabled: !!sellerPubkey,
 	})
+
+	// Fetch shipping option details if shipping reference exists
+	const { data: shippingOption } = useQuery({
+		...shippingOptionQueryOptions(shippingRef || ''),
+		enabled: !!shippingRef,
+	})
+
+	// Extract shipping information
+	const shippingInfo = shippingOption ? getShippingInfo(shippingOption) : null
+	const isPickupService = shippingOption ? getShippingService(shippingOption)?.[1] === 'pickup' : false
+	const pickupAddress = shippingOption && isPickupService ? getShippingPickupAddressString(shippingOption) : null
 
 	const products = productQueries.map((query) => query.data).filter(Boolean) as NDKEvent[]
 
@@ -524,23 +546,72 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 					</Card>
 				)}
 
-				{/* Debug Information */}
-				{process.env.NODE_ENV === 'development' && (
+				{/* Shipping Information */}
+				{(shippingInfo || shippingAddress) && (
 					<Card>
 						<CardHeader>
-							<CardTitle>Debug Info</CardTitle>
+							<div className="flex items-center gap-2">
+								{isPickupService ? <MapPin className="w-5 h-5" /> : <Truck className="w-5 h-5" />}
+								<CardTitle>{isPickupService ? 'Pickup Information' : 'Shipping Information'}</CardTitle>
+							</div>
 						</CardHeader>
 						<CardContent>
-							<div className="text-sm space-y-2">
-								<p className="break-all">Current User: {currentUserPubkey}</p>
-								<p className="break-all">Buyer Pubkey: {buyerPubkey}</p>
-								<p className="break-all">Seller Pubkey: {sellerPubkey}</p>
-								<p>Is Buyer: {isBuyer ? 'Yes' : 'No'}</p>
-								<p>Is Order Owner: {isOrderOwner ? 'Yes' : 'No'}</p>
-								<p>Is Order Seller: {isOrderSeller ? 'Yes' : 'No'}</p>
-								<p>Total Invoices: {totalInvoices}</p>
-								<p>Payment Requests: {order.paymentRequests?.length || 0}</p>
-								<p>Payment Receipts: {order.paymentReceipts?.length || 0}</p>
+							<div className="space-y-4">
+								{shippingInfo && (
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+										<DetailField label="Method:" value={shippingInfo.title} />
+										<DetailField label="Cost:" value={`${shippingInfo.price.amount} ${shippingInfo.price.currency}`} />
+										{shippingInfo.service && (
+											<DetailField
+												label="Service Type:"
+												value={shippingInfo.service.charAt(0).toUpperCase() + shippingInfo.service.slice(1)}
+											/>
+										)}
+										{shippingInfo.carrier && <DetailField label="Carrier:" value={shippingInfo.carrier} />}
+										{shippingInfo.duration && (
+											<DetailField
+												label="Delivery Time:"
+												value={`${shippingInfo.duration.min}-${shippingInfo.duration.max} ${shippingInfo.duration.unit}`}
+											/>
+										)}
+										{shippingInfo.countries && shippingInfo.countries.length > 0 && (
+											<DetailField label="Available Countries:" value={shippingInfo.countries.join(', ')} />
+										)}
+									</div>
+								)}
+
+								{/* Pickup Address */}
+								{isPickupService && pickupAddress && (
+									<div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+										<div className="flex items-start gap-2">
+											<MapPin className="w-4 h-4 text-blue-600 mt-0.5" />
+											<div>
+												<p className="font-medium text-blue-900">Pickup Address</p>
+												<p className="text-blue-800 mt-1">{pickupAddress}</p>
+											</div>
+										</div>
+									</div>
+								)}
+
+								{/* Shipping Address - only show for non-pickup orders */}
+								{!isPickupService && shippingAddress && (
+									<div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+										<div className="flex items-start gap-2">
+											<Truck className="w-4 h-4 text-green-600 mt-0.5" />
+											<div>
+												<p className="font-medium text-green-900">Delivery Address</p>
+												<p className="text-green-800 mt-1">{shippingAddress}</p>
+											</div>
+										</div>
+									</div>
+								)}
+
+								{/* Description */}
+								{shippingInfo?.description && (
+									<div className="mt-4 p-3 bg-gray-50 rounded-lg">
+										<p className="text-sm text-gray-700">{shippingInfo.description}</p>
+									</div>
+								)}
 							</div>
 						</CardContent>
 					</Card>
@@ -644,8 +715,8 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 										<Card key={invoice.id} className={`p-4 ${invoice.status === 'paid' ? 'bg-green-50' : 'bg-card'}`}>
 											<div
 												className={cn('flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between', {
-													'mb-3': isComplete || isBuyer,
-													'sm:mb-0': !isBuyer && !isComplete,
+													'mb-3': invoice.status === 'paid' || isBuyer,
+													'sm:mb-0': !isBuyer && invoice.status !== 'paid',
 												})}
 											>
 												<div className="flex items-center gap-3">
@@ -668,7 +739,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 												</div>
 												<div className="text-right">
 													{/* Desktop-only badge */}
-													{!isComplete && (
+													{invoice.status !== 'paid' && (
 														<Badge className={`hidden sm:inline-flex ${getStatusColor(invoice.status)}`} variant="outline">
 															{(invoice.status || 'pending').charAt(0).toUpperCase() + (invoice.status || 'pending').slice(1)}
 														</Badge>
@@ -727,7 +798,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 											)}
 
 											{/* Seller mobile status badge for incomplete payments */}
-											{!isBuyer && !isComplete && (
+											{!isBuyer && invoice.status !== 'paid' && (
 												<div className="pt-3 border-t border-gray-300 sm:hidden">
 													<Badge className={`${getStatusColor(invoice.status || 'pending')} w-full justify-center py-1`} variant="outline">
 														{(invoice.status || 'pending').charAt(0).toUpperCase() + (invoice.status || 'pending').slice(1)}
@@ -788,9 +859,6 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 									{isBuyer
 										? 'The seller has not yet created payment requests for this order.'
 										: 'Payment requests have not been created for this order yet.'}
-								</p>
-								<p className="text-sm text-gray-500 mt-2">
-									Payment requests: {order.paymentRequests?.length || 0} | Payment receipts: {order.paymentReceipts?.length || 0}
 								</p>
 							</div>
 						</CardContent>

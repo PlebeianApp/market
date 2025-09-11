@@ -2,7 +2,13 @@ import { CURRENCIES } from '@/lib/constants'
 import type { SupportedCurrency } from '@/queries/external'
 import { btcExchangeRatesQueryOptions, currencyConversionQueryOptions } from '@/queries/external'
 import { getProductPrice, getProductSellerPubkey, productQueryOptions } from '@/queries/products'
-import { getShippingInfo, getShippingPrice, shippingOptionQueryOptions, shippingOptionsByPubkeyQueryOptions } from '@/queries/shipping'
+import {
+	getShippingInfo,
+	getShippingPrice,
+	shippingOptionQueryOptions,
+	shippingOptionsByPubkeyQueryOptions,
+	shippingOptionByCoordinatesQueryOptions,
+} from '@/queries/shipping'
 import { v4VForUserQuery } from '@/queries/v4v'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { QueryClient } from '@tanstack/react-query'
@@ -178,12 +184,15 @@ const getProductEvent = async (id: string): Promise<NDKEvent | null> => {
 }
 
 const getShippingEvent = async (shippingReferenceId: string): Promise<NDKEvent | null> => {
+	console.log('getShippingEvent', shippingReferenceId)
 	try {
 		if (shippingReferenceId.startsWith(`${SHIPPING_KIND}:`)) {
 			const parts = shippingReferenceId.split(':')
 			if (parts.length === 3) {
-				const eventDTag = parts[2]
-				const event = (await cartQueryClient.fetchQuery(shippingOptionQueryOptions(eventDTag))) as NDKEvent | null
+				const pubkey = parts[1]
+				const dTag = parts[2]
+
+				const event = (await cartQueryClient.fetchQuery(shippingOptionByCoordinatesQueryOptions(pubkey, dTag))) as NDKEvent | null
 				return event
 			} else {
 				console.warn(`Invalid shipping reference format: ${shippingReferenceId}`)
@@ -352,6 +361,20 @@ export const cartActions = {
 		const prevState = cartStore.state
 		const prevProduct = prevState.cart.products[productId]
 
+		// Validate shipping ID
+		let validatedShippingId = shipping.id || null
+		if (shipping.id && typeof shipping.id === 'string' && shipping.id.trim().length > 0) {
+			const trimmedId = shipping.id.trim()
+			if (!trimmedId.endsWith(':') && trimmedId.split(':').length === 3) {
+				validatedShippingId = trimmedId
+			} else {
+				console.warn('Invalid shipping ID format:', shipping.id)
+				validatedShippingId = null
+			}
+		} else {
+			validatedShippingId = null
+		}
+
 		cartStore.setState((state) => {
 			const newCart = {
 				...state.cart,
@@ -359,7 +382,7 @@ export const cartActions = {
 					...state.cart.products,
 					[productId]: {
 						...state.cart.products[productId],
-						shippingMethodId: shipping.id || null,
+						shippingMethodId: validatedShippingId,
 						shippingCost: Number(shipping.cost || 0),
 						shippingMethodName: shipping.name ?? null,
 						shippingCostCurrency: shipping.currency || null,
@@ -1121,7 +1144,7 @@ export const cartActions = {
 			const allOptions = shippingEvents
 				.map((event) => {
 					const info = getShippingInfo(event)
-					if (!info) return null
+					if (!info || !info.id || info.id.trim().length === 0) return null
 
 					return {
 						id: `${SHIPPING_KIND}:${sellerPubkey}:${info.id}`,
@@ -1167,7 +1190,7 @@ export const cartActions = {
 					const allOptions = shippingEvents
 						.map((event) => {
 							const info = getShippingInfo(event)
-							if (!info) return null
+							if (!info || !info.id || typeof info.id !== 'string' || info.id.trim().length === 0) return null
 							return {
 								id: `${SHIPPING_KIND}:${sellerPubkey}:${info.id}`,
 								name: info.title,

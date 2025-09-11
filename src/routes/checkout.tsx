@@ -189,11 +189,6 @@ function RouteComponent() {
 				const newInvoices: PaymentInvoiceData[] = []
 				let invoiceIndex = 0
 
-				// Debug: Log all V4V shares data
-				console.log('📋 Current V4V shares data:', v4vShares)
-				console.log('🏪 Sellers:', sellers)
-				console.log('💰 Seller data:', sellerData)
-
 				try {
 					for (const sellerPubkey of sellers) {
 						const sellerProducts = productsBySeller[sellerPubkey] || []
@@ -201,12 +196,6 @@ function RouteComponent() {
 						const totalAmount = data?.satsTotal || 0
 						const shares = data?.shares
 						const v4vRecipients = v4vShares[sellerPubkey] || []
-
-						// Debug: Log V4V recipients for this seller
-						console.log(
-							`Seller ${sellerPubkey.substring(0, 8)}... has ${v4vRecipients.length} V4V recipients:`,
-							v4vRecipients.map((r) => `${r.name} (${r.percentage}%)`),
-						)
 
 						// Create invoice for seller's share
 						const sellerAmount = shares?.sellerAmount || totalAmount
