@@ -2,8 +2,9 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQuery } from '@tanstack/react-query'
 import { authorQueryOptions } from '@/queries/authors.tsx'
 import { threadStructureQueryOptions, type ThreadNode, type ThreadStructure, findRootFromETags } from '@/queries/thread.tsx'
+import { reactionsQueryOptions } from '@/queries/reactions'
 import { Link } from '@tanstack/react-router'
-import { type JSX, type SVGProps, useEffect, useRef, useState } from 'react'
+import { type JSX, type SVGProps, useEffect, useRef, useState, useMemo } from 'react'
 import { useThreadOpen } from '@/state/threadOpenStore'
 
 function SpoolIcon(props: SVGProps<SVGSVGElement>) {
@@ -179,31 +180,55 @@ function CollapsibleContent({ children, className }: { children: any; className?
 interface NoteViewProps {
 	note: NDKEvent
 	readOnlyInThread?: boolean
+	reactionsMap?: Record<string, Record<string, number>>
 }
 
 interface ThreadViewProps {
 	threadStructure: ThreadStructure
 	highlightedNoteId: string
+	reactionsMap?: Record<string, Record<string, number>>
 }
 
-function ThreadNodeView({ node, highlightedNoteId }: { node: ThreadNode; highlightedNoteId: string }) {
+function ThreadNodeView({ node, highlightedNoteId, reactionsMap }: { node: ThreadNode; highlightedNoteId: string; reactionsMap?: Record<string, Record<string, number>> }) {
 	const isHighlighted = node.id === highlightedNoteId
 	const indentLevel = Math.min(node.depth, 5) // Limit indentation depth
 
 	return (
 		<div className="mb-2" data-highlighted={isHighlighted || undefined} data-node-id={node.id}>
 			<div className="thread-node border-l pl-2 border-transparent" style={{ marginLeft: `${indentLevel * 16}px` }}>
-				<NoteView note={node.event} readOnlyInThread />
+				<NoteView note={node.event} readOnlyInThread reactionsMap={reactionsMap} />
 			</div>
 			{node.children.map((child) => (
-				<ThreadNodeView key={child.id} node={child} highlightedNoteId={highlightedNoteId} />
+				<ThreadNodeView key={child.id} node={child} highlightedNoteId={highlightedNoteId} reactionsMap={reactionsMap} />
 			))}
 		</div>
 	)
 }
 
-function ThreadView({ threadStructure, highlightedNoteId }: ThreadViewProps) {
+function ThreadView({ threadStructure, highlightedNoteId, reactionsMap: propReactionsMap }: ThreadViewProps) {
 	const containerRef = useRef<HTMLDivElement | null>(null)
+	
+	// Get the IDs of all notes in the thread structure
+	const noteIds = useMemo(() => {
+		const ids: string[] = []
+		if (threadStructure && threadStructure.nodes) {
+			threadStructure.nodes.forEach((node) => {
+				if (node.id) {
+					ids.push(node.id)
+				}
+			})
+		}
+		return ids
+	}, [threadStructure])
+	
+	// Fetch reactions for all notes in the thread if not provided via props
+	const { data: fetchedReactionsMap } = useQuery({
+		...reactionsQueryOptions(noteIds),
+		enabled: noteIds.length > 0 && !propReactionsMap,
+	})
+	
+	// Use provided reactionsMap from props if available, otherwise use fetched data
+	const reactionsMap = propReactionsMap || fetchedReactionsMap
 
 	useEffect(() => {
 		// Wait one frame to ensure children are rendered
@@ -228,13 +253,13 @@ function ThreadView({ threadStructure, highlightedNoteId }: ThreadViewProps) {
 		<div ref={containerRef} className="text-sm">
 			{/*<div className="mb-2 text-xs text-gray-600 font-medium">Thread ({threadStructure.nodes.size} notes)</div>*/}
 			{threadStructure.tree.map((rootNode) => (
-				<ThreadNodeView key={rootNode.id} node={rootNode} highlightedNoteId={highlightedNoteId} />
+				<ThreadNodeView key={rootNode.id} node={rootNode} highlightedNoteId={highlightedNoteId} reactionsMap={reactionsMap} />
 			))}
 		</div>
 	)
 }
 
-export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
+export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps) {
 	// Remove a trailing hashtag-only line from the note content for display
 	const displayContent = (() => {
 		try {
@@ -305,7 +330,7 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 						<div className="text-sm text-gray-500">Loading thread...</div>
 					) : threadStructure ? (
 						<>
-							<ThreadView threadStructure={threadStructure} highlightedNoteId={(note as any).id} />
+							<ThreadView threadStructure={threadStructure} highlightedNoteId={(note as any).id} reactionsMap={reactionsMap} />
 						</>
 					) : (
 						<div className="text-sm text-gray-500">No thread data available</div>
@@ -516,6 +541,31 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 					</button>
 				</div>
 			</div>
+			{/* Reactions row (shown above hashtags) */}
+			{(() => {
+				try {
+					const id = ((note as any)?.id || '') as string
+		      const emap = id && reactionsMap ? reactionsMap[id] : undefined
+					if (!emap) return null
+					const entries = Object.entries(emap)
+					if (entries.length === 0) return null
+					return (
+						<div className="mt-2 pt-2 border-t border-gray-200">
+							<div className="text-xs text-gray-700 flex flex-wrap items-center gap-2">
+								<span className="text-gray-500">Reactions:</span>
+								{entries.map(([emo, cnt]) => (
+									<span key={emo} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200">
+										<span>{emo}</span>
+										{cnt > 1 ? <span className="text-gray-500">{cnt}</span> : null}
+									</span>
+								))}
+							</div>
+						</div>
+					)
+				} catch {
+					return null
+				}
+			})()}
 			{/* Hashtags section */}
 			{(() => {
 				try {
@@ -568,7 +618,7 @@ export function NoteView({ note, readOnlyInThread }: NoteViewProps) {
 				} catch {
 					return null
 				}
-			})()}
+		   })()}
 			{/* Raw event pretty printed */}
 			{(() => {
 				let raw: any

@@ -60,7 +60,7 @@ function withFirstFetchedAt(e: NDKEvent): FetchedNDKEvent {
 	return { event: e, fetchedAt: ts }
 }
 
-export const fetchNotes = async (opts?: { tag?: string; author?: string }): Promise<FetchedNDKEvent[]> => {
+export const fetchNotes = async (opts?: { tag?: string; author?: string; follows?: boolean }): Promise<FetchedNDKEvent[]> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -79,14 +79,62 @@ export const fetchNotes = async (opts?: { tag?: string; author?: string }): Prom
 		;(filter as any).authors = [opts.author.trim()]
 	}
 
-	// Ensure we query using the default relay URLs
+ // Ensure we query using the default relay URLs
 	const relaySet = NDKRelaySet.fromRelayUrls(defaultRelaysUrls, ndk)
+
+	// If follows mode is requested, fetch the current user's contact list and limit authors
+	let mutedPubkeys: Set<string> | null = null
+	if (opts?.follows) {
+		try {
+			const user = await ndkActions.getUser()
+			const pubkey = user?.pubkey
+			if (!pubkey) {
+				return []
+			}
+			const contactsFilter: NDKFilter = { kinds: [3], authors: [pubkey], limit: 1 }
+			const contactEvents = await ndk.fetchEvents(contactsFilter, undefined, relaySet)
+			const contactArr = Array.from(contactEvents)
+			if (contactArr.length > 0) {
+				const latest = contactArr.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+				const pTags = (latest?.tags || []).filter((t: any) => Array.isArray(t) && t[0] === 'p' && typeof t[1] === 'string')
+				const followPubkeys = pTags.map((t: any) => t[1]) as string[]
+				if (followPubkeys.length === 0) {
+					return []
+				}
+				;(filter as any).authors = followPubkeys
+			} else {
+				return []
+			}
+			// Fetch mute list (kind 10000) and build muted set
+			try {
+				const muteFilter: NDKFilter = { kinds: [10000 as any], authors: [pubkey], limit: 1 }
+				const muteEvents = await ndk.fetchEvents(muteFilter, undefined, relaySet)
+				const muteArr = Array.from(muteEvents)
+				if (muteArr.length > 0) {
+					const latestMute = muteArr.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+					const pMuteTags = (latestMute?.tags || []).filter((t: any) => Array.isArray(t) && t[0] === 'p' && typeof t[1] === 'string')
+					mutedPubkeys = new Set(pMuteTags.map((t: any) => t[1] as string))
+				}
+			} catch (_) {
+				// ignore mute fetching errors
+			}
+		} catch (_) {
+			return []
+		}
+	}
+
 	const events = await ndk.fetchEvents(filter, undefined, relaySet)
 	const notes = Array.from(events)
 	// Filter out any falsy events or events without an id to avoid downstream crashes
 	const validNotes = notes.filter((e) => !!e && !!(e as any).id)
-	// Filter out events with client:Mostr tags and NSFW
-	const filteredNotes = validNotes.filter((e) => !hasClientMostrTag(e) && !isNSFWEvent(e))
+	// Filter out events with client:Mostr tags and NSFW and (in follows mode) mutes
+	const filteredNotes = validNotes.filter((e) => {
+		if (hasClientMostrTag(e) || isNSFWEvent(e)) return false
+		if (opts?.follows && mutedPubkeys && (e as any).pubkey) {
+			return !mutedPubkeys.has(((e as any).pubkey as string))
+		}
+		return true
+	})
 	// Map to include first-fetched timestamps and then sort by fetchedAt desc
 	const wrapped = filteredNotes.map(withFirstFetchedAt)
 	wrapped.sort((a, b) => b.fetchedAt - a.fetchedAt)
@@ -114,8 +162,8 @@ export const noteQueryOptions = (id: string) =>
 		queryFn: () => fetchNote(id),
 	})
 
-export const notesQueryOptions = (opts?: { tag?: string; author?: string }) =>
+export const notesQueryOptions = (opts?: { tag?: string; author?: string; follows?: boolean }) =>
 	queryOptions({
-		queryKey: [...noteKeys.all, 'list', normalizeTag(opts?.tag) || '', opts?.author?.trim() || ''],
+		queryKey: [...noteKeys.all, 'list', normalizeTag(opts?.tag) || '', opts?.author?.trim() || '', opts?.follows ? 'follows' : ''],
 		queryFn: () => fetchNotes(opts),
 	})

@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { type SVGProps, useEffect, useMemo, useState } from 'react'
 import { notesQueryOptions, type FetchedNDKEvent } from '@/queries/firehose'
 import { authorQueryOptions } from '@/queries/authors'
+import { reactionsQueryOptions } from '@/queries/reactions'
+import { ndkActions } from '@/lib/stores/ndk'
 import { NoteView } from '@/components/NoteView.tsx'
 import { Button } from '@/components/ui/button'
 import { Loader2, X, ArrowLeft } from 'lucide-react'
@@ -12,6 +14,7 @@ import { useThreadOpen } from '@/state/threadOpenStore'
 import { findRootFromETags } from '@/queries/thread'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import EmojiPicker from 'emoji-picker-react'
 
 function CollapseVerticalIcon(props: SVGProps<SVGSVGElement>) {
 	return (
@@ -40,23 +43,30 @@ export const Route = createFileRoute('/nostr/')({
 function FirehoseComponent() {
 	const location = useLocation()
 	const [isFiltersOpen, setIsFiltersOpen] = useState(false)
-	const [loadingMode, setLoadingMode] = useState<null | 'all' | 'threads' | 'originals'>(null)
+	const [loadingMode, setLoadingMode] = useState<null | 'all' | 'threads' | 'originals' | 'follows' | 'reactions'>(null)
 	const [spinnerSettled, setSpinnerSettled] = useState(false)
 	const { openThreadId, setOpenThreadId } = useThreadOpen()
 	const [tagFilter, setTagFilter] = useState('')
 	const [tagFilterInput, setTagFilterInput] = useState(tagFilter)
 	const [authorFilter, setAuthorFilter] = useState('')
 	const isBaseFeed = !tagFilter.trim() && !authorFilter.trim()
+	const [filterMode, setFilterMode] = useState<'all' | 'threads' | 'originals' | 'follows' | 'reactions'>('all')
 	const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-		...notesQueryOptions({ tag: tagFilter, author: authorFilter }),
+		...notesQueryOptions({ tag: tagFilter, author: authorFilter, follows: filterMode === 'follows' }),
 		refetchOnWindowFocus: !isBaseFeed,
 		refetchOnReconnect: !isBaseFeed,
 		refetchInterval: false,
 		staleTime: isBaseFeed ? Infinity : 0,
 	})
 	const { data: authorMeta } = useQuery({ ...authorQueryOptions(authorFilter), enabled: !!authorFilter }) as any
+	// Current user for follows mode
+	const [currentUserPk, setCurrentUserPk] = useState('')
+	const { data: currentUserMeta } = useQuery({
+		...authorQueryOptions(currentUserPk),
+		enabled: !!currentUserPk && filterMode === 'follows',
+	}) as any
+	const currentUserDisplayName = currentUserMeta?.name || (currentUserPk ? currentUserPk.slice(0, 8) + '…' : '')
 	const [showTop, setShowTop] = useState(false)
-	const [filterMode, setFilterMode] = useState<'all' | 'threads' | 'originals'>('all')
 	// Overlay state for loading a new tag
 	const [pendingTag, setPendingTag] = useState<string | null>(null)
 	const [showTagOverlay, setShowTagOverlay] = useState(false)
@@ -94,6 +104,13 @@ function FirehoseComponent() {
 
 	useEffect(() => {
 		scrollToTop()
+		// Load current user pubkey for follows mode header
+		;(async () => {
+			try {
+				const u = await ndkActions.getUser()
+				if (u?.pubkey) setCurrentUserPk(u.pubkey)
+			} catch {}
+		})()
 	}, [])
 
 	// Apply tag/user/view/threadview from URL when location changes
@@ -107,7 +124,16 @@ function FirehoseComponent() {
 			const incomingView = (sp.get('view') || '').trim().toLowerCase()
 			const incomingThread = (sp.get('threadview') || '').trim()
 			// sync filter mode from URL (?view)
-			const desiredMode = incomingView === 'threads' ? 'threads' : incomingView === 'originals' ? 'originals' : 'all'
+			const desiredMode =
+				incomingView === 'threads'
+					? 'threads'
+					: incomingView === 'originals'
+						? 'originals'
+						: incomingView === 'follows'
+							? 'follows'
+							: incomingView === 'reactions'
+								? 'reactions'
+								: 'all'
 			if (desiredMode !== filterMode) {
 				setFilterMode(desiredMode as any)
 			}
@@ -146,6 +172,15 @@ function FirehoseComponent() {
 	}, [])
 
 	const notes = data || []
+	// Reactions fetching based on currently visible notes
+	const noteIdsForReactions = useMemo(
+		() => (notes as FetchedNDKEvent[]).map((w) => (w.event as any)?.id as string).filter(Boolean),
+		[notes],
+	)
+	const [selectedEmoji, setSelectedEmoji] = useState<string>('')
+	const { data: reactionsMap } = useQuery({
+		...reactionsQueryOptions(noteIdsForReactions, selectedEmoji || undefined),
+	}) as any
 
 	const { filtered, counts } = useMemo(() => {
 		const all = (data || []) as FetchedNDKEvent[]
@@ -229,7 +264,7 @@ function FirehoseComponent() {
 	}, [isFetching, tagFilter, pendingTag])
 
 	// Now that all hooks are called, avoid blanking the page; show inline messages only
-	const showInitialSpinner = isLoading && !data?.length
+	const showInitialSpinner = isLoading
 	const showError = isError
 
 	return (
@@ -244,8 +279,8 @@ function FirehoseComponent() {
 							<Button
 								variant="primary"
 								className="p-1 h-6 w-6 flex"
-								title={tagFilter?.trim() ? "Clear tag filter" : "Clear user filter"}
-								aria-label={tagFilter?.trim() ? "Clear tag filter" : "Clear user filter"}
+								title={tagFilter?.trim() ? 'Clear tag filter' : 'Clear user filter'}
+								aria-label={tagFilter?.trim() ? 'Clear tag filter' : 'Clear user filter'}
 								onClick={() => {
 									setOpenThreadId(null)
 									try {
@@ -323,7 +358,15 @@ function FirehoseComponent() {
 							#{tagFilter.replace(/^#/, '')}
 						</span>
 					) : (
-						<span>Firehose</span>
+						<span>
+       {filterMode === 'follows' ? (
+								<span>{currentUserDisplayName ? `${currentUserDisplayName} follow feed` : 'Follow feed'}</span>
+							) : filterMode === 'reactions' ? (
+								<span>Reactions {selectedEmoji && selectedEmoji}</span>
+							) : (
+								<span>Firehose</span>
+							)}
+						</span>
 					)}
 				</span>
 				<section className="items-center">
@@ -435,6 +478,135 @@ function FirehoseComponent() {
 					<div className="p-4 text-sm">
 						<div className="mb-2 text-xs text-gray-400">Feed mode</div>
 						<div className="flex flex-col gap-2">
+							<Button
+								variant={'ghost'}
+								className="justify-start"
+								onClick={() => {
+									setLoadingMode('all')
+									setSpinnerSettled(false)
+									setFilterMode('all')
+									setOpenThreadId(null)
+									// Clear all filters
+									setTagFilter('')
+									setTagFilterInput('')
+									setAuthorFilter('')
+									setPendingTag(null)
+									scrollToTop()
+									try {
+										if (typeof window !== 'undefined') {
+											const url = new URL(window.location.href)
+											url.searchParams.delete('view')
+											url.searchParams.delete('tag')
+											url.searchParams.delete('user')
+											const target = url.pathname.startsWith('/nostr')
+												? url.search
+													? `/nostr${url.search}`
+													: '/nostr'
+												: url.search
+													? `${url.pathname}${url.search}`
+													: url.pathname
+											window.history.pushState({}, '', target)
+											window.dispatchEvent(new PopStateEvent('popstate'))
+										}
+									} catch {}
+									// keep drawer open until spinner settles
+								}}
+							>
+								<span className="inline-flex items-center gap-2">
+									{loadingMode === 'all' && isFiltersOpen && !tagFilter && !authorFilter ? (
+										<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
+									) : null}
+									<span>Global</span>
+								</span>
+							</Button>
+							<Button
+								variant={filterMode === 'reactions' ? 'primary' : 'ghost'}
+								className="justify-start"
+								onClick={() => {
+									setLoadingMode('reactions')
+									setSpinnerSettled(false)
+									setFilterMode('reactions')
+									setOpenThreadId(null)
+									try {
+										if (typeof window !== 'undefined') {
+											const url = new URL(window.location.href)
+											url.searchParams.set('view', 'reactions')
+											const target = url.pathname.startsWith('/nostr')
+												? url.search
+													? `/nostr${url.search}`
+													: '/nostr'
+												: url.search
+													? `${url.pathname}${url.search}`
+													: url.pathname
+											window.history.pushState({}, '', target)
+											window.dispatchEvent(new PopStateEvent('popstate'))
+										}
+									} catch {}
+									// keep drawer open until spinner settles
+								}}
+							>
+								<span className="inline-flex items-center gap-2">
+									{loadingMode === 'reactions' && isFiltersOpen ? (
+										<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
+									) : null}
+									<span>Reactions</span>
+								</span>
+							</Button>
+							<div className="pl-2 flex flex-col gap-2">
+								<div className="flex gap-2 items-center">
+									<span className="text-xs text-gray-500">Emoji:</span>
+									<div className="w-16 h-8 px-2 rounded bg-transparent border border-gray-700 flex items-center justify-center">
+										{selectedEmoji || "Any"}
+									</div>
+									<button className="h-8 px-2 rounded bg-white/10 text-secondary" onClick={() => setSelectedEmoji('')}>
+										Clear
+									</button>
+								</div>
+								<div className="mt-2">
+									<EmojiPicker
+										onEmojiClick={(emojiData) => setSelectedEmoji(emojiData.emoji)}
+										width="100%"
+										height="300px"
+										previewConfig={{ showPreview: false }}
+										searchDisabled={false}
+										skinTonesDisabled
+										theme="dark"
+									/>
+								</div>
+							</div>
+							<Button
+								variant={filterMode === 'follows' ? 'primary' : 'ghost'}
+								className="justify-start"
+								onClick={() => {
+									setLoadingMode('follows')
+									setSpinnerSettled(false)
+									setFilterMode('follows')
+									setOpenThreadId(null)
+									try {
+										if (typeof window !== 'undefined') {
+											const url = new URL(window.location.href)
+											url.searchParams.set('view', 'follows')
+											const target = url.pathname.startsWith('/nostr')
+												? url.search
+													? `/nostr${url.search}`
+													: '/nostr'
+												: url.search
+													? `${url.pathname}${url.search}`
+													: url.pathname
+											window.history.pushState({}, '', target)
+											window.dispatchEvent(new PopStateEvent('popstate'))
+										}
+									} catch {}
+									// keep drawer open until spinner settles
+								}}
+							>
+								<span className="inline-flex items-center gap-2">
+									{loadingMode === 'follows' && isFiltersOpen ? (
+										<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
+									) : null}
+									<span>Follows</span>
+								</span>
+							</Button>
 							<div className="mt-4">
 								<Label htmlFor="tag-filter">tag filter</Label>
 								<div className="flex gap-2 items-center">
@@ -592,11 +764,23 @@ function FirehoseComponent() {
 
 			<div className="p-3">
 				<div className="space-y-2 text-sm">
-					{filtered
-						.filter((wrapped: FetchedNDKEvent | undefined) => !!wrapped && !!wrapped.event && !!(wrapped.event as any).id)
-						.map((wrapped: FetchedNDKEvent) => (
-							<NoteView key={(wrapped.event as any).id as string} note={wrapped.event} />
-						))}
+					{(() => {
+						const base = filtered.filter(
+							(wrapped: FetchedNDKEvent | undefined) => !!wrapped && !!wrapped.event && !!(wrapped.event as any).id,
+						)
+						const toShow =
+							filterMode === 'reactions'
+								? base.filter((w) => {
+										const id = ((w.event as any)?.id as string) || ''
+										const emap = reactionsMap?.[id]
+										if (!emap) return false
+										return selectedEmoji ? !!emap[selectedEmoji] : Object.keys(emap).length > 0
+									})
+								: base
+						return toShow.map((wrapped: FetchedNDKEvent) => (
+							<NoteView key={(wrapped.event as any).id as string} note={wrapped.event} reactionsMap={reactionsMap || {}} />
+						))
+					})()}
 				</div>
 			</div>
 			{/* Floating Back-to-Top Button */}
