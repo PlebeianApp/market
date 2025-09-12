@@ -2,13 +2,16 @@ import { ProductCard } from '@/components/ProductCard'
 import { PaymentDialog, type PaymentInvoiceData } from '@/components/checkout/PaymentDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
+import { cn } from '@/lib/utils'
+import { getStatusStyles } from '@/lib/utils/orderUtils'
 import { publishPaymentReceipt } from '@/publish/payment'
-import { getEventDate, type OrderWithRelatedEvents } from '@/queries/orders'
+import { type OrderWithRelatedEvents } from '@/queries/orders'
 import { useGenerateInvoiceMutation } from '@/queries/payment'
 import { productQueryOptions } from '@/queries/products'
+import { getShippingInfo, getShippingPickupAddressString, getShippingService, parseShippingReference, shippingOptionByCoordinatesQueryOptions, shippingOptionQueryOptions } from '@/queries/shipping'
 import { fetchV4VShares } from '@/queries/v4v'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -32,12 +35,9 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { DetailField } from '../ui/DetailField'
-import { OrderActions } from './OrderActions'
 import { Separator } from '../ui/separator'
+import { OrderActions } from './OrderActions'
 import { TimelineEventCard } from './TimelineEventCard'
-import { getStatusStyles } from '@/lib/utils/orderUtils'
-import { cn } from '@/lib/utils'
-import { getShippingInfo, getShippingPickupAddressString, getShippingService, shippingOptionQueryOptions } from '@/queries/shipping'
 
 interface OrderDetailComponentProps {
 	order: OrderWithRelatedEvents
@@ -208,11 +208,36 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		enabled: !!sellerPubkey,
 	})
 
-	// Fetch shipping option details if shipping reference exists
-	const { data: shippingOption } = useQuery({
-		...shippingOptionQueryOptions(shippingRef || ''),
-		enabled: !!shippingRef,
+	// Parse shipping reference and fetch shipping option details
+	const parsedShippingData = useMemo(() => {
+		if (!shippingRef) return null
+		
+		// Check if it's a composite reference (30406:pubkey:dtag)
+		if (shippingRef.includes(':')) {
+			const parts = shippingRef.split(':')
+			if (parts.length === 3 && parts[0] === '30406') {
+				return { pubkey: parts[1], dTag: parts[2] }
+			}
+		}
+		
+		// If it's just an ID, we can't fetch without pubkey
+		return null
+	}, [shippingRef])
+
+	// Fetch shipping option by coordinates if we have parsed data
+	const { data: shippingOptionByCoords } = useQuery({
+		...shippingOptionByCoordinatesQueryOptions(parsedShippingData?.pubkey || '', parsedShippingData?.dTag || ''),
+		enabled: !!parsedShippingData,
 	})
+
+	// Fetch shipping option by ID if we don't have coordinates
+	const { data: shippingOptionById } = useQuery({
+		...shippingOptionQueryOptions(parseShippingReference(shippingRef || '')),
+		enabled: !!shippingRef && !parsedShippingData,
+	})
+
+	// Use the appropriate shipping option
+	const shippingOption = shippingOptionByCoords || shippingOptionById
 
 	// Extract shipping information
 	const shippingInfo = shippingOption ? getShippingInfo(shippingOption) : null
