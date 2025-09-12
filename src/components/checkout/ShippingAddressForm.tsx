@@ -387,11 +387,7 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 				<form.Subscribe
 					selector={(state: any) => [state.canSubmit, state.isSubmitting]}
 					children={([canSubmit, isSubmitting]: [boolean, boolean]) => (
-						<Button
-							type="submit"
-							className="w-full btn-black"
-							disabled={!canSubmit || !hasAllShippingMethods || isSubmitting}
-						>
+						<Button type="submit" className="w-full btn-black" disabled={!canSubmit || !hasAllShippingMethods || isSubmitting}>
 							{isSubmitting ? 'Processing...' : 'Continue to Payment'}
 						</Button>
 					)}
