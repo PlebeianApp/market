@@ -554,10 +554,34 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 							<div className="text-xs text-gray-700 flex flex-wrap items-center gap-2">
 								<span className="text-gray-500">Reactions:</span>
 								{entries.map(([emo, cnt]) => (
-									<span key={emo} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200">
+									<button
+										key={emo}
+										className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200 hover:bg-gray-200 focus:outline-none"
+										onClick={(e) => {
+											e.preventDefault()
+											e.stopPropagation()
+											try {
+												const url = new URL(window.location.href)
+												url.searchParams.set('view', 'reactions')
+												url.searchParams.set('emoji', emo)
+												// clear conflicting params
+												url.searchParams.delete('tag')
+												url.searchParams.delete('threadview')
+												const target = url.pathname.startsWith('/nostr')
+													? (url.search ? `/nostr${url.search}` : '/nostr')
+													: (url.search ? `${url.pathname}${url.search}` : url.pathname)
+												window.history.pushState({}, '', target)
+												window.dispatchEvent(new PopStateEvent('popstate'))
+											} catch {
+												window.location.href = `/nostr?view=reactions&emoji=${encodeURIComponent(emo)}`
+											}
+										}}
+										title={`Open reactions feed for ${emo}`}
+										aria-label={`Open reactions feed for ${emo}`}
+									>
 										<span>{emo}</span>
 										{cnt > 1 ? <span className="text-gray-500">{cnt}</span> : null}
-									</span>
+									</button>
 								))}
 							</div>
 						</div>
