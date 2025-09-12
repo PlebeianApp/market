@@ -178,6 +178,10 @@ const getProductEvent = async (id: string): Promise<NDKEvent | null> => {
 		const event = (await cartQueryClient.fetchQuery(productQueryOptions(id))) as NDKEvent | null
 		return event
 	} catch (error) {
+		// Don't log errors for missing products - this is expected when products are removed
+		if (error instanceof Error && error.message.includes('Product not found')) {
+			return null
+		}
 		console.error(`Failed to fetch product event ${id} via queryClient:`, error)
 		return null
 	}
@@ -405,6 +409,11 @@ export const cartActions = {
 		return state.cart.products[productId]?.shippingMethodId || null
 	},
 
+	isProductInCart: (productId: string): boolean => {
+		const state = cartStore.state
+		return productId in state.cart.products
+	},
+
 	clear: () => {
 		cartStore.setState((state) => ({
 			...state,
@@ -565,7 +574,18 @@ export const cartActions = {
 		try {
 			const event = await getProductEvent(productId)
 			if (!event) {
-				throw new Error(`Product not found: ${productId}`)
+				// Product not found - return zero totals and mark for removal
+				console.warn(`Product not found: ${productId} - will be removed from cart`)
+				return {
+					subtotalInSats: 0,
+					shippingInSats: 0,
+					totalInSats: 0,
+					subtotalInCurrency: 0,
+					shippingInCurrency: 0,
+					totalInCurrency: 0,
+					currency: 'USD',
+					shouldRemove: true, // Flag to indicate this product should be removed
+				}
 			}
 
 			const priceTag = getProductPrice(event)
@@ -608,6 +628,7 @@ export const cartActions = {
 				shippingInCurrency: shippingCostInFiat,
 				totalInCurrency: productTotalInCurrency + shippingCostInFiat,
 				currency: productCurrency,
+				shouldRemove: false,
 			}
 		} catch (error) {
 			console.error(`Error calculating product total for ${productId}:`, error)
@@ -619,6 +640,7 @@ export const cartActions = {
 				shippingInCurrency: 0,
 				totalInCurrency: 0,
 				currency: 'USD',
+				shouldRemove: false,
 			}
 		}
 	},
@@ -632,10 +654,20 @@ export const cartActions = {
 		let shippingInSats = 0
 		let totalInSats = 0
 		const currencyTotals: Record<string, { subtotal: number; shipping: number; total: number }> = {}
+		const productsToRemove: string[] = []
 
 		const productTotals = await Promise.all(products.map((product) => cartActions.calculateProductTotal(product.id)))
 
-		for (const productTotal of productTotals) {
+		for (let i = 0; i < products.length; i++) {
+			const product = products[i]
+			const productTotal = productTotals[i]
+
+			// Check if product should be removed
+			if (productTotal.shouldRemove) {
+				productsToRemove.push(product.id)
+				continue
+			}
+
 			subtotalInSats += productTotal.subtotalInSats
 			shippingInSats += productTotal.shippingInSats
 			totalInSats += productTotal.totalInSats
@@ -646,6 +678,14 @@ export const cartActions = {
 			currencyTotals[productTotal.currency].subtotal += productTotal.subtotalInCurrency
 			currencyTotals[productTotal.currency].shipping += productTotal.shippingInCurrency
 			currencyTotals[productTotal.currency].total += productTotal.totalInCurrency
+		}
+
+		// Remove products that no longer exist
+		if (productsToRemove.length > 0) {
+			console.log(`Removing ${productsToRemove.length} products that no longer exist:`, productsToRemove)
+			productsToRemove.forEach((productId) => {
+				cartActions.handleProductUpdate('remove', productId)
+			})
 		}
 
 		return { subtotalInSats, shippingInSats, totalInSats, currencyTotals }
@@ -824,6 +864,11 @@ export const cartActions = {
 			for (const productId of Object.values(state.cart.products).map((p) => p.id)) {
 				try {
 					const productTotal = await cartActions.calculateProductTotal(productId)
+
+					// Skip products that should be removed
+					if (productTotal.shouldRemove) {
+						continue
+					}
 
 					subtotalInSats += productTotal.subtotalInSats
 
@@ -1039,6 +1084,12 @@ export const cartActions = {
 				for (const product of products) {
 					try {
 						const productTotal = await cartActions.calculateProductTotal(product.id)
+
+						// Skip products that should be removed
+						if (productTotal.shouldRemove) {
+							continue
+						}
+
 						sellerTotal += productTotal.subtotalInSats
 
 						if (productTotal.currency) {

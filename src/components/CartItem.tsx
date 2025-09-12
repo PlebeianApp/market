@@ -81,7 +81,7 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 
 	if (isLoading) {
 		return (
-			<li className="flex gap-4 pb-4 border-b">
+			<li className="flex gap-4 pb-4 border-b border-gray-300 [.bg-gray-100_&]:border-white">
 				<Skeleton className="h-20 w-20 rounded-md" />
 				<div className="flex flex-1 flex-col justify-between">
 					<div>
@@ -102,16 +102,23 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 	}
 
 	return (
-		<li className="flex flex-col py-6 border-b">
-			<div className="flex items-start space-x-4">
+		<li className="flex flex-col py-4 border-b border-gray-300 [.bg-gray-100_&]:border-white">
+			<div className="flex flex-col sm:flex-row sm:items-center gap-4">
 				{/* Product Image */}
 				{images && images.length > 0 ? (
-					<div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-md border">
-						<img src={images[0][1]} alt={title || 'Product image'} className="h-full w-full object-cover object-center" />
+					<div className="h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 rounded-md border overflow-hidden">
+						<img
+							src={images[0][1]}
+							alt={title || 'Product image'}
+							className="h-full w-full object-cover object-center"
+							style={{ maxWidth: '100%', maxHeight: '100%' }}
+						/>
 					</div>
 				) : (
-					<div className="h-20 w-20 flex-shrink-0 overflow-hidden rounded-md border bg-gray-100 flex items-center justify-center text-gray-400">
-						No image
+					<div className="h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 rounded-md border bg-gray-100 flex items-center justify-center text-gray-400 overflow-hidden">
+						<span className="text-xs text-center px-1 leading-tight" style={{ lineHeight: '1.1' }}>
+							{title ? title.split(' ').slice(0, 2).join(' ') : 'No image'}
+						</span>
 					</div>
 				)}
 
@@ -120,12 +127,14 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 					<div>
 						<h3 className="text-base font-medium">{title || 'Untitled Product'}</h3>
 						<p className="mt-1 text-sm text-muted-foreground">
-							{price} {currency}
+							{currency.toLowerCase() === 'sats' || currency.toLowerCase() === 'sat'
+								? `${Math.round(price).toLocaleString()} sats`
+								: `${Math.round(price * 100).toLocaleString()} sats (${price.toFixed(2)} ${currency})`}
 						</p>
 					</div>
 
 					{/* Quantity Controls */}
-					<div className="flex items-center justify-between mt-2">
+					<div className="flex items-center mt-2">
 						<div className="flex items-center space-x-2">
 							<Button variant="outline" size="icon" className="h-8 w-8" onClick={handleDecrementClick} disabled={amount <= 1}>
 								<Minus size={14} />
@@ -145,30 +154,23 @@ export default function CartItem({ productId, amount, onQuantityChange, onRemove
 								<Plus size={14} />
 							</Button>
 						</div>
-
-						{/* Delete Button */}
-						<Button
-							variant="ghost"
-							size="icon"
-							className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
-							onClick={() => onRemove(productId)}
-						>
-							<Trash2 size={16} />
-						</Button>
 					</div>
 				</div>
 
-				{/* Product Total */}
-				<div className="flex items-center">
-					<p className="text-sm font-medium">
-						{subtotal.toFixed(2)} {currency}
-					</p>
-				</div>
+				{/* Delete Button */}
+				<Button
+					variant="ghost"
+					size="icon"
+					className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 sm:self-center sm:ml-auto self-start"
+					onClick={() => onRemove(productId)}
+				>
+					<Trash2 size={16} />
+				</Button>
 			</div>
 
 			{/* Shipping Section - only show if not hidden */}
 			{!hideShipping && (
-				<div className="ml-24 flex flex-col gap-2">
+				<div className="sm:ml-24 ml-0 mt-3 flex flex-col gap-2">
 					<button
 						className={`text-sm ${
 							!hasShipping ? 'text-red-600 hover:text-red-800 font-medium' : 'text-blue-600 hover:text-blue-800'

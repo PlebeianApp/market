@@ -32,7 +32,7 @@ function EditCollectionComponent() {
 
 	if (!collection) {
 		return (
-			<div className="space-y-6">
+			<div className="space-y-6 pb-8">
 				<h1 className="text-2xl font-bold">Collection Not Found</h1>
 				<p className="text-gray-600">The collection you're looking for doesn't exist or you don't have access to it.</p>
 			</div>
@@ -40,7 +40,7 @@ function EditCollectionComponent() {
 	}
 
 	return (
-		<div className="space-y-6">
+		<div className="space-y-6 pb-8">
 			<CollectionFormContent showFooter={true} />
 		</div>
 	)

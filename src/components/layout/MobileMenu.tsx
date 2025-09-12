@@ -11,7 +11,15 @@ export function MobileMenu() {
 	const { mobileMenuOpen } = useStore(uiStore)
 	const { isAuthenticated } = useStore(authStore)
 	const matchRoute = useMatchRoute()
-	const [animationParent] = useAutoAnimate<HTMLDivElement>()
+	// Use auto-animate with error handling to prevent DOM manipulation errors
+	const [animationParent] = (() => {
+		try {
+			return useAutoAnimate<HTMLDivElement>()
+		} catch (error) {
+			console.warn('Auto-animate not available:', error)
+			return [null]
+		}
+	})()
 
 	// Close menu on escape key
 	useEffect(() => {
@@ -58,7 +66,7 @@ export function MobileMenu() {
 	return (
 		<div ref={animationParent}>
 			{mobileMenuOpen && (
-				<div className={cn('fixed top-16 left-0 right-0 bottom-0 z-40 bg-black/90')} onClick={() => uiActions.closeMobileMenu()}>
+				<div className={cn('fixed top-16 left-0 right-0 bottom-0 z-[70] bg-black/90')} onClick={() => uiActions.closeMobileMenu()}>
 					{/* Dots Pattern Overlay */}
 					<Pattern pattern="dots" className="opacity-30" />
 

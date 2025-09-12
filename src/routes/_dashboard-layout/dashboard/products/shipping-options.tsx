@@ -38,6 +38,8 @@ import { DashboardListItem } from '@/components/layout/DashboardListItem'
 import { AlertCircleIcon, ChevronLeftIcon, PackageIcon, PlusIcon, TrashIcon, TruckIcon, XIcon } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { DashboardListItem } from '@/components/layout/DashboardListItem'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
 
 const SERVICE_TYPES = [
 	{ value: 'standard', label: 'Standard Shipping' },
@@ -254,11 +256,11 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 		switch (service) {
 			case 'express':
 			case 'overnight':
-				return <TruckIcon className="w-5 h-5 text-orange-500" />
+				return <TruckIcon className="w-5 h-5 text-black" />
 			case 'pickup':
-				return <PackageIcon className="w-5 h-5 text-blue-500" />
+				return <PackageIcon className="w-5 h-5 text-black" />
 			default:
-				return <TruckIcon className="w-5 h-5" />
+				return <TruckIcon className="w-5 h-5 text-black" />
 		}
 	}
 
@@ -601,7 +603,13 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 													setFormData((prev) => ({
 														...prev,
 														pickupAddress: {
-															...(prev.pickupAddress || { street: '', city: '', state: '', postalCode: '', country: '' }),
+															...(prev.pickupAddress || {
+																street: '',
+																city: '',
+																state: '',
+																postalCode: '',
+																country: '',
+															}),
 															city: e.target.value,
 														},
 													}))
@@ -631,7 +639,13 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 													setFormData((prev) => ({
 														...prev,
 														pickupAddress: {
-															...(prev.pickupAddress || { street: '', city: '', state: '', postalCode: '', country: '' }),
+															...(prev.pickupAddress || {
+																street: '',
+																city: '',
+																state: '',
+																postalCode: '',
+																country: '',
+															}),
 															state: e.target.value,
 														},
 													}))
@@ -653,7 +667,13 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 													setFormData((prev) => ({
 														...prev,
 														pickupAddress: {
-															...(prev.pickupAddress || { street: '', city: '', state: '', postalCode: '', country: '' }),
+															...(prev.pickupAddress || {
+																street: '',
+																city: '',
+																state: '',
+																postalCode: '',
+																country: '',
+															}),
 															postalCode: e.target.value,
 														},
 													}))
@@ -674,7 +694,13 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 														const newFormData = {
 															...prev,
 															pickupAddress: {
-																...(prev.pickupAddress || { street: '', city: '', state: '', postalCode: '', country: '' }),
+																...(prev.pickupAddress || {
+																	street: '',
+																	city: '',
+																	state: '',
+																	postalCode: '',
+																	country: '',
+																}),
 																country: e.target.value,
 															},
 														}
@@ -1066,6 +1092,16 @@ function ShippingOptionsComponent() {
 
 	useDashboardTitle('Shipping Options')
 
+	// Auto-animate for smooth list transitions
+	const [animationParent] = (() => {
+		try {
+			return useAutoAnimate()
+		} catch (error) {
+			console.warn('Auto-animate not available:', error)
+			return [null]
+		}
+	})()
+
 	useEffect(() => {
 		getUser().then(setUser)
 	}, [getUser])
@@ -1085,7 +1121,7 @@ function ShippingOptionsComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<div className="hidden lg:flex sticky top-0 z-10 fg-layer-elevated border-b border-black py-4 px-4 lg:px-6 items-center justify-between">
 				<h1 className="text-2xl font-bold">Shipping Options</h1>
 				<div className="flex items-center gap-4">
 					<div className="flex items-center gap-2">
@@ -1108,14 +1144,14 @@ function ShippingOptionsComponent() {
 					</div>
 					<Button
 						onClick={() => handleOpenChange('new', true)}
-						className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+						className="btn-black flex items-center gap-2 px-4 py-2 text-sm font-semibold"
 					>
 						<PlusIcon className="w-5 h-5" />
 						Add Shipping Option
 					</Button>
 				</div>
 			</div>
-			<div className="space-y-6 p-4 lg:p-6">
+			<div className="space-y-6 p-4 lg:p-6 bg-layer-base">
 				<div className="lg:hidden space-y-4">
 					<div>
 						<p className="text-muted-foreground">Manage your shipping options for customers</p>
@@ -1137,7 +1173,7 @@ function ShippingOptionsComponent() {
 
 					<Button
 						onClick={() => handleOpenChange('new', true)}
-						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+						className="w-full btn-black flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
 					>
 						<PlusIcon className="w-5 h-5" />
 						Add Shipping Option
@@ -1146,7 +1182,7 @@ function ShippingOptionsComponent() {
 
 				{/* Shipping option form - shows at top when opened */}
 				{openShippingOptionId === 'new' && (
-					<Card className="mt-4">
+					<Card className="mt-4 fg-layer-elevated border-layer-subtle">
 						<CardContent className="p-0">
 							<ShippingOptionForm
 								shippingOption={null}
@@ -1158,7 +1194,7 @@ function ShippingOptionsComponent() {
 					</Card>
 				)}
 
-				<div className="space-y-4">
+				<div ref={animationParent} className="space-y-4">
 					{/* Existing shipping options */}
 					{filteredShippingOptions.map((shippingOption) => {
 						const shippingId = getShippingId(shippingOption)

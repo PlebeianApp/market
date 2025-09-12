@@ -1,0 +1,277 @@
+/* 
+  Modern Button Design System
+  
+  Usage: Import this file to enable modern button styles
+  - Replace existing button variants with modern equivalents
+  - Add class names like 'btn-modern-base btn-primary-modern' to buttons
+  - Or modify button component to use these classes by default
+
+  To activate: Import this file in your main CSS or component
+*/
+
+/* Core button animations and transforms */
+.btn-modern-base {
+	position: relative;
+	overflow: hidden;
+	transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+	backdrop-filter: blur(8px);
+	box-shadow: 0 4px 15px 0 rgba(0, 0, 0, 0.1);
+}
+
+.btn-modern-base::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: -100%;
+	width: 100%;
+	height: 100%;
+	background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+	transition: left 0.5s ease;
+	z-index: 1;
+}
+
+.btn-modern-base:hover::before {
+	left: 100%;
+}
+
+.btn-modern-base:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 8px 25px 0 rgba(0, 0, 0, 0.15);
+}
+
+.btn-modern-base:active {
+	transform: translateY(0px);
+	transition: transform 0.1s ease;
+}
+
+/* Primary Button - Enhanced Black */
+.btn-primary-modern {
+	background: linear-gradient(135deg, #1d1d1d 0%, #0a0a0a 100%);
+	color: #ffffff;
+	border: 2px solid transparent;
+	background-clip: padding-box;
+	box-shadow:
+		0 4px 15px 0 rgba(29, 29, 29, 0.3),
+		inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.btn-primary-modern:hover {
+	background: linear-gradient(135deg, transparent 0%, transparent 100%);
+	color: #ff3eb5;
+	border-color: #ff3eb5;
+	box-shadow:
+		0 8px 25px 0 rgba(255, 62, 181, 0.25),
+		inset 0 0 20px rgba(255, 62, 181, 0.05);
+}
+
+/* Secondary Button - Enhanced Pink */
+.btn-secondary-modern {
+	background: linear-gradient(135deg, #ff3eb5 0%, #e61a9c 100%);
+	color: #0a0a0a;
+	border: 2px solid transparent;
+	background-clip: padding-box;
+	box-shadow:
+		0 4px 15px 0 rgba(255, 62, 181, 0.4),
+		inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.btn-secondary-modern:hover {
+	background: linear-gradient(135deg, transparent 0%, transparent 100%);
+	color: #ff3eb5;
+	border-color: #ff3eb5;
+	box-shadow:
+		0 8px 25px 0 rgba(255, 62, 181, 0.35),
+		inset 0 0 20px rgba(255, 62, 181, 0.1);
+}
+
+/* Tertiary Button - Enhanced White */
+.btn-tertiary-modern {
+	background: linear-gradient(135deg, #ffffff 0%, #f8f8f8 100%);
+	color: #1d1d1d;
+	border: 2px solid #1d1d1d;
+	box-shadow:
+		0 4px 15px 0 rgba(29, 29, 29, 0.1),
+		inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.btn-tertiary-modern:hover {
+	background: linear-gradient(135deg, #606060 0%, #404040 100%);
+	color: #ffffff;
+	border-color: #606060;
+	box-shadow:
+		0 8px 25px 0 rgba(96, 96, 96, 0.25),
+		inset 0 0 20px rgba(255, 255, 255, 0.05);
+}
+
+/* Focus Button - Enhanced Yellow */
+.btn-focus-modern {
+	background: linear-gradient(135deg, #ffd53d 0%, #ffcc00 100%);
+	color: #0a0a0a;
+	border: 2px solid transparent;
+	background-clip: padding-box;
+	box-shadow:
+		0 4px 15px 0 rgba(255, 213, 61, 0.4),
+		inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.btn-focus-modern:hover {
+	background: linear-gradient(135deg, transparent 0%, transparent 100%);
+	color: #ffd53d;
+	border-color: #ffd53d;
+	box-shadow:
+		0 8px 25px 0 rgba(255, 213, 61, 0.35),
+		inset 0 0 20px rgba(255, 213, 61, 0.1);
+}
+
+/* Destructive Button - Enhanced Red */
+.btn-destructive-modern {
+	background: linear-gradient(135deg, #bf4040 0%, #a03333 100%);
+	color: #ffffff;
+	border: 2px solid transparent;
+	background-clip: padding-box;
+	box-shadow:
+		0 4px 15px 0 rgba(191, 64, 64, 0.3),
+		inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.btn-destructive-modern:hover {
+	background: linear-gradient(135deg, transparent 0%, transparent 100%);
+	color: #bf4040;
+	border-color: #bf4040;
+	box-shadow:
+		0 8px 25px 0 rgba(191, 64, 64, 0.25),
+		inset 0 0 20px rgba(191, 64, 64, 0.05);
+}
+
+/* Ghost Button - Modern Glass Effect */
+.btn-ghost-modern {
+	background: rgba(255, 255, 255, 0.05);
+	color: #1d1d1d;
+	border: 2px solid rgba(29, 29, 29, 0.2);
+	backdrop-filter: blur(10px);
+	box-shadow:
+		0 4px 15px 0 rgba(0, 0, 0, 0.05),
+		inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.btn-ghost-modern:hover {
+	background: rgba(255, 62, 181, 0.1);
+	color: #ff3eb5;
+	border-color: #ff3eb5;
+	box-shadow:
+		0 8px 25px 0 rgba(255, 62, 181, 0.15),
+		inset 0 0 20px rgba(255, 62, 181, 0.05);
+}
+
+/* Enhanced Product banner button utility */
+.btn-product-banner-modern {
+	background: linear-gradient(135deg, #ff3eb5 0%, #e61a9c 100%);
+	color: var(--secondary-foreground);
+	border: 2px solid transparent;
+	background-clip: padding-box;
+	transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+	box-shadow: 0 4px 15px 0 rgba(255, 62, 181, 0.3);
+	position: relative;
+	overflow: hidden;
+}
+
+.btn-product-banner-modern::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: -100%;
+	width: 100%;
+	height: 100%;
+	background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+	transition: left 0.5s ease;
+	z-index: 1;
+}
+
+.btn-product-banner-modern:hover::before {
+	left: 100%;
+}
+
+.btn-product-banner-modern:hover {
+	background: transparent;
+	color: var(--secondary-foreground-hover);
+	border-color: var(--secondary-border-hover);
+	transform: translateY(-2px);
+	box-shadow: 0 8px 25px 0 rgba(255, 62, 181, 0.4);
+}
+
+/* Enhanced Black button utility */
+.btn-black-modern {
+	background: linear-gradient(135deg, #1d1d1d 0%, #0a0a0a 100%);
+	color: white;
+	border: 2px solid transparent;
+	background-clip: padding-box;
+	transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+	box-shadow: 0 4px 15px 0 rgba(29, 29, 29, 0.3);
+	position: relative;
+	overflow: hidden;
+}
+
+.btn-black-modern::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: -100%;
+	width: 100%;
+	height: 100%;
+	background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+	transition: left 0.5s ease;
+	z-index: 1;
+}
+
+.btn-black-modern:hover::before {
+	left: 100%;
+}
+
+.btn-black-modern:hover {
+	background: transparent;
+	color: black;
+	border-color: black;
+	transform: translateY(-2px);
+	box-shadow: 0 8px 25px 0 rgba(29, 29, 29, 0.4);
+}
+
+/* 
+  Button Component Integration Classes
+  
+  Use these to modify the existing button component:
+  
+  Example usage in Button component:
+  variant: {
+    primary: 'btn-modern-base btn-primary-modern',
+    secondary: 'btn-modern-base btn-secondary-modern uppercase',
+    // etc...
+  }
+*/
+
+.modern-button-variants {
+	/* Base class for all modern buttons */
+}
+
+.modern-button-variants.primary {
+	@apply btn-modern-base btn-primary-modern;
+}
+
+.modern-button-variants.secondary {
+	@apply btn-modern-base btn-secondary-modern;
+}
+
+.modern-button-variants.tertiary {
+	@apply btn-modern-base btn-tertiary-modern;
+}
+
+.modern-button-variants.focus {
+	@apply btn-modern-base btn-focus-modern;
+}
+
+.modern-button-variants.destructive {
+	@apply btn-modern-base btn-destructive-modern;
+}
+
+.modern-button-variants.ghost {
+	@apply btn-modern-base btn-ghost-modern;
+}

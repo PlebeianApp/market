@@ -11,9 +11,10 @@ import { copyToClipboard } from '@/lib/utils'
 import { NDKEvent, NDKUser, NDKZapper } from '@nostr-dev-kit/ndk'
 import { NDKNWCWallet } from '@nostr-dev-kit/ndk-wallet'
 import { useStore } from '@tanstack/react-store'
-import { Copy, CreditCard, Loader2, Zap } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Copy, CreditCard, Loader2, Zap } from 'lucide-react'
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react'
 import { toast } from 'sonner'
+import { Link } from '@tanstack/react-router'
 
 // WebLN types
 declare global {
@@ -61,6 +62,10 @@ interface LightningPaymentProcessorProps {
 	showManualVerification?: boolean
 	title?: string
 	active?: boolean // New prop to control when processor should be active
+	showNavigation?: boolean
+	currentIndex?: number
+	totalInvoices?: number
+	onNavigate?: (newIndex: number) => void
 }
 
 export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef, LightningPaymentProcessorProps>(
@@ -74,6 +79,10 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			showManualVerification = false,
 			title,
 			active = true, // Default to true for backward compatibility
+			showNavigation = false,
+			currentIndex = 0,
+			totalInvoices = 1,
+			onNavigate,
 		},
 		ref,
 	) => {
@@ -314,16 +323,16 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 
 		return (
 			<TooltipProvider>
-				<Card className={className}>
+				<div className={className}>
 					{title && (
-						<CardHeader>
-							<CardTitle>{title}</CardTitle>
-						</CardHeader>
+						<div className="mb-4">
+							<h3 className="text-lg font-semibold">{title}</h3>
+						</div>
 					)}
-					<CardContent className="space-y-6">
+					<div className="space-y-6">
 						{/* Loading state */}
 						{(isGeneratingInvoice || isPaymentInProgress) && (
-							<div className="flex items-center justify-center py-8">
+							<div className="flex items-center justify-center py-6">
 								<Loader2 className="h-8 w-8 animate-spin" />
 								<span className="ml-2">{isGeneratingInvoice ? 'Generating invoice...' : 'Processing payment...'}</span>
 							</div>
@@ -331,15 +340,42 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 
 						{/* Invoice QR Code - Always visible when available */}
 						{invoice && (
-							<div className="space-y-4">
-								<div className="flex justify-center">
+							<div className="space-y-6">
+								<div className="flex items-center justify-center gap-4">
+									{/* Previous Invoice Button */}
+									{showNavigation && (
+										<Button
+											variant="ghost"
+											size="icon"
+											onClick={() => onNavigate?.(Math.max(0, currentIndex - 1))}
+											disabled={currentIndex === 0}
+											className="h-12 w-12 rounded-full"
+										>
+											<ChevronLeft className="h-6 w-6" />
+										</Button>
+									)}
+
+									{/* QR Code */}
 									<a href={lightningUrl} className="block hover:opacity-90 transition-opacity" target="_blank" rel="noopener noreferrer">
-										<QRCode value={invoice} size={200} />
+										<QRCode value={invoice} size={200} showBorder={false} />
 									</a>
+
+									{/* Next Invoice Button */}
+									{showNavigation && (
+										<Button
+											variant="ghost"
+											size="icon"
+											onClick={() => onNavigate?.(Math.min(totalInvoices - 1, currentIndex + 1))}
+											disabled={currentIndex === totalInvoices - 1}
+											className="h-12 w-12 rounded-full"
+										>
+											<ChevronRight className="h-6 w-6" />
+										</Button>
+									)}
 								</div>
 
 								{/* Invoice text with copy button */}
-								<div className="space-y-2">
+								<div className="space-y-4">
 									<Label htmlFor="invoice">Lightning Invoice</Label>
 									<div className="flex gap-2">
 										<Input id="invoice" value={invoice} readOnly className="font-mono text-xs" />
@@ -353,7 +389,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 
 						{/* Payment buttons */}
 						{invoice && (
-							<div className="space-y-3">
+							<div className="space-y-6">
 								<div className="flex gap-2">
 									{/* NWC Payment Button */}
 									{!capabilities.hasNwc ? (
@@ -362,7 +398,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 												<div className="flex-1">
 													<Button disabled={true} className="w-full" variant="outline">
 														<Zap className="h-4 w-4 mr-2" />
-														Pay with NWC
+														Pay NWC
 													</Button>
 												</div>
 											</TooltipTrigger>
@@ -373,7 +409,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 									) : (
 										<Button onClick={handleNwcPayment} disabled={isPaymentInProgress} className="flex-1" variant="outline">
 											<Zap className="h-4 w-4 mr-2" />
-											Pay with NWC
+											Pay NWC
 										</Button>
 									)}
 
@@ -384,7 +420,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 												<div className="flex-1">
 													<Button disabled={true} className="w-full" variant="outline">
 														<CreditCard className="h-4 w-4 mr-2" />
-														Pay with WebLN
+														Pay WebLN
 													</Button>
 												</div>
 											</TooltipTrigger>
@@ -395,23 +431,23 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 									) : (
 										<Button onClick={handleWebLnPayment} disabled={isPaymentInProgress} className="flex-1" variant="outline">
 											<CreditCard className="h-4 w-4 mr-2" />
-											Pay with WebLN
+											Pay WebLN
 										</Button>
 									)}
 								</div>
 
 								{/* Manual verification */}
 								{capabilities.canManualVerify && (
-									<div className="space-y-2">
-										<Label htmlFor="preimage">Payment Preimage (Manual Verification)</Label>
-										<div className="flex gap-2">
+									<div className="space-y-4">
+										<Label htmlFor="preimage">Preimage (Manual Verification)</Label>
+										<div className="flex flex-col gap-2 lg:flex-row">
 											<Input
 												id="preimage"
 												placeholder="Enter payment preimage"
 												value={manualPreimage}
 												onChange={(e) => setManualPreimage(e.target.value)}
 											/>
-											<Button onClick={handleManualVerification} variant="secondary">
+											<Button onClick={handleManualVerification} variant="secondary" className="lg:w-auto">
 												Verify
 											</Button>
 										</div>
@@ -426,8 +462,8 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 								)}
 							</div>
 						)}
-					</CardContent>
-				</Card>
+					</div>
+				</div>
 			</TooltipProvider>
 		)
 	},

@@ -18,6 +18,8 @@ const buttonVariants = cva(
 				focus:
 					'bg-focus text-focus-foreground border-focus-border hover:bg-transparent hover:text-focus-foreground-hover hover:border-focus-border-hover',
 				destructive: 'bg-destructive text-destructive-foreground hover:bg-transparent hover:text-destructive-foreground',
+				'own-product': 'bg-transparent text-gray-500 border-gray-400 hover:bg-gray-100 hover:text-gray-600 hover:border-gray-500',
+				'added-to-cart': 'bg-green-100 text-green-800 border-green-300 hover:bg-green-200 hover:text-green-900 hover:border-green-400',
 
 				outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
 				ghost: 'hover:border-primary-border border-none',

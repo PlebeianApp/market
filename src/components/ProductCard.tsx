@@ -1,26 +1,34 @@
-import { cartActions } from '@/lib/stores/cart'
-import { ndkActions } from '@/lib/stores/ndk'
-import { uiActions } from '@/lib/stores/ui'
-import { getProductImages, getProductPrice, getProductStock, getProductTitle } from '@/queries/products'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { useState, useEffect } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
-import { Button } from './ui/button'
-import { ZapButton } from './ZapButton'
-import { useEffect, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { ZapButton } from '@/components/ZapButton'
+import { useNDK } from '@/lib/stores/ndk'
+import { useCart } from '@/lib/stores/cart'
+import { useUI } from '@/lib/stores/ui'
+import { getProductTitle, getProductImages, getProductPrice, getProductStock } from '@/queries/products'
+import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { ShoppingCart } from 'lucide-react'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
 
 export function ProductCard({ product }: { product: NDKEvent }) {
+	const ndk = useNDK()
+	const cart = useCart()
+	const ui = useUI()
+	const [parent] = useAutoAnimate()
 	const title = getProductTitle(product)
 	const images = getProductImages(product)
 	const price = getProductPrice(product)
 	const stock = getProductStock(product)
 	const [isOwnProduct, setIsOwnProduct] = useState(false)
 	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(null)
+	const [isAddingToCart, setIsAddingToCart] = useState(false)
+	const [showConfirmation, setShowConfirmation] = useState(false)
 	const location = useLocation()
 
 	// Check if current user is the seller of this product
 	useEffect(() => {
 		const checkIfOwnProduct = async () => {
-			const user = await ndkActions.getUser()
+			const user = await ndk.getUser()
 			if (user?.pubkey) {
 				setCurrentUserPubkey(user.pubkey)
 				setIsOwnProduct(user.pubkey === product.pubkey)
@@ -29,22 +37,36 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 		checkIfOwnProduct()
 	}, [product.pubkey])
 
-	const handleAddToCart = async () => {
-		if (isOwnProduct) return // Don't allow adding own products to cart
+	// Check if product is already in cart
+	const isInCart = cart.isProductInCart(product.id)
+	const cartQuantity = isInCart ? cart.cart.products[product.id]?.amount || 0 : 0
 
-		const userPubkey = await ndkActions.getUser()
-		if (!userPubkey) return
-		cartActions.addProduct(userPubkey.pubkey, product)
+	const handleAddToCart = async () => {
+		if (isOwnProduct) return // Don't allow adding own products
+
+		setIsAddingToCart(true)
+
+		try {
+			const userPubkey = await ndk.getUser()
+			if (!userPubkey) return
+			cart.addProduct(userPubkey.pubkey, product)
+
+			// Show confirmation animation
+			setShowConfirmation(true)
+			setTimeout(() => setShowConfirmation(false), 1500) // Hide after 1.5 seconds
+		} finally {
+			setIsAddingToCart(false)
+		}
 	}
 
 	const handleProductClick = () => {
 		// Store the current path as the source path
 		// This will also store it as originalResultsPath if not already set
-		uiActions.setProductSourcePath(location.pathname)
+		ui.setProductSourcePath(location.pathname)
 	}
 
 	return (
-		<div className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col" data-testid="product-card">
+		<div className="border border-zinc-800 rounded-lg bg-white shadow-md flex flex-col" data-testid="product-card">
 			{/* Square aspect ratio container for image */}
 			<Link
 				to={`/products/${product.id}`}
@@ -95,13 +117,38 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 
 				{/* Add to cart button */}
 				<div className="flex gap-2">
-					<Button
-						className="bg-black text-white py-3 px-4 rounded-lg flex-grow font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
-						onClick={handleAddToCart}
-						disabled={isOwnProduct}
-					>
-						{isOwnProduct ? 'Your Product' : 'Add to Cart'}
-					</Button>
+					<div ref={parent} className="flex-grow transition-all duration-300 ease-in-out">
+						{isInCart ? (
+							<div key="cart-state" className="flex gap-2 w-full">
+								{/* Show current quantity */}
+								<div className="flex items-center justify-center px-2 h-10 bg-pink-100 text-pink-800 border-2 border-pink-300 rounded-lg text-sm font-medium transition-all duration-200 ease-in-out">
+									{cartQuantity}
+								</div>
+								{/* Add more button */}
+								<Button
+									variant="primary"
+									className="py-3 px-4 rounded-lg flex-grow font-medium transition-all duration-200 ease-in-out"
+									onClick={handleAddToCart}
+									disabled={isAddingToCart}
+								>
+									{isAddingToCart ? 'Adding...' : 'Add'}
+								</Button>
+							</div>
+						) : (
+							<div key="add-state" className="w-full">
+								<Button
+									variant={isOwnProduct ? 'own-product' : 'primary'}
+									className={`py-3 px-4 rounded-lg w-full font-medium transition-all duration-300 ${
+										isAddingToCart ? 'opacity-75 scale-95' : ''
+									}`}
+									onClick={handleAddToCart}
+									disabled={isOwnProduct || isAddingToCart}
+								>
+									{isOwnProduct ? 'Your Item' : showConfirmation ? '✓ Added!' : isAddingToCart ? 'Adding...' : 'Add to Cart'}
+								</Button>
+							</div>
+						)}
+					</div>
 					<ZapButton event={product} />
 				</div>
 			</div>

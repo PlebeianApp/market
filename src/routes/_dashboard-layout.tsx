@@ -114,8 +114,8 @@ function LoginPrompt() {
 		<div className="flex items-center justify-center h-full">
 			<div className="flex flex-col items-center space-y-4">
 				<p className="text-lg text-muted-foreground">Please log in to view</p>
-				<Button onClick={handleLoginClick} className="bg-neutral-800 hover:bg-neutral-700 text-white">
-					Login
+				<Button onClick={handleLoginClick} variant="primary">
+					LOGIN
 				</Button>
 			</div>
 		</div>
@@ -129,7 +129,15 @@ function DashboardLayout() {
 	const breakpoint = useBreakpoint()
 	const isMobile = breakpoint === 'sm' || breakpoint === 'md' || breakpoint === 'lg' // Changed: treat anything below xl (1024px) as mobile
 	const [showSidebar, setShowSidebar] = useState(true)
-	const [parent] = useAutoAnimate()
+	// Use auto-animate with error handling to prevent DOM manipulation errors
+	const [parent] = (() => {
+		try {
+			return useAutoAnimate()
+		} catch (error) {
+			console.warn('Auto-animate not available:', error)
+			return [null]
+		}
+	})()
 	const { dashboardTitle } = useStore(uiStore)
 	const { isAuthenticated } = useStore(authStore)
 	const isMessageDetailView =
@@ -224,15 +232,15 @@ function DashboardLayout() {
 	const emoji = getCurrentEmoji(showSidebar, typeof window !== 'undefined' ? window.location.pathname : '')
 
 	return (
-		<div className="lg:flex lg:flex-col lg:h-[calc(100vh-8.5rem)]">
+		<div className="lg:flex lg:flex-col lg:h-[calc(100vh-5rem)]">
 			{/* Header - responsive for mobile/desktop */}
-			<div className="lg:hidden sticky top-[8.5rem] z-10">
+			<div className="lg:hidden sticky top-[9.5rem] lg:top-[5rem] z-10">
 				<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center relative">
 					{/* Mobile back button - only visible on small screens when not showing sidebar */}
 					{!showSidebar && isMobile && (
 						<button
 							onClick={handleBackToSidebar}
-							className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 top-1/2 -translate-y-1/2 w-12 h-12"
+							className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 sm:left-3 md:left-4 top-1/2 -translate-y-1/2 w-12 h-12 z-20"
 							aria-label="Back to sidebar"
 						>
 							<span className="i-back w-6 h-6" />
@@ -240,7 +248,7 @@ function DashboardLayout() {
 					)}
 
 					{/* Title */}
-					<span className="w-full truncate px-14 text-3xl flex items-center justify-center gap-2">
+					<span className="w-full truncate px-8 sm:px-12 md:px-16 text-3xl flex items-center justify-center gap-2 min-w-0">
 						{showSidebar || !isMobile ? (
 							'Dashboard'
 						) : (
@@ -248,17 +256,19 @@ function DashboardLayout() {
 								{isMessageDetailView && chatProfile ? (
 									<>
 										<Avatar className="h-8 w-8 flex-shrink-0">
-											<AvatarImage src={chatProfile.picture} />
+											<AvatarImage src={chatProfile.profile?.picture} />
 											<AvatarFallback>
-												{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
+												{(chatProfile.profile?.name || chatProfile.profile?.displayName || chatPubkey?.slice(0, 1))
+													?.charAt(0)
+													.toUpperCase()}
 											</AvatarFallback>
 										</Avatar>
-										<span className="truncate">{dashboardTitleWithoutEmoji}</span>
+										<span className="truncate min-w-0 flex-1 text-center">{dashboardTitleWithoutEmoji}</span>
 									</>
 								) : (
 									<>
-										{dashboardEmoji && <span className="text-2xl">{dashboardEmoji}</span>}
-										<span className="truncate">{dashboardTitleWithoutEmoji}</span>
+										{dashboardEmoji && <span className="text-2xl flex-shrink-0">{dashboardEmoji}</span>}
+										<span className="truncate min-w-0 flex-1 text-center">{dashboardTitleWithoutEmoji}</span>
 									</>
 								)}
 							</>
@@ -267,7 +277,7 @@ function DashboardLayout() {
 
 					{/* Mobile emoji - only visible on small screens when not showing sidebar */}
 					{!showSidebar && emoji && isMobile && !dashboardEmoji && (
-						<span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xl select-none w-12 h-12 flex items-center justify-center">
+						<span className="absolute right-2 sm:right-3 md:right-4 top-1/2 -translate-y-1/2 text-2xl select-none w-12 h-12 flex items-center justify-center z-20">
 							{emoji}
 						</span>
 					)}
@@ -281,13 +291,13 @@ function DashboardLayout() {
 			</div>
 
 			{/* Main container - responsive layout */}
-			<div className="lg:flex lg:p-6 lg:gap-6 lg:flex-1 lg:overflow-hidden lg:max-w-none lg:min-h-0">
-				<div ref={parent} className="lg:flex lg:w-full lg:gap-6">
+			<div className="lg:flex lg:p-6 lg:gap-6 lg:flex-1 lg:overflow-hidden lg:max-w-none lg:min-h-0 bg-layer-base">
+				<div className="lg:flex lg:w-full lg:gap-6 lg:min-w-0">
 					{/* Sidebar - responsive behavior */}
 					{(showSidebar || !isMobile) && (
-						<aside className="w-full lg:w-80 lg:overflow-y-auto lg:border lg:border-black lg:rounded lg:max-h-full lg:bg-white lg:flex-shrink-0">
-							<div className="lg:space-y-2">
-								{filteredNavigation.map((section) => (
+						<aside className="w-full lg:w-80 lg:overflow-y-auto lg:border lg:border-black lg:rounded lg:max-h-full bg-layer-elevated lg:flex-shrink-0 lg:shadow-md">
+							<div ref={parent} className="lg:space-y-2">
+								{dashboardNavigation.map((section) => (
 									<div key={section.title}>
 										<h3 className="font-heading bg-tertiary-black text-white px-4 py-2 mb-0 lg:mb-2">{section.title}</h3>
 										<nav className="space-y-2 p-4 lg:p-0 text-xl lg:text-base">
@@ -297,7 +307,7 @@ function DashboardLayout() {
 													<Link
 														key={item.path}
 														to={item.path}
-														className="block p-4 lg:px-6 lg:py-2 transition-colors font-bold border border-black bg-white rounded lg:border-0 lg:bg-transparent lg:rounded-none data-[status=active]:bg-gray-200 data-[status=active]:text-black hover:text-pink-500"
+														className="block p-4 lg:px-6 lg:py-2 transition-colors font-bold border border-black fg-layer-elevated rounded lg:border-0 lg:bg-transparent lg:rounded-none data-[status=active]:bg-secondary data-[status=active]:text-white data-[status=active]:border-secondary hover:text-pink-500"
 														onClick={handleSidebarItemClick}
 														data-status={isActive ? 'active' : 'inactive'}
 													>
@@ -315,13 +325,13 @@ function DashboardLayout() {
 					{/* Main content - responsive behavior */}
 					{(!showSidebar || !isMobile) && (
 						<div
-							className={`w-full lg:flex-1 lg:max-w-4xl lg:border lg:border-black lg:rounded lg:bg-white flex flex-col lg:max-h-full lg:overflow-hidden ${
-								isMessageDetailView && isMobile ? 'h-[calc(100vh-8.5rem)]' : ''
+							className={`w-full lg:flex-1 lg:max-w-4xl border border-black lg:rounded bg-layer-elevated flex flex-col lg:max-h-full lg:overflow-hidden lg:shadow-md ${
+								isMessageDetailView && isMobile ? 'h-[calc(100vh-5rem)]' : ''
 							}`}
 						>
 							{/* Desktop back button and title - fixed to top of container */}
 							{needsBackButton && (
-								<div className="sticky top-0 z-10 bg-white border-b border-gray-200 pb-4 mb-0 p-4 lg:p-8 flex-shrink-0 flex items-center relative">
+								<div className="sticky top-0 z-10 fg-layer-elevated border-b border-layer-subtle pb-4 mb-0 p-4 lg:p-8 flex-shrink-0 flex items-center justify-between relative">
 									<button
 										onClick={handleBackToParent}
 										className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
@@ -331,18 +341,18 @@ function DashboardLayout() {
 										<span className="text-sm font-medium">Back to {backButtonInfo?.parentTitle}</span>
 									</button>
 
-									{!isMobile && (
-										<h1 className="absolute left-1/2 -translate-x-1/2 text-[1.6rem] font-bold flex items-center gap-2">
-											{isMessageDetailView && chatProfile && (
-												<Avatar className="h-8 w-8">
-													<AvatarImage src={chatProfile.picture} />
-													<AvatarFallback>
-														{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
-													</AvatarFallback>
-												</Avatar>
-											)}
-											{dashboardTitle}
-										</h1>
+									{!isMobile && isMessageDetailView && chatProfile && (
+										<div className="flex items-center gap-2 min-w-0">
+											<Avatar className="h-6 w-6 flex-shrink-0">
+												<AvatarImage src={chatProfile.profile?.picture} />
+												<AvatarFallback>
+													{(chatProfile.profile?.name || chatProfile.profile?.displayName || chatPubkey?.slice(0, 1))
+														?.charAt(0)
+														.toUpperCase()}
+												</AvatarFallback>
+											</Avatar>
+											<span className="text-sm font-medium truncate min-w-0">{dashboardTitleWithoutEmoji}</span>
+										</div>
 									)}
 								</div>
 							)}
@@ -354,7 +364,7 @@ function DashboardLayout() {
 									<div className="h-full">
 										<div
 											className={cn(
-												'p-4 bg-white lg:p-8 lg:bg-transparent h-full',
+												'p-4 bg-layer-elevated lg:pt-8 lg:px-8 lg:pb-6 lg:bg-transparent h-full',
 												location.pathname === '/dashboard/sales/sales' && 'p-0 lg:p-0',
 												location.pathname.startsWith('/dashboard/sales/messages') && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/sales/circular-economy' && 'p-0 lg:p-0',
@@ -425,6 +435,15 @@ function DashboardLayout() {
 										<Outlet />
 									</div>
 								)}
+							</div>
+						</div>
+					)}
+
+					{/* Placeholder Container - responsive on desktop */}
+					{!isMobile && (
+						<div className="hidden min-[1470px]:block lg:min-w-0 lg:flex-1 lg:max-w-32 xl:max-w-48 2xl:max-w-64 lg:border lg:border-black lg:rounded bg-layer-elevated lg:max-h-full lg:overflow-hidden lg:shadow-md">
+							<div className="p-4 lg:px-6 lg:py-4 flex items-center justify-center h-full">
+								<span className="text-3xl">₿</span>
 							</div>
 						</div>
 					)}

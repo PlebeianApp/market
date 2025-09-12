@@ -125,7 +125,7 @@ export function Header() {
 
 	return (
 		<header
-			className={`sticky top-0 z-50 text-white px-4 ${isCommunityOrNostrPage ? 'bg-black' : getHeaderBackground()}`}
+			className={`sticky top-0 z-[60] text-white px-4 ${isCommunityOrNostrPage ? 'bg-black' : getHeaderBackground()}`}
 			style={isCommunityOrNostrPage ? {} : (getHeaderStyle() as React.CSSProperties)}
 		>
 			<div className="container flex h-full max-w-full items-center justify-between py-4">
@@ -253,7 +253,7 @@ export function Header() {
 					</div>
 				</div>
 			</div>
-			<div className="lg:hidden flex-1 pb-4">
+			<div className="lg:hidden flex-1 py-4">
 				<ProductSearch />
 			</div>
 

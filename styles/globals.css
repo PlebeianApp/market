@@ -154,6 +154,27 @@ button {
 	--neo-blue: #18b9fe;
 	--neo-gray: #f8f8f8;
 
+	/* Layered White System - Modern Interface Depth */
+	/* Base layer - Main page background */
+	--bg-base: #ffffff;
+	--fg-base: #fafafa;
+
+	/* Elevated layer - Cards, panels, containers on base */
+	--bg-elevated: #fafafa;
+	--fg-elevated: #f5f5f5;
+
+	/* Overlay layer - Dropdowns, tooltips, dialogs on elevated */
+	--bg-overlay: #f5f5f5;
+	--fg-overlay: #f0f0f0;
+
+	/* Modal layer - Highest level modals, sheets */
+	--bg-modal: #f0f0f0;
+	--fg-modal: #ebebeb;
+
+	/* Interactive layer - Hover states, active elements */
+	--bg-interactive: #ebebeb;
+	--fg-interactive: #e5e5e5;
+
 	/* Custom radius values */
 	--radius-sm: 2rem;
 	--radius-md: 4px;
@@ -310,20 +331,14 @@ button {
 		background-size: cover;
 		background-position: center;
 		background-repeat: no-repeat;
+		background-attachment: scroll;
 	}
 
 	.hero-container {
-		margin-top: -8.5rem;
-		padding-top: 8rem;
-		min-height: calc(400px + 8rem);
-	}
-
-	@media (min-width: 1024px) {
-		.hero-container {
-			margin-top: -6rem;
-			padding-top: 6rem;
-			min-height: calc(400px + 6rem);
-		}
+		margin-top: -100vh;
+		padding-top: 100vh;
+		min-height: 100vh;
+		position: relative;
 	}
 
 	.back-button {
@@ -352,11 +367,12 @@ button {
 		position: absolute;
 		inset: 0;
 		pointer-events: none;
+		z-index: 10;
 	}
 
 	.hero-content {
 		position: relative;
-		z-index: 10;
+		z-index: 50; /* ensure content is always above overlays and background on mobile */
 		container-type: inline-size;
 		max-width: 80rem;
 		margin: 0 auto;
@@ -383,5 +399,119 @@ button {
 			height: 45vh;
 			margin-top: 2rem;
 		}
+	}
+
+	/* Button hover utilities */
+	.hover-transparent {
+		transition: background-color 0.2s ease-out;
+	}
+
+	.hover-transparent:hover {
+		background-color: transparent !important;
+	}
+
+	.hover-transparent-black {
+		transition: background-color 0.2s ease-out;
+	}
+
+	.hover-transparent-black:hover {
+		background-color: rgba(0, 0, 0, 0.1) !important;
+	}
+
+	.hover-transparent-white {
+		transition: background-color 0.2s ease-out;
+	}
+
+	.hover-transparent-white:hover {
+		background-color: rgba(255, 255, 255, 0.1) !important;
+	}
+
+	/* Product banner button utility */
+	.btn-product-banner {
+		background-color: var(--secondary);
+		color: var(--secondary-foreground);
+		border: 2px solid var(--secondary-border);
+		transition: all 0.2s ease-out;
+	}
+
+	.btn-product-banner:hover {
+		background-color: transparent;
+		color: var(--secondary-foreground-hover);
+		border-color: var(--secondary-border-hover);
+	}
+
+	/* Black button utility */
+	.btn-black {
+		background-color: black;
+		color: white;
+		border: 2px solid black;
+		transition: all 0.2s ease-out;
+	}
+
+	.btn-black:hover {
+		background-color: transparent;
+		color: black;
+		border-color: black;
+	}
+
+	/* Layered White System Utilities */
+
+	/* Background Layer Classes */
+	.bg-layer-base {
+		background-color: var(--bg-base);
+	}
+	.bg-layer-elevated {
+		background-color: var(--bg-elevated);
+	}
+	.bg-layer-overlay {
+		background-color: var(--bg-overlay);
+	}
+	.bg-layer-modal {
+		background-color: var(--bg-modal);
+	}
+	.bg-layer-interactive {
+		background-color: var(--bg-interactive);
+	}
+
+	/* Foreground Layer Classes (for elements on top of backgrounds) */
+	.fg-layer-base {
+		background-color: var(--fg-base);
+	}
+	.fg-layer-elevated {
+		background-color: var(--fg-elevated);
+	}
+	.fg-layer-overlay {
+		background-color: var(--fg-overlay);
+	}
+	.fg-layer-modal {
+		background-color: var(--fg-modal);
+	}
+	.fg-layer-interactive {
+		background-color: var(--fg-interactive);
+	}
+
+	/* Hover States for Interactive Layering */
+	.bg-layer-base:hover {
+		background-color: var(--fg-base);
+		transition: background-color 0.2s ease;
+	}
+	.bg-layer-elevated:hover {
+		background-color: var(--fg-elevated);
+		transition: background-color 0.2s ease;
+	}
+	.bg-layer-overlay:hover {
+		background-color: var(--fg-overlay);
+		transition: background-color 0.2s ease;
+	}
+
+	/* Border utilities for layered interfaces */
+	.border-layer-subtle {
+		border-color: var(--fg-elevated);
+	}
+	.border-layer-medium {
+		border-color: var(--fg-overlay);
+	}
+	.border-layer-strong {
+		border-color: var(--fg-interactive);
 	}
 }

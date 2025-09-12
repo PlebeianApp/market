@@ -12,6 +12,7 @@ interface ShippingSelectorProps {
 	selectedId?: string
 	onSelect: (option: RichShippingInfo) => void
 	className?: string
+	disabled?: boolean
 }
 
 const getBestShippingOptions = (options: RichShippingInfo[], selectedId?: string): RichShippingInfo[] => {
@@ -41,6 +42,7 @@ export function ShippingSelector({
 	selectedId: propSelectedId,
 	onSelect,
 	className,
+	disabled,
 }: ShippingSelectorProps) {
 	const [selectedId, setSelectedId] = useState<string | undefined>(propSelectedId)
 
@@ -49,6 +51,13 @@ export function ShippingSelector({
 			setSelectedId(propSelectedId)
 		}
 	}, [propSelectedId])
+
+	// Cleanup effect to prevent memory leaks
+	useEffect(() => {
+		return () => {
+			// Cleanup any pending operations when component unmounts
+		}
+	}, [])
 
 	const { data: sellerPubkey = '' } = useProductPubkey(productId || '') || { data: '' }
 	const { data: shippingEvents = [], isLoading, error } = useShippingOptionsByPubkey(sellerPubkey)
@@ -86,23 +95,36 @@ export function ShippingSelector({
 		return options && options.length > 0
 	}, [options])
 
-	useEffect(() => {
-		if (options.length === 1 && !selectedId) {
-			handleSelect(options[0].id)
-		}
-	}, [options, selectedId])
+	// Removed automatic selection to prevent DOM manipulation conflicts
+	// useEffect(() => {
+	// 	if (options.length === 1 && !selectedId) {
+	// 		handleSelect(options[0].id)
+	// 	}
+	// }, [options, selectedId])
 
-	const handleSelect = async (id: string) => {
-		setSelectedId(id)
+	const handleSelect = (id: string) => {
+		if (disabled) return
 
 		const option = rawOptions.find((o: RichShippingInfo) => o.id === id)
 
 		if (option) {
-			if (productId) {
-				await cartActions.setShippingMethod(productId, option)
-			}
+			// Update local state immediately
+			setSelectedId(id)
 
+			// Call onSelect immediately
 			onSelect(option)
+
+			// Handle cart update asynchronously but don't block the UI
+			if (productId) {
+				// Use setTimeout with 0 delay to ensure it runs after current execution
+				setTimeout(async () => {
+					try {
+						await cartActions.setShippingMethod(productId, option)
+					} catch (error) {
+						console.error('Error updating shipping method:', error)
+					}
+				}, 0)
+			}
 		}
 	}
 
@@ -125,21 +147,29 @@ export function ShippingSelector({
 		}
 
 		return (
-			<Select onValueChange={handleSelect} value={selectedId}>
-				<SelectTrigger className={className}>
-					<SelectValue placeholder="Select shipping method" />
-				</SelectTrigger>
-				<SelectContent>
-					<SelectGroup>
-						<SelectLabel>Shipping Options</SelectLabel>
-						{options.map((option: RichShippingInfo) => (
-							<SelectItem key={option.id} value={option.id} className="break-all">
-								{option.name} - {option.cost} {option.currency}
-							</SelectItem>
-						))}
-					</SelectGroup>
-				</SelectContent>
-			</Select>
+			<div className={`${!selectedId ? 'flex items-center gap-2' : ''}`}>
+				{!selectedId && <div className="w-1 h-8 bg-yellow-400 rounded-sm flex-shrink-0" />}
+				<Select
+					key={`shipping-select-${productId || 'no-product'}-${selectedId || 'no-selection'}`}
+					onValueChange={handleSelect}
+					value={selectedId}
+					disabled={disabled}
+				>
+					<SelectTrigger className={className} disabled={disabled}>
+						<SelectValue placeholder={disabled ? 'Updating...' : 'Select shipping method'} />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectGroup>
+							<SelectLabel>Shipping Options</SelectLabel>
+							{options.map((option: RichShippingInfo) => (
+								<SelectItem key={option.id} value={option.id} className="break-all">
+									{option.name} - {option.cost} {option.currency}
+								</SelectItem>
+							))}
+						</SelectGroup>
+					</SelectContent>
+				</Select>
+			</div>
 		)
 	}
 

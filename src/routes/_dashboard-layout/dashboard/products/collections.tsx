@@ -11,6 +11,7 @@ import { useState } from 'react'
 import { ChevronDown, PlusIcon, StoreIcon, Trash } from 'lucide-react'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
 
 // Component to show basic collection information
 function CollectionBasicInfo({ collection }: { collection: any }) {
@@ -100,7 +101,7 @@ function CollectionListItem({
 			triggerContent={triggerContent}
 			actions={actions}
 			isDeleting={isDeleting}
-			icon={<StoreIcon className="h-6 w-6 text-muted-foreground" />}
+			icon={<StoreIcon className="h-5 w-5 text-black" />}
 		>
 			<CollectionBasicInfo collection={collection} />
 		</DashboardListItem>
@@ -117,6 +118,16 @@ function CollectionsComponent() {
 	const matchRoute = useMatchRoute()
 	const [expandedCollection, setExpandedCollection] = useState<string | null>(null)
 	useDashboardTitle('Collections')
+
+	// Auto-animate for smooth list transitions
+	const [animationParent] = (() => {
+		try {
+			return useAutoAnimate()
+		} catch (error) {
+			console.warn('Auto-animate not available:', error)
+			return [null]
+		}
+	})()
 
 	// Check if we're on a child route (editing or creating a collection)
 	const isOnChildRoute =
@@ -178,23 +189,23 @@ function CollectionsComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<div className="hidden lg:flex sticky top-0 z-10 fg-layer-elevated border-b border-layer-subtle py-4 px-4 lg:px-6 items-center justify-between">
 				<h1 className="text-2xl font-bold">Collections</h1>
 				<Button
 					onClick={handleAddCollectionClick}
 					data-testid="add-collection-button"
-					className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+					className="btn-black flex items-center gap-2 px-4 py-2 text-sm font-semibold"
 				>
 					<span className="i-market w-5 h-5" />
 					Create A Collection
 				</Button>
 			</div>
-			<div className="space-y-6 p-4 lg:p-6">
+			<div className="space-y-6 p-4 lg:p-6 bg-layer-base">
 				<div className="lg:hidden">
 					<Button
 						onClick={handleAddCollectionClick}
 						data-testid="add-collection-button-mobile"
-						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+						className="w-full btn-black flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
 					>
 						<span className="i-market w-5 h-5" />
 						Create A Collection
@@ -208,7 +219,7 @@ function CollectionsComponent() {
 					{!isLoading && !error && (
 						<>
 							{collections && collections.length > 0 ? (
-								<ul className="flex flex-col gap-4 mt-4">
+								<ul ref={animationParent} className="flex flex-col gap-4">
 									{collections.map((collection) => {
 										const collectionId = getCollectionId(collection)
 										return (

@@ -59,7 +59,7 @@ function Index() {
 							<h1 className="text-4xl lg:text-5xl font-theylive transition-opacity duration-500">Buy & Sell Stuff with sats</h1>
 						</div>
 
-						<div className="flex flex-col gap-6">
+						<div className="flex flex-col gap-6 mt-6 lg:mt-0">
 							<Button variant="focus" size="lg" onClick={handleStartSelling}>
 								<span className="flex items-center gap-2">
 									<span className="i-nostr w-6 h-6"></span>Start Selling

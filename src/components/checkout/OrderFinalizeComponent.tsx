@@ -96,9 +96,9 @@ export function OrderFinalizeComponent({
 	const isPostPayment = invoices.length > 0 && invoices.some((invoice) => invoice.status !== 'pending')
 
 	return (
-		<div className="h-full">
-			{/* Order Summary - Full Width */}
-			<Card className="h-full">
+		<div className="h-full flex flex-col">
+			<div className="flex-1 overflow-y-auto space-y-6 pr-2 pb-4">
+				{/* Order Summary - Full Width */}
 				<CardHeader>
 					<div className="flex items-center gap-3">
 						<div className={`p-2 rounded-lg ${isPostPayment ? 'bg-green-100' : 'bg-blue-100'}`}>
@@ -116,7 +116,8 @@ export function OrderFinalizeComponent({
 						</div>
 					</div>
 				</CardHeader>
-				<CardContent className="space-y-6">
+
+				<div className="space-y-6">
 					{/* Payment Status - only show if invoices exist */}
 					{isPostPayment && (
 						<div className="space-y-3">
@@ -274,40 +275,42 @@ export function OrderFinalizeComponent({
 							</ul>
 						</div>
 					)}
+				</div>
+			</div>
 
-					{/* Action Buttons */}
-					<div className="space-y-3 pt-4">
-						{!isPostPayment && onContinueToPayment && (
-							<Button onClick={onContinueToPayment} className="w-full bg-black text-white hover:bg-gray-800">
-								Continue to Payment
-							</Button>
-						)}
+			{/* Fixed Action Buttons Footer */}
+			<div className="flex-shrink-0 bg-white border-t pt-4">
+				<div className="space-y-3">
+					{!isPostPayment && onContinueToPayment && (
+						<Button onClick={onContinueToPayment} className="w-full btn-black">
+							Continue to Payment
+						</Button>
+					)}
 
-						{isPostPayment && (
-							<>
-								{allInvoicesPaid && onViewOrders && (
-									<Button onClick={onViewOrders} className="w-full bg-black text-white hover:bg-gray-800">
-										View Your Purchases
-									</Button>
-								)}
-
-								<Button
-									onClick={onNewOrder}
-									className={`w-full ${allInvoicesPaid && onViewOrders ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-black text-white hover:bg-gray-800'}`}
-								>
-									{allInvoicesPaid ? 'Continue Shopping' : 'Back to Store'}
+					{isPostPayment && (
+						<>
+							{allInvoicesPaid && onViewOrders && (
+								<Button onClick={onViewOrders} className="w-full btn-black">
+									View Your Purchases
 								</Button>
+							)}
 
-								{allInvoicesPaid && (
-									<Button variant="outline" className="w-full" onClick={() => window.print()}>
-										Print Order Summary
-									</Button>
-								)}
-							</>
-						)}
-					</div>
-				</CardContent>
-			</Card>
+							<Button
+								onClick={onNewOrder}
+								className={`w-full ${allInvoicesPaid && onViewOrders ? 'bg-gray-800 text-white hover-transparent-black' : 'btn-black'}`}
+							>
+								{allInvoicesPaid ? 'Continue Shopping' : 'Back to Store'}
+							</Button>
+
+							{allInvoicesPaid && (
+								<Button variant="outline" className="w-full" onClick={() => window.print()}>
+									Print Order Summary
+								</Button>
+							)}
+						</>
+					)}
+				</div>
+			</div>
 		</div>
 	)
 }

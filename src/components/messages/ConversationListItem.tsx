@@ -35,10 +35,10 @@ export function ConversationListItem({ conversation }: ConversationListItemProps
 			}}
 		>
 			<Card className="p-4 hover:bg-muted/50 transition-colors">
-				<div className="flex items-start gap-4">
+				<div className="flex items-center gap-4">
 					{/* Icon */}
-					<div className="p-2 bg-muted rounded-full">
-						<MessageSquareText className="h-6 w-6 text-muted-foreground" />
+					<div className="flex items-center justify-center w-10 h-10 border-2 border-black bg-transparent rounded-full shadow-md">
+						<MessageSquareText className="h-5 w-5 text-black" />
 					</div>
 
 					{/* Content Block */}

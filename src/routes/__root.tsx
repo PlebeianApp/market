@@ -28,6 +28,7 @@ function RootLayout() {
 	const isSetupPage = location.pathname === '/setup'
 	const isDashboardPage = location.pathname.startsWith('/dashboard')
 	const isProfilePage = location.pathname.startsWith('/profile/')
+	const isCheckoutPage = location.pathname === '/checkout'
 
 	useEffect(() => {
 		if (isLoading || isError) return
@@ -65,7 +66,7 @@ function RootLayout() {
 				<Outlet />
 			</main>
 			<Pattern pattern="page" />
-			{!isDashboardPage && <Footer />}
+			{!isDashboardPage && !isCheckoutPage && <Footer />}
 			{/* Having some build error with this rn */}
 			{/* <TanStackRouterDevtools /> */}
 			<DecryptPasswordDialog />

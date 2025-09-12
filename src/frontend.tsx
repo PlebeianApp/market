@@ -17,6 +17,8 @@ function createAppRouter(queryClient: QueryClient) {
 		} as AppRouterContext,
 		defaultPreload: 'intent',
 		defaultPreloadStaleTime: 0,
+		// Disable scroll restoration to prevent saving scroll positions
+		scrollRestoration: 'manual',
 	})
 }
 

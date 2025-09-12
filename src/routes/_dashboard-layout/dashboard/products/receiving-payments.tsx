@@ -46,6 +46,7 @@ import {
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
 
 interface ScopeSelectorProps {
 	value: PaymentScope
@@ -146,7 +147,7 @@ function PaymentDetailConfirmationCard({ value, type, onConfirm, onCancel }: Pay
 	const numAddresses = 5
 
 	return (
-		<Card className="border-yellow-200 bg-yellow-50">
+		<Card className="border-yellow-200 bg-yellow-50 fg-layer-overlay">
 			<CardHeader>
 				<CardTitle className="text-yellow-800">Confirm Payment Details</CardTitle>
 				<CardDescription>
@@ -156,7 +157,7 @@ function PaymentDetailConfirmationCard({ value, type, onConfirm, onCancel }: Pay
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="space-y-4">
-				<div className="p-3 bg-white rounded border">
+				<div className="p-3 fg-layer-elevated rounded border border-layer-subtle">
 					<p className="text-sm font-mono break-all">{value}</p>
 				</div>
 
@@ -441,9 +442,9 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 	const PaymentMethodIcon = ({ method }: { method: PaymentDetailsMethod }) => {
 		switch (method) {
 			case PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK:
-				return <ZapIcon className="w-5 h-5" />
+				return <ZapIcon className="w-5 h-5 text-black" />
 			case PAYMENT_DETAILS_METHOD.ON_CHAIN:
-				return <AnchorIcon className="w-5 h-5" />
+				return <AnchorIcon className="w-5 h-5 text-black" />
 			default:
 				return null
 		}
@@ -691,11 +692,11 @@ function PaymentDetailListItem({ paymentDetail, isOpen, onOpenChange, isDeleting
 	const PaymentMethodIcon = ({ method }: { method: PaymentDetailsMethod }) => {
 		switch (method) {
 			case PAYMENT_DETAILS_METHOD.ON_CHAIN:
-				return <AnchorIcon className="w-5 h-5 text-muted-foreground" />
+				return <AnchorIcon className="w-5 h-5 text-black" />
 			case PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK:
-				return <ZapIcon className="w-5 h-5 text-muted-foreground" />
+				return <ZapIcon className="w-5 h-5 text-black" />
 			default:
-				return <GlobeIcon className="w-5 h-5 text-muted-foreground" />
+				return <GlobeIcon className="w-5 h-5 text-black" />
 		}
 	}
 
@@ -745,6 +746,16 @@ function ReceivingPaymentsComponent() {
 	const [paymentMethodFilter, setPaymentMethodFilter] = useState<PaymentDetailsMethod | 'all'>('all')
 	useDashboardTitle('Receiving Payments')
 
+	// Auto-animate for smooth list transitions
+	const [animationParent] = (() => {
+		try {
+			return useAutoAnimate()
+		} catch (error) {
+			console.warn('Auto-animate not available:', error)
+			return [null]
+		}
+	})()
+
 	useEffect(() => {
 		getUser().then(setUser)
 	}, [getUser])
@@ -773,21 +784,18 @@ function ReceivingPaymentsComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<div className="hidden lg:flex sticky top-0 z-10 fg-layer-elevated border-b border-black py-4 px-4 lg:px-6 items-center justify-between">
 				<h1 className="text-2xl font-bold">Receiving Payments</h1>
-				<Button
-					onClick={() => handleOpenChange('new', true)}
-					className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
-				>
+				<Button onClick={() => handleOpenChange('new', true)} className="btn-black flex items-center gap-2 px-4 py-2 text-sm font-semibold">
 					<PlusIcon className="w-5 h-5" />
 					Add Payment Method
 				</Button>
 			</div>
-			<div className="space-y-4 p-4 lg:p-6">
+			<div className="space-y-4 p-4 lg:p-6 bg-layer-base">
 				<div className="lg:hidden">
 					<Button
 						onClick={() => handleOpenChange('new', true)}
-						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+						className="w-full btn-black flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
 					>
 						<PlusIcon className="w-5 h-5" />
 						Add Payment Method
@@ -796,7 +804,7 @@ function ReceivingPaymentsComponent() {
 
 				{/* Payment form - shows at top when opened */}
 				{openPaymentDetailId === 'new' && (
-					<Card className="mt-4">
+					<Card className="mt-4 fg-layer-elevated border-layer-subtle">
 						<CardHeader>
 							<CardTitle>Add New Payment Detail</CardTitle>
 							<CardDescription>Configure a new way to receive payments</CardDescription>
@@ -812,7 +820,7 @@ function ReceivingPaymentsComponent() {
 					</Card>
 				)}
 
-				<div className="space-y-4">
+				<div ref={animationParent} className="space-y-4">
 					{paymentDetails?.map((pd) => (
 						<PaymentDetailListItem
 							key={pd.id}
