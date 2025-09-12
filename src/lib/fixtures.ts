@@ -1,7 +1,7 @@
 // npub1s65ze2cck2fl20964t5vmjlw8alvgflal8uujv7mw7qqhd008zsqd2nnah
 export const devUser1 = {
 	pk: '86a82cab18b293f53cbaaae8cdcbee3f7ec427fdf9f9c933db77800bb5ef38a0',
-	sk: '5c81bffa8303bbd7726d6a5a1170f3ee46de2addabefd6a735845166af01f5c0',
+	sk: 'n',
 }
 
 // npub1m9p7jmtzd9dnrz5uqev280fl4740gsdqd8vtl5zde8lnn35uc7pqkxtwzu

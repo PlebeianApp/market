@@ -633,7 +633,7 @@ function RouteComponent() {
 							)}
 						</div>
 					</CardHeader>
-					<CardContent className="p-6 flex-1 lg:overflow-y-auto">
+					<CardContent className="p-6 pt-0 flex-1 lg:overflow-y-auto">
 						<div ref={animationParent} className="lg:h-full lg:min-h-full">
 							{currentStep === 'shipping' && (
 								<div className="h-full">
