@@ -7,6 +7,7 @@ import { Link, useLocation } from '@tanstack/react-router'
 import { Button } from './ui/button'
 import { ZapButton } from './ZapButton'
 import { useEffect, useState } from 'react'
+import { Check } from 'lucide-react'
 
 export function ProductCard({ product }: { product: NDKEvent }) {
 	const title = getProductTitle(product)
@@ -122,7 +123,15 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 									onClick={handleAddToCart}
 									disabled={isAddingToCart}
 								>
-									{isAddingToCart ? 'Adding...' : 'Add'}
+									{isAddingToCart ? (
+										'Adding...'
+									) : showConfirmation ? (
+										<>
+											<Check className="w-4 h-4 mr-2" /> Added
+										</>
+									) : (
+										'Add'
+									)}
 								</Button>
 							</div>
 						) : (
@@ -133,7 +142,17 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 								onClick={handleAddToCart}
 								disabled={isOwnProduct || isAddingToCart}
 							>
-								{isOwnProduct ? 'Your Product' : showConfirmation ? '✓ Added!' : isAddingToCart ? 'Adding...' : 'Add to Cart'}
+								{isOwnProduct ? (
+									'Your Product'
+								) : showConfirmation ? (
+									<>
+										<Check className="w-4 h-4 mr-2" /> Added!
+									</>
+								) : isAddingToCart ? (
+									'Adding...'
+								) : (
+									'Add to Cart'
+								)}
 							</Button>
 						)}
 					</div>
