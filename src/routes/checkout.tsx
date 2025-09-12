@@ -731,6 +731,23 @@ function RouteComponent() {
 								/>
 							)}
 						</div>
+						{/* Fixed Footer Actions for Shipping and Summary */}
+						{(currentStep === 'shipping' || currentStep === 'summary') && (
+							<div className="flex-shrink-0 bg-white border-t px-6 py-4">
+								{currentStep === 'shipping' ? (
+									<form.Subscribe
+										selector={(state: any) => [state.canSubmit, state.isSubmitting]}
+										children={([canSubmit, isSubmitting]: [boolean, boolean]) => (
+											<Button form="shipping-form" type="submit" className="w-full btn-black" disabled={!canSubmit || !hasAllShippingMethods || isSubmitting}>
+												{isSubmitting ? 'Processing...' : 'Continue to Payment'}
+											</Button>
+										)}
+									/>
+								) : (
+									<Button onClick={handleContinueToPayment} className="w-full btn-black">Continue to Payment</Button>
+								)}
+							</div>
+						)}
 					</CardContent>
 				</Card>
 

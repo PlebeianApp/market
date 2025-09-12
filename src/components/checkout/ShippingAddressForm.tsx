@@ -91,6 +91,7 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 	}, [cart.products])
 	return (
 		<form
+			id="shipping-form"
 			onSubmit={(e) => {
 				e.preventDefault()
 				e.stopPropagation()
@@ -366,15 +367,7 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 				</div>
 			)}
 
-			{/* Submit Button */}
-			<form.Subscribe
-				selector={(state: any) => [state.canSubmit, state.isSubmitting]}
-				children={([canSubmit, isSubmitting]: [boolean, boolean]) => (
-					<Button type="submit" className="w-full btn-black" disabled={!canSubmit || !hasAllShippingMethods || isSubmitting}>
-						{isSubmitting ? 'Processing...' : 'Continue to Payment'}
-					</Button>
-				)}
-			/>
+			{/* Submit button moved to parent fixed footer */}
 		</form>
 	)
 }
