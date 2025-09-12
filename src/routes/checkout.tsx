@@ -543,7 +543,7 @@ function RouteComponent() {
 								className="flex items-center justify-between cursor-pointer"
 								onClick={() => setMobileOrderSummaryOpen(!mobileOrderSummaryOpen)}
 							>
-								<span>{currentStep === 'payment' ? 'Invoices' : 'Order Summary'}</span>
+								<span>{currentStep === 'payment' ? 'Invoices' : 'Cart Summary'}</span>
 								<ChevronRight className={`w-5 h-5 transition-transform ${mobileOrderSummaryOpen ? 'rotate-90' : ''}`} />
 							</CardTitle>
 						</CardHeader>
@@ -607,7 +607,7 @@ function RouteComponent() {
 					<CardHeader>
 						<div className="flex items-center justify-between">
 						<CardTitle>
-							{currentStep === 'shipping' ? 'Shipping Address' : currentStep === 'payment' ? 'Payment Details' : 'Cart Summary'}
+							{currentStep === 'shipping' ? 'Shipping Address' : currentStep === 'payment' ? 'Payment Details' : 'Order Summary'}
 						</CardTitle>
 							{currentStep === 'payment' && invoices.length > 1 && (
 								<div className="hidden lg:flex items-center gap-2">
@@ -746,7 +746,7 @@ function RouteComponent() {
 				{/* Right Sidebar */}
 				<Card className="hidden lg:flex flex-1 lg:w-1/2 flex-col h-full shadow-md lg:order-1">
 					<CardHeader>
-						<CardTitle>{currentStep === 'payment' ? 'Invoices' : 'Order Summary'}</CardTitle>
+						<CardTitle>{currentStep === 'payment' ? 'Invoices' : 'Cart Summary'}</CardTitle>
 					</CardHeader>
 					<CardContent className="flex-1 overflow-y-auto">
 						{currentStep === 'payment' && isGeneratingInvoices ? (
