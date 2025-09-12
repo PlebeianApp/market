@@ -93,7 +93,7 @@ export function OrderFinalizeComponent({
 	const isPostPayment = invoices.length > 0 && invoices.some((invoice) => invoice.status !== 'pending')
 
 	return (
-		<div className="space-y-6 p-6">
+		<div className="space-y-6">
 					{/* Payment Status - only show if invoices exist */}
 					{isPostPayment && (
 						<div className="space-y-3">
