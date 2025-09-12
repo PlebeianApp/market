@@ -746,7 +746,7 @@ function RouteComponent() {
 				{/* Right Sidebar */}
 				<Card className="hidden lg:flex flex-1 lg:w-1/2 flex-col h-full shadow-md lg:order-1">
 					<CardHeader>
-						<CardTitle>{currentStep === 'payment' ? 'Invoices' : 'Cart Summary'}</CardTitle>
+						<CardTitle>{currentStep === 'payment' ? 'Invoices' : 'Order Summary'}</CardTitle>
 					</CardHeader>
 					<CardContent className="flex-1 overflow-y-auto">
 						{currentStep === 'payment' && isGeneratingInvoices ? (
