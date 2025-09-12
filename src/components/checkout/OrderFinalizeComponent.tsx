@@ -1,5 +1,4 @@
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Check, Receipt, MapPin } from 'lucide-react'
 import type { CheckoutFormData } from './ShippingAddressForm'
 import type { LightningInvoiceData } from '@/queries/payment'
@@ -94,27 +93,7 @@ export function OrderFinalizeComponent({
 	const isPostPayment = invoices.length > 0 && invoices.some((invoice) => invoice.status !== 'pending')
 
 	return (
-		<div className="h-full">
-			{/* Order Summary - Full Width */}
-			<Card className="h-full">
-				<CardHeader>
-					<div className="flex items-center gap-3">
-						<div className={`p-2 rounded-lg ${isPostPayment ? 'bg-green-100' : 'bg-blue-100'}`}>
-							<Receipt className={`h-5 w-5 ${isPostPayment ? 'text-green-600' : 'text-blue-600'}`} />
-						</div>
-						<div>
-							<CardTitle>{isPostPayment ? 'Order Complete!' : 'Order Summary'}</CardTitle>
-							<p className="text-sm text-gray-600">
-								{isPostPayment
-									? allInvoicesPaid
-										? 'Order completed successfully!'
-										: 'Processing your order...'
-									: 'Review your order details'}
-							</p>
-						</div>
-					</div>
-				</CardHeader>
-				<CardContent className="space-y-6">
+		<div className="space-y-6 p-6">
 					{/* Payment Status - only show if invoices exist */}
 					{isPostPayment && (
 						<div className="space-y-3">
@@ -293,8 +272,6 @@ export function OrderFinalizeComponent({
 							)}
 						</div>
 					)}
-				</CardContent>
-			</Card>
 		</div>
 	)
 }
