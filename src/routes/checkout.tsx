@@ -794,6 +794,7 @@ function RouteComponent() {
 						) : (
 							<ScrollArea className="h-full">
 								<CartSummary
+									className="pb-6"
 									allowQuantityChanges={currentStep === 'shipping'}
 									allowShippingChanges={currentStep === 'shipping'}
 									showExpandedDetails={false}
