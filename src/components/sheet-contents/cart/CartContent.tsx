@@ -7,12 +7,12 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import type { RichShippingInfo } from '@/lib/stores/cart'
 import { cartActions, cartStore } from '@/lib/stores/cart'
 import { uiActions } from '@/lib/stores/ui'
-import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useStore } from '@tanstack/react-store'
 import { useNavigate } from '@tanstack/react-router'
 import { ChevronDown } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { EmptyCartScreen } from './EmptyCartScreen'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
 
 export function CartContent({ className = '' }: { className?: string }) {
 	const {
@@ -52,6 +52,10 @@ export function CartContent({ className = '' }: { className?: string }) {
 	}
 
 	useEffect(() => {
+		enableAnimations(true)
+	}, [parent, enableAnimations])
+
+	useEffect(() => {
 		if (Object.keys(cart.products).length > 0) {
 			cartActions.groupProductsBySeller()
 			cartActions.updateSellerData()
@@ -67,10 +71,6 @@ export function CartContent({ className = '' }: { className?: string }) {
 		})
 		setSelectedShippingByUser(initialSelected)
 	}, [cart.products])
-
-	useEffect(() => {
-		enableAnimations(true)
-	}, [parent, enableAnimations])
 
 	const handleQuantityChange = (productId: string, newAmount: number) => {
 		// Updated function signature - no longer needs buyerPubkey
@@ -100,11 +100,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 	}
 
 	return (
-		<div className={`flex flex-col max-h-screen overflow-hidden py-4 px-6 ${className}`}>
-			<div className="mb-4">
-				<h2 className="text-lg font-semibold">YOUR CART</h2>
-			</div>
-
+		<div className={`flex flex-col h-full overflow-hidden px-4 sm:px-6 ${className}`}>
 			{missingShippingCount > 0 && (
 				<div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
 					<div className="flex">
@@ -117,8 +113,8 @@ export function CartContent({ className = '' }: { className?: string }) {
 				</div>
 			)}
 
-			<ScrollArea className="flex-1 overflow-y-auto py-2">
-				<div className="space-y-8" ref={parent}>
+			<ScrollArea className="flex-1 overflow-y-auto py-2 min-h-0">
+				<div className="space-y-6" ref={parent}>
 					{Object.entries(productsBySeller).map(([sellerPubkey, products]) => {
 						const data = sellerData[sellerPubkey] || {
 							satsTotal: 0,
@@ -130,25 +126,26 @@ export function CartContent({ className = '' }: { className?: string }) {
 						const optionsForThisSeller = sellerShippingOptions[sellerPubkey] || []
 
 						return (
-							<div key={sellerPubkey} className="border-b pb-8">
-								<div className="mb-4">
+							<div key={sellerPubkey} className="p-4 rounded-lg border shadow-md bg-white">
+								<div className="mb-3">
 									<UserWithAvatar pubkey={sellerPubkey} size="sm" showBadge={false} />
 								</div>
 
-								<ul className="space-y-6">
-									{products.map((product) => (
-										<CartItem
-											key={product.id}
-											productId={product.id}
-											amount={product.amount}
-											onQuantityChange={handleQuantityChange}
-											onRemove={handleRemoveProduct}
-											hideShipping={true}
-										/>
+								<ul className="space-y-4">
+									{products.map((product, index) => (
+										<div key={product.id} className={`p-3 rounded-lg ${index % 2 === 0 ? 'bg-gray-100' : 'bg-white'}`}>
+											<CartItem
+												productId={product.id}
+												amount={product.amount}
+												onQuantityChange={handleQuantityChange}
+												onRemove={handleRemoveProduct}
+												hideShipping={true}
+											/>
+										</div>
 									))}
 								</ul>
 
-								<div className="mt-4">
+								<div className={`mt-4 ${!selectedShippingByUser[sellerPubkey] ? 'border-l-4 border-yellow-400 pl-2' : ''}`}>
 									<ShippingSelector
 										options={optionsForThisSeller}
 										selectedId={selectedShippingByUser[sellerPubkey]}
@@ -159,7 +156,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 
 								{Object.entries(data.currencyTotals).map(([currency, amount]) => (
 									<div key={`${sellerPubkey}-${currency}`} className="flex justify-between mt-4">
-										<p className="text-sm">{currency} Total:</p>
+										<p className="text-sm">Products ({currency}):</p>
 										<p className="text-sm">
 											{amount.toFixed(2)} {currency}
 										</p>
@@ -205,7 +202,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 				</div>
 			</ScrollArea>
 
-			<div className="border-t pt-4 mt-auto">
+			<div className="pt-4 pb-6 sm:pb-4 mt-auto flex-shrink-0">
 				<div className="space-y-3 w-full">
 					<div className="space-y-1 mb-2">
 						<div className="flex justify-between">
@@ -222,49 +219,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 						</div>
 					</div>
 
-					<button
-						className="w-full flex items-center justify-between p-2 border rounded-lg bg-gray-50"
-						onClick={() => setDetailsExpanded(!detailsExpanded)}
-					>
-						<span className="text-sm">View Details</span>
-						<ChevronDown className={`w-4 h-4 transition-transform ${detailsExpanded ? 'rotate-180' : ''}`} />
-					</button>
-
-					{detailsExpanded && (
-						<div className="space-y-2 p-2 bg-gray-50 rounded-lg">
-							{Object.entries(totalByCurrency).map(([currency, amount]) => (
-								<div key={`total-${currency}`} className="flex justify-between">
-									<p className="text-sm">{currency} Total:</p>
-									<p className="text-sm">{amount.toFixed(2)}</p>
-								</div>
-							))}
-
-							{Object.entries(shippingByCurrency).map(([currency, amount]) => (
-								<div key={`shipping-${currency}`} className="flex justify-between">
-									<p className="text-sm">{currency} Shipping:</p>
-									<p className="text-sm">{amount.toFixed(2)}</p>
-								</div>
-							))}
-
-							<Separator className="my-2" />
-							<div className="flex justify-between">
-								<p className="text-sm">Subtotal:</p>
-								<p className="text-sm">{formatSats(totalInSats - totalShippingInSats)} sat</p>
-							</div>
-
-							<div className="flex justify-between">
-								<p className="text-sm">Shipping:</p>
-								<p className="text-sm">{formatSats(totalShippingInSats)} sat</p>
-							</div>
-
-							<Separator className="my-2" />
-
-							<div className="flex justify-between font-semibold">
-								<p className="text-sm">Grand Total:</p>
-								<p className="text-sm">{formatSats(totalInSats)} sat</p>
-							</div>
-						</div>
-					)}
+					{/* View Details temporarily hidden for design sync */}
 
 					<div className="space-y-3 mt-4">
 						<div className="flex gap-3">
@@ -278,7 +233,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 							</Button>
 
 							<Button
-								className="flex-1 bg-black text-white hover:bg-gray-800"
+								className="flex-1 btn-product-banner"
 								disabled={!hasAllShippingMethods || totalItems === 0}
 								title={!hasAllShippingMethods ? 'Please select shipping options for all items' : ''}
 								onClick={() => {

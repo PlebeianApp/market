@@ -23,7 +23,7 @@ export function generateShippingData(): Omit<z.infer<typeof ShippingOptionSchema
 	const shippingId = faker.string.alphanumeric(10)
 	const country = faker.helpers.arrayElement(COUNTRIES)
 	const price = faker.number.int({ min: 1, max: 10 }).toString()
-	const service = faker.helpers.arrayElement(['standard', 'express', 'overnight', 'pickup'])
+	const service = faker.helpers.arrayElement(['standard', 'express', 'overnight'])
 	const weightUnit = faker.helpers.arrayElement(WEIGHT_UNITS)
 	const dimensionUnit = faker.helpers.arrayElement(DIMENSION_UNITS)
 
@@ -82,7 +82,89 @@ export function generateShippingData(): Omit<z.infer<typeof ShippingOptionSchema
 	}
 }
 
-export async function createShippingEvent(signer: NDKPrivateKeySigner, ndk: NDK, shippingData: ReturnType<typeof generateShippingData>) {
+export function generatePickupShippingData(): Omit<z.infer<typeof ShippingOptionSchema>, 'tags'> & { tags: NDKTag[] } {
+	const shippingId = faker.string.alphanumeric(10)
+	const country = faker.helpers.arrayElement(COUNTRIES)
+	const price = '0' // Pickup services are always free
+	const service = 'pickup'
+	const weightUnit = faker.helpers.arrayElement(WEIGHT_UNITS)
+	const dimensionUnit = faker.helpers.arrayElement(DIMENSION_UNITS)
+
+	// Generate consistent pickup address data
+	const pickupStreet = faker.location.streetAddress()
+	const pickupCity = faker.location.city()
+	const pickupState = faker.location.state()
+	const pickupPostalCode = faker.location.zipCode()
+
+	const tags: NDKTag[] = [
+		// Required tags
+		['d', shippingId],
+		['title', `Local Pickup - ${pickupCity}`],
+		['price', price, 'sats'],
+		['country', country],
+		['service', service],
+
+		// Pickup address - structured format to match UI publishing logic
+		['pickup-street', pickupStreet],
+		['pickup-city', pickupCity],
+		['pickup-state', pickupState],
+		['pickup-postal-code', pickupPostalCode],
+		['pickup-country', country],
+		// Also store as combined address for backward compatibility
+		['pickup-address', `${pickupStreet}, ${pickupCity}, ${pickupState}, ${pickupPostalCode}, ${country}`],
+
+		// Optional tags
+		['carrier', 'Self-pickup'],
+	]
+
+	// Add optional region tag if country has regions
+	if (REGIONS[country as keyof typeof REGIONS]) {
+		tags.push(['region', faker.helpers.arrayElement(REGIONS[country as keyof typeof REGIONS])])
+	}
+
+	// Add duration tag (pickup is usually same day or next day)
+	tags.push([
+		'duration',
+		'0', // min duration
+		'1', // max duration
+		'D', // days
+	])
+
+	// Add location and geohash (use same city as pickup address)
+	tags.push(['location', pickupCity])
+	tags.push(['g', faker.string.alphanumeric(8).toLowerCase()])
+
+	// Add weight constraints (pickup can handle heavier items)
+	const minWeight = faker.number.float({ min: 0.1, max: 2, fractionDigits: 1 })
+	const maxWeight = faker.number.float({ min: 10, max: 100, fractionDigits: 1 })
+	tags.push(['weight-min', minWeight.toString(), weightUnit])
+	tags.push(['weight-max', maxWeight.toString(), weightUnit])
+
+	// Add dimension constraints (pickup can handle larger items)
+	const createDimensions = () => {
+		return `${faker.number.float({ min: 5, max: 200 })}x${faker.number.float({ min: 5, max: 200 })}x${faker.number.float({ min: 5, max: 200 })}`
+	}
+	tags.push(['dim-min', createDimensions(), dimensionUnit])
+	tags.push(['dim-max', createDimensions(), dimensionUnit])
+
+	// Pickup pricing is usually simpler (no weight/volume/distance pricing)
+	tags.push(['price-weight', '0', weightUnit])
+	tags.push(['price-volume', '0', dimensionUnit])
+	tags.push(['price-distance', '0', faker.helpers.arrayElement(DISTANCE_UNITS)])
+
+	return {
+		kind: SHIPPING_KIND,
+		created_at: Math.floor(Date.now() / 1000),
+		content: `Local pickup available at our ${faker.location.city()} location. Perfect for avoiding shipping costs and getting your items immediately.`,
+		tags: tags,
+	}
+}
+
+export async function createShippingEvent(
+	signer: NDKPrivateKeySigner,
+	ndk: NDK,
+	shippingData: ReturnType<typeof generateShippingData> | ReturnType<typeof generatePickupShippingData>,
+) {
 	const event = new NDKEvent(ndk)
 	event.kind = shippingData.kind
 	event.content = shippingData.content

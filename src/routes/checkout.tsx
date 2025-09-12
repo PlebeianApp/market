@@ -18,7 +18,7 @@ import { publishPaymentReceipt } from '@/publish/payment'
 import { useGenerateInvoiceMutation } from '@/queries/payment'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useForm } from '@tanstack/react-form'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ChevronLeft, ChevronRight, Zap } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -40,6 +40,7 @@ function RouteComponent() {
 	const [currentInvoiceIndex, setCurrentInvoiceIndex] = useState(0)
 	const [invoices, setInvoices] = useState<PaymentInvoiceData[]>([])
 	const [shippingData, setShippingData] = useState<CheckoutFormData | null>(null)
+	const [mobileOrderSummaryOpen, setMobileOrderSummaryOpen] = useState(false)
 
 	// Ref to control PaymentContent
 	const paymentContentRef = useRef<PaymentContentRef>(null)
@@ -111,7 +112,15 @@ function RouteComponent() {
 	}, [walletsInitialized, wallets])
 	const [orderInvoiceSets, setOrderInvoiceSets] = useState<Record<string, OrderInvoiceSet>>({})
 	const [specOrderIds, setSpecOrderIds] = useState<string[]>([])
-	const [animationParent] = useAutoAnimate()
+	// Use auto-animate with error handling to prevent DOM manipulation errors
+	const [animationParent] = (() => {
+		try {
+			return useAutoAnimate()
+		} catch (error) {
+			console.warn('Auto-animate not available:', error)
+			return [null]
+		}
+	})()
 	const { mutateAsync: generateInvoice, isPending: isGeneratingInvoices } = useGenerateInvoiceMutation()
 
 	const isCartEmpty = useMemo(() => {
@@ -189,11 +198,6 @@ function RouteComponent() {
 				const newInvoices: PaymentInvoiceData[] = []
 				let invoiceIndex = 0
 
-				// Debug: Log all V4V shares data
-				console.log('📋 Current V4V shares data:', v4vShares)
-				console.log('🏪 Sellers:', sellers)
-				console.log('💰 Seller data:', sellerData)
-
 				try {
 					for (const sellerPubkey of sellers) {
 						const sellerProducts = productsBySeller[sellerPubkey] || []
@@ -201,12 +205,6 @@ function RouteComponent() {
 						const totalAmount = data?.satsTotal || 0
 						const shares = data?.shares
 						const v4vRecipients = v4vShares[sellerPubkey] || []
-
-						// Debug: Log V4V recipients for this seller
-						console.log(
-							`Seller ${sellerPubkey.substring(0, 8)}... has ${v4vRecipients.length} V4V recipients:`,
-							v4vRecipients.map((r) => `${r.name} (${r.percentage}%)`),
-						)
 
 						// Create invoice for seller's share
 						const sellerAmount = shares?.sellerAmount || totalAmount
@@ -514,7 +512,7 @@ function RouteComponent() {
 				<div className="max-w-md mx-auto text-center">
 					<h1 className="text-2xl font-bold text-gray-900 mb-4">Your cart is empty</h1>
 					<p className="text-gray-600 mb-6">Add some products to your cart before checking out.</p>
-					<Button onClick={goBackToShopping} className="bg-black text-white hover:bg-gray-800">
+					<Button onClick={goBackToShopping} className="btn-black">
 						Continue Shopping
 					</Button>
 				</div>
@@ -524,22 +522,124 @@ function RouteComponent() {
 
 	return (
 		<div className="flex-grow flex flex-col">
-			{/* Progress Bar */}
-			<CheckoutProgress
-				currentStepNumber={currentStepNumber}
-				totalSteps={totalSteps}
-				progress={progress}
-				stepDescription={stepDescription}
-				onBackClick={handleBackClick}
-			/>
+			{/* Fixed Progress Bar */}
+			<div className="sticky top-[8.5rem] lg:top-[5rem] z-20 bg-white border-b border-gray-200">
+				<CheckoutProgress
+					currentStepNumber={currentStepNumber}
+					totalSteps={totalSteps}
+					progress={progress}
+					stepDescription={stepDescription}
+					onBackClick={handleBackClick}
+				/>
+			</div>
 
 			{/* Main Content */}
-			<div className="px-4 py-8 flex flex-row gap-4 w-full flex-grow">
+			<div className="px-4 py-8 flex flex-col lg:flex-row lg:gap-4 w-full lg:h-[calc(100vh-10rem)]">
+				{/* Mobile Order Summary / Invoices (collapsible) */}
+				<div className="lg:hidden mb-4">
+					<Card>
+						<CardHeader>
+							<CardTitle
+								className="flex items-center justify-between cursor-pointer"
+								onClick={() => setMobileOrderSummaryOpen(!mobileOrderSummaryOpen)}
+							>
+								<span>{currentStep === 'payment' ? 'Invoices' : 'Order Summary'}</span>
+								<ChevronRight className={`w-5 h-5 transition-transform ${mobileOrderSummaryOpen ? 'rotate-90' : ''}`} />
+							</CardTitle>
+						</CardHeader>
+						{mobileOrderSummaryOpen && (
+							<CardContent>
+								{currentStep === 'payment' && isGeneratingInvoices ? (
+									<div className="flex items-center justify-center py-8">
+										<div className="text-center">
+											<div className="animate-spin w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full mx-auto mb-4" />
+											<p className="text-gray-600">Loading payment details...</p>
+										</div>
+									</div>
+								) : currentStep === 'payment' && invoices.length > 0 ? (
+									<>
+										{/* NWC Status Indicator */}
+										<div className="mb-4 p-3 bg-gray-50 rounded-lg border">
+											<div className="flex items-center justify-between text-sm">
+												<span className="font-medium text-gray-700">Wallet Status:</span>
+												<div className="flex items-center gap-2">
+													{nwcEnabled ? (
+														<>
+															<div className="w-2 h-2 bg-green-500 rounded-full" />
+															<span className="text-green-700 font-medium">
+																{wallets.filter((w) => w.nwcUri && parseNwcUri(w.nwcUri)).length} NWC wallet
+																{wallets.filter((w) => w.nwcUri && parseNwcUri(w.nwcUri)).length !== 1 ? 's' : ''} connected
+															</span>
+														</>
+													) : (
+														<>
+															<div className="w-2 h-2 bg-gray-400 rounded-full" />
+															<span className="text-gray-600">
+																Fast Payments available with NWC, setup in{' '}
+																<Link to="/dashboard/account/making-payments" className="text-blue-600 hover:underline">
+																	settings
+																</Link>
+															</span>
+														</>
+													)}
+												</div>
+											</div>
+											{nwcEnabled && <p className="text-xs text-gray-500 mt-1">Use NWC to action all payments at once</p>}
+										</div>
+
+										<PaymentSummary invoices={invoices} currentIndex={currentInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
+									</>
+								) : (
+									<div className="max-h-[50vh] overflow-y-auto">
+										<CartSummary
+											allowQuantityChanges={currentStep === 'shipping'}
+											allowShippingChanges={currentStep === 'shipping'}
+											showExpandedDetails={false}
+										/>
+									</div>
+								)}
+							</CardContent>
+						)}
+					</Card>
+				</div>
 				{/* Main Content Area */}
-				<Card className="flex-1 w-1/2 flex-grow">
-					<CardContent className="p-6 h-full">
-						<div ref={animationParent}>
-							{currentStep === 'shipping' && <ShippingAddressForm form={form} hasAllShippingMethods={hasAllShippingMethods} />}
+				<Card className="flex-1 lg:w-1/2 flex flex-col lg:h-full shadow-md lg:order-2">
+					{currentStep !== 'shipping' && (
+						<CardHeader>
+							<div className="flex items-center justify-between">
+								<CardTitle>{currentStep === 'payment' ? 'Payment Details' : 'Order Summary'}</CardTitle>
+								{currentStep === 'payment' && invoices.length > 1 && (
+									<div className="hidden lg:flex items-center gap-2">
+										<Button
+											variant="outline"
+											size="sm"
+											onClick={() => setCurrentInvoiceIndex(Math.max(0, currentInvoiceIndex - 1))}
+											disabled={currentInvoiceIndex === 0}
+										>
+											<ChevronLeft className="w-4 h-4" />
+											Previous
+										</Button>
+										<Button
+											variant="outline"
+											size="sm"
+											onClick={() => setCurrentInvoiceIndex(Math.min(invoices.length - 1, currentInvoiceIndex + 1))}
+											disabled={currentInvoiceIndex === invoices.length - 1}
+										>
+											Next
+											<ChevronRight className="w-4 h-4" />
+										</Button>
+									</div>
+								)}
+							</div>
+						</CardHeader>
+					)}
+					<CardContent className="p-6 flex-1 lg:overflow-y-auto">
+						<div ref={animationParent} className="lg:h-full lg:min-h-full">
+							{currentStep === 'shipping' && (
+								<div className="h-full">
+									<ShippingAddressForm form={form} hasAllShippingMethods={hasAllShippingMethods} />
+								</div>
+							)}
 
 							{currentStep === 'summary' && (
 								<OrderFinalizeComponent
@@ -595,45 +695,12 @@ function RouteComponent() {
 							{/* Payment Interface - Only show when invoices are ready */}
 							{currentStep === 'payment' && !isGeneratingInvoices && invoices.length > 0 && (
 								<div className="space-y-6">
-									<div className="flex items-center justify-between">
-										<h2 className="text-2xl font-bold">
-											Payment {currentInvoiceIndex + 1} of {invoices.length}
-										</h2>
-										{invoices.length > 1 && (
-											<div className="flex items-center gap-2">
-												<Button
-													variant="outline"
-													size="sm"
-													onClick={() => setCurrentInvoiceIndex(Math.max(0, currentInvoiceIndex - 1))}
-													disabled={currentInvoiceIndex === 0}
-												>
-													<ChevronLeft className="w-4 h-4" />
-													Previous
-												</Button>
-												<span className="text-sm text-gray-500">
-													{currentInvoiceIndex + 1} of {invoices.length}
-												</span>
-												<Button
-													variant="outline"
-													size="sm"
-													onClick={() => setCurrentInvoiceIndex(Math.min(invoices.length - 1, currentInvoiceIndex + 1))}
-													disabled={currentInvoiceIndex === invoices.length - 1}
-												>
-													Next
-													<ChevronRight className="w-4 h-4" />
-												</Button>
-											</div>
-										)}
-									</div>
+									{/* desktop header nav exists; mobile under-QR nav is handled inside LightningPaymentProcessor */}
 
 									{/* Pay All Button - Only show if NWC is enabled and there are unpaid invoices */}
 									{nwcEnabled && invoices.filter((inv) => inv.status === 'pending').length > 1 && (
 										<div className="flex justify-center mb-4">
-											<Button
-												onClick={handlePayAllInvoices}
-												className="bg-green-600 hover:bg-green-700 text-white font-medium px-6 py-2"
-												size="lg"
-											>
+											<Button onClick={handlePayAllInvoices} className="btn-product-banner font-medium px-6 py-2" size="lg">
 												<Zap className="w-4 h-4 mr-2" />
 												Pay All with NWC ({invoices.filter((inv) => inv.status === 'pending').length} invoices)
 											</Button>
@@ -668,11 +735,11 @@ function RouteComponent() {
 				</Card>
 
 				{/* Right Sidebar */}
-				<Card className="flex-1 w-1/2">
+				<Card className="hidden lg:flex flex-1 lg:w-1/2 flex-col h-full shadow-md lg:order-1">
 					<CardHeader>
-						<CardTitle>{currentStep === 'payment' ? 'Payment Details' : 'Order Summary'}</CardTitle>
+						<CardTitle>{currentStep === 'payment' ? 'Invoices' : 'Order Summary'}</CardTitle>
 					</CardHeader>
-					<CardContent className="h-full">
+					<CardContent className="flex-1 overflow-y-auto">
 						{currentStep === 'payment' && isGeneratingInvoices ? (
 							<div className="flex items-center justify-center h-full">
 								<div className="text-center">
@@ -698,7 +765,12 @@ function RouteComponent() {
 											) : (
 												<>
 													<div className="w-2 h-2 bg-gray-400 rounded-full" />
-													<span className="text-gray-600">No NWC wallets</span>
+													<span className="text-gray-600">
+														Fast Payments available with NWC, setup in{' '}
+														<Link to="/dashboard/account/making-payments" className="text-blue-600 hover:underline">
+															settings
+														</Link>
+													</span>
 												</>
 											)}
 										</div>

@@ -8,12 +8,43 @@ import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
 import type { CheckoutFormData } from '@/components/checkout/ShippingAddressForm'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
+import { getShippingEvent, getShippingService } from '@/queries/shipping'
 // import type { CartProduct, SellerData, V4VShare } from '@/lib/stores/cart'
+
+/**
+ * Helper function to check if all products in a list are pickup orders
+ */
+async function checkIfAllProductsArePickup(products: CartProduct[]): Promise<boolean> {
+	try {
+		const pickupChecks = await Promise.all(
+			products.map(async (product) => {
+				if (!product.shippingMethodId) return false
+
+				try {
+					const shippingEvent = await getShippingEvent(product.shippingMethodId)
+					if (!shippingEvent) return false
+
+					const serviceTag = getShippingService(shippingEvent)
+					return serviceTag?.[1] === 'pickup'
+				} catch (error) {
+					console.error('Error checking shipping service:', error)
+					return false
+				}
+			}),
+		)
+
+		return pickupChecks.every((isPickup) => isPickup)
+	} catch (error) {
+		console.error('Error checking if all products are pickup:', error)
+		return false
+	}
+}
 
 // Temporary type definitions - ideally these should be imported from a central types file
 interface CartProduct {
 	id: string
 	amount: number
+	shippingMethodId?: string | null
 }
 interface V4VShare {
 	pubkey: string
@@ -693,6 +724,9 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 
 		if (sellerProducts.length === 0 || !data) continue
 
+		// Check if all products for this seller are pickup orders
+		const isAllPickup = await checkIfAllProductsArePickup(sellerProducts)
+
 		const orderData: OrderCreationData = {
 			merchantPubkey: sellerPubkey,
 			buyerPubkey: buyerPubkey,
@@ -701,7 +735,8 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 				quantity: product.amount,
 			})),
 			totalAmountSats: data.satsTotal,
-			shippingAddress: shippingData,
+			// Only include shipping address if not all pickup
+			shippingAddress: isAllPickup ? undefined : shippingData,
 			email: shippingData.email || 'customer@example.com',
 			notes: `Order for ${sellerProducts.length} item(s) from seller.`,
 		}
@@ -723,7 +758,7 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 		// 2a. Payment request for the merchant's share
 		const merchantShare = data.shares.sellerAmount
 		const sellerProfile = await fetchProfileByIdentifier(sellerPubkey)
-		const sellerLnAddress = sellerProfile?.lud16 || sellerProfile?.lud06
+		const sellerLnAddress = sellerProfile?.profile?.lud16 || sellerProfile?.profile?.lud06
 
 		if (!sellerLnAddress) {
 			console.warn(`Seller ${sellerPubkey} has no lightning address. Cannot create payment request.`)
@@ -745,7 +780,7 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 
 			if (recipientAmount > 0) {
 				const recipientProfile = await fetchProfileByIdentifier(recipient.pubkey)
-				const recipientLnAddress = recipientProfile?.lud16 || recipientProfile?.lud06
+				const recipientLnAddress = recipientProfile?.profile?.lud16 || recipientProfile?.profile?.lud06
 				if (!recipientLnAddress) {
 					console.warn(`V4V recipient ${recipient.name} has no lightning address. Skipping.`)
 					continue

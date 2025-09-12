@@ -11,7 +11,7 @@ import { copyToClipboard } from '@/lib/utils'
 import { NDKEvent, NDKUser, NDKZapper } from '@nostr-dev-kit/ndk'
 import { NDKNWCWallet } from '@nostr-dev-kit/ndk-wallet'
 import { useStore } from '@tanstack/react-store'
-import { Copy, CreditCard, Loader2, Zap } from 'lucide-react'
+import { Copy, CreditCard, Loader2, Zap, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react'
 import { toast } from 'sonner'
 
@@ -61,6 +61,10 @@ interface LightningPaymentProcessorProps {
 	showManualVerification?: boolean
 	title?: string
 	active?: boolean // New prop to control when processor should be active
+	showNavigation?: boolean
+	currentIndex?: number
+	totalInvoices?: number
+	onNavigate?: (index: number) => void
 }
 
 export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef, LightningPaymentProcessorProps>(
@@ -74,6 +78,10 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			showManualVerification = false,
 			title,
 			active = true, // Default to true for backward compatibility
+			showNavigation,
+			currentIndex,
+			totalInvoices,
+			onNavigate,
 		},
 		ref,
 	) => {
@@ -320,7 +328,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 							<CardTitle>{title}</CardTitle>
 						</CardHeader>
 					)}
-					<CardContent className="space-y-6">
+					<CardContent className="space-y-6 p-6">
 						{/* Loading state */}
 						{(isGeneratingInvoice || isPaymentInProgress) && (
 							<div className="flex items-center justify-center py-8">
@@ -338,6 +346,30 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 									</a>
 								</div>
 
+								{/* Mobile navigation under QR code */}
+								{showNavigation && (totalInvoices || 0) > 1 && (
+									<div className="sm:hidden mt-3 flex gap-2">
+										<Button
+											variant="outline"
+											className="flex-1"
+											onClick={() => onNavigate?.(Math.max(0, (currentIndex || 0) - 1))}
+											disabled={(currentIndex || 0) === 0}
+										>
+											<ChevronLeft className="w-4 h-4 mr-2" />
+											Previous
+										</Button>
+										<Button
+											variant="outline"
+											className="flex-1"
+											onClick={() => onNavigate?.(Math.min((totalInvoices || 0) - 1, (currentIndex || 0) + 1))}
+											disabled={(currentIndex || 0) >= (totalInvoices || 0) - 1}
+										>
+											Next
+											<ChevronRight className="w-4 h-4 ml-2" />
+										</Button>
+									</div>
+								)}
+
 								{/* Invoice text with copy button */}
 								<div className="space-y-2">
 									<Label htmlFor="invoice">Lightning Invoice</Label>
@@ -354,12 +386,12 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 						{/* Payment buttons */}
 						{invoice && (
 							<div className="space-y-3">
-								<div className="flex gap-2">
+								<div className="flex flex-col gap-2 sm:flex-row">
 									{/* NWC Payment Button */}
 									{!capabilities.hasNwc ? (
 										<Tooltip>
 											<TooltipTrigger asChild>
-												<div className="flex-1">
+												<div className="w-full sm:flex-1">
 													<Button disabled={true} className="w-full" variant="outline">
 														<Zap className="h-4 w-4 mr-2" />
 														Pay with NWC
@@ -371,7 +403,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 											</TooltipContent>
 										</Tooltip>
 									) : (
-										<Button onClick={handleNwcPayment} disabled={isPaymentInProgress} className="flex-1" variant="outline">
+										<Button onClick={handleNwcPayment} disabled={isPaymentInProgress} className="w-full sm:flex-1" variant="outline">
 											<Zap className="h-4 w-4 mr-2" />
 											Pay with NWC
 										</Button>
@@ -381,7 +413,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 									{!capabilities.hasWebLn ? (
 										<Tooltip>
 											<TooltipTrigger asChild>
-												<div className="flex-1">
+												<div className="w-full sm:flex-1">
 													<Button disabled={true} className="w-full" variant="outline">
 														<CreditCard className="h-4 w-4 mr-2" />
 														Pay with WebLN
@@ -393,7 +425,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 											</TooltipContent>
 										</Tooltip>
 									) : (
-										<Button onClick={handleWebLnPayment} disabled={isPaymentInProgress} className="flex-1" variant="outline">
+										<Button onClick={handleWebLnPayment} disabled={isPaymentInProgress} className="w-full sm:flex-1" variant="outline">
 											<CreditCard className="h-4 w-4 mr-2" />
 											Pay with WebLN
 										</Button>

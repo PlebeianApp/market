@@ -1,8 +1,12 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Check, Receipt } from 'lucide-react'
+import { Check, Receipt, MapPin } from 'lucide-react'
 import type { CheckoutFormData } from './ShippingAddressForm'
 import type { LightningInvoiceData } from '@/queries/payment'
+import { cartStore } from '@/lib/stores/cart'
+import { useStore } from '@tanstack/react-store'
+import { getShippingEvent, getShippingService, getShippingPickupAddressString } from '@/queries/shipping'
+import { useEffect, useState } from 'react'
 
 interface OrderFinalizeComponentProps {
 	shippingData: CheckoutFormData | null
@@ -21,9 +25,67 @@ export function OrderFinalizeComponent({
 	onContinueToPayment,
 	onViewOrders,
 }: OrderFinalizeComponentProps) {
+	const { cart } = useStore(cartStore)
+	const [pickupAddresses, setPickupAddresses] = useState<Array<{ sellerName: string; address: string }>>([])
+	const [isAllPickup, setIsAllPickup] = useState(false)
+
 	const formatSats = (sats: number): string => {
 		return Math.round(sats).toLocaleString()
 	}
+
+	// Check for pickup orders and collect pickup addresses
+	useEffect(() => {
+		const checkPickupOrders = async () => {
+			const products = Object.values(cart.products)
+			if (products.length === 0) {
+				setIsAllPickup(false)
+				setPickupAddresses([])
+				return
+			}
+
+			const pickupData = await Promise.all(
+				products.map(async (product) => {
+					if (!product.shippingMethodId) return null
+
+					try {
+						const shippingEvent = await getShippingEvent(product.shippingMethodId)
+						if (!shippingEvent) return null
+
+						const serviceTag = getShippingService(shippingEvent)
+						const isPickup = serviceTag?.[1] === 'pickup'
+
+						if (isPickup) {
+							const pickupAddressString = getShippingPickupAddressString(shippingEvent)
+							return {
+								isPickup: true,
+								sellerName: product.sellerPubkey || 'Unknown Seller',
+								address: pickupAddressString || 'Pickup address not specified',
+							}
+						}
+
+						return { isPickup: false, sellerName: '', address: '' }
+					} catch (error) {
+						console.error('Error checking shipping service:', error)
+						return null
+					}
+				}),
+			)
+
+			const validPickupData = pickupData.filter(Boolean)
+			const allPickup = validPickupData.every((data) => data?.isPickup)
+			const pickupItems = validPickupData.filter((data) => data?.isPickup)
+
+			setIsAllPickup(allPickup)
+			setPickupAddresses(
+				pickupItems.map((item) => ({
+					sellerName: item?.sellerName || 'Unknown Seller',
+					address: item!.address,
+				})),
+			)
+		}
+
+		checkPickupOrders()
+	}, [cart.products])
 
 	const allInvoicesPaid = invoices.every((invoice) => invoice.status === 'paid')
 	const paidInvoices = invoices.filter((invoice) => invoice.status === 'paid')
@@ -93,27 +155,46 @@ export function OrderFinalizeComponent({
 						</div>
 					)}
 
-					{/* Shipping Address */}
-					{shippingData && (
-						<div className="bg-gray-50 rounded-lg p-4">
-							<h3 className="font-medium text-gray-900 mb-3">Shipping Address</h3>
-							<div className="text-sm text-gray-600 space-y-1">
-								<p className="font-medium text-gray-900">{shippingData.name}</p>
-								{shippingData.email && <p>Email: {shippingData.email}</p>}
-								<p>{shippingData.firstLineOfAddress}</p>
-								<p>
-									{shippingData.city}, {shippingData.zipPostcode}
-								</p>
-								<p>{shippingData.country}</p>
-								{shippingData.phone && <p>Phone: {shippingData.phone}</p>}
-								{shippingData.additionalInformation && (
-									<div className="mt-2 pt-2 border-t border-gray-200">
-										<p className="text-xs text-gray-500">Delivery Notes:</p>
-										<p className="text-sm">{shippingData.additionalInformation}</p>
+					{/* Shipping/Pickup Address */}
+					{isAllPickup ? (
+						<div className="bg-green-50 p-4 rounded-lg border border-green-200">
+							<div className="flex items-center gap-2 mb-3">
+								<MapPin className="h-5 w-5 text-green-600" />
+								<h3 className="font-medium text-green-800">Pickup Locations</h3>
+							</div>
+							<div className="space-y-3">
+								{pickupAddresses.map((pickup, index) => (
+									<div key={index} className="bg-white p-3 rounded border border-green-100">
+										<div className="text-sm font-medium text-green-700 mb-1">Seller: {pickup.sellerName}</div>
+										<div className="text-sm text-gray-700">
+											<strong>Pickup Address:</strong> {pickup.address}
+										</div>
 									</div>
-								)}
+								))}
 							</div>
 						</div>
+					) : (
+						shippingData && (
+							<div className="bg-gray-50 rounded-lg p-4">
+								<h3 className="font-medium text-gray-900 mb-3">Shipping Address</h3>
+								<div className="text-sm text-gray-600 space-y-1">
+									<p className="font-medium text-gray-900">{shippingData.name}</p>
+									{shippingData.email && <p>Email: {shippingData.email}</p>}
+									<p>{shippingData.firstLineOfAddress}</p>
+									<p>
+										{shippingData.city}, {shippingData.zipPostcode}
+									</p>
+									<p>{shippingData.country}</p>
+									{shippingData.phone && <p>Phone: {shippingData.phone}</p>}
+									{shippingData.additionalInformation && (
+										<div className="mt-2 pt-2 border-t border-gray-200">
+											<p className="text-xs text-gray-500">Delivery Notes:</p>
+											<p className="text-sm">{shippingData.additionalInformation}</p>
+										</div>
+									)}
+								</div>
+							</div>
+						)
 					)}
 
 					{/* Order Total */}
@@ -197,7 +278,7 @@ export function OrderFinalizeComponent({
 					{/* Action Buttons */}
 					<div className="space-y-3 pt-4">
 						{!isPostPayment && onContinueToPayment && (
-							<Button onClick={onContinueToPayment} className="w-full bg-black text-white hover:bg-gray-800">
+							<Button onClick={onContinueToPayment} className="w-full btn-black">
 								Continue to Payment
 							</Button>
 						)}
@@ -205,15 +286,12 @@ export function OrderFinalizeComponent({
 						{isPostPayment && (
 							<>
 								{allInvoicesPaid && onViewOrders && (
-									<Button onClick={onViewOrders} className="w-full bg-black text-white hover:bg-gray-800">
+									<Button onClick={onViewOrders} className="w-full btn-black">
 										View Your Purchases
 									</Button>
 								)}
 
-								<Button
-									onClick={onNewOrder}
-									className={`w-full ${allInvoicesPaid && onViewOrders ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-black text-white hover:bg-gray-800'}`}
-								>
+								<Button onClick={onNewOrder} className={`w-full ${allInvoicesPaid ? 'hover-transparent-black' : 'btn-black'}`}>
 									{allInvoicesPaid ? 'Continue Shopping' : 'Back to Store'}
 								</Button>
 

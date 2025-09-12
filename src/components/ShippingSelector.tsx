@@ -59,7 +59,7 @@ export function ShippingSelector({
 		return shippingEvents
 			.map((event) => {
 				const info = getShippingInfo(event)
-				if (!info) return null
+				if (!info || !info.id || typeof info.id !== 'string' || info.id.trim().length === 0) return null
 
 				const id = createShippingReference(sellerPubkey, info.id)
 

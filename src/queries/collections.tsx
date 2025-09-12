@@ -61,9 +61,11 @@ export const fetchCollection = async (id: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 	if (!id) return null
-	const event = await ndk.fetchEvent(id)
+	const event = await ndk.fetchEvent({
+		ids: [id],
+	})
 	if (!event) {
-		throw new Error('Product not found')
+		throw new Error('Collection not found')
 	}
 	return event
 }

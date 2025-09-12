@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils'
 import { getStatusStyles } from '@/lib/utils/orderUtils'
 import { useUpdateOrderStatusMutation } from '@/publish/orders'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
-import { getBuyerPubkey, getOrderStatus, getSellerPubkey } from '@/queries/orders'
+import { getBuyerPubkey, getOrderId, getOrderStatus, getSellerPubkey } from '@/queries/orders'
 import { useUpdateShippingStatusMutation } from '@/queries/shipping'
 import { MoreHorizontal, PackageCheck, Truck, ShoppingBag, Clock, X, Check } from 'lucide-react'
 import { useState } from 'react'
@@ -64,13 +64,14 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 	const canReceive = isBuyer && status === ORDER_STATUS.PROCESSING
 
 	const handleStatusUpdate = (newStatus: string, reason?: string, tracking?: string) => {
-		if (!order.order.id) {
+		const orderEventId = getOrderId(order.order)
+		if (!orderEventId) {
 			toast.error('Order ID not found')
 			return
 		}
 
 		updateOrderStatus.mutate({
-			orderEventId: order.order.id,
+			orderEventId,
 			status: newStatus as any,
 			reason,
 			tracking,
@@ -84,7 +85,8 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 	}
 
 	const handleShipped = () => {
-		if (!order.order.id) {
+		const orderEventId = getOrderId(order.order)
+		if (!orderEventId) {
 			toast.error('Order ID not found')
 			return
 		}
@@ -92,7 +94,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 		// Use a normal status update instead of a shipping update
 		// This ensures it's processed the same way as other status changes
 		updateOrderStatus.mutate({
-			orderEventId: order.order.id,
+			orderEventId,
 			status: ORDER_STATUS.PROCESSING, // Keep as processing but with shipping info
 			tracking: trackingNumber,
 			reason: 'Order has been shipped',
@@ -100,7 +102,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 
 		// Also send a shipping update for record keeping, but don't rely on it for UI updates
 		updateShippingStatus.mutate({
-			orderEventId: order.order.id,
+			orderEventId,
 			status: SHIPPING_STATUS.SHIPPED,
 			tracking: trackingNumber,
 			reason: 'Order has been shipped',
