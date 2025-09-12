@@ -750,7 +750,7 @@ function RouteComponent() {
 					<CardHeader>
 						<CardTitle>{currentStep === 'payment' ? 'Invoices' : 'Cart Summary'}</CardTitle>
 					</CardHeader>
-					<CardContent className="flex-1 overflow-y-auto">
+					<CardContent className="flex-1 overflow-y-auto pb-0">
 						{currentStep === 'payment' && isGeneratingInvoices ? (
 							<div className="flex items-center justify-center h-full">
 								<div className="text-center">
