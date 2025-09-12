@@ -2,7 +2,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { MapPin } from 'lucide-react'
 import { cartStore } from '@/lib/stores/cart'
 import { useStore } from '@tanstack/react-store'
 import { getShippingEvent, getShippingService, getShippingPickupAddressString, getShippingTitle } from '@/queries/shipping'
@@ -91,17 +90,9 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 		checkPickupStatus()
 	}, [cart.products])
 	return (
-		<div className="space-y-6">
-			<div className="flex items-center gap-3 mb-6">
-				<div className="p-2 bg-blue-100 rounded-lg">
-					<MapPin className="h-5 w-5 text-blue-600" />
-				</div>
-				<div>
-					<h2 className="text-xl font-semibold">{isAllPickup ? 'Contact Information' : 'Shipping Address'}</h2>
-					<p className="text-gray-600">
-						{isAllPickup ? 'Please provide your contact details for pickup coordination.' : 'Where should we deliver your order?'}
-					</p>
-				</div>
+		<div className="flex flex-col h-full max-h-full">
+			<div className="sticky top-0 z-10 bg-white border-b px-6 pt-4 pb-3">
+				<h2 className="leading-none font-semibold tracking-tight">{isAllPickup ? 'Contact Information' : 'Shipping Address'}</h2>
 			</div>
 
 			<form
@@ -110,7 +101,7 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 					e.stopPropagation()
 					form.handleSubmit()
 				}}
-				className="space-y-4"
+				className="space-y-4 p-6"
 			>
 				{/* Customer Information */}
 				<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -202,10 +193,7 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 				{/* Pickup notification */}
 				{isAllPickup && (
 					<div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-						<div className="flex items-center gap-2 mb-3">
-							<MapPin className="h-4 w-4 text-blue-600" />
-							<h3 className="text-sm font-medium text-blue-800">Pickup Order</h3>
-						</div>
+						<h3 className="text-sm font-medium text-blue-800 mb-2">Pickup Order</h3>
 						<p className="text-sm text-blue-700 mb-3">All items in your order are for pickup. No shipping address is required.</p>
 
 						{pickupAddresses.length > 0 && (
