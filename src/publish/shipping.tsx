@@ -22,6 +22,13 @@ export interface ShippingFormData {
 	}
 	location?: string
 	geohash?: string
+	pickupAddress?: {
+		street: string
+		city: string
+		state: string
+		postalCode: string
+		country: string
+	}
 	weightLimits?: {
 		min?: { value: string; unit: string }
 		max?: { value: string; unit: string }
@@ -58,9 +65,17 @@ export const createShippingEvent = (
 		['d', id],
 		['title', formData.title],
 		['price', formData.price, formData.currency],
-		['country', ...formData.countries],
 		['service', formData.service],
 	]
+
+	// Add country tag - for pickup services, use pickup address country or default
+	if (formData.service === 'pickup') {
+		const pickupCountry = formData.pickupAddress?.country || 'USA'
+		tags.push(['country', pickupCountry])
+	} else {
+		// For non-pickup services, use the countries array
+		tags.push(['country', ...formData.countries])
+	}
 
 	// Add optional tags
 	if (formData.carrier) {
@@ -81,6 +96,38 @@ export const createShippingEvent = (
 
 	if (formData.geohash) {
 		tags.push(['g', formData.geohash])
+	}
+
+	if (formData.pickupAddress) {
+		// Store structured pickup address as separate tags
+		if (formData.pickupAddress.street) {
+			tags.push(['pickup-street', formData.pickupAddress.street])
+		}
+		if (formData.pickupAddress.city) {
+			tags.push(['pickup-city', formData.pickupAddress.city])
+		}
+		if (formData.pickupAddress.state) {
+			tags.push(['pickup-state', formData.pickupAddress.state])
+		}
+		if (formData.pickupAddress.postalCode) {
+			tags.push(['pickup-postal-code', formData.pickupAddress.postalCode])
+		}
+		if (formData.pickupAddress.country) {
+			tags.push(['pickup-country', formData.pickupAddress.country])
+		}
+		// Also store as a combined address for backward compatibility
+		const fullAddress = [
+			formData.pickupAddress.street,
+			formData.pickupAddress.city,
+			formData.pickupAddress.state,
+			formData.pickupAddress.postalCode,
+			formData.pickupAddress.country,
+		]
+			.filter(Boolean)
+			.join(', ')
+		if (fullAddress) {
+			tags.push(['pickup-address', fullAddress])
+		}
 	}
 
 	// Weight constraints
@@ -140,12 +187,32 @@ export const publishShippingOption = async (formData: ShippingFormData, signer: 
 		throw new Error('Currency is required')
 	}
 
-	if (!formData.countries.length) {
-		throw new Error('At least one country is required')
+	// Countries are only required for non-pickup services
+	if (formData.service !== 'pickup' && (!formData.countries || !formData.countries.length)) {
+		throw new Error('At least one country is required for non-pickup services')
 	}
 
 	if (!formData.service) {
 		throw new Error('Service type is required')
+	}
+	console.log('✓ Service validation passed')
+
+	// Additional pickup validation
+	if (formData.service === 'pickup') {
+		if (!formData.pickupAddress?.street?.trim()) {
+			console.error('Validation failed: pickup street address is required')
+			throw new Error('Street address is required for local pickup')
+		}
+		if (!formData.pickupAddress?.city?.trim()) {
+			console.error('Validation failed: pickup city is required')
+			throw new Error('City is required for local pickup')
+		}
+		// Enforce zero pricing for pickup services
+		if (formData.price !== '0') {
+			console.warn('Pickup service price should be 0, adjusting automatically')
+			formData.price = '0'
+		}
+		console.log('✓ Pickup address validation passed')
 	}
 
 	const event = createShippingEvent(formData, signer, ndk)
@@ -186,12 +253,28 @@ export const updateShippingOption = async (
 		throw new Error('Currency is required')
 	}
 
-	if (!formData.countries.length) {
-		throw new Error('At least one country is required')
+	// Countries are only required for non-pickup services
+	if (formData.service !== 'pickup' && (!formData.countries || !formData.countries.length)) {
+		throw new Error('At least one country is required for non-pickup services')
 	}
 
 	if (!formData.service) {
 		throw new Error('Service type is required')
+	}
+
+	// Additional pickup validation for updates
+	if (formData.service === 'pickup') {
+		if (!formData.pickupAddress?.street?.trim()) {
+			throw new Error('Street address is required for local pickup')
+		}
+		if (!formData.pickupAddress?.city?.trim()) {
+			throw new Error('City is required for local pickup')
+		}
+		// Enforce zero pricing for pickup services
+		if (formData.price !== '0') {
+			console.warn('Pickup service price should be 0, adjusting automatically')
+			formData.price = '0'
+		}
 	}
 
 	// Create event with the same d tag to update the existing shipping option

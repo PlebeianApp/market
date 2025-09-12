@@ -19,6 +19,7 @@ export const shippingKeys = {
 	all: ['shipping'] as const,
 	details: (id: string) => [...shippingKeys.all, id] as const,
 	byPubkey: (pubkey: string) => [...shippingKeys.all, 'byPubkey', pubkey] as const,
+	byCoordinates: (pubkey: string, dTag: string) => [...shippingKeys.all, 'byCoordinates', pubkey, dTag] as const,
 } as const
 
 export const collectionKeys = {

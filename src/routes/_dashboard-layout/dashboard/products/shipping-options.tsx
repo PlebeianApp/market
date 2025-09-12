@@ -1,3 +1,4 @@
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -6,7 +7,6 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
 import { COUNTRIES_ISO, CURRENCIES, SHIPPING_TEMPLATES } from '@/lib/constants'
 import { useNDK } from '@/lib/stores/ndk'
 import {
@@ -23,6 +23,7 @@ import {
 	getShippingDuration,
 	getShippingId,
 	getShippingLocation,
+	getShippingPickupAddress,
 	getShippingPrice,
 	getShippingService,
 	getShippingTitle,
@@ -32,10 +33,11 @@ import {
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { createFileRoute } from '@tanstack/react-router'
-import { ChevronLeftIcon, GlobeIcon, PackageIcon, PlusIcon, TrashIcon, TruckIcon, XIcon } from 'lucide-react'
+
+import { DashboardListItem } from '@/components/layout/DashboardListItem'
+import { AlertCircleIcon, ChevronLeftIcon, PackageIcon, PlusIcon, TrashIcon, TruckIcon, XIcon } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { DashboardListItem } from '@/components/layout/DashboardListItem'
 
 const SERVICE_TYPES = [
 	{ value: 'standard', label: 'Standard Shipping' },
@@ -64,6 +66,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 	const [user, setUser] = useState<any>(null)
 	const [isSubmitting, setIsSubmitting] = useState(false)
 	const [isOptionalDetailsOpen, setIsOptionalDetailsOpen] = useState(false)
+	const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
 	const publishMutation = usePublishShippingOptionMutation()
 	const updateMutation = useUpdateShippingOptionMutation()
@@ -79,6 +82,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 			const carrierTag = getShippingCarrier(shippingOption)
 			const durationTag = getShippingDuration(shippingOption)
 			const locationTag = getShippingLocation(shippingOption)
+			const pickupAddressTag = getShippingPickupAddress(shippingOption)
 			const weightLimits = getShippingWeightLimits(shippingOption)
 			const dimensionLimits = getShippingDimensionLimits(shippingOption)
 
@@ -91,6 +95,13 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 				service: (serviceTag?.[1] as any) || 'standard',
 				carrier: carrierTag?.[1] || '',
 				location: locationTag?.[1] || '',
+				pickupAddress: pickupAddressTag || {
+					street: '',
+					city: '',
+					state: '',
+					postalCode: '',
+					country: '',
+				},
 				duration: durationTag
 					? {
 							min: durationTag[1],
@@ -115,6 +126,13 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 			currency: 'USD',
 			countries: [],
 			service: 'standard',
+			pickupAddress: {
+				street: '',
+				city: '',
+				state: '',
+				postalCode: '',
+				country: '',
+			},
 		}
 	})
 
@@ -131,14 +149,57 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 			currency: 'USD',
 			countries: [],
 			service: 'standard',
+			pickupAddress: {
+				street: '',
+				city: '',
+				state: '',
+				postalCode: '',
+				country: '',
+			},
 		})
+		setFieldErrors({})
 		setIsSubmitting(false)
 	}, [])
+
+	const validateForm = (): boolean => {
+		const errors: Record<string, string> = {}
+
+		if (!formData.title.trim()) {
+			errors.title = 'Title is required'
+		}
+		if (!formData.description.trim()) {
+			errors.description = 'Description is required'
+		}
+		if (!formData.price.trim()) {
+			errors.price = 'Price is required'
+		} else if (isNaN(Number(formData.price))) {
+			errors.price = 'Price must be a valid number'
+		}
+		if (!formData.currency.trim()) {
+			errors.currency = 'Currency is required'
+		}
+		// Countries are only required for non-pickup services
+		if (formData.service !== 'pickup' && !formData.countries.length) {
+			errors.countries = 'At least one country is required'
+		}
+
+		if (formData.service === 'pickup') {
+			if (!formData.pickupAddress?.street?.trim()) {
+				errors.pickupStreet = 'Street address is required for local pickup'
+			}
+			if (!formData.pickupAddress?.city?.trim()) {
+				errors.pickupCity = 'City is required for local pickup'
+			}
+		}
+
+		setFieldErrors(errors)
+		return Object.keys(errors).length === 0
+	}
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
 
-		if (!formData.title.trim() || !formData.price.trim() || !formData.countries.length) {
+		if (!validateForm()) {
 			toast.error('Please fill in all required fields')
 			return
 		}
@@ -155,15 +216,17 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 					shippingDTag: shippingId,
 					formData,
 				})
+				toast.success('Shipping option updated successfully')
 			} else {
 				await publishMutation.mutateAsync(formData)
+				toast.success('Shipping option created successfully')
 			}
 
 			onOpenChange(false)
 			if (!isEditing) resetForm()
 			onSuccess?.()
 		} catch (error) {
-			console.error('Error saving shipping option:', error)
+			toast.error('Failed to save shipping option')
 		} finally {
 			setIsSubmitting(false)
 		}
@@ -182,7 +245,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 				onOpenChange(false)
 				onSuccess?.()
 			} catch (error) {
-				console.error('Error deleting shipping option:', error)
+				toast.error('Failed to delete shipping option')
 			}
 		}
 	}
@@ -264,6 +327,8 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 												title: template.name,
 												price: template.cost,
 												countries: template.countries || [],
+												// Auto-set service type to pickup for Local Pickup template
+												service: template.name === 'Local Pickup' ? 'pickup' : prev.service,
 											}))
 										}
 									}}
@@ -295,17 +360,48 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 									id="title"
 									data-testid="shipping-title-input"
 									value={formData.title}
-									onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
+									onChange={(e) => {
+										setFormData((prev) => ({ ...prev, title: e.target.value }))
+										if (fieldErrors.title) {
+											setFieldErrors((prev) => ({ ...prev, title: '' }))
+										}
+									}}
 									placeholder="e.g., Standard Shipping to US"
-									required
+									className={fieldErrors.title ? 'border-red-500' : ''}
 								/>
+								{fieldErrors.title && (
+									<div className="flex items-center gap-1 text-sm text-red-600">
+										<AlertCircleIcon className="h-4 w-4" />
+										{fieldErrors.title}
+									</div>
+								)}
 							</div>
 
 							<div className="space-y-2">
 								<Label htmlFor="service" className="font-medium">
 									Service Type *
 								</Label>
-								<Select value={formData.service} onValueChange={(value: any) => setFormData((prev) => ({ ...prev, service: value }))}>
+								<Select
+									value={formData.service}
+									onValueChange={(value: any) => {
+										setFormData((prev) => {
+											const newFormData = { ...prev, service: value }
+											// Auto-populate country and price for pickup services
+											if (value === 'pickup') {
+												// Set price to 0 for pickup services
+												newFormData.price = '0'
+												// Auto-populate country from pickup address if available
+												if (prev.pickupAddress?.country && !prev.countries.includes(prev.pickupAddress.country)) {
+													newFormData.countries = [prev.pickupAddress.country]
+												} else if (!prev.countries.length) {
+													// Default to USA if no country is set
+													newFormData.countries = ['USA']
+												}
+											}
+											return newFormData
+										})
+									}}
+								>
 									<SelectTrigger data-testid="shipping-service-select">
 										<SelectValue placeholder="Select service type" />
 									</SelectTrigger>
@@ -334,13 +430,28 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 										step="0.01"
 										min="0"
 										value={formData.price}
-										onChange={(e) => setFormData((prev) => ({ ...prev, price: e.target.value }))}
+										onChange={(e) => {
+											setFormData((prev) => ({ ...prev, price: e.target.value }))
+											if (fieldErrors.price) {
+												setFieldErrors((prev) => ({ ...prev, price: '' }))
+											}
+										}}
 										placeholder="0.00"
-										className="flex-1"
-										required
+										className={`flex-1 ${fieldErrors.price ? 'border-red-500' : ''}`}
 									/>
-									<Select value={formData.currency} onValueChange={(value) => setFormData((prev) => ({ ...prev, currency: value }))}>
-										<SelectTrigger className="w-20" data-testid="shipping-currency-select">
+									<Select
+										value={formData.currency}
+										onValueChange={(value) => {
+											setFormData((prev) => ({ ...prev, currency: value }))
+											if (fieldErrors.currency) {
+												setFieldErrors((prev) => ({ ...prev, currency: '' }))
+											}
+										}}
+									>
+										<SelectTrigger
+											className={`w-20 ${fieldErrors.currency ? 'border-red-500' : ''}`}
+											data-testid="shipping-currency-select"
+										>
 											<SelectValue>{formData.currency}</SelectValue>
 										</SelectTrigger>
 										<SelectContent>
@@ -352,74 +463,235 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 										</SelectContent>
 									</Select>
 								</div>
+								{(fieldErrors.price || fieldErrors.currency) && (
+									<div className="flex items-center gap-1 text-sm text-red-600">
+										<AlertCircleIcon className="h-4 w-4" />
+										{fieldErrors.price || fieldErrors.currency}
+									</div>
+								)}
 							</div>
 
-							<div className="space-y-2">
-								<Label htmlFor="countries" className="font-medium">
-									Countries *
-								</Label>
-
-								{/* Country Selection */}
+							{/* Countries - Hide for pickup services */}
+							{formData.service !== 'pickup' && (
 								<div className="space-y-2">
-									<Select
-										key={formData.countries.length}
-										onValueChange={(countryCode) => {
-											if (!formData.countries.includes(countryCode)) {
-												setFormData((prev) => ({
-													...prev,
-													countries: [...prev.countries, countryCode],
-												}))
-											}
-										}}
-									>
-										<SelectTrigger data-testid="shipping-country-select">
-											<SelectValue placeholder="Select countries" />
-										</SelectTrigger>
-										<SelectContent>
-											{Object.values(COUNTRIES_ISO)
-												.filter((country) => !formData.countries.includes(country.iso3))
-												.map((country) => (
-													<SelectItem key={country.iso3} value={country.iso3} data-testid={`country-${country.iso3.toLowerCase()}`}>
-														{country.name}
-													</SelectItem>
-												))}
-										</SelectContent>
-									</Select>
+									<Label htmlFor="countries" className="font-medium">
+										Countries *
+									</Label>
 
-									<div className="flex flex-wrap gap-2 min-h-[40px] p-2 border rounded-md">
-										{formData.countries.map((countryCode) => (
-											<Badge key={countryCode} variant="secondary" className="flex items-center gap-1 bg-black text-white">
-												{getCountryName(countryCode)}
-												<XIcon
-													className="w-3 h-3 cursor-pointer pointer-events-auto"
-													onClick={() =>
-														setFormData((prev) => ({
-															...prev,
-															countries: prev.countries.filter((c) => c !== countryCode),
-														}))
-													}
-												/>
-											</Badge>
-										))}
-										{formData.countries.length === 0 && <span className="text-muted-foreground text-sm">No countries selected</span>}
+									{/* Country Selection */}
+									<div className="space-y-2">
+										<Select
+											key={formData.countries.length}
+											onValueChange={(countryCode) => {
+												if (!formData.countries.includes(countryCode)) {
+													setFormData((prev) => ({
+														...prev,
+														countries: [...prev.countries, countryCode],
+													}))
+												}
+											}}
+										>
+											<SelectTrigger data-testid="shipping-country-select">
+												<SelectValue placeholder="Select countries" />
+											</SelectTrigger>
+											<SelectContent>
+												{Object.values(COUNTRIES_ISO)
+													.filter((country) => !formData.countries.includes(country.iso3))
+													.map((country) => (
+														<SelectItem key={country.iso3} value={country.iso3} data-testid={`country-${country.iso3.toLowerCase()}`}>
+															{country.name}
+														</SelectItem>
+													))}
+											</SelectContent>
+										</Select>
+
+										<div className="flex flex-wrap gap-2 min-h-[40px] p-2 border rounded-md">
+											{formData.countries.map((countryCode) => (
+												<Badge key={countryCode} variant="secondary" className="flex items-center gap-1 bg-black text-white">
+													{getCountryName(countryCode)}
+													<XIcon
+														className="w-3 h-3 cursor-pointer pointer-events-auto"
+														onClick={() =>
+															setFormData((prev) => ({
+																...prev,
+																countries: prev.countries.filter((c) => c !== countryCode),
+															}))
+														}
+													/>
+												</Badge>
+											))}
+											{formData.countries.length === 0 && <span className="text-muted-foreground text-sm">No countries selected</span>}
+										</div>
 									</div>
 								</div>
-							</div>
+							)}
 						</div>
 
 						<div className="space-y-2">
 							<Label htmlFor="description" className="font-medium">
-								Description
+								Description *
 							</Label>
 							<Textarea
 								id="description"
 								data-testid="shipping-description-input"
 								value={formData.description}
-								onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+								onChange={(e) => {
+									setFormData((prev) => ({ ...prev, description: e.target.value }))
+									if (fieldErrors.description) {
+										setFieldErrors((prev) => ({ ...prev, description: '' }))
+									}
+								}}
 								placeholder="Describe your shipping option..."
 								rows={3}
+								className={fieldErrors.description ? 'border-red-500' : ''}
 							/>
+							{fieldErrors.description && (
+								<div className="flex items-center gap-1 text-sm text-red-600">
+									<AlertCircleIcon className="h-4 w-4" />
+									{fieldErrors.description}
+								</div>
+							)}
 						</div>
+
+						{/* Pickup Address - Only show for pickup service */}
+						{formData.service === 'pickup' && (
+							<div className="space-y-4">
+								<Label className="font-medium text-base">Pickup Address *</Label>
+								<div className="grid grid-cols-1 gap-4">
+									<div className="space-y-2">
+										<Label htmlFor="pickup-street" className="text-sm font-medium">
+											Street Address *
+										</Label>
+										<Input
+											id="pickup-street"
+											data-testid="pickup-street-input"
+											value={formData.pickupAddress?.street || ''}
+											onChange={(e) => {
+												setFormData((prev) => ({
+													...prev,
+													pickupAddress: {
+														...(prev.pickupAddress || { street: '', city: '', state: '', postalCode: '', country: '' }),
+														street: e.target.value,
+													},
+												}))
+												if (fieldErrors.pickupStreet) {
+													setFieldErrors((prev) => ({ ...prev, pickupStreet: '' }))
+												}
+											}}
+											placeholder="123 Main Street"
+											className={fieldErrors.pickupStreet ? 'border-red-500' : ''}
+										/>
+										{fieldErrors.pickupStreet && (
+											<div className="flex items-center gap-1 text-sm text-red-600">
+												<AlertCircleIcon className="h-4 w-4" />
+												{fieldErrors.pickupStreet}
+											</div>
+										)}
+									</div>
+									<div className="grid grid-cols-2 gap-4">
+										<div className="space-y-2">
+											<Label htmlFor="pickup-city" className="text-sm font-medium">
+												City *
+											</Label>
+											<Input
+												id="pickup-city"
+												data-testid="pickup-city-input"
+												value={formData.pickupAddress?.city || ''}
+												onChange={(e) => {
+													setFormData((prev) => ({
+														...prev,
+														pickupAddress: {
+															...(prev.pickupAddress || { street: '', city: '', state: '', postalCode: '', country: '' }),
+															city: e.target.value,
+														},
+													}))
+													if (fieldErrors.pickupCity) {
+														setFieldErrors((prev) => ({ ...prev, pickupCity: '' }))
+													}
+												}}
+												placeholder="New York"
+												className={fieldErrors.pickupCity ? 'border-red-500' : ''}
+											/>
+											{fieldErrors.pickupCity && (
+												<div className="flex items-center gap-1 text-sm text-red-600">
+													<AlertCircleIcon className="h-4 w-4" />
+													{fieldErrors.pickupCity}
+												</div>
+											)}
+										</div>
+										<div className="space-y-2">
+											<Label htmlFor="pickup-state" className="text-sm font-medium">
+												State/Province
+											</Label>
+											<Input
+												id="pickup-state"
+												data-testid="pickup-state-input"
+												value={formData.pickupAddress?.state || ''}
+												onChange={(e) =>
+													setFormData((prev) => ({
+														...prev,
+														pickupAddress: {
+															...(prev.pickupAddress || { street: '', city: '', state: '', postalCode: '', country: '' }),
+															state: e.target.value,
+														},
+													}))
+												}
+												placeholder="NY"
+											/>
+										</div>
+									</div>
+									<div className="grid grid-cols-2 gap-4">
+										<div className="space-y-2">
+											<Label htmlFor="pickup-postal-code" className="text-sm font-medium">
+												Postal Code
+											</Label>
+											<Input
+												id="pickup-postal-code"
+												data-testid="pickup-postal-code-input"
+												value={formData.pickupAddress?.postalCode || ''}
+												onChange={(e) =>
+													setFormData((prev) => ({
+														...prev,
+														pickupAddress: {
+															...(prev.pickupAddress || { street: '', city: '', state: '', postalCode: '', country: '' }),
+															postalCode: e.target.value,
+														},
+													}))
+												}
+												placeholder="10001"
+											/>
+										</div>
+										<div className="space-y-2">
+											<Label htmlFor="pickup-country" className="text-sm font-medium">
+												Country
+											</Label>
+											<Input
+												id="pickup-country"
+												data-testid="pickup-country-input"
+												value={formData.pickupAddress?.country || ''}
+												onChange={(e) =>
+													setFormData((prev) => {
+														const newFormData = {
+															...prev,
+															pickupAddress: {
+																...(prev.pickupAddress || { street: '', city: '', state: '', postalCode: '', country: '' }),
+																country: e.target.value,
+															},
+														}
+														// Auto-populate countries for pickup services
+														if (prev.service === 'pickup' && e.target.value && !prev.countries.includes(e.target.value)) {
+															newFormData.countries = [e.target.value]
+														}
+														return newFormData
+													})
+												}
+												placeholder="United States"
+											/>
+										</div>
+									</div>
+								</div>
+							</div>
+						)}
 					</div>
 
 					{/* Optional Details */}
@@ -452,7 +724,31 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 										id="location"
 										value={formData.location || ''}
 										onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
-										placeholder="e.g., New York, Tokyo"
+										placeholder="e.g., 123 Main St, Downtown, FL"
+									/>
+								</div>
+
+								<div className="space-y-2">
+									<Label htmlFor="region" className="font-medium">
+										Region
+									</Label>
+									<Input
+										id="region"
+										value={formData.region || ''}
+										onChange={(e) => setFormData((prev) => ({ ...prev, region: e.target.value }))}
+										placeholder="e.g., US-FL (ISO 3166-2 format)"
+									/>
+								</div>
+
+								<div className="space-y-2">
+									<Label htmlFor="geohash" className="font-medium">
+										Geohash
+									</Label>
+									<Input
+										id="geohash"
+										value={formData.geohash || ''}
+										onChange={(e) => setFormData((prev) => ({ ...prev, geohash: e.target.value }))}
+										placeholder="e.g., dhwm9c4ws (precise location hash)"
 									/>
 								</div>
 
@@ -625,6 +921,12 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 												</SelectContent>
 											</Select>
 										</div>
+										{fieldErrors.price && (
+											<div className="flex items-center gap-1 text-sm text-red-600">
+												<AlertCircleIcon className="h-4 w-4" />
+												{fieldErrors.price}
+											</div>
+										)}
 									</div>
 								</div>
 

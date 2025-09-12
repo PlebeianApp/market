@@ -38,7 +38,9 @@ export const fetchPost = async (id: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const event = await ndk.fetchEvent(id)
+	const event = await ndk.fetchEvent({
+		ids: [id],
+	})
 	if (!event) {
 		throw new Error('Post not found')
 	}

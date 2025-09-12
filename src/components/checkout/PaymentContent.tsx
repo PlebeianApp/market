@@ -4,14 +4,12 @@ import {
 	type LightningPaymentProcessorRef,
 	type PaymentResult,
 } from '@/components/lightning/LightningPaymentProcessor'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { ndkStore } from '@/lib/stores/ndk'
 import { NDKUser } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
-import { ChevronLeft, ChevronRight, CreditCard, Users } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -231,14 +229,30 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 		}
 
 		return (
-			<div className="space-y-4">
+			<div className="lg:space-y-6 lg:px-6 lg:pb-6">
+				{/* Invoice Progress - Moved to top */}
+				{invoices.length > 1 && (
+					<div className="space-y-2 mb-4">
+						<div className="flex justify-between text-sm">
+							<span>Payment Progress</span>
+							<span>
+								{Object.values(invoiceStates).filter((state) => state === 'paid').length} of {invoices.length} completed
+							</span>
+						</div>
+						<Progress
+							value={(Object.values(invoiceStates).filter((state) => state === 'paid').length / invoices.length) * 100}
+							className="w-full"
+						/>
+					</div>
+				)}
+
 				{/* Navigation Header */}
 				{showNavigation && invoices.length > 1 && (
 					<div className="flex items-center justify-between">
 						<h3 className="text-lg font-semibold">
 							Payment {activeIndex + 1} of {invoices.length}
 						</h3>
-						<div className="flex items-center gap-2">
+						<div className="flex items-center gap-6">
 							<Button variant="ghost" size="sm" onClick={() => handleNavigate(Math.max(0, activeIndex - 1))} disabled={activeIndex === 0}>
 								<ChevronLeft className="w-4 h-4" />
 							</Button>
@@ -257,31 +271,6 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 					</div>
 				)}
 
-				{/* Invoice Details */}
-				<Card>
-					<CardHeader className="pb-3">
-						<div className="flex items-center justify-between">
-							<CardTitle className="text-base flex items-center gap-2">
-								{currentInvoice.type === 'merchant' ? <CreditCard className="w-4 h-4" /> : <Users className="w-4 h-4" />}
-								{currentInvoice.recipientName}
-							</CardTitle>
-							<Badge variant={invoiceStates[currentInvoice.id] === 'paid' ? 'secondary' : 'outline'}>
-								{invoiceStates[currentInvoice.id] === 'paid' ? 'Paid' : 'Pending'}
-							</Badge>
-						</div>
-					</CardHeader>
-					<CardContent className="space-y-3">
-						<div className="flex justify-between">
-							<span className="text-sm text-gray-600">Amount:</span>
-							<span className="font-semibold">{currentInvoice.amount.toLocaleString()} sats</span>
-						</div>
-						<div className="flex justify-between">
-							<span className="text-sm text-gray-600">Description:</span>
-							<span className="text-sm">{currentInvoice.description}</span>
-						</div>
-					</CardContent>
-				</Card>
-
 				{/* Render ALL Lightning Payment Processors (hidden except for current) */}
 				{allPaymentData.map(({ invoiceId, data }, index) => (
 					<div
@@ -297,27 +286,16 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 							data={data}
 							onPaymentComplete={handlePaymentComplete}
 							onPaymentFailed={handlePaymentFailed}
+							className="shadow-none border-0"
 							showManualVerification={true}
 							active={index === activeIndex} // Only the current processor is active
+							showNavigation={invoices.length > 1}
+							currentIndex={activeIndex}
+							totalInvoices={invoices.length}
+							onNavigate={handleNavigate}
 						/>
 					</div>
 				))}
-
-				{/* Invoice Progress */}
-				{invoices.length > 1 && (
-					<div className="space-y-2">
-						<div className="flex justify-between text-sm">
-							<span>Payment Progress</span>
-							<span>
-								{Object.values(invoiceStates).filter((state) => state === 'paid').length} of {invoices.length} completed
-							</span>
-						</div>
-						<Progress
-							value={(Object.values(invoiceStates).filter((state) => state === 'paid').length / invoices.length) * 100}
-							className="w-full"
-						/>
-					</div>
-				)}
 			</div>
 		)
 	},

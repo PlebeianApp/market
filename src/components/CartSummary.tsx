@@ -107,14 +107,14 @@ export function CartSummary({
 					<div className="flex">
 						<div className="ml-3">
 							<p className="text-sm text-yellow-700">
-								Please select shipping options for {missingShippingCount} {missingShippingCount === 1 ? 'item' : 'items'} before checkout.
+								Please select shipping for {missingShippingCount} {missingShippingCount === 1 ? 'item' : 'items'} before checkout.
 							</p>
 						</div>
 					</div>
 				</div>
 			)}
 
-			<div className="space-y-8" ref={parent}>
+			<div className="space-y-6" ref={parent}>
 				{Object.entries(productsBySeller).map(([sellerPubkey, products]) => {
 					const data = sellerData[sellerPubkey] || {
 						satsTotal: 0,
@@ -126,21 +126,22 @@ export function CartSummary({
 					const optionsForThisSeller = sellerShippingOptions[sellerPubkey] || []
 
 					return (
-						<div key={sellerPubkey} className="border-b pb-8">
+						<div key={sellerPubkey} className="p-4 rounded-lg border shadow-md bg-white">
 							<div className="mb-4">
 								<UserWithAvatar pubkey={sellerPubkey} size="sm" showBadge={false} />
 							</div>
 
 							<ul className="space-y-6">
-								{products.map((product) => (
-									<CartItem
-										key={product.id}
-										productId={product.id}
-										amount={product.amount}
-										onQuantityChange={allowQuantityChanges ? handleQuantityChange : () => {}}
-										onRemove={allowQuantityChanges ? handleRemoveProduct : () => {}}
-										hideShipping={true}
-									/>
+								{products.map((product, index) => (
+									<div key={product.id} className={`p-3 rounded-lg ${index % 2 === 0 ? 'bg-gray-100' : 'bg-white'}`}>
+										<CartItem
+											productId={product.id}
+											amount={product.amount}
+											onQuantityChange={allowQuantityChanges ? handleQuantityChange : () => {}}
+											onRemove={allowQuantityChanges ? handleRemoveProduct : () => {}}
+											hideShipping={true}
+										/>
+									</div>
 								))}
 							</ul>
 
@@ -157,7 +158,7 @@ export function CartSummary({
 
 							{Object.entries(data.currencyTotals).map(([currency, amount]) => (
 								<div key={`${sellerPubkey}-${currency}`} className="flex justify-between mt-4">
-									<p className="text-sm">{currency} Total:</p>
+									<p className="text-sm">Products ({currency}):</p>
 									<p className="text-sm">
 										{amount.toFixed(2)} {currency}
 									</p>
@@ -202,7 +203,7 @@ export function CartSummary({
 				})}
 			</div>
 
-			<div className="border-t pt-4 mt-4">
+			<div className="pt-4 mt-4">
 				<div className="space-y-3 w-full">
 					<div className="space-y-1 mb-2">
 						<div className="flex justify-between">
@@ -231,14 +232,14 @@ export function CartSummary({
 						<div className="space-y-2 p-2 bg-gray-50 rounded-lg">
 							{Object.entries(totalByCurrency).map(([currency, amount]) => (
 								<div key={`total-${currency}`} className="flex justify-between">
-									<p className="text-sm">{currency} Total:</p>
+									<p className="text-sm">Products ({currency}):</p>
 									<p className="text-sm">{amount.toFixed(2)}</p>
 								</div>
 							))}
 
 							{Object.entries(shippingByCurrency).map(([currency, amount]) => (
 								<div key={`shipping-${currency}`} className="flex justify-between">
-									<p className="text-sm">{currency} Shipping:</p>
+									<p className="text-sm">Products ({currency}):</p>
 									<p className="text-sm">{amount.toFixed(2)}</p>
 								</div>
 							))}
