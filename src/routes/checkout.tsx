@@ -642,13 +642,22 @@ function RouteComponent() {
 							)}
 
 							{currentStep === 'summary' && (
-								<OrderFinalizeComponent
-									shippingData={shippingData}
-									invoices={[]} // No invoices yet in summary step
-									totalInSats={totalInSats}
-									onNewOrder={goBackToShopping}
-									onContinueToPayment={handleContinueToPayment}
-								/>
+								<div className="h-full flex flex-col">
+									<div className="flex-1 overflow-y-auto">
+										<OrderFinalizeComponent
+											shippingData={shippingData}
+											invoices={[]} // No invoices yet in summary step
+											totalInSats={totalInSats}
+											onNewOrder={goBackToShopping}
+											// Note: onContinueToPayment moved to footer
+										/>
+									</div>
+									<div className="flex-shrink-0 bg-white border-t pt-4">
+										<Button onClick={handleContinueToPayment} className="w-full btn-black">
+											Continue to Payment
+										</Button>
+									</div>
+								</div>
 							)}
 
 							{/* Loading State for Invoice Generation */}

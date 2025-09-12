@@ -13,7 +13,6 @@ interface OrderFinalizeComponentProps {
 	invoices: LightningInvoiceData[]
 	totalInSats: number
 	onNewOrder: () => void
-	onContinueToPayment?: () => void
 	onViewOrders?: () => void
 }
 
@@ -22,7 +21,6 @@ export function OrderFinalizeComponent({
 	invoices,
 	totalInSats,
 	onNewOrder,
-	onContinueToPayment,
 	onViewOrders,
 }: OrderFinalizeComponentProps) {
 	const { cart } = useStore(cartStore)
@@ -275,34 +273,26 @@ export function OrderFinalizeComponent({
 						</div>
 					)}
 
-					{/* Action Buttons */}
-					<div className="space-y-3 pt-4">
-						{!isPostPayment && onContinueToPayment && (
-							<Button onClick={onContinueToPayment} className="w-full btn-black">
-								Continue to Payment
-							</Button>
-						)}
-
-						{isPostPayment && (
-							<>
-								{allInvoicesPaid && onViewOrders && (
-									<Button onClick={onViewOrders} className="w-full btn-black">
-										View Your Purchases
-									</Button>
-								)}
-
-								<Button onClick={onNewOrder} className={`w-full ${allInvoicesPaid ? 'hover-transparent-black' : 'btn-black'}`}>
-									{allInvoicesPaid ? 'Continue Shopping' : 'Back to Store'}
+					{/* Action Buttons - Only show post-payment buttons */}
+					{isPostPayment && (
+						<div className="space-y-3 pt-4">
+							{allInvoicesPaid && onViewOrders && (
+								<Button onClick={onViewOrders} className="w-full btn-black">
+									View Your Purchases
 								</Button>
+							)}
 
-								{allInvoicesPaid && (
-									<Button variant="outline" className="w-full" onClick={() => window.print()}>
-										Print Order Summary
-									</Button>
-								)}
-							</>
-						)}
-					</div>
+							<Button onClick={onNewOrder} className={`w-full ${allInvoicesPaid ? 'hover-transparent-black' : 'btn-black'}`}>
+								{allInvoicesPaid ? 'Continue Shopping' : 'Back to Store'}
+							</Button>
+
+							{allInvoicesPaid && (
+								<Button variant="outline" className="w-full" onClick={() => window.print()}>
+									Print Order Summary
+								</Button>
+							)}
+						</div>
+					)}
 				</CardContent>
 			</Card>
 		</div>
