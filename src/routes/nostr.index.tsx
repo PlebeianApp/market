@@ -1,4 +1,6 @@
 import { createFileRoute, useLocation } from '@tanstack/react-router'
+import { useStore } from '@tanstack/react-store'
+import { authStore } from '@/lib/stores/auth'
 import { useQuery } from '@tanstack/react-query'
 import { type SVGProps, useEffect, useMemo, useState } from 'react'
 import { notesQueryOptions, type FetchedNDKEvent } from '@/queries/firehose'
@@ -15,6 +17,18 @@ import { findRootFromETags } from '@/queries/thread'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import EmojiPicker from 'emoji-picker-react'
+import { goBackWithTimeLimit } from '@/lib/navigation'
+
+// Function to check if there's a previous entry in browser history
+function canGoBack(): boolean {
+	if (typeof window === 'undefined') return false
+	// window.history.length can vary by browser. Treat >1 as having something to go back to.
+	return (window.history.length || 0) > 1
+}
+// Backwards-compat helper for existing logic
+function isAtStartOfHistory(): boolean {
+	return !canGoBack()
+}
 
 function CollapseVerticalIcon(props: SVGProps<SVGSVGElement>) {
 	return (
@@ -49,10 +63,18 @@ function FirehoseComponent() {
 	const [tagFilter, setTagFilter] = useState('')
 	const [tagFilterInput, setTagFilterInput] = useState(tagFilter)
 	const [authorFilter, setAuthorFilter] = useState('')
-	const isBaseFeed = !tagFilter.trim() && !authorFilter.trim()
-	const [filterMode, setFilterMode] = useState<'all' | 'threads' | 'originals' | 'follows' | 'reactions'>('all')
+	const [filterMode, setFilterMode] = useState<'all' | 'threads' | 'originals' | 'follows' | 'reactions' | 'hashtag'>('all')
+	const isBaseFeed = filterMode !== 'hashtag' && !authorFilter.trim()
+	const [previousFilterMode, setPreviousFilterMode] = useState<'all' | 'threads' | 'originals' | 'follows' | 'hashtag'>('all')
+	const notesOpts = useMemo(() => {
+		// Hashtag view is independent: only in 'hashtag' mode do we apply the tag filter.
+		// Reactions mode is global only.
+		if (filterMode === 'reactions') return { tag: '', author: '', follows: false }
+		if (filterMode === 'hashtag') return { tag: tagFilter, author: '', follows: false }
+		return { tag: '', author: authorFilter, follows: filterMode === 'follows' }
+	}, [filterMode, tagFilter, authorFilter])
 	const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-		...notesQueryOptions({ tag: tagFilter, author: authorFilter, follows: filterMode === 'follows' }),
+		...notesQueryOptions(notesOpts),
 		refetchOnWindowFocus: !isBaseFeed,
 		refetchOnReconnect: !isBaseFeed,
 		refetchInterval: false,
@@ -61,6 +83,8 @@ function FirehoseComponent() {
 	const { data: authorMeta } = useQuery({ ...authorQueryOptions(authorFilter), enabled: !!authorFilter }) as any
 	// Current user for follows mode
 	const [currentUserPk, setCurrentUserPk] = useState('')
+	// React to auth store changes (login/logout) to keep currentUserPk in sync
+	const { isAuthenticated: authIsAuthenticated, user: authUser } = useStore(authStore) as any
 	const { data: currentUserMeta } = useQuery({
 		...authorQueryOptions(currentUserPk),
 		enabled: !!currentUserPk && filterMode === 'follows',
@@ -108,10 +132,109 @@ function FirehoseComponent() {
 		;(async () => {
 			try {
 				const u = await ndkActions.getUser()
-				if (u?.pubkey) setCurrentUserPk(u.pubkey)
+				if (u?.pubkey) {
+					setCurrentUserPk(u.pubkey)
+					// If landing fresh (no history), no explicit view in URL, and no tag/user/thread specified,
+					// default to follows feed for logged-in users
+					try {
+						if (typeof window !== 'undefined') {
+							const url = new URL(window.location.href)
+							const hasExplicitView = url.searchParams.has('view')
+							const hasTag = !!(url.searchParams.get('tag') || '').trim()
+							const hasUser = !!(url.searchParams.get('user') || '').trim()
+							const hasThread = !!(url.searchParams.get('threadview') || '').trim()
+							if (isAtStartOfHistory() && !hasExplicitView && !hasTag && !hasUser && !hasThread) {
+								// Set local state first to render immediately
+								setFilterMode('follows')
+								// Update URL to reflect follows view
+								url.searchParams.set('view', 'follows')
+								url.searchParams.delete('emoji')
+								url.searchParams.delete('tag')
+								const target = url.pathname.startsWith('/nostr')
+									? url.search
+										? `/nostr${url.search}`
+										: '/nostr'
+									: url.search
+										? `${url.pathname}${url.search}`
+										: url.pathname
+								window.history.replaceState({}, '', target)
+								// Trigger listeners to sync state from URL effect without adding history
+								window.dispatchEvent(new PopStateEvent('popstate'))
+							}
+						}
+					} catch {}
+				}
 			} catch {}
 		})()
 	}, [])
+
+	// Keep currentUserPk synced with auth store (login/logout)
+	useEffect(() => {
+		try {
+			const nextPk = authIsAuthenticated && (authUser as any)?.pubkey ? (authUser as any).pubkey : ''
+			if (nextPk !== currentUserPk) {
+				setCurrentUserPk(nextPk)
+				// If user logged out while in follows, downgrade to global and clean URL
+				if (!nextPk && filterMode === 'follows') {
+					setFilterMode('all')
+					if (typeof window !== 'undefined') {
+						const url = new URL(window.location.href)
+						// If view was explicitly set to follows, remove it
+						if ((url.searchParams.get('view') || '').toLowerCase() === 'follows') {
+							url.searchParams.delete('view')
+							const target = url.pathname.startsWith('/nostr')
+								? url.search
+									? `/nostr${url.search}`
+									: '/nostr'
+								: url.search
+									? `${url.pathname}${url.search}`
+									: url.pathname
+							window.history.replaceState({}, '', target)
+							window.dispatchEvent(new PopStateEvent('popstate'))
+						}
+					}
+				}
+			}
+		} catch {}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [authIsAuthenticated, (authUser as any)?.pubkey])
+
+	// When a user logs in during the session, switch to follows if appropriate
+	useEffect(() => {
+		try {
+			if (typeof window === 'undefined') return
+			// If we now have a currentUserPk and we're not explicitly in another constrained view,
+			// prefer switching to follows to satisfy the UX requirement that follows appears after login.
+			if (currentUserPk) {
+				const url = new URL(window.location.href)
+				const hasExplicitView = url.searchParams.has('view')
+				const hasTag = !!(url.searchParams.get('tag') || '').trim()
+				const hasUser = !!(url.searchParams.get('user') || '').trim()
+				const hasThread = !!(url.searchParams.get('threadview') || '').trim()
+				const requestedView = (url.searchParams.get('view') || '').toLowerCase()
+				// If the user explicitly asked for reactions or hashtag, do not override.
+				const isSpecial = requestedView === 'reactions' || requestedView === 'hashtag'
+				if (!hasTag && !hasUser && !hasThread && !isSpecial) {
+					// If there was no explicit view or it was previously downgraded to 'all', switch to follows
+					if (!hasExplicitView || requestedView === 'all' || requestedView === '') {
+						setFilterMode('follows')
+						url.searchParams.set('view', 'follows')
+						url.searchParams.delete('emoji')
+						url.searchParams.delete('tag')
+						const target = url.pathname.startsWith('/nostr')
+							? url.search
+								? `/nostr${url.search}`
+								: '/nostr'
+							: url.search
+								? `${url.pathname}${url.search}`
+								: url.pathname
+						window.history.replaceState({}, '', target)
+						window.dispatchEvent(new PopStateEvent('popstate'))
+					}
+				}
+			}
+		} catch {}
+	}, [currentUserPk])
 
 	// Apply tag/user/view/threadview from URL when location changes
 	useEffect(() => {
@@ -123,7 +246,9 @@ function FirehoseComponent() {
 			const incomingUser = (sp.get('user') || '').trim()
 			const incomingView = (sp.get('view') || '').trim().toLowerCase()
 			const incomingThread = (sp.get('threadview') || '').trim()
-			// sync filter mode from URL (?view)
+			const incomingEmojiRaw = sp.get('emoji') || ''
+			const incomingEmoji = incomingEmojiRaw
+			// sync filter mode from URL (?view) or presence of ?emoji
 			const desiredMode =
 				incomingView === 'threads'
 					? 'threads'
@@ -131,11 +256,35 @@ function FirehoseComponent() {
 						? 'originals'
 						: incomingView === 'follows'
 							? 'follows'
-							: incomingView === 'reactions'
+							: incomingView === 'reactions' || (!!incomingEmoji && incomingEmoji.trim() !== '')
 								? 'reactions'
-								: 'all'
-			if (desiredMode !== filterMode) {
-				setFilterMode(desiredMode as any)
+								: incomingView === 'hashtag' || (!!incomingTag && incomingTag !== '')
+									? 'hashtag'
+									: 'all'
+			// Prevent follows mode when logged out
+			const guardedDesiredMode = desiredMode === 'follows' && !currentUserPk ? 'all' : desiredMode
+			if (guardedDesiredMode !== filterMode) {
+				setFilterMode(guardedDesiredMode as any)
+				// If we downgraded from follows to all, also clean the URL
+				try {
+					if (typeof window !== 'undefined' && desiredMode === 'follows' && !currentUserPk) {
+						const url = new URL(window.location.href)
+						url.searchParams.delete('view')
+						const target = url.pathname.startsWith('/nostr')
+							? url.search
+								? `/nostr${url.search}`
+								: '/nostr'
+							: url.search
+								? `${url.pathname}${url.search}`
+								: url.pathname
+						window.history.replaceState({}, '', target)
+						window.dispatchEvent(new PopStateEvent('popstate'))
+					}
+				} catch {}
+			}
+			// Sync selected emoji from URL when present
+			if ((incomingEmoji || '') !== selectedEmoji) {
+				setSelectedEmoji(incomingEmoji || '')
 			}
 			// Sync thread open state from ?threadview
 			if (incomingThread && incomingThread !== openThreadId) {
@@ -155,6 +304,56 @@ function FirehoseComponent() {
 		} catch {}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [location.href])
+
+	// When tag view is active or a tag is present in the URL, remove all other query params (keep only `tag`).
+	useEffect(() => {
+		try {
+			if (typeof window === 'undefined') return
+			const url = new URL(window.location.href)
+			const rawTag = (url.searchParams.get('tag') || '').trim()
+			if (!rawTag) return
+			let changed = false
+			// Remove everything except 'tag'
+			for (const key of Array.from(url.searchParams.keys())) {
+				if (key !== 'tag') {
+					url.searchParams.delete(key)
+					changed = true
+				}
+			}
+			if (changed) {
+				const target = url.pathname.startsWith('/nostr')
+					? url.search
+						? `/nostr${url.search}`
+						: '/nostr'
+					: url.search
+						? `${url.pathname}${url.search}`
+						: url.pathname
+				window.history.replaceState({}, '', target)
+				window.dispatchEvent(new PopStateEvent('popstate'))
+			}
+		} catch {}
+	}, [location.href])
+
+	// Ensure 'tag' is not present in the URL when not in hashtag view
+	useEffect(() => {
+		try {
+			if (typeof window === 'undefined') return
+			if (filterMode === 'hashtag') return
+			const url = new URL(window.location.href)
+			if (url.searchParams.has('tag')) {
+				url.searchParams.delete('tag')
+				const target = url.pathname.startsWith('/nostr')
+					? url.search
+						? `/nostr${url.search}`
+						: '/nostr'
+					: url.search
+						? `${url.pathname}${url.search}`
+						: url.pathname
+				window.history.replaceState({}, '', target)
+				window.dispatchEvent(new PopStateEvent('popstate'))
+			}
+		} catch {}
+	}, [filterMode])
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return
@@ -221,7 +420,8 @@ function FirehoseComponent() {
 		const originals = roots.filter((w) => !rootsWithReplies.has(((w.event as any).id as string) || ''))
 		return {
 			filtered: (() => {
-				let base = filterMode === 'all' ? all : filterMode === 'threads' ? withThreads : originals
+				// When in reactions mode, use all notes as base so we can filter by reactions later
+				let base = filterMode === 'reactions' ? all : filterMode === 'all' ? all : filterMode === 'threads' ? withThreads : originals
 				base = base.filter((w) => {
 					const e: any = w.event as any
 					const tags = Array.isArray(e.tags) ? (e.tags as any[]) : []
@@ -271,100 +471,38 @@ function FirehoseComponent() {
 		<div className="relative items-center">
 			<div className="text-4xl font-heading sticky top-28 lg:top-20 sm:top-30 z-30 m-0 p-3 px-4 bg-secondary-black text-secondary flex justify-between items-center">
 				{/* Left header: replace Firehose with thread/user/hashtag when active */}
-				<span className="hidden lg:inline">
+				<span className="hidden lg:flex items-center gap-2">
+					{/* Back button - visible in all views except at start of history */}
+					<Button
+						variant="primary"
+						className="p-2 h-8 w-8 flex"
+						title="Go back"
+						aria-label="Go back"
+						disabled={!canGoBack()}
+						onClick={() => canGoBack() && goBackWithTimeLimit()}
+					>
+						<ArrowLeft className="h-4 w-4" />
+					</Button>
 					{openThreadId ? (
 						<span>Thread</span>
 					) : authorFilter?.trim() ? (
 						<span className="gap-1 items-center flex">
-							<Button
-								variant="primary"
-								className="p-1 h-6 w-6 flex"
-								title={tagFilter?.trim() ? 'Clear tag filter' : 'Clear user filter'}
-								aria-label={tagFilter?.trim() ? 'Clear tag filter' : 'Clear user filter'}
-								onClick={() => {
-									setOpenThreadId(null)
-									try {
-										if (typeof window !== 'undefined') {
-											const url = new URL(window.location.href)
-											// If both tag and user filters are active, clear only the tag
-											if (tagFilter?.trim()) {
-												url.searchParams.delete('tag')
-											} else {
-												url.searchParams.delete('user')
-											}
-											const target = url.pathname.startsWith('/nostr')
-												? url.search
-													? `/nostr${url.search}`
-													: '/nostr'
-												: url.search
-													? `${url.pathname}${url.search}`
-													: url.pathname
-											window.history.pushState({}, '', target)
-											window.dispatchEvent(new PopStateEvent('popstate'))
-										}
-									} catch {
-										window.location.href = '/nostr'
-									}
-									// If both tag and user filters are active, clear only the tag
-									if (tagFilter?.trim()) {
-										setTagFilter('')
-										setTagFilterInput('')
-										setPendingTag(null)
-									} else {
-										setAuthorFilter('')
-									}
-									scrollToTop()
-								}}
-							>
-								<ArrowLeft className="" />
-							</Button>
 							@{(authorMeta?.name || authorFilter.slice(0, 8)) + (authorMeta?.name ? '' : '…')}
-							{tagFilter?.trim() ? ` / #${tagFilter.replace(/^#/, '')}` : ''}
 						</span>
-					) : tagFilter?.trim() ? (
-						<span className="flex gap-1 items-center">
-							<Button
-								variant="primary"
-								className="p-1 h-6 w-6 flex"
-								title="Clear tag filter"
-								aria-label="Clear tag filter"
-								onClick={() => {
-									setOpenThreadId(null)
-									try {
-										if (typeof window !== 'undefined') {
-											const url = new URL(window.location.href)
-											url.searchParams.delete('tag')
-											const target = url.pathname.startsWith('/nostr')
-												? url.search
-													? `/nostr${url.search}`
-													: '/nostr'
-												: url.search
-													? `${url.pathname}${url.search}`
-													: url.pathname
-											window.history.pushState({}, '', target)
-											window.dispatchEvent(new PopStateEvent('popstate'))
-										}
-									} catch {
-										window.location.href = '/nostr'
-									}
-									setTagFilter('')
-									setTagFilterInput('')
-									setPendingTag(null)
-									scrollToTop()
-								}}
-							>
-								<ArrowLeft className="items-center" />
-							</Button>
-							#{tagFilter.replace(/^#/, '')}
-						</span>
+					) : filterMode === 'hashtag' && tagFilter?.trim() ? (
+						<span className="flex gap-1 items-center">#{tagFilter.replace(/^#/, '')}</span>
 					) : (
 						<span>
-       {filterMode === 'follows' ? (
+							{filterMode === 'follows' ? (
 								<span>{currentUserDisplayName ? `${currentUserDisplayName} follow feed` : 'Follow feed'}</span>
 							) : filterMode === 'reactions' ? (
-								<span>Reactions {selectedEmoji && selectedEmoji}</span>
+								<span className="flex gap-1 items-center">Reactions {selectedEmoji && selectedEmoji}</span>
+							) : filterMode === 'threads' ? (
+								<span>Firehose - threads</span>
+							) : filterMode === 'originals' ? (
+								<span>Firehose - original posts</span>
 							) : (
-								<span>Firehose</span>
+								<span>Firehose - global</span>
 							)}
 						</span>
 					)}
@@ -377,38 +515,8 @@ function FirehoseComponent() {
 								className="px-4 py-1 h-8 flex gap-1"
 								onClick={() => {
 									try {
-										const currentId = openThreadId
 										setOpenThreadId(null)
-										// Remove threadview from URL to support Back navigation
-										try {
-											const url = new URL(window.location.href)
-											url.searchParams.delete('threadview')
-											const target = url.pathname.startsWith('/nostr')
-												? url.search
-													? `/nostr${url.search}`
-													: '/nostr'
-												: url.search
-													? `${url.pathname}${url.search}`
-													: url.pathname
-											window.history.pushState({}, '', target)
-											window.dispatchEvent(new PopStateEvent('popstate'))
-										} catch {}
-										// Defer scroll until after DOM re-renders out of thread mode
-										let tries = 0
-										const step = () => {
-											tries++
-											try {
-												if (typeof window !== 'undefined' && currentId) {
-													const el = document.querySelector(`[data-note-id="${currentId}"]`) as HTMLElement | null
-													if (el) {
-														el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' })
-														return
-													}
-												}
-											} catch {}
-											if (tries < 3) requestAnimationFrame(step)
-										}
-										requestAnimationFrame(step)
+										goBackWithTimeLimit()
 									} catch {}
 								}}
 								title="Close thread"
@@ -476,180 +584,44 @@ function FirehoseComponent() {
 						<DrawerClose className="text-secondary hover:bg-white/10" />
 					</DrawerHeader>
 					<div className="p-4 text-sm">
-						<div className="mb-2 text-xs text-gray-400">Feed mode</div>
 						<div className="flex flex-col gap-2">
-							<Button
-								variant={'ghost'}
-								className="justify-start"
-								onClick={() => {
-									setLoadingMode('all')
-									setSpinnerSettled(false)
-									setFilterMode('all')
-									setOpenThreadId(null)
-									// Clear all filters
-									setTagFilter('')
-									setTagFilterInput('')
-									setAuthorFilter('')
-									setPendingTag(null)
-									scrollToTop()
-									try {
-										if (typeof window !== 'undefined') {
-											const url = new URL(window.location.href)
-											url.searchParams.delete('view')
-											url.searchParams.delete('tag')
-											url.searchParams.delete('user')
-											const target = url.pathname.startsWith('/nostr')
-												? url.search
-													? `/nostr${url.search}`
-													: '/nostr'
-												: url.search
-													? `${url.pathname}${url.search}`
-													: url.pathname
-											window.history.pushState({}, '', target)
-											window.dispatchEvent(new PopStateEvent('popstate'))
-										}
-									} catch {}
-									// keep drawer open until spinner settles
-								}}
-							>
-								<span className="inline-flex items-center gap-2">
-									{loadingMode === 'all' && isFiltersOpen && !tagFilter && !authorFilter ? (
-										<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
-									) : null}
-									<span>Global</span>
-								</span>
-							</Button>
-							<Button
-								variant={filterMode === 'reactions' ? 'primary' : 'ghost'}
-								className="justify-start"
-								onClick={() => {
-									setLoadingMode('reactions')
-									setSpinnerSettled(false)
-									setFilterMode('reactions')
-									setOpenThreadId(null)
-									try {
-										if (typeof window !== 'undefined') {
-											const url = new URL(window.location.href)
-											url.searchParams.set('view', 'reactions')
-											const target = url.pathname.startsWith('/nostr')
-												? url.search
-													? `/nostr${url.search}`
-													: '/nostr'
-												: url.search
-													? `${url.pathname}${url.search}`
-													: url.pathname
-											window.history.pushState({}, '', target)
-											window.dispatchEvent(new PopStateEvent('popstate'))
-										}
-									} catch {}
-									// keep drawer open until spinner settles
-								}}
-							>
-								<span className="inline-flex items-center gap-2">
-									{loadingMode === 'reactions' && isFiltersOpen ? (
-										<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
-									) : null}
-									<span>Reactions</span>
-								</span>
-							</Button>
-							<div className="pl-2 flex flex-col gap-2">
-								<div className="flex gap-2 items-center">
-									<span className="text-xs text-gray-500">Emoji:</span>
-									<div className="w-16 h-8 px-2 rounded bg-transparent border border-gray-700 flex items-center justify-center">
-										{selectedEmoji || "Any"}
-									</div>
-									<button className="h-8 px-2 rounded bg-white/10 text-secondary" onClick={() => setSelectedEmoji('')}>
-										Clear
-									</button>
-								</div>
-								<div className="mt-2">
-									<EmojiPicker
-										onEmojiClick={(emojiData) => setSelectedEmoji(emojiData.emoji)}
-										width="100%"
-										height="300px"
-										previewConfig={{ showPreview: false }}
-										searchDisabled={false}
-										skinTonesDisabled
-										theme="dark"
-									/>
-								</div>
-							</div>
-							<Button
-								variant={filterMode === 'follows' ? 'primary' : 'ghost'}
-								className="justify-start"
-								onClick={() => {
-									setLoadingMode('follows')
-									setSpinnerSettled(false)
-									setFilterMode('follows')
-									setOpenThreadId(null)
-									try {
-										if (typeof window !== 'undefined') {
-											const url = new URL(window.location.href)
-											url.searchParams.set('view', 'follows')
-											const target = url.pathname.startsWith('/nostr')
-												? url.search
-													? `/nostr${url.search}`
-													: '/nostr'
-												: url.search
-													? `${url.pathname}${url.search}`
-													: url.pathname
-											window.history.pushState({}, '', target)
-											window.dispatchEvent(new PopStateEvent('popstate'))
-										}
-									} catch {}
-									// keep drawer open until spinner settles
-								}}
-							>
-								<span className="inline-flex items-center gap-2">
-									{loadingMode === 'follows' && isFiltersOpen ? (
-										<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
-									) : null}
-									<span>Follows</span>
-								</span>
-							</Button>
-							<div className="mt-4">
-								<Label htmlFor="tag-filter">tag filter</Label>
-								<div className="flex gap-2 items-center">
-									<Input
-										id="tag-filter"
-										placeholder="#news or news"
-										value={tagFilterInput}
-										onChange={(e) => {
-											setTagFilterInput(e.target.value)
-										}}
-										onKeyDown={(e) => {
-											if (e.key === 'Enter') {
-												const normalized = (tagFilterInput || '').replace(/^#/, '').trim()
-												// Always update the filter, but only show overlay if a non-empty tag
-												scrollToTop()
-												setSpinnerSettled(false)
-												setLoadingMode('all')
-												setOpenThreadId(null)
-												if (normalized.length > 0) {
-													setPendingTag(normalized)
-												}
-												setTagFilter(normalized)
+							{currentUserPk ? (
+								<Button
+									variant={filterMode === 'follows' ? 'primary' : 'ghost'}
+									className="justify-start"
+									onClick={() => {
+										setLoadingMode('follows')
+										setSpinnerSettled(false)
+										setFilterMode('follows')
+										setOpenThreadId(null)
+										try {
+											if (typeof window !== 'undefined') {
+												const url = new URL(window.location.href)
+												url.searchParams.set('view', 'follows')
+												url.searchParams.delete('emoji')
+												url.searchParams.delete('tag')
+												const target = url.pathname.startsWith('/nostr')
+													? url.search
+														? `/nostr${url.search}`
+														: '/nostr'
+													: url.search
+														? `${url.pathname}${url.search}`
+														: url.pathname
+												window.history.pushState({}, '', target)
+												window.dispatchEvent(new PopStateEvent('popstate'))
 											}
-										}}
-										className="flex-1"
-									/>
-									<Button
-										variant="ghost"
-										className="p-2 h-9 w-9"
-										onClick={() => {
-											setTagFilterInput('')
-											const el = document.getElementById('tag-filter') as HTMLInputElement | null
-											el?.focus()
-										}}
-										title="Clear tag filter"
-										aria-label="Clear tag filter"
-										disabled={!tagFilterInput?.length}
-									>
-										<X className="h-4 w-4" />
-									</Button>
-								</div>
-								<div className="text-xs text-gray-500 mt-1">Only fetch events that contain this #t tag</div>
-							</div>
+										} catch {}
+										// keep drawer open until spinner settles
+									}}
+								>
+									<span className="inline-flex items-center gap-2">
+										{loadingMode === 'follows' && isFiltersOpen ? (
+											<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
+										) : null}
+										<span>Follows</span>
+									</span>
+								</Button>
+							) : null}
 							<Button
 								variant={filterMode === 'all' ? 'primary' : 'ghost'}
 								className="justify-start"
@@ -662,6 +634,8 @@ function FirehoseComponent() {
 										if (typeof window !== 'undefined') {
 											const url = new URL(window.location.href)
 											url.searchParams.delete('view')
+											url.searchParams.delete('emoji')
+											url.searchParams.delete('tag')
 											const target = url.pathname.startsWith('/nostr')
 												? url.search
 													? `/nostr${url.search}`
@@ -680,7 +654,7 @@ function FirehoseComponent() {
 									{loadingMode === 'all' && isFiltersOpen ? (
 										<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
 									) : null}
-									<span>All ({counts.all})</span>
+									<span>Global ({counts.all})</span>
 								</span>
 							</Button>
 							<Button
@@ -695,6 +669,8 @@ function FirehoseComponent() {
 										if (typeof window !== 'undefined') {
 											const url = new URL(window.location.href)
 											url.searchParams.set('view', 'threads')
+											url.searchParams.delete('emoji')
+											url.searchParams.delete('tag')
 											const target = url.pathname.startsWith('/nostr')
 												? url.search
 													? `/nostr${url.search}`
@@ -728,6 +704,8 @@ function FirehoseComponent() {
 										if (typeof window !== 'undefined') {
 											const url = new URL(window.location.href)
 											url.searchParams.set('view', 'originals')
+											url.searchParams.delete('emoji')
+											url.searchParams.delete('tag')
 											const target = url.pathname.startsWith('/nostr')
 												? url.search
 													? `/nostr${url.search}`
@@ -749,16 +727,236 @@ function FirehoseComponent() {
 									<span>Original posts ({counts.originals})</span>
 								</span>
 							</Button>
+							<div className="mt-4 px-4">
+								<Label htmlFor="tag-filter">Tags</Label>
+								<div className="flex gap-2 items-center">
+									<div className="relative flex-1">
+										<Input
+											id="tag-filter"
+											placeholder="#news or news"
+											value={tagFilterInput}
+											onChange={(e) => {
+												setTagFilterInput(e.target.value)
+											}}
+											onKeyDown={(e) => {
+												if (e.key === 'Enter') {
+													const normalized = (tagFilterInput || '').replace(/^#/, '').trim()
+													// Switch to independent hashtag mode when a tag is entered
+													scrollToTop()
+													setSpinnerSettled(false)
+													setLoadingMode('hashtag')
+													setFilterMode('hashtag')
+													setOpenThreadId(null)
+													if (normalized.length > 0) {
+														setPendingTag(normalized)
+													}
+													setTagFilter(normalized)
+													// Update URL to explicit hashtag view
+													try {
+														if (typeof window !== 'undefined') {
+															const url = new URL(window.location.href)
+															if (normalized) {
+																url.searchParams.set('view', 'hashtag')
+																url.searchParams.set('tag', normalized)
+															} else {
+																url.searchParams.delete('view')
+																url.searchParams.delete('tag')
+															}
+															url.searchParams.delete('emoji')
+															const target = url.pathname.startsWith('/nostr')
+																? url.search
+																	? `/nostr${url.search}`
+																	: '/nostr'
+																: url.search
+																	? `${url.pathname}${url.search}`
+																	: url.pathname
+															window.history.pushState({}, '', target)
+															window.dispatchEvent(new PopStateEvent('popstate'))
+														}
+													} catch {}
+												}
+											}}
+											className="w-full pr-8"
+										/>
+          {tagFilterInput?.length ? (
+													<button
+														type="button"
+														className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+														onClick={() => {
+															// Clear the input and active tag filter, and return to follows/global
+															setTagFilterInput('')
+															setTagFilter('')
+															setSpinnerSettled(false)
+															if (currentUserPk) {
+																setLoadingMode('follows')
+																setFilterMode('follows')
+															} else {
+																setLoadingMode('all')
+																setFilterMode('all')
+															}
+															setOpenThreadId(null)
+															try {
+																if (typeof window !== 'undefined') {
+																	const url = new URL(window.location.href)
+																	url.searchParams.delete('tag')
+																	url.searchParams.delete('emoji')
+																	if (currentUserPk) {
+																		url.searchParams.set('view', 'follows')
+																	} else {
+																		url.searchParams.delete('view')
+																	}
+																	const target = url.pathname.startsWith('/nostr')
+																		? (url.search ? `/nostr${url.search}` : '/nostr')
+																		: (url.search ? `${url.pathname}${url.search}` : url.pathname)
+																	window.history.pushState({}, '', target)
+																	window.dispatchEvent(new PopStateEvent('popstate'))
+																}
+															} catch {}
+															const el = document.getElementById('tag-filter') as HTMLInputElement | null
+															el?.focus()
+														}}
+														title="Clear tag filter"
+														aria-label="Clear tag filter"
+													>
+														<X className="h-4 w-4" />
+													</button>
+												) : null}
+									</div>
+									<Button
+										variant="primary"
+										className="h-9 px-3"
+										onClick={() => {
+											const normalized = (tagFilterInput || '').replace(/^#/, '').trim()
+											if (!normalized) return
+											// Perform same action as Enter
+											scrollToTop()
+											setSpinnerSettled(false)
+											setLoadingMode('hashtag')
+											setFilterMode('hashtag')
+											setOpenThreadId(null)
+											setPendingTag(normalized)
+											setTagFilter(normalized)
+											try {
+												if (typeof window !== 'undefined') {
+													const url = new URL(window.location.href)
+													url.searchParams.set('view', 'hashtag')
+													url.searchParams.set('tag', normalized)
+													url.searchParams.delete('emoji')
+													const target = url.pathname.startsWith('/nostr')
+														? url.search
+															? `/nostr${url.search}`
+															: '/nostr'
+														: url.search
+															? `${url.pathname}${url.search}`
+															: url.pathname
+													window.history.pushState({}, '', target)
+													window.dispatchEvent(new PopStateEvent('popstate'))
+												}
+											} catch {}
+										}}
+										title="Apply hashtag filter"
+										aria-label="Apply hashtag filter"
+										disabled={!(tagFilterInput || '').replace(/^#/, '').trim().length}
+									>
+										⤶
+									</Button>
+								</div>
+							</div>
+							<div className="flex gap-2 items-center px-3 py-2 mt-3 mb-1 font-medium">
+								<span>Reactions</span>
+							</div>
+							<div className="pl-2 flex flex-col gap-2">
+								<div className="flex gap-2 items-center px-2">
+									<span className="text-xs text-gray-500">Emoji:</span>
+									<div className="w-16 h-8 py-0 rounded bg-transparent border border-gray-700 flex items-center justify-center">
+										{selectedEmoji || 'Any'}
+									</div>
+									<button
+										className="h-8 px-2 rounded bg-white/10 text-secondary"
+										onClick={() => {
+											// Clear the emoji filter
+											setSelectedEmoji('')
+
+											// Return to previous filter mode if in reactions mode
+											if (filterMode === 'reactions') {
+												setLoadingMode(previousFilterMode)
+												setSpinnerSettled(false)
+												setFilterMode(previousFilterMode)
+
+												// Update URL
+												try {
+													if (typeof window !== 'undefined') {
+														const url = new URL(window.location.href)
+														if (previousFilterMode === 'all') {
+															url.searchParams.delete('view')
+														} else {
+															url.searchParams.set('view', previousFilterMode)
+														}
+														url.searchParams.delete('emoji')
+														if (previousFilterMode !== 'hashtag') {
+															url.searchParams.delete('tag')
+														}
+														const target = url.pathname.startsWith('/nostr')
+															? url.search
+																? `/nostr${url.search}`
+																: '/nostr'
+															: url.search
+																? `${url.pathname}${url.search}`
+																: url.pathname
+														window.history.pushState({}, '', target)
+														window.dispatchEvent(new PopStateEvent('popstate'))
+													}
+												} catch {}
+											}
+										}}
+									>
+										Clear
+									</button>
+								</div>
+								<div className="mt-2 p-2">
+									<EmojiPicker
+										onEmojiClick={(emojiData) => {
+											// Save current filter mode if not already in reactions mode
+											if (filterMode !== 'reactions') {
+												setPreviousFilterMode(filterMode as 'all' | 'threads' | 'originals' | 'follows' | 'hashtag')
+											}
+
+											// Set the emoji and switch to reactions mode
+											setSelectedEmoji(emojiData.emoji)
+											setLoadingMode('reactions')
+											setSpinnerSettled(false)
+											setFilterMode('reactions')
+											setOpenThreadId(null)
+
+											// Update URL
+											try {
+												if (typeof window !== 'undefined') {
+													const url = new URL(window.location.href)
+													url.searchParams.set('view', 'reactions')
+													url.searchParams.set('emoji', emojiData.emoji)
+													const target = url.pathname.startsWith('/nostr')
+														? url.search
+															? `/nostr${url.search}`
+															: '/nostr'
+														: url.search
+															? `${url.pathname}${url.search}`
+															: url.pathname
+													window.history.pushState({}, '', target)
+													window.dispatchEvent(new PopStateEvent('popstate'))
+												}
+											} catch {}
+										}}
+										width="100%"
+										// height="300px"
+										previewConfig={{ showPreview: false }}
+										searchDisabled={false}
+										skinTonesDisabled
+										theme="dark"
+									/>
+								</div>
+							</div>
 						</div>
 					</div>
-					<DrawerFooter className="p-4 border-t border-gray-800">
-						<div className="flex justify-end gap-2">
-							<Button variant="ghost" onClick={() => uiActions.closeDrawer('filters')}>
-								Close
-							</Button>
-							{/* No Apply button needed since filter applies immediately */}
-						</div>
-					</DrawerFooter>
 				</DrawerContent>
 			</Drawer>
 

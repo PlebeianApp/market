@@ -28,9 +28,13 @@ export const fetchReactionsForNotes = async (noteIds: string[], emoji?: string):
 
   const relaySet = NDKRelaySet.fromRelayUrls(defaultRelaysUrls, ndk)
 
+  const nowSec = Math.floor(Date.now() / 1000)
+  const oneMonthAgoSec = nowSec - 60 * 60 * 24 * 31 // ~last month
+
   const filter: NDKFilter = {
     kinds: [7 as any],
     limit: 2000,
+    since: oneMonthAgoSec,
   }
   ;(filter as any)['#e'] = noteIds
 
