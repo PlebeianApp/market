@@ -11,7 +11,14 @@ import { publishPaymentReceipt } from '@/publish/payment'
 import { type OrderWithRelatedEvents } from '@/queries/orders'
 import { useGenerateInvoiceMutation } from '@/queries/payment'
 import { productQueryOptions } from '@/queries/products'
-import { getShippingInfo, getShippingPickupAddressString, getShippingService, parseShippingReference, shippingOptionByCoordinatesQueryOptions, shippingOptionQueryOptions } from '@/queries/shipping'
+import {
+	getShippingInfo,
+	getShippingPickupAddressString,
+	getShippingService,
+	parseShippingReference,
+	shippingOptionByCoordinatesQueryOptions,
+	shippingOptionQueryOptions,
+} from '@/queries/shipping'
 import { fetchV4VShares } from '@/queries/v4v'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -211,7 +218,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	// Parse shipping reference and fetch shipping option details
 	const parsedShippingData = useMemo(() => {
 		if (!shippingRef) return null
-		
+
 		// Check if it's a composite reference (30406:pubkey:dtag)
 		if (shippingRef.includes(':')) {
 			const parts = shippingRef.split(':')
@@ -219,7 +226,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				return { pubkey: parts[1], dTag: parts[2] }
 			}
 		}
-		
+
 		// If it's just an ID, we can't fetch without pubkey
 		return null
 	}, [shippingRef])
