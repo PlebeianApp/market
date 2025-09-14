@@ -240,7 +240,7 @@ function DashboardLayout() {
 					)}
 
 					{/* Title */}
-					<span className="w-full truncate px-14 text-3xl flex items-center justify-center gap-2">
+					<span className="w-full truncate px-8 sm:px-12 md:px-16 text-3xl flex items-center justify-center gap-2 min-w-0">
 						{showSidebar || !isMobile ? (
 							'Dashboard'
 						) : (
