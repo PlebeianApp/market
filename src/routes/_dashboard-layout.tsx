@@ -267,7 +267,7 @@ function DashboardLayout() {
 
 					{/* Mobile emoji - only visible on small screens when not showing sidebar */}
 					{!showSidebar && emoji && isMobile && !dashboardEmoji && (
-						<span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xl select-none w-12 h-12 flex items-center justify-center">
+						<span className="absolute right-2 sm:right-3 md:right-4 top-1/2 -translate-y-1/2 text-2xl select-none w-12 h-12 flex items-center justify-center z-20">
 							{emoji}
 						</span>
 					)}
