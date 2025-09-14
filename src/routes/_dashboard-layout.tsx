@@ -226,7 +226,7 @@ function DashboardLayout() {
 	return (
 		<div className="lg:flex lg:flex-col lg:h-[calc(100vh-5rem)]">
 			{/* Header - responsive for mobile/desktop */}
-			<div className="lg:hidden sticky top-[9.5rem] lg:top-[5rem] z-10">
+			<div className="lg:hidden sticky top-[8.5rem] z-10">
 				<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center relative">
 					{/* Mobile back button - only visible on small screens when not showing sidebar */}
 					{!showSidebar && isMobile && (
@@ -331,18 +331,18 @@ function DashboardLayout() {
 										<span className="text-sm font-medium">Back to {backButtonInfo?.parentTitle}</span>
 									</button>
 
-									{!isMobile && (
-										<h1 className="absolute left-1/2 -translate-x-1/2 text-[1.6rem] font-bold flex items-center gap-2">
-											{isMessageDetailView && chatProfile && (
-												<Avatar className="h-8 w-8">
-													<AvatarImage src={chatProfile.picture} />
-													<AvatarFallback>
-														{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
-													</AvatarFallback>
-												</Avatar>
-											)}
-											{dashboardTitle}
-										</h1>
+									{!isMobile && isMessageDetailView && chatProfile && (
+										<div className="flex items-center gap-2 min-w-0">
+											<Avatar className="h-6 w-6 flex-shrink-0">
+												<AvatarImage src={chatProfile.profile?.picture} />
+												<AvatarFallback>
+													{(chatProfile.profile?.name || chatProfile.profile?.displayName || chatPubkey?.slice(0, 1))
+														?.charAt(0)
+														.toUpperCase()}
+												</AvatarFallback>
+											</Avatar>
+											<span className="text-sm font-medium truncate min-w-0">{dashboardTitleWithoutEmoji}</span>
+										</div>
 									)}
 								</div>
 							)}
