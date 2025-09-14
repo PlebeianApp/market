@@ -143,7 +143,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 				<span className="font-medium capitalize">{label}</span>
 			</div>
 
-			{hasActions && (
+			{hasActions ? (
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
 						<Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -202,6 +202,15 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 						)}
 					</DropdownMenuContent>
 				</DropdownMenu>
+			) : (
+				<Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled>
+					<span className="sr-only">No actions available</span>
+					{status === ORDER_STATUS.CANCELLED ? (
+						<X className="h-4 w-4 text-muted-foreground" />
+					) : (
+						<Check className="h-4 w-4 text-muted-foreground" />
+					)}
+				</Button>
 			)}
 
 			{/* Shipping dialog */}
