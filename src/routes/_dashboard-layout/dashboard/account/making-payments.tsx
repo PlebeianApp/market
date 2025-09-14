@@ -334,7 +334,7 @@ function MakingPaymentsComponent() {
 			) : (
 				!isAddingWallet && (
 					<>
-						<div ref={animationParent}>
+						<div ref={animationParent} className="space-y-4">
 							{combinedWallets.map((wallet) => (
 							<WalletListItemWithBalance
 								key={wallet.id}
@@ -461,7 +461,7 @@ function WalletListItem({
 	isDeleting,
 }: WalletListItemProps) {
 	return (
-		<Collapsible open={isOpen} onOpenChange={onToggleOpen} className="space-y-4">
+		<Collapsible open={isOpen} onOpenChange={onToggleOpen}>
 			<Card className={isDeleting ? 'opacity-50 pointer-events-none' : ''}>
 				<CollapsibleTrigger asChild>
 					<CardHeader className="pb-4 flex flex-row items-center justify-between cursor-pointer group">
