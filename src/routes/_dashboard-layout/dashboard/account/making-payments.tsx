@@ -250,7 +250,7 @@ function MakingPaymentsComponent() {
 		<div>
 			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
 				<h1 className="text-2xl font-bold">Making Payments</h1>
-				{combinedWallets.length > 0 && !isAddingWallet && (
+				{combinedWallets.length > 0 && (
 					<Button onClick={handleAddWalletClick} className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold">
 						<PlusIcon className="h-4 w-4 mr-2" /> Add Wallet
 					</Button>
@@ -258,7 +258,7 @@ function MakingPaymentsComponent() {
 			</div>
 			<div className="space-y-6 p-4 lg:p-6">
 				<div className="lg:hidden">
-					{combinedWallets.length > 0 && !isAddingWallet && (
+					{combinedWallets.length > 0 && (
 						<Button onClick={handleAddWalletClick} className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600">
 							<PlusIcon className="h-4 w-4 mr-2" /> Add Wallet
 						</Button>
@@ -325,10 +325,9 @@ function MakingPaymentsComponent() {
 					</CardContent>
 				</Card>
 			) : (
-				!isAddingWallet && (
-					<>
-						<div ref={animationParent} className="space-y-4">
-							{combinedWallets.map((wallet) => (
+				<>
+					<div ref={animationParent} className="space-y-4">
+						{combinedWallets.map((wallet) => (
 							<WalletListItemWithBalance
 								key={wallet.id}
 								wallet={wallet}
@@ -385,7 +384,6 @@ function MakingPaymentsComponent() {
 							</Button>
 						)}
 					</>
-				)
 			)}
 			</div>
 		</div>
