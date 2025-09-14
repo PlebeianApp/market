@@ -354,7 +354,7 @@ function DashboardLayout() {
 									<div className="h-full">
 										<div
 											className={cn(
-												'p-4 bg-white lg:p-8 lg:bg-transparent h-full',
+												'p-4 bg-white lg:pt-8 lg:px-8 lg:pb-6 lg:bg-transparent h-full',
 												location.pathname === '/dashboard/sales/sales' && 'p-0 lg:p-0',
 												location.pathname.startsWith('/dashboard/sales/messages') && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/sales/circular-economy' && 'p-0 lg:p-0',
