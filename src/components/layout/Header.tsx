@@ -30,8 +30,9 @@ export function Header() {
 	const isProfilePage = location.pathname.startsWith('/profile/')
 	const isHomepage = location.pathname === '/'
 	const isCommunityPage = location.pathname === '/community'
+	const isCollectionPage = location.pathname.startsWith('/collection/')
 	const isNostrPage = location.pathname === '/nostr'
-	const shouldUseTransparentHeader = isProductPage || isHomepage || isProfilePage || isCommunityPage
+	const shouldUseTransparentHeader = isProductPage || isHomepage || isProfilePage || isCommunityPage || isCollectionPage
 
 	// Scroll detection for pages with transparent headers
 	useEffect(() => {
