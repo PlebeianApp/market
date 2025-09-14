@@ -789,7 +789,9 @@ function RouteComponent() {
 									{nwcEnabled && <p className="text-xs text-gray-500 mt-1">Fast payments available • Configure more wallets in settings</p>}
 								</div>
 
-								<PaymentSummary invoices={invoices} currentIndex={currentInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
+								<div className="pb-6">
+									<PaymentSummary invoices={invoices} currentIndex={currentInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
+								</div>
 							</>
 						) : (
 							<ScrollArea className="h-full">
