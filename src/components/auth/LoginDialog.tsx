@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/lib/stores/auth'
@@ -25,11 +25,26 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-[425px]" data-testid="login-dialog">
-				<DialogHeader>
-					<DialogTitle>Login</DialogTitle>
-					<DialogDescription>Choose your preferred login method below.</DialogDescription>
-				</DialogHeader>
+			<DialogContent
+				className="sm:max-w-[425px] p-0 [&>button]:text-white [&>button]:hover:text-gray-300 [&>button]:top-6 [&>button]:right-6"
+				data-testid="login-dialog"
+			>
+				{/* Header Section */}
+				<div className="relative bg-black text-white p-6 overflow-hidden">
+					<div
+						className="absolute inset-0 opacity-80"
+						style={{
+							backgroundImage: 'radial-gradient(circle, rgba(255, 255, 255, 0.3) 1px, transparent 1px)',
+							backgroundSize: '10px 10px',
+							backgroundRepeat: 'repeat',
+						}}
+					/>
+					<div className="relative z-10">
+						<h2 className="text-xl font-semibold mb-2">Login</h2>
+						<p className="text-sm text-gray-300">Choose your preferred login method below.</p>
+					</div>
+				</div>
+				<div className="px-6 pt-0 pb-6">
 				<Tabs defaultValue="extension" className="w-full" value={activeTab} onValueChange={setActiveTab}>
 					<TabsList className="w-full rounded-none bg-transparent h-auto p-0 flex">
 						<TabsTrigger
@@ -111,6 +126,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 						/>
 						Auto-login
 					</Label>
+				</div>
 				</div>
 			</DialogContent>
 		</Dialog>
