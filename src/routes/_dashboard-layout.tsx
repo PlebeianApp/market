@@ -334,11 +334,9 @@ function DashboardLayout() {
 									{!isMobile && isMessageDetailView && chatProfile && (
 										<div className="flex items-center gap-2 min-w-0">
 											<Avatar className="h-6 w-6 flex-shrink-0">
-												<AvatarImage src={chatProfile.profile?.picture} />
+												<AvatarImage src={chatProfile.picture} />
 												<AvatarFallback>
-													{(chatProfile.profile?.name || chatProfile.profile?.displayName || chatPubkey?.slice(0, 1))
-														?.charAt(0)
-														.toUpperCase()}
+													{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
 												</AvatarFallback>
 											</Avatar>
 											<span className="text-sm font-medium truncate min-w-0">{dashboardTitleWithoutEmoji}</span>
