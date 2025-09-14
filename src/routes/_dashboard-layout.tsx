@@ -321,7 +321,7 @@ function DashboardLayout() {
 						>
 							{/* Desktop back button and title - fixed to top of container */}
 							{needsBackButton && (
-								<div className="sticky top-0 z-10 bg-white border-b border-gray-200 pb-4 mb-0 p-4 lg:p-8 flex-shrink-0 flex items-center relative">
+								<div className="sticky top-0 z-10 bg-white border-b border-gray-200 pb-4 mb-0 p-4 lg:p-8 flex-shrink-0 flex items-center justify-between relative">
 									<button
 										onClick={handleBackToParent}
 										className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
