@@ -22,6 +22,34 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Textarea } from '../ui/textarea'
 
+// Custom Stop Icon component
+function StopIcon({ className }: { className?: string }) {
+	return (
+		<svg
+			version="1.1"
+			id="Layer_1"
+			xmlns="http://www.w3.org/2000/svg"
+			xmlnsXlink="http://www.w3.org/1999/xlink"
+			x="0px"
+			y="0px"
+			width="122.88px"
+			height="122.88px"
+			viewBox="0 0 122.88 122.88"
+			enableBackground="new 0 0 122.88 122.88"
+			xmlSpace="preserve"
+			className={className}
+		>
+			<g>
+				<path
+					fillRule="evenodd"
+					clipRule="evenodd"
+					d="M61.44,0c33.926,0,61.44,27.514,61.44,61.44c0,33.926-27.514,61.439-61.44,61.439 C27.513,122.88,0,95.366,0,61.44C0,27.514,27.513,0,61.44,0L61.44,0z M98.505,37.049L37.051,98.503 c6.999,4.617,15.379,7.307,24.389,7.307c24.5,0,44.369-19.869,44.369-44.369C105.809,52.431,103.119,44.05,98.505,37.049 L98.505,37.049L98.505,37.049z M24.378,85.829l61.453-61.454c-6.997-4.615-15.381-7.304-24.391-7.304 c-24.5,0-44.369,19.87-44.369,44.369C17.072,70.449,19.761,78.83,24.378,85.829L24.378,85.829L24.378,85.829z"
+				/>
+			</g>
+		</svg>
+	)
+}
+
 interface OrderActionsProps {
 	order: OrderWithRelatedEvents
 	userPubkey: string
@@ -205,11 +233,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 			) : (
 				<Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled>
 					<span className="sr-only">No actions available</span>
-					{status === ORDER_STATUS.CANCELLED ? (
-						<X className="h-4 w-4 text-muted-foreground" />
-					) : (
-						<Check className="h-4 w-4 text-muted-foreground" />
-					)}
+					<StopIcon className="h-4 w-4 text-muted-foreground" />
 				</Button>
 			)}
 
