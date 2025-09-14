@@ -606,9 +606,9 @@ function RouteComponent() {
 				<Card className="flex-1 lg:w-1/2 flex flex-col lg:h-full shadow-md lg:order-2">
 					<CardHeader>
 						<div className="flex items-center justify-between">
-						<CardTitle>
-							{currentStep === 'shipping' ? 'Shipping Address' : currentStep === 'payment' ? 'Invoices' : 'Order Summary'}
-						</CardTitle>
+							<CardTitle>
+								{currentStep === 'shipping' ? 'Shipping Address' : currentStep === 'payment' ? 'Invoices' : 'Order Summary'}
+							</CardTitle>
 							{currentStep === 'payment' && invoices.length > 1 && (
 								<div className="hidden lg:flex items-center gap-2">
 									<Button

@@ -45,88 +45,88 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 					</div>
 				</div>
 				<div className="px-6 pt-0 pb-6">
-				<Tabs defaultValue="extension" className="w-full" value={activeTab} onValueChange={setActiveTab}>
-					<TabsList className="w-full rounded-none bg-transparent h-auto p-0 flex">
-						<TabsTrigger
-							value="extension"
-							data-testid="extension-tab"
-							className="flex-1 px-2 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
-						>
-							Extension
-						</TabsTrigger>
-						<TabsTrigger
-							value="connect"
-							data-testid="connect-tab"
-							className="flex-1 px-2 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
-						>
-							N-Connect
-						</TabsTrigger>
-						<TabsTrigger
-							value="private-key"
-							data-testid="private-key-tab"
-							className="flex-1 px-2 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
-						>
-							Private Key
-						</TabsTrigger>
-					</TabsList>
-					<TabsContent value="private-key">
-						<PrivateKeyLogin onError={handleError} onSuccess={() => onOpenChange(false)} />
-					</TabsContent>
-					<TabsContent value="connect">
-						<Tabs defaultValue="qr" className="w-full">
-							<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-[1px]">
-								<TabsTrigger
-									value="qr"
-									className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
-								>
-									QR Code
-								</TabsTrigger>
-								<TabsTrigger
-									value="bunker"
-									className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
-								>
-									Bunker
-								</TabsTrigger>
-							</TabsList>
-
-							<TabsContent value="qr">
-								<NostrConnectQR onError={handleError} onSuccess={() => onOpenChange(false)} />
-							</TabsContent>
-
-							<TabsContent value="bunker">{/* <BunkerConnect onError={handleError} /> */}</TabsContent>
-						</Tabs>
-					</TabsContent>
-					<TabsContent value="extension">
-						<div className="space-y-4 py-4">
-							<p className="text-sm text-muted-foreground">Login using your Nostr browser extension (e.g., Alby, nos2x).</p>
-							<Button
-								onClick={() =>
-									loginWithExtension()
-										.catch(console.error)
-										.finally(() => onOpenChange(false))
-								}
-								className="w-full"
-								data-testid="connect-extension-button"
+					<Tabs defaultValue="extension" className="w-full" value={activeTab} onValueChange={setActiveTab}>
+						<TabsList className="w-full rounded-none bg-transparent h-auto p-0 flex">
+							<TabsTrigger
+								value="extension"
+								data-testid="extension-tab"
+								className="flex-1 px-2 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
 							>
-								Connect to Extension
-							</Button>
-						</div>
-					</TabsContent>
-				</Tabs>
-				<div className="flex items-center space-x-2">
-					<Label htmlFor="auto-login" className=" flex gap-2 text-sm text-muted-foreground items-center">
-						<Checkbox
-							id="auto-login"
-							checked={enableAutoLogin}
-							onCheckedChange={(checked) => {
-								setEnableAutoLogin(checked === true)
-								localStorage.setItem(NOSTR_AUTO_LOGIN, checked === true ? 'true' : 'false')
-							}}
-							data-testid="auto-login-checkbox"
-						/>
-						Auto-login
-					</Label>
-				</div>
+								Extension
+							</TabsTrigger>
+							<TabsTrigger
+								value="connect"
+								data-testid="connect-tab"
+								className="flex-1 px-2 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
+							>
+								N-Connect
+							</TabsTrigger>
+							<TabsTrigger
+								value="private-key"
+								data-testid="private-key-tab"
+								className="flex-1 px-2 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
+							>
+								Private Key
+							</TabsTrigger>
+						</TabsList>
+						<TabsContent value="private-key">
+							<PrivateKeyLogin onError={handleError} onSuccess={() => onOpenChange(false)} />
+						</TabsContent>
+						<TabsContent value="connect">
+							<Tabs defaultValue="qr" className="w-full">
+								<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-[1px]">
+									<TabsTrigger
+										value="qr"
+										className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+									>
+										QR Code
+									</TabsTrigger>
+									<TabsTrigger
+										value="bunker"
+										className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+									>
+										Bunker
+									</TabsTrigger>
+								</TabsList>
+
+								<TabsContent value="qr">
+									<NostrConnectQR onError={handleError} onSuccess={() => onOpenChange(false)} />
+								</TabsContent>
+
+								<TabsContent value="bunker">{/* <BunkerConnect onError={handleError} /> */}</TabsContent>
+							</Tabs>
+						</TabsContent>
+						<TabsContent value="extension">
+							<div className="space-y-4 py-4">
+								<p className="text-sm text-muted-foreground">Login using your Nostr browser extension (e.g., Alby, nos2x).</p>
+								<Button
+									onClick={() =>
+										loginWithExtension()
+											.catch(console.error)
+											.finally(() => onOpenChange(false))
+									}
+									className="w-full"
+									data-testid="connect-extension-button"
+								>
+									Connect to Extension
+								</Button>
+							</div>
+						</TabsContent>
+					</Tabs>
+					<div className="flex items-center space-x-2">
+						<Label htmlFor="auto-login" className=" flex gap-2 text-sm text-muted-foreground items-center">
+							<Checkbox
+								id="auto-login"
+								checked={enableAutoLogin}
+								onCheckedChange={(checked) => {
+									setEnableAutoLogin(checked === true)
+									localStorage.setItem(NOSTR_AUTO_LOGIN, checked === true ? 'true' : 'false')
+								}}
+								data-testid="auto-login-checkbox"
+							/>
+							Auto-login
+						</Label>
+					</div>
 				</div>
 			</DialogContent>
 		</Dialog>
