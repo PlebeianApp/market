@@ -331,18 +331,18 @@ function DashboardLayout() {
 										<span className="text-sm font-medium">Back to {backButtonInfo?.parentTitle}</span>
 									</button>
 
-									{!isMobile && (
-										<h1 className="absolute left-1/2 -translate-x-1/2 text-[1.6rem] font-bold flex items-center gap-2">
-											{isMessageDetailView && chatProfile && (
-												<Avatar className="h-8 w-8">
-													<AvatarImage src={chatProfile.picture} />
-													<AvatarFallback>
-														{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
-													</AvatarFallback>
-												</Avatar>
-											)}
-											{dashboardTitle}
-										</h1>
+									{!isMobile && isMessageDetailView && chatProfile && (
+										<div className="flex items-center gap-2 min-w-0">
+											<Avatar className="h-6 w-6 flex-shrink-0">
+												<AvatarImage src={chatProfile.profile?.picture} />
+												<AvatarFallback>
+													{(chatProfile.profile?.name || chatProfile.profile?.displayName || chatPubkey?.slice(0, 1))
+														?.charAt(0)
+														.toUpperCase()}
+												</AvatarFallback>
+											</Avatar>
+											<span className="text-sm font-medium truncate min-w-0">{dashboardTitleWithoutEmoji}</span>
+										</div>
 									)}
 								</div>
 							)}
