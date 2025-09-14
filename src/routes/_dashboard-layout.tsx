@@ -371,48 +371,10 @@ function DashboardLayout() {
 												location.pathname === '/dashboard/app-settings/blacklists' && 'p-0 lg:p-0',
 											)}
 										>
-											{/* Only show title here if there's no back button */}
-											{!isMobile &&
-												!needsBackButton &&
-												location.pathname !== '/dashboard/sales/sales' &&
-												!location.pathname.startsWith('/dashboard/sales/messages') &&
-												location.pathname !== '/dashboard/sales/circular-economy' &&
-												location.pathname !== '/dashboard/products/products' &&
-												location.pathname !== '/dashboard/products/collections' &&
-												location.pathname !== '/dashboard/products/receiving-payments' &&
-												location.pathname !== '/dashboard/products/shipping-options' &&
-												location.pathname !== '/dashboard/account/profile' &&
-												location.pathname !== '/dashboard/account/making-payments' &&
-												location.pathname !== '/dashboard/account/your-purchases' &&
-												location.pathname !== '/dashboard/app-settings/app-miscelleneous' &&
-												location.pathname !== '/dashboard/app-settings/team' &&
-												location.pathname !== '/dashboard/app-settings/blacklists' &&
-												location.pathname !== '/dashboard/account/network' && (
-													<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>
-												)}
 											{!isAuthenticated ? (
 												<LoginPrompt />
 											) : (
 												<>
-													{/* Only show title here if there's no back button */}
-													{!isMobile &&
-														!needsBackButton &&
-														location.pathname !== '/dashboard/sales/sales' &&
-														!location.pathname.startsWith('/dashboard/sales/messages') &&
-														location.pathname !== '/dashboard/app-settings/app-miscelleneous' &&
-														location.pathname !== '/dashboard/app-settings/team' &&
-														location.pathname !== '/dashboard/app-settings/blacklists' &&
-														location.pathname !== '/dashboard/sales/circular-economy' &&
-														location.pathname !== '/dashboard/products/products' &&
-														location.pathname !== '/dashboard/products/collections' &&
-														location.pathname !== '/dashboard/products/receiving-payments' &&
-														location.pathname !== '/dashboard/products/shipping-options' &&
-														location.pathname !== '/dashboard/account/profile' &&
-														location.pathname !== '/dashboard/account/making-payments' &&
-														location.pathname !== '/dashboard/account/your-purchases' &&
-														location.pathname !== '/dashboard/account/network' && (
-															<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>
-														)}
 													<Outlet />
 												</>
 											)}
