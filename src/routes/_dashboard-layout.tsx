@@ -253,7 +253,7 @@ function DashboardLayout() {
 												{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
 											</AvatarFallback>
 										</Avatar>
-										<span className="truncate">{dashboardTitleWithoutEmoji}</span>
+										<span className="truncate min-w-0 flex-1 text-center">{dashboardTitleWithoutEmoji}</span>
 									</>
 								) : (
 									<>
