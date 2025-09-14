@@ -109,7 +109,7 @@ function RouteComponent() {
 						<span className="hidden sm:inline">Back to Community</span>
 					</Button>
 				)}
-				<div className={`relative hero-container ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-black'}`}>
+				<div className={`relative hero-container-small ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-black'}`}>
 					<div className="hero-overlays">
 						<div className="absolute inset-0 bg-radial-overlay z-10" />
 						<div className="absolute inset-0 opacity-30 bg-dots-overlay z-10" />
