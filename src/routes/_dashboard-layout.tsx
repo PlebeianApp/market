@@ -114,8 +114,8 @@ function LoginPrompt() {
 		<div className="flex items-center justify-center h-full">
 			<div className="flex flex-col items-center space-y-4">
 				<p className="text-lg text-muted-foreground">Please log in to view</p>
-				<Button onClick={handleLoginClick} className="bg-neutral-800 hover:bg-neutral-700 text-white">
-					Login
+				<Button onClick={handleLoginClick} variant="primary">
+					LOGIN
 				</Button>
 			</div>
 		</div>
@@ -224,15 +224,15 @@ function DashboardLayout() {
 	const emoji = getCurrentEmoji(showSidebar, typeof window !== 'undefined' ? window.location.pathname : '')
 
 	return (
-		<div className="lg:flex lg:flex-col lg:h-[calc(100vh-8.5rem)]">
+		<div className="lg:flex lg:flex-col lg:h-[calc(100vh-5rem)]">
 			{/* Header - responsive for mobile/desktop */}
-			<div className="lg:hidden sticky top-[8.5rem] z-10">
+			<div className="lg:hidden sticky top-[9.5rem] lg:top-[5rem] z-10">
 				<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center relative">
 					{/* Mobile back button - only visible on small screens when not showing sidebar */}
 					{!showSidebar && isMobile && (
 						<button
 							onClick={handleBackToSidebar}
-							className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 top-1/2 -translate-y-1/2 w-12 h-12"
+							className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 sm:left-3 md:left-4 top-1/2 -translate-y-1/2 w-12 h-12 z-20"
 							aria-label="Back to sidebar"
 						>
 							<span className="i-back w-6 h-6" />
