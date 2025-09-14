@@ -277,7 +277,7 @@ function ProfileComponent() {
 							<Button
 								type="button"
 								disabled={isLoading || !changesExist}
-								className="w-full lg:hidden"
+								className="btn-black w-full lg:hidden"
 								onClick={handleSave}
 								data-testid="profile-save-button"
 							>
