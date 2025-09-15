@@ -1,4 +1,4 @@
-import { createFileRoute, useLocation } from '@tanstack/react-router'
+import { createFileRoute, useLocation, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { authStore } from '@/lib/stores/auth'
 import { useQuery } from '@tanstack/react-query'
@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import EmojiPicker from 'emoji-picker-react'
 import { goBackWithTimeLimit } from '@/lib/navigation'
+import { useConfigQuery } from '@/queries/config'
 
 // Function to check if there's a previous entry in browser history
 function canGoBack(): boolean {
@@ -55,6 +56,7 @@ export const Route = createFileRoute('/nostr/')({
 })
 
 function FirehoseComponent() {
+	const { data: config } = useConfigQuery()
 	const location = useLocation()
 	const [isFiltersOpen, setIsFiltersOpen] = useState(false)
 	const [loadingMode, setLoadingMode] = useState<null | 'all' | 'threads' | 'originals' | 'follows' | 'reactions'>(null)
@@ -94,6 +96,8 @@ function FirehoseComponent() {
 	// Overlay state for loading a new tag
 	const [pendingTag, setPendingTag] = useState<string | null>(null)
 	const [showTagOverlay, setShowTagOverlay] = useState(false)
+	const [showHomeNavigation, setShowHomeNavigation] = useState(false)
+	const [logoButtonHighlighted, setLogoButtonHighlighted] = useState(false)
 
 	const scrollToTop = () => {
 		if (typeof window === 'undefined') return
@@ -334,6 +338,31 @@ function FirehoseComponent() {
 		} catch {}
 	}, [location.href])
 
+	// Auto-fallback to global view if follows mode returns empty data
+	useEffect(() => {
+		// Only apply this logic when in follows mode and data has loaded
+		if (filterMode === 'follows' && !isLoading && data && Array.isArray(data) && data.length === 0 && currentUserPk) {
+			console.log('No follow list found, switching to global view')
+			setFilterMode('all')
+			// Update URL to remove follows view parameter
+			if (typeof window !== 'undefined') {
+				try {
+					const url = new URL(window.location.href)
+					url.searchParams.delete('view')
+					const target = url.pathname.startsWith('/nostr')
+						? url.search
+							? `/nostr${url.search}`
+							: '/nostr'
+						: url.search
+							? `${url.pathname}${url.search}`
+							: url.pathname
+					window.history.replaceState({}, '', target)
+					window.dispatchEvent(new PopStateEvent('popstate'))
+				} catch {}
+			}
+		}
+	}, [filterMode, isLoading, data, currentUserPk])
+
 	// Ensure 'tag' is not present in the URL when not in hashtag view
 	useEffect(() => {
 		try {
@@ -469,21 +498,70 @@ function FirehoseComponent() {
 
 	return (
 		<div className="relative items-center">
-			<div className="text-4xl font-heading sticky top-28 lg:top-20 sm:top-30 z-30 m-0 p-3 px-4 bg-secondary-black text-secondary flex justify-between items-center">
+			<div className="text-4xl font-heading sticky top-0 lg:top-20 z-30 m-0 p-3 px-4 bg-secondary-black text-secondary flex justify-between items-center">
 				{/* Left header: replace Firehose with thread/user/hashtag when active */}
-				<span className="hidden lg:flex items-center gap-2">
-					{/* Back button - visible in all views except at start of history */}
-					<Button
-						variant="primary"
-						className="p-2 h-8 w-8 flex"
-						title="Go back"
-						aria-label="Go back"
-						disabled={!canGoBack()}
-						onClick={() => canGoBack() && goBackWithTimeLimit()}
+				<span className="flex items-center gap-0 justify-start">
+					{/* Home button - site logo button matching main page */}
+					<Link
+						to="/"
+						title="Go to home page"
+						aria-label="Go to home page"
+						className="lg:hidden"
+						onClick={() => {
+							if (showHomeNavigation) {
+								setShowHomeNavigation(false)
+							} else {
+								setShowHomeNavigation(true)
+							}
+						}}
 					>
-						<ArrowLeft className="h-4 w-4" />
-					</Button>
-					{openThreadId ? (
+						{config?.appSettings?.picture && (
+							<img src={config.appSettings.picture} alt={config.appSettings.displayName} className="w-16 px-2" />
+						)}
+					</Link>
+					{/* Back button - visible in all views except at start of history */}
+					{!showHomeNavigation && (
+						<Button
+							variant="primary"
+							className="p-2 mx-2 h-8 w-8 flex"
+							title="Go back"
+							aria-label="Go back"
+							disabled={!canGoBack()}
+							onClick={() => {
+								if (showHomeNavigation) {
+									setShowHomeNavigation(false)
+								} else {
+									setShowHomeNavigation(true)
+								}
+							}}
+						>
+							<ArrowLeft className="h-4 w-4" />
+						</Button>
+					)}
+					{showHomeNavigation ? (
+						<div className="flex items-center gap-2">
+							<Link to="/" className="hover:text-secondary text-sm">
+								Home
+							</Link>
+							<div className="flex gap-4 ml-4">
+								<Link to="/products" className="hover:text-secondary text-sm">
+									Products
+								</Link>
+								<Link to="/community" className="hover:text-secondary text-sm">
+									Community
+								</Link>
+								<Link
+									to="/nostr"
+									search={{
+										view: authIsAuthenticated ? 'follows' : undefined,
+									}}
+									className="hover:text-secondary text-sm"
+								>
+									Nostr
+								</Link>
+							</div>
+						</div>
+					) : openThreadId ? (
 						<span>Thread</span>
 					) : authorFilter?.trim() ? (
 						<span className="gap-1 items-center flex">
@@ -508,7 +586,21 @@ function FirehoseComponent() {
 					)}
 				</span>
 				<section className="items-center">
+					{/*<div className="flex justify-center mt-8">*/}
+					{/*	<img src="/images/logo.svg" alt="Plebeian Market Logo" className="w-16 h-16" />*/}
+					{/*</div>*/}
 					<div className="flex gap-2">
+						{/*<Button*/}
+						{/*	variant={logoButtonHighlighted ? 'primary' : 'ghost'}*/}
+						{/*	className={`p-2 h-8 w-8 flex items-center justify-center ${logoButtonHighlighted ? 'bg-secondary text-primary' : 'hover:bg-white/10'}`}*/}
+						{/*	onClick={() => {*/}
+						{/*		setLogoButtonHighlighted(!logoButtonHighlighted)*/}
+						{/*	}}*/}
+						{/*	title="Toggle logo button"*/}
+						{/*	aria-label="Toggle logo button"*/}
+						{/*>*/}
+						{/*	<img src="/images/logo.svg" alt="Plebeian Market Logo" className="w-4 h-4" />*/}
+						{/*</Button>*/}
 						{openThreadId ? (
 							<Button
 								variant="primary"
@@ -526,6 +618,21 @@ function FirehoseComponent() {
 								<CollapseVerticalIcon className="h-5 w-5 ml-0 lg:ml-0" />
 							</Button>
 						) : null}
+						{/*<Button*/}
+						{/*	variant="primary"*/}
+						{/*	className="p-2 h-8 w-8 flex"*/}
+						{/*	// onClick={() => {*/}
+						{/*	// 	scrollToTop()*/}
+						{/*	// 	// Also close any open thread when refreshing*/}
+						{/*	// 	setOpenThreadId(null)*/}
+						{/*	// 	refetch()*/}
+						{/*	// }}*/}
+						{/*	title="menu mode"*/}
+						{/*>*/}
+						{/*	<p>show site menu</p>*/}
+						{/*	/!*{isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <span className="i-refresh w-4 h-4" />}↻*!/*/}
+						{/*</Button>*/}
+
 						<Button
 							variant="primary"
 							className="p-2 h-8 w-8 flex"
@@ -778,49 +885,53 @@ function FirehoseComponent() {
 											}}
 											className="w-full pr-8"
 										/>
-          {tagFilterInput?.length ? (
-													<button
-														type="button"
-														className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-														onClick={() => {
-															// Clear the input and active tag filter, and return to follows/global
-															setTagFilterInput('')
-															setTagFilter('')
-															setSpinnerSettled(false)
+										{tagFilterInput?.length ? (
+											<button
+												type="button"
+												className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+												onClick={() => {
+													// Clear the input and active tag filter, and return to follows/global
+													setTagFilterInput('')
+													setTagFilter('')
+													setSpinnerSettled(false)
+													if (currentUserPk) {
+														setLoadingMode('follows')
+														setFilterMode('follows')
+													} else {
+														setLoadingMode('all')
+														setFilterMode('all')
+													}
+													setOpenThreadId(null)
+													try {
+														if (typeof window !== 'undefined') {
+															const url = new URL(window.location.href)
+															url.searchParams.delete('tag')
+															url.searchParams.delete('emoji')
 															if (currentUserPk) {
-																setLoadingMode('follows')
-																setFilterMode('follows')
+																url.searchParams.set('view', 'follows')
 															} else {
-																setLoadingMode('all')
-																setFilterMode('all')
+																url.searchParams.delete('view')
 															}
-															setOpenThreadId(null)
-															try {
-																if (typeof window !== 'undefined') {
-																	const url = new URL(window.location.href)
-																	url.searchParams.delete('tag')
-																	url.searchParams.delete('emoji')
-																	if (currentUserPk) {
-																		url.searchParams.set('view', 'follows')
-																	} else {
-																		url.searchParams.delete('view')
-																	}
-																	const target = url.pathname.startsWith('/nostr')
-																		? (url.search ? `/nostr${url.search}` : '/nostr')
-																		: (url.search ? `${url.pathname}${url.search}` : url.pathname)
-																	window.history.pushState({}, '', target)
-																	window.dispatchEvent(new PopStateEvent('popstate'))
-																}
-															} catch {}
-															const el = document.getElementById('tag-filter') as HTMLInputElement | null
-															el?.focus()
-														}}
-														title="Clear tag filter"
-														aria-label="Clear tag filter"
-													>
-														<X className="h-4 w-4" />
-													</button>
-												) : null}
+															const target = url.pathname.startsWith('/nostr')
+																? url.search
+																	? `/nostr${url.search}`
+																	: '/nostr'
+																: url.search
+																	? `${url.pathname}${url.search}`
+																	: url.pathname
+															window.history.pushState({}, '', target)
+															window.dispatchEvent(new PopStateEvent('popstate'))
+														}
+													} catch {}
+													const el = document.getElementById('tag-filter') as HTMLInputElement | null
+													el?.focus()
+												}}
+												title="Clear tag filter"
+												aria-label="Clear tag filter"
+											>
+												<X className="h-4 w-4" />
+											</button>
+										) : null}
 									</div>
 									<Button
 										variant="primary"
@@ -984,7 +1095,7 @@ function FirehoseComponent() {
 			{/* Floating Back-to-Top Button */}
 			<Button
 				variant="primary"
-				className={`fixed bottom-14 right-14 z-40 h-10 w-10 rounded-full px-0 lg:w-auto lg:px-4 flex items-center justify-center shadow-lg transition-opacity transition-colors duration-200 ${showTop ? 'opacity-100' : 'opacity-0 pointer-events-none'} hover:text-pink-500 hover:bg-blend-luminosity hover:bg-black`}
+				className={`group fixed bottom-26 right-14 z-40 h-10 w-10 rounded-full px-0 flex items-center justify-center shadow-lg transition-all duration-300 overflow-hidden ${showTop ? 'opacity-100 hover:w-auto hover:px-4 hover:text-pink-500 hover:bg-blend-luminosity hover:bg-black' : 'opacity-0 pointer-events-none'}`}
 				onClick={() => {
 					// Close any open thread to prevent auto-scroll back down
 					setOpenThreadId(null)
@@ -993,9 +1104,29 @@ function FirehoseComponent() {
 				title="Back to top"
 				aria-label="Back to top"
 			>
-				<span className="hidden lg:inline text-base leading-none p-0 m-0">Back to top</span>
-				<span className="text-lg ml-0 lg:ml-2" aria-hidden>
+				<span className="text-lg" aria-hidden>
 					🡅
+				</span>
+				<span className="opacity-0 w-0 whitespace-nowrap text-base leading-none transition-all duration-300 group-hover:opacity-100 group-hover:w-auto group-hover:ml-2">
+					Back to top
+				</span>
+			</Button>
+
+			{/* Floating New Note Button (below Back-to-Top) */}
+			<Button
+				variant="primary"
+				className={`group fixed bottom-2 right-14 z-40 h-20 w-20 rounded-full px-0 flex items-center justify-center shadow-lg transition-all duration-300 overflow-hidden hover:w-auto hover:px-6 hover:text-pink-500 hover:bg-blend-luminosity hover:bg-black`}
+				onClick={() => {
+					// TODO: Implement new note composer
+				}}
+				title="New note"
+				aria-label="New note"
+			>
+				<span className="text-2xl align-baseline" aria-hidden>
+					✍
+				</span>
+				<span className="opacity-0 w-0 whitespace-nowrap text-2xl leading-loose transition-all duration-300 group-hover:opacity-100 group-hover:w-auto group-hover:ml-2">
+					Compose
 				</span>
 			</Button>
 		</div>
