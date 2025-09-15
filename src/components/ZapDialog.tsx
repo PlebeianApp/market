@@ -43,13 +43,28 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 	})
 
 	// Try to get profile from the event first, then fallback to fetched profile
-	const profile = (event instanceof NDKUser ? event.profile : event.author?.profile) || profileData
+	const eventProfile = event instanceof NDKUser ? event.profile : event.author?.profile
+	const fetchedProfile = profileData?.profile || null
+	const profile = eventProfile || fetchedProfile
 
 	const recipientName = profile?.displayName || profile?.name || 'Unknown User'
 	const lightningAddress = profile?.lud16 || profile?.lud06 || null
 
 	// Check if NWC is available
 	const hasNwc = !!ndkState.activeNwcWalletUri
+
+	// Debug logging
+	console.log('ZapDialog Debug:', {
+		hasNwc,
+		activeNwcWalletUri: ndkState.activeNwcWalletUri,
+		lightningAddress,
+		profile,
+		eventProfile,
+		fetchedProfile,
+		recipientPubkey,
+		profileData,
+		isLoadingProfile
+	})
 
 	// Parse amount to number, handle empty/invalid values
 	const numericAmount = parseInt(amount, 10)

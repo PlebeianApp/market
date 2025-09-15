@@ -297,7 +297,7 @@ function DashboardLayout() {
 													<Link
 														key={item.path}
 														to={item.path}
-														className="block p-4 lg:px-6 lg:py-2 transition-colors font-bold border border-black fg-layer-elevated rounded lg:border-0 lg:bg-transparent lg:rounded-none data-[status=active]:bg-secondary data-[status=active]:text-white data-[status=active]:border-secondary hover:text-pink-500"
+														className="block p-4 lg:px-6 lg:py-2 transition-colors font-bold border border-black bg-white rounded lg:border-0 lg:bg-transparent lg:rounded-none data-[status=active]:bg-secondary data-[status=active]:text-white data-[status=active]:border-secondary hover:text-pink-500"
 														onClick={handleSidebarItemClick}
 														data-status={isActive ? 'active' : 'inactive'}
 													>
