@@ -458,9 +458,11 @@ function WalletListItem({
 		<Collapsible open={isOpen} onOpenChange={onToggleOpen} className="space-y-2">
 			<Card className={isDeleting ? 'opacity-50 pointer-events-none' : ''}>
 				<CollapsibleTrigger asChild>
-					<CardHeader className="pb-2 flex flex-row items-center justify-between cursor-pointer group">
+					<CardHeader className="flex flex-row items-center justify-between cursor-pointer group">
 						<div className="flex items-center gap-3">
-							<WalletIcon className="h-6 w-6 text-muted-foreground" />
+							<div className="flex items-center justify-center w-10 h-10 bg-gray-100 rounded-full">
+								<WalletIcon className="h-5 w-5 text-gray-600" />
+							</div>
 							<div>
 								<CardTitle>{wallet.name}</CardTitle>
 								<CardDescription className="text-xs">
