@@ -6,6 +6,7 @@ import { reactionsQueryOptions } from '@/queries/reactions'
 import { Link } from '@tanstack/react-router'
 import { type JSX, type SVGProps, useEffect, useRef, useState, useMemo } from 'react'
 import { useThreadOpen } from '@/state/threadOpenStore'
+import { useAuth } from '@/lib/stores/auth'
 
 function SpoolIcon(props: SVGProps<SVGSVGElement>) {
 	return (
@@ -189,7 +190,15 @@ interface ThreadViewProps {
 	reactionsMap?: Record<string, Record<string, number>>
 }
 
-function ThreadNodeView({ node, highlightedNoteId, reactionsMap }: { node: ThreadNode; highlightedNoteId: string; reactionsMap?: Record<string, Record<string, number>> }) {
+function ThreadNodeView({
+	node,
+	highlightedNoteId,
+	reactionsMap,
+}: {
+	node: ThreadNode
+	highlightedNoteId: string
+	reactionsMap?: Record<string, Record<string, number>>
+}) {
 	const isHighlighted = node.id === highlightedNoteId
 	const indentLevel = Math.min(node.depth, 5) // Limit indentation depth
 
@@ -207,7 +216,7 @@ function ThreadNodeView({ node, highlightedNoteId, reactionsMap }: { node: Threa
 
 function ThreadView({ threadStructure, highlightedNoteId, reactionsMap: propReactionsMap }: ThreadViewProps) {
 	const containerRef = useRef<HTMLDivElement | null>(null)
-	
+
 	// Get the IDs of all notes in the thread structure
 	const noteIds = useMemo(() => {
 		const ids: string[] = []
@@ -220,13 +229,13 @@ function ThreadView({ threadStructure, highlightedNoteId, reactionsMap: propReac
 		}
 		return ids
 	}, [threadStructure])
-	
+
 	// Fetch reactions for all notes in the thread if not provided via props
 	const { data: fetchedReactionsMap } = useQuery({
 		...reactionsQueryOptions(noteIds),
 		enabled: noteIds.length > 0 && !propReactionsMap,
 	})
-	
+
 	// Use provided reactionsMap from props if available, otherwise use fetched data
 	const reactionsMap = propReactionsMap || fetchedReactionsMap
 
@@ -236,19 +245,24 @@ function ThreadView({ threadStructure, highlightedNoteId, reactionsMap: propReac
 			try {
 				const container = containerRef.current
 				if (!container) return
-				const highlighted = container.querySelector('[data-highlighted="true"]') as HTMLElement | null
-				if (highlighted) {
-					// Center the highlighted note in the visible area of the thread panel
-					highlighted.scrollIntoView({
-						block: 'center',
-						inline: 'nearest',
-						behavior: 'smooth',
-					})
-				}
+				// Get the container's position and scroll to it
+				const rect = container.getBoundingClientRect()
+				const scrollTop = window.pageYOffset || document.documentElement.scrollTop
+				const targetY = rect.top + scrollTop
+				
+				// Account for site header height on larger screens (lg and up have 80px header space)
+				const headerOffset = window.innerWidth >= 1024 ? 80 : 0
+				
+				// Scroll to position the thread container below the site header
+				window.scrollTo({
+					top: targetY - headerOffset,
+					// behavior: 'smooth'
+				})
 			} catch {}
 		})
 		return () => cancelAnimationFrame(id)
 	}, [threadStructure, highlightedNoteId])
+
 	return (
 		<div ref={containerRef} className="text-sm">
 			{/*<div className="mb-2 text-xs text-gray-600 font-medium">Thread ({threadStructure.nodes.size} notes)</div>*/}
@@ -283,6 +297,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 	})()
 	const [showJson, setShowJson] = useState(false)
 	const { openThreadId, setOpenThreadId } = useThreadOpen()
+	const { isAuthenticated } = useAuth()
 	const noteIdForThread = ((note as any)?.id || findRootFromETags?.(note) || '') as string
 	const showThread = !readOnlyInThread && openThreadId === noteIdForThread
 	const { data: author, isLoading: isLoadingAuthor } = useQuery(authorQueryOptions(note.pubkey))
@@ -315,16 +330,6 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 	if (!readOnlyInThread && openThreadId === noteIdForThread) {
 		return (
 			<div className="relative">
-				{/*/!* Floating Close Thread button at top-right, matching Back-to-Top responsive text behavior *!/*/}
-				{/*<button*/}
-				{/*	className={`fixed top-24 right-14 z-40 h-10 w-10 rounded-full px-0 lg:w-auto lg:px-4 inline-flex items-center justify-center shadow-lg transition-opacity transition-colors duration-200 bg-white text-gray-700 hover:bg-gray-100 hover:text-blue-600`}*/}
-				{/*	onClick={() => setOpenThreadId(null)}*/}
-				{/*	title="Close thread"*/}
-				{/*	aria-label="Close thread"*/}
-				{/*>*/}
-				{/*	<span className="hidden lg:inline text-base leading-none p-0 m-0">close thread</span>*/}
-				{/*	<CollapseVerticalIcon className="h-5 w-5 ml-0 lg:ml-2" />*/}
-				{/*</button>*/}
 				<div className="p-3 bg-white text-black border border-gray-700 rounded-lg">
 					{isLoadingThread ? (
 						<div className="text-sm text-gray-500">Loading thread...</div>
@@ -447,6 +452,50 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 					</Link>
 				)}
 				<div className="ml-2 flex items-center gap-2">
+					{/* Right-side actions: reply, repost, quote (icons only on <1024px; icon + label on wide) */}
+					{isAuthenticated && (
+						<div className="flex items-center gap-2">
+							<button
+								className="h-8 rounded-full bg-white text-gray-700 hover:bg-gray-100 px-2 inline-flex items-center gap-1 border border-gray-200"
+								onClick={(e) => {
+									e.preventDefault()
+									e.stopPropagation()
+									// TODO: Implement reply functionality
+								}}
+								title="reply"
+								aria-label="reply"
+							>
+								<span aria-hidden>🗨</span>
+								<span className="hidden lg:inline">reply</span>
+							</button>
+							<button
+								className="h-8 rounded-full bg-white text-gray-700 hover:bg-gray-100 px-2 inline-flex items-center gap-1 border border-gray-200"
+								onClick={(e) => {
+									e.preventDefault()
+									e.stopPropagation()
+									// TODO: Implement repost functionality
+								}}
+								title="repost"
+								aria-label="repost"
+							>
+								<span aria-hidden>♻</span>
+								<span className="hidden lg:inline">repost</span>
+							</button>
+							<button
+								className="h-8 rounded-full bg-white text-gray-700 hover:bg-gray-100 px-2 inline-flex items-center gap-1 border border-gray-200"
+								onClick={(e) => {
+									e.preventDefault()
+									e.stopPropagation()
+									// TODO: Implement quote functionality
+								}}
+								title="quote"
+								aria-label="quote"
+							>
+								<span aria-hidden>💬</span>
+								<span className="hidden lg:inline">quote</span>
+							</button>
+						</div>
+					)}
 					{isClickablePanel ? (
 						<button
 							className={`h-8 w-8 inline-flex items-center justify-center text-xs rounded-full outline-none focus:outline-none focus:ring-0 border-0 transition-colors transition-shadow hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 hover:ring-offset-white ${
@@ -545,7 +594,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 			{(() => {
 				try {
 					const id = ((note as any)?.id || '') as string
-		      const emap = id && reactionsMap ? reactionsMap[id] : undefined
+					const emap = id && reactionsMap ? reactionsMap[id] : undefined
 					if (!emap) return null
 					const entries = Object.entries(emap)
 					if (entries.length === 0) return null
@@ -568,8 +617,12 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 												url.searchParams.delete('tag')
 												url.searchParams.delete('threadview')
 												const target = url.pathname.startsWith('/nostr')
-													? (url.search ? `/nostr${url.search}` : '/nostr')
-													: (url.search ? `${url.pathname}${url.search}` : url.pathname)
+													? url.search
+														? `/nostr${url.search}`
+														: '/nostr'
+													: url.search
+														? `${url.pathname}${url.search}`
+														: url.pathname
 												window.history.pushState({}, '', target)
 												window.dispatchEvent(new PopStateEvent('popstate'))
 											} catch {
@@ -642,7 +695,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 				} catch {
 					return null
 				}
-		   })()}
+			})()}
 			{/* Raw event pretty printed */}
 			{(() => {
 				let raw: any
@@ -666,6 +719,23 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 					</pre>
 				) : null
 			})()}
+			
+			{/* Floating button - hand holding pen emoji */}
+			{!readOnlyInThread && (
+				<button
+					className="fixed bottom-6 right-6 lg:bottom-8 lg:right-8 w-12 h-12 lg:w-15 lg:h-15 bg-black rounded-full flex items-center justify-center text-white text-xl lg:text-2xl shadow-lg hover:bg-gray-800 transition-colors duration-200 z-40"
+					title="Create new note"
+					aria-label="Create new note"
+					onClick={(e) => {
+						e.preventDefault()
+						e.stopPropagation()
+						// TODO: Add functionality for creating new note
+						console.log('Create new note clicked')
+					}}
+				>
+					✍️
+				</button>
+			)}
 		</div>
 	)
 }

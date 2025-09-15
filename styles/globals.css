@@ -53,7 +53,7 @@
 }
 
 @theme {
-	--font-sans: 'IBM Plex Mono', monospace;
+	--font-sans: 'IBM Plex Mono', 'Noto Color Emoji', 'Twemoji Mozilla', 'Apple Color Emoji', 'Segoe UI Emoji', monospace;
 	--font-heading: 'reglisse', sans-serif;
 	--font-theylive: 'theylive', sans-serif;
 
