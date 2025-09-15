@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { DEFAULT_ZAP_AMOUNTS } from '@/lib/constants'
+import { useNDK } from '@/lib/stores/ndk'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { profileKeys } from '@/queries/queryKeyFactory'
 import { NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
@@ -26,7 +27,10 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 	const [zapMessage, setZapMessage] = useState<string>('Zap from Plebeian')
 	const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState<boolean>(false)
 	const [isAnonymousZap, setIsAnonymousZap] = useState<boolean>(false)
-	const [showPaymentProcessor, setShowPaymentProcessor] = useState<boolean>(true)
+	const [step, setStep] = useState<'amount' | 'generateInvoice'>('amount')
+
+	// NDK state for NWC functionality
+	const ndkState = useNDK()
 
 	// Extract recipient information
 	const recipientPubkey = event instanceof NDKUser ? event.pubkey : event.pubkey
@@ -43,6 +47,9 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 
 	const recipientName = profile?.displayName || profile?.name || 'Unknown User'
 	const lightningAddress = profile?.lud16 || profile?.lud06 || null
+
+	// Check if NWC is available
+	const hasNwc = !!ndkState.activeNwcWalletUri
 
 	// Parse amount to number, handle empty/invalid values
 	const numericAmount = parseInt(amount, 10)
@@ -94,7 +101,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 		setZapMessage('Zap from Plebeian')
 		setAdvancedSettingsOpen(false)
 		setIsAnonymousZap(false)
-		setShowPaymentProcessor(true)
+		setStep('amount')
 	}
 
 	const handleDialogOpenChange = (open: boolean) => {
@@ -135,83 +142,113 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 					<DialogTitle>
 						Zap {recipientName} {lightningAddress && <small>({lightningAddress})</small>}
 					</DialogTitle>
-					<DialogDescription>
-						Amount: <span className="font-bold">{isValidAmount ? numericAmount : '0'} sats</span>
-					</DialogDescription>
 				</DialogHeader>
 
-				{/* Amount Selection */}
-				<div className="grid grid-cols-2 gap-2 mb-4">
-					{DEFAULT_ZAP_AMOUNTS.map(({ displayText, amount: presetAmount }) => (
-						<Button
-							key={presetAmount}
-							variant={numericAmount === presetAmount ? 'tertiary' : 'outline'}
-							className="border-2 border-black"
-							onClick={() => handleAmountButtonClick(presetAmount)}
-						>
-							{displayText}
-						</Button>
-					))}
-				</div>
+				{step === 'amount' && (
+					<div className="space-y-4">
+						{/* Amount Selection */}
+						<div className="py-2">
+							<div className="space-y-2">
+								<Label className="font-bold">Amount</Label>
+								<div className="grid grid-cols-2 gap-2">
+									{DEFAULT_ZAP_AMOUNTS.map(({ displayText, amount: presetAmount }) => (
+										<Button
+											key={presetAmount}
+											variant={numericAmount === presetAmount ? 'tertiary' : 'outline'}
+											className="border-2 border-black"
+											onClick={() => handleAmountButtonClick(presetAmount)}
+										>
+											{displayText}
+										</Button>
+									))}
+								</div>
+							</div>
+						</div>
 
-				{/* Message Input */}
-				<Label htmlFor="zapMessage" className="font-bold mt-4">
-					Message
-				</Label>
-				<Input
-					id="zapMessage"
-					type="text"
-					value={zapMessage}
-					onChange={(e) => setZapMessage(e.target.value)}
-					className="border-2 border-black"
-				/>
+						{/* Message Input */}
+						<div className="py-2">
+							<div className="space-y-2">
+								<Label htmlFor="zapMessage" className="font-bold">
+									Message
+								</Label>
+								<Input id="zapMessage" type="text" value={zapMessage} onChange={(e) => setZapMessage(e.target.value)} className="w-full" />
+							</div>
+						</div>
 
-				{/* Advanced Settings */}
-				<div className="space-y-4 mt-4">
-					<Label htmlFor="zapAmount" className="font-bold">
-						Manual zap amount
-					</Label>
-					<Input
-						id="zapAmount"
-						type="text"
-						value={amount}
-						onChange={handleAmountChange}
-						className="border-2 border-black"
-						placeholder="Enter amount in sats"
-					/>
-					{!isValidAmount && amount !== '' && <span className="text-red-500 text-sm">Please enter a valid amount</span>}
-					{amount === '' && <span className="text-red-500 text-sm">Amount is required</span>}
+						{/* Advanced Settings */}
+						<div className="py-2">
+							<div className="space-y-4">
+								<div className="space-y-2">
+									<Label htmlFor="zapAmount" className="font-bold">
+										Manual zap amount
+									</Label>
+									<Input
+										id="zapAmount"
+										type="text"
+										value={amount}
+										onChange={handleAmountChange}
+										className="w-full"
+										placeholder="Enter amount in sats"
+									/>
+									{!isValidAmount && amount !== '' && <span className="text-red-500 text-sm">Please enter a valid amount</span>}
+									{amount === '' && <span className="text-red-500 text-sm">Amount is required</span>}
+								</div>
 
-					<Label htmlFor="isAnonymousZap" className="font-bold">
-						Anonymous zap
-					</Label>
-					<Switch id="isAnonymousZap" checked={isAnonymousZap} onCheckedChange={setIsAnonymousZap} className="border-2 border-black" />
-				</div>
+								<div className="flex items-center justify-between gap-4">
+									<Label htmlFor="isAnonymousZap" className="font-bold">
+										Anonymous zap
+									</Label>
+									<Switch id="isAnonymousZap" checked={isAnonymousZap} onCheckedChange={setIsAnonymousZap} />
+								</div>
+							</div>
+						</div>
 
-				{/* Payment Processor Section */}
-				{lightningAddress ? (
-					<div className="mt-4">
-						<LightningPaymentProcessor
-							data={paymentData}
-							onPaymentComplete={handlePaymentComplete}
-							onPaymentFailed={handlePaymentFailed}
-							showManualVerification={true}
-						/>
-					</div>
-				) : (
-					<div className="text-center py-8 text-muted-foreground">
-						<p>No Lightning address found</p>
-						<p className="text-sm">The creator needs to set up a Lightning address in their profile to receive zaps.</p>
+						{/* Footer */}
+						<div className="py-2">
+							<div className="flex gap-2">
+								{hasNwc && (
+									<Button onClick={() => setStep('generateInvoice')} className="flex-1" variant="primary">
+										<Zap className="mr-2 h-4 w-4" />
+										Pay with NWC
+									</Button>
+								)}
+								<Button onClick={() => setStep('generateInvoice')} className={hasNwc ? 'flex-1' : 'w-full'} variant="focus">
+									<Zap className="mr-2 h-4 w-4" />
+									Generate Invoice
+								</Button>
+							</div>
+						</div>
 					</div>
 				)}
 
-				<DialogFooter className="sm:justify-between">
-					<DialogClose asChild>
-						<Button type="button" variant="secondary">
-							Cancel
-						</Button>
-					</DialogClose>
-				</DialogFooter>
+				{step === 'generateInvoice' && (
+					<>
+						{/* Amount and Message Info */}
+						<div className="text-center mb-4">
+							<p className="text-sm font-medium">
+								Amount: <span className="font-bold">{isValidAmount ? numericAmount : '0'} sats</span>
+							</p>
+							{zapMessage && <p className="text-sm text-muted-foreground mt-1">Message: "{zapMessage}"</p>}
+						</div>
+
+						{/* Payment Processor Section */}
+						{lightningAddress ? (
+							<div className="w-full overflow-hidden">
+								<LightningPaymentProcessor
+									data={paymentData}
+									onPaymentComplete={handlePaymentComplete}
+									onPaymentFailed={handlePaymentFailed}
+									showManualVerification={true}
+								/>
+							</div>
+						) : (
+							<div className="text-center py-8 text-muted-foreground">
+								<p>No Lightning address found</p>
+								<p className="text-sm">The creator needs to set up a Lightning address in their profile to receive zaps.</p>
+							</div>
+						)}
+					</>
+				)}
 			</DialogContent>
 		</Dialog>
 	)
