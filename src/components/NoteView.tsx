@@ -353,29 +353,30 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 				{readOnlyInThread ? (
 					<Link
 						to={`/nostr?user=${note.pubkey}`}
-						className="flex items-center  pr-2"
-						onClick={(e) => {
-							e.preventDefault()
-							e.stopPropagation()
-							// Clear any open thread when switching to user view
-							setOpenThreadId(null)
-							try {
-								const url = new URL(window.location.href)
-								url.searchParams.delete('threadview')
-								url.searchParams.set('user', String(note.pubkey))
-								const target = url.pathname.startsWith('/nostr')
-									? url.search
-										? `/nostr${url.search}`
-										: '/nostr'
-									: url.search
-										? `${url.pathname}${url.search}`
-										: url.pathname
-								window.history.pushState({}, '', target)
-								window.dispatchEvent(new PopStateEvent('popstate'))
-							} catch {
-								window.location.href = `/nostr?user=${encodeURIComponent(String(note.pubkey))}`
-							}
-						}}
+ 					className="flex items-center  pr-2"
+ 					onClick={(e) => {
+ 						e.preventDefault()
+ 						e.stopPropagation()
+ 						// Clear any open thread when switching to user view
+ 						setOpenThreadId(null)
+ 						try {
+ 							const url = new URL(window.location.href)
+ 							// Keep only user param
+ 							url.search = ''
+ 							url.searchParams.set('user', String(note.pubkey))
+ 							const target = url.pathname.startsWith('/nostr')
+ 								? url.search
+ 									? `/nostr${url.search}`
+ 									: '/nostr'
+ 								: url.search
+ 									? `${url.pathname}${url.search}`
+ 									: url.pathname
+ 							window.history.pushState({}, '', target)
+ 							window.dispatchEvent(new PopStateEvent('popstate'))
+ 						} catch {
+ 							window.location.href = `/nostr?user=${encodeURIComponent(String(note.pubkey))}`
+ 						}
+ 					}}
 					>
 						<div className="flex items-center  pr-2 hover:bg-gray-100">
 							<div>
@@ -404,29 +405,30 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 				) : (
 					<Link
 						to={`/nostr?user=${note.pubkey}`}
-						className="flex items-center pr-2 hover:bg-grey-200"
-						onClick={(e) => {
-							e.preventDefault()
-							e.stopPropagation()
-							// Clear any open thread when switching to user view
-							setOpenThreadId(null)
-							try {
-								const url = new URL(window.location.href)
-								url.searchParams.delete('threadview')
-								url.searchParams.set('user', String(note.pubkey))
-								const target = url.pathname.startsWith('/nostr')
-									? url.search
-										? `/nostr${url.search}`
-										: '/nostr'
-									: url.search
-										? `${url.pathname}${url.search}`
-										: url.pathname
-								window.history.pushState({}, '', target)
-								window.dispatchEvent(new PopStateEvent('popstate'))
-							} catch {
-								window.location.href = `/nostr?user=${encodeURIComponent(String(note.pubkey))}`
-							}
-						}}
+ 					className="flex items-center pr-2 hover:bg-grey-200"
+ 					onClick={(e) => {
+ 						e.preventDefault()
+ 						e.stopPropagation()
+ 						// Clear any open thread when switching to user view
+ 						setOpenThreadId(null)
+ 						try {
+ 							const url = new URL(window.location.href)
+ 							// Keep only user param
+ 							url.search = ''
+ 							url.searchParams.set('user', String(note.pubkey))
+ 							const target = url.pathname.startsWith('/nostr')
+ 								? url.search
+ 									? `/nostr${url.search}`
+ 									: '/nostr'
+ 								: url.search
+ 									? `${url.pathname}${url.search}`
+ 									: url.pathname
+ 							window.history.pushState({}, '', target)
+ 							window.dispatchEvent(new PopStateEvent('popstate'))
+ 						} catch {
+ 							window.location.href = `/nostr?user=${encodeURIComponent(String(note.pubkey))}`
+ 						}
+ 					}}
 					>
 						<div>
 							{isLoadingAuthor ? (
@@ -611,11 +613,10 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 											e.stopPropagation()
 											try {
 												const url = new URL(window.location.href)
+												// Keep only view and emoji
+												url.search = ''
 												url.searchParams.set('view', 'reactions')
 												url.searchParams.set('emoji', emo)
-												// clear conflicting params
-												url.searchParams.delete('tag')
-												url.searchParams.delete('threadview')
 												const target = url.pathname.startsWith('/nostr')
 													? url.search
 														? `/nostr${url.search}`
