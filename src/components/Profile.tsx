@@ -87,7 +87,8 @@ export function Profile({ compact = false }: ProfileProps) {
 						variant={authState.isAuthenticated ? 'primary' : 'outline'}
 						size={compact ? 'icon' : 'default'}
 						className={cn(
-							'p-2 w-full relative',
+							'p-2 relative',
+							!compact && 'w-full',
 							!authState.isAuthenticated && 'text-muted-foreground hover:text-foreground',
 							isOnOwnProfile && 'bg-secondary text-black hover:bg-secondary hover:text-black',
 						)}
