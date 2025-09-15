@@ -686,9 +686,14 @@ function FirehoseComponent() {
 						}
 					}}
 				>
-					<DrawerContent>
+					<DrawerContent className="relative">
+						{/* Close (X) button at right edge */}
+						<DrawerClose className="absolute top-2 right-2 text-secondary hover:bg-white/10">
+							<div className="w-8 h-8 p-3">
+								<X className="w-5 h-5" />
+							</div>
+						</DrawerClose>
 						<DrawerHeader className="drawer-filters-title">
-							{/*<DrawerClose className="text-secondary hover:bg-white/10" />*/}
 							<DrawerContent>
 								{/* Action row: small screens only */}
 								<div className="lg:hidden flex items-center gap-2 mb-2">

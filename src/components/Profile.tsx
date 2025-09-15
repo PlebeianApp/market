@@ -3,6 +3,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
+import { defaultRelaysUrls } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import type { NDKUserProfile } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
@@ -44,6 +45,8 @@ export function Profile({ compact = false }: ProfileProps) {
 				}
 
 				const user = ndk.getUser({ pubkey })
+				// Ensure the profile fetch uses the app's default read relays
+				;(user as any).relayUrls = defaultRelaysUrls
 				const profilePromise = await user.fetchProfile()
 
 				setProfile(profilePromise)
