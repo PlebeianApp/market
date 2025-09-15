@@ -111,7 +111,7 @@ export function CollectionFormContent({ className = '', showFooter = true }: { c
 			</div>
 
 			{showFooter && (
-				<div className="mt-auto sticky bottom-0 bg-white border-t pt-4">
+				<div className="mt-auto sticky bottom-0 bg-white border-t pt-4 pb-4">
 					<div className="flex gap-2 w-full">
 						{(activeTab === 'products' || activeTab === 'shipping') && (
 							<Button
