@@ -16,6 +16,7 @@ import { ArrowLeftIcon, ChevronDownIcon, EyeIcon, EyeOffIcon, PlusIcon, RefreshC
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/making-payments')({
 	component: MakingPaymentsComponent,
@@ -26,6 +27,9 @@ function MakingPaymentsComponent() {
 	const { wallets: localWallets, isLoading: localLoading, isInitialized } = useWallets()
 	const queryClient = useQueryClient()
 	useDashboardTitle('Making Payments')
+
+	// Auto-animate for smooth list transitions
+	const [animationParent] = useAutoAnimate()
 
 	// NDK User for Nostr operations
 	const [userPubkey, setUserPubkey] = useState<string | undefined>(undefined)
@@ -240,82 +244,93 @@ function MakingPaymentsComponent() {
 		)
 	}
 
-	// Add Wallet View
-	if (isAddingWallet) {
-		return (
-			<AddWalletForm
-				onSave={(formData) => {
-					// Logic for saving a new wallet
-					try {
-						if (!formData.nwcPubkey) {
-							toast.error('Wallet pubkey is required')
-							return
-						}
-						if (!formData.nwcRelays) {
-							toast.error('At least one relay is required')
-							return
-						}
-
-						let finalNwcUri = formData.nwcUri
-						if (!finalNwcUri || !finalNwcUri.startsWith('nostr+walletconnect://')) {
-							finalNwcUri = `nostr+walletconnect://${formData.nwcPubkey}?relay=${encodeURIComponent(formData.nwcRelays)}&secret=${formData.nwcSecret}`
-						}
-
-						const newWalletData: Omit<Wallet, 'id' | 'createdAt' | 'updatedAt'> = {
-							name: `Wallet ${combinedWallets.length + 1}`,
-							nwcUri: finalNwcUri,
-							pubkey: formData.nwcPubkey,
-							relays: formData.nwcRelays.split(',').map((r) => r.trim()),
-							storedOnNostr: formData.storeOnNostr,
-						}
-
-						const addedWallet = walletActions.addWallet(newWalletData, formData.storeOnNostr)
-
-						if (formData.storeOnNostr && userPubkey) {
-							const walletsToSaveToNostr = walletActions.getWallets().filter((w) => w.storedOnNostr || w.id === addedWallet.id)
-							saveNostrWalletsMutation.mutate({ wallets: walletsToSaveToNostr as UserNwcWallet[], userPubkey })
-						} else if (formData.storeOnNostr && !userPubkey) {
-							toast.warning('Cannot save to Nostr: User not logged in. Wallet saved locally.')
-						}
-
-						setIsAddingWallet(false)
-						toast.success('Wallet added successfully!')
-					} catch (error) {
-						console.error('Error saving new wallet:', error)
-						toast.error('Failed to save new wallet')
-					}
-				}}
-				onCancel={handleCancelAdd}
-				userPubkeyPresent={!!userPubkey}
-				isSaving={saveNostrWalletsMutation.isPending || localLoading /* consider overall loading state */}
-			/>
-		)
-	}
 
 	// Main View (List Wallets)
 	return (
-		<div className="space-y-6">
-			<div className="flex justify-between items-center">
-				{combinedWallets.length > 0 && !isAddingWallet && (
-					<Button onClick={handleAddWalletClick} className="hidden sm:flex">
-						<PlusIcon className="h-4 w-4 mr-2" /> Add Another Wallet
+		<div>
+			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+				<h1 className="text-2xl font-bold">Making Payments</h1>
+				{combinedWallets.length > 0 && (
+					<Button onClick={handleAddWalletClick} className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold">
+						<PlusIcon className="h-4 w-4 mr-2" /> Add Wallet
 					</Button>
 				)}
 			</div>
+			
+			{/* Mobile Add Wallet Button - full width, no padding */}
+			<div className="lg:hidden">
+				{combinedWallets.length > 0 && (
+					<Button onClick={handleAddWalletClick} className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-none border-b border-neutral-600">
+						<PlusIcon className="h-4 w-4 mr-2" /> Add Wallet
+					</Button>
+				)}
+			</div>
+			
+			<div className="space-y-6 p-4 lg:p-6">
 
-			{combinedWallets.length === 0 && !isAddingWallet ? (
-				<Card>
-					<CardContent className="py-10 flex flex-col items-center justify-center">
-						<p className="text-center text-muted-foreground mb-4">No wallets configured yet. Add a wallet to make payments.</p>
-						<Button onClick={handleAddWalletClick}>
-							<PlusIcon className="h-4 w-4 mr-2" /> Add Wallet
-						</Button>
-					</CardContent>
-				</Card>
-			) : (
-				!isAddingWallet && (
+				{/* Add Wallet Form - shows at top when opened */}
+				{isAddingWallet && (
+					<AddWalletForm
+						onSave={(formData) => {
+							// Logic for saving a new wallet
+							try {
+								if (!formData.nwcPubkey) {
+									toast.error('Wallet pubkey is required')
+									return
+								}
+								if (!formData.nwcRelays) {
+									toast.error('At least one relay is required')
+									return
+								}
+
+								let finalNwcUri = formData.nwcUri
+								if (!finalNwcUri || !finalNwcUri.startsWith('nostr+walletconnect://')) {
+									finalNwcUri = `nostr+walletconnect://${formData.nwcPubkey}?relay=${encodeURIComponent(formData.nwcRelays)}&secret=${formData.nwcSecret}`
+								}
+
+								const newWalletData: Omit<Wallet, 'id' | 'createdAt' | 'updatedAt'> = {
+									name: `Wallet ${combinedWallets.length + 1}`,
+									nwcUri: finalNwcUri,
+									pubkey: formData.nwcPubkey,
+									relays: formData.nwcRelays.split(',').map((r) => r.trim()),
+									storedOnNostr: formData.storeOnNostr,
+								}
+
+								const addedWallet = walletActions.addWallet(newWalletData, formData.storeOnNostr)
+
+								if (formData.storeOnNostr && userPubkey) {
+									const walletsToSaveToNostr = walletActions.getWallets().filter((w) => w.storedOnNostr || w.id === addedWallet.id)
+									saveNostrWalletsMutation.mutate({ wallets: walletsToSaveToNostr as UserNwcWallet[], userPubkey })
+								} else if (formData.storeOnNostr && !userPubkey) {
+									toast.warning('Cannot save to Nostr: User not logged in. Wallet saved locally.')
+								}
+
+								setIsAddingWallet(false)
+								toast.success('Wallet added successfully!')
+							} catch (error) {
+								console.error('Error saving new wallet:', error)
+								toast.error('Failed to save new wallet')
+							}
+						}}
+						onCancel={handleCancelAdd}
+						userPubkeyPresent={!!userPubkey}
+						isSaving={saveNostrWalletsMutation.isPending}
+					/>
+				)}
+
+				{combinedWallets.length === 0 && !isAddingWallet ? (
+					<Card>
+						<CardContent className="py-10 flex flex-col items-center justify-center">
+							<p className="text-center text-muted-foreground mb-4">No wallets configured yet. Add a wallet to make payments.</p>
+							<Button onClick={handleAddWalletClick}>
+								<PlusIcon className="h-4 w-4 mr-2" /> Add Wallet
+							</Button>
+						</CardContent>
+					</Card>
+				) : (
 					<>
-						{combinedWallets.map((wallet) => (
+						<div ref={animationParent} className="space-y-4">
+							{combinedWallets.map((wallet) => (
 							<WalletListItemWithBalance
 								key={wallet.id}
 								wallet={wallet}
@@ -364,6 +379,7 @@ function MakingPaymentsComponent() {
 								isDeleting={deletingWalletId === wallet.id}
 							/>
 						))}
+						</div>
 
 						{combinedWallets.length > 0 && (
 							<Button onClick={handleAddWalletClick} className="w-full mt-4 sm:hidden">
@@ -371,8 +387,8 @@ function MakingPaymentsComponent() {
 							</Button>
 						)}
 					</>
-				)
-			)}
+				)}
+			</div>
 		</div>
 	)
 }
@@ -661,15 +677,7 @@ function AddWalletForm({ onSave, onCancel, userPubkeyPresent, isSaving }: AddWal
 	}
 
 	return (
-		<div className="space-y-6">
-			<div className="flex items-center space-x-2">
-				<Button variant="ghost" size="icon" onClick={onCancel} aria-label="Back">
-					<ArrowLeftIcon className="h-4 w-4" />
-				</Button>
-				<h1 className="text-2xl font-bold">Add Wallet</h1>
-			</div>
-
-			<Card>
+		<Card>
 				<CardHeader>
 					<CardTitle>Add Nostr Wallet Connect</CardTitle>
 					<CardDescription>Paste your Nostr Wallet Connect URI or scan a QR code to connect your wallet.</CardDescription>
@@ -738,7 +746,6 @@ function AddWalletForm({ onSave, onCancel, userPubkeyPresent, isSaving }: AddWal
 						{isSaving ? 'Saving...' : 'Save Wallet'}
 					</Button>
 				</CardFooter>
-			</Card>
-		</div>
+		</Card>
 	)
 }
