@@ -23,6 +23,7 @@ import {
 	getShippingDuration,
 	getShippingId,
 	getShippingLocation,
+	getShippingPickupAddress,
 	getShippingPrice,
 	getShippingService,
 	getShippingTitle,
