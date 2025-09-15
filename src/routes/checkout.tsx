@@ -543,7 +543,7 @@ function RouteComponent() {
 								className="flex items-center justify-between cursor-pointer"
 								onClick={() => setMobileOrderSummaryOpen(!mobileOrderSummaryOpen)}
 							>
-								<span>{currentStep === 'payment' ? 'Invoices' : 'Order Summary'}</span>
+								<span>{currentStep === 'payment' ? 'Payment Details' : 'Cart Summary'}</span>
 								<ChevronRight className={`w-5 h-5 transition-transform ${mobileOrderSummaryOpen ? 'rotate-90' : ''}`} />
 							</CardTitle>
 						</CardHeader>
@@ -604,36 +604,36 @@ function RouteComponent() {
 				</div>
 				{/* Main Content Area */}
 				<Card className="flex-1 lg:w-1/2 flex flex-col lg:h-full shadow-md lg:order-2">
-					{currentStep !== 'shipping' && (
-						<CardHeader>
-							<div className="flex items-center justify-between">
-								<CardTitle>{currentStep === 'payment' ? 'Payment Details' : 'Order Summary'}</CardTitle>
-								{currentStep === 'payment' && invoices.length > 1 && (
-									<div className="hidden lg:flex items-center gap-2">
-										<Button
-											variant="outline"
-											size="sm"
-											onClick={() => setCurrentInvoiceIndex(Math.max(0, currentInvoiceIndex - 1))}
-											disabled={currentInvoiceIndex === 0}
-										>
-											<ChevronLeft className="w-4 h-4" />
-											Previous
-										</Button>
-										<Button
-											variant="outline"
-											size="sm"
-											onClick={() => setCurrentInvoiceIndex(Math.min(invoices.length - 1, currentInvoiceIndex + 1))}
-											disabled={currentInvoiceIndex === invoices.length - 1}
-										>
-											Next
-											<ChevronRight className="w-4 h-4" />
-										</Button>
-									</div>
-								)}
-							</div>
-						</CardHeader>
-					)}
-					<CardContent className="p-6 flex-1 lg:overflow-y-auto">
+					<CardHeader>
+						<div className="flex items-center justify-between">
+							<CardTitle>
+								{currentStep === 'shipping' ? 'Shipping Address' : currentStep === 'payment' ? 'Invoices' : 'Order Summary'}
+							</CardTitle>
+							{currentStep === 'payment' && invoices.length > 1 && (
+								<div className="hidden lg:flex items-center gap-2">
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={() => setCurrentInvoiceIndex(Math.max(0, currentInvoiceIndex - 1))}
+										disabled={currentInvoiceIndex === 0}
+									>
+										<ChevronLeft className="w-4 h-4" />
+										Previous
+									</Button>
+									<Button
+										variant="outline"
+										size="sm"
+										onClick={() => setCurrentInvoiceIndex(Math.min(invoices.length - 1, currentInvoiceIndex + 1))}
+										disabled={currentInvoiceIndex === invoices.length - 1}
+									>
+										Next
+										<ChevronRight className="w-4 h-4" />
+									</Button>
+								</div>
+							)}
+						</div>
+					</CardHeader>
+					<CardContent className="p-6 pt-0 flex-1 lg:overflow-y-auto">
 						<div ref={animationParent} className="lg:h-full lg:min-h-full">
 							{currentStep === 'shipping' && (
 								<div className="h-full">
@@ -642,24 +642,31 @@ function RouteComponent() {
 							)}
 
 							{currentStep === 'summary' && (
-								<OrderFinalizeComponent
-									shippingData={shippingData}
-									invoices={[]} // No invoices yet in summary step
-									totalInSats={totalInSats}
-									onNewOrder={goBackToShopping}
-									onContinueToPayment={handleContinueToPayment}
-								/>
+								<div className="h-full flex flex-col">
+									<div className="flex-1 overflow-y-auto">
+										<OrderFinalizeComponent
+											shippingData={shippingData}
+											invoices={[]} // No invoices yet in summary step
+											totalInSats={totalInSats}
+											onNewOrder={goBackToShopping}
+											// Note: onContinueToPayment moved to footer
+										/>
+									</div>
+									<div className="flex-shrink-0 bg-white border-t pt-4">
+										<Button onClick={handleContinueToPayment} className="w-full btn-black">
+											Continue to Payment
+										</Button>
+									</div>
+								</div>
 							)}
 
 							{/* Loading State for Invoice Generation */}
 							{currentStep === 'payment' && isGeneratingInvoices && (
-								<div className="text-center py-12">
-									<div className="inline-flex items-center gap-2 text-gray-600 mb-4">
-										<div className="animate-spin w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full" />
-										<span className="text-lg font-medium">Generating Lightning invoices...</span>
+								<div className="h-full flex items-center justify-center">
+									<div className="text-center">
+										<div className="animate-spin w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full mx-auto mb-4" />
+										<p className="text-gray-600">Generating Lightning invoices...</p>
 									</div>
-									<p className="text-sm text-gray-500 mb-2">Fetching seller Lightning addresses and creating payment requests</p>
-									<p className="text-xs text-gray-400">This may take a few seconds</p>
 								</div>
 							)}
 
@@ -737,9 +744,9 @@ function RouteComponent() {
 				{/* Right Sidebar */}
 				<Card className="hidden lg:flex flex-1 lg:w-1/2 flex-col h-full shadow-md lg:order-1">
 					<CardHeader>
-						<CardTitle>{currentStep === 'payment' ? 'Invoices' : 'Order Summary'}</CardTitle>
+						<CardTitle>{currentStep === 'payment' ? 'Payment Details' : 'Cart Summary'}</CardTitle>
 					</CardHeader>
-					<CardContent className="flex-1 overflow-y-auto">
+					<CardContent className="flex-1 overflow-y-auto pb-0">
 						{currentStep === 'payment' && isGeneratingInvoices ? (
 							<div className="flex items-center justify-center h-full">
 								<div className="text-center">
@@ -778,11 +785,14 @@ function RouteComponent() {
 									{nwcEnabled && <p className="text-xs text-gray-500 mt-1">Fast payments available • Configure more wallets in settings</p>}
 								</div>
 
-								<PaymentSummary invoices={invoices} currentIndex={currentInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
+								<div className="pb-6">
+									<PaymentSummary invoices={invoices} currentIndex={currentInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
+								</div>
 							</>
 						) : (
 							<ScrollArea className="h-full">
 								<CartSummary
+									className="pb-6"
 									allowQuantityChanges={currentStep === 'shipping'}
 									allowShippingChanges={currentStep === 'shipping'}
 									showExpandedDetails={false}

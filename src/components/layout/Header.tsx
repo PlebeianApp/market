@@ -29,10 +29,12 @@ export function Header() {
 	const isProductPage = location.pathname === '/products' || location.pathname.startsWith('/products/')
 	const isProfilePage = location.pathname.startsWith('/profile/')
 	const isHomepage = location.pathname === '/'
-	const isCommunityOrNostrPage = location.pathname === '/community' || location.pathname === '/nostr'
-	const shouldUseTransparentHeader = (isProductPage || isHomepage || isProfilePage) && !isCommunityOrNostrPage
+	const isCommunityPage = location.pathname === '/community'
+	const isCollectionPage = location.pathname.startsWith('/collection/')
+	const isNostrPage = location.pathname === '/nostr'
+	const shouldUseTransparentHeader = isProductPage || isHomepage || isProfilePage || isCommunityPage || isCollectionPage
 
-	// Scroll detection for product pages and homepage
+	// Scroll detection for pages with transparent headers
 	useEffect(() => {
 		if (!shouldUseTransparentHeader) return
 
@@ -52,12 +54,12 @@ export function Header() {
 		// Force black background when mobile menu is open
 		if (mobileMenuOpen) return 'bg-black'
 
-		// Force black background for community and nostr pages
-		if (isCommunityOrNostrPage) return 'bg-black'
+		// Force black background for nostr page only
+		if (isNostrPage) return 'bg-black'
 
 		if (!shouldUseTransparentHeader) return 'bg-black'
 
-		// Always use transition class for product pages and homepage
+		// Always use transition class for pages with transparent headers
 		return 'bg-header-scroll-transition'
 	}
 
@@ -66,8 +68,8 @@ export function Header() {
 		// No transition styles needed when mobile menu is open (solid black)
 		if (mobileMenuOpen) return {}
 
-		// No transition styles needed for community and nostr pages
-		if (isCommunityOrNostrPage) return {}
+		// No transition styles needed for nostr page only
+		if (isNostrPage) return {}
 
 		if (!shouldUseTransparentHeader) return {}
 
@@ -125,8 +127,8 @@ export function Header() {
 
 	return (
 		<header
-			className={`sticky top-0 z-50 text-white px-4 ${isCommunityOrNostrPage ? 'bg-black' : getHeaderBackground()}`}
-			style={isCommunityOrNostrPage ? {} : (getHeaderStyle() as React.CSSProperties)}
+			className={`sticky top-0 z-50 text-white px-4 ${isNostrPage ? 'bg-black' : getHeaderBackground()}`}
+			style={isNostrPage ? {} : (getHeaderStyle() as React.CSSProperties)}
 		>
 			<div className="container flex h-full max-w-full items-center justify-between py-4">
 				<section className="inline-flex items-center">

@@ -281,7 +281,7 @@ function DashboardLayout() {
 			</div>
 
 			{/* Main container - responsive layout */}
-			<div className="lg:flex lg:p-6 lg:gap-6 lg:flex-1 lg:overflow-hidden lg:max-w-none lg:min-h-0">
+			<div className="lg:flex lg:pt-6 lg:px-6 lg:pb-4 lg:gap-6 lg:flex-1 lg:overflow-hidden lg:max-w-none lg:min-h-0">
 				<div ref={parent} className="lg:flex lg:w-full lg:gap-6">
 					{/* Sidebar - responsive behavior */}
 					{(showSidebar || !isMobile) && (
