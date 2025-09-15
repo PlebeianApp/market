@@ -224,7 +224,7 @@ function DashboardLayout() {
 	const emoji = getCurrentEmoji(showSidebar, typeof window !== 'undefined' ? window.location.pathname : '')
 
 	return (
-		<div className="lg:flex lg:flex-col lg:h-[calc(100vh-8.5rem)]">
+		<div className="lg:flex lg:flex-col lg:h-[calc(100vh-5rem)]">
 			{/* Header - responsive for mobile/desktop */}
 			<div className="lg:hidden sticky top-[8.5rem] z-10">
 				<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center relative">
@@ -232,7 +232,7 @@ function DashboardLayout() {
 					{!showSidebar && isMobile && (
 						<button
 							onClick={handleBackToSidebar}
-							className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 top-1/2 -translate-y-1/2 w-12 h-12"
+							className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 sm:left-3 md:left-4 top-1/2 -translate-y-1/2 w-12 h-12 z-20"
 							aria-label="Back to sidebar"
 						>
 							<span className="i-back w-6 h-6" />
@@ -240,25 +240,25 @@ function DashboardLayout() {
 					)}
 
 					{/* Title */}
-					<span className="w-full truncate px-14 text-3xl flex items-center justify-center gap-2">
+					<span className="w-full truncate px-8 sm:px-12 md:px-16 text-3xl flex items-center justify-center gap-2 min-w-0">
 						{showSidebar || !isMobile ? (
 							'Dashboard'
 						) : (
 							<>
 								{isMessageDetailView && chatProfile ? (
 									<>
-										<Avatar className="h-8 w-8 flex-shrink-0">
-											<AvatarImage src={chatProfile.picture} />
-											<AvatarFallback>
-												{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
-											</AvatarFallback>
-										</Avatar>
-										<span className="truncate">{dashboardTitleWithoutEmoji}</span>
+									<Avatar className="h-8 w-8 flex-shrink-0">
+										<AvatarImage src={chatProfile.picture} />
+										<AvatarFallback>
+											{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
+										</AvatarFallback>
+									</Avatar>
+									<span className="truncate min-w-0 flex-1 text-center">{dashboardTitleWithoutEmoji}</span>
 									</>
 								) : (
 									<>
 										{dashboardEmoji && <span className="text-2xl">{dashboardEmoji}</span>}
-										<span className="truncate">{dashboardTitleWithoutEmoji}</span>
+										<span className="truncate min-w-0 flex-1 text-center">{dashboardTitleWithoutEmoji}</span>
 									</>
 								)}
 							</>
@@ -266,11 +266,11 @@ function DashboardLayout() {
 					</span>
 
 					{/* Mobile emoji - only visible on small screens when not showing sidebar */}
-					{!showSidebar && emoji && isMobile && !dashboardEmoji && (
-						<span className="absolute right-2 top-1/2 -translate-y-1/2 text-2xl select-none w-12 h-12 flex items-center justify-center">
-							{emoji}
-						</span>
-					)}
+				{!showSidebar && emoji && isMobile && !dashboardEmoji && (
+					<span className="absolute right-2 sm:right-3 md:right-4 top-1/2 -translate-y-1/2 text-2xl select-none w-12 h-12 flex items-center justify-center z-20">
+						{emoji}
+					</span>
+				)}
 				</h1>
 			</div>
 
@@ -297,7 +297,7 @@ function DashboardLayout() {
 													<Link
 														key={item.path}
 														to={item.path}
-														className="block p-4 lg:px-6 lg:py-2 transition-colors font-bold border border-black bg-white rounded lg:border-0 lg:bg-transparent lg:rounded-none data-[status=active]:bg-gray-200 data-[status=active]:text-black hover:text-pink-500"
+														className="block p-4 lg:px-6 lg:py-2 transition-colors font-bold border border-black fg-layer-elevated rounded lg:border-0 lg:bg-transparent lg:rounded-none data-[status=active]:bg-secondary data-[status=active]:text-white data-[status=active]:border-secondary hover:text-pink-500"
 														onClick={handleSidebarItemClick}
 														data-status={isActive ? 'active' : 'inactive'}
 													>
@@ -425,6 +425,15 @@ function DashboardLayout() {
 										<Outlet />
 									</div>
 								)}
+							</div>
+						</div>
+					)}
+
+					{/* Placeholder Container - responsive on desktop */}
+					{!isMobile && (
+						<div className="hidden min-[1470px]:block lg:min-w-0 lg:flex-1 lg:max-w-32 xl:max-w-48 2xl:max-w-64 lg:border lg:border-black lg:rounded bg-white lg:max-h-full lg:overflow-hidden lg:shadow-md">
+							<div className="p-4 lg:px-6 lg:py-4 flex items-center justify-center h-full">
+								<span className="text-3xl">₿</span>
 							</div>
 						</div>
 					)}
