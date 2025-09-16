@@ -63,7 +63,7 @@ function FirehoseComponent() {
 	const [isFiltersOpen, setIsFiltersOpen] = useState(false)
 	const [loadingMode, setLoadingMode] = useState<null | 'all' | 'threads' | 'originals' | 'follows' | 'reactions'>(null)
 	const [spinnerSettled, setSpinnerSettled] = useState(false)
-	const { openThreadId, setOpenThreadId } = useThreadOpen()
+	const { openThreadId, setOpenThreadId, feedScrollY, setFeedScrollY, clickedEventId, setClickedEventId } = useThreadOpen()
 	const [tagFilter, setTagFilter] = useState('')
 	const [tagFilterInput, setTagFilterInput] = useState(tagFilter)
 	const [authorFilter, setAuthorFilter] = useState('')
@@ -77,12 +77,12 @@ function FirehoseComponent() {
 		if (filterMode === 'hashtag') return { tag: tagFilter, author: '', follows: false }
 		return { tag: '', author: authorFilter, follows: filterMode === 'follows' }
 	}, [filterMode, tagFilter, authorFilter])
-	const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+ const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
 		...notesQueryOptions(notesOpts),
-		refetchOnWindowFocus: !isBaseFeed,
-		refetchOnReconnect: !isBaseFeed,
+		refetchOnWindowFocus: false,
+		refetchOnReconnect: false,
 		refetchInterval: false,
-		staleTime: isBaseFeed ? Infinity : 0,
+		staleTime: Infinity,
 	})
 	const { data: authorMeta } = useQuery({ ...authorQueryOptions(authorFilter), enabled: !!authorFilter }) as any
 	// Current user for follows mode
@@ -100,6 +100,30 @@ function FirehoseComponent() {
 	const [showTagOverlay, setShowTagOverlay] = useState(false)
 	const [showHomeNavigation, setShowHomeNavigation] = useState(false)
 	const [logoButtonHighlighted, setLogoButtonHighlighted] = useState(false)
+	// Track lg breakpoint to position floating buttons relative to feed panel
+	const [isLg, setIsLg] = useState(false)
+	useEffect(() => {
+		try {
+			if (typeof window === 'undefined') return
+			const mql = window.matchMedia('(min-width: 1024px)')
+			const handler = (e: MediaQueryListEvent | MediaQueryList) => {
+				// Support both modern and older APIs
+				const matches = 'matches' in e ? (e as MediaQueryListEvent).matches : (e as MediaQueryList).matches
+				setIsLg(matches)
+			}
+			// Initialize
+			setIsLg(mql.matches)
+			if (typeof mql.addEventListener === 'function') {
+				mql.addEventListener('change', handler as any)
+				return () => mql.removeEventListener('change', handler as any)
+			} else if (typeof (mql as any).addListener === 'function') {
+				;(mql as any).addListener(handler)
+				return () => (mql as any).removeListener(handler)
+			}
+		} catch {}
+	}, [])
+	// Compute horizontal offset for floating buttons: on lg with sidebar visible, shift by sidebar width (20rem)
+	const floatingRight = isLg ? (openThreadId ? '3.5rem' : 'calc(20rem + 3.5rem)') : '3.5rem'
 
 	const scrollToTop = () => {
 		if (typeof window === 'undefined') return
@@ -306,7 +330,10 @@ function FirehoseComponent() {
 			if (incomingUser !== authorFilter) {
 				setAuthorFilter(incomingUser)
 			}
-			scrollToTop()
+			// Only auto-scroll to top on general navigation, not when viewing a thread
+			if (!incomingThread) {
+				scrollToTop()
+			}
 		} catch {}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [location.href])
@@ -528,12 +555,35 @@ function FirehoseComponent() {
 							className="p-2 mx-2 h-8 w-8 flex"
 							title="Go back"
 							aria-label="Go back"
-							disabled={!canGoBack()}
-							onClick={() => {
-								try {
-									goBackWithTimeLimit()
-								} catch {}
-							}}
+       disabled={!canGoBack()}
+       onClick={() => {
+									try {
+										if (openThreadId) {
+											// Close thread view and restore scroll
+											setOpenThreadId(null)
+                      setClickedEventId(null)
+											try {
+												const url = new URL(window.location.href)
+												url.searchParams.delete('threadview')
+												const target = url.pathname.startsWith('/nostr')
+													? url.search
+														? `/nostr${url.search}`
+														: '/nostr'
+													: url.search
+														? `${url.pathname}${url.search}`
+														: url.pathname
+												window.history.replaceState({}, '', target)
+												window.dispatchEvent(new PopStateEvent('popstate'))
+											} catch {}
+											if (feedScrollY != null) {
+												window.scrollTo({ top: feedScrollY })
+												setFeedScrollY(null)
+											}
+										} else {
+											goBackWithTimeLimit()
+										}
+									} catch {}
+								}}
 						>
 							<ArrowLeft className="h-4 w-4" />
 						</Button>
@@ -602,15 +652,33 @@ function FirehoseComponent() {
 						{/*	<img src="/images/logo.svg" alt="Plebeian Market Logo" className="w-4 h-4" />*/}
 						{/*</Button>*/}
 						{openThreadId ? (
-							<Button
-								variant="primary"
-								className="px-4 py-1 h-8 flex gap-1"
-								onClick={() => {
-									try {
-										setOpenThreadId(null)
-										goBackWithTimeLimit()
-									} catch {}
-								}}
+       <Button
+										variant="primary"
+										className="px-4 py-1 h-8 flex gap-1"
+        onClick={() => {
+											try {
+												setOpenThreadId(null)
+                      setClickedEventId(null)
+												// Remove threadview from URL without navigating back
+												try {
+												const url = new URL(window.location.href)
+												url.searchParams.delete('threadview')
+												const target = url.pathname.startsWith('/nostr')
+													? url.search
+														? `/nostr${url.search}`
+														: '/nostr'
+													: url.search
+														? `${url.pathname}${url.search}`
+														: url.pathname
+												window.history.replaceState({}, '', target)
+												window.dispatchEvent(new PopStateEvent('popstate'))
+											} catch {}
+											if (feedScrollY != null) {
+												window.scrollTo({ top: feedScrollY })
+												setFeedScrollY(null)
+											}
+										} catch {}
+									}}
 								title="Close thread"
 								aria-label="Close thread"
 							>
@@ -1104,11 +1172,12 @@ function FirehoseComponent() {
 				</Drawer>
 			</div>
 
-			{/* Large-screen fixed Filters sidebar */}
-			<aside className="hidden lg:block fixed right-0 top-20 h-[calc(100vh-5rem)] w-80 overflow-y-auto bg-secondary-black text-secondary p-4 border-l border-gray-800">
-				<h2 className="text-lg font-semibold mb-2">Filters</h2>
-				<div className="text-sm">
-					<div className="flex flex-col gap-2">
+			{/* Large-screen fixed Filters sidebar (hidden during thread view) */}
+			{!openThreadId ? (
+				<aside className="hidden lg:block fixed right-0 top-24 h-[calc(100vh-6rem)] w-80 overflow-y-auto bg-secondary-black text-secondary p-4 border-l border-gray-800">
+					<h2 className="text-lg font-semibold mb-2">Filters</h2>
+					<div className="text-sm">
+						<div className="flex flex-col gap-2">
 						{currentUserPk ? (
 							<Button
 								variant={filterMode === 'follows' ? 'primary' : 'ghost'}
@@ -1440,13 +1509,21 @@ function FirehoseComponent() {
 					</div>
 				</div>
 			</aside>
+			) : null}
 
-			<div className="p-3 lg:mr-80">
+			<div className={"p-3 " + (openThreadId ? "" : "lg:mr-80")}>
 				<div className="space-y-2 text-sm">
 					{(() => {
 						const base = filtered.filter(
 							(wrapped: FetchedNDKEvent | undefined) => !!wrapped && !!wrapped.event && !!(wrapped.event as any).id,
 						)
+						// If a thread is open, render only that thread's root note, and let NoteView show the full indented thread
+						if (openThreadId) {
+							const match = base.find((w) => ((w.event as any)?.id as string) === openThreadId)
+							return match ? (
+								[<NoteView key={(match.event as any).id as string} note={match.event} reactionsMap={reactionsMap || {}} />]
+							) : null
+						}
 						const toShow =
 							filterMode === 'reactions'
 								? base.filter((w) => {
@@ -1462,43 +1539,49 @@ function FirehoseComponent() {
 					})()}
 				</div>
 			</div>
-			{/* Floating Back-to-Top Button */}
-			<Button
-				variant="primary"
-				className={`group fixed bottom-26 right-14 z-40 h-10 w-10 rounded-full px-0 flex items-center justify-center shadow-lg transition-all duration-300 overflow-hidden ${showTop ? 'opacity-100 hover:w-auto hover:px-4 hover:text-pink-500 hover:bg-blend-luminosity hover:bg-black' : 'opacity-0 pointer-events-none'}`}
-				onClick={() => {
-					// Close any open thread to prevent auto-scroll back down
-					setOpenThreadId(null)
-					scrollToTop()
-				}}
-				title="Back to top"
-				aria-label="Back to top"
-			>
-				<span className="text-lg" aria-hidden>
-					🡅
-				</span>
-				<span className="opacity-0 w-0 whitespace-nowrap text-base leading-none transition-all duration-300 group-hover:opacity-100 group-hover:w-auto group-hover:ml-2">
-					Back to top
-				</span>
-			</Button>
+			{/* Floating Back-to-Top Button with left fade-in label */}
+				<div className={`group fixed bottom-36 z-40 ${showTop ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} style={{ right: floatingRight }}>
+				{/* Label pill to the left */}
+				<div className="absolute top-1/2 right-full -translate-y-1/2 mr-3 pointer-events-none transition-opacity duration-300 opacity-0 group-hover:opacity-100">
+					<span className="px-3 py-1 rounded-full bg-black/70 text-white text-sm shadow whitespace-nowrap text-right">Back to top</span>
+				</div>
+				<Button
+					variant="primary"
+					className={`h-10 w-10 rounded-full px-0 flex items-center justify-center shadow-lg transition-colors duration-200 hover:bg-white`}
+					onClick={() => {
+						// Close any open thread to prevent auto-scroll back down
+						setOpenThreadId(null)
+						scrollToTop()
+					}}
+					title="Back to top"
+					aria-label="Back to top"
+				>
+					<span className="text-lg" aria-hidden>
+						🡅
+					</span>
+				</Button>
+			</div>
 
-			{/* Floating New Note Button (below Back-to-Top) */}
-			<Button
-				variant="primary"
-				className={`group fixed bottom-2 right-14 z-40 h-20 w-20 rounded-full px-0 flex items-center justify-center shadow-lg transition-all duration-300 overflow-hidden hover:w-auto hover:px-6 hover:text-pink-500 hover:bg-blend-luminosity hover:bg-black`}
-				onClick={() => {
-					// TODO: Implement new note composer
-				}}
-				title="New note"
-				aria-label="New note"
-			>
-				<span className="text-2xl align-baseline" aria-hidden>
-					✍
-				</span>
-				<span className="opacity-0 w-0 whitespace-nowrap text-2xl leading-loose transition-all duration-300 group-hover:opacity-100 group-hover:w-auto group-hover:ml-2">
-					Compose
-				</span>
-			</Button>
+			{/* Floating New Note Button (below Back-to-Top) with left fade-in label */}
+			<div className="group fixed bottom-12 z-40" style={{ right: floatingRight }}>
+				{/* Label pill to the left */}
+				<div className="absolute top-1/2 right-full -translate-y-1/2 mr-3 pointer-events-none transition-opacity duration-300 opacity-0 group-hover:opacity-100">
+					<span className="px-4 py-1.5 rounded-full bg-black/70 text-white text-lg shadow">Compose</span>
+				</div>
+				<Button
+					variant="primary"
+					className={`h-20 w-20 rounded-full px-0 flex items-center justify-center shadow-lg transition-colors duration-200 hover:bg-white`}
+					onClick={() => {
+						// TODO: Implement new note composer
+					}}
+					title="New note"
+					aria-label="New note"
+				>
+					<span className="text-2xl align-baseline" aria-hidden>
+						✍
+					</span>
+				</Button>
+			</div>
 		</div>
 	)
 }

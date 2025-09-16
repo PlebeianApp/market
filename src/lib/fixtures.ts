@@ -18,7 +18,7 @@ export const devUser3 = {
 // npub173cjrntc8qpwd4y8ne3jxw654l65ueuga20026xwcqjee3s0u2rqltqgwe
 export const devUser4 = {
 	pk: 'f47121cd783802e6d4879e63233b54aff54e6788ea9ef568cec0259cc60fe286',
-	sk: 'beb8f6777d4379ac60b01d91fa84456bb23a2ef6b083f557b9ede311ae1ede53',
+	sk: '/',
 }
 
 // npub1jmrj0ax3agv2srgrvg2jp6l78jd7zwrsxvqf5n6mvk2e6zfz9mkqmwmacn

@@ -245,19 +245,14 @@ function ThreadView({ threadStructure, highlightedNoteId, reactionsMap: propReac
 			try {
 				const container = containerRef.current
 				if (!container) return
-				// Get the container's position and scroll to it
-				const rect = container.getBoundingClientRect()
+				const targetEl = container.querySelector(`[data-node-id="${highlightedNoteId}"]`) as HTMLElement | null
+				if (!targetEl) return
+				const rect = targetEl.getBoundingClientRect()
 				const scrollTop = window.pageYOffset || document.documentElement.scrollTop
-				const targetY = rect.top + scrollTop
-				
-				// Account for site header height on larger screens (lg and up have 80px header space)
-				const headerOffset = window.innerWidth >= 1024 ? 80 : 0
-				
-				// Scroll to position the thread container below the site header
-				window.scrollTo({
-					top: targetY - headerOffset,
-					// behavior: 'smooth'
-				})
+				const elementCenterOffset = rect.top + rect.height / 2
+				const viewportCenter = window.innerHeight / 2
+				const desiredTop = scrollTop + (elementCenterOffset - viewportCenter)
+				window.scrollTo({ top: Math.max(0, desiredTop) })
 			} catch {}
 		})
 		return () => cancelAnimationFrame(id)
@@ -296,7 +291,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 		}
 	})()
 	const [showJson, setShowJson] = useState(false)
-	const { openThreadId, setOpenThreadId } = useThreadOpen()
+	const { openThreadId, setOpenThreadId, feedScrollY, setFeedScrollY, clickedEventId, setClickedEventId } = useThreadOpen()
 	const { isAuthenticated } = useAuth()
 	const noteIdForThread = ((note as any)?.id || findRootFromETags?.(note) || '') as string
 	const showThread = !readOnlyInThread && openThreadId === noteIdForThread
@@ -335,7 +330,11 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 						<div className="text-sm text-gray-500">Loading thread...</div>
 					) : threadStructure ? (
 						<>
-							<ThreadView threadStructure={threadStructure} highlightedNoteId={(note as any).id} reactionsMap={reactionsMap} />
+							<ThreadView
+								threadStructure={threadStructure}
+								highlightedNoteId={(clickedEventId || (note as any).id) as string}
+								reactionsMap={reactionsMap}
+							/>
 						</>
 					) : (
 						<div className="text-sm text-gray-500">No thread data available</div>
@@ -353,30 +352,30 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 				{readOnlyInThread ? (
 					<Link
 						to={`/nostr?user=${note.pubkey}`}
- 					className="flex items-center  pr-2"
- 					onClick={(e) => {
- 						e.preventDefault()
- 						e.stopPropagation()
- 						// Clear any open thread when switching to user view
- 						setOpenThreadId(null)
- 						try {
- 							const url = new URL(window.location.href)
- 							// Keep only user param
- 							url.search = ''
- 							url.searchParams.set('user', String(note.pubkey))
- 							const target = url.pathname.startsWith('/nostr')
- 								? url.search
- 									? `/nostr${url.search}`
- 									: '/nostr'
- 								: url.search
- 									? `${url.pathname}${url.search}`
- 									: url.pathname
- 							window.history.pushState({}, '', target)
- 							window.dispatchEvent(new PopStateEvent('popstate'))
- 						} catch {
- 							window.location.href = `/nostr?user=${encodeURIComponent(String(note.pubkey))}`
- 						}
- 					}}
+						className="flex items-center  pr-2"
+						onClick={(e) => {
+							e.preventDefault()
+							e.stopPropagation()
+							// Clear any open thread when switching to user view
+							setOpenThreadId(null)
+							try {
+								const url = new URL(window.location.href)
+								// Keep only user param
+								url.search = ''
+								url.searchParams.set('user', String(note.pubkey))
+								const target = url.pathname.startsWith('/nostr')
+									? url.search
+										? `/nostr${url.search}`
+										: '/nostr'
+									: url.search
+										? `${url.pathname}${url.search}`
+										: url.pathname
+								window.history.pushState({}, '', target)
+								window.dispatchEvent(new PopStateEvent('popstate'))
+							} catch {
+								window.location.href = `/nostr?user=${encodeURIComponent(String(note.pubkey))}`
+							}
+						}}
 					>
 						<div className="flex items-center  pr-2 hover:bg-gray-100">
 							<div>
@@ -405,30 +404,30 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 				) : (
 					<Link
 						to={`/nostr?user=${note.pubkey}`}
- 					className="flex items-center pr-2 hover:bg-grey-200"
- 					onClick={(e) => {
- 						e.preventDefault()
- 						e.stopPropagation()
- 						// Clear any open thread when switching to user view
- 						setOpenThreadId(null)
- 						try {
- 							const url = new URL(window.location.href)
- 							// Keep only user param
- 							url.search = ''
- 							url.searchParams.set('user', String(note.pubkey))
- 							const target = url.pathname.startsWith('/nostr')
- 								? url.search
- 									? `/nostr${url.search}`
- 									: '/nostr'
- 								: url.search
- 									? `${url.pathname}${url.search}`
- 									: url.pathname
- 							window.history.pushState({}, '', target)
- 							window.dispatchEvent(new PopStateEvent('popstate'))
- 						} catch {
- 							window.location.href = `/nostr?user=${encodeURIComponent(String(note.pubkey))}`
- 						}
- 					}}
+						className="flex items-center pr-2 hover:bg-grey-200"
+						onClick={(e) => {
+							e.preventDefault()
+							e.stopPropagation()
+							// Clear any open thread when switching to user view
+							setOpenThreadId(null)
+							try {
+								const url = new URL(window.location.href)
+								// Keep only user param
+								url.search = ''
+								url.searchParams.set('user', String(note.pubkey))
+								const target = url.pathname.startsWith('/nostr')
+									? url.search
+										? `/nostr${url.search}`
+										: '/nostr'
+									: url.search
+										? `${url.pathname}${url.search}`
+										: url.pathname
+								window.history.pushState({}, '', target)
+								window.dispatchEvent(new PopStateEvent('popstate'))
+							} catch {
+								window.location.href = `/nostr?user=${encodeURIComponent(String(note.pubkey))}`
+							}
+						}}
 					>
 						<div>
 							{isLoadingAuthor ? (
@@ -509,6 +508,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 								e.stopPropagation()
 								if (openThreadId === noteIdForThread) {
 									setOpenThreadId(null)
+									setClickedEventId(null)
 									try {
 										const url = new URL(window.location.href)
 										url.searchParams.delete('threadview')
@@ -519,11 +519,23 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 											: url.search
 												? `${url.pathname}${url.search}`
 												: url.pathname
-										window.history.pushState({}, '', target)
+										window.history.replaceState({}, '', target)
 										window.dispatchEvent(new PopStateEvent('popstate'))
 									} catch {}
+									// Restore scroll position if we saved one
+									try {
+										if (typeof window !== 'undefined' && feedScrollY != null) {
+											window.scrollTo({ top: feedScrollY })
+											setFeedScrollY(null)
+										}
+									} catch {}
 								} else {
+									// Save current feed scroll before opening thread
+									try {
+										if (typeof window !== 'undefined') setFeedScrollY(window.scrollY)
+									} catch {}
 									setOpenThreadId(noteIdForThread)
+									setClickedEventId(((note as any)?.id || '') as string)
 									try {
 										const url = new URL(window.location.href)
 										url.searchParams.set('threadview', noteIdForThread)
@@ -720,23 +732,6 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 					</pre>
 				) : null
 			})()}
-			
-			{/* Floating button - hand holding pen emoji */}
-			{!readOnlyInThread && (
-				<button
-					className="fixed bottom-6 right-6 lg:bottom-8 lg:right-8 w-12 h-12 lg:w-15 lg:h-15 bg-black rounded-full flex items-center justify-center text-white text-xl lg:text-2xl shadow-lg hover:bg-gray-800 transition-colors duration-200 z-40"
-					title="Create new note"
-					aria-label="Create new note"
-					onClick={(e) => {
-						e.preventDefault()
-						e.stopPropagation()
-						// TODO: Add functionality for creating new note
-						console.log('Create new note clicked')
-					}}
-				>
-					✍️
-				</button>
-			)}
 		</div>
 	)
 }
