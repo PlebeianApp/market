@@ -150,7 +150,7 @@ function ProfileComponent() {
 					type="button"
 					disabled={isLoading || !changesExist}
 					onClick={handleSave}
-					className="bg-black hover:bg-gray-800 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+					className="btn-black flex items-center gap-2 px-4 py-2 text-sm font-semibold"
 					data-testid="profile-save-button-desktop"
 				>
 					{isLoading ? 'Saving...' : changesExist ? 'Save Changes' : 'Saved'}
@@ -277,7 +277,7 @@ function ProfileComponent() {
 							<Button
 								type="button"
 								disabled={isLoading || !changesExist}
-								className="w-full lg:hidden"
+								className="btn-black w-full lg:hidden"
 								onClick={handleSave}
 								data-testid="profile-save-button"
 							>

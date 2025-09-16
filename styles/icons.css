@@ -564,6 +564,18 @@
 	--svg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill='none' viewBox='0 0 24 24'%3e%3cpath fill='currentColor' d='M17.8 16a2.136 2.136 0 0 0 2.133-2.133V6.133A2.136 2.136 0 0 0 17.8 4H7.133A2.136 2.136 0 0 0 5 6.133v7.734C5 15.043 5.957 16 7.133 16H9.8v1.333c0 .883-.718 1.6-1.6 1.6A.534.534 0 0 0 8.2 20h8.533a.534.534 0 0 0 0-1.067c-.882 0-1.6-.717-1.6-1.6V16zM6.067 6.133c0-.59.477-1.066 1.066-1.066H17.8c.59 0 1.067.477 1.067 1.066v4.8h-12.8zm4.266 12.8c.337-.445.534-1 .534-1.6V16h3.2v1.333c0 .6.2 1.155.533 1.6h-4.27zm-3.2-4c-.59 0-1.066-.477-1.066-1.066V12h12.8v1.867c0 .59-.477 1.066-1.067 1.066z'/%3e%3c/svg%3e");
 }
 
+.i-stop {
+	display: inline-block;
+	background-color: currentColor;
+	-webkit-mask-image: var(--svg);
+	mask-image: var(--svg);
+	-webkit-mask-repeat: no-repeat;
+	mask-repeat: no-repeat;
+	-webkit-mask-size: 100% 100%;
+	mask-size: 100% 100%;
+	--svg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill='currentColor' viewBox='0 0 24 24'%3e%3crect width='12' height='12' x='6' y='6' rx='2'/%3e%3c/svg%3e");
+}
+
 .i-shipping {
 	display: inline-block;
 	background-color: currentColor;

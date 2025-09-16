@@ -238,7 +238,7 @@ const PaymentReceiptMessage = ({ event }: { event: NDKEvent }) => {
 
 export function ChatMessageBubble({ event, isCurrentUser }: ChatMessageBubbleProps) {
 	const alignment = isCurrentUser ? 'justify-end' : 'justify-start'
-	const bubbleStyles = isCurrentUser ? 'bg-primary text-primary-foreground' : 'bg-muted'
+	const bubbleStyles = isCurrentUser ? 'bg-gray-50 border border-black text-off-black' : 'bg-muted'
 	const authorPubkey = event.pubkey
 	const showAvatar = !isCurrentUser
 
