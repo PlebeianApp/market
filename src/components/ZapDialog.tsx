@@ -53,19 +53,6 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 	// Check if NWC is available
 	const hasNwc = !!ndkState.activeNwcWalletUri
 
-	// Debug logging
-	console.log('ZapDialog Debug:', {
-		hasNwc,
-		activeNwcWalletUri: ndkState.activeNwcWalletUri,
-		lightningAddress,
-		profile,
-		eventProfile,
-		fetchedProfile,
-		recipientPubkey,
-		profileData,
-		isLoadingProfile,
-	})
-
 	// Parse amount to number, handle empty/invalid values
 	const numericAmount = parseInt(amount, 10)
 	const isValidAmount = !isNaN(numericAmount) && numericAmount > 0
