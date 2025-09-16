@@ -5,13 +5,19 @@ import { createContext, useContext, useMemo, useState } from 'react'
 type ThreadOpenContextValue = {
   openThreadId: string | null
   setOpenThreadId: (id: string | null) => void
+  feedScrollY: number | null
+  setFeedScrollY: (y: number | null) => void
+  clickedEventId: string | null
+  setClickedEventId: (id: string | null) => void
 }
 
 const ThreadOpenContext = createContext<ThreadOpenContextValue | null>(null)
 
 export function ThreadOpenProvider({ children }: { children: React.ReactNode }) {
   const [openThreadId, setOpenThreadId] = useState<string | null>(null)
-  const value = useMemo(() => ({ openThreadId, setOpenThreadId }), [openThreadId])
+  const [feedScrollY, setFeedScrollY] = useState<number | null>(null)
+  const [clickedEventId, setClickedEventId] = useState<string | null>(null)
+  const value = useMemo(() => ({ openThreadId, setOpenThreadId, feedScrollY, setFeedScrollY, clickedEventId, setClickedEventId }), [openThreadId, feedScrollY, clickedEventId])
   return <ThreadOpenContext.Provider value={value}>{children}</ThreadOpenContext.Provider>
 }
 
