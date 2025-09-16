@@ -7,9 +7,5 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/')({
 
 function DashboardInnerComponent() {
 	useDashboardTitle('Dashboard')
-	return (
-		<div className="space-y-6">
-			<p>Dashboard</p>
-		</div>
-	)
+	return <div className="space-y-6"></div>
 }

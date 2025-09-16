@@ -374,6 +374,7 @@ function DashboardLayout() {
 											{/* Only show title here if there's no back button */}
 											{!isMobile &&
 												!needsBackButton &&
+												location.pathname !== '/dashboard' &&
 												location.pathname !== '/dashboard/sales/sales' &&
 												!location.pathname.startsWith('/dashboard/sales/messages') &&
 												location.pathname !== '/dashboard/sales/circular-economy' &&
