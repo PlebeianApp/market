@@ -63,7 +63,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 		fetchedProfile,
 		recipientPubkey,
 		profileData,
-		isLoadingProfile
+		isLoadingProfile,
 	})
 
 	// Parse amount to number, handle empty/invalid values
