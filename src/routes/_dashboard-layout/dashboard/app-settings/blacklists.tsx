@@ -228,7 +228,7 @@ function BlacklistsComponent() {
 
 	if (isLoadingBlacklist || isLoadingPermissions) {
 		return (
-			<div className="space-y-6 p-6">
+			<div className="space-y-6 pt-4 px-4 xl:px-6">
 				<div className="animate-pulse">
 					<div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
 					<div className="space-y-3">
@@ -242,7 +242,7 @@ function BlacklistsComponent() {
 
 	if (!amIAdmin && !amIEditor) {
 		return (
-			<div className="space-y-6 p-6">
+			<div className="space-y-6 pt-4 px-4 xl:px-6">
 				<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
 					<div className="flex items-center gap-3">
 						<Shield className="w-6 h-6 text-muted-foreground" />

@@ -1202,7 +1202,7 @@ function ShippingOptionsComponent() {
 					</Button>
 				</div>
 			</div>
-			<div className="space-y-6 p-4 lg:p-6">
+			<div className="space-y-6 pt-4 px-4 xl:px-6">
 				<div className="lg:hidden space-y-4">
 					<div>
 						<p className="text-muted-foreground">Manage your shipping options for customers</p>

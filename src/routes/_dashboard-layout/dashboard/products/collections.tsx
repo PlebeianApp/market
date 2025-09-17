@@ -206,7 +206,7 @@ function CollectionsComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 xl:px-6 items-center justify-between">
 				<h1 className="text-2xl font-bold">Collections</h1>
 				<div className="flex items-center gap-4">
 					<Select value={orderBy} onValueChange={setOrderBy}>
@@ -230,7 +230,7 @@ function CollectionsComponent() {
 					</Button>
 				</div>
 			</div>
-			<div className="space-y-6 p-4 lg:p-6">
+			<div className="space-y-6 pt-4 px-4 xl:px-6">
 				<div className="lg:hidden space-y-4">
 					<Select value={orderBy} onValueChange={setOrderBy}>
 						<SelectTrigger className="w-full">
