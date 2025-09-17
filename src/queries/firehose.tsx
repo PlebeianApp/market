@@ -6,6 +6,7 @@ import { queryOptions } from '@tanstack/react-query'
 import { noteKeys } from '@/queries/queryKeyFactory'
 import { ndkActions } from '@/lib/stores/ndk'
 import { defaultRelaysUrls } from '@/lib/constants'
+import { configActions } from '@/lib/stores/config'
 
 // Wrapper type to include the timestamp of when the event was first fetched
 export type FetchedNDKEvent = {
@@ -79,8 +80,10 @@ export const fetchNotes = async (opts?: { tag?: string; author?: string; follows
 		;(filter as any).authors = [opts.author.trim()]
 	}
 
- // Ensure we query using the default relay URLs
-	const relaySet = NDKRelaySet.fromRelayUrls(defaultRelaysUrls, ndk)
+ // Ensure we query using the default relay URLs plus the home relay if available
+	const appRelay = configActions.getAppRelay()
+	const allRelays = appRelay ? [...defaultRelaysUrls, appRelay] : defaultRelaysUrls
+	const relaySet = NDKRelaySet.fromRelayUrls(allRelays, ndk)
 
 	// If follows mode is requested, fetch the current user's contact list and limit authors
 	let mutedPubkeys: Set<string> | null = null

@@ -43,7 +43,7 @@ export default defineConfig({
 	/* Run your local dev server before starting the tests */
 	webServer: [
 		{
-			command: 'nak serve',
+			command: 'nak serve --verbose',
 			port: 10547,
 			reuseExistingServer: !process.env.CI,
 			env: {
