@@ -14,9 +14,10 @@ interface UserWithAvatarProps {
 	size?: 'sm' | 'md' | 'lg'
 	showBadge?: boolean
 	disableLink?: boolean
+	variant?: 'default' | 'sales' | 'messages'
 }
 
-export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge = true, disableLink = false }: UserWithAvatarProps) {
+export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge = true, disableLink = false, variant = 'default' }: UserWithAvatarProps) {
 	// Validate pubkey to prevent crashes with invalid data
 	const validPubkey = isValidHexKey(pubkey)
 
@@ -49,7 +50,7 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 
 	const nameInitial = profileData?.profile?.name || profileData?.profile?.displayName || pubkey.slice(0, 1).toUpperCase()
 
-	const content = (
+	const content = variant === 'sales' ? (
 		<div className={cn(
 			"flex items-center gap-1 border border-gray-300 rounded px-1.5 py-1 inline-flex max-w-[100px] sm:max-w-[120px] overflow-hidden",
 			!disableLink && "hover:bg-muted/50 hover:border-primary transition-colors duration-200"
@@ -72,6 +73,17 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 				{showBadge && <Nip05Badge pubkey={pubkey} />}
 			</div>
 		</div>
+	) : (
+		<>
+			<Avatar className={avatarSizeClass}>
+				<AvatarImage src={profileData?.profile?.picture} />
+				<AvatarFallback>{nameInitial}</AvatarFallback>
+			</Avatar>
+			<div className="flex flex-row items-center gap-1">
+				<ProfileName pubkey={pubkey} className={textSizeClass} truncate={true} disableLink={true} />
+				{showBadge && <Nip05Badge pubkey={pubkey} />}
+			</div>
+		</>
 	)
 
 	if (disableLink) {

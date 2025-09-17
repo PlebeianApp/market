@@ -84,7 +84,7 @@ export const purchaseColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 		header: 'Seller',
 		cell: ({ row }) => {
 			const sellerPubkey = getSellerPubkey(row.original.order)
-			return <UserWithAvatar pubkey={sellerPubkey || ''} showBadge={false} size="sm" disableLink={true} />
+			return <UserWithAvatar pubkey={sellerPubkey || ''} showBadge={false} size="sm" disableLink={false} variant="sales" />
 		},
 	},
 	baseOrderColumns[1], // Date
@@ -103,7 +103,7 @@ export const salesColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 		header: 'Buyer',
 		cell: ({ row }) => {
 			const buyerPubkey = getBuyerPubkey(row.original.order)
-			return <UserWithAvatar pubkey={buyerPubkey || ''} showBadge={false} size="sm" disableLink={true} />
+			return <UserWithAvatar pubkey={buyerPubkey || ''} showBadge={false} size="sm" disableLink={false} variant="sales" />
 		},
 		accessorFn: (row) => getBuyerPubkey(row.order),
 	},
