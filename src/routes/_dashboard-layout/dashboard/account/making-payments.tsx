@@ -271,7 +271,7 @@ function MakingPaymentsComponent() {
 				)}
 			</div>
 
-			<div className="space-y-6 pt-4 px-4 xl:px-6">
+			<div className="space-y-6 pt-4 px-4 xl:px-6 pb-6">
 				{/* Add Wallet Form - shows at top when opened */}
 				{isAddingWallet && (
 					<AddWalletForm
