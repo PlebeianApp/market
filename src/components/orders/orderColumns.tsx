@@ -27,7 +27,7 @@ export const baseOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 		header: 'Time & Date',
 		cell: ({ row }) => {
 			const date = getEventDate(row.original.order)
-			return <span className="text-xs text-muted-foreground">{date}</span>
+			return <div className="text-right text-xs font-normal">{date}</div>
 		},
 	},
 	{
