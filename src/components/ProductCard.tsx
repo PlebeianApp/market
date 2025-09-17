@@ -101,7 +101,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 
 					{/* Stock indicator - right aligned */}
 					{stock !== undefined && (
-						<div className="bg-[var(--light-gray)] font-medium px-4 py-1 rounded-full text-xs">{stock[1]} in stock</div>
+						<div className="bg-[var(--light-gray)] font-medium px-4 py-1 rounded-full text-xs whitespace-nowrap">{stock[1]} in stock</div>
 					)}
 				</div>
 
