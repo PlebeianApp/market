@@ -9,7 +9,7 @@ import { reactionsQueryOptions } from '@/queries/reactions'
 import { ndkActions } from '@/lib/stores/ndk'
 import { NoteView } from '@/components/NoteView.tsx'
 import { Button } from '@/components/ui/button'
-import { Loader2, X, ArrowLeft, LogOut } from 'lucide-react'
+import { Loader2, X, ArrowLeft, LogOut, LucideRefreshCw, RefreshCw } from 'lucide-react'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter, DrawerClose } from '@/components/ui/drawer'
 import { uiActions } from '@/lib/stores/ui'
 import { useThreadOpen } from '@/state/threadOpenStore'
@@ -77,7 +77,7 @@ function FirehoseComponent() {
 		if (filterMode === 'hashtag') return { tag: tagFilter, author: '', follows: false }
 		return { tag: '', author: authorFilter, follows: filterMode === 'follows' }
 	}, [filterMode, tagFilter, authorFilter])
- const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+	const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
 		...notesQueryOptions(notesOpts),
 		refetchOnWindowFocus: false,
 		refetchOnReconnect: false,
@@ -100,6 +100,12 @@ function FirehoseComponent() {
 	const [showTagOverlay, setShowTagOverlay] = useState(false)
 	const [showHomeNavigation, setShowHomeNavigation] = useState(false)
 	const [logoButtonHighlighted, setLogoButtonHighlighted] = useState(false)
+	// Composer state
+	const [isComposeOpen, setIsComposeOpen] = useState(false)
+	const [composeText, setComposeText] = useState('')
+	const [composeImages, setComposeImages] = useState<File[]>([])
+	const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+	const [isComposeLarge, setIsComposeLarge] = useState(false)
 	// Track lg breakpoint to position floating buttons relative to feed panel
 	const [isLg, setIsLg] = useState(false)
 	useEffect(() => {
@@ -552,40 +558,40 @@ function FirehoseComponent() {
 					{!showHomeNavigation && (
 						<Button
 							variant="primary"
-							className="p-2 mx-2 h-8 w-8 flex"
+							className="p-2 mx-2 h-16 w-16 lg:h-8 lg:w-8 flex"
 							title="Go back"
 							aria-label="Go back"
-       disabled={!canGoBack()}
-       onClick={() => {
-									try {
-										if (openThreadId) {
-											// Close thread view and restore scroll
-											setOpenThreadId(null)
-                      setClickedEventId(null)
-											try {
-												const url = new URL(window.location.href)
-												url.searchParams.delete('threadview')
-												const target = url.pathname.startsWith('/nostr')
-													? url.search
-														? `/nostr${url.search}`
-														: '/nostr'
-													: url.search
-														? `${url.pathname}${url.search}`
-														: url.pathname
-												window.history.replaceState({}, '', target)
-												window.dispatchEvent(new PopStateEvent('popstate'))
-											} catch {}
-											if (feedScrollY != null) {
-												window.scrollTo({ top: feedScrollY })
-												setFeedScrollY(null)
-											}
-										} else {
-											goBackWithTimeLimit()
+							disabled={!canGoBack()}
+							onClick={() => {
+								try {
+									if (openThreadId) {
+										// Close thread view and restore scroll
+										setOpenThreadId(null)
+										setClickedEventId(null)
+										try {
+											const url = new URL(window.location.href)
+											url.searchParams.delete('threadview')
+											const target = url.pathname.startsWith('/nostr')
+												? url.search
+													? `/nostr${url.search}`
+													: '/nostr'
+												: url.search
+													? `${url.pathname}${url.search}`
+													: url.pathname
+											window.history.replaceState({}, '', target)
+											window.dispatchEvent(new PopStateEvent('popstate'))
+										} catch {}
+										if (feedScrollY != null) {
+											window.scrollTo({ top: feedScrollY })
+											setFeedScrollY(null)
 										}
-									} catch {}
-								}}
+									} else {
+										goBackWithTimeLimit()
+									}
+								} catch {}
+							}}
 						>
-							<ArrowLeft className="h-4 w-4" />
+							<ArrowLeft className="h-8 w-8 lg:h-4 lg:w-4" />
 						</Button>
 					)}
 					{showHomeNavigation ? (
@@ -612,15 +618,84 @@ function FirehoseComponent() {
 							</div>
 						</div>
 					) : openThreadId ? (
-						<span>Thread</span>
+						<span className="flex items-center gap-2">
+							Thread
+							<Button
+								variant="primary"
+								className="px-2 py-1 h-6 flex gap-1 lg:hidden"
+								onClick={() => {
+									try {
+										setOpenThreadId(null)
+										setClickedEventId(null)
+										// Remove threadview from URL without navigating back
+										try {
+											const url = new URL(window.location.href)
+											url.searchParams.delete('threadview')
+											const target = url.pathname.startsWith('/nostr')
+												? url.search
+													? `/nostr${url.search}`
+													: '/nostr'
+												: url.search
+													? `${url.pathname}${url.search}`
+													: url.pathname
+											window.history.replaceState({}, '', target)
+											window.dispatchEvent(new PopStateEvent('popstate'))
+										} catch {}
+										if (feedScrollY != null) {
+											window.scrollTo({ top: feedScrollY })
+											setFeedScrollY(null)
+										}
+									} catch {}
+								}}
+								title="Close thread"
+								aria-label="Close thread"
+							>
+								<CollapseVerticalIcon className="h-4 w-4" />
+							</Button>
+							<RefreshCw
+								className={`h-6 w-6 flex cursor-pointer ${isFetching ? 'animate-spin' : ''}`}
+								onClick={() => {
+									scrollToTop()
+									setOpenThreadId(null)
+									refetch()
+								}}
+								title="Reload feed"
+							>
+								{isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <p className="font-heading h-4 w-4">↻</p>}
+							</RefreshCw>
+						</span>
 					) : authorFilter?.trim() ? (
-						<span className="gap-1 items-center flex">
+						<span className="gap-2 items-center flex">
 							@{(authorMeta?.name || authorFilter.slice(0, 8)) + (authorMeta?.name ? '' : '…')}
+							<RefreshCw
+								className={`h-6 w-6 flex cursor-pointer ${isFetching ? 'animate-spin' : ''}`}
+								onClick={() => {
+									scrollToTop()
+									setOpenThreadId(null)
+									refetch()
+								}}
+								title="Reload feed"
+							>
+								{isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <p className="font-heading h-4 w-4">↻</p>}
+							</RefreshCw>
 						</span>
 					) : filterMode === 'hashtag' && tagFilter?.trim() ? (
-						<span className="flex gap-1 items-center">#{tagFilter.replace(/^#/, '')}</span>
+						<span className="flex gap-2 items-center">
+							#{tagFilter.replace(/^#/, '')}
+							<RefreshCw
+								className={`h-6 w-6 flex cursor-pointer ${isFetching ? 'animate-spin' : ''}`}
+								onClick={() => {
+									scrollToTop()
+									setOpenThreadId(null)
+									refetch()
+								}}
+								title="Reload feed"
+							>
+								{isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <p className="font-heading h-4 w-4">↻</p>}
+							</RefreshCw>
+						</span>
 					) : (
-						<span>
+						<span className="flex items-center gap-2">
 							{filterMode === 'follows' ? (
 								<span>{currentUserDisplayName ? `${currentUserDisplayName} follow feed` : 'Follow feed'}</span>
 							) : filterMode === 'reactions' ? (
@@ -632,6 +707,17 @@ function FirehoseComponent() {
 							) : (
 								<span>Firehose - global</span>
 							)}
+							<RefreshCw
+								className={`h-6 w-6 flex cursor-pointer ${isFetching ? 'animate-spin' : ''}`}
+								onClick={() => {
+									scrollToTop()
+									setOpenThreadId(null)
+									refetch()
+								}}
+								title="Reload feed"
+							>
+								{isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <p className="font-heading h-4 w-4">↻</p>}
+							</RefreshCw>
 						</span>
 					)}
 				</span>
@@ -652,33 +738,33 @@ function FirehoseComponent() {
 						{/*	<img src="/images/logo.svg" alt="Plebeian Market Logo" className="w-4 h-4" />*/}
 						{/*</Button>*/}
 						{openThreadId ? (
-       <Button
-										variant="primary"
-										className="px-4 py-1 h-8 flex gap-1"
-        onClick={() => {
-											try {
-												setOpenThreadId(null)
-                      setClickedEventId(null)
-												// Remove threadview from URL without navigating back
-												try {
-												const url = new URL(window.location.href)
-												url.searchParams.delete('threadview')
-												const target = url.pathname.startsWith('/nostr')
-													? url.search
-														? `/nostr${url.search}`
-														: '/nostr'
-													: url.search
-														? `${url.pathname}${url.search}`
-														: url.pathname
-												window.history.replaceState({}, '', target)
-												window.dispatchEvent(new PopStateEvent('popstate'))
-											} catch {}
-											if (feedScrollY != null) {
-												window.scrollTo({ top: feedScrollY })
-												setFeedScrollY(null)
-											}
+							<Button
+								variant="primary"
+								className="px-4 py-1 h-8 hidden lg:flex gap-1"
+								onClick={() => {
+									try {
+										setOpenThreadId(null)
+										setClickedEventId(null)
+										// Remove threadview from URL without navigating back
+										try {
+											const url = new URL(window.location.href)
+											url.searchParams.delete('threadview')
+											const target = url.pathname.startsWith('/nostr')
+												? url.search
+													? `/nostr${url.search}`
+													: '/nostr'
+												: url.search
+													? `${url.pathname}${url.search}`
+													: url.pathname
+											window.history.replaceState({}, '', target)
+											window.dispatchEvent(new PopStateEvent('popstate'))
 										} catch {}
-									}}
+										if (feedScrollY != null) {
+											window.scrollTo({ top: feedScrollY })
+											setFeedScrollY(null)
+										}
+									} catch {}
+								}}
 								title="Close thread"
 								aria-label="Close thread"
 							>
@@ -686,44 +772,16 @@ function FirehoseComponent() {
 								<CollapseVerticalIcon className="h-5 w-5 ml-0 lg:ml-0" />
 							</Button>
 						) : null}
-						{/*<Button*/}
-						{/*	variant="primary"*/}
-						{/*	className="p-2 h-8 w-8 flex"*/}
-						{/*	// onClick={() => {*/}
-						{/*	// 	scrollToTop()*/}
-						{/*	// 	// Also close any open thread when refreshing*/}
-						{/*	// 	setOpenThreadId(null)*/}
-						{/*	// 	refetch()*/}
-						{/*	// }}*/}
-						{/*	title="menu mode"*/}
-						{/*>*/}
-						{/*	<p>show site menu</p>*/}
-						{/*	/!*{isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <span className="i-refresh w-4 h-4" />}↻*!/*/}
-						{/*</Button>*/}
-
-						<Button
-							variant="primary"
-							className="p-2 h-8 w-8 flex"
-							onClick={() => {
-								scrollToTop()
-								// Also close any open thread when refreshing
-								setOpenThreadId(null)
-								refetch()
-							}}
-							title="Reload feed"
-						>
-							{isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <span className="i-refresh w-4 h-4" />}↻
-						</Button>
 						<Button
 							variant="ghost"
-							className="px-2 py-1 h-8 lg:hidden"
+							className="px-4 py-2 h-16 w-16 lg:px-2 lg:py-1 lg:h-8 lg:w-auto lg:hidden"
 							onClick={() => {
 								setIsFiltersOpen(true)
 								uiActions.openDrawer('filters')
 							}}
 							title="Open filters"
 						>
-							☰
+							<span className="text-2xl lg:text-base">☰</span>
 						</Button>
 					</div>
 				</section>
@@ -1178,20 +1236,54 @@ function FirehoseComponent() {
 					<h2 className="text-lg font-semibold mb-2">Filters</h2>
 					<div className="text-sm">
 						<div className="flex flex-col gap-2">
-						{currentUserPk ? (
+							{currentUserPk ? (
+								<Button
+									variant={filterMode === 'follows' ? 'primary' : 'ghost'}
+									className="justify-start"
+									onClick={() => {
+										setLoadingMode('follows')
+										setSpinnerSettled(false)
+										setFilterMode('follows')
+										setOpenThreadId(null)
+										try {
+											if (typeof window !== 'undefined') {
+												const url = new URL(window.location.href)
+												url.search = ''
+												url.searchParams.set('view', 'follows')
+												const target = url.pathname.startsWith('/nostr')
+													? url.search
+														? `/nostr${url.search}`
+														: '/nostr'
+													: url.search
+														? `${url.pathname}${url.search}`
+														: url.pathname
+												window.history.pushState({}, '', target)
+												window.dispatchEvent(new PopStateEvent('popstate'))
+											}
+										} catch {}
+									}}
+								>
+									<span className="inline-flex items-center gap-2">
+										{loadingMode === 'follows' && !isFiltersOpen ? (
+											<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
+										) : null}
+										<span>Follows</span>
+									</span>
+								</Button>
+							) : null}
 							<Button
-								variant={filterMode === 'follows' ? 'primary' : 'ghost'}
+								variant={filterMode === 'all' ? 'primary' : 'ghost'}
 								className="justify-start"
 								onClick={() => {
-									setLoadingMode('follows')
+									setLoadingMode('all')
 									setSpinnerSettled(false)
-									setFilterMode('follows')
+									setFilterMode('all')
 									setOpenThreadId(null)
 									try {
 										if (typeof window !== 'undefined') {
 											const url = new URL(window.location.href)
 											url.search = ''
-											url.searchParams.set('view', 'follows')
+											url.searchParams.set('view', 'global')
 											const target = url.pathname.startsWith('/nostr')
 												? url.search
 													? `/nostr${url.search}`
@@ -1206,312 +1298,284 @@ function FirehoseComponent() {
 								}}
 							>
 								<span className="inline-flex items-center gap-2">
-									{loadingMode === 'follows' && !isFiltersOpen ? (
+									{loadingMode === 'all' && !isFiltersOpen ? (
 										<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
 									) : null}
-									<span>Follows</span>
+									<span>Global ({counts.all})</span>
 								</span>
 							</Button>
-						) : null}
-						<Button
-							variant={filterMode === 'all' ? 'primary' : 'ghost'}
-							className="justify-start"
-							onClick={() => {
-								setLoadingMode('all')
-								setSpinnerSettled(false)
-								setFilterMode('all')
-								setOpenThreadId(null)
-								try {
-									if (typeof window !== 'undefined') {
-										const url = new URL(window.location.href)
-										url.search = ''
-										url.searchParams.set('view', 'global')
-										const target = url.pathname.startsWith('/nostr')
-											? url.search
-												? `/nostr${url.search}`
-												: '/nostr'
-											: url.search
-												? `${url.pathname}${url.search}`
-												: url.pathname
-										window.history.pushState({}, '', target)
-										window.dispatchEvent(new PopStateEvent('popstate'))
-									}
-								} catch {}
-							}}
-						>
-							<span className="inline-flex items-center gap-2">
-								{loadingMode === 'all' && !isFiltersOpen ? <Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} /> : null}
-								<span>Global ({counts.all})</span>
-							</span>
-						</Button>
-						<Button
-							variant={filterMode === 'threads' ? 'primary' : 'ghost'}
-							className="justify-start"
-							onClick={() => {
-								setLoadingMode('threads')
-								setSpinnerSettled(false)
-								setFilterMode('threads')
-								setOpenThreadId(null)
-								try {
-									if (typeof window !== 'undefined') {
-										const url = new URL(window.location.href)
-										url.search = ''
-										url.searchParams.set('view', 'threads')
-										const target = url.pathname.startsWith('/nostr')
-											? url.search
-												? `/nostr${url.search}`
-												: '/nostr'
-											: url.search
-												? `${url.pathname}${url.search}`
-												: url.pathname
-										window.history.pushState({}, '', target)
-										window.dispatchEvent(new PopStateEvent('popstate'))
-									}
-								} catch {}
-							}}
-						>
-							<span className="inline-flex items-center gap-2">
-								{loadingMode === 'threads' && !isFiltersOpen ? (
-									<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
-								) : null}
-								<span>Threads ({counts.threads})</span>
-							</span>
-						</Button>
-						<Button
-							variant={filterMode === 'originals' ? 'primary' : 'ghost'}
-							className="justify-start"
-							onClick={() => {
-								setLoadingMode('originals')
-								setSpinnerSettled(false)
-								setFilterMode('originals')
-								setOpenThreadId(null)
-								try {
-									if (typeof window !== 'undefined') {
-										const url = new URL(window.location.href)
-										url.search = ''
-										url.searchParams.set('view', 'originals')
-										const target = url.pathname.startsWith('/nostr')
-											? url.search
-												? `/nostr${url.search}`
-												: '/nostr'
-											: url.search
-												? `${url.pathname}${url.search}`
-												: url.pathname
-										window.history.pushState({}, '', target)
-										window.dispatchEvent(new PopStateEvent('popstate'))
-									}
-								} catch {}
-							}}
-						>
-							<span className="inline-flex items-center gap-2">
-								{loadingMode === 'originals' && !isFiltersOpen ? (
-									<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
-								) : null}
-								<span>Original posts ({counts.originals})</span>
-							</span>
-						</Button>
-						<div className="mt-4 px-4">
-							<Label htmlFor="tag-filter">Tags</Label>
-							<div className="flex gap-2 items-center">
-								<div className="relative flex-1">
-									<Input
-										id="tag-filter"
-										placeholder="#news or news"
-										value={tagFilterInput}
-										onChange={(e) => {
-											setTagFilterInput(e.target.value)
-										}}
-										onKeyDown={(e) => {
-											if (e.key === 'Enter') {
-												const normalized = (tagFilterInput || '').replace(/^#/, '').trim()
-												// Switch to independent hashtag mode when a tag is entered
-												scrollToTop()
-												setSpinnerSettled(false)
-												setLoadingMode('hashtag')
-												setFilterMode('hashtag')
-												setOpenThreadId(null)
-												if (normalized.length > 0) {
-													setPendingTag(normalized)
-												}
-												setTagFilter(normalized)
-												// Update URL to explicit hashtag view
-												try {
-													if (typeof window !== 'undefined') {
-														const url = new URL(window.location.href)
-														url.search = ''
-														if (normalized) {
-															url.searchParams.set('view', 'hashtag')
-															url.searchParams.set('tag', normalized)
-														}
-														const target = url.pathname.startsWith('/nostr')
-															? url.search
-																? `/nostr${url.search}`
-																: '/nostr'
-															: url.search
-																? `${url.pathname}${url.search}`
-																: url.pathname
-														window.history.pushState({}, '', target)
-														window.dispatchEvent(new PopStateEvent('popstate'))
-													}
-												} catch {}
-											}
-										}}
-										className="w-full pr-8"
-									/>
-									{tagFilterInput?.length ? (
-										<button
-											type="button"
-											className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-											onClick={() => {
-												// Clear the input and active tag filter, and return to follows/global
-												setTagFilterInput('')
-												setTagFilter('')
-												setSpinnerSettled(false)
-												if (currentUserPk) {
-													setLoadingMode('follows')
-													setFilterMode('follows')
-												} else {
-													setLoadingMode('all')
-													setFilterMode('all')
-												}
-												setOpenThreadId(null)
-												try {
-													if (typeof window !== 'undefined') {
-														const url = new URL(window.location.href)
-														url.search = ''
-														if (currentUserPk) {
-															url.searchParams.set('view', 'follows')
-														} else {
-															url.searchParams.set('view', 'global')
-														}
-														const target = url.pathname.startsWith('/nostr')
-															? url.search
-																? `/nostr${url.search}`
-																: '/nostr'
-															: url.search
-																? `${url.pathname}${url.search}`
-																: url.pathname
-														window.history.pushState({}, '', target)
-														window.dispatchEvent(new PopStateEvent('popstate'))
-													}
-												} catch {}
-												const el = document.getElementById('tag-filter') as HTMLInputElement | null
-												el?.focus()
-											}}
-											title="Clear tag filter"
-											aria-label="Clear tag filter"
-										>
-											<X className="h-4 w-4" />
-										</button>
+							<Button
+								variant={filterMode === 'threads' ? 'primary' : 'ghost'}
+								className="justify-start"
+								onClick={() => {
+									setLoadingMode('threads')
+									setSpinnerSettled(false)
+									setFilterMode('threads')
+									setOpenThreadId(null)
+									try {
+										if (typeof window !== 'undefined') {
+											const url = new URL(window.location.href)
+											url.search = ''
+											url.searchParams.set('view', 'threads')
+											const target = url.pathname.startsWith('/nostr')
+												? url.search
+													? `/nostr${url.search}`
+													: '/nostr'
+												: url.search
+													? `${url.pathname}${url.search}`
+													: url.pathname
+											window.history.pushState({}, '', target)
+											window.dispatchEvent(new PopStateEvent('popstate'))
+										}
+									} catch {}
+								}}
+							>
+								<span className="inline-flex items-center gap-2">
+									{loadingMode === 'threads' && !isFiltersOpen ? (
+										<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
 									) : null}
-								</div>
-								<Button
-									variant="primary"
-									className="h-9 px-3"
-									onClick={() => {
-										const normalized = (tagFilterInput || '').replace(/^#/, '').trim()
-										if (!normalized) return
-										// Perform same action as Enter
-										scrollToTop()
-										setSpinnerSettled(false)
-										setLoadingMode('hashtag')
-										setFilterMode('hashtag')
-										setOpenThreadId(null)
-										setPendingTag(normalized)
-										setTagFilter(normalized)
-										try {
-											if (typeof window !== 'undefined') {
-												const url = new URL(window.location.href)
-												url.search = ''
-												url.searchParams.set('view', 'hashtag')
-												url.searchParams.set('tag', normalized)
-												const target = url.pathname.startsWith('/nostr')
-													? url.search
-														? `/nostr${url.search}`
-														: '/nostr'
-													: url.search
-														? `${url.pathname}${url.search}`
-														: url.pathname
-												window.history.pushState({}, '', target)
-												window.dispatchEvent(new PopStateEvent('popstate'))
-											}
-										} catch {}
-									}}
-									title="Apply hashtag filter"
-									aria-label="Apply hashtag filter"
-									disabled={!(tagFilterInput || '').replace(/^#/, '').trim().length}
-								>
-									⤶
-								</Button>
-							</div>
-						</div>
-						<div className="flex gap-2 items-center px-3 py-2 mt-3 mb-1 font-medium">
-							<span>Reactions</span>
-						</div>
-						<div className="pl-2 flex flex-col gap-2">
-							<div className="flex gap-2 items-center px-2">
-								<span className="text-xs text-gray-500">Emoji:</span>
-								<div className="w-16 h-8 py-0 rounded bg-transparent border border-gray-700 flex items-center justify-center">
-									{selectedEmoji || 'Any'}
-								</div>
-								<button
-									className="h-8 px-2 rounded bg-white/10 text-secondary"
-									onClick={() => {
-										// Clear the emoji filter and revert to previous mode locally; URL will sync elsewhere
-										setSelectedEmoji('')
-										if (filterMode === 'reactions') {
-											setLoadingMode(previousFilterMode)
+									<span>Threads ({counts.threads})</span>
+								</span>
+							</Button>
+							<Button
+								variant={filterMode === 'originals' ? 'primary' : 'ghost'}
+								className="justify-start"
+								onClick={() => {
+									setLoadingMode('originals')
+									setSpinnerSettled(false)
+									setFilterMode('originals')
+									setOpenThreadId(null)
+									try {
+										if (typeof window !== 'undefined') {
+											const url = new URL(window.location.href)
+											url.search = ''
+											url.searchParams.set('view', 'originals')
+											const target = url.pathname.startsWith('/nostr')
+												? url.search
+													? `/nostr${url.search}`
+													: '/nostr'
+												: url.search
+													? `${url.pathname}${url.search}`
+													: url.pathname
+											window.history.pushState({}, '', target)
+											window.dispatchEvent(new PopStateEvent('popstate'))
+										}
+									} catch {}
+								}}
+							>
+								<span className="inline-flex items-center gap-2">
+									{loadingMode === 'originals' && !isFiltersOpen ? (
+										<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
+									) : null}
+									<span>Original posts ({counts.originals})</span>
+								</span>
+							</Button>
+							<div className="mt-4 px-4">
+								<Label htmlFor="tag-filter">Tags</Label>
+								<div className="flex gap-2 items-center">
+									<div className="relative flex-1">
+										<Input
+											id="tag-filter"
+											placeholder="#news or news"
+											value={tagFilterInput}
+											onChange={(e) => {
+												setTagFilterInput(e.target.value)
+											}}
+											onKeyDown={(e) => {
+												if (e.key === 'Enter') {
+													const normalized = (tagFilterInput || '').replace(/^#/, '').trim()
+													// Switch to independent hashtag mode when a tag is entered
+													scrollToTop()
+													setSpinnerSettled(false)
+													setLoadingMode('hashtag')
+													setFilterMode('hashtag')
+													setOpenThreadId(null)
+													if (normalized.length > 0) {
+														setPendingTag(normalized)
+													}
+													setTagFilter(normalized)
+													// Update URL to explicit hashtag view
+													try {
+														if (typeof window !== 'undefined') {
+															const url = new URL(window.location.href)
+															url.search = ''
+															if (normalized) {
+																url.searchParams.set('view', 'hashtag')
+																url.searchParams.set('tag', normalized)
+															}
+															const target = url.pathname.startsWith('/nostr')
+																? url.search
+																	? `/nostr${url.search}`
+																	: '/nostr'
+																: url.search
+																	? `${url.pathname}${url.search}`
+																	: url.pathname
+															window.history.pushState({}, '', target)
+															window.dispatchEvent(new PopStateEvent('popstate'))
+														}
+													} catch {}
+												}
+											}}
+											className="w-full pr-8"
+										/>
+										{tagFilterInput?.length ? (
+											<button
+												type="button"
+												className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+												onClick={() => {
+													// Clear the input and active tag filter, and return to follows/global
+													setTagFilterInput('')
+													setTagFilter('')
+													setSpinnerSettled(false)
+													if (currentUserPk) {
+														setLoadingMode('follows')
+														setFilterMode('follows')
+													} else {
+														setLoadingMode('all')
+														setFilterMode('all')
+													}
+													setOpenThreadId(null)
+													try {
+														if (typeof window !== 'undefined') {
+															const url = new URL(window.location.href)
+															url.search = ''
+															if (currentUserPk) {
+																url.searchParams.set('view', 'follows')
+															} else {
+																url.searchParams.set('view', 'global')
+															}
+															const target = url.pathname.startsWith('/nostr')
+																? url.search
+																	? `/nostr${url.search}`
+																	: '/nostr'
+																: url.search
+																	? `${url.pathname}${url.search}`
+																	: url.pathname
+															window.history.pushState({}, '', target)
+															window.dispatchEvent(new PopStateEvent('popstate'))
+														}
+													} catch {}
+													const el = document.getElementById('tag-filter') as HTMLInputElement | null
+													el?.focus()
+												}}
+												title="Clear tag filter"
+												aria-label="Clear tag filter"
+											>
+												<X className="h-4 w-4" />
+											</button>
+										) : null}
+									</div>
+									<Button
+										variant="primary"
+										className="h-9 px-3"
+										onClick={() => {
+											const normalized = (tagFilterInput || '').replace(/^#/, '').trim()
+											if (!normalized) return
+											// Perform same action as Enter
+											scrollToTop()
 											setSpinnerSettled(false)
-											setFilterMode(previousFilterMode)
-										}
-									}}
-								>
-									Clear
-								</button>
+											setLoadingMode('hashtag')
+											setFilterMode('hashtag')
+											setOpenThreadId(null)
+											setPendingTag(normalized)
+											setTagFilter(normalized)
+											try {
+												if (typeof window !== 'undefined') {
+													const url = new URL(window.location.href)
+													url.search = ''
+													url.searchParams.set('view', 'hashtag')
+													url.searchParams.set('tag', normalized)
+													const target = url.pathname.startsWith('/nostr')
+														? url.search
+															? `/nostr${url.search}`
+															: '/nostr'
+														: url.search
+															? `${url.pathname}${url.search}`
+															: url.pathname
+													window.history.pushState({}, '', target)
+													window.dispatchEvent(new PopStateEvent('popstate'))
+												}
+											} catch {}
+										}}
+										title="Apply hashtag filter"
+										aria-label="Apply hashtag filter"
+										disabled={!(tagFilterInput || '').replace(/^#/, '').trim().length}
+									>
+										⤶
+									</Button>
+								</div>
 							</div>
-							<div className="mt-2 p-2">
-								<EmojiPicker
-									onEmojiClick={(emojiData) => {
-										if (filterMode !== 'reactions') {
-											setPreviousFilterMode(filterMode as 'all' | 'threads' | 'originals' | 'follows' | 'hashtag')
-										}
-										setSelectedEmoji(emojiData.emoji)
-										setLoadingMode('reactions')
-										setSpinnerSettled(false)
-										setFilterMode('reactions')
-										setOpenThreadId(null)
-										try {
-											if (typeof window !== 'undefined') {
-												const url = new URL(window.location.href)
-												url.search = ''
-												url.searchParams.set('view', 'reactions')
-												url.searchParams.set('emoji', emojiData.emoji)
-												const target = url.pathname.startsWith('/nostr')
-													? url.search
-														? `/nostr${url.search}`
-														: '/nostr'
-													: url.search
-														? `${url.pathname}${url.search}`
-														: url.pathname
-												window.history.pushState({}, '', target)
-												window.dispatchEvent(new PopStateEvent('popstate'))
+							<div className="flex gap-2 items-center px-3 py-2 mt-3 mb-1 font-medium">
+								<span>Reactions</span>
+							</div>
+							<div className="pl-2 flex flex-col gap-2">
+								<div className="flex gap-2 items-center px-2">
+									<span className="text-xs text-gray-500">Emoji:</span>
+									<div className="w-16 h-8 py-0 rounded bg-transparent border border-gray-700 flex items-center justify-center">
+										{selectedEmoji || 'Any'}
+									</div>
+									<button
+										className="h-8 px-2 rounded bg-white/10 text-secondary"
+										onClick={() => {
+											// Clear the emoji filter and revert to previous mode locally; URL will sync elsewhere
+											setSelectedEmoji('')
+											if (filterMode === 'reactions') {
+												setLoadingMode(previousFilterMode)
+												setSpinnerSettled(false)
+												setFilterMode(previousFilterMode)
 											}
-										} catch {}
-									}}
-									width="100%"
-									previewConfig={{ showPreview: false }}
-									searchDisabled={false}
-									skinTonesDisabled
-									theme="dark"
-								/>
+										}}
+									>
+										Clear
+									</button>
+								</div>
+								<div className="mt-2 p-2">
+									<EmojiPicker
+										onEmojiClick={(emojiData) => {
+											if (filterMode !== 'reactions') {
+												setPreviousFilterMode(filterMode as 'all' | 'threads' | 'originals' | 'follows' | 'hashtag')
+											}
+											setSelectedEmoji(emojiData.emoji)
+											setLoadingMode('reactions')
+											setSpinnerSettled(false)
+											setFilterMode('reactions')
+											setOpenThreadId(null)
+											try {
+												if (typeof window !== 'undefined') {
+													const url = new URL(window.location.href)
+													url.search = ''
+													url.searchParams.set('view', 'reactions')
+													url.searchParams.set('emoji', emojiData.emoji)
+													const target = url.pathname.startsWith('/nostr')
+														? url.search
+															? `/nostr${url.search}`
+															: '/nostr'
+														: url.search
+															? `${url.pathname}${url.search}`
+															: url.pathname
+													window.history.pushState({}, '', target)
+													window.dispatchEvent(new PopStateEvent('popstate'))
+												}
+											} catch {}
+										}}
+										width="100%"
+										previewConfig={{ showPreview: false }}
+										searchDisabled={false}
+										skinTonesDisabled
+										theme="dark"
+									/>
+								</div>
 							</div>
 						</div>
 					</div>
-				</div>
-			</aside>
+				</aside>
 			) : null}
 
-			<div className={"p-3 " + (openThreadId ? "" : "lg:mr-80")}>
+			<div
+				className={
+					'py-3 px-3 lg:px-3 ' + (openThreadId ? '' : 'lg:mr-80') + (isComposeOpen ? (isComposeLarge ? ' pb-[50vh]' : ' pb-32') : '')
+				}
+			>
 				<div className="space-y-2 text-sm">
 					{(() => {
 						const base = filtered.filter(
@@ -1520,9 +1584,9 @@ function FirehoseComponent() {
 						// If a thread is open, render only that thread's root note, and let NoteView show the full indented thread
 						if (openThreadId) {
 							const match = base.find((w) => ((w.event as any)?.id as string) === openThreadId)
-							return match ? (
-								[<NoteView key={(match.event as any).id as string} note={match.event} reactionsMap={reactionsMap || {}} />]
-							) : null
+							return match
+								? [<NoteView key={(match.event as any).id as string} note={match.event} reactionsMap={reactionsMap || {}} />]
+								: null
 						}
 						const toShow =
 							filterMode === 'reactions'
@@ -1540,7 +1604,10 @@ function FirehoseComponent() {
 				</div>
 			</div>
 			{/* Floating Back-to-Top Button with left fade-in label */}
-				<div className={`group fixed bottom-36 z-40 ${showTop ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} style={{ right: floatingRight }}>
+			<div
+				className={`group fixed ${isComposeOpen ? (isComposeLarge ? 'bottom-[calc(50vh+3rem)]' : 'bottom-40') : 'bottom-36'} z-40 ${showTop ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+				style={{ right: floatingRight }}
+			>
 				{/* Label pill to the left */}
 				<div className="absolute top-1/2 right-full -translate-y-1/2 mr-3 pointer-events-none transition-opacity duration-300 opacity-0 group-hover:opacity-100">
 					<span className="px-3 py-1 rounded-full bg-black/70 text-white text-sm shadow whitespace-nowrap text-right">Back to top</span>
@@ -1563,25 +1630,183 @@ function FirehoseComponent() {
 			</div>
 
 			{/* Floating New Note Button (below Back-to-Top) with left fade-in label */}
-			<div className="group fixed bottom-12 z-40" style={{ right: floatingRight }}>
-				{/* Label pill to the left */}
-				<div className="absolute top-1/2 right-full -translate-y-1/2 mr-3 pointer-events-none transition-opacity duration-300 opacity-0 group-hover:opacity-100">
-					<span className="px-4 py-1.5 rounded-full bg-black/70 text-white text-lg shadow">Compose</span>
+			{!isComposeOpen ? (
+				<div className="group fixed bottom-12 z-40" style={{ right: floatingRight }}>
+					{/* Label pill to the left */}
+					<div className="absolute top-1/2 right-full -translate-y-1/2 mr-3 pointer-events-none transition-opacity duration-300 opacity-0 group-hover:opacity-100">
+						<span className="px-4 py-1.5 rounded-full bg-black/70 text-white text-lg shadow">Compose</span>
+					</div>
+					<Button
+						variant="primary"
+						className={`h-20 w-20 rounded-full px-0 flex items-center justify-center shadow-lg transition-colors duration-200 hover:bg-white`}
+						onClick={() => {
+							setIsComposeOpen((v) => !v)
+						}}
+						title="New note"
+						aria-label="New note"
+					>
+						<span className="text-2xl align-baseline" aria-hidden>
+							✍
+						</span>
+					</Button>
 				</div>
-				<Button
-					variant="primary"
-					className={`h-20 w-20 rounded-full px-0 flex items-center justify-center shadow-lg transition-colors duration-200 hover:bg-white`}
-					onClick={() => {
-						// TODO: Implement new note composer
-					}}
-					title="New note"
-					aria-label="New note"
-				>
-					<span className="text-2xl align-baseline" aria-hidden>
-						✍
-					</span>
-				</Button>
-			</div>
+			) : null}
+			{/* Bottom Compose Panel */}
+			{isComposeOpen ? (
+				<div className={`fixed bottom-0 left-0 z-40 ${openThreadId ? 'right-0' : 'right-0 lg:right-80'}`}>
+					<div className="border-t border-black/20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 shadow-lg">
+						<form
+							className={`p-3 flex items-stretch gap-2 ${isComposeLarge ? 'h-[50vh]' : 'min-h-32'}`}
+							onSubmit={(e) => {
+								e.preventDefault()
+								try {
+									console.log('Send note:', { text: composeText, images: composeImages })
+								} catch {}
+								setComposeText('')
+								setComposeImages([])
+								setIsComposeOpen(false)
+							}}
+						>
+							<div className="flex-1 flex flex-col">
+								<textarea
+									value={composeText}
+									onChange={(e) => setComposeText(e.target.value)}
+									placeholder="Write a note..."
+									className="w-full flex-1 p-2 rounded-md border border-black/20 bg-background focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+								/>
+								{composeImages.length > 0 ? (
+									<div className="mt-2 flex flex-wrap gap-2">
+										{composeImages.map((f, idx) => (
+											<span key={idx} className="text-xs px-2 py-1 rounded bg-muted text-muted-foreground border">
+												{f.name}
+											</span>
+										))}
+									</div>
+								) : null}
+							</div>
+							<div className="flex flex-col gap-2">
+								{/* Top row - Toggle and Close buttons (right-justified) */}
+								<div className="flex justify-end items-end gap-1 text-xl">
+									<Button
+										type="button"
+										variant="tertiary"
+										size="icon"
+										title={isComposeLarge ? 'Return to small mode' : 'Expand to large mode'}
+										aria-label={isComposeLarge ? 'Return to small mode' : 'Expand to large mode'}
+										onClick={() => {
+											setIsComposeLarge((v) => !v)
+										}}
+									>
+										<span aria-hidden className="items-center text-2xl">
+											{isComposeLarge ? '⇓' : '⇕'}
+										</span>
+									</Button>
+									<Button
+										type="button"
+										variant="primary"
+										size="icon"
+										title="Close"
+										aria-label="Close compose"
+										onClick={() => {
+											setIsComposeOpen(false)
+										}}
+									>
+										<span aria-hidden>X</span>
+									</Button>
+								</div>
+								<div className="flex flex-grow justify-end items-end">
+									{/*<Button*/}
+									{/*	type="button"*/}
+									{/*	variant="tertiary"*/}
+									{/*	size="icon"*/}
+									{/*	title="Close"*/}
+									{/*	aria-label="Close compose"*/}
+									{/*	onClick={() => {*/}
+									{/*		setIsComposeOpen(false)*/}
+									{/*	}}*/}
+									{/*>*/}
+									{/*	<span aria-hidden>✖</span>*/}
+									{/*</Button>*/}
+								</div>
+								{/* Bottom row - Image, Emoji, Send buttons */}
+								<div className="flex items-end gap-1">
+									{/* Image upload */}
+									<input
+										id="compose-image-input"
+										type="file"
+										accept="image/*"
+										multiple
+										className="hidden"
+										onChange={(e) => {
+											const files = Array.from(e.target.files || [])
+											setComposeImages((prev) => [...prev, ...files])
+											e.currentTarget.value = ''
+										}}
+									/>
+									<label htmlFor="compose-image-input">
+										<Button type="button" variant="tertiary" size="icon" title="Add image" aria-label="Add image">
+											<span aria-hidden>🖼️</span>
+										</Button>
+									</label>
+									{/* Emoji */}
+									<div className="relative">
+										<Button
+											type="button"
+											variant="tertiary"
+											size="icon"
+											onClick={() => setShowEmojiPicker((v) => !v)}
+											title="Emoji"
+											aria-label="Emoji"
+										>
+											<span aria-hidden>😊</span>
+										</Button>
+										{showEmojiPicker ? (
+											<div className="absolute bottom-12 right-0 z-50">
+												<EmojiPicker
+													onEmojiClick={(emojiData) => {
+														setComposeText((t) => t + emojiData.emoji)
+													}}
+													width={300}
+													previewConfig={{ showPreview: false }}
+													searchDisabled={false}
+													skinTonesDisabled
+													theme="dark"
+												/>
+											</div>
+										) : null}
+									</div>
+									{/* Spacer to expand and fill available space */}
+									<div className="flex-grow"></div>
+									{/* Send */}
+									<Button
+										type="submit"
+										variant="primary"
+										size="icon"
+										title="Send"
+										aria-label="Send"
+										disabled={!composeText.trim() && composeImages.length === 0}
+									>
+										{/* Paper airplane right icon */}
+										<svg
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											strokeWidth="2"
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											className="w-5 h-5"
+											aria-hidden
+										>
+											<path d="M22 2L11 13" />
+											<path d="M22 2l-7 20-4-9-9-4 20-7z" />
+										</svg>
+									</Button>
+								</div>
+							</div>
+						</form>
+					</div>
+				</div>
+			) : null}
 		</div>
 	)
 }

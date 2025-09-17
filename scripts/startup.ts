@@ -4,6 +4,7 @@ import { config } from 'dotenv'
 import { devUser1, devUser2, devUser3, devUser4, devUser5 } from '@/lib/fixtures'
 import { AppSettingsSchema } from '@/lib/schemas/app'
 import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
+import { nip19 } from 'nostr-tools'
 
 config()
 
@@ -16,7 +17,31 @@ if (!RELAY_URL || !APP_PRIVATE_KEY) {
 }
 
 const relay = RELAY_URL as string
-const privateKey = APP_PRIVATE_KEY as string
+
+function normalizePrivKey(key: string): string {
+	let k = key.trim()
+	if (k.startsWith('nsec')) {
+		try {
+			const dec = nip19.decode(k)
+			if (dec.type === 'nsec' && typeof dec.data === 'string') {
+				k = dec.data
+			} else if (dec.type === 'nsec' && dec.data instanceof Uint8Array) {
+				k = Buffer.from(dec.data).toString('hex')
+			} else {
+				throw new Error('Invalid nsec key')
+			}
+		} catch (e) {
+			throw new Error('APP_PRIVATE_KEY: could not decode nsec key')
+		}
+	}
+	if (k.startsWith('0x')) k = k.slice(2)
+	if (!/^[0-9a-fA-F]{64}$/.test(k)) {
+		throw new Error('APP_PRIVATE_KEY must be a 64-char hex string or a valid nsec')
+	}
+	return k.toLowerCase()
+}
+
+const privateKey = normalizePrivKey(APP_PRIVATE_KEY as string)
 
 // Initialize NDK with the relay URL
 const ndk = ndkActions.initialize([relay])
