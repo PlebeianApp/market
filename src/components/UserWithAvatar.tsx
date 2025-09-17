@@ -50,16 +50,28 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 	const nameInitial = profileData?.profile?.name || profileData?.profile?.displayName || pubkey.slice(0, 1).toUpperCase()
 
 	const content = (
-		<>
-			<Avatar className={avatarSizeClass}>
+		<div className={cn(
+			"flex items-center gap-1 border border-gray-300 rounded px-3 py-1 w-full max-w-[180px]",
+			!disableLink && "hover:bg-muted/50 hover:border-primary transition-colors duration-200"
+		)}>
+			<Avatar className={cn(avatarSizeClass, "flex-shrink-0")}>
 				<AvatarImage src={profileData?.profile?.picture} />
 				<AvatarFallback>{nameInitial}</AvatarFallback>
 			</Avatar>
-			<div className="flex flex-row items-center gap-1">
-				<ProfileName pubkey={pubkey} className={textSizeClass} truncate={true} disableLink={true} />
+			<div className="flex items-center gap-0.5 min-w-0 flex-1">
+				<ProfileName
+					pubkey={pubkey}
+					className={cn(
+						textSizeClass,
+						"truncate",
+						!disableLink && 'hover:text-primary transition-colors duration-200'
+					)}
+					truncate={true}
+					disableLink={true}
+				/>
 				{showBadge && <Nip05Badge pubkey={pubkey} />}
 			</div>
-		</>
+		</div>
 	)
 
 	if (disableLink) {
