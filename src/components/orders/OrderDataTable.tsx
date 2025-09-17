@@ -194,14 +194,14 @@ export function OrderDataTable<TData>({
 
 											return (
 												<>
-													<div className="flex justify-between items-center mb-4">
+													<div className="flex items-center mb-4">
 														{orderIdCell && (
 															<div className="text-sm font-medium">
 																{flexRender(orderIdCell.column.columnDef.cell, orderIdCell.getContext())}
 															</div>
 														)}
 														{actionsCell && (
-															<div className="text-sm">{flexRender(actionsCell.column.columnDef.cell, actionsCell.getContext())}</div>
+															<div className="text-sm ml-auto">{flexRender(actionsCell.column.columnDef.cell, actionsCell.getContext())}</div>
 														)}
 													</div>
 													<div className="space-y-3">
