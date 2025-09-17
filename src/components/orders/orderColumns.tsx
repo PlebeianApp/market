@@ -97,6 +97,27 @@ export const salesColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 	{
 		...baseOrderColumns[0], // Order ID
 		accessorFn: (row) => getOrderId(row.order),
+		cell: ({ row, table }) => {
+			const orderId = getOrderId(row.original.order)
+			// Calculate row number from the end (newest first)
+			const totalRows = table.getRowModel().rows.length
+			const rowNumber = totalRows - row.index
+			
+			return (
+				<div className="flex items-center">
+					{/* Row number with different background */}
+					<div className="bg-gray-300 text-gray-700 rounded-l px-2 py-1 text-xs font-medium min-w-[1.5rem] text-center">
+						{rowNumber}
+					</div>
+					{/* Order ID with original styling */}
+					<div className="bg-gray-200 text-black rounded-r px-3 py-1 inline-block">
+						<Link to="/dashboard/orders/$orderId" params={{ orderId: orderId || 'unknown' }} className="font-mono text-xs text-black hover:text-gray-600">
+							{orderId ? `${orderId.substring(0, 8)}...` : 'Unknown'}
+						</Link>
+					</div>
+				</div>
+			)
+		},
 	},
 	{
 		accessorKey: 'buyer',
