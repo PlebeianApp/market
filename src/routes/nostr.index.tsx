@@ -1656,7 +1656,7 @@ function FirehoseComponent() {
 				<div className={`fixed bottom-0 left-0 z-40 ${openThreadId ? 'right-0' : 'right-0 lg:right-80'}`}>
 					<div className="border-t border-black/20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 shadow-lg">
 						<form
-							className={`p-3 flex items-stretch gap-2 ${isComposeLarge ? 'h-[50vh]' : 'min-h-32'}`}
+							className={`flex items-stretch gap-2 ${isComposeLarge ? 'h-[50vh] p-0' : 'min-h-24 p-3'}`}
 							onSubmit={(e) => {
 								e.preventDefault()
 								try {
@@ -1667,142 +1667,257 @@ function FirehoseComponent() {
 								setIsComposeOpen(false)
 							}}
 						>
-							<div className="flex-1 flex flex-col">
-								<textarea
-									value={composeText}
-									onChange={(e) => setComposeText(e.target.value)}
-									placeholder="Write a note..."
-									className="w-full flex-1 p-2 rounded-md border border-black/20 bg-background focus:outline-none focus:ring-2 focus:ring-primary resize-none"
-								/>
-								{composeImages.length > 0 ? (
-									<div className="mt-2 flex flex-wrap gap-2">
-										{composeImages.map((f, idx) => (
-											<span key={idx} className="text-xs px-2 py-1 rounded bg-muted text-muted-foreground border">
-												{f.name}
-											</span>
-										))}
+							{isComposeLarge ? (
+								<>
+									{/* Expanded layout - all buttons right-aligned */}
+									<div className="flex-1 flex flex-col w-all pr-1 p-2">
+										<textarea
+											value={composeText}
+											onChange={(e) => setComposeText(e.target.value)}
+											placeholder="Write a note..."
+											className="w-full flex-1 p-2 rounded-md border border-black/20 bg-background focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+										/>
+										{composeImages.length > 0 ? (
+											<div className="mt-2 flex flex-wrap gap-2">
+												{composeImages.map((f, idx) => (
+													<span key={idx} className="text-xs px-2 py-1 rounded bg-muted text-muted-foreground border">
+														{f.name}
+													</span>
+												))}
+											</div>
+										) : null}
 									</div>
-								) : null}
-							</div>
-							<div className="flex flex-col gap-2">
-								{/* Top row - Toggle and Close buttons (right-justified) */}
-								<div className="flex justify-end items-end gap-1 text-xl">
-									<Button
-										type="button"
-										variant="tertiary"
-										size="icon"
-										title={isComposeLarge ? 'Return to small mode' : 'Expand to large mode'}
-										aria-label={isComposeLarge ? 'Return to small mode' : 'Expand to large mode'}
-										onClick={() => {
-											setIsComposeLarge((v) => !v)
-										}}
-									>
-										<span aria-hidden className="items-center text-2xl">
-											{isComposeLarge ? '⇓' : '⇕'}
-										</span>
-									</Button>
-									<Button
-										type="button"
-										variant="primary"
-										size="icon"
-										title="Close"
-										aria-label="Close compose"
-										onClick={() => {
-											setIsComposeOpen(false)
-										}}
-									>
-										<span aria-hidden>X</span>
-									</Button>
-								</div>
-								<div className="flex flex-grow justify-end items-end">
-									{/*<Button*/}
-									{/*	type="button"*/}
-									{/*	variant="tertiary"*/}
-									{/*	size="icon"*/}
-									{/*	title="Close"*/}
-									{/*	aria-label="Close compose"*/}
-									{/*	onClick={() => {*/}
-									{/*		setIsComposeOpen(false)*/}
-									{/*	}}*/}
-									{/*>*/}
-									{/*	<span aria-hidden>✖</span>*/}
-									{/*</Button>*/}
-								</div>
-								{/* Bottom row - Image, Emoji, Send buttons */}
-								<div className="flex items-end gap-1">
-									{/* Image upload */}
-									<input
-										id="compose-image-input"
-										type="file"
-										accept="image/*"
-										multiple
-										className="hidden"
-										onChange={(e) => {
-											const files = Array.from(e.target.files || [])
-											setComposeImages((prev) => [...prev, ...files])
-											e.currentTarget.value = ''
-										}}
-									/>
-									<label htmlFor="compose-image-input">
-										<Button type="button" variant="tertiary" size="icon" title="Add image" aria-label="Add image">
-											<span aria-hidden>🖼️</span>
+									{/* Top-right flowing downward buttons */}
+									<div className="flex flex-col gap-2 p-1">
+										<Button
+											type="button"
+											variant="primary"
+											size="icon"
+											title="Close"
+											aria-label="Close compose"
+											onClick={() => {
+												setIsComposeOpen(false)
+											}}
+										>
+											<span aria-hidden>X</span>
 										</Button>
-									</label>
-									{/* Emoji */}
-									<div className="relative">
 										<Button
 											type="button"
 											variant="tertiary"
 											size="icon"
-											onClick={() => setShowEmojiPicker((v) => !v)}
-											title="Emoji"
-											aria-label="Emoji"
+											title="Return to small mode"
+											aria-label="Return to small mode"
+											onClick={() => {
+												setIsComposeLarge((v) => !v)
+											}}
 										>
-											<span aria-hidden>😊</span>
+											<span aria-hidden className="items-center text-2xl">
+												⇓
+											</span>
 										</Button>
-										{showEmojiPicker ? (
-											<div className="absolute bottom-12 right-0 z-50">
-												<EmojiPicker
-													onEmojiClick={(emojiData) => {
-														setComposeText((t) => t + emojiData.emoji)
-													}}
-													width={300}
-													previewConfig={{ showPreview: false }}
-													searchDisabled={false}
-													skinTonesDisabled
-													theme="dark"
-												/>
+										<div className="flex-1" />
+										{/*</div>*/}
+										{/* Bottom-right flowing upward buttons */}
+										{/*<div className="flex flex-col-reverse gap-2 p-3 pb-3">*/}
+										{/* Emoji */}
+										<div className="relative">
+											<Button
+												type="button"
+												variant="tertiary"
+												size="icon"
+												onClick={() => setShowEmojiPicker((v) => !v)}
+												title="Emoji"
+												aria-label="Emoji"
+											>
+												<span aria-hidden>😊</span>
+											</Button>
+											{showEmojiPicker ? (
+												<div className="absolute bottom-12 right-0 z-50">
+													<EmojiPicker
+														onEmojiClick={(emojiData) => {
+															setComposeText((t) => t + emojiData.emoji)
+														}}
+														width={300}
+														previewConfig={{ showPreview: false }}
+														searchDisabled={false}
+														skinTonesDisabled
+														theme="dark"
+													/>
+												</div>
+											) : null}
+										</div>
+										{/* Image upload */}
+										<>
+											<input
+												id="compose-image-input"
+												type="file"
+												accept="image/*"
+												multiple
+												className="hidden"
+												onChange={(e) => {
+													const files = Array.from(e.target.files || [])
+													setComposeImages((prev) => [...prev, ...files])
+													e.currentTarget.value = ''
+												}}
+											/>
+											<label htmlFor="compose-image-input">
+												<Button type="button" variant="tertiary" size="icon" title="Add image" aria-label="Add image">
+													<span aria-hidden>🖼️</span>
+												</Button>
+											</label>
+										</>
+										<Button
+											type="submit"
+											variant="primary"
+											size="icon"
+											title="Send"
+											aria-label="Send"
+											disabled={!composeText.trim() && composeImages.length === 0}
+										>
+											{/* Paper airplane right icon */}
+											<svg
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												strokeWidth="2"
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												className="w-5 h-5"
+												aria-hidden
+											>
+												<path d="M22 2L11 13" />
+												<path d="M22 2l-7 20-4-9-9-4 20-7z" />
+											</svg>
+										</Button>
+									</div>
+								</>
+							) : (
+								<>
+									{/* Small layout - all buttons right-aligned */}
+									<div className="flex-1 flex pr-2">
+										<textarea
+											value={composeText}
+											onChange={(e) => setComposeText(e.target.value)}
+											placeholder="Write a note..."
+											className="w-full flex-1 p-0 rounded-md border border-black/20 bg-background focus:outline-none focus:ring-2 focus:ring-primary resize-none h-[88px]"
+										/>
+										{composeImages.length > 0 ? (
+											<div className="mt-2 flex gap-2">
+												{composeImages.map((f, idx) => (
+													<span key={idx} className="text-xs px-2 py-1 rounded bg-muted text-muted-foreground border">
+														{f.name}
+													</span>
+												))}
 											</div>
 										) : null}
 									</div>
-									{/* Spacer to expand and fill available space */}
-									<div className="flex-grow"></div>
-									{/* Send */}
-									<Button
-										type="submit"
-										variant="primary"
-										size="icon"
-										title="Send"
-										aria-label="Send"
-										disabled={!composeText.trim() && composeImages.length === 0}
-									>
-										{/* Paper airplane right icon */}
-										<svg
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											strokeWidth="2"
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											className="w-5 h-5"
-											aria-hidden
-										>
-											<path d="M22 2L11 13" />
-											<path d="M22 2l-7 20-4-9-9-4 20-7z" />
-										</svg>
-									</Button>
-								</div>
-							</div>
+									<div className="flex flex-col gap-2">
+										{/* Close button on separate line */}
+										<div className="flex justify-end gap-2">
+											<Button
+												type="button"
+												variant="tertiary"
+												size="icon"
+												title="Expand to large mode"
+												aria-label="Expand to large mode"
+												onClick={() => {
+													setIsComposeLarge((v) => !v)
+												}}
+											>
+												<span aria-hidden className="items-center text-2xl">
+													⇑
+												</span>
+											</Button>
+											<Button
+												type="button"
+												variant="primary"
+												size="icon"
+												title="Close"
+												aria-label="Close compose"
+												onClick={() => {
+													setIsComposeOpen(false)
+												}}
+											>
+												<span aria-hidden>X</span>
+											</Button>
+										</div>
+										{/* Bottom three buttons on same line */}
+										<div className="flex gap-2 justify-end">
+											{/* Image upload */}
+											<>
+												<input
+													id="compose-image-input"
+													type="file"
+													accept="image/*"
+													multiple
+													className="hidden"
+													onChange={(e) => {
+														const files = Array.from(e.target.files || [])
+														setComposeImages((prev) => [...prev, ...files])
+														e.currentTarget.value = ''
+													}}
+												/>
+												<label htmlFor="compose-image-input">
+													<Button type="button" variant="tertiary" size="icon" title="Add image" aria-label="Add image">
+														<span aria-hidden>🖼️</span>
+													</Button>
+												</label>
+											</>
+											{/* Emoji */}
+											<div className="relative">
+												<Button
+													type="button"
+													variant="tertiary"
+													size="icon"
+													onClick={() => setShowEmojiPicker((v) => !v)}
+													title="Emoji"
+													aria-label="Emoji"
+												>
+													<span aria-hidden>😊</span>
+												</Button>
+												{showEmojiPicker ? (
+													<div className="absolute bottom-12 right-0 z-50">
+														<EmojiPicker
+															onEmojiClick={(emojiData) => {
+																setComposeText((t) => t + emojiData.emoji)
+															}}
+															width={300}
+															previewConfig={{ showPreview: false }}
+															searchDisabled={false}
+															skinTonesDisabled
+															theme="dark"
+														/>
+													</div>
+												) : null}
+											</div>
+											{/* Send */}
+											<Button
+												type="submit"
+												variant="primary"
+												size="icon"
+												title="Send"
+												aria-label="Send"
+												disabled={!composeText.trim() && composeImages.length === 0}
+											>
+												{/* Paper airplane right icon */}
+												<svg
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													strokeWidth="2"
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													className="w-5 h-5"
+													aria-hidden
+												>
+													<path d="M22 2L11 13" />
+													<path d="M22 2l-7 20-4-9-9-4 20-7z" />
+												</svg>
+											</Button>
+										</div>
+									</div>
+								</>
+							)}
 						</form>
 					</div>
 				</div>
