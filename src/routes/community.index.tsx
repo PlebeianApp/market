@@ -203,11 +203,11 @@ function CommunityRoute() {
 	// Render homepage hero content
 	const renderHomepageHero = () => (
 		<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-16 lg:mt-0">
-			<div className="flex items-center justify-center h-24 lg:h-32">
-				<h1 className="text-4xl lg:text-5xl font-theylive transition-opacity duration-500">Browse Collections</h1>
+			<div className="flex items-center justify-center min-h-24 lg:min-h-32 px-4">
+				<h1 className="text-3xl lg:text-5xl font-theylive transition-opacity duration-500 leading-tight">Browse Collections</h1>
 			</div>
 
-			<div className="flex flex-col gap-6">
+			<div className="flex flex-col gap-6 mt-4">
 				<Button variant="focus" size="lg" onClick={handleStartSelling}>
 					<span className="flex items-center gap-2">
 						<span className="i-nostr w-6 h-6"></span>Start Selling
@@ -252,11 +252,11 @@ function CommunityRoute() {
 	// Render collections hero content
 	const renderCollectionsHero = () => (
 		<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-16 lg:mt-0">
-			<div className="flex items-center justify-center h-24 lg:h-32">
-				<h1 className="text-4xl lg:text-5xl font-theylive transition-opacity duration-500">{displayTitle || 'Loading...'}</h1>
+			<div className="flex items-center justify-center min-h-24 lg:min-h-32 px-4">
+				<h1 className="text-3xl lg:text-5xl font-theylive transition-opacity duration-500 leading-tight">{displayTitle || 'Loading...'}</h1>
 			</div>
 
-			<div className="flex flex-col gap-6">
+			<div className="flex flex-col gap-6 mt-4">
 				<Link to={`/collection/${currentCollectionId}`}>
 					<Button variant="secondary" size="lg">
 						View Collection
