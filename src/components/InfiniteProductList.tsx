@@ -40,17 +40,23 @@ export function InfiniteProductList({
 	})
 
 	// Use scroll restoration hook
-	const { scrollElementRef, saveScrollPosition } = useScrollRestoration({
+	const { scrollElementRef, saveScrollPosition, restoreScrollPosition } = useScrollRestoration({
 		key: scrollKey,
 		ttl: 30 * 60 * 1000, // 30 minutes
 	})
 
-	// Set the scroll element ref to the container
+	// Note: scrollElementRef is not used since we're using window-level scrolling
+
+	// Restore scroll position when initial data loads
 	useEffect(() => {
-		if (containerRef.current) {
-			scrollElementRef.current = containerRef.current
+		if (products.length && !isLoading) {
+			// Small delay to ensure DOM has rendered
+			const timer = setTimeout(() => {
+				restoreScrollPosition()
+			}, 100)
+			return () => clearTimeout(timer)
 		}
-	}, [])
+	}, [products.length, isLoading, restoreScrollPosition])
 
 	// Save scroll position when products change (user might be navigating)
 	useEffect(() => {

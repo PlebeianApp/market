@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useLocation } from '@tanstack/react-router'
 
 interface ScrollPosition {
-	scrollTop: number
+	scrollY: number
 	timestamp: number
 }
 
@@ -27,10 +27,10 @@ export function useScrollRestoration({ key, ttl = 30 * 60 * 1000 }: UseScrollRes
 
 	// Save current scroll position
 	const saveScrollPosition = () => {
-		if (!scrollElementRef.current || isRestoringRef.current) return
+		if (isRestoringRef.current) return
 
 		const scrollPosition: ScrollPosition = {
-			scrollTop: scrollElementRef.current.scrollTop,
+			scrollY: window.scrollY || window.pageYOffset,
 			timestamp: Date.now(),
 		}
 
@@ -43,8 +43,6 @@ export function useScrollRestoration({ key, ttl = 30 * 60 * 1000 }: UseScrollRes
 
 	// Restore scroll position
 	const restoreScrollPosition = () => {
-		if (!scrollElementRef.current) return
-
 		try {
 			const stored = sessionStorage.getItem(storageKey)
 			if (!stored) return
@@ -61,7 +59,7 @@ export function useScrollRestoration({ key, ttl = 30 * 60 * 1000 }: UseScrollRes
 			isRestoringRef.current = true
 
 			// Restore scroll position
-			scrollElementRef.current.scrollTop = scrollPosition.scrollTop
+			window.scrollTo(0, scrollPosition.scrollY)
 
 			// Reset flag after a short delay
 			setTimeout(() => {
@@ -86,22 +84,36 @@ export function useScrollRestoration({ key, ttl = 30 * 60 * 1000 }: UseScrollRes
 		// Try to restore scroll position when component mounts
 		const timer = setTimeout(() => {
 			restoreScrollPosition()
-		}, 50) // Small delay to ensure DOM is ready
+		}, 300) // Longer delay to ensure data is loaded and DOM is ready
 
 		return () => clearTimeout(timer)
 	}, [storageKey])
 
-	// Save scroll position before navigation
+	// Save scroll position during scrolling and before navigation
 	useEffect(() => {
+		let scrollTimer: NodeJS.Timeout
+
+		const handleScroll = () => {
+			// Debounce scroll saving to avoid excessive storage writes
+			clearTimeout(scrollTimer)
+			scrollTimer = setTimeout(() => {
+				saveScrollPosition()
+			}, 150)
+		}
+
 		const handleBeforeUnload = () => {
 			saveScrollPosition()
 		}
 
+		// Save on scroll (debounced)
+		window.addEventListener('scroll', handleScroll, { passive: true })
 		// Save on page unload
 		window.addEventListener('beforeunload', handleBeforeUnload)
 
 		// Save on route change (cleanup function)
 		return () => {
+			clearTimeout(scrollTimer)
+			window.removeEventListener('scroll', handleScroll)
 			window.removeEventListener('beforeunload', handleBeforeUnload)
 			saveScrollPosition()
 		}

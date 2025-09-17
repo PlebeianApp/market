@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { productsPaginatedQueryOptions } from '@/queries/products'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -45,19 +45,40 @@ export function useInfiniteScroll({
 			return fetchProductsPaginated(limit, pageParam)
 		},
 		initialPageParam: undefined as number | undefined,
-		getNextPageParam: (lastPage) => {
+		getNextPageParam: (lastPage, allPages) => {
 			if (!lastPage || lastPage.length < limit) {
 				return undefined // No more pages
 			}
+
+			// Get all product IDs we've already fetched to avoid duplicates
+			const fetchedIds = new Set(allPages.flat().map((p) => p.id))
+
 			// Use the oldest timestamp from the last page as the next page param
+			// But subtract 1 second to avoid including products with the exact same timestamp
 			const oldestProduct = lastPage[lastPage.length - 1]
-			return oldestProduct?.created_at
+			const nextTimestamp = oldestProduct?.created_at ? oldestProduct.created_at - 1 : undefined
+
+			return nextTimestamp
 		},
 		staleTime: 300000, // 5 minutes
 	})
 
-	// Flatten all pages into a single array
-	const products = data?.pages.flat() ?? []
+	// Flatten all pages into a single array and deduplicate by event ID
+	const products = useMemo(() => {
+		if (!data?.pages) return []
+
+		const allProducts = data.pages.flat()
+		const uniqueProducts = new Map<string, NDKEvent>()
+
+		// Deduplicate by event ID, keeping the first occurrence
+		for (const product of allProducts) {
+			if (!uniqueProducts.has(product.id)) {
+				uniqueProducts.set(product.id, product)
+			}
+		}
+
+		return Array.from(uniqueProducts.values())
+	}, [data?.pages])
 
 	// Manual load more function
 	const loadMore = useCallback(() => {
