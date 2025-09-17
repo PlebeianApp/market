@@ -5,6 +5,7 @@ export const productKeys = {
 	byATag: (pubkey: string, dTag: string) => [...productKeys.all, 'byATag', pubkey, dTag] as const,
 	byCollection: (collectionId: string) => [...productKeys.all, 'byCollection', collectionId] as const,
 	seller: (id: string) => [...productKeys.all, 'seller', id] as const,
+	paginated: (limit: number, until?: number) => [...productKeys.all, 'paginated', limit, until] as const,
 } as const
 
 export const orderKeys = {

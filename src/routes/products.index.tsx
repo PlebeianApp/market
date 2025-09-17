@@ -9,6 +9,7 @@ import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
 import { useState, useEffect, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
+import { InfiniteProductList } from '@/components/InfiniteProductList'
 
 // Hook to inject dynamic CSS for background image
 function useHeroBackground(imageUrl: string, className: string) {
@@ -237,6 +238,11 @@ function ProductsRoute() {
 						<ProductCard key={product.id} product={product} />
 					))}
 				</ItemGrid>
+
+				{/* Infinite Product List */}
+				<div className="mt-8">
+					<InfiniteProductList title="More Products" scrollKey="products-page" limit={20} threshold={1000} autoLoad={true} />
+				</div>
 			</div>
 		</div>
 	)

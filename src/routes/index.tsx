@@ -6,6 +6,7 @@ import { useStore } from '@tanstack/react-store'
 import { useEffect } from 'react'
 import { Link } from '@tanstack/react-router'
 import { FeaturedSections } from '@/components/FeaturedSections'
+import { InfiniteProductList } from '@/components/InfiniteProductList'
 
 // Hook to inject dynamic CSS for background image
 function useHeroBackground(imageUrl: string, className: string) {
@@ -72,6 +73,11 @@ function Index() {
 				</div>
 			</div>
 			<FeaturedSections maxItemsPerSection={5} />
+
+			{/* Infinite Product List */}
+			<div className="px-8 py-4">
+				<InfiniteProductList title="All Products" scrollKey="homepage-products" limit={20} threshold={1000} autoLoad={true} />
+			</div>
 		</div>
 	)
 }

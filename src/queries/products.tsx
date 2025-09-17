@@ -41,6 +41,26 @@ export const fetchProducts = async () => {
 }
 
 /**
+ * Fetches product listings with pagination support
+ * @param limit Number of products to fetch (default: 20)
+ * @param until Timestamp to fetch products before (for pagination)
+ * @returns Array of product events sorted by creation date
+ */
+export const fetchProductsPaginated = async (limit: number = 20, until?: number) => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	const filter: NDKFilter = {
+		kinds: [30402], // Product listings in Nostr
+		limit,
+		...(until && { until }),
+	}
+
+	const events = await ndk.fetchEvents(filter)
+	return Array.from(events).sort((a, b) => b.created_at! - a.created_at!)
+}
+
+/**
  * Fetches a single product listing
  * @param id The ID of the product listing
  * @returns The product listing event
@@ -111,6 +131,18 @@ export const productsQueryOptions = queryOptions({
 	queryKey: productKeys.all,
 	queryFn: fetchProducts,
 })
+
+/**
+ * React Query options for fetching products with pagination
+ * @param limit Number of products to fetch
+ * @param until Timestamp to fetch products before
+ */
+export const productsPaginatedQueryOptions = (limit: number = 20, until?: number) =>
+	queryOptions({
+		queryKey: productKeys.paginated(limit, until),
+		queryFn: () => fetchProductsPaginated(limit, until),
+		staleTime: 300000, // 5 minutes
+	})
 
 /**
  * React Query options for fetching products by pubkey
