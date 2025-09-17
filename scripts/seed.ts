@@ -64,9 +64,9 @@ const ndk = ndkActions.initialize([RELAY_URL])
 const devUsers = [devUser1, devUser2, devUser3, devUser4, devUser5]
 
 async function seedData() {
-	const PRODUCTS_PER_USER = 6
+	const PRODUCTS_PER_USER = 10
 	const SHIPPING_OPTIONS_PER_USER = 4
-	const COLLECTIONS_PER_USER = 2
+	const COLLECTIONS_PER_USER = 3
 	const REVIEWS_PER_USER = 2
 	const ORDERS_PER_PAIR = 6 // Increased to demonstrate all order states
 
