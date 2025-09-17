@@ -332,9 +332,9 @@ function DashboardLayout() {
 									</button>
 
 									{!isMobile && (
-										<h1 className="absolute left-1/2 -translate-x-1/2 text-[1.6rem] font-bold flex items-center gap-2">
+										<h1 className="absolute right-4 text-lg font-bold flex items-center gap-2">
 											{isMessageDetailView && chatProfile && (
-												<Avatar className="h-8 w-8">
+												<Avatar className="h-6 w-6">
 													<AvatarImage src={chatProfile.picture} />
 													<AvatarFallback>
 														{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
