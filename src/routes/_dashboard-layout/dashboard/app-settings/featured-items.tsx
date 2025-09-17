@@ -1,8 +1,11 @@
+import { CollectionDisplayComponent } from '@/components/CollectionDisplayComponent'
+import { ProductDisplayComponent } from '@/components/ProductDisplayComponent'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { UserDisplayComponent } from '@/components/UserDisplayComponent'
 import { ndkActions } from '@/lib/stores/ndk'
 import { getATagFromCoords, getCoordsFromATag } from '@/lib/utils/coords'
 import {
@@ -22,11 +25,11 @@ import { useConfigQuery } from '@/queries/config'
 import { useFeaturedCollections, useFeaturedProducts, useFeaturedUsers } from '@/queries/featured'
 import { fetchProduct, fetchProductByATag, getProductId, getProductTitle } from '@/queries/products'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
-import { formatPubkeyForDisplay, npubToHex } from '@/routes/setup'
+import { npubToHex } from '@/routes/setup'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { ChevronDown, ChevronUp, FolderOpen, Package, Plus, Star, Trash2, Users } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { FolderOpen, Package, Plus, Star, Users } from 'lucide-react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/app-settings/featured-items')({
@@ -110,66 +113,6 @@ const convertCollectionInputToCoords = async (input: string, authorPubkey?: stri
 	} catch (error) {
 		throw new Error(`Failed to convert collection ID to coordinates: ${error instanceof Error ? error.message : 'Unknown error'}`)
 	}
-}
-
-// Component to display product information
-function ProductDisplayItem({
-	productCoords,
-	index,
-	onMoveUp,
-	onMoveDown,
-	onRemove,
-	canMoveUp,
-	canMoveDown,
-	isReordering,
-	isRemoving,
-}: {
-	productCoords: string
-	index: number
-	onMoveUp: () => void
-	onMoveDown: () => void
-	onRemove: () => void
-	canMoveUp: boolean
-	canMoveDown: boolean
-	isReordering: boolean
-	isRemoving: boolean
-}) {
-	const [displayInfo, setDisplayInfo] = useState<{ id: string; title: string; coords: string }>({
-		id: 'loading...',
-		title: 'Loading...',
-		coords: productCoords,
-	})
-
-	// Load product info on mount
-	useEffect(() => {
-		getProductDisplayInfo(productCoords).then(setDisplayInfo)
-	}, [productCoords])
-
-	return (
-		<div className="flex items-center justify-between p-3 border rounded-lg">
-			<div className="flex items-center gap-3">
-				<div className="flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-600 rounded-full text-sm font-medium">
-					{index + 1}
-				</div>
-				<div>
-					<div className="font-medium">{displayInfo.title}</div>
-					<div className="text-sm text-gray-500">ID: {displayInfo.id}</div>
-					<div className="text-xs text-gray-400 font-mono">{displayInfo.coords}</div>
-				</div>
-			</div>
-			<div className="flex items-center gap-1">
-				<Button variant="outline" size="sm" onClick={onMoveUp} disabled={!canMoveUp || isReordering} title="Move up">
-					<ChevronUp className="w-4 h-4" />
-				</Button>
-				<Button variant="outline" size="sm" onClick={onMoveDown} disabled={!canMoveDown || isReordering} title="Move down">
-					<ChevronDown className="w-4 h-4" />
-				</Button>
-				<Button variant="outline" size="sm" onClick={onRemove} disabled={isRemoving} title="Remove from featured">
-					<Trash2 className="w-4 h-4 text-red-600" />
-				</Button>
-			</div>
-		</div>
-	)
 }
 
 function FeaturedItemsComponent() {
@@ -548,16 +491,25 @@ function FeaturedItemsComponent() {
 				</div>
 
 				<Tabs defaultValue="products" className="w-full">
-					<TabsList className="grid w-full grid-cols-3">
-						<TabsTrigger value="products" className="flex items-center gap-2">
+					<TabsList className="w-full rounded-none bg-transparent h-auto p-0 flex">
+						<TabsTrigger
+							value="products"
+							className="flex-1 px-4 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none flex items-center gap-2"
+						>
 							<Package className="w-4 h-4" />
 							Products
 						</TabsTrigger>
-						<TabsTrigger value="collections" className="flex items-center gap-2">
+						<TabsTrigger
+							value="collections"
+							className="flex-1 px-4 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none flex items-center gap-2"
+						>
 							<FolderOpen className="w-4 h-4" />
 							Collections
 						</TabsTrigger>
-						<TabsTrigger value="users" className="flex items-center gap-2">
+						<TabsTrigger
+							value="users"
+							className="flex-1 px-4 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none flex items-center gap-2"
+						>
 							<Users className="w-4 h-4" />
 							Users
 						</TabsTrigger>
@@ -585,7 +537,7 @@ function FeaturedItemsComponent() {
 								) : (
 									<div className="space-y-3">
 										{featuredProducts.featuredProducts.map((productCoords, index) => (
-											<ProductDisplayItem
+											<ProductDisplayComponent
 												key={productCoords}
 												productCoords={productCoords}
 												index={index}
@@ -665,46 +617,18 @@ function FeaturedItemsComponent() {
 								) : (
 									<div className="space-y-3">
 										{featuredCollections.featuredCollections.map((collectionCoords, index) => (
-											<div key={collectionCoords} className="flex items-center justify-between p-3 border rounded-lg">
-												<div className="flex items-center gap-3">
-													<div className="flex items-center justify-center w-8 h-8 bg-purple-100 text-purple-600 rounded-full text-sm font-medium">
-														{index + 1}
-													</div>
-													<div>
-														<div className="font-mono text-sm">{collectionCoords}</div>
-														<div className="text-xs text-purple-600 font-medium">Featured Collection</div>
-													</div>
-												</div>
-												<div className="flex items-center gap-1">
-													<Button
-														variant="outline"
-														size="sm"
-														onClick={() => handleMoveCollectionUp(index)}
-														disabled={index === 0 || reorderCollectionsMutation.isPending}
-														title="Move up"
-													>
-														<ChevronUp className="w-4 h-4" />
-													</Button>
-													<Button
-														variant="outline"
-														size="sm"
-														onClick={() => handleMoveCollectionDown(index)}
-														disabled={index === featuredCollections.featuredCollections.length - 1 || reorderCollectionsMutation.isPending}
-														title="Move down"
-													>
-														<ChevronDown className="w-4 h-4" />
-													</Button>
-													<Button
-														variant="outline"
-														size="sm"
-														onClick={() => handleRemoveCollection(collectionCoords)}
-														disabled={removeCollectionMutation.isPending}
-														title="Remove from featured"
-													>
-														<Trash2 className="w-4 h-4 text-red-600" />
-													</Button>
-												</div>
-											</div>
+											<CollectionDisplayComponent
+												key={collectionCoords}
+												collectionCoords={collectionCoords}
+												index={index}
+												onMoveUp={() => handleMoveCollectionUp(index)}
+												onMoveDown={() => handleMoveCollectionDown(index)}
+												onRemove={() => handleRemoveCollection(collectionCoords)}
+												canMoveUp={index > 0}
+												canMoveDown={index < featuredCollections.featuredCollections.length - 1}
+												isReordering={reorderCollectionsMutation.isPending}
+												isRemoving={removeCollectionMutation.isPending}
+											/>
 										))}
 									</div>
 								)}
@@ -773,46 +697,18 @@ function FeaturedItemsComponent() {
 								) : (
 									<div className="space-y-3">
 										{featuredUsers.featuredUsers.map((userPubkey, index) => (
-											<div key={userPubkey} className="flex items-center justify-between p-3 border rounded-lg">
-												<div className="flex items-center gap-3">
-													<div className="flex items-center justify-center w-8 h-8 bg-green-100 text-green-600 rounded-full text-sm font-medium">
-														{index + 1}
-													</div>
-													<div>
-														<div className="font-mono text-sm">{formatPubkeyForDisplay(userPubkey)}</div>
-														<div className="text-xs text-green-600 font-medium">Featured User</div>
-													</div>
-												</div>
-												<div className="flex items-center gap-1">
-													<Button
-														variant="outline"
-														size="sm"
-														onClick={() => handleMoveUserUp(index)}
-														disabled={index === 0 || reorderUsersMutation.isPending}
-														title="Move up"
-													>
-														<ChevronUp className="w-4 h-4" />
-													</Button>
-													<Button
-														variant="outline"
-														size="sm"
-														onClick={() => handleMoveUserDown(index)}
-														disabled={index === featuredUsers.featuredUsers.length - 1 || reorderUsersMutation.isPending}
-														title="Move down"
-													>
-														<ChevronDown className="w-4 h-4" />
-													</Button>
-													<Button
-														variant="outline"
-														size="sm"
-														onClick={() => handleRemoveUser(userPubkey)}
-														disabled={removeUserMutation.isPending}
-														title="Remove from featured"
-													>
-														<Trash2 className="w-4 h-4 text-red-600" />
-													</Button>
-												</div>
-											</div>
+											<UserDisplayComponent
+												key={userPubkey}
+												userPubkey={userPubkey}
+												index={index}
+												onMoveUp={() => handleMoveUserUp(index)}
+												onMoveDown={() => handleMoveUserDown(index)}
+												onRemove={() => handleRemoveUser(userPubkey)}
+												canMoveUp={index > 0}
+												canMoveDown={index < featuredUsers.featuredUsers.length - 1}
+												isReordering={reorderUsersMutation.isPending}
+												isRemoving={removeUserMutation.isPending}
+											/>
 										))}
 									</div>
 								)}
