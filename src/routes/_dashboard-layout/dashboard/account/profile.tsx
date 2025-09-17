@@ -156,7 +156,7 @@ function ProfileComponent() {
 					{isLoading ? 'Saving...' : changesExist ? 'Save Changes' : 'Saved'}
 				</Button>
 			</div>
-			<div className="space-y-6 p-4 lg:p-8">
+			<div className="space-y-6 pt-4 px-4 xl:px-6">
 				{isLoadingProfile ? (
 					<div className="flex items-center justify-center p-8">
 						<div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
