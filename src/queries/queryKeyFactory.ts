@@ -26,6 +26,7 @@ export const collectionKeys = {
 	all: ['collections'] as const,
 	details: (id: string) => [...collectionKeys.all, id] as const,
 	byPubkey: (pubkey: string) => [...collectionKeys.all, 'byPubkey', pubkey] as const,
+	byATag: (pubkey: string, dTag: string) => [...collectionKeys.all, 'byATag', pubkey, dTag] as const,
 } as const
 
 export const collectionsKeys = {

@@ -10,7 +10,10 @@ export function generateProductData(
 	const productId = faker.string.alphanumeric(10)
 	const price = faker.number.int({ min: 1, max: 20 }).toString()
 	const numImages = faker.number.int({ min: 2, max: 5 })
-	const images = Array.from({ length: numImages }, (_, i) => ['image', faker.image.url(), '800x600', i.toString()] as NDKTag)
+	const images = Array.from(
+		{ length: numImages },
+		(_, i) => ['image', faker.image.urlPicsumPhotos({ width: 1200, height: 400 }), '800x600', i.toString()] as NDKTag,
+	)
 
 	// Add shipping options if available (randomly select 1-3 shipping options)
 	const shippingTags: NDKTag[] = []

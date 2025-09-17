@@ -28,7 +28,7 @@ export function generateUserProfileData(userIndex?: number): NDKUserProfile {
 		name: baseUsername,
 		displayName: faker.person.fullName(),
 		image: faker.image.avatarGitHub(), // GitHub avatars are good placeholders
-		banner: faker.image.urlLoremFlickr({ category: selectedCategory, width: 1200, height: 400 }),
+		banner: faker.image.urlPicsumPhotos({ width: 1200, height: 400 }),
 		about: faker.lorem.paragraph(3),
 		nip05: `${baseUsername}@example.com`,
 		website: `https://${baseUsername}.com`,

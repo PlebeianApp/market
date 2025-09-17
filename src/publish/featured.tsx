@@ -21,7 +21,7 @@ export interface FeaturedUsersData {
 /**
  * Creates a Kind 30405 featured products event (Collection format)
  */
-const createFeaturedProductsEvent = (data: FeaturedProductsData, signer: NDKSigner, ndk: NDK): NDKEvent => {
+export const createFeaturedProductsEvent = (data: FeaturedProductsData, signer: NDKSigner, ndk: NDK): NDKEvent => {
 	const event = new NDKEvent(ndk)
 	event.kind = FEATURED_ITEMS_CONFIG.PRODUCTS.kind
 	event.content = 'Featured products collection'
@@ -44,7 +44,7 @@ const createFeaturedProductsEvent = (data: FeaturedProductsData, signer: NDKSign
 /**
  * Creates a Kind 30003 featured collections event (NIP-51 list)
  */
-const createFeaturedCollectionsEvent = (data: FeaturedCollectionsData, signer: NDKSigner, ndk: NDK): NDKEvent => {
+export const createFeaturedCollectionsEvent = (data: FeaturedCollectionsData, signer: NDKSigner, ndk: NDK): NDKEvent => {
 	const event = new NDKEvent(ndk)
 	event.kind = FEATURED_ITEMS_CONFIG.COLLECTIONS.kind
 	event.content = ''
@@ -64,7 +64,7 @@ const createFeaturedCollectionsEvent = (data: FeaturedCollectionsData, signer: N
 /**
  * Creates a Kind 30000 featured users event (NIP-51 list)
  */
-const createFeaturedUsersEvent = (data: FeaturedUsersData, signer: NDKSigner, ndk: NDK): NDKEvent => {
+export const createFeaturedUsersEvent = (data: FeaturedUsersData, signer: NDKSigner, ndk: NDK): NDKEvent => {
 	const event = new NDKEvent(ndk)
 	event.kind = FEATURED_ITEMS_CONFIG.USERS.kind
 	event.content = ''

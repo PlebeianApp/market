@@ -17,6 +17,7 @@ import {
 	reorderFeaturedUsers,
 } from '@/publish/featured'
 import { useUserRole } from '@/queries/app-settings'
+import { fetchCollection, getCollectionId } from '@/queries/collections'
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedCollections, useFeaturedProducts, useFeaturedUsers } from '@/queries/featured'
 import { fetchProduct, fetchProductByATag, getProductId, getProductTitle } from '@/queries/products'
@@ -78,6 +79,36 @@ const convertInputToCoords = async (input: string, authorPubkey?: string): Promi
 		return getATagFromCoords({ kind: 30402, pubkey: productEvent.pubkey, identifier: realDtag })
 	} catch (error) {
 		throw new Error(`Failed to convert product ID to coordinates: ${error instanceof Error ? error.message : 'Unknown error'}`)
+	}
+}
+
+const convertCollectionInputToCoords = async (input: string, authorPubkey?: string): Promise<string> => {
+	// If input is already a coordinate (contains colons), return as-is
+	if (input.includes(':')) {
+		try {
+			getCoordsFromATag(input) // Validate format
+			return input
+		} catch {
+			throw new Error('Invalid coordinate format')
+		}
+	}
+
+	// If input is just an ID, fetch the collection to get its real dtag and pubkey
+	try {
+		const collectionEvent = await fetchCollection(input)
+		if (!collectionEvent) {
+			throw new Error('Collection not found')
+		}
+
+		const realDtag = getCollectionId(collectionEvent)
+		if (!realDtag) {
+			throw new Error('Collection has no dtag')
+		}
+
+		// Create coordinates using the collection's actual pubkey and dtag
+		return getATagFromCoords({ kind: 30405, pubkey: collectionEvent.pubkey, identifier: realDtag })
+	} catch (error) {
+		throw new Error(`Failed to convert collection ID to coordinates: ${error instanceof Error ? error.message : 'Unknown error'}`)
 	}
 }
 
@@ -290,14 +321,18 @@ function FeaturedItemsComponent() {
 
 	const handleAddCollection = async () => {
 		if (!newCollectionInput.trim()) {
-			toast.error('Please enter a valid collection coordinate (30405:pubkey:d-tag)')
+			toast.error('Please enter a collection ID or coordinate (e.g., "my-collection-id" or "30405:pubkey:d-tag")')
 			return
 		}
 
 		try {
 			setIsAddingCollection(true)
+
+			// Convert input to coordinates if needed
+			const collectionCoords = await convertCollectionInputToCoords(newCollectionInput.trim(), config?.appPublicKey)
+
 			await addCollectionMutation.mutateAsync({
-				collectionCoords: newCollectionInput.trim(),
+				collectionCoords,
 				appPubkey: config?.appPublicKey,
 			})
 			setNewCollectionInput('')
