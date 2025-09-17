@@ -51,7 +51,7 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 
 	const content = (
 		<div className={cn(
-			"flex items-center gap-1 border border-gray-300 rounded px-2 py-1 inline-flex max-w-[140px] overflow-hidden",
+			"flex items-center gap-1 border border-gray-300 rounded px-1.5 py-1 inline-flex max-w-[100px] sm:max-w-[120px] overflow-hidden",
 			!disableLink && "hover:bg-muted/50 hover:border-primary transition-colors duration-200"
 		)}>
 			<Avatar className={cn(avatarSizeClass, "flex-shrink-0")}>

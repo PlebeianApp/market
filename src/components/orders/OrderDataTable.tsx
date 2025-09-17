@@ -8,6 +8,7 @@ import type { ColumnDef, ColumnFiltersState, FilterFn, SortingState } from '@tan
 import { flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
+import { cn } from '@/lib/utils'
 
 const fuzzyFilter: FilterFn<OrderWithRelatedEvents> = (row, columnId, value, addMeta) => {
 	const item = (row.getValue(columnId) as string) || ''
@@ -213,7 +214,12 @@ export function OrderDataTable<TData>({
 																		: cell.column.id.replace(/([A-Z])/g, ' $1').trim()}
 																	:
 																</span>
-																<div className="text-sm text-right min-w-0 flex-1">
+																<div className={cn(
+																	"text-sm min-w-0 flex-1",
+																	cell.column.id === 'buyer' || cell.column.id === 'seller' 
+																		? "flex justify-end" 
+																		: "text-right"
+																)}>
 																	{flexRender(cell.column.columnDef.cell, cell.getContext())}
 																</div>
 															</div>
