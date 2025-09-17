@@ -7,7 +7,7 @@ export const defaultRelaysUrls: string[] = [
 	'wss://relay.damus.io',
 	'wss://relay.minibits.cash',
 	'wss://relay.orly.dev',
-	// 'ws://localhost:10547',
+	'ws://localhost:10547',
 ]
 
 // Dedicated zap detection relays

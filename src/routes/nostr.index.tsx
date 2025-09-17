@@ -1,12 +1,14 @@
 import { createFileRoute, useLocation, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { authActions, authStore } from '@/lib/stores/auth'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { type SVGProps, useEffect, useMemo, useState } from 'react'
 import { notesQueryOptions, type FetchedNDKEvent } from '@/queries/firehose'
 import { authorQueryOptions } from '@/queries/authors'
 import { reactionsQueryOptions } from '@/queries/reactions'
 import { ndkActions } from '@/lib/stores/ndk'
+import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
+import { toast } from 'sonner'
 import { NoteView } from '@/components/NoteView.tsx'
 import { Button } from '@/components/ui/button'
 import { Loader2, X, ArrowLeft, LogOut, LucideRefreshCw, RefreshCw } from 'lucide-react'
@@ -31,6 +33,61 @@ function canGoBack(): boolean {
 // Backwards-compat helper for existing logic
 function isAtStartOfHistory(): boolean {
 	return !canGoBack()
+}
+
+// Utility function to format timestamp as "X seconds ago"
+function formatTimeAgo(timestamp: number): string {
+	const now = Date.now()
+	const diff = now - timestamp
+	const seconds = Math.floor(diff / 1000)
+	const minutes = Math.floor(seconds / 60)
+	const hours = Math.floor(minutes / 60)
+	const days = Math.floor(hours / 24)
+
+	if (seconds < 60) {
+		return `${seconds}s ago`
+	} else if (minutes < 60) {
+		return `${minutes}m ago`
+	} else if (hours < 24) {
+		return `${hours}h ago`
+	} else {
+		return `${days}d ago`
+	}
+}
+
+// View mode state management with localStorage persistence
+const VIEW_TIMESTAMPS_KEY = 'nostr_view_timestamps'
+const VIEW_POSITIONS_KEY = 'nostr_view_positions'
+const VIEW_CACHE_KEY = 'nostr_view_cache'
+
+interface ViewState {
+	lastRefreshTimestamp: number
+	scrollPosition: number
+	cachedData?: FetchedNDKEvent[]
+}
+
+function getViewStateKey(filterMode: string, tagFilter: string, authorFilter: string): string {
+	return `${filterMode}-${tagFilter || ''}-${authorFilter || ''}`
+}
+
+function saveViewState(key: string, state: ViewState): void {
+	try {
+		const allStates = JSON.parse(localStorage.getItem(VIEW_TIMESTAMPS_KEY) || '{}')
+		allStates[key] = state
+		localStorage.setItem(VIEW_TIMESTAMPS_KEY, JSON.stringify(allStates))
+	} catch (error) {
+		console.warn('Failed to save view state:', error)
+	}
+}
+
+function loadViewState(key: string): ViewState | null {
+	try {
+		const allStates = JSON.parse(localStorage.getItem(VIEW_TIMESTAMPS_KEY) || '{}')
+		return allStates[key] || null
+	} catch (error) {
+		console.warn('Failed to load view state:', error)
+		return null
+	}
 }
 
 function CollapseVerticalIcon(props: SVGProps<SVGSVGElement>) {
@@ -60,6 +117,7 @@ export const Route = createFileRoute('/nostr/')({
 function FirehoseComponent() {
 	const { data: config } = useConfigQuery()
 	const location = useLocation()
+	const queryClient = useQueryClient()
 	const [isFiltersOpen, setIsFiltersOpen] = useState(false)
 	const [loadingMode, setLoadingMode] = useState<null | 'all' | 'threads' | 'originals' | 'follows' | 'reactions'>(null)
 	const [spinnerSettled, setSpinnerSettled] = useState(false)
@@ -94,6 +152,33 @@ function FirehoseComponent() {
 		enabled: !!currentUserPk && filterMode === 'follows',
 	}) as any
 	const currentUserDisplayName = currentUserMeta?.name || (currentUserPk ? currentUserPk.slice(0, 8) + '…' : '')
+	// Get the newest note timestamp for display
+	const newestNoteTimestamp = data && data.length > 0 ? data[0].fetchedAt : null
+
+	// Helper function to update the URL with the latest timestamp
+	const updateLatestTimestampInUrl = (timestamp: number) => {
+		try {
+			if (typeof window === 'undefined') return
+			const url = new URL(window.location.href)
+			const unixTimestamp = Math.floor(timestamp / 1000) // Convert ms to seconds
+			url.searchParams.set('latest', unixTimestamp.toString())
+			const target = url.pathname.startsWith('/nostr')
+				? url.search
+					? `/nostr${url.search}`
+					: '/nostr'
+				: url.search
+					? `${url.pathname}${url.search}`
+					: url.pathname
+			window.history.replaceState({}, '', target)
+		} catch {}
+	}
+
+	// View state management
+	const currentViewKey = getViewStateKey(filterMode, tagFilter, authorFilter)
+	const [viewStates, setViewStates] = useState<Record<string, ViewState>>({})
+	const [lastRefreshTimestamp, setLastRefreshTimestamp] = useState<number | null>(null)
+	const [hasNewerNotes, setHasNewerNotes] = useState(false)
+
 	const [showTop, setShowTop] = useState(false)
 	// Overlay state for loading a new tag
 	const [pendingTag, setPendingTag] = useState<string | null>(null)
@@ -130,6 +215,50 @@ function FirehoseComponent() {
 	}, [])
 	// Compute horizontal offset for floating buttons: on lg with sidebar visible, shift by sidebar width (20rem)
 	const floatingRight = isLg ? (openThreadId ? '3.5rem' : 'calc(20rem + 3.5rem)') : '3.5rem'
+
+	// Load view state when switching views
+	useEffect(() => {
+		const savedState = loadViewState(currentViewKey)
+		if (savedState) {
+			setLastRefreshTimestamp(savedState.lastRefreshTimestamp)
+			// Restore scroll position after data loads
+			if (savedState.scrollPosition > 0) {
+				setTimeout(() => {
+					window.scrollTo({ top: savedState.scrollPosition, behavior: 'auto' })
+				}, 100)
+			}
+		} else {
+			setLastRefreshTimestamp(null)
+		}
+	}, [currentViewKey])
+
+	// Update URL with latest timestamp when data loads or changes
+	useEffect(() => {
+		if (newestNoteTimestamp && !isLoading) {
+			updateLatestTimestampInUrl(newestNoteTimestamp)
+		}
+	}, [newestNoteTimestamp, isLoading])
+
+	// Save current view state before switching
+	const saveCurrentViewState = () => {
+		const scrollPosition = window.scrollY || document.documentElement.scrollTop || 0
+		const state: ViewState = {
+			lastRefreshTimestamp: lastRefreshTimestamp || Date.now(),
+			scrollPosition,
+			cachedData: data,
+		}
+		saveViewState(currentViewKey, state)
+	}
+
+	// Detect newer notes compared to last refresh timestamp
+	useEffect(() => {
+		if (data && data.length > 0 && lastRefreshTimestamp) {
+			const hasNewer = data.some((note) => note.fetchedAt > lastRefreshTimestamp)
+			setHasNewerNotes(hasNewer)
+		} else {
+			setHasNewerNotes(false)
+		}
+	}, [data, lastRefreshTimestamp])
 
 	const scrollToTop = () => {
 		if (typeof window === 'undefined') return
@@ -654,51 +783,87 @@ function FirehoseComponent() {
 							</Button>
 							<Button
 								variant="primary"
-								className="p-2 h-8 w-8 flex"
-								onClick={() => {
-									scrollToTop()
+								className={`p-2 h-8 w-8 flex ${hasNewerNotes ? 'animate-pulse' : ''}`}
+								onClick={async () => {
+									// Preserve scroll position when refreshing
+									const currentScrollPosition = window.scrollY || document.documentElement.scrollTop || 0
 									setOpenThreadId(null)
-									refetch()
+									setLastRefreshTimestamp(Date.now())
+									setHasNewerNotes(false)
+									const result = await refetch()
+									// Update URL with newest timestamp after successful refetch
+									if (result.data && result.data.length > 0) {
+										updateLatestTimestampInUrl(result.data[0].fetchedAt)
+									}
+									// Restore scroll position after content update
+									setTimeout(() => {
+										window.scrollTo({ top: currentScrollPosition, behavior: 'auto' })
+									}, 50)
 								}}
 								title="Reload feed"
 								aria-label="Reload feed"
 							>
 								{isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
 							</Button>
+							{newestNoteTimestamp && <span className="text-xs text-muted-foreground ml-2">{formatTimeAgo(newestNoteTimestamp)}</span>}
 						</span>
 					) : authorFilter?.trim() ? (
 						<span className="gap-2 items-center flex">
 							@{(authorMeta?.name || authorFilter.slice(0, 8)) + (authorMeta?.name ? '' : '…')}
 							<Button
 								variant="primary"
-								className="p-2 h-8 w-8 flex"
-								onClick={() => {
-									scrollToTop()
+								className={`p-2 h-8 w-8 flex ${hasNewerNotes ? 'animate-pulse' : ''}`}
+								onClick={async () => {
+									// Preserve scroll position when refreshing
+									const currentScrollPosition = window.scrollY || document.documentElement.scrollTop || 0
 									setOpenThreadId(null)
-									refetch()
+									setLastRefreshTimestamp(Date.now())
+									setHasNewerNotes(false)
+									const result = await refetch()
+									// Update URL with newest timestamp after successful refetch
+									if (result.data && result.data.length > 0) {
+										updateLatestTimestampInUrl(result.data[0].fetchedAt)
+									}
+									// Restore scroll position after content update
+									setTimeout(() => {
+										window.scrollTo({ top: currentScrollPosition, behavior: 'auto' })
+									}, 50)
 								}}
 								title="Reload feed"
 								aria-label="Reload feed"
 							>
 								{isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
 							</Button>
+							{newestNoteTimestamp && <span className="text-xs text-muted-foreground ml-2">{formatTimeAgo(newestNoteTimestamp)}</span>}
 						</span>
 					) : filterMode === 'hashtag' && tagFilter?.trim() ? (
 						<span className="flex gap-2 items-center">
 							#{tagFilter.replace(/^#/, '')}
 							<Button
 								variant="primary"
-								className="p-2 h-8 w-8 flex"
-								onClick={() => {
-									scrollToTop()
+								className={`p-2 h-8 w-8 flex ${hasNewerNotes ? 'animate-pulse' : ''}`}
+								onClick={async () => {
+									// Preserve scroll position when refreshing
+									const currentScrollPosition = window.scrollY || document.documentElement.scrollTop || 0
 									setOpenThreadId(null)
-									refetch()
+									setLastRefreshTimestamp(Date.now())
+									setHasNewerNotes(false)
+									const result = await refetch()
+									// Update URL with newest timestamp after successful refetch
+									if (result.data && result.data.length > 0) {
+										updateLatestTimestampInUrl(result.data[0].fetchedAt)
+									}
+									// Restore scroll position after content update
+									setTimeout(() => {
+										window.scrollTo({ top: currentScrollPosition, behavior: 'auto' })
+									}, 50)
 								}}
 								title="Reload feed"
 								aria-label="Reload feed"
 							>
 								{isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
 							</Button>
+							{newestNoteTimestamp && <span className="text-xs text-muted-foreground ml-2">{formatTimeAgo(newestNoteTimestamp)}</span>}
 						</span>
 					) : (
 						<span className="flex items-center gap-2">
@@ -715,17 +880,29 @@ function FirehoseComponent() {
 							)}
 							<Button
 								variant="primary"
-								className="p-2 h-10 w-10 flex"
-								onClick={() => {
-									scrollToTop()
+								className={`p-2 h-10 w-10 flex ${hasNewerNotes ? 'animate-pulse' : ''}`}
+								onClick={async () => {
+									// Preserve scroll position when refreshing
+									const currentScrollPosition = window.scrollY || document.documentElement.scrollTop || 0
 									setOpenThreadId(null)
-									refetch()
+									setLastRefreshTimestamp(Date.now())
+									setHasNewerNotes(false)
+									const result = await refetch()
+									// Update URL with newest timestamp after successful refetch
+									if (result.data && result.data.length > 0) {
+										updateLatestTimestampInUrl(result.data[0].fetchedAt)
+									}
+									// Restore scroll position after content update
+									setTimeout(() => {
+										window.scrollTo({ top: currentScrollPosition, behavior: 'auto' })
+									}, 50)
 								}}
 								title="Reload feed"
 								aria-label="Reload feed"
 							>
 								{isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
 							</Button>
+							{newestNoteTimestamp && <span className="text-xs text-muted-foreground ml-2">{formatTimeAgo(newestNoteTimestamp)}</span>}
 						</span>
 					)}
 				</span>
@@ -1665,14 +1842,91 @@ function FirehoseComponent() {
 					<div className="border-t border-black/20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 shadow-lg">
 						<form
 							className={`flex items-stretch gap-2 ${isComposeLarge ? 'h-[50vh] p-0' : 'min-h-24 p-3'}`}
-							onSubmit={(e) => {
+							onSubmit={async (e) => {
 								e.preventDefault()
+								
+								// Don't send empty messages
+								if (!composeText.trim()) return
+								
 								try {
-									console.log('Send note:', { text: composeText, images: composeImages })
-								} catch {}
-								setComposeText('')
-								setComposeImages([])
-								setIsComposeOpen(false)
+									// Get NDK instance and signer
+									const ndk = ndkActions.getNDK()
+									if (!ndk) {
+										toast.error('Not connected to Nostr network')
+										return
+									}
+									
+									const signer = ndkActions.getSigner()
+									if (!signer) {
+										toast.error('Please log in to send notes')
+										return
+									}
+									
+									// Show loading toast
+									const loadingToastId = toast.loading('Publishing note...')
+									
+									// Create the kind 1 text note event
+									const event = new NDKEvent(ndk)
+									event.kind = 1
+									event.content = composeText.trim()
+									event.tags = []
+									
+									// TODO: Handle image uploads by creating image URLs and adding them to content
+									// For now, we'll just send the text content
+									
+									// Sign and publish the event
+									await event.sign(signer)
+									
+									// Create a relay set with only localhost:10547 for publishing
+									const publishRelaySet = NDKRelaySet.fromRelayUrls(['ws://localhost:10547'], ndk)
+									await event.publish(publishRelaySet)
+									
+									console.log('Note published successfully:', event.id)
+									
+									// Create wrapped event for immediate feed updates
+									const wrappedEvent = {
+										event: event,
+										fetchedAt: Date.now()
+									}
+									
+									// Get current user pubkey for follow feed check
+									const user = await ndkActions.getUser()
+									const currentUserPubkey = user?.pubkey
+									
+									// Update all relevant feeds immediately by modifying query cache
+									// Update global feed (all mode)
+									const globalKey = [...noteKeys.all, 'list', '', '', '']
+									queryClient.setQueryData(globalKey, (oldData: any) => {
+										if (oldData && Array.isArray(oldData)) {
+											return [wrappedEvent, ...oldData]
+										}
+										return [wrappedEvent]
+									})
+									
+									// Update follow feed if user has follows (published notes should appear in follow feed)
+									if (currentUserPubkey) {
+										const followsKey = [...noteKeys.all, 'list', '', '', 'follows']
+										queryClient.setQueryData(followsKey, (oldData: any) => {
+											if (oldData && Array.isArray(oldData)) {
+												return [wrappedEvent, ...oldData]
+											}
+											return [wrappedEvent]
+										})
+									}
+									
+									// Clear the compose form
+									setComposeText('')
+									setComposeImages([])
+									setIsComposeOpen(false)
+									
+									// Show success message
+									toast.dismiss(loadingToastId)
+									toast.success('Note published successfully!')
+									
+								} catch (error) {
+									console.error('Failed to send note:', error)
+									toast.error('Failed to publish note. Please try again.')
+								}
 							}}
 						>
 							{isComposeLarge ? (

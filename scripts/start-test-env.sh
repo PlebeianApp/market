@@ -14,7 +14,7 @@ sleep 2
 
 # Start relay in background
 echo "📡 Starting relay on port 10547..."
-nak serve --port 10547 &
+nak serve --verbose --port 10547 &
 RELAY_PID=$!
 
 # Wait for relay to start

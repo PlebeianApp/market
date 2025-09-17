@@ -35,8 +35,8 @@ This project was created using `bun init` in bun v1.2.4. [Bun](https://bun.sh) i
      # Install nak
      go install github.com/fiatjaf/nak@latest
 
-     # Start a local relay
-     nak serve
+     # Start a local relay with verbose logging
+     nak serve --verbose
      ```
 
    - The relay will be available at `ws://localhost:10547`
