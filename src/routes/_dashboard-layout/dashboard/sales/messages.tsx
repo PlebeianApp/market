@@ -23,7 +23,7 @@ function MessagesListComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:block sticky top-0 z-10 bg-white border-b py-4 px-4 xl:px-6">
+			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b h-[73px] px-4 lg:px-6 items-center">
 				<h1 className="text-2xl font-bold">Messages</h1>
 			</div>
 			<div className="space-y-4 pt-4 px-4 xl:px-6">

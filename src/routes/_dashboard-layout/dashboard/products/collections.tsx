@@ -230,7 +230,7 @@ function CollectionsComponent() {
 					</Button>
 				</div>
 			</div>
-			<div className="space-y-6 pt-4 px-4 xl:px-6">
+			<div className="space-y-4 pt-4 px-4 xl:px-6">
 				<div className="lg:hidden space-y-4">
 					<Select value={orderBy} onValueChange={setOrderBy}>
 						<SelectTrigger className="w-full">
