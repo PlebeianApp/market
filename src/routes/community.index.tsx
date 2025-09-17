@@ -204,7 +204,7 @@ function CommunityRoute() {
 	const renderHomepageHero = () => (
 		<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-16 lg:mt-0">
 			<div className="flex items-center justify-center min-h-24 lg:min-h-32 px-4">
-				<h1 className="text-3xl lg:text-5xl font-theylive transition-opacity duration-500 leading-tight">Browse Collections</h1>
+					<h1 className="text-3xl lg:text-5xl font-theylive transition-opacity duration-500 leading-tight">Sell Stuff for Sats</h1>
 			</div>
 
 			<div className="flex flex-col gap-6 mt-4">
