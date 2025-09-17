@@ -2,6 +2,7 @@ import { serve } from 'bun'
 import { config } from 'dotenv'
 import { Relay } from 'nostr-tools'
 import { getPublicKey, verifyEvent, type Event } from 'nostr-tools/pure'
+import { nip19 } from 'nostr-tools'
 import index from './index.html'
 import { fetchAppSettings } from './lib/appSettings'
 import { getEventHandler } from './server'
@@ -24,8 +25,21 @@ async function initializeAppSettings() {
 		process.exit(1)
 	}
 
-	try {
-		const privateKeyBytes = new Uint8Array(Buffer.from(APP_PRIVATE_KEY, 'hex'))
+ try {
+		function normalizePrivKey(key: string): string {
+			let k = key.trim()
+			if (k.startsWith('nsec')) {
+				const dec = nip19.decode(k)
+				if (dec.type === 'nsec' && typeof dec.data === 'string') k = dec.data
+				else if (dec.type === 'nsec' && dec.data instanceof Uint8Array) k = Buffer.from(dec.data).toString('hex')
+				else throw new Error('Invalid nsec key')
+			}
+			if (k.startsWith('0x')) k = k.slice(2)
+			if (!/^[0-9a-fA-F]{64}$/.test(k)) throw new Error('APP_PRIVATE_KEY must be 64-char hex or valid nsec')
+			return k.toLowerCase()
+		}
+		const normalized = normalizePrivKey(APP_PRIVATE_KEY)
+		const privateKeyBytes = new Uint8Array(Buffer.from(normalized, 'hex'))
 		APP_PUBLIC_KEY = getPublicKey(privateKeyBytes)
 		appSettings = await fetchAppSettings(RELAY_URL as string, APP_PUBLIC_KEY)
 		if (appSettings) {
