@@ -119,11 +119,11 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 
 					{/* Stock/Pre-order indicator - right aligned */}
 					{visibility === 'pre-order' ? (
-						<div className="bg-blue-100 text-blue-800 font-medium px-4 py-1 rounded-full text-xs">Pre-order</div>
+						<div className="bg-blue-100 text-blue-800 font-medium px-4 py-1 rounded-full text-xs whitespace-nowrap">Pre-order</div>
 					) : isOutOfStock ? (
-						<div className="bg-red-100 text-red-800 font-medium px-4 py-1 rounded-full text-xs">Out of stock</div>
+						<div className="bg-red-100 text-red-800 font-medium px-4 py-1 rounded-full text-xs whitespace-nowrap">Out of stock</div>
 					) : stockQuantity !== undefined ? (
-						<div className="bg-[var(--light-gray)] font-medium px-4 py-1 rounded-full text-xs">{stockQuantity} in stock</div>
+						<div className="bg-[var(--light-gray)] font-medium px-4 py-1 rounded-full text-xs whitespace-nowrap">{stockQuantity} in stock</div>
 					) : null}
 				</div>
 
