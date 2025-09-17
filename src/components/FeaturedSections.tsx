@@ -1,4 +1,5 @@
 import { CollectionCard } from '@/components/CollectionCard'
+import { FeaturedUserCard } from '@/components/FeaturedUserCard'
 import { ItemGrid } from '@/components/ItemGrid'
 import { ProductCard } from '@/components/ProductCard'
 import { Button } from '@/components/ui/button'
@@ -52,7 +53,7 @@ function FeaturedCollectionItem({ collectionCoords }: { collectionCoords: string
 
 	const { data: collection, isLoading } = useQuery({
 		...collectionByATagQueryOptions(pubkey, dTag),
-		enabled: !!pubkey && !!dTag,
+		enabled: !!(pubkey && dTag),
 	})
 
 	if (isLoading) {
@@ -70,128 +71,93 @@ function FeaturedCollectionItem({ collectionCoords }: { collectionCoords: string
 	return <CollectionCard collection={collection} />
 }
 
-// Component for displaying a featured user
-function FeaturedUserItem({ userPubkey }: { userPubkey: string }) {
-	return (
-		<Card className="p-4 hover:shadow-md transition-shadow">
-			<Link to="/profile/$profileId" params={{ profileId: userPubkey }} className="block">
-				<div className="flex flex-col items-center text-center space-y-3">
-					<UserWithAvatar pubkey={userPubkey} size="lg" showBadge={true} disableLink={true} />
-					<Button variant="outline" size="sm" className="w-full">
-						View Profile
-					</Button>
-				</div>
-			</Link>
-		</Card>
-	)
-}
+// FeaturedUserItem has been replaced with FeaturedUserCard component
 
 // Main component for displaying all featured sections
 export function FeaturedSections({ className, maxItemsPerSection = 5 }: FeaturedSectionsProps) {
 	const { data: config } = useConfigQuery()
-	const { data: featuredProducts, isLoading: isLoadingProducts } = useFeaturedProducts(config?.appPublicKey || '')
-	const { data: featuredCollections, isLoading: isLoadingCollections } = useFeaturedCollections(config?.appPublicKey || '')
-	const { data: featuredUsers, isLoading: isLoadingUsers } = useFeaturedUsers(config?.appPublicKey || '')
+	const { data: featuredProducts } = useFeaturedProducts(config?.appPublicKey || '')
+	const { data: featuredCollections } = useFeaturedCollections(config?.appPublicKey || '')
+	const { data: featuredUsers } = useFeaturedUsers(config?.appPublicKey || '')
 
-	// Get limited items for display
+	// Limit items per section
 	const displayProducts = featuredProducts?.featuredProducts?.slice(0, maxItemsPerSection) || []
 	const displayCollections = featuredCollections?.featuredCollections?.slice(0, maxItemsPerSection) || []
 	const displayUsers = featuredUsers?.featuredUsers?.slice(0, maxItemsPerSection) || []
 
-	// Count total items to determine layout
-	const totalSections = [displayProducts.length > 0, displayCollections.length > 0, displayUsers.length > 0].filter(Boolean).length
-
-	if (isLoadingProducts || isLoadingCollections || isLoadingUsers) {
-		return (
-			<div className={cn('space-y-8', className)}>
-				<div className="animate-pulse space-y-6">
-					<div className="bg-gray-200 h-8 rounded w-48"></div>
-					<div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-						{Array.from({ length: 5 }).map((_, i) => (
-							<div key={i} className="bg-gray-200 aspect-square rounded-lg"></div>
-						))}
-					</div>
-				</div>
-			</div>
-		)
-	}
-
-	// Don't render anything if no featured items
-	if (totalSections === 0) {
-		return null
-	}
-
-	// Create array of visible sections with their index for alternating backgrounds
-	const visibleSections = [
-		{ type: 'products', visible: displayProducts.length > 0 },
-		{ type: 'collections', visible: displayCollections.length > 0 },
-		{ type: 'users', visible: displayUsers.length > 0 },
-	].filter((section) => section.visible)
-
+	// Track section index for alternating backgrounds
 	let sectionIndex = 0
 
 	return (
-		<div className={cn('space-y-0', className)}>
+		<div className={cn('w-full', className)}>
 			{/* Featured Products */}
 			{displayProducts.length > 0 && (
-				<section className={cn('px-8 py-12', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
-					<div className="flex items-center justify-between mb-6">
-						<div className="flex items-center gap-3">
-							<Package className="w-6 h-6 text-primary" />
-							<h2 className="text-2xl font-heading">Featured Products</h2>
+				<section className={cn('w-full py-12', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
+					<div className="px-8">
+						<div className="flex items-center justify-between mb-6">
+							<div className="flex items-center gap-3">
+								<Package className="w-6 h-6 text-primary" />
+								<h2 className="text-2xl font-heading">Featured Products</h2>
+							</div>
+							{featuredProducts?.featuredProducts && featuredProducts.featuredProducts.length > maxItemsPerSection && (
+								<Link to="/products" className="flex items-center gap-2 text-primary hover:underline">
+									<Button variant="ghost" size="sm" className="gap-2">
+										View All <ArrowRight className="w-4 h-4" />
+									</Button>
+								</Link>
+							)}
 						</div>
-						{featuredProducts?.featuredProducts && featuredProducts.featuredProducts.length > maxItemsPerSection && (
-							<Link to="/products">
-								<Button variant="ghost" size="sm" className="flex items-center gap-2">
-									View All <ArrowRight className="w-4 h-4" />
-								</Button>
-							</Link>
-						)}
+						<ItemGrid className="gap-8">
+							{displayProducts.map((productCoords: string) => (
+								<FeaturedProductItem key={productCoords} productCoords={productCoords} />
+							))}
+						</ItemGrid>
 					</div>
-					<ItemGrid className="gap-8">
-						{displayProducts.map((productCoords) => (
-							<FeaturedProductItem key={productCoords} productCoords={productCoords} />
-						))}
-					</ItemGrid>
 				</section>
 			)}
 
 			{/* Featured Collections */}
 			{displayCollections.length > 0 && (
-				<section className={cn('px-8 py-12', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
-					<div className="flex items-center justify-between mb-6">
-						<div className="flex items-center gap-3">
-							<FolderOpen className="w-6 h-6 text-primary" />
-							<h2 className="text-2xl font-heading">Featured Collections</h2>
+				<section className={cn('w-full py-12', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
+					<div className="px-8">
+						<div className="flex items-center justify-between mb-6">
+							<div className="flex items-center gap-3">
+								<FolderOpen className="w-6 h-6 text-primary text-white" />
+								<h2 className="text-2xl font-heading text-white">Featured Collections</h2>
+							</div>
+							{featuredCollections?.featuredCollections && featuredCollections.featuredCollections.length > maxItemsPerSection && (
+								<Link to="/collections" className="flex items-center gap-2 text-primary hover:underline">
+									<Button variant="ghost" size="sm" className="gap-2">
+										View All <ArrowRight className="w-4 h-4" />
+									</Button>
+								</Link>
+							)}
 						</div>
-						{featuredCollections?.featuredCollections && featuredCollections.featuredCollections.length > maxItemsPerSection && (
-							<Button variant="ghost" size="sm" className="flex items-center gap-2">
-								View All <ArrowRight className="w-4 h-4" />
-							</Button>
-						)}
+						<ItemGrid className="gap-8">
+							{displayCollections.map((collectionCoords: string) => (
+								<FeaturedCollectionItem key={collectionCoords} collectionCoords={collectionCoords} />
+							))}
+						</ItemGrid>
 					</div>
-					<ItemGrid className="gap-8">
-						{displayCollections.map((collectionCoords) => (
-							<FeaturedCollectionItem key={collectionCoords} collectionCoords={collectionCoords} />
-						))}
-					</ItemGrid>
 				</section>
 			)}
 
 			{/* Featured Users */}
 			{displayUsers.length > 0 && (
-				<section className={cn('px-8 py-12', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
-					<div className="flex items-center justify-between mb-6">
-						<div className="flex items-center gap-3">
-							<Users className="w-6 h-6 text-primary" />
-							<h2 className="text-2xl font-heading">Featured Sellers</h2>
+				<section className={cn('w-full py-12', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
+					<div className="px-8">
+						<div className="flex items-center justify-between mb-6">
+							<div className="flex items-center gap-3">
+								<Users className="w-6 h-6 text-primary" />
+								<h2 className="text-2xl font-heading">Featured Sellers</h2>
+							</div>
+						</div>
+						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+							{displayUsers.map((userPubkey: string) => (
+								<FeaturedUserCard key={userPubkey} userPubkey={userPubkey} />
+							))}
 						</div>
 					</div>
-					<ItemGrid className="gap-8">
-						{displayUsers.map((userPubkey) => (
-							<FeaturedUserItem key={userPubkey} userPubkey={userPubkey} />
-						))}
-					</ItemGrid>
 				</section>
 			)}
 		</div>
