@@ -206,7 +206,7 @@ export function OrderDataTable<TData>({
 													</div>
 													<div className="space-y-3">
 														{otherCells.map((cell) => (
-															<div key={cell.id} className="flex justify-between items-start">
+															<div key={cell.id} className="flex justify-between items-center">
 																<span className="text-sm font-medium text-gray-600 capitalize min-w-0 flex-shrink-0 mr-3">
 																	{typeof cell.column.columnDef.header === 'string'
 																		? cell.column.columnDef.header

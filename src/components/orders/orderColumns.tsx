@@ -14,8 +14,8 @@ export const baseOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 		cell: ({ row }) => {
 			const orderId = getOrderId(row.original.order)
 			return (
-				<div className="border border-gray-300 rounded px-3 py-1 inline-block">
-					<Link to="/dashboard/orders/$orderId" params={{ orderId: orderId || 'unknown' }} className="font-mono text-xs hover:underline">
+				<div className="bg-gray-200 text-black rounded px-3 py-1 inline-block">
+					<Link to="/dashboard/orders/$orderId" params={{ orderId: orderId || 'unknown' }} className="font-mono text-xs text-black hover:text-gray-600">
 						{orderId ? `${orderId.substring(0, 8)}...` : 'Unknown'}
 					</Link>
 				</div>

@@ -51,14 +51,14 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 
 	const content = (
 		<div className={cn(
-			"flex items-center gap-1 border border-gray-300 rounded px-3 py-1 w-full max-w-[180px]",
+			"flex items-center gap-1 border border-gray-300 rounded px-2 py-1 inline-flex max-w-[140px] overflow-hidden",
 			!disableLink && "hover:bg-muted/50 hover:border-primary transition-colors duration-200"
 		)}>
 			<Avatar className={cn(avatarSizeClass, "flex-shrink-0")}>
 				<AvatarImage src={profileData?.profile?.picture} />
 				<AvatarFallback>{nameInitial}</AvatarFallback>
 			</Avatar>
-			<div className="flex items-center gap-0.5 min-w-0 flex-1">
+			<div className="flex items-center gap-0.5 min-w-0 flex-1 overflow-hidden">
 				<ProfileName
 					pubkey={pubkey}
 					className={cn(
