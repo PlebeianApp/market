@@ -558,7 +558,7 @@ function FirehoseComponent() {
 					{!showHomeNavigation && (
 						<Button
 							variant="primary"
-							className="p-2 mx-2 h-16 w-16 lg:h-8 lg:w-8 flex"
+							className="p-2 mx-2 h-10 w-10 lg:h-8 lg:w-8 flex"
 							title="Go back"
 							aria-label="Go back"
 							disabled={!canGoBack()}
@@ -652,47 +652,53 @@ function FirehoseComponent() {
 							>
 								<CollapseVerticalIcon className="h-4 w-4" />
 							</Button>
-							<RefreshCw
-								className={`h-6 w-6 flex cursor-pointer ${isFetching ? 'animate-spin' : ''}`}
+							<Button
+								variant="primary"
+								className="p-2 h-8 w-8 flex"
 								onClick={() => {
 									scrollToTop()
 									setOpenThreadId(null)
 									refetch()
 								}}
 								title="Reload feed"
+								aria-label="Reload feed"
 							>
-								{isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <p className="font-heading h-4 w-4">↻</p>}
-							</RefreshCw>
+								{isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+							</Button>
 						</span>
 					) : authorFilter?.trim() ? (
 						<span className="gap-2 items-center flex">
 							@{(authorMeta?.name || authorFilter.slice(0, 8)) + (authorMeta?.name ? '' : '…')}
-							<RefreshCw
-								className={`h-6 w-6 flex cursor-pointer ${isFetching ? 'animate-spin' : ''}`}
+							<Button
+								variant="primary"
+								className="p-2 h-8 w-8 flex"
 								onClick={() => {
 									scrollToTop()
 									setOpenThreadId(null)
 									refetch()
 								}}
 								title="Reload feed"
+								aria-label="Reload feed"
 							>
-								{isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <p className="font-heading h-4 w-4">↻</p>}
-							</RefreshCw>
+								{isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+							</Button>
 						</span>
 					) : filterMode === 'hashtag' && tagFilter?.trim() ? (
 						<span className="flex gap-2 items-center">
 							#{tagFilter.replace(/^#/, '')}
-							<RefreshCw
-								className={`h-6 w-6 flex cursor-pointer ${isFetching ? 'animate-spin' : ''}`}
+							<Button
+								variant="primary"
+								className="p-2 h-8 w-8 flex"
 								onClick={() => {
 									scrollToTop()
 									setOpenThreadId(null)
 									refetch()
 								}}
 								title="Reload feed"
+								aria-label="Reload feed"
 							>
-								{isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <p className="font-heading h-4 w-4">↻</p>}
-							</RefreshCw>
+								{isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+							</Button>
 						</span>
 					) : (
 						<span className="flex items-center gap-2">
@@ -707,17 +713,19 @@ function FirehoseComponent() {
 							) : (
 								<span>Firehose - global</span>
 							)}
-							<RefreshCw
-								className={`h-6 w-6 flex cursor-pointer ${isFetching ? 'animate-spin' : ''}`}
+							<Button
+								variant="primary"
+								className="p-2 h-10 w-10 flex"
 								onClick={() => {
 									scrollToTop()
 									setOpenThreadId(null)
 									refetch()
 								}}
 								title="Reload feed"
+								aria-label="Reload feed"
 							>
-								{isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <p className="font-heading h-4 w-4">↻</p>}
-							</RefreshCw>
+								{isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+							</Button>
 						</span>
 					)}
 				</span>
