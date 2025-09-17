@@ -23,6 +23,10 @@ export const dashboardNavigation: NavSection[] = [
 				path: '/dashboard/sales/messages',
 			},
 			{
+				title: '💸 Receive Payments',
+				path: '/dashboard/products/receiving-payments',
+			},
+			{
 				title: '♻️ Circular Economy',
 				path: '/dashboard/sales/circular-economy',
 			},
@@ -38,10 +42,6 @@ export const dashboardNavigation: NavSection[] = [
 			{
 				title: '🗂️ Collections',
 				path: '/dashboard/products/collections',
-			},
-			{
-				title: '💸 Receive Payments',
-				path: '/dashboard/products/receiving-payments',
 			},
 			{
 				title: '📫 Shipping Options',
