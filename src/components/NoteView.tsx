@@ -1,7 +1,7 @@
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQuery } from '@tanstack/react-query'
 import { authorQueryOptions } from '@/queries/authors.tsx'
-import { threadStructureQueryOptions, type ThreadNode, type ThreadStructure, findRootFromETags } from '@/queries/thread.tsx'
+import { enhancedThreadStructureQueryOptions, type EnhancedThreadNode, type EnhancedThreadStructure, findRootFromETags } from '@/queries/enhanced-thread.tsx'
 import { reactionsQueryOptions } from '@/queries/reactions'
 import { Link } from '@tanstack/react-router'
 import { type JSX, type SVGProps, useEffect, useRef, useState, useMemo } from 'react'
@@ -185,7 +185,7 @@ interface NoteViewProps {
 }
 
 interface ThreadViewProps {
-	threadStructure: ThreadStructure
+	threadStructure: EnhancedThreadStructure
 	highlightedNoteId: string
 	reactionsMap?: Record<string, Record<string, number>>
 }
@@ -195,7 +195,7 @@ function ThreadNodeView({
 	highlightedNoteId,
 	reactionsMap,
 }: {
-	node: ThreadNode
+	node: EnhancedThreadNode
 	highlightedNoteId: string
 	reactionsMap?: Record<string, Record<string, number>>
 }) {
@@ -297,7 +297,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 	const showThread = !readOnlyInThread && openThreadId === noteIdForThread
 	const { data: author, isLoading: isLoadingAuthor } = useQuery(authorQueryOptions(note.pubkey))
 	const noteId = (note as any)?.id || findRootFromETags?.(note) || ''
-	const { data: threadStructure, isLoading: isLoadingThread } = useQuery(threadStructureQueryOptions(noteId))
+	const { data: threadStructure, isLoading: isLoadingThread } = useQuery(enhancedThreadStructureQueryOptions(noteId))
 	// Safely handle possible undefined or non-numeric created_at from NDKEvent
 	const createdAtSeconds =
 		typeof note.created_at === 'number'
