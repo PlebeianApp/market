@@ -23,13 +23,13 @@ export const ExtendedKind = {
 	VOICE_COMMENT: 1244,
 	FAVORITE_RELAYS: 10012,
 	BLOSSOM_SERVER_LIST: 10063,
-	GROUP_METADATA: 39000
+	GROUP_METADATA: 39000,
 } as const
 
 // Comprehensive supported kinds for proper feed loading
 export const SUPPORTED_KINDS = [
-	1,    // ShortTextNote
-	6,    // Repost
+	1, // ShortTextNote
+	6, // Repost
 	ExtendedKind.PICTURE,
 	ExtendedKind.VIDEO,
 	ExtendedKind.SHORT_VIDEO,
@@ -38,7 +38,7 @@ export const SUPPORTED_KINDS = [
 	ExtendedKind.VOICE,
 	ExtendedKind.VOICE_COMMENT,
 	9802, // Highlights
-	30023 // LongFormArticle
+	30023, // LongFormArticle
 ] as const
 
 // Enhanced wrapper type with metadata for better feed management
@@ -68,14 +68,14 @@ const eventDataLoader = new DataLoader<string, NDKEvent | null>(
 
 		const filter: NDKFilter = {
 			ids: Array.from(ids),
-			limit: ids.length * 2 // Allow some buffer for duplicates
+			limit: ids.length * 2, // Allow some buffer for duplicates
 		}
 
 		try {
 			const events = await ndk.fetchEvents(filter, undefined, relaySet)
 			const eventMap = new Map<string, NDKEvent>()
-			
-			events.forEach(event => {
+
+			events.forEach((event) => {
 				const id = (event as any).id
 				if (id) {
 					eventMap.set(id, event)
@@ -87,16 +87,16 @@ const eventDataLoader = new DataLoader<string, NDKEvent | null>(
 				}
 			})
 
-			return Array.from(ids).map(id => eventMap.get(id) || null)
+			return Array.from(ids).map((id) => eventMap.get(id) || null)
 		} catch (error) {
 			console.error('Batch event fetch failed:', error)
 			return Array.from(ids).map(() => null)
 		}
 	},
 	{
-		batchScheduleFn: callback => setTimeout(callback, 10), // Small delay for batching
-		cacheMap: new Map() // Use internal cache
-	}
+		batchScheduleFn: (callback) => setTimeout(callback, 10), // Small delay for batching
+		cacheMap: new Map(), // Use internal cache
+	},
 )
 
 // Enhanced utility functions
@@ -143,17 +143,20 @@ function getReplaceableCoordinate(event: NDKEvent): string {
 function calculateEventPriority(event: NDKEvent): number {
 	const now = Date.now() / 1000
 	const age = now - ((event as any).created_at || 0)
-	const ageScore = Math.max(0, 1 - (age / (24 * 60 * 60))) // Decay over 24 hours
-	
+	const ageScore = Math.max(0, 1 - age / (24 * 60 * 60)) // Decay over 24 hours
+
 	// Priority based on event type
 	const kind = (event as any).kind
 	let kindScore = 0.5 // Default
-	
-	if (kind === 1) kindScore = 1.0 // Text notes highest priority
-	else if (kind === 6) kindScore = 0.9 // Reposts high priority
-	else if ([ExtendedKind.PICTURE, ExtendedKind.VIDEO].includes(kind)) kindScore = 0.8 // Media high priority
+
+	if (kind === 1)
+		kindScore = 1.0 // Text notes highest priority
+	else if (kind === 6)
+		kindScore = 0.9 // Reposts high priority
+	else if ([ExtendedKind.PICTURE, ExtendedKind.VIDEO].includes(kind))
+		kindScore = 0.8 // Media high priority
 	else if (kind === 30023) kindScore = 0.7 // Articles medium-high priority
-	
+
 	return ageScore * kindScore
 }
 
@@ -162,22 +165,22 @@ function withEnhancedMetadata(e: NDKEvent, isFromCache: boolean = false): Enhanc
 	const existing = id ? firstFetchTimestamps.get(id) : undefined
 	const now = Date.now()
 	const ts = existing ?? now
-	
+
 	if (id && existing === undefined) {
 		firstFetchTimestamps.set(id, ts)
 	}
-	
+
 	return {
 		event: e,
 		fetchedAt: ts,
 		relaysSeen: Array.from(relayTracker.get(id) || []),
 		isFromCache,
-		priority: calculateEventPriority(e)
+		priority: calculateEventPriority(e),
 	}
 }
 
 // Enhanced note fetching with improved algorithms
-export const fetchEnhancedNotes = async (opts?: { 
+export const fetchEnhancedNotes = async (opts?: {
 	tag?: string
 	author?: string
 	follows?: boolean
@@ -198,12 +201,12 @@ export const fetchEnhancedNotes = async (opts?: {
 	// Enhanced tag filtering
 	const normTag = normalizeTag(opts?.tag)
 	if (normTag) {
-		(filter as any)['#t'] = [normTag]
+		;(filter as any)['#t'] = [normTag]
 	}
 
 	// Enhanced author filtering
 	if (opts?.author && typeof opts.author === 'string' && opts.author.trim()) {
-		(filter as any).authors = [opts.author.trim()]
+		;(filter as any).authors = [opts.author.trim()]
 	}
 
 	// Enhanced relay selection
@@ -211,10 +214,10 @@ export const fetchEnhancedNotes = async (opts?: {
 	const allRelays = appRelay ? [...defaultRelaysUrls, appRelay] : defaultRelaysUrls
 	const relaySet = NDKRelaySet.fromRelayUrls(allRelays, ndk)
 
- // Enhanced follows handling with better contact list processing
+	// Enhanced follows handling with better contact list processing
 	let mutedPubkeys: Set<string> | null = null
 	let followedPubkeys: Set<string> | null = null
-	
+
 	if (opts?.follows) {
 		try {
 			const user = await ndkActions.getUser()
@@ -225,12 +228,12 @@ export const fetchEnhancedNotes = async (opts?: {
 			const contactsFilter: NDKFilter = { kinds: [3], authors: [pubkey], limit: 1 }
 			const contactEvents = await ndk.fetchEvents(contactsFilter, undefined, relaySet)
 			const contactArr = Array.from(contactEvents)
-			
+
 			if (contactArr.length > 0) {
 				const latest = contactArr.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
 				const pTags = (latest?.tags || []).filter((t: any) => Array.isArray(t) && t[0] === 'p' && typeof t[1] === 'string')
 				const followPubkeys = pTags.map((t: any) => t[1]) as string[]
-				
+
 				if (followPubkeys.length === 0) return []
 				followedPubkeys = new Set(followPubkeys)
 
@@ -238,13 +241,13 @@ export const fetchEnhancedNotes = async (opts?: {
 				// instead of querying all pubkeys individually
 				const pubkeyBatches: string[][] = []
 				const pubkeyArray = Array.from(followedPubkeys)
-				
-				// Create batches of 10 pubkeys
-				for (let i = 0; i < pubkeyArray.length; i += 10) {
-					const batch = pubkeyArray.slice(i, i + 10)
+
+				// Create batches of 30 pubkeys
+				for (let i = 0; i < pubkeyArray.length; i += 30) {
+					const batch = pubkeyArray.slice(i, i + 30)
 					pubkeyBatches.push(batch)
 				}
-				
+
 				// We'll create batched filters when fetching events
 				// This is handled when we set the 'authors' filter below
 			} else {
@@ -256,7 +259,7 @@ export const fetchEnhancedNotes = async (opts?: {
 				const muteFilter: NDKFilter = { kinds: [10000 as any], authors: [pubkey], limit: 1 }
 				const muteEvents = await ndk.fetchEvents(muteFilter, undefined, relaySet)
 				const muteArr = Array.from(muteEvents)
-				
+
 				if (muteArr.length > 0) {
 					const latestMute = muteArr.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
 					const pMuteTags = (latestMute?.tags || []).filter((t: any) => Array.isArray(t) && t[0] === 'p' && typeof t[1] === 'string')
@@ -273,11 +276,11 @@ export const fetchEnhancedNotes = async (opts?: {
 	// Fetch events with enhanced error handling
 	try {
 		let allEvents: NDKEvent[] = []
-		
+
 		// For follows feed, fetch events in batches of 10 pubkeys at a time
 		if (opts?.follows && followedPubkeys) {
 			const pubkeyArray = Array.from(followedPubkeys)
-			
+
 			// Handle empty array edge case
 			if (pubkeyArray.length === 0) {
 				allEvents = []
@@ -286,24 +289,24 @@ export const fetchEnhancedNotes = async (opts?: {
 				for (let i = 0; i < pubkeyArray.length; i += 10) {
 					const batchPubkeys = pubkeyArray.slice(i, i + 10)
 					if (batchPubkeys.length === 0) continue
-					
+
 					// Create a filter with the current batch of pubkeys
 					const batchFilter: NDKFilter = {
 						...filter,
-						authors: batchPubkeys
+						authors: batchPubkeys,
 					}
-					
+
 					try {
 						// Fetch events for this batch with timeout protection
 						const batchEvents = await Promise.race([
 							ndk.fetchEvents(batchFilter, undefined, relaySet),
 							new Promise<Set<NDKEvent>>((resolve) => {
 								setTimeout(() => resolve(new Set()), 5000) // 5 second timeout
-							})
+							}),
 						])
 						allEvents = [...allEvents, ...Array.from(batchEvents)]
 					} catch (error) {
-						console.warn(`Failed to fetch batch of pubkeys ${i}-${i+10}: ${error}`)
+						console.warn(`Failed to fetch batch of pubkeys ${i}-${i + 10}: ${error}`)
 						// Continue with next batch even if this one fails
 					}
 				}
@@ -313,25 +316,25 @@ export const fetchEnhancedNotes = async (opts?: {
 			const events = await ndk.fetchEvents(filter, undefined, relaySet)
 			allEvents = Array.from(events)
 		}
-		
+
 		// Enhanced filtering and validation
 		const validNotes = allEvents.filter((e) => {
 			if (!e || !(e as any).id) return false
 			if (hasClientMostrTag(e) || isNSFWEvent(e)) return false
-			
+
 			// Get event data
 			const eventAuthor = (e as any).pubkey as string
 			const eventTags = (e as any).tags || []
 			const pTags = eventTags.filter((t: any) => Array.isArray(t) && t[0] === 'p' && typeof t[1] === 'string')
 			const mentionedPubkeys = pTags.map((t: any) => t[1] as string)
-			
+
 			// Check for muted users (both author and mentioned users)
 			if (mutedPubkeys) {
 				// Filter out notes authored by muted users
 				if (mutedPubkeys.has(eventAuthor)) {
 					return false
 				}
-				
+
 				// Filter out notes containing p tags referencing muted users
 				for (const mentionedPubkey of mentionedPubkeys) {
 					if (mutedPubkeys.has(mentionedPubkey)) {
@@ -339,34 +342,34 @@ export const fetchEnhancedNotes = async (opts?: {
 					}
 				}
 			}
-			
+
 			// For follow feed, only include notes authored by or mentioning followed users
 			if (opts?.follows && followedPubkeys) {
 				// Include if authored by a followed user
 				if (followedPubkeys.has(eventAuthor)) {
 					return true
 				}
-				
+
 				// Include if mentions a followed user
 				for (const mentionedPubkey of mentionedPubkeys) {
 					if (followedPubkeys.has(mentionedPubkey)) {
 						return true
 					}
 				}
-				
+
 				// If this is a follow feed and note doesn't match criteria, exclude it
 				return false
 			}
-			
+
 			return true
 		})
 
 		// Cache valid events
-		validNotes.forEach(event => {
+		validNotes.forEach((event) => {
 			const id = (event as any).id
 			if (id) {
 				eventCache.set(id, event)
-				
+
 				// Handle replaceable events
 				if (isReplaceableEvent((event as any).kind)) {
 					const coordinate = getReplaceableCoordinate(event)
@@ -379,8 +382,8 @@ export const fetchEnhancedNotes = async (opts?: {
 		})
 
 		// Enhanced metadata and sorting
-		const enhanced = validNotes.map(e => withEnhancedMetadata(e))
-		
+		const enhanced = validNotes.map((e) => withEnhancedMetadata(e))
+
 		// Multi-factor sorting: priority, then fetchedAt
 		enhanced.sort((a, b) => {
 			const priorityDiff = b.priority - a.priority
@@ -428,22 +431,16 @@ export const enhancedNoteQueryOptions = (id: string) =>
 		staleTime: 5 * 60 * 1000, // 5 minutes
 	})
 
-export const enhancedNotesQueryOptions = (opts?: { 
-	tag?: string
-	author?: string
-	follows?: boolean
-	limit?: number
-	kinds?: number[]
-}) =>
+export const enhancedNotesQueryOptions = (opts?: { tag?: string; author?: string; follows?: boolean; limit?: number; kinds?: number[] }) =>
 	queryOptions({
 		queryKey: [
-			...noteKeys.all, 
-			'enhanced-list', 
-			normalizeTag(opts?.tag) || '', 
-			opts?.author?.trim() || '', 
+			...noteKeys.all,
+			'enhanced-list',
+			normalizeTag(opts?.tag) || '',
+			opts?.author?.trim() || '',
 			opts?.follows ? 'follows' : '',
 			opts?.limit || 200,
-			(opts?.kinds || SUPPORTED_KINDS).join(',')
+			(opts?.kinds || SUPPORTED_KINDS).join(','),
 		],
 		queryFn: () => fetchEnhancedNotes(opts),
 		staleTime: 2 * 60 * 1000, // 2 minutes for feeds

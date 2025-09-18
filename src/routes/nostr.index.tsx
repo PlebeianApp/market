@@ -8,6 +8,7 @@ import { authorQueryOptions } from '@/queries/authors'
 import { reactionsQueryOptions } from '@/queries/reactions'
 import { ndkActions } from '@/lib/stores/ndk'
 import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
+import { writeRelaysUrls } from '@/lib/constants'
 import { toast } from 'sonner'
 import { NoteView } from '@/components/NoteView.tsx'
 import { Button } from '@/components/ui/button'
@@ -1877,16 +1878,20 @@ function FirehoseComponent() {
 									// Sign and publish the event
 									await event.sign(signer)
 									
-									// Create a relay set with only localhost:10547 for publishing
-									const publishRelaySet = NDKRelaySet.fromRelayUrls(['ws://localhost:10547'], ndk)
+									// Create a relay set for publishing using writeRelaysUrls
+									const publishRelaySet = NDKRelaySet.fromRelayUrls(writeRelaysUrls, ndk)
 									await event.publish(publishRelaySet)
 									
 									console.log('Note published successfully:', event.id)
+									console.log('Published event JSON:', JSON.stringify(event.rawEvent()))
 									
 									// Create wrapped event for immediate feed updates
 									const wrappedEvent = {
 										event: event,
-										fetchedAt: Date.now()
+										fetchedAt: Date.now(),
+										relaysSeen: [],
+										isFromCache: false,
+										priority: 1 // High priority for new notes
 									}
 									
 									// Get current user pubkey for follow feed check
@@ -1895,7 +1900,7 @@ function FirehoseComponent() {
 									
 									// Update all relevant feeds immediately by modifying query cache
 									// Update global feed (all mode)
-									const globalKey = [...noteKeys.all, 'list', '', '', '']
+									const globalKey = [...noteKeys.all, 'enhanced-list', '', '', '']
 									queryClient.setQueryData(globalKey, (oldData: any) => {
 										if (oldData && Array.isArray(oldData)) {
 											return [wrappedEvent, ...oldData]
@@ -1905,7 +1910,7 @@ function FirehoseComponent() {
 									
 									// Update follow feed if user has follows (published notes should appear in follow feed)
 									if (currentUserPubkey) {
-										const followsKey = [...noteKeys.all, 'list', '', '', 'follows']
+										const followsKey = [...noteKeys.all, 'enhanced-list', '', '', 'follows']
 										queryClient.setQueryData(followsKey, (oldData: any) => {
 											if (oldData && Array.isArray(oldData)) {
 												return [wrappedEvent, ...oldData]

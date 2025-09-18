@@ -18,6 +18,7 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { Button } from '@/components/ui/button'
 import { EmojiPicker } from 'emoji-picker-react'
 import { toast } from 'sonner'
+import { writeRelaysUrls } from '@/lib/constants'
 
 function SpoolIcon(props: SVGProps<SVGSVGElement>) {
 	return (
@@ -283,9 +284,36 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 	// Access query client for optimistic updates
 	const queryClient = useQueryClient()
 	
-	// Remove a trailing hashtag-only line from the note content for display
+	// Reference to track note visibility
+	const noteRef = useRef<HTMLDivElement>(null)
+
+	// Process note content based on kind and format for display
 	const displayContent = (() => {
 		try {
+			// Check if this is a kind 6 repost event
+			const kind = (note as any)?.kind
+
+			// For kind 6 (repost), try to extract content from the embedded note
+			if (kind === 6) {
+				// The content of a kind 6 event should be the JSON of the reposted note
+				const raw = ((note as any)?.content || '') as string
+				if (!raw) return ''
+
+				try {
+					// Try to parse the JSON to extract the reposted note
+					const repostedNote = JSON.parse(raw)
+					// Use the content from the reposted note
+					if (repostedNote && typeof repostedNote.content === 'string') {
+						return repostedNote.content
+					}
+				} catch (jsonError) {
+					console.warn('Failed to parse repost content JSON:', jsonError)
+					// Fallback to showing raw content or a placeholder
+					return raw.length > 100 ? raw.substring(0, 100) + '...' : raw
+				}
+			}
+
+			// For other kinds, process normally
 			const raw = ((note as any)?.content || '') as string
 			if (!raw) return raw
 			const lines = raw.replace(/\r\n?/g, '\n').split('\n')
@@ -300,7 +328,8 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 			const newLines = lines.slice(0, i)
 			while (newLines.length > 0 && newLines[newLines.length - 1].trim() === '') newLines.pop()
 			return newLines.join('\n')
-		} catch {
+		} catch (error) {
+			console.error('Error processing note content:', error)
 			return ((note as any)?.content || '') as string
 		}
 	})()
@@ -310,10 +339,10 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 		JSON: 'json',
 		REPLY: 'reply',
 		QUOTE: 'quote',
-		REPOST: 'repost'
+		REPOST: 'repost',
 	} as const
-	
-	const [viewMode, setViewMode] = useState<typeof VIEW_MODE[keyof typeof VIEW_MODE]>(VIEW_MODE.NONE)
+
+	const [viewMode, setViewMode] = useState<(typeof VIEW_MODE)[keyof typeof VIEW_MODE]>(VIEW_MODE.NONE)
 	// Separate state for reply and quote modes
 	const [replyText, setReplyText] = useState('')
 	const [replyImages, setReplyImages] = useState<File[]>([])
@@ -322,57 +351,57 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 	const [showEmojiPicker, setShowEmojiPicker] = useState(false)
 	// Flag to track if a repost is in progress
 	const [isReposting, setIsReposting] = useState(false)
-	
+
 	// Create refs outside of conditional rendering
 	const replyTextareaRef = useRef<HTMLTextAreaElement | null>(null)
 	const quoteTextareaRef = useRef<HTMLTextAreaElement | null>(null)
-	
+
 	// Create a NIP-19 nevent entity for the note with relay hints
 	const createNip19NoteReference = () => {
 		try {
 			// Get the note ID
 			const id = (note as any)?.id || ''
 			if (!id) return ''
-			
+
 			// Get relay hints from the note tags
 			const relays: string[] = []
 			if (Array.isArray((note as any)?.tags)) {
-				const relayTags = ((note as any).tags as any[]).filter(t => 
-					Array.isArray(t) && t[0] === 'r' && typeof t[1] === 'string' && t[1].startsWith('wss://')
+				const relayTags = ((note as any).tags as any[]).filter(
+					(t) => Array.isArray(t) && t[0] === 'r' && typeof t[1] === 'string' && t[1].startsWith('wss://'),
 				)
-				relayTags.forEach(tag => {
+				relayTags.forEach((tag) => {
 					if (!relays.includes(tag[1])) {
 						relays.push(tag[1])
 					}
 				})
 			}
-			
+
 			// Add some default relays if none are found
 			if (relays.length === 0) {
 				relays.push('wss://relay.damus.io', 'wss://nos.lol')
 			}
-			
+
 			// Create the NIP-19 nevent entity
 			return nip19.neventEncode({
 				id,
 				relays,
-				author: note.pubkey
+				author: note.pubkey,
 			})
 		} catch (error) {
 			console.error('Error creating NIP-19 note reference:', error)
 			return ''
 		}
 	}
-	
+
 	// Create NIP-19 reference for quote functionality
 	const nip19Reference = useMemo(() => createNip19NoteReference(), [note])
-	
+
 	// Handle quote mode text setting and cursor positioning
 	useEffect(() => {
 		if (viewMode === VIEW_MODE.QUOTE && !quoteText && nip19Reference) {
 			// Set initial text with a blank line at the top
 			setQuoteText(`\n${nip19Reference}`)
-			
+
 			// Focus the textarea and set cursor to the start
 			setTimeout(() => {
 				if (quoteTextareaRef.current) {
@@ -388,7 +417,59 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 	const showThread = !readOnlyInThread && openThreadId === noteIdForThread
 	const { data: author, isLoading: isLoadingAuthor } = useQuery(authorQueryOptions(note.pubkey))
 	const noteId = (note as any)?.id || findRootFromETags?.(note) || ''
-	const { data: threadStructure, isLoading: isLoadingThread } = useQuery(enhancedThreadStructureQueryOptions(noteId))
+	// Only load thread data if we're viewing a thread or inside a thread to improve initial feed performance
+	const [isHovering, setIsHovering] = useState(false)
+	// Use delayed hover state to prevent loading thread data during quick scrolling/browsing
+	const [delayedHover, setDelayedHover] = useState(false)
+
+	// Set up delay for hover loading to prevent unnecessary loads during quick scrolling
+	useEffect(() => {
+		let timerId: NodeJS.Timeout | null = null
+		if (isHovering) {
+			timerId = setTimeout(() => {
+				setDelayedHover(true)
+			}, 500) // 500ms delay before loading thread data on hover
+		} else {
+			setDelayedHover(false)
+		}
+		return () => {
+			if (timerId) clearTimeout(timerId)
+		}
+	}, [isHovering])
+
+	// Track note visibility to prioritize thread loading from top of list
+	const [isVisible, setIsVisible] = useState(false)
+	
+	// Set up intersection observer to detect when notes are visible
+	useEffect(() => {
+		const observer = new IntersectionObserver(
+			(entries) => {
+				if (entries[0].isIntersecting) {
+					setIsVisible(true)
+				}
+			},
+			{ threshold: 0.1 } // 10% visibility is enough to trigger
+		)
+		
+		if (noteRef.current) {
+			observer.observe(noteRef.current)
+		}
+		
+		return () => {
+			if (noteRef.current) {
+				observer.unobserve(noteRef.current)
+			}
+		}
+	}, [])
+	
+	// Immediate thread loading for visible notes, to prioritize top of list
+	// Once a note is visible, we'll always keep its isVisible state true even if scrolled away
+	// This ensures we fetch thread data immediately for notes at the top of the list
+	const needsThreadData = showThread || readOnlyInThread || delayedHover || isVisible
+	const { data: threadStructure, isLoading: isLoadingThread } = useQuery({
+		...enhancedThreadStructureQueryOptions(noteId),
+		enabled: needsThreadData,
+	})
 	// Safely handle possible undefined or non-numeric created_at from NDKEvent
 	const createdAtSeconds =
 		typeof note.created_at === 'number'
@@ -410,7 +491,10 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 	const displayRootId = rootIdFromTags || (note.id as string | undefined) || ''
 
 	// Determine if the whole panel should show a darker hover (only when clickable)
-	const isClickablePanel = !readOnlyInThread && !isLoadingThread && !!threadStructure && (threadStructure.nodes?.size || 0) > 1
+	// Show clickable appearance by default for top-level notes until we know it doesn't have replies
+	const isClickablePanel =
+		!readOnlyInThread &&
+		(!needsThreadData || (needsThreadData && !isLoadingThread && !!threadStructure && (threadStructure.nodes?.size || 0) > 1))
 
 	// When thread is open (and not rendering inside thread), replace whole frame with a single combined thread panel
 	if (!readOnlyInThread && openThreadId === noteIdForThread) {
@@ -436,8 +520,11 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 	}
 	return (
 		<div
+			ref={noteRef}
 			data-note-id={noteIdForThread}
-			className={`group border p-3 z-20 rounded-lg  transition-colors duration-150 ${isClickablePanel ? 'hover:bg-gray-100' : 'hover:bg-gray-100/50'}`}
+			className={`group border p-3 z-20 rounded-lg transition-colors duration-150 ${isClickablePanel ? 'hover:bg-gray-100' : 'hover:bg-gray-100/50'}`}
+			onMouseEnter={() => !readOnlyInThread && setIsHovering(true)}
+			onMouseLeave={() => !readOnlyInThread && setIsHovering(false)}
 		>
 			<div className="flex items-center justify-between mb-1" onClick={(e) => e.stopPropagation()}>
 				{readOnlyInThread ? (
@@ -481,11 +568,18 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 								)}
 							</div>
 							<div className="ml-3">
-								<div className="font-medium">
+								<div className="font-medium flex items-center">
 									{isLoadingAuthor ? (
 										<div className="w-24 h-4 bg-gray-200 rounded animate-pulse"></div>
 									) : (
-										author?.name || note.pubkey.slice(0, 8) + '...'
+										<>
+											{author?.name || note.pubkey.slice(0, 8) + '...'}
+											{(note as any)?.kind === 6 && (
+												<span className="ml-2 text-xs text-gray-500 bg-gray-100 px-1 rounded" title="Reposted note">
+													Repost
+												</span>
+											)}
+										</>
 									)}
 								</div>
 								<div className="text-xs text-gray-500">{createdAtMs ? new Date(createdAtMs).toLocaleString() : 'Unknown date'}</div>
@@ -532,11 +626,18 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 							)}
 						</div>
 						<div className="ml-3">
-							<div className="font-medium">
+							<div className="font-medium flex items-center">
 								{isLoadingAuthor ? (
 									<div className="w-24 h-4 bg-gray-200 rounded animate-pulse"></div>
 								) : (
-									author?.name || note.pubkey.slice(0, 8) + '...'
+									<>
+										{author?.name || note.pubkey.slice(0, 8) + '...'}
+										{(note as any)?.kind === 6 && (
+											<span className="ml-2 text-xs text-gray-500 bg-gray-100 px-1 rounded" title="Reposted note">
+												Repost
+											</span>
+										)}
+									</>
 								)}
 							</div>
 							<div className="text-xs text-gray-500">{createdAtMs ? new Date(createdAtMs).toLocaleString() : 'Unknown date'}</div>
@@ -553,7 +654,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 									e.preventDefault()
 									e.stopPropagation()
 									console.log('reply')
-									setViewMode(v => v === VIEW_MODE.REPLY ? VIEW_MODE.NONE : VIEW_MODE.REPLY)
+									setViewMode((v) => (v === VIEW_MODE.REPLY ? VIEW_MODE.NONE : VIEW_MODE.REPLY))
 								}}
 								title={viewMode === VIEW_MODE.REPLY ? 'Hide reply' : 'Reply to this note'}
 								aria-label="reply"
@@ -570,7 +671,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 										e.stopPropagation()
 										// Implement repost functionality (publishing kind 6 event)
 										if (isReposting) return
-										
+
 										setIsReposting(true)
 										try {
 											// Get NDK instance
@@ -580,21 +681,29 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 												setIsReposting(false)
 												return
 											}
-											
+
 											const signer = ndkActions.getSigner()
 											if (!signer) {
 												toast.error('Please log in to repost')
 												setIsReposting(false)
 												return
 											}
-											
+
+											// Validate that note has a valid ID
+											const noteId = (note as any)?.id || ''
+											if (!noteId) {
+												toast.error('Cannot repost: Note ID is missing or invalid')
+												setIsReposting(false)
+												return
+											}
+
 											// Show loading toast
 											const loadingToastId = toast.loading('Reposting...')
-											
+
 											// Create repost event (kind 6)
 											const event = new NDKEvent(ndk)
 											event.kind = 6
-											
+
 											// Set content to stringified JSON of the reposted note
 											try {
 												const noteJson = note.rawEvent ? note.rawEvent() : note
@@ -603,29 +712,30 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 												console.error('Error stringifying note:', error)
 												event.content = ''
 											}
-											
+
 											// Add tags
 											event.tags = []
-											
+
 											// Add e tag with the ID of the note being reposted
-											event.tags.push(['e', note.id as string, '', ''])
-											
+											event.tags.push(['e', noteId, '', ''])
+
 											// Add p tag with the pubkey of the author of the reposted note
 											event.tags.push(['p', note.pubkey])
-											
+
 											// Sign and publish the event
 											await event.sign(signer)
-											
+
 											// Create a relay set for publishing
-											const publishRelaySet = NDKRelaySet.fromRelayUrls(['ws://localhost:10547'], ndk)
+											const publishRelaySet = NDKRelaySet.fromRelayUrls(writeRelaysUrls, ndk)
 											await event.publish(publishRelaySet)
-											
+
 											console.log('Repost published successfully:', event.id)
-											
+											console.log('Published event JSON:', JSON.stringify(event.rawEvent()))
+
 											// Show success message
 											toast.dismiss(loadingToastId)
 											toast.success('Repost published successfully!')
-											
+
 											// Reset view mode
 											setViewMode(VIEW_MODE.NONE)
 										} catch (error) {
@@ -649,7 +759,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 										e.preventDefault()
 										e.stopPropagation()
 										console.log('Toggle repost mode')
-										setViewMode(v => v === VIEW_MODE.REPOST ? VIEW_MODE.NONE : VIEW_MODE.REPOST)
+										setViewMode((v) => (v === VIEW_MODE.REPOST ? VIEW_MODE.NONE : VIEW_MODE.REPOST))
 									}}
 									title="Repost this note"
 									aria-label="repost"
@@ -665,7 +775,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 									e.preventDefault()
 									e.stopPropagation()
 									console.log('Toggle quote mode')
-									setViewMode(v => v === VIEW_MODE.QUOTE ? VIEW_MODE.NONE : VIEW_MODE.QUOTE)
+									setViewMode((v) => (v === VIEW_MODE.QUOTE ? VIEW_MODE.NONE : VIEW_MODE.QUOTE))
 								}}
 								title={viewMode === VIEW_MODE.QUOTE ? 'Hide quote' : 'Quote this note'}
 								aria-label="quote"
@@ -676,7 +786,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 							</button>
 						</div>
 					)}
-					{isClickablePanel ? (
+					{(needsThreadData ? !!threadStructure && (threadStructure.nodes?.size || 0) > 1 : true) ? (
 						<button
 							className={`h-8 w-8 inline-flex items-center justify-center text-xs rounded-full outline-none focus:outline-none focus:ring-0 border-0 transition-colors transition-shadow hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 hover:ring-offset-white ${
 								showThread ? 'bg-blue-50 text-blue-600 hover:bg-blue-100' : 'bg-white text-gray-600 hover:bg-gray-100'
@@ -733,7 +843,11 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 							title={showThread ? 'Hide thread' : 'View thread'}
 							aria-label={showThread ? 'Hide thread' : 'View thread'}
 						>
-							<SpoolIcon className="h-4 w-4 hover:bg-grey-300" />
+							{isLoadingThread && delayedHover ? (
+								<span className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
+							) : (
+								<SpoolIcon className="h-4 w-4 hover:bg-grey-300" />
+							)}
 						</button>
 					) : null}
 				</div>
@@ -741,7 +855,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 			<div className="flex gap-2">
 				<div className="flex-1">
 					{readOnlyInThread ? (
-						<CollapsibleContent className="px-2 py-1 text-md text-left break-words whitespace-pre-wrap align-text-top w-full hover:bg-grey-300">
+						<CollapsibleContent className="px-2 py-1 text-md text-left break-words whitespace-pre-wrap align-text-top w-full hover:bg-grey-300 aria-hidden:true">
 							{linkifyContent(displayContent, { stopPropagation: true })}
 						</CollapsibleContent>
 					) : (
@@ -776,7 +890,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 							e.preventDefault()
 							e.stopPropagation()
 							console.log('Toggle JSON view')
-							setViewMode(v => v === VIEW_MODE.JSON ? VIEW_MODE.NONE : VIEW_MODE.JSON)
+							setViewMode((v) => (v === VIEW_MODE.JSON ? VIEW_MODE.NONE : VIEW_MODE.JSON))
 						}}
 						title={viewMode === VIEW_MODE.JSON ? 'Hide raw JSON' : 'Show raw JSON'}
 					>
@@ -889,24 +1003,24 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 					return null
 				}
 			})()}
-   {/* Panel for different view modes */}
+			{/* Panel for different view modes */}
 			{(() => {
 				// Different content based on viewMode
 				if (viewMode === VIEW_MODE.NONE) {
-					return null;
+					return null
 				} else if (viewMode === VIEW_MODE.JSON) {
 					// Raw JSON view
-					let raw: any;
+					let raw: any
 					try {
-						raw = typeof (note as any).rawEvent === 'function' ? (note as any).rawEvent() : note;
+						raw = typeof (note as any).rawEvent === 'function' ? (note as any).rawEvent() : note
 					} catch (e) {
-						raw = note;
+						raw = note
 					}
-					let json = '';
+					let json = ''
 					try {
-						json = JSON.stringify(raw, null, 2);
+						json = JSON.stringify(raw, null, 2)
 					} catch (e) {
-						json = String(raw);
+						json = String(raw)
 					}
 
 					return (
@@ -916,7 +1030,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 						>
 							{json}
 						</pre>
-					);
+					)
 				} else if (viewMode === VIEW_MODE.REPLY) {
 					// Reply compose panel
 					return (
@@ -944,7 +1058,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 											</div>
 										) : null}
 									</div>
-									
+
 									{/* Right column buttons */}
 									<div className="flex flex-col gap-2">
 										<Button
@@ -960,7 +1074,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 										>
 											<span aria-hidden>X</span>
 										</Button>
-										
+
 										{/* Emoji */}
 										<div className="relative">
 											<Button
@@ -990,7 +1104,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 												</div>
 											) : null}
 										</div>
-										
+
 										{/* Image upload */}
 										<>
 											<input
@@ -1006,11 +1120,11 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 												}}
 											/>
 											<label htmlFor={`compose-image-input-${(note as any)?.id ?? note.pubkey ?? 'unknown'}`}>
-												<Button 
-													type="button" 
-													variant="secondary" 
-													size="icon" 
-													title="Add image" 
+												<Button
+													type="button"
+													variant="secondary"
+													size="icon"
+													title="Add image"
 													aria-label="Add image"
 													className="h-8 w-8 rounded-full flex items-center justify-center"
 												>
@@ -1018,7 +1132,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 												</Button>
 											</label>
 										</>
-										
+
 										{/* Send button */}
 										<Button
 											type="button"
@@ -1028,10 +1142,82 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 											aria-label="Send"
 											disabled={!replyText.trim() && replyImages.length === 0}
 											className="h-8 w-8 rounded-full flex items-center justify-center"
-											onClick={() => {
-												// TODO: Implement actual sending functionality
-												console.log('Would send reply:', replyText)
-												setViewMode(VIEW_MODE.NONE)
+											onClick={async () => {
+												try {
+													// Get NDK instance
+													const ndk = ndkActions.getNDK()
+													if (!ndk) {
+														toast.error('Not connected to Nostr network')
+														return
+													}
+
+													const signer = ndkActions.getSigner()
+													if (!signer) {
+														toast.error('Please log in to reply')
+														return
+													}
+
+													// Show loading toast
+													const loadingToastId = toast.loading('Sending reply...')
+
+													// Create reply event (kind 1)
+													const event = new NDKEvent(ndk)
+													event.kind = 1
+													event.content = replyText.trim()
+
+													// Add tags for threading according to NIP-10
+													event.tags = []
+
+													// Add "e" tag with root marker if available
+													const rootId = rootIdFromTags || (note.id as string)
+													if (rootId) {
+														event.tags.push(['e', rootId, '', 'root'])
+													}
+
+													// Add "e" tag with reply marker for the direct parent
+													event.tags.push(['e', note.id as string, '', 'reply'])
+
+													// Add "p" tag for the author of the note being replied to
+													event.tags.push(['p', note.pubkey])
+
+													// Get all p tags from the parent note to maintain thread participants
+													if (Array.isArray((note as any)?.tags)) {
+														const parentPTags = ((note as any).tags as any[]).filter(
+															(t) => Array.isArray(t) && t[0] === 'p' && typeof t[1] === 'string',
+														)
+
+														// Add all unique p tags from the parent note
+														parentPTags.forEach((tag) => {
+															const pubkey = tag[1]
+															// Only add if not already added and not the current user
+															if (pubkey !== note.pubkey && !event.tags.some((t) => t[0] === 'p' && t[1] === pubkey)) {
+																event.tags.push(['p', pubkey])
+															}
+														})
+													}
+
+													// Sign and publish the event
+													await event.sign(signer)
+
+													// Create a relay set for publishing
+													const publishRelaySet = NDKRelaySet.fromRelayUrls(writeRelaysUrls, ndk)
+													await event.publish(publishRelaySet)
+
+													console.log('Reply published successfully:', event.id)
+													console.log('Published event JSON:', JSON.stringify(event.rawEvent()))
+
+													// Show success message
+													toast.dismiss(loadingToastId)
+													toast.success('Reply published successfully!')
+
+													// Reset view mode and text
+													setReplyText('')
+													setReplyImages([])
+													setViewMode(VIEW_MODE.NONE)
+												} catch (error) {
+													console.error('Failed to send reply:', error)
+													toast.error('Failed to send reply. Please try again.')
+												}
 											}}
 										>
 											{/* Paper airplane right icon */}
@@ -1053,7 +1239,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 								</div>
 							</div>
 						</div>
-					);
+					)
 				} else if (viewMode === VIEW_MODE.REPOST) {
 					// Repost mode - shows a confirmation UI
 					return (
@@ -1067,26 +1253,17 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 									This will share the note with your followers. The original author will be credited.
 								</p>
 							</div>
-							
+
 							<div className="border rounded-md p-3 bg-white mb-4">
-								<div className="text-sm text-gray-800">
-									{displayContent}
-								</div>
-								<div className="text-xs text-gray-500 mt-2">
-									— {note.pubkey?.slice(0, 8)}...
-								</div>
+								<div className="text-sm text-gray-800">{displayContent}</div>
+								<div className="text-xs text-gray-500 mt-2">— {note.pubkey?.slice(0, 8)}...</div>
 							</div>
-							
+
 							<div className="flex justify-center gap-2">
-								<Button
-									type="button"
-									variant="secondary"
-									onClick={() => setViewMode(VIEW_MODE.NONE)}
-									className="px-4"
-								>
+								<Button type="button" variant="secondary" onClick={() => setViewMode(VIEW_MODE.NONE)} className="px-4">
 									Cancel
 								</Button>
-								
+
 								<Button
 									type="button"
 									variant="default"
@@ -1094,7 +1271,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 									disabled={isReposting}
 									onClick={async () => {
 										if (isReposting) return
-										
+
 										setIsReposting(true)
 										try {
 											// Get NDK instance
@@ -1104,21 +1281,29 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 												setIsReposting(false)
 												return
 											}
-											
+
 											const signer = ndkActions.getSigner()
 											if (!signer) {
 												toast.error('Please log in to repost')
 												setIsReposting(false)
 												return
 											}
-											
+
+											// Validate that note has a valid ID
+											const noteId = (note as any)?.id || ''
+											if (!noteId) {
+												toast.error('Cannot repost: Note ID is missing or invalid')
+												setIsReposting(false)
+												return
+											}
+
 											// Show loading toast
 											const loadingToastId = toast.loading('Reposting...')
-											
+
 											// Create repost event (kind 6)
 											const event = new NDKEvent(ndk)
 											event.kind = 6
-											
+
 											// Set content to stringified JSON of the reposted note
 											try {
 												const noteJson = note.rawEvent ? note.rawEvent() : note
@@ -1127,29 +1312,30 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 												console.error('Error stringifying note:', error)
 												event.content = ''
 											}
-											
+
 											// Add tags
 											event.tags = []
-											
+
 											// Add e tag with the ID of the note being reposted
-											event.tags.push(['e', note.id as string, '', ''])
-											
+											event.tags.push(['e', noteId, '', ''])
+
 											// Add p tag with the pubkey of the author of the reposted note
 											event.tags.push(['p', note.pubkey])
-											
+
 											// Sign and publish the event
 											await event.sign(signer)
-											
+
 											// Create a relay set for publishing
-											const publishRelaySet = NDKRelaySet.fromRelayUrls(['ws://localhost:10547'], ndk)
+											const publishRelaySet = NDKRelaySet.fromRelayUrls(writeRelaysUrls, ndk)
 											await event.publish(publishRelaySet)
-											
+
 											console.log('Repost published successfully:', event.id)
-											
+											console.log('Published event JSON:', JSON.stringify(event.rawEvent()))
+
 											// Show success message
 											toast.dismiss(loadingToastId)
 											toast.success('Repost published successfully!')
-											
+
 											// Reset view mode
 											setViewMode(VIEW_MODE.NONE)
 										} catch (error) {
@@ -1164,7 +1350,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 								</Button>
 							</div>
 						</div>
-					);
+					)
 				} else if (viewMode === VIEW_MODE.QUOTE) {
 					// Quote compose panel - similar to reply but with the note reference pre-pasted
 
@@ -1193,7 +1379,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 											</div>
 										) : null}
 									</div>
-									
+
 									{/* Right column buttons */}
 									<div className="flex flex-col gap-2">
 										<Button
@@ -1209,7 +1395,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 										>
 											<span aria-hidden>X</span>
 										</Button>
-										
+
 										{/* Emoji */}
 										<div className="relative">
 											<Button
@@ -1239,7 +1425,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 												</div>
 											) : null}
 										</div>
-										
+
 										{/* Image upload */}
 										<>
 											<input
@@ -1255,11 +1441,11 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 												}}
 											/>
 											<label htmlFor={`quote-image-input-${(note as any)?.id ?? note.pubkey ?? 'unknown'}`}>
-												<Button 
-													type="button" 
-													variant="secondary" 
-													size="icon" 
-													title="Add image" 
+												<Button
+													type="button"
+													variant="secondary"
+													size="icon"
+													title="Add image"
 													aria-label="Add image"
 													className="h-8 w-8 rounded-full flex items-center justify-center"
 												>
@@ -1267,7 +1453,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 												</Button>
 											</label>
 										</>
-										
+
 										{/* Send button */}
 										<Button
 											type="button"
@@ -1277,10 +1463,60 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 											aria-label="Send"
 											disabled={!quoteText.trim() && quoteImages.length === 0}
 											className="h-8 w-8 rounded-full flex items-center justify-center"
-											onClick={() => {
-												// TODO: Implement actual sending functionality
-												console.log('Would send quote:', quoteText)
-												setViewMode(VIEW_MODE.NONE)
+											onClick={async () => {
+												try {
+													// Get NDK instance
+													const ndk = ndkActions.getNDK()
+													if (!ndk) {
+														toast.error('Not connected to Nostr network')
+														return
+													}
+
+													const signer = ndkActions.getSigner()
+													if (!signer) {
+														toast.error('Please log in to quote')
+														return
+													}
+
+													// Show loading toast
+													const loadingToastId = toast.loading('Sending quote post...')
+
+													// Create quote event (kind 1 with q tag)
+													const event = new NDKEvent(ndk)
+													event.kind = 1
+													event.content = quoteText.trim()
+
+													// Add tags for quote post according to NIP-18
+													event.tags = []
+
+													// Add "q" tag with quoted note ID and relay hint
+													event.tags.push(['q', note.id as string, '', note.pubkey])
+
+													// Add "p" tag for the author of the note being quoted
+													event.tags.push(['p', note.pubkey])
+
+													// Sign and publish the event
+													await event.sign(signer)
+
+													// Create a relay set for publishing
+													const publishRelaySet = NDKRelaySet.fromRelayUrls(writeRelaysUrls, ndk)
+													await event.publish(publishRelaySet)
+
+													console.log('Quote post published successfully:', event.id)
+													console.log('Published event JSON:', JSON.stringify(event.rawEvent()))
+
+													// Show success message
+													toast.dismiss(loadingToastId)
+													toast.success('Quote post published successfully!')
+
+													// Reset view mode and text
+													setQuoteText('')
+													setQuoteImages([])
+													setViewMode(VIEW_MODE.NONE)
+												} catch (error) {
+													console.error('Failed to send quote post:', error)
+													toast.error('Failed to send quote post. Please try again.')
+												}
 											}}
 										>
 											{/* Paper airplane right icon */}
@@ -1302,10 +1538,10 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 								</div>
 							</div>
 						</div>
-					);
+					)
 				}
-				
-				return null;
+
+				return null
 			})()}
 		</div>
 	)

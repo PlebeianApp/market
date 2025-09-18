@@ -10,6 +10,11 @@ export const defaultRelaysUrls: string[] = [
 	'ws://localhost:10547',
 ]
 
+// Write relay URLs - In dev mode, only use localhost relay
+// In production mode, use the same relays as defaultRelaysUrls
+export const writeRelaysUrls: string[] =
+	process.env.NODE_ENV === 'production' ? defaultRelaysUrls : ['ws://localhost:10547', 'wss://relay.orly.dev']
+
 // Dedicated zap detection relays
 export const ZAP_RELAYS = [
 	'wss://relay.damus.io',
