@@ -1,12 +1,20 @@
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQuery } from '@tanstack/react-query'
 import { authorQueryOptions } from '@/queries/authors.tsx'
-import { enhancedThreadStructureQueryOptions, type EnhancedThreadNode, type EnhancedThreadStructure, findRootFromETags } from '@/queries/enhanced-thread.tsx'
+import {
+	enhancedThreadStructureQueryOptions,
+	type EnhancedThreadNode,
+	type EnhancedThreadStructure,
+	findRootFromETags,
+} from '@/queries/enhanced-thread.tsx'
+import { nip19 } from 'nostr-tools'
 import { reactionsQueryOptions } from '@/queries/reactions'
 import { Link } from '@tanstack/react-router'
 import { type JSX, type SVGProps, useEffect, useRef, useState, useMemo } from 'react'
 import { useThreadOpen } from '@/state/threadOpenStore'
 import { useAuth } from '@/lib/stores/auth'
+import { Button } from '@/components/ui/button'
+import { EmojiPicker } from 'emoji-picker-react'
 
 function SpoolIcon(props: SVGProps<SVGSVGElement>) {
 	return (
@@ -290,7 +298,77 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 			return ((note as any)?.content || '') as string
 		}
 	})()
-	const [showJson, setShowJson] = useState(false)
+	// Define view mode constants
+	const VIEW_MODE = {
+		NONE: 'none',
+		JSON: 'json',
+		REPLY: 'reply',
+		QUOTE: 'quote'
+	} as const
+	
+	const [viewMode, setViewMode] = useState<typeof VIEW_MODE[keyof typeof VIEW_MODE]>(VIEW_MODE.NONE)
+	const [composeText, setComposeText] = useState('')
+	const [composeImages, setComposeImages] = useState<File[]>([])
+	const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+	
+	// Create refs outside of conditional rendering
+	const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+	
+	// Create a NIP-19 nevent entity for the note with relay hints
+	const createNip19NoteReference = () => {
+		try {
+			// Get the note ID
+			const id = (note as any)?.id || ''
+			if (!id) return ''
+			
+			// Get relay hints from the note tags
+			const relays: string[] = []
+			if (Array.isArray((note as any)?.tags)) {
+				const relayTags = ((note as any).tags as any[]).filter(t => 
+					Array.isArray(t) && t[0] === 'r' && typeof t[1] === 'string' && t[1].startsWith('wss://')
+				)
+				relayTags.forEach(tag => {
+					if (!relays.includes(tag[1])) {
+						relays.push(tag[1])
+					}
+				})
+			}
+			
+			// Add some default relays if none are found
+			if (relays.length === 0) {
+				relays.push('wss://relay.damus.io', 'wss://nos.lol')
+			}
+			
+			// Create the NIP-19 nevent entity
+			return nip19.neventEncode({
+				id,
+				relays,
+				author: note.pubkey
+			})
+		} catch (error) {
+			console.error('Error creating NIP-19 note reference:', error)
+			return ''
+		}
+	}
+	
+	// Create NIP-19 reference for quote functionality
+	const nip19Reference = useMemo(() => createNip19NoteReference(), [note])
+	
+	// Handle quote mode text setting and cursor positioning
+	useEffect(() => {
+		if (viewMode === VIEW_MODE.QUOTE && !composeText && nip19Reference) {
+			// Set initial text with a blank line at the top
+			setComposeText(`\n${nip19Reference}`)
+			
+			// Focus the textarea and set cursor to the start
+			setTimeout(() => {
+				if (textareaRef.current) {
+					textareaRef.current.focus()
+					textareaRef.current.setSelectionRange(0, 0)
+				}
+			}, 50)
+		}
+	}, [viewMode, nip19Reference, composeText])
 	const { openThreadId, setOpenThreadId, feedScrollY, setFeedScrollY, clickedEventId, setClickedEventId } = useThreadOpen()
 	const { isAuthenticated } = useAuth()
 	const noteIdForThread = ((note as any)?.id || findRootFromETags?.(note) || '') as string
@@ -461,10 +539,12 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 								onClick={(e) => {
 									e.preventDefault()
 									e.stopPropagation()
-									// TODO: Implement reply functionality
+									console.log('reply')
+									setViewMode(v => v === VIEW_MODE.REPLY ? VIEW_MODE.NONE : VIEW_MODE.REPLY)
 								}}
-								title="reply"
+								title={viewMode === VIEW_MODE.REPLY ? 'Hide reply' : 'Reply to this note'}
 								aria-label="reply"
+								aria-pressed={viewMode === VIEW_MODE.REPLY}
 							>
 								<span aria-hidden>🗨</span>
 								<span className="hidden lg:inline">reply</span>
@@ -487,10 +567,12 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 								onClick={(e) => {
 									e.preventDefault()
 									e.stopPropagation()
-									// TODO: Implement quote functionality
+									console.log('Toggle quote mode')
+									setViewMode(v => v === VIEW_MODE.QUOTE ? VIEW_MODE.NONE : VIEW_MODE.QUOTE)
 								}}
-								title="quote"
+								title={viewMode === VIEW_MODE.QUOTE ? 'Hide quote' : 'Quote this note'}
 								aria-label="quote"
+								aria-pressed={viewMode === VIEW_MODE.QUOTE}
 							>
 								<span aria-hidden>💬</span>
 								<span className="hidden lg:inline">quote</span>
@@ -591,14 +673,15 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 				<div className="flex flex-col justify-end">
 					<button
 						className="h-8 w-8 inline-flex items-center justify-center text-xs rounded-full bg-white text-gray-600 hover:bg-gray-100 outline-none focus:outline-none focus:ring-0 border-0"
-						aria-pressed={showJson}
+						aria-pressed={viewMode === VIEW_MODE.JSON}
 						aria-controls={`note-json-${(note as any)?.id ?? note.pubkey ?? Math.random().toString(36).slice(2)}`}
 						onClick={(e) => {
 							e.preventDefault()
 							e.stopPropagation()
-							setShowJson((v) => !v)
+							console.log('Toggle JSON view')
+							setViewMode(v => v === VIEW_MODE.JSON ? VIEW_MODE.NONE : VIEW_MODE.JSON)
 						}}
-						title={showJson ? 'Hide raw JSON' : 'Show raw JSON'}
+						title={viewMode === VIEW_MODE.JSON ? 'Hide raw JSON' : 'Show raw JSON'}
 					>
 						&lt;/&gt;
 					</button>
@@ -709,28 +792,319 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 					return null
 				}
 			})()}
-			{/* Raw event pretty printed */}
+   {/* Panel for different view modes */}
 			{(() => {
-				let raw: any
-				try {
-					raw = typeof (note as any).rawEvent === 'function' ? (note as any).rawEvent() : note
-				} catch (e) {
-					raw = note
+				// Different content based on viewMode
+				if (viewMode === VIEW_MODE.NONE) {
+					return null;
+				} else if (viewMode === VIEW_MODE.JSON) {
+					// Raw JSON view
+					let raw: any;
+					try {
+						raw = typeof (note as any).rawEvent === 'function' ? (note as any).rawEvent() : note;
+					} catch (e) {
+						raw = note;
+					}
+					let json = '';
+					try {
+						json = JSON.stringify(raw, null, 2);
+					} catch (e) {
+						json = String(raw);
+					}
+
+					return (
+						<pre
+							id={`note-json-${(note as any)?.id ?? note.pubkey ?? 'unknown'}`}
+							className="mt-2 p-3 bg-gray-50 border rounded text-xs overflow-auto max-h-80 whitespace-pre-wrap"
+						>
+							{json}
+						</pre>
+					);
+				} else if (viewMode === VIEW_MODE.REPLY) {
+					// Reply compose panel
+					return (
+						<div
+							id={`note-compose-${(note as any)?.id ?? note.pubkey ?? 'unknown'}`}
+							className="mt-2 border rounded overflow-hidden min-h-[150px] flex flex-col"
+						>
+							<div className="bg-white border-b border-gray-200 flex flex-col flex-1">
+								<div className="flex items-stretch gap-2 p-3 flex-1">
+									<div className="flex-1 flex flex-col w-all">
+										<textarea
+											value={composeText}
+											onChange={(e) => setComposeText(e.target.value)}
+											placeholder="Write a reply..."
+											className="w-full p-2 rounded-md border border-black/20 bg-background focus:outline-none focus:ring-2 focus:ring-primary resize-none flex-1 min-h-[100px]"
+										/>
+										{composeImages.length > 0 ? (
+											<div className="mt-2 flex flex-wrap gap-2">
+												{composeImages.map((f, idx) => (
+													<span key={idx} className="text-xs px-2 py-1 rounded bg-muted text-muted-foreground border">
+														{f.name}
+													</span>
+												))}
+											</div>
+										) : null}
+									</div>
+									
+									{/* Right column buttons */}
+									<div className="flex flex-col gap-2">
+										<Button
+											type="button"
+											variant="secondary"
+											size="icon"
+											title="Close"
+											aria-label="Close compose"
+											onClick={() => {
+												setViewMode(VIEW_MODE.NONE)
+												setComposeText('')
+												setComposeImages([])
+											}}
+											className="h-8 w-8 rounded-full flex items-center justify-center"
+										>
+											<span aria-hidden>X</span>
+										</Button>
+										
+										{/* Emoji */}
+										<div className="relative">
+											<Button
+												type="button"
+												variant="secondary"
+												size="icon"
+												onClick={() => setShowEmojiPicker((v) => !v)}
+												title="Emoji"
+												aria-label="Emoji"
+												className="h-8 w-8 rounded-full flex items-center justify-center"
+											>
+												<span aria-hidden>😊</span>
+											</Button>
+											{showEmojiPicker ? (
+												<div className="absolute bottom-12 right-0 z-50">
+													<EmojiPicker
+														onEmojiClick={(emojiData) => {
+															setComposeText((t) => t + emojiData.emoji)
+															setShowEmojiPicker(false)
+														}}
+														width={300}
+														previewConfig={{ showPreview: false }}
+														searchDisabled={false}
+														skinTonesDisabled
+														theme="light"
+													/>
+												</div>
+											) : null}
+										</div>
+										
+										{/* Image upload */}
+										<>
+											<input
+												id={`compose-image-input-${(note as any)?.id ?? note.pubkey ?? 'unknown'}`}
+												type="file"
+												accept="image/*"
+												multiple
+												className="hidden"
+												onChange={(e) => {
+													const files = Array.from(e.target.files || [])
+													setComposeImages((prev) => [...prev, ...files])
+													e.currentTarget.value = ''
+												}}
+											/>
+											<label htmlFor={`compose-image-input-${(note as any)?.id ?? note.pubkey ?? 'unknown'}`}>
+												<Button 
+													type="button" 
+													variant="secondary" 
+													size="icon" 
+													title="Add image" 
+													aria-label="Add image"
+													className="h-8 w-8 rounded-full flex items-center justify-center"
+												>
+													<span aria-hidden>🖼️</span>
+												</Button>
+											</label>
+										</>
+										
+										{/* Send button */}
+										<Button
+											type="button"
+											variant="primary"
+											size="icon"
+											title="Send"
+											aria-label="Send"
+											disabled={!composeText.trim() && composeImages.length === 0}
+											className="h-8 w-8 rounded-full flex items-center justify-center"
+											onClick={() => {
+												// TODO: Implement actual sending functionality
+												console.log('Would send reply:', composeText)
+												setViewMode(VIEW_MODE.NONE)
+												setComposeText('')
+												setComposeImages([])
+											}}
+										>
+											{/* Paper airplane right icon */}
+											<svg
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												strokeWidth="2"
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												className="w-4 h-4"
+												aria-hidden
+											>
+												<path d="M22 2L11 13" />
+												<path d="M22 2L15 22L11 13L2 9L22 2Z" />
+											</svg>
+										</Button>
+									</div>
+								</div>
+							</div>
+						</div>
+					);
+				} else if (viewMode === VIEW_MODE.QUOTE) {
+					// Quote compose panel - similar to reply but with the note reference pre-pasted
+
+					return (
+						<div
+							id={`note-quote-${(note as any)?.id ?? note.pubkey ?? 'unknown'}`}
+							className="mt-2 border rounded overflow-hidden min-h-[150px] flex flex-col"
+						>
+							<div className="bg-white border-b border-gray-200 flex flex-col flex-1">
+								<div className="flex items-stretch gap-2 p-3 flex-1">
+									<div className="flex-1 flex flex-col w-all">
+										<textarea
+											ref={textareaRef}
+											value={composeText}
+											onChange={(e) => setComposeText(e.target.value)}
+											placeholder="Write a quote..."
+											className="w-full p-2 rounded-md border border-black/20 bg-background focus:outline-none focus:ring-2 focus:ring-primary resize-none flex-1 min-h-[100px]"
+										/>
+										{composeImages.length > 0 ? (
+											<div className="mt-2 flex flex-wrap gap-2">
+												{composeImages.map((f, idx) => (
+													<span key={idx} className="text-xs px-2 py-1 rounded bg-muted text-muted-foreground border">
+														{f.name}
+													</span>
+												))}
+											</div>
+										) : null}
+									</div>
+									
+									{/* Right column buttons */}
+									<div className="flex flex-col gap-2">
+										<Button
+											type="button"
+											variant="secondary"
+											size="icon"
+											title="Close"
+											aria-label="Close compose"
+											onClick={() => {
+												setViewMode(VIEW_MODE.NONE)
+												setComposeText('')
+												setComposeImages([])
+											}}
+											className="h-8 w-8 rounded-full flex items-center justify-center"
+										>
+											<span aria-hidden>X</span>
+										</Button>
+										
+										{/* Emoji */}
+										<div className="relative">
+											<Button
+												type="button"
+												variant="secondary"
+												size="icon"
+												onClick={() => setShowEmojiPicker((v) => !v)}
+												title="Emoji"
+												aria-label="Emoji"
+												className="h-8 w-8 rounded-full flex items-center justify-center"
+											>
+												<span aria-hidden>😊</span>
+											</Button>
+											{showEmojiPicker ? (
+												<div className="absolute bottom-12 right-0 z-50">
+													<EmojiPicker
+														onEmojiClick={(emojiData) => {
+															setComposeText((t) => t + emojiData.emoji)
+															setShowEmojiPicker(false)
+														}}
+														width={300}
+														previewConfig={{ showPreview: false }}
+														searchDisabled={false}
+														skinTonesDisabled
+														theme="light"
+													/>
+												</div>
+											) : null}
+										</div>
+										
+										{/* Image upload */}
+										<>
+											<input
+												id={`quote-image-input-${(note as any)?.id ?? note.pubkey ?? 'unknown'}`}
+												type="file"
+												accept="image/*"
+												multiple
+												className="hidden"
+												onChange={(e) => {
+													const files = Array.from(e.target.files || [])
+													setComposeImages((prev) => [...prev, ...files])
+													e.currentTarget.value = ''
+												}}
+											/>
+											<label htmlFor={`quote-image-input-${(note as any)?.id ?? note.pubkey ?? 'unknown'}`}>
+												<Button 
+													type="button" 
+													variant="secondary" 
+													size="icon" 
+													title="Add image" 
+													aria-label="Add image"
+													className="h-8 w-8 rounded-full flex items-center justify-center"
+												>
+													<span aria-hidden>🖼️</span>
+												</Button>
+											</label>
+										</>
+										
+										{/* Send button */}
+										<Button
+											type="button"
+											variant="primary"
+											size="icon"
+											title="Send"
+											aria-label="Send"
+											disabled={!composeText.trim() && composeImages.length === 0}
+											className="h-8 w-8 rounded-full flex items-center justify-center"
+											onClick={() => {
+												// TODO: Implement actual sending functionality
+												console.log('Would send quote:', composeText)
+												setViewMode(VIEW_MODE.NONE)
+												setComposeText('')
+												setComposeImages([])
+											}}
+										>
+											{/* Paper airplane right icon */}
+											<svg
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												strokeWidth="2"
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												className="w-4 h-4"
+												aria-hidden
+											>
+												<path d="M22 2L11 13" />
+												<path d="M22 2L15 22L11 13L2 9L22 2Z" />
+											</svg>
+										</Button>
+									</div>
+								</div>
+							</div>
+						</div>
+					);
 				}
-				let json = ''
-				try {
-					json = JSON.stringify(raw, null, 2)
-				} catch (e) {
-					json = String(raw)
-				}
-				return showJson ? (
-					<pre
-						id={`note-json-${(note as any)?.id ?? note.pubkey ?? 'unknown'}`}
-						className="mt-2 p-3 bg-gray-50 border rounded text-xs overflow-auto max-h-80 whitespace-pre-wrap"
-					>
-						{json}
-					</pre>
-				) : null
+				
+				return null;
 			})()}
 		</div>
 	)
