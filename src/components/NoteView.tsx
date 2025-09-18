@@ -307,12 +307,16 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 	} as const
 	
 	const [viewMode, setViewMode] = useState<typeof VIEW_MODE[keyof typeof VIEW_MODE]>(VIEW_MODE.NONE)
-	const [composeText, setComposeText] = useState('')
-	const [composeImages, setComposeImages] = useState<File[]>([])
+	// Separate state for reply and quote modes
+	const [replyText, setReplyText] = useState('')
+	const [replyImages, setReplyImages] = useState<File[]>([])
+	const [quoteText, setQuoteText] = useState('')
+	const [quoteImages, setQuoteImages] = useState<File[]>([])
 	const [showEmojiPicker, setShowEmojiPicker] = useState(false)
 	
 	// Create refs outside of conditional rendering
-	const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+	const replyTextareaRef = useRef<HTMLTextAreaElement | null>(null)
+	const quoteTextareaRef = useRef<HTMLTextAreaElement | null>(null)
 	
 	// Create a NIP-19 nevent entity for the note with relay hints
 	const createNip19NoteReference = () => {
@@ -356,19 +360,19 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 	
 	// Handle quote mode text setting and cursor positioning
 	useEffect(() => {
-		if (viewMode === VIEW_MODE.QUOTE && !composeText && nip19Reference) {
+		if (viewMode === VIEW_MODE.QUOTE && !quoteText && nip19Reference) {
 			// Set initial text with a blank line at the top
-			setComposeText(`\n${nip19Reference}`)
+			setQuoteText(`\n${nip19Reference}`)
 			
 			// Focus the textarea and set cursor to the start
 			setTimeout(() => {
-				if (textareaRef.current) {
-					textareaRef.current.focus()
-					textareaRef.current.setSelectionRange(0, 0)
+				if (quoteTextareaRef.current) {
+					quoteTextareaRef.current.focus()
+					quoteTextareaRef.current.setSelectionRange(0, 0)
 				}
 			}, 50)
 		}
-	}, [viewMode, nip19Reference, composeText])
+	}, [viewMode, nip19Reference, quoteText])
 	const { openThreadId, setOpenThreadId, feedScrollY, setFeedScrollY, clickedEventId, setClickedEventId } = useThreadOpen()
 	const { isAuthenticated } = useAuth()
 	const noteIdForThread = ((note as any)?.id || findRootFromETags?.(note) || '') as string
@@ -831,14 +835,15 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 								<div className="flex items-stretch gap-2 p-3 flex-1">
 									<div className="flex-1 flex flex-col w-all">
 										<textarea
-											value={composeText}
-											onChange={(e) => setComposeText(e.target.value)}
+											ref={replyTextareaRef}
+											value={replyText}
+											onChange={(e) => setReplyText(e.target.value)}
 											placeholder="Write a reply..."
 											className="w-full p-2 rounded-md border border-black/20 bg-background focus:outline-none focus:ring-2 focus:ring-primary resize-none flex-1 min-h-[100px]"
 										/>
-										{composeImages.length > 0 ? (
+										{replyImages.length > 0 ? (
 											<div className="mt-2 flex flex-wrap gap-2">
-												{composeImages.map((f, idx) => (
+												{replyImages.map((f, idx) => (
 													<span key={idx} className="text-xs px-2 py-1 rounded bg-muted text-muted-foreground border">
 														{f.name}
 													</span>
@@ -857,8 +862,6 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 											aria-label="Close compose"
 											onClick={() => {
 												setViewMode(VIEW_MODE.NONE)
-												setComposeText('')
-												setComposeImages([])
 											}}
 											className="h-8 w-8 rounded-full flex items-center justify-center"
 										>
@@ -882,7 +885,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 												<div className="absolute bottom-12 right-0 z-50">
 													<EmojiPicker
 														onEmojiClick={(emojiData) => {
-															setComposeText((t) => t + emojiData.emoji)
+															setReplyText((t) => t + emojiData.emoji)
 															setShowEmojiPicker(false)
 														}}
 														width={300}
@@ -905,7 +908,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 												className="hidden"
 												onChange={(e) => {
 													const files = Array.from(e.target.files || [])
-													setComposeImages((prev) => [...prev, ...files])
+													setReplyImages((prev) => [...prev, ...files])
 													e.currentTarget.value = ''
 												}}
 											/>
@@ -930,14 +933,12 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 											size="icon"
 											title="Send"
 											aria-label="Send"
-											disabled={!composeText.trim() && composeImages.length === 0}
+											disabled={!replyText.trim() && replyImages.length === 0}
 											className="h-8 w-8 rounded-full flex items-center justify-center"
 											onClick={() => {
 												// TODO: Implement actual sending functionality
-												console.log('Would send reply:', composeText)
+												console.log('Would send reply:', replyText)
 												setViewMode(VIEW_MODE.NONE)
-												setComposeText('')
-												setComposeImages([])
 											}}
 										>
 											{/* Paper airplane right icon */}
@@ -972,15 +973,15 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 								<div className="flex items-stretch gap-2 p-3 flex-1">
 									<div className="flex-1 flex flex-col w-all">
 										<textarea
-											ref={textareaRef}
-											value={composeText}
-											onChange={(e) => setComposeText(e.target.value)}
+											ref={quoteTextareaRef}
+											value={quoteText}
+											onChange={(e) => setQuoteText(e.target.value)}
 											placeholder="Write a quote..."
 											className="w-full p-2 rounded-md border border-black/20 bg-background focus:outline-none focus:ring-2 focus:ring-primary resize-none flex-1 min-h-[100px]"
 										/>
-										{composeImages.length > 0 ? (
+										{quoteImages.length > 0 ? (
 											<div className="mt-2 flex flex-wrap gap-2">
-												{composeImages.map((f, idx) => (
+												{quoteImages.map((f, idx) => (
 													<span key={idx} className="text-xs px-2 py-1 rounded bg-muted text-muted-foreground border">
 														{f.name}
 													</span>
@@ -999,8 +1000,6 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 											aria-label="Close compose"
 											onClick={() => {
 												setViewMode(VIEW_MODE.NONE)
-												setComposeText('')
-												setComposeImages([])
 											}}
 											className="h-8 w-8 rounded-full flex items-center justify-center"
 										>
@@ -1024,7 +1023,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 												<div className="absolute bottom-12 right-0 z-50">
 													<EmojiPicker
 														onEmojiClick={(emojiData) => {
-															setComposeText((t) => t + emojiData.emoji)
+															setQuoteText((t) => t + emojiData.emoji)
 															setShowEmojiPicker(false)
 														}}
 														width={300}
@@ -1047,7 +1046,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 												className="hidden"
 												onChange={(e) => {
 													const files = Array.from(e.target.files || [])
-													setComposeImages((prev) => [...prev, ...files])
+													setQuoteImages((prev) => [...prev, ...files])
 													e.currentTarget.value = ''
 												}}
 											/>
@@ -1072,14 +1071,12 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 											size="icon"
 											title="Send"
 											aria-label="Send"
-											disabled={!composeText.trim() && composeImages.length === 0}
+											disabled={!quoteText.trim() && quoteImages.length === 0}
 											className="h-8 w-8 rounded-full flex items-center justify-center"
 											onClick={() => {
 												// TODO: Implement actual sending functionality
-												console.log('Would send quote:', composeText)
+												console.log('Would send quote:', quoteText)
 												setViewMode(VIEW_MODE.NONE)
-												setComposeText('')
-												setComposeImages([])
 											}}
 										>
 											{/* Paper airplane right icon */}
