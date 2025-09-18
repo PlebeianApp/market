@@ -3,7 +3,7 @@ import { useStore } from '@tanstack/react-store'
 import { authActions, authStore } from '@/lib/stores/auth'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { type SVGProps, useEffect, useMemo, useState } from 'react'
-import { notesQueryOptions, type FetchedNDKEvent } from '@/queries/firehose'
+import { enhancedNotesQueryOptions, type EnhancedFetchedNDKEvent } from '@/queries/enhanced-firehose'
 import { authorQueryOptions } from '@/queries/authors'
 import { reactionsQueryOptions } from '@/queries/reactions'
 import { ndkActions } from '@/lib/stores/ndk'
@@ -15,7 +15,7 @@ import { Loader2, X, ArrowLeft, LogOut, LucideRefreshCw, RefreshCw } from 'lucid
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerFooter, DrawerClose } from '@/components/ui/drawer'
 import { uiActions } from '@/lib/stores/ui'
 import { useThreadOpen } from '@/state/threadOpenStore'
-import { findRootFromETags } from '@/queries/thread'
+import { findRootFromETags } from '@/queries/enhanced-thread'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import EmojiPicker from 'emoji-picker-react'
@@ -63,7 +63,7 @@ const VIEW_CACHE_KEY = 'nostr_view_cache'
 interface ViewState {
 	lastRefreshTimestamp: number
 	scrollPosition: number
-	cachedData?: FetchedNDKEvent[]
+	cachedData?: EnhancedFetchedNDKEvent[]
 }
 
 function getViewStateKey(filterMode: string, tagFilter: string, authorFilter: string): string {
@@ -136,7 +136,7 @@ function FirehoseComponent() {
 		return { tag: '', author: authorFilter, follows: filterMode === 'follows' }
 	}, [filterMode, tagFilter, authorFilter])
 	const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
-		...notesQueryOptions(notesOpts),
+		...enhancedNotesQueryOptions(notesOpts),
 		refetchOnWindowFocus: false,
 		refetchOnReconnect: false,
 		refetchInterval: false,
@@ -566,7 +566,7 @@ function FirehoseComponent() {
 	const notes = data || []
 	// Reactions fetching based on currently visible notes
 	const noteIdsForReactions = useMemo(
-		() => (notes as FetchedNDKEvent[]).map((w) => (w.event as any)?.id as string).filter(Boolean),
+		() => (notes as EnhancedFetchedNDKEvent[]).map((w) => (w.event as any)?.id as string).filter(Boolean),
 		[notes],
 	)
 	const [selectedEmoji, setSelectedEmoji] = useState<string>('')
@@ -575,7 +575,7 @@ function FirehoseComponent() {
 	}) as any
 
 	const { filtered, counts } = useMemo(() => {
-		const all = (data || []) as FetchedNDKEvent[]
+		const all = (data || []) as EnhancedFetchedNDKEvent[]
 		// Build a set of rootIds that have at least one reply
 		const rootsWithReplies = new Set<string>()
 		for (const w of all) {
@@ -1764,7 +1764,7 @@ function FirehoseComponent() {
 				<div className="space-y-2 text-sm">
 					{(() => {
 						const base = filtered.filter(
-							(wrapped: FetchedNDKEvent | undefined) => !!wrapped && !!wrapped.event && !!(wrapped.event as any).id,
+							(wrapped: EnhancedFetchedNDKEvent | undefined) => !!wrapped && !!wrapped.event && !!(wrapped.event as any).id,
 						)
 						// If a thread is open, render only that thread's root note, and let NoteView show the full indented thread
 						if (openThreadId) {
@@ -1782,7 +1782,7 @@ function FirehoseComponent() {
 										return selectedEmoji ? !!emap[selectedEmoji] : Object.keys(emap).length > 0
 									})
 								: base
-						return toShow.map((wrapped: FetchedNDKEvent) => (
+						return toShow.map((wrapped: EnhancedFetchedNDKEvent) => (
 							<NoteView key={(wrapped.event as any).id as string} note={wrapped.event} reactionsMap={reactionsMap || {}} />
 						))
 					})()}
