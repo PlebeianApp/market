@@ -211,7 +211,7 @@ export const fetchEnhancedNotes = async (opts?: {
 	const allRelays = appRelay ? [...defaultRelaysUrls, appRelay] : defaultRelaysUrls
 	const relaySet = NDKRelaySet.fromRelayUrls(allRelays, ndk)
 
-	// Enhanced follows handling with better contact list processing
+ // Enhanced follows handling with better contact list processing
 	let mutedPubkeys: Set<string> | null = null
 	let followedPubkeys: Set<string> | null = null
 	
@@ -233,10 +233,20 @@ export const fetchEnhancedNotes = async (opts?: {
 				
 				if (followPubkeys.length === 0) return []
 				followedPubkeys = new Set(followPubkeys)
+
+				// For follow feed, create batched queries (10 pubkeys per batch)
+				// instead of querying all pubkeys individually
+				const pubkeyBatches: string[][] = []
+				const pubkeyArray = Array.from(followedPubkeys)
 				
-				// For follow feed, we need to search more broadly to find mentions
-				// Remove the authors filter restriction to allow finding notes that mention followed users
-				// We'll filter on the client side instead
+				// Create batches of 10 pubkeys
+				for (let i = 0; i < pubkeyArray.length; i += 10) {
+					const batch = pubkeyArray.slice(i, i + 10)
+					pubkeyBatches.push(batch)
+				}
+				
+				// We'll create batched filters when fetching events
+				// This is handled when we set the 'authors' filter below
 			} else {
 				return []
 			}
@@ -262,11 +272,50 @@ export const fetchEnhancedNotes = async (opts?: {
 
 	// Fetch events with enhanced error handling
 	try {
-		const events = await ndk.fetchEvents(filter, undefined, relaySet)
-		const notes = Array.from(events)
-
+		let allEvents: NDKEvent[] = []
+		
+		// For follows feed, fetch events in batches of 10 pubkeys at a time
+		if (opts?.follows && followedPubkeys) {
+			const pubkeyArray = Array.from(followedPubkeys)
+			
+			// Handle empty array edge case
+			if (pubkeyArray.length === 0) {
+				allEvents = []
+			} else {
+				// Process in batches of 10 pubkeys
+				for (let i = 0; i < pubkeyArray.length; i += 10) {
+					const batchPubkeys = pubkeyArray.slice(i, i + 10)
+					if (batchPubkeys.length === 0) continue
+					
+					// Create a filter with the current batch of pubkeys
+					const batchFilter: NDKFilter = {
+						...filter,
+						authors: batchPubkeys
+					}
+					
+					try {
+						// Fetch events for this batch with timeout protection
+						const batchEvents = await Promise.race([
+							ndk.fetchEvents(batchFilter, undefined, relaySet),
+							new Promise<Set<NDKEvent>>((resolve) => {
+								setTimeout(() => resolve(new Set()), 5000) // 5 second timeout
+							})
+						])
+						allEvents = [...allEvents, ...Array.from(batchEvents)]
+					} catch (error) {
+						console.warn(`Failed to fetch batch of pubkeys ${i}-${i+10}: ${error}`)
+						// Continue with next batch even if this one fails
+					}
+				}
+			}
+		} else {
+			// For non-follows feed, use the original filter
+			const events = await ndk.fetchEvents(filter, undefined, relaySet)
+			allEvents = Array.from(events)
+		}
+		
 		// Enhanced filtering and validation
-		const validNotes = notes.filter((e) => {
+		const validNotes = allEvents.filter((e) => {
 			if (!e || !(e as any).id) return false
 			if (hasClientMostrTag(e) || isNSFWEvent(e)) return false
 			

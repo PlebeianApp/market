@@ -104,20 +104,125 @@ export function findParentsFromETags(event: NDKEvent): string[] {
 }
 
 /**
- * Enhanced event fetching with better error handling
+ * Enhanced event fetching with better error handling and batching
  */
-async function fetchEventById(eventId: string): Promise<NDKEvent | null> {
-	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
+const eventBatchCache = new Map<string, Promise<NDKEvent | null>>()
+const pendingEventBatches: string[] = []
+const eventBatchSize = 100
+let batchTimer: NodeJS.Timeout | null = null
 
+async function processBatchedEvents(): Promise<void> {
+	if (pendingEventBatches.length === 0) return
+	
+	const batchIds = [...pendingEventBatches]
+	pendingEventBatches.length = 0 // Clear the pending batch
+	
+	const ndk = ndkActions.getNDK()
+	if (!ndk) {
+		console.warn('NDK not initialized for batch processing')
+		// Resolve all promises with null if NDK is not initialized
+		for (const id of batchIds) {
+			const promise = eventBatchCache.get(id)
+			if (promise) {
+				const resolvePromise = (promise as any).__resolve
+				if (typeof resolvePromise === 'function') {
+					resolvePromise(null)
+				}
+				eventBatchCache.delete(id)
+			}
+		}
+		return
+	}
+	
 	try {
 		const relaySet = NDKRelaySet.fromRelayUrls(defaultRelaysUrls, ndk)
-		const event = await ndk.fetchEvent(eventId, undefined, relaySet)
-		return event
+		
+		// Create a filter with all the event IDs
+		const filter: NDKFilter = {
+			ids: batchIds,
+			limit: batchIds.length * 2 // Allow some buffer for duplicates
+		}
+		
+		// Fetch all events in a single query with timeout protection
+		const fetchPromise = ndk.fetchEvents(filter, undefined, relaySet)
+		const timeoutPromise = new Promise<Set<NDKEvent>>((resolve) => {
+			setTimeout(() => resolve(new Set()), 15000) // 15 second timeout for larger batches
+		})
+		
+		const events = await Promise.race([fetchPromise, timeoutPromise])
+		const eventMap = new Map<string, NDKEvent>()
+		
+		// Map events to their IDs
+		Array.from(events).forEach(event => {
+			const id = (event as any).id
+			if (id) eventMap.set(id, event)
+		})
+		
+		// Resolve all promises in the cache
+		for (const id of batchIds) {
+			const promise = eventBatchCache.get(id)
+			if (promise) {
+				// Get the resolve function from the promise
+				const resolvePromise = (promise as any).__resolve
+				if (typeof resolvePromise === 'function') {
+					resolvePromise(eventMap.get(id) || null)
+				}
+				eventBatchCache.delete(id)
+			}
+		}
 	} catch (error) {
-		console.warn(`Failed to fetch event ${eventId}:`, error)
-		return null
+		console.warn(`Failed to fetch batched events: ${error}`)
+		// Resolve all promises with null on error
+		for (const id of batchIds) {
+			const promise = eventBatchCache.get(id)
+			if (promise) {
+				const resolvePromise = (promise as any).__resolve
+				if (typeof resolvePromise === 'function') {
+					resolvePromise(null)
+				}
+				eventBatchCache.delete(id)
+			}
+		}
 	}
+}
+
+async function fetchEventById(eventId: string): Promise<NDKEvent | null> {
+	// Check if there's already a pending request for this event
+	if (eventBatchCache.has(eventId)) {
+		return eventBatchCache.get(eventId)!
+	}
+	
+	// Create a new promise for this event
+	let resolvePromise: (value: NDKEvent | null) => void = () => {}
+	const promise = new Promise<NDKEvent | null>(resolve => {
+		resolvePromise = resolve
+	})
+	
+	// Store the resolve function with the promise
+	;(promise as any).__resolve = resolvePromise
+	eventBatchCache.set(eventId, promise)
+	
+	// Add to pending batch
+	pendingEventBatches.push(eventId)
+	
+	// Set a timer to process the batch if it's not already set
+	if (batchTimer === null) {
+		batchTimer = setTimeout(() => {
+			batchTimer = null
+			processBatchedEvents()
+		}, 10) // 10ms delay for batching
+	}
+	
+	// If we have enough events, process the batch immediately
+	if (pendingEventBatches.length >= eventBatchSize) {
+		if (batchTimer !== null) {
+			clearTimeout(batchTimer)
+			batchTimer = null
+		}
+		processBatchedEvents()
+	}
+	
+	return promise
 }
 
 /**
