@@ -1,5 +1,6 @@
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { useQuery } from '@tanstack/react-query'
+import { NDKRelaySet } from '@nostr-dev-kit/ndk'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { authorQueryOptions } from '@/queries/authors.tsx'
 import {
 	enhancedThreadStructureQueryOptions,
@@ -13,8 +14,10 @@ import { Link } from '@tanstack/react-router'
 import { type JSX, type SVGProps, useEffect, useRef, useState, useMemo } from 'react'
 import { useThreadOpen } from '@/state/threadOpenStore'
 import { useAuth } from '@/lib/stores/auth'
+import { ndkActions } from '@/lib/stores/ndk'
 import { Button } from '@/components/ui/button'
 import { EmojiPicker } from 'emoji-picker-react'
+import { toast } from 'sonner'
 
 function SpoolIcon(props: SVGProps<SVGSVGElement>) {
 	return (
@@ -277,6 +280,9 @@ function ThreadView({ threadStructure, highlightedNoteId, reactionsMap: propReac
 }
 
 export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps) {
+	// Access query client for optimistic updates
+	const queryClient = useQueryClient()
+	
 	// Remove a trailing hashtag-only line from the note content for display
 	const displayContent = (() => {
 		try {
@@ -303,7 +309,8 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 		NONE: 'none',
 		JSON: 'json',
 		REPLY: 'reply',
-		QUOTE: 'quote'
+		QUOTE: 'quote',
+		REPOST: 'repost'
 	} as const
 	
 	const [viewMode, setViewMode] = useState<typeof VIEW_MODE[keyof typeof VIEW_MODE]>(VIEW_MODE.NONE)
@@ -313,6 +320,8 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 	const [quoteText, setQuoteText] = useState('')
 	const [quoteImages, setQuoteImages] = useState<File[]>([])
 	const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+	// Flag to track if a repost is in progress
+	const [isReposting, setIsReposting] = useState(false)
 	
 	// Create refs outside of conditional rendering
 	const replyTextareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -553,19 +562,103 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 								<span aria-hidden>🗨</span>
 								<span className="hidden lg:inline">reply</span>
 							</button>
-							<button
-								className="h-8 rounded-full bg-white text-gray-700 hover:bg-gray-100 px-2 inline-flex items-center gap-1 border border-gray-200"
-								onClick={(e) => {
-									e.preventDefault()
-									e.stopPropagation()
-									// TODO: Implement repost functionality
-								}}
-								title="repost"
-								aria-label="repost"
-							>
-								<span aria-hidden>♻</span>
-								<span className="hidden lg:inline">repost</span>
-							</button>
+							{viewMode === VIEW_MODE.REPOST ? (
+								<button
+									className="h-8 rounded-full bg-secondary text-white hover:bg-secondary/90 px-2 inline-flex items-center gap-1 border border-secondary"
+									onClick={async (e) => {
+										e.preventDefault()
+										e.stopPropagation()
+										// Implement repost functionality (publishing kind 6 event)
+										if (isReposting) return
+										
+										setIsReposting(true)
+										try {
+											// Get NDK instance
+											const ndk = ndkActions.getNDK()
+											if (!ndk) {
+												toast.error('Not connected to Nostr network')
+												setIsReposting(false)
+												return
+											}
+											
+											const signer = ndkActions.getSigner()
+											if (!signer) {
+												toast.error('Please log in to repost')
+												setIsReposting(false)
+												return
+											}
+											
+											// Show loading toast
+											const loadingToastId = toast.loading('Reposting...')
+											
+											// Create repost event (kind 6)
+											const event = new NDKEvent(ndk)
+											event.kind = 6
+											
+											// Set content to stringified JSON of the reposted note
+											try {
+												const noteJson = note.rawEvent ? note.rawEvent() : note
+												event.content = JSON.stringify(noteJson)
+											} catch (error) {
+												console.error('Error stringifying note:', error)
+												event.content = ''
+											}
+											
+											// Add tags
+											event.tags = []
+											
+											// Add e tag with the ID of the note being reposted
+											event.tags.push(['e', note.id as string, '', ''])
+											
+											// Add p tag with the pubkey of the author of the reposted note
+											event.tags.push(['p', note.pubkey])
+											
+											// Sign and publish the event
+											await event.sign(signer)
+											
+											// Create a relay set for publishing
+											const publishRelaySet = NDKRelaySet.fromRelayUrls(['ws://localhost:10547'], ndk)
+											await event.publish(publishRelaySet)
+											
+											console.log('Repost published successfully:', event.id)
+											
+											// Show success message
+											toast.dismiss(loadingToastId)
+											toast.success('Repost published successfully!')
+											
+											// Reset view mode
+											setViewMode(VIEW_MODE.NONE)
+										} catch (error) {
+											console.error('Failed to repost:', error)
+											toast.error('Failed to repost. Please try again.')
+										} finally {
+											setIsReposting(false)
+										}
+									}}
+									title="Send repost"
+									aria-label="send repost"
+									disabled={isReposting}
+								>
+									<span aria-hidden>♻</span>
+									<span className="lg:inline">SNED!</span>
+								</button>
+							) : (
+								<button
+									className="h-8 rounded-full bg-white text-gray-700 hover:bg-gray-100 px-2 inline-flex items-center gap-1 border border-gray-200"
+									onClick={(e) => {
+										e.preventDefault()
+										e.stopPropagation()
+										console.log('Toggle repost mode')
+										setViewMode(v => v === VIEW_MODE.REPOST ? VIEW_MODE.NONE : VIEW_MODE.REPOST)
+									}}
+									title="Repost this note"
+									aria-label="repost"
+									aria-pressed={false}
+								>
+									<span aria-hidden>♻</span>
+									<span className="hidden lg:inline">repost</span>
+								</button>
+							)}
 							<button
 								className="h-8 rounded-full bg-white text-gray-700 hover:bg-gray-100 px-2 inline-flex items-center gap-1 border border-gray-200"
 								onClick={(e) => {
@@ -958,6 +1051,117 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 										</Button>
 									</div>
 								</div>
+							</div>
+						</div>
+					);
+				} else if (viewMode === VIEW_MODE.REPOST) {
+					// Repost mode - shows a confirmation UI
+					return (
+						<div
+							id={`note-repost-${(note as any)?.id ?? note.pubkey ?? 'unknown'}`}
+							className="mt-2 border rounded overflow-hidden p-4 bg-gray-50"
+						>
+							<div className="text-center mb-4">
+								<h3 className="text-lg font-medium">Repost this note?</h3>
+								<p className="text-sm text-gray-600 mt-1">
+									This will share the note with your followers. The original author will be credited.
+								</p>
+							</div>
+							
+							<div className="border rounded-md p-3 bg-white mb-4">
+								<div className="text-sm text-gray-800">
+									{displayContent}
+								</div>
+								<div className="text-xs text-gray-500 mt-2">
+									— {note.pubkey?.slice(0, 8)}...
+								</div>
+							</div>
+							
+							<div className="flex justify-center gap-2">
+								<Button
+									type="button"
+									variant="secondary"
+									onClick={() => setViewMode(VIEW_MODE.NONE)}
+									className="px-4"
+								>
+									Cancel
+								</Button>
+								
+								<Button
+									type="button"
+									variant="default"
+									className="bg-secondary text-white hover:bg-secondary/90 px-4"
+									disabled={isReposting}
+									onClick={async () => {
+										if (isReposting) return
+										
+										setIsReposting(true)
+										try {
+											// Get NDK instance
+											const ndk = ndkActions.getNDK()
+											if (!ndk) {
+												toast.error('Not connected to Nostr network')
+												setIsReposting(false)
+												return
+											}
+											
+											const signer = ndkActions.getSigner()
+											if (!signer) {
+												toast.error('Please log in to repost')
+												setIsReposting(false)
+												return
+											}
+											
+											// Show loading toast
+											const loadingToastId = toast.loading('Reposting...')
+											
+											// Create repost event (kind 6)
+											const event = new NDKEvent(ndk)
+											event.kind = 6
+											
+											// Set content to stringified JSON of the reposted note
+											try {
+												const noteJson = note.rawEvent ? note.rawEvent() : note
+												event.content = JSON.stringify(noteJson)
+											} catch (error) {
+												console.error('Error stringifying note:', error)
+												event.content = ''
+											}
+											
+											// Add tags
+											event.tags = []
+											
+											// Add e tag with the ID of the note being reposted
+											event.tags.push(['e', note.id as string, '', ''])
+											
+											// Add p tag with the pubkey of the author of the reposted note
+											event.tags.push(['p', note.pubkey])
+											
+											// Sign and publish the event
+											await event.sign(signer)
+											
+											// Create a relay set for publishing
+											const publishRelaySet = NDKRelaySet.fromRelayUrls(['ws://localhost:10547'], ndk)
+											await event.publish(publishRelaySet)
+											
+											console.log('Repost published successfully:', event.id)
+											
+											// Show success message
+											toast.dismiss(loadingToastId)
+											toast.success('Repost published successfully!')
+											
+											// Reset view mode
+											setViewMode(VIEW_MODE.NONE)
+										} catch (error) {
+											console.error('Failed to repost:', error)
+											toast.error('Failed to repost. Please try again.')
+										} finally {
+											setIsReposting(false)
+										}
+									}}
+								>
+									{isReposting ? 'Reposting...' : 'SNED!'}
+								</Button>
 							</div>
 						</div>
 					);
