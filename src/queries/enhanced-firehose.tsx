@@ -54,6 +54,7 @@ export type EnhancedFetchedNDKEvent = {
 const eventCache = new LRUCache<string, NDKEvent>({ max: 5000, ttl: 1000 * 60 * 30 }) // 30 min TTL
 const replaceableEventCache = new Map<string, NDKEvent>()
 const firstFetchTimestamps = new Map<string, number>()
+const lastDisplayedTimestamps = new Map<string, number>() // Track when events were last displayed
 const relayTracker = new Map<string, Set<string>>() // eventId -> Set<relayUrl>
 
 // DataLoader for batched event fetching
@@ -104,6 +105,68 @@ function hasClientMostrTag(event: NDKEvent): boolean {
 	const tags = (event as any)?.tags
 	if (!Array.isArray(tags)) return false
 	return tags.some((tag) => Array.isArray(tag) && tag.length >= 2 && tag[0] === 'client' && tag[1] === 'Mostr')
+}
+
+// Track when an event is displayed to the user
+export function updateEventDisplayTime(eventId: string): void {
+	if (!eventId) return
+	lastDisplayedTimestamps.set(eventId, Date.now())
+}
+
+// Get events that haven't been displayed recently
+export function getStaleEvents(maxAge: number = 1000 * 60 * 60): string[] {
+	const now = Date.now()
+	const staleEvents: string[] = []
+	
+	// Check all events in the cache
+	for (const [id, _] of eventCache.entries()) {
+		const lastDisplayed = lastDisplayedTimestamps.get(id) || 0
+		// If never displayed or displayed longer ago than maxAge
+		if (lastDisplayed === 0 || (now - lastDisplayed) > maxAge) {
+			staleEvents.push(id)
+		}
+	}
+	
+	return staleEvents
+}
+
+// Clean up stale events from cache to free memory
+export function cleanupStaleEvents(maxAge: number = 1000 * 60 * 60, maxToRemove: number = 100): number {
+	// Get stale events
+	const staleEvents = getStaleEvents(maxAge)
+	
+	// Limit the number of events to remove at once to avoid performance issues
+	const eventsToRemove = staleEvents.slice(0, maxToRemove)
+	
+	// Remove events from cache
+	let removedCount = 0
+	for (const id of eventsToRemove) {
+		// Remove from main cache
+		if (eventCache.delete(id)) {
+			removedCount++
+		}
+		
+		// Clean up associated metadata
+		firstFetchTimestamps.delete(id)
+		lastDisplayedTimestamps.delete(id)
+		relayTracker.delete(id)
+	}
+	
+	// Also check for any replaceable events that might be stale
+	// This is a separate cache, so we handle it differently
+	const now = Date.now()
+	for (const [coordinate, event] of replaceableEventCache.entries()) {
+		const id = (event as any)?.id
+		if (!id) continue
+		
+		const lastDisplayed = lastDisplayedTimestamps.get(id) || 0
+		if (lastDisplayed === 0 || (now - lastDisplayed) > maxAge) {
+			replaceableEventCache.delete(coordinate)
+			removedCount++
+		}
+	}
+	
+	return removedCount
 }
 
 function isNSFWEvent(event: NDKEvent): boolean {
@@ -427,7 +490,13 @@ export const fetchEnhancedNote = async (id: string): Promise<EnhancedFetchedNDKE
 export const enhancedNoteQueryOptions = (id: string) =>
 	queryOptions({
 		queryKey: noteKeys.details(id),
-		queryFn: () => fetchEnhancedNote(id),
+		queryFn: async () => {
+			// When fetching a specific note, update its display timestamp
+			const note = await fetchEnhancedNote(id)
+			// Mark as displayed immediately (will be updated again by IntersectionObserver when actually in view)
+			updateEventDisplayTime(id)
+			return note
+		},
 		staleTime: 5 * 60 * 1000, // 5 minutes
 	})
 
