@@ -9,6 +9,8 @@ import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
 import { useState, useEffect, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
+import { InfiniteProductList } from '@/components/InfiniteProductList'
+import type { NDKEvent } from '@nostr-dev-kit/ndk'
 
 // Hook to inject dynamic CSS for background image
 function useHeroBackground(imageUrl: string, className: string) {
@@ -34,8 +36,8 @@ export const Route = createFileRoute('/products/')({
 })
 
 function ProductsRoute() {
-	const productsQuery = useSuspenseQuery(productsQueryOptions)
-	const products = productsQuery.data
+	const productsQuery = useSuspenseQuery(productsQueryOptions())
+	const products = productsQuery.data as NDKEvent[]
 
 	const { isAuthenticated } = useStore(authStore)
 	const [currentSlideIndex, setCurrentSlideIndex] = useState(0)
@@ -46,8 +48,8 @@ function ProductsRoute() {
 	const minSwipeDistance = 50
 
 	// Filter products that have images, then limit to 4 for pagination
-	const productsWithImages = products.filter((product) => {
-		return product.tags.some((tag) => tag[0] === 'image' && tag[1])
+	const productsWithImages = products.filter((product: NDKEvent) => {
+		return product.tags.some((tag: string[]) => tag[0] === 'image' && tag[1])
 	})
 
 	const recentProducts = productsWithImages.slice(0, 4) // Limit to 4 products
@@ -237,6 +239,11 @@ function ProductsRoute() {
 						<ProductCard key={product.id} product={product} />
 					))}
 				</ItemGrid>
+
+				{/* Infinite Product List */}
+				<div className="mt-8">
+					<InfiniteProductList title="More Products" scrollKey="products-page" chunkSize={20} threshold={1000} autoLoad={true} />
+				</div>
 			</div>
 		</div>
 	)

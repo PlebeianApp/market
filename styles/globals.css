@@ -398,4 +398,9 @@ button {
 			margin-top: 2rem;
 		}
 	}
+
+	/* Custom utility classes */
+	.bg-off-black {
+		background-color: var(--off-black);
+	}
 }
