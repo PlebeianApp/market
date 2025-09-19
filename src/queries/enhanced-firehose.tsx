@@ -186,6 +186,7 @@ export const fetchEnhancedNotes = async (opts?: {
 	follows?: boolean
 	limit?: number
 	kinds?: number[]
+	until?: number  // Add support for until parameter for pagination
 }): Promise<EnhancedFetchedNDKEvent[]> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
@@ -196,6 +197,11 @@ export const fetchEnhancedNotes = async (opts?: {
 	const filter: NDKFilter = {
 		kinds: kinds,
 		limit: limit,
+	}
+	
+	// Add until parameter for pagination if provided
+	if (opts?.until && typeof opts.until === 'number') {
+		filter.until = opts.until
 	}
 
 	// Enhanced tag filtering

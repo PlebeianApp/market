@@ -3,7 +3,7 @@ import { useStore } from '@tanstack/react-store'
 import { authActions, authStore } from '@/lib/stores/auth'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { type SVGProps, useEffect, useMemo, useState } from 'react'
-import { enhancedNotesQueryOptions, type EnhancedFetchedNDKEvent } from '@/queries/enhanced-firehose'
+import { enhancedNotesQueryOptions, fetchEnhancedNotes, type EnhancedFetchedNDKEvent } from '@/queries/enhanced-firehose'
 import { authorQueryOptions } from '@/queries/authors'
 import { reactionsQueryOptions } from '@/queries/reactions'
 import { ndkActions } from '@/lib/stores/ndk'
@@ -111,8 +111,14 @@ function CollapseVerticalIcon(props: SVGProps<SVGSVGElement>) {
 	)
 }
 
+import { ThreadOpenProvider } from '@/state/threadOpenStore'
+
 export const Route = createFileRoute('/nostr/')({
-	component: FirehoseComponent,
+	component: () => (
+		<ThreadOpenProvider>
+			<FirehoseComponent />
+		</ThreadOpenProvider>
+	),
 })
 
 function FirehoseComponent() {
@@ -148,6 +154,41 @@ function FirehoseComponent() {
 	const [currentUserPk, setCurrentUserPk] = useState('')
 	// React to auth store changes (login/logout) to keep currentUserPk in sync
 	const { isAuthenticated: authIsAuthenticated, user: authUser } = useStore(authStore) as any
+	
+	// Function to load older events based on the oldest timestamp
+	const loadOlderEvents = async (oldestTimestamp: number) => {
+		if (isLoadingMore || !oldestTimestamp) return
+		
+		setIsLoadingMore(true)
+		
+		try {
+			const ndk = ndkActions.getNDK()
+			if (!ndk) {
+				console.error('NDK not initialized')
+				setIsLoadingMore(false)
+				return
+			}
+			
+			// Clone the current options and add until parameter
+			const paginationOpts = { 
+				...notesOpts,
+				limit: Math.ceil(notesOpts.limit ? notesOpts.limit * 0.5 : 5), // 50% of current limit
+				until: oldestTimestamp - 1 // Ensure we don't get duplicates
+			}
+			
+			// Use the enhanced notes query directly
+			const olderEvents = await fetchEnhancedNotes(paginationOpts)
+			
+			if (olderEvents && olderEvents.length > 0) {
+				// Store the older events to be appended to the current data
+				setOldestNotes(prev => [...prev, ...olderEvents])
+			}
+		} catch (error) {
+			console.error('Failed to fetch older events:', error)
+		} finally {
+			setIsLoadingMore(false)
+		}
+	}
 	const { data: currentUserMeta } = useQuery({
 		...authorQueryOptions(currentUserPk),
 		enabled: !!currentUserPk && filterMode === 'follows',
@@ -181,6 +222,10 @@ function FirehoseComponent() {
 	const [hasNewerNotes, setHasNewerNotes] = useState(false)
 
 	const [showTop, setShowTop] = useState(false)
+	// Infinite scroll state
+	const [isLoadingMore, setIsLoadingMore] = useState(false)
+	const [oldestEventTimestamp, setOldestEventTimestamp] = useState<number | null>(null)
+	const [oldestNotes, setOldestNotes] = useState<EnhancedFetchedNDKEvent[]>([])
 	// Overlay state for loading a new tag
 	const [pendingTag, setPendingTag] = useState<string | null>(null)
 	const [showTagOverlay, setShowTagOverlay] = useState(false)
@@ -553,18 +598,62 @@ function FirehoseComponent() {
 		if (typeof window === 'undefined') return
 		const onScroll = () => {
 			try {
+				// Show "Back to top" button logic
 				const threshold = window.innerHeight / 4
 				setShowTop(window.scrollY > threshold)
-			} catch (_) {
-				// noop
+				
+				// Infinite scroll logic - load more when scrolled to 75% of the page
+				if (!isLoadingMore && !openThreadId && data && data.length > 0) {
+					const scrollHeight = document.documentElement.scrollHeight
+					const scrollTop = window.scrollY || document.documentElement.scrollTop
+					const clientHeight = window.innerHeight || document.documentElement.clientHeight
+					
+					// Calculate scroll percentage (0 to 1)
+					const scrollPercentage = (scrollTop + clientHeight) / scrollHeight
+					
+					// If scrolled to 75% and we have an oldest timestamp, load more events
+					if (scrollPercentage >= 0.75) {
+						// Find the oldest event in current data to use as "until" parameter
+						const sortedEvents = [...data].sort((a, b) => {
+							const aCreatedAt = (a.event as any).created_at || 0
+							const bCreatedAt = (b.event as any).created_at || 0
+							return aCreatedAt - bCreatedAt
+						})
+						
+						const oldestEvent = sortedEvents[0]
+						if (oldestEvent) {
+							const oldestTimestamp = (oldestEvent.event as any).created_at
+							setOldestEventTimestamp(oldestTimestamp)
+							loadOlderEvents(oldestTimestamp)
+						}
+					}
+				}
+			} catch (error) {
+				console.error("Error in scroll handler:", error)
 			}
 		}
 		onScroll()
 		window.addEventListener('scroll', onScroll, { passive: true })
 		return () => window.removeEventListener('scroll', onScroll)
-	}, [])
+	}, [data, isLoadingMore, openThreadId])
 
-	const notes = data || []
+	// Combine original notes with older notes loaded from infinite scrolling
+	const notes = useMemo(() => {
+		// Combine both data sources
+		const combinedNotes = [...(data || []), ...oldestNotes]
+		
+		// Remove duplicates by event ID
+		const uniqueMap = new Map<string, EnhancedFetchedNDKEvent>()
+		combinedNotes.forEach(note => {
+			const id = (note.event as any)?.id
+			if (id && !uniqueMap.has(id)) {
+				uniqueMap.set(id, note)
+			}
+		})
+		
+		return Array.from(uniqueMap.values())
+	}, [data, oldestNotes])
+	
 	// Reactions fetching based on currently visible notes
 	const noteIdsForReactions = useMemo(
 		() => (notes as EnhancedFetchedNDKEvent[]).map((w) => (w.event as any)?.id as string).filter(Boolean),
@@ -576,7 +665,7 @@ function FirehoseComponent() {
 	}) as any
 
 	const { filtered, counts } = useMemo(() => {
-		const all = (data || []) as EnhancedFetchedNDKEvent[]
+		const all = notes as EnhancedFetchedNDKEvent[]
 		// Build a set of rootIds that have at least one reply
 		const rootsWithReplies = new Set<string>()
 		for (const w of all) {
@@ -630,7 +719,7 @@ function FirehoseComponent() {
 				originals: originals.length,
 			},
 		}
-	}, [data, filterMode])
+	}, [notes, filterMode])
 
 	// Stop spinner animation when the feed + thread view have committed a re-render
 	useEffect(() => {
@@ -1783,9 +1872,22 @@ function FirehoseComponent() {
 										return selectedEmoji ? !!emap[selectedEmoji] : Object.keys(emap).length > 0
 									})
 								: base
-						return toShow.map((wrapped: EnhancedFetchedNDKEvent) => (
-							<NoteView key={(wrapped.event as any).id as string} note={wrapped.event} reactionsMap={reactionsMap || {}} />
-						))
+						
+						// Return notes with loading indicator at the bottom if loading more
+						return (
+							<>
+								{toShow.map((wrapped: EnhancedFetchedNDKEvent) => (
+									<NoteView key={(wrapped.event as any).id as string} note={wrapped.event} reactionsMap={reactionsMap || {}} />
+								))}
+								
+								{isLoadingMore && (
+									<div className="flex justify-center items-center py-4">
+										<Loader2 className="h-6 w-6 animate-spin text-primary" />
+										<span className="ml-2 text-sm text-muted-foreground">Loading more events...</span>
+									</div>
+								)}
+							</>
+						)
 					})()}
 				</div>
 			</div>
