@@ -3,12 +3,12 @@ import { useStore } from '@tanstack/react-store'
 import { authActions, authStore } from '@/lib/stores/auth'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { type SVGProps, useEffect, useMemo, useState, useRef } from 'react'
-import { enhancedNotesQueryOptions, type EnhancedFetchedNDKEvent, cleanupStaleEvents } from '@/queries/enhanced-firehose'
+import { enhancedNotesQueryOptions, type EnhancedFetchedNDKEvent, cleanupStaleEvents, SUPPORTED_KINDS } from '@/queries/enhanced-firehose'
 import { authorQueryOptions } from '@/queries/authors'
 import { reactionsQueryOptions } from '@/queries/reactions'
 import { ndkActions } from '@/lib/stores/ndk'
 import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
-import { writeRelaysUrls } from '@/lib/constants'
+import { writeRelaysUrls, defaultRelaysUrls } from '@/lib/constants'
 import { toast } from 'sonner'
 import { NoteView } from '@/components/NoteView.tsx'
 import { Button } from '@/components/ui/button'
@@ -145,7 +145,7 @@ function FirehoseComponent() {
 		if (filterMode === 'hashtag') return { tag: tagFilter, author: '', follows: false, limit: eventLimit }
 		return { tag: '', author: authorFilter, follows: filterMode === 'follows', limit: eventLimit }
 	}, [filterMode, tagFilter, authorFilter, eventLimit])
-	const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+	const { data, isLoading, isError, error, refetch: doRefetch, isFetching } = useQuery({
 		...enhancedNotesQueryOptions(notesOpts),
 		refetchOnWindowFocus: false,
 		refetchOnReconnect: false,
@@ -153,6 +153,19 @@ function FirehoseComponent() {
 		staleTime: Infinity,
 	})
 	const { data: authorMeta } = useQuery({ ...authorQueryOptions(authorFilter), enabled: !!authorFilter }) as any
+
+	// Override refetch to apply pending live notes when available
+	const refetch = async () => {
+		if (pendingNewNotes.length > 0) {
+			applyPendingNotes()
+			// Schedule another scroll-to-top to override any delayed scroll restoration in callers
+			setTimeout(() => {
+				try { scrollToTop() } catch {}
+			}, 120)
+			return { data: allLoadedEvents } as any
+		}
+		return await doRefetch()
+	}
 	// Current user for follows mode
 	const [currentUserPk, setCurrentUserPk] = useState('')
 	// React to auth store changes (login/logout) to keep currentUserPk in sync
@@ -188,6 +201,9 @@ function FirehoseComponent() {
 	const [viewStates, setViewStates] = useState<Record<string, ViewState>>({})
 	const [lastRefreshTimestamp, setLastRefreshTimestamp] = useState<number | null>(null)
 	const [hasNewerNotes, setHasNewerNotes] = useState(false)
+	// Live updates: hold incoming notes and their authors until user loads them
+	const [pendingNewNotes, setPendingNewNotes] = useState<EnhancedFetchedNDKEvent[]>([])
+	const [newNoteAuthors, setNewNoteAuthors] = useState<string[]>([])
 
 	const [showTop, setShowTop] = useState(false)
 	// Overlay state for loading a new tag
@@ -253,6 +269,77 @@ function FirehoseComponent() {
 			updateLatestTimestampInUrl(newestNoteTimestamp)
 		}
 	}, [newestNoteTimestamp, isLoading])
+
+	// Live subscription for new notes matching current view
+	useEffect(() => {
+		let sub: any | null = null
+		let stopped = false
+		;(async () => {
+			try {
+				const ndk = ndkActions.getNDK()
+				if (!ndk) return
+				const relaySet = NDKRelaySet.fromRelayUrls(defaultRelaysUrls, ndk)
+				// Start after newest currently shown to avoid duplicates
+				const since = Math.floor(((newestNoteTimestamp || Date.now()) / 1000))
+				const filter: any = { kinds: SUPPORTED_KINDS as any, since }
+				if (filterMode === 'hashtag' && (tagFilter || '').trim()) {
+					;(filter as any)['#t'] = [(tagFilter || '').trim().toLowerCase()]
+				}
+				if (authorFilter && filterMode !== 'hashtag' && filterMode !== 'reactions' && !((filterMode === 'follows'))) {
+					filter.authors = [authorFilter]
+				}
+				if (filterMode === 'follows') {
+					try {
+						const user = await ndkActions.getUser()
+						const pubkey = (user as any)?.pubkey as string | undefined
+						if (!pubkey) return
+						const contactsFilter: any = { kinds: [3], authors: [pubkey], limit: 1 }
+						const contacts = await ndk.fetchEvents(contactsFilter, undefined, relaySet)
+						const arr = Array.from(contacts)
+						if (arr.length > 0) {
+							const latest = arr.sort((a, b) => ((b as any).created_at ?? 0) - ((a as any).created_at ?? 0))[0] as any
+							const pTags = (latest?.tags || []).filter((t: any) => Array.isArray(t) && t[0] === 'p' && typeof t[1] === 'string')
+							const follows: string[] = pTags.map((t: any) => t[1])
+							if (follows.length > 0) (filter as any).authors = follows
+						}
+					} catch {}
+				}
+				if (stopped) return
+				sub = (ndk as any).subscribe(filter, undefined, relaySet)
+				sub.on('event', (ev: any) => {
+					try {
+						const id = (ev as any)?.id || ''
+						if (!id) return
+						setPendingNewNotes((prev) => {
+							const existsInPending = prev.some((w) => (((w.event as any)?.id as string) || '') === id)
+							const existsInLoaded = (allLoadedEvents || []).some((w) => ((((w.event as any)?.id as string) || '') === id))
+							if (existsInPending || existsInLoaded) return prev
+							const wrapped: EnhancedFetchedNDKEvent = {
+								event: ev,
+								fetchedAt: Date.now(),
+								relaysSeen: [],
+								isFromCache: false,
+								priority: 1,
+							}
+							return [wrapped, ...prev]
+						})
+						setNewNoteAuthors((prev) => {
+							const pk = (ev as any)?.pubkey as string
+							if (!pk || prev.includes(pk)) return prev
+							return [pk, ...prev].slice(0, 12)
+						})
+						setHasNewerNotes(true)
+					} catch {}
+				})
+			} catch {}
+		})()
+		return () => {
+			stopped = true
+			try {
+				sub?.stop?.()
+			} catch {}
+		}
+	}, [filterMode, tagFilter, authorFilter, newestNoteTimestamp])
 
 	// Update allLoadedEvents when new data arrives
 	// Ref to store scroll position before data update
@@ -353,6 +440,47 @@ function FirehoseComponent() {
 		} catch (_) {
 			// noop
 		}
+	}
+
+	// Apply pending live notes: prepend them and scroll to top
+	const applyPendingNotes = () => {
+		try {
+			setOpenThreadId(null)
+			setAllLoadedEvents((prev) => {
+				const existingIds = new Set(prev.map((w) => (((w.event as any)?.id as string) || '')))
+				const fresh = pendingNewNotes.filter((w) => {
+					const id = (((w.event as any)?.id as string) || '')
+					return id && !existingIds.has(id)
+				})
+				return [...fresh, ...prev]
+			})
+			setPendingNewNotes([])
+			setNewNoteAuthors([])
+			setHasNewerNotes(false)
+			scrollToTop()
+		} catch {}
+	}
+
+	// Unified reload button behavior
+	const reloadFeed = async () => {
+		if (pendingNewNotes.length > 0) {
+			applyPendingNotes()
+			return
+		}
+		// Preserve scroll position when refreshing
+		const currentScrollPosition = window.scrollY || document.documentElement.scrollTop || 0
+		setOpenThreadId(null)
+		setLastRefreshTimestamp(Date.now())
+		setHasNewerNotes(false)
+		const result = await refetch()
+		// Update URL with newest timestamp after successful refetch
+		if (result.data && result.data.length > 0) {
+			updateLatestTimestampInUrl(result.data[0].fetchedAt)
+		}
+		// Restore scroll position after content update
+		setTimeout(() => {
+			window.scrollTo({ top: currentScrollPosition, behavior: 'auto' })
+		}, 50)
 	}
 
 	useEffect(() => {
@@ -1922,6 +2050,46 @@ function FirehoseComponent() {
 					'py-3 px-3 lg:px-3 ' + (openThreadId ? '' : 'lg:mr-80') + (isComposeOpen ? (isComposeLarge ? ' pb-[50vh]' : ' pb-32') : '')
 				}
 			>
+    {/* Floating New Notes Banner near top-right (disabled as per new UX: use pulsing reload button instead) */}
+    {pendingNewNotes.length > 0 && false ? (
+					<div className="group fixed top-16 z-40" style={{ right: floatingRight }}>
+						<div className="absolute top-1/2 right-full -translate-y-1/2 mr-3 pointer-events-none transition-opacity duration-300 opacity-0 group-hover:opacity-100">
+							<span className="px-3 py-1 rounded-full bg-black/70 text-white text-sm shadow whitespace-nowrap text-right">Load new notes</span>
+						</div>
+						<Button
+							variant="primary"
+							className={`h-10 rounded-full px-3 flex items-center gap-2 shadow-lg transition-colors duration-200 hover:bg-white`}
+							onClick={() => {
+								// Close any open thread for a predictable top scroll
+								setOpenThreadId(null)
+								// Prepend pending notes (dedup)
+								setAllLoadedEvents((prev) => {
+									const existingIds = new Set(prev.map((w) => (((w.event as any)?.id as string) || '')))
+									const fresh = pendingNewNotes.filter((w) => {
+										const id = (((w.event as any)?.id as string) || '')
+										return id && !existingIds.has(id)
+									})
+									return [...fresh, ...prev]
+								})
+								setPendingNewNotes([])
+								setNewNoteAuthors([])
+								scrollToTop()
+							}}
+							title="Load new notes and scroll to top"
+							aria-label="Load new notes"
+						>
+							<span className="text-base" aria-hidden>🆕</span>
+							<span className="text-sm font-medium">New notes from:</span>
+							<div className="flex -space-x-2">
+								{Array.from(new Set(newNoteAuthors)).slice(0, 8).map((pk) => (
+									<div key={pk} className="w-6 h-6 rounded-full bg-gray-200 border border-white text-[10px] flex items-center justify-center text-gray-700" title={pk}>
+										{pk.slice(0, 2)}
+									</div>
+								))}
+							</div>
+						</Button>
+					</div>
+				) : null}
 				<div className="space-y-2 text-sm">
 					{(() => {
 						const base = filtered.filter(
