@@ -59,7 +59,7 @@ function RootLayout() {
 	}
 
 	return (
-		<div className="relative flex flex-col min-h-screen">
+		<div className="flex flex-col min-h-screen">
 			{!isProfilePage && <Header />}
 
 			<main className="flex-grow flex flex-col">

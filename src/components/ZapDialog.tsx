@@ -6,12 +6,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { DEFAULT_ZAP_AMOUNTS } from '@/lib/constants'
-import { useNDK } from '@/lib/stores/ndk'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { profileKeys } from '@/queries/queryKeyFactory'
+import { ndkStore } from '@/lib/stores/ndk'
 import { NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown, Loader2, Zap } from 'lucide-react'
+import { useStore } from '@tanstack/react-store'
+import { ChevronLeft, Loader2, X, Zap } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -22,15 +23,17 @@ interface ZapDialogProps {
 	onZapComplete?: (zapEvent?: NDKEvent) => void
 }
 
+type DialogStep = 'main' | 'generateInvoice'
+
 export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDialogProps) {
 	const [amount, setAmount] = useState<string>('21')
 	const [zapMessage, setZapMessage] = useState<string>('Zap from Plebeian')
-	const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState<boolean>(false)
 	const [isAnonymousZap, setIsAnonymousZap] = useState<boolean>(false)
-	const [step, setStep] = useState<'amount' | 'generateInvoice'>('amount')
+	const [step, setStep] = useState<DialogStep>('main')
+	const ndkState = useStore(ndkStore)
 
-	// NDK state for NWC functionality
-	const ndkState = useNDK()
+	// Check if NWC is available
+	const hasNwc = !!ndkState.activeNwcWalletUri
 
 	// Extract recipient information
 	const recipientPubkey = event instanceof NDKUser ? event.pubkey : event.pubkey
@@ -43,15 +46,10 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 	})
 
 	// Try to get profile from the event first, then fallback to fetched profile
-	const eventProfile = event instanceof NDKUser ? event.profile : event.author?.profile
-	const fetchedProfile = profileData?.profile || null
-	const profile = eventProfile || fetchedProfile
+	const profile = (event instanceof NDKUser ? event.profile : event.author?.profile) || profileData?.profile
 
 	const recipientName = profile?.displayName || profile?.name || 'Unknown User'
 	const lightningAddress = profile?.lud16 || profile?.lud06 || null
-
-	// Check if NWC is available
-	const hasNwc = !!ndkState.activeNwcWalletUri
 
 	// Parse amount to number, handle empty/invalid values
 	const numericAmount = parseInt(amount, 10)
@@ -101,9 +99,8 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 	const resetState = () => {
 		setAmount('21')
 		setZapMessage('Zap from Plebeian')
-		setAdvancedSettingsOpen(false)
 		setIsAnonymousZap(false)
-		setStep('amount')
+		setStep('main')
 	}
 
 	const handleDialogOpenChange = (open: boolean) => {
@@ -139,31 +136,52 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 
 	return (
 		<Dialog open={isOpen} onOpenChange={handleDialogOpenChange}>
-			<DialogContent className="max-w-[425px]">
-				<DialogHeader>
-					<DialogTitle>
-						Zap {recipientName} {lightningAddress && <small>({lightningAddress})</small>}
-					</DialogTitle>
+			<DialogContent className="max-w-[425px] w-[95vw] max-h-[90vh] overflow-y-auto [&>button]:hidden">
+				<DialogHeader className="sr-only">
+					<DialogTitle>Zap {recipientName}</DialogTitle>
 				</DialogHeader>
+				{/* Custom Header with three columns */}
+				<div className="flex items-center justify-between pb-4">
+					{/* Left: Back button (only visible on generateInvoice step) */}
+					<div className="flex items-center w-8">
+						{step === 'generateInvoice' && (
+							<Button variant="ghost" size="sm" onClick={() => setStep('main')} className="h-8 w-8 p-0">
+								<ChevronLeft className="h-4 w-4" />
+							</Button>
+						)}
+					</div>
 
-				{step === 'amount' && (
-					<div className="space-y-4">
+					{/* Center: Profile name and address */}
+					<div className="flex-1 text-center px-2 min-w-0">
+						<h2 className="text-base font-semibold truncate">Zap {recipientName}</h2>
+						{lightningAddress && <p className="text-sm text-muted-foreground truncate">{lightningAddress}</p>}
+					</div>
+
+					{/* Right: Close button */}
+					<div className="flex items-center w-8">
+						<DialogClose asChild>
+							<Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+								<X className="h-4 w-4" />
+							</Button>
+						</DialogClose>
+					</div>
+				</div>
+
+				{step === 'main' && (
+					<div>
 						{/* Amount Selection */}
 						<div className="py-2">
-							<div className="space-y-2">
-								<Label className="font-bold">Amount</Label>
-								<div className="grid grid-cols-2 gap-2">
-									{DEFAULT_ZAP_AMOUNTS.map(({ displayText, amount: presetAmount }) => (
-										<Button
-											key={presetAmount}
-											variant={numericAmount === presetAmount ? 'tertiary' : 'outline'}
-											className="border-2 border-black"
-											onClick={() => handleAmountButtonClick(presetAmount)}
-										>
-											{displayText}
-										</Button>
-									))}
-								</div>
+							<div className="grid grid-cols-2 gap-2">
+								{DEFAULT_ZAP_AMOUNTS.map(({ displayText, amount: presetAmount }) => (
+									<Button
+										key={presetAmount}
+										variant={numericAmount === presetAmount ? 'tertiary' : 'outline'}
+										className="text-sm"
+										onClick={() => handleAmountButtonClick(presetAmount)}
+									>
+										{displayText}
+									</Button>
+								))}
 							</div>
 						</div>
 
@@ -205,21 +223,33 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 							</div>
 						</div>
 
-						{/* Footer */}
-						<div className="py-2">
-							<div className="flex gap-2">
-								{hasNwc && (
-									<Button onClick={() => setStep('generateInvoice')} className="flex-1" variant="primary">
-										<Zap className="mr-2 h-4 w-4" />
-										Pay with NWC
-									</Button>
-								)}
-								<Button onClick={() => setStep('generateInvoice')} className={hasNwc ? 'flex-1' : 'w-full'} variant="focus">
-									<Zap className="mr-2 h-4 w-4" />
-									Generate Invoice
-								</Button>
+						{/* No lightning address message */}
+						{!lightningAddress && (
+							<div className="py-2">
+								<div className="text-center text-muted-foreground">
+									<p>No Lightning address found</p>
+									<p className="text-sm">The creator needs to set up a Lightning address in their profile to receive zaps.</p>
+								</div>
 							</div>
-						</div>
+						)}
+
+						{/* Footer */}
+						{lightningAddress && (
+							<div className="py-2">
+								<div className="flex gap-2">
+									{hasNwc && (
+										<Button onClick={() => setStep('generateInvoice')} className="flex-1" variant="primary">
+											<Zap className="mr-2 h-4 w-4" />
+											Pay with NWC
+										</Button>
+									)}
+									<Button onClick={() => setStep('generateInvoice')} className={hasNwc ? 'flex-1' : 'w-full'} variant="focus">
+										<Zap className="mr-2 h-4 w-4" />
+										Generate Invoice
+									</Button>
+								</div>
+							</div>
+						)}
 					</div>
 				)}
 
@@ -233,22 +263,14 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 							{zapMessage && <p className="text-sm text-muted-foreground mt-1">Message: "{zapMessage}"</p>}
 						</div>
 
-						{/* Payment Processor Section */}
-						{lightningAddress ? (
-							<div className="w-full overflow-hidden">
-								<LightningPaymentProcessor
-									data={paymentData}
-									onPaymentComplete={handlePaymentComplete}
-									onPaymentFailed={handlePaymentFailed}
-									showManualVerification={true}
-								/>
-							</div>
-						) : (
-							<div className="text-center py-8 text-muted-foreground">
-								<p>No Lightning address found</p>
-								<p className="text-sm">The creator needs to set up a Lightning address in their profile to receive zaps.</p>
-							</div>
-						)}
+						<div className="w-full overflow-hidden">
+							<LightningPaymentProcessor
+								data={paymentData}
+								onPaymentComplete={handlePaymentComplete}
+								onPaymentFailed={handlePaymentFailed}
+								showManualVerification={true}
+							/>
+						</div>
 					</>
 				)}
 			</DialogContent>

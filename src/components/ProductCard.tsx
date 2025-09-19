@@ -1,4 +1,4 @@
-import { cartActions, useCart } from '@/lib/stores/cart'
+import { cartActions } from '@/lib/stores/cart'
 import { ndkActions } from '@/lib/stores/ndk'
 import { uiActions } from '@/lib/stores/ui'
 import { getProductImages, getProductPrice, getProductStock, getProductTitle } from '@/queries/products'
@@ -7,7 +7,6 @@ import { Link, useLocation } from '@tanstack/react-router'
 import { Button } from './ui/button'
 import { ZapButton } from './ZapButton'
 import { useEffect, useState } from 'react'
-import { Check } from 'lucide-react'
 
 export function ProductCard({ product }: { product: NDKEvent }) {
 	const title = getProductTitle(product)
@@ -16,10 +15,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 	const stock = getProductStock(product)
 	const [isOwnProduct, setIsOwnProduct] = useState(false)
 	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(null)
-	const [isAddingToCart, setIsAddingToCart] = useState(false)
-	const [showConfirmation, setShowConfirmation] = useState(false)
 	const location = useLocation()
-	const cart = useCart()
 
 	// Check if current user is the seller of this product
 	useEffect(() => {
@@ -33,23 +29,12 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 		checkIfOwnProduct()
 	}, [product.pubkey])
 
-	// Check if product is already in cart
-	const isInCart = !!cart.cart.products[product.id]
-	const cartQuantity = isInCart ? cart.cart.products[product.id]?.amount || 0 : 0
-
 	const handleAddToCart = async () => {
 		if (isOwnProduct) return // Don't allow adding own products to cart
 
-		setIsAddingToCart(true)
-		try {
-			const userPubkey = await ndkActions.getUser()
-			if (!userPubkey) return
-			await cartActions.addProduct(userPubkey.pubkey, product)
-			setShowConfirmation(true)
-			setTimeout(() => setShowConfirmation(false), 1200)
-		} finally {
-			setIsAddingToCart(false)
-		}
+		const userPubkey = await ndkActions.getUser()
+		if (!userPubkey) return
+		cartActions.addProduct(userPubkey.pubkey, product)
 	}
 
 	const handleProductClick = () => {
@@ -110,52 +95,13 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 
 				{/* Add to cart button */}
 				<div className="flex gap-2">
-					<div className="flex-grow transition-all duration-300 ease-in-out">
-						{isInCart ? (
-							<div className="flex gap-2 w-full">
-								{/* Show current quantity */}
-								<div className="flex items-center justify-center px-2 h-10 bg-pink-100 text-pink-800 border-2 border-pink-300 rounded-lg text-sm font-medium transition-all duration-200 ease-in-out">
-									{cartQuantity}
-								</div>
-								{/* Add more button */}
-								<Button
-									className="py-3 px-4 rounded-lg flex-grow font-medium transition-all duration-200 ease-in-out bg-black text-white disabled:bg-gray-400 disabled:cursor-not-allowed"
-									onClick={handleAddToCart}
-									disabled={isAddingToCart}
-								>
-									{isAddingToCart ? (
-										'Adding...'
-									) : showConfirmation ? (
-										<>
-											<Check className="w-4 h-4 mr-2" /> Added
-										</>
-									) : (
-										'Add'
-									)}
-								</Button>
-							</div>
-						) : (
-							<Button
-								className={`py-3 px-4 rounded-lg w-full font-medium transition-all duration-300 bg-black text-white disabled:bg-gray-400 disabled:cursor-not-allowed ${
-									isAddingToCart ? 'opacity-75 scale-95' : ''
-								}`}
-								onClick={handleAddToCart}
-								disabled={isOwnProduct || isAddingToCart}
-							>
-								{isOwnProduct ? (
-									'Your Product'
-								) : showConfirmation ? (
-									<>
-										<Check className="w-4 h-4 mr-2" /> Added!
-									</>
-								) : isAddingToCart ? (
-									'Adding...'
-								) : (
-									'Add to Cart'
-								)}
-							</Button>
-						)}
-					</div>
+					<Button
+						className="bg-black text-white py-3 px-4 rounded-lg flex-grow font-medium disabled:bg-gray-400 disabled:cursor-not-allowed"
+						onClick={handleAddToCart}
+						disabled={isOwnProduct}
+					>
+						{isOwnProduct ? 'Your Product' : 'Add to Cart'}
+					</Button>
 					<ZapButton event={product} />
 				</div>
 			</div>
