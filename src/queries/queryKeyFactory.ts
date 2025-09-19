@@ -5,6 +5,7 @@ export const productKeys = {
 	byATag: (pubkey: string, dTag: string) => [...productKeys.all, 'byATag', pubkey, dTag] as const,
 	byCollection: (collectionId: string) => [...productKeys.all, 'byCollection', collectionId] as const,
 	seller: (id: string) => [...productKeys.all, 'seller', id] as const,
+	paginated: (limit: number, until?: number) => [...productKeys.all, 'paginated', limit, until] as const,
 } as const
 
 export const orderKeys = {
@@ -26,6 +27,7 @@ export const collectionKeys = {
 	all: ['collections'] as const,
 	details: (id: string) => [...collectionKeys.all, id] as const,
 	byPubkey: (pubkey: string) => [...collectionKeys.all, 'byPubkey', pubkey] as const,
+	byATag: (pubkey: string, dTag: string) => [...collectionKeys.all, 'byATag', pubkey, dTag] as const,
 } as const
 
 export const collectionsKeys = {
@@ -68,6 +70,9 @@ export const configKeys = {
 	admins: (appPubkey: string) => [...configKeys.all, 'admins', appPubkey] as const,
 	editors: (appPubkey: string) => [...configKeys.all, 'editors', appPubkey] as const,
 	blacklist: (appPubkey: string) => [...configKeys.all, 'blacklist', appPubkey] as const,
+	featuredProducts: (appPubkey: string) => [...configKeys.all, 'featuredProducts', appPubkey] as const,
+	featuredCollections: (appPubkey: string) => [...configKeys.all, 'featuredCollections', appPubkey] as const,
+	featuredUsers: (appPubkey: string) => [...configKeys.all, 'featuredUsers', appPubkey] as const,
 } as const
 
 export const appSettingsKeys = {

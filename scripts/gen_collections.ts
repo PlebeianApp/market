@@ -23,7 +23,7 @@ export function generateCollectionData(productRefs: string[]): Omit<z.infer<type
 			// Add product references
 			...selectedProducts.map((ref) => ['a', ref]),
 			// Optional tags
-			['image', faker.image.url()],
+			['image', faker.image.urlPicsumPhotos({ width: 1200, height: 400 })],
 			['summary', faker.commerce.productDescription()],
 			['location', faker.location.city()],
 			['g', faker.string.alphanumeric(8).toLowerCase()],

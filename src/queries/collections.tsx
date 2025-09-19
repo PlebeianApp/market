@@ -1,20 +1,10 @@
-import { CollectionTitleTagSchema, CollectionImageTagSchema, CollectionSummaryTagSchema } from '@/lib/schemas/productCollection.ts'
+import { CollectionImageTagSchema, CollectionSummaryTagSchema, CollectionTitleTagSchema } from '@/lib/schemas/productCollection.ts'
 import { ndkActions } from '@/lib/stores/ndk'
 import type { NDKFilter, NDKKind } from '@nostr-dev-kit/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { queryOptions, useQuery } from '@tanstack/react-query'
-import { collectionsKeys } from './queryKeyFactory'
-import { collectionKeys } from './queryKeyFactory'
 import { z } from 'zod'
-import {
-	fetchProductByATag,
-	productByATagQueryOptions,
-	productKeys,
-	fetchProductsByCollection,
-	productsByCollectionQueryOptions,
-	useProductsByCollection,
-} from '@/queries/products.tsx'
-import { getCoordsForATag } from '@/lib/utils/coords.ts'
+import { collectionKeys, collectionsKeys } from './queryKeyFactory'
 
 // --- DATA FETCHING FUNCTIONS ---
 /**
@@ -53,21 +43,48 @@ export const fetchCollectionsByPubkey = async (pubkey: string) => {
 }
 
 /**
- * Fetches a single collection listing
- * @param id The ID of the collection listing
+ * Fetches a single collection listing by d-tag
+ * @param dTag The d-tag identifier of the collection
  * @returns The collection listing event
  */
-export const fetchCollection = async (id: string) => {
+export const fetchCollection = async (dTag: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
-	if (!id) return null
-	const event = await ndk.fetchEvent({
-		ids: [id],
-	})
-	if (!event) {
-		throw new Error('Collection not found')
+	if (!dTag) return null
+
+	const filter: NDKFilter = {
+		kinds: [30405 as NDKKind],
+		'#d': [dTag],
 	}
-	return event
+
+	const events = await ndk.fetchEvents(filter)
+	const eventArray = Array.from(events)
+
+	if (eventArray.length === 0) {
+		return null
+	}
+
+	return eventArray[0]
+}
+
+/**
+ * Fetches a collection by addressable tag (a-tag)
+ * @param pubkey The pubkey of the author
+ * @param dTag The d-tag identifier
+ * @returns The collection event
+ */
+export const fetchCollectionByATag = async (pubkey: string, dTag: string) => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+	if (!pubkey || !dTag) return null
+
+	const filter: NDKFilter = {
+		kinds: [30405 as NDKKind],
+		authors: [pubkey],
+		'#d': [dTag],
+	}
+
+	return await ndk.fetchEvent(filter)
 }
 
 /**
@@ -124,6 +141,19 @@ export const collectionQueryOptions = (id: string) =>
 	queryOptions({
 		queryKey: collectionKeys.details(id),
 		queryFn: () => fetchCollection(id),
+		staleTime: 300000,
+	})
+
+/**
+ * React Query options for fetching a collection by addressable tag (a-tag)
+ * @param pubkey The pubkey of the author
+ * @param dTag The d-tag identifier
+ * @returns Query options object
+ */
+export const collectionByATagQueryOptions = (pubkey: string, dTag: string) =>
+	queryOptions({
+		queryKey: collectionKeys.byATag(pubkey, dTag),
+		queryFn: () => fetchCollectionByATag(pubkey, dTag),
 		staleTime: 300000,
 	})
 /**

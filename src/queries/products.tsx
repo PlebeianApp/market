@@ -25,19 +25,40 @@ export { productKeys }
 
 /**
  * Fetches all product listings
+ * @param limit Maximum number of products to fetch (default: 500)
  * @returns Array of product events sorted by creation date
  */
-export const fetchProducts = async () => {
+export const fetchProducts = async (limit: number = 500) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
 	const filter: NDKFilter = {
 		kinds: [30402], // Product listings in Nostr
-		limit: 50,
+		limit,
 	}
 
 	const events = await ndk.fetchEvents(filter)
-	return Array.from(events)
+	return Array.from(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+}
+
+/**
+ * Fetches product listings with pagination support
+ * @param limit Number of products to fetch (default: 20)
+ * @param until Timestamp to fetch products before (for pagination)
+ * @returns Array of product events sorted by creation date
+ */
+export const fetchProductsPaginated = async (limit: number = 20, until?: number) => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	const filter: NDKFilter = {
+		kinds: [30402], // Product listings in Nostr
+		limit,
+		...(until && { until }),
+	}
+
+	const events = await ndk.fetchEvents(filter)
+	return Array.from(events).sort((a, b) => b.created_at! - a.created_at!)
 }
 
 /**
@@ -107,10 +128,23 @@ export const productQueryOptions = (id: string) =>
 /**
  * React Query options for fetching all products
  */
-export const productsQueryOptions = queryOptions({
-	queryKey: productKeys.all,
-	queryFn: fetchProducts,
-})
+export const productsQueryOptions = (limit: number = 500) =>
+	queryOptions({
+		queryKey: productKeys.all,
+		queryFn: () => fetchProducts(limit),
+	})
+
+/**
+ * React Query options for fetching products with pagination
+ * @param limit Number of products to fetch
+ * @param until Timestamp to fetch products before
+ */
+export const productsPaginatedQueryOptions = (limit: number = 20, until?: number) =>
+	queryOptions({
+		queryKey: productKeys.paginated(limit, until),
+		queryFn: () => fetchProductsPaginated(limit, until),
+		staleTime: 300000, // 5 minutes
+	})
 
 /**
  * React Query options for fetching products by pubkey

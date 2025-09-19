@@ -339,6 +339,20 @@ h3.font-heading {
 		}
 	}
 
+	.hero-container-small {
+		margin-top: -8.5rem;
+		padding-top: 8rem;
+		min-height: calc(200px + 8rem);
+	}
+
+	@media (min-width: 1024px) {
+		.hero-container-small {
+			margin-top: -6rem;
+			padding-top: 6rem;
+			min-height: calc(200px + 6rem);
+		}
+	}
+
 	.back-button {
 		position: absolute;
 		left: 0.5rem;
@@ -396,5 +410,10 @@ h3.font-heading {
 			height: 45vh;
 			margin-top: 2rem;
 		}
+	}
+
+	/* Custom utility classes */
+	.bg-off-black {
+		background-color: var(--off-black);
 	}
 }
