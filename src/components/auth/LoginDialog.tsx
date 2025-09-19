@@ -26,7 +26,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent
-				className="sm:max-w-[425px] p-0 [&>button]:text-white [&>button]:hover:text-gray-300 [&>button]:top-6 [&>button]:right-6"
+				className="sm:max-w-[425px] p-0 [&>button:not([data-dialog-close])]:text-white [&>button:not([data-dialog-close])]:hover:text-gray-300"
 				data-testid="login-dialog"
 			>
 				{/* Header Section */}
