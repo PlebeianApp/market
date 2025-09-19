@@ -5,8 +5,6 @@ import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
 import { useEffect } from 'react'
 import { Link } from '@tanstack/react-router'
-import { FeaturedSections } from '@/components/FeaturedSections'
-import { InfiniteProductList } from '@/components/InfiniteProductList'
 
 // Hook to inject dynamic CSS for background image
 function useHeroBackground(imageUrl: string, className: string) {
@@ -49,7 +47,6 @@ function Index() {
 
 	return (
 		<div>
-			{/* Hero Section */}
 			<div className={`relative hero-container ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-black'}`}>
 				<div className="hero-overlays">
 					<div className="absolute inset-0 bg-radial-overlay z-10" />
@@ -71,12 +68,6 @@ function Index() {
 						</div>
 					</div>
 				</div>
-			</div>
-			<FeaturedSections maxItemsPerSection={5} />
-
-			{/* Infinite Product List */}
-			<div className="px-8 py-4">
-				<InfiniteProductList title="All Products" scrollKey="homepage-products" limit={20} threshold={1000} autoLoad={true} />
 			</div>
 		</div>
 	)

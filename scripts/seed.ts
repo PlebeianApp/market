@@ -1,33 +1,37 @@
 // seed.ts
-import { devUser1, devUser2, devUser3, devUser4, devUser5, WALLETED_USER_LUD16, XPUB } from '@/lib/fixtures'
-import { ORDER_STATUS, SHIPPING_STATUS } from '@/lib/schemas/order'
-import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
+import { devUser1, devUser2, devUser3, devUser4, devUser5, XPUB, WALLETED_USER_LUD16 } from '@/lib/fixtures'
 import { ndkActions } from '@/lib/stores/ndk'
-import { createFeaturedCollectionsEvent, createFeaturedProductsEvent, createFeaturedUsersEvent } from '@/publish/featured'
-import { hexToBytes } from '@noble/hashes/utils'
 import { NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { config } from 'dotenv'
 import { getPublicKey } from 'nostr-tools/pure'
+import { hexToBytes } from '@noble/hashes/utils'
+import { nip19 } from 'nostr-tools'
 import { createCollectionEvent, createProductReference, generateCollectionData } from './gen_collections'
-import {
-	createGeneralCommunicationEvent,
-	createMultiplePaymentRequestEvents,
-	createOrderEvent,
-	createOrderStatusEvent,
-	createPaymentReceiptsForOrder,
-	createShippingUpdateEvent,
-	generateGeneralCommunicationData,
-	generateOrderCreationData,
-	generateOrderStatusData,
-	generateShippingUpdateData,
-} from './gen_orders'
 import { createPaymentDetailEvent, generateLightningPaymentDetail, generateOnChainPaymentDetail } from './gen_payment_details'
 import { createProductEvent, generateProductData } from './gen_products'
-import { createReviewEvent, generateReviewData } from './gen_review'
-import { createShippingEvent, generatePickupShippingData, generateShippingData } from './gen_shipping'
-import { createUserProfileEvent, generateUserProfileData } from './gen_user'
-import { createV4VSharesEvent } from './gen_v4v'
 import { createUserNwcWallets } from './gen_wallets'
+import { createReviewEvent, generateReviewData } from './gen_review'
+import { createShippingEvent, generateShippingData } from './gen_shipping'
+import { createV4VSharesEvent } from './gen_v4v'
+import { ORDER_STATUS, SHIPPING_STATUS } from '@/lib/schemas/order'
+import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
+import { createUserProfileEvent, generateUserProfileData } from './gen_user'
+import {
+	createOrderEvent,
+	createOrderStatusEvent,
+	createPaymentRequestEvent,
+	createMultiplePaymentRequestEvents,
+	createPaymentReceiptEvent,
+	createPaymentReceiptsForOrder,
+	createShippingUpdateEvent,
+	generateOrderCreationData,
+	generateOrderStatusData,
+	generatePaymentRequestData,
+	generatePaymentReceiptData,
+	generateShippingUpdateData,
+	createGeneralCommunicationEvent,
+	generateGeneralCommunicationData,
+} from './gen_orders'
 
 config()
 
@@ -57,16 +61,59 @@ if (!APP_PRIVATE_KEY) {
 	process.exit(1)
 }
 
+// Normalize APP_PRIVATE_KEY (supports nsec, 0x-prefixed, or raw hex)
+function normalizePrivKey(key: string): string {
+	let k = key.trim()
+	if (k.startsWith('nsec')) {
+		try {
+			const dec = nip19.decode(k)
+			if (dec.type === 'nsec' && typeof dec.data === 'string') {
+				k = dec.data
+			} else if (dec.type === 'nsec' && dec.data instanceof Uint8Array) {
+				k = Buffer.from(dec.data).toString('hex')
+			} else {
+				throw new Error('Invalid nsec key')
+			}
+		} catch (e) {
+			throw new Error('APP_PRIVATE_KEY: could not decode nsec key')
+		}
+	}
+	if (k.startsWith('0x')) k = k.slice(2)
+	if (!/^[0-9a-fA-F]{64}$/.test(k)) {
+		throw new Error('APP_PRIVATE_KEY must be a 64-char hex string or a valid nsec')
+	}
+	return k.toLowerCase()
+}
+
+const NORMALIZED_APP_PRIVATE_KEY = normalizePrivKey(APP_PRIVATE_KEY)
+
 // Derive the public key from the private key
-const APP_PUBKEY = getPublicKey(hexToBytes(APP_PRIVATE_KEY))
+const APP_PUBKEY = getPublicKey(hexToBytes(NORMALIZED_APP_PRIVATE_KEY))
 
 const ndk = ndkActions.initialize([RELAY_URL])
 const devUsers = [devUser1, devUser2, devUser3, devUser4, devUser5]
 
+// Normalize and filter out invalid dev users' secret keys (e.g., placeholders like "/")
+type DevUser = typeof devUser1
+const validUsers: { user: DevUser; sk: string }[] = []
+for (const u of devUsers) {
+	try {
+		const normalizedSk = normalizePrivKey(u.sk)
+		validUsers.push({ user: u, sk: normalizedSk })
+	} catch (e) {
+		console.warn(`Skipping dev user with pk ${u.pk.substring(0, 8)} due to invalid sk:`, e instanceof Error ? e.message : e)
+	}
+}
+
+if (validUsers.length === 0) {
+	console.error('No valid dev users found to seed')
+	process.exit(1)
+}
+
 async function seedData() {
-	const PRODUCTS_PER_USER = 10
+	const PRODUCTS_PER_USER = 6
 	const SHIPPING_OPTIONS_PER_USER = 4
-	const COLLECTIONS_PER_USER = 3
+	const COLLECTIONS_PER_USER = 2
 	const REVIEWS_PER_USER = 2
 	const ORDERS_PER_PAIR = 6 // Increased to demonstrate all order states
 
@@ -77,14 +124,13 @@ async function seedData() {
 	const allProductRefs: string[] = []
 	const shippingsByUser: Record<string, string[]> = {}
 	const userPubkeys: string[] = []
-	const allCollectionCoords: string[] = []
 
 	console.log('Starting seeding...')
 
 	// Create user profiles, products and shipping options for each user
-	for (let i = 0; i < devUsers.length; i++) {
-		const user = devUsers[i]
-		const signer = new NDKPrivateKeySigner(user.sk)
+	for (let i = 0; i < validUsers.length; i++) {
+		const { user, sk } = validUsers[i]
+		const signer = new NDKPrivateKeySigner(sk)
 		await signer.blockUntilReady()
 		const pubkey = (await signer.user()).pubkey
 		userPubkeys.push(pubkey)
@@ -113,15 +159,15 @@ async function seedData() {
 		console.log(`Creating shipping options for user ${pubkey.substring(0, 8)}...`)
 		shippingsByUser[pubkey] = []
 
-		// Create one pickup shipping option for each user
-		const pickupShipping = generatePickupShippingData()
-		const pickupSuccess = await createShippingEvent(signer, ndk, pickupShipping)
-		if (pickupSuccess) {
-			const pickupShippingId = pickupShipping.tags.find((tag) => tag[0] === 'd')?.[1]
-			if (pickupShippingId) {
-				shippingsByUser[pubkey].push(`${SHIPPING_KIND}:${pubkey}:${pickupShippingId}`)
-			}
-		}
+		// // Create one pickup shipping option for each user
+		// const pickupShipping = generatePickupShippingData()
+		// const pickupSuccess = await createShippingEvent(signer, ndk, pickupShipping)
+		// if (pickupSuccess) {
+		// 	const pickupShippingId = pickupShipping.tags.find((tag) => tag[0] === 'd')?.[1]
+		// 	if (pickupShippingId) {
+		// 		shippingsByUser[pubkey].push(`${SHIPPING_KIND}:${pubkey}:${pickupShippingId}`)
+		// 	}
+		// }
 
 		// Create regular shipping options
 		for (let j = 0; j < SHIPPING_OPTIONS_PER_USER; j++) {
@@ -162,8 +208,8 @@ async function seedData() {
 
 	// Create collections
 	console.log('Creating collections...')
-	for (const user of devUsers) {
-		const signer = new NDKPrivateKeySigner(user.sk)
+	for (const entry of validUsers) {
+		const signer = new NDKPrivateKeySigner(entry.sk)
 		await signer.blockUntilReady()
 		const pubkey = (await signer.user()).pubkey
 
@@ -172,20 +218,14 @@ async function seedData() {
 		for (let i = 0; i < COLLECTIONS_PER_USER; i++) {
 			const collectionProducts = productsByUser[pubkey] || []
 			const collection = generateCollectionData(collectionProducts)
-			const success = await createCollectionEvent(signer, ndk, collection)
-			if (success) {
-				const collectionId = collection.tags.find((tag) => tag[0] === 'd')?.[1]
-				if (collectionId) {
-					allCollectionCoords.push(`30405:${pubkey}:${collectionId}`)
-				}
-			}
+			await createCollectionEvent(signer, ndk, collection)
 		}
 	}
 
 	// Create reviews
 	console.log('Creating reviews...')
-	for (const user of devUsers) {
-		const signer = new NDKPrivateKeySigner(user.sk)
+	for (const entry of validUsers) {
+		const signer = new NDKPrivateKeySigner(entry.sk)
 		await signer.blockUntilReady()
 		const pubkey = (await signer.user()).pubkey
 
@@ -215,8 +255,8 @@ async function seedData() {
 	// For each pair of users
 	for (let buyerIndex = 0; buyerIndex < userPubkeys.length; buyerIndex++) {
 		const buyerPubkey = userPubkeys[buyerIndex]
-		const buyerUser = devUsers[buyerIndex]
-		const buyerSigner = new NDKPrivateKeySigner(buyerUser.sk)
+		const buyerEntry = validUsers[buyerIndex]
+		const buyerSigner = new NDKPrivateKeySigner(buyerEntry.sk)
 		await buyerSigner.blockUntilReady()
 
 		console.log(`Creating orders for buyer ${buyerPubkey.substring(0, 8)}...`)
@@ -227,8 +267,8 @@ async function seedData() {
 			if (sellerIndex === buyerIndex) continue
 
 			const sellerPubkey = userPubkeys[sellerIndex]
-			const sellerUser = devUsers[sellerIndex]
-			const sellerSigner = new NDKPrivateKeySigner(sellerUser.sk)
+			const sellerEntry = validUsers[sellerIndex]
+			const sellerSigner = new NDKPrivateKeySigner(sellerEntry.sk)
 			await sellerSigner.blockUntilReady()
 
 			console.log(`  Creating orders from ${buyerPubkey.substring(0, 8)} to ${sellerPubkey.substring(0, 8)}...`)
@@ -498,55 +538,6 @@ async function seedData() {
 				}
 			}
 		}
-	}
-
-	// Create featured items for the app
-	console.log('Creating featured items...')
-	if (!APP_PRIVATE_KEY) {
-		console.error('APP_PRIVATE_KEY is required for creating featured items')
-		return
-	}
-	const appSigner = new NDKPrivateKeySigner(APP_PRIVATE_KEY)
-	await appSigner.blockUntilReady()
-
-	// Get random users for featured users (3 users)
-	const featuredUserPubkeys = userPubkeys.slice(0, 3)
-
-	// Get random product coordinates for featured products (10 products)
-	const featuredProductCoords = allProductRefs.slice(0, 10)
-
-	// Get random collection coordinates for featured collections (4 collections)
-	// Use the actual collection coordinates from seeded collections
-	const featuredCollectionCoords = allCollectionCoords.slice(0, 5)
-
-	try {
-		// Publish featured users
-		if (featuredUserPubkeys.length > 0) {
-			console.log(`Publishing ${featuredUserPubkeys.length} featured users...`)
-			const featuredUsersEvent = createFeaturedUsersEvent({ featuredUsers: featuredUserPubkeys }, appSigner, ndk)
-			await featuredUsersEvent.sign(appSigner)
-			await featuredUsersEvent.publish()
-		}
-
-		// Publish featured collections
-		if (featuredCollectionCoords.length > 0) {
-			console.log(`Publishing ${featuredCollectionCoords.length} featured collections...`)
-			const featuredCollectionsEvent = createFeaturedCollectionsEvent({ featuredCollections: featuredCollectionCoords }, appSigner, ndk)
-			await featuredCollectionsEvent.sign(appSigner)
-			await featuredCollectionsEvent.publish()
-		}
-
-		// Publish featured products
-		if (featuredProductCoords.length > 0) {
-			console.log(`Publishing ${featuredProductCoords.length} featured products...`)
-			const featuredProductsEvent = createFeaturedProductsEvent({ featuredProducts: featuredProductCoords }, appSigner, ndk)
-			await featuredProductsEvent.sign(appSigner)
-			await featuredProductsEvent.publish()
-		}
-
-		console.log('Featured items created successfully!')
-	} catch (error) {
-		console.error('Failed to create featured items:', error)
 	}
 
 	console.log('Seeding complete!')

@@ -1146,12 +1146,16 @@ function ShippingOptionsComponent() {
 
 				{/* Shipping option form - shows at top when opened */}
 				{openShippingOptionId === 'new' && (
-					<ShippingOptionForm
-						shippingOption={null}
-						isOpen={openShippingOptionId === 'new'}
-						onOpenChange={(open) => handleOpenChange('new', open)}
-						onSuccess={() => shippingOptionsQuery.refetch()}
-					/>
+					<Card className="mt-4">
+						<CardContent className="p-0">
+							<ShippingOptionForm
+								shippingOption={null}
+								isOpen={openShippingOptionId === 'new'}
+								onOpenChange={(open) => handleOpenChange('new', open)}
+								onSuccess={() => shippingOptionsQuery.refetch()}
+							/>
+						</CardContent>
+					</Card>
 				)}
 
 				<div className="space-y-4">

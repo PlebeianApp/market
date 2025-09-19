@@ -89,11 +89,6 @@ export const dashboardNavigation: NavSection[] = [
 				path: '/dashboard/app-settings/blacklists',
 				adminOnly: true,
 			},
-			{
-				title: '⭐ Featured Items',
-				path: '/dashboard/app-settings/featured-items',
-				adminOnly: true,
-			},
 		],
 	},
 ]
