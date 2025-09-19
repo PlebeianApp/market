@@ -1791,7 +1791,7 @@ function FirehoseComponent() {
 			</div>
 			{/* Floating Back-to-Top Button with left fade-in label */}
 			<div
-				className={`group fixed ${isComposeOpen ? (isComposeLarge ? 'bottom-[calc(50vh+3rem)]' : 'bottom-40') : 'bottom-36'} z-40 ${showTop ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+				className={`group fixed ${isComposeOpen ? (isComposeLarge ? 'bottom-[calc(50vh+3rem)]' : 'bottom-40') : (authIsAuthenticated ? 'bottom-36' : 'bottom-12')} z-40 ${showTop ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
 				style={{ right: floatingRight }}
 			>
 				{/* Label pill to the left */}
@@ -1815,8 +1815,8 @@ function FirehoseComponent() {
 				</Button>
 			</div>
 
-			{/* Floating New Note Button (below Back-to-Top) with left fade-in label */}
-			{!isComposeOpen ? (
+   {/* Floating New Note Button (below Back-to-Top) with left fade-in label */}
+			{!isComposeOpen && authIsAuthenticated ? (
 				<div className="group fixed bottom-12 z-40" style={{ right: floatingRight }}>
 					{/* Label pill to the left */}
 					<div className="absolute top-1/2 right-full -translate-y-1/2 mr-3 pointer-events-none transition-opacity duration-300 opacity-0 group-hover:opacity-100">

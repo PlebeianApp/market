@@ -190,7 +190,7 @@ export const fetchEnhancedNotes = async (opts?: {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const limit = opts?.limit || 200
+	const limit = opts?.limit || 10
 	const kinds = opts?.kinds || SUPPORTED_KINDS
 
 	const filter: NDKFilter = {
@@ -439,7 +439,7 @@ export const enhancedNotesQueryOptions = (opts?: { tag?: string; author?: string
 			normalizeTag(opts?.tag) || '',
 			opts?.author?.trim() || '',
 			opts?.follows ? 'follows' : '',
-			opts?.limit || 200,
+			opts?.limit || 10,
 			(opts?.kinds || SUPPORTED_KINDS).join(','),
 		],
 		queryFn: () => fetchEnhancedNotes(opts),
