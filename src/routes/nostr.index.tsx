@@ -2,7 +2,7 @@ import { createFileRoute, useLocation, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { authActions, authStore } from '@/lib/stores/auth'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { type SVGProps, useEffect, useMemo, useState } from 'react'
+import { type SVGProps, useEffect, useMemo, useState, useRef } from 'react'
 import { enhancedNotesQueryOptions, type EnhancedFetchedNDKEvent } from '@/queries/enhanced-firehose'
 import { authorQueryOptions } from '@/queries/authors'
 import { reactionsQueryOptions } from '@/queries/reactions'
@@ -129,13 +129,16 @@ function FirehoseComponent() {
 	const [filterMode, setFilterMode] = useState<'all' | 'threads' | 'originals' | 'follows' | 'reactions' | 'hashtag'>('all')
 	const isBaseFeed = filterMode !== 'hashtag' && !authorFilter.trim()
 	const [previousFilterMode, setPreviousFilterMode] = useState<'all' | 'threads' | 'originals' | 'follows' | 'hashtag'>('all')
+	const [eventLimit, setEventLimit] = useState(10)
+	// Store all loaded events, so we can append new ones without reloading
+	const [allLoadedEvents, setAllLoadedEvents] = useState<EnhancedFetchedNDKEvent[]>([])
 	const notesOpts = useMemo(() => {
 		// Hashtag view is independent: only in 'hashtag' mode do we apply the tag filter.
 		// Reactions mode is global only.
-		if (filterMode === 'reactions') return { tag: '', author: '', follows: false }
-		if (filterMode === 'hashtag') return { tag: tagFilter, author: '', follows: false }
-		return { tag: '', author: authorFilter, follows: filterMode === 'follows' }
-	}, [filterMode, tagFilter, authorFilter])
+		if (filterMode === 'reactions') return { tag: '', author: '', follows: false, limit: eventLimit }
+		if (filterMode === 'hashtag') return { tag: tagFilter, author: '', follows: false, limit: eventLimit }
+		return { tag: '', author: authorFilter, follows: filterMode === 'follows', limit: eventLimit }
+	}, [filterMode, tagFilter, authorFilter, eventLimit])
 	const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
 		...enhancedNotesQueryOptions(notesOpts),
 		refetchOnWindowFocus: false,
@@ -219,6 +222,11 @@ function FirehoseComponent() {
 
 	// Load view state when switching views
 	useEffect(() => {
+		// Reset event limit to 10 when view changes
+		setEventLimit(10)
+		// Clear accumulated events when view changes
+		setAllLoadedEvents([])
+		
 		const savedState = loadViewState(currentViewKey)
 		if (savedState) {
 			setLastRefreshTimestamp(savedState.lastRefreshTimestamp)
@@ -239,6 +247,55 @@ function FirehoseComponent() {
 			updateLatestTimestampInUrl(newestNoteTimestamp)
 		}
 	}, [newestNoteTimestamp, isLoading])
+	
+	// Update allLoadedEvents when new data arrives
+	// Ref to store scroll position before data update
+	const scrollPositionBeforeUpdateRef = useRef<number>(0);
+	
+	// Save scroll position before data update
+	useEffect(() => {
+		if (eventLimit > 10 && !isLoading) {
+			// Only save position when loading more (not on initial load or view change)
+			scrollPositionBeforeUpdateRef.current = window.scrollY || document.documentElement.scrollTop || 0;
+		}
+	}, [eventLimit, isLoading]);
+	
+	useEffect(() => {
+		if (!data || isLoading) return;
+		
+		// When view changes (filter/tag/author), reset the loaded events
+		if (eventLimit === 10) {
+			setAllLoadedEvents(data);
+		} else {
+			// Otherwise, append new events without duplicates
+			setAllLoadedEvents((prevEvents) => {
+				// Get ids of all previously loaded events
+				const existingIds = new Set(prevEvents.map(w => ((w.event as any)?.id as string) || ''));
+				
+				// Filter out new events that are already in the list
+				const newEvents = data.filter(w => {
+					const id = ((w.event as any)?.id as string) || '';
+					return id && !existingIds.has(id);
+				});
+				
+				// Return combined list
+				return [...prevEvents, ...newEvents];
+			});
+			
+  	// Restore scroll position after the update
+			if (scrollPositionBeforeUpdateRef.current > 0) {
+				// Use multiple frames to ensure DOM has updated fully
+				requestAnimationFrame(() => {
+					requestAnimationFrame(() => {
+						window.scrollTo({
+							top: scrollPositionBeforeUpdateRef.current,
+							behavior: 'auto'
+						});
+					});
+				});
+			}
+		}
+	}, [data, isLoading, eventLimit])
 
 	// Save current view state before switching
 	const saveCurrentViewState = () => {
@@ -293,7 +350,14 @@ function FirehoseComponent() {
 	}
 
 	useEffect(() => {
-		scrollToTop()
+		// Only scroll to top on initial page load, not on updates
+		// This prevents the view from jumping when new events are loaded
+		if (typeof window !== 'undefined' && window.history.state?.nostrInitialLoad !== true) {
+			scrollToTop()
+			// Mark that we've already done the initial scroll
+			window.history.replaceState({ ...window.history.state, nostrInitialLoad: true }, '')
+		}
+		
 		// Load current user pubkey for follows mode header
 		;(async () => {
 			try {
@@ -323,7 +387,7 @@ function FirehoseComponent() {
 									: url.search
 										? `${url.pathname}${url.search}`
 										: url.pathname
-								window.history.replaceState({}, '', target)
+								window.history.replaceState({ ...window.history.state, nostrInitialLoad: true }, '', target)
 								// Trigger listeners to sync state from URL effect without adding history
 								window.dispatchEvent(new PopStateEvent('popstate'))
 							}
@@ -549,22 +613,70 @@ function FirehoseComponent() {
 		} catch {}
 	}, [filterMode])
 
+	// Ref to track if we're already loading more content
+	const isLoadingMoreRef = useRef(false)
+	
 	useEffect(() => {
 		if (typeof window === 'undefined') return
+		
+		// Reset the loading ref when fetch completes
+		if (!isFetching && !isLoading) {
+			isLoadingMoreRef.current = false
+		}
+	}, [isFetching, isLoading])
+	
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+		
+		let scrollTimeout: number | null = null
+		
 		const onScroll = () => {
 			try {
 				const threshold = window.innerHeight / 4
 				setShowTop(window.scrollY > threshold)
+				
+				// Clear any pending timeout
+				if (scrollTimeout) {
+					window.clearTimeout(scrollTimeout)
+				}
+				
+				// Debounce the scroll event (wait 100ms before checking)
+				scrollTimeout = window.setTimeout(() => {
+					// Check if we need to load more content
+					if (!isFetching && !isLoading && !isLoadingMoreRef.current) {
+						const scrollPosition = window.scrollY
+						const windowHeight = window.innerHeight
+						const documentHeight = document.documentElement.scrollHeight
+						
+						// Calculate how far down the user has scrolled (as a percentage)
+						// When the user is 80% of the way to the bottom, load more events
+						const scrollPercentage = (scrollPosition + windowHeight) / documentHeight
+						
+						if (scrollPercentage >= 0.8) {
+							// Set the loading flag to prevent multiple calls
+							isLoadingMoreRef.current = true
+							// Increase the limit to load more events
+							setEventLimit(prevLimit => prevLimit + 10)
+						}
+					}
+				}, 100)
 			} catch (_) {
 				// noop
 			}
 		}
+		
 		onScroll()
 		window.addEventListener('scroll', onScroll, { passive: true })
-		return () => window.removeEventListener('scroll', onScroll)
-	}, [])
+		return () => {
+			window.removeEventListener('scroll', onScroll)
+			if (scrollTimeout) {
+				window.clearTimeout(scrollTimeout)
+			}
+		}
+	}, [isFetching, isLoading])
 
-	const notes = data || []
+	// Use the accumulated events instead of just the latest query data
+	const notes = allLoadedEvents.length > 0 ? allLoadedEvents : (data || [])
 	// Reactions fetching based on currently visible notes
 	const noteIdsForReactions = useMemo(
 		() => (notes as EnhancedFetchedNDKEvent[]).map((w) => (w.event as any)?.id as string).filter(Boolean),
@@ -576,7 +688,7 @@ function FirehoseComponent() {
 	}) as any
 
 	const { filtered, counts } = useMemo(() => {
-		const all = (data || []) as EnhancedFetchedNDKEvent[]
+		const all = notes as EnhancedFetchedNDKEvent[]
 		// Build a set of rootIds that have at least one reply
 		const rootsWithReplies = new Set<string>()
 		for (const w of all) {
