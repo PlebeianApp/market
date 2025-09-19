@@ -700,7 +700,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 					</Link>
 				)}
 				<div className="ml-2 flex items-center gap-2">
-					{(needsThreadData ? !!threadStructure && (threadStructure.nodes?.size || 0) > 1 : true) ? (
+					{!readOnlyInThread && (needsThreadData ? !!threadStructure && (threadStructure.nodes?.size || 0) > 1 : true) ? (
 						<button
  						className={`h-8 w-8 inline-flex items-center justify-center text-xs rounded-full outline-none focus:outline-none focus:ring-0 border-0 transition-colors transition-shadow hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 hover:ring-offset-white ${showThread || isLastViewedThread ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-white text-gray-600 hover:bg-gray-100'}`}
  						aria-pressed={showThread}
