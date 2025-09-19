@@ -136,6 +136,16 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 		}
 	}
 
+	// If no actions available, only show status badge
+	if (!hasActions) {
+		return (
+			<div className={cn('flex items-center justify-center gap-2 rounded-md px-3 py-1', bgColor, textColor)}>
+				{renderIcon()}
+				<span className="font-medium capitalize">{label}</span>
+			</div>
+		)
+	}
+
 	return (
 		<div className="flex w-full items-center justify-between gap-2 md:w-auto md:justify-end">
 			<div className={cn('flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1 md:w-32 md:flex-none', bgColor, textColor)}>
@@ -143,14 +153,13 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 				<span className="font-medium capitalize">{label}</span>
 			</div>
 
-			{hasActions ? (
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-							<span className="sr-only">Open menu</span>
-							<MoreHorizontal className="h-4 w-4" />
-						</Button>
-					</DropdownMenuTrigger>
+			<DropdownMenu>
+				<DropdownMenuTrigger asChild>
+					<Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+						<span className="sr-only">Open menu</span>
+						<MoreHorizontal className="h-4 w-4" />
+					</Button>
+				</DropdownMenuTrigger>
 					<DropdownMenuContent align="end">
 						<DropdownMenuLabel>Actions</DropdownMenuLabel>
 						<DropdownMenuSeparator />
@@ -202,12 +211,6 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 						)}
 					</DropdownMenuContent>
 				</DropdownMenu>
-			) : (
-				<Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled>
-					<span className="sr-only">No actions available</span>
-					<span className="w-4 h-4" />
-				</Button>
-			)}
 
 			{/* Shipping dialog */}
 			<Dialog open={isShippingOpen} onOpenChange={setIsShippingOpen}>

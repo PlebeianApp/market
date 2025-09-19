@@ -189,7 +189,7 @@ function CollectionsComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
+			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 xl:px-6 items-center justify-between">
 				<h1 className="text-2xl font-bold">Collections</h1>
 				<Button
 					onClick={handleAddCollectionClick}
@@ -200,17 +200,17 @@ function CollectionsComponent() {
 					Create A Collection
 				</Button>
 			</div>
-			<div className="space-y-6 p-4 lg:p-6">
-				<div className="lg:hidden">
-					<Button
-						onClick={handleAddCollectionClick}
-						data-testid="add-collection-button-mobile"
-						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
-					>
-						<span className="i-market w-5 h-5" />
-						Create A Collection
-					</Button>
-				</div>
+			<div className="lg:hidden">
+				<Button
+					onClick={handleAddCollectionClick}
+					data-testid="add-collection-button-mobile"
+					className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+				>
+					<span className="i-market w-5 h-5" />
+					Create A Collection
+				</Button>
+			</div>
+			<div className="space-y-4 pt-2 px-4 xl:px-6 pb-6">
 
 				<div>
 					{isLoading && <div className="p-6 text-center text-gray-500 mt-4">Loading your collections...</div>}

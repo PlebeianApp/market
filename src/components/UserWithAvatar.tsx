@@ -14,9 +14,10 @@ interface UserWithAvatarProps {
 	size?: 'sm' | 'md' | 'lg'
 	showBadge?: boolean
 	disableLink?: boolean
+	variant?: 'default' | 'sales' | 'messages'
 }
 
-export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge = true, disableLink = false }: UserWithAvatarProps) {
+export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge = true, disableLink = false, variant = 'default' }: UserWithAvatarProps) {
 	const { data: profile, isLoading } = useQuery({
 		queryKey: profileKeys.details(pubkey),
 		queryFn: () => fetchProfileByIdentifier(pubkey),
@@ -36,7 +37,30 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 
 	const nameInitial = profile?.name || profile?.displayName || pubkey.slice(0, 1).toUpperCase()
 
-	const content = (
+	const content = variant === 'sales' ? (
+		<div className={cn(
+			"flex items-center gap-1 border border-gray-300 rounded px-1.5 py-1 inline-flex max-w-[100px] sm:max-w-[120px] overflow-hidden",
+			!disableLink && "hover:bg-muted/50 hover:border-primary transition-colors duration-200"
+		)}>
+			<Avatar className={cn(avatarSizeClass, "flex-shrink-0")}>
+				<AvatarImage src={profile?.picture} />
+				<AvatarFallback>{nameInitial}</AvatarFallback>
+			</Avatar>
+			<div className="flex items-center gap-0.5 min-w-0 flex-1 overflow-hidden">
+				<ProfileName 
+					pubkey={pubkey} 
+					className={cn(
+						textSizeClass,
+						"truncate",
+						!disableLink && 'hover:text-primary transition-colors duration-200'
+					)} 
+					truncate={true} 
+					disableLink={true} 
+				/>
+				{showBadge && <Nip05Badge userId={pubkey} className="flex-shrink-0" />}
+			</div>
+		</div>
+	) : (
 		<>
 			<Avatar className={avatarSizeClass}>
 				<AvatarImage src={profile?.picture} />
