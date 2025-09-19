@@ -8,6 +8,7 @@ import {
 	type EnhancedThreadStructure,
 	findRootFromETags,
 } from '@/queries/enhanced-thread.tsx'
+import { updateEventDisplayTime } from '@/queries/enhanced-firehose'
 import { nip19 } from 'nostr-tools'
 import { reactionsQueryOptions } from '@/queries/reactions'
 import { Link } from '@tanstack/react-router'
@@ -242,14 +243,27 @@ function ThreadView({ threadStructure, highlightedNoteId, reactionsMap: propReac
 		return ids
 	}, [threadStructure])
 
-	// Fetch reactions for all notes in the thread if not provided via props
+	// Determine if the provided reactions map covers all thread notes
+	const hasSufficientReactions = useMemo(() => {
+		if (!propReactionsMap) return false
+		for (const id of noteIds) {
+			if (!propReactionsMap[id]) return false
+		}
+		return true
+	}, [propReactionsMap, noteIds])
+
+	// Fetch reactions for all notes in the thread when needed
 	const { data: fetchedReactionsMap } = useQuery({
 		...reactionsQueryOptions(noteIds),
-		enabled: noteIds.length > 0 && !propReactionsMap,
-	})
+		enabled: noteIds.length > 0 && !hasSufficientReactions,
+		refetchOnWindowFocus: false,
+		refetchOnReconnect: false,
+		keepPreviousData: true,
+		staleTime: 60_000,
+	} as any)
 
-	// Use provided reactionsMap from props if available, otherwise use fetched data
-	const reactionsMap = propReactionsMap || fetchedReactionsMap
+	// Use provided reactionsMap only if it fully covers the thread; otherwise, use fetched data
+	const reactionsMap = hasSufficientReactions ? propReactionsMap : fetchedReactionsMap
 
 	useEffect(() => {
 		// Wait one frame to ensure children are rendered
@@ -283,9 +297,36 @@ function ThreadView({ threadStructure, highlightedNoteId, reactionsMap: propReac
 export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps) {
 	// Access query client for optimistic updates
 	const queryClient = useQueryClient()
-	
+
 	// Reference to track note visibility
 	const noteRef = useRef<HTMLDivElement>(null)
+
+	// Set up intersection observer to track when note is displayed
+	useEffect(() => {
+		// Get the note ID
+		const noteId = (note as any)?.id
+		if (!noteId || !noteRef.current) return
+
+		// Create observer to track visibility
+		const observer = new IntersectionObserver(
+			(entries) => {
+				// When note becomes visible
+				if (entries[0].isIntersecting) {
+					// Update the display timestamp
+					updateEventDisplayTime(noteId)
+				}
+			},
+			{ threshold: 0.5 }, // Consider visible when 50% of note is in viewport
+		)
+
+		// Start observing the note element
+		observer.observe(noteRef.current)
+
+		// Clean up observer on unmount
+		return () => {
+			observer.disconnect()
+		}
+	}, [note])
 
 	// Process note content based on kind and format for display
 	const displayContent = (() => {
@@ -412,6 +453,14 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 		}
 	}, [viewMode, nip19Reference, quoteText])
 	const { openThreadId, setOpenThreadId, feedScrollY, setFeedScrollY, clickedEventId, setClickedEventId } = useThreadOpen()
+	const isLastViewedThread = useMemo(() => {
+		try {
+			const currentId = ((note as any)?.id || '') as string
+			return !!currentId && clickedEventId === currentId
+		} catch {
+			return false
+		}
+	}, [clickedEventId, note])
 	const { isAuthenticated } = useAuth()
 	const noteIdForThread = ((note as any)?.id || findRootFromETags?.(note) || '') as string
 	const showThread = !readOnlyInThread && openThreadId === noteIdForThread
@@ -439,7 +488,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 
 	// Track note visibility to prioritize thread loading from top of list
 	const [isVisible, setIsVisible] = useState(false)
-	
+
 	// Set up intersection observer to detect when notes are visible
 	useEffect(() => {
 		const observer = new IntersectionObserver(
@@ -448,20 +497,20 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 					setIsVisible(true)
 				}
 			},
-			{ threshold: 0.1 } // 10% visibility is enough to trigger
+			{ threshold: 0.1 }, // 10% visibility is enough to trigger
 		)
-		
+
 		if (noteRef.current) {
 			observer.observe(noteRef.current)
 		}
-		
+
 		return () => {
 			if (noteRef.current) {
 				observer.unobserve(noteRef.current)
 			}
 		}
 	}, [])
-	
+
 	// Immediate thread loading for visible notes, to prioritize top of list
 	// Once a note is visible, we'll always keep its isVisible state true even if scrolled away
 	// This ensures we fetch thread data immediately for notes at the top of the list
@@ -469,6 +518,11 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 	const { data: threadStructure, isLoading: isLoadingThread } = useQuery({
 		...enhancedThreadStructureQueryOptions(noteId),
 		enabled: needsThreadData,
+		// Prevent any automatic refetches while viewing a thread to stop reloads
+		refetchOnWindowFocus: false,
+		refetchOnReconnect: false,
+		refetchInterval: false,
+		staleTime: Infinity,
 	})
 	// Safely handle possible undefined or non-numeric created_at from NDKEvent
 	const createdAtSeconds =
@@ -522,7 +576,8 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 		<div
 			ref={noteRef}
 			data-note-id={noteIdForThread}
-			className={`group border p-3 z-20 rounded-lg transition-colors duration-150 ${isClickablePanel ? 'hover:bg-gray-100' : 'hover:bg-gray-100/50'}`}
+			data-last-viewed={isLastViewedThread || undefined}
+			className={`group border p-3 z-20 rounded-lg transition-colors duration-150 ${isClickablePanel ? 'hover:bg-gray-100' : 'hover:bg-gray-100/50'} ${isLastViewedThread ? 'bg-primary/10 ring-2 ring-primary' : ''}`}
 			onMouseEnter={() => !readOnlyInThread && setIsHovering(true)}
 			onMouseLeave={() => !readOnlyInThread && setIsHovering(false)}
 		>
@@ -645,6 +700,67 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 					</Link>
 				)}
 				<div className="ml-2 flex items-center gap-2">
+					{(needsThreadData ? !!threadStructure && (threadStructure.nodes?.size || 0) > 1 : true) ? (
+						<button
+ 						className={`h-8 w-8 inline-flex items-center justify-center text-xs rounded-full outline-none focus:outline-none focus:ring-0 border-0 transition-colors transition-shadow hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 hover:ring-offset-white ${showThread || isLastViewedThread ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-white text-gray-600 hover:bg-gray-100'}`}
+ 						aria-pressed={showThread}
+							onClick={(e) => {
+								e.preventDefault()
+								e.stopPropagation()
+								if (openThreadId === noteIdForThread) {
+									setOpenThreadId(null)
+									try {
+										const url = new URL(window.location.href)
+										url.searchParams.delete('threadview')
+										const target = url.pathname.startsWith('/nostr')
+											? url.search
+												? `/nostr${url.search}`
+												: '/nostr'
+											: url.search
+												? `${url.pathname}${url.search}`
+												: url.pathname
+										window.history.replaceState({}, '', target)
+										window.dispatchEvent(new PopStateEvent('popstate'))
+									} catch {}
+									// Restore scroll position if we saved one
+									try {
+										if (typeof window !== 'undefined' && feedScrollY != null) {
+											window.scrollTo({ top: feedScrollY })
+											setFeedScrollY(null)
+										}
+									} catch {}
+								} else {
+									// Save current feed scroll before opening thread
+									try {
+										if (typeof window !== 'undefined') setFeedScrollY(window.scrollY)
+									} catch {}
+									setOpenThreadId(noteIdForThread)
+									setClickedEventId(((note as any)?.id || '') as string)
+									try {
+										const url = new URL(window.location.href)
+										url.searchParams.set('threadview', noteIdForThread)
+										const target = url.pathname.startsWith('/nostr')
+											? url.search
+												? `/nostr${url.search}`
+												: '/nostr'
+											: url.search
+												? `${url.pathname}${url.search}`
+												: url.pathname
+										window.history.pushState({}, '', target)
+										window.dispatchEvent(new PopStateEvent('popstate'))
+									} catch {}
+								}
+							}}
+							title={showThread ? 'Hide thread' : 'View thread'}
+							aria-label={showThread ? 'Hide thread' : 'View thread'}
+						>
+							{isLoadingThread && delayedHover ? (
+								<span className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
+							) : (
+								<SpoolIcon className="h-4 w-4 hover:bg-grey-300" />
+							)}
+						</button>
+					) : null}
 					{/* Right-side actions: reply, repost, quote (icons only on <1024px; icon + label on wide) */}
 					{isAuthenticated && (
 						<div className="flex items-center gap-2">
@@ -786,70 +902,6 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 							</button>
 						</div>
 					)}
-					{(needsThreadData ? !!threadStructure && (threadStructure.nodes?.size || 0) > 1 : true) ? (
-						<button
-							className={`h-8 w-8 inline-flex items-center justify-center text-xs rounded-full outline-none focus:outline-none focus:ring-0 border-0 transition-colors transition-shadow hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 hover:ring-offset-white ${
-								showThread ? 'bg-blue-50 text-blue-600 hover:bg-blue-100' : 'bg-white text-gray-600 hover:bg-gray-100'
-							}`}
-							aria-pressed={showThread}
-							onClick={(e) => {
-								e.preventDefault()
-								e.stopPropagation()
-								if (openThreadId === noteIdForThread) {
-									setOpenThreadId(null)
-									setClickedEventId(null)
-									try {
-										const url = new URL(window.location.href)
-										url.searchParams.delete('threadview')
-										const target = url.pathname.startsWith('/nostr')
-											? url.search
-												? `/nostr${url.search}`
-												: '/nostr'
-											: url.search
-												? `${url.pathname}${url.search}`
-												: url.pathname
-										window.history.replaceState({}, '', target)
-										window.dispatchEvent(new PopStateEvent('popstate'))
-									} catch {}
-									// Restore scroll position if we saved one
-									try {
-										if (typeof window !== 'undefined' && feedScrollY != null) {
-											window.scrollTo({ top: feedScrollY })
-											setFeedScrollY(null)
-										}
-									} catch {}
-								} else {
-									// Save current feed scroll before opening thread
-									try {
-										if (typeof window !== 'undefined') setFeedScrollY(window.scrollY)
-									} catch {}
-									setOpenThreadId(noteIdForThread)
-									setClickedEventId(((note as any)?.id || '') as string)
-									try {
-										const url = new URL(window.location.href)
-										url.searchParams.set('threadview', noteIdForThread)
-										const target = url.pathname.startsWith('/nostr')
-											? url.search
-												? `/nostr${url.search}`
-												: '/nostr'
-											: url.search
-												? `${url.pathname}${url.search}`
-												: url.pathname
-										window.history.pushState({}, '', target)
-										window.dispatchEvent(new PopStateEvent('popstate'))
-									} catch {}
-								}
-							}}
-							title={showThread ? 'Hide thread' : 'View thread'}
-							aria-label={showThread ? 'Hide thread' : 'View thread'}
-						>
-							{isLoadingThread && delayedHover ? (
-								<span className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-							) : (
-								<SpoolIcon className="h-4 w-4 hover:bg-grey-300" />
-							)}
-						</button>
-					) : null}
 				</div>
 			</div>
 			<div className="flex gap-2">

@@ -3,7 +3,7 @@ import { useStore } from '@tanstack/react-store'
 import { authActions, authStore } from '@/lib/stores/auth'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { type SVGProps, useEffect, useMemo, useState, useRef } from 'react'
-import { enhancedNotesQueryOptions, type EnhancedFetchedNDKEvent } from '@/queries/enhanced-firehose'
+import { enhancedNotesQueryOptions, type EnhancedFetchedNDKEvent, cleanupStaleEvents } from '@/queries/enhanced-firehose'
 import { authorQueryOptions } from '@/queries/authors'
 import { reactionsQueryOptions } from '@/queries/reactions'
 import { ndkActions } from '@/lib/stores/ndk'
@@ -132,6 +132,12 @@ function FirehoseComponent() {
 	const [eventLimit, setEventLimit] = useState(10)
 	// Store all loaded events, so we can append new ones without reloading
 	const [allLoadedEvents, setAllLoadedEvents] = useState<EnhancedFetchedNDKEvent[]>([])
+	
+	// Track cache cleanup stats for debugging
+	const [lastCleanupStats, setLastCleanupStats] = useState<{
+		timestamp: number;
+		removedCount: number;
+	} | null>(null)
 	const notesOpts = useMemo(() => {
 		// Hashtag view is independent: only in 'hashtag' mode do we apply the tag filter.
 		// Reactions mode is global only.
@@ -226,7 +232,7 @@ function FirehoseComponent() {
 		setEventLimit(10)
 		// Clear accumulated events when view changes
 		setAllLoadedEvents([])
-		
+
 		const savedState = loadViewState(currentViewKey)
 		if (savedState) {
 			setLastRefreshTimestamp(savedState.lastRefreshTimestamp)
@@ -247,52 +253,52 @@ function FirehoseComponent() {
 			updateLatestTimestampInUrl(newestNoteTimestamp)
 		}
 	}, [newestNoteTimestamp, isLoading])
-	
+
 	// Update allLoadedEvents when new data arrives
 	// Ref to store scroll position before data update
-	const scrollPositionBeforeUpdateRef = useRef<number>(0);
-	
+	const scrollPositionBeforeUpdateRef = useRef<number>(0)
+
 	// Save scroll position before data update
 	useEffect(() => {
 		if (eventLimit > 10 && !isLoading) {
 			// Only save position when loading more (not on initial load or view change)
-			scrollPositionBeforeUpdateRef.current = window.scrollY || document.documentElement.scrollTop || 0;
+			scrollPositionBeforeUpdateRef.current = window.scrollY || document.documentElement.scrollTop || 0
 		}
-	}, [eventLimit, isLoading]);
-	
+	}, [eventLimit, isLoading])
+
 	useEffect(() => {
-		if (!data || isLoading) return;
-		
+		if (!data || isLoading) return
+
 		// When view changes (filter/tag/author), reset the loaded events
 		if (eventLimit === 10) {
-			setAllLoadedEvents(data);
+			setAllLoadedEvents(data)
 		} else {
 			// Otherwise, append new events without duplicates
 			setAllLoadedEvents((prevEvents) => {
 				// Get ids of all previously loaded events
-				const existingIds = new Set(prevEvents.map(w => ((w.event as any)?.id as string) || ''));
-				
+				const existingIds = new Set(prevEvents.map((w) => ((w.event as any)?.id as string) || ''))
+
 				// Filter out new events that are already in the list
-				const newEvents = data.filter(w => {
-					const id = ((w.event as any)?.id as string) || '';
-					return id && !existingIds.has(id);
-				});
-				
+				const newEvents = data.filter((w) => {
+					const id = ((w.event as any)?.id as string) || ''
+					return id && !existingIds.has(id)
+				})
+
 				// Return combined list
-				return [...prevEvents, ...newEvents];
-			});
-			
-  	// Restore scroll position after the update
+				return [...prevEvents, ...newEvents]
+			})
+
+			// Restore scroll position after the update
 			if (scrollPositionBeforeUpdateRef.current > 0) {
 				// Use multiple frames to ensure DOM has updated fully
 				requestAnimationFrame(() => {
 					requestAnimationFrame(() => {
 						window.scrollTo({
 							top: scrollPositionBeforeUpdateRef.current,
-							behavior: 'auto'
-						});
-					});
-				});
+							behavior: 'auto',
+						})
+					})
+				})
 			}
 		}
 	}, [data, isLoading, eventLimit])
@@ -357,7 +363,7 @@ function FirehoseComponent() {
 			// Mark that we've already done the initial scroll
 			window.history.replaceState({ ...window.history.state, nostrInitialLoad: true }, '')
 		}
-		
+
 		// Load current user pubkey for follows mode header
 		;(async () => {
 			try {
@@ -519,6 +525,8 @@ function FirehoseComponent() {
 			// Sync thread open state from ?threadview
 			if (incomingThread && incomingThread !== openThreadId) {
 				setOpenThreadId(incomingThread)
+				// Also record this as the last clicked to keep highlight consistent (and persisted)
+				setClickedEventId(incomingThread)
 			} else if (!incomingThread && openThreadId) {
 				setOpenThreadId(null)
 			}
@@ -615,48 +623,50 @@ function FirehoseComponent() {
 
 	// Ref to track if we're already loading more content
 	const isLoadingMoreRef = useRef(false)
-	
+
 	useEffect(() => {
 		if (typeof window === 'undefined') return
-		
+
 		// Reset the loading ref when fetch completes
 		if (!isFetching && !isLoading) {
 			isLoadingMoreRef.current = false
 		}
 	}, [isFetching, isLoading])
-	
+
 	useEffect(() => {
 		if (typeof window === 'undefined') return
-		
+
 		let scrollTimeout: number | null = null
-		
+
 		const onScroll = () => {
 			try {
 				const threshold = window.innerHeight / 4
 				setShowTop(window.scrollY > threshold)
-				
+
 				// Clear any pending timeout
 				if (scrollTimeout) {
 					window.clearTimeout(scrollTimeout)
 				}
-				
+
 				// Debounce the scroll event (wait 100ms before checking)
 				scrollTimeout = window.setTimeout(() => {
+					// If a thread is open, do not attempt to load more feed items
+					if (openThreadId) return
 					// Check if we need to load more content
 					if (!isFetching && !isLoading && !isLoadingMoreRef.current) {
 						const scrollPosition = window.scrollY
 						const windowHeight = window.innerHeight
 						const documentHeight = document.documentElement.scrollHeight
-						
+
 						// Calculate how far down the user has scrolled (as a percentage)
-						// When the user is 80% of the way to the bottom, load more events
+						// When the user is 75% of the way to the bottom, load more events
 						const scrollPercentage = (scrollPosition + windowHeight) / documentHeight
-						
-						if (scrollPercentage >= 0.8) {
+
+						if (scrollPercentage >= 0.75) {
 							// Set the loading flag to prevent multiple calls
 							isLoadingMoreRef.current = true
 							// Increase the limit to load more events
-							setEventLimit(prevLimit => prevLimit + 10)
+							setEventLimit((prevLimit) => prevLimit + 5)
 						}
 					}
 				}, 100)
@@ -664,7 +674,7 @@ function FirehoseComponent() {
 				// noop
 			}
 		}
-		
+
 		onScroll()
 		window.addEventListener('scroll', onScroll, { passive: true })
 		return () => {
@@ -673,10 +683,10 @@ function FirehoseComponent() {
 				window.clearTimeout(scrollTimeout)
 			}
 		}
-	}, [isFetching, isLoading])
+	}, [isFetching, isLoading, openThreadId])
 
 	// Use the accumulated events instead of just the latest query data
-	const notes = allLoadedEvents.length > 0 ? allLoadedEvents : (data || [])
+	const notes = allLoadedEvents.length > 0 ? allLoadedEvents : data || []
 	// Reactions fetching based on currently visible notes
 	const noteIdsForReactions = useMemo(
 		() => (notes as EnhancedFetchedNDKEvent[]).map((w) => (w.event as any)?.id as string).filter(Boolean),
@@ -744,6 +754,44 @@ function FirehoseComponent() {
 		}
 	}, [data, filterMode])
 
+	// Periodically clean up stale events from cache to free memory
+	useEffect(() => {
+		// Run cache cleanup every 5 minutes (adjust this interval as needed)
+		const CLEANUP_INTERVAL = 1000 * 60 * 5 // 5 minutes
+		
+		// Run initial cleanup
+		const initialCleanup = () => {
+			try {
+				// Use 1 hour as the max age for stale events (adjust as needed)
+				const MAX_AGE = 1000 * 60 * 60 // 1 hour
+				const removedCount = cleanupStaleEvents(MAX_AGE)
+				
+				// Update stats for debugging
+				if (removedCount > 0) {
+					setLastCleanupStats({
+						timestamp: Date.now(),
+						removedCount
+					})
+					console.log(`Cache cleanup: removed ${removedCount} stale events`)
+				}
+			} catch (error) {
+				console.error('Error during cache cleanup:', error)
+			}
+		}
+		
+		// Run cleanup periodically
+		const cleanupInterval = setInterval(initialCleanup, CLEANUP_INTERVAL)
+		
+		// Run initial cleanup after a short delay
+		const initialTimeout = setTimeout(initialCleanup, 10000)
+		
+		// Clean up intervals on unmount
+		return () => {
+			clearInterval(cleanupInterval)
+			clearTimeout(initialTimeout)
+		}
+	}, [])
+	
 	// Stop spinner animation when the feed + thread view have committed a re-render
 	useEffect(() => {
 		if (!loadingMode) return
@@ -1903,7 +1951,7 @@ function FirehoseComponent() {
 			</div>
 			{/* Floating Back-to-Top Button with left fade-in label */}
 			<div
-				className={`group fixed ${isComposeOpen ? (isComposeLarge ? 'bottom-[calc(50vh+3rem)]' : 'bottom-40') : (authIsAuthenticated ? 'bottom-36' : 'bottom-12')} z-40 ${showTop ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+				className={`group fixed ${isComposeOpen ? (isComposeLarge ? 'bottom-[calc(50vh+3rem)]' : 'bottom-40') : authIsAuthenticated ? 'bottom-36' : 'bottom-12'} z-40 ${showTop ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
 				style={{ right: floatingRight }}
 			>
 				{/* Label pill to the left */}
@@ -1927,7 +1975,7 @@ function FirehoseComponent() {
 				</Button>
 			</div>
 
-   {/* Floating New Note Button (below Back-to-Top) with left fade-in label */}
+			{/* Floating New Note Button (below Back-to-Top) with left fade-in label */}
 			{!isComposeOpen && authIsAuthenticated ? (
 				<div className="group fixed bottom-12 z-40" style={{ right: floatingRight }}>
 					{/* Label pill to the left */}
@@ -1957,10 +2005,10 @@ function FirehoseComponent() {
 							className={`flex items-stretch gap-2 ${isComposeLarge ? 'h-[50vh] p-0' : 'min-h-24 p-3'}`}
 							onSubmit={async (e) => {
 								e.preventDefault()
-								
+
 								// Don't send empty messages
 								if (!composeText.trim()) return
-								
+
 								try {
 									// Get NDK instance and signer
 									const ndk = ndkActions.getNDK()
@@ -1968,48 +2016,48 @@ function FirehoseComponent() {
 										toast.error('Not connected to Nostr network')
 										return
 									}
-									
+
 									const signer = ndkActions.getSigner()
 									if (!signer) {
 										toast.error('Please log in to send notes')
 										return
 									}
-									
+
 									// Show loading toast
 									const loadingToastId = toast.loading('Publishing note...')
-									
+
 									// Create the kind 1 text note event
 									const event = new NDKEvent(ndk)
 									event.kind = 1
 									event.content = composeText.trim()
 									event.tags = []
-									
+
 									// TODO: Handle image uploads by creating image URLs and adding them to content
 									// For now, we'll just send the text content
-									
+
 									// Sign and publish the event
 									await event.sign(signer)
-									
+
 									// Create a relay set for publishing using writeRelaysUrls
 									const publishRelaySet = NDKRelaySet.fromRelayUrls(writeRelaysUrls, ndk)
 									await event.publish(publishRelaySet)
-									
+
 									console.log('Note published successfully:', event.id)
 									console.log('Published event JSON:', JSON.stringify(event.rawEvent()))
-									
+
 									// Create wrapped event for immediate feed updates
 									const wrappedEvent = {
 										event: event,
 										fetchedAt: Date.now(),
 										relaysSeen: [],
 										isFromCache: false,
-										priority: 1 // High priority for new notes
+										priority: 1, // High priority for new notes
 									}
-									
+
 									// Get current user pubkey for follow feed check
 									const user = await ndkActions.getUser()
 									const currentUserPubkey = user?.pubkey
-									
+
 									// Update all relevant feeds immediately by modifying query cache
 									// Update global feed (all mode)
 									const globalKey = [...noteKeys.all, 'enhanced-list', '', '', '']
@@ -2019,7 +2067,7 @@ function FirehoseComponent() {
 										}
 										return [wrappedEvent]
 									})
-									
+
 									// Update follow feed if user has follows (published notes should appear in follow feed)
 									if (currentUserPubkey) {
 										const followsKey = [...noteKeys.all, 'enhanced-list', '', '', 'follows']
@@ -2030,16 +2078,15 @@ function FirehoseComponent() {
 											return [wrappedEvent]
 										})
 									}
-									
+
 									// Clear the compose form
 									setComposeText('')
 									setComposeImages([])
 									setIsComposeOpen(false)
-									
+
 									// Show success message
 									toast.dismiss(loadingToastId)
 									toast.success('Note published successfully!')
-									
 								} catch (error) {
 									console.error('Failed to send note:', error)
 									toast.error('Failed to publish note. Please try again.')
