@@ -156,9 +156,9 @@ export function Header() {
 						</Link>
 						<Link
 							to="/nostr"
-							search={{
-								view: isAuthenticated ? 'follows' : undefined // Send to follows feed if logged in, global if not
-							}}
+ 						search={{
+ 							view: undefined // Always go to global/default feed; follows feed removed
+ 						}}
 							className="hover:text-secondary"
 							activeProps={{
 								className: 'text-secondary',

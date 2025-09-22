@@ -24,7 +24,6 @@ export const ZAP_RELAYS = [
 	'wss://relay.minibits.cash',
 	'wss://relay.coinos.io/',
 	'wss://nwc.primal.net',
-	// 'ws://localhost:10547',
 ]
 // export const defaultRelaysUrls: string[] = []
 
