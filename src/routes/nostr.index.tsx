@@ -19,11 +19,12 @@ import { useThreadOpen } from '@/state/threadOpenStore'
 import { findRootFromETags } from '@/queries/enhanced-thread'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import EmojiPicker from 'emoji-picker-react'
+import EmojiPicker, { Theme } from 'emoji-picker-react'
 import { goBackWithTimeLimit } from '@/lib/navigation'
 import { useConfigQuery } from '@/queries/config'
 import { CartButton } from '@/components/CartButton'
 import { Profile } from '@/components/Profile'
+import { noteKeys } from '@/queries/queryKeyFactory'
 
 // Function to check if there's a previous entry in browser history
 function canGoBack(): boolean {
@@ -120,7 +121,7 @@ function FirehoseComponent() {
 	const location = useLocation()
 	const queryClient = useQueryClient()
 	const [isFiltersOpen, setIsFiltersOpen] = useState(false)
-	const [loadingMode, setLoadingMode] = useState<null | 'all' | 'threads' | 'originals' | 'follows' | 'reactions'>(null)
+ const [loadingMode, setLoadingMode] = useState<null | 'all' | 'threads' | 'originals' | 'follows' | 'reactions' | 'hashtag'>(null)
 	const [spinnerSettled, setSpinnerSettled] = useState(false)
 	const { openThreadId, setOpenThreadId, feedScrollY, setFeedScrollY, clickedEventId, setClickedEventId } = useThreadOpen()
 	const [tagFilter, setTagFilter] = useState('')
@@ -143,7 +144,8 @@ function FirehoseComponent() {
 		// Reactions mode is global only.
 		if (filterMode === 'reactions') return { tag: '', author: '', follows: false, limit: eventLimit }
 		if (filterMode === 'hashtag') return { tag: tagFilter, author: '', follows: false, limit: eventLimit }
-		return { tag: '', author: authorFilter, follows: filterMode === 'follows', limit: eventLimit }
+		if (filterMode === 'follows') return { tag: '', author: '', follows: true, limit: eventLimit }
+		return { tag: '', author: authorFilter, follows: false, limit: eventLimit }
 	}, [filterMode, tagFilter, authorFilter, eventLimit])
 	const { data, isLoading, isError, error, refetch: doRefetch, isFetching } = useQuery({
 		...enhancedNotesQueryOptions(notesOpts),
@@ -509,9 +511,9 @@ function FirehoseComponent() {
 							const hasThread = !!(url.searchParams.get('threadview') || '').trim()
 							if (isAtStartOfHistory() && !hasExplicitView && !hasTag && !hasUser && !hasThread) {
 								// Set local state first to render immediately
-								setFilterMode('follows')
-								// Update URL to reflect follows view
-								url.searchParams.set('view', 'follows')
+								setFilterMode('all')
+								// Update URL to reflect global view
+								url.searchParams.set('view', 'global')
 								url.searchParams.delete('emoji')
 								url.searchParams.delete('tag')
 								const target = url.pathname.startsWith('/nostr')
@@ -580,9 +582,9 @@ function FirehoseComponent() {
 				const isSpecial = requestedView === 'reactions' || requestedView === 'hashtag'
 				if (!hasTag && !hasUser && !hasThread && !isSpecial) {
 					// If there was no explicit view or it was previously downgraded to 'all', switch to follows
-					if (!hasExplicitView || requestedView === 'all' || requestedView === '') {
-						setFilterMode('follows')
-						url.searchParams.set('view', 'follows')
+						if (!hasExplicitView || requestedView === 'all' || requestedView === '') {
+							setFilterMode('all')
+							url.searchParams.set('view', 'global')
 						url.searchParams.delete('emoji')
 						url.searchParams.delete('tag')
 						const target = url.pathname.startsWith('/nostr')
@@ -600,6 +602,36 @@ function FirehoseComponent() {
 		} catch {}
 	}, [currentUserPk])
 
+	// Background prefetch for Follows feed so it loads while user browses other views
+	useEffect(() => {
+		try {
+			if (!currentUserPk) return
+			// If already on follows view, the main query is active; skip background prefetch
+			if (filterMode === 'follows') return
+
+			let stopped = false
+			const prefetch = () => {
+				if (stopped) return
+				try {
+					// Prefetch with a reasonable batch size so switching is instant
+					const limit = Math.max(30, eventLimit)
+					queryClient.prefetchQuery({
+						...enhancedNotesQueryOptions({ tag: '', author: '', follows: true, limit }),
+					})
+				} catch {}
+			}
+
+			// Prefetch immediately on login or view change
+			prefetch()
+			// And keep it warm every 45s in the background
+			const id = window.setInterval(prefetch, 45_000)
+			return () => {
+				stopped = true
+				window.clearInterval(id)
+			}
+		} catch {}
+	}, [currentUserPk, filterMode, eventLimit, queryClient])
+	
 	// Apply tag/user/view/threadview from URL when location changes
 	useEffect(() => {
 		try {
@@ -618,13 +650,13 @@ function FirehoseComponent() {
 					? 'threads'
 					: incomingView === 'originals'
 						? 'originals'
-						: incomingView === 'follows'
-							? 'follows'
-							: incomingView === 'reactions' || (!!incomingEmoji && incomingEmoji.trim() !== '')
-								? 'reactions'
-								: incomingView === 'hashtag' || (!!incomingTag && incomingTag !== '')
+						: incomingView === 'reactions' || (!!incomingEmoji && incomingEmoji.trim() !== '')
+							? 'reactions'
+							: incomingView === 'hashtag' || (!!incomingTag && incomingTag !== '')
 									? 'hashtag'
-									: 'all'
+									: incomingView === 'follows'
+											? 'follows'
+											: 'all'
 			// Prevent follows mode when logged out
 			const guardedDesiredMode = desiredMode === 'follows' && !currentUserPk ? 'all' : desiredMode
 			if (guardedDesiredMode !== filterMode) {
@@ -703,28 +735,30 @@ function FirehoseComponent() {
 		} catch {}
 	}, [location.href])
 
-	// Auto-fallback to global view if follows mode returns empty data
+	// When navigating to a specific user feed, force a refresh to load newest posts from that user
 	useEffect(() => {
-		// Only apply this logic when in follows mode and data has loaded
-		if (filterMode === 'follows' && !isLoading && data && Array.isArray(data) && data.length === 0 && currentUserPk) {
-			console.log('No follow list found, switching to global view')
-			setFilterMode('all')
-			// Update URL to remove follows view parameter
-			if (typeof window !== 'undefined') {
-				try {
-					const url = new URL(window.location.href)
-					url.searchParams.delete('view')
-					const target = url.pathname.startsWith('/nostr')
-						? url.search
-							? `/nostr${url.search}`
-							: '/nostr'
-						: url.search
-							? `${url.pathname}${url.search}`
-							: url.pathname
-					window.history.replaceState({}, '', target)
-					window.dispatchEvent(new PopStateEvent('popstate'))
-				} catch {}
+		try {
+			// Only trigger when an explicit author filter is active (and not hashtag or reactions views)
+			if (authorFilter && filterMode !== 'hashtag' && filterMode !== 'reactions') {
+				setSpinnerSettled(false)
+				setOpenThreadId(null)
+				setAllLoadedEvents([])
+				setEventLimit(10)
+				// Scroll to top for fresh context
+				scrollToTop()
+				// Trigger a refetch from network
+				try { doRefetch() } catch {}
 			}
+		} catch {}
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [authorFilter])
+
+	// Previously: auto-fallback to global view if follows mode returned empty data.
+	// This caused unintended switching from Follows to Global during transient empty states.
+	// We now keep the Follows view selected even if it currently has no items.
+	useEffect(() => {
+		if (filterMode === 'follows' && !isLoading && data && Array.isArray(data) && data.length === 0 && currentUserPk) {
+			console.debug('Follows feed currently empty; staying on Follows view')
 		}
 	}, [filterMode, isLoading, data, currentUserPk])
 
@@ -1323,43 +1357,43 @@ function FirehoseComponent() {
 							{/*<div className="lg:hidden border-t border-gray-800 my-2"></div>*/}
 							<h2 className="lg:hidden text-base font-semibold mb-2">Filters</h2>
 							<div className="flex flex-col gap-2">
-								{currentUserPk ? (
-									<Button
-										variant={filterMode === 'follows' ? 'primary' : 'ghost'}
-										className="justify-start"
-										onClick={() => {
-											setLoadingMode('follows')
-											setSpinnerSettled(false)
-											setFilterMode('follows')
-											setOpenThreadId(null)
-											try {
-												if (typeof window !== 'undefined') {
-													const url = new URL(window.location.href)
-													// Keep only view=follows
-													url.search = ''
-													url.searchParams.set('view', 'follows')
-													const target = url.pathname.startsWith('/nostr')
-														? url.search
-															? `/nostr${url.search}`
-															: '/nostr'
-														: url.search
-															? `${url.pathname}${url.search}`
-															: url.pathname
-													window.history.pushState({}, '', target)
-													window.dispatchEvent(new PopStateEvent('popstate'))
-												}
-											} catch {}
-											// keep drawer open until spinner settles
-										}}
-									>
-										<span className="inline-flex items-center gap-2">
-											{loadingMode === 'follows' && isFiltersOpen ? (
-												<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
-											) : null}
-											<span>Follows</span>
-										</span>
-									</Button>
-								) : null}
+ 							{currentUserPk ? (
+ 								<Button
+ 									variant={filterMode === 'follows' ? 'primary' : 'ghost'}
+ 									className="justify-start"
+ 									onClick={() => {
+ 										setLoadingMode('follows')
+ 										setSpinnerSettled(false)
+ 										setFilterMode('follows')
+ 										setOpenThreadId(null)
+ 										try {
+ 											if (typeof window !== 'undefined') {
+ 												const url = new URL(window.location.href)
+ 												// Keep only view=follows
+ 												url.search = ''
+ 												url.searchParams.set('view', 'follows')
+ 													const target = url.pathname.startsWith('/nostr')
+ 														? url.search
+ 															? `/nostr${url.search}`
+ 															: '/nostr'
+ 													: url.search
+ 														? `${url.pathname}${url.search}`
+ 														: url.pathname
+ 													window.history.pushState({}, '', target)
+ 													window.dispatchEvent(new PopStateEvent('popstate'))
+ 											}
+ 										} catch {}
+ 										// keep drawer open until spinner settles
+ 									}}
+ 								>
+ 									<span className="inline-flex items-center gap-2">
+ 										{loadingMode === 'follows' && isFiltersOpen ? (
+ 											<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
+ 										) : null}
+ 										<span>Follows</span>
+ 									</span>
+ 								</Button>
+ 							) : null}
 								<Button
 									variant={filterMode === 'all' ? 'primary' : 'ghost'}
 									className="justify-start"
@@ -1534,13 +1568,9 @@ function FirehoseComponent() {
 														try {
 															if (typeof window !== 'undefined') {
 																const url = new URL(window.location.href)
-																// Clear all params; then set only view depending on auth
-																url.search = ''
-																if (currentUserPk) {
-																	url.searchParams.set('view', 'follows')
-																} else {
-																	url.searchParams.set('view', 'global')
-																}
+    												// Clear all params; then set only view=global
+    												url.search = ''
+    												url.searchParams.set('view', 'global')
 																const target = url.pathname.startsWith('/nostr')
 																	? url.search
 																		? `/nostr${url.search}`
@@ -1689,12 +1719,12 @@ function FirehoseComponent() {
 													}
 												} catch {}
 											}}
-											width="100%"
-											// height="300px"
-											previewConfig={{ showPreview: false }}
-											searchDisabled={false}
-											skinTonesDisabled
-											theme="dark"
+													width="100%"
+													// height="300px"
+													previewConfig={{ showPreview: false }}
+													searchDisabled={false}
+													skinTonesDisabled
+													theme={Theme.DARK}
 										/>
 									</div>
 								</div>
@@ -1731,9 +1761,9 @@ function FirehoseComponent() {
 													: url.search
 														? `${url.pathname}${url.search}`
 														: url.pathname
-												window.history.pushState({}, '', target)
-												window.dispatchEvent(new PopStateEvent('popstate'))
-											}
+											window.history.pushState({}, '', target)
+											window.dispatchEvent(new PopStateEvent('popstate'))
+										}
 										} catch {}
 									}}
 								>
@@ -2032,11 +2062,11 @@ function FirehoseComponent() {
 												}
 											} catch {}
 										}}
-										width="100%"
-										previewConfig={{ showPreview: false }}
-										searchDisabled={false}
-										skinTonesDisabled
-										theme="dark"
+													width="100%"
+													previewConfig={{ showPreview: false }}
+													searchDisabled={false}
+													skinTonesDisabled
+													theme={Theme.DARK}
 									/>
 								</div>
 							</div>
@@ -2334,16 +2364,16 @@ function FirehoseComponent() {
 														onEmojiClick={(emojiData) => {
 															setComposeText((t) => t + emojiData.emoji)
 														}}
-														width={300}
-														previewConfig={{ showPreview: false }}
-														searchDisabled={false}
-														skinTonesDisabled
-														theme="dark"
-													/>
-												</div>
-											) : null}
-										</div>
-										{/* Image upload */}
+ 													width={300}
+ 													previewConfig={{ showPreview: false }}
+ 													searchDisabled={false}
+ 													skinTonesDisabled
+ 													theme={Theme.DARK}
+ 													/>
+ 												</div>
+ 											) : null}
+ 										</div>
+ 										{/* Image upload */}
 										<>
 											<input
 												id="compose-image-input"
@@ -2567,14 +2597,14 @@ function FirehoseComponent() {
 															onEmojiClick={(emojiData) => {
 																setComposeText((t) => t + emojiData.emoji)
 															}}
-															width={300}
-															previewConfig={{ showPreview: false }}
-															searchDisabled={false}
-															skinTonesDisabled
-															theme="dark"
-														/>
-													</div>
-												) : null}
+  													width={300}
+  													previewConfig={{ showPreview: false }}
+  													searchDisabled={false}
+  													skinTonesDisabled
+  													theme={Theme.DARK}
+  													/>
+  												</div>
+  											) : null}
 											</div>
 											{/* Send */}
 											<Button

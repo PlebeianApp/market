@@ -6,7 +6,7 @@ import { NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { queryOptions } from '@tanstack/react-query'
 import { noteKeys } from '@/queries/queryKeyFactory'
 import { ndkActions } from '@/lib/stores/ndk'
-import { defaultRelaysUrls } from '@/lib/constants'
+import { defaultRelaysUrls, writeRelaysUrls } from '@/lib/constants'
 import { configActions } from '@/lib/stores/config'
 import DataLoader from 'dataloader'
 import { LRUCache } from 'typescript-lru-cache'
@@ -288,10 +288,25 @@ export const fetchEnhancedNotes = async (opts?: {
 			const pubkey = user?.pubkey
 			if (!pubkey) return []
 
-			// Fetch contact list with enhanced filtering
+			// Fetch contact list from the default relays to build the follows feed
 			const contactsFilter: NDKFilter = { kinds: [3], authors: [pubkey], limit: 1 }
-			const contactEvents = await ndk.fetchEvents(contactsFilter, undefined, relaySet)
-			const contactArr = Array.from(contactEvents)
+			let contactArr: NDKEvent[] = []
+			try {
+				const defaultSet = NDKRelaySet.fromRelayUrls(defaultRelaysUrls, ndk)
+				const defaultEvents = await ndk.fetchEvents(contactsFilter, undefined, defaultSet)
+				contactArr = Array.from(defaultEvents)
+			} catch (_) {}
+
+			// If found on default relays, republish latest contact list to the app's write relays for persistence
+			if (contactArr.length > 0) {
+				try {
+					const latestToRepublish = contactArr.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+					const writeSet = NDKRelaySet.fromRelayUrls(writeRelaysUrls, ndk)
+					await latestToRepublish.publish(writeSet)
+				} catch (e) {
+					console.warn('Failed to republish contact list to write relays', e)
+				}
+			}
 
 			if (contactArr.length > 0) {
 				const latest = contactArr.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
@@ -341,45 +356,47 @@ export const fetchEnhancedNotes = async (opts?: {
 	try {
 		let allEvents: NDKEvent[] = []
 
-		// For follows feed, fetch events in batches of 10 pubkeys at a time
-		if (opts?.follows && followedPubkeys) {
-			const pubkeyArray = Array.from(followedPubkeys)
+				// For follows feed, fetch events in batches of 10 pubkeys at a time
+				if (opts?.follows && followedPubkeys) {
+					const pubkeyArray = Array.from(followedPubkeys)
 
-			// Handle empty array edge case
-			if (pubkeyArray.length === 0) {
-				allEvents = []
-			} else {
-				// Process in batches of 10 pubkeys
-				for (let i = 0; i < pubkeyArray.length; i += 10) {
-					const batchPubkeys = pubkeyArray.slice(i, i + 10)
-					if (batchPubkeys.length === 0) continue
-
-					// Create a filter with the current batch of pubkeys
-					const batchFilter: NDKFilter = {
-						...filter,
-						authors: batchPubkeys,
+					// Handle empty array edge case
+					if (pubkeyArray.length === 0) {
+						allEvents = []
+					} else {
+						// Process in batches of 10 pubkeys
+						for (let i = 0; i < pubkeyArray.length; i += 10) {
+							const batchPubkeys = pubkeyArray.slice(i, i + 10)
+							if (batchPubkeys.length === 0) continue
+							
+							// Create a filter with the current batch of pubkeys
+							const batchFilter: NDKFilter = {
+								...filter,
+								authors: batchPubkeys,
+								// Use a larger limit per batch so the final merged sort can choose the newest
+								limit: Math.max(limit, 50),
+							}
+							
+							try {
+								// Fetch events for this batch with timeout protection
+								const batchEvents = await Promise.race([
+									ndk.fetchEvents(batchFilter, undefined, relaySet),
+									new Promise<Set<NDKEvent>>((resolve) => {
+										setTimeout(() => resolve(new Set()), 5000) // 5 second timeout
+									}),
+								])
+								allEvents = [...allEvents, ...Array.from(batchEvents)]
+							} catch (error) {
+								console.warn(`Failed to fetch batch of pubkeys ${i}-${i + 10}: ${error}`)
+								// Continue with next batch even if this one fails
+							}
+						}
 					}
-
-					try {
-						// Fetch events for this batch with timeout protection
-						const batchEvents = await Promise.race([
-							ndk.fetchEvents(batchFilter, undefined, relaySet),
-							new Promise<Set<NDKEvent>>((resolve) => {
-								setTimeout(() => resolve(new Set()), 5000) // 5 second timeout
-							}),
-						])
-						allEvents = [...allEvents, ...Array.from(batchEvents)]
-					} catch (error) {
-						console.warn(`Failed to fetch batch of pubkeys ${i}-${i + 10}: ${error}`)
-						// Continue with next batch even if this one fails
-					}
+				} else {
+					// For non-follows feed, use the original filter
+					const events = await ndk.fetchEvents(filter, undefined, relaySet)
+					allEvents = Array.from(events)
 				}
-			}
-		} else {
-			// For non-follows feed, use the original filter
-			const events = await ndk.fetchEvents(filter, undefined, relaySet)
-			allEvents = Array.from(events)
-		}
 
 		// Enhanced filtering and validation
 		const validNotes = allEvents.filter((e) => {
@@ -407,22 +424,9 @@ export const fetchEnhancedNotes = async (opts?: {
 				}
 			}
 
-			// For follow feed, only include notes authored by or mentioning followed users
+			// For follows feed, strictly include only notes authored by followed users
 			if (opts?.follows && followedPubkeys) {
-				// Include if authored by a followed user
-				if (followedPubkeys.has(eventAuthor)) {
-					return true
-				}
-
-				// Include if mentions a followed user
-				for (const mentionedPubkey of mentionedPubkeys) {
-					if (followedPubkeys.has(mentionedPubkey)) {
-						return true
-					}
-				}
-
-				// If this is a follow feed and note doesn't match criteria, exclude it
-				return false
+				return followedPubkeys.has(eventAuthor)
 			}
 
 			return true
@@ -448,14 +452,19 @@ export const fetchEnhancedNotes = async (opts?: {
 		// Enhanced metadata and sorting
 		const enhanced = validNotes.map((e) => withEnhancedMetadata(e))
 
-		// Multi-factor sorting: priority, then fetchedAt
+		// Sort by newest first using created_at primarily to ensure freshest posts are shown
 		enhanced.sort((a, b) => {
+			const aCreated = ((a.event as any)?.created_at ?? 0) as number
+			const bCreated = ((b.event as any)?.created_at ?? 0) as number
+			if (bCreated !== aCreated) return bCreated - aCreated
+			// Tie-breakers: higher priority first, then by fetchedAt (newer first)
 			const priorityDiff = b.priority - a.priority
-			if (Math.abs(priorityDiff) > 0.1) return priorityDiff
+			if (priorityDiff !== 0) return priorityDiff
 			return b.fetchedAt - a.fetchedAt
 		})
 
-		return enhanced
+		// Enforce final limit after merging/sorting across batches to guarantee newest
+		return enhanced.slice(0, limit)
 	} catch (error) {
 		console.error('Enhanced notes fetch failed:', error)
 		return []
