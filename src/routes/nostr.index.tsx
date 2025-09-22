@@ -2191,70 +2191,73 @@ function FirehoseComponent() {
 										return
 									}
 
-									// Show loading toast
-									const loadingToastId = toast.loading('Publishing note...')
+											// Create the kind 1 text note event
+											const event = new NDKEvent(ndk)
+											event.kind = 1
+											event.content = composeText.trim()
+											event.tags = []
 
-									// Create the kind 1 text note event
-									const event = new NDKEvent(ndk)
-									event.kind = 1
-									event.content = composeText.trim()
-									event.tags = []
+											// Sign the event (do not block UI on publish)
+											await event.sign(signer)
 
-									// TODO: Handle image uploads by creating image URLs and adding them to content
-									// For now, we'll just send the text content
-
-									// Sign and publish the event
-									await event.sign(signer)
-
-									// Create a relay set for publishing using writeRelaysUrls
-									const publishRelaySet = NDKRelaySet.fromRelayUrls(writeRelaysUrls, ndk)
-									await event.publish(publishRelaySet)
-
-									console.log('Note published successfully:', event.id)
-									console.log('Published event JSON:', JSON.stringify(event.rawEvent()))
-
-									// Create wrapped event for immediate feed updates
-									const wrappedEvent = {
-										event: event,
-										fetchedAt: Date.now(),
-										relaysSeen: [],
-										isFromCache: false,
-										priority: 1, // High priority for new notes
-									}
-
-									// Get current user pubkey for follow feed check
-									const user = await ndkActions.getUser()
-									const currentUserPubkey = user?.pubkey
-
-									// Update all relevant feeds immediately by modifying query cache
-									// Update global feed (all mode)
-									const globalKey = [...noteKeys.all, 'enhanced-list', '', '', '']
-									queryClient.setQueryData(globalKey, (oldData: any) => {
-										if (oldData && Array.isArray(oldData)) {
-											return [wrappedEvent, ...oldData]
-										}
-										return [wrappedEvent]
-									})
-
-									// Update follow feed if user has follows (published notes should appear in follow feed)
-									if (currentUserPubkey) {
-										const followsKey = [...noteKeys.all, 'enhanced-list', '', '', 'follows']
-										queryClient.setQueryData(followsKey, (oldData: any) => {
-											if (oldData && Array.isArray(oldData)) {
-												return [wrappedEvent, ...oldData]
+											// Create wrapped event for immediate feed updates
+											const wrappedEvent = {
+												event: event,
+												fetchedAt: Date.now(),
+												relaysSeen: [],
+												isFromCache: false,
+												priority: 1, // High priority for new notes
 											}
-											return [wrappedEvent]
-										})
-									}
 
-									// Clear the compose form
-									setComposeText('')
-									setComposeImages([])
-									setIsComposeOpen(false)
+											// Get current user pubkey for follow & author feed
+											const user = await ndkActions.getUser()
+											const currentUserPubkey = user?.pubkey
 
-									// Show success message
-									toast.dismiss(loadingToastId)
-									toast.success('Note published successfully!')
+											// Optimistically update feeds immediately
+											const globalKey = [...noteKeys.all, 'enhanced-list', '', '', '']
+											queryClient.setQueryData(globalKey, (oldData: any) => {
+												if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
+												return [wrappedEvent]
+											})
+
+											if (currentUserPubkey) {
+												const followsKey = [...noteKeys.all, 'enhanced-list', '', '', 'follows']
+												queryClient.setQueryData(followsKey, (oldData: any) => {
+													if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
+													return [wrappedEvent]
+												})
+												// Author's own posts view
+												const authorKey = [...noteKeys.all, 'enhanced-list', '', currentUserPubkey, '']
+												queryClient.setQueryData(authorKey, (oldData: any) => {
+													if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
+													return [wrappedEvent]
+												})
+											}
+
+											// Clear the compose form and close
+											setComposeText('')
+											setComposeImages([])
+											setIsComposeOpen(false)
+
+											// Inform user and publish in background
+											toast.info('Posting in background...', { duration: 1500 })
+
+											// Fire-and-forget background publishing with simple retries
+											;(async () => {
+												const publishRelaySet = NDKRelaySet.fromRelayUrls(writeRelaysUrls, ndk)
+												const maxAttempts = 3
+												for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+													try {
+														await event.publish(publishRelaySet)
+														console.log('Note published successfully:', event.id)
+														return
+													} catch (err) {
+														console.warn(`Publish attempt ${attempt} failed`, err)
+														await new Promise((r) => setTimeout(r, 1000 * attempt))
+													}
+												}
+												console.error('Failed to publish note after retries:', event.id)
+											})()
 								} catch (error) {
 									console.error('Failed to send note:', error)
 									toast.error('Failed to publish note. Please try again.')
@@ -2358,31 +2361,120 @@ function FirehoseComponent() {
 												<Button type="button" variant="tertiary" size="icon" title="Add image" aria-label="Add image">
 													<span aria-hidden>🖼️</span>
 												</Button>
-											</label>
-										</>
-										<Button
-											type="submit"
-											variant="primary"
-											size="icon"
-											title="Send"
-											aria-label="Send"
-											disabled={!composeText.trim() && composeImages.length === 0}
-										>
-											{/* Paper airplane right icon */}
-											<svg
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												strokeWidth="2"
-												strokeLinecap="round"
-												strokeLinejoin="round"
-												className="w-5 h-5"
-												aria-hidden
-											>
-												<path d="M22 2L11 13" />
-												<path d="M22 2l-7 20-4-9-9-4 20-7z" />
-											</svg>
-										</Button>
+   								</label>
+								</>
+								<Button
+									type="button"
+									variant="primary"
+									size="icon"
+									title="Send"
+									aria-label="Send"
+									disabled={!composeText.trim() && composeImages.length === 0}
+									onClick={async () => {
+										// Don't send empty messages
+										if (!composeText.trim()) return
+
+										try {
+											// Get NDK instance and signer
+											const ndk = ndkActions.getNDK()
+											if (!ndk) {
+												toast.error('Not connected to Nostr network')
+												return
+											}
+
+											const signer = ndkActions.getSigner()
+											if (!signer) {
+												toast.error('Please log in to send notes')
+												return
+											}
+
+												// Create the kind 1 text note event
+												const event = new NDKEvent(ndk)
+												event.kind = 1
+												event.content = composeText.trim()
+												event.tags = []
+
+												// Sign the event (do not block UI on publish)
+												await event.sign(signer)
+
+												// Create wrapped event for immediate feed updates
+												const wrappedEvent = {
+													event: event,
+													fetchedAt: Date.now(),
+													relaysSeen: [],
+													isFromCache: false,
+													priority: 1,
+												}
+
+												// Get current user pubkey for follow & author feed
+												const user = await ndkActions.getUser()
+												const currentUserPubkey = user?.pubkey
+
+												// Optimistically update feeds immediately
+												const globalKey = [...noteKeys.all, 'enhanced-list', '', '', '']
+												queryClient.setQueryData(globalKey, (oldData: any) => {
+													if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
+													return [wrappedEvent]
+												})
+
+												if (currentUserPubkey) {
+													const followsKey = [...noteKeys.all, 'enhanced-list', '', '', 'follows']
+													queryClient.setQueryData(followsKey, (oldData: any) => {
+														if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
+														return [wrappedEvent]
+													})
+													const authorKey = [...noteKeys.all, 'enhanced-list', '', currentUserPubkey, '']
+													queryClient.setQueryData(authorKey, (oldData: any) => {
+														if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
+														return [wrappedEvent]
+													})
+												}
+
+												// Clear the compose form and close
+												setComposeText('')
+												setComposeImages([])
+												setIsComposeOpen(false)
+
+												// Inform user and publish in background
+												toast.info('Posting in background...', { duration: 1500 })
+
+												// Fire-and-forget background publishing with simple retries
+												;(async () => {
+													const publishRelaySet = NDKRelaySet.fromRelayUrls(writeRelaysUrls, ndk)
+													const maxAttempts = 3
+													for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+														try {
+															await event.publish(publishRelaySet)
+															console.log('Note published successfully:', event.id)
+															return
+														} catch (err) {
+															console.warn(`Publish attempt ${attempt} failed`, err)
+															await new Promise((r) => setTimeout(r, 1000 * attempt))
+														}
+													}
+													console.error('Failed to publish note after retries:', event.id)
+												})()
+										} catch (error) {
+											console.error('Failed to send note:', error)
+											toast.error('Failed to publish note. Please try again.')
+										}
+									}}
+								>
+									{/* Paper airplane right icon */}
+									<svg
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										strokeWidth="2"
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										className="w-5 h-5"
+										aria-hidden
+									>
+										<path d="M22 2L11 13" />
+										<path d="M22 2l-7 20-4-9-9-4 20-7z" />
+									</svg>
+								</Button>
 									</div>
 								</>
 							) : (
@@ -2486,28 +2578,117 @@ function FirehoseComponent() {
 											</div>
 											{/* Send */}
 											<Button
-												type="submit"
+												type="button"
 												variant="primary"
 												size="icon"
 												title="Send"
 												aria-label="Send"
 												disabled={!composeText.trim() && composeImages.length === 0}
-											>
-												{/* Paper airplane right icon */}
-												<svg
-													viewBox="0 0 24 24"
-													fill="none"
-													stroke="currentColor"
-													strokeWidth="2"
-													strokeLinecap="round"
-													strokeLinejoin="round"
-													className="w-5 h-5"
-													aria-hidden
-												>
-													<path d="M22 2L11 13" />
-													<path d="M22 2l-7 20-4-9-9-4 20-7z" />
-												</svg>
-											</Button>
+												onClick={async () => {
+												// Don't send empty messages
+												if (!composeText.trim()) return
+
+												try {
+													// Get NDK instance and signer
+													const ndk = ndkActions.getNDK()
+													if (!ndk) {
+														toast.error('Not connected to Nostr network')
+														return
+													}
+
+													const signer = ndkActions.getSigner()
+													if (!signer) {
+														toast.error('Please log in to send notes')
+														return
+													}
+
+													// Create the kind 1 text note event
+													const event = new NDKEvent(ndk)
+													event.kind = 1
+													event.content = composeText.trim()
+													event.tags = []
+
+													// Sign the event (do not block UI on publish)
+													await event.sign(signer)
+
+													// Create wrapped event for immediate feed updates
+													const wrappedEvent = {
+														event: event,
+														fetchedAt: Date.now(),
+														relaysSeen: [],
+														isFromCache: false,
+														priority: 1,
+													}
+
+													// Get current user pubkey for follow & author feed
+													const user = await ndkActions.getUser()
+													const currentUserPubkey = user?.pubkey
+
+													// Optimistically update feeds immediately
+													const globalKey = [...noteKeys.all, 'enhanced-list', '', '', '']
+													queryClient.setQueryData(globalKey, (oldData: any) => {
+														if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
+														return [wrappedEvent]
+													})
+
+													if (currentUserPubkey) {
+														const followsKey = [...noteKeys.all, 'enhanced-list', '', '', 'follows']
+														queryClient.setQueryData(followsKey, (oldData: any) => {
+															if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
+															return [wrappedEvent]
+														})
+														const authorKey = [...noteKeys.all, 'enhanced-list', '', currentUserPubkey, '']
+														queryClient.setQueryData(authorKey, (oldData: any) => {
+															if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
+															return [wrappedEvent]
+														})
+													}
+
+													// Clear the compose form and close
+													setComposeText('')
+													setComposeImages([])
+													setIsComposeOpen(false)
+
+													// Inform user and publish in background
+													toast.info('Posting in background...', { duration: 1500 })
+
+													// Fire-and-forget background publishing with simple retries
+													;(async () => {
+														const publishRelaySet = NDKRelaySet.fromRelayUrls(writeRelaysUrls, ndk)
+														const maxAttempts = 3
+														for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+															try {
+																await event.publish(publishRelaySet)
+																console.log('Note published successfully:', event.id)
+																return
+															} catch (err) {
+																console.warn(`Publish attempt ${attempt} failed`, err)
+																await new Promise((r) => setTimeout(r, 1000 * attempt))
+															}
+														}
+														console.error('Failed to publish note after retries:', event.id)
+													})()
+												} catch (error) {
+													console.error('Failed to send note:', error)
+													toast.error('Failed to publish note. Please try again.')
+												}
+											}}
+ 									>
+ 										{/* Paper airplane right icon */}
+ 										<svg
+ 											viewBox="0 0 24 24"
+ 											fill="none"
+ 											stroke="currentColor"
+ 											strokeWidth="2"
+ 											strokeLinecap="round"
+ 											strokeLinejoin="round"
+ 											className="w-5 h-5"
+ 											aria-hidden
+ 										>
+ 											<path d="M22 2L11 13" />
+ 											<path d="M22 2l-7 20-4-9-9-4 20-7z" />
+ 										</svg>
+ 									</Button>
 										</div>
 									</div>
 								</>

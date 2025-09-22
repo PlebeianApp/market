@@ -1,5 +1,4 @@
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { NDKRelaySet } from '@nostr-dev-kit/ndk'
+import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { authorQueryOptions } from '@/queries/authors.tsx'
 import {
@@ -17,7 +16,7 @@ import { useThreadOpen } from '@/state/threadOpenStore'
 import { useAuth } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
 import { Button } from '@/components/ui/button'
-import { EmojiPicker } from 'emoji-picker-react'
+import EmojiPicker from 'emoji-picker-react'
 import { toast } from 'sonner'
 import { writeRelaysUrls } from '@/lib/constants'
 
@@ -253,17 +252,21 @@ function ThreadView({ threadStructure, highlightedNoteId, reactionsMap: propReac
 	}, [propReactionsMap, noteIds])
 
 	// Fetch reactions for all notes in the thread when needed
-	const { data: fetchedReactionsMap } = useQuery({
-		...reactionsQueryOptions(noteIds),
-		enabled: noteIds.length > 0 && !hasSufficientReactions,
-		refetchOnWindowFocus: false,
-		refetchOnReconnect: false,
-		keepPreviousData: true,
-		staleTime: 60_000,
-	} as any)
+	const { data: fetchedReactionsMap } = useQuery<Record<string, Record<string, number>>>(
+		{
+			...reactionsQueryOptions(noteIds),
+			enabled: noteIds.length > 0 && !hasSufficientReactions,
+			refetchOnWindowFocus: false,
+			refetchOnReconnect: false,
+			keepPreviousData: true,
+			staleTime: 60_000,
+		} as any,
+	)
 
 	// Use provided reactionsMap only if it fully covers the thread; otherwise, use fetched data
-	const reactionsMap = hasSufficientReactions ? propReactionsMap : fetchedReactionsMap
+	const reactionsMap: Record<string, Record<string, number>> | undefined = hasSufficientReactions
+		? propReactionsMap
+		: fetchedReactionsMap || undefined
 
 	useEffect(() => {
 		// Wait one frame to ensure children are rendered
@@ -441,7 +444,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 	useEffect(() => {
 		if (viewMode === VIEW_MODE.QUOTE && !quoteText && nip19Reference) {
 			// Set initial text with a blank line at the top
-			setQuoteText(`\n${nip19Reference}`)
+			setQuoteText(`\nnostr:${nip19Reference}`)
 
 			// Focus the textarea and set cursor to the start
 			setTimeout(() => {
@@ -1142,17 +1145,16 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 											</Button>
 											{showEmojiPicker ? (
 												<div className="absolute bottom-12 right-0 z-50">
-													<EmojiPicker
-														onEmojiClick={(emojiData) => {
-															setReplyText((t) => t + emojiData.emoji)
-															setShowEmojiPicker(false)
-														}}
-														width={300}
-														previewConfig={{ showPreview: false }}
-														searchDisabled={false}
-														skinTonesDisabled
-														theme="light"
-													/>
+															<EmojiPicker
+																onEmojiClick={(emojiData) => {
+																	setReplyText((t) => t + emojiData.emoji)
+																	setShowEmojiPicker(false)
+																}}
+																width={300}
+																previewConfig={{ showPreview: false }}
+																searchDisabled={false}
+																skinTonesDisabled
+															/> 
 												</div>
 											) : null}
 										</div>
@@ -1316,12 +1318,12 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 									Cancel
 								</Button>
 
-								<Button
-									type="button"
-									variant="default"
-									className="bg-secondary text-white hover:bg-secondary/90 px-4"
-									disabled={isReposting}
-									onClick={async () => {
+															<Button
+																type="button"
+																variant="primary"
+																className="bg-secondary text-white hover:bg-secondary/90 px-4"
+																disabled={isReposting}
+																onClick={async () => {
 										if (isReposting) return
 
 										setIsReposting(true)
@@ -1463,17 +1465,16 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 											</Button>
 											{showEmojiPicker ? (
 												<div className="absolute bottom-12 right-0 z-50">
-													<EmojiPicker
-														onEmojiClick={(emojiData) => {
-															setQuoteText((t) => t + emojiData.emoji)
-															setShowEmojiPicker(false)
-														}}
-														width={300}
-														previewConfig={{ showPreview: false }}
-														searchDisabled={false}
-														skinTonesDisabled
-														theme="light"
-													/>
+															<EmojiPicker
+																onEmojiClick={(emojiData) => {
+																	setQuoteText((t) => t + emojiData.emoji)
+																	setShowEmojiPicker(false)
+																}}
+																width={300}
+																previewConfig={{ showPreview: false }}
+																searchDisabled={false}
+																skinTonesDisabled
+															/> 
 												</div>
 											) : null}
 										</div>
