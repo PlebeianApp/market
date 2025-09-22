@@ -78,7 +78,7 @@ describe('WebSocket Server', () => {
 		const okResponse = await waitForMessage()
 
 		expect(okResponse[0]).toBe('OK')
-		expect(okResponse[2]).toBe(true)
-		expect(okResponse[2]).toBeEmpty()
+ 	expect(okResponse[2]).toBe(true)
+ 	expect(okResponse[3]).toBeEmpty()
 	})
 })

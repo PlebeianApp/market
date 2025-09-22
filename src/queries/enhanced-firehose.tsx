@@ -9,7 +9,7 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { defaultRelaysUrls } from '@/lib/constants'
 import { configActions } from '@/lib/stores/config'
 import DataLoader from 'dataloader'
-import LRUCache from 'lru-cache'
+import { LRUCache } from 'typescript-lru-cache'
 
 // Extended event kinds based on jumble patterns
 export const ExtendedKind = {
@@ -51,7 +51,7 @@ export type EnhancedFetchedNDKEvent = {
 }
 
 // Global caches for enhanced performance
-const eventCache = new LRUCache<string, NDKEvent>({ max: 5000, ttl: 1000 * 60 * 30 }) // 30 min TTL
+const eventCache = new LRUCache<string, NDKEvent>({ maxSize: 5000, entryExpirationTimeInMS: 1000 * 60 * 30 }) // 30 min TTL
 const replaceableEventCache = new Map<string, NDKEvent>()
 const firstFetchTimestamps = new Map<string, number>()
 const lastDisplayedTimestamps = new Map<string, number>() // Track when events were last displayed
@@ -118,14 +118,15 @@ export function getStaleEvents(maxAge: number = 1000 * 60 * 60): string[] {
 	const now = Date.now()
 	const staleEvents: string[] = []
 	
-	// Check all events in the cache
-	for (const [id, _] of eventCache.entries()) {
+	// Check all events in the cache (avoid for...of to prevent downlevel iteration issues)
+	eventCache.forEach((_value, key) => {
+		const id = key as string
 		const lastDisplayed = lastDisplayedTimestamps.get(id) || 0
 		// If never displayed or displayed longer ago than maxAge
-		if (lastDisplayed === 0 || (now - lastDisplayed) > maxAge) {
+		if (lastDisplayed === 0 || now - lastDisplayed > maxAge) {
 			staleEvents.push(id)
 		}
-	}
+	})
 	
 	return staleEvents
 }
@@ -155,16 +156,16 @@ export function cleanupStaleEvents(maxAge: number = 1000 * 60 * 60, maxToRemove:
 	// Also check for any replaceable events that might be stale
 	// This is a separate cache, so we handle it differently
 	const now = Date.now()
-	for (const [coordinate, event] of replaceableEventCache.entries()) {
-		const id = (event as any)?.id
-		if (!id) continue
+ replaceableEventCache.forEach((repEvent, coordinate) => {
+		const id = (repEvent as any)?.id
+		if (!id) return
 		
 		const lastDisplayed = lastDisplayedTimestamps.get(id) || 0
-		if (lastDisplayed === 0 || (now - lastDisplayed) > maxAge) {
+		if (lastDisplayed === 0 || now - lastDisplayed > maxAge) {
 			replaceableEventCache.delete(coordinate)
 			removedCount++
 		}
-	}
+	})
 	
 	return removedCount
 }
@@ -253,8 +254,8 @@ export const fetchEnhancedNotes = async (opts?: {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const limit = opts?.limit || 10
-	const kinds = opts?.kinds || SUPPORTED_KINDS
+	const limit = opts?.limit ?? 10
+	const kinds: number[] = opts?.kinds ?? [...SUPPORTED_KINDS]
 
 	const filter: NDKFilter = {
 		kinds: kinds,
