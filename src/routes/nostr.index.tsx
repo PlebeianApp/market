@@ -122,7 +122,7 @@ function FirehoseComponent() {
 	const location = useLocation()
 	const queryClient = useQueryClient()
 	const [isFiltersOpen, setIsFiltersOpen] = useState(false)
- const [loadingMode, setLoadingMode] = useState<null | 'all' | 'threads' | 'originals' | 'follows' | 'reactions' | 'hashtag'>(null)
+	const [loadingMode, setLoadingMode] = useState<null | 'all' | 'threads' | 'originals' | 'follows' | 'reactions' | 'hashtag'>(null)
 	const [spinnerSettled, setSpinnerSettled] = useState(false)
 	const { openThreadId, setOpenThreadId, feedScrollY, setFeedScrollY, clickedEventId, setClickedEventId } = useThreadOpen()
 	const [tagFilter, setTagFilter] = useState('')
@@ -147,11 +147,11 @@ function FirehoseComponent() {
 	const [eventLimit, setEventLimit] = useState(getInitialFeedLimit())
 	// Store all loaded events, so we can append new ones without reloading
 	const [allLoadedEvents, setAllLoadedEvents] = useState<EnhancedFetchedNDKEvent[]>([])
-	
+
 	// Track cache cleanup stats for debugging
 	const [lastCleanupStats, setLastCleanupStats] = useState<{
-		timestamp: number;
-		removedCount: number;
+		timestamp: number
+		removedCount: number
 	} | null>(null)
 	const notesOpts = useMemo(() => {
 		// Hashtag view is independent: only in 'hashtag' mode do we apply the tag filter.
@@ -161,7 +161,14 @@ function FirehoseComponent() {
 		if (filterMode === 'follows') return { tag: '', author: '', follows: true, limit: eventLimit }
 		return { tag: '', author: authorFilter, follows: false, limit: eventLimit }
 	}, [filterMode, tagFilter, authorFilter, eventLimit])
-	const { data, isLoading, isError, error, refetch: doRefetch, isFetching } = useQuery({
+	const {
+		data,
+		isLoading,
+		isError,
+		error,
+		refetch: doRefetch,
+		isFetching,
+	} = useQuery({
 		...enhancedNotesQueryOptions(notesOpts),
 		refetchOnWindowFocus: false,
 		refetchOnReconnect: false,
@@ -176,7 +183,9 @@ function FirehoseComponent() {
 			applyPendingNotes()
 			// Schedule another scroll-to-top to override any delayed scroll restoration in callers
 			setTimeout(() => {
-				try { scrollToTop() } catch {}
+				try {
+					scrollToTop()
+				} catch {}
 			}, 120)
 			return { data: allLoadedEvents } as any
 		}
@@ -268,6 +277,8 @@ function FirehoseComponent() {
 		setEventLimit(getInitialFeedLimit())
 		// Clear accumulated events when view changes
 		setAllLoadedEvents([])
+		// Reset prefetch tracker for the new view
+		lastPrefetchLimitRef.current = 0
 
 		const savedState = loadViewState(currentViewKey)
 		if (savedState) {
@@ -302,12 +313,12 @@ function FirehoseComponent() {
 				const allRelays = appRelay ? [...defaultRelaysUrls, appRelay] : defaultRelaysUrls
 				const relaySet = NDKRelaySet.fromRelayUrls(allRelays, ndk)
 				// Start after newest currently shown to avoid duplicates
-				const since = Math.floor(((newestNoteTimestamp || Date.now()) / 1000))
+				const since = Math.floor((newestNoteTimestamp || Date.now()) / 1000)
 				const filter: any = { kinds: SUPPORTED_KINDS as any, since }
 				if (filterMode === 'hashtag' && (tagFilter || '').trim()) {
 					;(filter as any)['#t'] = [(tagFilter || '').trim().toLowerCase()]
 				}
-				if (authorFilter && filterMode !== 'hashtag' && filterMode !== 'reactions' && !((filterMode === 'follows'))) {
+				if (authorFilter && filterMode !== 'hashtag' && filterMode !== 'reactions' && !(filterMode === 'follows')) {
 					filter.authors = [authorFilter]
 				}
 				if (filterMode === 'follows') {
@@ -321,10 +332,10 @@ function FirehoseComponent() {
 						if (arr.length > 0) {
 							const latest = arr.sort((a, b) => ((b as any).created_at ?? 0) - ((a as any).created_at ?? 0))[0] as any
 							const pTags = (latest?.tags || []).filter((t: any) => Array.isArray(t) && t[0] === 'p' && typeof t[1] === 'string')
-									let follows: string[] = pTags.map((t: any) => t[1])
-									// Always include the logged-in user's own pubkey in the follows live subscription
-									if (pubkey && !follows.includes(pubkey)) follows = [...follows, pubkey]
-									if (follows.length > 0) (filter as any).authors = follows
+							let follows: string[] = pTags.map((t: any) => t[1])
+							// Always include the logged-in user's own pubkey in the follows live subscription
+							if (pubkey && !follows.includes(pubkey)) follows = [...follows, pubkey]
+							if (follows.length > 0) (filter as any).authors = follows
 						}
 					} catch {}
 				}
@@ -336,7 +347,7 @@ function FirehoseComponent() {
 						if (!id) return
 						setPendingNewNotes((prev) => {
 							const existsInPending = prev.some((w) => (((w.event as any)?.id as string) || '') === id)
-							const existsInLoaded = (allLoadedEvents || []).some((w) => ((((w.event as any)?.id as string) || '') === id))
+							const existsInLoaded = (allLoadedEvents || []).some((w) => (((w.event as any)?.id as string) || '') === id)
 							if (existsInPending || existsInLoaded) return prev
 							const wrapped: EnhancedFetchedNDKEvent = {
 								event: ev,
@@ -471,9 +482,9 @@ function FirehoseComponent() {
 		try {
 			setOpenThreadId(null)
 			setAllLoadedEvents((prev) => {
-				const existingIds = new Set(prev.map((w) => (((w.event as any)?.id as string) || '')))
+				const existingIds = new Set(prev.map((w) => ((w.event as any)?.id as string) || ''))
 				const fresh = pendingNewNotes.filter((w) => {
-					const id = (((w.event as any)?.id as string) || '')
+					const id = ((w.event as any)?.id as string) || ''
 					return id && !existingIds.has(id)
 				})
 				return [...fresh, ...prev]
@@ -494,7 +505,9 @@ function FirehoseComponent() {
 			setEventLimit(getInitialFeedLimit())
 			scrollToTop()
 			setTimeout(() => {
-				try { doRefetch() } catch {}
+				try {
+					doRefetch()
+				} catch {}
 			}, 30)
 		} catch {}
 	}
@@ -618,9 +631,9 @@ function FirehoseComponent() {
 				const isSpecial = requestedView === 'reactions' || requestedView === 'hashtag'
 				if (!hasTag && !hasUser && !hasThread && !isSpecial) {
 					// If there was no explicit view or it was previously downgraded to 'all', switch to follows
-						if (!hasExplicitView || requestedView === 'all' || requestedView === '') {
-							setFilterMode('all')
-							url.searchParams.set('view', 'global')
+					if (!hasExplicitView || requestedView === 'all' || requestedView === '') {
+						setFilterMode('all')
+						url.searchParams.set('view', 'global')
 						url.searchParams.delete('emoji')
 						url.searchParams.delete('tag')
 						const target = url.pathname.startsWith('/nostr')
@@ -667,7 +680,7 @@ function FirehoseComponent() {
 			}
 		} catch {}
 	}, [currentUserPk, filterMode, eventLimit, queryClient])
-	
+
 	// Apply tag/user/view/threadview from URL when location changes
 	useEffect(() => {
 		try {
@@ -689,10 +702,10 @@ function FirehoseComponent() {
 						: incomingView === 'reactions' || (!!incomingEmoji && incomingEmoji.trim() !== '')
 							? 'reactions'
 							: incomingView === 'hashtag' || (!!incomingTag && incomingTag !== '')
-									? 'hashtag'
-									: incomingView === 'follows'
-											? 'follows'
-											: 'all'
+								? 'hashtag'
+								: incomingView === 'follows'
+									? 'follows'
+									: 'all'
 			// Prevent follows mode when logged out
 			const guardedDesiredMode = desiredMode === 'follows' && !currentUserPk ? 'all' : desiredMode
 			if (guardedDesiredMode !== filterMode) {
@@ -783,10 +796,12 @@ function FirehoseComponent() {
 				// Scroll to top for fresh context
 				scrollToTop()
 				// Trigger a refetch from network
-				try { doRefetch() } catch {}
+				try {
+					doRefetch()
+				} catch {}
 			}
 		} catch {}
-	// eslint-disable-next-line react-hooks/exhaustive-deps
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [authorFilter])
 
 	// Immediately refresh when feed mode changes (e.g., user clicks a feed mode button)
@@ -799,7 +814,9 @@ function FirehoseComponent() {
 			setEventLimit(getInitialFeedLimit())
 			scrollToTop()
 			// Trigger an immediate refetch
-			try { doRefetch() } catch {}
+			try {
+				doRefetch()
+			} catch {}
 		} catch {}
 		// We intentionally depend only on filterMode to catch user-driven changes
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -830,14 +847,16 @@ function FirehoseComponent() {
 				if (emptyRetryRef.current < 3) {
 					emptyRetryRef.current += 1
 					// Trigger a refetch to try to populate the feed
-					try { doRefetch() } catch {}
+					try {
+						doRefetch()
+					} catch {}
 				}
 			} else if (!noItems) {
 				// Once we have items, clear the forced loading state
 				setForceFeedLoading(false)
 			}
 		} catch {}
-	// eslint-disable-next-line react-hooks/exhaustive-deps
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [currentViewKey, data, isLoading, isFetching])
 
 	// Ensure 'tag' is not present in the URL when not in hashtag view
@@ -863,6 +882,8 @@ function FirehoseComponent() {
 
 	// Ref to track if we're already loading more content
 	const isLoadingMoreRef = useRef(false)
+	// Remember the last prefetch limit we requested to avoid duplicate work
+	const lastPrefetchLimitRef = useRef<number>(0)
 
 	useEffect(() => {
 		if (typeof window === 'undefined') return
@@ -898,15 +919,36 @@ function FirehoseComponent() {
 						const windowHeight = window.innerHeight
 						const documentHeight = document.documentElement.scrollHeight
 
-						// Calculate how far down the user has scrolled (as a percentage)
-						// When the user is 75% of the way to the bottom, load more events
-						const scrollPercentage = (scrollPosition + windowHeight) / documentHeight
+ 					// Calculate how far down the user has scrolled (as a percentage)
+ 					const scrollPercentage = (scrollPosition + windowHeight) / documentHeight
 
+ 					// Prefetch ahead when user is 60% down the page
+ 					if (scrollPercentage >= 0.6) {
+ 						const targetLimit = eventLimit + 15
+ 						if (lastPrefetchLimitRef.current < targetLimit) {
+ 							try {
+ 								lastPrefetchLimitRef.current = targetLimit
+ 								// Warm the cache with a larger limit in the background
+ 								queryClient.prefetchQuery({
+ 									...enhancedNotesQueryOptions({ ...notesOpts, limit: targetLimit }),
+ 									staleTime: Infinity,
+ 								})
+ 							} catch (_) {}
+ 						}
+ 					}
+
+ 					// When the user is 75% of the way to the bottom, reveal more items
 						if (scrollPercentage >= 0.75) {
 							// Set the loading flag to prevent multiple calls
 							isLoadingMoreRef.current = true
 							// Increase the limit to load more events
 							setEventLimit((prevLimit) => prevLimit + 5)
+							// Ensure the larger limit is reflected by forcing a refetch (key excludes limit)
+							setTimeout(() => {
+								try {
+									doRefetch()
+								} catch {}
+							}, 0)
 						}
 					}
 				}, 100)
@@ -923,7 +965,137 @@ function FirehoseComponent() {
 				window.clearTimeout(scrollTimeout)
 			}
 		}
-	}, [isFetching, isLoading, openThreadId])
+	}, [isFetching, isLoading, openThreadId, eventLimit, notesOpts])
+
+	// Overscroll edge triggers to load in appropriate direction
+	const topOverscrollRef = useRef<{count:number; lastTs:number}>({ count: 0, lastTs: 0 })
+	const bottomOverscrollRef = useRef<{count:number; lastTs:number}>({ count: 0, lastTs: 0 })
+	const touchStartYRef = useRef<number | null>(null)
+	const topEdgeLoadingRef = useRef(false)
+
+	const triggerLoadAtTop = async () => {
+		if (openThreadId) return
+		if (topEdgeLoadingRef.current) return
+		topEdgeLoadingRef.current = true
+		try {
+			if (pendingNewNotes.length > 0) {
+				applyPendingNotes()
+			} else {
+				const res: any = await doRefetch()
+				const fresh = (res?.data || []) as EnhancedFetchedNDKEvent[]
+				if (Array.isArray(fresh) && fresh.length > 0) {
+					setAllLoadedEvents((prev) => {
+						const prevIds = new Set(prev.map((w) => (((w.event as any)?.id as string) || '')))
+						const newUnique = fresh.filter((w) => {
+							const id = (((w.event as any)?.id as string) || '')
+							return id && !prevIds.has(id)
+						})
+						return [...newUnique, ...prev]
+					})
+				}
+			}
+		} catch {}
+		finally {
+			setTimeout(() => {
+				topEdgeLoadingRef.current = false
+			}, 150)
+		}
+	}
+
+	const triggerLoadAtBottom = () => {
+		if (openThreadId) return
+		if (isLoadingMoreRef.current) return
+		isLoadingMoreRef.current = true
+		const targetLimit = eventLimit + 10
+		if (lastPrefetchLimitRef.current < targetLimit) {
+			lastPrefetchLimitRef.current = targetLimit
+			try {
+				queryClient.prefetchQuery({
+					...enhancedNotesQueryOptions({ ...notesOpts, limit: targetLimit }),
+					staleTime: Infinity,
+				})
+			} catch {}
+		}
+		setEventLimit((prev) => Math.max(prev, targetLimit))
+		// Force a refetch after bumping the limit so the UI picks up the larger dataset
+		setTimeout(() => {
+			try {
+				doRefetch()
+			} catch {}
+		}, 0)
+	}
+
+	useEffect(() => {
+		if (typeof window === 'undefined') return
+		const atTop = () => (window.scrollY || document.documentElement.scrollTop || 0) <= 1
+		const atBottom = () => {
+			const scrollPosition = window.scrollY || document.documentElement.scrollTop || 0
+			const windowHeight = window.innerHeight
+			const documentHeight = document.documentElement.scrollHeight
+			return scrollPosition + windowHeight >= documentHeight - 2
+		}
+		const handleWheel = (e: WheelEvent) => {
+			const now = Date.now()
+			if (now - topOverscrollRef.current.lastTs > 800) topOverscrollRef.current.count = 0
+			if (now - bottomOverscrollRef.current.lastTs > 800) bottomOverscrollRef.current.count = 0
+			if (atTop() && e.deltaY < -5) {
+				topOverscrollRef.current.count++
+				topOverscrollRef.current.lastTs = now
+				if (topOverscrollRef.current.count >= 3) {
+					triggerLoadAtTop()
+					topOverscrollRef.current.count = 0
+				}
+			} else if (atBottom() && e.deltaY > 5) {
+				bottomOverscrollRef.current.count++
+				bottomOverscrollRef.current.lastTs = now
+				if (bottomOverscrollRef.current.count >= 2) {
+					triggerLoadAtBottom()
+					bottomOverscrollRef.current.count = 0
+				}
+			}
+		}
+		const onTouchStart = (e: TouchEvent) => {
+			touchStartYRef.current = e.touches && e.touches.length ? e.touches[0].clientY : null
+		}
+		const onTouchMove = (e: TouchEvent) => {
+			const y0 = touchStartYRef.current
+			if (y0 == null) return
+			const y = e.touches && e.touches.length ? e.touches[0].clientY : y0
+			const dy = y - y0
+			const now = Date.now()
+			if (now - topOverscrollRef.current.lastTs > 900) topOverscrollRef.current.count = 0
+			if (now - bottomOverscrollRef.current.lastTs > 900) bottomOverscrollRef.current.count = 0
+			if (atTop() && dy > 40) {
+				topOverscrollRef.current.count++
+				topOverscrollRef.current.lastTs = now
+				if (topOverscrollRef.current.count >= 1) {
+					triggerLoadAtTop()
+					topOverscrollRef.current.count = 0
+				}
+			}
+			if (atBottom() && dy < -40) {
+				bottomOverscrollRef.current.count++
+				bottomOverscrollRef.current.lastTs = now
+				if (bottomOverscrollRef.current.count >= 1) {
+					triggerLoadAtBottom()
+					bottomOverscrollRef.current.count = 0
+				}
+			}
+		}
+		const onTouchEnd = () => {
+			touchStartYRef.current = null
+		}
+		window.addEventListener('wheel', handleWheel, { passive: true })
+		window.addEventListener('touchstart', onTouchStart, { passive: true })
+		window.addEventListener('touchmove', onTouchMove, { passive: true })
+		window.addEventListener('touchend', onTouchEnd, { passive: true })
+		return () => {
+			window.removeEventListener('wheel', handleWheel as any)
+			window.removeEventListener('touchstart', onTouchStart as any)
+			window.removeEventListener('touchmove', onTouchMove as any)
+			window.removeEventListener('touchend', onTouchEnd as any)
+		}
+	}, [pendingNewNotes.length, openThreadId, isFetching, isLoading, eventLimit, notesOpts])
 
 	// Use the accumulated events instead of just the latest query data
 	const notes = allLoadedEvents.length > 0 ? allLoadedEvents : data || []
@@ -998,19 +1170,19 @@ function FirehoseComponent() {
 	useEffect(() => {
 		// Run cache cleanup every 5 minutes (adjust this interval as needed)
 		const CLEANUP_INTERVAL = 1000 * 60 * 5 // 5 minutes
-		
+
 		// Run initial cleanup
 		const initialCleanup = () => {
 			try {
 				// Use 1 hour as the max age for stale events (adjust as needed)
 				const MAX_AGE = 1000 * 60 * 60 // 1 hour
 				const removedCount = cleanupStaleEvents(MAX_AGE)
-				
+
 				// Update stats for debugging
 				if (removedCount > 0) {
 					setLastCleanupStats({
 						timestamp: Date.now(),
-						removedCount
+						removedCount,
 					})
 					console.log(`Cache cleanup: removed ${removedCount} stale events`)
 				}
@@ -1018,20 +1190,20 @@ function FirehoseComponent() {
 				console.error('Error during cache cleanup:', error)
 			}
 		}
-		
+
 		// Run cleanup periodically
 		const cleanupInterval = setInterval(initialCleanup, CLEANUP_INTERVAL)
-		
+
 		// Run initial cleanup after a short delay
 		const initialTimeout = setTimeout(initialCleanup, 10000)
-		
+
 		// Clean up intervals on unmount
 		return () => {
 			clearInterval(cleanupInterval)
 			clearTimeout(initialTimeout)
 		}
 	}, [])
-	
+
 	// Stop spinner animation when the feed + thread view have committed a re-render
 	useEffect(() => {
 		if (!loadingMode) return
@@ -1435,43 +1607,6 @@ function FirehoseComponent() {
 							{/*<div className="lg:hidden border-t border-gray-800 my-2"></div>*/}
 							<h2 className="lg:hidden text-base font-semibold mb-2">Filters</h2>
 							<div className="flex flex-col gap-2">
- 							{currentUserPk ? (
- 								<Button
- 									variant={filterMode === 'follows' ? 'primary' : 'ghost'}
- 									className="justify-start"
- 									onClick={() => {
- 										setLoadingMode('follows')
- 										setSpinnerSettled(false)
- 										setFilterMode('follows')
- 										setOpenThreadId(null)
- 										try {
- 											if (typeof window !== 'undefined') {
- 												const url = new URL(window.location.href)
- 												// Keep only view=follows
- 												url.search = ''
- 												url.searchParams.set('view', 'follows')
- 													const target = url.pathname.startsWith('/nostr')
- 														? url.search
- 															? `/nostr${url.search}`
- 															: '/nostr'
- 													: url.search
- 														? `${url.pathname}${url.search}`
- 														: url.pathname
- 													window.history.pushState({}, '', target)
- 													window.dispatchEvent(new PopStateEvent('popstate'))
- 											}
- 										} catch {}
- 										// keep drawer open until spinner settles
- 									}}
- 								>
- 									<span className="inline-flex items-center gap-2">
- 										{loadingMode === 'follows' && isFiltersOpen ? (
- 											<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
- 										) : null}
- 										<span>Follows</span>
- 									</span>
- 								</Button>
- 							) : null}
 								<Button
 									variant={filterMode === 'all' ? 'primary' : 'ghost'}
 									className="justify-start"
@@ -1505,76 +1640,6 @@ function FirehoseComponent() {
 											<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
 										) : null}
 										<span>Global ({counts.all})</span>
-									</span>
-								</Button>
-								<Button
-									variant={filterMode === 'threads' ? 'primary' : 'ghost'}
-									className="justify-start"
-									onClick={() => {
-										setLoadingMode('threads')
-										setSpinnerSettled(false)
-										setFilterMode('threads')
-										setOpenThreadId(null)
-										try {
-											if (typeof window !== 'undefined') {
-												const url = new URL(window.location.href)
-												// Keep only view=threads
-												url.search = ''
-												url.searchParams.set('view', 'threads')
-												const target = url.pathname.startsWith('/nostr')
-													? url.search
-														? `/nostr${url.search}`
-														: '/nostr'
-													: url.search
-														? `${url.pathname}${url.search}`
-														: url.pathname
-												window.history.pushState({}, '', target)
-												window.dispatchEvent(new PopStateEvent('popstate'))
-											}
-										} catch {}
-										// keep drawer open until spinner settles
-									}}
-								>
-									<span className="inline-flex items-center gap-2">
-										{loadingMode === 'threads' && isFiltersOpen ? (
-											<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
-										) : null}
-										<span>Threads ({counts.threads})</span>
-									</span>
-								</Button>
-								<Button
-									variant={filterMode === 'originals' ? 'primary' : 'ghost'}
-									className="justify-start"
-									onClick={() => {
-										setLoadingMode('originals')
-										setSpinnerSettled(false)
-										setFilterMode('originals')
-										setOpenThreadId(null)
-										try {
-											if (typeof window !== 'undefined') {
-												const url = new URL(window.location.href)
-												// Keep only view=originals
-												url.search = ''
-												url.searchParams.set('view', 'originals')
-												const target = url.pathname.startsWith('/nostr')
-													? url.search
-														? `/nostr${url.search}`
-														: '/nostr'
-													: url.search
-														? `${url.pathname}${url.search}`
-														: url.pathname
-												window.history.pushState({}, '', target)
-												window.dispatchEvent(new PopStateEvent('popstate'))
-											}
-										} catch {}
-										// keep drawer open until spinner settles
-									}}
-								>
-									<span className="inline-flex items-center gap-2">
-										{loadingMode === 'originals' && isFiltersOpen ? (
-											<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
-										) : null}
-										<span>Original posts ({counts.originals})</span>
 									</span>
 								</Button>
 								<div className="mt-4 px-4">
@@ -1646,9 +1711,9 @@ function FirehoseComponent() {
 														try {
 															if (typeof window !== 'undefined') {
 																const url = new URL(window.location.href)
-    												// Clear all params; then set only view=global
-    												url.search = ''
-    												url.searchParams.set('view', 'global')
+																// Clear all params; then set only view=global
+																url.search = ''
+																url.searchParams.set('view', 'global')
 																const target = url.pathname.startsWith('/nostr')
 																	? url.search
 																		? `/nostr${url.search}`
@@ -1797,12 +1862,12 @@ function FirehoseComponent() {
 													}
 												} catch {}
 											}}
-													width="100%"
-													// height="300px"
-													previewConfig={{ showPreview: false }}
-													searchDisabled={false}
-													skinTonesDisabled
-													theme={Theme.DARK}
+											width="100%"
+											// height="300px"
+											previewConfig={{ showPreview: false }}
+											searchDisabled={false}
+											skinTonesDisabled
+											theme={Theme.DARK}
 										/>
 									</div>
 								</div>
@@ -1818,41 +1883,6 @@ function FirehoseComponent() {
 					<h2 className="text-lg font-semibold mb-2">Filters</h2>
 					<div className="text-sm">
 						<div className="flex flex-col gap-2">
-							{currentUserPk ? (
-								<Button
-									variant={filterMode === 'follows' ? 'primary' : 'ghost'}
-									className="justify-start"
-									onClick={() => {
-										setLoadingMode('follows')
-										setSpinnerSettled(false)
-										setFilterMode('follows')
-										setOpenThreadId(null)
-										try {
-											if (typeof window !== 'undefined') {
-												const url = new URL(window.location.href)
-												url.search = ''
-												url.searchParams.set('view', 'follows')
-												const target = url.pathname.startsWith('/nostr')
-													? url.search
-														? `/nostr${url.search}`
-														: '/nostr'
-													: url.search
-														? `${url.pathname}${url.search}`
-														: url.pathname
-											window.history.pushState({}, '', target)
-											window.dispatchEvent(new PopStateEvent('popstate'))
-										}
-										} catch {}
-									}}
-								>
-									<span className="inline-flex items-center gap-2">
-										{loadingMode === 'follows' && !isFiltersOpen ? (
-											<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
-										) : null}
-										<span>Follows</span>
-									</span>
-								</Button>
-							) : null}
 							<Button
 								variant={filterMode === 'all' ? 'primary' : 'ghost'}
 								className="justify-start"
@@ -1884,72 +1914,6 @@ function FirehoseComponent() {
 										<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
 									) : null}
 									<span>Global ({counts.all})</span>
-								</span>
-							</Button>
-							<Button
-								variant={filterMode === 'threads' ? 'primary' : 'ghost'}
-								className="justify-start"
-								onClick={() => {
-									setLoadingMode('threads')
-									setSpinnerSettled(false)
-									setFilterMode('threads')
-									setOpenThreadId(null)
-									try {
-										if (typeof window !== 'undefined') {
-											const url = new URL(window.location.href)
-											url.search = ''
-											url.searchParams.set('view', 'threads')
-											const target = url.pathname.startsWith('/nostr')
-												? url.search
-													? `/nostr${url.search}`
-													: '/nostr'
-												: url.search
-													? `${url.pathname}${url.search}`
-													: url.pathname
-											window.history.pushState({}, '', target)
-											window.dispatchEvent(new PopStateEvent('popstate'))
-										}
-									} catch {}
-								}}
-							>
-								<span className="inline-flex items-center gap-2">
-									{loadingMode === 'threads' && !isFiltersOpen ? (
-										<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
-									) : null}
-									<span>Threads ({counts.threads})</span>
-								</span>
-							</Button>
-							<Button
-								variant={filterMode === 'originals' ? 'primary' : 'ghost'}
-								className="justify-start"
-								onClick={() => {
-									setLoadingMode('originals')
-									setSpinnerSettled(false)
-									setFilterMode('originals')
-									setOpenThreadId(null)
-									try {
-										if (typeof window !== 'undefined') {
-											const url = new URL(window.location.href)
-											url.search = ''
-											url.searchParams.set('view', 'originals')
-											const target = url.pathname.startsWith('/nostr')
-												? url.search
-													? `/nostr${url.search}`
-													: '/nostr'
-												: url.search
-													? `${url.pathname}${url.search}`
-													: url.pathname
-											window.history.pushState({}, '', target)
-											window.dispatchEvent(new PopStateEvent('popstate'))
-										}
-									} catch {}
-								}}
-							>
-								<span className="inline-flex items-center gap-2">
-									{loadingMode === 'originals' && !isFiltersOpen ? (
-										<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
-									) : null}
-									<span>Original posts ({counts.originals})</span>
 								</span>
 							</Button>
 							<div className="mt-4 px-4">
@@ -2005,40 +1969,31 @@ function FirehoseComponent() {
 												type="button"
 												className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
 												onClick={() => {
-													// Clear the input and active tag filter, and return to follows/global
-													setTagFilterInput('')
-													setTagFilter('')
-													setSpinnerSettled(false)
-													if (currentUserPk) {
-														setLoadingMode('follows')
-														setFilterMode('follows')
-													} else {
-														setLoadingMode('all')
-														setFilterMode('all')
-													}
-													setOpenThreadId(null)
-													try {
-														if (typeof window !== 'undefined') {
-															const url = new URL(window.location.href)
-															url.search = ''
-															if (currentUserPk) {
-																url.searchParams.set('view', 'follows')
-															} else {
-																url.searchParams.set('view', 'global')
-															}
-															const target = url.pathname.startsWith('/nostr')
-																? url.search
-																	? `/nostr${url.search}`
-																	: '/nostr'
-																: url.search
-																	? `${url.pathname}${url.search}`
-																	: url.pathname
-															window.history.pushState({}, '', target)
-															window.dispatchEvent(new PopStateEvent('popstate'))
-														}
-													} catch {}
-													const el = document.getElementById('tag-filter') as HTMLInputElement | null
-													el?.focus()
+   										// Clear the input and active tag filter, and return to Global
+   										setTagFilterInput('')
+   										setTagFilter('')
+   										setSpinnerSettled(false)
+   										setLoadingMode('all')
+   										setFilterMode('all')
+   										setOpenThreadId(null)
+   										try {
+   											if (typeof window !== 'undefined') {
+   												const url = new URL(window.location.href)
+   												url.search = ''
+   												url.searchParams.set('view', 'global')
+   												const target = url.pathname.startsWith('/nostr')
+   													? url.search
+   														? `/nostr${url.search}`
+   														: '/nostr'
+   													: url.search
+   														? `${url.pathname}${url.search}`
+   														: url.pathname
+   												window.history.pushState({}, '', target)
+   												window.dispatchEvent(new PopStateEvent('popstate'))
+   											}
+   										} catch {}
+   										const el = document.getElementById('tag-filter') as HTMLInputElement | null
+   										el?.focus()
 												}}
 												title="Clear tag filter"
 												aria-label="Clear tag filter"
@@ -2140,11 +2095,11 @@ function FirehoseComponent() {
 												}
 											} catch {}
 										}}
-													width="100%"
-													previewConfig={{ showPreview: false }}
-													searchDisabled={false}
-													skinTonesDisabled
-													theme={Theme.DARK}
+										width="100%"
+										previewConfig={{ showPreview: false }}
+										searchDisabled={false}
+										skinTonesDisabled
+										theme={Theme.DARK}
 									/>
 								</div>
 							</div>
@@ -2158,11 +2113,13 @@ function FirehoseComponent() {
 					'py-3 px-3 lg:px-3 ' + (openThreadId ? '' : 'lg:mr-80') + (isComposeOpen ? (isComposeLarge ? ' pb-[50vh]' : ' pb-32') : '')
 				}
 			>
-    {/* Floating New Notes Banner near top-right (disabled as per new UX: use pulsing reload button instead) */}
-    {pendingNewNotes.length > 0 && false ? (
+				{/* Floating New Notes Banner near top-right (disabled as per new UX: use pulsing reload button instead) */}
+				{pendingNewNotes.length > 0 && false ? (
 					<div className="group fixed top-16 z-40" style={{ right: floatingRight }}>
 						<div className="absolute top-1/2 right-full -translate-y-1/2 mr-3 pointer-events-none transition-opacity duration-300 opacity-0 group-hover:opacity-100">
-							<span className="px-3 py-1 rounded-full bg-black/70 text-white text-sm shadow whitespace-nowrap text-right">Load new notes</span>
+							<span className="px-3 py-1 rounded-full bg-black/70 text-white text-sm shadow whitespace-nowrap text-right">
+								Load new notes
+							</span>
 						</div>
 						<Button
 							variant="primary"
@@ -2172,9 +2129,9 @@ function FirehoseComponent() {
 								setOpenThreadId(null)
 								// Prepend pending notes (dedup)
 								setAllLoadedEvents((prev) => {
-									const existingIds = new Set(prev.map((w) => (((w.event as any)?.id as string) || '')))
+									const existingIds = new Set(prev.map((w) => ((w.event as any)?.id as string) || ''))
 									const fresh = pendingNewNotes.filter((w) => {
-										const id = (((w.event as any)?.id as string) || '')
+										const id = ((w.event as any)?.id as string) || ''
 										return id && !existingIds.has(id)
 									})
 									return [...fresh, ...prev]
@@ -2186,14 +2143,22 @@ function FirehoseComponent() {
 							title="Load new notes and scroll to top"
 							aria-label="Load new notes"
 						>
-							<span className="text-base" aria-hidden>🆕</span>
+							<span className="text-base" aria-hidden>
+								🆕
+							</span>
 							<span className="text-sm font-medium">New notes from:</span>
 							<div className="flex -space-x-2">
-								{Array.from(new Set(newNoteAuthors)).slice(0, 8).map((pk) => (
-									<div key={pk} className="w-6 h-6 rounded-full bg-gray-200 border border-white text-[10px] flex items-center justify-center text-gray-700" title={pk}>
-										{pk.slice(0, 2)}
-									</div>
-								))}
+								{Array.from(new Set(newNoteAuthors))
+									.slice(0, 8)
+									.map((pk) => (
+										<div
+											key={pk}
+											className="w-6 h-6 rounded-full bg-gray-200 border border-white text-[10px] flex items-center justify-center text-gray-700"
+											title={pk}
+										>
+											{pk.slice(0, 2)}
+										</div>
+									))}
 							</div>
 						</Button>
 					</div>
@@ -2218,18 +2183,18 @@ function FirehoseComponent() {
 										if (!emap) return false
 										return selectedEmoji ? !!emap[selectedEmoji] : Object.keys(emap).length > 0
 									})
-   					: base
-					if (toShow.length === 0) {
-						return (
-							<div className="p-6 text-center text-gray-500 flex flex-col items-center justify-center">
-								<Loader2 className={`h-5 w-5 mb-2 ${forceFeedLoading || isLoading || isFetching ? 'animate-spin' : ''}`} />
-								<div>{forceFeedLoading || isLoading || isFetching ? 'Loading feed…' : 'No posts yet'}</div>
-							</div>
-						)
-					}
-					return toShow.map((wrapped: EnhancedFetchedNDKEvent) => (
-						<NoteView key={(wrapped.event as any).id as string} note={wrapped.event} reactionsMap={reactionsMap || {}} />
-					))
+								: base
+						if (toShow.length === 0) {
+							return (
+								<div className="p-6 text-center text-gray-500 flex flex-col items-center justify-center">
+									<Loader2 className={`h-5 w-5 mb-2 ${forceFeedLoading || isLoading || isFetching ? 'animate-spin' : ''}`} />
+									<div>{forceFeedLoading || isLoading || isFetching ? 'Loading feed…' : 'No posts yet'}</div>
+								</div>
+							)
+						}
+						return toShow.map((wrapped: EnhancedFetchedNDKEvent) => (
+							<NoteView key={(wrapped.event as any).id as string} note={wrapped.event} reactionsMap={reactionsMap || {}} />
+						))
 					})()}
 				</div>
 			</div>
@@ -2307,73 +2272,73 @@ function FirehoseComponent() {
 										return
 									}
 
-											// Create the kind 1 text note event
-											const event = new NDKEvent(ndk)
-											event.kind = 1
-											event.content = composeText.trim()
-											event.tags = []
+									// Create the kind 1 text note event
+									const event = new NDKEvent(ndk)
+									event.kind = 1
+									event.content = composeText.trim()
+									event.tags = []
 
-											// Sign the event (do not block UI on publish)
-											await event.sign(signer)
+									// Sign the event (do not block UI on publish)
+									await event.sign(signer)
 
-											// Create wrapped event for immediate feed updates
-											const wrappedEvent = {
-												event: event,
-												fetchedAt: Date.now(),
-												relaysSeen: [],
-												isFromCache: false,
-												priority: 1, // High priority for new notes
+									// Create wrapped event for immediate feed updates
+									const wrappedEvent = {
+										event: event,
+										fetchedAt: Date.now(),
+										relaysSeen: [],
+										isFromCache: false,
+										priority: 1, // High priority for new notes
+									}
+
+									// Get current user pubkey for follow & author feed
+									const user = await ndkActions.getUser()
+									const currentUserPubkey = user?.pubkey
+
+									// Optimistically update feeds immediately
+									const globalKey = [...noteKeys.all, 'enhanced-list', '', '', '']
+									queryClient.setQueryData(globalKey, (oldData: any) => {
+										if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
+										return [wrappedEvent]
+									})
+
+									if (currentUserPubkey) {
+										const followsKey = [...noteKeys.all, 'enhanced-list', '', '', 'follows']
+										queryClient.setQueryData(followsKey, (oldData: any) => {
+											if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
+											return [wrappedEvent]
+										})
+										// Author's own posts view
+										const authorKey = [...noteKeys.all, 'enhanced-list', '', currentUserPubkey, '']
+										queryClient.setQueryData(authorKey, (oldData: any) => {
+											if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
+											return [wrappedEvent]
+										})
+									}
+
+									// Clear the compose form and close
+									setComposeText('')
+									setComposeImages([])
+									setIsComposeOpen(false)
+
+									// Inform user and publish in background
+									toast.info('Posting in background...', { duration: 1500 })
+
+									// Fire-and-forget background publishing with simple retries
+									;(async () => {
+										const publishRelaySet = NDKRelaySet.fromRelayUrls(writeRelaysUrls, ndk)
+										const maxAttempts = 3
+										for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+											try {
+												await event.publish(publishRelaySet)
+												console.log('Note published successfully:', event.id)
+												return
+											} catch (err) {
+												console.warn(`Publish attempt ${attempt} failed`, err)
+												await new Promise((r) => setTimeout(r, 1000 * attempt))
 											}
-
-											// Get current user pubkey for follow & author feed
-											const user = await ndkActions.getUser()
-											const currentUserPubkey = user?.pubkey
-
-											// Optimistically update feeds immediately
-											const globalKey = [...noteKeys.all, 'enhanced-list', '', '', '']
-											queryClient.setQueryData(globalKey, (oldData: any) => {
-												if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
-												return [wrappedEvent]
-											})
-
-											if (currentUserPubkey) {
-												const followsKey = [...noteKeys.all, 'enhanced-list', '', '', 'follows']
-												queryClient.setQueryData(followsKey, (oldData: any) => {
-													if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
-													return [wrappedEvent]
-												})
-												// Author's own posts view
-												const authorKey = [...noteKeys.all, 'enhanced-list', '', currentUserPubkey, '']
-												queryClient.setQueryData(authorKey, (oldData: any) => {
-													if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
-													return [wrappedEvent]
-												})
-											}
-
-											// Clear the compose form and close
-											setComposeText('')
-											setComposeImages([])
-											setIsComposeOpen(false)
-
-											// Inform user and publish in background
-											toast.info('Posting in background...', { duration: 1500 })
-
-											// Fire-and-forget background publishing with simple retries
-											;(async () => {
-												const publishRelaySet = NDKRelaySet.fromRelayUrls(writeRelaysUrls, ndk)
-												const maxAttempts = 3
-												for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-													try {
-														await event.publish(publishRelaySet)
-														console.log('Note published successfully:', event.id)
-														return
-													} catch (err) {
-														console.warn(`Publish attempt ${attempt} failed`, err)
-														await new Promise((r) => setTimeout(r, 1000 * attempt))
-													}
-												}
-												console.error('Failed to publish note after retries:', event.id)
-											})()
+										}
+										console.error('Failed to publish note after retries:', event.id)
+									})()
 								} catch (error) {
 									console.error('Failed to send note:', error)
 									toast.error('Failed to publish note. Please try again.')
@@ -2450,16 +2415,16 @@ function FirehoseComponent() {
 														onEmojiClick={(emojiData) => {
 															setComposeText((t) => t + emojiData.emoji)
 														}}
- 													width={300}
- 													previewConfig={{ showPreview: false }}
- 													searchDisabled={false}
- 													skinTonesDisabled
- 													theme={Theme.DARK}
- 													/>
- 												</div>
- 											) : null}
- 										</div>
- 										{/* Image upload */}
+														width={300}
+														previewConfig={{ showPreview: false }}
+														searchDisabled={false}
+														skinTonesDisabled
+														theme={Theme.DARK}
+													/>
+												</div>
+											) : null}
+										</div>
+										{/* Image upload */}
 										<>
 											<input
 												id="compose-image-input"
@@ -2477,120 +2442,120 @@ function FirehoseComponent() {
 												<Button type="button" variant="tertiary" size="icon" title="Add image" aria-label="Add image">
 													<span aria-hidden>🖼️</span>
 												</Button>
-   								</label>
-								</>
-								<Button
-									type="button"
-									variant="primary"
-									size="icon"
-									title="Send"
-									aria-label="Send"
-									disabled={!composeText.trim() && composeImages.length === 0}
-									onClick={async () => {
-										// Don't send empty messages
-										if (!composeText.trim()) return
+											</label>
+										</>
+										<Button
+											type="button"
+											variant="primary"
+											size="icon"
+											title="Send"
+											aria-label="Send"
+											disabled={!composeText.trim() && composeImages.length === 0}
+											onClick={async () => {
+												// Don't send empty messages
+												if (!composeText.trim()) return
 
-										try {
-											// Get NDK instance and signer
-											const ndk = ndkActions.getNDK()
-											if (!ndk) {
-												toast.error('Not connected to Nostr network')
-												return
-											}
-
-											const signer = ndkActions.getSigner()
-											if (!signer) {
-												toast.error('Please log in to send notes')
-												return
-											}
-
-												// Create the kind 1 text note event
-												const event = new NDKEvent(ndk)
-												event.kind = 1
-												event.content = composeText.trim()
-												event.tags = []
-
-												// Sign the event (do not block UI on publish)
-												await event.sign(signer)
-
-												// Create wrapped event for immediate feed updates
-												const wrappedEvent = {
-													event: event,
-													fetchedAt: Date.now(),
-													relaysSeen: [],
-													isFromCache: false,
-													priority: 1,
-												}
-
-												// Get current user pubkey for follow & author feed
-												const user = await ndkActions.getUser()
-												const currentUserPubkey = user?.pubkey
-
-												// Optimistically update feeds immediately
-												const globalKey = [...noteKeys.all, 'enhanced-list', '', '', '']
-												queryClient.setQueryData(globalKey, (oldData: any) => {
-													if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
-													return [wrappedEvent]
-												})
-
-												if (currentUserPubkey) {
-													const followsKey = [...noteKeys.all, 'enhanced-list', '', '', 'follows']
-													queryClient.setQueryData(followsKey, (oldData: any) => {
-														if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
-														return [wrappedEvent]
-													})
-													const authorKey = [...noteKeys.all, 'enhanced-list', '', currentUserPubkey, '']
-													queryClient.setQueryData(authorKey, (oldData: any) => {
-														if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
-														return [wrappedEvent]
-													})
-												}
-
-												// Clear the compose form and close
-												setComposeText('')
-												setComposeImages([])
-												setIsComposeOpen(false)
-
-												// Inform user and publish in background
-												toast.info('Posting in background...', { duration: 1500 })
-
-												// Fire-and-forget background publishing with simple retries
-												;(async () => {
-													const publishRelaySet = NDKRelaySet.fromRelayUrls(writeRelaysUrls, ndk)
-													const maxAttempts = 3
-													for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-														try {
-															await event.publish(publishRelaySet)
-															console.log('Note published successfully:', event.id)
-															return
-														} catch (err) {
-															console.warn(`Publish attempt ${attempt} failed`, err)
-															await new Promise((r) => setTimeout(r, 1000 * attempt))
-														}
+												try {
+													// Get NDK instance and signer
+													const ndk = ndkActions.getNDK()
+													if (!ndk) {
+														toast.error('Not connected to Nostr network')
+														return
 													}
-													console.error('Failed to publish note after retries:', event.id)
-												})()
-										} catch (error) {
-											console.error('Failed to send note:', error)
-											toast.error('Failed to publish note. Please try again.')
-										}
-									}}
-								>
-									{/* Paper airplane right icon */}
-									<svg
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										strokeWidth="2"
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										className="w-5 h-5"
-										aria-hidden
-									>
-										<path d="M22 2L11 13" />
-										<path d="M22 2l-7 20-4-9-9-4 20-7z" />
-									</svg>
-								</Button>
+
+													const signer = ndkActions.getSigner()
+													if (!signer) {
+														toast.error('Please log in to send notes')
+														return
+													}
+
+													// Create the kind 1 text note event
+													const event = new NDKEvent(ndk)
+													event.kind = 1
+													event.content = composeText.trim()
+													event.tags = []
+
+													// Sign the event (do not block UI on publish)
+													await event.sign(signer)
+
+													// Create wrapped event for immediate feed updates
+													const wrappedEvent = {
+														event: event,
+														fetchedAt: Date.now(),
+														relaysSeen: [],
+														isFromCache: false,
+														priority: 1,
+													}
+
+													// Get current user pubkey for follow & author feed
+													const user = await ndkActions.getUser()
+													const currentUserPubkey = user?.pubkey
+
+													// Optimistically update feeds immediately
+													const globalKey = [...noteKeys.all, 'enhanced-list', '', '', '']
+													queryClient.setQueryData(globalKey, (oldData: any) => {
+														if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
+														return [wrappedEvent]
+													})
+
+													if (currentUserPubkey) {
+														const followsKey = [...noteKeys.all, 'enhanced-list', '', '', 'follows']
+														queryClient.setQueryData(followsKey, (oldData: any) => {
+															if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
+															return [wrappedEvent]
+														})
+														const authorKey = [...noteKeys.all, 'enhanced-list', '', currentUserPubkey, '']
+														queryClient.setQueryData(authorKey, (oldData: any) => {
+															if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
+															return [wrappedEvent]
+														})
+													}
+
+													// Clear the compose form and close
+													setComposeText('')
+													setComposeImages([])
+													setIsComposeOpen(false)
+
+													// Inform user and publish in background
+													toast.info('Posting in background...', { duration: 1500 })
+
+													// Fire-and-forget background publishing with simple retries
+													;(async () => {
+														const publishRelaySet = NDKRelaySet.fromRelayUrls(writeRelaysUrls, ndk)
+														const maxAttempts = 3
+														for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+															try {
+																await event.publish(publishRelaySet)
+																console.log('Note published successfully:', event.id)
+																return
+															} catch (err) {
+																console.warn(`Publish attempt ${attempt} failed`, err)
+																await new Promise((r) => setTimeout(r, 1000 * attempt))
+															}
+														}
+														console.error('Failed to publish note after retries:', event.id)
+													})()
+												} catch (error) {
+													console.error('Failed to send note:', error)
+													toast.error('Failed to publish note. Please try again.')
+												}
+											}}
+										>
+											{/* Paper airplane right icon */}
+											<svg
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												strokeWidth="2"
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												className="w-5 h-5"
+												aria-hidden
+											>
+												<path d="M22 2L11 13" />
+												<path d="M22 2l-7 20-4-9-9-4 20-7z" />
+											</svg>
+										</Button>
 									</div>
 								</>
 							) : (
@@ -2683,14 +2648,14 @@ function FirehoseComponent() {
 															onEmojiClick={(emojiData) => {
 																setComposeText((t) => t + emojiData.emoji)
 															}}
-  													width={300}
-  													previewConfig={{ showPreview: false }}
-  													searchDisabled={false}
-  													skinTonesDisabled
-  													theme={Theme.DARK}
-  													/>
-  												</div>
-  											) : null}
+															width={300}
+															previewConfig={{ showPreview: false }}
+															searchDisabled={false}
+															skinTonesDisabled
+															theme={Theme.DARK}
+														/>
+													</div>
+												) : null}
 											</div>
 											{/* Send */}
 											<Button
@@ -2701,110 +2666,110 @@ function FirehoseComponent() {
 												aria-label="Send"
 												disabled={!composeText.trim() && composeImages.length === 0}
 												onClick={async () => {
-												// Don't send empty messages
-												if (!composeText.trim()) return
+													// Don't send empty messages
+													if (!composeText.trim()) return
 
-												try {
-													// Get NDK instance and signer
-													const ndk = ndkActions.getNDK()
-													if (!ndk) {
-														toast.error('Not connected to Nostr network')
-														return
-													}
-
-													const signer = ndkActions.getSigner()
-													if (!signer) {
-														toast.error('Please log in to send notes')
-														return
-													}
-
-													// Create the kind 1 text note event
-													const event = new NDKEvent(ndk)
-													event.kind = 1
-													event.content = composeText.trim()
-													event.tags = []
-
-													// Sign the event (do not block UI on publish)
-													await event.sign(signer)
-
-													// Create wrapped event for immediate feed updates
-													const wrappedEvent = {
-														event: event,
-														fetchedAt: Date.now(),
-														relaysSeen: [],
-														isFromCache: false,
-														priority: 1,
-													}
-
-													// Get current user pubkey for follow & author feed
-													const user = await ndkActions.getUser()
-													const currentUserPubkey = user?.pubkey
-
-													// Optimistically update feeds immediately
-													const globalKey = [...noteKeys.all, 'enhanced-list', '', '', '']
-													queryClient.setQueryData(globalKey, (oldData: any) => {
-														if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
-														return [wrappedEvent]
-													})
-
-													if (currentUserPubkey) {
-														const followsKey = [...noteKeys.all, 'enhanced-list', '', '', 'follows']
-														queryClient.setQueryData(followsKey, (oldData: any) => {
-															if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
-															return [wrappedEvent]
-														})
-														const authorKey = [...noteKeys.all, 'enhanced-list', '', currentUserPubkey, '']
-														queryClient.setQueryData(authorKey, (oldData: any) => {
-															if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
-															return [wrappedEvent]
-														})
-													}
-
-													// Clear the compose form and close
-													setComposeText('')
-													setComposeImages([])
-													setIsComposeOpen(false)
-
-													// Inform user and publish in background
-													toast.info('Posting in background...', { duration: 1500 })
-
-													// Fire-and-forget background publishing with simple retries
-													;(async () => {
-														const publishRelaySet = NDKRelaySet.fromRelayUrls(writeRelaysUrls, ndk)
-														const maxAttempts = 3
-														for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-															try {
-																await event.publish(publishRelaySet)
-																console.log('Note published successfully:', event.id)
-																return
-															} catch (err) {
-																console.warn(`Publish attempt ${attempt} failed`, err)
-																await new Promise((r) => setTimeout(r, 1000 * attempt))
-															}
+													try {
+														// Get NDK instance and signer
+														const ndk = ndkActions.getNDK()
+														if (!ndk) {
+															toast.error('Not connected to Nostr network')
+															return
 														}
-														console.error('Failed to publish note after retries:', event.id)
-													})()
-												} catch (error) {
-													console.error('Failed to send note:', error)
-													toast.error('Failed to publish note. Please try again.')
-												}
-											}}
- 									>
- 										{/* Paper airplane right icon */}
- 										<svg
- 											viewBox="0 0 24 24"
- 											fill="none"
- 											stroke="currentColor"
- 											strokeWidth="2"
- 											strokeLinecap="round"
- 											strokeLinejoin="round"
- 											className="w-5 h-5"
- 											aria-hidden
- 										>
- 											<path d="M22 2L11 13" />
- 											<path d="M22 2l-7 20-4-9-9-4 20-7z" />
- 										</svg>
- 									</Button>
+
+														const signer = ndkActions.getSigner()
+														if (!signer) {
+															toast.error('Please log in to send notes')
+															return
+														}
+
+														// Create the kind 1 text note event
+														const event = new NDKEvent(ndk)
+														event.kind = 1
+														event.content = composeText.trim()
+														event.tags = []
+
+														// Sign the event (do not block UI on publish)
+														await event.sign(signer)
+
+														// Create wrapped event for immediate feed updates
+														const wrappedEvent = {
+															event: event,
+															fetchedAt: Date.now(),
+															relaysSeen: [],
+															isFromCache: false,
+															priority: 1,
+														}
+
+														// Get current user pubkey for follow & author feed
+														const user = await ndkActions.getUser()
+														const currentUserPubkey = user?.pubkey
+
+														// Optimistically update feeds immediately
+														const globalKey = [...noteKeys.all, 'enhanced-list', '', '', '']
+														queryClient.setQueryData(globalKey, (oldData: any) => {
+															if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
+															return [wrappedEvent]
+														})
+
+														if (currentUserPubkey) {
+															const followsKey = [...noteKeys.all, 'enhanced-list', '', '', 'follows']
+															queryClient.setQueryData(followsKey, (oldData: any) => {
+																if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
+																return [wrappedEvent]
+															})
+															const authorKey = [...noteKeys.all, 'enhanced-list', '', currentUserPubkey, '']
+															queryClient.setQueryData(authorKey, (oldData: any) => {
+																if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
+																return [wrappedEvent]
+															})
+														}
+
+														// Clear the compose form and close
+														setComposeText('')
+														setComposeImages([])
+														setIsComposeOpen(false)
+
+														// Inform user and publish in background
+														toast.info('Posting in background...', { duration: 1500 })
+
+														// Fire-and-forget background publishing with simple retries
+														;(async () => {
+															const publishRelaySet = NDKRelaySet.fromRelayUrls(writeRelaysUrls, ndk)
+															const maxAttempts = 3
+															for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+																try {
+																	await event.publish(publishRelaySet)
+																	console.log('Note published successfully:', event.id)
+																	return
+																} catch (err) {
+																	console.warn(`Publish attempt ${attempt} failed`, err)
+																	await new Promise((r) => setTimeout(r, 1000 * attempt))
+																}
+															}
+															console.error('Failed to publish note after retries:', event.id)
+														})()
+													} catch (error) {
+														console.error('Failed to send note:', error)
+														toast.error('Failed to publish note. Please try again.')
+													}
+												}}
+											>
+												{/* Paper airplane right icon */}
+												<svg
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													strokeWidth="2"
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													className="w-5 h-5"
+													aria-hidden
+												>
+													<path d="M22 2L11 13" />
+													<path d="M22 2l-7 20-4-9-9-4 20-7z" />
+												</svg>
+											</Button>
 										</div>
 									</div>
 								</>
