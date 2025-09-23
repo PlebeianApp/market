@@ -42,10 +42,7 @@ export function MediaOverlay({ open, onOpenChange, src, alt = 'Media' }: MediaOv
 				{/* Content */}
 				<DialogPrimitive.Content
 					className="fixed inset-0 z-50 flex items-center justify-center p-4"
-					onPointerDownOutside={(e) => {
-						// Allow closing by clicking outside the media
-						onOpenChange(false)
-					}}
+					onClick={() => onOpenChange(false)}
 				>
 					{/* Close button in top right */}
 					<DialogPrimitive.Close
