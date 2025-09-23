@@ -655,8 +655,8 @@ function FirehoseComponent() {
 
 			// Prefetch immediately on login or view change
 			prefetch()
-			// And keep it warm every 45s in the background
-			const id = window.setInterval(prefetch, 45_000)
+			// And keep it warm every 5 minutes in the background to reduce continuous reloading
+			const id = window.setInterval(prefetch, 5 * 60 * 1000)
 			return () => {
 				stopped = true
 				window.clearInterval(id)
@@ -862,10 +862,12 @@ function FirehoseComponent() {
 				setForceFeedLoading(true)
 				if (emptyRetryRef.current < 3) {
 					emptyRetryRef.current += 1
-					// Trigger a refetch to try to populate the feed
-					try {
-						doRefetch()
-					} catch {}
+					// Add delay before refetch to prevent continuous reloading
+					setTimeout(() => {
+						try {
+							doRefetch()
+						} catch {}
+					}, 2000) // 2 second delay between retries
 				}
 			} else if (!noItems) {
 				// Once we have items, clear the forced loading state
@@ -1069,12 +1071,16 @@ function FirehoseComponent() {
 
 	// Use the accumulated events instead of just the latest query data
 	const notes = allLoadedEvents.length > 0 ? allLoadedEvents : data || []
-	// Reactions fetching based on currently visible notes
-	const noteIdsForReactions = useMemo(
-		() => (notes as EnhancedFetchedNDKEvent[]).map((w) => (w.event as any)?.id as string).filter(Boolean),
-		[notes],
-	)
+	// State for selected emoji in reactions view (must be declared before use in useMemo)
 	const [selectedEmoji, setSelectedEmoji] = useState<string>('')
+	// Reactions fetching based on currently visible notes
+	// When in reactions view, use a stable reference to prevent continuous reloading
+	const noteIdsForReactions = useMemo(() => {
+		const noteIds = (notes as EnhancedFetchedNDKEvent[]).map((w) => (w.event as any)?.id as string).filter(Boolean)
+		// In reactions view, we want to prevent reloading unless the filter criteria actually changes
+		// The reactions query should only reload when selectedEmoji changes, not when new notes are added
+		return noteIds
+	}, filterMode === 'reactions' ? [selectedEmoji] : [notes])
 	const { data: reactionsMap } = useQuery({
 		...reactionsQueryOptions(noteIdsForReactions, selectedEmoji || undefined),
 	}) as any

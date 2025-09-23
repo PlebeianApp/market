@@ -331,6 +331,31 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 		}
 	}, [note])
 
+	// Memoized reactions computation to prevent re-rendering
+	const reactionsData = useMemo(() => {
+		try {
+			const id = ((note as any)?.id || '') as string
+			const emap = id && reactionsMap ? reactionsMap[id] : undefined
+			const entries = emap ? Object.entries(emap) : []
+			return { id, entries }
+		} catch {
+			return { id: '', entries: [] }
+		}
+	}, [note, reactionsMap])
+
+	// Memoized hashtags computation to prevent re-rendering
+	const hashtagsData = useMemo(() => {
+		try {
+			const tagsArr = Array.isArray((note as any)?.tags) ? ((note as any).tags as any[]) : []
+			const tTags = tagsArr.filter((t) => Array.isArray(t) && t[0] === 't' && typeof t[1] === 'string')
+			const hashSet = new Set(tTags.map((t) => String(t[1]).replace(/^#/, '').trim()).filter((v) => v.length > 0))
+			const hashtags = Array.from(hashSet)
+			return hashtags
+		} catch {
+			return []
+		}
+	}, [note])
+
 	// Process note content based on kind and format for display
 	const displayContent = (() => {
 		try {
@@ -954,110 +979,84 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 				</div>
 			</div>
 			{/* Reactions row (shown above hashtags) */}
-			{(() => {
-				try {
-					const id = ((note as any)?.id || '') as string
-					const emap = id && reactionsMap ? reactionsMap[id] : undefined
-					if (!emap) return null
-					const entries = Object.entries(emap)
-					if (entries.length === 0) return null
-					return (
-						<div className="mt-2 pt-2 border-t border-gray-200">
-							<div className="text-xs text-gray-700 flex flex-wrap items-center gap-2">
-								<span className="text-gray-500">Reactions:</span>
-								{entries.map(([emo, cnt]) => (
-									<button
-										key={emo}
-										className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200 hover:bg-gray-200 focus:outline-none"
-										onClick={(e) => {
-											e.preventDefault()
-											e.stopPropagation()
-											try {
-												const url = new URL(window.location.href)
-												// Keep only view and emoji
-												url.search = ''
-												url.searchParams.set('view', 'reactions')
-												url.searchParams.set('emoji', emo)
-												const target = url.pathname.startsWith('/nostr')
-													? url.search
-														? `/nostr${url.search}`
-														: '/nostr'
-													: url.search
-														? `${url.pathname}${url.search}`
-														: url.pathname
-												window.history.pushState({}, '', target)
-												window.dispatchEvent(new PopStateEvent('popstate'))
-											} catch {
-												window.location.href = `/nostr?view=reactions&emoji=${encodeURIComponent(emo)}`
-											}
-										}}
-										title={`Open reactions feed for ${emo}`}
-										aria-label={`Open reactions feed for ${emo}`}
-									>
-										<span>{emo}</span>
-										{cnt > 1 ? <span className="text-gray-500">{cnt}</span> : null}
-									</button>
-								))}
-							</div>
-						</div>
-					)
-				} catch {
-					return null
-				}
-			})()}
+			<div className="mt-2 pt-2 border-t border-gray-200">
+				<div className="text-xs text-gray-700 flex flex-wrap items-center gap-2">
+					<span className="text-gray-500">Reactions:</span>
+					{reactionsData.entries.map(([emo, cnt]) => (
+						<button
+							key={emo}
+							className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 border border-gray-200 hover:bg-gray-200 focus:outline-none"
+							onClick={(e) => {
+								e.preventDefault()
+								e.stopPropagation()
+								try {
+									const url = new URL(window.location.href)
+									// Keep only view and emoji
+									url.search = ''
+									url.searchParams.set('view', 'reactions')
+									url.searchParams.set('emoji', emo)
+									const target = url.pathname.startsWith('/nostr')
+										? url.search
+											? `/nostr${url.search}`
+											: '/nostr'
+										: url.search
+											? `${url.pathname}${url.search}`
+											: url.pathname
+									window.history.pushState({}, '', target)
+									window.dispatchEvent(new PopStateEvent('popstate'))
+								} catch {
+									window.location.href = `/nostr?view=reactions&emoji=${encodeURIComponent(emo)}`
+								}
+							}}
+							title={`Open reactions feed for ${emo}`}
+							aria-label={`Open reactions feed for ${emo}`}
+						>
+							<span>{emo}</span>
+							{cnt > 1 ? <span className="text-gray-500">{cnt}</span> : null}
+						</button>
+					))}
+				</div>
+			</div>
 			{/* Hashtags section */}
-			{(() => {
-				try {
-					const tagsArr = Array.isArray((note as any)?.tags) ? ((note as any).tags as any[]) : []
-					const tTags = tagsArr.filter((t) => Array.isArray(t) && t[0] === 't' && typeof t[1] === 'string')
-					const hashSet = new Set(tTags.map((t) => String(t[1]).replace(/^#/, '').trim()).filter((v) => v.length > 0))
-					const hashtags = Array.from(hashSet)
-					if (hashtags.length === 0) return null
-					return (
-						<div className="mt-2 pt-2 border-t border-gray-200">
-							<div className="text-xs text-gray-600 flex flex-wrap items-center gap-2">
-								<span className="text-gray-500">Hashtags:</span>
-								{hashtags.map((tag) => (
-									<Link
-										key={tag}
-										to={`/nostr?tag=${encodeURIComponent(tag)}`}
-										className="text-blue-600 hover:underline"
-										onClick={(e) => {
-											e.preventDefault()
-											e.stopPropagation()
-											// Clear any open thread when switching to hashtag view
-											setOpenThreadId(null)
-											// Use window.location to ensure URL updates query param for the feed page
-											try {
-												const url = new URL(window.location.href)
-												url.searchParams.delete('threadview')
-												url.searchParams.set('tag', tag)
-												// Preserve existing author filter if present
-												const target = url.pathname.startsWith('/nostr')
-													? url.search
-														? `/nostr${url.search}`
-														: '/nostr'
-													: url.search
-														? `${url.pathname}${url.search}`
-														: url.pathname
-												window.history.pushState({}, '', target)
-												window.dispatchEvent(new PopStateEvent('popstate'))
-											} catch {
-												// Fallback navigation
-												window.location.href = `/nostr?tag=${encodeURIComponent(tag)}`
-											}
-										}}
-									>
-										#{tag}
-									</Link>
-								))}
-							</div>
-						</div>
-					)
-				} catch {
-					return null
-				}
-			})()}
+			<div className="mt-2 pt-2 border-t border-gray-200">
+				<div className="text-xs text-gray-600 flex flex-wrap items-center gap-2">
+					<span className="text-gray-500">Hashtags:</span>
+					{hashtagsData.map((tag) => (
+						<Link
+							key={tag}
+							to={`/nostr?tag=${encodeURIComponent(tag)}`}
+							className="text-blue-600 hover:underline"
+							onClick={(e) => {
+								e.preventDefault()
+								e.stopPropagation()
+								// Clear any open thread when switching to hashtag view
+								setOpenThreadId(null)
+								// Use window.location to ensure URL updates query param for the feed page
+								try {
+									const url = new URL(window.location.href)
+									url.searchParams.delete('threadview')
+									url.searchParams.set('tag', tag)
+									// Preserve existing author filter if present
+									const target = url.pathname.startsWith('/nostr')
+										? url.search
+											? `/nostr${url.search}`
+											: '/nostr'
+										: url.search
+											? `${url.pathname}${url.search}`
+											: url.pathname
+									window.history.pushState({}, '', target)
+									window.dispatchEvent(new PopStateEvent('popstate'))
+								} catch {
+									// Fallback navigation
+									window.location.href = `/nostr?tag=${encodeURIComponent(tag)}`
+								}
+							}}
+						>
+							#{tag}
+						</Link>
+					))}
+				</div>
+			</div>
 			{/* Panel for different view modes */}
 			{(() => {
 				// Different content based on viewMode

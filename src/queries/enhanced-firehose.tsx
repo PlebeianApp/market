@@ -698,7 +698,8 @@ export async function fetchEnhancedNotesPage(
 				const followPubkeys = pTags.map((t: any) => t[1]) as string[]
 				if (pubkey && !followPubkeys.includes(pubkey)) followPubkeys.push(pubkey)
 				followedPubkeys = new Set(followPubkeys)
-				;(filter as any).authors = Array.from(followedPubkeys)
+				// Do not constrain the filter by authors here; instead, use the same pattern as the global feed
+				// by fetching broadly and applying follows post-filtering below.
 			} else {
 				return { items: [], oldest: null, newest: null }
 			}
