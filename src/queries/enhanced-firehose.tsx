@@ -51,7 +51,7 @@ export type EnhancedFetchedNDKEvent = {
 }
 
 // Global caches for enhanced performance
-const eventCache = new LRUCache<string, NDKEvent>({ maxSize: 5000, entryExpirationTimeInMS: 1000 * 60 * 30 }) // 30 min TTL
+const eventCache = new LRUCache<string, NDKEvent>({ maxSize: 1000, entryExpirationTimeInMS: 1000 * 60 * 30 }) // 30 min TTL
 const replaceableEventCache = new Map<string, NDKEvent>()
 const firstFetchTimestamps = new Map<string, number>()
 const lastDisplayedTimestamps = new Map<string, number>() // Track when events were last displayed
@@ -368,8 +368,8 @@ export const fetchEnhancedNotes = async (opts?: {
 					if (pubkeyArray.length === 0) {
 						allEvents = []
 					} else {
-						// Iterate backwards in time until we have at least `limit` valid entries (min 30 to overflow) or hit max rounds
-						const target = Math.max(limit, 30)
+						// Iterate backwards in time until we have at least `limit` valid entries or hit max rounds
+						const target = limit ?? 0
 						let rounds = 0
 						const maxRounds = 5
 						let untilCursor: number | undefined = undefined
@@ -450,8 +450,8 @@ export const fetchEnhancedNotes = async (opts?: {
 					}
 				} else {
 					// For non-follows views, iteratively expand the time window (doubling each round)
-					// until we have enough valid entries to overflow the viewport.
-					const target = Math.max(limit, 30)
+					// until we have enough valid entries.
+					const target = limit ?? 0
 					let rounds = 0
 					const maxRounds = 6
 					let windowSeconds = 2 * 60 * 60 // start with 2 hours
@@ -625,7 +625,6 @@ export const enhancedNotesQueryOptions = (opts?: { tag?: string; author?: string
 			normalizeTag(opts?.tag) || '',
 			opts?.author?.trim() || '',
 			opts?.follows ? 'follows' : '',
-			opts?.limit || 10,
 			(opts?.kinds || SUPPORTED_KINDS).join(','),
 		],
 		queryFn: () => fetchEnhancedNotes(opts),
