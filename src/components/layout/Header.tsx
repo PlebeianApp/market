@@ -156,9 +156,9 @@ export function Header() {
 						</Link>
 						<Link
 							to="/nostr"
- 						search={{
- 							view: undefined // Always go to global/default feed; follows feed removed
- 						}}
+							search={{
+								view: undefined, // Always go to global/default feed; follows feed removed
+							}}
 							className="hover:text-secondary"
 							activeProps={{
 								className: 'text-secondary',

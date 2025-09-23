@@ -25,7 +25,7 @@ async function initializeAppSettings() {
 		process.exit(1)
 	}
 
- try {
+	try {
 		function normalizePrivKey(key: string): string {
 			let k = key.trim()
 			if (k.startsWith('nsec')) {

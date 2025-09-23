@@ -3,7 +3,13 @@ import { useStore } from '@tanstack/react-store'
 import { authActions, authStore } from '@/lib/stores/auth'
 import { useQuery, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
 import { type JSX, type SVGProps, useEffect, useMemo, useState, useRef } from 'react'
-import { enhancedNotesQueryOptions, type EnhancedFetchedNDKEvent, cleanupStaleEvents, SUPPORTED_KINDS, getAugmentedRelayUrls } from '@/queries/enhanced-firehose'
+import {
+	enhancedNotesQueryOptions,
+	type EnhancedFetchedNDKEvent,
+	cleanupStaleEvents,
+	SUPPORTED_KINDS,
+	getAugmentedRelayUrls,
+} from '@/queries/enhanced-firehose'
 import { authorQueryOptions } from '@/queries/authors'
 import { reactionsQueryOptions } from '@/queries/reactions'
 import { ndkActions } from '@/lib/stores/ndk'
@@ -125,7 +131,13 @@ function linkifyPlainText(text: string): (string | JSX.Element)[] {
 		if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index))
 		const url = match[0]
 		parts.push(
-			<a key={`lk-${match.index}`} href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-words">
+			<a
+				key={`lk-${match.index}`}
+				href={url}
+				target="_blank"
+				rel="noopener noreferrer"
+				className="text-blue-600 hover:underline break-words"
+			>
 				{url}
 			</a>,
 		)
@@ -194,12 +206,12 @@ function ProfileBanner({
 							style={
 								!expanded
 									? {
-										display: '-webkit-box',
-										WebkitLineClamp: 4 as any,
-										WebkitBoxOrient: 'vertical' as any,
-										overflow: 'hidden',
-										wordBreak: 'break-word',
-									}
+											display: '-webkit-box',
+											WebkitLineClamp: 4 as any,
+											WebkitBoxOrient: 'vertical' as any,
+											overflow: 'hidden',
+											wordBreak: 'break-word',
+										}
 									: { wordBreak: 'break-word' }
 							}
 						>
@@ -207,11 +219,7 @@ function ProfileBanner({
 						</div>
 						{!expanded && needsClamp ? (
 							<div className="mt-1">
-								<button
-									type="button"
-									className="text-blue-600 hover:underline text-sm"
-									onClick={() => setExpanded(true)}
-								>
+								<button type="button" className="text-blue-600 hover:underline text-sm" onClick={() => setExpanded(true)}>
 									Show more
 								</button>
 							</div>
@@ -224,25 +232,23 @@ function ProfileBanner({
 }
 
 // Chip component for user feed list that shows username instead of pubkey
-function UserFeedChip({
-	pk,
-	isActive,
-	onOpen,
-	onRemove,
-}: {
-	pk: string
-	isActive: boolean
-	onOpen: () => void
-	onRemove: () => void
-}) {
+function UserFeedChip({ pk, isActive, onOpen, onRemove }: { pk: string; isActive: boolean; onOpen: () => void; onRemove: () => void }) {
 	const { data: author, isLoading } = useQuery({ ...authorQueryOptions(pk), enabled: !!pk }) as any
-	const displayName = isLoading ? 'Loading…' : (author?.name || author?.displayName || author?.nip05 || (pk.slice(0, 8) + '…'))
+	const displayName = isLoading ? 'Loading…' : author?.name || author?.displayName || author?.nip05 || pk.slice(0, 8) + '…'
 	return (
-		<div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border ${isActive ? 'bg-secondary text-white border-secondary' : 'bg-gray-100 text-gray-800 border-gray-200'}`}>
+		<div
+			className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border ${isActive ? 'bg-secondary text-white border-secondary' : 'bg-gray-100 text-gray-800 border-gray-200'}`}
+		>
 			<button type="button" className="text-sm hover:underline" onClick={onOpen} title={`Open user feed ${displayName}`}>
 				{displayName}
 			</button>
-			<button type="button" className={`ml-1 rounded-full p-0.5 ${isActive ? 'hover:bg-white/20' : 'hover:bg-gray-200'}`} onClick={onRemove} title="Remove from list" aria-label="Remove user from saved list">
+			<button
+				type="button"
+				className={`ml-1 rounded-full p-0.5 ${isActive ? 'hover:bg-white/20' : 'hover:bg-gray-200'}`}
+				onClick={onRemove}
+				title="Remove from list"
+				aria-label="Remove user from saved list"
+			>
 				<X className="h-3.5 w-3.5" />
 			</button>
 		</div>
@@ -364,7 +370,7 @@ function FirehoseComponent() {
 			notesOpts.tag || '',
 			notesOpts.author || '',
 			notesOpts.follows ? 'follows' : 'all',
-			filterMode === 'follows' ? (currentUserPk || 'anon') : '',
+			filterMode === 'follows' ? currentUserPk || 'anon' : '',
 			(SUPPORTED_KINDS as any).join(','),
 		],
 		initialPageParam: { since: undefined as number | undefined, until: undefined as number | undefined },
@@ -373,13 +379,13 @@ function FirehoseComponent() {
 		queryFn: async ({ pageParam }: any) => {
 			const { fetchEnhancedNotesPage } = await import('@/queries/enhanced-firehose')
 			const pageSize = 4
-				const res = await fetchEnhancedNotesPage(
-					filterMode === 'follows'
-						? { tag: '', author: '', follows: true, kinds: [...SUPPORTED_KINDS] as any }
-						: { tag: notesOpts.tag || '', author: notesOpts.author || '', follows: false, kinds: [...SUPPORTED_KINDS] as any },
-					{ since: pageParam?.since, until: pageParam?.until, pageSize },
-				)
-				return res
+			const res = await fetchEnhancedNotesPage(
+				filterMode === 'follows'
+					? { tag: '', author: '', follows: true, kinds: [...SUPPORTED_KINDS] as any }
+					: { tag: notesOpts.tag || '', author: notesOpts.author || '', follows: false, kinds: [...SUPPORTED_KINDS] as any },
+				{ since: pageParam?.since, until: pageParam?.until, pageSize },
+			)
+			return res
 		},
 		refetchOnWindowFocus: false,
 		refetchOnReconnect: false,
@@ -396,7 +402,7 @@ function FirehoseComponent() {
 			const id = (((wrapped.event as any)?.id as string) || '').trim()
 			if (!id) return
 			setAllLoadedEvents((prev) => {
-				if (prev.some((w) => ((((w.event as any)?.id as string) || '').trim()) === id)) return prev
+				if (prev.some((w) => (((w.event as any)?.id as string) || '').trim() === id)) return prev
 				return [wrapped, ...prev]
 			})
 		} catch {}
@@ -1165,16 +1171,16 @@ function FirehoseComponent() {
 						const windowHeight = window.innerHeight
 						const documentHeight = document.documentElement.scrollHeight
 
- 					// Calculate how far down the user has scrolled (as a percentage)
- 					const scrollPercentage = (scrollPosition + windowHeight) / documentHeight
+						// Calculate how far down the user has scrolled (as a percentage)
+						const scrollPercentage = (scrollPosition + windowHeight) / documentHeight
 
- 					// When the user is 75% of the way to the bottom, load the next page (4 items)
- 					if (scrollPercentage >= 0.75 && !isFetching && !isLoading && !isLoadingMoreRef.current) {
- 						isLoadingMoreRef.current = true
- 						fetchNextPage().finally(() => {
- 							isLoadingMoreRef.current = false
- 						})
- 					}
+						// When the user is 75% of the way to the bottom, load the next page (4 items)
+						if (scrollPercentage >= 0.75 && !isFetching && !isLoading && !isLoadingMoreRef.current) {
+							isLoadingMoreRef.current = true
+							fetchNextPage().finally(() => {
+								isLoadingMoreRef.current = false
+							})
+						}
 					}
 				}, 100)
 			} catch (_) {
@@ -1193,8 +1199,8 @@ function FirehoseComponent() {
 	}, [isFetching, isLoading, openThreadId, eventLimit, notesOpts])
 
 	// Overscroll edge triggers to load in appropriate direction
-	const topOverscrollRef = useRef<{count:number; lastTs:number}>({ count: 0, lastTs: 0 })
-	const bottomOverscrollRef = useRef<{count:number; lastTs:number}>({ count: 0, lastTs: 0 })
+	const topOverscrollRef = useRef<{ count: number; lastTs: number }>({ count: 0, lastTs: 0 })
+	const bottomOverscrollRef = useRef<{ count: number; lastTs: number }>({ count: 0, lastTs: 0 })
 	const touchStartYRef = useRef<number | null>(null)
 	const topEdgeLoadingRef = useRef(false)
 
@@ -1208,8 +1214,8 @@ function FirehoseComponent() {
 			} else {
 				await fetchPreviousPage()
 			}
-		} catch {}
-		finally {
+		} catch {
+		} finally {
 			setTimeout(() => {
 				topEdgeLoadingRef.current = false
 			}, 150)
@@ -1301,18 +1307,21 @@ function FirehoseComponent() {
 	const notes = allLoadedEvents.length > 0 ? allLoadedEvents : data || []
 	// State for selected emoji in reactions view (must be declared before use in useMemo)
 	const [selectedEmoji, setSelectedEmoji] = useState<string>('')
- // Token to force update of reactions when feed reloads
+	// Token to force update of reactions when feed reloads
 	const [reactionsReloadToken, setReactionsReloadToken] = useState(0)
 
 	// Reactions fetching based on currently visible notes
 	// When in reactions view, use a stable reference to prevent continuous reloading
-	const noteIdsForReactions = useMemo(() => {
-		const noteIds = (notes as EnhancedFetchedNDKEvent[]).map((w) => (w.event as any)?.id as string).filter(Boolean)
-		// In reactions view, we want to prevent reloading unless the filter criteria actually changes
-		// The reactions query should only reload when selectedEmoji changes, not when new notes are added
-		return noteIds
-	}, filterMode === 'reactions' ? [selectedEmoji] : [notes])
- const { data: reactionsMap } = useQuery({
+	const noteIdsForReactions = useMemo(
+		() => {
+			const noteIds = (notes as EnhancedFetchedNDKEvent[]).map((w) => (w.event as any)?.id as string).filter(Boolean)
+			// In reactions view, we want to prevent reloading unless the filter criteria actually changes
+			// The reactions query should only reload when selectedEmoji changes, not when new notes are added
+			return noteIds
+		},
+		filterMode === 'reactions' ? [selectedEmoji] : [notes],
+	)
+	const { data: reactionsMap } = useQuery({
 		...reactionsQueryOptions(noteIdsForReactions, selectedEmoji || undefined, reactionsReloadToken),
 	}) as any
 
@@ -1760,13 +1769,13 @@ function FirehoseComponent() {
 					<span>Loading feed…</span>
 				</div>
 			)}
-			{!showInitialSpinner && filtered.length === 0 && (
-				filterMode === 'follows' && currentUserPk && followsListNotFound ? (
+			{!showInitialSpinner &&
+				filtered.length === 0 &&
+				(filterMode === 'follows' && currentUserPk && followsListNotFound ? (
 					<div className="px-4 py-2 text-gray-400">cannot find your follow list</div>
 				) : (
 					<div className="px-4 py-2 text-gray-400">No notes found.</div>
-				)
-			)}
+				))}
 
 			{/* Filters Drawer */}
 			<div className="lg:hidden">
@@ -1796,115 +1805,115 @@ function FirehoseComponent() {
 								<div className="lg:hidden flex items-center gap-2 mb-2">
 									<CartButton size="icon" />
 									{/* Dashboard (authenticated only) */}
- 								{authIsAuthenticated ? (
- 									<Link to="/dashboard">
- 										<Button variant="primary" size="icon" title="Dashboard" aria-label="Dashboard">
- 											<span className="i-dashboard w-6 h-6" />
- 										</Button>
- 									</Link>
- 								) : null}
- 								{/* Profile (authenticated only) */}
- 								{authIsAuthenticated ? <Profile compact /> : null}
- 								{/* Logout (authenticated only) */}
- 								{authIsAuthenticated ? (
- 									<Button variant="primary" size="icon" title="Log out" aria-label="Log out" onClick={() => authActions.logout()}>
- 										<LogOut className="w-6 h-6" />
- 									</Button>
- 								) : null}
- 								{/* View selectors */}
- 								<div className="flex gap-2 ml-auto">
- 									{authIsAuthenticated ? (
- 										<Button
- 											variant={filterMode === 'follows' ? 'primary' : 'ghost'}
- 											className="px-3 py-1 h-8"
- 											onClick={() => {
- 												setLoadingMode('follows')
- 												setSpinnerSettled(false)
- 												setFilterMode('follows')
- 												setOpenThreadId(null)
- 												try {
- 													if (typeof window !== 'undefined') {
- 														const url = new URL(window.location.href)
- 														url.search = ''
- 														url.searchParams.set('view', 'follows')
- 														const target = url.pathname.startsWith('/nostr')
- 															? url.search
- 																? `/nostr${url.search}`
- 																: '/nostr'
- 															: url.search
- 																? `${url.pathname}${url.search}`
- 																: url.pathname
- 														window.history.pushState({}, '', target)
- 														window.dispatchEvent(new PopStateEvent('popstate'))
- 													}
- 												} catch {}
- 											}}
- 										>
- 											Follows
- 										</Button>
- 									) : null}
- 									{authIsAuthenticated ? (
- 										<Button
- 											variant={authorFilter && currentUserPk && authorFilter === currentUserPk ? 'primary' : 'ghost'}
- 											className="px-3 py-1 h-8"
- 											onClick={() => {
- 												if (!currentUserPk) return
- 												setLoadingMode('all')
- 												setSpinnerSettled(false)
- 												setFilterMode('all')
- 												setOpenThreadId(null)
- 												setAuthorFilter(currentUserPk)
- 												try {
- 													if (typeof window !== 'undefined') {
- 														const url = new URL(window.location.href)
- 														url.search = ''
- 														url.searchParams.set('view', 'own')
- 														url.searchParams.set('user', currentUserPk)
- 														const target = url.pathname.startsWith('/nostr')
- 															? url.search
- 																? `/nostr${url.search}`
- 																: '/nostr'
- 															: url.search
- 																? `${url.pathname}${url.search}`
- 																: url.pathname
- 														window.history.pushState({}, '', target)
- 														window.dispatchEvent(new PopStateEvent('popstate'))
- 													}
- 												} catch {}
- 											}}
- 										>
- 											Own notes
- 										</Button>
- 									) : null}
- 									<Button
- 										variant={filterMode === 'all' ? 'primary' : 'ghost'}
- 										className="px-3 py-1 h-8"
- 										onClick={() => {
- 											setLoadingMode('all')
- 											setSpinnerSettled(false)
- 											setFilterMode('all')
- 											setOpenThreadId(null)
- 											try {
- 												if (typeof window !== 'undefined') {
- 													const url = new URL(window.location.href)
- 													url.search = ''
- 													url.searchParams.set('view', 'global')
- 													const target = url.pathname.startsWith('/nostr')
- 														? url.search
- 															? `/nostr${url.search}`
- 															: '/nostr'
- 														: url.search
- 															? `${url.pathname}${url.search}`
- 															: url.pathname
- 													window.history.pushState({}, '', target)
- 													window.dispatchEvent(new PopStateEvent('popstate'))
- 												}
- 											} catch {}
- 										}}
- 									>
- 										Global
- 									</Button>
- 								</div>
+									{authIsAuthenticated ? (
+										<Link to="/dashboard">
+											<Button variant="primary" size="icon" title="Dashboard" aria-label="Dashboard">
+												<span className="i-dashboard w-6 h-6" />
+											</Button>
+										</Link>
+									) : null}
+									{/* Profile (authenticated only) */}
+									{authIsAuthenticated ? <Profile compact /> : null}
+									{/* Logout (authenticated only) */}
+									{authIsAuthenticated ? (
+										<Button variant="primary" size="icon" title="Log out" aria-label="Log out" onClick={() => authActions.logout()}>
+											<LogOut className="w-6 h-6" />
+										</Button>
+									) : null}
+									{/* View selectors */}
+									<div className="flex gap-2 ml-auto">
+										{authIsAuthenticated ? (
+											<Button
+												variant={filterMode === 'follows' ? 'primary' : 'ghost'}
+												className="px-3 py-1 h-8"
+												onClick={() => {
+													setLoadingMode('follows')
+													setSpinnerSettled(false)
+													setFilterMode('follows')
+													setOpenThreadId(null)
+													try {
+														if (typeof window !== 'undefined') {
+															const url = new URL(window.location.href)
+															url.search = ''
+															url.searchParams.set('view', 'follows')
+															const target = url.pathname.startsWith('/nostr')
+																? url.search
+																	? `/nostr${url.search}`
+																	: '/nostr'
+																: url.search
+																	? `${url.pathname}${url.search}`
+																	: url.pathname
+															window.history.pushState({}, '', target)
+															window.dispatchEvent(new PopStateEvent('popstate'))
+														}
+													} catch {}
+												}}
+											>
+												Follows
+											</Button>
+										) : null}
+										{authIsAuthenticated ? (
+											<Button
+												variant={authorFilter && currentUserPk && authorFilter === currentUserPk ? 'primary' : 'ghost'}
+												className="px-3 py-1 h-8"
+												onClick={() => {
+													if (!currentUserPk) return
+													setLoadingMode('all')
+													setSpinnerSettled(false)
+													setFilterMode('all')
+													setOpenThreadId(null)
+													setAuthorFilter(currentUserPk)
+													try {
+														if (typeof window !== 'undefined') {
+															const url = new URL(window.location.href)
+															url.search = ''
+															url.searchParams.set('view', 'own')
+															url.searchParams.set('user', currentUserPk)
+															const target = url.pathname.startsWith('/nostr')
+																? url.search
+																	? `/nostr${url.search}`
+																	: '/nostr'
+																: url.search
+																	? `${url.pathname}${url.search}`
+																	: url.pathname
+															window.history.pushState({}, '', target)
+															window.dispatchEvent(new PopStateEvent('popstate'))
+														}
+													} catch {}
+												}}
+											>
+												Own notes
+											</Button>
+										) : null}
+										<Button
+											variant={filterMode === 'all' ? 'primary' : 'ghost'}
+											className="px-3 py-1 h-8"
+											onClick={() => {
+												setLoadingMode('all')
+												setSpinnerSettled(false)
+												setFilterMode('all')
+												setOpenThreadId(null)
+												try {
+													if (typeof window !== 'undefined') {
+														const url = new URL(window.location.href)
+														url.search = ''
+														url.searchParams.set('view', 'global')
+														const target = url.pathname.startsWith('/nostr')
+															? url.search
+																? `/nostr${url.search}`
+																: '/nostr'
+															: url.search
+																? `${url.pathname}${url.search}`
+																: url.pathname
+														window.history.pushState({}, '', target)
+														window.dispatchEvent(new PopStateEvent('popstate'))
+													}
+												} catch {}
+											}}
+										>
+											Global
+										</Button>
+									</div>
 								</div>
 							</DrawerContent>
 							{/*<DrawerTitle id="drawer-filters-title">Filters</DrawerTitle>*/}
@@ -2228,80 +2237,80 @@ function FirehoseComponent() {
 					<h2 className="text-lg font-semibold mb-2">Filters</h2>
 					<div className="text-sm">
 						<div className="flex flex-col gap-2">
-									{authIsAuthenticated ? (
-										<Button
-											variant={filterMode === 'follows' ? 'primary' : 'ghost'}
-											className="justify-start"
-											onClick={() => {
-												setLoadingMode('follows')
-												setSpinnerSettled(false)
-												setFilterMode('follows')
-												setOpenThreadId(null)
-												try {
-													if (typeof window !== 'undefined') {
-														const url = new URL(window.location.href)
-														url.search = ''
-														url.searchParams.set('view', 'follows')
-														const target = url.pathname.startsWith('/nostr')
-															? url.search
-																? `/nostr${url.search}`
-																: '/nostr'
-															: url.search
-																? `${url.pathname}${url.search}`
-																: url.pathname
-														window.history.pushState({}, '', target)
-														window.dispatchEvent(new PopStateEvent('popstate'))
-													}
-												} catch {}
-											}}
-										>
-											<span className="inline-flex items-center gap-2">
-												{loadingMode === 'follows' && !isFiltersOpen ? (
-													<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
-												) : null}
-												<span>Follows</span>
-											</span>
-										</Button>
-									) : null}
-									{authIsAuthenticated ? (
-										<Button
-											variant={authorFilter && currentUserPk && authorFilter === currentUserPk ? 'primary' : 'ghost'}
-											className="justify-start"
-											onClick={() => {
-												if (!currentUserPk) return
-												setLoadingMode('all')
-												setSpinnerSettled(false)
-												setFilterMode('all')
-												setOpenThreadId(null)
-												setAuthorFilter(currentUserPk)
-												try {
-													if (typeof window !== 'undefined') {
-														const url = new URL(window.location.href)
-														url.search = ''
-														url.searchParams.set('view', 'own')
-														url.searchParams.set('user', currentUserPk)
-														const target = url.pathname.startsWith('/nostr')
-															? url.search
-																? `/nostr${url.search}`
-																: '/nostr'
-															: url.search
-																? `${url.pathname}${url.search}`
-																: url.pathname
-														window.history.pushState({}, '', target)
-														window.dispatchEvent(new PopStateEvent('popstate'))
-													}
-												} catch {}
-											}}
-										>
-											<span className="inline-flex items-center gap-2">
-												{loadingMode === 'all' && !isFiltersOpen ? (
-													<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
-												) : null}
-												<span>Own notes</span>
-											</span>
-										</Button>
-									) : null}
-									<Button
+							{authIsAuthenticated ? (
+								<Button
+									variant={filterMode === 'follows' ? 'primary' : 'ghost'}
+									className="justify-start"
+									onClick={() => {
+										setLoadingMode('follows')
+										setSpinnerSettled(false)
+										setFilterMode('follows')
+										setOpenThreadId(null)
+										try {
+											if (typeof window !== 'undefined') {
+												const url = new URL(window.location.href)
+												url.search = ''
+												url.searchParams.set('view', 'follows')
+												const target = url.pathname.startsWith('/nostr')
+													? url.search
+														? `/nostr${url.search}`
+														: '/nostr'
+													: url.search
+														? `${url.pathname}${url.search}`
+														: url.pathname
+												window.history.pushState({}, '', target)
+												window.dispatchEvent(new PopStateEvent('popstate'))
+											}
+										} catch {}
+									}}
+								>
+									<span className="inline-flex items-center gap-2">
+										{loadingMode === 'follows' && !isFiltersOpen ? (
+											<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
+										) : null}
+										<span>Follows</span>
+									</span>
+								</Button>
+							) : null}
+							{authIsAuthenticated ? (
+								<Button
+									variant={authorFilter && currentUserPk && authorFilter === currentUserPk ? 'primary' : 'ghost'}
+									className="justify-start"
+									onClick={() => {
+										if (!currentUserPk) return
+										setLoadingMode('all')
+										setSpinnerSettled(false)
+										setFilterMode('all')
+										setOpenThreadId(null)
+										setAuthorFilter(currentUserPk)
+										try {
+											if (typeof window !== 'undefined') {
+												const url = new URL(window.location.href)
+												url.search = ''
+												url.searchParams.set('view', 'own')
+												url.searchParams.set('user', currentUserPk)
+												const target = url.pathname.startsWith('/nostr')
+													? url.search
+														? `/nostr${url.search}`
+														: '/nostr'
+													: url.search
+														? `${url.pathname}${url.search}`
+														: url.pathname
+												window.history.pushState({}, '', target)
+												window.dispatchEvent(new PopStateEvent('popstate'))
+											}
+										} catch {}
+									}}
+								>
+									<span className="inline-flex items-center gap-2">
+										{loadingMode === 'all' && !isFiltersOpen ? (
+											<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
+										) : null}
+										<span>Own notes</span>
+									</span>
+								</Button>
+							) : null}
+							<Button
 								variant={filterMode === 'all' ? 'primary' : 'ghost'}
 								className="justify-start"
 								onClick={() => {
@@ -2334,50 +2343,50 @@ function FirehoseComponent() {
 									<span>Global ({counts.all})</span>
 								</span>
 							</Button>
- 						<div className="mt-4 px-4">
- 							<Label>User feeds</Label>
- 							{userFeeds.length === 0 ? (
- 								<div className="text-xs text-gray-400 mt-1">None yet</div>
- 							) : (
- 								<div className="mt-2 flex flex-wrap gap-2">
- 									{userFeeds.map((pk) => {
- 										const isActive = pk === authorFilter
- 										return (
- 											<UserFeedChip
- 												key={pk}
- 												pk={pk}
- 												isActive={isActive}
- 												onOpen={() => {
- 													navigateToUserFeed(pk)
- 													setIsFiltersOpen(false)
- 												}}
- 												onRemove={() => {
- 													setUserFeeds((prev) => prev.filter((p) => p !== pk))
- 													try {
- 														if (pk === authorFilter) {
- 															// Clear current user filter and navigate back to global
- 															setAuthorFilter('')
- 															const url = new URL(window.location.href)
- 															url.search = ''
- 															url.searchParams.set('view', 'global')
- 															const target = url.pathname.startsWith('/nostr')
- 																? url.search
- 																	? `/nostr${url.search}`
- 																	: '/nostr'
- 																: url.search
- 																	? `${url.pathname}${url.search}`
- 																	: url.pathname
- 															window.history.pushState({}, '', target)
- 															window.dispatchEvent(new PopStateEvent('popstate'))
- 														}
- 													} catch {}
- 												}}
- 											/>
- 										)
- 									})}
- 								</div>
- 							)}
- 						</div>
+							<div className="mt-4 px-4">
+								<Label>User feeds</Label>
+								{userFeeds.length === 0 ? (
+									<div className="text-xs text-gray-400 mt-1">None yet</div>
+								) : (
+									<div className="mt-2 flex flex-wrap gap-2">
+										{userFeeds.map((pk) => {
+											const isActive = pk === authorFilter
+											return (
+												<UserFeedChip
+													key={pk}
+													pk={pk}
+													isActive={isActive}
+													onOpen={() => {
+														navigateToUserFeed(pk)
+														setIsFiltersOpen(false)
+													}}
+													onRemove={() => {
+														setUserFeeds((prev) => prev.filter((p) => p !== pk))
+														try {
+															if (pk === authorFilter) {
+																// Clear current user filter and navigate back to global
+																setAuthorFilter('')
+																const url = new URL(window.location.href)
+																url.search = ''
+																url.searchParams.set('view', 'global')
+																const target = url.pathname.startsWith('/nostr')
+																	? url.search
+																		? `/nostr${url.search}`
+																		: '/nostr'
+																	: url.search
+																		? `${url.pathname}${url.search}`
+																		: url.pathname
+																window.history.pushState({}, '', target)
+																window.dispatchEvent(new PopStateEvent('popstate'))
+															}
+														} catch {}
+													}}
+												/>
+											)
+										})}
+									</div>
+								)}
+							</div>
 							<div className="mt-4 px-4">
 								<Label htmlFor="tag-filter">Tags</Label>
 								<div className="flex gap-2 items-center">
@@ -2431,31 +2440,31 @@ function FirehoseComponent() {
 												type="button"
 												className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
 												onClick={() => {
-   										// Clear the input and active tag filter, and return to Global
-   										setTagFilterInput('')
-   										setTagFilter('')
-   										setSpinnerSettled(false)
-   										setLoadingMode('all')
-   										setFilterMode('all')
-   										setOpenThreadId(null)
-   										try {
-   											if (typeof window !== 'undefined') {
-   												const url = new URL(window.location.href)
-   												url.search = ''
-   												url.searchParams.set('view', 'global')
-   												const target = url.pathname.startsWith('/nostr')
-   													? url.search
-   														? `/nostr${url.search}`
-   														: '/nostr'
-   													: url.search
-   														? `${url.pathname}${url.search}`
-   														: url.pathname
-   												window.history.pushState({}, '', target)
-   												window.dispatchEvent(new PopStateEvent('popstate'))
-   											}
-   										} catch {}
-   										const el = document.getElementById('tag-filter') as HTMLInputElement | null
-   										el?.focus()
+													// Clear the input and active tag filter, and return to Global
+													setTagFilterInput('')
+													setTagFilter('')
+													setSpinnerSettled(false)
+													setLoadingMode('all')
+													setFilterMode('all')
+													setOpenThreadId(null)
+													try {
+														if (typeof window !== 'undefined') {
+															const url = new URL(window.location.href)
+															url.search = ''
+															url.searchParams.set('view', 'global')
+															const target = url.pathname.startsWith('/nostr')
+																? url.search
+																	? `/nostr${url.search}`
+																	: '/nostr'
+																: url.search
+																	? `${url.pathname}${url.search}`
+																	: url.pathname
+															window.history.pushState({}, '', target)
+															window.dispatchEvent(new PopStateEvent('popstate'))
+														}
+													} catch {}
+													const el = document.getElementById('tag-filter') as HTMLInputElement | null
+													el?.focus()
 												}}
 												title="Clear tag filter"
 												aria-label="Clear tag filter"
@@ -2576,22 +2585,24 @@ function FirehoseComponent() {
 				}
 			>
 				{/* Cover/banner background behind the view header when in a user's feed */}
-				{authorFilter && (authorMeta as any) ? (() => {
-					const coverUrl = (authorMeta as any)?.banner || (authorMeta as any)?.cover || (authorMeta as any)?.cover_image || ''
-					return coverUrl ? (
-						<div
-							className="fixed top-0 left-0 right-0 h-32 md:h-40 z-0 pointer-events-none"
-							style={{
-								backgroundImage: `url("${coverUrl}")`,
-								backgroundSize: 'cover',
-								backgroundPosition: 'center',
-								backgroundRepeat: 'no-repeat',
-							}}
-						>
-							<div className="w-full h-full bg-black/20" />
-						</div>
-					) : null
-				})() : null}
+				{authorFilter && (authorMeta as any)
+					? (() => {
+							const coverUrl = (authorMeta as any)?.banner || (authorMeta as any)?.cover || (authorMeta as any)?.cover_image || ''
+							return coverUrl ? (
+								<div
+									className="fixed top-0 left-0 right-0 h-32 md:h-40 z-0 pointer-events-none"
+									style={{
+										backgroundImage: `url("${coverUrl}")`,
+										backgroundSize: 'cover',
+										backgroundPosition: 'center',
+										backgroundRepeat: 'no-repeat',
+									}}
+								>
+									<div className="w-full h-full bg-black/20" />
+								</div>
+							) : null
+						})()
+					: null}
 
 				{/* Profile banner shown on user feed views */}
 				{authorFilter ? (
@@ -2773,16 +2784,16 @@ function FirehoseComponent() {
 									await event.sign(signer)
 
 									// Create wrapped event for immediate feed updates
-     				const wrappedEvent = {
-     					event: event,
-     					fetchedAt: Date.now(),
-     					relaysSeen: [],
-     					isFromCache: false,
-     					priority: 1, // High priority for new notes
-     				}
+									const wrappedEvent = {
+										event: event,
+										fetchedAt: Date.now(),
+										relaysSeen: [],
+										isFromCache: false,
+										priority: 1, // High priority for new notes
+									}
 
-     				// Prepend to current feed immediately
-     				addToFeed(wrappedEvent as any)
+									// Prepend to current feed immediately
+									addToFeed(wrappedEvent as any)
 
 									// Get current user pubkey for follow & author feed
 									const user = await ndkActions.getUser()
@@ -2803,7 +2814,15 @@ function FirehoseComponent() {
 											return [wrappedEvent]
 										})
 										// New follows key with cacheKey = current user pubkey
-										const followsKeyWithUser = [...noteKeys.all, 'enhanced-list', '', '', 'follows', currentUserPubkey, (SUPPORTED_KINDS as any).join(',')]
+										const followsKeyWithUser = [
+											...noteKeys.all,
+											'enhanced-list',
+											'',
+											'',
+											'follows',
+											currentUserPubkey,
+											(SUPPORTED_KINDS as any).join(','),
+										]
 										queryClient.setQueryData(followsKeyWithUser, (oldData: any) => {
 											if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
 											return [wrappedEvent]

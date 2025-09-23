@@ -40,7 +40,7 @@ export const fetchAuthor = async (pubkey: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
- // Query using the app's relays, prioritizing the configured main relay alongside defaults
+	// Query using the app's relays, prioritizing the configured main relay alongside defaults
 	const appRelay = configActions.getAppRelay()
 	const allRelays = appRelay ? [...defaultRelaysUrls, appRelay] : defaultRelaysUrls
 	const relaySet = NDKRelaySet.fromRelayUrls(allRelays, ndk)
