@@ -68,7 +68,13 @@ function navigateToUserFeed(hexPubkey: string, stopPropagation?: boolean) {
 		// Keep only user param when navigating to a user feed
 		url.search = ''
 		url.searchParams.set('user', hexPubkey)
-		const target = url.pathname.startsWith('/nostr') ? (url.search ? `/nostr${url.search}` : '/nostr') : url.search ? `${url.pathname}${url.search}` : url.pathname
+		const target = url.pathname.startsWith('/nostr')
+			? url.search
+				? `/nostr${url.search}`
+				: '/nostr'
+			: url.search
+				? `${url.pathname}${url.search}`
+				: url.pathname
 		if (stopPropagation) {
 			window.history.pushState({}, '', target)
 			window.dispatchEvent(new PopStateEvent('popstate'))
@@ -238,9 +244,7 @@ function linkifyContent(content: string, opts?: { stopPropagation?: boolean; onM
 					if (type === 'nprofile') pubkey = (decoded.data as any).pubkey
 					if (type === 'naddr') pubkey = (decoded.data as any).pubkey
 					if (type === 'npub' || type === 'nprofile') {
-						nodes.push(
-							<InlineUserChip key={`np-${match.index}`} pubkey={pubkey} stopPropagation={opts?.stopPropagation} />,
-						)
+						nodes.push(<InlineUserChip key={`np-${match.index}`} pubkey={pubkey} stopPropagation={opts?.stopPropagation} />)
 					} else {
 						const handleClick: React.MouseEventHandler<HTMLAnchorElement> = (e) => {
 							if (opts?.stopPropagation) {
@@ -250,7 +254,12 @@ function linkifyContent(content: string, opts?: { stopPropagation?: boolean; onM
 							navigateToUserFeed(pubkey, opts?.stopPropagation)
 						}
 						nodes.push(
-							<a key={`np-${match.index}`} href={`/nostr?user=${pubkey}`} className="text-blue-600 hover:underline break-words" onClick={handleClick}>
+							<a
+								key={`np-${match.index}`}
+								href={`/nostr?user=${pubkey}`}
+								className="text-blue-600 hover:underline break-words"
+								onClick={handleClick}
+							>
 								{`nostr:${bech}`}
 							</a>,
 						)
@@ -487,7 +496,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap, embeddedDepth =
 		}
 	}, [note])
 
- // Detect embedded note in kind 6 (repost) content
+	// Detect embedded note in kind 6 (repost) content
 	const embeddedRepostNote = useMemo(() => {
 		try {
 			const kind = (note as any)?.kind
@@ -1191,16 +1200,16 @@ export function NoteView({ note, readOnlyInThread, reactionsMap, embeddedDepth =
 			</div>
 			<div className="flex gap-2">
 				<div className="flex-1">
-     {readOnlyInThread ? (
-					<CollapsibleContent className="px-2 py-1 text-md text-left break-words whitespace-pre-wrap align-text-top w-full hover:bg-grey-300 aria-hidden:true">
-						{embeddedRepostNote && embeddedDepth === 0 ? (
-							<div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 p-2">
-								<NoteView note={embeddedRepostNote as any} readOnlyInThread reactionsMap={reactionsMap} embeddedDepth={1} />
-							</div>
-						) : (
-							linkifyContent(displayContent, { stopPropagation: true, onMediaClick: handleMediaClick })
-						)}
-					</CollapsibleContent>
+					{readOnlyInThread ? (
+						<CollapsibleContent className="px-2 py-1 text-md text-left break-words whitespace-pre-wrap align-text-top w-full hover:bg-grey-300 aria-hidden:true">
+							{embeddedRepostNote && embeddedDepth === 0 ? (
+								<div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 p-2">
+									<NoteView note={embeddedRepostNote as any} readOnlyInThread reactionsMap={reactionsMap} embeddedDepth={1} />
+								</div>
+							) : (
+								linkifyContent(displayContent, { stopPropagation: true, onMediaClick: handleMediaClick })
+							)}
+						</CollapsibleContent>
 					) : (
 						(() => {
 							const hasThreadItems = !!threadStructure && (threadStructure.nodes?.size || 0) > 1
@@ -1218,13 +1227,13 @@ export function NoteView({ note, readOnlyInThread, reactionsMap, embeddedDepth =
 								<CollapsibleContent
 									className={`px-2 py-1 text-md text-left break-words whitespace-pre-wrap align-text-top w-full rounded-md transition-colors duration-150 hover:bg-grey-300`}
 								>
-         {embeddedRepostNote && embeddedDepth === 0 ? (
-         								<div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 p-2">
-         									<NoteView note={embeddedRepostNote as any} readOnlyInThread reactionsMap={reactionsMap} embeddedDepth={1} />
-         								</div>
-         							) : (
-         								linkifyContent(displayContent, { stopPropagation: true, onMediaClick: handleMediaClick })
-         							) }
+									{embeddedRepostNote && embeddedDepth === 0 ? (
+										<div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 p-2">
+											<NoteView note={embeddedRepostNote as any} readOnlyInThread reactionsMap={reactionsMap} embeddedDepth={1} />
+										</div>
+									) : (
+										linkifyContent(displayContent, { stopPropagation: true, onMediaClick: handleMediaClick })
+									)}
 								</CollapsibleContent>
 							)
 						})()
@@ -1559,19 +1568,19 @@ export function NoteView({ note, readOnlyInThread, reactionsMap, embeddedDepth =
 													console.log('Reply published successfully:', event.id)
 													console.log('Published event JSON:', JSON.stringify(event.rawEvent()))
 
-    									// Show success message
-    									toast.dismiss(loadingToastId)
-    									toast.success('Reply published successfully!')
+													// Show success message
+													toast.dismiss(loadingToastId)
+													toast.success('Reply published successfully!')
 
-    									// Immediately add to the feed
-    									try {
-    										;(window as any).__nostrAddToFeed?.(event)
-    									} catch {}
+													// Immediately add to the feed
+													try {
+														;(window as any).__nostrAddToFeed?.(event)
+													} catch {}
 
-    									// Reset view mode and text
-    									setReplyText('')
-    									setReplyImages([])
-    									setViewMode(VIEW_MODE.NONE)
+													// Reset view mode and text
+													setReplyText('')
+													setReplyImages([])
+													setViewMode(VIEW_MODE.NONE)
 												} catch (error) {
 													console.error('Failed to send reply:', error)
 													toast.error('Failed to send reply. Please try again.')
@@ -1862,19 +1871,19 @@ export function NoteView({ note, readOnlyInThread, reactionsMap, embeddedDepth =
 													console.log('Quote post published successfully:', event.id)
 													console.log('Published event JSON:', JSON.stringify(event.rawEvent()))
 
-    									// Show success message
-    									toast.dismiss(loadingToastId)
-    									toast.success('Quote post published successfully!')
+													// Show success message
+													toast.dismiss(loadingToastId)
+													toast.success('Quote post published successfully!')
 
-    									// Immediately add to the feed
-    									try {
-    										;(window as any).__nostrAddToFeed?.(event)
-    									} catch {}
+													// Immediately add to the feed
+													try {
+														;(window as any).__nostrAddToFeed?.(event)
+													} catch {}
 
-    									// Reset view mode and text
-    									setQuoteText('')
-    									setQuoteImages([])
-    									setViewMode(VIEW_MODE.NONE)
+													// Reset view mode and text
+													setQuoteText('')
+													setQuoteImages([])
+													setViewMode(VIEW_MODE.NONE)
 												} catch (error) {
 													console.error('Failed to send quote post:', error)
 													toast.error('Failed to send quote post. Please try again.')

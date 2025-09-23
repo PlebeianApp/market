@@ -60,12 +60,7 @@ export function findRootFromETags(event: NDKEvent): string | null {
 	if (!Array.isArray(tags)) return null
 
 	// NIP-10: Prefer explicit root marker
-	const rootTag = tags.find((tag: any) =>
-		Array.isArray(tag) &&
-		tag[0] === 'e' &&
-		tag[3] === 'root' &&
-		typeof tag[1] === 'string'
-	)
+	const rootTag = tags.find((tag: any) => Array.isArray(tag) && tag[0] === 'e' && tag[3] === 'root' && typeof tag[1] === 'string')
 	if (rootTag) return rootTag[1]
 
 	// Fallback: first e-tag is typically the root
@@ -84,7 +79,7 @@ export function findParentsFromETags(event: NDKEvent): string[] {
 	if (!Array.isArray(tags)) return []
 
 	const eTags = tags.filter((tag: any) => Array.isArray(tag) && tag[0] === 'e' && typeof tag[1] === 'string')
-	
+
 	// NIP-10: Use reply markers if present
 	const replyTagged = eTags.filter((tag: any) => tag[3] === 'reply')
 	if (replyTagged.length > 0) {
@@ -114,10 +109,10 @@ let batchTimer: NodeJS.Timeout | null = null
 
 async function processBatchedEvents(): Promise<void> {
 	if (pendingEventBatches.length === 0) return
-	
+
 	const batchIds = [...pendingEventBatches]
 	pendingEventBatches.length = 0 // Clear the pending batch
-	
+
 	const ndk = ndkActions.getNDK()
 	if (!ndk) {
 		console.warn('NDK not initialized for batch processing')
@@ -134,32 +129,32 @@ async function processBatchedEvents(): Promise<void> {
 		}
 		return
 	}
-	
+
 	try {
 		const allRelays = await getAugmentedRelayUrls()
 		const relaySet = NDKRelaySet.fromRelayUrls(allRelays, ndk)
-		
+
 		// Create a filter with all the event IDs
 		const filter: NDKFilter = {
 			ids: batchIds,
-			limit: batchIds.length * 2 // Allow some buffer for duplicates
+			limit: batchIds.length * 2, // Allow some buffer for duplicates
 		}
-		
+
 		// Fetch all events in a single query with timeout protection
 		const fetchPromise = ndk.fetchEvents(filter, undefined, relaySet)
 		const timeoutPromise = new Promise<Set<NDKEvent>>((resolve) => {
 			setTimeout(() => resolve(new Set()), 15000) // 15 second timeout for larger batches
 		})
-		
+
 		const events = await Promise.race([fetchPromise, timeoutPromise])
 		const eventMap = new Map<string, NDKEvent>()
-		
+
 		// Map events to their IDs
-		Array.from(events).forEach(event => {
+		Array.from(events).forEach((event) => {
 			const id = (event as any).id
 			if (id) eventMap.set(id, event)
 		})
-		
+
 		// Resolve all promises in the cache
 		for (const id of batchIds) {
 			const promise = eventBatchCache.get(id)
@@ -193,20 +188,20 @@ async function fetchEventById(eventId: string): Promise<NDKEvent | null> {
 	if (eventBatchCache.has(eventId)) {
 		return eventBatchCache.get(eventId)!
 	}
-	
+
 	// Create a new promise for this event
 	let resolvePromise: (value: NDKEvent | null) => void = () => {}
-	const promise = new Promise<NDKEvent | null>(resolve => {
+	const promise = new Promise<NDKEvent | null>((resolve) => {
 		resolvePromise = resolve
 	})
-	
+
 	// Store the resolve function with the promise
 	;(promise as any).__resolve = resolvePromise
 	eventBatchCache.set(eventId, promise)
-	
+
 	// Add to pending batch
 	pendingEventBatches.push(eventId)
-	
+
 	// Set a timer to process the batch if it's not already set
 	if (batchTimer === null) {
 		batchTimer = setTimeout(() => {
@@ -214,7 +209,7 @@ async function fetchEventById(eventId: string): Promise<NDKEvent | null> {
 			processBatchedEvents()
 		}, 10) // 10ms delay for batching
 	}
-	
+
 	// If we have enough events, process the batch immediately
 	if (pendingEventBatches.length >= eventBatchSize) {
 		if (batchTimer !== null) {
@@ -223,7 +218,7 @@ async function fetchEventById(eventId: string): Promise<NDKEvent | null> {
 		}
 		processBatchedEvents()
 	}
-	
+
 	return promise
 }
 
@@ -251,14 +246,14 @@ export async function findEnhancedRootEvent(noteId: string): Promise<{ rootEvent
 	let currentEvent = initialEvent
 	const visited = new Set<string>([noteId])
 	const maxDepth = 50 // Prevent infinite loops
-	
+
 	for (let depth = 0; depth < maxDepth; depth++) {
 		const parents = findParentsFromETags(currentEvent)
-		
+
 		if (parents.length === 0) {
-			return { 
-				rootEvent: currentEvent, 
-				rootId: (currentEvent as any).id || noteId 
+			return {
+				rootEvent: currentEvent,
+				rootId: (currentEvent as any).id || noteId,
 			}
 		}
 
@@ -266,7 +261,7 @@ export async function findEnhancedRootEvent(noteId: string): Promise<{ rootEvent
 		let foundParent = false
 		for (const parentId of parents) {
 			if (visited.has(parentId)) continue // Cycle detection
-			
+
 			const parentEvent = await fetchEventById(parentId)
 			if (parentEvent) {
 				currentEvent = parentEvent
@@ -277,17 +272,17 @@ export async function findEnhancedRootEvent(noteId: string): Promise<{ rootEvent
 		}
 
 		if (!foundParent) {
-			return { 
-				rootEvent: currentEvent, 
-				rootId: (currentEvent as any).id || noteId 
+			return {
+				rootEvent: currentEvent,
+				rootId: (currentEvent as any).id || noteId,
 			}
 		}
 	}
 
 	// Max depth reached
-	return { 
-		rootEvent: currentEvent, 
-		rootId: (currentEvent as any).id || noteId 
+	return {
+		rootEvent: currentEvent,
+		rootId: (currentEvent as any).id || noteId,
 	}
 }
 
@@ -317,14 +312,14 @@ async function fetchEnhancedThreadEvents(rootId: string): Promise<NDKEvent[]> {
 		const batchIds = Array.from(frontier)
 			.filter((id) => !visitedFrontier.has(id))
 			.slice(0, 50) // Increased batch size
-		
+
 		if (batchIds.length === 0) break
-		
+
 		batchIds.forEach((id) => visitedFrontier.add(id))
 
 		const filter: NDKFilter = {
 			kinds: SUPPORTED_KINDS,
-			"#e": batchIds,
+			'#e': batchIds,
 			limit: 300, // Increased limit
 		}
 
@@ -367,8 +362,8 @@ function isValidThreadEvent(event: NDKEvent): boolean {
 
 		// Check for NSFW
 		if (Array.isArray(tags)) {
-			const hasNsfwTag = tags.some((t: any) => 
-				Array.isArray(t) && t[0] === 't' && typeof t[1] === 'string' && t[1].toLowerCase() === 'nsfw'
+			const hasNsfwTag = tags.some(
+				(t: any) => Array.isArray(t) && t[0] === 't' && typeof t[1] === 'string' && t[1].toLowerCase() === 'nsfw',
 			)
 			if (hasNsfwTag) return false
 		}
@@ -380,9 +375,7 @@ function isValidThreadEvent(event: NDKEvent): boolean {
 
 		// Check for client:Mostr tag
 		if (Array.isArray(tags)) {
-			const hasMostrTag = tags.some((tag: any) => 
-				Array.isArray(tag) && tag.length >= 2 && tag[0] === 'client' && tag[1] === 'Mostr'
-			)
+			const hasMostrTag = tags.some((tag: any) => Array.isArray(tag) && tag.length >= 2 && tag[0] === 'client' && tag[1] === 'Mostr')
 			if (hasMostrTag) return false
 		}
 
@@ -398,12 +391,12 @@ function isValidThreadEvent(event: NDKEvent): boolean {
 function calculateNodeMetadata(event: NDKEvent): EnhancedThreadNode['metadata'] {
 	const kind = (event as any).kind
 	const content = (event as any)?.content || ''
-	
+
 	return {
 		isRoot: !findParentsFromETags(event).length,
 		replyCount: 0, // Will be calculated during tree building
 		hasMedia: [20, 21, 22].includes(kind) || /\.(jpg|jpeg|png|gif|webp|mp4|webm)/i.test(content),
-		isLongForm: kind === 30023
+		isLongForm: kind === 30023,
 	}
 }
 
@@ -413,20 +406,23 @@ function calculateNodeMetadata(event: NDKEvent): EnhancedThreadNode['metadata'] 
 function calculateThreadPriority(event: NDKEvent, depth: number): number {
 	const now = Date.now() / 1000
 	const age = now - ((event as any).created_at || 0)
-	const ageScore = Math.max(0, 1 - (age / (24 * 60 * 60))) // Decay over 24 hours
-	
+	const ageScore = Math.max(0, 1 - age / (24 * 60 * 60)) // Decay over 24 hours
+
 	// Depth penalty (deeper = lower priority)
-	const depthScore = Math.max(0.1, 1 - (depth * 0.2))
-	
+	const depthScore = Math.max(0.1, 1 - depth * 0.2)
+
 	// Kind bonus
 	const kind = (event as any).kind
 	let kindScore = 0.5
-	
-	if (kind === 1) kindScore = 1.0 // Text notes
-	else if (kind === 6) kindScore = 0.9 // Reposts
-	else if ([20, 21, 22].includes(kind)) kindScore = 0.8 // Media
+
+	if (kind === 1)
+		kindScore = 1.0 // Text notes
+	else if (kind === 6)
+		kindScore = 0.9 // Reposts
+	else if ([20, 21, 22].includes(kind))
+		kindScore = 0.8 // Media
 	else if (kind === 30023) kindScore = 0.7 // Articles
-	
+
 	return ageScore * depthScore * kindScore
 }
 
@@ -434,10 +430,8 @@ function calculateThreadPriority(event: NDKEvent, depth: number): number {
  * Enhanced recursive children building with metadata
  */
 function buildEnhancedChildren(parent: EnhancedThreadNode, currentDepth: number, nodes: Map<string, EnhancedThreadNode>) {
-	const children = Array.from(nodes.values()).filter(node => 
-		node.parentId === parent.id && node.id !== parent.id
-	)
-	
+	const children = Array.from(nodes.values()).filter((node) => node.parentId === parent.id && node.id !== parent.id)
+
 	for (const child of children) {
 		child.depth = currentDepth + 1
 		child.priority = calculateThreadPriority(child.event, child.depth)
@@ -445,7 +439,7 @@ function buildEnhancedChildren(parent: EnhancedThreadNode, currentDepth: number,
 		parent.metadata.replyCount++
 		buildEnhancedChildren(child, child.depth, nodes)
 	}
-	
+
 	// Enhanced sorting: priority first, then creation time
 	parent.children.sort((a, b) => {
 		const priorityDiff = b.priority - a.priority
@@ -459,8 +453,8 @@ function buildEnhancedChildren(parent: EnhancedThreadNode, currentDepth: number,
  */
 function buildEnhancedThreadTree(events: NDKEvent[], rootId: string): EnhancedThreadStructure {
 	const nodes = new Map<string, EnhancedThreadNode>()
-	const rootEvent = events.find(e => (e as any).id === rootId)
-	
+	const rootEvent = events.find((e) => (e as any).id === rootId)
+
 	if (!rootEvent) {
 		throw new Error(`Root event ${rootId} not found in events`)
 	}
@@ -476,7 +470,7 @@ function buildEnhancedThreadTree(events: NDKEvent[], rootId: string): EnhancedTh
 
 		const parents = findParentsFromETags(event)
 		let parentId = parents.length > 0 ? parents[0] : undefined
-		
+
 		if (eventId === rootId) {
 			parentId = undefined
 		}
@@ -493,12 +487,12 @@ function buildEnhancedThreadTree(events: NDKEvent[], rootId: string): EnhancedTh
 			depth: 0,
 			relaysSeen: [], // Will be populated if relay info available
 			priority: 0, // Will be calculated
-			metadata
+			metadata,
 		}
 
 		nodes.set(eventId, node)
 		participants.add((event as any).pubkey)
-		
+
 		const createdAt = (event as any).created_at || 0
 		if (createdAt > lastActivity) {
 			lastActivity = createdAt
@@ -508,7 +502,7 @@ function buildEnhancedThreadTree(events: NDKEvent[], rootId: string): EnhancedTh
 	// Build tree structure
 	const tree: EnhancedThreadNode[] = []
 	const rootNode = nodes.get(rootId)
-	
+
 	if (rootNode) {
 		rootNode.depth = 0
 		rootNode.priority = calculateThreadPriority(rootNode.event, 0)
@@ -518,7 +512,7 @@ function buildEnhancedThreadTree(events: NDKEvent[], rootId: string): EnhancedTh
 
 	// Calculate thread metadata
 	const allNodes = Array.from(nodes.values())
-	const maxDepth = Math.max(...allNodes.map(n => n.depth))
+	const maxDepth = Math.max(...allNodes.map((n) => n.depth))
 	const totalReplies = allNodes.length - 1 // Exclude root
 
 	return {
@@ -532,8 +526,8 @@ function buildEnhancedThreadTree(events: NDKEvent[], rootId: string): EnhancedTh
 			participantCount: participants.size,
 			hasMedia: hasMediaInThread,
 			createdAt: (rootEvent as any).created_at || 0,
-			lastActivityAt: lastActivity
-		}
+			lastActivityAt: lastActivity,
+		},
 	}
 }
 
@@ -553,10 +547,10 @@ export async function constructEnhancedThreadStructure(noteId: string): Promise<
 
 		// Fetch all thread events
 		const threadEvents = await fetchEnhancedThreadEvents(rootId)
-		
+
 		// Build enhanced tree structure
 		const threadStructure = buildEnhancedThreadTree(threadEvents, rootId)
-		
+
 		return threadStructure
 	} catch (error) {
 		console.error('Failed to construct enhanced thread structure:', error)
@@ -573,25 +567,25 @@ export async function fetchThreadContext(noteId: string, contextDepth: number = 
 
 	const context: NDKEvent[] = []
 	const visited = new Set<string>()
-	
+
 	try {
 		// Get the note and trace back for context
 		let currentId = noteId
-		
+
 		for (let i = 0; i < contextDepth && !visited.has(currentId); i++) {
 			visited.add(currentId)
-			
+
 			const event = await fetchEventById(currentId)
 			if (!event || !isValidThreadEvent(event)) break
-			
+
 			context.unshift(event) // Add to beginning for chronological order
-			
+
 			const parents = findParentsFromETags(event)
 			if (parents.length === 0) break
-			
+
 			currentId = parents[0] // Follow first parent
 		}
-		
+
 		return context
 	} catch (error) {
 		console.error('Failed to fetch thread context:', error)
