@@ -58,12 +58,15 @@ export const fetchReactionsForNotes = async (noteIds: string[], emoji?: string):
   return map
 }
 
-export const reactionsQueryOptions = (noteIds: string[], emoji?: string) =>
+export const reactionsQueryOptions = (noteIds: string[] | string, emoji?: string, reloadToken: number = 0) =>
   queryOptions({
-    queryKey: ['reactions', noteIds.slice().sort().join(','), emoji || ''],
-    queryFn: () => fetchReactionsForNotes(noteIds, emoji),
+    queryKey: (() => {
+      const ids = Array.isArray(noteIds) ? noteIds.slice() : [noteIds]
+      return ['reactions', ids.sort().join(','), emoji || '', reloadToken]
+    })(),
+    queryFn: () => fetchReactionsForNotes(Array.isArray(noteIds) ? noteIds : [noteIds], emoji),
     staleTime: Infinity, // Never refetch reactions once loaded - they are immutable after creation
     refetchOnWindowFocus: false, // Don't refetch when window gains focus
     refetchOnReconnect: false, // Don't refetch when connection is restored
-    enabled: noteIds.length > 0,
+    enabled: Array.isArray(noteIds) ? noteIds.length > 0 : !!noteIds,
   })

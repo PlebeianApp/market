@@ -206,6 +206,7 @@ interface NoteViewProps {
 	note: NDKEvent
 	readOnlyInThread?: boolean
 	reactionsMap?: Record<string, Record<string, number>>
+	embeddedDepth?: number // prevent infinite nesting when rendering embedded notes
 }
 
 interface ThreadViewProps {
@@ -307,7 +308,7 @@ function ThreadView({ threadStructure, highlightedNoteId, reactionsMap: propReac
 	)
 }
 
-export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps) {
+export function NoteView({ note, readOnlyInThread, reactionsMap, embeddedDepth = 0 }: NoteViewProps) {
 	// Access query client for optimistic updates
 	const queryClient = useQueryClient()
 
@@ -363,6 +364,25 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 			return hashtags
 		} catch {
 			return []
+		}
+	}, [note])
+
+ // Detect embedded note in kind 6 (repost) content
+	const embeddedRepostNote = useMemo(() => {
+		try {
+			const kind = (note as any)?.kind
+			if (kind !== 6) return null
+			const raw = ((note as any)?.content || '') as string
+			if (!raw) return null
+			const parsed = JSON.parse(raw)
+			// Basic validation of a nostr note shape
+			if (parsed && typeof parsed === 'object' && typeof parsed.pubkey === 'string' && typeof parsed.content === 'string') {
+				return parsed as any
+			}
+			return null
+		} catch (e) {
+			console.warn('Failed to parse embedded repost JSON', e)
+			return null
 		}
 	}, [note])
 
@@ -442,6 +462,48 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 
 	// Handle emoji reaction selection
 	const handleEmojiReaction = async (emoji: string) => {
+		// Helper to update all cached reactions maps that include this note id
+		const applyOptimistic = (delta: number) => {
+			try {
+				const targetId = (note as any)?.id as string
+				if (!targetId) return
+				// Iterate over all reactions queries and update those that include this note id
+				const all = queryClient.getQueriesData({ queryKey: ['reactions'] }) as any[]
+				for (const [qk, data] of all) {
+					try {
+						const key = qk as any[]
+						// key format: ['reactions', idsJoined, emojiFilter, reloadToken]
+						const idsJoined = key?.[1]
+						const emojiFilter = key?.[2] || ''
+						if (typeof idsJoined !== 'string') continue
+						const ids = idsJoined.split(',').filter(Boolean)
+						if (!ids.includes(targetId)) continue
+						if (emojiFilter && emojiFilter !== emoji) continue
+						queryClient.setQueryData(key, (oldVal: any) => {
+							if (!oldVal || typeof oldVal !== 'object') {
+								// If undefined, initialize as multi-note map
+								return { [targetId]: { [emoji]: Math.max(0, delta) } }
+							}
+							// Determine shape: multi-note map (noteId -> emoji->count) or single-note emoji map
+							const isMulti = Object.keys(oldVal).some((k) => typeof oldVal[k] === 'object')
+							if (isMulti) {
+								const next = { ...oldVal }
+								const emap = { ...(next[targetId] || {}) }
+								emap[emoji] = (emap[emoji] || 0) + delta
+								if (emap[emoji] <= 0) delete emap[emoji]
+								next[targetId] = emap
+								return next
+							} else {
+								const next = { ...oldVal }
+								next[emoji] = (next[emoji] || 0) + delta
+								if (next[emoji] <= 0) delete next[emoji]
+								return next
+							}
+						})
+					} catch {}
+				}
+			} catch {}
+		}
 		try {
 			// Get NDK instance
 			const ndk = ndkActions.getNDK()
@@ -456,6 +518,8 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 				return
 			}
 
+			// Optimistic UI update immediately
+			applyOptimistic(1)
 			// Show loading toast
 			const loadingToastId = toast.loading('Adding reaction...')
 
@@ -486,15 +550,9 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 			// Show success message
 			toast.dismiss(loadingToastId)
 			toast.success(`Reaction ${emoji} added!`)
-
-			// Optimistically update the reactions display
-			queryClient.setQueryData(reactionsQueryOptions(note.id as string).queryKey, (oldData: any) => {
-				if (!oldData) return { [emoji]: 1 }
-				const newData = { ...oldData }
-				newData[emoji] = (newData[emoji] || 0) + 1
-				return newData
-			})
 		} catch (error) {
+			// Rollback optimistic update
+			applyOptimistic(-1)
 			console.error('Failed to send reaction:', error)
 			toast.error('Failed to send reaction. Please try again.')
 		}
@@ -1013,10 +1071,16 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 			</div>
 			<div className="flex gap-2">
 				<div className="flex-1">
-					{readOnlyInThread ? (
-						<CollapsibleContent className="px-2 py-1 text-md text-left break-words whitespace-pre-wrap align-text-top w-full hover:bg-grey-300 aria-hidden:true">
-							{linkifyContent(displayContent, { stopPropagation: true, onMediaClick: handleMediaClick })}
-						</CollapsibleContent>
+     {readOnlyInThread ? (
+					<CollapsibleContent className="px-2 py-1 text-md text-left break-words whitespace-pre-wrap align-text-top w-full hover:bg-grey-300 aria-hidden:true">
+						{embeddedRepostNote && embeddedDepth === 0 ? (
+							<div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 p-2">
+								<NoteView note={embeddedRepostNote as any} readOnlyInThread reactionsMap={reactionsMap} embeddedDepth={1} />
+							</div>
+						) : (
+							linkifyContent(displayContent, { stopPropagation: true, onMediaClick: handleMediaClick })
+						)}
+					</CollapsibleContent>
 					) : (
 						(() => {
 							const hasThreadItems = !!threadStructure && (threadStructure.nodes?.size || 0) > 1
@@ -1034,7 +1098,13 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 								<CollapsibleContent
 									className={`px-2 py-1 text-md text-left break-words whitespace-pre-wrap align-text-top w-full rounded-md transition-colors duration-150 hover:bg-grey-300`}
 								>
-									{linkifyContent(displayContent, { stopPropagation: true, onMediaClick: handleMediaClick })}
+         {embeddedRepostNote && embeddedDepth === 0 ? (
+         								<div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 p-2">
+         									<NoteView note={embeddedRepostNote as any} readOnlyInThread reactionsMap={reactionsMap} embeddedDepth={1} />
+         								</div>
+         							) : (
+         								linkifyContent(displayContent, { stopPropagation: true, onMediaClick: handleMediaClick })
+         							) }
 								</CollapsibleContent>
 							)
 						})()

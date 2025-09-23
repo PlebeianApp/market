@@ -506,6 +506,8 @@ function FirehoseComponent() {
 		setOpenThreadId(null)
 		setLastRefreshTimestamp(Date.now())
 		setHasNewerNotes(false)
+		// Force reactions to refresh for currently visible notes
+		setReactionsReloadToken((t) => t + 1)
 		const result = await refetch()
 		// Update URL with newest timestamp after successful refetch
 		if (result.data && result.data.length > 0) {
@@ -727,7 +729,12 @@ function FirehoseComponent() {
 				setTagFilter(incomingTag)
 				setTagFilterInput('#' + incomingTag)
 			}
-			if (incomingUser !== authorFilter) {
+			// Handle "own" view: show only current user's notes
+			if (incomingView === 'own') {
+				if (currentUserPk && authorFilter !== currentUserPk) {
+					setAuthorFilter(currentUserPk)
+				}
+			} else if (incomingUser !== authorFilter) {
 				setAuthorFilter(incomingUser)
 			}
 			// Only auto-scroll to top on general navigation, not when viewing a thread
@@ -1073,6 +1080,9 @@ function FirehoseComponent() {
 	const notes = allLoadedEvents.length > 0 ? allLoadedEvents : data || []
 	// State for selected emoji in reactions view (must be declared before use in useMemo)
 	const [selectedEmoji, setSelectedEmoji] = useState<string>('')
+ // Token to force update of reactions when feed reloads
+	const [reactionsReloadToken, setReactionsReloadToken] = useState(0)
+
 	// Reactions fetching based on currently visible notes
 	// When in reactions view, use a stable reference to prevent continuous reloading
 	const noteIdsForReactions = useMemo(() => {
@@ -1081,8 +1091,8 @@ function FirehoseComponent() {
 		// The reactions query should only reload when selectedEmoji changes, not when new notes are added
 		return noteIds
 	}, filterMode === 'reactions' ? [selectedEmoji] : [notes])
-	const { data: reactionsMap } = useQuery({
-		...reactionsQueryOptions(noteIdsForReactions, selectedEmoji || undefined),
+ const { data: reactionsMap } = useQuery({
+		...reactionsQueryOptions(noteIdsForReactions, selectedEmoji || undefined, reactionsReloadToken),
 	}) as any
 
 	const { filtered, counts } = useMemo(() => {
@@ -1612,6 +1622,39 @@ function FirehoseComponent() {
  											Follows
  										</Button>
  									) : null}
+ 									{authIsAuthenticated ? (
+ 										<Button
+ 											variant={authorFilter && currentUserPk && authorFilter === currentUserPk ? 'primary' : 'ghost'}
+ 											className="px-3 py-1 h-8"
+ 											onClick={() => {
+ 												if (!currentUserPk) return
+ 												setLoadingMode('all')
+ 												setSpinnerSettled(false)
+ 												setFilterMode('all')
+ 												setOpenThreadId(null)
+ 												setAuthorFilter(currentUserPk)
+ 												try {
+ 													if (typeof window !== 'undefined') {
+ 														const url = new URL(window.location.href)
+ 														url.search = ''
+ 														url.searchParams.set('view', 'own')
+ 														url.searchParams.set('user', currentUserPk)
+ 														const target = url.pathname.startsWith('/nostr')
+ 															? url.search
+ 																? `/nostr${url.search}`
+ 																: '/nostr'
+ 															: url.search
+ 																? `${url.pathname}${url.search}`
+ 																: url.pathname
+ 														window.history.pushState({}, '', target)
+ 														window.dispatchEvent(new PopStateEvent('popstate'))
+ 													}
+ 												} catch {}
+ 											}}
+ 										>
+ 											Own notes
+ 										</Button>
+ 									) : null}
  									<Button
  										variant={filterMode === 'all' ? 'primary' : 'ghost'}
  										className="px-3 py-1 h-8"
@@ -1685,6 +1728,44 @@ function FirehoseComponent() {
 										<span>Global ({counts.all})</span>
 									</span>
 								</Button>
+								{authIsAuthenticated ? (
+									<Button
+										variant={authorFilter && currentUserPk && authorFilter === currentUserPk ? 'primary' : 'ghost'}
+										className="justify-start"
+										onClick={() => {
+											if (!currentUserPk) return
+											setLoadingMode('all')
+											setSpinnerSettled(false)
+											setFilterMode('all')
+											setOpenThreadId(null)
+											setAuthorFilter(currentUserPk)
+											try {
+												if (typeof window !== 'undefined') {
+													const url = new URL(window.location.href)
+													url.search = ''
+													url.searchParams.set('view', 'own')
+													url.searchParams.set('user', currentUserPk)
+													const target = url.pathname.startsWith('/nostr')
+														? url.search
+															? `/nostr${url.search}`
+															: '/nostr'
+														: url.search
+															? `${url.pathname}${url.search}`
+															: url.pathname
+													window.history.pushState({}, '', target)
+													window.dispatchEvent(new PopStateEvent('popstate'))
+												}
+											} catch {}
+										}}
+									>
+										<span className="inline-flex items-center gap-2">
+											{loadingMode === 'all' && isFiltersOpen ? (
+												<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
+											) : null}
+											<span>Own notes</span>
+										</span>
+									</Button>
+								) : null}
 								<div className="mt-4 px-4">
 									<Label htmlFor="tag-filter">Tags</Label>
 									<div className="flex gap-2 items-center">
@@ -1926,42 +2007,80 @@ function FirehoseComponent() {
 					<h2 className="text-lg font-semibold mb-2">Filters</h2>
 					<div className="text-sm">
 						<div className="flex flex-col gap-2">
-							{authIsAuthenticated ? (
-								<Button
-									variant={filterMode === 'follows' ? 'primary' : 'ghost'}
-									className="justify-start"
-									onClick={() => {
-										setLoadingMode('follows')
-										setSpinnerSettled(false)
-										setFilterMode('follows')
-										setOpenThreadId(null)
-										try {
-											if (typeof window !== 'undefined') {
-												const url = new URL(window.location.href)
-												url.search = ''
-												url.searchParams.set('view', 'follows')
-												const target = url.pathname.startsWith('/nostr')
-													? url.search
-														? `/nostr${url.search}`
-														: '/nostr'
-													: url.search
-														? `${url.pathname}${url.search}`
-														: url.pathname
-												window.history.pushState({}, '', target)
-												window.dispatchEvent(new PopStateEvent('popstate'))
-											}
-										} catch {}
-									}}
-								>
-									<span className="inline-flex items-center gap-2">
-										{loadingMode === 'follows' && !isFiltersOpen ? (
-											<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
-										) : null}
-										<span>Follows</span>
-									</span>
-								</Button>
-							) : null}
-							<Button
+									{authIsAuthenticated ? (
+										<Button
+											variant={filterMode === 'follows' ? 'primary' : 'ghost'}
+											className="justify-start"
+											onClick={() => {
+												setLoadingMode('follows')
+												setSpinnerSettled(false)
+												setFilterMode('follows')
+												setOpenThreadId(null)
+												try {
+													if (typeof window !== 'undefined') {
+														const url = new URL(window.location.href)
+														url.search = ''
+														url.searchParams.set('view', 'follows')
+														const target = url.pathname.startsWith('/nostr')
+															? url.search
+																? `/nostr${url.search}`
+																: '/nostr'
+															: url.search
+																? `${url.pathname}${url.search}`
+																: url.pathname
+														window.history.pushState({}, '', target)
+														window.dispatchEvent(new PopStateEvent('popstate'))
+													}
+												} catch {}
+											}}
+										>
+											<span className="inline-flex items-center gap-2">
+												{loadingMode === 'follows' && !isFiltersOpen ? (
+													<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
+												) : null}
+												<span>Follows</span>
+											</span>
+										</Button>
+									) : null}
+									{authIsAuthenticated ? (
+										<Button
+											variant={authorFilter && currentUserPk && authorFilter === currentUserPk ? 'primary' : 'ghost'}
+											className="justify-start"
+											onClick={() => {
+												if (!currentUserPk) return
+												setLoadingMode('all')
+												setSpinnerSettled(false)
+												setFilterMode('all')
+												setOpenThreadId(null)
+												setAuthorFilter(currentUserPk)
+												try {
+													if (typeof window !== 'undefined') {
+														const url = new URL(window.location.href)
+														url.search = ''
+														url.searchParams.set('view', 'own')
+														url.searchParams.set('user', currentUserPk)
+														const target = url.pathname.startsWith('/nostr')
+															? url.search
+																? `/nostr${url.search}`
+																: '/nostr'
+															: url.search
+																? `${url.pathname}${url.search}`
+																: url.pathname
+														window.history.pushState({}, '', target)
+														window.dispatchEvent(new PopStateEvent('popstate'))
+													}
+												} catch {}
+											}}
+										>
+											<span className="inline-flex items-center gap-2">
+												{loadingMode === 'all' && !isFiltersOpen ? (
+													<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
+												) : null}
+												<span>Own notes</span>
+											</span>
+										</Button>
+									) : null}
+									<Button
 								variant={filterMode === 'all' ? 'primary' : 'ghost'}
 								className="justify-start"
 								onClick={() => {
