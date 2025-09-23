@@ -3,6 +3,7 @@ import { NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { queryOptions } from '@tanstack/react-query'
 import { ndkActions } from '@/lib/stores/ndk'
 import { defaultRelaysUrls } from '@/lib/constants'
+import { configActions } from '@/lib/stores/config'
 
 export type ReactionsMap = Record<string, Record<string, number>> // noteId -> emoji -> count
 
@@ -26,7 +27,9 @@ export const fetchReactionsForNotes = async (noteIds: string[], emoji?: string):
   if (!ndk) throw new Error('NDK not initialized')
   if (!Array.isArray(noteIds) || noteIds.length === 0) return {}
 
-  const relaySet = NDKRelaySet.fromRelayUrls(defaultRelaysUrls, ndk)
+  const appRelay = configActions.getAppRelay()
+    const allRelays = appRelay ? [...defaultRelaysUrls, appRelay] : defaultRelaysUrls
+    const relaySet = NDKRelaySet.fromRelayUrls(allRelays, ndk)
 
   const nowSec = Math.floor(Date.now() / 1000)
   const oneMonthAgoSec = nowSec - 60 * 60 * 24 * 31 // ~last month

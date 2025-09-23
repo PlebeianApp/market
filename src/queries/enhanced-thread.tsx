@@ -6,6 +6,7 @@ import { NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { queryOptions } from '@tanstack/react-query'
 import { ndkActions } from '@/lib/stores/ndk'
 import { defaultRelaysUrls } from '@/lib/constants'
+import { configActions } from '@/lib/stores/config'
 import { EnhancedFetchedNDKEvent, SUPPORTED_KINDS } from './enhanced-firehose'
 
 // Enhanced thread node structure
@@ -135,7 +136,9 @@ async function processBatchedEvents(): Promise<void> {
 	}
 	
 	try {
-		const relaySet = NDKRelaySet.fromRelayUrls(defaultRelaysUrls, ndk)
+		const appRelay = configActions.getAppRelay()
+		const allRelays = appRelay ? [...defaultRelaysUrls, appRelay] : defaultRelaysUrls
+		const relaySet = NDKRelaySet.fromRelayUrls(allRelays, ndk)
 		
 		// Create a filter with all the event IDs
 		const filter: NDKFilter = {
@@ -296,7 +299,9 @@ async function fetchEnhancedThreadEvents(rootId: string): Promise<NDKEvent[]> {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const relaySet = NDKRelaySet.fromRelayUrls(defaultRelaysUrls, ndk)
+	const appRelay = configActions.getAppRelay()
+	const allRelays = appRelay ? [...defaultRelaysUrls, appRelay] : defaultRelaysUrls
+	const relaySet = NDKRelaySet.fromRelayUrls(allRelays, ndk)
 	const maxIterations = 5
 	const maxTotal = 1000 // Increased for better thread coverage
 	const knownEvents = new Map<string, NDKEvent>()

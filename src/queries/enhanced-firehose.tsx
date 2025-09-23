@@ -292,7 +292,8 @@ export const fetchEnhancedNotes = async (opts?: {
 			const contactsFilter: NDKFilter = { kinds: [3], authors: [pubkey], limit: 1 }
 			let contactArr: NDKEvent[] = []
 			try {
-				const defaultSet = NDKRelaySet.fromRelayUrls(defaultRelaysUrls, ndk)
+				const appRelay = configActions.getAppRelay()
+				const defaultSet = NDKRelaySet.fromRelayUrls(appRelay ? [...defaultRelaysUrls, appRelay] : defaultRelaysUrls, ndk)
 				const defaultEvents = await ndk.fetchEvents(contactsFilter, undefined, defaultSet)
 				contactArr = Array.from(defaultEvents)
 			} catch (_) {}
@@ -308,30 +309,33 @@ export const fetchEnhancedNotes = async (opts?: {
 				}
 			}
 
-			if (contactArr.length > 0) {
-				const latest = contactArr.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
-				const pTags = (latest?.tags || []).filter((t: any) => Array.isArray(t) && t[0] === 'p' && typeof t[1] === 'string')
-				const followPubkeys = pTags.map((t: any) => t[1]) as string[]
+				if (contactArr.length > 0) {
+					const latest = contactArr.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+					const pTags = (latest?.tags || []).filter((t: any) => Array.isArray(t) && t[0] === 'p' && typeof t[1] === 'string')
+					const followPubkeys = pTags.map((t: any) => t[1]) as string[]
 
-				if (followPubkeys.length === 0) return []
-				followedPubkeys = new Set(followPubkeys)
+					// Always include the logged-in user's own pubkey in the follows feed
+					if (pubkey && !followPubkeys.includes(pubkey)) followPubkeys.push(pubkey)
 
-				// For follow feed, create batched queries (10 pubkeys per batch)
-				// instead of querying all pubkeys individually
-				const pubkeyBatches: string[][] = []
-				const pubkeyArray = Array.from(followedPubkeys)
+					if (followPubkeys.length === 0) return []
+					followedPubkeys = new Set(followPubkeys)
 
-				// Create batches of 30 pubkeys
-				for (let i = 0; i < pubkeyArray.length; i += 30) {
-					const batch = pubkeyArray.slice(i, i + 30)
-					pubkeyBatches.push(batch)
+					// For follow feed, create batched queries (10 pubkeys per batch)
+					// instead of querying all pubkeys individually
+					const pubkeyBatches: string[][] = []
+					const pubkeyArray = Array.from(followedPubkeys)
+
+					// Create batches of 30 pubkeys
+					for (let i = 0; i < pubkeyArray.length; i += 30) {
+						const batch = pubkeyArray.slice(i, i + 30)
+						pubkeyBatches.push(batch)
+					}
+
+					// We'll create batched filters when fetching events
+					// This is handled when we set the 'authors' filter below
+				} else {
+					return []
 				}
-
-				// We'll create batched filters when fetching events
-				// This is handled when we set the 'authors' filter below
-			} else {
-				return []
-			}
 
 			// Enhanced mute list handling
 			try {
@@ -356,46 +360,149 @@ export const fetchEnhancedNotes = async (opts?: {
 	try {
 		let allEvents: NDKEvent[] = []
 
-				// For follows feed, fetch events in batches of 10 pubkeys at a time
+				// For follows feed, fetch events in batches of 50 pubkeys at a time
 				if (opts?.follows && followedPubkeys) {
 					const pubkeyArray = Array.from(followedPubkeys)
-
+					
 					// Handle empty array edge case
 					if (pubkeyArray.length === 0) {
 						allEvents = []
 					} else {
-						// Process in batches of 10 pubkeys
-						for (let i = 0; i < pubkeyArray.length; i += 10) {
-							const batchPubkeys = pubkeyArray.slice(i, i + 10)
-							if (batchPubkeys.length === 0) continue
-							
-							// Create a filter with the current batch of pubkeys
-							const batchFilter: NDKFilter = {
-								...filter,
-								authors: batchPubkeys,
-								// Use a larger limit per batch so the final merged sort can choose the newest
-								limit: Math.max(limit, 50),
-							}
-							
+						// Iterate backwards in time until we have at least `limit` valid entries (min 30 to overflow) or hit max rounds
+						const target = Math.max(limit, 30)
+						let rounds = 0
+						const maxRounds = 5
+						let untilCursor: number | undefined = undefined
+						const seenIds = new Set<string>()
+
+						// Helper: event validity consistent with post-filtering
+						const isValid = (e: NDKEvent): boolean => {
 							try {
-								// Fetch events for this batch with timeout protection
-								const batchEvents = await Promise.race([
-									ndk.fetchEvents(batchFilter, undefined, relaySet),
-									new Promise<Set<NDKEvent>>((resolve) => {
-										setTimeout(() => resolve(new Set()), 5000) // 5 second timeout
-									}),
-								])
-								allEvents = [...allEvents, ...Array.from(batchEvents)]
-							} catch (error) {
-								console.warn(`Failed to fetch batch of pubkeys ${i}-${i + 10}: ${error}`)
-								// Continue with next batch even if this one fails
+								if (!e || !(e as any).id) return false
+								if (hasClientMostrTag(e) || isNSFWEvent(e)) return false
+								const author = (e as any).pubkey as string
+								if (mutedPubkeys && mutedPubkeys.has(author)) return false
+								if (opts?.follows && followedPubkeys && !followedPubkeys.has(author)) return false
+								if (mutedPubkeys) {
+									const eventTags = (e as any).tags || []
+									const pTags = eventTags.filter((t: any) => Array.isArray(t) && t[0] === 'p' && typeof t[1] === 'string')
+									for (const t of pTags) {
+										if (mutedPubkeys.has(t[1] as string)) return false
+									}
+								}
+								return true
+							} catch {
+								return false
 							}
+						}
+
+						while (rounds < maxRounds) {
+							rounds++
+							let roundFetched = 0
+							let oldest = Number.POSITIVE_INFINITY
+
+							for (let i = 0; i < pubkeyArray.length; i += 50) {
+								const batchPubkeys = pubkeyArray.slice(i, i + 50)
+								if (batchPubkeys.length === 0) continue
+
+								const batchFilter: NDKFilter = {
+									...filter,
+									authors: batchPubkeys,
+									// Use a larger per-batch limit so the final merge can select the newest
+									limit: Math.max(limit, 100),
+								}
+								if (untilCursor && Number.isFinite(untilCursor)) {
+									;(batchFilter as any).until = untilCursor
+								}
+
+								try {
+									// Fetch events for this batch with timeout protection
+									const batchEvents = await Promise.race([
+										ndk.fetchEvents(batchFilter, undefined, relaySet),
+										new Promise<Set<NDKEvent>>((resolve) => {
+											setTimeout(() => resolve(new Set()), 6000) // 6 second timeout
+										}),
+									])
+									const arr = Array.from(batchEvents)
+									for (const ev of arr) {
+										const id = (ev as any).id as string
+										if (!id || seenIds.has(id)) continue
+										seenIds.add(id)
+										allEvents.push(ev)
+										roundFetched++
+										const c = (ev as any).created_at ?? 0
+										if (typeof c === 'number' && c > 0 && c < oldest) oldest = c
+									}
+								} catch (error) {
+									console.warn(`Failed to fetch batch of pubkeys ${i}-${i + 50}: ${error}`)
+									// Continue with next batch even if this one fails
+								}
+							}
+
+							// Stop if we already have enough valid entries
+							const validSoFar = allEvents.filter(isValid)
+							if (validSoFar.length >= target) break
+
+							// If nothing new fetched or no older timestamp, stop
+							if (roundFetched === 0 || !Number.isFinite(oldest)) break
+							untilCursor = Math.floor(oldest - 1)
 						}
 					}
 				} else {
-					// For non-follows feed, use the original filter
-					const events = await ndk.fetchEvents(filter, undefined, relaySet)
-					allEvents = Array.from(events)
+					// For non-follows views, iteratively expand the time window (doubling each round)
+					// until we have enough valid entries to overflow the viewport.
+					const target = Math.max(limit, 30)
+					let rounds = 0
+					const maxRounds = 6
+					let windowSeconds = 2 * 60 * 60 // start with 2 hours
+					const nowSec = Math.floor(Date.now() / 1000)
+					const seenIds = new Set<string>()
+					// Helper aligned with later validation (minus follows-only checks)
+					const isValid = (e: NDKEvent): boolean => {
+						try {
+							if (!e || !(e as any).id) return false
+							if (hasClientMostrTag(e) || isNSFWEvent(e)) return false
+							// Basic mute handling when available
+							if (mutedPubkeys) {
+								const author = (e as any).pubkey as string
+								if (mutedPubkeys.has(author)) return false
+								const eventTags = (e as any).tags || []
+								for (const t of eventTags) {
+									if (Array.isArray(t) && t[0] === 'p' && typeof t[1] === 'string' && mutedPubkeys.has(t[1])) return false
+								}
+							}
+							return true
+						} catch {
+							return false
+						}
+					}
+					while (rounds < maxRounds) {
+						rounds++
+						const roundFilter: NDKFilter = {
+							...filter,
+							limit: Math.max(limit, 200),
+							since: nowSec - windowSeconds,
+						}
+						try {
+							const roundEvents = await Promise.race([
+								ndk.fetchEvents(roundFilter, undefined, relaySet),
+								new Promise<Set<NDKEvent>>((resolve) => setTimeout(() => resolve(new Set()), 6000)),
+							])
+							const arr = Array.from(roundEvents)
+							for (const ev of arr) {
+								const id = (ev as any).id as string
+								if (!id || seenIds.has(id)) continue
+								seenIds.add(id)
+								allEvents.push(ev)
+							}
+						} catch (err) {
+							console.warn('Non-follows round fetch failed:', err)
+						}
+						const validSoFar = allEvents.filter(isValid)
+						if (validSoFar.length >= target) break
+						// Double the time window for the next attempt
+						windowSeconds *= 2
+					}
 				}
 
 		// Enhanced filtering and validation

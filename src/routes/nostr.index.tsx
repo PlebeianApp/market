@@ -9,6 +9,7 @@ import { reactionsQueryOptions } from '@/queries/reactions'
 import { ndkActions } from '@/lib/stores/ndk'
 import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { writeRelaysUrls, defaultRelaysUrls } from '@/lib/constants'
+import { configActions } from '@/lib/stores/config'
 import { toast } from 'sonner'
 import { NoteView } from '@/components/NoteView.tsx'
 import { Button } from '@/components/ui/button'
@@ -130,7 +131,20 @@ function FirehoseComponent() {
 	const [filterMode, setFilterMode] = useState<'all' | 'threads' | 'originals' | 'follows' | 'reactions' | 'hashtag'>('all')
 	const isBaseFeed = filterMode !== 'hashtag' && !authorFilter.trim()
 	const [previousFilterMode, setPreviousFilterMode] = useState<'all' | 'threads' | 'originals' | 'follows' | 'hashtag'>('all')
-	const [eventLimit, setEventLimit] = useState(10)
+	// Determine an initial limit that will overflow the viewport a bit so the feed feels full
+	function getInitialFeedLimit(): number {
+		try {
+			if (typeof window !== 'undefined' && typeof window.innerHeight === 'number') {
+				const h = Math.max(400, window.innerHeight)
+				const estItemHeight = 220 // rough average card height
+				const perView = Math.ceil(h / estItemHeight)
+				// Add buffer to ensure overflow
+				return Math.max(20, perView + 8)
+			}
+		} catch {}
+		return 30
+	}
+	const [eventLimit, setEventLimit] = useState(getInitialFeedLimit())
 	// Store all loaded events, so we can append new ones without reloading
 	const [allLoadedEvents, setAllLoadedEvents] = useState<EnhancedFetchedNDKEvent[]>([])
 	
@@ -206,6 +220,10 @@ function FirehoseComponent() {
 	// Live updates: hold incoming notes and their authors until user loads them
 	const [pendingNewNotes, setPendingNewNotes] = useState<EnhancedFetchedNDKEvent[]>([])
 	const [newNoteAuthors, setNewNoteAuthors] = useState<string[]>([])
+	// When a feed appears empty, force a loading state and trigger background refetches instead of falling back to Global
+	const [forceFeedLoading, setForceFeedLoading] = useState(false)
+	const emptyViewKeyRef = useRef<string>('')
+	const emptyRetryRef = useRef<number>(0)
 
 	const [showTop, setShowTop] = useState(false)
 	// Overlay state for loading a new tag
@@ -246,8 +264,8 @@ function FirehoseComponent() {
 
 	// Load view state when switching views
 	useEffect(() => {
-		// Reset event limit to 10 when view changes
-		setEventLimit(10)
+		// Reset event limit to a value that ensures the feed will overflow the viewport
+		setEventLimit(getInitialFeedLimit())
 		// Clear accumulated events when view changes
 		setAllLoadedEvents([])
 
@@ -280,7 +298,9 @@ function FirehoseComponent() {
 			try {
 				const ndk = ndkActions.getNDK()
 				if (!ndk) return
-				const relaySet = NDKRelaySet.fromRelayUrls(defaultRelaysUrls, ndk)
+				const appRelay = configActions.getAppRelay()
+				const allRelays = appRelay ? [...defaultRelaysUrls, appRelay] : defaultRelaysUrls
+				const relaySet = NDKRelaySet.fromRelayUrls(allRelays, ndk)
 				// Start after newest currently shown to avoid duplicates
 				const since = Math.floor(((newestNoteTimestamp || Date.now()) / 1000))
 				const filter: any = { kinds: SUPPORTED_KINDS as any, since }
@@ -301,8 +321,10 @@ function FirehoseComponent() {
 						if (arr.length > 0) {
 							const latest = arr.sort((a, b) => ((b as any).created_at ?? 0) - ((a as any).created_at ?? 0))[0] as any
 							const pTags = (latest?.tags || []).filter((t: any) => Array.isArray(t) && t[0] === 'p' && typeof t[1] === 'string')
-							const follows: string[] = pTags.map((t: any) => t[1])
-							if (follows.length > 0) (filter as any).authors = follows
+									let follows: string[] = pTags.map((t: any) => t[1])
+									// Always include the logged-in user's own pubkey in the follows live subscription
+									if (pubkey && !follows.includes(pubkey)) follows = [...follows, pubkey]
+									if (follows.length > 0) (filter as any).authors = follows
 						}
 					} catch {}
 				}
@@ -460,6 +482,20 @@ function FirehoseComponent() {
 			setNewNoteAuthors([])
 			setHasNewerNotes(false)
 			scrollToTop()
+		} catch {}
+	}
+
+	// Helper to force immediate refresh after switching feed modes
+	const scheduleImmediateRefresh = () => {
+		try {
+			setSpinnerSettled(false)
+			setOpenThreadId(null)
+			setAllLoadedEvents([])
+			setEventLimit(getInitialFeedLimit())
+			scrollToTop()
+			setTimeout(() => {
+				try { doRefetch() } catch {}
+			}, 30)
 		} catch {}
 	}
 
@@ -743,7 +779,7 @@ function FirehoseComponent() {
 				setSpinnerSettled(false)
 				setOpenThreadId(null)
 				setAllLoadedEvents([])
-				setEventLimit(10)
+				setEventLimit(getInitialFeedLimit())
 				// Scroll to top for fresh context
 				scrollToTop()
 				// Trigger a refetch from network
@@ -753,6 +789,22 @@ function FirehoseComponent() {
 	// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [authorFilter])
 
+	// Immediately refresh when feed mode changes (e.g., user clicks a feed mode button)
+	useEffect(() => {
+		try {
+			// Reset view and fetch fresh items for the new mode
+			setSpinnerSettled(false)
+			setOpenThreadId(null)
+			setAllLoadedEvents([])
+			setEventLimit(getInitialFeedLimit())
+			scrollToTop()
+			// Trigger an immediate refetch
+			try { doRefetch() } catch {}
+		} catch {}
+		// We intentionally depend only on filterMode to catch user-driven changes
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [filterMode])
+
 	// Previously: auto-fallback to global view if follows mode returned empty data.
 	// This caused unintended switching from Follows to Global during transient empty states.
 	// We now keep the Follows view selected even if it currently has no items.
@@ -761,6 +813,32 @@ function FirehoseComponent() {
 			console.debug('Follows feed currently empty; staying on Follows view')
 		}
 	}, [filterMode, isLoading, data, currentUserPk])
+
+	// Generic handler: if current view returns no items, do not fall back to Global.
+	// Instead, show a loading state and trigger a background refetch with limited retries.
+	useEffect(() => {
+		try {
+			const currentKey = currentViewKey
+			// Reset retry counter if the view key changed
+			if (emptyViewKeyRef.current !== currentKey) {
+				emptyViewKeyRef.current = currentKey
+				emptyRetryRef.current = 0
+			}
+			const noItems = Array.isArray(data) ? data.length === 0 : false
+			if (noItems && !isLoading && !isFetching) {
+				setForceFeedLoading(true)
+				if (emptyRetryRef.current < 3) {
+					emptyRetryRef.current += 1
+					// Trigger a refetch to try to populate the feed
+					try { doRefetch() } catch {}
+				}
+			} else if (!noItems) {
+				// Once we have items, clear the forced loading state
+				setForceFeedLoading(false)
+			}
+		} catch {}
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [currentViewKey, data, isLoading, isFetching])
 
 	// Ensure 'tag' is not present in the URL when not in hashtag view
 	useEffect(() => {
@@ -2140,10 +2218,18 @@ function FirehoseComponent() {
 										if (!emap) return false
 										return selectedEmoji ? !!emap[selectedEmoji] : Object.keys(emap).length > 0
 									})
-								: base
-						return toShow.map((wrapped: EnhancedFetchedNDKEvent) => (
-							<NoteView key={(wrapped.event as any).id as string} note={wrapped.event} reactionsMap={reactionsMap || {}} />
-						))
+   					: base
+					if (toShow.length === 0) {
+						return (
+							<div className="p-6 text-center text-gray-500 flex flex-col items-center justify-center">
+								<Loader2 className={`h-5 w-5 mb-2 ${forceFeedLoading || isLoading || isFetching ? 'animate-spin' : ''}`} />
+								<div>{forceFeedLoading || isLoading || isFetching ? 'Loading feed…' : 'No posts yet'}</div>
+							</div>
+						)
+					}
+					return toShow.map((wrapped: EnhancedFetchedNDKEvent) => (
+						<NoteView key={(wrapped.event as any).id as string} note={wrapped.event} reactionsMap={reactionsMap || {}} />
+					))
 					})()}
 				</div>
 			</div>

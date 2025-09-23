@@ -4,6 +4,7 @@ import { authorKeys } from './queryKeyFactory'
 import { queryOptions } from '@tanstack/react-query'
 import { ndkActions } from '@/lib/stores/ndk'
 import { defaultRelaysUrls } from '@/lib/constants'
+import { configActions } from '@/lib/stores/config'
 
 export type NostrAuthor = {
 	id: string
@@ -39,8 +40,10 @@ export const fetchAuthor = async (pubkey: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	// Query using the app's default relay URLs to ensure consistent metadata resolution
-	const relaySet = NDKRelaySet.fromRelayUrls(defaultRelaysUrls, ndk)
+ // Query using the app's relays, prioritizing the configured main relay alongside defaults
+	const appRelay = configActions.getAppRelay()
+	const allRelays = appRelay ? [...defaultRelaysUrls, appRelay] : defaultRelaysUrls
+	const relaySet = NDKRelaySet.fromRelayUrls(allRelays, ndk)
 	const events = await ndk.fetchEvents(filter, undefined, relaySet)
 	const eventArray = Array.from(events)
 
