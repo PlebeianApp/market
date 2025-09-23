@@ -373,11 +373,13 @@ function FirehoseComponent() {
 		queryFn: async ({ pageParam }: any) => {
 			const { fetchEnhancedNotesPage } = await import('@/queries/enhanced-firehose')
 			const pageSize = 4
-			const res = await fetchEnhancedNotesPage(
-				filterMode === 'follows' ? { tag: '', author: '', follows: true } : { tag: notesOpts.tag || '', author: notesOpts.author || '', follows: false },
-				{ since: pageParam?.since, until: pageParam?.until, pageSize },
-			)
-			return res
+				const res = await fetchEnhancedNotesPage(
+					filterMode === 'follows'
+						? { tag: '', author: '', follows: true, kinds: [...SUPPORTED_KINDS] as any }
+						: { tag: notesOpts.tag || '', author: notesOpts.author || '', follows: false, kinds: [...SUPPORTED_KINDS] as any },
+					{ since: pageParam?.since, until: pageParam?.until, pageSize },
+				)
+				return res
 		},
 		refetchOnWindowFocus: false,
 		refetchOnReconnect: false,
