@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button'
 import EmojiPicker from 'emoji-picker-react'
 import { toast } from 'sonner'
 import { writeRelaysUrls } from '@/lib/constants'
+import { MediaOverlay } from '@/components/MediaOverlay'
 
 function SpoolIcon(props: SVGProps<SVGSVGElement>) {
 	return (
@@ -59,7 +60,7 @@ function CollapseVerticalIcon(props: SVGProps<SVGSVGElement>) {
 	)
 }
 
-function linkifyContent(content: string, opts?: { stopPropagation?: boolean }) {
+function linkifyContent(content: string, opts?: { stopPropagation?: boolean; onMediaClick?: (url: string) => void }) {
 	// Basic URL regex for http/https, stop at whitespace or angle bracket
 	const urlRegex = /(https?:\/\/[^\s<]+)/gi
 	const nodes: (string | JSX.Element)[] = []
@@ -112,9 +113,19 @@ function linkifyContent(content: string, opts?: { stopPropagation?: boolean }) {
 			? (e) => {
 					e.preventDefault()
 					e.stopPropagation()
-					try {
-						window.open(actual, '_blank', 'noopener,noreferrer')
-					} catch {}
+					// Check if it's a media URL and we have a media click handler
+					if (isMediaUrl(actual) && opts.onMediaClick) {
+						opts.onMediaClick(actual)
+					} else {
+						try {
+							window.open(actual, '_blank', 'noopener,noreferrer')
+						} catch {}
+					}
+				}
+			: isMediaUrl(actual) && opts?.onMediaClick
+			? (e) => {
+					e.preventDefault()
+					opts.onMediaClick!(actual)
 				}
 			: undefined
 
@@ -420,6 +431,15 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 	const [showEmojiPicker, setShowEmojiPicker] = useState(false)
 	// Flag to track if a repost is in progress
 	const [isReposting, setIsReposting] = useState(false)
+	// MediaOverlay state management
+	const [mediaOverlayOpen, setMediaOverlayOpen] = useState(false)
+	const [mediaOverlaySrc, setMediaOverlaySrc] = useState('')
+
+	// Media click handler for overlay
+	const handleMediaClick = (url: string) => {
+		setMediaOverlaySrc(url)
+		setMediaOverlayOpen(true)
+	}
 
 	// Create refs outside of conditional rendering
 	const replyTextareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -936,7 +956,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 				<div className="flex-1">
 					{readOnlyInThread ? (
 						<CollapsibleContent className="px-2 py-1 text-md text-left break-words whitespace-pre-wrap align-text-top w-full hover:bg-grey-300 aria-hidden:true">
-							{linkifyContent(displayContent, { stopPropagation: true })}
+							{linkifyContent(displayContent, { stopPropagation: true, onMediaClick: handleMediaClick })}
 						</CollapsibleContent>
 					) : (
 						(() => {
@@ -955,7 +975,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 								<CollapsibleContent
 									className={`px-2 py-1 text-md text-left break-words whitespace-pre-wrap align-text-top w-full rounded-md transition-colors duration-150 hover:bg-grey-300`}
 								>
-									{linkifyContent(displayContent, { stopPropagation: true })}
+									{linkifyContent(displayContent, { stopPropagation: true, onMediaClick: handleMediaClick })}
 								</CollapsibleContent>
 							)
 						})()
@@ -1595,6 +1615,13 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 
 				return null
 			})()}
+
+			{/* MediaOverlay for showing images/videos */}
+			<MediaOverlay
+				open={mediaOverlayOpen}
+				onOpenChange={setMediaOverlayOpen}
+				src={mediaOverlaySrc}
+			/>
 		</div>
 	)
 }
