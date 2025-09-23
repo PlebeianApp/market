@@ -20,6 +20,7 @@ import EmojiPicker from 'emoji-picker-react'
 import { toast } from 'sonner'
 import { writeRelaysUrls } from '@/lib/constants'
 import { MediaOverlay } from '@/components/MediaOverlay'
+import { Dialog, DialogContent, DialogOverlay } from '@/components/ui/dialog'
 
 function SpoolIcon(props: SVGProps<SVGSVGElement>) {
 	return (
@@ -123,11 +124,11 @@ function linkifyContent(content: string, opts?: { stopPropagation?: boolean; onM
 					}
 				}
 			: isMediaUrl(actual) && opts?.onMediaClick
-			? (e) => {
-					e.preventDefault()
-					opts.onMediaClick!(actual)
-				}
-			: undefined
+				? (e) => {
+						e.preventDefault()
+						opts.onMediaClick!(actual)
+					}
+				: undefined
 
 		// Always render as a regular clickable link (no inline images)
 		nodes.push(
@@ -263,16 +264,14 @@ function ThreadView({ threadStructure, highlightedNoteId, reactionsMap: propReac
 	}, [propReactionsMap, noteIds])
 
 	// Fetch reactions for all notes in the thread when needed
-	const { data: fetchedReactionsMap } = useQuery<Record<string, Record<string, number>>>(
-		{
-			...reactionsQueryOptions(noteIds),
-			enabled: noteIds.length > 0 && !hasSufficientReactions,
-			refetchOnWindowFocus: false,
-			refetchOnReconnect: false,
-			keepPreviousData: true,
-			staleTime: 60_000,
-		} as any,
-	)
+	const { data: fetchedReactionsMap } = useQuery<Record<string, Record<string, number>>>({
+		...reactionsQueryOptions(noteIds),
+		enabled: noteIds.length > 0 && !hasSufficientReactions,
+		refetchOnWindowFocus: false,
+		refetchOnReconnect: false,
+		keepPreviousData: true,
+		staleTime: 60_000,
+	} as any)
 
 	// Use provided reactionsMap only if it fully covers the thread; otherwise, use fetched data
 	const reactionsMap: Record<string, Record<string, number>> | undefined = hasSufficientReactions
@@ -439,6 +438,66 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 	const handleMediaClick = (url: string) => {
 		setMediaOverlaySrc(url)
 		setMediaOverlayOpen(true)
+	}
+
+	// Handle emoji reaction selection
+	const handleEmojiReaction = async (emoji: string) => {
+		try {
+			// Get NDK instance
+			const ndk = ndkActions.getNDK()
+			if (!ndk) {
+				toast.error('Not connected to Nostr network')
+				return
+			}
+
+			const signer = ndkActions.getSigner()
+			if (!signer) {
+				toast.error('Please log in to react')
+				return
+			}
+
+			// Show loading toast
+			const loadingToastId = toast.loading('Adding reaction...')
+
+			// Create reaction event (kind 7)
+			const event = new NDKEvent(ndk)
+			event.kind = 7
+			event.content = emoji
+
+			// Add tags for reaction according to NIP-25
+			event.tags = []
+
+			// Add "e" tag with the note ID being reacted to
+			event.tags.push(['e', note.id as string])
+
+			// Add "p" tag for the author of the note being reacted to
+			event.tags.push(['p', note.pubkey])
+
+			// Sign and publish the event
+			await event.sign(signer)
+
+			// Create a relay set for publishing
+			const publishRelaySet = NDKRelaySet.fromRelayUrls(writeRelaysUrls, ndk)
+			await event.publish(publishRelaySet)
+
+			console.log('Reaction published successfully:', event.id)
+			console.log('Published reaction JSON:', JSON.stringify(event.rawEvent()))
+
+			// Show success message
+			toast.dismiss(loadingToastId)
+			toast.success(`Reaction ${emoji} added!`)
+
+			// Optimistically update the reactions display
+			queryClient.setQueryData(reactionsQueryOptions(note.id as string).queryKey, (oldData: any) => {
+				if (!oldData) return { [emoji]: 1 }
+				const newData = { ...oldData }
+				newData[emoji] = (newData[emoji] || 0) + 1
+				return newData
+			})
+		} catch (error) {
+			console.error('Failed to send reaction:', error)
+			toast.error('Failed to send reaction. Please try again.')
+		}
 	}
 
 	// Create refs outside of conditional rendering
@@ -750,8 +809,8 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 				<div className="ml-2 flex items-center gap-2">
 					{!readOnlyInThread && (needsThreadData ? !!threadStructure && (threadStructure.nodes?.size || 0) > 1 : true) ? (
 						<button
- 						className={`h-8 w-8 inline-flex items-center justify-center text-xs rounded-full outline-none focus:outline-none focus:ring-0 border-0 transition-colors transition-shadow hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 hover:ring-offset-white ${showThread || isLastViewedThread ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-white text-gray-600 hover:bg-gray-100'}`}
- 						aria-pressed={showThread}
+							className={`h-8 w-8 inline-flex items-center justify-center text-xs rounded-full outline-none focus:outline-none focus:ring-0 border-0 transition-colors transition-shadow hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 hover:ring-offset-white ${showThread || isLastViewedThread ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'bg-white text-gray-600 hover:bg-gray-100'}`}
+							aria-pressed={showThread}
 							onClick={(e) => {
 								e.preventDefault()
 								e.stopPropagation()
@@ -1001,7 +1060,20 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 			{/* Reactions row (shown above hashtags) */}
 			<div className="mt-2 pt-2 border-t border-gray-200">
 				<div className="text-xs text-gray-700 flex flex-wrap items-center gap-2">
-					<span className="text-gray-500">Reactions:</span>
+					<button
+						className="h-8 rounded-full bg-white text-gray-700 hover:bg-gray-100 px-2 inline-flex items-center gap-1 border border-gray-200"
+						onClick={(e) => {
+							e.preventDefault()
+							e.stopPropagation()
+							setShowEmojiPicker(!showEmojiPicker)
+						}}
+						title="Add reaction"
+						aria-label="Add reaction"
+					>
+						<span className="h-8 rounded-full bg-white text-gray-700 hover:bg-gray-100 px-2 inline-flex items-center gap-1 border border-gray-200">
+							🤙 React
+						</span>
+					</button>
 					{reactionsData.entries.map(([emo, cnt]) => (
 						<button
 							key={emo}
@@ -1036,6 +1108,24 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 						</button>
 					))}
 				</div>
+				{/* Emoji picker modal for reactions */}
+				<Dialog open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
+					<DialogContent className="p-0 border-none bg-transparent shadow-none max-w-fit">
+						<EmojiPicker
+							onEmojiClick={(emojiObject) => {
+								console.log('Selected emoji:', emojiObject)
+								// Handle emoji selection - emit reaction event
+								handleEmojiReaction(emojiObject.emoji)
+								setShowEmojiPicker(false)
+							}}
+							width={300}
+							height={400}
+							previewConfig={{
+								showPreview: false,
+							}}
+						/>
+					</DialogContent>
+				</Dialog>
 			</div>
 			{/* Hashtags section */}
 			<div className="mt-2 pt-2 border-t border-gray-200">
@@ -1164,16 +1254,16 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 											</Button>
 											{showEmojiPicker ? (
 												<div className="absolute bottom-12 right-0 z-50">
-															<EmojiPicker
-																onEmojiClick={(emojiData) => {
-																	setReplyText((t) => t + emojiData.emoji)
-																	setShowEmojiPicker(false)
-																}}
-																width={300}
-																previewConfig={{ showPreview: false }}
-																searchDisabled={false}
-																skinTonesDisabled
-															/> 
+													<EmojiPicker
+														onEmojiClick={(emojiData) => {
+															setReplyText((t) => t + emojiData.emoji)
+															setShowEmojiPicker(false)
+														}}
+														width={300}
+														previewConfig={{ showPreview: false }}
+														searchDisabled={false}
+														skinTonesDisabled
+													/>
 												</div>
 											) : null}
 										</div>
@@ -1337,12 +1427,12 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 									Cancel
 								</Button>
 
-															<Button
-																type="button"
-																variant="primary"
-																className="bg-secondary text-white hover:bg-secondary/90 px-4"
-																disabled={isReposting}
-																onClick={async () => {
+								<Button
+									type="button"
+									variant="primary"
+									className="bg-secondary text-white hover:bg-secondary/90 px-4"
+									disabled={isReposting}
+									onClick={async () => {
 										if (isReposting) return
 
 										setIsReposting(true)
@@ -1484,16 +1574,16 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 											</Button>
 											{showEmojiPicker ? (
 												<div className="absolute bottom-12 right-0 z-50">
-															<EmojiPicker
-																onEmojiClick={(emojiData) => {
-																	setQuoteText((t) => t + emojiData.emoji)
-																	setShowEmojiPicker(false)
-																}}
-																width={300}
-																previewConfig={{ showPreview: false }}
-																searchDisabled={false}
-																skinTonesDisabled
-															/> 
+													<EmojiPicker
+														onEmojiClick={(emojiData) => {
+															setQuoteText((t) => t + emojiData.emoji)
+															setShowEmojiPicker(false)
+														}}
+														width={300}
+														previewConfig={{ showPreview: false }}
+														searchDisabled={false}
+														skinTonesDisabled
+													/>
 												</div>
 											) : null}
 										</div>
@@ -1617,11 +1707,7 @@ export function NoteView({ note, readOnlyInThread, reactionsMap }: NoteViewProps
 			})()}
 
 			{/* MediaOverlay for showing images/videos */}
-			<MediaOverlay
-				open={mediaOverlayOpen}
-				onOpenChange={setMediaOverlayOpen}
-				src={mediaOverlaySrc}
-			/>
+			<MediaOverlay open={mediaOverlayOpen} onOpenChange={setMediaOverlayOpen} src={mediaOverlaySrc} />
 		</div>
 	)
 }
