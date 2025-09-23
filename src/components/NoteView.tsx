@@ -61,9 +61,87 @@ function CollapseVerticalIcon(props: SVGProps<SVGSVGElement>) {
 	)
 }
 
+// Helper: navigate to a user's feed using ?user=<hexpubkey>
+function navigateToUserFeed(hexPubkey: string, stopPropagation?: boolean) {
+	try {
+		const url = new URL(window.location.href)
+		// Keep only user param when navigating to a user feed
+		url.search = ''
+		url.searchParams.set('user', hexPubkey)
+		const target = url.pathname.startsWith('/nostr') ? (url.search ? `/nostr${url.search}` : '/nostr') : url.search ? `${url.pathname}${url.search}` : url.pathname
+		if (stopPropagation) {
+			window.history.pushState({}, '', target)
+			window.dispatchEvent(new PopStateEvent('popstate'))
+		} else {
+			window.location.href = target
+		}
+	} catch {
+		window.location.href = `/nostr?user=${hexPubkey}`
+	}
+}
+
+// Inline component that fetches and renders a note by event id
+function InlineNoteById({ id }: { id: string }) {
+	const ndk = ndkActions.getNDK()
+	const { data, isLoading } = useQuery({
+		queryKey: ['inline-event', id],
+		queryFn: async () => {
+			if (!ndk) return null
+			try {
+				// ndk.fetchEvent can accept an id string
+				return await ndk.fetchEvent(id)
+			} catch {
+				return null
+			}
+		},
+		staleTime: 60_000,
+		refetchOnWindowFocus: false,
+		refetchOnReconnect: false,
+	})
+
+	if (isLoading) return <span className="text-gray-500">Loading nostr note…</span>
+	if (!data) return <span className="text-gray-500">(nostr note not found)</span>
+	return (
+		<div className="mt-1 rounded-lg border border-gray-200 bg-gray-50 p-2">
+			<NoteView note={data as any} readOnlyInThread embeddedDepth={1} />
+		</div>
+	)
+}
+
+// Inline user chip: avatar + name that navigates to the user's feed
+function InlineUserChip({ pubkey, stopPropagation }: { pubkey: string; stopPropagation?: boolean }) {
+	const { data: author, isLoading } = useQuery({ ...authorQueryOptions(pubkey), enabled: !!pubkey }) as any
+	const name = author?.name || author?.displayName || author?.nip05 || (pubkey ? pubkey.slice(0, 8) + '…' : 'user')
+	const pic = author?.picture || ''
+	const onClick: React.MouseEventHandler<HTMLButtonElement> = (e) => {
+		if (stopPropagation) {
+			e.preventDefault()
+			e.stopPropagation()
+		}
+		navigateToUserFeed(pubkey, stopPropagation)
+	}
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			title={`Open ${name}'s feed`}
+			className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-gray-100 border border-gray-200 hover:bg-gray-200 text-gray-800 align-baseline"
+		>
+			{pic ? (
+				<img src={pic} alt={name} className="w-4 h-4 rounded-full object-cover" loading="lazy" />
+			) : (
+				<span className="w-4 h-4 rounded-full bg-gray-300 text-gray-700 text-[10px] inline-flex items-center justify-center">
+					{(name || 'U').slice(0, 1).toUpperCase()}
+				</span>
+			)}
+			<span className="text-blue-700 hover:underline">{isLoading ? 'Loading…' : name}</span>
+		</button>
+	)
+}
+
 function linkifyContent(content: string, opts?: { stopPropagation?: boolean; onMediaClick?: (url: string) => void }) {
-	// Basic URL regex for http/https, stop at whitespace or angle bracket
-	const urlRegex = /(https?:\/\/[^\s<]+)/gi
+	// Combined regex to find http(s) URLs and nostr: bech32 references in order
+	const combinedRegex = /(https?:\/\/[^\s<]+)|(nostr:[a-z0-9]+)/gi
 	const nodes: (string | JSX.Element)[] = []
 	let lastIndex = 0
 	let match: RegExpExecArray | null
@@ -90,60 +168,102 @@ function linkifyContent(content: string, opts?: { stopPropagation?: boolean; onM
 		}
 	}
 
-	while ((match = urlRegex.exec(content)) !== null) {
-		const url = match[1]
+	while ((match = combinedRegex.exec(content)) !== null) {
+		const full = match[0]
+		const httpUrl = match[1]
+		const nostrUri = match[2]
 		// push preceding text
 		if (match.index > lastIndex) {
 			nodes.push(content.slice(lastIndex, match.index))
 		}
-		// Trim common trailing punctuation without breaking parentheses balance
-		let display = url
-		let actual = url
+		// Trim trailing punctuation and unmatched right parenthesis
+		let token = full
 		const trailing = [')', '.', ',', '!', '?', ':', ';']
-		while (trailing.includes(display.slice(-1))) {
-			// avoid stripping matching ) if there is an unmatched (
-			if (display.endsWith(')')) {
-				const left = (display.match(/\(/g) || []).length
-				const right = (display.match(/\)/g) || []).length
+		while (trailing.includes(token.slice(-1))) {
+			if (token.endsWith(')')) {
+				const left = (token.match(/\(/g) || []).length
+				const right = (token.match(/\)/g) || []).length
 				if (right <= left) break
 			}
-			display = display.slice(0, -1)
+			token = token.slice(0, -1)
 		}
-		actual = display
-		const onClick: React.MouseEventHandler<HTMLAnchorElement> | undefined = opts?.stopPropagation
-			? (e) => {
-					e.preventDefault()
-					e.stopPropagation()
-					// Check if it's a media URL and we have a media click handler
-					if (isMediaUrl(actual) && opts.onMediaClick) {
-						opts.onMediaClick(actual)
-					} else {
-						try {
-							window.open(actual, '_blank', 'noopener,noreferrer')
-						} catch {}
-					}
-				}
-			: isMediaUrl(actual) && opts?.onMediaClick
+
+		if (httpUrl) {
+			const actual = token
+			const onClick: React.MouseEventHandler<HTMLAnchorElement> | undefined = opts?.stopPropagation
 				? (e) => {
 						e.preventDefault()
-						opts.onMediaClick!(actual)
+						e.stopPropagation()
+						if (isMediaUrl(actual) && opts.onMediaClick) {
+							opts.onMediaClick(actual)
+						} else {
+							try {
+								window.open(actual, '_blank', 'noopener,noreferrer')
+							} catch {}
+						}
 					}
-				: undefined
-
-		// Always render as a regular clickable link (no inline images)
-		nodes.push(
-			<a
-				key={`u-${match.index}`}
-				href={actual}
-				target="_blank"
-				rel="noopener noreferrer"
-				className="text-blue-600 hover:underline break-words"
-				onClick={onClick}
-				title={isMediaUrl(actual) ? 'This media could be NSFW' : undefined}
-			>
-				{actual}
-			</a>,
-		)
+				: isMediaUrl(actual) && opts?.onMediaClick
+					? (e) => {
+							e.preventDefault()
+							opts.onMediaClick!(actual)
+						}
+					: undefined
+			nodes.push(
+				<a
+					key={`u-${match.index}`}
+					href={actual}
+					target="_blank"
+					rel="noopener noreferrer"
+					className="text-blue-600 hover:underline break-words"
+					onClick={onClick}
+					title={isMediaUrl(actual) ? 'This media could be NSFW' : undefined}
+				>
+					{actual}
+				</a>,
+			)
+		} else if (nostrUri) {
+			const bech = token.replace(/^nostr:/i, '')
+			try {
+				const decoded = nip19.decode(bech as any)
+				const type = decoded.type
+				if (type === 'nevent') {
+					const id = (decoded.data as any).id as string
+					nodes.push(<InlineNoteById key={`ne-${match.index}`} id={id} />)
+				} else if (type === 'note') {
+					const id = String((decoded as any).data)
+					nodes.push(<InlineNoteById key={`no-${match.index}`} id={id} />)
+				} else if (type === 'npub' || type === 'nprofile' || type === 'naddr') {
+					let pubkey = ''
+					if (type === 'npub') pubkey = String((decoded as any).data)
+					if (type === 'nprofile') pubkey = (decoded.data as any).pubkey
+					if (type === 'naddr') pubkey = (decoded.data as any).pubkey
+					if (type === 'npub' || type === 'nprofile') {
+						nodes.push(
+							<InlineUserChip key={`np-${match.index}`} pubkey={pubkey} stopPropagation={opts?.stopPropagation} />,
+						)
+					} else {
+						const handleClick: React.MouseEventHandler<HTMLAnchorElement> = (e) => {
+							if (opts?.stopPropagation) {
+								e.preventDefault()
+								e.stopPropagation()
+							}
+							navigateToUserFeed(pubkey, opts?.stopPropagation)
+						}
+						nodes.push(
+							<a key={`np-${match.index}`} href={`/nostr?user=${pubkey}`} className="text-blue-600 hover:underline break-words" onClick={handleClick}>
+								{`nostr:${bech}`}
+							</a>,
+						)
+					}
+				} else {
+					// Fallback: render plain text if unknown type
+					nodes.push(token)
+				}
+			} catch {
+				// Not a valid nostr bech32, render as plain text
+				nodes.push(token)
+			}
+		}
 
 		lastIndex = match.index + match[0].length
 	}
@@ -1439,14 +1559,19 @@ export function NoteView({ note, readOnlyInThread, reactionsMap, embeddedDepth =
 													console.log('Reply published successfully:', event.id)
 													console.log('Published event JSON:', JSON.stringify(event.rawEvent()))
 
-													// Show success message
-													toast.dismiss(loadingToastId)
-													toast.success('Reply published successfully!')
+    									// Show success message
+    									toast.dismiss(loadingToastId)
+    									toast.success('Reply published successfully!')
 
-													// Reset view mode and text
-													setReplyText('')
-													setReplyImages([])
-													setViewMode(VIEW_MODE.NONE)
+    									// Immediately add to the feed
+    									try {
+    										;(window as any).__nostrAddToFeed?.(event)
+    									} catch {}
+
+    									// Reset view mode and text
+    									setReplyText('')
+    									setReplyImages([])
+    									setViewMode(VIEW_MODE.NONE)
 												} catch (error) {
 													console.error('Failed to send reply:', error)
 													toast.error('Failed to send reply. Please try again.')
@@ -1737,14 +1862,19 @@ export function NoteView({ note, readOnlyInThread, reactionsMap, embeddedDepth =
 													console.log('Quote post published successfully:', event.id)
 													console.log('Published event JSON:', JSON.stringify(event.rawEvent()))
 
-													// Show success message
-													toast.dismiss(loadingToastId)
-													toast.success('Quote post published successfully!')
+    									// Show success message
+    									toast.dismiss(loadingToastId)
+    									toast.success('Quote post published successfully!')
 
-													// Reset view mode and text
-													setQuoteText('')
-													setQuoteImages([])
-													setViewMode(VIEW_MODE.NONE)
+    									// Immediately add to the feed
+    									try {
+    										;(window as any).__nostrAddToFeed?.(event)
+    									} catch {}
+
+    									// Reset view mode and text
+    									setQuoteText('')
+    									setQuoteImages([])
+    									setViewMode(VIEW_MODE.NONE)
 												} catch (error) {
 													console.error('Failed to send quote post:', error)
 													toast.error('Failed to send quote post. Please try again.')
