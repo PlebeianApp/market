@@ -652,6 +652,108 @@ export const enhancedNotesQueryOptions = (opts?: { tag?: string; author?: string
 		staleTime: 2 * 60 * 1000, // 2 minutes for feeds
 	})
 
+// Infinite paging support: fetch a single page with optional cursors
+export type EnhancedNotesPage = {
+	items: EnhancedFetchedNDKEvent[]
+	oldest: number | null // created_at of oldest item in this page
+	newest: number | null // created_at of newest item in this page
+}
+
+export async function fetchEnhancedNotesPage(
+	opts?: { tag?: string; author?: string; follows?: boolean; kinds?: number[] },
+	page?: { since?: number; until?: number; pageSize?: number }
+): Promise<EnhancedNotesPage> {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) return { items: [], oldest: null, newest: null }
+
+	const kinds: number[] = opts?.kinds ?? [...SUPPORTED_KINDS]
+	const pageSize = Math.max(1, page?.pageSize ?? 4)
+
+	// Build base filter
+	const filter: NDKFilter = { kinds, limit: Math.max(100, pageSize * 25) }
+	const normTag = normalizeTag(opts?.tag)
+	if (normTag) (filter as any)['#t'] = [normTag]
+	if (opts?.author && opts.author.trim()) (filter as any).authors = [opts.author.trim()]
+	if (typeof page?.since === 'number') (filter as any).since = Math.floor(page!.since!)
+	if (typeof page?.until === 'number') (filter as any).until = Math.floor(page!.until!)
+
+	const allRelays = await getAugmentedRelayUrls()
+	const relaySet = NDKRelaySet.fromRelayUrls(allRelays, ndk)
+
+	// Follows/mutes
+	let mutedPubkeys: Set<string> | null = null
+	let followedPubkeys: Set<string> | null = null
+	if (opts?.follows) {
+		try {
+			const user = await ndkActions.getUser()
+			const pubkey = user?.pubkey
+			if (!pubkey) return { items: [], oldest: null, newest: null }
+			// Contact list
+			const contactsFilter: NDKFilter = { kinds: [3], authors: [pubkey], limit: 1 }
+			const contacts = await ndk.fetchEvents(contactsFilter, undefined, relaySet)
+			const arr = Array.from(contacts)
+			if (arr.length > 0) {
+				const latest = arr.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+				const pTags = (latest?.tags || []).filter((t: any) => Array.isArray(t) && t[0] === 'p' && typeof t[1] === 'string')
+				const followPubkeys = pTags.map((t: any) => t[1]) as string[]
+				if (pubkey && !followPubkeys.includes(pubkey)) followPubkeys.push(pubkey)
+				followedPubkeys = new Set(followPubkeys)
+				;(filter as any).authors = Array.from(followedPubkeys)
+			} else {
+				return { items: [], oldest: null, newest: null }
+			}
+			// Mutes
+			try {
+				const muteFilter: NDKFilter = { kinds: [10000 as any], authors: [pubkey], limit: 1 }
+				const muteEvents = await ndk.fetchEvents(muteFilter, undefined, relaySet)
+				const muteArr = Array.from(muteEvents)
+				if (muteArr.length > 0) {
+					const latestMute = muteArr.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+					const pMuteTags = (latestMute?.tags || []).filter((t: any) => Array.isArray(t) && t[0] === 'p' && typeof t[1] === 'string')
+					mutedPubkeys = new Set(pMuteTags.map((t: any) => t[1] as string))
+				}
+			} catch {}
+		} catch {}
+	}
+
+	try {
+		const result = await Promise.race([
+			ndk.fetchEvents(filter, undefined, relaySet),
+			new Promise<Set<NDKEvent>>((resolve) => setTimeout(() => resolve(new Set()), 7000)),
+		])
+		const all = Array.from(result)
+		// Filtering similar to main path
+		const filtered = all.filter((e) => {
+			try {
+				if (!e || !(e as any).id) return false
+				if (hasClientMostrTag(e) || isNSFWEvent(e)) return false
+				const author = (e as any).pubkey as string
+				if (mutedPubkeys && mutedPubkeys.has(author)) return false
+				if (opts?.follows && followedPubkeys && !followedPubkeys.has(author)) return false
+				if (mutedPubkeys) {
+					const tags = (e as any).tags || []
+					for (const t of tags) {
+						if (Array.isArray(t) && t[0] === 'p' && typeof t[1] === 'string' && mutedPubkeys.has(t[1])) return false
+					}
+				}
+				return true
+			} catch {
+				return false
+			}
+		})
+		// Sort newest first
+		filtered.sort((a, b) => ((b as any).created_at ?? 0) - ((a as any).created_at ?? 0))
+		const sliced = filtered.slice(0, pageSize)
+		const enhanced = sliced.map((e) => withEnhancedMetadata(e))
+		const newest = enhanced.length > 0 ? (((enhanced[0].event as any).created_at as number) ?? null) : null
+		const oldest = enhanced.length > 0 ? (((enhanced[enhanced.length - 1].event as any).created_at as number) ?? null) : null
+		return { items: enhanced, oldest, newest }
+	} catch (e) {
+		console.warn('fetchEnhancedNotesPage failed', e)
+		return { items: [], oldest: null, newest: null }
+	}
+}
+
 
 // Helper: fetch and cache user's relay list (NIP-65 kind:10002)
 let __userRelayCache: { urls: string[]; fetchedAt: number } | null = null
