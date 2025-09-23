@@ -2,7 +2,7 @@ import { createFileRoute, useLocation, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { authActions, authStore } from '@/lib/stores/auth'
 import { useQuery, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
-import { type SVGProps, useEffect, useMemo, useState, useRef } from 'react'
+import { type JSX, type SVGProps, useEffect, useMemo, useState, useRef } from 'react'
 import { enhancedNotesQueryOptions, type EnhancedFetchedNDKEvent, cleanupStaleEvents, SUPPORTED_KINDS, getAugmentedRelayUrls } from '@/queries/enhanced-firehose'
 import { authorQueryOptions } from '@/queries/authors'
 import { reactionsQueryOptions } from '@/queries/reactions'
@@ -62,6 +62,8 @@ function formatTimeAgo(timestamp: number): string {
 const VIEW_TIMESTAMPS_KEY = 'nostr_view_timestamps'
 const VIEW_POSITIONS_KEY = 'nostr_view_positions'
 const VIEW_CACHE_KEY = 'nostr_view_cache'
+// Persisted list of recently opened user feed pubkeys
+const USER_FEEDS_KEY = 'nostr_user_feeds'
 
 interface ViewState {
 	lastRefreshTimestamp: number
@@ -113,6 +115,140 @@ function CollapseVerticalIcon(props: SVGProps<SVGSVGElement>) {
 	)
 }
 
+// Lightweight URL linkifier for plain text (http/https only)
+function linkifyPlainText(text: string): (string | JSX.Element)[] {
+	const parts: (string | JSX.Element)[] = []
+	const regex = /(https?:\/\/[^\s<]+)/gi
+	let lastIndex = 0
+	let match: RegExpExecArray | null
+	while ((match = regex.exec(text)) !== null) {
+		if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index))
+		const url = match[0]
+		parts.push(
+			<a key={`lk-${match.index}`} href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-words">
+				{url}
+			</a>,
+		)
+		lastIndex = match.index + match[0].length
+	}
+	if (lastIndex < text.length) parts.push(text.slice(lastIndex))
+	return parts
+}
+
+// Profile banner displayed at the top of a user's feed (based on kind 0 profile metadata)
+function ProfileBanner({
+	pubkey,
+	name,
+	picture,
+	about,
+	isLoading,
+}: {
+	pubkey: string
+	name?: string
+	picture?: string
+	about?: string
+	isLoading?: boolean
+}) {
+	// Clamp to 4 lines with a revealer
+	const contentRef = useRef<HTMLDivElement | null>(null)
+	const [expanded, setExpanded] = useState(false)
+	const [needsClamp, setNeedsClamp] = useState(false)
+
+	useEffect(() => {
+		const el = contentRef.current
+		if (!el) return
+		// Measure after layout
+		const id = window.setTimeout(() => {
+			try {
+				setNeedsClamp(el.scrollHeight > el.clientHeight + 1)
+			} catch {}
+		}, 0)
+		return () => window.clearTimeout(id)
+	}, [about, expanded])
+
+	const displayName = name || pubkey?.slice(0, 8) + '…'
+
+	return (
+		<div className="mb-3">
+			<div className="w-full rounded-md border border-gray-200 bg-white p-3">
+				<div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+					{/* Left: avatar + name */}
+					<div className="flex items-center gap-3 min-w-0">
+						{picture ? (
+							<img src={picture} alt={displayName} className="w-16 h-16 rounded-full object-cover border" />
+						) : (
+							<div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-xl border">
+								{(displayName || 'U').slice(0, 1).toUpperCase()}
+							</div>
+						)}
+						<div className="min-w-0">
+							<div className="text-xl font-semibold leading-tight truncate">{isLoading ? 'Loading…' : displayName}</div>
+							<div className="text-xs text-gray-500 truncate">{pubkey}</div>
+						</div>
+					</div>
+					{/* Right: about (linkified) */}
+					<div className="md:w-1/2">
+						<div
+							ref={contentRef}
+							className="text-sm text-gray-800"
+							style={
+								!expanded
+									? {
+										display: '-webkit-box',
+										WebkitLineClamp: 4 as any,
+										WebkitBoxOrient: 'vertical' as any,
+										overflow: 'hidden',
+										wordBreak: 'break-word',
+									}
+									: { wordBreak: 'break-word' }
+							}
+						>
+							{about ? linkifyPlainText(about) : <span className="text-gray-500">No bio</span>}
+						</div>
+						{!expanded && needsClamp ? (
+							<div className="mt-1">
+								<button
+									type="button"
+									className="text-blue-600 hover:underline text-sm"
+									onClick={() => setExpanded(true)}
+								>
+									Show more
+								</button>
+							</div>
+						) : null}
+					</div>
+				</div>
+			</div>
+		</div>
+	)
+}
+
+// Chip component for user feed list that shows username instead of pubkey
+function UserFeedChip({
+	pk,
+	isActive,
+	onOpen,
+	onRemove,
+}: {
+	pk: string
+	isActive: boolean
+	onOpen: () => void
+	onRemove: () => void
+}) {
+	const { data: author, isLoading } = useQuery({ ...authorQueryOptions(pk), enabled: !!pk }) as any
+	const displayName = isLoading ? 'Loading…' : (author?.name || author?.displayName || author?.nip05 || (pk.slice(0, 8) + '…'))
+	return (
+		<div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border ${isActive ? 'bg-secondary text-white border-secondary' : 'bg-gray-100 text-gray-800 border-gray-200'}`}>
+			<button type="button" className="text-sm hover:underline" onClick={onOpen} title={`Open user feed ${displayName}`}>
+				{displayName}
+			</button>
+			<button type="button" className={`ml-1 rounded-full p-0.5 ${isActive ? 'hover:bg-white/20' : 'hover:bg-gray-200'}`} onClick={onRemove} title="Remove from list" aria-label="Remove user from saved list">
+				<X className="h-3.5 w-3.5" />
+			</button>
+		</div>
+	)
+}
+
 export const Route = createFileRoute('/nostr/')({
 	component: FirehoseComponent,
 })
@@ -128,9 +264,57 @@ function FirehoseComponent() {
 	const [tagFilter, setTagFilter] = useState('')
 	const [tagFilterInput, setTagFilterInput] = useState(tagFilter)
 	const [authorFilter, setAuthorFilter] = useState('')
+	// Recently opened user feeds (persisted)
+	const [userFeeds, setUserFeeds] = useState<string[]>([])
 	const [filterMode, setFilterMode] = useState<'all' | 'threads' | 'originals' | 'follows' | 'reactions' | 'hashtag'>('all')
 	const isBaseFeed = filterMode !== 'hashtag' && !authorFilter.trim()
 	const [previousFilterMode, setPreviousFilterMode] = useState<'all' | 'threads' | 'originals' | 'follows' | 'hashtag'>('all')
+
+	// Load saved user feeds on mount
+	useEffect(() => {
+		try {
+			const raw = localStorage.getItem(USER_FEEDS_KEY) || '[]'
+			const arr = JSON.parse(raw)
+			if (Array.isArray(arr)) {
+				setUserFeeds(arr.filter((s: any) => typeof s === 'string'))
+			}
+		} catch {}
+	}, [])
+	// Persist user feeds when changed
+	useEffect(() => {
+		try {
+			localStorage.setItem(USER_FEEDS_KEY, JSON.stringify(userFeeds))
+		} catch {}
+	}, [userFeeds])
+	// When a user feed is opened, add it to the saved list (most recent first)
+	useEffect(() => {
+		if ((authorFilter || '').trim()) {
+			setUserFeeds((prev) => {
+				const pk = (authorFilter || '').trim()
+				const next = [pk, ...prev.filter((p) => p !== pk)]
+				return next.slice(0, 12)
+			})
+		}
+	}, [authorFilter])
+
+	function navigateToUserFeed(hexPubkey: string) {
+		try {
+			if (typeof window === 'undefined') return
+			const url = new URL(window.location.href)
+			url.search = ''
+			url.searchParams.set('user', hexPubkey)
+			const target = url.pathname.startsWith('/nostr')
+				? url.search
+					? `/nostr${url.search}`
+					: '/nostr'
+				: url.search
+					? `${url.pathname}${url.search}`
+					: url.pathname
+			window.history.pushState({}, '', target)
+			window.dispatchEvent(new PopStateEvent('popstate'))
+		} catch {}
+	}
+
 	// Determine an initial limit that will overflow the viewport a bit so the feed feels full
 	function getInitialFeedLimit(): number {
 		try {
@@ -199,10 +383,45 @@ function FirehoseComponent() {
 		refetchOnReconnect: false,
 		refetchInterval: false,
 		staleTime: Infinity,
-	})
+	} as any)
 	const flatPages = useMemo(() => (pagesData?.pages ? (pagesData.pages as any[]).flatMap((p: any) => p.items || []) : []), [pagesData])
 	const data = allLoadedEvents.length > 0 ? allLoadedEvents : flatPages
 	const { data: authorMeta } = useQuery({ ...authorQueryOptions(authorFilter), enabled: !!authorFilter }) as any
+
+	// Helper to optimistically prepend a just-published event to the feed
+	const addToFeed = (wrapped: EnhancedFetchedNDKEvent) => {
+		try {
+			const id = (((wrapped.event as any)?.id as string) || '').trim()
+			if (!id) return
+			setAllLoadedEvents((prev) => {
+				if (prev.some((w) => ((((w.event as any)?.id as string) || '').trim()) === id)) return prev
+				return [wrapped, ...prev]
+			})
+		} catch {}
+	}
+
+	// Expose a global hook so components like NoteView can push freshly created events into the feed immediately
+	useEffect(() => {
+		;(window as any).__nostrAddToFeed = (ev: any) => {
+			try {
+				const eventObj = ev && ev.event ? ev.event : ev
+				if (!eventObj) return
+				const wrapped: EnhancedFetchedNDKEvent = {
+					event: eventObj,
+					fetchedAt: Date.now(),
+					relaysSeen: [],
+					isFromCache: false,
+					priority: 1,
+				} as any
+				addToFeed(wrapped)
+			} catch {}
+		}
+		return () => {
+			try {
+				if ((window as any).__nostrAddToFeed) delete (window as any).__nostrAddToFeed
+			} catch {}
+		}
+	}, [])
 
 	// Override refetch to apply pending live notes when available
 	const refetch = async () => {
@@ -2113,6 +2332,50 @@ function FirehoseComponent() {
 									<span>Global ({counts.all})</span>
 								</span>
 							</Button>
+ 						<div className="mt-4 px-4">
+ 							<Label>User feeds</Label>
+ 							{userFeeds.length === 0 ? (
+ 								<div className="text-xs text-gray-400 mt-1">None yet</div>
+ 							) : (
+ 								<div className="mt-2 flex flex-wrap gap-2">
+ 									{userFeeds.map((pk) => {
+ 										const isActive = pk === authorFilter
+ 										return (
+ 											<UserFeedChip
+ 												key={pk}
+ 												pk={pk}
+ 												isActive={isActive}
+ 												onOpen={() => {
+ 													navigateToUserFeed(pk)
+ 													setIsFiltersOpen(false)
+ 												}}
+ 												onRemove={() => {
+ 													setUserFeeds((prev) => prev.filter((p) => p !== pk))
+ 													try {
+ 														if (pk === authorFilter) {
+ 															// Clear current user filter and navigate back to global
+ 															setAuthorFilter('')
+ 															const url = new URL(window.location.href)
+ 															url.search = ''
+ 															url.searchParams.set('view', 'global')
+ 															const target = url.pathname.startsWith('/nostr')
+ 																? url.search
+ 																	? `/nostr${url.search}`
+ 																	: '/nostr'
+ 																: url.search
+ 																	? `${url.pathname}${url.search}`
+ 																	: url.pathname
+ 															window.history.pushState({}, '', target)
+ 															window.dispatchEvent(new PopStateEvent('popstate'))
+ 														}
+ 													} catch {}
+ 												}}
+ 											/>
+ 										)
+ 									})}
+ 								</div>
+ 							)}
+ 						</div>
 							<div className="mt-4 px-4">
 								<Label htmlFor="tag-filter">Tags</Label>
 								<div className="flex gap-2 items-center">
@@ -2310,6 +2573,35 @@ function FirehoseComponent() {
 					'py-3 px-3 lg:px-3 ' + (openThreadId ? '' : 'lg:mr-80') + (isComposeOpen ? (isComposeLarge ? ' pb-[50vh]' : ' pb-32') : '')
 				}
 			>
+				{/* Cover/banner background behind the view header when in a user's feed */}
+				{authorFilter && (authorMeta as any) ? (() => {
+					const coverUrl = (authorMeta as any)?.banner || (authorMeta as any)?.cover || (authorMeta as any)?.cover_image || ''
+					return coverUrl ? (
+						<div
+							className="fixed top-0 left-0 right-0 h-32 md:h-40 z-0 pointer-events-none"
+							style={{
+								backgroundImage: `url("${coverUrl}")`,
+								backgroundSize: 'cover',
+								backgroundPosition: 'center',
+								backgroundRepeat: 'no-repeat',
+							}}
+						>
+							<div className="w-full h-full bg-black/20" />
+						</div>
+					) : null
+				})() : null}
+
+				{/* Profile banner shown on user feed views */}
+				{authorFilter ? (
+					<ProfileBanner
+						pubkey={authorFilter}
+						name={(authorMeta as any)?.name || (authorMeta as any)?.displayName || (authorMeta as any)?.nip05}
+						picture={(authorMeta as any)?.picture}
+						about={(authorMeta as any)?.about}
+						isLoading={!authorMeta}
+					/>
+				) : null}
+
 				{/* Floating New Notes Banner near top-right (disabled as per new UX: use pulsing reload button instead) */}
 				{pendingNewNotes.length > 0 && false ? (
 					<div className="group fixed top-16 z-40" style={{ right: floatingRight }}>
@@ -2479,13 +2771,16 @@ function FirehoseComponent() {
 									await event.sign(signer)
 
 									// Create wrapped event for immediate feed updates
-									const wrappedEvent = {
-										event: event,
-										fetchedAt: Date.now(),
-										relaysSeen: [],
-										isFromCache: false,
-										priority: 1, // High priority for new notes
-									}
+     				const wrappedEvent = {
+     					event: event,
+     					fetchedAt: Date.now(),
+     					relaysSeen: [],
+     					isFromCache: false,
+     					priority: 1, // High priority for new notes
+     				}
+
+     				// Prepend to current feed immediately
+     				addToFeed(wrappedEvent as any)
 
 									// Get current user pubkey for follow & author feed
 									const user = await ndkActions.getUser()
