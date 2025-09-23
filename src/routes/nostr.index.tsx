@@ -1,7 +1,7 @@
 import { createFileRoute, useLocation, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { authActions, authStore } from '@/lib/stores/auth'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
 import { type SVGProps, useEffect, useMemo, useState, useRef } from 'react'
 import { enhancedNotesQueryOptions, type EnhancedFetchedNDKEvent, cleanupStaleEvents, SUPPORTED_KINDS, getAugmentedRelayUrls } from '@/queries/enhanced-firehose'
 import { authorQueryOptions } from '@/queries/authors'
@@ -164,19 +164,44 @@ function FirehoseComponent() {
 		return { tag: '', author: authorFilter, follows: false, limit: eventLimit }
 	}, [filterMode, tagFilter, authorFilter, eventLimit])
 	const {
-		data,
+		data: pagesData,
 		isLoading,
 		isError,
 		error,
 		refetch: doRefetch,
 		isFetching,
-	} = useQuery({
-		...enhancedNotesQueryOptions(filterMode === 'follows' ? { ...notesOpts, cacheKey: currentUserPk || 'anon' } : notesOpts),
+		fetchNextPage,
+		fetchPreviousPage,
+		hasNextPage,
+		hasPreviousPage,
+	} = useInfiniteQuery({
+		queryKey: [
+			'enhanced-infinite',
+			notesOpts.tag || '',
+			notesOpts.author || '',
+			notesOpts.follows ? 'follows' : 'all',
+			filterMode === 'follows' ? (currentUserPk || 'anon') : '',
+			(SUPPORTED_KINDS as any).join(','),
+		],
+		initialPageParam: { since: undefined as number | undefined, until: undefined as number | undefined },
+		getNextPageParam: (lastPage: any) => (lastPage?.oldest ? { until: Math.max(0, (lastPage.oldest as number) - 1) } : undefined),
+		getPreviousPageParam: (firstPage: any) => (firstPage?.newest ? { since: Math.max(0, (firstPage.newest as number) + 1) } : undefined),
+		queryFn: async ({ pageParam }: any) => {
+			const { fetchEnhancedNotesPage } = await import('@/queries/enhanced-firehose')
+			const pageSize = 4
+			const res = await fetchEnhancedNotesPage(
+				filterMode === 'follows' ? { tag: '', author: '', follows: true } : { tag: notesOpts.tag || '', author: notesOpts.author || '', follows: false },
+				{ since: pageParam?.since, until: pageParam?.until, pageSize },
+			)
+			return res
+		},
 		refetchOnWindowFocus: false,
 		refetchOnReconnect: false,
 		refetchInterval: false,
 		staleTime: Infinity,
 	})
+	const flatPages = useMemo(() => (pagesData?.pages ? (pagesData.pages as any[]).flatMap((p: any) => p.items || []) : []), [pagesData])
+	const data = allLoadedEvents.length > 0 ? allLoadedEvents : flatPages
 	const { data: authorMeta } = useQuery({ ...authorQueryOptions(authorFilter), enabled: !!authorFilter }) as any
 
 	// Override refetch to apply pending live notes when available
@@ -377,54 +402,11 @@ function FirehoseComponent() {
 		}
 	}, [filterMode, tagFilter, authorFilter, newestNoteTimestamp])
 
-	// Update allLoadedEvents when new data arrives
-	// Ref to store scroll position before data update
-	const scrollPositionBeforeUpdateRef = useRef<number>(0)
-
-	// Save scroll position before data update
+	// Update allLoadedEvents when infinite pages data arrives
 	useEffect(() => {
-		if (eventLimit > 10 && !isLoading) {
-			// Only save position when loading more (not on initial load or view change)
-			scrollPositionBeforeUpdateRef.current = window.scrollY || document.documentElement.scrollTop || 0
-		}
-	}, [eventLimit, isLoading])
-
-	useEffect(() => {
-		if (!data || isLoading) return
-
-		// When view changes (filter/tag/author), reset the loaded events
-		if (eventLimit === 10) {
-			setAllLoadedEvents(data)
-		} else {
-			// Otherwise, append new events without duplicates
-			setAllLoadedEvents((prevEvents) => {
-				// Get ids of all previously loaded events
-				const existingIds = new Set(prevEvents.map((w) => ((w.event as any)?.id as string) || ''))
-
-				// Filter out new events that are already in the list
-				const newEvents = data.filter((w) => {
-					const id = ((w.event as any)?.id as string) || ''
-					return id && !existingIds.has(id)
-				})
-
-				// Return combined list
-				return [...prevEvents, ...newEvents]
-			})
-
-			// Restore scroll position after the update
-			if (scrollPositionBeforeUpdateRef.current > 0) {
-				// Use multiple frames to ensure DOM has updated fully
-				requestAnimationFrame(() => {
-					requestAnimationFrame(() => {
-						window.scrollTo({
-							top: scrollPositionBeforeUpdateRef.current,
-							behavior: 'auto',
-						})
-					})
-				})
-			}
-		}
-	}, [data, isLoading, eventLimit])
+		const flat = pagesData?.pages ? (pagesData.pages as any[]).flatMap((p: any) => p.items || []) : []
+		setAllLoadedEvents(flat)
+	}, [pagesData])
 
 	// Save current view state before switching
 	const saveCurrentViewState = () => {
@@ -956,34 +938,13 @@ function FirehoseComponent() {
  					// Calculate how far down the user has scrolled (as a percentage)
  					const scrollPercentage = (scrollPosition + windowHeight) / documentHeight
 
- 					// Prefetch ahead when user is 60% down the page
- 					if (scrollPercentage >= 0.6) {
- 						const targetLimit = eventLimit + 15
- 						if (lastPrefetchLimitRef.current < targetLimit) {
- 							try {
- 								lastPrefetchLimitRef.current = targetLimit
-									// Warm the cache with a larger limit in the background
-									queryClient.prefetchQuery({
-										...enhancedNotesQueryOptions({ ...notesOpts, limit: targetLimit, cacheKey: (notesOpts as any).follows ? (currentUserPk || 'anon') : undefined }),
-										staleTime: Infinity,
-									})
- 							} catch (_) {}
- 						}
+ 					// When the user is 75% of the way to the bottom, load the next page (4 items)
+ 					if (scrollPercentage >= 0.75 && !isFetching && !isLoading && !isLoadingMoreRef.current) {
+ 						isLoadingMoreRef.current = true
+ 						fetchNextPage().finally(() => {
+ 							isLoadingMoreRef.current = false
+ 						})
  					}
-
- 					// When the user is 75% of the way to the bottom, reveal more items
-						if (scrollPercentage >= 0.75) {
-							// Set the loading flag to prevent multiple calls
-							isLoadingMoreRef.current = true
-							// Increase the limit to load more events
-							setEventLimit((prevLimit) => prevLimit + 5)
-							// Ensure the larger limit is reflected by forcing a refetch (key excludes limit)
-							setTimeout(() => {
-								try {
-									doRefetch()
-								} catch {}
-							}, 0)
-						}
 					}
 				}, 100)
 			} catch (_) {
@@ -1015,18 +976,7 @@ function FirehoseComponent() {
 			if (pendingNewNotes.length > 0) {
 				applyPendingNotes()
 			} else {
-				const res: any = await doRefetch()
-				const fresh = (res?.data || []) as EnhancedFetchedNDKEvent[]
-				if (Array.isArray(fresh) && fresh.length > 0) {
-					setAllLoadedEvents((prev) => {
-						const prevIds = new Set(prev.map((w) => (((w.event as any)?.id as string) || '')))
-						const newUnique = fresh.filter((w) => {
-							const id = (((w.event as any)?.id as string) || '')
-							return id && !prevIds.has(id)
-						})
-						return [...newUnique, ...prev]
-					})
-				}
+				await fetchPreviousPage()
 			}
 		} catch {}
 		finally {
@@ -1040,23 +990,9 @@ function FirehoseComponent() {
 		if (openThreadId) return
 		if (isLoadingMoreRef.current) return
 		isLoadingMoreRef.current = true
-		const targetLimit = eventLimit + 10
-		if (lastPrefetchLimitRef.current < targetLimit) {
-			lastPrefetchLimitRef.current = targetLimit
- 		try {
-				queryClient.prefetchQuery({
-					...enhancedNotesQueryOptions({ ...notesOpts, limit: targetLimit, cacheKey: (notesOpts as any).follows ? (currentUserPk || 'anon') : undefined }),
-					staleTime: Infinity,
-				})
-			} catch {}
-		}
-		setEventLimit((prev) => Math.max(prev, targetLimit))
-		// Force a refetch after bumping the limit so the UI picks up the larger dataset
-		setTimeout(() => {
-			try {
-				doRefetch()
-			} catch {}
-		}, 0)
+		fetchNextPage().finally(() => {
+			isLoadingMoreRef.current = false
+		})
 	}
 
 	useEffect(() => {
