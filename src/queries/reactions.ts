@@ -62,6 +62,8 @@ export const reactionsQueryOptions = (noteIds: string[], emoji?: string) =>
   queryOptions({
     queryKey: ['reactions', noteIds.slice().sort().join(','), emoji || ''],
     queryFn: () => fetchReactionsForNotes(noteIds, emoji),
-    staleTime: 10_000,
+    staleTime: Infinity, // Never refetch reactions once loaded - they are immutable after creation
+    refetchOnWindowFocus: false, // Don't refetch when window gains focus
+    refetchOnReconnect: false, // Don't refetch when connection is restored
     enabled: noteIds.length > 0,
   })
