@@ -63,8 +63,7 @@ const eventDataLoader = new DataLoader<string, NDKEvent | null>(
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
 
-		const appRelay = configActions.getAppRelay()
-		const allRelays = appRelay ? [...defaultRelaysUrls, appRelay] : defaultRelaysUrls
+		const allRelays = await getAugmentedRelayUrls()
 		const relaySet = NDKRelaySet.fromRelayUrls(allRelays, ndk)
 
 		const filter: NDKFilter = {
@@ -274,9 +273,10 @@ export const fetchEnhancedNotes = async (opts?: {
 	}
 
 	// Enhanced relay selection
-	const appRelay = configActions.getAppRelay()
-	const allRelays = appRelay ? [...defaultRelaysUrls, appRelay] : defaultRelaysUrls
+	const allRelays = await getAugmentedRelayUrls()
 	const relaySet = NDKRelaySet.fromRelayUrls(allRelays, ndk)
+	// Optionally expanded relay set for follows feed (built from contact list relay hints)
+	let followsRelaySet: NDKRelaySet | null = null
 
 	// Enhanced follows handling with better contact list processing
 	let mutedPubkeys: Set<string> | null = null
@@ -292,11 +292,18 @@ export const fetchEnhancedNotes = async (opts?: {
 			const contactsFilter: NDKFilter = { kinds: [3], authors: [pubkey], limit: 1 }
 			let contactArr: NDKEvent[] = []
 			try {
-				const appRelay = configActions.getAppRelay()
-				const defaultSet = NDKRelaySet.fromRelayUrls(appRelay ? [...defaultRelaysUrls, appRelay] : defaultRelaysUrls, ndk)
-				const defaultEvents = await ndk.fetchEvents(contactsFilter, undefined, defaultSet)
+				const defaultEvents = await ndk.fetchEvents(contactsFilter, undefined, relaySet)
 				contactArr = Array.from(defaultEvents)
 			} catch (_) {}
+
+			// Fallback: also try write relays if not found on default/app relays
+			if (contactArr.length === 0) {
+				try {
+					const writeSet = NDKRelaySet.fromRelayUrls(writeRelaysUrls, ndk)
+					const writeEvents = await ndk.fetchEvents(contactsFilter, undefined, writeSet)
+					contactArr = Array.from(writeEvents)
+				} catch (_) {}
+			}
 
 			// If found on default relays, republish latest contact list to the app's write relays for persistence
 			if (contactArr.length > 0) {
@@ -319,6 +326,19 @@ export const fetchEnhancedNotes = async (opts?: {
 
 					if (followPubkeys.length === 0) return []
 					followedPubkeys = new Set(followPubkeys)
+
+					// Expand relay set with any relay hints from contact list (third element of 'p' tags)
+					try {
+						const relayHints = pTags
+							.map((t: any) => (typeof t[2] === 'string' ? t[2] : ''))
+							.filter((u: string) => typeof u === 'string' && /^wss:\/\//i.test(u))
+							.map((u: string) => u.trim())
+							.filter((u: string) => !!u)
+						const merged = Array.from(new Set<string>([...allRelays, ...relayHints]))
+						// Cap number of extra relays to avoid overload (keep at most 20 more than defaults)
+						const capped = merged.slice(0, allRelays.length + 20)
+						followsRelaySet = NDKRelaySet.fromRelayUrls(capped, ndk)
+					} catch (_) {}
 
 					// For follow feed, create batched queries (10 pubkeys per batch)
 					// instead of querying all pubkeys individually
@@ -417,12 +437,12 @@ export const fetchEnhancedNotes = async (opts?: {
 
 								try {
 									// Fetch events for this batch with timeout protection
-									const batchEvents = await Promise.race([
-										ndk.fetchEvents(batchFilter, undefined, relaySet),
-										new Promise<Set<NDKEvent>>((resolve) => {
-											setTimeout(() => resolve(new Set()), 6000) // 6 second timeout
-										}),
-									])
+ 								const batchEvents = await Promise.race([
+ 									ndk.fetchEvents(batchFilter, undefined, (followsRelaySet || relaySet)),
+ 									new Promise<Set<NDKEvent>>((resolve) => {
+ 										setTimeout(() => resolve(new Set()), 6000) // 6 second timeout
+ 									}),
+ 								])
 									const arr = Array.from(batchEvents)
 									for (const ev of arr) {
 										const id = (ev as any).id as string
@@ -617,7 +637,7 @@ export const enhancedNoteQueryOptions = (id: string) =>
 		staleTime: 5 * 60 * 1000, // 5 minutes
 	})
 
-export const enhancedNotesQueryOptions = (opts?: { tag?: string; author?: string; follows?: boolean; limit?: number; kinds?: number[] }) =>
+export const enhancedNotesQueryOptions = (opts?: { tag?: string; author?: string; follows?: boolean; limit?: number; kinds?: number[]; cacheKey?: string }) =>
 	queryOptions({
 		queryKey: [
 			...noteKeys.all,
@@ -625,8 +645,76 @@ export const enhancedNotesQueryOptions = (opts?: { tag?: string; author?: string
 			normalizeTag(opts?.tag) || '',
 			opts?.author?.trim() || '',
 			opts?.follows ? 'follows' : '',
+			(opts?.cacheKey || ''),
 			(opts?.kinds || SUPPORTED_KINDS).join(','),
 		],
 		queryFn: () => fetchEnhancedNotes(opts),
 		staleTime: 2 * 60 * 1000, // 2 minutes for feeds
 	})
+
+
+// Helper: fetch and cache user's relay list (NIP-65 kind:10002)
+let __userRelayCache: { urls: string[]; fetchedAt: number } | null = null
+const USER_RELAY_CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+
+export async function getUserRelayUrls(): Promise<string[]> {
+	try {
+		const now = Date.now()
+		if (__userRelayCache && now - __userRelayCache.fetchedAt < USER_RELAY_CACHE_TTL_MS) {
+			return __userRelayCache.urls
+		}
+		const ndk = ndkActions.getNDK()
+		if (!ndk) return []
+		const user = await ndkActions.getUser()
+		const pubkey = user?.pubkey
+		if (!pubkey) return []
+
+		const appRelay = configActions.getAppRelay()
+		const baseRelays = appRelay ? [...defaultRelaysUrls, appRelay] : defaultRelaysUrls
+		const trySets: NDKRelaySet[] = [
+			NDKRelaySet.fromRelayUrls(baseRelays, ndk),
+			NDKRelaySet.fromRelayUrls(writeRelaysUrls, ndk),
+		]
+		let found: NDKEvent | null = null
+		for (const rs of trySets) {
+			try {
+				const filter: NDKFilter = { kinds: [10002 as any], authors: [pubkey], limit: 1 }
+				const result = await ndk.fetchEvents(filter, undefined, rs)
+				const arr = Array.from(result)
+				if (arr.length > 0) {
+					found = arr.sort((a, b) => ((b as any).created_at ?? 0) - ((a as any).created_at ?? 0))[0]
+					break
+				}
+			} catch (_) {}
+		}
+		const relays: string[] = []
+		if (found) {
+			const tags = ((found as any).tags || []) as any[]
+			for (const t of tags) {
+				if (Array.isArray(t) && t[0] === 'r' && typeof t[1] === 'string') {
+					const url = t[1].trim()
+					if (/^wss:\/\//i.test(url)) relays.push(url)
+				}
+			}
+		}
+		const unique = Array.from(new Set(relays))
+		__userRelayCache = { urls: unique, fetchedAt: now }
+		return unique
+	} catch {
+		return []
+	}
+}
+
+export async function getAugmentedRelayUrls(): Promise<string[]> {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) return defaultRelaysUrls
+	const appRelay = configActions.getAppRelay()
+	const base = appRelay ? [...defaultRelaysUrls, appRelay] : [...defaultRelaysUrls]
+	let userRelays: string[] = []
+	try {
+		userRelays = await getUserRelayUrls()
+	} catch {}
+	const merged = Array.from(new Set<string>([...base, ...userRelays]))
+	// Cap to a reasonable number to avoid overload (keep at most 40 total)
+	return merged.slice(0, 40)
+}

@@ -3,7 +3,7 @@ import { useStore } from '@tanstack/react-store'
 import { authActions, authStore } from '@/lib/stores/auth'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { type SVGProps, useEffect, useMemo, useState, useRef } from 'react'
-import { enhancedNotesQueryOptions, type EnhancedFetchedNDKEvent, cleanupStaleEvents, SUPPORTED_KINDS } from '@/queries/enhanced-firehose'
+import { enhancedNotesQueryOptions, type EnhancedFetchedNDKEvent, cleanupStaleEvents, SUPPORTED_KINDS, getAugmentedRelayUrls } from '@/queries/enhanced-firehose'
 import { authorQueryOptions } from '@/queries/authors'
 import { reactionsQueryOptions } from '@/queries/reactions'
 import { ndkActions } from '@/lib/stores/ndk'
@@ -147,6 +147,8 @@ function FirehoseComponent() {
 	const [eventLimit, setEventLimit] = useState(getInitialFeedLimit())
 	// Store all loaded events, so we can append new ones without reloading
 	const [allLoadedEvents, setAllLoadedEvents] = useState<EnhancedFetchedNDKEvent[]>([])
+	// Current user for follows mode
+	const [currentUserPk, setCurrentUserPk] = useState('')
 
 	// Track cache cleanup stats for debugging
 	const [lastCleanupStats, setLastCleanupStats] = useState<{
@@ -169,7 +171,7 @@ function FirehoseComponent() {
 		refetch: doRefetch,
 		isFetching,
 	} = useQuery({
-		...enhancedNotesQueryOptions(notesOpts),
+		...enhancedNotesQueryOptions(filterMode === 'follows' ? { ...notesOpts, cacheKey: currentUserPk || 'anon' } : notesOpts),
 		refetchOnWindowFocus: false,
 		refetchOnReconnect: false,
 		refetchInterval: false,
@@ -191,8 +193,6 @@ function FirehoseComponent() {
 		}
 		return await doRefetch()
 	}
-	// Current user for follows mode
-	const [currentUserPk, setCurrentUserPk] = useState('')
 	// React to auth store changes (login/logout) to keep currentUserPk in sync
 	const { isAuthenticated: authIsAuthenticated, user: authUser } = useStore(authStore) as any
 	const { data: currentUserMeta } = useQuery({
@@ -200,6 +200,8 @@ function FirehoseComponent() {
 		enabled: !!currentUserPk && filterMode === 'follows',
 	}) as any
 	const currentUserDisplayName = currentUserMeta?.name || (currentUserPk ? currentUserPk.slice(0, 8) + '…' : '')
+	// Track when the user's follow list cannot be found (for follows view)
+	const [followsListNotFound, setFollowsListNotFound] = useState(false)
 	// Get the newest note timestamp for display
 	const newestNoteTimestamp = data && data.length > 0 ? data[0].fetchedAt : null
 
@@ -309,8 +311,7 @@ function FirehoseComponent() {
 			try {
 				const ndk = ndkActions.getNDK()
 				if (!ndk) return
-				const appRelay = configActions.getAppRelay()
-				const allRelays = appRelay ? [...defaultRelaysUrls, appRelay] : defaultRelaysUrls
+				const allRelays = await getAugmentedRelayUrls()
 				const relaySet = NDKRelaySet.fromRelayUrls(allRelays, ndk)
 				// Start after newest currently shown to avoid duplicates
 				const since = Math.floor((newestNoteTimestamp || Date.now()) / 1000)
@@ -665,7 +666,7 @@ function FirehoseComponent() {
 					// Prefetch with a reasonable batch size so switching is instant
 					const limit = Math.max(30, eventLimit)
 					queryClient.prefetchQuery({
-						...enhancedNotesQueryOptions({ tag: '', author: '', follows: true, limit }),
+						...enhancedNotesQueryOptions({ tag: '', author: '', follows: true, limit, cacheKey: currentUserPk || 'anon' }),
 					})
 				} catch {}
 			}
@@ -831,6 +832,39 @@ function FirehoseComponent() {
 		}
 	}, [filterMode, isLoading, data, currentUserPk])
 
+	// When in follows view, check for presence of the user's contact list (kind:3).
+	// If no contact list is found, show a helpful message to the user.
+	useEffect(() => {
+		let cancelled = false
+		;(async () => {
+			try {
+				// Reset flag by default
+				setFollowsListNotFound(false)
+				if (filterMode !== 'follows') return
+				if (!currentUserPk) return
+				const ndk = ndkActions.getNDK()
+				if (!ndk) return
+				const allRelays = await getAugmentedRelayUrls()
+				const relaySet = NDKRelaySet.fromRelayUrls(allRelays, ndk)
+				const contactsFilter: any = { kinds: [3], authors: [currentUserPk], limit: 1 }
+				try {
+					const contacts = await ndk.fetchEvents(contactsFilter, undefined, relaySet)
+					const arr = Array.from(contacts)
+					if (!cancelled) {
+						setFollowsListNotFound(arr.length === 0)
+					}
+				} catch (_) {
+					if (!cancelled) setFollowsListNotFound(true)
+				}
+			} catch (_) {
+				if (!cancelled) setFollowsListNotFound(false)
+			}
+		})()
+		return () => {
+			cancelled = true
+		}
+	}, [filterMode, currentUserPk])
+
 	// Generic handler: if current view returns no items, do not fall back to Global.
 	// Instead, show a loading state and trigger a background refetch with limited retries.
 	useEffect(() => {
@@ -928,11 +962,11 @@ function FirehoseComponent() {
  						if (lastPrefetchLimitRef.current < targetLimit) {
  							try {
  								lastPrefetchLimitRef.current = targetLimit
- 								// Warm the cache with a larger limit in the background
- 								queryClient.prefetchQuery({
- 									...enhancedNotesQueryOptions({ ...notesOpts, limit: targetLimit }),
- 									staleTime: Infinity,
- 								})
+									// Warm the cache with a larger limit in the background
+									queryClient.prefetchQuery({
+										...enhancedNotesQueryOptions({ ...notesOpts, limit: targetLimit, cacheKey: (notesOpts as any).follows ? (currentUserPk || 'anon') : undefined }),
+										staleTime: Infinity,
+									})
  							} catch (_) {}
  						}
  					}
@@ -1009,9 +1043,9 @@ function FirehoseComponent() {
 		const targetLimit = eventLimit + 10
 		if (lastPrefetchLimitRef.current < targetLimit) {
 			lastPrefetchLimitRef.current = targetLimit
-			try {
+ 		try {
 				queryClient.prefetchQuery({
-					...enhancedNotesQueryOptions({ ...notesOpts, limit: targetLimit }),
+					...enhancedNotesQueryOptions({ ...notesOpts, limit: targetLimit, cacheKey: (notesOpts as any).follows ? (currentUserPk || 'anon') : undefined }),
 					staleTime: Infinity,
 				})
 			} catch {}
@@ -1553,7 +1587,13 @@ function FirehoseComponent() {
 					<span>Loading feed…</span>
 				</div>
 			)}
-			{!showInitialSpinner && filtered.length === 0 && <div className="px-4 py-2 text-gray-400">No notes found.</div>}
+			{!showInitialSpinner && filtered.length === 0 && (
+				filterMode === 'follows' && currentUserPk && followsListNotFound ? (
+					<div className="px-4 py-2 text-gray-400">cannot find your follow list</div>
+				) : (
+					<div className="px-4 py-2 text-gray-400">No notes found.</div>
+				)
+			)}
 
 			{/* Filters Drawer */}
 			<div className="lg:hidden">
@@ -1583,21 +1623,82 @@ function FirehoseComponent() {
 								<div className="lg:hidden flex items-center gap-2 mb-2">
 									<CartButton size="icon" />
 									{/* Dashboard (authenticated only) */}
-									{authIsAuthenticated ? (
-										<Link to="/dashboard">
-											<Button variant="primary" size="icon" title="Dashboard" aria-label="Dashboard">
-												<span className="i-dashboard w-6 h-6" />
-											</Button>
-										</Link>
-									) : null}
-									{/* Profile (authenticated only) */}
-									{authIsAuthenticated ? <Profile compact /> : null}
-									{/* Logout (authenticated only) */}
-									{authIsAuthenticated ? (
-										<Button variant="primary" size="icon" title="Log out" aria-label="Log out" onClick={() => authActions.logout()}>
-											<LogOut className="w-6 h-6" />
-										</Button>
-									) : null}
+ 								{authIsAuthenticated ? (
+ 									<Link to="/dashboard">
+ 										<Button variant="primary" size="icon" title="Dashboard" aria-label="Dashboard">
+ 											<span className="i-dashboard w-6 h-6" />
+ 										</Button>
+ 									</Link>
+ 								) : null}
+ 								{/* Profile (authenticated only) */}
+ 								{authIsAuthenticated ? <Profile compact /> : null}
+ 								{/* Logout (authenticated only) */}
+ 								{authIsAuthenticated ? (
+ 									<Button variant="primary" size="icon" title="Log out" aria-label="Log out" onClick={() => authActions.logout()}>
+ 										<LogOut className="w-6 h-6" />
+ 									</Button>
+ 								) : null}
+ 								{/* View selectors */}
+ 								<div className="flex gap-2 ml-auto">
+ 									{authIsAuthenticated ? (
+ 										<Button
+ 											variant={filterMode === 'follows' ? 'primary' : 'ghost'}
+ 											className="px-3 py-1 h-8"
+ 											onClick={() => {
+ 												setLoadingMode('follows')
+ 												setSpinnerSettled(false)
+ 												setFilterMode('follows')
+ 												setOpenThreadId(null)
+ 												try {
+ 													if (typeof window !== 'undefined') {
+ 														const url = new URL(window.location.href)
+ 														url.search = ''
+ 														url.searchParams.set('view', 'follows')
+ 														const target = url.pathname.startsWith('/nostr')
+ 															? url.search
+ 																? `/nostr${url.search}`
+ 																: '/nostr'
+ 															: url.search
+ 																? `${url.pathname}${url.search}`
+ 																: url.pathname
+ 														window.history.pushState({}, '', target)
+ 														window.dispatchEvent(new PopStateEvent('popstate'))
+ 													}
+ 												} catch {}
+ 											}}
+ 										>
+ 											Follows
+ 										</Button>
+ 									) : null}
+ 									<Button
+ 										variant={filterMode === 'all' ? 'primary' : 'ghost'}
+ 										className="px-3 py-1 h-8"
+ 										onClick={() => {
+ 											setLoadingMode('all')
+ 											setSpinnerSettled(false)
+ 											setFilterMode('all')
+ 											setOpenThreadId(null)
+ 											try {
+ 												if (typeof window !== 'undefined') {
+ 													const url = new URL(window.location.href)
+ 													url.search = ''
+ 													url.searchParams.set('view', 'global')
+ 													const target = url.pathname.startsWith('/nostr')
+ 														? url.search
+ 															? `/nostr${url.search}`
+ 															: '/nostr'
+ 														: url.search
+ 															? `${url.pathname}${url.search}`
+ 															: url.pathname
+ 													window.history.pushState({}, '', target)
+ 													window.dispatchEvent(new PopStateEvent('popstate'))
+ 												}
+ 											} catch {}
+ 										}}
+ 									>
+ 										Global
+ 									</Button>
+ 								</div>
 								</div>
 							</DrawerContent>
 							{/*<DrawerTitle id="drawer-filters-title">Filters</DrawerTitle>*/}
@@ -1883,6 +1984,41 @@ function FirehoseComponent() {
 					<h2 className="text-lg font-semibold mb-2">Filters</h2>
 					<div className="text-sm">
 						<div className="flex flex-col gap-2">
+							{authIsAuthenticated ? (
+								<Button
+									variant={filterMode === 'follows' ? 'primary' : 'ghost'}
+									className="justify-start"
+									onClick={() => {
+										setLoadingMode('follows')
+										setSpinnerSettled(false)
+										setFilterMode('follows')
+										setOpenThreadId(null)
+										try {
+											if (typeof window !== 'undefined') {
+												const url = new URL(window.location.href)
+												url.search = ''
+												url.searchParams.set('view', 'follows')
+												const target = url.pathname.startsWith('/nostr')
+													? url.search
+														? `/nostr${url.search}`
+														: '/nostr'
+													: url.search
+														? `${url.pathname}${url.search}`
+														: url.pathname
+												window.history.pushState({}, '', target)
+												window.dispatchEvent(new PopStateEvent('popstate'))
+											}
+										} catch {}
+									}}
+								>
+									<span className="inline-flex items-center gap-2">
+										{loadingMode === 'follows' && !isFiltersOpen ? (
+											<Loader2 className={`h-4 w-4 ${spinnerSettled ? '' : 'animate-spin'}`} />
+										) : null}
+										<span>Follows</span>
+									</span>
+								</Button>
+							) : null}
 							<Button
 								variant={filterMode === 'all' ? 'primary' : 'ghost'}
 								className="justify-start"
@@ -2303,7 +2439,14 @@ function FirehoseComponent() {
 
 									if (currentUserPubkey) {
 										const followsKey = [...noteKeys.all, 'enhanced-list', '', '', 'follows']
+										// Legacy follows key update (without cacheKey) for backward compatibility
 										queryClient.setQueryData(followsKey, (oldData: any) => {
+											if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
+											return [wrappedEvent]
+										})
+										// New follows key with cacheKey = current user pubkey
+										const followsKeyWithUser = [...noteKeys.all, 'enhanced-list', '', '', 'follows', currentUserPubkey, (SUPPORTED_KINDS as any).join(',')]
+										queryClient.setQueryData(followsKeyWithUser, (oldData: any) => {
 											if (oldData && Array.isArray(oldData)) return [wrappedEvent, ...oldData]
 											return [wrappedEvent]
 										})

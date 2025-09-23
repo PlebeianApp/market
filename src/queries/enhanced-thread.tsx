@@ -7,7 +7,7 @@ import { queryOptions } from '@tanstack/react-query'
 import { ndkActions } from '@/lib/stores/ndk'
 import { defaultRelaysUrls } from '@/lib/constants'
 import { configActions } from '@/lib/stores/config'
-import { EnhancedFetchedNDKEvent, SUPPORTED_KINDS } from './enhanced-firehose'
+import { EnhancedFetchedNDKEvent, SUPPORTED_KINDS, getAugmentedRelayUrls } from './enhanced-firehose'
 
 // Enhanced thread node structure
 export type EnhancedThreadNode = {
@@ -136,8 +136,7 @@ async function processBatchedEvents(): Promise<void> {
 	}
 	
 	try {
-		const appRelay = configActions.getAppRelay()
-		const allRelays = appRelay ? [...defaultRelaysUrls, appRelay] : defaultRelaysUrls
+		const allRelays = await getAugmentedRelayUrls()
 		const relaySet = NDKRelaySet.fromRelayUrls(allRelays, ndk)
 		
 		// Create a filter with all the event IDs
@@ -299,8 +298,7 @@ async function fetchEnhancedThreadEvents(rootId: string): Promise<NDKEvent[]> {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const appRelay = configActions.getAppRelay()
-	const allRelays = appRelay ? [...defaultRelaysUrls, appRelay] : defaultRelaysUrls
+	const allRelays = await getAugmentedRelayUrls()
 	const relaySet = NDKRelaySet.fromRelayUrls(allRelays, ndk)
 	const maxIterations = 5
 	const maxTotal = 1000 // Increased for better thread coverage
