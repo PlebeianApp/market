@@ -39,23 +39,27 @@ function RouteComponent() {
 	return (
 		<div className="relative min-h-screen">
 			<Header />
-			<div className="absolute top-0 left-0 right-0 z-0 h-[40vh] sm:h-[40vh] md:h-[50vh] overflow-hidden">
-				{profile?.banner ? (
-					<div className="w-[150%] sm:w-full h-full -ml-[25%] sm:ml-0">
-						<img src={profile.banner} alt="profile-banner" className="w-full h-full object-cover" />
-					</div>
-				) : (
-					<div
-						className="w-full h-full"
-						style={{
-							background: `linear-gradient(45deg, ${getHexColorFingerprintFromHexPubkey(params.profileId)} 0%, #000 100%)`,
-							opacity: 0.8,
-						}}
-					/>
-				)}
-			</div>
-			<div className="flex flex-col relative z-10 pt-[18vh] sm:pt-[22vh] md:pt-[30vh]">
-				<div className="flex flex-row justify-between px-8 py-4 bg-black items-center">
+			{/* Header with banner background and dark scrim so image appears underneath the header text */}
+			<div className="relative w-full h-40 sm:h-48 md:h-60 overflow-hidden">
+				{(() => {
+					const bannerUrl = (profile as any)?.banner || (profile as any)?.cover || (profile as any)?.cover_image || ''
+					return bannerUrl ? (
+						<>
+							<img src={bannerUrl} alt="profile-banner" className="absolute inset-0 w-full h-full object-cover" />
+							{/* Dark scrim on top of the image to improve text readability under the header text */}
+							<div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/20 pointer-events-none" />
+						</>
+					) : (
+						<div
+							className="absolute inset-0"
+							style={{
+								background: `linear-gradient(45deg, ${getHexColorFingerprintFromHexPubkey(params.profileId)} 0%, #000 100%)`,
+								opacity: 0.8,
+							}}
+						/>
+					)
+				})()}
+				<div className="relative z-10 flex flex-row justify-between px-8 py-4 items-center h-full">
 					<div className="flex flex-row items-center gap-4">
 						{profile?.picture && (
 							<img
@@ -81,6 +85,7 @@ function RouteComponent() {
 						</div>
 					)}
 				</div>
+			</div>
 
 				{profile?.about && (
 					<div ref={animationParent} className="flex flex-row items-center justify-between px-8 py-4 bg-zinc-900 text-white text-sm">
@@ -121,8 +126,7 @@ function RouteComponent() {
 							<span className="text-2xl font-heading">No products found</span>
 						</div>
 					)}
-				</div>
+					</div>
 			</div>
-		</div>
-	)
+		)
 }

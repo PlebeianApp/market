@@ -112,6 +112,21 @@ Testing Considerations
 - Mock external dependencies (Nostr relays, NDK) in tests.
 - Test error scenarios and edge cases thoroughly.
 
+Development Testing Process
+- Make small, testable changes - break down large features into incremental changes
+- Each change should be independently testable and focus on one specific functionality
+- Provide clear testing instructions for each change:
+  - Include exact URL or navigation path to test
+  - Describe specific visual or functional changes to look for
+  - Specify edge cases or different states to verify
+  - Use this format: "Go to [URL], look for [element], verify [outcome], test [edge cases]"
+- Wait for user confirmation before committing:
+  - Present testing instructions and wait for "Accept" or "ready, proceed"
+  - Only commit changes after user approval
+  - If issues are found, fix them before proceeding to next change
+- Use descriptive commit messages that explain what was changed
+- Move to next change only after current one is approved and committed
+
 Import Organization
 - Group imports: React/external libraries, internal utilities, components, types.
 - Use path aliases defined in `tsconfig.json` (@/components, @/lib, etc.).

@@ -3,6 +3,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
+import { defaultRelaysUrls } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 import type { NDKUserProfile } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
@@ -44,6 +45,8 @@ export function Profile({ compact = false }: ProfileProps) {
 				}
 
 				const user = ndk.getUser({ pubkey })
+				// Ensure the profile fetch uses the app's default read relays
+				;(user as any).relayUrls = defaultRelaysUrls
 				const profilePromise = await user.fetchProfile()
 
 				setProfile(profilePromise)
@@ -87,7 +90,8 @@ export function Profile({ compact = false }: ProfileProps) {
 						variant={authState.isAuthenticated ? 'primary' : 'outline'}
 						size={compact ? 'icon' : 'default'}
 						className={cn(
-							'p-2 w-full relative',
+							'p-2 relative',
+							!compact && 'w-full',
 							!authState.isAuthenticated && 'text-muted-foreground hover:text-foreground',
 							isOnOwnProfile && 'bg-secondary text-black hover:bg-secondary hover:text-black',
 						)}

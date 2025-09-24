@@ -1,8 +1,10 @@
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { authorKeys } from './queryKeyFactory'
 import { queryOptions } from '@tanstack/react-query'
 import { ndkActions } from '@/lib/stores/ndk'
+import { defaultRelaysUrls } from '@/lib/constants'
+import { configActions } from '@/lib/stores/config'
 
 export type NostrAuthor = {
 	id: string
@@ -10,15 +12,32 @@ export type NostrAuthor = {
 	about?: string
 	picture?: string
 	nip05?: string
+	// Common banner fields in kind-0 metadata across Nostr clients
+	banner?: string
+	cover?: string
+	cover_image?: string
 }
 
-const transformEvent = (event: NDKEvent): NostrAuthor => ({
-	id: event.pubkey,
-	name: event.tags.find((t) => t[0] === 'name')?.[1] || JSON.parse(event.content)?.name,
-	about: JSON.parse(event.content)?.about,
-	picture: JSON.parse(event.content)?.picture,
-	nip05: JSON.parse(event.content)?.nip05,
-})
+const transformEvent = (event: NDKEvent): NostrAuthor => {
+	let parsed: any = {}
+	try {
+		parsed = JSON.parse(event.content || '{}')
+	} catch (_) {
+		parsed = {}
+	}
+	return {
+		id: event.pubkey,
+		// Prefer display_name (common in Nostr metadata) over name
+		name: event.tags.find((t) => t[0] === 'name')?.[1] || parsed?.display_name || parsed?.name,
+		about: parsed?.about,
+		picture: parsed?.picture,
+		nip05: parsed?.nip05,
+		// Pass through banner-like fields so consumers (user feeds) can render header images
+		banner: parsed?.banner,
+		cover: parsed?.cover,
+		cover_image: parsed?.cover_image,
+	}
+}
 
 export const fetchAuthor = async (pubkey: string) => {
 	const filter: NDKFilter = {
@@ -29,11 +48,16 @@ export const fetchAuthor = async (pubkey: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const events = await ndk.fetchEvents(filter)
+	// Query using the app's relays, prioritizing the configured main relay alongside defaults
+	const appRelay = configActions.getAppRelay()
+	const allRelays = appRelay ? [...defaultRelaysUrls, appRelay] : defaultRelaysUrls
+	const relaySet = NDKRelaySet.fromRelayUrls(allRelays, ndk)
+	const events = await ndk.fetchEvents(filter, undefined, relaySet)
 	const eventArray = Array.from(events)
 
 	if (eventArray.length === 0) {
-		throw new Error('Author not found')
+		// Gracefully return a minimal author object if no metadata is found.
+		return { id: pubkey }
 	}
 
 	// Get the most recent metadata event
