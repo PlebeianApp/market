@@ -9,6 +9,7 @@ import { createRootRoute, Outlet, useNavigate, useLocation } from '@tanstack/rea
 import { useEffect } from 'react'
 import { DecryptPasswordDialog } from '@/components/auth/DecryptPasswordDialog'
 import { Toaster } from 'sonner'
+import { ThreadOpenProvider } from '@/state/threadOpenStore'
 
 export const Route = createRootRoute({
 	component: RootComponent,
@@ -59,20 +60,22 @@ function RootLayout() {
 	}
 
 	return (
-		<div className="relative flex flex-col min-h-screen">
-			{!isProfilePage && <Header />}
-
-			<main className="flex-grow flex flex-col">
-				<Outlet />
-			</main>
-			<Pattern pattern="page" />
-			{!isDashboardPage && !isCheckoutPage && <Footer />}
-			{/* Having some build error with this rn */}
-			{/* <TanStackRouterDevtools /> */}
-			<DecryptPasswordDialog />
-			<SheetRegistry />
-			<DialogRegistry />
-			<Toaster />
-		</div>
+		<ThreadOpenProvider>
+			<div className="relative flex flex-col min-h-screen">
+				{!isProfilePage && <Header />}
+				
+				<main className="flex-grow flex flex-col">
+					<Outlet />
+				</main>
+				<Pattern pattern="page" />
+				{!isDashboardPage && !isCheckoutPage && <Footer />}
+				{/* Having some build error with this rn */}
+				{/* <TanStackRouterDevtools /> */}
+				<DecryptPasswordDialog />
+				<SheetRegistry />
+				<DialogRegistry />
+				<Toaster />
+			</div>
+		</ThreadOpenProvider>
 	)
 }
