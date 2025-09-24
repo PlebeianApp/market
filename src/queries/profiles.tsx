@@ -77,31 +77,46 @@ export const profileByIdentifierQueryOptions = (identifier: string) =>
 		queryFn: () => fetchProfileByIdentifier(identifier),
 	})
 
-export const validateNip05 = async (npub: string): Promise<boolean | null> => {
+export const validateNip05 = async (pubkeyOrNpub: string): Promise<boolean> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
 	try {
+		// Normalize input: if it's hex, convert to npub
+		const npub = /^[0-9a-f]{64}$/i.test(pubkeyOrNpub) ? nip19.npubEncode(pubkeyOrNpub) : pubkeyOrNpub
+
 		const user = ndk.getUser({ npub })
 		const profile = await user.fetchProfile()
-		if (!profile?.nip05) return null
+		if (!profile?.nip05) return false
 
 		const [name, domain] = profile.nip05.split('@')
+		if (!domain) return false
 
-		let punycodeDomain = domain
-		if (!/^[a-z0-9.-]+$/.test(domain)) {
-			try {
-				console.log(`Domain might need punycode conversion: ${domain}`)
-			} catch (err) {
-				console.warn(`Punycode conversion failed for domain: ${domain}. Using original domain.`)
+		const url = `https://${domain}/.well-known/nostr.json?name=${encodeURIComponent(name)}`
+
+		let res: Response
+		try {
+			res = await fetch(url)
+		} catch (err: any) {
+			if (err instanceof TypeError && err.message.includes('fetch')) {
+				console.warn(`NIP-05 fetch failed for ${url} (likely CORS):`, err)
+				return false
 			}
+			throw err // rethrow if it's another type of error
 		}
 
-		const parsedNip05 = `${name}@${punycodeDomain}`
+		if (!res.ok) return false
 
-		return true
-	} catch (e) {
-		console.error('Error validating NIP-05:', e)
+		const data = await res.json()
+		const pubkey = nip19.decode(npub).data as string
+
+		// check if the entry exists and matches
+		const matchedPubkey = data.names?.[name]
+		if (!matchedPubkey) return false
+
+		return matchedPubkey.toLowerCase() === pubkey.toLowerCase()
+	} catch (err) {
+		console.warn('NIP-05 validation error:', err)
 		return false
 	}
 }
