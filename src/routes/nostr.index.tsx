@@ -31,7 +31,10 @@ import { goBackWithTimeLimit } from '@/lib/navigation'
 import { useConfigQuery } from '@/queries/config'
 import { CartButton } from '@/components/CartButton'
 import { Profile } from '@/components/Profile'
-import { noteKeys } from '@/queries/queryKeyFactory'
+
+// Local query-key base for notes (replacement for missing noteKeys)
+const noteKeysAll = ['notes'] as const
+const noteKeys = { all: noteKeysAll } as const
 
 // Function to check if there's a previous entry in browser history
 function canGoBack(): boolean {
@@ -153,12 +156,14 @@ function ProfileBanner({
 	name,
 	picture,
 	about,
+	bannerUrl,
 	isLoading,
 }: {
 	pubkey: string
 	name?: string
 	picture?: string
 	about?: string
+	bannerUrl?: string
 	isLoading?: boolean
 }) {
 	// Clamp to 4 lines with a revealer
@@ -182,48 +187,58 @@ function ProfileBanner({
 
 	return (
 		<div className="mb-3">
-			<div className="w-full rounded-md border border-gray-200 bg-white p-3">
-				<div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
-					{/* Left: avatar + name */}
-					<div className="flex items-center gap-3 min-w-0">
-						{picture ? (
-							<img src={picture} alt={displayName} className="w-16 h-16 rounded-full object-cover border" />
-						) : (
-							<div className="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 text-xl border">
-								{(displayName || 'U').slice(0, 1).toUpperCase()}
+			<div className="relative w-full overflow-hidden rounded-md border border-gray-200">
+				{bannerUrl ? (
+					<>
+						<img src={bannerUrl} alt="profile-banner" className="absolute inset-0 w-full h-full object-cover" />
+						<div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/40 to-black/20 pointer-events-none" />
+					</>
+				) : (
+					<div className="absolute inset-0 bg-zinc-800" />
+				)}
+				<div className="relative z-10 p-3">
+					<div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+						{/* Left: avatar + name */}
+						<div className="flex items-center gap-3 min-w-0">
+							{picture ? (
+								<img src={picture} alt={displayName} className="w-16 h-16 rounded-full object-cover border border-white/70" />
+							) : (
+								<div className="w-16 h-16 rounded-full bg-black/30 flex items-center justify-center text-white/80 text-xl border border-white/30">
+									{(displayName || 'U').slice(0, 1).toUpperCase()}
+								</div>
+							)}
+							<div className="min-w-0">
+								<div className="text-xl font-semibold leading-tight truncate text-white">{isLoading ? 'Loading…' : displayName}</div>
+								<div className="text-xs text-gray-200 truncate">{pubkey}</div>
 							</div>
-						)}
-						<div className="min-w-0">
-							<div className="text-xl font-semibold leading-tight truncate">{isLoading ? 'Loading…' : displayName}</div>
-							<div className="text-xs text-gray-500 truncate">{pubkey}</div>
 						</div>
-					</div>
-					{/* Right: about (linkified) */}
-					<div className="md:w-1/2">
-						<div
-							ref={contentRef}
-							className="text-sm text-gray-800"
-							style={
-								!expanded
-									? {
+						{/* Right: about (linkified) */}
+						<div className="md:w-1/2">
+							<div
+								ref={contentRef}
+								className="text-sm text-gray-100"
+								style={
+									!expanded
+										? {
 											display: '-webkit-box',
 											WebkitLineClamp: 4 as any,
 											WebkitBoxOrient: 'vertical' as any,
 											overflow: 'hidden',
 											wordBreak: 'break-word',
-										}
+										  }
 									: { wordBreak: 'break-word' }
-							}
-						>
-							{about ? linkifyPlainText(about) : <span className="text-gray-500">No bio</span>}
-						</div>
-						{!expanded && needsClamp ? (
-							<div className="mt-1">
-								<button type="button" className="text-blue-600 hover:underline text-sm" onClick={() => setExpanded(true)}>
-									Show more
-								</button>
+								}
+							>
+								{about ? linkifyPlainText(about) : <span className="text-white/70">No bio</span>}
 							</div>
-						) : null}
+							{!expanded && needsClamp ? (
+								<div className="mt-1">
+									<button type="button" className="text-blue-300 hover:underline text-sm" onClick={() => setExpanded(true)}>
+										Show more
+									</button>
+								</div>
+							) : null}
+						</div>
 					</div>
 				</div>
 			</div>
@@ -1432,10 +1447,10 @@ function FirehoseComponent() {
 	useEffect(() => {
 		if (!loadingMode) return
 		if (!isFiltersOpen) return
-		if (spinnerSettled) {
-			uiActions.closeDrawer('filters')
-		}
-	}, [spinnerSettled, loadingMode, isFiltersOpen])
+			if (spinnerSettled) {
+				uiActions.closeDrawer('filters' as any)
+			}
+		}, [spinnerSettled, loadingMode, isFiltersOpen])
 
 	// Clear pending tag marker once the fetch for it completes (no overlay)
 	useEffect(() => {
@@ -1750,8 +1765,8 @@ function FirehoseComponent() {
 							variant="ghost"
 							className="px-4 py-2 h-16 w-16 lg:px-2 lg:py-1 lg:h-8 lg:w-auto lg:hidden"
 							onClick={() => {
-								setIsFiltersOpen(true)
-								uiActions.openDrawer('filters')
+    				setIsFiltersOpen(true)
+    				uiActions.openDrawer('filters' as any)
 							}}
 							title="Open filters"
 						>
@@ -1780,17 +1795,9 @@ function FirehoseComponent() {
 			{/* Filters Drawer */}
 			<div className="lg:hidden">
 				<Drawer
-					type="filters"
+					type={'filters' as any}
 					side="right"
 					className="bg-secondary-black text-secondary"
-					onOpenChange={(open: boolean) => {
-						setIsFiltersOpen(open)
-						if (!open) {
-							setLoadingMode(null)
-						} else {
-							setSpinnerSettled(false)
-						}
-					}}
 				>
 					<DrawerContent className="relative">
 						{/* Close (X) button at right edge */}
@@ -1803,7 +1810,7 @@ function FirehoseComponent() {
 							<DrawerContent>
 								{/* Action row: small screens only */}
 								<div className="lg:hidden flex items-center gap-2 mb-2">
-									<CartButton size="icon" />
+ 								<CartButton />
 									{/* Dashboard (authenticated only) */}
 									{authIsAuthenticated ? (
 										<Link to="/dashboard">
@@ -2584,26 +2591,6 @@ function FirehoseComponent() {
 					'py-3 px-3 lg:px-3 ' + (openThreadId ? '' : 'lg:mr-80') + (isComposeOpen ? (isComposeLarge ? ' pb-[50vh]' : ' pb-32') : '')
 				}
 			>
-				{/* Cover/banner background behind the view header when in a user's feed */}
-				{authorFilter && (authorMeta as any)
-					? (() => {
-							const coverUrl = (authorMeta as any)?.banner || (authorMeta as any)?.cover || (authorMeta as any)?.cover_image || ''
-							return coverUrl ? (
-								<div
-									className="fixed top-0 left-0 right-0 h-32 md:h-40 z-0 pointer-events-none"
-									style={{
-										backgroundImage: `url("${coverUrl}")`,
-										backgroundSize: 'cover',
-										backgroundPosition: 'center',
-										backgroundRepeat: 'no-repeat',
-									}}
-								>
-									<div className="w-full h-full bg-black/20" />
-								</div>
-							) : null
-						})()
-					: null}
-
 				{/* Profile banner shown on user feed views */}
 				{authorFilter ? (
 					<ProfileBanner
@@ -2611,6 +2598,7 @@ function FirehoseComponent() {
 						name={(authorMeta as any)?.name || (authorMeta as any)?.displayName || (authorMeta as any)?.nip05}
 						picture={(authorMeta as any)?.picture}
 						about={(authorMeta as any)?.about}
+						bannerUrl={(authorMeta as any)?.banner || (authorMeta as any)?.cover || (authorMeta as any)?.cover_image}
 						isLoading={!authorMeta}
 					/>
 				) : null}

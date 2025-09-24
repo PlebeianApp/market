@@ -76,7 +76,7 @@ function Index() {
 
 			{/* Infinite Product List */}
 			<div className="px-8 py-4">
-				<InfiniteProductList title="All Products" scrollKey="homepage-products" limit={20} threshold={1000} autoLoad={true} />
+				<InfiniteProductList title="All Products" scrollKey="homepage-products" chunkSize={20} threshold={1000} autoLoad={true} />
 			</div>
 		</div>
 	)

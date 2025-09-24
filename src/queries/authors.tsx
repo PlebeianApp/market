@@ -12,6 +12,10 @@ export type NostrAuthor = {
 	about?: string
 	picture?: string
 	nip05?: string
+	// Common banner fields in kind-0 metadata across Nostr clients
+	banner?: string
+	cover?: string
+	cover_image?: string
 }
 
 const transformEvent = (event: NDKEvent): NostrAuthor => {
@@ -28,6 +32,10 @@ const transformEvent = (event: NDKEvent): NostrAuthor => {
 		about: parsed?.about,
 		picture: parsed?.picture,
 		nip05: parsed?.nip05,
+		// Pass through banner-like fields so consumers (user feeds) can render header images
+		banner: parsed?.banner,
+		cover: parsed?.cover,
+		cover_image: parsed?.cover_image,
 	}
 }
 
