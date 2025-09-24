@@ -1,6 +1,6 @@
 import { serve } from 'bun'
 import { config } from 'dotenv'
-import { Relay } from 'nostr-tools'
+import { Relay, nip19 } from 'nostr-tools'
 import { getPublicKey, verifyEvent, type Event } from 'nostr-tools/pure'
 import { nip19 } from 'nostr-tools'
 import index from './index.html'

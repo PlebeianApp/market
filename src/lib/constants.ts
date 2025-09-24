@@ -12,6 +12,7 @@ export const defaultRelaysUrls: string[] = [
 
 // Write relay URLs - In dev mode, only use localhost relay
 // In production mode, use the same relays as defaultRelaysUrls
+// todo: this probably needs to be a proper relay haha. get a proper relay...
 export const writeRelaysUrls: string[] =
 	process.env.NODE_ENV === 'production' ? defaultRelaysUrls : ['ws://localhost:10547', 'wss://relay.orly.dev']
 
@@ -24,9 +25,9 @@ export const ZAP_RELAYS = [
 	'wss://relay.minibits.cash',
 	'wss://relay.coinos.io/',
 	'wss://nwc.primal.net',
+	'wss://relay.orly.dev',
+	'ws://localhost:10547',
 ]
-// export const defaultRelaysUrls: string[] = []
-
 export const CURRENCIES = [
 	'SATS', // Satoshis
 	'BTC', // Bitcoin

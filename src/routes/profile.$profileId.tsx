@@ -16,6 +16,7 @@ import { useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, MessageCircle, Minus, Plus, Share2 } from 'lucide-react'
 import { useState } from 'react'
+import { nip19 } from 'nostr-tools'
 
 export const Route = createFileRoute('/profile/$profileId')({
 	component: RouteComponent,
@@ -30,25 +31,63 @@ function RouteComponent() {
 	const { data: profileData } = useSuspenseQuery(profileByIdentifierQueryOptions(params.profileId))
 	const { profile, user } = profileData || {}
 
-	const { data: sellerProducts } = useSuspenseQuery(productsByPubkeyQueryOptions(user?.pubkey || ''))
+	// If we have fetched profile metadata, attach it to the NDKUser so components like ZapButton/ZapDialog
+	// can immediately access lud16/lud06 without refetching.
+	if (user && profile) {
+		;(user as any).profile = (user as any).profile || profile
+	}
+
+	// Derive pubkey early when possible (hex or npub). For nip05, wait for profile fetch to provide user.pubkey.
+	let immediatePubkey = ''
+	try {
+		if (params.profileId.startsWith('npub')) {
+			const decoded = nip19.decode(params.profileId)
+			if (typeof decoded.data === 'string') immediatePubkey = decoded.data
+		} else if (!params.profileId.includes('@')) {
+			immediatePubkey = params.profileId
+		}
+	} catch (e) {
+		// ignore decode errors; will fall back to user?.pubkey once available
+	}
+
+	const pubkeyForProducts = immediatePubkey || user?.pubkey || 'placeholder'
+
+	const { data: sellerProducts = [] } = useSuspenseQuery(
+		productsByPubkeyQueryOptions(pubkeyForProducts)
+	)
 
 	const [showFullAbout, setShowFullAbout] = useState(false)
 	const breakpoint = useBreakpoint()
 	const isSmallScreen = breakpoint === 'sm'
+	// Determine the best display name with proper fallbacks:
+	// 1) Prefer profile displayName/display_name or name.
+	// 2) If no username-like fields are available, fall back to truncated npub (bech32) derived from pubkey.
+	const rawDisplay = profile?.displayName || (profile as any)?.display_name || profile?.name || ''
+	const username = profile?.name || ''
+	// Compute npub string from available identifiers
+	let computedNpub = user?.npub || ''
+	try {
+		const hex = immediatePubkey || user?.pubkey || ''
+		if (!computedNpub && hex) computedNpub = nip19.npubEncode(hex)
+	} catch {}
+	const fallbackDisplay = computedNpub ? truncateText(computedNpub, isSmallScreen ? 12 : 24) : 'Unnamed user'
+	const displayName = rawDisplay || fallbackDisplay
+	const lightningAddress = (profile?.lud16 || (profile as any)?.lud06 || '') as string
 
 	return (
 		<div className="relative min-h-screen">
 			<Header />
 			<div className="absolute top-0 left-0 right-0 z-0 h-[40vh] sm:h-[40vh] md:h-[50vh] overflow-hidden">
 				{profile?.banner ? (
-					<div className="w-[150%] sm:w-full h-full -ml-[25%] sm:ml-0">
-						<img src={profile.banner} alt="profile-banner" className="w-full h-full object-cover" />
+					<div className="relative w-full h-full">
+						<img src={profile.banner} alt="Profile banner" className="w-full h-full object-cover object-center" />
+						<div className="absolute inset-0 bg-black/30" />
 					</div>
 				) : (
 					<div
 						className="w-full h-full"
 						style={{
-							background: `linear-gradient(45deg, ${getHexColorFingerprintFromHexPubkey(params.profileId)} 0%, #000 100%)`,
+							background: `linear-gradient(45deg, ${getHexColorFingerprintFromHexPubkey(immediatePubkey || params.profileId)} 0%, #000 100%)`,
 							opacity: 0.8,
 						}}
 					/>
@@ -65,7 +104,18 @@ function RouteComponent() {
 							/>
 						)}
 						<div className="flex items-center gap-2">
-							<h2 className="text-2xl font-bold text-white">{truncateText(profile?.name ?? 'Unnamed user', isSmallScreen ? 10 : 50)}</h2>
+							<div className="flex flex-col">
+								<h2 className="text-2xl font-bold text-white">{truncateText(displayName, isSmallScreen ? 10 : 50)}</h2>
+								{username && username !== displayName && (
+									<span className="text-sm text-zinc-300">@{truncateText(username, isSmallScreen ? 12 : 24)}</span>
+								)}
+								{lightningAddress && (
+									<span className="text-xs text-amber-300 flex items-center gap-1">
+										<span className="i-lightning w-4 h-4" />
+										{truncateText(lightningAddress, isSmallScreen ? 16 : 40)}
+									</span>
+								)}
+							</div>
 							<Nip05Badge userId={user?.npub || ''} />
 						</div>
 					</div>
