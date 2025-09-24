@@ -114,8 +114,8 @@ function LoginPrompt() {
 		<div className="flex items-center justify-center h-full">
 			<div className="flex flex-col items-center space-y-4">
 				<p className="text-lg text-muted-foreground">Please log in to view</p>
-				<Button variant="primary" onClick={handleLoginClick}>
-					Login
+				<Button onClick={handleLoginClick} variant="primary">
+					LOGIN
 				</Button>
 			</div>
 		</div>
@@ -258,7 +258,7 @@ function DashboardLayout() {
 								) : (
 									<>
 										{dashboardEmoji && <span className="text-2xl">{dashboardEmoji}</span>}
-										<span className="truncate min-w-0 flex-1 text-center">{dashboardTitleWithoutEmoji}</span>
+										<span className="truncate">{dashboardTitleWithoutEmoji}</span>
 									</>
 								)}
 							</>
@@ -281,11 +281,11 @@ function DashboardLayout() {
 			</div>
 
 			{/* Main container - responsive layout */}
-			<div className="lg:flex lg:pt-6 lg:px-6 lg:pb-4 lg:gap-6 lg:flex-1 lg:overflow-hidden lg:max-w-none lg:min-h-0">
+			<div className="lg:flex lg:p-6 lg:gap-6 lg:flex-1 lg:overflow-hidden lg:max-w-none lg:min-h-0 bg-gray-50">
 				<div ref={parent} className="lg:flex lg:w-full lg:gap-6">
 					{/* Sidebar - responsive behavior */}
 					{(showSidebar || !isMobile) && (
-						<aside className="w-full lg:w-80 lg:overflow-y-auto lg:border lg:border-black lg:rounded lg:max-h-full bg-layer-elevated lg:flex-shrink-0 lg:shadow-md">
+						<aside className="w-full lg:w-80 lg:overflow-y-auto lg:border lg:border-black lg:rounded lg:max-h-full bg-white lg:flex-shrink-0 lg:shadow-md">
 							<div className="lg:space-y-2">
 								{filteredNavigation.map((section) => (
 									<div key={section.title}>
@@ -297,7 +297,7 @@ function DashboardLayout() {
 													<Link
 														key={item.path}
 														to={item.path}
-														className="block p-4 lg:px-6 lg:py-2 transition-colors font-bold border border-black bg-white rounded lg:border-0 lg:bg-transparent lg:rounded-none data-[status=active]:bg-secondary data-[status=active]:text-white data-[status=active]:border-secondary hover:text-pink-500"
+														className="block p-4 lg:px-6 lg:py-2 transition-colors font-bold border border-black fg-layer-elevated rounded lg:border-0 lg:bg-transparent lg:rounded-none data-[status=active]:bg-secondary data-[status=active]:text-white data-[status=active]:border-secondary hover:text-pink-500"
 														onClick={handleSidebarItemClick}
 														data-status={isActive ? 'active' : 'inactive'}
 													>
@@ -315,7 +315,7 @@ function DashboardLayout() {
 					{/* Main content - responsive behavior */}
 					{(!showSidebar || !isMobile) && (
 						<div
-							className={`w-full lg:flex-1 lg:max-w-4xl lg:border lg:border-black lg:rounded lg:bg-white flex flex-col lg:max-h-full lg:overflow-hidden ${
+							className={`w-full lg:flex-1 lg:max-w-4xl border border-black lg:rounded bg-white flex flex-col lg:max-h-full lg:overflow-hidden lg:shadow-md ${
 								isMessageDetailView && isMobile ? 'h-[calc(100vh-8.5rem)]' : ''
 							}`}
 						>
@@ -367,54 +367,12 @@ function DashboardLayout() {
 												location.pathname === '/dashboard/app-settings/app-miscelleneous' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/app-settings/team' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/app-settings/blacklists' && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/app-settings/featured-items' && 'p-0 lg:p-0',
 											)}
 										>
-											{/* Only show title here if there's no back button */}
-											{!isMobile &&
-												!needsBackButton &&
-												location.pathname !== '/dashboard' &&
-												location.pathname !== '/dashboard/sales/sales' &&
-												!location.pathname.startsWith('/dashboard/sales/messages') &&
-												location.pathname !== '/dashboard/sales/circular-economy' &&
-												location.pathname !== '/dashboard/products/products' &&
-												location.pathname !== '/dashboard/products/collections' &&
-												location.pathname !== '/dashboard/products/receiving-payments' &&
-												location.pathname !== '/dashboard/products/shipping-options' &&
-												location.pathname !== '/dashboard/account/profile' &&
-												location.pathname !== '/dashboard/account/making-payments' &&
-												location.pathname !== '/dashboard/account/your-purchases' &&
-												location.pathname !== '/dashboard/app-settings/app-miscelleneous' &&
-												location.pathname !== '/dashboard/app-settings/team' &&
-												location.pathname !== '/dashboard/app-settings/blacklists' &&
-												location.pathname !== '/dashboard/app-settings/featured-items' &&
-												location.pathname !== '/dashboard/account/network' && (
-													<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>
-												)}
 											{!isAuthenticated ? (
 												<LoginPrompt />
 											) : (
 												<>
-													{/* Only show title here if there's no back button */}
-													{!isMobile &&
-														!needsBackButton &&
-														location.pathname !== '/dashboard/sales/sales' &&
-														!location.pathname.startsWith('/dashboard/sales/messages') &&
-														location.pathname !== '/dashboard/app-settings/app-miscelleneous' &&
-														location.pathname !== '/dashboard/app-settings/team' &&
-														location.pathname !== '/dashboard/app-settings/blacklists' &&
-														location.pathname !== '/dashboard/app-settings/featured-items' &&
-														location.pathname !== '/dashboard/sales/circular-economy' &&
-														location.pathname !== '/dashboard/products/products' &&
-														location.pathname !== '/dashboard/products/collections' &&
-														location.pathname !== '/dashboard/products/receiving-payments' &&
-														location.pathname !== '/dashboard/products/shipping-options' &&
-														location.pathname !== '/dashboard/account/profile' &&
-														location.pathname !== '/dashboard/account/making-payments' &&
-														location.pathname !== '/dashboard/account/your-purchases' &&
-														location.pathname !== '/dashboard/account/network' && (
-															<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>
-														)}
 													<Outlet />
 												</>
 											)}
