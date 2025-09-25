@@ -16,7 +16,7 @@ interface UserWithAvatarProps {
 }
 
 export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge = true, disableLink = false }: UserWithAvatarProps) {
-	const { data: profile, isLoading } = useQuery({
+	const { data: profileData, isLoading } = useQuery({
 		queryKey: profileKeys.details(pubkey),
 		queryFn: () => fetchProfileByIdentifier(pubkey),
 	})
@@ -33,12 +33,12 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 		lg: 'text-base',
 	}[size]
 
-	const nameInitial = profile?.profile?.name || profile?.profile?.displayName || pubkey.slice(0, 1).toUpperCase()
+	const nameInitial = profileData?.profile?.name || profileData?.profile?.displayName || pubkey.slice(0, 1).toUpperCase()
 
 	const content = (
 		<>
 			<Avatar className={avatarSizeClass}>
-				<AvatarImage src={profile?.profile?.picture} />
+				<AvatarImage src={profileData?.profile?.picture} />
 				<AvatarFallback>{nameInitial}</AvatarFallback>
 			</Avatar>
 			<div className="flex flex-row items-center gap-1">
