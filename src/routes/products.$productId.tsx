@@ -264,7 +264,7 @@ function RouteComponent() {
 
 							<div className="flex items-center gap-2">
 								<span>Sold by:</span>
-								<UserNameWithBadge userId={pubkey} />
+								<UserNameWithBadge pubkey={pubkey} />
 							</div>
 						</div>
 					</div>
