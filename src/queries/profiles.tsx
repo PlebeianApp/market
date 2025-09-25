@@ -85,12 +85,7 @@ export const validateNip05 = async (pubkey: string): Promise<boolean | null> => 
 		const profile = await user.fetchProfile()
 		if (!profile?.nip05) return null
 
-		const nip05User = await ndk.getUserFromNip05(profile.nip05)
-		if (!nip05User) {
-			return false
-		}
-
-		return nip05User.pubkey === user.pubkey
+		return await user.validateNip05(profile.nip05)
 	} catch (e) {
 		console.error('Error validating NIP-05:', e)
 		return false
