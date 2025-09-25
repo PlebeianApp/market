@@ -1,15 +1,15 @@
+import { Skeleton } from '@/components/ui/skeleton'
 import { nip05ValidationQueryOptions } from '@/queries/profiles'
 import { useQuery } from '@tanstack/react-query'
 import { BadgeAlert, BadgeCheck } from 'lucide-react'
-import { Skeleton } from '@/components/ui/skeleton'
 
 interface Nip05BadgeProps {
-	userId: string
+	pubkey: string
 	className?: string
 }
 
-export function Nip05Badge({ userId, className = '' }: Nip05BadgeProps) {
-	const { data: isVerified, isLoading } = useQuery(nip05ValidationQueryOptions(userId))
+export function Nip05Badge({ pubkey, className = '' }: Nip05BadgeProps) {
+	const { data: isVerified, isLoading } = useQuery(nip05ValidationQueryOptions(pubkey))
 
 	if (isLoading) {
 		return <Skeleton className={`h-6 w-6 ${className}`} />
