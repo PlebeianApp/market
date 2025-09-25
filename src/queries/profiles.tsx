@@ -44,7 +44,13 @@ const ensureUserRelays = async (pubkey: string): Promise<string[]> => {
 			return []
 		}
 		const readRelays: string[] = (relayListEvt.tags || [])
-			.filter((t) => Array.isArray(t) && t[0] === 'r' && typeof t[1] === 'string' && (t[2] === undefined || t[2] === '' || t[2] === 'read' || t[2] === 'both'))
+			.filter(
+				(t) =>
+					Array.isArray(t) &&
+					t[0] === 'r' &&
+					typeof t[1] === 'string' &&
+					(t[2] === undefined || t[2] === '' || t[2] === 'read' || t[2] === 'both'),
+			)
 			.map((t: any) => (t[1] as string).trim())
 			.filter((u) => /^wss:\/\//i.test(u)) as string[]
 		const unique = Array.from(new Set(readRelays))
