@@ -1,5 +1,5 @@
-import { Header } from '@/components/layout/Header'
 import { ItemGrid } from '@/components/ItemGrid'
+import { Header } from '@/components/layout/Header'
 import { Nip05Badge } from '@/components/Nip05Badge'
 import { ProductCard } from '@/components/ProductCard'
 import { ProfileName } from '@/components/ProfileName'
@@ -11,10 +11,10 @@ import { getHexColorFingerprintFromHexPubkey, truncateText } from '@/lib/utils'
 import { productsByPubkeyQueryOptions } from '@/queries/products'
 import { profileByIdentifierQueryOptions } from '@/queries/profiles'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
-import type { NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
+import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { ArrowLeft, MessageCircle, Minus, Plus, Share2 } from 'lucide-react'
+import { MessageCircle, Minus, Plus, Share2 } from 'lucide-react'
 import { useState } from 'react'
 
 export const Route = createFileRoute('/profile/$profileId')({
@@ -66,7 +66,7 @@ function RouteComponent() {
 						)}
 						<div className="flex items-center gap-2">
 							<h2 className="text-2xl font-bold text-white">{truncateText(profile?.name ?? 'Unnamed user', isSmallScreen ? 10 : 50)}</h2>
-							<Nip05Badge userId={user?.npub || ''} />
+							<Nip05Badge pubkey={user?.pubkey || ''} />
 						</div>
 					</div>
 					{!isSmallScreen && (

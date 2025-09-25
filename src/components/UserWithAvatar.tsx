@@ -1,12 +1,11 @@
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { cn } from '@/lib/utils'
+import { fetchProfileByIdentifier } from '@/queries/profiles'
+import { profileKeys } from '@/queries/queryKeyFactory'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Nip05Badge } from './Nip05Badge'
 import { ProfileName } from './ProfileName'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Skeleton } from '@/components/ui/skeleton'
-import { cn } from '@/lib/utils'
-import { useQuery } from '@tanstack/react-query'
-import { profileKeys } from '@/queries/queryKeyFactory'
-import { fetchProfileByIdentifier } from '@/queries/profiles'
 
 interface UserWithAvatarProps {
 	pubkey: string
@@ -34,17 +33,17 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 		lg: 'text-base',
 	}[size]
 
-	const nameInitial = profile?.name || profile?.displayName || pubkey.slice(0, 1).toUpperCase()
+	const nameInitial = profile?.profile?.name || profile?.profile?.displayName || pubkey.slice(0, 1).toUpperCase()
 
 	const content = (
 		<>
 			<Avatar className={avatarSizeClass}>
-				<AvatarImage src={profile?.picture} />
+				<AvatarImage src={profile?.profile?.picture} />
 				<AvatarFallback>{nameInitial}</AvatarFallback>
 			</Avatar>
 			<div className="flex flex-row items-center gap-1">
 				<ProfileName pubkey={pubkey} className={textSizeClass} truncate={true} disableLink={true} />
-				{showBadge && <Nip05Badge userId={pubkey} />}
+				{showBadge && <Nip05Badge pubkey={pubkey} />}
 			</div>
 		</>
 	)
