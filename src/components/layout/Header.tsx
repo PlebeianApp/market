@@ -1,19 +1,19 @@
+import { CartButton } from '@/components/CartButton'
+import { CurrencyDropdown } from '@/components/CurrencyDropdown'
+import { MobileMenu } from '@/components/layout/MobileMenu'
 import { ProductSearch } from '@/components/ProductSearch'
 import { Profile } from '@/components/Profile'
 import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { authActions, authStore } from '@/lib/stores/auth'
+import { ndkActions } from '@/lib/stores/ndk'
+import { uiActions, uiStore } from '@/lib/stores/ui'
 import { useConfigQuery } from '@/queries/config'
+import type { NDKUserProfile } from '@nostr-dev-kit/ndk'
 import { Link, useLocation } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Loader2, Menu, LogOut, X } from 'lucide-react'
-import { CartButton } from '@/components/CartButton'
-import { uiActions, uiStore } from '@/lib/stores/ui'
-import { MobileMenu } from '@/components/layout/MobileMenu'
-import { ndkActions } from '@/lib/stores/ndk'
-import { useState, useEffect } from 'react'
-import type { NDKUserProfile } from '@nostr-dev-kit/ndk'
-import { useBreakpoint } from '@/hooks/useBreakpoint'
+import { Loader2, LogOut, Menu, X } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 export function Header() {
 	const { data: config } = useConfigQuery()
@@ -172,6 +172,9 @@ export function Header() {
 						<ProductSearch />
 					</div>
 					<div className="flex gap-2">
+						{/* Currency Dropdown - always visible on desktop */}
+						{!isMobile && <CurrencyDropdown />}
+
 						{/* Mobile Layout */}
 						{isMobile ? (
 							<>
