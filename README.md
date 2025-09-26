@@ -1,24 +1,82 @@
-# Market Frontend
+# Plebeian Market
 
-To install dependencies:
+A decentralized marketplace built on the Nostr protocol, enabling peer-to-peer trading with Bitcoin Lightning Network payments.
+
+## Quick Start
+
+### Prerequisites
+
+- [Bun](https://bun.sh) runtime (v1.2.4+)
+- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) (for containerized deployment)
+- OR [Go](https://golang.org/doc/install) (for local relay setup)
+
+### Option 1: Docker Development Deployment (Recommended)
+
+The fastest way to get started is using Docker Compose, which automatically sets up both the Nostr relay and web application:
+
+```bash
+# Clone and navigate to the project
+git clone <repository-url>
+cd market
+
+# Build and start all services
+docker-compose up --build
+
+# Or run in detached mode
+docker-compose up --build -d
+```
+
+This will start:
+- **Orly Relay** on `localhost:10547` (Nostr relay for development)
+- **Web Application** on `localhost:3000`
+
+The Docker setup automatically:
+- Installs and configures the next.orly.dev relay
+- Sets up the web application with proper environment variables
+- Configures networking between services
+- Includes health checks and auto-restart policies
+
+#### Docker Commands
+
+```bash
+# Stop all services
+docker-compose down
+
+# View logs
+docker-compose logs -f
+
+# Rebuild and restart services
+docker-compose up --build --force-recreate
+
+# Clean up (removes containers, networks, and volumes)
+docker-compose down -v --remove-orphans
+```
+
+### Option 2: Local Development Setup
+
+For local development without Docker:
+
+#### Install Dependencies
 
 ```bash
 bun install
 ```
 
-To start a development server:
+#### Start Development Server
 
 ```bash
+# With seeded data
+bun dev:seed
+
+# Fresh start without seed data
 bun dev
 ```
 
-To run for production:
+#### Production Build
 
 ```bash
 bun start
 ```
-
-This project was created using `bun init` in bun v1.2.4. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
 
 ## Getting Started
 

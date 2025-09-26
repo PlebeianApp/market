@@ -80,7 +80,17 @@ const serveStatic = async (path: string) => {
 	}
 }
 
+// Parse command line arguments for port and host
+const args = process.argv.slice(2)
+const portIndex = args.indexOf('--port')
+const hostIndex = args.indexOf('--host')
+
+const port = portIndex !== -1 && args[portIndex + 1] ? parseInt(args[portIndex + 1], 10) : 3000
+const hostname = hostIndex !== -1 && args[hostIndex + 1] ? args[hostIndex + 1] : 'localhost'
+
 export const server = serve({
+	port,
+	hostname,
 	routes: {
 		'/*': index,
 		'/api/config': {
@@ -98,6 +108,7 @@ export const server = serve({
 		'/images/:file': ({ params }) => serveStatic(`images/${params.file}`),
 	},
 	development: process.env.NODE_ENV !== 'production',
+	idleTimeout: 30, // Increase timeout from default 10s to 30s
 	fetch(req, server) {
 		if (server.upgrade(req)) {
 			return new Response()

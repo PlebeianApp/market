@@ -1,4 +1,4 @@
-import { defaultRelaysUrls, ZAP_RELAYS } from '@/lib/constants'
+import { defaultRelaysUrls, writeRelaysUrls, ZAP_RELAYS } from '@/lib/constants'
 import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
 import type { NDKEvent, NDKSigner, NDKUser } from '@nostr-dev-kit/ndk'
 import NDK, { NDKKind } from '@nostr-dev-kit/ndk'
@@ -35,10 +35,18 @@ export const ndkActions = {
 		const state = ndkStore.state
 		if (state.ndk) return state.ndk
 
-		const LOCAL_ONLY = configStore.state.config.appRelay
-
+		// In dev mode, use writeRelaysUrls which only includes localhost
+		// In production, use the provided relays or default to writeRelaysUrls (which equals defaultRelaysUrls in prod)
+		const isDevelopment = process.env.NODE_ENV === 'development'
 		const appRelay = configStore.state.config.appRelay
-		const explicitRelays = LOCAL_ONLY ? ([appRelay].filter(Boolean) as string[]) : relays && relays.length > 0 ? relays : defaultRelaysUrls
+		
+		// If app relay is configured and we're in development, use only the app relay
+		// Otherwise, use writeRelaysUrls for proper dev/prod behavior
+		const explicitRelays = (isDevelopment && appRelay) 
+			? [appRelay] 
+			: relays && relays.length > 0 
+				? (isDevelopment ? writeRelaysUrls : relays)
+				: writeRelaysUrls
 
 		const ndk = new NDK({
 			explicitRelayUrls: explicitRelays,

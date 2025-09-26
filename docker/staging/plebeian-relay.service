@@ -1,0 +1,22 @@
+[Unit]
+Description=Plebeian Relay Service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/app/orly
+Environment=ORLY_LOG_LEVEL=off
+Environment=ORLY_LISTEN=localhost
+Environment=ORLY_PORT=10547
+Environment=ORLY_ADMINS=
+Environment=ORLY_ACL_MODE=none
+Environment=ORLY_DATA_DIR=/tmp/plebeian
+Environment=PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/usr/local/go/bin/go run .
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

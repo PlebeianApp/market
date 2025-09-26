@@ -10,6 +10,8 @@ config()
 const RELAY_URL = process.env.APP_RELAY_URL
 const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
 
+console.log('Environment variables:', { RELAY_URL, APP_PRIVATE_KEY: APP_PRIVATE_KEY ? '[REDACTED]' : undefined })
+
 if (!RELAY_URL || !APP_PRIVATE_KEY) {
 	console.error('Missing required environment variables: APP_RELAY_URL, APP_PRIVATE_KEY')
 	process.exit(1)
@@ -17,6 +19,8 @@ if (!RELAY_URL || !APP_PRIVATE_KEY) {
 
 const relay = RELAY_URL as string
 const privateKey = APP_PRIVATE_KEY as string
+
+console.log('Using relay URL:', relay)
 
 // Initialize NDK with the relay URL
 const ndk = ndkActions.initialize([relay])
