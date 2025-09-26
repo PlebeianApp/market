@@ -15,7 +15,7 @@ import { useBtcExchangeRates, type SupportedCurrency } from '@/queries/external'
 import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useForm } from '@tanstack/react-form'
 import { useStore } from '@tanstack/react-store'
-import { CheckIcon, PackageIcon, PlusIcon, SettingsIcon, TruckIcon, X, Loader2 } from 'lucide-react'
+import { CheckIcon, PackageIcon, PlusIcon, SettingsIcon, TruckIcon, X, Loader2, Info } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -93,12 +93,18 @@ export function DetailTab() {
 
 	// Handle fiat price changes
 	const handleFiatPriceChange = (value: string) => {
-		const numValue = parseFloat(value) || 0
+		// Store the raw input value without formatting
 		setFiatDisplayValue(value)
 
-		// Convert fiat to SATS for storage
-		const satsValue = convertCurrencyToSats(numValue, currency)
-		productFormActions.updateValues({ price: satsValue.toString() })
+		// Only convert to sats if we have a valid number
+		const numValue = parseFloat(value)
+		if (!isNaN(numValue) && numValue > 0) {
+			const satsValue = convertCurrencyToSats(numValue, currency)
+			productFormActions.updateValues({ price: satsValue.toString() })
+		} else if (value === '' || value === '0') {
+			// Clear the price if input is empty or zero
+			productFormActions.updateValues({ price: '0' })
+		}
 	}
 
 	// Get display value for Bitcoin field
@@ -170,7 +176,11 @@ export function DetailTab() {
 			const satsValue = parseFloat(price) || 0
 			if (satsValue > 0) {
 				const fiatValue = convertSatsToCurrency(satsValue, currency)
-				setFiatDisplayValue(fiatValue.toFixed(2))
+				// Only update if the field is not currently being edited
+				// This prevents overwriting user input during typing
+				if (document.activeElement?.id !== 'fiat-price') {
+					setFiatDisplayValue(fiatValue.toFixed(2))
+				}
 			}
 		}
 	}, [currency, price, showFiatField])
@@ -231,19 +241,37 @@ export function DetailTab() {
 					<RadioGroup
 						value={currencyMode}
 						onValueChange={(value: 'sats' | 'fiat') => setCurrencyMode(value)}
-						className="flex flex-col space-y-2"
+						className="flex flex-col space-y-3"
 					>
-						<div className="flex items-center space-x-2">
-							<RadioGroupItem value="sats" id="sats-mode" />
-							<Label htmlFor="sats-mode" className="text-sm">
-								Use sats as currency (amount calculated on spot)
-							</Label>
+						<div className="space-y-1">
+							<div className="flex items-center space-x-2">
+								<RadioGroupItem value="sats" id="sats-mode" />
+								<Label htmlFor="sats-mode" className="text-sm">
+									Use sats as currency (amount calculated on spot)
+								</Label>
+							</div>
+							<div className="flex items-start space-x-2 ml-6">
+								<Info className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+								<p className="text-xs text-muted-foreground">
+									The product will be priced in sats, calculated from the current Bitcoin exchange rate. Buyers will pay the exact sats
+									amount at purchase time.
+								</p>
+							</div>
 						</div>
-						<div className="flex items-center space-x-2">
-							<RadioGroupItem value="fiat" id="fiat-mode" />
-							<Label htmlFor="fiat-mode" className="text-sm">
-								Use fiat as currency
-							</Label>
+						<div className="space-y-1">
+							<div className="flex items-center space-x-2">
+								<RadioGroupItem value="fiat" id="fiat-mode" />
+								<Label htmlFor="fiat-mode" className="text-sm">
+									Use fiat as currency
+								</Label>
+							</div>
+							<div className="flex items-start space-x-2 ml-6">
+								<Info className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+								<p className="text-xs text-muted-foreground">
+									The product will be priced in {currency}. Buyers will pay the equivalent sats amount based on the exchange rate at
+									purchase time.
+								</p>
+							</div>
 						</div>
 					</RadioGroup>
 				</div>
