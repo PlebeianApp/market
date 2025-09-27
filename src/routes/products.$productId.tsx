@@ -207,6 +207,7 @@ function RouteComponent() {
 								className="space-y-1"
 								showSatsPrice={true}
 								showOriginalPrice={true}
+								showRootCurrency={true}
 							/>
 
 							<Badge variant="primary">{stock !== undefined ? `${stock} in stock` : 'Out of stock'}</Badge>

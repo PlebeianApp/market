@@ -1,5 +1,5 @@
-import { useCurrencyConversion, useBtcExchangeRates } from '@/queries/external'
 import { uiStore } from '@/lib/stores/ui'
+import { useBtcExchangeRates, useCurrencyConversion } from '@/queries/external'
 import { useStore } from '@tanstack/react-store'
 
 interface PriceDisplayProps {
@@ -13,6 +13,8 @@ interface PriceDisplayProps {
 	showOriginalPrice?: boolean
 	/** Whether to show the sats price (default: true) */
 	showSatsPrice?: boolean
+	/** Whether to show the root currency indicator (default: false) */
+	showRootCurrency?: boolean
 }
 
 export function PriceDisplay({
@@ -21,39 +23,55 @@ export function PriceDisplay({
 	className = '',
 	showOriginalPrice = true,
 	showSatsPrice = true,
+	showRootCurrency = false,
 }: PriceDisplayProps) {
 	const { selectedCurrency } = useStore(uiStore)
-
-	// Convert the original price to sats
-	const { data: satsPrice, isLoading: satsLoading } = useCurrencyConversion(originalCurrency, priceValue)
 
 	// Get BTC exchange rates for currency conversion
 	const { data: exchangeRates, isLoading: ratesLoading } = useBtcExchangeRates()
 
-	// Calculate the display price in the selected currency
-	const getDisplayPrice = () => {
-		if (originalCurrency.toLowerCase() === selectedCurrency.toLowerCase()) {
-			// If original currency matches selected currency, show original price
-			return { value: priceValue, currency: originalCurrency }
-		} else if (selectedCurrency.toLowerCase() === 'sats' && satsPrice) {
-			// If selected currency is sats, show sats price
-			return { value: satsPrice, currency: 'SATS' }
-		} else if (satsPrice && exchangeRates && selectedCurrency !== 'SATS') {
-			// Convert from sats to selected currency via BTC
-			const btcAmount = satsPrice / 100000000 // Convert sats to BTC
-			const selectedCurrencyRate = exchangeRates[selectedCurrency as keyof typeof exchangeRates]
-			if (selectedCurrencyRate) {
-				const convertedValue = btcAmount * selectedCurrencyRate
-				return { value: convertedValue, currency: selectedCurrency }
-			}
-		}
+	// Convert the original price to sats (for fiat currencies)
+	const { data: satsFromFiat, isLoading: satsLoading } = useCurrencyConversion(originalCurrency, priceValue)
 
-		// Fallback to original price
-		return { value: priceValue, currency: originalCurrency }
+	// Determine if the original currency is Bitcoin-based
+	const isBitcoinCurrency = ['SATS', 'BTC', 'sats', 'btc'].includes(originalCurrency.toUpperCase())
+
+	// Calculate sats value based on root currency type
+	const getSatsValue = (): number | null => {
+		if (isBitcoinCurrency) {
+			// If root currency is Bitcoin-based, convert to sats
+			if (originalCurrency.toUpperCase() === 'SATS') {
+				return priceValue
+			} else if (originalCurrency.toUpperCase() === 'BTC') {
+				return Math.round(priceValue * 100000000) // Convert BTC to sats
+			}
+		} else {
+			// If root currency is fiat, use the converted sats value
+			return satsFromFiat || null
+		}
+		return null
 	}
 
-	const displayPrice = getDisplayPrice()
-	const isLoading = satsLoading || ratesLoading
+	// Calculate fiat value from sats
+	const getFiatValue = (satsValue: number): { value: number; currency: string } | null => {
+		if (!exchangeRates || !satsValue) return null
+
+		const btcAmount = satsValue / 100000000 // Convert sats to BTC
+		const targetCurrency = isBitcoinCurrency ? selectedCurrency : originalCurrency
+		const rate = exchangeRates[targetCurrency as keyof typeof exchangeRates]
+
+		if (rate) {
+			return {
+				value: btcAmount * rate,
+				currency: targetCurrency,
+			}
+		}
+		return null
+	}
+
+	const satsValue = getSatsValue()
+	const fiatValue = satsValue ? getFiatValue(satsValue) : null
+	const isLoading = ratesLoading || (!isBitcoinCurrency && satsLoading)
 
 	if (isLoading) {
 		return (
@@ -66,17 +84,37 @@ export function PriceDisplay({
 
 	return (
 		<div className={`flex flex-col gap-1 ${className}`}>
-			{/* Sats price - more prominent */}
-			{showSatsPrice && satsPrice && <p className="text-md font-bold">{Math.round(satsPrice).toLocaleString()} sats</p>}
+			{/* Root currency indicator */}
+			{showRootCurrency && (
+				<div className="flex items-center gap-2 mb-1">
+					<span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Listed in {originalCurrency}</span>
+					<div className="h-1 w-1 bg-gray-400 rounded-full"></div>
+					<span className="text-xs text-gray-400">{isBitcoinCurrency ? 'Bitcoin' : `Fiat currency: ${selectedCurrency}`}</span>
+				</div>
+			)}
 
-			{/* Original or converted price */}
+			{/* Sats price - more prominent */}
+			{showSatsPrice && satsValue && <p className="text-md font-bold">{Math.round(satsValue).toLocaleString()} sats</p>}
+
+			{/* Secondary price (fiat when root is Bitcoin, or original when root is fiat) */}
 			{showOriginalPrice && (
 				<p className="text-sm text-gray-400">
-					{displayPrice.value.toLocaleString(undefined, {
-						minimumFractionDigits: originalCurrency.toLowerCase() === 'btc' ? 8 : 2,
-						maximumFractionDigits: originalCurrency.toLowerCase() === 'btc' ? 8 : 2,
-					})}{' '}
-					{displayPrice.currency}
+					{isBitcoinCurrency
+						? // Root is Bitcoin, show converted fiat
+							fiatValue
+							? `${fiatValue.value.toLocaleString(undefined, {
+									minimumFractionDigits: 2,
+									maximumFractionDigits: 2,
+								})} ${fiatValue.currency}`
+							: `${priceValue.toLocaleString(undefined, {
+									minimumFractionDigits: originalCurrency.toLowerCase() === 'btc' ? 8 : 0,
+									maximumFractionDigits: originalCurrency.toLowerCase() === 'btc' ? 8 : 0,
+								})} ${originalCurrency}`
+						: // Root is fiat, show original fiat price
+							`${priceValue.toLocaleString(undefined, {
+								minimumFractionDigits: 2,
+								maximumFractionDigits: 2,
+							})} ${originalCurrency}`}
 				</p>
 			)}
 		</div>
