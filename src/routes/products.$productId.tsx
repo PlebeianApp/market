@@ -1,5 +1,6 @@
 import { ImageCarousel } from '@/components/ImageCarousel'
 import { ItemGrid } from '@/components/ItemGrid'
+import { PriceDisplay } from '@/components/PriceDisplay'
 import { ProductCard } from '@/components/ProductCard'
 import { ShippingSelector } from '@/components/ShippingSelector'
 import { Badge } from '@/components/ui/badge'
@@ -32,7 +33,7 @@ import type { FileRoutesByPath } from '@tanstack/react-router'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, Minus, Plus, Truck } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 // Hook to inject dynamic CSS
 function useHeroBackground(imageUrl: string, className: string) {
@@ -200,10 +201,14 @@ function RouteComponent() {
 								</div>
 							</div>
 
-							<div className="space-y-1">
-								<p className="text-2xl font-bold">{price.toLocaleString()} sats</p>
-								<p className="text-sm text-gray-400">€{(price * 0.0004).toFixed(2)} EUR</p>
-							</div>
+							<PriceDisplay
+								priceValue={price}
+								originalCurrency={priceTag?.[2] || 'SATS'}
+								className="space-y-1"
+								showSatsPrice={true}
+								showOriginalPrice={true}
+								showRootCurrency={true}
+							/>
 
 							<Badge variant="primary">{stock !== undefined ? `${stock} in stock` : 'Out of stock'}</Badge>
 
