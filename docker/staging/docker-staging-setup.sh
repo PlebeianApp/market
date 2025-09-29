@@ -164,20 +164,25 @@ print_status "Relay started with PID: ${RELAY_PID}"
 cd /app
 
 # Wait for relay to be ready (check if it's accepting connections)
-print_status "Waiting for relay to be ready..."
-for i in {1..30}; do
-    if curl -s --connect-timeout 1 http://localhost:10547 >/dev/null 2>&1; then
-        print_status "Relay is ready after ${i} seconds"
+print_status "Waiting for relay to be ready (TCP 10547)..."
+# Use bash's /dev/tcp to test raw TCP connectivity since the relay speaks WebSocket, not HTTP
+MAX_WAIT=90
+for ((i=1; i<=MAX_WAIT; i++)); do
+    if bash -c "</dev/tcp/127.0.0.1/10547" >/dev/null 2>&1; then
+        print_status "Relay TCP port is accepting connections after ${i} seconds"
+        READY=1
         break
-    fi
-    if [ $i -eq 30 ]; then
-        print_error "Relay failed to become ready after 30 seconds"
-        # Show relay logs for debugging
-        jobs -p | xargs -I{} ps -p {} -o pid,cmd || echo "No relay process found"
-        exit 1
     fi
     sleep 1
 done
+
+if [ -z "${READY}" ]; then
+    print_error "Relay failed to become ready after ${MAX_WAIT} seconds"
+    # Show relay process info for debugging
+    jobs -p | xargs -I{} ps -p {} -o pid,cmd || echo "No relay process found"
+    # Try to output last few lines from the background go process if available
+    exit 1
+fi
 
 print_status "Running database seed..."
 
