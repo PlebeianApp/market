@@ -39,14 +39,11 @@ export const ndkActions = {
 		// In production, use the provided relays or default to writeRelaysUrls (which equals defaultRelaysUrls in prod)
 		const isDevelopment = process.env.NODE_ENV === 'development'
 		const appRelay = configStore.state.config.appRelay
-		
+
 		// If app relay is configured and we're in development, use only the app relay
 		// Otherwise, use writeRelaysUrls for proper dev/prod behavior
-		const explicitRelays = (isDevelopment && appRelay) 
-			? [appRelay] 
-			: relays && relays.length > 0 
-				? (isDevelopment ? writeRelaysUrls : relays)
-				: writeRelaysUrls
+		const explicitRelays =
+			isDevelopment && appRelay ? [appRelay] : relays && relays.length > 0 ? (isDevelopment ? writeRelaysUrls : relays) : writeRelaysUrls
 
 		const ndk = new NDK({
 			explicitRelayUrls: explicitRelays,

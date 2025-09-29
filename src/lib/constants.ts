@@ -12,9 +12,7 @@ export const defaultRelaysUrls: string[] = [
 // In production mode, use the same relays as defaultRelaysUrls
 // todo: this probably needs to be a proper relay haha. get a proper relay...
 export const writeRelaysUrls: string[] =
-	process.env.NODE_ENV === 'production' 
-		? defaultRelaysUrls 
-		: [process.env.APP_RELAY_URL || 'ws://localhost:10547', 'wss://relay.orly.dev']
+	process.env.NODE_ENV === 'production' ? defaultRelaysUrls : [process.env.APP_RELAY_URL || 'ws://localhost:10547', 'wss://relay.orly.dev']
 
 // Dedicated zap detection relays
 export const ZAP_RELAYS = [

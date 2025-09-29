@@ -27,10 +27,12 @@ docker-compose up --build -d
 ```
 
 This will start:
+
 - **Orly Relay** on `localhost:10547` (Nostr relay for development)
 - **Web Application** on `localhost:3000`
 
 The Docker setup automatically:
+
 - Installs and configures the next.orly.dev relay
 - Sets up the web application with proper environment variables
 - Configures networking between services
