@@ -35,7 +35,7 @@ export async function fetchAppSettings(relayUrl: string, appPubkey: string): Pro
 		const eventArray = Array.from(events)
 
 		if (eventArray.length === 0) {
-			console.log(`No app settings events found for pubkey: ${appPubkey} with dTag: ${dTag}`)
+			console.log(`No app settings events found for pubkey: ${appPubkey}`)
 			return null
 		}
 
