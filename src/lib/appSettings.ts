@@ -3,8 +3,8 @@ import { Relay, type Event } from 'nostr-tools'
 import { AppSettingsSchema, type AppSettings } from './schemas/app'
 import { ndkActions } from './stores/ndk'
 
-export async function fetchAppSettings(relayUrl: string, appPubkey: string, ): Promise<AppSettings | null> {
-	console.log(`Fetching app settings from relay: ${relayUrl} for pubkey: ${appPubkey} (dTag: ${dTag})`)
+export async function fetchAppSettings(relayUrl: string, appPubkey: string): Promise<AppSettings | null> {
+	console.log(`Fetching app settings from relay: ${relayUrl} for pubkey: ${appPubkey}`)
 
 	try {
 		const ndk = ndkActions.initialize([relayUrl])
