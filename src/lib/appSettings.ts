@@ -3,7 +3,7 @@ import { Relay, type Event } from 'nostr-tools'
 import { AppSettingsSchema, type AppSettings } from './schemas/app'
 import { ndkActions } from './stores/ndk'
 
-export async function fetchAppSettings(relayUrl: string, appPubkey: string, dTag: string = 'app-settings'): Promise<AppSettings | null> {
+export async function fetchAppSettings(relayUrl: string, appPubkey: string, ): Promise<AppSettings | null> {
 	console.log(`Fetching app settings from relay: ${relayUrl} for pubkey: ${appPubkey} (dTag: ${dTag})`)
 
 	try {
@@ -15,7 +15,6 @@ export async function fetchAppSettings(relayUrl: string, appPubkey: string, dTag
 		const filter: NDKFilter = {
 			kinds: [31990],
 			authors: [appPubkey],
-			'#d': [dTag],
 			limit: 1,
 		}
 
