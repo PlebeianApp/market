@@ -1,11 +1,12 @@
-import React, { useEffect, useRef } from 'react'
-import { Link, useLocation, useMatchRoute } from '@tanstack/react-router'
-import { useStore } from '@tanstack/react-store'
-import { uiStore, uiActions } from '@/lib/stores/ui'
-import { authActions, authStore } from '@/lib/stores/auth'
-import { cn } from '@/lib/utils'
+import { CurrencyDropdown } from '@/components/CurrencyDropdown'
 import { Pattern } from '@/components/pattern'
+import { authActions, authStore } from '@/lib/stores/auth'
+import { uiActions, uiStore } from '@/lib/stores/ui'
+import { cn } from '@/lib/utils'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
+import { Link, useMatchRoute } from '@tanstack/react-router'
+import { useStore } from '@tanstack/react-store'
+import { useEffect } from 'react'
 
 export function MobileMenu() {
 	const { mobileMenuOpen } = useStore(uiStore)
@@ -91,6 +92,11 @@ export function MobileMenu() {
 									</button>
 								</div>
 							)}
+
+							{/* Currency Dropdown for mobile */}
+							<div className="py-3 px-6 flex justify-center">
+								<CurrencyDropdown />
+							</div>
 						</nav>
 					</div>
 				</div>
