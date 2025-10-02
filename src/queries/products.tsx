@@ -17,6 +17,7 @@ import { queryOptions, useQuery } from '@tanstack/react-query'
 import { z } from 'zod'
 import { productKeys } from './queryKeyFactory'
 import { getCoordsFromATag, getATagFromCoords } from '@/lib/utils/coords.ts'
+import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 
 // Re-export productKeys for use in other query files
 export { productKeys }
@@ -26,28 +27,34 @@ export { productKeys }
 /**
  * Fetches all product listings
  * @param limit Maximum number of products to fetch (default: 500)
- * @returns Array of product events sorted by creation date
+ * @param tag Optional tag to filter products by
+ * @returns Array of product events sorted by creation date (blacklist filtered)
  */
-export const fetchProducts = async (limit: number = 500) => {
+export const fetchProducts = async (limit: number = 500, tag?: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
 	const filter: NDKFilter = {
 		kinds: [30402], // Product listings in Nostr
 		limit,
+		...(tag && { '#t': [tag] }), // Add tag filter if provided
 	}
 
 	const events = await ndk.fetchEvents(filter)
-	return Array.from(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+	const allEvents = Array.from(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+
+	// Filter out blacklisted products and authors
+	return filterBlacklistedEvents(allEvents)
 }
 
 /**
  * Fetches product listings with pagination support
  * @param limit Number of products to fetch (default: 20)
  * @param until Timestamp to fetch products before (for pagination)
- * @returns Array of product events sorted by creation date
+ * @param tag Optional tag to filter products by
+ * @returns Array of product events sorted by creation date (blacklist filtered)
  */
-export const fetchProductsPaginated = async (limit: number = 20, until?: number) => {
+export const fetchProductsPaginated = async (limit: number = 20, until?: number, tag?: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -55,10 +62,14 @@ export const fetchProductsPaginated = async (limit: number = 20, until?: number)
 		kinds: [30402], // Product listings in Nostr
 		limit,
 		...(until && { until }),
+		...(tag && { '#t': [tag] }), // Add tag filter if provided
 	}
 
 	const events = await ndk.fetchEvents(filter)
-	return Array.from(events).sort((a, b) => b.created_at! - a.created_at!)
+	const allEvents = Array.from(events).sort((a, b) => b.created_at! - a.created_at!)
+
+	// Filter out blacklisted products and authors
+	return filterBlacklistedEvents(allEvents)
 }
 
 /**
@@ -83,7 +94,7 @@ export const fetchProduct = async (id: string) => {
 /**
  * Fetches all products from a specific pubkey
  * @param pubkey The pubkey of the seller
- * @returns Array of product events sorted by creation date
+ * @returns Array of product events sorted by creation date (blacklist filtered)
  */
 export const fetchProductsByPubkey = async (pubkey: string) => {
 	const ndk = ndkActions.getNDK()
@@ -96,7 +107,10 @@ export const fetchProductsByPubkey = async (pubkey: string) => {
 	}
 
 	const events = await ndk.fetchEvents(filter)
-	return Array.from(events)
+	const allEvents = Array.from(events)
+
+	// Filter out blacklisted products (author check not needed since we're querying by author)
+	return filterBlacklistedEvents(allEvents)
 }
 
 export const fetchProductByATag = async (pubkey: string, dTag: string) => {
@@ -128,21 +142,22 @@ export const productQueryOptions = (id: string) =>
 /**
  * React Query options for fetching all products
  */
-export const productsQueryOptions = (limit: number = 500) =>
+export const productsQueryOptions = (limit: number = 500, tag?: string) =>
 	queryOptions({
-		queryKey: productKeys.all,
-		queryFn: () => fetchProducts(limit),
+		queryKey: tag ? [...productKeys.all, 'tag', tag] : productKeys.all,
+		queryFn: () => fetchProducts(limit, tag),
 	})
 
 /**
  * React Query options for fetching products with pagination
  * @param limit Number of products to fetch
  * @param until Timestamp to fetch products before
+ * @param tag Optional tag to filter products by
  */
-export const productsPaginatedQueryOptions = (limit: number = 20, until?: number) =>
+export const productsPaginatedQueryOptions = (limit: number = 20, until?: number, tag?: string) =>
 	queryOptions({
-		queryKey: productKeys.paginated(limit, until),
-		queryFn: () => fetchProductsPaginated(limit, until),
+		queryKey: tag ? [...productKeys.paginated(limit, until), 'tag', tag] : productKeys.paginated(limit, until),
+		queryFn: () => fetchProductsPaginated(limit, until, tag),
 		staleTime: 300000, // 5 minutes
 	})
 
@@ -183,7 +198,7 @@ export const productByATagQueryOptions = (pubkey: string, dTag: string) =>
 /**
  * Fetches products contained in a collection by parsing a-tags
  * @param collectionEvent The collection event containing a-tags
- * @returns Array of product events
+ * @returns Array of product events (blacklist filtered)
  */
 export const fetchProductsByCollection = async (collectionEvent: NDKEvent): Promise<NDKEvent[]> => {
 	if (!collectionEvent) return []
@@ -214,7 +229,10 @@ export const fetchProductsByCollection = async (collectionEvent: NDKEvent): Prom
 	})
 
 	const results = await Promise.all(productPromises)
-	return results.filter((event) => event !== null) as NDKEvent[]
+	const allProducts = results.filter((event) => event !== null) as NDKEvent[]
+
+	// Filter out blacklisted products and authors
+	return filterBlacklistedEvents(allProducts)
 }
 
 /**

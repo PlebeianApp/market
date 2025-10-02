@@ -8,7 +8,7 @@ import { useStore } from '@tanstack/react-store'
 import { useState, useEffect, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
 import { collectionsQueryOptions } from '@/queries/collections.tsx'
-import { useCollectionTitle, useCollectionImages, getCollectionTitle } from '@/queries/collections'
+import { useCollectionTitle, useCollectionImages, getCollectionTitle, getCollectionId } from '@/queries/collections'
 import { CollectionCard } from '@/components/CollectionCard'
 
 // Hook to inject dynamic CSS for background image
@@ -72,7 +72,7 @@ function CommunityRoute() {
 		: currentSlideIndex === 0
 			? recentCollections[0]
 			: recentCollections[currentSlideIndex - 1]
-	const currentCollectionId = currentCollection?.id
+	const currentCollectionId = currentCollection ? getCollectionId(currentCollection) : undefined
 
 	// Get current collections data (only if not homepage slide)
 	const { data: currentTitle } = useCollectionTitle(currentCollectionId || '')

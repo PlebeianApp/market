@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
-import { CURRENCIES } from '@/lib/constants'
+import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
 import type { RichShippingInfo } from '@/lib/stores/cart'
 import { useNDK } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore, type ProductShippingForm } from '@/lib/stores/product'
@@ -364,18 +364,8 @@ export function DetailTab() {
 export function CategoryTab() {
 	const { categories, mainCategory } = useStore(productFormStore)
 
-	// Available main categories
-	const mainCategories = [
-		'Bitcoin',
-		'Art',
-		'Clothing',
-		'Food & Drink',
-		'Home & Technology',
-		'Health & Beauty',
-		'Sports & Outside',
-		'Services',
-		'Other',
-	]
+	// Available main categories from constants
+	const mainCategories = [...PRODUCT_CATEGORIES]
 
 	const handleMainCategorySelect = (value: string) => {
 		productFormActions.updateValues({ mainCategory: value })
