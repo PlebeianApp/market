@@ -7,12 +7,21 @@ import { PRODUCT_CATEGORIES } from '@/lib/constants'
 import { authStore } from '@/lib/stores/auth'
 import { uiActions } from '@/lib/stores/ui'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { useSuspenseQuery } from '@tanstack/react-query'
+import { useQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
-import { getProductCategories, getProductTitle, productsQueryOptions, useProductImages, useProductTitle } from '../queries/products'
+import {
+	getProductCategories,
+	getProductTitle,
+	productByATagQueryOptions,
+	productsQueryOptions,
+	useProductImages,
+	useProductTitle,
+} from '../queries/products'
+import { useConfigQuery } from '@/queries/config'
+import { useFeaturedProducts } from '@/queries/featured'
 
 // Hook to inject dynamic CSS for background image
 function useHeroBackground(imageUrl: string, className: string) {
@@ -33,6 +42,29 @@ function useHeroBackground(imageUrl: string, className: string) {
 	}, [imageUrl, className])
 }
 
+// Hook to fetch featured product events
+function useFeaturedProductEvents(featuredProducts: string[] | undefined) {
+	const queries = (featuredProducts || []).map((productCoords) => {
+		const [, pubkey, dTag] = productCoords.split(':')
+		return {
+			...productByATagQueryOptions(pubkey, dTag),
+			enabled: !!(pubkey && dTag),
+		}
+	})
+
+	// Use multiple useQuery calls for each featured product
+	const results = queries.map((queryOptions) => useQuery(queryOptions))
+
+	// Filter out loading and null products, return only loaded products
+	return results
+		.filter((result) => !result.isLoading && result.data)
+		.map((result) => result.data as NDKEvent)
+		.filter((product) => {
+			// Only include products with images
+			return product.tags.some((tag: string[]) => tag[0] === 'image' && tag[1])
+		})
+}
+
 const productsSearchSchema = z.object({
 	tag: z.string().optional(),
 })
@@ -49,6 +81,21 @@ function ProductsRoute() {
 	const products = productsQuery.data as NDKEvent[]
 
 	const { isAuthenticated } = useStore(authStore)
+
+	// Fetch featured products for slides
+	const { data: config } = useConfigQuery()
+	const { data: featuredProductsData } = useFeaturedProducts(config?.appPublicKey || '')
+	const featuredProductEvents = useFeaturedProductEvents(featuredProductsData?.featuredProducts)
+
+	// Use featured products for slides, fallback to recent products if no featured products
+	const productsForSlides =
+		featuredProductEvents.length > 0
+			? featuredProductEvents
+			: products
+					.filter((product: NDKEvent) => {
+						return product.tags.some((tag: string[]) => tag[0] === 'image' && tag[1])
+					})
+					.slice(0, 4)
 
 	// Extract all unique tags from products
 	const allTags = useMemo(() => {
@@ -88,13 +135,7 @@ function ProductsRoute() {
 	const touchEndX = useRef<number>(0)
 	const minSwipeDistance = 50
 
-	// Filter products that have images, then limit to 4 for pagination
-	const productsWithImages = products.filter((product: NDKEvent) => {
-		return product.tags.some((tag: string[]) => tag[0] === 'image' && tag[1])
-	})
-
-	const recentProducts = productsWithImages.slice(0, 4) // Limit to 4 products
-	const totalSlides = 1 + recentProducts.length // Homepage + products
+	const totalSlides = 1 + productsForSlides.length // Homepage + featured products
 
 	// Auto-slide functionality - change slide every 8 seconds
 	useEffect(() => {
@@ -109,7 +150,7 @@ function ProductsRoute() {
 
 	// Current slide data - homepage banner is now at index 1
 	const isHomepageSlide = currentSlideIndex === 1
-	const currentProduct = isHomepageSlide ? null : currentSlideIndex === 0 ? recentProducts[0] : recentProducts[currentSlideIndex - 1]
+	const currentProduct = isHomepageSlide ? null : currentSlideIndex === 0 ? productsForSlides[0] : productsForSlides[currentSlideIndex - 1]
 	const currentProductId = currentProduct?.id
 
 	// Get current product data (only if not homepage slide)
