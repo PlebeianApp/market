@@ -9,6 +9,7 @@ import { createRootRoute, Outlet, useNavigate, useLocation } from '@tanstack/rea
 import { useEffect } from 'react'
 import { DecryptPasswordDialog } from '@/components/auth/DecryptPasswordDialog'
 import { Toaster } from 'sonner'
+import { useBlacklistSync } from '@/hooks/useBlacklistSync'
 
 export const Route = createRootRoute({
 	component: RootComponent,
@@ -29,6 +30,9 @@ function RootLayout() {
 	const isDashboardPage = location.pathname.startsWith('/dashboard')
 	const isProfilePage = location.pathname.startsWith('/profile/')
 	const isCheckoutPage = location.pathname.startsWith('/checkout')
+
+	// Sync blacklist store with backend data
+	useBlacklistSync()
 
 	useEffect(() => {
 		if (isLoading || isError) return

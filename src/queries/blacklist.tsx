@@ -6,6 +6,8 @@ import { configKeys } from './queryKeyFactory'
 
 export interface BlacklistSettings {
 	blacklistedPubkeys: string[] // Array of blacklisted pubkeys in hex format
+	blacklistedProducts: string[] // Array of blacklisted product coordinates
+	blacklistedCollections: string[] // Array of blacklisted collection coordinates
 	lastUpdated: number // Timestamp of last update
 	event: NDKEvent | null // Raw blacklist event
 }
@@ -38,6 +40,8 @@ export const fetchBlacklistSettings = async (appPubkey?: string): Promise<Blackl
 		// Return empty blacklist instead of null for consistency
 		return {
 			blacklistedPubkeys: [],
+			blacklistedProducts: [],
+			blacklistedCollections: [],
 			lastUpdated: 0,
 			event: null,
 		}
@@ -49,8 +53,18 @@ export const fetchBlacklistSettings = async (appPubkey?: string): Promise<Blackl
 	// Extract blacklisted pubkeys from 'p' tags
 	const blacklistedPubkeys = latestEvent.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1])
 
+	// Extract blacklisted products from 'a' tags (kind 30402)
+	const blacklistedProducts = latestEvent.tags.filter((tag) => tag[0] === 'a' && tag[1] && tag[1].startsWith('30402:')).map((tag) => tag[1])
+
+	// Extract blacklisted collections from 'a' tags (kind 30405)
+	const blacklistedCollections = latestEvent.tags
+		.filter((tag) => tag[0] === 'a' && tag[1] && tag[1].startsWith('30405:'))
+		.map((tag) => tag[1])
+
 	return {
 		blacklistedPubkeys,
+		blacklistedProducts,
+		blacklistedCollections,
 		lastUpdated: latestEvent.created_at ?? 0,
 		event: latestEvent,
 	}
@@ -78,7 +92,6 @@ export const useBlacklistSettings = (appPubkey?: string) => {
 
 		// Event handler for blacklist updates
 		subscription.on('event', (newEvent) => {
-			console.log('Blacklist updated, invalidating queries:', newEvent.id)
 			queryClient.invalidateQueries({ queryKey: configKeys.blacklist(appPubkey) })
 		})
 

@@ -20,7 +20,7 @@ import {
 	reorderFeaturedUsers,
 } from '@/publish/featured'
 import { useUserRole } from '@/queries/app-settings'
-import { fetchCollection, getCollectionId } from '@/queries/collections'
+import { fetchCollection, fetchCollectionByEventId, getCollectionId } from '@/queries/collections'
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedCollections, useFeaturedProducts, useFeaturedUsers } from '@/queries/featured'
 import { fetchProduct, fetchProductByATag, getProductId, getProductTitle } from '@/queries/products'
@@ -96,9 +96,16 @@ const convertCollectionInputToCoords = async (input: string, authorPubkey?: stri
 		}
 	}
 
-	// If input is just an ID, fetch the collection to get its real dtag and pubkey
+	// If input is just an ID, try to fetch the collection
+	// First try as d-tag, then as event ID if that fails
 	try {
-		const collectionEvent = await fetchCollection(input)
+		let collectionEvent = await fetchCollection(input)
+
+		// If not found by d-tag, try by event ID (for 64-char hex strings)
+		if (!collectionEvent && input.length === 64) {
+			collectionEvent = await fetchCollectionByEventId(input)
+		}
+
 		if (!collectionEvent) {
 			throw new Error('Collection not found')
 		}
