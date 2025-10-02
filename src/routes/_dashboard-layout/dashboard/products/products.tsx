@@ -9,7 +9,7 @@ import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Outlet, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { PackageIcon, Trash } from 'lucide-react'
+import { PackageIcon, Trash, EyeOff, Clock, Eye } from 'lucide-react'
 import { useState } from 'react'
 
 // Component to show basic product information
@@ -79,8 +79,25 @@ function ProductListItem({
 	onDelete: () => void
 	isDeleting: boolean
 }) {
+	const visibilityTag = product.tags.find((tag: any) => tag[0] === 'visibility')
+	const visibility = visibilityTag?.[1] || 'on-sale'
+
+	const getVisibilityIcon = () => {
+		switch (visibility) {
+			case 'hidden':
+				return <EyeOff className="w-4 h-4 text-gray-500" />
+			case 'pre-order':
+				return <Clock className="w-4 h-4 text-blue-600" />
+			case 'on-sale':
+				return <Eye className="w-4 h-4 text-green-600" />
+			default:
+				return null
+		}
+	}
+
 	const triggerContent = (
-		<div>
+		<div className="flex items-center gap-2">
+			{getVisibilityIcon()}
 			<p className="font-semibold">{getProductTitle(product)}</p>
 		</div>
 	)
