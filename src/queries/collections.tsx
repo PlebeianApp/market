@@ -5,11 +5,12 @@ import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { z } from 'zod'
 import { collectionKeys, collectionsKeys } from './queryKeyFactory'
+import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 
 // --- DATA FETCHING FUNCTIONS ---
 /**
  * Fetches all collections
- * @returns Array of collection events sorted by creation date
+ * @returns Array of collection events sorted by creation date (blacklist filtered)
  */
 export const fetchCollections = async () => {
 	const ndk = ndkActions.getNDK()
@@ -21,12 +22,15 @@ export const fetchCollections = async () => {
 	}
 
 	const events = await ndk.fetchEvents(filter)
-	return Array.from(events)
+	const allEvents = Array.from(events)
+
+	// Filter out blacklisted collections and authors
+	return filterBlacklistedEvents(allEvents)
 }
 /**
  * Fetches all collections from a specific pubkey
  * @param pubkey The pubkey of the user
- * @returns Array of collection events sorted by creation date
+ * @returns Array of collection events sorted by creation date (blacklist filtered)
  */
 export const fetchCollectionsByPubkey = async (pubkey: string) => {
 	const ndk = ndkActions.getNDK()
@@ -39,7 +43,10 @@ export const fetchCollectionsByPubkey = async (pubkey: string) => {
 	}
 
 	const events = await ndk.fetchEvents(filter)
-	return Array.from(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+	const allEvents = Array.from(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+
+	// Filter out blacklisted collections (author check not needed since we're querying by author)
+	return filterBlacklistedEvents(allEvents)
 }
 
 /**
