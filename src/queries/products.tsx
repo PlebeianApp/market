@@ -685,7 +685,6 @@ export const useProductByATag = (pubkey: string, dTag: string) => {
 	})
 }
 
-
 // --- PRODUCT SEARCH (NIP-50) ---
 
 const PRODUCT_SEARCH_RELAYS = ['wss://relay.nostr.band', 'wss://search.nos.today', 'wss://nos.lol']
