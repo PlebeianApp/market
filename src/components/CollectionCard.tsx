@@ -1,5 +1,5 @@
 import { NDKEvent } from '@nostr-dev-kit/ndk'
-import { getCollectionImages, getCollectionSummary, getCollectionTitle } from '@/queries/collections.tsx'
+import { getCollectionImages, getCollectionSummary, getCollectionTitle, getCollectionId } from '@/queries/collections.tsx'
 import { useEffect, useState } from 'react'
 import { ndkActions } from '@/lib/stores/ndk.ts'
 import { uiActions } from '@/lib/stores/ui'
@@ -11,6 +11,7 @@ import { useSuspenseQuery } from '@tanstack/react-query'
 
 export function CollectionCard({ collection }: { collection: NDKEvent }) {
 	const title = getCollectionTitle(collection)
+	const collectionId = getCollectionId(collection)
 	const pubkey = collection.pubkey
 	const summary = getCollectionSummary(collection)
 	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(null)
@@ -41,7 +42,7 @@ export function CollectionCard({ collection }: { collection: NDKEvent }) {
 		<div className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col" data-testid="product-card">
 			{/* Square aspect ratio container for image */}
 			<Link
-				to={`/collection/${collection.id}`}
+				to={`/collection/${collectionId}`}
 				className="relative aspect-square overflow-hidden border-b border-zinc-800 block"
 				onClick={handleCollectionClick}
 			>
@@ -60,7 +61,7 @@ export function CollectionCard({ collection }: { collection: NDKEvent }) {
 
 			<div className="p-4 flex flex-col gap-2 flex-grow">
 				{/* Product title */}
-				<Link to={`/collection/${collection.id}`} onClick={handleCollectionClick}>
+				<Link to={`/collection/${collectionId}`} onClick={handleCollectionClick}>
 					<h2 className="text-lg font-black border-b border-[var(--light-gray)] pb-2 overflow-hidden text-ellipsis whitespace-nowrap">
 						{title}
 					</h2>
