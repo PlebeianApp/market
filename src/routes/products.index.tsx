@@ -7,7 +7,7 @@ import { PRODUCT_CATEGORIES } from '@/lib/constants'
 import { authStore } from '@/lib/stores/auth'
 import { uiActions } from '@/lib/stores/ui'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { useQuery, useSuspenseQuery } from '@tanstack/react-query'
+import { useQueries, useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -42,7 +42,7 @@ function useHeroBackground(imageUrl: string, className: string) {
 	}, [imageUrl, className])
 }
 
-// Hook to fetch featured product events
+// Hook to fetch featured product events using useQueries
 function useFeaturedProductEvents(featuredProducts: string[] | undefined) {
 	const queries = (featuredProducts || []).map((productCoords) => {
 		const [, pubkey, dTag] = productCoords.split(':')
@@ -52,8 +52,7 @@ function useFeaturedProductEvents(featuredProducts: string[] | undefined) {
 		}
 	})
 
-	// Use multiple useQuery calls for each featured product
-	const results = queries.map((queryOptions) => useQuery(queryOptions))
+	const results = useQueries({ queries })
 
 	// Filter out loading and null products, return only loaded products
 	return results
