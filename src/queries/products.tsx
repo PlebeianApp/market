@@ -18,6 +18,7 @@ import { z } from 'zod'
 import { productKeys } from './queryKeyFactory'
 import { getCoordsFromATag, getATagFromCoords } from '@/lib/utils/coords.ts'
 import { discoverNip50Relays } from '@/lib/relays'
+import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 
 // Re-export productKeys for use in other query files
 export { productKeys }

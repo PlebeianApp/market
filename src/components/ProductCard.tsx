@@ -90,7 +90,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 
 				{/* Pricing section */}
 				<div className="flex justify-between items-center">
-					{price && <PriceDisplay priceValue={parseFloat(price[1])} originalCurrency={price[2]} />}
+					{price && <PriceDisplay priceValue={parseFloat(price[1])} originalCurrency={price[2] || 'SATS'} />}
 
 					{/* Stock indicator - right aligned */}
 					{stock !== undefined && (
