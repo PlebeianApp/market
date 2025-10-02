@@ -29,7 +29,9 @@ function SearchProductsPage() {
 
 	return (
 		<div className="container mx-auto px-4 py-6">
-			<h1 className="text-2xl font-heading mb-4">Search results for: <span className="text-secondary">{q}</span></h1>
+			<h1 className="text-2xl font-heading mb-4">
+				Search results for: <span className="text-secondary">{q}</span>
+			</h1>
 			{isFetching && results.length === 0 ? (
 				<div className="py-12 text-center text-muted-foreground">Searching...</div>
 			) : results.length === 0 ? (

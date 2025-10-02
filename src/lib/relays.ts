@@ -47,9 +47,13 @@ export async function relaySupportsNip50(relayUrl: string): Promise<boolean> {
 	}
 
 	try {
-		const res = await fetchWithTimeout(httpUrl, {
-			headers: { Accept: 'application/nostr+json' },
-		}, 6000)
+		const res = await fetchWithTimeout(
+			httpUrl,
+			{
+				headers: { Accept: 'application/nostr+json' },
+			},
+			6000,
+		)
 		if (!res.ok) throw new Error(`HTTP ${res.status}`)
 		const info = await res.json().catch(() => ({}))
 		const nips: number[] | undefined = info?.supported_nips
@@ -75,8 +79,6 @@ export async function discoverNip50Relays(extraSeeds: string[] = []): Promise<st
 	const configured = state?.explicitRelayUrls ?? []
 	const candidates = Array.from(new Set([...defaultRelaysUrls, ...configured, ...extraSeeds].map(normalizeRelayUrl)))
 
-	const results = await Promise.all(
-		candidates.map(async (url) => ({ url, ok: await relaySupportsNip50(url) }))
-	)
+	const results = await Promise.all(candidates.map(async (url) => ({ url, ok: await relaySupportsNip50(url) })))
 	return results.filter((r) => r.ok).map((r) => r.url)
 }
