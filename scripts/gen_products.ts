@@ -1,4 +1,4 @@
-import { CURRENCIES } from '@/lib/constants'
+import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
 import type { ProductListingSchema } from '@/lib/schemas/productListing'
 import { faker } from '@faker-js/faker'
 import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev-kit/ndk'
@@ -33,6 +33,19 @@ export function generateProductData(
 		})
 	}
 
+	// Generate category tags: at least one from PRODUCT_CATEGORIES, optionally 0-3 more random ones
+	const categoryTags: NDKTag[] = []
+
+	// Always add at least one category from PRODUCT_CATEGORIES
+	const defaultCategory = faker.helpers.arrayElement([...PRODUCT_CATEGORIES])
+	categoryTags.push(['t', defaultCategory])
+
+	// Optionally add 0-3 additional random category tags
+	const numAdditionalTags = faker.number.int({ min: 0, max: 3 })
+	for (let i = 0; i < numAdditionalTags; i++) {
+		categoryTags.push(['t', faker.commerce.department()])
+	}
+
 	return {
 		kind: 30402,
 		created_at: Math.floor(Date.now() / 1000),
@@ -57,7 +70,7 @@ export function generateProductData(
 			],
 			['location', faker.location.city()],
 			['g', faker.string.alphanumeric(8).toLowerCase()],
-			['t', faker.commerce.department()],
+			...categoryTags,
 		] as NDKTag[],
 	}
 }

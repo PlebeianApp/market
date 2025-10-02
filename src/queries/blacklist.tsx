@@ -92,7 +92,6 @@ export const useBlacklistSettings = (appPubkey?: string) => {
 
 		// Event handler for blacklist updates
 		subscription.on('event', (newEvent) => {
-			console.log('Blacklist updated, invalidating queries:', newEvent.id)
 			queryClient.invalidateQueries({ queryKey: configKeys.blacklist(appPubkey) })
 		})
 

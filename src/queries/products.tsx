@@ -27,15 +27,17 @@ export { productKeys }
 /**
  * Fetches all product listings
  * @param limit Maximum number of products to fetch (default: 500)
+ * @param tag Optional tag to filter products by
  * @returns Array of product events sorted by creation date (blacklist filtered)
  */
-export const fetchProducts = async (limit: number = 500) => {
+export const fetchProducts = async (limit: number = 500, tag?: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
 	const filter: NDKFilter = {
 		kinds: [30402], // Product listings in Nostr
 		limit,
+		...(tag && { '#t': [tag] }), // Add tag filter if provided
 	}
 
 	const events = await ndk.fetchEvents(filter)
@@ -49,9 +51,10 @@ export const fetchProducts = async (limit: number = 500) => {
  * Fetches product listings with pagination support
  * @param limit Number of products to fetch (default: 20)
  * @param until Timestamp to fetch products before (for pagination)
+ * @param tag Optional tag to filter products by
  * @returns Array of product events sorted by creation date (blacklist filtered)
  */
-export const fetchProductsPaginated = async (limit: number = 20, until?: number) => {
+export const fetchProductsPaginated = async (limit: number = 20, until?: number, tag?: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -59,6 +62,7 @@ export const fetchProductsPaginated = async (limit: number = 20, until?: number)
 		kinds: [30402], // Product listings in Nostr
 		limit,
 		...(until && { until }),
+		...(tag && { '#t': [tag] }), // Add tag filter if provided
 	}
 
 	const events = await ndk.fetchEvents(filter)
@@ -138,21 +142,22 @@ export const productQueryOptions = (id: string) =>
 /**
  * React Query options for fetching all products
  */
-export const productsQueryOptions = (limit: number = 500) =>
+export const productsQueryOptions = (limit: number = 500, tag?: string) =>
 	queryOptions({
-		queryKey: productKeys.all,
-		queryFn: () => fetchProducts(limit),
+		queryKey: tag ? [...productKeys.all, 'tag', tag] : productKeys.all,
+		queryFn: () => fetchProducts(limit, tag),
 	})
 
 /**
  * React Query options for fetching products with pagination
  * @param limit Number of products to fetch
  * @param until Timestamp to fetch products before
+ * @param tag Optional tag to filter products by
  */
-export const productsPaginatedQueryOptions = (limit: number = 20, until?: number) =>
+export const productsPaginatedQueryOptions = (limit: number = 20, until?: number, tag?: string) =>
 	queryOptions({
-		queryKey: productKeys.paginated(limit, until),
-		queryFn: () => fetchProductsPaginated(limit, until),
+		queryKey: tag ? [...productKeys.paginated(limit, until), 'tag', tag] : productKeys.paginated(limit, until),
+		queryFn: () => fetchProductsPaginated(limit, until, tag),
 		staleTime: 300000, // 5 minutes
 	})
 

@@ -49,17 +49,16 @@ export class BlacklistManagerImpl implements BlacklistManager {
 		this.blacklistedCollections.clear()
 		newBlacklistedCollections.forEach((coords) => this.blacklistedCollections.add(coords))
 
-		// Find newly blacklisted pubkeys
+		// Log newly blacklisted pubkeys for debugging
 		const newlyBlacklisted = newBlacklistedPubkeys.filter((pubkey) => !previouslyBlacklisted.has(pubkey))
 
 		if (newlyBlacklisted.length > 0) {
 			console.log('Newly blacklisted pubkeys:', newlyBlacklisted)
-
-			// Delete all events from newly blacklisted pubkeys
-			for (const pubkey of newlyBlacklisted) {
-				await this.deleteEventsFromPubkey(pubkey)
-			}
 		}
+
+		console.log(
+			`Blacklist updated: ${this.blacklistedPubkeys.size} users, ${this.blacklistedProducts.size} products, ${this.blacklistedCollections.size} collections`,
+		)
 	}
 
 	private extractBlacklistedPubkeys(event: NostrEvent): string[] {
@@ -78,40 +77,6 @@ export class BlacklistManagerImpl implements BlacklistManager {
 	private extractBlacklistedCollections(event: NostrEvent): string[] {
 		// Extract collection coordinates from 'a' tags with kind 30405
 		return event.tags.filter((tag) => tag[0] === 'a' && tag[1] && tag[1].startsWith('30405:')).map((tag) => tag[1])
-	}
-
-	private async deleteEventsFromPubkey(pubkey: string): Promise<void> {
-		if (!this.ndk) {
-			console.warn('NDK not available, cannot delete events from blacklisted pubkey:', pubkey)
-			return
-		}
-
-		try {
-			console.log('Fetching events from blacklisted pubkey:', pubkey)
-
-			// Fetch all events from the blacklisted pubkey
-			const eventsToDelete = await this.ndk.fetchEvents({
-				authors: [pubkey],
-				limit: 1000, // Reasonable limit to avoid overwhelming the system
-			})
-
-			if (eventsToDelete.size === 0) {
-				console.log('No events found for blacklisted pubkey:', pubkey)
-				return
-			}
-
-			console.log(`Found ${eventsToDelete.size} events to delete from pubkey: ${pubkey}`)
-
-			// MOCK IMPLEMENTATION: Log deletion intent without creating actual deletion events
-			// TODO: Implement proper deletion mechanism (admin cannot create deletion events for events they didn't author)
-			Array.from(eventsToDelete).forEach((eventToDelete) => {
-				console.log(`MOCK: Would delete event ${eventToDelete.id} (kind: ${eventToDelete.kind}) from blacklisted pubkey: ${pubkey}`)
-			})
-
-			console.log(`MOCK: Completed deletion process for pubkey: ${pubkey} (${eventsToDelete.size} events marked for deletion)`)
-		} catch (error) {
-			console.error(`Error processing events from pubkey ${pubkey}:`, error)
-		}
 	}
 
 	public isBlacklisted(pubkey: string): boolean {

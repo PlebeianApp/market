@@ -73,12 +73,6 @@ export const blacklistActions = {
 			lastUpdated: data.lastUpdated || Date.now(),
 			isLoaded: true,
 		}))
-
-		console.log('🛡️ Blacklist updated:', {
-			pubkeys: data.blacklistedPubkeys.length,
-			products: data.blacklistedProducts.length,
-			collections: data.blacklistedCollections.length,
-		})
 	},
 
 	/**
