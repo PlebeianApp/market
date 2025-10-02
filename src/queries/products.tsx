@@ -684,3 +684,52 @@ export const useProductByATag = (pubkey: string, dTag: string) => {
 		...productByATagQueryOptions(pubkey, dTag),
 	})
 }
+
+
+// --- PRODUCT SEARCH (NIP-50) ---
+
+const PRODUCT_SEARCH_RELAYS = ['wss://relay.nostr.band', 'wss://search.nos.today', 'wss://nos.lol']
+
+/**
+ * Search for product listing events (kind 30402) by free-text query.
+ * Uses NIP-50 `search` on relays that support it.
+ */
+export const fetchProductsBySearch = async (query: string, limit: number = 20) => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+	if (!query?.trim()) return []
+
+	// Ensure we have search-capable relays connected
+	for (const url of PRODUCT_SEARCH_RELAYS) {
+		try {
+			await ndk.addExplicitRelay(url)
+		} catch (error) {
+			console.error(`Failed to connect to relay ${url}:`, error)
+		}
+	}
+
+	const filter: NDKFilter = {
+		kinds: [30402],
+		search: query,
+		limit,
+	}
+
+	const events = await ndk.fetchEvents(filter)
+	return Array.from(events)
+}
+
+/** React Query options for searching products by text */
+export const productsSearchQueryOptions = (query: string, limit: number = 20) =>
+	queryOptions({
+		queryKey: [...productKeys.all, 'search', query, limit],
+		queryFn: () => fetchProductsBySearch(query, limit),
+		enabled: !!query?.trim(),
+	})
+
+/** Hook to search products by text */
+export const useProductSearch = (query: string, options?: { enabled?: boolean; limit?: number }) => {
+	return useQuery({
+		...productsSearchQueryOptions(query, options?.limit ?? 20),
+		enabled: options?.enabled ?? !!query?.trim(),
+	})
+}
