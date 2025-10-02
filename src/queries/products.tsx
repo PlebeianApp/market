@@ -18,6 +18,7 @@ import { z } from 'zod'
 import { productKeys } from './queryKeyFactory'
 import { getCoordsFromATag, getATagFromCoords } from '@/lib/utils/coords.ts'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
+import { discoverNip50Relays } from '@/lib/relays'
 
 // Re-export productKeys for use in other query files
 export { productKeys }
@@ -699,13 +700,20 @@ export const fetchProductsBySearch = async (query: string, limit: number = 20) =
 	if (!ndk) throw new Error('NDK not initialized')
 	if (!query?.trim()) return []
 
-	// Ensure we have search-capable relays connected
-	for (const url of PRODUCT_SEARCH_RELAYS) {
-		try {
-			await ndk.addExplicitRelay(url)
-		} catch (error) {
-			console.error(`Failed to connect to relay ${url}:`, error)
-		}
+	// Discover relays that claim NIP-50 support via NIP-11 and connect to them
+	let relays: string[] = []
+	try {
+		relays = await discoverNip50Relays(PRODUCT_SEARCH_RELAYS)
+	} catch (e) {
+		console.warn('NIP-11 discovery failed, falling back to static search relays')
+	}
+	if (!relays || relays.length === 0) {
+		relays = PRODUCT_SEARCH_RELAYS
+	}
+	try {
+		ndkActions.addExplicitRelay(relays)
+	} catch (error) {
+		console.error('Failed to add discovered search relays:', error)
 	}
 
 	const filter: NDKFilter = {
