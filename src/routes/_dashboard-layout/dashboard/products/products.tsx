@@ -1,17 +1,16 @@
+import { DashboardListItem } from '@/components/layout/DashboardListItem'
 import { Button } from '@/components/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { authStore } from '@/lib/stores/auth'
 import { productFormActions } from '@/lib/stores/product'
-import { getProductTitle, getProductImages, getProductId, productsByPubkeyQueryOptions } from '@/queries/products'
 import { useDeleteProductMutation } from '@/publish/products'
-import { useQuery } from '@tanstack/react-query'
-import { createFileRoute, useNavigate, Outlet, useMatchRoute } from '@tanstack/react-router'
-import { useStore } from '@tanstack/react-store'
-import { useState } from 'react'
-import { ChevronDown, PackageIcon, PlusIcon, Trash } from 'lucide-react'
+import { getProductId, getProductImages, getProductTitle, productsByPubkeyQueryOptions } from '@/queries/products'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
-import { DashboardListItem } from '@/components/layout/DashboardListItem'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
+import { useQuery } from '@tanstack/react-query'
+import { createFileRoute, Outlet, useMatchRoute, useNavigate } from '@tanstack/react-router'
+import { useStore } from '@tanstack/react-store'
+import { PackageIcon, Trash } from 'lucide-react'
+import { useState } from 'react'
 
 // Component to show basic product information
 function ProductBasicInfo({ product }: { product: any }) {
@@ -19,8 +18,10 @@ function ProductBasicInfo({ product }: { product: any }) {
 	const images = getProductImages(product)
 	const priceTag = product.tags.find((tag: any) => tag[0] === 'price')
 	const price = priceTag ? `${priceTag[1]} ${priceTag[2]}` : 'Price not set'
-	const statusTag = product.tags.find((tag: any) => tag[0] === 'status')
-	const status = statusTag?.[1] || 'Unknown'
+	const visibilityTag = product.tags.find((tag: any) => tag[0] === 'visibility')
+	const visibility = visibilityTag?.[1] || 'on-sale'
+	const stockTag = product.tags.find((tag: any) => tag[0] === 'stock')
+	const stock = stockTag?.[1]
 
 	return (
 		<div className="p-4 bg-gray-50 border-t">
@@ -42,10 +43,22 @@ function ProductBasicInfo({ product }: { product: any }) {
 					</div>
 					<div>
 						<p className="text-sm text-gray-600">
-							Status: <span className="font-medium capitalize">{status}</span>
+							Visibility:{' '}
+							<span
+								className={`font-medium capitalize ${visibility === 'hidden' ? 'text-gray-500' : visibility === 'pre-order' ? 'text-blue-600' : 'text-green-600'}`}
+							>
+								{visibility}
+							</span>
 						</p>
 					</div>
 				</div>
+				{stock && (
+					<div>
+						<p className="text-sm text-gray-600">
+							Stock: <span className="font-medium">{stock} in stock</span>
+						</p>
+					</div>
+				)}
 			</div>
 		</div>
 	)
@@ -154,7 +167,7 @@ function ProductsOverviewComponent() {
 		isLoading,
 		error,
 	} = useQuery({
-		...productsByPubkeyQueryOptions(user?.pubkey ?? ''),
+		...productsByPubkeyQueryOptions(user?.pubkey ?? '', true), // Include hidden products for own dashboard
 		enabled: !!user?.pubkey && isAuthenticated,
 	})
 

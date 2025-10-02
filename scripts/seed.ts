@@ -139,10 +139,30 @@ async function seedData() {
 		productsByUser[pubkey] = []
 
 		// Create products with shipping options
+		// Ensure at least one hidden and one pre-order product
 		for (let j = 0; j < PRODUCTS_PER_USER; j++) {
 			// Use the shipping options from this user for their products
 			const userShippingRefs = shippingsByUser[pubkey] || []
-			const product = generateProductData(userShippingRefs)
+
+			// Determine visibility: first product is hidden, second is pre-order, rest are varied
+			let visibility: 'hidden' | 'on-sale' | 'pre-order'
+			if (j === 0) {
+				visibility = 'hidden'
+			} else if (j === 1) {
+				visibility = 'pre-order'
+			} else {
+				// Randomly assign visibility for remaining products (70% on-sale, 15% hidden, 15% pre-order)
+				const rand = Math.random()
+				if (rand < 0.7) {
+					visibility = 'on-sale'
+				} else if (rand < 0.85) {
+					visibility = 'hidden'
+				} else {
+					visibility = 'pre-order'
+				}
+			}
+
+			const product = generateProductData(userShippingRefs, visibility)
 			const success = await createProductEvent(signer, ndk, product)
 			if (success) {
 				const productId = product.tags.find((tag) => tag[0] === 'd')?.[1]
