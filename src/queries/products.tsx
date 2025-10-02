@@ -722,8 +722,30 @@ export const fetchProductsBySearch = async (query: string, limit: number = 20) =
 		limit,
 	}
 
-	const events = await ndk.fetchEvents(filter)
-	return Array.from(events)
+	// In some deployments, ndk.fetchEvents may hang if relays are slow/unresponsive.
+	// Race the fetch with a timeout so the UI can recover gracefully.
+	const SEARCH_TIMEOUT_MS = 8000
+	try {
+		const fetchPromise = ndk
+			.fetchEvents(filter)
+			.then((events) => Array.from(events))
+			.catch((err) => {
+				console.error('Search fetch failed:', err)
+				return []
+			})
+
+		const timeoutPromise = new Promise<import('@nostr-dev-kit/ndk').NDKEvent[]>((resolve) => {
+			setTimeout(() => {
+				console.warn(`Search timed out after ${SEARCH_TIMEOUT_MS}ms`, { query })
+				resolve([])
+			}, SEARCH_TIMEOUT_MS)
+		})
+
+		return await Promise.race([fetchPromise, timeoutPromise])
+	} catch (e) {
+		console.error('Search error:', e)
+		return []
+	}
 }
 
 /** React Query options for searching products by text */
