@@ -3,6 +3,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ndkActions } from '@/lib/stores/ndk'
 import { toast } from 'sonner'
+import { BlossomUploadService } from '@/lib/blossom/uploadService'
+import { SimpleBlossomUploadService } from '@/lib/blossom/simpleUploadService'
+import { ProxyBlossomUploadService } from '@/lib/blossom/proxyUploadService'
+import { BlossomServerSelector } from '@/components/ui/blossom-server-selector'
+import { BLOSSOM_SERVERS } from '@/lib/blossom/config'
 
 interface ImageUploaderProps {
   src: string | null
@@ -38,6 +43,8 @@ export function ImageUploader({
   const [localSrc, setLocalSrc] = useState<string | null>(src)
   const [inputValue, setInputValue] = useState(initialUrl || '')
   const [hasInteracted, setHasInteracted] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [selectedBlossomServer, setSelectedBlossomServer] = useState(BLOSSOM_SERVERS[0].url)
   const inputTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
@@ -48,22 +55,97 @@ export function ImageUploader({
     setInputValue(initialUrl || '')
   }, [initialUrl])
 
+  const handleFileUpload = async (files: FileList | File[]) => {
+    setIsLoading(true)
+    setUploadProgress(0)
+
+    try {
+      // Try proxy upload first (bypasses CORS)
+      try {
+        const proxyUploadService = new ProxyBlossomUploadService(selectedBlossomServer)
+
+        for (const file of Array.from(files)) {
+          const result = await proxyUploadService.uploadFile(file, (progress) => {
+            setUploadProgress(progress.percentage)
+          })
+
+          onSave({ url: result.url, index })
+
+          if (index === -1) {
+            setInputValue('')
+          }
+        }
+
+        toast.success('File uploaded successfully! (via proxy)')
+        return
+      } catch (proxyError) {
+        console.log('Proxy upload failed, trying direct upload:', proxyError)
+      }
+
+      // Try direct upload with NDK
+      const ndk = ndkActions.getNDK()
+      if (ndk) {
+        try {
+          const uploadService = new BlossomUploadService(ndk, selectedBlossomServer)
+
+          for (const file of Array.from(files)) {
+            const result = await uploadService.uploadFile(file, (progress) => {
+              setUploadProgress(progress.percentage)
+            })
+
+            onSave({ url: result.url, index })
+
+            if (index === -1) {
+              setInputValue('')
+            }
+          }
+
+          toast.success('File uploaded successfully! (using data URL)')
+          return
+        } catch (blossomError) {
+          console.log('Blossom service failed, falling back to simple upload:', blossomError)
+        }
+      }
+
+      // Final fallback to simple upload service
+      const simpleUploadService = new SimpleBlossomUploadService(selectedBlossomServer)
+
+      for (const file of Array.from(files)) {
+        const result = await simpleUploadService.uploadFile(file, (progress) => {
+          setUploadProgress(progress.percentage)
+        })
+
+        onSave({ url: result.url, index })
+
+        if (index === -1) {
+          setInputValue('')
+        }
+      }
+
+      toast.success('File uploaded successfully! (using fallback method)')
+    } catch (error) {
+      console.error('Upload failed:', error)
+      toast.error(`Upload failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setIsLoading(false)
+      setUploadProgress(0)
+    }
+  }
+
   const handleUploadIntent = async () => {
     if (!hasInteracted && onInteraction) {
       setHasInteracted(true)
       onInteraction()
     }
-    
+
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = 'image/*,video/*'
     input.multiple = !forSingle
     input.onchange = async (e) => {
-      const files = Array.from((e.target as HTMLInputElement).files || [])
-      if (files.length) {
-        toast.warning("File upload not yet supported. Please use URL input instead.", {
-          duration: 5000,
-        })
+      const files = (e.target as HTMLInputElement).files
+      if (files && files.length) {
+        await handleFileUpload(files)
       }
     }
     input.click()
@@ -72,7 +154,7 @@ export function ImageUploader({
   function handleDragEnter(e: React.DragEvent<HTMLButtonElement>) {
     e.preventDefault()
     setIsDragging(true)
-    
+
     if (!hasInteracted && onInteraction) {
       setHasInteracted(true)
       onInteraction()
@@ -87,17 +169,15 @@ export function ImageUploader({
   function handleDrop(e: React.DragEvent<HTMLButtonElement>) {
     e.preventDefault()
     setIsDragging(false)
-    
+
     if (!hasInteracted && onInteraction) {
       setHasInteracted(true)
       onInteraction()
     }
 
-    const files = Array.from(e.dataTransfer?.files || [])
-    if (files.length) {
-      toast.warning("File upload not yet supported. Please use URL input instead.", {
-        duration: 5000,
-      })
+    const files = e.dataTransfer?.files
+    if (files && files.length) {
+      handleFileUpload(files)
     }
   }
 
@@ -106,16 +186,14 @@ export function ImageUploader({
       setHasInteracted(true)
       onInteraction()
     }
-    
+
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = 'image/*'
     input.onchange = async (e) => {
-      const files = Array.from((e.target as HTMLInputElement).files || [])
-      if (files.length) {
-        toast.warning("File upload not yet supported. Please use URL input instead.", {
-          duration: 5000,
-        })
+      const files = (e.target as HTMLInputElement).files
+      if (files && files.length) {
+        await handleFileUpload(files)
       }
     }
     input.click()
@@ -126,18 +204,18 @@ export function ImageUploader({
       setHasInteracted(true)
       onInteraction()
     }
-    
+
     if (inputTimeoutRef.current) {
       clearTimeout(inputTimeoutRef.current)
     }
-    
+
     const newValue = event.target.value
     setInputValue(newValue)
-    
+
     if (onUrlChange) {
       onUrlChange(newValue)
     }
-    
+
     inputTimeoutRef.current = setTimeout(() => {
       if (!newValue.trim()) {
         setUrlError(null)
@@ -162,9 +240,9 @@ export function ImageUploader({
   function handleSaveImage() {
     if (!inputValue) return
     if (urlError) return
-    
+
     onSave({ url: inputValue, index })
-    
+
     if (index === -1) {
       setInputValue('')
     }
@@ -184,6 +262,16 @@ export function ImageUploader({
   return (
     <div className="w-full h-full">
       <div className="flex flex-col">
+        {/* Blossom Server Selector */}
+        {!localSrc && (
+          <div className="mb-4">
+            <BlossomServerSelector
+              selectedServer={selectedBlossomServer}
+              onServerChange={setSelectedBlossomServer}
+            />
+          </div>
+        )}
+
         <div
           className={`border-2 border-b-0 border-black relative w-full aspect-video overflow-hidden
             ${localSrc ? 'bg-black' : ''}`}
@@ -195,7 +283,7 @@ export function ImageUploader({
                 <div className="absolute inset-0 bg-gradient-to-r from-gray-300 to-white" style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}></div>
                 <div className="absolute inset-0 bg-gradient-to-l from-gray-300 to-white" style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}></div>
               </div>
-              
+
               <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundImage: 'url("images/image-bg-pattern.png")', backgroundRepeat: 'repeat' }}>
                 {getMediaType(localSrc) === 'video' ? (
                   <video src={localSrc} controls className="max-w-full max-h-full object-contain">
@@ -206,7 +294,7 @@ export function ImageUploader({
                   <img src={localSrc} alt="uploaded media" className="max-w-full max-h-full object-contain" />
                 )}
               </div>
-              
+
               <div className="absolute bottom-2 right-2 flex gap-2">
                 {inputEditable && (
                   <Button type="button" variant="outline" size="icon" className="bg-white" onClick={handleEditByUpload}>
@@ -217,25 +305,25 @@ export function ImageUploader({
                   <span className="i-delete w-4 h-4" />
                 </Button>
               </div>
-              
+
               {index !== -1 && (
                 <div className="absolute left-2 bottom-2 flex flex-row gap-2">
-                  <Button 
+                  <Button
                     type="button"
-                    variant="outline" 
-                    size="icon" 
+                    variant="outline"
+                    size="icon"
                     className="bg-white"
-                    disabled={index === 0} 
+                    disabled={index === 0}
                     onClick={() => onPromote && onPromote(index)}
                   >
                     <span className="i-up w-4 h-4" />
                   </Button>
-                  <Button 
+                  <Button
                     type="button"
-                    variant="outline" 
-                    size="icon" 
+                    variant="outline"
+                    size="icon"
                     className="bg-white"
-                    disabled={index === imagesLength - 1} 
+                    disabled={index === imagesLength - 1}
                     onClick={() => onDemote && onDemote(index)}
                   >
                     <span className="i-down w-4 h-4" />
@@ -260,7 +348,7 @@ export function ImageUploader({
             </button>
           )}
         </div>
-        
+
         <div className="w-full flex items-center justify-center">
           <div className="relative w-full">
             <Input
@@ -277,20 +365,20 @@ export function ImageUploader({
             />
             {localSrc ? (
               inputEditable ? (
-                <Button 
+                <Button
                   type="button"
-                  variant="primary" 
-                  className="absolute right-1 top-1 bottom-1 h-10" 
+                  variant="primary"
+                  className="absolute right-1 top-1 bottom-1 h-10"
                   onClick={handleSaveImage}
                   data-testid="image-save-button"
                 >
                   Save
                 </Button>
               ) : (
-                <Button 
+                <Button
                   type="button"
-                  variant="outline" 
-                  className="absolute right-1 top-1 bottom-1 h-10 bg-white" 
+                  variant="outline"
+                  className="absolute right-1 top-1 bottom-1 h-10 bg-white"
                   onClick={() => setInputEditable(true)}
                   data-testid="image-edit-button"
                 >
@@ -298,10 +386,10 @@ export function ImageUploader({
                 </Button>
               )
             ) : (
-              <Button 
+              <Button
                 type="button"
-                variant="primary" 
-                className="absolute right-1 top-1 bottom-1 h-10" 
+                variant="primary"
+                className="absolute right-1 top-1 bottom-1 h-10"
                 onClick={handleSaveImage}
                 data-testid="image-save-button"
               >
@@ -310,18 +398,25 @@ export function ImageUploader({
             )}
           </div>
         </div>
-        
+
         {urlError && (
           <p className="text-destructive">{urlError}</p>
         )}
-        
+
         {isLoading && (
           <div className="flex flex-row gap-2 mt-2">
             <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full"></div>
             <p>Loading...</p>
           </div>
         )}
+
+        {uploadProgress > 0 && uploadProgress < 100 && (
+          <div className="flex flex-row gap-2 mt-2">
+            <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full"></div>
+            <p>Uploading... {uploadProgress}%</p>
+          </div>
+        )}
       </div>
     </div>
   )
-} 
+}

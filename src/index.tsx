@@ -96,6 +96,56 @@ export const server = serve({
 			},
 		},
 		'/images/:file': ({ params }) => serveStatic(`images/${params.file}`),
+		'/api/upload-proxy': {
+			POST: async (req) => {
+				try {
+					const formData = await req.formData()
+					const file = formData.get('file') as File
+					const serverUrl = formData.get('server') as string
+
+					if (!file || !serverUrl) {
+						return Response.json({ error: 'Missing file or server' }, { status: 400 })
+					}
+
+					// Create new FormData for the actual upload
+					const uploadFormData = new FormData()
+					uploadFormData.append('file', file)
+
+					// Try different endpoints
+					const endpoints = [
+						`${serverUrl}/api/v1/upload`,
+						`${serverUrl}/upload`,
+						`${serverUrl}/api/upload`,
+						`${serverUrl}/v1/upload`
+					]
+
+					for (const endpoint of endpoints) {
+						try {
+							const response = await fetch(endpoint, {
+								method: 'POST',
+								body: uploadFormData,
+							})
+
+							if (response.ok) {
+								const result = await response.json()
+								return Response.json({
+									url: result.url || result.data?.url || result,
+									nip96Url: result.nip96Url
+								})
+							}
+						} catch (error) {
+							console.log(`Failed to upload to ${endpoint}:`, error)
+							continue
+						}
+					}
+
+					return Response.json({ error: 'All upload endpoints failed' }, { status: 500 })
+				} catch (error) {
+					console.error('Proxy upload error:', error)
+					return Response.json({ error: 'Upload failed' }, { status: 500 })
+				}
+			},
+		},
 	},
 	development: process.env.NODE_ENV !== 'production',
 	fetch(req, server) {
