@@ -687,6 +687,7 @@ export function ShippingTab() {
 											className="w-24 text-sm"
 										/>
 										<Button
+											type="button"
 											variant="outline"
 											size="sm"
 											onClick={() => removeShippingOption(index)}
@@ -731,6 +732,7 @@ export function ShippingTab() {
 									</div>
 								</div>
 								<Button
+									type="button"
 									variant="outline"
 									size="sm"
 									onClick={() => addShippingOption(option)}
@@ -790,13 +792,13 @@ export function SpecTab() {
 								onChange={(e) => updateSpec(index, 'value', e.target.value)}
 							/>
 						</div>
-						<Button variant="outline" size="sm" onClick={() => removeSpec(index)} className="text-red-600 hover:text-red-700">
+						<Button type="button" variant="outline" size="sm" onClick={() => removeSpec(index)} className="text-red-600 hover:text-red-700">
 							<X className="w-4 h-4" />
 						</Button>
 					</div>
 				))}
 
-				<Button variant="outline" onClick={addSpec} className="w-full flex items-center gap-2">
+				<Button type="button" variant="outline" onClick={addSpec} className="w-full flex items-center gap-2">
 					<PlusIcon className="w-4 h-4" />
 					Add Specification
 				</Button>

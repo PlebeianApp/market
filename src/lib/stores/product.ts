@@ -89,7 +89,7 @@ export const DEFAULT_FORM_STATE: ProductFormState = {
 	fiatPrice: '',
 	quantity: '',
 	currency: 'SATS',
-	status: 'hidden',
+	status: 'on-sale',
 	productType: 'single',
 	mainCategory: null,
 	selectedCollection: null,
