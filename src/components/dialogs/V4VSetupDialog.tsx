@@ -1,8 +1,7 @@
-import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { V4VManager } from '@/components/v4v/V4VManager'
-import { useV4VManager } from '@/hooks/useV4VManager'
-import { toast } from 'sonner'
+import { useV4VShares } from '@/queries/v4v'
+import { useMemo } from 'react'
 
 interface V4VSetupDialogProps {
 	open: boolean
@@ -12,23 +11,36 @@ interface V4VSetupDialogProps {
 }
 
 export function V4VSetupDialog({ open, onOpenChange, userPubkey, onConfirm }: V4VSetupDialogProps) {
-	const { saveShares, localShares, totalV4VPercentage } = useV4VManager({
-		userPubkey,
-		onSaveSuccess: () => {
-			onOpenChange(false)
-			if (onConfirm) {
-				onConfirm()
-			}
-		},
-	})
+	// Fetch existing V4V shares (if any)
+	const { data: v4vShares } = useV4VShares(userPubkey)
 
-	const handleConfirm = async () => {
-		if (totalV4VPercentage === 0 || localShares.length === 0) {
-			toast.error('Please set up V4V shares before confirming')
-			return
+	// Calculate initial values from fetched shares
+	const { initialShares, initialTotalPercentage } = useMemo(() => {
+		if (!v4vShares || v4vShares.length === 0) {
+			return { initialShares: [], initialTotalPercentage: 10 }
 		}
 
-		await saveShares()
+		// Calculate total V4V percentage (sum of all share percentages)
+		const totalPercentage = v4vShares.reduce((sum, share) => sum + share.percentage, 0) * 100
+
+		// Normalize shares to sum to 1 (for the split between recipients)
+		const totalSharePercentage = v4vShares.reduce((sum, share) => sum + share.percentage, 0)
+		const normalizedShares = v4vShares.map((share) => ({
+			...share,
+			percentage: share.percentage / totalSharePercentage,
+		}))
+
+		return {
+			initialShares: normalizedShares,
+			initialTotalPercentage: totalPercentage,
+		}
+	}, [v4vShares])
+
+	const handleSaveSuccess = () => {
+		onOpenChange(false)
+		if (onConfirm) {
+			onConfirm()
+		}
 	}
 
 	return (
@@ -42,17 +54,17 @@ export function V4VSetupDialog({ open, onOpenChange, userPubkey, onConfirm }: V4
 				</DialogHeader>
 
 				<div className="space-y-6 py-4">
-					<V4VManager userPubkey={userPubkey} />
-
-					{/* Dialog actions */}
-					<div className="flex justify-end gap-2 mt-6 pt-4 border-t">
-						<Button variant="outline" onClick={() => onOpenChange(false)}>
-							Cancel
-						</Button>
-						<Button onClick={handleConfirm} disabled={totalV4VPercentage === 0 || localShares.length === 0}>
-							'Confirm & Save'
-						</Button>
-					</div>
+					<V4VManager
+						userPubkey={userPubkey}
+						initialShares={initialShares}
+						initialTotalPercentage={initialTotalPercentage}
+						onSaveSuccess={handleSaveSuccess}
+						showSaveButton={true}
+						saveButtonText="Confirm & Save"
+						saveButtonTestId="confirm-v4v-setup-button"
+						showCancelButton={true}
+						onCancel={() => onOpenChange(false)}
+					/>
 				</div>
 			</DialogContent>
 		</Dialog>

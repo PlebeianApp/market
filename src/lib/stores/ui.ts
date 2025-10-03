@@ -116,14 +116,20 @@ export const uiActions = {
 	},
 
 	closeDialog: (dialog: DialogType) => {
-		uiStore.setState((state) => ({
-			...state,
-			dialogs: {
-				...state.dialogs,
-				[dialog]: false,
-			},
-			activeElement: state.activeElement === `dialog-${dialog}` ? undefined : state.activeElement,
-		}))
+		uiStore.setState((state) => {
+			const newCallbacks = { ...state.dialogCallbacks }
+			delete newCallbacks[dialog]
+
+			return {
+				...state,
+				dialogs: {
+					...state.dialogs,
+					[dialog]: false,
+				},
+				dialogCallbacks: newCallbacks,
+				activeElement: state.activeElement === `dialog-${dialog}` ? undefined : state.activeElement,
+			}
+		})
 	},
 
 	toggleDialog: (dialog: DialogType) => {
