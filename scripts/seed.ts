@@ -81,6 +81,23 @@ async function seedData() {
 
 	console.log('Starting seeding...')
 
+	// Create app profile first
+	console.log(`Creating profile for app pubkey ${APP_PUBKEY.substring(0, 8)}...`)
+	const appSigner = new NDKPrivateKeySigner(APP_PRIVATE_KEY!)
+	await appSigner.blockUntilReady()
+
+	const appProfile = {
+		name: 'plebeianmarket',
+		displayName: 'Plebeian Market',
+		image: 'https://plebeian.market/logo.svg',
+		banner: 'https://plebeian.market/banner.png',
+		about: 'The Plebeian Market - A decentralized marketplace built on Nostr. Trade freely with Bitcoin.',
+		nip05: 'plebeian@plebeian.market',
+		website: 'https://plebeian.market',
+		lud16: 'plebeian@getalby.com',
+	}
+	await createUserProfileEvent(appSigner, ndk, appProfile)
+
 	// Create user profiles, products and shipping options for each user
 	for (let i = 0; i < devUsers.length; i++) {
 		const user = devUsers[i]
@@ -522,12 +539,7 @@ async function seedData() {
 
 	// Create featured items for the app
 	console.log('Creating featured items...')
-	if (!APP_PRIVATE_KEY) {
-		console.error('APP_PRIVATE_KEY is required for creating featured items')
-		return
-	}
-	const appSigner = new NDKPrivateKeySigner(APP_PRIVATE_KEY)
-	await appSigner.blockUntilReady()
+	// Reuse the appSigner we created earlier (no need to recreate it)
 
 	// Get random users for featured users (3 users)
 	const featuredUserPubkeys = userPubkeys.slice(0, 3)
