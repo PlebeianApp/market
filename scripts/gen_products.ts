@@ -6,6 +6,7 @@ import type { z } from 'zod'
 
 export function generateProductData(
 	availableShippingRefs?: string[],
+	visibility: 'hidden' | 'on-sale' | 'pre-order' = 'on-sale',
 ): Omit<z.infer<typeof ProductListingSchema>, 'tags'> & { tags: NDKTag[] } {
 	const productId = faker.string.alphanumeric(10)
 	const price = faker.number.int({ min: 1, max: 20 }).toString()
@@ -55,7 +56,7 @@ export function generateProductData(
 			['title', faker.commerce.productName()],
 			['price', price, 'sats'],
 			['type', 'simple', 'physical'],
-			['visibility', 'on-sale'],
+			['visibility', visibility],
 			['stock', faker.number.int({ min: 1, max: 100 }).toString()],
 			['summary', faker.commerce.productDescription()],
 			['spec', 'color', faker.color.human()],

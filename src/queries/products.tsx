@@ -28,9 +28,10 @@ export { productKeys }
  * Fetches all product listings
  * @param limit Maximum number of products to fetch (default: 500)
  * @param tag Optional tag to filter products by
- * @returns Array of product events sorted by creation date (blacklist filtered)
+ * @param includeHidden Whether to include hidden products (default: false)
+ * @returns Array of product events sorted by creation date (blacklist filtered, optionally hidden products excluded)
  */
-export const fetchProducts = async (limit: number = 500, tag?: string) => {
+export const fetchProducts = async (limit: number = 500, tag?: string, includeHidden: boolean = false) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -44,7 +45,18 @@ export const fetchProducts = async (limit: number = 500, tag?: string) => {
 	const allEvents = Array.from(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 
 	// Filter out blacklisted products and authors
-	return filterBlacklistedEvents(allEvents)
+	const filteredEvents = filterBlacklistedEvents(allEvents)
+
+	// Filter out hidden products unless explicitly included
+	if (includeHidden) {
+		return filteredEvents
+	}
+
+	return filteredEvents.filter((event) => {
+		const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
+		const visibility = visibilityTag?.[1] || 'on-sale' // Default to on-sale if not specified
+		return visibility !== 'hidden'
+	})
 }
 
 /**
@@ -52,9 +64,10 @@ export const fetchProducts = async (limit: number = 500, tag?: string) => {
  * @param limit Number of products to fetch (default: 20)
  * @param until Timestamp to fetch products before (for pagination)
  * @param tag Optional tag to filter products by
- * @returns Array of product events sorted by creation date (blacklist filtered)
+ * @param includeHidden Whether to include hidden products (default: false)
+ * @returns Array of product events sorted by creation date (blacklist filtered, optionally hidden products excluded)
  */
-export const fetchProductsPaginated = async (limit: number = 20, until?: number, tag?: string) => {
+export const fetchProductsPaginated = async (limit: number = 20, until?: number, tag?: string, includeHidden: boolean = false) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -69,7 +82,18 @@ export const fetchProductsPaginated = async (limit: number = 20, until?: number,
 	const allEvents = Array.from(events).sort((a, b) => b.created_at! - a.created_at!)
 
 	// Filter out blacklisted products and authors
-	return filterBlacklistedEvents(allEvents)
+	const filteredEvents = filterBlacklistedEvents(allEvents)
+
+	// Filter out hidden products unless explicitly included
+	if (includeHidden) {
+		return filteredEvents
+	}
+
+	return filteredEvents.filter((event) => {
+		const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
+		const visibility = visibilityTag?.[1] || 'on-sale' // Default to on-sale if not specified
+		return visibility !== 'hidden'
+	})
 }
 
 /**
@@ -94,9 +118,10 @@ export const fetchProduct = async (id: string) => {
 /**
  * Fetches all products from a specific pubkey
  * @param pubkey The pubkey of the seller
- * @returns Array of product events sorted by creation date (blacklist filtered)
+ * @param includeHidden Whether to include hidden products (default: false, should be true for own products)
+ * @returns Array of product events sorted by creation date (blacklist filtered, optionally hidden products excluded)
  */
-export const fetchProductsByPubkey = async (pubkey: string) => {
+export const fetchProductsByPubkey = async (pubkey: string, includeHidden: boolean = false) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -110,7 +135,18 @@ export const fetchProductsByPubkey = async (pubkey: string) => {
 	const allEvents = Array.from(events)
 
 	// Filter out blacklisted products (author check not needed since we're querying by author)
-	return filterBlacklistedEvents(allEvents)
+	const filteredEvents = filterBlacklistedEvents(allEvents)
+
+	// Filter out hidden products unless explicitly included
+	if (includeHidden) {
+		return filteredEvents
+	}
+
+	return filteredEvents.filter((event) => {
+		const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
+		const visibility = visibilityTag?.[1] || 'on-sale' // Default to on-sale if not specified
+		return visibility !== 'hidden'
+	})
 }
 
 export const fetchProductByATag = async (pubkey: string, dTag: string) => {
@@ -164,11 +200,12 @@ export const productsPaginatedQueryOptions = (limit: number = 20, until?: number
 /**
  * React Query options for fetching products by pubkey
  * @param pubkey Seller's pubkey
+ * @param includeHidden Whether to include hidden products (default: false)
  */
-export const productsByPubkeyQueryOptions = (pubkey: string) =>
+export const productsByPubkeyQueryOptions = (pubkey: string, includeHidden: boolean = false) =>
 	queryOptions({
-		queryKey: productKeys.byPubkey(pubkey),
-		queryFn: () => fetchProductsByPubkey(pubkey),
+		queryKey: includeHidden ? [...productKeys.byPubkey(pubkey), 'includeHidden'] : productKeys.byPubkey(pubkey),
+		queryFn: () => fetchProductsByPubkey(pubkey, includeHidden),
 	})
 
 /**
@@ -643,11 +680,12 @@ export const useProductPubkey = (id: string) => {
 /**
  * Hook to get products by pubkey
  * @param pubkey Seller's pubkey
+ * @param includeHidden Whether to include hidden products (default: false)
  * @returns Query result with an array of product events
  */
-export const useProductsByPubkey = (pubkey: string) => {
+export const useProductsByPubkey = (pubkey: string, includeHidden: boolean = false) => {
 	return useQuery({
-		...productsByPubkeyQueryOptions(pubkey),
+		...productsByPubkeyQueryOptions(pubkey, includeHidden),
 	})
 }
 

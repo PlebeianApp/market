@@ -26,6 +26,7 @@ import {
 	useProductStock,
 	useProductTitle,
 	useProductType,
+	useProductVisibility,
 	useProductWeight,
 } from '@/queries/products'
 import { useSuspenseQuery } from '@tanstack/react-query'
@@ -105,6 +106,7 @@ function RouteComponent() {
 	const { data: priceTag } = useProductPrice(productId)
 	const { data: typeTag } = useProductType(productId)
 	const { data: stockTag } = useProductStock(productId)
+	const { data: visibilityTag } = useProductVisibility(productId)
 	const { data: specs = [] } = useProductSpecs(productId)
 	const { data: weightTag } = useProductWeight(productId)
 	const { data: dimensionsTag } = useProductDimensions(productId)
@@ -122,6 +124,7 @@ function RouteComponent() {
 	// Derived data from tags
 	const price = priceTag ? parseFloat(priceTag[1]) : 0
 	const stock = stockTag ? parseInt(stockTag[1]) : undefined
+	const visibility = visibilityTag?.[1] || 'on-sale'
 	const productType = typeTag
 		? {
 				product: typeTag[1],
@@ -210,7 +213,13 @@ function RouteComponent() {
 								showRootCurrency={true}
 							/>
 
-							<Badge variant="primary">{stock !== undefined ? `${stock} in stock` : 'Out of stock'}</Badge>
+							{visibility === 'pre-order' ? (
+								<Badge variant="primary" className="bg-blue-500">
+									Pre-order
+								</Badge>
+							) : (
+								<Badge variant="primary">{stock !== undefined ? `${stock} in stock` : 'Out of stock'}</Badge>
+							)}
 
 							{(() => {
 								switch (productType?.product) {
