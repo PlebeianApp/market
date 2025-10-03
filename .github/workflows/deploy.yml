@@ -22,7 +22,7 @@ jobs:
           username: ${{ secrets.REMOTE_USER }}
           password: ${{ secrets.REMOTE_PASSWORD }}
           source: './*'
-          target: '~/market.3000'
+          target: '~/market'
           rm: true
       - name: Write .env file from secrets
         uses: appleboy/ssh-action@master
@@ -31,7 +31,7 @@ jobs:
           username: ${{ secrets.REMOTE_USER }}
           password: ${{ secrets.REMOTE_PASSWORD }}
           script: |
-            cat <<EOF > ~/market.3000/.env
+            cat <<EOF > ~/market/.env
             APP_RELAY_URL=${{ secrets.APP_RELAY_URL }}
             APP_PRIVATE_KEY=${{ secrets.APP_PRIVATE_KEY }}
             EOF
