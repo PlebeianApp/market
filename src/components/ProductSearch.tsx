@@ -92,7 +92,7 @@ export function ProductSearch() {
 								const images = getProductImages(ev)
 								const sellerPubkey = getProductPubkey(ev)
 								const mainImage = images?.[0]?.[1] // First image URL
-								
+
 								return (
 									<Link
 										to="/products/$productId"
@@ -102,30 +102,19 @@ export function ProductSearch() {
 										onClick={() => setShowResults(false)}
 									>
 										{/* Product Image */}
-										{mainImage && (
-											<img 
-												src={mainImage} 
-												alt={title || 'Product'} 
-												className="w-8 h-8 rounded object-cover shrink-0"
-											/>
-										)}
-										
+										{mainImage && <img src={mainImage} alt={title || 'Product'} className="w-8 h-8 rounded object-cover shrink-0" />}
+
 										{/* Content Section */}
 										<div className="flex-1 min-w-0 flex items-center gap-2">
 											<span className="text-sm text-white truncate">{title || id || ev.id}</span>
 											{sellerPubkey && (
 												<>
 													<span className="text-xs text-gray-400">by</span>
-													<UserWithAvatar 
-														pubkey={sellerPubkey} 
-														size="sm" 
-														showBadge={false} 
-														disableLink={true}
-													/>
+													<UserWithAvatar pubkey={sellerPubkey} size="sm" showBadge={false} disableLink={true} />
 												</>
 											)}
 										</div>
-										
+
 										<span className="i-external-link w-4 h-4 text-secondary shrink-0" />
 									</Link>
 								)
