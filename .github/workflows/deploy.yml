@@ -1,4 +1,4 @@
-name: Build and Deploy Bun Project
+name: Test Build and Deploy Bun Project
 on:
   push:
     branches:
