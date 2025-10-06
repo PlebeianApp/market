@@ -106,7 +106,7 @@ function SearchProductsPage() {
 	return (
 		<div className="container mx-auto px-4 py-6">
 			<h1 className="text-2xl font-heading mb-4">
-				Search results for: <span className="text-secondary">{q}</span>
+				Search results for: <span className="text-secondary">'{q}'</span>
 			</h1>
 
 			{/* Filter and Sort Bar */}
