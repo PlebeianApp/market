@@ -19,7 +19,7 @@ interface PriceDisplayProps {
 
 export function PriceDisplay({
 	priceValue,
-	originalCurrency,
+	originalCurrency = 'SATS',
 	className = '',
 	showOriginalPrice = true,
 	showSatsPrice = true,

@@ -17,6 +17,9 @@ import { queryOptions, useQuery } from '@tanstack/react-query'
 import { z } from 'zod'
 import { productKeys } from './queryKeyFactory'
 import { getCoordsFromATag, getATagFromCoords } from '@/lib/utils/coords.ts'
+import { discoverNip50Relays } from '@/lib/relays'
+import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
+import { discoverNip50Relays } from '@/lib/relays'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 
 // Re-export productKeys for use in other query files
@@ -720,5 +723,82 @@ export const useProductsByCollection = (collectionEvent: NDKEvent | null) => {
 export const useProductByATag = (pubkey: string, dTag: string) => {
 	return useQuery({
 		...productByATagQueryOptions(pubkey, dTag),
+	})
+}
+
+// --- PRODUCT SEARCH (NIP-50) ---
+
+const PRODUCT_SEARCH_RELAYS = ['wss://relay.nostr.band', 'wss://search.nos.today', 'wss://nos.lol']
+
+/**
+ * Search for product listing events (kind 30402) by free-text query.
+ * Uses NIP-50 `search` on relays that support it.
+ */
+export const fetchProductsBySearch = async (query: string, limit: number = 20) => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+	if (!query?.trim()) return []
+
+	// Discover relays that claim NIP-50 support via NIP-11 and connect to them
+	let relays: string[] = []
+	try {
+		relays = await discoverNip50Relays(PRODUCT_SEARCH_RELAYS)
+	} catch (e) {
+		console.warn('NIP-11 discovery failed, falling back to static search relays')
+	}
+	if (!relays || relays.length === 0) {
+		relays = PRODUCT_SEARCH_RELAYS
+	}
+	try {
+		ndkActions.addExplicitRelay(relays)
+	} catch (error) {
+		console.error('Failed to add discovered search relays:', error)
+	}
+
+	const filter: NDKFilter = {
+		kinds: [30402],
+		search: query,
+		limit,
+	}
+
+	// In some deployments, ndk.fetchEvents may hang if relays are slow/unresponsive.
+	// Race the fetch with a timeout so the UI can recover gracefully.
+	const SEARCH_TIMEOUT_MS = 8000
+	try {
+		const fetchPromise = ndk
+			.fetchEvents(filter)
+			.then((events) => Array.from(events))
+			.catch((err) => {
+				console.error('Search fetch failed:', err)
+				return []
+			})
+
+		const timeoutPromise = new Promise<import('@nostr-dev-kit/ndk').NDKEvent[]>((resolve) => {
+			setTimeout(() => {
+				console.warn(`Search timed out after ${SEARCH_TIMEOUT_MS}ms`, { query })
+				resolve([])
+			}, SEARCH_TIMEOUT_MS)
+		})
+
+		return await Promise.race([fetchPromise, timeoutPromise])
+	} catch (e) {
+		console.error('Search error:', e)
+		return []
+	}
+}
+
+/** React Query options for searching products by text */
+export const productsSearchQueryOptions = (query: string, limit: number = 20) =>
+	queryOptions({
+		queryKey: [...productKeys.all, 'search', query, limit],
+		queryFn: () => fetchProductsBySearch(query, limit),
+		enabled: !!query?.trim(),
+	})
+
+/** Hook to search products by text */
+export const useProductSearch = (query: string, options?: { enabled?: boolean; limit?: number }) => {
+	return useQuery({
+		...productsSearchQueryOptions(query, options?.limit ?? 20),
+		enabled: options?.enabled ?? !!query?.trim(),
 	})
 }
