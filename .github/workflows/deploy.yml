@@ -2,7 +2,7 @@ name: Test Build and Deploy Bun Project
 on:
   push:
     branches:
-      - deploytest
+      - master
   workflow_dispatch:
 jobs:
   deploy:
