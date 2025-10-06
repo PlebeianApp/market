@@ -3,6 +3,14 @@ import { useProductSearch, getProductTitle } from '@/queries/products'
 import { ProductCard } from '@/components/ProductCard'
 import { useEffect } from 'react'
 
+declare module '@tanstack/react-router' {
+	interface FileRoutesByPath {
+		'/search/products': {
+			validateSearch: (search: Record<string, unknown>) => { q: string }
+		}
+	}
+}
+
 // Define the route: /search/products?q=...
 export const Route = createFileRoute('/search/products')({
 	component: SearchProductsPage,
