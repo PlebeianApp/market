@@ -1,4 +1,4 @@
-name: Build and Deploy Bun Project
+name: Test Build and Deploy Bun Project
 on:
   push:
     branches:
@@ -31,7 +31,7 @@ jobs:
           username: ${{ secrets.REMOTE_USER }}
           password: ${{ secrets.REMOTE_PASSWORD }}
           script: |
-            cat <<EOF > ~/market.3000/.env
+            cat <<EOF > ~/market/.env
             APP_RELAY_URL=${{ secrets.APP_RELAY_URL }}
             APP_PRIVATE_KEY=${{ secrets.APP_PRIVATE_KEY }}
             EOF
