@@ -43,4 +43,3 @@ jobs:
           password: ${{ secrets.REMOTE_PASSWORD_TEST }}
           script: |
             sudo /bin/systemctl restart market-dev.service
-
