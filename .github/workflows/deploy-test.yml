@@ -18,28 +18,28 @@ jobs:
       - name: Deploy to VPS
         uses: appleboy/scp-action@master
         with:
-          host: ${{ secrets.REMOTE_HOST_TEST }}
-          username: ${{ secrets.REMOTE_USER_TEST }}
-          password: ${{ secrets.REMOTE_PASSWORD_TEST }}
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USER }}
+          password: ${{ secrets.REMOTE_PASSWORD }}
           source: './*'
-          target: '~/market'
+          target: '~/market.3000'
           rm: true
       - name: Write .env file from secrets
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.REMOTE_HOST_TEST }}
-          username: ${{ secrets.REMOTE_USER_TEST }}
-          password: ${{ secrets.REMOTE_PASSWORD_TEST }}
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USER }}
+          password: ${{ secrets.REMOTE_PASSWORD }}
           script: |
-            cat <<EOF > ~/market/.env
-            APP_RELAY_URL=${{ secrets.APP_RELAY_URL_TEST }}
-            APP_PRIVATE_KEY=${{ secrets.APP_PRIVATE_KEY_TEST }}
+            cat <<EOF > ~/market.3000/.env
+            APP_RELAY_URL=${{ secrets.APP_RELAY_URL }}
+            APP_PRIVATE_KEY=${{ secrets.APP_PRIVATE_KEY }}
             EOF
       - name: Restart market-dev.service
         uses: appleboy/ssh-action@master
         with:
-          host: ${{ secrets.REMOTE_HOST_TEST }}
-          username: ${{ secrets.REMOTE_USER_TEST }}
-          password: ${{ secrets.REMOTE_PASSWORD_TEST }}
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USER }}
+          password: ${{ secrets.REMOTE_PASSWORD }}
           script: |
-            sudo /bin/systemctl restart market-dev.service
+            sudo systemctl restart market-dev.service
