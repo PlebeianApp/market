@@ -3,8 +3,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { authActions, NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY } from '@/lib/stores/auth'
 import { generateSecretKey, nip19 } from 'nostr-tools'
-import { useState, useEffect } from 'react'
-import { Loader2 } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Loader2, Eye, EyeOff } from 'lucide-react'
 
 interface PrivateKeyLoginProps {
 	onError?: (error: string) => void
@@ -20,6 +20,8 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 	const [hasStoredKey, setHasStoredKey] = useState(false)
 	const [storedPubkey, setStoredPubkey] = useState<string | null>(null)
 	const [showPasswordInput, setShowPasswordInput] = useState(false)
+	const [showPrivateKey, setShowPrivateKey] = useState(false)
+	const privateKeyInputRef = useRef<HTMLDivElement>(null)
 
 	useEffect(() => {
 		const storedKey = localStorage.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
@@ -33,6 +35,22 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 			}
 		}
 	}, [])
+
+	useEffect(() => {
+		const handleClickOutside = (event: MouseEvent) => {
+			if (privateKeyInputRef.current && !privateKeyInputRef.current.contains(event.target as Node)) {
+				setShowPrivateKey(false)
+			}
+		}
+
+		if (showPrivateKey) {
+			document.addEventListener('mousedown', handleClickOutside)
+		}
+
+		return () => {
+			document.removeEventListener('mousedown', handleClickOutside)
+		}
+	}, [showPrivateKey])
 
 	const encryptAndStoreKey = async (key: string, password: string) => {
 		try {
@@ -206,19 +224,36 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 						Generate New Key
 					</Button>
 				</div>
-				<Input
-					id="private-key"
-					type="password"
-					placeholder="nsec1..."
-					value={privateKey}
-					onChange={(e) => setPrivateKey(e.target.value)}
-					onKeyDown={(e) => {
-						if (e.key === 'Enter' && privateKey) {
-							handleContinue()
-						}
-					}}
-					data-testid="private-key-input"
-				/>
+				<div className="relative" ref={privateKeyInputRef}>
+					<Input
+						id="private-key"
+						type={showPrivateKey ? "text" : "password"}
+						placeholder="nsec1..."
+						value={privateKey}
+						onChange={(e) => setPrivateKey(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === 'Enter' && privateKey) {
+								handleContinue()
+							}
+						}}
+						className="pr-10"
+						data-testid="private-key-input"
+					/>
+					<Button
+						type="button"
+						variant="ghost"
+						size="sm"
+						className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+						onClick={() => setShowPrivateKey(!showPrivateKey)}
+						data-testid="toggle-private-key-visibility"
+					>
+						{showPrivateKey ? (
+							<EyeOff className="h-4 w-4 text-gray-500" />
+						) : (
+							<Eye className="h-4 w-4 text-gray-500" />
+						)}
+					</Button>
+				</div>
 			</div>
 			<Button onClick={handleContinue} disabled={isLoading || !privateKey} className="w-full" data-testid="continue-button">
 				{isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Continue'}
