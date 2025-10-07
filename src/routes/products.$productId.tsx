@@ -1,5 +1,6 @@
 import { ImageCarousel } from '@/components/ImageCarousel'
 import { ItemGrid } from '@/components/ItemGrid'
+import { PriceDisplay } from '@/components/PriceDisplay'
 import { ProductCard } from '@/components/ProductCard'
 import { ShippingSelector } from '@/components/ShippingSelector'
 import { Badge } from '@/components/ui/badge'
@@ -25,6 +26,7 @@ import {
 	useProductStock,
 	useProductTitle,
 	useProductType,
+	useProductVisibility,
 	useProductWeight,
 } from '@/queries/products'
 import { useSuspenseQuery } from '@tanstack/react-query'
@@ -32,7 +34,7 @@ import type { FileRoutesByPath } from '@tanstack/react-router'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, Minus, Plus, Truck } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 // Hook to inject dynamic CSS
 function useHeroBackground(imageUrl: string, className: string) {
@@ -104,6 +106,7 @@ function RouteComponent() {
 	const { data: priceTag } = useProductPrice(productId)
 	const { data: typeTag } = useProductType(productId)
 	const { data: stockTag } = useProductStock(productId)
+	const { data: visibilityTag } = useProductVisibility(productId)
 	const { data: specs = [] } = useProductSpecs(productId)
 	const { data: weightTag } = useProductWeight(productId)
 	const { data: dimensionsTag } = useProductDimensions(productId)
@@ -121,6 +124,7 @@ function RouteComponent() {
 	// Derived data from tags
 	const price = priceTag ? parseFloat(priceTag[1]) : 0
 	const stock = stockTag ? parseInt(stockTag[1]) : undefined
+	const visibility = visibilityTag?.[1] || 'on-sale'
 	const productType = typeTag
 		? {
 				product: typeTag[1],
@@ -200,12 +204,22 @@ function RouteComponent() {
 								</div>
 							</div>
 
-							<div className="space-y-1">
-								<p className="text-2xl font-bold">{price.toLocaleString()} sats</p>
-								<p className="text-sm text-gray-400">€{(price * 0.0004).toFixed(2)} EUR</p>
-							</div>
+							<PriceDisplay
+								priceValue={price}
+								originalCurrency={priceTag?.[2] || 'SATS'}
+								className="space-y-1"
+								showSatsPrice={true}
+								showOriginalPrice={true}
+								showRootCurrency={true}
+							/>
 
-							<Badge variant="primary">{stock !== undefined ? `${stock} in stock` : 'Out of stock'}</Badge>
+							{visibility === 'pre-order' ? (
+								<Badge variant="primary" className="bg-blue-500">
+									Pre-order
+								</Badge>
+							) : (
+								<Badge variant="primary">{stock !== undefined ? `${stock} in stock` : 'Out of stock'}</Badge>
+							)}
 
 							{(() => {
 								switch (productType?.product) {
@@ -264,7 +278,7 @@ function RouteComponent() {
 
 							<div className="flex items-center gap-2">
 								<span>Sold by:</span>
-								<UserNameWithBadge userId={pubkey} />
+								<UserNameWithBadge pubkey={pubkey} />
 							</div>
 						</div>
 					</div>

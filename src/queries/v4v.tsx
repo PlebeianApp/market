@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ndkActions } from '@/lib/stores/ndk'
 import { v4vKeys } from './queryKeyFactory'
 import type { V4VDTO } from '@/lib/stores/cart'
@@ -188,9 +188,17 @@ export const publishV4VShares = async (shares: V4VDTO[], userPubkey: string, app
 }
 
 export const usePublishV4VShares = () => {
+	const queryClient = useQueryClient()
+
 	return useMutation({
 		mutationKey: v4vKeys.publishShare(),
 		mutationFn: (params: { shares: V4VDTO[]; userPubkey: string; appPubkey?: string }) =>
 			publishV4VShares(params.shares, params.userPubkey, params.appPubkey),
+		onSuccess: (_, variables) => {
+			// Invalidate the specific user's V4V shares query
+			queryClient.invalidateQueries({ queryKey: v4vKeys.userShares(variables.userPubkey) })
+			// Also invalidate all V4V queries to be safe
+			queryClient.invalidateQueries({ queryKey: v4vKeys.all })
+		},
 	})
 }

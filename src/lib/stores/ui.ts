@@ -1,9 +1,11 @@
 import { Store } from '@tanstack/store'
+import { CURRENCIES } from '@/lib/constants'
 
 // Define types for different UI elements
 export type DrawerType = 'cart' | 'createProduct' | 'createCollection'
 export type DialogType = 'login' | 'signup' | 'checkout' | 'product-details' | 'scan-qr' | 'v4v-setup'
 export type ToastType = 'success' | 'error' | 'warning' | 'info'
+export type SupportedCurrency = (typeof CURRENCIES)[number]
 
 // Toast notification structure
 export interface Toast {
@@ -29,6 +31,7 @@ export interface UIState {
 	dashboardTitle: string
 	mobileMenuOpen: boolean
 	navigation: NavigationState
+	selectedCurrency: SupportedCurrency
 }
 
 // Initial state
@@ -54,6 +57,7 @@ const initialState: UIState = {
 		productSourcePath: null,
 		originalResultsPath: null,
 	},
+	selectedCurrency: 'USD',
 }
 
 // Create the store
@@ -112,14 +116,20 @@ export const uiActions = {
 	},
 
 	closeDialog: (dialog: DialogType) => {
-		uiStore.setState((state) => ({
-			...state,
-			dialogs: {
-				...state.dialogs,
-				[dialog]: false,
-			},
-			activeElement: state.activeElement === `dialog-${dialog}` ? undefined : state.activeElement,
-		}))
+		uiStore.setState((state) => {
+			const newCallbacks = { ...state.dialogCallbacks }
+			delete newCallbacks[dialog]
+
+			return {
+				...state,
+				dialogs: {
+					...state.dialogs,
+					[dialog]: false,
+				},
+				dialogCallbacks: newCallbacks,
+				activeElement: state.activeElement === `dialog-${dialog}` ? undefined : state.activeElement,
+			}
+		})
 	},
 
 	toggleDialog: (dialog: DialogType) => {
@@ -258,6 +268,14 @@ export const uiActions = {
 				productSourcePath: null,
 				originalResultsPath: null,
 			},
+		}))
+	},
+
+	// Currency actions
+	setCurrency: (currency: SupportedCurrency) => {
+		uiStore.setState((state) => ({
+			...state,
+			selectedCurrency: currency,
 		}))
 	},
 }

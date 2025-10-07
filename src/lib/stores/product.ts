@@ -1,5 +1,4 @@
 import { ProductCategoryTagSchema, ProductImageTagSchema } from '@/lib/schemas/productListing'
-import { uiActions } from '@/lib/stores/ui'
 import { publishProduct, updateProduct, type ProductFormData } from '@/publish/products'
 import {
 	fetchProduct,
@@ -19,7 +18,6 @@ import {
 	getProductWeight,
 } from '@/queries/products'
 import { productKeys } from '@/queries/queryKeyFactory'
-import { fetchV4VShares } from '@/queries/v4v'
 import NDK, { type NDKSigner } from '@nostr-dev-kit/ndk'
 import { QueryClient } from '@tanstack/react-query'
 import { Store } from '@tanstack/store'
@@ -61,6 +59,7 @@ export interface ProductFormState {
 	name: string
 	description: string
 	price: string
+	fiatPrice: string
 	quantity: string
 	currency: string
 	status: 'hidden' | 'on-sale' | 'pre-order'
@@ -73,6 +72,9 @@ export interface ProductFormState {
 	shippings: ProductShippingForm[]
 	weight: ProductWeight | null
 	dimensions: ProductDimensions | null
+	// Currency system state
+	bitcoinUnit: 'SATS' | 'BTC'
+	currencyMode: 'sats' | 'fiat'
 }
 
 export const DEFAULT_FORM_STATE: ProductFormState = {
@@ -82,9 +84,10 @@ export const DEFAULT_FORM_STATE: ProductFormState = {
 	name: '',
 	description: '',
 	price: '',
+	fiatPrice: '',
 	quantity: '',
 	currency: 'SATS',
-	status: 'hidden',
+	status: 'on-sale',
 	productType: 'single',
 	mainCategory: null,
 	selectedCollection: null,
@@ -94,6 +97,9 @@ export const DEFAULT_FORM_STATE: ProductFormState = {
 	shippings: [],
 	weight: null,
 	dimensions: null,
+	// Currency system defaults
+	bitcoinUnit: 'SATS',
+	currencyMode: 'sats',
 }
 
 // Create the store
@@ -268,13 +274,43 @@ export const productFormActions = {
 	continuePublishing: async (signer: NDKSigner, ndk: NDK, queryClient?: QueryClient): Promise<boolean | string> => {
 		const state = productFormStore.state
 
+		// Apply currency conversion logic before publishing
+		let finalPrice = state.price
+		let finalCurrency = state.currency
+
+		// If we have a Bitcoin currency selected, always publish in SATS
+		if (state.currency === 'SATS' || state.currency === 'BTC') {
+			const bitcoinValue = parseFloat(state.price || '0')
+			if (state.bitcoinUnit === 'BTC') {
+				// Convert BTC to SATS for publishing
+				finalPrice = (bitcoinValue * 100000000).toString()
+			} else {
+				// Already in SATS
+				finalPrice = state.price || '0'
+			}
+			finalCurrency = 'SATS'
+		} else {
+			// Fiat currency selected - check currency mode
+			if (state.currencyMode === 'fiat') {
+				// Use fiat currency and fiat price
+				finalPrice = state.fiatPrice || state.price
+				finalCurrency = state.currency
+			} else {
+				// Use sats as currency (calculated on spot)
+				const bitcoinValue = parseFloat(state.price || '0')
+				const satsValue = state.bitcoinUnit === 'BTC' ? bitcoinValue * 100000000 : bitcoinValue
+				finalPrice = satsValue.toString()
+				finalCurrency = 'SATS'
+			}
+		}
+
 		// Convert state to ProductFormData format
 		const formData: ProductFormData = {
 			name: state.name,
 			description: state.description,
-			price: state.price,
+			price: finalPrice,
 			quantity: state.quantity,
-			currency: state.currency,
+			currency: finalCurrency,
 			status: state.status,
 			productType: state.productType,
 			mainCategory: state.mainCategory || '',
@@ -322,31 +358,7 @@ export const productFormActions = {
 	},
 
 	publishProduct: async (signer: NDKSigner, ndk: NDK, queryClient?: QueryClient): Promise<boolean | string> => {
-		const state = productFormStore.state
-
-		// Check for V4V shares before publishing (only for new products)
-		if (!state.editingProductId) {
-			try {
-				const user = await signer.user()
-				if (user?.pubkey) {
-					const v4vShares = await fetchV4VShares(user.pubkey)
-					if (!v4vShares || v4vShares.length === 0) {
-						// No V4V shares found, open the V4V setup dialog with callback
-						const publishCallback = () => {
-							// Continue with publishing after V4V setup
-							productFormActions.continuePublishing(signer, ndk, queryClient)
-						}
-						uiActions.openDialog('v4v-setup', publishCallback)
-						return false
-					}
-				}
-			} catch (error) {
-				console.error('Error checking V4V shares:', error)
-				// Continue with publishing even if V4V check fails
-			}
-		}
-
-		// Continue with normal publishing flow
+		// V4V check is now handled in the UI layer, so we can directly publish
 		return productFormActions.continuePublishing(signer, ndk, queryClient)
 	},
 }

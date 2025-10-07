@@ -2,17 +2,15 @@ import CartItem from '@/components/CartItem'
 import { ShippingSelector } from '@/components/ShippingSelector'
 import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { RichShippingInfo } from '@/lib/stores/cart'
 import { cartActions, cartStore } from '@/lib/stores/cart'
 import { uiActions } from '@/lib/stores/ui'
-import { useStore } from '@tanstack/react-store'
+import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useNavigate } from '@tanstack/react-router'
-import { ChevronDown } from 'lucide-react'
+import { useStore } from '@tanstack/react-store'
 import { useEffect, useMemo, useState } from 'react'
 import { EmptyCartScreen } from './EmptyCartScreen'
-import { useAutoAnimate } from '@formkit/auto-animate/react'
 
 export function CartContent({ className = '' }: { className?: string }) {
 	const {
@@ -28,7 +26,6 @@ export function CartContent({ className = '' }: { className?: string }) {
 
 	const [parent, enableAnimations] = useAutoAnimate()
 	const [selectedShippingByUser, setSelectedShippingByUser] = useState<Record<string, string>>({})
-	const [detailsExpanded, setDetailsExpanded] = useState(false)
 	const navigate = useNavigate()
 
 	const totalItems = useMemo(() => {

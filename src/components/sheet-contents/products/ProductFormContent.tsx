@@ -1,12 +1,15 @@
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ndkActions } from '@/lib/stores/ndk'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { ndkActions, useNDK } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore } from '@/lib/stores/product'
+import { uiActions } from '@/lib/stores/ui'
+import { useV4VShares } from '@/queries/v4v'
 import { useForm } from '@tanstack/react-form'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { NameTab } from './NameTab'
 import { DetailTab, CategoryTab, ImagesTab, ShippingTab, SpecTab } from './tabs'
@@ -15,10 +18,30 @@ export function ProductFormContent({ className = '', showFooter = true }: { clas
 	const [isPublishing, setIsPublishing] = useState(false)
 	const navigate = useNavigate()
 	const queryClient = useQueryClient()
+	const { getUser } = useNDK()
 
 	// Get form state from store, including editingProductId
 	const formState = useStore(productFormStore)
 	const { mainTab, productSubTab, editingProductId } = formState
+
+	// Get user and check V4V shares (only for new products)
+	const [userPubkey, setUserPubkey] = useState<string>('')
+	const { data: v4vShares, isLoading: isLoadingV4V } = useV4VShares(userPubkey)
+	const hasV4VSetup = v4vShares && v4vShares.length > 0
+	const needsV4VSetup = !editingProductId && !hasV4VSetup && !isLoadingV4V
+
+	// Get user pubkey on mount
+	useEffect(() => {
+		getUser().then((user) => {
+			if (user?.pubkey) {
+				setUserPubkey(user.pubkey)
+			}
+		})
+	}, [getUser])
+
+	useEffect(() => {
+		console.log('v4vShares', v4vShares)
+	}, [v4vShares])
 
 	const form = useForm({
 		defaultValues: {},
@@ -196,23 +219,55 @@ export function ProductFormContent({ className = '', showFooter = true }: { clas
 						{mainTab === 'shipping' || editingProductId ? (
 							<form.Subscribe
 								selector={(state) => [state.canSubmit, state.isSubmitting]}
-								children={([canSubmit, isSubmitting]) => (
-									<Button
-										type="submit"
-										variant="secondary"
-										className="flex-1 uppercase"
-										disabled={isSubmitting || isPublishing || !canSubmit}
-										data-testid="product-save-button"
-									>
-										{isSubmitting || isPublishing
-											? editingProductId
-												? 'Updating...'
-												: 'Publishing...'
-											: editingProductId
-												? 'Update Product'
-												: 'Save'}
-									</Button>
-								)}
+								children={([canSubmit, isSubmitting]) => {
+									// Check if we need V4V setup for new products
+									if (needsV4VSetup && !editingProductId) {
+										return (
+											<TooltipProvider>
+												<Tooltip>
+													<TooltipTrigger asChild>
+														<Button
+															type="button"
+															variant="secondary"
+															className="flex-1 uppercase"
+															onClick={() => {
+																const publishCallback = async () => {
+																	// After V4V setup, trigger the form submission
+																	form.handleSubmit()
+																}
+																uiActions.openDialog('v4v-setup', publishCallback)
+															}}
+															data-testid="product-setup-v4v-button"
+														>
+															Setup V4V First
+														</Button>
+													</TooltipTrigger>
+													<TooltipContent>
+														<p>You need to configure Value for Value (V4V) settings before publishing your first product</p>
+													</TooltipContent>
+												</Tooltip>
+											</TooltipProvider>
+										)
+									}
+
+									return (
+										<Button
+											type="submit"
+											variant="secondary"
+											className="flex-1 uppercase"
+											disabled={isSubmitting || isPublishing || !canSubmit}
+											data-testid="product-save-button"
+										>
+											{isSubmitting || isPublishing
+												? editingProductId
+													? 'Updating...'
+													: 'Publishing...'
+												: editingProductId
+													? 'Update Product'
+													: 'Save'}
+										</Button>
+									)
+								}}
 							/>
 						) : (
 							<Button

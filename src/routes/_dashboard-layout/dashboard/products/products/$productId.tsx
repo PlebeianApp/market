@@ -18,9 +18,9 @@ function EditProductComponent() {
 
 	useDashboardTitle('Edit Product')
 
-	// Fetch user's products to find the one being edited
+	// Fetch user's products to find the one being edited (including hidden products)
 	const { data: products = [] } = useQuery({
-		...productsByPubkeyQueryOptions(user?.pubkey ?? ''),
+		...productsByPubkeyQueryOptions(user?.pubkey ?? '', true),
 		enabled: !!user?.pubkey,
 	})
 

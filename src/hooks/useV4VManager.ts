@@ -28,6 +28,18 @@ export function useV4VManager({ userPubkey, initialShares = [], initialTotalPerc
 
 	const { data: canReceiveZaps, isLoading: isCheckingZap } = useZapCapabilityByNpub(newRecipientNpub || '')
 
+	// Sync local shares when initialShares change (e.g., after refetch)
+	useEffect(() => {
+		if (initialShares.length > 0) {
+			setLocalShares(initialShares)
+		}
+	}, [initialShares])
+
+	// Sync total percentage when it changes
+	useEffect(() => {
+		setTotalV4VPercentage(initialTotalPercentage)
+	}, [initialTotalPercentage])
+
 	// Initialize with app's npub as default recipient if no initial shares
 	useEffect(() => {
 		if (appPubkey && localShares.length === 0 && initialShares.length === 0) {

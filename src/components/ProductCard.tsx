@@ -1,19 +1,22 @@
 import { cartActions, useCart } from '@/lib/stores/cart'
 import { ndkActions } from '@/lib/stores/ndk'
 import { uiActions } from '@/lib/stores/ui'
-import { getProductImages, getProductPrice, getProductStock, getProductTitle } from '@/queries/products'
+import { getProductImages, getProductPrice, getProductStock, getProductTitle, getProductVisibility } from '@/queries/products'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Link, useLocation } from '@tanstack/react-router'
+import { Check } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { PriceDisplay } from './PriceDisplay'
 import { Button } from './ui/button'
 import { ZapButton } from './ZapButton'
-import { useEffect, useState } from 'react'
-import { Check } from 'lucide-react'
 
 export function ProductCard({ product }: { product: NDKEvent }) {
 	const title = getProductTitle(product)
 	const images = getProductImages(product)
 	const price = getProductPrice(product)
 	const stock = getProductStock(product)
+	const visibilityTag = getProductVisibility(product)
+	const visibility = visibilityTag?.[1] || 'on-sale'
 	const [isOwnProduct, setIsOwnProduct] = useState(false)
 	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(null)
 	const [isAddingToCart, setIsAddingToCart] = useState(false)
@@ -89,20 +92,14 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 
 				{/* Pricing section */}
 				<div className="flex justify-between items-center">
-					<div className="flex flex-col gap-1">
-						{price && (
-							<p className="text-xs text-gray-500">
-								{price[1]} {price[2]}
-							</p>
-						)}
-						{/* Sats price - more prominent */}
-						<p className="text-sm font-medium">{price ? Math.round(parseFloat(price[1]) * 220).toLocaleString() : '0'} Sats</p>
-					</div>
+					{price && <PriceDisplay priceValue={parseFloat(price[1])} originalCurrency={price[2]} />}
 
-					{/* Stock indicator - right aligned */}
-					{stock !== undefined && (
+					{/* Stock/Pre-order indicator - right aligned */}
+					{visibility === 'pre-order' ? (
+						<div className="bg-blue-100 text-blue-800 font-medium px-4 py-1 rounded-full text-xs">Pre-order</div>
+					) : stock !== undefined ? (
 						<div className="bg-[var(--light-gray)] font-medium px-4 py-1 rounded-full text-xs">{stock[1]} in stock</div>
-					)}
+					) : null}
 				</div>
 
 				{/* Add a flex spacer to push the button to the bottom */}

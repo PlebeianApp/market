@@ -19,6 +19,8 @@ interface V4VManagerProps {
 	showChangesIndicator?: boolean
 	hasChanges?: boolean
 	className?: string
+	showCancelButton?: boolean
+	onCancel?: () => void
 }
 
 export function V4VManager({
@@ -32,6 +34,8 @@ export function V4VManager({
 	showChangesIndicator = false,
 	hasChanges = false,
 	className = '',
+	showCancelButton = false,
+	onCancel,
 }: V4VManagerProps) {
 	const {
 		// State
@@ -228,21 +232,44 @@ export function V4VManager({
 				{/* Save button */}
 				{showSaveButton && (
 					<div className="mt-6">
-						<Button
-							variant="focus"
-							className="w-full"
-							onClick={handleSave}
-							disabled={publishMutation.isPending || (showChangesIndicator && !hasChanges)}
-							data-testid={saveButtonTestId}
-						>
-							{publishMutation.isPending
-								? 'Saving...'
-								: showChangesIndicator && hasChanges
-									? saveButtonText
-									: showChangesIndicator
-										? 'Saved'
-										: saveButtonText}
-						</Button>
+						{showCancelButton ? (
+							<div className="flex gap-2">
+								<Button variant="outline" onClick={onCancel} className="flex-1">
+									Cancel
+								</Button>
+								<Button
+									variant="focus"
+									className="flex-1"
+									onClick={handleSave}
+									disabled={publishMutation.isPending || (showChangesIndicator && !hasChanges)}
+									data-testid={saveButtonTestId}
+								>
+									{publishMutation.isPending
+										? 'Saving...'
+										: showChangesIndicator && hasChanges
+											? saveButtonText
+											: showChangesIndicator
+												? 'Saved'
+												: saveButtonText}
+								</Button>
+							</div>
+						) : (
+							<Button
+								variant="focus"
+								className="w-full"
+								onClick={handleSave}
+								disabled={publishMutation.isPending || (showChangesIndicator && !hasChanges)}
+								data-testid={saveButtonTestId}
+							>
+								{publishMutation.isPending
+									? 'Saving...'
+									: showChangesIndicator && hasChanges
+										? saveButtonText
+										: showChangesIndicator
+											? 'Saved'
+											: saveButtonText}
+							</Button>
+						)}
 					</div>
 				)}
 			</div>

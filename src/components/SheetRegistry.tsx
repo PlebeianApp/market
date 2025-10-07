@@ -4,7 +4,7 @@ import { NewCollectionContent } from '@/components/sheet-contents/NewCollectionC
 import { Sheet } from '@/components/ui/sheet'
 import { useStore } from '@tanstack/react-store'
 import { uiStore } from '@/lib/stores/ui'
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 
 export function SheetRegistry() {
 	const { drawers } = useStore(uiStore)
@@ -15,6 +15,30 @@ export function SheetRegistry() {
 		if (drawers.createCollection) return 'createCollection'
 		return null
 	}, [drawers])
+
+	// Local state to control sheet open/close for animations
+	const [open, setOpen] = useState(!!activeDrawer)
+
+	// Sync local state with store state
+	useEffect(() => {
+		setOpen(!!activeDrawer)
+	}, [activeDrawer])
+
+	const handleOpenChange = (nextOpen: boolean) => {
+		setOpen(nextOpen)
+		if (!nextOpen && activeDrawer) {
+			// Delay closing in store until after animation (300ms slide-out duration)
+			setTimeout(() => {
+				uiStore.setState((state) => ({
+					...state,
+					drawers: {
+						...state.drawers,
+						[activeDrawer]: false,
+					},
+				}))
+			}, 300)
+		}
+	}
 
 	if (!activeDrawer) return null
 
@@ -36,21 +60,7 @@ export function SheetRegistry() {
 	const config = sheetConfig[activeDrawer]
 
 	return (
-		<Sheet
-			open={!!activeDrawer}
-			onOpenChange={(open) => {
-				if (!open) {
-					// Close the active drawer
-					uiStore.setState((state) => ({
-						...state,
-						drawers: {
-							...state.drawers,
-							[activeDrawer]: false,
-						},
-					}))
-				}
-			}}
-		>
+		<Sheet open={open} onOpenChange={handleOpenChange}>
 			{config.content}
 		</Sheet>
 	)

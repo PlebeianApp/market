@@ -5,11 +5,12 @@ import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { z } from 'zod'
 import { collectionKeys, collectionsKeys } from './queryKeyFactory'
+import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 
 // --- DATA FETCHING FUNCTIONS ---
 /**
  * Fetches all collections
- * @returns Array of collection events sorted by creation date
+ * @returns Array of collection events sorted by creation date (blacklist filtered)
  */
 export const fetchCollections = async () => {
 	const ndk = ndkActions.getNDK()
@@ -21,12 +22,15 @@ export const fetchCollections = async () => {
 	}
 
 	const events = await ndk.fetchEvents(filter)
-	return Array.from(events)
+	const allEvents = Array.from(events)
+
+	// Filter out blacklisted collections and authors
+	return filterBlacklistedEvents(allEvents)
 }
 /**
  * Fetches all collections from a specific pubkey
  * @param pubkey The pubkey of the user
- * @returns Array of collection events sorted by creation date
+ * @returns Array of collection events sorted by creation date (blacklist filtered)
  */
 export const fetchCollectionsByPubkey = async (pubkey: string) => {
 	const ndk = ndkActions.getNDK()
@@ -39,7 +43,10 @@ export const fetchCollectionsByPubkey = async (pubkey: string) => {
 	}
 
 	const events = await ndk.fetchEvents(filter)
-	return Array.from(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+	const allEvents = Array.from(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+
+	// Filter out blacklisted collections (author check not needed since we're querying by author)
+	return filterBlacklistedEvents(allEvents)
 }
 
 /**
@@ -68,6 +75,27 @@ export const fetchCollection = async (dTag: string) => {
 }
 
 /**
+ * Fetches a single collection by event ID
+ * @param id The event ID of the collection
+ * @returns The collection event
+ */
+export const fetchCollectionByEventId = async (id: string) => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+	if (!id) return null
+
+	const event = await ndk.fetchEvent({
+		ids: [id],
+	})
+
+	if (!event || event.kind !== 30405) {
+		return null
+	}
+
+	return event
+}
+
+/**
  * Fetches a collection by addressable tag (a-tag)
  * @param pubkey The pubkey of the author
  * @param dTag The d-tag identifier
@@ -85,6 +113,26 @@ export const fetchCollectionByATag = async (pubkey: string, dTag: string) => {
 	}
 
 	return await ndk.fetchEvent(filter)
+}
+
+/**
+ * Fetches a collection by ID (supports both d-tag and event ID)
+ * Tries d-tag first, then event ID if the input is 64 characters long
+ * @param id The d-tag identifier or event ID of the collection
+ * @returns The collection event or null if not found
+ */
+export const fetchCollectionById = async (id: string): Promise<NDKEvent | null> => {
+	if (!id) return null
+
+	// First try fetching by d-tag
+	let collection = await fetchCollection(id)
+
+	// If not found and input looks like an event ID (64 chars), try fetching by event ID
+	if (!collection && id.length === 64) {
+		collection = await fetchCollectionByEventId(id)
+	}
+
+	return collection
 }
 
 /**
@@ -141,6 +189,18 @@ export const collectionQueryOptions = (id: string) =>
 	queryOptions({
 		queryKey: collectionKeys.details(id),
 		queryFn: () => fetchCollection(id),
+		staleTime: 300000,
+	})
+
+/**
+ * React Query options for fetching a collection by ID (supports both d-tag and event ID)
+ * @param id The d-tag identifier or event ID
+ * @returns Query options object
+ */
+export const collectionByIdQueryOptions = (id: string) =>
+	queryOptions({
+		queryKey: collectionKeys.details(id),
+		queryFn: () => fetchCollectionById(id),
 		staleTime: 300000,
 	})
 
