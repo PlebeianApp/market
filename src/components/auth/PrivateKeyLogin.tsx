@@ -227,7 +227,7 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 				<div className="relative" ref={privateKeyInputRef}>
 					<Input
 						id="private-key"
-						type={showPrivateKey ? "text" : "password"}
+						type={showPrivateKey ? 'text' : 'password'}
 						placeholder="nsec1..."
 						value={privateKey}
 						onChange={(e) => setPrivateKey(e.target.value)}
@@ -247,11 +247,7 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 						onClick={() => setShowPrivateKey(!showPrivateKey)}
 						data-testid="toggle-private-key-visibility"
 					>
-						{showPrivateKey ? (
-							<EyeOff className="h-4 w-4 text-gray-500" />
-						) : (
-							<Eye className="h-4 w-4 text-gray-500" />
-						)}
+						{showPrivateKey ? <EyeOff className="h-4 w-4 text-gray-500" /> : <Eye className="h-4 w-4 text-gray-500" />}
 					</Button>
 				</div>
 			</div>
