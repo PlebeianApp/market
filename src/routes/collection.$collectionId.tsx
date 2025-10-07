@@ -1,13 +1,12 @@
 import { ItemGrid } from '@/components/ItemGrid'
 import { Nip05Badge } from '@/components/Nip05Badge.tsx'
 import { ProductCard } from '@/components/ProductCard'
-import { ProfileName } from '@/components/ProfileName'
 import { Button } from '@/components/ui/button'
 import { ZapButton } from '@/components/ZapButton.tsx'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { uiActions, uiStore } from '@/lib/stores/ui'
 import { truncateText } from '@/lib/utils.ts'
-import { collectionQueryOptions, getCollectionImages, getCollectionSummary, getCollectionTitle } from '@/queries/collections'
+import { collectionByIdQueryOptions, getCollectionImages, getCollectionSummary, getCollectionTitle } from '@/queries/collections'
 import { useProductsByCollection } from '@/queries/products'
 import { profileByIdentifierQueryOptions, useProfileName } from '@/queries/profiles'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -53,8 +52,7 @@ export const Route = createFileRoute('/collection/$collectionId')({
 
 function RouteComponent() {
 	const { collectionId } = Route.useLoaderData()
-	const collectionQuery = useSuspenseQuery(collectionQueryOptions(collectionId))
-	// todo: handle this event not existing
+	const collectionQuery = useSuspenseQuery(collectionByIdQueryOptions(collectionId))
 	const collection = collectionQuery.data
 
 	if (!collection) {
@@ -136,7 +134,7 @@ function RouteComponent() {
 							)}
 							<div className="flex items-center gap-2">
 								<h2 className="text-1xl font-bold text-white">{truncateText(profile?.name ?? 'Unnamed user', isSmallScreen ? 10 : 50)}</h2>
-								<Nip05Badge userId={user?.npub || ''} />
+								<Nip05Badge pubkey={user?.pubkey || ''} />
 							</div>{' '}
 						</div>
 					</Link>

@@ -1583,6 +1583,20 @@ export const COUNTRIES_ISO = {
 
 export type ISO3 = (typeof COUNTRIES_ISO)[keyof typeof COUNTRIES_ISO]['iso3']
 
+export const PRODUCT_CATEGORIES = [
+	'Bitcoin',
+	'Art',
+	'Clothing',
+	'Food & Drink',
+	'Home & Technology',
+	'Health & Beauty',
+	'Sports & Outside',
+	'Services',
+	'Other',
+] as const
+
+export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number]
+
 export const SHIPPING_TEMPLATES = [
 	{
 		name: 'Local Pickup',

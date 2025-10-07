@@ -9,12 +9,12 @@ import { nip19 } from 'nostr-tools'
 interface UserDisplayComponentProps {
 	userPubkey: string
 	index: number
-	onMoveUp: () => void
-	onMoveDown: () => void
+	onMoveUp?: () => void
+	onMoveDown?: () => void
 	onRemove: () => void
-	canMoveUp: boolean
-	canMoveDown: boolean
-	isReordering: boolean
+	canMoveUp?: boolean
+	canMoveDown?: boolean
+	isReordering?: boolean
 	isRemoving: boolean
 }
 
@@ -64,12 +64,16 @@ export function UserDisplayComponent({
 
 				{/* Action Buttons */}
 				<div className="flex flex-col gap-1">
-					<Button variant="outline" size="sm" onClick={onMoveUp} disabled={!canMoveUp || isReordering} className="h-8 w-8 p-0">
-						<ChevronUp className="h-4 w-4" />
-					</Button>
-					<Button variant="outline" size="sm" onClick={onMoveDown} disabled={!canMoveDown || isReordering} className="h-8 w-8 p-0">
-						<ChevronDown className="h-4 w-4" />
-					</Button>
+					{onMoveUp && (
+						<Button variant="outline" size="sm" onClick={onMoveUp} disabled={!canMoveUp || isReordering} className="h-8 w-8 p-0">
+							<ChevronUp className="h-4 w-4" />
+						</Button>
+					)}
+					{onMoveDown && (
+						<Button variant="outline" size="sm" onClick={onMoveDown} disabled={!canMoveDown || isReordering} className="h-8 w-8 p-0">
+							<ChevronDown className="h-4 w-4" />
+						</Button>
+					)}
 					<Button variant="destructive" size="sm" onClick={onRemove} disabled={isRemoving} className="h-8 w-8 p-0">
 						<Trash2 className="h-4 w-4" />
 					</Button>

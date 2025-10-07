@@ -17,6 +17,7 @@ import { Route as ProductsIndexRouteImport } from './routes/products.index'
 import { Route as PostsIndexRouteImport } from './routes/posts.index'
 import { Route as NostrIndexRouteImport } from './routes/nostr.index'
 import { Route as CommunityIndexRouteImport } from './routes/community.index'
+import { Route as SearchProductsRouteImport } from './routes/search.products'
 import { Route as ProfileProfileIdRouteImport } from './routes/profile.$profileId'
 import { Route as ProductsProductIdRouteImport } from './routes/products.$productId'
 import { Route as PostsPostIdRouteImport } from './routes/posts.$postId'
@@ -81,6 +82,11 @@ const NostrIndexRoute = NostrIndexRouteImport.update({
 const CommunityIndexRoute = CommunityIndexRouteImport.update({
 	id: '/community/',
 	path: '/community/',
+	getParentRoute: () => rootRouteImport,
+} as any)
+const SearchProductsRoute = SearchProductsRouteImport.update({
+	id: '/search/products',
+	path: '/search/products',
 	getParentRoute: () => rootRouteImport,
 } as any)
 const ProfileProfileIdRoute = ProfileProfileIdRouteImport.update({
@@ -223,6 +229,7 @@ export interface FileRoutesByFullPath {
 	'/posts/$postId': typeof PostsPostIdRoute
 	'/products/$productId': typeof ProductsProductIdRoute
 	'/profile/$profileId': typeof ProfileProfileIdRoute
+	'/search/products': typeof SearchProductsRoute
 	'/community': typeof CommunityIndexRoute
 	'/nostr': typeof NostrIndexRoute
 	'/posts': typeof PostsIndexRoute
@@ -258,6 +265,7 @@ export interface FileRoutesByTo {
 	'/posts/$postId': typeof PostsPostIdRoute
 	'/products/$productId': typeof ProductsProductIdRoute
 	'/profile/$profileId': typeof ProfileProfileIdRoute
+	'/search/products': typeof SearchProductsRoute
 	'/community': typeof CommunityIndexRoute
 	'/nostr': typeof NostrIndexRoute
 	'/posts': typeof PostsIndexRoute
@@ -295,6 +303,7 @@ export interface FileRoutesById {
 	'/posts/$postId': typeof PostsPostIdRoute
 	'/products/$productId': typeof ProductsProductIdRoute
 	'/profile/$profileId': typeof ProfileProfileIdRoute
+	'/search/products': typeof SearchProductsRoute
 	'/community/': typeof CommunityIndexRoute
 	'/nostr/': typeof NostrIndexRoute
 	'/posts/': typeof PostsIndexRoute
@@ -332,6 +341,7 @@ export interface FileRouteTypes {
 		| '/posts/$postId'
 		| '/products/$productId'
 		| '/profile/$profileId'
+		| '/search/products'
 		| '/community'
 		| '/nostr'
 		| '/posts'
@@ -367,6 +377,7 @@ export interface FileRouteTypes {
 		| '/posts/$postId'
 		| '/products/$productId'
 		| '/profile/$profileId'
+		| '/search/products'
 		| '/community'
 		| '/nostr'
 		| '/posts'
@@ -403,6 +414,7 @@ export interface FileRouteTypes {
 		| '/posts/$postId'
 		| '/products/$productId'
 		| '/profile/$profileId'
+		| '/search/products'
 		| '/community/'
 		| '/nostr/'
 		| '/posts/'
@@ -440,6 +452,7 @@ export interface RootRouteChildren {
 	PostsPostIdRoute: typeof PostsPostIdRoute
 	ProductsProductIdRoute: typeof ProductsProductIdRoute
 	ProfileProfileIdRoute: typeof ProfileProfileIdRoute
+	SearchProductsRoute: typeof SearchProductsRoute
 	CommunityIndexRoute: typeof CommunityIndexRoute
 	NostrIndexRoute: typeof NostrIndexRoute
 	PostsIndexRoute: typeof PostsIndexRoute
@@ -502,6 +515,13 @@ declare module '@tanstack/react-router' {
 			path: '/community'
 			fullPath: '/community'
 			preLoaderRoute: typeof CommunityIndexRouteImport
+			parentRoute: typeof rootRouteImport
+		}
+		'/search/products': {
+			id: '/search/products'
+			path: '/search/products'
+			fullPath: '/search/products'
+			preLoaderRoute: typeof SearchProductsRouteImport
 			parentRoute: typeof rootRouteImport
 		}
 		'/profile/$profileId': {
@@ -780,6 +800,7 @@ const rootRouteChildren: RootRouteChildren = {
 	PostsPostIdRoute: PostsPostIdRoute,
 	ProductsProductIdRoute: ProductsProductIdRoute,
 	ProfileProfileIdRoute: ProfileProfileIdRoute,
+	SearchProductsRoute: SearchProductsRoute,
 	CommunityIndexRoute: CommunityIndexRoute,
 	NostrIndexRoute: NostrIndexRoute,
 	PostsIndexRoute: PostsIndexRoute,

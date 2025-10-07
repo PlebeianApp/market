@@ -2,25 +2,61 @@ import { Button } from '@/components/ui/button'
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
-import { CURRENCIES } from '@/lib/constants'
+import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
 import type { RichShippingInfo } from '@/lib/stores/cart'
 import { useNDK } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore, type ProductShippingForm } from '@/lib/stores/product'
-import { useShippingOptionsByPubkey, getShippingInfo, createShippingReference } from '@/queries/shipping'
+import { uiStore, useUI } from '@/lib/stores/ui'
+import { MempoolService } from '@/lib/utils/mempool'
+import { useBtcExchangeRates, type SupportedCurrency } from '@/queries/external'
+import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useForm } from '@tanstack/react-form'
 import { useStore } from '@tanstack/react-store'
-import { CheckIcon, PlusIcon, TruckIcon, PackageIcon, SettingsIcon } from 'lucide-react'
-import { useState, useEffect, useMemo } from 'react'
+import { CheckIcon, PackageIcon, PlusIcon, SettingsIcon, TruckIcon, X, Loader2, Info } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 export function DetailTab() {
-	const { price, quantity, currency, status } = useStore(productFormStore)
+	const { price, fiatPrice, quantity, currency, status, specs } = useStore(productFormStore)
+	const { selectedCurrency } = useStore(uiStore)
+	const { data: exchangeRates } = useBtcExchangeRates()
+	const [bitcoinUnit, setBitcoinUnit] = useState<'SATS' | 'BTC'>('SATS')
+	const [currencyMode, setCurrencyMode] = useState<'sats' | 'fiat'>('sats') // For fiat currencies only
+	const [fiatDisplayValue, setFiatDisplayValue] = useState('')
+
+	// Use existing conversion functions from MempoolService
+	const convertSatsToBtc = MempoolService.satoshisToBtc
+	const convertBtcToSats = MempoolService.btcToSatoshis
+
+	const convertSatsToCurrency = (sats: number, targetCurrency: string): number => {
+		if (targetCurrency === 'SATS') return sats
+		if (targetCurrency === 'BTC') return convertSatsToBtc(sats)
+		if (!exchangeRates) return 0
+
+		const btcAmount = sats / 100_000_000 // Convert sats to BTC
+		const rate = exchangeRates[targetCurrency as SupportedCurrency]
+		return rate ? btcAmount * rate : 0
+	}
+
+	const convertCurrencyToSats = (amount: number, fromCurrency: string): number => {
+		if (fromCurrency === 'SATS') return amount
+		if (fromCurrency === 'BTC') return convertBtcToSats(amount)
+		if (!exchangeRates) return 0
+
+		const rate = exchangeRates[fromCurrency as SupportedCurrency]
+		if (!rate) return 0
+
+		const btcAmount = amount / rate
+		return Math.round(btcAmount * 100_000_000) // Convert BTC to sats
+	}
 
 	const form = useForm({
 		defaultValues: {
 			price: price,
+			fiatPrice: fiatPrice,
 			quantity: quantity,
 			currency: currency,
 			status: status,
@@ -28,72 +64,237 @@ export function DetailTab() {
 		onSubmit: async ({ value }) => {
 			productFormActions.updateValues({
 				price: value.price,
+				fiatPrice: value.fiatPrice,
 				quantity: value.quantity,
 				currency: value.currency,
 				status: value.status,
+				// Update currency system state
+				bitcoinUnit: bitcoinUnit,
+				currencyMode: currencyMode,
 			})
 		},
 	})
 
+	// Handle Bitcoin price changes (SATS/BTC field)
+	const handleBitcoinPriceChange = (value: string) => {
+		const numValue = parseFloat(value) || 0
+
+		// Convert to SATS for storage
+		const satsValue = bitcoinUnit === 'SATS' ? numValue : convertBtcToSats(numValue)
+
+		productFormActions.updateValues({ price: satsValue.toString() })
+
+		// Update fiat field if a fiat currency is selected and visible
+		if (currency !== 'SATS' && currency !== 'BTC') {
+			const fiatValue = convertSatsToCurrency(satsValue, currency)
+			setFiatDisplayValue(fiatValue.toFixed(2))
+		}
+	}
+
+	// Handle fiat price changes
+	const handleFiatPriceChange = (value: string) => {
+		// Store the raw input value without formatting
+		setFiatDisplayValue(value)
+
+		// Only convert to sats if we have a valid number
+		const numValue = parseFloat(value)
+		if (!isNaN(numValue) && numValue > 0) {
+			const satsValue = convertCurrencyToSats(numValue, currency)
+			productFormActions.updateValues({ price: satsValue.toString() })
+		} else if (value === '' || value === '0') {
+			// Clear the price if input is empty or zero
+			productFormActions.updateValues({ price: '0' })
+		}
+	}
+
+	// Get display value for Bitcoin field
+	const getBitcoinDisplayValue = (): string => {
+		if (!price) return ''
+		const satsValue = parseFloat(price) || 0
+		return bitcoinUnit === 'SATS' ? satsValue.toString() : convertSatsToBtc(satsValue).toFixed(8)
+	}
+
+	// Handle currency dropdown change
+	const handleCurrencyChange = (newCurrency: string) => {
+		productFormActions.updateValues({ currency: newCurrency })
+
+		// Auto-switch Bitcoin unit based on currency
+		if (newCurrency === 'BTC') {
+			setBitcoinUnit('BTC')
+		} else if (newCurrency === 'SATS') {
+			setBitcoinUnit('SATS')
+		}
+
+		// Set currency mode based on selected currency
+		setCurrencyMode(newCurrency === 'BTC' || newCurrency === 'SATS' ? 'sats' : 'fiat')
+	}
+
+	// Function to determine what gets published to the protocol
+	const getPublishCurrency = (): { price: string; currency: string } => {
+		if (currency === 'SATS' || currency === 'BTC') {
+			// When Bitcoin currency is selected, always publish in SATS
+			const bitcoinValue = parseFloat(price || '0')
+			if (bitcoinUnit === 'BTC') {
+				// Convert BTC to SATS for publishing
+				const satsValue = bitcoinValue * 100000000
+				return { price: satsValue.toString(), currency: 'SATS' }
+			} else {
+				// Already in SATS
+				return { price: price || '0', currency: 'SATS' }
+			}
+		} else {
+			// Fiat currency selected - check radio group selection
+			if (currencyMode === 'fiat') {
+				// Use fiat currency
+				return { price: fiatDisplayValue, currency: currency }
+			} else {
+				// Use sats as currency (calculated on spot)
+				const bitcoinValue = parseFloat(price || '0')
+				const satsValue = bitcoinUnit === 'BTC' ? bitcoinValue * 100000000 : bitcoinValue
+				return { price: satsValue.toString(), currency: 'SATS' }
+			}
+		}
+	}
+
+	// Toggle Bitcoin unit (SATS/BTC)
+	const toggleBitcoinUnit = () => {
+		setBitcoinUnit((prev) => (prev === 'SATS' ? 'BTC' : 'SATS'))
+	}
+
+	// Check if current currency is Bitcoin-based
+	const isBitcoinCurrency = currency === 'SATS' || currency === 'BTC'
+
+	// Check if fiat field should be visible
+	const showFiatField = !isBitcoinCurrency
+
+	// Check if radio group should be visible
+	const showRadioGroup = showFiatField
+
+	// Update fiat display when currency or price changes
+	useEffect(() => {
+		if (showFiatField && price) {
+			const satsValue = parseFloat(price) || 0
+			if (satsValue > 0) {
+				const fiatValue = convertSatsToCurrency(satsValue, currency)
+				// Only update if the field is not currently being edited
+				// This prevents overwriting user input during typing
+				if (document.activeElement?.id !== 'fiat-price') {
+					setFiatDisplayValue(fiatValue.toFixed(2))
+				}
+			}
+		}
+	}, [currency, price, showFiatField])
+
 	return (
-		<div className="space-y-4">
-			<div className="grid w-full gap-1.5">
-				<Label>
-					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Currency</span>
+		<div className="space-y-6">
+			{/* Currency Dropdown */}
+			<div className="space-y-2">
+				<Label htmlFor="currency" className="text-sm font-medium">
+					Currency <span className="text-red-500">*</span>
 				</Label>
-				<Select value={currency} onValueChange={(value) => productFormActions.updateValues({ currency: value })}>
-					<SelectTrigger className="border-2">
+				<Select value={currency} onValueChange={handleCurrencyChange}>
+					<SelectTrigger>
 						<SelectValue placeholder="Select currency" />
 					</SelectTrigger>
 					<SelectContent>
-						<SelectItem value="SATS">SATS</SelectItem>
-						{Array.isArray(CURRENCIES) &&
-							CURRENCIES.map((curr: string) => (
-								<SelectItem key={curr} value={curr}>
-									{curr}
-								</SelectItem>
-							))}
+						{CURRENCIES.map((curr) => (
+							<SelectItem key={curr} value={curr}>
+								{curr}
+							</SelectItem>
+						))}
 					</SelectContent>
 				</Select>
 			</div>
 
-			<form.Field
-				name="price"
-				validators={{
-					onChange: (field) => {
-						if (!field.value) return 'Price is required'
-						if (!/^[0-9]*$/.test(field.value)) return 'Please enter a valid number'
-						return undefined
-					},
-				}}
-			>
-				{(field) => (
-					<div className="grid w-full gap-1.5">
-						<Label htmlFor={field.name}>
-							<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Price</span>
-							<small className="font-light ml-1">(In {currency})</small>
-						</Label>
-						<Input
-							id={field.name}
-							name={field.name}
-							value={field.state.value}
-							onBlur={field.handleBlur}
-							onChange={(e) => {
-								field.handleChange(e.target.value)
-								productFormActions.updateValues({ price: e.target.value })
-							}}
-							className="border-2"
-							placeholder="e.g. 10000"
-							data-testid="product-price-input"
-							required
-							pattern="[0-9]*"
-						/>
-						{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
-							<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>
-						)}
-					</div>
-				)}
-			</form.Field>
+			{/* Bitcoin Price Field (always visible) */}
+			<div className="space-y-2">
+				<Label htmlFor="bitcoin-price" className="text-sm font-medium">
+					Price in {bitcoinUnit} <span className="text-red-500">*</span>
+					<span className="text-xs text-muted-foreground ml-1">(Bitcoin)</span>
+				</Label>
+				<div className="relative">
+					<Input
+						id="bitcoin-price"
+						type="number"
+						step="any"
+						placeholder={bitcoinUnit === 'SATS' ? 'e.g., 10000' : 'e.g., 0.0001'}
+						value={getBitcoinDisplayValue()}
+						onChange={(e) => handleBitcoinPriceChange(e.target.value)}
+						className="pr-20"
+					/>
+					<Button
+						type="button"
+						variant="ghost"
+						size="sm"
+						onClick={toggleBitcoinUnit}
+						className="absolute right-1 top-1/2 -translate-y-1/2 h-8 px-3 text-xs"
+					>
+						{bitcoinUnit}
+					</Button>
+				</div>
+			</div>
+
+			{/* Radio Group for Fiat Currencies */}
+			{showRadioGroup && (
+				<div className="space-y-3">
+					<Label className="text-sm font-medium">Currency Mode</Label>
+					<RadioGroup
+						value={currencyMode}
+						onValueChange={(value: 'sats' | 'fiat') => setCurrencyMode(value)}
+						className="flex flex-col space-y-3"
+					>
+						<div className="space-y-1">
+							<div className="flex items-center space-x-2">
+								<RadioGroupItem value="sats" id="sats-mode" />
+								<Label htmlFor="sats-mode" className="text-sm">
+									Use sats as currency (amount calculated on spot)
+								</Label>
+							</div>
+							<div className="flex items-start space-x-2 ml-6">
+								<Info className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+								<p className="text-xs text-muted-foreground">
+									The product will be priced in sats, calculated from the current Bitcoin exchange rate. Buyers will pay the exact sats
+									amount at purchase time.
+								</p>
+							</div>
+						</div>
+						<div className="space-y-1">
+							<div className="flex items-center space-x-2">
+								<RadioGroupItem value="fiat" id="fiat-mode" />
+								<Label htmlFor="fiat-mode" className="text-sm">
+									Use fiat as currency
+								</Label>
+							</div>
+							<div className="flex items-start space-x-2 ml-6">
+								<Info className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+								<p className="text-xs text-muted-foreground">
+									The product will be priced in {currency}. Buyers will pay the equivalent sats amount based on the exchange rate at
+									purchase time.
+								</p>
+							</div>
+						</div>
+					</RadioGroup>
+				</div>
+			)}
+
+			{/* Fiat Price Field (conditional) */}
+			{showFiatField && (
+				<div className="space-y-2">
+					<Label htmlFor="fiat-price" className="text-sm font-medium">
+						Price <span className="text-red-500">*</span>
+						<span className="text-xs text-muted-foreground ml-1">(In {currency})</span>
+					</Label>
+					<Input
+						id="fiat-price"
+						type="number"
+						step="0.01"
+						placeholder={`e.g., 25.00`}
+						value={fiatDisplayValue}
+						onChange={(e) => handleFiatPriceChange(e.target.value)}
+						className="w-full"
+					/>
+				</div>
+			)}
 
 			<form.Field
 				name="quantity"
@@ -163,18 +364,8 @@ export function DetailTab() {
 export function CategoryTab() {
 	const { categories, mainCategory } = useStore(productFormStore)
 
-	// Available main categories
-	const mainCategories = [
-		'Bitcoin',
-		'Art',
-		'Clothing',
-		'Food & Drink',
-		'Home & Technology',
-		'Health & Beauty',
-		'Sports & Outside',
-		'Services',
-		'Other',
-	]
+	// Available main categories from constants
+	const mainCategories = [...PRODUCT_CATEGORIES]
 
 	const handleMainCategorySelect = (value: string) => {
 		productFormActions.updateValues({ mainCategory: value })
@@ -399,9 +590,9 @@ export function ShippingTab() {
 					name: info.title,
 					cost: parseFloat(info.price.amount),
 					currency: info.price.currency,
-					countries: info.countries,
-					service: info.service,
-					carrier: info.carrier,
+					countries: info.countries || [],
+					service: info.service || '',
+					carrier: info.carrier || '',
 				}
 			})
 			.filter(Boolean) as RichShippingInfo[]
@@ -418,7 +609,7 @@ export function ShippingTab() {
 		const newShipping: ProductShippingForm = {
 			shipping: {
 				id: option.id,
-				name: option.name,
+				name: option.name || '',
 			},
 			extraCost: '',
 		}
@@ -460,7 +651,7 @@ export function ShippingTab() {
 	return (
 		<div className="space-y-6">
 			<div className="space-y-2">
-				<p className="text-gray-600">Select shipping options you'd like to make available to customers for this product</p>
+				<p className="text-gray-600">Select shipping options that will be available for this product</p>
 			</div>
 
 			{/* Selected Shipping Options */}
@@ -472,13 +663,16 @@ export function ShippingTab() {
 							const option = availableShippingOptions.find((opt) => opt.id === shipping.shipping?.id)
 							return (
 								<div key={index} className="flex items-center gap-3 p-3 border rounded-md bg-gray-50">
-									{option && <ServiceIcon service={option.service || 'standard'} />}
+									{option && option.service && <ServiceIcon service={option.service} />}
 									<div className="flex-1">
 										<div className="font-medium">{shipping.shipping?.name}</div>
 										{option && (
 											<div className="text-sm text-gray-500">
-												{option.cost} {option.currency} • {option.countries?.join(', ') || 'No countries'} •{' '}
-												{option.service || 'Unknown service'}
+												{option.cost} {option.currency} •{' '}
+												{option.countries && option.countries.length > 1
+													? `${option.countries.length} countries`
+													: option.countries?.[0] || 'No countries'}{' '}
+												• {option.service || 'Unknown service'}
 											</div>
 										)}
 									</div>
@@ -492,8 +686,14 @@ export function ShippingTab() {
 											placeholder="Extra cost"
 											className="w-24 text-sm"
 										/>
-										<Button type="button" variant="ghost" size="sm" onClick={() => removeShippingOption(index)}>
-											<span className="i-delete w-4 h-4" />
+										<Button
+											type="button"
+											variant="outline"
+											size="sm"
+											onClick={() => removeShippingOption(index)}
+											className="text-red-600 hover:text-red-700"
+										>
+											<X className="w-4 h-4" />
 										</Button>
 									</div>
 								</div>
@@ -505,181 +705,104 @@ export function ShippingTab() {
 
 			{/* Available Shipping Options */}
 			<div className="space-y-4">
-				<div className="flex items-center justify-between">
-					<h3 className="font-medium">Available Shipping Options</h3>
-					{shippingOptionsQuery.isLoading && <Spinner />}
-				</div>
-
-				{availableShippingOptions.length === 0 && !shippingOptionsQuery.isLoading && (
-					<div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-md">
-						<TruckIcon className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-						<p className="text-gray-500 mb-4">No shipping options found</p>
-						<p className="text-sm text-gray-400 mb-4">You need to create shipping options first before adding them to products</p>
-						<Button
-							type="button"
-							variant="outline"
-							onClick={() => {
-								// Navigate to shipping options page
-								window.open('/dashboard/products/shipping-options', '_blank')
-							}}
-						>
-							Create Shipping Options
-						</Button>
+				<h3 className="font-medium">Available Shipping Options</h3>
+				{shippingOptionsQuery.isLoading ? (
+					<div className="flex items-center justify-center p-8">
+						<Loader2 className="w-6 h-6 animate-spin" />
+						<span className="ml-2">Loading shipping options...</span>
 					</div>
-				)}
-
-				{availableShippingOptions.length > 0 && (
-					<div className="space-y-2">
-						{availableShippingOptions.map((option) => {
-							const isAdded = shippings.some((s) => s.shipping?.id === option.id)
-							return (
-								<div key={option.id} className="flex items-center gap-3 p-3 border rounded-md hover:bg-gray-50">
-									<ServiceIcon service={option.service || 'standard'} />
-									<div className="flex-1">
-										<div className="font-medium">{option.name}</div>
-										<div className="text-sm text-gray-500">
-											{option.cost} {option.currency} • {option.countries?.join(', ') || 'No countries'} •{' '}
-											{option.service || 'Unknown service'}
-											{option.carrier && ` • ${option.carrier}`}
-										</div>
+				) : availableShippingOptions.length === 0 ? (
+					<div className="text-center p-8 text-gray-500">
+						<p>No shipping options available.</p>
+						<p className="text-sm mt-2">Create shipping options in your dashboard first.</p>
+					</div>
+				) : (
+					<div className="grid gap-3">
+						{availableShippingOptions.map((option) => (
+							<div key={option.id} className="flex items-center gap-3 p-3 border rounded-md hover:bg-gray-50">
+								{option.service && <ServiceIcon service={option.service} />}
+								<div className="flex-1">
+									<div className="font-medium">{option.name}</div>
+									<div className="text-sm text-gray-500">
+										{option.cost} {option.currency} •{' '}
+										{option.countries && option.countries.length > 1
+											? `${option.countries.length} countries`
+											: option.countries?.[0] || 'No countries'}{' '}
+										• {option.service || 'Unknown service'}
 									</div>
-									<Button
-										type="button"
-										variant={isAdded ? 'outline' : 'secondary'}
-										size="sm"
-										onClick={() => (isAdded ? null : addShippingOption(option))}
-										disabled={isAdded}
-										data-testid={`add-shipping-option-${option.name?.replace(/\s+/g, '-').toLowerCase() || 'unknown'}`}
-									>
-										{isAdded ? (
-											<>
-												<CheckIcon className="w-4 h-4 mr-1" />
-												Added
-											</>
-										) : (
-											<>
-												<PlusIcon className="w-4 h-4 mr-1" />
-												Add
-											</>
-										)}
-									</Button>
 								</div>
-							)
-						})}
+								<Button
+									type="button"
+									variant="outline"
+									size="sm"
+									onClick={() => addShippingOption(option)}
+									disabled={shippings.some((s) => s.shipping?.id === option.id)}
+								>
+									{shippings.some((s) => s.shipping?.id === option.id) ? 'Added' : 'Add'}
+								</Button>
+							</div>
+						))}
 					</div>
 				)}
-			</div>
-
-			{/* Quick Actions */}
-			<div className="flex gap-2">
-				<Button
-					type="button"
-					variant="outline"
-					className="flex-1"
-					onClick={() => {
-						// Navigate to shipping options page
-						window.open('/dashboard/products/shipping-options', '_blank')
-					}}
-				>
-					<SettingsIcon className="w-4 h-4 mr-2" />
-					Manage Shipping Options
-				</Button>
 			</div>
 		</div>
 	)
 }
 
 export function SpecTab() {
-	const { specs, weight, dimensions } = useStore(productFormStore)
-	const [newSpecKey, setNewSpecKey] = useState('')
-	const [newSpecValue, setNewSpecValue] = useState('')
+	const { specs } = useStore(productFormStore)
 
-	const form = useForm({
-		defaultValues: {
-			weightValue: weight?.value || '',
-			weightUnit: weight?.unit || 'kg',
-			dimensionsValue: dimensions?.value || '',
-			dimensionsUnit: dimensions?.unit || 'cm',
-		},
-		onSubmit: async ({ value }) => {
-			// This is handled by the onChange handlers
-		},
-	})
+	const updateSpec = (index: number, field: 'key' | 'value', value: string) => {
+		const newSpecs = [...specs]
+		newSpecs[index] = { ...newSpecs[index], [field]: value }
+		productFormActions.updateValues({ specs: newSpecs })
+	}
 
 	const addSpec = () => {
-		if (newSpecKey.trim() && newSpecValue.trim()) {
-			productFormActions.updateValues({
-				specs: [...specs, { key: newSpecKey, value: newSpecValue }],
-			})
-			setNewSpecKey('')
-			setNewSpecValue('')
-		}
+		const newSpecs = [...specs, { key: '', value: '' }]
+		productFormActions.updateValues({ specs: newSpecs })
 	}
 
 	const removeSpec = (index: number) => {
-		productFormActions.updateValues({
-			specs: specs.filter((_, i) => i !== index),
-		})
+		const newSpecs = specs.filter((_, i) => i !== index)
+		productFormActions.updateValues({ specs: newSpecs })
 	}
 
 	return (
 		<div className="space-y-6">
+			<div className="space-y-2">
+				<Label className="text-base font-medium">Product Specifications</Label>
+				<p className="text-gray-600">Add detailed specifications for your product</p>
+			</div>
+
 			<div className="space-y-4">
-				<h3 className="text-sm font-medium">Product Specifications</h3>
-
-				{specs.length > 0 && (
-					<div className="space-y-2 mb-4">
-						{specs.map((spec, index) => (
-							<div key={index} className="flex items-center gap-2 p-2 border rounded-md">
-								<div className="flex-1">
-									<span className="font-medium">{spec.key}: </span>
-									<span>{spec.value}</span>
-								</div>
-								<Button type="button" variant="ghost" className="h-8 w-8 p-0" onClick={() => removeSpec(index)}>
-									<span className="i-delete w-5 h-5"></span>
-								</Button>
-							</div>
-						))}
+				{specs.map((spec, index) => (
+					<div key={index} className="flex gap-3 items-start">
+						<div className="flex-1">
+							<Input
+								placeholder="Specification name (e.g., Material, Size, Weight)"
+								value={spec.key}
+								onChange={(e) => updateSpec(index, 'key', e.target.value)}
+							/>
+						</div>
+						<div className="flex-1">
+							<Input
+								placeholder="Value (e.g., Cotton, Large, 2kg)"
+								value={spec.value}
+								onChange={(e) => updateSpec(index, 'value', e.target.value)}
+							/>
+						</div>
+						<Button type="button" variant="outline" size="sm" onClick={() => removeSpec(index)} className="text-red-600 hover:text-red-700">
+							<X className="w-4 h-4" />
+						</Button>
 					</div>
-				)}
+				))}
 
-				<div className="grid grid-cols-2 gap-3">
-					<div className="grid w-full gap-1.5">
-						<Label htmlFor="spec-key">Property</Label>
-						<Input
-							id="spec-key"
-							value={newSpecKey}
-							onChange={(e) => setNewSpecKey(e.target.value)}
-							className="border-2"
-							placeholder="e.g. Material"
-						/>
-					</div>
-
-					<div className="grid w-full gap-1.5">
-						<Label htmlFor="spec-value">Value</Label>
-						<Input
-							id="spec-value"
-							value={newSpecValue}
-							onChange={(e) => setNewSpecValue(e.target.value)}
-							className="border-2"
-							placeholder="e.g. Cotton"
-						/>
-					</div>
-				</div>
-
-				<Button
-					type="button"
-					variant="outline"
-					className="w-full flex gap-2 justify-center"
-					onClick={addSpec}
-					disabled={!newSpecKey.trim() || !newSpecValue.trim()}
-				>
-					<span className="i-plus w-5 h-5"></span>
+				<Button type="button" variant="outline" onClick={addSpec} className="w-full flex items-center gap-2">
+					<PlusIcon className="w-4 h-4" />
 					Add Specification
 				</Button>
 			</div>
-
-			{/* Weight and dimensions sections would continue here... */}
 		</div>
 	)
 }

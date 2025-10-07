@@ -10,8 +10,8 @@ export function ProductsTab() {
 	const { selectedProducts, availableProducts } = useStore(collectionFormStore)
 	const { user } = useStore(authStore)
 
-	// Fetch user's products
-	const { data: products = [], isLoading } = useProductsByPubkey(user?.pubkey || '')
+	// Fetch user's products (including hidden ones for collection management)
+	const { data: products = [], isLoading } = useProductsByPubkey(user?.pubkey || '', true)
 
 	// Update available products when products are loaded
 	// TODO: Refactor this to use the new product query

@@ -55,7 +55,7 @@ interface ScopeSelectorProps {
 }
 
 function ScopeSelector({ value, scopeId, userPubkey, onChange }: ScopeSelectorProps) {
-	const productsQuery = useProductsByPubkey(userPubkey)
+	const productsQuery = useProductsByPubkey(userPubkey, true) // Include hidden products for payment scope selection
 	const collectionsQuery = useCollectionsByPubkey(userPubkey)
 
 	const handleScopeChange = (newValue: string) => {
