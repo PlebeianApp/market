@@ -13,9 +13,9 @@ import { cn } from '@/lib/utils'
 import { getStatusStyles } from '@/lib/utils/orderUtils'
 import { useUpdateOrderStatusMutation } from '@/publish/orders'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
-import { getBuyerPubkey, getOrderId, getOrderStatus, getSellerPubkey } from '@/queries/orders'
+import { getBuyerPubkey, getOrderStatus, getSellerPubkey } from '@/queries/orders'
 import { useUpdateShippingStatusMutation } from '@/queries/shipping'
-import { MoreHorizontal, PackageCheck, Truck, ShoppingBag, Clock, X, Check } from 'lucide-react'
+import { Check, Clock, MoreHorizontal, ShoppingBag, Truck, X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Input } from '../ui/input'
@@ -48,8 +48,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 	const isSeller = userPubkey === sellerPubkey
 
 	// Determine which actions are allowed based on role and current status
-	const canCancel =
-		(status === ORDER_STATUS.PENDING || status === ORDER_STATUS.CONFIRMED) && (isBuyer || (isSeller && status === ORDER_STATUS.PENDING))
+	const canCancel = status === ORDER_STATUS.PENDING && (isBuyer || isSeller)
 
 	// Check if the order has been shipped
 	const hasBeenShipped = order.shippingUpdates.some((update) => update.tags.find((tag) => tag[0] === 'status')?.[1] === 'shipped')
@@ -58,13 +57,12 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 	const canConfirm = isSeller && status === ORDER_STATUS.PENDING
 	const canProcess = isSeller && status === ORDER_STATUS.CONFIRMED
 	const canShip = isSeller && status === ORDER_STATUS.PROCESSING && !hasBeenShipped
-	const canComplete = isSeller && status === ORDER_STATUS.PROCESSING
 
 	// Buyer actions
-	const canReceive = isBuyer && status === ORDER_STATUS.PROCESSING
+	const canReceive = isBuyer && status === ORDER_STATUS.PROCESSING && hasBeenShipped
 
 	const handleStatusUpdate = (newStatus: string, reason?: string, tracking?: string) => {
-		const orderEventId = getOrderId(order.order)
+		const orderEventId = order.order.id // Use actual event ID, not the order tag UUID
 		if (!orderEventId) {
 			toast.error('Order ID not found')
 			return
@@ -85,22 +83,14 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 	}
 
 	const handleShipped = () => {
-		const orderEventId = getOrderId(order.order)
+		const orderEventId = order.order.id // Use actual event ID, not the order tag UUID
 		if (!orderEventId) {
 			toast.error('Order ID not found')
 			return
 		}
 
-		// Use a normal status update instead of a shipping update
-		// This ensures it's processed the same way as other status changes
-		updateOrderStatus.mutate({
-			orderEventId,
-			status: ORDER_STATUS.PROCESSING, // Keep as processing but with shipping info
-			tracking: trackingNumber,
-			reason: 'Order has been shipped',
-		})
-
-		// Also send a shipping update for record keeping, but don't rely on it for UI updates
+		// Send ONLY a shipping update (Type 4) per gamma spec
+		// Order status remains PROCESSING, shipping status becomes SHIPPED
 		updateShippingStatus.mutate({
 			orderEventId,
 			status: SHIPPING_STATUS.SHIPPED,
@@ -117,7 +107,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 	}
 
 	// Check if there are any available actions
-	const hasActions = canCancel || canConfirm || canProcess || canShip || canComplete || canReceive
+	const hasActions = canCancel || canConfirm || canProcess || canShip || canReceive
 
 	const { bgColor, textColor, iconName, label } = getStatusStyles(order)
 
@@ -186,12 +176,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 							</DropdownMenuItem>
 						)}
 
-						{isSeller && canComplete && (
-							<DropdownMenuItem onClick={() => handleStatusUpdate(ORDER_STATUS.COMPLETED)}>
-								<PackageCheck className="mr-2 h-4 w-4" />
-								{hasBeenShipped ? 'Mark as Delivered' : 'Complete Order'}
-							</DropdownMenuItem>
-						)}
+						{/* Seller can no longer complete orders; completion is buyer-only after shipped */}
 
 						{/* Cancel action - open dialog */}
 						{canCancel && (

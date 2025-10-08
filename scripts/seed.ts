@@ -94,7 +94,7 @@ async function seedData() {
 		about: 'The Plebeian Market - A decentralized marketplace built on Nostr. Trade freely with Bitcoin.',
 		nip05: 'plebeian@plebeian.market',
 		website: 'https://plebeian.market',
-		lud16: 'plebeian@getalby.com',
+		lud16: 'plebeianuser@coinos.io',
 	}
 	await createUserProfileEvent(appSigner, ndk, appProfile)
 
@@ -468,15 +468,15 @@ async function seedData() {
 								;({ createdAt: currentTimestamp } = await createGeneralCommunicationEvent(buyerSigner, ndk, kind14Data))
 								lastEventTimestamp = currentTimestamp
 
-								const statusCompleted = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.COMPLETED, lastEventTimestamp)
-								await createOrderStatusEvent(sellerSigner, ndk, statusCompleted)
+								// BUYER completes the order after receiving shipment (not seller)
+								const statusCompleted = generateOrderStatusData(sellerPubkey, orderId, ORDER_STATUS.COMPLETED, lastEventTimestamp)
+								await createOrderStatusEvent(buyerSigner, ndk, statusCompleted)
 								break
 
 							case 5:
-								console.log(`    Order ${i + 1}: CANCELLED state`)
-								const cancelStage = Math.floor(Math.random() * 3)
+								console.log(`    Order ${i + 1}: CANCELLED state (PENDING only)`)
 
-								// Always create payment requests
+								// Create payment requests (order is in PENDING state)
 								let paymentReqResults5 = await createMultiplePaymentRequestEvents(
 									sellerSigner,
 									ndk,
@@ -490,36 +490,15 @@ async function seedData() {
 									lastEventTimestamp = Math.max(...paymentReqResults5.map((r) => r.createdAt))
 								}
 
-								if (cancelStage >= 1) {
-									// Create payment receipts for confirmed orders that got cancelled
-									const receiptResults5 = await createPaymentReceiptsForOrder(
-										buyerSigner,
-										ndk,
-										orderId,
-										paymentReqResults5,
-										lastEventTimestamp,
-									)
-									if (receiptResults5.length > 0) {
-										lastEventTimestamp = Math.max(...receiptResults5.map((r) => r.createdAt))
-									}
-
-									const statusConfirmed5 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED, lastEventTimestamp)
-									;({ createdAt: currentTimestamp } = await createOrderStatusEvent(sellerSigner, ndk, statusConfirmed5))
-									lastEventTimestamp = currentTimestamp
-								}
-
-								if (cancelStage >= 2) {
-									const statusProcessing4 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.PROCESSING, lastEventTimestamp)
-									;({ createdAt: currentTimestamp } = await createOrderStatusEvent(sellerSigner, ndk, statusProcessing4))
-									lastEventTimestamp = currentTimestamp
-								}
+								// Cancellation is ONLY allowed in PENDING state (before confirmation)
+								// No payment receipts, no confirmation status - direct cancellation
 
 								// Add a general message about cancellation reason
 								const isBuyerCancelling = Math.random() > 0.5
 								const canceller = isBuyerCancelling ? buyerSigner : sellerSigner
 								const recipientForCancelReason = isBuyerCancelling ? sellerPubkey : buyerPubkey
 								kind14Data = generateGeneralCommunicationData(recipientForCancelReason, orderId, lastEventTimestamp)
-								kind14Data.content = "I've had to cancel this order, sorry for any inconvenience."
+								kind14Data.content = "I've had to cancel this order before payment, sorry for any inconvenience."
 								;({ createdAt: currentTimestamp } = await createGeneralCommunicationEvent(canceller, ndk, kind14Data))
 								lastEventTimestamp = currentTimestamp
 

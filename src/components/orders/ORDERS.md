@@ -69,26 +69,27 @@
 ### PENDING
 
 - **Buyer can**: Cancel (it's their order)
+- **Seller can**: Cancel (optional, administrative)
 - **Seller can**: Confirm (accepting the order)
-- **Reasoning**: Only the seller should confirm receipt of a new order, and both parties can cancel before confirmation
+- **Reasoning**: Only the seller should confirm receipt of a new order. Cancellation is allowed only before confirmation.
 
 ### CONFIRMED
 
-- **Buyer can**: Cancel (still before processing)
+- **Buyer cannot cancel**: Cancellation is only allowed before confirmation
 - **Seller can**: Process (move to fulfillment)
-- **Reasoning**: After payment confirmation, seller needs to process the order, but buyer can still cancel if needed
+- **Reasoning**: Once confirmed by the merchant, the order progresses to fulfillment; refunds are handled off-protocol via messaging between parties.
 
 ### PROCESSING
 
-- **Buyer can**: Cancel (though impact is limited after processing started)
-- **Seller can**: Ship (mark as shipped) & Complete (for digital goods)
+- **Buyer cannot cancel**
+- **Seller can**: Ship (send shipping update with tracking)
 - **Reasoning**: Primary actions are with seller as they handle order fulfillment
 
 ### SHIPPED (PROCESSING + shipping updates)
 
-- **Buyer can**: Confirm receipt
-- **Seller can**: Mark as delivered/completed
-- **Reasoning**: Either party can complete the transaction - buyer upon receiving goods or seller when delivery is confirmed
+- **Buyer can**: Confirm receipt (sets order to Completed)
+- **Seller cannot**: Complete orders
+- **Reasoning**: Only buyers can mark orders as completed after shipment; delivery confirmation is buyer-driven.
 
 ### COMPLETED / CANCELLED
 
@@ -104,30 +105,17 @@ The order flow uses the following Nostr event types:
 - **ORDER_CREATION** (Type 1): Initial order event
 - **PAYMENT_REQUEST** (Type 2): Payment request from seller
 - **STATUS_UPDATE** (Type 3): Status changes (pending, confirmed, processing, completed, cancelled)
-- **SHIPPING_UPDATE** (Type 4): Shipping-specific updates (shipped, delivered)
+- **SHIPPING_UPDATE** (Type 4): Shipping-specific updates (processing, shipped, delivered, exception)
 
-### Dual-Track Approach for Shipping
+### Shipping Updates
 
-When an order is shipped, two events are generated:
-
-1. **Status Update** (Type 3): Maintains the "PROCESSING" state
-2. **Shipping Update** (Type 4): Records shipping details (tracking, carrier)
-
-This approach:
-
-- Preserves the linear order workflow
-- Treats shipping as a sub-state of processing
-- Allows for shipping-specific details while maintaining compatibility
+Shipping is represented exclusively via **Type 4** events. Order status (Type 3) and shipping status (Type 4) are separate streams. Shipping updates carry tracking, carrier, and status such as `processing`, `shipped`, `delivered`, or `exception`.
 
 ### UI Representation
 
-The UI displays shipping status through a hybrid approach:
-
-- Underlying `ORDER_STATUS` remains "PROCESSING"
-- UI checks for shipping updates to display "Shipped" with:
-  - Orange color scheme
-  - Truck icon
-  - Updated action buttons ("Mark as Delivered" vs "Complete Order")
+- Display order status from Type 3 events
+- Display shipping status from Type 4 events (e.g. show "Shipped" with truck icon)
+- Completion is a buyer action available only after a `shipped` shipping update exists
 
 ### Permissions Control
 
