@@ -57,7 +57,7 @@ function ProfileComponent() {
 	useEffect(() => {
 		if (fetchedProfile) {
 			console.log('✅ Profile component received kind 0 metadata:', fetchedProfile)
-			
+
 			// Handle kind 0 metadata field mappings: picture -> image
 			const profileWithMappedFields = {
 				...fetchedProfile,
@@ -65,20 +65,20 @@ function ProfileComponent() {
 			}
 			setProfile(profileWithMappedFields)
 			setOriginalProfile(profileWithMappedFields)
-			
+
 			console.log('✅ Profile component processed kind 0 metadata with field mappings:', profileWithMappedFields)
 
- 		// Update form data with fetched profile
- 		// Handle both snake_case (from kind 0 metadata) and camelCase field formats
- 		setFormData({
- 			name: fetchedProfile.name || '',
- 			displayName: fetchedProfile.displayName || (fetchedProfile as any).display_name || '',
- 			about: fetchedProfile.about || '',
- 			nip05: fetchedProfile.nip05 || '',
- 			lud16: fetchedProfile.lud16 || '',
- 			lud06: fetchedProfile.lud06 || '',
- 			website: fetchedProfile.website || '',
- 		})
+			// Update form data with fetched profile
+			// Handle both snake_case (from kind 0 metadata) and camelCase field formats
+			setFormData({
+				name: fetchedProfile.name || '',
+				displayName: fetchedProfile.displayName || (fetchedProfile as any).display_name || '',
+				about: fetchedProfile.about || '',
+				nip05: fetchedProfile.nip05 || '',
+				lud16: fetchedProfile.lud16 || '',
+				lud06: fetchedProfile.lud06 || '',
+				website: fetchedProfile.website || '',
+			})
 		}
 	}, [fetchedProfile])
 
