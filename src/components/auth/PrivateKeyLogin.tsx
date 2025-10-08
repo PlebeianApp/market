@@ -58,7 +58,7 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 	// Normalize private key input - accept both nsec and 64-char hex format
 	const normalizePrivateKey = (key: string): string => {
 		const trimmedKey = key.trim()
-		
+
 		// Check if it's a 64-character hex string
 		if (/^[0-9a-fA-F]{64}$/.test(trimmedKey)) {
 			// Convert hex to Uint8Array and encode as nsec
@@ -68,7 +68,7 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 			}
 			return nip19.nsecEncode(hexBytes)
 		}
-		
+
 		// Return as-is if it's already in nsec format or other format
 		return trimmedKey
 	}
