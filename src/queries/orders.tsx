@@ -716,42 +716,8 @@ export const getOrderStatus = (order: OrderWithRelatedEvents): string => {
 	const statusUpdates = [...order.statusUpdates]
 	const shippingUpdates = [...order.shippingUpdates]
 
-	// First, check if there are any shipping updates that should influence status
-	if (shippingUpdates.length > 0) {
-		// Sort newest first
-		shippingUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-		const latestShippingUpdate = shippingUpdates[0]
-		const shippingStatusTag = latestShippingUpdate.tags.find((tag) => tag[0] === 'status')
-
-		// If an item has been shipped, it should be at least in processing state
-		if (shippingStatusTag?.[1] === 'shipped') {
-			// Check if we have newer status updates that might override this
-			if (statusUpdates.length > 0) {
-				statusUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-				const latestStatusUpdate = statusUpdates[0]
-
-				// Only process if the status update is newer than the shipping update
-				if (
-					latestStatusUpdate.created_at &&
-					latestShippingUpdate.created_at &&
-					latestStatusUpdate.created_at > latestShippingUpdate.created_at
-				) {
-					const statusTag = latestStatusUpdate.tags.find((tag) => tag[0] === 'status')
-					if (statusTag?.[1]) {
-						return statusTag[1]
-					}
-				}
-			}
-
-			// If no newer status updates, return PROCESSING state for shipped items
-			return ORDER_STATUS.PROCESSING
-		}
-
-		// If delivered, mark as completed
-		if (shippingStatusTag?.[1] === 'delivered') {
-			return ORDER_STATUS.COMPLETED
-		}
-	}
+	// Shipping updates no longer directly set order status.
+	// Order status is determined solely by explicit status update events (Type 3).
 
 	// Next, check status updates if no shipping rules applied
 	if (statusUpdates.length > 0) {
@@ -765,10 +731,7 @@ export const getOrderStatus = (order: OrderWithRelatedEvents): string => {
 		}
 	}
 
-	// If there are payment receipts but no status, consider it confirmed
-	if (order.paymentReceipts.length > 0) {
-		return ORDER_STATUS.CONFIRMED
-	}
+	// Do not infer confirmation from payment receipts. Merchant must explicitly confirm via status update.
 
 	// Default to pending if no other status is found
 	return ORDER_STATUS.PENDING

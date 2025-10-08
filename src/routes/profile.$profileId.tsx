@@ -1,3 +1,4 @@
+import { EntityActionsMenu } from '@/components/EntityActionsMenu'
 import { ItemGrid } from '@/components/ItemGrid'
 import { Header } from '@/components/layout/Header'
 import { Nip05Badge } from '@/components/Nip05Badge'
@@ -7,15 +8,23 @@ import { ProfileName } from '@/components/ProfileName'
 import { Button } from '@/components/ui/button'
 import { ZapButton } from '@/components/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
+import { useEntityPermissions } from '@/hooks/useEntityPermissions'
 import { getHexColorFingerprintFromHexPubkey, truncateText } from '@/lib/utils'
+import { ndkActions } from '@/lib/stores/ndk'
+import { addToBlacklist, removeFromBlacklist } from '@/publish/blacklist'
+import { addToFeaturedUsers, removeFromFeaturedUsers } from '@/publish/featured'
+import { useBlacklistSettings } from '@/queries/blacklist'
+import { useConfigQuery } from '@/queries/config'
+import { useFeaturedUsers } from '@/queries/featured'
 import { productsByPubkeyQueryOptions } from '@/queries/products'
 import { profileByIdentifierQueryOptions } from '@/queries/profiles'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { useSuspenseQuery } from '@tanstack/react-query'
+import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { MessageCircle, Minus, Plus, Share2 } from 'lucide-react'
+import { Edit, MessageCircle, Minus, Plus, Share2 } from 'lucide-react'
 import { useState } from 'react'
+import { toast } from 'sonner'
 
 export const Route = createFileRoute('/profile/$profileId')({
 	component: RouteComponent,
@@ -35,6 +44,86 @@ function RouteComponent() {
 	const [showFullAbout, setShowFullAbout] = useState(false)
 	const breakpoint = useBreakpoint()
 	const isSmallScreen = breakpoint === 'sm'
+	const queryClient = useQueryClient()
+
+	// Get app config
+	const { data: config } = useConfigQuery()
+	const appPubkey = config?.appPublicKey || ''
+
+	// Get entity permissions
+	const permissions = useEntityPermissions(user?.pubkey)
+
+	// Get blacklist and featured status
+	const { data: blacklistSettings } = useBlacklistSettings(appPubkey)
+	const { data: featuredData } = useFeaturedUsers(appPubkey)
+
+	const isBlacklisted = blacklistSettings?.blacklistedPubkeys.includes(user?.pubkey || '') || false
+	const isFeatured = featuredData?.featuredUsers.includes(user?.pubkey || '') || false
+
+	// Handle edit profile
+	const handleEdit = () => {
+		navigate({ to: '/dashboard/account/profile' })
+	}
+
+	// Handle blacklist toggle
+	const handleBlacklistToggle = async () => {
+		const ndk = ndkActions.getNDK()
+		const signer = ndk?.signer
+
+		if (!ndk || !signer) {
+			toast.error('Please connect your wallet to perform this action')
+			return
+		}
+
+		if (!user?.pubkey) {
+			toast.error('Invalid user pubkey')
+			return
+		}
+
+		try {
+			if (isBlacklisted) {
+				await removeFromBlacklist(user.pubkey, signer, ndk, appPubkey)
+				toast.success('User removed from blacklist')
+			} else {
+				await addToBlacklist(user.pubkey, signer, ndk, appPubkey)
+				toast.success('User added to blacklist')
+			}
+			// Invalidate queries to refresh the UI
+			queryClient.invalidateQueries({ queryKey: ['config', 'blacklist', appPubkey] })
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Failed to update blacklist')
+		}
+	}
+
+	// Handle featured toggle
+	const handleFeaturedToggle = async () => {
+		const ndk = ndkActions.getNDK()
+		const signer = ndk?.signer
+
+		if (!ndk || !signer) {
+			toast.error('Please connect your wallet to perform this action')
+			return
+		}
+
+		if (!user?.pubkey) {
+			toast.error('Invalid user pubkey')
+			return
+		}
+
+		try {
+			if (isFeatured) {
+				await removeFromFeaturedUsers(user.pubkey, signer, ndk, appPubkey)
+				toast.success('User removed from featured')
+			} else {
+				await addToFeaturedUsers(user.pubkey, signer, ndk, appPubkey)
+				toast.success('User added to featured')
+			}
+			// Invalidate queries to refresh the UI
+			queryClient.invalidateQueries({ queryKey: ['config', 'featuredUsers', appPubkey] })
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Failed to update featured users')
+		}
+	}
 
 	return (
 		<div className="relative min-h-screen">
@@ -78,6 +167,26 @@ function RouteComponent() {
 							<Button variant="secondary" size="icon">
 								<Share2 className="w-5 h-5" />
 							</Button>
+							{/* Edit button for profile owner */}
+							{permissions.canEdit && (
+								<Button variant="secondary" onClick={handleEdit} className="flex items-center gap-2">
+									<Edit className="h-5 w-5" />
+									<span className="hidden md:inline">Edit Profile</span>
+								</Button>
+							)}
+							{/* Entity Actions Menu for admins/editors (blacklist and featured functionality) */}
+							<EntityActionsMenu
+								permissions={permissions}
+								entityType="profile"
+								entityId={params.profileId}
+								isBlacklisted={isBlacklisted}
+								isFeatured={isFeatured}
+								onEdit={permissions.canEdit ? handleEdit : undefined}
+								onBlacklist={permissions.canBlacklist && !isBlacklisted ? handleBlacklistToggle : undefined}
+								onUnblacklist={permissions.canBlacklist && isBlacklisted ? handleBlacklistToggle : undefined}
+								onSetFeatured={permissions.canSetFeatured && !isFeatured ? handleFeaturedToggle : undefined}
+								onUnsetFeatured={permissions.canSetFeatured && isFeatured ? handleFeaturedToggle : undefined}
+							/>
 						</div>
 					)}
 				</div>

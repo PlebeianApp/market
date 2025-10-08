@@ -1,10 +1,10 @@
 import { V4VManager } from '@/components/v4v/V4VManager'
 import { authStore } from '@/lib/stores/auth'
 import { useV4VShares } from '@/queries/v4v'
-import { createFileRoute } from '@tanstack/react-router'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
+import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { useEffect, useMemo } from 'react'
+import { useMemo } from 'react'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/circular-economy')({
 	component: CircularEconomyComponent,
@@ -18,20 +18,18 @@ function CircularEconomyComponent() {
 	// Fetch existing V4V shares
 	const { data: v4vShares, isLoading } = useV4VShares(userPubkey)
 
-	useEffect(() => {
-		console.log('v4vShares', v4vShares)
-	}, [v4vShares])
-
 	// Calculate initial values from fetched shares
 	const { initialShares, initialTotalPercentage } = useMemo(() => {
 		if (!v4vShares || v4vShares.length === 0) {
+			// No shares configured - use defaults
 			return { initialShares: [], initialTotalPercentage: 10 }
 		}
 
 		// Calculate total V4V percentage (sum of all share percentages)
+		// Shares are stored as decimals (0.1 = 10% of total sales)
 		const totalPercentage = v4vShares.reduce((sum, share) => sum + share.percentage, 0) * 100
 
-		// Normalize shares to sum to 1 (for the split between recipients)
+		// Normalize shares to sum to 1 (for the split between recipients in the UI)
 		const totalSharePercentage = v4vShares.reduce((sum, share) => sum + share.percentage, 0)
 		const normalizedShares = v4vShares.map((share) => ({
 			...share,

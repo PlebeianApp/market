@@ -46,6 +46,12 @@ function getRandomPastTimestamp(min = MIN_SEED_TIMESTAMP, max = MAX_SEED_TIMESTA
 	return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
+// Helper to get a random float (duplicated from gen_v4v.ts)
+function getRandomFloat(min: number, max: number, decimals: number = 4): number {
+	const rand = Math.random() * (max - min) + min
+	return parseFloat(rand.toFixed(decimals))
+}
+
 if (!RELAY_URL) {
 	console.error('Missing required environment variables')
 	process.exit(1)
@@ -94,7 +100,7 @@ async function seedData() {
 		about: 'The Plebeian Market - A decentralized marketplace built on Nostr. Trade freely with Bitcoin.',
 		nip05: 'plebeian@plebeian.market',
 		website: 'https://plebeian.market',
-		lud16: 'plebeian@getalby.com',
+		lud16: 'plebeianuser@coinos.io',
 	}
 	await createUserProfileEvent(appSigner, ndk, appProfile)
 
@@ -190,11 +196,45 @@ async function seedData() {
 				}
 			}
 		}
+	}
 
-		// Create V4V shares for each user (excluding themselves from potential recipients)
+	// Create V4V shares for all users (after all users are created)
+	console.log('Creating V4V shares for all users...')
+	for (let i = 0; i < devUsers.length; i++) {
+		const user = devUsers[i]
+		const signer = new NDKPrivateKeySigner(user.sk)
+		await signer.blockUntilReady()
+		const pubkey = (await signer.user()).pubkey
+
 		console.log(`Creating V4V shares for user ${pubkey.substring(0, 8)}...`)
-		const otherUserPubkeys = userPubkeys.filter((otherPubkey) => otherPubkey !== pubkey)
-		await createV4VSharesEvent(signer, ndk, APP_PUBKEY, otherUserPubkeys)
+
+		// devUser4 (index 3) gets an empty V4V event (takes 100%, V4V configured but 0%)
+		if (i === 3) {
+			console.log('  → devUser4: Creating empty V4V event (100% to seller)')
+			await createV4VSharesEvent(signer, ndk, APP_PUBKEY, [], [])
+		} else {
+			// Other users get 2 shares: app_pubkey + one random other user
+			const otherUserPubkeys = userPubkeys.filter((otherPubkey) => otherPubkey !== pubkey)
+			const randomOtherUser = otherUserPubkeys[Math.floor(Math.random() * otherUserPubkeys.length)]
+
+			// Total V4V percentage between 8-12%
+			const totalV4VPercentage = getRandomFloat(0.08, 0.12, 4)
+			// App gets 60-80% of the V4V share
+			const appShareOfV4V = getRandomFloat(0.6, 0.8, 2)
+
+			const appPercentage = totalV4VPercentage * appShareOfV4V
+			const userPercentage = totalV4VPercentage * (1 - appShareOfV4V)
+
+			const customShares = [
+				{ pubkey: APP_PUBKEY, percentage: appPercentage },
+				{ pubkey: randomOtherUser, percentage: userPercentage },
+			]
+
+			console.log(
+				`  → Creating V4V: ${(totalV4VPercentage * 100).toFixed(1)}% total (app: ${(appPercentage * 100).toFixed(1)}%, user: ${(userPercentage * 100).toFixed(1)}%)`,
+			)
+			await createV4VSharesEvent(signer, ndk, APP_PUBKEY, [], customShares)
+		}
 	}
 
 	// Create collections
@@ -468,15 +508,15 @@ async function seedData() {
 								;({ createdAt: currentTimestamp } = await createGeneralCommunicationEvent(buyerSigner, ndk, kind14Data))
 								lastEventTimestamp = currentTimestamp
 
-								const statusCompleted = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.COMPLETED, lastEventTimestamp)
-								await createOrderStatusEvent(sellerSigner, ndk, statusCompleted)
+								// BUYER completes the order after receiving shipment (not seller)
+								const statusCompleted = generateOrderStatusData(sellerPubkey, orderId, ORDER_STATUS.COMPLETED, lastEventTimestamp)
+								await createOrderStatusEvent(buyerSigner, ndk, statusCompleted)
 								break
 
 							case 5:
-								console.log(`    Order ${i + 1}: CANCELLED state`)
-								const cancelStage = Math.floor(Math.random() * 3)
+								console.log(`    Order ${i + 1}: CANCELLED state (PENDING only)`)
 
-								// Always create payment requests
+								// Create payment requests (order is in PENDING state)
 								let paymentReqResults5 = await createMultiplePaymentRequestEvents(
 									sellerSigner,
 									ndk,
@@ -490,36 +530,15 @@ async function seedData() {
 									lastEventTimestamp = Math.max(...paymentReqResults5.map((r) => r.createdAt))
 								}
 
-								if (cancelStage >= 1) {
-									// Create payment receipts for confirmed orders that got cancelled
-									const receiptResults5 = await createPaymentReceiptsForOrder(
-										buyerSigner,
-										ndk,
-										orderId,
-										paymentReqResults5,
-										lastEventTimestamp,
-									)
-									if (receiptResults5.length > 0) {
-										lastEventTimestamp = Math.max(...receiptResults5.map((r) => r.createdAt))
-									}
-
-									const statusConfirmed5 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED, lastEventTimestamp)
-									;({ createdAt: currentTimestamp } = await createOrderStatusEvent(sellerSigner, ndk, statusConfirmed5))
-									lastEventTimestamp = currentTimestamp
-								}
-
-								if (cancelStage >= 2) {
-									const statusProcessing4 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.PROCESSING, lastEventTimestamp)
-									;({ createdAt: currentTimestamp } = await createOrderStatusEvent(sellerSigner, ndk, statusProcessing4))
-									lastEventTimestamp = currentTimestamp
-								}
+								// Cancellation is ONLY allowed in PENDING state (before confirmation)
+								// No payment receipts, no confirmation status - direct cancellation
 
 								// Add a general message about cancellation reason
 								const isBuyerCancelling = Math.random() > 0.5
 								const canceller = isBuyerCancelling ? buyerSigner : sellerSigner
 								const recipientForCancelReason = isBuyerCancelling ? sellerPubkey : buyerPubkey
 								kind14Data = generateGeneralCommunicationData(recipientForCancelReason, orderId, lastEventTimestamp)
-								kind14Data.content = "I've had to cancel this order, sorry for any inconvenience."
+								kind14Data.content = "I've had to cancel this order before payment, sorry for any inconvenience."
 								;({ createdAt: currentTimestamp } = await createGeneralCommunicationEvent(canceller, ndk, kind14Data))
 								lastEventTimestamp = currentTimestamp
 

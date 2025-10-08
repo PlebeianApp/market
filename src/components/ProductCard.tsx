@@ -41,7 +41,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 	const cartQuantity = isInCart ? cart.cart.products[product.id]?.amount || 0 : 0
 
 	const handleAddToCart = async () => {
-		if (isOwnProduct) return // Don't allow adding own products to cart
+		if (isOwnProduct || visibility === 'hidden') return // Don't allow adding own products or hidden products to cart
 
 		setIsAddingToCart(true)
 		try {
@@ -118,7 +118,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 								<Button
 									className="py-3 px-4 rounded-lg flex-grow font-medium transition-all duration-200 ease-in-out bg-black text-white disabled:bg-gray-400 disabled:cursor-not-allowed"
 									onClick={handleAddToCart}
-									disabled={isAddingToCart}
+									disabled={isAddingToCart || visibility === 'hidden'}
 								>
 									{isAddingToCart ? (
 										'Adding...'
@@ -137,16 +137,20 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 									isAddingToCart ? 'opacity-75 scale-95' : ''
 								}`}
 								onClick={handleAddToCart}
-								disabled={isOwnProduct || isAddingToCart}
+								disabled={isOwnProduct || isAddingToCart || visibility === 'hidden'}
 							>
 								{isOwnProduct ? (
 									'Your Product'
+								) : visibility === 'hidden' ? (
+									'Not Available'
 								) : showConfirmation ? (
 									<>
 										<Check className="w-4 h-4 mr-2" /> Added!
 									</>
 								) : isAddingToCart ? (
 									'Adding...'
+								) : visibility === 'pre-order' ? (
+									'Pre-order'
 								) : (
 									'Add to Cart'
 								)}

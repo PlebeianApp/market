@@ -1,6 +1,9 @@
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { copyToClipboard } from '@/lib/utils'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import { CheckCircle, Copy } from 'lucide-react'
 
 interface TimelineEventCardProps {
 	event: NDKEvent
@@ -28,6 +31,7 @@ export function TimelineEventCard({ event, title, icon, type, timelineIndex }: T
 	const content = event.content
 	let extraInfo = null
 	let shippingDetails = null
+	let paymentDetails = null
 
 	const hasGreyContainer = type === 'status' || type === 'payment' || type === 'payment_request' || type === 'shipping'
 
@@ -53,6 +57,39 @@ export function TimelineEventCard({ event, title, icon, type, timelineIndex }: T
 						Paid: {amount.toLocaleString()} sats
 					</Badge>
 				)
+
+				// Extract preimage from payment tag for receipts
+				const paymentTag = event.tags.find((tag) => tag[0] === 'payment')
+				const preimage = paymentTag?.[3] // Format: ["payment", "<medium>", "<medium-reference>", "<proof>"]
+
+				if (preimage) {
+					paymentDetails = (
+						<div className="space-y-3">
+							<div className="flex items-center gap-2 text-green-700">
+								<CheckCircle className="w-4 h-4" />
+								<span className="text-sm font-medium">Payment Verified</span>
+							</div>
+							<div className="bg-green-50 border border-green-200 rounded-lg p-3">
+								<div className="space-y-2">
+									<div className="flex items-center justify-between">
+										<span className="text-xs font-medium text-green-700 uppercase tracking-wide">Payment Proof (Preimage)</span>
+										<Button
+											variant="ghost"
+											size="sm"
+											className="h-6 px-2 text-green-700 hover:text-green-900 hover:bg-green-100"
+											onClick={() => copyToClipboard(preimage, 'Preimage copied to clipboard')}
+										>
+											<Copy className="h-3 w-3" />
+										</Button>
+									</div>
+									<div className="font-mono text-xs text-green-900 break-all bg-white rounded px-2 py-1 border border-green-200">
+										{preimage}
+									</div>
+								</div>
+							</div>
+						</div>
+					)
+				}
 			} else {
 				extraInfo = (
 					<Badge variant="outline" className="w-full justify-center sm:w-auto sm:justify-start">
@@ -109,10 +146,11 @@ export function TimelineEventCard({ event, title, icon, type, timelineIndex }: T
 						</div>
 					</div>
 				</CardHeader>
-				{(content || shippingDetails) && (
+				{(content || shippingDetails || paymentDetails) && (
 					<CardContent className="pt-4 space-y-4">
 						{content && <p className="text-gray-700">{content}</p>}
 						{shippingDetails}
+						{paymentDetails}
 					</CardContent>
 				)}
 				<CardFooter className="flex justify-center pt-4">

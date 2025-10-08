@@ -28,7 +28,7 @@
 	"dependencies": {
 		"@faker-js/faker": "^9.9.0",
 		"@formkit/auto-animate": "^0.8.2",
-		"@getalby/lightning-tools": "^5.2.0",
+		"@getalby/lightning-tools": "^6.0.0",
 		"@hookform/resolvers": "^5.1.1",
 		"@noble/hashes": "^1.8.0",
 		"@nostr-dev-kit/ndk": "2.14.35",

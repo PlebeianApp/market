@@ -82,6 +82,125 @@ const getShippingRef = (orderEvent: NDKEvent): string | undefined => {
 	return orderEvent.tags.find((tag) => tag[0] === 'shipping')?.[1]
 }
 
+// Parse address string into structured components
+const parseAddress = (addressString: string) => {
+	// Handle both newline-separated and comma-separated addresses
+	let lines: string[]
+
+	if (addressString.includes('\n')) {
+		// Newline-separated format (preferred)
+		lines = addressString
+			.split('\n')
+			.map((line) => line.trim())
+			.filter(Boolean)
+	} else if (addressString.includes(',')) {
+		// Comma-separated format (legacy)
+		lines = addressString
+			.split(',')
+			.map((line) => line.trim())
+			.filter(Boolean)
+	} else {
+		// Single line or unsupported format
+		return null
+	}
+
+	if (lines.length === 0) return null
+
+	// Try to identify address components
+	const result: {
+		name?: string
+		street?: string
+		street2?: string
+		city?: string
+		state?: string
+		zip?: string
+		country?: string
+	} = {}
+
+	// Pattern to detect if a string is likely a ZIP/postal code
+	const zipPattern = /^\d{4,6}(-\d{4})?$/
+
+	// Pattern to detect state codes (2 uppercase letters)
+	const statePattern = /^[A-Z]{2}$/
+
+	// Newline-separated format (standard):
+	// Line 1: Name
+	// Line 2: Street Address
+	// Line 3 (optional): Additional Address Info (street2)
+	// Line 4 (or 3): City
+	// Line 5 (or 4): ZIP Code
+	// Line 6 (or 5): Country
+
+	if (lines.length >= 1) {
+		result.name = lines[0]
+	}
+
+	if (lines.length >= 2) {
+		result.street = lines[1]
+	}
+
+	if (lines.length >= 3) {
+		// Work backwards from the end to identify components
+		let currentIndex = lines.length - 1
+
+		// Last item is typically country (unless it's a ZIP code)
+		const lastItem = lines[currentIndex]
+
+		// Check if last item is a ZIP code
+		if (zipPattern.test(lastItem)) {
+			result.zip = lastItem
+			currentIndex--
+
+			// Previous item should be city
+			if (currentIndex >= 2) {
+				result.city = lines[currentIndex]
+				currentIndex--
+			}
+		} else {
+			// Last item is country
+			result.country = lastItem
+			currentIndex--
+
+			// Next item back should be ZIP or city
+			if (currentIndex >= 2) {
+				const secondLast = lines[currentIndex]
+				if (zipPattern.test(secondLast)) {
+					result.zip = secondLast
+					currentIndex--
+
+					// Next should be city (or state)
+					if (currentIndex >= 2) {
+						const beforeZip = lines[currentIndex]
+						if (statePattern.test(beforeZip) && currentIndex > 2) {
+							result.state = beforeZip
+							currentIndex--
+							result.city = lines[currentIndex]
+							currentIndex--
+						} else {
+							result.city = beforeZip
+							currentIndex--
+						}
+					}
+				} else {
+					// Second last is city (no separate ZIP provided)
+					result.city = secondLast
+					currentIndex--
+				}
+			}
+		}
+
+		// Everything between street (index 1) and what we've parsed is street2/additional info
+		if (currentIndex > 1) {
+			const street2Lines = lines.slice(2, currentIndex + 1)
+			if (street2Lines.length > 0) {
+				result.street2 = street2Lines.join(', ')
+			}
+		}
+	}
+
+	return result
+}
+
 // Extract payment methods from payment request events
 const extractPaymentMethods = (paymentRequest: NDKEvent) => {
 	const paymentTags = paymentRequest.tags.filter((tag) => tag[0] === 'payment')
@@ -626,17 +745,75 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 								)}
 
 								{/* Shipping Address - only show for non-pickup orders */}
-								{!isPickupService && shippingAddress && (
-									<div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-										<div className="flex items-start gap-2">
-											<Truck className="w-4 h-4 text-green-600 mt-0.5" />
-											<div>
-												<p className="font-medium text-green-900">Delivery Address</p>
-												<p className="text-green-800 mt-1">{shippingAddress}</p>
+								{!isPickupService &&
+									shippingAddress &&
+									(() => {
+										const parsedAddress = parseAddress(shippingAddress)
+
+										return (
+											<div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+												<div className="flex items-start gap-3">
+													<Truck className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+													<div className="flex-1 min-w-0">
+														<p className="font-semibold text-green-900 mb-3">Delivery Address</p>
+														{parsedAddress ? (
+															<div className="space-y-2">
+																{parsedAddress.name && (
+																	<div>
+																		<p className="text-xs font-medium text-green-700 uppercase tracking-wide">Name</p>
+																		<p className="text-green-900 font-medium">{parsedAddress.name}</p>
+																	</div>
+																)}
+																{parsedAddress.street && (
+																	<div>
+																		<p className="text-xs font-medium text-green-700 uppercase tracking-wide">Street Address</p>
+																		<p className="text-green-900">{parsedAddress.street}</p>
+																		{parsedAddress.street2 && <p className="text-green-900">{parsedAddress.street2}</p>}
+																	</div>
+																)}
+																<div className="grid grid-cols-2 gap-3">
+																	{parsedAddress.city && (
+																		<div>
+																			<p className="text-xs font-medium text-green-700 uppercase tracking-wide">City</p>
+																			<p className="text-green-900">{parsedAddress.city}</p>
+																		</div>
+																	)}
+																	{parsedAddress.state && (
+																		<div>
+																			<p className="text-xs font-medium text-green-700 uppercase tracking-wide">State</p>
+																			<p className="text-green-900">{parsedAddress.state}</p>
+																		</div>
+																	)}
+																</div>
+																<div className="grid grid-cols-2 gap-3">
+																	{parsedAddress.zip && (
+																		<div>
+																			<p className="text-xs font-medium text-green-700 uppercase tracking-wide">ZIP Code</p>
+																			<p className="text-green-900">{parsedAddress.zip}</p>
+																		</div>
+																	)}
+																	{parsedAddress.country && (
+																		<div>
+																			<p className="text-xs font-medium text-green-700 uppercase tracking-wide">Country</p>
+																			<p className="text-green-900">{parsedAddress.country}</p>
+																		</div>
+																	)}
+																</div>
+															</div>
+														) : (
+															<div className="text-green-800 space-y-0.5">
+																{shippingAddress.split('\n').map((line, index) => (
+																	<p key={index} className="leading-relaxed">
+																		{line.trim()}
+																	</p>
+																))}
+															</div>
+														)}
+													</div>
+												</div>
 											</div>
-										</div>
-									</div>
-								)}
+										)
+									})()}
 
 								{/* Description */}
 								{shippingInfo?.description && (

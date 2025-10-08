@@ -119,7 +119,8 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 		const allPaymentData = useMemo(() => {
 			console.log('🔄 Memoizing payment data for', invoices.length, 'invoices')
 			return invoices.map((invoice) => {
-				// V4V payments should always be zaps, regardless of bolt11 presence
+				// V4V payments should always be zaps
+				// Merchant payments use regular bolt11 invoices
 				const isZap = invoice.type === 'v4v'
 
 				let recipient: NDKUser | undefined
@@ -127,12 +128,12 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 					recipient = ndkState.ndk.getUser({ pubkey: invoice.recipientPubkey })
 				}
 
-				console.log(`📋 Invoice ${invoice.id}:`, {
+				console.log(`📋 Processing invoice ${invoice.id}:`, {
 					type: invoice.type,
-					hasBot11: !!invoice.bolt11,
 					isZap,
 					recipientName: invoice.recipientName,
 					amount: invoice.amount,
+					hasRecipient: !!recipient,
 				})
 
 				return {
@@ -140,10 +141,11 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 					data: {
 						amount: invoice.amount,
 						description: invoice.description,
-						// For zaps, don't use pre-generated bolt11 - let the zapper generate it
+						// For zaps, let NDKZapper generate the invoice
+						// For merchant payments, use the pre-generated bolt11
 						bolt11: isZap ? undefined : invoice.bolt11 || undefined,
 						isZap,
-						recipient: recipient || undefined,
+						recipient: isZap ? recipient : undefined,
 						orderId: invoice.orderId,
 						invoiceId: invoice.id,
 					} as LightningPaymentData,
@@ -194,34 +196,6 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 			}),
 			[payAllWithNwc],
 		)
-
-		// Build LightningPaymentData for current invoice
-		const currentPaymentData: LightningPaymentData = useMemo(() => {
-			if (!currentInvoice) {
-				return {
-					amount: 0,
-					description: '',
-					isZap: false,
-				} as LightningPaymentData
-			}
-
-			const isZap = currentInvoice.type === 'v4v' && !currentInvoice.bolt11
-
-			let recipient: NDKUser | undefined
-			if (isZap && ndkState.ndk) {
-				recipient = ndkState.ndk.getUser({ pubkey: currentInvoice.recipientPubkey })
-			}
-
-			return {
-				amount: currentInvoice.amount,
-				description: currentInvoice.description,
-				bolt11: currentInvoice.bolt11 || undefined,
-				isZap,
-				recipient: recipient || undefined,
-				orderId: currentInvoice.orderId,
-				invoiceId: currentInvoice.id,
-			} as LightningPaymentData
-		}, [currentInvoice, ndkState.ndk])
 
 		// Early return after all hooks are called
 		if (!currentInvoice) {

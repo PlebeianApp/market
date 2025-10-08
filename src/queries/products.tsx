@@ -19,8 +19,6 @@ import { productKeys } from './queryKeyFactory'
 import { getCoordsFromATag, getATagFromCoords } from '@/lib/utils/coords.ts'
 import { discoverNip50Relays } from '@/lib/relays'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
-import { discoverNip50Relays } from '@/lib/relays'
-import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 
 // Re-export productKeys for use in other query files
 export { productKeys }
@@ -308,6 +306,16 @@ export const productsByCollectionQueryOptions = (collectionEvent: NDKEvent | nul
 export const getProductId = (event: NDKEvent | null): string => {
 	const dTag = event?.tags.find((t) => t[0] === 'd')
 	return dTag?.[1] || ''
+}
+
+/**
+ * Gets the product coordinates in the format kind:pubkey:identifier
+ * @param event The product event
+ * @returns The product coordinates string
+ */
+export const getProductCoordinates = (event: NDKEvent): string => {
+	const id = getProductId(event)
+	return `30402:${event.pubkey}:${id}`
 }
 
 /**

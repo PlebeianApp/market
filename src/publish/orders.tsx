@@ -447,12 +447,17 @@ export async function createOrderCreationEvent(data: OrderCreationData): Promise
 	}
 
 	if (data.shippingAddress) {
-		const addressString = [
+		// Create a newline-separated address for better parsing and readability
+		const addressParts = [
 			data.shippingAddress.name,
 			data.shippingAddress.firstLineOfAddress,
-			`${data.shippingAddress.city}, ${data.shippingAddress.zipPostcode}`,
+			data.shippingAddress.additionalInformation, // Include additional info if present
+			data.shippingAddress.city,
+			data.shippingAddress.zipPostcode,
 			data.shippingAddress.country,
-		].join(', ')
+		].filter(Boolean) // Remove empty values
+
+		const addressString = addressParts.join('\n')
 		tags.push(['address', addressString])
 	}
 

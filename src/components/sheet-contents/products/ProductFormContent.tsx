@@ -1,7 +1,8 @@
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { ndkActions, useNDK } from '@/lib/stores/ndk'
+import { authStore } from '@/lib/stores/auth'
+import { ndkActions } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore } from '@/lib/stores/product'
 import { uiActions } from '@/lib/stores/ui'
 import { useV4VShares } from '@/queries/v4v'
@@ -9,39 +10,28 @@ import { useForm } from '@tanstack/react-form'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { NameTab } from './NameTab'
-import { DetailTab, CategoryTab, ImagesTab, ShippingTab, SpecTab } from './tabs'
+import { CategoryTab, DetailTab, ImagesTab, ShippingTab, SpecTab } from './tabs'
 
 export function ProductFormContent({ className = '', showFooter = true }: { className?: string; showFooter?: boolean }) {
 	const [isPublishing, setIsPublishing] = useState(false)
 	const navigate = useNavigate()
 	const queryClient = useQueryClient()
-	const { getUser } = useNDK()
 
 	// Get form state from store, including editingProductId
 	const formState = useStore(productFormStore)
 	const { mainTab, productSubTab, editingProductId } = formState
 
-	// Get user and check V4V shares (only for new products)
-	const [userPubkey, setUserPubkey] = useState<string>('')
+	// Get user pubkey from auth store directly to avoid timing issues
+	const authState = useStore(authStore)
+	const userPubkey = authState.user?.pubkey || ''
+
+	// Check V4V shares (only for new products)
 	const { data: v4vShares, isLoading: isLoadingV4V } = useV4VShares(userPubkey)
 	const hasV4VSetup = v4vShares && v4vShares.length > 0
 	const needsV4VSetup = !editingProductId && !hasV4VSetup && !isLoadingV4V
-
-	// Get user pubkey on mount
-	useEffect(() => {
-		getUser().then((user) => {
-			if (user?.pubkey) {
-				setUserPubkey(user.pubkey)
-			}
-		})
-	}, [getUser])
-
-	useEffect(() => {
-		console.log('v4vShares', v4vShares)
-	}, [v4vShares])
 
 	const form = useForm({
 		defaultValues: {},

@@ -1,20 +1,35 @@
+import { EntityActionsMenu } from '@/components/EntityActionsMenu'
 import { ItemGrid } from '@/components/ItemGrid'
 import { Nip05Badge } from '@/components/Nip05Badge.tsx'
 import { ProductCard } from '@/components/ProductCard'
 import { Button } from '@/components/ui/button'
 import { ZapButton } from '@/components/ZapButton.tsx'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
+import { useEntityPermissions } from '@/hooks/useEntityPermissions'
+import { ndkActions } from '@/lib/stores/ndk'
 import { uiActions, uiStore } from '@/lib/stores/ui'
 import { truncateText } from '@/lib/utils.ts'
-import { collectionByIdQueryOptions, getCollectionImages, getCollectionSummary, getCollectionTitle } from '@/queries/collections'
+import { addToBlacklistCollections, removeFromBlacklistCollections } from '@/publish/blacklist'
+import { addToFeaturedCollections, removeFromFeaturedCollections } from '@/publish/featured'
+import { useBlacklistSettings } from '@/queries/blacklist'
+import {
+	collectionByIdQueryOptions,
+	getCollectionCoordinates,
+	getCollectionImages,
+	getCollectionSummary,
+	getCollectionTitle,
+} from '@/queries/collections'
+import { useConfigQuery } from '@/queries/config'
+import { useFeaturedCollections } from '@/queries/featured'
 import { useProductsByCollection } from '@/queries/products'
 import { profileByIdentifierQueryOptions, useProfileName } from '@/queries/profiles'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { useSuspenseQuery } from '@tanstack/react-query'
+import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { ArrowLeft, MessageCircle, Share2 } from 'lucide-react'
+import { ArrowLeft, Edit, MessageCircle, Share2 } from 'lucide-react'
 import { useEffect } from 'react'
+import { toast } from 'sonner'
 
 // Hook to inject dynamic CSS for background image
 function useHeroBackground(imageUrl: string, className: string) {
@@ -85,6 +100,78 @@ function RouteComponent() {
 	const marketHeroClassName = 'hero-bg-market'
 	// Get background image from current collection (only if not homepage slide)
 	useHeroBackground(marketBackgroundImageUrl, marketHeroClassName)
+	const queryClient = useQueryClient()
+
+	// Get app config
+	const { data: config } = useConfigQuery()
+	const appPubkey = config?.appPublicKey || ''
+
+	// Get entity permissions
+	const permissions = useEntityPermissions(pubkey)
+
+	// Get blacklist and featured status
+	const { data: blacklistSettings } = useBlacklistSettings(appPubkey)
+	const { data: featuredData } = useFeaturedCollections(appPubkey)
+
+	// Determine if this collection is blacklisted or featured
+	const collectionCoords = getCollectionCoordinates(collection)
+	const isBlacklisted = blacklistSettings?.blacklistedCollections.includes(collectionCoords) || false
+	const isFeatured = featuredData?.featuredCollections.includes(collectionCoords) || false
+
+	// Handle edit collection
+	const handleEdit = () => {
+		navigate({ to: '/dashboard/products/collections/$collectionId', params: { collectionId } })
+	}
+
+	// Handle blacklist toggle
+	const handleBlacklistToggle = async () => {
+		const ndk = ndkActions.getNDK()
+		const signer = ndk?.signer
+
+		if (!ndk || !signer) {
+			toast.error('Please connect your wallet to perform this action')
+			return
+		}
+
+		try {
+			if (isBlacklisted) {
+				await removeFromBlacklistCollections(collectionCoords, signer, ndk, appPubkey)
+				toast.success('Collection removed from blacklist')
+			} else {
+				await addToBlacklistCollections(collectionCoords, signer, ndk, appPubkey)
+				toast.success('Collection added to blacklist')
+			}
+			// Invalidate queries to refresh the UI
+			queryClient.invalidateQueries({ queryKey: ['config', 'blacklist', appPubkey] })
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Failed to update blacklist')
+		}
+	}
+
+	// Handle featured toggle
+	const handleFeaturedToggle = async () => {
+		const ndk = ndkActions.getNDK()
+		const signer = ndk?.signer
+
+		if (!ndk || !signer) {
+			toast.error('Please connect your wallet to perform this action')
+			return
+		}
+
+		try {
+			if (isFeatured) {
+				await removeFromFeaturedCollections(collectionCoords, signer, ndk, appPubkey)
+				toast.success('Collection removed from featured items')
+			} else {
+				await addToFeaturedCollections(collectionCoords, signer, ndk, appPubkey)
+				toast.success('Collection added to featured items')
+			}
+			// Invalidate queries to refresh the UI
+			queryClient.invalidateQueries({ queryKey: ['config', 'featuredCollections', appPubkey] })
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Failed to update featured items')
+		}
+	}
 
 	const handleBackClick = () => {
 		if (navigation.originalResultsPath) {
@@ -147,6 +234,27 @@ function RouteComponent() {
 							<Button variant="secondary" size="icon">
 								<Share2 className="w-5 h-5" />
 							</Button>
+							{/* Edit button for owner */}
+							{permissions.canEdit && (
+								<Button variant="secondary" onClick={handleEdit} className="flex items-center gap-2">
+									<Edit className="h-5 w-5" />
+									<span className="hidden md:inline">Edit Collection</span>
+								</Button>
+							)}
+							{/* Entity Actions Menu for admins/editors/owners */}
+							<EntityActionsMenu
+								permissions={permissions}
+								entityType="collection"
+								entityId={collectionId}
+								entityCoords={collectionCoords}
+								isBlacklisted={isBlacklisted}
+								isFeatured={isFeatured}
+								onEdit={permissions.canEdit ? handleEdit : undefined}
+								onBlacklist={permissions.canBlacklist && !isBlacklisted ? handleBlacklistToggle : undefined}
+								onUnblacklist={permissions.canBlacklist && isBlacklisted ? handleBlacklistToggle : undefined}
+								onSetFeatured={permissions.canSetFeatured && !isFeatured ? handleFeaturedToggle : undefined}
+								onUnsetFeatured={permissions.canSetFeatured && isFeatured ? handleFeaturedToggle : undefined}
+							/>
 						</div>
 					)}
 				</div>
