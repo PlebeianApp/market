@@ -46,6 +46,12 @@ function getRandomPastTimestamp(min = MIN_SEED_TIMESTAMP, max = MAX_SEED_TIMESTA
 	return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
+// Helper to get a random float (duplicated from gen_v4v.ts)
+function getRandomFloat(min: number, max: number, decimals: number = 4): number {
+	const rand = Math.random() * (max - min) + min
+	return parseFloat(rand.toFixed(decimals))
+}
+
 if (!RELAY_URL) {
 	console.error('Missing required environment variables')
 	process.exit(1)
@@ -194,14 +200,41 @@ async function seedData() {
 
 	// Create V4V shares for all users (after all users are created)
 	console.log('Creating V4V shares for all users...')
-	for (const user of devUsers) {
+	for (let i = 0; i < devUsers.length; i++) {
+		const user = devUsers[i]
 		const signer = new NDKPrivateKeySigner(user.sk)
 		await signer.blockUntilReady()
 		const pubkey = (await signer.user()).pubkey
 
 		console.log(`Creating V4V shares for user ${pubkey.substring(0, 8)}...`)
-		const otherUserPubkeys = userPubkeys.filter((otherPubkey) => otherPubkey !== pubkey)
-		await createV4VSharesEvent(signer, ndk, APP_PUBKEY, otherUserPubkeys)
+
+		// devUser4 (index 3) gets an empty V4V event (takes 100%, V4V configured but 0%)
+		if (i === 3) {
+			console.log('  → devUser4: Creating empty V4V event (100% to seller)')
+			await createV4VSharesEvent(signer, ndk, APP_PUBKEY, [], [])
+		} else {
+			// Other users get 2 shares: app_pubkey + one random other user
+			const otherUserPubkeys = userPubkeys.filter((otherPubkey) => otherPubkey !== pubkey)
+			const randomOtherUser = otherUserPubkeys[Math.floor(Math.random() * otherUserPubkeys.length)]
+
+			// Total V4V percentage between 8-12%
+			const totalV4VPercentage = getRandomFloat(0.08, 0.12, 4)
+			// App gets 60-80% of the V4V share
+			const appShareOfV4V = getRandomFloat(0.6, 0.8, 2)
+
+			const appPercentage = totalV4VPercentage * appShareOfV4V
+			const userPercentage = totalV4VPercentage * (1 - appShareOfV4V)
+
+			const customShares = [
+				{ pubkey: APP_PUBKEY, percentage: appPercentage },
+				{ pubkey: randomOtherUser, percentage: userPercentage },
+			]
+
+			console.log(
+				`  → Creating V4V: ${(totalV4VPercentage * 100).toFixed(1)}% total (app: ${(appPercentage * 100).toFixed(1)}%, user: ${(userPercentage * 100).toFixed(1)}%)`,
+			)
+			await createV4VSharesEvent(signer, ndk, APP_PUBKEY, [], customShares)
+		}
 	}
 
 	// Create collections

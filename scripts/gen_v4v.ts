@@ -22,35 +22,48 @@ export async function createV4VSharesEvent(
 	ndk: any,
 	appPubkey: string = '',
 	availableUserPubkeys: string[] = [],
+	customShares?: Array<{ pubkey: string; percentage: number }>,
 ) {
 	try {
 		const uuid = Buffer.from(randomBytes(16)).toString('hex')
-		const totalPercentage = getRandomFloat(0.05, 0.2)
+		let zapTags: string[][] = []
 
-		// Use available user pubkeys instead of fixed recipients
-		const potentialRecipients = availableUserPubkeys.length > 0 ? availableUserPubkeys : []
-		if (potentialRecipients.length === 0) {
-			console.log('No potential V4V recipients available, skipping V4V shares creation')
-			return true
-		}
-
-		const recipientCount = Math.floor(Math.random() * Math.min(potentialRecipients.length, 3)) + 1
-		const selectedRecipients = shuffleArray(potentialRecipients).slice(0, recipientCount)
-
-		let remainingPercentage = totalPercentage
-		const zapTags: string[][] = []
-
-		for (let i = 0; i < selectedRecipients.length; i++) {
-			const recipient = selectedRecipients[i]
-			if (i === selectedRecipients.length - 1) {
-				zapTags.push(['zap', recipient, remainingPercentage.toString()])
+		// If custom shares provided, use them (allows creating empty V4V events)
+		if (customShares !== undefined) {
+			if (customShares.length === 0) {
+				// Empty array = user takes 100%, V4V configured but set to 0%
+				zapTags = []
 			} else {
-				const minAllocation = 0.01
-				const maxForThisRecipient = remainingPercentage - minAllocation * (selectedRecipients.length - i - 1)
+				zapTags = customShares.map((share) => ['zap', share.pubkey, share.percentage.toString()])
+			}
+		} else {
+			// Legacy random generation
+			const totalPercentage = getRandomFloat(0.05, 0.2)
 
-				const percentage = getRandomFloat(minAllocation, maxForThisRecipient)
-				zapTags.push(['zap', recipient, percentage.toString()])
-				remainingPercentage = parseFloat((remainingPercentage - percentage).toFixed(4))
+			// Use available user pubkeys instead of fixed recipients
+			const potentialRecipients = availableUserPubkeys.length > 0 ? availableUserPubkeys : []
+			if (potentialRecipients.length === 0) {
+				console.log('No potential V4V recipients available, skipping V4V shares creation')
+				return true
+			}
+
+			const recipientCount = Math.floor(Math.random() * Math.min(potentialRecipients.length, 3)) + 1
+			const selectedRecipients = shuffleArray(potentialRecipients).slice(0, recipientCount)
+
+			let remainingPercentage = totalPercentage
+
+			for (let i = 0; i < selectedRecipients.length; i++) {
+				const recipient = selectedRecipients[i]
+				if (i === selectedRecipients.length - 1) {
+					zapTags.push(['zap', recipient, remainingPercentage.toString()])
+				} else {
+					const minAllocation = 0.01
+					const maxForThisRecipient = remainingPercentage - minAllocation * (selectedRecipients.length - i - 1)
+
+					const percentage = getRandomFloat(minAllocation, maxForThisRecipient)
+					zapTags.push(['zap', recipient, percentage.toString()])
+					remainingPercentage = parseFloat((remainingPercentage - percentage).toFixed(4))
+				}
 			}
 		}
 
