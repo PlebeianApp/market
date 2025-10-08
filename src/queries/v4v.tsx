@@ -1,10 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ndkActions } from '@/lib/stores/ndk'
-import { v4vKeys } from './queryKeyFactory'
 import type { V4VDTO } from '@/lib/stores/cart'
+import { ndkActions } from '@/lib/stores/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { nip19 } from 'nostr-tools'
 import { v4 as uuidv4 } from 'uuid'
+import { v4vKeys } from './queryKeyFactory'
 
 function padHexString(hex: string): string {
 	return hex.length % 2 === 1 ? '0' + hex : hex
@@ -42,10 +42,28 @@ function normalizeAndEncodePubkey(value: string): { pubkey: string; npub: string
 	}
 }
 
+/**
+ * Fetches V4V shares for a user
+ *
+ * Three distinct states:
+ * 1. No V4V event exists → returns [] (user never configured V4V)
+ * 2. V4V event with empty content [] → returns [] (user configured V4V but chose 0%, takes 100%)
+ * 3. V4V event with shares → returns shares array
+ *
+ * NOTE: States 1 and 2 both return [], but state 2 has an event published.
+ * The difference is important for UI logic (has the user made a choice vs never configured).
+ */
 export const fetchV4VShares = async (pubkey: string): Promise<V4VDTO[]> => {
 	try {
+		if (!pubkey || pubkey.trim() === '') {
+			console.warn('fetchV4VShares: Empty pubkey provided')
+			return []
+		}
+
 		const ndk = ndkActions.getNDK()
-		if (!ndk) throw new Error('NDK not initialized')
+		if (!ndk) {
+			throw new Error('NDK not initialized')
+		}
 
 		const events = await ndk.fetchEvents({
 			kinds: [30078],
@@ -53,8 +71,8 @@ export const fetchV4VShares = async (pubkey: string): Promise<V4VDTO[]> => {
 			'#l': ['v4v_share'],
 		})
 
+		// State 1: No V4V event exists (never configured)
 		if (!events || events.size === 0) {
-			console.log('No V4V events found for pubkey:', pubkey)
 			return []
 		}
 
@@ -78,9 +96,16 @@ export const fetchV4VShares = async (pubkey: string): Promise<V4VDTO[]> => {
 			const content = JSON.parse(mostRecentEvent.content)
 
 			if (!Array.isArray(content)) {
+				console.warn('V4V event content is not an array')
 				return []
 			}
 
+			// State 2: V4V event exists but with empty array (user takes 100%)
+			if (content.length === 0) {
+				return []
+			}
+
+			// State 3: V4V event with actual shares
 			const shares = await Promise.all(
 				content
 					.map(async (zapTag, index) => {
@@ -155,6 +180,16 @@ export const useV4VShares = (pubkey: string) => {
 	})
 }
 
+/**
+ * Publishes V4V shares configuration
+ *
+ * Handles three scenarios:
+ * 1. shares = [] → Publishes event with empty array (user takes 100%, V4V is 0%)
+ * 2. shares = [...] → Publishes event with shares (user configured V4V recipients)
+ * 3. To delete/clear → Call this with empty array []
+ *
+ * NOTE: Empty array is valid and means "I configured V4V to 0%", different from no event.
+ */
 export const publishV4VShares = async (shares: V4VDTO[], userPubkey: string, appPubkey?: string): Promise<boolean> => {
 	try {
 		const ndk = ndkActions.getNDK()
@@ -163,6 +198,7 @@ export const publishV4VShares = async (shares: V4VDTO[], userPubkey: string, app
 		const signer = ndkActions.getSigner()
 		if (!signer) throw new Error('User signer not available')
 
+		// zapTags can be empty array (user takes 100%)
 		const zapTags = shares.map((share) => ['zap', share.pubkey, share.percentage.toString()])
 
 		const event = new NDKEvent(ndk)

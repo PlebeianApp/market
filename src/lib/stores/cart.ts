@@ -184,7 +184,6 @@ const getProductEvent = async (id: string): Promise<NDKEvent | null> => {
 }
 
 const getShippingEvent = async (shippingReferenceId: string): Promise<NDKEvent | null> => {
-	console.log('getShippingEvent', shippingReferenceId)
 	try {
 		if (shippingReferenceId.startsWith(`${SHIPPING_KIND}:`)) {
 			const parts = shippingReferenceId.split(':')
@@ -748,9 +747,11 @@ export const cartActions = {
 				}
 			})
 
-			// Only fetch seller shares if we don't already have them or if they're empty
+			// Only fetch seller shares if we don't already have them
+			// NOTE: We check if the key exists, NOT if it's empty
+			// An empty array means "we fetched and found nothing" - that's valid cached data!
 			for (const sellerPubkey of Array.from(uniqueSellerPubkeys)) {
-				if (!shares[sellerPubkey] || shares[sellerPubkey].length === 0) {
+				if (!shares[sellerPubkey]) {
 					try {
 						const sellerShares = await v4VForUserQuery(sellerPubkey)
 						shares[sellerPubkey] = (sellerShares || []).map((share) => ({
@@ -759,6 +760,7 @@ export const cartActions = {
 						}))
 					} catch (error) {
 						console.error(`Failed to fetch v4v shares for seller ${sellerPubkey}:`, error)
+						// Store empty array to prevent re-fetching
 						shares[sellerPubkey] = []
 					}
 				}
@@ -766,28 +768,25 @@ export const cartActions = {
 
 			// Fetch buyer shares from auth system (buyer is the logged-in user)
 			const buyerPubkey = cartActions.getBuyerPubkey()
-			if (buyerPubkey && (!shares[buyerPubkey] || shares[buyerPubkey].length === 0)) {
-				try {
-					const buyerShares = await v4VForUserQuery(buyerPubkey)
-					shares[buyerPubkey] = (buyerShares || []).map((share) => ({
-						...share,
-						percentage: isNaN(share.percentage) ? 5 : share.percentage,
-					}))
-				} catch (error) {
-					console.error(`Failed to fetch v4v shares for buyer ${buyerPubkey}:`, error)
-					shares[buyerPubkey] = []
+			if (buyerPubkey) {
+				const buyerPubkeyStr: string = buyerPubkey
+				if (!shares[buyerPubkeyStr]) {
+					try {
+						const buyerShares = await v4VForUserQuery(buyerPubkeyStr)
+						shares[buyerPubkeyStr] = (buyerShares || []).map((share) => ({
+							...share,
+							percentage: isNaN(share.percentage) ? 5 : share.percentage,
+						}))
+					} catch (error) {
+						console.error(`Failed to fetch v4v shares for buyer ${buyerPubkeyStr}:`, error)
+						// Store empty array to prevent re-fetching
+						shares[buyerPubkeyStr] = []
+					}
 				}
 			}
 
-			// Be very conservative about cleanup - only remove shares for empty arrays
-			// Never remove shares that have actual data, even if they're not currently relevant
-			// This prevents losing shares on reload when cart hasn't been fully reconstructed yet
-			Object.keys(shares).forEach((pubkey) => {
-				// Only delete shares that are completely empty arrays
-				if (shares[pubkey] && shares[pubkey].length === 0) {
-					delete shares[pubkey]
-				}
-			})
+			// Don't delete empty arrays - they represent "we checked and found nothing"
+			// which is different from "we haven't checked yet" (key doesn't exist)
 
 			// Save to both state and persistent storage
 			cartStore.setState((state) => ({
@@ -1252,10 +1251,10 @@ export function useCart() {
 			const sellersInCart = new Set(Object.values(storeState.cart.products).map((p) => p.sellerPubkey))
 			const sellersWithShares = new Set(Object.keys(storeState.v4vShares))
 
-			// Check if any sellers are missing shares
-			const missingSellers = Array.from(sellersInCart).filter(
-				(seller) => seller && (!sellersWithShares.has(seller) || storeState.v4vShares[seller].length === 0),
-			)
+			// Check if any sellers are missing shares (not yet fetched)
+			// NOTE: We only check if the seller is NOT in the shares object, not if they have an empty array
+			// An empty array means we already fetched and the seller has no V4V shares configured
+			const missingSellers = Array.from(sellersInCart).filter((seller) => seller && !sellersWithShares.has(seller))
 
 			if (missingSellers.length > 0) {
 				cartActions.updateV4VShares().then(() => {
