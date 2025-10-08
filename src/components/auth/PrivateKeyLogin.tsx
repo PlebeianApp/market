@@ -55,10 +55,29 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 		}
 	}, [showPrivateKey])
 
+	// Normalize private key input - accept both nsec and 64-char hex format
+	const normalizePrivateKey = (key: string): string => {
+		const trimmedKey = key.trim()
+		
+		// Check if it's a 64-character hex string
+		if (/^[0-9a-fA-F]{64}$/.test(trimmedKey)) {
+			// Convert hex to Uint8Array and encode as nsec
+			const hexBytes = new Uint8Array(32)
+			for (let i = 0; i < 32; i++) {
+				hexBytes[i] = parseInt(trimmedKey.slice(i * 2, i * 2 + 2), 16)
+			}
+			return nip19.nsecEncode(hexBytes)
+		}
+		
+		// Return as-is if it's already in nsec format or other format
+		return trimmedKey
+	}
+
 	const encryptAndStoreKey = async (key: string, password: string) => {
 		try {
-			const pubkey = nip19.decode(key).data as string
-			const encryptedKey = `${pubkey}:${key}`
+			const normalizedKey = normalizePrivateKey(key)
+			const pubkey = nip19.decode(normalizedKey).data as string
+			const encryptedKey = `${pubkey}:${normalizedKey}`
 			localStorage.setItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY, encryptedKey)
 			setHasStoredKey(true)
 			setStoredPubkey(pubkey)
@@ -70,7 +89,8 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 	const handleValidatePrivateKey = async () => {
 		try {
 			setIsLoading(true)
-			await authActions.loginWithPrivateKey(privateKey)
+			const normalizedKey = normalizePrivateKey(privateKey)
+			await authActions.loginWithPrivateKey(normalizedKey)
 			setPrivateKey('')
 			onSuccess?.()
 		} catch (error) {
@@ -252,7 +272,7 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 								handleContinue()
 							}
 						}}
-						className="pr-20"
+						className={`pr-20 ${showPrivateKey ? 'text-red-500' : ''}`}
 						data-testid="private-key-input"
 					/>
 					<Button
@@ -264,7 +284,7 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 						data-testid="copy-private-key-button"
 						title={copied ? 'Copied!' : 'Copy to clipboard'}
 					>
-						<Copy className={`h-4 w-4 ${copied ? 'text-green-500' : 'text-gray-500'}`} />
+						<Copy className={`h-4 w-4 ${copied ? 'text-green-500' : showGeneratedKeyWarning ? 'text-red-500' : 'text-gray-500'}`} />
 					</Button>
 					<Button
 						type="button"
