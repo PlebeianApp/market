@@ -1,3 +1,4 @@
+import { EntityActionsMenu } from '@/components/EntityActionsMenu'
 import { ImageCarousel } from '@/components/ImageCarousel'
 import { ItemGrid } from '@/components/ItemGrid'
 import { PriceDisplay } from '@/components/PriceDisplay'
@@ -10,9 +11,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { UserNameWithBadge } from '@/components/UserNameWithBadge'
 import { ZapButton } from '@/components/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
+import { useEntityPermissions } from '@/hooks/useEntityPermissions'
 import { cartActions, useCart, type RichShippingInfo } from '@/lib/stores/cart'
+import { ndkActions } from '@/lib/stores/ndk'
 import { uiActions, uiStore } from '@/lib/stores/ui'
+import { addToBlacklistProducts, removeFromBlacklistProducts } from '@/publish/blacklist'
+import { addToFeaturedProducts, removeFromFeaturedProducts } from '@/publish/featured'
+import { useBlacklistSettings } from '@/queries/blacklist'
+import { useConfigQuery } from '@/queries/config'
+import { useFeaturedProducts } from '@/queries/featured'
 import {
+	getProductCoordinates,
 	productQueryOptions,
 	productsByPubkeyQueryOptions,
 	useProductCategories,
@@ -29,12 +38,13 @@ import {
 	useProductVisibility,
 	useProductWeight,
 } from '@/queries/products'
-import { useSuspenseQuery } from '@tanstack/react-query'
+import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query'
 import type { FileRoutesByPath } from '@tanstack/react-router'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { ArrowLeft, Minus, Plus, Truck } from 'lucide-react'
+import { ArrowLeft, Edit, Minus, Plus, Truck } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 
 // Hook to inject dynamic CSS
 function useHeroBackground(imageUrl: string, className: string) {
@@ -120,6 +130,23 @@ function RouteComponent() {
 	const isSmallScreen = breakpoint === 'sm'
 	const isMobileOrTablet = breakpoint === 'sm' || breakpoint === 'md'
 	const [quantity, setQuantity] = useState(1)
+	const queryClient = useQueryClient()
+
+	// Get app config
+	const { data: config } = useConfigQuery()
+	const appPubkey = config?.appPublicKey || ''
+
+	// Get entity permissions
+	const permissions = useEntityPermissions(pubkey)
+
+	// Get blacklist and featured status
+	const { data: blacklistSettings } = useBlacklistSettings(appPubkey)
+	const { data: featuredData } = useFeaturedProducts(appPubkey)
+
+	// Determine if this product is blacklisted or featured
+	const productCoords = product ? getProductCoordinates(product) : ''
+	const isBlacklisted = blacklistSettings?.blacklistedProducts.includes(productCoords) || false
+	const isFeatured = featuredData?.featuredProducts.includes(productCoords) || false
 
 	// Derived data from tags
 	const price = priceTag ? parseFloat(priceTag[1]) : 0
@@ -169,6 +196,61 @@ function RouteComponent() {
 		uiActions.openDrawer('cart')
 	}
 
+	// Handle edit product
+	const handleEdit = () => {
+		navigate({ to: '/dashboard/products/products/$productId', params: { productId } })
+	}
+
+	// Handle blacklist toggle
+	const handleBlacklistToggle = async () => {
+		const ndk = ndkActions.getNDK()
+		const signer = ndk?.signer
+
+		if (!ndk || !signer) {
+			toast.error('Please connect your wallet to perform this action')
+			return
+		}
+
+		try {
+			if (isBlacklisted) {
+				await removeFromBlacklistProducts(productCoords, signer, ndk, appPubkey)
+				toast.success('Product removed from blacklist')
+			} else {
+				await addToBlacklistProducts(productCoords, signer, ndk, appPubkey)
+				toast.success('Product added to blacklist')
+			}
+			// Invalidate queries to refresh the UI
+			queryClient.invalidateQueries({ queryKey: ['config', 'blacklist', appPubkey] })
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Failed to update blacklist')
+		}
+	}
+
+	// Handle featured toggle
+	const handleFeaturedToggle = async () => {
+		const ndk = ndkActions.getNDK()
+		const signer = ndk?.signer
+
+		if (!ndk || !signer) {
+			toast.error('Please connect your wallet to perform this action')
+			return
+		}
+
+		try {
+			if (isFeatured) {
+				await removeFromFeaturedProducts(productCoords, signer, ndk, appPubkey)
+				toast.success('Product removed from featured items')
+			} else {
+				await addToFeaturedProducts(productCoords, signer, ndk, appPubkey)
+				toast.success('Product added to featured items')
+			}
+			// Invalidate queries to refresh the UI
+			queryClient.invalidateQueries({ queryKey: ['config', 'featuredProducts', appPubkey] })
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : 'Failed to update featured items')
+		}
+	}
+
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="relative z-10">
@@ -200,6 +282,20 @@ function RouteComponent() {
 										size="icon"
 										className="bg-white/10 hover:bg-white/20"
 										icon={<span className="i-sharing w-6 h-6" />}
+									/>
+									{/* Entity Actions Menu for admins/editors/owners */}
+									<EntityActionsMenu
+										permissions={permissions}
+										entityType="product"
+										entityId={productId}
+										entityCoords={productCoords}
+										isBlacklisted={isBlacklisted}
+										isFeatured={isFeatured}
+										onEdit={permissions.canEdit ? handleEdit : undefined}
+										onBlacklist={permissions.canBlacklist && !isBlacklisted ? handleBlacklistToggle : undefined}
+										onUnblacklist={permissions.canBlacklist && isBlacklisted ? handleBlacklistToggle : undefined}
+										onSetFeatured={permissions.canSetFeatured && !isFeatured ? handleFeaturedToggle : undefined}
+										onUnsetFeatured={permissions.canSetFeatured && isFeatured ? handleFeaturedToggle : undefined}
 									/>
 								</div>
 							</div>
@@ -244,35 +340,50 @@ function RouteComponent() {
 
 							{stock !== undefined && (
 								<div className="flex items-center gap-4">
-									<div className="flex items-center gap-2">
-										<Button variant="tertiary" size="icon" onClick={() => setQuantity(Math.max(1, quantity - 1))} disabled={quantity <= 1}>
-											<Minus className="h-6 w-6" />
+									{/* Show cart controls for non-owners */}
+									{permissions.canAddToCart && (
+										<div className="flex items-center gap-2">
+											<Button
+												variant="tertiary"
+												size="icon"
+												onClick={() => setQuantity(Math.max(1, quantity - 1))}
+												disabled={quantity <= 1}
+											>
+												<Minus className="h-6 w-6" />
+											</Button>
+											<Input
+												className="w-12 text-center font-medium bg-white text-black"
+												value={quantity}
+												onChange={(e) => {
+													const value = parseInt(e.target.value)
+													if (!isNaN(value) && value > 0 && value <= (stock || Infinity)) {
+														setQuantity(value)
+													}
+												}}
+												min={1}
+												max={stock}
+												type="number"
+											/>
+											<Button
+												variant="tertiary"
+												size="icon"
+												onClick={() => setQuantity(Math.min(stock || quantity + 1, quantity + 1))}
+												disabled={quantity >= (stock || quantity)}
+											>
+												<Plus className="h-6 w-6" />
+											</Button>
+											<Button variant="secondary" onClick={handleAddToCartClick} disabled={stock === 0 || visibility === 'hidden'}>
+												{visibility === 'hidden' ? 'Not Available' : visibility === 'pre-order' ? 'Pre-order' : 'Add to cart'}
+											</Button>
+										</div>
+									)}
+									{/* Show edit button for owners */}
+									{permissions.canEdit && (
+										<Button variant="secondary" onClick={handleEdit} className="flex items-center gap-2">
+											<Edit className="h-5 w-5" />
+											<span>Edit Product</span>
 										</Button>
-										<Input
-											className="w-12 text-center font-medium bg-white text-black"
-											value={quantity}
-											onChange={(e) => {
-												const value = parseInt(e.target.value)
-												if (!isNaN(value) && value > 0 && value <= (stock || Infinity)) {
-													setQuantity(value)
-												}
-											}}
-											min={1}
-											max={stock}
-											type="number"
-										/>
-										<Button
-											variant="tertiary"
-											size="icon"
-											onClick={() => setQuantity(Math.min(stock || quantity + 1, quantity + 1))}
-											disabled={quantity >= (stock || quantity)}
-										>
-											<Plus className="h-6 w-6" />
-										</Button>
-										<Button variant="secondary" onClick={handleAddToCartClick} disabled={stock === 0 || visibility === 'hidden'}>
-											{visibility === 'hidden' ? 'Not Available' : visibility === 'pre-order' ? 'Pre-order' : 'Add to cart'}
-										</Button>
-									</div>
+									)}
 								</div>
 							)}
 
