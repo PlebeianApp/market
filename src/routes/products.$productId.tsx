@@ -151,8 +151,8 @@ function RouteComponent() {
 
 	// Handle adding product to cart
 	const handleAddToCartClick = async () => {
-		// Check if we have a valid product
-		if (!product) return
+		// Check if we have a valid product and it's not hidden
+		if (!product || visibility === 'hidden') return
 
 		// Just add the product ID to the cart with the specified quantity
 		await cartActions.addProduct(pubkey, {
@@ -269,8 +269,8 @@ function RouteComponent() {
 										>
 											<Plus className="h-6 w-6" />
 										</Button>
-										<Button variant="secondary" onClick={handleAddToCartClick} disabled={stock === 0}>
-											Add to cart
+										<Button variant="secondary" onClick={handleAddToCartClick} disabled={stock === 0 || visibility === 'hidden'}>
+											{visibility === 'hidden' ? 'Not Available' : visibility === 'pre-order' ? 'Pre-order' : 'Add to cart'}
 										</Button>
 									</div>
 								</div>
