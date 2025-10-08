@@ -26,10 +26,13 @@ function ProfileComponent() {
 	const pubkey = ndk?.activeUser?.pubkey
 
 	// Fetch profile data with Tanstack Query
-	const { data: fetchedProfile, isLoading: isLoadingProfile } = useQuery({
+	const { data: fetchedData, isLoading: isLoadingProfile } = useQuery({
 		...profileByIdentifierQueryOptions(pubkey || ''),
 		enabled: !!pubkey,
 	})
+
+	// Extract profile from the query result
+	const fetchedProfile = fetchedData?.profile
 
 	// Manage local state for profile data
 	const [profile, setProfile] = useState<NDKUserProfile>({})
@@ -53,13 +56,23 @@ function ProfileComponent() {
 	// Update local state when fetched profile changes
 	useEffect(() => {
 		if (fetchedProfile) {
-			setProfile(fetchedProfile)
-			setOriginalProfile(fetchedProfile)
+			console.log('✅ Profile component received kind 0 metadata:', fetchedProfile)
+
+			// Handle kind 0 metadata field mappings: picture -> image
+			const profileWithMappedFields = {
+				...fetchedProfile,
+				image: fetchedProfile.image || (fetchedProfile as any).picture,
+			}
+			setProfile(profileWithMappedFields)
+			setOriginalProfile(profileWithMappedFields)
+
+			console.log('✅ Profile component processed kind 0 metadata with field mappings:', profileWithMappedFields)
 
 			// Update form data with fetched profile
+			// Handle both snake_case (from kind 0 metadata) and camelCase field formats
 			setFormData({
 				name: fetchedProfile.name || '',
-				displayName: fetchedProfile.displayName || '',
+				displayName: fetchedProfile.displayName || (fetchedProfile as any).display_name || '',
 				about: fetchedProfile.about || '',
 				nip05: fetchedProfile.nip05 || '',
 				lud16: fetchedProfile.lud16 || '',
@@ -102,9 +115,11 @@ function ProfileComponent() {
 		}
 
 		// Check form field changes
+		// Handle both snake_case (from kind 0 metadata) and camelCase field formats
+		const originalDisplayName = originalProfile.displayName || (originalProfile as any).display_name || ''
 		const formFieldsChanged =
 			formData.name !== (originalProfile.name || '') ||
-			formData.displayName !== (originalProfile.displayName || '') ||
+			formData.displayName !== originalDisplayName ||
 			formData.about !== (originalProfile.about || '') ||
 			formData.nip05 !== (originalProfile.nip05 || '') ||
 			formData.lud16 !== (originalProfile.lud16 || '') ||
@@ -112,7 +127,9 @@ function ProfileComponent() {
 			formData.website !== (originalProfile.website || '')
 
 		// Check image changes
-		const imageChanges = profile.banner !== originalProfile.banner || profile.image !== originalProfile.image
+		// Handle both image and picture field formats from kind 0 metadata
+		const originalImage = originalProfile.image || (originalProfile as any).picture
+		const imageChanges = profile.banner !== originalProfile.banner || profile.image !== originalImage
 
 		return formFieldsChanged || imageChanges
 	}
