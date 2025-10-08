@@ -61,13 +61,23 @@ interface LightningPaymentProcessorProps {
 	className?: string
 	showManualVerification?: boolean
 	title?: string
-	active?: boolean // New prop to control when processor should be active
+	active?: boolean // Control when processor should be active
 	showNavigation?: boolean
 	currentIndex?: number
 	totalInvoices?: number
 	onNavigate?: (index: number) => void
 }
 
+/**
+ * LightningPaymentProcessor - A comprehensive component for handling Lightning Network payments
+ *
+ * Features:
+ * - Zap invoice generation using NDKZapper
+ * - Real-time zap receipt monitoring
+ * - Multiple payment methods: NWC, WebLN, QR code
+ * - Manual preimage verification
+ * - Proper cleanup and state management
+ */
 export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef, LightningPaymentProcessorProps>(
 	(
 		{
@@ -78,7 +88,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			className,
 			showManualVerification = false,
 			title,
-			active = true, // Default to true for backward compatibility
+			active = true,
 			showNavigation,
 			currentIndex,
 			totalInvoices,
@@ -89,17 +99,20 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 		const { user } = useStore(authStore)
 		const ndkState = useStore(ndkStore)
 
+		// Component state
 		const [invoice, setInvoice] = useState<string | null>(data.bolt11 || null)
 		const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false)
 		const [isPaymentInProgress, setIsPaymentInProgress] = useState(false)
 		const [manualPreimage, setManualPreimage] = useState('')
 		const [paymentMonitoring, setPaymentMonitoring] = useState<(() => void) | null>(null)
 
-		// Prevent duplicate invoice generation
+		// Refs for controlling behavior
 		const hasRequestedInvoiceRef = useRef(false)
-
-		// Store previous values to detect actual changes
-		const previousDataRef = useRef<{ amount: number; description: string }>({ amount: data.amount, description: data.description })
+		const hasCompletedRef = useRef(false)
+		const previousDataRef = useRef<{ amount: number; description: string }>({
+			amount: data.amount,
+			description: data.description,
+		})
 
 		// Check payment capabilities
 		const capabilities: PaymentCapabilities = {
@@ -110,34 +123,46 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 
 		const lightningUrl = invoice ? `lightning:${invoice}` : ''
 
+		/**
+		 * Generate a zap invoice using NDKZapper
+		 * This creates the invoice but doesn't automatically pay it
+		 */
 		const generateZapInvoice = useCallback(async () => {
 			if (!data.isZap || isGeneratingInvoice || !ndkState.ndk || !active) return
 
 			try {
 				setIsGeneratingInvoice(true)
-				console.log('🔍 Generating zap invoice for amount:', data.amount, 'invoiceId:', data.invoiceId)
+				console.log('🔍 Generating zap invoice:', {
+					amount: data.amount,
+					invoiceId: data.invoiceId,
+					recipientType: data.recipient instanceof NDKUser ? 'NDKUser' : 'NDKEvent',
+				})
 
-				// Ensure zap NDK is connected
+				// Ensure zap NDK is connected for monitoring
 				if (!ndkState.isZapNdkConnected) {
 					await ndkActions.connectZapNdk()
 				}
 
-				// Create zapper instance with lnPay callback to get invoice
+				// Create zapper instance with lnPay callback to capture the generated invoice
 				const zapper = new NDKZapper(data.recipient, data.amount * 1000, 'msat', {
 					ndk: ndkState.ndk,
 					signer: ndkState.ndk.signer || undefined,
 					comment: data.description,
 					lnPay: async (payment) => {
-						console.log('📄 Invoice generated for', data.invoiceId, ':', payment.pr.substring(0, 20) + '...')
+						console.log('📄 Zap invoice generated:', {
+							invoiceId: data.invoiceId,
+							invoicePreview: payment.pr.substring(0, 30) + '...',
+						})
 						setInvoice(payment.pr)
-						return undefined // Don't auto-pay, just get the invoice
+						return undefined // Don't auto-pay, just capture the invoice
 					},
 				})
 
-				// This call will generate the invoice via lnPay callback but not pay it
+				// Generate the zap invoice (calls lnPay callback)
 				await zapper.zap()
+				console.log('✅ Zap invoice generation complete for', data.invoiceId)
 			} catch (error) {
-				console.error('Failed to generate zap invoice:', error)
+				console.error('❌ Failed to generate zap invoice:', error)
 				onPaymentFailed?.({
 					success: false,
 					error: error instanceof Error ? error.message : 'Failed to generate invoice',
@@ -145,27 +170,63 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			} finally {
 				setIsGeneratingInvoice(false)
 			}
-		}, [data.isZap, data.recipient, data.amount, data.description, data.invoiceId, ndkState.ndk, onPaymentFailed, active])
+		}, [
+			data.isZap,
+			data.recipient,
+			data.amount,
+			data.description,
+			data.invoiceId,
+			ndkState.ndk,
+			ndkState.isZapNdkConnected,
+			onPaymentFailed,
+			active,
+		])
 
+		/**
+		 * Start monitoring for zap receipts
+		 * Subscribes to zap events and looks for our specific invoice
+		 */
 		const startZapMonitoring = useCallback(() => {
-			if (!invoice || !data.isZap || !active) return
+			if (!invoice || !data.isZap || !active || paymentMonitoring) return
 
-			console.log('🔔 Starting zap monitoring for invoice:', data.invoiceId, invoice.substring(0, 20) + '...')
+			console.log('🔔 Starting zap monitoring:', {
+				invoiceId: data.invoiceId,
+				invoicePreview: invoice.substring(0, 30) + '...',
+			})
 
 			const stopMonitoring = ndkActions.monitorZapPayment(
 				invoice,
 				(preimage: string) => {
-					console.log('⚡ Zap payment confirmed for', data.invoiceId, '!')
+					console.log('⚡ Zap receipt detected!', {
+						invoiceId: data.invoiceId,
+						preimagePreview: preimage.substring(0, 20) + '...',
+					})
 					handlePaymentSuccess(preimage)
 				},
-				60000, // 60 second timeout
+				90000, // 90 second timeout for zap receipts
 			)
 
 			setPaymentMonitoring(() => stopMonitoring)
-		}, [invoice, data.isZap, data.invoiceId, active])
+		}, [invoice, data.isZap, data.invoiceId, active, paymentMonitoring])
 
+		/**
+		 * Handle successful payment
+		 * Cleanup monitoring and notify parent component
+		 */
 		const handlePaymentSuccess = useCallback(
 			(preimage: string) => {
+				// Prevent duplicate success callbacks
+				if (hasCompletedRef.current) {
+					console.log('⚠️ Payment already completed, ignoring duplicate success')
+					return
+				}
+				hasCompletedRef.current = true
+
+				console.log('✅ Payment successful:', {
+					invoiceId: data.invoiceId,
+					preimagePreview: preimage.substring(0, 20) + '...',
+				})
+
 				// Stop monitoring
 				if (paymentMonitoring) {
 					paymentMonitoring()
@@ -182,6 +243,10 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			[paymentMonitoring, onPaymentComplete, data.invoiceId],
 		)
 
+		/**
+		 * Handle NWC (Nostr Wallet Connect) payment
+		 * Uses the configured NWC wallet to pay the invoice
+		 */
 		const handleNwcPayment = useCallback(async () => {
 			if (!ndkState.activeNwcWalletUri || !ndkState.ndk) {
 				toast.error('NWC wallet not connected')
@@ -190,6 +255,11 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 
 			try {
 				setIsPaymentInProgress(true)
+				console.log('💳 Starting NWC payment:', {
+					invoiceId: data.invoiceId,
+					isZap: data.isZap,
+					amount: data.amount,
+				})
 
 				const wallet = new NDKNWCWallet(ndkState.zapNdk as any, {
 					pairingCode: ndkState.activeNwcWalletUri,
@@ -198,49 +268,77 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 				ndkState.ndk.wallet = wallet
 
 				if (data.isZap) {
-					const zapper = new NDKZapper(data.recipient, data.amount * 1000, 'msat', { comment: data.description })
+					// For zaps, use NDKZapper with NWC
+					const zapper = new NDKZapper(data.recipient, data.amount * 1000, 'msat', {
+						ndk: ndkState.ndk,
+						comment: data.description,
+					})
 
+					// Listen for zap completion events
 					;(zapper as any).on?.('complete', (results: Map<any, any>) => {
+						console.log('⚡ Zap completed via NWC')
 						handlePaymentSuccess('nwc-zap-complete')
 					})
 					;(zapper as any).on?.('ln_payment', ({ preimage }: { preimage: string }) => {
+						console.log('⚡ Lightning payment confirmed via NWC')
 						handlePaymentSuccess(preimage)
 					})
 
 					await zapper.zap()
 				} else {
-					await wallet.lnPay({ pr: invoice || '' })
+					// For regular invoices, pay directly
+					if (!invoice) {
+						throw new Error('No invoice available to pay')
+					}
+					await wallet.lnPay({ pr: invoice })
 					handlePaymentSuccess('nwc-payment-preimage')
 				}
+
+				console.log('✅ NWC payment initiated successfully')
 			} catch (err) {
-				console.error('NWC payment failed', err)
+				console.error('❌ NWC payment failed:', err)
 				setIsPaymentInProgress(false)
-				onPaymentFailed?.({ success: false, error: (err as Error).message })
+				onPaymentFailed?.({
+					success: false,
+					error: (err as Error).message,
+					paymentHash: data.invoiceId,
+				})
 			}
 		}, [data, invoice, ndkState, handlePaymentSuccess, onPaymentFailed])
 
+		/**
+		 * Handle WebLN payment
+		 * Uses browser extension (e.g., Alby) to pay the invoice
+		 */
 		const handleWebLnPayment = useCallback(async () => {
 			if (!invoice || !window.webln) return
 
 			try {
 				setIsPaymentInProgress(true)
-				console.log('🌐 Starting WebLN payment for', data.invoiceId)
+				console.log('🌐 Starting WebLN payment:', {
+					invoiceId: data.invoiceId,
+					isZap: data.isZap,
+				})
 
 				await window.webln.enable()
 				const result = await window.webln.sendPayment(invoice)
 
-				console.log('✅ WebLN payment completed for', data.invoiceId)
+				console.log('✅ WebLN payment completed:', {
+					invoiceId: data.invoiceId,
+					hasPreimage: !!result.preimage,
+				})
 
 				if (data.isZap) {
-					console.log('Zap sent via WebLN - monitoring will handle confirmation')
 					// For zaps, the monitoring system will detect the zap receipt
-					// Don't call success immediately, let zap monitoring handle it
+					// Don't call success immediately - let monitoring handle it
+					console.log('🔔 Waiting for zap receipt confirmation...')
+					toast.info('Payment sent! Waiting for confirmation...')
 				} else {
 					// For regular invoices, we can call success immediately
 					handlePaymentSuccess(result.preimage || 'webln-payment-preimage')
 				}
 			} catch (error) {
-				console.error('WebLN payment failed:', error)
+				console.error('❌ WebLN payment failed:', error)
 				setIsPaymentInProgress(false)
 				onPaymentFailed?.({
 					success: false,
@@ -250,13 +348,16 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			}
 		}, [invoice, data.isZap, data.invoiceId, handlePaymentSuccess, onPaymentFailed])
 
+		/**
+		 * Handle manual preimage verification
+		 * Validates the preimage against the invoice
+		 */
 		const handleManualVerification = useCallback(() => {
 			if (!manualPreimage.trim()) {
 				toast.error('Please enter a preimage')
 				return
 			}
 
-			// Validate the preimage against the invoice
 			if (!invoice) {
 				toast.error('No invoice available to validate preimage against')
 				return
@@ -271,15 +372,18 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 					return
 				}
 
-				console.log('✅ Preimage validated successfully')
+				console.log('✅ Manual preimage validated successfully')
+				toast.success('Preimage validated!')
 				handlePaymentSuccess(manualPreimage)
 			} catch (error) {
-				console.error('Failed to validate preimage:', error)
+				console.error('❌ Failed to validate preimage:', error)
 				toast.error('Failed to validate preimage: ' + (error instanceof Error ? error.message : 'Unknown error'))
 			}
 		}, [manualPreimage, invoice, handlePaymentSuccess])
 
-		// Expose ref interface for programmatic control
+		/**
+		 * Expose ref interface for programmatic control
+		 */
 		useImperativeHandle(
 			ref,
 			() => ({
@@ -289,29 +393,34 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			[handleNwcPayment, invoice, capabilities.hasNwc, isPaymentInProgress],
 		)
 
-		// Generate invoice when needed and processor is active
+		/**
+		 * Effect: Generate invoice when component becomes active
+		 */
 		useEffect(() => {
 			if (data.isZap && !invoice && !isGeneratingInvoice && !hasRequestedInvoiceRef.current && active) {
-				hasRequestedInvoiceRef.current = true // mark as requested
+				hasRequestedInvoiceRef.current = true
 				generateZapInvoice()
 			}
 
 			// Reset request flag when processor becomes inactive
 			if (!active) {
 				hasRequestedInvoiceRef.current = false
+				hasCompletedRef.current = false
 			}
 		}, [data.isZap, invoice, isGeneratingInvoice, active, generateZapInvoice])
 
-		// Start monitoring when invoice is available and processor is active
+		/**
+		 * Effect: Start monitoring when invoice is available
+		 */
 		useEffect(() => {
 			if (invoice && data.isZap && !paymentMonitoring && active) {
-				console.log('🔔 Starting zap monitoring for active processor:', data.invoiceId)
+				console.log('🔔 Invoice ready, starting zap monitoring:', data.invoiceId)
 				startZapMonitoring()
 			}
 
 			// Stop monitoring when processor becomes inactive
 			if (!active && paymentMonitoring) {
-				console.log('🔕 Stopping zap monitoring for inactive processor:', data.invoiceId)
+				console.log('🔕 Processor inactive, stopping monitoring:', data.invoiceId)
 				paymentMonitoring()
 				setPaymentMonitoring(null)
 			}
@@ -324,20 +433,34 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			}
 		}, [invoice, data.isZap, data.invoiceId, paymentMonitoring, active, startZapMonitoring])
 
-		// Clear and regenerate when amount or description actually changes (only for zaps)
+		/**
+		 * Effect: Handle data changes (amount/description)
+		 * Regenerate invoice if payment details change
+		 */
 		useEffect(() => {
 			const prevAmount = previousDataRef.current.amount
 			const prevDesc = previousDataRef.current.description
 			const hasAmountChanged = prevAmount !== data.amount
 			const hasDescriptionChanged = prevDesc !== data.description
+
 			if (data.isZap && invoice && (hasAmountChanged || hasDescriptionChanged)) {
+				console.log('🔄 Payment data changed, regenerating invoice:', {
+					amountChanged: hasAmountChanged,
+					descriptionChanged: hasDescriptionChanged,
+				})
+
+				// Cleanup existing monitoring
 				if (paymentMonitoring) {
 					paymentMonitoring()
 					setPaymentMonitoring(null)
 				}
+
+				// Clear invoice to trigger regeneration
 				setInvoice(null)
-				hasRequestedInvoiceRef.current = false // reset so we can request new invoice
+				hasRequestedInvoiceRef.current = false
+				hasCompletedRef.current = false
 			}
+
 			previousDataRef.current = { amount: data.amount, description: data.description }
 		}, [data.amount, data.description, invoice, data.isZap, paymentMonitoring])
 
@@ -359,7 +482,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 						)}
 
 						{/* Invoice QR Code - Always visible when available */}
-						{invoice && (
+						{invoice && !isGeneratingInvoice && (
 							<div className="space-y-4">
 								<div className="flex justify-center">
 									<a href={lightningUrl} className="block hover:opacity-90 transition-opacity" target="_blank" rel="noopener noreferrer">
@@ -405,7 +528,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 						)}
 
 						{/* Payment buttons */}
-						{invoice && (
+						{invoice && !isGeneratingInvoice && (
 							<div className="space-y-3">
 								<div className="flex flex-col gap-2 sm:flex-row">
 									{/* NWC Payment Button */}

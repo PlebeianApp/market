@@ -42,15 +42,6 @@ interface PaymentVerificationResult {
 }
 
 export class LightningService {
-	private static readonly ZAP_RELAYS = [
-		'wss://relay.damus.io',
-		'wss://relay.nostr.band',
-		'wss://nos.lol',
-		'wss://relay.nostr.net',
-		'wss://relay.minibits.cash',
-		// 'wss://relay.coinos.io/',
-	]
-
 	/**
 	 * Generate an invoice from a Lightning address (LUD16) with enhanced Nostr support
 	 * @param lightningAddress The Lightning address (e.g., user@domain.com)

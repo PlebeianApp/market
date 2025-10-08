@@ -36,6 +36,7 @@ export const ndkActions = {
 		if (state.ndk) return state.ndk
 
 		const LOCAL_ONLY = configStore.state.config.appRelay
+		// const LOCAL_ONLY = false // configStore.state.config.appRelay
 
 		const appRelay = configStore.state.config.appRelay
 		const explicitRelays = LOCAL_ONLY ? ([appRelay].filter(Boolean) as string[]) : relays && relays.length > 0 ? relays : defaultRelaysUrls
@@ -346,17 +347,24 @@ export const ndkActions = {
 
 		const filters: any = {
 			kinds: [NDKKind.Zap],
-			since: Math.floor(Date.now() / 1000) - 60 * 5, // 5 minutes back
+			since: Math.floor(Date.now() / 1000) - 60, // Look back 1 minute for recent zaps
 		}
 
-		// If monitoring a specific invoice, add bolt11 filter
-		if (bolt11) {
-			filters['#bolt11'] = [bolt11]
-		}
+		const subscription = state.zapNdk.subscribe(filters, { closeOnEose: false })
 
-		const subscription = state.zapNdk.subscribe(filters)
+		subscription.on('event', (event: NDKEvent) => {
+			// If we're monitoring a specific invoice, filter by bolt11
+			if (bolt11) {
+				const eventBolt11 = event.tagValue('bolt11')
+				if (eventBolt11 === bolt11) {
+					onZapEvent(event)
+				}
+			} else {
+				// No specific invoice filter, pass all zaps
+				onZapEvent(event)
+			}
+		})
 
-		subscription.on('event', onZapEvent)
 		subscription.start()
 
 		console.log('🔔 Started zap receipt subscription', bolt11 ? `for invoice: ${bolt11.substring(0, 20)}...` : '(all zaps)')
@@ -377,15 +385,22 @@ export const ndkActions = {
 	monitorZapPayment: (bolt11: string, onZapReceived: (preimage: string) => void, timeoutMs: number = 30000): (() => void) => {
 		console.log('👀 Starting zap payment monitoring for invoice:', bolt11.substring(0, 20) + '...')
 
+		let hasReceivedZap = false
 		const cleanupFunctions: Array<() => void> = []
 
 		// Create zap subscription
 		const stopSubscription = ndkActions.createZapReceiptSubscription((event: NDKEvent) => {
 			const eventBolt11 = event.tagValue('bolt11')
-			if (eventBolt11 === bolt11) {
-				const preimage = event.tagValue('preimage') || 'No preimage present'
+			if (eventBolt11 === bolt11 && !hasReceivedZap) {
+				hasReceivedZap = true
+				const preimage = event.tagValue('preimage') || event.tagValue('payment_hash') || 'zap-receipt-confirmed'
 				console.log('⚡ Zap receipt detected! Preimage:', preimage.substring(0, 20) + '...')
 				onZapReceived(preimage)
+
+				// Cleanup after successful detection
+				setTimeout(() => {
+					cleanupFunctions.forEach((fn) => fn())
+				}, 100)
 			}
 		}, bolt11)
 
@@ -393,7 +408,10 @@ export const ndkActions = {
 
 		// Set timeout for monitoring
 		const timeout = setTimeout(() => {
-			console.log('⏰ Zap monitoring timeout reached for invoice:', bolt11.substring(0, 20) + '...')
+			if (!hasReceivedZap) {
+				console.log('⏰ Zap monitoring timeout reached for invoice:', bolt11.substring(0, 20) + '...')
+				console.log('💡 Tip: The zap may have succeeded but the receipt may not have propagated to relays yet')
+			}
 		}, timeoutMs)
 
 		cleanupFunctions.push(() => clearTimeout(timeout))
