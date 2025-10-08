@@ -190,8 +190,15 @@ async function seedData() {
 				}
 			}
 		}
+	}
 
-		// Create V4V shares for each user (excluding themselves from potential recipients)
+	// Create V4V shares for all users (after all users are created)
+	console.log('Creating V4V shares for all users...')
+	for (const user of devUsers) {
+		const signer = new NDKPrivateKeySigner(user.sk)
+		await signer.blockUntilReady()
+		const pubkey = (await signer.user()).pubkey
+
 		console.log(`Creating V4V shares for user ${pubkey.substring(0, 8)}...`)
 		const otherUserPubkeys = userPubkeys.filter((otherPubkey) => otherPubkey !== pubkey)
 		await createV4VSharesEvent(signer, ndk, APP_PUBKEY, otherUserPubkeys)
