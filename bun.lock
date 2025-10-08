@@ -6,7 +6,7 @@
       "dependencies": {
         "@faker-js/faker": "^9.9.0",
         "@formkit/auto-animate": "^0.8.2",
-        "@getalby/lightning-tools": "^5.2.0",
+        "@getalby/lightning-tools": "^6.0.0",
         "@hookform/resolvers": "^5.1.1",
         "@noble/hashes": "^1.8.0",
         "@nostr-dev-kit/ndk": "2.14.35",
@@ -158,7 +158,7 @@
 
     "@formkit/auto-animate": ["@formkit/auto-animate@0.8.2", "", {}, ""],
 
-    "@getalby/lightning-tools": ["@getalby/lightning-tools@5.2.0", "", {}, "sha512-8kBvENBTMh541VjGKhw3I29+549/C02gLSh3AQaMfoMNSZaMxfQW+7dcMcc7vbFaCKEcEe18ST5bUveTRBuXCQ=="],
+    "@getalby/lightning-tools": ["@getalby/lightning-tools@6.0.0", "", {}, "sha512-jpTO+7o1N1KhV5qT6qetPK+et6ZQshCzUMCRV8+Ek1NVlVU4ITIqOWRQ3kOrb0PhSxkbGN5G3d60HCi535hbDw=="],
 
     "@hookform/resolvers": ["@hookform/resolvers@5.1.1", "", { "dependencies": { "@standard-schema/utils": "^0.3.0" }, "peerDependencies": { "react-hook-form": "^7.55.0" } }, "sha512-J/NVING3LMAEvexJkyTLjruSm7aOFx7QX21pzkiJfMoNG0wl5aFEjLTl7ay7IQb9EWY6AkrBy7tHL2Alijpdcg=="],
 

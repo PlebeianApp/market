@@ -8,11 +8,12 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { authStore } from '@/lib/stores/auth'
 import { ndkActions, ndkStore } from '@/lib/stores/ndk'
 import { copyToClipboard } from '@/lib/utils'
+import { Invoice } from '@getalby/lightning-tools'
 import { NDKEvent, NDKUser, NDKZapper } from '@nostr-dev-kit/ndk'
 import { NDKNWCWallet } from '@nostr-dev-kit/ndk-wallet'
 import { useStore } from '@tanstack/react-store'
-import { Copy, CreditCard, Loader2, Zap, ChevronLeft, ChevronRight } from 'lucide-react'
-import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef } from 'react'
+import { ChevronLeft, ChevronRight, Copy, CreditCard, Loader2, Zap } from 'lucide-react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 // WebLN types
@@ -255,8 +256,28 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 				return
 			}
 
-			handlePaymentSuccess(manualPreimage)
-		}, [manualPreimage, handlePaymentSuccess])
+			// Validate the preimage against the invoice
+			if (!invoice) {
+				toast.error('No invoice available to validate preimage against')
+				return
+			}
+
+			try {
+				const invoiceObj = new Invoice({ pr: invoice })
+				const isValid = invoiceObj.validatePreimage(manualPreimage)
+
+				if (!isValid) {
+					toast.error('Invalid preimage. The preimage does not match this invoice.')
+					return
+				}
+
+				console.log('✅ Preimage validated successfully')
+				handlePaymentSuccess(manualPreimage)
+			} catch (error) {
+				console.error('Failed to validate preimage:', error)
+				toast.error('Failed to validate preimage: ' + (error instanceof Error ? error.message : 'Unknown error'))
+			}
+		}, [manualPreimage, invoice, handlePaymentSuccess])
 
 		// Expose ref interface for programmatic control
 		useImperativeHandle(
