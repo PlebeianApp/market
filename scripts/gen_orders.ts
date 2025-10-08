@@ -63,6 +63,19 @@ export function generateOrderCreationData(
 	// Ensure it's not before MIN_SEED_TIMESTAMP, especially if baseTimestamp was very low (though unlikely with current setup)
 	createdAt = Math.max(createdAt, MIN_SEED_TIMESTAMP)
 
+	// Generate a realistic structured address (newline-separated format)
+	const addressParts = [
+		faker.person.fullName(), // Name
+		faker.location.streetAddress(), // Street address
+		// Sometimes include apartment/suite number
+		faker.datatype.boolean() ? `Apt ${faker.number.int({ min: 1, max: 999 })}` : null,
+		faker.location.city(), // City
+		faker.location.zipCode(), // ZIP/Postal code
+		faker.location.country(), // Country
+	].filter(Boolean) // Remove null values
+
+	const addressString = addressParts.join('\n')
+
 	const tags: NDKTag[] = [
 		// Required tags
 		['p', sellerPubkey], // Merchant's pubkey
@@ -73,7 +86,7 @@ export function generateOrderCreationData(
 		['item', productRef, quantity],
 
 		// Optional tags
-		['address', faker.location.streetAddress() + ', ' + faker.location.city() + ', ' + faker.location.country()],
+		['address', addressString],
 		['email', faker.internet.email()],
 		['phone', faker.phone.number()],
 	]
