@@ -3,8 +3,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { authActions, NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY } from '@/lib/stores/auth'
 import { generateSecretKey, nip19 } from 'nostr-tools'
-import { useState, useEffect } from 'react'
-import { Loader2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Copy, Eye, EyeOff, Loader2 } from 'lucide-react'
 
 interface PrivateKeyLoginProps {
 	onError?: (error: string) => void
@@ -20,6 +20,11 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 	const [hasStoredKey, setHasStoredKey] = useState(false)
 	const [storedPubkey, setStoredPubkey] = useState<string | null>(null)
 	const [showPasswordInput, setShowPasswordInput] = useState(false)
+	const [showPrivateKey, setShowPrivateKey] = useState(false)
+	const [showGeneratedKeyWarning, setShowGeneratedKeyWarning] = useState(false)
+	const [acknowledgedWarning, setAcknowledgedWarning] = useState(false)
+	const [copied, setCopied] = useState(false)
+	const privateKeyInputRef = useRef<HTMLDivElement>(null)
 
 	useEffect(() => {
 		const storedKey = localStorage.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
@@ -34,10 +39,45 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 		}
 	}, [])
 
+	useEffect(() => {
+		const handleClickOutside = (event: MouseEvent) => {
+			if (privateKeyInputRef.current && !privateKeyInputRef.current.contains(event.target as Node)) {
+				setShowPrivateKey(false)
+			}
+		}
+
+		if (showPrivateKey) {
+			document.addEventListener('mousedown', handleClickOutside)
+		}
+
+		return () => {
+			document.removeEventListener('mousedown', handleClickOutside)
+		}
+	}, [showPrivateKey])
+
+	// Normalize private key input - accept both nsec and 64-char hex format
+	const normalizePrivateKey = (key: string): string => {
+		const trimmedKey = key.trim()
+
+		// Check if it's a 64-character hex string
+		if (/^[0-9a-fA-F]{64}$/.test(trimmedKey)) {
+			// Convert hex to Uint8Array and encode as nsec
+			const hexBytes = new Uint8Array(32)
+			for (let i = 0; i < 32; i++) {
+				hexBytes[i] = parseInt(trimmedKey.slice(i * 2, i * 2 + 2), 16)
+			}
+			return nip19.nsecEncode(hexBytes)
+		}
+
+		// Return as-is if it's already in nsec format or other format
+		return trimmedKey
+	}
+
 	const encryptAndStoreKey = async (key: string, password: string) => {
 		try {
-			const pubkey = nip19.decode(key).data as string
-			const encryptedKey = `${pubkey}:${key}`
+			const normalizedKey = normalizePrivateKey(key)
+			const pubkey = nip19.decode(normalizedKey).data as string
+			const encryptedKey = `${pubkey}:${normalizedKey}`
 			localStorage.setItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY, encryptedKey)
 			setHasStoredKey(true)
 			setStoredPubkey(pubkey)
@@ -49,7 +89,8 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 	const handleValidatePrivateKey = async () => {
 		try {
 			setIsLoading(true)
-			await authActions.loginWithPrivateKey(privateKey)
+			const normalizedKey = normalizePrivateKey(privateKey)
+			await authActions.loginWithPrivateKey(normalizedKey)
 			setPrivateKey('')
 			onSuccess?.()
 		} catch (error) {
@@ -63,6 +104,17 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 	const handleContinue = () => {
 		if (!privateKey) return
 		setShowPasswordInput(true)
+	}
+
+	const handleCopyToClipboard = async () => {
+		if (!privateKey) return
+		try {
+			await navigator.clipboard.writeText(privateKey)
+			setCopied(true)
+			setTimeout(() => setCopied(false), 2000)
+		} catch (error) {
+			console.error('Failed to copy to clipboard:', error)
+		}
 	}
 
 	const handleEncryptAndStore = async () => {
@@ -200,27 +252,77 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 						onClick={() => {
 							const newPrivateKey = generateSecretKey()
 							setPrivateKey(nip19.nsecEncode(newPrivateKey))
+							setShowPrivateKey(true)
+							setShowGeneratedKeyWarning(true)
 						}}
 						data-testid="generate-key-button"
 					>
 						Generate New Key
 					</Button>
 				</div>
-				<Input
-					id="private-key"
-					type="password"
-					placeholder="nsec1..."
-					value={privateKey}
-					onChange={(e) => setPrivateKey(e.target.value)}
-					onKeyDown={(e) => {
-						if (e.key === 'Enter' && privateKey) {
-							handleContinue()
-						}
-					}}
-					data-testid="private-key-input"
-				/>
+				<div className="relative" ref={privateKeyInputRef}>
+					<Input
+						id="private-key"
+						type={showPrivateKey ? 'text' : 'password'}
+						placeholder="nsec1..."
+						value={privateKey}
+						onChange={(e) => setPrivateKey(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === 'Enter' && privateKey) {
+								handleContinue()
+							}
+						}}
+						className={`pr-20 ${showPrivateKey ? 'text-red-500' : ''}`}
+						data-testid="private-key-input"
+					/>
+					<Button
+						type="button"
+						variant="ghost"
+						size="sm"
+						className={`absolute right-10 top-0 h-full px-3 py-2 hover:bg-transparent ${showGeneratedKeyWarning && !copied ? 'animate-pulse' : ''}`}
+						onClick={handleCopyToClipboard}
+						data-testid="copy-private-key-button"
+						title={copied ? 'Copied!' : 'Copy to clipboard'}
+					>
+						<Copy className={`h-4 w-4 ${copied ? 'text-green-500' : showGeneratedKeyWarning ? 'text-red-500' : 'text-gray-500'}`} />
+					</Button>
+					<Button
+						type="button"
+						variant="ghost"
+						size="sm"
+						className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+						onClick={() => setShowPrivateKey(!showPrivateKey)}
+						data-testid="toggle-private-key-visibility"
+					>
+						{showPrivateKey ? <EyeOff className="h-4 w-4 text-gray-500" /> : <Eye className="h-4 w-4 text-gray-500" />}
+					</Button>
+				</div>
+				{showGeneratedKeyWarning && (
+					<div className="space-y-2">
+						<p className="text-sm text-red-500 font-medium">⚠️ Copy this text and save it somewhere safe, it cannot be recovered.</p>
+						<p className="text-sm text-red-500 font-medium">It is the key to your new nostr identity.</p>
+						<div className="flex items-start space-x-2">
+							<input
+								type="checkbox"
+								id="acknowledge-warning"
+								checked={acknowledgedWarning}
+								onChange={(e) => setAcknowledgedWarning(e.target.checked)}
+								className="mt-1"
+								data-testid="acknowledge-warning-checkbox"
+							/>
+							<label htmlFor="acknowledge-warning" className="text-sm cursor-pointer">
+								I have saved my private key securely
+							</label>
+						</div>
+					</div>
+				)}
 			</div>
-			<Button onClick={handleContinue} disabled={isLoading || !privateKey} className="w-full" data-testid="continue-button">
+			<Button
+				onClick={handleContinue}
+				disabled={isLoading || !privateKey || (showGeneratedKeyWarning && !acknowledgedWarning)}
+				className="w-full"
+				data-testid="continue-button"
+			>
 				{isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Continue'}
 			</Button>
 		</div>
