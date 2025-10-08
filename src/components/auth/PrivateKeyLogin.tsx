@@ -3,8 +3,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { authActions, NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY } from '@/lib/stores/auth'
 import { generateSecretKey, nip19 } from 'nostr-tools'
-import { useState, useEffect, useRef } from 'react'
-import { Loader2, Eye, EyeOff } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Copy, Eye, EyeOff, Loader2 } from 'lucide-react'
 
 interface PrivateKeyLoginProps {
 	onError?: (error: string) => void
@@ -21,6 +21,9 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 	const [storedPubkey, setStoredPubkey] = useState<string | null>(null)
 	const [showPasswordInput, setShowPasswordInput] = useState(false)
 	const [showPrivateKey, setShowPrivateKey] = useState(false)
+	const [showGeneratedKeyWarning, setShowGeneratedKeyWarning] = useState(false)
+	const [acknowledgedWarning, setAcknowledgedWarning] = useState(false)
+	const [copied, setCopied] = useState(false)
 	const privateKeyInputRef = useRef<HTMLDivElement>(null)
 
 	useEffect(() => {
@@ -81,6 +84,17 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 	const handleContinue = () => {
 		if (!privateKey) return
 		setShowPasswordInput(true)
+	}
+
+	const handleCopyToClipboard = async () => {
+		if (!privateKey) return
+		try {
+			await navigator.clipboard.writeText(privateKey)
+			setCopied(true)
+			setTimeout(() => setCopied(false), 2000)
+		} catch (error) {
+			console.error('Failed to copy to clipboard:', error)
+		}
 	}
 
 	const handleEncryptAndStore = async () => {
@@ -218,6 +232,8 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 						onClick={() => {
 							const newPrivateKey = generateSecretKey()
 							setPrivateKey(nip19.nsecEncode(newPrivateKey))
+							setShowPrivateKey(true)
+							setShowGeneratedKeyWarning(true)
 						}}
 						data-testid="generate-key-button"
 					>
@@ -236,9 +252,20 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 								handleContinue()
 							}
 						}}
-						className="pr-10"
+						className="pr-20"
 						data-testid="private-key-input"
 					/>
+					<Button
+						type="button"
+						variant="ghost"
+						size="sm"
+						className={`absolute right-10 top-0 h-full px-3 py-2 hover:bg-transparent ${showGeneratedKeyWarning && !copied ? 'animate-pulse' : ''}`}
+						onClick={handleCopyToClipboard}
+						data-testid="copy-private-key-button"
+						title={copied ? 'Copied!' : 'Copy to clipboard'}
+					>
+						<Copy className={`h-4 w-4 ${copied ? 'text-green-500' : 'text-gray-500'}`} />
+					</Button>
 					<Button
 						type="button"
 						variant="ghost"
@@ -250,8 +277,32 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 						{showPrivateKey ? <EyeOff className="h-4 w-4 text-gray-500" /> : <Eye className="h-4 w-4 text-gray-500" />}
 					</Button>
 				</div>
+				{showGeneratedKeyWarning && (
+					<div className="space-y-2">
+						<p className="text-sm text-red-500 font-medium">⚠️ Copy this text and save it somewhere safe, it cannot be recovered.</p>
+						<p className="text-sm text-red-500 font-medium">It is the key to your new nostr identity.</p>
+						<div className="flex items-start space-x-2">
+							<input
+								type="checkbox"
+								id="acknowledge-warning"
+								checked={acknowledgedWarning}
+								onChange={(e) => setAcknowledgedWarning(e.target.checked)}
+								className="mt-1"
+								data-testid="acknowledge-warning-checkbox"
+							/>
+							<label htmlFor="acknowledge-warning" className="text-sm cursor-pointer">
+								I have saved my private key securely
+							</label>
+						</div>
+					</div>
+				)}
 			</div>
-			<Button onClick={handleContinue} disabled={isLoading || !privateKey} className="w-full" data-testid="continue-button">
+			<Button
+				onClick={handleContinue}
+				disabled={isLoading || !privateKey || (showGeneratedKeyWarning && !acknowledgedWarning)}
+				className="w-full"
+				data-testid="continue-button"
+			>
 				{isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Continue'}
 			</Button>
 		</div>
