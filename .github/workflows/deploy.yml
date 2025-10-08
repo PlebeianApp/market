@@ -15,6 +15,17 @@ jobs:
           bun-version: latest
       - run: bun install
       - run: bun run build
+      - name: Stop market-dev.service
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USER }}
+          password: ${{ secrets.REMOTE_PASSWORD }}
+          script: |
+            sudo systemctl stop market-dev.service && \
+            sudo systemctl stop orly.service && \
+            sudo rm -rf ~/.local/share/ORLY
+
       - name: Deploy to VPS
         uses: appleboy/scp-action@master
         with:
@@ -35,11 +46,12 @@ jobs:
             APP_RELAY_URL=${{ secrets.APP_RELAY_URL }}
             APP_PRIVATE_KEY=${{ secrets.APP_PRIVATE_KEY }}
             EOF
-      - name: Restart market-dev.service
+      - name: Start market-dev.service
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.REMOTE_HOST }}
           username: ${{ secrets.REMOTE_USER }}
           password: ${{ secrets.REMOTE_PASSWORD }}
           script: |
-            sudo systemctl restart market-dev.service
+            sudo systemctl start orly.service && \
+            sudo systemctl start market-dev.service
