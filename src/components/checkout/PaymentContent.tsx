@@ -299,6 +299,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 							currentIndex={activeIndex}
 							totalInvoices={invoices.length}
 							onNavigate={handleNavigate}
+							skippable={true}
 						/>
 					</div>
 				))}

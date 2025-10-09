@@ -69,6 +69,7 @@ interface LightningPaymentProcessorProps {
 	currentIndex?: number
 	totalInvoices?: number
 	onNavigate?: (index: number) => void
+	skippable?: boolean // Control whether skip/pay later buttons are shown (default: false)
 }
 
 /**
@@ -97,6 +98,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			currentIndex,
 			totalInvoices,
 			onNavigate,
+			skippable = false,
 		},
 		ref,
 	) => {
@@ -514,10 +516,12 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 								<div className="text-center text-amber-600">
 									<p className="font-medium">Unable to generate Lightning invoice</p>
 									<p className="text-sm text-gray-600 mt-1">
-										The recipient may not have Lightning configured. You can skip this payment and pay directly later.
+										{skippable
+											? 'The recipient may not have Lightning configured. You can skip this payment and pay directly later.'
+											: 'The recipient may not have Lightning configured.'}
 									</p>
 								</div>
-								{onSkipPayment && (
+								{onSkipPayment && skippable && (
 									<Button onClick={handleSkipPayment} variant="secondary" className="w-full">
 										Skip Payment (Pay Later)
 									</Button>
@@ -639,7 +643,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 								)}
 
 								{/* Pay Later / Skip button */}
-								{onSkipPayment && (
+								{onSkipPayment && skippable && (
 									<Button onClick={handleSkipPayment} variant="tertiary" className="w-full">
 										Pay Later
 									</Button>
