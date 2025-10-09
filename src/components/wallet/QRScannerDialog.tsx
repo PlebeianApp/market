@@ -18,13 +18,13 @@ export function QRScannerDialog({ onScan, open, onOpenChange }: QRScannerDialogP
 		(detectedCodes: any[]) => {
 			if (detectedCodes && detectedCodes.length > 0) {
 				const result = detectedCodes[0].rawValue
-				// Check if it's an NWC URI
-				if (result && result.startsWith('nostr+walletconnect://')) {
+				// Check if it's an NWC URI or bunker URI
+				if (result && (result.startsWith('nostr+walletconnect://') || result.startsWith('bunker://'))) {
 					onScan(result)
 					onOpenChange(false) // Close the dialog
 					toast.success('QR code scanned successfully')
 				} else if (result) {
-					setError('The scanned code is not a valid Nostr Wallet Connect URI')
+					setError('The scanned code is not a valid Nostr Wallet Connect or Bunker URI')
 				}
 			}
 		},
@@ -52,7 +52,7 @@ export function QRScannerDialog({ onScan, open, onOpenChange }: QRScannerDialogP
 			<DialogContent className="sm:max-w-md">
 				<DialogHeader>
 					<DialogTitle>Scan QR Code</DialogTitle>
-					<DialogDescription>Scan a Nostr Wallet Connect QR code to add your wallet</DialogDescription>
+					<DialogDescription>Scan a Nostr Wallet Connect or Bunker connection QR code</DialogDescription>
 				</DialogHeader>
 
 				<div className="mt-4 mb-4">

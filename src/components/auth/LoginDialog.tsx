@@ -6,6 +6,7 @@ import { NOSTR_AUTO_LOGIN } from '@/lib/stores/auth'
 import { useState } from 'react'
 import { NostrConnectQR } from './NostrConnectQR'
 import { PrivateKeyLogin } from './PrivateKeyLogin'
+import { BunkerConnect } from './BunkerConnect'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 
@@ -77,15 +78,17 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 								<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-[1px]">
 									<TabsTrigger
 										value="qr"
+										data-testid="qr-tab"
 										className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
 									>
 										QR Code
 									</TabsTrigger>
 									<TabsTrigger
 										value="bunker"
+										data-testid="bunker-tab"
 										className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
 									>
-										Bunker
+										Bunker URL
 									</TabsTrigger>
 								</TabsList>
 
@@ -93,7 +96,9 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 									<NostrConnectQR onError={handleError} onSuccess={() => onOpenChange(false)} />
 								</TabsContent>
 
-								<TabsContent value="bunker">{/* <BunkerConnect onError={handleError} /> */}</TabsContent>
+								<TabsContent value="bunker">
+									<BunkerConnect onError={handleError} onSuccess={() => onOpenChange(false)} />
+								</TabsContent>
 							</Tabs>
 						</TabsContent>
 						<TabsContent value="extension">
