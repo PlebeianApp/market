@@ -40,8 +40,8 @@ export function CurrencyDropdown() {
 						{CURRENCIES.map((currency) => (
 							<button
 								key={currency}
-								className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 first:rounded-t-lg last:rounded-b-lg transition-colors ${
-									currency === selectedCurrency ? 'bg-gray-100 font-medium' : ''
+								className={`w-full text-left px-3 py-2 text-sm first:rounded-t-lg last:rounded-b-lg transition-colors ${
+									currency === selectedCurrency ? 'bg-black-500 text-white hover:bg-gray-500' : 'bg-white text-black hover:bg-gray-200'
 								}`}
 								onClick={() => handleCurrencySelect(currency)}
 								data-testid={`currency-option-${currency}`}
