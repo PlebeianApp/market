@@ -38,7 +38,12 @@ function MiniProductCard({ productCoords }: { productCoords: string }) {
 
 	const title = getProductTitle(product)
 	const images = getProductImages(product)
-	const price = getProductPrice(product)
+	const priceTag = getProductPrice(product)
+
+	// Extract price amount and currency from tuple: ['price', amount, currency]
+	const priceAmount = priceTag?.[1]
+	const priceCurrency = priceTag?.[2]
+	const priceDisplay = priceAmount && priceCurrency ? `${priceAmount} ${priceCurrency}` : 'Price not set'
 
 	return (
 		<Link to="/product/$productId" params={{ productId: product.id }} className="block">
@@ -57,7 +62,7 @@ function MiniProductCard({ productCoords }: { productCoords: string }) {
 					)}
 				</div>
 				<h4 className="text-xs font-medium truncate">{title}</h4>
-				<p className="text-xs text-gray-600">{price ? `${price} sats` : 'Price not set'}</p>
+				<p className="text-xs text-gray-600">{priceDisplay}</p>
 			</div>
 		</Link>
 	)
@@ -88,21 +93,22 @@ export function FeaturedUserCard({ userPubkey }: FeaturedUserCardProps) {
 	const picture = profile?.picture
 
 	return (
-		<Card className="hover:shadow-lg h-[200px] transition-shadow bg-white">
-			<div className="flex items-center space-x-4 h-full">
-				{/* Borderless avatar on the left */}
-				<div className="flex-shrink-0 h-full aspect-square">
+		<Card className="hover:shadow-lg h-[200px] transition-shadow bg-white overflow-hidden">
+			<div className="flex h-full">
+				{/* Avatar on the left */}
+				<div className="flex-shrink-0 w-[200px] h-full">
 					<Link to="/profile/$profileId" params={{ profileId: pubkeyString }}>
 						<img
-							src={picture || `https://robohash.org/${pubkeyString}?set=set4&size=80x80`}
+							src={picture || `https://robohash.org/${pubkeyString}?set=set4&size=200x200`}
 							alt={displayName.toString()}
-							className="w-full h-full object-cover rounded"
+							className="w-full h-full object-cover"
 						/>
 					</Link>
 				</div>
 
-				<div className="flex flex-col justify-between h-full p-4">
-					{/* User info in the middle */}
+				{/* User info and products */}
+				<div className="flex flex-col justify-between flex-1 p-4 min-w-0">
+					{/* User info */}
 					<div className="flex-1 min-w-0">
 						<Link to="/profile/$profileId" params={{ profileId: pubkeyString }} className="block">
 							<h3 className="font-semibold text-gray-900 truncate hover:text-blue-600 transition-colors">{displayName}</h3>
@@ -111,12 +117,12 @@ export function FeaturedUserCard({ userPubkey }: FeaturedUserCardProps) {
 						</Link>
 					</div>
 
-					{/* 2x2 product grid on the right */}
-					<div className="flex-shrink-0">
+					{/* Product grid at the bottom */}
+					<div className="flex-shrink-0 mt-2">
 						{isLoadingProducts ? (
 							<div className="flex flex-row gap-1">
 								{Array.from({ length: 4 }).map((_, index) => (
-									<div key={index} className="bg-gray-200 rounded animate-pulse w-9 h-9"></div>
+									<div key={index} className="bg-gray-200 rounded animate-pulse w-12 h-12"></div>
 								))}
 							</div>
 						) : (
@@ -126,17 +132,17 @@ export function FeaturedUserCard({ userPubkey }: FeaturedUserCardProps) {
 									if (product) {
 										const images = getProductImages(product)
 										return (
-											<Link key={product.id} to="/products/$productId" params={{ productId: product.id }} className="block">
+											<Link key={product.id} to="/product/$productId" params={{ productId: product.id }} className="block">
 												<img
 													src={images?.[0]?.[1] || '/images/placeholder.png'}
 													alt="Product"
-													className="w-9 h-9 rounded object-cover hover:opacity-80 transition-opacity"
+													className="w-12 h-12 rounded object-cover hover:opacity-80 transition-opacity"
 												/>
 											</Link>
 										)
 									} else {
 										return (
-											<div key={index} className="w-9 h-9 bg-gray-100 rounded flex items-center justify-center">
+											<div key={index} className="w-12 h-12 bg-gray-100 rounded flex items-center justify-center">
 												<span className="text-gray-400 text-xs">•</span>
 											</div>
 										)

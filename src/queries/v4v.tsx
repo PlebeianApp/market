@@ -238,3 +238,50 @@ export const usePublishV4VShares = () => {
 		},
 	})
 }
+
+/**
+ * Fetches all users who have configured V4V shares (merchants)
+ * Returns an array of unique pubkeys
+ */
+export const fetchV4VMerchants = async (): Promise<string[]> => {
+	try {
+		const ndk = ndkActions.getNDK()
+		if (!ndk) {
+			throw new Error('NDK not initialized')
+		}
+
+		const events = await ndk.fetchEvents({
+			kinds: [30078],
+			'#l': ['v4v_share'],
+			limit: 100, // Limit to 100 most recent merchants
+		})
+
+		if (!events || events.size === 0) {
+			return []
+		}
+
+		// Get unique pubkeys from the events
+		const pubkeySet = new Set<string>()
+		Array.from(events).forEach((event) => {
+			if (event.pubkey) {
+				pubkeySet.add(event.pubkey)
+			}
+		})
+
+		return Array.from(pubkeySet)
+	} catch (error) {
+		console.error('Error fetching V4V merchants:', error)
+		return []
+	}
+}
+
+/**
+ * Hook to fetch all merchants who have V4V configured
+ */
+export const useV4VMerchants = () => {
+	return useQuery({
+		queryKey: v4vKeys.merchants(),
+		queryFn: fetchV4VMerchants,
+		staleTime: 1000 * 60 * 5, // 5 minutes
+	})
+}
