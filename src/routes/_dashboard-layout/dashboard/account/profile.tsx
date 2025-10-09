@@ -141,7 +141,7 @@ function ProfileComponent() {
 
 	const changesExist = hasChanges()
 	const mandatoryFieldsFilled = areMandatoryFieldsFilled()
-	
+
 	// Allow saving if mandatory fields are filled, even if no original profile exists yet
 	// This handles the case where user is creating a new profile
 	const canSave = mandatoryFieldsFilled && (changesExist || Object.keys(originalProfile).length === 0)
@@ -308,7 +308,13 @@ function ProfileComponent() {
 								onClick={handleSave}
 								data-testid="profile-save-button"
 							>
-								{isLoading ? 'Saving...' : canSave ? (Object.keys(originalProfile).length === 0 ? 'Create Profile' : 'Save Changes') : 'Saved'}
+								{isLoading
+									? 'Saving...'
+									: canSave
+										? Object.keys(originalProfile).length === 0
+											? 'Create Profile'
+											: 'Save Changes'
+										: 'Saved'}
 							</Button>
 						</div>
 					</div>
