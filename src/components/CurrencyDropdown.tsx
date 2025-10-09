@@ -36,18 +36,16 @@ export function CurrencyDropdown() {
 					<div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
 
 					{/* Dropdown menu */}
-					<div className="absolute right-0 top-full mt-1 bg-primary border border-zinc-200 rounded-lg shadow-lg z-50 min-w-[120px] max-h-60 overflow-y-auto">
+					<div className="absolute right-0 top-full mt-1 bg-primary rounded-lg shadow-lg z-50 min-w-24 max-h-60 overflow-y-auto">
 						{CURRENCIES.map((currency) => (
-							<button
+							<Button
 								key={currency}
-								className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-100 first:rounded-t-lg last:rounded-b-lg transition-colors ${
-									currency === selectedCurrency ? 'bg-gray-100 font-medium' : ''
-								}`}
+								className={`w-full ${currency === selectedCurrency ? 'bg-black-500 text-white hover:bg-gray-500' : 'text-gray-500'}`}
 								onClick={() => handleCurrencySelect(currency)}
 								data-testid={`currency-option-${currency}`}
 							>
 								{currency}
-							</button>
+							</Button>
 						))}
 					</div>
 				</>
