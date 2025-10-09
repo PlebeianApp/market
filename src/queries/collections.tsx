@@ -6,6 +6,7 @@ import { queryOptions, useQuery } from '@tanstack/react-query'
 import { z } from 'zod'
 import { collectionKeys, collectionsKeys } from './queryKeyFactory'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
+import { FEATURED_ITEMS_CONFIG } from '@/lib/schemas/featured'
 
 // --- DATA FETCHING FUNCTIONS ---
 /**
@@ -25,7 +26,13 @@ export const fetchCollections = async () => {
 	const allEvents = Array.from(events)
 
 	// Filter out blacklisted collections and authors
-	return filterBlacklistedEvents(allEvents)
+	const filteredEvents = filterBlacklistedEvents(allEvents)
+
+	// Filter out system collections (featured products list)
+	return filteredEvents.filter((event) => {
+		const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
+		return dTag !== FEATURED_ITEMS_CONFIG.PRODUCTS.dTag
+	})
 }
 /**
  * Fetches all collections from a specific pubkey
@@ -46,7 +53,13 @@ export const fetchCollectionsByPubkey = async (pubkey: string) => {
 	const allEvents = Array.from(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 
 	// Filter out blacklisted collections (author check not needed since we're querying by author)
-	return filterBlacklistedEvents(allEvents)
+	const filteredEvents = filterBlacklistedEvents(allEvents)
+
+	// Filter out system collections (featured products list)
+	return filteredEvents.filter((event) => {
+		const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
+		return dTag !== FEATURED_ITEMS_CONFIG.PRODUCTS.dTag
+	})
 }
 
 /**
