@@ -13,6 +13,7 @@ import.meta.hot.accept()
 config()
 
 const RELAY_URL = process.env.APP_RELAY_URL
+const NIP46_RELAY_URL = process.env.NIP46_RELAY_URL || 'wss://relay.nsec.app'
 const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
 
 let appSettings: Awaited<ReturnType<typeof fetchAppSettings>> = null
@@ -89,6 +90,7 @@ export const server = serve({
 				const currentSettings = await fetchAppSettings(RELAY_URL as string, APP_PUBLIC_KEY)
 				return Response.json({
 					appRelay: RELAY_URL,
+					nip46Relay: NIP46_RELAY_URL,
 					appSettings: currentSettings,
 					appPublicKey: APP_PUBLIC_KEY,
 					needsSetup: !currentSettings,

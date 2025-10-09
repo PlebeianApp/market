@@ -1,50 +1,70 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { authActions } from '@/lib/stores/auth'
-import { ndkActions } from '@/lib/stores/ndk'
 import { copyToClipboard } from '@/lib/utils'
 import { useConfigQuery } from '@/queries/config'
-import { NDKEvent, NDKKind, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
+import NDK, { NDKEvent, NDKKind, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { CopyIcon, Loader2 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 
 interface NostrConnectQRProps {
 	onError?: (error: string) => void
 	onSuccess?: () => void
 }
 
-let globalLoginInProgress = false
-
 export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 	const { data: config, isLoading, isError } = useConfigQuery()
 
 	const [localSigner, setLocalSigner] = useState<NDKPrivateKeySigner | null>(null)
 	const [localPubkey, setLocalPubkey] = useState<string | null>(null)
-	const [tempSecret, setTempSecret] = useState<string | null>(null)
 	const [listening, setListening] = useState(false)
 	const [generatingConnectionUrl, setGeneratingConnectionUrl] = useState(false)
 	const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
+
+	// Generate secret once and keep it stable
+	const tempSecretRef = useRef<string>(Math.random().toString(36).substring(2, 15))
+	const tempSecret = tempSecretRef.current
 
 	const isLoggingInRef = useRef(false)
 	const activeSubscriptionRef = useRef<any>(null)
 	const isMountedRef = useRef(true)
 	const hasTriggeredSuccessRef = useRef(false)
+	const nip46NdkRef = useRef<NDK | null>(null)
 
-	useEffect(() => {
-		if (!document.querySelector('[data-nostr-connect-active="true"]')) {
-			globalLoginInProgress = false
+	const cleanup = useCallback(() => {
+		if (!isMountedRef.current) return
+
+		isLoggingInRef.current = false
+
+		if (activeSubscriptionRef.current) {
+			try {
+				activeSubscriptionRef.current.stop()
+			} catch (e) {
+				console.error('Error stopping subscription:', e)
+			}
+			activeSubscriptionRef.current = null
 		}
 
+		// Clean up the NIP-46 NDK instance
+		if (nip46NdkRef.current) {
+			try {
+				nip46NdkRef.current = null
+			} catch (e) {
+				console.error('Error cleaning up NIP-46 NDK:', e)
+			}
+		}
+
+		setListening(false)
+	}, [])
+
+	useEffect(() => {
 		isMountedRef.current = true
-		document.body.setAttribute('data-nostr-connect-active', 'true')
 
 		return () => {
 			isMountedRef.current = false
-			document.body.removeAttribute('data-nostr-connect-active')
 
 			if (activeSubscriptionRef.current) {
-				console.log('Final cleanup on unmount')
 				try {
 					activeSubscriptionRef.current.stop()
 				} catch (e) {
@@ -55,31 +75,7 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 		}
 	}, [])
 
-	const cleanup = () => {
-		if (!isMountedRef.current) return
-
-		console.log('Running cleanup')
-		isLoggingInRef.current = false
-
-		if (activeSubscriptionRef.current) {
-			console.log('Cleaning up subscription')
-			try {
-				activeSubscriptionRef.current.stop()
-			} catch (e) {
-				console.error('Error stopping subscription:', e)
-			}
-			activeSubscriptionRef.current = null
-		}
-
-		setListening(false)
-	}
-
 	useEffect(() => {
-		if (globalLoginInProgress) {
-			console.log('Global login already in progress, skipping initialization')
-			return
-		}
-
 		setGeneratingConnectionUrl(true)
 		const signer = NDKPrivateKeySigner.generate()
 		setLocalSigner(signer)
@@ -100,11 +96,8 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 	}, [])
 
 	const connectionUrl = useMemo(() => {
-		if (!localPubkey) return null
-		const relay = config?.appRelay || 'ws://localhost:10547'
-		const secret = Math.random().toString(36).substring(2, 15)
-
-		setTempSecret(secret)
+		if (!localPubkey || !config) return null
+		const relay = config.nip46Relay || 'wss://relay.nsec.app'
 
 		const params = new URLSearchParams()
 		params.set('relay', relay)
@@ -117,82 +110,76 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 				icons: [],
 			}),
 		)
-		params.set('token', secret)
+		params.set('token', tempSecret)
 
 		return `nostrconnect://${localPubkey}?` + params.toString()
-	}, [localPubkey])
+	}, [localPubkey, config, tempSecret])
 
-	const constructBunkerUrl = (event: NDKEvent) => {
-		const baseUrl = `bunker://${event.pubkey}?`
-		const relay = config?.appRelay || 'ws://localhost:10547'
+	const constructBunkerUrl = useCallback(
+		(event: NDKEvent) => {
+			const baseUrl = `bunker://${event.pubkey}?`
+			const relay = config?.nip46Relay || 'wss://relay.nsec.app'
 
-		const params = new URLSearchParams()
-		params.set('relay', relay)
-		params.set('secret', tempSecret ?? '')
+			const params = new URLSearchParams()
+			params.set('relay', relay)
+			params.set('secret', tempSecret)
 
-		return baseUrl + params.toString()
-	}
+			return baseUrl + params.toString()
+		},
+		[config, tempSecret],
+	)
 
-	const triggerSuccess = () => {
+	const triggerSuccess = useCallback(() => {
 		if (hasTriggeredSuccessRef.current) {
 			return
 		}
-
-		console.log('triggerSuccess')
 
 		hasTriggeredSuccessRef.current = true
 		cleanup()
 
 		isMountedRef.current = false
-		globalLoginInProgress = false
 
 		if (onSuccess) {
 			setTimeout(() => {
 				onSuccess()
 			}, 0)
 		}
-	}
+	}, [cleanup, onSuccess])
 
-	const handleLoginWithNip46Signer = async (event: NDKEvent) => {
-		if (globalLoginInProgress || isLoggingInRef.current || !isMountedRef.current || hasTriggeredSuccessRef.current) {
-			console.log('Login already in progress or component unmounted, skipping duplicate login attempt')
-			return
-		}
-
-		try {
-			globalLoginInProgress = true
-			isLoggingInRef.current = true
-			cleanup()
-
-			const bunkerUrl = constructBunkerUrl(event)
-			if (!localSigner) {
-				throw new Error('No local signer available')
+	const handleLoginWithNip46Signer = useCallback(
+		async (event: NDKEvent) => {
+			if (isLoggingInRef.current || !isMountedRef.current || hasTriggeredSuccessRef.current) {
+				return
 			}
 
-			if (!tempSecret) {
-				throw new Error('No temporary secret available')
-			}
+			try {
+				isLoggingInRef.current = true
+				cleanup()
 
-			console.log('bunkerUrl', bunkerUrl)
-
-			setConnectionStatus('connected')
-			await authActions.loginWithNip46(bunkerUrl, localSigner)
-
-			triggerSuccess()
-		} catch (err) {
-			console.error('Error in login flow:', err)
-
-			if (isMountedRef.current) {
-				setConnectionStatus('error')
-				if (onError) {
-					onError(err instanceof Error ? err.message : 'Connection error')
+				const bunkerUrl = constructBunkerUrl(event)
+				if (!localSigner) {
+					throw new Error('No local signer available')
 				}
-			}
 
-			isLoggingInRef.current = false
-			globalLoginInProgress = false
-		}
-	}
+				setConnectionStatus('connected')
+				await authActions.loginWithNip46(bunkerUrl, localSigner)
+
+				triggerSuccess()
+			} catch (err) {
+				console.error('NIP-46 login error:', err)
+
+				if (isMountedRef.current) {
+					setConnectionStatus('error')
+					if (onError) {
+						onError(err instanceof Error ? err.message : 'Connection error')
+					}
+				}
+
+				isLoggingInRef.current = false
+			}
+		},
+		[localSigner, constructBunkerUrl, cleanup, triggerSuccess, onError],
+	)
 
 	useEffect(() => {
 		if (
@@ -200,119 +187,123 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 			!localSigner ||
 			!connectionUrl ||
 			isLoggingInRef.current ||
-			globalLoginInProgress ||
 			hasTriggeredSuccessRef.current ||
-			!isMountedRef.current
+			!isMountedRef.current ||
+			!config
 		) {
 			return
 		}
 
-		console.log('Starting subscription for pubkey:', localPubkey)
-		setListening(true)
-		setConnectionStatus('connecting')
+		const initNip46Connection = async () => {
+			setListening(true)
+			setConnectionStatus('connecting')
 
-		const ndk = ndkActions.getNDK()
-		if (!ndk) {
-			console.error('NDK not initialized')
-			setConnectionStatus('error')
-			if (onError) onError('NDK not initialized')
-			return
-		}
+			// Create a dedicated NDK instance connected to the NIP-46 relay
+			const nip46Relay = config.nip46Relay || 'wss://relay.nsec.app'
 
-		const processedRequestIds = new Set<string>()
-		const processedAckIds = new Set<string>()
+			const ndk = new NDK({
+				explicitRelayUrls: [nip46Relay],
+			})
 
-		const sub = ndk.subscribe(
-			{
-				kinds: [NDKKind.NostrConnect],
-				'#p': [localPubkey],
-			},
-			{ closeOnEose: false },
-		)
+			nip46NdkRef.current = ndk
 
-		activeSubscriptionRef.current = sub
-
-		sub.on('event', async (event) => {
-			if (globalLoginInProgress || isLoggingInRef.current || !isMountedRef.current || hasTriggeredSuccessRef.current) {
-				console.log('Login in progress or component unmounted, ignoring event')
+			try {
+				await ndk.connect()
+			} catch (error) {
+				console.error('Failed to connect to NIP-46 relay:', error)
+				setConnectionStatus('error')
+				if (onError) onError('Failed to connect to NIP-46 relay')
 				return
 			}
 
-			try {
-				await event.decrypt(undefined, localSigner)
-				const request = JSON.parse(event.content)
+			const processedRequestIds = new Set<string>()
+			const processedAckIds = new Set<string>()
 
-				if (request.method === 'connect') {
-					if (request.id && processedRequestIds.has(request.id)) {
-						console.log('Skipping already processed connect request:', request.id)
-						return
-					}
+			const sub = ndk.subscribe(
+				{
+					kinds: [NDKKind.NostrConnect],
+					'#p': [localPubkey],
+				},
+				{ closeOnEose: false },
+			)
 
-					if (request.id) {
-						processedRequestIds.add(request.id)
-					}
+			activeSubscriptionRef.current = sub
 
-					if (request.params && request.params.token === tempSecret) {
-						const response = {
-							id: request.id,
-							result: tempSecret,
+			sub.on('event', async (event: NDKEvent) => {
+				if (isLoggingInRef.current || !isMountedRef.current || hasTriggeredSuccessRef.current) {
+					return
+				}
+
+				try {
+					await event.decrypt(undefined, localSigner)
+					const request = JSON.parse(event.content)
+
+					if (request.method === 'connect') {
+						if (request.id && processedRequestIds.has(request.id)) {
+							return
 						}
 
-						const responseEvent = new NDKEvent(ndk)
-						responseEvent.kind = NDKKind.NostrConnect
-						responseEvent.tags = [['p', event.pubkey]]
-						responseEvent.content = JSON.stringify(response)
+						if (request.id) {
+							processedRequestIds.add(request.id)
+						}
 
-						try {
-							await responseEvent.sign(localSigner)
-							// @ts-ignore - The NDK API requires a string pubkey here despite type definitions
-							await responseEvent.encrypt(undefined, localSigner, event.pubkey)
-							await responseEvent.publish()
+						if (request.params && request.params.token === tempSecret) {
+							const response = {
+								id: request.id,
+								result: tempSecret,
+							}
 
-							console.log('Connection approved, waiting for ACK response')
-						} catch (err) {
-							console.error('Error sending approval:', err)
-							if (isMountedRef.current && !hasTriggeredSuccessRef.current) {
-								setConnectionStatus('error')
-								if (onError) onError(err instanceof Error ? err.message : 'Error sending approval')
+							const responseEvent = new NDKEvent(ndk)
+							responseEvent.kind = NDKKind.NostrConnect
+							responseEvent.tags = [['p', event.pubkey]]
+							responseEvent.content = JSON.stringify(response)
+
+							try {
+								await responseEvent.sign(localSigner)
+								// @ts-ignore - The NDK API requires a string pubkey here despite type definitions
+								await responseEvent.encrypt(undefined, localSigner, event.pubkey)
+								await responseEvent.publish()
+							} catch (err) {
+								console.error('Error sending NIP-46 approval:', err)
+								if (isMountedRef.current && !hasTriggeredSuccessRef.current) {
+									setConnectionStatus('error')
+									if (onError) onError(err instanceof Error ? err.message : 'Error sending approval')
+								}
 							}
 						}
-					} else {
-						console.log('Token mismatch:', request.params?.token, tempSecret)
-					}
-				} else if (request.result === 'ack') {
-					if (processedAckIds.has(event.id)) {
-						console.log('Skipping already processed ACK:', event.id)
-						return
-					}
+					} else if (request.result === 'ack') {
+						if (processedAckIds.has(event.id)) {
+							return
+						}
 
-					processedAckIds.add(event.id)
-
-					console.log('Received ACK response, processing login...')
-					await handleLoginWithNip46Signer(event)
+						processedAckIds.add(event.id)
+						await handleLoginWithNip46Signer(event)
+					}
+				} catch (error) {
+					console.error('Failed to process NIP-46 event:', error)
+					if (isMountedRef.current && !hasTriggeredSuccessRef.current) {
+						setConnectionStatus('error')
+						if (onError) onError(error instanceof Error ? error.message : 'Failed to process event')
+					}
 				}
-			} catch (error) {
-				console.error('Failed to process event:', error)
-				if (isMountedRef.current && !hasTriggeredSuccessRef.current) {
+			})
+
+			const timeout = setTimeout(() => {
+				if (isMountedRef.current && !hasTriggeredSuccessRef.current && connectionStatus !== 'connected' && !isLoggingInRef.current) {
+					cleanup()
 					setConnectionStatus('error')
-					if (onError) onError(error instanceof Error ? error.message : 'Failed to process event')
+					if (onError) onError('Connection timed out. Please try again.')
 				}
-			}
-		})
+			}, 300000) // 5 minutes
 
-		const timeout = setTimeout(() => {
-			if (isMountedRef.current && !hasTriggeredSuccessRef.current && connectionStatus !== 'connected' && !isLoggingInRef.current) {
+			return () => {
+				clearTimeout(timeout)
 				cleanup()
-				setConnectionStatus('error')
-				if (onError) onError('Connection timed out. Please try again.')
 			}
-		}, 300000) // 5 minutes
-
-		return () => {
-			clearTimeout(timeout)
-			cleanup()
 		}
-	}, [connectionUrl, localPubkey, localSigner, onError, onSuccess, tempSecret])
+
+		initNip46Connection()
+	}, [connectionUrl, localPubkey, localSigner, tempSecret, config, onError, handleLoginWithNip46Signer, cleanup])
 
 	return (
 		<div className="flex flex-col items-center gap-4 py-4">
