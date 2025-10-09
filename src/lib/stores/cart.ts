@@ -1137,27 +1137,44 @@ export const cartActions = {
 			const productEvent = await getProductEvent(productId)
 			if (!productEvent) return []
 
-			const sellerPubkey = productEvent.pubkey
-			const shippingEvents = (await cartQueryClient.fetchQuery(shippingOptionsByPubkeyQueryOptions(sellerPubkey))) as NDKEvent[]
+			// Get shipping options attached to this specific product
+			const shippingTags = productEvent.tags.filter((t) => t[0] === 'shipping_option')
 
-			const allOptions = shippingEvents
-				.map((event) => {
-					const info = getShippingInfo(event)
-					if (!info || !info.id || info.id.trim().length === 0) return null
+			if (shippingTags.length === 0) {
+				return []
+			}
 
-					return {
-						id: `${SHIPPING_KIND}:${sellerPubkey}:${info.id}`,
+			const shippingOptions: RichShippingInfo[] = []
+
+			for (const tag of shippingTags) {
+				const shippingRef = tag[1] // Format: "30406:pubkey:d-tag"
+				const extraCost = tag[2] ? parseFloat(tag[2]) : 0
+
+				try {
+					const shippingEvent = await getShippingEvent(shippingRef)
+					if (!shippingEvent) continue
+
+					const info = getShippingInfo(shippingEvent)
+					if (!info || !info.id || info.id.trim().length === 0) continue
+
+					const baseCost = parseFloat(info.price.amount)
+					const totalCost = baseCost + extraCost
+
+					shippingOptions.push({
+						id: shippingRef,
 						name: info.title,
-						cost: parseFloat(info.price.amount),
+						cost: totalCost,
 						currency: info.price.currency,
 						countries: info.countries,
 						service: info.service,
 						carrier: info.carrier,
-					}
-				})
-				.filter(Boolean) as RichShippingInfo[]
+					})
+				} catch (error) {
+					console.error(`Failed to fetch shipping option ${shippingRef}:`, error)
+				}
+			}
 
-			const sortedOptions = allOptions.sort((a, b) => {
+			const sortedOptions = shippingOptions.sort((a, b) => {
 				const aIsStandard = a.name?.toLowerCase().includes('standard') || false
 				const bIsStandard = b.name?.toLowerCase().includes('standard') || false
 				if (aIsStandard && !bIsStandard) return -1
@@ -1165,7 +1182,7 @@ export const cartActions = {
 				return (a.cost || 0) - (b.cost || 0)
 			})
 
-			return sortedOptions.slice(0, 4)
+			return sortedOptions
 		} catch (error) {
 			console.error(`Failed to fetch shipping options for product ${productId}:`, error)
 			return []
@@ -1184,28 +1201,75 @@ export const cartActions = {
 		for (const [sellerPubkey, products] of Object.entries(productsBySeller)) {
 			if (products.length > 0) {
 				try {
-					const shippingEvents = (await cartQueryClient.fetchQuery(shippingOptionsByPubkeyQueryOptions(sellerPubkey))) as NDKEvent[]
+					// Collect all shipping option references from products in cart
+					const productShippingRefs = new Set<string>()
+					const extraCosts: Record<string, number> = {}
 
-					const allOptions = shippingEvents
-						.map((event) => {
-							const info = getShippingInfo(event)
-							if (!info || !info.id || typeof info.id !== 'string' || info.id.trim().length === 0) return null
-							return {
-								id: `${SHIPPING_KIND}:${sellerPubkey}:${info.id}`,
+					for (const product of products) {
+						const productEvent = await getProductEvent(product.id)
+						if (!productEvent) continue
+
+						const shippingTags = productEvent.tags.filter((t) => t[0] === 'shipping_option')
+						for (const tag of shippingTags) {
+							const shippingRef = tag[1] // Format: "30406:pubkey:d-tag"
+							const extraCost = tag[2] ? parseFloat(tag[2]) : 0
+
+							productShippingRefs.add(shippingRef)
+
+							// Store extra cost if specified (use the highest if multiple products have different extra costs)
+							if (extraCost > 0) {
+								extraCosts[shippingRef] = Math.max(extraCosts[shippingRef] || 0, extraCost)
+							}
+						}
+					}
+
+					// If no shipping options are attached to any products, show empty
+					if (productShippingRefs.size === 0) {
+						newSellerShippingOptions[sellerPubkey] = []
+						continue
+					}
+
+					// Fetch only the shipping options that are referenced by the products
+					const shippingOptions: RichShippingInfo[] = []
+
+					for (const shippingRef of Array.from(productShippingRefs)) {
+						try {
+							// Parse the shipping reference
+							const parts = shippingRef.split(':')
+							if (parts.length !== 3) continue
+
+							const [kind, pubkey, dTag] = parts
+
+							// Fetch the shipping event
+							const shippingEvent = await getShippingEvent(shippingRef)
+							if (!shippingEvent) continue
+
+							const info = getShippingInfo(shippingEvent)
+							if (!info || !info.id || typeof info.id !== 'string' || info.id.trim().length === 0) continue
+
+							const baseCost = parseFloat(info.price.amount)
+							const extraCost = extraCosts[shippingRef] || 0
+							const totalCost = baseCost + extraCost
+
+							shippingOptions.push({
+								id: shippingRef,
 								name: info.title,
-								cost: parseFloat(info.price.amount),
+								cost: totalCost,
 								currency: info.price.currency,
 								countries: info.countries,
 								service: info.service,
 								carrier: info.carrier,
-							}
-						})
-						.filter(Boolean) as RichShippingInfo[]
+							})
+						} catch (error) {
+							console.error(`Failed to fetch shipping option ${shippingRef}:`, error)
+						}
+					}
 
+					// Remove duplicates and sort
 					const uniqueOptions: RichShippingInfo[] = []
 					const addedKeys = new Set<string>()
-					for (const option of allOptions) {
-						const uniqueKey = `${option.name}-${option.countries?.join(',') || ''}`
+					for (const option of shippingOptions) {
+						const uniqueKey = `${option.id}`
 						if (!addedKeys.has(uniqueKey)) {
 							addedKeys.add(uniqueKey)
 							uniqueOptions.push(option)
@@ -1220,7 +1284,7 @@ export const cartActions = {
 						return (a.cost || 0) - (b.cost || 0)
 					})
 
-					newSellerShippingOptions[sellerPubkey] = sortedOptions.slice(0, 4)
+					newSellerShippingOptions[sellerPubkey] = sortedOptions
 				} catch (error) {
 					console.error(`Failed to fetch/process shipping options for seller ${sellerPubkey}:`, error)
 					newSellerShippingOptions[sellerPubkey] = []
