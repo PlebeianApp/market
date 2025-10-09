@@ -30,6 +30,7 @@ export interface LightningPaymentData {
 	amount: number
 	description: string
 	recipient: NDKEvent | NDKUser
+	recipientName?: string
 	bolt11?: string
 	isZap?: boolean
 	invoiceId?: string
@@ -51,12 +52,14 @@ interface PaymentCapabilities {
 export interface LightningPaymentProcessorRef {
 	triggerNwcPayment: () => Promise<void>
 	isReady: () => boolean
+	skipPayment: () => void
 }
 
 interface LightningPaymentProcessorProps {
 	data: LightningPaymentData
 	onPaymentComplete?: (result: PaymentResult) => void
 	onPaymentFailed?: (result: PaymentResult) => void
+	onSkipPayment?: () => void
 	onCancel?: () => void
 	className?: string
 	showManualVerification?: boolean
@@ -84,6 +87,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			data,
 			onPaymentComplete,
 			onPaymentFailed,
+			onSkipPayment,
 			onCancel,
 			className,
 			showManualVerification = false,
@@ -382,6 +386,28 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 		}, [manualPreimage, invoice, handlePaymentSuccess])
 
 		/**
+		 * Handle skip payment
+		 * Allows user to skip this invoice and continue with checkout
+		 */
+		const handleSkipPayment = useCallback(() => {
+			console.log('⏭️ Skipping payment:', {
+				invoiceId: data.invoiceId,
+				recipientName: data.recipientName || 'Unknown',
+				amount: data.amount,
+			})
+
+			// Stop monitoring
+			if (paymentMonitoring) {
+				paymentMonitoring()
+				setPaymentMonitoring(null)
+			}
+
+			setIsPaymentInProgress(false)
+			onSkipPayment?.()
+			toast.info('Payment skipped - you can pay this later')
+		}, [data.invoiceId, data.recipientName, data.amount, paymentMonitoring, onSkipPayment])
+
+		/**
 		 * Expose ref interface for programmatic control
 		 */
 		useImperativeHandle(
@@ -389,8 +415,9 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			() => ({
 				triggerNwcPayment: handleNwcPayment,
 				isReady: () => !!invoice && capabilities.hasNwc && !isPaymentInProgress,
+				skipPayment: handleSkipPayment,
 			}),
-			[handleNwcPayment, invoice, capabilities.hasNwc, isPaymentInProgress],
+			[handleNwcPayment, handleSkipPayment, invoice, capabilities.hasNwc, isPaymentInProgress],
 		)
 
 		/**
@@ -478,6 +505,23 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 							<div className="flex items-center justify-center py-8">
 								<Loader2 className="h-8 w-8 animate-spin" />
 								<span className="ml-2">{isGeneratingInvoice ? 'Generating invoice...' : 'Processing payment...'}</span>
+							</div>
+						)}
+
+						{/* Error state - Failed to generate invoice */}
+						{!invoice && !isGeneratingInvoice && !isPaymentInProgress && (
+							<div className="space-y-4 py-4">
+								<div className="text-center text-amber-600">
+									<p className="font-medium">Unable to generate Lightning invoice</p>
+									<p className="text-sm text-gray-600 mt-1">
+										The recipient may not have Lightning configured. You can skip this payment and pay directly later.
+									</p>
+								</div>
+								{onSkipPayment && (
+									<Button onClick={handleSkipPayment} variant="secondary" className="w-full">
+										Skip Payment (Pay Later)
+									</Button>
+								)}
 							</div>
 						)}
 
@@ -592,6 +636,13 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 											</Button>
 										</div>
 									</div>
+								)}
+
+								{/* Pay Later / Skip button */}
+								{onSkipPayment && (
+									<Button onClick={handleSkipPayment} variant="tertiary" className="w-full">
+										Pay Later
+									</Button>
 								)}
 
 								{/* Cancel button */}

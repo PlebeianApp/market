@@ -831,7 +831,7 @@ export interface LightningInvoiceData {
 		amount: number
 		price: number
 	}>
-	status: 'pending' | 'processing' | 'paid' | 'expired' | 'failed'
+	status: 'pending' | 'processing' | 'paid' | 'expired' | 'failed' | 'skipped'
 	invoiceType?: 'seller' | 'v4v'
 	originalSellerPubkey?: string
 }
