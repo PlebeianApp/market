@@ -11,6 +11,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { useUpdateProfileMutation } from '@/publish/profiles'
 import { useQuery } from '@tanstack/react-query'
 import { profileByIdentifierQueryOptions } from '@/queries/profiles'
+import { useRichUserPaymentDetails } from '@/queries/payment'
+import { PAYMENT_DETAILS_METHOD } from '@/lib/constants'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 
@@ -30,6 +32,9 @@ function ProfileComponent() {
 		...profileByIdentifierQueryOptions(pubkey || ''),
 		enabled: !!pubkey,
 	})
+
+	// Fetch payment details to get lightning address
+	const { data: paymentDetails, refetch: refetchPaymentDetails } = useRichUserPaymentDetails(pubkey)
 
 	// Extract profile from the query result
 	const fetchedProfile = fetchedData?.profile
@@ -53,6 +58,23 @@ function ProfileComponent() {
 	const updateProfileMutation = useUpdateProfileMutation()
 	const isLoading = isLoadingProfile || updateProfileMutation.isPending
 
+	// Debug logging
+	console.log('🔍 Payment details:', paymentDetails)
+	console.log('🔍 Payment method constant:', PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK)
+	
+	// More detailed debugging
+	if (paymentDetails && paymentDetails.length > 0) {
+		paymentDetails.forEach((pd, index) => {
+			console.log(`🔍 Payment detail ${index}:`, {
+				id: pd.id,
+				paymentMethod: pd.paymentMethod,
+				paymentDetail: pd.paymentDetail,
+				scope: pd.scope,
+				isDefault: pd.isDefault
+			})
+		})
+	}
+
 	// Update local state when fetched profile changes
 	useEffect(() => {
 		if (fetchedProfile) {
@@ -70,17 +92,44 @@ function ProfileComponent() {
 
 			// Update form data with fetched profile
 			// Handle both snake_case (from kind 0 metadata) and camelCase field formats
+			const profileLightningAddress = fetchedProfile.lud16 || fetchedProfile.lud06
+			const lightningAddressToUse = profileLightningAddress || ''
+
 			setFormData({
 				name: fetchedProfile.name || '',
 				displayName: fetchedProfile.displayName || (fetchedProfile as any).display_name || '',
 				about: fetchedProfile.about || '',
 				nip05: fetchedProfile.nip05 || '',
-				lud16: fetchedProfile.lud16 || '',
-				lud06: fetchedProfile.lud06 || '',
+				lud16: lightningAddressToUse,
+				lud06: '', // Keep lud06 empty if we're using payment details
 				website: fetchedProfile.website || '',
 			})
 		}
 	}, [fetchedProfile])
+
+	// Update lightning address when payment details change
+	useEffect(() => {
+		if (paymentDetails && fetchedProfile) {
+			const lightningAddress = paymentDetails.find(
+				(pd) => pd.paymentMethod === PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK && pd.paymentDetail
+			)?.paymentDetail
+			
+			if (lightningAddress) {
+				console.log('✅ Payment details changed, updating lightning address:', lightningAddress)
+				console.log('✅ Current form data lud16:', formData.lud16)
+				console.log('✅ Profile lud16:', fetchedProfile.lud16)
+				console.log('✅ Profile lud06:', fetchedProfile.lud06)
+				
+				// Always update if payment details have a lightning address and profile doesn't have one
+				if (!fetchedProfile.lud16 && !fetchedProfile.lud06) {
+					setFormData((prev) => ({
+						...prev,
+						lud16: lightningAddress,
+					}))
+				}
+			}
+		}
+	}, [paymentDetails, fetchedProfile, formData.lud16])
 
 	// Handle form submission
 	const handleSave = async () => {
@@ -277,6 +326,50 @@ function ProfileComponent() {
 									onChange={(e) => setFormData((prev) => ({ ...prev, lud16: e.target.value }))}
 									placeholder="you@walletprovider.com"
 								/>
+								{paymentDetails?.find(pd => pd.paymentMethod === PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK && pd.paymentDetail) && !fetchedProfile?.lud16 && !fetchedProfile?.lud06 && (
+									<p className="text-sm text-blue-600">
+										✨ Pre-populate from your payment details if you set with Receive Payments
+									</p>
+								)}
+								{/* Debug buttons */}
+								<div className="flex gap-2 mt-2">
+									<Button
+										type="button"
+										variant="outline"
+										size="sm"
+										onClick={() => {
+											console.log('🔄 Refreshing payment details...')
+											refetchPaymentDetails()
+										}}
+									>
+										Refresh Payment Details
+									</Button>
+									<Button
+										type="button"
+										variant="outline"
+										size="sm"
+										onClick={() => {
+											console.log('🔍 Current state:')
+											console.log('Form data:', formData)
+											console.log('Payment details:', paymentDetails)
+											console.log('Fetched profile:', fetchedProfile)
+											
+											const lightningAddress = paymentDetails?.find(
+												(pd) => pd.paymentMethod === PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK && pd.paymentDetail
+											)?.paymentDetail
+											
+											if (lightningAddress) {
+												console.log('🔧 Manually updating lightning address to:', lightningAddress)
+												setFormData((prev) => ({
+													...prev,
+													lud16: lightningAddress,
+												}))
+											}
+										}}
+									>
+										Force Update
+									</Button>
+								</div>
 							</div>
 
 							<div className="space-y-2">

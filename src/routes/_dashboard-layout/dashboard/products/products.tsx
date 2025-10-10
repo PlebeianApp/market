@@ -1,15 +1,17 @@
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
 import { Button } from '@/components/ui/button'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { authStore } from '@/lib/stores/auth'
 import { productFormActions } from '@/lib/stores/product'
 import { useDeleteProductMutation } from '@/publish/products'
 import { getProductId, getProductImages, getProductTitle, productsByPubkeyQueryOptions } from '@/queries/products'
+import { profileByIdentifierQueryOptions } from '@/queries/profiles'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Outlet, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { PackageIcon, Trash, EyeOff, Clock, Eye } from 'lucide-react'
+import { PackageIcon, Trash, EyeOff, Clock, Eye, AlertTriangle } from 'lucide-react'
 import { useState } from 'react'
 
 // Component to show basic product information
@@ -159,6 +161,22 @@ function ProductsOverviewComponent() {
 	const [expandedProduct, setExpandedProduct] = useState<string | null>(null)
 	useDashboardTitle('Products')
 
+	// Fetch user profile to check for lightning address
+	const { data: profileData } = useQuery({
+		...profileByIdentifierQueryOptions(user?.pubkey ?? ''),
+		enabled: !!user?.pubkey && isAuthenticated,
+	})
+
+	// Check if user has lightning address
+	const hasLightningAddress = profileData?.profile?.lud16 || profileData?.profile?.lud06
+
+	// Handler to navigate to profile section
+	const handleNavigateToProfile = () => {
+		navigate({
+			to: '/dashboard/account/profile',
+		})
+	}
+
 	// Auto-animate for smooth list transitions
 	const [animationParent] = (() => {
 		try {
@@ -239,17 +257,33 @@ function ProductsOverviewComponent() {
 				<Button
 					onClick={handleAddProductClick}
 					data-testid="add-product-button"
-					className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+					disabled={!hasLightningAddress}
+					className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed"
 				>
 					<span className="i-product w-5 h-5" /> Add A Product
 				</Button>
 			</div>
+			
+			{/* Lightning address warning snackbar */}
+			{!hasLightningAddress && (
+				<div className="px-4 lg:px-6 py-3 bg-white border-b">
+					<Alert className="bg-orange-50 border-orange-200 text-orange-800 cursor-pointer hover:bg-orange-100 transition-colors" onClick={handleNavigateToProfile}>
+						<AlertTriangle className="h-4 w-4" />
+						<AlertDescription>
+							<p>A Lightning address is required</p>
+							<br />
+							<p>Click here to edit your profile and add your Lightning Address (LUD16)</p>
+						</AlertDescription>
+					</Alert>
+				</div>
+			)}
 			<div className="space-y-6 p-4 lg:p-6">
 				<div className="lg:hidden">
 					<Button
 						onClick={handleAddProductClick}
 						data-testid="add-product-button-mobile"
-						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+						disabled={!hasLightningAddress}
+						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
 					>
 						<span className="i-product w-5 h-5" /> Add A Product
 					</Button>
