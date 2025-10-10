@@ -32,28 +32,44 @@ export const fetchProfileByNip05 = async (nip05: string): Promise<NDKUserProfile
 }
 
 export const fetchProfileByIdentifier = async (identifier: string): Promise<{ profile: NDKUserProfile | null; user: NDKUser | null }> => {
+	console.log('🔄 Profile Query: Starting profile fetch for identifier:', identifier)
 	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
+	if (!ndk) {
+		console.error('❌ Profile Query: NDK not initialized')
+		throw new Error('NDK not initialized')
+	}
 
 	try {
+		let user: NDKUser | null = null
+		let profile: NDKUserProfile | null = null
+
 		if (identifier.includes('@')) {
-			const user = await ndk.getUserFromNip05(identifier)
-			if (!user) return { profile: null, user: null }
-			const profile = await user.fetchProfile()
-			return { profile, user }
+			console.log('🔍 Profile Query: Fetching user by NIP-05:', identifier)
+			user = await ndk.getUserFromNip05(identifier)
+			if (!user) {
+				console.warn('⚠️ Profile Query: No user found for NIP-05:', identifier)
+				return { profile: null, user: null }
+			}
+			profile = await user.fetchProfile()
+		} else if (identifier.startsWith('npub')) {
+			console.log('🔍 Profile Query: Fetching user by npub:', identifier)
+			user = ndk.getUser({ npub: identifier })
+			profile = await user.fetchProfile()
+		} else {
+			console.log('🔍 Profile Query: Fetching user by hex pubkey:', identifier)
+			user = ndk.getUser({ hexpubkey: identifier })
+			profile = await user.fetchProfile()
 		}
 
-		if (identifier.startsWith('npub')) {
-			const user = ndk.getUser({ npub: identifier })
-			const profile = await user.fetchProfile()
-			return { profile, user }
+		if (profile) {
+			console.log('✅ Profile Query: Successfully fetched profile for:', identifier, 'Profile:', profile)
+		} else {
+			console.warn('⚠️ Profile Query: No profile data found for:', identifier)
 		}
 
-		const user = ndk.getUser({ hexpubkey: identifier })
-		const profile = await user.fetchProfile()
 		return { profile, user }
 	} catch (e) {
-		console.error('Failed to fetch profile with identifier:', e)
+		console.error('❌ Profile Query: Failed to fetch profile with identifier:', identifier, 'Error:', e)
 		return { profile: null, user: null }
 	}
 }

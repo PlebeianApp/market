@@ -2,6 +2,8 @@ import { NDKNip07Signer, NDKNip46Signer, NDKPrivateKeySigner, NDKUser, NDKEvent 
 import { Store } from '@tanstack/store'
 import { ndkActions } from './ndk'
 import { fetchProductsByPubkey } from '@/queries/products'
+import { fetchProfileByIdentifier, profileQueryOptions } from '@/queries/profiles'
+import { nip19 } from 'nostr-tools'
 
 export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
 export const NOSTR_LOCAL_SIGNER_KEY = 'nostr_local_signer_key'
@@ -61,8 +63,11 @@ export const authActions = {
 			}
 
 			const [, key] = encryptedPrivateKey.split(':')
-			await authActions.loginWithPrivateKey(key)
+			const user = await authActions.loginWithPrivateKey(key)
 			authStore.setState((state) => ({ ...state, needsDecryptionPassword: false }))
+			
+			// Profile preloading is already handled in loginWithPrivateKey
+			return user
 		} catch (error) {
 			throw error
 		} finally {
@@ -87,6 +92,9 @@ export const authActions = {
 				user,
 				isAuthenticated: true,
 			}))
+
+			// Preload user profile after successful authentication
+			authActions.preloadUserProfile(user)
 
 			return user
 		} catch (error) {
@@ -117,6 +125,9 @@ export const authActions = {
 				user,
 				isAuthenticated: true,
 			}))
+
+			// Preload user profile after successful authentication
+			authActions.preloadUserProfile(user)
 
 			return user
 		} catch (error) {
@@ -149,6 +160,9 @@ export const authActions = {
 				user,
 				isAuthenticated: true,
 			}))
+
+			// Preload user profile after successful authentication
+			authActions.preloadUserProfile(user)
 
 			return user
 		} catch (error) {
@@ -183,6 +197,34 @@ export const authActions = {
 		} catch (error) {
 			console.error('Failed to check user products:', error)
 			return false
+		}
+	},
+
+	preloadUserProfile: async (user: NDKUser): Promise<void> => {
+		try {
+			console.log('🔄 Auth Store: Attempting to preload user profile for:', user.pubkey)
+			const result = await fetchProfileByIdentifier(user.pubkey)
+			if (result?.profile) {
+				console.log('✅ Auth Store: Profile preloaded successfully for:', user.pubkey, 'Profile data:', result.profile)
+			} else {
+				console.warn('⚠️ Auth Store: Profile preload returned no data for:', user.pubkey)
+			}
+		} catch (error) {
+			console.error('❌ Auth Store: Failed to preload user profile for:', user.pubkey, 'Error:', error)
+		}
+	},
+
+	preloadUserProfileWithQueryClient: async (user: NDKUser, queryClient: any): Promise<void> => {
+		try {
+			console.log('🔄 Auth Store: Preloading user profile with QueryClient for:', user.pubkey)
+			const npub = nip19.npubEncode(user.pubkey)
+			
+			// Prefetch the profile query to populate the cache
+			await queryClient.prefetchQuery(profileQueryOptions(npub))
+			
+			console.log('✅ Auth Store: Profile query prefetched successfully for:', user.pubkey)
+		} catch (error) {
+			console.error('❌ Auth Store: Failed to prefetch profile query for:', user.pubkey, 'Error:', error)
 		}
 	},
 }

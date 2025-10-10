@@ -1,14 +1,14 @@
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { authStore } from '@/lib/stores/auth'
-import { ndkActions } from '@/lib/stores/ndk'
+import { authStore, authActions } from '@/lib/stores/auth'
 import { cn } from '@/lib/utils'
-import type { NDKUserProfile } from '@nostr-dev-kit/ndk'
+import { profileByIdentifierQueryOptions } from '@/queries/profiles'
 import { useStore } from '@tanstack/react-store'
 import { useNavigate, useLocation } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 
 interface ProfileProps {
 	compact?: boolean
@@ -16,46 +16,29 @@ interface ProfileProps {
 
 export function Profile({ compact = false }: ProfileProps) {
 	const authState = useStore(authStore)
-	const [profile, setProfile] = useState<NDKUserProfile | null>(null)
-	const [isLoading, setIsLoading] = useState(true)
 	const navigate = useNavigate()
 	const location = useLocation()
 
 	// Check if we're on the user's own profile page
 	const isOnOwnProfile = authState.user?.pubkey && location.pathname === `/profile/${authState.user.pubkey}`
 
+	// Use TanStack Query for profile data
+	const { data: profileData, isLoading } = useQuery({
+		...profileByIdentifierQueryOptions(authState.user?.pubkey || ''),
+		enabled: !!authState.user?.pubkey,
+	})
+
+	const profile = profileData?.profile
+
+	// Trigger profile preloading when component renders and user is authenticated
 	useEffect(() => {
-		if (!authState.user?.pubkey) {
-			setIsLoading(false)
-			return
+		if (authState.isAuthenticated && authState.user && !profile) {
+			console.log('🔄 Profile Component: Triggering profile preload for:', authState.user.pubkey)
+			authActions.preloadUserProfile(authState.user).catch((error) => {
+				console.error('❌ Profile Component: Profile preload failed for:', authState.user.pubkey, 'Error:', error)
+			})
 		}
-
-		const fetchProfile = async () => {
-			const pubkey = authState.user?.pubkey
-			if (!pubkey) {
-				setIsLoading(false)
-				return
-			}
-
-			try {
-				const ndk = ndkActions.getNDK()
-				if (!ndk) {
-					throw new Error('NDK not initialized')
-				}
-
-				const user = ndk.getUser({ pubkey })
-				const profilePromise = await user.fetchProfile()
-
-				setProfile(profilePromise)
-			} catch (error) {
-				console.error('Error fetching profile:', error)
-			} finally {
-				setIsLoading(false)
-			}
-		}
-
-		fetchProfile()
-	}, [authState.user?.pubkey])
+	}, [authState.isAuthenticated, authState.user, profile])
 
 	const displayName = profile?.name || 'Local User'
 
