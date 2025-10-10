@@ -263,11 +263,14 @@ function ProductsOverviewComponent() {
 					<span className="i-product w-5 h-5" /> Add A Product
 				</Button>
 			</div>
-			
+
 			{/* Lightning address warning snackbar */}
 			{!hasLightningAddress && (
 				<div className="px-4 lg:px-6 py-3 bg-white border-b">
-					<Alert className="bg-orange-50 border-orange-200 text-orange-800 cursor-pointer hover:bg-orange-100 transition-colors" onClick={handleNavigateToProfile}>
+					<Alert
+						className="bg-orange-50 border-orange-200 text-orange-800 cursor-pointer hover:bg-orange-100 transition-colors"
+						onClick={handleNavigateToProfile}
+					>
 						<AlertTriangle className="h-4 w-4" />
 						<AlertDescription>
 							<p>A Lightning address is required</p>
