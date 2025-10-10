@@ -1,15 +1,15 @@
 import { Button } from '@/components/ui/button'
-import { Check, Receipt, MapPin } from 'lucide-react'
-import type { CheckoutFormData } from './ShippingAddressForm'
-import type { LightningInvoiceData } from '@/queries/payment'
 import { cartStore } from '@/lib/stores/cart'
+import { getShippingEvent, getShippingPickupAddressString, getShippingService } from '@/queries/shipping'
 import { useStore } from '@tanstack/react-store'
-import { getShippingEvent, getShippingService, getShippingPickupAddressString } from '@/queries/shipping'
+import { Check, MapPin, SkipForward } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import type { PaymentInvoiceData } from './PaymentContent'
+import type { CheckoutFormData } from './ShippingAddressForm'
 
 interface OrderFinalizeComponentProps {
 	shippingData: CheckoutFormData | null
-	invoices: LightningInvoiceData[]
+	invoices: PaymentInvoiceData[]
 	totalInSats: number
 	onNewOrder: () => void
 	onViewOrders?: () => void
@@ -79,15 +79,17 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 	}, [cart.products])
 
 	const allInvoicesPaid = invoices.every((invoice) => invoice.status === 'paid')
+	const allInvoicesCompleted = invoices.every((invoice) => invoice.status === 'paid' || invoice.status === 'skipped')
 	const paidInvoices = invoices.filter((invoice) => invoice.status === 'paid')
+	const skippedInvoices = invoices.filter((invoice) => invoice.status === 'skipped')
 	const pendingInvoices = invoices.filter((invoice) => invoice.status === 'pending')
-	const failedInvoices = invoices.filter((invoice) => invoice.status === 'failed')
+	const expiredInvoices = invoices.filter((invoice) => invoice.status === 'expired')
 
 	// If this is the final summary (after payments), show completion state
 	const isPostPayment = invoices.length > 0 && invoices.some((invoice) => invoice.status !== 'pending')
 
 	return (
-		<div className="space-y-6Can we">
+		<div className="space-y-6">
 			{/* Payment Status - only show if invoices exist */}
 			{isPostPayment && (
 				<div className="space-y-3">
@@ -101,6 +103,21 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 								Your orders have been sent to the merchants and you should receive confirmation shortly.
 							</p>
 						</div>
+					) : allInvoicesCompleted ? (
+						<div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+							<div className="flex items-center gap-2">
+								<Check className="w-5 h-5 text-blue-600" />
+								<span className="font-medium text-blue-800">Checkout completed!</span>
+							</div>
+							<p className="text-sm text-blue-700 mt-1">
+								{skippedInvoices.length > 0 && (
+									<>
+										You have {skippedInvoices.length} payment{skippedInvoices.length !== 1 ? 's' : ''} to complete later. You can find{' '}
+										{skippedInvoices.length === 1 ? 'it' : 'them'} in your order history.
+									</>
+								)}
+							</p>
+						</div>
 					) : (
 						<div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
 							<p className="text-yellow-800 font-medium">Payment Status:</p>
@@ -110,14 +127,19 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 										✓ {paidInvoices.length} payment{paidInvoices.length !== 1 ? 's' : ''} completed
 									</li>
 								)}
+								{skippedInvoices.length > 0 && (
+									<li>
+										⏭️ {skippedInvoices.length} payment{skippedInvoices.length !== 1 ? 's' : ''} skipped
+									</li>
+								)}
 								{pendingInvoices.length > 0 && (
 									<li>
 										⏳ {pendingInvoices.length} payment{pendingInvoices.length !== 1 ? 's' : ''} pending
 									</li>
 								)}
-								{failedInvoices.length > 0 && (
+								{expiredInvoices.length > 0 && (
 									<li>
-										❌ {failedInvoices.length} payment{failedInvoices.length !== 1 ? 's' : ''} failed
+										❌ {expiredInvoices.length} payment{expiredInvoices.length !== 1 ? 's' : ''} expired
 									</li>
 								)}
 							</ul>
@@ -193,11 +215,11 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 						{invoices.map((invoice, index) => (
 							<div key={invoice.id} className="flex justify-between items-center">
 								<div className="flex items-center gap-2">
-									<span className="text-sm">{invoice.sellerName}</span>
+									<span className="text-sm">{invoice.recipientName}</span>
 									{invoice.status === 'paid' && <Check className="w-4 h-4 text-green-600" />}
+									{invoice.status === 'skipped' && <SkipForward className="w-4 h-4 text-orange-600" />}
 									{invoice.status === 'pending' && <span className="w-4 h-4 rounded-full bg-yellow-400 animate-pulse"></span>}
-									{invoice.status === 'failed' && <span className="w-4 h-4 rounded-full bg-red-400"></span>}
-									{invoice.status === 'processing' && <span className="w-4 h-4 rounded-full bg-blue-400 animate-pulse"></span>}
+									{invoice.status === 'expired' && <span className="w-4 h-4 rounded-full bg-red-400"></span>}
 								</div>
 								<div className="text-right">
 									<span className="text-sm font-medium">{formatSats(invoice.amount)} sats</span>
@@ -209,38 +231,15 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 				</div>
 			)}
 
-			{/* Order Items - detailed breakdown */}
-			{invoices.length > 0 && (
-				<div className="bg-gray-50 rounded-lg p-4">
-					<h3 className="font-medium text-gray-900 mb-3">Order Items</h3>
-					<div className="space-y-3">
-						{invoices.map((invoice) => (
-							<div key={invoice.id}>
-								<div className="font-medium text-sm text-gray-800 mb-2">From {invoice.sellerName}:</div>
-								<div className="space-y-1 ml-4">
-									{invoice.items?.map((item) => (
-										<div key={item.productId} className="flex justify-between text-sm">
-											<span className="text-gray-600">
-												{item.name} x{item.amount}
-											</span>
-											<span className="font-medium">{formatSats(item.price)} sats</span>
-										</div>
-									)) || <div className="text-sm text-gray-500">No items details available</div>}
-								</div>
-							</div>
-						))}
-					</div>
-				</div>
-			)}
-
 			{/* Next Steps - only for completed orders */}
-			{isPostPayment && allInvoicesPaid && (
+			{isPostPayment && allInvoicesCompleted && (
 				<div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
 					<h4 className="font-medium text-blue-900 mb-2">What's Next?</h4>
 					<ul className="text-sm text-blue-800 space-y-1">
-						<li>• Merchants will be notified of your payment</li>
-						<li>• You'll receive order confirmations via Nostr messages</li>
-						<li>• Tracking information will be shared when items ship</li>
+						{paidInvoices.length > 0 && <li>• Merchants will be notified of your payment</li>}
+						{paidInvoices.length > 0 && <li>• You'll receive order confirmations via Nostr messages</li>}
+						{paidInvoices.length > 0 && <li>• Tracking information will be shared when items ship</li>}
+						{skippedInvoices.length > 0 && <li>• Complete pending payments from your order history</li>}
 						<li>• Check your messages for updates from sellers</li>
 					</ul>
 				</div>
@@ -249,17 +248,17 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 			{/* Action Buttons - Only show post-payment buttons */}
 			{isPostPayment && (
 				<div className="space-y-3 pt-4">
-					{allInvoicesPaid && onViewOrders && (
+					{allInvoicesCompleted && onViewOrders && (
 						<Button onClick={onViewOrders} className="w-full btn-black">
 							View Your Purchases
 						</Button>
 					)}
 
-					<Button onClick={onNewOrder} className={`w-full ${allInvoicesPaid ? 'hover-transparent-black' : 'btn-black'}`}>
-						{allInvoicesPaid ? 'Continue Shopping' : 'Back to Store'}
+					<Button onClick={onNewOrder} className={`w-full ${allInvoicesCompleted ? 'hover-transparent-black' : 'btn-black'}`}>
+						{allInvoicesCompleted ? 'Continue Shopping' : 'Back to Store'}
 					</Button>
 
-					{allInvoicesPaid && (
+					{allInvoicesCompleted && (
 						<Button variant="outline" className="w-full" onClick={() => window.print()}>
 							Print Order Summary
 						</Button>

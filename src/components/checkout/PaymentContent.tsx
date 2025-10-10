@@ -20,7 +20,7 @@ export interface PaymentInvoiceData {
 	amount: number
 	description: string
 	recipientName: string
-	status: 'pending' | 'paid' | 'expired'
+	status: 'pending' | 'paid' | 'expired' | 'skipped'
 	expiresAt?: number
 	createdAt: number
 	lightningAddress?: string | null
@@ -37,15 +37,19 @@ interface PaymentContentProps {
 	currentIndex?: number
 	onPaymentComplete?: (invoiceId: string, preimage: string) => void
 	onPaymentFailed?: (invoiceId: string, error: string) => void
+	onSkipPayment?: (invoiceId: string) => void
 	showNavigation?: boolean
 	nwcEnabled?: boolean
 	onNavigate?: (index: number) => void
 }
 
 export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>(
-	({ invoices, currentIndex = 0, onPaymentComplete, onPaymentFailed, showNavigation = true, nwcEnabled = true, onNavigate }, ref) => {
+	(
+		{ invoices, currentIndex = 0, onPaymentComplete, onPaymentFailed, onSkipPayment, showNavigation = true, nwcEnabled = true, onNavigate },
+		ref,
+	) => {
 		const [activeIndex, setActiveIndex] = useState(currentIndex)
-		const [invoiceStates, setInvoiceStates] = useState<Record<string, 'pending' | 'paid' | 'failed'>>({})
+		const [invoiceStates, setInvoiceStates] = useState<Record<string, 'pending' | 'paid' | 'failed' | 'skipped'>>({})
 		const ndkState = useStore(ndkStore)
 
 		// Refs to control all payment processors
@@ -72,7 +76,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 			}
 		}, [invoices.length, activeIndex])
 
-		const updateInvoiceState = (invoiceId: string, state: 'pending' | 'paid' | 'failed') => {
+		const updateInvoiceState = (invoiceId: string, state: 'pending' | 'paid' | 'failed' | 'skipped') => {
 			setInvoiceStates((prev) => ({
 				...prev,
 				[invoiceId]: state,
@@ -115,6 +119,28 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 			[currentInvoice, onPaymentFailed],
 		)
 
+		const handleSkipPayment = useCallback(() => {
+			const invoiceId = currentInvoice.id
+			console.log(`⏭️ Skipping payment for invoice:`, invoiceId)
+
+			// Mark as skipped
+			updateInvoiceState(invoiceId, 'skipped')
+			onSkipPayment?.(invoiceId)
+
+			// Auto-advance to the next invoice after a short delay
+			setTimeout(() => {
+				setActiveIndex((prev) => {
+					const next = prev + 1
+					if (next < invoices.length) {
+						onNavigate?.(next)
+						return next
+					}
+					// If this was the last invoice, parent component will handle completion
+					return prev
+				})
+			}, 500)
+		}, [currentInvoice, onSkipPayment, onNavigate, invoices.length])
+
 		// Memoize payment data for all invoices
 		const allPaymentData = useMemo(() => {
 			console.log('🔄 Memoizing payment data for', invoices.length, 'invoices')
@@ -141,6 +167,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 					data: {
 						amount: invoice.amount,
 						description: invoice.description,
+						recipientName: invoice.recipientName,
 						// For zaps, let NDKZapper generate the invoice
 						// For merchant payments, use the pre-generated bolt11
 						bolt11: isZap ? undefined : invoice.bolt11 || undefined,
@@ -210,11 +237,14 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 						<div className="flex justify-between text-sm">
 							<span>Payment Progress</span>
 							<span>
-								{Object.values(invoiceStates).filter((state) => state === 'paid').length} of {invoices.length} completed
+								{Object.values(invoiceStates).filter((state) => state === 'paid' || state === 'skipped').length} of {invoices.length}{' '}
+								completed
 							</span>
 						</div>
 						<Progress
-							value={(Object.values(invoiceStates).filter((state) => state === 'paid').length / invoices.length) * 100}
+							value={
+								(Object.values(invoiceStates).filter((state) => state === 'paid' || state === 'skipped').length / invoices.length) * 100
+							}
 							className="w-full"
 						/>
 					</div>
@@ -250,7 +280,8 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 					<div
 						key={invoiceId}
 						style={{
-							display: index === activeIndex && invoiceStates[invoiceId] !== 'paid' ? 'block' : 'none',
+							display:
+								index === activeIndex && invoiceStates[invoiceId] !== 'paid' && invoiceStates[invoiceId] !== 'skipped' ? 'block' : 'none',
 						}}
 					>
 						<LightningPaymentProcessor
@@ -260,6 +291,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 							data={data}
 							onPaymentComplete={handlePaymentComplete}
 							onPaymentFailed={handlePaymentFailed}
+							onSkipPayment={handleSkipPayment}
 							className="shadow-none border-0"
 							showManualVerification={true}
 							active={index === activeIndex} // Only the current processor is active
@@ -267,6 +299,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 							currentIndex={activeIndex}
 							totalInvoices={invoices.length}
 							onNavigate={handleNavigate}
+							skippable={true}
 						/>
 					</div>
 				))}

@@ -86,6 +86,7 @@ export const v4vKeys = {
 	all: ['v4v'] as const,
 	userShares: (pubkey: string) => [...v4vKeys.all, 'shares', pubkey] as const,
 	publishShare: () => [...v4vKeys.all, 'publish'] as const,
+	merchants: () => [...v4vKeys.all, 'merchants'] as const,
 } as const
 
 export const walletKeys = {

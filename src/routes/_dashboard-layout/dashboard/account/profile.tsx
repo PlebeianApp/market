@@ -107,6 +107,11 @@ function ProfileComponent() {
 		}
 	}
 
+	// Check if mandatory fields are filled
+	const areMandatoryFieldsFilled = () => {
+		return formData.name.trim() !== '' && formData.displayName.trim() !== ''
+	}
+
 	// Check if there are any changes
 	const hasChanges = () => {
 		// Don't show changes until original profile is loaded
@@ -135,6 +140,11 @@ function ProfileComponent() {
 	}
 
 	const changesExist = hasChanges()
+	const mandatoryFieldsFilled = areMandatoryFieldsFilled()
+
+	// Allow saving if mandatory fields are filled, even if no original profile exists yet
+	// This handles the case where user is creating a new profile
+	const canSave = mandatoryFieldsFilled && (changesExist || Object.keys(originalProfile).length === 0)
 
 	const handleHeaderImageSave = (data: { url: string; index: number }) => {
 		setProfile((prev) => ({ ...prev, banner: data.url }))
@@ -165,12 +175,12 @@ function ProfileComponent() {
 				<h1 className="text-2xl font-bold">Profile</h1>
 				<Button
 					type="button"
-					disabled={isLoading || !changesExist}
+					disabled={isLoading || !canSave}
 					onClick={handleSave}
 					className="btn-black flex items-center gap-2 px-4 py-2 text-sm font-semibold"
 					data-testid="profile-save-button-desktop"
 				>
-					{isLoading ? 'Saving...' : changesExist ? 'Save Changes' : 'Saved'}
+					{isLoading ? 'Saving...' : canSave ? (Object.keys(originalProfile).length === 0 ? 'Create Profile' : 'Save Changes') : 'Saved'}
 				</Button>
 			</div>
 			<div className="space-y-6 p-4 lg:p-8">
@@ -293,12 +303,18 @@ function ProfileComponent() {
 
 							<Button
 								type="button"
-								disabled={isLoading || !changesExist}
+								disabled={isLoading || !canSave}
 								className="btn-black w-full lg:hidden"
 								onClick={handleSave}
 								data-testid="profile-save-button"
 							>
-								{isLoading ? 'Saving...' : changesExist ? 'Save Changes' : 'Saved'}
+								{isLoading
+									? 'Saving...'
+									: canSave
+										? Object.keys(originalProfile).length === 0
+											? 'Create Profile'
+											: 'Save Changes'
+										: 'Saved'}
 							</Button>
 						</div>
 					</div>

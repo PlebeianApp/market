@@ -18,7 +18,7 @@ import { publishPaymentReceipt } from '@/publish/payment'
 import { useGenerateInvoiceMutation } from '@/queries/payment'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useForm } from '@tanstack/react-form'
-import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ChevronLeft, ChevronRight, Zap } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -62,10 +62,12 @@ function RouteComponent() {
 		}
 	}, [walletsInitialized, initializeWallets])
 
-	// Clear cart when checkout is complete
+	// Clear cart when component unmounts if checkout was completed
 	useEffect(() => {
-		if (currentStep === 'complete') {
-			cartActions.clear()
+		return () => {
+			if (currentStep === 'complete') {
+				cartActions.clear()
+			}
 		}
 	}, [currentStep])
 
@@ -392,14 +394,14 @@ function RouteComponent() {
 			setTimeout(() => {
 				// Use the setter function to get fresh state
 				setInvoices((currentInvoices) => {
-					const allPaid = currentInvoices.every((inv) => inv.status === 'paid')
+					const allCompleted = currentInvoices.every((inv) => inv.status === 'paid' || inv.status === 'skipped')
 
-					if (allPaid) {
+					if (allCompleted) {
 						setCurrentStep('complete')
 					} else if (currentInvoiceIndex < currentInvoices.length - 1) {
 						setCurrentInvoiceIndex((prev) => prev + 1)
 					} else {
-						// If we're at the last invoice but not all are paid, stay here
+						// If we're at the last invoice but not all are completed, stay here
 						// This can happen with failed payments
 					}
 
@@ -427,6 +429,40 @@ function RouteComponent() {
 		toast.error(`Payment failed: ${error}`)
 	}
 
+	const handleSkipPayment = (invoiceId: string) => {
+		console.log(`⏭️ Payment skipped for invoice ${invoiceId}`)
+
+		// Mark invoice as skipped to allow checkout to proceed
+		setInvoices((prev) =>
+			prev.map((invoice) => {
+				if (invoice.id === invoiceId) {
+					return {
+						...invoice,
+						status: 'skipped' as const,
+					}
+				}
+				return invoice
+			}),
+		)
+
+		toast.info('Payment skipped - you can pay this invoice later from your order history')
+
+		// Check if all invoices are now completed (paid or skipped)
+		setTimeout(() => {
+			setInvoices((currentInvoices) => {
+				const allCompleted = currentInvoices.every((inv) => inv.status === 'paid' || inv.status === 'skipped')
+
+				if (allCompleted) {
+					setCurrentStep('complete')
+				} else if (currentInvoiceIndex < currentInvoices.length - 1) {
+					setCurrentInvoiceIndex((prev) => prev + 1)
+				}
+
+				return currentInvoices // Return unchanged state
+			})
+		}, 500)
+	}
+
 	// Simplified pay all function using PaymentContent ref
 	const handlePayAllInvoices = async () => {
 		if (!nwcEnabled) {
@@ -448,10 +484,18 @@ function RouteComponent() {
 	}
 
 	const goBackToShopping = () => {
+		// Clear cart when leaving checkout after completion
+		if (currentStep === 'complete') {
+			cartActions.clear()
+		}
 		navigate({ to: '/' })
 	}
 
 	const goToOrders = () => {
+		// Clear cart when viewing orders after completion
+		if (currentStep === 'complete') {
+			cartActions.clear()
+		}
 		navigate({ to: '/dashboard/account/your-purchases' })
 	}
 
@@ -505,8 +549,8 @@ function RouteComponent() {
 		return Math.round(sats).toLocaleString()
 	}
 
-	// Redirect to home if cart is empty
-	if (isCartEmpty) {
+	// Redirect to home if cart is empty (but allow complete step to show summary)
+	if (isCartEmpty && currentStep !== 'complete') {
 		return (
 			<div className="min-h-screen bg-gray-50 flex items-center justify-center">
 				<div className="max-w-md mx-auto text-center">
@@ -721,6 +765,7 @@ function RouteComponent() {
 										currentIndex={currentInvoiceIndex}
 										onPaymentComplete={handlePaymentComplete}
 										onPaymentFailed={handlePaymentFailed}
+										onSkipPayment={handleSkipPayment}
 										showNavigation={false} // We have our own navigation above
 										nwcEnabled={nwcEnabled}
 										onNavigate={setCurrentInvoiceIndex}

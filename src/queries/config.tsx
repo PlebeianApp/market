@@ -4,6 +4,7 @@ import type { AppSettings } from '../lib/schemas/app'
 
 interface Config {
 	appRelay: string
+	nip46Relay: string
 	appSettings: AppSettings | null
 	appPublicKey: string
 	needsSetup: boolean

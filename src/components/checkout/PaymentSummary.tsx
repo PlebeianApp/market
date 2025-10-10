@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Check, Clock, Zap, Users, CreditCard } from 'lucide-react'
+import { Check, Clock, Zap, Users, CreditCard, SkipForward } from 'lucide-react'
 import type { PaymentInvoiceData } from './PaymentDialog'
 
 interface PaymentSummaryProps {
@@ -12,9 +12,11 @@ export function PaymentSummary({ invoices, currentIndex, onSelectInvoice }: Paym
 	const formatSats = (sats: number) => Math.round(sats).toLocaleString()
 
 	const paidCount = invoices.filter((inv) => inv.status === 'paid').length
+	const skippedCount = invoices.filter((inv) => inv.status === 'skipped').length
 	const totalAmount = invoices.reduce((sum, inv) => sum + inv.amount, 0)
 	const paidAmount = invoices.filter((inv) => inv.status === 'paid').reduce((sum, inv) => sum + inv.amount, 0)
-	const remainingAmount = totalAmount - paidAmount
+	const skippedAmount = invoices.filter((inv) => inv.status === 'skipped').reduce((sum, inv) => sum + inv.amount, 0)
+	const remainingAmount = totalAmount - paidAmount - skippedAmount
 
 	const currentInvoice = invoices[currentIndex]
 
@@ -32,10 +34,24 @@ export function PaymentSummary({ invoices, currentIndex, onSelectInvoice }: Paym
 							{paidCount}/{invoices.length}
 						</span>
 					</div>
+					{skippedCount > 0 && (
+						<div className="flex justify-between text-sm">
+							<span>Skipped</span>
+							<span className="font-medium">
+								{skippedCount}/{invoices.length}
+							</span>
+						</div>
+					)}
 					<div className="flex justify-between text-sm">
 						<span>Completed</span>
 						<span className="font-medium text-green-600">{formatSats(paidAmount)} sats</span>
 					</div>
+					{skippedAmount > 0 && (
+						<div className="flex justify-between text-sm">
+							<span>Skipped Amount</span>
+							<span className="font-medium text-orange-600">{formatSats(skippedAmount)} sats</span>
+						</div>
+					)}
 					<div className="flex justify-between text-sm">
 						<span>Remaining</span>
 						<span className="font-medium">{formatSats(remainingAmount)} sats</span>
@@ -63,7 +79,9 @@ export function PaymentSummary({ invoices, currentIndex, onSelectInvoice }: Paym
 										? 'border-pink-300 bg-pink-50 shadow-sm'
 										: invoice.status === 'paid'
 											? 'border-green-200 bg-green-50'
-											: 'border-gray-200 bg-white hover:bg-gray-50'
+											: invoice.status === 'skipped'
+												? 'border-orange-200 bg-orange-50'
+												: 'border-gray-200 bg-white hover:bg-gray-50'
 								}`}
 							>
 								<div className="flex items-center justify-between mb-1">
@@ -75,6 +93,7 @@ export function PaymentSummary({ invoices, currentIndex, onSelectInvoice }: Paym
 										)}
 										<span className="font-medium text-sm truncate">{invoice.recipientName}</span>
 										{invoice.status === 'paid' && <Check className="w-4 h-4 text-green-600" />}
+										{invoice.status === 'skipped' && <SkipForward className="w-4 h-4 text-orange-600" />}
 									</div>
 								</div>
 
@@ -83,6 +102,7 @@ export function PaymentSummary({ invoices, currentIndex, onSelectInvoice }: Paym
 									<div className="text-right">
 										<div className="font-medium text-sm">{formatSats(invoice.amount)} sats</div>
 										{invoice.status === 'paid' && <div className="text-xs text-green-600">Paid</div>}
+										{invoice.status === 'skipped' && <div className="text-xs text-orange-600">Skipped</div>}
 										{invoice.status === 'pending' && invoice.expiresAt && (
 											<div className="text-xs text-gray-500 flex items-center gap-1">
 												<Clock className="w-3 h-3" />
