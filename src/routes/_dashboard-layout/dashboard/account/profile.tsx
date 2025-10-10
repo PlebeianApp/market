@@ -331,19 +331,8 @@ function ProfileComponent() {
 										✨ Pre-populate from your payment details if you set with Receive Payments
 									</p>
 								)}
-								{/* Debug buttons */}
-								<div className="flex gap-2 mt-2">
-									<Button
-										type="button"
-										variant="outline"
-										size="sm"
-										onClick={() => {
-											console.log('🔄 Refreshing payment details...')
-											refetchPaymentDetails()
-										}}
-									>
-										Refresh Payment Details
-									</Button>
+								{/* Debug button */}
+								<div className="mt-2">
 									<Button
 										type="button"
 										variant="outline"
@@ -367,7 +356,7 @@ function ProfileComponent() {
 											}
 										}}
 									>
-										Force Update
+										Update from Payment Details
 									</Button>
 								</div>
 							</div>
