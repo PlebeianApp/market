@@ -68,10 +68,10 @@ function RouteComponent() {
 		const triggerProfileLoad = async () => {
 			try {
 				const queryKey = profileKeys.details(params.profileId)
-				
+
 				// Force invalidate and refetch the profile query
 				await queryClient.invalidateQueries({ queryKey })
-				
+
 				// Also try to refetch directly
 				await queryClient.fetchQuery({
 					queryKey,

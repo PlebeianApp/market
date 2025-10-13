@@ -40,7 +40,7 @@ export const fetchProfileByIdentifier = async (identifier: string): Promise<{ pr
 
 	// Check if NDK is connected to relays
 	const connectedRelays = ndk.pool?.connectedRelays() || []
-	
+
 	// If no relays are connected, try to connect
 	if (connectedRelays.length === 0) {
 		try {
@@ -72,7 +72,7 @@ export const fetchProfileByIdentifier = async (identifier: string): Promise<{ pr
 				profile = await user.fetchProfile()
 			} else {
 				user = ndk.getUser({ hexpubkey: identifier })
-				
+
 				// Check if profile is already cached
 				if (user.profile) {
 					profile = user.profile

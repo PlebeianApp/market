@@ -43,17 +43,17 @@ export function Profile({ compact = false }: ProfileProps) {
 			const triggerProfileLoad = async () => {
 				try {
 					const queryKey = profileKeys.details(authState.user!.pubkey)
-					
+
 					// Invalidate and refetch the query
 					await queryClient.invalidateQueries({ queryKey })
-					
+
 					// Also trigger a manual refetch
 					refetch()
 				} catch (error) {
 					console.error('Failed to trigger profile load:', error)
 				}
 			}
-			
+
 			triggerProfileLoad()
 		}
 	}, [authState.isAuthenticated, authState.user?.pubkey, authState.isAuthenticating, queryClient, refetch])
@@ -66,7 +66,7 @@ export function Profile({ compact = false }: ProfileProps) {
 				const queryKey = profileKeys.details(authState.user!.pubkey)
 				queryClient.invalidateQueries({ queryKey })
 			}, 100)
-			
+
 			return () => clearTimeout(timeoutId)
 		}
 	}, []) // Empty dependency array - only run on mount
