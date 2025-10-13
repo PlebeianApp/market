@@ -39,7 +39,9 @@ export const ndkActions = {
 		// const LOCAL_ONLY = false // configStore.state.config.appRelay
 
 		const appRelay = configStore.state.config.appRelay
-		const explicitRelays = LOCAL_ONLY ? ([appRelay].filter(Boolean) as string[]) : relays && relays.length > 0 ? relays : defaultRelaysUrls
+
+		// Always use default relays for profile fetching, regardless of LOCAL_ONLY setting
+		const explicitRelays = relays && relays.length > 0 ? relays : defaultRelaysUrls
 
 		const ndk = new NDK({
 			explicitRelayUrls: explicitRelays,
@@ -78,7 +80,6 @@ export const ndkActions = {
 
 			await Promise.race([connectPromise, timeoutPromise])
 			ndkStore.setState((state) => ({ ...state, isConnected: true }))
-			console.log('✅ NDK connected to relays')
 
 			// Also connect zap NDK (with timeout)
 			await ndkActions.connectZapNdk(5000)
@@ -89,7 +90,8 @@ export const ndkActions = {
 			const connectedRelays = state.ndk?.pool?.connectedRelays() || []
 			if (connectedRelays.length > 0) {
 				ndkStore.setState((state) => ({ ...state, isConnected: true }))
-				console.log(`✅ NDK partially connected to ${connectedRelays.length} relays`)
+			} else {
+				console.warn('No relays connected')
 			}
 		} finally {
 			ndkStore.setState((state) => ({ ...state, isConnecting: false }))

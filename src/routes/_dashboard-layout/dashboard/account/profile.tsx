@@ -9,10 +9,11 @@ import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import { Textarea } from '@/components/ui/textarea'
 import { useUpdateProfileMutation } from '@/publish/profiles'
-import { useQuery } from '@tanstack/react-query'
-import { profileByIdentifierQueryOptions } from '@/queries/profiles'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { profileByIdentifierQueryOptions, fetchProfileByIdentifier } from '@/queries/profiles'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
+import { profileKeys } from '@/queries/queryKeyFactory'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/profile')({
 	component: ProfileComponent,
@@ -24,12 +25,41 @@ function ProfileComponent() {
 	const isMobile = breakpoint === 'sm' || breakpoint === 'md'
 	const ndk = ndkActions.getNDK()
 	const pubkey = ndk?.activeUser?.pubkey
+	const queryClient = useQueryClient()
 
 	// Fetch profile data with Tanstack Query
-	const { data: fetchedData, isLoading: isLoadingProfile } = useQuery({
+	const {
+		data: fetchedData,
+		isLoading: isLoadingProfile,
+		refetch,
+	} = useQuery({
 		...profileByIdentifierQueryOptions(pubkey || ''),
 		enabled: !!pubkey,
 	})
+
+	// Trigger metadata loading when component mounts
+	useEffect(() => {
+		if (pubkey) {
+			// Trigger a fresh fetch of the user's metadata
+			const loadUserMetadata = async () => {
+				try {
+					const result = await fetchProfileByIdentifier(pubkey)
+					if (result?.profile) {
+						// Update the query cache with fresh data
+						const queryKey = profileKeys.details(pubkey)
+						queryClient.setQueryData(queryKey, result)
+
+						// Also trigger a refetch to ensure UI updates
+						refetch()
+					}
+				} catch (error) {
+					console.error('Failed to load metadata:', error)
+				}
+			}
+
+			loadUserMetadata()
+		}
+	}, [pubkey, queryClient, refetch])
 
 	// Extract profile from the query result
 	const fetchedProfile = fetchedData?.profile

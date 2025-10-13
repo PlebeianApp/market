@@ -17,14 +17,15 @@ import { useBlacklistSettings } from '@/queries/blacklist'
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedUsers } from '@/queries/featured'
 import { productsByPubkeyQueryOptions } from '@/queries/products'
-import { profileByIdentifierQueryOptions } from '@/queries/profiles'
+import { profileByIdentifierQueryOptions, fetchProfileByIdentifier } from '@/queries/profiles'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Edit, MessageCircle, Minus, Plus, Share2 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
+import { profileKeys } from '@/queries/queryKeyFactory'
 
 export const Route = createFileRoute('/profile/$profileId')({
 	component: RouteComponent,
@@ -36,15 +37,56 @@ function RouteComponent() {
 	const navigate = useNavigate()
 	const [animationParent] = useAutoAnimate()
 
-	const { data: profileData } = useSuspenseQuery(profileByIdentifierQueryOptions(params.profileId))
+	const {
+		data: profileData,
+		isLoading: isLoadingProfile,
+		error: profileError,
+	} = useQuery(profileByIdentifierQueryOptions(params.profileId))
 	const { profile, user } = profileData || {}
 
-	const { data: sellerProducts } = useSuspenseQuery(productsByPubkeyQueryOptions(user?.pubkey || ''))
+	// Debug logging for profile loading
+	console.log('🔄 Profile Page: Loading profile for:', params.profileId, {
+		isLoading: isLoadingProfile,
+		hasProfileData: !!profileData,
+		hasProfile: !!profile,
+		hasUser: !!user,
+		error: profileError,
+	})
+
+	const { data: sellerProducts, isLoading: isLoadingProducts } = useQuery({
+		...productsByPubkeyQueryOptions(user?.pubkey || ''),
+		enabled: !!user?.pubkey,
+	})
 
 	const [showFullAbout, setShowFullAbout] = useState(false)
 	const breakpoint = useBreakpoint()
 	const isSmallScreen = breakpoint === 'sm'
 	const queryClient = useQueryClient()
+
+	// Trigger profile metadata loading on component mount
+	useEffect(() => {
+		const triggerProfileLoad = async () => {
+			try {
+				const queryKey = profileKeys.details(params.profileId)
+				
+				// Force invalidate and refetch the profile query
+				await queryClient.invalidateQueries({ queryKey })
+				
+				// Also try to refetch directly
+				await queryClient.fetchQuery({
+					queryKey,
+					queryFn: () => fetchProfileByIdentifier(params.profileId),
+				})
+			} catch (error) {
+				console.error('Failed to trigger profile load:', error)
+			}
+		}
+
+		// Use a small delay to ensure component is fully mounted
+		const timeoutId = setTimeout(triggerProfileLoad, 100)
+
+		return () => clearTimeout(timeoutId)
+	}, [params.profileId, queryClient])
 
 	// Get app config
 	const { data: config } = useConfigQuery()
@@ -123,6 +165,54 @@ function RouteComponent() {
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : 'Failed to update featured users')
 		}
+	}
+
+	// Show loading state while profile data is being fetched
+	if (isLoadingProfile) {
+		return (
+			<div className="relative min-h-screen">
+				<Header />
+				<div className="flex items-center justify-center h-screen">
+					<div className="text-center">
+						<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+						<p className="text-white">Loading profile...</p>
+					</div>
+				</div>
+			</div>
+		)
+	}
+
+	// Handle case where profile data is not found or failed to load
+	if (!profileData && !isLoadingProfile) {
+		return (
+			<div className="relative min-h-screen">
+				<Header />
+				<div className="flex items-center justify-center h-screen">
+					<div className="text-center">
+						<div className="text-white text-xl mb-4">{profileError ? 'Failed to Load Profile' : 'Profile Not Found'}</div>
+						<p className="text-gray-400 mb-6">
+							{profileError ? 'There was an error loading this profile. Please try again.' : 'This profile could not be loaded.'}
+						</p>
+						<div className="flex gap-2 justify-center">
+							<Button
+								onClick={() => window.location.reload()}
+								variant="outline"
+								className="text-white border-white hover:bg-white hover:text-black"
+							>
+								Retry
+							</Button>
+							<Button
+								onClick={() => navigate({ to: '/' })}
+								variant="outline"
+								className="text-white border-white hover:bg-white hover:text-black"
+							>
+								Go Home
+							</Button>
+						</div>
+					</div>
+				</div>
+			</div>
+		)
 	}
 
 	return (
