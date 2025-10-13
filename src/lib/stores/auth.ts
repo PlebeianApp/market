@@ -1,6 +1,7 @@
 import { NDKNip07Signer, NDKNip46Signer, NDKPrivateKeySigner, NDKUser, NDKEvent } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { ndkActions } from './ndk'
+import { cartActions } from './cart'
 import { fetchProductsByPubkey } from '@/queries/products'
 
 export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
@@ -170,6 +171,8 @@ export const authActions = {
 		localStorage.removeItem(NOSTR_CONNECT_KEY)
 		localStorage.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_AUTO_LOGIN)
+		// Clear cart when user logs out
+		cartActions.clear()
 		authStore.setState(() => initialState)
 	},
 
