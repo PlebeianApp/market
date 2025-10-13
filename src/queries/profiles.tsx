@@ -3,6 +3,7 @@ import { type NDKUserProfile, NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { nip19 } from 'nostr-tools'
 import { profileKeys } from './queryKeyFactory'
+import { defaultRelaysUrls } from '@/lib/constants'
 
 export const fetchProfileByNpub = async (npub: string): Promise<NDKUserProfile | null> => {
 	const ndk = ndkActions.getNDK()
@@ -32,44 +33,66 @@ export const fetchProfileByNip05 = async (nip05: string): Promise<NDKUserProfile
 }
 
 export const fetchProfileByIdentifier = async (identifier: string): Promise<{ profile: NDKUserProfile | null; user: NDKUser | null }> => {
-	console.log('🔄 Profile Query: Starting profile fetch for identifier:', identifier)
 	const ndk = ndkActions.getNDK()
 	if (!ndk) {
-		console.error('❌ Profile Query: NDK not initialized')
 		throw new Error('NDK not initialized')
+	}
+
+	// Check if NDK is connected to relays
+	const connectedRelays = ndk.pool?.connectedRelays() || []
+	
+	// If no relays are connected, try to connect
+	if (connectedRelays.length === 0) {
+		try {
+			ndkActions.initialize(defaultRelaysUrls)
+			await ndkActions.connect()
+		} catch (error) {
+			console.error('Failed to connect NDK:', error)
+		}
 	}
 
 	try {
 		let user: NDKUser | null = null
 		let profile: NDKUserProfile | null = null
 
-		if (identifier.includes('@')) {
-			console.log('🔍 Profile Query: Fetching user by NIP-05:', identifier)
-			user = await ndk.getUserFromNip05(identifier)
-			if (!user) {
-				console.warn('⚠️ Profile Query: No user found for NIP-05:', identifier)
-				return { profile: null, user: null }
+		// Add timeout to prevent hanging
+		const timeoutPromise = new Promise<never>((_, reject) => {
+			setTimeout(() => reject(new Error('Profile fetch timeout after 10 seconds')), 10000)
+		})
+
+		const fetchProfile = async () => {
+			if (identifier.includes('@')) {
+				user = await ndk.getUserFromNip05(identifier)
+				if (!user) {
+					return { profile: null, user: null }
+				}
+				profile = await user.fetchProfile()
+			} else if (identifier.startsWith('npub')) {
+				user = ndk.getUser({ npub: identifier })
+				profile = await user.fetchProfile()
+			} else {
+				user = ndk.getUser({ hexpubkey: identifier })
+				
+				// Check if profile is already cached
+				if (user.profile) {
+					profile = user.profile
+				} else {
+					profile = await user.fetchProfile()
+				}
 			}
-			profile = await user.fetchProfile()
-		} else if (identifier.startsWith('npub')) {
-			console.log('🔍 Profile Query: Fetching user by npub:', identifier)
-			user = ndk.getUser({ npub: identifier })
-			profile = await user.fetchProfile()
-		} else {
-			console.log('🔍 Profile Query: Fetching user by hex pubkey:', identifier)
-			user = ndk.getUser({ hexpubkey: identifier })
-			profile = await user.fetchProfile()
+			return { profile, user }
 		}
 
-		if (profile) {
-			console.log('✅ Profile Query: Successfully fetched profile for:', identifier, 'Profile:', profile)
-		} else {
-			console.warn('⚠️ Profile Query: No profile data found for:', identifier)
+		// Race between profile fetch and timeout
+		const result = await Promise.race([fetchProfile(), timeoutPromise])
+
+		if (!result.profile) {
+			console.warn('No profile data found for:', identifier)
 		}
 
-		return { profile, user }
+		return result
 	} catch (e) {
-		console.error('❌ Profile Query: Failed to fetch profile with identifier:', identifier, 'Error:', e)
+		console.error('Failed to fetch profile:', identifier, e)
 		return { profile: null, user: null }
 	}
 }
@@ -78,18 +101,30 @@ export const profileQueryOptions = (npub: string) =>
 	queryOptions({
 		queryKey: profileKeys.details(npub),
 		queryFn: () => fetchProfileByNpub(npub),
+		staleTime: 1000 * 60 * 5, // 5 minutes - profile data doesn't change frequently
+		retry: 3, // Retry up to 3 times for network issues
+		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+		refetchOnWindowFocus: false, // Don't refetch on window focus for profile data
 	})
 
 export const profileByNip05QueryOptions = (nip05: string) =>
 	queryOptions({
 		queryKey: profileKeys.detailsByNip05(nip05),
 		queryFn: () => fetchProfileByNip05(nip05),
+		staleTime: 1000 * 60 * 5, // 5 minutes - profile data doesn't change frequently
+		retry: 3, // Retry up to 3 times for network issues
+		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+		refetchOnWindowFocus: false, // Don't refetch on window focus for profile data
 	})
 
 export const profileByIdentifierQueryOptions = (identifier: string) =>
 	queryOptions({
 		queryKey: profileKeys.details(identifier),
 		queryFn: () => fetchProfileByIdentifier(identifier),
+		staleTime: 1000 * 60 * 5, // 5 minutes - profile data doesn't change frequently
+		retry: 3, // Retry up to 3 times for network issues
+		retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
+		refetchOnWindowFocus: false, // Don't refetch on window focus for profile data
 	})
 
 export const validateNip05 = async (pubkey: string): Promise<boolean | null> => {

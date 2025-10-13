@@ -6,9 +6,10 @@ import { cn } from '@/lib/utils'
 import { profileByIdentifierQueryOptions } from '@/queries/profiles'
 import { useStore } from '@tanstack/react-store'
 import { useNavigate, useLocation } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { useEffect } from 'react'
+import { profileKeys } from '@/queries/queryKeyFactory'
 
 interface ProfileProps {
 	compact?: boolean
@@ -18,27 +19,62 @@ export function Profile({ compact = false }: ProfileProps) {
 	const authState = useStore(authStore)
 	const navigate = useNavigate()
 	const location = useLocation()
+	const queryClient = useQueryClient()
 
 	// Check if we're on the user's own profile page
 	const isOnOwnProfile = authState.user?.pubkey && location.pathname === `/profile/${authState.user.pubkey}`
 
-	// Use TanStack Query for profile data
-	const { data: profileData, isLoading } = useQuery({
+	// Use TanStack Query for profile data - enable when authenticated (with fallback)
+	const {
+		data: profileData,
+		isLoading,
+		refetch,
+	} = useQuery({
 		...profileByIdentifierQueryOptions(authState.user?.pubkey || ''),
-		enabled: !!authState.user?.pubkey,
+		enabled: !!authState.user?.pubkey && authState.isAuthenticated,
 	})
 
 	const profile = profileData?.profile
 
-	// Trigger profile preloading when component renders and user is authenticated
+	// Trigger profile metadata loading every time the component renders
 	useEffect(() => {
-		if (authState.isAuthenticated && authState.user && !profile) {
-			console.log('🔄 Profile Component: Triggering profile preload for:', authState.user.pubkey)
-			authActions.preloadUserProfile(authState.user).catch((error) => {
-				console.error('❌ Profile Component: Profile preload failed for:', authState.user.pubkey, 'Error:', error)
-			})
+		if (authState.isAuthenticated && authState.user?.pubkey && !authState.isAuthenticating) {
+			// Force a fresh fetch of profile data
+			const triggerProfileLoad = async () => {
+				try {
+					const queryKey = profileKeys.details(authState.user!.pubkey)
+					
+					// Invalidate and refetch the query
+					await queryClient.invalidateQueries({ queryKey })
+					
+					// Also trigger a manual refetch
+					refetch()
+				} catch (error) {
+					console.error('Failed to trigger profile load:', error)
+				}
+			}
+			
+			triggerProfileLoad()
 		}
-	}, [authState.isAuthenticated, authState.user, profile])
+	}, [authState.isAuthenticated, authState.user?.pubkey, authState.isAuthenticating, queryClient, refetch])
+
+	// Additional trigger on component mount to ensure profile loads immediately
+	useEffect(() => {
+		if (authState.isAuthenticated && authState.user?.pubkey && !authState.isAuthenticating) {
+			// Use a small delay to ensure the component is fully mounted
+			const timeoutId = setTimeout(() => {
+				const queryKey = profileKeys.details(authState.user!.pubkey)
+				queryClient.invalidateQueries({ queryKey })
+			}, 100)
+			
+			return () => clearTimeout(timeoutId)
+		}
+	}, []) // Empty dependency array - only run on mount
+
+
+	// Profile preloading is now handled during login before auth state updates
+	// This ensures profile data is available immediately when components render
+
 
 	const displayName = profile?.name || 'Local User'
 
