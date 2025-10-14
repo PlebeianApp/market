@@ -405,24 +405,18 @@ export const cartActions = {
 	},
 
 	clear: () => {
-		cartStore.setState((state) => ({
-			...state,
-			cart: { sellers: {}, products: {}, orders: {}, invoices: {} },
-			v4vShares: {},
-			sellerData: {},
-			productsBySeller: {},
-			totalInSats: 0,
-			totalShippingInSats: 0,
-			subtotalByCurrency: {},
-			shippingByCurrency: {},
-			totalByCurrency: {},
-			sellerShippingOptions: {},
-		}))
-
+		// Clear sessionStorage first to prevent reloading
 		if (typeof sessionStorage !== 'undefined') {
 			sessionStorage.removeItem('cart')
 			sessionStorage.removeItem('v4vShares')
 		}
+
+		// Reset cart store to initial state
+		cartStore.setState(() => ({
+			...initialState,
+			cart: { sellers: {}, products: {}, orders: {}, invoices: {} },
+			v4vShares: {},
+		}))
 	},
 
 	clearKeys: (keys: (keyof NormalizedCart)[]) => {
