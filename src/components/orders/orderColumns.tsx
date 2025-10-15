@@ -50,7 +50,11 @@ const purchaseActionsColumn: ColumnDef<OrderWithRelatedEvents> = {
 
 		if (!currentUserPubkey) return null
 
-		return <OrderActions order={row.original} userPubkey={currentUserPubkey} />
+		return (
+			<div onClick={(e) => e.stopPropagation()}>
+				<OrderActions order={row.original} userPubkey={currentUserPubkey} />
+			</div>
+		)
 	},
 }
 
@@ -64,7 +68,11 @@ const salesActionsColumn: ColumnDef<OrderWithRelatedEvents> = {
 
 		if (!currentUserPubkey) return null
 
-		return <OrderActions order={row.original} userPubkey={currentUserPubkey} />
+		return (
+			<div onClick={(e) => e.stopPropagation()}>
+				<OrderActions order={row.original} userPubkey={currentUserPubkey} />
+			</div>
+		)
 	},
 }
 
