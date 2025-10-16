@@ -103,6 +103,8 @@ export const paymentDetailsKeys = {
 	details: (id: string) => [...paymentDetailsKeys.all, id] as const,
 	byPubkey: (pubkey: string | undefined) => [...paymentDetailsKeys.all, 'byPubkey', pubkey || ''] as const,
 	byProductOrCollection: (d: string) => [...paymentDetailsKeys.all, 'byCoordinates', d],
+	availableOptions: (sellerPubkey: string, productIds: string[]) =>
+		[...paymentDetailsKeys.all, 'availableOptions', sellerPubkey, productIds.sort().join(',')] as const,
 	publish: () => [...paymentDetailsKeys.all, 'publish'] as const,
 	updatePaymentDetail: () => [...paymentDetailsKeys.all, 'update'] as const,
 	deletePaymentDetail: () => [...paymentDetailsKeys.all, 'delete'] as const,
