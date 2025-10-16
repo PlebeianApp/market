@@ -308,15 +308,15 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 						comment: data.description,
 					})
 
-						// Listen for zap completion events
-						; (zapper as any).on?.('complete', (results: Map<any, any>) => {
-							console.log('⚡ Zap completed via NWC')
-							handlePaymentSuccess('nwc-zap-complete')
-						})
-						; (zapper as any).on?.('ln_payment', ({ preimage }: { preimage: string }) => {
-							console.log('⚡ Lightning payment confirmed via NWC')
-							handlePaymentSuccess(preimage)
-						})
+					// Listen for zap completion events
+					;(zapper as any).on?.('complete', (results: Map<any, any>) => {
+						console.log('⚡ Zap completed via NWC')
+						handlePaymentSuccess('nwc-zap-complete')
+					})
+					;(zapper as any).on?.('ln_payment', ({ preimage }: { preimage: string }) => {
+						console.log('⚡ Lightning payment confirmed via NWC')
+						handlePaymentSuccess(preimage)
+					})
 
 					await zapper.zap()
 				} else {
