@@ -1,5 +1,6 @@
-import { ndkActions } from '@/lib/stores/ndk'
-import { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk'
+import { ndkActions, ndkStore } from '@/lib/stores/ndk'
+import { parseNwcUri } from '@/lib/stores/wallet'
+import NDK, { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk'
 import { NDKNWCWallet } from '@nostr-dev-kit/ndk-wallet'
 import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -113,20 +114,44 @@ export interface NwcBalance {
  * This function creates a temporary NDKNWCWallet instance.
  */
 export const fetchNwcWalletBalance = async (nwcUri: string): Promise<NwcBalance | null> => {
-	const ndkInstance = ndkActions.getZapNdk()
-	if (!ndkInstance || !ndkInstance.signer) {
-		console.error('NDK instance or signer not available for NWC balance fetch')
-		return null
-	}
 	if (!nwcUri) {
 		console.warn('NWC URI is undefined, cannot fetch balance.')
+		return null
+	}
+
+	// Parse the NWC URI to get the relay URL
+	const parsedUri = parseNwcUri(nwcUri)
+	if (!parsedUri || !parsedUri.relay) {
+		console.error('Failed to parse NWC URI or missing relay URL:', nwcUri)
+		return null
+	}
+
+	// Create a dedicated NDK instance for this specific NWC wallet
+	const nwcNdk = new NDK({
+		explicitRelayUrls: [parsedUri.relay],
+	})
+
+	// Set the signer from the main NDK instance
+	const mainNdk = ndkActions.getNDK()
+	if (!mainNdk || !mainNdk.signer) {
+		console.error('Main NDK instance or signer not available for NWC balance fetch')
+		return null
+	}
+	nwcNdk.signer = mainNdk.signer
+
+	// Connect to the NWC relay
+	try {
+		console.log('Connecting to NWC relay:', parsedUri.relay)
+		await nwcNdk.connect()
+	} catch (error) {
+		console.error('Failed to connect to NWC relay:', error)
 		return null
 	}
 
 	let nwcWalletInstance: NDKNWCWallet | null = null
 
 	try {
-		nwcWalletInstance = new NDKNWCWallet(ndkInstance as any, { pairingCode: nwcUri })
+		nwcWalletInstance = new NDKNWCWallet(nwcNdk as any, { pairingCode: nwcUri })
 		await nwcWalletInstance.updateBalance()
 
 		const balanceResponse = nwcWalletInstance.balance
@@ -159,6 +184,12 @@ export const fetchNwcWalletBalance = async (nwcUri: string): Promise<NwcBalance 
 			} catch (e) {
 				// Ignore cleanup errors
 			}
+		}
+		// Disconnect the NWC NDK instance
+		try {
+			await nwcNdk.disconnect()
+		} catch (e) {
+			// Ignore cleanup errors
 		}
 	}
 }

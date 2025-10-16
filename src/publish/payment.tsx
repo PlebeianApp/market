@@ -1,8 +1,10 @@
 import { configStore } from '@/lib/stores/config'
 import { ndkActions } from '@/lib/stores/ndk'
+import { parseNwcUri } from '@/lib/stores/wallet'
 import type { PublishPaymentDetailParams } from '@/queries/payment'
 import { publishPaymentDetail } from '@/queries/payment'
 import { paymentDetailsKeys } from '@/queries/queryKeyFactory'
+import NDK from '@nostr-dev-kit/ndk'
 import { NDKNWCWallet, NDKWalletStatus } from '@nostr-dev-kit/ndk-wallet'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -136,10 +138,33 @@ export interface PayWithNwcParams {
 export const payInvoiceWithNwc = async (params: PayWithNwcParams): Promise<string> => {
 	const { bolt11, nwcUri, userPubkey } = params
 
-	let ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
+	// Parse the NWC URI to get the relay URL
+	const parsedUri = parseNwcUri(nwcUri)
+	if (!parsedUri || !parsedUri.relay) {
+		throw new Error('Failed to parse NWC URI or missing relay URL')
+	}
 
-	const nwcWalletForPayment = new NDKNWCWallet(ndk, { pairingCode: nwcUri })
+	// Create a dedicated NDK instance for this specific NWC wallet
+	const nwcNdk = new NDK({
+		explicitRelayUrls: [parsedUri.relay],
+	})
+
+	// Set the signer from the main NDK instance
+	const mainNdk = ndkActions.getNDK()
+	if (!mainNdk || !mainNdk.signer) {
+		throw new Error('Main NDK instance or signer not available')
+	}
+	nwcNdk.signer = mainNdk.signer
+
+	// Connect to the NWC relay
+	try {
+		console.log('Connecting to NWC relay for payment:', parsedUri.relay)
+		await nwcNdk.connect()
+	} catch (error) {
+		throw new Error(`Failed to connect to NWC relay: ${error}`)
+	}
+
+	const nwcWalletForPayment = new NDKNWCWallet(nwcNdk, { pairingCode: nwcUri })
 
 	// Wait for the wallet to connect
 	const timeout = 10000 // 10 seconds
@@ -177,6 +202,13 @@ export const payInvoiceWithNwc = async (params: PayWithNwcParams): Promise<strin
 	} catch (error) {
 		console.error('❌ NWC payment failed:', error)
 		throw new Error(`NWC payment failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+	} finally {
+		// Disconnect the NWC NDK instance
+		try {
+			await nwcNdk.disconnect()
+		} catch (e) {
+			// Ignore cleanup errors
+		}
 	}
 }
 
