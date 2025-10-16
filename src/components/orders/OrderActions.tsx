@@ -21,6 +21,7 @@ import { toast } from 'sonner'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Textarea } from '../ui/textarea'
+import { StockUpdateDialog } from './StockUpdateDialog'
 
 interface OrderActionsProps {
 	order: OrderWithRelatedEvents
@@ -35,6 +36,8 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 
 	const [trackingNumber, setTrackingNumber] = useState('')
 	const [isShippingOpen, setIsShippingOpen] = useState(false)
+
+	const [isStockUpdateOpen, setIsStockUpdateOpen] = useState(false)
 
 	const updateOrderStatus = useUpdateOrderStatusMutation()
 	const updateShippingStatus = useUpdateShippingStatusMutation()
@@ -100,10 +103,18 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 
 		setIsShippingOpen(false)
 		setTrackingNumber('')
+
+		// After marking as shipped, open the stock update dialog
+		setIsStockUpdateOpen(true)
 	}
 
 	if (!isBuyer && !isSeller) {
 		return null // Don't show actions if user is neither buyer nor seller
+	}
+
+	const handleStockUpdateComplete = () => {
+		// Stock has been updated, dialog can close
+		// No need to update order status - shipping status is already set
 	}
 
 	// Check if there are any available actions
@@ -175,8 +186,6 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 								Mark as Shipped
 							</DropdownMenuItem>
 						)}
-
-						{/* Seller can no longer complete orders; completion is buyer-only after shipped */}
 
 						{/* Cancel action - open dialog */}
 						{canCancel && (
@@ -251,6 +260,14 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>
+
+			{/* Stock Update Dialog */}
+			<StockUpdateDialog
+				open={isStockUpdateOpen}
+				onOpenChange={setIsStockUpdateOpen}
+				order={order}
+				onComplete={handleStockUpdateComplete}
+			/>
 		</div>
 	)
 }
