@@ -45,6 +45,22 @@
             opacity: 0.9;
         }
 
+        .important-note {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 15px;
+            font-size: 0.95rem;
+            line-height: 1.4;
+        }
+
+        .red-asterisk {
+            color: #ef4444;
+            font-weight: bold;
+            margin-right: 4px;
+        }
+
         .controls {
             padding: 20px 30px;
             background: #f1f5f9;
@@ -156,39 +172,138 @@
             margin-bottom: 15px;
         }
 
+        .checklist-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+
+        .checklist-table th {
+            background-color: #f8fafc;
+            padding: 12px;
+            text-align: left;
+            border: 1px solid #e2e8f0;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .checklist-table td {
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+            vertical-align: top;
+        }
+
+        .checkbox-cell {
+            width: 60%;
+            background-color: #ffffff;
+        }
+
+        .checkbox-cell.completed {
+            background-color: #f0fdf4;
+        }
+
         .checkbox-item {
             display: flex;
             align-items: flex-start;
-            margin: 8px 0;
-            padding: 8px;
+            padding: 4px;
             border-radius: 4px;
             transition: background-color 0.2s;
+        }
+
+        .checkbox-item-content {
+            display: flex;
+            align-items: flex-start;
+            width: 100%;
         }
 
         .checkbox-item:hover {
             background-color: #f8fafc;
         }
 
-        .checkbox-item.completed {
-            background-color: #f0fdf4;
+        .checkbox-group {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+            margin-right: 12px;
+            padding: 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            background-color: #f9fafb;
+            min-width: 80px;
         }
 
-        .checkbox-item.completed .checkbox-label {
-            text-decoration: line-through;
-            color: #6b7280;
+        .checkbox-pair {
+            display: flex;
+            align-items: center;
+            gap: 4px;
         }
 
-        input[type="checkbox"] {
-            margin-right: 10px;
-            margin-top: 2px;
-            transform: scale(1.2);
+        .checkbox-pair label {
+            font-size: 11px;
+            font-weight: 500;
             cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        input[type="radio"] {
+            margin: 0;
+            transform: scale(1.1);
+            cursor: pointer;
+        }
+
+        .works-radio {
+            accent-color: #10b981;
+        }
+
+        .doesnt-work-radio {
+            accent-color: #ef4444;
         }
 
         .checkbox-label {
             flex: 1;
             cursor: pointer;
             user-select: none;
+        }
+
+        .checkbox-label.completed {
+            text-decoration: line-through;
+            color: #6b7280;
+        }
+
+        .comment-cell {
+            width: 40%;
+            background-color: #fafbfc;
+        }
+
+        .comment-cell.completed {
+            background-color: #f0fdf4;
+        }
+
+        .comment-input {
+            width: 100%;
+            min-height: 40px;
+            padding: 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
+            background-color: #ffffff;
+        }
+
+        .comment-input:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .comment-label {
+            font-size: 12px;
+            color: #6b7280;
+            margin-bottom: 4px;
+            font-weight: 500;
         }
 
         .section-summary {
@@ -241,6 +356,67 @@
             .subsubsection {
                 margin-left: 20px;
             }
+
+            .checklist-table {
+                font-size: 14px;
+            }
+
+            .checklist-table th,
+            .checklist-table td {
+                padding: 8px;
+            }
+
+            .comment-input {
+                min-height: 60px;
+                font-size: 13px;
+            }
+
+            .checkbox-label {
+                font-size: 13px;
+                line-height: 1.4;
+            }
+
+            .checkbox-group {
+                min-width: 70px;
+                padding: 6px;
+            }
+
+            .checkbox-pair label {
+                font-size: 10px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .checklist-table {
+                font-size: 12px;
+            }
+
+            .checklist-table th,
+            .checklist-table td {
+                padding: 6px;
+            }
+
+            .comment-input {
+                min-height: 50px;
+                font-size: 12px;
+            }
+
+            .checkbox-label {
+                font-size: 12px;
+            }
+
+            .comment-label {
+                font-size: 11px;
+            }
+
+            .checkbox-group {
+                min-width: 60px;
+                padding: 4px;
+            }
+
+            .checkbox-pair label {
+                font-size: 9px;
+            }
         }
 
         .toast {
@@ -271,6 +447,9 @@
         <div class="header">
             <h1>Plebian Market - Testing Checklist</h1>
             <p>Comprehensive testing guide for all interaction flows</p>
+            <div class="important-note">
+                <strong>⚠️ Important:</strong> Items marked with a red asterisk (*) are the most important for end users and should be prioritized during testing.
+            </div>
         </div>
 
         <div class="controls">
@@ -1073,7 +1252,7 @@
         function renderSection(container, data, sectionName, level = 0) {
             Object.entries(data).forEach(([key, value]) => {
                 if (Array.isArray(value)) {
-                    // This is a list of checkboxes
+                    // This is a list of checkboxes - render as table
                     const subsection = document.createElement('div');
                     subsection.className = level === 0 ? 'subsection' : 'subsubsection';
 
@@ -1081,25 +1260,118 @@
                     header.textContent = key;
                     subsection.appendChild(header);
 
+                    // Create table
+                    const table = document.createElement('table');
+                    table.className = 'checklist-table';
+
+                    // Create table header
+                    const thead = document.createElement('thead');
+                    const headerRow = document.createElement('tr');
+                    const checkboxHeader = document.createElement('th');
+                    checkboxHeader.innerHTML = 'Test Item<br><small>Works ✓ / Doesn\'t Work ✗</small>';
+                    const commentHeader = document.createElement('th');
+                    commentHeader.textContent = 'Comments';
+                    headerRow.appendChild(checkboxHeader);
+                    headerRow.appendChild(commentHeader);
+                    thead.appendChild(headerRow);
+                    table.appendChild(thead);
+
+                    // Create table body
+                    const tbody = document.createElement('tbody');
                     value.forEach(item => {
+                        const row = document.createElement('tr');
+                        
+                        // Checkbox cell
+                        const checkboxCell = document.createElement('td');
+                        checkboxCell.className = 'checkbox-cell';
+                        
                         const checkboxItem = document.createElement('div');
                         checkboxItem.className = 'checkbox-item';
 
-                        const checkbox = document.createElement('input');
-                        checkbox.type = 'checkbox';
-                        checkbox.id = generateId(sectionName, key, item);
-                        checkbox.addEventListener('change', updateProgress);
+                        // Create dual checkbox system
+                        const checkboxGroup = document.createElement('div');
+                        checkboxGroup.className = 'checkbox-group';
 
-                        const label = document.createElement('label');
-                        label.className = 'checkbox-label';
-                        label.setAttribute('for', checkbox.id);
-                        label.textContent = item;
+                        // Works radio button
+                        const worksPair = document.createElement('div');
+                        worksPair.className = 'checkbox-pair';
+                        const worksRadio = document.createElement('input');
+                        worksRadio.type = 'radio';
+                        worksRadio.name = generateId(sectionName, key, item) + '-status';
+                        worksRadio.id = generateId(sectionName, key, item) + '-works';
+                        worksRadio.className = 'works-radio';
+                        worksRadio.value = 'works';
+                        worksRadio.addEventListener('change', updateProgress);
+                        const worksLabel = document.createElement('label');
+                        worksLabel.setAttribute('for', worksRadio.id);
+                        worksLabel.textContent = 'Works';
+                        worksPair.appendChild(worksRadio);
+                        worksPair.appendChild(worksLabel);
 
-                        checkboxItem.appendChild(checkbox);
-                        checkboxItem.appendChild(label);
-                        subsection.appendChild(checkboxItem);
+                        // Doesn't work radio button
+                        const doesntWorkPair = document.createElement('div');
+                        doesntWorkPair.className = 'checkbox-pair';
+                        const doesntWorkRadio = document.createElement('input');
+                        doesntWorkRadio.type = 'radio';
+                        doesntWorkRadio.name = generateId(sectionName, key, item) + '-status';
+                        doesntWorkRadio.id = generateId(sectionName, key, item) + '-doesnt-work';
+                        doesntWorkRadio.className = 'doesnt-work-radio';
+                        doesntWorkRadio.value = 'doesnt-work';
+                        doesntWorkRadio.addEventListener('change', updateProgress);
+                        const doesntWorkLabel = document.createElement('label');
+                        doesntWorkLabel.setAttribute('for', doesntWorkRadio.id);
+                        doesntWorkLabel.textContent = 'Doesn\'t Work';
+                        doesntWorkPair.appendChild(doesntWorkRadio);
+                        doesntWorkPair.appendChild(doesntWorkLabel);
+
+                        checkboxGroup.appendChild(worksPair);
+                        checkboxGroup.appendChild(doesntWorkPair);
+
+                        // Test item label with potential red asterisk
+                        const itemLabel = document.createElement('div');
+                        itemLabel.className = 'checkbox-label';
+                        const isNonTechnical = isNonTechnicalItem(item);
+                        if (isNonTechnical) {
+                            const asterisk = document.createElement('span');
+                            asterisk.className = 'red-asterisk';
+                            asterisk.textContent = '*';
+                            itemLabel.appendChild(asterisk);
+                        }
+                        itemLabel.appendChild(document.createTextNode(item));
+
+                        // Create content wrapper
+                        const contentWrapper = document.createElement('div');
+                        contentWrapper.className = 'checkbox-item-content';
+                        contentWrapper.appendChild(checkboxGroup);
+                        contentWrapper.appendChild(itemLabel);
+
+                        checkboxItem.appendChild(contentWrapper);
+                        checkboxCell.appendChild(checkboxItem);
+                        
+                        // Comment cell
+                        const commentCell = document.createElement('td');
+                        commentCell.className = 'comment-cell';
+                        
+                        const commentLabel = document.createElement('div');
+                        commentLabel.className = 'comment-label';
+                        commentLabel.textContent = 'Comments:';
+                        
+                        const commentInput = document.createElement('textarea');
+                        commentInput.className = 'comment-input';
+                        commentInput.placeholder = 'Add your test notes, issues, or observations here...';
+                        commentInput.id = generateId(sectionName, key, item) + '-comment';
+                        commentInput.addEventListener('input', saveProgress);
+                        
+                        commentCell.appendChild(commentLabel);
+                        commentCell.appendChild(commentInput);
+                        
+                        row.appendChild(checkboxCell);
+                        row.appendChild(commentCell);
+                        tbody.appendChild(row);
                     });
-
+                    
+                    table.appendChild(tbody);
+                    subsection.appendChild(table);
                     container.appendChild(subsection);
                 } else {
                     // This is a nested object
@@ -1121,11 +1393,35 @@
             return `${sectionName.replace(/\s+/g, '-').toLowerCase()}-${subsectionName.replace(/\s+/g, '-').toLowerCase()}-${item.replace(/\s+/g, '-').toLowerCase().replace(/[^a-z0-9-]/g, '')}`;
         }
 
+        // Determine if an item is non-technical (important for end users)
+        function isNonTechnicalItem(item) {
+            const technicalKeywords = [
+                'component', 'action', 'function', 'query', 'store', 'ndk', 'nostr', 'event', 'kind',
+                'tanstack', 'typescript', 'react', 'zod', 'validation', 'localStorage', 'relay',
+                'pubkey', 'signer', 'encryption', 'decryption', 'bolt11', 'lightning', 'nwc', 'webln',
+                'zap', 'invoice', 'preimage', 'receipt', 'monitoring', 'subscription', 'timeout',
+                'mutation', 'hook', 'schema', 'interface', 'type', 'route', 'path', 'params',
+                'state', 'dispatch', 'reducer', 'context', 'provider', 'client', 'server',
+                'api', 'endpoint', 'request', 'response', 'headers', 'cookies', 'session',
+                'authentication', 'authorization', 'csrf', 'xss', 'sql', 'injection',
+                'cors', 'https', 'ssl', 'tls', 'jwt', 'token', 'refresh', 'expiry',
+                'cache', 'redis', 'database', 'sqlite', 'postgresql', 'mongodb',
+                'docker', 'kubernetes', 'deployment', 'ci/cd', 'github', 'gitlab',
+                'npm', 'yarn', 'package.json', 'node_modules', 'bundle', 'webpack',
+                'babel', 'eslint', 'prettier', 'jest', 'cypress', 'playwright',
+                'lighthouse', 'performance', 'metrics', 'analytics', 'logging',
+                'monitoring', 'alerting', 'sentry', 'datadog', 'newrelic'
+            ];
+            
+            const itemLower = item.toLowerCase();
+            return !technicalKeywords.some(keyword => itemLower.includes(keyword));
+        }
+
         // Update progress
         function updateProgress() {
-            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-            const checked = document.querySelectorAll('input[type="checkbox"]:checked');
-            const total = checkboxes.length;
+            const radioButtons = document.querySelectorAll('input[type="radio"]');
+            const checked = document.querySelectorAll('input[type="radio"]:checked');
+            const total = radioButtons.length / 2; // Divide by 2 since each item has 2 radio buttons
             const completed = checked.length;
 
             const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
@@ -1138,13 +1434,25 @@
                 updateSectionProgress(sectionName);
             });
 
-            // Update checkbox item styling
-            checkboxes.forEach(checkbox => {
-                const item = checkbox.closest('.checkbox-item');
-                if (checkbox.checked) {
-                    item.classList.add('completed');
+            // Update radio button item styling
+            const rows = document.querySelectorAll('tbody tr');
+            rows.forEach(row => {
+                const worksRadio = row.querySelector('.works-radio');
+                const doesntWorkRadio = row.querySelector('.doesnt-work-radio');
+                const checkboxCell = row.querySelector('.checkbox-cell');
+                const commentCell = row.querySelector('.comment-cell');
+                const itemLabel = row.querySelector('.checkbox-label');
+                
+                const isCompleted = (worksRadio && worksRadio.checked) || (doesntWorkRadio && doesntWorkRadio.checked);
+                
+                if (isCompleted) {
+                    checkboxCell.classList.add('completed');
+                    commentCell.classList.add('completed');
+                    if (itemLabel) itemLabel.classList.add('completed');
                 } else {
-                    item.classList.remove('completed');
+                    checkboxCell.classList.remove('completed');
+                    commentCell.classList.remove('completed');
+                    if (itemLabel) itemLabel.classList.remove('completed');
                 }
             });
 
@@ -1201,8 +1509,10 @@
             Object.entries(data).forEach(([key, value]) => {
                 if (Array.isArray(value)) {
                     value.forEach(item => {
-                        const checkbox = document.getElementById(generateId(sectionName, key, item));
-                        if (checkbox && checkbox.checked) {
+                        const worksRadio = document.getElementById(generateId(sectionName, key, item) + '-works');
+                        const doesntWorkRadio = document.getElementById(generateId(sectionName, key, item) + '-doesnt-work');
+                        const isCompleted = (worksRadio && worksRadio.checked) || (doesntWorkRadio && doesntWorkRadio.checked);
+                        if (isCompleted) {
                             count++;
                         }
                     });
@@ -1215,11 +1525,19 @@
 
         // Save progress to localStorage
         function saveProgress() {
-            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-            const progress = {};
+            const radioButtons = document.querySelectorAll('input[type="radio"]');
+            const commentInputs = document.querySelectorAll('.comment-input');
+            const progress = {
+                radioButtons: {},
+                comments: {}
+            };
             
-            checkboxes.forEach(checkbox => {
-                progress[checkbox.id] = checkbox.checked;
+            radioButtons.forEach(radio => {
+                progress.radioButtons[radio.id] = radio.checked;
+            });
+            
+            commentInputs.forEach(input => {
+                progress.comments[input.id] = input.value;
             });
             
             localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
@@ -1231,22 +1549,43 @@
             const saved = localStorage.getItem(STORAGE_KEY);
             if (saved) {
                 const progress = JSON.parse(saved);
-                Object.entries(progress).forEach(([id, checked]) => {
-                    const checkbox = document.getElementById(id);
-                    if (checkbox) {
-                        checkbox.checked = checked;
-                    }
-                });
+                
+                // Load radio button states
+                if (progress.radioButtons) {
+                    Object.entries(progress.radioButtons).forEach(([id, checked]) => {
+                        const radio = document.getElementById(id);
+                        if (radio) {
+                            radio.checked = checked;
+                        }
+                    });
+                }
+                
+                // Load comment values
+                if (progress.comments) {
+                    Object.entries(progress.comments).forEach(([id, value]) => {
+                        const input = document.getElementById(id);
+                        if (input) {
+                            input.value = value;
+                        }
+                    });
+                }
             }
         }
 
-        // Clear all checkboxes
+        // Clear all radio buttons
         function clearAll() {
             if (confirm('Are you sure you want to clear all progress? This cannot be undone.')) {
-                const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-                checkboxes.forEach(checkbox => {
-                    checkbox.checked = false;
+                const radioButtons = document.querySelectorAll('input[type="radio"]');
+                const commentInputs = document.querySelectorAll('.comment-input');
+                
+                radioButtons.forEach(radio => {
+                    radio.checked = false;
                 });
+                
+                commentInputs.forEach(input => {
+                    input.value = '';
+                });
+                
                 updateProgress();
                 showToast('All progress cleared!', 'success');
             }
@@ -1254,15 +1593,19 @@
 
         // Generate markdown document
         function generateMarkdown() {
-            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-            const checked = document.querySelectorAll('input[type="checkbox"]:checked');
-            const total = checkboxes.length;
+            const radioButtons = document.querySelectorAll('input[type="radio"]');
+            const checked = document.querySelectorAll('input[type="radio"]:checked');
+            const total = radioButtons.length / 2; // Divide by 2 since each item has 2 radio buttons
             const completed = checked.length;
             const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
             let markdown = `# Plebian Market - Testing Checklist Results\n\n`;
             markdown += `**Generated on:** ${new Date().toLocaleString()}\n`;
             markdown += `**Progress:** ${completed}/${total} (${percentage}%)\n\n`;
+            markdown += `**Legend:**\n`;
+            markdown += `- ✓ = Works\n`;
+            markdown += `- ✗ = Doesn't Work\n`;
+            markdown += `- * = Important for end users (non-technical items)\n\n`;
             markdown += `---\n\n`;
 
             // Generate markdown for each section
@@ -1307,9 +1650,21 @@
                 if (Array.isArray(value)) {
                     markdown += `${prefix}### ${key}\n\n`;
                     value.forEach(item => {
-                        const checkbox = document.getElementById(generateId(sectionName, key, item));
-                        const checked = checkbox && checkbox.checked ? 'x' : ' ';
-                        markdown += `${prefix}- [${checked}] ${item}\n`;
+                        const worksRadio = document.getElementById(generateId(sectionName, key, item) + '-works');
+                        const doesntWorkRadio = document.getElementById(generateId(sectionName, key, item) + '-doesnt-work');
+                        const commentInput = document.getElementById(generateId(sectionName, key, item) + '-comment');
+                        
+                        let status = ' ';
+                        if (worksRadio && worksRadio.checked) {
+                            status = '✓';
+                        } else if (doesntWorkRadio && doesntWorkRadio.checked) {
+                            status = '✗';
+                        }
+                        
+                        const comment = commentInput && commentInput.value.trim() ? `\n${prefix}  **Comments:** ${commentInput.value.trim()}` : '';
+                        const isNonTechnical = isNonTechnicalItem(item);
+                        const asterisk = isNonTechnical ? ' *' : '';
+                        markdown += `${prefix}- [${status}] ${item}${asterisk}${comment}\n`;
                     });
                     markdown += `\n`;
                 } else {
