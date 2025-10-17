@@ -130,17 +130,10 @@ export async function createPaymentDetailEvent(
 
 	// Convert keys to hex format
 	const hexAppPubkey = ensureHexPubkey(appPubkey)
-	const hexUserPubkey = ensureHexPubkey(user.pubkey)
 
-	// Encrypt the content using NIP-04
-	try {
-		event.content = await nip04.encrypt(hexUserPubkey, hexAppPubkey, content)
-	} catch (error) {
-		console.error('Failed to encrypt payment details:', error)
-		console.error('App pubkey:', appPubkey)
-		console.error('User pubkey:', user.pubkey)
-		throw error
-	}
+	// Payment details contain public information (Lightning addresses, BTC addresses)
+	// No encryption needed - buyers need to read these to generate invoices
+	event.content = content
 
 	// Set the required tags
 	event.tags = [
@@ -225,41 +218,48 @@ export async function seedMultiplePaymentDetails(
 		}
 	}
 
-	// 3. Create PRODUCT-SPECIFIC wallets
+	// 3. Create PRODUCT-SPECIFIC wallets with OVERLAPPING scopes
+	// This ensures buyers have a high chance of encountering the wallet selector
 	if (productCoordinates.length > 0) {
-		console.log('\n3️⃣ Creating PRODUCT-SPECIFIC wallets...')
+		console.log('\n3️⃣ Creating PRODUCT-SPECIFIC wallets with overlapping scopes...')
 
-		// Single product wallet
-		if (productCoordinates.length >= 1) {
-			const singleProductWallet = generateLightningPaymentDetail({
-				lightningAddress,
-				scope: 'products',
-				coordinates: [productCoordinates[0]],
-				scopeName: 'Product 1 Wallet',
-			})
-			results.push(await createPaymentDetailEvent(signer, ndk, singleProductWallet, appPubkey))
-		}
+		// Strategy: Create 2 wallets that cover different but overlapping product ranges
+		// This way, most products will have: global wallet + wallet A + wallet B = 3 options!
 
-		// Multi-product wallet (2-3 products)
+		// Wallet A: Covers first ~60% of products
+		const walletACount = Math.max(1, Math.ceil(productCoordinates.length * 0.6))
+		const walletAProducts = productCoordinates.slice(0, walletACount)
+
+		const walletA = generateLightningPaymentDetail({
+			lightningAddress,
+			scope: 'products',
+			coordinates: walletAProducts,
+			scopeName: `Primary Products Wallet (${walletACount} products)`,
+		})
+		results.push(await createPaymentDetailEvent(signer, ndk, walletA, appPubkey))
+		console.log(`   📦 Wallet A covers products 1-${walletACount}`)
+
+		// Wallet B: Covers last ~60% of products (overlapping with Wallet A)
 		if (productCoordinates.length >= 3) {
-			const multiProductWallet = generateLightningPaymentDetail({
-				lightningAddress,
-				scope: 'products',
-				coordinates: [productCoordinates[1], productCoordinates[2]],
-				scopeName: 'Products 2-3 Wallet',
-			})
-			results.push(await createPaymentDetailEvent(signer, ndk, multiProductWallet, appPubkey))
-		}
+			const walletBStartIndex = Math.max(1, Math.floor(productCoordinates.length * 0.4))
+			const walletBProducts = productCoordinates.slice(walletBStartIndex)
 
-		// Another multi-product wallet (if more products available)
-		if (productCoordinates.length >= 5) {
-			const anotherMultiProductWallet = generateLightningPaymentDetail({
+			const walletB = generateLightningPaymentDetail({
 				lightningAddress,
 				scope: 'products',
-				coordinates: [productCoordinates[3], productCoordinates[4]],
-				scopeName: 'Products 4-5 Wallet',
+				coordinates: walletBProducts,
+				scopeName: `Secondary Products Wallet (${walletBProducts.length} products)`,
 			})
-			results.push(await createPaymentDetailEvent(signer, ndk, anotherMultiProductWallet, appPubkey))
+			results.push(await createPaymentDetailEvent(signer, ndk, walletB, appPubkey))
+			console.log(`   📦 Wallet B covers products ${walletBStartIndex + 1}-${productCoordinates.length}`)
+
+			// Calculate overlap
+			const overlapStart = walletBStartIndex
+			const overlapEnd = walletACount
+			if (overlapEnd > overlapStart) {
+				const overlapCount = overlapEnd - overlapStart
+				console.log(`   ✨ ${overlapCount} products have BOTH specific wallets + global = 3 wallet options!`)
+			}
 		}
 	}
 
@@ -306,10 +306,10 @@ export async function seedMultiplePaymentDetails(
  * // This will create:
  * // - 1 global wallet (applies to all products)
  * // - 2 collection-specific wallets (one per collection)
- * // - 3 product-specific wallets:
- * //   - Single product wallet (product 1)
- * //   - Multi-product wallet (products 2-3)
- * //   - Multi-product wallet (products 4-5)
- * // Total: 6 payment details
+ * // - 2 product-specific wallets with OVERLAPPING scopes:
+ * //   - Wallet A: First 60% of products (e.g., products 1-3 if 5 products)
+ * //   - Wallet B: Last 60% of products (e.g., products 3-5 if 5 products)
+ * //   - Result: Middle products have 3 options (global + A + B)
+ * // Total: 5 payment details with high buyer wallet selector visibility
  * ```
  */

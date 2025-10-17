@@ -206,11 +206,10 @@ async function seedData() {
 		}
 	}
 
-	// Optionally create multi-wallet configurations for the first user (for testing)
-	if (process.env.SEED_MULTI_WALLETS === 'true' && devUsers.length > 0) {
-		console.log('\n🎯 Creating multi-wallet configuration for first user...')
-		const firstUser = devUsers[0]
-		const signer = new NDKPrivateKeySigner(firstUser.sk)
+	// Create multi-wallet configurations for all users (standard seeding)
+	console.log('\n🎯 Creating multi-wallet configurations for all users...')
+	for (const user of devUsers) {
+		const signer = new NDKPrivateKeySigner(user.sk)
 		await signer.blockUntilReady()
 		const pubkey = (await signer.user()).pubkey
 
@@ -219,6 +218,8 @@ async function seedData() {
 		const productCoordinates = userProducts.map((ref) => ref.coordinates)
 
 		if (productCoordinates.length >= 3) {
+			console.log(`\n💳 Setting up wallets for user ${pubkey.substring(0, 8)}... (${productCoordinates.length} products)`)
+
 			const { seedMultiplePaymentDetails } = await import('./gen_payment_details')
 
 			await seedMultiplePaymentDetails(
@@ -230,7 +231,7 @@ async function seedData() {
 				[], // No collections in basic seed
 			)
 		} else {
-			console.log(`⚠️ Not enough products (${productCoordinates.length}) for multi-wallet seeding, skipping...`)
+			console.log(`⏭️ Skipping multi-wallet for user ${pubkey.substring(0, 8)} (only ${productCoordinates.length} products)`)
 		}
 	}
 

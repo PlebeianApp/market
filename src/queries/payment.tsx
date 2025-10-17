@@ -82,39 +82,9 @@ export const fetchPaymentDetail = async (id: string): Promise<PaymentDetail | nu
 			return null
 		}
 
-		// Decrypt the content if the user has a signer
-		const signer = ndkActions.getSigner()
-		if (!signer) {
-			console.warn('No signer available to decrypt payment details')
-			return null
-		}
-
-		const user = await signer.user()
-		if (!user) return null
-
-		// Find app pubkey from the p tag or use the stored app pubkey
-		const pTag = event.tags.find((tag) => tag[0] === 'p')
-		const appPubkey = pTag ? pTag[1] : configStore.state.config.appPublicKey
-
-		if (!appPubkey) {
-			console.warn('App public key not available')
-			return null
-		}
-
-		// Decrypt the content
-		let content
+		// Parse the content (no decryption needed - payment details are public)
 		try {
-			// If the event author is the app, decrypt with the user's key
-			// If the event author is the user, decrypt with the app's key
-			const isEventFromApp = event.pubkey === appPubkey
-
-			if (isEventFromApp) {
-				content = await nip04.decrypt(appPubkey, user.pubkey, event.content)
-			} else {
-				content = await nip04.decrypt(user.pubkey, appPubkey, event.content)
-			}
-
-			const parsedContent = JSON.parse(content)
+			const parsedContent = JSON.parse(event.content)
 
 			// Find ALL 'a' tags for coordinates (for multi-product wallets)
 			const aTags = event.tags.filter((tag) => tag[0] === 'a')
@@ -129,7 +99,7 @@ export const fetchPaymentDetail = async (id: string): Promise<PaymentDetail | nu
 				isDefault: parsedContent.is_default === true || parsedContent.is_default === 'true',
 			}
 		} catch (error) {
-			console.error('Error decrypting payment details:', error)
+			console.error('Error parsing payment details:', error)
 			return null
 		}
 	} catch (error) {
@@ -320,17 +290,14 @@ export const publishPaymentDetail = async (params: PublishPaymentDetailParams): 
 			is_default: params.isDefault || false,
 		}
 
-		// Encrypt content for the app
+		// Payment details are public (Lightning addresses, BTC addresses)
+		// No encryption needed - buyers need to read these to generate invoices
 		const contentStr = JSON.stringify(contentObj)
-		let encryptedContent
-
-		// Encrypt to app's pubkey
-		encryptedContent = await nip04.encrypt(user.pubkey, appPubkey, contentStr)
 
 		// Create the event
 		const event = new NDKEvent(ndk)
 		event.kind = NDKKind.AppSpecificData
-		event.content = encryptedContent
+		event.content = contentStr
 		event.tags = [
 			['d', params.dTag || uuidv4()],
 			['l', 'payment_detail'],
