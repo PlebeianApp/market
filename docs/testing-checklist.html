@@ -1,0 +1,1353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plebian Market - Testing Checklist</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f8f9fa;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: #2563eb;
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .controls {
+            padding: 20px 30px;
+            background: #f1f5f9;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .progress {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .progress-bar {
+            width: 200px;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #10b981;
+            transition: width 0.3s ease;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-secondary {
+            background: #6b7280;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #4b5563;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        h2 {
+            color: #1f2937;
+            font-size: 1.5rem;
+            margin: 30px 0 15px 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        h3 {
+            color: #374151;
+            font-size: 1.2rem;
+            margin: 20px 0 10px 0;
+        }
+
+        h4 {
+            color: #4b5563;
+            font-size: 1rem;
+            margin: 15px 0 8px 0;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .subsection {
+            margin-left: 20px;
+            margin-bottom: 20px;
+        }
+
+        .subsubsection {
+            margin-left: 40px;
+            margin-bottom: 15px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: flex-start;
+            margin: 8px 0;
+            padding: 8px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        .checkbox-item:hover {
+            background-color: #f8fafc;
+        }
+
+        .checkbox-item.completed {
+            background-color: #f0fdf4;
+        }
+
+        .checkbox-item.completed .checkbox-label {
+            text-decoration: line-through;
+            color: #6b7280;
+        }
+
+        input[type="checkbox"] {
+            margin-right: 10px;
+            margin-top: 2px;
+            transform: scale(1.2);
+            cursor: pointer;
+        }
+
+        .checkbox-label {
+            flex: 1;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .section-summary {
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border-left: 4px solid #2563eb;
+        }
+
+        .section-summary.completed {
+            border-left-color: #10b981;
+            background: #f0fdf4;
+        }
+
+        .completion-stats {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 14px;
+            color: #6b7280;
+        }
+
+        .footer {
+            padding: 20px 30px;
+            background: #f1f5f9;
+            border-top: 1px solid #e2e8f0;
+            text-align: center;
+            color: #6b7280;
+        }
+
+        @media (max-width: 768px) {
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .actions {
+                justify-content: center;
+            }
+
+            .progress {
+                justify-content: center;
+            }
+
+            .subsection {
+                margin-left: 10px;
+            }
+
+            .subsubsection {
+                margin-left: 20px;
+            }
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #10b981;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
+
+        .toast.show {
+            transform: translateX(0);
+        }
+
+        .toast.error {
+            background: #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Plebian Market - Testing Checklist</h1>
+            <p>Comprehensive testing guide for all interaction flows</p>
+        </div>
+
+        <div class="controls">
+            <div class="progress">
+                <span>Progress:</span>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <span id="progressText">0%</span>
+            </div>
+            <div class="actions">
+                <button class="btn btn-secondary" onclick="clearAll()">Clear All</button>
+                <button class="btn btn-primary" onclick="saveProgress()">Save Progress</button>
+                <button class="btn btn-success" onclick="generateMarkdown()">Download Markdown</button>
+            </div>
+        </div>
+
+        <div class="content" id="content">
+            <!-- Content will be generated by JavaScript -->
+        </div>
+
+        <div class="footer">
+            <p>This testing checklist should be used as a comprehensive guide for testing all aspects of the Plebian Market application.</p>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        // Checklist data structure
+        const checklistData = {
+            "Application Architecture Testing": {
+                "Core Technologies": [
+                    "React 19 with TypeScript compiles without errors",
+                    "TanStack Router file-based routing works correctly",
+                    "TanStack Store state management functions properly",
+                    "TanStack Query data fetching works as expected",
+                    "TanStack Form with Zod validation functions correctly",
+                    "Radix UI + Tailwind CSS styling renders properly",
+                    "NDK (Nostr Development Kit) connects to relays",
+                    "Lightning Network payment integration works"
+                ],
+                "Key Stores": [
+                    "`authStore` manages authentication state correctly",
+                    "`cartStore` manages shopping cart state properly",
+                    "`ndkStore` manages Nostr connections effectively",
+                    "`uiStore` manages UI state (drawers, dialogs) correctly",
+                    "`configStore` manages app configuration properly",
+                    "`walletStore` manages Lightning wallet state correctly"
+                ]
+            },
+            "Authentication Flows Testing": {
+                "Login Methods": {
+                    "Private Key Login": [
+                        "Login dialog opens when clicking login button",
+                        "Private key tab is accessible and functional",
+                        "User can enter nsec private key",
+                        "Password setting form appears after key entry",
+                        "Auto-login option can be enabled/disabled",
+                        "User is redirected to dashboard after successful login",
+                        "`PrivateKeyLogin.tsx` component renders correctly",
+                        "`DecryptPasswordDialog.tsx` appears when needed",
+                        "`loginWithPrivateKey()` action executes successfully",
+                        "`decryptAndLogin()` action works with stored encrypted keys"
+                    ],
+                    "NIP-07 Extension Login": [
+                        "Login dialog opens correctly",
+                        "Extension tab is accessible",
+                        "Browser extension detection works",
+                        "User can authorize through extension",
+                        "Dashboard redirects after successful authorization",
+                        "`LoginDialog.tsx` component functions properly",
+                        "`loginWithExtension()` action executes successfully"
+                    ],
+                    "NIP-46 Bunker Connect": [
+                        "Login dialog opens correctly",
+                        "Bunker tab is accessible",
+                        "User can enter Bunker URL",
+                        "Connection to Bunker service works",
+                        "Dashboard redirects after successful connection",
+                        "`BunkerConnect.tsx` component functions properly",
+                        "`loginWithNip46()` action executes successfully"
+                    ]
+                },
+                "Auto-Login Flow": [
+                    "App checks localStorage on initialization",
+                    "Auto-login triggers when enabled",
+                    "Encrypted keys are decrypted correctly",
+                    "User is automatically logged in on page refresh",
+                    "Auto-login can be disabled",
+                    "localStorage stores authentication data correctly"
+                ],
+                "Logout Flow": [
+                    "Logout button is accessible",
+                    "localStorage is cleared on logout",
+                    "Cart is cleared on logout",
+                    "Auth state is reset properly",
+                    "User is redirected to home page",
+                    "`logout()` action executes successfully"
+                ]
+            },
+            "Product Management Flows Testing": {
+                "Adding a New Product": {
+                    "Dashboard Flow": [
+                        "Dashboard navigation to Products works",
+                        "\"Add Product\" button is accessible",
+                        "Product form opens correctly",
+                        "Form can be filled with product details",
+                        "Product is published successfully",
+                        "New product appears in product list",
+                        "Route `/dashboard/products/products/new` works",
+                        "`NewProductContent.tsx` component renders",
+                        "`ProductFormContent.tsx` component functions",
+                        "`productFormStore` manages form state",
+                        "`publishProduct()` action executes successfully"
+                    ],
+                    "Product Form Steps": [
+                        "**Basic Info**: Title, description, price, currency fields work",
+                        "**Images**: Image upload and ordering functions",
+                        "**Categories**: Main category and additional tags work",
+                        "**Specifications**: Key-value pairs can be added/removed",
+                        "**Shipping**: Shipping options can be selected with costs",
+                        "**Collection**: Optional collection assignment works",
+                        "**Weight/Dimensions**: Physical product details can be entered"
+                    ],
+                    "Product Data Structure (Nostr Kind 30402)": [
+                        "Product events are created with correct kind (30402)",
+                        "All required tags are included in the event",
+                        "Product data is properly structured",
+                        "Events are published to Nostr relays successfully"
+                    ]
+                },
+                "Editing Existing Product": [
+                    "Product list displays existing products",
+                    "Edit button is accessible for each product",
+                    "Edit form is pre-filled with existing data",
+                    "Form can be updated with new information",
+                    "Product is updated successfully",
+                    "Updated product appears in the list",
+                    "Route `/dashboard/products/products/$productId` works",
+                    "`updateProduct()` action executes successfully"
+                ],
+                "Product Visibility Management": [
+                    "Product list shows visibility status",
+                    "Toggle visibility button works",
+                    "Products can be hidden/shown",
+                    "Nostr events are updated with visibility changes",
+                    "`toggleProductVisibility()` action executes successfully"
+                ],
+                "Product Deletion": [
+                    "Delete button is accessible for each product",
+                    "Confirmation dialog appears before deletion",
+                    "Product is deleted successfully",
+                    "Product is removed from the list",
+                    "`deleteProduct()` action executes successfully"
+                ]
+            },
+            "Collection Management Flows Testing": {
+                "Creating a New Collection": {
+                    "Dashboard Flow": [
+                        "Dashboard navigation to Collections works",
+                        "\"Add Collection\" button is accessible",
+                        "Collection form opens correctly",
+                        "Form can be filled with collection details",
+                        "Collection is published successfully",
+                        "New collection appears in collection list",
+                        "Route `/dashboard/products/collections/new` works",
+                        "`NewCollectionContent.tsx` component renders",
+                        "`CollectionFormContent.tsx` component functions",
+                        "`collectionFormStore` manages form state",
+                        "`publishCollection()` action executes successfully"
+                    ],
+                    "Collection Form Steps": [
+                        "**Basic Info**: Name, description, header image fields work",
+                        "**Products**: Products can be selected for inclusion",
+                        "**Shipping**: Collection-wide shipping options can be configured",
+                        "**Location**: Optional location and geohash can be set"
+                    ],
+                    "Collection Data Structure (Nostr Kind 30405)": [
+                        "Collection events are created with correct kind (30405)",
+                        "All required tags are included in the event",
+                        "Collection data is properly structured",
+                        "Events are published to Nostr relays successfully"
+                    ]
+                },
+                "Editing Collection": [
+                    "Collection list displays existing collections",
+                    "Edit button is accessible for each collection",
+                    "Edit form is pre-filled with existing data",
+                    "Form can be updated with new information",
+                    "Collection is updated successfully",
+                    "Updated collection appears in the list",
+                    "Route `/dashboard/products/collections/$collectionId` works",
+                    "`updateCollection()` action executes successfully"
+                ],
+                "Collection Product Management": [
+                    "Collection form shows products tab",
+                    "Products can be selected/deselected with checkboxes",
+                    "Collection is updated when products are modified",
+                    "`ProductsTab.tsx` component functions correctly"
+                ]
+            },
+            "Shopping Cart & Checkout Flows Testing": {
+                "Adding Items to Cart": {
+                    "Product Page Flow": [
+                        "Product page displays \"Add to Cart\" button",
+                        "Items are added to cart successfully",
+                        "Cart store is updated correctly",
+                        "Cart drawer opens automatically",
+                        "`ProductCard.tsx` component functions",
+                        "`CartContent.tsx` component renders",
+                        "`cartActions.addProduct()` executes successfully",
+                        "`cartStore` manages cart state properly"
+                    ],
+                    "Cart Data Structure": [
+                        "Cart maintains proper data structure",
+                        "Products are stored correctly",
+                        "Sellers are grouped properly",
+                        "V4V shares are calculated correctly"
+                    ]
+                },
+                "Cart Management": {
+                    "Cart Drawer Operations": [
+                        "Cart drawer opens and closes correctly",
+                        "Cart items are displayed properly",
+                        "Quantities can be modified",
+                        "Items can be removed from cart",
+                        "Shipping options can be selected",
+                        "Cart can be cleared completely",
+                        "Checkout button is accessible",
+                        "`CartContent.tsx` component functions",
+                        "`CartItem.tsx` component works",
+                        "`CartSummary.tsx` component displays totals",
+                        "`updateProductAmount()` action works",
+                        "`removeProduct()` action works",
+                        "`clear()` action works",
+                        "`updateShippingMethod()` action works"
+                    ]
+                },
+                "Checkout Process": {
+                    "Multi-Step Checkout Flow": [
+                        "Checkout page is accessible from cart",
+                        "Multi-step process works correctly",
+                        "Progress indicator shows current step",
+                        "Navigation between steps works",
+                        "Route `/checkout` functions properly",
+                        "`CheckoutProgress.tsx` component works",
+                        "`ShippingAddressForm.tsx` component functions",
+                        "`PaymentContent.tsx` component works"
+                    ],
+                    "Checkout Steps": [
+                        "**Shipping Information**: Address form collects data correctly",
+                        "**Order Summary**: Cart contents and totals display properly",
+                        "**Payment Processing**: Invoices are generated correctly",
+                        "**Order Completion**: Confirmation is shown and cart is cleared"
+                    ],
+                    "Order Creation Process": [
+                        "Separate orders are created for each seller",
+                        "Order dependencies are handled correctly",
+                        "`publishOrderWithDependencies()` executes successfully"
+                    ]
+                }
+            },
+            "Payment Processing Flows Testing": {
+                "Lightning Payment Methods": {
+                    "NWC (Nostr Wallet Connect)": [
+                        "Payment dialog displays NWC button",
+                        "Wallet connection process works",
+                        "Invoice payment executes successfully",
+                        "Payment confirmation is received",
+                        "`LightningPaymentProcessor.tsx` component functions",
+                        "`handleNwcPayment()` action works correctly"
+                    ],
+                    "WebLN (Browser Extension)": [
+                        "Payment dialog displays WebLN button",
+                        "Browser extension integration works",
+                        "Invoice payment executes successfully",
+                        "Immediate confirmation is received",
+                        "`handleWeblnPayment()` action works correctly"
+                    ],
+                    "QR Code Payment": [
+                        "Payment dialog displays QR code",
+                        "QR code is scannable and valid",
+                        "Manual preimage entry works",
+                        "Payment verification succeeds",
+                        "`handleManualVerification()` action works correctly"
+                    ]
+                },
+                "Multi-Invoice Payment Flow": {
+                    "Sequential Payment Processing": [
+                        "Multiple invoices are generated correctly",
+                        "Sequential processing works",
+                        "Auto-advance to next invoice functions",
+                        "Progress tracking works",
+                        "`PaymentContent.tsx` component manages state",
+                        "`currentInvoiceIndex` and `invoices[]` state work"
+                    ],
+                    "Bulk NWC Payment": [
+                        "\"Pay All with NWC\" button is accessible",
+                        "All invoices are processed sequentially",
+                        "Progress indicator shows completion status",
+                        "1-second delays between payments work"
+                    ]
+                },
+                "Payment Types": {
+                    "Merchant Payments": [
+                        "Direct payments to seller addresses work",
+                        "Immediate confirmation via WebLN/NWC works",
+                        "Manual verification for QR payments works"
+                    ],
+                    "V4V (Value for Value) Payments": [
+                        "Zap-based payments to community members work",
+                        "Zap receipt monitoring functions",
+                        "90-second timeout for receipt detection works"
+                    ],
+                    "On-Chain Payments": [
+                        "Bitcoin address payments work",
+                        "Manual verification is required and works",
+                        "30-minute expiry functions correctly"
+                    ]
+                },
+                "Payment Verification": {
+                    "Lightning Payment Verification": [
+                        "Regular invoice payments are verified correctly",
+                        "Zap payments are verified through receipt monitoring",
+                        "Payment success handlers execute properly"
+                    ],
+                    "Payment Receipt Monitoring": [
+                        "Zap receipt events are subscribed to correctly",
+                        "Filtering by bolt11 invoice works",
+                        "Timeout scenarios are handled properly",
+                        "Subscriptions are cleaned up correctly"
+                    ]
+                }
+            },
+            "Order Management & Communication Flows Testing": {
+                "Order Lifecycle": {
+                    "Order States": [
+                        "Order states transition correctly: PENDING → CONFIRMED → PROCESSING → SHIPPED → COMPLETED",
+                        "Cancellation path works: PENDING → CANCELLED",
+                        "`OrderDetailComponent.tsx` displays order information",
+                        "`OrderActions.tsx` provides correct actions",
+                        "Order status is managed via Nostr events correctly"
+                    ],
+                    "Order Status Transitions": [
+                        "**PENDING**: Initial order creation works",
+                        "**CONFIRMED**: Seller can accept orders",
+                        "**PROCESSING**: Seller can move orders to processing",
+                        "**SHIPPED**: Seller can mark orders as shipped",
+                        "**COMPLETED**: Buyer can confirm receipt",
+                        "**CANCELLED**: Either party can cancel orders"
+                    ]
+                },
+                "Order Communication System": {
+                    "Message Types (Nostr Events)": [
+                        "**Kind 14**: General communication works",
+                        "**Kind 16**: Order processing messages work",
+                        "Type 1: Order creation messages",
+                        "Type 2: Payment request messages",
+                        "Type 3: Status update messages",
+                        "Type 4: Shipping update messages",
+                        "**Kind 17**: Payment receipt messages work"
+                    ],
+                    "Communication Flow": [
+                        "Message input is accessible",
+                        "Encrypted DMs are sent successfully",
+                        "Messages are published to Nostr relays",
+                        "Recipients receive notifications",
+                        "`MessageInput.tsx` component functions",
+                        "`ChatMessageBubble.tsx` component displays messages",
+                        "`useConversationMessages()` query works",
+                        "`sendChatMessage()` function executes successfully"
+                    ]
+                },
+                "Order Actions by Role": {
+                    "Buyer Actions": [
+                        "**PENDING**: Buyer can cancel orders",
+                        "**SHIPPED**: Buyer can confirm receipt (complete order)",
+                        "**Any Status**: Buyer can send messages"
+                    ],
+                    "Seller Actions": [
+                        "**PENDING**: Seller can confirm or cancel orders",
+                        "**CONFIRMED**: Seller can process orders (move to processing)",
+                        "**PROCESSING**: Seller can ship orders (add tracking info)",
+                        "**Any Status**: Seller can send messages and update status"
+                    ]
+                },
+                "Shipping Updates": {
+                    "Shipping Status Flow": [
+                        "Seller can access ship order functionality",
+                        "Tracking information can be added",
+                        "Shipping update events are created",
+                        "Buyer receives notifications",
+                        "`OrderActions.tsx` component provides shipping actions",
+                        "`updateOrderStatus()` action works with shipping details",
+                        "Shipping tags (tracking, carrier, eta, status) are included"
+                    ]
+                }
+            },
+            "V4V (Value for Value) System Testing": {
+                "V4V Configuration": {
+                    "Setup Flow": [
+                        "Dashboard navigation to Profile works",
+                        "V4V Setup option is accessible",
+                        "Recipients can be configured",
+                        "Percentages can be set",
+                        "Configuration is saved successfully",
+                        "`V4VSetupDialog.tsx` component functions",
+                        "`V4VManager.tsx` component works",
+                        "V4V shares are stored as Nostr events (Kind 30078)"
+                    ],
+                    "V4V Manager Features": [
+                        "Recipients can be added/removed by npub",
+                        "Percentage allocations can be set",
+                        "Zap capability is validated",
+                        "Seller vs V4V split is previewed correctly"
+                    ]
+                },
+                "V4V Data Structure": [
+                    "V4V events are created with correct kind (30078)",
+                    "Event content is properly structured",
+                    "Required tags are included",
+                    "Events are published to Nostr relays successfully"
+                ],
+                "V4V in Checkout Process": {
+                    "Payment Calculation": [
+                        "V4V share is calculated from order total",
+                        "Separate invoices are generated for V4V recipients",
+                        "V4V payments are processed alongside merchant payments",
+                        "`publishOrderWithDependencies()` handles V4V correctly"
+                    ],
+                    "V4V Recipients": [
+                        "Platform/app developers receive payments",
+                        "Content creators receive payments",
+                        "Community contributors receive payments",
+                        "Infrastructure providers receive payments"
+                    ]
+                }
+            },
+            "Dashboard Navigation Testing": {
+                "Dashboard Structure": {
+                    "Main Sections": [
+                        "**SALES** section is accessible",
+                        "Sales (orders) sub-section works",
+                        "Messages (communications) sub-section works",
+                        "Circular Economy sub-section works",
+                        "**PRODUCTS** section is accessible",
+                        "Products (manage listings) sub-section works",
+                        "Collections (group products) sub-section works",
+                        "Receive Payments (wallet setup) sub-section works",
+                        "Shipping Options sub-section works",
+                        "**ACCOUNT** section is accessible",
+                        "Profile (user info) sub-section works",
+                        "Make Payments (wallet management) sub-section works",
+                        "Your Purchases (order history) sub-section works",
+                        "Network (Nostr connections) sub-section works",
+                        "**APP SETTINGS** section is accessible (Admin Only)",
+                        "App Miscellaneous sub-section works",
+                        "Team Management sub-section works",
+                        "Blacklists sub-section works",
+                        "Featured Items sub-section works"
+                    ]
+                },
+                "Navigation Flow": [
+                    "Dashboard navigation works correctly",
+                    "Section navigation functions properly",
+                    "Sub-section navigation works",
+                    "Actions within sections execute successfully",
+                    "`DashboardLayout.tsx` component functions",
+                    "`DashboardListItem.tsx` component works",
+                    "File-based routing with `_dashboard-layout.tsx` works"
+                ],
+                "Mobile Navigation": [
+                    "Mobile hamburger menu is accessible",
+                    "Section list is displayed correctly",
+                    "Sub-section navigation works on mobile",
+                    "Content is displayed properly",
+                    "`MobileMenu.tsx` component functions",
+                    "Sidebar collapses on mobile correctly",
+                    "Full-screen content is shown on mobile"
+                ]
+            },
+            "Admin Functions Testing": {
+                "Admin Access Control": {
+                    "Admin Verification": [
+                        "User login works correctly",
+                        "Admin status is checked properly",
+                        "Access is granted/denied based on admin status",
+                        "Navigation is filtered for non-admins",
+                        "`useAmIAdmin()` hook functions correctly",
+                        "Route-level admin checks in `__root.tsx` work"
+                    ]
+                },
+                "Admin Features": {
+                    "Blacklist Management": [
+                        "Admin can access blacklists section",
+                        "Users can be added/removed from blacklist",
+                        "Products can be added/removed from blacklist",
+                        "Blacklist events are updated correctly",
+                        "`BlacklistsComponent.tsx` component functions",
+                        "Add/remove from blacklist actions work"
+                    ],
+                    "Featured Items": [
+                        "Admin can access featured items section",
+                        "Products can be selected for featuring",
+                        "Featured status can be set/toggled",
+                        "Featured events are updated correctly",
+                        "`FeaturedItemsComponent.tsx` component functions",
+                        "Toggle featured status actions work"
+                    ],
+                    "Team Management": [
+                        "Admin can access team management",
+                        "Team members can be added/removed",
+                        "Permissions can be updated",
+                        "Team management interface functions correctly"
+                    ]
+                },
+                "App Settings": {
+                    "App Configuration": [
+                        "Admin can access app miscellaneous settings",
+                        "App-wide configuration can be updated",
+                        "Settings are saved successfully",
+                        "App settings interface functions correctly"
+                    ]
+                }
+            },
+            "Key Interaction Patterns Testing": {
+                "Nostr Event Flow": [
+                    "User actions trigger form validation",
+                    "NDK events are created correctly",
+                    "Events are signed properly",
+                    "Events are published to relays",
+                    "UI is updated after successful publication"
+                ],
+                "State Management Pattern": [
+                    "User interactions trigger store actions",
+                    "State updates occur correctly",
+                    "UI re-renders with new state",
+                    "State is persisted to storage"
+                ],
+                "Error Handling Pattern": [
+                    "Actions are wrapped in try/catch blocks",
+                    "Error states are managed properly",
+                    "User notifications are shown for errors",
+                    "Retry options are provided when appropriate"
+                ],
+                "Loading States": [
+                    "Loading states are triggered for actions",
+                    "Background processing is handled correctly",
+                    "Success/error states are managed",
+                    "UI is updated appropriately"
+                ]
+            },
+            "Technical Implementation Testing": {
+                "Nostr Event Kinds Used": [
+                    "**30402**: Product listings work correctly",
+                    "**30405**: Product collections work correctly",
+                    "**30406**: Shipping options work correctly",
+                    "**30407**: Order events work correctly",
+                    "**30408**: Payment requests work correctly",
+                    "**30078**: V4V shares work correctly",
+                    "**14**: Direct messages work correctly",
+                    "**16**: Order processing messages work correctly",
+                    "**17**: Payment receipts work correctly"
+                ],
+                "Key Components Architecture": [
+                    "Page components render correctly",
+                    "Feature components function properly",
+                    "UI components work as expected",
+                    "Store actions execute successfully",
+                    "Nostr events are created and published"
+                ],
+                "Data Flow": [
+                    "Nostr relays are connected properly",
+                    "NDK manages connections correctly",
+                    "TanStack Query fetches data successfully",
+                    "React components render with data",
+                    "User interface displays correctly"
+                ],
+                "Payment Integration": [
+                    "Lightning Network integration works",
+                    "NWC/WebLN connections function",
+                    "NDK handles payment processing",
+                    "Payment processors work correctly",
+                    "Order completion is handled properly"
+                ]
+            },
+            "Cross-Browser Testing": {
+                "Desktop Browsers": [
+                    "Chrome (latest version)",
+                    "Firefox (latest version)",
+                    "Safari (latest version)",
+                    "Edge (latest version)"
+                ],
+                "Mobile Browsers": [
+                    "Chrome Mobile",
+                    "Safari Mobile",
+                    "Firefox Mobile",
+                    "Samsung Internet"
+                ],
+                "Responsive Design": [
+                    "Mobile view (320px - 768px)",
+                    "Tablet view (768px - 1024px)",
+                    "Desktop view (1024px+)"
+                ]
+            },
+            "Performance Testing": {
+                "Load Times": [
+                    "Initial page load < 3 seconds",
+                    "Navigation between pages < 1 second",
+                    "Form submissions < 2 seconds",
+                    "Payment processing < 5 seconds"
+                ],
+                "Memory Usage": [
+                    "No memory leaks in long sessions",
+                    "Proper cleanup of event listeners",
+                    "Efficient state management"
+                ],
+                "Network Efficiency": [
+                    "Minimal API calls",
+                    "Efficient Nostr relay usage",
+                    "Proper caching strategies"
+                ]
+            },
+            "Security Testing": {
+                "Authentication": [
+                    "Private keys are encrypted in localStorage",
+                    "Sessions expire appropriately",
+                    "Admin routes are protected",
+                    "CSRF protection is in place"
+                ],
+                "Data Validation": [
+                    "All user inputs are validated",
+                    "Nostr events are properly signed",
+                    "Payment amounts are verified",
+                    "File uploads are restricted"
+                ],
+                "Privacy": [
+                    "Encrypted messages work correctly",
+                    "User data is not exposed",
+                    "Payment information is secure",
+                    "Nostr relay connections are secure"
+                ]
+            },
+            "Accessibility Testing": {
+                "WCAG Compliance": [
+                    "Keyboard navigation works",
+                    "Screen reader compatibility",
+                    "Color contrast meets standards",
+                    "Focus indicators are visible",
+                    "Alt text for images",
+                    "Form labels are associated correctly"
+                ],
+                "Usability": [
+                    "Clear error messages",
+                    "Intuitive navigation",
+                    "Consistent UI patterns",
+                    "Helpful tooltips and hints"
+                ]
+            },
+            "Integration Testing": {
+                "Nostr Protocol": [
+                    "Relay connections are stable",
+                    "Event publishing works reliably",
+                    "Event subscription works correctly",
+                    "Message encryption/decryption works"
+                ],
+                "Lightning Network": [
+                    "Invoice generation works",
+                    "Payment processing is reliable",
+                    "Multiple wallet types work",
+                    "Payment verification is accurate"
+                ],
+                "Third-Party Services": [
+                    "Image upload services work",
+                    "External payment processors work",
+                    "Analytics tracking works (if applicable)",
+                    "Error monitoring works (if applicable)"
+                ]
+            },
+            "Regression Testing": {
+                "Critical Paths": [
+                    "User registration and login",
+                    "Product creation and management",
+                    "Shopping cart and checkout",
+                    "Payment processing",
+                    "Order management",
+                    "Communication system"
+                ],
+                "Edge Cases": [
+                    "Network connectivity issues",
+                    "Payment failures",
+                    "Invalid user inputs",
+                    "Concurrent user actions",
+                    "Large data sets",
+                    "Timeout scenarios"
+                ]
+            },
+            "Test Environment Setup": {
+                "Prerequisites": [
+                    "Test Nostr relays are configured",
+                    "Test Lightning Network nodes are available",
+                    "Test user accounts are created",
+                    "Test products and collections are seeded",
+                    "Test payment methods are configured"
+                ],
+                "Test Data": [
+                    "Sample products with various configurations",
+                    "Test collections with different products",
+                    "Test users with different roles",
+                    "Test orders in various states",
+                    "Test payment scenarios"
+                ],
+                "Cleanup": [
+                    "Test data is cleaned up after tests",
+                    "Test accounts are reset",
+                    "Test transactions are reversed",
+                    "Test events are removed from relays"
+                ]
+            },
+            "Test Execution Checklist": {
+                "Pre-Test": [
+                    "Test environment is set up correctly",
+                    "All dependencies are installed",
+                    "Test data is prepared",
+                    "Test accounts are ready",
+                    "Test relays are accessible"
+                ],
+                "During Test": [
+                    "Each test case is executed systematically",
+                    "Results are documented",
+                    "Issues are logged with details",
+                    "Screenshots are taken for failures",
+                    "Performance metrics are recorded"
+                ],
+                "Post-Test": [
+                    "Test results are compiled",
+                    "Issues are prioritized",
+                    "Test environment is cleaned up",
+                    "Test report is generated",
+                    "Follow-up actions are planned"
+                ]
+            },
+            "Sign-off": {
+                "Test Completion": [
+                    "All test cases have been executed",
+                    "All critical issues have been resolved",
+                    "Performance benchmarks are met",
+                    "Security requirements are satisfied",
+                    "Accessibility standards are met"
+                ],
+                "Approval": [
+                    "QA Team Lead Approval: ________________",
+                    "Product Owner Approval: ________________",
+                    "Technical Lead Approval: ________________",
+                    "Date: ________________"
+                ]
+            }
+        };
+
+        // Storage key for saving progress
+        const STORAGE_KEY = 'plebian_testing_checklist';
+
+        // Initialize the application
+        function init() {
+            loadProgress();
+            renderChecklist();
+            updateProgress();
+        }
+
+        // Render the checklist
+        function renderChecklist() {
+            const content = document.getElementById('content');
+            content.innerHTML = '';
+
+            Object.entries(checklistData).forEach(([sectionName, sectionData]) => {
+                const sectionDiv = document.createElement('div');
+                sectionDiv.className = 'section';
+
+                const sectionHeader = document.createElement('h2');
+                sectionHeader.textContent = sectionName;
+                sectionDiv.appendChild(sectionHeader);
+
+                const sectionSummary = document.createElement('div');
+                sectionSummary.className = 'section-summary';
+                sectionSummary.innerHTML = `
+                    <div class="completion-stats">
+                        <span>Section Progress</span>
+                        <span id="section-${sectionName.replace(/\s+/g, '-').toLowerCase()}-stats">0/0</span>
+                    </div>
+                `;
+                sectionDiv.appendChild(sectionSummary);
+
+                renderSection(sectionDiv, sectionData, sectionName);
+                content.appendChild(sectionDiv);
+            });
+        }
+
+        // Render a section recursively
+        function renderSection(container, data, sectionName, level = 0) {
+            Object.entries(data).forEach(([key, value]) => {
+                if (Array.isArray(value)) {
+                    // This is a list of checkboxes
+                    const subsection = document.createElement('div');
+                    subsection.className = level === 0 ? 'subsection' : 'subsubsection';
+
+                    const header = document.createElement(level === 0 ? 'h3' : 'h4');
+                    header.textContent = key;
+                    subsection.appendChild(header);
+
+                    value.forEach(item => {
+                        const checkboxItem = document.createElement('div');
+                        checkboxItem.className = 'checkbox-item';
+
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.id = generateId(sectionName, key, item);
+                        checkbox.addEventListener('change', updateProgress);
+
+                        const label = document.createElement('label');
+                        label.className = 'checkbox-label';
+                        label.setAttribute('for', checkbox.id);
+                        label.textContent = item;
+
+                        checkboxItem.appendChild(checkbox);
+                        checkboxItem.appendChild(label);
+                        subsection.appendChild(checkboxItem);
+                    });
+
+                    container.appendChild(subsection);
+                } else {
+                    // This is a nested object
+                    const subsection = document.createElement('div');
+                    subsection.className = level === 0 ? 'subsection' : 'subsubsection';
+
+                    const header = document.createElement(level === 0 ? 'h3' : 'h4');
+                    header.textContent = key;
+                    subsection.appendChild(header);
+
+                    renderSection(subsection, value, sectionName, level + 1);
+                    container.appendChild(subsection);
+                }
+            });
+        }
+
+        // Generate a unique ID for each checkbox
+        function generateId(sectionName, subsectionName, item) {
+            return `${sectionName.replace(/\s+/g, '-').toLowerCase()}-${subsectionName.replace(/\s+/g, '-').toLowerCase()}-${item.replace(/\s+/g, '-').toLowerCase().replace(/[^a-z0-9-]/g, '')}`;
+        }
+
+        // Update progress
+        function updateProgress() {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            const checked = document.querySelectorAll('input[type="checkbox"]:checked');
+            const total = checkboxes.length;
+            const completed = checked.length;
+
+            const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+            
+            document.getElementById('progressFill').style.width = `${percentage}%`;
+            document.getElementById('progressText').textContent = `${percentage}%`;
+
+            // Update section summaries
+            Object.keys(checklistData).forEach(sectionName => {
+                updateSectionProgress(sectionName);
+            });
+
+            // Update checkbox item styling
+            checkboxes.forEach(checkbox => {
+                const item = checkbox.closest('.checkbox-item');
+                if (checkbox.checked) {
+                    item.classList.add('completed');
+                } else {
+                    item.classList.remove('completed');
+                }
+            });
+
+            // Update section summary styling
+            document.querySelectorAll('.section-summary').forEach(summary => {
+                const sectionName = summary.id.replace('section-', '').replace('-stats', '').replace(/-/g, ' ');
+                const sectionData = getSectionData(sectionName);
+                const sectionTotal = countItems(sectionData);
+                const sectionCompleted = countCompletedItems(sectionName, sectionData);
+                
+                if (sectionCompleted === sectionTotal && sectionTotal > 0) {
+                    summary.classList.add('completed');
+                } else {
+                    summary.classList.remove('completed');
+                }
+            });
+
+            saveProgress();
+        }
+
+        // Update section progress
+        function updateSectionProgress(sectionName) {
+            const sectionData = getSectionData(sectionName);
+            const total = countItems(sectionData);
+            const completed = countCompletedItems(sectionName, sectionData);
+            
+            const statsElement = document.getElementById(`section-${sectionName.replace(/\s+/g, '-').toLowerCase()}-stats`);
+            if (statsElement) {
+                statsElement.textContent = `${completed}/${total}`;
+            }
+        }
+
+        // Get section data
+        function getSectionData(sectionName) {
+            return checklistData[sectionName];
+        }
+
+        // Count total items in a section
+        function countItems(data) {
+            let count = 0;
+            Object.values(data).forEach(value => {
+                if (Array.isArray(value)) {
+                    count += value.length;
+                } else {
+                    count += countItems(value);
+                }
+            });
+            return count;
+        }
+
+        // Count completed items in a section
+        function countCompletedItems(sectionName, data) {
+            let count = 0;
+            Object.entries(data).forEach(([key, value]) => {
+                if (Array.isArray(value)) {
+                    value.forEach(item => {
+                        const checkbox = document.getElementById(generateId(sectionName, key, item));
+                        if (checkbox && checkbox.checked) {
+                            count++;
+                        }
+                    });
+                } else {
+                    count += countCompletedItems(sectionName, value);
+                }
+            });
+            return count;
+        }
+
+        // Save progress to localStorage
+        function saveProgress() {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            const progress = {};
+            
+            checkboxes.forEach(checkbox => {
+                progress[checkbox.id] = checkbox.checked;
+            });
+            
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+            showToast('Progress saved!', 'success');
+        }
+
+        // Load progress from localStorage
+        function loadProgress() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                const progress = JSON.parse(saved);
+                Object.entries(progress).forEach(([id, checked]) => {
+                    const checkbox = document.getElementById(id);
+                    if (checkbox) {
+                        checkbox.checked = checked;
+                    }
+                });
+            }
+        }
+
+        // Clear all checkboxes
+        function clearAll() {
+            if (confirm('Are you sure you want to clear all progress? This cannot be undone.')) {
+                const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked = false;
+                });
+                updateProgress();
+                showToast('All progress cleared!', 'success');
+            }
+        }
+
+        // Generate markdown document
+        function generateMarkdown() {
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            const checked = document.querySelectorAll('input[type="checkbox"]:checked');
+            const total = checkboxes.length;
+            const completed = checked.length;
+            const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+            let markdown = `# Plebian Market - Testing Checklist Results\n\n`;
+            markdown += `**Generated on:** ${new Date().toLocaleString()}\n`;
+            markdown += `**Progress:** ${completed}/${total} (${percentage}%)\n\n`;
+            markdown += `---\n\n`;
+
+            // Generate markdown for each section
+            Object.entries(checklistData).forEach(([sectionName, sectionData]) => {
+                markdown += `## ${sectionName}\n\n`;
+                markdown += generateSectionMarkdown(sectionData, sectionName);
+                markdown += `\n`;
+            });
+
+            // Add summary
+            markdown += `## Summary\n\n`;
+            markdown += `- **Total Items:** ${total}\n`;
+            markdown += `- **Completed Items:** ${completed}\n`;
+            markdown += `- **Remaining Items:** ${total - completed}\n`;
+            markdown += `- **Completion Rate:** ${percentage}%\n\n`;
+
+            // Add sign-off section
+            markdown += `## Sign-off\n\n`;
+            markdown += `### Test Completion\n`;
+            markdown += `- [ ] All test cases have been executed\n`;
+            markdown += `- [ ] All critical issues have been resolved\n`;
+            markdown += `- [ ] Performance benchmarks are met\n`;
+            markdown += `- [ ] Security requirements are satisfied\n`;
+            markdown += `- [ ] Accessibility standards are met\n\n`;
+            markdown += `### Approval\n`;
+            markdown += `- [ ] QA Team Lead Approval: ________________\n`;
+            markdown += `- [ ] Product Owner Approval: ________________\n`;
+            markdown += `- [ ] Technical Lead Approval: ________________\n`;
+            markdown += `- [ ] Date: ________________\n\n`;
+
+            // Download the markdown file
+            downloadFile(markdown, `plebian-testing-checklist-${new Date().toISOString().split('T')[0]}.md`, 'text/markdown');
+            showToast('Markdown document downloaded!', 'success');
+        }
+
+        // Generate markdown for a section
+        function generateSectionMarkdown(data, sectionName, level = 0) {
+            let markdown = '';
+            const prefix = '  '.repeat(level);
+            
+            Object.entries(data).forEach(([key, value]) => {
+                if (Array.isArray(value)) {
+                    markdown += `${prefix}### ${key}\n\n`;
+                    value.forEach(item => {
+                        const checkbox = document.getElementById(generateId(sectionName, key, item));
+                        const checked = checkbox && checkbox.checked ? 'x' : ' ';
+                        markdown += `${prefix}- [${checked}] ${item}\n`;
+                    });
+                    markdown += `\n`;
+                } else {
+                    markdown += `${prefix}### ${key}\n\n`;
+                    markdown += generateSectionMarkdown(value, sectionName, level + 1);
+                }
+            });
+            
+            return markdown;
+        }
+
+        // Download file
+        function downloadFile(content, filename, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Show toast notification
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type}`;
+            toast.classList.add('show');
+            
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // Initialize the application when the page loads
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

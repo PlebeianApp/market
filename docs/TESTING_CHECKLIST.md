@@ -9,22 +9,22 @@ This document provides a comprehensive testing checklist for all interaction flo
 ## Application Architecture Testing
 
 ### Core Technologies
-- [ ] React 19 with TypeScript compiles without errors
-- [ ] TanStack Router file-based routing works correctly
-- [ ] TanStack Store state management functions properly
-- [ ] TanStack Query data fetching works as expected
-- [ ] TanStack Form with Zod validation functions correctly
-- [ ] Radix UI + Tailwind CSS styling renders properly
-- [ ] NDK (Nostr Development Kit) connects to relays
-- [ ] Lightning Network payment integration works
+- React 19 with TypeScript compiles without errors
+- TanStack Router file-based routing works correctly
+- TanStack Store state management functions properly
+- TanStack Query data fetching works as expected
+- TanStack Form with Zod validation functions correctly
+- Radix UI + Tailwind CSS styling renders properly
+- NDK (Nostr Development Kit) connects to relays
+- Lightning Network payment integration works
 
 ### Key Stores
-- [ ] `authStore` manages authentication state correctly
-- [ ] `cartStore` manages shopping cart state properly
-- [ ] `ndkStore` manages Nostr connections effectively
-- [ ] `uiStore` manages UI state (drawers, dialogs) correctly
-- [ ] `configStore` manages app configuration properly
-- [ ] `walletStore` manages Lightning wallet state correctly
+- `authStore` manages authentication state correctly
+- `cartStore` manages shopping cart state properly
+- `ndkStore` manages Nostr connections effectively
+- `uiStore` manages UI state (drawers, dialogs) correctly
+- `configStore` manages app configuration properly
+- `walletStore` manages Lightning wallet state correctly
 
 ---
 
