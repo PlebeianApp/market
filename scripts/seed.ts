@@ -120,12 +120,20 @@ async function seedData() {
 		// Create payment details for each user (one Lightning, one On-chain)
 		console.log(`Creating payment details for user ${pubkey.substring(0, 8)}...`)
 
-		// Create Lightning Network payment detail
-		const lightningPaymentDetail = generateLightningPaymentDetail(WALLETED_USER_LUD16)
+		// Create Lightning Network payment detail (global scope)
+		const lightningPaymentDetail = generateLightningPaymentDetail({
+			lightningAddress: WALLETED_USER_LUD16,
+			scope: 'global',
+			scopeName: 'Global Wallet',
+		})
 		await createPaymentDetailEvent(signer, ndk, lightningPaymentDetail, APP_PUBKEY!)
 
-		// Create On-chain payment detail (using the same XPUB for all users)
-		const onChainPaymentDetail = generateOnChainPaymentDetail(XPUB)
+		// Create On-chain payment detail (using the same XPUB for all users, global scope)
+		const onChainPaymentDetail = generateOnChainPaymentDetail({
+			xpub: XPUB,
+			scope: 'global',
+			scopeName: 'Global Wallet',
+		})
 		await createPaymentDetailEvent(signer, ndk, onChainPaymentDetail, APP_PUBKEY!)
 
 		// Create NWC wallets for each user (2 wallets with organic names)
@@ -195,6 +203,35 @@ async function seedData() {
 					allProductRefs.push(productRef)
 				}
 			}
+		}
+	}
+
+	// Create multi-wallet configurations for all users (standard seeding)
+	console.log('\n🎯 Creating multi-wallet configurations for all users...')
+	for (const user of devUsers) {
+		const signer = new NDKPrivateKeySigner(user.sk)
+		await signer.blockUntilReady()
+		const pubkey = (await signer.user()).pubkey
+
+		// Get product coordinates for this user
+		const userProducts = productsByUser[pubkey] || []
+		const productCoordinates = userProducts.map((ref) => ref.coordinates)
+
+		if (productCoordinates.length >= 3) {
+			console.log(`\n💳 Setting up wallets for user ${pubkey.substring(0, 8)}... (${productCoordinates.length} products)`)
+
+			const { seedMultiplePaymentDetails } = await import('./gen_payment_details')
+
+			await seedMultiplePaymentDetails(
+				signer,
+				ndk,
+				APP_PUBKEY,
+				WALLETED_USER_LUD16,
+				productCoordinates,
+				[], // No collections in basic seed
+			)
+		} else {
+			console.log(`⏭️ Skipping multi-wallet for user ${pubkey.substring(0, 8)} (only ${productCoordinates.length} products)`)
 		}
 	}
 

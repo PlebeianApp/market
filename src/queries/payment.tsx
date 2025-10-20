@@ -1,4 +1,4 @@
-import { type PaymentDetailsMethod } from '@/lib/constants'
+import { PAYMENT_DETAILS_METHOD, type PaymentDetailsMethod } from '@/lib/constants'
 import { configStore } from '@/lib/stores/config'
 import { ndkActions } from '@/lib/stores/ndk'
 import type { PayWithNwcParams } from '@/publish/payment'
@@ -39,7 +39,8 @@ export type PaymentScope = 'global' | 'collection' | 'product'
 export interface RichPaymentDetail extends PaymentDetail {
 	userId: string
 	scope: PaymentScope
-	scopeId?: string | null // Collection or product ID
+	scopeId?: string | null // Collection or product ID (primary, for single or first of many)
+	scopeIds?: string[] // All product/collection IDs (for multi-product wallets)
 	scopeName?: string // Collection or product name
 	isDefault: boolean
 }
@@ -81,54 +82,24 @@ export const fetchPaymentDetail = async (id: string): Promise<PaymentDetail | nu
 			return null
 		}
 
-		// Decrypt the content if the user has a signer
-		const signer = ndkActions.getSigner()
-		if (!signer) {
-			console.warn('No signer available to decrypt payment details')
-			return null
-		}
-
-		const user = await signer.user()
-		if (!user) return null
-
-		// Find app pubkey from the p tag or use the stored app pubkey
-		const pTag = event.tags.find((tag) => tag[0] === 'p')
-		const appPubkey = pTag ? pTag[1] : configStore.state.config.appPublicKey
-
-		if (!appPubkey) {
-			console.warn('App public key not available')
-			return null
-		}
-
-		// Decrypt the content
-		let content
+		// Parse the content (no decryption needed - payment details are public)
 		try {
-			// If the event author is the app, decrypt with the user's key
-			// If the event author is the user, decrypt with the app's key
-			const isEventFromApp = event.pubkey === appPubkey
+			const parsedContent = JSON.parse(event.content)
 
-			if (isEventFromApp) {
-				content = await nip04.decrypt(appPubkey, user.pubkey, event.content)
-			} else {
-				content = await nip04.decrypt(user.pubkey, appPubkey, event.content)
-			}
-
-			const parsedContent = JSON.parse(content)
-
-			// Find any a tag for coordinates
-			const aTag = event.tags.find((tag) => tag[0] === 'a')
-			const coordinates = aTag ? aTag[1] : undefined
+			// Find ALL 'a' tags for coordinates (for multi-product wallets)
+			const aTags = event.tags.filter((tag) => tag[0] === 'a')
+			const coordinates = aTags.length > 0 ? aTags.map((t) => t[1]).join(',') : undefined
 
 			return {
 				id: event.id,
 				paymentMethod: parsedContent.payment_method || 'other',
 				paymentDetail: parsedContent.payment_detail || '',
 				createdAt: event.created_at || 0,
-				coordinates,
+				coordinates, // Now contains all product/collection references
 				isDefault: parsedContent.is_default === true || parsedContent.is_default === 'true',
 			}
 		} catch (error) {
-			console.error('Error decrypting payment details:', error)
+			console.error('Error parsing payment details:', error)
 			return null
 		}
 	} catch (error) {
@@ -287,7 +258,7 @@ export const useProductPaymentDetails = (coordinates: string, userPubkey?: strin
 export interface PublishPaymentDetailParams {
 	paymentMethod: PaymentMethod
 	paymentDetail: string
-	coordinates?: string // Optional product/collection coordinates
+	coordinates?: string | string[] // Optional product/collection coordinates (single or multiple)
 	appPubkey?: string // Optional app pubkey
 	dTag?: string // Optional d tag for replaceable events (for updates)
 	isDefault?: boolean // Whether this is the default payment method
@@ -319,26 +290,26 @@ export const publishPaymentDetail = async (params: PublishPaymentDetailParams): 
 			is_default: params.isDefault || false,
 		}
 
-		// Encrypt content for the app
+		// Payment details are public (Lightning addresses, BTC addresses)
+		// No encryption needed - buyers need to read these to generate invoices
 		const contentStr = JSON.stringify(contentObj)
-		let encryptedContent
-
-		// Encrypt to app's pubkey
-		encryptedContent = await nip04.encrypt(user.pubkey, appPubkey, contentStr)
 
 		// Create the event
 		const event = new NDKEvent(ndk)
 		event.kind = NDKKind.AppSpecificData
-		event.content = encryptedContent
+		event.content = contentStr
 		event.tags = [
 			['d', params.dTag || uuidv4()],
 			['l', 'payment_detail'],
 			['p', appPubkey], // Reference to the app
 		]
 
-		// Add coordinates if provided
+		// Add coordinates if provided (can be single string or array)
 		if (params.coordinates) {
-			event.tags.push(['a', params.coordinates])
+			const coordinatesArray = Array.isArray(params.coordinates) ? params.coordinates : [params.coordinates]
+			coordinatesArray.forEach((coord) => {
+				event.tags.push(['a', coord])
+			})
 		}
 
 		// Sign and publish
@@ -434,13 +405,60 @@ export const fetchRichUserPaymentDetails = async (userPubkey: string): Promise<R
 
 		// Enhance the basic details with scope information from coordinates
 		const richDetails = basicDetails.map((detail) => {
-			const scopeInfo = parseScopeFromCoordinates(detail.coordinates)
+			// Parse ALL coordinates from the event (comma-separated)
+			const coordinatesArray = detail.coordinates ? detail.coordinates.split(',') : []
 
-			return {
-				...detail,
-				userId: userPubkey,
-				...scopeInfo,
-				isDefault: detail.isDefault || false,
+			if (coordinatesArray.length === 0) {
+				// Global wallet
+				return {
+					...detail,
+					userId: userPubkey,
+					scope: 'global' as PaymentScope,
+					scopeId: null,
+					scopeName: 'Global',
+					scopeIds: [],
+					isDefault: detail.isDefault || false,
+				}
+			} else if (coordinatesArray.length > 1) {
+				// Multiple products - check if they're all the same kind
+				const firstCoord = coordinatesArray[0].split(':')
+				const kind = firstCoord[0]
+
+				const scopeIds = coordinatesArray.map((c) => c.split(':')[2])
+
+				if (kind === '30405') {
+					// Multiple collections (rare case)
+					return {
+						...detail,
+						userId: userPubkey,
+						scope: 'collection' as PaymentScope,
+						scopeId: scopeIds[0],
+						scopeName: `${coordinatesArray.length} Collections`,
+						scopeIds,
+						isDefault: detail.isDefault || false,
+					}
+				} else {
+					// Multiple products
+					return {
+						...detail,
+						userId: userPubkey,
+						scope: 'product' as PaymentScope,
+						scopeId: scopeIds[0],
+						scopeName: `${coordinatesArray.length} Products`,
+						scopeIds,
+						isDefault: detail.isDefault || false,
+					}
+				}
+			} else {
+				// Single product or collection
+				const scopeInfo = parseScopeFromCoordinates(coordinatesArray[0])
+				return {
+					...detail,
+					userId: userPubkey,
+					...scopeInfo,
+					scopeIds: [scopeInfo.scopeId!].filter(Boolean),
+					isDefault: detail.isDefault || false,
+				}
 			}
 		})
 
@@ -737,26 +755,93 @@ export interface GenerateInvoiceParams {
 	invoiceId: string // A unique ID for this specific invoice generation attempt
 	items: Array<{ productId: string; name: string; amount: number; price: number }>
 	type: 'seller' | 'v4v'
+	selectedPaymentDetailId?: string // Optional: Specific payment detail to use (bypasses resolution)
 }
 
 /**
- * Generates a BOLT11 invoice from a seller's lightning address.
- * Fetches the seller's profile to find their lud16.
+ * Generates a BOLT11 invoice from a seller's payment details or lightning address.
+ * Priority order:
+ * 1. Product-specific payment details
+ * 2. Collection-specific payment details
+ * 3. Global payment details
+ * 4. Seller's lud16 from profile
  */
 export const generateInvoice = async (params: GenerateInvoiceParams): Promise<GeneratedInvoice> => {
-	const { sellerPubkey, amountSats, description } = params
+	const { sellerPubkey, amountSats, description, items, type, selectedPaymentDetailId } = params
 
-	// Fetch profile to get lightning address
+	// Fetch profile to get seller name and lud16 fallback
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
 	const user = ndk.getUser({ pubkey: sellerPubkey })
 	await user.fetchProfile()
 	const sellerName = user.profile?.displayName || user.profile?.name || nip19.npubEncode(sellerPubkey).substring(0, 12)
-	const lnAddress = user.profile?.lud16 || user.profile?.lud06
+	const fallbackLnAddress = user.profile?.lud16 || user.profile?.lud06
 
+	let paymentDetails: PaymentDetail[] = []
+	let lnAddress: string | null = null
+
+	// For V4V payments, skip payment details resolution and use profile lud16 directly
+	if (type === 'v4v') {
+		console.log(`V4V payment - using seller's profile lud16 for ${sellerName}`)
+		lnAddress = fallbackLnAddress || null
+	} else if (selectedPaymentDetailId) {
+		// If a specific payment detail was selected, use it directly
+		console.log(`🎯 Using buyer-selected payment detail ID: ${selectedPaymentDetailId}`)
+		try {
+			const selectedDetail = await fetchPaymentDetail(selectedPaymentDetailId)
+			if (selectedDetail && selectedDetail.paymentMethod === PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK) {
+				lnAddress = selectedDetail.paymentDetail
+				console.log(`📍 Using buyer-selected lightning address: ${lnAddress}`)
+			} else {
+				console.warn(`⚠️ Selected payment detail not found or not Lightning, falling back to resolution`)
+			}
+		} catch (error) {
+			console.error(`❌ Error fetching selected payment detail, falling back to resolution:`, error)
+		}
+	}
+
+	// If no specific payment detail was selected or fetching failed, use resolution logic
+	if (!lnAddress && type !== 'v4v') {
+		// For seller payments, resolve payment details using the priority order:
+		// 1. Product-specific 2. Collection-specific 3. Global 4. Profile lud16
+		const productIds = items.map((item) => item.productId)
+
+		// Try each product in order until we find payment details
+		for (const productId of productIds) {
+			try {
+				console.log(`🔍 Resolving payment details for product ${productId}`)
+				const resolvedDetails = await resolvePaymentDetailsForProduct(productId, sellerPubkey)
+
+				if (resolvedDetails.length > 0) {
+					console.log(`✅ Found ${resolvedDetails.length} payment detail(s) for product ${productId}`)
+					paymentDetails = resolvedDetails
+					break // Use the first product's payment details
+				}
+			} catch (error) {
+				console.error(`❌ Error resolving payment details for product ${productId}:`, error)
+			}
+		}
+
+		// Extract Lightning Network address from resolved payment details
+		if (paymentDetails.length > 0) {
+			const lightningPaymentDetail = paymentDetails.find((pd) => pd.paymentMethod === PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK)
+			if (lightningPaymentDetail) {
+				lnAddress = lightningPaymentDetail.paymentDetail
+				console.log(`📍 Using resolved lightning address: ${lnAddress}`)
+			}
+		}
+
+		// Fallback to profile lud16 if no payment details found
+		if (!lnAddress && fallbackLnAddress) {
+			console.log(`⚠️ No payment details found, using fallback lud16: ${fallbackLnAddress}`)
+			lnAddress = fallbackLnAddress
+		}
+	}
+
+	// If still no lightning address found, return failed status
 	if (!lnAddress) {
-		// No address found, return a 'failed' status so UI can handle it
+		console.warn(`❌ No lightning address found for seller ${sellerName}`)
 		return {
 			...params,
 			id: params.invoiceId,
@@ -769,17 +854,19 @@ export const generateInvoice = async (params: GenerateInvoiceParams): Promise<Ge
 		}
 	}
 
+	// Generate the invoice using the resolved lightning address
 	try {
+		console.log(`⚡ Generating invoice for ${lnAddress} (${amountSats} sats)`)
 		const ln = new LightningAddress(lnAddress)
 		await ln.fetch()
 
-		// NWC zapper requires msats
 		const invoice = await ln.requestInvoice({ satoshi: amountSats, comment: description })
 
 		if (!invoice.paymentRequest) {
 			throw new Error('Failed to retrieve BOLT11 invoice from lightning address.')
 		}
 
+		console.log(`✅ Invoice generated successfully for ${sellerName}`)
 		return {
 			...params,
 			id: params.invoiceId,
@@ -791,7 +878,7 @@ export const generateInvoice = async (params: GenerateInvoiceParams): Promise<Ge
 			status: 'pending',
 		}
 	} catch (error) {
-		console.error(`Failed to generate invoice for ${lnAddress}:`, error)
+		console.error(`❌ Failed to generate invoice for ${lnAddress}:`, error)
 		// Return failed status on error
 		return {
 			...params,
@@ -816,6 +903,120 @@ export const useGenerateInvoiceMutation = () => {
 			toast.error(`Failed to generate invoice for ${variables.sellerPubkey}: ${error.message}`)
 		},
 	})
+}
+
+/**
+ * Gets all available payment options for a seller's products.
+ * Returns all payment details found via the priority resolution.
+ * @param productIds - Array of product IDs to resolve payment details for
+ * @param sellerPubkey - The seller's pubkey
+ * @returns Array of unique payment details
+ */
+export const getAvailablePaymentOptions = async (productIds: string[], sellerPubkey: string): Promise<PaymentDetail[]> => {
+	try {
+		const allPaymentDetails: PaymentDetail[] = []
+
+		// Collect payment details from all products
+		for (const productId of productIds) {
+			try {
+				const resolvedDetails = await resolvePaymentDetailsForProduct(productId, sellerPubkey)
+				allPaymentDetails.push(...resolvedDetails)
+			} catch (error) {
+				console.error(`Error resolving payment details for product ${productId}:`, error)
+			}
+		}
+
+		// Remove duplicates based on payment detail ID
+		const uniquePaymentDetails = Array.from(new Map(allPaymentDetails.map((pd) => [pd.id, pd])).values())
+
+		// Filter to only Lightning Network payment methods
+		const lightningPayments = uniquePaymentDetails.filter((pd) => pd.paymentMethod === PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK)
+
+		console.log(`Found ${lightningPayments.length} unique Lightning payment option(s) for seller`)
+		return lightningPayments
+	} catch (error) {
+		console.error('Error getting available payment options:', error)
+		return []
+	}
+}
+
+/**
+ * Query hook for fetching available payment options for seller's products
+ */
+export const useAvailablePaymentOptions = (productIds: string[], sellerPubkey: string, enabled = true) => {
+	return useQuery({
+		queryKey: paymentDetailsKeys.availableOptions(sellerPubkey, productIds),
+		queryFn: () => getAvailablePaymentOptions(productIds, sellerPubkey),
+		enabled: enabled && productIds.length > 0 && !!sellerPubkey,
+		staleTime: 1000 * 60 * 5, // 5 minutes
+	})
+}
+
+/**
+ * Resolves the applicable payment details for a given product.
+ * Priority order:
+ * 1. Product-specific payment details
+ * 2. Collection-specific payment details (if product is in a collection)
+ * 3. Global payment details
+ * 4. Seller's lud16 from profile metadata
+ *
+ * @param productId - The product ID (d-tag)
+ * @param sellerPubkey - The seller's pubkey
+ * @returns Array of payment details, or empty array if none found
+ */
+export const resolvePaymentDetailsForProduct = async (productId: string, sellerPubkey: string): Promise<PaymentDetail[]> => {
+	try {
+		const ndk = ndkActions.getNDK()
+		if (!ndk) throw new Error('NDK not initialized')
+
+		// 1. Check for product-specific payment details
+		const productCoordinates = `30402:${sellerPubkey}:${productId}`
+		const productPaymentDetails = await fetchProductPaymentDetails(productCoordinates, sellerPubkey)
+
+		if (productPaymentDetails.length > 0) {
+			console.log(`Found ${productPaymentDetails.length} product-specific payment details for ${productId}`)
+			return productPaymentDetails
+		}
+
+		// 2. Check if product is in a collection and get collection-specific payment details
+		// First, fetch the product event to see if it has collection references
+		const productEvent = await ndk.fetchEvent({
+			kinds: [30402],
+			authors: [sellerPubkey],
+			'#d': [productId],
+		})
+
+		if (productEvent) {
+			// Look for 'a' tags that reference collections (kind 30405)
+			const collectionTags = productEvent.tags.filter((tag) => tag[0] === 'a' && tag[1]?.startsWith('30405:'))
+
+			for (const collectionTag of collectionTags) {
+				const collectionCoordinates = collectionTag[1]
+				const collectionPaymentDetails = await fetchProductPaymentDetails(collectionCoordinates, sellerPubkey)
+
+				if (collectionPaymentDetails.length > 0) {
+					console.log(`Found ${collectionPaymentDetails.length} collection-specific payment details for product ${productId}`)
+					return collectionPaymentDetails
+				}
+			}
+		}
+
+		// 3. Check for global payment details
+		const globalPaymentDetails = await fetchUserPaymentDetails(sellerPubkey)
+		const globalOnly = globalPaymentDetails.filter((pd) => !pd.coordinates)
+
+		if (globalOnly.length > 0) {
+			console.log(`Found ${globalOnly.length} global payment details for seller ${sellerPubkey}`)
+			return globalOnly
+		}
+
+		// 4. Fallback: no payment details found, will use seller's lud16 from profile
+		console.log(`No payment details found for product ${productId}, will use seller's lud16`)
+		return []
+	} catch (error) {
+		console.error(`Error resolving payment details for product ${productId}:`, error)
+		return []
+	}
 }
 
 export interface LightningInvoiceData {
