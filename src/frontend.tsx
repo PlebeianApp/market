@@ -28,12 +28,23 @@ function App() {
 	const [error, setError] = useState<string | null>(null)
 
 	useEffect(() => {
+		const fetchWithTimeout = async (url: string, timeoutMs = 10000): Promise<Response> => {
+			const controller = new AbortController()
+			const timeout = setTimeout(() => controller.abort(), timeoutMs)
+			try {
+				const res = await fetch(url, { signal: controller.signal })
+				return res
+			} finally {
+				clearTimeout(timeout)
+			}
+		}
+
 		const initialize = async () => {
 			try {
 				setIsLoading(true)
 
 				// First fetch the config
-				const response = await fetch('/api/config')
+				const response = await fetchWithTimeout('/api/config', 10000)
 				if (!response.ok) {
 					throw new Error(`Failed to fetch config: ${response.status} ${response.statusText}`)
 				}
