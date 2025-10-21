@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { ndkActions } from '@/lib/stores/ndk'
+import { uploadToBlossomServer, BLOSSOM_SERVERS } from '@/lib/blossom'
 import html2canvas from 'html2canvas'
 
 interface BugReportModalProps {
@@ -17,6 +18,7 @@ export function BugReportModal({ isOpen, onClose, onReopen }: BugReportModalProp
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 	const [pendingScreenshotUrl, setPendingScreenshotUrl] = useState<string | null>(null)
 	const [isCapturing, setIsCapturing] = useState(false)
+	const [hasAutoPopulated, setHasAutoPopulated] = useState(false)
 
 	// Gather system information from browser
 	const getSystemInfo = () => {
@@ -63,145 +65,49 @@ Online: ${info.onLine ? 'Yes' : 'No'}
 Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 	}
 
-	// Upload image to Blossom using Nostr authentication (following Jumble's approach)
+	// Upload image to Blossom using the merged blossom upload code
 	const uploadToBlossom = async (blob: Blob, filename: string) => {
 		try {
-			console.log('Uploading to Blossom with Nostr authentication...')
+			console.log('Uploading to Blossom using merged upload code...')
 			
-			// Get NDK instance for signing
-			const ndk = await ndkActions.getNDK()
-			if (!ndk) {
-				throw new Error('NDK not available')
-			}
+			// Convert blob to File object
+			const file = new File([blob], filename, { type: blob.type })
 			
-			// Get the user's public key for authentication
-			const user = ndk.activeUser
-			if (!user) {
-				throw new Error('No active user for authentication')
-			}
-			
-			// Get upload URL from NIP-96 endpoint (following Jumble's approach)
-			const serviceUrl = 'https://blossom.band'
-			const nip96Response = await fetch(`${serviceUrl}/.well-known/nostr/nip96.json`)
-			if (!nip96Response.ok) {
-				throw new Error('Failed to get NIP-96 configuration')
-			}
-			const nip96Data = await nip96Response.json()
-			const uploadUrl = nip96Data?.api_url || `${serviceUrl}/upload`
-			
-			// Create authentication event using NDKEvent (proper serialization)
-			const authEvent = new NDKEvent(ndk)
-			authEvent.kind = 1
-			authEvent.content = ''
-			authEvent.tags = [
-				['u', uploadUrl],
-				['method', 'POST']
-			]
-			
-			// Sign the authentication event
-			await authEvent.sign()
-			
-			// Get the raw event and ensure proper serialization
-			const signedEvent = authEvent.rawEvent()
-			
-			// Ensure kind is serialized as string (nostr.build requirement)
-			const serializedEvent = {
-				...signedEvent,
-				kind: signedEvent.kind.toString()
-			}
-			
-			// Create form data with file
-			const formData = new FormData()
-			formData.append('file', blob, filename)
-			
-			// Upload via proxy to avoid CORS issues
-			const authHeader = btoa(JSON.stringify(serializedEvent))
-			console.log('Serialized event:', serializedEvent)
-			console.log('Auth header:', authHeader)
-			const response = await fetch('/api/upload-to-blossom', {
-				method: 'POST',
-				body: formData,
-				headers: {
-					'Authorization': `Nostr ${authHeader}`
-				}
+			// Use the merged blossom upload function
+			const result = await uploadToBlossomServer(file, {
+				serverUrl: BLOSSOM_SERVERS[0].url, // Use first available server
+				onProgress: (loaded, total) => {
+					const pct = Math.round((loaded / total) * 100)
+					console.log(`Upload progress: ${pct}%`)
+				},
+				maxRetries: 3,
+				retryDelay: 2000
 			})
 			
-			if (response.ok) {
-				const result = await response.json()
-				// Extract URL from NIP-94 tags (following Jumble's approach)
-				const tags = result.nip94_event?.tags ?? []
-				const url = tags.find(([tagName]: [string, string]) => tagName === 'url')?.[1]
-				if (url) {
-					return { url, tags }
-				} else {
-					throw new Error('No url found in response')
-				}
-			} else {
-				const errorText = await response.text()
-				throw new Error(`Upload failed: ${response.status} ${errorText}`)
-			}
+			console.log('Blossom upload successful:', result)
+			return result
 		} catch (error) {
 			console.error('Blossom upload error:', error)
 			throw error
 		}
 	}
 
-	// Test function to upload a simple 50x50 black PNG
-	const testImageUpload = async () => {
-		try {
-			console.log('Testing image upload with 50x50 black PNG...')
-			
-			// Create a 50x50 black PNG canvas
-			const canvas = document.createElement('canvas')
-			canvas.width = 50
-			canvas.height = 50
-			const ctx = canvas.getContext('2d')
-			
-			if (!ctx) {
-				throw new Error('Could not get canvas context')
+	// Auto-populate system information when modal opens
+	useEffect(() => {
+		if (isOpen && !hasAutoPopulated) {
+			const systemInfo = getSystemInfo()
+			const systemInfoInsertText = 'What device and operating system are you using?\n\n'
+			const systemInfoInsertIndex = bugReport.indexOf(systemInfoInsertText)
+
+			if (systemInfoInsertIndex !== -1) {
+				const beforeInsert = bugReport.substring(0, systemInfoInsertIndex + systemInfoInsertText.length)
+				const afterInsert = bugReport.substring(systemInfoInsertIndex + systemInfoInsertText.length)
+				const newText = beforeInsert + `${systemInfo}\n\n` + afterInsert
+				setBugReport(newText)
+				setHasAutoPopulated(true)
 			}
-			
-			// Fill with black
-			ctx.fillStyle = 'black'
-			ctx.fillRect(0, 0, 50, 50)
-			
-			// Convert to blob
-			const blob = await new Promise<Blob>((resolve, reject) => {
-				canvas.toBlob((blob) => {
-					if (blob) resolve(blob)
-					else reject(new Error('Failed to create blob'))
-				}, 'image/png', 1.0)
-			})
-			
-			console.log('Created test image blob:', blob.size, 'bytes')
-			
-			// Upload to Blossom using Nostr authentication
-			const result = await uploadToBlossom(blob, 'test-black-50x50.png')
-			console.log('Upload result:', result)
-
-			const imageUrl = result.url
-			console.log('Image URL:', imageUrl)
-
-			if (imageUrl) {
-				// Test downloading the image
-				console.log('Testing image download...')
-				const downloadResponse = await fetch(imageUrl)
-				console.log('Download response status:', downloadResponse.status)
-
-				if (downloadResponse.ok) {
-					const downloadBlob = await downloadResponse.blob()
-					console.log('Downloaded image size:', downloadBlob.size, 'bytes')
-					console.log('Download successful!')
-				} else {
-					console.error('Download failed:', downloadResponse.statusText)
-				}
-			} else {
-				console.error('No image URL in response')
-			}
-		} catch (error) {
-			console.error('Test upload failed:', error)
 		}
-	}
+	}, [isOpen, hasAutoPopulated, bugReport])
 
 	// Handle inserting screenshot URL when modal reopens
 	useEffect(() => {
@@ -252,10 +158,13 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 		}
 	}, [isOpen, pendingScreenshotUrl, bugReport])
 
-	// Cleanup effect to reset flash state when modal closes
+	// Cleanup effect to reset states when modal closes
 	useEffect(() => {
 		if (!isOpen) {
 			setIsCapturing(false)
+			setHasAutoPopulated(false)
+			// Reset to default template for next time
+			setBugReport('Describe the problem you are having:\n\n\n\nUse the screenshot button to add a screenshot of the problem.\n\n\n\nWhat device and operating system are you using?\n\nWhat steps did you take to reproduce the problem?\n\n\n\nWhat did you expect to happen?\n\n\n\nWhat actually happened?\n\n\n\nPlease provide any other relevant information.')
 		}
 	}, [isOpen])
 
@@ -302,9 +211,6 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			
 			// Wait a bit for modal to close
 			await new Promise(resolve => setTimeout(resolve, 300))
-			
-			// Test upload with a simple 50x50 black PNG first
-			await testImageUpload()
 			
 			// Capture screenshot of the entire page
 			const canvas = await html2canvas(document.body, {
@@ -387,43 +293,6 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 		}
 	}
 
-	const handleSystemInfo = () => {
-		// Just populate system info without taking screenshot
-		const systemInfo = getSystemInfo()
-		console.log('Setting pending system info:', systemInfo)
-		
-		// Insert system info immediately
-		const systemInfoInsertText = 'What device and operating system are you using?\n\n'
-		const systemInfoInsertIndex = bugReport.indexOf(systemInfoInsertText)
-		
-		if (systemInfoInsertIndex !== -1) {
-			const beforeInsert = bugReport.substring(0, systemInfoInsertIndex + systemInfoInsertText.length)
-			const afterInsert = bugReport.substring(systemInfoInsertIndex + systemInfoInsertText.length)
-			const newText = beforeInsert + `${systemInfo}\n\n` + afterInsert
-			setBugReport(newText)
-			
-			// Focus textarea and position cursor
-			setTimeout(() => {
-				if (textareaRef.current) {
-					textareaRef.current.focus()
-					const cursorPos = beforeInsert.length + `${systemInfo}\n\n`.length
-					textareaRef.current.setSelectionRange(cursorPos, cursorPos)
-				}
-			}, 100)
-		} else {
-			// Fallback: append at end
-			const newText = bugReport + `\n${systemInfo}\n`
-			setBugReport(newText)
-			
-			setTimeout(() => {
-				if (textareaRef.current) {
-					textareaRef.current.focus()
-					textareaRef.current.setSelectionRange(newText.length, newText.length)
-				}
-			}, 100)
-		}
-	}
-
 	const handleKeyDown = (e: React.KeyboardEvent) => {
 		if (e.key === 'Escape') {
 			onClose()
@@ -486,24 +355,6 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 						{/* Footer */}
 						<div className="flex justify-between items-center p-6 border-t border-gray-200">
 							<div className="flex gap-2">
-								<Button
-									onClick={testImageUpload}
-									variant="outline"
-									className="flex items-center gap-2"
-								>
-									<span className="i-info w-4 h-4" />
-									Test Upload
-								</Button>
-								
-								<Button
-									onClick={handleSystemInfo}
-									variant="outline"
-									className="flex items-center gap-2"
-								>
-									<span className="i-info w-4 h-4" />
-									System Info
-								</Button>
-								
 								<Button
 									onClick={handleScreenshot}
 									variant="outline"
