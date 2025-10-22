@@ -58,14 +58,14 @@ export function ImageUploader({
         debug: false,
       })
 
-      // Update the input value and local source with the uploaded URL
+      // Update the input value with the uploaded URL
       setInputValue(result.url)
-      setLocalSrc(result.url)
 
       // Keep input editable so URL is visible and can be edited
       setInputEditable(false)
 
-      // Save the uploaded image
+      // Save the uploaded image - this will trigger parent to update src prop
+      // which will then update localSrc through the useEffect
       onSave({ url: result.url, index })
 
       toast.success('Image uploaded successfully')
