@@ -13,7 +13,7 @@ interface BugReportModalProps {
 }
 
 export function BugReportModal({ isOpen, onClose, onReopen }: BugReportModalProps) {
-	const [bugReport, setBugReport] = useState('Describe the problem you are having:\n\n\n\nUse the drag and drop or paste to add images of the problem.\n\n\n\nWhat device and operating system are you using?\n\nWhat steps did you take to reproduce the problem?\n\n\n\nWhat did you expect to happen?\n\n\n\nWhat actually happened?\n\n\n\nPlease provide any other relevant information.')
+	const [bugReport, setBugReport] = useState('Describe the problem you are having:\n\n\n\nUse the drag and drop or paste to add images of the problem.\n\n\n\nWhat device and operating system are you using?\n\nWhat steps did you take to reproduce the problem?\n\n\n\nWhat did you expect to happen?\n\n\n\nWhat actually happened?\n\n\n\nPlease provide any other relevant information\n\n')
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 	const [isUploading, setIsUploading] = useState(false)
 	const [hasAutoPopulated, setHasAutoPopulated] = useState(false)
@@ -159,7 +159,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			setHasAutoPopulated(false)
 			setUploadedImages([])
 			// Reset to default template for next time
-			setBugReport('Describe the problem you are having:\n\n\n\nUse the drag and drop or paste to add images of the problem.\n\n\n\nWhat device and operating system are you using?\n\nWhat steps did you take to reproduce the problem?\n\n\n\nWhat did you expect to happen?\n\n\n\nWhat actually happened?\n\n\n\nPlease provide any other relevant information.')
+			setBugReport('Describe the problem you are having:\n\n\n\nUse the drag and drop or paste to add images of the problem.\n\n\n\nWhat device and operating system are you using?\n\nWhat steps did you take to reproduce the problem?\n\n\n\nWhat did you expect to happen?\n\n\n\nWhat actually happened?\n\n\n\nPlease provide any other relevant information\n\n')
 		}
 	}, [isOpen])
 
@@ -175,8 +175,8 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			}
 			console.log('NDK instance obtained:', !!ndk)
 
-			// Ensure test.orly.dev relay is added for bug reports
-			const relayAdded = ndkActions.addSingleRelay('wss://test.orly.dev/')
+			// Ensure bugs.plebeian.market relay is added for bug reports
+			const relayAdded = ndkActions.addSingleRelay('wss://bugs.plebeian.market/')
 			console.log('Relay added:', relayAdded)
 			
 			// Also add some reliable relays as fallback
@@ -251,7 +251,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			})
 
 			// Clear the input and close modal after sending
-			setBugReport('Describe the problem you are having:\n\n\n\nUse the drag and drop or paste to add images of the problem.\n\n\n\nWhat device and operating system are you using?\n\nWhat steps did you take to reproduce the problem?\n\n\n\nWhat did you expect to happen?\n\n\n\nWhat actually happened?\n\n\n\nPlease provide any other relevant information.')
+			setBugReport('Describe the problem you are having:\n\n\n\nUse the drag and drop or paste to add images of the problem.\n\n\n\nWhat device and operating system are you using?\n\nWhat steps did you take to reproduce the problem?\n\n\n\nWhat did you expect to happen?\n\n\n\nWhat actually happened?\n\n\n\nPlease provide any other relevant information\n\n')
 			onClose()
 		} catch (error) {
 			console.error('Failed to publish bug report:', error)
@@ -338,7 +338,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			onKeyDown={handleKeyDown}
 		>
 			<div
-				className="bg-white rounded-lg shadow-xl w-[28em] h-[80vh] flex flex-col"
+				className="bg-white rounded-lg shadow-xl w-[40em] h-[80vh] flex flex-col"
 				onClick={(e) => e.stopPropagation()}
 			>
 				{/* Header */}
