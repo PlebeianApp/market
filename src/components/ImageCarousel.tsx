@@ -14,9 +14,10 @@ interface ImageCarouselProps {
 	title: string
 	className?: string
 	onImageChange?: (index: number) => void
+	onImageClick?: (index: number) => void
 }
 
-export function ImageCarousel({ images, title, className, onImageChange }: ImageCarouselProps) {
+export function ImageCarousel({ images, title, className, onImageChange, onImageClick }: ImageCarouselProps) {
 	const [currentIndex, setCurrentIndex] = useState(0)
 	const [api, setApi] = useState<CarouselApi>()
 	const [previewApiVertical, setPreviewApiVertical] = useState<CarouselApi>()
@@ -58,12 +59,18 @@ export function ImageCarousel({ images, title, className, onImageChange }: Image
 	return (
 		<div className="h-full flex flex-col lg:flex-row gap-4">
 			{/* Main Carousel */}
-			<Carousel setApi={setApi} className="w-full xl:aspect-square lg:order-2">
+			<Carousel setApi={setApi} className="w-full aspect-square lg:order-2">
 				<CarouselContent>
 					{images.map((image, index) => (
-						<CarouselItem key={index} className="flex items-center justify-center relative">
-							{index === currentIndex && <div className="absolute inset-0 bg-dots-image-overlay pointer-events-none" />}
-							<img src={image.url} alt={`${title} - Image ${index + 1}`} className="max-h-[45vh] max-w-full relative z-10" />
+						<CarouselItem key={index} className="flex items-center justify-center relative aspect-square">
+							{index === currentIndex && <div className="absolute inset-0 bg-dots-image-overlay pointer-events-none z-20" />}
+							<button
+								onClick={() => onImageClick?.(index)}
+								className="absolute inset-0 z-10 cursor-pointer bg-black overflow-hidden"
+								aria-label={`View ${title} - Image ${index + 1} in full size`}
+							>
+								<img src={image.url} alt={`${title} - Image ${index + 1}`} className="w-full h-full object-cover" />
+							</button>
 						</CarouselItem>
 					))}
 				</CarouselContent>
