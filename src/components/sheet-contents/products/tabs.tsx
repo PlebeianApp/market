@@ -363,8 +363,6 @@ export function DetailTab() {
 
 export function CategoryTab() {
 	const { categories, mainCategory } = useStore(productFormStore)
-
-	// Available main categories from constants
 	const mainCategories = [...PRODUCT_CATEGORIES]
 
 	const handleMainCategorySelect = (value: string) => {
@@ -372,6 +370,7 @@ export function CategoryTab() {
 	}
 
 	const addSubCategory = () => {
+		if (categories.length >= 3) return // Prevent adding more than 3
 		productFormActions.updateCategories([
 			...categories,
 			{
@@ -476,7 +475,13 @@ export function CategoryTab() {
 						))}
 					</div>
 
-					<Button type="button" variant="outline" className="w-full flex gap-2 justify-center mt-4" onClick={addSubCategory}>
+					<Button
+						type="button"
+						variant="outline"
+						className="w-full flex gap-2 justify-center mt-4"
+						onClick={addSubCategory}
+						disabled={categories.length >= 3}
+					>
 						<span className="i-plus w-5 h-5"></span>
 						New Sub Category
 					</Button>
