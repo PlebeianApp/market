@@ -4,18 +4,17 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Spinner } from '@/components/ui/spinner'
 import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
 import type { RichShippingInfo } from '@/lib/stores/cart'
 import { useNDK } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore, type ProductShippingForm } from '@/lib/stores/product'
-import { uiStore, useUI } from '@/lib/stores/ui'
+import { uiStore } from '@/lib/stores/ui'
 import { MempoolService } from '@/lib/utils/mempool'
 import { useBtcExchangeRates, type SupportedCurrency } from '@/queries/external'
 import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useForm } from '@tanstack/react-form'
 import { useStore } from '@tanstack/react-store'
-import { CheckIcon, PackageIcon, PlusIcon, SettingsIcon, TruckIcon, X, Loader2, Info } from 'lucide-react'
+import { Info, Loader2, PackageIcon, PlusIcon, TruckIcon, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -363,8 +362,6 @@ export function DetailTab() {
 
 export function CategoryTab() {
 	const { categories, mainCategory } = useStore(productFormStore)
-
-	// Available main categories from constants
 	const mainCategories = [...PRODUCT_CATEGORIES]
 
 	const handleMainCategorySelect = (value: string) => {
@@ -372,6 +369,10 @@ export function CategoryTab() {
 	}
 
 	const addSubCategory = () => {
+		if (categories.length >= 3) {
+			toast.error('You can only add up to 3 sub categories')
+			return
+		}
 		productFormActions.updateCategories([
 			...categories,
 			{
@@ -476,7 +477,13 @@ export function CategoryTab() {
 						))}
 					</div>
 
-					<Button type="button" variant="outline" className="w-full flex gap-2 justify-center mt-4" onClick={addSubCategory}>
+					<Button
+						type="button"
+						variant="outline"
+						className="w-full flex gap-2 justify-center mt-4"
+						onClick={addSubCategory}
+						disabled={categories.length >= 3}
+					>
 						<span className="i-plus w-5 h-5"></span>
 						New Sub Category
 					</Button>
