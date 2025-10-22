@@ -5,6 +5,9 @@ import { cn } from '@/lib/utils'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { ndkActions } from '@/lib/stores/ndk'
 import { uploadToBlossomServer, BLOSSOM_SERVERS } from '@/lib/blossom'
+import { BugReportItem } from '@/components/BugReportItem'
+import { useBugReportsInfiniteScroll } from '@/hooks/useBugReportsInfiniteScroll'
+import { Loader2 } from 'lucide-react'
 
 interface BugReportModalProps {
 	isOpen: boolean
@@ -13,12 +16,21 @@ interface BugReportModalProps {
 }
 
 export function BugReportModal({ isOpen, onClose, onReopen }: BugReportModalProps) {
+	const [activeTab, setActiveTab] = useState<'report' | 'viewer'>('report')
 	const [bugReport, setBugReport] = useState('Describe the problem you are having:\n\n\n\nUse the drag and drop or paste to add images of the problem.\n\n\n\nWhat device and operating system are you using?\n\nWhat steps did you take to reproduce the problem?\n\n\n\nWhat did you expect to happen?\n\n\n\nWhat actually happened?\n\n\n\nPlease provide any other relevant information\n\n')
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 	const [isUploading, setIsUploading] = useState(false)
 	const [hasAutoPopulated, setHasAutoPopulated] = useState(false)
 	const [isDragOver, setIsDragOver] = useState(false)
 	const [uploadedImages, setUploadedImages] = useState<string[]>([])
+
+	// Infinite scroll for bug reports viewer
+	const { reports, hasMore, isLoading: isLoadingReports, loadMore } = useBugReportsInfiniteScroll({
+		chunkSize: 10,
+		maxReports: 100,
+		threshold: 1000,
+		autoLoad: true,
+	})
 
 	// Gather system information from browser
 	const getSystemInfo = () => {
@@ -155,6 +167,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 	// Cleanup effect to reset states when modal closes
 	useEffect(() => {
 		if (!isOpen) {
+			setActiveTab('report')
 			setIsUploading(false)
 			setHasAutoPopulated(false)
 			setUploadedImages([])
@@ -343,7 +356,26 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			>
 				{/* Header */}
 				<div className="flex items-center justify-between p-6 border-b border-gray-200">
-					<h2 className="text-xl font-semibold text-gray-900">Bug Report</h2>
+					<div className="flex items-center gap-2">
+						<Button
+							variant={activeTab === 'report' ? 'primary' : 'outline'}
+							size="sm"
+							onClick={() => setActiveTab('report')}
+							className="flex items-center gap-2"
+						>
+							<span className="i-warning w-4 h-4" />
+							Bug Report
+						</Button>
+						<Button
+							variant={activeTab === 'viewer' ? 'primary' : 'outline'}
+							size="sm"
+							onClick={() => setActiveTab('viewer')}
+							className="flex items-center gap-2"
+						>
+							<span className="i-search w-4 h-4" />
+							Report Viewer
+						</Button>
+					</div>
 					<Button
 						variant="ghost"
 						size="icon"
@@ -357,51 +389,94 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 
 				{/* Content */}
 				<div className="flex-1 flex flex-col p-6">
-					<p className="text-gray-600 mb-6">Report a bug you have found</p>
-                    <p className="text-gray-600 mb-6">Use the drag and drop or paste to add images of the problem.</p>
-                    <p className="text-gray-600 mb-6">The details of your system configuration have been automatically added.</p>
-					<div className="flex-1 flex flex-col">
-						<textarea
-							ref={textareaRef}
-							value={bugReport}
-							onChange={(e) => setBugReport(e.target.value)}
-							onPaste={handlePaste}
-							onDragOver={handleDragOver}
-							onDragLeave={handleDragLeave}
-							onDrop={handleDrop}
-							placeholder="Describe the bug you encountered..."
-							className={cn(
-								"flex-1 w-full p-4 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent",
-								isDragOver && "border-secondary bg-secondary/5",
-								isUploading && "opacity-50"
-							)}
-							rows={10}
-							disabled={isUploading}
-						/>
-						{isDragOver && (
-							<div className="absolute inset-0 flex items-center justify-center bg-secondary/10 border-2 border-dashed border-secondary rounded-lg pointer-events-none">
-								<p className="text-secondary font-medium">Drop image files here</p>
+					{activeTab === 'report' ? (
+						<>
+							<p className="text-gray-600 mb-6">Report a bug you have found</p>
+							<p className="text-gray-600 mb-6">Use the drag and drop or paste to add images of the problem.</p>
+							<p className="text-gray-600 mb-6">The details of your system configuration have been automatically added.</p>
+							<div className="flex-1 flex flex-col">
+								<textarea
+									ref={textareaRef}
+									value={bugReport}
+									onChange={(e) => setBugReport(e.target.value)}
+									onPaste={handlePaste}
+									onDragOver={handleDragOver}
+									onDragLeave={handleDragLeave}
+									onDrop={handleDrop}
+									placeholder="Describe the bug you encountered..."
+									className={cn(
+										"flex-1 w-full p-4 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent",
+										isDragOver && "border-secondary bg-secondary/5",
+										isUploading && "opacity-50"
+									)}
+									rows={10}
+									disabled={isUploading}
+								/>
+								{isDragOver && (
+									<div className="absolute inset-0 flex items-center justify-center bg-secondary/10 border-2 border-dashed border-secondary rounded-lg pointer-events-none">
+										<p className="text-secondary font-medium">Drop image files here</p>
+									</div>
+								)}
+								{isUploading && (
+									<div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-lg pointer-events-none">
+										<p className="text-gray-600 font-medium">Uploading image...</p>
+									</div>
+								)}
 							</div>
-						)}
-						{isUploading && (
-							<div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-lg pointer-events-none">
-								<p className="text-gray-600 font-medium">Uploading image...</p>
+						</>
+					) : (
+						<>
+							<p className="text-gray-600 mb-6">View bug reports from the community</p>
+							<div className="flex-1 overflow-y-auto">
+								{isLoadingReports && reports.length === 0 ? (
+									<div className="flex flex-col items-center justify-center py-12">
+										<Loader2 className="w-8 h-8 animate-spin mb-4" />
+										<p className="text-gray-600">Loading bug reports...</p>
+									</div>
+								) : reports.length === 0 ? (
+									<div className="flex flex-col items-center justify-center py-12 text-center">
+										<h3 className="text-lg font-semibold text-gray-900 mb-2">No bug reports found</h3>
+										<p className="text-gray-600">There are no bug reports available at the moment.</p>
+									</div>
+								) : (
+									<div className="space-y-4">
+										{reports.map((report) => (
+											<BugReportItem key={report.id} report={report} />
+										))}
+										{hasMore && (
+											<div className="flex justify-center py-4">
+												<Button onClick={loadMore} variant="outline" disabled={isLoadingReports}>
+													{isLoadingReports ? (
+														<>
+															<Loader2 className="w-4 h-4 animate-spin mr-2" />
+															Loading...
+														</>
+													) : (
+														'Load More Reports'
+													)}
+												</Button>
+											</div>
+										)}
+									</div>
+								)}
 							</div>
-						)}
-					</div>
+						</>
+					)}
 				</div>
 
 				{/* Footer */}
-				<div className="flex justify-end items-center p-6 border-t border-gray-200">
-					<Button
-						onClick={handleSend}
-						disabled={!bugReport.trim() || isUploading}
-						className="flex items-center gap-2 bg-secondary hover:bg-secondary/90 text-white"
-					>
-						<span className="i-send-message w-4 h-4" />
-						Send
-					</Button>
-				</div>
+				{activeTab === 'report' && (
+					<div className="flex justify-end items-center p-6 border-t border-gray-200">
+						<Button
+							onClick={handleSend}
+							disabled={!bugReport.trim() || isUploading}
+							className="flex items-center gap-2 bg-secondary hover:bg-secondary/90 text-white"
+						>
+							<span className="i-send-message w-4 h-4" />
+							Send
+						</Button>
+					</div>
+				)}
 			</div>
 		</div>
 	)
