@@ -10,6 +10,7 @@ interface ImageUploaderProps {
   imagesLength: number
   forSingle?: boolean
   initialUrl?: string
+  imageDimensionText?: string
   onSave: (data: { url: string; index: number }) => void
   onDelete: (index: number) => void
   onPromote?: (index: number) => void
@@ -29,7 +30,8 @@ export function ImageUploader({
   onPromote,
   onDemote,
   onInteraction,
-  onUrlChange
+  onUrlChange,
+  imageDimensionText = "dimensions: 1600px High x 1600px Wide",
 }: ImageUploaderProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [urlError, setUrlError] = useState<string | null>(null)
@@ -53,7 +55,7 @@ export function ImageUploader({
       setHasInteracted(true)
       onInteraction()
     }
-    
+
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = 'image/*,video/*'
@@ -72,7 +74,7 @@ export function ImageUploader({
   function handleDragEnter(e: React.DragEvent<HTMLButtonElement>) {
     e.preventDefault()
     setIsDragging(true)
-    
+
     if (!hasInteracted && onInteraction) {
       setHasInteracted(true)
       onInteraction()
@@ -87,7 +89,7 @@ export function ImageUploader({
   function handleDrop(e: React.DragEvent<HTMLButtonElement>) {
     e.preventDefault()
     setIsDragging(false)
-    
+
     if (!hasInteracted && onInteraction) {
       setHasInteracted(true)
       onInteraction()
@@ -106,7 +108,7 @@ export function ImageUploader({
       setHasInteracted(true)
       onInteraction()
     }
-    
+
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = 'image/*'
@@ -126,18 +128,18 @@ export function ImageUploader({
       setHasInteracted(true)
       onInteraction()
     }
-    
+
     if (inputTimeoutRef.current) {
       clearTimeout(inputTimeoutRef.current)
     }
-    
+
     const newValue = event.target.value
     setInputValue(newValue)
-    
+
     if (onUrlChange) {
       onUrlChange(newValue)
     }
-    
+
     inputTimeoutRef.current = setTimeout(() => {
       if (!newValue.trim()) {
         setUrlError(null)
@@ -162,9 +164,9 @@ export function ImageUploader({
   function handleSaveImage() {
     if (!inputValue) return
     if (urlError) return
-    
+
     onSave({ url: inputValue, index })
-    
+
     if (index === -1) {
       setInputValue('')
     }
@@ -195,7 +197,7 @@ export function ImageUploader({
                 <div className="absolute inset-0 bg-gradient-to-r from-gray-300 to-white" style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}></div>
                 <div className="absolute inset-0 bg-gradient-to-l from-gray-300 to-white" style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}></div>
               </div>
-              
+
               <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundImage: 'url("images/image-bg-pattern.png")', backgroundRepeat: 'repeat' }}>
                 {getMediaType(localSrc) === 'video' ? (
                   <video src={localSrc} controls className="max-w-full max-h-full object-contain">
@@ -206,7 +208,7 @@ export function ImageUploader({
                   <img src={localSrc} alt="uploaded media" className="max-w-full max-h-full object-contain" />
                 )}
               </div>
-              
+
               <div className="absolute bottom-2 right-2 flex gap-2">
                 {inputEditable && (
                   <Button type="button" variant="outline" size="icon" className="bg-white" onClick={handleEditByUpload}>
@@ -217,25 +219,25 @@ export function ImageUploader({
                   <span className="i-delete w-4 h-4" />
                 </Button>
               </div>
-              
+
               {index !== -1 && (
                 <div className="absolute left-2 bottom-2 flex flex-row gap-2">
-                  <Button 
+                  <Button
                     type="button"
-                    variant="outline" 
-                    size="icon" 
+                    variant="outline"
+                    size="icon"
                     className="bg-white"
-                    disabled={index === 0} 
+                    disabled={index === 0}
                     onClick={() => onPromote && onPromote(index)}
                   >
                     <span className="i-up w-4 h-4" />
                   </Button>
-                  <Button 
+                  <Button
                     type="button"
-                    variant="outline" 
-                    size="icon" 
+                    variant="outline"
+                    size="icon"
                     className="bg-white"
-                    disabled={index === imagesLength - 1} 
+                    disabled={index === imagesLength - 1}
                     onClick={() => onDemote && onDemote(index)}
                   >
                     <span className="i-down w-4 h-4" />
@@ -256,11 +258,12 @@ export function ImageUploader({
               onDrop={handleDrop}
             >
               <span className="i-upload w-10 h-10" />
-              <strong>{isDragging ? 'Drop media here' : 'Upload at least one image'}</strong>
+              <strong>{isDragging ? 'Drop media here' : 'Click or drag image here'}</strong>
+              <strong className="text-xs text-gray-500">{imageDimensionText}</strong>
             </button>
           )}
         </div>
-        
+
         <div className="w-full flex items-center justify-center">
           <div className="relative w-full">
             <Input
@@ -277,20 +280,20 @@ export function ImageUploader({
             />
             {localSrc ? (
               inputEditable ? (
-                <Button 
+                <Button
                   type="button"
-                  variant="primary" 
-                  className="absolute right-1 top-1 bottom-1 h-10" 
+                  variant="primary"
+                  className="absolute right-1 top-1 bottom-1 h-10"
                   onClick={handleSaveImage}
                   data-testid="image-save-button"
                 >
                   Save
                 </Button>
               ) : (
-                <Button 
+                <Button
                   type="button"
-                  variant="outline" 
-                  className="absolute right-1 top-1 bottom-1 h-10 bg-white" 
+                  variant="outline"
+                  className="absolute right-1 top-1 bottom-1 h-10 bg-white"
                   onClick={() => setInputEditable(true)}
                   data-testid="image-edit-button"
                 >
@@ -298,10 +301,10 @@ export function ImageUploader({
                 </Button>
               )
             ) : (
-              <Button 
+              <Button
                 type="button"
-                variant="primary" 
-                className="absolute right-1 top-1 bottom-1 h-10" 
+                variant="primary"
+                className="absolute right-1 top-1 bottom-1 h-10"
                 onClick={handleSaveImage}
                 data-testid="image-save-button"
               >
@@ -310,11 +313,11 @@ export function ImageUploader({
             )}
           </div>
         </div>
-        
+
         {urlError && (
           <p className="text-destructive">{urlError}</p>
         )}
-        
+
         {isLoading && (
           <div className="flex flex-row gap-2 mt-2">
             <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full"></div>
@@ -324,4 +327,4 @@ export function ImageUploader({
       </div>
     </div>
   )
-} 
+}
