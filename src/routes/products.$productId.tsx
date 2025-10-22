@@ -1,5 +1,6 @@
 import { EntityActionsMenu } from '@/components/EntityActionsMenu'
 import { ImageCarousel } from '@/components/ImageCarousel'
+import { ImageViewerModal } from '@/components/ImageViewerModal'
 import { ItemGrid } from '@/components/ItemGrid'
 import { PriceDisplay } from '@/components/PriceDisplay'
 import { ProductCard } from '@/components/ProductCard'
@@ -38,8 +39,7 @@ import {
 	useProductVisibility,
 	useProductWeight,
 } from '@/queries/products'
-import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query'
-import type { FileRoutesByPath } from '@tanstack/react-router'
+import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, Edit, Minus, Plus, Truck } from 'lucide-react'
@@ -130,6 +130,8 @@ function RouteComponent() {
 	const isSmallScreen = breakpoint === 'sm'
 	const isMobileOrTablet = breakpoint === 'sm' || breakpoint === 'md'
 	const [quantity, setQuantity] = useState(1)
+	const [imageViewerOpen, setImageViewerOpen] = useState(false)
+	const [selectedImageIndex, setSelectedImageIndex] = useState(0)
 	const queryClient = useQueryClient()
 
 	// Get app config
@@ -251,6 +253,12 @@ function RouteComponent() {
 		}
 	}
 
+	// Handle image click to open modal
+	const handleImageClick = (index: number) => {
+		setSelectedImageIndex(index)
+		setImageViewerOpen(true)
+	}
+
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="relative z-10">
@@ -269,7 +277,7 @@ function RouteComponent() {
 
 					<div className="hero-content">
 						<div className="hero-image-container">
-							<ImageCarousel images={formattedImages} title={title} />
+							<ImageCarousel images={formattedImages} title={title} onImageClick={handleImageClick} />
 						</div>
 
 						<div className="flex flex-col gap-8 text-white lg:justify-center">
@@ -661,6 +669,14 @@ function RouteComponent() {
 					))}
 				</ItemGrid>
 			</div>
+
+			{/* Image Viewer Modal */}
+			<ImageViewerModal
+				isOpen={imageViewerOpen}
+				onClose={() => setImageViewerOpen(false)}
+				imageUrl={formattedImages[selectedImageIndex]?.url || ''}
+				imageTitle={title}
+			/>
 		</div>
 	)
 }
