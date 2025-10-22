@@ -369,7 +369,7 @@ export function CategoryTab() {
 	}
 
 	const addSubCategory = () => {
-			if (categories.length >= 3)  {
+		if (categories.length >= 3) {
 			toast.error('You can only add up to 3 sub categories')
 			return
 		}
