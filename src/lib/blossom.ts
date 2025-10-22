@@ -1,8 +1,7 @@
-import { NDKBlossom } from '@nostr-dev-kit/ndk-blossom'
-import { imetaTagToTag } from '@nostr-dev-kit/ndk'
 import { ndkActions } from '@/lib/stores/ndk'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
-import { sha256 } from '@noble/hashes/sha2.js'
+import type { BlossomUploadOptions } from '@nostr-dev-kit/blossom'
+import NDKBlossom from '@nostr-dev-kit/blossom'
+import type { NDKImetaTag } from '@nostr-dev-kit/ndk'
 
 export type BlossomServer = {
 	name: string
@@ -10,290 +9,152 @@ export type BlossomServer = {
 	plan: 'free' | 'paid' | 'public'
 }
 
-export const BLOSSOM_SERVERS = [
+export const BLOSSOM_SERVERS: BlossomServer[] = [
 	{ name: 'nostrcheck.me', url: 'https://nostrcheck.me', plan: 'public' },
 	{ name: 'Primal', url: 'https://blossom.primal.net', plan: 'public' },
 	{ name: 'Blossom Band', url: 'https://blossom.band', plan: 'paid' },
 	{ name: '24242', url: 'https://24242.io', plan: 'public' },
 	{ name: 'f7z Blossom', url: 'https://blossom.f7z.io', plan: 'public' },
 	{ name: 'nostr.download', url: 'https://nostr.download', plan: 'public' },
-] as const
-
-export async function checkBlossomAvailability(serverUrl: string, timeoutMs = 3000): Promise<boolean> {
-	const controller = new AbortController()
-	const t = setTimeout(() => controller.abort(), timeoutMs)
-	try {
-		const target = serverUrl.replace(/\/$/, '')
-		const res = await fetch(target, { method: 'HEAD', signal: controller.signal })
-		return res.ok
-	} catch {
-		return false
-	} finally {
-		clearTimeout(t)
-	}
-}
-
-export type UploadProgress = (progress: { loaded: number; total: number }, file: File, serverUrl: string) => 'continue' | 'cancel'
+]
 
 export interface UploadOptions {
-	preferredServerUrl?: string
-	onProgress?: UploadProgress
-	logger?: (msg: string, data?: unknown) => void
-	maxAttempts?: number
-}
-
-export async function uploadWithRetries(ndk: unknown, file: File, opts: UploadOptions = {}) {
-	if (!ndk) throw new Error('NDK not initialized')
-
-	const log = opts.logger ?? ((msg: string, data?: unknown) => console.log(`[blossom] ${msg}`, data ?? ''))
-	const servers = uniqueServers(
-		opts.preferredServerUrl ? [opts.preferredServerUrl, ...BLOSSOM_SERVERS.map((s) => s.url)] : BLOSSOM_SERVERS.map((s) => s.url),
-	)
-	const maxAttempts = opts.maxAttempts ?? Math.min(servers.length, 5)
-
-	let lastError: unknown = null
-	let attempt = 0
-
-	for (const serverUrl of servers) {
-		if (attempt >= maxAttempts) break
-		attempt++
-
-		const isUp = await checkBlossomAvailability(serverUrl)
-		if (!isUp) {
-			log('Server unavailable, skipping', { serverUrl })
-			continue
-		}
-
-		try {
-			log('Attempting upload', { attempt, serverUrl, fileName: file.name, size: file.size })
-
-			const blossom = new NDKBlossom(ndk as any)
-
-			blossom.onUploadFailed = async (error: any) => {
-				// Try to log Blossom server response if present
-				const resp = error?.response
-				if (resp) {
-					try {
-						const bodyText = await resp.text?.()
-						log('Upload failed callback (server response)', {
-							serverUrl,
-							status: resp.status,
-							statusText: resp.statusText,
-							headers: Object.fromEntries(resp.headers?.entries?.() || []),
-							bodyText,
-						})
-					} catch (_) {
-						log('Upload failed callback (no body)', { serverUrl, status: resp.status, statusText: resp.statusText })
-					}
-				} else {
-					log('Upload failed callback', { serverUrl, error })
-				}
-			}
-			if (opts.onProgress) {
-				blossom.onUploadProgress = (progress, f) => opts.onProgress!(progress, f, serverUrl)
-			}
-
-			// Some versions support an options object with serverUrl.
-			// @ts-expect-error optional depending on library version
-			const imeta = await blossom.upload(file, { serverUrl })
-			const imetaTag = imetaTagToTag(imeta)
-
-			log('Upload successful', { serverUrl, imeta })
-			return { imeta, imetaTag, serverUrl }
-		} catch (err: any) {
-			lastError = err
-			// If the error carries a Response, log status/body for diagnostics
-			const resp = err?.response
-			if (resp) {
-				try {
-					const bodyText = await resp.text?.()
-					log('Upload attempt error (server response)', {
-						attempt,
-						serverUrl,
-						status: resp.status,
-						statusText: resp.statusText,
-						headers: Object.fromEntries(resp.headers?.entries?.() || []),
-						bodyText,
-					})
-				} catch (_) {
-					log('Upload attempt error (no body)', { attempt, serverUrl })
-				}
-			} else {
-				log('Upload attempt error', { attempt, serverUrl, error: err?.message || String(err) })
-			}
-		}
-	}
-
-	throw new Error(`All Blossom upload attempts failed. Last error: ${String(lastError)}`)
-}
-
-export async function fixUrlWithNDK(ndk: unknown, brokenUrl: string, serverUrl?: string) {
-	const blossom = new NDKBlossom(ndk as any)
-	const user = (ndk as any)?.signer ? await (ndk as any).signer.user() : undefined
-	if (!user) throw new Error('No signer available to fix Blossom URL')
-
-	if (serverUrl) {
-		// @ts-expect-error optional depending on library version
-		return await blossom.fixUrl(user, brokenUrl, { serverUrl })
-	}
-
-	return await blossom.fixUrl(user, brokenUrl)
-}
-
-function uniqueServers(urls: string[]) {
-	const seen = new Set<string>()
-	const result: string[] = []
-	for (const u of urls) {
-		const norm = u.replace(/\/$/, '')
-		if (!seen.has(norm)) {
-			seen.add(norm)
-			result.push(norm)
-		}
-	}
-	return result
-}
-
-export async function uploadWithStoreSigner(file: File) {
-	const ndk = ndkActions.getNDK()
-	if (!ndk || !ndk.signer) throw new Error('NDK or signer not initialized')
-
-	const blossom = new NDKBlossom(ndk as any)
-
-	blossom.onUploadFailed = (e) => console.error(e)
-	blossom.onUploadProgress = (p, f, serverUrl) => {
-		console.log(`Upload ${f.name} -> ${serverUrl}: ${Math.round((p.loaded / p.total) * 100)}%`)
-		return 'continue'
-	}
-
-	return await blossom.upload(file)
-}
-
-async function computeSha256(buffer: ArrayBuffer): Promise<string> {
-	const hashBytes = sha256(new Uint8Array(buffer))
-	return Array.from(hashBytes)
-		.map((b) => b.toString(16).padStart(2, '0'))
-		.join('')
-}
-
-async function createAuthEvent(hash: string, ndk: any): Promise<any> {
-	if (!ndk.signer) throw new Error('No signer available')
-
-	const event = new NDKEvent()
-	event.kind = 24242
-	event.content = 'Upload media file'
-	event.tags = [
-		['t', 'upload'],
-		['x', hash],
-		['expiration', Math.floor(Date.now() / 1000 + 3600).toString()],
-	]
-
-	await event.sign(ndk.signer)
-	return event.rawEvent()
-}
-
-export interface BlossomUploadConfig {
-	serverUrl: string
-	onProgress?: (loaded: number, total: number) => void
+	/**
+	 * Preferred server URL to use for upload
+	 */
+	preferredServer?: string
+	/**
+	 * Callback for upload progress
+	 */
+	onProgress?: (progress: { loaded: number; total: number }) => void
+	/**
+	 * Callback for upload failures
+	 */
+	onError?: (error: string, serverUrl?: string) => void
+	/**
+	 * Maximum number of retry attempts
+	 */
 	maxRetries?: number
-	retryDelay?: number
-	fallbackToOtherServers?: boolean
+	/**
+	 * Enable debug logging
+	 */
+	debug?: boolean
 }
 
-export async function uploadToBlossomServer(file: File, config: BlossomUploadConfig): Promise<{ url: string; imeta: any }> {
+export interface UploadResult {
+	imeta: NDKImetaTag
+	url: string
+	hash: string
+}
+
+/**
+ * Upload a file to Blossom servers using NDKBlossom
+ * @param file - File to upload
+ * @param options - Upload options
+ * @returns Upload result with imeta and URL
+ */
+export async function uploadFileToBlossom(file: File, options: UploadOptions = {}): Promise<UploadResult> {
 	const ndk = ndkActions.getNDK()
-	if (!ndk || !ndk.signer) throw new Error('NDK or signer not initialized')
-
-	const maxRetries = config.maxRetries ?? 3
-	const retryDelay = config.retryDelay ?? 1000
-
-	// Get all available servers, starting with the selected one
-	const servers = [config.serverUrl, ...BLOSSOM_SERVERS.filter((s) => s.url !== config.serverUrl).map((s) => s.url)]
-
-	const attempted = new Set<string>()
-	let lastError: Error | null = null
-
-	// Try each server until success or all fail
-	for (const serverUrl of servers) {
-		if (attempted.has(serverUrl)) continue
-		attempted.add(serverUrl)
-
-		let attempt = 0
-		while (attempt < maxRetries) {
-			try {
-				const data = await file.arrayBuffer()
-				const hash = await computeSha256(data)
-				const authEvent = await createAuthEvent(hash, ndk)
-
-				console.log(`Server ${serverUrl}, attempt ${attempt + 1}/${maxRetries}`)
-
-				const result = await new Promise<{ url: string; imeta: any }>((resolve, reject) => {
-					const xhr = new XMLHttpRequest()
-
-					xhr.upload.addEventListener('progress', (e) => {
-						if (e.lengthComputable && config.onProgress) {
-							config.onProgress(e.loaded, e.total)
-						}
-					})
-
-					xhr.addEventListener('load', async () => {
-						if (xhr.status >= 200 && xhr.status < 300) {
-							try {
-								let url: string
-								let extraMeta = {}
-
-								if (xhr.responseText) {
-									try {
-										const json = JSON.parse(xhr.responseText)
-										url = json.url || json.urls?.[0] || `${serverUrl}/${hash}`
-										extraMeta = json
-									} catch {
-										url = xhr.responseURL || `${serverUrl}/${hash}`
-									}
-								} else {
-									url = xhr.responseURL || `${serverUrl}/${hash}`
-								}
-
-								const imeta = {
-									url,
-									m: file.type,
-									x: hash,
-									size: file.size.toString(),
-									...extraMeta,
-								}
-
-								resolve({ url, imeta })
-							} catch (error) {
-								reject(new Error(`Invalid response: ${xhr.responseText}`))
-							}
-						} else {
-							reject(new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`))
-						}
-					})
-
-					xhr.addEventListener('error', () => reject(new Error('Network error')))
-					xhr.addEventListener('abort', () => reject(new Error('Upload aborted')))
-
-					xhr.open('PUT', `${serverUrl}/upload`)
-					xhr.setRequestHeader('Content-Type', file.type)
-					xhr.setRequestHeader('Authorization', `Nostr ${btoa(JSON.stringify(authEvent))}`)
-					xhr.send(data)
-				})
-
-				return result
-			} catch (error: any) {
-				attempt++
-				lastError = error
-				console.log(`Server ${serverUrl}, attempt ${attempt} failed:`, error.message)
-
-				if (attempt < maxRetries) {
-					console.log(`Retrying in ${retryDelay}ms...`)
-					await new Promise((resolve) => setTimeout(resolve, retryDelay))
-				}
-			}
-		}
-
-		console.log(`All attempts failed for ${serverUrl}, trying next server...`)
+	if (!ndk || !ndk.signer) {
+		throw new Error('NDK or signer not initialized')
 	}
 
-	throw new Error(`Upload failed on all servers. Last error: ${lastError?.message}`)
+	const blossom = new NDKBlossom(ndk)
+
+	// Enable debug mode if requested
+	if (options.debug) {
+		blossom.debug = true
+	}
+
+	// Setup error callback
+	if (options.onError) {
+		blossom.onUploadFailed = (error: string, serverUrl?: string) => {
+			options.onError!(error, serverUrl)
+		}
+	}
+
+	// Setup progress callback
+	if (options.onProgress) {
+		blossom.onUploadProgress = (progress, _file, _serverUrl) => {
+			options.onProgress!(progress)
+			return 'continue'
+		}
+	}
+
+	// Configure upload options
+	const uploadOptions: BlossomUploadOptions = {}
+
+	// Set preferred server if provided
+	if (options.preferredServer) {
+		uploadOptions.server = options.preferredServer
+	}
+
+	// Set fallback server (use first public server as fallback)
+	const fallbackServer = BLOSSOM_SERVERS.find((s) => s.plan === 'public')
+	if (fallbackServer && fallbackServer.url !== options.preferredServer) {
+		uploadOptions.fallbackServer = fallbackServer.url
+	}
+
+	// Set retry options
+	if (options.maxRetries !== undefined) {
+		uploadOptions.maxRetries = options.maxRetries
+	}
+
+	try {
+		// Upload the file using NDKBlossom
+		const imeta = await blossom.upload(file, uploadOptions)
+
+		// Extract the URL and hash from the imeta
+		const url = imeta.url
+		const hash = imeta.x || imeta.sha256 || ''
+
+		return {
+			imeta,
+			url: url || '',
+			hash: Array.isArray(hash) ? hash[0] : hash,
+		}
+	} catch (error: any) {
+		// Log the error and re-throw
+		console.error('Blossom upload failed:', error)
+		throw new Error(error.message || 'Upload failed')
+	}
+}
+
+/**
+ * Check if a blossom server is available
+ * @param serverUrl - Server URL to check
+ * @param timeoutMs - Timeout in milliseconds
+ * @returns True if server is available
+ */
+export async function checkBlossomServerAvailability(serverUrl: string, timeoutMs = 3000): Promise<boolean> {
+	const controller = new AbortController()
+	const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+	try {
+		const normalizedUrl = serverUrl.replace(/\/$/, '')
+		const response = await fetch(normalizedUrl, {
+			method: 'HEAD',
+			signal: controller.signal,
+		})
+		return response.ok
+	} catch (error) {
+		return false
+	} finally {
+		clearTimeout(timeout)
+	}
+}
+
+/**
+ * Get available blossom servers by checking their availability
+ * @param timeoutMs - Timeout for each server check
+ * @returns Array of available server URLs
+ */
+export async function getAvailableBlossomServers(timeoutMs = 3000): Promise<BlossomServer[]> {
+	const availabilityChecks = BLOSSOM_SERVERS.map(async (server) => {
+		const isAvailable = await checkBlossomServerAvailability(server.url, timeoutMs)
+		return isAvailable ? server : null
+	})
+
+	const results = await Promise.all(availabilityChecks)
+	return results.filter((server): server is BlossomServer => server !== null)
 }
