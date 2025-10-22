@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils'
-import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious, type CarouselApi } from '@/components/ui/carousel'
-import { ImageOff, ChevronUp, ChevronDown } from 'lucide-react'
+import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel'
+import { ImageOff } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
 interface ProductImage {
@@ -62,14 +62,14 @@ export function ImageCarousel({ images, title, className, onImageChange, onImage
 			<Carousel setApi={setApi} className="w-full aspect-square lg:order-2">
 				<CarouselContent>
 					{images.map((image, index) => (
-						<CarouselItem key={index} className="flex items-center justify-center relative aspect-square">
-							{index === currentIndex && <div className="absolute inset-0 bg-dots-image-overlay pointer-events-none z-20" />}
+						<CarouselItem key={index} className="flex items-center justify-center relative aspect-square bg-black">
+							{index === currentIndex && <div className="absolute inset-0 bg-dots-image-overlay pointer-events-none z-0" />}
 							<button
 								onClick={() => onImageClick?.(index)}
-								className="absolute inset-0 z-10 cursor-pointer bg-black overflow-hidden"
+								className="relative z-10 w-full h-full cursor-pointer flex items-center justify-center"
 								aria-label={`View ${title} - Image ${index + 1} in full size`}
 							>
-								<img src={image.url} alt={`${title} - Image ${index + 1}`} className="w-full h-full object-cover" />
+								<img src={image.url} alt={`${title} - Image ${index + 1}`} className="max-w-full max-h-full object-contain" />
 							</button>
 						</CarouselItem>
 					))}
