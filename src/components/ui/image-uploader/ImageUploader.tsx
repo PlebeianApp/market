@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ndkActions } from '@/lib/stores/ndk'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { uploadToBlossomServer, BLOSSOM_SERVERS } from '@/lib/blossom'
+import { uploadFileToBlossom, BLOSSOM_SERVERS } from '@/lib/blossom'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 interface ImageUploaderProps {
   src: string | null
@@ -11,6 +11,7 @@ interface ImageUploaderProps {
   imagesLength: number
   forSingle?: boolean
   initialUrl?: string
+  imageDimensionText?: string
   onSave: (data: { url: string; index: number }) => void
   onDelete: (index: number) => void
   onPromote?: (index: number) => void
@@ -30,7 +31,8 @@ export function ImageUploader({
   onPromote,
   onDemote,
   onInteraction,
-  onUrlChange
+  onUrlChange,
+  imageDimensionText = "dimensions: 1600px High x 1600px Wide",
 }: ImageUploaderProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [urlError, setUrlError] = useState<string | null>(null)
@@ -43,26 +45,31 @@ export function ImageUploader({
   const inputTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
   async function performBlossomUpload(file: File) {
-    const ndk = ndkActions.getNDK()
-    if (!ndk || !ndk.signer) {
-      toast.error('NDK or signer not initialized')
-      throw new Error('NDK or signer not initialized')
-    }
-
     setIsLoading(true)
     try {
-      const result = await uploadToBlossomServer(file, {
-        serverUrl: selectedServer,
-        onProgress: (loaded, total) => {
-          const pct = Math.round((loaded / total) * 100)
+      const result = await uploadFileToBlossom(file, {
+        preferredServer: selectedServer,
+        onProgress: (progress) => {
+          const pct = Math.round((progress.loaded / progress.total) * 100)
           console.log(`Upload progress: ${pct}%`)
         },
+        onError: (error, serverUrl) => {
+          console.error(`Upload error on ${serverUrl}:`, error)
+        },
         maxRetries: 3,
-        retryDelay: 2000
+        debug: false,
       })
 
-      // setInputValue(result.url)
+      // Update the input value with the uploaded URL
+      setInputValue(result.url)
+
+      // Keep input editable so URL is visible and can be edited
+      setInputEditable(false)
+
+      // Save the uploaded image - this will trigger parent to update src prop
+      // which will then update localSrc through the useEffect
       onSave({ url: result.url, index })
+
       toast.success('Image uploaded successfully')
     } catch (err: any) {
       console.error('Upload error:', err)
@@ -75,11 +82,14 @@ export function ImageUploader({
 
   useEffect(() => {
     setLocalSrc(src)
-  }, [src])
-
-  useEffect(() => {
-    setInputValue(initialUrl || '')
-  }, [initialUrl])
+    // Also update inputValue to display the URL when image exists
+    // Use src if no initialUrl is provided
+    if (src && !initialUrl) {
+      setInputValue(src)
+    } else if (initialUrl) {
+      setInputValue(initialUrl)
+    }
+  }, [src, initialUrl])
 
   const handleUploadIntent = async () => {
     if (!hasInteracted && onInteraction) {
@@ -233,6 +243,22 @@ export function ImageUploader({
             ${localSrc ? 'bg-black' : ''}`}
           style={localSrc ? {} : { backgroundImage: 'url("images/checker.png")', backgroundRepeat: 'repeat' }}
         >
+          {/* Floating server selector */}
+          <div className="absolute top-2 left-2 z-10">
+            <Select value={selectedServer} onValueChange={setSelectedServer}>
+              <SelectTrigger className="w-[280px] bg-white border-2 border-black shadow-sm">
+                <SelectValue placeholder="Select server" />
+              </SelectTrigger>
+              <SelectContent>
+                {BLOSSOM_SERVERS.map((server) => (
+                  <SelectItem key={server.url} value={server.url}>
+                    {server.name} ({server.plan})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {localSrc ? (
             <>
               <div className="absolute inset-0 opacity-10">
@@ -300,27 +326,13 @@ export function ImageUploader({
               onDrop={handleDrop}
             >
               <span className="i-upload w-10 h-10" />
-              <strong>{isDragging ? 'Drop media here' : 'Upload at least one image'}</strong>
+              <strong>{isDragging ? 'Drop media here' : 'Click or drag image here'}</strong>
+              <strong className="text-xs text-gray-500">{imageDimensionText}</strong>
             </button>
           )}
         </div>
 
         <div className="w-full flex items-center justify-center">
-          <div className="flex items-center gap-2 mb-2 w-full">
-            <select
-              className="border-2 border-black h-10 px-2 rounded-none"
-              value={selectedServer}
-              onChange={(e) => setSelectedServer(e.target.value)}
-              title="Upload server"
-            >
-              {BLOSSOM_SERVERS.map((server) => (
-                <option key={server.url} value={server.url}>
-                  {server.name} ({server.plan})
-                </option>
-              ))}
-            </select>
-          </div>
-
           <div className="relative w-full">
             <Input
               disabled={!inputEditable && Boolean(localSrc)}
@@ -357,6 +369,22 @@ export function ImageUploader({
                 </Button>
               )
             ) : (
+        {/* URL input below image - full width */}
+        <div className="relative w-full">
+          <Input
+            readOnly={!inputEditable && Boolean(localSrc)}
+            value={inputValue}
+            type="text"
+            className="border-2 border-black pr-12 h-12 rounded-none"
+            placeholder="Set a remote image URL"
+            id="userImageRemote"
+            name="imageRemoteInput"
+            onChange={handleInput}
+            onFocus={handleInputFocus}
+            data-testid="image-url-input"
+          />
+          {localSrc ? (
+            inputEditable ? (
               <Button
                 type="button"
                 variant="primary"
@@ -366,18 +394,38 @@ export function ImageUploader({
               >
                 Save
               </Button>
-            )}
-          </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                className="absolute right-1 top-1 bottom-1 h-10 bg-white"
+                onClick={() => setInputEditable(true)}
+                data-testid="image-edit-button"
+              >
+                Edit
+              </Button>
+            )
+          ) : (
+            <Button
+              type="button"
+              variant="primary"
+              className="absolute right-1 top-1 bottom-1 h-10"
+              onClick={handleSaveImage}
+              data-testid="image-save-button"
+            >
+              Save
+            </Button>
+          )}
         </div>
 
         {urlError && (
-          <p className="text-destructive">{urlError}</p>
+          <p className="text-destructive text-sm">{urlError}</p>
         )}
 
         {isLoading && (
-          <div className="flex flex-row gap-2 mt-2">
+          <div className="flex flex-row gap-2 items-center">
             <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full"></div>
-            <p>Loading...</p>
+            <p className="text-sm">Uploading...</p>
           </div>
         )}
       </div>
