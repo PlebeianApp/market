@@ -23,8 +23,7 @@ jobs:
           password: ${{ secrets.REMOTE_PASSWORD }}
           script: |
             sudo systemctl stop market-dev.service && \
-            sudo systemctl stop orly.service && \
-            sudo rm -rf ~/.local/share/ORLY
+            sudo systemctl stop orly.service
 
       - name: Deploy to VPS
         uses: appleboy/scp-action@master
