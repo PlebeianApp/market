@@ -11,6 +11,7 @@ interface ImageUploaderProps {
   imagesLength: number
   forSingle?: boolean
   initialUrl?: string
+  imageDimensionText?: string
   onSave: (data: { url: string; index: number }) => void
   onDelete: (index: number) => void
   onPromote?: (index: number) => void
@@ -30,7 +31,8 @@ export function ImageUploader({
   onPromote,
   onDemote,
   onInteraction,
-  onUrlChange
+  onUrlChange,
+  imageDimensionText = "dimensions: 1600px High x 1600px Wide",
 }: ImageUploaderProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [urlError, setUrlError] = useState<string | null>(null)
@@ -324,11 +326,49 @@ export function ImageUploader({
               onDrop={handleDrop}
             >
               <span className="i-upload w-10 h-10" />
-              <strong>{isDragging ? 'Drop media here' : 'Upload at least one image'}</strong>
+              <strong>{isDragging ? 'Drop media here' : 'Click or drag image here'}</strong>
+              <strong className="text-xs text-gray-500">{imageDimensionText}</strong>
             </button>
           )}
         </div>
 
+        <div className="w-full flex items-center justify-center">
+          <div className="relative w-full">
+            <Input
+              disabled={!inputEditable && Boolean(localSrc)}
+              value={inputValue}
+              type="text"
+              className="border-2 border-black pr-12 h-12 rounded-none"
+              placeholder="Set a remote image URL"
+              id="userImageRemote"
+              name="imageRemoteInput"
+              onChange={handleInput}
+              onFocus={handleInputFocus}
+              data-testid="image-url-input"
+            />
+            {localSrc ? (
+              inputEditable ? (
+                <Button
+                  type="button"
+                  variant="primary"
+                  className="absolute right-1 top-1 bottom-1 h-10"
+                  onClick={handleSaveImage}
+                  data-testid="image-save-button"
+                >
+                  Save
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="absolute right-1 top-1 bottom-1 h-10 bg-white"
+                  onClick={() => setInputEditable(true)}
+                  data-testid="image-edit-button"
+                >
+                  Edit
+                </Button>
+              )
+            ) : (
         {/* URL input below image - full width */}
         <div className="relative w-full">
           <Input

@@ -14,7 +14,7 @@ import { useBtcExchangeRates, type SupportedCurrency } from '@/queries/external'
 import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useForm } from '@tanstack/react-form'
 import { useStore } from '@tanstack/react-store'
-import { ArrowRightLeft, Loader2, PackageIcon, PlusIcon, TruckIcon, X } from 'lucide-react'
+import { Info, ArrowRightLeft, Loader2, PackageIcon, PlusIcon, TruckIcon, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
