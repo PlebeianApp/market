@@ -332,47 +332,10 @@ export function ImageUploader({
           )}
         </div>
 
-        <div className="w-full flex items-center justify-center">
-          <div className="relative w-full">
-            <Input
-              disabled={!inputEditable && Boolean(localSrc)}
-              value={inputValue}
-              type="text"
-              className="border-2 border-black pr-12 h-12 rounded-none"
-              placeholder="Set a remote image URL"
-              id="userImageRemote"
-              name="imageRemoteInput"
-              onChange={handleInput}
-              onFocus={handleInputFocus}
-              data-testid="image-url-input"
-            />
-            {localSrc ? (
-              inputEditable ? (
-                <Button
-                  type="button"
-                  variant="primary"
-                  className="absolute right-1 top-1 bottom-1 h-10"
-                  onClick={handleSaveImage}
-                  data-testid="image-save-button"
-                >
-                  Save
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="absolute right-1 top-1 bottom-1 h-10 bg-white"
-                  onClick={() => setInputEditable(true)}
-                  data-testid="image-edit-button"
-                >
-                  Edit
-                </Button>
-              )
-            ) : (
         {/* URL input below image - full width */}
         <div className="relative w-full">
           <Input
-            readOnly={!inputEditable && Boolean(localSrc)}
+            disabled={!inputEditable && Boolean(localSrc)}
             value={inputValue}
             type="text"
             className="border-2 border-black pr-12 h-12 rounded-none"
