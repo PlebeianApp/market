@@ -9,8 +9,9 @@ export async function createQueryClient(): Promise<QueryClient> {
 	try {
 		ndkActions.initialize(defaultRelaysUrls)
 		await ndkActions.connect()
-		await authActions.getAuthFromLocalStorageAndLogin()
-		await walletActions.initialize()
+		// Perform auth and wallet initialization without blocking app startup
+		void authActions.getAuthFromLocalStorageAndLogin()
+		void walletActions.initialize()
 		console.log('NDK and stores initialized successfully')
 		// Create and return a new QueryClient only after initialization
 		return new QueryClient()
