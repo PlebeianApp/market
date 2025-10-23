@@ -22,9 +22,7 @@ jobs:
           username: ${{ secrets.REMOTE_USER }}
           password: ${{ secrets.REMOTE_PASSWORD }}
           script: |
-            sudo systemctl stop market-dev.service && \
-            sudo systemctl stop orly.service
-
+            sudo systemctl stop market-dev.service 
       - name: Deploy to VPS
         uses: appleboy/scp-action@master
         with:
@@ -52,5 +50,4 @@ jobs:
           username: ${{ secrets.REMOTE_USER }}
           password: ${{ secrets.REMOTE_PASSWORD }}
           script: |
-            sudo systemctl start orly.service && \
             sudo systemctl start market-dev.service
