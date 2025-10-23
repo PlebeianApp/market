@@ -35,11 +35,7 @@ export function BugReportItem({ report, className }: BugReportItemProps) {
 		<div className={cn('border border-gray-200 rounded-lg p-4 space-y-3', className)}>
 			{/* User info header */}
 			<div className="flex items-center justify-between">
-				<Button
-					variant="ghost"
-					onClick={handleProfileClick}
-					className="flex items-center gap-2 p-0 h-auto hover:bg-gray-50"
-				>
+				<Button variant="ghost" onClick={handleProfileClick} className="flex items-center gap-2 p-0 h-auto hover:bg-gray-50">
 					<Avatar className="h-8 w-8">
 						<AvatarImage src={profile?.picture} />
 						<AvatarFallback className="text-xs">{nameInitial}</AvatarFallback>
@@ -53,9 +49,7 @@ export function BugReportItem({ report, className }: BugReportItemProps) {
 			</div>
 
 			{/* Report content */}
-			<div className="text-sm text-gray-800 whitespace-pre-wrap break-words">
-				{report.content}
-			</div>
+			<div className="text-sm text-gray-800 whitespace-pre-wrap break-words">{report.content}</div>
 		</div>
 	)
 }

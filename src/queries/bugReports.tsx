@@ -38,13 +38,15 @@ export const fetchBugReports = async (limit: number = 20, until?: number): Promi
 
 	const events = await ndk.fetchEvents(filter)
 	const bugReports = Array.from(events)
-		.map((event): BugReport => ({
-			id: event.id,
-			pubkey: event.pubkey,
-			content: event.content,
-			createdAt: event.created_at ?? Math.floor(Date.now() / 1000),
-			event,
-		}))
+		.map(
+			(event): BugReport => ({
+				id: event.id,
+				pubkey: event.pubkey,
+				content: event.content,
+				createdAt: event.created_at ?? Math.floor(Date.now() / 1000),
+				event,
+			}),
+		)
 		.sort((a, b) => b.createdAt - a.createdAt) // Sort by newest first
 
 	return bugReports

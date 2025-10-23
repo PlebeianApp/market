@@ -30,17 +30,13 @@ export function BugReportButton({ className }: BugReportButtonProps) {
 				onClick={handleBugReport}
 				className={cn(
 					'fixed bottom-16 right-16 z-50 h-12 w-12 rounded-full bg-black text-white hover:bg-black hover:text-secondary shadow-lg transition-colors cursor-help',
-					className
+					className,
 				)}
 				aria-label="Report a bug"
 			>
 				<span className="i-bug w-6 h-6" />
 			</Button>
-			<BugReportModal 
-				isOpen={isModalOpen} 
-				onClose={() => setIsModalOpen(false)}
-				onReopen={() => setIsModalOpen(true)}
-			/>
+			<BugReportModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onReopen={() => setIsModalOpen(true)} />
 		</>
 	)
 }

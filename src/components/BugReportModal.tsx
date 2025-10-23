@@ -17,7 +17,9 @@ interface BugReportModalProps {
 
 export function BugReportModal({ isOpen, onClose, onReopen }: BugReportModalProps) {
 	const [activeTab, setActiveTab] = useState<'report' | 'viewer'>('report')
-	const [bugReport, setBugReport] = useState('Describe the problem you are having:\n\n\n\nUse the drag and drop or paste to add images of the problem.\n\n\n\nWhat device and operating system are you using?\n\nWhat steps did you take to reproduce the problem?\n\n\n\nWhat did you expect to happen?\n\n\n\nWhat actually happened?\n\n\n\nPlease provide any other relevant information\n\n')
+	const [bugReport, setBugReport] = useState(
+		'Describe the problem you are having:\n\n\n\nUse the drag and drop or paste to add images of the problem.\n\n\n\nWhat device and operating system are you using?\n\nWhat steps did you take to reproduce the problem?\n\n\n\nWhat did you expect to happen?\n\n\n\nWhat actually happened?\n\n\n\nPlease provide any other relevant information\n\n',
+	)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 	const [isUploading, setIsUploading] = useState(false)
 	const [hasAutoPopulated, setHasAutoPopulated] = useState(false)
@@ -25,7 +27,12 @@ export function BugReportModal({ isOpen, onClose, onReopen }: BugReportModalProp
 	const [uploadedImages, setUploadedImages] = useState<string[]>([])
 
 	// Infinite scroll for bug reports viewer
-	const { reports, hasMore, isLoading: isLoadingReports, loadMore } = useBugReportsInfiniteScroll({
+	const {
+		reports,
+		hasMore,
+		isLoading: isLoadingReports,
+		loadMore,
+	} = useBugReportsInfiniteScroll({
 		chunkSize: 10,
 		maxReports: 100,
 		threshold: 1000,
@@ -53,7 +60,7 @@ export function BugReportModal({ isOpen, onClose, onReopen }: BugReportModalProp
 			notificationSupport: 'Notification' in window,
 			geolocationSupport: 'geolocation' in navigator,
 			localStorageSupport: typeof Storage !== 'undefined',
-			sessionStorageSupport: typeof Storage !== 'undefined'
+			sessionStorageSupport: typeof Storage !== 'undefined',
 		}
 
 		return `Device: ${info.platform}
@@ -81,7 +88,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 	const uploadToBlossom = async (file: File) => {
 		try {
 			console.log('Uploading to Blossom using merged upload code...')
-			
+
 			// Use the merged blossom upload function
 			const result = await uploadToBlossomServer(file, {
 				serverUrl: BLOSSOM_SERVERS[0].url, // Use first available server
@@ -90,9 +97,9 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 					console.log(`Upload progress: ${pct}%`)
 				},
 				maxRetries: 3,
-				retryDelay: 2000
+				retryDelay: 2000,
 			})
-			
+
 			console.log('Blossom upload successful:', result)
 			return result
 		} catch (error) {
@@ -126,16 +133,14 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 		if (imageInsertIndex !== -1) {
 			const beforeInsert = bugReport.substring(0, imageInsertIndex + imageInsertText.length)
 			const afterInsert = bugReport.substring(imageInsertIndex + imageInsertText.length)
-			
+
 			// If this is the first image, insert it. If not, add it on a new line after existing images
 			const existingImages = uploadedImages.length
-			const imageText = existingImages === 0 
-				? `[Image: ${imageUrl}]\n\n` 
-				: `\n[Image: ${imageUrl}]\n\n`
-			
+			const imageText = existingImages === 0 ? `[Image: ${imageUrl}]\n\n` : `\n[Image: ${imageUrl}]\n\n`
+
 			const newText = beforeInsert + imageText + afterInsert
 			setBugReport(newText)
-			setUploadedImages(prev => [...prev, imageUrl])
+			setUploadedImages((prev) => [...prev, imageUrl])
 
 			// Focus the textarea and position cursor after the inserted image
 			setTimeout(() => {
@@ -147,13 +152,11 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			}, 100)
 		} else {
 			// Fallback: insert at end if pattern not found
-			const imageText = uploadedImages.length === 0 
-				? `\n[Image: ${imageUrl}]\n` 
-				: `\n[Image: ${imageUrl}]\n`
-			
+			const imageText = uploadedImages.length === 0 ? `\n[Image: ${imageUrl}]\n` : `\n[Image: ${imageUrl}]\n`
+
 			const newText = bugReport + imageText
 			setBugReport(newText)
-			setUploadedImages(prev => [...prev, imageUrl])
+			setUploadedImages((prev) => [...prev, imageUrl])
 
 			setTimeout(() => {
 				if (textareaRef.current) {
@@ -172,14 +175,16 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			setHasAutoPopulated(false)
 			setUploadedImages([])
 			// Reset to default template for next time
-			setBugReport('Describe the problem you are having:\n\n\n\nUse the drag and drop or paste to add images of the problem.\n\n\n\nWhat device and operating system are you using?\n\nWhat steps did you take to reproduce the problem?\n\n\n\nWhat did you expect to happen?\n\n\n\nWhat actually happened?\n\n\n\nPlease provide any other relevant information\n\n')
+			setBugReport(
+				'Describe the problem you are having:\n\n\n\nUse the drag and drop or paste to add images of the problem.\n\n\n\nWhat device and operating system are you using?\n\nWhat steps did you take to reproduce the problem?\n\n\n\nWhat did you expect to happen?\n\n\n\nWhat actually happened?\n\n\n\nPlease provide any other relevant information\n\n',
+			)
 		}
 	}, [isOpen])
 
 	const handleSend = async () => {
 		try {
 			console.log('Starting bug report send process...')
-			
+
 			// Get NDK instance
 			const ndk = await ndkActions.getNDK()
 			if (!ndk) {
@@ -191,22 +196,18 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			// Ensure bugs.plebeian.market relay is added for bug reports
 			const relayAdded = ndkActions.addSingleRelay('wss://bugs.plebeian.market/')
 			console.log('Relay added:', relayAdded)
-			
+
 			// Also add some reliable relays as fallback
-			const fallbackRelays = [
-				'wss://relay.nostr.band',
-				'wss://nos.lol',
-				'wss://relay.damus.io'
-			]
-			fallbackRelays.forEach(relay => {
+			const fallbackRelays = ['wss://relay.nostr.band', 'wss://nos.lol', 'wss://relay.damus.io']
+			fallbackRelays.forEach((relay) => {
 				ndkActions.addSingleRelay(relay)
 			})
 			console.log('Fallback relays added')
-			
+
 			// Log current relay configuration
 			const currentRelays = Array.from(ndk.pool.relays.keys())
 			console.log('Current relays configured:', currentRelays)
-			
+
 			// Check if we have a signer
 			if (!ndk.signer) {
 				console.error('No signer available - user not authenticated')
@@ -227,32 +228,30 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			const event = new NDKEvent(ndk)
 			event.kind = 1
 			event.content = bugReport
-			
+
 			// Add plebian2beta tag
 			event.tags = [['t', 'plebian2beta']]
 
 			console.log('Event created:', {
 				kind: event.kind,
 				contentLength: event.content.length,
-				tags: event.tags
+				tags: event.tags,
 			})
 
 			// Sign and publish the event
 			console.log('Signing event...')
 			await event.sign()
 			console.log('Event signed, ID:', event.id)
-			
+
 			console.log('Publishing event...')
-			
+
 			// Add timeout to publish operation
 			const publishPromise = event.publish()
-			const timeoutPromise = new Promise((_, reject) => 
-				setTimeout(() => reject(new Error('Publish timeout after 10 seconds')), 10000)
-			)
-			
+			const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Publish timeout after 10 seconds')), 10000))
+
 			await Promise.race([publishPromise, timeoutPromise])
 			console.log('Event published successfully!')
-			
+
 			// Log the event details for debugging
 			console.log('Published event details:', {
 				id: event.id,
@@ -260,11 +259,13 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 				kind: event.kind,
 				created_at: event.created_at,
 				tags: event.tags,
-				content: event.content.substring(0, 100) + '...'
+				content: event.content.substring(0, 100) + '...',
 			})
 
 			// Clear the input and close modal after sending
-			setBugReport('Describe the problem you are having:\n\n\n\nUse the drag and drop or paste to add images of the problem.\n\n\n\nWhat device and operating system are you using?\n\nWhat steps did you take to reproduce the problem?\n\n\n\nWhat did you expect to happen?\n\n\n\nWhat actually happened?\n\n\n\nPlease provide any other relevant information\n\n')
+			setBugReport(
+				'Describe the problem you are having:\n\n\n\nUse the drag and drop or paste to add images of the problem.\n\n\n\nWhat device and operating system are you using?\n\nWhat steps did you take to reproduce the problem?\n\n\n\nWhat did you expect to happen?\n\n\n\nWhat actually happened?\n\n\n\nPlease provide any other relevant information\n\n',
+			)
 			onClose()
 		} catch (error) {
 			console.error('Failed to publish bug report:', error)
@@ -272,7 +273,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 				console.error('Error details:', {
 					name: error.name,
 					message: error.message,
-					stack: error.stack
+					stack: error.stack,
 				})
 			} else {
 				console.error('Unknown error type:', error)
@@ -314,9 +315,9 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 	const handleDrop = (e: React.DragEvent) => {
 		e.preventDefault()
 		setIsDragOver(false)
-		
+
 		const files = Array.from(e.dataTransfer.files)
-		files.forEach(file => {
+		files.forEach((file) => {
 			if (file.type.startsWith('image/')) {
 				handleFileUpload(file)
 			}
@@ -326,7 +327,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 	// Handle paste
 	const handlePaste = (e: React.ClipboardEvent) => {
 		const items = Array.from(e.clipboardData.items)
-		items.forEach(item => {
+		items.forEach((item) => {
 			if (item.type.startsWith('image/')) {
 				const file = item.getAsFile()
 				if (file) {
@@ -350,10 +351,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			onClick={onClose}
 			onKeyDown={handleKeyDown}
 		>
-			<div
-				className="bg-white rounded-lg shadow-xl w-[40em] h-[80vh] flex flex-col"
-				onClick={(e) => e.stopPropagation()}
-			>
+			<div className="bg-white rounded-lg shadow-xl w-[40em] h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
 				{/* Header */}
 				<div className="flex items-center justify-between p-6 border-b border-gray-200">
 					<div className="flex items-center gap-2">
@@ -405,9 +403,9 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 									onDrop={handleDrop}
 									placeholder="Describe the bug you encountered..."
 									className={cn(
-										"flex-1 w-full p-4 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent",
-										isDragOver && "border-secondary bg-secondary/5",
-										isUploading && "opacity-50"
+										'flex-1 w-full p-4 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent',
+										isDragOver && 'border-secondary bg-secondary/5',
+										isUploading && 'opacity-50',
 									)}
 									rows={10}
 									disabled={isUploading}
