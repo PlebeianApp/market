@@ -75,5 +75,5 @@ jobs:
       - name: Health check
         run: |
           sleep 10
-          curl -f https://${{ secrets.REMOTE_HOST }}/api/config || exit 1
+          curl -f https://staging.plebeian.market/api/config || exit 1
           echo "✅ Staging deployment successful!"
