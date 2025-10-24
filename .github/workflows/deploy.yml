@@ -54,20 +54,20 @@ jobs:
           password: ${{ secrets.REMOTE_PASSWORD }}
           script: |
             cd /home/deployer/market
-            
+
             # Create staging environment file
             cat <<EOF > .env
             NODE_ENV=production
             APP_RELAY_URL=${{ secrets.APP_RELAY_URL }}
             APP_PRIVATE_KEY=${{ secrets.APP_PRIVATE_KEY }}
             EOF
-            
+
             # Install production dependencies
             bun install --production
-            
+
             # Start staging service
             sudo systemctl start market-dev.service
-            
+
             # Verify deployment
             sleep 5
             sudo systemctl status market-dev.service --no-pager
