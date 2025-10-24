@@ -42,7 +42,7 @@ export const updateProfile = async (profile: NDKUserProfile): Promise<void> => {
 		}
 	} catch (error) {
 		console.error('❌ Error during profile publish:', error)
-		console.error('Connected relays at time of error:', ndk.pool?.connectedRelays()?.map(r => r.url) || [])
+		console.error('Connected relays at time of error:', ndk.pool?.connectedRelays()?.map((r) => r.url) || [])
 		throw error
 	}
 }
