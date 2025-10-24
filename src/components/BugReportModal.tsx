@@ -1,13 +1,12 @@
-import { useState, useRef, useEffect } from 'react'
+import { BugReportItem } from '@/components/BugReportItem'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { useBugReportsInfiniteScroll } from '@/hooks/useBugReportsInfiniteScroll'
+import { BLOSSOM_SERVERS, uploadFileToBlossom } from '@/lib/blossom'
+import { ndkActions } from '@/lib/stores/ndk'
 import { cn } from '@/lib/utils'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
-import { ndkActions } from '@/lib/stores/ndk'
-import { uploadToBlossomServer, BLOSSOM_SERVERS } from '@/lib/blossom'
-import { BugReportItem } from '@/components/BugReportItem'
-import { useBugReportsInfiniteScroll } from '@/hooks/useBugReportsInfiniteScroll'
 import { Loader2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 
 interface BugReportModalProps {
 	isOpen: boolean
@@ -90,7 +89,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			console.log('Uploading to Blossom using merged upload code...')
 
 			// Use the merged blossom upload function
-			const result = await uploadToBlossomServer(file, {
+			const result = await uploadFileToBlossom(file, {
 				serverUrl: BLOSSOM_SERVERS[0].url, // Use first available server
 				onProgress: (loaded, total) => {
 					const pct = Math.round((loaded / total) * 100)
