@@ -9,6 +9,10 @@ export async function createQueryClient(): Promise<QueryClient> {
 	try {
 		ndkActions.initialize(defaultRelaysUrls)
 		await ndkActions.connect()
+
+		// Restore authenticated state immediately after NDK initialization
+		authActions.restoreAuthenticatedState()
+
 		// Perform auth and wallet initialization without blocking app startup
 		void authActions.getAuthFromLocalStorageAndLogin()
 		void walletActions.initialize()
