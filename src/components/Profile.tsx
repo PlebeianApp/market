@@ -2,13 +2,15 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { authStore } from '@/lib/stores/auth'
-import { ndkActions } from '@/lib/stores/ndk'
 import { cn } from '@/lib/utils'
 import type { NDKUserProfile } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
 import { useNavigate, useLocation } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { profileByIdentifierQueryOptions } from '@/queries/profiles'
+import { getProfileFromLocalStorage } from '@/lib/utils/profileStorage'
+import { useState, useEffect } from 'react'
 
 interface ProfileProps {
 	compact?: boolean
@@ -16,48 +18,61 @@ interface ProfileProps {
 
 export function Profile({ compact = false }: ProfileProps) {
 	const authState = useStore(authStore)
-	const [profile, setProfile] = useState<NDKUserProfile | null>(null)
-	const [isLoading, setIsLoading] = useState(true)
 	const navigate = useNavigate()
 	const location = useLocation()
-
+	
+	// Local state for profile data as fallback
+	const [localProfile, setLocalProfile] = useState<NDKUserProfile | null>(null)
+	
 	// Check if we're on the user's own profile page
 	const isOnOwnProfile = authState.user?.pubkey && location.pathname === `/profile/${authState.user.pubkey}`
-
+	
+	// Load profile from localStorage when pubkey changes
 	useEffect(() => {
-		if (!authState.user?.pubkey) {
-			setIsLoading(false)
-			return
-		}
-
-		const fetchProfile = async () => {
-			const pubkey = authState.user?.pubkey
-			if (!pubkey) {
-				setIsLoading(false)
-				return
+		if (authState.user?.pubkey) {
+			const cachedProfile = getProfileFromLocalStorage(authState.user.pubkey)
+			if (cachedProfile) {
+				setLocalProfile(cachedProfile)
 			}
-
-			try {
-				const ndk = ndkActions.getNDK()
-				if (!ndk) {
-					throw new Error('NDK not initialized')
-				}
-
-				const user = ndk.getUser({ pubkey })
-				const profilePromise = await user.fetchProfile()
-
-				setProfile(profilePromise)
-			} catch (error) {
-				console.error('Error fetching profile:', error)
-			} finally {
-				setIsLoading(false)
-			}
+		} else {
+			setLocalProfile(null)
 		}
-
-		fetchProfile()
 	}, [authState.user?.pubkey])
 
-	const displayName = profile?.name || 'Local User'
+	// Use TanStack Query to fetch profile data
+	const { data: profileData, isLoading, error } = useQuery({
+		...profileByIdentifierQueryOptions(authState.user?.pubkey || ''),
+		enabled: !!authState.user?.pubkey && authState.user.pubkey.length > 0,
+		staleTime: 5 * 60 * 1000, // 5 minutes
+		initialData: () => {
+			// Try to load from localStorage first for immediate display
+			if (authState.user?.pubkey) {
+				const profile = getProfileFromLocalStorage(authState.user.pubkey)
+				if (profile) {
+					return { profile, user: null }
+				}
+			}
+			return undefined
+		},
+		// Keep data fresh but don't refetch too aggressively
+		refetchOnWindowFocus: false,
+		refetchOnMount: true // Allow initial fetch
+	})
+
+	// Use query data if available, otherwise fall back to localStorage
+	const profile = profileData?.profile || localProfile
+	const displayName = profile?.name || profile?.displayName || 'Local User'
+	
+	// Debug logging (only in development)
+	if (process.env.NODE_ENV === 'development' && authState.user?.pubkey) {
+		console.log('🔍 Profile component:', {
+			pubkey: authState.user.pubkey.slice(0, 8) + '...',
+			hasQueryData: !!profileData?.profile,
+			hasLocalProfile: !!localProfile,
+			finalProfile: !!profile,
+			isLoading
+		})
+	}
 
 	const handleProfileClick = () => {
 		if (authState.isAuthenticated && authState.user?.pubkey) {
@@ -95,7 +110,7 @@ export function Profile({ compact = false }: ProfileProps) {
 					>
 						{compact && authState.isAuthenticated ? (
 							<Avatar className="w-6 h-6">
-								<AvatarImage src={profile?.picture} />
+								<AvatarImage src={profile?.image || profile?.picture} />
 								<AvatarFallback className={cn('text-xs', isOnOwnProfile ? 'bg-white text-secondary' : 'bg-secondary text-black')}>
 									{(profile?.name || profile?.displayName || authState.user?.pubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
 								</AvatarFallback>

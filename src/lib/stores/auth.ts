@@ -1,6 +1,7 @@
 import { NDKNip07Signer, NDKNip46Signer, NDKPrivateKeySigner, NDKUser, NDKEvent } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { ndkActions } from './ndk'
+import { removeProfileFromLocalStorage } from '@/lib/utils/profileStorage'
 import { cartActions } from './cart'
 import { fetchProductsByPubkey } from '@/queries/products'
 
@@ -89,6 +90,9 @@ export const authActions = {
 				isAuthenticated: true,
 			}))
 
+			// Enable auto-login for persistence
+			localStorage.setItem(NOSTR_AUTO_LOGIN, 'true')
+
 			return user
 		} catch (error) {
 			authStore.setState((state) => ({
@@ -118,6 +122,9 @@ export const authActions = {
 				user,
 				isAuthenticated: true,
 			}))
+
+			// Enable auto-login for persistence
+			localStorage.setItem(NOSTR_AUTO_LOGIN, 'true')
 
 			return user
 		} catch (error) {
@@ -151,6 +158,9 @@ export const authActions = {
 				isAuthenticated: true,
 			}))
 
+			// Enable auto-login for persistence
+			localStorage.setItem(NOSTR_AUTO_LOGIN, 'true')
+
 			return user
 		} catch (error) {
 			authStore.setState((state) => ({
@@ -164,8 +174,15 @@ export const authActions = {
 	},
 
 	logout: () => {
+		const state = authStore.state
 		const ndk = ndkActions.getNDK()
 		if (!ndk) return
+		
+		// Clean up profile data for the current user
+		if (state.user?.pubkey) {
+			removeProfileFromLocalStorage(state.user.pubkey)
+		}
+		
 		ndkActions.removeSigner()
 		localStorage.removeItem(NOSTR_LOCAL_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_CONNECT_KEY)

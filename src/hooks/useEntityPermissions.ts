@@ -1,4 +1,6 @@
 import { ndkActions } from '@/lib/stores/ndk'
+import { authStore } from '@/lib/stores/auth'
+import { useStore } from '@tanstack/react-store'
 import { useUserRole } from '@/queries/app-settings'
 import { useConfigQuery } from '@/queries/config'
 import { useMemo } from 'react'
@@ -31,14 +33,25 @@ export interface EntityPermissions {
 export function useEntityPermissions(entityPubkey: string | undefined): EntityPermissions {
 	const { data: config } = useConfigQuery()
 	const appPubkey = config?.appPublicKey
+	const authState = useStore(authStore)
 
 	const { userRole, isLoading, currentUserPubkey } = useUserRole(appPubkey)
-	const ndk = ndkActions.getNDK()
-	const authenticatedUserPubkey = ndk?.activeUser?.pubkey
+	const authenticatedUserPubkey = authState.user?.pubkey
 
 	const permissions = useMemo(() => {
 		// Determine if current user is the entity owner
 		const isEntityOwner = !!(entityPubkey && authenticatedUserPubkey && entityPubkey === authenticatedUserPubkey)
+
+		// Debug logging for permissions
+		if (process.env.NODE_ENV === 'development') {
+			console.log('🔍 Entity Permissions:', {
+				entityPubkey: entityPubkey?.slice(0, 8) + '...',
+				authenticatedUserPubkey: authenticatedUserPubkey?.slice(0, 8) + '...',
+				isEntityOwner,
+				userRole,
+				isAuthenticated: !!authenticatedUserPubkey
+			})
+		}
 
 		// Admins and editors can blacklist and set featured
 		const canBlacklist = userRole === 'owner' || userRole === 'admin' || userRole === 'editor'

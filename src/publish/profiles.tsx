@@ -3,6 +3,7 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { type NDKUserProfile } from '@nostr-dev-kit/ndk'
 import { profileKeys } from '@/queries/queryKeyFactory'
 import { toast } from 'sonner'
+import { storeProfileInLocalStorage } from '@/lib/utils/profileStorage'
 
 /**
  * Updates the user's profile on the Nostr network.
@@ -17,17 +18,25 @@ export const updateProfile = async (profile: NDKUserProfile): Promise<void> => {
 	const user = ndk.activeUser
 	if (!user) throw new Error('No active user')
 
+	// Ensure NDK is connected before publishing
+	if (!ndk.pool || ndk.pool.connectedRelays().length === 0) {
+		console.log('NDK not connected, attempting to connect...')
+		await ndkActions.connect()
+	}
+
 	// Update the user's profile and publish the changes
 	user.profile = profile
 
-	await user.publish()
+	console.log('Publishing profile to relays:', ndk.pool?.connectedRelays().map(r => r.url))
+	const publishResult = await user.publish()
+	console.log('Profile publish result:', publishResult)
 }
 
 /**
  * Mutation hook for updating a user profile.
  * Handles invalidating the related queries for proper cache updates.
  */
-export const useUpdateProfileMutation = () => {
+export function useUpdateProfileMutation() {
 	const queryClient = useQueryClient()
 
 	return useMutation({
@@ -38,15 +47,38 @@ export const useUpdateProfileMutation = () => {
 			const pubkey = ndk?.activeUser?.pubkey
 
 			if (pubkey) {
-				// Invalidate relevant queries to trigger refetching
-				await queryClient.invalidateQueries({ queryKey: profileKeys.details(pubkey) })
+				// Store profile in localStorage for immediate access
+				storeProfileInLocalStorage(pubkey, profile)
 
+				// Update the query cache with the new profile data
+				queryClient.setQueryData(profileKeys.details(pubkey), { profile, user: ndk.activeUser })
+				
+				// Schedule a delayed invalidation to allow relay propagation
+				// This gives the relay time to process and store the new profile
+				setTimeout(() => {
+					queryClient.invalidateQueries({ queryKey: profileKeys.details(pubkey) })
+					console.log('🔄 Profile cache invalidated after relay propagation delay')
+				}, 3000) // 3 second delay
+				
 				toast.success('Profile updated successfully')
 			}
 		},
 		onError: (error) => {
 			console.error('Failed to update profile:', error)
-			toast.error('Failed to update profile')
+			
+			// Provide more specific error messages
+			let errorMessage = 'Failed to update profile'
+			if (error instanceof Error) {
+				if (error.message.includes('NDK not initialized')) {
+					errorMessage = 'Connection not available. Please try again.'
+				} else if (error.message.includes('No active user')) {
+					errorMessage = 'Please sign in to update your profile.'
+				} else if (error.message.includes('timeout') || error.message.includes('connection')) {
+					errorMessage = 'Connection timeout. Please check your internet and try again.'
+				}
+			}
+			
+			toast.error(errorMessage)
 		},
 	})
 }
@@ -58,7 +90,7 @@ export const useUpdateProfileMutation = () => {
  * @param field The profile field to update
  * @param value The new value for the field
  */
-export const useUpdateProfileFieldMutation = () => {
+export function useUpdateProfileFieldMutation() {
 	const queryClient = useQueryClient()
 
 	return useMutation({

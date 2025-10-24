@@ -20,6 +20,28 @@ bun start
 
 This project was created using `bun init` in bun v1.2.4. [Bun](https://bun.sh) is a fast all-in-one JavaScript runtime.
 
+## Environment Configuration
+
+### Staging vs Production
+
+The application supports two environments controlled by the `STAGING` environment variable:
+
+- **Staging (default)**: `STAGING=true` or unset
+  - Uses `wss://relay.staging.plebeian.market` as the primary relay
+  - Includes fallback relays for development
+  - Safe for testing without affecting production data
+
+- **Production**: `STAGING=false`
+  - Uses production relay configuration
+  - Connects to multiple public relays for redundancy
+
+To switch to production mode:
+```bash
+export STAGING=false
+# or in your .env file
+STAGING=false
+```
+
 ## Getting Started
 
 ### Initial Setup
@@ -28,6 +50,7 @@ This project was created using `bun init` in bun v1.2.4. [Bun](https://bun.sh) i
 2. Copy `.env.example` to `.env` and configure your environment variables:
    - `APP_RELAY_URL`: Your relay URL
    - `APP_PRIVATE_KEY`: Your private key for initialization
+   - `STAGING`: Set to `false` to use production relays (defaults to `true` for staging)
 3. Set up a development relay (required for local development)
    - We recommend using [nak](https://github.com/fiatjaf/nak) for development:
 
