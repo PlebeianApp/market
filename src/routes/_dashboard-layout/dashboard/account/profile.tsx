@@ -1,7 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
-import { ndkActions } from '@/lib/stores/ndk'
+import { ndkActions, ndkStore } from '@/lib/stores/ndk'
 import { authStore } from '@/lib/stores/auth'
+import { configStore } from '@/lib/stores/config'
 import { useStore } from '@tanstack/react-store'
 import { type NDKUserProfile } from '@nostr-dev-kit/ndk'
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
@@ -84,23 +85,10 @@ function ProfileComponent() {
 	const updateProfileMutation = useUpdateProfileMutation()
 	const isLoading = isLoadingProfile || updateProfileMutation.isPending
 
-	// Debug logging for profile editor
-	if (process.env.NODE_ENV === 'development') {
-		console.log('🔍 Profile Editor state:', {
-			pubkey: pubkey?.slice(0, 8) + '...',
-			isAuthenticated: authState.isAuthenticated,
-			hasQueryData: !!fetchedData?.profile,
-			hasLocalProfile: !!localProfile,
-			finalProfile: !!fetchedProfile,
-			isLoading: isLoadingProfile,
-		})
-	}
 
 	// Update local state when fetched profile changes
 	useEffect(() => {
 		if (fetchedProfile) {
-			console.log('✅ Profile editor received profile data:', fetchedProfile)
-
 			// Handle kind 0 metadata field mappings: picture -> image
 			const profileWithMappedFields = {
 				...fetchedProfile,
@@ -108,8 +96,6 @@ function ProfileComponent() {
 			}
 			setProfile(profileWithMappedFields)
 			setOriginalProfile(profileWithMappedFields)
-
-			console.log('✅ Profile component processed kind 0 metadata with field mappings:', profileWithMappedFields)
 
 			// Update form data with fetched profile
 			// Handle both snake_case (from kind 0 metadata) and camelCase field formats
@@ -181,19 +167,6 @@ function ProfileComponent() {
 
 		const hasChanges = formFieldsChanged || imageChanges
 
-		// Debug logging for save button state
-		if (process.env.NODE_ENV === 'development') {
-			console.log('Profile save button state:', {
-				formFieldsChanged,
-				imageChanges,
-				hasChanges,
-				mandatoryFieldsFilled: areMandatoryFieldsFilled(),
-				isLoadingProfile,
-				originalProfileKeys: Object.keys(originalProfile),
-				formData,
-				originalProfile,
-			})
-		}
 
 		return hasChanges
 	}

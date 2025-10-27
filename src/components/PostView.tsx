@@ -17,7 +17,7 @@ export function PostView({ post, showJson = false }: PostViewProps) {
 				{isLoadingAuthor ? (
 					<div className="w-10 h-10 rounded-full bg-gray-200 animate-pulse"></div>
 				) : author?.picture ? (
-					<img src={author.picture} alt={author.name || 'Profile'} className="w-10 h-10 rounded-full object-cover" />
+					<img src={author.picture} alt={author.name || 'Profile'} className="w-10 h-10 rounded-full object-cover object-center" />
 				) : (
 					<div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center text-gray-600">
 						{author?.name?.[0]?.toUpperCase() || '?'}

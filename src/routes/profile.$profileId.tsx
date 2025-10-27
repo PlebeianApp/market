@@ -220,7 +220,7 @@ function RouteComponent() {
 			<div className="absolute top-0 left-0 right-0 z-0 h-[40vh] sm:h-[40vh] md:h-[50vh] overflow-hidden">
 				{profile?.banner ? (
 					<div className="w-[150%] sm:w-full h-full -ml-[25%] sm:ml-0">
-						<img src={profile.banner} alt="profile-banner" className="w-full h-full object-cover" />
+						<img src={profile.banner} alt="profile-banner" className="w-full h-full object-cover object-center" />
 					</div>
 				) : (
 					<div
@@ -239,7 +239,7 @@ function RouteComponent() {
 							<img
 								src={profile.image || profile.picture}
 								alt={profile.name || 'Profile picture'}
-								className="rounded-full w-10 h-10 sm:w-16 sm:h-16 border-2 border-black"
+								className="rounded-full w-10 h-10 sm:w-16 sm:h-16 border-2 border-black object-cover object-center"
 							/>
 						)}
 						<div className="flex items-center gap-2">

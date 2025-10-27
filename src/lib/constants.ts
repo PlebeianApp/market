@@ -8,9 +8,6 @@ const isStaging =
 export const defaultRelaysUrls: string[] = isStaging
 	? [
 			'wss://relay.staging.plebeian.market',
-			// Fallback relays for staging
-			'wss://relay.nostr.band',
-			'wss://nos.lol',
 		]
 	: [
 			'wss://relay.nostr.band',
@@ -18,12 +15,12 @@ export const defaultRelaysUrls: string[] = isStaging
 			'wss://relay.nostr.net',
 			'wss://relay.damus.io',
 			'wss://relay.minibits.cash',
-			// 'ws://localhost:10547',
+			'ws://localhost:10547',
 		]
 
 // Dedicated zap detection relays
 export const ZAP_RELAYS = isStaging
-	? ['wss://relay.staging.plebeian.market', 'wss://relay.damus.io', 'wss://relay.nostr.band', 'wss://nos.lol']
+	? ['wss://relay.staging.plebeian.market']
 	: [
 			'wss://relay.damus.io',
 			'wss://relay.nostr.band',
