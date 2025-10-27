@@ -26,6 +26,7 @@ export function BugReportModal({ isOpen, onClose, onReopen }: BugReportModalProp
 		'Describe the problem you are having:\n\n\n\nUse the drag and drop or paste to add images of the problem.\n\n\n\nWhat device and operating system are you using?\n\nWhat steps did you take to reproduce the problem?\n\n\n\nWhat did you expect to happen?\n\n\n\nWhat actually happened?\n\n\n\nPlease provide any other relevant information\n\n',
 	)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
+	const scrollContainerRef = useRef<HTMLDivElement>(null)
 	const [isUploading, setIsUploading] = useState(false)
 	const [hasAutoPopulated, setHasAutoPopulated] = useState(false)
 	const [isDragOver, setIsDragOver] = useState(false)
@@ -42,7 +43,22 @@ export function BugReportModal({ isOpen, onClose, onReopen }: BugReportModalProp
 		maxReports: 100,
 		threshold: 1000,
 		autoLoad: true,
+		scrollContainer: scrollContainerRef,
 	})
+
+	// Prevent body scrolling when modal is open
+	useEffect(() => {
+		if (isOpen) {
+			document.body.style.overflow = 'hidden'
+		} else {
+			document.body.style.overflow = 'unset'
+		}
+
+		// Cleanup on unmount
+		return () => {
+			document.body.style.overflow = 'unset'
+		}
+	}, [isOpen])
 
 	// Gather system information from browser
 	const getSystemInfo = () => {
@@ -96,13 +112,12 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 
 			// Use the merged blossom upload function
 			const result = await uploadFileToBlossom(file, {
-				serverUrl: BLOSSOM_SERVERS[0].url, // Use first available server
-				onProgress: (loaded, total) => {
+				preferredServer: BLOSSOM_SERVERS[0].url, // Use first available server
+				onProgress: ({ loaded, total }) => {
 					const pct = Math.round((loaded / total) * 100)
 					console.log(`Upload progress: ${pct}%`)
 				},
 				maxRetries: 3,
-				retryDelay: 2000,
 			})
 
 			console.log('Blossom upload successful:', result)
@@ -351,8 +366,14 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
 			onClick={onClose}
 			onKeyDown={handleKeyDown}
+			onWheel={(e) => e.preventDefault()}
+			onTouchMove={(e) => e.preventDefault()}
+			style={{ overflow: 'hidden' }}
 		>
-			<div className="bg-white rounded-lg shadow-xl w-[40em] h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+			<div 
+				className="bg-white rounded-lg shadow-xl w-[40em] h-[80vh] flex flex-col" 
+				onClick={(e) => e.stopPropagation()}
+			>
 				{/* Header */}
 				<div className="flex items-center justify-between p-6 border-b border-gray-200">
 					<div className="flex items-center gap-2">
@@ -402,6 +423,8 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 									onDragOver={handleDragOver}
 									onDragLeave={handleDragLeave}
 									onDrop={handleDrop}
+									onWheel={(e) => e.stopPropagation()}
+									onTouchMove={(e) => e.stopPropagation()}
 									placeholder="Describe the bug you encountered..."
 									className={cn(
 										'flex-1 w-full p-4 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent',
@@ -426,7 +449,23 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 					) : (
 						<>
 							<p className="text-gray-600 mb-6">View bug reports from the community</p>
-							<div className="flex-1 overflow-y-auto">
+							<div 
+								ref={scrollContainerRef}
+								className="flex-1 overflow-y-auto pr-2 min-h-0"
+								style={{
+									scrollbarWidth: 'thin',
+									scrollbarColor: '#d1d5db #f3f4f6',
+									maxHeight: 'calc(80vh - 200px)' // Ensure container has a defined max height
+								}}
+								onWheel={(e) => {
+									// Allow scrolling within this container, but prevent bubbling to backdrop
+									e.stopPropagation()
+								}}
+								onTouchMove={(e) => {
+									// Allow touch scrolling within this container, but prevent bubbling to backdrop
+									e.stopPropagation()
+								}}
+							>
 								{isLoadingReports && reports.length === 0 ? (
 									<div className="flex flex-col items-center justify-center py-12">
 										<Loader2 className="w-8 h-8 animate-spin mb-4" />

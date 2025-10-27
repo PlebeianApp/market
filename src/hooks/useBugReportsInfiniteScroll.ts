@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import React, { useState, useCallback, useMemo, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { bugReportsQueryOptions, type BugReport } from '@/queries/bugReports'
 
@@ -7,6 +7,7 @@ interface UseBugReportsInfiniteScrollOptions {
 	maxReports?: number
 	threshold?: number
 	autoLoad?: boolean
+	scrollContainer?: React.RefObject<HTMLElement | null>
 }
 
 interface UseBugReportsInfiniteScrollReturn {
@@ -29,6 +30,7 @@ export const useBugReportsInfiniteScroll = ({
 	maxReports = 500,
 	threshold = 1000,
 	autoLoad = true,
+	scrollContainer,
 }: UseBugReportsInfiniteScrollOptions = {}): UseBugReportsInfiniteScrollReturn => {
 	// Fetch all reports at once
 	const { data: allReports = [], isLoading, isError, error } = useQuery(bugReportsQueryOptions(maxReports))
@@ -64,9 +66,23 @@ export const useBugReportsInfiniteScroll = ({
 		if (!autoLoad) return
 
 		const handleScroll = () => {
-			const scrollTop = window.pageYOffset || document.documentElement.scrollTop
-			const scrollHeight = document.documentElement.scrollHeight
-			const clientHeight = window.innerHeight
+			let scrollTop: number
+			let scrollHeight: number
+			let clientHeight: number
+
+			if (scrollContainer?.current) {
+				// Container-based scrolling
+				const container = scrollContainer.current
+				scrollTop = container.scrollTop
+				scrollHeight = container.scrollHeight
+				clientHeight = container.clientHeight
+			} else {
+				// Window-based scrolling (fallback)
+				scrollTop = window.pageYOffset || document.documentElement.scrollTop
+				scrollHeight = document.documentElement.scrollHeight
+				clientHeight = window.innerHeight
+			}
+
 			const distanceFromBottom = scrollHeight - scrollTop - clientHeight
 
 			if (distanceFromBottom <= threshold && hasMore && !isLoading) {
@@ -74,9 +90,10 @@ export const useBugReportsInfiniteScroll = ({
 			}
 		}
 
-		window.addEventListener('scroll', handleScroll, { passive: true })
-		return () => window.removeEventListener('scroll', handleScroll)
-	}, [autoLoad, threshold, hasMore, isLoading, loadMore])
+		const scrollElement = scrollContainer?.current || window
+		scrollElement.addEventListener('scroll', handleScroll, { passive: true })
+		return () => scrollElement.removeEventListener('scroll', handleScroll)
+	}, [autoLoad, threshold, hasMore, isLoading, loadMore, scrollContainer])
 
 	return {
 		reports,
