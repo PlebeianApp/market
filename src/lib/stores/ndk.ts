@@ -1,10 +1,15 @@
 import { defaultRelaysUrls, ZAP_RELAYS } from '@/lib/constants'
 import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
-import type { NDKEvent, NDKSigner, NDKUser } from '@nostr-dev-kit/ndk'
-import NDK, { NDKKind } from '@nostr-dev-kit/ndk'
+import type { NDKSigner, NDKUser } from '@nostr-dev-kit/ndk'
+import NDK, { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { configStore } from './config'
 import { walletActions, walletStore, type Wallet } from './wallet'
+
+// Check for staging environment
+const isStaging =
+	(typeof process !== 'undefined' && process.env?.STAGING === 'true') ||
+	(typeof import.meta !== 'undefined' && import.meta.env?.STAGING === 'true')
 
 export interface NDKState {
 	ndk: NDK | null
@@ -35,20 +40,33 @@ export const ndkActions = {
 		const state = ndkStore.state
 		if (state.ndk) return state.ndk
 
-		const LOCAL_ONLY = configStore.state.config.appRelay
-		// const LOCAL_ONLY = false // configStore.state.config.appRelay
-
 		const appRelay = configStore.state.config.appRelay
-		const explicitRelays = LOCAL_ONLY ? ([appRelay].filter(Boolean) as string[]) : relays && relays.length > 0 ? relays : defaultRelaysUrls
 
-		console.log('🔗 Initializing NDK with relays:', explicitRelays)
+		// In staging mode, ONLY use the staging relay from constants
+		// In production with appRelay configured, use only the appRelay
+		// Otherwise, use the provided relays or default relays
+		let explicitRelays: string[]
+
+		if (isStaging) {
+			// Staging mode: ONLY use staging relay from constants, ignore appRelay
+			explicitRelays = ['wss://relay.staging.plebeian.market']
+		} else if (appRelay) {
+			// Production with appRelay configured: use only appRelay
+			explicitRelays = [appRelay]
+		} else {
+			// Production without appRelay: use provided relays or defaults
+			explicitRelays = relays && relays.length > 0 ? relays : defaultRelaysUrls
+		}
 
 		const ndk = new NDK({
 			explicitRelayUrls: explicitRelays,
 		})
 
+		// For ZAP relays, also respect staging mode
+		const zapRelays = isStaging ? ['wss://relay.staging.plebeian.market'] : ZAP_RELAYS
+
 		const zapNdk = new NDK({
-			explicitRelayUrls: ZAP_RELAYS,
+			explicitRelayUrls: zapRelays,
 		})
 
 		ndkStore.setState((state) => ({
@@ -67,7 +85,10 @@ export const ndkActions = {
 
 	connect: async (timeoutMs: number = 10000): Promise<void> => {
 		const state = ndkStore.state
-		if (!state.ndk || state.isConnected || state.isConnecting) return
+
+		if (!state.ndk || state.isConnected || state.isConnecting) {
+			return
+		}
 
 		ndkStore.setState((state) => ({ ...state, isConnecting: true }))
 
@@ -81,27 +102,25 @@ export const ndkActions = {
 			await Promise.race([connectPromise, timeoutPromise])
 			ndkStore.setState((state) => ({ ...state, isConnected: true }))
 
-			const connectedRelays = state.ndk?.pool?.connectedRelays() || []
-			console.log(
-				'✅ NDK connected to relays:',
-				connectedRelays.map((r) => r.url),
-			)
+			// Set up auth handlers for connected relays if we have a signer
+			if (state.signer) {
+				ndkActions.setupRelayAuth(state.ndk, state.signer)
+			}
 
 			// Also connect zap NDK (with timeout)
 			await ndkActions.connectZapNdk(5000)
 		} catch (error) {
-			console.error('Failed to connect NDK:', error)
 			// Don't throw - allow app to continue even if some relays fail
 			// Mark as connected if we have any working relays
 			const connectedRelays = state.ndk?.pool?.connectedRelays() || []
+
 			if (connectedRelays.length > 0) {
 				ndkStore.setState((state) => ({ ...state, isConnected: true }))
-				console.log(
-					`✅ NDK partially connected to ${connectedRelays.length} relays:`,
-					connectedRelays.map((r) => r.url),
-				)
-			} else {
-				console.warn('⚠️ No relays connected. Profile updates may fail.')
+
+				// Set up auth handlers for connected relays if we have a signer
+				if (state.signer) {
+					ndkActions.setupRelayAuth(state.ndk!, state.signer)
+				}
 			}
 		} finally {
 			ndkStore.setState((state) => ({ ...state, isConnecting: false }))
@@ -227,6 +246,8 @@ export const ndkActions = {
 		ndkStore.setState((s) => ({ ...s, signer }))
 
 		if (signer) {
+			// Set up NIP-42 authentication for relays that require it
+			ndkActions.setupRelayAuth(ndkStore.state.ndk!, signer)
 			await ndkActions.selectAndSetInitialNwcWallet()
 		} else {
 			ndkActions.setActiveNwcWalletUri(null)
@@ -235,6 +256,44 @@ export const ndkActions = {
 
 	removeSigner: () => {
 		ndkActions.setSigner(undefined)
+	},
+
+	setupRelayAuth: (ndk: NDK, signer: NDKSigner) => {
+		console.log('🔐 Setting up relay authentication handlers')
+
+		// NDK should handle NIP-42 authentication automatically when a signer is present
+		// The signer is already set on the NDK instance, so auth challenges should be handled automatically
+
+		// Listen for auth events on the pool level
+		ndk.pool?.on('relay:auth', async (relay: any, challenge: string) => {
+			console.log('🔐 Received AUTH challenge from relay:', relay.url, 'challenge:', challenge)
+
+			try {
+				// Create auth event according to NIP-42
+				const authEvent = new NDKEvent(ndk)
+				authEvent.kind = 22242
+				authEvent.content = ''
+				authEvent.tags = [
+					['relay', relay.url],
+					['challenge', challenge],
+				]
+				authEvent.created_at = Math.floor(Date.now() / 1000)
+
+				// Sign the auth event
+				await authEvent.sign(signer)
+				console.log('🔐 Signed auth event for relay:', relay.url)
+
+				// Try to authenticate using NDK's built-in method if available
+				if (relay.auth && typeof relay.auth === 'function') {
+					await relay.auth(authEvent.rawEvent())
+					console.log('🔐 Authenticated with relay using built-in method:', relay.url)
+				} else {
+					console.log('🔐 Auth event created, NDK should handle sending automatically')
+				}
+			} catch (error) {
+				console.error('❌ Failed to authenticate with relay:', relay.url, error)
+			}
+		})
 	},
 
 	setActiveNwcWalletUri: (uri: string | null) => {

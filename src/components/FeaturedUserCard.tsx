@@ -101,7 +101,7 @@ export function FeaturedUserCard({ userPubkey }: FeaturedUserCardProps) {
 						<img
 							src={picture || `https://robohash.org/${pubkeyString}?set=set4&size=200x200`}
 							alt={displayName.toString()}
-							className="w-full h-full object-cover"
+							className="w-full h-full object-cover object-center"
 						/>
 					</Link>
 				</div>

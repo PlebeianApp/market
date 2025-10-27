@@ -3,10 +3,16 @@ import { Button } from '@/components/ui/button'
 import { useBugReportsInfiniteScroll } from '@/hooks/useBugReportsInfiniteScroll'
 import { BLOSSOM_SERVERS, uploadFileToBlossom } from '@/lib/blossom'
 import { ndkActions } from '@/lib/stores/ndk'
+import { defaultRelaysUrls } from '@/lib/constants'
 import { cn } from '@/lib/utils'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import NDK, { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+
+// Check for staging environment
+const isStaging =
+	(typeof process !== 'undefined' && process.env?.STAGING === 'true') ||
+	(typeof import.meta !== 'undefined' && import.meta.env?.STAGING === 'true')
 
 interface BugReportModalProps {
 	isOpen: boolean
@@ -184,47 +190,36 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 		try {
 			console.log('Starting bug report send process...')
 
-			// Get NDK instance
-			const ndk = await ndkActions.getNDK()
-			if (!ndk) {
-				console.error('NDK not available')
-				return
-			}
-			console.log('NDK instance obtained:', !!ndk)
+			// Create a separate NDK instance for bug reports to avoid contaminating the main instance
+			// In staging mode, use only staging relay; in production, use bugs relay + defaults
+			const bugReportRelays = isStaging ? ['wss://relay.staging.plebeian.market'] : ['wss://bugs.plebeian.market/', ...defaultRelaysUrls]
 
-			// Ensure bugs.plebeian.market relay is added for bug reports
-			const relayAdded = ndkActions.addSingleRelay('wss://bugs.plebeian.market/')
-			console.log('Relay added:', relayAdded)
-
-			// Also add some reliable relays as fallback
-			const fallbackRelays = ['wss://relay.nostr.band', 'wss://nos.lol', 'wss://relay.damus.io']
-			fallbackRelays.forEach((relay) => {
-				ndkActions.addSingleRelay(relay)
+			const bugReportNdk = new NDK({
+				explicitRelayUrls: bugReportRelays,
 			})
-			console.log('Fallback relays added')
 
-			// Log current relay configuration
-			const currentRelays = Array.from(ndk.pool.relays.keys())
-			console.log('Current relays configured:', currentRelays)
-
-			// Check if we have a signer
-			if (!ndk.signer) {
-				console.error('No signer available - user not authenticated')
+			// Get the main NDK instance only to get the signer
+			const mainNdk = ndkActions.getNDK()
+			if (!mainNdk || !mainNdk.signer) {
+				console.error('Main NDK not available or no signer')
 				return
 			}
-			console.log('Signer available:', !!ndk.signer)
 
-			// Ensure NDK is connected
+			// Set the signer on the bug report NDK
+			bugReportNdk.signer = mainNdk.signer
+			console.log('🐛 Signer set on bug report NDK')
+
+			// Connect the bug report NDK
 			try {
-				console.log('Ensuring NDK connection...')
-				await ndk.connect()
-				console.log('NDK connection ensured')
+				console.log('🐛 Connecting bug report NDK...')
+				await bugReportNdk.connect()
+				console.log('🐛 Bug report NDK connected')
 			} catch (connectError) {
-				console.warn('NDK connection warning:', connectError)
+				console.warn('🐛 Bug report NDK connection warning:', connectError)
 			}
 
-			// Create kind 1 event (text note)
-			const event = new NDKEvent(ndk)
+			// Create kind 1 event (text note) using the bug report NDK
+			const event = new NDKEvent(bugReportNdk)
 			event.kind = 1
 			event.content = bugReport
 
@@ -237,19 +232,26 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 				tags: event.tags,
 			})
 
-			// Sign and publish the event
-			console.log('Signing event...')
+			// Sign and publish the event using the bug report NDK
+			console.log('🐛 Signing event...')
 			await event.sign()
-			console.log('Event signed, ID:', event.id)
+			console.log('🐛 Event signed, ID:', event.id)
 
-			console.log('Publishing event...')
+			console.log('🐛 Publishing event...')
 
 			// Add timeout to publish operation
 			const publishPromise = event.publish()
 			const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Publish timeout after 10 seconds')), 10000))
 
 			await Promise.race([publishPromise, timeoutPromise])
-			console.log('Event published successfully!')
+			console.log('🐛 Event published successfully!')
+			console.log(
+				'🐛 Published to relays:',
+				bugReportNdk.pool?.connectedRelays().map((r) => r.url),
+			)
+
+			// Clean up the bug report NDK
+			bugReportNdk.pool?.relays.forEach((relay) => relay.disconnect())
 
 			// Log the event details for debugging
 			console.log('Published event details:', {
