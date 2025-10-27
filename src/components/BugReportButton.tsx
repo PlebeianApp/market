@@ -29,7 +29,7 @@ export function BugReportButton({ className }: BugReportButtonProps) {
 				<div className="bg-white rounded-full px-3 py-1 shadow-lg">
 					<span className="text-xs text-gray-700 font-medium whitespace-nowrap">Report a bug</span>
 				</div>
-				
+
 				{/* Bug report button */}
 				<Button
 					variant="outline"
