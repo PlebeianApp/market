@@ -1,6 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
 import { ndkActions } from '@/lib/stores/ndk'
+import { authStore } from '@/lib/stores/auth'
+import { useStore } from '@tanstack/react-store'
 import { type NDKUserProfile } from '@nostr-dev-kit/ndk'
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 import { Button } from '@/components/ui/button'
@@ -13,6 +15,7 @@ import { useQuery } from '@tanstack/react-query'
 import { profileByIdentifierQueryOptions } from '@/queries/profiles'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
+import { getProfileFromLocalStorage } from '@/lib/utils/profileStorage'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/profile')({
 	component: ProfileComponent,
@@ -22,17 +25,45 @@ function ProfileComponent() {
 	useDashboardTitle('Profile')
 	const breakpoint = useBreakpoint()
 	const isMobile = breakpoint === 'sm' || breakpoint === 'md'
-	const ndk = ndkActions.getNDK()
-	const pubkey = ndk?.activeUser?.pubkey
+	const authState = useStore(authStore)
+	const pubkey = authState.user?.pubkey
+
+	// Local state for profile data as fallback
+	const [localProfile, setLocalProfile] = useState<NDKUserProfile | null>(null)
+
+	// Load profile from localStorage when pubkey changes
+	useEffect(() => {
+		if (pubkey) {
+			const cachedProfile = getProfileFromLocalStorage(pubkey)
+			if (cachedProfile) {
+				setLocalProfile(cachedProfile)
+			}
+		} else {
+			setLocalProfile(null)
+		}
+	}, [pubkey])
 
 	// Fetch profile data with Tanstack Query
 	const { data: fetchedData, isLoading: isLoadingProfile } = useQuery({
 		...profileByIdentifierQueryOptions(pubkey || ''),
-		enabled: !!pubkey,
+		enabled: !!pubkey && pubkey.length > 0,
+		staleTime: 5 * 60 * 1000, // 5 minutes
+		initialData: () => {
+			// Try to load from localStorage first for immediate display
+			if (pubkey) {
+				const profile = getProfileFromLocalStorage(pubkey)
+				if (profile) {
+					return { profile, user: null }
+				}
+			}
+			return undefined
+		},
+		refetchOnWindowFocus: false,
+		refetchOnMount: true,
 	})
 
-	// Extract profile from the query result
-	const fetchedProfile = fetchedData?.profile
+	// Extract profile from the query result, with fallback to localStorage
+	const fetchedProfile = fetchedData?.profile || localProfile
 
 	// Manage local state for profile data
 	const [profile, setProfile] = useState<NDKUserProfile>({})
@@ -53,10 +84,22 @@ function ProfileComponent() {
 	const updateProfileMutation = useUpdateProfileMutation()
 	const isLoading = isLoadingProfile || updateProfileMutation.isPending
 
+	// Debug logging for profile editor
+	if (process.env.NODE_ENV === 'development') {
+		console.log('🔍 Profile Editor state:', {
+			pubkey: pubkey?.slice(0, 8) + '...',
+			isAuthenticated: authState.isAuthenticated,
+			hasQueryData: !!fetchedData?.profile,
+			hasLocalProfile: !!localProfile,
+			finalProfile: !!fetchedProfile,
+			isLoading: isLoadingProfile,
+		})
+	}
+
 	// Update local state when fetched profile changes
 	useEffect(() => {
 		if (fetchedProfile) {
-			console.log('✅ Profile component received kind 0 metadata:', fetchedProfile)
+			console.log('✅ Profile editor received profile data:', fetchedProfile)
 
 			// Handle kind 0 metadata field mappings: picture -> image
 			const profileWithMappedFields = {
@@ -136,7 +179,23 @@ function ProfileComponent() {
 		const originalImage = originalProfile.image || (originalProfile as any).picture
 		const imageChanges = profile.banner !== originalProfile.banner || profile.image !== originalImage
 
-		return formFieldsChanged || imageChanges
+		const hasChanges = formFieldsChanged || imageChanges
+
+		// Debug logging for save button state
+		if (process.env.NODE_ENV === 'development') {
+			console.log('Profile save button state:', {
+				formFieldsChanged,
+				imageChanges,
+				hasChanges,
+				mandatoryFieldsFilled: areMandatoryFieldsFilled(),
+				isLoadingProfile,
+				originalProfileKeys: Object.keys(originalProfile),
+				formData,
+				originalProfile,
+			})
+		}
+
+		return hasChanges
 	}
 
 	const changesExist = hasChanges()

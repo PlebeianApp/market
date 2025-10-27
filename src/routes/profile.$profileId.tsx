@@ -20,14 +20,19 @@ import { productsByPubkeyQueryOptions } from '@/queries/products'
 import { profileByIdentifierQueryOptions } from '@/queries/profiles'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Edit, MessageCircle, Minus, Plus, Share2 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
+import { getProfileFromLocalStorage } from '@/lib/utils/profileStorage'
 
 export const Route = createFileRoute('/profile/$profileId')({
 	component: RouteComponent,
+	loader: ({ params }) => {
+		// Pre-load profile data to avoid suspense issues
+		return { profileId: params.profileId }
+	},
 })
 
 function RouteComponent() {
@@ -36,10 +41,47 @@ function RouteComponent() {
 	const navigate = useNavigate()
 	const [animationParent] = useAutoAnimate()
 
-	const { data: profileData } = useSuspenseQuery(profileByIdentifierQueryOptions(params.profileId))
-	const { profile, user } = profileData || {}
+	// Local state for profile data as fallback
+	const [localProfile, setLocalProfile] = useState<any>(null)
 
-	const { data: sellerProducts } = useSuspenseQuery(productsByPubkeyQueryOptions(user?.pubkey || ''))
+	// Load profile from localStorage when profileId changes
+	useEffect(() => {
+		if (params.profileId) {
+			const cachedProfile = getProfileFromLocalStorage(params.profileId)
+			if (cachedProfile) {
+				setLocalProfile({ profile: cachedProfile, user: null })
+			}
+		} else {
+			setLocalProfile(null)
+		}
+	}, [params.profileId])
+
+	const { data: profileData, isLoading: isLoadingProfile } = useQuery({
+		...profileByIdentifierQueryOptions(params.profileId),
+		enabled: !!params.profileId,
+		staleTime: 5 * 60 * 1000, // 5 minutes
+		initialData: () => {
+			// Try to load from localStorage first for immediate display
+			if (params.profileId) {
+				const profile = getProfileFromLocalStorage(params.profileId)
+				if (profile) {
+					return { profile, user: null }
+				}
+			}
+			return undefined
+		},
+		refetchOnWindowFocus: false,
+		refetchOnMount: true,
+	})
+
+	// Use query data if available, otherwise fall back to localStorage
+	const finalProfileData = profileData || localProfile
+	const { profile, user } = finalProfileData || {}
+
+	const { data: sellerProducts, isLoading: isLoadingProducts } = useQuery({
+		...productsByPubkeyQueryOptions(user?.pubkey || ''),
+		enabled: !!user?.pubkey,
+	})
 
 	const [showFullAbout, setShowFullAbout] = useState(false)
 	const breakpoint = useBreakpoint()
@@ -50,8 +92,40 @@ function RouteComponent() {
 	const { data: config } = useConfigQuery()
 	const appPubkey = config?.appPublicKey || ''
 
-	// Get entity permissions
-	const permissions = useEntityPermissions(user?.pubkey)
+	// Get entity permissions - use the profileId from URL params, not user?.pubkey
+	const permissions = useEntityPermissions(params.profileId)
+
+	// Debug logging for profile page
+	if (process.env.NODE_ENV === 'development') {
+		console.log('🔍 Profile Page state:', {
+			profileId: params.profileId,
+			profileData,
+			localProfile,
+			finalProfileData,
+			profile,
+			user,
+			hasProfile: !!profile,
+			profileKeys: profile ? Object.keys(profile) : [],
+			isLoading: isLoadingProfile,
+			permissions: {
+				canEdit: permissions.canEdit,
+				isEntityOwner: permissions.isEntityOwner,
+				userRole: permissions.userRole,
+				currentUserPubkey: permissions.currentUserPubkey?.slice(0, 8) + '...',
+			},
+			editButtonChecks: {
+				isSmallScreen,
+				permissionsCanEdit: permissions.canEdit,
+				shouldShowDesktopButton: !isSmallScreen && permissions.canEdit,
+				shouldShowMobileButton: isSmallScreen && permissions.canEdit,
+				profileIdVsAuthPubkey: {
+					profileId: params.profileId,
+					authPubkey: permissions.currentUserPubkey,
+					matches: params.profileId === permissions.currentUserPubkey,
+				},
+			},
+		})
+	}
 
 	// Get blacklist and featured status
 	const { data: blacklistSettings } = useBlacklistSettings(appPubkey)
@@ -125,6 +199,21 @@ function RouteComponent() {
 		}
 	}
 
+	// Show loading state if no profile data is available
+	if (isLoadingProfile && !profile) {
+		return (
+			<div className="relative min-h-screen">
+				<Header />
+				<div className="flex items-center justify-center h-96">
+					<div className="text-center">
+						<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+						<p className="text-white">Loading profile...</p>
+					</div>
+				</div>
+			</div>
+		)
+	}
+
 	return (
 		<div className="relative min-h-screen">
 			<Header />
@@ -146,9 +235,9 @@ function RouteComponent() {
 			<div className="flex flex-col relative z-10 pt-[18vh] sm:pt-[22vh] md:pt-[30vh]">
 				<div className="flex flex-row justify-between px-8 py-4 bg-black items-center">
 					<div className="flex flex-row items-center gap-4">
-						{profile?.picture && (
+						{(profile?.image || profile?.picture) && (
 							<img
-								src={profile.picture}
+								src={profile.image || profile.picture}
 								alt={profile.name || 'Profile picture'}
 								className="rounded-full w-10 h-10 sm:w-16 sm:h-16 border-2 border-black"
 							/>
@@ -187,6 +276,15 @@ function RouteComponent() {
 								onSetFeatured={permissions.canSetFeatured && !isFeatured ? handleFeaturedToggle : undefined}
 								onUnsetFeatured={permissions.canSetFeatured && isFeatured ? handleFeaturedToggle : undefined}
 							/>
+						</div>
+					)}
+					{/* Mobile edit button */}
+					{isSmallScreen && permissions.canEdit && (
+						<div className="px-8 py-2">
+							<Button variant="secondary" onClick={handleEdit} className="w-full flex items-center justify-center gap-2">
+								<Edit className="h-4 w-4" />
+								<span>Edit Profile</span>
+							</Button>
 						</div>
 					)}
 				</div>

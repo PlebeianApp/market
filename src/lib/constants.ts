@@ -1,25 +1,39 @@
 export type ObjectValues<T> = T[keyof T]
 
-export const defaultRelaysUrls: string[] = [
-	'wss://relay.nostr.band',
-	'wss://nos.lol',
-	'wss://relay.nostr.net',
-	'wss://relay.damus.io',
-	'wss://relay.minibits.cash',
-	// 'ws://localhost:10547',
-]
+// Check for staging environment
+const isStaging =
+	(typeof process !== 'undefined' && process.env?.STAGING !== 'false') ||
+	(typeof import.meta !== 'undefined' && import.meta.env?.STAGING !== 'false')
+
+export const defaultRelaysUrls: string[] = isStaging
+	? [
+			'wss://relay.staging.plebeian.market',
+			// Fallback relays for staging
+			'wss://relay.nostr.band',
+			'wss://nos.lol',
+		]
+	: [
+			'wss://relay.nostr.band',
+			'wss://nos.lol',
+			'wss://relay.nostr.net',
+			'wss://relay.damus.io',
+			'wss://relay.minibits.cash',
+			// 'ws://localhost:10547',
+		]
 
 // Dedicated zap detection relays
-export const ZAP_RELAYS = [
-	'wss://relay.damus.io',
-	'wss://relay.nostr.band',
-	'wss://nos.lol',
-	'wss://relay.nostr.net',
-	'wss://relay.minibits.cash',
-	'wss://relay.coinos.io/',
-	'wss://nwc.primal.net',
-	// 'ws://localhost:10547',
-]
+export const ZAP_RELAYS = isStaging
+	? ['wss://relay.staging.plebeian.market', 'wss://relay.damus.io', 'wss://relay.nostr.band', 'wss://nos.lol']
+	: [
+			'wss://relay.damus.io',
+			'wss://relay.nostr.band',
+			'wss://nos.lol',
+			'wss://relay.nostr.net',
+			'wss://relay.minibits.cash',
+			'wss://relay.coinos.io/',
+			'wss://nwc.primal.net',
+			// 'ws://localhost:10547',
+		]
 // export const defaultRelaysUrls: string[] = []
 
 export const CURRENCIES = [

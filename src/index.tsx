@@ -15,6 +15,7 @@ config()
 const RELAY_URL = process.env.APP_RELAY_URL
 const NIP46_RELAY_URL = process.env.NIP46_RELAY_URL || 'wss://relay.nsec.app'
 const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
+const STAGING = process.env.STAGING !== 'false' // Default to true
 
 let appSettings: Awaited<ReturnType<typeof fetchAppSettings>> = null
 let APP_PUBLIC_KEY: string
