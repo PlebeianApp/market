@@ -9,6 +9,11 @@ import NDK, { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
+// Check for staging environment
+const isStaging =
+	(typeof process !== 'undefined' && process.env?.STAGING === 'true') ||
+	(typeof import.meta !== 'undefined' && import.meta.env?.STAGING === 'true')
+
 interface BugReportModalProps {
 	isOpen: boolean
 	onClose: () => void
@@ -186,12 +191,14 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			console.log('Starting bug report send process...')
 
 			// Create a separate NDK instance for bug reports to avoid contaminating the main instance
-			console.log('🐛 Creating separate NDK instance for bug reports...')
+			// In staging mode, use only staging relay; in production, use bugs relay + defaults
+			const bugReportRelays = isStaging 
+				? ['wss://relay.staging.plebeian.market']
+				: ['wss://bugs.plebeian.market/', ...defaultRelaysUrls]
+				
 			const bugReportNdk = new NDK({
-				explicitRelayUrls: ['wss://bugs.plebeian.market/', ...defaultRelaysUrls]
+				explicitRelayUrls: bugReportRelays
 			})
-			
-			console.log('🐛 Bug report NDK created with relays:', ['wss://bugs.plebeian.market/', ...defaultRelaysUrls])
 
 			// Get the main NDK instance only to get the signer
 			const mainNdk = ndkActions.getNDK()

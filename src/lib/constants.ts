@@ -2,8 +2,9 @@ export type ObjectValues<T> = T[keyof T]
 
 // Check for staging environment
 const isStaging =
-	(typeof process !== 'undefined' && process.env?.STAGING !== 'false') ||
-	(typeof import.meta !== 'undefined' && import.meta.env?.STAGING !== 'false')
+	(typeof process !== 'undefined' && process.env?.STAGING === 'true') ||
+	(typeof import.meta !== 'undefined' && import.meta.env?.STAGING === 'true')
+
 
 export const defaultRelaysUrls: string[] = isStaging
 	? [

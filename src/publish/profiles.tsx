@@ -15,6 +15,7 @@ export const updateProfile = async (profile: NDKUserProfile): Promise<void> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
+
 	const user = ndk.activeUser
 	if (!user) throw new Error('No active user')
 
