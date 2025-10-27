@@ -24,3 +24,5 @@ jobs:
 
       - name: Check formatting
         run: bun run format:check
+
+        
