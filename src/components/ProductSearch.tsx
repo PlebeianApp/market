@@ -102,7 +102,9 @@ export function ProductSearch() {
 										onClick={() => setShowResults(false)}
 									>
 										{/* Product Image */}
-										{mainImage && <img src={mainImage} alt={title || 'Product'} className="w-8 h-8 rounded object-cover object-center shrink-0" />}
+										{mainImage && (
+											<img src={mainImage} alt={title || 'Product'} className="w-8 h-8 rounded object-cover object-center shrink-0" />
+										)}
 
 										{/* Content Section */}
 										<div className="flex-1 min-w-0 flex items-center gap-2">

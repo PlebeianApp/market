@@ -192,12 +192,10 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 
 			// Create a separate NDK instance for bug reports to avoid contaminating the main instance
 			// In staging mode, use only staging relay; in production, use bugs relay + defaults
-			const bugReportRelays = isStaging 
-				? ['wss://relay.staging.plebeian.market']
-				: ['wss://bugs.plebeian.market/', ...defaultRelaysUrls]
-				
+			const bugReportRelays = isStaging ? ['wss://relay.staging.plebeian.market'] : ['wss://bugs.plebeian.market/', ...defaultRelaysUrls]
+
 			const bugReportNdk = new NDK({
-				explicitRelayUrls: bugReportRelays
+				explicitRelayUrls: bugReportRelays,
 			})
 
 			// Get the main NDK instance only to get the signer
@@ -206,7 +204,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 				console.error('Main NDK not available or no signer')
 				return
 			}
-			
+
 			// Set the signer on the bug report NDK
 			bugReportNdk.signer = mainNdk.signer
 			console.log('🐛 Signer set on bug report NDK')
@@ -247,10 +245,13 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 
 			await Promise.race([publishPromise, timeoutPromise])
 			console.log('🐛 Event published successfully!')
-			console.log('🐛 Published to relays:', bugReportNdk.pool?.connectedRelays().map(r => r.url))
-			
+			console.log(
+				'🐛 Published to relays:',
+				bugReportNdk.pool?.connectedRelays().map((r) => r.url),
+			)
+
 			// Clean up the bug report NDK
-			bugReportNdk.pool?.relays.forEach(relay => relay.disconnect())
+			bugReportNdk.pool?.relays.forEach((relay) => relay.disconnect())
 
 			// Log the event details for debugging
 			console.log('Published event details:', {

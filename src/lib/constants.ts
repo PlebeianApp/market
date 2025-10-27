@@ -5,11 +5,8 @@ const isStaging =
 	(typeof process !== 'undefined' && process.env?.STAGING === 'true') ||
 	(typeof import.meta !== 'undefined' && import.meta.env?.STAGING === 'true')
 
-
 export const defaultRelaysUrls: string[] = isStaging
-	? [
-			'wss://relay.staging.plebeian.market',
-		]
+	? ['wss://relay.staging.plebeian.market']
 	: [
 			'wss://relay.nostr.band',
 			'wss://nos.lol',

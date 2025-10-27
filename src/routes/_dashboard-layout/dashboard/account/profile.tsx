@@ -85,7 +85,6 @@ function ProfileComponent() {
 	const updateProfileMutation = useUpdateProfileMutation()
 	const isLoading = isLoadingProfile || updateProfileMutation.isPending
 
-
 	// Update local state when fetched profile changes
 	useEffect(() => {
 		if (fetchedProfile) {
@@ -166,7 +165,6 @@ function ProfileComponent() {
 		const imageChanges = profile.banner !== originalProfile.banner || profile.image !== originalImage
 
 		const hasChanges = formFieldsChanged || imageChanges
-
 
 		return hasChanges
 	}

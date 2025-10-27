@@ -15,17 +15,16 @@ export const updateProfile = async (profile: NDKUserProfile): Promise<void> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-
 	const user = ndk.activeUser
 	if (!user) throw new Error('No active user')
 
 	// Clean up any unwanted relays (like bugs.plebeian.market that might have been added by BugReportModal)
 	const configState = ndkActions.getNDK()
 	const appRelay = configState?.pool?.relays.has('ws://localhost:10547/') || configState?.pool?.relays.has('ws://localhost:10547')
-	
+
 	if (appRelay) {
 		const unwantedRelays = ['wss://bugs.plebeian.market/', 'wss://bugs.plebeian.market']
-		unwantedRelays.forEach(relayUrl => {
+		unwantedRelays.forEach((relayUrl) => {
 			if (ndk.pool?.relays.has(relayUrl)) {
 				ndk.pool.removeRelay(relayUrl)
 			}
@@ -35,7 +34,7 @@ export const updateProfile = async (profile: NDKUserProfile): Promise<void> => {
 	// Ensure NDK is connected before publishing
 	if (!ndk.pool || ndk.pool.connectedRelays().length === 0) {
 		await ndkActions.connect()
-		
+
 		if (!ndk.pool || ndk.pool.connectedRelays().length === 0) {
 			throw new Error('Unable to connect to any relays. Please check your internet connection and try again.')
 		}
@@ -54,36 +53,35 @@ export const updateProfile = async (profile: NDKUserProfile): Promise<void> => {
 	profileEvent.kind = 0 // Kind 0 is for user metadata
 	profileEvent.content = JSON.stringify(profile)
 	profileEvent.pubkey = user.pubkey
-	
+
 	try {
 		// Sign and publish the profile event
 		await profileEvent.sign()
-		
+
 		const publishPromise = profileEvent.publish()
 		const timeoutPromise = new Promise((_, reject) => {
 			setTimeout(() => reject(new Error('Profile publish timeout')), 15000)
 		})
-		
+
 		const publishResult = await Promise.race([publishPromise, timeoutPromise])
-		
+
 		// Check if any relays actually received the event
-		if (publishResult && (
-			(publishResult instanceof Set && publishResult.size === 0) ||
-			(Array.isArray(publishResult) && publishResult.length === 0)
-		)) {
+		if (
+			publishResult &&
+			((publishResult instanceof Set && publishResult.size === 0) || (Array.isArray(publishResult) && publishResult.length === 0))
+		) {
 			throw new Error('Profile published but no relays confirmed receipt')
 		}
-		
 	} catch (error) {
 		// Provide more specific error message for relay issues
 		if (error instanceof Error && error.message.includes('Not enough relays')) {
 			throw new Error('Unable to publish profile - relay connection failed. Please try again or check if the staging relay is accessible.')
 		}
-		
+
 		if (error instanceof Error && error.message.includes('timeout')) {
 			throw new Error('Profile publish timed out. Please check your connection and try again.')
 		}
-		
+
 		throw error
 	}
 }
@@ -102,19 +100,20 @@ export function useUpdateProfileMutation() {
 			if (failureCount < 2) {
 				if (error instanceof Error) {
 					// Retry for connection issues
-					if (error.message.includes('connection') || 
+					if (
+						error.message.includes('connection') ||
 						error.message.includes('timeout') ||
-						error.message.includes('relay connection failed')) {
+						error.message.includes('relay connection failed')
+					) {
 						return true
 					}
 					// Retry for relay issues
-					if (error.message.includes('Not enough relays') ||
-						error.message.includes('no relays confirmed')) {
+					if (error.message.includes('Not enough relays') || error.message.includes('no relays confirmed')) {
 						return true
 					}
 				}
 			}
-			
+
 			return false
 		},
 		retryDelay: (attemptIndex) => {
@@ -159,7 +158,7 @@ export function useUpdateProfileMutation() {
 			}
 
 			toast.error(errorMessage)
-		}
+		},
 	})
 }
 
