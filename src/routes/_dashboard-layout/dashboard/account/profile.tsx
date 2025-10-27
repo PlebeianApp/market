@@ -59,7 +59,7 @@ function ProfileComponent() {
 			return undefined
 		},
 		refetchOnWindowFocus: false,
-		refetchOnMount: true
+		refetchOnMount: true,
 	})
 
 	// Extract profile from the query result, with fallback to localStorage
@@ -92,7 +92,7 @@ function ProfileComponent() {
 			hasQueryData: !!fetchedData?.profile,
 			hasLocalProfile: !!localProfile,
 			finalProfile: !!fetchedProfile,
-			isLoading: isLoadingProfile
+			isLoading: isLoadingProfile,
 		})
 	}
 
@@ -180,7 +180,7 @@ function ProfileComponent() {
 		const imageChanges = profile.banner !== originalProfile.banner || profile.image !== originalImage
 
 		const hasChanges = formFieldsChanged || imageChanges
-		
+
 		// Debug logging for save button state
 		if (process.env.NODE_ENV === 'development') {
 			console.log('Profile save button state:', {
@@ -191,10 +191,10 @@ function ProfileComponent() {
 				isLoadingProfile,
 				originalProfileKeys: Object.keys(originalProfile),
 				formData,
-				originalProfile
+				originalProfile,
 			})
 		}
-		
+
 		return hasChanges
 	}
 

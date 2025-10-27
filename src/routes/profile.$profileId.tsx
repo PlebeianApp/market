@@ -32,7 +32,7 @@ export const Route = createFileRoute('/profile/$profileId')({
 	loader: ({ params }) => {
 		// Pre-load profile data to avoid suspense issues
 		return { profileId: params.profileId }
-	}
+	},
 })
 
 function RouteComponent() {
@@ -71,7 +71,7 @@ function RouteComponent() {
 			return undefined
 		},
 		refetchOnWindowFocus: false,
-		refetchOnMount: true
+		refetchOnMount: true,
 	})
 
 	// Use query data if available, otherwise fall back to localStorage
@@ -80,7 +80,7 @@ function RouteComponent() {
 
 	const { data: sellerProducts, isLoading: isLoadingProducts } = useQuery({
 		...productsByPubkeyQueryOptions(user?.pubkey || ''),
-		enabled: !!user?.pubkey
+		enabled: !!user?.pubkey,
 	})
 
 	const [showFullAbout, setShowFullAbout] = useState(false)
@@ -111,7 +111,7 @@ function RouteComponent() {
 				canEdit: permissions.canEdit,
 				isEntityOwner: permissions.isEntityOwner,
 				userRole: permissions.userRole,
-				currentUserPubkey: permissions.currentUserPubkey?.slice(0, 8) + '...'
+				currentUserPubkey: permissions.currentUserPubkey?.slice(0, 8) + '...',
 			},
 			editButtonChecks: {
 				isSmallScreen,
@@ -121,9 +121,9 @@ function RouteComponent() {
 				profileIdVsAuthPubkey: {
 					profileId: params.profileId,
 					authPubkey: permissions.currentUserPubkey,
-					matches: params.profileId === permissions.currentUserPubkey
-				}
-			}
+					matches: params.profileId === permissions.currentUserPubkey,
+				},
+			},
 		})
 	}
 

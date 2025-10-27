@@ -20,13 +20,13 @@ export function Profile({ compact = false }: ProfileProps) {
 	const authState = useStore(authStore)
 	const navigate = useNavigate()
 	const location = useLocation()
-	
+
 	// Local state for profile data as fallback
 	const [localProfile, setLocalProfile] = useState<NDKUserProfile | null>(null)
-	
+
 	// Check if we're on the user's own profile page
 	const isOnOwnProfile = authState.user?.pubkey && location.pathname === `/profile/${authState.user.pubkey}`
-	
+
 	// Load profile from localStorage when pubkey changes
 	useEffect(() => {
 		if (authState.user?.pubkey) {
@@ -40,7 +40,11 @@ export function Profile({ compact = false }: ProfileProps) {
 	}, [authState.user?.pubkey])
 
 	// Use TanStack Query to fetch profile data
-	const { data: profileData, isLoading, error } = useQuery({
+	const {
+		data: profileData,
+		isLoading,
+		error,
+	} = useQuery({
 		...profileByIdentifierQueryOptions(authState.user?.pubkey || ''),
 		enabled: !!authState.user?.pubkey && authState.user.pubkey.length > 0,
 		staleTime: 5 * 60 * 1000, // 5 minutes
@@ -56,13 +60,13 @@ export function Profile({ compact = false }: ProfileProps) {
 		},
 		// Keep data fresh but don't refetch too aggressively
 		refetchOnWindowFocus: false,
-		refetchOnMount: true // Allow initial fetch
+		refetchOnMount: true, // Allow initial fetch
 	})
 
 	// Use query data if available, otherwise fall back to localStorage
 	const profile = profileData?.profile || localProfile
 	const displayName = profile?.name || profile?.displayName || 'Local User'
-	
+
 	// Debug logging (only in development)
 	if (process.env.NODE_ENV === 'development' && authState.user?.pubkey) {
 		console.log('🔍 Profile component:', {
@@ -70,7 +74,7 @@ export function Profile({ compact = false }: ProfileProps) {
 			hasQueryData: !!profileData?.profile,
 			hasLocalProfile: !!localProfile,
 			finalProfile: !!profile,
-			isLoading
+			isLoading,
 		})
 	}
 

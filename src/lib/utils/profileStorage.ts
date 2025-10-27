@@ -54,9 +54,9 @@ export const removeProfileFromLocalStorage = (pubkey: string): void => {
 export const clearAllProfilesFromLocalStorage = (): void => {
 	try {
 		const keys = Object.keys(localStorage)
-		const profileKeys = keys.filter(key => key.startsWith(PROFILE_STORAGE_PREFIX))
-		
-		profileKeys.forEach(key => localStorage.removeItem(key))
+		const profileKeys = keys.filter((key) => key.startsWith(PROFILE_STORAGE_PREFIX))
+
+		profileKeys.forEach((key) => localStorage.removeItem(key))
 		console.log(`🗑️ Cleared ${profileKeys.length} profiles from localStorage`)
 	} catch (error) {
 		console.warn('Failed to clear profiles from localStorage:', error)

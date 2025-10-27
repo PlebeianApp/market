@@ -36,6 +36,7 @@ The application supports two environments controlled by the `STAGING` environmen
   - Connects to multiple public relays for redundancy
 
 To switch to production mode:
+
 ```bash
 export STAGING=false
 # or in your .env file

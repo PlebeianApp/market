@@ -27,7 +27,10 @@ export const updateProfile = async (profile: NDKUserProfile): Promise<void> => {
 	// Update the user's profile and publish the changes
 	user.profile = profile
 
-	console.log('Publishing profile to relays:', ndk.pool?.connectedRelays().map(r => r.url))
+	console.log(
+		'Publishing profile to relays:',
+		ndk.pool?.connectedRelays().map((r) => r.url),
+	)
 	const publishResult = await user.publish()
 	console.log('Profile publish result:', publishResult)
 }
@@ -52,20 +55,20 @@ export function useUpdateProfileMutation() {
 
 				// Update the query cache with the new profile data
 				queryClient.setQueryData(profileKeys.details(pubkey), { profile, user: ndk.activeUser })
-				
+
 				// Schedule a delayed invalidation to allow relay propagation
 				// This gives the relay time to process and store the new profile
 				setTimeout(() => {
 					queryClient.invalidateQueries({ queryKey: profileKeys.details(pubkey) })
 					console.log('🔄 Profile cache invalidated after relay propagation delay')
 				}, 3000) // 3 second delay
-				
+
 				toast.success('Profile updated successfully')
 			}
 		},
 		onError: (error) => {
 			console.error('Failed to update profile:', error)
-			
+
 			// Provide more specific error messages
 			let errorMessage = 'Failed to update profile'
 			if (error instanceof Error) {
@@ -77,7 +80,7 @@ export function useUpdateProfileMutation() {
 					errorMessage = 'Connection timeout. Please check your internet and try again.'
 				}
 			}
-			
+
 			toast.error(errorMessage)
 		},
 	})

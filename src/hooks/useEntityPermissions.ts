@@ -49,7 +49,7 @@ export function useEntityPermissions(entityPubkey: string | undefined): EntityPe
 				authenticatedUserPubkey: authenticatedUserPubkey?.slice(0, 8) + '...',
 				isEntityOwner,
 				userRole,
-				isAuthenticated: !!authenticatedUserPubkey
+				isAuthenticated: !!authenticatedUserPubkey,
 			})
 		}
 

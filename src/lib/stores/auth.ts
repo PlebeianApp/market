@@ -177,12 +177,12 @@ export const authActions = {
 		const state = authStore.state
 		const ndk = ndkActions.getNDK()
 		if (!ndk) return
-		
+
 		// Clean up profile data for the current user
 		if (state.user?.pubkey) {
 			removeProfileFromLocalStorage(state.user.pubkey)
 		}
-		
+
 		ndkActions.removeSigner()
 		localStorage.removeItem(NOSTR_LOCAL_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_CONNECT_KEY)
