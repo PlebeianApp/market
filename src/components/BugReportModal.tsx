@@ -370,10 +370,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			onTouchMove={(e) => e.preventDefault()}
 			style={{ overflow: 'hidden' }}
 		>
-			<div 
-				className="bg-white rounded-lg shadow-xl w-[40em] h-[80vh] flex flex-col" 
-				onClick={(e) => e.stopPropagation()}
-			>
+			<div className="bg-white rounded-lg shadow-xl w-[40em] h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
 				{/* Header */}
 				<div className="flex items-center justify-between p-6 border-b border-gray-200">
 					<div className="flex items-center gap-2">
@@ -449,13 +446,13 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 					) : (
 						<>
 							<p className="text-gray-600 mb-6">View bug reports from the community</p>
-							<div 
+							<div
 								ref={scrollContainerRef}
 								className="flex-1 overflow-y-auto pr-2 min-h-0"
 								style={{
 									scrollbarWidth: 'thin',
 									scrollbarColor: '#d1d5db #f3f4f6',
-									maxHeight: 'calc(80vh - 200px)' // Ensure container has a defined max height
+									maxHeight: 'calc(80vh - 200px)', // Ensure container has a defined max height
 								}}
 								onWheel={(e) => {
 									// Allow scrolling within this container, but prevent bubbling to backdrop
