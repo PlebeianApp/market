@@ -1,12 +1,11 @@
-import { BugReportItem } from '@/components/BugReportItem'
+import { BugReportsTable } from '@/components/BugReportsTable'
 import { Button } from '@/components/ui/button'
-import { useBugReportsInfiniteScroll } from '@/hooks/useBugReportsInfiniteScroll'
 import { BLOSSOM_SERVERS, uploadFileToBlossom } from '@/lib/blossom'
 import { ndkActions } from '@/lib/stores/ndk'
 import { cn } from '@/lib/utils'
 import { bugReportKeys } from '@/queries/bugReports'
 import { useQueryClient } from '@tanstack/react-query'
-import NDK, { NDKEvent } from '@nostr-dev-kit/ndk'
+import { finalizeEvent, getPublicKey } from 'nostr-tools'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
@@ -28,27 +27,12 @@ export function BugReportModal({ isOpen, onClose, onReopen }: BugReportModalProp
 		'Describe the problem you are having:\n\n\n\nUse the drag and drop or paste to add images of the problem.\n\n\n\nWhat device and operating system are you using?\n\nWhat steps did you take to reproduce the problem?\n\n\n\nWhat did you expect to happen?\n\n\n\nWhat actually happened?\n\n\n\nPlease provide any other relevant information\n\n',
 	)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
-	const scrollContainerRef = useRef<HTMLDivElement>(null)
 	const [isUploading, setIsUploading] = useState(false)
 	const [isSending, setIsSending] = useState(false)
 	const [sendStatus, setSendStatus] = useState<'idle' | 'success' | 'error'>('idle')
 	const [hasAutoPopulated, setHasAutoPopulated] = useState(false)
 	const [isDragOver, setIsDragOver] = useState(false)
 	const [uploadedImages, setUploadedImages] = useState<string[]>([])
-
-	// Infinite scroll for bug reports viewer
-	const {
-		reports,
-		hasMore,
-		isLoading: isLoadingReports,
-		loadMore,
-	} = useBugReportsInfiniteScroll({
-		chunkSize: 10,
-		maxReports: 100,
-		threshold: 1000,
-		autoLoad: true,
-		scrollContainer: scrollContainerRef,
-	})
 
 	// Prevent body scrolling when modal is open
 	useEffect(() => {
@@ -214,17 +198,14 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 		setIsSending(true)
 		setSendStatus('idle')
 		
-		let bugReportNdk: NDK | null = null
-		
 		try {
-			console.log('Starting bug report send process...')
+			console.log('🐛 Starting bug report send with nostr-tools...')
 
-			// Create a separate NDK instance for bug reports to avoid contaminating the main instance
-			// In staging mode, use only staging relay; in production, use only bugs relay
-			const bugReportRelays = isStaging ? ['wss://relay.staging.plebeian.market'] : ['wss://bugs.plebeian.market/']
-			console.log('🐛 Using bug report relays:', bugReportRelays)
+			// Get relay URL
+			const bugReportRelay = isStaging ? 'wss://relay.staging.plebeian.market' : 'wss://bugs.plebeian.market/'
+			console.log('🐛 Using bug report relay:', bugReportRelay)
 
-			// Get the main NDK instance to get the signer FIRST
+			// Get the main NDK instance to get the signer
 			const mainNdk = ndkActions.getNDK()
 			if (!mainNdk || !mainNdk.signer) {
 				console.error('Main NDK not available or no signer')
@@ -232,184 +213,216 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 				throw new Error('Main NDK not available or no signer')
 			}
 
-			console.log('🐛 Main NDK info:', {
-				hasNdk: !!mainNdk,
-				hasSigner: !!mainNdk.signer,
-				signerType: mainNdk.signer?.constructor?.name,
-				connectedRelays: mainNdk.pool?.connectedRelays()?.map(r => r.url) || []
-			})
+			console.log('🐛 Main NDK signer type:', mainNdk.signer?.constructor?.name)
 
-			// Create bug report NDK with signer from the start
-			bugReportNdk = new NDK({
-				explicitRelayUrls: bugReportRelays,
-				signer: mainNdk.signer
-			})
-			
-			console.log('🐛 Bug report NDK created with signer:', !!bugReportNdk.signer)
-			console.log('🐛 Bug report NDK signer type:', bugReportNdk.signer?.constructor?.name)
-
-			// Small delay to ensure signer is properly set
-			await new Promise(resolve => setTimeout(resolve, 100))
-
-			// Test direct WebSocket connection to check for CORS issues
-			console.log('🐛 Testing direct WebSocket connection...')
-			try {
-				const testWs = new WebSocket(bugReportRelays[0])
-				
-				const wsTestPromise = new Promise((resolve, reject) => {
-					const timeout = setTimeout(() => {
-						testWs.close()
-						reject(new Error('WebSocket test timeout'))
-					}, 3000)
-					
-					testWs.onopen = () => {
-						clearTimeout(timeout)
-						console.log('🐛 Direct WebSocket connection successful')
-						testWs.close()
-						resolve('success')
-					}
-					
-					testWs.onerror = (error) => {
-						clearTimeout(timeout)
-						console.error('🐛 Direct WebSocket connection failed:', error)
-						reject(error)
-					}
-					
-					testWs.onclose = (event) => {
-						if (event.code !== 1000) { // 1000 is normal closure
-							console.log('🐛 WebSocket closed with code:', event.code, 'reason:', event.reason)
-						}
-					}
-				})
-				
-				await wsTestPromise
-			} catch (wsError) {
-				console.error('🐛 WebSocket test failed:', wsError)
-				console.log('🐛 This might indicate CORS or network connectivity issues')
+			// Create the event
+			const eventTemplate = {
+				kind: 1,
+				created_at: Math.floor(Date.now() / 1000),
+				tags: [['t', 'plebian2beta']],
+				content: bugReport,
 			}
 
-			// Connect the bug report NDK with timeout
-			console.log('🐛 Connecting bug report NDK...')
-			console.log('🐛 NDK pool info before connect:', {
-				hasPool: !!bugReportNdk.pool,
-				relayCount: bugReportNdk.pool?.relays?.size || 0,
-				relayUrls: Array.from(bugReportNdk.pool?.relays?.keys() || [])
+			console.log('🐛 Event template created:', {
+				kind: eventTemplate.kind,
+				contentLength: eventTemplate.content.length,
+				tags: eventTemplate.tags,
 			})
-			
-			const connectPromise = bugReportNdk.connect()
-			const connectTimeoutPromise = new Promise((_, reject) => 
-				setTimeout(() => reject(new Error('Connection timeout after 5 seconds')), 5000)
-			)
-			
+
+			// Sign the event using nostr-tools directly
+			console.log('🐛 Signing event with nostr-tools...')
+			let signedEvent
 			try {
-				await Promise.race([connectPromise, connectTimeoutPromise])
-				console.log('🐛 Bug report NDK connected successfully')
+				// Get user info from NDK signer
+				const user = await mainNdk.signer.user()
+				const pubkey = user.pubkey
 				
-				// Verify connection
-				const connectedRelays = bugReportNdk.pool?.connectedRelays() || []
-				const allRelays = Array.from(bugReportNdk.pool?.relays?.values() || [])
+				console.log('🐛 Got user pubkey from signer:', pubkey)
 				
-				console.log('🐛 Connection status:', {
-					connectedCount: connectedRelays.length,
-					connectedUrls: connectedRelays.map(r => r.url),
-					totalRelays: allRelays.length,
-					allRelayUrls: allRelays.map(r => r.url),
-					relayStatuses: allRelays.map(r => ({
-						url: r.url,
-						status: r.connectivity?.status,
-						connected: r.connectivity?.connected
-					}))
+				// Create event with pubkey
+				const eventWithPubkey = {
+					...eventTemplate,
+					pubkey: pubkey,
+				}
+				
+				console.log('🐛 Event template with pubkey:', {
+					kind: eventWithPubkey.kind,
+					contentLength: eventWithPubkey.content.length,
+					tags: eventWithPubkey.tags,
+					pubkey: eventWithPubkey.pubkey,
 				})
 				
-				if (connectedRelays.length === 0) {
-					console.warn('🐛 No relays connected!')
-					// Let's try to wait a bit more for connection
-					console.log('🐛 Waiting additional 2 seconds for connection...')
-					await new Promise(resolve => setTimeout(resolve, 2000))
-					
-					const connectedAfterWait = bugReportNdk.pool?.connectedRelays() || []
-					console.log('🐛 Connected after wait:', connectedAfterWait.map(r => r.url))
-					
-					if (connectedAfterWait.length === 0) {
-						console.warn('🐛 Still no relays connected after waiting')
-						console.warn('🐛 Bug reports can only be sent to the bugs relay - no fallback available')
+				// Check if this is a private key signer (we can sign directly)
+				if (mainNdk.signer.constructor.name === 'NDKPrivateKeySigner') {
+					console.log('🐛 Using NDKPrivateKeySigner - signing with nostr-tools...')
+					// Get the private key from the signer
+					const privateKey = (mainNdk.signer as any).privateKey
+					if (privateKey) {
+						signedEvent = finalizeEvent(eventWithPubkey, privateKey)
+						console.log('🐛 Event signed with private key signer')
+					} else {
+						throw new Error('Private key not available from NDKPrivateKeySigner')
 					}
+				} else {
+					console.log('🐛 Using extension signer - falling back to NDK signing...')
+					// For extension signers, we need to use NDK's signing method
+					const ndkEvent = new (await import('@nostr-dev-kit/ndk')).NDKEvent(mainNdk, eventWithPubkey)
+					await ndkEvent.sign()
+					
+					signedEvent = {
+						...eventWithPubkey,
+						id: ndkEvent.id!,
+						pubkey: ndkEvent.pubkey!,
+						sig: ndkEvent.sig!,
+					}
+					console.log('🐛 Event signed with extension signer')
 				}
-			} catch (connectError) {
-				console.error('🐛 Bug report NDK connection error:', connectError)
-				console.log('🐛 Connection error details:', {
-					message: connectError instanceof Error ? connectError.message : String(connectError),
-					stack: connectError instanceof Error ? connectError.stack : undefined,
-					relayCount: bugReportNdk.pool?.relays?.size || 0
+				
+				console.log('🐛 Event signed successfully:', {
+					id: signedEvent.id,
+					pubkey: signedEvent.pubkey,
+					sigLength: signedEvent.sig?.length,
 				})
-				
-				// Check if this might be a CORS issue
-				const errorMessage = connectError instanceof Error ? connectError.message : String(connectError)
-				if (errorMessage.includes('CORS') || errorMessage.includes('cross-origin') || errorMessage.includes('blocked')) {
-					console.warn('🐛 Possible CORS issue detected. The bugs relay might not allow connections from this origin.')
-					console.log('🐛 Current origin:', window.location.origin)
-					console.log('🐛 Relay URL:', bugReportRelays[0])
-				}
-				
-				// Continue anyway - NDK might still work for publishing
-			}
-
-			// Create kind 1 event (text note) using the bug report NDK
-			console.log('🐛 Creating event...')
-			const event = new NDKEvent(bugReportNdk)
-			event.kind = 1
-			event.content = bugReport
-			event.tags = [['t', 'plebian2beta']]
-
-			console.log('🐛 Event created:', {
-				kind: event.kind,
-				contentLength: event.content.length,
-				tags: event.tags,
-				ndk: !!event.ndk,
-				signer: !!event.ndk?.signer
-			})
-
-			// Sign the event
-			console.log('🐛 Signing event...')
-			try {
-				await event.sign()
-				console.log('🐛 Event signed successfully, ID:', event.id)
-				console.log('🐛 Event pubkey:', event.pubkey)
 			} catch (signError) {
 				console.error('🐛 Failed to sign event:', signError)
 				throw new Error(`Failed to sign event: ${signError instanceof Error ? signError.message : String(signError)}`)
 			}
 
-			// Publish the event
-			console.log('🐛 Publishing event...')
-			try {
-				const publishPromise = event.publish()
-				const publishTimeoutPromise = new Promise((_, reject) => 
-					setTimeout(() => reject(new Error('Publish timeout after 15 seconds')), 15000)
-				)
-
-				const publishResult = await Promise.race([publishPromise, publishTimeoutPromise])
-				console.log('🐛 Event published successfully!')
-				console.log('🐛 Publish result size:', publishResult instanceof Set ? publishResult.size : 0)
-				console.log('🐛 Published to relays:', publishResult instanceof Set ? Array.from(publishResult).map((r: any) => r.url) : [])
-			} catch (publishError) {
-				console.error('🐛 Failed to publish event:', publishError)
-				throw new Error(`Failed to publish event: ${publishError instanceof Error ? publishError.message : String(publishError)}`)
+			// Publish using direct WebSocket connection (more reliable in browser)
+			console.log('🐛 Publishing event with direct WebSocket...')
+			let publishSuccess = false
+			let lastError: any = null
+			const maxRetries = 3
+			
+			for (let attempt = 1; attempt <= maxRetries; attempt++) {
+				try {
+					console.log(`🐛 Publish attempt ${attempt}/${maxRetries} to ${bugReportRelay}...`)
+					
+					await new Promise<void>((resolve, reject) => {
+						const ws = new WebSocket(bugReportRelay)
+						let isResolved = false
+						
+						const cleanup = () => {
+							if (ws.readyState === WebSocket.OPEN) {
+								ws.close()
+							}
+						}
+						
+						const timeout = setTimeout(() => {
+							if (!isResolved) {
+								isResolved = true
+								cleanup()
+								reject(new Error('WebSocket connection timeout after 10 seconds'))
+							}
+						}, 10000)
+						
+						ws.onopen = () => {
+							console.log(`🐛 WebSocket connected to ${bugReportRelay}`)
+							
+							// Send the EVENT message
+							const eventMessage = JSON.stringify(['EVENT', signedEvent])
+							console.log(`🐛 Sending EVENT message:`, eventMessage.substring(0, 200) + '...')
+							ws.send(eventMessage)
+						}
+						
+						ws.onmessage = (event) => {
+							console.log(`🐛 Received message:`, event.data)
+							
+							try {
+								const message = JSON.parse(event.data)
+								
+								// Check for OK response
+								if (Array.isArray(message) && message[0] === 'OK') {
+									const [, eventId, success, reason] = message
+									
+									if (success) {
+										console.log(`🐛 Event published successfully! ID: ${eventId}`)
+										if (!isResolved) {
+											isResolved = true
+											clearTimeout(timeout)
+											cleanup()
+											resolve()
+										}
+									} else {
+										console.error(`🐛 Event rejected by relay: ${reason}`)
+										if (!isResolved) {
+											isResolved = true
+											clearTimeout(timeout)
+											cleanup()
+											reject(new Error(`Event rejected: ${reason}`))
+										}
+									}
+								}
+								// Also handle NOTICE messages
+								else if (Array.isArray(message) && message[0] === 'NOTICE') {
+									console.log(`🐛 Relay notice: ${message[1]}`)
+								}
+							} catch (parseError) {
+								console.error('🐛 Failed to parse relay message:', parseError)
+							}
+						}
+						
+						ws.onerror = (error) => {
+							console.error(`🐛 WebSocket error:`, error)
+							if (!isResolved) {
+								isResolved = true
+								clearTimeout(timeout)
+								cleanup()
+								reject(new Error('WebSocket connection error'))
+							}
+						}
+						
+						ws.onclose = (event) => {
+							console.log(`🐛 WebSocket closed: code=${event.code}, reason=${event.reason}`)
+							if (!isResolved) {
+								isResolved = true
+								clearTimeout(timeout)
+								reject(new Error(`WebSocket closed unexpectedly: ${event.code} ${event.reason}`))
+							}
+						}
+					})
+					
+					console.log(`🐛 Attempt ${attempt}: Event published successfully!`)
+					publishSuccess = true
+					break // Success, exit retry loop
+					
+				} catch (publishError) {
+					lastError = publishError
+					console.error(`🐛 Attempt ${attempt}: Publish failed:`, publishError)
+					
+					if (attempt < maxRetries) {
+						console.log(`🐛 Retrying in 2 seconds... (${maxRetries - attempt} attempts remaining)`)
+						await new Promise(resolve => setTimeout(resolve, 2000))
+					}
+				}
+			}
+			
+			if (!publishSuccess) {
+				console.error('🐛 All publish attempts failed')
+				throw new Error(`Failed to publish event after ${maxRetries} attempts: ${lastError instanceof Error ? lastError.message : String(lastError)}`)
 			}
 
 			// Log the event details for debugging
-			console.log('Published event details:', {
-				id: event.id,
-				pubkey: event.pubkey,
-				kind: event.kind,
-				created_at: event.created_at,
-				tags: event.tags,
-				content: event.content.substring(0, 100) + '...',
+			console.log('🐛 Published event details:', {
+				id: signedEvent.id,
+				pubkey: signedEvent.pubkey,
+				kind: signedEvent.kind,
+				created_at: signedEvent.created_at,
+				tags: signedEvent.tags,
+				content: signedEvent.content.substring(0, 100) + '...',
 			})
 
-			// Invalidate bug reports cache to refresh the viewer
-			console.log('🐛 Invalidating query cache...')
+			// Invalidate and refetch bug reports cache to refresh the viewer
+			console.log('🐛 Invalidating and refetching query cache...')
 			await queryClient.invalidateQueries({ queryKey: bugReportKeys.all })
+			
+			// Wait a moment for the event to propagate to the relay
+			console.log('🐛 Waiting for event propagation...')
+			await new Promise(resolve => setTimeout(resolve, 2000))
+			
+			// Force refetch the bug reports to ensure we get the latest data
+			console.log('🐛 Force refetching bug reports...')
+			await queryClient.refetchQueries({ queryKey: bugReportKeys.all })
 			
 			setSendStatus('success')
 			console.log('🐛 Bug report send completed successfully!')
@@ -428,23 +441,18 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 				setSendStatus('idle')
 			}, 3000)
 		} catch (error) {
-			console.error('Failed to publish bug report:', error)
+			console.error('🐛 Failed to publish bug report:', error)
 			setSendStatus('error')
 			if (error instanceof Error) {
-				console.error('Error details:', {
+				console.error('🐛 Error details:', {
 					name: error.name,
 					message: error.message,
 					stack: error.stack,
 				})
 			} else {
-				console.error('Unknown error type:', error)
+				console.error('🐛 Unknown error type:', error)
 			}
 		} finally {
-			// Clean up the bug report NDK
-			if (bugReportNdk) {
-				console.log('🐛 Cleaning up bug report NDK...')
-				bugReportNdk.pool?.relays.forEach((relay) => relay.disconnect())
-			}
 			setIsSending(false)
 		}
 	}
@@ -538,7 +546,14 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 						<Button
 							variant={activeTab === 'viewer' ? 'primary' : 'outline'}
 							size="sm"
-							onClick={() => setActiveTab('viewer')}
+							onClick={async () => {
+								console.log('🐛 Switching to viewer tab and reloading bug reports...')
+								setActiveTab('viewer')
+								// Trigger a reload of the bug reports when switching to viewer
+								await queryClient.invalidateQueries({ queryKey: bugReportKeys.all })
+								await queryClient.refetchQueries({ queryKey: bugReportKeys.all })
+								console.log('🐛 Bug reports reloaded')
+							}}
 							className="flex items-center gap-2"
 						>
 							<span className="i-search w-4 h-4" />
@@ -605,54 +620,8 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 									</div>
 								)}
 							</div>
-							<div
-								ref={scrollContainerRef}
-								className="flex-1 overflow-y-auto pr-2 min-h-0"
-								style={{
-									scrollbarWidth: 'thin',
-									scrollbarColor: '#d1d5db #f3f4f6',
-									maxHeight: 'calc(80vh - 200px)', // Ensure container has a defined max height
-								}}
-								onWheel={(e) => {
-									// Allow scrolling within this container, but prevent bubbling to backdrop
-									e.stopPropagation()
-								}}
-								onTouchMove={(e) => {
-									// Allow touch scrolling within this container, but prevent bubbling to backdrop
-									e.stopPropagation()
-								}}
-							>
-								{isLoadingReports && reports.length === 0 ? (
-									<div className="flex flex-col items-center justify-center py-12">
-										<Loader2 className="w-8 h-8 animate-spin mb-4" />
-										<p className="text-gray-600">Loading bug reports...</p>
-									</div>
-								) : reports.length === 0 ? (
-									<div className="flex flex-col items-center justify-center py-12 text-center">
-										<h3 className="text-lg font-semibold text-gray-900 mb-2">No bug reports found</h3>
-										<p className="text-gray-600">There are no bug reports available at the moment.</p>
-									</div>
-								) : (
-									<div className="space-y-4">
-										{reports.map((report) => (
-											<BugReportItem key={report.id} report={report} />
-										))}
-										{hasMore && (
-											<div className="flex justify-center py-4">
-												<Button onClick={loadMore} variant="outline" disabled={isLoadingReports}>
-													{isLoadingReports ? (
-														<>
-															<Loader2 className="w-4 h-4 animate-spin mr-2" />
-															Loading...
-														</>
-													) : (
-														'Load More Reports'
-													)}
-												</Button>
-											</div>
-										)}
-									</div>
-								)}
+							<div className="flex-1 min-h-0">
+								<BugReportsTable className="h-full" />
 							</div>
 						</>
 					)}

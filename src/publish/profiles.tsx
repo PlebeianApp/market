@@ -18,18 +18,7 @@ export const updateProfile = async (profile: NDKUserProfile): Promise<void> => {
 	const user = ndk.activeUser
 	if (!user) throw new Error('No active user')
 
-	// Clean up any unwanted relays (like bugs.plebeian.market that might have been added by BugReportModal)
-	const configState = ndkActions.getNDK()
-	const appRelay = configState?.pool?.relays.has('ws://localhost:10547/') || configState?.pool?.relays.has('ws://localhost:10547')
-
-	if (appRelay) {
-		const unwantedRelays = ['wss://bugs.plebeian.market/', 'wss://bugs.plebeian.market']
-		unwantedRelays.forEach((relayUrl) => {
-			if (ndk.pool?.relays.has(relayUrl)) {
-				ndk.pool.removeRelay(relayUrl)
-			}
-		})
-	}
+	// No need to clean up bugs relay since bug reports now use isolated nostr-tools SimplePool
 
 	// Ensure NDK is connected before publishing
 	if (!ndk.pool || ndk.pool.connectedRelays().length === 0) {

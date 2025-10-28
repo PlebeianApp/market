@@ -1,13 +1,13 @@
 import { useQuery } from '@tanstack/react-query'
 import { ndkActions } from '@/lib/stores/ndk'
-import NDK, { type NDKEvent, type NDKFilter } from '@nostr-dev-kit/ndk'
+import { SimplePool, type Event, type Filter } from 'nostr-tools'
 
 export interface BugReport {
 	id: string
 	pubkey: string
 	content: string
 	createdAt: number
-	event: NDKEvent
+	event: Event
 }
 
 export interface UserProfile {
@@ -28,56 +28,51 @@ const isStaging =
  * with t tag "plebian2beta"
  */
 export const fetchBugReports = async (limit: number = 20, until?: number): Promise<BugReport[]> => {
-	// Create a dedicated NDK instance for bug reports to ensure we're fetching from the correct relay
-	const bugReportRelays = isStaging ? ['wss://relay.staging.plebeian.market'] : ['wss://bugs.plebeian.market/']
+	// Use SimplePool for direct relay communication
+	const bugReportRelay = isStaging ? 'wss://relay.staging.plebeian.market' : 'wss://bugs.plebeian.market/'
 	
-	console.log('🐛 Fetching bug reports from relays:', bugReportRelays)
+	console.log('🐛 Fetching bug reports from relay:', bugReportRelay)
 	
-	const bugReportNdk = new NDK({
-		explicitRelayUrls: bugReportRelays,
-	})
+	const pool = new SimplePool()
 
-	// Connect to the bugs relay with timeout
 	try {
-		const connectPromise = bugReportNdk.connect()
-		const timeoutPromise = new Promise((_, reject) => 
-			setTimeout(() => reject(new Error('Bug report fetch connection timeout')), 5000)
-		)
-		await Promise.race([connectPromise, timeoutPromise])
+		const filter: Filter = {
+			kinds: [1], // kind 1 is text notes
+			'#t': ['plebian2beta'], // tag filter for plebian2beta
+			limit,
+			...(until && { until }),
+		}
+
+		console.log('🐛 Fetching events with filter:', filter)
 		
-		const connectedRelays = bugReportNdk.pool?.connectedRelays() || []
-		console.log('🐛 Connected to bug report relays:', connectedRelays.map(r => r.url))
-	} catch (connectError) {
-		console.warn('Bug report NDK connection warning:', connectError)
-	}
-
-	const filter: NDKFilter = {
-		kinds: [1], // kind 1 is text notes
-		'#t': ['plebian2beta'], // tag filter for plebian2beta
-		limit,
-		...(until && { until }),
-	}
-
-	console.log('🐛 Fetching events with filter:', filter)
-	const events = await bugReportNdk.fetchEvents(filter)
-	console.log('🐛 Fetched', events.size, 'bug report events from bugs relay')
-	const bugReports = Array.from(events)
-		.map(
-			(event): BugReport => ({
+		// Fetch events with timeout
+		const fetchPromise = pool.querySync([bugReportRelay], filter)
+		const timeoutPromise = new Promise<Event[]>((_, reject) => 
+			setTimeout(() => reject(new Error('Bug report fetch timeout')), 10000)
+		)
+		
+		const events = await Promise.race([fetchPromise, timeoutPromise])
+		console.log('🐛 Fetched', events.length, 'bug report events from bugs relay')
+		
+		const bugReports = events
+			.map((event): BugReport => ({
 				id: event.id,
 				pubkey: event.pubkey,
 				content: event.content,
-				createdAt: event.created_at ?? Math.floor(Date.now() / 1000),
+				createdAt: event.created_at,
 				event,
-			}),
-		)
-		.sort((a, b) => b.createdAt - a.createdAt) // Sort by newest first
+			}))
+			.sort((a, b) => b.createdAt - a.createdAt) // Sort by newest first
 
-	// Clean up the connection
-	console.log('🐛 Cleaning up bug report NDK connections...')
-	bugReportNdk.pool?.relays.forEach((relay) => relay.disconnect())
-
-	return bugReports
+		return bugReports
+	} catch (error) {
+		console.error('🐛 Failed to fetch bug reports:', error)
+		throw error
+	} finally {
+		// Clean up the pool
+		console.log('🐛 Cleaning up SimplePool connections...')
+		pool.close([bugReportRelay])
+	}
 }
 
 /**
@@ -87,7 +82,7 @@ export const fetchUserProfile = async (pubkey: string): Promise<UserProfile | nu
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const filter: NDKFilter = {
+	const filter: Filter = {
 		kinds: [0], // kind 0 is profile metadata
 		authors: [pubkey],
 		limit: 1,
