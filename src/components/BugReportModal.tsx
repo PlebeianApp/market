@@ -3,8 +3,9 @@ import { Button } from '@/components/ui/button'
 import { useBugReportsInfiniteScroll } from '@/hooks/useBugReportsInfiniteScroll'
 import { BLOSSOM_SERVERS, uploadFileToBlossom } from '@/lib/blossom'
 import { ndkActions } from '@/lib/stores/ndk'
-import { defaultRelaysUrls } from '@/lib/constants'
 import { cn } from '@/lib/utils'
+import { bugReportKeys } from '@/queries/bugReports'
+import { useQueryClient } from '@tanstack/react-query'
 import NDK, { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -21,6 +22,7 @@ interface BugReportModalProps {
 }
 
 export function BugReportModal({ isOpen, onClose, onReopen }: BugReportModalProps) {
+	const queryClient = useQueryClient()
 	const [activeTab, setActiveTab] = useState<'report' | 'viewer'>('report')
 	const [bugReport, setBugReport] = useState(
 		'Describe the problem you are having:\n\n\n\nUse the drag and drop or paste to add images of the problem.\n\n\n\nWhat device and operating system are you using?\n\nWhat steps did you take to reproduce the problem?\n\n\n\nWhat did you expect to happen?\n\n\n\nWhat actually happened?\n\n\n\nPlease provide any other relevant information\n\n',
@@ -28,6 +30,8 @@ export function BugReportModal({ isOpen, onClose, onReopen }: BugReportModalProp
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 	const scrollContainerRef = useRef<HTMLDivElement>(null)
 	const [isUploading, setIsUploading] = useState(false)
+	const [isSending, setIsSending] = useState(false)
+	const [sendStatus, setSendStatus] = useState<'idle' | 'success' | 'error'>('idle')
 	const [hasAutoPopulated, setHasAutoPopulated] = useState(false)
 	const [isDragOver, setIsDragOver] = useState(false)
 	const [uploadedImages, setUploadedImages] = useState<string[]>([])
@@ -192,6 +196,8 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 		if (!isOpen) {
 			setActiveTab('report')
 			setIsUploading(false)
+			setIsSending(false)
+			setSendStatus('idle')
 			setHasAutoPopulated(false)
 			setUploadedImages([])
 			// Reset to default template for next time
@@ -201,72 +207,195 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 		}
 	}, [isOpen])
 
+
 	const handleSend = async () => {
+		if (isSending) return // Prevent double submission
+		
+		setIsSending(true)
+		setSendStatus('idle')
+		
+		let bugReportNdk: NDK | null = null
+		
 		try {
 			console.log('Starting bug report send process...')
 
 			// Create a separate NDK instance for bug reports to avoid contaminating the main instance
-			// In staging mode, use only staging relay; in production, use bugs relay + defaults
-			const bugReportRelays = isStaging ? ['wss://relay.staging.plebeian.market'] : ['wss://bugs.plebeian.market/', ...defaultRelaysUrls]
+			// In staging mode, use only staging relay; in production, use only bugs relay
+			const bugReportRelays = isStaging ? ['wss://relay.staging.plebeian.market'] : ['wss://bugs.plebeian.market/']
+			console.log('🐛 Using bug report relays:', bugReportRelays)
 
-			const bugReportNdk = new NDK({
-				explicitRelayUrls: bugReportRelays,
-			})
-
-			// Get the main NDK instance only to get the signer
+			// Get the main NDK instance to get the signer FIRST
 			const mainNdk = ndkActions.getNDK()
 			if (!mainNdk || !mainNdk.signer) {
 				console.error('Main NDK not available or no signer')
-				return
+				setSendStatus('error')
+				throw new Error('Main NDK not available or no signer')
 			}
 
-			// Set the signer on the bug report NDK
-			bugReportNdk.signer = mainNdk.signer
-			console.log('🐛 Signer set on bug report NDK')
+			console.log('🐛 Main NDK info:', {
+				hasNdk: !!mainNdk,
+				hasSigner: !!mainNdk.signer,
+				signerType: mainNdk.signer?.constructor?.name,
+				connectedRelays: mainNdk.pool?.connectedRelays()?.map(r => r.url) || []
+			})
 
-			// Connect the bug report NDK
+			// Create bug report NDK with signer from the start
+			bugReportNdk = new NDK({
+				explicitRelayUrls: bugReportRelays,
+				signer: mainNdk.signer
+			})
+			
+			console.log('🐛 Bug report NDK created with signer:', !!bugReportNdk.signer)
+			console.log('🐛 Bug report NDK signer type:', bugReportNdk.signer?.constructor?.name)
+
+			// Small delay to ensure signer is properly set
+			await new Promise(resolve => setTimeout(resolve, 100))
+
+			// Test direct WebSocket connection to check for CORS issues
+			console.log('🐛 Testing direct WebSocket connection...')
 			try {
-				console.log('🐛 Connecting bug report NDK...')
-				await bugReportNdk.connect()
-				console.log('🐛 Bug report NDK connected')
+				const testWs = new WebSocket(bugReportRelays[0])
+				
+				const wsTestPromise = new Promise((resolve, reject) => {
+					const timeout = setTimeout(() => {
+						testWs.close()
+						reject(new Error('WebSocket test timeout'))
+					}, 3000)
+					
+					testWs.onopen = () => {
+						clearTimeout(timeout)
+						console.log('🐛 Direct WebSocket connection successful')
+						testWs.close()
+						resolve('success')
+					}
+					
+					testWs.onerror = (error) => {
+						clearTimeout(timeout)
+						console.error('🐛 Direct WebSocket connection failed:', error)
+						reject(error)
+					}
+					
+					testWs.onclose = (event) => {
+						if (event.code !== 1000) { // 1000 is normal closure
+							console.log('🐛 WebSocket closed with code:', event.code, 'reason:', event.reason)
+						}
+					}
+				})
+				
+				await wsTestPromise
+			} catch (wsError) {
+				console.error('🐛 WebSocket test failed:', wsError)
+				console.log('🐛 This might indicate CORS or network connectivity issues')
+			}
+
+			// Connect the bug report NDK with timeout
+			console.log('🐛 Connecting bug report NDK...')
+			console.log('🐛 NDK pool info before connect:', {
+				hasPool: !!bugReportNdk.pool,
+				relayCount: bugReportNdk.pool?.relays?.size || 0,
+				relayUrls: Array.from(bugReportNdk.pool?.relays?.keys() || [])
+			})
+			
+			const connectPromise = bugReportNdk.connect()
+			const connectTimeoutPromise = new Promise((_, reject) => 
+				setTimeout(() => reject(new Error('Connection timeout after 5 seconds')), 5000)
+			)
+			
+			try {
+				await Promise.race([connectPromise, connectTimeoutPromise])
+				console.log('🐛 Bug report NDK connected successfully')
+				
+				// Verify connection
+				const connectedRelays = bugReportNdk.pool?.connectedRelays() || []
+				const allRelays = Array.from(bugReportNdk.pool?.relays?.values() || [])
+				
+				console.log('🐛 Connection status:', {
+					connectedCount: connectedRelays.length,
+					connectedUrls: connectedRelays.map(r => r.url),
+					totalRelays: allRelays.length,
+					allRelayUrls: allRelays.map(r => r.url),
+					relayStatuses: allRelays.map(r => ({
+						url: r.url,
+						status: r.connectivity?.status,
+						connected: r.connectivity?.connected
+					}))
+				})
+				
+				if (connectedRelays.length === 0) {
+					console.warn('🐛 No relays connected!')
+					// Let's try to wait a bit more for connection
+					console.log('🐛 Waiting additional 2 seconds for connection...')
+					await new Promise(resolve => setTimeout(resolve, 2000))
+					
+					const connectedAfterWait = bugReportNdk.pool?.connectedRelays() || []
+					console.log('🐛 Connected after wait:', connectedAfterWait.map(r => r.url))
+					
+					if (connectedAfterWait.length === 0) {
+						console.warn('🐛 Still no relays connected after waiting')
+						console.warn('🐛 Bug reports can only be sent to the bugs relay - no fallback available')
+					}
+				}
 			} catch (connectError) {
-				console.warn('🐛 Bug report NDK connection warning:', connectError)
+				console.error('🐛 Bug report NDK connection error:', connectError)
+				console.log('🐛 Connection error details:', {
+					message: connectError instanceof Error ? connectError.message : String(connectError),
+					stack: connectError instanceof Error ? connectError.stack : undefined,
+					relayCount: bugReportNdk.pool?.relays?.size || 0
+				})
+				
+				// Check if this might be a CORS issue
+				const errorMessage = connectError instanceof Error ? connectError.message : String(connectError)
+				if (errorMessage.includes('CORS') || errorMessage.includes('cross-origin') || errorMessage.includes('blocked')) {
+					console.warn('🐛 Possible CORS issue detected. The bugs relay might not allow connections from this origin.')
+					console.log('🐛 Current origin:', window.location.origin)
+					console.log('🐛 Relay URL:', bugReportRelays[0])
+				}
+				
+				// Continue anyway - NDK might still work for publishing
 			}
 
 			// Create kind 1 event (text note) using the bug report NDK
+			console.log('🐛 Creating event...')
 			const event = new NDKEvent(bugReportNdk)
 			event.kind = 1
 			event.content = bugReport
-
-			// Add plebian2beta tag
 			event.tags = [['t', 'plebian2beta']]
 
-			console.log('Event created:', {
+			console.log('🐛 Event created:', {
 				kind: event.kind,
 				contentLength: event.content.length,
 				tags: event.tags,
+				ndk: !!event.ndk,
+				signer: !!event.ndk?.signer
 			})
 
-			// Sign and publish the event using the bug report NDK
+			// Sign the event
 			console.log('🐛 Signing event...')
-			await event.sign()
-			console.log('🐛 Event signed, ID:', event.id)
+			try {
+				await event.sign()
+				console.log('🐛 Event signed successfully, ID:', event.id)
+				console.log('🐛 Event pubkey:', event.pubkey)
+			} catch (signError) {
+				console.error('🐛 Failed to sign event:', signError)
+				throw new Error(`Failed to sign event: ${signError instanceof Error ? signError.message : String(signError)}`)
+			}
 
+			// Publish the event
 			console.log('🐛 Publishing event...')
+			try {
+				const publishPromise = event.publish()
+				const publishTimeoutPromise = new Promise((_, reject) => 
+					setTimeout(() => reject(new Error('Publish timeout after 15 seconds')), 15000)
+				)
 
-			// Add timeout to publish operation
-			const publishPromise = event.publish()
-			const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Publish timeout after 10 seconds')), 10000))
-
-			await Promise.race([publishPromise, timeoutPromise])
-			console.log('🐛 Event published successfully!')
-			console.log(
-				'🐛 Published to relays:',
-				bugReportNdk.pool?.connectedRelays().map((r) => r.url),
-			)
-
-			// Clean up the bug report NDK
-			bugReportNdk.pool?.relays.forEach((relay) => relay.disconnect())
+				const publishResult = await Promise.race([publishPromise, publishTimeoutPromise])
+				console.log('🐛 Event published successfully!')
+				console.log('🐛 Publish result size:', publishResult instanceof Set ? publishResult.size : 0)
+				console.log('🐛 Published to relays:', publishResult instanceof Set ? Array.from(publishResult).map((r: any) => r.url) : [])
+			} catch (publishError) {
+				console.error('🐛 Failed to publish event:', publishError)
+				throw new Error(`Failed to publish event: ${publishError instanceof Error ? publishError.message : String(publishError)}`)
+			}
 
 			// Log the event details for debugging
 			console.log('Published event details:', {
@@ -278,13 +407,29 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 				content: event.content.substring(0, 100) + '...',
 			})
 
-			// Clear the input and close modal after sending
+			// Invalidate bug reports cache to refresh the viewer
+			console.log('🐛 Invalidating query cache...')
+			await queryClient.invalidateQueries({ queryKey: bugReportKeys.all })
+			
+			setSendStatus('success')
+			console.log('🐛 Bug report send completed successfully!')
+			
+			// Switch to viewer tab to show the new report
+			console.log('🐛 Switching to report viewer...')
+			setActiveTab('viewer')
+			
+			// Clear the input for next time
 			setBugReport(
 				'Describe the problem you are having:\n\n\n\nUse the drag and drop or paste to add images of the problem.\n\n\n\nWhat device and operating system are you using?\n\nWhat steps did you take to reproduce the problem?\n\n\n\nWhat did you expect to happen?\n\n\n\nWhat actually happened?\n\n\n\nPlease provide any other relevant information\n\n',
 			)
-			onClose()
+			
+			// Show success message briefly
+			setTimeout(() => {
+				setSendStatus('idle')
+			}, 3000)
 		} catch (error) {
 			console.error('Failed to publish bug report:', error)
+			setSendStatus('error')
 			if (error instanceof Error) {
 				console.error('Error details:', {
 					name: error.name,
@@ -294,6 +439,13 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			} else {
 				console.error('Unknown error type:', error)
 			}
+		} finally {
+			// Clean up the bug report NDK
+			if (bugReportNdk) {
+				console.log('🐛 Cleaning up bug report NDK...')
+				bugReportNdk.pool?.relays.forEach((relay) => relay.disconnect())
+			}
+			setIsSending(false)
 		}
 	}
 
@@ -445,7 +597,14 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 						</>
 					) : (
 						<>
-							<p className="text-gray-600 mb-6">View bug reports from the community</p>
+							<div className="mb-6">
+								<p className="text-gray-600">View bug reports from the community</p>
+								{sendStatus === 'success' && (
+									<div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+										<p className="text-green-800 text-sm font-medium">✅ Bug report sent successfully!</p>
+									</div>
+								)}
+							</div>
 							<div
 								ref={scrollContainerRef}
 								className="flex-1 overflow-y-auto pr-2 min-h-0"
@@ -502,13 +661,47 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 				{/* Footer */}
 				{activeTab === 'report' && (
 					<div className="flex justify-end items-center p-6 border-t border-gray-200">
+						{sendStatus === 'error' && (
+							<div className="text-red-600 text-sm mr-4">
+								Failed to send bug report. Check console for details and try again.
+							</div>
+						)}
+						{sendStatus === 'success' && (
+							<div className="text-green-600 text-sm mr-4">
+								Bug report sent successfully!
+							</div>
+						)}
 						<Button
-							onClick={handleSend}
-							disabled={!bugReport.trim() || isUploading}
-							className="flex items-center gap-2 bg-secondary hover:bg-secondary/90 text-white"
+							onClick={() => {
+								if (sendStatus === 'error') {
+									setSendStatus('idle')
+								}
+								handleSend()
+							}}
+							disabled={!bugReport.trim() || isUploading || isSending || sendStatus === 'success'}
+							className={cn(
+								"flex items-center gap-2 text-white",
+								sendStatus === 'success' 
+									? "bg-green-600 hover:bg-green-600" 
+									: "bg-secondary hover:bg-secondary/90"
+							)}
 						>
-							<span className="i-send-message w-4 h-4" />
-							Send
+							{isSending ? (
+								<>
+									<Loader2 className="w-4 h-4 animate-spin" />
+									Sending...
+								</>
+							) : sendStatus === 'success' ? (
+								<>
+									<span className="i-tick w-4 h-4" />
+									Sent
+								</>
+							) : (
+								<>
+									<span className="i-send-message w-4 h-4" />
+									Send
+								</>
+							)}
 						</Button>
 					</div>
 				)}
