@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { ndkActions } from '@/lib/stores/ndk'
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
+import NDK, { type NDKEvent, type NDKFilter } from '@nostr-dev-kit/ndk'
 
 export interface BugReport {
 	id: string
@@ -18,16 +18,38 @@ export interface UserProfile {
 	about?: string
 }
 
+// Check for staging environment
+const isStaging =
+	(typeof process !== 'undefined' && process.env?.STAGING === 'true') ||
+	(typeof import.meta !== 'undefined' && import.meta.env?.STAGING === 'true')
+
 /**
  * Fetches bug reports (kind 1 events) from bugs.plebeian.market relay
  * with t tag "plebian2beta"
  */
 export const fetchBugReports = async (limit: number = 20, until?: number): Promise<BugReport[]> => {
-	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
+	// Create a dedicated NDK instance for bug reports to ensure we're fetching from the correct relay
+	const bugReportRelays = isStaging ? ['wss://relay.staging.plebeian.market'] : ['wss://bugs.plebeian.market/']
+	
+	console.log('🐛 Fetching bug reports from relays:', bugReportRelays)
+	
+	const bugReportNdk = new NDK({
+		explicitRelayUrls: bugReportRelays,
+	})
 
-	// Ensure bugs.plebeian.market relay is added
-	ndkActions.addSingleRelay('wss://bugs.plebeian.market/')
+	// Connect to the bugs relay with timeout
+	try {
+		const connectPromise = bugReportNdk.connect()
+		const timeoutPromise = new Promise((_, reject) => 
+			setTimeout(() => reject(new Error('Bug report fetch connection timeout')), 5000)
+		)
+		await Promise.race([connectPromise, timeoutPromise])
+		
+		const connectedRelays = bugReportNdk.pool?.connectedRelays() || []
+		console.log('🐛 Connected to bug report relays:', connectedRelays.map(r => r.url))
+	} catch (connectError) {
+		console.warn('Bug report NDK connection warning:', connectError)
+	}
 
 	const filter: NDKFilter = {
 		kinds: [1], // kind 1 is text notes
@@ -36,7 +58,9 @@ export const fetchBugReports = async (limit: number = 20, until?: number): Promi
 		...(until && { until }),
 	}
 
-	const events = await ndk.fetchEvents(filter)
+	console.log('🐛 Fetching events with filter:', filter)
+	const events = await bugReportNdk.fetchEvents(filter)
+	console.log('🐛 Fetched', events.size, 'bug report events from bugs relay')
 	const bugReports = Array.from(events)
 		.map(
 			(event): BugReport => ({
@@ -48,6 +72,10 @@ export const fetchBugReports = async (limit: number = 20, until?: number): Promi
 			}),
 		)
 		.sort((a, b) => b.createdAt - a.createdAt) // Sort by newest first
+
+	// Clean up the connection
+	console.log('🐛 Cleaning up bug report NDK connections...')
+	bugReportNdk.pool?.relays.forEach((relay) => relay.disconnect())
 
 	return bugReports
 }
@@ -107,7 +135,7 @@ export const bugReportKeys = {
 export const bugReportsQueryOptions = (limit: number = 20, until?: number) => ({
 	queryKey: bugReportKeys.list(limit, until),
 	queryFn: () => fetchBugReports(limit, until),
-	staleTime: 5 * 60 * 1000, // 5 minutes
+	staleTime: 30 * 1000, // 30 seconds - refresh more frequently for bug reports
 })
 
 // React Query options for user profiles
