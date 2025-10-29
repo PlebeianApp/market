@@ -190,13 +190,12 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 		}
 	}, [isOpen])
 
-
 	const handleSend = async () => {
 		if (isSending) return // Prevent double submission
-		
+
 		setIsSending(true)
 		setSendStatus('idle')
-		
+
 		try {
 			console.log('🐛 Starting bug report send with nostr-tools...')
 
@@ -235,22 +234,22 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 				// Get user info from NDK signer
 				const user = await mainNdk.signer.user()
 				const pubkey = user.pubkey
-				
+
 				console.log('🐛 Got user pubkey from signer:', pubkey)
-				
+
 				// Create event with pubkey
 				const eventWithPubkey = {
 					...eventTemplate,
 					pubkey: pubkey,
 				}
-				
+
 				console.log('🐛 Event template with pubkey:', {
 					kind: eventWithPubkey.kind,
 					contentLength: eventWithPubkey.content.length,
 					tags: eventWithPubkey.tags,
 					pubkey: eventWithPubkey.pubkey,
 				})
-				
+
 				// Check if this is a private key signer (we can sign directly)
 				if (mainNdk.signer.constructor.name === 'NDKPrivateKeySigner') {
 					console.log('🐛 Using NDKPrivateKeySigner - signing with nostr-tools...')
@@ -267,7 +266,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 					// For extension signers, we need to use NDK's signing method
 					const ndkEvent = new (await import('@nostr-dev-kit/ndk')).NDKEvent(mainNdk, eventWithPubkey)
 					await ndkEvent.sign()
-					
+
 					signedEvent = {
 						...eventWithPubkey,
 						id: ndkEvent.id!,
@@ -276,7 +275,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 					}
 					console.log('🐛 Event signed with extension signer')
 				}
-				
+
 				console.log('🐛 Event signed successfully:', {
 					id: signedEvent.id,
 					pubkey: signedEvent.pubkey,
@@ -292,21 +291,21 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			let publishSuccess = false
 			let lastError: any = null
 			const maxRetries = 3
-			
+
 			for (let attempt = 1; attempt <= maxRetries; attempt++) {
 				try {
 					console.log(`🐛 Publish attempt ${attempt}/${maxRetries} to ${bugReportRelay}...`)
-					
+
 					await new Promise<void>((resolve, reject) => {
 						const ws = new WebSocket(bugReportRelay)
 						let isResolved = false
-						
+
 						const cleanup = () => {
 							if (ws.readyState === WebSocket.OPEN) {
 								ws.close()
 							}
 						}
-						
+
 						const timeout = setTimeout(() => {
 							if (!isResolved) {
 								isResolved = true
@@ -314,26 +313,26 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 								reject(new Error('WebSocket connection timeout after 10 seconds'))
 							}
 						}, 10000)
-						
+
 						ws.onopen = () => {
 							console.log(`🐛 WebSocket connected to ${bugReportRelay}`)
-							
+
 							// Send the EVENT message
 							const eventMessage = JSON.stringify(['EVENT', signedEvent])
 							console.log(`🐛 Sending EVENT message:`, eventMessage.substring(0, 200) + '...')
 							ws.send(eventMessage)
 						}
-						
+
 						ws.onmessage = (event) => {
 							console.log(`🐛 Received message:`, event.data)
-							
+
 							try {
 								const message = JSON.parse(event.data)
-								
+
 								// Check for OK response
 								if (Array.isArray(message) && message[0] === 'OK') {
 									const [, eventId, success, reason] = message
-									
+
 									if (success) {
 										console.log(`🐛 Event published successfully! ID: ${eventId}`)
 										if (!isResolved) {
@@ -360,7 +359,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 								console.error('🐛 Failed to parse relay message:', parseError)
 							}
 						}
-						
+
 						ws.onerror = (error) => {
 							console.error(`🐛 WebSocket error:`, error)
 							if (!isResolved) {
@@ -370,7 +369,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 								reject(new Error('WebSocket connection error'))
 							}
 						}
-						
+
 						ws.onclose = (event) => {
 							console.log(`🐛 WebSocket closed: code=${event.code}, reason=${event.reason}`)
 							if (!isResolved) {
@@ -380,25 +379,26 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 							}
 						}
 					})
-					
+
 					console.log(`🐛 Attempt ${attempt}: Event published successfully!`)
 					publishSuccess = true
 					break // Success, exit retry loop
-					
 				} catch (publishError) {
 					lastError = publishError
 					console.error(`🐛 Attempt ${attempt}: Publish failed:`, publishError)
-					
+
 					if (attempt < maxRetries) {
 						console.log(`🐛 Retrying in 2 seconds... (${maxRetries - attempt} attempts remaining)`)
-						await new Promise(resolve => setTimeout(resolve, 2000))
+						await new Promise((resolve) => setTimeout(resolve, 2000))
 					}
 				}
 			}
-			
+
 			if (!publishSuccess) {
 				console.error('🐛 All publish attempts failed')
-				throw new Error(`Failed to publish event after ${maxRetries} attempts: ${lastError instanceof Error ? lastError.message : String(lastError)}`)
+				throw new Error(
+					`Failed to publish event after ${maxRetries} attempts: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
+				)
 			}
 
 			// Log the event details for debugging
@@ -413,24 +413,24 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 
 			// Wait a moment for the event to propagate to the relay
 			console.log('🐛 Waiting for event propagation...')
-			await new Promise(resolve => setTimeout(resolve, 2000))
-			
+			await new Promise((resolve) => setTimeout(resolve, 2000))
+
 			// Force refetch the bug reports to ensure we get the latest data
 			console.log('🐛 Force refetching bug reports...')
 			await queryClient.refetchQueries({ queryKey: bugReportKeys.all })
-			
+
 			setSendStatus('success')
 			console.log('🐛 Bug report send completed successfully!')
-			
+
 			// Switch to viewer tab to show the new report
 			console.log('🐛 Switching to report viewer...')
 			setActiveTab('viewer')
-			
+
 			// Clear the input for next time
 			setBugReport(
 				'Describe the problem you are having:\n\n\n\nUse the drag and drop or paste to add images of the problem.\n\n\n\nWhat device and operating system are you using?\n\nWhat steps did you take to reproduce the problem?\n\n\n\nWhat did you expect to happen?\n\n\n\nWhat actually happened?\n\n\n\nPlease provide any other relevant information\n\n',
 			)
-			
+
 			// Show success message briefly
 			setTimeout(() => {
 				setSendStatus('idle')
@@ -611,15 +611,9 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 				{activeTab === 'report' && (
 					<div className="flex justify-end items-center p-6 border-t border-gray-200">
 						{sendStatus === 'error' && (
-							<div className="text-red-600 text-sm mr-4">
-								Failed to send bug report. Check console for details and try again.
-							</div>
+							<div className="text-red-600 text-sm mr-4">Failed to send bug report. Check console for details and try again.</div>
 						)}
-						{sendStatus === 'success' && (
-							<div className="text-green-600 text-sm mr-4">
-								Bug report sent successfully!
-							</div>
-						)}
+						{sendStatus === 'success' && <div className="text-green-600 text-sm mr-4">Bug report sent successfully!</div>}
 						<Button
 							onClick={() => {
 								if (sendStatus === 'error') {
@@ -629,10 +623,8 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 							}}
 							disabled={!bugReport.trim() || isUploading || isSending || sendStatus === 'success'}
 							className={cn(
-								"flex items-center gap-2 text-white",
-								sendStatus === 'success' 
-									? "bg-green-600 hover:bg-green-600" 
-									: "bg-secondary hover:bg-secondary/90"
+								'flex items-center gap-2 text-white',
+								sendStatus === 'success' ? 'bg-green-600 hover:bg-green-600' : 'bg-secondary hover:bg-secondary/90',
 							)}
 						>
 							{isSending ? (

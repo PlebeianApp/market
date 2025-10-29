@@ -6,15 +6,7 @@ import { AlertCircle, FileText, MessageSquare } from 'lucide-react'
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
 import { useState } from 'react'
 
-function BugReportItem({
-	report,
-	isExpanded,
-	onToggleExpanded,
-}: {
-	report: BugReport
-	isExpanded: boolean
-	onToggleExpanded: () => void
-}) {
+function BugReportItem({ report, isExpanded, onToggleExpanded }: { report: BugReport; isExpanded: boolean; onToggleExpanded: () => void }) {
 	const { data: userProfile, isLoading: isProfileLoading } = useUserProfile(report.pubkey)
 
 	const timeAgo = formatDistanceToNow(new Date(report.createdAt * 1000), {

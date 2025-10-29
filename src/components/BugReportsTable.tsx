@@ -1,13 +1,6 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import {
-	createColumnHelper,
-	flexRender,
-	getCoreRowModel,
-	getSortedRowModel,
-	useReactTable,
-	type SortingState,
-} from '@tanstack/react-table'
+import { createColumnHelper, flexRender, getCoreRowModel, getSortedRowModel, useReactTable, type SortingState } from '@tanstack/react-table'
 import { useState } from 'react'
 import { BugReport, bugReportsQueryOptions } from '@/queries/bugReports'
 import { useUserProfile } from '@/queries/bugReports'
@@ -40,11 +33,7 @@ function UserProfileCell({ pubkey }: { pubkey: string }) {
 	}
 
 	return (
-		<Button 
-			variant="ghost" 
-			onClick={handleProfileClick} 
-			className="flex items-center gap-2 p-0 h-auto hover:bg-gray-50"
-		>
+		<Button variant="ghost" onClick={handleProfileClick} className="flex items-center gap-2 p-0 h-auto hover:bg-gray-50">
 			<Avatar className="h-8 w-8">
 				<AvatarImage src={profile?.picture} />
 				<AvatarFallback className="text-xs">{nameInitial}</AvatarFallback>
@@ -74,17 +63,11 @@ interface BugReportsTableProps {
 
 export function BugReportsTable({ className = '' }: BugReportsTableProps) {
 	const [sorting, setSorting] = useState<SortingState>([
-		{ id: 'createdAt', desc: true } // Default sort by newest first
+		{ id: 'createdAt', desc: true }, // Default sort by newest first
 	])
 
 	// Fetch bug reports using React Query
-	const { 
-		data: bugReports = [], 
-		isLoading, 
-		isError, 
-		error,
-		refetch 
-	} = useQuery(bugReportsQueryOptions(100)) // Load up to 100 reports
+	const { data: bugReports = [], isLoading, isError, error, refetch } = useQuery(bugReportsQueryOptions(100)) // Load up to 100 reports
 
 	// Define table columns
 	const columns = useMemo(
@@ -102,27 +85,19 @@ export function BugReportsTable({ className = '' }: BugReportsTableProps) {
 				cell: ({ getValue }) => {
 					const content = getValue()
 					const preview = content.length > 150 ? content.slice(0, 150) + '...' : content
-					return (
-						<div className="text-sm text-gray-800 whitespace-pre-wrap break-words max-w-md">
-							{preview}
-						</div>
-					)
+					return <div className="text-sm text-gray-800 whitespace-pre-wrap break-words max-w-md">{preview}</div>
 				},
 				enableSorting: false,
 			}),
 			columnHelper.accessor('createdAt', {
 				id: 'createdAt',
 				header: 'Date',
-				cell: ({ getValue }) => (
-					<span className="text-xs text-gray-500 whitespace-nowrap">
-						{formatDate(getValue())}
-					</span>
-				),
+				cell: ({ getValue }) => <span className="text-xs text-gray-500 whitespace-nowrap">{formatDate(getValue())}</span>,
 				enableSorting: true,
 				size: 150,
 			}),
 		],
-		[]
+		[],
 	)
 
 	// Create table instance
@@ -147,9 +122,7 @@ export function BugReportsTable({ className = '' }: BugReportsTableProps) {
 		return (
 			<div className={`flex flex-col items-center justify-center py-12 text-center ${className}`}>
 				<h3 className="text-lg font-semibold text-red-600 mb-2">Failed to load bug reports</h3>
-				<p className="text-gray-600 mb-4">
-					{error instanceof Error ? error.message : 'An unknown error occurred'}
-				</p>
+				<p className="text-gray-600 mb-4">{error instanceof Error ? error.message : 'An unknown error occurred'}</p>
 				<Button onClick={handleRefresh} variant="outline">
 					Try Again
 				</Button>
@@ -182,9 +155,7 @@ export function BugReportsTable({ className = '' }: BugReportsTableProps) {
 		<div className={`flex flex-col ${className}`}>
 			{/* Header with refresh button */}
 			<div className="flex items-center justify-between mb-4">
-				<h3 className="text-lg font-semibold text-gray-900">
-					Bug Reports ({bugReports.length})
-				</h3>
+				<h3 className="text-lg font-semibold text-gray-900">Bug Reports ({bugReports.length})</h3>
 				<Button onClick={handleRefresh} variant="outline" size="sm">
 					Refresh
 				</Button>
@@ -205,17 +176,10 @@ export function BugReportsTable({ className = '' }: BugReportsTableProps) {
 										>
 											{header.isPlaceholder ? null : (
 												<div
-													className={
-														header.column.getCanSort()
-															? 'cursor-pointer select-none flex items-center gap-1'
-															: ''
-													}
+													className={header.column.getCanSort() ? 'cursor-pointer select-none flex items-center gap-1' : ''}
 													onClick={header.column.getToggleSortingHandler()}
 												>
-													{flexRender(
-														header.column.columnDef.header,
-														header.getContext()
-													)}
+													{flexRender(header.column.columnDef.header, header.getContext())}
 													{header.column.getCanSort() && (
 														<span className="text-gray-400">
 															{{

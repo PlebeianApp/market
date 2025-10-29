@@ -30,9 +30,9 @@ const isStaging =
 export const fetchBugReports = async (limit: number = 20, until?: number): Promise<BugReport[]> => {
 	// Use SimplePool for direct relay communication
 	const bugReportRelay = isStaging ? 'wss://relay.staging.plebeian.market' : 'wss://bugs.plebeian.market/'
-	
+
 	console.log('🐛 Fetching bug reports from relay:', bugReportRelay)
-	
+
 	const pool = new SimplePool()
 
 	try {
@@ -44,24 +44,24 @@ export const fetchBugReports = async (limit: number = 20, until?: number): Promi
 		}
 
 		console.log('🐛 Fetching events with filter:', filter)
-		
+
 		// Fetch events with timeout
 		const fetchPromise = pool.querySync([bugReportRelay], filter)
-		const timeoutPromise = new Promise<Event[]>((_, reject) => 
-			setTimeout(() => reject(new Error('Bug report fetch timeout')), 10000)
-		)
-		
+		const timeoutPromise = new Promise<Event[]>((_, reject) => setTimeout(() => reject(new Error('Bug report fetch timeout')), 10000))
+
 		const events = await Promise.race([fetchPromise, timeoutPromise])
 		console.log('🐛 Fetched', events.length, 'bug report events from bugs relay')
-		
+
 		const bugReports = events
-			.map((event): BugReport => ({
-				id: event.id,
-				pubkey: event.pubkey,
-				content: event.content,
-				createdAt: event.created_at,
-				event,
-			}))
+			.map(
+				(event): BugReport => ({
+					id: event.id,
+					pubkey: event.pubkey,
+					content: event.content,
+					createdAt: event.created_at,
+					event,
+				}),
+			)
 			.sort((a, b) => b.createdAt - a.createdAt) // Sort by newest first
 
 		return bugReports
