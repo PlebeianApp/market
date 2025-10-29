@@ -4,6 +4,7 @@ import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { orderKeys } from './queryKeyFactory'
+import { authStore } from '@/lib/stores/auth'
 
 export type OrderWithRelatedEvents = {
 	order: NDKEvent // The original order creation event (kind 16, type 1)
@@ -189,12 +190,13 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
  */
 export const useOrders = () => {
 	const ndk = ndkActions.getNDK()
+	const { user } = authStore
 	const isConnected = !!ndk?.activeUser
 
 	return useQuery({
 		queryKey: orderKeys.all,
 		queryFn: fetchOrders,
-		enabled: isConnected,
+		enabled: !!user?.pubkey,
 	})
 }
 

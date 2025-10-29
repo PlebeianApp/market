@@ -25,6 +25,17 @@ function DashboardInnerComponent() {
 	const { data: orders, isLoading: isLoadingOrders } = useOrders()
 	const { data: conversations, isLoading: isLoadingMessages } = useConversationsList()
 
+	// Debugging logs to inspect query states
+	console.log('Dashboard Queries:', {
+		userPubkey,
+		isLoadingProducts,
+		isLoadingOrders,
+		isLoadingMessages,
+		myProducts,
+		orders,
+		conversations,
+	})
+
 	// Calculate stats
 	const activeListings =
 		myProducts?.filter((p: NDKEvent) => {
