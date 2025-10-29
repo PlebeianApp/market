@@ -1,4 +1,3 @@
-import { BugReportsTable } from '@/components/BugReportsTable'
 import { Button } from '@/components/ui/button'
 import { BLOSSOM_SERVERS, uploadFileToBlossom } from '@/lib/blossom'
 import { ndkActions } from '@/lib/stores/ndk'
@@ -8,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { finalizeEvent, getPublicKey } from 'nostr-tools'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { BugReportsList } from './BugReportsList'
 
 // Check for staging environment
 const isStaging =
@@ -17,10 +17,9 @@ const isStaging =
 interface BugReportModalProps {
 	isOpen: boolean
 	onClose: () => void
-	onReopen: () => void
 }
 
-export function BugReportModal({ isOpen, onClose, onReopen }: BugReportModalProps) {
+export function BugReportModal({ isOpen, onClose }: BugReportModalProps) {
 	const queryClient = useQueryClient()
 	const [activeTab, setActiveTab] = useState<'report' | 'viewer'>('report')
 	const [bugReport, setBugReport] = useState(
@@ -412,10 +411,6 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 				content: signedEvent.content.substring(0, 100) + '...',
 			})
 
-			// Invalidate and refetch bug reports cache to refresh the viewer
-			console.log('🐛 Invalidating and refetching query cache...')
-			await queryClient.invalidateQueries({ queryKey: bugReportKeys.all })
-			
 			// Wait a moment for the event to propagate to the relay
 			console.log('🐛 Waiting for event propagation...')
 			await new Promise(resolve => setTimeout(resolve, 2000))
@@ -439,6 +434,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			// Show success message briefly
 			setTimeout(() => {
 				setSendStatus('idle')
+				onClose()
 			}, 3000)
 		} catch (error) {
 			console.error('🐛 Failed to publish bug report:', error)
@@ -526,8 +522,6 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
 			onClick={onClose}
 			onKeyDown={handleKeyDown}
-			onWheel={(e) => e.preventDefault()}
-			onTouchMove={(e) => e.preventDefault()}
 			style={{ overflow: 'hidden' }}
 		>
 			<div className="bg-white rounded-lg shadow-xl w-[40em] h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
@@ -541,23 +535,16 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 							className="flex items-center gap-2"
 						>
 							<span className="i-warning w-4 h-4" />
-							Bug Report
+							Report a bug
 						</Button>
 						<Button
 							variant={activeTab === 'viewer' ? 'primary' : 'outline'}
 							size="sm"
-							onClick={async () => {
-								console.log('🐛 Switching to viewer tab and reloading bug reports...')
-								setActiveTab('viewer')
-								// Trigger a reload of the bug reports when switching to viewer
-								await queryClient.invalidateQueries({ queryKey: bugReportKeys.all })
-								await queryClient.refetchQueries({ queryKey: bugReportKeys.all })
-								console.log('🐛 Bug reports reloaded')
-							}}
+							onClick={() => setActiveTab('viewer')}
 							className="flex items-center gap-2"
 						>
 							<span className="i-search w-4 h-4" />
-							Report Viewer
+							View bug reports
 						</Button>
 					</div>
 					<Button
@@ -572,7 +559,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 				</div>
 
 				{/* Content */}
-				<div className="flex-1 flex flex-col p-6">
+				<div className="flex-1 flex flex-col p-6 min-h-0">
 					{activeTab === 'report' ? (
 						<>
 							<p className="text-gray-600 mb-6">Report a bug you have found</p>
@@ -612,16 +599,9 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 						</>
 					) : (
 						<>
-							<div className="mb-6">
-								<p className="text-gray-600">View bug reports from the community</p>
-								{sendStatus === 'success' && (
-									<div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-										<p className="text-green-800 text-sm font-medium">✅ Bug report sent successfully!</p>
-									</div>
-								)}
-							</div>
-							<div className="flex-1 min-h-0">
-								<BugReportsTable className="h-full" />
+							<p className="text-gray-600 mb-6">View bug reports from the community</p>
+							<div className="flex-1 overflow-y-auto">
+								<BugReportsList />
 							</div>
 						</>
 					)}
