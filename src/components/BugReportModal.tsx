@@ -1,42 +1,51 @@
-import { BugReportItem } from '@/components/BugReportItem'
 import { Button } from '@/components/ui/button'
-import { useBugReportsInfiniteScroll } from '@/hooks/useBugReportsInfiniteScroll'
 import { BLOSSOM_SERVERS, uploadFileToBlossom } from '@/lib/blossom'
 import { ndkActions } from '@/lib/stores/ndk'
 import { cn } from '@/lib/utils'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { bugReportKeys } from '@/queries/bugReports'
+import { useQueryClient } from '@tanstack/react-query'
+import { finalizeEvent, getPublicKey } from 'nostr-tools'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { BugReportsList } from './BugReportsList'
+
+// Check for staging environment
+const isStaging =
+	(typeof process !== 'undefined' && process.env?.STAGING === 'true') ||
+	(typeof import.meta !== 'undefined' && import.meta.env?.STAGING === 'true')
 
 interface BugReportModalProps {
 	isOpen: boolean
 	onClose: () => void
-	onReopen: () => void
 }
 
-export function BugReportModal({ isOpen, onClose, onReopen }: BugReportModalProps) {
+export function BugReportModal({ isOpen, onClose }: BugReportModalProps) {
+	const queryClient = useQueryClient()
 	const [activeTab, setActiveTab] = useState<'report' | 'viewer'>('report')
 	const [bugReport, setBugReport] = useState(
 		'Describe the problem you are having:\n\n\n\nUse the drag and drop or paste to add images of the problem.\n\n\n\nWhat device and operating system are you using?\n\nWhat steps did you take to reproduce the problem?\n\n\n\nWhat did you expect to happen?\n\n\n\nWhat actually happened?\n\n\n\nPlease provide any other relevant information\n\n',
 	)
 	const textareaRef = useRef<HTMLTextAreaElement>(null)
 	const [isUploading, setIsUploading] = useState(false)
+	const [isSending, setIsSending] = useState(false)
+	const [sendStatus, setSendStatus] = useState<'idle' | 'success' | 'error'>('idle')
 	const [hasAutoPopulated, setHasAutoPopulated] = useState(false)
 	const [isDragOver, setIsDragOver] = useState(false)
 	const [uploadedImages, setUploadedImages] = useState<string[]>([])
 
-	// Infinite scroll for bug reports viewer
-	const {
-		reports,
-		hasMore,
-		isLoading: isLoadingReports,
-		loadMore,
-	} = useBugReportsInfiniteScroll({
-		chunkSize: 10,
-		maxReports: 100,
-		threshold: 1000,
-		autoLoad: true,
-	})
+	// Prevent body scrolling when modal is open
+	useEffect(() => {
+		if (isOpen) {
+			document.body.style.overflow = 'hidden'
+		} else {
+			document.body.style.overflow = 'unset'
+		}
+
+		// Cleanup on unmount
+		return () => {
+			document.body.style.overflow = 'unset'
+		}
+	}, [isOpen])
 
 	// Gather system information from browser
 	const getSystemInfo = () => {
@@ -90,13 +99,12 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 
 			// Use the merged blossom upload function
 			const result = await uploadFileToBlossom(file, {
-				serverUrl: BLOSSOM_SERVERS[0].url, // Use first available server
-				onProgress: (loaded, total) => {
+				preferredServer: BLOSSOM_SERVERS[0].url, // Use first available server
+				onProgress: ({ loaded, total }) => {
 					const pct = Math.round((loaded / total) * 100)
 					console.log(`Upload progress: ${pct}%`)
 				},
 				maxRetries: 3,
-				retryDelay: 2000,
 			})
 
 			console.log('Blossom upload successful:', result)
@@ -171,6 +179,8 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 		if (!isOpen) {
 			setActiveTab('report')
 			setIsUploading(false)
+			setIsSending(false)
+			setSendStatus('idle')
 			setHasAutoPopulated(false)
 			setUploadedImages([])
 			// Reset to default template for next time
@@ -181,102 +191,265 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 	}, [isOpen])
 
 	const handleSend = async () => {
+		if (isSending) return // Prevent double submission
+
+		setIsSending(true)
+		setSendStatus('idle')
+
 		try {
-			console.log('Starting bug report send process...')
+			console.log('🐛 Starting bug report send with nostr-tools...')
 
-			// Get NDK instance
-			const ndk = await ndkActions.getNDK()
-			if (!ndk) {
-				console.error('NDK not available')
-				return
+			// Get relay URL
+			const bugReportRelay = isStaging ? 'wss://relay.staging.plebeian.market' : 'wss://bugs.plebeian.market/'
+			console.log('🐛 Using bug report relay:', bugReportRelay)
+
+			// Get the main NDK instance to get the signer
+			const mainNdk = ndkActions.getNDK()
+			if (!mainNdk || !mainNdk.signer) {
+				console.error('Main NDK not available or no signer')
+				setSendStatus('error')
+				throw new Error('Main NDK not available or no signer')
 			}
-			console.log('NDK instance obtained:', !!ndk)
 
-			// Ensure bugs.plebeian.market relay is added for bug reports
-			const relayAdded = ndkActions.addSingleRelay('wss://bugs.plebeian.market/')
-			console.log('Relay added:', relayAdded)
+			console.log('🐛 Main NDK signer type:', mainNdk.signer?.constructor?.name)
 
-			// Also add some reliable relays as fallback
-			const fallbackRelays = ['wss://relay.nostr.band', 'wss://nos.lol', 'wss://relay.damus.io']
-			fallbackRelays.forEach((relay) => {
-				ndkActions.addSingleRelay(relay)
+			// Create the event
+			const eventTemplate = {
+				kind: 1,
+				created_at: Math.floor(Date.now() / 1000),
+				tags: [['t', 'plebian2beta']],
+				content: bugReport,
+			}
+
+			console.log('🐛 Event template created:', {
+				kind: eventTemplate.kind,
+				contentLength: eventTemplate.content.length,
+				tags: eventTemplate.tags,
 			})
-			console.log('Fallback relays added')
 
-			// Log current relay configuration
-			const currentRelays = Array.from(ndk.pool.relays.keys())
-			console.log('Current relays configured:', currentRelays)
-
-			// Check if we have a signer
-			if (!ndk.signer) {
-				console.error('No signer available - user not authenticated')
-				return
-			}
-			console.log('Signer available:', !!ndk.signer)
-
-			// Ensure NDK is connected
+			// Sign the event using nostr-tools directly
+			console.log('🐛 Signing event with nostr-tools...')
+			let signedEvent
 			try {
-				console.log('Ensuring NDK connection...')
-				await ndk.connect()
-				console.log('NDK connection ensured')
-			} catch (connectError) {
-				console.warn('NDK connection warning:', connectError)
+				// Get user info from NDK signer
+				const user = await mainNdk.signer.user()
+				const pubkey = user.pubkey
+
+				console.log('🐛 Got user pubkey from signer:', pubkey)
+
+				// Create event with pubkey
+				const eventWithPubkey = {
+					...eventTemplate,
+					pubkey: pubkey,
+				}
+
+				console.log('🐛 Event template with pubkey:', {
+					kind: eventWithPubkey.kind,
+					contentLength: eventWithPubkey.content.length,
+					tags: eventWithPubkey.tags,
+					pubkey: eventWithPubkey.pubkey,
+				})
+
+				// Check if this is a private key signer (we can sign directly)
+				if (mainNdk.signer.constructor.name === 'NDKPrivateKeySigner') {
+					console.log('🐛 Using NDKPrivateKeySigner - signing with nostr-tools...')
+					// Get the private key from the signer
+					const privateKey = (mainNdk.signer as any).privateKey
+					if (privateKey) {
+						signedEvent = finalizeEvent(eventWithPubkey, privateKey)
+						console.log('🐛 Event signed with private key signer')
+					} else {
+						throw new Error('Private key not available from NDKPrivateKeySigner')
+					}
+				} else {
+					console.log('🐛 Using extension signer - falling back to NDK signing...')
+					// For extension signers, we need to use NDK's signing method
+					const ndkEvent = new (await import('@nostr-dev-kit/ndk')).NDKEvent(mainNdk, eventWithPubkey)
+					await ndkEvent.sign()
+
+					signedEvent = {
+						...eventWithPubkey,
+						id: ndkEvent.id!,
+						pubkey: ndkEvent.pubkey!,
+						sig: ndkEvent.sig!,
+					}
+					console.log('🐛 Event signed with extension signer')
+				}
+
+				console.log('🐛 Event signed successfully:', {
+					id: signedEvent.id,
+					pubkey: signedEvent.pubkey,
+					sigLength: signedEvent.sig?.length,
+				})
+			} catch (signError) {
+				console.error('🐛 Failed to sign event:', signError)
+				throw new Error(`Failed to sign event: ${signError instanceof Error ? signError.message : String(signError)}`)
 			}
 
-			// Create kind 1 event (text note)
-			const event = new NDKEvent(ndk)
-			event.kind = 1
-			event.content = bugReport
+			// Publish using direct WebSocket connection (more reliable in browser)
+			console.log('🐛 Publishing event with direct WebSocket...')
+			let publishSuccess = false
+			let lastError: any = null
+			const maxRetries = 3
 
-			// Add plebian2beta tag
-			event.tags = [['t', 'plebian2beta']]
+			for (let attempt = 1; attempt <= maxRetries; attempt++) {
+				try {
+					console.log(`🐛 Publish attempt ${attempt}/${maxRetries} to ${bugReportRelay}...`)
 
-			console.log('Event created:', {
-				kind: event.kind,
-				contentLength: event.content.length,
-				tags: event.tags,
-			})
+					await new Promise<void>((resolve, reject) => {
+						const ws = new WebSocket(bugReportRelay)
+						let isResolved = false
 
-			// Sign and publish the event
-			console.log('Signing event...')
-			await event.sign()
-			console.log('Event signed, ID:', event.id)
+						const cleanup = () => {
+							if (ws.readyState === WebSocket.OPEN) {
+								ws.close()
+							}
+						}
 
-			console.log('Publishing event...')
+						const timeout = setTimeout(() => {
+							if (!isResolved) {
+								isResolved = true
+								cleanup()
+								reject(new Error('WebSocket connection timeout after 10 seconds'))
+							}
+						}, 10000)
 
-			// Add timeout to publish operation
-			const publishPromise = event.publish()
-			const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Publish timeout after 10 seconds')), 10000))
+						ws.onopen = () => {
+							console.log(`🐛 WebSocket connected to ${bugReportRelay}`)
 
-			await Promise.race([publishPromise, timeoutPromise])
-			console.log('Event published successfully!')
+							// Send the EVENT message
+							const eventMessage = JSON.stringify(['EVENT', signedEvent])
+							console.log(`🐛 Sending EVENT message:`, eventMessage.substring(0, 200) + '...')
+							ws.send(eventMessage)
+						}
+
+						ws.onmessage = (event) => {
+							console.log(`🐛 Received message:`, event.data)
+
+							try {
+								const message = JSON.parse(event.data)
+
+								// Check for OK response
+								if (Array.isArray(message) && message[0] === 'OK') {
+									const [, eventId, success, reason] = message
+
+									if (success) {
+										console.log(`🐛 Event published successfully! ID: ${eventId}`)
+										if (!isResolved) {
+											isResolved = true
+											clearTimeout(timeout)
+											cleanup()
+											resolve()
+										}
+									} else {
+										console.error(`🐛 Event rejected by relay: ${reason}`)
+										if (!isResolved) {
+											isResolved = true
+											clearTimeout(timeout)
+											cleanup()
+											reject(new Error(`Event rejected: ${reason}`))
+										}
+									}
+								}
+								// Also handle NOTICE messages
+								else if (Array.isArray(message) && message[0] === 'NOTICE') {
+									console.log(`🐛 Relay notice: ${message[1]}`)
+								}
+							} catch (parseError) {
+								console.error('🐛 Failed to parse relay message:', parseError)
+							}
+						}
+
+						ws.onerror = (error) => {
+							console.error(`🐛 WebSocket error:`, error)
+							if (!isResolved) {
+								isResolved = true
+								clearTimeout(timeout)
+								cleanup()
+								reject(new Error('WebSocket connection error'))
+							}
+						}
+
+						ws.onclose = (event) => {
+							console.log(`🐛 WebSocket closed: code=${event.code}, reason=${event.reason}`)
+							if (!isResolved) {
+								isResolved = true
+								clearTimeout(timeout)
+								reject(new Error(`WebSocket closed unexpectedly: ${event.code} ${event.reason}`))
+							}
+						}
+					})
+
+					console.log(`🐛 Attempt ${attempt}: Event published successfully!`)
+					publishSuccess = true
+					break // Success, exit retry loop
+				} catch (publishError) {
+					lastError = publishError
+					console.error(`🐛 Attempt ${attempt}: Publish failed:`, publishError)
+
+					if (attempt < maxRetries) {
+						console.log(`🐛 Retrying in 2 seconds... (${maxRetries - attempt} attempts remaining)`)
+						await new Promise((resolve) => setTimeout(resolve, 2000))
+					}
+				}
+			}
+
+			if (!publishSuccess) {
+				console.error('🐛 All publish attempts failed')
+				throw new Error(
+					`Failed to publish event after ${maxRetries} attempts: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
+				)
+			}
 
 			// Log the event details for debugging
-			console.log('Published event details:', {
-				id: event.id,
-				pubkey: event.pubkey,
-				kind: event.kind,
-				created_at: event.created_at,
-				tags: event.tags,
-				content: event.content.substring(0, 100) + '...',
+			console.log('🐛 Published event details:', {
+				id: signedEvent.id,
+				pubkey: signedEvent.pubkey,
+				kind: signedEvent.kind,
+				created_at: signedEvent.created_at,
+				tags: signedEvent.tags,
+				content: signedEvent.content.substring(0, 100) + '...',
 			})
 
-			// Clear the input and close modal after sending
+			// Wait a moment for the event to propagate to the relay
+			console.log('🐛 Waiting for event propagation...')
+			await new Promise((resolve) => setTimeout(resolve, 2000))
+
+			// Force refetch the bug reports to ensure we get the latest data
+			console.log('🐛 Force refetching bug reports...')
+			await queryClient.refetchQueries({ queryKey: bugReportKeys.all })
+
+			setSendStatus('success')
+			console.log('🐛 Bug report send completed successfully!')
+
+			// Switch to viewer tab to show the new report
+			console.log('🐛 Switching to report viewer...')
+			setActiveTab('viewer')
+
+			// Clear the input for next time
 			setBugReport(
 				'Describe the problem you are having:\n\n\n\nUse the drag and drop or paste to add images of the problem.\n\n\n\nWhat device and operating system are you using?\n\nWhat steps did you take to reproduce the problem?\n\n\n\nWhat did you expect to happen?\n\n\n\nWhat actually happened?\n\n\n\nPlease provide any other relevant information\n\n',
 			)
-			onClose()
+
+			// Show success message briefly
+			setTimeout(() => {
+				setSendStatus('idle')
+				onClose()
+			}, 3000)
 		} catch (error) {
-			console.error('Failed to publish bug report:', error)
+			console.error('🐛 Failed to publish bug report:', error)
+			setSendStatus('error')
 			if (error instanceof Error) {
-				console.error('Error details:', {
+				console.error('🐛 Error details:', {
 					name: error.name,
 					message: error.message,
 					stack: error.stack,
 				})
 			} else {
-				console.error('Unknown error type:', error)
+				console.error('🐛 Unknown error type:', error)
 			}
+		} finally {
+			setIsSending(false)
 		}
 	}
 
@@ -349,6 +522,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
 			onClick={onClose}
 			onKeyDown={handleKeyDown}
+			style={{ overflow: 'hidden' }}
 		>
 			<div className="bg-white rounded-lg shadow-xl w-[40em] h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
 				{/* Header */}
@@ -361,7 +535,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 							className="flex items-center gap-2"
 						>
 							<span className="i-warning w-4 h-4" />
-							Bug Report
+							Report a bug
 						</Button>
 						<Button
 							variant={activeTab === 'viewer' ? 'primary' : 'outline'}
@@ -370,7 +544,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 							className="flex items-center gap-2"
 						>
 							<span className="i-search w-4 h-4" />
-							Report Viewer
+							View bug reports
 						</Button>
 					</div>
 					<Button
@@ -385,7 +559,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 				</div>
 
 				{/* Content */}
-				<div className="flex-1 flex flex-col p-6">
+				<div className="flex-1 flex flex-col p-6 min-h-0">
 					{activeTab === 'report' ? (
 						<>
 							<p className="text-gray-600 mb-6">Report a bug you have found</p>
@@ -400,6 +574,8 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 									onDragOver={handleDragOver}
 									onDragLeave={handleDragLeave}
 									onDrop={handleDrop}
+									onWheel={(e) => e.stopPropagation()}
+									onTouchMove={(e) => e.stopPropagation()}
 									placeholder="Describe the bug you encountered..."
 									className={cn(
 										'flex-1 w-full p-4 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent',
@@ -425,37 +601,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 						<>
 							<p className="text-gray-600 mb-6">View bug reports from the community</p>
 							<div className="flex-1 overflow-y-auto">
-								{isLoadingReports && reports.length === 0 ? (
-									<div className="flex flex-col items-center justify-center py-12">
-										<Loader2 className="w-8 h-8 animate-spin mb-4" />
-										<p className="text-gray-600">Loading bug reports...</p>
-									</div>
-								) : reports.length === 0 ? (
-									<div className="flex flex-col items-center justify-center py-12 text-center">
-										<h3 className="text-lg font-semibold text-gray-900 mb-2">No bug reports found</h3>
-										<p className="text-gray-600">There are no bug reports available at the moment.</p>
-									</div>
-								) : (
-									<div className="space-y-4">
-										{reports.map((report) => (
-											<BugReportItem key={report.id} report={report} />
-										))}
-										{hasMore && (
-											<div className="flex justify-center py-4">
-												<Button onClick={loadMore} variant="outline" disabled={isLoadingReports}>
-													{isLoadingReports ? (
-														<>
-															<Loader2 className="w-4 h-4 animate-spin mr-2" />
-															Loading...
-														</>
-													) : (
-														'Load More Reports'
-													)}
-												</Button>
-											</div>
-										)}
-									</div>
-								)}
+								<BugReportsList />
 							</div>
 						</>
 					)}
@@ -464,13 +610,39 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 				{/* Footer */}
 				{activeTab === 'report' && (
 					<div className="flex justify-end items-center p-6 border-t border-gray-200">
+						{sendStatus === 'error' && (
+							<div className="text-red-600 text-sm mr-4">Failed to send bug report. Check console for details and try again.</div>
+						)}
+						{sendStatus === 'success' && <div className="text-green-600 text-sm mr-4">Bug report sent successfully!</div>}
 						<Button
-							onClick={handleSend}
-							disabled={!bugReport.trim() || isUploading}
-							className="flex items-center gap-2 bg-secondary hover:bg-secondary/90 text-white"
+							onClick={() => {
+								if (sendStatus === 'error') {
+									setSendStatus('idle')
+								}
+								handleSend()
+							}}
+							disabled={!bugReport.trim() || isUploading || isSending || sendStatus === 'success'}
+							className={cn(
+								'flex items-center gap-2 text-white',
+								sendStatus === 'success' ? 'bg-green-600 hover:bg-green-600' : 'bg-secondary hover:bg-secondary/90',
+							)}
 						>
-							<span className="i-send-message w-4 h-4" />
-							Send
+							{isSending ? (
+								<>
+									<Loader2 className="w-4 h-4 animate-spin" />
+									Sending...
+								</>
+							) : sendStatus === 'success' ? (
+								<>
+									<span className="i-tick w-4 h-4" />
+									Sent
+								</>
+							) : (
+								<>
+									<span className="i-send-message w-4 h-4" />
+									Send
+								</>
+							)}
 						</Button>
 					</div>
 				)}

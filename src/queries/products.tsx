@@ -736,7 +736,9 @@ export const useProductByATag = (pubkey: string, dTag: string) => {
 
 // --- PRODUCT SEARCH (NIP-50) ---
 
-const PRODUCT_SEARCH_RELAYS = ['wss://relay.nostr.band', 'wss://search.nos.today', 'wss://nos.lol']
+import { defaultRelaysUrls } from '@/lib/constants'
+
+const PRODUCT_SEARCH_RELAYS = defaultRelaysUrls
 
 /**
  * Search for product listing events (kind 30402) by free-text query.

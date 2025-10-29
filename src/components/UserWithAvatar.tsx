@@ -38,7 +38,7 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 	const content = (
 		<>
 			<Avatar className={avatarSizeClass}>
-				<AvatarImage src={profileData?.profile?.picture} />
+				<AvatarImage src={profileData?.profile?.image || profileData?.profile?.picture} />
 				<AvatarFallback>{nameInitial}</AvatarFallback>
 			</Avatar>
 			<div className="flex flex-row items-center gap-1">

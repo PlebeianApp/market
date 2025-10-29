@@ -1,6 +1,7 @@
 import { NDKNip07Signer, NDKNip46Signer, NDKPrivateKeySigner, NDKUser, NDKEvent } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { ndkActions } from './ndk'
+import { removeProfileFromLocalStorage } from '@/lib/utils/profileStorage'
 import { cartActions } from './cart'
 import { fetchProductsByPubkey } from '@/queries/products'
 
@@ -8,6 +9,7 @@ export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
 export const NOSTR_LOCAL_SIGNER_KEY = 'nostr_local_signer_key'
 export const NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY = 'nostr_local_encrypted_signer_key'
 export const NOSTR_AUTO_LOGIN = 'nostr_auto_login'
+export const NOSTR_USER_PUBKEY = 'nostr_user_pubkey'
 
 interface AuthState {
 	user: NDKUser | null
@@ -16,16 +18,65 @@ interface AuthState {
 	isAuthenticating: boolean
 }
 
-const initialState: AuthState = {
-	user: null,
-	isAuthenticated: false,
-	needsDecryptionPassword: false,
-	isAuthenticating: false,
+// Function to restore auth state from localStorage immediately
+function loadInitialAuthState(): AuthState {
+	const baseState: AuthState = {
+		user: null,
+		isAuthenticated: false,
+		needsDecryptionPassword: false,
+		isAuthenticating: false,
+	}
+
+	if (typeof localStorage === 'undefined') return baseState
+
+	try {
+		const autoLogin = localStorage.getItem(NOSTR_AUTO_LOGIN)
+
+		// Check if we need decryption password
+		const encryptedPrivateKey = localStorage.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
+		if (autoLogin === 'true' && encryptedPrivateKey) {
+			return {
+				...baseState,
+				needsDecryptionPassword: true,
+			}
+		}
+	} catch (error) {
+		console.error('Error loading initial auth state:', error)
+	}
+
+	return baseState
 }
+
+const initialState: AuthState = loadInitialAuthState()
 
 export const authStore = new Store<AuthState>(initialState)
 
 export const authActions = {
+	// Restore authenticated state immediately after NDK is initialized
+	restoreAuthenticatedState: () => {
+		if (typeof localStorage === 'undefined') return
+
+		try {
+			const autoLogin = localStorage.getItem(NOSTR_AUTO_LOGIN)
+			const userPubkey = localStorage.getItem(NOSTR_USER_PUBKEY)
+
+			// If we have auto-login enabled and a stored pubkey, restore the authenticated state
+			if (autoLogin === 'true' && userPubkey) {
+				const ndk = ndkActions.getNDK()
+				if (ndk) {
+					const user = ndk.getUser({ pubkey: userPubkey })
+					authStore.setState((state) => ({
+						...state,
+						user,
+						isAuthenticated: true,
+					}))
+				}
+			}
+		} catch (error) {
+			console.error('Error restoring authenticated state:', error)
+		}
+	},
+
 	getAuthFromLocalStorageAndLogin: async () => {
 		try {
 			const autoLogin = localStorage.getItem(NOSTR_AUTO_LOGIN)
@@ -83,11 +134,18 @@ export const authActions = {
 
 			const user = await signer.user()
 
+			// Store user pubkey and enable auto-login for persistence
+			localStorage.setItem(NOSTR_USER_PUBKEY, user.pubkey)
+			localStorage.setItem(NOSTR_AUTO_LOGIN, 'true')
+
 			authStore.setState((state) => ({
 				...state,
 				user,
 				isAuthenticated: true,
 			}))
+
+			// Enable auto-login for persistence
+			localStorage.setItem(NOSTR_AUTO_LOGIN, 'true')
 
 			return user
 		} catch (error) {
@@ -113,11 +171,18 @@ export const authActions = {
 
 			const user = await signer.user()
 
+			// Store user pubkey and enable auto-login for persistence
+			localStorage.setItem(NOSTR_USER_PUBKEY, user.pubkey)
+			localStorage.setItem(NOSTR_AUTO_LOGIN, 'true')
+
 			authStore.setState((state) => ({
 				...state,
 				user,
 				isAuthenticated: true,
 			}))
+
+			// Enable auto-login for persistence
+			localStorage.setItem(NOSTR_AUTO_LOGIN, 'true')
 
 			return user
 		} catch (error) {
@@ -145,11 +210,18 @@ export const authActions = {
 			ndkActions.setSigner(signer)
 			const user = await signer.user()
 
+			// Store user pubkey and enable auto-login for persistence
+			localStorage.setItem(NOSTR_USER_PUBKEY, user.pubkey)
+			localStorage.setItem(NOSTR_AUTO_LOGIN, 'true')
+
 			authStore.setState((state) => ({
 				...state,
 				user,
 				isAuthenticated: true,
 			}))
+
+			// Enable auto-login for persistence
+			localStorage.setItem(NOSTR_AUTO_LOGIN, 'true')
 
 			return user
 		} catch (error) {
@@ -164,16 +236,29 @@ export const authActions = {
 	},
 
 	logout: () => {
+		const state = authStore.state
 		const ndk = ndkActions.getNDK()
 		if (!ndk) return
+
+		// Clean up profile data for the current user
+		if (state.user?.pubkey) {
+			removeProfileFromLocalStorage(state.user.pubkey)
+		}
+
 		ndkActions.removeSigner()
 		localStorage.removeItem(NOSTR_LOCAL_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_CONNECT_KEY)
 		localStorage.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_AUTO_LOGIN)
+		localStorage.removeItem(NOSTR_USER_PUBKEY)
 		// Clear cart when user logs out
 		cartActions.clear()
-		authStore.setState(() => initialState)
+		authStore.setState(() => ({
+			user: null,
+			isAuthenticated: false,
+			needsDecryptionPassword: false,
+			isAuthenticating: false,
+		}))
 	},
 
 	userHasProducts: async (): Promise<boolean> => {

@@ -150,6 +150,7 @@ const result = await build({
 	sourcemap: 'linked',
 	define: {
 		'process.env.NODE_ENV': JSON.stringify('production'),
+		'process.env.STAGING': JSON.stringify(process.env.STAGING || 'true'),
 		global: 'globalThis',
 		process: 'globalThis.process',
 	},

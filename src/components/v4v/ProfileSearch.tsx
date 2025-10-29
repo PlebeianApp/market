@@ -10,8 +10,9 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { profileKeys } from '@/queries/queryKeyFactory'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { defaultRelaysUrls } from '@/lib/constants'
 
-const SEARCH_RELAYS = ['wss://relay.nostr.band', 'wss://search.nos.today', 'wss://nos.lol']
+const SEARCH_RELAYS = defaultRelaysUrls
 const DEBOUNCE_MS = 500
 
 interface ProfileSearchProps {
