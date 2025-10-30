@@ -541,8 +541,15 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 			})
 		})
 
+		// Let NDK auto-start the subscription when handlers are set up
+		// Do not call .start() explicitly to avoid initialization race conditions
+
 		return () => {
-			sub.stop()
+			try {
+				sub.stop()
+			} catch (error) {
+				console.warn('OrderDetailComponent: Error stopping subscription:', error)
+			}
 		}
 	}, [orderId])
 

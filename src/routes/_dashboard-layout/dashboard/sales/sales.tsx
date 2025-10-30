@@ -2,11 +2,14 @@ import { OrderDataTable } from '@/components/orders/OrderDataTable'
 import { salesColumns } from '@/components/orders/orderColumns'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { authStore } from '@/lib/stores/auth'
-import { getOrderStatus, useOrdersBySeller } from '@/queries/orders'
+import { ndkActions, ndkStore } from '@/lib/stores/ndk'
+import { fetchOrdersByBuyer, fetchOrdersBySeller, getOrderStatus, useOrdersBySeller } from '@/queries/orders'
+import { orderKeys } from '@/queries/queryKeyFactory'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/sales')({
 	component: SalesComponent,
@@ -16,8 +19,46 @@ function SalesComponent() {
 	useDashboardTitle('Sales')
 	const { user } = useStore(authStore)
 	const userPubkey = user?.pubkey || ''
+	const queryClient = useQueryClient()
 	const [statusFilter, setStatusFilter] = useState<string>('any')
-	const { data: sales, isLoading } = useOrdersBySeller(userPubkey)
+	const { data: sales, isLoading, refetch } = useOrdersBySeller(userPubkey)
+
+	// Prefetch purchases query to populate cache (same data as dashboard)
+	useEffect(() => {
+		if (!userPubkey) return
+
+		queryClient.prefetchQuery({
+			queryKey: orderKeys.byBuyer(userPubkey),
+			queryFn: () => fetchOrdersByBuyer(userPubkey),
+			staleTime: 30000,
+		})
+	}, [userPubkey, queryClient])
+
+	// Explicitly refetch on mount to ensure fresh data on refresh
+	useEffect(() => {
+		if (!userPubkey) return
+
+		// Wait for NDK to be ready, then refetch
+		const refetchOrders = async () => {
+			// Ensure NDK is connected first
+			const ndk = ndkActions.getNDK()
+			if (ndk) {
+				const ndkState = ndkStore.state
+				if (!ndkState.isConnected) {
+					await ndkActions.connect()
+				}
+			}
+
+			// Use queryClient to refetch which works even if query is temporarily disabled
+			await queryClient.refetchQueries({ queryKey: orderKeys.bySeller(userPubkey) })
+		}
+
+		const timer = setTimeout(() => {
+			refetchOrders()
+		}, 100)
+
+		return () => clearTimeout(timer)
+	}, [userPubkey, queryClient])
 
 	// Filter orders by status if needed
 	const filteredSales = useMemo(() => {

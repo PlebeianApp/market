@@ -3,6 +3,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
+import { getOrderId } from '@/queries/orders'
 import type { ColumnDef, ColumnFiltersState, FilterFn, SortingState } from '@tanstack/react-table'
 import { flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import { Link, useNavigate } from '@tanstack/react-router'
@@ -122,7 +123,7 @@ export function OrderDataTable<TData>({
 				) : table.getRowModel().rows?.length ? (
 					<div className="space-y-4 pt-4 px-4 xl:px-6">
 						{table.getRowModel().rows.map((row) => {
-							const orderId = (row.original as any).order.id || 'unknown'
+							const orderId = getOrderId((row.original as any).order) || 'unknown'
 							return (
 								<Card
 									key={row.id}

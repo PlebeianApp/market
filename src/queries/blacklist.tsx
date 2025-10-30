@@ -95,9 +95,18 @@ export const useBlacklistSettings = (appPubkey?: string) => {
 			queryClient.invalidateQueries({ queryKey: configKeys.blacklist(appPubkey) })
 		})
 
+		// Let NDK auto-start the subscription when handlers are set up
+		// Do not call .start() explicitly to avoid initialization race conditions
+
 		// Clean up subscription when unmounting
 		return () => {
-			subscription.stop()
+			try {
+				if (subscription.stop) {
+					subscription.stop()
+				}
+			} catch (error) {
+				console.warn('useBlacklistSettings: Error stopping subscription:', error)
+			}
 		}
 	}, [appPubkey, ndk, queryClient])
 
