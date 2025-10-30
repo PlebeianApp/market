@@ -1,10 +1,11 @@
 import { OrderDataTable } from '@/components/orders/OrderDataTable'
 import { salesColumns } from '@/components/orders/orderColumns'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ndkActions } from '@/lib/stores/ndk'
+import { authStore } from '@/lib/stores/auth'
 import { getOrderStatus, useOrdersBySeller } from '@/queries/orders'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
+import { useStore } from '@tanstack/react-store'
 import { useMemo, useState } from 'react'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/sales')({
@@ -13,10 +14,10 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/sales')
 
 function SalesComponent() {
 	useDashboardTitle('Sales')
-	const ndk = ndkActions.getNDK()
-	const currentUser = ndk?.activeUser
+	const { user } = useStore(authStore)
+	const userPubkey = user?.pubkey || ''
 	const [statusFilter, setStatusFilter] = useState<string>('any')
-	const { data: sales, isLoading } = useOrdersBySeller(currentUser?.pubkey || '')
+	const { data: sales, isLoading } = useOrdersBySeller(userPubkey)
 
 	// Filter orders by status if needed
 	const filteredSales = useMemo(() => {

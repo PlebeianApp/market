@@ -207,6 +207,11 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string): Promise<OrderWith
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
+	if (!buyerPubkey) {
+		console.warn('fetchOrdersByBuyer: buyerPubkey is empty, returning empty array')
+		return []
+	}
+
 	// Orders where the specified user is the author (buyer sending order to merchant)
 	const orderCreationFilter: NDKFilter = {
 		kinds: [ORDER_PROCESS_KIND],
@@ -345,6 +350,9 @@ export const useOrdersByBuyer = (buyerPubkey: string) => {
 		queryKey: orderKeys.byBuyer(buyerPubkey),
 		queryFn: () => fetchOrdersByBuyer(buyerPubkey),
 		enabled: !!buyerPubkey,
+		refetchOnMount: true,
+		refetchOnWindowFocus: true,
+		refetchOnReconnect: true,
 	})
 }
 
@@ -355,6 +363,11 @@ export const fetchOrdersBySeller = async (sellerPubkey: string): Promise<OrderWi
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
+	if (!sellerPubkey) {
+		console.warn('fetchOrdersBySeller: sellerPubkey is empty, returning empty array')
+		return []
+	}
+
 	// Orders where the specified user is the recipient (merchant receiving orders)
 	const orderReceivedFilter: NDKFilter = {
 		kinds: [ORDER_PROCESS_KIND],
@@ -363,7 +376,14 @@ export const fetchOrdersBySeller = async (sellerPubkey: string): Promise<OrderWi
 		limit: 100,
 	}
 
+	console.log('🔍 fetchOrdersBySeller: Querying for orders with filter:', {
+		sellerPubkey: sellerPubkey.substring(0, 8) + '...',
+		filter: orderReceivedFilter,
+	})
+
 	const orders = await ndk.fetchEvents(orderReceivedFilter)
+	console.log(`🔍 fetchOrdersBySeller: Found ${orders.size} order creation events`)
+
 	if (orders.size === 0) return []
 
 	// Get all order IDs
@@ -493,6 +513,9 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 		queryKey: orderKeys.bySeller(sellerPubkey),
 		queryFn: () => fetchOrdersBySeller(sellerPubkey),
 		enabled: !!sellerPubkey,
+		refetchOnMount: true,
+		refetchOnWindowFocus: true,
+		refetchOnReconnect: true,
 	})
 }
 
