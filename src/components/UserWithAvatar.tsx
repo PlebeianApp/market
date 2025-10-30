@@ -58,6 +58,8 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 			params={{ profileId: pubkey }}
 			className={cn('flex items-center gap-2', className)}
 			onClick={(e) => e.stopPropagation()}
+			target="_blank"
+			rel="noopener noreferrer"
 		>
 			{content}
 		</Link>
