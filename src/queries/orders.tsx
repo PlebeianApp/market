@@ -1,7 +1,8 @@
 import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, ORDER_STATUS, PAYMENT_RECEIPT_KIND } from '@/lib/schemas/order'
-import { ndkActions } from '@/lib/stores/ndk'
+import { ndkActions, ndkStore } from '@/lib/stores/ndk'
 import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useStore } from '@tanstack/react-store'
 import { useEffect } from 'react'
 import { orderKeys } from './queryKeyFactory'
 import { authStore } from '@/lib/stores/auth'
@@ -220,7 +221,43 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string): Promise<OrderWith
 		limit: 100,
 	}
 
-	const orders = await ndk.fetchEvents(orderCreationFilter)
+	let orders: Set<NDKEvent>
+	try {
+		// Use subscription with closeOnEose to ensure we get EOSE signal
+		const ordersSet = new Set<NDKEvent>()
+		const subscription = ndk.subscribe(orderCreationFilter, {
+			closeOnEose: true,
+		})
+
+		subscription.on('event', (event: NDKEvent) => {
+			ordersSet.add(event)
+		})
+
+		// Wait for EOSE or timeout
+		await new Promise<void>((resolve, reject) => {
+			const timeout = setTimeout(() => {
+				subscription.stop()
+				reject(new Error('fetchOrdersByBuyer timeout after 10s'))
+			}, 10000)
+
+			subscription.on('eose', () => {
+				clearTimeout(timeout)
+				subscription.stop()
+				resolve()
+			})
+
+			subscription.on('close', () => {
+				clearTimeout(timeout)
+				resolve()
+			})
+		})
+
+		orders = ordersSet
+	} catch (error) {
+		console.error('🔍 fetchOrdersByBuyer: Error fetching orders:', error)
+		throw error
+	}
+
 	if (orders.size === 0) return []
 
 	// Get all order IDs
@@ -379,12 +416,63 @@ export const fetchOrdersBySeller = async (sellerPubkey: string): Promise<OrderWi
 	console.log('🔍 fetchOrdersBySeller: Querying for orders with filter:', {
 		sellerPubkey: sellerPubkey.substring(0, 8) + '...',
 		filter: orderReceivedFilter,
+		relayUrls: ndk.explicitRelayUrls || ndk.pool?.relays ? Array.from(ndk.pool.relays.keys()) : [],
 	})
 
-	const orders = await ndk.fetchEvents(orderReceivedFilter)
-	console.log(`🔍 fetchOrdersBySeller: Found ${orders.size} order creation events`)
+	let orders: Set<NDKEvent>
+	try {
+		// Use subscription with closeOnEose to ensure we get EOSE signal
+		const ordersSet = new Set<NDKEvent>()
+		const subscription = ndk.subscribe(orderReceivedFilter, {
+			closeOnEose: true,
+		})
 
-	if (orders.size === 0) return []
+		subscription.on('event', (event: NDKEvent) => {
+			ordersSet.add(event)
+		})
+
+		// Wait for EOSE or timeout - use race to ensure we don't wait too long
+		await Promise.race([
+			new Promise<void>((resolve) => {
+				const timeout = setTimeout(() => {
+					subscription.stop()
+					resolve()
+				}, 2500) // 2.5 second timeout - fast enough for good UX
+
+				subscription.on('eose', () => {
+					clearTimeout(timeout)
+					subscription.stop()
+					resolve()
+				})
+
+				subscription.on('close', () => {
+					clearTimeout(timeout)
+					resolve()
+				})
+
+				// Start the subscription explicitly
+				subscription.start()
+			}),
+			// Fallback timeout to ensure we never wait more than 3s total
+			new Promise<void>((resolve) => {
+				setTimeout(() => {
+					subscription.stop()
+					resolve()
+				}, 3000)
+			})
+		])
+
+		orders = ordersSet
+		console.log(`🔍 fetchOrdersBySeller: Found ${orders.size} order creation events`)
+	} catch (error) {
+		console.error('🔍 fetchOrdersBySeller: Error fetching orders:', error)
+		orders = new Set()
+	}
+
+	if (orders.size === 0) {
+		console.log('🔍 fetchOrdersBySeller: No orders found, returning empty array')
+		return []
+	}
 
 	// Get all order IDs
 	const orderIds = Array.from(orders)
@@ -394,7 +482,12 @@ export const fetchOrdersBySeller = async (sellerPubkey: string): Promise<OrderWi
 		})
 		.filter(Boolean) as string[]
 
-	if (orderIds.length === 0) return []
+	console.log(`🔍 fetchOrdersBySeller: Extracted ${orderIds.length} order IDs:`, orderIds.map(id => id.substring(0, 8) + '...'))
+
+	if (orderIds.length === 0) {
+		console.log('🔍 fetchOrdersBySeller: No order IDs found in events, returning empty array')
+		return []
+	}
 
 	// Fetch all related events for these orders
 	const relatedEventsFilter: NDKFilter = {
@@ -403,7 +496,58 @@ export const fetchOrdersBySeller = async (sellerPubkey: string): Promise<OrderWi
 		limit: 500,
 	}
 
-	const relatedEvents = await ndk.fetchEvents(relatedEventsFilter)
+	console.log(`🔍 fetchOrdersBySeller: Fetching related events for ${orderIds.length} orders`)
+
+	// Fetch related events with a very short timeout
+	// Related events (status updates, payment receipts) are nice to have but not critical for initial display
+	let relatedEvents: Set<NDKEvent> = new Set()
+	try {
+		const relatedEventsSet = new Set<NDKEvent>()
+		const subscription = ndk.subscribe(relatedEventsFilter, {
+			closeOnEose: true,
+		})
+
+		subscription.on('event', (event: NDKEvent) => {
+			relatedEventsSet.add(event)
+		})
+
+		// Wait for EOSE or timeout - very short timeout since related events aren't critical for initial display
+		await Promise.race([
+			new Promise<void>((resolve) => {
+				const timeout = setTimeout(() => {
+					subscription.stop()
+					resolve()
+				}, 800) // 800ms timeout - fast enough for good UX
+
+				subscription.on('eose', () => {
+					clearTimeout(timeout)
+					subscription.stop()
+					resolve()
+				})
+
+				subscription.on('close', () => {
+					clearTimeout(timeout)
+					resolve()
+				})
+
+				// Start the subscription
+				subscription.start()
+			}),
+			// Fallback timeout to ensure we never wait more than 1.2s total
+			new Promise<void>((resolve) => {
+				setTimeout(() => {
+					subscription.stop()
+					resolve()
+				}, 1200)
+			})
+		])
+
+		relatedEvents = relatedEventsSet
+		console.log(`🔍 fetchOrdersBySeller: Found ${relatedEvents.size} related events`)
+	} catch (error) {
+		console.error('🔍 fetchOrdersBySeller: Error fetching related events:', error)
+		relatedEvents = new Set()
+	}
 
 	// Group and process events similar to fetchOrders
 	const eventsByOrderId: Record<
@@ -460,7 +604,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string): Promise<OrderWi
 	}
 
 	// Create the combined order objects
-	return Array.from(orders).map((order) => {
+	const result = Array.from(orders).map((order) => {
 		const orderTag = order.tags.find((tag) => tag[0] === 'order')
 		if (!orderTag?.[1]) {
 			return {
@@ -503,19 +647,39 @@ export const fetchOrdersBySeller = async (sellerPubkey: string): Promise<OrderWi
 			latestMessage: related.generalMessages[0],
 		}
 	})
+
+	console.log(`🔍 fetchOrdersBySeller: Returning ${result.length} orders`)
+	return result
 }
 
 /**
  * Hook to fetch orders where the specified user is the seller
  */
 export const useOrdersBySeller = (sellerPubkey: string) => {
+	const ndk = ndkActions.getNDK()
+	const ndkState = useStore(ndkStore)
+	const isConnected = ndkState.isConnected
+	
+	console.log('🔍 useOrdersBySeller hook:', {
+		sellerPubkey: sellerPubkey?.substring(0, 8) + '...',
+		hasPubkey: !!sellerPubkey,
+		ndkInitialized: !!ndk,
+		ndkConnected: isConnected,
+		willEnable: !!sellerPubkey && !!ndk && isConnected,
+	})
+
 	return useQuery({
 		queryKey: orderKeys.bySeller(sellerPubkey),
-		queryFn: () => fetchOrdersBySeller(sellerPubkey),
-		enabled: !!sellerPubkey,
+		queryFn: () => {
+			console.log('🔍 useOrdersBySeller: queryFn executing for sellerPubkey:', sellerPubkey?.substring(0, 8) + '...')
+			return fetchOrdersBySeller(sellerPubkey)
+		},
+		enabled: !!sellerPubkey && !!ndk && isConnected,
 		refetchOnMount: true,
 		refetchOnWindowFocus: true,
 		refetchOnReconnect: true,
+		staleTime: 30000, // Consider data fresh for 30 seconds
+		gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
 	})
 }
 
