@@ -27,7 +27,7 @@ import { Route as DashboardLayoutDashboardSalesSalesRouteImport } from './routes
 import { Route as DashboardLayoutDashboardSalesMessagesRouteImport } from './routes/_dashboard-layout/dashboard/sales/messages'
 import { Route as DashboardLayoutDashboardSalesCircularEconomyRouteImport } from './routes/_dashboard-layout/dashboard/sales/circular-economy'
 import { Route as DashboardLayoutDashboardProductsShippingOptionsRouteImport } from './routes/_dashboard-layout/dashboard/products/shipping-options'
-import { Route as DashboardLayoutDashboardProductsReceivingPaymentsRouteImport } from './routes/_dashboard-layout/dashboard/products/receiving-payments'
+import { Route as DashboardLayoutDashboardProductsReceivingPaymentsRouteImport } from './routes/_dashboard-layout/dashboard/account/receiving-payments'
 import { Route as DashboardLayoutDashboardProductsProductsRouteImport } from './routes/_dashboard-layout/dashboard/products/products'
 import { Route as DashboardLayoutDashboardProductsCollectionsRouteImport } from './routes/_dashboard-layout/dashboard/products/collections'
 import { Route as DashboardLayoutDashboardOrdersOrderIdRouteImport } from './routes/_dashboard-layout/dashboard/orders/$orderId'
