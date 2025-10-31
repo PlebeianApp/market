@@ -60,4 +60,3 @@ export function useOrdersBackgroundSync() {
 		}
 	}, [userPubkey, ndk, queryClient, ndkState.isConnected])
 }
-

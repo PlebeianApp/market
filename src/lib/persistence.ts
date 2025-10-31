@@ -32,7 +32,7 @@ class IndexedDBPersister {
 
 	async getItem(key: string): Promise<string | null> {
 		if (!this.db) await this.init()
-		
+
 		return new Promise((resolve, reject) => {
 			const transaction = this.db!.transaction([this.storeName], 'readonly')
 			const store = transaction.objectStore(this.storeName)
@@ -109,12 +109,12 @@ export async function persistOrdersToIndexedDB(queryClient: QueryClient): Promis
 	// Manual persistence using queryClient cache
 	// Set up periodic persistence
 	let persistTimeout: NodeJS.Timeout | null = null
-	
+
 	const persistCache = async () => {
 		try {
 			const cache = queryClient.getQueryCache()
 			const queries = cache.getAll()
-			
+
 			// Filter only order queries
 			const orderQueries = queries.filter((query) => {
 				const queryKey = query.queryKey

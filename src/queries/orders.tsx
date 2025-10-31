@@ -21,7 +21,7 @@ export type OrderWithRelatedEvents = {
 	latestPaymentRequest?: NDKEvent
 	latestPaymentReceipt?: NDKEvent
 	latestMessage?: NDKEvent
-	
+
 	// Flag to track if EOSE was received for related events subscription
 	// If true and no status updates exist, we know loading is complete and status is truly pending
 	relatedEventsEoseReceived?: boolean
@@ -52,7 +52,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 	// Ensure NDK pool is ready before creating subscriptions
 	if (!ndk.pool) {
 		// Wait a bit for pool to initialize
-		await new Promise(resolve => setTimeout(resolve, 100))
+		await new Promise((resolve) => setTimeout(resolve, 100))
 		ndk = ndkActions.getNDK()
 		if (!ndk || !ndk.pool) {
 			throw new Error('NDK pool not initialized')
@@ -81,12 +81,12 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 	let ordersSent: Set<NDKEvent> = new Set()
 	try {
 		const ordersSentSet = new Set<NDKEvent>()
-		
+
 		// Verify NDK is ready before creating subscription
 		if (!ndk || !ndk.pool) {
 			throw new Error('NDK not ready for subscription')
 		}
-		
+
 		const sentSubscription = ndk.subscribe(orderCreationFilter, {
 			closeOnEose: true,
 		})
@@ -97,7 +97,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 				if (signer && event.content && !event.content.startsWith('{')) {
 					await event.decrypt(undefined, signer)
 				}
-				
+
 				const typeTag = event.tags.find((tag) => tag[0] === 'type')
 				if (typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION) {
 					ordersSentSet.add(event)
@@ -145,7 +145,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 					stopSentSubscription()
 					resolve()
 				}, 3500)
-			})
+			}),
 		])
 
 		ordersSent = ordersSentSet
@@ -158,12 +158,12 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 	let ordersReceived: Set<NDKEvent> = new Set()
 	try {
 		const ordersReceivedSet = new Set<NDKEvent>()
-		
+
 		// Verify NDK is ready before creating subscription
 		if (!ndk || !ndk.pool) {
 			throw new Error('NDK not ready for subscription')
 		}
-		
+
 		const receivedSubscription = ndk.subscribe(orderReceivedFilter, {
 			closeOnEose: true,
 		})
@@ -175,7 +175,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 				if (signer && event.content && !event.content.trim().startsWith('{') && !event.content.trim().startsWith('[')) {
 					await event.decrypt(undefined, signer)
 				}
-				
+
 				const typeTag = event.tags.find((tag) => tag[0] === 'type')
 				if (typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION) {
 					ordersReceivedSet.add(event)
@@ -227,7 +227,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 					stopReceivedSubscription()
 					resolve()
 				}, 3500)
-			})
+			}),
 		])
 
 		ordersReceived = ordersReceivedSet
@@ -261,12 +261,12 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 	let relatedEvents: Set<NDKEvent> = new Set()
 	try {
 		const relatedEventsSet = new Set<NDKEvent>()
-		
+
 		// Verify NDK is ready before creating subscription
 		if (!ndk || !ndk.pool) {
 			throw new Error('NDK not ready for subscription')
 		}
-		
+
 		const subscription = ndk.subscribe(relatedEventsFilter, {
 			closeOnEose: true,
 		})
@@ -277,7 +277,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 				if (signer && event.content && !event.content.startsWith('{')) {
 					await event.decrypt(undefined, signer)
 				}
-				
+
 				// Check if this event is related to any of our orders
 				const orderTag = event.tags.find((tag) => tag[0] === 'order')
 				if (orderTag && orderIds.includes(orderTag[1])) {
@@ -325,7 +325,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 					stopSubscription()
 					resolve()
 				}, 2500)
-			})
+			}),
 		])
 
 		relatedEvents = relatedEventsSet
@@ -465,7 +465,10 @@ export const useOrders = () => {
 /**
  * Fetches orders where the specified user is the buyer
  */
-export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: ReturnType<typeof useQueryClient>): Promise<OrderWithRelatedEvents[]> => {
+export const fetchOrdersByBuyer = async (
+	buyerPubkey: string,
+	queryClient?: ReturnType<typeof useQueryClient>,
+): Promise<OrderWithRelatedEvents[]> => {
 	let ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -489,7 +492,7 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 	// Ensure NDK pool is ready before creating subscriptions
 	if (!ndk.pool) {
 		// Wait a bit for pool to initialize
-		await new Promise(resolve => setTimeout(resolve, 100))
+		await new Promise((resolve) => setTimeout(resolve, 100))
 		ndk = ndkActions.getNDK()
 		if (!ndk || !ndk.pool) {
 			throw new Error('NDK pool not initialized')
@@ -512,16 +515,16 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 	const orderIdsSet = new Set<string>()
 	// Declare related events subscription outside try block so it's accessible later
 	let relatedEventsSubscription: NDKSubscription | null = null
-	
+
 	try {
 		// Use subscription with closeOnEose to ensure we get EOSE signal
 		const ordersSet = new Set<NDKEvent>()
-		
+
 		// Verify NDK is ready before creating subscription
 		if (!ndk || !ndk.pool) {
 			throw new Error('NDK not ready for subscription')
 		}
-		
+
 		const subscription = ndk.subscribe(orderCreationFilter, {
 			closeOnEose: true,
 		})
@@ -532,13 +535,13 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 		// Track all pending event processing promises
 		const pendingEventProcessing: Promise<void>[] = []
 		let subscriptionClosed = false
-		
+
 		// Start related events subscription in parallel
 		const relatedEventsFilter: NDKFilter = {
 			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
 			limit: 500,
 		}
-		
+
 		if (queryClient) {
 			try {
 				relatedEventsSubscription = ndk.subscribe(relatedEventsFilter, {
@@ -559,17 +562,17 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 				// Per NIP-17, encrypted direct messages have their tags encrypted
 				// We need to decrypt first, then check the type tag
 				// However, events might not always be encrypted, so check tags before and after decryption
-				
+
 				// First, check if type tag exists before decryption (for unencrypted events)
 				let typeTag = event.tags.find((tag) => tag[0] === 'type')
 				const orderTag = event.tags.find((tag) => tag[0] === 'order')
-				
+
 				// If we already found the type tag and it matches, we can skip decryption
 				if (typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION) {
 					ordersSet.add(event)
 					return
 				}
-				
+
 				// Try to decrypt if content looks encrypted
 				let decrypted = false
 				try {
@@ -579,7 +582,7 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 						if (contentLooksEncrypted) {
 							await event.decrypt(undefined, signer)
 							decrypted = true
-							
+
 							// Re-check tags after decryption (tags might have been encrypted)
 							typeTag = event.tags.find((tag) => tag[0] === 'type')
 						}
@@ -589,10 +592,10 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 					const errorMsg = error instanceof Error ? error.message : String(error)
 					// Filter out base64/invalid padding errors (expected when decrypting wrong events)
 				}
-				
+
 				// Check type tag after decryption attempt (or re-check if we already found it)
 				typeTag = event.tags.find((tag) => tag[0] === 'type')
-				
+
 				// If type tag matches ORDER_CREATION, add the event
 				if (typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION) {
 					ordersSet.add(event)
@@ -607,12 +610,12 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 			// Track this promise
 			pendingEventProcessing.push(processPromise)
 		})
-		
+
 		// Set up related events handler if subscription was created
 		if (relatedEventsSubscription && queryClient) {
 			// Track EOSE for related events subscription
 			let relatedEventsEoseReceived = false
-			
+
 			// Set up timeout to mark EOSE as received after 5 seconds if not received yet
 			const eoseTimeout = setTimeout(() => {
 				if (!relatedEventsEoseReceived) {
@@ -620,34 +623,34 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 					// Update all orders in cache to mark EOSE as received
 					const currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey))
 					if (currentData) {
-						const updatedData = currentData.map(order => ({
+						const updatedData = currentData.map((order) => ({
 							...order,
-							relatedEventsEoseReceived: true
+							relatedEventsEoseReceived: true,
 						}))
 						queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), updatedData)
 					}
 				}
 			}, 5000)
-			
+
 			relatedEventsSubscription.on('eose', () => {
 				clearTimeout(eoseTimeout)
 				relatedEventsEoseReceived = true
 				// Update all orders in cache to mark EOSE as received
 				const currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey))
 				if (currentData) {
-					const updatedData = currentData.map(order => ({
+					const updatedData = currentData.map((order) => ({
 						...order,
-						relatedEventsEoseReceived: true
+						relatedEventsEoseReceived: true,
 					}))
 					queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), updatedData)
 				}
 			})
-			
+
 			const updateCacheForOrder = (orderId: string, event: NDKEvent) => {
 				if (!queryClient) return
-				
+
 				let currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey))
-				
+
 				if (!currentData) {
 					setTimeout(() => {
 						currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey))
@@ -656,14 +659,14 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 					}, 100)
 					return
 				}
-				
+
 				updateCacheForOrderInner(orderId, event, currentData)
 			}
-			
+
 			const updateCacheForOrderInner = (orderId: string, event: NDKEvent, currentData: OrderWithRelatedEvents[]) => {
 				let orderFound = false
 				let eventAdded = false
-				
+
 				const updatedData = currentData.map((orderData) => {
 					const orderTag = orderData.order.tags.find((tag) => tag[0] === 'order')
 					const dataOrderId = orderTag?.[1]
@@ -679,8 +682,8 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 					const generalMessages = [...orderData.generalMessages]
 					const paymentReceipts = [...orderData.paymentReceipts]
 
-					const eventExists = (arr: NDKEvent[]) => arr.some(e => e.id === event.id)
-					
+					const eventExists = (arr: NDKEvent[]) => arr.some((e) => e.id === event.id)
+
 					if (event.kind === ORDER_PROCESS_KIND) {
 						const typeTag = event.tags.find((tag) => tag[0] === 'type')
 						if (typeTag) {
@@ -738,7 +741,7 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 				})
 
 				if (orderFound && eventAdded) {
-					const newDataArray = updatedData.map(order => ({
+					const newDataArray = updatedData.map((order) => ({
 						...order,
 						paymentRequests: [...order.paymentRequests],
 						statusUpdates: [...order.statusUpdates],
@@ -746,17 +749,17 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 						generalMessages: [...order.generalMessages],
 						paymentReceipts: [...order.paymentReceipts],
 					}))
-					
+
 					queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), newDataArray)
-					queryClient.invalidateQueries({ 
+					queryClient.invalidateQueries({
 						queryKey: orderKeys.byBuyer(buyerPubkey),
 						refetchType: 'none',
 					})
 				}
 			}
-			
+
 			let relatedEventsClosed = false
-			
+
 			relatedEventsSubscription.on('event', async (event: NDKEvent) => {
 				if (relatedEventsClosed) return
 
@@ -767,11 +770,11 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 							try {
 								await event.decrypt(undefined, signer)
 							} catch (decryptError) {
-							// Filter out expected decryption errors
+								// Filter out expected decryption errors
 							}
 						}
 					}
-					
+
 					const orderTag = event.tags.find((tag) => tag[0] === 'order')
 					if (orderTag && orderTag[1]) {
 						const orderId = orderTag[1]
@@ -797,7 +800,7 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 					// Ignore expected errors
 				}
 			})
-			
+
 			// Don't start related events subscription here - it will be started after orders subscription completes
 		}
 
@@ -828,8 +831,8 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 			orders = new Set()
 		} else {
 			// Add small delay to ensure subscription is fully initialized
-			await new Promise(resolve => setTimeout(resolve, 50))
-			
+			await new Promise((resolve) => setTimeout(resolve, 50))
+
 			try {
 				// Start subscription AFTER handlers are set up but BEFORE Promise.race
 				subscription.start()
@@ -839,7 +842,7 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 				subscriptionStarted = false
 			}
 		}
-		
+
 		if (!subscriptionStarted || !subscription) {
 			orders = new Set()
 		} else {
@@ -870,7 +873,7 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 						stopSubscription()
 						resolve()
 					}, 1500) // Further reduced fallback timeout
-				})
+				}),
 			])
 
 			orders = ordersSet
@@ -893,12 +896,12 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 	const initialResult: OrderWithRelatedEvents[] = Array.from(orders).map((order) => {
 		const orderTag = order.tags.find((tag) => tag[0] === 'order')
 		const orderId = orderTag?.[1]
-		
+
 		// Add order ID to set so related events subscription can match it
 		if (orderId) {
 			orderIdsSet.add(orderId)
 		}
-		
+
 		// Check if we have cached related events for this order
 		let cachedRelatedEvents: OrderWithRelatedEvents | undefined
 		if (existingCache && orderId) {
@@ -961,7 +964,7 @@ export const useOrdersByBuyer = (buyerPubkey: string) => {
 	const ndkState = useStore(ndkStore)
 	const isConnected = ndkState.isConnected
 	const queryClient = useQueryClient()
-	
+
 	// Enable query when NDK is initialized (not just connected)
 	// The queryFn will handle connecting NDK if needed
 	const queryEnabled = !!buyerPubkey && !!ndk
@@ -971,15 +974,15 @@ export const useOrdersByBuyer = (buyerPubkey: string) => {
 		queryFn: async () => {
 			// Get cached data before attempting fetch
 			const cachedData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey))
-			
+
 			try {
 				const result = await fetchOrdersByBuyer(buyerPubkey, queryClient)
-				
+
 				// If result is empty but we have cached data, preserve cache to prevent disappearing
 				if (result.length === 0 && cachedData && cachedData.length > 0) {
 					return cachedData
 				}
-				
+
 				// ALWAYS merge result with cached data to preserve related events
 				// This ensures cache is never wiped - we always preserve what's already there
 				if (cachedData && cachedData.length > 0) {
@@ -992,46 +995,46 @@ export const useOrdersByBuyer = (buyerPubkey: string) => {
 							cachedMap.set(orderId, cachedOrder)
 						}
 					})
-					
+
 					// Merge: if result has empty related events but cache has them, use cache's related events
 					const mergedResult = result.map((orderData) => {
 						const orderTag = orderData.order.tags.find((tag) => tag[0] === 'order')
 						const orderId = orderTag?.[1]
 						if (!orderId) return orderData
-						
+
 						const cachedOrder = cachedMap.get(orderId)
 						if (!cachedOrder) return orderData
-						
+
 						// If result has empty related events but cache has them, use cache's related events
-						const hasRelatedEvents = 
+						const hasRelatedEvents =
 							orderData.statusUpdates.length > 0 ||
 							orderData.paymentReceipts.length > 0 ||
 							orderData.shippingUpdates.length > 0 ||
 							orderData.paymentRequests.length > 0 ||
 							orderData.generalMessages.length > 0
-						
-						const cachedHasRelatedEvents = 
+
+						const cachedHasRelatedEvents =
 							cachedOrder.statusUpdates.length > 0 ||
 							cachedOrder.paymentReceipts.length > 0 ||
 							cachedOrder.shippingUpdates.length > 0 ||
 							cachedOrder.paymentRequests.length > 0 ||
 							cachedOrder.generalMessages.length > 0
-						
+
 						// If result doesn't have related events but cache does, use cache's related events
 						if (!hasRelatedEvents && cachedHasRelatedEvents) {
 							return cachedOrder
 						}
-						
+
 						// Otherwise, merge: take the union of events from both (deduplicated by event ID)
 						const mergeEvents = (resultEvents: NDKEvent[], cachedEvents: NDKEvent[]) => {
 							const eventMap = new Map<string, NDKEvent>()
 							// First add cached events
-							cachedEvents.forEach(e => eventMap.set(e.id, e))
+							cachedEvents.forEach((e) => eventMap.set(e.id, e))
 							// Then add result events (they take precedence if duplicate)
-							resultEvents.forEach(e => eventMap.set(e.id, e))
+							resultEvents.forEach((e) => eventMap.set(e.id, e))
 							return Array.from(eventMap.values()).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 						}
-						
+
 						return {
 							...orderData,
 							paymentRequests: mergeEvents(orderData.paymentRequests, cachedOrder.paymentRequests),
@@ -1046,12 +1049,12 @@ export const useOrdersByBuyer = (buyerPubkey: string) => {
 							latestMessage: mergeEvents(orderData.generalMessages, cachedOrder.generalMessages)[0],
 						}
 					})
-					
+
 					// Cache the merged result to preserve related events - this prevents cache from being wiped
 					queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), mergedResult)
 					return mergedResult
 				}
-				
+
 				// No cached data - cache the result as-is
 				queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), result)
 				return result
@@ -1081,21 +1084,21 @@ export const useOrdersByBuyer = (buyerPubkey: string) => {
 	// Refetch when NDK connects to ensure we get fresh data
 	useEffect(() => {
 		if (!queryEnabled || !isConnected) return
-		
+
 		// Only refetch if we don't have data or if data is stale
 		const queryData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey))
 		if (queryData && queryData.length > 0) {
 			// We have data, don't aggressively refetch
 			return
 		}
-		
+
 		// Small delay to ensure connection is fully established
 		const timer = setTimeout(() => {
 			queryClient.refetchQueries({ queryKey: orderKeys.byBuyer(buyerPubkey) }).catch(() => {
 				// Ignore refetch errors
 			})
 		}, 100)
-		
+
 		return () => clearTimeout(timer)
 	}, [isConnected, queryEnabled, buyerPubkey, queryClient])
 
@@ -1105,7 +1108,10 @@ export const useOrdersByBuyer = (buyerPubkey: string) => {
 /**
  * Fetches orders where the specified user is the seller (recipient of order messages)
  */
-export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: ReturnType<typeof useQueryClient>): Promise<OrderWithRelatedEvents[]> => {
+export const fetchOrdersBySeller = async (
+	sellerPubkey: string,
+	queryClient?: ReturnType<typeof useQueryClient>,
+): Promise<OrderWithRelatedEvents[]> => {
 	// Get NDK instance - ensure it's initialized
 	let ndk = ndkActions.getNDK()
 	if (!ndk) {
@@ -1135,7 +1141,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 	// Ensure NDK pool is ready before creating subscriptions
 	if (!ndk.pool) {
 		// Wait a bit for pool to initialize
-		await new Promise(resolve => setTimeout(resolve, 100))
+		await new Promise((resolve) => setTimeout(resolve, 100))
 		ndk = ndkActions.getNDK()
 		if (!ndk || !ndk.pool) {
 			throw new Error('NDK pool not initialized')
@@ -1158,16 +1164,16 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 	const orderIdsSet = new Set<string>()
 	// Declare related events subscription outside try block so it's accessible later
 	let relatedEventsSubscription: NDKSubscription | null = null
-	
+
 	try {
 		// Use subscription - we'll handle closing ourselves to avoid NDK internal timeout conflicts
 		const ordersSet = new Set<NDKEvent>()
-		
+
 		// Verify NDK is ready before creating subscription
 		if (!ndk || !ndk.pool) {
 			throw new Error('NDK not ready for subscription')
 		}
-		
+
 		const subscription = ndk.subscribe(orderReceivedFilter, {
 			closeOnEose: true,
 		})
@@ -1178,13 +1184,13 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 		// Track all pending event processing promises
 		const pendingEventProcessing: Promise<void>[] = []
 		let subscriptionClosed = false
-		
+
 		// Start related events subscription in parallel
 		const relatedEventsFilter: NDKFilter = {
 			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
 			limit: 500,
 		}
-		
+
 		if (queryClient) {
 			try {
 				relatedEventsSubscription = ndk.subscribe(relatedEventsFilter, {
@@ -1204,11 +1210,11 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 				// Per NIP-17, encrypted direct messages have their tags encrypted
 				// We need to decrypt first, then check the type tag
 				// However, events might not always be encrypted, so check tags before and after decryption
-				
+
 				// First, check if type tag exists before decryption (for unencrypted events)
 				let typeTag = event.tags.find((tag) => tag[0] === 'type')
 				const orderTag = event.tags.find((tag) => tag[0] === 'order')
-				
+
 				// If we already found the type tag and it matches, we can skip decryption
 				if (typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION) {
 					ordersSet.add(event)
@@ -1217,7 +1223,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 					}
 					return
 				}
-				
+
 				// Try to decrypt if content looks encrypted
 				let decrypted = false
 				try {
@@ -1227,7 +1233,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 						if (contentLooksEncrypted) {
 							await event.decrypt(undefined, signer)
 							decrypted = true
-							
+
 							// Re-check tags after decryption (tags might have been encrypted)
 							typeTag = event.tags.find((tag) => tag[0] === 'type')
 						}
@@ -1237,10 +1243,10 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 					const errorMsg = error instanceof Error ? error.message : String(error)
 					// Filter out base64/invalid padding errors (expected when decrypting wrong events)
 				}
-				
+
 				// Check type tag after decryption attempt (or re-check if we already found it)
 				typeTag = event.tags.find((tag) => tag[0] === 'type')
-				
+
 				// If type tag matches ORDER_CREATION, add the event
 				if (typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION) {
 					ordersSet.add(event)
@@ -1254,12 +1260,12 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 			// Track this promise
 			pendingEventProcessing.push(processPromise)
 		})
-		
+
 		// Set up related events handler if subscription was created
 		if (relatedEventsSubscription && queryClient) {
 			// Track EOSE for related events subscription
 			let relatedEventsEoseReceived = false
-			
+
 			// Set up timeout to mark EOSE as received after 5 seconds if not received yet
 			const eoseTimeout = setTimeout(() => {
 				if (!relatedEventsEoseReceived) {
@@ -1267,34 +1273,34 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 					// Update all orders in cache to mark EOSE as received
 					const currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey))
 					if (currentData) {
-						const updatedData = currentData.map(order => ({
+						const updatedData = currentData.map((order) => ({
 							...order,
-							relatedEventsEoseReceived: true
+							relatedEventsEoseReceived: true,
 						}))
 						queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), updatedData)
 					}
 				}
 			}, 5000)
-			
+
 			relatedEventsSubscription.on('eose', () => {
 				clearTimeout(eoseTimeout)
 				relatedEventsEoseReceived = true
 				// Update all orders in cache to mark EOSE as received
 				const currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey))
 				if (currentData) {
-					const updatedData = currentData.map(order => ({
+					const updatedData = currentData.map((order) => ({
 						...order,
-						relatedEventsEoseReceived: true
+						relatedEventsEoseReceived: true,
 					}))
 					queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), updatedData)
 				}
 			})
-			
+
 			const updateCacheForOrder = (orderId: string, event: NDKEvent) => {
 				if (!queryClient) return
-				
+
 				let currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey))
-				
+
 				if (!currentData) {
 					setTimeout(() => {
 						currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey))
@@ -1303,14 +1309,14 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 					}, 100)
 					return
 				}
-				
+
 				updateCacheForOrderInner(orderId, event, currentData)
 			}
-			
+
 			const updateCacheForOrderInner = (orderId: string, event: NDKEvent, currentData: OrderWithRelatedEvents[]) => {
 				let orderFound = false
 				let eventAdded = false
-				
+
 				const updatedData = currentData.map((orderData) => {
 					const orderTag = orderData.order.tags.find((tag) => tag[0] === 'order')
 					const dataOrderId = orderTag?.[1]
@@ -1326,8 +1332,8 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 					const generalMessages = [...orderData.generalMessages]
 					const paymentReceipts = [...orderData.paymentReceipts]
 
-					const eventExists = (arr: NDKEvent[]) => arr.some(e => e.id === event.id)
-					
+					const eventExists = (arr: NDKEvent[]) => arr.some((e) => e.id === event.id)
+
 					if (event.kind === ORDER_PROCESS_KIND) {
 						const typeTag = event.tags.find((tag) => tag[0] === 'type')
 						if (typeTag) {
@@ -1385,7 +1391,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 				})
 
 				if (orderFound && eventAdded) {
-					const newDataArray = updatedData.map(order => ({
+					const newDataArray = updatedData.map((order) => ({
 						...order,
 						paymentRequests: [...order.paymentRequests],
 						statusUpdates: [...order.statusUpdates],
@@ -1393,17 +1399,17 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 						generalMessages: [...order.generalMessages],
 						paymentReceipts: [...order.paymentReceipts],
 					}))
-					
+
 					queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), newDataArray)
-					queryClient.invalidateQueries({ 
+					queryClient.invalidateQueries({
 						queryKey: orderKeys.bySeller(sellerPubkey),
 						refetchType: 'none',
 					})
 				}
 			}
-			
+
 			let relatedEventsClosed = false
-			
+
 			relatedEventsSubscription.on('event', async (event: NDKEvent) => {
 				if (relatedEventsClosed) return
 
@@ -1414,11 +1420,11 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 							try {
 								await event.decrypt(undefined, signer)
 							} catch (decryptError) {
-							// Filter out expected decryption errors
+								// Filter out expected decryption errors
 							}
 						}
 					}
-					
+
 					const orderTag = event.tags.find((tag) => tag[0] === 'order')
 					if (orderTag && orderTag[1]) {
 						const orderId = orderTag[1]
@@ -1444,7 +1450,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 					// Ignore expected errors
 				}
 			})
-			
+
 			// Don't start related events subscription here - it will be started after orders subscription completes
 		}
 
@@ -1475,8 +1481,8 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 			orders = new Set()
 		} else {
 			// Add small delay to ensure subscription is fully initialized
-			await new Promise(resolve => setTimeout(resolve, 50))
-			
+			await new Promise((resolve) => setTimeout(resolve, 50))
+
 			try {
 				// Start subscription AFTER handlers are set up but BEFORE Promise.race
 				subscription.start()
@@ -1486,7 +1492,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 				subscriptionStarted = false
 			}
 		}
-		
+
 		if (!subscriptionStarted || !subscription) {
 			orders = new Set()
 		} else {
@@ -1517,7 +1523,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 						stopSubscription()
 						resolve()
 					}, 1500) // Same fallback timeout as purchases
-				})
+				}),
 			])
 
 			// Wait for all pending event processing before continuing
@@ -1543,12 +1549,12 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 	const initialResult = Array.from(orders).map((order) => {
 		const orderTag = order.tags.find((tag) => tag[0] === 'order')
 		const orderId = orderTag?.[1] || ''
-		
+
 		// Add order ID to set so related events subscription can match it
 		if (orderId) {
 			orderIdsSet.add(orderId)
 		}
-		
+
 		// Check if we have cached related events for this order
 		let cachedRelatedEvents: OrderWithRelatedEvents | undefined
 		if (existingCache && orderId) {
@@ -1557,7 +1563,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 				return cachedOrderTag?.[1] === orderId
 			})
 		}
-		
+
 		return {
 			order,
 			paymentRequests: cachedRelatedEvents?.paymentRequests || [],
@@ -1599,25 +1605,25 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 	const ndkState = useStore(ndkStore)
 	const isConnected = ndkState.isConnected
 	const queryClient = useQueryClient()
-	
+
 	// Enable query when NDK is initialized (not just connected)
 	// The queryFn will handle connecting NDK if needed
 	const queryEnabled = !!sellerPubkey && !!ndk
-	
+
 	const queryResult = useQuery({
 		queryKey: orderKeys.bySeller(sellerPubkey),
 		queryFn: async () => {
 			// Get cached data before attempting fetch
 			const cachedData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey))
-			
+
 			try {
 				const result = await fetchOrdersBySeller(sellerPubkey, queryClient)
-				
+
 				// If result is empty but we have cached data, preserve cache to prevent disappearing
 				if (result.length === 0 && cachedData && cachedData.length > 0) {
 					return cachedData
 				}
-				
+
 				// ALWAYS merge result with cached data to preserve related events
 				// This ensures cache is never wiped - we always preserve what's already there
 				if (cachedData && cachedData.length > 0) {
@@ -1630,31 +1636,31 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 							cachedMap.set(orderId, cachedOrder)
 						}
 					})
-					
+
 					// Merge: if result has empty related events but cache has them, use cache's related events
 					const mergedResult = result.map((orderData) => {
 						const orderTag = orderData.order.tags.find((tag) => tag[0] === 'order')
 						const orderId = orderTag?.[1]
 						if (!orderId) return orderData
-						
+
 						const cachedOrder = cachedMap.get(orderId)
 						if (!cachedOrder) return orderData
-						
+
 						// If result has empty related events but cache has them, use cache's related events
-						const hasRelatedEvents = 
+						const hasRelatedEvents =
 							orderData.statusUpdates.length > 0 ||
 							orderData.paymentReceipts.length > 0 ||
 							orderData.shippingUpdates.length > 0 ||
 							orderData.paymentRequests.length > 0 ||
 							orderData.generalMessages.length > 0
-						
-						const cachedHasRelatedEvents = 
+
+						const cachedHasRelatedEvents =
 							cachedOrder.statusUpdates.length > 0 ||
 							cachedOrder.paymentReceipts.length > 0 ||
 							cachedOrder.shippingUpdates.length > 0 ||
 							cachedOrder.paymentRequests.length > 0 ||
 							cachedOrder.generalMessages.length > 0
-						
+
 						// CRITICAL: If result doesn't have related events but cache does, use cache's related events
 						// This prevents status reset when fetchOrdersBySeller returns empty arrays
 						if (!hasRelatedEvents && cachedHasRelatedEvents) {
@@ -1664,18 +1670,18 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 								order: orderData.order, // Use latest order event
 							}
 						}
-						
+
 						// Otherwise, merge: take the union of events from both (deduplicated by event ID)
 						// Cached events are added first, then result events (they take precedence if duplicate)
 						const mergeEvents = (resultEvents: NDKEvent[], cachedEvents: NDKEvent[]) => {
 							const eventMap = new Map<string, NDKEvent>()
 							// First add cached events (preserve what's already in cache)
-							cachedEvents.forEach(e => eventMap.set(e.id, e))
+							cachedEvents.forEach((e) => eventMap.set(e.id, e))
 							// Then add result events (they take precedence if duplicate)
-							resultEvents.forEach(e => eventMap.set(e.id, e))
+							resultEvents.forEach((e) => eventMap.set(e.id, e))
 							return Array.from(eventMap.values()).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 						}
-						
+
 						return {
 							...orderData,
 							paymentRequests: mergeEvents(orderData.paymentRequests, cachedOrder.paymentRequests),
@@ -1690,12 +1696,12 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 							latestMessage: mergeEvents(orderData.generalMessages, cachedOrder.generalMessages)[0],
 						}
 					})
-					
+
 					// Cache the merged result to preserve related events - this prevents cache from being wiped
 					queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), mergedResult)
 					return mergedResult
 				}
-				
+
 				// No cached data - cache the result as-is
 				queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), result)
 				return result
@@ -1725,21 +1731,21 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 	// Refetch when NDK connects to ensure we get fresh data
 	useEffect(() => {
 		if (!queryEnabled || !isConnected) return
-		
+
 		// Only refetch if we don't have data or if data is stale
 		const queryData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey))
 		if (queryData && queryData.length > 0) {
 			// We have data, don't aggressively refetch
 			return
 		}
-		
+
 		// Small delay to ensure connection is fully established
 		const timer = setTimeout(() => {
 			queryClient.refetchQueries({ queryKey: orderKeys.bySeller(sellerPubkey) }).catch(() => {
 				// Ignore refetch errors
 			})
 		}, 100)
-		
+
 		return () => clearTimeout(timer)
 	}, [isConnected, queryEnabled, sellerPubkey, queryClient])
 
@@ -1750,7 +1756,10 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
  * Fetches a specific order by its ID
  * Checks cache first before making REQ
  */
-export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<typeof useQueryClient>): Promise<OrderWithRelatedEvents | null> => {
+export const fetchOrderById = async (
+	orderId: string,
+	queryClient?: ReturnType<typeof useQueryClient>,
+): Promise<OrderWithRelatedEvents | null> => {
 	// Check cache first if queryClient is provided
 	if (queryClient) {
 		// Check if order is in detail cache
@@ -1800,7 +1809,7 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 	// Ensure NDK pool is ready before creating subscriptions
 	if (!ndk.pool) {
 		// Wait a bit for pool to initialize
-		await new Promise(resolve => setTimeout(resolve, 100))
+		await new Promise((resolve) => setTimeout(resolve, 100))
 		ndk = ndkActions.getNDK()
 		if (!ndk || !ndk.pool) {
 			throw new Error('NDK pool not initialized')
@@ -1815,7 +1824,7 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 	// The tags (type, order) are NOT encrypted - they're in the public tags array
 	// However, we should filter by authors/#p and kinds, then check tags client-side
 	// For order lookup, we can use the subject tag which may contain order info, or filter by authors/#p
-	
+
 	// Get user pubkey to filter messages they're involved in
 	const signer = ndkActions.getSigner()
 	const user = signer ? await signer.user().catch(() => null) : null
@@ -1829,12 +1838,12 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 	// The order tag is encrypted, so we can't filter by it on the relay
 	// We need to fetch all Kind 16 messages where the user is involved and decrypt to check the order tag
 	// Try both as author (orders they sent) and as recipient (orders they received)
-	
+
 	// Fetch order creation event using subscription with timeout
 	let orderEvent: NDKEvent | null = null
 	try {
 		const orderEventsSet = new Set<NDKEvent>()
-		
+
 		// Create subscriptions for both author and recipient
 		const filters: NDKFilter[] = [
 			{
@@ -1855,14 +1864,14 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 		}
 
 		// Try both filters and combine results
-		const subscriptions = filters.map(filter => ndk.subscribe(filter, { closeOnEose: true }))
-		
+		const subscriptions = filters.map((filter) => ndk.subscribe(filter, { closeOnEose: true }))
+
 		for (const subscription of subscriptions) {
 			subscription.on('event', async (event: NDKEvent) => {
 				// Check if tags are already visible (event might not be encrypted)
 				let orderTag = event.tags.find((tag) => tag[0] === 'order')
 				let typeTag = event.tags.find((tag) => tag[0] === 'type')
-				
+
 				// If tags are not visible, try to decrypt
 				if (!orderTag && signer && event.content) {
 					try {
@@ -1878,7 +1887,7 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 						// Decryption failed - continue to check tags
 					}
 				}
-				
+
 				// Check if this is the order we're looking for
 				if (orderTag && orderTag[1] === orderId && typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION) {
 					orderEventsSet.add(event)
@@ -1901,7 +1910,7 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 		// Set up eose and close handlers for all subscriptions
 		// Each subscription completes when it receives EOSE or close
 		const subscriptionCompletePromises: Promise<void>[] = []
-		
+
 		subscriptions.forEach((subscription, index) => {
 			const completePromise = new Promise<void>((resolve) => {
 				let resolved = false
@@ -1911,7 +1920,7 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 						resolve()
 					}
 				}
-				
+
 				subscription.on('eose', () => {
 					markComplete()
 				})
@@ -1925,7 +1934,7 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 			// Start subscription AFTER handlers are set up
 			subscription.start()
 		})
-		
+
 		// Wait for all subscriptions to complete or timeout
 		// Create a combined promise that resolves when all subscriptions complete
 		const allSubscriptionsComplete = Promise.all(subscriptionCompletePromises).then(() => {
@@ -1946,7 +1955,7 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 					stopAllSubscriptions()
 					resolve()
 				}, 3500)
-			})
+			}),
 		])
 
 		if (orderEventsSet.size === 0) {
@@ -1986,15 +1995,15 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 		if (!ndk || !ndk.pool) {
 			throw new Error('NDK not ready for subscription')
 		}
-		
+
 		const relatedEventsSet = new Set<NDKEvent>()
-		const subscriptions = relatedEventsFilters.map(filter => ndk.subscribe(filter, { closeOnEose: true }))
+		const subscriptions = relatedEventsFilters.map((filter) => ndk.subscribe(filter, { closeOnEose: true }))
 
 		for (const subscription of subscriptions) {
 			subscription.on('event', async (event: NDKEvent) => {
 				// Check if tags are already visible (event might not be encrypted)
 				let orderTag = event.tags.find((tag) => tag[0] === 'order')
-				
+
 				// If tags are not visible, try to decrypt
 				if (!orderTag && signer && event.content) {
 					try {
@@ -2009,7 +2018,7 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 						// Decryption failed - continue to check tags
 					}
 				}
-				
+
 				// Check if this event is related to our order by checking the order tag
 				if (orderTag && orderTag[1] === orderIdFromTag) {
 					relatedEventsSet.add(event)
@@ -2075,7 +2084,7 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 					stopAllSubscriptions()
 					resolve()
 				}, 2500)
-			})
+			}),
 		])
 
 		relatedEvents = relatedEventsSet
@@ -2147,12 +2156,12 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 	// Cache the result if queryClient is available
 	if (queryClient) {
 		queryClient.setQueryData(orderKeys.details(orderId), result)
-		
+
 		// Also update list cache if we have the user pubkey
 		const signer = ndkActions.getSigner()
 		const user = signer ? await signer.user().catch(() => null) : null
 		const userPubkey = user?.pubkey
-		
+
 		if (userPubkey) {
 			const updateListCache = (key: string[]) => {
 				const listData = queryClient.getQueryData<OrderWithRelatedEvents[]>(key)
@@ -2166,7 +2175,7 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 					queryClient.setQueryData(key, updatedList)
 				}
 			}
-			
+
 			updateListCache(orderKeys.byBuyer(userPubkey))
 			updateListCache(orderKeys.bySeller(userPubkey))
 		}
@@ -2183,7 +2192,7 @@ export const useOrderById = (orderId: string) => {
 	const ndk = ndkActions.getNDK()
 	const { user } = useStore(authStore)
 	const userPubkey = user?.pubkey || ''
-	
+
 	// Prefetch list queries ONLY if cache is empty (don't refetch if cache exists)
 	useEffect(() => {
 		if (!userPubkey || !ndk) return
@@ -2209,16 +2218,16 @@ export const useOrderById = (orderId: string) => {
 			})
 		}
 	}, [userPubkey, ndk, queryClient])
-	
+
 	// Try to get order from list queries cache first - use useMemo to avoid initialization issues
 	const cachedOrder = useMemo(() => {
 		if (!orderId || !userPubkey) return undefined
-		
+
 		try {
 			const sellerOrders = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(userPubkey)) || []
 			const buyerOrders = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(userPubkey)) || []
 			const allCachedOrders = [...sellerOrders, ...buyerOrders]
-			
+
 			// Find the order in cache by matching order ID
 			// Use a local function to avoid potential hoisting issues
 			const findOrderById = (order: OrderWithRelatedEvents): boolean => {
@@ -2257,8 +2266,8 @@ export const useOrderById = (orderId: string) => {
 			},
 		]
 
-		const subscriptions = relatedEventsFilters.map(filter => 
-			ndk.subscribe(filter, { closeOnEose: false }) // Keep subscriptions open
+		const subscriptions = relatedEventsFilters.map(
+			(filter) => ndk.subscribe(filter, { closeOnEose: false }), // Keep subscriptions open
 		)
 
 		// Get signer for decryption
@@ -2269,7 +2278,7 @@ export const useOrderById = (orderId: string) => {
 			subscription.on('event', async (newEvent) => {
 				// Check if tags are already visible (event might not be encrypted)
 				let orderTag = newEvent.tags.find((tag) => tag[0] === 'order')
-				
+
 				// If tags are not visible, try to decrypt
 				if (!orderTag && signer && newEvent.content) {
 					try {
@@ -2284,7 +2293,7 @@ export const useOrderById = (orderId: string) => {
 						return
 					}
 				}
-				
+
 				// Check if this event is related to our order by checking the order tag
 				if (!orderTag || orderTag[1] !== orderId) {
 					// Not related to our order, skip
@@ -2294,28 +2303,32 @@ export const useOrderById = (orderId: string) => {
 				// Update cache directly instead of invalidating/refetching to preserve related events
 				if (newEvent.kind === ORDER_PROCESS_KIND) {
 					const typeTag = newEvent.tags.find((tag) => tag[0] === 'type')
-				if (typeTag && (typeTag[1] === ORDER_MESSAGE_TYPE.STATUS_UPDATE || typeTag[1] === ORDER_MESSAGE_TYPE.SHIPPING_UPDATE)) {
-					// Update detail cache
+					if (typeTag && (typeTag[1] === ORDER_MESSAGE_TYPE.STATUS_UPDATE || typeTag[1] === ORDER_MESSAGE_TYPE.SHIPPING_UPDATE)) {
+						// Update detail cache
 						const currentDetail = queryClient.getQueryData<OrderWithRelatedEvents>(orderKeys.details(orderId))
 						if (currentDetail) {
 							const updatedDetail = { ...currentDetail }
 							if (typeTag[1] === ORDER_MESSAGE_TYPE.STATUS_UPDATE) {
-								const existing = updatedDetail.statusUpdates.find(e => e.id === newEvent.id)
+								const existing = updatedDetail.statusUpdates.find((e) => e.id === newEvent.id)
 								if (!existing) {
-									updatedDetail.statusUpdates = [...updatedDetail.statusUpdates, newEvent].sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+									updatedDetail.statusUpdates = [...updatedDetail.statusUpdates, newEvent].sort(
+										(a, b) => (b.created_at || 0) - (a.created_at || 0),
+									)
 									updatedDetail.latestStatus = updatedDetail.statusUpdates[0]
 									queryClient.setQueryData(orderKeys.details(orderId), updatedDetail)
 								}
 							} else if (typeTag[1] === ORDER_MESSAGE_TYPE.SHIPPING_UPDATE) {
-								const existing = updatedDetail.shippingUpdates.find(e => e.id === newEvent.id)
+								const existing = updatedDetail.shippingUpdates.find((e) => e.id === newEvent.id)
 								if (!existing) {
-									updatedDetail.shippingUpdates = [...updatedDetail.shippingUpdates, newEvent].sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+									updatedDetail.shippingUpdates = [...updatedDetail.shippingUpdates, newEvent].sort(
+										(a, b) => (b.created_at || 0) - (a.created_at || 0),
+									)
 									updatedDetail.latestShipping = updatedDetail.shippingUpdates[0]
 									queryClient.setQueryData(orderKeys.details(orderId), updatedDetail)
 								}
 							}
 						}
-						
+
 						// Update list cache (buyer and seller) - update directly to preserve cache
 						if (userPubkey) {
 							const updateListCache = (key: string[]) => {
@@ -2324,18 +2337,22 @@ export const useOrderById = (orderId: string) => {
 									const updatedList = listData.map((orderData) => {
 										const orderTag = orderData.order.tags.find((tag) => tag[0] === 'order')
 										if (orderTag?.[1] !== orderId) return orderData
-										
+
 										const updated = { ...orderData }
 										if (typeTag[1] === ORDER_MESSAGE_TYPE.STATUS_UPDATE) {
-											const existing = updated.statusUpdates.find(e => e.id === newEvent.id)
+											const existing = updated.statusUpdates.find((e) => e.id === newEvent.id)
 											if (!existing) {
-												updated.statusUpdates = [...updated.statusUpdates, newEvent].sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+												updated.statusUpdates = [...updated.statusUpdates, newEvent].sort(
+													(a, b) => (b.created_at || 0) - (a.created_at || 0),
+												)
 												updated.latestStatus = updated.statusUpdates[0]
 											}
 										} else if (typeTag[1] === ORDER_MESSAGE_TYPE.SHIPPING_UPDATE) {
-											const existing = updated.shippingUpdates.find(e => e.id === newEvent.id)
+											const existing = updated.shippingUpdates.find((e) => e.id === newEvent.id)
 											if (!existing) {
-												updated.shippingUpdates = [...updated.shippingUpdates, newEvent].sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+												updated.shippingUpdates = [...updated.shippingUpdates, newEvent].sort(
+													(a, b) => (b.created_at || 0) - (a.created_at || 0),
+												)
 												updated.latestShipping = updated.shippingUpdates[0]
 											}
 										}
@@ -2344,7 +2361,7 @@ export const useOrderById = (orderId: string) => {
 									queryClient.setQueryData(key, updatedList)
 								}
 							}
-							
+
 							updateListCache(orderKeys.byBuyer(userPubkey))
 							updateListCache(orderKeys.bySeller(userPubkey))
 						}
@@ -2354,14 +2371,16 @@ export const useOrderById = (orderId: string) => {
 					const currentDetail = queryClient.getQueryData<OrderWithRelatedEvents>(orderKeys.details(orderId))
 					if (currentDetail) {
 						const updatedDetail = { ...currentDetail }
-						const existing = updatedDetail.paymentReceipts.find(e => e.id === newEvent.id)
+						const existing = updatedDetail.paymentReceipts.find((e) => e.id === newEvent.id)
 						if (!existing) {
-							updatedDetail.paymentReceipts = [...updatedDetail.paymentReceipts, newEvent].sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+							updatedDetail.paymentReceipts = [...updatedDetail.paymentReceipts, newEvent].sort(
+								(a, b) => (b.created_at || 0) - (a.created_at || 0),
+							)
 							updatedDetail.latestPaymentReceipt = updatedDetail.paymentReceipts[0]
 							queryClient.setQueryData(orderKeys.details(orderId), updatedDetail)
 						}
 					}
-					
+
 					// Update list cache (buyer and seller) - update directly to preserve cache
 					if (userPubkey) {
 						const updateListCache = (key: string[]) => {
@@ -2370,11 +2389,13 @@ export const useOrderById = (orderId: string) => {
 								const updatedList = listData.map((orderData) => {
 									const orderTag = orderData.order.tags.find((tag) => tag[0] === 'order')
 									if (orderTag?.[1] !== orderId) return orderData
-									
+
 									const updated = { ...orderData }
-									const existing = updated.paymentReceipts.find(e => e.id === newEvent.id)
+									const existing = updated.paymentReceipts.find((e) => e.id === newEvent.id)
 									if (!existing) {
-										updated.paymentReceipts = [...updated.paymentReceipts, newEvent].sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+										updated.paymentReceipts = [...updated.paymentReceipts, newEvent].sort(
+											(a, b) => (b.created_at || 0) - (a.created_at || 0),
+										)
 										updated.latestPaymentReceipt = updated.paymentReceipts[0]
 									}
 									return updated
@@ -2382,7 +2403,7 @@ export const useOrderById = (orderId: string) => {
 								queryClient.setQueryData(key, updatedList)
 							}
 						}
-						
+
 						updateListCache(orderKeys.byBuyer(userPubkey))
 						updateListCache(orderKeys.bySeller(userPubkey))
 					}
@@ -2392,7 +2413,7 @@ export const useOrderById = (orderId: string) => {
 
 		// Subscriptions will auto-start when handlers are attached
 		// No need to manually call start() - this avoids initialization race conditions
-		
+
 		// Clean up subscriptions when unmounting
 		// Don't manually stop - let NDK handle cleanup naturally
 		// Manually stopping causes NDK internal errors

@@ -194,7 +194,7 @@ function DashboardLayout() {
 	// Fetch order data to determine if user is buyer or seller
 	const { data: order } = useOrderById(orderId || '')
 	const { user } = useStore(authStore)
-	
+
 	// Determine if user is buyer or seller for this order
 	const orderData = React.useMemo(() => {
 		if (!order || !user) return null

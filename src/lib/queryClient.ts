@@ -17,7 +17,7 @@ export async function createQueryClient(): Promise<QueryClient> {
 		// Perform auth and wallet initialization without blocking app startup
 		void authActions.getAuthFromLocalStorageAndLogin()
 		void walletActions.initialize()
-		
+
 		// Create QueryClient
 		const queryClient = new QueryClient({
 			defaultOptions: {
@@ -27,7 +27,7 @@ export async function createQueryClient(): Promise<QueryClient> {
 				},
 			},
 		})
-		
+
 		// Set up IndexedDB persistence for orders (purchases and sales)
 		// This runs asynchronously and doesn't block app initialization
 		if (typeof window !== 'undefined' && 'indexedDB' in window) {
@@ -35,7 +35,7 @@ export async function createQueryClient(): Promise<QueryClient> {
 				// Silently fail - persistence is best effort
 			})
 		}
-		
+
 		return queryClient
 	} catch (error) {
 		throw error
