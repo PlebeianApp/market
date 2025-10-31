@@ -1099,7 +1099,7 @@ export const useOrdersByBuyer = (buyerPubkey: string) => {
 		refetchOnWindowFocus: false, // Don't refetch on window focus - preserve cache
 		refetchOnReconnect: true, // Refetch when reconnecting to network
 		staleTime: 2 * 60 * 1000, // Consider data fresh for 2 minutes
-		gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
+		gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes (increased to match purchases persistence)
 		// Return empty array as placeholder data when disabled
 		placeholderData: queryEnabled ? undefined : [],
 		retry: 1, // Only retry once on failure
@@ -1762,7 +1762,7 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 		refetchOnWindowFocus: false, // Don't refetch on window focus - preserve cache
 		refetchOnReconnect: true, // Refetch when reconnecting to network
 		staleTime: 2 * 60 * 1000, // Consider data fresh for 2 minutes
-		gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
+		gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes (increased for better persistence)
 		// Return empty array as placeholder data when disabled
 		placeholderData: queryEnabled ? undefined : [],
 		retry: 1, // Only retry once on failure
