@@ -449,6 +449,8 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string): Promise<OrderWith
 
 	let orders: Set<NDKEvent>
 	try {
+		console.log('🔍 fetchOrdersByBuyer: Starting subscription for buyer:', buyerPubkey)
+		console.log('🔍 fetchOrdersByBuyer: Filter:', JSON.stringify(orderCreationFilter))
 		// Use subscription with closeOnEose to ensure we get EOSE signal
 		const ordersSet = new Set<NDKEvent>()
 		const subscription = ndk.subscribe(orderCreationFilter, {
@@ -458,39 +460,107 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string): Promise<OrderWith
 		// Get signer for decryption
 		const signer = ndkActions.getSigner()
 
+		// Track all pending event processing promises
+		const pendingEventProcessing: Promise<void>[] = []
+		let subscriptionClosed = false
+
 		// Set up event handlers first
 		subscription.on('event', async (event: NDKEvent) => {
-			// Per NIP-17, encrypted direct messages have their tags encrypted
-			// We need to decrypt first, then check the type tag
-			let decrypted = false
-			try {
-				if (signer && event.content) {
-					// Check if content looks encrypted (not JSON)
-					const contentLooksEncrypted = !event.content.trim().startsWith('{') && !event.content.trim().startsWith('[')
-					if (contentLooksEncrypted) {
-						await event.decrypt(undefined, signer)
-						decrypted = true
+			// Skip if subscription is already closed
+			if (subscriptionClosed) return
+
+			// Process event asynchronously and track the promise
+			const processPromise = (async () => {
+				// Per NIP-17, encrypted direct messages have their tags encrypted
+				// We need to decrypt first, then check the type tag
+				// However, events might not always be encrypted, so check tags before and after decryption
+				
+				// First, check if type tag exists before decryption (for unencrypted events)
+				let typeTag = event.tags.find((tag) => tag[0] === 'type')
+				const orderTag = event.tags.find((tag) => tag[0] === 'order')
+				
+				// If we already found the type tag and it matches, we can skip decryption
+				if (typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION) {
+					console.log('🔍 fetchOrdersByBuyer: Found order event (unencrypted):', event.id)
+					ordersSet.add(event)
+					return
+				}
+				
+				// Try to decrypt if content looks encrypted
+				let decrypted = false
+				try {
+					if (signer && event.content) {
+						// Check if content looks encrypted (not JSON)
+						const contentLooksEncrypted = !event.content.trim().startsWith('{') && !event.content.trim().startsWith('[')
+						if (contentLooksEncrypted) {
+							await event.decrypt(undefined, signer)
+							decrypted = true
+							
+							// Re-check tags after decryption (tags might have been encrypted)
+							typeTag = event.tags.find((tag) => tag[0] === 'type')
+						}
+					}
+				} catch (error) {
+					// Decryption failed - log but continue to check tags
+					const errorMsg = error instanceof Error ? error.message : String(error)
+					// Filter out base64/invalid padding errors (expected when decrypting wrong events)
+					if (!errorMsg.includes('invalid base64') && !errorMsg.includes('Invalid padding') && !errorMsg.includes('invalid payload length') && !errorMsg.includes('Unknown letter')) {
+						console.warn('🔍 fetchOrdersByBuyer: Decryption error for event:', errorMsg)
 					}
 				}
-			} catch (error) {
-				// Decryption failed - continue to check tags
-			}
-			
-			// Check type tag after decryption attempt
-			const typeTag = event.tags.find((tag) => tag[0] === 'type')
-			const orderTag = event.tags.find((tag) => tag[0] === 'order')
-			
-			// If type tag matches ORDER_CREATION, add the event
-			if (typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION) {
-				ordersSet.add(event)
-			}
+				
+				// Check type tag after decryption attempt (or re-check if we already found it)
+				typeTag = event.tags.find((tag) => tag[0] === 'type')
+				
+				// Debug logging
+				if (typeTag) {
+					console.log('🔍 fetchOrdersByBuyer: Found event with type tag:', {
+						typeTagValue: typeTag[1],
+						expectedType: ORDER_MESSAGE_TYPE.ORDER_CREATION,
+						matches: typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION,
+						hasOrderTag: !!orderTag,
+						decrypted,
+						eventId: event.id,
+						author: event.pubkey,
+					})
+				} else {
+					console.log('🔍 fetchOrdersByBuyer: Event received but no type tag found:', {
+						eventId: event.id,
+						author: event.pubkey,
+						tagsCount: event.tags.length,
+						tags: event.tags.map((t) => t[0]),
+						decrypted,
+					})
+				}
+				
+				// If type tag matches ORDER_CREATION, add the event
+				if (typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION) {
+					console.log('🔍 fetchOrdersByBuyer: Adding order event:', event.id)
+					ordersSet.add(event)
+				}
+			})()
+
+			// Track this promise
+			pendingEventProcessing.push(processPromise)
 		})
+
+		// Helper to wait for all pending event processing
+		const waitForPendingEvents = async (): Promise<void> => {
+			if (pendingEventProcessing.length === 0) return
+			try {
+				await Promise.allSettled(pendingEventProcessing)
+			} catch (error) {
+				// Errors are already handled in the individual promises
+				console.warn('🔍 fetchOrdersByBuyer: Some event processing failed:', error)
+			}
+		}
 
 		// Set up eose and close handlers BEFORE starting
 		let stopped = false
 		const stopSubscription = () => {
 			if (!stopped) {
 				stopped = true
+				subscriptionClosed = true
 				// Don't call stop() - let NDK handle cleanup naturally with closeOnEose
 				// Manually stopping causes NDK internal errors
 			}
@@ -501,39 +571,53 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string): Promise<OrderWith
 
 		await Promise.race([
 			new Promise<void>((resolve) => {
-				const timeout = setTimeout(() => {
+				const timeout = setTimeout(async () => {
 					stopSubscription()
+					await waitForPendingEvents()
+					console.log('🔍 fetchOrdersByBuyer: Timeout reached, found', ordersSet.size, 'orders')
 					resolve()
 				}, 2500) // 2.5 second timeout
 
-				subscription.on('eose', () => {
+				subscription.on('eose', async () => {
+					console.log('🔍 fetchOrdersByBuyer: EOSE received, waiting for pending events...')
 					clearTimeout(timeout)
+					// Wait for all pending event processing to complete
+					await waitForPendingEvents()
+					console.log('🔍 fetchOrdersByBuyer: EOSE processed, found', ordersSet.size, 'orders')
 					stopSubscription()
 					resolve()
 				})
 
-				subscription.on('close', () => {
+				subscription.on('close', async () => {
+					console.log('🔍 fetchOrdersByBuyer: Subscription closed, waiting for pending events...')
 					clearTimeout(timeout)
+					// Wait for all pending event processing to complete
+					await waitForPendingEvents()
+					console.log('🔍 fetchOrdersByBuyer: Close processed, found', ordersSet.size, 'orders')
 					stopSubscription()
 					resolve()
 				})
 			}),
 			// Fallback timeout
 			new Promise<void>((resolve) => {
-				setTimeout(() => {
+				setTimeout(async () => {
 					stopSubscription()
+					await waitForPendingEvents()
+					console.log('🔍 fetchOrdersByBuyer: Fallback timeout reached, found', ordersSet.size, 'orders')
 					resolve()
 				}, 3000)
 			})
 		])
 
 		orders = ordersSet
+		console.log('🔍 fetchOrdersByBuyer: Subscription completed, found', orders.size, 'orders')
 	} catch (error) {
 		console.error('🔍 fetchOrdersByBuyer: Error fetching orders:', error)
 		throw error
 	}
 
 	if (orders.size === 0) {
+		console.warn('🔍 fetchOrdersByBuyer: No orders found for buyer:', buyerPubkey)
 		return []
 	}
 
