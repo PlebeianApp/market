@@ -769,8 +769,25 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 					}
 					
 					const orderTag = event.tags.find((tag) => tag[0] === 'order')
-					if (orderTag && orderIdsSet.has(orderTag[1])) {
-						updateCacheForOrder(orderTag[1], event)
+					if (orderTag && orderTag[1]) {
+						const orderId = orderTag[1]
+						// Check if this order ID is in our set (might have been added after subscription started)
+						if (orderIdsSet.has(orderId)) {
+							updateCacheForOrder(orderId, event)
+						} else {
+							// Check if this order exists in the cache (order IDs might not be in set yet)
+							const currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey))
+							if (currentData) {
+								const orderExists = currentData.some((orderData) => {
+									const dataOrderTag = orderData.order.tags.find((tag) => tag[0] === 'order')
+									return dataOrderTag?.[1] === orderId
+								})
+								if (orderExists) {
+									orderIdsSet.add(orderId) // Add to set for future events
+									updateCacheForOrder(orderId, event)
+								}
+							}
+						}
 					}
 				} catch (error) {
 					const errorMsg = error instanceof Error ? error.message : String(error)
@@ -829,7 +846,8 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 			console.warn('🔍 fetchOrdersByBuyer: Subscription not started, returning empty orders')
 			orders = new Set()
 		} else {
-			// Start orders subscription first - wait for it to complete
+			// Start orders subscription and wait for it to complete
+			// As soon as we have orders, we'll start fetching related events in parallel
 			await Promise.race([
 				new Promise<void>((resolve) => {
 					const timeout = setTimeout(async () => {
@@ -877,11 +895,29 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 	// Get all order IDs (populate from Set we built during subscription)
 	const orderIds = Array.from(orderIdsSet).filter(Boolean)
 
-	// Create initial result with empty related events - return immediately
-	// Related events are already being fetched in parallel and will update cache
+	// Get existing cached data to merge related events if available
+	const existingCache = queryClient?.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey))
+
+	// Create initial result - merge with existing cache if available
 	const initialResult: OrderWithRelatedEvents[] = Array.from(orders).map((order) => {
 		const orderTag = order.tags.find((tag) => tag[0] === 'order')
-		if (!orderTag?.[1]) {
+		const orderId = orderTag?.[1]
+		
+		// Add order ID to set so related events subscription can match it
+		if (orderId) {
+			orderIdsSet.add(orderId)
+		}
+		
+		// Check if we have cached related events for this order
+		let cachedRelatedEvents: OrderWithRelatedEvents | undefined
+		if (existingCache && orderId) {
+			cachedRelatedEvents = existingCache.find((cached) => {
+				const cachedOrderTag = cached.order.tags.find((tag) => tag[0] === 'order')
+				return cachedOrderTag?.[1] === orderId
+			})
+		}
+
+		if (!orderId) {
 			return {
 				order,
 				paymentRequests: [],
@@ -892,30 +928,45 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 			}
 		}
 
+		// Use cached related events if available, otherwise use empty arrays
 		return {
 			order,
-			paymentRequests: [],
-			statusUpdates: [],
-			shippingUpdates: [],
-			generalMessages: [],
-			paymentReceipts: [],
+			paymentRequests: cachedRelatedEvents?.paymentRequests || [],
+			statusUpdates: cachedRelatedEvents?.statusUpdates || [],
+			shippingUpdates: cachedRelatedEvents?.shippingUpdates || [],
+			generalMessages: cachedRelatedEvents?.generalMessages || [],
+			paymentReceipts: cachedRelatedEvents?.paymentReceipts || [],
+			latestStatus: cachedRelatedEvents?.latestStatus,
+			latestShipping: cachedRelatedEvents?.latestShipping,
+			latestPaymentRequest: cachedRelatedEvents?.latestPaymentRequest,
+			latestPaymentReceipt: cachedRelatedEvents?.latestPaymentReceipt,
+			latestMessage: cachedRelatedEvents?.latestMessage,
 		}
 	})
 
-	// Set initial cache and start related events subscription
+	// Don't set cache directly here - let the queryFn handle caching and merging
+	// Setting cache here would overwrite existing related events
+
+	// Start fetching related events in parallel AFTER orders are found (don't wait)
 	if (queryClient && relatedEventsSubscription) {
-		queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), initialResult)
+		// Ensure order IDs are populated
+		console.log('🔍 fetchOrdersByBuyer: Order IDs ready for related events:', Array.from(orderIdsSet))
 		
-		// Now start related events subscription after cache is set
-		try {
-			relatedEventsSubscription.start()
-			console.log('🔍 fetchOrdersByBuyer: Started related events subscription')
-		} catch (startError) {
-			console.error('🔍 fetchOrdersByBuyer: Error starting related events subscription:', startError)
-		}
+		// Start related events subscription synchronously after a small delay to ensure handlers are set up
+		setTimeout(() => {
+			try {
+				if (relatedEventsSubscription && ndk && ndk.pool) {
+					relatedEventsSubscription.start()
+					console.log('🔍 fetchOrdersByBuyer: Started related events subscription in parallel')
+				}
+			} catch (startError) {
+				console.error('🔍 fetchOrdersByBuyer: Error starting related events subscription:', startError)
+			}
+		}, 100)
 	}
 
-	// Return orders immediately - related events subscription will update cache as events arrive
+	// Return orders immediately - related events subscription is fetching in parallel
+	// The queryFn will handle caching and merging with existing cache
 	return initialResult
 }
 
@@ -946,6 +997,80 @@ export const useOrdersByBuyer = (buyerPubkey: string) => {
 					return cachedData
 				}
 				
+				// ALWAYS merge result with cached data to preserve related events
+				// This ensures cache is never wiped - we always preserve what's already there
+				if (cachedData && cachedData.length > 0) {
+					// Create a map of cached orders by order ID for quick lookup
+					const cachedMap = new Map<string, OrderWithRelatedEvents>()
+					cachedData.forEach((cachedOrder) => {
+						const orderTag = cachedOrder.order.tags.find((tag) => tag[0] === 'order')
+						const orderId = orderTag?.[1]
+						if (orderId) {
+							cachedMap.set(orderId, cachedOrder)
+						}
+					})
+					
+					// Merge: if result has empty related events but cache has them, use cache's related events
+					const mergedResult = result.map((orderData) => {
+						const orderTag = orderData.order.tags.find((tag) => tag[0] === 'order')
+						const orderId = orderTag?.[1]
+						if (!orderId) return orderData
+						
+						const cachedOrder = cachedMap.get(orderId)
+						if (!cachedOrder) return orderData
+						
+						// If result has empty related events but cache has them, use cache's related events
+						const hasRelatedEvents = 
+							orderData.statusUpdates.length > 0 ||
+							orderData.paymentReceipts.length > 0 ||
+							orderData.shippingUpdates.length > 0 ||
+							orderData.paymentRequests.length > 0 ||
+							orderData.generalMessages.length > 0
+						
+						const cachedHasRelatedEvents = 
+							cachedOrder.statusUpdates.length > 0 ||
+							cachedOrder.paymentReceipts.length > 0 ||
+							cachedOrder.shippingUpdates.length > 0 ||
+							cachedOrder.paymentRequests.length > 0 ||
+							cachedOrder.generalMessages.length > 0
+						
+						// If result doesn't have related events but cache does, use cache's related events
+						if (!hasRelatedEvents && cachedHasRelatedEvents) {
+							return cachedOrder
+						}
+						
+						// Otherwise, merge: take the union of events from both (deduplicated by event ID)
+						const mergeEvents = (resultEvents: NDKEvent[], cachedEvents: NDKEvent[]) => {
+							const eventMap = new Map<string, NDKEvent>()
+							// First add cached events
+							cachedEvents.forEach(e => eventMap.set(e.id, e))
+							// Then add result events (they take precedence if duplicate)
+							resultEvents.forEach(e => eventMap.set(e.id, e))
+							return Array.from(eventMap.values()).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+						}
+						
+						return {
+							...orderData,
+							paymentRequests: mergeEvents(orderData.paymentRequests, cachedOrder.paymentRequests),
+							statusUpdates: mergeEvents(orderData.statusUpdates, cachedOrder.statusUpdates),
+							shippingUpdates: mergeEvents(orderData.shippingUpdates, cachedOrder.shippingUpdates),
+							generalMessages: mergeEvents(orderData.generalMessages, cachedOrder.generalMessages),
+							paymentReceipts: mergeEvents(orderData.paymentReceipts, cachedOrder.paymentReceipts),
+							latestStatus: mergeEvents(orderData.statusUpdates, cachedOrder.statusUpdates)[0],
+							latestShipping: mergeEvents(orderData.shippingUpdates, cachedOrder.shippingUpdates)[0],
+							latestPaymentRequest: mergeEvents(orderData.paymentRequests, cachedOrder.paymentRequests)[0],
+							latestPaymentReceipt: mergeEvents(orderData.paymentReceipts, cachedOrder.paymentReceipts)[0],
+							latestMessage: mergeEvents(orderData.generalMessages, cachedOrder.generalMessages)[0],
+						}
+					})
+					
+					// Cache the merged result to preserve related events - this prevents cache from being wiped
+					queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), mergedResult)
+					return mergedResult
+				}
+				
+				// No cached data - cache the result as-is
+				queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), result)
 				return result
 			} catch (error) {
 				console.error('🔍 useOrdersByBuyer: queryFn error:', error)
@@ -958,10 +1083,10 @@ export const useOrdersByBuyer = (buyerPubkey: string) => {
 			}
 		},
 		enabled: queryEnabled,
-		refetchOnMount: true, // Refetch on mount if data is stale
-		refetchOnWindowFocus: true,
-		refetchOnReconnect: true,
-		staleTime: 0, // Always consider data stale to allow cache updates to be visible immediately
+		refetchOnMount: false, // Don't refetch on mount - use cache if available
+		refetchOnWindowFocus: false, // Don't refetch on window focus - preserve cache
+		refetchOnReconnect: true, // Refetch when reconnecting to network
+		staleTime: 2 * 60 * 1000, // Consider data fresh for 2 minutes
 		gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
 		// Return empty array as placeholder data when disabled
 		placeholderData: queryEnabled ? undefined : [],
@@ -1050,6 +1175,8 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 	let orders: Set<NDKEvent>
 	// Track order IDs dynamically as they're discovered
 	const orderIdsSet = new Set<string>()
+	// Declare related events subscription outside try block so it's accessible later
+	let relatedEventsSubscription: NDKSubscription | null = null
 	
 	try {
 		// Use subscription - we'll handle closing ourselves to avoid NDK internal timeout conflicts
@@ -1078,7 +1205,6 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 			limit: 500,
 		}
 		
-		let relatedEventsSubscription: NDKSubscription | null = null
 		if (queryClient) {
 			try {
 				relatedEventsSubscription = ndk.subscribe(relatedEventsFilter, {
@@ -1301,8 +1427,25 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 					}
 					
 					const orderTag = event.tags.find((tag) => tag[0] === 'order')
-					if (orderTag && orderIdsSet.has(orderTag[1])) {
-						updateCacheForOrder(orderTag[1], event)
+					if (orderTag && orderTag[1]) {
+						const orderId = orderTag[1]
+						// Check if this order ID is in our set (might have been added after subscription started)
+						if (orderIdsSet.has(orderId)) {
+							updateCacheForOrder(orderId, event)
+						} else {
+							// Check if this order exists in the cache (order IDs might not be in set yet)
+							const currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey))
+							if (currentData) {
+								const orderExists = currentData.some((orderData) => {
+									const dataOrderTag = orderData.order.tags.find((tag) => tag[0] === 'order')
+									return dataOrderTag?.[1] === orderId
+								})
+								if (orderExists) {
+									orderIdsSet.add(orderId) // Add to set for future events
+									updateCacheForOrder(orderId, event)
+								}
+							}
+						}
 					}
 				} catch (error) {
 					const errorMsg = error instanceof Error ? error.message : String(error)
@@ -1312,12 +1455,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 				}
 			})
 			
-			// Start related events subscription in parallel
-			try {
-				relatedEventsSubscription.start()
-			} catch (startError) {
-				console.error('🔍 fetchOrdersBySeller: Error starting related events subscription:', startError)
-			}
+			// Don't start related events subscription here - it will be started after orders subscription completes
 		}
 
 		// Set up eose and close handlers BEFORE starting
@@ -1401,6 +1539,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 		])
 
 		orders = ordersSet
+		console.log('🔍 fetchOrdersBySeller: Subscription completed, found', orders.size, 'orders')
 	} catch (error) {
 		console.error('🔍 fetchOrdersBySeller: Error fetching orders:', error)
 		orders = new Set()
@@ -1413,29 +1552,66 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 	// Get all order IDs (populate from Set we built during subscription)
 	const orderIds = Array.from(orderIdsSet).filter(Boolean)
 
-	if (orderIds.length === 0) return []
+	// Get existing cached data to merge related events if available
+	const existingCache = queryClient?.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey))
 
-	// Create initial result with empty related events - return immediately
-	// Related events are already being fetched in parallel and will update cache
+	// Create initial result - merge with existing cache if available
 	const initialResult = Array.from(orders).map((order) => {
 		const orderTag = order.tags.find((tag) => tag[0] === 'order')
 		const orderId = orderTag?.[1] || ''
+		
+		// Add order ID to set so related events subscription can match it
+		if (orderId) {
+			orderIdsSet.add(orderId)
+		}
+		
+		// Check if we have cached related events for this order
+		let cachedRelatedEvents: OrderWithRelatedEvents | undefined
+		if (existingCache && orderId) {
+			cachedRelatedEvents = existingCache.find((cached) => {
+				const cachedOrderTag = cached.order.tags.find((tag) => tag[0] === 'order')
+				return cachedOrderTag?.[1] === orderId
+			})
+		}
+		
 		return {
 			order,
-			paymentRequests: [],
-			statusUpdates: [],
-			shippingUpdates: [],
-			generalMessages: [],
-			paymentReceipts: [],
-			latestStatus: undefined,
-			latestShipping: undefined,
-			latestPaymentRequest: undefined,
-			latestPaymentReceipt: undefined,
-			latestMessage: undefined,
+			paymentRequests: cachedRelatedEvents?.paymentRequests || [],
+			statusUpdates: cachedRelatedEvents?.statusUpdates || [],
+			shippingUpdates: cachedRelatedEvents?.shippingUpdates || [],
+			generalMessages: cachedRelatedEvents?.generalMessages || [],
+			paymentReceipts: cachedRelatedEvents?.paymentReceipts || [],
+			latestStatus: cachedRelatedEvents?.latestStatus,
+			latestShipping: cachedRelatedEvents?.latestShipping,
+			latestPaymentRequest: cachedRelatedEvents?.latestPaymentRequest,
+			latestPaymentReceipt: cachedRelatedEvents?.latestPaymentReceipt,
+			latestMessage: cachedRelatedEvents?.latestMessage,
 		}
 	})
 
-	// Return orders immediately - related events subscription is already running in parallel and updating cache
+	// Don't set cache directly here - let the queryFn handle caching and merging
+	// Setting cache here would overwrite existing related events
+
+	// Start fetching related events in parallel AFTER orders are found (don't wait)
+	if (queryClient && relatedEventsSubscription) {
+		// Ensure order IDs are populated
+		console.log('🔍 fetchOrdersBySeller: Order IDs ready for related events:', Array.from(orderIdsSet))
+		
+		// Start related events subscription synchronously after a small delay to ensure handlers are set up
+		setTimeout(() => {
+			try {
+				if (relatedEventsSubscription && ndk && ndk.pool) {
+					relatedEventsSubscription.start()
+					console.log('🔍 fetchOrdersBySeller: Started related events subscription in parallel')
+				}
+			} catch (startError) {
+				console.error('🔍 fetchOrdersBySeller: Error starting related events subscription:', startError)
+			}
+		}, 100)
+	}
+
+	// Return orders immediately - related events subscription is fetching in parallel
+	// The queryFn will handle caching and merging with existing cache
 	return initialResult
 }
 
@@ -1466,6 +1642,80 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 					return cachedData
 				}
 				
+				// ALWAYS merge result with cached data to preserve related events
+				// This ensures cache is never wiped - we always preserve what's already there
+				if (cachedData && cachedData.length > 0) {
+					// Create a map of cached orders by order ID for quick lookup
+					const cachedMap = new Map<string, OrderWithRelatedEvents>()
+					cachedData.forEach((cachedOrder) => {
+						const orderTag = cachedOrder.order.tags.find((tag) => tag[0] === 'order')
+						const orderId = orderTag?.[1]
+						if (orderId) {
+							cachedMap.set(orderId, cachedOrder)
+						}
+					})
+					
+					// Merge: if result has empty related events but cache has them, use cache's related events
+					const mergedResult = result.map((orderData) => {
+						const orderTag = orderData.order.tags.find((tag) => tag[0] === 'order')
+						const orderId = orderTag?.[1]
+						if (!orderId) return orderData
+						
+						const cachedOrder = cachedMap.get(orderId)
+						if (!cachedOrder) return orderData
+						
+						// If result has empty related events but cache has them, use cache's related events
+						const hasRelatedEvents = 
+							orderData.statusUpdates.length > 0 ||
+							orderData.paymentReceipts.length > 0 ||
+							orderData.shippingUpdates.length > 0 ||
+							orderData.paymentRequests.length > 0 ||
+							orderData.generalMessages.length > 0
+						
+						const cachedHasRelatedEvents = 
+							cachedOrder.statusUpdates.length > 0 ||
+							cachedOrder.paymentReceipts.length > 0 ||
+							cachedOrder.shippingUpdates.length > 0 ||
+							cachedOrder.paymentRequests.length > 0 ||
+							cachedOrder.generalMessages.length > 0
+						
+						// If result doesn't have related events but cache does, use cache's related events
+						if (!hasRelatedEvents && cachedHasRelatedEvents) {
+							return cachedOrder
+						}
+						
+						// Otherwise, merge: take the union of events from both (deduplicated by event ID)
+						const mergeEvents = (resultEvents: NDKEvent[], cachedEvents: NDKEvent[]) => {
+							const eventMap = new Map<string, NDKEvent>()
+							// First add cached events
+							cachedEvents.forEach(e => eventMap.set(e.id, e))
+							// Then add result events (they take precedence if duplicate)
+							resultEvents.forEach(e => eventMap.set(e.id, e))
+							return Array.from(eventMap.values()).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+						}
+						
+						return {
+							...orderData,
+							paymentRequests: mergeEvents(orderData.paymentRequests, cachedOrder.paymentRequests),
+							statusUpdates: mergeEvents(orderData.statusUpdates, cachedOrder.statusUpdates),
+							shippingUpdates: mergeEvents(orderData.shippingUpdates, cachedOrder.shippingUpdates),
+							generalMessages: mergeEvents(orderData.generalMessages, cachedOrder.generalMessages),
+							paymentReceipts: mergeEvents(orderData.paymentReceipts, cachedOrder.paymentReceipts),
+							latestStatus: mergeEvents(orderData.statusUpdates, cachedOrder.statusUpdates)[0],
+							latestShipping: mergeEvents(orderData.shippingUpdates, cachedOrder.shippingUpdates)[0],
+							latestPaymentRequest: mergeEvents(orderData.paymentRequests, cachedOrder.paymentRequests)[0],
+							latestPaymentReceipt: mergeEvents(orderData.paymentReceipts, cachedOrder.paymentReceipts)[0],
+							latestMessage: mergeEvents(orderData.generalMessages, cachedOrder.generalMessages)[0],
+						}
+					})
+					
+					// Cache the merged result to preserve related events - this prevents cache from being wiped
+					queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), mergedResult)
+					return mergedResult
+				}
+				
+				// No cached data - cache the result as-is
+				queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), result)
 				return result
 			} catch (error) {
 				console.error('🔍 useOrdersBySeller: queryFn error:', error)
@@ -1478,10 +1728,10 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 			}
 		},
 		enabled: queryEnabled,
-		refetchOnMount: true, // Refetch on mount if data is stale
-		refetchOnWindowFocus: true,
-		refetchOnReconnect: true,
-		staleTime: 0, // Always consider data stale to allow cache updates to be visible immediately
+		refetchOnMount: false, // Don't refetch on mount - use cache if available
+		refetchOnWindowFocus: false, // Don't refetch on window focus - preserve cache
+		refetchOnReconnect: true, // Refetch when reconnecting to network
+		staleTime: 2 * 60 * 1000, // Consider data fresh for 2 minutes
 		gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
 		// Return empty array as placeholder data when disabled
 		placeholderData: queryEnabled ? undefined : [],
@@ -1517,8 +1767,42 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 
 /**
  * Fetches a specific order by its ID
+ * Checks cache first before making REQ
  */
-export const fetchOrderById = async (orderId: string): Promise<OrderWithRelatedEvents | null> => {
+export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<typeof useQueryClient>): Promise<OrderWithRelatedEvents | null> => {
+	// Check cache first if queryClient is provided
+	if (queryClient) {
+		// Check if order is in detail cache
+		const cachedOrder = queryClient.getQueryData<OrderWithRelatedEvents>(orderKeys.details(orderId))
+		if (cachedOrder) {
+			console.log(`🔍 fetchOrderById: Found order ${orderId} in detail cache`)
+			return cachedOrder
+		}
+
+		// Check if order is in list caches (buyer/seller orders)
+		const signer = ndkActions.getSigner()
+		const user = signer ? await signer.user().catch(() => null) : null
+		const userPubkey = user?.pubkey
+
+		if (userPubkey) {
+			const buyerOrders = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(userPubkey)) || []
+			const sellerOrders = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(userPubkey)) || []
+			const allCachedOrders = [...buyerOrders, ...sellerOrders]
+
+			const found = allCachedOrders.find((order) => {
+				const orderTag = order.order.tags.find((tag) => tag[0] === 'order')
+				return orderTag?.[1] === orderId
+			})
+
+			if (found) {
+				console.log(`🔍 fetchOrderById: Found order ${orderId} in list cache`)
+				// Cache it in detail cache for future lookups
+				queryClient.setQueryData(orderKeys.details(orderId), found)
+				return found
+			}
+		}
+	}
+
 	let ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -1546,7 +1830,7 @@ export const fetchOrderById = async (orderId: string): Promise<OrderWithRelatedE
 		}
 	}
 
-	console.log(`🔍 fetchOrderById: Searching for order with ID: ${orderId}`)
+	console.log(`🔍 fetchOrderById: Searching for order with ID: ${orderId} (not in cache)`)
 
 	// Check if we have a UUID format or a hash format
 	const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(orderId)
@@ -1918,7 +2202,7 @@ export const fetchOrderById = async (orderId: string): Promise<OrderWithRelatedE
 	generalMessages.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 	paymentReceipts.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 
-	return {
+	const result: OrderWithRelatedEvents = {
 		order: orderEvent,
 		paymentRequests,
 		statusUpdates,
@@ -1931,6 +2215,36 @@ export const fetchOrderById = async (orderId: string): Promise<OrderWithRelatedE
 		latestPaymentReceipt: paymentReceipts[0],
 		latestMessage: generalMessages[0],
 	}
+
+	// Cache the result if queryClient is available
+	if (queryClient) {
+		queryClient.setQueryData(orderKeys.details(orderId), result)
+		
+		// Also update list cache if we have the user pubkey
+		const signer = ndkActions.getSigner()
+		const user = signer ? await signer.user().catch(() => null) : null
+		const userPubkey = user?.pubkey
+		
+		if (userPubkey) {
+			const updateListCache = (key: string[]) => {
+				const listData = queryClient.getQueryData<OrderWithRelatedEvents[]>(key)
+				if (listData) {
+					const updatedList = listData.map((orderData) => {
+						const orderTag = orderData.order.tags.find((tag) => tag[0] === 'order')
+						if (orderTag?.[1] !== orderId) return orderData
+						// Replace with the full result from fetchOrderById
+						return result
+					})
+					queryClient.setQueryData(key, updatedList)
+				}
+			}
+			
+			updateListCache(orderKeys.byBuyer(userPubkey))
+			updateListCache(orderKeys.bySeller(userPubkey))
+		}
+	}
+
+	return result
 }
 
 /**
@@ -2045,32 +2359,104 @@ export const useOrderById = (orderId: string) => {
 					return
 				}
 
-				// If we get a status update, shipping update, or payment receipt, invalidate and refetch queries
+				// Update cache directly instead of invalidating/refetching to preserve related events
 				if (newEvent.kind === ORDER_PROCESS_KIND) {
 					const typeTag = newEvent.tags.find((tag) => tag[0] === 'type')
 					if (typeTag && (typeTag[1] === ORDER_MESSAGE_TYPE.STATUS_UPDATE || typeTag[1] === ORDER_MESSAGE_TYPE.SHIPPING_UPDATE)) {
-						console.log(`🔍 useOrderById: Status/shipping update received, invalidating and refetching queries`)
-						queryClient.invalidateQueries({ queryKey: orderKeys.details(orderId) })
-						queryClient.refetchQueries({ queryKey: orderKeys.details(orderId) })
-						// Also invalidate and refetch list queries so dashboard/sales/purchases pages update immediately
+						console.log(`🔍 useOrderById: Status/shipping update received, updating cache directly`)
+						
+						// Update detail cache
+						const currentDetail = queryClient.getQueryData<OrderWithRelatedEvents>(orderKeys.details(orderId))
+						if (currentDetail) {
+							const updatedDetail = { ...currentDetail }
+							if (typeTag[1] === ORDER_MESSAGE_TYPE.STATUS_UPDATE) {
+								const existing = updatedDetail.statusUpdates.find(e => e.id === newEvent.id)
+								if (!existing) {
+									updatedDetail.statusUpdates = [...updatedDetail.statusUpdates, newEvent].sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+									updatedDetail.latestStatus = updatedDetail.statusUpdates[0]
+									queryClient.setQueryData(orderKeys.details(orderId), updatedDetail)
+								}
+							} else if (typeTag[1] === ORDER_MESSAGE_TYPE.SHIPPING_UPDATE) {
+								const existing = updatedDetail.shippingUpdates.find(e => e.id === newEvent.id)
+								if (!existing) {
+									updatedDetail.shippingUpdates = [...updatedDetail.shippingUpdates, newEvent].sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+									updatedDetail.latestShipping = updatedDetail.shippingUpdates[0]
+									queryClient.setQueryData(orderKeys.details(orderId), updatedDetail)
+								}
+							}
+						}
+						
+						// Update list cache (buyer and seller) - update directly to preserve cache
 						if (userPubkey) {
-							queryClient.invalidateQueries({ queryKey: orderKeys.bySeller(userPubkey) })
-							queryClient.invalidateQueries({ queryKey: orderKeys.byBuyer(userPubkey) })
-							queryClient.refetchQueries({ queryKey: orderKeys.bySeller(userPubkey) })
-							queryClient.refetchQueries({ queryKey: orderKeys.byBuyer(userPubkey) })
+							const updateListCache = (key: string[]) => {
+								const listData = queryClient.getQueryData<OrderWithRelatedEvents[]>(key)
+								if (listData) {
+									const updatedList = listData.map((orderData) => {
+										const orderTag = orderData.order.tags.find((tag) => tag[0] === 'order')
+										if (orderTag?.[1] !== orderId) return orderData
+										
+										const updated = { ...orderData }
+										if (typeTag[1] === ORDER_MESSAGE_TYPE.STATUS_UPDATE) {
+											const existing = updated.statusUpdates.find(e => e.id === newEvent.id)
+											if (!existing) {
+												updated.statusUpdates = [...updated.statusUpdates, newEvent].sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+												updated.latestStatus = updated.statusUpdates[0]
+											}
+										} else if (typeTag[1] === ORDER_MESSAGE_TYPE.SHIPPING_UPDATE) {
+											const existing = updated.shippingUpdates.find(e => e.id === newEvent.id)
+											if (!existing) {
+												updated.shippingUpdates = [...updated.shippingUpdates, newEvent].sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+												updated.latestShipping = updated.shippingUpdates[0]
+											}
+										}
+										return updated
+									})
+									queryClient.setQueryData(key, updatedList)
+								}
+							}
+							
+							updateListCache(orderKeys.byBuyer(userPubkey))
+							updateListCache(orderKeys.bySeller(userPubkey))
 						}
 					}
 				} else if (newEvent.kind === PAYMENT_RECEIPT_KIND) {
-					// Payment receipt received - force immediate refetch to update payment status
-					console.log('🔍 useOrderById: Payment receipt received, forcing immediate refetch:', newEvent.id)
-					queryClient.invalidateQueries({ queryKey: orderKeys.details(orderId) })
-					queryClient.refetchQueries({ queryKey: orderKeys.details(orderId) })
-					// Also invalidate and refetch list queries so dashboard/sales/purchases pages update immediately
+					console.log('🔍 useOrderById: Payment receipt received, updating cache directly:', newEvent.id)
+					
+					// Update detail cache
+					const currentDetail = queryClient.getQueryData<OrderWithRelatedEvents>(orderKeys.details(orderId))
+					if (currentDetail) {
+						const updatedDetail = { ...currentDetail }
+						const existing = updatedDetail.paymentReceipts.find(e => e.id === newEvent.id)
+						if (!existing) {
+							updatedDetail.paymentReceipts = [...updatedDetail.paymentReceipts, newEvent].sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+							updatedDetail.latestPaymentReceipt = updatedDetail.paymentReceipts[0]
+							queryClient.setQueryData(orderKeys.details(orderId), updatedDetail)
+						}
+					}
+					
+					// Update list cache (buyer and seller) - update directly to preserve cache
 					if (userPubkey) {
-						queryClient.invalidateQueries({ queryKey: orderKeys.bySeller(userPubkey) })
-						queryClient.invalidateQueries({ queryKey: orderKeys.byBuyer(userPubkey) })
-						queryClient.refetchQueries({ queryKey: orderKeys.bySeller(userPubkey) })
-						queryClient.refetchQueries({ queryKey: orderKeys.byBuyer(userPubkey) })
+						const updateListCache = (key: string[]) => {
+							const listData = queryClient.getQueryData<OrderWithRelatedEvents[]>(key)
+							if (listData) {
+								const updatedList = listData.map((orderData) => {
+									const orderTag = orderData.order.tags.find((tag) => tag[0] === 'order')
+									if (orderTag?.[1] !== orderId) return orderData
+									
+									const updated = { ...orderData }
+									const existing = updated.paymentReceipts.find(e => e.id === newEvent.id)
+									if (!existing) {
+										updated.paymentReceipts = [...updated.paymentReceipts, newEvent].sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+										updated.latestPaymentReceipt = updated.paymentReceipts[0]
+									}
+									return updated
+								})
+								queryClient.setQueryData(key, updatedList)
+							}
+						}
+						
+						updateListCache(orderKeys.byBuyer(userPubkey))
+						updateListCache(orderKeys.bySeller(userPubkey))
 					}
 				}
 			})
@@ -2089,15 +2475,17 @@ export const useOrderById = (orderId: string) => {
 
 	return useQuery({
 		queryKey: orderKeys.details(orderId),
-		queryFn: () => fetchOrderById(orderId),
+		queryFn: () => fetchOrderById(orderId, queryClient),
 		enabled: !!orderId,
-		// Always fetch fresh data to get latest status updates
-		staleTime: 0, // Always consider data stale to force refetch
+		// Use cache-first approach - data is fresh for 2 minutes
+		staleTime: 2 * 60 * 1000, // Consider data fresh for 2 minutes
 		gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
-		refetchOnMount: true, // Always refetch when component mounts
-		refetchOnWindowFocus: true, // Refetch when window regains focus
-		refetchOnReconnect: true, // Refetch when network reconnects
-		refetchInterval: 30000, // Refetch every 30 seconds to keep status updated
+		refetchOnMount: false, // Don't refetch on mount - use cache if available
+		refetchOnWindowFocus: false, // Don't refetch on window focus - preserve cache
+		refetchOnReconnect: true, // Refetch when reconnecting to network
+		// Use cached order as initial data if available
+		initialData: cachedOrder,
+		placeholderData: cachedOrder, // Use cached order as placeholder while fetching
 	})
 }
 

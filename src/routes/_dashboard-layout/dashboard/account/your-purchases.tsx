@@ -34,11 +34,18 @@ function YourPurchasesComponent() {
 		})
 	}, [userPubkey, queryClient])
 
-	// Explicitly refetch on mount to ensure fresh data on refresh
+	// Refetch only on initial mount or when cache is empty (not on navigation back)
 	useEffect(() => {
 		if (!userPubkey) return
 
-		// Wait for NDK to be ready, then refetch
+		// Check if we already have cached data
+		const cachedData = queryClient.getQueryData(orderKeys.byBuyer(userPubkey))
+		if (cachedData) {
+			// We have cached data, don't refetch (preserves cache when navigating back)
+			return
+		}
+
+		// Only refetch if cache is empty (initial load or cache expired)
 		const refetchOrders = async () => {
 			// Ensure NDK is connected first
 			const ndk = ndkActions.getNDK()
