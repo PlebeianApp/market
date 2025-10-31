@@ -17,7 +17,6 @@ export async function createQueryClient(): Promise<QueryClient> {
 		// Perform auth and wallet initialization without blocking app startup
 		void authActions.getAuthFromLocalStorageAndLogin()
 		void walletActions.initialize()
-		console.log('NDK and stores initialized successfully')
 		
 		// Create QueryClient
 		const queryClient = new QueryClient({
@@ -32,14 +31,13 @@ export async function createQueryClient(): Promise<QueryClient> {
 		// Set up IndexedDB persistence for orders (purchases and sales)
 		// This runs asynchronously and doesn't block app initialization
 		if (typeof window !== 'undefined' && 'indexedDB' in window) {
-			persistOrdersToIndexedDB(queryClient).catch((error) => {
-				console.warn('Failed to set up IndexedDB persistence for orders:', error)
+			persistOrdersToIndexedDB(queryClient).catch(() => {
+				// Silently fail - persistence is best effort
 			})
 		}
 		
 		return queryClient
 	} catch (error) {
-		console.error('Error initializing NDK and stores:', error)
 		throw error
 	}
 }

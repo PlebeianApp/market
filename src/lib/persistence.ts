@@ -86,7 +86,7 @@ export async function persistOrdersToIndexedDB(queryClient: QueryClient): Promis
 			try {
 				await persister.setItem('react-query-orders-cache', JSON.stringify(persistedClient))
 			} catch (error) {
-				console.error('Failed to persist orders to IndexedDB:', error)
+				// Silently fail - persistence is best effort
 			}
 		},
 		restoreClient: async () => {
@@ -94,7 +94,6 @@ export async function persistOrdersToIndexedDB(queryClient: QueryClient): Promis
 				const persisted = await persister.getItem('react-query-orders-cache')
 				return persisted ? JSON.parse(persisted) : undefined
 			} catch (error) {
-				console.error('Failed to restore orders from IndexedDB:', error)
 				return undefined
 			}
 		},
@@ -102,7 +101,7 @@ export async function persistOrdersToIndexedDB(queryClient: QueryClient): Promis
 			try {
 				await persister.removeItem('react-query-orders-cache')
 			} catch (error) {
-				console.error('Failed to remove orders from IndexedDB:', error)
+				// Silently fail - cleanup is best effort
 			}
 		},
 	}
@@ -145,7 +144,7 @@ export async function persistOrdersToIndexedDB(queryClient: QueryClient): Promis
 				await indexedDBPersister.persistClient(dehydratedState)
 			}
 		} catch (error) {
-			console.error('Failed to manually persist orders cache:', error)
+			// Silently fail - persistence is best effort
 		}
 	}
 
@@ -155,7 +154,6 @@ export async function persistOrdersToIndexedDB(queryClient: QueryClient): Promis
 		restored.queries.forEach((query: any) => {
 			queryClient.setQueryData(query.queryKey, query.state.data)
 		})
-		console.log(`Restored ${restored.queries.length} order queries from IndexedDB`)
 	}
 
 	// Persist on cache changes with debouncing

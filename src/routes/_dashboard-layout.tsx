@@ -323,7 +323,7 @@ function DashboardLayout() {
 										<h3 className="font-heading bg-tertiary-black text-white px-4 py-2 mb-0 lg:mb-2">{section.title}</h3>
 										<nav className="space-y-2 p-4 lg:p-0 text-xl lg:text-base">
 											{section.items.map((item) => {
-												const isActive = matchRoute({ to: item.path, fuzzy: true })
+												const isActive = matchRoute({ to: item.path, exact: true })
 												return (
 													<Link
 														key={item.path}
