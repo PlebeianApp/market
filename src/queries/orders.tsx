@@ -1,6 +1,6 @@
 import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, ORDER_STATUS, PAYMENT_RECEIPT_KIND } from '@/lib/schemas/order'
 import { ndkActions, ndkStore } from '@/lib/stores/ndk'
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
+import type { NDKEvent, NDKFilter, NDKSubscription } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useMemo } from 'react'
@@ -421,7 +421,7 @@ export const useOrders = () => {
 /**
  * Fetches orders where the specified user is the buyer
  */
-export const fetchOrdersByBuyer = async (buyerPubkey: string): Promise<OrderWithRelatedEvents[]> => {
+export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: ReturnType<typeof useQueryClient>): Promise<OrderWithRelatedEvents[]> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -631,157 +631,8 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string): Promise<OrderWith
 
 	if (orderIds.length === 0) return []
 
-	// Fetch all related events for these orders
-	// Per gamma_spec.md, we can't filter by #order tag - filter client-side after decryption
-	const relatedEventsFilter: NDKFilter = {
-		kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
-		limit: 500,
-	}
-
-	// Fetch related events using subscription pattern
-	let relatedEvents: Set<NDKEvent> = new Set()
-	try {
-		const relatedEventsSet = new Set<NDKEvent>()
-		const subscription = ndk.subscribe(relatedEventsFilter, {
-			closeOnEose: true,
-		})
-
-		// Get signer for decryption
-		const signer = ndkActions.getSigner()
-
-		subscription.on('event', async (event: NDKEvent) => {
-			// Decrypt and filter by order tag client-side
-			try {
-				if (signer && event.content) {
-					// Check if content looks encrypted (not JSON)
-					const contentLooksEncrypted = !event.content.trim().startsWith('{') && !event.content.trim().startsWith('[')
-					if (contentLooksEncrypted) {
-						try {
-							await event.decrypt(undefined, signer)
-						} catch (decryptError) {
-							// Decryption can fail for events not meant for us - this is expected
-							// Filter out base64/invalid padding errors (expected when decrypting wrong events)
-							const errorMsg = decryptError instanceof Error ? decryptError.message : String(decryptError)
-							if (!errorMsg.includes('invalid base64') && !errorMsg.includes('Invalid padding') && !errorMsg.includes('invalid payload length') && !errorMsg.includes('Unknown letter')) {
-								console.warn('🔍 fetchOrdersByBuyer: Unexpected decryption error:', errorMsg)
-							}
-							// Continue to check tags even if decryption fails
-						}
-					}
-				}
-				
-				// Check if this event is related to any of our orders
-				const orderTag = event.tags.find((tag) => tag[0] === 'order')
-				if (orderTag && orderIds.includes(orderTag[1])) {
-					relatedEventsSet.add(event)
-				}
-			} catch (error) {
-				// Only log unexpected errors
-				const errorMsg = error instanceof Error ? error.message : String(error)
-				if (!errorMsg.includes('invalid base64') && !errorMsg.includes('Invalid padding') && !errorMsg.includes('invalid payload length') && !errorMsg.includes('Unknown letter')) {
-					console.warn('🔍 fetchOrdersByBuyer: Error processing related event:', errorMsg)
-				}
-			}
-		})
-
-		let stopped = false
-		const stopSubscription = () => {
-			if (!stopped) {
-				stopped = true
-				// Don't call stop() - let NDK handle cleanup naturally with closeOnEose
-				// Manually stopping causes NDK internal errors
-			}
-		}
-
-		await Promise.race([
-			new Promise<void>((resolve) => {
-				const timeout = setTimeout(() => {
-					stopSubscription()
-					resolve()
-				}, 2000)
-
-				subscription.on('eose', () => {
-					clearTimeout(timeout)
-					stopSubscription()
-					resolve()
-				})
-
-				subscription.on('close', () => {
-					clearTimeout(timeout)
-					stopSubscription()
-					resolve()
-				})
-			}),
-			new Promise<void>((resolve) => {
-				setTimeout(() => {
-					stopSubscription()
-					resolve()
-				}, 2500)
-			})
-		])
-
-		relatedEvents = relatedEventsSet
-	} catch (error) {
-		console.error('🔍 fetchOrdersByBuyer: Error fetching related events:', error)
-		relatedEvents = new Set()
-	}
-
-	// Group and process events similar to fetchOrders
-	const eventsByOrderId: Record<
-		string,
-		{
-			paymentRequests: NDKEvent[]
-			statusUpdates: NDKEvent[]
-			shippingUpdates: NDKEvent[]
-			generalMessages: NDKEvent[]
-			paymentReceipts: NDKEvent[]
-		}
-	> = {}
-
-	// Initialize with empty arrays for each order ID
-	orderIds.forEach((orderId) => {
-		eventsByOrderId[orderId] = {
-			paymentRequests: [],
-			statusUpdates: [],
-			shippingUpdates: [],
-			generalMessages: [],
-			paymentReceipts: [],
-		}
-	})
-
-	// Categorize each event
-	for (const event of Array.from(relatedEvents)) {
-		const orderTag = event.tags.find((tag) => tag[0] === 'order')
-		if (!orderTag?.[1]) continue
-
-		const orderId = orderTag[1]
-		if (!eventsByOrderId[orderId]) continue
-
-		// Categorize by kind and type
-		if (event.kind === ORDER_PROCESS_KIND) {
-			const typeTag = event.tags.find((tag) => tag[0] === 'type')
-			if (typeTag) {
-				switch (typeTag[1]) {
-					case ORDER_MESSAGE_TYPE.PAYMENT_REQUEST:
-						eventsByOrderId[orderId].paymentRequests.push(event)
-						break
-					case ORDER_MESSAGE_TYPE.STATUS_UPDATE:
-						eventsByOrderId[orderId].statusUpdates.push(event)
-						break
-					case ORDER_MESSAGE_TYPE.SHIPPING_UPDATE:
-						eventsByOrderId[orderId].shippingUpdates.push(event)
-						break
-				}
-			}
-		} else if (event.kind === ORDER_GENERAL_KIND) {
-			eventsByOrderId[orderId].generalMessages.push(event)
-		} else if (event.kind === PAYMENT_RECEIPT_KIND) {
-			eventsByOrderId[orderId].paymentReceipts.push(event)
-		}
-	}
-
-	// Create the combined order objects
-	return Array.from(orders).map((order) => {
+	// Create initial result with empty related events - return immediately
+	const initialResult: OrderWithRelatedEvents[] = Array.from(orders).map((order) => {
 		const orderTag = order.tags.find((tag) => tag[0] === 'order')
 		if (!orderTag?.[1]) {
 			return {
@@ -794,36 +645,221 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string): Promise<OrderWith
 			}
 		}
 
-		const orderId = orderTag[1]
-		const related = eventsByOrderId[orderId] || {
+		return {
+			order,
 			paymentRequests: [],
 			statusUpdates: [],
 			shippingUpdates: [],
 			generalMessages: [],
 			paymentReceipts: [],
 		}
-
-		// Sort all events by created_at (newest first)
-		related.paymentRequests.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-		related.statusUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-		related.shippingUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-		related.generalMessages.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-		related.paymentReceipts.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-
-		return {
-			order,
-			paymentRequests: related.paymentRequests,
-			statusUpdates: related.statusUpdates,
-			shippingUpdates: related.shippingUpdates,
-			generalMessages: related.generalMessages,
-			paymentReceipts: related.paymentReceipts,
-			latestStatus: related.statusUpdates[0],
-			latestShipping: related.shippingUpdates[0],
-			latestPaymentRequest: related.paymentRequests[0],
-			latestPaymentReceipt: related.paymentReceipts[0],
-			latestMessage: related.generalMessages[0],
-		}
 	})
+
+	// Fetch related events in the background (don't wait for them)
+	// This allows UI to update incrementally as events arrive
+	;(async () => {
+		if (!queryClient) return
+
+		const relatedEventsFilter: NDKFilter = {
+			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			limit: 500,
+		}
+
+		try {
+			let subscription: NDKSubscription | null = null
+			
+			try {
+				subscription = ndk.subscribe(relatedEventsFilter, {
+					closeOnEose: false, // Handle closing ourselves to avoid NDK internal timeout errors
+				})
+			} catch (subError) {
+				console.error('🔍 fetchOrdersByBuyer: Error creating subscription:', subError)
+				return
+			}
+
+			if (!subscription) return
+
+			// Function to update cache incrementally as events arrive
+			const updateCacheForOrder = (orderId: string, event: NDKEvent) => {
+				if (!queryClient) return
+				
+				let currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey))
+				
+				if (!currentData) {
+					setTimeout(() => {
+						currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey))
+						if (!currentData) return
+						updateCacheForOrderInner(orderId, event, currentData)
+					}, 100)
+					return
+				}
+				
+				updateCacheForOrderInner(orderId, event, currentData)
+			}
+			
+			const updateCacheForOrderInner = (orderId: string, event: NDKEvent, currentData: OrderWithRelatedEvents[]) => {
+				let orderFound = false
+				let eventAdded = false
+				
+				const updatedData = currentData.map((orderData) => {
+					const orderTag = orderData.order.tags.find((tag) => tag[0] === 'order')
+					const dataOrderId = orderTag?.[1]
+					if (dataOrderId !== orderId) {
+						return orderData
+					}
+
+					orderFound = true
+
+					const paymentRequests = [...orderData.paymentRequests]
+					const statusUpdates = [...orderData.statusUpdates]
+					const shippingUpdates = [...orderData.shippingUpdates]
+					const generalMessages = [...orderData.generalMessages]
+					const paymentReceipts = [...orderData.paymentReceipts]
+
+					const eventExists = (arr: NDKEvent[]) => arr.some(e => e.id === event.id)
+					
+					if (event.kind === ORDER_PROCESS_KIND) {
+						const typeTag = event.tags.find((tag) => tag[0] === 'type')
+						if (typeTag) {
+							switch (typeTag[1]) {
+								case ORDER_MESSAGE_TYPE.PAYMENT_REQUEST:
+									if (!eventExists(paymentRequests)) {
+										paymentRequests.push(event)
+										paymentRequests.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+										eventAdded = true
+									}
+									break
+								case ORDER_MESSAGE_TYPE.STATUS_UPDATE:
+									if (!eventExists(statusUpdates)) {
+										statusUpdates.push(event)
+										statusUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+										eventAdded = true
+									}
+									break
+								case ORDER_MESSAGE_TYPE.SHIPPING_UPDATE:
+									if (!eventExists(shippingUpdates)) {
+										shippingUpdates.push(event)
+										shippingUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+										eventAdded = true
+									}
+									break
+							}
+						}
+					} else if (event.kind === ORDER_GENERAL_KIND) {
+						if (!eventExists(generalMessages)) {
+							generalMessages.push(event)
+							generalMessages.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+							eventAdded = true
+						}
+					} else if (event.kind === PAYMENT_RECEIPT_KIND) {
+						if (!eventExists(paymentReceipts)) {
+							paymentReceipts.push(event)
+							paymentReceipts.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+							eventAdded = true
+						}
+					}
+
+					return {
+						...orderData,
+						paymentRequests,
+						statusUpdates,
+						shippingUpdates,
+						generalMessages,
+						paymentReceipts,
+						latestStatus: statusUpdates[0],
+						latestShipping: shippingUpdates[0],
+						latestPaymentRequest: paymentRequests[0],
+						latestPaymentReceipt: paymentReceipts[0],
+						latestMessage: generalMessages[0],
+					}
+				})
+
+				if (orderFound && eventAdded) {
+					const newDataArray = [...updatedData]
+					queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), newDataArray)
+					queryClient.invalidateQueries({ 
+						queryKey: orderKeys.byBuyer(buyerPubkey),
+						refetchType: 'none',
+					})
+				}
+			}
+
+			const signer = ndkActions.getSigner()
+			let subscriptionClosed = false
+
+			subscription.on('event', async (event: NDKEvent) => {
+				if (subscriptionClosed) return
+
+				try {
+					if (signer && event.content) {
+						const contentLooksEncrypted = !event.content.trim().startsWith('{') && !event.content.trim().startsWith('[')
+						if (contentLooksEncrypted) {
+							try {
+								await event.decrypt(undefined, signer)
+							} catch (decryptError) {
+								const errorMsg = decryptError instanceof Error ? decryptError.message : String(decryptError)
+								if (!errorMsg.includes('invalid base64') && !errorMsg.includes('Invalid padding') && !errorMsg.includes('invalid payload length') && !errorMsg.includes('Unknown letter')) {
+									console.warn('🔍 fetchOrdersByBuyer: Unexpected decryption error:', errorMsg)
+								}
+							}
+						}
+					}
+					
+					const orderTag = event.tags.find((tag) => tag[0] === 'order')
+					if (orderTag && orderIds.includes(orderTag[1])) {
+						updateCacheForOrder(orderTag[1], event)
+					}
+				} catch (error) {
+					const errorMsg = error instanceof Error ? error.message : String(error)
+					if (!errorMsg.includes('invalid base64') && !errorMsg.includes('Invalid padding') && !errorMsg.includes('invalid payload length') && !errorMsg.includes('Unknown letter')) {
+						console.warn('🔍 fetchOrdersByBuyer: Error processing related event:', errorMsg)
+					}
+				}
+			})
+
+			let stopped = false
+			const stopSubscription = () => {
+				if (!stopped && subscription) {
+					stopped = true
+					subscriptionClosed = true
+				}
+			}
+
+			subscription.start()
+
+			await Promise.race([
+				new Promise<void>((resolve) => {
+					const timeout = setTimeout(() => {
+						stopSubscription()
+						resolve()
+					}, 2000)
+
+					subscription.on('eose', () => {
+						clearTimeout(timeout)
+						stopSubscription()
+						resolve()
+					})
+
+					subscription.on('close', () => {
+						clearTimeout(timeout)
+						stopSubscription()
+						resolve()
+					})
+				}),
+				new Promise<void>((resolve) => {
+					setTimeout(() => {
+						stopSubscription()
+						resolve()
+					}, 2500)
+				})
+			])
+		} catch (error) {
+			console.error('🔍 fetchOrdersByBuyer: Error in background fetch:', error)
+		}
+	})()
+
+	// Return orders immediately - background fetch will update them
+	return initialResult
 }
 
 /**
@@ -846,7 +882,7 @@ export const useOrdersByBuyer = (buyerPubkey: string) => {
 			const cachedData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey))
 			
 			try {
-				const result = await fetchOrdersByBuyer(buyerPubkey)
+				const result = await fetchOrdersByBuyer(buyerPubkey, queryClient)
 				
 				// If result is empty but we have cached data, preserve cache to prevent disappearing
 				if (result.length === 0 && cachedData && cachedData.length > 0) {
