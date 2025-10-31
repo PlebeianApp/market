@@ -29,7 +29,7 @@ function SalesComponent() {
 
 		queryClient.prefetchQuery({
 			queryKey: orderKeys.byBuyer(userPubkey),
-			queryFn: () => fetchOrdersByBuyer(userPubkey),
+			queryFn: () => fetchOrdersByBuyer(userPubkey, queryClient),
 			staleTime: 30000,
 		})
 	}, [userPubkey, queryClient])

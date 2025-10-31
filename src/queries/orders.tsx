@@ -573,39 +573,33 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 			new Promise<void>((resolve) => {
 				const timeout = setTimeout(async () => {
 					stopSubscription()
-					await waitForPendingEvents()
+					// Don't wait for all events - just resolve immediately
 					console.log('🔍 fetchOrdersByBuyer: Timeout reached, found', ordersSet.size, 'orders')
 					resolve()
-				}, 2500) // 2.5 second timeout
+				}, 1500) // Reduced timeout to 1.5 seconds
 
 				subscription.on('eose', async () => {
-					console.log('🔍 fetchOrdersByBuyer: EOSE received, waiting for pending events...')
+					console.log('🔍 fetchOrdersByBuyer: EOSE received, found', ordersSet.size, 'orders')
 					clearTimeout(timeout)
-					// Wait for all pending event processing to complete
-					await waitForPendingEvents()
-					console.log('🔍 fetchOrdersByBuyer: EOSE processed, found', ordersSet.size, 'orders')
 					stopSubscription()
+					// Don't wait for pending events - they're processed in background
 					resolve()
 				})
 
 				subscription.on('close', async () => {
-					console.log('🔍 fetchOrdersByBuyer: Subscription closed, waiting for pending events...')
+					console.log('🔍 fetchOrdersByBuyer: Subscription closed, found', ordersSet.size, 'orders')
 					clearTimeout(timeout)
-					// Wait for all pending event processing to complete
-					await waitForPendingEvents()
-					console.log('🔍 fetchOrdersByBuyer: Close processed, found', ordersSet.size, 'orders')
 					stopSubscription()
+					// Don't wait for pending events - they're processed in background
 					resolve()
 				})
 			}),
 			// Fallback timeout
 			new Promise<void>((resolve) => {
-				setTimeout(async () => {
+				setTimeout(() => {
 					stopSubscription()
-					await waitForPendingEvents()
-					console.log('🔍 fetchOrdersByBuyer: Fallback timeout reached, found', ordersSet.size, 'orders')
 					resolve()
-				}, 3000)
+				}, 2000) // Reduced fallback timeout
 			})
 		])
 
@@ -775,12 +769,31 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 				})
 
 				if (orderFound && eventAdded) {
-					const newDataArray = [...updatedData]
+					// Create a completely new array reference with deep clones to ensure React Query detects the change
+					const newDataArray = updatedData.map(order => ({
+						...order,
+						paymentRequests: [...order.paymentRequests],
+						statusUpdates: [...order.statusUpdates],
+						shippingUpdates: [...order.shippingUpdates],
+						generalMessages: [...order.generalMessages],
+						paymentReceipts: [...order.paymentReceipts],
+					}))
+					
+					console.log('🔍 fetchOrdersByBuyer: Updating cache for order', orderId, 'event kind:', event.kind)
 					queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), newDataArray)
+					// Force notify by invalidating without refetch
 					queryClient.invalidateQueries({ 
 						queryKey: orderKeys.byBuyer(buyerPubkey),
 						refetchType: 'none',
 					})
+					console.log('🔍 fetchOrdersByBuyer: Cache updated, current data length:', newDataArray.length)
+				} else {
+					if (!orderFound) {
+						console.log('🔍 fetchOrdersByBuyer: Order not found in cache:', orderId, 'available orders:', currentData.map(o => o.order.tags.find(t => t[0] === 'order')?.[1]))
+					}
+					if (!eventAdded) {
+						console.log('🔍 fetchOrdersByBuyer: Event already exists or not added:', event.id)
+					}
 				}
 			}
 
@@ -904,12 +917,14 @@ export const useOrdersByBuyer = (buyerPubkey: string) => {
 		refetchOnMount: true, // Refetch on mount if data is stale
 		refetchOnWindowFocus: true,
 		refetchOnReconnect: true,
-		staleTime: 30000, // Consider data fresh for 30 seconds
+		staleTime: 0, // Always consider data stale to allow cache updates to be visible immediately
 		gcTime: 5 * 60 * 1000, // Keep in cache for 5 minutes
 		// Return empty array as placeholder data when disabled
 		placeholderData: queryEnabled ? undefined : [],
 		retry: 1, // Only retry once on failure
 		retryDelay: 1000, // Wait 1s before retry
+		notifyOnChangeProps: ['data', 'error', 'status'], // Explicitly notify on these changes
+		structuralSharing: false, // Disable structural sharing to ensure React detects all cache updates
 	})
 
 	// Refetch when NDK connects to ensure we get fresh data
@@ -1094,7 +1109,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 			new Promise<void>((resolvePromise) => {
 				let eoseReceived = false
 				let inactivityTimer: NodeJS.Timeout | null = null
-				const INACTIVITY_TIMEOUT = 5000 // Wait 5s after last event before closing
+				const INACTIVITY_TIMEOUT = 3000 // Reduced to 3s after last event before closing
 
 				const checkInactivityAndClose = async () => {
 					const timeSinceLastEvent = Date.now() - lastEventReceivedTime
@@ -1115,15 +1130,14 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 					await waitForDecryptions()
 					stopSubscription()
 					resolvePromise()
-				}, 20000) // Increased timeout to 20s
+				}, 10000) // Reduced timeout to 10s
 
 				subscription.on('eose', async () => {
 					eoseReceived = true
-					// Wait longer after EOSE before starting inactivity check - events can arrive slowly
-					// Give it 5 seconds to allow all events to arrive, then start checking for inactivity
+					// Wait shorter after EOSE before starting inactivity check
 					setTimeout(() => {
 						checkInactivityAndClose()
-					}, 5000) // Wait 5s after EOSE before checking inactivity
+					}, 2000) // Reduced wait after EOSE to 2s
 				})
 
 				subscription.on('close', async () => {
@@ -1134,13 +1148,13 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 					resolvePromise()
 				})
 			}),
-			// Fallback timeout to ensure we never wait more than 25s total
+			// Fallback timeout to ensure we never wait more than 12s total
 			new Promise<void>((resolvePromise) => {
 				setTimeout(async () => {
 					await waitForDecryptions()
 					stopSubscription()
 					resolvePromise()
-				}, 25000)
+				}, 12000) // Reduced fallback timeout
 			})
 		])
 
@@ -1209,13 +1223,13 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 		let lastRelatedEventReceivedTime = Date.now()
 		let eoseReceived = false
 		let inactivityTimer: NodeJS.Timeout | null = null
-		const INACTIVITY_TIMEOUT = 10000 // Wait 10s after last event before closing (increased for slow relays)
-		const POST_EOSE_WAIT = 10000 // Wait 10s after EOSE before starting inactivity check (events can arrive slowly)
+		const INACTIVITY_TIMEOUT = 3000 // Reduced to 3s after last event before closing
+		const POST_EOSE_WAIT = 2000 // Reduced wait after EOSE to 2s
 
-				const checkInactivityAndClose = async () => {
-					const timeSinceLastEvent = Date.now() - lastRelatedEventReceivedTime
-					if (timeSinceLastEvent >= INACTIVITY_TIMEOUT) {
-						if (inactivityTimer) clearTimeout(inactivityTimer)
+		const checkInactivityAndClose = async () => {
+			const timeSinceLastEvent = Date.now() - lastRelatedEventReceivedTime
+			if (timeSinceLastEvent >= INACTIVITY_TIMEOUT) {
+				if (inactivityTimer) clearTimeout(inactivityTimer)
 				inactivityTimer = null
 				await waitForDecryptions()
 				stopSubscription()
@@ -1336,10 +1350,17 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 
 			// Only update cache if we found the order and added a new event
 			if (orderFound && eventAdded) {
-				// Create a completely new array reference to ensure React Query detects the change
-				// This is critical - even though we're cloning arrays, we need to ensure the top-level array is new
-				const newDataArray = [...updatedData]
+				// Create a completely new array reference with deep clones to ensure React Query detects the change
+				const newDataArray = updatedData.map(order => ({
+					...order,
+					paymentRequests: [...order.paymentRequests],
+					statusUpdates: [...order.statusUpdates],
+					shippingUpdates: [...order.shippingUpdates],
+					generalMessages: [...order.generalMessages],
+					paymentReceipts: [...order.paymentReceipts],
+				}))
 				
+				console.log('🔍 fetchOrdersBySeller: Updating cache for order', orderId, 'event kind:', event.kind)
 				// Set the query data with the new array reference
 				queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), newDataArray)
 				
@@ -1349,6 +1370,14 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 					queryKey: orderKeys.bySeller(sellerPubkey),
 					refetchType: 'none', // Don't refetch, just notify subscribers
 				})
+				console.log('🔍 fetchOrdersBySeller: Cache updated, current data length:', newDataArray.length)
+			} else {
+				if (!orderFound) {
+					console.log('🔍 fetchOrdersBySeller: Order not found in cache:', orderId, 'available orders:', currentData.map(o => o.order.tags.find(t => t[0] === 'order')?.[1]))
+				}
+				if (!eventAdded) {
+					console.log('🔍 fetchOrdersBySeller: Event already exists or not added:', event.id)
+				}
 			}
 		}
 
@@ -1466,14 +1495,12 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 					await waitForDecryptions()
 					stopSubscription()
 					resolve()
-				}, 30000) // Increased timeout to 30s to account for POST_EOSE_WAIT + INACTIVITY_TIMEOUT
+				}, 15000) // Reduced timeout to 15s
 
 				subscription.on('eose', async () => {
 					eoseReceived = true
-					// Wait longer after EOSE before starting inactivity check - events can arrive slowly
-					// Give it time to allow all events to arrive, then start checking for inactivity
+					// Wait shorter after EOSE before starting inactivity check
 					setTimeout(() => {
-						// Only start inactivity check if it's not already running (events might have reset it)
 						if (!inactivityTimer) {
 							checkInactivityAndClose().then((shouldClose) => {
 								if (shouldClose) {
@@ -1493,7 +1520,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 					resolve()
 				})
 			}),
-			// Fallback timeout to ensure we never wait more than 35s total
+			// Fallback timeout to ensure we never wait more than 18s total
 			new Promise<void>((resolve) => {
 				setTimeout(async () => {
 					await waitForDecryptions()
@@ -1503,7 +1530,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 						console.warn('🔍 fetchOrdersBySeller: Error stopping subscription in fallback:', error)
 					}
 					resolve()
-				}, 35000)
+				}, 18000) // Reduced fallback timeout
 			})
 		])
 
