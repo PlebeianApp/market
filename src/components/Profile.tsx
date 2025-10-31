@@ -67,17 +67,6 @@ export function Profile({ compact = false }: ProfileProps) {
 	const profile = profileData?.profile || localProfile
 	const displayName = profile?.name || profile?.displayName || 'Local User'
 
-	// Debug logging (only in development)
-	if (process.env.NODE_ENV === 'development' && authState.user?.pubkey) {
-		console.log('🔍 Profile component:', {
-			pubkey: authState.user.pubkey.slice(0, 8) + '...',
-			hasQueryData: !!profileData?.profile,
-			hasLocalProfile: !!localProfile,
-			finalProfile: !!profile,
-			isLoading,
-		})
-	}
-
 	const handleProfileClick = () => {
 		if (authState.isAuthenticated && authState.user?.pubkey) {
 			navigate({ to: '/profile/$profileId', params: { profileId: authState.user.pubkey } })

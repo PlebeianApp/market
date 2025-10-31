@@ -86,7 +86,6 @@ export const useAdminSettings = (appPubkey?: string) => {
 
 		// Event handler for admin list updates
 		subscription.on('event', (newEvent) => {
-			console.log('Admin list updated, invalidating queries:', newEvent.id)
 			queryClient.invalidateQueries({ queryKey: configKeys.admins(appPubkey) })
 			queryClient.refetchQueries({ queryKey: configKeys.admins(appPubkey) })
 		})
