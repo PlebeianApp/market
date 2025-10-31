@@ -21,6 +21,10 @@ export type OrderWithRelatedEvents = {
 	latestPaymentRequest?: NDKEvent
 	latestPaymentReceipt?: NDKEvent
 	latestMessage?: NDKEvent
+	
+	// Flag to track if EOSE was received for related events subscription
+	// If true and no status updates exist, we know loading is complete and status is truly pending
+	relatedEventsEoseReceived?: boolean
 }
 
 /**
@@ -466,7 +470,6 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 	if (!ndk) throw new Error('NDK not initialized')
 
 	if (!buyerPubkey) {
-		console.warn('fetchOrdersByBuyer: buyerPubkey is empty, returning empty array')
 		return []
 	}
 
@@ -511,8 +514,6 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 	let relatedEventsSubscription: NDKSubscription | null = null
 	
 	try {
-		console.log('🔍 fetchOrdersByBuyer: Starting subscription for buyer:', buyerPubkey)
-		console.log('🔍 fetchOrdersByBuyer: Filter:', JSON.stringify(orderCreationFilter))
 		// Use subscription with closeOnEose to ensure we get EOSE signal
 		const ordersSet = new Set<NDKEvent>()
 		
@@ -544,7 +545,7 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 					closeOnEose: false,
 				})
 			} catch (subError) {
-				console.error('🔍 fetchOrdersByBuyer: Error creating related events subscription:', subError)
+				// Ignore subscription creation errors
 			}
 		}
 
@@ -565,7 +566,6 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 				
 				// If we already found the type tag and it matches, we can skip decryption
 				if (typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION) {
-					console.log('🔍 fetchOrdersByBuyer: Found order event (unencrypted):', event.id)
 					ordersSet.add(event)
 					return
 				}
@@ -588,38 +588,13 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 					// Decryption failed - log but continue to check tags
 					const errorMsg = error instanceof Error ? error.message : String(error)
 					// Filter out base64/invalid padding errors (expected when decrypting wrong events)
-					if (!errorMsg.includes('invalid base64') && !errorMsg.includes('Invalid padding') && !errorMsg.includes('invalid payload length') && !errorMsg.includes('Unknown letter')) {
-						console.warn('🔍 fetchOrdersByBuyer: Decryption error for event:', errorMsg)
-					}
 				}
 				
 				// Check type tag after decryption attempt (or re-check if we already found it)
 				typeTag = event.tags.find((tag) => tag[0] === 'type')
 				
-				// Debug logging
-				if (typeTag) {
-					console.log('🔍 fetchOrdersByBuyer: Found event with type tag:', {
-						typeTagValue: typeTag[1],
-						expectedType: ORDER_MESSAGE_TYPE.ORDER_CREATION,
-						matches: typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION,
-						hasOrderTag: !!orderTag,
-						decrypted,
-						eventId: event.id,
-						author: event.pubkey,
-					})
-				} else {
-					console.log('🔍 fetchOrdersByBuyer: Event received but no type tag found:', {
-						eventId: event.id,
-						author: event.pubkey,
-						tagsCount: event.tags.length,
-						tags: event.tags.map((t) => t[0]),
-						decrypted,
-					})
-				}
-				
 				// If type tag matches ORDER_CREATION, add the event
 				if (typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION) {
-					console.log('🔍 fetchOrdersByBuyer: Adding order event:', event.id)
 					ordersSet.add(event)
 					// Track order ID as it's discovered
 					const orderTag = event.tags.find((tag) => tag[0] === 'order')
@@ -635,6 +610,39 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 		
 		// Set up related events handler if subscription was created
 		if (relatedEventsSubscription && queryClient) {
+			// Track EOSE for related events subscription
+			let relatedEventsEoseReceived = false
+			
+			// Set up timeout to mark EOSE as received after 5 seconds if not received yet
+			const eoseTimeout = setTimeout(() => {
+				if (!relatedEventsEoseReceived) {
+					relatedEventsEoseReceived = true
+					// Update all orders in cache to mark EOSE as received
+					const currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey))
+					if (currentData) {
+						const updatedData = currentData.map(order => ({
+							...order,
+							relatedEventsEoseReceived: true
+						}))
+						queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), updatedData)
+					}
+				}
+			}, 5000)
+			
+			relatedEventsSubscription.on('eose', () => {
+				clearTimeout(eoseTimeout)
+				relatedEventsEoseReceived = true
+				// Update all orders in cache to mark EOSE as received
+				const currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey))
+				if (currentData) {
+					const updatedData = currentData.map(order => ({
+						...order,
+						relatedEventsEoseReceived: true
+					}))
+					queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), updatedData)
+				}
+			})
+			
 			const updateCacheForOrder = (orderId: string, event: NDKEvent) => {
 				if (!queryClient) return
 				
@@ -739,7 +747,6 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 						paymentReceipts: [...order.paymentReceipts],
 					}))
 					
-					console.log('🔍 fetchOrdersByBuyer: Updating cache for order', orderId, 'event kind:', event.kind)
 					queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), newDataArray)
 					queryClient.invalidateQueries({ 
 						queryKey: orderKeys.byBuyer(buyerPubkey),
@@ -760,10 +767,7 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 							try {
 								await event.decrypt(undefined, signer)
 							} catch (decryptError) {
-								const errorMsg = decryptError instanceof Error ? decryptError.message : String(decryptError)
-								if (!errorMsg.includes('invalid base64') && !errorMsg.includes('Invalid padding') && !errorMsg.includes('invalid payload length') && !errorMsg.includes('Unknown letter')) {
-									console.warn('🔍 fetchOrdersByBuyer: Unexpected decryption error:', errorMsg)
-								}
+							// Filter out expected decryption errors
 							}
 						}
 					}
@@ -790,10 +794,7 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 						}
 					}
 				} catch (error) {
-					const errorMsg = error instanceof Error ? error.message : String(error)
-					if (!errorMsg.includes('invalid base64') && !errorMsg.includes('Invalid padding') && !errorMsg.includes('invalid payload length') && !errorMsg.includes('Unknown letter')) {
-						console.warn('🔍 fetchOrdersByBuyer: Error processing related event:', errorMsg)
-					}
+					// Ignore expected errors
 				}
 			})
 			
@@ -807,7 +808,6 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 				await Promise.allSettled(pendingEventProcessing)
 			} catch (error) {
 				// Errors are already handled in the individual promises
-				console.warn('🔍 fetchOrdersByBuyer: Some event processing failed:', error)
 			}
 		}
 
@@ -825,7 +825,6 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 
 		// Ensure subscription is ready before starting
 		if (!subscription) {
-			console.error('🔍 fetchOrdersByBuyer: Subscription not available')
 			orders = new Set()
 		} else {
 			// Add small delay to ensure subscription is fully initialized
@@ -836,14 +835,12 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 				subscription.start()
 				subscriptionStarted = true
 			} catch (startError) {
-				console.error('🔍 fetchOrdersByBuyer: Error starting subscription:', startError)
 				orders = new Set()
 				subscriptionStarted = false
 			}
 		}
 		
 		if (!subscriptionStarted || !subscription) {
-			console.warn('🔍 fetchOrdersByBuyer: Subscription not started, returning empty orders')
 			orders = new Set()
 		} else {
 			// Start orders subscription and wait for it to complete
@@ -852,19 +849,16 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 				new Promise<void>((resolve) => {
 					const timeout = setTimeout(async () => {
 						stopSubscription()
-						console.log('🔍 fetchOrdersByBuyer: Timeout reached, found', ordersSet.size, 'orders')
 						resolve()
 					}, 1000) // Further reduced timeout to 1 second
 
 					subscription.on('eose', async () => {
-						console.log('🔍 fetchOrdersByBuyer: EOSE received, found', ordersSet.size, 'orders')
 						clearTimeout(timeout)
 						stopSubscription()
 						resolve()
 					})
 
 					subscription.on('close', async () => {
-						console.log('🔍 fetchOrdersByBuyer: Subscription closed, found', ordersSet.size, 'orders')
 						clearTimeout(timeout)
 						stopSubscription()
 						resolve()
@@ -880,15 +874,12 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 			])
 
 			orders = ordersSet
-			console.log('🔍 fetchOrdersByBuyer: Subscription completed, found', orders.size, 'orders')
 		}
 	} catch (error) {
-		console.error('🔍 fetchOrdersByBuyer: Error fetching orders:', error)
 		throw error
 	}
 
 	if (orders.size === 0) {
-		console.warn('🔍 fetchOrdersByBuyer: No orders found for buyer:', buyerPubkey)
 		return []
 	}
 
@@ -941,6 +932,7 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 			latestPaymentRequest: cachedRelatedEvents?.latestPaymentRequest,
 			latestPaymentReceipt: cachedRelatedEvents?.latestPaymentReceipt,
 			latestMessage: cachedRelatedEvents?.latestMessage,
+			relatedEventsEoseReceived: cachedRelatedEvents?.relatedEventsEoseReceived || false,
 		}
 	})
 
@@ -952,43 +944,8 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 
 	// Start fetching related events in parallel AFTER orders are found (don't wait)
 	if (queryClient && relatedEventsSubscription) {
-		// Start related events subscription immediately after setting cache
-		// This ensures events can update the cache right away
-		// Use longer delay and wrap in try-catch to prevent initialization errors
-		const startRelatedEventsSub = () => {
-			try {
-				if (!relatedEventsSubscription || !ndk || !ndk.pool) {
-					return
-				}
-
-				// Verify subscription has start method and is fully initialized
-				if ('start' in relatedEventsSubscription && typeof relatedEventsSubscription.start === 'function') {
-					// Wrap the actual start call in another try-catch to catch NDK internal errors
-					try {
-						relatedEventsSubscription.start()
-					} catch (innerError) {
-						// Silently ignore NDK initialization errors - subscription may auto-start
-						const innerErrorMsg = innerError instanceof Error ? innerError.message : String(innerError)
-						if (!innerErrorMsg.includes("Cannot access 's' before initialization") && 
-						    !innerErrorMsg.includes("before initialization") &&
-						    !innerErrorMsg.includes("ReferenceError")) {
-							// Only log if it's not an initialization error
-						}
-					}
-				}
-			} catch (startError) {
-				// Ignore all initialization errors - subscription might auto-start or already be started
-				const errorMsg = startError instanceof Error ? startError.message : String(startError)
-				if (!errorMsg.includes("Cannot access 's' before initialization") && 
-				    !errorMsg.includes("before initialization") &&
-				    !errorMsg.includes("ReferenceError")) {
-					// Only log if it's not an initialization error
-				}
-			}
-		}
-		
-		// Use longer delay to ensure subscription is fully initialized
-		setTimeout(startRelatedEventsSub, 400)
+		// Related events subscription will auto-start when handlers are attached
+		// No need to manually call start() - this avoids initialization race conditions
 	}
 
 	// Return orders immediately - related events subscription is fetching in parallel
@@ -1099,7 +1056,6 @@ export const useOrdersByBuyer = (buyerPubkey: string) => {
 				queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), result)
 				return result
 			} catch (error) {
-				console.error('🔍 useOrdersByBuyer: queryFn error:', error)
 				// Check if we have existing cache data - don't overwrite with empty array on error
 				if (cachedData && cachedData.length > 0) {
 					return cachedData
@@ -1135,8 +1091,8 @@ export const useOrdersByBuyer = (buyerPubkey: string) => {
 		
 		// Small delay to ensure connection is fully established
 		const timer = setTimeout(() => {
-			queryClient.refetchQueries({ queryKey: orderKeys.byBuyer(buyerPubkey) }).catch((err) => {
-				console.warn('Failed to refetch orders after NDK connection:', err)
+			queryClient.refetchQueries({ queryKey: orderKeys.byBuyer(buyerPubkey) }).catch(() => {
+				// Ignore refetch errors
 			})
 		}, 100)
 		
@@ -1161,7 +1117,6 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 	}
 
 	if (!sellerPubkey) {
-		console.warn('fetchOrdersBySeller: sellerPubkey is empty, returning empty array')
 		return []
 	}
 
@@ -1236,7 +1191,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 					closeOnEose: false,
 				})
 			} catch (subError) {
-				console.error('🔍 fetchOrdersBySeller: Error creating related events subscription:', subError)
+				// Ignore subscription creation errors
 			}
 		}
 
@@ -1281,9 +1236,6 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 					// Decryption failed - log but continue to check tags
 					const errorMsg = error instanceof Error ? error.message : String(error)
 					// Filter out base64/invalid padding errors (expected when decrypting wrong events)
-					if (!errorMsg.includes('invalid base64') && !errorMsg.includes('Invalid padding') && !errorMsg.includes('invalid payload length') && !errorMsg.includes('Unknown letter')) {
-						console.warn('🔍 fetchOrdersBySeller: Decryption error for event:', errorMsg)
-					}
 				}
 				
 				// Check type tag after decryption attempt (or re-check if we already found it)
@@ -1305,6 +1257,39 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 		
 		// Set up related events handler if subscription was created
 		if (relatedEventsSubscription && queryClient) {
+			// Track EOSE for related events subscription
+			let relatedEventsEoseReceived = false
+			
+			// Set up timeout to mark EOSE as received after 5 seconds if not received yet
+			const eoseTimeout = setTimeout(() => {
+				if (!relatedEventsEoseReceived) {
+					relatedEventsEoseReceived = true
+					// Update all orders in cache to mark EOSE as received
+					const currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey))
+					if (currentData) {
+						const updatedData = currentData.map(order => ({
+							...order,
+							relatedEventsEoseReceived: true
+						}))
+						queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), updatedData)
+					}
+				}
+			}, 5000)
+			
+			relatedEventsSubscription.on('eose', () => {
+				clearTimeout(eoseTimeout)
+				relatedEventsEoseReceived = true
+				// Update all orders in cache to mark EOSE as received
+				const currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey))
+				if (currentData) {
+					const updatedData = currentData.map(order => ({
+						...order,
+						relatedEventsEoseReceived: true
+					}))
+					queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), updatedData)
+				}
+			})
+			
 			const updateCacheForOrder = (orderId: string, event: NDKEvent) => {
 				if (!queryClient) return
 				
@@ -1409,7 +1394,6 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 						paymentReceipts: [...order.paymentReceipts],
 					}))
 					
-					console.log('🔍 fetchOrdersBySeller: Updating cache for order', orderId, 'event kind:', event.kind)
 					queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), newDataArray)
 					queryClient.invalidateQueries({ 
 						queryKey: orderKeys.bySeller(sellerPubkey),
@@ -1430,10 +1414,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 							try {
 								await event.decrypt(undefined, signer)
 							} catch (decryptError) {
-								const errorMsg = decryptError instanceof Error ? decryptError.message : String(decryptError)
-								if (!errorMsg.includes('invalid base64') && !errorMsg.includes('Invalid padding') && !errorMsg.includes('invalid payload length') && !errorMsg.includes('Unknown letter')) {
-									console.warn('🔍 fetchOrdersBySeller: Unexpected decryption error:', errorMsg)
-								}
+							// Filter out expected decryption errors
 							}
 						}
 					}
@@ -1460,10 +1441,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 						}
 					}
 				} catch (error) {
-					const errorMsg = error instanceof Error ? error.message : String(error)
-					if (!errorMsg.includes('invalid base64') && !errorMsg.includes('Invalid padding') && !errorMsg.includes('invalid payload length') && !errorMsg.includes('Unknown letter')) {
-						console.warn('🔍 fetchOrdersBySeller: Error processing related event:', errorMsg)
-					}
+					// Ignore expected errors
 				}
 			})
 			
@@ -1548,7 +1526,6 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 			orders = ordersSet
 		}
 	} catch (error) {
-		console.error('🔍 fetchOrdersBySeller: Error fetching orders:', error)
 		orders = new Set()
 	}
 
@@ -1593,6 +1570,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 			latestPaymentRequest: cachedRelatedEvents?.latestPaymentRequest,
 			latestPaymentReceipt: cachedRelatedEvents?.latestPaymentReceipt,
 			latestMessage: cachedRelatedEvents?.latestMessage,
+			relatedEventsEoseReceived: cachedRelatedEvents?.relatedEventsEoseReceived || false,
 		}
 	})
 
@@ -1604,43 +1582,8 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 
 	// Start fetching related events in parallel AFTER orders are found (don't wait)
 	if (queryClient && relatedEventsSubscription) {
-		// Start related events subscription immediately after setting cache
-		// This ensures events can update the cache right away
-		// Use longer delay and wrap in try-catch to prevent initialization errors
-		const startRelatedEventsSub = () => {
-			try {
-				if (!relatedEventsSubscription || !ndk || !ndk.pool) {
-					return
-				}
-
-				// Verify subscription has start method and is fully initialized
-				if ('start' in relatedEventsSubscription && typeof relatedEventsSubscription.start === 'function') {
-					// Wrap the actual start call in another try-catch to catch NDK internal errors
-					try {
-						relatedEventsSubscription.start()
-					} catch (innerError) {
-						// Silently ignore NDK initialization errors - subscription may auto-start
-						const innerErrorMsg = innerError instanceof Error ? innerError.message : String(innerError)
-						if (!innerErrorMsg.includes("Cannot access 's' before initialization") && 
-						    !innerErrorMsg.includes("before initialization") &&
-						    !innerErrorMsg.includes("ReferenceError")) {
-							// Only log if it's not an initialization error
-						}
-					}
-				}
-			} catch (startError) {
-				// Ignore all initialization errors - subscription might auto-start or already be started
-				const errorMsg = startError instanceof Error ? startError.message : String(startError)
-				if (!errorMsg.includes("Cannot access 's' before initialization") && 
-				    !errorMsg.includes("before initialization") &&
-				    !errorMsg.includes("ReferenceError")) {
-					// Only log if it's not an initialization error
-				}
-			}
-		}
-		
-		// Use longer delay to ensure subscription is fully initialized
-		setTimeout(startRelatedEventsSub, 400)
+		// Related events subscription will auto-start when handlers are attached
+		// No need to manually call start() - this avoids initialization race conditions
 	}
 
 	// Return orders immediately - related events subscription is fetching in parallel
@@ -1757,7 +1700,6 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 				queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), result)
 				return result
 			} catch (error) {
-				console.error('🔍 useOrdersBySeller: queryFn error:', error)
 				// Check if we have existing cache data - don't overwrite with empty array on error
 				if (cachedData && cachedData.length > 0) {
 					return cachedData
@@ -1793,8 +1735,8 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 		
 		// Small delay to ensure connection is fully established
 		const timer = setTimeout(() => {
-			queryClient.refetchQueries({ queryKey: orderKeys.bySeller(sellerPubkey) }).catch((err) => {
-				console.warn('Failed to refetch orders after NDK connection:', err)
+			queryClient.refetchQueries({ queryKey: orderKeys.bySeller(sellerPubkey) }).catch(() => {
+				// Ignore refetch errors
 			})
 		}, 100)
 		
@@ -1814,7 +1756,6 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 		// Check if order is in detail cache
 		const cachedOrder = queryClient.getQueryData<OrderWithRelatedEvents>(orderKeys.details(orderId))
 		if (cachedOrder) {
-			console.log(`🔍 fetchOrderById: Found order ${orderId} in detail cache`)
 			return cachedOrder
 		}
 
@@ -1834,7 +1775,6 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 			})
 
 			if (found) {
-				console.log(`🔍 fetchOrderById: Found order ${orderId} in list cache`)
 				// Cache it in detail cache for future lookups
 				queryClient.setQueryData(orderKeys.details(orderId), found)
 				return found
@@ -1848,9 +1788,7 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 	// Ensure NDK is connected before querying
 	const ndkState = ndkStore.state
 	if (!ndkState.isConnected) {
-		console.log(`🔍 fetchOrderById: NDK not connected, connecting...`)
 		await ndkActions.connect()
-		console.log(`🔍 fetchOrderById: NDK connection status:`, ndkStore.state.isConnected)
 	}
 
 	// Re-check NDK after connection
@@ -1869,13 +1807,9 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 		}
 	}
 
-	console.log(`🔍 fetchOrderById: Searching for order with ID: ${orderId} (not in cache)`)
-
 	// Check if we have a UUID format or a hash format
 	const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(orderId)
 	const isHash = /^[0-9a-f]{64}$/.test(orderId)
-
-	console.log(`🔍 fetchOrderById: Order ID format - UUID: ${isUuid}, Hash: ${isHash}`)
 
 	// According to gamma_spec.md, Kind 16 messages use NIP-17 encrypted direct messages
 	// The tags (type, order) are NOT encrypted - they're in the public tags array
@@ -1888,7 +1822,6 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 	const userPubkey = user?.pubkey
 
 	if (!userPubkey) {
-		console.warn('🔍 fetchOrderById: No user pubkey available, cannot filter encrypted messages')
 		return null
 	}
 
@@ -1901,13 +1834,6 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 	let orderEvent: NDKEvent | null = null
 	try {
 		const orderEventsSet = new Set<NDKEvent>()
-		
-		// Log which relays will be used
-		const relayUrls = ndk.explicitRelayUrls || (ndk.pool?.relays ? Array.from(ndk.pool.relays.keys()) : [])
-		const connectedRelays = ndk.pool?.connectedRelays()?.map(r => r.url) || []
-		console.log(`🔍 fetchOrderById: Using relays:`, relayUrls)
-		console.log(`🔍 fetchOrderById: Connected relays:`, connectedRelays)
-		console.log(`🔍 fetchOrderById: Searching for order ID: ${orderId}`)
 		
 		// Create subscriptions for both author and recipient
 		const filters: NDKFilter[] = [
@@ -1933,8 +1859,6 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 		
 		for (const subscription of subscriptions) {
 			subscription.on('event', async (event: NDKEvent) => {
-				console.log(`🔍 fetchOrderById: Received event:`, event.id, event.pubkey, `tags (before decrypt):`, event.tags)
-				
 				// Check if tags are already visible (event might not be encrypted)
 				let orderTag = event.tags.find((tag) => tag[0] === 'order')
 				let typeTag = event.tags.find((tag) => tag[0] === 'type')
@@ -1946,25 +1870,18 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 						const contentLooksEncrypted = !event.content.trim().startsWith('{') && !event.content.trim().startsWith('[')
 						if (contentLooksEncrypted) {
 							await event.decrypt(undefined, signer)
-							console.log(`🔍 fetchOrderById: Decrypted event ${event.id}, tags (after decrypt):`, event.tags)
 							// Re-check tags after decryption
 							orderTag = event.tags.find((tag) => tag[0] === 'order')
 							typeTag = event.tags.find((tag) => tag[0] === 'type')
 						}
 					} catch (error) {
-						// Decryption failed - log but continue to check tags
-						console.log(`🔍 fetchOrderById: Decryption failed for event ${event.id}:`, error instanceof Error ? error.message : error)
+						// Decryption failed - continue to check tags
 					}
 				}
 				
-				console.log(`🔍 fetchOrderById: Event ${event.id} order tag:`, orderTag, `type tag:`, typeTag)
-				
 				// Check if this is the order we're looking for
 				if (orderTag && orderTag[1] === orderId && typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION) {
-					console.log(`🔍 fetchOrderById: ✅ Found matching order event:`, event.id)
 					orderEventsSet.add(event)
-				} else {
-					console.log(`🔍 fetchOrderById: ❌ Event ${event.id} does not match (order tag: ${orderTag?.[1] || 'missing'}, expected: ${orderId}, type tag: ${typeTag?.[1] || 'missing'})`)
 				}
 			})
 		}
@@ -1996,12 +1913,10 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 				}
 				
 				subscription.on('eose', () => {
-					console.log(`🔍 fetchOrderById: EOSE received for subscription ${index}`)
 					markComplete()
 				})
 
 				subscription.on('close', () => {
-					console.log(`🔍 fetchOrderById: Close received for subscription ${index}`)
 					markComplete()
 				})
 			})
@@ -2011,12 +1926,9 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 			subscription.start()
 		})
 		
-		console.log(`🔍 fetchOrderById: Started ${subscriptions.length} subscriptions, waiting for events...`)
-
 		// Wait for all subscriptions to complete or timeout
 		// Create a combined promise that resolves when all subscriptions complete
 		const allSubscriptionsComplete = Promise.all(subscriptionCompletePromises).then(() => {
-			console.log(`🔍 fetchOrderById: All subscriptions completed`)
 			stopAllSubscriptions()
 		})
 
@@ -2024,7 +1936,6 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 			allSubscriptionsComplete,
 			new Promise<void>((resolve) => {
 				const timeout = setTimeout(() => {
-					console.log(`🔍 fetchOrderById: Timeout reached after 3s, stopping all subscriptions`)
 					stopAllSubscriptions()
 					resolve()
 				}, 3000) // 3 second timeout
@@ -2032,25 +1943,17 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 			// Fallback timeout
 			new Promise<void>((resolve) => {
 				setTimeout(() => {
-					console.log(`🔍 fetchOrderById: Fallback timeout reached after 3.5s`)
 					stopAllSubscriptions()
 					resolve()
 				}, 3500)
 			})
 		])
 
-		console.log(`🔍 fetchOrderById: Subscription completed, found ${orderEventsSet.size} events`)
-
 		if (orderEventsSet.size === 0) {
-			console.log(`🔍 fetchOrderById: No order events found for ID: ${orderId}`)
-			console.log(`🔍 fetchOrderById: Relay URLs used:`, relayUrls)
-			console.log(`🔍 fetchOrderById: Filters used:`, filters)
 			return null
 		}
 		orderEvent = Array.from(orderEventsSet)[0] // Take the first matching order event
-		console.log(`🔍 fetchOrderById: Found order event: ${orderEvent.id}, order tag: ${orderEvent.tags.find((t) => t[0] === 'order')?.[1]}`)
 	} catch (error) {
-		console.error('🔍 fetchOrderById: Error fetching order event:', error)
 		return null
 	}
 
@@ -2075,9 +1978,6 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 			limit: 500,
 		},
 	]
-
-	console.log(`🔍 fetchOrderById: Fetching related events with filters:`, relatedEventsFilters)
-	console.log(`🔍 fetchOrderById: Connected relays for related events:`, ndk.pool?.connectedRelays()?.map(r => r.url) || [])
 
 	// Fetch related events using subscription with timeout
 	let relatedEvents: Set<NDKEvent> = new Set()
@@ -2106,14 +2006,12 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 							orderTag = event.tags.find((tag) => tag[0] === 'order')
 						}
 					} catch (error) {
-						// Decryption failed - log but continue to check tags
-						console.warn('🔍 fetchOrderById: Error processing related event:', error)
+						// Decryption failed - continue to check tags
 					}
 				}
 				
 				// Check if this event is related to our order by checking the order tag
 				if (orderTag && orderTag[1] === orderIdFromTag) {
-					console.log(`🔍 fetchOrderById: Received related event:`, event.id, event.kind, event.tags.find(t => t[0] === 'type')?.[1])
 					relatedEventsSet.add(event)
 				}
 			})
@@ -2145,12 +2043,10 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 				}
 
 				subscription.on('eose', () => {
-					console.log(`🔍 fetchOrderById: Related events EOSE received for subscription ${index}`)
 					markComplete()
 				})
 
 				subscription.on('close', () => {
-					console.log(`🔍 fetchOrderById: Related events close received for subscription ${index}`)
 					markComplete()
 				})
 			})
@@ -2160,11 +2056,8 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 			subscription.start()
 		})
 
-		console.log(`🔍 fetchOrderById: Started ${subscriptions.length} subscriptions for related events, waiting...`)
-
 		// Wait for all subscriptions to complete or timeout
 		const allSubscriptionsComplete = Promise.all(subscriptionCompletePromises).then(() => {
-			console.log(`🔍 fetchOrderById: All related events subscriptions completed`)
 			stopAllSubscriptions()
 		})
 
@@ -2172,7 +2065,6 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 			allSubscriptionsComplete,
 			new Promise<void>((resolve) => {
 				const timeout = setTimeout(() => {
-					console.log(`🔍 fetchOrderById: Related events timeout reached after 2s, stopping all subscriptions`)
 					stopAllSubscriptions()
 					resolve()
 				}, 2000) // 2 second timeout
@@ -2180,7 +2072,6 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 			// Fallback timeout
 			new Promise<void>((resolve) => {
 				setTimeout(() => {
-					console.log(`🔍 fetchOrderById: Related events fallback timeout reached after 2.5s`)
 					stopAllSubscriptions()
 					resolve()
 				}, 2500)
@@ -2188,9 +2079,7 @@ export const fetchOrderById = async (orderId: string, queryClient?: ReturnType<t
 		])
 
 		relatedEvents = relatedEventsSet
-		console.log(`🔍 fetchOrderById: Found ${relatedEvents.size} related events`)
 	} catch (error) {
-		console.error('🔍 fetchOrderById: Error fetching related events:', error)
 		relatedEvents = new Set()
 	}
 
@@ -2340,10 +2229,8 @@ export const useOrderById = (orderId: string) => {
 
 			const found = allCachedOrders.find(findOrderById)
 
-			console.log(`🔍 useOrderById: Looking for order ${orderId} in cache, found: ${found ? 'yes' : 'no'}`)
 			return found
 		} catch (error) {
-			console.error('🔍 useOrderById: Error reading from cache:', error)
 			return undefined
 		}
 	}, [orderId, userPubkey, queryClient])
@@ -2354,7 +2241,6 @@ export const useOrderById = (orderId: string) => {
 
 		// Verify NDK pool is ready before creating subscriptions
 		if (!ndk.pool) {
-			console.warn('useOrderById: NDK pool not ready, skipping subscription')
 			return
 		}
 
@@ -2395,7 +2281,6 @@ export const useOrderById = (orderId: string) => {
 							orderTag = newEvent.tags.find((tag) => tag[0] === 'order')
 						}
 					} catch (error) {
-						console.warn('useOrderById: Error processing live event:', error)
 						return
 					}
 				}
@@ -2409,10 +2294,8 @@ export const useOrderById = (orderId: string) => {
 				// Update cache directly instead of invalidating/refetching to preserve related events
 				if (newEvent.kind === ORDER_PROCESS_KIND) {
 					const typeTag = newEvent.tags.find((tag) => tag[0] === 'type')
-					if (typeTag && (typeTag[1] === ORDER_MESSAGE_TYPE.STATUS_UPDATE || typeTag[1] === ORDER_MESSAGE_TYPE.SHIPPING_UPDATE)) {
-						console.log(`🔍 useOrderById: Status/shipping update received, updating cache directly`)
-						
-						// Update detail cache
+				if (typeTag && (typeTag[1] === ORDER_MESSAGE_TYPE.STATUS_UPDATE || typeTag[1] === ORDER_MESSAGE_TYPE.SHIPPING_UPDATE)) {
+					// Update detail cache
 						const currentDetail = queryClient.getQueryData<OrderWithRelatedEvents>(orderKeys.details(orderId))
 						if (currentDetail) {
 							const updatedDetail = { ...currentDetail }
@@ -2467,8 +2350,6 @@ export const useOrderById = (orderId: string) => {
 						}
 					}
 				} else if (newEvent.kind === PAYMENT_RECEIPT_KIND) {
-					console.log('🔍 useOrderById: Payment receipt received, updating cache directly:', newEvent.id)
-					
 					// Update detail cache
 					const currentDetail = queryClient.getQueryData<OrderWithRelatedEvents>(orderKeys.details(orderId))
 					if (currentDetail) {
@@ -2507,34 +2388,11 @@ export const useOrderById = (orderId: string) => {
 					}
 				}
 			})
+		}
 
-		// Start subscriptions AFTER all handlers are set up
-		// Add delay to ensure subscriptions are fully initialized before starting
-		setTimeout(() => {
-			for (const subscription of subscriptions) {
-				try {
-					// Verify subscription is still valid before starting
-					if (!ndk || !ndk.pool || !subscription) {
-						continue
-					}
-
-					// Verify subscription has start method
-					if ('start' in subscription && typeof subscription.start === 'function') {
-						subscription.start()
-					}
-				} catch (startError) {
-					// Ignore "Cannot access 's' before initialization" errors - subscription might auto-start
-					const errorMsg = startError instanceof Error ? startError.message : String(startError)
-					if (errorMsg.includes("Cannot access 's' before initialization") || errorMsg.includes("before initialization")) {
-						console.log('useOrderById: Subscription already initialized or auto-started')
-					} else {
-						console.warn('useOrderById: Error starting subscription:', startError)
-					}
-				}
-			}
-		}, 400) // Longer delay to ensure full initialization
-	}
-
+		// Subscriptions will auto-start when handlers are attached
+		// No need to manually call start() - this avoids initialization race conditions
+		
 		// Clean up subscriptions when unmounting
 		// Don't manually stop - let NDK handle cleanup naturally
 		// Manually stopping causes NDK internal errors

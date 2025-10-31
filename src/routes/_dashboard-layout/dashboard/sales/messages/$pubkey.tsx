@@ -61,7 +61,6 @@ function ConversationDetailComponent() {
 		},
 		onError: (err) => {
 			setIsSending(false)
-			console.error('Error sending message:', err)
 			alert(`Failed to send message: ${err instanceof Error ? err.message : 'Unknown error'}`)
 		},
 	})
