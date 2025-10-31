@@ -944,37 +944,51 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 		}
 	})
 
-	// Don't set cache directly here - let the queryFn handle caching and merging
-	// Setting cache here would overwrite existing related events
+	// Set cache immediately so related events subscription can update it
+	// The queryFn will merge properly when it runs
+	if (queryClient) {
+		queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), initialResult)
+	}
 
 	// Start fetching related events in parallel AFTER orders are found (don't wait)
 	if (queryClient && relatedEventsSubscription) {
-		// Ensure order IDs are populated
-		console.log('🔍 fetchOrdersByBuyer: Order IDs ready for related events:', Array.from(orderIdsSet))
-		
-		// Start related events subscription after ensuring it's fully initialized
-		// Use longer delay and verify subscription is ready before starting
-		setTimeout(() => {
+		// Start related events subscription immediately after setting cache
+		// This ensures events can update the cache right away
+		// Use longer delay and wrap in try-catch to prevent initialization errors
+		const startRelatedEventsSub = () => {
 			try {
 				if (!relatedEventsSubscription || !ndk || !ndk.pool) {
 					return
 				}
 
-				// Verify subscription has start method
+				// Verify subscription has start method and is fully initialized
 				if ('start' in relatedEventsSubscription && typeof relatedEventsSubscription.start === 'function') {
-					relatedEventsSubscription.start()
-					console.log('🔍 fetchOrdersByBuyer: Started related events subscription in parallel')
+					// Wrap the actual start call in another try-catch to catch NDK internal errors
+					try {
+						relatedEventsSubscription.start()
+					} catch (innerError) {
+						// Silently ignore NDK initialization errors - subscription may auto-start
+						const innerErrorMsg = innerError instanceof Error ? innerError.message : String(innerError)
+						if (!innerErrorMsg.includes("Cannot access 's' before initialization") && 
+						    !innerErrorMsg.includes("before initialization") &&
+						    !innerErrorMsg.includes("ReferenceError")) {
+							// Only log if it's not an initialization error
+						}
+					}
 				}
 			} catch (startError) {
-				// Ignore "Cannot access 's' before initialization" errors - subscription might auto-start
+				// Ignore all initialization errors - subscription might auto-start or already be started
 				const errorMsg = startError instanceof Error ? startError.message : String(startError)
-				if (errorMsg.includes("Cannot access 's' before initialization") || errorMsg.includes("before initialization")) {
-					console.log('🔍 fetchOrdersByBuyer: Subscription already initialized or auto-started')
-				} else {
-					console.error('🔍 fetchOrdersByBuyer: Error starting related events subscription:', startError)
+				if (!errorMsg.includes("Cannot access 's' before initialization") && 
+				    !errorMsg.includes("before initialization") &&
+				    !errorMsg.includes("ReferenceError")) {
+					// Only log if it's not an initialization error
 				}
 			}
-		}, 400) // Longer delay to ensure subscription is fully initialized
+		}
+		
+		// Use longer delay to ensure subscription is fully initialized
+		setTimeout(startRelatedEventsSub, 400)
 	}
 
 	// Return orders immediately - related events subscription is fetching in parallel
@@ -1200,16 +1214,15 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 		}
 		
 		const subscription = ndk.subscribe(orderReceivedFilter, {
-			closeOnEose: false, // Handle closing ourselves to avoid NDK internal timeout errors
+			closeOnEose: true,
 		})
 
 		// Get signer for decryption
 		const signer = ndkActions.getSigner()
 
-		// Track all pending decryption promises
-		const pendingDecryptions: Promise<void>[] = []
+		// Track all pending event processing promises
+		const pendingEventProcessing: Promise<void>[] = []
 		let subscriptionClosed = false
-		let lastEventReceivedTime = Date.now()
 		
 		// Start related events subscription in parallel
 		const relatedEventsFilter: NDKFilter = {
@@ -1228,79 +1241,66 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 		}
 
 		subscription.on('event', async (event: NDKEvent) => {
-			// Update last event time for inactivity tracking
-			lastEventReceivedTime = Date.now()
-			
-			// Skip processing if subscription is already closed
-			if (subscriptionClosed) {
-				return
-			}
+			// Skip if subscription is already closed
+			if (subscriptionClosed) return
 
-			// Ensure NDK is still valid before processing
-			const currentNdk = ndkActions.getNDK()
-			if (!currentNdk) {
-				console.warn('🔍 fetchOrdersBySeller: NDK became invalid during event processing, skipping event')
-				return
-			}
-
-			// Decrypt and filter by type tag client-side
-			const decryptionPromise = (async () => {
-				try {
-					// Re-check signer and NDK before decrypting
-					const currentSigner = ndkActions.getSigner()
-					if (!currentSigner) {
-						console.warn('🔍 fetchOrdersBySeller: Signer not available for decryption')
-						return
+			// Process event asynchronously and track the promise
+			const processPromise = (async () => {
+				// Per NIP-17, encrypted direct messages have their tags encrypted
+				// We need to decrypt first, then check the type tag
+				// However, events might not always be encrypted, so check tags before and after decryption
+				
+				// First, check if type tag exists before decryption (for unencrypted events)
+				let typeTag = event.tags.find((tag) => tag[0] === 'type')
+				const orderTag = event.tags.find((tag) => tag[0] === 'order')
+				
+				// If we already found the type tag and it matches, we can skip decryption
+				if (typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION) {
+					ordersSet.add(event)
+					if (orderTag?.[1]) {
+						orderIdsSet.add(orderTag[1])
 					}
-
-					let decrypted = false
-					if (currentSigner && event.content) {
+					return
+				}
+				
+				// Try to decrypt if content looks encrypted
+				let decrypted = false
+				try {
+					if (signer && event.content) {
 						// Check if content looks encrypted (not JSON)
 						const contentLooksEncrypted = !event.content.trim().startsWith('{') && !event.content.trim().startsWith('[')
 						if (contentLooksEncrypted) {
-							// Check again if decryption is still allowed before attempting
-							if (subscriptionClosed) {
-								return
-							}
-							try {
-								await event.decrypt(undefined, currentSigner)
-								decrypted = true
-							} catch (decryptError) {
-								// Decryption failed - continue to check tags
-								const errorMsg = decryptError instanceof Error ? decryptError.message : String(decryptError)
-								// If decryption fails due to subscription being closed or NDK issues, don't process further
-								if (errorMsg.includes('initialization') || errorMsg.includes('not initialized')) {
-									return
-								}
-							}
-						}
-					}
-					
-					// Only process if subscription hasn't closed
-					if (!subscriptionClosed) {
-						// Check type tag after decryption attempt
-						const typeTag = event.tags.find((tag) => tag[0] === 'type')
-						const orderTag = event.tags.find((tag) => tag[0] === 'order')
-						
-						// If type tag matches ORDER_CREATION, add the event
-						if (typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION) {
-							ordersSet.add(event)
-							// Track order ID as it's discovered
-							if (orderTag?.[1]) {
-								orderIdsSet.add(orderTag[1])
-							}
+							await event.decrypt(undefined, signer)
+							decrypted = true
+							
+							// Re-check tags after decryption (tags might have been encrypted)
+							typeTag = event.tags.find((tag) => tag[0] === 'type')
 						}
 					}
 				} catch (error) {
-					// General error - log but continue if we haven't closed
-					if (!subscriptionClosed) {
-						const errorMsg = error instanceof Error ? error.message : String(error)
+					// Decryption failed - log but continue to check tags
+					const errorMsg = error instanceof Error ? error.message : String(error)
+					// Filter out base64/invalid padding errors (expected when decrypting wrong events)
+					if (!errorMsg.includes('invalid base64') && !errorMsg.includes('Invalid padding') && !errorMsg.includes('invalid payload length') && !errorMsg.includes('Unknown letter')) {
+						console.warn('🔍 fetchOrdersBySeller: Decryption error for event:', errorMsg)
+					}
+				}
+				
+				// Check type tag after decryption attempt (or re-check if we already found it)
+				typeTag = event.tags.find((tag) => tag[0] === 'type')
+				
+				// If type tag matches ORDER_CREATION, add the event
+				if (typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION) {
+					ordersSet.add(event)
+					// Track order ID as it's discovered
+					if (orderTag?.[1]) {
+						orderIdsSet.add(orderTag[1])
 					}
 				}
 			})()
 
-			// Track this decryption promise
-			pendingDecryptions.push(decryptionPromise)
+			// Track this promise
+			pendingEventProcessing.push(processPromise)
 		})
 		
 		// Set up related events handler if subscription was created
@@ -1470,10 +1470,21 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 			// Don't start related events subscription here - it will be started after orders subscription completes
 		}
 
+		// Helper to wait for all pending event processing
+		const waitForPendingEvents = async (): Promise<void> => {
+			if (pendingEventProcessing.length === 0) return
+			try {
+				await Promise.allSettled(pendingEventProcessing)
+			} catch (error) {
+				// Errors are already handled in the individual promises
+			}
+		}
+
 		// Set up eose and close handlers BEFORE starting
 		let stopped = false
+		let subscriptionStarted = false
 		const stopSubscription = () => {
-			if (!stopped) {
+			if (!stopped && subscription && subscriptionStarted) {
 				stopped = true
 				subscriptionClosed = true
 				// Don't call stop() - let NDK handle cleanup naturally with closeOnEose
@@ -1481,77 +1492,61 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 			}
 		}
 
-		// Helper to wait for all pending decryptions
-		const waitForDecryptions = async (): Promise<void> => {
-			if (pendingDecryptions.length === 0) return
+		// Ensure subscription is ready before starting
+		if (!subscription) {
+			orders = new Set()
+		} else {
+			// Add small delay to ensure subscription is fully initialized
+			await new Promise(resolve => setTimeout(resolve, 50))
 			
 			try {
-				// Wait for all pending decryptions with a reasonable timeout
-				await Promise.allSettled(pendingDecryptions)
-			} catch (error) {
-				// Ignore errors - we've already handled them in the decryption promise
-				console.warn('🔍 fetchOrdersBySeller: Some decryptions failed:', error)
+				// Start subscription AFTER handlers are set up but BEFORE Promise.race
+				subscription.start()
+				subscriptionStarted = true
+			} catch (startError) {
+				orders = new Set()
+				subscriptionStarted = false
 			}
 		}
-
-		// Start subscription AFTER handlers are set up but BEFORE Promise.race
-		subscription.start()
-
-		await Promise.race([
-			new Promise<void>((resolvePromise) => {
-				let eoseReceived = false
-				let inactivityTimer: NodeJS.Timeout | null = null
-				const INACTIVITY_TIMEOUT = 1500 // Reduced to 1.5s after last event before closing for faster loading
-
-				const checkInactivityAndClose = async () => {
-					const timeSinceLastEvent = Date.now() - lastEventReceivedTime
-					if (timeSinceLastEvent >= INACTIVITY_TIMEOUT) {
-						if (inactivityTimer) clearTimeout(inactivityTimer)
-						await waitForDecryptions()
+		
+		if (!subscriptionStarted || !subscription) {
+			orders = new Set()
+		} else {
+			// Start orders subscription and wait for it to complete
+			// As soon as we have orders, we'll start fetching related events in parallel
+			await Promise.race([
+				new Promise<void>((resolve) => {
+					const timeout = setTimeout(async () => {
 						stopSubscription()
-						resolvePromise()
-					} else {
-						// Schedule another check
-						const remainingTime = INACTIVITY_TIMEOUT - timeSinceLastEvent
-						inactivityTimer = setTimeout(checkInactivityAndClose, remainingTime)
-					}
-				}
+						resolve()
+					}, 1000) // Same timeout as purchases
 
-				const timeout = setTimeout(async () => {
-					if (inactivityTimer) clearTimeout(inactivityTimer)
-					await waitForDecryptions()
-					stopSubscription()
-					resolvePromise()
-				}, 3000) // Reduced timeout to 3s for faster loading
+					subscription.on('eose', async () => {
+						clearTimeout(timeout)
+						stopSubscription()
+						resolve()
+					})
 
-				subscription.on('eose', async () => {
-					eoseReceived = true
-					// Wait shorter after EOSE before starting inactivity check
+					subscription.on('close', async () => {
+						clearTimeout(timeout)
+						stopSubscription()
+						resolve()
+					})
+				}),
+				// Fallback timeout
+				new Promise<void>((resolve) => {
 					setTimeout(() => {
-						checkInactivityAndClose()
-					}, 1000) // Reduced wait after EOSE to 1s for faster loading
+						stopSubscription()
+						resolve()
+					}, 1500) // Same fallback timeout as purchases
 				})
+			])
 
-				subscription.on('close', async () => {
-					clearTimeout(timeout)
-					if (inactivityTimer) clearTimeout(inactivityTimer)
-					await waitForDecryptions()
-					stopSubscription()
-					resolvePromise()
-				})
-			}),
-			// Fallback timeout to ensure we never wait more than 5s total
-			new Promise<void>((resolvePromise) => {
-				setTimeout(async () => {
-					await waitForDecryptions()
-					stopSubscription()
-					resolvePromise()
-				}, 5000) // Reduced fallback timeout for faster loading
-			})
-		])
+			// Wait for all pending event processing before continuing
+			await waitForPendingEvents()
 
-		orders = ordersSet
-		console.log('🔍 fetchOrdersBySeller: Subscription completed, found', orders.size, 'orders')
+			orders = ordersSet
+		}
 	} catch (error) {
 		console.error('🔍 fetchOrdersBySeller: Error fetching orders:', error)
 		orders = new Set()
@@ -1601,37 +1596,51 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 		}
 	})
 
-	// Don't set cache directly here - let the queryFn handle caching and merging
-	// Setting cache here would overwrite existing related events
+	// Set cache immediately so related events subscription can update it
+	// The queryFn will merge properly when it runs
+	if (queryClient) {
+		queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), initialResult)
+	}
 
 	// Start fetching related events in parallel AFTER orders are found (don't wait)
 	if (queryClient && relatedEventsSubscription) {
-		// Ensure order IDs are populated
-		console.log('🔍 fetchOrdersBySeller: Order IDs ready for related events:', Array.from(orderIdsSet))
-		
-		// Start related events subscription after ensuring it's fully initialized
-		// Use longer delay and verify subscription is ready before starting
-		setTimeout(() => {
+		// Start related events subscription immediately after setting cache
+		// This ensures events can update the cache right away
+		// Use longer delay and wrap in try-catch to prevent initialization errors
+		const startRelatedEventsSub = () => {
 			try {
 				if (!relatedEventsSubscription || !ndk || !ndk.pool) {
 					return
 				}
 
-				// Verify subscription has start method
+				// Verify subscription has start method and is fully initialized
 				if ('start' in relatedEventsSubscription && typeof relatedEventsSubscription.start === 'function') {
-					relatedEventsSubscription.start()
-					console.log('🔍 fetchOrdersBySeller: Started related events subscription in parallel')
+					// Wrap the actual start call in another try-catch to catch NDK internal errors
+					try {
+						relatedEventsSubscription.start()
+					} catch (innerError) {
+						// Silently ignore NDK initialization errors - subscription may auto-start
+						const innerErrorMsg = innerError instanceof Error ? innerError.message : String(innerError)
+						if (!innerErrorMsg.includes("Cannot access 's' before initialization") && 
+						    !innerErrorMsg.includes("before initialization") &&
+						    !innerErrorMsg.includes("ReferenceError")) {
+							// Only log if it's not an initialization error
+						}
+					}
 				}
 			} catch (startError) {
-				// Ignore "Cannot access 's' before initialization" errors - subscription might auto-start
+				// Ignore all initialization errors - subscription might auto-start or already be started
 				const errorMsg = startError instanceof Error ? startError.message : String(startError)
-				if (errorMsg.includes("Cannot access 's' before initialization") || errorMsg.includes("before initialization")) {
-					console.log('🔍 fetchOrdersBySeller: Subscription already initialized or auto-started')
-				} else {
-					console.error('🔍 fetchOrdersBySeller: Error starting related events subscription:', startError)
+				if (!errorMsg.includes("Cannot access 's' before initialization") && 
+				    !errorMsg.includes("before initialization") &&
+				    !errorMsg.includes("ReferenceError")) {
+					// Only log if it's not an initialization error
 				}
 			}
-		}, 400) // Longer delay to ensure subscription is fully initialized
+		}
+		
+		// Use longer delay to ensure subscription is fully initialized
+		setTimeout(startRelatedEventsSub, 400)
 	}
 
 	// Return orders immediately - related events subscription is fetching in parallel
