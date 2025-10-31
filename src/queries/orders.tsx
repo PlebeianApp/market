@@ -952,17 +952,29 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 		// Ensure order IDs are populated
 		console.log('🔍 fetchOrdersByBuyer: Order IDs ready for related events:', Array.from(orderIdsSet))
 		
-		// Start related events subscription synchronously after a small delay to ensure handlers are set up
+		// Start related events subscription after ensuring it's fully initialized
+		// Use longer delay and verify subscription is ready before starting
 		setTimeout(() => {
 			try {
-				if (relatedEventsSubscription && ndk && ndk.pool) {
+				if (!relatedEventsSubscription || !ndk || !ndk.pool) {
+					return
+				}
+
+				// Verify subscription has start method
+				if ('start' in relatedEventsSubscription && typeof relatedEventsSubscription.start === 'function') {
 					relatedEventsSubscription.start()
 					console.log('🔍 fetchOrdersByBuyer: Started related events subscription in parallel')
 				}
 			} catch (startError) {
-				console.error('🔍 fetchOrdersByBuyer: Error starting related events subscription:', startError)
+				// Ignore "Cannot access 's' before initialization" errors - subscription might auto-start
+				const errorMsg = startError instanceof Error ? startError.message : String(startError)
+				if (errorMsg.includes("Cannot access 's' before initialization") || errorMsg.includes("before initialization")) {
+					console.log('🔍 fetchOrdersByBuyer: Subscription already initialized or auto-started')
+				} else {
+					console.error('🔍 fetchOrdersByBuyer: Error starting related events subscription:', startError)
+				}
 			}
-		}, 100)
+		}, 400) // Longer delay to ensure subscription is fully initialized
 	}
 
 	// Return orders immediately - related events subscription is fetching in parallel
@@ -1489,7 +1501,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 			new Promise<void>((resolvePromise) => {
 				let eoseReceived = false
 				let inactivityTimer: NodeJS.Timeout | null = null
-				const INACTIVITY_TIMEOUT = 3000 // Reduced to 3s after last event before closing
+				const INACTIVITY_TIMEOUT = 1500 // Reduced to 1.5s after last event before closing for faster loading
 
 				const checkInactivityAndClose = async () => {
 					const timeSinceLastEvent = Date.now() - lastEventReceivedTime
@@ -1510,14 +1522,14 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 					await waitForDecryptions()
 					stopSubscription()
 					resolvePromise()
-				}, 10000) // Reduced timeout to 10s
+				}, 3000) // Reduced timeout to 3s for faster loading
 
 				subscription.on('eose', async () => {
 					eoseReceived = true
 					// Wait shorter after EOSE before starting inactivity check
 					setTimeout(() => {
 						checkInactivityAndClose()
-					}, 2000) // Reduced wait after EOSE to 2s
+					}, 1000) // Reduced wait after EOSE to 1s for faster loading
 				})
 
 				subscription.on('close', async () => {
@@ -1528,13 +1540,13 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 					resolvePromise()
 				})
 			}),
-			// Fallback timeout to ensure we never wait more than 12s total
+			// Fallback timeout to ensure we never wait more than 5s total
 			new Promise<void>((resolvePromise) => {
 				setTimeout(async () => {
 					await waitForDecryptions()
 					stopSubscription()
 					resolvePromise()
-				}, 12000) // Reduced fallback timeout
+				}, 5000) // Reduced fallback timeout for faster loading
 			})
 		])
 
@@ -1597,17 +1609,29 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 		// Ensure order IDs are populated
 		console.log('🔍 fetchOrdersBySeller: Order IDs ready for related events:', Array.from(orderIdsSet))
 		
-		// Start related events subscription synchronously after a small delay to ensure handlers are set up
+		// Start related events subscription after ensuring it's fully initialized
+		// Use longer delay and verify subscription is ready before starting
 		setTimeout(() => {
 			try {
-				if (relatedEventsSubscription && ndk && ndk.pool) {
+				if (!relatedEventsSubscription || !ndk || !ndk.pool) {
+					return
+				}
+
+				// Verify subscription has start method
+				if ('start' in relatedEventsSubscription && typeof relatedEventsSubscription.start === 'function') {
 					relatedEventsSubscription.start()
 					console.log('🔍 fetchOrdersBySeller: Started related events subscription in parallel')
 				}
 			} catch (startError) {
-				console.error('🔍 fetchOrdersBySeller: Error starting related events subscription:', startError)
+				// Ignore "Cannot access 's' before initialization" errors - subscription might auto-start
+				const errorMsg = startError instanceof Error ? startError.message : String(startError)
+				if (errorMsg.includes("Cannot access 's' before initialization") || errorMsg.includes("before initialization")) {
+					console.log('🔍 fetchOrdersBySeller: Subscription already initialized or auto-started')
+				} else {
+					console.error('🔍 fetchOrdersBySeller: Error starting related events subscription:', startError)
+				}
 			}
-		}, 100)
+		}, 400) // Longer delay to ensure subscription is fully initialized
 	}
 
 	// Return orders immediately - related events subscription is fetching in parallel
@@ -1679,15 +1703,21 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 							cachedOrder.paymentRequests.length > 0 ||
 							cachedOrder.generalMessages.length > 0
 						
-						// If result doesn't have related events but cache does, use cache's related events
+						// CRITICAL: If result doesn't have related events but cache does, use cache's related events
+						// This prevents status reset when fetchOrdersBySeller returns empty arrays
 						if (!hasRelatedEvents && cachedHasRelatedEvents) {
-							return cachedOrder
+							// Return cached order with updated order event (in case order event changed)
+							return {
+								...cachedOrder,
+								order: orderData.order, // Use latest order event
+							}
 						}
 						
 						// Otherwise, merge: take the union of events from both (deduplicated by event ID)
+						// Cached events are added first, then result events (they take precedence if duplicate)
 						const mergeEvents = (resultEvents: NDKEvent[], cachedEvents: NDKEvent[]) => {
 							const eventMap = new Map<string, NDKEvent>()
-							// First add cached events
+							// First add cached events (preserve what's already in cache)
 							cachedEvents.forEach(e => eventMap.set(e.id, e))
 							// Then add result events (they take precedence if duplicate)
 							resultEvents.forEach(e => eventMap.set(e.id, e))
@@ -2256,22 +2286,30 @@ export const useOrderById = (orderId: string) => {
 	const { user } = useStore(authStore)
 	const userPubkey = user?.pubkey || ''
 	
-	// Prefetch list queries to populate cache so order details can use cached data
+	// Prefetch list queries ONLY if cache is empty (don't refetch if cache exists)
 	useEffect(() => {
 		if (!userPubkey || !ndk) return
 
-		// Prefetch both seller and buyer queries to populate cache
-		queryClient.prefetchQuery({
-			queryKey: orderKeys.bySeller(userPubkey),
-			queryFn: () => fetchOrdersBySeller(userPubkey),
-			staleTime: 30000,
-		})
+		// Check if we already have cached data - don't prefetch if cache exists
+		const sellerCache = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(userPubkey))
+		const buyerCache = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(userPubkey))
 
-		queryClient.prefetchQuery({
-			queryKey: orderKeys.byBuyer(userPubkey),
-			queryFn: () => fetchOrdersByBuyer(userPubkey),
-			staleTime: 30000,
-		})
+		// Only prefetch if cache is empty (pass queryClient so merge logic works)
+		if (!sellerCache || sellerCache.length === 0) {
+			queryClient.prefetchQuery({
+				queryKey: orderKeys.bySeller(userPubkey),
+				queryFn: () => fetchOrdersBySeller(userPubkey, queryClient),
+				staleTime: 30000,
+			})
+		}
+
+		if (!buyerCache || buyerCache.length === 0) {
+			queryClient.prefetchQuery({
+				queryKey: orderKeys.byBuyer(userPubkey),
+				queryFn: () => fetchOrdersByBuyer(userPubkey, queryClient),
+				staleTime: 30000,
+			})
+		}
 	}, [userPubkey, ndk, queryClient])
 	
 	// Try to get order from list queries cache first - use useMemo to avoid initialization issues
@@ -2331,7 +2369,7 @@ export const useOrderById = (orderId: string) => {
 		// Get signer for decryption
 		const signer = ndkActions.getSigner()
 
-		// Event handler for all events
+		// Set up event handlers BEFORE starting subscriptions to ensure handlers are registered
 		for (const subscription of subscriptions) {
 			subscription.on('event', async (newEvent) => {
 				// Check if tags are already visible (event might not be encrypted)
@@ -2461,9 +2499,32 @@ export const useOrderById = (orderId: string) => {
 				}
 			})
 
-			// Start subscription after handlers are set up
-			subscription.start()
-		}
+		// Start subscriptions AFTER all handlers are set up
+		// Add delay to ensure subscriptions are fully initialized before starting
+		setTimeout(() => {
+			for (const subscription of subscriptions) {
+				try {
+					// Verify subscription is still valid before starting
+					if (!ndk || !ndk.pool || !subscription) {
+						continue
+					}
+
+					// Verify subscription has start method
+					if ('start' in subscription && typeof subscription.start === 'function') {
+						subscription.start()
+					}
+				} catch (startError) {
+					// Ignore "Cannot access 's' before initialization" errors - subscription might auto-start
+					const errorMsg = startError instanceof Error ? startError.message : String(startError)
+					if (errorMsg.includes("Cannot access 's' before initialization") || errorMsg.includes("before initialization")) {
+						console.log('useOrderById: Subscription already initialized or auto-started')
+					} else {
+						console.warn('useOrderById: Error starting subscription:', startError)
+					}
+				}
+			}
+		}, 400) // Longer delay to ensure full initialization
+	}
 
 		// Clean up subscriptions when unmounting
 		// Don't manually stop - let NDK handle cleanup naturally
