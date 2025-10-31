@@ -27,11 +27,33 @@ export type OrderWithRelatedEvents = {
  * Fetches all orders where the current user is either a buyer or seller
  */
 export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
-	const ndk = ndkActions.getNDK()
+	let ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
 	const user = ndk.activeUser
 	if (!user) throw new Error('No active user')
+
+	// Ensure NDK is connected before querying
+	const ndkState = ndkStore.state
+	if (!ndkState.isConnected) {
+		await ndkActions.connect()
+	}
+
+	// Re-check NDK after connection
+	ndk = ndkActions.getNDK()
+	if (!ndk) {
+		throw new Error('NDK not initialized after connection')
+	}
+
+	// Ensure NDK pool is ready before creating subscriptions
+	if (!ndk.pool) {
+		// Wait a bit for pool to initialize
+		await new Promise(resolve => setTimeout(resolve, 100))
+		ndk = ndkActions.getNDK()
+		if (!ndk || !ndk.pool) {
+			throw new Error('NDK pool not initialized')
+		}
+	}
 
 	// Fetch orders where the current user is involved (either as sender or recipient of encrypted DMs)
 	// Per gamma_spec.md, we can't filter by #type or #order tags - they're not valid Nostr filter tags
@@ -55,6 +77,12 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 	let ordersSent: Set<NDKEvent> = new Set()
 	try {
 		const ordersSentSet = new Set<NDKEvent>()
+		
+		// Verify NDK is ready before creating subscription
+		if (!ndk || !ndk.pool) {
+			throw new Error('NDK not ready for subscription')
+		}
+		
 		const sentSubscription = ndk.subscribe(orderCreationFilter, {
 			closeOnEose: true,
 		})
@@ -126,6 +154,12 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 	let ordersReceived: Set<NDKEvent> = new Set()
 	try {
 		const ordersReceivedSet = new Set<NDKEvent>()
+		
+		// Verify NDK is ready before creating subscription
+		if (!ndk || !ndk.pool) {
+			throw new Error('NDK not ready for subscription')
+		}
+		
 		const receivedSubscription = ndk.subscribe(orderReceivedFilter, {
 			closeOnEose: true,
 		})
@@ -223,6 +257,12 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 	let relatedEvents: Set<NDKEvent> = new Set()
 	try {
 		const relatedEventsSet = new Set<NDKEvent>()
+		
+		// Verify NDK is ready before creating subscription
+		if (!ndk || !ndk.pool) {
+			throw new Error('NDK not ready for subscription')
+		}
+		
 		const subscription = ndk.subscribe(relatedEventsFilter, {
 			closeOnEose: true,
 		})
@@ -422,7 +462,7 @@ export const useOrders = () => {
  * Fetches orders where the specified user is the buyer
  */
 export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: ReturnType<typeof useQueryClient>): Promise<OrderWithRelatedEvents[]> => {
-	const ndk = ndkActions.getNDK()
+	let ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
 	if (!buyerPubkey) {
@@ -434,6 +474,23 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 	const ndkState = ndkStore.state
 	if (!ndkState.isConnected) {
 		await ndkActions.connect()
+	}
+
+	// Re-check NDK after connection to ensure it's still valid
+	let currentNdk = ndkActions.getNDK()
+	if (!currentNdk) {
+		throw new Error('NDK not initialized after connection')
+	}
+	ndk = currentNdk
+
+	// Ensure NDK pool is ready before creating subscriptions
+	if (!ndk.pool) {
+		// Wait a bit for pool to initialize
+		await new Promise(resolve => setTimeout(resolve, 100))
+		ndk = ndkActions.getNDK()
+		if (!ndk || !ndk.pool) {
+			throw new Error('NDK pool not initialized')
+		}
 	}
 
 	// Orders where the specified user is the author (buyer sending order to merchant)
@@ -448,11 +505,22 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 	const relayUrls = ndk.explicitRelayUrls || (ndk.pool?.relays ? Array.from(ndk.pool.relays.keys()) : [])
 
 	let orders: Set<NDKEvent>
+	// Track order IDs dynamically as they're discovered
+	const orderIdsSet = new Set<string>()
+	// Declare related events subscription outside try block so it's accessible later
+	let relatedEventsSubscription: NDKSubscription | null = null
+	
 	try {
 		console.log('🔍 fetchOrdersByBuyer: Starting subscription for buyer:', buyerPubkey)
 		console.log('🔍 fetchOrdersByBuyer: Filter:', JSON.stringify(orderCreationFilter))
 		// Use subscription with closeOnEose to ensure we get EOSE signal
 		const ordersSet = new Set<NDKEvent>()
+		
+		// Verify NDK is ready before creating subscription
+		if (!ndk || !ndk.pool) {
+			throw new Error('NDK not ready for subscription')
+		}
+		
 		const subscription = ndk.subscribe(orderCreationFilter, {
 			closeOnEose: true,
 		})
@@ -463,6 +531,22 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 		// Track all pending event processing promises
 		const pendingEventProcessing: Promise<void>[] = []
 		let subscriptionClosed = false
+		
+		// Start related events subscription in parallel
+		const relatedEventsFilter: NDKFilter = {
+			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			limit: 500,
+		}
+		
+		if (queryClient) {
+			try {
+				relatedEventsSubscription = ndk.subscribe(relatedEventsFilter, {
+					closeOnEose: false,
+				})
+			} catch (subError) {
+				console.error('🔍 fetchOrdersByBuyer: Error creating related events subscription:', subError)
+			}
+		}
 
 		// Set up event handlers first
 		subscription.on('event', async (event: NDKEvent) => {
@@ -537,143 +621,20 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 				if (typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION) {
 					console.log('🔍 fetchOrdersByBuyer: Adding order event:', event.id)
 					ordersSet.add(event)
+					// Track order ID as it's discovered
+					const orderTag = event.tags.find((tag) => tag[0] === 'order')
+					if (orderTag?.[1]) {
+						orderIdsSet.add(orderTag[1])
+					}
 				}
 			})()
 
 			// Track this promise
 			pendingEventProcessing.push(processPromise)
 		})
-
-		// Helper to wait for all pending event processing
-		const waitForPendingEvents = async (): Promise<void> => {
-			if (pendingEventProcessing.length === 0) return
-			try {
-				await Promise.allSettled(pendingEventProcessing)
-			} catch (error) {
-				// Errors are already handled in the individual promises
-				console.warn('🔍 fetchOrdersByBuyer: Some event processing failed:', error)
-			}
-		}
-
-		// Set up eose and close handlers BEFORE starting
-		let stopped = false
-		const stopSubscription = () => {
-			if (!stopped) {
-				stopped = true
-				subscriptionClosed = true
-				// Don't call stop() - let NDK handle cleanup naturally with closeOnEose
-				// Manually stopping causes NDK internal errors
-			}
-		}
-
-		// Start subscription AFTER handlers are set up but BEFORE Promise.race
-		subscription.start()
-
-		await Promise.race([
-			new Promise<void>((resolve) => {
-				const timeout = setTimeout(async () => {
-					stopSubscription()
-					// Don't wait for all events - just resolve immediately
-					console.log('🔍 fetchOrdersByBuyer: Timeout reached, found', ordersSet.size, 'orders')
-					resolve()
-				}, 1500) // Reduced timeout to 1.5 seconds
-
-				subscription.on('eose', async () => {
-					console.log('🔍 fetchOrdersByBuyer: EOSE received, found', ordersSet.size, 'orders')
-					clearTimeout(timeout)
-					stopSubscription()
-					// Don't wait for pending events - they're processed in background
-					resolve()
-				})
-
-				subscription.on('close', async () => {
-					console.log('🔍 fetchOrdersByBuyer: Subscription closed, found', ordersSet.size, 'orders')
-					clearTimeout(timeout)
-					stopSubscription()
-					// Don't wait for pending events - they're processed in background
-					resolve()
-				})
-			}),
-			// Fallback timeout
-			new Promise<void>((resolve) => {
-				setTimeout(() => {
-					stopSubscription()
-					resolve()
-				}, 2000) // Reduced fallback timeout
-			})
-		])
-
-		orders = ordersSet
-		console.log('🔍 fetchOrdersByBuyer: Subscription completed, found', orders.size, 'orders')
-	} catch (error) {
-		console.error('🔍 fetchOrdersByBuyer: Error fetching orders:', error)
-		throw error
-	}
-
-	if (orders.size === 0) {
-		console.warn('🔍 fetchOrdersByBuyer: No orders found for buyer:', buyerPubkey)
-		return []
-	}
-
-	// Get all order IDs
-	const orderIds = Array.from(orders)
-		.map((order) => {
-			const orderTag = order.tags.find((tag) => tag[0] === 'order')
-			return orderTag?.[1]
-		})
-		.filter(Boolean) as string[]
-
-	if (orderIds.length === 0) return []
-
-	// Create initial result with empty related events - return immediately
-	const initialResult: OrderWithRelatedEvents[] = Array.from(orders).map((order) => {
-		const orderTag = order.tags.find((tag) => tag[0] === 'order')
-		if (!orderTag?.[1]) {
-			return {
-				order,
-				paymentRequests: [],
-				statusUpdates: [],
-				shippingUpdates: [],
-				generalMessages: [],
-				paymentReceipts: [],
-			}
-		}
-
-		return {
-			order,
-			paymentRequests: [],
-			statusUpdates: [],
-			shippingUpdates: [],
-			generalMessages: [],
-			paymentReceipts: [],
-		}
-	})
-
-	// Fetch related events in the background (don't wait for them)
-	// This allows UI to update incrementally as events arrive
-	;(async () => {
-		if (!queryClient) return
-
-		const relatedEventsFilter: NDKFilter = {
-			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
-			limit: 500,
-		}
-
-		try {
-			let subscription: NDKSubscription | null = null
-			
-			try {
-				subscription = ndk.subscribe(relatedEventsFilter, {
-					closeOnEose: false, // Handle closing ourselves to avoid NDK internal timeout errors
-				})
-			} catch (subError) {
-				console.error('🔍 fetchOrdersByBuyer: Error creating subscription:', subError)
-				return
-			}
-
-			if (!subscription) return
-
-			// Function to update cache incrementally as events arrive
+		
+		// Set up related events handler if subscription was created
+		if (relatedEventsSubscription && queryClient) {
 			const updateCacheForOrder = (orderId: string, event: NDKEvent) => {
 				if (!queryClient) return
 				
@@ -769,7 +730,6 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 				})
 
 				if (orderFound && eventAdded) {
-					// Create a completely new array reference with deep clones to ensure React Query detects the change
 					const newDataArray = updatedData.map(order => ({
 						...order,
 						paymentRequests: [...order.paymentRequests],
@@ -781,27 +741,17 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 					
 					console.log('🔍 fetchOrdersByBuyer: Updating cache for order', orderId, 'event kind:', event.kind)
 					queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), newDataArray)
-					// Force notify by invalidating without refetch
 					queryClient.invalidateQueries({ 
 						queryKey: orderKeys.byBuyer(buyerPubkey),
 						refetchType: 'none',
 					})
-					console.log('🔍 fetchOrdersByBuyer: Cache updated, current data length:', newDataArray.length)
-				} else {
-					if (!orderFound) {
-						console.log('🔍 fetchOrdersByBuyer: Order not found in cache:', orderId, 'available orders:', currentData.map(o => o.order.tags.find(t => t[0] === 'order')?.[1]))
-					}
-					if (!eventAdded) {
-						console.log('🔍 fetchOrdersByBuyer: Event already exists or not added:', event.id)
-					}
 				}
 			}
-
-			const signer = ndkActions.getSigner()
-			let subscriptionClosed = false
-
-			subscription.on('event', async (event: NDKEvent) => {
-				if (subscriptionClosed) return
+			
+			let relatedEventsClosed = false
+			
+			relatedEventsSubscription.on('event', async (event: NDKEvent) => {
+				if (relatedEventsClosed) return
 
 				try {
 					if (signer && event.content) {
@@ -819,7 +769,7 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 					}
 					
 					const orderTag = event.tags.find((tag) => tag[0] === 'order')
-					if (orderTag && orderIds.includes(orderTag[1])) {
+					if (orderTag && orderIdsSet.has(orderTag[1])) {
 						updateCacheForOrder(orderTag[1], event)
 					}
 				} catch (error) {
@@ -829,49 +779,143 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string, queryClient?: Retu
 					}
 				}
 			})
+			
+			// Don't start related events subscription here - it will be started after orders subscription completes
+		}
 
-			let stopped = false
-			const stopSubscription = () => {
-				if (!stopped && subscription) {
-					stopped = true
-					subscriptionClosed = true
-				}
+		// Helper to wait for all pending event processing
+		const waitForPendingEvents = async (): Promise<void> => {
+			if (pendingEventProcessing.length === 0) return
+			try {
+				await Promise.allSettled(pendingEventProcessing)
+			} catch (error) {
+				// Errors are already handled in the individual promises
+				console.warn('🔍 fetchOrdersByBuyer: Some event processing failed:', error)
 			}
+		}
 
-			subscription.start()
+		// Set up eose and close handlers BEFORE starting
+		let stopped = false
+		let subscriptionStarted = false
+		const stopSubscription = () => {
+			if (!stopped && subscription && subscriptionStarted) {
+				stopped = true
+				subscriptionClosed = true
+				// Don't call stop() - let NDK handle cleanup naturally with closeOnEose
+				// Manually stopping causes NDK internal errors
+			}
+		}
 
+		// Ensure subscription is ready before starting
+		if (!subscription) {
+			console.error('🔍 fetchOrdersByBuyer: Subscription not available')
+			orders = new Set()
+		} else {
+			// Add small delay to ensure subscription is fully initialized
+			await new Promise(resolve => setTimeout(resolve, 50))
+			
+			try {
+				// Start subscription AFTER handlers are set up but BEFORE Promise.race
+				subscription.start()
+				subscriptionStarted = true
+			} catch (startError) {
+				console.error('🔍 fetchOrdersByBuyer: Error starting subscription:', startError)
+				orders = new Set()
+				subscriptionStarted = false
+			}
+		}
+		
+		if (!subscriptionStarted || !subscription) {
+			console.warn('🔍 fetchOrdersByBuyer: Subscription not started, returning empty orders')
+			orders = new Set()
+		} else {
+			// Start orders subscription first - wait for it to complete
 			await Promise.race([
 				new Promise<void>((resolve) => {
-					const timeout = setTimeout(() => {
+					const timeout = setTimeout(async () => {
 						stopSubscription()
+						console.log('🔍 fetchOrdersByBuyer: Timeout reached, found', ordersSet.size, 'orders')
 						resolve()
-					}, 2000)
+					}, 1000) // Further reduced timeout to 1 second
 
-					subscription.on('eose', () => {
+					subscription.on('eose', async () => {
+						console.log('🔍 fetchOrdersByBuyer: EOSE received, found', ordersSet.size, 'orders')
 						clearTimeout(timeout)
 						stopSubscription()
 						resolve()
 					})
 
-					subscription.on('close', () => {
+					subscription.on('close', async () => {
+						console.log('🔍 fetchOrdersByBuyer: Subscription closed, found', ordersSet.size, 'orders')
 						clearTimeout(timeout)
 						stopSubscription()
 						resolve()
 					})
 				}),
+				// Fallback timeout
 				new Promise<void>((resolve) => {
 					setTimeout(() => {
 						stopSubscription()
 						resolve()
-					}, 2500)
+					}, 1500) // Further reduced fallback timeout
 				})
 			])
-		} catch (error) {
-			console.error('🔍 fetchOrdersByBuyer: Error in background fetch:', error)
-		}
-	})()
 
-	// Return orders immediately - background fetch will update them
+			orders = ordersSet
+			console.log('🔍 fetchOrdersByBuyer: Subscription completed, found', orders.size, 'orders')
+		}
+	} catch (error) {
+		console.error('🔍 fetchOrdersByBuyer: Error fetching orders:', error)
+		throw error
+	}
+
+	if (orders.size === 0) {
+		console.warn('🔍 fetchOrdersByBuyer: No orders found for buyer:', buyerPubkey)
+		return []
+	}
+
+	// Get all order IDs (populate from Set we built during subscription)
+	const orderIds = Array.from(orderIdsSet).filter(Boolean)
+
+	// Create initial result with empty related events - return immediately
+	// Related events are already being fetched in parallel and will update cache
+	const initialResult: OrderWithRelatedEvents[] = Array.from(orders).map((order) => {
+		const orderTag = order.tags.find((tag) => tag[0] === 'order')
+		if (!orderTag?.[1]) {
+			return {
+				order,
+				paymentRequests: [],
+				statusUpdates: [],
+				shippingUpdates: [],
+				generalMessages: [],
+				paymentReceipts: [],
+			}
+		}
+
+		return {
+			order,
+			paymentRequests: [],
+			statusUpdates: [],
+			shippingUpdates: [],
+			generalMessages: [],
+			paymentReceipts: [],
+		}
+	})
+
+	// Set initial cache and start related events subscription
+	if (queryClient && relatedEventsSubscription) {
+		queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), initialResult)
+		
+		// Now start related events subscription after cache is set
+		try {
+			relatedEventsSubscription.start()
+			console.log('🔍 fetchOrdersByBuyer: Started related events subscription')
+		} catch (startError) {
+			console.error('🔍 fetchOrdersByBuyer: Error starting related events subscription:', startError)
+		}
+	}
+
+	// Return orders immediately - related events subscription will update cache as events arrive
 	return initialResult
 }
 
@@ -982,6 +1026,16 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 		throw new Error('NDK not initialized after connection')
 	}
 
+	// Ensure NDK pool is ready before creating subscriptions
+	if (!ndk.pool) {
+		// Wait a bit for pool to initialize
+		await new Promise(resolve => setTimeout(resolve, 100))
+		ndk = ndkActions.getNDK()
+		if (!ndk || !ndk.pool) {
+			throw new Error('NDK pool not initialized')
+		}
+	}
+
 	// Orders where the specified user is the recipient (merchant receiving orders)
 	// Per gamma_spec.md, we can't filter by #type or #order tags - they're not valid Nostr filter tags
 	// We fetch all Kind 16 messages and decrypt to filter by type tag client-side
@@ -994,17 +1048,46 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 	const relayUrls = ndk.explicitRelayUrls || (ndk.pool?.relays ? Array.from(ndk.pool.relays.keys()) : [])
 
 	let orders: Set<NDKEvent>
+	// Track order IDs dynamically as they're discovered
+	const orderIdsSet = new Set<string>()
+	
 	try {
 		// Use subscription - we'll handle closing ourselves to avoid NDK internal timeout conflicts
 		const ordersSet = new Set<NDKEvent>()
+		
+		// Verify NDK is ready before creating subscription
+		if (!ndk || !ndk.pool) {
+			throw new Error('NDK not ready for subscription')
+		}
+		
 		const subscription = ndk.subscribe(orderReceivedFilter, {
 			closeOnEose: false, // Handle closing ourselves to avoid NDK internal timeout errors
 		})
+
+		// Get signer for decryption
+		const signer = ndkActions.getSigner()
 
 		// Track all pending decryption promises
 		const pendingDecryptions: Promise<void>[] = []
 		let subscriptionClosed = false
 		let lastEventReceivedTime = Date.now()
+		
+		// Start related events subscription in parallel
+		const relatedEventsFilter: NDKFilter = {
+			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			limit: 500,
+		}
+		
+		let relatedEventsSubscription: NDKSubscription | null = null
+		if (queryClient) {
+			try {
+				relatedEventsSubscription = ndk.subscribe(relatedEventsFilter, {
+					closeOnEose: false,
+				})
+			} catch (subError) {
+				console.error('🔍 fetchOrdersBySeller: Error creating related events subscription:', subError)
+			}
+		}
 
 		subscription.on('event', async (event: NDKEvent) => {
 			// Update last event time for inactivity tracking
@@ -1064,6 +1147,10 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 						// If type tag matches ORDER_CREATION, add the event
 						if (typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION) {
 							ordersSet.add(event)
+							// Track order ID as it's discovered
+							if (orderTag?.[1]) {
+								orderIdsSet.add(orderTag[1])
+							}
 						}
 					}
 				} catch (error) {
@@ -1077,6 +1164,161 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 			// Track this decryption promise
 			pendingDecryptions.push(decryptionPromise)
 		})
+		
+		// Set up related events handler if subscription was created
+		if (relatedEventsSubscription && queryClient) {
+			const updateCacheForOrder = (orderId: string, event: NDKEvent) => {
+				if (!queryClient) return
+				
+				let currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey))
+				
+				if (!currentData) {
+					setTimeout(() => {
+						currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey))
+						if (!currentData) return
+						updateCacheForOrderInner(orderId, event, currentData)
+					}, 100)
+					return
+				}
+				
+				updateCacheForOrderInner(orderId, event, currentData)
+			}
+			
+			const updateCacheForOrderInner = (orderId: string, event: NDKEvent, currentData: OrderWithRelatedEvents[]) => {
+				let orderFound = false
+				let eventAdded = false
+				
+				const updatedData = currentData.map((orderData) => {
+					const orderTag = orderData.order.tags.find((tag) => tag[0] === 'order')
+					const dataOrderId = orderTag?.[1]
+					if (dataOrderId !== orderId) {
+						return orderData
+					}
+
+					orderFound = true
+
+					const paymentRequests = [...orderData.paymentRequests]
+					const statusUpdates = [...orderData.statusUpdates]
+					const shippingUpdates = [...orderData.shippingUpdates]
+					const generalMessages = [...orderData.generalMessages]
+					const paymentReceipts = [...orderData.paymentReceipts]
+
+					const eventExists = (arr: NDKEvent[]) => arr.some(e => e.id === event.id)
+					
+					if (event.kind === ORDER_PROCESS_KIND) {
+						const typeTag = event.tags.find((tag) => tag[0] === 'type')
+						if (typeTag) {
+							switch (typeTag[1]) {
+								case ORDER_MESSAGE_TYPE.PAYMENT_REQUEST:
+									if (!eventExists(paymentRequests)) {
+										paymentRequests.push(event)
+										paymentRequests.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+										eventAdded = true
+									}
+									break
+								case ORDER_MESSAGE_TYPE.STATUS_UPDATE:
+									if (!eventExists(statusUpdates)) {
+										statusUpdates.push(event)
+										statusUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+										eventAdded = true
+									}
+									break
+								case ORDER_MESSAGE_TYPE.SHIPPING_UPDATE:
+									if (!eventExists(shippingUpdates)) {
+										shippingUpdates.push(event)
+										shippingUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+										eventAdded = true
+									}
+									break
+							}
+						}
+					} else if (event.kind === ORDER_GENERAL_KIND) {
+						if (!eventExists(generalMessages)) {
+							generalMessages.push(event)
+							generalMessages.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+							eventAdded = true
+						}
+					} else if (event.kind === PAYMENT_RECEIPT_KIND) {
+						if (!eventExists(paymentReceipts)) {
+							paymentReceipts.push(event)
+							paymentReceipts.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+							eventAdded = true
+						}
+					}
+
+					return {
+						...orderData,
+						paymentRequests,
+						statusUpdates,
+						shippingUpdates,
+						generalMessages,
+						paymentReceipts,
+						latestStatus: statusUpdates[0],
+						latestShipping: shippingUpdates[0],
+						latestPaymentRequest: paymentRequests[0],
+						latestPaymentReceipt: paymentReceipts[0],
+						latestMessage: generalMessages[0],
+					}
+				})
+
+				if (orderFound && eventAdded) {
+					const newDataArray = updatedData.map(order => ({
+						...order,
+						paymentRequests: [...order.paymentRequests],
+						statusUpdates: [...order.statusUpdates],
+						shippingUpdates: [...order.shippingUpdates],
+						generalMessages: [...order.generalMessages],
+						paymentReceipts: [...order.paymentReceipts],
+					}))
+					
+					console.log('🔍 fetchOrdersBySeller: Updating cache for order', orderId, 'event kind:', event.kind)
+					queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), newDataArray)
+					queryClient.invalidateQueries({ 
+						queryKey: orderKeys.bySeller(sellerPubkey),
+						refetchType: 'none',
+					})
+				}
+			}
+			
+			let relatedEventsClosed = false
+			
+			relatedEventsSubscription.on('event', async (event: NDKEvent) => {
+				if (relatedEventsClosed) return
+
+				try {
+					if (signer && event.content) {
+						const contentLooksEncrypted = !event.content.trim().startsWith('{') && !event.content.trim().startsWith('[')
+						if (contentLooksEncrypted) {
+							try {
+								await event.decrypt(undefined, signer)
+							} catch (decryptError) {
+								const errorMsg = decryptError instanceof Error ? decryptError.message : String(decryptError)
+								if (!errorMsg.includes('invalid base64') && !errorMsg.includes('Invalid padding') && !errorMsg.includes('invalid payload length') && !errorMsg.includes('Unknown letter')) {
+									console.warn('🔍 fetchOrdersBySeller: Unexpected decryption error:', errorMsg)
+								}
+							}
+						}
+					}
+					
+					const orderTag = event.tags.find((tag) => tag[0] === 'order')
+					if (orderTag && orderIdsSet.has(orderTag[1])) {
+						updateCacheForOrder(orderTag[1], event)
+					}
+				} catch (error) {
+					const errorMsg = error instanceof Error ? error.message : String(error)
+					if (!errorMsg.includes('invalid base64') && !errorMsg.includes('Invalid padding') && !errorMsg.includes('invalid payload length') && !errorMsg.includes('Unknown letter')) {
+						console.warn('🔍 fetchOrdersBySeller: Error processing related event:', errorMsg)
+					}
+				}
+			})
+			
+			// Start related events subscription in parallel
+			try {
+				relatedEventsSubscription.start()
+			} catch (startError) {
+				console.error('🔍 fetchOrdersBySeller: Error starting related events subscription:', startError)
+			}
+		}
 
 		// Set up eose and close handlers BEFORE starting
 		let stopped = false
@@ -1168,19 +1410,13 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 		return []
 	}
 
-	// Get all order IDs
-	const orderIds = Array.from(orders)
-		.map((order) => {
-			const orderTag = order.tags.find((tag) => tag[0] === 'order')
-			return orderTag?.[1]
-		})
-		.filter(Boolean) as string[]
+	// Get all order IDs (populate from Set we built during subscription)
+	const orderIds = Array.from(orderIdsSet).filter(Boolean)
 
-	if (orderIds.length === 0) {
-		return []
-	}
+	if (orderIds.length === 0) return []
 
-	// Create initial result with empty related events
+	// Create initial result with empty related events - return immediately
+	// Related events are already being fetched in parallel and will update cache
 	const initialResult = Array.from(orders).map((order) => {
 		const orderTag = order.tags.find((tag) => tag[0] === 'order')
 		const orderId = orderTag?.[1] || ''
@@ -1199,351 +1435,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string, queryClient?: Re
 		}
 	})
 
-	// Fetch related events in the background (don't wait for them)
-	// Per gamma_spec.md, we can't filter by #order tag - filter client-side after decryption
-	const relatedEventsFilter: NDKFilter = {
-		kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
-		limit: 500,
-	}
-
-	// Start background fetch but don't await it - return orders immediately
-	;(async () => {
-		const relatedEventsSet = new Set<NDKEvent>()
-		try {
-			const subscription = ndk.subscribe(relatedEventsFilter, {
-				closeOnEose: false, // Handle closing ourselves to avoid NDK internal timeout errors
-			})
-
-		// Get signer for decryption (reuse from outer scope)
-		const signer = ndkActions.getSigner()
-
-		// Track all pending decryption promises
-		const pendingDecryptions: Promise<void>[] = []
-		let subscriptionClosed = false
-		let lastRelatedEventReceivedTime = Date.now()
-		let eoseReceived = false
-		let inactivityTimer: NodeJS.Timeout | null = null
-		const INACTIVITY_TIMEOUT = 3000 // Reduced to 3s after last event before closing
-		const POST_EOSE_WAIT = 2000 // Reduced wait after EOSE to 2s
-
-		const checkInactivityAndClose = async () => {
-			const timeSinceLastEvent = Date.now() - lastRelatedEventReceivedTime
-			if (timeSinceLastEvent >= INACTIVITY_TIMEOUT) {
-				if (inactivityTimer) clearTimeout(inactivityTimer)
-				inactivityTimer = null
-				await waitForDecryptions()
-				stopSubscription()
-				return true // Signal that we're closing
-			} else {
-				// Schedule another check
-				const remainingTime = INACTIVITY_TIMEOUT - timeSinceLastEvent
-				inactivityTimer = setTimeout(checkInactivityAndClose, remainingTime)
-				return false
-			}
-		}
-
-		// Function to update cache incrementally as events arrive
-		const updateCacheForOrder = (orderId: string, event: NDKEvent) => {
-			if (!queryClient) {
-				return
-			}
-			
-			let currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey))
-			
-			// If cache isn't ready yet, retry a few times (cache might be initializing)
-			if (!currentData) {
-				setTimeout(() => {
-					currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey))
-					if (!currentData) {
-						return
-					}
-					updateCacheForOrderInner(orderId, event, currentData)
-				}, 100)
-				return
-			}
-			
-			updateCacheForOrderInner(orderId, event, currentData)
-		}
-		
-		// Inner function that does the actual cache update
-		const updateCacheForOrderInner = (orderId: string, event: NDKEvent, currentData: OrderWithRelatedEvents[]) => {
-
-			let orderFound = false
-			let eventAdded = false
-			
-			const updatedData = currentData.map((orderData) => {
-				const orderTag = orderData.order.tags.find((tag) => tag[0] === 'order')
-				const dataOrderId = orderTag?.[1]
-				if (dataOrderId !== orderId) {
-					return orderData
-				}
-
-				orderFound = true
-
-				// Clone the arrays to avoid mutation
-				const paymentRequests = [...orderData.paymentRequests]
-				const statusUpdates = [...orderData.statusUpdates]
-				const shippingUpdates = [...orderData.shippingUpdates]
-				const generalMessages = [...orderData.generalMessages]
-				const paymentReceipts = [...orderData.paymentReceipts]
-
-				// Check if event already exists to avoid duplicates
-				const eventExists = (arr: NDKEvent[]) => arr.some(e => e.id === event.id)
-				
-				// Categorize and add the event only if it doesn't exist
-				if (event.kind === ORDER_PROCESS_KIND) {
-					const typeTag = event.tags.find((tag) => tag[0] === 'type')
-					if (typeTag) {
-						switch (typeTag[1]) {
-							case ORDER_MESSAGE_TYPE.PAYMENT_REQUEST:
-								if (!eventExists(paymentRequests)) {
-									paymentRequests.push(event)
-									paymentRequests.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-									eventAdded = true
-								}
-								break
-							case ORDER_MESSAGE_TYPE.STATUS_UPDATE:
-								if (!eventExists(statusUpdates)) {
-									statusUpdates.push(event)
-									statusUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-									eventAdded = true
-								}
-								break
-							case ORDER_MESSAGE_TYPE.SHIPPING_UPDATE:
-								if (!eventExists(shippingUpdates)) {
-									shippingUpdates.push(event)
-									shippingUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-									eventAdded = true
-								}
-								break
-						}
-					}
-				} else if (event.kind === ORDER_GENERAL_KIND) {
-					if (!eventExists(generalMessages)) {
-						generalMessages.push(event)
-						generalMessages.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-						eventAdded = true
-					}
-				} else if (event.kind === PAYMENT_RECEIPT_KIND) {
-					if (!eventExists(paymentReceipts)) {
-						paymentReceipts.push(event)
-						paymentReceipts.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-						eventAdded = true
-					}
-				}
-
-				// Always create a new object with updated arrays to ensure React Query detects the change
-				return {
-					...orderData,
-					paymentRequests,
-					statusUpdates,
-					shippingUpdates,
-					generalMessages,
-					paymentReceipts,
-					latestStatus: statusUpdates[0],
-					latestShipping: shippingUpdates[0],
-					latestPaymentRequest: paymentRequests[0],
-					latestPaymentReceipt: paymentReceipts[0],
-					latestMessage: generalMessages[0],
-				}
-			})
-
-			// Only update cache if we found the order and added a new event
-			if (orderFound && eventAdded) {
-				// Create a completely new array reference with deep clones to ensure React Query detects the change
-				const newDataArray = updatedData.map(order => ({
-					...order,
-					paymentRequests: [...order.paymentRequests],
-					statusUpdates: [...order.statusUpdates],
-					shippingUpdates: [...order.shippingUpdates],
-					generalMessages: [...order.generalMessages],
-					paymentReceipts: [...order.paymentReceipts],
-				}))
-				
-				console.log('🔍 fetchOrdersBySeller: Updating cache for order', orderId, 'event kind:', event.kind)
-				// Set the query data with the new array reference
-				queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), newDataArray)
-				
-				// Invalidate the query to notify all subscribers without refetching
-				// This ensures React Query triggers re-renders for all components using this query
-				queryClient.invalidateQueries({ 
-					queryKey: orderKeys.bySeller(sellerPubkey),
-					refetchType: 'none', // Don't refetch, just notify subscribers
-				})
-				console.log('🔍 fetchOrdersBySeller: Cache updated, current data length:', newDataArray.length)
-			} else {
-				if (!orderFound) {
-					console.log('🔍 fetchOrdersBySeller: Order not found in cache:', orderId, 'available orders:', currentData.map(o => o.order.tags.find(t => t[0] === 'order')?.[1]))
-				}
-				if (!eventAdded) {
-					console.log('🔍 fetchOrdersBySeller: Event already exists or not added:', event.id)
-				}
-			}
-		}
-
-		subscription.on('event', async (event: NDKEvent) => {
-			// Update last event time for inactivity tracking
-			const eventReceivedTime = Date.now()
-			lastRelatedEventReceivedTime = eventReceivedTime
-			
-			// If EOSE has been received, reset the inactivity timer
-			// This handles events arriving after EOSE but before or after the inactivity check starts
-			if (eoseReceived) {
-				if (inactivityTimer) {
-					clearTimeout(inactivityTimer)
-					inactivityTimer = null
-				}
-				// Schedule a new inactivity check - events are still arriving
-				inactivityTimer = setTimeout(checkInactivityAndClose, INACTIVITY_TIMEOUT)
-			}
-
-			// Skip processing if subscription is already closed
-			if (subscriptionClosed) {
-				return
-			}
-
-			// Ensure NDK is still valid before processing
-			const currentNdk = ndkActions.getNDK()
-			if (!currentNdk) {
-				console.warn('🔍 fetchOrdersBySeller: NDK became invalid during event processing, skipping event')
-				return
-			}
-
-			// Decrypt and filter by order tag client-side
-			const decryptionPromise = (async () => {
-				try {
-					// Re-check signer and NDK before decrypting
-					const currentSigner = ndkActions.getSigner()
-					if (!currentSigner) {
-						console.warn('🔍 fetchOrdersBySeller: Signer not available for decryption')
-						return
-					}
-
-					if (currentSigner && event.content) {
-						// Check if content looks encrypted (not JSON)
-						const contentLooksEncrypted = !event.content.trim().startsWith('{') && !event.content.trim().startsWith('[')
-						if (contentLooksEncrypted) {
-							try {
-								await event.decrypt(undefined, currentSigner)
-							} catch (decryptError) {
-								// Decryption can fail for events not meant for us - this is expected
-								// Filter out base64/invalid padding errors (expected when decrypting wrong events)
-								const errorMsg = decryptError instanceof Error ? decryptError.message : String(decryptError)
-								if (!errorMsg.includes('invalid base64') && !errorMsg.includes('Invalid padding') && !errorMsg.includes('invalid payload length') && !errorMsg.includes('Unknown letter') && !errorMsg.includes('not initialized')) {
-									console.warn('🔍 fetchOrdersBySeller: Unexpected decryption error:', errorMsg)
-								}
-								// Continue to check tags even if decryption fails
-							}
-						}
-					}
-					
-					// Only process if subscription hasn't closed
-					if (!subscriptionClosed) {
-						// Check if this event is related to any of our orders
-						const orderTag = event.tags.find((tag) => tag[0] === 'order')
-						if (orderTag && orderIds.includes(orderTag[1])) {
-							relatedEventsSet.add(event)
-							const orderId = orderTag[1]
-							updateCacheForOrder(orderId, event)
-						}
-					}
-				} catch (error) {
-					// Only log unexpected errors
-					const errorMsg = error instanceof Error ? error.message : String(error)
-					if (!errorMsg.includes('invalid base64') && !errorMsg.includes('Invalid padding') && !errorMsg.includes('invalid payload length') && !errorMsg.includes('Unknown letter') && !errorMsg.includes('not initialized')) {
-						console.warn('🔍 fetchOrdersBySeller: Error processing related event:', errorMsg)
-					}
-				}
-			})()
-
-			// Track this decryption promise
-			pendingDecryptions.push(decryptionPromise)
-		})
-
-		// Set up eose and close handlers BEFORE starting
-		let stopped = false
-		const stopSubscription = () => {
-			if (!stopped) {
-				stopped = true
-				subscriptionClosed = true
-				// Don't call stop() - resolving the promise will let NDK cleanup naturally
-				// Manually stopping causes NDK internal errors (Cannot access 's' before initialization)
-				// The subscription will be cleaned up when the promise resolves
-			}
-		}
-
-		// Helper to wait for all pending decryptions
-		const waitForDecryptions = async (): Promise<void> => {
-			if (pendingDecryptions.length === 0) return
-			
-			try {
-				// Wait for all pending decryptions with a reasonable timeout
-				await Promise.allSettled(pendingDecryptions)
-			} catch (error) {
-				// Ignore errors - we've already handled them in the decryption promise
-				console.warn('🔍 fetchOrdersBySeller: Some decryptions failed:', error)
-			}
-		}
-
-		// Start subscription AFTER handlers are set up but BEFORE Promise.race
-		subscription.start()
-
-		await Promise.race([
-			new Promise<void>((resolve) => {
-				const timeout = setTimeout(async () => {
-					if (inactivityTimer) clearTimeout(inactivityTimer)
-					await waitForDecryptions()
-					stopSubscription()
-					resolve()
-				}, 15000) // Reduced timeout to 15s
-
-				subscription.on('eose', async () => {
-					eoseReceived = true
-					// Wait shorter after EOSE before starting inactivity check
-					setTimeout(() => {
-						if (!inactivityTimer) {
-							checkInactivityAndClose().then((shouldClose) => {
-								if (shouldClose) {
-									clearTimeout(timeout)
-									resolve()
-								}
-							})
-						}
-					}, POST_EOSE_WAIT) // Wait after EOSE before checking inactivity
-				})
-
-				subscription.on('close', async () => {
-					clearTimeout(timeout)
-					if (inactivityTimer) clearTimeout(inactivityTimer)
-					await waitForDecryptions()
-					stopSubscription()
-					resolve()
-				})
-			}),
-			// Fallback timeout to ensure we never wait more than 18s total
-			new Promise<void>((resolve) => {
-				setTimeout(async () => {
-					await waitForDecryptions()
-					try {
-						stopSubscription()
-					} catch (error) {
-						console.warn('🔍 fetchOrdersBySeller: Error stopping subscription in fallback:', error)
-					}
-					resolve()
-				}, 18000) // Reduced fallback timeout
-			})
-		])
-
-			// Cache is updated incrementally as events arrive via updateCacheForOrder()
-			// No need for bulk update at the end
-		} catch (error) {
-			console.error('🔍 fetchOrdersBySeller: Error in background fetch:', error)
-		}
-	})().catch((error) => {
-		console.error('🔍 fetchOrdersBySeller: Unhandled error in background fetch:', error)
-	})
-
-	// Return orders immediately - background fetch will update them
+	// Return orders immediately - related events subscription is already running in parallel and updating cache
 	return initialResult
 }
 
@@ -1627,7 +1519,7 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
  * Fetches a specific order by its ID
  */
 export const fetchOrderById = async (orderId: string): Promise<OrderWithRelatedEvents | null> => {
-	const ndk = ndkActions.getNDK()
+	let ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
 	// Ensure NDK is connected before querying
@@ -1636,6 +1528,22 @@ export const fetchOrderById = async (orderId: string): Promise<OrderWithRelatedE
 		console.log(`🔍 fetchOrderById: NDK not connected, connecting...`)
 		await ndkActions.connect()
 		console.log(`🔍 fetchOrderById: NDK connection status:`, ndkStore.state.isConnected)
+	}
+
+	// Re-check NDK after connection
+	ndk = ndkActions.getNDK()
+	if (!ndk) {
+		throw new Error('NDK not initialized after connection')
+	}
+
+	// Ensure NDK pool is ready before creating subscriptions
+	if (!ndk.pool) {
+		// Wait a bit for pool to initialize
+		await new Promise(resolve => setTimeout(resolve, 100))
+		ndk = ndkActions.getNDK()
+		if (!ndk || !ndk.pool) {
+			throw new Error('NDK pool not initialized')
+		}
 	}
 
 	console.log(`🔍 fetchOrderById: Searching for order with ID: ${orderId}`)
@@ -1691,6 +1599,11 @@ export const fetchOrderById = async (orderId: string): Promise<OrderWithRelatedE
 				limit: 100,
 			},
 		]
+
+		// Verify NDK is ready before creating subscriptions
+		if (!ndk || !ndk.pool) {
+			throw new Error('NDK not ready for subscription')
+		}
 
 		// Try both filters and combine results
 		const subscriptions = filters.map(filter => ndk.subscribe(filter, { closeOnEose: true }))
@@ -1846,6 +1759,11 @@ export const fetchOrderById = async (orderId: string): Promise<OrderWithRelatedE
 	// Fetch related events using subscription with timeout
 	let relatedEvents: Set<NDKEvent> = new Set()
 	try {
+		// Verify NDK is still ready before creating subscriptions
+		if (!ndk || !ndk.pool) {
+			throw new Error('NDK not ready for subscription')
+		}
+		
 		const relatedEventsSet = new Set<NDKEvent>()
 		const subscriptions = relatedEventsFilters.map(filter => ndk.subscribe(filter, { closeOnEose: true }))
 
@@ -2072,6 +1990,12 @@ export const useOrderById = (orderId: string) => {
 	// Set up a live subscription to monitor events for this order
 	useEffect(() => {
 		if (!orderId || !ndk || !userPubkey) return
+
+		// Verify NDK pool is ready before creating subscriptions
+		if (!ndk.pool) {
+			console.warn('useOrderById: NDK pool not ready, skipping subscription')
+			return
+		}
 
 		// Per NIP-17, Kind 16 messages are encrypted - tags are encrypted
 		// We can't filter by #order - fetch all events where user is involved and filter client-side
