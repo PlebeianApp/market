@@ -1,16 +1,17 @@
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { X, ZoomIn, ZoomOut, RotateCw, Download } from 'lucide-react'
+import { X, ZoomIn, ZoomOut, RotateCw, Download, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
 interface ImageViewerModalProps {
 	isOpen: boolean
 	onClose: () => void
-	imageUrl: string
-	imageTitle: string
+	images: { url: string; title: string }[]
+	currentIndex: number
+	onIndexChange: (newIndex: number) => void
 }
 
-export function ImageViewerModal({ isOpen, onClose, imageUrl, imageTitle }: ImageViewerModalProps) {
+export function ImageViewerModal({ isOpen, onClose, images, currentIndex, onIndexChange }: ImageViewerModalProps) {
 	const [zoom, setZoom] = useState(100)
 	const [rotation, setRotation] = useState(0)
 
@@ -20,7 +21,7 @@ export function ImageViewerModal({ isOpen, onClose, imageUrl, imageTitle }: Imag
 			setZoom(100)
 			setRotation(0)
 		}
-	}, [isOpen, imageUrl])
+	}, [isOpen, currentIndex])
 
 	const handleZoomIn = () => {
 		setZoom((prev) => Math.min(prev + 25, 300))
@@ -36,12 +37,12 @@ export function ImageViewerModal({ isOpen, onClose, imageUrl, imageTitle }: Imag
 
 	const handleDownload = async () => {
 		try {
-			const response = await fetch(imageUrl)
+			const response = await fetch(images[currentIndex].url)
 			const blob = await response.blob()
 			const url = window.URL.createObjectURL(blob)
 			const link = document.createElement('a')
 			link.href = url
-			link.download = `${imageTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.jpg`
+			link.download = `${images[currentIndex].title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.jpg`
 			document.body.appendChild(link)
 			link.click()
 			document.body.removeChild(link)
@@ -51,9 +52,16 @@ export function ImageViewerModal({ isOpen, onClose, imageUrl, imageTitle }: Imag
 		}
 	}
 
+	const handlePrev = () => {
+		onIndexChange((currentIndex - 1 + images.length) % images.length)
+	}
+	const handleNext = () => {
+		onIndexChange((currentIndex + 1) % images.length)
+	}
+
 	return (
 		<Dialog open={isOpen} onOpenChange={onClose}>
-			<DialogTitle>{imageTitle}</DialogTitle>
+			<DialogTitle>{images[currentIndex]?.title}</DialogTitle>
 			<DialogContent className="!max-w-[95vw] sm:!max-w-[95vw] w-[95vw] h-[95vh] p-0 bg-black/95 border-none">
 				{/* Toolbar */}
 				<div className="absolute top-0 left-0 right-0 z-50 flex items-center justify-between p-4 bg-gradient-to-b from-black/80 to-transparent">
@@ -92,11 +100,33 @@ export function ImageViewerModal({ isOpen, onClose, imageUrl, imageTitle }: Imag
 				</div>
 
 				{/* Image Container */}
-				<div className="w-full h-full flex items-center justify-center overflow-auto">
+				<div className="w-full h-full flex items-center justify-center overflow-auto relative">
+					{/* Left navigation button */}
+					<Button
+						variant="ghost"
+						size="icon"
+						onClick={handlePrev}
+						className="absolute left-4 top-1/2 -translate-y-1/2 z-40 bg-black/40 hover:bg-black/60 text-white"
+						aria-label="Previous"
+						style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}
+					>
+						<ChevronLeft className="h-8 w-8" />
+					</Button>
+					{/* Right navigation button */}
+					<Button
+						variant="ghost"
+						size="icon"
+						onClick={handleNext}
+						className="absolute right-4 top-1/2 -translate-y-1/2 z-40 bg-black/40 hover:bg-black/60 text-white"
+						aria-label="Next"
+						style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}
+					>
+						<ChevronRight className="h-8 w-8" />
+					</Button>
 					<div className="relative flex items-center justify-center w-full h-full p-16">
 						<img
-							src={imageUrl}
-							alt={imageTitle}
+							src={images[currentIndex]?.url}
+							alt={images[currentIndex]?.title}
 							className="max-w-full max-h-full object-contain transition-transform duration-200"
 							style={{
 								transform: `scale(${zoom / 100}) rotate(${rotation}deg)`,
