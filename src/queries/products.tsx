@@ -697,6 +697,7 @@ export const useProductPubkey = (id: string) => {
 export const useProductsByPubkey = (pubkey: string, includeHidden: boolean = false) => {
 	return useQuery({
 		...productsByPubkeyQueryOptions(pubkey, includeHidden),
+		enabled: !!pubkey,
 	})
 }
 

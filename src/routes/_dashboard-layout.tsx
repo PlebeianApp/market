@@ -15,6 +15,8 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useLocation, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import React, { useState } from 'react'
 import { UserWithAvatar } from '@/components/UserWithAvatar'
+import { useOrderById } from '@/queries/orders'
+import { getBuyerPubkey, getSellerPubkey } from '@/queries/orders'
 
 export const Route = createFileRoute('/_dashboard-layout')({
 	component: DashboardLayout,
@@ -61,7 +63,10 @@ const backButtonRoutes: Record<string, { parentPath: string; parentTitle: string
 }
 
 // Helper to check if current route needs a back button
-function getBackButtonInfo(currentPath: string): { parentPath: string; parentTitle: string } | null {
+function getBackButtonInfo(
+	currentPath: string,
+	orderData?: { isBuyer: boolean } | null,
+): { parentPath: string; parentTitle: string } | null {
 	// Check exact matches first
 	if (backButtonRoutes[currentPath]) {
 		return backButtonRoutes[currentPath]
@@ -79,7 +84,18 @@ function getBackButtonInfo(currentPath: string): { parentPath: string; parentTit
 
 	// Check for order detail pages (pattern: /dashboard/orders/[orderId])
 	if (currentPath.startsWith('/dashboard/orders/') && currentPath !== '/dashboard/orders') {
-		return backButtonRoutes['/dashboard/orders/']
+		// Determine if this is a purchase (user is buyer) or sale (user is seller)
+		if (orderData?.isBuyer) {
+			return {
+				parentPath: '/dashboard/account/your-purchases',
+				parentTitle: '🛒 Your Purchases',
+			}
+		} else {
+			return {
+				parentPath: '/dashboard/sales/sales',
+				parentTitle: '💰 Sales',
+			}
+		}
 	}
 
 	// Check for message detail pages (pattern: /dashboard/sales/messages/[pubkey])
@@ -171,8 +187,25 @@ function DashboardLayout() {
 		enabled: !!chatPubkey,
 	})
 
+	// Extract orderId from pathname for order detail views
+	const isOrderDetailView = location.pathname.startsWith('/dashboard/orders/') && location.pathname !== '/dashboard/orders'
+	const orderId = isOrderDetailView ? location.pathname.split('/').pop() : null
+
+	// Fetch order data to determine if user is buyer or seller
+	const { data: order } = useOrderById(orderId || '')
+	const { user } = useStore(authStore)
+
+	// Determine if user is buyer or seller for this order
+	const orderData = React.useMemo(() => {
+		if (!order || !user) return null
+		const buyerPubkey = getBuyerPubkey(order.order)
+		const sellerPubkey = getSellerPubkey(order.order)
+		const isBuyer = buyerPubkey === user.pubkey
+		return { isBuyer }
+	}, [order, user])
+
 	// Check if current route needs a back button
-	const backButtonInfo = getBackButtonInfo(location.pathname)
+	const backButtonInfo = getBackButtonInfo(location.pathname, orderData)
 	const needsBackButton = !!backButtonInfo && !isMobile
 
 	// When route changes on mobile, show sidebar for /dashboard, main content otherwise
@@ -203,7 +236,12 @@ function DashboardLayout() {
 			}
 			// Check if we're on an order detail page and navigate accordingly
 			else if (location.pathname.startsWith('/dashboard/orders/')) {
-				navigate({ to: '/dashboard/sales/sales' })
+				// Determine if this is a purchase or sale based on order data
+				if (orderData?.isBuyer) {
+					navigate({ to: '/dashboard/account/your-purchases' })
+				} else {
+					navigate({ to: '/dashboard/sales/sales' })
+				}
 			}
 			// Check if we're on a message detail page and navigate accordingly
 			else if (location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages') {
@@ -285,7 +323,7 @@ function DashboardLayout() {
 										<h3 className="font-heading bg-tertiary-black text-white px-4 py-2 mb-0 lg:mb-2">{section.title}</h3>
 										<nav className="space-y-2 p-4 lg:p-0 text-xl lg:text-base">
 											{section.items.map((item) => {
-												const isActive = matchRoute({ to: item.path, fuzzy: true })
+												const isActive = matchRoute({ to: item.path, exact: true })
 												return (
 													<Link
 														key={item.path}

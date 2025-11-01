@@ -532,6 +532,12 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		const ndk = ndkActions.getNDK()
 		if (!ndk || !orderId) return
 
+		// Verify NDK pool is ready before creating subscription
+		if (!ndk.pool) {
+			console.warn('OrderDetailComponent: NDK pool not ready, skipping subscription')
+			return
+		}
+
 		const sub = ndk.subscribe({ kinds: [17 as any], '#order': [orderId] })
 
 		sub.on('event', (event: NDKEvent) => {
@@ -541,8 +547,15 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 			})
 		})
 
+		// Let NDK auto-start the subscription when handlers are set up
+		// Do not call .start() explicitly to avoid initialization race conditions
+
 		return () => {
-			sub.stop()
+			try {
+				sub.stop()
+			} catch (error) {
+				console.warn('OrderDetailComponent: Error stopping subscription:', error)
+			}
 		}
 	}, [orderId])
 

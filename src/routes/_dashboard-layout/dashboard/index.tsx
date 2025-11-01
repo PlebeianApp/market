@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton'
 import { authStore } from '@/lib/stores/auth'
 import { useConversationsList } from '@/queries/messages'
-import { useOrders } from '@/queries/orders'
+import { useOrders, useOrdersByBuyer, useOrdersBySeller } from '@/queries/orders'
 import { useProductsByPubkey } from '@/queries/products'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -21,9 +21,33 @@ function DashboardInnerComponent() {
 	const { user } = useStore(authStore)
 	const userPubkey = user?.pubkey || ''
 
-	const { data: myProducts, isLoading: isLoadingProducts } = useProductsByPubkey(userPubkey, true)
-	const { data: orders, isLoading: isLoadingOrders } = useOrders()
-	const { data: conversations, isLoading: isLoadingMessages } = useConversationsList()
+	const { data: myProducts, isLoading: isLoadingProducts, error: productsError } = useProductsByPubkey(userPubkey, true)
+	const { data: orders, isLoading: isLoadingOrders, error: ordersError } = useOrders()
+	const { data: sellerOrders, isLoading: isLoadingSellerOrders, error: sellerOrdersError } = useOrdersBySeller(userPubkey)
+	const { data: buyerOrders, isLoading: isLoadingBuyerOrders, error: buyerOrdersError } = useOrdersByBuyer(userPubkey)
+	const { data: conversations, isLoading: isLoadingMessages, error: messagesError } = useConversationsList()
+
+	// Debugging logs to inspect query states
+	console.log('Dashboard Queries:', {
+		userPubkey,
+		isLoadingProducts,
+		isLoadingOrders,
+		isLoadingSellerOrders,
+		isLoadingBuyerOrders,
+		isLoadingMessages,
+		errors: {
+			productsError,
+			ordersError,
+			sellerOrdersError,
+			buyerOrdersError,
+			messagesError,
+		},
+		myProducts,
+		orders,
+		sellerOrders,
+		buyerOrders,
+		conversations,
+	})
 
 	// Calculate stats
 	const activeListings =
@@ -34,24 +58,16 @@ function DashboardInnerComponent() {
 
 	const totalListings = myProducts?.length || 0
 
-	// Buyer = author of order (sent the order)
-	// Seller = recipient of order (tagged with #p)
-	const buyerOrders =
-		orders?.filter((o) => {
-			return o.order.pubkey === userPubkey
-		}) || []
-
-	const sellerOrders =
-		orders?.filter((o) => {
-			const pTag = o.order.tags.find((t) => t[0] === 'p')
-			return pTag?.[1] === userPubkey
-		}) || []
-
 	const unreadMessages = conversations?.length || 0
 
 	const recentOrders = orders?.slice(0, 3) || []
 
-	const isLoading = isLoadingProducts || isLoadingOrders || isLoadingMessages
+	// Individual loading states for each card
+	const isProductsLoading = isLoadingProducts
+	const isSalesLoading = isLoadingSellerOrders
+	const isPurchasesLoading = isLoadingBuyerOrders
+	const isMessagesLoading = isLoadingMessages
+	const isRecentOrdersLoading = isLoadingOrders
 
 	return (
 		<div className="space-y-6">
@@ -69,7 +85,7 @@ function DashboardInnerComponent() {
 						<span className="text-2xl">📦</span>
 					</CardHeader>
 					<CardContent>
-						{isLoading ? (
+						{isProductsLoading ? (
 							<Skeleton className="h-8 w-20" />
 						) : (
 							<>
@@ -86,11 +102,11 @@ function DashboardInnerComponent() {
 						<span className="text-2xl">💰</span>
 					</CardHeader>
 					<CardContent>
-						{isLoading ? (
+						{isSalesLoading ? (
 							<Skeleton className="h-8 w-20" />
 						) : (
 							<>
-								<div className="text-2xl font-bold">{sellerOrders.length}</div>
+								<div className="text-2xl font-bold">{sellerOrders?.length || 0}</div>
 								<p className="text-xs text-muted-foreground">Orders received</p>
 							</>
 						)}
@@ -103,11 +119,11 @@ function DashboardInnerComponent() {
 						<span className="text-2xl">🛍️</span>
 					</CardHeader>
 					<CardContent>
-						{isLoading ? (
+						{isPurchasesLoading ? (
 							<Skeleton className="h-8 w-20" />
 						) : (
 							<>
-								<div className="text-2xl font-bold">{buyerOrders.length}</div>
+								<div className="text-2xl font-bold">{buyerOrders?.length || 0}</div>
 								<p className="text-xs text-muted-foreground">Orders placed</p>
 							</>
 						)}
@@ -120,7 +136,7 @@ function DashboardInnerComponent() {
 						<span className="text-2xl">✉️</span>
 					</CardHeader>
 					<CardContent>
-						{isLoading ? (
+						{isMessagesLoading ? (
 							<Skeleton className="h-8 w-20" />
 						) : (
 							<>
@@ -222,7 +238,7 @@ function DashboardInnerComponent() {
 					<CardDescription>Your latest marketplace activity</CardDescription>
 				</CardHeader>
 				<CardContent>
-					{isLoading ? (
+					{isRecentOrdersLoading ? (
 						<div className="space-y-4">
 							{[...Array(3)].map((_, i) => (
 								<div key={i} className="flex items-center space-x-4">
@@ -287,7 +303,7 @@ function DashboardInnerComponent() {
 			</Card>
 
 			{/* Getting Started Guide (shown if user has no products) */}
-			{!isLoading && totalListings === 0 && (
+			{!isProductsLoading && totalListings === 0 && (
 				<Card className="border-primary">
 					<CardHeader>
 						<CardTitle>Getting Started</CardTitle>

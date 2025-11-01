@@ -11,6 +11,7 @@ import { useEffect } from 'react'
 import { DecryptPasswordDialog } from '@/components/auth/DecryptPasswordDialog'
 import { Toaster } from 'sonner'
 import { useBlacklistSync } from '@/hooks/useBlacklistSync'
+import { useOrdersBackgroundSync } from '@/hooks/useOrdersBackgroundSync'
 
 export const Route = createRootRoute({
 	component: RootComponent,
@@ -34,6 +35,9 @@ function RootLayout() {
 
 	// Sync blacklist store with backend data
 	useBlacklistSync()
+
+	// Prefetch and keep orders updated in the background
+	useOrdersBackgroundSync()
 
 	useEffect(() => {
 		if (isLoading || isError) return

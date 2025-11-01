@@ -86,14 +86,22 @@ export const useAdminSettings = (appPubkey?: string) => {
 
 		// Event handler for admin list updates
 		subscription.on('event', (newEvent) => {
-			console.log('Admin list updated, invalidating queries:', newEvent.id)
 			queryClient.invalidateQueries({ queryKey: configKeys.admins(appPubkey) })
 			queryClient.refetchQueries({ queryKey: configKeys.admins(appPubkey) })
 		})
 
+		// Let NDK auto-start the subscription when handlers are set up
+		// Do not call .start() explicitly to avoid initialization race conditions
+
 		// Clean up subscription when unmounting
 		return () => {
-			subscription.stop()
+			try {
+				if (subscription.stop) {
+					subscription.stop()
+				}
+			} catch (error) {
+				console.warn('useAdminSettings: Error stopping subscription:', error)
+			}
 		}
 	}, [appPubkey, ndk, queryClient])
 
@@ -232,9 +240,18 @@ export const useEditorSettings = (appPubkey?: string) => {
 			queryClient.refetchQueries({ queryKey: configKeys.editors(appPubkey) })
 		})
 
+		// Let NDK auto-start the subscription when handlers are set up
+		// Do not call .start() explicitly to avoid initialization race conditions
+
 		// Clean up subscription when unmounting
 		return () => {
-			subscription.stop()
+			try {
+				if (subscription.stop) {
+					subscription.stop()
+				}
+			} catch (error) {
+				console.warn('useEditorSettings: Error stopping subscription:', error)
+			}
 		}
 	}, [appPubkey, ndk, queryClient])
 

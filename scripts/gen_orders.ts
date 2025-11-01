@@ -11,6 +11,10 @@ import { faker } from '@faker-js/faker'
 import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import type { z } from 'zod'
 import { v4 as uuidv4 } from 'uuid'
+import { getPublicKey } from 'nostr-tools/pure'
+
+// Define a constant for the order creation type
+const ORDER_CREATION_TYPE = '1'
 
 // V4V share interface for seeding
 interface V4VRecipient {
@@ -109,7 +113,7 @@ export async function createOrderEvent(
 ): Promise<{ eventId: string | null; createdAt: number }> {
 	// Return createdAt
 	const event = new NDKEvent(ndk)
-	event.kind = orderData.kind
+	event.kind = ORDER_PROCESS_KIND
 	event.content = orderData.content
 	event.tags = orderData.tags
 	event.created_at = orderData.created_at
@@ -180,7 +184,7 @@ export async function createPaymentRequestEvent(
 ): Promise<{ eventId: string | null; createdAt: number }> {
 	// Return createdAt
 	const event = new NDKEvent(ndk)
-	event.kind = paymentData.kind
+	event.kind = ORDER_PROCESS_KIND
 	event.content = paymentData.content
 	event.tags = paymentData.tags
 	event.created_at = paymentData.created_at
@@ -250,7 +254,7 @@ export async function createOrderStatusEvent(
 ): Promise<{ eventId: string | null; createdAt: number }> {
 	// Return createdAt
 	const event = new NDKEvent(ndk)
-	event.kind = statusData.kind
+	event.kind = ORDER_PROCESS_KIND
 	event.content = statusData.content
 	event.tags = statusData.tags
 	event.created_at = statusData.created_at
@@ -335,7 +339,7 @@ export async function createShippingUpdateEvent(
 ): Promise<{ eventId: string | null; createdAt: number }> {
 	// Return createdAt
 	const event = new NDKEvent(ndk)
-	event.kind = shippingData.kind
+	event.kind = ORDER_PROCESS_KIND
 	event.content = shippingData.content
 	event.tags = shippingData.tags
 	event.created_at = shippingData.created_at
@@ -397,7 +401,7 @@ export async function createGeneralCommunicationEvent(
 ): Promise<{ eventId: string | null; createdAt: number }> {
 	// Return createdAt
 	const event = new NDKEvent(ndk)
-	event.kind = communicationData.kind
+	event.kind = ORDER_GENERAL_KIND
 	event.content = communicationData.content
 	event.tags = communicationData.tags
 	event.created_at = communicationData.created_at
@@ -490,7 +494,7 @@ export async function createPaymentReceiptEvent(
 ): Promise<{ eventId: string | null; createdAt: number }> {
 	// Return createdAt
 	const event = new NDKEvent(ndk)
-	event.kind = receiptData.kind
+	event.kind = PAYMENT_RECEIPT_KIND
 	event.content = receiptData.content
 	event.tags = receiptData.tags
 	event.created_at = receiptData.created_at

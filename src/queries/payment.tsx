@@ -1093,10 +1093,17 @@ export const usePaymentReceiptSubscription = (params: PaymentReceiptSubscription
 						const preimage = paymentTag?.[3] || 'external-payment'
 
 						console.log(`✅ Valid payment receipt detected for ${invoiceId}`)
-						subscription.stop()
+						try {
+							subscription.stop()
+						} catch (error) {
+							console.warn('usePaymentReceiptSubscription: Error stopping subscription:', error)
+						}
 						resolve(preimage)
 					}
 				})
+
+				// Let NDK auto-start the subscription when handlers are set up
+				// Do not call .start() explicitly to avoid initialization race conditions
 			})
 		},
 		enabled: enabled,
