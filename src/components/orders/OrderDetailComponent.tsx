@@ -552,9 +552,16 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 		return () => {
 			try {
-				sub.stop()
+				// Add a small delay to prevent race conditions with NDK's internal cleanup
+				setTimeout(() => {
+					try {
+						sub.stop()
+					} catch (error) {
+						console.warn('OrderDetailComponent: Error stopping subscription:', error)
+					}
+				}, 10)
 			} catch (error) {
-				console.warn('OrderDetailComponent: Error stopping subscription:', error)
+				console.warn('OrderDetailComponent: Error setting up subscription cleanup:', error)
 			}
 		}
 	}, [orderId])

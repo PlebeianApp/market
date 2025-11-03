@@ -200,8 +200,8 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 			}
 		}
 
-		// Start subscription AFTER handlers are set up but BEFORE Promise.race
-		receivedSubscription.start()
+		// Let NDK auto-start the subscription when handlers are set up
+		// Do not call .start() explicitly to avoid initialization race conditions
 
 		await Promise.race([
 			new Promise<void>((resolve) => {
@@ -298,8 +298,8 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 			}
 		}
 
-		// Start subscription AFTER handlers are set up but BEFORE Promise.race
-		subscription.start()
+		// Let NDK auto-start the subscription when handlers are set up
+		// Do not call .start() explicitly to avoid initialization race conditions
 
 		await Promise.race([
 			new Promise<void>((resolve) => {
@@ -835,7 +835,8 @@ export const fetchOrdersByBuyer = async (
 
 			try {
 				// Start subscription AFTER handlers are set up but BEFORE Promise.race
-				subscription.start()
+				// Let NDK auto-start the subscription to avoid temporal dead zone issues
+				// subscription.start()
 				subscriptionStarted = true
 			} catch (startError) {
 				orders = new Set()
@@ -1485,7 +1486,8 @@ export const fetchOrdersBySeller = async (
 
 			try {
 				// Start subscription AFTER handlers are set up but BEFORE Promise.race
-				subscription.start()
+				// Let NDK auto-start the subscription to avoid temporal dead zone issues
+				// subscription.start()
 				subscriptionStarted = true
 			} catch (startError) {
 				orders = new Set()
@@ -1932,7 +1934,8 @@ export const fetchOrderById = async (
 			subscriptionCompletePromises.push(completePromise)
 
 			// Start subscription AFTER handlers are set up
-			subscription.start()
+			// Let NDK auto-start the subscription to avoid temporal dead zone issues
+			// subscription.start()
 		})
 
 		// Wait for all subscriptions to complete or timeout
@@ -2062,7 +2065,8 @@ export const fetchOrderById = async (
 			subscriptionCompletePromises.push(completePromise)
 
 			// Start subscription AFTER handlers are set up
-			subscription.start()
+			// Let NDK auto-start the subscription to avoid temporal dead zone issues
+			// subscription.start()
 		})
 
 		// Wait for all subscriptions to complete or timeout

@@ -102,10 +102,17 @@ export const useBlacklistSettings = (appPubkey?: string) => {
 		return () => {
 			try {
 				if (subscription.stop) {
-					subscription.stop()
+					// Add a small delay to prevent race conditions with NDK's internal cleanup
+					setTimeout(() => {
+						try {
+							subscription.stop()
+						} catch (error) {
+							console.warn('useBlacklistSettings: Error stopping subscription:', error)
+						}
+					}, 10)
 				}
 			} catch (error) {
-				console.warn('useBlacklistSettings: Error stopping subscription:', error)
+				console.warn('useBlacklistSettings: Error setting up subscription cleanup:', error)
 			}
 		}
 	}, [appPubkey, ndk, queryClient])

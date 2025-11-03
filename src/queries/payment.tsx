@@ -1094,9 +1094,16 @@ export const usePaymentReceiptSubscription = (params: PaymentReceiptSubscription
 
 						console.log(`✅ Valid payment receipt detected for ${invoiceId}`)
 						try {
-							subscription.stop()
+							// Add a small delay to prevent race conditions with NDK's internal cleanup
+							setTimeout(() => {
+								try {
+									subscription.stop()
+								} catch (error) {
+									console.warn('usePaymentReceiptSubscription: Error stopping subscription:', error)
+								}
+							}, 10)
 						} catch (error) {
-							console.warn('usePaymentReceiptSubscription: Error stopping subscription:', error)
+							console.warn('usePaymentReceiptSubscription: Error setting up subscription stop:', error)
 						}
 						resolve(preimage)
 					}

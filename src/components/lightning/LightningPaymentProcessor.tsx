@@ -485,14 +485,40 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			// Stop monitoring when processor becomes inactive
 			if (!active && paymentMonitoring) {
 				console.log('🔕 Processor inactive, stopping monitoring:', data.invoiceId)
-				paymentMonitoring()
-				setPaymentMonitoring(null)
+				try {
+					// Add a small delay to prevent race conditions with NDK's internal cleanup
+					setTimeout(() => {
+						try {
+							if (paymentMonitoring) {
+								paymentMonitoring()
+								setPaymentMonitoring(null)
+							}
+						} catch (error) {
+							console.warn('Error stopping payment monitoring:', error)
+						}
+					}, 10)
+				} catch (error) {
+					console.warn('Error setting up payment monitoring cleanup:', error)
+				}
 			}
 
 			// Cleanup on unmount
 			return () => {
 				if (paymentMonitoring) {
-					paymentMonitoring()
+					try {
+						// Add a small delay to prevent race conditions with NDK's internal cleanup
+						setTimeout(() => {
+							try {
+								if (paymentMonitoring) {
+									paymentMonitoring()
+								}
+							} catch (error) {
+								console.warn('Error stopping payment monitoring on unmount:', error)
+							}
+						}, 10)
+					} catch (error) {
+						console.warn('Error setting up payment monitoring unmount cleanup:', error)
+					}
 				}
 			}
 		}, [invoice, data.isZap, data.invoiceId, paymentMonitoring, active, startZapMonitoring])

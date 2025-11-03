@@ -436,13 +436,25 @@ export const ndkActions = {
 			}
 		})
 
-		subscription.start()
+		// Let NDK auto-start the subscription to avoid temporal dead zone issues
+		// subscription.start()
 
 		console.log('🔔 Started zap receipt subscription', bolt11 ? `for invoice: ${bolt11.substring(0, 20)}...` : '(all zaps)')
 
 		return () => {
-			subscription.stop()
-			console.log('🔕 Stopped zap receipt subscription')
+			try {
+				// Add a small delay to prevent race conditions with NDK's internal cleanup
+				setTimeout(() => {
+					try {
+						subscription.stop()
+						console.log('🔕 Stopped zap receipt subscription')
+					} catch (error) {
+						console.warn('Error stopping zap subscription:', error)
+					}
+				}, 10)
+			} catch (error) {
+				console.warn('Error setting up zap subscription cleanup:', error)
+			}
 		}
 	},
 

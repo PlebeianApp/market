@@ -39,9 +39,19 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 
 		if (activeSubscriptionRef.current) {
 			try {
-				activeSubscriptionRef.current.stop()
+				// Add a small delay to prevent race conditions with NDK's internal cleanup
+				setTimeout(() => {
+					try {
+						if (activeSubscriptionRef.current) {
+							activeSubscriptionRef.current.stop()
+							activeSubscriptionRef.current = null
+						}
+					} catch (e) {
+						console.error('Error stopping subscription:', e)
+					}
+				}, 10)
 			} catch (e) {
-				console.error('Error stopping subscription:', e)
+				console.error('Error setting up subscription cleanup:', e)
 			}
 			activeSubscriptionRef.current = null
 		}
@@ -66,7 +76,17 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 
 			if (activeSubscriptionRef.current) {
 				try {
-					activeSubscriptionRef.current.stop()
+					// Add a small delay to prevent race conditions with NDK's internal cleanup
+					setTimeout(() => {
+						try {
+							if (activeSubscriptionRef.current) {
+								activeSubscriptionRef.current.stop()
+								activeSubscriptionRef.current = null
+							}
+						} catch (e) {
+							console.error('Error stopping subscription in cleanup:', e)
+						}
+					}, 10)
 				} catch (e) {
 					console.error('Error stopping subscription:', e)
 				}
