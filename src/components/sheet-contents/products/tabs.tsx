@@ -19,11 +19,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 export function DetailTab() {
-	const { price, fiatPrice, quantity, currency, status, specs } = useStore(productFormStore)
+	const { price, fiatPrice, quantity, currency, status, specs, bitcoinUnit, currencyMode } = useStore(productFormStore)
 	const { selectedCurrency } = useStore(uiStore)
 	const { data: exchangeRates } = useBtcExchangeRates()
-	const [bitcoinUnit, setBitcoinUnit] = useState<'SATS' | 'BTC'>('SATS')
-	const [currencyMode, setCurrencyMode] = useState<'sats' | 'fiat'>('fiat') // For fiat currencies only
 	const [fiatDisplayValue, setFiatDisplayValue] = useState('')
 
 	// Use existing conversion functions from MempoolService
@@ -67,9 +65,6 @@ export function DetailTab() {
 				quantity: value.quantity,
 				currency: value.currency,
 				status: value.status,
-				// Update currency system state
-				bitcoinUnit: bitcoinUnit,
-				currencyMode: currencyMode,
 			})
 		},
 	})
@@ -115,17 +110,15 @@ export function DetailTab() {
 
 	// Handle currency dropdown change
 	const handleCurrencyChange = (newCurrency: string) => {
-		productFormActions.updateValues({ currency: newCurrency })
+		// Determine new bitcoin unit and currency mode based on currency
+		const newBitcoinUnit: 'SATS' | 'BTC' = newCurrency === 'BTC' ? 'BTC' : 'SATS'
+		const newCurrencyMode: 'sats' | 'fiat' = newCurrency === 'BTC' || newCurrency === 'SATS' ? 'sats' : 'fiat'
 
-		// Auto-switch Bitcoin unit based on currency
-		if (newCurrency === 'BTC') {
-			setBitcoinUnit('BTC')
-		} else if (newCurrency === 'SATS') {
-			setBitcoinUnit('SATS')
-		}
-
-		// Set currency mode based on selected currency
-		setCurrencyMode(newCurrency === 'BTC' || newCurrency === 'SATS' ? 'sats' : 'fiat')
+		productFormActions.updateValues({
+			currency: newCurrency,
+			bitcoinUnit: newBitcoinUnit,
+			currencyMode: newCurrencyMode,
+		})
 	}
 
 	// Function to determine what gets published to the protocol
@@ -157,7 +150,8 @@ export function DetailTab() {
 
 	// Toggle Bitcoin unit (SATS/BTC)
 	const toggleBitcoinUnit = () => {
-		setBitcoinUnit((prev) => (prev === 'SATS' ? 'BTC' : 'SATS'))
+		const newUnit: 'SATS' | 'BTC' = bitcoinUnit === 'SATS' ? 'BTC' : 'SATS'
+		productFormActions.updateValues({ bitcoinUnit: newUnit })
 	}
 
 	// Check if current currency is Bitcoin-based
@@ -261,7 +255,9 @@ export function DetailTab() {
 					<Label className="text-sm font-medium">Currency Mode</Label>
 					<RadioGroup
 						value={currencyMode}
-						onValueChange={(value: 'sats' | 'fiat') => setCurrencyMode(value)}
+						onValueChange={(value: 'sats' | 'fiat') => {
+							productFormActions.updateValues({ currencyMode: value as 'sats' | 'fiat' })
+						}}
 						className="flex flex-col space-y-3 mt-2"
 					>
 						<div className="space-y-1">
