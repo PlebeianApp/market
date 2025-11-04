@@ -12,9 +12,14 @@ function NewProductComponent() {
 	useDashboardTitle('Add a Product')
 
 	useEffect(() => {
-		// Reset form and set to creation mode when component mounts
-		productFormActions.reset()
+		// Set to creation mode first
 		productFormActions.setEditingProductId(null)
+		
+		// Try to load persisted state, otherwise reset
+		productFormActions.loadPersistedState().catch(() => {
+			// If loading fails, reset to default
+			productFormActions.reset()
+		})
 	}, [])
 
 	return (
