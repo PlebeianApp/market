@@ -12,7 +12,7 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/sales')({
@@ -31,6 +31,8 @@ function SalesComponent() {
 	
 	// Track if we're currently refetching on mount
 	const [isRefetching, setIsRefetching] = useState(false)
+	// Track if we've already attempted to refetch to prevent infinite loops
+	const hasRefetchedRef = useRef(false)
 
 	// Prefetch purchases query only if cache is empty (same data as dashboard)
 	useEffect(() => {
@@ -46,34 +48,10 @@ function SalesComponent() {
 				staleTime: 5 * 60 * 1000, // 5 minutes
 			})
 		}
-	}, [userPubkey, queryClient])
+	}, [userPubkey]) // Remove queryClient from deps to prevent re-runs
 
-	// Subscribe to cache updates to ensure component re-renders when cache changes
-	useEffect(() => {
-		if (!userPubkey) return
-
-		// Subscribe to query cache updates for sales orders
-		const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
-			if (event?.type === 'updated' && event?.query?.queryKey) {
-				const queryKey = event.query.queryKey
-				// Check if this is the sales orders query
-				if (
-					Array.isArray(queryKey) &&
-					queryKey[0] === 'orders' &&
-					queryKey[1] === 'bySeller' &&
-					queryKey[2] === userPubkey
-				) {
-					// Query data updated - invalidate to trigger re-render
-					queryClient.invalidateQueries({
-						queryKey: orderKeys.bySeller(userPubkey),
-						refetchType: 'none',
-					})
-				}
-			}
-		})
-
-		return unsubscribe
-	}, [userPubkey, queryClient])
+	// Note: We don't need a cache subscription - useQuery already subscribes to cache updates
+	// Adding one here was causing infinite loops
 
 	// Set up live subscription to monitor order status updates (similar to useOrderById)
 	// This ensures status updates are received in real-time and cache is updated
@@ -167,9 +145,8 @@ function SalesComponent() {
 			// Only update cache if we actually added an event
 			if (eventAdded) {
 				// Create new array reference to ensure React detects change
+				// setQueryData will automatically notify all observers (useQuery hooks)
 				queryClient.setQueryData(key, [...updatedList])
-				// Invalidate to ensure observers are notified
-				queryClient.invalidateQueries({ queryKey: key, refetchType: 'none' })
 			}
 		}
 
@@ -216,17 +193,22 @@ function SalesComponent() {
 		
 		// Start setting up subscriptions
 		setupSubscriptions()
-	}, [userPubkey, queryClient])
+	}, [userPubkey]) // Remove queryClient from deps - access it via closure
 
 	// Only refetch on mount if cache is empty - otherwise use cached data
 	// This prevents unnecessary fetches and decryption after first load
 	useEffect(() => {
 		if (!userPubkey) return
+		// Prevent multiple refetches - check flag first
+		if (hasRefetchedRef.current) return
 
 		const cachedData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(userPubkey))
 		
-		// Only refetch if cache is empty
+		// Only refetch if cache is empty and we haven't refetched yet
 		if (!cachedData || cachedData.length === 0) {
+			// Set flag immediately to prevent re-runs
+			hasRefetchedRef.current = true
+			
 			const refetchOrders = async () => {
 				setIsRefetching(true)
 				try {
@@ -239,13 +221,9 @@ function SalesComponent() {
 						}
 					}
 
-					// Only refetch if cache is still empty
-					const stillEmpty = !queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(userPubkey))
-					if (stillEmpty) {
-						// Refetch to ensure we have the latest data including status updates
-						// fetchOrdersBySeller will wait for status updates synchronously before returning
-						await queryClient.refetchQueries({ queryKey: orderKeys.bySeller(userPubkey) })
-					}
+					// Refetch to ensure we have the latest data including status updates
+					// fetchOrdersBySeller will wait for status updates synchronously before returning
+					await queryClient.refetchQueries({ queryKey: orderKeys.bySeller(userPubkey) })
 				} finally {
 					setIsRefetching(false)
 				}
@@ -258,7 +236,12 @@ function SalesComponent() {
 
 			return () => clearTimeout(timer)
 		}
-	}, [userPubkey, queryClient])
+	}, [userPubkey]) // Remove queryClient from deps - it's stable but causes re-runs
+	
+	// Reset refetch flag when userPubkey changes
+	useEffect(() => {
+		hasRefetchedRef.current = false
+	}, [userPubkey])
 
 	// Filter orders by status if needed
 	const filteredSales = useMemo(() => {
