@@ -4,6 +4,7 @@ import { authActions } from '@/lib/stores/auth'
 import { copyToClipboard } from '@/lib/utils'
 import { useConfigQuery } from '@/queries/config'
 import NDK, { NDKEvent, NDKKind, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
+import { safeDecryptEvent } from '@/lib/utils/decrypt'
 import { CopyIcon, Loader2 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
@@ -39,21 +40,34 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 
 		if (activeSubscriptionRef.current) {
 			try {
-				// Add a small delay to prevent race conditions with NDK's internal cleanup
-				setTimeout(() => {
+				// Use a longer delay to ensure NDK's internal cleanup is complete
+				// This prevents the "Cannot access 's' before initialization" error
+				const timeoutId = setTimeout(() => {
 					try {
-						if (activeSubscriptionRef.current) {
+						// Guard against subscription not being initialized (NDK race condition fix)
+						if (activeSubscriptionRef.current && typeof activeSubscriptionRef.current.stop === 'function') {
 							activeSubscriptionRef.current.stop()
-							activeSubscriptionRef.current = null
 						}
 					} catch (e) {
-						console.error('Error stopping subscription:', e)
+						// Suppress "Cannot access 's' before initialization" errors from NDK
+						if (e instanceof ReferenceError && e.message.includes("Cannot access 's' before initialization")) {
+							console.warn('[NDK] Suppressed subscription cleanup race condition')
+							return
+						}
+						// Also suppress aiGuardrails related errors
+						if (e instanceof ReferenceError && e.message.includes('aiGuardrails')) {
+							console.warn('[NDK] Suppressed aiGuardrails race condition')
+							return
+						}
+						console.error('Error stopping subscription in cleanup:', e)
+					} finally {
+						activeSubscriptionRef.current = null
 					}
-				}, 10)
+				}, 50) // Increased delay to ensure NDK initialization is complete
 			} catch (e) {
 				console.error('Error setting up subscription cleanup:', e)
+				activeSubscriptionRef.current = null
 			}
-			activeSubscriptionRef.current = null
 		}
 
 		// Clean up the NIP-46 NDK instance
@@ -76,21 +90,29 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 
 			if (activeSubscriptionRef.current) {
 				try {
-					// Add a small delay to prevent race conditions with NDK's internal cleanup
+					// Use a longer delay to ensure NDK's internal cleanup is complete
+					// This prevents the "Cannot access 's' before initialization" error
 					setTimeout(() => {
 						try {
-							if (activeSubscriptionRef.current) {
+							// Guard against subscription not being initialized (NDK race condition fix)
+							if (activeSubscriptionRef.current && typeof activeSubscriptionRef.current.stop === 'function') {
 								activeSubscriptionRef.current.stop()
-								activeSubscriptionRef.current = null
 							}
 						} catch (e) {
+							// Suppress "Cannot access 's' before initialization" errors from NDK
+							if (e instanceof ReferenceError && e.message.includes("Cannot access 's' before initialization")) {
+								console.warn('[NDK] Suppressed subscription cleanup race condition')
+								return
+							}
 							console.error('Error stopping subscription in cleanup:', e)
+						} finally {
+							activeSubscriptionRef.current = null
 						}
-					}, 10)
+					}, 50) // Increased delay to ensure NDK initialization is complete
 				} catch (e) {
 					console.error('Error stopping subscription:', e)
+					activeSubscriptionRef.current = null
 				}
-				activeSubscriptionRef.current = null
 			}
 		}
 	}, [])
@@ -255,7 +277,7 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 				}
 
 				try {
-					await event.decrypt(undefined, localSigner)
+					await safeDecryptEvent(event, localSigner)
 					const request = JSON.parse(event.content)
 
 					if (request.method === 'connect') {

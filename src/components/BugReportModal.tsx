@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { finalizeEvent, getPublicKey } from 'nostr-tools'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { BugReportsList } from './BugReportsList'
 
 // Check for staging environment
@@ -264,7 +265,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 				} else {
 					console.log('🐛 Using extension signer - falling back to NDK signing...')
 					// For extension signers, we need to use NDK's signing method
-					const ndkEvent = new (await import('@nostr-dev-kit/ndk')).NDKEvent(mainNdk, eventWithPubkey)
+					const ndkEvent = new NDKEvent(mainNdk, eventWithPubkey)
 					await ndkEvent.sign()
 
 					signedEvent = {

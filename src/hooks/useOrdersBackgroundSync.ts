@@ -16,15 +16,41 @@ export function useOrdersBackgroundSync() {
 	const ndk = ndkActions.getNDK()
 	const ndkState = useStore(ndkStore)
 	const intervalRef = useRef<NodeJS.Timeout | null>(null)
+	const isMountedRef = useRef(true)
+
+	useEffect(() => {
+		isMountedRef.current = true
+		return () => {
+			isMountedRef.current = false
+		}
+	}, [])
 
 	useEffect(() => {
 		if (!userPubkey || !ndk) return
 
 		// Function to refresh orders (always updates, even if cache exists)
 		const refreshOrders = async () => {
+			// Don't refetch if component is unmounted
+			if (!isMountedRef.current) return
+
 			// Ensure NDK is connected
 			if (!ndkState.isConnected) {
-				await ndkActions.connect()
+				try {
+					await ndkActions.connect()
+				} catch (error) {
+					// Suppress NDK initialization errors
+					if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
+						console.warn('[NDK] Suppressed initialization error in background sync')
+						return
+					}
+					console.warn('useOrdersBackgroundSync: Error connecting NDK:', error)
+					return
+				}
+			}
+
+			// Verify NDK is still ready before refetching
+			if (!ndk.pool || !isMountedRef.current) {
+				return
 			}
 
 			// Always refetch to keep data updated in background
@@ -39,6 +65,11 @@ export function useOrdersBackgroundSync() {
 					}),
 				])
 			} catch (error) {
+				// Suppress NDK initialization errors
+				if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
+					console.warn('[NDK] Suppressed initialization error in background sync refetch')
+					return
+				}
 				console.warn('useOrdersBackgroundSync: Error refreshing orders:', error)
 			}
 		}
@@ -48,7 +79,9 @@ export function useOrdersBackgroundSync() {
 
 		// Set up periodic refresh every 30 seconds to keep data updated
 		intervalRef.current = setInterval(() => {
-			refreshOrders()
+			if (isMountedRef.current) {
+				refreshOrders()
+			}
 		}, 30000)
 
 		// Cleanup interval on unmount

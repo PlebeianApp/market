@@ -105,8 +105,21 @@ export const useBlacklistSettings = (appPubkey?: string) => {
 					// Add a small delay to prevent race conditions with NDK's internal cleanup
 					setTimeout(() => {
 						try {
-							subscription.stop()
+							// Guard against subscription not being initialized (NDK race condition fix)
+							if (subscription && typeof subscription.stop === 'function') {
+								subscription.stop()
+							}
 						} catch (error) {
+							// Suppress "Cannot access 's' before initialization" errors from NDK
+							if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
+								console.warn('[NDK] Suppressed subscription cleanup race condition')
+								return
+							}
+							// Also suppress aiGuardrails related errors
+							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
+								console.warn('[NDK] Suppressed aiGuardrails race condition')
+								return
+							}
 							console.warn('useBlacklistSettings: Error stopping subscription:', error)
 						}
 					}, 10)

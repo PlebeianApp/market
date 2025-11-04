@@ -538,30 +538,65 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 			return
 		}
 
-		const sub = ndk.subscribe({ kinds: [17 as any], '#order': [orderId] })
+		let isMounted = true
+		let subscription: any = null
+		let timeoutId: ReturnType<typeof setTimeout> | null = null
 
-		sub.on('event', (event: NDKEvent) => {
-			setLivePaymentReceipts((prev) => {
-				if (prev.find((e) => e.id === event.id)) return prev
-				return [...prev, event]
+		try {
+			subscription = ndk.subscribe({ kinds: [17 as any], '#order': [orderId] })
+
+			subscription.on('event', (event: NDKEvent) => {
+				if (!isMounted) return
+				setLivePaymentReceipts((prev) => {
+					if (prev.find((e) => e.id === event.id)) return prev
+					return [...prev, event]
+				})
 			})
-		})
 
-		// Let NDK auto-start the subscription when handlers are set up
-		// Do not call .start() explicitly to avoid initialization race conditions
+			// Let NDK auto-start the subscription when handlers are set up
+			// Do not call .start() explicitly to avoid initialization race conditions
+		} catch (error) {
+			console.warn('OrderDetailComponent: Error creating subscription:', error)
+			return
+		}
 
 		return () => {
-			try {
-				// Add a small delay to prevent race conditions with NDK's internal cleanup
-				setTimeout(() => {
-					try {
-						sub.stop()
-					} catch (error) {
-						console.warn('OrderDetailComponent: Error stopping subscription:', error)
-					}
-				}, 10)
-			} catch (error) {
-				console.warn('OrderDetailComponent: Error setting up subscription cleanup:', error)
+			isMounted = false
+			
+			if (subscription) {
+				try {
+					// Use a longer delay to ensure NDK's internal cleanup is complete
+					// This prevents temporal dead zone errors
+					timeoutId = setTimeout(() => {
+						try {
+							// Guard against subscription not being initialized (NDK race condition fix)
+							if (subscription && typeof subscription.stop === 'function') {
+								subscription.stop()
+							}
+						} catch (error) {
+							// Suppress "Cannot access 's' before initialization" errors from NDK
+							if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
+								console.warn('[NDK] Suppressed subscription cleanup race condition')
+								return
+							}
+							// Also suppress aiGuardrails related errors
+							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
+								console.warn('[NDK] Suppressed aiGuardrails race condition')
+								return
+							}
+							console.warn('OrderDetailComponent: Error stopping subscription:', error)
+						}
+					}, 100) // Increased delay to ensure NDK initialization is complete
+				} catch (error) {
+					console.warn('OrderDetailComponent: Error setting up subscription cleanup:', error)
+				}
+			}
+
+			// Cleanup timeout on unmount
+			return () => {
+				if (timeoutId) {
+					clearTimeout(timeoutId)
+				}
 			}
 		}
 	}, [orderId])

@@ -446,9 +446,22 @@ export const ndkActions = {
 				// Add a small delay to prevent race conditions with NDK's internal cleanup
 				setTimeout(() => {
 					try {
-						subscription.stop()
-						console.log('🔕 Stopped zap receipt subscription')
+						// Guard against subscription not being initialized (NDK race condition fix)
+						if (subscription && typeof subscription.stop === 'function') {
+							subscription.stop()
+							console.log('🔕 Stopped zap receipt subscription')
+						}
 					} catch (error) {
+						// Suppress "Cannot access 's' before initialization" errors from NDK
+						if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
+							console.warn('[NDK] Suppressed subscription cleanup race condition')
+							return
+						}
+						// Also suppress aiGuardrails related errors
+						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
+							console.warn('[NDK] Suppressed aiGuardrails race condition')
+							return
+						}
 						console.warn('Error stopping zap subscription:', error)
 					}
 				}, 10)

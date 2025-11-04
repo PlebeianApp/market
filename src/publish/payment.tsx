@@ -4,7 +4,7 @@ import { parseNwcUri } from '@/lib/stores/wallet'
 import type { PublishPaymentDetailParams } from '@/queries/payment'
 import { publishPaymentDetail } from '@/queries/payment'
 import { paymentDetailsKeys } from '@/queries/queryKeyFactory'
-import NDK from '@nostr-dev-kit/ndk'
+import NDK, { NDKEvent } from '@nostr-dev-kit/ndk'
 import { NDKNWCWallet, NDKWalletStatus } from '@nostr-dev-kit/ndk-wallet'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -267,7 +267,7 @@ export const publishPaymentReceipt = async (params: PublishPaymentReceiptParams)
 	if (!user) throw new Error('No user available')
 
 	// Create the payment receipt event (Kind 17)
-	const event = new (await import('@nostr-dev-kit/ndk')).NDKEvent(ndk)
+	const event = new NDKEvent(ndk)
 	event.kind = 17 // Payment Receipt Kind
 	event.content = invoice.description || 'Payment confirmation'
 
