@@ -1,9 +1,9 @@
 /**
  * Global error handler for NDK temporal dead zone issues
- * 
+ *
  * This catches ReferenceErrors from NDK's internal code that occur due to
  * JavaScript temporal dead zone issues with lexical declarations.
- * 
+ *
  * The errors typically occur in:
  * - NDK's subscription management (accessing 's' before initialization)
  * - NDK's aiGuardrails feature
@@ -30,17 +30,17 @@ export function installNDKErrorHandler(): void {
 		// Check if this is an NDK temporal dead zone error
 		if (error instanceof ReferenceError) {
 			const message = error.message || ''
-			
+
 			// Check for known NDK temporal dead zone patterns
-			const isNDKTemporalDeadZone = 
+			const isNDKTemporalDeadZone =
 				message.includes("Cannot access 's' before initialization") ||
 				message.includes("can't access lexical declaration 's' before initialization") ||
 				message.includes('aiGuardrails') ||
-				message.includes("Cannot access lexical declaration") ||
+				message.includes('Cannot access lexical declaration') ||
 				message.includes("can't access lexical declaration")
 
 			// Check if error is from NDK (look at source/stack)
-			const isFromNDK = 
+			const isFromNDK =
 				(source && source.includes('nostr-dev-kit')) ||
 				(source && source.includes('ndk')) ||
 				(error.stack && error.stack.includes('nostr-dev-kit')) ||
@@ -49,17 +49,14 @@ export function installNDKErrorHandler(): void {
 
 			if (isNDKTemporalDeadZone || isFromNDK) {
 				// Log as warning instead of error
-				console.warn(
-					'[NDK Error Handler] Suppressed NDK temporal dead zone error:',
-					{
-						message: error.message,
-						source,
-						line: lineno,
-						column: colno,
-						stack: error.stack?.split('\n').slice(0, 3).join('\n')
-					}
-				)
-				
+				console.warn('[NDK Error Handler] Suppressed NDK temporal dead zone error:', {
+					message: error.message,
+					source,
+					line: lineno,
+					column: colno,
+					stack: error.stack?.split('\n').slice(0, 3).join('\n'),
+				})
+
 				// Prevent the error from propagating
 				return true
 			}
@@ -77,31 +74,28 @@ export function installNDKErrorHandler(): void {
 	// Also install an unhandledrejection handler for promise rejections
 	window.addEventListener('unhandledrejection', (event) => {
 		const error = event.reason
-		
+
 		if (error instanceof ReferenceError) {
 			const message = error.message || ''
-			
-			const isNDKTemporalDeadZone = 
+
+			const isNDKTemporalDeadZone =
 				message.includes("Cannot access 's' before initialization") ||
 				message.includes("can't access lexical declaration 's' before initialization") ||
 				message.includes('aiGuardrails') ||
-				message.includes("Cannot access lexical declaration") ||
+				message.includes('Cannot access lexical declaration') ||
 				message.includes("can't access lexical declaration")
 
-			const isFromNDK = 
+			const isFromNDK =
 				(error.stack && error.stack.includes('nostr-dev-kit')) ||
 				(error.stack && error.stack.includes('fetchEvent')) ||
 				(error.stack && error.stack.includes('node_modules'))
 
 			if (isNDKTemporalDeadZone || isFromNDK) {
-				console.warn(
-					'[NDK Error Handler] Suppressed NDK temporal dead zone promise rejection:',
-					{
-						message: error.message,
-						stack: error.stack?.split('\n').slice(0, 3).join('\n')
-					}
-				)
-				
+				console.warn('[NDK Error Handler] Suppressed NDK temporal dead zone promise rejection:', {
+					message: error.message,
+					stack: error.stack?.split('\n').slice(0, 3).join('\n'),
+				})
+
 				// Prevent the unhandled rejection
 				event.preventDefault()
 			}
@@ -124,7 +118,7 @@ export function uninstallNDKErrorHandler(): void {
 	window.onerror = originalErrorHandler
 	originalErrorHandler = null
 	isErrorHandlerInstalled = false
-	
+
 	console.log('[NDK Error Handler] Uninstalled global error handler')
 }
 
@@ -134,4 +128,3 @@ export function uninstallNDKErrorHandler(): void {
 export function isNDKErrorHandlerInstalled(): boolean {
 	return isErrorHandlerInstalled
 }
-

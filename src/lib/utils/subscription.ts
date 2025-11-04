@@ -21,7 +21,7 @@ export interface SafeSubscriptionResult {
 export function createSafeSubscription(
 	ndk: NDK,
 	filter: NDKFilter | NDKFilter[],
-	options: SafeSubscriptionOptions = {}
+	options: SafeSubscriptionOptions = {},
 ): SafeSubscriptionResult {
 	const { closeOnEose = true, timeout = 30000, onEvent, onEose, onClose } = options
 
@@ -30,7 +30,7 @@ export function createSafeSubscription(
 		console.warn('[SafeSubscription] NDK not ready for subscription')
 		return {
 			subscription: null,
-			cleanup: () => {}
+			cleanup: () => {},
 		}
 	}
 
@@ -79,7 +79,6 @@ export function createSafeSubscription(
 
 		// Let NDK auto-start the subscription to avoid temporal dead zone issues
 		// Do not call .start() explicitly
-
 	} catch (error) {
 		console.error('[SafeSubscription] Error creating subscription:', error)
 		subscription = null
@@ -127,7 +126,7 @@ export function createSafeSubscription(
 
 	return {
 		subscription,
-		cleanup
+		cleanup,
 	}
 }
 
@@ -138,18 +137,18 @@ export function useSafeSubscription(
 	ndk: NDK | null,
 	filter: NDKFilter | NDKFilter[],
 	options: SafeSubscriptionOptions = {},
-	dependencies: React.DependencyList = []
+	dependencies: React.DependencyList = [],
 ): SafeSubscriptionResult {
 	const [result, setResult] = React.useState<SafeSubscriptionResult>({
 		subscription: null,
-		cleanup: () => {}
+		cleanup: () => {},
 	})
 
 	React.useEffect(() => {
 		if (!ndk) {
 			setResult({
 				subscription: null,
-				cleanup: () => {}
+				cleanup: () => {},
 			})
 			return
 		}
@@ -175,7 +174,7 @@ export function createSubscriptionPromise<T = NDKEvent[]>(
 	options: SafeSubscriptionOptions & {
 		collectEvents?: boolean
 		maxEvents?: number
-	} = {}
+	} = {},
 ): Promise<T> {
 	const { collectEvents = true, maxEvents = 1000, timeout = 30000 } = options
 
@@ -226,7 +225,7 @@ export function createSubscriptionPromise<T = NDKEvent[]>(
 					safeResolve(undefined as T)
 				}
 				options.onClose?.()
-			}
+			},
 		})
 
 		if (!subscription) {

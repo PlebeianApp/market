@@ -140,4 +140,3 @@ export const loadProductFormState = async (): Promise<ProductFormState | null> =
 export const clearProductFormState = async (): Promise<void> => {
 	await persistence.clearFormState()
 }
-

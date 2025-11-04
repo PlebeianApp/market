@@ -14,7 +14,7 @@ function NewProductComponent() {
 	useEffect(() => {
 		// Set to creation mode first
 		productFormActions.setEditingProductId(null)
-		
+
 		// Try to load persisted state, otherwise reset
 		productFormActions.loadPersistedState().catch(() => {
 			// If loading fails, reset to default

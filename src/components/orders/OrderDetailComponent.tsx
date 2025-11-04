@@ -562,7 +562,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 		return () => {
 			isMounted = false
-			
+
 			if (subscription) {
 				try {
 					// Use a longer delay to ensure NDK's internal cleanup is complete
