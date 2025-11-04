@@ -1049,23 +1049,26 @@ export const fetchOrdersByBuyer = async (
 		}
 	})
 
-		// Set cache immediately so related events subscription can update it
-		// The queryFn will merge properly when it runs
-		// Create new array reference to ensure React detects change
-		if (queryClient) {
-			queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), [...initialResult])
-		}
+	// Set cache immediately so related events subscription can update it
+	// The queryFn will merge properly when it runs
+	// Create new array reference to ensure React detects change
+	if (queryClient) {
+		queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), [...initialResult])
+	}
 
 	// Fetch related events synchronously before returning to ensure status is available on first render
 	if (queryClient && relatedEventsSubscription && orderIds.length > 0) {
 		const signer = ndkActions.getSigner()
-		const relatedEventsMap = new Map<string, {
-			paymentRequests: NDKEvent[]
-			statusUpdates: NDKEvent[]
-			shippingUpdates: NDKEvent[]
-			generalMessages: NDKEvent[]
-			paymentReceipts: NDKEvent[]
-		}>()
+		const relatedEventsMap = new Map<
+			string,
+			{
+				paymentRequests: NDKEvent[]
+				statusUpdates: NDKEvent[]
+				shippingUpdates: NDKEvent[]
+				generalMessages: NDKEvent[]
+				paymentReceipts: NDKEvent[]
+			}
+		>()
 
 		// Initialize map for each order
 		orderIds.forEach((orderId) => {
@@ -1171,10 +1174,7 @@ export const fetchOrdersByBuyer = async (
 		})
 
 		// Wait for related events to be collected (with timeout)
-		await Promise.race([
-			relatedEventsPromise,
-			new Promise<void>((resolve) => setTimeout(resolve, 2000)),
-		])
+		await Promise.race([relatedEventsPromise, new Promise<void>((resolve) => setTimeout(resolve, 2000))])
 
 		// Update initial result with collected related events
 		initialResult.forEach((orderData) => {
@@ -1847,23 +1847,26 @@ export const fetchOrdersBySeller = async (
 		}
 	})
 
-		// Set cache immediately so related events subscription can update it
-		// The queryFn will merge properly when it runs
-		// Create new array reference to ensure React detects change
-		if (queryClient) {
-			queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), [...initialResult])
-		}
+	// Set cache immediately so related events subscription can update it
+	// The queryFn will merge properly when it runs
+	// Create new array reference to ensure React detects change
+	if (queryClient) {
+		queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), [...initialResult])
+	}
 
 	// Fetch related events synchronously before returning to ensure status is available on first render
 	if (queryClient && relatedEventsSubscription && orderIds.length > 0) {
 		const signer = ndkActions.getSigner()
-		const relatedEventsMap = new Map<string, {
-			paymentRequests: NDKEvent[]
-			statusUpdates: NDKEvent[]
-			shippingUpdates: NDKEvent[]
-			generalMessages: NDKEvent[]
-			paymentReceipts: NDKEvent[]
-		}>()
+		const relatedEventsMap = new Map<
+			string,
+			{
+				paymentRequests: NDKEvent[]
+				statusUpdates: NDKEvent[]
+				shippingUpdates: NDKEvent[]
+				generalMessages: NDKEvent[]
+				paymentReceipts: NDKEvent[]
+			}
+		>()
 
 		// Initialize map for each order
 		orderIds.forEach((orderId) => {
@@ -1969,10 +1972,7 @@ export const fetchOrdersBySeller = async (
 		})
 
 		// Wait for related events to be collected (with timeout)
-		await Promise.race([
-			relatedEventsPromise,
-			new Promise<void>((resolve) => setTimeout(resolve, 2000)),
-		])
+		await Promise.race([relatedEventsPromise, new Promise<void>((resolve) => setTimeout(resolve, 2000))])
 
 		// Update initial result with collected related events
 		initialResult.forEach((orderData) => {

@@ -96,9 +96,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 				// Check if it's an order-related query
 				const isOrderQuery =
 					Array.isArray(queryKey) &&
-					((queryKey[0] === 'orders' &&
-						(queryKey[1] === 'byBuyer' || queryKey[1] === 'bySeller') &&
-						queryKey[2] === userPubkey) ||
+					((queryKey[0] === 'orders' && (queryKey[1] === 'byBuyer' || queryKey[1] === 'bySeller') && queryKey[2] === userPubkey) ||
 						(queryKey[0] === 'order' && queryKey[1] === 'details' && queryKey[2] === orderId))
 
 				if (isOrderQuery) {
