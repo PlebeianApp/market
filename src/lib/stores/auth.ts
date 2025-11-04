@@ -159,6 +159,16 @@ export const authActions = {
 		}
 	},
 
+	getAvailableNostrExtensions: (): string[] => {
+		const extensions: string[] = []
+		if (typeof window !== 'undefined') {
+			if ((window as any).nostr) extensions.push('nostr')
+			if ((window as any).nos2x) extensions.push('nos2x')
+			if ((window as any).alby) extensions.push('alby')
+		}
+		return extensions
+	},
+
 	loginWithExtension: async () => {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
@@ -170,6 +180,17 @@ export const authActions = {
 			ndkActions.setSigner(signer)
 
 			const user = await signer.user()
+
+			// VHandle missing extension and failed signer
+			if (!user || !user.pubkey) {
+				const availableExtensions = authActions.getAvailableNostrExtensions()
+				if (availableExtensions.length === 0) {
+					throw new Error(
+						'No Nostr extension detected. Please install a Nostr browser extension (e.g., Alby, nos2x, or Nostr) before logging in.',
+					)
+				}
+				throw new Error('Failed to authenticate with Nostr extension. Please make sure your extension is unlocked and try again.')
+			}
 
 			// Store user pubkey and enable auto-login for persistence
 			localStorage.setItem(NOSTR_USER_PUBKEY, user.pubkey)
@@ -186,6 +207,19 @@ export const authActions = {
 
 			return user
 		} catch (error) {
+			// If we caught an error and don't have a user/pubkey, check if extension is missing
+			if (error instanceof Error && !error.message.includes('No Nostr extension detected')) {
+				const availableExtensions = authActions.getAvailableNostrExtensions()
+				if (availableExtensions.length === 0) {
+					authStore.setState((state) => ({
+						...state,
+						isAuthenticated: false,
+					}))
+					throw new Error(
+						'No Nostr extension detected. Please install a Nostr browser extension (e.g., Alby, nos2x, or Nostr) before logging in.',
+					)
+				}
+			}
 			authStore.setState((state) => ({
 				...state,
 				isAuthenticated: false,
