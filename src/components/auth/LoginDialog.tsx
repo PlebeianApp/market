@@ -18,6 +18,7 @@ interface LoginDialogProps {
 export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 	const [activeTab, setActiveTab] = useState('extension')
 	const [enableAutoLogin, setEnableAutoLogin] = useState(localStorage.getItem(NOSTR_AUTO_LOGIN) === 'true')
+	const [extensionError, setExtensionError] = useState<string | null>(null)
 	const { loginWithExtension } = useAuth()
 
 	const handleError = (error: string) => {
@@ -104,12 +105,22 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 						<TabsContent value="extension">
 							<div className="space-y-4 py-4">
 								<p className="text-sm text-muted-foreground">Login using your Nostr browser extension (e.g., Alby, nos2x).</p>
+								{extensionError && (
+									<div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm" role="alert">
+										<p className="font-medium">Login Failed</p>
+										<p>{extensionError}</p>
+									</div>
+								)}
 								<Button
-									onClick={() =>
+									onClick={() => {
+										setExtensionError(null)
 										loginWithExtension()
-											.catch(console.error)
-											.finally(() => onOpenChange(false))
-									}
+											.then(() => onOpenChange(false))
+											.catch((error) => {
+												console.error(error)
+												setExtensionError(error.message || 'Failed to connect to extension')
+											})
+									}}
 									className="w-full"
 									data-testid="connect-extension-button"
 								>
