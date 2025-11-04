@@ -13,10 +13,12 @@ import { cn } from '@/lib/utils'
 import { getStatusStyles } from '@/lib/utils/orderUtils'
 import { useUpdateOrderStatusMutation } from '@/publish/orders'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
-import { getBuyerPubkey, getOrderStatus, getSellerPubkey } from '@/queries/orders'
+import { getBuyerPubkey, getOrderId, getOrderStatus, getSellerPubkey } from '@/queries/orders'
+import { orderKeys } from '@/queries/queryKeyFactory'
 import { useUpdateShippingStatusMutation } from '@/queries/shipping'
+import { useQueryClient } from '@tanstack/react-query'
 import { Check, Clock, MoreHorizontal, ShoppingBag, Truck, X } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -39,30 +41,97 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 
 	const [isStockUpdateOpen, setIsStockUpdateOpen] = useState(false)
 
+	const queryClient = useQueryClient()
 	const updateOrderStatus = useUpdateOrderStatusMutation()
 	const updateShippingStatus = useUpdateShippingStatusMutation()
 
-	const status = getOrderStatus(order)
+	const orderId = getOrderId(order.order)
 
-	const buyerPubkey = getBuyerPubkey(order.order)
-	const sellerPubkey = getSellerPubkey(order.order)
+	// Create a dependency key from order data that changes when status updates
+	// This ensures the component re-renders when order data changes
+	const orderDataKey = useMemo(() => {
+		return JSON.stringify({
+			statusUpdates: order.statusUpdates.map((e) => e.id),
+			shippingUpdates: order.shippingUpdates.map((e) => e.id),
+			latestStatus: order.latestStatus?.id,
+		})
+	}, [order.statusUpdates, order.shippingUpdates, order.latestStatus])
+
+	// Compute status and derived values using useMemo to ensure they update when order data changes
+	const status = useMemo(() => getOrderStatus(order), [order, orderDataKey])
+
+	const buyerPubkey = useMemo(() => getBuyerPubkey(order.order), [order.order])
+	const sellerPubkey = useMemo(() => getSellerPubkey(order.order), [order.order])
 
 	const isBuyer = userPubkey === buyerPubkey
 	const isSeller = userPubkey === sellerPubkey
 
-	// Determine which actions are allowed based on role and current status
-	const canCancel = status === ORDER_STATUS.PENDING && (isBuyer || isSeller)
-
 	// Check if the order has been shipped
-	const hasBeenShipped = order.shippingUpdates.some((update) => update.tags.find((tag) => tag[0] === 'status')?.[1] === 'shipped')
+	const hasBeenShipped = useMemo(
+		() => order.shippingUpdates.some((update) => update.tags.find((tag) => tag[0] === 'status')?.[1] === 'shipped'),
+		[order.shippingUpdates, orderDataKey],
+	)
+
+	// Determine which actions are allowed based on role and current status
+	const canCancel = useMemo(() => status === ORDER_STATUS.PENDING && (isBuyer || isSeller), [status, isBuyer, isSeller])
 
 	// Seller actions
-	const canConfirm = isSeller && status === ORDER_STATUS.PENDING
-	const canProcess = isSeller && status === ORDER_STATUS.CONFIRMED
-	const canShip = isSeller && status === ORDER_STATUS.PROCESSING && !hasBeenShipped
+	const canConfirm = useMemo(() => isSeller && status === ORDER_STATUS.PENDING, [isSeller, status])
+	const canProcess = useMemo(() => isSeller && status === ORDER_STATUS.CONFIRMED, [isSeller, status])
+	const canShip = useMemo(() => isSeller && status === ORDER_STATUS.PROCESSING && !hasBeenShipped, [isSeller, status, hasBeenShipped])
 
 	// Buyer actions
-	const canReceive = isBuyer && status === ORDER_STATUS.PROCESSING && hasBeenShipped
+	const canReceive = useMemo(() => isBuyer && status === ORDER_STATUS.PROCESSING && hasBeenShipped, [isBuyer, status, hasBeenShipped])
+
+	// Watch for order data changes in the cache via query cache subscription
+	useEffect(() => {
+		if (!orderId || !userPubkey) return
+
+		// Subscribe to query cache updates
+		const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
+			// Check if the updated query is related to this order
+			if (event?.type === 'updated' && event?.query?.queryKey) {
+				const queryKey = event.query.queryKey
+
+				// Check if it's an order-related query
+				const isOrderQuery =
+					Array.isArray(queryKey) &&
+					((queryKey[0] === 'orders' &&
+						(queryKey[1] === 'byBuyer' || queryKey[1] === 'bySeller') &&
+						queryKey[2] === userPubkey) ||
+						(queryKey[0] === 'order' && queryKey[1] === 'details' && queryKey[2] === orderId))
+
+				if (isOrderQuery) {
+					// Order query was updated - invalidate queries to ensure parent components re-render
+					// This will cause the order prop to update, triggering our useMemo hooks
+					queryClient.invalidateQueries({ queryKey: orderKeys.byBuyer(userPubkey), refetchType: 'none' })
+					queryClient.invalidateQueries({ queryKey: orderKeys.bySeller(userPubkey), refetchType: 'none' })
+					queryClient.invalidateQueries({ queryKey: orderKeys.details(orderId), refetchType: 'none' })
+				}
+			}
+		})
+
+		return unsubscribe
+	}, [orderId, userPubkey, queryClient])
+
+	// Ensure mutations invalidate queries to trigger updates
+	useEffect(() => {
+		if (!orderId || !userPubkey) return
+
+		// When status update succeeds, invalidate queries to refresh data
+		if (updateOrderStatus.isSuccess) {
+			queryClient.invalidateQueries({ queryKey: orderKeys.byBuyer(userPubkey) })
+			queryClient.invalidateQueries({ queryKey: orderKeys.bySeller(userPubkey) })
+			queryClient.invalidateQueries({ queryKey: orderKeys.details(orderId) })
+		}
+
+		// When shipping update succeeds, invalidate queries to refresh data
+		if (updateShippingStatus.isSuccess) {
+			queryClient.invalidateQueries({ queryKey: orderKeys.byBuyer(userPubkey) })
+			queryClient.invalidateQueries({ queryKey: orderKeys.bySeller(userPubkey) })
+			queryClient.invalidateQueries({ queryKey: orderKeys.details(orderId) })
+		}
+	}, [updateOrderStatus.isSuccess, updateShippingStatus.isSuccess, orderId, userPubkey, queryClient])
 
 	const handleStatusUpdate = (newStatus: string, reason?: string, tracking?: string) => {
 		const orderEventId = order.order.id // Use actual event ID, not the order tag UUID
