@@ -201,13 +201,19 @@ export const productFormActions = {
 				}
 			})
 
+			const loadedCurrency = priceTag?.[2] || 'SATS'
+			const loadedBitcoinUnit: 'SATS' | 'BTC' = loadedCurrency === 'BTC' ? 'BTC' : 'SATS'
+			const loadedCurrencyMode: 'sats' | 'fiat' = loadedCurrency === 'BTC' || loadedCurrency === 'SATS' ? 'sats' : 'fiat'
+
 			productFormStore.setState((state) => ({
 				...DEFAULT_FORM_STATE,
 				editingProductId: productDTag, // Use the d tag value, not the event ID!
 				name: title,
 				description: description,
 				price: priceTag?.[1] || '',
-				currency: priceTag?.[2] || 'SATS',
+				currency: loadedCurrency,
+				bitcoinUnit: loadedBitcoinUnit,
+				currencyMode: loadedCurrencyMode,
 				quantity: stockTag?.[1] || '',
 				status: visibilityTag?.[1] || 'hidden',
 				productType: typeTag?.[1] === 'simple' ? 'single' : 'variable',
