@@ -132,26 +132,26 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 		sentSubscription.start()
 
 		await Promise.race([
-				new Promise<void>((resolve) => {
-					const timeout = setTimeout(() => {
-						try {
-							stopSentSubscription()
-						} catch (error) {
-							// Suppress NDK initialization errors
-							if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-								console.warn('[NDK] Suppressed subscription cleanup race condition')
-							}
-							// Also suppress aiGuardrails related errors
-							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
-							}
-							// Also suppress aiGuardrails related errors
-							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
-							}
+			new Promise<void>((resolve) => {
+				const timeout = setTimeout(() => {
+					try {
+						stopSentSubscription()
+					} catch (error) {
+						// Suppress NDK initialization errors
+						if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
+							console.warn('[NDK] Suppressed subscription cleanup race condition')
 						}
-						resolve()
-					}, 3000)
+						// Also suppress aiGuardrails related errors
+						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
+							console.warn('[NDK] Suppressed aiGuardrails race condition')
+						}
+						// Also suppress aiGuardrails related errors
+						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
+							console.warn('[NDK] Suppressed aiGuardrails race condition')
+						}
+					}
+					resolve()
+				}, 3000)
 
 				sentSubscription.on('eose', () => {
 					clearTimeout(timeout)
@@ -238,26 +238,26 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 		// Do not call .start() explicitly to avoid initialization race conditions
 
 		await Promise.race([
-				new Promise<void>((resolve) => {
-					const timeout = setTimeout(() => {
-						try {
-							stopReceivedSubscription()
-						} catch (error) {
-							// Suppress NDK initialization errors
-							if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-								console.warn('[NDK] Suppressed subscription cleanup race condition')
-							}
-							// Also suppress aiGuardrails related errors
-							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
-							}
-							// Also suppress aiGuardrails related errors
-							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
-							}
+			new Promise<void>((resolve) => {
+				const timeout = setTimeout(() => {
+					try {
+						stopReceivedSubscription()
+					} catch (error) {
+						// Suppress NDK initialization errors
+						if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
+							console.warn('[NDK] Suppressed subscription cleanup race condition')
 						}
-						resolve()
-					}, 3000)
+						// Also suppress aiGuardrails related errors
+						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
+							console.warn('[NDK] Suppressed aiGuardrails race condition')
+						}
+						// Also suppress aiGuardrails related errors
+						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
+							console.warn('[NDK] Suppressed aiGuardrails race condition')
+						}
+					}
+					resolve()
+				}, 3000)
 
 				receivedSubscription.on('eose', () => {
 					clearTimeout(timeout)
@@ -351,26 +351,26 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 		// Do not call .start() explicitly to avoid initialization race conditions
 
 		await Promise.race([
-				new Promise<void>((resolve) => {
-					const timeout = setTimeout(() => {
-						try {
-							stopSubscription()
-						} catch (error) {
-							// Suppress NDK initialization errors
-							if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-								console.warn('[NDK] Suppressed subscription cleanup race condition')
-							}
-							// Also suppress aiGuardrails related errors
-							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
-							}
-							// Also suppress aiGuardrails related errors
-							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
-							}
+			new Promise<void>((resolve) => {
+				const timeout = setTimeout(() => {
+					try {
+						stopSubscription()
+					} catch (error) {
+						// Suppress NDK initialization errors
+						if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
+							console.warn('[NDK] Suppressed subscription cleanup race condition')
 						}
-						resolve()
-					}, 2000)
+						// Also suppress aiGuardrails related errors
+						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
+							console.warn('[NDK] Suppressed aiGuardrails race condition')
+						}
+						// Also suppress aiGuardrails related errors
+						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
+							console.warn('[NDK] Suppressed aiGuardrails race condition')
+						}
+					}
+					resolve()
+				}, 2000)
 
 				subscription.on('eose', () => {
 					clearTimeout(timeout)
