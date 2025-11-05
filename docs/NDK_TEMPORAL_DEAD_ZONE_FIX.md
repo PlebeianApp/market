@@ -17,6 +17,7 @@ This is a JavaScript **temporal dead zone (TDZ)** issue in NDK's bundled code. T
 3. JavaScript's strict mode throws a ReferenceError when attempting to access a variable in its TDZ
 
 This is particularly problematic with:
+
 - Rapid navigation between routes
 - Component unmounting during async operations
 - Browser extensions (like Gooti) that interact with Nostr events
@@ -33,6 +34,7 @@ Updated the existing global error handler to catch the specific error patterns:
 - **fetchEvent errors**: Timeout-related errors in NDK's event fetching
 
 The handler now:
+
 - Detects temporal dead zone errors more accurately
 - Checks if errors originate from NDK (via stack traces)
 - Suppresses errors while logging them as warnings
@@ -44,6 +46,7 @@ The handler now:
 Enhanced all NDK subscription cleanup patterns across the codebase:
 
 **Files Updated:**
+
 - `src/components/orders/OrderDetailComponent.tsx`
 - `src/components/auth/NostrConnectQR.tsx`
 - `src/queries/payment.tsx`
@@ -53,6 +56,7 @@ Enhanced all NDK subscription cleanup patterns across the codebase:
 - `src/lib/stores/ndk.ts`
 
 **Changes:**
+
 - Added `aiGuardrails` error suppression to all cleanup handlers
 - Increased cleanup delays (50-100ms) to give NDK more initialization time
 - Enhanced error logging with detailed context
@@ -64,6 +68,7 @@ Enhanced all NDK subscription cleanup patterns across the codebase:
 Created a reusable utility for handling NDK subscriptions safely:
 
 **Features:**
+
 - Consistent error handling for all subscription operations
 - Automatic cleanup with proper timing
 - Hook-based API for React components
@@ -72,18 +77,19 @@ Created a reusable utility for handling NDK subscriptions safely:
 - Comprehensive TDZ error suppression
 
 **Usage Example:**
+
 ```typescript
 import { createSafeSubscription } from '@/lib/utils/subscription'
 
 const { subscription, cleanup } = createSafeSubscription(
-  ndk,
-  { kinds: [1], authors: [pubkey] },
-  {
-    closeOnEose: true,
-    timeout: 5000,
-    onEvent: (event) => console.log('Event:', event),
-    onEose: () => console.log('Complete'),
-  }
+	ndk,
+	{ kinds: [1], authors: [pubkey] },
+	{
+		closeOnEose: true,
+		timeout: 5000,
+		onEvent: (event) => console.log('Event:', event),
+		onEose: () => console.log('Complete'),
+	},
 )
 
 // Later...
@@ -95,6 +101,7 @@ cleanup()
 Created a standalone module for NDK error handling that can be used independently:
 
 **Features:**
+
 - Install/uninstall capability
 - Handles both synchronous errors and promise rejections
 - Detailed error logging
@@ -106,9 +113,11 @@ After implementing these changes, you should:
 
 1. **Test navigation**: Navigate between sales/purchase views multiple times
 2. **Check console**: You should see warnings like:
+
    ```
    [NDK] Suppressed temporal dead zone error (NDK race condition): {...}
    ```
+
    Instead of uncaught errors
 
 3. **Verify functionality**: All Nostr operations should work normally
@@ -131,6 +140,7 @@ After implementing these changes, you should:
 ## Monitoring
 
 Watch for these warnings in the console:
+
 - `[NDK] Suppressed temporal dead zone error`
 - `[NDK] Suppressed aiGuardrails race condition`
 - `[NDK] Suppressed subscription cleanup race condition`
@@ -147,9 +157,9 @@ If you see these frequently, it indicates NDK operations are running into timing
 ## Related Issues
 
 This issue is related to:
+
 - JavaScript temporal dead zone (TDZ)
 - NDK's bundling/compilation process
 - Browser-specific error message formats
 - Async/await timing in subscription lifecycle
 - Component unmounting during async operations
-

@@ -132,26 +132,26 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 		sentSubscription.start()
 
 		await Promise.race([
-				new Promise<void>((resolve) => {
-					const timeout = setTimeout(() => {
-						try {
-							stopSentSubscription()
-						} catch (error) {
-							// Suppress NDK initialization errors
-							if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-								console.warn('[NDK] Suppressed subscription cleanup race condition')
-							}
-							// Also suppress aiGuardrails related errors
-							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
-							}
-							// Also suppress aiGuardrails related errors
-							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
-							}
+			new Promise<void>((resolve) => {
+				const timeout = setTimeout(() => {
+					try {
+						stopSentSubscription()
+					} catch (error) {
+						// Suppress NDK initialization errors
+						if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
+							console.warn('[NDK] Suppressed subscription cleanup race condition')
 						}
-						resolve()
-					}, 3000)
+						// Also suppress aiGuardrails related errors
+						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
+							console.warn('[NDK] Suppressed aiGuardrails race condition')
+						}
+						// Also suppress aiGuardrails related errors
+						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
+							console.warn('[NDK] Suppressed aiGuardrails race condition')
+						}
+					}
+					resolve()
+				}, 3000)
 
 				sentSubscription.on('eose', () => {
 					clearTimeout(timeout)
@@ -238,26 +238,26 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 		// Do not call .start() explicitly to avoid initialization race conditions
 
 		await Promise.race([
-				new Promise<void>((resolve) => {
-					const timeout = setTimeout(() => {
-						try {
-							stopReceivedSubscription()
-						} catch (error) {
-							// Suppress NDK initialization errors
-							if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-								console.warn('[NDK] Suppressed subscription cleanup race condition')
-							}
-							// Also suppress aiGuardrails related errors
-							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
-							}
-							// Also suppress aiGuardrails related errors
-							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
-							}
+			new Promise<void>((resolve) => {
+				const timeout = setTimeout(() => {
+					try {
+						stopReceivedSubscription()
+					} catch (error) {
+						// Suppress NDK initialization errors
+						if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
+							console.warn('[NDK] Suppressed subscription cleanup race condition')
 						}
-						resolve()
-					}, 3000)
+						// Also suppress aiGuardrails related errors
+						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
+							console.warn('[NDK] Suppressed aiGuardrails race condition')
+						}
+						// Also suppress aiGuardrails related errors
+						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
+							console.warn('[NDK] Suppressed aiGuardrails race condition')
+						}
+					}
+					resolve()
+				}, 3000)
 
 				receivedSubscription.on('eose', () => {
 					clearTimeout(timeout)
@@ -351,26 +351,26 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 		// Do not call .start() explicitly to avoid initialization race conditions
 
 		await Promise.race([
-				new Promise<void>((resolve) => {
-					const timeout = setTimeout(() => {
-						try {
-							stopSubscription()
-						} catch (error) {
-							// Suppress NDK initialization errors
-							if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-								console.warn('[NDK] Suppressed subscription cleanup race condition')
-							}
-							// Also suppress aiGuardrails related errors
-							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
-							}
-							// Also suppress aiGuardrails related errors
-							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
-							}
+			new Promise<void>((resolve) => {
+				const timeout = setTimeout(() => {
+					try {
+						stopSubscription()
+					} catch (error) {
+						// Suppress NDK initialization errors
+						if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
+							console.warn('[NDK] Suppressed subscription cleanup race condition')
 						}
-						resolve()
-					}, 2000)
+						// Also suppress aiGuardrails related errors
+						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
+							console.warn('[NDK] Suppressed aiGuardrails race condition')
+						}
+						// Also suppress aiGuardrails related errors
+						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
+							console.warn('[NDK] Suppressed aiGuardrails race condition')
+						}
+					}
+					resolve()
+				}, 2000)
 
 				subscription.on('eose', () => {
 					clearTimeout(timeout)
@@ -686,11 +686,17 @@ export const fetchOrdersByBuyer = async (
 					// Update all orders in cache to mark EOSE as received
 					const currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey))
 					if (currentData) {
+						// Create new array reference to ensure React detects change
 						const updatedData = currentData.map((order) => ({
 							...order,
 							relatedEventsEoseReceived: true,
 						}))
-						queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), updatedData)
+						queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), [...updatedData])
+						// Invalidate to notify observers
+						queryClient.invalidateQueries({
+							queryKey: orderKeys.byBuyer(buyerPubkey),
+							refetchType: 'none',
+						})
 					}
 				}
 			}, 5000)
@@ -701,11 +707,17 @@ export const fetchOrdersByBuyer = async (
 				// Update all orders in cache to mark EOSE as received
 				const currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey))
 				if (currentData) {
+					// Create new array reference to ensure React detects change
 					const updatedData = currentData.map((order) => ({
 						...order,
 						relatedEventsEoseReceived: true,
 					}))
-					queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), updatedData)
+					queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), [...updatedData])
+					// Invalidate to notify observers
+					queryClient.invalidateQueries({
+						queryKey: orderKeys.byBuyer(buyerPubkey),
+						refetchType: 'none',
+					})
 				}
 			})
 
@@ -804,6 +816,7 @@ export const fetchOrdersByBuyer = async (
 				})
 
 				if (orderFound && eventAdded) {
+					// Create a completely new array with new object references to ensure React detects changes
 					const newDataArray = updatedData.map((order) => ({
 						...order,
 						paymentRequests: [...order.paymentRequests],
@@ -811,9 +824,16 @@ export const fetchOrdersByBuyer = async (
 						shippingUpdates: [...order.shippingUpdates],
 						generalMessages: [...order.generalMessages],
 						paymentReceipts: [...order.paymentReceipts],
+						latestStatus: order.statusUpdates[0],
+						latestShipping: order.shippingUpdates[0],
+						latestPaymentRequest: order.paymentRequests[0],
+						latestPaymentReceipt: order.paymentReceipts[0],
+						latestMessage: order.generalMessages[0],
 					}))
 
-					queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), newDataArray)
+					// Update cache with new reference - this will trigger re-renders in components using useQuery
+					queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), [...newDataArray])
+					// Invalidate to ensure all observers are notified
 					queryClient.invalidateQueries({
 						queryKey: orderKeys.byBuyer(buyerPubkey),
 						refetchType: 'none',
@@ -1031,18 +1051,168 @@ export const fetchOrdersByBuyer = async (
 
 	// Set cache immediately so related events subscription can update it
 	// The queryFn will merge properly when it runs
+	// Create new array reference to ensure React detects change
 	if (queryClient) {
-		queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), initialResult)
+		queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), [...initialResult])
 	}
 
-	// Start fetching related events in parallel AFTER orders are found (don't wait)
-	if (queryClient && relatedEventsSubscription) {
-		// Related events subscription will auto-start when handlers are attached
-		// No need to manually call start() - this avoids initialization race conditions
+	// Fetch related events synchronously before returning to ensure status is available on first render
+	if (queryClient && relatedEventsSubscription && orderIds.length > 0) {
+		const signer = ndkActions.getSigner()
+		const relatedEventsMap = new Map<
+			string,
+			{
+				paymentRequests: NDKEvent[]
+				statusUpdates: NDKEvent[]
+				shippingUpdates: NDKEvent[]
+				generalMessages: NDKEvent[]
+				paymentReceipts: NDKEvent[]
+			}
+		>()
+
+		// Initialize map for each order
+		orderIds.forEach((orderId) => {
+			relatedEventsMap.set(orderId, {
+				paymentRequests: [],
+				statusUpdates: [],
+				shippingUpdates: [],
+				generalMessages: [],
+				paymentReceipts: [],
+			})
+		})
+
+		// Collect related events for a short time to populate status
+		const relatedEventsPromise = new Promise<void>((resolve) => {
+			let eventsCollected = 0
+			let resolved = false
+
+			const collectEvent = async (event: NDKEvent) => {
+				if (resolved) return
+
+				try {
+					if (signer && event.content) {
+						const contentLooksEncrypted = !event.content.trim().startsWith('{') && !event.content.trim().startsWith('[')
+						if (contentLooksEncrypted) {
+							await safeDecryptEvent(event, signer)
+						}
+					}
+
+					const orderTag = event.tags.find((tag) => tag[0] === 'order')
+					if (orderTag && orderTag[1] && orderIdsSet.has(orderTag[1])) {
+						const orderId = orderTag[1]
+						const orderEvents = relatedEventsMap.get(orderId)
+						if (!orderEvents) return
+
+						const eventExists = (arr: NDKEvent[]) => arr.some((e) => e.id === event.id)
+
+						if (event.kind === ORDER_PROCESS_KIND) {
+							const typeTag = event.tags.find((tag) => tag[0] === 'type')
+							if (typeTag) {
+								switch (typeTag[1]) {
+									case ORDER_MESSAGE_TYPE.PAYMENT_REQUEST:
+										if (!eventExists(orderEvents.paymentRequests)) {
+											orderEvents.paymentRequests.push(event)
+											eventsCollected++
+										}
+										break
+									case ORDER_MESSAGE_TYPE.STATUS_UPDATE:
+										if (!eventExists(orderEvents.statusUpdates)) {
+											orderEvents.statusUpdates.push(event)
+											eventsCollected++
+										}
+										break
+									case ORDER_MESSAGE_TYPE.SHIPPING_UPDATE:
+										if (!eventExists(orderEvents.shippingUpdates)) {
+											orderEvents.shippingUpdates.push(event)
+											eventsCollected++
+										}
+										break
+								}
+							}
+						} else if (event.kind === ORDER_GENERAL_KIND) {
+							if (!eventExists(orderEvents.generalMessages)) {
+								orderEvents.generalMessages.push(event)
+								eventsCollected++
+							}
+						} else if (event.kind === PAYMENT_RECEIPT_KIND) {
+							if (!eventExists(orderEvents.paymentReceipts)) {
+								orderEvents.paymentReceipts.push(event)
+								eventsCollected++
+							}
+						}
+					}
+				} catch (error) {
+					// Ignore errors
+				}
+			}
+
+			relatedEventsSubscription.on('event', collectEvent)
+
+			// Wait for EOSE or timeout after 2 seconds
+			const timeout = setTimeout(() => {
+				if (!resolved) {
+					resolved = true
+					resolve()
+				}
+			}, 2000)
+
+			relatedEventsSubscription.on('eose', () => {
+				if (!resolved) {
+					resolved = true
+					clearTimeout(timeout)
+					resolve()
+				}
+			})
+
+			relatedEventsSubscription.on('close', () => {
+				if (!resolved) {
+					resolved = true
+					clearTimeout(timeout)
+					resolve()
+				}
+			})
+		})
+
+		// Wait for related events to be collected (with timeout)
+		await Promise.race([relatedEventsPromise, new Promise<void>((resolve) => setTimeout(resolve, 2000))])
+
+		// Update initial result with collected related events
+		initialResult.forEach((orderData) => {
+			const orderTag = orderData.order.tags.find((tag) => tag[0] === 'order')
+			const orderId = orderTag?.[1]
+			if (!orderId) return
+
+			const collectedEvents = relatedEventsMap.get(orderId)
+			if (!collectedEvents) return
+
+			// Merge collected events with cached events (cached takes precedence)
+			const mergeEvents = (collected: NDKEvent[], cached: NDKEvent[]) => {
+				const eventMap = new Map<string, NDKEvent>()
+				cached.forEach((e) => eventMap.set(e.id, e))
+				collected.forEach((e) => eventMap.set(e.id, e))
+				return Array.from(eventMap.values()).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+			}
+
+			orderData.paymentRequests = mergeEvents(collectedEvents.paymentRequests, orderData.paymentRequests)
+			orderData.statusUpdates = mergeEvents(collectedEvents.statusUpdates, orderData.statusUpdates)
+			orderData.shippingUpdates = mergeEvents(collectedEvents.shippingUpdates, orderData.shippingUpdates)
+			orderData.generalMessages = mergeEvents(collectedEvents.generalMessages, orderData.generalMessages)
+			orderData.paymentReceipts = mergeEvents(collectedEvents.paymentReceipts, orderData.paymentReceipts)
+			orderData.latestStatus = orderData.statusUpdates[0]
+			orderData.latestShipping = orderData.shippingUpdates[0]
+			orderData.latestPaymentRequest = orderData.paymentRequests[0]
+			orderData.latestPaymentReceipt = orderData.paymentReceipts[0]
+			orderData.latestMessage = orderData.generalMessages[0]
+		})
+
+		// Update cache with enriched data
+		// Create new array reference to ensure React detects change
+		if (queryClient) {
+			queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), [...initialResult])
+		}
 	}
 
-	// Return orders immediately - related events subscription is fetching in parallel
-	// The queryFn will handle caching and merging with existing cache
+	// Return orders with related events included
 	return initialResult
 }
 
@@ -1141,12 +1311,14 @@ export const useOrdersByBuyer = (buyerPubkey: string) => {
 					})
 
 					// Cache the merged result to preserve related events - this prevents cache from being wiped
-					queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), mergedResult)
+					// Create new array reference to ensure React detects change
+					queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), [...mergedResult])
 					return mergedResult
 				}
 
 				// No cached data - cache the result as-is
-				queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), result)
+				// Create new array reference to ensure React detects change
+				queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), [...result])
 				return result
 			} catch (error) {
 				// Check if we have existing cache data - don't overwrite with empty array on error
@@ -1158,39 +1330,28 @@ export const useOrdersByBuyer = (buyerPubkey: string) => {
 			}
 		},
 		enabled: queryEnabled,
-		refetchOnMount: false, // Don't refetch on mount - use cache if available
-		refetchOnWindowFocus: false, // Don't refetch on window focus - preserve cache
-		refetchOnReconnect: true, // Refetch when reconnecting to network
-		staleTime: 2 * 60 * 1000, // Consider data fresh for 2 minutes
-		gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes (increased to match purchases persistence)
-		// Return empty array as placeholder data when disabled
-		placeholderData: queryEnabled ? undefined : [],
+		// Cache configuration - keep data fresh for 5 minutes, cache for 30 minutes
+		staleTime: 5 * 60 * 1000, // 5 minutes - data is considered fresh
+		gcTime: 30 * 60 * 1000, // 30 minutes - keep in cache
+		refetchOnMount: false, // Don't refetch on mount if cache exists
+		refetchOnWindowFocus: false, // Don't refetch on window focus
+		refetchOnReconnect: true, // Only refetch when reconnecting
+		// Use cached data as initial data if available
+		initialData: () => queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey)),
+		placeholderData: queryEnabled ? () => queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey)) : [],
 		retry: 1, // Only retry once on failure
 		retryDelay: 1000, // Wait 1s before retry
 		notifyOnChangeProps: ['data', 'error', 'status'], // Explicitly notify on these changes
 		structuralSharing: false, // Disable structural sharing to ensure React detects all cache updates
 	})
 
-	// Refetch when NDK connects to ensure we get fresh data
-	useEffect(() => {
-		if (!queryEnabled || !isConnected) return
-
-		// Only refetch if we don't have data or if data is stale
-		const queryData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey))
-		if (queryData && queryData.length > 0) {
-			// We have data, don't aggressively refetch
-			return
-		}
-
-		// Small delay to ensure connection is fully established
-		const timer = setTimeout(() => {
-			queryClient.refetchQueries({ queryKey: orderKeys.byBuyer(buyerPubkey) }).catch(() => {
-				// Ignore refetch errors
-			})
-		}, 100)
-
-		return () => clearTimeout(timer)
-	}, [isConnected, queryEnabled, buyerPubkey, queryClient])
+	// Don't refetch when NDK connects - use cache instead
+	// Live subscriptions will handle real-time updates
+	// Refetching causes unnecessary decryption and slow performance
+	// useEffect(() => {
+	// 	if (!queryEnabled || !isConnected) return
+	// 	// ... refetch logic removed to prevent unnecessary fetches
+	// }, [isConnected, queryEnabled, buyerPubkey, queryClient])
 
 	return queryResult
 }
@@ -1362,11 +1523,17 @@ export const fetchOrdersBySeller = async (
 					// Update all orders in cache to mark EOSE as received
 					const currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey))
 					if (currentData) {
+						// Create new array reference to ensure React detects change
 						const updatedData = currentData.map((order) => ({
 							...order,
 							relatedEventsEoseReceived: true,
 						}))
-						queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), updatedData)
+						queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), [...updatedData])
+						// Invalidate to notify observers
+						queryClient.invalidateQueries({
+							queryKey: orderKeys.bySeller(sellerPubkey),
+							refetchType: 'none',
+						})
 					}
 				}
 			}, 5000)
@@ -1377,11 +1544,17 @@ export const fetchOrdersBySeller = async (
 				// Update all orders in cache to mark EOSE as received
 				const currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey))
 				if (currentData) {
+					// Create new array reference to ensure React detects change
 					const updatedData = currentData.map((order) => ({
 						...order,
 						relatedEventsEoseReceived: true,
 					}))
-					queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), updatedData)
+					queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), [...updatedData])
+					// Invalidate to notify observers
+					queryClient.invalidateQueries({
+						queryKey: orderKeys.bySeller(sellerPubkey),
+						refetchType: 'none',
+					})
 				}
 			})
 
@@ -1480,6 +1653,7 @@ export const fetchOrdersBySeller = async (
 				})
 
 				if (orderFound && eventAdded) {
+					// Create a completely new array with new object references to ensure React detects changes
 					const newDataArray = updatedData.map((order) => ({
 						...order,
 						paymentRequests: [...order.paymentRequests],
@@ -1487,9 +1661,16 @@ export const fetchOrdersBySeller = async (
 						shippingUpdates: [...order.shippingUpdates],
 						generalMessages: [...order.generalMessages],
 						paymentReceipts: [...order.paymentReceipts],
+						latestStatus: order.statusUpdates[0],
+						latestShipping: order.shippingUpdates[0],
+						latestPaymentRequest: order.paymentRequests[0],
+						latestPaymentReceipt: order.paymentReceipts[0],
+						latestMessage: order.generalMessages[0],
 					}))
 
-					queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), newDataArray)
+					// Update cache with new reference - this will trigger re-renders in components using useQuery
+					queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), [...newDataArray])
+					// Invalidate to ensure all observers are notified
 					queryClient.invalidateQueries({
 						queryKey: orderKeys.bySeller(sellerPubkey),
 						refetchType: 'none',
@@ -1668,18 +1849,168 @@ export const fetchOrdersBySeller = async (
 
 	// Set cache immediately so related events subscription can update it
 	// The queryFn will merge properly when it runs
+	// Create new array reference to ensure React detects change
 	if (queryClient) {
-		queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), initialResult)
+		queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), [...initialResult])
 	}
 
-	// Start fetching related events in parallel AFTER orders are found (don't wait)
-	if (queryClient && relatedEventsSubscription) {
-		// Related events subscription will auto-start when handlers are attached
-		// No need to manually call start() - this avoids initialization race conditions
+	// Fetch related events synchronously before returning to ensure status is available on first render
+	if (queryClient && relatedEventsSubscription && orderIds.length > 0) {
+		const signer = ndkActions.getSigner()
+		const relatedEventsMap = new Map<
+			string,
+			{
+				paymentRequests: NDKEvent[]
+				statusUpdates: NDKEvent[]
+				shippingUpdates: NDKEvent[]
+				generalMessages: NDKEvent[]
+				paymentReceipts: NDKEvent[]
+			}
+		>()
+
+		// Initialize map for each order
+		orderIds.forEach((orderId) => {
+			relatedEventsMap.set(orderId, {
+				paymentRequests: [],
+				statusUpdates: [],
+				shippingUpdates: [],
+				generalMessages: [],
+				paymentReceipts: [],
+			})
+		})
+
+		// Collect related events for a short time to populate status
+		const relatedEventsPromise = new Promise<void>((resolve) => {
+			let eventsCollected = 0
+			let resolved = false
+
+			const collectEvent = async (event: NDKEvent) => {
+				if (resolved) return
+
+				try {
+					if (signer && event.content) {
+						const contentLooksEncrypted = !event.content.trim().startsWith('{') && !event.content.trim().startsWith('[')
+						if (contentLooksEncrypted) {
+							await safeDecryptEvent(event, signer)
+						}
+					}
+
+					const orderTag = event.tags.find((tag) => tag[0] === 'order')
+					if (orderTag && orderTag[1] && orderIdsSet.has(orderTag[1])) {
+						const orderId = orderTag[1]
+						const orderEvents = relatedEventsMap.get(orderId)
+						if (!orderEvents) return
+
+						const eventExists = (arr: NDKEvent[]) => arr.some((e) => e.id === event.id)
+
+						if (event.kind === ORDER_PROCESS_KIND) {
+							const typeTag = event.tags.find((tag) => tag[0] === 'type')
+							if (typeTag) {
+								switch (typeTag[1]) {
+									case ORDER_MESSAGE_TYPE.PAYMENT_REQUEST:
+										if (!eventExists(orderEvents.paymentRequests)) {
+											orderEvents.paymentRequests.push(event)
+											eventsCollected++
+										}
+										break
+									case ORDER_MESSAGE_TYPE.STATUS_UPDATE:
+										if (!eventExists(orderEvents.statusUpdates)) {
+											orderEvents.statusUpdates.push(event)
+											eventsCollected++
+										}
+										break
+									case ORDER_MESSAGE_TYPE.SHIPPING_UPDATE:
+										if (!eventExists(orderEvents.shippingUpdates)) {
+											orderEvents.shippingUpdates.push(event)
+											eventsCollected++
+										}
+										break
+								}
+							}
+						} else if (event.kind === ORDER_GENERAL_KIND) {
+							if (!eventExists(orderEvents.generalMessages)) {
+								orderEvents.generalMessages.push(event)
+								eventsCollected++
+							}
+						} else if (event.kind === PAYMENT_RECEIPT_KIND) {
+							if (!eventExists(orderEvents.paymentReceipts)) {
+								orderEvents.paymentReceipts.push(event)
+								eventsCollected++
+							}
+						}
+					}
+				} catch (error) {
+					// Ignore errors
+				}
+			}
+
+			relatedEventsSubscription.on('event', collectEvent)
+
+			// Wait for EOSE or timeout after 2 seconds
+			const timeout = setTimeout(() => {
+				if (!resolved) {
+					resolved = true
+					resolve()
+				}
+			}, 2000)
+
+			relatedEventsSubscription.on('eose', () => {
+				if (!resolved) {
+					resolved = true
+					clearTimeout(timeout)
+					resolve()
+				}
+			})
+
+			relatedEventsSubscription.on('close', () => {
+				if (!resolved) {
+					resolved = true
+					clearTimeout(timeout)
+					resolve()
+				}
+			})
+		})
+
+		// Wait for related events to be collected (with timeout)
+		await Promise.race([relatedEventsPromise, new Promise<void>((resolve) => setTimeout(resolve, 2000))])
+
+		// Update initial result with collected related events
+		initialResult.forEach((orderData) => {
+			const orderTag = orderData.order.tags.find((tag) => tag[0] === 'order')
+			const orderId = orderTag?.[1]
+			if (!orderId) return
+
+			const collectedEvents = relatedEventsMap.get(orderId)
+			if (!collectedEvents) return
+
+			// Merge collected events with cached events (cached takes precedence)
+			const mergeEvents = (collected: NDKEvent[], cached: NDKEvent[]) => {
+				const eventMap = new Map<string, NDKEvent>()
+				cached.forEach((e) => eventMap.set(e.id, e))
+				collected.forEach((e) => eventMap.set(e.id, e))
+				return Array.from(eventMap.values()).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+			}
+
+			orderData.paymentRequests = mergeEvents(collectedEvents.paymentRequests, orderData.paymentRequests)
+			orderData.statusUpdates = mergeEvents(collectedEvents.statusUpdates, orderData.statusUpdates)
+			orderData.shippingUpdates = mergeEvents(collectedEvents.shippingUpdates, orderData.shippingUpdates)
+			orderData.generalMessages = mergeEvents(collectedEvents.generalMessages, orderData.generalMessages)
+			orderData.paymentReceipts = mergeEvents(collectedEvents.paymentReceipts, orderData.paymentReceipts)
+			orderData.latestStatus = orderData.statusUpdates[0]
+			orderData.latestShipping = orderData.shippingUpdates[0]
+			orderData.latestPaymentRequest = orderData.paymentRequests[0]
+			orderData.latestPaymentReceipt = orderData.paymentReceipts[0]
+			orderData.latestMessage = orderData.generalMessages[0]
+		})
+
+		// Update cache with enriched data
+		// Create new array reference to ensure React detects change
+		if (queryClient) {
+			queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), [...initialResult])
+		}
 	}
 
-	// Return orders immediately - related events subscription is fetching in parallel
-	// The queryFn will handle caching and merging with existing cache
+	// Return orders with related events included
 	return initialResult
 }
 
@@ -1784,12 +2115,14 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 					})
 
 					// Cache the merged result to preserve related events - this prevents cache from being wiped
-					queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), mergedResult)
+					// Create new array reference to ensure React detects change
+					queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), [...mergedResult])
 					return mergedResult
 				}
 
 				// No cached data - cache the result as-is
-				queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), result)
+				// Create new array reference to ensure React detects change
+				queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), [...result])
 				return result
 			} catch (error) {
 				// Check if we have existing cache data - don't overwrite with empty array on error
@@ -1801,39 +2134,28 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 			}
 		},
 		enabled: queryEnabled,
-		refetchOnMount: false, // Don't refetch on mount - use cache if available
-		refetchOnWindowFocus: false, // Don't refetch on window focus - preserve cache
-		refetchOnReconnect: true, // Refetch when reconnecting to network
-		staleTime: 2 * 60 * 1000, // Consider data fresh for 2 minutes
-		gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes (increased for better persistence)
-		// Return empty array as placeholder data when disabled
-		placeholderData: queryEnabled ? undefined : [],
+		// Cache configuration - keep data fresh for 5 minutes, cache for 30 minutes
+		staleTime: 5 * 60 * 1000, // 5 minutes - data is considered fresh
+		gcTime: 30 * 60 * 1000, // 30 minutes - keep in cache
+		refetchOnMount: false, // Don't refetch on mount if cache exists
+		refetchOnWindowFocus: false, // Don't refetch on window focus
+		refetchOnReconnect: true, // Only refetch when reconnecting
+		// Use cached data as initial data if available
+		initialData: () => queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey)),
+		placeholderData: queryEnabled ? () => queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey)) : [],
 		retry: 1, // Only retry once on failure
 		retryDelay: 1000, // Wait 1s before retry
 		notifyOnChangeProps: ['data', 'error', 'status'], // Explicitly notify on these changes
 		structuralSharing: false, // Disable structural sharing to ensure React detects all changes
 	})
 
-	// Refetch when NDK connects to ensure we get fresh data
-	useEffect(() => {
-		if (!queryEnabled || !isConnected) return
-
-		// Only refetch if we don't have data or if data is stale
-		const queryData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey))
-		if (queryData && queryData.length > 0) {
-			// We have data, don't aggressively refetch
-			return
-		}
-
-		// Small delay to ensure connection is fully established
-		const timer = setTimeout(() => {
-			queryClient.refetchQueries({ queryKey: orderKeys.bySeller(sellerPubkey) }).catch(() => {
-				// Ignore refetch errors
-			})
-		}, 100)
-
-		return () => clearTimeout(timer)
-	}, [isConnected, queryEnabled, sellerPubkey, queryClient])
+	// Don't refetch when NDK connects - use cache instead
+	// Live subscriptions will handle real-time updates
+	// Refetching causes unnecessary decryption and slow performance
+	// useEffect(() => {
+	// 	if (!queryEnabled || !isConnected) return
+	// 	// ... refetch logic removed to prevent unnecessary fetches
+	// }, [isConnected, queryEnabled, sellerPubkey, queryClient])
 
 	return queryResult
 }

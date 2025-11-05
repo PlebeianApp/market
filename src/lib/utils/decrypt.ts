@@ -6,11 +6,7 @@ import type { NDKSigner } from '@nostr-dev-kit/ndk'
  * This prevents "Cannot access 's' before initialization" errors
  * that occur due to race conditions in NDK's bundled code
  */
-export async function safeDecryptEvent(
-	event: NDKEvent,
-	signer: NDKSigner | undefined,
-	userPubkey?: string,
-): Promise<boolean> {
+export async function safeDecryptEvent(event: NDKEvent, signer: NDKSigner | undefined, userPubkey?: string): Promise<boolean> {
 	if (!signer || !event.content) {
 		return false
 	}
@@ -27,10 +23,7 @@ export async function safeDecryptEvent(
 	} catch (error) {
 		// Suppress the specific "Cannot access 's' before initialization" error
 		// This is a known NDK race condition bug in bundled code
-		if (
-			error instanceof ReferenceError &&
-			error.message.includes("Cannot access 's' before initialization")
-		) {
+		if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
 			console.warn('[NDK] Suppressed decrypt initialization error (race condition)')
 			return false
 		}
@@ -46,5 +39,3 @@ export async function safeDecryptEvent(
 		throw error
 	}
 }
-
-
