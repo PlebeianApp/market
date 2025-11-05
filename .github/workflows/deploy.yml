@@ -36,22 +36,42 @@ jobs:
           script: |
             sudo systemctl stop market-dev.service || true
 
+      - name: Prepare deployment archive
+        run: |
+          tar -czf deploy.tar.gz dist/ public/ src/ package.json bun.lock tsconfig.json bunfig.toml
+          
       - name: Deploy to staging server
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.REMOTE_HOST }}
           username: ${{ secrets.REMOTE_USER }}
           password: ${{ secrets.REMOTE_PASSWORD }}
-          source: |
-            dist/
-            public/
-            src/
-            package.json
-            bun.lock
-            tsconfig.json
-            bunfig.toml
+          source: "deploy.tar.gz"
           target: '/home/deployer/market'
-          rm: true
+          
+      - name: Extract and cleanup on staging server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USER }}
+          password: ${{ secrets.REMOTE_PASSWORD }}
+          script: |
+            cd /home/deployer/market
+            # Remove old files (but keep .env if it exists)
+            if [ -f .env ]; then
+              mv .env .env.backup
+            fi
+            rm -rf dist/ public/ src/ package.json bun.lock tsconfig.json bunfig.toml
+            # Extract new files
+            tar -xzf deploy.tar.gz
+            rm deploy.tar.gz
+            # Restore .env if it was backed up
+            if [ -f .env.backup ]; then
+              mv .env.backup .env
+            fi
+            
+      - name: Cleanup deployment archive
+        run: rm -f deploy.tar.gz
 
       - name: Setup staging environment
         uses: appleboy/ssh-action@master
