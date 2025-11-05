@@ -91,12 +91,12 @@ const serveStatic = async (path: string) => {
 const serveDist = async (pathname: string) => {
 	const fileName = pathname.slice(1) // Remove leading /
 	const filePath = join(process.cwd(), 'dist', fileName)
-	
+
 	try {
 		if (!existsSync(filePath)) {
 			return null
 		}
-		
+
 		const f = file(filePath)
 		return new Response(f, {
 			headers: { 'Content-Type': getContentType(fileName) },
@@ -126,7 +126,7 @@ export const server = serve({
 		'/*': async (req) => {
 			const url = new URL(req.url)
 			const pathname = url.pathname
-			
+
 			// In production/staging (NODE_ENV=production), serve from dist directory
 			if (isProduction) {
 				// Serve dist/index.html for root
@@ -139,7 +139,7 @@ export const server = serve({
 						})
 					}
 				}
-				
+
 				// Try serving other files from dist (CSS, JS, fonts, etc.)
 				if (pathname !== '/' && !pathname.startsWith('/api/') && !pathname.startsWith('/images/')) {
 					const distResponse = await serveDist(pathname)
@@ -148,7 +148,7 @@ export const server = serve({
 					}
 				}
 			}
-			
+
 			// Fall back to Bun's HTMLBundle in development
 			return index
 		},

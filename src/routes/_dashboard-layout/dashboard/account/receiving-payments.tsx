@@ -224,7 +224,7 @@ function PaymentDetailConfirmationCard({ value, type, onConfirm, onCancel }: Pay
 
 							if (!derivedAddresses || derivedAddresses.length === 0) {
 								return (
-									<div className='space-y-2'>
+									<div className="space-y-2">
 										<Label className="text-sm font-medium text-red-700">Error:</Label>
 										<div className="text-sm text-red-600 p-2 bg-red-50 rounded">
 											Unable to derive addresses from this extended public key. Please check the format.
@@ -236,7 +236,7 @@ function PaymentDetailConfirmationCard({ value, type, onConfirm, onCancel }: Pay
 							return (
 								<div className="space-y-2">
 									<Label className="text-sm font-medium">Preview of derived addresses:</Label>
-									<div className='space-y-1'>
+									<div className="space-y-1">
 										{derivedAddresses.slice(0, numAddresses).map((address, index) => (
 											<div key={index} className="text-xs font-mono p-2 bg-gray-50 rounded">
 												{index}: {address}
@@ -561,8 +561,8 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 	)
 
 	return (
-        <div className="border-t pt-4">
-            {showConfirmation ? (
+		<div className="border-t pt-4">
+			{showConfirmation ? (
 				<PaymentDetailConfirmationCard
 					value={tempValidatedValue}
 					type={confirmationType}
@@ -608,13 +608,13 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 								onChange={(scope, scopeId, scopeName, scopeIds) => {
 									setEditedPaymentDetail(
 										(prev) =>
-											(({
-                                                ...prev,
-                                                scope,
-                                                scopeId,
-                                                scopeName,
-                                                scopeIds: scopeIds || []
-                                            }) as any),
+											({
+												...prev,
+												scope,
+												scopeId,
+												scopeName,
+												scopeIds: scopeIds || [],
+											}) as any,
 									)
 								}}
 							/>
@@ -626,12 +626,12 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 							Payment details
 						</Label>
 						<Input
-							id='payment-details'
+							id="payment-details"
 							data-testid="payment-details-input"
 							value={editedPaymentDetail.paymentDetail}
 							onChange={(e) => setEditedPaymentDetail((prev) => ({ ...prev, paymentDetail: e.target.value }))}
 							placeholder="Enter payment details e.g. plebeian@getalby.com"
-							className='w-full'
+							className="w-full"
 						/>
 
 						{walletDetailQuery.data &&
@@ -654,8 +654,8 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 									return (
 										<div className="bg-gray-50 p-3 rounded-md space-y-2">
 											<Label className="font-medium">Current address</Label>
-											<div className='space-y-1'>
-												<small className='font-mono'>
+											<div className="space-y-1">
+												<small className="font-mono">
 													Index: {walletDetailQuery.data.valueNumeric} - {currentAddress}
 												</small>
 												<small>Last updated: {format(walletDetailQuery.data.updatedAt, 'PPp')}</small>
@@ -686,7 +686,7 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 					<div className="space-y-4">
 						<div className="flex items-center gap-2">
 							<Checkbox
-								id='default-payment'
+								id="default-payment"
 								data-testid="default-payment-checkbox"
 								checked={editedPaymentDetail.isDefault}
 								onCheckedChange={(checked) => setEditedPaymentDetail((prev) => ({ ...prev, isDefault: !!checked }))}
@@ -698,8 +698,8 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 
 						<div className="flex justify-end gap-2">
 							<Button
-								type='button'
-								variant='outline'
+								type="button"
+								variant="outline"
 								onClick={() => onOpenChange(false)}
 								disabled={formState !== 'idle'}
 								data-testid="cancel-payment-button"
@@ -709,8 +709,8 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 
 							{isEditing && (
 								<Button
-									type='button'
-									variant='destructive'
+									type="button"
+									variant="destructive"
 									onClick={handleDelete}
 									disabled={formState !== 'idle'}
 									data-testid="delete-payment-button"
@@ -727,8 +727,8 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 					</div>
 				</form>
 			)}
-        </div>
-    )
+		</div>
+	)
 }
 
 interface PaymentDetailListItemProps {
