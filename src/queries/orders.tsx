@@ -2019,8 +2019,6 @@ export const fetchOrdersBySeller = async (
  */
 export const useOrdersBySeller = (sellerPubkey: string) => {
 	const ndk = ndkActions.getNDK()
-	const ndkState = useStore(ndkStore)
-	const isConnected = ndkState.isConnected
 	const queryClient = useQueryClient()
 
 	// Enable query when NDK is initialized (not just connected)
@@ -2139,7 +2137,7 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 		gcTime: 30 * 60 * 1000, // 30 minutes - keep in cache
 		refetchOnMount: false, // Don't refetch on mount if cache exists
 		refetchOnWindowFocus: false, // Don't refetch on window focus
-		refetchOnReconnect: true, // Only refetch when reconnecting
+		refetchOnReconnect: false, // Don't refetch on reconnect - live subscriptions handle updates
 		// Use cached data as initial data if available
 		initialData: () => queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey)),
 		placeholderData: queryEnabled ? () => queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey)) : [],

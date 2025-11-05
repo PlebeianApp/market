@@ -53,17 +53,30 @@ export function useOrdersBackgroundSync() {
 				return
 			}
 
-			// Always refetch to keep data updated in background
-			// Pass queryClient so merge logic works correctly and preserves status
+			// Only refetch if data is stale (respects staleTime: 5 minutes)
+			// This prevents unnecessary refetches when data is still fresh
+			const buyerQueryState = queryClient.getQueryState(orderKeys.byBuyer(userPubkey))
+
+			// Only refetch purchases (byBuyer) in background - sales are updated via live subscriptions
+			// Check if buyer query is stale before refetching
+			const shouldRefetchBuyer = !buyerQueryState || buyerQueryState.isStale
+
 			try {
-				await Promise.allSettled([
-					queryClient.refetchQueries({
-						queryKey: orderKeys.byBuyer(userPubkey),
-					}),
-					queryClient.refetchQueries({
-						queryKey: orderKeys.bySeller(userPubkey),
-					}),
-				])
+				const promises: Promise<unknown>[] = []
+
+				// Only refetch buyer orders if stale
+				if (shouldRefetchBuyer) {
+					promises.push(
+						queryClient.refetchQueries({
+							queryKey: orderKeys.byBuyer(userPubkey),
+						}),
+					)
+				}
+
+				// Never refetch sales in background - they're updated via live subscriptions
+				// Sales will only refetch on manual refresh or when explicitly requested
+
+				await Promise.allSettled(promises)
 			} catch (error) {
 				// Suppress NDK initialization errors
 				if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
