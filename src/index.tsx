@@ -7,7 +7,6 @@ import { fetchAppSettings } from './lib/appSettings'
 import { getEventHandler } from './server'
 import { join } from 'path'
 import { file } from 'bun'
-import { existsSync } from 'fs'
 
 import.meta.hot.accept()
 
@@ -16,8 +15,7 @@ config()
 const RELAY_URL = process.env.APP_RELAY_URL
 const NIP46_RELAY_URL = process.env.NIP46_RELAY_URL || 'wss://relay.nsec.app'
 const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
-const STAGING = process.env.STAGING !== 'false' // Default to true (controls relay write permissions)
-const isProduction = process.env.NODE_ENV === 'production' // Both staging and production use this
+const STAGING = process.env.STAGING !== 'false' // Default to true
 
 let appSettings: Awaited<ReturnType<typeof fetchAppSettings>> = null
 let APP_PUBLIC_KEY: string
@@ -54,21 +52,6 @@ getEventHandler()
 	})
 	.catch((error) => console.error(error))
 
-// Helper function to determine content type based on file extension
-const getContentType = (path: string): string => {
-	if (path.endsWith('.svg')) return 'image/svg+xml'
-	if (path.endsWith('.png')) return 'image/png'
-	if (path.endsWith('.jpg') || path.endsWith('.jpeg')) return 'image/jpeg'
-	if (path.endsWith('.css')) return 'text/css'
-	if (path.endsWith('.js')) return 'application/javascript'
-	if (path.endsWith('.js.map')) return 'application/json'
-	if (path.endsWith('.ttf')) return 'font/ttf'
-	if (path.endsWith('.woff')) return 'font/woff'
-	if (path.endsWith('.woff2')) return 'font/woff2'
-	if (path.endsWith('.ico')) return 'image/x-icon'
-	return 'application/octet-stream'
-}
-
 // Handle static files from the public directory
 const serveStatic = async (path: string) => {
 	const filePath = join(process.cwd(), 'public', path)
@@ -77,9 +60,21 @@ const serveStatic = async (path: string) => {
 		if (!f.exists()) {
 			return new Response('File not found', { status: 404 })
 		}
+		// Determine content type based on file extension
+		const contentType = path.endsWith('.svg')
+			? 'image/svg+xml'
+			: path.endsWith('.png')
+				? 'image/png'
+				: path.endsWith('.jpg') || path.endsWith('.jpeg')
+					? 'image/jpeg'
+					: path.endsWith('.css')
+						? 'text/css'
+						: path.endsWith('.js')
+							? 'application/javascript'
+							: 'application/octet-stream'
 
 		return new Response(f, {
-			headers: { 'Content-Type': getContentType(path) },
+			headers: { 'Content-Type': contentType },
 		})
 	} catch (error) {
 		console.error(`Error serving static file ${path}:`, error)
@@ -87,28 +82,9 @@ const serveStatic = async (path: string) => {
 	}
 }
 
-// Serve files from dist directory in production
-const serveDist = async (pathname: string) => {
-	const fileName = pathname.slice(1) // Remove leading /
-	const filePath = join(process.cwd(), 'dist', fileName)
-
-	try {
-		if (!existsSync(filePath)) {
-			return null
-		}
-
-		const f = file(filePath)
-		return new Response(f, {
-			headers: { 'Content-Type': getContentType(fileName) },
-		})
-	} catch (error) {
-		console.error(`Error serving dist file ${fileName}:`, error)
-		return null
-	}
-}
-
 export const server = serve({
 	routes: {
+		'/*': index,
 		'/api/config': {
 			GET: async () => {
 				// Always fetch fresh settings from relay
@@ -123,42 +99,12 @@ export const server = serve({
 			},
 		},
 		'/images/:file': ({ params }) => serveStatic(`images/${params.file}`),
-		'/*': async (req) => {
-			const url = new URL(req.url)
-			const pathname = url.pathname
-
-			// In production/staging (NODE_ENV=production), serve from dist directory
-			if (isProduction) {
-				// Serve dist/index.html for root
-				if (pathname === '/' || pathname === '/index.html') {
-					const distIndexPath = join(process.cwd(), 'dist', 'index.html')
-					if (existsSync(distIndexPath)) {
-						const f = file(distIndexPath)
-						return new Response(f, {
-							headers: { 'Content-Type': 'text/html' },
-						})
-					}
-				}
-
-				// Try serving other files from dist (CSS, JS, fonts, etc.)
-				if (pathname !== '/' && !pathname.startsWith('/api/') && !pathname.startsWith('/images/')) {
-					const distResponse = await serveDist(pathname)
-					if (distResponse) {
-						return distResponse
-					}
-				}
-			}
-
-			// Fall back to Bun's HTMLBundle in development
-			return index
-		},
 	},
-	development: !isProduction,
+	development: process.env.NODE_ENV !== 'production',
 	fetch(req, server) {
 		if (server.upgrade(req)) {
 			return new Response()
 		}
-		// Let routes handle the request
 		return new Response('Upgrade failed', { status: 500 })
 	},
 	// @ts-ignore
