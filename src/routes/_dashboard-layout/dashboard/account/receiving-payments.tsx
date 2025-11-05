@@ -185,7 +185,7 @@ function ScopeSelector({ value, scopeId, scopeIds, userPubkey, onChange }: Scope
 	)
 }
 
-export const Route = createFileRoute('/_dashboard-layout/dashboard/products/receiving-payments')({
+export const Route = createFileRoute('/_dashboard-layout/dashboard/account/receiving-payments')({
 	component: ReceivingPaymentsComponent,
 })
 
