@@ -81,23 +81,33 @@ jobs:
           password: ${{ secrets.REMOTE_PASSWORD }}
           script: |
             cd /home/deployer/market
-
+            
+            # Verify dist directory exists
+            echo "Checking dist directory:"
+            ls -la dist/ || echo "❌ dist directory not found!"
+            
             # Create staging environment file
             cat <<EOF > .env
             NODE_ENV=production
+            STAGING=true
             APP_RELAY_URL=${{ secrets.APP_RELAY_URL }}
             APP_PRIVATE_KEY=${{ secrets.APP_PRIVATE_KEY }}
             EOF
 
             # Install production dependencies
             bun install --production
-
+            
             # Start staging service
             sudo systemctl start market-dev.service
-
+            
             # Verify deployment
             sleep 5
             sudo systemctl status market-dev.service --no-pager
+            
+            # Check server logs for any errors
+            echo ""
+            echo "Last 20 lines of service logs:"
+            sudo journalctl -u market-dev.service -n 20 --no-pager
 
       - name: Health check
         run: |

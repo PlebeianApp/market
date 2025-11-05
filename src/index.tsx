@@ -16,8 +16,8 @@ config()
 const RELAY_URL = process.env.APP_RELAY_URL
 const NIP46_RELAY_URL = process.env.NIP46_RELAY_URL || 'wss://relay.nsec.app'
 const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
-const STAGING = process.env.STAGING !== 'false' // Default to true
-const isProduction = process.env.NODE_ENV === 'production'
+const STAGING = process.env.STAGING !== 'false' // Default to true (controls relay write permissions)
+const isProduction = process.env.NODE_ENV === 'production' // Both staging and production use this
 
 let appSettings: Awaited<ReturnType<typeof fetchAppSettings>> = null
 let APP_PUBLIC_KEY: string
@@ -87,47 +87,28 @@ const serveStatic = async (path: string) => {
 	}
 }
 
-// Handle built assets from the dist directory (production only)
-const serveDist = async (path: string) => {
-	const filePath = join(process.cwd(), 'dist', path)
+// Serve files from dist directory in production
+const serveDist = async (pathname: string) => {
+	const fileName = pathname.slice(1) // Remove leading /
+	const filePath = join(process.cwd(), 'dist', fileName)
+	
 	try {
-		const f = file(filePath)
-		if (!f.exists()) {
-			return new Response('File not found', { status: 404 })
+		if (!existsSync(filePath)) {
+			return null
 		}
-
+		
+		const f = file(filePath)
 		return new Response(f, {
-			headers: { 'Content-Type': getContentType(path) },
+			headers: { 'Content-Type': getContentType(fileName) },
 		})
 	} catch (error) {
-		console.error(`Error serving dist file ${path}:`, error)
-		return new Response('Internal server error', { status: 500 })
+		console.error(`Error serving dist file ${fileName}:`, error)
+		return null
 	}
-}
-
-// Get the index HTML handler (built in production, source in development)
-const getIndexHandler = () => {
-	if (isProduction) {
-		const distIndexPath = join(process.cwd(), 'dist', 'index.html')
-		if (existsSync(distIndexPath)) {
-			return async () => {
-				const f = file(distIndexPath)
-				if (!f.exists()) {
-					return new Response('Built index.html not found', { status: 500 })
-				}
-				return new Response(f, {
-					headers: { 'Content-Type': 'text/html' },
-				})
-			}
-		}
-		console.warn('⚠️  Production mode but dist/index.html not found, falling back to source')
-	}
-	return index
 }
 
 export const server = serve({
 	routes: {
-		// API routes first
 		'/api/config': {
 			GET: async () => {
 				// Always fetch fresh settings from relay
@@ -141,33 +122,35 @@ export const server = serve({
 				})
 			},
 		},
-		// Serve public images
 		'/images/:file': ({ params }) => serveStatic(`images/${params.file}`),
-		// In production, serve built assets from dist/ directory
-		...(isProduction
-			? {
-					'/chunk-:file': ({ params }) => serveDist(`chunk-${params.file}`),
-					'/favicon-:file': ({ params }) => serveDist(`favicon-${params.file}`),
-					'/logo-:file': ({ params }) => serveDist(`logo-${params.file}`),
-					'/IBMPlexMono-:file': ({ params }) => serveDist(`IBMPlexMono-${params.file}`),
-				}
-			: {}),
-		// Catch-all route for HTML (must be last)
 		'/*': async (req) => {
-			// In production, check if this is a request for a dist asset
+			const url = new URL(req.url)
+			const pathname = url.pathname
+			
+			// In production/staging (NODE_ENV=production), serve from dist directory
 			if (isProduction) {
-				const url = new URL(req.url)
-				const pathname = url.pathname
+				// Serve dist/index.html for root
+				if (pathname === '/' || pathname === '/index.html') {
+					const distIndexPath = join(process.cwd(), 'dist', 'index.html')
+					if (existsSync(distIndexPath)) {
+						const f = file(distIndexPath)
+						return new Response(f, {
+							headers: { 'Content-Type': 'text/html' },
+						})
+					}
+				}
+				
+				// Try serving other files from dist (CSS, JS, fonts, etc.)
 				if (pathname !== '/' && !pathname.startsWith('/api/') && !pathname.startsWith('/images/')) {
-					const fileName = pathname.slice(1) // Remove leading slash
-					const distPath = join(process.cwd(), 'dist', fileName)
-					if (existsSync(distPath)) {
-						return serveDist(fileName)
+					const distResponse = await serveDist(pathname)
+					if (distResponse) {
+						return distResponse
 					}
 				}
 			}
-			// Otherwise serve the index HTML
-			return getIndexHandler()()
+			
+			// Fall back to Bun's HTMLBundle in development
+			return index
 		},
 	},
 	development: !isProduction,
