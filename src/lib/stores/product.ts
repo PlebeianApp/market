@@ -18,6 +18,7 @@ import {
 	getProductWeight,
 } from '@/queries/products'
 import { productKeys } from '@/queries/queryKeyFactory'
+import { clearProductFormState, loadProductFormState, saveProductFormState } from '@/lib/utils/productFormPersistence'
 import NDK, { type NDKSigner } from '@nostr-dev-kit/ndk'
 import { QueryClient } from '@tanstack/react-query'
 import { Store } from '@tanstack/store'
@@ -105,6 +106,26 @@ export const DEFAULT_FORM_STATE: ProductFormState = {
 // Create the store
 export const productFormStore = new Store<ProductFormState>(DEFAULT_FORM_STATE)
 
+// Debounced auto-save to IndexedDB
+let saveTimeout: NodeJS.Timeout | null = null
+const DEBOUNCE_MS = 500
+
+// Subscribe to store changes and auto-save to IndexedDB
+productFormStore.subscribe((state) => {
+	// Clear any pending save
+	if (saveTimeout) {
+		clearTimeout(saveTimeout)
+	}
+
+	// Only save if it's a new product (not editing)
+	if (!state.editingProductId) {
+		saveTimeout = setTimeout(() => {
+			void saveProductFormState(state)
+			saveTimeout = null
+		}, DEBOUNCE_MS)
+	}
+})
+
 // Create actions object
 export const productFormActions = {
 	setEditingProductId: (productId: string | null) => {
@@ -112,6 +133,13 @@ export const productFormActions = {
 			...state,
 			editingProductId: productId,
 		}))
+	},
+
+	loadPersistedState: async () => {
+		const persistedState = await loadProductFormState()
+		if (persistedState && !persistedState.editingProductId) {
+			productFormStore.setState(() => persistedState)
+		}
 	},
 
 	loadProductForEdit: async (productId: string) => {
@@ -173,13 +201,19 @@ export const productFormActions = {
 				}
 			})
 
+			const loadedCurrency = priceTag?.[2] || 'SATS'
+			const loadedBitcoinUnit: 'SATS' | 'BTC' = loadedCurrency === 'BTC' ? 'BTC' : 'SATS'
+			const loadedCurrencyMode: 'sats' | 'fiat' = loadedCurrency === 'BTC' || loadedCurrency === 'SATS' ? 'sats' : 'fiat'
+
 			productFormStore.setState((state) => ({
 				...DEFAULT_FORM_STATE,
 				editingProductId: productDTag, // Use the d tag value, not the event ID!
 				name: title,
 				description: description,
 				price: priceTag?.[1] || '',
-				currency: priceTag?.[2] || 'SATS',
+				currency: loadedCurrency,
+				bitcoinUnit: loadedBitcoinUnit,
+				currencyMode: loadedCurrencyMode,
 				quantity: stockTag?.[1] || '',
 				status: visibilityTag?.[1] || 'hidden',
 				productType: typeTag?.[1] === 'simple' ? 'single' : 'variable',
@@ -248,6 +282,8 @@ export const productFormActions = {
 
 	reset: () => {
 		productFormStore.setState(() => DEFAULT_FORM_STATE)
+		// Clear persisted state when resetting
+		void clearProductFormState()
 	},
 
 	updateValues: (values: Partial<ProductFormState>) => {
@@ -348,6 +384,11 @@ export const productFormActions = {
 				if (result) {
 					await queryClient.invalidateQueries({ queryKey: productKeys.details(result) })
 				}
+			}
+
+			// Clear persisted state after successful publish/update
+			if (result) {
+				void clearProductFormState()
 			}
 
 			return result
