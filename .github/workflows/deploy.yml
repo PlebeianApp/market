@@ -42,7 +42,14 @@ jobs:
           host: ${{ secrets.REMOTE_HOST }}
           username: ${{ secrets.REMOTE_USER }}
           password: ${{ secrets.REMOTE_PASSWORD }}
-          source: './*'
+          source: |
+            dist/
+            public/
+            src/
+            package.json
+            bun.lock
+            tsconfig.json
+            bunfig.toml
           target: '/home/deployer/market'
           rm: true
 

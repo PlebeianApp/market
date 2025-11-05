@@ -7,6 +7,7 @@ import { fetchAppSettings } from './lib/appSettings'
 import { getEventHandler } from './server'
 import { join } from 'path'
 import { file } from 'bun'
+import { existsSync } from 'fs'
 
 import.meta.hot.accept()
 
@@ -16,6 +17,7 @@ const RELAY_URL = process.env.APP_RELAY_URL
 const NIP46_RELAY_URL = process.env.NIP46_RELAY_URL || 'wss://relay.nsec.app'
 const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
 const STAGING = process.env.STAGING !== 'false' // Default to true
+const isProduction = process.env.NODE_ENV === 'production'
 
 let appSettings: Awaited<ReturnType<typeof fetchAppSettings>> = null
 let APP_PUBLIC_KEY: string
@@ -52,6 +54,21 @@ getEventHandler()
 	})
 	.catch((error) => console.error(error))
 
+// Helper function to determine content type based on file extension
+const getContentType = (path: string): string => {
+	if (path.endsWith('.svg')) return 'image/svg+xml'
+	if (path.endsWith('.png')) return 'image/png'
+	if (path.endsWith('.jpg') || path.endsWith('.jpeg')) return 'image/jpeg'
+	if (path.endsWith('.css')) return 'text/css'
+	if (path.endsWith('.js')) return 'application/javascript'
+	if (path.endsWith('.js.map')) return 'application/json'
+	if (path.endsWith('.ttf')) return 'font/ttf'
+	if (path.endsWith('.woff')) return 'font/woff'
+	if (path.endsWith('.woff2')) return 'font/woff2'
+	if (path.endsWith('.ico')) return 'image/x-icon'
+	return 'application/octet-stream'
+}
+
 // Handle static files from the public directory
 const serveStatic = async (path: string) => {
 	const filePath = join(process.cwd(), 'public', path)
@@ -60,21 +77,9 @@ const serveStatic = async (path: string) => {
 		if (!f.exists()) {
 			return new Response('File not found', { status: 404 })
 		}
-		// Determine content type based on file extension
-		const contentType = path.endsWith('.svg')
-			? 'image/svg+xml'
-			: path.endsWith('.png')
-				? 'image/png'
-				: path.endsWith('.jpg') || path.endsWith('.jpeg')
-					? 'image/jpeg'
-					: path.endsWith('.css')
-						? 'text/css'
-						: path.endsWith('.js')
-							? 'application/javascript'
-							: 'application/octet-stream'
 
 		return new Response(f, {
-			headers: { 'Content-Type': contentType },
+			headers: { 'Content-Type': getContentType(path) },
 		})
 	} catch (error) {
 		console.error(`Error serving static file ${path}:`, error)
@@ -82,9 +87,47 @@ const serveStatic = async (path: string) => {
 	}
 }
 
+// Handle built assets from the dist directory (production only)
+const serveDist = async (path: string) => {
+	const filePath = join(process.cwd(), 'dist', path)
+	try {
+		const f = file(filePath)
+		if (!f.exists()) {
+			return new Response('File not found', { status: 404 })
+		}
+
+		return new Response(f, {
+			headers: { 'Content-Type': getContentType(path) },
+		})
+	} catch (error) {
+		console.error(`Error serving dist file ${path}:`, error)
+		return new Response('Internal server error', { status: 500 })
+	}
+}
+
+// Get the index HTML handler (built in production, source in development)
+const getIndexHandler = () => {
+	if (isProduction) {
+		const distIndexPath = join(process.cwd(), 'dist', 'index.html')
+		if (existsSync(distIndexPath)) {
+			return async () => {
+				const f = file(distIndexPath)
+				if (!f.exists()) {
+					return new Response('Built index.html not found', { status: 500 })
+				}
+				return new Response(f, {
+					headers: { 'Content-Type': 'text/html' },
+				})
+			}
+		}
+		console.warn('⚠️  Production mode but dist/index.html not found, falling back to source')
+	}
+	return index
+}
+
 export const server = serve({
 	routes: {
-		'/*': index,
+		// API routes first
 		'/api/config': {
 			GET: async () => {
 				// Always fetch fresh settings from relay
@@ -98,13 +141,41 @@ export const server = serve({
 				})
 			},
 		},
+		// Serve public images
 		'/images/:file': ({ params }) => serveStatic(`images/${params.file}`),
+		// In production, serve built assets from dist/ directory
+		...(isProduction
+			? {
+					'/chunk-:file': ({ params }) => serveDist(`chunk-${params.file}`),
+					'/favicon-:file': ({ params }) => serveDist(`favicon-${params.file}`),
+					'/logo-:file': ({ params }) => serveDist(`logo-${params.file}`),
+					'/IBMPlexMono-:file': ({ params }) => serveDist(`IBMPlexMono-${params.file}`),
+				}
+			: {}),
+		// Catch-all route for HTML (must be last)
+		'/*': async (req) => {
+			// In production, check if this is a request for a dist asset
+			if (isProduction) {
+				const url = new URL(req.url)
+				const pathname = url.pathname
+				if (pathname !== '/' && !pathname.startsWith('/api/') && !pathname.startsWith('/images/')) {
+					const fileName = pathname.slice(1) // Remove leading slash
+					const distPath = join(process.cwd(), 'dist', fileName)
+					if (existsSync(distPath)) {
+						return serveDist(fileName)
+					}
+				}
+			}
+			// Otherwise serve the index HTML
+			return getIndexHandler()()
+		},
 	},
-	development: process.env.NODE_ENV !== 'production',
+	development: !isProduction,
 	fetch(req, server) {
 		if (server.upgrade(req)) {
 			return new Response()
 		}
+		// Let routes handle the request
 		return new Response('Upgrade failed', { status: 500 })
 	},
 	// @ts-ignore
