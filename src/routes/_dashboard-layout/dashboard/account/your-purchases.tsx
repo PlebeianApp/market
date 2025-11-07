@@ -21,7 +21,17 @@ function YourPurchasesComponent() {
 	const userPubkey = user?.pubkey || ''
 	const queryClient = useQueryClient()
 	const [statusFilter, setStatusFilter] = useState<string>('any')
-	const { data: purchases, isLoading, refetch } = useOrdersByBuyer(userPubkey)
+	const [isRefreshing, setIsRefreshing] = useState(false)
+	const { data: purchases, isLoading, isFetching, refetch } = useOrdersByBuyer(userPubkey)
+
+	const handleRefresh = async () => {
+		setIsRefreshing(true)
+		try {
+			await refetch()
+		} finally {
+			setIsRefreshing(false)
+		}
+	}
 
 	// Prefetch sales query to populate cache (same data as dashboard)
 	useEffect(() => {
@@ -87,12 +97,14 @@ function YourPurchasesComponent() {
 				heading={<h1 className="text-2xl font-bold">Your Purchases</h1>}
 				data={filteredPurchases}
 				columns={purchaseColumns}
-				isLoading={isLoading}
+				isLoading={isLoading || isFetching}
 				filterColumn="status"
 				showStatusFilter={true}
 				onStatusFilterChange={setStatusFilter}
 				statusFilter={statusFilter}
 				showSearch={false}
+				onRefresh={handleRefresh}
+				isRefreshing={isRefreshing}
 			/>
 		</div>
 	)

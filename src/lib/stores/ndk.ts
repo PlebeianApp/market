@@ -2,6 +2,7 @@ import { defaultRelaysUrls, ZAP_RELAYS } from '@/lib/constants'
 import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
 import type { NDKSigner, NDKUser } from '@nostr-dev-kit/ndk'
 import NDK, { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk'
+import NDKCacheAdapterDexie from '@nostr-dev-kit/ndk-cache-dexie'
 import { Store } from '@tanstack/store'
 import { configStore } from './config'
 import { walletActions, walletStore, type Wallet } from './wallet'
@@ -58,8 +59,23 @@ export const ndkActions = {
 			explicitRelays = relays && relays.length > 0 ? relays : defaultRelaysUrls
 		}
 
+		// Try to create Dexie cache adapter for IndexedDB caching
+		// This may fail in environments without IndexedDB (incognito mode, unsupported browsers, etc.)
+		let dexieAdapter = undefined
+		try {
+			// Check if IndexedDB is available
+			if (typeof indexedDB !== 'undefined') {
+				dexieAdapter = new NDKCacheAdapterDexie({ dbName: 'plebeian-market-ndk' })
+			} else {
+				console.warn('[NDK] IndexedDB not available - caching disabled')
+			}
+		} catch (error) {
+			console.warn('[NDK] Failed to create cache adapter - caching disabled:', error)
+		}
+
 		const ndk = new NDK({
 			explicitRelayUrls: explicitRelays,
+			cacheAdapter: dexieAdapter,
 		})
 
 		// For ZAP relays, also respect staging mode
@@ -67,6 +83,7 @@ export const ndkActions = {
 
 		const zapNdk = new NDK({
 			explicitRelayUrls: zapRelays,
+			cacheAdapter: dexieAdapter, // Share cache adapter between instances
 		})
 
 		ndkStore.setState((state) => ({

@@ -7,6 +7,7 @@ import { getOrderId } from '@/queries/orders'
 import type { ColumnDef, ColumnFiltersState, FilterFn, SortingState } from '@tanstack/react-table'
 import { flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import { Link, useNavigate } from '@tanstack/react-router'
+import { RefreshCw } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
 const fuzzyFilter: FilterFn<OrderWithRelatedEvents> = (row, columnId, value, addMeta) => {
@@ -39,6 +40,8 @@ interface OrderDataTableProps<TData> {
 	onStatusFilterChange?: (value: string) => void
 	statusFilter?: string
 	showSearch?: boolean
+	onRefresh?: () => void
+	isRefreshing?: boolean
 }
 
 export function OrderDataTable<TData>({
@@ -51,6 +54,8 @@ export function OrderDataTable<TData>({
 	onStatusFilterChange,
 	statusFilter = 'any',
 	showSearch = true,
+	onRefresh,
+	isRefreshing = false,
 }: OrderDataTableProps<TData>) {
 	const [sorting, setSorting] = useState<SortingState>([])
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -80,6 +85,11 @@ export function OrderDataTable<TData>({
 				{heading && <div className="hidden lg:block flex-1">{heading}</div>}
 
 				<div className="flex flex-col sm:flex-row sm:justify-end items-center gap-4 w-full lg:w-auto">
+					{onRefresh && (
+						<Button variant="outline" size="icon" onClick={onRefresh} disabled={isRefreshing || isLoading} className="shrink-0">
+							<RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+						</Button>
+					)}
 					{showSearch && (
 						<Input
 							placeholder="Search by Order ID or Buyer..."

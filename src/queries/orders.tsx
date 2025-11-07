@@ -301,10 +301,19 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 
 	// Fetch all related events for these orders
 	// Per gamma_spec.md, we can't filter by #order tag - filter client-side after decryption
-	const relatedEventsFilter: NDKFilter = {
-		kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
-		limit: 500,
-	}
+	// Use multiple filters (OR logic) to get events authored by user OR mentioning user
+	const relatedEventsFilters: NDKFilter[] = [
+		{
+			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			authors: [user.pubkey],
+			limit: 250,
+		},
+		{
+			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			'#p': [user.pubkey],
+			limit: 250,
+		},
+	]
 
 	// Fetch related events using subscription pattern
 	let relatedEvents: Set<NDKEvent> = new Set()
@@ -316,7 +325,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 			throw new Error('NDK not ready for subscription')
 		}
 
-		const subscription = ndk.subscribe(relatedEventsFilter, {
+		const subscription = ndk.subscribe(relatedEventsFilters, {
 			closeOnEose: true,
 		})
 
@@ -601,15 +610,26 @@ export const fetchOrdersByBuyer = async (
 		let subscriptionClosed = false
 
 		// Start related events subscription in parallel
-		const relatedEventsFilter: NDKFilter = {
-			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
-			limit: 500,
-		}
+		// Use multiple filters (OR logic) to get events authored by buyer OR mentioning buyer
+		const relatedEventsFilters: NDKFilter[] = [
+			{
+				kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+				authors: [buyerPubkey],
+				limit: 250,
+			},
+			{
+				kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+				'#p': [buyerPubkey],
+				limit: 250,
+			},
+		]
 
 		if (queryClient) {
 			try {
-				relatedEventsSubscription = ndk.subscribe(relatedEventsFilter, {
+				relatedEventsSubscription = ndk.subscribe(relatedEventsFilters, {
 					closeOnEose: false,
+					// Use cache first if available, otherwise just query relays
+					cacheUsage: ndk.cacheAdapter ? 'CACHE_FIRST' : undefined,
 				})
 			} catch (subError) {
 				// Ignore subscription creation errors
@@ -827,11 +847,10 @@ export const fetchOrdersByBuyer = async (
 				if (relatedEventsClosed) return
 
 				try {
+					// Always try to decrypt, even if content looks decrypted
+					// This ensures tags are available (they might be encrypted separately)
 					if (signer && event.content) {
-						const contentLooksEncrypted = !event.content.trim().startsWith('{') && !event.content.trim().startsWith('[')
-						if (contentLooksEncrypted) {
-							await safeDecryptEvent(event, signer)
-						}
+						await safeDecryptEvent(event, signer)
 					}
 
 					const orderTag = event.tags.find((tag) => tag[0] === 'order')
@@ -1035,10 +1054,141 @@ export const fetchOrdersByBuyer = async (
 		queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), initialResult)
 	}
 
-	// Start fetching related events in parallel AFTER orders are found (don't wait)
-	if (queryClient && relatedEventsSubscription) {
-		// Related events subscription will auto-start when handlers are attached
-		// No need to manually call start() - this avoids initialization race conditions
+	// Fetch related events synchronously before returning to ensure status is available on first render
+	if (queryClient && relatedEventsSubscription && orderIds.length > 0) {
+		const signer = ndkActions.getSigner()
+		const relatedEventsMap = new Map<
+			string,
+			{
+				paymentRequests: NDKEvent[]
+				statusUpdates: NDKEvent[]
+				shippingUpdates: NDKEvent[]
+				generalMessages: NDKEvent[]
+				paymentReceipts: NDKEvent[]
+			}
+		>()
+
+		// Initialize map for each order
+		orderIds.forEach((orderId) => {
+			relatedEventsMap.set(orderId, {
+				paymentRequests: [],
+				statusUpdates: [],
+				shippingUpdates: [],
+				generalMessages: [],
+				paymentReceipts: [],
+			})
+		})
+
+		// Collect related events for a short time to populate status
+		// Disable real-time handler during initial collection to avoid race conditions
+		relatedEventsClosed = true
+
+		// Store collection handler reference so we can remove it later
+		let collectionHandler: ((event: NDKEvent) => Promise<void>) | null = null
+
+		const relatedEventsPromise = new Promise<void>((resolve) => {
+			let eventsCollected = 0
+			let resolved = false
+
+			const collectEvent = async (event: NDKEvent) => {
+				if (resolved) return
+
+				try {
+					// Always try to decrypt, even if content looks decrypted
+					// This ensures tags are available (they might be encrypted separately)
+					if (signer && event.content) {
+						await safeDecryptEvent(event, signer)
+					}
+
+					const orderTag = event.tags.find((tag) => tag[0] === 'order')
+					if (orderTag && orderTag[1] && orderIdsSet.has(orderTag[1])) {
+						const orderId = orderTag[1]
+						const orderEvents = relatedEventsMap.get(orderId)
+						if (!orderEvents) return
+
+						const eventExists = (arr: NDKEvent[]) => arr.some((e) => e.id === event.id)
+
+						if (event.kind === ORDER_PROCESS_KIND) {
+							const typeTag = event.tags.find((tag) => tag[0] === 'type')
+							if (typeTag) {
+								switch (typeTag[1]) {
+									case ORDER_MESSAGE_TYPE.PAYMENT_REQUEST:
+										if (!eventExists(orderEvents.paymentRequests)) {
+											orderEvents.paymentRequests.push(event)
+											eventsCollected++
+										}
+										break
+									case ORDER_MESSAGE_TYPE.STATUS_UPDATE:
+										if (!eventExists(orderEvents.statusUpdates)) {
+											orderEvents.statusUpdates.push(event)
+											eventsCollected++
+										}
+										break
+									case ORDER_MESSAGE_TYPE.SHIPPING_UPDATE:
+										if (!eventExists(orderEvents.shippingUpdates)) {
+											orderEvents.shippingUpdates.push(event)
+											eventsCollected++
+										}
+										break
+								}
+							}
+						} else if (event.kind === ORDER_GENERAL_KIND) {
+							if (!eventExists(orderEvents.generalMessages)) {
+								orderEvents.generalMessages.push(event)
+								eventsCollected++
+							}
+						} else if (event.kind === PAYMENT_RECEIPT_KIND) {
+							if (!eventExists(orderEvents.paymentReceipts)) {
+								orderEvents.paymentReceipts.push(event)
+								eventsCollected++
+							}
+						}
+					}
+				} catch (error) {
+					// Ignore errors
+				}
+			}
+
+			// Store handler reference and register it
+			collectionHandler = collectEvent
+			relatedEventsSubscription.on('event', collectionHandler)
+
+			// Wait for EOSE or timeout after 6 seconds (increased to allow slower relays to respond)
+			const timeout = setTimeout(() => {
+				if (!resolved) {
+					resolved = true
+					resolve()
+				}
+			}, 6000)
+
+			relatedEventsSubscription.on('eose', () => {
+				if (!resolved) {
+					resolved = true
+					clearTimeout(timeout)
+					resolve()
+				}
+			})
+
+			relatedEventsSubscription.on('close', () => {
+				if (!resolved) {
+					resolved = true
+					clearTimeout(timeout)
+					resolve()
+				}
+			})
+		})
+
+		// Wait for related events to be collected (with timeout)
+		await Promise.race([relatedEventsPromise, new Promise<void>((resolve) => setTimeout(resolve, 6000))])
+
+		// Remove only the collection handler now that initial collection is complete
+		// This prevents double-processing with the real-time handler
+		if (relatedEventsSubscription && collectionHandler) {
+			relatedEventsSubscription.off('event', collectionHandler)
+		}
+
+		// Re-enable real-time handler now that initial collection is complete
+		relatedEventsClosed = false
 	}
 
 	// Return orders immediately - related events subscription is fetching in parallel
@@ -1276,15 +1426,26 @@ export const fetchOrdersBySeller = async (
 		let subscriptionClosed = false
 
 		// Start related events subscription in parallel
-		const relatedEventsFilter: NDKFilter = {
-			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
-			limit: 500,
-		}
+		// Use multiple filters (OR logic) to get events authored by seller OR mentioning seller
+		const relatedEventsFilters: NDKFilter[] = [
+			{
+				kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+				authors: [sellerPubkey],
+				limit: 250,
+			},
+			{
+				kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+				'#p': [sellerPubkey],
+				limit: 250,
+			},
+		]
 
 		if (queryClient) {
 			try {
-				relatedEventsSubscription = ndk.subscribe(relatedEventsFilter, {
+				relatedEventsSubscription = ndk.subscribe(relatedEventsFilters, {
 					closeOnEose: false,
+					// Use cache first if available, otherwise just query relays
+					cacheUsage: ndk.cacheAdapter ? 'CACHE_FIRST' : undefined,
 				})
 			} catch (subError) {
 				// Ignore subscription creation errors
@@ -1503,11 +1664,10 @@ export const fetchOrdersBySeller = async (
 				if (relatedEventsClosed) return
 
 				try {
+					// Always try to decrypt, even if content looks decrypted
+					// This ensures tags are available (they might be encrypted separately)
 					if (signer && event.content) {
-						const contentLooksEncrypted = !event.content.trim().startsWith('{') && !event.content.trim().startsWith('[')
-						if (contentLooksEncrypted) {
-							await safeDecryptEvent(event, signer)
-						}
+						await safeDecryptEvent(event, signer)
 					}
 
 					const orderTag = event.tags.find((tag) => tag[0] === 'order')
@@ -1612,9 +1772,7 @@ export const fetchOrdersBySeller = async (
 				}),
 			])
 
-			// Wait for all pending event processing before continuing
-			await waitForPendingEvents()
-
+			// Don't wait for pending events - let them process asynchronously (matches fetchOrdersByBuyer)
 			orders = ordersSet
 		}
 	} catch (error) {
@@ -1634,7 +1792,7 @@ export const fetchOrdersBySeller = async (
 	// Create initial result - merge with existing cache if available
 	const initialResult = Array.from(orders).map((order) => {
 		const orderTag = order.tags.find((tag) => tag[0] === 'order')
-		const orderId = orderTag?.[1] || ''
+		const orderId = orderTag?.[1]
 
 		// Add order ID to set so related events subscription can match it
 		if (orderId) {
@@ -1650,6 +1808,18 @@ export const fetchOrdersBySeller = async (
 			})
 		}
 
+		if (!orderId) {
+			return {
+				order,
+				paymentRequests: [],
+				statusUpdates: [],
+				shippingUpdates: [],
+				generalMessages: [],
+				paymentReceipts: [],
+			}
+		}
+
+		// Use cached related events if available, otherwise use empty arrays
 		return {
 			order,
 			paymentRequests: cachedRelatedEvents?.paymentRequests || [],
@@ -1672,10 +1842,141 @@ export const fetchOrdersBySeller = async (
 		queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), initialResult)
 	}
 
-	// Start fetching related events in parallel AFTER orders are found (don't wait)
-	if (queryClient && relatedEventsSubscription) {
-		// Related events subscription will auto-start when handlers are attached
-		// No need to manually call start() - this avoids initialization race conditions
+	// Fetch related events synchronously before returning to ensure status is available on first render
+	if (queryClient && relatedEventsSubscription && orderIds.length > 0) {
+		const signer = ndkActions.getSigner()
+		const relatedEventsMap = new Map<
+			string,
+			{
+				paymentRequests: NDKEvent[]
+				statusUpdates: NDKEvent[]
+				shippingUpdates: NDKEvent[]
+				generalMessages: NDKEvent[]
+				paymentReceipts: NDKEvent[]
+			}
+		>()
+
+		// Initialize map for each order
+		orderIds.forEach((orderId) => {
+			relatedEventsMap.set(orderId, {
+				paymentRequests: [],
+				statusUpdates: [],
+				shippingUpdates: [],
+				generalMessages: [],
+				paymentReceipts: [],
+			})
+		})
+
+		// Collect related events for a short time to populate status
+		// Disable real-time handler during initial collection to avoid race conditions
+		relatedEventsClosed = true
+
+		// Store collection handler reference so we can remove it later
+		let collectionHandler: ((event: NDKEvent) => Promise<void>) | null = null
+
+		const relatedEventsPromise = new Promise<void>((resolve) => {
+			let eventsCollected = 0
+			let resolved = false
+
+			const collectEvent = async (event: NDKEvent) => {
+				if (resolved) return
+
+				try {
+					// Always try to decrypt, even if content looks decrypted
+					// This ensures tags are available (they might be encrypted separately)
+					if (signer && event.content) {
+						await safeDecryptEvent(event, signer)
+					}
+
+					const orderTag = event.tags.find((tag) => tag[0] === 'order')
+					if (orderTag && orderTag[1] && orderIdsSet.has(orderTag[1])) {
+						const orderId = orderTag[1]
+						const orderEvents = relatedEventsMap.get(orderId)
+						if (!orderEvents) return
+
+						const eventExists = (arr: NDKEvent[]) => arr.some((e) => e.id === event.id)
+
+						if (event.kind === ORDER_PROCESS_KIND) {
+							const typeTag = event.tags.find((tag) => tag[0] === 'type')
+							if (typeTag) {
+								switch (typeTag[1]) {
+									case ORDER_MESSAGE_TYPE.PAYMENT_REQUEST:
+										if (!eventExists(orderEvents.paymentRequests)) {
+											orderEvents.paymentRequests.push(event)
+											eventsCollected++
+										}
+										break
+									case ORDER_MESSAGE_TYPE.STATUS_UPDATE:
+										if (!eventExists(orderEvents.statusUpdates)) {
+											orderEvents.statusUpdates.push(event)
+											eventsCollected++
+										}
+										break
+									case ORDER_MESSAGE_TYPE.SHIPPING_UPDATE:
+										if (!eventExists(orderEvents.shippingUpdates)) {
+											orderEvents.shippingUpdates.push(event)
+											eventsCollected++
+										}
+										break
+								}
+							}
+						} else if (event.kind === ORDER_GENERAL_KIND) {
+							if (!eventExists(orderEvents.generalMessages)) {
+								orderEvents.generalMessages.push(event)
+								eventsCollected++
+							}
+						} else if (event.kind === PAYMENT_RECEIPT_KIND) {
+							if (!eventExists(orderEvents.paymentReceipts)) {
+								orderEvents.paymentReceipts.push(event)
+								eventsCollected++
+							}
+						}
+					}
+				} catch (error) {
+					// Ignore errors
+				}
+			}
+
+			// Store handler reference and register it
+			collectionHandler = collectEvent
+			relatedEventsSubscription.on('event', collectionHandler)
+
+			// Wait for EOSE or timeout after 6 seconds (increased to allow slower relays to respond)
+			const timeout = setTimeout(() => {
+				if (!resolved) {
+					resolved = true
+					resolve()
+				}
+			}, 6000)
+
+			relatedEventsSubscription.on('eose', () => {
+				if (!resolved) {
+					resolved = true
+					clearTimeout(timeout)
+					resolve()
+				}
+			})
+
+			relatedEventsSubscription.on('close', () => {
+				if (!resolved) {
+					resolved = true
+					clearTimeout(timeout)
+					resolve()
+				}
+			})
+		})
+
+		// Wait for related events to be collected (with timeout)
+		await Promise.race([relatedEventsPromise, new Promise<void>((resolve) => setTimeout(resolve, 6000))])
+
+		// Remove only the collection handler now that initial collection is complete
+		// This prevents double-processing with the real-time handler
+		if (relatedEventsSubscription && collectionHandler) {
+			relatedEventsSubscription.off('event', collectionHandler)
+		}
+
+		// Re-enable real-time handler now that initial collection is complete
+		relatedEventsClosed = false
 	}
 
 	// Return orders immediately - related events subscription is fetching in parallel

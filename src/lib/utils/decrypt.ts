@@ -23,6 +23,13 @@ export async function safeDecryptEvent(
 	try {
 		// Try NDK's decrypt method with error handling
 		await event.decrypt(undefined, signer)
+
+		// Note: We don't save decrypted events to IndexedDB because:
+		// 1. NDK's cache stores raw encrypted events from relays
+		// 2. Decryption must happen at runtime using private keys
+		// 3. Storing decrypted private messages would be a security risk
+		// The decryption is fast enough to do on each page load
+
 		return true
 	} catch (error) {
 		// Suppress the specific "Cannot access 's' before initialization" error
