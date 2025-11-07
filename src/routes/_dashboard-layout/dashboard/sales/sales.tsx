@@ -102,7 +102,7 @@ function SalesComponent() {
 			const signer = ndkActions.getSigner()
 
 			// Update list cache directly (same logic as useOrderById)
-			const updateListCache = (key: string[], orderId: string, newEvent: NDKEvent) => {
+			const updateListCache = (key: readonly string[], orderId: string, newEvent: NDKEvent) => {
 				const listData = queryClient.getQueryData<OrderWithRelatedEvents[]>(key)
 				if (!listData) return
 

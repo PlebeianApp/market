@@ -119,10 +119,10 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 				} catch (error) {
 					// Suppress NDK initialization errors
 					if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-						console.warn('[NDK] Suppressed subscription cleanup race condition in stopSentSubscription')
+						// Suppressed silently
 						return
 					}
-					console.warn('Error in stopSentSubscription:', error)
+					// Ignore cleanup errors
 				}
 			}
 		}
@@ -132,26 +132,26 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 		sentSubscription.start()
 
 		await Promise.race([
-				new Promise<void>((resolve) => {
-					const timeout = setTimeout(() => {
-						try {
-							stopSentSubscription()
-						} catch (error) {
-							// Suppress NDK initialization errors
-							if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-								console.warn('[NDK] Suppressed subscription cleanup race condition')
-							}
-							// Also suppress aiGuardrails related errors
-							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
-							}
-							// Also suppress aiGuardrails related errors
-							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
-							}
+			new Promise<void>((resolve) => {
+				const timeout = setTimeout(() => {
+					try {
+						stopSentSubscription()
+					} catch (error) {
+						// Suppress NDK initialization errors
+						if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
+							// Suppressed silently
 						}
-						resolve()
-					}, 3000)
+						// Also suppress aiGuardrails related errors
+						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
+							// Suppressed silently
+						}
+						// Also suppress aiGuardrails related errors
+						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
+							// Suppressed silently
+						}
+					}
+					resolve()
+				}, 3000)
 
 				sentSubscription.on('eose', () => {
 					clearTimeout(timeout)
@@ -175,7 +175,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 
 		ordersSent = ordersSentSet
 	} catch (error) {
-		console.error('🔍 fetchOrders: Error fetching orders sent:', error)
+		console.error('Error fetching orders sent:', error)
 		ordersSent = new Set()
 	}
 
@@ -226,10 +226,10 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 				} catch (error) {
 					// Suppress NDK initialization errors
 					if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-						console.warn('[NDK] Suppressed subscription cleanup race condition in stopReceivedSubscription')
+						// Suppressed silently
 						return
 					}
-					console.warn('Error in stopReceivedSubscription:', error)
+					// Ignore cleanup errors
 				}
 			}
 		}
@@ -238,26 +238,26 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 		// Do not call .start() explicitly to avoid initialization race conditions
 
 		await Promise.race([
-				new Promise<void>((resolve) => {
-					const timeout = setTimeout(() => {
-						try {
-							stopReceivedSubscription()
-						} catch (error) {
-							// Suppress NDK initialization errors
-							if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-								console.warn('[NDK] Suppressed subscription cleanup race condition')
-							}
-							// Also suppress aiGuardrails related errors
-							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
-							}
-							// Also suppress aiGuardrails related errors
-							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
-							}
+			new Promise<void>((resolve) => {
+				const timeout = setTimeout(() => {
+					try {
+						stopReceivedSubscription()
+					} catch (error) {
+						// Suppress NDK initialization errors
+						if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
+							// Suppressed silently
 						}
-						resolve()
-					}, 3000)
+						// Also suppress aiGuardrails related errors
+						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
+							// Suppressed silently
+						}
+						// Also suppress aiGuardrails related errors
+						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
+							// Suppressed silently
+						}
+					}
+					resolve()
+				}, 3000)
 
 				receivedSubscription.on('eose', () => {
 					clearTimeout(timeout)
@@ -281,7 +281,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 
 		ordersReceived = ordersReceivedSet
 	} catch (error) {
-		console.error('🔍 fetchOrders: Error fetching orders received:', error)
+		console.error('Error fetching orders received:', error)
 		ordersReceived = new Set()
 	}
 
@@ -351,26 +351,26 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 		// Do not call .start() explicitly to avoid initialization race conditions
 
 		await Promise.race([
-				new Promise<void>((resolve) => {
-					const timeout = setTimeout(() => {
-						try {
-							stopSubscription()
-						} catch (error) {
-							// Suppress NDK initialization errors
-							if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-								console.warn('[NDK] Suppressed subscription cleanup race condition')
-							}
-							// Also suppress aiGuardrails related errors
-							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
-							}
-							// Also suppress aiGuardrails related errors
-							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
-							}
+			new Promise<void>((resolve) => {
+				const timeout = setTimeout(() => {
+					try {
+						stopSubscription()
+					} catch (error) {
+						// Suppress NDK initialization errors
+						if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
+							// Suppressed silently
 						}
-						resolve()
-					}, 2000)
+						// Also suppress aiGuardrails related errors
+						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
+							// Suppressed silently
+						}
+						// Also suppress aiGuardrails related errors
+						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
+							// Suppressed silently
+						}
+					}
+					resolve()
+				}, 2000)
 
 				subscription.on('eose', () => {
 					clearTimeout(timeout)
@@ -394,7 +394,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 
 		relatedEvents = relatedEventsSet
 	} catch (error) {
-		console.error('🔍 fetchOrders: Error fetching related events:', error)
+		console.error('Error fetching related events:', error)
 		relatedEvents = new Set()
 	}
 
@@ -935,15 +935,15 @@ export const fetchOrdersByBuyer = async (
 						} catch (error) {
 							// Suppress NDK initialization errors
 							if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-								console.warn('[NDK] Suppressed subscription cleanup race condition')
+								// Suppressed silently
 							}
 							// Also suppress aiGuardrails related errors
 							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
+								// Suppressed silently
 							}
 							// Also suppress aiGuardrails related errors
 							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
+								// Suppressed silently
 							}
 						}
 						resolve()
@@ -969,15 +969,15 @@ export const fetchOrdersByBuyer = async (
 						} catch (error) {
 							// Suppress NDK initialization errors
 							if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-								console.warn('[NDK] Suppressed subscription cleanup race condition')
+								// Suppressed silently
 							}
 							// Also suppress aiGuardrails related errors
 							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
+								// Suppressed silently
 							}
 							// Also suppress aiGuardrails related errors
 							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
+								// Suppressed silently
 							}
 						}
 						resolve()
@@ -2309,10 +2309,10 @@ export const fetchOrderById = async (
 			} catch (error) {
 				// Suppress NDK initialization errors
 				if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-					console.warn('[NDK] Suppressed subscription cleanup race condition in stopAllSubscriptions')
+					// Suppressed silently
 					return
 				}
-				console.warn('Error in stopAllSubscriptions:', error)
+				// Ignore cleanup errors
 			}
 		}
 
@@ -2360,7 +2360,7 @@ export const fetchOrderById = async (
 					} catch (error) {
 						// Suppress NDK initialization errors
 						if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-							console.warn('[NDK] Suppressed subscription cleanup race condition')
+							// Suppressed silently
 						}
 					}
 					resolve()
@@ -2374,7 +2374,7 @@ export const fetchOrderById = async (
 					} catch (error) {
 						// Suppress NDK initialization errors
 						if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-							console.warn('[NDK] Suppressed subscription cleanup race condition')
+							// Suppressed silently
 						}
 					}
 					resolve()
@@ -2464,10 +2464,10 @@ export const fetchOrderById = async (
 			} catch (error) {
 				// Suppress NDK initialization errors
 				if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-					console.warn('[NDK] Suppressed subscription cleanup race condition in stopAllSubscriptions')
+					// Suppressed silently
 					return
 				}
-				console.warn('Error in stopAllSubscriptions:', error)
+				// Ignore cleanup errors
 			}
 		}
 
@@ -2513,7 +2513,7 @@ export const fetchOrderById = async (
 					} catch (error) {
 						// Suppress NDK initialization errors
 						if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-							console.warn('[NDK] Suppressed subscription cleanup race condition')
+							// Suppressed silently
 						}
 					}
 					resolve()
@@ -2527,7 +2527,7 @@ export const fetchOrderById = async (
 					} catch (error) {
 						// Suppress NDK initialization errors
 						if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-							console.warn('[NDK] Suppressed subscription cleanup race condition')
+							// Suppressed silently
 						}
 					}
 					resolve()

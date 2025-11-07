@@ -31,7 +31,6 @@ export async function safeDecryptEvent(event: NDKEvent, signer: NDKSigner | unde
 		// Suppress the specific "Cannot access 's' before initialization" error
 		// This is a known NDK race condition bug in bundled code
 		if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-			console.warn('[NDK] Suppressed decrypt initialization error (race condition)')
 			return false
 		}
 
@@ -42,10 +41,9 @@ export async function safeDecryptEvent(event: NDKEvent, signer: NDKSigner | unde
 			return false
 		}
 
-		// For other decryption errors, log but don't throw
+		// For other decryption errors, silently return false
 		// The content might already be decrypted or encrypted with a different key
 		if (error instanceof Error && error.message.includes('decrypt')) {
-			console.warn('[NDK] Decryption failed (content may already be decrypted):', error.message)
 			return false
 		}
 

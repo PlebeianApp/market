@@ -83,28 +83,6 @@ function DashboardInnerComponent() {
 		return () => clearTimeout(timer)
 	}, [userPubkey, queryClient])
 
-	// Debugging logs to inspect query states
-	console.log('Dashboard Queries:', {
-		userPubkey,
-		isLoadingProducts,
-		isLoadingOrders,
-		isLoadingSellerOrders,
-		isLoadingBuyerOrders,
-		isLoadingMessages,
-		errors: {
-			productsError,
-			ordersError,
-			sellerOrdersError,
-			buyerOrdersError,
-			messagesError,
-		},
-		myProducts,
-		orders,
-		sellerOrders,
-		buyerOrders,
-		conversations,
-	})
-
 	// Calculate stats
 	const activeListings =
 		myProducts?.filter((p: NDKEvent) => {

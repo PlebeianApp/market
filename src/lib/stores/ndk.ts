@@ -1,7 +1,7 @@
 import { defaultRelaysUrls, ZAP_RELAYS } from '@/lib/constants'
 import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
 import type { NDKSigner, NDKUser } from '@nostr-dev-kit/ndk'
-import NDK, { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk'
+import NDK, { NDKEvent, NDKKind, type NDKCacheAdapter } from '@nostr-dev-kit/ndk'
 import NDKCacheAdapterDexie from '@nostr-dev-kit/ndk-cache-dexie'
 import { Store } from '@tanstack/store'
 import { configStore } from './config'
@@ -61,11 +61,11 @@ export const ndkActions = {
 
 		// Try to create Dexie cache adapter for IndexedDB caching
 		// This may fail in environments without IndexedDB (incognito mode, unsupported browsers, etc.)
-		let dexieAdapter = undefined
+		let dexieAdapter: NDKCacheAdapter | undefined = undefined
 		try {
 			// Check if IndexedDB is available
 			if (typeof indexedDB !== 'undefined') {
-				dexieAdapter = new NDKCacheAdapterDexie({ dbName: 'plebeian-market-ndk' })
+				dexieAdapter = new NDKCacheAdapterDexie({ dbName: 'plebeian-market-ndk' }) as unknown as NDKCacheAdapter
 			} else {
 				console.warn('[NDK] IndexedDB not available - caching disabled')
 			}
