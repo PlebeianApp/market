@@ -152,4 +152,3 @@ export const migratedEventsQueryOptions = (userPubkey: string) => {
 		enabled: !!userPubkey,
 	})
 }
-

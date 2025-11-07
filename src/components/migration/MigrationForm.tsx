@@ -173,12 +173,7 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 								<Label>Images</Label>
 								<div className="grid grid-cols-2 gap-2 mt-2">
 									{nip15Data.images.map((url, index) => (
-										<img
-											key={index}
-											src={url}
-											alt={`Product image ${index + 1}`}
-											className="w-full h-32 object-cover rounded border"
-										/>
+										<img key={index} src={url} alt={`Product image ${index + 1}`} className="w-full h-32 object-cover rounded border" />
 									))}
 								</div>
 							</div>
@@ -279,10 +274,7 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 							<Label htmlFor="mainCategory">
 								<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Main Category</span>
 							</Label>
-							<Select
-								value={formData.mainCategory}
-								onValueChange={(value) => setFormData({ ...formData, mainCategory: value })}
-							>
+							<Select value={formData.mainCategory} onValueChange={(value) => setFormData({ ...formData, mainCategory: value })}>
 								<SelectTrigger id="mainCategory">
 									<SelectValue placeholder="Select category" />
 								</SelectTrigger>
@@ -402,13 +394,7 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 							<Button type="button" variant="outline" onClick={onBack} className="flex-1">
 								Cancel
 							</Button>
-							<Button
-								type="button"
-								variant="secondary"
-								onClick={handleSubmit}
-								disabled={isPublishing}
-								className="flex-1"
-							>
+							<Button type="button" variant="secondary" onClick={handleSubmit} disabled={isPublishing} className="flex-1">
 								{isPublishing ? 'Migrating...' : 'Migrate Product'}
 							</Button>
 						</div>
@@ -469,4 +455,3 @@ function parseNip15Event(event: NDKEvent) {
 
 	return productData
 }
-

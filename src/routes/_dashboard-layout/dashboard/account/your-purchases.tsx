@@ -25,9 +25,17 @@ function YourPurchasesComponent() {
 	const userPubkey = user?.pubkey || ''
 	const queryClient = useQueryClient()
 	const [statusFilter, setStatusFilter] = useState<string>('any')
-
-	// Use the query hook - it automatically subscribes to cache updates and re-renders when data changes
+	const [isRefreshing, setIsRefreshing] = useState(false)
 	const { data: purchases, isLoading, isFetching, refetch } = useOrdersByBuyer(userPubkey)
+
+	const handleRefresh = async () => {
+		setIsRefreshing(true)
+		try {
+			await refetch()
+		} finally {
+			setIsRefreshing(false)
+		}
+	}
 
 	// Track if we're currently refetching on mount
 	const [isRefetching, setIsRefetching] = useState(false)
@@ -98,7 +106,7 @@ function YourPurchasesComponent() {
 			const signer = ndkActions.getSigner()
 
 			// Update list cache directly (same logic as useOrderById)
-			const updateListCache = (key: string[], orderId: string, newEvent: NDKEvent) => {
+			const updateListCache = (key: readonly string[], orderId: string, newEvent: NDKEvent) => {
 				const listData = queryClient.getQueryData<OrderWithRelatedEvents[]>(key)
 				if (!listData) return
 
@@ -257,12 +265,14 @@ function YourPurchasesComponent() {
 				heading={<h1 className="text-2xl font-bold">Your Purchases</h1>}
 				data={filteredPurchases}
 				columns={purchaseColumns}
-				isLoading={isLoading || isFetching || isRefetching}
+				isLoading={isLoading || isFetching}
 				filterColumn="status"
 				showStatusFilter={true}
 				onStatusFilterChange={setStatusFilter}
 				statusFilter={statusFilter}
 				showSearch={false}
+				onRefresh={handleRefresh}
+				isRefreshing={isRefreshing}
 			/>
 		</div>
 	)

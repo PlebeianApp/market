@@ -47,26 +47,17 @@ function MigrationToolComponent() {
 	}
 
 	// Filter out already migrated events
-	const unmigratedProducts =
-		nip15Products?.filter((event) => !migratedEventIds?.has(event.id)) || []
+	const unmigratedProducts = nip15Products?.filter((event) => !migratedEventIds?.has(event.id)) || []
 
 	if (selectedEvent) {
-		return (
-			<MigrationForm
-				nip15Event={selectedEvent}
-				onBack={() => setSelectedEvent(null)}
-				onSuccess={handleMigrationSuccess}
-			/>
-		)
+		return <MigrationForm nip15Event={selectedEvent} onBack={() => setSelectedEvent(null)} onSuccess={handleMigrationSuccess} />
 	}
 
 	return (
 		<div className="p-4 lg:p-6">
 			<div className="mb-6">
 				<h1 className="text-2xl font-bold mb-2">Migration Tool</h1>
-				<p className="text-gray-600">
-					Search for NIP-15 product listings and migrate them to NIP-99 format.
-				</p>
+				<p className="text-gray-600">Search for NIP-15 product listings and migrate them to NIP-99 format.</p>
 			</div>
 
 			{isLoadingNip15 || isLoadingMigrated ? (
@@ -91,18 +82,12 @@ function MigrationToolComponent() {
 						{unmigratedProducts.map((event) => {
 							const productData = parseNip15Event(event)
 							return (
-								<Card
-									key={event.id}
-									className="cursor-pointer hover:bg-gray-50 transition-colors"
-									onClick={() => setSelectedEvent(event)}
-								>
+								<Card key={event.id} className="cursor-pointer hover:bg-gray-50 transition-colors" onClick={() => setSelectedEvent(event)}>
 									<CardContent className="p-4">
 										<div className="flex items-start justify-between">
 											<div className="flex-1">
 												<h3 className="font-semibold text-lg mb-1">{productData.name}</h3>
-												<p className="text-sm text-gray-600 mb-2 line-clamp-2">
-													{productData.description || 'No description'}
-												</p>
+												<p className="text-sm text-gray-600 mb-2 line-clamp-2">{productData.description || 'No description'}</p>
 												<div className="flex gap-4 text-sm">
 													<span>
 														<strong>Price:</strong> {productData.price} {productData.currency}
@@ -179,4 +164,3 @@ function parseNip15Event(event: NDKEvent) {
 
 	return productData
 }
-

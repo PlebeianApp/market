@@ -104,7 +104,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 					ordersSentSet.add(event)
 				}
 			} catch (error) {
-				console.warn('🔍 fetchOrders: Error processing sent event:', error)
+				// Decryption errors are handled silently by safeDecryptEvent
 			}
 		})
 
@@ -119,10 +119,10 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 				} catch (error) {
 					// Suppress NDK initialization errors
 					if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-						console.warn('[NDK] Suppressed subscription cleanup race condition in stopSentSubscription')
+						// Suppressed silently
 						return
 					}
-					console.warn('Error in stopSentSubscription:', error)
+					// Ignore cleanup errors
 				}
 			}
 		}
@@ -139,15 +139,15 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 					} catch (error) {
 						// Suppress NDK initialization errors
 						if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-							console.warn('[NDK] Suppressed subscription cleanup race condition')
+							// Suppressed silently
 						}
 						// Also suppress aiGuardrails related errors
 						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-							console.warn('[NDK] Suppressed aiGuardrails race condition')
+							// Suppressed silently
 						}
 						// Also suppress aiGuardrails related errors
 						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-							console.warn('[NDK] Suppressed aiGuardrails race condition')
+							// Suppressed silently
 						}
 					}
 					resolve()
@@ -175,7 +175,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 
 		ordersSent = ordersSentSet
 	} catch (error) {
-		console.error('🔍 fetchOrders: Error fetching orders sent:', error)
+		console.error('Error fetching orders sent:', error)
 		ordersSent = new Set()
 	}
 
@@ -206,7 +206,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 					ordersReceivedSet.add(event)
 				}
 			} catch (error) {
-				console.warn('🔍 fetchOrders: Error processing received event:', error)
+				// Decryption errors are handled silently by safeDecryptEvent
 				// Even if decryption fails, check if type tag exists (might already be decrypted)
 				const typeTag = event.tags.find((tag) => tag[0] === 'type')
 				if (typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION) {
@@ -226,10 +226,10 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 				} catch (error) {
 					// Suppress NDK initialization errors
 					if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-						console.warn('[NDK] Suppressed subscription cleanup race condition in stopReceivedSubscription')
+						// Suppressed silently
 						return
 					}
-					console.warn('Error in stopReceivedSubscription:', error)
+					// Ignore cleanup errors
 				}
 			}
 		}
@@ -245,15 +245,15 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 					} catch (error) {
 						// Suppress NDK initialization errors
 						if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-							console.warn('[NDK] Suppressed subscription cleanup race condition')
+							// Suppressed silently
 						}
 						// Also suppress aiGuardrails related errors
 						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-							console.warn('[NDK] Suppressed aiGuardrails race condition')
+							// Suppressed silently
 						}
 						// Also suppress aiGuardrails related errors
 						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-							console.warn('[NDK] Suppressed aiGuardrails race condition')
+							// Suppressed silently
 						}
 					}
 					resolve()
@@ -281,7 +281,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 
 		ordersReceived = ordersReceivedSet
 	} catch (error) {
-		console.error('🔍 fetchOrders: Error fetching orders received:', error)
+		console.error('Error fetching orders received:', error)
 		ordersReceived = new Set()
 	}
 
@@ -333,7 +333,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 					relatedEventsSet.add(event)
 				}
 			} catch (error) {
-				console.warn('🔍 fetchOrders: Error processing related event:', error)
+				// Decryption errors are handled silently by safeDecryptEvent
 			}
 		})
 
@@ -358,15 +358,15 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 					} catch (error) {
 						// Suppress NDK initialization errors
 						if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-							console.warn('[NDK] Suppressed subscription cleanup race condition')
+							// Suppressed silently
 						}
 						// Also suppress aiGuardrails related errors
 						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-							console.warn('[NDK] Suppressed aiGuardrails race condition')
+							// Suppressed silently
 						}
 						// Also suppress aiGuardrails related errors
 						if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-							console.warn('[NDK] Suppressed aiGuardrails race condition')
+							// Suppressed silently
 						}
 					}
 					resolve()
@@ -394,7 +394,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 
 		relatedEvents = relatedEventsSet
 	} catch (error) {
-		console.error('🔍 fetchOrders: Error fetching related events:', error)
+		console.error('Error fetching related events:', error)
 		relatedEvents = new Set()
 	}
 
@@ -516,7 +516,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
  */
 export const useOrders = () => {
 	const ndk = ndkActions.getNDK()
-	const { user } = authStore
+	const { user } = useStore(authStore)
 	const isConnected = !!ndk?.activeUser
 
 	return useQuery({
@@ -579,6 +579,7 @@ export const fetchOrdersByBuyer = async (
 	const orderIdsSet = new Set<string>()
 	// Declare related events subscription outside try block so it's accessible later
 	let relatedEventsSubscription: NDKSubscription | null = null
+	let relatedEventsClosed = false
 
 	try {
 		// Use subscription with closeOnEose to ensure we get EOSE signal
@@ -841,8 +842,6 @@ export const fetchOrdersByBuyer = async (
 				}
 			}
 
-			let relatedEventsClosed = false
-
 			relatedEventsSubscription.on('event', async (event: NDKEvent) => {
 				if (relatedEventsClosed) return
 
@@ -936,15 +935,15 @@ export const fetchOrdersByBuyer = async (
 						} catch (error) {
 							// Suppress NDK initialization errors
 							if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-								console.warn('[NDK] Suppressed subscription cleanup race condition')
+								// Suppressed silently
 							}
 							// Also suppress aiGuardrails related errors
 							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
+								// Suppressed silently
 							}
 							// Also suppress aiGuardrails related errors
 							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
+								// Suppressed silently
 							}
 						}
 						resolve()
@@ -970,15 +969,15 @@ export const fetchOrdersByBuyer = async (
 						} catch (error) {
 							// Suppress NDK initialization errors
 							if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-								console.warn('[NDK] Suppressed subscription cleanup race condition')
+								// Suppressed silently
 							}
 							// Also suppress aiGuardrails related errors
 							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
+								// Suppressed silently
 							}
 							// Also suppress aiGuardrails related errors
 							if (error instanceof ReferenceError && error.message.includes('aiGuardrails')) {
-								console.warn('[NDK] Suppressed aiGuardrails race condition')
+								// Suppressed silently
 							}
 						}
 						resolve()
@@ -1082,6 +1081,12 @@ export const fetchOrdersByBuyer = async (
 		})
 
 		// Collect related events for a short time to populate status
+		// Disable real-time handler during initial collection to avoid race conditions
+		relatedEventsClosed = true
+
+		// Store collection handler reference so we can remove it later
+		let collectionHandler: ((event: NDKEvent) => Promise<void>) | null = null
+
 		const relatedEventsPromise = new Promise<void>((resolve) => {
 			let eventsCollected = 0
 			let resolved = false
@@ -1146,15 +1151,17 @@ export const fetchOrdersByBuyer = async (
 				}
 			}
 
-			relatedEventsSubscription.on('event', collectEvent)
+			// Store handler reference and register it
+			collectionHandler = collectEvent
+			relatedEventsSubscription.on('event', collectionHandler)
 
-			// Wait for EOSE or timeout after 2 seconds
+			// Wait for EOSE or timeout after 6 seconds (increased to allow slower relays to respond)
 			const timeout = setTimeout(() => {
 				if (!resolved) {
 					resolved = true
 					resolve()
 				}
-			}, 2000)
+			}, 6000)
 
 			relatedEventsSubscription.on('eose', () => {
 				if (!resolved) {
@@ -1174,45 +1181,20 @@ export const fetchOrdersByBuyer = async (
 		})
 
 		// Wait for related events to be collected (with timeout)
-		await Promise.race([relatedEventsPromise, new Promise<void>((resolve) => setTimeout(resolve, 2000))])
+		await Promise.race([relatedEventsPromise, new Promise<void>((resolve) => setTimeout(resolve, 6000))])
 
-		// Update initial result with collected related events
-		initialResult.forEach((orderData) => {
-			const orderTag = orderData.order.tags.find((tag) => tag[0] === 'order')
-			const orderId = orderTag?.[1]
-			if (!orderId) return
-
-			const collectedEvents = relatedEventsMap.get(orderId)
-			if (!collectedEvents) return
-
-			// Merge collected events with cached events (cached takes precedence)
-			const mergeEvents = (collected: NDKEvent[], cached: NDKEvent[]) => {
-				const eventMap = new Map<string, NDKEvent>()
-				cached.forEach((e) => eventMap.set(e.id, e))
-				collected.forEach((e) => eventMap.set(e.id, e))
-				return Array.from(eventMap.values()).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-			}
-
-			orderData.paymentRequests = mergeEvents(collectedEvents.paymentRequests, orderData.paymentRequests)
-			orderData.statusUpdates = mergeEvents(collectedEvents.statusUpdates, orderData.statusUpdates)
-			orderData.shippingUpdates = mergeEvents(collectedEvents.shippingUpdates, orderData.shippingUpdates)
-			orderData.generalMessages = mergeEvents(collectedEvents.generalMessages, orderData.generalMessages)
-			orderData.paymentReceipts = mergeEvents(collectedEvents.paymentReceipts, orderData.paymentReceipts)
-			orderData.latestStatus = orderData.statusUpdates[0]
-			orderData.latestShipping = orderData.shippingUpdates[0]
-			orderData.latestPaymentRequest = orderData.paymentRequests[0]
-			orderData.latestPaymentReceipt = orderData.paymentReceipts[0]
-			orderData.latestMessage = orderData.generalMessages[0]
-		})
-
-		// Update cache with enriched data
-		// Create new array reference to ensure React detects change
-		if (queryClient) {
-			queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), [...initialResult])
+		// Remove only the collection handler now that initial collection is complete
+		// This prevents double-processing with the real-time handler
+		if (relatedEventsSubscription && collectionHandler) {
+			relatedEventsSubscription.off('event', collectionHandler)
 		}
+
+		// Re-enable real-time handler now that initial collection is complete
+		relatedEventsClosed = false
 	}
 
-	// Return orders with related events included
+	// Return orders immediately - related events subscription is fetching in parallel
+	// The queryFn will handle caching and merging with existing cache
 	return initialResult
 }
 
@@ -1311,14 +1293,12 @@ export const useOrdersByBuyer = (buyerPubkey: string) => {
 					})
 
 					// Cache the merged result to preserve related events - this prevents cache from being wiped
-					// Create new array reference to ensure React detects change
-					queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), [...mergedResult])
+					queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), mergedResult)
 					return mergedResult
 				}
 
 				// No cached data - cache the result as-is
-				// Create new array reference to ensure React detects change
-				queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), [...result])
+				queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), result)
 				return result
 			} catch (error) {
 				// Check if we have existing cache data - don't overwrite with empty array on error
@@ -1330,28 +1310,39 @@ export const useOrdersByBuyer = (buyerPubkey: string) => {
 			}
 		},
 		enabled: queryEnabled,
-		// Cache configuration - keep data fresh for 5 minutes, cache for 30 minutes
-		staleTime: 5 * 60 * 1000, // 5 minutes - data is considered fresh
-		gcTime: 30 * 60 * 1000, // 30 minutes - keep in cache
-		refetchOnMount: false, // Don't refetch on mount if cache exists
-		refetchOnWindowFocus: false, // Don't refetch on window focus
-		refetchOnReconnect: true, // Only refetch when reconnecting
-		// Use cached data as initial data if available
-		initialData: () => queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey)),
-		placeholderData: queryEnabled ? () => queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey)) : [],
+		refetchOnMount: false, // Don't refetch on mount - use cache if available
+		refetchOnWindowFocus: false, // Don't refetch on window focus - preserve cache
+		refetchOnReconnect: true, // Refetch when reconnecting to network
+		staleTime: 2 * 60 * 1000, // Consider data fresh for 2 minutes
+		gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes (increased to match purchases persistence)
+		// Return empty array as placeholder data when disabled
+		placeholderData: queryEnabled ? undefined : [],
 		retry: 1, // Only retry once on failure
 		retryDelay: 1000, // Wait 1s before retry
 		notifyOnChangeProps: ['data', 'error', 'status'], // Explicitly notify on these changes
 		structuralSharing: false, // Disable structural sharing to ensure React detects all cache updates
 	})
 
-	// Don't refetch when NDK connects - use cache instead
-	// Live subscriptions will handle real-time updates
-	// Refetching causes unnecessary decryption and slow performance
-	// useEffect(() => {
-	// 	if (!queryEnabled || !isConnected) return
-	// 	// ... refetch logic removed to prevent unnecessary fetches
-	// }, [isConnected, queryEnabled, buyerPubkey, queryClient])
+	// Refetch when NDK connects to ensure we get fresh data
+	useEffect(() => {
+		if (!queryEnabled || !isConnected) return
+
+		// Only refetch if we don't have data or if data is stale
+		const queryData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey))
+		if (queryData && queryData.length > 0) {
+			// We have data, don't aggressively refetch
+			return
+		}
+
+		// Small delay to ensure connection is fully established
+		const timer = setTimeout(() => {
+			queryClient.refetchQueries({ queryKey: orderKeys.byBuyer(buyerPubkey) }).catch(() => {
+				// Ignore refetch errors
+			})
+		}, 100)
+
+		return () => clearTimeout(timer)
+	}, [isConnected, queryEnabled, buyerPubkey, queryClient])
 
 	return queryResult
 }
@@ -1415,6 +1406,7 @@ export const fetchOrdersBySeller = async (
 	const orderIdsSet = new Set<string>()
 	// Declare related events subscription outside try block so it's accessible later
 	let relatedEventsSubscription: NDKSubscription | null = null
+	let relatedEventsClosed = false
 
 	try {
 		// Use subscription - we'll handle closing ourselves to avoid NDK internal timeout conflicts
@@ -1678,8 +1670,6 @@ export const fetchOrdersBySeller = async (
 				}
 			}
 
-			let relatedEventsClosed = false
-
 			relatedEventsSubscription.on('event', async (event: NDKEvent) => {
 				if (relatedEventsClosed) return
 
@@ -1793,9 +1783,7 @@ export const fetchOrdersBySeller = async (
 				}),
 			])
 
-			// Wait for all pending event processing before continuing
-			await waitForPendingEvents()
-
+			// Don't wait for pending events - let them process asynchronously (matches fetchOrdersByBuyer)
 			orders = ordersSet
 		}
 	} catch (error) {
@@ -1815,7 +1803,7 @@ export const fetchOrdersBySeller = async (
 	// Create initial result - merge with existing cache if available
 	const initialResult = Array.from(orders).map((order) => {
 		const orderTag = order.tags.find((tag) => tag[0] === 'order')
-		const orderId = orderTag?.[1] || ''
+		const orderId = orderTag?.[1]
 
 		// Add order ID to set so related events subscription can match it
 		if (orderId) {
@@ -1831,6 +1819,18 @@ export const fetchOrdersBySeller = async (
 			})
 		}
 
+		if (!orderId) {
+			return {
+				order,
+				paymentRequests: [],
+				statusUpdates: [],
+				shippingUpdates: [],
+				generalMessages: [],
+				paymentReceipts: [],
+			}
+		}
+
+		// Use cached related events if available, otherwise use empty arrays
 		return {
 			order,
 			paymentRequests: cachedRelatedEvents?.paymentRequests || [],
@@ -1880,6 +1880,12 @@ export const fetchOrdersBySeller = async (
 		})
 
 		// Collect related events for a short time to populate status
+		// Disable real-time handler during initial collection to avoid race conditions
+		relatedEventsClosed = true
+
+		// Store collection handler reference so we can remove it later
+		let collectionHandler: ((event: NDKEvent) => Promise<void>) | null = null
+
 		const relatedEventsPromise = new Promise<void>((resolve) => {
 			let eventsCollected = 0
 			let resolved = false
@@ -1944,15 +1950,17 @@ export const fetchOrdersBySeller = async (
 				}
 			}
 
-			relatedEventsSubscription.on('event', collectEvent)
+			// Store handler reference and register it
+			collectionHandler = collectEvent
+			relatedEventsSubscription.on('event', collectionHandler)
 
-			// Wait for EOSE or timeout after 2 seconds
+			// Wait for EOSE or timeout after 6 seconds (increased to allow slower relays to respond)
 			const timeout = setTimeout(() => {
 				if (!resolved) {
 					resolved = true
 					resolve()
 				}
-			}, 2000)
+			}, 6000)
 
 			relatedEventsSubscription.on('eose', () => {
 				if (!resolved) {
@@ -1972,45 +1980,20 @@ export const fetchOrdersBySeller = async (
 		})
 
 		// Wait for related events to be collected (with timeout)
-		await Promise.race([relatedEventsPromise, new Promise<void>((resolve) => setTimeout(resolve, 2000))])
+		await Promise.race([relatedEventsPromise, new Promise<void>((resolve) => setTimeout(resolve, 6000))])
 
-		// Update initial result with collected related events
-		initialResult.forEach((orderData) => {
-			const orderTag = orderData.order.tags.find((tag) => tag[0] === 'order')
-			const orderId = orderTag?.[1]
-			if (!orderId) return
-
-			const collectedEvents = relatedEventsMap.get(orderId)
-			if (!collectedEvents) return
-
-			// Merge collected events with cached events (cached takes precedence)
-			const mergeEvents = (collected: NDKEvent[], cached: NDKEvent[]) => {
-				const eventMap = new Map<string, NDKEvent>()
-				cached.forEach((e) => eventMap.set(e.id, e))
-				collected.forEach((e) => eventMap.set(e.id, e))
-				return Array.from(eventMap.values()).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-			}
-
-			orderData.paymentRequests = mergeEvents(collectedEvents.paymentRequests, orderData.paymentRequests)
-			orderData.statusUpdates = mergeEvents(collectedEvents.statusUpdates, orderData.statusUpdates)
-			orderData.shippingUpdates = mergeEvents(collectedEvents.shippingUpdates, orderData.shippingUpdates)
-			orderData.generalMessages = mergeEvents(collectedEvents.generalMessages, orderData.generalMessages)
-			orderData.paymentReceipts = mergeEvents(collectedEvents.paymentReceipts, orderData.paymentReceipts)
-			orderData.latestStatus = orderData.statusUpdates[0]
-			orderData.latestShipping = orderData.shippingUpdates[0]
-			orderData.latestPaymentRequest = orderData.paymentRequests[0]
-			orderData.latestPaymentReceipt = orderData.paymentReceipts[0]
-			orderData.latestMessage = orderData.generalMessages[0]
-		})
-
-		// Update cache with enriched data
-		// Create new array reference to ensure React detects change
-		if (queryClient) {
-			queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), [...initialResult])
+		// Remove only the collection handler now that initial collection is complete
+		// This prevents double-processing with the real-time handler
+		if (relatedEventsSubscription && collectionHandler) {
+			relatedEventsSubscription.off('event', collectionHandler)
 		}
+
+		// Re-enable real-time handler now that initial collection is complete
+		relatedEventsClosed = false
 	}
 
-	// Return orders with related events included
+	// Return orders immediately - related events subscription is fetching in parallel
+	// The queryFn will handle caching and merging with existing cache
 	return initialResult
 }
 
@@ -2019,6 +2002,8 @@ export const fetchOrdersBySeller = async (
  */
 export const useOrdersBySeller = (sellerPubkey: string) => {
 	const ndk = ndkActions.getNDK()
+	const ndkState = useStore(ndkStore)
+	const isConnected = ndkState.isConnected
 	const queryClient = useQueryClient()
 
 	// Enable query when NDK is initialized (not just connected)
@@ -2113,14 +2098,12 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 					})
 
 					// Cache the merged result to preserve related events - this prevents cache from being wiped
-					// Create new array reference to ensure React detects change
-					queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), [...mergedResult])
+					queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), mergedResult)
 					return mergedResult
 				}
 
 				// No cached data - cache the result as-is
-				// Create new array reference to ensure React detects change
-				queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), [...result])
+				queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), result)
 				return result
 			} catch (error) {
 				// Check if we have existing cache data - don't overwrite with empty array on error
@@ -2132,28 +2115,39 @@ export const useOrdersBySeller = (sellerPubkey: string) => {
 			}
 		},
 		enabled: queryEnabled,
-		// Cache configuration - keep data fresh for 5 minutes, cache for 30 minutes
-		staleTime: 5 * 60 * 1000, // 5 minutes - data is considered fresh
-		gcTime: 30 * 60 * 1000, // 30 minutes - keep in cache
-		refetchOnMount: false, // Don't refetch on mount if cache exists
-		refetchOnWindowFocus: false, // Don't refetch on window focus
-		refetchOnReconnect: false, // Don't refetch on reconnect - live subscriptions handle updates
-		// Use cached data as initial data if available
-		initialData: () => queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey)),
-		placeholderData: queryEnabled ? () => queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey)) : [],
+		refetchOnMount: false, // Don't refetch on mount - use cache if available
+		refetchOnWindowFocus: false, // Don't refetch on window focus - preserve cache
+		refetchOnReconnect: true, // Refetch when reconnecting to network
+		staleTime: 2 * 60 * 1000, // Consider data fresh for 2 minutes
+		gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes (increased for better persistence)
+		// Return empty array as placeholder data when disabled
+		placeholderData: queryEnabled ? undefined : [],
 		retry: 1, // Only retry once on failure
 		retryDelay: 1000, // Wait 1s before retry
 		notifyOnChangeProps: ['data', 'error', 'status'], // Explicitly notify on these changes
 		structuralSharing: false, // Disable structural sharing to ensure React detects all changes
 	})
 
-	// Don't refetch when NDK connects - use cache instead
-	// Live subscriptions will handle real-time updates
-	// Refetching causes unnecessary decryption and slow performance
-	// useEffect(() => {
-	// 	if (!queryEnabled || !isConnected) return
-	// 	// ... refetch logic removed to prevent unnecessary fetches
-	// }, [isConnected, queryEnabled, sellerPubkey, queryClient])
+	// Refetch when NDK connects to ensure we get fresh data
+	useEffect(() => {
+		if (!queryEnabled || !isConnected) return
+
+		// Only refetch if we don't have data or if data is stale
+		const queryData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey))
+		if (queryData && queryData.length > 0) {
+			// We have data, don't aggressively refetch
+			return
+		}
+
+		// Small delay to ensure connection is fully established
+		const timer = setTimeout(() => {
+			queryClient.refetchQueries({ queryKey: orderKeys.bySeller(sellerPubkey) }).catch(() => {
+				// Ignore refetch errors
+			})
+		}, 100)
+
+		return () => clearTimeout(timer)
+	}, [isConnected, queryEnabled, sellerPubkey, queryClient])
 
 	return queryResult
 }
@@ -2315,10 +2309,10 @@ export const fetchOrderById = async (
 			} catch (error) {
 				// Suppress NDK initialization errors
 				if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-					console.warn('[NDK] Suppressed subscription cleanup race condition in stopAllSubscriptions')
+					// Suppressed silently
 					return
 				}
-				console.warn('Error in stopAllSubscriptions:', error)
+				// Ignore cleanup errors
 			}
 		}
 
@@ -2366,7 +2360,7 @@ export const fetchOrderById = async (
 					} catch (error) {
 						// Suppress NDK initialization errors
 						if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-							console.warn('[NDK] Suppressed subscription cleanup race condition')
+							// Suppressed silently
 						}
 					}
 					resolve()
@@ -2380,7 +2374,7 @@ export const fetchOrderById = async (
 					} catch (error) {
 						// Suppress NDK initialization errors
 						if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-							console.warn('[NDK] Suppressed subscription cleanup race condition')
+							// Suppressed silently
 						}
 					}
 					resolve()
@@ -2470,10 +2464,10 @@ export const fetchOrderById = async (
 			} catch (error) {
 				// Suppress NDK initialization errors
 				if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-					console.warn('[NDK] Suppressed subscription cleanup race condition in stopAllSubscriptions')
+					// Suppressed silently
 					return
 				}
-				console.warn('Error in stopAllSubscriptions:', error)
+				// Ignore cleanup errors
 			}
 		}
 
@@ -2519,7 +2513,7 @@ export const fetchOrderById = async (
 					} catch (error) {
 						// Suppress NDK initialization errors
 						if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-							console.warn('[NDK] Suppressed subscription cleanup race condition')
+							// Suppressed silently
 						}
 					}
 					resolve()
@@ -2533,7 +2527,7 @@ export const fetchOrderById = async (
 					} catch (error) {
 						// Suppress NDK initialization errors
 						if (error instanceof ReferenceError && error.message.includes("Cannot access 's' before initialization")) {
-							console.warn('[NDK] Suppressed subscription cleanup race condition')
+							// Suppressed silently
 						}
 					}
 					resolve()
@@ -2617,7 +2611,7 @@ export const fetchOrderById = async (
 		const userPubkey = user?.pubkey
 
 		if (userPubkey) {
-			const updateListCache = (key: string[]) => {
+			const updateListCache = (key: readonly string[]) => {
 				const listData = queryClient.getQueryData<OrderWithRelatedEvents[]>(key)
 				if (listData) {
 					const updatedList = listData.map((orderData) => {
@@ -2785,7 +2779,7 @@ export const useOrderById = (orderId: string) => {
 
 						// Update list cache (buyer and seller) - update directly to preserve cache
 						if (userPubkey) {
-							const updateListCache = (key: string[]) => {
+							const updateListCache = (key: readonly string[]) => {
 								const listData = queryClient.getQueryData<OrderWithRelatedEvents[]>(key)
 								if (listData) {
 									const updatedList = listData.map((orderData) => {
@@ -2837,7 +2831,7 @@ export const useOrderById = (orderId: string) => {
 
 					// Update list cache (buyer and seller) - update directly to preserve cache
 					if (userPubkey) {
-						const updateListCache = (key: string[]) => {
+						const updateListCache = (key: readonly string[]) => {
 							const listData = queryClient.getQueryData<OrderWithRelatedEvents[]>(key)
 							if (listData) {
 								const updatedList = listData.map((orderData) => {

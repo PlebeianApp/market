@@ -1,7 +1,7 @@
 import { OrderDataTable } from '@/components/orders/OrderDataTable'
 import { salesColumns } from '@/components/orders/orderColumns'
 import { authStore } from '@/lib/stores/auth'
-import { ndkActions } from '@/lib/stores/ndk'
+import { ndkActions, ndkStore } from '@/lib/stores/ndk'
 import { ORDER_GENERAL_KIND, ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, PAYMENT_RECEIPT_KIND } from '@/lib/schemas/order'
 import { safeDecryptEvent } from '@/lib/utils/decrypt'
 import { fetchOrdersByBuyer, getOrderStatus, useOrdersBySeller } from '@/queries/orders'
@@ -24,9 +24,19 @@ function SalesComponent() {
 	const userPubkey = user?.pubkey || ''
 	const queryClient = useQueryClient()
 	const [statusFilter, setStatusFilter] = useState<string>('any')
+	const [isRefreshing, setIsRefreshing] = useState(false)
 
 	// Use the query hook - it automatically subscribes to cache updates and re-renders when data changes
-	const { data: sales, isLoading, isFetching } = useOrdersBySeller(userPubkey)
+	const { data: sales, isLoading, isFetching, refetch } = useOrdersBySeller(userPubkey)
+
+	const handleRefresh = async () => {
+		setIsRefreshing(true)
+		try {
+			await refetch()
+		} finally {
+			setIsRefreshing(false)
+		}
+	}
 
 	// Prefetch purchases query only if cache is empty (same data as dashboard)
 	useEffect(() => {
@@ -92,7 +102,7 @@ function SalesComponent() {
 			const signer = ndkActions.getSigner()
 
 			// Update list cache directly (same logic as useOrderById)
-			const updateListCache = (key: string[], orderId: string, newEvent: NDKEvent) => {
+			const updateListCache = (key: readonly string[], orderId: string, newEvent: NDKEvent) => {
 				const listData = queryClient.getQueryData<OrderWithRelatedEvents[]>(key)
 				if (!listData) return
 
@@ -212,6 +222,8 @@ function SalesComponent() {
 				onStatusFilterChange={setStatusFilter}
 				statusFilter={statusFilter}
 				showSearch={false}
+				onRefresh={handleRefresh}
+				isRefreshing={isRefreshing}
 			/>
 		</div>
 	)
