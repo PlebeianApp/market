@@ -104,7 +104,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 					ordersSentSet.add(event)
 				}
 			} catch (error) {
-				console.warn('🔍 fetchOrders: Error processing sent event:', error)
+				// Decryption errors are handled silently by safeDecryptEvent
 			}
 		})
 
@@ -206,7 +206,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 					ordersReceivedSet.add(event)
 				}
 			} catch (error) {
-				console.warn('🔍 fetchOrders: Error processing received event:', error)
+				// Decryption errors are handled silently by safeDecryptEvent
 				// Even if decryption fails, check if type tag exists (might already be decrypted)
 				const typeTag = event.tags.find((tag) => tag[0] === 'type')
 				if (typeTag && typeTag[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION) {
@@ -333,7 +333,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 					relatedEventsSet.add(event)
 				}
 			} catch (error) {
-				console.warn('🔍 fetchOrders: Error processing related event:', error)
+				// Decryption errors are handled silently by safeDecryptEvent
 			}
 		})
 
@@ -516,7 +516,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
  */
 export const useOrders = () => {
 	const ndk = ndkActions.getNDK()
-	const { user } = authStore
+	const { user } = useStore(authStore)
 	const isConnected = !!ndk?.activeUser
 
 	return useQuery({
@@ -579,6 +579,7 @@ export const fetchOrdersByBuyer = async (
 	const orderIdsSet = new Set<string>()
 	// Declare related events subscription outside try block so it's accessible later
 	let relatedEventsSubscription: NDKSubscription | null = null
+	let relatedEventsClosed = false
 
 	try {
 		// Use subscription with closeOnEose to ensure we get EOSE signal
@@ -840,8 +841,6 @@ export const fetchOrdersByBuyer = async (
 					})
 				}
 			}
-
-			let relatedEventsClosed = false
 
 			relatedEventsSubscription.on('event', async (event: NDKEvent) => {
 				if (relatedEventsClosed) return
@@ -1407,6 +1406,7 @@ export const fetchOrdersBySeller = async (
 	const orderIdsSet = new Set<string>()
 	// Declare related events subscription outside try block so it's accessible later
 	let relatedEventsSubscription: NDKSubscription | null = null
+	let relatedEventsClosed = false
 
 	try {
 		// Use subscription - we'll handle closing ourselves to avoid NDK internal timeout conflicts
@@ -1669,8 +1669,6 @@ export const fetchOrdersBySeller = async (
 					})
 				}
 			}
-
-			let relatedEventsClosed = false
 
 			relatedEventsSubscription.on('event', async (event: NDKEvent) => {
 				if (relatedEventsClosed) return
@@ -2613,7 +2611,7 @@ export const fetchOrderById = async (
 		const userPubkey = user?.pubkey
 
 		if (userPubkey) {
-			const updateListCache = (key: string[]) => {
+			const updateListCache = (key: readonly string[]) => {
 				const listData = queryClient.getQueryData<OrderWithRelatedEvents[]>(key)
 				if (listData) {
 					const updatedList = listData.map((orderData) => {
@@ -2781,7 +2779,7 @@ export const useOrderById = (orderId: string) => {
 
 						// Update list cache (buyer and seller) - update directly to preserve cache
 						if (userPubkey) {
-							const updateListCache = (key: string[]) => {
+							const updateListCache = (key: readonly string[]) => {
 								const listData = queryClient.getQueryData<OrderWithRelatedEvents[]>(key)
 								if (listData) {
 									const updatedList = listData.map((orderData) => {
@@ -2833,7 +2831,7 @@ export const useOrderById = (orderId: string) => {
 
 					// Update list cache (buyer and seller) - update directly to preserve cache
 					if (userPubkey) {
-						const updateListCache = (key: string[]) => {
+						const updateListCache = (key: readonly string[]) => {
 							const listData = queryClient.getQueryData<OrderWithRelatedEvents[]>(key)
 							if (listData) {
 								const updatedList = listData.map((orderData) => {
