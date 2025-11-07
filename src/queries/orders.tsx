@@ -301,19 +301,10 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 
 	// Fetch all related events for these orders
 	// Per gamma_spec.md, we can't filter by #order tag - filter client-side after decryption
-	// Use multiple filters (OR logic) to get events authored by user OR mentioning user
-	const relatedEventsFilters: NDKFilter[] = [
-		{
-			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
-			authors: [user.pubkey],
-			limit: 250,
-		},
-		{
-			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
-			'#p': [user.pubkey],
-			limit: 250,
-		},
-	]
+	const relatedEventsFilter: NDKFilter = {
+		kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+		limit: 500,
+	}
 
 	// Fetch related events using subscription pattern
 	let relatedEvents: Set<NDKEvent> = new Set()
@@ -325,7 +316,7 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 			throw new Error('NDK not ready for subscription')
 		}
 
-		const subscription = ndk.subscribe(relatedEventsFilters, {
+		const subscription = ndk.subscribe(relatedEventsFilter, {
 			closeOnEose: true,
 		})
 
@@ -610,26 +601,15 @@ export const fetchOrdersByBuyer = async (
 		let subscriptionClosed = false
 
 		// Start related events subscription in parallel
-		// Use multiple filters (OR logic) to get events authored by buyer OR mentioning buyer
-		const relatedEventsFilters: NDKFilter[] = [
-			{
-				kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
-				authors: [buyerPubkey],
-				limit: 250,
-			},
-			{
-				kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
-				'#p': [buyerPubkey],
-				limit: 250,
-			},
-		]
+		const relatedEventsFilter: NDKFilter = {
+			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			limit: 500,
+		}
 
 		if (queryClient) {
 			try {
-				relatedEventsSubscription = ndk.subscribe(relatedEventsFilters, {
+				relatedEventsSubscription = ndk.subscribe(relatedEventsFilter, {
 					closeOnEose: false,
-					// Use cache first if available, otherwise just query relays
-					cacheUsage: ndk.cacheAdapter ? 'CACHE_FIRST' : undefined,
 				})
 			} catch (subError) {
 				// Ignore subscription creation errors
@@ -706,11 +686,17 @@ export const fetchOrdersByBuyer = async (
 					// Update all orders in cache to mark EOSE as received
 					const currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey))
 					if (currentData) {
+						// Create new array reference to ensure React detects change
 						const updatedData = currentData.map((order) => ({
 							...order,
 							relatedEventsEoseReceived: true,
 						}))
-						queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), updatedData)
+						queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), [...updatedData])
+						// Invalidate to notify observers
+						queryClient.invalidateQueries({
+							queryKey: orderKeys.byBuyer(buyerPubkey),
+							refetchType: 'none',
+						})
 					}
 				}
 			}, 5000)
@@ -721,11 +707,17 @@ export const fetchOrdersByBuyer = async (
 				// Update all orders in cache to mark EOSE as received
 				const currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.byBuyer(buyerPubkey))
 				if (currentData) {
+					// Create new array reference to ensure React detects change
 					const updatedData = currentData.map((order) => ({
 						...order,
 						relatedEventsEoseReceived: true,
 					}))
-					queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), updatedData)
+					queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), [...updatedData])
+					// Invalidate to notify observers
+					queryClient.invalidateQueries({
+						queryKey: orderKeys.byBuyer(buyerPubkey),
+						refetchType: 'none',
+					})
 				}
 			})
 
@@ -824,6 +816,7 @@ export const fetchOrdersByBuyer = async (
 				})
 
 				if (orderFound && eventAdded) {
+					// Create a completely new array with new object references to ensure React detects changes
 					const newDataArray = updatedData.map((order) => ({
 						...order,
 						paymentRequests: [...order.paymentRequests],
@@ -831,9 +824,16 @@ export const fetchOrdersByBuyer = async (
 						shippingUpdates: [...order.shippingUpdates],
 						generalMessages: [...order.generalMessages],
 						paymentReceipts: [...order.paymentReceipts],
+						latestStatus: order.statusUpdates[0],
+						latestShipping: order.shippingUpdates[0],
+						latestPaymentRequest: order.paymentRequests[0],
+						latestPaymentReceipt: order.paymentReceipts[0],
+						latestMessage: order.generalMessages[0],
 					}))
 
-					queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), newDataArray)
+					// Update cache with new reference - this will trigger re-renders in components using useQuery
+					queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), [...newDataArray])
+					// Invalidate to ensure all observers are notified
 					queryClient.invalidateQueries({
 						queryKey: orderKeys.byBuyer(buyerPubkey),
 						refetchType: 'none',
@@ -847,10 +847,11 @@ export const fetchOrdersByBuyer = async (
 				if (relatedEventsClosed) return
 
 				try {
-					// Always try to decrypt, even if content looks decrypted
-					// This ensures tags are available (they might be encrypted separately)
 					if (signer && event.content) {
-						await safeDecryptEvent(event, signer)
+						const contentLooksEncrypted = !event.content.trim().startsWith('{') && !event.content.trim().startsWith('[')
+						if (contentLooksEncrypted) {
+							await safeDecryptEvent(event, signer)
+						}
 					}
 
 					const orderTag = event.tags.find((tag) => tag[0] === 'order')
@@ -1050,8 +1051,9 @@ export const fetchOrdersByBuyer = async (
 
 	// Set cache immediately so related events subscription can update it
 	// The queryFn will merge properly when it runs
+	// Create new array reference to ensure React detects change
 	if (queryClient) {
-		queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), initialResult)
+		queryClient.setQueryData(orderKeys.byBuyer(buyerPubkey), [...initialResult])
 	}
 
 	// Fetch related events synchronously before returning to ensure status is available on first render
@@ -1094,10 +1096,11 @@ export const fetchOrdersByBuyer = async (
 				if (resolved) return
 
 				try {
-					// Always try to decrypt, even if content looks decrypted
-					// This ensures tags are available (they might be encrypted separately)
 					if (signer && event.content) {
-						await safeDecryptEvent(event, signer)
+						const contentLooksEncrypted = !event.content.trim().startsWith('{') && !event.content.trim().startsWith('[')
+						if (contentLooksEncrypted) {
+							await safeDecryptEvent(event, signer)
+						}
 					}
 
 					const orderTag = event.tags.find((tag) => tag[0] === 'order')
@@ -1426,26 +1429,15 @@ export const fetchOrdersBySeller = async (
 		let subscriptionClosed = false
 
 		// Start related events subscription in parallel
-		// Use multiple filters (OR logic) to get events authored by seller OR mentioning seller
-		const relatedEventsFilters: NDKFilter[] = [
-			{
-				kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
-				authors: [sellerPubkey],
-				limit: 250,
-			},
-			{
-				kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
-				'#p': [sellerPubkey],
-				limit: 250,
-			},
-		]
+		const relatedEventsFilter: NDKFilter = {
+			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			limit: 500,
+		}
 
 		if (queryClient) {
 			try {
-				relatedEventsSubscription = ndk.subscribe(relatedEventsFilters, {
+				relatedEventsSubscription = ndk.subscribe(relatedEventsFilter, {
 					closeOnEose: false,
-					// Use cache first if available, otherwise just query relays
-					cacheUsage: ndk.cacheAdapter ? 'CACHE_FIRST' : undefined,
 				})
 			} catch (subError) {
 				// Ignore subscription creation errors
@@ -1523,11 +1515,17 @@ export const fetchOrdersBySeller = async (
 					// Update all orders in cache to mark EOSE as received
 					const currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey))
 					if (currentData) {
+						// Create new array reference to ensure React detects change
 						const updatedData = currentData.map((order) => ({
 							...order,
 							relatedEventsEoseReceived: true,
 						}))
-						queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), updatedData)
+						queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), [...updatedData])
+						// Invalidate to notify observers
+						queryClient.invalidateQueries({
+							queryKey: orderKeys.bySeller(sellerPubkey),
+							refetchType: 'none',
+						})
 					}
 				}
 			}, 5000)
@@ -1538,11 +1536,17 @@ export const fetchOrdersBySeller = async (
 				// Update all orders in cache to mark EOSE as received
 				const currentData = queryClient.getQueryData<OrderWithRelatedEvents[]>(orderKeys.bySeller(sellerPubkey))
 				if (currentData) {
+					// Create new array reference to ensure React detects change
 					const updatedData = currentData.map((order) => ({
 						...order,
 						relatedEventsEoseReceived: true,
 					}))
-					queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), updatedData)
+					queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), [...updatedData])
+					// Invalidate to notify observers
+					queryClient.invalidateQueries({
+						queryKey: orderKeys.bySeller(sellerPubkey),
+						refetchType: 'none',
+					})
 				}
 			})
 
@@ -1641,6 +1645,7 @@ export const fetchOrdersBySeller = async (
 				})
 
 				if (orderFound && eventAdded) {
+					// Create a completely new array with new object references to ensure React detects changes
 					const newDataArray = updatedData.map((order) => ({
 						...order,
 						paymentRequests: [...order.paymentRequests],
@@ -1648,9 +1653,16 @@ export const fetchOrdersBySeller = async (
 						shippingUpdates: [...order.shippingUpdates],
 						generalMessages: [...order.generalMessages],
 						paymentReceipts: [...order.paymentReceipts],
+						latestStatus: order.statusUpdates[0],
+						latestShipping: order.shippingUpdates[0],
+						latestPaymentRequest: order.paymentRequests[0],
+						latestPaymentReceipt: order.paymentReceipts[0],
+						latestMessage: order.generalMessages[0],
 					}))
 
-					queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), newDataArray)
+					// Update cache with new reference - this will trigger re-renders in components using useQuery
+					queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), [...newDataArray])
+					// Invalidate to ensure all observers are notified
 					queryClient.invalidateQueries({
 						queryKey: orderKeys.bySeller(sellerPubkey),
 						refetchType: 'none',
@@ -1664,10 +1676,11 @@ export const fetchOrdersBySeller = async (
 				if (relatedEventsClosed) return
 
 				try {
-					// Always try to decrypt, even if content looks decrypted
-					// This ensures tags are available (they might be encrypted separately)
 					if (signer && event.content) {
-						await safeDecryptEvent(event, signer)
+						const contentLooksEncrypted = !event.content.trim().startsWith('{') && !event.content.trim().startsWith('[')
+						if (contentLooksEncrypted) {
+							await safeDecryptEvent(event, signer)
+						}
 					}
 
 					const orderTag = event.tags.find((tag) => tag[0] === 'order')
@@ -1838,8 +1851,9 @@ export const fetchOrdersBySeller = async (
 
 	// Set cache immediately so related events subscription can update it
 	// The queryFn will merge properly when it runs
+	// Create new array reference to ensure React detects change
 	if (queryClient) {
-		queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), initialResult)
+		queryClient.setQueryData(orderKeys.bySeller(sellerPubkey), [...initialResult])
 	}
 
 	// Fetch related events synchronously before returning to ensure status is available on first render
@@ -1882,10 +1896,11 @@ export const fetchOrdersBySeller = async (
 				if (resolved) return
 
 				try {
-					// Always try to decrypt, even if content looks decrypted
-					// This ensures tags are available (they might be encrypted separately)
 					if (signer && event.content) {
-						await safeDecryptEvent(event, signer)
+						const contentLooksEncrypted = !event.content.trim().startsWith('{') && !event.content.trim().startsWith('[')
+						if (contentLooksEncrypted) {
+							await safeDecryptEvent(event, signer)
+						}
 					}
 
 					const orderTag = event.tags.find((tag) => tag[0] === 'order')

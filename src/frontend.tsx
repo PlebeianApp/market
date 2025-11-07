@@ -43,35 +43,32 @@ if (typeof window !== 'undefined') {
 		const sourceStr = typeof source === 'string' ? source : ''
 		const errorMsg = error?.message || ''
 		const errorStack = error?.stack || ''
-		
-		const isTemporalDeadZoneError = 
+
+		const isTemporalDeadZoneError =
 			messageStr.includes("Cannot access 's' before initialization") ||
 			messageStr.includes("can't access lexical declaration 's' before initialization") ||
 			messageStr.includes("can't access lexical declaration") ||
 			errorMsg.includes("Cannot access 's' before initialization") ||
 			errorMsg.includes("can't access lexical declaration 's' before initialization") ||
 			errorMsg.includes('aiGuardrails')
-		
-		const isFromNDK = 
+
+		const isFromNDK =
 			sourceStr.includes('index.mjs') ||
 			sourceStr.includes('.js') ||
 			errorStack.includes('nostr-dev-kit') ||
 			errorStack.includes('fetchEvent') ||
 			errorStack.includes('node_modules')
-		
+
 		if (isTemporalDeadZoneError && isFromNDK) {
 			// Log for debugging but suppress the popup
-			console.warn(
-				'[NDK] Suppressed temporal dead zone error (NDK race condition):',
-				{
-					message: messageStr,
-					source: sourceStr,
-					line: lineno,
-					column: colno,
-					errorMessage: errorMsg,
-					stackPreview: errorStack.split('\n').slice(0, 3).join('\n')
-				}
-			)
+			console.warn('[NDK] Suppressed temporal dead zone error (NDK race condition):', {
+				message: messageStr,
+				source: sourceStr,
+				line: lineno,
+				column: colno,
+				errorMessage: errorMsg,
+				stackPreview: errorStack.split('\n').slice(0, 3).join('\n'),
+			})
 			return true // Prevent default error handling (popup)
 		}
 
@@ -101,13 +98,10 @@ if (typeof window !== 'undefined') {
 			errorStack.includes('nostr-dev-kit') ||
 			errorMessage.includes('relaySet')
 		) {
-			console.warn(
-				'[NDK] Suppressed temporal dead zone promise rejection (NDK race condition):',
-				{
-					message: errorMessage,
-					stackPreview: errorStack.split('\n').slice(0, 3).join('\n')
-				}
-			)
+			console.warn('[NDK] Suppressed temporal dead zone promise rejection (NDK race condition):', {
+				message: errorMessage,
+				stackPreview: errorStack.split('\n').slice(0, 3).join('\n'),
+			})
 			event.preventDefault() // Prevent default error handling
 			return
 		}
@@ -191,9 +185,7 @@ if (typeof window !== 'undefined') {
 		})
 
 		// Check if error overlay exists and contains NDK error - target Bun's error overlay structure
-		const errorOverlays = document.querySelectorAll(
-			'[role="dialog"], [data-react-error-overlay], [class*="error"], [class*="overlay"]',
-		)
+		const errorOverlays = document.querySelectorAll('[role="dialog"], [data-react-error-overlay], [class*="error"], [class*="overlay"]')
 		errorOverlays.forEach((overlay) => {
 			const errorText = overlay.textContent || ''
 			if (

@@ -125,3 +125,9 @@ export const messageKeys = {
 	conversationMessages: (currentUserPubkey: string | undefined, otherUserPubkey: string | undefined) =>
 		[...messageKeys.all, 'conversation', currentUserPubkey || 'na', otherUserPubkey || 'na'] as const,
 } as const
+
+export const migrationKeys = {
+	all: ['migration'] as const,
+	nip15Products: (userPubkey: string) => [...migrationKeys.all, 'nip15', userPubkey] as const,
+	migratedEvents: (userPubkey: string) => [...migrationKeys.all, 'migrated', userPubkey] as const,
+} as const

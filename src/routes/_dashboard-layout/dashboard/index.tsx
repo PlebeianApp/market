@@ -3,13 +3,17 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { authStore } from '@/lib/stores/auth'
+import { ndkActions, ndkStore } from '@/lib/stores/ndk'
 import { useConversationsList } from '@/queries/messages'
-import { useOrders, useOrdersByBuyer, useOrdersBySeller } from '@/queries/orders'
+import { fetchOrdersByBuyer, fetchOrdersBySeller, useOrders, useOrdersByBuyer, useOrdersBySeller } from '@/queries/orders'
+import { orderKeys } from '@/queries/queryKeyFactory'
 import { useProductsByPubkey } from '@/queries/products'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
+import { useEffect } from 'react'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/')({
 	component: DashboardInnerComponent,
@@ -21,11 +25,63 @@ function DashboardInnerComponent() {
 	const { user } = useStore(authStore)
 	const userPubkey = user?.pubkey || ''
 
+	const queryClient = useQueryClient()
 	const { data: myProducts, isLoading: isLoadingProducts, error: productsError } = useProductsByPubkey(userPubkey, true)
 	const { data: orders, isLoading: isLoadingOrders, error: ordersError } = useOrders()
 	const { data: sellerOrders, isLoading: isLoadingSellerOrders, error: sellerOrdersError } = useOrdersBySeller(userPubkey)
 	const { data: buyerOrders, isLoading: isLoadingBuyerOrders, error: buyerOrdersError } = useOrdersByBuyer(userPubkey)
 	const { data: conversations, isLoading: isLoadingMessages, error: messagesError } = useConversationsList()
+
+	// Trigger loading of sales and purchases data (including order status) when dashboard loads
+	useEffect(() => {
+		if (!userPubkey) return
+
+		const loadOrdersData = async () => {
+			// Ensure NDK is connected first
+			const ndk = ndkActions.getNDK()
+			if (ndk) {
+				const ndkState = ndkStore.state
+				if (!ndkState.isConnected) {
+					await ndkActions.connect()
+				}
+			}
+
+			// Prefetch sales orders (seller orders) with status updates
+			// This will load data and populate cache for the sales page
+			try {
+				await queryClient.prefetchQuery({
+					queryKey: orderKeys.bySeller(userPubkey),
+					queryFn: () => fetchOrdersBySeller(userPubkey, queryClient),
+					staleTime: 30000,
+				})
+			} catch (error) {
+				// Ignore prefetch errors - query will handle them
+			}
+
+			// Prefetch purchases orders (buyer orders) with status updates
+			// This will load data and populate cache for the purchases page
+			try {
+				await queryClient.prefetchQuery({
+					queryKey: orderKeys.byBuyer(userPubkey),
+					queryFn: () => fetchOrdersByBuyer(userPubkey, queryClient),
+					staleTime: 30000,
+				})
+			} catch (error) {
+				// Ignore prefetch errors - query will handle them
+			}
+
+			// Also invalidate queries to trigger refetch in case they're already active
+			queryClient.invalidateQueries({ queryKey: orderKeys.bySeller(userPubkey) })
+			queryClient.invalidateQueries({ queryKey: orderKeys.byBuyer(userPubkey) })
+		}
+
+		// Small delay to ensure component is mounted and hooks are ready
+		const timer = setTimeout(() => {
+			loadOrdersData()
+		}, 100)
+
+		return () => clearTimeout(timer)
+	}, [userPubkey, queryClient])
 
 	// Debugging logs to inspect query states
 	console.log('Dashboard Queries:', {
