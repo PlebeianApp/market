@@ -134,27 +134,16 @@ const DashboardLayoutDashboardProductsShippingOptionsRoute = DashboardLayoutDash
 	path: '/dashboard/products/shipping-options',
 	getParentRoute: () => DashboardLayoutRoute,
 } as any)
-<<<<<<< Updated upstream
 const DashboardLayoutDashboardProductsReceivingPaymentsRoute = DashboardLayoutDashboardProductsReceivingPaymentsRouteImport.update({
 	id: '/dashboard/products/receiving-payments',
 	path: '/dashboard/products/receiving-payments',
 	getParentRoute: () => DashboardLayoutRoute,
 } as any)
-=======
->>>>>>> Stashed changes
 const DashboardLayoutDashboardProductsProductsRoute = DashboardLayoutDashboardProductsProductsRouteImport.update({
 	id: '/dashboard/products/products',
 	path: '/dashboard/products/products',
 	getParentRoute: () => DashboardLayoutRoute,
 } as any)
-<<<<<<< Updated upstream
-=======
-const DashboardLayoutDashboardProductsMigrationToolRoute = DashboardLayoutDashboardProductsMigrationToolRouteImport.update({
-	id: '/dashboard/products/migration-tool',
-	path: '/dashboard/products/migration-tool',
-	getParentRoute: () => DashboardLayoutRoute,
-} as any)
->>>>>>> Stashed changes
 const DashboardLayoutDashboardProductsCollectionsRoute = DashboardLayoutDashboardProductsCollectionsRouteImport.update({
 	id: '/dashboard/products/collections',
 	path: '/dashboard/products/collections',
@@ -190,14 +179,6 @@ const DashboardLayoutDashboardAccountYourPurchasesRoute = DashboardLayoutDashboa
 	path: '/dashboard/account/your-purchases',
 	getParentRoute: () => DashboardLayoutRoute,
 } as any)
-<<<<<<< Updated upstream
-=======
-const DashboardLayoutDashboardAccountReceivingPaymentsRoute = DashboardLayoutDashboardAccountReceivingPaymentsRouteImport.update({
-	id: '/dashboard/account/receiving-payments',
-	path: '/dashboard/account/receiving-payments',
-	getParentRoute: () => DashboardLayoutRoute,
-} as any)
->>>>>>> Stashed changes
 const DashboardLayoutDashboardAccountProfileRoute = DashboardLayoutDashboardAccountProfileRouteImport.update({
 	id: '/dashboard/account/profile',
 	path: '/dashboard/account/profile',
@@ -257,10 +238,6 @@ export interface FileRoutesByFullPath {
 	'/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
 	'/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
 	'/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
-<<<<<<< Updated upstream
-=======
-	'/dashboard/account/receiving-payments': typeof DashboardLayoutDashboardAccountReceivingPaymentsRoute
->>>>>>> Stashed changes
 	'/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
 	'/dashboard/app-settings/app-miscelleneous': typeof DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute
 	'/dashboard/app-settings/blacklists': typeof DashboardLayoutDashboardAppSettingsBlacklistsRoute
@@ -268,13 +245,8 @@ export interface FileRoutesByFullPath {
 	'/dashboard/app-settings/team': typeof DashboardLayoutDashboardAppSettingsTeamRoute
 	'/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
 	'/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
-<<<<<<< Updated upstream
 	'/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
 	'/dashboard/products/receiving-payments': typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
-=======
-	'/dashboard/products/migration-tool': typeof DashboardLayoutDashboardProductsMigrationToolRoute
-	'/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
->>>>>>> Stashed changes
 	'/dashboard/products/shipping-options': typeof DashboardLayoutDashboardProductsShippingOptionsRoute
 	'/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
 	'/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
@@ -302,10 +274,6 @@ export interface FileRoutesByTo {
 	'/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
 	'/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
 	'/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
-<<<<<<< Updated upstream
-=======
-	'/dashboard/account/receiving-payments': typeof DashboardLayoutDashboardAccountReceivingPaymentsRoute
->>>>>>> Stashed changes
 	'/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
 	'/dashboard/app-settings/app-miscelleneous': typeof DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute
 	'/dashboard/app-settings/blacklists': typeof DashboardLayoutDashboardAppSettingsBlacklistsRoute
@@ -313,13 +281,8 @@ export interface FileRoutesByTo {
 	'/dashboard/app-settings/team': typeof DashboardLayoutDashboardAppSettingsTeamRoute
 	'/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
 	'/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
-<<<<<<< Updated upstream
 	'/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
 	'/dashboard/products/receiving-payments': typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
-=======
-	'/dashboard/products/migration-tool': typeof DashboardLayoutDashboardProductsMigrationToolRoute
-	'/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
->>>>>>> Stashed changes
 	'/dashboard/products/shipping-options': typeof DashboardLayoutDashboardProductsShippingOptionsRoute
 	'/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
 	'/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
@@ -349,10 +312,6 @@ export interface FileRoutesById {
 	'/_dashboard-layout/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
 	'/_dashboard-layout/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
 	'/_dashboard-layout/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
-<<<<<<< Updated upstream
-=======
-	'/_dashboard-layout/dashboard/account/receiving-payments': typeof DashboardLayoutDashboardAccountReceivingPaymentsRoute
->>>>>>> Stashed changes
 	'/_dashboard-layout/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
 	'/_dashboard-layout/dashboard/app-settings/app-miscelleneous': typeof DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute
 	'/_dashboard-layout/dashboard/app-settings/blacklists': typeof DashboardLayoutDashboardAppSettingsBlacklistsRoute
@@ -360,13 +319,8 @@ export interface FileRoutesById {
 	'/_dashboard-layout/dashboard/app-settings/team': typeof DashboardLayoutDashboardAppSettingsTeamRoute
 	'/_dashboard-layout/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
 	'/_dashboard-layout/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
-<<<<<<< Updated upstream
 	'/_dashboard-layout/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
 	'/_dashboard-layout/dashboard/products/receiving-payments': typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
-=======
-	'/_dashboard-layout/dashboard/products/migration-tool': typeof DashboardLayoutDashboardProductsMigrationToolRoute
-	'/_dashboard-layout/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
->>>>>>> Stashed changes
 	'/_dashboard-layout/dashboard/products/shipping-options': typeof DashboardLayoutDashboardProductsShippingOptionsRoute
 	'/_dashboard-layout/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
 	'/_dashboard-layout/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
@@ -396,10 +350,6 @@ export interface FileRouteTypes {
 		| '/dashboard/account/making-payments'
 		| '/dashboard/account/network'
 		| '/dashboard/account/profile'
-<<<<<<< Updated upstream
-=======
-		| '/dashboard/account/receiving-payments'
->>>>>>> Stashed changes
 		| '/dashboard/account/your-purchases'
 		| '/dashboard/app-settings/app-miscelleneous'
 		| '/dashboard/app-settings/blacklists'
@@ -407,13 +357,8 @@ export interface FileRouteTypes {
 		| '/dashboard/app-settings/team'
 		| '/dashboard/orders/$orderId'
 		| '/dashboard/products/collections'
-<<<<<<< Updated upstream
 		| '/dashboard/products/products'
 		| '/dashboard/products/receiving-payments'
-=======
-		| '/dashboard/products/migration-tool'
-		| '/dashboard/products/products'
->>>>>>> Stashed changes
 		| '/dashboard/products/shipping-options'
 		| '/dashboard/sales/circular-economy'
 		| '/dashboard/sales/messages'
@@ -441,10 +386,6 @@ export interface FileRouteTypes {
 		| '/dashboard/account/making-payments'
 		| '/dashboard/account/network'
 		| '/dashboard/account/profile'
-<<<<<<< Updated upstream
-=======
-		| '/dashboard/account/receiving-payments'
->>>>>>> Stashed changes
 		| '/dashboard/account/your-purchases'
 		| '/dashboard/app-settings/app-miscelleneous'
 		| '/dashboard/app-settings/blacklists'
@@ -452,13 +393,8 @@ export interface FileRouteTypes {
 		| '/dashboard/app-settings/team'
 		| '/dashboard/orders/$orderId'
 		| '/dashboard/products/collections'
-<<<<<<< Updated upstream
 		| '/dashboard/products/products'
 		| '/dashboard/products/receiving-payments'
-=======
-		| '/dashboard/products/migration-tool'
-		| '/dashboard/products/products'
->>>>>>> Stashed changes
 		| '/dashboard/products/shipping-options'
 		| '/dashboard/sales/circular-economy'
 		| '/dashboard/sales/messages'
@@ -487,10 +423,6 @@ export interface FileRouteTypes {
 		| '/_dashboard-layout/dashboard/account/making-payments'
 		| '/_dashboard-layout/dashboard/account/network'
 		| '/_dashboard-layout/dashboard/account/profile'
-<<<<<<< Updated upstream
-=======
-		| '/_dashboard-layout/dashboard/account/receiving-payments'
->>>>>>> Stashed changes
 		| '/_dashboard-layout/dashboard/account/your-purchases'
 		| '/_dashboard-layout/dashboard/app-settings/app-miscelleneous'
 		| '/_dashboard-layout/dashboard/app-settings/blacklists'
@@ -498,13 +430,8 @@ export interface FileRouteTypes {
 		| '/_dashboard-layout/dashboard/app-settings/team'
 		| '/_dashboard-layout/dashboard/orders/$orderId'
 		| '/_dashboard-layout/dashboard/products/collections'
-<<<<<<< Updated upstream
 		| '/_dashboard-layout/dashboard/products/products'
 		| '/_dashboard-layout/dashboard/products/receiving-payments'
-=======
-		| '/_dashboard-layout/dashboard/products/migration-tool'
-		| '/_dashboard-layout/dashboard/products/products'
->>>>>>> Stashed changes
 		| '/_dashboard-layout/dashboard/products/shipping-options'
 		| '/_dashboard-layout/dashboard/sales/circular-economy'
 		| '/_dashboard-layout/dashboard/sales/messages'
@@ -660,7 +587,6 @@ declare module '@tanstack/react-router' {
 			preLoaderRoute: typeof DashboardLayoutDashboardProductsShippingOptionsRouteImport
 			parentRoute: typeof DashboardLayoutRoute
 		}
-<<<<<<< Updated upstream
 		'/_dashboard-layout/dashboard/products/receiving-payments': {
 			id: '/_dashboard-layout/dashboard/products/receiving-payments'
 			path: '/dashboard/products/receiving-payments'
@@ -668,8 +594,6 @@ declare module '@tanstack/react-router' {
 			preLoaderRoute: typeof DashboardLayoutDashboardProductsReceivingPaymentsRouteImport
 			parentRoute: typeof DashboardLayoutRoute
 		}
-=======
->>>>>>> Stashed changes
 		'/_dashboard-layout/dashboard/products/products': {
 			id: '/_dashboard-layout/dashboard/products/products'
 			path: '/dashboard/products/products'
@@ -677,16 +601,6 @@ declare module '@tanstack/react-router' {
 			preLoaderRoute: typeof DashboardLayoutDashboardProductsProductsRouteImport
 			parentRoute: typeof DashboardLayoutRoute
 		}
-<<<<<<< Updated upstream
-=======
-		'/_dashboard-layout/dashboard/products/migration-tool': {
-			id: '/_dashboard-layout/dashboard/products/migration-tool'
-			path: '/dashboard/products/migration-tool'
-			fullPath: '/dashboard/products/migration-tool'
-			preLoaderRoute: typeof DashboardLayoutDashboardProductsMigrationToolRouteImport
-			parentRoute: typeof DashboardLayoutRoute
-		}
->>>>>>> Stashed changes
 		'/_dashboard-layout/dashboard/products/collections': {
 			id: '/_dashboard-layout/dashboard/products/collections'
 			path: '/dashboard/products/collections'
@@ -736,16 +650,6 @@ declare module '@tanstack/react-router' {
 			preLoaderRoute: typeof DashboardLayoutDashboardAccountYourPurchasesRouteImport
 			parentRoute: typeof DashboardLayoutRoute
 		}
-<<<<<<< Updated upstream
-=======
-		'/_dashboard-layout/dashboard/account/receiving-payments': {
-			id: '/_dashboard-layout/dashboard/account/receiving-payments'
-			path: '/dashboard/account/receiving-payments'
-			fullPath: '/dashboard/account/receiving-payments'
-			preLoaderRoute: typeof DashboardLayoutDashboardAccountReceivingPaymentsRouteImport
-			parentRoute: typeof DashboardLayoutRoute
-		}
->>>>>>> Stashed changes
 		'/_dashboard-layout/dashboard/account/profile': {
 			id: '/_dashboard-layout/dashboard/account/profile'
 			path: '/dashboard/account/profile'
@@ -850,10 +754,6 @@ interface DashboardLayoutRouteChildren {
 	DashboardLayoutDashboardAccountMakingPaymentsRoute: typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
 	DashboardLayoutDashboardAccountNetworkRoute: typeof DashboardLayoutDashboardAccountNetworkRoute
 	DashboardLayoutDashboardAccountProfileRoute: typeof DashboardLayoutDashboardAccountProfileRoute
-<<<<<<< Updated upstream
-=======
-	DashboardLayoutDashboardAccountReceivingPaymentsRoute: typeof DashboardLayoutDashboardAccountReceivingPaymentsRoute
->>>>>>> Stashed changes
 	DashboardLayoutDashboardAccountYourPurchasesRoute: typeof DashboardLayoutDashboardAccountYourPurchasesRoute
 	DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute: typeof DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute
 	DashboardLayoutDashboardAppSettingsBlacklistsRoute: typeof DashboardLayoutDashboardAppSettingsBlacklistsRoute
@@ -861,13 +761,8 @@ interface DashboardLayoutRouteChildren {
 	DashboardLayoutDashboardAppSettingsTeamRoute: typeof DashboardLayoutDashboardAppSettingsTeamRoute
 	DashboardLayoutDashboardOrdersOrderIdRoute: typeof DashboardLayoutDashboardOrdersOrderIdRoute
 	DashboardLayoutDashboardProductsCollectionsRoute: typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
-<<<<<<< Updated upstream
 	DashboardLayoutDashboardProductsProductsRoute: typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
 	DashboardLayoutDashboardProductsReceivingPaymentsRoute: typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
-=======
-	DashboardLayoutDashboardProductsMigrationToolRoute: typeof DashboardLayoutDashboardProductsMigrationToolRoute
-	DashboardLayoutDashboardProductsProductsRoute: typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
->>>>>>> Stashed changes
 	DashboardLayoutDashboardProductsShippingOptionsRoute: typeof DashboardLayoutDashboardProductsShippingOptionsRoute
 	DashboardLayoutDashboardSalesCircularEconomyRoute: typeof DashboardLayoutDashboardSalesCircularEconomyRoute
 	DashboardLayoutDashboardSalesMessagesRoute: typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
@@ -879,10 +774,6 @@ const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
 	DashboardLayoutDashboardAccountMakingPaymentsRoute: DashboardLayoutDashboardAccountMakingPaymentsRoute,
 	DashboardLayoutDashboardAccountNetworkRoute: DashboardLayoutDashboardAccountNetworkRoute,
 	DashboardLayoutDashboardAccountProfileRoute: DashboardLayoutDashboardAccountProfileRoute,
-<<<<<<< Updated upstream
-=======
-	DashboardLayoutDashboardAccountReceivingPaymentsRoute: DashboardLayoutDashboardAccountReceivingPaymentsRoute,
->>>>>>> Stashed changes
 	DashboardLayoutDashboardAccountYourPurchasesRoute: DashboardLayoutDashboardAccountYourPurchasesRoute,
 	DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute: DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute,
 	DashboardLayoutDashboardAppSettingsBlacklistsRoute: DashboardLayoutDashboardAppSettingsBlacklistsRoute,
@@ -890,13 +781,8 @@ const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
 	DashboardLayoutDashboardAppSettingsTeamRoute: DashboardLayoutDashboardAppSettingsTeamRoute,
 	DashboardLayoutDashboardOrdersOrderIdRoute: DashboardLayoutDashboardOrdersOrderIdRoute,
 	DashboardLayoutDashboardProductsCollectionsRoute: DashboardLayoutDashboardProductsCollectionsRouteWithChildren,
-<<<<<<< Updated upstream
 	DashboardLayoutDashboardProductsProductsRoute: DashboardLayoutDashboardProductsProductsRouteWithChildren,
 	DashboardLayoutDashboardProductsReceivingPaymentsRoute: DashboardLayoutDashboardProductsReceivingPaymentsRoute,
-=======
-	DashboardLayoutDashboardProductsMigrationToolRoute: DashboardLayoutDashboardProductsMigrationToolRoute,
-	DashboardLayoutDashboardProductsProductsRoute: DashboardLayoutDashboardProductsProductsRouteWithChildren,
->>>>>>> Stashed changes
 	DashboardLayoutDashboardProductsShippingOptionsRoute: DashboardLayoutDashboardProductsShippingOptionsRoute,
 	DashboardLayoutDashboardSalesCircularEconomyRoute: DashboardLayoutDashboardSalesCircularEconomyRoute,
 	DashboardLayoutDashboardSalesMessagesRoute: DashboardLayoutDashboardSalesMessagesRouteWithChildren,
