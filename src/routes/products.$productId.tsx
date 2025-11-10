@@ -280,7 +280,7 @@ function RouteComponent() {
 							<ImageCarousel images={formattedImages} title={title} onImageClick={handleImageClick} />
 						</div>
 
-						<div className="flex flex-col gap-8 text-white lg:justify-center">
+						<div className="flex flex-col gap-8 text-white lg:justify-center mr-4">
 							<div className="flex items-center justify-between">
 								<h1 className="text-3xl font-semibold lg:pl-0">{title}</h1>
 								<div className="flex items-center gap-2">
@@ -350,36 +350,38 @@ function RouteComponent() {
 								<div className="flex items-center gap-4">
 									{/* Show cart controls for non-owners */}
 									{permissions.canAddToCart && (
-										<div className="flex items-center gap-2">
-											<Button
-												variant="tertiary"
-												size="icon"
-												onClick={() => setQuantity(Math.max(1, quantity - 1))}
-												disabled={quantity <= 1}
-											>
-												<Minus className="h-6 w-6" />
-											</Button>
-											<Input
-												className="w-12 text-center font-medium bg-white text-black"
-												value={quantity}
-												onChange={(e) => {
-													const value = parseInt(e.target.value)
-													if (!isNaN(value) && value > 0 && value <= (stock || Infinity)) {
-														setQuantity(value)
-													}
-												}}
-												min={1}
-												max={stock}
-												type="number"
-											/>
-											<Button
-												variant="tertiary"
-												size="icon"
-												onClick={() => setQuantity(Math.min(stock || quantity + 1, quantity + 1))}
-												disabled={quantity >= (stock || quantity)}
-											>
-												<Plus className="h-6 w-6" />
-											</Button>
+										<div className="flex items-center gap-2 flex-wrap">
+											<div className="flex items-center gap-2 flex-shrink-0">
+												<Button
+													variant="tertiary"
+													size="icon"
+													onClick={() => setQuantity(Math.max(1, quantity - 1))}
+													disabled={quantity <= 1}
+												>
+													<Minus className="h-6 w-6" />
+												</Button>
+												<Input
+													className="w-12 text-center font-medium bg-white text-black"
+													value={quantity}
+													onChange={(e) => {
+														const value = parseInt(e.target.value)
+														if (!isNaN(value) && value > 0 && value <= (stock || Infinity)) {
+															setQuantity(value)
+														}
+													}}
+													min={1}
+													max={stock}
+													type="number"
+												/>
+												<Button
+													variant="tertiary"
+													size="icon"
+													onClick={() => setQuantity(Math.min(stock || quantity + 1, quantity + 1))}
+													disabled={quantity >= (stock || quantity)}
+												>
+													<Plus className="h-6 w-6" />
+												</Button>
+											</div>
 											<Button variant="secondary" onClick={handleAddToCartClick} disabled={stock === 0 || visibility === 'hidden'}>
 												{visibility === 'hidden' ? 'Not Available' : visibility === 'pre-order' ? 'Pre-order' : 'Add to cart'}
 											</Button>

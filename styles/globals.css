@@ -388,13 +388,16 @@ button {
 	}
 
 	.hero-image-container {
-		max-height: 65vh;
+		height: auto;
+		min-height: 500px;
 		margin-top: 4rem;
+		margin-right: 1rem;
+		max-width: calc(100% - 1rem);
 	}
 
 	@media (min-width: 1024px) {
 		.hero-image-container {
-			height: 45vh;
+			height: 500px;
 			margin-top: 2rem;
 		}
 	}
