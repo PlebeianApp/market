@@ -532,9 +532,14 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		const ndk = ndkActions.getNDK()
 		if (!ndk || !orderId) return
 
-		const sub = ndk.subscribe({ kinds: [17 as any], '#order': [orderId] })
+		// Cannot use multi-character tag filter - fetch all kind 17 events and filter programmatically
+		const sub = ndk.subscribe({ kinds: [17 as any] })
 
 		sub.on('event', (event: NDKEvent) => {
+			// Filter programmatically for order
+			const orderTag = event.tags.find((tag) => tag[0] === 'order')
+			if (orderTag?.[1] !== orderId) return
+
 			setLivePaymentReceipts((prev) => {
 				if (prev.find((e) => e.id === event.id)) return prev
 				return [...prev, event]

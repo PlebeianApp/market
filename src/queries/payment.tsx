@@ -1068,10 +1068,9 @@ export const usePaymentReceiptSubscription = (params: PaymentReceiptSubscription
 
 				console.log(`🔍 Subscribing to payment receipts for invoice: ${invoiceId}`)
 
+				// Cannot use multi-character tag filters - fetch all kind 17 events and filter programmatically
 				const receiptFilter = {
 					kinds: [17],
-					'#order': [orderId],
-					'#payment-request': [invoiceId],
 					since: sessionStartTime - 30, // 30-second buffer for clock skew
 				}
 
@@ -1080,6 +1079,15 @@ export const usePaymentReceiptSubscription = (params: PaymentReceiptSubscription
 				})
 
 				subscription.on('event', (receiptEvent: NDKEvent) => {
+					// Filter programmatically for order and payment-request
+					const orderTag = receiptEvent.tags.find((tag) => tag[0] === 'order')
+					const paymentRequestTag = receiptEvent.tags.find((tag) => tag[0] === 'payment-request')
+
+					// Only process events for our specific order and invoice
+					if (orderTag?.[1] !== orderId || paymentRequestTag?.[1] !== invoiceId) {
+						return
+					}
+
 					console.log(`💳 Payment receipt received for invoice: ${invoiceId}`, receiptEvent)
 
 					if (receiptEvent.created_at && receiptEvent.created_at < sessionStartTime - 30) {
@@ -1087,15 +1095,12 @@ export const usePaymentReceiptSubscription = (params: PaymentReceiptSubscription
 						return
 					}
 
-					const paymentRequestTag = receiptEvent.tags.find((tag) => tag[0] === 'payment-request')
-					if (paymentRequestTag?.[1] === invoiceId) {
-						const paymentTag = receiptEvent.tags.find((tag) => tag[0] === 'payment')
-						const preimage = paymentTag?.[3] || 'external-payment'
+					const paymentTag = receiptEvent.tags.find((tag) => tag[0] === 'payment')
+					const preimage = paymentTag?.[3] || 'external-payment'
 
-						console.log(`✅ Valid payment receipt detected for ${invoiceId}`)
-						subscription.stop()
-						resolve(preimage)
-					}
+					console.log(`✅ Valid payment receipt detected for ${invoiceId}`)
+					subscription.stop()
+					resolve(preimage)
 				})
 			})
 		},
