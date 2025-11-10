@@ -34,14 +34,12 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 	// Fetch orders where the current user is involved (either as sender or recipient of encrypted DMs)
 	const orderCreationFilter: NDKFilter = {
 		kinds: [ORDER_PROCESS_KIND],
-		'#type': [ORDER_MESSAGE_TYPE.ORDER_CREATION],
 		authors: [user.pubkey],
 		limit: 100,
 	}
 
 	const orderReceivedFilter: NDKFilter = {
 		kinds: [ORDER_PROCESS_KIND],
-		'#type': [ORDER_MESSAGE_TYPE.ORDER_CREATION],
 		'#p': [user.pubkey],
 		limit: 100,
 	}
@@ -49,8 +47,19 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 	const ordersSent = await ndk.fetchEvents(orderCreationFilter)
 	const ordersReceived = await ndk.fetchEvents(orderReceivedFilter)
 
+	// Filter for ORDER_CREATION type programmatically (since relays reject multi-character tags)
+	const filterByType = (events: Set<NDKEvent>, messageType: string) => {
+		return Array.from(events).filter((event) => {
+			const typeTag = event.tags.find((tag) => tag[0] === 'type')
+			return typeTag?.[1] === messageType
+		})
+	}
+
+	const filteredOrdersSent = filterByType(ordersSent, ORDER_MESSAGE_TYPE.ORDER_CREATION)
+	const filteredOrdersReceived = filterByType(ordersReceived, ORDER_MESSAGE_TYPE.ORDER_CREATION)
+
 	// Combine all orders
-	const allOrders = new Set<NDKEvent>([...Array.from(ordersSent), ...Array.from(ordersReceived)])
+	const allOrders = new Set<NDKEvent>([...filteredOrdersSent, ...filteredOrdersReceived])
 	if (allOrders.size === 0) return []
 
 	// Get all order IDs from the 'order' tag
@@ -63,14 +72,47 @@ export const fetchOrders = async (): Promise<OrderWithRelatedEvents[]> => {
 
 	if (orderIds.length === 0) return []
 
-	// Fetch all related events for these orders
-	const relatedEventsFilter: NDKFilter = {
-		kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
-		'#order': orderIds,
-		limit: 500,
-	}
+	// Collect all unique authors (buyers and sellers) from orders
+	const authorsSet = new Set<string>()
+	Array.from(allOrders).forEach((order) => {
+		authorsSet.add(order.pubkey) // buyer
+		const sellerTag = order.tags.find((tag) => tag[0] === 'p')
+		if (sellerTag?.[1]) authorsSet.add(sellerTag[1]) // seller
+	})
+	const authors = Array.from(authorsSet)
 
-	const relatedEvents = await ndk.fetchEvents(relatedEventsFilter)
+	// Fetch related events authored by or referencing these users
+	// This is much more efficient than fetching all events
+	const relatedEventsFilters: NDKFilter[] = [
+		{
+			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			authors: authors, // Events created by buyers/sellers
+			limit: 500,
+		},
+		{
+			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			'#p': authors, // Events mentioning buyers/sellers
+			limit: 500,
+		},
+	]
+
+	// Fetch events from both filters in parallel
+	const [eventsByAuthors, eventsByMentions] = await Promise.all([
+		ndk.fetchEvents(relatedEventsFilters[0]),
+		ndk.fetchEvents(relatedEventsFilters[1]),
+	])
+
+	// Combine and deduplicate
+	const allEvents = new Set<NDKEvent>([...Array.from(eventsByAuthors), ...Array.from(eventsByMentions)])
+
+	// Filter events by order ID programmatically
+	const relatedEvents = new Set<NDKEvent>(
+		Array.from(allEvents).filter((event) => {
+			const orderTag = event.tags.find((tag) => tag[0] === 'order')
+			return orderTag?.[1] && orderIds.includes(orderTag[1])
+		}),
+	)
+
 	if (relatedEvents.size === 0) {
 		// Return just the order creation events if no related events found
 		return Array.from(allOrders).map((order) => ({
@@ -208,12 +250,20 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string): Promise<OrderWith
 	// Orders where the specified user is the author (buyer sending order to merchant)
 	const orderCreationFilter: NDKFilter = {
 		kinds: [ORDER_PROCESS_KIND],
-		'#type': [ORDER_MESSAGE_TYPE.ORDER_CREATION],
 		authors: [buyerPubkey],
 		limit: 100,
 	}
 
-	const orders = await ndk.fetchEvents(orderCreationFilter)
+	const allOrders = await ndk.fetchEvents(orderCreationFilter)
+
+	// Filter for ORDER_CREATION type programmatically
+	const orders = new Set<NDKEvent>(
+		Array.from(allOrders).filter((event) => {
+			const typeTag = event.tags.find((tag) => tag[0] === 'type')
+			return typeTag?.[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION
+		}),
+	)
+
 	if (orders.size === 0) return []
 
 	// Get all order IDs
@@ -226,14 +276,42 @@ export const fetchOrdersByBuyer = async (buyerPubkey: string): Promise<OrderWith
 
 	if (orderIds.length === 0) return []
 
-	// Fetch all related events for these orders
-	const relatedEventsFilter: NDKFilter = {
-		kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
-		'#order': orderIds,
-		limit: 500,
-	}
+	// Collect all unique sellers from orders
+	const sellersSet = new Set<string>()
+	Array.from(orders).forEach((order) => {
+		const sellerTag = order.tags.find((tag) => tag[0] === 'p')
+		if (sellerTag?.[1]) sellersSet.add(sellerTag[1])
+	})
+	const sellers = Array.from(sellersSet)
+	const allAuthors = [buyerPubkey, ...sellers]
 
-	const relatedEvents = await ndk.fetchEvents(relatedEventsFilter)
+	// Fetch related events more efficiently using authors filter
+	const relatedEventsFilters: NDKFilter[] = [
+		{
+			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			authors: allAuthors,
+			limit: 500,
+		},
+		{
+			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			'#p': allAuthors,
+			limit: 500,
+		},
+	]
+
+	const [eventsByAuthors, eventsByMentions] = await Promise.all([
+		ndk.fetchEvents(relatedEventsFilters[0]),
+		ndk.fetchEvents(relatedEventsFilters[1]),
+	])
+
+	const allEvents = new Set<NDKEvent>([...Array.from(eventsByAuthors), ...Array.from(eventsByMentions)])
+
+	const relatedEvents = new Set<NDKEvent>(
+		Array.from(allEvents).filter((event) => {
+			const orderTag = event.tags.find((tag) => tag[0] === 'order')
+			return orderTag?.[1] && orderIds.includes(orderTag[1])
+		}),
+	)
 
 	// Group and process events similar to fetchOrders
 	const eventsByOrderId: Record<
@@ -356,12 +434,20 @@ export const fetchOrdersBySeller = async (sellerPubkey: string): Promise<OrderWi
 	// Orders where the specified user is the recipient (merchant receiving orders)
 	const orderReceivedFilter: NDKFilter = {
 		kinds: [ORDER_PROCESS_KIND],
-		'#type': [ORDER_MESSAGE_TYPE.ORDER_CREATION],
 		'#p': [sellerPubkey],
 		limit: 100,
 	}
 
-	const orders = await ndk.fetchEvents(orderReceivedFilter)
+	const allOrders = await ndk.fetchEvents(orderReceivedFilter)
+
+	// Filter for ORDER_CREATION type programmatically
+	const orders = new Set<NDKEvent>(
+		Array.from(allOrders).filter((event) => {
+			const typeTag = event.tags.find((tag) => tag[0] === 'type')
+			return typeTag?.[1] === ORDER_MESSAGE_TYPE.ORDER_CREATION
+		}),
+	)
+
 	if (orders.size === 0) return []
 
 	// Get all order IDs
@@ -374,14 +460,41 @@ export const fetchOrdersBySeller = async (sellerPubkey: string): Promise<OrderWi
 
 	if (orderIds.length === 0) return []
 
-	// Fetch all related events for these orders
-	const relatedEventsFilter: NDKFilter = {
-		kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
-		'#order': orderIds,
-		limit: 500,
-	}
+	// Collect all unique buyers from orders
+	const buyersSet = new Set<string>()
+	Array.from(orders).forEach((order) => {
+		buyersSet.add(order.pubkey) // buyer is the author
+	})
+	const buyers = Array.from(buyersSet)
+	const allAuthors = [sellerPubkey, ...buyers]
 
-	const relatedEvents = await ndk.fetchEvents(relatedEventsFilter)
+	// Fetch related events more efficiently using authors filter
+	const relatedEventsFilters: NDKFilter[] = [
+		{
+			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			authors: allAuthors,
+			limit: 500,
+		},
+		{
+			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			'#p': allAuthors,
+			limit: 500,
+		},
+	]
+
+	const [eventsByAuthors, eventsByMentions] = await Promise.all([
+		ndk.fetchEvents(relatedEventsFilters[0]),
+		ndk.fetchEvents(relatedEventsFilters[1]),
+	])
+
+	const allEvents = new Set<NDKEvent>([...Array.from(eventsByAuthors), ...Array.from(eventsByMentions)])
+
+	const relatedEvents = new Set<NDKEvent>(
+		Array.from(allEvents).filter((event) => {
+			const orderTag = event.tags.find((tag) => tag[0] === 'order')
+			return orderTag?.[1] && orderIds.includes(orderTag[1])
+		}),
+	)
 
 	// Group and process events similar to fetchOrders
 	const eventsByOrderId: Record<
@@ -462,7 +575,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string): Promise<OrderWi
 
 		// Sort all events by created_at (newest first)
 		related.paymentRequests.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-		related.statusUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+		related.shippingUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 		related.shippingUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 		related.generalMessages.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 		related.paymentReceipts.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
@@ -501,95 +614,81 @@ export const fetchOrderById = async (orderId: string): Promise<OrderWithRelatedE
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	// Check if we have a UUID format or a hash format
-	const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(orderId)
+	// Check if we have a hash format (event ID)
 	const isHash = /^[0-9a-f]{64}$/.test(orderId)
 
-	// Fetch order creation event
+	// Fetch order creation events - cannot use '#type' or '#order' filters
 	const orderFilter: NDKFilter = {
 		kinds: [ORDER_PROCESS_KIND],
-		'#type': [ORDER_MESSAGE_TYPE.ORDER_CREATION],
+		limit: 100,
 	}
 
 	// Add the appropriate filter depending on what type of ID we have
-	if (isUuid) {
-		// If it's a UUID, it's in the order tag
-		orderFilter['#order'] = [orderId]
-	} else if (isHash) {
+	if (isHash) {
 		// If it's a hash, it could be the event ID
 		orderFilter.ids = [orderId]
-	} else {
-		// Try both just in case
-		orderFilter['#order'] = [orderId]
 	}
 
-	const orderEvents = await ndk.fetchEvents(orderFilter)
-	if (orderEvents.size === 0) return null
+	const allOrderEvents = await ndk.fetchEvents(orderFilter)
 
-	const orderEvent = Array.from(orderEvents)[0] // Take the first matching order event
+	// Filter programmatically for ORDER_CREATION type and matching order ID
+	const matchingOrders = Array.from(allOrderEvents).filter((event) => {
+		const typeTag = event.tags.find((tag) => tag[0] === 'type')
+		if (typeTag?.[1] !== ORDER_MESSAGE_TYPE.ORDER_CREATION) return false
 
-	// Fetch all related events for this order
-	const relatedEventsFilter: NDKFilter = {
-		kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
-	}
+		// Check if order ID matches
+		if (isHash && event.id === orderId) return true
+
+		const orderTag = event.tags.find((tag) => tag[0] === 'order')
+		return orderTag?.[1] === orderId
+	})
+
+	if (matchingOrders.length === 0) return null
+
+	const orderEvent = matchingOrders[0] // Take the first matching order event
 
 	// Get the order ID from the order tag
 	const orderIdFromTag = orderEvent.tags.find((tag) => tag[0] === 'order')?.[1]
 	const eventId = orderEvent.id
 
-	// Add the appropriate filters
-	if (orderIdFromTag) {
-		relatedEventsFilter['#order'] = [orderIdFromTag]
-	}
+	if (!orderIdFromTag) return null
 
-	// Create a subscription to make sure we're getting real-time updates
-	const sub = ndk.subscribe(relatedEventsFilter, {
-		closeOnEose: false, // Keep subscription open
-	})
+	// Get buyer and seller from the order
+	const buyer = orderEvent.pubkey
+	const seller = orderEvent.tags.find((tag) => tag[0] === 'p')?.[1]
+	if (!seller) return null
 
-	// Set up event handler for new status updates
-	sub.on('event', (event) => {
-		// Process updates if needed
-	})
+	const participants = [buyer, seller]
 
-	// Wait for at least the initial batch of events
-	await new Promise<void>((resolve) => {
-		const timeout = setTimeout(() => resolve(), 2000) // Max 2 seconds wait
-		sub.on('eose', () => {
-			clearTimeout(timeout)
-			resolve()
-		})
-	})
+	// Fetch related events more efficiently using authors filter
+	const relatedEventsFilters: NDKFilter[] = [
+		{
+			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			authors: participants,
+			limit: 500,
+		},
+		{
+			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
+			'#p': participants,
+			limit: 500,
+		},
+	]
 
-	// Get all events from the subscription
-	const relatedEvents = await ndk.fetchEvents(relatedEventsFilter)
+	const [eventsByAuthors, eventsByMentions] = await Promise.all([
+		ndk.fetchEvents(relatedEventsFilters[0]),
+		ndk.fetchEvents(relatedEventsFilters[1]),
+	])
 
-	// Also check for status updates referencing this order's event ID
-	const statusByEventIdFilter: NDKFilter = {
-		kinds: [ORDER_PROCESS_KIND],
-		'#type': [ORDER_MESSAGE_TYPE.STATUS_UPDATE],
-		'#order': [eventId], // Using the event ID as order reference
-	}
+	const allEvents = new Set<NDKEvent>([...Array.from(eventsByAuthors), ...Array.from(eventsByMentions)])
 
-	const statusByEventId = await ndk.fetchEvents(statusByEventIdFilter)
-
-	// Also check for shipping updates referencing this order's event ID
-	const shippingByEventIdFilter: NDKFilter = {
-		kinds: [ORDER_PROCESS_KIND],
-		'#type': [ORDER_MESSAGE_TYPE.SHIPPING_UPDATE],
-		'#order': [eventId], // Using the event ID as order reference
-	}
-
-	const shippingByEventId = await ndk.fetchEvents(shippingByEventIdFilter)
-
-	// Combine all sets of events
-	for (const event of Array.from(statusByEventId)) {
-		relatedEvents.add(event)
-	}
-
-	for (const event of Array.from(shippingByEventId)) {
-		relatedEvents.add(event)
-	}
+	// Filter events by order ID programmatically
+	const relatedEvents = new Set<NDKEvent>(
+		Array.from(allEvents).filter((event) => {
+			const orderTag = event.tags.find((tag) => tag[0] === 'order')
+			// Match both the order UUID and the event ID
+			return orderTag?.[1] && (orderTag[1] === orderIdFromTag || orderTag[1] === eventId)
+		}),
+	)
 
 	// Group by type with improved deduplication
 	const paymentRequests: NDKEvent[] = []
@@ -664,10 +763,9 @@ export const useOrderById = (orderId: string) => {
 	useEffect(() => {
 		if (!orderId || !ndk) return
 
-		// Subscription for all related events
+		// Subscription for all related events - no multi-character tag filters
 		const relatedEventsFilter = {
 			kinds: [ORDER_PROCESS_KIND, ORDER_GENERAL_KIND, PAYMENT_RECEIPT_KIND],
-			'#order': [orderId],
 		}
 
 		const subscription = ndk.subscribe(relatedEventsFilter, {
@@ -676,6 +774,10 @@ export const useOrderById = (orderId: string) => {
 
 		// Event handler for all events
 		subscription.on('event', (newEvent) => {
+			// Check if this event is related to our order
+			const orderTag = newEvent.tags.find((tag) => tag[0] === 'order')
+			if (!orderTag?.[1] || orderTag[1] !== orderId) return
+
 			// If we get a status update, shipping update, or payment receipt, invalidate the query to refresh the data
 			if (newEvent.kind === ORDER_PROCESS_KIND) {
 				const typeTag = newEvent.tags.find((tag) => tag[0] === 'type')
