@@ -246,7 +246,7 @@ async function seedData() {
 
 		// Get product coordinates for this user
 		const userProducts = productsByUser[pubkey] || []
-		const productCoordinates = userProducts.map((ref) => ref.coordinates)
+		const productCoordinates = userProducts
 
 		if (productCoordinates.length >= 3) {
 			console.log(`\n💳 Setting up wallets for user ${pubkey.substring(0, 8)}... (${productCoordinates.length} products)`)
