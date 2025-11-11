@@ -123,12 +123,20 @@ async function seedData() {
 		// Create payment details for each user (one Lightning, one On-chain)
 		console.log(`Creating payment details for user ${pubkey.substring(0, 8)}...`)
 
-		// Create Lightning Network payment detail
-		const lightningPaymentDetail = generateLightningPaymentDetail(WALLETED_USER_LUD16)
+		// Create Lightning Network payment detail (global scope)
+		const lightningPaymentDetail = generateLightningPaymentDetail({
+			lightningAddress: WALLETED_USER_LUD16,
+			scope: 'global',
+			scopeName: 'Global Wallet',
+		})
 		await createPaymentDetailEvent(signer, ndk, lightningPaymentDetail, APP_PUBKEY!)
 
-		// Create On-chain payment detail (using the same XPUB for all users)
-		const onChainPaymentDetail = generateOnChainPaymentDetail(XPUB)
+		// Create On-chain payment detail (using the same XPUB for all users, global scope)
+		const onChainPaymentDetail = generateOnChainPaymentDetail({
+			xpub: XPUB,
+			scope: 'global',
+			scopeName: 'Global Wallet',
+		})
 		await createPaymentDetailEvent(signer, ndk, onChainPaymentDetail, APP_PUBKEY!)
 
 		// Create NWC wallets for each user (2 wallets with organic names)
@@ -229,8 +237,6 @@ async function seedData() {
 		}
 	}
 
-<<<<<<< Updated upstream
-=======
 	// Create multi-wallet configurations for all users (standard seeding)
 	console.log('\n🎯 Creating multi-wallet configurations for all users...')
 	for (const user of devUsers) {
@@ -240,7 +246,7 @@ async function seedData() {
 
 		// Get product coordinates for this user
 		const userProducts = productsByUser[pubkey] || []
-		const productCoordinates = userProducts // productRefs are already coordinates strings
+		const productCoordinates = userProducts.map((ref) => ref.coordinates)
 
 		if (productCoordinates.length >= 3) {
 			console.log(`\n💳 Setting up wallets for user ${pubkey.substring(0, 8)}... (${productCoordinates.length} products)`)
@@ -260,7 +266,6 @@ async function seedData() {
 		}
 	}
 
->>>>>>> Stashed changes
 	// Create V4V shares for all users (after all users are created)
 	console.log('Creating V4V shares for all users...')
 	for (let i = 0; i < devUsers.length; i++) {

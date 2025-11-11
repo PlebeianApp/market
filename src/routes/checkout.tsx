@@ -5,6 +5,7 @@ import { OrderFinalizeComponent } from '@/components/checkout/OrderFinalizeCompo
 import { PaymentContent, type PaymentContentRef, type PaymentInvoiceData } from '@/components/checkout/PaymentContent'
 import { PaymentSummary } from '@/components/checkout/PaymentSummary'
 import { ShippingAddressForm, type CheckoutFormData } from '@/components/checkout/ShippingAddressForm'
+import { WalletSelector, type WalletOption } from '@/components/checkout/WalletSelector'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -15,7 +16,7 @@ import { parseNwcUri, useWallets } from '@/lib/stores/wallet'
 import type { OrderInvoiceSet } from '@/lib/utils/orderUtils'
 import { publishOrderWithDependencies } from '@/publish/orders'
 import { publishPaymentReceipt } from '@/publish/payment'
-import { useGenerateInvoiceMutation } from '@/queries/payment'
+import { useGenerateInvoiceMutation, useAvailablePaymentOptions, type PaymentDetail } from '@/queries/payment'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useForm } from '@tanstack/react-form'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
@@ -41,6 +42,8 @@ function RouteComponent() {
 	const [invoices, setInvoices] = useState<PaymentInvoiceData[]>([])
 	const [shippingData, setShippingData] = useState<CheckoutFormData | null>(null)
 	const [mobileOrderSummaryOpen, setMobileOrderSummaryOpen] = useState(false)
+	const [selectedWallets, setSelectedWallets] = useState<Record<string, string>>({}) // sellerPubkey -> paymentDetailId
+	const [availableWalletsBySeller, setAvailableWalletsBySeller] = useState<Record<string, PaymentDetail[]>>({})
 
 	// Ref to control PaymentContent
 	const paymentContentRef = useRef<PaymentContentRef>(null)
@@ -193,6 +196,38 @@ function RouteComponent() {
 		}
 	}, [currentStep, currentInvoiceIndex, invoices])
 
+	// Fetch available payment options when entering payment step (before invoice generation)
+	useEffect(() => {
+		if (currentStep === 'payment' && Object.keys(availableWalletsBySeller).length === 0 && sellers.length > 0) {
+			const fetchPaymentOptions = async () => {
+				const walletsBySeller: Record<string, PaymentDetail[]> = {}
+
+				for (const sellerPubkey of sellers) {
+					const sellerProducts = productsBySeller[sellerPubkey] || []
+					const productIds = sellerProducts.map((p) => p.id)
+
+					try {
+						const { getAvailablePaymentOptions } = await import('@/queries/payment')
+						const options = await getAvailablePaymentOptions(productIds, sellerPubkey)
+						walletsBySeller[sellerPubkey] = options
+
+						// Auto-select first wallet
+						if (options.length > 0 && !selectedWallets[sellerPubkey]) {
+							setSelectedWallets((prev) => ({ ...prev, [sellerPubkey]: options[0].id }))
+						}
+					} catch (error) {
+						console.error(`Error fetching payment options for seller ${sellerPubkey}:`, error)
+						walletsBySeller[sellerPubkey] = []
+					}
+				}
+
+				setAvailableWalletsBySeller(walletsBySeller)
+			}
+
+			fetchPaymentOptions()
+		}
+	}, [currentStep, sellers, productsBySeller, availableWalletsBySeller, selectedWallets])
+
 	// Generate Lightning invoices when moving to payment step
 	useEffect(() => {
 		if (currentStep === 'payment' && invoices.length === 0 && sellers.length > 0 && !isGeneratingInvoices) {
@@ -219,6 +254,9 @@ function RouteComponent() {
 
 						console.log(`Generating invoice for seller ${sellerPubkey.substring(0, 8)}... (${sellerAmount} sats)`)
 
+						// Get the selected wallet for this seller (if any)
+						const selectedWalletId = selectedWallets[sellerPubkey]
+
 						const sellerInvoice = await generateInvoice({
 							sellerPubkey,
 							amountSats: sellerAmount,
@@ -226,6 +264,7 @@ function RouteComponent() {
 							invoiceId: `invoice-${invoiceIndex++}`,
 							items: sellerItems,
 							type: 'seller',
+							selectedPaymentDetailId: selectedWalletId,
 						})
 
 						// Convert to PaymentInvoiceData format
@@ -483,6 +522,69 @@ function RouteComponent() {
 		}
 	}
 
+	// Regenerate invoice when wallet selection changes
+	const handleWalletChange = async (sellerPubkey: string, newWalletId: string) => {
+		console.log(`💳 Wallet changed for seller ${sellerPubkey.substring(0, 8)}: ${newWalletId}`)
+
+		// Update selected wallet
+		setSelectedWallets((prev) => ({ ...prev, [sellerPubkey]: newWalletId }))
+
+		// Find the invoice for this seller
+		const invoiceIndex = invoices.findIndex((inv) => inv.recipientPubkey === sellerPubkey && inv.type === 'merchant')
+		if (invoiceIndex === -1) {
+			console.warn(`No merchant invoice found for seller ${sellerPubkey}`)
+			return
+		}
+
+		const oldInvoice = invoices[invoiceIndex]
+
+		// Generate new invoice with selected wallet
+		try {
+			const sellerProducts = productsBySeller[sellerPubkey] || []
+			const data = sellerData[sellerPubkey]
+			const totalAmount = data?.satsTotal || 0
+			const shares = data?.shares
+			const sellerAmount = shares?.sellerAmount || totalAmount
+
+			const sellerItems = sellerProducts.map((product) => ({
+				productId: product.id,
+				name: `Product ${product.id.substring(0, 8)}...`,
+				amount: product.amount,
+				price: Math.floor(sellerAmount / sellerProducts.length),
+			}))
+
+			console.log(`🔄 Regenerating invoice for seller ${sellerPubkey.substring(0, 8)}... (${sellerAmount} sats)`)
+
+			const newInvoiceData = await generateInvoice({
+				sellerPubkey,
+				amountSats: sellerAmount,
+				description: `Seller payment for ${sellerProducts.length} items`,
+				invoiceId: oldInvoice.id, // Reuse same ID
+				items: sellerItems,
+				type: 'seller',
+				selectedPaymentDetailId: newWalletId,
+			})
+
+			// Update the invoice in state
+			setInvoices((prevInvoices) => {
+				const updated = [...prevInvoices]
+				updated[invoiceIndex] = {
+					...oldInvoice,
+					bolt11: newInvoiceData.bolt11,
+					lightningAddress: newInvoiceData.lightningAddress,
+					expiresAt: newInvoiceData.expiresAt,
+					status: newInvoiceData.status === 'failed' ? 'expired' : (newInvoiceData.status as 'pending' | 'paid' | 'expired'),
+				}
+				return updated
+			})
+
+			console.log(`✅ Invoice regenerated successfully`)
+		} catch (error) {
+			console.error(`❌ Failed to regenerate invoice:`, error)
+			toast.error('Failed to update payment wallet')
+		}
+	}
+
 	const goBackToShopping = () => {
 		// Clear cart when leaving checkout after completion
 		if (currentStep === 'complete') {
@@ -523,6 +625,7 @@ function RouteComponent() {
 	}
 
 	const handleContinueToPayment = async () => {
+		// Move directly to payment step
 		setCurrentStep('payment')
 
 		if (shippingData && sellers.length > 0 && specOrderIds.length === 0) {
@@ -769,6 +872,9 @@ function RouteComponent() {
 										showNavigation={false} // We have our own navigation above
 										nwcEnabled={nwcEnabled}
 										onNavigate={setCurrentInvoiceIndex}
+										availableWalletsBySeller={availableWalletsBySeller}
+										selectedWallets={selectedWallets}
+										onWalletChange={handleWalletChange}
 									/>
 								</div>
 							)}

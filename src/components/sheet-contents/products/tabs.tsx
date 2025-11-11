@@ -4,18 +4,17 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Spinner } from '@/components/ui/spinner'
 import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
 import type { RichShippingInfo } from '@/lib/stores/cart'
 import { useNDK } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore, type ProductShippingForm } from '@/lib/stores/product'
-import { uiStore, useUI } from '@/lib/stores/ui'
+import { uiStore } from '@/lib/stores/ui'
 import { MempoolService } from '@/lib/utils/mempool'
 import { useBtcExchangeRates, type SupportedCurrency } from '@/queries/external'
 import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useForm } from '@tanstack/react-form'
 import { useStore } from '@tanstack/react-store'
-import { CheckIcon, PackageIcon, PlusIcon, SettingsIcon, TruckIcon, X, Loader2, Info } from 'lucide-react'
+import { Info, ArrowRightLeft, Loader2, PackageIcon, PlusIcon, TruckIcon, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -24,7 +23,7 @@ export function DetailTab() {
 	const { selectedCurrency } = useStore(uiStore)
 	const { data: exchangeRates } = useBtcExchangeRates()
 	const [bitcoinUnit, setBitcoinUnit] = useState<'SATS' | 'BTC'>('SATS')
-	const [currencyMode, setCurrencyMode] = useState<'sats' | 'fiat'>('sats') // For fiat currencies only
+	const [currencyMode, setCurrencyMode] = useState<'sats' | 'fiat'>('fiat') // For fiat currencies only
 	const [fiatDisplayValue, setFiatDisplayValue] = useState('')
 
 	// Use existing conversion functions from MempoolService
@@ -206,31 +205,53 @@ export function DetailTab() {
 				</Select>
 			</div>
 
-			{/* Bitcoin Price Field (always visible) */}
-			<div className="space-y-2">
-				<Label htmlFor="bitcoin-price" className="text-sm font-medium">
-					Price in {bitcoinUnit} <span className="text-red-500">*</span>
-					<span className="text-xs text-muted-foreground ml-1">(Bitcoin)</span>
-				</Label>
-				<div className="relative">
-					<Input
-						id="bitcoin-price"
-						type="number"
-						step="any"
-						placeholder={bitcoinUnit === 'SATS' ? 'e.g., 10000' : 'e.g., 0.0001'}
-						value={getBitcoinDisplayValue()}
-						onChange={(e) => handleBitcoinPriceChange(e.target.value)}
-						className="pr-20"
-					/>
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						onClick={toggleBitcoinUnit}
-						className="absolute right-1 top-1/2 -translate-y-1/2 h-8 px-3 text-xs"
-					>
-						{bitcoinUnit}
-					</Button>
+			<div className="flex flex-row w-full items-end">
+				{/* Fiat Price Field (conditional) */}
+				{showFiatField && (
+					<div className="space-y-2 flex-1">
+						<Label htmlFor="fiat-price" className="text-sm font-medium">
+							Price <span className="text-red-500">*</span>
+							<span className="text-xs text-muted-foreground ml-1">(In {currency})</span>
+						</Label>
+						<Input
+							id="fiat-price"
+							type="number"
+							step="0.01"
+							placeholder={`e.g., 25.00`}
+							value={fiatDisplayValue}
+							onChange={(e) => handleFiatPriceChange(e.target.value)}
+							className="w-full"
+						/>
+					</div>
+				)}
+
+				{showFiatField && <ArrowRightLeft className="m-2 w-6 h-6 flex-shrink-0" />}
+				{/* Bitcoin Price Field (always visible) */}
+				<div className="space-y-2 flex-1">
+					<Label htmlFor="bitcoin-price" className="text-sm font-medium">
+						Price in {bitcoinUnit} <span className="text-red-500">*</span>
+						<span className="text-xs text-muted-foreground ml-1">(Bitcoin)</span>
+					</Label>
+					<div className="relative">
+						<Input
+							id="bitcoin-price"
+							type="number"
+							step="any"
+							placeholder={bitcoinUnit === 'SATS' ? 'e.g., 10000' : 'e.g., 0.0001'}
+							value={getBitcoinDisplayValue()}
+							onChange={(e) => handleBitcoinPriceChange(e.target.value)}
+							className="pr-20"
+						/>
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							onClick={toggleBitcoinUnit}
+							className="absolute right-1 top-1/2 -translate-y-1/2 h-8 px-3 text-xs"
+						>
+							{bitcoinUnit}
+						</Button>
+					</div>
 				</div>
 			</div>
 
@@ -241,58 +262,25 @@ export function DetailTab() {
 					<RadioGroup
 						value={currencyMode}
 						onValueChange={(value: 'sats' | 'fiat') => setCurrencyMode(value)}
-						className="flex flex-col space-y-3"
+						className="flex flex-col space-y-3 mt-2"
 					>
-						<div className="space-y-1">
-							<div className="flex items-center space-x-2">
-								<RadioGroupItem value="sats" id="sats-mode" />
-								<Label htmlFor="sats-mode" className="text-sm">
-									Use sats as currency (amount calculated on spot)
-								</Label>
-							</div>
-							<div className="flex items-start space-x-2 ml-6">
-								<Info className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-								<p className="text-xs text-muted-foreground">
-									The product will be priced in sats, calculated from the current Bitcoin exchange rate. Buyers will pay the exact sats
-									amount at purchase time.
-								</p>
-							</div>
-						</div>
 						<div className="space-y-1">
 							<div className="flex items-center space-x-2">
 								<RadioGroupItem value="fiat" id="fiat-mode" />
 								<Label htmlFor="fiat-mode" className="text-sm">
-									Use fiat as currency
+									Fix the price in fiat (sats price will fluctuate, recommended)
 								</Label>
 							</div>
-							<div className="flex items-start space-x-2 ml-6">
-								<Info className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-								<p className="text-xs text-muted-foreground">
-									The product will be priced in {currency}. Buyers will pay the equivalent sats amount based on the exchange rate at
-									purchase time.
-								</p>
+						</div>
+						<div className="space-y-1">
+							<div className="flex items-center space-x-2">
+								<RadioGroupItem value="sats" id="sats-mode" />
+								<Label htmlFor="sats-mode" className="text-sm">
+									Fix the price in sats (fiat price will fluctuate)
+								</Label>
 							</div>
 						</div>
 					</RadioGroup>
-				</div>
-			)}
-
-			{/* Fiat Price Field (conditional) */}
-			{showFiatField && (
-				<div className="space-y-2">
-					<Label htmlFor="fiat-price" className="text-sm font-medium">
-						Price <span className="text-red-500">*</span>
-						<span className="text-xs text-muted-foreground ml-1">(In {currency})</span>
-					</Label>
-					<Input
-						id="fiat-price"
-						type="number"
-						step="0.01"
-						placeholder={`e.g., 25.00`}
-						value={fiatDisplayValue}
-						onChange={(e) => handleFiatPriceChange(e.target.value)}
-						className="w-full"
-					/>
 				</div>
 			)}
 
@@ -363,8 +351,6 @@ export function DetailTab() {
 
 export function CategoryTab() {
 	const { categories, mainCategory } = useStore(productFormStore)
-
-	// Available main categories from constants
 	const mainCategories = [...PRODUCT_CATEGORIES]
 
 	const handleMainCategorySelect = (value: string) => {
@@ -372,6 +358,10 @@ export function CategoryTab() {
 	}
 
 	const addSubCategory = () => {
+		if (categories.length >= 3) {
+			toast.error('You can only add up to 3 sub categories')
+			return
+		}
 		productFormActions.updateCategories([
 			...categories,
 			{
@@ -476,7 +466,13 @@ export function CategoryTab() {
 						))}
 					</div>
 
-					<Button type="button" variant="outline" className="w-full flex gap-2 justify-center mt-4" onClick={addSubCategory}>
+					<Button
+						type="button"
+						variant="outline"
+						className="w-full flex gap-2 justify-center mt-4"
+						onClick={addSubCategory}
+						disabled={categories.length >= 3}
+					>
 						<span className="i-plus w-5 h-5"></span>
 						New Sub Category
 					</Button>

@@ -14,6 +14,7 @@ import { authStore } from '@/lib/stores/auth'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useLocation, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import React, { useState } from 'react'
+import { UserWithAvatar } from '@/components/UserWithAvatar'
 
 export const Route = createFileRoute('/_dashboard-layout')({
 	component: DashboardLayout,
@@ -246,15 +247,7 @@ function DashboardLayout() {
 						) : (
 							<>
 								{isMessageDetailView && chatProfile ? (
-									<>
-										<Avatar className="h-8 w-8 flex-shrink-0">
-											<AvatarImage src={chatProfile.picture} />
-											<AvatarFallback>
-												{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
-											</AvatarFallback>
-										</Avatar>
-										<span className="truncate min-w-0 flex-1 text-center">{dashboardTitleWithoutEmoji}</span>
-									</>
+									<UserWithAvatar pubkey={chatProfile?.user?.pubkey || ''} size="md" showBadge={false} disableLink={true} />
 								) : (
 									<>
 										{dashboardEmoji && <span className="text-2xl">{dashboardEmoji}</span>}
@@ -333,13 +326,8 @@ function DashboardLayout() {
 
 									{!isMobile && (
 										<h1 className="absolute left-1/2 -translate-x-1/2 text-[1.6rem] font-bold flex items-center gap-2">
-											{isMessageDetailView && chatProfile && (
-												<Avatar className="h-8 w-8">
-													<AvatarImage src={chatProfile.picture} />
-													<AvatarFallback>
-														{(chatProfile.name || chatProfile.displayName || chatPubkey?.slice(0, 1))?.charAt(0).toUpperCase()}
-													</AvatarFallback>
-												</Avatar>
+											{isMessageDetailView && chatProfile?.user?.pubkey && (
+												<UserWithAvatar pubkey={chatProfile?.user?.pubkey} size="md" showBadge={false} disableLink={true} />
 											)}
 											{dashboardTitle}
 										</h1>

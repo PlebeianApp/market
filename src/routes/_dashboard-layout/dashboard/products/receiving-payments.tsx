@@ -1,7 +1,7 @@
+import { DashboardListItem } from '@/components/layout/DashboardListItem'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -31,100 +31,157 @@ import { getProductId, getProductTitle, useProductsByPubkey } from '@/queries/pr
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
 import { format } from 'date-fns'
-import {
-	AnchorIcon,
-	ChevronLeftIcon,
-	ClipboardIcon,
-	GlobeIcon,
-	PackageIcon,
-	PlusIcon,
-	StarIcon,
-	StoreIcon,
-	TrashIcon,
-	ZapIcon,
-} from 'lucide-react'
+import { AnchorIcon, ClipboardIcon, GlobeIcon, PackageIcon, PlusIcon, StarIcon, StoreIcon, TrashIcon, ZapIcon } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { DashboardListItem } from '@/components/layout/DashboardListItem'
 
 interface ScopeSelectorProps {
 	value: PaymentScope
 	scopeId?: string | null
+	scopeIds?: string[] // For multi-product selection
 	userPubkey: string
-	onChange: (scope: PaymentScope, scopeId: string | null, scopeName: string) => void
+	onChange: (scope: PaymentScope, scopeId: string | null, scopeName: string, scopeIds?: string[]) => void
 }
 
-function ScopeSelector({ value, scopeId, userPubkey, onChange }: ScopeSelectorProps) {
+function ScopeSelector({ value, scopeId, scopeIds, userPubkey, onChange }: ScopeSelectorProps) {
 	const productsQuery = useProductsByPubkey(userPubkey, true) // Include hidden products for payment scope selection
 	const collectionsQuery = useCollectionsByPubkey(userPubkey)
+	const [selectedProducts, setSelectedProducts] = useState<string[]>(scopeIds || [])
+	const [isProductSelectorOpen, setIsProductSelectorOpen] = useState(false)
 
 	const handleScopeChange = (newValue: string) => {
 		if (newValue === 'global') {
-			onChange('global', null, 'Global')
+			setSelectedProducts([])
+			onChange('global', null, 'Global', [])
+		} else if (newValue === 'collection:') {
+			// This triggers the collection selector mode
+			setSelectedProducts([])
+		} else if (newValue === 'product:') {
+			// This triggers the multi-product selector mode
+			setIsProductSelectorOpen(true)
 		} else if (newValue.startsWith('collection:')) {
 			const collectionId = newValue.replace('collection:', '')
 			const collection = collectionsQuery.data?.find((c) => getCollectionId(c) === collectionId)
 			if (collection) {
-				onChange('collection', collectionId, getCollectionTitle(collection))
-			}
-		} else if (newValue.startsWith('product:')) {
-			const productId = newValue.replace('product:', '')
-			const product = productsQuery.data?.find((p) => getProductId(p) === productId)
-			if (product) {
-				onChange('product', productId, getProductTitle(product))
+				setSelectedProducts([])
+				onChange('collection', collectionId, getCollectionTitle(collection), [])
 			}
 		}
+	}
+
+	const handleProductToggle = (productId: string) => {
+		setSelectedProducts((prev) => {
+			const newSelection = prev.includes(productId) ? prev.filter((id) => id !== productId) : [...prev, productId]
+
+			// Update parent with the new selection
+			if (newSelection.length > 0) {
+				const productNames = newSelection
+					.map((id) => {
+						const product = productsQuery.data?.find((p) => getProductId(p) === id)
+						return product ? getProductTitle(product) : null
+					})
+					.filter(Boolean)
+
+				const scopeName = newSelection.length === 1 ? productNames[0]! : `${newSelection.length} Products`
+
+				onChange('product', newSelection[0], scopeName, newSelection)
+			}
+
+			return newSelection
+		})
 	}
 
 	const getCurrentValue = () => {
 		if (value === 'global') return 'global'
 		if (value === 'collection' && scopeId) return `collection:${scopeId}`
-		if (value === 'product' && scopeId) return `product:${scopeId}`
+		if (value === 'product' && selectedProducts.length > 0) return 'product:'
 		return 'global'
 	}
 
+	const getDisplayText = () => {
+		if (value === 'global') return 'Global - All products'
+		if (value === 'collection' && scopeId) {
+			const collection = collectionsQuery.data?.find((c) => getCollectionId(c) === scopeId)
+			return collection ? `Collection: ${getCollectionTitle(collection)}` : 'Collection'
+		}
+		if (value === 'product' && selectedProducts.length > 0) {
+			if (selectedProducts.length === 1) {
+				const product = productsQuery.data?.find((p) => getProductId(p) === selectedProducts[0])
+				return product ? `Product: ${getProductTitle(product)}` : '1 Product'
+			}
+			return `${selectedProducts.length} Products selected`
+		}
+		return 'Select scope'
+	}
+
 	return (
-		<Select value={getCurrentValue()} onValueChange={handleScopeChange}>
-			<SelectTrigger>
-				<SelectValue placeholder="Select scope" />
-			</SelectTrigger>
-			<SelectContent>
-				<SelectItem value="global">
-					<div className="flex items-center gap-2">
-						<GlobeIcon className="w-5 h-5" />
-						Global
-					</div>
-				</SelectItem>
+		<div className="space-y-2">
+			<Select value={getCurrentValue()} onValueChange={handleScopeChange}>
+				<SelectTrigger>
+					<SelectValue placeholder="Select scope">{getDisplayText()}</SelectValue>
+				</SelectTrigger>
+				<SelectContent>
+					<SelectItem value="global">
+						<div className="flex items-center gap-2">
+							<GlobeIcon className="w-5 h-5" />
+							Global (All Products)
+						</div>
+					</SelectItem>
 
-				{collectionsQuery.data && collectionsQuery.data.length > 0 && (
-					<>
-						<div className="px-2 py-1 text-xs font-medium text-muted-foreground">Collections</div>
-						{collectionsQuery.data.map((collection) => (
-							<SelectItem key={getCollectionId(collection)} value={`collection:${getCollectionId(collection)}`}>
-								<div className="flex items-center gap-2">
-									<StoreIcon className="w-5 h-5" />
-									<span className="truncate max-w-[200px]">{getCollectionTitle(collection)}</span>
-								</div>
-							</SelectItem>
-						))}
-					</>
-				)}
+					{collectionsQuery.data && collectionsQuery.data.length > 0 && (
+						<>
+							<div className="px-2 py-1 text-xs font-medium text-muted-foreground">Collections</div>
+							{collectionsQuery.data.map((collection) => (
+								<SelectItem key={getCollectionId(collection)} value={`collection:${getCollectionId(collection)}`}>
+									<div className="flex items-center gap-2">
+										<StoreIcon className="w-5 h-5" />
+										<span className="truncate max-w-[200px]">{getCollectionTitle(collection)}</span>
+									</div>
+								</SelectItem>
+							))}
+						</>
+					)}
 
-				{productsQuery.data && productsQuery.data.length > 0 && (
-					<>
-						<div className="px-2 py-1 text-xs font-medium text-muted-foreground">Products</div>
-						{productsQuery.data.map((product) => (
-							<SelectItem key={getProductId(product)} value={`product:${getProductId(product)}`}>
+					{productsQuery.data && productsQuery.data.length > 0 && (
+						<>
+							<div className="px-2 py-1 text-xs font-medium text-muted-foreground">Products</div>
+							<SelectItem value="product:">
 								<div className="flex items-center gap-2">
 									<PackageIcon className="w-5 h-5" />
-									<span className="truncate max-w-[200px]">{getProductTitle(product)}</span>
+									Select Multiple Products...
 								</div>
 							</SelectItem>
-						))}
-					</>
-				)}
-			</SelectContent>
-		</Select>
+						</>
+					)}
+				</SelectContent>
+			</Select>
+
+			{/* Multi-product selector popover */}
+			{isProductSelectorOpen && productsQuery.data && productsQuery.data.length > 0 && (
+				<Card className="p-4">
+					<div className="flex items-center justify-between mb-3">
+						<Label className="font-semibold">Select Products</Label>
+						<Button variant="ghost" size="sm" onClick={() => setIsProductSelectorOpen(false)}>
+							Done
+						</Button>
+					</div>
+					<div className="space-y-2 max-h-60 overflow-y-auto">
+						{productsQuery.data.map((product) => {
+							const productId = getProductId(product)
+							const isSelected = selectedProducts.includes(productId)
+							return (
+								<div key={productId} className="flex items-center gap-2">
+									<Checkbox id={productId} checked={isSelected} onCheckedChange={() => handleProductToggle(productId)} />
+									<Label htmlFor={productId} className="cursor-pointer flex-1">
+										{getProductTitle(product)}
+									</Label>
+								</div>
+							)
+						})}
+					</div>
+				</Card>
+			)}
+		</div>
 	)
 }
 
@@ -357,18 +414,27 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 		setValidationMessage('Saving...')
 
 		try {
-			// Generate coordinates for collection or product scope
-			let coordinates: string | undefined
+			const scopeIds = (editedPaymentDetail as any).scopeIds as string[] | undefined
+
+			// Build coordinates array for multiple products
+			let coordinates: string[] = []
+
 			if (editedPaymentDetail.scope === 'collection' && editedPaymentDetail.scopeId && user?.pubkey) {
-				coordinates = `30405:${user.pubkey}:${editedPaymentDetail.scopeId}`
-			} else if (editedPaymentDetail.scope === 'product' && editedPaymentDetail.scopeId && user?.pubkey) {
-				coordinates = `30402:${user.pubkey}:${editedPaymentDetail.scopeId}`
+				coordinates = [`30405:${user.pubkey}:${editedPaymentDetail.scopeId}`]
+			} else if (editedPaymentDetail.scope === 'product' && user?.pubkey) {
+				// Handle multiple products
+				if (scopeIds && scopeIds.length > 0) {
+					coordinates = scopeIds.map((productId) => `30402:${user.pubkey}:${productId}`)
+				} else if (editedPaymentDetail.scopeId) {
+					// Single product
+					coordinates = [`30402:${user.pubkey}:${editedPaymentDetail.scopeId}`]
+				}
 			}
 
 			const payload = {
 				paymentMethod: editedPaymentDetail.paymentMethod,
 				paymentDetail: editedPaymentDetail.paymentDetail,
-				coordinates, // Add coordinates for scoped payment details
+				coordinates: coordinates.length > 0 ? coordinates : undefined,
 				scope: editedPaymentDetail.scope,
 				scopeId: editedPaymentDetail.scopeId,
 				scopeName: editedPaymentDetail.scopeName,
@@ -381,7 +447,7 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 					paymentDetailId: editedPaymentDetail.id,
 				})
 			} else {
-				await publishMutation.mutateAsync(payload)
+				await publishMutation.mutateAsync(payload as any)
 			}
 
 			onOpenChange(false)
@@ -537,14 +603,19 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 							<ScopeSelector
 								value={editedPaymentDetail.scope}
 								scopeId={editedPaymentDetail.scopeId}
+								scopeIds={(editedPaymentDetail as any).scopeIds}
 								userPubkey={user?.pubkey || ''}
-								onChange={(scope, scopeId, scopeName) => {
-									setEditedPaymentDetail((prev) => ({
-										...prev,
-										scope,
-										scopeId,
-										scopeName,
-									}))
+								onChange={(scope, scopeId, scopeName, scopeIds) => {
+									setEditedPaymentDetail(
+										(prev) =>
+											({
+												...prev,
+												scope,
+												scopeId,
+												scopeName,
+												scopeIds: scopeIds || [],
+											}) as any,
+									)
 								}}
 							/>
 						</div>

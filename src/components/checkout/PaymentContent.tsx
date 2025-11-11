@@ -6,6 +6,7 @@ import {
 } from '@/components/lightning/LightningPaymentProcessor'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
+import { WalletSelector } from '@/components/checkout/WalletSelector'
 import { ndkStore } from '@/lib/stores/ndk'
 import { NDKUser } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
@@ -41,11 +42,26 @@ interface PaymentContentProps {
 	showNavigation?: boolean
 	nwcEnabled?: boolean
 	onNavigate?: (index: number) => void
+	availableWalletsBySeller?: Record<string, any[]> // PaymentDetail[]
+	selectedWallets?: Record<string, string>
+	onWalletChange?: (sellerPubkey: string, walletId: string) => void
 }
 
 export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>(
 	(
-		{ invoices, currentIndex = 0, onPaymentComplete, onPaymentFailed, onSkipPayment, showNavigation = true, nwcEnabled = true, onNavigate },
+		{
+			invoices,
+			currentIndex = 0,
+			onPaymentComplete,
+			onPaymentFailed,
+			onSkipPayment,
+			showNavigation = true,
+			nwcEnabled = true,
+			onNavigate,
+			availableWalletsBySeller = {},
+			selectedWallets = {},
+			onWalletChange,
+		},
 		ref,
 	) => {
 		const [activeIndex, setActiveIndex] = useState(currentIndex)
@@ -276,33 +292,57 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 				)}
 
 				{/* Render ALL Lightning Payment Processors (hidden except for current) */}
-				{allPaymentData.map(({ invoiceId, data }, index) => (
-					<div
-						key={invoiceId}
-						style={{
-							display:
-								index === activeIndex && invoiceStates[invoiceId] !== 'paid' && invoiceStates[invoiceId] !== 'skipped' ? 'block' : 'none',
-						}}
-					>
-						<LightningPaymentProcessor
-							ref={(el) => {
-								processorRefs.current[invoiceId] = el
+				{allPaymentData.map(({ invoiceId, data }, index) => {
+					const invoice = invoices[index]
+					const sellerPubkey = invoice?.recipientPubkey
+					const availableWallets = sellerPubkey ? availableWalletsBySeller[sellerPubkey] || [] : []
+					const selectedWalletId = sellerPubkey ? selectedWallets[sellerPubkey] : null
+					const isMerchantInvoice = invoice?.type === 'merchant'
+
+					return (
+						<div
+							key={invoiceId}
+							style={{
+								display:
+									index === activeIndex && invoiceStates[invoiceId] !== 'paid' && invoiceStates[invoiceId] !== 'skipped' ? 'block' : 'none',
 							}}
-							data={data}
-							onPaymentComplete={handlePaymentComplete}
-							onPaymentFailed={handlePaymentFailed}
-							onSkipPayment={handleSkipPayment}
-							className="shadow-none border-0"
-							showManualVerification={true}
-							active={index === activeIndex} // Only the current processor is active
-							showNavigation={invoices.length > 1}
-							currentIndex={activeIndex}
-							totalInvoices={invoices.length}
-							onNavigate={handleNavigate}
-							skippable={true}
-						/>
-					</div>
-				))}
+						>
+							{/* Wallet Selector for merchant invoices with multiple wallets */}
+							{isMerchantInvoice && availableWallets.length > 0 && onWalletChange && (
+								<div className="mb-4">
+									<WalletSelector
+										wallets={availableWallets.map((w) => ({ ...w, displayName: w.paymentDetail }))}
+										selectedWalletId={selectedWalletId}
+										onSelect={(walletId) => {
+											if (sellerPubkey) {
+												onWalletChange(sellerPubkey, walletId)
+											}
+										}}
+										sellerName={invoice?.recipientName}
+									/>
+								</div>
+							)}
+
+							<LightningPaymentProcessor
+								ref={(el) => {
+									processorRefs.current[invoiceId] = el
+								}}
+								data={data}
+								onPaymentComplete={handlePaymentComplete}
+								onPaymentFailed={handlePaymentFailed}
+								onSkipPayment={handleSkipPayment}
+								className="shadow-none border-0"
+								showManualVerification={true}
+								active={index === activeIndex} // Only the current processor is active
+								showNavigation={invoices.length > 1}
+								currentIndex={activeIndex}
+								totalInvoices={invoices.length}
+								onNavigate={handleNavigate}
+								skippable={true}
+							/>
+						</div>
+					)
+				})}
 			</div>
 		)
 	},
