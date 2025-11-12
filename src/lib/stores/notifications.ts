@@ -9,13 +9,15 @@ export type ConversationNotifications = Record<string, number> // pubkey -> coun
 // Notification state interface
 export interface NotificationState {
 	// Unseen counts
-	unseenOrders: number
-	unseenMessages: number
+	unseenOrders: number // New orders where user is seller
+	unseenMessages: number // New messages in conversations
+	unseenPurchases: number // Updates to orders where user is buyer
 	unseenByConversation: ConversationNotifications
 
 	// Last seen timestamps (unix timestamp in seconds)
 	lastSeenTimestamps: {
 		orders: number
+		purchases: number
 		messages: Record<string, number> // pubkey -> timestamp
 	}
 
@@ -58,9 +60,11 @@ const createInitialState = (): NotificationState => {
 	return {
 		unseenOrders: 0,
 		unseenMessages: 0,
+		unseenPurchases: 0,
 		unseenByConversation: {},
 		lastSeenTimestamps: {
 			orders: stored.lastSeenTimestamps?.orders || 0,
+			purchases: stored.lastSeenTimestamps?.purchases || 0,
 			messages: stored.lastSeenTimestamps?.messages || {},
 		},
 		isInitialized: false,
@@ -104,6 +108,16 @@ export const notificationActions = {
 	},
 
 	/**
+	 * Update unseen purchase count
+	 */
+	setUnseenPurchases: (count: number) => {
+		notificationStore.setState((state) => ({
+			...state,
+			unseenPurchases: Math.max(0, count),
+		}))
+	},
+
+	/**
 	 * Update unseen count for a specific conversation
 	 */
 	setUnseenForConversation: (pubkey: string, count: number) => {
@@ -137,6 +151,16 @@ export const notificationActions = {
 				...state.unseenByConversation,
 				[pubkey]: (state.unseenByConversation[pubkey] || 0) + 1,
 			},
+		}))
+	},
+
+	/**
+	 * Increment unseen purchase count
+	 */
+	incrementUnseenPurchases: () => {
+		notificationStore.setState((state) => ({
+			...state,
+			unseenPurchases: state.unseenPurchases + 1,
 		}))
 	},
 
@@ -218,6 +242,26 @@ export const notificationActions = {
 	},
 
 	/**
+	 * Mark all purchases as seen
+	 * Updates the last seen timestamp and resets unseen count
+	 */
+	markPurchasesSeen: () => {
+		const now = Math.floor(Date.now() / 1000)
+		notificationStore.setState((state) => {
+			const newState = {
+				...state,
+				unseenPurchases: 0,
+				lastSeenTimestamps: {
+					...state.lastSeenTimestamps,
+					purchases: now,
+				},
+			}
+			saveToStorage(newState)
+			return newState
+		})
+	},
+
+	/**
 	 * Get last seen timestamp for orders
 	 */
 	getLastSeenOrders: (): number => {
@@ -229,6 +273,13 @@ export const notificationActions = {
 	 */
 	getLastSeenForConversation: (pubkey: string): number => {
 		return notificationStore.state.lastSeenTimestamps.messages[pubkey] || 0
+	},
+
+	/**
+	 * Get last seen timestamp for purchases
+	 */
+	getLastSeenPurchases: (): number => {
+		return notificationStore.state.lastSeenTimestamps.purchases
 	},
 
 	/**
@@ -244,11 +295,17 @@ export const notificationActions = {
 	 * Recalculate unseen counts based on provided events
 	 * This is used by the monitor to sync with actual data
 	 */
-	recalculateFromEvents: (data: { orderCount: number; messageCount: number; conversationCounts: ConversationNotifications }) => {
+	recalculateFromEvents: (data: {
+		orderCount: number
+		messageCount: number
+		purchaseCount: number
+		conversationCounts: ConversationNotifications
+	}) => {
 		notificationStore.setState((state) => ({
 			...state,
 			unseenOrders: data.orderCount,
 			unseenMessages: data.messageCount,
+			unseenPurchases: data.purchaseCount,
 			unseenByConversation: data.conversationCounts,
 		}))
 	},

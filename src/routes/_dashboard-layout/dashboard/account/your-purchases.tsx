@@ -2,10 +2,11 @@ import { OrderDataTable } from '@/components/orders/OrderDataTable'
 import { purchaseColumns } from '@/components/orders/orderColumns'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ndkActions } from '@/lib/stores/ndk'
+import { notificationActions } from '@/lib/stores/notifications'
 import { getOrderStatus, useOrdersByBuyer } from '@/queries/orders'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/your-purchases')({
 	component: YourPurchasesComponent,
@@ -17,6 +18,11 @@ function YourPurchasesComponent() {
 	const currentUser = ndk?.activeUser
 	const [statusFilter, setStatusFilter] = useState<string>('any')
 	const { data: purchases, isLoading } = useOrdersByBuyer(currentUser?.pubkey || '')
+
+	// Mark all purchase updates as seen when the page is viewed
+	useEffect(() => {
+		notificationActions.markPurchasesSeen()
+	}, [])
 
 	// Filter orders by status if needed
 	const filteredPurchases = useMemo(() => {

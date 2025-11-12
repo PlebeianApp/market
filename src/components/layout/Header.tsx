@@ -20,7 +20,7 @@ export function Header() {
 	const { data: config } = useConfigQuery()
 	const { isAuthenticated, isAuthenticating, user } = useStore(authStore)
 	const { mobileMenuOpen } = useStore(uiStore)
-	const { unseenOrders, unseenMessages } = useStore(notificationStore)
+	const { unseenOrders, unseenMessages, unseenPurchases } = useStore(notificationStore)
 	const location = useLocation()
 	const [scrollY, setScrollY] = useState(0)
 	const [profile, setProfile] = useState<NDKUserProfile | null>(null)
@@ -28,7 +28,7 @@ export function Header() {
 	const isMobile = breakpoint === 'sm' || breakpoint === 'md'
 
 	// Calculate total notification count for dashboard button
-	const totalNotifications = unseenOrders + unseenMessages
+	const totalNotifications = unseenOrders + unseenMessages + unseenPurchases
 
 	// Check if we're on any product page (index page or individual product) or homepage
 	const isProductPage = location.pathname === '/products' || location.pathname.startsWith('/products/')

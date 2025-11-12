@@ -41,6 +41,11 @@ export const useNotificationMonitor = () => {
 			return (event.created_at || 0) > lastSeen
 		}
 
+		const isNewPurchaseUpdate = (event: NDKEvent): boolean => {
+			const lastSeen = notificationActions.getLastSeenPurchases()
+			return (event.created_at || 0) > lastSeen
+		}
+
 		// Initial fetch to calculate current unseen counts
 		const initializeNotifications = async () => {
 			try {
@@ -80,16 +85,40 @@ export const useNotificationMonitor = () => {
 					}
 				})
 
+				// Fetch recent purchase updates (orders where user is buyer)
+				const purchaseFilter: NDKFilter = {
+					kinds: [ORDER_PROCESS_KIND],
+					authors: [user.pubkey],
+					limit: 100,
+				}
+
+				const purchaseEvents = await ndk.fetchEvents(purchaseFilter)
+
+				// Filter for purchase updates (payment requests, status updates, shipping updates)
+				// Exclude order creation events since those are initiated by the buyer
+				const newPurchaseUpdates = Array.from(purchaseEvents).filter((event) => {
+					const typeTag = event.tags.find((tag) => tag[0] === 'type')
+					const isUpdate =
+						typeTag?.[1] === ORDER_MESSAGE_TYPE.PAYMENT_REQUEST ||
+						typeTag?.[1] === ORDER_MESSAGE_TYPE.STATUS_UPDATE ||
+						typeTag?.[1] === ORDER_MESSAGE_TYPE.SHIPPING_UPDATE
+
+					// Only count if it's an update type AND it's from the seller (not the buyer)
+					return isUpdate && event.pubkey !== user.pubkey && isNewPurchaseUpdate(event)
+				})
+
 				// Update store with initial counts
 				notificationActions.recalculateFromEvents({
 					orderCount: newOrders.length,
 					messageCount: totalUnseenMessages,
+					purchaseCount: newPurchaseUpdates.length,
 					conversationCounts,
 				})
 
 				console.log('[NotificationMonitor] Initial counts:', {
 					orders: newOrders.length,
 					messages: totalUnseenMessages,
+					purchases: newPurchaseUpdates.length,
 					conversations: Object.keys(conversationCounts).length,
 				})
 			} catch (error) {
@@ -151,10 +180,9 @@ export const useNotificationMonitor = () => {
 
 		subscriptionsRef.current.push(messageSubscription)
 
-		// 3. Subscribe to order updates (status, shipping, payment) for orders we're involved in
-		// This is more complex - we need to track orders we're part of
-		// For now, we'll just monitor all order process events and filter
-		const orderUpdateSubscription = ndk.subscribe(
+		// 3. Subscribe to purchase updates (orders where user is buyer)
+		// Listen for events tagged with user's pubkey that are updates from sellers
+		const purchaseUpdateSubscription = ndk.subscribe(
 			{
 				kinds: [ORDER_PROCESS_KIND],
 				'#p': [user.pubkey],
@@ -165,25 +193,31 @@ export const useNotificationMonitor = () => {
 			},
 		)
 
-		orderUpdateSubscription.on('event', (event: NDKEvent) => {
+		purchaseUpdateSubscription.on('event', (event: NDKEvent) => {
+			// Only count if event is from someone else (the seller)
+			if (event.pubkey === user.pubkey) return
+
 			const typeTag = event.tags.find((tag) => tag[0] === 'type')
 
-			// Handle different update types
+			// Handle purchase-related updates (seller sending updates to buyer)
 			if (typeTag) {
 				switch (typeTag[1]) {
+					case ORDER_MESSAGE_TYPE.PAYMENT_REQUEST:
 					case ORDER_MESSAGE_TYPE.STATUS_UPDATE:
 					case ORDER_MESSAGE_TYPE.SHIPPING_UPDATE:
-					case ORDER_MESSAGE_TYPE.PAYMENT_REQUEST:
-						// These are updates to existing orders
-						// We could show a different notification type, but for now
-						// we'll just log them. The order detail page will handle updates.
-						console.log('[NotificationMonitor] Order update received:', typeTag[1], event.id)
+						if (isNewPurchaseUpdate(event)) {
+							console.log('[NotificationMonitor] Purchase update received:', typeTag[1], event.id)
+							notificationActions.incrementUnseenPurchases()
+						}
+						break
+					case ORDER_MESSAGE_TYPE.ORDER_CREATION:
+						// This is a new order where user is seller - already handled above
 						break
 				}
 			}
 		})
 
-		subscriptionsRef.current.push(orderUpdateSubscription)
+		subscriptionsRef.current.push(purchaseUpdateSubscription)
 
 		console.log('[NotificationMonitor] Subscriptions active:', subscriptionsRef.current.length)
 

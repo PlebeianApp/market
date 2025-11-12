@@ -108,12 +108,15 @@ function getCurrentEmoji(showSidebar: boolean, currentPath: string): string | nu
 }
 
 // Helper to get notification count for a navigation item
-function getNotificationCount(path: string, unseenOrders: number, unseenMessages: number): number {
+function getNotificationCount(path: string, unseenOrders: number, unseenMessages: number, unseenPurchases: number): number {
 	if (path === '/dashboard/sales/sales') {
 		return unseenOrders
 	}
 	if (path === '/dashboard/sales/messages') {
 		return unseenMessages
+	}
+	if (path === '/dashboard/account/your-purchases') {
+		return unseenPurchases
 	}
 	return 0
 }
@@ -146,7 +149,7 @@ function DashboardLayout() {
 	const [parent] = useAutoAnimate()
 	const { dashboardTitle } = useStore(uiStore)
 	const { isAuthenticated } = useStore(authStore)
-	const { unseenOrders, unseenMessages, unseenByConversation } = useStore(notificationStore)
+	const { unseenOrders, unseenMessages, unseenPurchases, unseenByConversation } = useStore(notificationStore)
 	const isMessageDetailView =
 		location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages'
 
@@ -310,7 +313,7 @@ function DashboardLayout() {
 										<nav className="space-y-2 p-4 lg:p-0 text-xl lg:text-base">
 											{section.items.map((item) => {
 												const isActive = matchRoute({ to: item.path, fuzzy: true })
-												const notificationCount = getNotificationCount(item.path, unseenOrders, unseenMessages)
+												const notificationCount = getNotificationCount(item.path, unseenOrders, unseenMessages, unseenPurchases)
 												return (
 													<Link
 														key={item.path}
