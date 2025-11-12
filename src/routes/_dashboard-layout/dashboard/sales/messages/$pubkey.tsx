@@ -3,6 +3,7 @@ import { ChatMessageBubble } from '@/components/messages/ChatMessageBubble'
 import { MessageInput } from '@/components/messages/MessageInput'
 import { Button } from '@/components/ui/button'
 import { authStore } from '@/lib/stores/auth'
+import { notificationActions } from '@/lib/stores/notifications'
 import { sendChatMessage, useConversationMessages } from '@/queries/messages'
 import { messageKeys } from '@/queries/queryKeyFactory'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
@@ -39,6 +40,11 @@ function ConversationDetailComponent() {
 	useEffect(() => {
 		scrollToBottom()
 	}, [messages])
+
+	// Mark this conversation as seen when viewing it
+	useEffect(() => {
+		notificationActions.markConversationSeen(otherUserPubkey)
+	}, [otherUserPubkey])
 
 	const sendMessageMutation = useMutation({
 		mutationFn: async (content: string) => {

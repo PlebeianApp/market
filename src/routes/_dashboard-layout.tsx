@@ -2,6 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { dashboardNavigation } from '@/config/dashboardNavigation'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
+import { useNotificationMonitor } from '@/hooks/useNotificationMonitor'
 import { cn } from '@/lib/utils'
 import { useAmIAdmin } from '@/queries/app-settings'
 import { useConfigQuery } from '@/queries/config'
@@ -11,6 +12,7 @@ import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useStore } from '@tanstack/react-store'
 import { uiStore, uiActions } from '@/lib/stores/ui'
 import { authStore } from '@/lib/stores/auth'
+import { notificationStore, notificationActions } from '@/lib/stores/notifications'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useLocation, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import React, { useState } from 'react'
@@ -105,6 +107,17 @@ function getCurrentEmoji(showSidebar: boolean, currentPath: string): string | nu
 	return null
 }
 
+// Helper to get notification count for a navigation item
+function getNotificationCount(path: string, unseenOrders: number, unseenMessages: number): number {
+	if (path === '/dashboard/sales/sales') {
+		return unseenOrders
+	}
+	if (path === '/dashboard/sales/messages') {
+		return unseenMessages
+	}
+	return 0
+}
+
 // Component to show when user is not authenticated
 function LoginPrompt() {
 	const handleLoginClick = () => {
@@ -133,8 +146,19 @@ function DashboardLayout() {
 	const [parent] = useAutoAnimate()
 	const { dashboardTitle } = useStore(uiStore)
 	const { isAuthenticated } = useStore(authStore)
+	const { unseenOrders, unseenMessages, unseenByConversation } = useStore(notificationStore)
 	const isMessageDetailView =
 		location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages'
+
+	// Initialize notification system
+	React.useEffect(() => {
+		if (isAuthenticated) {
+			notificationActions.initialize()
+		}
+	}, [isAuthenticated])
+
+	// Start monitoring for notifications
+	useNotificationMonitor()
 
 	// Admin checking
 	const { data: config } = useConfigQuery()
@@ -286,15 +310,23 @@ function DashboardLayout() {
 										<nav className="space-y-2 p-4 lg:p-0 text-xl lg:text-base">
 											{section.items.map((item) => {
 												const isActive = matchRoute({ to: item.path, fuzzy: true })
+												const notificationCount = getNotificationCount(item.path, unseenOrders, unseenMessages)
 												return (
 													<Link
 														key={item.path}
 														to={item.path}
-														className="block p-4 lg:px-6 lg:py-2 transition-colors font-bold border border-black bg-white rounded lg:border-0 lg:bg-transparent lg:rounded-none data-[status=active]:bg-secondary data-[status=active]:text-white data-[status=active]:border-secondary hover:text-pink-500"
+														className="block p-4 lg:px-6 lg:py-2 transition-colors font-bold border border-black bg-white rounded lg:border-0 lg:bg-transparent lg:rounded-none data-[status=active]:bg-secondary data-[status=active]:text-white data-[status=active]:border-secondary hover:text-pink-500 relative"
 														onClick={handleSidebarItemClick}
 														data-status={isActive ? 'active' : 'inactive'}
 													>
-														{item.title}
+														<span className="flex items-center justify-between">
+															<span>{item.title}</span>
+															{notificationCount > 0 && (
+																<span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 text-xs font-bold text-white bg-pink-500 rounded-full ml-2">
+																	{notificationCount > 99 ? '99+' : notificationCount}
+																</span>
+															)}
+														</span>
 													</Link>
 												)
 											})}
