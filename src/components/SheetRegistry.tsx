@@ -1,18 +1,20 @@
 import CartSheetContent from '@/components/sheet-contents/CartSheetContent'
 import { NewProductContent } from '@/components/sheet-contents/NewProductContent'
 import { NewCollectionContent } from '@/components/sheet-contents/NewCollectionContent'
+import { ConversationSheetContent } from '@/components/sheet-contents/ConversationSheetContent'
 import { Sheet } from '@/components/ui/sheet'
 import { useStore } from '@tanstack/react-store'
 import { uiStore } from '@/lib/stores/ui'
 import { useMemo, useState, useEffect } from 'react'
 
 export function SheetRegistry() {
-	const { drawers } = useStore(uiStore)
+	const { drawers, conversationPubkey } = useStore(uiStore)
 
 	const activeDrawer = useMemo(() => {
 		if (drawers.cart) return 'cart'
 		if (drawers.createProduct) return 'createProduct'
 		if (drawers.createCollection) return 'createCollection'
+		if (drawers.conversation) return 'conversation'
 		return null
 	}, [drawers])
 
@@ -54,6 +56,10 @@ export function SheetRegistry() {
 		createCollection: {
 			side: 'right' as const,
 			content: <NewCollectionContent title="Create Collection" description="Organize your products into collections" />,
+		},
+		conversation: {
+			side: 'right' as const,
+			content: conversationPubkey ? <ConversationSheetContent pubkey={conversationPubkey} /> : null,
 		},
 	}
 

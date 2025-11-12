@@ -1,9 +1,10 @@
 import { Button } from '@/components/ui/button'
 import { cartStore } from '@/lib/stores/cart'
+import { uiActions } from '@/lib/stores/ui'
 import { getShippingEvent, getShippingPickupAddressString, getShippingService } from '@/queries/shipping'
 import { useStore } from '@tanstack/react-store'
-import { Check, MapPin, SkipForward } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Check, MapPin, MessageCircle, SkipForward } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import type { PaymentInvoiceData } from './PaymentContent'
 import type { CheckoutFormData } from './ShippingAddressForm'
 
@@ -87,6 +88,16 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 
 	// If this is the final summary (after payments), show completion state
 	const isPostPayment = invoices.length > 0 && invoices.some((invoice) => invoice.status !== 'pending')
+
+	// Extract unique seller pubkeys from invoices
+	const sellerPubkeys = useMemo(() => {
+		const pubkeys = invoices.filter((invoice) => invoice.type === 'merchant').map((invoice) => invoice.recipientPubkey)
+		return Array.from(new Set(pubkeys))
+	}, [invoices])
+
+	const handleMessageSeller = (pubkey: string) => {
+		uiActions.openConversation(pubkey)
+	}
 
 	return (
 		<div className="space-y-6">
@@ -242,6 +253,29 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 						{skippedInvoices.length > 0 && <li>• Complete pending payments from your order history</li>}
 						<li>• Check your messages for updates from sellers</li>
 					</ul>
+				</div>
+			)}
+
+			{/* Seller Contact Section - Show on summary or after payment */}
+			{sellerPubkeys.length > 0 && (
+				<div className="bg-gray-50 rounded-lg p-4">
+					<h3 className="font-medium text-gray-900 mb-3">Need to contact a seller?</h3>
+					<div className="space-y-2">
+						{invoices
+							.filter((invoice) => invoice.type === 'merchant')
+							.map((invoice) => (
+								<Button
+									key={invoice.recipientPubkey}
+									variant="outline"
+									className="w-full flex items-center justify-center gap-2"
+									onClick={() => handleMessageSeller(invoice.recipientPubkey)}
+								>
+									<MessageCircle className="w-4 h-4" />
+									Message {invoice.recipientName}
+								</Button>
+							))}
+					</div>
+					<p className="text-xs text-gray-500 mt-2">Chat directly with sellers about your order, shipping, or any questions</p>
 				</div>
 			)}
 
