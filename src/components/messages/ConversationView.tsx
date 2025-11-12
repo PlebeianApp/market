@@ -6,20 +6,26 @@ import { authStore } from '@/lib/stores/auth'
 import { notificationActions } from '@/lib/stores/notifications'
 import { sendChatMessage, useConversationMessages } from '@/queries/messages'
 import { messageKeys } from '@/queries/queryKeyFactory'
-import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useProfileName } from '@/queries/profiles'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
-export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/messages/$pubkey')({
-	component: ConversationDetailComponent,
-})
+interface ConversationViewProps {
+	/** The pubkey of the other user in the conversation */
+	otherUserPubkey: string
+	/** Optional callback when title changes (for sheet header updates) */
+	onTitleChange?: (title: string) => void
+	/** Whether to show the user avatar header (disable for sheets that show it separately) */
+	showHeader?: boolean
+}
 
-function ConversationDetailComponent() {
-	const { pubkey: otherUserPubkey } = Route.useParams()
+/**
+ * Reusable conversation view component that displays messages and allows sending
+ * Can be used in sheets, dialogs, or as a standalone page component
+ */
+export function ConversationView({ otherUserPubkey, onTitleChange, showHeader = true }: ConversationViewProps) {
 	const { user: currentUser } = useStore(authStore)
 	const queryClient = useQueryClient()
 	const messagesEndRef = useRef<HTMLDivElement | null>(null)
@@ -29,12 +35,17 @@ function ConversationDetailComponent() {
 	const { data: userName, isLoading: isLoadingName } = useProfileName(otherUserPubkey)
 	const displayTitle = isLoadingName ? 'Messages' : userName ? userName : `${otherUserPubkey.substring(0, 8)}...`
 
-	useDashboardTitle(displayTitle)
+	// Notify parent of title changes
+	useEffect(() => {
+		if (onTitleChange) {
+			onTitleChange(displayTitle)
+		}
+	}, [displayTitle, onTitleChange])
 
 	const { data: messages, isLoading, error, refetch } = useConversationMessages(otherUserPubkey)
 
 	const scrollToBottom = () => {
-		setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 0) // Use auto for instant scroll on load
+		setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'auto' }), 0)
 	}
 
 	useEffect(() => {
@@ -63,7 +74,6 @@ function ConversationDetailComponent() {
 			queryClient.invalidateQueries({
 				queryKey: messageKeys.conversationsList(currentUser?.pubkey),
 			})
-			// scrollToBottom() // Let useEffect handle scroll on new messages
 		},
 		onError: (err) => {
 			setIsSending(false)
@@ -79,6 +89,13 @@ function ConversationDetailComponent() {
 
 	return (
 		<div className="flex flex-col h-full">
+			{/* Optional Header */}
+			{showHeader && (
+				<div className="flex-shrink-0 border-b bg-background p-4">
+					<UserWithAvatar pubkey={otherUserPubkey} size="md" showBadge={true} disableLink={false} />
+				</div>
+			)}
+
 			{/* Messages Area */}
 			<div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
 				{isLoading && (

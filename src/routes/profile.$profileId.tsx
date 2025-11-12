@@ -11,6 +11,7 @@ import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { useEntityPermissions } from '@/hooks/useEntityPermissions'
 import { getHexColorFingerprintFromHexPubkey, truncateText } from '@/lib/utils'
 import { ndkActions } from '@/lib/stores/ndk'
+import { uiActions } from '@/lib/stores/ui'
 import { addToBlacklist, removeFromBlacklist } from '@/publish/blacklist'
 import { addToFeaturedUsers, removeFromFeaturedUsers } from '@/publish/featured'
 import { useBlacklistSettings } from '@/queries/blacklist'
@@ -63,6 +64,13 @@ function RouteComponent() {
 	// Handle edit profile
 	const handleEdit = () => {
 		navigate({ to: '/dashboard/account/profile' })
+	}
+
+	// Handle message button
+	const handleMessageClick = () => {
+		if (user?.pubkey) {
+			uiActions.openConversation(user.pubkey)
+		}
 	}
 
 	// Handle blacklist toggle
@@ -161,7 +169,7 @@ function RouteComponent() {
 					{!isSmallScreen && (
 						<div className="flex gap-2">
 							{user && <ZapButton event={user} />}
-							<Button variant="focus" size="icon">
+							<Button variant="focus" size="icon" onClick={handleMessageClick}>
 								<MessageCircle className="w-5 h-5" />
 							</Button>
 							<Button variant="secondary" size="icon">
