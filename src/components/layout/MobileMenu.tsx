@@ -43,8 +43,8 @@ export function MobileMenu() {
 		uiActions.closeMobileMenu()
 	}
 
-	const handleLogout = () => {
-		authActions.logout()
+	const handleLogout = async () => {
+		await authActions.logout()
 		uiActions.closeMobileMenu()
 	}
 
