@@ -3,7 +3,14 @@ import { Store } from '@tanstack/store'
 import { ndkActions } from './ndk'
 import { cartActions } from './cart'
 import { fetchProductsByPubkey } from '@/queries/products'
-import { saveAuthState, getAuthState, clearAuthState, type PersistedAuthState } from '@/lib/auth-persistence'
+import {
+	saveAuthState,
+	getAuthState,
+	clearAllAuthState,
+	saveSessionAuthState,
+	getSessionAuthState,
+	type PersistedAuthState,
+} from '@/lib/auth-persistence'
 
 export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
 export const NOSTR_LOCAL_SIGNER_KEY = 'nostr_local_signer_key'
@@ -29,12 +36,38 @@ export const authStore = new Store<AuthState>(initialState)
 export const authActions = {
 	getAuthFromLocalStorageAndLogin: async () => {
 		try {
+			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
+
+			// First check sessionStorage for session-only login
+			const sessionState = getSessionAuthState()
+			if (sessionState) {
+				switch (sessionState.method) {
+					case 'nip46':
+						if (sessionState.bunkerUrl && sessionState.localSignerKey) {
+							await authActions.loginWithNip46(
+								sessionState.bunkerUrl,
+								new NDKPrivateKeySigner(sessionState.localSignerKey),
+								false // Don't save again
+							)
+							return
+						}
+						break
+
+					case 'extension':
+						await authActions.loginWithExtension(false) // Don't save again
+						return
+
+					case 'encrypted-private-key':
+						authStore.setState((state) => ({ ...state, needsDecryptionPassword: true }))
+						return
+				}
+			}
+
+			// Then check if permanent auto-login is enabled
 			const autoLogin = localStorage.getItem(NOSTR_AUTO_LOGIN)
 			if (autoLogin !== 'true') return
 
-			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
-
-			// Try to restore from IndexedDB first
+			// Try to restore from IndexedDB (permanent storage)
 			const persistedState = await getAuthState()
 			if (persistedState) {
 				switch (persistedState.method) {
@@ -123,17 +156,25 @@ export const authActions = {
 				isAuthenticated: true,
 			}))
 
-			// Note: We don't save unencrypted private keys to IndexedDB
+			// Note: We don't save unencrypted private keys to storage
 			// This method should only be used for encrypted key restoration
 			// Check if this is coming from encrypted storage
 			const encryptedPrivateKey = localStorage.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
-			if (encryptedPrivateKey && localStorage.getItem(NOSTR_AUTO_LOGIN) === 'true') {
-				await saveAuthState({
-					method: 'encrypted-private-key',
+			if (encryptedPrivateKey) {
+				const authStateData = {
+					method: 'encrypted-private-key' as const,
 					pubkey: user.pubkey,
 					timestamp: Date.now(),
 					encryptedKey: encryptedPrivateKey,
-				})
+				}
+
+				if (localStorage.getItem(NOSTR_AUTO_LOGIN) === 'true') {
+					// Permanent storage
+					await saveAuthState(authStateData)
+				} else {
+					// Session-only storage
+					saveSessionAuthState(authStateData)
+				}
 			}
 
 			return user
@@ -166,13 +207,21 @@ export const authActions = {
 				isAuthenticated: true,
 			}))
 
-			// Save auth state to IndexedDB
-			if (saveState && localStorage.getItem(NOSTR_AUTO_LOGIN) === 'true') {
-				await saveAuthState({
-					method: 'extension',
+			// Save auth state - to IndexedDB if auto-login enabled, otherwise to sessionStorage
+			if (saveState) {
+				const authStateData = {
+					method: 'extension' as const,
 					pubkey: user.pubkey,
 					timestamp: Date.now(),
-				})
+				}
+
+				if (localStorage.getItem(NOSTR_AUTO_LOGIN) === 'true') {
+					// Permanent storage
+					await saveAuthState(authStateData)
+				} else {
+					// Session-only storage
+					saveSessionAuthState(authStateData)
+				}
 			}
 
 			return user
@@ -207,15 +256,23 @@ export const authActions = {
 				isAuthenticated: true,
 			}))
 
-			// Save auth state to IndexedDB
-			if (saveState && localStorage.getItem(NOSTR_AUTO_LOGIN) === 'true') {
-				await saveAuthState({
-					method: 'nip46',
+			// Save auth state - to IndexedDB if auto-login enabled, otherwise to sessionStorage
+			if (saveState) {
+				const authStateData = {
+					method: 'nip46' as const,
 					pubkey: user.pubkey,
 					timestamp: Date.now(),
 					bunkerUrl,
 					localSignerKey: localSigner.privateKey || undefined,
-				})
+				}
+
+				if (localStorage.getItem(NOSTR_AUTO_LOGIN) === 'true') {
+					// Permanent storage
+					await saveAuthState(authStateData)
+				} else {
+					// Session-only storage
+					saveSessionAuthState(authStateData)
+				}
 			}
 
 			return user
@@ -239,8 +296,8 @@ export const authActions = {
 		localStorage.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
 		// Disable auto-login when user explicitly logs out
 		localStorage.setItem(NOSTR_AUTO_LOGIN, 'false')
-		// Clear auth state from IndexedDB
-		await clearAuthState()
+		// Clear auth state from both IndexedDB and sessionStorage
+		await clearAllAuthState()
 		// Clear cart when user logs out
 		cartActions.clear()
 		authStore.setState(() => initialState)
