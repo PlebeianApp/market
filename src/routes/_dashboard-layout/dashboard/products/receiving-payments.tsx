@@ -35,6 +35,7 @@ import { AnchorIcon, ClipboardIcon, GlobeIcon, PackageIcon, PlusIcon, StarIcon, 
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { WalletSetupGuide } from '@/components/WalletSetupGuide'
+import { ProfileWalletCheck } from '@/components/ProfileWalletCheck'
 
 interface ScopeSelectorProps {
 	value: PaymentScope
@@ -862,6 +863,7 @@ function ReceivingPaymentsComponent() {
 			<div className="space-y-4 p-4 lg:p-6">
 				{!hasPaymentDetails && openPaymentDetailId !== 'new' ? (
 					<>
+						<ProfileWalletCheck />
 						<WalletSetupGuide />
 						<div className="flex justify-center pt-4">
 							<Button
@@ -875,6 +877,8 @@ function ReceivingPaymentsComponent() {
 					</>
 				) : (
 					<>
+						<ProfileWalletCheck />
+
 						<div className="lg:hidden">
 							<Button
 								onClick={() => handleOpenChange('new', true)}
