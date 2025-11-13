@@ -34,6 +34,7 @@ import { format } from 'date-fns'
 import { AnchorIcon, ClipboardIcon, GlobeIcon, PackageIcon, PlusIcon, StarIcon, StoreIcon, TrashIcon, ZapIcon } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { WalletSetupGuide } from '@/components/WalletSetupGuide'
 
 interface ScopeSelectorProps {
 	value: PaymentScope
@@ -842,58 +843,79 @@ function ReceivingPaymentsComponent() {
 		return <div>Error loading payment details: {error.message}</div>
 	}
 
+	const hasPaymentDetails = paymentDetails && paymentDetails.length > 0
+
 	return (
 		<div>
 			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
 				<h1 className="text-2xl font-bold">Receiving Payments</h1>
-				<Button
-					onClick={() => handleOpenChange('new', true)}
-					className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
-				>
-					<PlusIcon className="w-5 h-5" />
-					Add Payment Method
-				</Button>
-			</div>
-			<div className="space-y-4 p-4 lg:p-6">
-				<div className="lg:hidden">
+				{hasPaymentDetails && (
 					<Button
 						onClick={() => handleOpenChange('new', true)}
-						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+						className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
 					>
 						<PlusIcon className="w-5 h-5" />
 						Add Payment Method
 					</Button>
-				</div>
-
-				{/* Payment form - shows at top when opened */}
-				{openPaymentDetailId === 'new' && (
-					<Card className="mt-4">
-						<CardHeader>
-							<CardTitle>Add New Payment Detail</CardTitle>
-							<CardDescription>Configure a new way to receive payments</CardDescription>
-						</CardHeader>
-						<CardContent>
-							<PaymentDetailForm
-								paymentDetail={null}
-								isOpen={openPaymentDetailId === 'new'}
-								onOpenChange={(open) => handleOpenChange('new', open)}
-								onSuccess={handleSuccess}
-							/>
-						</CardContent>
-					</Card>
 				)}
+			</div>
+			<div className="space-y-4 p-4 lg:p-6">
+				{!hasPaymentDetails && openPaymentDetailId !== 'new' ? (
+					<>
+						<WalletSetupGuide />
+						<div className="flex justify-center pt-4">
+							<Button
+								onClick={() => handleOpenChange('new', true)}
+								size="lg"
+								className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-6 py-3"
+							>
+								<PlusIcon className="w-5 h-5" />I Already Have a Wallet - Add Payment Method
+							</Button>
+						</div>
+					</>
+				) : (
+					<>
+						<div className="lg:hidden">
+							<Button
+								onClick={() => handleOpenChange('new', true)}
+								className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+							>
+								<PlusIcon className="w-5 h-5" />
+								Add Payment Method
+							</Button>
+						</div>
 
-				<div className="space-y-4">
-					{paymentDetails?.map((pd) => (
-						<PaymentDetailListItem
-							key={pd.id}
-							paymentDetail={pd}
-							isOpen={openPaymentDetailId === pd.id}
-							onOpenChange={(open) => handleOpenChange(pd.id, open)}
-							onSuccess={handleSuccess}
-						/>
-					))}
-				</div>
+						{/* Payment form - shows at top when opened */}
+						{openPaymentDetailId === 'new' && (
+							<Card className="mt-4">
+								<CardHeader>
+									<CardTitle>Add New Payment Detail</CardTitle>
+									<CardDescription>Configure a new way to receive payments</CardDescription>
+								</CardHeader>
+								<CardContent>
+									<PaymentDetailForm
+										paymentDetail={null}
+										isOpen={openPaymentDetailId === 'new'}
+										onOpenChange={(open) => handleOpenChange('new', open)}
+										onSuccess={handleSuccess}
+									/>
+								</CardContent>
+							</Card>
+						)}
+
+						<div className="space-y-4">
+							{paymentDetails?.map((pd) => (
+								<PaymentDetailListItem
+									key={pd.id}
+									paymentDetail={pd}
+									isOpen={openPaymentDetailId === pd.id}
+									onOpenChange={(open) => handleOpenChange(pd.id, open)}
+									onSuccess={handleSuccess}
+								/>
+							))}
+						</div>
+					</>
+				)}
 			</div>
 		</div>
 	)
