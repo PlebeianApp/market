@@ -1,13 +1,15 @@
 // seed.ts
 import { devUser1, devUser2, devUser3, devUser4, devUser5, WALLETED_USER_LUD16, XPUB } from '@/lib/fixtures'
+import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
 import { ORDER_STATUS, SHIPPING_STATUS } from '@/lib/schemas/order'
 import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 import { ndkActions } from '@/lib/stores/ndk'
 import { createFeaturedCollectionsEvent, createFeaturedProductsEvent, createFeaturedUsersEvent } from '@/publish/featured'
 import { hexToBytes } from '@noble/hashes/utils'
-import { NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
+import { NDKPrivateKeySigner, NDKEvent } from '@nostr-dev-kit/ndk'
 import { config } from 'dotenv'
 import { getPublicKey } from 'nostr-tools/pure'
+import { faker } from '@faker-js/faker'
 import { createCollectionEvent, createProductReference, generateCollectionData } from './gen_collections'
 import {
 	createGeneralCommunicationEvent,
@@ -23,6 +25,7 @@ import {
 } from './gen_orders'
 import { createPaymentDetailEvent, generateLightningPaymentDetail, generateOnChainPaymentDetail } from './gen_payment_details'
 import { createProductEvent, generateProductData } from './gen_products'
+import { createNip15ProductEvent, generateNip15ProductData } from './gen_nip15_products'
 import { createReviewEvent, generateReviewData } from './gen_review'
 import { createShippingEvent, generatePickupShippingData, generateShippingData } from './gen_shipping'
 import { createUserProfileEvent, generateUserProfileData } from './gen_user'
@@ -140,6 +143,14 @@ async function seedData() {
 		console.log(`Creating NWC wallets for user ${pubkey.substring(0, 8)}...`)
 		await createUserNwcWallets(signer, pubkey, 2)
 
+		// Create relay list (kind 10002) for each user so migration tool can find their products
+		console.log(`Creating relay list for user ${pubkey.substring(0, 8)}...`)
+		const relayListEvent = new NDKEvent(ndk)
+		relayListEvent.kind = 10002
+		relayListEvent.tags.push(['r', RELAY_URL!])
+		await relayListEvent.sign(signer)
+		await relayListEvent.publish()
+
 		// Create shipping options first
 		console.log(`Creating shipping options for user ${pubkey.substring(0, 8)}...`)
 		shippingsByUser[pubkey] = []
@@ -169,7 +180,27 @@ async function seedData() {
 		console.log(`Creating products for user ${pubkey.substring(0, 8)}...`)
 		productsByUser[pubkey] = []
 
-		// Create products with shipping options
+		// Create NIP-15 products first (older format for migration tool)
+		console.log(`  Creating NIP-15 products (older format) for user ${pubkey.substring(0, 8)}...`)
+		const stallId = `stall_${pubkey.substring(0, 8)}_${faker.string.alphanumeric(6)}`
+		const NIP15_PRODUCTS_PER_USER = 5 // Create 5 NIP-15 products per user
+
+		// Generate shipping zone IDs for NIP-15 (simplified - just use IDs)
+		const shippingZoneIds = shippingsByUser[pubkey]
+			.map((ref) => {
+				// Extract shipping ID from reference like "30406:pubkey:id"
+				const parts = ref.split(':')
+				return parts.length > 2 ? parts[2] : null
+			})
+			.filter((id): id is string => id !== null)
+
+		for (let j = 0; j < NIP15_PRODUCTS_PER_USER; j++) {
+			const nip15Product = generateNip15ProductData(stallId, shippingZoneIds)
+			const category = faker.helpers.arrayElement([...PRODUCT_CATEGORIES])
+			await createNip15ProductEvent(signer, ndk, nip15Product, category)
+		}
+
+		// Create NIP-99 products with shipping options
 		// Ensure at least one hidden and one pre-order product
 		for (let j = 0; j < PRODUCTS_PER_USER; j++) {
 			// Use the shipping options from this user for their products
@@ -215,7 +246,7 @@ async function seedData() {
 
 		// Get product coordinates for this user
 		const userProducts = productsByUser[pubkey] || []
-		const productCoordinates = userProducts.map((ref) => ref.coordinates)
+		const productCoordinates = userProducts
 
 		if (productCoordinates.length >= 3) {
 			console.log(`\n💳 Setting up wallets for user ${pubkey.substring(0, 8)}... (${productCoordinates.length} products)`)
