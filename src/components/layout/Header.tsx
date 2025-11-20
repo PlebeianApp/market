@@ -274,13 +274,16 @@ export function Header() {
 										</Tooltip>
 									</>
 								) : (
-									<Button
-										variant="primary"
-										className="p-2 relative hover:[&>span]:text-secondary"
-										icon={<span className="i-account w-6 h-6" />}
-										onClick={handleLoginClick}
-										data-testid="login-button"
-									/>
+									<>
+										<CartButton />
+										<Button
+											variant="primary"
+											className="p-2 relative hover:[&>span]:text-secondary"
+											icon={<span className="i-account w-6 h-6" />}
+											onClick={handleLoginClick}
+											data-testid="login-button"
+										/>
+									</>
 								)}
 							</>
 						)}

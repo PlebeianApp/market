@@ -60,9 +60,8 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 
 		setIsAddingToCart(true)
 		try {
-			const userPubkey = await ndkActions.getUser()
-			if (!userPubkey) return
-			await cartActions.addProduct(userPubkey.pubkey, product)
+			const user = await ndkActions.getUser()
+			await cartActions.addProduct(user?.pubkey ?? null, product)
 			setShowConfirmation(true)
 			setTimeout(() => setShowConfirmation(false), 1200)
 		} finally {
