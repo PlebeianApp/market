@@ -1,9 +1,11 @@
 import { ConversationListItem, type ConversationItemData } from '@/components/messages/ConversationListItem'
 import { authStore } from '@/lib/stores/auth'
+import { notificationActions } from '@/lib/stores/notifications'
 import { useConversationsList } from '@/queries/messages'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { createFileRoute, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
+import { useEffect } from 'react'
 import { Loader2, MessageSquareText } from 'lucide-react'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/messages')({
@@ -13,6 +15,11 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/message
 function MessagesListComponent() {
 	useDashboardTitle('Messages')
 	const { data: conversations, isLoading, error } = useConversationsList()
+
+	// Mark all messages as seen when the messages list is viewed
+	useEffect(() => {
+		notificationActions.markMessagesSeen()
+	}, [])
 
 	return (
 		<div>

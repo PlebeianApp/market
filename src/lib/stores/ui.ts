@@ -2,7 +2,7 @@ import { Store } from '@tanstack/store'
 import { CURRENCIES } from '@/lib/constants'
 
 // Define types for different UI elements
-export type DrawerType = 'cart' | 'createProduct' | 'createCollection'
+export type DrawerType = 'cart' | 'createProduct' | 'createCollection' | 'conversation'
 export type DialogType = 'login' | 'signup' | 'checkout' | 'product-details' | 'scan-qr' | 'v4v-setup'
 export type ToastType = 'success' | 'error' | 'warning' | 'info'
 export type SupportedCurrency = (typeof CURRENCIES)[number]
@@ -32,6 +32,7 @@ export interface UIState {
 	mobileMenuOpen: boolean
 	navigation: NavigationState
 	selectedCurrency: SupportedCurrency
+	conversationPubkey: string | null // Track which conversation to open
 }
 
 // Initial state
@@ -40,7 +41,9 @@ const initialState: UIState = {
 		cart: false,
 		createProduct: false,
 		createCollection: false,
+		conversation: false,
 	},
+	conversationPubkey: null,
 	dialogs: {
 		login: false,
 		signup: false,
@@ -276,6 +279,31 @@ export const uiActions = {
 		uiStore.setState((state) => ({
 			...state,
 			selectedCurrency: currency,
+		}))
+	},
+
+	// Conversation actions
+	openConversation: (pubkey: string) => {
+		uiStore.setState((state) => ({
+			...state,
+			conversationPubkey: pubkey,
+			drawers: {
+				...state.drawers,
+				conversation: true,
+			},
+			activeElement: 'drawer-conversation',
+		}))
+	},
+
+	closeConversation: () => {
+		uiStore.setState((state) => ({
+			...state,
+			conversationPubkey: null,
+			drawers: {
+				...state.drawers,
+				conversation: false,
+			},
+			activeElement: state.activeElement === 'drawer-conversation' ? undefined : state.activeElement,
 		}))
 	},
 }

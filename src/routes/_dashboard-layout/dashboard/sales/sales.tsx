@@ -2,10 +2,11 @@ import { OrderDataTable } from '@/components/orders/OrderDataTable'
 import { salesColumns } from '@/components/orders/orderColumns'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ndkActions } from '@/lib/stores/ndk'
+import { notificationActions } from '@/lib/stores/notifications'
 import { getOrderStatus, useOrdersBySeller } from '@/queries/orders'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/sales')({
 	component: SalesComponent,
@@ -17,6 +18,11 @@ function SalesComponent() {
 	const currentUser = ndk?.activeUser
 	const [statusFilter, setStatusFilter] = useState<string>('any')
 	const { data: sales, isLoading } = useOrdersBySeller(currentUser?.pubkey || '')
+
+	// Mark all orders as seen when the page is viewed
+	useEffect(() => {
+		notificationActions.markOrdersSeen()
+	}, [])
 
 	// Filter orders by status if needed
 	const filteredSales = useMemo(() => {

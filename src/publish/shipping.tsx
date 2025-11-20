@@ -11,7 +11,7 @@ export interface ShippingFormData {
 	price: string
 	currency: string
 	countries: string[]
-	service: 'standard' | 'express' | 'overnight' | 'pickup'
+	service: 'standard' | 'express' | 'overnight' | 'pickup' | 'digital'
 	carrier?: string
 	region?: string
 	additionalRegions?: string[]
@@ -72,8 +72,9 @@ export const createShippingEvent = (
 	if (formData.service === 'pickup') {
 		const pickupCountry = formData.pickupAddress?.country || 'USA'
 		tags.push(['country', pickupCountry])
-	} else {
-		// For non-pickup services, use the countries array
+	} else if (formData.countries && formData.countries.length > 0) {
+		// For non-pickup services, use the countries array if specified
+		// Empty countries array means worldwide shipping - no country tag needed
 		tags.push(['country', ...formData.countries])
 	}
 
@@ -179,18 +180,23 @@ export const publishShippingOption = async (formData: ShippingFormData, signer: 
 		throw new Error('Shipping description is required')
 	}
 
-	if (!formData.price.trim() || isNaN(Number(formData.price))) {
-		throw new Error('Valid shipping price is required')
+	// Price validation - not required for digital delivery
+	if (formData.service !== 'digital') {
+		if (!formData.price.trim() || isNaN(Number(formData.price))) {
+			throw new Error('Valid shipping price is required')
+		}
+
+		if (!formData.currency.trim()) {
+			throw new Error('Currency is required')
+		}
+	} else {
+		// Enforce zero pricing for digital delivery
+		formData.price = '0'
+		formData.currency = formData.currency || 'USD'
 	}
 
-	if (!formData.currency.trim()) {
-		throw new Error('Currency is required')
-	}
-
-	// Countries are only required for non-pickup services
-	if (formData.service !== 'pickup' && (!formData.countries || !formData.countries.length)) {
-		throw new Error('At least one country is required for non-pickup services')
-	}
+	// Countries are optional - empty array means worldwide shipping
+	// No validation needed for countries
 
 	if (!formData.service) {
 		throw new Error('Service type is required')
@@ -245,18 +251,23 @@ export const updateShippingOption = async (
 		throw new Error('Shipping description is required')
 	}
 
-	if (!formData.price.trim() || isNaN(Number(formData.price))) {
-		throw new Error('Valid shipping price is required')
+	// Price validation - not required for digital delivery
+	if (formData.service !== 'digital') {
+		if (!formData.price.trim() || isNaN(Number(formData.price))) {
+			throw new Error('Valid shipping price is required')
+		}
+
+		if (!formData.currency.trim()) {
+			throw new Error('Currency is required')
+		}
+	} else {
+		// Enforce zero pricing for digital delivery
+		formData.price = '0'
+		formData.currency = formData.currency || 'USD'
 	}
 
-	if (!formData.currency.trim()) {
-		throw new Error('Currency is required')
-	}
-
-	// Countries are only required for non-pickup services
-	if (formData.service !== 'pickup' && (!formData.countries || !formData.countries.length)) {
-		throw new Error('At least one country is required for non-pickup services')
-	}
+	// Countries are optional - empty array means worldwide shipping
+	// No validation needed for countries
 
 	if (!formData.service) {
 		throw new Error('Service type is required')

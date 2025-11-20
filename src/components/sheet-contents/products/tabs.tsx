@@ -313,6 +313,7 @@ export function DetailTab() {
 							data-testid="product-quantity-input"
 							required
 							pattern="[0-9]*"
+							inputMode="numeric"
 						/>
 						{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
 							<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>
