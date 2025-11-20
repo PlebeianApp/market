@@ -151,7 +151,6 @@ function RouteComponent() {
 					/>
 				)}
 			</div>
-
 			<div className="flex flex-col relative z-10 pt-[18vh] sm:pt-[22vh] md:pt-[30vh]">
 				<div className="flex flex-row justify-between px-8 py-4 bg-black items-center">
 					<div className="flex flex-row items-center gap-4">
