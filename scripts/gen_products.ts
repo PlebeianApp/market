@@ -1,5 +1,6 @@
 import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
 import type { ProductListingSchema } from '@/lib/schemas/productListing'
+import { createClientTag } from '@/publish/nip89'
 import { faker } from '@faker-js/faker'
 import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import type { z } from 'zod'
@@ -76,12 +77,23 @@ export function generateProductData(
 	}
 }
 
-export async function createProductEvent(signer: NDKPrivateKeySigner, ndk: NDK, productData: ReturnType<typeof generateProductData>) {
+export async function createProductEvent(
+	signer: NDKPrivateKeySigner,
+	ndk: NDK,
+	productData: ReturnType<typeof generateProductData>,
+	appPubkey?: string,
+	handlerId?: string,
+) {
 	const event = new NDKEvent(ndk)
 	event.kind = productData.kind
 	event.content = productData.content
 	event.tags = productData.tags
 	event.created_at = productData.created_at
+
+	// Add client tag if app pubkey and handler ID are provided (NIP-89)
+	if (appPubkey && handlerId) {
+		event.tags.push(createClientTag(appPubkey, handlerId))
+	}
 
 	try {
 		await event.sign(signer)
