@@ -188,7 +188,7 @@ function DashboardInnerComponent() {
 							</Button>
 						</Link>
 
-						<Link to="/dashboard/products/receiving-payments">
+						<Link to="/dashboard/account/receiving-payments">
 							<Button variant="outline" className="w-full justify-start h-auto py-4">
 								<div className="flex items-start gap-3">
 									<span className="text-2xl">💸</span>
@@ -287,7 +287,7 @@ function DashboardInnerComponent() {
 								<div>
 									<div className="font-semibold">Configure payment methods</div>
 									<p className="text-sm text-muted-foreground">Set up how you'll receive payments from customers</p>
-									<Link to="/dashboard/products/receiving-payments">
+									<Link to="/dashboard/account/receiving-payments">
 										<Button variant="link" className="p-0 h-auto">
 											Set Up Payments →
 										</Button>
