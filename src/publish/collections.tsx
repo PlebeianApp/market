@@ -31,6 +31,7 @@ export const createCollectionEvent = (formData: CollectionFormData, signer: NDKS
 	event.tags = [
 		['d', id], // Collection identifier
 		['title', formData.name],
+		['summary', formData.description], // Collection summary
 	]
 
 	// Optional header image
