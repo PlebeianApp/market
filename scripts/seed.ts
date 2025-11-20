@@ -377,7 +377,7 @@ async function seedData() {
 					if (orderId) {
 						// Add a general message from buyer after placing order
 						let kind14Data = generateGeneralCommunicationData(sellerPubkey, orderId, lastEventTimestamp)
-							; ({ createdAt: currentTimestamp } = await createGeneralCommunicationEvent(buyerSigner, ndk, kind14Data))
+						;({ createdAt: currentTimestamp } = await createGeneralCommunicationEvent(buyerSigner, ndk, kind14Data))
 						lastEventTimestamp = currentTimestamp
 
 						switch (i) {
@@ -420,7 +420,7 @@ async function seedData() {
 
 								// Add a general message from seller after payment
 								kind14Data = generateGeneralCommunicationData(buyerPubkey, orderId, lastEventTimestamp)
-									; ({ createdAt: currentTimestamp } = await createGeneralCommunicationEvent(sellerSigner, ndk, kind14Data))
+								;({ createdAt: currentTimestamp } = await createGeneralCommunicationEvent(sellerSigner, ndk, kind14Data))
 								lastEventTimestamp = currentTimestamp
 
 								const statusConfirmed = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED, lastEventTimestamp)
@@ -455,7 +455,7 @@ async function seedData() {
 								}
 
 								const statusConfirmed2 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED, lastEventTimestamp)
-									; ({ createdAt: currentTimestamp } = await createOrderStatusEvent(sellerSigner, ndk, statusConfirmed2))
+								;({ createdAt: currentTimestamp } = await createOrderStatusEvent(sellerSigner, ndk, statusConfirmed2))
 								lastEventTimestamp = currentTimestamp
 
 								const statusProcessing = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.PROCESSING, lastEventTimestamp)
@@ -490,16 +490,16 @@ async function seedData() {
 								}
 
 								const statusConfirmed3 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED, lastEventTimestamp)
-									; ({ createdAt: currentTimestamp } = await createOrderStatusEvent(sellerSigner, ndk, statusConfirmed3))
+								;({ createdAt: currentTimestamp } = await createOrderStatusEvent(sellerSigner, ndk, statusConfirmed3))
 								lastEventTimestamp = currentTimestamp
 
 								const statusProcessing2 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.PROCESSING, lastEventTimestamp)
-									; ({ createdAt: currentTimestamp } = await createOrderStatusEvent(sellerSigner, ndk, statusProcessing2))
+								;({ createdAt: currentTimestamp } = await createOrderStatusEvent(sellerSigner, ndk, statusProcessing2))
 								lastEventTimestamp = currentTimestamp
 
 								// Add a general message from seller before shipping
 								kind14Data = generateGeneralCommunicationData(buyerPubkey, orderId, lastEventTimestamp)
-									; ({ createdAt: currentTimestamp } = await createGeneralCommunicationEvent(sellerSigner, ndk, kind14Data))
+								;({ createdAt: currentTimestamp } = await createGeneralCommunicationEvent(sellerSigner, ndk, kind14Data))
 								lastEventTimestamp = currentTimestamp
 
 								const shippingData = generateShippingUpdateData(buyerPubkey, orderId, SHIPPING_STATUS.SHIPPED, lastEventTimestamp)
@@ -534,20 +534,20 @@ async function seedData() {
 								}
 
 								const statusConfirmed4 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.CONFIRMED, lastEventTimestamp)
-									; ({ createdAt: currentTimestamp } = await createOrderStatusEvent(sellerSigner, ndk, statusConfirmed4))
+								;({ createdAt: currentTimestamp } = await createOrderStatusEvent(sellerSigner, ndk, statusConfirmed4))
 								lastEventTimestamp = currentTimestamp
 
 								const statusProcessing3 = generateOrderStatusData(buyerPubkey, orderId, ORDER_STATUS.PROCESSING, lastEventTimestamp)
-									; ({ createdAt: currentTimestamp } = await createOrderStatusEvent(sellerSigner, ndk, statusProcessing3))
+								;({ createdAt: currentTimestamp } = await createOrderStatusEvent(sellerSigner, ndk, statusProcessing3))
 								lastEventTimestamp = currentTimestamp
 
 								const shippingData2 = generateShippingUpdateData(buyerPubkey, orderId, SHIPPING_STATUS.SHIPPED, lastEventTimestamp)
-									; ({ createdAt: currentTimestamp } = await createShippingUpdateEvent(sellerSigner, ndk, shippingData2))
+								;({ createdAt: currentTimestamp } = await createShippingUpdateEvent(sellerSigner, ndk, shippingData2))
 								lastEventTimestamp = currentTimestamp
 
 								// Add a general message from buyer after receiving
 								kind14Data = generateGeneralCommunicationData(sellerPubkey, orderId, lastEventTimestamp)
-									; ({ createdAt: currentTimestamp } = await createGeneralCommunicationEvent(buyerSigner, ndk, kind14Data))
+								;({ createdAt: currentTimestamp } = await createGeneralCommunicationEvent(buyerSigner, ndk, kind14Data))
 								lastEventTimestamp = currentTimestamp
 
 								// BUYER completes the order after receiving shipment (not seller)
@@ -581,7 +581,7 @@ async function seedData() {
 								const recipientForCancelReason = isBuyerCancelling ? sellerPubkey : buyerPubkey
 								kind14Data = generateGeneralCommunicationData(recipientForCancelReason, orderId, lastEventTimestamp)
 								kind14Data.content = "I've had to cancel this order before payment, sorry for any inconvenience."
-									; ({ createdAt: currentTimestamp } = await createGeneralCommunicationEvent(canceller, ndk, kind14Data))
+								;({ createdAt: currentTimestamp } = await createGeneralCommunicationEvent(canceller, ndk, kind14Data))
 								lastEventTimestamp = currentTimestamp
 
 								const recipientForStatus = isBuyerCancelling ? sellerPubkey : buyerPubkey

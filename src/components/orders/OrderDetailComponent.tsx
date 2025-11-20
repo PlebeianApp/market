@@ -1,12 +1,14 @@
 import { ProductCard } from '@/components/ProductCard'
-import { PaymentDialog, type PaymentInvoiceData } from '@/components/checkout/PaymentDialog'
+import { PaymentDialog } from '@/components/checkout/PaymentDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
-import { cn } from '@/lib/utils'
+import type { PaymentInvoiceData } from '@/lib/types/invoice'
+import { cn, copyToClipboard } from '@/lib/utils'
 import { getStatusStyles } from '@/lib/utils/orderUtils'
+import { getPersistedInvoicesForOrder, persistInvoicesLocally, updatePersistedInvoiceLocally } from '@/lib/utils/invoiceStorage'
 import { publishPaymentReceipt } from '@/publish/payment'
 import { type OrderWithRelatedEvents } from '@/queries/orders'
 import { useGenerateInvoiceMutation } from '@/queries/payment'
@@ -28,6 +30,7 @@ import {
 	AlertTriangle,
 	CheckCircle,
 	Clock,
+	Copy,
 	CreditCard,
 	MapPin,
 	MessageSquare,
@@ -39,7 +42,14 @@ import {
 	XCircle,
 	Zap,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+
+type InvoiceSource = 'request' | 'both'
+
+type InvoiceWithSource = PaymentInvoiceData & {
+	source: InvoiceSource
+	localCopies: PaymentInvoiceData[]
+}
 import { toast } from 'sonner'
 import { DetailField } from '../ui/DetailField'
 import { Separator } from '../ui/separator'
@@ -80,6 +90,10 @@ const getSellerPubkey = (orderEvent: NDKEvent): string => {
 // Extract shipping reference from order event
 const getShippingRef = (orderEvent: NDKEvent): string | undefined => {
 	return orderEvent.tags.find((tag) => tag[0] === 'shipping')?.[1]
+}
+
+const makeInvoiceKey = (invoice: PaymentInvoiceData) => {
+	return `${invoice.orderId}:${invoice.recipientPubkey}:${invoice.amount}:${invoice.type}`
 }
 
 // Parse address string into structured components
@@ -266,6 +280,8 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const [generatingInvoices, setGeneratingInvoices] = useState<Set<string>>(new Set())
 	const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
 	const [selectedInvoiceIndex, setSelectedInvoiceIndex] = useState(0)
+	const [localInvoices, setLocalInvoices] = useState<PaymentInvoiceData[]>([])
+	const [dialogInvoices, setDialogInvoices] = useState<PaymentInvoiceData[]>([])
 
 	// Live payment receipts received via Nostr subscription
 	const [livePaymentReceipts, setLivePaymentReceipts] = useState<NDKEvent[]>([])
@@ -291,6 +307,16 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const sellerPubkey = getSellerPubkey(orderEvent)
 	const isBuyer = buyerPubkey === user?.pubkey
 	const isOrderSeller = sellerPubkey === user?.pubkey
+
+	const refreshLocalInvoices = useCallback(() => {
+		if (!isBuyer || !orderId) return
+		const stored = getPersistedInvoicesForOrder(orderId)
+		setLocalInvoices(stored)
+	}, [isBuyer, orderId])
+
+	useEffect(() => {
+		refreshLocalInvoices()
+	}, [refreshLocalInvoices])
 	const totalAmount = getTotalAmount(orderEvent)
 
 	// Extract shipping information
@@ -435,6 +461,48 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		return invoices
 	}, [order.paymentRequests, livePaymentReceipts, order.paymentReceipts, totalAmount, orderId, sellerV4VShares, sellerPubkey])
 
+	const localInvoicesByKey = useMemo(() => {
+		const map: Record<string, PaymentInvoiceData[]> = {}
+
+		localInvoices.forEach((invoice) => {
+			if (invoice.orderId !== orderId) return
+			const key = makeInvoiceKey(invoice)
+			if (!map[key]) {
+				map[key] = []
+			}
+			map[key].push(invoice)
+		})
+
+		Object.values(map).forEach((list) =>
+			list.sort((a, b) => {
+				const aTime = a.updatedAt || a.createdAt || 0
+				const bTime = b.updatedAt || b.createdAt || 0
+				return bTime - aTime
+			}),
+		)
+
+		return map
+	}, [localInvoices, orderId])
+
+	const enrichedInvoices: InvoiceWithSource[] = useMemo(() => {
+		return invoicesFromPaymentRequests.map((invoice) => {
+			const key = makeInvoiceKey(invoice)
+			const localCopies = localInvoicesByKey[key] || []
+			const latestLocal = localCopies[0]
+
+			return {
+				...invoice,
+				status: latestLocal?.status ?? invoice.status,
+				bolt11: latestLocal?.bolt11 || invoice.bolt11,
+				lightningAddress: latestLocal?.lightningAddress || invoice.lightningAddress,
+				preimage: latestLocal?.preimage || invoice.preimage,
+				isZap: latestLocal?.isZap ?? invoice.isZap,
+				source: latestLocal ? 'both' : 'request',
+				localCopies,
+			}
+		})
+	}, [invoicesFromPaymentRequests, localInvoicesByKey])
+
 	// Function to generate a new invoice for a payment request
 	const handleGenerateNewInvoice = async (invoice: PaymentInvoiceData) => {
 		if (!invoice.lightningAddress) {
@@ -455,9 +523,25 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				type: invoice.type === 'merchant' ? 'seller' : invoice.type,
 			})
 
-			// TODO: Update the payment request with the new invoice
-			// This would require creating a new payment request event or updating the existing one
-			console.log('Generated new invoice:', newInvoiceData)
+			const newPersistedInvoice: PaymentInvoiceData = {
+				id: newInvoiceData.id,
+				orderId,
+				recipientPubkey,
+				recipientName: invoice.recipientName,
+				amount: invoice.amount,
+				description: invoice.description,
+				bolt11: newInvoiceData.bolt11 || null,
+				lightningAddress: newInvoiceData.lightningAddress || invoice.lightningAddress || null,
+				expiresAt: newInvoiceData.expiresAt,
+				status: newInvoiceData.status === 'failed' ? 'expired' : (newInvoiceData.status as 'pending' | 'paid' | 'expired'),
+				type: invoice.type,
+				createdAt: Date.now(),
+				isZap: newInvoiceData.isZap,
+			}
+
+			persistInvoicesLocally([newPersistedInvoice])
+			refreshLocalInvoices()
+
 			toast.success(`New invoice generated for ${invoice.recipientName}`)
 		} catch (error) {
 			console.error('Failed to generate new invoice:', error)
@@ -471,12 +555,20 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		}
 	}
 
+	const openPaymentDialog = (invoiceList: PaymentInvoiceData[]) => {
+		if (!invoiceList.length) return
+		setDialogInvoices(invoiceList)
+		setSelectedInvoiceIndex(0)
+		setPaymentDialogOpen(true)
+	}
+
 	const handlePaymentComplete = async (invoiceId: string, preimage: string) => {
 		console.log(`Payment completed for invoice ${invoiceId}`, { preimage })
 		toast.success('Payment completed successfully!')
 
+		const invoice = enrichedInvoices.find((inv) => inv.id === invoiceId)
+
 		// Publish payment receipt so that reload shows status
-		const invoice = invoicesFromPaymentRequests.find((inv) => inv.id === invoiceId)
 		if (invoice && invoice.bolt11) {
 			try {
 				const receiptId = await publishPaymentReceipt({
@@ -519,12 +611,22 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				console.error('Failed to publish payment receipt:', err)
 			}
 		}
+
+		updatePersistedInvoiceLocally(orderId, invoiceId, {
+			status: 'paid',
+			preimage,
+		})
+		refreshLocalInvoices()
 	}
 
 	const handlePaymentFailed = (_invoiceId: string, error: string) => {
 		console.error(`Payment failed for invoice ${_invoiceId}:`, error)
 		toast.error(`Payment failed: ${error}`)
 		// no local state map; UI remains unchanged (still pending) until user retries or receipt arrives
+		updatePersistedInvoiceLocally(orderId, _invoiceId, {
+			status: 'expired',
+		})
+		refreshLocalInvoices()
 	}
 
 	// Subscribe to payment receipts for this order once component is mounted
@@ -552,12 +654,12 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	}, [orderId])
 
 	// Calculate payment statistics
-	const incompleteInvoices = invoicesFromPaymentRequests.filter((invoice) => {
+	const incompleteInvoices = enrichedInvoices.filter((invoice) => {
 		return invoice.status === 'expired' || invoice.status === 'pending'
 	})
 
-	const paidInvoices = invoicesFromPaymentRequests.filter((invoice) => invoice.status === 'paid')
-	const totalInvoices = invoicesFromPaymentRequests.length
+	const paidInvoices = enrichedInvoices.filter((invoice) => invoice.status === 'paid')
+	const totalInvoices = enrichedInvoices.length
 	const paymentProgress = totalInvoices > 0 ? (paidInvoices.length / totalInvoices) * 100 : 0
 
 	const getStatusIcon = (status: string) => {
@@ -588,6 +690,18 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 			default:
 				return 'bg-gray-100 text-gray-800 border-gray-300'
 		}
+	}
+
+	const formatExpiryDisplay = (timestamp?: number) => {
+		if (!timestamp) return 'No expiry'
+		const millis = timestamp > 10_000_000_000 ? timestamp : timestamp * 1000
+		return format(millis, 'PPP p')
+	}
+
+	const formatLocalInvoiceTimestamp = (invoice: PaymentInvoiceData) => {
+		const timestamp = invoice.updatedAt || invoice.createdAt
+		if (!timestamp) return 'Unknown date'
+		return format(new Date(timestamp), 'PPP p')
 	}
 
 	const currentUserPubkey = user?.pubkey
@@ -851,7 +965,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 										<div>
 											<p className="text-gray-500">Merchant</p>
 											<p className="font-semibold">
-												{invoicesFromPaymentRequests.filter((inv) => inv.description === 'Merchant Payment').length} invoice
+												{enrichedInvoices.filter((inv) => inv.description === 'Merchant Payment').length} invoice
 											</p>
 										</div>
 									</div>
@@ -860,7 +974,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 										<div>
 											<p className="text-gray-500">V4V Recipients</p>
 											<p className="font-semibold">
-												{invoicesFromPaymentRequests.filter((inv) => inv.description === 'V4V Community Payment').length} invoices
+												{enrichedInvoices.filter((inv) => inv.description === 'V4V Community Payment').length} invoices
 											</p>
 										</div>
 									</div>
@@ -868,9 +982,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 										<Package className="w-4 h-4 text-blue-600" />
 										<div>
 											<p className="text-gray-500">Total Amount</p>
-											<p className="font-semibold">
-												{invoicesFromPaymentRequests.reduce((sum, inv) => sum + inv.amount, 0).toLocaleString()} sats
-											</p>
+											<p className="font-semibold">{enrichedInvoices.reduce((sum, inv) => sum + inv.amount, 0).toLocaleString()} sats</p>
 										</div>
 									</div>
 								</div>
@@ -922,7 +1034,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 							{/* Individual invoice payment buttons */}
 							<div className="grid gap-3">
-								{invoicesFromPaymentRequests.map((invoice, index) => {
+								{enrichedInvoices.map((invoice, index) => {
 									const isGeneratingThis = generatingInvoices.has(invoice.id)
 
 									return (
@@ -934,7 +1046,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 												})}
 											>
 												<div className="flex items-center gap-3">
-													{invoicesFromPaymentRequests.length > 1 && (
+													{enrichedInvoices.length > 1 && (
 														<div className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-600">
 															{index + 1}
 														</div>
@@ -949,6 +1061,12 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 													<div>
 														<h4 className="font-medium">{invoice.type === 'merchant' ? 'Merchant Payment' : invoice.recipientName}</h4>
 														{invoice.type !== 'merchant' && <p className="text-sm text-gray-500">{invoice.description}</p>}
+														<p className="text-xs text-gray-500">
+															{invoice.amount.toLocaleString()} sats · {formatExpiryDisplay(invoice.expiresAt)}
+														</p>
+														{invoice.source === 'both' && isBuyer && (
+															<p className="text-xs text-blue-600 mt-1">Payment request + local copy</p>
+														)}
 													</div>
 												</div>
 												<div className="text-right">
@@ -978,8 +1096,8 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 															className="flex-1"
 															disabled={isGeneratingThis}
 															onClick={() => {
-																setSelectedInvoiceIndex(index)
-																setPaymentDialogOpen(true)
+																const list = invoice.localCopies.length > 0 ? invoice.localCopies : [invoice]
+																openPaymentDialog(list)
 															}}
 														>
 															{isGeneratingThis ? (
@@ -1007,6 +1125,29 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 																{isGeneratingThis ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
 															</Button>
 														)}
+
+														{invoice.bolt11 && (
+															<Button
+																variant="ghost"
+																size="sm"
+																className="text-blue-700 hover:text-blue-900"
+																onClick={() => copyToClipboard(invoice.bolt11 || '')}
+															>
+																<Copy className="w-4 h-4 mr-2" />
+																Copy invoice
+															</Button>
+														)}
+														{invoice.preimage && (
+															<Button
+																variant="ghost"
+																size="sm"
+																className="text-blue-700 hover:text-blue-900"
+																onClick={() => copyToClipboard(invoice.preimage || '')}
+															>
+																<Copy className="w-4 h-4 mr-2" />
+																Copy preimage
+															</Button>
+														)}
 													</div>
 												</div>
 											)}
@@ -1017,6 +1158,53 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 													<Badge className={`${getStatusColor(invoice.status || 'pending')} w-full justify-center py-1`} variant="outline">
 														{(invoice.status || 'pending').charAt(0).toUpperCase() + (invoice.status || 'pending').slice(1)}
 													</Badge>
+												</div>
+											)}
+
+											{isBuyer && invoice.localCopies.length > 0 && (
+												<div className="mt-3 border border-blue-200 rounded-lg bg-blue-50 p-3 space-y-2">
+													<p className="text-xs uppercase font-semibold text-blue-800">Stored invoices</p>
+													{invoice.localCopies.map((storedInvoice, storedIndex) => (
+														<div
+															key={`${storedInvoice.id}-${storedInvoice.updatedAt}-${storedIndex}`}
+															className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border border-blue-100 rounded-lg bg-white p-2"
+														>
+															<div>
+																<p className="text-sm font-medium text-gray-900">Attempt #{storedIndex + 1}</p>
+																<p className="text-xs text-gray-600">
+																	{formatLocalInvoiceTimestamp(storedInvoice)} · <span className="capitalize">{storedInvoice.status}</span>
+																</p>
+															</div>
+															<div className="flex flex-wrap gap-2">
+																<Button variant="outline" size="sm" onClick={() => openPaymentDialog([storedInvoice])}>
+																	<Zap className="w-4 h-4 mr-2" />
+																	Pay again
+																</Button>
+																{storedInvoice.bolt11 && (
+																	<Button
+																		variant="ghost"
+																		size="sm"
+																		className="text-blue-700 hover:text-blue-900"
+																		onClick={() => copyToClipboard(storedInvoice.bolt11 || '')}
+																	>
+																		<Copy className="w-4 h-4 mr-2" />
+																		Copy invoice
+																	</Button>
+																)}
+																{storedInvoice.preimage && (
+																	<Button
+																		variant="ghost"
+																		size="sm"
+																		className="text-blue-700 hover:text-blue-900"
+																		onClick={() => copyToClipboard(storedInvoice.preimage || '')}
+																	>
+																		<Copy className="w-4 h-4 mr-2" />
+																		Copy preimage
+																	</Button>
+																)}
+															</div>
+														</div>
+													))}
 												</div>
 											)}
 
@@ -1103,12 +1291,12 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 			<PaymentDialog
 				open={paymentDialogOpen}
 				onOpenChange={setPaymentDialogOpen}
-				invoices={invoicesFromPaymentRequests}
+				invoices={dialogInvoices}
 				currentIndex={selectedInvoiceIndex}
 				onPaymentComplete={handlePaymentComplete}
 				onPaymentFailed={handlePaymentFailed}
 				title={`Pay for Order #${orderId.substring(0, 8)}...`}
-				showNavigation={invoicesFromPaymentRequests.length > 1}
+				showNavigation={dialogInvoices.length > 1}
 				nwcEnabled={true}
 			/>
 		</div>
