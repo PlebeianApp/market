@@ -113,62 +113,62 @@ export function ImageViewerModal({ isOpen, onClose, images, currentIndex, onInde
 					</div>
 				</div>
 
-			{/* Image Container */}
-			<div className="w-full h-full flex items-center justify-center overflow-auto relative">
-				{/* Left navigation button */}
-				{images.length > 1 && (
-					<Button
-						variant="ghost"
-						size="icon"
-						onClick={handlePrev}
-						className="hidden sm:inline-flex absolute left-4 top-1/2 -translate-y-1/2 z-40 bg-black/40 hover:bg-black/60 text-white"
-						aria-label="Previous image"
-						style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}
-					>
-						<ChevronLeft className="h-8 w-8" />
-					</Button>
-				)}
-
-				{/* Right navigation button */}
-				{images.length > 1 && (
-					<Button
-						variant="ghost"
-						size="icon"
-						onClick={handleNext}
-						className="hidden sm:inline-flex absolute right-4 top-1/2 -translate-y-1/2 z-40 bg-black/40 hover:bg-black/60 text-white"
-						aria-label="Next image"
-						style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}
-					>
-						<ChevronRight className="h-8 w-8" />
-					</Button>
-				)}
-
-				{/* Bottom navigation for mobile */}
-				{images.length > 1 && (
-					<div className="sm:hidden absolute bottom-0 left-0 right-0 z-40 flex items-center justify-center gap-6 px-6 py-4 bg-gradient-to-t from-black/80 to-transparent">
+				{/* Image Container */}
+				<div className="w-full h-full flex items-center justify-center overflow-auto relative">
+					{/* Left navigation button */}
+					{images.length > 1 && (
 						<Button
 							variant="ghost"
 							size="icon"
 							onClick={handlePrev}
-							className="bg-black/40 hover:bg-black/60 text-white"
+							className="hidden sm:inline-flex absolute left-4 top-1/2 -translate-y-1/2 z-40 bg-black/40 hover:bg-black/60 text-white"
 							aria-label="Previous image"
 							style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}
 						>
 							<ChevronLeft className="h-8 w-8" />
 						</Button>
+					)}
 
+					{/* Right navigation button */}
+					{images.length > 1 && (
 						<Button
 							variant="ghost"
 							size="icon"
 							onClick={handleNext}
-							className="bg-black/40 hover:bg-black/60 text-white"
+							className="hidden sm:inline-flex absolute right-4 top-1/2 -translate-y-1/2 z-40 bg-black/40 hover:bg-black/60 text-white"
 							aria-label="Next image"
 							style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}
 						>
 							<ChevronRight className="h-8 w-8" />
 						</Button>
-					</div>
-				)}
+					)}
+
+					{/* Bottom navigation for mobile */}
+					{images.length > 1 && (
+						<div className="sm:hidden absolute bottom-0 left-0 right-0 z-40 flex items-center justify-center gap-6 px-6 py-4 bg-gradient-to-t from-black/80 to-transparent">
+							<Button
+								variant="ghost"
+								size="icon"
+								onClick={handlePrev}
+								className="bg-black/40 hover:bg-black/60 text-white"
+								aria-label="Previous image"
+								style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}
+							>
+								<ChevronLeft className="h-8 w-8" />
+							</Button>
+
+							<Button
+								variant="ghost"
+								size="icon"
+								onClick={handleNext}
+								className="bg-black/40 hover:bg-black/60 text-white"
+								aria-label="Next image"
+								style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}
+							>
+								<ChevronRight className="h-8 w-8" />
+							</Button>
+						</div>
+					)}
 
 					<div className="relative flex items-center justify-center w-full h-full p-16">
 						<img
