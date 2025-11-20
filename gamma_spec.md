@@ -46,6 +46,7 @@ Watch-only clients are applications that allow users to display products without
 ### Core Flows
 
 1. Merchant Preferences
+
    - Application preferences via [NIP-89](89.md)
    - Payment method preferences via kind `0` tags
 
@@ -128,6 +129,7 @@ Products are the core element in a marketplace. Each product listing MUST contai
 **Optional tags**:
 
 - Product Details:
+
   - `type`: Product classification `[<type>, <format>]`
     - type: "simple", "variable", or "variation"
     - format: "digital" or "physical"
@@ -138,16 +140,19 @@ Products are the core element in a marketplace. Each product listing MUST contai
   - `spec`: Product specifications `[<key>, <value>]`, can appear multiple times
 
 - Media:
+
   - `image`: Product images `[<url>, <dimensions>, <sorting-order>]`, MAY appear multiple times
     - url: Direct image URL
     - dimensions: Optional, in pixels, "<width>x<height>" format, if not present the place in the array should be respected by using an empty string `""`
     - sorting order: Optional integer for order sorting. Values are sorted from lowest to highest, independent of starting value (not restricted to start with 0 or 1)
 
 - Physical Properties:
+
   - `weight`: Product weight `[<value>, <unit>]` using ISO 80000-1
   - `dim`: Dimensions `[<l>x<w>x<h>, <unit>]` using ISO 80000-1
 
 - Location:
+
   - `location`: Human-readable location string or collection coordinates
   - `g`: Geohash for precise location lookup or collection coordinates
 
@@ -202,20 +207,24 @@ Products are the core element in a marketplace. Each product listing MUST contai
 #### Notes
 
 1. Product Configuration:
+
    - Products can be simple, variable (with options), or variations of variable products
    - Digital products skip shipping requirements
    - Visibility controls product display status
 
 2. Variable products:
+
    - The parent or "root" product should use `variable` as value for `type`
    - The variations of the parent product should use `variation` as value for `type`.
    - Variations MUST include an `a` tag pointing to the `variable` parent product.
 
 3. Shipping Rules:
+
    - Shipping options can be defined directly by pointing to a shipping event, or inherited from collections
    - If the product specifies product-specific shipping, and also from a collection, shipping options MUST be merged.
 
 4. Collections and Categories:
+
    - Products can refer to one o multiple collections using `a` tags, whether or not they are part of it, for discoverability purposes.
    - Categories ("t" tags) aid in discovery and organization
 
@@ -240,10 +249,12 @@ A specialized event type using [NIP-51](51.md) like list format to organize rela
 **Optional tags**:
 
 - Display:
+
   - `image`: Collection banner/thumbnail URL
   - `summary`: Brief collection description
 
 - Location:
+
   - `location`: Human-readable location string
   - `g`: Geohash for precise location lookup
 
@@ -278,10 +289,12 @@ A specialized event type using [NIP-51](51.md) like list format to organize rela
 #### Notes
 
 1. Collection Management:
+
    - Collections can contain any number of products
    - Products can belong to multiple collections
 
 2. Reference Model:
+
    - Collection settings (shipping, location, geohash) serve as references only
    - Products MUST explicitly reference collection resources to inherit collection attributes (e.g. shipping, location, geohash).
    - No automatic cascading of settings to products
@@ -313,6 +326,7 @@ A specialized event type for defining shipping methods, costs, and constraints. 
 - Extra details:
   - `carrier`: The name of the carrier that will be used for the delivery
 - Time and Location:
+
   - `region`: Array of ISO 3166-2 region codes for which shipping method is available `[<code1>, <code2>, ...]`
   - `duration`: Delivery window `[<min>, <max>, <unit>]` using ISO 8601 duration units
     - min: Minimum delivery time
@@ -322,6 +336,7 @@ A specialized event type for defining shipping methods, costs, and constraints. 
   - `g`: Geohash for precise location
 
 - Constraints:
+
   - `weight-min`: Minimum weight `[<value>, <unit>]` (ISO 80000-1)
   - `weight-max`: Maximum weight `[<value>, <unit>]`
   - `dim-min`: Minimum dimensions `[<l>x<w>x<h>, <unit>]`
@@ -415,11 +430,13 @@ Standard Shipping:
 #### Notes
 
 1. Event Management:
+
    - Create separate events for each distinct shipping option
    - Each option needs a unique `d` tag identifier
    - Merchants can reference third-party shipping options
 
 2. Shipping Rules:
+
    - Physical pickup requires location and/or geohash
    - Weight/dimension constraints use ISO 80000-1 units
 
@@ -746,9 +763,11 @@ Sent by buyer to confirm payment completion. The receipt can include proof of pa
 #### Notes
 
 1. Message Flow:
+
    - Receipts should include verifiable proofs
 
 2. Payment Processing:
+
    - Manual mode provides more flexibility
    - Automatic mode enables faster processing and convenience
    - Multiple payment options can be offered
@@ -841,6 +860,7 @@ If not present, it defaults to `manual`. The preferences are processed in this o
 #### Payment Processing Scenarios
 
 1. **Manual Processing**
+
    - Merchant initiates payment request
    - Used when no application is recommended or automatic preferences are set
    - Merchant must manually send payment requests
@@ -848,6 +868,7 @@ If not present, it defaults to `manual`. The preferences are processed in this o
    - Merchants can have their own service that listens for new orders and then sends the payment request
 
 2. **Automatic Processing**
+
    - Buyer initiates payment request
    - Requires a valid `payment_preference` in merchant's kind `0`
    - Service-Based Processing processing if `payment_preference` is `manual` and the merchant have a recommended application
