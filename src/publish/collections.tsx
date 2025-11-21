@@ -4,6 +4,7 @@ import { collectionsKeys } from '@/queries/queryKeyFactory'
 import { toast } from 'sonner'
 import { ndkActions } from '@/lib/stores/ndk'
 import type { RichShippingInfo } from '@/lib/stores/cart'
+import { createClientTag } from './nip89'
 
 export interface CollectionFormData {
 	name: string
@@ -19,7 +20,14 @@ export interface CollectionFormData {
 /**
  * Creates a new collection event (kind 30405)
  */
-export const createCollectionEvent = (formData: CollectionFormData, signer: NDKSigner, ndk: NDK, collectionId?: string): NDKEvent => {
+export const createCollectionEvent = (
+	formData: CollectionFormData,
+	signer: NDKSigner,
+	ndk: NDK,
+	collectionId?: string,
+	appPubkey?: string, // Optional app pubkey for client tag
+	handlerId?: string, // Optional handler ID for client tag
+): NDKEvent => {
 	const event = new NDKEvent(ndk)
 	event.kind = 30405 // Collections kind
 	event.content = formData.description
@@ -53,6 +61,11 @@ export const createCollectionEvent = (formData: CollectionFormData, signer: NDKS
 		})
 
 	event.tags.push(...shippingTags)
+
+	// Add client tag if app pubkey and handler ID are provided (NIP-89)
+	if (appPubkey && handlerId) {
+		event.tags.push(createClientTag(appPubkey, handlerId))
+	}
 
 	return event
 }

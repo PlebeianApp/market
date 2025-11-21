@@ -8,26 +8,12 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { WalletSelector } from '@/components/checkout/WalletSelector'
 import { ndkStore } from '@/lib/stores/ndk'
+import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import { NDKUser } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-
-export interface PaymentInvoiceData {
-	id: string
-	orderId: string
-	bolt11?: string | null
-	amount: number
-	description: string
-	recipientName: string
-	status: 'pending' | 'paid' | 'expired' | 'skipped'
-	expiresAt?: number
-	createdAt: number
-	lightningAddress?: string | null
-	recipientPubkey: string
-	type: 'merchant' | 'v4v'
-}
 
 export interface PaymentContentRef {
 	payAllWithNwc: () => Promise<void>
@@ -161,9 +147,8 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 		const allPaymentData = useMemo(() => {
 			console.log('🔄 Memoizing payment data for', invoices.length, 'invoices')
 			return invoices.map((invoice) => {
-				// V4V payments should always be zaps
-				// Merchant payments use regular bolt11 invoices
-				const isZap = invoice.type === 'v4v'
+				// V4V payments should always be zaps, but some merchant invoices can also be zap invoices
+				const isZap = invoice.isZap ?? invoice.type === 'v4v'
 
 				let recipient: NDKUser | undefined
 				if (isZap && ndkState.ndk) {

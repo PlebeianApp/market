@@ -1,5 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { PaymentContent, type PaymentInvoiceData } from './PaymentContent'
+import type { PaymentInvoiceData } from '@/lib/types/invoice'
+import { PaymentContent } from './PaymentContent'
 
 interface PaymentDialogProps {
 	open: boolean
@@ -12,8 +13,6 @@ interface PaymentDialogProps {
 	showNavigation?: boolean
 	nwcEnabled?: boolean
 }
-
-export type { PaymentInvoiceData }
 
 export function PaymentDialog({
 	open,

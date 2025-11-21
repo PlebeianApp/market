@@ -104,6 +104,11 @@ async function seedData() {
 	}
 	await createUserProfileEvent(appSigner, ndk, appProfile)
 
+	// Use a fixed handler ID for client tags
+	// The actual handler information event is published during setup with app settings
+	const handlerId = 'plebeian-market-handler'
+	console.log(`Using handler ID for client tags: ${handlerId}`)
+
 	// Create user profiles, products and shipping options for each user
 	for (let i = 0; i < devUsers.length; i++) {
 		const user = devUsers[i]
@@ -194,7 +199,7 @@ async function seedData() {
 			}
 
 			const product = generateProductData(userShippingRefs, visibility)
-			const success = await createProductEvent(signer, ndk, product)
+			const success = await createProductEvent(signer, ndk, product, APP_PUBKEY, handlerId)
 			if (success) {
 				const productId = product.tags.find((tag) => tag[0] === 'd')?.[1]
 				if (productId) {
@@ -215,7 +220,7 @@ async function seedData() {
 
 		// Get product coordinates for this user
 		const userProducts = productsByUser[pubkey] || []
-		const productCoordinates = userProducts.map((ref) => ref.coordinates)
+		const productCoordinates = userProducts // userProducts is already an array of coordinate strings
 
 		if (productCoordinates.length >= 3) {
 			console.log(`\n💳 Setting up wallets for user ${pubkey.substring(0, 8)}... (${productCoordinates.length} products)`)
@@ -286,7 +291,7 @@ async function seedData() {
 		for (let i = 0; i < COLLECTIONS_PER_USER; i++) {
 			const collectionProducts = productsByUser[pubkey] || []
 			const collection = generateCollectionData(collectionProducts)
-			const success = await createCollectionEvent(signer, ndk, collection)
+			const success = await createCollectionEvent(signer, ndk, collection, APP_PUBKEY, handlerId)
 			if (success) {
 				const collectionId = collection.tags.find((tag) => tag[0] === 'd')?.[1]
 				if (collectionId) {

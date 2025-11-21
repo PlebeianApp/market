@@ -5,7 +5,7 @@ import { getShippingEvent, getShippingPickupAddressString, getShippingService } 
 import { useStore } from '@tanstack/react-store'
 import { Check, MapPin, MessageCircle, SkipForward } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import type { PaymentInvoiceData } from './PaymentContent'
+import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import type { CheckoutFormData } from './ShippingAddressForm'
 
 interface OrderFinalizeComponentProps {

@@ -1,4 +1,5 @@
 import type { ProductCollectionSchema } from '@/lib/schemas/productCollection'
+import { createClientTag } from '@/publish/nip89'
 import { faker } from '@faker-js/faker'
 import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import type { z } from 'zod'
@@ -35,12 +36,19 @@ export async function createCollectionEvent(
 	signer: NDKPrivateKeySigner,
 	ndk: NDK,
 	collectionData: ReturnType<typeof generateCollectionData>,
+	appPubkey?: string,
+	handlerId?: string,
 ) {
 	const event = new NDKEvent(ndk)
 	event.kind = collectionData.kind
 	event.content = collectionData.content
 	event.tags = collectionData.tags
 	event.created_at = collectionData.created_at
+
+	// Add client tag if app pubkey and handler ID are provided (NIP-89)
+	if (appPubkey && handlerId) {
+		event.tags.push(createClientTag(appPubkey, handlerId))
+	}
 
 	try {
 		await event.sign(signer)

@@ -5,6 +5,7 @@ import { productKeys } from '@/queries/queryKeyFactory'
 import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { createClientTag } from './nip89'
 
 export interface ProductFormData {
 	name: string
@@ -35,6 +36,8 @@ export const createProductEvent = (
 	signer: NDKSigner,
 	ndk: NDK,
 	productId?: string, // Optional for updates
+	appPubkey?: string, // Optional app pubkey for client tag
+	handlerId?: string, // Optional handler ID for client tag
 ): NDKEvent => {
 	const event = new NDKEvent(ndk)
 	event.kind = 30402 // Product listings kind
@@ -72,6 +75,9 @@ export const createProductEvent = (
 
 	const collectionTag = formData.selectedCollection ? [['collection', formData.selectedCollection] as NDKTag] : []
 
+	// Add client tag if app pubkey and handler ID are provided (NIP-89)
+	const clientTag = appPubkey && handlerId ? [createClientTag(appPubkey, handlerId)] : []
+
 	// Required tags
 	event.tags = [
 		['d', id], // Product identifier - this is the key for updates!
@@ -88,6 +94,7 @@ export const createProductEvent = (
 		...weightTag,
 		...dimensionsTag,
 		...collectionTag,
+		...clientTag,
 	]
 
 	return event
