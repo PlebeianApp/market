@@ -3,6 +3,7 @@ import { CartSummary } from '@/components/CartSummary'
 import { CheckoutProgress } from '@/components/checkout/CheckoutProgress'
 import { OrderFinalizeComponent } from '@/components/checkout/OrderFinalizeComponent'
 import { PaymentContent, type PaymentContentRef } from '@/components/checkout/PaymentContent'
+import { PaymentMethodSelector } from '@/components/checkout/PaymentMethodSelector'
 import { PaymentSummary } from '@/components/checkout/PaymentSummary'
 import { ShippingAddressForm, type CheckoutFormData } from '@/components/checkout/ShippingAddressForm'
 import { WalletSelector, type WalletOption } from '@/components/checkout/WalletSelector'
@@ -46,6 +47,8 @@ function RouteComponent() {
 	const [mobileOrderSummaryOpen, setMobileOrderSummaryOpen] = useState(false)
 	const [selectedWallets, setSelectedWallets] = useState<Record<string, string>>({}) // sellerPubkey -> paymentDetailId
 	const [availableWalletsBySeller, setAvailableWalletsBySeller] = useState<Record<string, PaymentDetail[]>>({})
+	const [paymentMethod, setPaymentMethod] = useState<'ln' | 'on-chain'>('ln') // Merchant payment method
+	const [v4vPaymentMethods, setV4vPaymentMethods] = useState<Record<string, 'ln' | 'on-chain'>>({}) // V4V payment methods per recipient
 
 	// Ref to control PaymentContent
 	const paymentContentRef = useRef<PaymentContentRef>(null)
@@ -670,6 +673,8 @@ function RouteComponent() {
 					productsBySeller,
 					sellerData,
 					v4vShares,
+					paymentMethod,
+					v4vPaymentMethods,
 				})
 				setSpecOrderIds(createdOrderIds)
 				console.log('\n🎉 Order creation process complete. Generated Order IDs:', createdOrderIds)
@@ -834,6 +839,49 @@ function RouteComponent() {
 											onNewOrder={goBackToShopping}
 											// Note: onContinueToPayment moved to footer
 										/>
+
+										{/* Payment Method Selection */}
+										<div className="px-4 pb-4 mt-6 space-y-6">
+											{/* Merchant Payment Method */}
+											<div>
+												<h3 className="font-medium text-gray-900 mb-2">Merchant Payment Method</h3>
+												<PaymentMethodSelector
+													selectedMethod={paymentMethod}
+													onSelect={(method) => setPaymentMethod(method as 'ln' | 'on-chain')}
+												/>
+											</div>
+
+											{/* V4V Recipients Payment Methods */}
+											{Object.entries(v4vShares).some(([_, shares]) => shares.length > 0) && (
+												<div className="border-t pt-4">
+													<h3 className="font-medium text-gray-900 mb-4">V4V Contributors Payment Methods</h3>
+													<p className="text-sm text-gray-600 mb-4">Select how each contributor should receive their share</p>
+													<div className="space-y-4">
+														{Object.entries(v4vShares).map(([sellerPubkey, shares]) =>
+															shares.map((share) => (
+																<div key={share.pubkey} className="border rounded-lg p-4">
+																	<div className="flex items-center justify-between mb-3">
+																		<div>
+																			<h4 className="font-medium">{share.name}</h4>
+																			<p className="text-sm text-gray-500">{share.percentage}% share</p>
+																		</div>
+																	</div>
+																	<PaymentMethodSelector
+																		selectedMethod={v4vPaymentMethods[share.pubkey] || 'ln'}
+																		onSelect={(method) => {
+																			setV4vPaymentMethods((prev) => ({
+																				...prev,
+																				[share.pubkey]: method as 'ln' | 'on-chain',
+																			}))
+																		}}
+																	/>
+																</div>
+															)),
+														)}
+													</div>
+												</div>
+											)}
+										</div>
 									</div>
 									<div className="flex-shrink-0 bg-white border-t pt-4">
 										<Button onClick={handleContinueToPayment} className="w-full btn-black">

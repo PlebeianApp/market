@@ -891,3 +891,53 @@ export const formatSats = (amount?: string): string => {
 	if (!amount) return '-'
 	return `${parseInt(amount).toLocaleString()} sats`
 }
+
+/**
+ * Get payment method from order creation event
+ */
+export const getPaymentMethod = (order: NDKEvent): 'ln' | 'on-chain' | undefined => {
+	const paymentMethodTag = order.tags.find((tag) => tag[0] === 'payment_method')
+	return paymentMethodTag?.[1] as 'ln' | 'on-chain' | undefined
+}
+
+/**
+ * Extract Bitcoin address from a payment request event
+ */
+export const extractBitcoinAddress = (paymentRequest: NDKEvent): string | undefined => {
+	const bitcoinAddressTag = paymentRequest.tags.find((tag) => tag[0] === 'bitcoin_address')
+	return bitcoinAddressTag?.[1]
+}
+
+/**
+ * Extract TXID from a payment receipt event
+ */
+export const extractTxid = (paymentReceipt: NDKEvent): string | undefined => {
+	// Look for payment tag with 'bitcoin' medium
+	const paymentTag = paymentReceipt.tags.find((tag) => tag[0] === 'payment' && tag[1] === 'bitcoin')
+	// TXID is in the 4th position (index 3) of the payment tag
+	return paymentTag?.[3]
+}
+
+/**
+ * Extract payment medium from a payment receipt event
+ */
+export const extractPaymentMedium = (paymentReceipt: NDKEvent): 'lightning' | 'bitcoin' | 'fiat' | 'other' | undefined => {
+	const paymentTag = paymentReceipt.tags.find((tag) => tag[0] === 'payment')
+	return paymentTag?.[1] as 'lightning' | 'bitcoin' | 'fiat' | 'other' | undefined
+}
+
+/**
+ * Check if a payment request is for on-chain Bitcoin
+ */
+export const isOnChainPaymentRequest = (paymentRequest: NDKEvent): boolean => {
+	const paymentMethodTag = paymentRequest.tags.find((tag) => tag[0] === 'payment_method')
+	return paymentMethodTag?.[1] === 'on-chain'
+}
+
+/**
+ * Check if a payment receipt is for on-chain Bitcoin
+ */
+export const isOnChainPaymentReceipt = (paymentReceipt: NDKEvent): boolean => {
+	const paymentTag = paymentReceipt.tags.find((tag) => tag[0] === 'payment')
+	return paymentTag?.[1] === 'bitcoin'
+}

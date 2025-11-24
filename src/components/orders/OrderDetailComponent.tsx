@@ -55,6 +55,9 @@ import { DetailField } from '../ui/DetailField'
 import { Separator } from '../ui/separator'
 import { OrderActions } from './OrderActions'
 import { TimelineEventCard } from './TimelineEventCard'
+import { ProvideBitcoinAddressDialog } from './ProvideBitcoinAddressDialog'
+import { BitcoinPaymentDisplay } from './BitcoinPaymentDisplay'
+import { extractBitcoinAddress, extractTxid, isOnChainPaymentRequest, getPaymentMethod } from '@/queries/orders'
 
 interface OrderDetailComponentProps {
 	order: OrderWithRelatedEvents
@@ -286,6 +289,10 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	// Live payment receipts received via Nostr subscription
 	const [livePaymentReceipts, setLivePaymentReceipts] = useState<NDKEvent[]>([])
 
+	// On-chain payment state
+	const [provideBitcoinAddressDialogOpen, setProvideBitcoinAddressDialogOpen] = useState(false)
+	const [selectedPaymentRequest, setSelectedPaymentRequest] = useState<NDKEvent | null>(null)
+
 	// No extra local status map – status is derived directly from receipts/invoice data
 
 	if (!order) {
@@ -415,8 +422,13 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 			if (amount <= 0) return
 
+			// Check if this is an on-chain or lightning payment
+			const paymentMethodTag = paymentRequest.tags.find((tag) => tag[0] === 'payment_method')
+			const paymentMethod = paymentMethodTag?.[1] as 'ln' | 'on-chain' | undefined
+
 			const paymentMethods = extractPaymentMethods(paymentRequest)
 			const lightningPayment = paymentMethods.find((p) => p.type === 'lightning')
+			const bitcoinPayment = paymentMethods.find((p) => p.type === 'bitcoin')
 			const isCompleted = isPaymentCompleted(paymentRequest, combinedReceipts)
 
 			// Determine if this is a V4V payment or merchant payment
@@ -434,6 +446,22 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 			const expirationValue = expirationTag?.[1]
 			const expiresAt = expirationValue ? parseInt(expirationValue, 10) : Math.floor(Date.now() / 1000) + 3600
 
+			// Extract bitcoin address for on-chain payments
+			const bitcoinAddress = extractBitcoinAddress(paymentRequest)
+
+			// Extract TXID from payment receipts if on-chain
+			let txid: string | undefined
+			if (paymentMethod === 'on-chain' && bitcoinAddress) {
+				const matchingReceipt = combinedReceipts.find((receipt) => {
+					const receiptOrderTag = receipt.tags.find((tag) => tag[0] === 'order')?.[1]
+					const receiptRecipientTag = receipt.tags.find((tag) => tag[0] === 'p')?.[1]
+					return receiptOrderTag === orderId && receiptRecipientTag === recipientPubkey
+				})
+				if (matchingReceipt) {
+					txid = extractTxid(matchingReceipt)
+				}
+			}
+
 			// Extract lightning address from payment method for invoice generation
 			const lightningAddress = lightningPayment?.details || ''
 
@@ -442,19 +470,32 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 			const actualBolt11 = isBolt11 ? lightningAddress : '' // Only use if it's actually a BOLT11 invoice
 			const actualLightningAddress = !isBolt11 ? lightningAddress : '' // Only use if it's a lightning address
 
+			// Build BIP21 payment URI for on-chain payments
+			let paymentUri: string | undefined
+			if (paymentMethod === 'on-chain' && bitcoinAddress) {
+				const amountBTC = (amount / 100000000).toFixed(8)
+				const label = isSellerPayment ? 'Order Payment' : 'V4V Payment'
+				paymentUri = `bitcoin:${bitcoinAddress}?amount=${amountBTC}&label=${label}`
+			}
+
 			invoices.push({
 				id: paymentRequest.id,
 				orderId: orderId,
-				bolt11: actualBolt11, // Only include BOLT11 invoices here
+				bolt11: actualBolt11 || null, // Only include BOLT11 invoices here
 				amount,
 				description: isSellerPayment ? 'Merchant Payment' : 'V4V Community Payment',
 				recipientName,
 				status: isCompleted ? 'paid' : expiresAt < Math.floor(Date.now() / 1000) ? 'expired' : 'pending',
 				expiresAt,
 				createdAt: paymentRequest.created_at || Math.floor(Date.now() / 1000),
-				lightningAddress: actualLightningAddress, // Store lightning address separately for invoice generation
+				lightningAddress: actualLightningAddress || null, // Store lightning address separately for invoice generation
 				recipientPubkey, // Store recipient pubkey for invoice generation
 				type: isSellerPayment ? 'merchant' : 'v4v',
+				// On-chain fields
+				paymentMethod: paymentMethod || 'ln',
+				bitcoinAddress: bitcoinAddress || undefined,
+				paymentUri: paymentUri || undefined,
+				txid: txid || undefined,
 			})
 		})
 
@@ -945,6 +986,52 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 					</Card>
 				)}
 
+				{/* On-chain Payment Notice for Seller - shows when buyer chose on-chain but no payment request exists yet */}
+				{isOrderSeller && getPaymentMethod(orderEvent) === 'on-chain' && totalInvoices === 0 && (
+					<Card className="border-orange-200 bg-orange-50">
+						<CardHeader>
+							<div className="flex items-center gap-2">
+								<CreditCard className="w-5 h-5 text-orange-600" />
+								<CardTitle className="text-orange-900">Bitcoin On-chain Payment Requested</CardTitle>
+							</div>
+						</CardHeader>
+						<CardContent>
+							<div className="space-y-4">
+								<p className="text-orange-800">
+									The buyer has requested to pay via Bitcoin on-chain. Please provide a fresh Bitcoin address to receive the payment.
+								</p>
+								<Button
+									onClick={() => {
+										setSelectedPaymentRequest(orderEvent as any)
+										setProvideBitcoinAddressDialogOpen(true)
+									}}
+									className="w-full"
+								>
+									Provide Bitcoin Address
+								</Button>
+							</div>
+						</CardContent>
+					</Card>
+				)}
+
+				{/* On-chain Payment Notice for Buyer - shows when buyer chose on-chain but waiting for seller address */}
+				{isBuyer && getPaymentMethod(orderEvent) === 'on-chain' && totalInvoices === 0 && (
+					<Card className="border-blue-200 bg-blue-50">
+						<CardHeader>
+							<div className="flex items-center gap-2">
+								<Clock className="w-5 h-5 text-blue-600" />
+								<CardTitle className="text-blue-900">Waiting for Bitcoin Address</CardTitle>
+							</div>
+						</CardHeader>
+						<CardContent>
+							<p className="text-blue-800">
+								You selected Bitcoin on-chain payment. The seller will provide a Bitcoin address shortly. You'll be able to make the payment
+								once they provide it.
+							</p>
+						</CardContent>
+					</Card>
+				)}
+
 				{/* Payment Processing - visible to both buyer and seller */}
 				{totalInvoices > 0 && (
 					<Card>
@@ -1089,66 +1176,109 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 													>
 														{(invoice.status || 'pending').charAt(0).toUpperCase() + (invoice.status || 'pending').slice(1)}
 													</Badge>
-													<div className="flex gap-2">
-														<Button
-															variant="outline"
-															size="sm"
-															className="flex-1"
-															disabled={isGeneratingThis}
-															onClick={() => {
-																const list = invoice.localCopies.length > 0 ? invoice.localCopies : [invoice]
-																openPaymentDialog(list)
-															}}
-														>
-															{isGeneratingThis ? (
-																<>
-																	<RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-																	Generating...
-																</>
-															) : (
-																<>
-																	<Zap className="w-4 h-4 mr-2" />
-																	Pay {invoice.amount.toLocaleString()} sats
-																</>
-															)}
-														</Button>
 
-														{/* Generate new invoice button */}
-														{invoice.lightningAddress && (
+													{/* On-chain payment UI for buyers */}
+													{invoice.paymentMethod === 'on-chain' && invoice.bitcoinAddress ? (
+														<BitcoinPaymentDisplay
+															address={invoice.bitcoinAddress}
+															amount={invoice.amount}
+															orderId={orderId}
+															invoiceId={invoice.id}
+															recipientPubkey={invoice.recipientPubkey || sellerPubkey}
+															isV4V={invoice.type === 'v4v'}
+															onPaymentSubmitted={() => {
+																queryClient.invalidateQueries({ queryKey: ['order', orderId] })
+																toast.success('Payment submitted! Waiting for confirmation.')
+															}}
+														/>
+													) : invoice.paymentMethod === 'on-chain' && !invoice.bitcoinAddress ? (
+														<div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">
+															<div className="flex items-center gap-2">
+																<Clock className="w-4 h-4" />
+																<span>Waiting for seller to provide Bitcoin address...</span>
+															</div>
+														</div>
+													) : (
+														<div className="flex gap-2">
 															<Button
 																variant="outline"
 																size="sm"
-																onClick={() => handleGenerateNewInvoice(invoice)}
+																className="flex-1"
 																disabled={isGeneratingThis}
-																title="Generate a new invoice with fresh expiration"
+																onClick={() => {
+																	const list = invoice.localCopies.length > 0 ? invoice.localCopies : [invoice]
+																	openPaymentDialog(list)
+																}}
 															>
-																{isGeneratingThis ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+																{isGeneratingThis ? (
+																	<>
+																		<RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+																		Generating...
+																	</>
+																) : (
+																	<>
+																		<Zap className="w-4 h-4 mr-2" />
+																		Pay {invoice.amount.toLocaleString()} sats
+																	</>
+																)}
 															</Button>
-														)}
 
-														{invoice.bolt11 && (
-															<Button
-																variant="ghost"
-																size="sm"
-																className="text-blue-700 hover:text-blue-900"
-																onClick={() => copyToClipboard(invoice.bolt11 || '')}
-															>
-																<Copy className="w-4 h-4 mr-2" />
-																Copy invoice
-															</Button>
-														)}
-														{invoice.preimage && (
-															<Button
-																variant="ghost"
-																size="sm"
-																className="text-blue-700 hover:text-blue-900"
-																onClick={() => copyToClipboard(invoice.preimage || '')}
-															>
-																<Copy className="w-4 h-4 mr-2" />
-																Copy preimage
-															</Button>
-														)}
-													</div>
+															{/* Generate new invoice button */}
+															{invoice.lightningAddress && (
+																<Button
+																	variant="outline"
+																	size="sm"
+																	onClick={() => handleGenerateNewInvoice(invoice)}
+																	disabled={isGeneratingThis}
+																	title="Generate a new invoice with fresh expiration"
+																>
+																	{isGeneratingThis ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+																</Button>
+															)}
+
+															{invoice.bolt11 && (
+																<Button
+																	variant="ghost"
+																	size="sm"
+																	className="text-blue-700 hover:text-blue-900"
+																	onClick={() => copyToClipboard(invoice.bolt11 || '')}
+																>
+																	<Copy className="w-4 h-4 mr-2" />
+																	Copy invoice
+																</Button>
+															)}
+															{invoice.preimage && (
+																<Button
+																	variant="ghost"
+																	size="sm"
+																	className="text-blue-700 hover:text-blue-900"
+																	onClick={() => copyToClipboard(invoice.preimage || '')}
+																>
+																	<Copy className="w-4 h-4 mr-2" />
+																	Copy preimage
+																</Button>
+															)}
+														</div>
+													)}
+												</div>
+											)}
+
+											{/* Seller actions for on-chain payments */}
+											{isOrderSeller && invoice.status !== 'paid' && invoice.paymentMethod === 'on-chain' && !invoice.bitcoinAddress && (
+												<div className="flex flex-col gap-2 pt-3 border-t border-muted">
+													<Button
+														variant="outline"
+														size="sm"
+														onClick={() => {
+															const paymentRequest = order.paymentRequests.find((pr) => pr.id === invoice.id)
+															if (paymentRequest) {
+																setSelectedPaymentRequest(paymentRequest)
+																setProvideBitcoinAddressDialogOpen(true)
+															}
+														}}
+													>
+														Provide Bitcoin Address
+													</Button>
 												</div>
 											)}
 
@@ -1299,6 +1429,20 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				showNavigation={dialogInvoices.length > 1}
 				nwcEnabled={true}
 			/>
+
+			{/* Bitcoin Address Dialog for Sellers */}
+			{selectedPaymentRequest && (
+				<ProvideBitcoinAddressDialog
+					open={provideBitcoinAddressDialogOpen}
+					onOpenChange={setProvideBitcoinAddressDialogOpen}
+					order={order}
+					onComplete={() => {
+						queryClient.invalidateQueries({ queryKey: ['order', orderId] })
+						setProvideBitcoinAddressDialogOpen(false)
+						setSelectedPaymentRequest(null)
+					}}
+				/>
+			)}
 		</div>
 	)
 }

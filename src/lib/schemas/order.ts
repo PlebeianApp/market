@@ -64,6 +64,7 @@ export const ShippingTagSchema = z.tuple([z.literal('shipping'), z.string()]) //
 export const AddressTagSchema = z.tuple([z.literal('address'), z.string()]) // Shipping address details
 export const EmailTagSchema = z.tuple([z.literal('email'), z.string().email()]) // Customer email
 export const PhoneTagSchema = z.tuple([z.literal('phone'), z.string()]) // Customer phone
+export const PaymentMethodChoiceTagSchema = z.tuple([z.literal('payment_method'), z.enum(['ln', 'on-chain'])]) // Buyer's payment method choice
 
 // Complete Order Creation Schema
 export const OrderCreationSchema = z.object({
@@ -86,6 +87,7 @@ export const OrderCreationSchema = z.object({
 				AddressTagSchema,
 				EmailTagSchema,
 				PhoneTagSchema,
+				PaymentMethodChoiceTagSchema,
 			]),
 		)
 		.refine(
@@ -118,6 +120,8 @@ export const PaymentMethodTagSchema = z.tuple([
 	z.string().optional(), // Optional proof
 ])
 export const ExpirationTagSchema = z.tuple([z.literal('expiration'), z.string()])
+export const BitcoinAddressTagSchema = z.tuple([z.literal('bitcoin_address'), z.string()]) // Bitcoin address for on-chain payments
+export const Bolt11TagSchema = z.tuple([z.literal('bolt11'), z.string()]) // Lightning invoice
 
 // Complete Payment Request Schema (merchant to buyer)
 export const PaymentRequestSchema = z.object({
@@ -136,7 +140,10 @@ export const PaymentRequestSchema = z.object({
 
 				// Optional tags
 				PaymentMethodTagSchema,
+				PaymentMethodChoiceTagSchema,
 				ExpirationTagSchema,
+				BitcoinAddressTagSchema,
+				Bolt11TagSchema,
 			]),
 		)
 		.refine(

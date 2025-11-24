@@ -244,9 +244,14 @@ export interface PublishPaymentReceiptParams {
 		description?: string
 		id: string
 		bolt11?: string
+		paymentMethod?: 'ln' | 'on-chain'
 	}
-	preimage: string
-	bolt11: string
+	// Lightning payment fields
+	preimage?: string
+	bolt11?: string
+	// On-chain payment fields
+	txid?: string
+	bitcoinAddress?: string
 }
 
 /**
@@ -254,7 +259,7 @@ export interface PublishPaymentReceiptParams {
  * This creates a proof of payment for the order
  */
 export const publishPaymentReceipt = async (params: PublishPaymentReceiptParams): Promise<string> => {
-	const { invoice, preimage, bolt11 } = params
+	const { invoice, preimage, bolt11, txid, bitcoinAddress } = params
 
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
@@ -271,11 +276,25 @@ export const publishPaymentReceipt = async (params: PublishPaymentReceiptParams)
 	event.kind = 17 // Payment Receipt Kind
 	event.content = invoice.description || 'Payment confirmation'
 
+	const isOnChain = invoice.paymentMethod === 'on-chain'
+
+	// Build payment tag based on payment method
+	let paymentTag: string[]
+	if (isOnChain && txid && bitcoinAddress) {
+		// On-chain payment: ['payment', 'bitcoin', address, txid]
+		paymentTag = ['payment', 'bitcoin', bitcoinAddress, txid]
+	} else if (!isOnChain && bolt11 && preimage) {
+		// Lightning payment: ['payment', 'lightning', bolt11, preimage]
+		paymentTag = ['payment', 'lightning', bolt11, preimage]
+	} else {
+		throw new Error('Invalid payment parameters: missing required fields for payment method')
+	}
+
 	const tags = [
 		['p', invoice.recipientPubkey || ''], // Merchant's pubkey
 		['subject', 'order-receipt'],
 		['order', invoice.orderId],
-		['payment', 'lightning', bolt11, preimage], // Payment proof
+		paymentTag, // Payment proof
 		['amount', invoice.amount.toString()],
 	]
 
@@ -286,7 +305,7 @@ export const publishPaymentReceipt = async (params: PublishPaymentReceiptParams)
 		await event.sign(signer)
 		await event.publish()
 
-		console.log(`✅ Payment receipt published for order ${invoice.orderId}`)
+		console.log(`✅ Payment receipt published for order ${invoice.orderId} (${isOnChain ? 'on-chain' : 'lightning'})`)
 		return event.id
 	} catch (error) {
 		console.error('❌ Failed to publish payment receipt:', error)

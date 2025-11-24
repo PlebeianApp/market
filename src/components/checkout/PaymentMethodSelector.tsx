@@ -123,7 +123,7 @@ export function PaymentMethodSelector({ methods = defaultMethods, selectedMethod
 }
 
 // Helper function to get payment method by type
-export function getPaymentMethodByType(type: 'lightning' | 'bitcoin'): PaymentMethodOption {
+export function getPaymentMethodByType(type: 'lightning' | 'bitcoin' | 'on-chain'): PaymentMethodOption {
 	return defaultMethods.find((method) => method.type === type) || defaultMethods[0]
 }
 

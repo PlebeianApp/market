@@ -67,7 +67,7 @@ export const EMAIL_REGEX = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
 export const PAYMENT_DETAILS_METHOD = {
 	LIGHTNING_NETWORK: 'ln',
-	// ON_CHAIN: 'on-chain',
+	ON_CHAIN: 'on-chain',
 	// CASHU: 'cashu',
 	// OTHER: 'other',
 } as const

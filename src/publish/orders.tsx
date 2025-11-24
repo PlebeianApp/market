@@ -379,6 +379,7 @@ export interface OrderCreationData {
 	email?: string
 	phone?: string
 	notes?: string
+	paymentMethod?: 'ln' | 'on-chain' // Buyer's chosen payment method
 }
 
 export interface PaymentRequestData {
@@ -469,6 +470,11 @@ export async function createOrderCreationEvent(data: OrderCreationData): Promise
 		tags.push(['phone', data.phone])
 	}
 
+	// Add payment method if specified
+	if (data.paymentMethod) {
+		tags.push(['payment_method', data.paymentMethod])
+	}
+
 	// Create the event
 	const event = new NDKEvent(ndk)
 	event.kind = ORDER_PROCESS_KIND
@@ -518,6 +524,65 @@ export async function createPaymentRequestEvent(data: PaymentRequestData): Promi
 	event.kind = ORDER_PROCESS_KIND
 	event.created_at = now
 	event.content = data.notes || 'Payment request for your order'
+	event.tags = tags
+
+	// Sign the event
+	await event.sign()
+
+	return event
+}
+
+export interface OnChainPaymentRequestData {
+	buyerPubkey: string
+	recipientPubkey: string // Can be merchant or V4V recipient
+	orderId: string
+	amountSats: number
+	bitcoinAddress: string
+	isV4V?: boolean // True if this is a V4V payment
+	v4vRecipientName?: string
+	notes?: string
+}
+
+/**
+ * Creates an on-chain payment request event (Kind 16, type 2)
+ * Seller/V4V recipient provides a Bitcoin address for the buyer to pay to
+ */
+export async function createOnChainPaymentRequest(data: OnChainPaymentRequestData): Promise<NDKEvent> {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	const now = Math.floor(Date.now() / 1000)
+
+	// Build tags according to spec
+	const tags: NDKTag[] = [
+		// Required tags
+		['p', data.buyerPubkey],
+		['subject', data.isV4V ? 'v4v-payment-request' : 'order-payment'],
+		['type', ORDER_MESSAGE_TYPE.PAYMENT_REQUEST],
+		['order', data.orderId],
+		['amount', data.amountSats.toString()],
+		['currency', 'sats'],
+
+		// On-chain payment details
+		['payment_method', 'on-chain'],
+		['bitcoin_address', data.bitcoinAddress],
+	]
+
+	// Add V4V markers if applicable
+	if (data.isV4V) {
+		tags.push(['payment-type', 'v4v'])
+		tags.push(['v4v-recipient', data.recipientPubkey])
+	}
+
+	// Create the event
+	const event = new NDKEvent(ndk)
+	event.kind = ORDER_PROCESS_KIND
+	event.created_at = now
+	event.content =
+		data.notes ||
+		(data.isV4V
+			? `V4V payment request: Please send ${data.amountSats} sats to the provided Bitcoin address`
+			: `Please send ${data.amountSats} sats to the provided Bitcoin address`)
 	event.tags = tags
 
 	// Sign the event
@@ -701,6 +766,8 @@ export interface PublishOrderDependenciesParams {
 	productsBySeller: Record<string, CartProduct[]>
 	sellerData: Record<string, SellerData>
 	v4vShares: Record<string, V4VShare[]>
+	paymentMethod?: 'ln' | 'on-chain' // Buyer's chosen payment method for merchant payments
+	v4vPaymentMethods?: Record<string, 'ln' | 'on-chain'> // Payment method per V4V recipient pubkey
 }
 
 /**
@@ -711,7 +778,7 @@ export interface PublishOrderDependenciesParams {
  * @returns An array of the created spec-compliant order IDs.
  */
 export async function publishOrderWithDependencies(params: PublishOrderDependenciesParams): Promise<string[]> {
-	const { shippingData, sellers, productsBySeller, sellerData, v4vShares } = params
+	const { shippingData, sellers, productsBySeller, sellerData, v4vShares, paymentMethod = 'ln', v4vPaymentMethods = {} } = params
 
 	const ndk = ndkActions.getNDK()
 	const currentUser = ndk?.activeUser
@@ -744,6 +811,7 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 			shippingAddress: isAllPickup ? undefined : shippingData,
 			email: shippingData.email || 'customer@example.com',
 			notes: `Order for ${sellerProducts.length} item(s) from seller.`,
+			paymentMethod: paymentMethod, // Add buyer's chosen payment method
 		}
 
 		// 1. Create the main order event
@@ -756,48 +824,60 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 		console.log(`✅ Spec-compliant order created for seller ${sellerPubkey.substring(0, 8)}...:`, orderId)
 
 		// 2. Create payment requests for the order (merchant + V4V)
+		// Note: Only create immediate payment requests for Lightning payments
+		// For on-chain payments, seller provides address later via createOnChainPaymentRequest()
 		const paymentRequests: PaymentRequestData[] = []
 		const productSubtotal = data.satsTotal - data.shippingSats
 		const v4vRecipients = v4vShares[sellerPubkey] || []
 
-		// 2a. Payment request for the merchant's share
+		// 2a. Payment request for the merchant's share (only if Lightning)
 		const merchantShare = data.shares.sellerAmount
-		const sellerProfile = await fetchProfileByIdentifier(sellerPubkey)
-		const sellerLnAddress = sellerProfile?.profile?.lud16 || sellerProfile?.profile?.lud06
+		if (paymentMethod === 'ln') {
+			const sellerProfile = await fetchProfileByIdentifier(sellerPubkey)
+			const sellerLnAddress = sellerProfile?.profile?.lud16 || sellerProfile?.profile?.lud06
 
-		if (!sellerLnAddress) {
-			console.warn(`Seller ${sellerPubkey} has no lightning address. Cannot create payment request.`)
+			if (!sellerLnAddress) {
+				console.warn(`Seller ${sellerPubkey} has no lightning address. Cannot create payment request.`)
+			} else {
+				paymentRequests.push({
+					buyerPubkey: buyerPubkey,
+					merchantPubkey: sellerPubkey,
+					orderId: orderId,
+					amountSats: merchantShare,
+					paymentMethods: [{ type: 'lightning', details: sellerLnAddress }],
+					notes: `Payment for order ${orderId}`,
+				})
+			}
 		} else {
-			paymentRequests.push({
-				buyerPubkey: buyerPubkey,
-				merchantPubkey: sellerPubkey,
-				orderId: orderId,
-				amountSats: merchantShare,
-				paymentMethods: [{ type: 'lightning', details: sellerLnAddress }],
-				notes: `Payment for order ${orderId}`,
-			})
+			console.log(`On-chain payment chosen for merchant ${sellerPubkey}. Seller will provide Bitcoin address.`)
 		}
 
-		// 2b. Payment requests for V4V shares
+		// 2b. Payment requests for V4V shares (only if Lightning chosen for that recipient)
 		for (const recipient of v4vRecipients) {
 			const recipientPercentage = recipient.percentage > 1 ? recipient.percentage / 100 : recipient.percentage
 			const recipientAmount = Math.max(1, Math.floor(productSubtotal * recipientPercentage))
 
 			if (recipientAmount > 0) {
-				const recipientProfile = await fetchProfileByIdentifier(recipient.pubkey)
-				const recipientLnAddress = recipientProfile?.profile?.lud16 || recipientProfile?.profile?.lud06
-				if (!recipientLnAddress) {
-					console.warn(`V4V recipient ${recipient.name} has no lightning address. Skipping.`)
-					continue
+				const recipientPaymentMethod = v4vPaymentMethods[recipient.pubkey] || 'ln' // Default to Lightning
+
+				if (recipientPaymentMethod === 'ln') {
+					const recipientProfile = await fetchProfileByIdentifier(recipient.pubkey)
+					const recipientLnAddress = recipientProfile?.profile?.lud16 || recipientProfile?.profile?.lud06
+					if (!recipientLnAddress) {
+						console.warn(`V4V recipient ${recipient.name} has no lightning address. Skipping.`)
+						continue
+					}
+					paymentRequests.push({
+						buyerPubkey: buyerPubkey,
+						merchantPubkey: recipient.pubkey, // V4V recipient is the one getting paid
+						orderId: orderId,
+						amountSats: recipientAmount,
+						paymentMethods: [{ type: 'lightning', details: recipientLnAddress }],
+						notes: `V4V share for order ${orderId} (${(recipientPercentage * 100).toFixed(1)}%)`,
+					})
+				} else {
+					console.log(`On-chain payment chosen for V4V recipient ${recipient.name}. Recipient will provide Bitcoin address.`)
 				}
-				paymentRequests.push({
-					buyerPubkey: buyerPubkey,
-					merchantPubkey: recipient.pubkey, // V4V recipient is the one getting paid
-					orderId: orderId,
-					amountSats: recipientAmount,
-					paymentMethods: [{ type: 'lightning', details: recipientLnAddress }],
-					notes: `V4V share for order ${orderId} (${(recipientPercentage * 100).toFixed(1)}%)`,
-				})
 			}
 		}
 
