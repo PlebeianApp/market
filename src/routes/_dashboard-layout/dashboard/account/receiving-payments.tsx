@@ -187,7 +187,7 @@ function ScopeSelector({ value, scopeId, scopeIds, userPubkey, onChange }: Scope
 	)
 }
 
-export const Route = createFileRoute('/_dashboard-layout/dashboard/products/receiving-payments')({
+export const Route = createFileRoute('/_dashboard-layout/dashboard/account/receiving-payments')({
 	component: ReceivingPaymentsComponent,
 })
 
@@ -359,22 +359,22 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 				}
 				return false
 			}
-			case PAYMENT_DETAILS_METHOD.ON_CHAIN: {
-				if (isExtendedPublicKey(value)) {
-					setConfirmationType('extended_public_key')
-					const validation = validateExtendedPublicKey(value)
-					if (!validation.isValid) {
-						setValidationMessage(validation.error || 'Invalid extended public key')
-						return false
-					}
-					return 'needsConfirmation'
-				}
-				if (value.startsWith('bc1')) {
-					setConfirmationType('single_address')
-					return checkAddress(value) ? 'needsConfirmation' : false
-				}
-				return false
-			}
+			// case PAYMENT_DETAILS_METHOD.ON_CHAIN: {
+			// 	if (isExtendedPublicKey(value)) {
+			// 		setConfirmationType('extended_public_key')
+			// 		const validation = validateExtendedPublicKey(value)
+			// 		if (!validation.isValid) {
+			// 			setValidationMessage(validation.error || 'Invalid extended public key')
+			// 			return false
+			// 		}
+			// 		return 'needsConfirmation'
+			// 	}
+			// 	if (value.startsWith('bc1')) {
+			// 		setConfirmationType('single_address')
+			// 		return checkAddress(value) ? 'needsConfirmation' : false
+			// 	}
+			// 	return false
+			// }
 			default:
 				return false
 		}
@@ -510,8 +510,8 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 		switch (method) {
 			case PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK:
 				return <ZapIcon className="w-5 h-5" />
-			case PAYMENT_DETAILS_METHOD.ON_CHAIN:
-				return <AnchorIcon className="w-5 h-5" />
+			// case PAYMENT_DETAILS_METHOD.ON_CHAIN:
+			// 	return <AnchorIcon className="w-5 h-5" />
 			default:
 				return null
 		}
@@ -763,8 +763,8 @@ function PaymentDetailListItem({ paymentDetail, isOpen, onOpenChange, isDeleting
 
 	const PaymentMethodIcon = ({ method }: { method: PaymentDetailsMethod }) => {
 		switch (method) {
-			case PAYMENT_DETAILS_METHOD.ON_CHAIN:
-				return <AnchorIcon className="w-5 h-5 text-muted-foreground" />
+			// case PAYMENT_DETAILS_METHOD.ON_CHAIN:
+			// 	return <AnchorIcon className="w-5 h-5 text-muted-foreground" />
 			case PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK:
 				return <ZapIcon className="w-5 h-5 text-muted-foreground" />
 			default:

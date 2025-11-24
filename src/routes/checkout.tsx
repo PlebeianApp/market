@@ -2,7 +2,7 @@
 import { CartSummary } from '@/components/CartSummary'
 import { CheckoutProgress } from '@/components/checkout/CheckoutProgress'
 import { OrderFinalizeComponent } from '@/components/checkout/OrderFinalizeComponent'
-import { PaymentContent, type PaymentContentRef, type PaymentInvoiceData } from '@/components/checkout/PaymentContent'
+import { PaymentContent, type PaymentContentRef } from '@/components/checkout/PaymentContent'
 import { PaymentSummary } from '@/components/checkout/PaymentSummary'
 import { ShippingAddressForm, type CheckoutFormData } from '@/components/checkout/ShippingAddressForm'
 import { WalletSelector, type WalletOption } from '@/components/checkout/WalletSelector'
@@ -13,9 +13,11 @@ import { authStore } from '@/lib/stores/auth'
 import { cartActions, cartStore } from '@/lib/stores/cart'
 import { ndkStore } from '@/lib/stores/ndk'
 import { parseNwcUri, useWallets } from '@/lib/stores/wallet'
+import { persistInvoicesLocally, updatePersistedInvoiceLocally } from '@/lib/utils/invoiceStorage'
 import type { OrderInvoiceSet } from '@/lib/utils/orderUtils'
 import { publishOrderWithDependencies } from '@/publish/orders'
 import { publishPaymentReceipt } from '@/publish/payment'
+import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import { useGenerateInvoiceMutation, useAvailablePaymentOptions, type PaymentDetail } from '@/queries/payment'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useForm } from '@tanstack/react-form'
@@ -230,12 +232,19 @@ function RouteComponent() {
 
 	// Generate Lightning invoices when moving to payment step
 	useEffect(() => {
+		const hasAllOrderIds = specOrderIds.length >= sellers.length && sellers.length > 0
 		if (currentStep === 'payment' && invoices.length === 0 && sellers.length > 0 && !isGeneratingInvoices) {
+			if (!hasAllOrderIds) {
+				console.warn('Waiting for order IDs before generating invoices...')
+				return
+			}
+
 			const generateInvoices = async () => {
 				const newInvoices: PaymentInvoiceData[] = []
 				let invoiceIndex = 0
 
 				try {
+					let sellerPosition = 0
 					for (const sellerPubkey of sellers) {
 						const sellerProducts = productsBySeller[sellerPubkey] || []
 						const data = sellerData[sellerPubkey]
@@ -267,10 +276,12 @@ function RouteComponent() {
 							selectedPaymentDetailId: selectedWalletId,
 						})
 
+						const sellerOrderId = specOrderIds[sellerPosition] || specOrderIds[0] || 'temp-order'
+
 						// Convert to PaymentInvoiceData format
 						const paymentInvoice: PaymentInvoiceData = {
 							id: sellerInvoice.id,
-							orderId: specOrderIds.length > 0 ? specOrderIds[0] : 'temp-order',
+							orderId: sellerOrderId,
 							recipientPubkey: sellerInvoice.sellerPubkey,
 							recipientName: sellerInvoice.sellerName,
 							amount: sellerInvoice.amount,
@@ -281,6 +292,7 @@ function RouteComponent() {
 							status: sellerInvoice.status === 'failed' ? 'expired' : (sellerInvoice.status as 'pending' | 'paid' | 'expired'),
 							type: 'merchant',
 							createdAt: Date.now(),
+							isZap: sellerInvoice.isZap,
 						}
 						newInvoices.push(paymentInvoice)
 
@@ -322,7 +334,7 @@ function RouteComponent() {
 									// Convert to PaymentInvoiceData format
 									const v4vPaymentInvoice: PaymentInvoiceData = {
 										id: recipientInvoice.id,
-										orderId: specOrderIds.length > 0 ? specOrderIds[0] : 'temp-order',
+										orderId: sellerOrderId,
 										recipientPubkey: recipient.pubkey,
 										recipientName: recipient.name,
 										amount: recipientAmount,
@@ -333,6 +345,7 @@ function RouteComponent() {
 										status: recipientInvoice.status === 'failed' ? 'expired' : (recipientInvoice.status as 'pending' | 'paid' | 'expired'),
 										type: 'v4v',
 										createdAt: Date.now(),
+										isZap: recipientInvoice.isZap ?? true,
 									}
 									newInvoices.push(v4vPaymentInvoice)
 									console.log(`✅ Successfully generated V4V invoice for ${recipient.name}`)
@@ -344,10 +357,12 @@ function RouteComponent() {
 								console.log(`⚠️ Skipping V4V recipient ${recipient.name} due to zero percentage`)
 							}
 						}
+						sellerPosition += 1
 					}
 
 					console.log(`Generated ${newInvoices.length} invoices`)
 					setInvoices(newInvoices)
+					persistInvoicesLocally(newInvoices)
 				} catch (error) {
 					console.error('Failed to generate invoices:', error)
 					// Fallback to empty invoices - the user can retry
@@ -410,6 +425,10 @@ function RouteComponent() {
 					preimage,
 					bolt11: invoice.bolt11 || '',
 				})
+				updatePersistedInvoiceLocally(orderId, invoice.id, {
+					status: 'paid',
+					preimage,
+				})
 			} catch (error) {
 				console.error('Failed to publish payment receipt:', error)
 				toast.error(`Failed to create receipt: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -456,6 +475,10 @@ function RouteComponent() {
 		setInvoices((prev) =>
 			prev.map((invoice) => {
 				if (invoice.id === invoiceId) {
+					const orderId = invoice.orderId !== 'temp-order' ? invoice.orderId : specOrderIds[0] || 'unknown-order'
+					updatePersistedInvoiceLocally(orderId, invoice.id, {
+						status: 'expired',
+					})
 					return {
 						...invoice,
 						status: 'expired' as const,
@@ -475,6 +498,10 @@ function RouteComponent() {
 		setInvoices((prev) =>
 			prev.map((invoice) => {
 				if (invoice.id === invoiceId) {
+					const orderId = invoice.orderId !== 'temp-order' ? invoice.orderId : specOrderIds[0] || 'unknown-order'
+					updatePersistedInvoiceLocally(orderId, invoice.id, {
+						status: 'skipped',
+					})
 					return {
 						...invoice,
 						status: 'skipped' as const,
@@ -574,8 +601,18 @@ function RouteComponent() {
 					lightningAddress: newInvoiceData.lightningAddress,
 					expiresAt: newInvoiceData.expiresAt,
 					status: newInvoiceData.status === 'failed' ? 'expired' : (newInvoiceData.status as 'pending' | 'paid' | 'expired'),
+					isZap: newInvoiceData.isZap ?? oldInvoice.isZap,
 				}
 				return updated
+			})
+
+			const resolvedOrderId = oldInvoice.orderId !== 'temp-order' ? oldInvoice.orderId : specOrderIds[0] || 'unknown-order'
+			updatePersistedInvoiceLocally(resolvedOrderId, oldInvoice.id, {
+				bolt11: newInvoiceData.bolt11 || undefined,
+				lightningAddress: newInvoiceData.lightningAddress || undefined,
+				expiresAt: newInvoiceData.expiresAt,
+				isZap: newInvoiceData.isZap ?? oldInvoice.isZap,
+				status: newInvoiceData.status === 'failed' ? 'expired' : (newInvoiceData.status as 'pending' | 'paid' | 'expired'),
 			})
 
 			console.log(`✅ Invoice regenerated successfully`)
@@ -625,9 +662,6 @@ function RouteComponent() {
 	}
 
 	const handleContinueToPayment = async () => {
-		// Move directly to payment step
-		setCurrentStep('payment')
-
 		if (shippingData && sellers.length > 0 && specOrderIds.length === 0) {
 			try {
 				const createdOrderIds = await publishOrderWithDependencies({
@@ -642,10 +676,12 @@ function RouteComponent() {
 			} catch (error) {
 				console.error('Failed to create spec-compliant orders:', error)
 				toast.error(`Order creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
-				// Optionally, revert to summary step
-				// setCurrentStep('summary')
+				return
 			}
 		}
+
+		// Move to payment step once orders exist
+		setCurrentStep('payment')
 	}
 
 	const formatSats = (sats: number): string => {

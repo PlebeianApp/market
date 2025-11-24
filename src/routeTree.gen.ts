@@ -27,7 +27,6 @@ import { Route as DashboardLayoutDashboardSalesSalesRouteImport } from './routes
 import { Route as DashboardLayoutDashboardSalesMessagesRouteImport } from './routes/_dashboard-layout/dashboard/sales/messages'
 import { Route as DashboardLayoutDashboardSalesCircularEconomyRouteImport } from './routes/_dashboard-layout/dashboard/sales/circular-economy'
 import { Route as DashboardLayoutDashboardProductsShippingOptionsRouteImport } from './routes/_dashboard-layout/dashboard/products/shipping-options'
-import { Route as DashboardLayoutDashboardProductsReceivingPaymentsRouteImport } from './routes/_dashboard-layout/dashboard/products/receiving-payments'
 import { Route as DashboardLayoutDashboardProductsProductsRouteImport } from './routes/_dashboard-layout/dashboard/products/products'
 import { Route as DashboardLayoutDashboardProductsMigrationToolRouteImport } from './routes/_dashboard-layout/dashboard/products/migration-tool'
 import { Route as DashboardLayoutDashboardProductsCollectionsRouteImport } from './routes/_dashboard-layout/dashboard/products/collections'
@@ -37,6 +36,7 @@ import { Route as DashboardLayoutDashboardAppSettingsFeaturedItemsRouteImport } 
 import { Route as DashboardLayoutDashboardAppSettingsBlacklistsRouteImport } from './routes/_dashboard-layout/dashboard/app-settings/blacklists'
 import { Route as DashboardLayoutDashboardAppSettingsAppMiscelleneousRouteImport } from './routes/_dashboard-layout/dashboard/app-settings/app-miscelleneous'
 import { Route as DashboardLayoutDashboardAccountYourPurchasesRouteImport } from './routes/_dashboard-layout/dashboard/account/your-purchases'
+import { Route as DashboardLayoutDashboardAccountReceivingPaymentsRouteImport } from './routes/_dashboard-layout/dashboard/account/receiving-payments'
 import { Route as DashboardLayoutDashboardAccountProfileRouteImport } from './routes/_dashboard-layout/dashboard/account/profile'
 import { Route as DashboardLayoutDashboardAccountNetworkRouteImport } from './routes/_dashboard-layout/dashboard/account/network'
 import { Route as DashboardLayoutDashboardAccountMakingPaymentsRouteImport } from './routes/_dashboard-layout/dashboard/account/making-payments'
@@ -135,11 +135,6 @@ const DashboardLayoutDashboardProductsShippingOptionsRoute = DashboardLayoutDash
 	path: '/dashboard/products/shipping-options',
 	getParentRoute: () => DashboardLayoutRoute,
 } as any)
-const DashboardLayoutDashboardProductsReceivingPaymentsRoute = DashboardLayoutDashboardProductsReceivingPaymentsRouteImport.update({
-	id: '/dashboard/products/receiving-payments',
-	path: '/dashboard/products/receiving-payments',
-	getParentRoute: () => DashboardLayoutRoute,
-} as any)
 const DashboardLayoutDashboardProductsProductsRoute = DashboardLayoutDashboardProductsProductsRouteImport.update({
 	id: '/dashboard/products/products',
 	path: '/dashboard/products/products',
@@ -183,6 +178,11 @@ const DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute = DashboardLayout
 const DashboardLayoutDashboardAccountYourPurchasesRoute = DashboardLayoutDashboardAccountYourPurchasesRouteImport.update({
 	id: '/dashboard/account/your-purchases',
 	path: '/dashboard/account/your-purchases',
+	getParentRoute: () => DashboardLayoutRoute,
+} as any)
+const DashboardLayoutDashboardAccountReceivingPaymentsRoute = DashboardLayoutDashboardAccountReceivingPaymentsRouteImport.update({
+	id: '/dashboard/account/receiving-payments',
+	path: '/dashboard/account/receiving-payments',
 	getParentRoute: () => DashboardLayoutRoute,
 } as any)
 const DashboardLayoutDashboardAccountProfileRoute = DashboardLayoutDashboardAccountProfileRouteImport.update({
@@ -244,6 +244,7 @@ export interface FileRoutesByFullPath {
 	'/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
 	'/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
 	'/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
+	'/dashboard/account/receiving-payments': typeof DashboardLayoutDashboardAccountReceivingPaymentsRoute
 	'/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
 	'/dashboard/app-settings/app-miscelleneous': typeof DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute
 	'/dashboard/app-settings/blacklists': typeof DashboardLayoutDashboardAppSettingsBlacklistsRoute
@@ -253,7 +254,6 @@ export interface FileRoutesByFullPath {
 	'/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
 	'/dashboard/products/migration-tool': typeof DashboardLayoutDashboardProductsMigrationToolRoute
 	'/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
-	'/dashboard/products/receiving-payments': typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
 	'/dashboard/products/shipping-options': typeof DashboardLayoutDashboardProductsShippingOptionsRoute
 	'/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
 	'/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
@@ -281,6 +281,7 @@ export interface FileRoutesByTo {
 	'/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
 	'/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
 	'/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
+	'/dashboard/account/receiving-payments': typeof DashboardLayoutDashboardAccountReceivingPaymentsRoute
 	'/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
 	'/dashboard/app-settings/app-miscelleneous': typeof DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute
 	'/dashboard/app-settings/blacklists': typeof DashboardLayoutDashboardAppSettingsBlacklistsRoute
@@ -290,7 +291,6 @@ export interface FileRoutesByTo {
 	'/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
 	'/dashboard/products/migration-tool': typeof DashboardLayoutDashboardProductsMigrationToolRoute
 	'/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
-	'/dashboard/products/receiving-payments': typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
 	'/dashboard/products/shipping-options': typeof DashboardLayoutDashboardProductsShippingOptionsRoute
 	'/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
 	'/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
@@ -320,6 +320,7 @@ export interface FileRoutesById {
 	'/_dashboard-layout/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
 	'/_dashboard-layout/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
 	'/_dashboard-layout/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
+	'/_dashboard-layout/dashboard/account/receiving-payments': typeof DashboardLayoutDashboardAccountReceivingPaymentsRoute
 	'/_dashboard-layout/dashboard/account/your-purchases': typeof DashboardLayoutDashboardAccountYourPurchasesRoute
 	'/_dashboard-layout/dashboard/app-settings/app-miscelleneous': typeof DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute
 	'/_dashboard-layout/dashboard/app-settings/blacklists': typeof DashboardLayoutDashboardAppSettingsBlacklistsRoute
@@ -329,7 +330,6 @@ export interface FileRoutesById {
 	'/_dashboard-layout/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
 	'/_dashboard-layout/dashboard/products/migration-tool': typeof DashboardLayoutDashboardProductsMigrationToolRoute
 	'/_dashboard-layout/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
-	'/_dashboard-layout/dashboard/products/receiving-payments': typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
 	'/_dashboard-layout/dashboard/products/shipping-options': typeof DashboardLayoutDashboardProductsShippingOptionsRoute
 	'/_dashboard-layout/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
 	'/_dashboard-layout/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
@@ -359,6 +359,7 @@ export interface FileRouteTypes {
 		| '/dashboard/account/making-payments'
 		| '/dashboard/account/network'
 		| '/dashboard/account/profile'
+		| '/dashboard/account/receiving-payments'
 		| '/dashboard/account/your-purchases'
 		| '/dashboard/app-settings/app-miscelleneous'
 		| '/dashboard/app-settings/blacklists'
@@ -368,7 +369,6 @@ export interface FileRouteTypes {
 		| '/dashboard/products/collections'
 		| '/dashboard/products/migration-tool'
 		| '/dashboard/products/products'
-		| '/dashboard/products/receiving-payments'
 		| '/dashboard/products/shipping-options'
 		| '/dashboard/sales/circular-economy'
 		| '/dashboard/sales/messages'
@@ -396,6 +396,7 @@ export interface FileRouteTypes {
 		| '/dashboard/account/making-payments'
 		| '/dashboard/account/network'
 		| '/dashboard/account/profile'
+		| '/dashboard/account/receiving-payments'
 		| '/dashboard/account/your-purchases'
 		| '/dashboard/app-settings/app-miscelleneous'
 		| '/dashboard/app-settings/blacklists'
@@ -405,7 +406,6 @@ export interface FileRouteTypes {
 		| '/dashboard/products/collections'
 		| '/dashboard/products/migration-tool'
 		| '/dashboard/products/products'
-		| '/dashboard/products/receiving-payments'
 		| '/dashboard/products/shipping-options'
 		| '/dashboard/sales/circular-economy'
 		| '/dashboard/sales/messages'
@@ -434,6 +434,7 @@ export interface FileRouteTypes {
 		| '/_dashboard-layout/dashboard/account/making-payments'
 		| '/_dashboard-layout/dashboard/account/network'
 		| '/_dashboard-layout/dashboard/account/profile'
+		| '/_dashboard-layout/dashboard/account/receiving-payments'
 		| '/_dashboard-layout/dashboard/account/your-purchases'
 		| '/_dashboard-layout/dashboard/app-settings/app-miscelleneous'
 		| '/_dashboard-layout/dashboard/app-settings/blacklists'
@@ -443,7 +444,6 @@ export interface FileRouteTypes {
 		| '/_dashboard-layout/dashboard/products/collections'
 		| '/_dashboard-layout/dashboard/products/migration-tool'
 		| '/_dashboard-layout/dashboard/products/products'
-		| '/_dashboard-layout/dashboard/products/receiving-payments'
 		| '/_dashboard-layout/dashboard/products/shipping-options'
 		| '/_dashboard-layout/dashboard/sales/circular-economy'
 		| '/_dashboard-layout/dashboard/sales/messages'
@@ -599,13 +599,6 @@ declare module '@tanstack/react-router' {
 			preLoaderRoute: typeof DashboardLayoutDashboardProductsShippingOptionsRouteImport
 			parentRoute: typeof DashboardLayoutRoute
 		}
-		'/_dashboard-layout/dashboard/products/receiving-payments': {
-			id: '/_dashboard-layout/dashboard/products/receiving-payments'
-			path: '/dashboard/products/receiving-payments'
-			fullPath: '/dashboard/products/receiving-payments'
-			preLoaderRoute: typeof DashboardLayoutDashboardProductsReceivingPaymentsRouteImport
-			parentRoute: typeof DashboardLayoutRoute
-		}
 		'/_dashboard-layout/dashboard/products/products': {
 			id: '/_dashboard-layout/dashboard/products/products'
 			path: '/dashboard/products/products'
@@ -667,6 +660,13 @@ declare module '@tanstack/react-router' {
 			path: '/dashboard/account/your-purchases'
 			fullPath: '/dashboard/account/your-purchases'
 			preLoaderRoute: typeof DashboardLayoutDashboardAccountYourPurchasesRouteImport
+			parentRoute: typeof DashboardLayoutRoute
+		}
+		'/_dashboard-layout/dashboard/account/receiving-payments': {
+			id: '/_dashboard-layout/dashboard/account/receiving-payments'
+			path: '/dashboard/account/receiving-payments'
+			fullPath: '/dashboard/account/receiving-payments'
+			preLoaderRoute: typeof DashboardLayoutDashboardAccountReceivingPaymentsRouteImport
 			parentRoute: typeof DashboardLayoutRoute
 		}
 		'/_dashboard-layout/dashboard/account/profile': {
@@ -773,6 +773,7 @@ interface DashboardLayoutRouteChildren {
 	DashboardLayoutDashboardAccountMakingPaymentsRoute: typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
 	DashboardLayoutDashboardAccountNetworkRoute: typeof DashboardLayoutDashboardAccountNetworkRoute
 	DashboardLayoutDashboardAccountProfileRoute: typeof DashboardLayoutDashboardAccountProfileRoute
+	DashboardLayoutDashboardAccountReceivingPaymentsRoute: typeof DashboardLayoutDashboardAccountReceivingPaymentsRoute
 	DashboardLayoutDashboardAccountYourPurchasesRoute: typeof DashboardLayoutDashboardAccountYourPurchasesRoute
 	DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute: typeof DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute
 	DashboardLayoutDashboardAppSettingsBlacklistsRoute: typeof DashboardLayoutDashboardAppSettingsBlacklistsRoute
@@ -782,7 +783,6 @@ interface DashboardLayoutRouteChildren {
 	DashboardLayoutDashboardProductsCollectionsRoute: typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
 	DashboardLayoutDashboardProductsMigrationToolRoute: typeof DashboardLayoutDashboardProductsMigrationToolRoute
 	DashboardLayoutDashboardProductsProductsRoute: typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
-	DashboardLayoutDashboardProductsReceivingPaymentsRoute: typeof DashboardLayoutDashboardProductsReceivingPaymentsRoute
 	DashboardLayoutDashboardProductsShippingOptionsRoute: typeof DashboardLayoutDashboardProductsShippingOptionsRoute
 	DashboardLayoutDashboardSalesCircularEconomyRoute: typeof DashboardLayoutDashboardSalesCircularEconomyRoute
 	DashboardLayoutDashboardSalesMessagesRoute: typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
@@ -794,6 +794,7 @@ const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
 	DashboardLayoutDashboardAccountMakingPaymentsRoute: DashboardLayoutDashboardAccountMakingPaymentsRoute,
 	DashboardLayoutDashboardAccountNetworkRoute: DashboardLayoutDashboardAccountNetworkRoute,
 	DashboardLayoutDashboardAccountProfileRoute: DashboardLayoutDashboardAccountProfileRoute,
+	DashboardLayoutDashboardAccountReceivingPaymentsRoute: DashboardLayoutDashboardAccountReceivingPaymentsRoute,
 	DashboardLayoutDashboardAccountYourPurchasesRoute: DashboardLayoutDashboardAccountYourPurchasesRoute,
 	DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute: DashboardLayoutDashboardAppSettingsAppMiscelleneousRoute,
 	DashboardLayoutDashboardAppSettingsBlacklistsRoute: DashboardLayoutDashboardAppSettingsBlacklistsRoute,
@@ -803,7 +804,6 @@ const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
 	DashboardLayoutDashboardProductsCollectionsRoute: DashboardLayoutDashboardProductsCollectionsRouteWithChildren,
 	DashboardLayoutDashboardProductsMigrationToolRoute: DashboardLayoutDashboardProductsMigrationToolRoute,
 	DashboardLayoutDashboardProductsProductsRoute: DashboardLayoutDashboardProductsProductsRouteWithChildren,
-	DashboardLayoutDashboardProductsReceivingPaymentsRoute: DashboardLayoutDashboardProductsReceivingPaymentsRoute,
 	DashboardLayoutDashboardProductsShippingOptionsRoute: DashboardLayoutDashboardProductsShippingOptionsRoute,
 	DashboardLayoutDashboardSalesCircularEconomyRoute: DashboardLayoutDashboardSalesCircularEconomyRoute,
 	DashboardLayoutDashboardSalesMessagesRoute: DashboardLayoutDashboardSalesMessagesRouteWithChildren,

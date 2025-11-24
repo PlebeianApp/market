@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Check, Clock, Zap, Users, CreditCard, SkipForward } from 'lucide-react'
-import type { PaymentInvoiceData } from './PaymentDialog'
+import type { PaymentInvoiceData } from '@/lib/types/invoice'
 
 interface PaymentSummaryProps {
 	invoices: PaymentInvoiceData[]

@@ -388,6 +388,7 @@ function DashboardLayout() {
 												location.pathname === '/dashboard/products/shipping-options' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/account/profile' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/account/making-payments' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/account/receiving-payments' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/account/your-purchases' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/account/network' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/app-settings/app-miscelleneous' && 'p-0 lg:p-0',
@@ -410,6 +411,7 @@ function DashboardLayout() {
 												location.pathname !== '/dashboard/products/shipping-options' &&
 												location.pathname !== '/dashboard/account/profile' &&
 												location.pathname !== '/dashboard/account/making-payments' &&
+												location.pathname !== '/dashboard/account/receiving-payments' &&
 												location.pathname !== '/dashboard/account/your-purchases' &&
 												location.pathname !== '/dashboard/app-settings/app-miscelleneous' &&
 												location.pathname !== '/dashboard/app-settings/team' &&
@@ -439,6 +441,7 @@ function DashboardLayout() {
 														location.pathname !== '/dashboard/products/shipping-options' &&
 														location.pathname !== '/dashboard/account/profile' &&
 														location.pathname !== '/dashboard/account/making-payments' &&
+														location.pathname !== '/dashboard/account/receiving-payments' &&
 														location.pathname !== '/dashboard/account/your-purchases' &&
 														location.pathname !== '/dashboard/account/network' && (
 															<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>
