@@ -1,3 +1,4 @@
+import { UserDisplayComponent } from '@/components/UserDisplayComponent'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -23,7 +24,7 @@ import {
 } from '@/queries/app-settings'
 import { useConfigQuery } from '@/queries/config'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
-import { formatPubkeyForDisplay, npubToHex } from '@/routes/setup'
+import { npubToHex } from '@/routes/setup'
 import { createFileRoute } from '@tanstack/react-router'
 import { ArrowDown, ArrowUp, Edit, Globe, Shield, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
 import { useState } from 'react'
@@ -38,7 +39,7 @@ function TeamComponent() {
 	const { data: config } = useConfigQuery()
 	const { data: adminSettings, isLoading: isLoadingAdmins } = useAdminSettings(config?.appPublicKey)
 	const { data: editorSettings, isLoading: isLoadingEditors } = useEditorSettings(config?.appPublicKey)
-	const { userRole, amIAdmin, amIOwner, isLoading: isLoadingPermissions } = useUserRole(config?.appPublicKey)
+	const { amIAdmin, amIOwner, isLoading: isLoadingPermissions } = useUserRole(config?.appPublicKey)
 	const [newAdminInput, setNewAdminInput] = useState('')
 	const [newEditorInput, setNewEditorInput] = useState('')
 	const [isAddingAdmin, setIsAddingAdmin] = useState(false)
@@ -296,42 +297,41 @@ function TeamComponent() {
 							</div>
 						) : (
 							<div className="space-y-3">
-								{formattedAdmins.map((admin) => {
+								{formattedAdmins.map((admin, index) => {
 									const actions = getAvailableActions(admin.pubkey)
 									return (
-										<div key={admin.pubkey} className="flex items-center justify-between p-3 border rounded-lg">
-											<div className="flex items-center gap-3">
-												{admin.isOwner ? <ShieldCheck className="w-5 h-5 text-green-600" /> : <Shield className="w-5 h-5 text-blue-600" />}
-												<div>
-													<div className="font-mono text-sm">{formatPubkeyForDisplay(admin.pubkey)}</div>
-													{admin.isOwner && <div className="text-xs text-green-600 font-medium">Owner</div>}
-												</div>
-											</div>
-											{actions.length > 0 && (
-												<div className="flex gap-2">
-													{actions.map((action, index) => {
-														const Icon = action.icon
-														return (
-															<Button
-																key={index}
-																variant="outline"
-																size="sm"
-																onClick={action.handler}
-																disabled={
-																	removeAdminMutation.isPending ||
-																	promoteEditorToAdminMutation.isPending ||
-																	demoteAdminToEditorMutation.isPending ||
-																	removeUserFromAllRolesMutation.isPending
-																}
-																title={action.label}
-															>
-																<Icon className={`w-4 h-4 ${action.color}`} />
-															</Button>
-														)
-													})}
-												</div>
-											)}
-										</div>
+										<UserDisplayComponent
+											key={admin.pubkey}
+											userPubkey={admin.pubkey}
+											index={index}
+											customActions={
+												actions.length > 0 ? (
+													<>
+														{actions.map((action, actionIndex) => {
+															const Icon = action.icon
+															return (
+																<Button
+																	key={actionIndex}
+																	variant="outline"
+																	size="sm"
+																	onClick={action.handler}
+																	disabled={
+																		removeAdminMutation.isPending ||
+																		promoteEditorToAdminMutation.isPending ||
+																		demoteAdminToEditorMutation.isPending ||
+																		removeUserFromAllRolesMutation.isPending
+																	}
+																	title={action.label}
+																	className="h-8 w-8 p-0"
+																>
+																	<Icon className={`w-4 h-4 ${action.color}`} />
+																</Button>
+															)
+														})}
+													</>
+												) : undefined
+											}
+										/>
 									)
 								})}
 							</div>
@@ -356,42 +356,41 @@ function TeamComponent() {
 							</div>
 						) : (
 							<div className="space-y-3">
-								{formattedEditors.map((editor) => {
+								{formattedEditors.map((editor, index) => {
 									const actions = getAvailableActions(editor.pubkey)
 									return (
-										<div key={editor.pubkey} className="flex items-center justify-between p-3 border rounded-lg">
-											<div className="flex items-center gap-3">
-												<Edit className="w-5 h-5 text-purple-600" />
-												<div>
-													<div className="font-mono text-sm">{formatPubkeyForDisplay(editor.pubkey)}</div>
-													<div className="text-xs text-purple-600 font-medium">Editor</div>
-												</div>
-											</div>
-											{actions.length > 0 && (
-												<div className="flex gap-2">
-													{actions.map((action, index) => {
-														const Icon = action.icon
-														return (
-															<Button
-																key={index}
-																variant="outline"
-																size="sm"
-																onClick={action.handler}
-																disabled={
-																	removeEditorMutation.isPending ||
-																	promoteEditorToAdminMutation.isPending ||
-																	demoteEditorToUserMutation.isPending ||
-																	removeUserFromAllRolesMutation.isPending
-																}
-																title={action.label}
-															>
-																<Icon className={`w-4 h-4 ${action.color}`} />
-															</Button>
-														)
-													})}
-												</div>
-											)}
-										</div>
+										<UserDisplayComponent
+											key={editor.pubkey}
+											userPubkey={editor.pubkey}
+											index={index}
+											customActions={
+												actions.length > 0 ? (
+													<>
+														{actions.map((action, actionIndex) => {
+															const Icon = action.icon
+															return (
+																<Button
+																	key={actionIndex}
+																	variant="outline"
+																	size="sm"
+																	onClick={action.handler}
+																	disabled={
+																		removeEditorMutation.isPending ||
+																		promoteEditorToAdminMutation.isPending ||
+																		demoteEditorToUserMutation.isPending ||
+																		removeUserFromAllRolesMutation.isPending
+																	}
+																	title={action.label}
+																	className="h-8 w-8 p-0"
+																>
+																	<Icon className={`w-4 h-4 ${action.color}`} />
+																</Button>
+															)
+														})}
+													</>
+												) : undefined
+											}
+										/>
 									)
 								})}
 							</div>
