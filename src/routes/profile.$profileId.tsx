@@ -162,7 +162,9 @@ function RouteComponent() {
 							/>
 						)}
 						<div className="flex items-center gap-2">
-							<h2 className="text-2xl font-bold text-white">{truncateText(profile?.name ?? 'Unnamed user', isSmallScreen ? 10 : 50)}</h2>
+							<h2 className="text-xl sm:text-2xl font-bold text-white">
+								{truncateText(profile?.name ?? 'Unnamed user', isSmallScreen ? 28 : 50)}
+							</h2>
 							<Nip05Badge pubkey={user?.pubkey || ''} />
 						</div>
 					</div>
@@ -200,7 +202,10 @@ function RouteComponent() {
 				</div>
 
 				{profile?.about && (
-					<div ref={animationParent} className="flex flex-row items-center justify-between px-8 py-4 bg-zinc-900 text-white text-sm">
+					<div
+						ref={animationParent}
+						className="flex flex-row items-center justify-between px-8 py-4 bg-zinc-900 text-white text-xs sm:text-sm"
+					>
 						{(() => {
 							const truncationLength = isSmallScreen ? 70 : 250
 							const aboutTruncated = truncateText(profile.about, truncationLength)
