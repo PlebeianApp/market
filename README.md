@@ -29,6 +29,7 @@ This project was created using `bun init` in bun v1.2.4. [Bun](https://bun.sh) i
    - `APP_RELAY_URL`: Your relay URL
    - `APP_PRIVATE_KEY`: Your private key for initialization
 3. Set up a development relay (required for local development)
+
    - We recommend using [nak](https://github.com/fiatjaf/nak) for development:
 
      ```bash

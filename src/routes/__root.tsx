@@ -3,7 +3,6 @@ import { Header } from '@/components/layout/Header'
 import { Pattern } from '@/components/pattern'
 import { SheetRegistry } from '@/components/SheetRegistry'
 import { DialogRegistry } from '@/components/DialogRegistry'
-import { BugReportButton } from '@/components/BugReportButton'
 import { useConfigQuery } from '@/queries/config'
 import { useAmIAdmin } from '@/queries/app-settings'
 import { createRootRoute, Outlet, useNavigate, useLocation } from '@tanstack/react-router'
@@ -78,7 +77,6 @@ function RootLayout() {
 			<SheetRegistry />
 			<DialogRegistry />
 			<Toaster />
-			<BugReportButton />
 		</div>
 	)
 }
