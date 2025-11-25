@@ -1,5 +1,6 @@
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { authStore } from '@/lib/stores/auth'
 import { productFormActions } from '@/lib/stores/product'
 import { useDeleteProductMutation } from '@/publish/products'
@@ -10,7 +11,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Outlet, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { PackageIcon, Trash, EyeOff, Clock, Eye } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 
 // Component to show basic product information
 function ProductBasicInfo({ product }: { product: any }) {
@@ -157,6 +158,7 @@ function ProductsOverviewComponent() {
 	const navigate = useNavigate()
 	const matchRoute = useMatchRoute()
 	const [expandedProduct, setExpandedProduct] = useState<string | null>(null)
+	const [orderBy, setOrderBy] = useState<string>('newest')
 	useDashboardTitle('Products')
 
 	// Auto-animate for smooth list transitions
@@ -187,6 +189,21 @@ function ProductsOverviewComponent() {
 		...productsByPubkeyQueryOptions(user?.pubkey ?? '', true), // Include hidden products for own dashboard
 		enabled: !!user?.pubkey && isAuthenticated,
 	})
+
+	// Sort products based on orderBy
+	const sortedProducts = useMemo(() => {
+		if (!products) return []
+		return [...products].sort((a, b) => {
+			const timeA = a.created_at || 0
+			const timeB = b.created_at || 0
+			// For replaceable events, created_at is both creation and update time
+			if (orderBy === 'oldest' || orderBy === 'least-updated') {
+				return timeA - timeB
+			} else {
+				return timeB - timeA
+			}
+		})
+	}, [products, orderBy])
 
 	// Delete mutation
 	const deleteMutation = useDeleteProductMutation()
@@ -236,16 +253,40 @@ function ProductsOverviewComponent() {
 		<div>
 			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
 				<h1 className="text-2xl font-bold">Products</h1>
-				<Button
-					onClick={handleAddProductClick}
-					data-testid="add-product-button"
-					className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
-				>
-					<span className="i-product w-5 h-5" /> Add A Product
-				</Button>
+				<div className="flex items-center gap-4">
+					<Select value={orderBy} onValueChange={setOrderBy}>
+						<SelectTrigger className="w-48">
+							<SelectValue placeholder="Order By" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="newest">Newest First</SelectItem>
+							<SelectItem value="oldest">Oldest First</SelectItem>
+							<SelectItem value="recently-updated">Recently Updated</SelectItem>
+							<SelectItem value="least-updated">Least Recently Updated</SelectItem>
+						</SelectContent>
+					</Select>
+					<Button
+						onClick={handleAddProductClick}
+						data-testid="add-product-button"
+						className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+					>
+						<span className="i-product w-5 h-5" /> Add A Product
+					</Button>
+				</div>
 			</div>
 			<div className="space-y-6 p-4 lg:p-6">
-				<div className="lg:hidden">
+				<div className="lg:hidden space-y-4">
+					<Select value={orderBy} onValueChange={setOrderBy}>
+						<SelectTrigger className="w-full">
+							<SelectValue placeholder="Order By" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="newest">Newest First</SelectItem>
+							<SelectItem value="oldest">Oldest First</SelectItem>
+							<SelectItem value="recently-updated">Recently Updated</SelectItem>
+							<SelectItem value="least-updated">Least Recently Updated</SelectItem>
+						</SelectContent>
+					</Select>
 					<Button
 						onClick={handleAddProductClick}
 						data-testid="add-product-button-mobile"
@@ -261,9 +302,9 @@ function ProductsOverviewComponent() {
 
 					{!isLoading && !error && (
 						<>
-							{products && products.length > 0 ? (
+							{sortedProducts && sortedProducts.length > 0 ? (
 								<ul ref={animationParent} className="flex flex-col gap-4 mt-4">
-									{products.map((product) => (
+									{sortedProducts.map((product) => (
 										<li key={product.id}>
 											<ProductListItem
 												product={product}
