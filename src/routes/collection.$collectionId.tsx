@@ -273,9 +273,7 @@ function RouteComponent() {
 						// 	</div>
 						// }
 						>
-							{products?.map((product: NDKEvent) => (
-								<ProductCard key={product.id} product={product} />
-							))}
+							{products?.map((product: NDKEvent) => <ProductCard key={product.id} product={product} />)}
 						</ItemGrid>
 					) : (
 						<div className="flex flex-col items-center justify-center h-full">

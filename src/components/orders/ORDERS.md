@@ -156,27 +156,32 @@ To test the full order lifecycle, the application uses a seeding mechanism that 
 ### Seeded Order States
 
 1. **PENDING Orders**
+
    - Only the order creation and payment request events are created
    - No payment receipt or status updates
    - Allows testing of initial order display and seller confirmation flow
 
 2. **CONFIRMED Orders**
+
    - Includes order creation, payment request and receipt
    - Adds a status update to CONFIRMED
    - Tests the payment confirmation handling
 
 3. **PROCESSING Orders**
+
    - Full flow through CONFIRMED
    - Adds PROCESSING status
    - Tests the order processing interface and shipping preparation
 
 4. **SHIPPED Orders**
+
    - Includes CONFIRMED and PROCESSING states
    - Adds a shipping update with SHIPPING_STATUS.SHIPPED
    - Tests the hybrid status representation (PROCESSING + shipping tag)
    - Validates the visual shipping indicators (orange color, truck icon)
 
 5. **COMPLETED Orders**
+
    - Full order lifecycle through all states
    - Demonstrates the complete flow from creation to delivery
    - Tests final state handling and order history display

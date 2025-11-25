@@ -123,6 +123,7 @@ await seedMultiplePaymentDetails(signer, ndk, appPubkey, 'seller@getalby.com', p
 4. **Add multiple products to cart** (products that have different wallet configurations)
 
 5. **Proceed to checkout**
+
    - Complete shipping info
    - Review order
    - **Wallet selection step appears** (if products have multiple wallet options)

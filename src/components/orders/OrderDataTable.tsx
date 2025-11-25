@@ -38,6 +38,9 @@ interface OrderDataTableProps<TData> {
 	onStatusFilterChange?: (value: string) => void
 	statusFilter?: string
 	showSearch?: boolean
+	showOrderBy?: boolean
+	onOrderByChange?: (value: string) => void
+	orderBy?: string
 }
 
 export function OrderDataTable<TData>({
@@ -50,6 +53,9 @@ export function OrderDataTable<TData>({
 	onStatusFilterChange,
 	statusFilter = 'any',
 	showSearch = true,
+	showOrderBy = false,
+	onOrderByChange,
+	orderBy = 'newest',
 }: OrderDataTableProps<TData>) {
 	const [sorting, setSorting] = useState<SortingState>([])
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -86,6 +92,22 @@ export function OrderDataTable<TData>({
 							onChange={(e) => setGlobalFilter(e.target.value)}
 							className="w-full sm:max-w-xs"
 						/>
+					)}
+
+					{showOrderBy && onOrderByChange && (
+						<div className="w-full sm:w-auto sm:min-w-48">
+							<Select value={orderBy} onValueChange={onOrderByChange}>
+								<SelectTrigger>
+									<SelectValue placeholder="Order By" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="newest">Newest First</SelectItem>
+									<SelectItem value="oldest">Oldest First</SelectItem>
+									<SelectItem value="recently-updated">Recently Updated</SelectItem>
+									<SelectItem value="least-updated">Least Recently Updated</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
 					)}
 
 					{showStatusFilter && onStatusFilterChange && (
