@@ -40,6 +40,14 @@ export const dashboardNavigation: NavSection[] = [
 				path: '/dashboard/products/collections',
 			},
 			{
+				title: '🔄 Migration Tool',
+				path: '/dashboard/products/migration-tool',
+			},
+			{
+				title: '💸 Receive Payments',
+				path: '/dashboard/products/receiving-payments',
+			},
+			{
 				title: '📫 Shipping Options',
 				path: '/dashboard/products/shipping-options',
 			},

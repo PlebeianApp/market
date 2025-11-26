@@ -28,6 +28,7 @@ import { Route as DashboardLayoutDashboardSalesMessagesRouteImport } from './rou
 import { Route as DashboardLayoutDashboardSalesCircularEconomyRouteImport } from './routes/_dashboard-layout/dashboard/sales/circular-economy'
 import { Route as DashboardLayoutDashboardProductsShippingOptionsRouteImport } from './routes/_dashboard-layout/dashboard/products/shipping-options'
 import { Route as DashboardLayoutDashboardProductsProductsRouteImport } from './routes/_dashboard-layout/dashboard/products/products'
+import { Route as DashboardLayoutDashboardProductsMigrationToolRouteImport } from './routes/_dashboard-layout/dashboard/products/migration-tool'
 import { Route as DashboardLayoutDashboardProductsCollectionsRouteImport } from './routes/_dashboard-layout/dashboard/products/collections'
 import { Route as DashboardLayoutDashboardOrdersOrderIdRouteImport } from './routes/_dashboard-layout/dashboard/orders/$orderId'
 import { Route as DashboardLayoutDashboardAppSettingsTeamRouteImport } from './routes/_dashboard-layout/dashboard/app-settings/team'
@@ -139,6 +140,11 @@ const DashboardLayoutDashboardProductsProductsRoute = DashboardLayoutDashboardPr
 	path: '/dashboard/products/products',
 	getParentRoute: () => DashboardLayoutRoute,
 } as any)
+const DashboardLayoutDashboardProductsMigrationToolRoute = DashboardLayoutDashboardProductsMigrationToolRouteImport.update({
+	id: '/dashboard/products/migration-tool',
+	path: '/dashboard/products/migration-tool',
+	getParentRoute: () => DashboardLayoutRoute,
+} as any)
 const DashboardLayoutDashboardProductsCollectionsRoute = DashboardLayoutDashboardProductsCollectionsRouteImport.update({
 	id: '/dashboard/products/collections',
 	path: '/dashboard/products/collections',
@@ -246,6 +252,7 @@ export interface FileRoutesByFullPath {
 	'/dashboard/app-settings/team': typeof DashboardLayoutDashboardAppSettingsTeamRoute
 	'/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
 	'/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
+	'/dashboard/products/migration-tool': typeof DashboardLayoutDashboardProductsMigrationToolRoute
 	'/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
 	'/dashboard/products/shipping-options': typeof DashboardLayoutDashboardProductsShippingOptionsRoute
 	'/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
@@ -282,6 +289,7 @@ export interface FileRoutesByTo {
 	'/dashboard/app-settings/team': typeof DashboardLayoutDashboardAppSettingsTeamRoute
 	'/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
 	'/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
+	'/dashboard/products/migration-tool': typeof DashboardLayoutDashboardProductsMigrationToolRoute
 	'/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
 	'/dashboard/products/shipping-options': typeof DashboardLayoutDashboardProductsShippingOptionsRoute
 	'/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
@@ -320,6 +328,7 @@ export interface FileRoutesById {
 	'/_dashboard-layout/dashboard/app-settings/team': typeof DashboardLayoutDashboardAppSettingsTeamRoute
 	'/_dashboard-layout/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
 	'/_dashboard-layout/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
+	'/_dashboard-layout/dashboard/products/migration-tool': typeof DashboardLayoutDashboardProductsMigrationToolRoute
 	'/_dashboard-layout/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
 	'/_dashboard-layout/dashboard/products/shipping-options': typeof DashboardLayoutDashboardProductsShippingOptionsRoute
 	'/_dashboard-layout/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
@@ -358,6 +367,7 @@ export interface FileRouteTypes {
 		| '/dashboard/app-settings/team'
 		| '/dashboard/orders/$orderId'
 		| '/dashboard/products/collections'
+		| '/dashboard/products/migration-tool'
 		| '/dashboard/products/products'
 		| '/dashboard/products/shipping-options'
 		| '/dashboard/sales/circular-economy'
@@ -394,6 +404,7 @@ export interface FileRouteTypes {
 		| '/dashboard/app-settings/team'
 		| '/dashboard/orders/$orderId'
 		| '/dashboard/products/collections'
+		| '/dashboard/products/migration-tool'
 		| '/dashboard/products/products'
 		| '/dashboard/products/shipping-options'
 		| '/dashboard/sales/circular-economy'
@@ -431,6 +442,7 @@ export interface FileRouteTypes {
 		| '/_dashboard-layout/dashboard/app-settings/team'
 		| '/_dashboard-layout/dashboard/orders/$orderId'
 		| '/_dashboard-layout/dashboard/products/collections'
+		| '/_dashboard-layout/dashboard/products/migration-tool'
 		| '/_dashboard-layout/dashboard/products/products'
 		| '/_dashboard-layout/dashboard/products/shipping-options'
 		| '/_dashboard-layout/dashboard/sales/circular-economy'
@@ -592,6 +604,13 @@ declare module '@tanstack/react-router' {
 			path: '/dashboard/products/products'
 			fullPath: '/dashboard/products/products'
 			preLoaderRoute: typeof DashboardLayoutDashboardProductsProductsRouteImport
+			parentRoute: typeof DashboardLayoutRoute
+		}
+		'/_dashboard-layout/dashboard/products/migration-tool': {
+			id: '/_dashboard-layout/dashboard/products/migration-tool'
+			path: '/dashboard/products/migration-tool'
+			fullPath: '/dashboard/products/migration-tool'
+			preLoaderRoute: typeof DashboardLayoutDashboardProductsMigrationToolRouteImport
 			parentRoute: typeof DashboardLayoutRoute
 		}
 		'/_dashboard-layout/dashboard/products/collections': {
@@ -762,6 +781,7 @@ interface DashboardLayoutRouteChildren {
 	DashboardLayoutDashboardAppSettingsTeamRoute: typeof DashboardLayoutDashboardAppSettingsTeamRoute
 	DashboardLayoutDashboardOrdersOrderIdRoute: typeof DashboardLayoutDashboardOrdersOrderIdRoute
 	DashboardLayoutDashboardProductsCollectionsRoute: typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
+	DashboardLayoutDashboardProductsMigrationToolRoute: typeof DashboardLayoutDashboardProductsMigrationToolRoute
 	DashboardLayoutDashboardProductsProductsRoute: typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
 	DashboardLayoutDashboardProductsShippingOptionsRoute: typeof DashboardLayoutDashboardProductsShippingOptionsRoute
 	DashboardLayoutDashboardSalesCircularEconomyRoute: typeof DashboardLayoutDashboardSalesCircularEconomyRoute
@@ -782,6 +802,7 @@ const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
 	DashboardLayoutDashboardAppSettingsTeamRoute: DashboardLayoutDashboardAppSettingsTeamRoute,
 	DashboardLayoutDashboardOrdersOrderIdRoute: DashboardLayoutDashboardOrdersOrderIdRoute,
 	DashboardLayoutDashboardProductsCollectionsRoute: DashboardLayoutDashboardProductsCollectionsRouteWithChildren,
+	DashboardLayoutDashboardProductsMigrationToolRoute: DashboardLayoutDashboardProductsMigrationToolRoute,
 	DashboardLayoutDashboardProductsProductsRoute: DashboardLayoutDashboardProductsProductsRouteWithChildren,
 	DashboardLayoutDashboardProductsShippingOptionsRoute: DashboardLayoutDashboardProductsShippingOptionsRoute,
 	DashboardLayoutDashboardSalesCircularEconomyRoute: DashboardLayoutDashboardSalesCircularEconomyRoute,
