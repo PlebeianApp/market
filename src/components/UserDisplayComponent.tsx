@@ -5,17 +5,19 @@ import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import { profileQueryOptions } from '@/queries/profiles'
 import { nip19 } from 'nostr-tools'
+import type { ReactNode } from 'react'
 
 interface UserDisplayComponentProps {
 	userPubkey: string
 	index: number
 	onMoveUp?: () => void
 	onMoveDown?: () => void
-	onRemove: () => void
+	onRemove?: () => void
 	canMoveUp?: boolean
 	canMoveDown?: boolean
 	isReordering?: boolean
-	isRemoving: boolean
+	isRemoving?: boolean
+	customActions?: ReactNode
 }
 
 export function UserDisplayComponent({
@@ -28,6 +30,7 @@ export function UserDisplayComponent({
 	canMoveDown,
 	isReordering,
 	isRemoving,
+	customActions,
 }: UserDisplayComponentProps) {
 	// Convert pubkey to npub for profile query
 	const npub = nip19.npubEncode(userPubkey)
@@ -63,21 +66,27 @@ export function UserDisplayComponent({
 				</div>
 
 				{/* Action Buttons */}
-				<div className="flex flex-col gap-1">
-					{onMoveUp && (
-						<Button variant="outline" size="sm" onClick={onMoveUp} disabled={!canMoveUp || isReordering} className="h-8 w-8 p-0">
-							<ChevronUp className="h-4 w-4" />
-						</Button>
-					)}
-					{onMoveDown && (
-						<Button variant="outline" size="sm" onClick={onMoveDown} disabled={!canMoveDown || isReordering} className="h-8 w-8 p-0">
-							<ChevronDown className="h-4 w-4" />
-						</Button>
-					)}
-					<Button variant="destructive" size="sm" onClick={onRemove} disabled={isRemoving} className="h-8 w-8 p-0">
-						<Trash2 className="h-4 w-4" />
-					</Button>
-				</div>
+				{customActions ? (
+					<div className="flex flex-col gap-1">{customActions}</div>
+				) : (
+					<div className="flex flex-col gap-1">
+						{onMoveUp && (
+							<Button variant="outline" size="sm" onClick={onMoveUp} disabled={!canMoveUp || isReordering} className="h-8 w-8 p-0">
+								<ChevronUp className="h-4 w-4" />
+							</Button>
+						)}
+						{onMoveDown && (
+							<Button variant="outline" size="sm" onClick={onMoveDown} disabled={!canMoveDown || isReordering} className="h-8 w-8 p-0">
+								<ChevronDown className="h-4 w-4" />
+							</Button>
+						)}
+						{onRemove && (
+							<Button variant="destructive" size="sm" onClick={onRemove} disabled={isRemoving} className="h-8 w-8 p-0">
+								<Trash2 className="h-4 w-4" />
+							</Button>
+						)}
+					</div>
+				)}
 			</div>
 		</Card>
 	)
