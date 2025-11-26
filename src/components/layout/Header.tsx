@@ -1,3 +1,4 @@
+import { BugReportButton } from '@/components/BugReportButton'
 import { CartButton } from '@/components/CartButton'
 import { CurrencyDropdown } from '@/components/CurrencyDropdown'
 import { MobileMenu } from '@/components/layout/MobileMenu'
@@ -177,12 +178,18 @@ export function Header() {
 						<ProductSearch />
 					</div>
 					<div className="flex gap-2">
+						{/* Bug Report Button - visible when authenticated on desktop */}
+						{!isMobile && (
+							<BugReportButton className="!static !w-auto !rounded-lg !shadow-none !bg-primary-border !border-2 !border-transparent hover:!bg-black hover:!border-primary-border-hover p-2 relative hover:[&>span]:text-secondary" />
+						)}
 						{/* Currency Dropdown - always visible on desktop */}
 						{!isMobile && <CurrencyDropdown />}
 
 						{/* Mobile Layout */}
 						{isMobile ? (
 							<>
+								{/* Bug Report Button - visible when authenticated on mobile */}
+								<BugReportButton className="!static !w-auto !rounded-lg !shadow-none !bg-primary-border !border-2 !border-transparent hover:!bg-black hover:!border-primary-border-hover p-2 relative hover:[&>span]:text-secondary" />
 								{/* Account Button/Avatar - changes based on auth state - positioned first when logged in */}
 								{isAuthenticating ? (
 									<Button variant="primary" className="p-2 relative" data-testid="auth-loading">
