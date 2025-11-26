@@ -159,6 +159,12 @@ function RouteComponent() {
 		return 2 + invoices.length + 1
 	}, [invoices.length])
 
+	// Ensure currentInvoiceIndex stays within bounds
+	const safeInvoiceIndex = useMemo(() => {
+		if (invoices.length === 0) return 0
+		return Math.min(currentInvoiceIndex, invoices.length - 1)
+	}, [currentInvoiceIndex, invoices.length])
+
 	const currentStepNumber = useMemo(() => {
 		switch (currentStep) {
 			case 'shipping':
@@ -166,13 +172,13 @@ function RouteComponent() {
 			case 'summary':
 				return 2
 			case 'payment':
-				return 3 + currentInvoiceIndex
+				return 3 + safeInvoiceIndex
 			case 'complete':
 				return totalSteps
 			default:
 				return 1
 		}
-	}, [currentStep, currentInvoiceIndex, totalSteps])
+	}, [currentStep, safeInvoiceIndex, totalSteps])
 
 	const progress = useMemo(() => {
 		return ((currentStepNumber - 1) / (totalSteps - 1)) * 100
@@ -185,18 +191,18 @@ function RouteComponent() {
 			case 'summary':
 				return 'Review your order'
 			case 'payment':
-				const currentInvoice = invoices[currentInvoiceIndex]
+				const currentInvoice = invoices[safeInvoiceIndex]
 				if (currentInvoice) {
 					const invoiceTypeLabel = currentInvoice.type === 'v4v' ? 'V4V Payment' : 'Payment'
-					return `${invoiceTypeLabel} ${currentInvoiceIndex + 1} of ${invoices.length}: ${currentInvoice.recipientName}`
+					return `${invoiceTypeLabel} ${safeInvoiceIndex + 1} of ${invoices.length}: ${currentInvoice.recipientName}`
 				}
-				return `Processing Lightning payments (${currentInvoiceIndex + 1} of ${invoices.length})`
+				return `Processing Lightning payments (${safeInvoiceIndex + 1} of ${invoices.length})`
 			case 'complete':
 				return 'Order complete'
 			default:
 				return 'Checkout'
 		}
-	}, [currentStep, currentInvoiceIndex, invoices])
+	}, [currentStep, safeInvoiceIndex, invoices])
 
 	// Fetch available payment options when entering payment step (before invoice generation)
 	useEffect(() => {
@@ -411,7 +417,13 @@ function RouteComponent() {
 	}
 
 	const handlePaymentComplete = async (invoiceId: string, preimage: string, skipAutoAdvance = false) => {
-		console.log(`Payment completed for invoice ${invoiceId} with preimage: ${preimage.substring(0, 16)}...`)
+		console.log(`🎯 handlePaymentComplete called:`, {
+			invoiceId,
+			preimagePreview: preimage.substring(0, 16) + '...',
+			currentInvoiceIndex: safeInvoiceIndex,
+			totalInvoices: invoices.length,
+			invoiceStatuses: invoices.map((inv, i) => `${i}: ${inv.id.substring(0, 8)}... = ${inv.status}`),
+		})
 
 		// Find the invoice to get bolt11 for receipt creation
 		const invoice = invoices.find((inv) => inv.id === invoiceId)
@@ -456,11 +468,27 @@ function RouteComponent() {
 
 					if (allCompleted) {
 						setCurrentStep('complete')
-					} else if (currentInvoiceIndex < currentInvoices.length - 1) {
-						setCurrentInvoiceIndex((prev) => prev + 1)
 					} else {
-						// If we're at the last invoice but not all are completed, stay here
-						// This can happen with failed payments
+						// Find the next pending invoice starting from current position
+						setCurrentInvoiceIndex((prevIndex) => {
+							// First, try to find next pending invoice after current position
+							for (let i = prevIndex + 1; i < currentInvoices.length; i++) {
+								if (currentInvoices[i].status === 'pending') {
+									console.log(`📍 Advancing to next pending invoice at index ${i}`)
+									return i
+								}
+							}
+							// If no pending invoice after current, look from the beginning
+							for (let i = 0; i < prevIndex; i++) {
+								if (currentInvoices[i].status === 'pending') {
+									console.log(`📍 Wrapping to pending invoice at index ${i}`)
+									return i
+								}
+							}
+							// Stay at current if no pending found (shouldn't happen if not allCompleted)
+							console.log(`📍 No pending invoice found, staying at index ${prevIndex}`)
+							return prevIndex
+						})
 					}
 
 					return currentInvoices // Return unchanged state
@@ -520,8 +548,26 @@ function RouteComponent() {
 
 				if (allCompleted) {
 					setCurrentStep('complete')
-				} else if (currentInvoiceIndex < currentInvoices.length - 1) {
-					setCurrentInvoiceIndex((prev) => prev + 1)
+				} else {
+					// Find the next pending invoice
+					setCurrentInvoiceIndex((prevIndex) => {
+						// First, try to find next pending invoice after current position
+						for (let i = prevIndex + 1; i < currentInvoices.length; i++) {
+							if (currentInvoices[i].status === 'pending') {
+								console.log(`📍 [Skip] Advancing to next pending invoice at index ${i}`)
+								return i
+							}
+						}
+						// If no pending invoice after current, look from the beginning
+						for (let i = 0; i < prevIndex; i++) {
+							if (currentInvoices[i].status === 'pending') {
+								console.log(`📍 [Skip] Wrapping to pending invoice at index ${i}`)
+								return i
+							}
+						}
+						// Stay at current if no pending found
+						return prevIndex
+					})
 				}
 
 				return currentInvoices // Return unchanged state
@@ -770,7 +816,7 @@ function RouteComponent() {
 											{nwcEnabled && <p className="text-xs text-gray-500 mt-1">Use NWC to action all payments at once</p>}
 										</div>
 
-										<PaymentSummary invoices={invoices} currentIndex={currentInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
+										<PaymentSummary invoices={invoices} currentIndex={safeInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
 									</>
 								) : (
 									<div className="max-h-[50vh] overflow-y-auto">
@@ -797,8 +843,8 @@ function RouteComponent() {
 									<Button
 										variant="outline"
 										size="sm"
-										onClick={() => setCurrentInvoiceIndex(Math.max(0, currentInvoiceIndex - 1))}
-										disabled={currentInvoiceIndex === 0}
+										onClick={() => setCurrentInvoiceIndex(Math.max(0, safeInvoiceIndex - 1))}
+										disabled={safeInvoiceIndex === 0}
 									>
 										<ChevronLeft className="w-4 h-4" />
 										Previous
@@ -806,8 +852,8 @@ function RouteComponent() {
 									<Button
 										variant="outline"
 										size="sm"
-										onClick={() => setCurrentInvoiceIndex(Math.min(invoices.length - 1, currentInvoiceIndex + 1))}
-										disabled={currentInvoiceIndex === invoices.length - 1}
+										onClick={() => setCurrentInvoiceIndex(Math.min(invoices.length - 1, safeInvoiceIndex + 1))}
+										disabled={safeInvoiceIndex === invoices.length - 1}
 									>
 										Next
 										<ChevronRight className="w-4 h-4" />
@@ -901,7 +947,7 @@ function RouteComponent() {
 									<PaymentContent
 										ref={paymentContentRef}
 										invoices={invoices}
-										currentIndex={currentInvoiceIndex}
+										currentIndex={safeInvoiceIndex}
 										onPaymentComplete={handlePaymentComplete}
 										onPaymentFailed={handlePaymentFailed}
 										onSkipPayment={handleSkipPayment}
@@ -973,7 +1019,7 @@ function RouteComponent() {
 								</div>
 
 								<div className="pb-6">
-									<PaymentSummary invoices={invoices} currentIndex={currentInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
+									<PaymentSummary invoices={invoices} currentIndex={safeInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
 								</div>
 							</>
 						) : (
