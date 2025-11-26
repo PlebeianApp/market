@@ -5,13 +5,11 @@
 ### Critical Issues Resolved
 
 1. **✅ Zap Receipt Detection**
-
    - **Before**: Zap receipts were not being detected after payment
    - **After**: Reliable zap receipt monitoring with client-side filtering
    - **Impact**: Zaps now properly complete with feedback
 
 2. **✅ Payment Feedback**
-
    - **Before**: Users didn't know when zaps completed successfully
    - **After**: Clear success callbacks, dialog closes, progress updates
    - **Impact**: Better UX, users know payment status immediately
@@ -210,7 +208,6 @@ console.log('🔍 Generating zap invoice:', {
 ## 📚 Documentation Added
 
 1. **LIGHTNING_PAYMENT_REFACTOR.md**
-
    - Complete refactoring overview
    - Architecture explanation
    - API documentation
