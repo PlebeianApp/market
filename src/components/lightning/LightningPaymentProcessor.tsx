@@ -190,33 +190,6 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 		])
 
 		/**
-		 * Start monitoring for zap receipts
-		 * Subscribes to zap events and looks for our specific invoice
-		 */
-		const startZapMonitoring = useCallback(() => {
-			if (!invoice || !data.isZap || !active || paymentMonitoring) return
-
-			console.log('🔔 Starting zap monitoring:', {
-				invoiceId: data.invoiceId,
-				invoicePreview: invoice.substring(0, 30) + '...',
-			})
-
-			const stopMonitoring = ndkActions.monitorZapPayment(
-				invoice,
-				(preimage: string) => {
-					console.log('⚡ Zap receipt detected!', {
-						invoiceId: data.invoiceId,
-						preimagePreview: preimage.substring(0, 20) + '...',
-					})
-					handlePaymentSuccess(preimage)
-				},
-				90000, // 90 second timeout for zap receipts
-			)
-
-			setPaymentMonitoring(() => stopMonitoring)
-		}, [invoice, data.isZap, data.invoiceId, active, paymentMonitoring])
-
-		/**
 		 * Handle successful payment
 		 * Cleanup monitoring and notify parent component
 		 */
@@ -249,6 +222,44 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			},
 			[paymentMonitoring, onPaymentComplete, data.invoiceId],
 		)
+
+		/**
+		 * Start monitoring for zap receipts
+		 * Subscribes to zap events and looks for our specific invoice
+		 */
+		const startZapMonitoring = useCallback(async () => {
+			if (!invoice || !data.isZap || !active || paymentMonitoring) return
+
+			// Ensure zap NDK is connected before starting monitoring
+			if (!ndkState.isZapNdkConnected) {
+				console.log('🔌 Connecting zap NDK for monitoring...')
+				try {
+					await ndkActions.connectZapNdk()
+				} catch (error) {
+					console.error('Failed to connect zap NDK:', error)
+					return
+				}
+			}
+
+			console.log('🔔 Starting zap monitoring:', {
+				invoiceId: data.invoiceId,
+				invoicePreview: invoice.substring(0, 30) + '...',
+			})
+
+			const stopMonitoring = ndkActions.monitorZapPayment(
+				invoice,
+				(preimage: string) => {
+					console.log('⚡ Zap receipt detected!', {
+						invoiceId: data.invoiceId,
+						preimagePreview: preimage.substring(0, 20) + '...',
+					})
+					handlePaymentSuccess(preimage)
+				},
+				90000, // 90 second timeout for zap receipts
+			)
+
+			setPaymentMonitoring(() => stopMonitoring)
+		}, [invoice, data.isZap, data.invoiceId, active, paymentMonitoring, ndkState.isZapNdkConnected, handlePaymentSuccess])
 
 		/**
 		 * Handle NWC (Nostr Wallet Connect) payment

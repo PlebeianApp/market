@@ -566,7 +566,11 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		console.log(`Payment completed for invoice ${invoiceId}`, { preimage })
 		toast.success('Payment completed successfully!')
 
-		const invoice = enrichedInvoices.find((inv) => inv.id === invoiceId)
+		// Close the dialog
+		setPaymentDialogOpen(false)
+
+		// Find the invoice - check both enrichedInvoices and dialogInvoices
+		const invoice = enrichedInvoices.find((inv) => inv.id === invoiceId) || dialogInvoices.find((inv) => inv.id === invoiceId)
 
 		// Publish payment receipt so that reload shows status
 		if (invoice && invoice.bolt11) {
@@ -654,11 +658,9 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	}, [orderId])
 
 	// Calculate payment statistics
-	const incompleteInvoices = enrichedInvoices.filter((invoice) => {
-		return invoice.status === 'expired' || invoice.status === 'pending'
-	})
-
+	// Treat 'skipped' as incomplete (user chose to pay later)
 	const paidInvoices = enrichedInvoices.filter((invoice) => invoice.status === 'paid')
+	const incompleteInvoices = enrichedInvoices.filter((invoice) => invoice.status !== 'paid')
 	const totalInvoices = enrichedInvoices.length
 	const paymentProgress = totalInvoices > 0 ? (paidInvoices.length / totalInvoices) * 100 : 0
 
@@ -1032,185 +1034,148 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 								</div>
 							</div>
 
-							{/* Individual invoice payment buttons */}
+							{/* Individual payment cards */}
 							<div className="grid gap-3">
 								{enrichedInvoices.map((invoice, index) => {
 									const isGeneratingThis = generatingInvoices.has(invoice.id)
+									const isPaid = invoice.status === 'paid'
+									// Treat 'skipped' as needing payment (user chose to pay later)
+									const needsPayment = !isPaid
+
+									// Find the best invoice to pay: latest non-expired local copy, or the original
+									const now = Math.floor(Date.now() / 1000)
+									const validLocalCopy = invoice.localCopies.find(
+										(copy) => copy.status !== 'paid' && copy.bolt11 && (!copy.expiresAt || copy.expiresAt > now),
+									)
+									const invoiceToUse = validLocalCopy || invoice
+									const isExpired = invoiceToUse.expiresAt && invoiceToUse.expiresAt < now
+									const hasBolt11 = !!invoiceToUse.bolt11
 
 									return (
-										<Card key={invoice.id} className={`p-4 ${invoice.status === 'paid' ? 'bg-green-50' : 'bg-card'}`}>
-											<div
-												className={cn('flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between', {
-													'mb-3': invoice.status === 'paid' || isBuyer,
-													'sm:mb-0': !isBuyer && invoice.status !== 'paid',
-												})}
-											>
-												<div className="flex items-center gap-3">
+										<Card key={invoice.id} className={cn('p-4', isPaid ? 'bg-green-50' : 'bg-card')}>
+											{/* Header row */}
+											<div className="flex items-center justify-between gap-3">
+												<div className="flex items-center gap-3 min-w-0">
 													{enrichedInvoices.length > 1 && (
-														<div className="flex h-6 w-6 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-600">
+														<div
+															className={cn(
+																'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold',
+																isPaid ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-600',
+															)}
+														>
 															{index + 1}
 														</div>
 													)}
-													<div className={`p-1 rounded-full ${invoice.status === 'paid' ? 'bg-green-100' : 'bg-gray-100'}`}>
-														{invoice.status === 'paid' ? (
-															<CheckCircle className="w-4 h-4 text-green-600" />
-														) : (
-															<CreditCard className="w-4 h-4 text-gray-600" />
-														)}
-													</div>
-													<div>
-														<h4 className="font-medium">{invoice.type === 'merchant' ? 'Merchant Payment' : invoice.recipientName}</h4>
-														{invoice.type !== 'merchant' && <p className="text-sm text-gray-500">{invoice.description}</p>}
-														<p className="text-xs text-gray-500">
-															{invoice.amount.toLocaleString()} sats · {formatExpiryDisplay(invoice.expiresAt)}
-														</p>
-														{invoice.source === 'both' && isBuyer && (
-															<p className="text-xs text-blue-600 mt-1">Payment request + local copy</p>
-														)}
-													</div>
-												</div>
-												<div className="text-right">
-													{/* Desktop-only badge */}
-													{invoice.status !== 'paid' && (
-														<Badge className={`hidden sm:inline-flex ${getStatusColor(invoice.status)}`} variant="outline">
-															{(invoice.status || 'pending').charAt(0).toUpperCase() + (invoice.status || 'pending').slice(1)}
-														</Badge>
+													{isPaid ? (
+														<CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+													) : (
+														<CreditCard className="w-5 h-5 text-gray-400 flex-shrink-0" />
 													)}
+													<div className="min-w-0">
+														<h4 className="font-medium truncate">
+															{invoice.type === 'merchant' ? 'Merchant Payment' : invoice.recipientName}
+														</h4>
+														<p className="text-sm text-muted-foreground">
+															{invoice.amount.toLocaleString()} sats
+															{invoiceToUse.expiresAt && (
+																<span className={cn('ml-2', isExpired ? 'text-red-500' : 'text-gray-400')}>
+																	· {isExpired ? 'Expired' : 'Expires'} {formatExpiryDisplay(invoiceToUse.expiresAt)}
+																</span>
+															)}
+														</p>
+													</div>
 												</div>
+												<Badge
+													className={cn('flex-shrink-0', getStatusColor(isPaid ? 'paid' : isExpired ? 'expired' : 'pending'))}
+													variant="outline"
+												>
+													{isPaid ? 'Paid' : isExpired ? 'Expired' : 'Pending'}
+												</Badge>
 											</div>
 
-											{/* Payment action buttons - only for buyers and incomplete payments */}
-											{isBuyer && invoice.status !== 'paid' && (
-												<div className="flex flex-col gap-2 pt-3 border-t border-muted sm:pt-0 sm:border-t-0">
-													{/* Mobile-only badge */}
-													<Badge
-														className={`${getStatusColor(invoice.status || 'pending')} w-full justify-center py-1 sm:hidden`}
-														variant="outline"
-													>
-														{(invoice.status || 'pending').charAt(0).toUpperCase() + (invoice.status || 'pending').slice(1)}
-													</Badge>
-													<div className="flex gap-2">
-														<Button
-															variant="outline"
-															size="sm"
-															className="flex-1"
-															disabled={isGeneratingThis}
-															onClick={() => {
-																const list = invoice.localCopies.length > 0 ? invoice.localCopies : [invoice]
-																openPaymentDialog(list)
-															}}
-														>
-															{isGeneratingThis ? (
-																<>
-																	<RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-																	Generating...
-																</>
-															) : (
-																<>
-																	<Zap className="w-4 h-4 mr-2" />
-																	Pay {invoice.amount.toLocaleString()} sats
-																</>
-															)}
-														</Button>
-
-														{/* Generate new invoice button */}
-														{invoice.lightningAddress && (
-															<Button
-																variant="outline"
-																size="sm"
-																onClick={() => handleGenerateNewInvoice(invoice)}
-																disabled={isGeneratingThis}
-																title="Generate a new invoice with fresh expiration"
-															>
-																{isGeneratingThis ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+											{/* Payment actions for buyers */}
+											{isBuyer && needsPayment && (
+												<div className="mt-4 pt-4 border-t border-muted space-y-3">
+													{/* Main action buttons */}
+													<div className="flex flex-wrap gap-2">
+														{/* Pay button - only if we have a valid invoice */}
+														{hasBolt11 && !isExpired && (
+															<Button size="sm" className="flex-1 min-w-[140px]" onClick={() => openPaymentDialog([invoiceToUse])}>
+																<Zap className="w-4 h-4 mr-2" />
+																Pay {invoice.amount.toLocaleString()} sats
 															</Button>
 														)}
 
-														{invoice.bolt11 && (
+														{/* Generate new invoice - show if expired OR no bolt11 */}
+														{invoice.lightningAddress && (isExpired || !hasBolt11) && (
+															<Button
+																variant={hasBolt11 ? 'outline' : undefined}
+																size="sm"
+																className="flex-1 min-w-[140px]"
+																onClick={() => handleGenerateNewInvoice(invoice)}
+																disabled={isGeneratingThis}
+															>
+																{isGeneratingThis ? (
+																	<RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+																) : (
+																	<RefreshCw className="w-4 h-4 mr-2" />
+																)}
+																{isExpired ? 'Generate New Invoice' : 'Generate Invoice'}
+															</Button>
+														)}
+
+														{/* Copy invoice - secondary action */}
+														{hasBolt11 && (
 															<Button
 																variant="ghost"
 																size="sm"
-																className="text-blue-700 hover:text-blue-900"
-																onClick={() => copyToClipboard(invoice.bolt11 || '')}
+																onClick={() => copyToClipboard(invoiceToUse.bolt11 || '')}
+																title="Copy lightning invoice"
 															>
-																<Copy className="w-4 h-4 mr-2" />
+																<Copy className="w-4 h-4" />
+															</Button>
+														)}
+													</div>
+
+													{/* Show expired warning */}
+													{isExpired && hasBolt11 && (
+														<p className="text-xs text-amber-600">Invoice expired. Generate a new one to continue payment.</p>
+													)}
+												</div>
+											)}
+
+											{/* Paid confirmation with copy options */}
+											{isPaid && (
+												<div className="mt-3 pt-3 border-t border-green-200 space-y-2">
+													<div className="flex items-center gap-2 text-sm text-green-700">
+														<CheckCircle className="w-4 h-4" />
+														<span>Payment completed</span>
+													</div>
+													<div className="flex flex-wrap gap-2">
+														{invoiceToUse.bolt11 && (
+															<Button
+																variant="ghost"
+																size="sm"
+																className="text-gray-600 hover:text-gray-900 h-auto py-1"
+																onClick={() => copyToClipboard(invoiceToUse.bolt11 || '')}
+															>
+																<Copy className="w-3 h-3 mr-1" />
 																Copy invoice
 															</Button>
 														)}
-														{invoice.preimage && (
+														{(invoice.preimage || invoiceToUse.preimage) && (
 															<Button
 																variant="ghost"
 																size="sm"
-																className="text-blue-700 hover:text-blue-900"
-																onClick={() => copyToClipboard(invoice.preimage || '')}
+																className="text-gray-600 hover:text-gray-900 h-auto py-1"
+																onClick={() => copyToClipboard(invoice.preimage || invoiceToUse.preimage || '')}
 															>
-																<Copy className="w-4 h-4 mr-2" />
+																<Copy className="w-3 h-3 mr-1" />
 																Copy preimage
 															</Button>
 														)}
 													</div>
 												</div>
-											)}
-
-											{/* Seller mobile status badge for incomplete payments */}
-											{!isBuyer && invoice.status !== 'paid' && (
-												<div className="pt-3 border-t border-gray-300 sm:hidden">
-													<Badge className={`${getStatusColor(invoice.status || 'pending')} w-full justify-center py-1`} variant="outline">
-														{(invoice.status || 'pending').charAt(0).toUpperCase() + (invoice.status || 'pending').slice(1)}
-													</Badge>
-												</div>
-											)}
-
-											{isBuyer && invoice.localCopies.length > 0 && (
-												<div className="mt-3 border border-blue-200 rounded-lg bg-blue-50 p-3 space-y-2">
-													<p className="text-xs uppercase font-semibold text-blue-800">Stored invoices</p>
-													{invoice.localCopies.map((storedInvoice, storedIndex) => (
-														<div
-															key={`${storedInvoice.id}-${storedInvoice.updatedAt}-${storedIndex}`}
-															className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border border-blue-100 rounded-lg bg-white p-2"
-														>
-															<div>
-																<p className="text-sm font-medium text-gray-900">Attempt #{storedIndex + 1}</p>
-																<p className="text-xs text-gray-600">
-																	{formatLocalInvoiceTimestamp(storedInvoice)} · <span className="capitalize">{storedInvoice.status}</span>
-																</p>
-															</div>
-															<div className="flex flex-wrap gap-2">
-																<Button variant="outline" size="sm" onClick={() => openPaymentDialog([storedInvoice])}>
-																	<Zap className="w-4 h-4 mr-2" />
-																	Pay again
-																</Button>
-																{storedInvoice.bolt11 && (
-																	<Button
-																		variant="ghost"
-																		size="sm"
-																		className="text-blue-700 hover:text-blue-900"
-																		onClick={() => copyToClipboard(storedInvoice.bolt11 || '')}
-																	>
-																		<Copy className="w-4 h-4 mr-2" />
-																		Copy invoice
-																	</Button>
-																)}
-																{storedInvoice.preimage && (
-																	<Button
-																		variant="ghost"
-																		size="sm"
-																		className="text-blue-700 hover:text-blue-900"
-																		onClick={() => copyToClipboard(storedInvoice.preimage || '')}
-																	>
-																		<Copy className="w-4 h-4 mr-2" />
-																		Copy preimage
-																	</Button>
-																)}
-															</div>
-														</div>
-													))}
-												</div>
-											)}
-
-											{/* Show payment completion status for completed payments */}
-											{invoice.status === 'paid' && (
-												<div className="bg-green-100 text-green-800 p-2 rounded text-sm">✅ Payment completed successfully</div>
 											)}
 										</Card>
 									)

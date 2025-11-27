@@ -31,6 +31,12 @@ interface PaymentContentProps {
 	availableWalletsBySeller?: Record<string, any[]> // PaymentDetail[]
 	selectedWallets?: Record<string, string>
 	onWalletChange?: (sellerPubkey: string, walletId: string) => void
+	/**
+	 * Mode controls how "skipped" status is treated:
+	 * - 'checkout': skipped invoices show as completed (used during checkout flow)
+	 * - 'order': skipped invoices can be re-attempted (used in order details)
+	 */
+	mode?: 'checkout' | 'order'
 }
 
 export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>(
@@ -47,6 +53,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 			availableWalletsBySeller = {},
 			selectedWallets = {},
 			onWalletChange,
+			mode = 'checkout',
 		},
 		ref,
 	) => {
@@ -58,27 +65,39 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 		const currentInvoice = invoices[activeIndex]
 
 		// Count completed invoices from parent state (single source of truth)
+		// In 'order' mode, only 'paid' counts as completed (skipped can be re-attempted)
 		const completedCount = useMemo(() => {
+			if (mode === 'order') {
+				return invoices.filter((inv) => inv.status === 'paid').length
+			}
 			return invoices.filter((inv) => inv.status === 'paid' || inv.status === 'skipped').length
-		}, [invoices])
+		}, [invoices, mode])
 
 		// Build payment data for current invoice only
 		const currentPaymentData = useMemo((): LightningPaymentData | null => {
 			if (!currentInvoice) return null
 
-			const isZap = currentInvoice.isZap ?? currentInvoice.type === 'v4v'
+			// Determine if this is conceptually a zap invoice (for monitoring purposes)
+			const isZapInvoice = currentInvoice.isZap ?? currentInvoice.type === 'v4v'
 			let recipient: NDKUser | undefined
 
-			if (isZap && ndkState.ndk) {
+			if (isZapInvoice && ndkState.ndk) {
 				recipient = ndkState.ndk.getUser({ pubkey: currentInvoice.recipientPubkey })
 			}
+
+			// Use existing bolt11 if available
+			const existingBolt11 = currentInvoice.bolt11 || undefined
 
 			return {
 				amount: currentInvoice.amount,
 				description: currentInvoice.description,
 				recipientName: currentInvoice.recipientName,
-				bolt11: isZap ? undefined : currentInvoice.bolt11 || undefined,
-				isZap,
+				bolt11: existingBolt11,
+				// isZap controls two things:
+				// 1. Whether to generate a new zap invoice (only if no bolt11)
+				// 2. Whether to monitor for zap receipts (always for zap invoices)
+				// We need isZap=true for monitoring even if we have a bolt11
+				isZap: isZapInvoice,
 				recipient: recipient as NDKUser | undefined,
 				orderId: currentInvoice.orderId,
 				invoiceId: currentInvoice.id,
@@ -162,7 +181,9 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 		}
 
 		// Check if current invoice is already completed
-		const isCurrentCompleted = currentInvoice.status === 'paid' || currentInvoice.status === 'skipped'
+		// In 'order' mode, only 'paid' is considered completed (skipped can be re-attempted)
+		const isCurrentCompleted =
+			mode === 'order' ? currentInvoice.status === 'paid' : currentInvoice.status === 'paid' || currentInvoice.status === 'skipped'
 
 		// Get wallet info for current invoice
 		const sellerPubkey = currentInvoice.recipientPubkey

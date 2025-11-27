@@ -957,6 +957,7 @@ function RouteComponent() {
 										availableWalletsBySeller={availableWalletsBySeller}
 										selectedWallets={selectedWallets}
 										onWalletChange={handleWalletChange}
+										mode="checkout"
 									/>
 								</div>
 							)}
