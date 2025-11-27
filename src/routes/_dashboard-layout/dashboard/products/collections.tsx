@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { authStore } from '@/lib/stores/auth'
 import { collectionFormActions } from '@/lib/stores/collection'
 
@@ -7,7 +8,7 @@ import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/q
 import { useDeleteCollectionMutation } from '@/publish/collections'
 import { createFileRoute, useNavigate, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { ChevronDown, PlusIcon, StoreIcon, Trash } from 'lucide-react'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
@@ -117,6 +118,7 @@ function CollectionsComponent() {
 	const navigate = useNavigate()
 	const matchRoute = useMatchRoute()
 	const [expandedCollection, setExpandedCollection] = useState<string | null>(null)
+	const [orderBy, setOrderBy] = useState<string>('newest')
 	useDashboardTitle('Collections')
 
 	// Auto-animate for smooth list transitions
@@ -142,6 +144,21 @@ function CollectionsComponent() {
 
 	// Fetch user's collections
 	const { data: collections = [], isLoading, error } = useCollectionsByPubkey(user?.pubkey || '')
+
+	// Sort collections based on orderBy
+	const sortedCollections = useMemo(() => {
+		if (!collections) return []
+		return [...collections].sort((a, b) => {
+			const timeA = a.created_at || 0
+			const timeB = b.created_at || 0
+			// For replaceable events, created_at is both creation and update time
+			if (orderBy === 'oldest' || orderBy === 'least-updated') {
+				return timeA - timeB
+			} else {
+				return timeB - timeA
+			}
+		})
+	}, [collections, orderBy])
 
 	// Delete mutation
 	const deleteMutation = useDeleteCollectionMutation()
@@ -191,17 +208,41 @@ function CollectionsComponent() {
 		<div>
 			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
 				<h1 className="text-2xl font-bold">Collections</h1>
-				<Button
-					onClick={handleAddCollectionClick}
-					data-testid="add-collection-button"
-					className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
-				>
-					<span className="i-market w-5 h-5" />
-					Create A Collection
-				</Button>
+				<div className="flex items-center gap-4">
+					<Select value={orderBy} onValueChange={setOrderBy}>
+						<SelectTrigger className="w-48">
+							<SelectValue placeholder="Order By" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="newest">Newest First</SelectItem>
+							<SelectItem value="oldest">Oldest First</SelectItem>
+							<SelectItem value="recently-updated">Recently Updated</SelectItem>
+							<SelectItem value="least-updated">Least Recently Updated</SelectItem>
+						</SelectContent>
+					</Select>
+					<Button
+						onClick={handleAddCollectionClick}
+						data-testid="add-collection-button"
+						className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+					>
+						<span className="i-market w-5 h-5" />
+						Create A Collection
+					</Button>
+				</div>
 			</div>
 			<div className="space-y-6 p-4 lg:p-6">
-				<div className="lg:hidden">
+				<div className="lg:hidden space-y-4">
+					<Select value={orderBy} onValueChange={setOrderBy}>
+						<SelectTrigger className="w-full">
+							<SelectValue placeholder="Order By" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="newest">Newest First</SelectItem>
+							<SelectItem value="oldest">Oldest First</SelectItem>
+							<SelectItem value="recently-updated">Recently Updated</SelectItem>
+							<SelectItem value="least-updated">Least Recently Updated</SelectItem>
+						</SelectContent>
+					</Select>
 					<Button
 						onClick={handleAddCollectionClick}
 						data-testid="add-collection-button-mobile"
@@ -218,9 +259,9 @@ function CollectionsComponent() {
 
 					{!isLoading && !error && (
 						<>
-							{collections && collections.length > 0 ? (
+							{sortedCollections && sortedCollections.length > 0 ? (
 								<ul ref={animationParent} className="flex flex-col gap-4 mt-4">
-									{collections.map((collection) => {
+									{sortedCollections.map((collection) => {
 										const collectionId = getCollectionId(collection)
 										return (
 											<li key={collection.id} data-testid={`collection-item-${collectionId}`}>
