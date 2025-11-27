@@ -23,6 +23,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { Store } from '@tanstack/store'
 import type { z } from 'zod'
 import type { RichShippingInfo } from './cart'
+import { uiStore } from '@/lib/stores/ui'
 
 export type Category = z.infer<typeof ProductCategoryTagSchema>
 export type ProductImage = z.infer<typeof ProductImageTagSchema>
@@ -247,7 +248,17 @@ export const productFormActions = {
 	},
 
 	reset: () => {
-		productFormStore.setState(() => DEFAULT_FORM_STATE)
+		productFormStore.setState(() => {
+			// Get fresh UI state when resetting
+
+			const selectedCurrency = uiStore.state.selectedCurrency
+
+			return {
+				...DEFAULT_FORM_STATE,
+				currency: selectedCurrency === 'BTC' ? 'SATS' : selectedCurrency,
+				currencyMode: ['BTC', 'SATS'].includes(selectedCurrency) ? 'sats' : 'fiat',
+			}
+		})
 	},
 
 	updateValues: (values: Partial<ProductFormState>) => {

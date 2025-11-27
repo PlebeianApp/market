@@ -35,6 +35,11 @@ export interface UIState {
 	conversationPubkey: string | null // Track which conversation to open
 }
 
+const getSelectedCurrency = (): SupportedCurrency => {
+	const saved = typeof window !== 'undefined' ? localStorage.getItem('selectedCurrency') : null
+	return saved && CURRENCIES.includes(saved as SupportedCurrency) ? (saved as SupportedCurrency) : 'USD'
+}
+
 // Initial state
 const initialState: UIState = {
 	drawers: {
@@ -60,7 +65,7 @@ const initialState: UIState = {
 		productSourcePath: null,
 		originalResultsPath: null,
 	},
-	selectedCurrency: 'USD',
+	selectedCurrency: getSelectedCurrency(),
 }
 
 // Create the store
@@ -276,6 +281,10 @@ export const uiActions = {
 
 	// Currency actions
 	setCurrency: (currency: SupportedCurrency) => {
+		if (typeof window !== 'undefined') {
+			localStorage.setItem('selectedCurrency', currency)
+		}
+
 		uiStore.setState((state) => ({
 			...state,
 			selectedCurrency: currency,
