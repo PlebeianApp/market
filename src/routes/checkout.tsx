@@ -117,6 +117,18 @@ function RouteComponent() {
 
 		return hasValidWallets
 	}, [walletsInitialized, wallets])
+
+	// Get the first valid NWC wallet URI to pass to payment processors
+	const nwcWalletUri = useMemo(() => {
+		if (!walletsInitialized) return null
+		const validWallet = wallets.find((wallet) => {
+			if (!wallet.nwcUri) return false
+			const parsed = parseNwcUri(wallet.nwcUri)
+			return parsed !== null && parsed.pubkey && parsed.relay && parsed.secret
+		})
+		return validWallet?.nwcUri || null
+	}, [walletsInitialized, wallets])
+
 	const [orderInvoiceSets, setOrderInvoiceSets] = useState<Record<string, OrderInvoiceSet>>({})
 	const [specOrderIds, setSpecOrderIds] = useState<string[]>([])
 	// Use auto-animate with error handling to prevent DOM manipulation errors
@@ -953,6 +965,7 @@ function RouteComponent() {
 										onSkipPayment={handleSkipPayment}
 										showNavigation={false} // We have our own navigation above
 										nwcEnabled={nwcEnabled}
+										nwcWalletUri={nwcWalletUri}
 										onNavigate={setCurrentInvoiceIndex}
 										availableWalletsBySeller={availableWalletsBySeller}
 										selectedWallets={selectedWallets}

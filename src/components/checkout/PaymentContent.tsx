@@ -27,6 +27,7 @@ interface PaymentContentProps {
 	onSkipPayment?: (invoiceId: string) => void
 	showNavigation?: boolean
 	nwcEnabled?: boolean
+	nwcWalletUri?: string | null // NWC wallet URI to pass to payment processor
 	onNavigate?: (index: number) => void
 	availableWalletsBySeller?: Record<string, any[]> // PaymentDetail[]
 	selectedWallets?: Record<string, string>
@@ -49,6 +50,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 			onSkipPayment,
 			showNavigation = true,
 			nwcEnabled = true,
+			nwcWalletUri,
 			onNavigate,
 			availableWalletsBySeller = {},
 			selectedWallets = {},
@@ -273,6 +275,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 							active={true}
 							showNavigation={false}
 							skippable={true}
+							nwcWalletUri={nwcWalletUri}
 						/>
 					</>
 				)}

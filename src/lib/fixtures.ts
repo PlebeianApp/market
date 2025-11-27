@@ -29,3 +29,5 @@ export const devUser5 = {
 
 export const XPUB = 'xpub6CK51df37SEz9q2EztLtHX6mE1NoAGBAKaQamafguE2vPq6pBuW5i9KVeb1SeJuhTsgD4ED8L8y66ocN68WEVc7BHYxHU6dmxHVJBHPLkYa'
 export const WALLETED_USER_LUD16 = 'plebeianuser@coinos.io'
+
+// nsec18cmyxjcca6y8s3yhegt7nmrcxw9pn4ugnqe68jfc8km3sr2c5d2srsltll
