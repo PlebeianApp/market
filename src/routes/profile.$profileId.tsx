@@ -165,7 +165,7 @@ function RouteComponent() {
 							<h2 className="text-xl sm:text-2xl font-bold text-white">
 								{truncateText(profile?.name ?? 'Unnamed user', isSmallScreen ? 28 : 50)}
 							</h2>
-							<Nip05Badge pubkey={user?.pubkey || ''} />
+							<Nip05Badge pubkey={user?.pubkey || ''} showAddress nip05={profile?.nip05} />
 						</div>
 					</div>
 					{!isSmallScreen && (
