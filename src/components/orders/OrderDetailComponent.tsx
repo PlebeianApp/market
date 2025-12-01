@@ -248,29 +248,10 @@ const isPaymentCompleted = (paymentRequest: NDKEvent, paymentReceipts: NDKEvent[
 		const recipientMatches = recipientTag?.[1] === requestRecipient
 
 		// Match receipt to payment request by recipient and approximate amount
-		const matches = orderTag && amountTag && recipientTag && paymentTag && recipientMatches && amountMatches
-
-		if (process.env.NODE_ENV === 'development') {
-			if (matches) {
-				console.log(`✅ Found matching receipt for payment request ${paymentRequest.id} (amount diff: ${amountDiff} sats)`)
-			} else if (recipientMatches && !amountMatches) {
-				console.log(
-					`⚠️ Recipient matches but amount differs too much: request=${requestAmountNum}, receipt=${receiptAmountNum}, diff=${amountDiff}`,
-				)
-			} else if (!recipientMatches && amountMatches) {
-				console.log(
-					`⚠️ Amount matches but recipient differs: request=${requestRecipient.substring(0, 8)}, receipt=${recipientTag?.[1]?.substring(0, 8)}`,
-				)
-			}
-		}
-
-		return matches
+		return orderTag && amountTag && recipientTag && paymentTag && recipientMatches && amountMatches
 	})
 
-	const isCompleted = !!matchingReceipt
-	console.log(`🏁 Payment request ${paymentRequest.id} completion status:`, isCompleted)
-
-	return isCompleted
+	return !!matchingReceipt
 }
 
 export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
@@ -563,7 +544,6 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	}
 
 	const handlePaymentComplete = async (invoiceId: string, preimage: string) => {
-		console.log(`Payment completed for invoice ${invoiceId}`, { preimage })
 		toast.success('Payment completed successfully!')
 
 		const invoice = enrichedInvoices.find((inv) => inv.id === invoiceId)
@@ -800,13 +780,11 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 									const productId = product.id
 									const quantity = quantityMap.get(productId) || 1
 									return (
-										<div key={product.id} className="flex items-center space-x-4 p-4 border rounded-lg">
-											<div className="flex-1 min-w-0">
-												<ProductCard product={product} />
-											</div>
-											<div className="text-right flex-shrink-0">
-												<div className="text-sm text-gray-500">Quantity</div>
-												<div className="text-lg font-semibold">{quantity}</div>
+										<div key={product.id} className="p-4 border rounded-lg">
+											<ProductCard product={product} />
+											<div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
+												<span className="text-sm text-gray-500">Quantity</span>
+												<span className="text-lg font-semibold">{quantity}</span>
 											</div>
 										</div>
 									)
