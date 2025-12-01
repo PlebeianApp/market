@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { ZapButton } from '@/components/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { useEntityPermissions } from '@/hooks/useEntityPermissions'
-import { getHexColorFingerprintFromHexPubkey, truncateText } from '@/lib/utils'
+import { getHexColorFingerprintFromHexPubkey, truncateText, checkImageLoadable } from '@/lib/utils'
 import { ndkActions } from '@/lib/stores/ndk'
 import { uiActions } from '@/lib/stores/ui'
 import { addToBlacklist, removeFromBlacklist } from '@/publish/blacklist'
@@ -24,7 +24,7 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Edit, MessageCircle, Minus, Plus, Share2 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
 
 export const Route = createFileRoute('/profile/$profileId')({
@@ -43,6 +43,7 @@ function RouteComponent() {
 	const { data: sellerProducts } = useSuspenseQuery(productsByPubkeyQueryOptions(user?.pubkey || ''))
 
 	const [showFullAbout, setShowFullAbout] = useState(false)
+	const [bannerIsLoadable, setBannerIsLoadable] = useState<boolean | null>(null)
 	const breakpoint = useBreakpoint()
 	const isSmallScreen = breakpoint === 'sm'
 	const queryClient = useQueryClient()
@@ -133,11 +134,24 @@ function RouteComponent() {
 		}
 	}
 
+	// Check if banner image is loadable
+	useEffect(() => {
+		const validateBanner = async () => {
+			if (profile?.banner) {
+				const isLoadable = await checkImageLoadable(profile.banner)
+				setBannerIsLoadable(isLoadable)
+			} else {
+				setBannerIsLoadable(null)
+			}
+		}
+		validateBanner()
+	}, [profile?.banner])
+
 	return (
-		<div className="relative min-h-screen">
+		<div className="relative min-h-screen flex flex-col">
 			<Header />
 			<div className="absolute top-0 left-0 right-0 z-0 h-[40vh] sm:h-[40vh] md:h-[50vh] overflow-hidden">
-				{profile?.banner ? (
+				{profile?.banner && bannerIsLoadable === true ? (
 					<div className="w-[150%] sm:w-full h-full -ml-[25%] sm:ml-0">
 						<img src={profile.banner} alt="profile-banner" className="w-full h-full object-cover" />
 					</div>
@@ -151,7 +165,7 @@ function RouteComponent() {
 					/>
 				)}
 			</div>
-			<div className="flex flex-col relative z-10 pt-[18vh] sm:pt-[22vh] md:pt-[30vh]">
+			<div className="flex flex-col relative z-10 pt-[18vh] sm:pt-[22vh] md:pt-[30vh] flex-1">
 				<div className="flex flex-row justify-between px-8 py-4 bg-black items-center">
 					<div className="flex flex-row items-center gap-4">
 						{profile?.picture && (
@@ -224,7 +238,7 @@ function RouteComponent() {
 					</div>
 				)}
 
-				<div className="p-4">
+				<div className="p-4 flex-1 flex flex-col">
 					{sellerProducts && sellerProducts.length > 0 ? (
 						<ItemGrid
 							title={
@@ -239,7 +253,7 @@ function RouteComponent() {
 							))}
 						</ItemGrid>
 					) : (
-						<div className="flex flex-col items-center justify-center h-full">
+						<div className="flex flex-col items-center justify-center flex-1">
 							<span className="text-2xl font-heading">No products found</span>
 						</div>
 					)}
