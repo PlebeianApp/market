@@ -306,22 +306,6 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			// Set the signer from the main NDK instance
 			nwcNdk.signer = ndkState.ndk.signer
 
-			// Connect to the NWC relay with timeout
-			try {
-				console.log('🔌 Connecting to NWC relay for payment:', parsedUri.relay)
-				const connectPromise = nwcNdk.connect()
-				const timeoutPromise = new Promise<never>((_, reject) => {
-					setTimeout(() => reject(new Error('Connection timeout (10s)')), 10000)
-				})
-				await Promise.race([connectPromise, timeoutPromise])
-				console.log('✅ Connected to NWC relay:', parsedUri.relay)
-			} catch (error) {
-				console.error('Failed to connect to NWC relay for payment:', error)
-				setIsPaymentInProgress(false)
-				toast.error(`Failed to connect to wallet: ${(error as Error).message}`)
-				return
-			}
-
 			try {
 				console.log('💳 Starting NWC payment:', {
 					invoiceId: data.invoiceId,
