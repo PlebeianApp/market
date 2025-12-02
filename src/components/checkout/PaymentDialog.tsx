@@ -12,6 +12,9 @@ interface PaymentDialogProps {
 	title?: string
 	showNavigation?: boolean
 	nwcEnabled?: boolean
+	nwcWalletUri?: string | null
+	/** Mode controls how skipped invoices are treated */
+	mode?: 'checkout' | 'order'
 }
 
 export function PaymentDialog({
@@ -24,6 +27,8 @@ export function PaymentDialog({
 	title = 'Complete Payment',
 	showNavigation = true,
 	nwcEnabled = true,
+	nwcWalletUri,
+	mode = 'order',
 }: PaymentDialogProps) {
 	if (!invoices.length) return null
 
@@ -46,6 +51,8 @@ export function PaymentDialog({
 					onPaymentFailed={onPaymentFailed}
 					showNavigation={showNavigation}
 					nwcEnabled={nwcEnabled}
+					nwcWalletUri={nwcWalletUri}
+					mode={mode}
 				/>
 			</DialogContent>
 		</Dialog>
