@@ -674,7 +674,7 @@ function RouteComponent() {
 			<ImageViewerModal
 				isOpen={imageViewerOpen}
 				onClose={() => setImageViewerOpen(false)}
-				images={formattedImages.map((img) => ({ url: img.url, title }))}
+				images={formattedImages.map((img) => ({ url: img.url, title: '' }))}
 				currentIndex={selectedImageIndex}
 				onIndexChange={setSelectedImageIndex}
 			/>
