@@ -107,16 +107,16 @@ export function InfiniteProductList({
 	}
 
 	return (
-		<div className={cn('w-full', className)} ref={containerRef}>
+		<div className={cn('w-full max-w-full overflow-hidden', className)} ref={containerRef}>
 			{/* Title */}
 			{title && (
 				<div className="mb-4">
-					{typeof title === 'string' ? <h1 className="text-2xl font-heading text-center sm:text-left">{title}</h1> : title}
+					{typeof title === 'string' ? <h1 className="text-xl sm:text-2xl font-heading text-center sm:text-left">{title}</h1> : title}
 				</div>
 			)}
 
 			{/* Product Grid */}
-			<div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-16">
+			<div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-8 lg:gap-16 w-full max-w-full">
 				{products.map((product) => (
 					<ProductCard key={product.id} product={product} />
 				))}

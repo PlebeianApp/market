@@ -48,7 +48,7 @@ function Index() {
 	}
 
 	return (
-		<div>
+		<div className="w-full max-w-full overflow-hidden">
 			{/* Hero Section */}
 			<div className={`relative hero-container ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-black'}`}>
 				<div className="hero-overlays">
@@ -75,8 +75,8 @@ function Index() {
 			<FeaturedSections maxItemsPerSection={5} />
 
 			{/* Infinite Product List */}
-			<div className="px-8 py-4">
-				<InfiniteProductList title="All Products" scrollKey="homepage-products" limit={20} threshold={1000} autoLoad={true} />
+			<div className="px-4 sm:px-8 py-4 w-full max-w-full">
+				<InfiniteProductList title="All Products" scrollKey="homepage-products" chunkSize={20} threshold={1000} autoLoad={true} />
 			</div>
 		</div>
 	)
