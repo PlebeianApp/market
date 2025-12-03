@@ -116,13 +116,13 @@ export function BunkerConnect({ onError, onSuccess }: BunkerConnectProps) {
 	}, [])
 
 	return (
-		<div className="space-y-4 py-4">
-			<div className="space-y-2">
+		<div className="space-y-4 py-4 w-full max-w-full overflow-hidden">
+			<div className="space-y-2 max-w-full">
 				<Label htmlFor="bunker-url">Bunker URL</Label>
 				<p className="text-sm text-muted-foreground">
 					Paste your bunker:// connection string from your remote signer (e.g., nsec.app, Amber).
 				</p>
-				<div className="flex gap-2">
+				<div className="flex gap-2 max-w-full min-w-0">
 					<Input
 						id="bunker-url"
 						type="text"
@@ -137,13 +137,14 @@ export function BunkerConnect({ onError, onSuccess }: BunkerConnectProps) {
 								handleConnect()
 							}
 						}}
-						className="font-mono text-sm"
+						className="font-mono text-sm min-w-0"
 						data-testid="bunker-url-input"
 					/>
 					<Button
 						type="button"
 						variant="outline"
 						size="icon"
+						className="shrink-0"
 						onClick={(e) => {
 							e.preventDefault()
 							e.stopPropagation()

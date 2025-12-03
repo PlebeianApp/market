@@ -28,11 +28,11 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent
-				className="sm:max-w-[425px] p-0 [&>button:not([data-dialog-close])]:text-white [&>button:not([data-dialog-close])]:hover:text-gray-300"
+				className="sm:max-w-[425px] p-0 gap-0 overflow-hidden [&>button:not([data-dialog-close])]:text-white [&>button:not([data-dialog-close])]:hover:text-gray-300"
 				data-testid="login-dialog"
 			>
 				{/* Header Section */}
-				<div className="relative bg-black text-white p-6 overflow-hidden">
+				<div className="relative bg-black text-white px-4 sm:px-6 py-6 overflow-hidden w-full max-w-full">
 					<div
 						className="absolute inset-0 opacity-80"
 						style={{
@@ -46,27 +46,27 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 						<p className="text-sm text-gray-300">Choose your preferred login method below.</p>
 					</div>
 				</div>
-				<div className="px-6 pt-0 pb-6">
+				<div className="px-4 sm:px-6 pt-0 pb-6 overflow-hidden w-full max-w-full">
 					<Tabs defaultValue="extension" className="w-full" value={activeTab} onValueChange={setActiveTab}>
 						<TabsList className="w-full rounded-none bg-transparent h-auto p-0 flex">
 							<TabsTrigger
 								value="extension"
 								data-testid="extension-tab"
-								className="flex-1 px-2 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
+								className="flex-1 px-1 sm:px-2 py-2 text-sm sm:text-base font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
 							>
 								Extension
 							</TabsTrigger>
 							<TabsTrigger
 								value="connect"
 								data-testid="connect-tab"
-								className="flex-1 px-2 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
+								className="flex-1 px-1 sm:px-2 py-2 text-sm sm:text-base font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
 							>
 								N-Connect
 							</TabsTrigger>
 							<TabsTrigger
 								value="private-key"
 								data-testid="private-key-tab"
-								className="flex-1 px-2 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
+								className="flex-1 px-1 sm:px-2 py-2 text-sm sm:text-base font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
 							>
 								Private Key
 							</TabsTrigger>
