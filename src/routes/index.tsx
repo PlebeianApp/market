@@ -48,7 +48,7 @@ function Index() {
 	}
 
 	return (
-		<div className="w-full max-w-full overflow-hidden">
+		<div>
 			{/* Hero Section */}
 			<div className={`relative hero-container ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-black'}`}>
 				<div className="hero-overlays">
