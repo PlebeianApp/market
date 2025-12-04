@@ -47,7 +47,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 					</div>
 				</div>
 				<div className="px-4 sm:px-6 pt-0 pb-6 overflow-hidden w-full max-w-full">
-					<Tabs defaultValue="extension" className="w-full" value={activeTab} onValueChange={setActiveTab}>
+					<Tabs defaultValue="extension" className="w-full max-w-full min-w-0" value={activeTab} onValueChange={setActiveTab}>
 						<TabsList className="w-full rounded-none bg-transparent h-auto p-0 flex">
 							<TabsTrigger
 								value="extension"
@@ -71,11 +71,11 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 								Private Key
 							</TabsTrigger>
 						</TabsList>
-						<TabsContent value="private-key">
+						<TabsContent value="private-key" className="w-full max-w-full overflow-hidden">
 							<PrivateKeyLogin onError={handleError} onSuccess={() => onOpenChange(false)} />
 						</TabsContent>
-						<TabsContent value="connect">
-							<Tabs defaultValue="qr" className="w-full">
+						<TabsContent value="connect" className="w-full max-w-full overflow-hidden">
+							<Tabs defaultValue="qr" className="w-full max-w-full min-w-0">
 								<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-[1px]">
 									<TabsTrigger
 										value="qr"
@@ -93,16 +93,16 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 									</TabsTrigger>
 								</TabsList>
 
-								<TabsContent value="qr">
+								<TabsContent value="qr" className="w-full max-w-full overflow-hidden">
 									<NostrConnectQR onError={handleError} onSuccess={() => onOpenChange(false)} />
 								</TabsContent>
 
-								<TabsContent value="bunker">
+								<TabsContent value="bunker" className="w-full max-w-full overflow-hidden">
 									<BunkerConnect onError={handleError} onSuccess={() => onOpenChange(false)} />
 								</TabsContent>
 							</Tabs>
 						</TabsContent>
-						<TabsContent value="extension">
+						<TabsContent value="extension" className="w-full max-w-full overflow-hidden">
 							<div className="space-y-4 py-4">
 								<p className="text-sm text-muted-foreground">Login using your Nostr browser extension (e.g., Alby, nos2x).</p>
 								{extensionError && (

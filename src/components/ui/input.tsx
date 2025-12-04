@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 
 const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(({ className, type, ...props }, ref) => {
 	return (
-		<div className="w-full min-w-0">
+		<div className="w-full">
 			<input
 				type={type}
 				data-slot="input"
