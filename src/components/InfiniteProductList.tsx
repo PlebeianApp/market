@@ -1,6 +1,7 @@
 import { useSimpleInfiniteScroll } from '@/hooks/useSimpleInfiniteScroll'
 import { useScrollRestoration } from '@/hooks/useScrollRestoration'
 import { ProductCard } from '@/components/ProductCard'
+import { ItemGrid } from '@/components/ItemGrid'
 import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef } from 'react'
@@ -116,11 +117,11 @@ export function InfiniteProductList({
 			)}
 
 			{/* Product Grid */}
-			<div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-8 lg:gap-16 w-full max-w-full">
+			<ItemGrid className="gap-4 sm:gap-8">
 				{products.map((product) => (
 					<ProductCard key={product.id} product={product} />
 				))}
-			</div>
+			</ItemGrid>
 
 			{/* Load more button */}
 			{hasMore && (
