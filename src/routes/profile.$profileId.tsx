@@ -47,6 +47,11 @@ function RouteComponent() {
 	const breakpoint = useBreakpoint()
 	const isSmallScreen = breakpoint === 'sm'
 	const queryClient = useQueryClient()
+	const aboutText = profile?.about?.trim() ?? ''
+	const hasAbout = aboutText.length > 0
+	const truncationLength = isSmallScreen ? 70 : 250
+	const aboutTruncated = truncateText(aboutText, truncationLength)
+	const shouldTruncateAbout = hasAbout && aboutTruncated !== aboutText
 
 	// Get app config
 	const { data: config } = useConfigQuery()
@@ -215,28 +220,25 @@ function RouteComponent() {
 					)}
 				</div>
 
-				{profile?.about && (
-					<div
-						ref={animationParent}
-						className="flex flex-row items-center justify-between px-8 py-4 bg-zinc-900 text-white text-xs sm:text-sm"
-					>
-						{(() => {
-							const truncationLength = isSmallScreen ? 70 : 250
-							const aboutTruncated = truncateText(profile.about, truncationLength)
-							if (aboutTruncated !== profile.about) {
-								return (
-									<>
-										<p className="flex-1 break-words">{showFullAbout ? profile.about : aboutTruncated}</p>
-										<Button variant="ghost" size="icon" onClick={() => setShowFullAbout(!showFullAbout)}>
-											{showFullAbout ? <Minus className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-										</Button>
-									</>
-								)
-							}
-							return <p className="w-full break-words">{profile.about}</p>
-						})()}
-					</div>
-				)}
+				<div
+					ref={animationParent}
+					className="flex flex-row items-center justify-between px-8 py-4 bg-zinc-900 text-white text-xs sm:text-sm min-h-[52px]"
+				>
+					{hasAbout ? (
+						shouldTruncateAbout ? (
+							<>
+								<p className="flex-1 break-words">{showFullAbout ? aboutText : aboutTruncated}</p>
+								<Button variant="ghost" size="icon" onClick={() => setShowFullAbout(!showFullAbout)}>
+									{showFullAbout ? <Minus className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+								</Button>
+							</>
+						) : (
+							<p className="w-full break-words">{aboutText}</p>
+						)
+					) : (
+						<div className="w-full" aria-hidden="true" />
+					)}
+				</div>
 
 				<div className="p-4 flex-1 flex flex-col">
 					{sellerProducts && sellerProducts.length > 0 ? (
