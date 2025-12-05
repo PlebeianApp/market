@@ -1,4 +1,5 @@
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
+import { ProfileWalletCheck } from '@/components/ProfileWalletCheck'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -6,17 +7,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
+import { WalletSetupGuide } from '@/components/WalletSetupGuide'
 import { PAYMENT_DETAILS_METHOD, type PaymentDetailsMethod } from '@/lib/constants'
 import { useNDK } from '@/lib/stores/ndk'
 import { isValidNip05 } from '@/lib/utils'
-import {
-	checkAddress,
-	deriveAddresses,
-	isExtendedPublicKey,
-	parsePaymentDetailsFromClipboard,
-	paymentMethodLabels,
-	validateExtendedPublicKey,
-} from '@/lib/utils/paymentDetails'
+import { deriveAddresses, isExtendedPublicKey, parsePaymentDetailsFromClipboard, paymentMethodLabels } from '@/lib/utils/paymentDetails'
 import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
 import {
 	useDeletePaymentDetail,
@@ -31,11 +26,9 @@ import { getProductId, getProductTitle, useProductsByPubkey } from '@/queries/pr
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
 import { format } from 'date-fns'
-import { AnchorIcon, ClipboardIcon, GlobeIcon, PackageIcon, PlusIcon, StarIcon, StoreIcon, TrashIcon, ZapIcon } from 'lucide-react'
+import { ClipboardIcon, GlobeIcon, PackageIcon, PlusIcon, StarIcon, StoreIcon, TrashIcon, ZapIcon } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { WalletSetupGuide } from '@/components/WalletSetupGuide'
-import { ProfileWalletCheck } from '@/components/ProfileWalletCheck'
 
 interface ScopeSelectorProps {
 	value: PaymentScope

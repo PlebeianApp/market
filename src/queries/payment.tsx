@@ -513,14 +513,39 @@ export const publishRichPaymentDetail = async (params: PublishRichPaymentDetailP
  */
 export const usePublishRichPaymentDetail = () => {
 	const queryClient = useQueryClient()
+	const signer = ndkActions.getSigner()
 
 	return useMutation({
 		mutationKey: paymentDetailsKeys.publish(),
 		mutationFn: publishRichPaymentDetail,
-		onSuccess: (eventId, variables) => {
+		onSuccess: async (eventId, variables) => {
 			toast.success('Payment details saved successfully')
+
+			// Get current user pubkey to invalidate the correct query
+			let userPubkey = ''
+			if (signer) {
+				try {
+					const user = await signer.user()
+					if (user?.pubkey) {
+						userPubkey = user.pubkey
+					}
+				} catch (error) {
+					console.error('Failed to get user pubkey for cache invalidation:', error)
+				}
+			}
+
 			// Invalidate relevant queries
-			queryClient.invalidateQueries({ queryKey: paymentDetailsKeys.byPubkey(variables.appPubkey || '') })
+			if (userPubkey) {
+				queryClient.invalidateQueries({ queryKey: paymentDetailsKeys.byPubkey(userPubkey) })
+			}
+
+			if (variables.coordinates) {
+				const coordinatesArray = Array.isArray(variables.coordinates) ? variables.coordinates : [variables.coordinates]
+				coordinatesArray.forEach((coord) => {
+					queryClient.invalidateQueries({ queryKey: paymentDetailsKeys.byProductOrCollection(coord) })
+				})
+			}
+
 			return eventId
 		},
 		onError: (error) => {
@@ -600,7 +625,10 @@ export const useUpdatePaymentDetail = () => {
 			}
 
 			if (variables.coordinates) {
-				queryClient.invalidateQueries({ queryKey: paymentDetailsKeys.byProductOrCollection(variables.coordinates) })
+				const coordinatesArray = Array.isArray(variables.coordinates) ? variables.coordinates : [variables.coordinates]
+				coordinatesArray.forEach((coord) => {
+					queryClient.invalidateQueries({ queryKey: paymentDetailsKeys.byProductOrCollection(coord) })
+				})
 			}
 
 			toast.success('Payment details updated successfully')
