@@ -7,7 +7,7 @@ import { useUpdateOrderStatusMutation } from '@/publish/orders'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { getBuyerPubkey, getOrderStatus, getSellerPubkey } from '@/queries/orders'
 import { useUpdateShippingStatusMutation } from '@/queries/shipping'
-import { Check, CheckCircle, Clock, Package, Truck, X } from 'lucide-react'
+import { Ban, Check, CheckCircle, Clock, Package, Truck, X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Input } from '../ui/input'
@@ -172,8 +172,21 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 					{nextAction.label}
 					<nextAction.icon className="h-4 w-4 ml-1" />
 				</Button>
+			) : status === ORDER_STATUS.COMPLETED ? (
+				<Button variant="ghost" size="sm" disabled className="shrink-0 text-green-600">
+					Done
+					<CheckCircle className="h-4 w-4 ml-1" />
+				</Button>
+			) : status === ORDER_STATUS.CANCELLED ? (
+				<Button variant="ghost" size="sm" disabled className="shrink-0 text-muted-foreground">
+					Cancelled
+					<Ban className="h-4 w-4 ml-1" />
+				</Button>
 			) : (
-				<div className="w-[88px] shrink-0" /> // Spacer to match button width
+				<Button variant="ghost" size="sm" disabled className="shrink-0 text-muted-foreground">
+					Waiting
+					<Clock className="h-4 w-4 ml-1" />
+				</Button>
 			)}
 
 			{/* Shipping dialog */}
