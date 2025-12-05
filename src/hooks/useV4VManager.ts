@@ -127,6 +127,14 @@ export function useV4VManager({ userPubkey, initialShares = [], initialTotalPerc
 			}
 
 			const hexPubkey = getNormalizedPubkey(newRecipientNpub)
+
+			// Check for duplicates
+			if (localShares.some((share) => share.pubkey === hexPubkey)) {
+				toast.error('This recipient is already in the list')
+				setIsChecking(false)
+				return
+			}
+
 			let newSharePercentage = 0
 			let updatedShares = []
 
@@ -135,7 +143,7 @@ export function useV4VManager({ userPubkey, initialShares = [], initialTotalPerc
 				updatedShares = [
 					{
 						id: `new-${Date.now()}`,
-						name: newRecipientNpub,
+						name: '', // Will be resolved by UserWithAvatar component
 						pubkey: hexPubkey,
 						percentage: newSharePercentage,
 					},
@@ -154,7 +162,7 @@ export function useV4VManager({ userPubkey, initialShares = [], initialTotalPerc
 
 				updatedShares.push({
 					id: `new-${Date.now()}`,
-					name: newRecipientNpub,
+					name: '', // Will be resolved by UserWithAvatar component
 					pubkey: hexPubkey,
 					percentage: newSharePercentage,
 				})
