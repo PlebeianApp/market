@@ -1,7 +1,6 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { type NDKUserProfile, NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
 import { queryOptions, useQuery } from '@tanstack/react-query'
-import { nip19 } from 'nostr-tools'
 import { profileKeys } from './queryKeyFactory'
 
 export const fetchProfileByNpub = async (npub: string): Promise<NDKUserProfile | null> => {
@@ -127,15 +126,16 @@ export const useProfileNip05 = (pubkey: string) => {
 }
 
 export const checkZapCapability = async (event: NDKEvent | NDKUser): Promise<boolean> => {
-	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
+	const signer = ndkActions.getSigner()
+	if (!signer) throw new Error('No signer available')
 
 	try {
 		if (event instanceof NDKUser) {
 			const zapInfo = await event.getZapInfo()
 			return zapInfo.size > 0
 		} else {
-			const userToZap = ndk.getUser({ pubkey: event.pubkey })
+			const userToZap = await signer.user()
+			if (!userToZap) throw new Error('No user available')
 			const zapInfo = await userToZap.getZapInfo()
 			return zapInfo.size > 0
 		}
@@ -158,26 +158,79 @@ export const useZapCapability = (event: NDKEvent | NDKUser) => {
 	})
 }
 
+export type ZapMethod = 'nip57' | 'nip61'
+
+export interface ZapCapabilityInfo {
+	canReceiveZaps: boolean
+	methods: ZapMethod[]
+	hasLightning: boolean // nip57 - traditional Lightning zaps
+	hasCashu: boolean // nip61 - Cashu/Nutzaps
+}
+
 export const checkZapCapabilityByNpub = async (npub: string): Promise<boolean> => {
+	// Guard against empty or invalid npub
+	if (!npub || !npub.startsWith('npub')) {
+		return false
+	}
+
 	try {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
 
-		// Convert npub to hex pubkey
-		const { data: pubkey } = nip19.decode(npub)
-		if (typeof pubkey !== 'string') {
-			throw new Error('Invalid npub format')
-		}
+		// Get user from NDK (ensures NDK instance is attached)
+		const user = ndk.getUser({ npub })
 
-		// Create a user from the pubkey
-		const user = new NDKUser({ pubkey })
-		user.ndk = ndk
-
-		// Check zap capability using existing function
-		return await checkZapCapability(user)
+		// Check zap capability - get zap info directly
+		const zapInfo = await user.getZapInfo()
+		return zapInfo.size > 0
 	} catch (error) {
 		console.error('Error checking zap capability by npub:', error)
 		return false
+	}
+}
+
+export const getZapCapabilityInfo = async (npub: string): Promise<ZapCapabilityInfo> => {
+	const defaultResult: ZapCapabilityInfo = {
+		canReceiveZaps: false,
+		methods: [],
+		hasLightning: false,
+		hasCashu: false,
+	}
+
+	// Guard against empty or invalid npub
+	if (!npub || !npub.startsWith('npub')) {
+		return defaultResult
+	}
+
+	try {
+		const ndk = ndkActions.getNDK()
+		if (!ndk) throw new Error('NDK not initialized')
+
+		// Get user from NDK (ensures NDK instance is attached)
+		const user = ndk.getUser({ npub })
+
+		// Get zap info
+		const zapInfo = await user.getZapInfo()
+
+		const methods: ZapMethod[] = []
+		let hasLightning = false
+		let hasCashu = false
+
+		zapInfo.forEach((_, method) => {
+			methods.push(method as ZapMethod)
+			if (method === 'nip57') hasLightning = true
+			if (method === 'nip61') hasCashu = true
+		})
+
+		return {
+			canReceiveZaps: zapInfo.size > 0,
+			methods,
+			hasLightning,
+			hasCashu,
+		}
+	} catch (error) {
+		console.error('Error getting zap capability info:', error)
+		return defaultResult
 	}
 }
 
@@ -185,11 +238,27 @@ export const zapCapabilityByNpubQueryOptions = (npub: string) =>
 	queryOptions({
 		queryKey: profileKeys.zapCapability(npub),
 		queryFn: () => checkZapCapabilityByNpub(npub),
+		enabled: !!npub && npub.startsWith('npub'),
 	})
 
 export const useZapCapabilityByNpub = (npub: string) => {
 	return useQuery({
 		...zapCapabilityByNpubQueryOptions(npub),
+		enabled: !!npub && npub.startsWith('npub'),
 		select: (data) => data,
+	})
+}
+
+export const zapCapabilityInfoQueryOptions = (npub: string) =>
+	queryOptions({
+		queryKey: [...profileKeys.zapCapability(npub), 'info'],
+		queryFn: () => getZapCapabilityInfo(npub),
+		enabled: !!npub && npub.startsWith('npub'),
+	})
+
+export const useZapCapabilityInfo = (npub: string) => {
+	return useQuery({
+		...zapCapabilityInfoQueryOptions(npub),
+		enabled: !!npub && npub.startsWith('npub'),
 	})
 }

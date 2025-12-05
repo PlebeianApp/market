@@ -306,7 +306,7 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 	}, [connectionUrl, localPubkey, localSigner, tempSecret, config, onError, handleLoginWithNip46Signer, cleanup])
 
 	return (
-		<div className="flex flex-col items-center gap-4 py-4">
+		<div className="flex flex-col items-center gap-4 py-4 w-full max-w-full overflow-hidden">
 			{connectionStatus === 'error' && (
 				<div className="bg-destructive/10 text-destructive rounded p-2 mb-2 text-sm w-full">Connection failed. Please try again.</div>
 			)}
@@ -341,11 +341,18 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 				<>
 					<a
 						href={connectionUrl}
-						className="block hover:opacity-90 transition-opacity bg-white p-4 rounded-lg"
+						className="block hover:opacity-90 transition-opacity bg-white p-4 rounded-lg w-full max-w-[250px]"
 						target="_blank"
 						rel="noopener noreferrer"
 					>
-						<QRCodeSVG value={connectionUrl} size={250} bgColor="#ffffff" fgColor="#000000" level="L" includeMargin={false} />
+						<QRCodeSVG
+							value={connectionUrl}
+							className="w-full h-auto"
+							bgColor="#ffffff"
+							fgColor="#000000"
+							level="L"
+							includeMargin={false}
+						/>
 					</a>
 
 					<div className="flex w-full items-center justify-center">
@@ -357,9 +364,9 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 						)}
 					</div>
 
-					<div className="flex items-center gap-2 w-full">
-						<Input value={connectionUrl} readOnly onClick={(e) => e.currentTarget.select()} />
-						<Button variant="outline" size="icon" onClick={() => copyToClipboard(connectionUrl)}>
+					<div className="flex items-center gap-2 w-full min-w-0">
+						<Input value={connectionUrl} readOnly onClick={(e) => e.currentTarget.select()} className="min-w-0" />
+						<Button variant="outline" size="icon" className="shrink-0" onClick={() => copyToClipboard(connectionUrl)}>
 							<CopyIcon className="h-4 w-4" />
 						</Button>
 					</div>

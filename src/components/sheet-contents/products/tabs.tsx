@@ -19,12 +19,22 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 export function DetailTab() {
-	const { price, fiatPrice, quantity, currency, status, specs } = useStore(productFormStore)
+	const {
+		price,
+		fiatPrice,
+		quantity,
+		currency,
+		status,
+		specs,
+		bitcoinUnit: storeBitcoinUnit,
+		currencyMode: storeCurrencyMode,
+	} = useStore(productFormStore)
 	const { selectedCurrency } = useStore(uiStore)
 	const { data: exchangeRates } = useBtcExchangeRates()
-	const [bitcoinUnit, setBitcoinUnit] = useState<'SATS' | 'BTC'>('SATS')
-	const [currencyMode, setCurrencyMode] = useState<'sats' | 'fiat'>('fiat') // For fiat currencies only
-	const [fiatDisplayValue, setFiatDisplayValue] = useState('')
+	// Initialize local state from store values (important for editing)
+	const [bitcoinUnit, setBitcoinUnit] = useState<'SATS' | 'BTC'>(storeBitcoinUnit || 'SATS')
+	const [currencyMode, setCurrencyMode] = useState<'sats' | 'fiat'>(storeCurrencyMode || 'fiat')
+	const [fiatDisplayValue, setFiatDisplayValue] = useState(fiatPrice || '')
 
 	// Use existing conversion functions from MempoolService
 	const convertSatsToBtc = MempoolService.satoshisToBtc
@@ -99,10 +109,11 @@ export function DetailTab() {
 		const numValue = parseFloat(value)
 		if (!isNaN(numValue) && numValue > 0) {
 			const satsValue = convertCurrencyToSats(numValue, currency)
-			productFormActions.updateValues({ price: satsValue.toString() })
+			// Store both the sats value (for display) and the fiat value (for publishing)
+			productFormActions.updateValues({ price: satsValue.toString(), fiatPrice: value })
 		} else if (value === '' || value === '0') {
 			// Clear the price if input is empty or zero
-			productFormActions.updateValues({ price: '0' })
+			productFormActions.updateValues({ price: '0', fiatPrice: '' })
 		}
 	}
 
@@ -115,7 +126,11 @@ export function DetailTab() {
 
 	// Handle currency dropdown change
 	const handleCurrencyChange = (newCurrency: string) => {
-		productFormActions.updateValues({ currency: newCurrency })
+		// Determine the new currency mode
+		const newCurrencyMode = newCurrency === 'BTC' || newCurrency === 'SATS' ? 'sats' : 'fiat'
+
+		// Update store with currency and mode
+		productFormActions.updateValues({ currency: newCurrency, currencyMode: newCurrencyMode })
 
 		// Auto-switch Bitcoin unit based on currency
 		if (newCurrency === 'BTC') {
@@ -124,8 +139,8 @@ export function DetailTab() {
 			setBitcoinUnit('SATS')
 		}
 
-		// Set currency mode based on selected currency
-		setCurrencyMode(newCurrency === 'BTC' || newCurrency === 'SATS' ? 'sats' : 'fiat')
+		// Set local currency mode state
+		setCurrencyMode(newCurrencyMode)
 	}
 
 	// Function to determine what gets published to the protocol
@@ -157,7 +172,9 @@ export function DetailTab() {
 
 	// Toggle Bitcoin unit (SATS/BTC)
 	const toggleBitcoinUnit = () => {
-		setBitcoinUnit((prev) => (prev === 'SATS' ? 'BTC' : 'SATS'))
+		const newUnit = bitcoinUnit === 'SATS' ? 'BTC' : 'SATS'
+		setBitcoinUnit(newUnit)
+		productFormActions.updateValues({ bitcoinUnit: newUnit })
 	}
 
 	// Check if current currency is Bitcoin-based
@@ -169,8 +186,22 @@ export function DetailTab() {
 	// Check if radio group should be visible
 	const showRadioGroup = showFiatField
 
-	// Update fiat display when currency or price changes
+	// Sync local state from store when store values change (for edit mode)
 	useEffect(() => {
+		setBitcoinUnit(storeBitcoinUnit || 'SATS')
+		setCurrencyMode(storeCurrencyMode || 'fiat')
+		if (fiatPrice) {
+			setFiatDisplayValue(fiatPrice)
+		}
+	}, [storeBitcoinUnit, storeCurrencyMode, fiatPrice])
+
+	// Update fiat display when currency or price changes (only for auto-conversion from sats)
+	useEffect(() => {
+		// Skip if we're in fiat mode and already have a fiat price - don't overwrite user input
+		if (storeCurrencyMode === 'fiat' && fiatPrice) {
+			return
+		}
+
 		if (showFiatField && price) {
 			const satsValue = parseFloat(price) || 0
 			if (satsValue > 0) {
@@ -182,7 +213,7 @@ export function DetailTab() {
 				}
 			}
 		}
-	}, [currency, price, showFiatField])
+	}, [currency, price, showFiatField, storeCurrencyMode, fiatPrice])
 
 	return (
 		<div className="space-y-6">
@@ -261,7 +292,11 @@ export function DetailTab() {
 					<Label className="text-sm font-medium">Currency Mode</Label>
 					<RadioGroup
 						value={currencyMode}
-						onValueChange={(value: 'sats' | 'fiat') => setCurrencyMode(value)}
+						onValueChange={(value: 'sats' | 'fiat') => {
+							setCurrencyMode(value)
+							// Sync to store for publishing
+							productFormActions.updateValues({ currencyMode: value })
+						}}
 						className="flex flex-col space-y-3 mt-2"
 					>
 						<div className="space-y-1">

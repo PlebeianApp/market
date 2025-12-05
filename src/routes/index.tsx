@@ -57,8 +57,8 @@ function Index() {
 				</div>
 
 				<div className="hero-content">
-					<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-16 lg:mt-0 gap-8">
-						<div className="flex items-center justify-center">
+					<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-16 lg:mt-0">
+						<div className="flex items-center justify-center h-24 lg:h-32">
 							<h1 className="text-4xl lg:text-5xl font-theylive transition-opacity duration-500">Buy & Sell Stuff with sats</h1>
 						</div>
 

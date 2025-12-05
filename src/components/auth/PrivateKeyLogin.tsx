@@ -173,8 +173,8 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 
 	if (hasStoredKey) {
 		return (
-			<div className="space-y-4 py-4">
-				<div className="space-y-2">
+			<div className="space-y-4 py-4 w-full max-w-full overflow-hidden">
+				<div className="space-y-2 max-w-full">
 					<Label htmlFor="stored-password">Enter Password</Label>
 					<p className="text-sm text-muted-foreground">Enter your password to decrypt your stored private key.</p>
 					<p className="text-sm font-medium">Pubkey: {storedPubkey ? `${storedPubkey.slice(0, 8)}...` : 'Unknown'}</p>
@@ -212,8 +212,8 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 
 	if (showPasswordInput) {
 		return (
-			<div className="space-y-4 py-4">
-				<div className="space-y-2">
+			<div className="space-y-4 py-4 w-full max-w-full overflow-hidden">
+				<div className="space-y-2 max-w-full">
 					<Label htmlFor="password">Set Password</Label>
 					<p className="text-sm text-muted-foreground">Set a password to encrypt your private key.</p>
 					<Input
@@ -242,9 +242,9 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 	}
 
 	return (
-		<div className="space-y-4 py-4">
-			<div className="space-y-2">
-				<div className="flex justify-between items-center">
+		<div className="space-y-4 py-4 w-full max-w-full overflow-hidden">
+			<div className="space-y-2 max-w-full">
+				<div className="flex justify-between items-center gap-2 flex-wrap">
 					<Label htmlFor="private-key">Private Key (nsec)</Label>
 					<Button
 						variant="outline"
@@ -260,7 +260,7 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 						Generate New Key
 					</Button>
 				</div>
-				<div className="relative" ref={privateKeyInputRef}>
+				<div className="relative max-w-full" ref={privateKeyInputRef}>
 					<Input
 						id="private-key"
 						type={showPrivateKey ? 'text' : 'password'}
@@ -272,7 +272,7 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 								handleContinue()
 							}
 						}}
-						className={`pr-20 ${showPrivateKey ? 'text-red-500' : ''}`}
+						className={`pr-20 min-w-0 ${showPrivateKey ? 'text-red-500' : ''}`}
 						data-testid="private-key-input"
 					/>
 					<Button

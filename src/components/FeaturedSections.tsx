@@ -89,25 +89,27 @@ export function FeaturedSections({ className, maxItemsPerSection = 5 }: Featured
 	let sectionIndex = 0
 
 	return (
-		<div className={cn('w-full', className)}>
+		<div className={cn('w-full max-w-full overflow-hidden', className)}>
 			{/* Featured Products */}
 			{displayProducts.length > 0 && (
-				<section className={cn('w-full py-12', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
-					<div className="px-8">
-						<div className="flex items-center justify-between mb-6">
+				<section className={cn('w-full max-w-full py-12 overflow-hidden', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
+					<div className="px-4 sm:px-8 max-w-full">
+						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-2">
 							<div className="flex items-center gap-3">
-								<Package className="w-6 h-6 text-primary" />
-								<h2 className="text-2xl font-heading">Featured Products</h2>
+								<Package className="w-6 h-6 text-primary shrink-0" />
+								<h2 className="text-xl sm:text-2xl font-heading">Featured Products</h2>
 							</div>
 							{featuredProducts?.featuredProducts && featuredProducts.featuredProducts.length > maxItemsPerSection && (
-								<Link to="/products" className="flex items-center gap-2 text-primary hover:underline">
-									<Button variant="ghost" size="sm" className="gap-2">
-										View All <ArrowRight className="w-4 h-4" />
-									</Button>
-								</Link>
+								<div className="w-full sm:w-auto flex justify-end">
+									<Link to="/products" className="flex items-center gap-2 text-primary hover:underline">
+										<Button variant="ghost" size="sm" className="gap-2">
+											View All <ArrowRight className="w-4 h-4" />
+										</Button>
+									</Link>
+								</div>
 							)}
 						</div>
-						<ItemGrid className="gap-8">
+						<ItemGrid className="gap-4 sm:gap-8">
 							{displayProducts.map((productCoords: string) => (
 								<FeaturedProductItem key={productCoords} productCoords={productCoords} />
 							))}
@@ -118,22 +120,24 @@ export function FeaturedSections({ className, maxItemsPerSection = 5 }: Featured
 
 			{/* Featured Collections */}
 			{displayCollections.length > 0 && (
-				<section className={cn('w-full py-12', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
-					<div className="px-8">
-						<div className="flex items-center justify-between mb-6">
+				<section className={cn('w-full max-w-full py-12 overflow-hidden', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
+					<div className="px-4 sm:px-8 max-w-full">
+						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-2">
 							<div className="flex items-center gap-3">
-								<FolderOpen className="w-6 h-6 text-primary text-white" />
-								<h2 className="text-2xl font-heading text-white">Featured Collections</h2>
+								<FolderOpen className="w-6 h-6 text-primary text-white shrink-0" />
+								<h2 className="text-xl sm:text-2xl font-heading text-white">Featured Collections</h2>
 							</div>
 							{featuredCollections?.featuredCollections && featuredCollections.featuredCollections.length > maxItemsPerSection && (
-								<Link to="/collections" className="flex items-center gap-2 text-primary hover:underline">
-									<Button variant="ghost" size="sm" className="gap-2">
-										View All <ArrowRight className="w-4 h-4" />
-									</Button>
-								</Link>
+								<div className="w-full sm:w-auto flex justify-end">
+									<Link to="/collections" className="flex items-center gap-2 text-primary hover:underline">
+										<Button variant="ghost" size="sm" className="gap-2">
+											View All <ArrowRight className="w-4 h-4" />
+										</Button>
+									</Link>
+								</div>
 							)}
 						</div>
-						<ItemGrid className="gap-8">
+						<ItemGrid className="gap-4 sm:gap-8">
 							{displayCollections.map((collectionCoords: string) => (
 								<FeaturedCollectionItem key={collectionCoords} collectionCoords={collectionCoords} />
 							))}
@@ -144,15 +148,15 @@ export function FeaturedSections({ className, maxItemsPerSection = 5 }: Featured
 
 			{/* Featured Users */}
 			{displayUsers.length > 0 && (
-				<section className={cn('w-full py-12', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
-					<div className="px-8">
-						<div className="flex items-center justify-between mb-6">
+				<section className={cn('w-full max-w-full py-12 overflow-hidden', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
+					<div className="px-4 sm:px-8 max-w-full">
+						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-2">
 							<div className="flex items-center gap-3">
-								<Users className="w-6 h-6 text-primary" />
-								<h2 className="text-2xl font-heading">Featured Sellers</h2>
+								<Users className="w-6 h-6 text-primary shrink-0" />
+								<h2 className="text-xl sm:text-2xl font-heading">Featured Sellers</h2>
 							</div>
 						</div>
-						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
 							{displayUsers.map((userPubkey: string) => (
 								<FeaturedUserCard key={userPubkey} userPubkey={userPubkey} />
 							))}
