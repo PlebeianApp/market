@@ -345,7 +345,14 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 						target="_blank"
 						rel="noopener noreferrer"
 					>
-						<QRCodeSVG value={connectionUrl} className="w-full h-auto" bgColor="#ffffff" fgColor="#000000" level="L" includeMargin={false} />
+						<QRCodeSVG
+							value={connectionUrl}
+							className="w-full h-auto"
+							bgColor="#ffffff"
+							fgColor="#000000"
+							level="L"
+							includeMargin={false}
+						/>
 					</a>
 
 					<div className="flex w-full items-center justify-center">
