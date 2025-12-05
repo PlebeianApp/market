@@ -141,7 +141,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 		<div className="flex w-full items-center justify-between gap-2 md:w-auto md:justify-end">
 			<div className={cn('flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1 md:w-32 md:flex-none', bgColor, textColor)}>
 				{renderIcon()}
-				<span className="font-medium capitalize">{label}</span>
+				<span className="hidden sm:inline font-medium capitalize">{label}</span>
 			</div>
 
 			{hasActions ? (
