@@ -158,6 +158,15 @@ export const useZapCapability = (event: NDKEvent | NDKUser) => {
 	})
 }
 
+export type ZapMethod = 'nip57' | 'nip61'
+
+export interface ZapCapabilityInfo {
+	canReceiveZaps: boolean
+	methods: ZapMethod[]
+	hasLightning: boolean // nip57 - traditional Lightning zaps
+	hasCashu: boolean // nip61 - Cashu/Nutzaps
+}
+
 export const checkZapCapabilityByNpub = async (npub: string): Promise<boolean> => {
 	// Guard against empty or invalid npub
 	if (!npub || !npub.startsWith('npub')) {
@@ -180,6 +189,51 @@ export const checkZapCapabilityByNpub = async (npub: string): Promise<boolean> =
 	}
 }
 
+export const getZapCapabilityInfo = async (npub: string): Promise<ZapCapabilityInfo> => {
+	const defaultResult: ZapCapabilityInfo = {
+		canReceiveZaps: false,
+		methods: [],
+		hasLightning: false,
+		hasCashu: false,
+	}
+
+	// Guard against empty or invalid npub
+	if (!npub || !npub.startsWith('npub')) {
+		return defaultResult
+	}
+
+	try {
+		const ndk = ndkActions.getNDK()
+		if (!ndk) throw new Error('NDK not initialized')
+
+		// Get user from NDK (ensures NDK instance is attached)
+		const user = ndk.getUser({ npub })
+
+		// Get zap info
+		const zapInfo = await user.getZapInfo()
+
+		const methods: ZapMethod[] = []
+		let hasLightning = false
+		let hasCashu = false
+
+		zapInfo.forEach((_, method) => {
+			methods.push(method as ZapMethod)
+			if (method === 'nip57') hasLightning = true
+			if (method === 'nip61') hasCashu = true
+		})
+
+		return {
+			canReceiveZaps: zapInfo.size > 0,
+			methods,
+			hasLightning,
+			hasCashu,
+		}
+	} catch (error) {
+		console.error('Error getting zap capability info:', error)
+		return defaultResult
+	}
+}
+
 export const zapCapabilityByNpubQueryOptions = (npub: string) =>
 	queryOptions({
 		queryKey: profileKeys.zapCapability(npub),
@@ -192,5 +246,19 @@ export const useZapCapabilityByNpub = (npub: string) => {
 		...zapCapabilityByNpubQueryOptions(npub),
 		enabled: !!npub && npub.startsWith('npub'),
 		select: (data) => data,
+	})
+}
+
+export const zapCapabilityInfoQueryOptions = (npub: string) =>
+	queryOptions({
+		queryKey: [...profileKeys.zapCapability(npub), 'info'],
+		queryFn: () => getZapCapabilityInfo(npub),
+		enabled: !!npub && npub.startsWith('npub'),
+	})
+
+export const useZapCapabilityInfo = (npub: string) => {
+	return useQuery({
+		...zapCapabilityInfoQueryOptions(npub),
+		enabled: !!npub && npub.startsWith('npub'),
 	})
 }
