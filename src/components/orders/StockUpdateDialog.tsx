@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { fetchProductByATag, getProductId, getProductStock } from '@/queries/products'
+import { fetchProductByATag, fetchProduct, getProductId, getProductStock } from '@/queries/products'
 import { useUpdateProductMutation, type ProductFormData } from '@/publish/products'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { useEffect, useState } from 'react'
@@ -59,19 +59,35 @@ export function StockUpdateDialog({ open, onOpenChange, order, onComplete }: Sto
 				const productUpdates: ProductStockUpdate[] = []
 
 				for (const itemTag of itemTags) {
-					const productRef = itemTag[1] // Format: 30402:pubkey:dtag
+					const productRef = itemTag[1] // Format: 30402:pubkey:dtag (or 30402:pubkey:eventId for legacy)
 					const quantity = parseInt(itemTag[2] || '1')
 
 					// Parse the product reference
-					const [kind, pubkey, dTag] = productRef.split(':')
+					const [kind, pubkey, identifier] = productRef.split(':')
 
-					if (kind !== '30402' || !pubkey || !dTag) {
+					if (kind !== '30402' || !pubkey || !identifier) {
 						console.warn('Invalid product reference:', productRef)
 						continue
 					}
 
-					// Fetch the product event
-					const productEvent = await fetchProductByATag(pubkey, dTag)
+					let productEvent: NDKEvent | null = null
+
+					// First, try to fetch by d-tag (new format)
+					productEvent = await fetchProductByATag(pubkey, identifier)
+
+					// If not found and identifier looks like an event ID (64 hex chars), try fetching by event ID
+					if (!productEvent && /^[a-f0-9]{64}$/i.test(identifier)) {
+						try {
+							productEvent = await fetchProduct(identifier)
+							// Verify the product belongs to the expected seller
+							if (productEvent && productEvent.pubkey !== pubkey) {
+								console.warn('Product pubkey mismatch, ignoring:', productRef)
+								productEvent = null
+							}
+						} catch (error) {
+							console.warn('Failed to fetch product by event ID:', identifier)
+						}
+					}
 
 					if (!productEvent) {
 						console.warn('Product not found:', productRef)
@@ -83,8 +99,11 @@ export function StockUpdateDialog({ open, onOpenChange, order, onComplete }: Sto
 					const currentStock = stockTag ? parseInt(stockTag[1]) : 0
 					const newStock = Math.max(0, currentStock - quantity)
 
+					// Get the actual d-tag for updates
+					const actualDTag = getProductId(productEvent)
+
 					productUpdates.push({
-						productRef,
+						productRef: `30402:${pubkey}:${actualDTag}`, // Use proper d-tag format
 						productName,
 						quantityOrdered: quantity,
 						currentStock,

@@ -174,13 +174,21 @@ export const productFormActions = {
 				}
 			})
 
+			// Determine if this is a fiat or sats price
+			const priceCurrency = priceTag?.[2] || 'SATS'
+			const priceValue = priceTag?.[1] || ''
+			const isFiatCurrency = priceCurrency !== 'SATS' && priceCurrency !== 'BTC'
+
 			productFormStore.setState((state) => ({
 				...DEFAULT_FORM_STATE,
 				editingProductId: productDTag, // Use the d tag value, not the event ID!
 				name: title,
 				description: description,
-				price: priceTag?.[1] || '',
-				currency: priceTag?.[2] || 'SATS',
+				price: priceValue,
+				fiatPrice: isFiatCurrency ? priceValue : '', // Set fiatPrice if currency is fiat
+				currency: priceCurrency,
+				currencyMode: isFiatCurrency ? 'fiat' : 'sats',
+				bitcoinUnit: priceCurrency === 'BTC' ? 'BTC' : 'SATS',
 				quantity: stockTag?.[1] || '',
 				status: visibilityTag?.[1] || 'hidden',
 				productType: typeTag?.[1] === 'simple' ? 'single' : 'variable',
