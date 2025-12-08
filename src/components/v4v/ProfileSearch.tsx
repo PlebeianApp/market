@@ -138,8 +138,10 @@ export function ProfileSearch({ onSelect, placeholder = 'Search profiles or past
 	}
 
 	// Handle profile link click
-	const handleProfileLinkClick = (e: React.MouseEvent) => {
+	const handleProfileLinkClick = (e: React.MouseEvent, npub: string) => {
 		e.stopPropagation() // Prevent triggering the parent onClick
+		e.preventDefault()
+		window.open(`https://njump.me/${npub}`, '_blank', 'noopener,noreferrer')
 	}
 
 	// Check if input is a valid npub
@@ -211,7 +213,7 @@ export function ProfileSearch({ onSelect, placeholder = 'Search profiles or past
 												to="/profile/$profileId"
 												params={{ profileId: event.pubkey }}
 												className="opacity-0 group-hover:opacity-100 transition-opacity"
-												onClick={handleProfileLinkClick}
+												onClick={(e) => handleProfileLinkClick(e, npub)}
 											>
 												<Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" title="View profile">
 													<ExternalLink className="h-4 w-4" />
