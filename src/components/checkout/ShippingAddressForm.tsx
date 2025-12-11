@@ -250,7 +250,7 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 							/>
 
 							<form.Subscribe
-								selector={(state: any) => state.values.country}
+								selector={(state: any) => state.values.country || ''}
 								children={(selectedCountry: string) => (
 									<form.Field
 										name="city"

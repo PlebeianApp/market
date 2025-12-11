@@ -226,10 +226,7 @@ export function CityCombobox({
 				<button
 					type="button"
 					onClick={toggleDropdown}
-					className={cn(
-						'absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center',
-						cityList.length === 0 && 'opacity-30 cursor-not-allowed',
-					)}
+					className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center"
 					tabIndex={-1}
 					aria-label="Toggle city list"
 					disabled={cityList.length === 0}
