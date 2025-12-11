@@ -486,11 +486,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 	// Function to generate a new invoice for a payment request
 	const handleGenerateNewInvoice = async (invoice: PaymentInvoiceData) => {
-		if (!invoice.lightningAddress) {
-			toast.error('No lightning address available for this payment')
-			return
-		}
-
+		// Note: We don't require lightning address upfront as generateInvoice can resolve it from profile
 		setGeneratingInvoices((prev) => new Set(prev).add(invoice.id))
 
 		try {
@@ -1085,7 +1081,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 														)}
 
 														{/* Generate new invoice - show if expired OR no bolt11 */}
-														{invoice.lightningAddress && (isExpired || !hasBolt11) && (
+														{(isExpired || !hasBolt11) && (
 															<Button
 																variant={hasBolt11 ? 'outline' : undefined}
 																size="sm"
