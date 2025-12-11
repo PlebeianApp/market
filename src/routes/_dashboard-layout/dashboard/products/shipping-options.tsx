@@ -579,17 +579,25 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 											) : (
 												<>
 													{formData.countries.map((countryCode) => (
-														<Badge key={countryCode} variant="secondary" className="flex items-center gap-1 bg-black text-white">
+														<Badge
+															key={countryCode}
+															variant="secondary"
+															className="flex items-center gap-1 bg-black text-white [&>svg]:pointer-events-auto"
+														>
 															{getCountryName(countryCode)}
-															<XIcon
-																className="w-3 h-3 cursor-pointer pointer-events-auto"
-																onClick={() =>
+															<button
+																type="button"
+																className="ml-1 hover:bg-white/20 rounded-full p-0.5"
+																onClick={(e) => {
+																	e.stopPropagation()
 																	setFormData((prev) => ({
 																		...prev,
 																		countries: prev.countries.filter((c) => c !== countryCode),
 																	}))
-																}
-															/>
+																}}
+															>
+																<XIcon className="w-3 h-3" />
+															</button>
 														</Badge>
 													))}
 													{formData.countries.length === 0 && <span className="text-muted-foreground text-sm">No countries selected</span>}
