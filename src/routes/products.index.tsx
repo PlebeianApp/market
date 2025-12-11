@@ -337,7 +337,7 @@ function ProductsRoute() {
 			)}
 
 			<div className="px-8 py-4">
-				<ItemGrid title="All Products">
+				<ItemGrid title="All Products" className="gap-4 sm:gap-8">
 					{products.map((product) => (
 						<ProductCard key={product.id} product={product} />
 					))}
