@@ -78,9 +78,7 @@ export function PhoneInput({ value, onChange, onBlur, placeholder = '7751892718'
 	const filteredCountries = useMemo(() => {
 		if (showFullList || !searchValue.trim()) return countryCodeList
 		const search = searchValue.toLowerCase()
-		return countryCodeList.filter(
-			(country) => country.name.toLowerCase().includes(search) || country.dialCode.includes(search),
-		)
+		return countryCodeList.filter((country) => country.name.toLowerCase().includes(search) || country.dialCode.includes(search))
 	}, [searchValue, showFullList])
 
 	// Reset highlighted index when filtered list changes
