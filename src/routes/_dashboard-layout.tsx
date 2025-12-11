@@ -147,7 +147,7 @@ function DashboardLayout() {
 	const isMobile = breakpoint === 'sm' || breakpoint === 'md' || breakpoint === 'lg' // Changed: treat anything below xl (1024px) as mobile
 	const [showSidebar, setShowSidebar] = useState(true)
 	const [parent] = useAutoAnimate()
-	const { dashboardTitle } = useStore(uiStore)
+	const { dashboardTitle, dashboardHeaderAction } = useStore(uiStore)
 	const { isAuthenticated } = useStore(authStore)
 	const { unseenOrders, unseenMessages, unseenPurchases, unseenByConversation } = useStore(notificationStore)
 	const isMessageDetailView =
@@ -366,6 +366,16 @@ function DashboardLayout() {
 											)}
 											{dashboardTitle}
 										</h1>
+									)}
+
+									{/* Header action button (e.g., Discard Edits) */}
+									{dashboardHeaderAction && (
+										<button
+											onClick={dashboardHeaderAction.onClick}
+											className="absolute right-4 lg:right-8 top-1/2 -translate-y-1/2 px-3 py-1 text-sm font-medium bg-pink-500 text-white rounded hover:bg-pink-600 transition-colors"
+										>
+											{dashboardHeaderAction.label}
+										</button>
 									)}
 								</div>
 							)}

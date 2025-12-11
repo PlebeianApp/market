@@ -18,12 +18,13 @@ import {
 	getProductWeight,
 } from '@/queries/products'
 import { productKeys } from '@/queries/queryKeyFactory'
+import { clearProductFormDraft, getProductFormDraft, saveProductFormDraft } from '@/lib/utils/productFormStorage'
+import type { RichShippingInfo } from './cart'
+import { uiStore } from '@/lib/stores/ui'
 import NDK, { type NDKSigner } from '@nostr-dev-kit/ndk'
 import { QueryClient } from '@tanstack/react-query'
 import { Store } from '@tanstack/store'
 import type { z } from 'zod'
-import type { RichShippingInfo } from './cart'
-import { uiStore } from '@/lib/stores/ui'
 
 export type Category = z.infer<typeof ProductCategoryTagSchema>
 export type ProductImage = z.infer<typeof ProductImageTagSchema>
@@ -55,6 +56,7 @@ export type ProductDimensions = {
 
 export interface ProductFormState {
 	editingProductId: string | null
+	isDirty: boolean // Track if form has been modified from saved state
 	mainTab: 'product' | 'shipping'
 	productSubTab: 'name' | 'detail' | 'spec' | 'category' | 'images'
 	name: string
@@ -80,6 +82,7 @@ export interface ProductFormState {
 
 export const DEFAULT_FORM_STATE: ProductFormState = {
 	editingProductId: null,
+	isDirty: false,
 	mainTab: 'product',
 	productSubTab: 'name',
 	name: '',
@@ -106,6 +109,31 @@ export const DEFAULT_FORM_STATE: ProductFormState = {
 // Create the store
 export const productFormStore = new Store<ProductFormState>(DEFAULT_FORM_STATE)
 
+// Debounce utility for auto-save
+let saveTimeoutId: ReturnType<typeof setTimeout> | null = null
+const SAVE_DEBOUNCE_MS = 500
+
+const cancelPendingSave = () => {
+	if (saveTimeoutId) {
+		clearTimeout(saveTimeoutId)
+		saveTimeoutId = null
+	}
+}
+
+const debouncedSave = () => {
+	cancelPendingSave()
+
+	saveTimeoutId = setTimeout(() => {
+		const state = productFormStore.state
+		if (state.editingProductId) {
+			saveProductFormDraft(state.editingProductId, state).catch((error) => {
+				console.error('Failed to auto-save product form draft:', error)
+			})
+		}
+		saveTimeoutId = null
+	}, SAVE_DEBOUNCE_MS)
+}
+
 // Create actions object
 export const productFormActions = {
 	setEditingProductId: (productId: string | null) => {
@@ -115,7 +143,13 @@ export const productFormActions = {
 		}))
 	},
 
-	loadProductForEdit: async (productId: string) => {
+	loadProductForEdit: async (
+		productId: string,
+		options?: { preserveTabState?: { mainTab: 'product' | 'shipping'; productSubTab: 'name' | 'detail' | 'spec' | 'category' | 'images' } },
+	) => {
+		// Cancel any pending auto-save to prevent interference during load
+		cancelPendingSave()
+
 		try {
 			const event = await fetchProduct(productId)
 			if (!event) {
@@ -174,6 +208,10 @@ export const productFormActions = {
 				}
 			})
 
+			// Use preserved tab state if provided, otherwise default to 'product' and 'name'
+			const mainTab = options?.preserveTabState?.mainTab ?? 'product'
+			const productSubTab = options?.preserveTabState?.productSubTab ?? 'name'
+
 			// Determine if this is a fiat or sats price
 			const priceCurrency = priceTag?.[2] || 'SATS'
 			const priceValue = priceTag?.[1] || ''
@@ -203,8 +241,8 @@ export const productFormActions = {
 				weight: weightTag ? { value: weightTag[1], unit: weightTag[2] } : null,
 				dimensions: dimensionsTag ? { value: dimensionsTag[1], unit: dimensionsTag[2] } : null,
 				shippings: shippingOptions,
-				mainTab: 'product',
-				productSubTab: 'name',
+				mainTab,
+				productSubTab,
 			}))
 		} catch (error) {
 			console.error('Error loading product for edit:', error)
@@ -256,9 +294,10 @@ export const productFormActions = {
 	},
 
 	reset: () => {
-		productFormStore.setState(() => {
-			// Get fresh UI state when resetting
+		// Cancel any pending auto-save to prevent stale data from being written
+		cancelPendingSave()
 
+		productFormStore.setState(() => {
 			const selectedCurrency = uiStore.state.selectedCurrency
 
 			return {
@@ -273,6 +312,17 @@ export const productFormActions = {
 		productFormStore.setState((state) => ({
 			...state,
 			...values,
+			isDirty: true,
+		}))
+		debouncedSave()
+	},
+
+	// Update tab state without marking as dirty (used for navigation, restore after discard, etc.)
+	setTabState: (mainTab: 'product' | 'shipping', productSubTab: 'name' | 'detail' | 'spec' | 'category' | 'images') => {
+		productFormStore.setState((state) => ({
+			...state,
+			mainTab,
+			productSubTab,
 		}))
 	},
 
@@ -280,14 +330,51 @@ export const productFormActions = {
 		productFormStore.setState((state) => ({
 			...state,
 			categories,
+			isDirty: true,
 		}))
+		debouncedSave()
 	},
 
 	updateImages: (images: Array<{ imageUrl: string; imageOrder: number }>) => {
 		productFormStore.setState((state) => ({
 			...state,
 			images,
+			isDirty: true,
 		}))
+		debouncedSave()
+	},
+
+	loadDraftForProduct: async (productId: string): Promise<boolean> => {
+		try {
+			const draft = await getProductFormDraft(productId)
+			if (draft) {
+				productFormStore.setState((state) => ({
+					...state,
+					...draft,
+					// Restore tab state to defaults since we don't persist them
+					mainTab: 'product',
+					productSubTab: 'name',
+					// Mark as dirty since we're loading unsaved changes
+					isDirty: true,
+				}))
+				return true
+			}
+			return false
+		} catch (error) {
+			console.error('Failed to load product form draft:', error)
+			return false
+		}
+	},
+
+	clearDraftForProduct: async (productId: string): Promise<void> => {
+		// Cancel any pending auto-save to prevent it from recreating the draft
+		cancelPendingSave()
+
+		try {
+			await clearProductFormDraft(productId)
+		} catch (error) {
+			console.error('Failed to clear product form draft:', error)
+		}
 	},
 
 	continuePublishing: async (signer: NDKSigner, ndk: NDK, queryClient?: QueryClient): Promise<boolean | string> => {
@@ -351,6 +438,11 @@ export const productFormActions = {
 			} else {
 				// Create new product
 				result = await publishProduct(formData, signer, ndk)
+			}
+
+			// Clear the draft after successful publish
+			if (state.editingProductId) {
+				await clearProductFormDraft(state.editingProductId)
 			}
 
 			// Invalidate queries if queryClient is provided

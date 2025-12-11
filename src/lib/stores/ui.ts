@@ -21,6 +21,12 @@ export type NavigationState = {
 	originalResultsPath: string | null // Track the first/original results page
 }
 
+// Dashboard header action structure
+export interface DashboardHeaderAction {
+	label: string
+	onClick: () => void
+}
+
 // UI State interface
 export interface UIState {
 	drawers: Record<DrawerType, boolean>
@@ -29,6 +35,7 @@ export interface UIState {
 	activeElement?: string
 	dialogCallbacks?: Partial<Record<DialogType, any>>
 	dashboardTitle: string
+	dashboardHeaderAction: DashboardHeaderAction | null
 	mobileMenuOpen: boolean
 	navigation: NavigationState
 	selectedCurrency: SupportedCurrency
@@ -60,6 +67,7 @@ const initialState: UIState = {
 	toasts: [],
 	dialogCallbacks: {},
 	dashboardTitle: 'DASHBOARD',
+	dashboardHeaderAction: null,
 	mobileMenuOpen: false,
 	navigation: {
 		productSourcePath: null,
@@ -241,6 +249,21 @@ export const uiActions = {
 		uiStore.setState((state) => ({
 			...state,
 			dashboardTitle: title,
+		}))
+	},
+
+	// Dashboard header action
+	setDashboardHeaderAction: (action: DashboardHeaderAction | null) => {
+		uiStore.setState((state) => ({
+			...state,
+			dashboardHeaderAction: action,
+		}))
+	},
+
+	clearDashboardHeaderAction: () => {
+		uiStore.setState((state) => ({
+			...state,
+			dashboardHeaderAction: null,
 		}))
 	},
 
