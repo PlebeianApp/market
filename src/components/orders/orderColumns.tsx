@@ -14,11 +14,10 @@ export const baseOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 		cell: ({ row }) => {
 			const orderId = getOrderId(row.original.order)
 			return (
-				<div className="border border-gray-300 rounded px-3 py-1 inline-block">
-					<Link to="/dashboard/orders/$orderId" params={{ orderId: orderId || 'unknown' }} className="font-mono text-xs hover:underline">
-						{orderId ? `${orderId.substring(0, 8)}...` : 'Unknown'}
-					</Link>
-				</div>
+				<Link to="/dashboard/orders/$orderId" params={{ orderId: orderId || 'unknown' }} className="font-mono text-xs hover:underline">
+					<span className="xl:hidden">{orderId || 'Unknown'}</span>
+					<span className="hidden xl:inline">{orderId ? `${orderId.substring(0, 8)}...` : 'Unknown'}</span>
+				</Link>
 			)
 		},
 	},
@@ -35,7 +34,11 @@ export const baseOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 		header: () => <div className="text-right">Amount</div>,
 		cell: ({ row }) => {
 			const amount = getOrderAmount(row.original.order)
-			return <div className="text-right font-medium">{formatSats(amount)}</div>
+			return (
+				<div className="xl:w-40 text-right">
+					<span className="font-bold">{formatSats(amount)}</span>
+				</div>
+			)
 		},
 	},
 ]
@@ -84,7 +87,11 @@ export const purchaseColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 		header: 'Seller',
 		cell: ({ row }) => {
 			const sellerPubkey = getSellerPubkey(row.original.order)
-			return <UserWithAvatar pubkey={sellerPubkey || ''} showBadge={false} size="sm" disableLink={false} />
+			return (
+				<div className="min-w-32 xl:w-40 overflow-hidden">
+					<UserWithAvatar pubkey={sellerPubkey || ''} showBadge={false} size="sm" disableLink={false} />
+				</div>
+			)
 		},
 	},
 	baseOrderColumns[1], // Date
@@ -103,7 +110,11 @@ export const salesColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 		header: 'Buyer',
 		cell: ({ row }) => {
 			const buyerPubkey = getBuyerPubkey(row.original.order)
-			return <UserWithAvatar pubkey={buyerPubkey || ''} showBadge={false} size="sm" disableLink={false} />
+			return (
+				<div className="min-w-32 xl:w-40 overflow-hidden">
+					<UserWithAvatar pubkey={buyerPubkey || ''} showBadge={false} size="sm" disableLink={false} />
+				</div>
+			)
 		},
 		accessorFn: (row) => getBuyerPubkey(row.order),
 	},
@@ -120,7 +131,11 @@ export const fullOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 		header: 'Seller',
 		cell: ({ row }) => {
 			const sellerPubkey = getSellerPubkey(row.original.order)
-			return <UserWithAvatar pubkey={sellerPubkey || ''} showBadge={false} size="sm" disableLink={false} />
+			return (
+				<div className="w-72 overflow-hidden">
+					<UserWithAvatar pubkey={sellerPubkey || ''} showBadge={false} size="sm" disableLink={false} />
+				</div>
+			)
 		},
 	},
 	{
@@ -128,7 +143,11 @@ export const fullOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 		header: 'Buyer',
 		cell: ({ row }) => {
 			const buyerPubkey = getBuyerPubkey(row.original.order)
-			return <UserWithAvatar pubkey={buyerPubkey || ''} showBadge={false} size="sm" disableLink={false} />
+			return (
+				<div className="w-72 overflow-hidden">
+					<UserWithAvatar pubkey={buyerPubkey || ''} showBadge={false} size="sm" disableLink={false} />
+				</div>
+			)
 		},
 	},
 	baseOrderColumns[1], // Date

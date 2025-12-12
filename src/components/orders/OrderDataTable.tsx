@@ -188,13 +188,18 @@ export function OrderDataTable<TData>({
 										{(() => {
 											const orderIdCell = row.getVisibleCells().find((c) => c.column.id === 'orderId')
 											const actionsCell = row.getVisibleCells().find((c) => c.column.id === 'actions')
-											const otherCells = row.getVisibleCells().filter((c) => c.column.id !== 'orderId' && c.column.id !== 'actions')
+											const dateCell = row.getVisibleCells().find((c) => c.column.id === 'date')
+											const amountCell = row.getVisibleCells().find((c) => c.column.id === 'amount')
+											const otherCells = row
+												.getVisibleCells()
+												.filter((c) => !['orderId', 'actions', 'date', 'amount'].includes(c.column.id))
 
 											return (
 												<>
-													<div className="flex justify-between items-center mb-4">
+													<div className="flex justify-between items-center mb-3">
 														{orderIdCell && (
-															<div className="text-sm font-medium">
+															<div className="flex items-center text-sm font-medium">
+																<span className="text-sm font-medium text-gray-600 w-18">Order:</span>
 																{flexRender(orderIdCell.column.columnDef.cell, orderIdCell.getContext())}
 															</div>
 														)}
@@ -204,28 +209,52 @@ export function OrderDataTable<TData>({
 													</div>
 													<div className="space-y-3">
 														{otherCells.map((cell) => (
-															<div key={cell.id} className="flex justify-between items-start">
-																<span className="text-sm font-medium text-gray-600 capitalize min-w-0 flex-shrink-0 mr-3">
+															<div key={cell.id} className="flex items-center">
+																<span className="text-sm font-medium text-gray-600 capitalize w-18 flex-shrink-0">
 																	{typeof cell.column.columnDef.header === 'string'
 																		? cell.column.columnDef.header
 																		: cell.column.id.replace(/([A-Z])/g, ' $1').trim()}
 																	:
 																</span>
-																<div className="text-sm text-right min-w-0 flex-1">
-																	{flexRender(cell.column.columnDef.cell, cell.getContext())}
-																</div>
+																<div className="text-sm min-w-0">{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
 															</div>
 														))}
+														{/* Date & Amount row - 50% split */}
+														{(dateCell || amountCell) && (
+															<div className="flex justify-between items-center">
+																{dateCell && (
+																	<div className="flex items-center text-sm text-left w-1/2">
+																		<span className="text-sm font-medium text-gray-600 w-18">Date:</span>
+																		{flexRender(dateCell.column.columnDef.cell, dateCell.getContext())}
+																	</div>
+																)}
+																{amountCell && (
+																	<div className="flex items-center justify-end text-sm w-1/2">
+																		<span className="text-sm font-medium text-gray-600 w-18">Price:</span>
+																		<span className="w-40 text-right">
+																			{flexRender(amountCell.column.columnDef.cell, amountCell.getContext())}
+																		</span>
+																	</div>
+																)}
+															</div>
+														)}
 													</div>
 												</>
 											)
 										})()}
 									</div>
 
-									{/* Desktop Grid Layout - only on xl screens and above */}
-									<div className="hidden xl:grid xl:grid-cols-5 gap-4 p-4 items-center">
+									{/* Desktop Flex Layout - only on xl screens and above */}
+									<div className="hidden xl:flex xl:flex-row gap-4 p-4 items-center w-full overflow-hidden">
 										{row.getVisibleCells().map((cell) => (
-											<div key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
+											<div
+												key={cell.id}
+												className={
+													cell.column.id === 'actions' ? 'flex-1 flex justify-end overflow-hidden' : 'min-w-0 shrink-0 overflow-hidden'
+												}
+											>
+												{flexRender(cell.column.columnDef.cell, cell.getContext())}
+											</div>
 										))}
 									</div>
 								</Card>

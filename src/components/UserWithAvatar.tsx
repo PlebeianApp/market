@@ -23,9 +23,9 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 	})
 
 	const avatarSizeClass = {
-		sm: 'h-6 w-6',
-		md: 'h-8 w-8',
-		lg: 'h-10 w-10',
+		sm: 'h-6 w-6 min-h-6 min-w-6',
+		md: 'h-8 w-8 min-h-8 min-w-8',
+		lg: 'h-10 w-10 min-h-10 min-w-10',
 	}[size]
 
 	const textSizeClass = {
@@ -38,26 +38,26 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 
 	const content = (
 		<>
-			<Avatar className={avatarSizeClass}>
+			<Avatar className={cn(avatarSizeClass, 'shrink-0')}>
 				<AvatarImage src={profileData?.profile?.picture} />
 				<AvatarFallback>{nameInitial}</AvatarFallback>
 			</Avatar>
-			<div className="flex flex-row items-center gap-1">
-				<ProfileName pubkey={pubkey} className={textSizeClass} truncate={true} disableLink={true} />
+			<div className="flex flex-row items-center gap-1 min-w-0">
+				<ProfileName pubkey={pubkey} className={cn(textSizeClass, 'truncate')} truncate={true} disableLink={true} />
 				{showBadge && <Nip05Badge pubkey={pubkey} />}
 			</div>
 		</>
 	)
 
 	if (disableLink) {
-		return <div className={cn('flex items-center gap-2', className)}>{content}</div>
+		return <div className={cn('flex items-center gap-2 justify-start', className)}>{content}</div>
 	}
 
 	return (
 		<Link
 			to={`https://njump.me/${nip19.npubEncode(pubkey)}`}
 			params={{ profileId: pubkey }}
-			className={cn('flex items-center gap-2', className)}
+			className={cn('flex items-center gap-2 justify-start hover:text-pink-500 transition-colors', className)}
 			onClick={(e) => e.stopPropagation()}
 			target="_blank"
 			rel="noopener noreferrer"
