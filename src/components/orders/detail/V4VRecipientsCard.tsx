@@ -5,6 +5,14 @@ interface V4VRecipientsCardProps {
 }
 
 export function V4VRecipientsCard({ shares }: V4VRecipientsCardProps) {
+	const formatPercentage = (percentage: number) => {
+		const normalized = percentage > 1 ? percentage : percentage * 100
+		return new Intl.NumberFormat(undefined, {
+			minimumFractionDigits: normalized < 1 ? 2 : 0,
+			maximumFractionDigits: 2,
+		}).format(normalized)
+	}
+
 	return (
 		<div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
 			<div className="flex items-center gap-2 mb-2">
@@ -19,7 +27,7 @@ export function V4VRecipientsCard({ shares }: V4VRecipientsCardProps) {
 				{shares.map((share, index) => (
 					<div key={index} className="flex justify-between text-sm">
 						<span className="text-blue-700">{share.name}</span>
-						<span className="text-blue-600 font-medium">{share.percentage}%</span>
+						<span className="text-blue-600 font-medium">{formatPercentage(share.percentage)}%</span>
 					</div>
 				))}
 			</div>
