@@ -1,7 +1,7 @@
 import { ndkActions, ndkStore } from '@/lib/stores/ndk'
 import { parseNwcUri } from '@/lib/stores/wallet'
 import NDK, { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk'
-import { NDKNWCWallet } from '@nostr-dev-kit/ndk-wallet'
+import { NDKNWCWallet } from '@nostr-dev-kit/wallet'
 import { useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { walletKeys } from './queryKeyFactory'
