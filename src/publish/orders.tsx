@@ -778,9 +778,7 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 			amountSats: merchantShare,
 			// Include payment method if available, otherwise empty array indicates pending payment setup
 			paymentMethods: sellerLnAddress ? [{ type: 'lightning', details: sellerLnAddress }] : [],
-			notes: sellerLnAddress
-				? `Payment for order ${orderId}`
-				: `Payment for order ${orderId} (seller payment details pending)`,
+			notes: sellerLnAddress ? `Payment for order ${orderId}` : `Payment for order ${orderId} (seller payment details pending)`,
 		})
 
 		// 2b. Payment requests for V4V shares

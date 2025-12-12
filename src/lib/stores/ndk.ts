@@ -44,6 +44,7 @@ export const ndkActions = {
 		const ndk = new NDK({
 			explicitRelayUrls: explicitRelays,
 			enableOutboxModel: LOCAL_ONLY ? false : true,
+			// aiGuardrails: true,
 		})
 
 		const zapNdk = new NDK({
@@ -343,7 +344,7 @@ export const ndkActions = {
 		const state = ndkStore.state
 		if (!state.zapNdk || !state.isZapNdkConnected) {
 			console.warn('Zap NDK not connected. Cannot create zap subscription.')
-			return () => { }
+			return () => {}
 		}
 
 		const filters: any = {

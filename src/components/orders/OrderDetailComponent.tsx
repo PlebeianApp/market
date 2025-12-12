@@ -1,18 +1,13 @@
 import { ProductCard } from '@/components/ProductCard'
 import { PaymentDialog } from '@/components/checkout/PaymentDialog'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { authStore } from '@/lib/stores/auth'
-import { ndkActions } from '@/lib/stores/ndk'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
-import { cn, copyToClipboard } from '@/lib/utils'
+import { cn } from '@/lib/utils'
+import { getCoordsFromATag } from '@/lib/utils/coords'
 import { getStatusStyles } from '@/lib/utils/orderUtils'
-import { getPersistedInvoicesForOrder, persistInvoicesLocally, updatePersistedInvoiceLocally } from '@/lib/utils/invoiceStorage'
-import { publishPaymentReceipt } from '@/publish/payment'
-import { type OrderWithRelatedEvents } from '@/queries/orders'
-import { useGenerateInvoiceMutation } from '@/queries/payment'
-import { productQueryOptions } from '@/queries/products'
+import type { OrderWithRelatedEvents } from '@/queries/orders'
+import { getProductId, productSmartQueryOptions } from '@/queries/products'
 import {
 	getShippingInfo,
 	getShippingPickupAddressString,
@@ -23,251 +18,42 @@ import {
 } from '@/queries/shipping'
 import { fetchV4VShares } from '@/queries/v4v'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { format } from 'date-fns'
-import {
-	AlertTriangle,
-	CheckCircle,
-	Clock,
-	Copy,
-	CreditCard,
-	MapPin,
-	MessageSquare,
-	Package,
-	Receipt,
-	RefreshCw,
-	Truck,
-	Users,
-	XCircle,
-	Zap,
-} from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
-
-type InvoiceSource = 'request' | 'both'
-
-type InvoiceWithSource = PaymentInvoiceData & {
-	source: InvoiceSource
-	localCopies: PaymentInvoiceData[]
-}
+import { CreditCard, MapPin, MessageSquare, Package, Receipt, Truck } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { DetailField } from '../ui/DetailField'
 import { Separator } from '../ui/separator'
 import { OrderActions } from './OrderActions'
 import { TimelineEventCard } from './TimelineEventCard'
 
+// Imported helpers and components
+import { getOrderId, getOrderItems, getSellerPubkey, getShippingRef, getTotalAmount } from './orderDetailHelpers'
+import { useOrderInvoices } from './useOrderInvoices'
+import {
+	DeliveryAddressDisplay,
+	IncompleteInvoicesBanner,
+	InvoiceCard,
+	NoPaymentRequestsCard,
+	PaymentProgressBar,
+	PaymentSummary,
+	PickupAddressDisplay,
+	ShippingInfoDisplay,
+	TrackingInfoDisplay,
+	V4VRecipientsCard,
+} from './detail'
+
 interface OrderDetailComponentProps {
 	order: OrderWithRelatedEvents
 }
 
-// Helper functions to extract data from order events
-const getOrderId = (orderEvent: NDKEvent): string => {
-	return orderEvent.tags.find((tag) => tag[0] === 'order')?.[1] || orderEvent.id
-}
-
-const getTotalAmount = (orderEvent: NDKEvent): number => {
-	return parseInt(orderEvent.tags.find((tag) => tag[0] === 'amount')?.[1] || '0')
-}
-
-const getProductRefs = (orderEvent: NDKEvent): string[] => {
-	return orderEvent.tags.filter((tag) => tag[0] === 'item').map((tag) => tag[1])
-}
-
-// NEW: Extract item quantities from order tags
-const getOrderItems = (orderEvent: NDKEvent): Array<{ productRef: string; quantity: number }> => {
-	return orderEvent.tags
-		.filter((tag) => tag[0] === 'item')
-		.map((tag) => ({
-			productRef: tag[1],
-			quantity: parseInt(tag[2] || '1', 10), // Default to 1 if quantity is missing
-		}))
-}
-
-const getSellerPubkey = (orderEvent: NDKEvent): string => {
-	return orderEvent.tags.find((tag) => tag[0] === 'p')?.[1] || ''
-}
-
-// Extract shipping reference from order event
-const getShippingRef = (orderEvent: NDKEvent): string | undefined => {
-	return orderEvent.tags.find((tag) => tag[0] === 'shipping')?.[1]
-}
-
-const makeInvoiceKey = (invoice: PaymentInvoiceData) => {
-	return `${invoice.orderId}:${invoice.recipientPubkey}:${invoice.amount}:${invoice.type}`
-}
-
-// Parse address string into structured components
-const parseAddress = (addressString: string) => {
-	// Handle both newline-separated and comma-separated addresses
-	let lines: string[]
-
-	if (addressString.includes('\n')) {
-		// Newline-separated format (preferred)
-		lines = addressString
-			.split('\n')
-			.map((line) => line.trim())
-			.filter(Boolean)
-	} else if (addressString.includes(',')) {
-		// Comma-separated format (legacy)
-		lines = addressString
-			.split(',')
-			.map((line) => line.trim())
-			.filter(Boolean)
-	} else {
-		// Single line or unsupported format
-		return null
-	}
-
-	if (lines.length === 0) return null
-
-	// Try to identify address components
-	const result: {
-		name?: string
-		street?: string
-		street2?: string
-		city?: string
-		state?: string
-		zip?: string
-		country?: string
-	} = {}
-
-	// Pattern to detect if a string is likely a ZIP/postal code
-	const zipPattern = /^\d{4,6}(-\d{4})?$/
-
-	// Pattern to detect state codes (2 uppercase letters)
-	const statePattern = /^[A-Z]{2}$/
-
-	// Newline-separated format (standard):
-	// Line 1: Name
-	// Line 2: Street Address
-	// Line 3 (optional): Additional Address Info (street2)
-	// Line 4 (or 3): City
-	// Line 5 (or 4): ZIP Code
-	// Line 6 (or 5): Country
-
-	if (lines.length >= 1) {
-		result.name = lines[0]
-	}
-
-	if (lines.length >= 2) {
-		result.street = lines[1]
-	}
-
-	if (lines.length >= 3) {
-		// Work backwards from the end to identify components
-		let currentIndex = lines.length - 1
-
-		// Last item is typically country (unless it's a ZIP code)
-		const lastItem = lines[currentIndex]
-
-		// Check if last item is a ZIP code
-		if (zipPattern.test(lastItem)) {
-			result.zip = lastItem
-			currentIndex--
-
-			// Previous item should be city
-			if (currentIndex >= 2) {
-				result.city = lines[currentIndex]
-				currentIndex--
-			}
-		} else {
-			// Last item is country
-			result.country = lastItem
-			currentIndex--
-
-			// Next item back should be ZIP or city
-			if (currentIndex >= 2) {
-				const secondLast = lines[currentIndex]
-				if (zipPattern.test(secondLast)) {
-					result.zip = secondLast
-					currentIndex--
-
-					// Next should be city (or state)
-					if (currentIndex >= 2) {
-						const beforeZip = lines[currentIndex]
-						if (statePattern.test(beforeZip) && currentIndex > 2) {
-							result.state = beforeZip
-							currentIndex--
-							result.city = lines[currentIndex]
-							currentIndex--
-						} else {
-							result.city = beforeZip
-							currentIndex--
-						}
-					}
-				} else {
-					// Second last is city (no separate ZIP provided)
-					result.city = secondLast
-					currentIndex--
-				}
-			}
-		}
-
-		// Everything between street (index 1) and what we've parsed is street2/additional info
-		if (currentIndex > 1) {
-			const street2Lines = lines.slice(2, currentIndex + 1)
-			if (street2Lines.length > 0) {
-				result.street2 = street2Lines.join(', ')
-			}
-		}
-	}
-
-	return result
-}
-
-// Extract payment methods from payment request events
-const extractPaymentMethods = (paymentRequest: NDKEvent) => {
-	const paymentTags = paymentRequest.tags.filter((tag) => tag[0] === 'payment')
-	return paymentTags.map((tag) => ({
-		type: tag[1] as 'lightning' | 'bitcoin' | 'other',
-		details: tag[2],
-		proof: tag[3] || undefined,
-	}))
-}
-
-// Check if payment has been completed based on receipts
-const isPaymentCompleted = (paymentRequest: NDKEvent, paymentReceipts: NDKEvent[]): boolean => {
-	// Get payment request details
-	const requestAmount = paymentRequest.tags.find((tag) => tag[0] === 'amount')?.[1] || '0'
-	const requestRecipient = paymentRequest.tags.find((tag) => tag[0] === 'recipient')?.[1] || paymentRequest.pubkey
-
-	const matchingReceipt = paymentReceipts.find((receipt) => {
-		// Look for order tag, amount tag, and p tag (recipient) in the receipt
-		const orderTag = receipt.tags.find((tag) => tag[0] === 'order')
-		const amountTag = receipt.tags.find((tag) => tag[0] === 'amount')
-		const recipientTag = receipt.tags.find((tag) => tag[0] === 'p')
-		const paymentTag = receipt.tags.find((tag) => tag[0] === 'payment')
-
-		// For exact recipient match, allow small amount variations (±2 sats for fees/rounding)
-		const requestAmountNum = parseInt(requestAmount, 10)
-		const receiptAmountNum = parseInt(amountTag?.[1] || '0', 10)
-		const amountDiff = Math.abs(requestAmountNum - receiptAmountNum)
-		const amountMatches = amountDiff <= 2 // Allow up to 2 sats difference
-
-		// Must have exact recipient match
-		const recipientMatches = recipientTag?.[1] === requestRecipient
-
-		// Match receipt to payment request by recipient and approximate amount
-		return orderTag && amountTag && recipientTag && paymentTag && recipientMatches && amountMatches
-	})
-
-	return !!matchingReceipt
-}
-
 export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const { user } = useStore(authStore)
-	const { mutateAsync: generateInvoice } = useGenerateInvoiceMutation()
-	const queryClient = useQueryClient()
-	const [generatingInvoices, setGeneratingInvoices] = useState<Set<string>>(new Set())
 	const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
 	const [selectedInvoiceIndex, setSelectedInvoiceIndex] = useState(0)
-	const [localInvoices, setLocalInvoices] = useState<PaymentInvoiceData[]>([])
 	const [dialogInvoices, setDialogInvoices] = useState<PaymentInvoiceData[]>([])
-
-	// Live payment receipts received via Nostr subscription
-	const [livePaymentReceipts, setLivePaymentReceipts] = useState<NDKEvent[]>([])
-
-	// No extra local status map – status is derived directly from receipts/invoice data
 
 	if (!order) {
 		return (
@@ -289,15 +75,6 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const isBuyer = buyerPubkey === user?.pubkey
 	const isOrderSeller = sellerPubkey === user?.pubkey
 
-	const refreshLocalInvoices = useCallback(() => {
-		if (!isBuyer || !orderId) return
-		const stored = getPersistedInvoicesForOrder(orderId)
-		setLocalInvoices(stored)
-	}, [isBuyer, orderId])
-
-	useEffect(() => {
-		refreshLocalInvoices()
-	}, [refreshLocalInvoices])
 	const totalAmount = getTotalAmount(orderEvent)
 
 	// Extract shipping information
@@ -312,25 +89,46 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 	// Get product references and quantities from order
 	const orderItems = getOrderItems(orderEvent)
-	const productIds = orderItems.map((item) => {
-		const parts = item.productRef.split(':')
-		return parts.length >= 3 ? parts[2] : item.productRef
-	})
+	const parsedOrderItems = useMemo(
+		() =>
+			orderItems.map((item) => {
+				let coords: { identifier: string; pubkey: string } | null = null
 
-	// Create a quantity map for easy lookup
-	const quantityMap = new Map(
-		orderItems.map((item) => {
-			const parts = item.productRef.split(':')
-			const productId = parts.length >= 3 ? parts[2] : item.productRef
-			return [productId, item.quantity]
-		}),
+				if (item.productRef.includes(':')) {
+					try {
+						const parsed = getCoordsFromATag(item.productRef)
+						coords = { identifier: parsed.identifier, pubkey: parsed.pubkey }
+					} catch (err) {
+						console.warn('Failed to parse product reference as a-tag', err)
+					}
+				}
+
+				return {
+					...item,
+					lookupId: coords?.identifier || item.productRef,
+					itemSellerPubkey: coords?.pubkey || sellerPubkey,
+				}
+			}),
+		[orderItems, sellerPubkey],
 	)
+
+	// Create a quantity map keyed by the product lookup id (prefer d-tag over event id)
+	const quantityMap = useMemo(() => {
+		const map = new Map<string, number>()
+		parsedOrderItems.forEach((item) => {
+			if (item.lookupId) {
+				map.set(item.lookupId, item.quantity)
+			}
+			map.set(item.productRef, item.quantity)
+		})
+		return map
+	}, [parsedOrderItems])
 
 	// Fetch products
 	const productQueries = useQueries({
-		queries: productIds.map((productId) => ({
-			...productQueryOptions(productId),
-			enabled: !!productId,
+		queries: parsedOrderItems.map((item) => ({
+			...productSmartQueryOptions(item.lookupId, item.itemSellerPubkey),
+			enabled: !!item.lookupId,
 		})),
 	})
 
@@ -341,11 +139,27 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		enabled: !!sellerPubkey,
 	})
 
+	// Use the invoice hook
+	const {
+		enrichedInvoices,
+		paidInvoices,
+		incompleteInvoices,
+		totalInvoices,
+		paymentProgress,
+		generatingInvoices,
+		handleGenerateNewInvoice,
+		handlePaymentComplete,
+		handlePaymentFailed,
+	} = useOrderInvoices({
+		order,
+		sellerV4VShares,
+		userPubkey: user?.pubkey,
+	})
+
 	// Parse shipping reference and fetch shipping option details
 	const parsedShippingData = useMemo(() => {
 		if (!shippingRef) return null
 
-		// Check if it's a composite reference (30406:pubkey:dtag)
 		if (shippingRef.includes(':')) {
 			const parts = shippingRef.split(':')
 			if (parts.length === 3 && parts[0] === '30406') {
@@ -353,7 +167,6 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 			}
 		}
 
-		// If it's just an ID, we can't fetch without pubkey
 		return null
 	}, [shippingRef])
 
@@ -379,159 +192,6 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 	const products = productQueries.map((query) => query.data).filter(Boolean) as NDKEvent[]
 
-	// Combine receipts that came with the order and those observed live
-	const invoicesFromPaymentRequests = useMemo(() => {
-		const combinedReceipts = [...(order.paymentReceipts || []), ...livePaymentReceipts]
-
-		if (!order.paymentRequests || order.paymentRequests.length === 0) {
-			return []
-		}
-
-		const invoices: PaymentInvoiceData[] = []
-
-		// Each payment request represents a separate payable invoice
-		order.paymentRequests.forEach((paymentRequest) => {
-			const amountTag = paymentRequest.tags.find((tag) => tag[0] === 'amount')
-			const amount = amountTag?.[1] ? parseInt(amountTag[1], 10) : 0
-
-			if (amount <= 0) return
-
-			const paymentMethods = extractPaymentMethods(paymentRequest)
-			const lightningPayment = paymentMethods.find((p) => p.type === 'lightning')
-			const isCompleted = isPaymentCompleted(paymentRequest, combinedReceipts)
-
-			// Determine if this is a V4V payment or merchant payment
-			const recipientPubkey = paymentRequest.tags.find((tag) => tag[0] === 'recipient')?.[1] || paymentRequest.pubkey
-			const isSellerPayment = recipientPubkey === sellerPubkey
-
-			// Find the V4V recipient name if applicable
-			let recipientName = 'Merchant'
-			if (!isSellerPayment) {
-				const v4vRecipient = sellerV4VShares.find((share) => share.pubkey === recipientPubkey)
-				recipientName = v4vRecipient ? v4vRecipient.name : 'V4V Recipient'
-			}
-
-			const expirationTag = paymentRequest.tags.find((tag) => tag[0] === 'expiration')
-			const expirationValue = expirationTag?.[1]
-			const expiresAt = expirationValue ? parseInt(expirationValue, 10) : Math.floor(Date.now() / 1000) + 3600
-
-			// Extract lightning address from payment method for invoice generation
-			const lightningAddress = lightningPayment?.details || ''
-
-			// Check if the payment details contain a BOLT11 invoice or lightning address
-			const isBolt11 = lightningAddress.toLowerCase().startsWith('lnbc') || lightningAddress.toLowerCase().startsWith('lntb')
-			const actualBolt11 = isBolt11 ? lightningAddress : '' // Only use if it's actually a BOLT11 invoice
-			const actualLightningAddress = !isBolt11 ? lightningAddress : '' // Only use if it's a lightning address
-
-			invoices.push({
-				id: paymentRequest.id,
-				orderId: orderId,
-				bolt11: actualBolt11, // Only include BOLT11 invoices here
-				amount,
-				description: isSellerPayment ? 'Merchant Payment' : 'V4V Community Payment',
-				recipientName,
-				status: isCompleted ? 'paid' : expiresAt < Math.floor(Date.now() / 1000) ? 'expired' : 'pending',
-				expiresAt,
-				createdAt: paymentRequest.created_at || Math.floor(Date.now() / 1000),
-				lightningAddress: actualLightningAddress, // Store lightning address separately for invoice generation
-				recipientPubkey, // Store recipient pubkey for invoice generation
-				type: isSellerPayment ? 'merchant' : 'v4v',
-			})
-		})
-
-		return invoices
-	}, [order.paymentRequests, livePaymentReceipts, order.paymentReceipts, totalAmount, orderId, sellerV4VShares, sellerPubkey])
-
-	const localInvoicesByKey = useMemo(() => {
-		const map: Record<string, PaymentInvoiceData[]> = {}
-
-		localInvoices.forEach((invoice) => {
-			if (invoice.orderId !== orderId) return
-			const key = makeInvoiceKey(invoice)
-			if (!map[key]) {
-				map[key] = []
-			}
-			map[key].push(invoice)
-		})
-
-		Object.values(map).forEach((list) =>
-			list.sort((a, b) => {
-				const aTime = a.updatedAt || a.createdAt || 0
-				const bTime = b.updatedAt || b.createdAt || 0
-				return bTime - aTime
-			}),
-		)
-
-		return map
-	}, [localInvoices, orderId])
-
-	const enrichedInvoices: InvoiceWithSource[] = useMemo(() => {
-		return invoicesFromPaymentRequests.map((invoice) => {
-			const key = makeInvoiceKey(invoice)
-			const localCopies = localInvoicesByKey[key] || []
-			const latestLocal = localCopies[0]
-
-			return {
-				...invoice,
-				status: latestLocal?.status ?? invoice.status,
-				bolt11: latestLocal?.bolt11 || invoice.bolt11,
-				lightningAddress: latestLocal?.lightningAddress || invoice.lightningAddress,
-				preimage: latestLocal?.preimage || invoice.preimage,
-				isZap: latestLocal?.isZap ?? invoice.isZap,
-				source: latestLocal ? 'both' : 'request',
-				localCopies,
-			}
-		})
-	}, [invoicesFromPaymentRequests, localInvoicesByKey])
-
-	// Function to generate a new invoice for a payment request
-	const handleGenerateNewInvoice = async (invoice: PaymentInvoiceData) => {
-		// Note: We don't require lightning address upfront as generateInvoice can resolve it from profile
-		setGeneratingInvoices((prev) => new Set(prev).add(invoice.id))
-
-		try {
-			const recipientPubkey = invoice.recipientPubkey || sellerPubkey
-			const newInvoiceData = await generateInvoice({
-				sellerPubkey: recipientPubkey,
-				amountSats: invoice.amount,
-				description: invoice.description || 'Payment',
-				invoiceId: invoice.id,
-				items: [], // Empty items array for order payments
-				type: invoice.type === 'merchant' ? 'seller' : invoice.type,
-			})
-
-			const newPersistedInvoice: PaymentInvoiceData = {
-				id: newInvoiceData.id,
-				orderId,
-				recipientPubkey,
-				recipientName: invoice.recipientName,
-				amount: invoice.amount,
-				description: invoice.description,
-				bolt11: newInvoiceData.bolt11 || null,
-				lightningAddress: newInvoiceData.lightningAddress || invoice.lightningAddress || null,
-				expiresAt: newInvoiceData.expiresAt,
-				status: newInvoiceData.status === 'failed' ? 'expired' : (newInvoiceData.status as 'pending' | 'paid' | 'expired'),
-				type: invoice.type,
-				createdAt: Date.now(),
-				isZap: newInvoiceData.isZap,
-			}
-
-			persistInvoicesLocally([newPersistedInvoice])
-			refreshLocalInvoices()
-
-			toast.success(`New invoice generated for ${invoice.recipientName}`)
-		} catch (error) {
-			console.error('Failed to generate new invoice:', error)
-			toast.error(`Failed to generate new invoice: ${error instanceof Error ? error.message : 'Unknown error'}`)
-		} finally {
-			setGeneratingInvoices((prev) => {
-				const newSet = new Set(prev)
-				newSet.delete(invoice.id)
-				return newSet
-			})
-		}
-	}
-
 	const openPaymentDialog = (invoiceList: PaymentInvoiceData[]) => {
 		if (!invoiceList.length) return
 		setDialogInvoices(invoiceList)
@@ -539,151 +199,14 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		setPaymentDialogOpen(true)
 	}
 
-	const handlePaymentComplete = async (invoiceId: string, preimage: string) => {
-		toast.success('Payment completed successfully!')
-
-		// Close the dialog
+	const onPaymentComplete = async (invoiceId: string, preimage: string) => {
 		setPaymentDialogOpen(false)
-
-		// Find the invoice - check both enrichedInvoices and dialogInvoices
-		const invoice = enrichedInvoices.find((inv) => inv.id === invoiceId) || dialogInvoices.find((inv) => inv.id === invoiceId)
-
-		// Publish payment receipt so that reload shows status
-		if (invoice && invoice.bolt11) {
-			try {
-				const receiptId = await publishPaymentReceipt({
-					invoice: {
-						orderId,
-						recipientPubkey: invoice.recipientPubkey,
-						amount: invoice.amount,
-						description: invoice.description,
-						id: invoice.id,
-						bolt11: invoice.bolt11,
-					},
-					preimage,
-					bolt11: invoice.bolt11,
-				})
-
-				// Optimistically add the new receipt to the live list so UI updates instantly
-				if (receiptId) {
-					setLivePaymentReceipts((prev) => {
-						// Avoid duplicates
-						if (prev.find((e) => e.id === receiptId)) return prev
-						const placeholder: any = {
-							id: receiptId,
-							tags: [
-								['order', orderId],
-								['amount', invoice.amount.toString()],
-								['p', invoice.recipientPubkey || ''],
-								['payment', 'lightning', invoice.bolt11 || '', preimage],
-							],
-							content: invoice.description || 'Payment confirmation',
-							created_at: Math.floor(Date.now() / 1000),
-							pubkey: user?.pubkey || '',
-						} as unknown as NDKEvent
-						return [...prev, placeholder]
-					})
-				}
-
-				// Refresh order data
-				queryClient.invalidateQueries({ queryKey: ['order', orderId] })
-			} catch (err) {
-				console.error('Failed to publish payment receipt:', err)
-			}
-		}
-
-		updatePersistedInvoiceLocally(orderId, invoiceId, {
-			status: 'paid',
-			preimage,
-		})
-		refreshLocalInvoices()
+		await handlePaymentComplete(invoiceId, preimage, dialogInvoices)
 	}
 
-	const handlePaymentFailed = (_invoiceId: string, error: string) => {
-		console.error(`Payment failed for invoice ${_invoiceId}:`, error)
-		toast.error(`Payment failed: ${error}`)
-		// no local state map; UI remains unchanged (still pending) until user retries or receipt arrives
-		updatePersistedInvoiceLocally(orderId, _invoiceId, {
-			status: 'expired',
-		})
-		refreshLocalInvoices()
+	const onPaymentFailed = (invoiceId: string, error: string) => {
+		handlePaymentFailed(invoiceId, error)
 	}
-
-	// Subscribe to payment receipts for this order once component is mounted
-	useEffect(() => {
-		const ndk = ndkActions.getNDK()
-		if (!ndk || !orderId) return
-
-		// Cannot use multi-character tag filter - fetch all kind 17 events and filter programmatically
-		const sub = ndk.subscribe({ kinds: [17 as any] })
-
-		sub.on('event', (event: NDKEvent) => {
-			// Filter programmatically for order
-			const orderTag = event.tags.find((tag) => tag[0] === 'order')
-			if (orderTag?.[1] !== orderId) return
-
-			setLivePaymentReceipts((prev) => {
-				if (prev.find((e) => e.id === event.id)) return prev
-				return [...prev, event]
-			})
-		})
-
-		return () => {
-			sub.stop()
-		}
-	}, [orderId])
-
-	// Calculate payment statistics
-	// Treat 'skipped' as incomplete (user chose to pay later)
-	const paidInvoices = enrichedInvoices.filter((invoice) => invoice.status === 'paid')
-	const incompleteInvoices = enrichedInvoices.filter((invoice) => invoice.status !== 'paid')
-	const totalInvoices = enrichedInvoices.length
-	const paymentProgress = totalInvoices > 0 ? (paidInvoices.length / totalInvoices) * 100 : 0
-
-	const getStatusIcon = (status: string) => {
-		switch (status) {
-			case 'paid':
-				return <CheckCircle className="w-4 h-4 text-green-600" />
-			case 'pending':
-				return <Clock className="w-4 h-4 text-yellow-600" />
-			case 'processing':
-				return <RefreshCw className="w-4 h-4 text-blue-600 animate-spin" />
-			case 'expired':
-				return <XCircle className="w-4 h-4 text-red-600" />
-			default:
-				return <AlertTriangle className="w-4 h-4 text-gray-600" />
-		}
-	}
-
-	const getStatusColor = (status: string) => {
-		switch (status) {
-			case 'paid':
-				return 'bg-green-100 text-green-800 border-green-300'
-			case 'pending':
-				return 'bg-yellow-100 text-yellow-800 border-yellow-300'
-			case 'processing':
-				return 'bg-blue-100 text-blue-800 border-blue-300'
-			case 'expired':
-				return 'bg-red-100 text-red-800 border-red-300'
-			default:
-				return 'bg-gray-100 text-gray-800 border-gray-300'
-		}
-	}
-
-	const formatExpiryDisplay = (timestamp?: number) => {
-		if (!timestamp) return 'No expiry'
-		const millis = timestamp > 10_000_000_000 ? timestamp : timestamp * 1000
-		return format(millis, 'PPP p')
-	}
-
-	const formatLocalInvoiceTimestamp = (invoice: PaymentInvoiceData) => {
-		const timestamp = invoice.updatedAt || invoice.createdAt
-		if (!timestamp) return 'Unknown date'
-		return format(new Date(timestamp), 'PPP p')
-	}
-
-	const currentUserPubkey = user?.pubkey
-	const isOrderOwner = currentUserPubkey === buyerPubkey // The buyer is the order owner who created the order
 
 	if (!order.order) {
 		return (
@@ -694,6 +217,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		)
 	}
 
+	// Timeline events
 	const allEvents = [
 		...order.statusUpdates.map((event) => ({
 			event,
@@ -775,8 +299,8 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 						<CardContent>
 							<div className="grid grid-cols-1 gap-4">
 								{products.map((product) => {
-									const productId = product.id
-									const quantity = quantityMap.get(productId) || 1
+									const lookupId = getProductId(product) || product.id
+									const quantity = quantityMap.get(lookupId) || quantityMap.get(product.id) || 1
 									return (
 										<div key={product.id} className="p-4 border rounded-lg">
 											<ProductCard product={product} />
@@ -803,114 +327,19 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 						</CardHeader>
 						<CardContent>
 							<div className="space-y-4">
-								{shippingInfo && (
-									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-										<DetailField label="Method:" value={shippingInfo.title} />
-										<DetailField label="Cost:" value={`${shippingInfo.price.amount} ${shippingInfo.price.currency}`} />
-										{shippingInfo.service && (
-											<DetailField
-												label="Service Type:"
-												value={shippingInfo.service.charAt(0).toUpperCase() + shippingInfo.service.slice(1)}
-											/>
-										)}
-										{shippingInfo.carrier && <DetailField label="Carrier:" value={shippingInfo.carrier} />}
-										{shippingInfo.duration && (
-											<DetailField
-												label="Delivery Time:"
-												value={`${shippingInfo.duration.min}-${shippingInfo.duration.max} ${shippingInfo.duration.unit}`}
-											/>
-										)}
-										{shippingInfo.countries && shippingInfo.countries.length > 0 && (
-											<DetailField label="Available Countries:" value={shippingInfo.countries.join(', ')} />
-										)}
-									</div>
-								)}
+								{shippingInfo && <ShippingInfoDisplay shippingInfo={shippingInfo} />}
 
-								{/* Pickup Address */}
-								{isPickupService && pickupAddress && (
-									<div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-										<div className="flex items-start gap-2">
-											<MapPin className="w-4 h-4 text-blue-600 mt-0.5" />
-											<div>
-												<p className="font-medium text-blue-900">Pickup Address</p>
-												<p className="text-blue-800 mt-1">{pickupAddress}</p>
-											</div>
-										</div>
-									</div>
-								)}
+								{isPickupService && pickupAddress && <PickupAddressDisplay pickupAddress={pickupAddress} />}
 
-								{/* Shipping Address - only show for non-pickup orders */}
-								{!isPickupService &&
-									shippingAddress &&
-									(() => {
-										const parsedAddress = parseAddress(shippingAddress)
+								{!isPickupService && shippingAddress && <DeliveryAddressDisplay shippingAddress={shippingAddress} />}
 
-										return (
-											<div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-												<div className="flex items-start gap-3">
-													<Truck className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-													<div className="flex-1 min-w-0">
-														<p className="font-semibold text-green-900 mb-3">Delivery Address</p>
-														{parsedAddress ? (
-															<div className="space-y-2">
-																{parsedAddress.name && (
-																	<div>
-																		<p className="text-xs font-medium text-green-700 uppercase tracking-wide">Name</p>
-																		<p className="text-green-900 font-medium">{parsedAddress.name}</p>
-																	</div>
-																)}
-																{parsedAddress.street && (
-																	<div>
-																		<p className="text-xs font-medium text-green-700 uppercase tracking-wide">Street Address</p>
-																		<p className="text-green-900">{parsedAddress.street}</p>
-																		{parsedAddress.street2 && <p className="text-green-900">{parsedAddress.street2}</p>}
-																	</div>
-																)}
-																<div className="grid grid-cols-2 gap-3">
-																	{parsedAddress.city && (
-																		<div>
-																			<p className="text-xs font-medium text-green-700 uppercase tracking-wide">City</p>
-																			<p className="text-green-900">{parsedAddress.city}</p>
-																		</div>
-																	)}
-																	{parsedAddress.state && (
-																		<div>
-																			<p className="text-xs font-medium text-green-700 uppercase tracking-wide">State</p>
-																			<p className="text-green-900">{parsedAddress.state}</p>
-																		</div>
-																	)}
-																</div>
-																<div className="grid grid-cols-2 gap-3">
-																	{parsedAddress.zip && (
-																		<div>
-																			<p className="text-xs font-medium text-green-700 uppercase tracking-wide">ZIP Code</p>
-																			<p className="text-green-900">{parsedAddress.zip}</p>
-																		</div>
-																	)}
-																	{parsedAddress.country && (
-																		<div>
-																			<p className="text-xs font-medium text-green-700 uppercase tracking-wide">Country</p>
-																			<p className="text-green-900">{parsedAddress.country}</p>
-																		</div>
-																	)}
-																</div>
-															</div>
-														) : (
-															<div className="text-green-800 space-y-0.5">
-																{shippingAddress.split('\n').map((line, index) => (
-																	<p key={index} className="leading-relaxed">
-																		{line.trim()}
-																	</p>
-																))}
-															</div>
-														)}
-													</div>
-												</div>
-											</div>
-										)
-									})()}
+								{/* Tracking Information */}
+								<TrackingInfoDisplay
+									trackingNumber={order.latestShipping?.tags.find((tag) => tag[0] === 'tracking')?.[1]}
+									carrier={order.latestShipping?.tags.find((tag) => tag[0] === 'carrier')?.[1]}
+									shippingStatus={order.latestShipping?.tags.find((tag) => tag[0] === 'status')?.[1]}
+								/>
 
-								{/* Description */}
 								{shippingInfo?.description && (
 									<div className="mt-4 p-3 bg-gray-50 rounded-lg">
 										<p className="text-sm text-gray-700">{shippingInfo.description}</p>
@@ -921,7 +350,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 					</Card>
 				)}
 
-				{/* Payment Processing - visible to both buyer and seller */}
+				{/* Payment Processing */}
 				{totalInvoices > 0 && (
 					<Card>
 						<CardHeader className="p-0">
@@ -934,277 +363,47 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 									</div>
 								</div>
 								<div className="my-3 border-b border-gray-300 sm:hidden" />
-								{/* Payment Summary */}
-								<div className="sm:mt-3 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-									<div className="flex items-center gap-2">
-										<CreditCard className="w-4 h-4 text-green-600" />
-										<div>
-											<p className="text-gray-500">Merchant</p>
-											<p className="font-semibold">
-												{enrichedInvoices.filter((inv) => inv.description === 'Merchant Payment').length} invoice
-											</p>
-										</div>
-									</div>
-									<div className="flex items-center gap-2">
-										<Users className="w-4 h-4 text-purple-600" />
-										<div>
-											<p className="text-gray-500">V4V Recipients</p>
-											<p className="font-semibold">
-												{enrichedInvoices.filter((inv) => inv.description === 'V4V Community Payment').length} invoices
-											</p>
-										</div>
-									</div>
-									<div className="flex items-center gap-2">
-										<Package className="w-4 h-4 text-blue-600" />
-										<div>
-											<p className="text-gray-500">Total Amount</p>
-											<p className="font-semibold">{enrichedInvoices.reduce((sum, inv) => sum + inv.amount, 0).toLocaleString()} sats</p>
-										</div>
-									</div>
-								</div>
+								<PaymentSummary enrichedInvoices={enrichedInvoices} />
 							</div>
 						</CardHeader>
 						<CardContent className="space-y-4 pt-4">
-							{/* Reattempt All Button - only for buyers */}
+							{/* Incomplete invoices banner */}
 							{isBuyer && incompleteInvoices.length > 0 && (
-								<div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-									<div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:justify-between sm:text-left">
-										<div className="flex flex-col items-center gap-2 text-yellow-800 sm:flex-row sm:items-center">
-											<AlertTriangle className="w-6 h-6 text-yellow-800 sm:w-5 sm:h-5" />
-											<div>
-												<p className="font-medium">
-													{incompleteInvoices.length} invoice{incompleteInvoices.length !== 1 ? 's' : ''} require payment
-												</p>
-												<p className="text-sm">Make all payments to complete the order</p>
-											</div>
-										</div>
-										<Button
-											variant="outline"
-											size="sm"
-											onClick={() => {
-												// Trigger refresh or reattempt logic for all incomplete invoices
-												toast.info('Refreshing payment status for all incomplete invoices...')
-											}}
-											className="w-full text-yellow-700 border-yellow-300 hover:bg-yellow-100 sm:w-auto"
-										>
-											<RefreshCw className="w-4 h-4 mr-2" />
-											Refresh All
-										</Button>
-									</div>
-								</div>
+								<IncompleteInvoicesBanner
+									count={incompleteInvoices.length}
+									onRefresh={() => {
+										toast.info('Refreshing payment status for all incomplete invoices...')
+									}}
+								/>
 							)}
 
 							{/* Payment Progress */}
-							<div className="space-y-2">
-								<div className="flex justify-between text-sm">
-									<span>Payment Progress</span>
-									<span>
-										{paidInvoices.length}/{totalInvoices} Complete
-									</span>
-								</div>
-								{/* Progress bar */}
-								<div className="w-full bg-gray-200 rounded-full h-2">
-									<div className="bg-green-600 h-2 rounded-full transition-all duration-300" style={{ width: `${paymentProgress}%` }} />
-								</div>
-							</div>
+							<PaymentProgressBar paidCount={paidInvoices.length} totalCount={totalInvoices} progressPercent={paymentProgress} />
 
-							{/* Individual payment cards */}
+							{/* Individual invoice cards */}
 							<div className="grid gap-3">
-								{enrichedInvoices.map((invoice, index) => {
-									const isGeneratingThis = generatingInvoices.has(invoice.id)
-									const isPaid = invoice.status === 'paid'
-									// Treat 'skipped' as needing payment (user chose to pay later)
-									const needsPayment = !isPaid
-
-									// Find the best invoice to pay: latest non-expired local copy, or the original
-									const now = Math.floor(Date.now() / 1000)
-									const validLocalCopy = invoice.localCopies.find(
-										(copy) => copy.status !== 'paid' && copy.bolt11 && (!copy.expiresAt || copy.expiresAt > now),
-									)
-									const invoiceToUse = validLocalCopy || invoice
-									const isExpired = invoiceToUse.expiresAt && invoiceToUse.expiresAt < now
-									const hasBolt11 = !!invoiceToUse.bolt11
-
-									return (
-										<Card key={invoice.id} className={cn('p-4', isPaid ? 'bg-green-50' : 'bg-card')}>
-											{/* Header row */}
-											<div className="flex items-center justify-between gap-3">
-												<div className="flex items-center gap-3 min-w-0">
-													{enrichedInvoices.length > 1 && (
-														<div
-															className={cn(
-																'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold',
-																isPaid ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-600',
-															)}
-														>
-															{index + 1}
-														</div>
-													)}
-													{isPaid ? (
-														<CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-													) : (
-														<CreditCard className="w-5 h-5 text-gray-400 flex-shrink-0" />
-													)}
-													<div className="min-w-0">
-														<h4 className="font-medium truncate">
-															{invoice.type === 'merchant' ? 'Merchant Payment' : invoice.recipientName}
-														</h4>
-														<p className="text-sm text-muted-foreground">
-															{invoice.amount.toLocaleString()} sats
-															{invoiceToUse.expiresAt && (
-																<span className={cn('ml-2', isExpired ? 'text-red-500' : 'text-gray-400')}>
-																	· {isExpired ? 'Expired' : 'Expires'} {formatExpiryDisplay(invoiceToUse.expiresAt)}
-																</span>
-															)}
-														</p>
-													</div>
-												</div>
-												<Badge
-													className={cn('flex-shrink-0', getStatusColor(isPaid ? 'paid' : isExpired ? 'expired' : 'pending'))}
-													variant="outline"
-												>
-													{isPaid ? 'Paid' : isExpired ? 'Expired' : 'Pending'}
-												</Badge>
-											</div>
-
-											{/* Payment actions for buyers */}
-											{isBuyer && needsPayment && (
-												<div className="mt-4 pt-4 border-t border-muted space-y-3">
-													{/* Main action buttons */}
-													<div className="flex flex-wrap gap-2">
-														{/* Pay button - only if we have a valid invoice */}
-														{hasBolt11 && !isExpired && (
-															<Button size="sm" className="flex-1 min-w-[140px]" onClick={() => openPaymentDialog([invoiceToUse])}>
-																<Zap className="w-4 h-4 mr-2" />
-																Pay {invoice.amount.toLocaleString()} sats
-															</Button>
-														)}
-
-														{/* Generate new invoice - show if expired OR no bolt11 */}
-														{(isExpired || !hasBolt11) && (
-															<Button
-																variant={hasBolt11 ? 'outline' : undefined}
-																size="sm"
-																className="flex-1 min-w-[140px]"
-																onClick={() => handleGenerateNewInvoice(invoice)}
-																disabled={isGeneratingThis}
-															>
-																{isGeneratingThis ? (
-																	<RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-																) : (
-																	<RefreshCw className="w-4 h-4 mr-2" />
-																)}
-																{isExpired ? 'Generate New Invoice' : 'Generate Invoice'}
-															</Button>
-														)}
-
-														{/* Copy invoice - secondary action */}
-														{hasBolt11 && (
-															<Button
-																variant="ghost"
-																size="sm"
-																onClick={() => copyToClipboard(invoiceToUse.bolt11 || '')}
-																title="Copy lightning invoice"
-															>
-																<Copy className="w-4 h-4" />
-															</Button>
-														)}
-													</div>
-
-													{/* Show expired warning */}
-													{isExpired && hasBolt11 && (
-														<p className="text-xs text-amber-600">Invoice expired. Generate a new one to continue payment.</p>
-													)}
-												</div>
-											)}
-
-											{/* Paid confirmation with copy options */}
-											{isPaid && (
-												<div className="mt-3 pt-3 border-t border-green-200 space-y-2">
-													<div className="flex items-center gap-2 text-sm text-green-700">
-														<CheckCircle className="w-4 h-4" />
-														<span>Payment completed</span>
-													</div>
-													<div className="flex flex-wrap gap-2">
-														{invoiceToUse.bolt11 && (
-															<Button
-																variant="ghost"
-																size="sm"
-																className="text-gray-600 hover:text-gray-900 h-auto py-1"
-																onClick={() => copyToClipboard(invoiceToUse.bolt11 || '')}
-															>
-																<Copy className="w-3 h-3 mr-1" />
-																Copy invoice
-															</Button>
-														)}
-														{(invoice.preimage || invoiceToUse.preimage) && (
-															<Button
-																variant="ghost"
-																size="sm"
-																className="text-gray-600 hover:text-gray-900 h-auto py-1"
-																onClick={() => copyToClipboard(invoice.preimage || invoiceToUse.preimage || '')}
-															>
-																<Copy className="w-3 h-3 mr-1" />
-																Copy preimage
-															</Button>
-														)}
-													</div>
-												</div>
-											)}
-										</Card>
-									)
-								})}
+								{enrichedInvoices.map((invoice, index) => (
+									<InvoiceCard
+										key={invoice.id}
+										invoice={invoice}
+										index={index}
+										totalInvoices={enrichedInvoices.length}
+										isBuyer={isBuyer}
+										isGenerating={generatingInvoices.has(invoice.id)}
+										onPay={(inv) => openPaymentDialog([inv])}
+										onGenerateNew={handleGenerateNewInvoice}
+									/>
+								))}
 							</div>
 
 							{/* V4V Information */}
-							{sellerV4VShares.length > 0 && (
-								<div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-									<div className="flex items-center gap-2 mb-2">
-										<Users className="w-5 h-5 text-blue-600" />
-										<h4 className="font-medium text-blue-900">Value-for-Value Recipients</h4>
-									</div>
-									<div className="text-sm text-blue-800">
-										This seller shares revenue with {sellerV4VShares.length} community recipient
-										{sellerV4VShares.length !== 1 ? 's' : ''}:
-									</div>
-									<div className="mt-2 space-y-1">
-										{sellerV4VShares.map((share, index) => (
-											<div key={index} className="flex justify-between text-sm">
-												<span className="text-blue-700">{share.name}</span>
-												<span className="text-blue-600 font-medium">{share.percentage}%</span>
-											</div>
-										))}
-									</div>
-								</div>
-							)}
+							{sellerV4VShares.length > 0 && <V4VRecipientsCard shares={sellerV4VShares} />}
 						</CardContent>
 					</Card>
 				)}
 
-				{/* Payment status when no invoices exist - visible to both buyer and seller */}
-				{totalInvoices === 0 && (
-					<Card>
-						<CardHeader>
-							<CardTitle className="flex items-center gap-2">
-								<CreditCard className="w-5 h-5" />
-								Payment Status
-							</CardTitle>
-						</CardHeader>
-						<CardContent>
-							<div className="text-center py-8">
-								<Clock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-								<p className="text-lg font-medium text-gray-900 mb-2">
-									{isBuyer ? 'Waiting for Payment Requests' : 'No Payment Requests Created'}
-								</p>
-								<p className="text-gray-600">
-									{isBuyer
-										? 'The seller has not yet created payment requests for this order.'
-										: 'Payment requests have not been created for this order yet.'}
-								</p>
-							</div>
-						</CardContent>
-					</Card>
-				)}
+				{/* No payment requests card */}
+				{totalInvoices === 0 && <NoPaymentRequestsCard isBuyer={isBuyer} />}
 
 				{/* Order Timeline */}
 				{allEvents.length > 0 && (
@@ -1232,8 +431,8 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				onOpenChange={setPaymentDialogOpen}
 				invoices={dialogInvoices}
 				currentIndex={selectedInvoiceIndex}
-				onPaymentComplete={handlePaymentComplete}
-				onPaymentFailed={handlePaymentFailed}
+				onPaymentComplete={onPaymentComplete}
+				onPaymentFailed={onPaymentFailed}
 				title={`Pay for Order #${orderId.substring(0, 8)}...`}
 				showNavigation={dialogInvoices.length > 1}
 				nwcEnabled={true}
