@@ -2,6 +2,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { CountryCombobox, isValidCountry } from '@/components/checkout/CountryCombobox'
+import { CityCombobox } from '@/components/checkout/CityCombobox'
+import { PhoneInput } from '@/components/checkout/PhoneInput'
 import { cartStore } from '@/lib/stores/cart'
 import { useStore } from '@tanstack/react-store'
 import { getShippingEvent, getShippingService, getShippingPickupAddressString, getShippingTitle } from '@/queries/shipping'
@@ -167,22 +170,26 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 						/>
 					</div>
 
-					<form.Field
-						name="phone"
-						children={(field: any) => (
-							<div>
-								<Label htmlFor={field.name} className="text-sm font-medium">
-									Phone Number
-								</Label>
-								<Input
-									id={field.name}
-									type="tel"
-									placeholder="e.g. +447751892718"
-									value={field.state.value}
-									onChange={(e) => field.handleChange(e.target.value)}
-									onBlur={field.handleBlur}
-								/>
-							</div>
+					<form.Subscribe
+						selector={(state: any) => state.values.country}
+						children={(selectedCountry: string) => (
+							<form.Field
+								name="phone"
+								children={(field: any) => (
+									<div>
+										<Label htmlFor={field.name} className="text-sm font-medium">
+											Phone Number
+										</Label>
+										<PhoneInput
+											id={field.name}
+											value={field.state.value}
+											onChange={(value) => field.handleChange(value)}
+											onBlur={field.handleBlur}
+											selectedCountry={selectedCountry}
+										/>
+									</div>
+								)}
+							/>
 						)}
 					/>
 
@@ -242,34 +249,39 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 								)}
 							/>
 
-							<form.Field
-								name="city"
-								validators={{
-									onChange: ({ value }: { value: string }) =>
-										!isAllPickup && !value.trim()
-											? 'City is required'
-											: !isAllPickup && value.trim().length < 2
-												? 'Please enter a valid city name'
-												: undefined,
-								}}
-								children={(field: any) => (
-									<div>
-										<Label htmlFor={field.name} className="text-sm font-medium">
-											City <span className="text-red-500">*</span>
-										</Label>
-										<Input
-											id={field.name}
-											type="text"
-											placeholder="e.g. San Francisco"
-											value={field.state.value}
-											onChange={(e) => field.handleChange(e.target.value)}
-											onBlur={field.handleBlur}
-											required={!isAllPickup}
-										/>
-										{field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
-											<p className="text-xs text-red-500 mt-1">{field.state.meta.errors[0]}</p>
+							<form.Subscribe
+								selector={(state: any) => state.values.country || ''}
+								children={(selectedCountry: string) => (
+									<form.Field
+										name="city"
+										validators={{
+											onChange: ({ value }: { value: string }) =>
+												!isAllPickup && !value.trim()
+													? 'City is required'
+													: !isAllPickup && value.trim().length < 2
+														? 'Please enter a valid city name'
+														: undefined,
+										}}
+										children={(field: any) => (
+											<div>
+												<Label htmlFor={field.name} className="text-sm font-medium">
+													City <span className="text-red-500">*</span>
+												</Label>
+												<CityCombobox
+													id={field.name}
+													value={field.state.value}
+													onChange={(value) => field.handleChange(value)}
+													onBlur={field.handleBlur}
+													placeholder="e.g. San Francisco"
+													required={!isAllPickup}
+													selectedCountry={selectedCountry}
+												/>
+												{field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
+													<p className="text-xs text-red-500 mt-1">{field.state.meta.errors[0]}</p>
+												)}
+											</div>
 										)}
-									</div>
+									/>
 								)}
 							/>
 
@@ -310,8 +322,8 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 									onChange: ({ value }: { value: string }) =>
 										!isAllPickup && !value.trim()
 											? 'Country is required'
-											: !isAllPickup && value.trim().length < 2
-												? 'Please enter a valid country name'
+											: !isAllPickup && !isValidCountry(value)
+												? 'Please select a valid country from the list'
 												: undefined,
 								}}
 								children={(field: any) => (
@@ -319,13 +331,12 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 										<Label htmlFor={field.name} className="text-sm font-medium">
 											Country <span className="text-red-500">*</span>
 										</Label>
-										<Input
+										<CountryCombobox
 											id={field.name}
-											type="text"
-											placeholder="e.g. United Kingdom"
 											value={field.state.value}
-											onChange={(e) => field.handleChange(e.target.value)}
+											onChange={(value) => field.handleChange(value)}
 											onBlur={field.handleBlur}
+											placeholder="e.g. United Kingdom"
 											required={!isAllPickup}
 										/>
 										{field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
