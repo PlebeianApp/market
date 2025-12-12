@@ -137,10 +137,10 @@ export function Header() {
 			style={isNostrPage ? {} : (getHeaderStyle() as React.CSSProperties)}
 		>
 			<div className="container flex h-full max-w-full items-center justify-between py-4">
-				<section className="inline-flex items-center">
+				<section className="inline-flex items-center shrink-0">
 					<Link to="/" data-testid="home-link">
 						{config?.appSettings?.picture && (
-							<img src={config.appSettings.picture} alt={config.appSettings.displayName} className="w-16 px-2" />
+							<img src={config.appSettings.picture} alt={config.appSettings.displayName} className="w-16 px-2 shrink-0 min-w-16" />
 						)}
 					</Link>
 					<div className="hidden sm:flex mx-8 gap-8">
