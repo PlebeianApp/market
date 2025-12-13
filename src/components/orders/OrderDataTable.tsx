@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, CheckCircle, Circle, Clock, Filter, Loader, XCircle } from 'lucide-react'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
-import { formatSats, getBuyerPubkey, getEventDate, getEventDateOnly, getOrderAmount, getOrderId, getSellerPubkey } from '@/queries/orders'
+import { formatSats, getBuyerPubkey, getEventDate, getOrderAmount, getOrderId, getSellerPubkey } from '@/queries/orders'
 import type { ColumnDef, ColumnFiltersState, FilterFn, SortingState } from '@tanstack/react-table'
 import { getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import { Link, useNavigate } from '@tanstack/react-router'
@@ -11,6 +11,9 @@ import { useState } from 'react'
 import { ndkActions } from '@/lib/stores/ndk'
 import { UserWithAvatar } from '../UserWithAvatar'
 import { OrderActionsInline } from './OrderActionsInline'
+import { uiStore } from '@/lib/stores/ui'
+import { useBtcExchangeRates } from '@/queries/external'
+import { useStore } from '@tanstack/react-store'
 
 const fuzzyFilter: FilterFn<OrderWithRelatedEvents> = (row, columnId, value, addMeta) => {
 	const item = (row.getValue(columnId) as string) || ''
@@ -69,6 +72,8 @@ export function OrderDataTable<TData>({
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
 	const [globalFilter, setGlobalFilter] = useState('')
 	const navigate = useNavigate()
+	const { selectedCurrency } = useStore(uiStore)
+	const { data: exchangeRates } = useBtcExchangeRates()
 
 	const table = useReactTable({
 		data,
@@ -203,10 +208,8 @@ export function OrderDataTable<TData>({
 											const orderData = row.original as OrderWithRelatedEvents
 											const orderId = getOrderId(orderData.order) || 'unknown'
 											const date = getEventDate(orderData.order)
-											const dateOnly = getEventDateOnly(orderData.order)
 											const amount = getOrderAmount(orderData.order)
-											const userPubkey =
-												viewType === 'sales' ? getBuyerPubkey(orderData.order) : getSellerPubkey(orderData.order)
+											const userPubkey = viewType === 'sales' ? getBuyerPubkey(orderData.order) : getSellerPubkey(orderData.order)
 											const ndk = ndkActions.getNDK()
 											const currentUserPubkey = ndk?.activeUser?.pubkey
 
@@ -233,34 +236,39 @@ export function OrderDataTable<TData>({
 															</div>
 														)}
 													</div>
-													{/* Row 2: Buyer/Seller */}
-													<div className="flex items-center gap-2 mb-2">
-														<span className="text-sm font-bold text-muted-foreground uppercase">
-															{viewType === 'sales' ? 'Buyer:' : 'Seller:'}
-														</span>
-														<UserWithAvatar
-															pubkey={userPubkey || ''}
-															showBadge={false}
-															size="sm"
-															disableLink={false}
-															showHoverEffects={true}
-															truncate={false}
-														/>
+													{/* Row 2: Buyer/Seller + Fiat Price */}
+													<div className="flex items-center justify-between gap-2 mb-2">
+														<div className="flex items-center gap-2">
+															<span className="text-sm font-bold text-muted-foreground uppercase">
+																{viewType === 'sales' ? 'Buyer:' : 'Seller:'}
+															</span>
+															<UserWithAvatar
+																pubkey={userPubkey || ''}
+																showBadge={false}
+																size="sm"
+																disableLink={false}
+																showHoverEffects={true}
+																truncate={false}
+															/>
+														</div>
+														{/* Fiat Price */}
+														{exchangeRates && amount > 0 && (
+															<span className="text-sm text-muted-foreground whitespace-nowrap shrink-0">
+																{(
+																	(amount / 100000000) *
+																	(exchangeRates[selectedCurrency as keyof typeof exchangeRates] || 0)
+																).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}{' '}
+																{selectedCurrency}
+															</span>
+														)}
 													</div>
 													{/* Row 3: Date, Price */}
 													<div className="flex items-center justify-between">
-														<div className="flex items-center gap-2">
-															<span className="text-sm font-bold text-muted-foreground uppercase">Date:</span>
-															<span className="text-sm whitespace-nowrap">
-																<span className="sm:hidden">{dateOnly}</span>
-																<span className="hidden sm:inline">{date}</span>
-															</span>
-														</div>
+														<span className="text-sm whitespace-nowrap">{date}</span>
 														{/* Price */}
-														<div className="flex items-center gap-2 shrink-0">
-															<span className="hidden min-[480px]:inline text-sm font-bold text-muted-foreground uppercase shrink-0">Price:</span>
-															<span className="font-medium text-sm text-right min-w-0 min-[480px]:min-w-[175px] whitespace-nowrap">{formatSats(amount)}</span>
-														</div>
+														<span className="font-medium text-sm text-right min-w-0 min-[480px]:min-w-[175px] whitespace-nowrap shrink-0">
+															{formatSats(amount)}
+														</span>
 													</div>
 												</>
 											)
