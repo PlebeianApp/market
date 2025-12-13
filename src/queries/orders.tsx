@@ -833,17 +833,15 @@ export const getOrderStatus = (order: OrderWithRelatedEvents): string => {
 }
 
 /**
- * Get formatted date from event
+ * Get formatted date from event (time first, then date)
+ * Format: "3:29pm 22 May 2025" (UK/Australian style)
  */
 export const getEventDate = (event?: NDKEvent): string => {
 	if (!event || !event.created_at) return '-'
-	return new Date(event.created_at * 1000).toLocaleString('de-DE', {
-		year: 'numeric',
-		month: '2-digit',
-		day: '2-digit',
-		hour: '2-digit',
-		minute: '2-digit',
-	})
+	const d = new Date(event.created_at * 1000)
+	const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }).toLowerCase().replace(' ', '')
+	const date = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+	return `${time} ${date}`
 }
 
 /**

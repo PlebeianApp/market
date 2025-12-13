@@ -169,9 +169,18 @@ export function OrderActionsInline({ order, userPubkey }: OrderActionsInlineProp
 			{/* Status Badge - fixed width to match widest label (Cancelled) */}
 			<Tooltip>
 				<TooltipTrigger asChild>
-					<div className={cn('flex items-center justify-center rounded px-2 h-6 w-6 md:w-[120px] lg:w-6 xl:w-[120px] border cursor-default', bgColor, borderColor, textColor)}>
+					<div
+						className={cn(
+							'flex items-center justify-center rounded px-2 h-6 w-6 md:w-[120px] lg:w-6 xl:w-[120px] border cursor-default',
+							bgColor,
+							borderColor,
+							textColor,
+						)}
+					>
 						<div className="w-4 shrink-0">{renderStatusIcon()}</div>
-						<span className="hidden md:block lg:hidden xl:block font-medium capitalize text-xs whitespace-nowrap flex-1 text-center">{label}</span>
+						<span className="hidden md:block lg:hidden xl:block font-medium capitalize text-xs whitespace-nowrap flex-1 text-center">
+							{label}
+						</span>
 					</div>
 				</TooltipTrigger>
 				<TooltipContent>{label}</TooltipContent>
@@ -189,7 +198,9 @@ export function OrderActionsInline({ order, userPubkey }: OrderActionsInlineProp
 							className="shrink-0 w-6 md:w-[100px] lg:w-6 xl:w-[100px] h-6 px-2 text-xs bg-black text-white border border-transparent rounded cursor-pointer hover:bg-black hover:text-[#ff3eb5] hover:border-[#ff3eb5] justify-center"
 						>
 							<span className="hidden md:block lg:hidden xl:block flex-1 text-center">{nextAction.label}</span>
-							<div className="w-4 shrink-0 flex justify-center md:justify-end lg:justify-center xl:justify-end"><nextAction.icon className="h-3 w-3" /></div>
+							<div className="w-4 shrink-0 flex justify-center md:justify-end lg:justify-center xl:justify-end">
+								<nextAction.icon className="h-3 w-3" />
+							</div>
 						</Button>
 					</TooltipTrigger>
 					<TooltipContent>{nextAction.label}</TooltipContent>
@@ -199,7 +210,9 @@ export function OrderActionsInline({ order, userPubkey }: OrderActionsInlineProp
 					<TooltipTrigger asChild>
 						<div className="shrink-0 w-6 md:w-[100px] lg:w-6 xl:w-[100px] h-6 px-2 text-xs text-green-600 border border-green-600/50 rounded flex items-center justify-center cursor-default">
 							<span className="hidden md:block lg:hidden xl:block flex-1 text-center">Done</span>
-							<div className="w-4 shrink-0 flex justify-center md:justify-end lg:justify-center xl:justify-end"><CheckCircle className="h-3 w-3" /></div>
+							<div className="w-4 shrink-0 flex justify-center md:justify-end lg:justify-center xl:justify-end">
+								<CheckCircle className="h-3 w-3" />
+							</div>
 						</div>
 					</TooltipTrigger>
 					<TooltipContent>Done</TooltipContent>
@@ -209,7 +222,9 @@ export function OrderActionsInline({ order, userPubkey }: OrderActionsInlineProp
 					<TooltipTrigger asChild>
 						<div className="shrink-0 w-6 md:w-[100px] lg:w-6 xl:w-[100px] h-6 px-2 text-xs text-muted-foreground border border-muted-foreground/50 rounded flex items-center justify-center cursor-default">
 							<span className="hidden md:block lg:hidden xl:block flex-1 text-center">Cancelled</span>
-							<div className="w-4 shrink-0 flex justify-center md:justify-end lg:justify-center xl:justify-end"><Ban className="h-3 w-3" /></div>
+							<div className="w-4 shrink-0 flex justify-center md:justify-end lg:justify-center xl:justify-end">
+								<Ban className="h-3 w-3" />
+							</div>
 						</div>
 					</TooltipTrigger>
 					<TooltipContent>Cancelled</TooltipContent>
@@ -219,7 +234,9 @@ export function OrderActionsInline({ order, userPubkey }: OrderActionsInlineProp
 					<TooltipTrigger asChild>
 						<div className="shrink-0 w-6 md:w-[100px] lg:w-6 xl:w-[100px] h-6 px-2 text-xs text-muted-foreground border border-muted-foreground/50 rounded flex items-center justify-center cursor-default">
 							<span className="hidden md:block lg:hidden xl:block flex-1 text-center">Waiting</span>
-							<div className="w-4 shrink-0 flex justify-center md:justify-end lg:justify-center xl:justify-end"><Clock className="h-3 w-3" /></div>
+							<div className="w-4 shrink-0 flex justify-center md:justify-end lg:justify-center xl:justify-end">
+								<Clock className="h-3 w-3" />
+							</div>
 						</div>
 					</TooltipTrigger>
 					<TooltipContent>Waiting</TooltipContent>
