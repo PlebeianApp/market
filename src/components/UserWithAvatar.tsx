@@ -82,7 +82,8 @@ export function UserWithAvatar({
 
 	const containerClass = cn(
 		'flex items-center gap-2',
-		showHoverEffects && 'group px-2 py-1 rounded border border-transparent hover:bg-gray-100 hover:border-[#ff3eb5] transition-colors duration-200',
+		showHoverEffects &&
+			'group px-2 py-1 rounded border border-transparent hover:bg-gray-100 hover:border-[#ff3eb5] transition-colors duration-200',
 		className,
 	)
 
