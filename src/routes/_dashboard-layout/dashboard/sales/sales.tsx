@@ -3,7 +3,7 @@ import { salesColumns } from '@/components/orders/orderColumns'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ndkActions } from '@/lib/stores/ndk'
 import { notificationActions } from '@/lib/stores/notifications'
-import { getOrderStatus, useOrdersBySeller } from '@/queries/orders'
+import { getBuyerPubkey, getOrderStatus, useOrdersBySeller } from '@/queries/orders'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
@@ -40,6 +40,14 @@ function SalesComponent() {
 
 		// Sort by order
 		const sorted = [...filtered].sort((a, b) => {
+			// Sort by username (buyer pubkey for sales)
+			if (orderBy === 'username-asc' || orderBy === 'username-desc') {
+				const pubkeyA = getBuyerPubkey(a.order) || ''
+				const pubkeyB = getBuyerPubkey(b.order) || ''
+				const comparison = pubkeyA.localeCompare(pubkeyB)
+				return orderBy === 'username-asc' ? comparison : -comparison
+			}
+
 			let timeA: number
 			let timeB: number
 
@@ -78,7 +86,7 @@ function SalesComponent() {
 	return (
 		<div className="h-full">
 			<OrderDataTable
-				heading={<h1 className="text-2xl font-bold">Sales</h1>}
+				heading={<h1 className="text-2xl font-bold shrink-0 whitespace-nowrap h-8">Sales</h1>}
 				data={filteredSales}
 				columns={salesColumns}
 				isLoading={isLoading}
@@ -91,6 +99,7 @@ function SalesComponent() {
 				onOrderByChange={setOrderBy}
 				orderBy={orderBy}
 				emptyMessage="You haven't sold anything yet."
+				viewType="sales"
 			/>
 		</div>
 	)
