@@ -1,13 +1,16 @@
-import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, CheckCircle, Circle, Clock, Filter, Loader, XCircle } from 'lucide-react'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
+import { formatSats, getBuyerPubkey, getEventDate, getEventDateOnly, getOrderAmount, getOrderId, getSellerPubkey } from '@/queries/orders'
 import type { ColumnDef, ColumnFiltersState, FilterFn, SortingState } from '@tanstack/react-table'
-import { flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
+import { getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
+import { ndkActions } from '@/lib/stores/ndk'
+import { UserWithAvatar } from '../UserWithAvatar'
+import { OrderActionsInline } from './OrderActionsInline'
 
 const fuzzyFilter: FilterFn<OrderWithRelatedEvents> = (row, columnId, value, addMeta) => {
 	const item = (row.getValue(columnId) as string) || ''
@@ -43,6 +46,7 @@ interface OrderDataTableProps<TData> {
 	onOrderByChange?: (value: string) => void
 	orderBy?: string
 	emptyMessage?: string
+	viewType?: 'sales' | 'purchases'
 }
 
 export function OrderDataTable<TData>({
@@ -59,6 +63,7 @@ export function OrderDataTable<TData>({
 	onOrderByChange,
 	orderBy = 'newest',
 	emptyMessage = 'No orders found.',
+	viewType = 'sales',
 }: OrderDataTableProps<TData>) {
 	const [sorting, setSorting] = useState<SortingState>([])
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -84,16 +89,16 @@ export function OrderDataTable<TData>({
 
 	return (
 		<div className="flex h-full flex-col">
-			<div className="sticky top-[12.75rem] lg:top-0 z-20 bg-white border-b py-4 px-4 xl:px-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 shadow-sm">
-				{heading && <div className="hidden lg:block flex-1">{heading}</div>}
+			<div className="sticky top-0 z-20 bg-white border-b p-4 flex flex-row items-center justify-between gap-4 shadow-sm overflow-hidden">
+				{heading && <div className="shrink-0 min-w-0">{heading}</div>}
 
-				<div className="flex flex-row justify-end items-center gap-2 sm:gap-4 w-full lg:w-auto">
+				<div className="flex flex-row justify-end items-center gap-4 w-auto shrink-0">
 					{showSearch && (
 						<Input
 							placeholder="Search by Order ID or Buyer..."
 							value={globalFilter}
 							onChange={(e) => setGlobalFilter(e.target.value)}
-							className="w-full sm:max-w-xs"
+							className="max-w-xs"
 						/>
 					)}
 
@@ -119,6 +124,14 @@ export function OrderDataTable<TData>({
 									<SelectItem value="least-updated">
 										<ArrowUpNarrowWide className="h-4 w-4" />
 										Least Recently Updated
+									</SelectItem>
+									<SelectItem value="username-asc">
+										<ArrowUpNarrowWide className="h-4 w-4" />
+										Username A-Z
+									</SelectItem>
+									<SelectItem value="username-desc">
+										<ArrowDownNarrowWide className="h-4 w-4" />
+										Username Z-A
 									</SelectItem>
 								</SelectContent>
 							</Select>
@@ -163,9 +176,9 @@ export function OrderDataTable<TData>({
 				</div>
 			</div>
 
-			<div className="flex-1 overflow-y-auto pb-4">
+			<div className="flex-1 overflow-y-auto">
 				{isLoading ? (
-					<div className="space-y-4 pt-4 px-4 xl:px-6">
+					<div className="space-y-4 p-4">
 						{Array(7)
 							.fill(0)
 							.map((_, i) => (
@@ -175,7 +188,7 @@ export function OrderDataTable<TData>({
 							))}
 					</div>
 				) : table.getRowModel().rows?.length ? (
-					<div className="space-y-4 pt-4 px-4 xl:px-6">
+					<div className="space-y-4 p-4">
 						{table.getRowModel().rows.map((row) => {
 							const orderId = (row.original as any).order.id || 'unknown'
 							return (
@@ -185,50 +198,73 @@ export function OrderDataTable<TData>({
 									className="cursor-pointer hover:bg-muted/50"
 									data-state={row.getIsSelected() && 'selected'}
 								>
-									{/* Mobile/Tablet Card Layout */}
-									<div className="block xl:hidden p-4">
+									<div className="p-4">
 										{(() => {
-											const orderIdCell = row.getVisibleCells().find((c) => c.column.id === 'orderId')
-											const actionsCell = row.getVisibleCells().find((c) => c.column.id === 'actions')
-											const otherCells = row.getVisibleCells().filter((c) => c.column.id !== 'orderId' && c.column.id !== 'actions')
+											const orderData = row.original as OrderWithRelatedEvents
+											const orderId = getOrderId(orderData.order) || 'unknown'
+											const date = getEventDate(orderData.order)
+											const dateOnly = getEventDateOnly(orderData.order)
+											const amount = getOrderAmount(orderData.order)
+											const userPubkey =
+												viewType === 'sales' ? getBuyerPubkey(orderData.order) : getSellerPubkey(orderData.order)
+											const ndk = ndkActions.getNDK()
+											const currentUserPubkey = ndk?.activeUser?.pubkey
 
 											return (
 												<>
-													<div className="flex justify-between items-center mb-4">
-														{orderIdCell && (
-															<div className="text-sm font-medium">
-																{flexRender(orderIdCell.column.columnDef.cell, orderIdCell.getContext())}
+													{/* Row 1: Order, Status/Action/Cancel */}
+													<div className="flex items-center justify-between mb-2">
+														{/* Order ID - full, no wrap */}
+														<div className="flex items-center gap-2 min-w-0">
+															<span className="text-sm font-bold text-muted-foreground uppercase shrink-0">Order:</span>
+															<Link
+																to="/dashboard/orders/$orderId"
+																params={{ orderId }}
+																className="text-sm truncate"
+																onClick={(e) => e.stopPropagation()}
+															>
+																{orderId}
+															</Link>
+														</div>
+														{/* Status + Actions */}
+														{currentUserPubkey && (
+															<div onClick={(e) => e.stopPropagation()} className="shrink-0">
+																<OrderActionsInline order={orderData} userPubkey={currentUserPubkey} />
 															</div>
-														)}
-														{actionsCell && (
-															<div className="text-sm">{flexRender(actionsCell.column.columnDef.cell, actionsCell.getContext())}</div>
 														)}
 													</div>
-													<div className="space-y-3">
-														{otherCells.map((cell) => (
-															<div key={cell.id} className="flex justify-between items-start">
-																<span className="text-sm font-medium text-gray-600 capitalize min-w-0 flex-shrink-0 mr-3">
-																	{typeof cell.column.columnDef.header === 'string'
-																		? cell.column.columnDef.header
-																		: cell.column.id.replace(/([A-Z])/g, ' $1').trim()}
-																	:
-																</span>
-																<div className="text-sm text-right min-w-0 flex-1">
-																	{flexRender(cell.column.columnDef.cell, cell.getContext())}
-																</div>
-															</div>
-														))}
+													{/* Row 2: Buyer/Seller */}
+													<div className="flex items-center gap-2 mb-2">
+														<span className="text-sm font-bold text-muted-foreground uppercase">
+															{viewType === 'sales' ? 'Buyer:' : 'Seller:'}
+														</span>
+														<UserWithAvatar
+															pubkey={userPubkey || ''}
+															showBadge={false}
+															size="sm"
+															disableLink={false}
+															showHoverEffects={true}
+															truncate={false}
+														/>
+													</div>
+													{/* Row 3: Date, Price */}
+													<div className="flex items-center justify-between">
+														<div className="flex items-center gap-2">
+															<span className="text-sm font-bold text-muted-foreground uppercase">Date:</span>
+															<span className="text-sm whitespace-nowrap">
+																<span className="sm:hidden">{dateOnly}</span>
+																<span className="hidden sm:inline">{date}</span>
+															</span>
+														</div>
+														{/* Price */}
+														<div className="flex items-center gap-2 shrink-0">
+															<span className="hidden min-[480px]:inline text-sm font-bold text-muted-foreground uppercase shrink-0">Price:</span>
+															<span className="font-medium text-sm text-right min-w-0 min-[480px]:min-w-[175px] whitespace-nowrap">{formatSats(amount)}</span>
+														</div>
 													</div>
 												</>
 											)
 										})()}
-									</div>
-
-									{/* Desktop Grid Layout - only on xl screens and above */}
-									<div className="hidden xl:grid xl:grid-cols-5 gap-4 p-4 items-center">
-										{row.getVisibleCells().map((cell) => (
-											<div key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</div>
-										))}
 									</div>
 								</Card>
 							)

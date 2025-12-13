@@ -847,6 +847,18 @@ export const getEventDate = (event?: NDKEvent): string => {
 }
 
 /**
+ * Get formatted date only (no time) from event
+ */
+export const getEventDateOnly = (event?: NDKEvent): string => {
+	if (!event || !event.created_at) return '-'
+	return new Date(event.created_at * 1000).toLocaleDateString('de-DE', {
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit',
+	})
+}
+
+/**
  * Get seller pubkey from order
  */
 export const getSellerPubkey = (order: NDKEvent): string | undefined => {

@@ -113,13 +113,13 @@ export function Header() {
 			style={isNostrPage ? {} : (getHeaderStyle() as React.CSSProperties)}
 		>
 			<div className="container flex h-full max-w-full items-center justify-between py-4">
-				<section className="inline-flex items-center">
-					<Link to="/" data-testid="home-link">
+				<section className="inline-flex items-center shrink-0">
+					<Link to="/" data-testid="home-link" className="shrink-0">
 						{config?.appSettings?.picture && (
-							<img src={config.appSettings.picture} alt={config.appSettings.displayName} className="w-16 px-2" />
+							<img src={config.appSettings.picture} alt={config.appSettings.displayName} className="w-16 px-2 shrink-0" />
 						)}
 					</Link>
-					<div className="hidden sm:flex mx-8 gap-8">
+					<div className="hidden sm:flex mx-8 gap-8 shrink-0">
 						<Link
 							to="/products"
 							className="hover:text-secondary"

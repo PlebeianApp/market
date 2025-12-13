@@ -119,6 +119,7 @@ export const getStatusStyles = (order: OrderWithRelatedEvents) => {
 	if (status === ORDER_STATUS.PROCESSING && hasBeenShipped) {
 		return {
 			bgColor: 'bg-orange-100',
+			borderColor: 'border-orange-100',
 			headerBgColor: 'bg-orange-100/30',
 			textColor: 'text-orange-800',
 			iconName: 'truck',
@@ -130,6 +131,7 @@ export const getStatusStyles = (order: OrderWithRelatedEvents) => {
 		case ORDER_STATUS.CONFIRMED:
 			return {
 				bgColor: 'bg-blue-100',
+				borderColor: 'border-blue-100',
 				headerBgColor: 'bg-blue-100/30',
 				textColor: 'text-blue-800',
 				iconName: 'tick',
@@ -138,6 +140,7 @@ export const getStatusStyles = (order: OrderWithRelatedEvents) => {
 		case ORDER_STATUS.PROCESSING:
 			return {
 				bgColor: 'bg-yellow-100',
+				borderColor: 'border-yellow-100',
 				headerBgColor: 'bg-yellow-100/30',
 				textColor: 'text-yellow-800',
 				iconName: 'clock',
@@ -146,6 +149,7 @@ export const getStatusStyles = (order: OrderWithRelatedEvents) => {
 		case ORDER_STATUS.COMPLETED:
 			return {
 				bgColor: 'bg-green-100',
+				borderColor: 'border-green-100',
 				headerBgColor: 'bg-green-100/30',
 				textColor: 'text-green-800',
 				iconName: 'tick',
@@ -154,6 +158,7 @@ export const getStatusStyles = (order: OrderWithRelatedEvents) => {
 		case ORDER_STATUS.CANCELLED:
 			return {
 				bgColor: 'bg-red-100',
+				borderColor: 'border-red-100',
 				headerBgColor: 'bg-red-100/30',
 				textColor: 'text-red-800',
 				iconName: 'cross',
@@ -163,6 +168,7 @@ export const getStatusStyles = (order: OrderWithRelatedEvents) => {
 		default:
 			return {
 				bgColor: 'bg-gray-100',
+				borderColor: 'border-gray-100',
 				headerBgColor: 'bg-gray-100/30',
 				textColor: 'text-gray-800',
 				iconName: 'clock',

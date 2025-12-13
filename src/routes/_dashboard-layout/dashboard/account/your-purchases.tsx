@@ -3,7 +3,7 @@ import { purchaseColumns } from '@/components/orders/orderColumns'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ndkActions } from '@/lib/stores/ndk'
 import { notificationActions } from '@/lib/stores/notifications'
-import { getOrderStatus, useOrdersByBuyer } from '@/queries/orders'
+import { getOrderStatus, getSellerPubkey, useOrdersByBuyer } from '@/queries/orders'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
@@ -40,6 +40,14 @@ function YourPurchasesComponent() {
 
 		// Sort by order
 		const sorted = [...filtered].sort((a, b) => {
+			// Sort by username (seller pubkey for purchases)
+			if (orderBy === 'username-asc' || orderBy === 'username-desc') {
+				const pubkeyA = getSellerPubkey(a.order) || ''
+				const pubkeyB = getSellerPubkey(b.order) || ''
+				const comparison = pubkeyA.localeCompare(pubkeyB)
+				return orderBy === 'username-asc' ? comparison : -comparison
+			}
+
 			let timeA: number
 			let timeB: number
 
@@ -91,6 +99,7 @@ function YourPurchasesComponent() {
 				onOrderByChange={setOrderBy}
 				orderBy={orderBy}
 				emptyMessage="You haven't purchased anything yet."
+				viewType="purchases"
 			/>
 		</div>
 	)
