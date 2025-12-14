@@ -81,13 +81,9 @@ export function ProfileWalletCheck() {
 					</div>
 					<div className="text-sm text-green-800 space-y-2">
 						<p>
-							<strong>By default</strong>, if you don't configure specific payment methods for Plebeian Market, payments will be sent to
-							this Lightning address from your Nostr profile.
+							<strong>By default</strong>, payments go to your Lightning address on your Nostr profile.
 						</p>
-						<p>
-							You can still add payment methods below if you want to use different addresses specifically for Plebeian Market, or configure
-							different addresses for specific products or collections.
-						</p>
+						<p>Want to use a different one? Add new addresses below for specific products or collections.</p>
 					</div>
 				</CardContent>
 			</Card>
