@@ -191,7 +191,7 @@ export function OrderActionsInline({ order, userPubkey }: OrderActionsInlineProp
 				<Tooltip>
 					<TooltipTrigger asChild>
 						<Button
-							variant="default"
+							variant="primary"
 							size="sm"
 							onClick={nextAction.action}
 							disabled={isLoading}
