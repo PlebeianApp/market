@@ -3671,7 +3671,216 @@ export const PRODUCT_CATEGORIES = [
 	'Other',
 ] as const
 
-export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number]
+
+export const PRODUCTS_TAXONOMY: Record<string, string[]> = {
+	'Animals & Pet Supplies': ['Live Animals', 'Pet Supplies'],
+
+	'Apparel & Accessories': [
+		'Clothing',
+		'Clothing Accessories',
+		'Costumes & Accessories',
+		'Handbag & Wallet Accessories',
+		'Handbags, Wallets & Cases',
+		'Jewelry',
+		'Shoe Accessories',
+		'Shoes',
+	],
+
+	'Arts & Entertainment': ['Event Tickets', 'Hobbies & Creative Arts', 'Party & Celebration'],
+
+	'Baby & Toddler': [
+		'Baby Bathing',
+		'Baby Gift Sets',
+		'Baby Health',
+		'Baby Safety',
+		'Baby Toys & Activity Equipment',
+		'Baby Transport',
+		'Baby Transport Accessories',
+		'Diapering',
+		'Nursing & Feeding',
+	],
+
+	'Business & Industrial': [
+		'Advertising & Marketing',
+		'Agriculture',
+		'Automation Control Components',
+		'Construction',
+		'Dentistry',
+		'Film & Television',
+		'Finance & Insurance',
+		'Food Service',
+		'Forestry & Logging',
+		'Hairdressing & Cosmetology',
+		'Heavy Machinery',
+		'Hotel & Hospitality',
+		'Industrial Storage',
+		'Janitorial & Sanitation Supplies',
+		'Law Enforcement',
+		'Manufacturing',
+		'Medical',
+		'Mining & Quarrying',
+		'Piercing & Tattooing',
+		'Retail',
+		'Science & Laboratory',
+		'Signage',
+		'Work Safety Protective Gear',
+	],
+
+	'Cameras & Optics': ['Camera & Optic Accessories', 'Cameras', 'Optics'],
+
+	Electronics: [
+		'Arcade Equipment',
+		'Audio',
+		'Circuit Boards & Components',
+		'Communications',
+		'Components',
+		'Computers',
+		'Electronics Accessories',
+		'Gambling',
+		'GPS Accessories',
+		'GPS Navigation Systems',
+		'Marine Electronics',
+		'Networking',
+		'Print, Copy, Scan & Fax',
+		'Radar Detectors',
+		'Speed Radars',
+		'Video',
+		'Video Game Console Accessories',
+		'Video Game Consoles',
+	],
+
+	'Food, Beverages & Tobacco': ['Beverages', 'Food Items', 'Tobacco Products'],
+
+	Furniture: [
+		'Baby & Toddler Furniture',
+		'Beds & Accessories',
+		'Benches',
+		'Cabinets & Storage',
+		'Carts & Islands',
+		'Chairs',
+		'Entertainment Centers & TV Stands',
+		'Furniture Accessories',
+		'Futons',
+		'Office Furniture',
+		'Office Furniture Accessories',
+		'Ottomans',
+		'Outdoor Furniture',
+		'Outdoor Furniture Accessories',
+		'Room Dividers',
+		'Shelving',
+		'Shelving Accessories',
+		'Sofas',
+		'Table Accessories',
+		'Tables',
+	],
+
+	Hardware: [
+		'Building Consumables',
+		'Building Materials',
+		'Fencing & Barriers',
+		'Fuel',
+		'Hardware Accessories',
+		'Heating, Ventilation & Air Conditioning',
+		'Locks & Keys',
+		'Plumbing',
+		'Power & Electrical Supplies',
+		'Pumps',
+		'Small Engines',
+		'Storage Tanks',
+		'Tool Accessories',
+		'Tools',
+	],
+
+	'Health & Beauty': ['Health Care', 'Personal Care'],
+
+	'Home & Garden': [
+		'Bathroom Accessories',
+		'Business & Home Security',
+		'Decor',
+		'Emergency Preparedness',
+		'Fireplace & Wood Stove Accessories',
+		'Fireplaces & Wood Stoves',
+		'Flood, Fire & Gas Safety',
+		'Household Appliance Accessories',
+		'Household Appliances',
+		'Household Supplies',
+		'Kitchen & Dining',
+		'Lawn & Garden',
+		'Lighting',
+		'Linens & Bedding',
+		'Parasols & Rain Umbrellas',
+		'Plants',
+		'Pool & Spa',
+		'Smoking Accessories',
+	],
+
+	'Luggage & Bags': [
+		'Backpacks',
+		'Briefcases',
+		'Cosmetic & Toiletry Bags',
+		'Diaper Bags',
+		'Dry Boxes',
+		'Duffel Bags',
+		'Fanny Packs',
+		'Garment Bags',
+		'Luggage Accessories',
+		'Messenger Bags',
+		'Shopping Bags',
+		'Suitcases',
+		'Train Cases',
+		'Wristlet Wallets',
+	],
+
+	Mature: ['Erotic', 'Weapons'],
+
+	Media: ['Books', 'Magazines & Newspapers', 'Music & Audio', 'Product Manuals', 'Videos'],
+
+	'Office Supplies': [
+		'Desk Trays',
+		'General Office Supplies',
+		'Ink & Toner',
+		'Mailing Supplies',
+		'Office & Chair Mats',
+		'Office Carts',
+		'Office Instruments',
+		'Paper Handling',
+		'Presentation Supplies',
+		'Shipping Supplies',
+		'Stationery',
+		'Tape, Adhesives & Fasteners',
+		'Writing & Drawing Instruments',
+	],
+
+	'Religion & Ceremonies': ['Memorial Ceremony Supplies', 'Religious Items'],
+
+	Software: ['Computer Software', 'Digital Goods & Currency', 'Video Game Software'],
+
+	'Sporting Goods': [
+		'Exercise & Fitness',
+		'Indoor Games',
+		'Outdoor Recreation',
+		'Skates & Skateboards',
+		'Sport & Outdoor Recreation Apparel',
+		'Sport & Outdoor Recreation Equipment',
+	],
+
+	'Toys & Games': ['Game Timers', 'Games', 'Outdoor Play Equipment', 'Puzzles', 'Toys'],
+
+	'Vehicles & Parts': ['Vehicle Parts & Accessories', 'Vehicles'],
+}
+
+// Export PRODUCTS_TAXONOMY keys for use as product categories
+export const PRODUCT_TAXONOMY_CATEGORIES = Object.keys(PRODUCTS_TAXONOMY)
+
+// Use taxonomy keys as product categories
+export const PRODUCT_CATEGORIES = PRODUCT_TAXONOMY_CATEGORIES
+
+export type ProductCategory = (typeof PRODUCT_TAXONOMY_CATEGORIES)[number]
+
+// Helper function to get subcategories for a main category
+export const getSubcategoriesForCategory = (category: string): string[] => {
+	return PRODUCTS_TAXONOMY[category] || []
+}
 
 export const SHIPPING_TEMPLATES = [
 	{
