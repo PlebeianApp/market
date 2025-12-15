@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { COUNTRIES_ISO, CURRENCIES, SHIPPING_TEMPLATES } from '@/lib/constants'
+import { uiStore } from '@/lib/stores/ui'
 import { useNDK } from '@/lib/stores/ndk'
 import {
 	useDeleteShippingOptionMutation,
@@ -85,6 +86,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 	const isEditing = !!shippingOption
 
 	const [formData, setFormData] = useState<ShippingFormData>(() => {
+		const defaultCurrency = uiStore.state.selectedCurrency
 		if (shippingOption) {
 			const priceTag = getShippingPrice(shippingOption)
 			const countryTag = getShippingCountry(shippingOption)
@@ -100,7 +102,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 				title: getShippingTitle(shippingOption),
 				description: getShippingDescription(shippingOption),
 				price: priceTag?.[1] || '',
-				currency: priceTag?.[2] || 'USD',
+				currency: priceTag?.[2] || defaultCurrency,
 				countries: countryTag?.slice(1) || [],
 				service: (serviceTag?.[1] as any) || 'standard',
 				carrier: carrierTag?.[1] || '',
@@ -133,7 +135,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 			title: '',
 			description: '',
 			price: '',
-			currency: 'USD',
+			currency: defaultCurrency,
 			countries: [],
 			service: 'standard',
 			pickupAddress: {
@@ -152,11 +154,12 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 	}, [getUser])
 
 	const resetForm = useCallback(() => {
+		const defaultCurrency = uiStore.state.selectedCurrency
 		setFormData({
 			title: '',
 			description: '',
 			price: '',
-			currency: 'USD',
+			currency: defaultCurrency,
 			countries: [],
 			service: 'standard',
 			pickupAddress: {
