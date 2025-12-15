@@ -5,7 +5,7 @@ import type { PublishPaymentDetailParams } from '@/queries/payment'
 import { publishPaymentDetail } from '@/queries/payment'
 import { paymentDetailsKeys } from '@/queries/queryKeyFactory'
 import NDK from '@nostr-dev-kit/ndk'
-import { NDKNWCWallet, NDKWalletStatus } from '@nostr-dev-kit/ndk-wallet'
+import { NDKNWCWallet, NDKWalletStatus } from '@nostr-dev-kit/wallet'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 

@@ -1,7 +1,7 @@
 import { CURRENCIES } from '@/lib/constants'
 import type { SupportedCurrency } from '@/queries/external'
 import { btcExchangeRatesQueryOptions, currencyConversionQueryOptions } from '@/queries/external'
-import { getProductPrice, getProductSellerPubkey, productQueryOptions } from '@/queries/products'
+import { getProductId, getProductPrice, getProductSellerPubkey, productQueryOptions, productByATagQueryOptions } from '@/queries/products'
 import {
 	getShippingInfo,
 	getShippingPrice,
@@ -173,10 +173,31 @@ const cartQueryClient = new QueryClient({
 	},
 })
 
-const getProductEvent = async (id: string): Promise<NDKEvent | null> => {
+// Helper to check if an ID looks like a Nostr event ID (64-hex characters)
+const isEventId = (id: string): boolean => /^[a-f0-9]{64}$/i.test(id)
+
+/**
+ * Fetches a product event by ID.
+ * Supports both event IDs (64-hex characters) and d-tags.
+ * For d-tags, the sellerPubkey is required.
+ */
+const getProductEvent = async (id: string, sellerPubkey?: string): Promise<NDKEvent | null> => {
 	try {
-		const event = (await cartQueryClient.fetchQuery(productQueryOptions(id))) as NDKEvent | null
-		return event
+		// If it looks like an event ID (64 hex chars), query by event ID
+		if (isEventId(id)) {
+			const event = (await cartQueryClient.fetchQuery(productQueryOptions(id))) as NDKEvent | null
+			return event
+		}
+
+		// Otherwise, it's likely a d-tag - we need the seller pubkey to query by a-tag
+		if (sellerPubkey) {
+			const event = (await cartQueryClient.fetchQuery(productByATagQueryOptions(sellerPubkey, id))) as NDKEvent | null
+			return event
+		}
+
+		// No seller pubkey provided for a d-tag - can't fetch
+		console.warn(`Cannot fetch product by d-tag "${id}" without seller pubkey`)
+		return null
 	} catch (error) {
 		console.error(`Failed to fetch product event ${id} via queryClient:`, error)
 		return null
@@ -228,8 +249,14 @@ export const cartActions = {
 	},
 
 	convertNDKEventToCartProduct: (event: NDKEvent, amount: number = 1): CartProduct => {
+		// Use the product's d-tag as the ID, not the event.id
+		// This ensures correct product references in orders (30402:pubkey:dTag format)
+		const productDTag = getProductId(event)
+		if (!productDTag) {
+			console.warn('Product event has no d-tag, falling back to event.id:', event.id)
+		}
 		return {
-			id: event.id,
+			id: productDTag || event.id, // Prefer d-tag, fallback to event.id for compatibility
 			amount: amount,
 			shippingMethodId: null,
 			shippingMethodName: null,
@@ -273,7 +300,13 @@ export const cartActions = {
 				return
 			}
 		} else if (productData instanceof NDKEvent) {
-			productId = productData.id
+			// Use the product's d-tag as the ID, not the event.id
+			// This ensures correct product references in orders (30402:pubkey:dTag format)
+			const productDTag = getProductId(productData)
+			if (!productDTag) {
+				console.warn('Product event has no d-tag, falling back to event.id:', productData.id)
+			}
+			productId = productDTag || productData.id // Prefer d-tag, fallback to event.id
 			sellerPubkey = productData.pubkey
 		} else {
 			productId = productData.id
@@ -556,7 +589,7 @@ export const cartActions = {
 		}
 
 		try {
-			const event = await getProductEvent(productId)
+			const event = await getProductEvent(productId, product.sellerPubkey)
 			if (!event) {
 				throw new Error(`Product not found: ${productId}`)
 			}
@@ -866,7 +899,7 @@ export const cartActions = {
 
 		for (const product of Object.values(state.cart.products)) {
 			try {
-				const event = await getProductEvent(product.id)
+				const event = await getProductEvent(product.id, product.sellerPubkey)
 				if (!event) continue
 
 				const priceTag = getProductPrice(event)
@@ -901,7 +934,7 @@ export const cartActions = {
 		}
 
 		try {
-			const event = await getProductEvent(productId)
+			const event = await getProductEvent(productId, product.sellerPubkey)
 			if (!event) {
 				return { value: 0, currency: 'USD' }
 			}
@@ -1128,7 +1161,10 @@ export const cartActions = {
 
 	fetchAvailableShippingOptions: async (productId: string): Promise<RichShippingInfo[]> => {
 		try {
-			const productEvent = await getProductEvent(productId)
+			// Get seller pubkey from cart product if available
+			const state = cartStore.state
+			const cartProduct = state.cart.products[productId]
+			const productEvent = await getProductEvent(productId, cartProduct?.sellerPubkey)
 			if (!productEvent) return []
 
 			// Get shipping options attached to this specific product
@@ -1200,7 +1236,7 @@ export const cartActions = {
 					const extraCosts: Record<string, number> = {}
 
 					for (const product of products) {
-						const productEvent = await getProductEvent(product.id)
+						const productEvent = await getProductEvent(product.id, product.sellerPubkey)
 						if (!productEvent) continue
 
 						const shippingTags = productEvent.tags.filter((t) => t[0] === 'shipping_option')

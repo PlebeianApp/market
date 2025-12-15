@@ -10,6 +10,9 @@ import {
 	AlertCircleIcon,
 	MessageSquareIcon,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { fetchProductByATag, useProductTitle, useProductPrice, useProductImages } from '@/queries/products'
+import { getCoordsFromATag } from '@/lib/utils/coords'
 
 // Helper functions to extract tag information
 const getTags = (event: NDKEvent, tagName: string): string[][] => {
@@ -29,6 +32,47 @@ const getTagValue = (
 interface ChatMessageBubbleProps {
 	event: NDKEvent
 	isCurrentUser: boolean
+}
+
+// Component to display a single order item with product details
+const OrderItem = ({ itemTag }: { itemTag: string[] }) => {
+	const itemName = itemTag[0] || 'Unknown Item'
+	const aTag = itemTag[1]
+	const quantity = itemTag[2] || '1'
+
+	const coords = getCoordsFromATag(aTag)
+	const pubkey = coords?.pubkey
+	const productId = coords.identifier
+
+	const product = fetchProductByATag(coords.pubkey, coords.identifier)
+
+	const { data: title = 'Untitled Product' } = useProductTitle(productId)
+	const { data: priceTag } = useProductPrice(productId)
+	const { data: images = [] } = useProductImages(productId)
+	const price = priceTag ? `${priceTag[1]} ${priceTag[2]}` : null
+
+	return (
+		<li className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
+			{images.length > 0 && (
+				<div className="h-12 w-12 flex-shrink-0 rounded-md border overflow-hidden bg-gray-100">
+					<img src={images[0][1]} alt={title || 'Product image'} className="h-full w-full object-cover object-center" />
+				</div>
+			)}
+
+			<div className="flex-1 min-w-0">
+				<p className="font-medium text-sm truncate">{title}</p>
+				<div className="flex items-center gap-2 text-xs text-muted-foreground">
+					<span>Qty: {quantity}</span>
+					{price && (
+						<>
+							<span>•</span>
+							<span>{price}</span>
+						</>
+					)}
+				</div>
+			</div>
+		</li>
+	)
 }
 
 // --- Sub-components for different message types ---
@@ -63,7 +107,7 @@ const OrderCreationMessage = ({ event }: { event: NDKEvent }) => {
 					<strong>Items:</strong>
 					<ul className="list-disc list-inside pl-2 text-xs space-y-0.5">
 						{items.map((item, idx) => (
-							<li key={idx} className="break-words">{`${item[1]} (Qty: ${item[2] || '1'})`}</li>
+							<OrderItem key={idx} itemTag={item} />
 						))}
 					</ul>
 				</div>

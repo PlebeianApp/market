@@ -9,21 +9,22 @@ import { cartActions, cartStore } from '@/lib/stores/cart'
 
 interface CartItemProps {
 	productId: string
+	sellerPubkey: string
 	amount: number
 	onQuantityChange: (productId: string, newAmount: number) => void
 	onRemove: (productId: string) => void
 	hideShipping?: boolean
 }
 
-export default function CartItem({ productId, amount, onQuantityChange, onRemove, hideShipping = false }: CartItemProps) {
+export default function CartItem({ productId, sellerPubkey, amount, onQuantityChange, onRemove, hideShipping = false }: CartItemProps) {
 	const [quantity, setQuantity] = useState(amount)
 	const [showShipping, setShowShipping] = useState(false)
 
-	// Fetch product data
-	const { data: title, isLoading: isTitleLoading } = useProductTitle(productId)
-	const { data: priceTag, isLoading: isPriceLoading } = useProductPrice(productId)
-	const { data: images, isLoading: isImagesLoading } = useProductImages(productId)
-	const { data: stockTag, isLoading: isStockLoading } = useProductStock(productId)
+	// Fetch product data - pass sellerPubkey to support d-tag lookups
+	const { data: title, isLoading: isTitleLoading } = useProductTitle(productId, sellerPubkey)
+	const { data: priceTag, isLoading: isPriceLoading } = useProductPrice(productId, sellerPubkey)
+	const { data: images, isLoading: isImagesLoading } = useProductImages(productId, sellerPubkey)
+	const { data: stockTag, isLoading: isStockLoading } = useProductStock(productId, sellerPubkey)
 
 	const isLoading = isTitleLoading || isPriceLoading || isImagesLoading || isStockLoading
 

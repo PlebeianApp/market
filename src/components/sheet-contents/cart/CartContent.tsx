@@ -133,6 +133,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 										<div key={product.id} className={`p-3 rounded-lg ${index % 2 === 0 ? 'bg-gray-100' : 'bg-white'}`}>
 											<CartItem
 												productId={product.id}
+												sellerPubkey={product.sellerPubkey}
 												amount={product.amount}
 												onQuantityChange={handleQuantityChange}
 												onRemove={handleRemoveProduct}

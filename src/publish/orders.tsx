@@ -765,18 +765,21 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 		const sellerProfile = await fetchProfileByIdentifier(sellerPubkey)
 		const sellerLnAddress = sellerProfile?.profile?.lud16 || sellerProfile?.profile?.lud06
 
+		// Always create a payment request event, even if no lightning address is available.
+		// This ensures the order workflow is complete and the payment can be retried later
+		// when the seller configures their payment details.
 		if (!sellerLnAddress) {
-			console.warn(`Seller ${sellerPubkey} has no lightning address. Cannot create payment request.`)
-		} else {
-			paymentRequests.push({
-				buyerPubkey: buyerPubkey,
-				merchantPubkey: sellerPubkey,
-				orderId: orderId,
-				amountSats: merchantShare,
-				paymentMethods: [{ type: 'lightning', details: sellerLnAddress }],
-				notes: `Payment for order ${orderId}`,
-			})
+			console.warn(`Seller ${sellerPubkey} has no lightning address. Creating payment request without payment method.`)
 		}
+		paymentRequests.push({
+			buyerPubkey: buyerPubkey,
+			merchantPubkey: sellerPubkey,
+			orderId: orderId,
+			amountSats: merchantShare,
+			// Include payment method if available, otherwise empty array indicates pending payment setup
+			paymentMethods: sellerLnAddress ? [{ type: 'lightning', details: sellerLnAddress }] : [],
+			notes: sellerLnAddress ? `Payment for order ${orderId}` : `Payment for order ${orderId} (seller payment details pending)`,
+		})
 
 		// 2b. Payment requests for V4V shares
 		for (const recipient of v4vRecipients) {
@@ -786,17 +789,21 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 			if (recipientAmount > 0) {
 				const recipientProfile = await fetchProfileByIdentifier(recipient.pubkey)
 				const recipientLnAddress = recipientProfile?.profile?.lud16 || recipientProfile?.profile?.lud06
+
+				// Always create a payment request event for V4V recipients, even if no lightning address is available
 				if (!recipientLnAddress) {
-					console.warn(`V4V recipient ${recipient.name} has no lightning address. Skipping.`)
-					continue
+					console.warn(`V4V recipient ${recipient.name} has no lightning address. Creating payment request without payment method.`)
 				}
 				paymentRequests.push({
 					buyerPubkey: buyerPubkey,
 					merchantPubkey: recipient.pubkey, // V4V recipient is the one getting paid
 					orderId: orderId,
 					amountSats: recipientAmount,
-					paymentMethods: [{ type: 'lightning', details: recipientLnAddress }],
-					notes: `V4V share for order ${orderId} (${(recipientPercentage * 100).toFixed(1)}%)`,
+					// Include payment method if available, otherwise empty array indicates pending payment setup
+					paymentMethods: recipientLnAddress ? [{ type: 'lightning', details: recipientLnAddress }] : [],
+					notes: recipientLnAddress
+						? `V4V share for order ${orderId} (${(recipientPercentage * 100).toFixed(1)}%)`
+						: `V4V share for order ${orderId} (${(recipientPercentage * 100).toFixed(1)}%) - payment details pending`,
 				})
 			}
 		}
