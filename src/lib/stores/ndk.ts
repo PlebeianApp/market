@@ -114,7 +114,15 @@ export const ndkActions = {
 			console.log('✅ Zap NDK connected to relays:', ZAP_RELAYS)
 		} catch (error) {
 			console.error('Failed to connect Zap NDK:', error)
-			// Don't throw - allow app to continue even if zap relays fail
+			// Don't throw - allow app to continue even if some zap relays fail
+			// Mark as connected if we have any working zap relays
+			const connectedRelays = state.zapNdk?.pool?.connectedRelays() || []
+			if (connectedRelays.length > 0) {
+				ndkStore.setState((state) => ({ ...state, isZapNdkConnected: true }))
+				console.log(`✅ Zap NDK partially connected to ${connectedRelays.length} relays`)
+			} else {
+				console.warn('⚠️ Zap NDK could not connect to any relays. Zap monitoring will be unavailable.')
+			}
 		}
 	},
 
