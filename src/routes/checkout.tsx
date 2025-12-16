@@ -166,10 +166,15 @@ function RouteComponent() {
 		return total
 	}, [sellers, v4vShares])
 
+	// Keep the progress bar stable even while invoices are being generated
+	const invoiceStepCount = useMemo(() => {
+		return invoices.length > 0 ? invoices.length : totalInvoicesNeeded
+	}, [invoices.length, totalInvoicesNeeded])
+
 	const totalSteps = useMemo(() => {
-		// shipping + summary + (actual invoices) + complete
-		return 2 + invoices.length + 1
-	}, [invoices.length])
+		// shipping + summary + (actual/expected invoices) + complete
+		return 2 + invoiceStepCount + 1
+	}, [invoiceStepCount])
 
 	// Ensure currentInvoiceIndex stays within bounds
 	const safeInvoiceIndex = useMemo(() => {
@@ -184,13 +189,15 @@ function RouteComponent() {
 			case 'summary':
 				return 2
 			case 'payment':
-				return 3 + safeInvoiceIndex
+				// When invoices are still generating, stay on the first payment step
+				const paymentPosition = invoices.length > 0 ? safeInvoiceIndex : 0
+				return 3 + paymentPosition
 			case 'complete':
 				return totalSteps
 			default:
 				return 1
 		}
-	}, [currentStep, safeInvoiceIndex, totalSteps])
+	}, [currentStep, invoices.length, safeInvoiceIndex, totalSteps])
 
 	const progress = useMemo(() => {
 		return ((currentStepNumber - 1) / (totalSteps - 1)) * 100
@@ -203,6 +210,9 @@ function RouteComponent() {
 			case 'summary':
 				return 'Review your order'
 			case 'payment':
+				if (invoices.length === 0) {
+					return 'Generating payment invoices...'
+				}
 				const currentInvoice = invoices[safeInvoiceIndex]
 				if (currentInvoice) {
 					const invoiceTypeLabel = currentInvoice.type === 'v4v' ? 'V4V Payment' : 'Payment'
@@ -411,21 +421,45 @@ function RouteComponent() {
 		},
 	})
 
-	const handlePayInvoice = async (invoiceId: string) => {
-		// Mock Lightning payment processing
-		setInvoices((prev) => prev.map((invoice) => (invoice.id === invoiceId ? { ...invoice, status: 'processing' } : invoice)))
-
-		// Simulate Lightning payment verification delay
-		setTimeout(() => {
-			setInvoices((prev) => prev.map((invoice) => (invoice.id === invoiceId ? { ...invoice, status: 'paid' } : invoice)))
-
-			// Move to next invoice or complete
-			if (currentInvoiceIndex < invoices.length - 1) {
-				setCurrentInvoiceIndex((prev) => prev + 1)
-			} else {
-				setCurrentStep('complete')
+	const findNextPendingInvoiceIndex = (list: PaymentInvoiceData[], fromIndex: number) => {
+		for (let i = fromIndex + 1; i < list.length; i++) {
+			if (list[i].status === 'pending') {
+				return i
 			}
-		}, 3000) // Slightly longer delay to simulate Lightning verification
+		}
+
+		for (let i = 0; i <= fromIndex; i++) {
+			if (list[i].status === 'pending') {
+				return i
+			}
+		}
+
+		return -1
+	}
+
+	const updateInvoiceStatus = (invoiceId: string, changes: Partial<PaymentInvoiceData>, options?: { skipAutoAdvance?: boolean }) => {
+		let nextPendingIndex: number | null = null
+		let allCompleted = false
+
+		setInvoices((prevInvoices) => {
+			const updated = prevInvoices.map((invoice) => (invoice.id === invoiceId ? { ...invoice, ...changes } : invoice))
+
+			allCompleted = updated.length > 0 && updated.every((inv) => inv.status === 'paid' || inv.status === 'skipped')
+
+			if (!options?.skipAutoAdvance && !allCompleted) {
+				const currentIndex = updated.findIndex((inv) => inv.id === invoiceId)
+				nextPendingIndex = findNextPendingInvoiceIndex(updated, currentIndex === -1 ? safeInvoiceIndex : currentIndex)
+			}
+
+			return updated
+		})
+
+		if (allCompleted) {
+			setCurrentStep('complete')
+		} else if (!options?.skipAutoAdvance && nextPendingIndex !== null && nextPendingIndex !== -1) {
+			// Small delay keeps UI transitions smooth
+			setTimeout(() => setCurrentInvoiceIndex(nextPendingIndex!), 200)
+		}
 	}
 
 	const handlePaymentComplete = async (invoiceId: string, preimage: string, skipAutoAdvance = false) => {
@@ -439,17 +473,17 @@ function RouteComponent() {
 
 		// Find the invoice to get bolt11 for receipt creation
 		const invoice = invoices.find((inv) => inv.id === invoiceId)
+		const resolvedOrderId = invoice?.orderId && invoice.orderId !== 'temp-order' ? invoice.orderId : specOrderIds[0] || 'unknown-order'
 
 		// Create payment receipt
 		if (invoice) {
 			try {
-				const orderId = invoice.orderId !== 'temp-order' ? invoice.orderId : specOrderIds[0] || 'unknown-order'
 				await publishPaymentReceipt({
-					invoice: { ...invoice, orderId },
+					invoice: { ...invoice, orderId: resolvedOrderId },
 					preimage,
 					bolt11: invoice.bolt11 || '',
 				})
-				updatePersistedInvoiceLocally(orderId, invoice.id, {
+				updatePersistedInvoiceLocally(resolvedOrderId, invoice.id, {
 					status: 'paid',
 					preimage,
 				})
@@ -459,54 +493,14 @@ function RouteComponent() {
 			}
 		}
 
-		setInvoices((prev) =>
-			prev.map((invoice) => {
-				if (invoice.id === invoiceId) {
-					return {
-						...invoice,
-						status: 'paid' as const,
-					}
-				}
-				return invoice
-			}),
+		updateInvoiceStatus(
+			invoiceId,
+			{
+				status: 'paid' as const,
+				preimage,
+			},
+			{ skipAutoAdvance },
 		)
-
-		// Auto-advance on successful payment (unless disabled for bulk operations)
-		if (!skipAutoAdvance) {
-			setTimeout(() => {
-				// Use the setter function to get fresh state
-				setInvoices((currentInvoices) => {
-					const allCompleted = currentInvoices.every((inv) => inv.status === 'paid' || inv.status === 'skipped')
-
-					if (allCompleted) {
-						setCurrentStep('complete')
-					} else {
-						// Find the next pending invoice starting from current position
-						setCurrentInvoiceIndex((prevIndex) => {
-							// First, try to find next pending invoice after current position
-							for (let i = prevIndex + 1; i < currentInvoices.length; i++) {
-								if (currentInvoices[i].status === 'pending') {
-									console.log(`📍 Advancing to next pending invoice at index ${i}`)
-									return i
-								}
-							}
-							// If no pending invoice after current, look from the beginning
-							for (let i = 0; i < prevIndex; i++) {
-								if (currentInvoices[i].status === 'pending') {
-									console.log(`📍 Wrapping to pending invoice at index ${i}`)
-									return i
-								}
-							}
-							// Stay at current if no pending found (shouldn't happen if not allCompleted)
-							console.log(`📍 No pending invoice found, staying at index ${prevIndex}`)
-							return prevIndex
-						})
-					}
-
-					return currentInvoices // Return unchanged state
-				})
-			}, 1500)
-		}
 	}
 
 	const handlePaymentFailed = (invoiceId: string, error: string) => {
@@ -534,57 +528,19 @@ function RouteComponent() {
 	const handleSkipPayment = (invoiceId: string) => {
 		console.log(`⏭️ Payment skipped for invoice ${invoiceId}`)
 
+		const invoice = invoices.find((inv) => inv.id === invoiceId)
+		const resolvedOrderId = invoice?.orderId && invoice.orderId !== 'temp-order' ? invoice.orderId : specOrderIds[0] || 'unknown-order'
+
+		if (invoice) {
+			updatePersistedInvoiceLocally(resolvedOrderId, invoice.id, {
+				status: 'skipped',
+			})
+		}
+
 		// Mark invoice as skipped to allow checkout to proceed
-		setInvoices((prev) =>
-			prev.map((invoice) => {
-				if (invoice.id === invoiceId) {
-					const orderId = invoice.orderId !== 'temp-order' ? invoice.orderId : specOrderIds[0] || 'unknown-order'
-					updatePersistedInvoiceLocally(orderId, invoice.id, {
-						status: 'skipped',
-					})
-					return {
-						...invoice,
-						status: 'skipped' as const,
-					}
-				}
-				return invoice
-			}),
-		)
+		updateInvoiceStatus(invoiceId, { status: 'skipped' })
 
 		toast.info('Payment skipped - you can pay this invoice later from your order history')
-
-		// Check if all invoices are now completed (paid or skipped)
-		setTimeout(() => {
-			setInvoices((currentInvoices) => {
-				const allCompleted = currentInvoices.every((inv) => inv.status === 'paid' || inv.status === 'skipped')
-
-				if (allCompleted) {
-					setCurrentStep('complete')
-				} else {
-					// Find the next pending invoice
-					setCurrentInvoiceIndex((prevIndex) => {
-						// First, try to find next pending invoice after current position
-						for (let i = prevIndex + 1; i < currentInvoices.length; i++) {
-							if (currentInvoices[i].status === 'pending') {
-								console.log(`📍 [Skip] Advancing to next pending invoice at index ${i}`)
-								return i
-							}
-						}
-						// If no pending invoice after current, look from the beginning
-						for (let i = 0; i < prevIndex; i++) {
-							if (currentInvoices[i].status === 'pending') {
-								console.log(`📍 [Skip] Wrapping to pending invoice at index ${i}`)
-								return i
-							}
-						}
-						// Stay at current if no pending found
-						return prevIndex
-					})
-				}
-
-				return currentInvoices // Return unchanged state
-			})
-		}, 500)
 	}
 
 	// Simplified pay all function using PaymentContent ref
