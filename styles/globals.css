@@ -277,6 +277,18 @@ button {
 	body {
 		@apply bg-background text-foreground;
 	}
+
+	/* Hide number input spinners across all browsers */
+	input[type='number']::-webkit-outer-spin-button,
+	input[type='number']::-webkit-inner-spin-button {
+		-webkit-appearance: none;
+		margin: 0;
+	}
+
+	input[type='number'] {
+		-moz-appearance: textfield;
+		appearance: textfield;
+	}
 }
 
 /* Custom utility classes */
@@ -313,7 +325,7 @@ button {
 	}
 
 	.hero-container {
-		margin-top: -8.5rem;
+		margin-top: -6.5rem;
 		padding-top: 8rem;
 		min-height: calc(400px + 8rem);
 	}
@@ -323,6 +335,20 @@ button {
 			margin-top: -6rem;
 			padding-top: 6rem;
 			min-height: calc(400px + 6rem);
+		}
+	}
+
+	.hero-container-product {
+		margin-top: -8.5rem;
+		padding-top: 8.5rem;
+		min-height: auto;
+	}
+
+	@media (min-width: 1024px) {
+		.hero-container-product {
+			margin-top: -6rem;
+			padding-top: 6rem;
+			min-height: auto;
 		}
 	}
 
@@ -341,25 +367,17 @@ button {
 	}
 
 	.back-button {
-		position: absolute;
-		left: 0.5rem;
-		top: 1rem;
-		z-index: 50;
-		display: flex;
+		display: inline-flex;
 		align-items: center;
-		gap: 0.5rem;
 		color: white;
-		min-height: 3rem;
-		min-width: 3rem;
-		padding: 0.75rem;
-		margin-bottom: 1rem;
-	}
-
-	@media (min-width: 1024px) {
-		.back-button {
-			top: 0;
-			margin-bottom: 0;
-		}
+		padding: 0.5rem 0;
+		margin: 0;
+		z-index: 50;
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		text-transform: uppercase;
+		font-size: 0.875rem;
 	}
 
 	.hero-overlays {
@@ -374,29 +392,46 @@ button {
 		container-type: inline-size;
 		max-width: 80rem;
 		margin: 0 auto;
-		display: grid;
-		grid-template-columns: 1fr;
-		gap: 4rem;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 2rem;
 		padding: 1rem 1rem 4rem 1rem;
 	}
 
 	@media (min-width: 1024px) {
 		.hero-content {
-			grid-template-columns: 1fr 1fr;
 			padding: 4rem;
 		}
 	}
 
-	.hero-image-container {
-		max-height: 65vh;
-		margin-top: 4rem;
+	/* Product detail specific hero content - stacked layout, two columns at lg */
+	.hero-content-product {
+		position: relative;
+		z-index: 10;
+		container-type: inline-size;
+		max-width: 80rem;
+		margin: 0 auto;
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+		padding: 1rem 1rem 4rem 1rem;
 	}
 
 	@media (min-width: 1024px) {
-		.hero-image-container {
-			height: 45vh;
-			margin-top: 2rem;
+		.hero-content-product {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 1rem;
+			align-items: start;
+			padding: 1rem 1rem 4rem 1rem;
 		}
+	}
+
+	.hero-image-container {
+		max-width: 100%;
+		min-height: 0; /* Fix for Firefox: aspect-ratio in grid requires min-height: 0 */
+		overflow: hidden; /* Required alongside min-height: 0 for aspect-ratio in grid */
 	}
 
 	/* Custom utility classes */

@@ -262,25 +262,25 @@ function RouteComponent() {
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="relative z-10">
-				{!mobileMenuOpen && (
-					<Button variant="ghost" onClick={handleBackClick} className="back-button">
-						<ArrowLeft className="h-8 w-8 lg:h-4 lg:w-4" />
-						<span className="hidden sm:inline">Back to results</span>
-					</Button>
-				)}
-
-				<div className={`relative hero-container ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-black'}`}>
+				<div className={`relative hero-container-product ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-black'}`}>
 					<div className="hero-overlays">
 						<div className="absolute inset-0 bg-radial-overlay" />
 						<div className="absolute inset-0 opacity-30 bg-dots-overlay" />
 					</div>
 
-					<div className="hero-content">
+					<div className="hero-content-product">
+						{!mobileMenuOpen && (
+							<button onClick={handleBackClick} className="back-button col-span-full">
+								<ArrowLeft className="h-4 w-6" />
+								<span>Back to results</span>
+							</button>
+						)}
+
 						<div className="hero-image-container">
 							<ImageCarousel images={formattedImages} title={title} onImageClick={handleImageClick} />
 						</div>
 
-						<div className="flex flex-col gap-8 text-white lg:justify-center">
+						<div className="flex flex-col gap-4 text-white w-full max-w-[600px] mx-auto lg:max-w-none">
 							<div className="flex items-center justify-between">
 								<h1 className="text-3xl font-semibold lg:pl-0">{title}</h1>
 								<div className="flex items-center gap-2">
@@ -663,7 +663,7 @@ function RouteComponent() {
 			{/* More from this seller */}
 			<div className="flex flex-col gap-4 p-4">
 				<h2 className="font-heading text-2xl text-center lg:text-left">More from this seller</h2>
-				<ItemGrid>
+				<ItemGrid className="gap-4 sm:gap-8">
 					{sellerProducts.map((p) => (
 						<ProductCard key={p.id} product={p} />
 					))}

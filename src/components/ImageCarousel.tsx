@@ -57,9 +57,9 @@ export function ImageCarousel({ images, title, className, onImageChange, onImage
 	}
 
 	return (
-		<div className="h-full flex flex-col lg:flex-row gap-4">
+		<div className="h-full flex flex-col gap-4">
 			{/* Main Carousel */}
-			<Carousel setApi={setApi} className="w-full aspect-square lg:order-2">
+			<Carousel setApi={setApi} className="w-full aspect-square">
 				<CarouselContent>
 					{images.map((image, index) => (
 						<CarouselItem key={index} className="flex items-center justify-center relative aspect-square bg-black">
@@ -76,45 +76,18 @@ export function ImageCarousel({ images, title, className, onImageChange, onImage
 				</CarouselContent>
 			</Carousel>
 
-			{/* Preview Images */}
-			<div className="lg:order-1 lg:w-24 lg:flex lg:flex-col">
+			{/* Preview Images - horizontal row below main image */}
+			{images.length > 1 && (
 				<Carousel
 					setApi={setPreviewApiVertical}
 					opts={{
-						align: 'center',
-					}}
-					orientation="vertical"
-					className="hidden lg:block w-full"
-				>
-					<CarouselContent className="-mt-1 max-h-[45vh]">
-						{images.map((image, index) => (
-							<CarouselItem key={index} className="pt-1 basis-1/3 p-2">
-								<button
-									className={cn(
-										'relative w-full p-1 transition-all flex-shrink-0',
-										index === currentIndex ? 'ring-2 ring-secondary' : 'hover:ring-1 hover:ring-primary/50',
-									)}
-									onClick={() => handlePreviewClick(index)}
-								>
-									<div className="aspect-square w-full overflow-hidden relative bg-black border border-gray-800">
-										<img className="h-full w-full object-cover" src={image.url} alt={`${title} thumbnail ${index + 1}`} />
-									</div>
-									{index === currentIndex && <div className="absolute bottom-1 right-1 w-2 h-2 bg-primary rounded-full" />}
-								</button>
-							</CarouselItem>
-						))}
-					</CarouselContent>
-				</Carousel>
-
-				<Carousel
-					opts={{
 						align: 'start',
 					}}
-					className="lg:hidden"
+					className="w-full"
 				>
 					<CarouselContent className="ml-1">
 						{images.map((image, index) => (
-							<CarouselItem key={index} className="basis-1/4 sm:basis-1/5 md:basis-1/6 p-2">
+							<CarouselItem key={index} className="basis-1/4 sm:basis-1/5 md:basis-1/6 lg:basis-1/6 p-2">
 								<button
 									className={cn(
 										'relative w-full p-1 transition-all flex-shrink-0',
@@ -131,7 +104,7 @@ export function ImageCarousel({ images, title, className, onImageChange, onImage
 						))}
 					</CarouselContent>
 				</Carousel>
-			</div>
+			)}
 		</div>
 	)
 }
