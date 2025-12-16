@@ -5,24 +5,36 @@ import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore } from '@/lib/stores/product'
 import { uiActions } from '@/lib/stores/ui'
+import { hasProductFormDraft } from '@/lib/utils/productFormStorage'
 import { useV4VShares } from '@/queries/v4v'
 import { useForm } from '@tanstack/react-form'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { NameTab } from './NameTab'
 import { CategoryTab, DetailTab, ImagesTab, ShippingTab, SpecTab } from './tabs'
 
-export function ProductFormContent({ className = '', showFooter = true }: { className?: string; showFooter?: boolean }) {
+export function ProductFormContent({
+	className = '',
+	showFooter = true,
+	productDTag,
+	productEventId,
+}: {
+	className?: string
+	showFooter?: boolean
+	productDTag?: string | null
+	productEventId?: string | null
+}) {
 	const [isPublishing, setIsPublishing] = useState(false)
+	const [hasDraft, setHasDraft] = useState(false)
 	const navigate = useNavigate()
 	const queryClient = useQueryClient()
 
 	// Get form state from store, including editingProductId
 	const formState = useStore(productFormStore)
-	const { mainTab, productSubTab, editingProductId } = formState
+	const { mainTab, productSubTab, editingProductId, isDirty } = formState
 
 	// Get user pubkey from auth store directly to avoid timing issues
 	const authState = useStore(authStore)
@@ -32,6 +44,84 @@ export function ProductFormContent({ className = '', showFooter = true }: { clas
 	const { data: v4vShares, isLoading: isLoadingV4V } = useV4VShares(userPubkey)
 	const hasV4VSetup = v4vShares && v4vShares.length > 0
 	const needsV4VSetup = !editingProductId && !hasV4VSetup && !isLoadingV4V
+
+	// Check for persisted draft on mount (for drafts from previous sessions)
+	const checkForPersistedDraft = useCallback(async () => {
+		const draftKey = productDTag || editingProductId
+		if (draftKey) {
+			const exists = await hasProductFormDraft(draftKey)
+			if (exists) {
+				setHasDraft(true)
+			}
+		}
+	}, [productDTag, editingProductId])
+
+	// Update hasDraft when isDirty changes (for immediate feedback on current session changes)
+	useEffect(() => {
+		if (editingProductId && isDirty) {
+			setHasDraft(true)
+		}
+	}, [editingProductId, isDirty])
+
+	// Store the discard function in a ref to avoid stale closures in the header action
+	const discardEditsRef = useRef<(() => Promise<void>) | null>(null)
+
+	// Update the ref whenever dependencies change
+	useEffect(() => {
+		discardEditsRef.current = async () => {
+			const draftKey = productDTag || editingProductId
+			if (!draftKey) return
+
+			// Preserve current tab state before reset
+			const currentMainTab = formState.mainTab
+			const currentProductSubTab = formState.productSubTab
+
+			await productFormActions.clearDraftForProduct(draftKey)
+
+			// If we have a productEventId, reload the product from the network using the event ID
+			// Pass the preserved tab state to avoid flicker
+			if (productEventId && productDTag) {
+				productFormActions.setEditingProductId(productDTag)
+				await productFormActions.loadProductForEdit(productEventId, {
+					preserveTabState: { mainTab: currentMainTab, productSubTab: currentProductSubTab },
+				})
+			} else {
+				// No product to reload, just reset but restore tabs
+				productFormActions.reset()
+				productFormActions.setTabState(currentMainTab, currentProductSubTab)
+			}
+
+			setHasDraft(false)
+			uiActions.clearDashboardHeaderAction()
+		}
+	}, [productDTag, editingProductId, productEventId, formState.mainTab, formState.productSubTab])
+
+	// Stable callback that reads from the ref
+	const handleDiscardEdits = useCallback(() => {
+		discardEditsRef.current?.()
+	}, [])
+
+	// Check for persisted draft on mount
+	useEffect(() => {
+		checkForPersistedDraft()
+	}, [checkForPersistedDraft])
+
+	// Update dashboard header action when draft state changes
+	useEffect(() => {
+		if (editingProductId && hasDraft) {
+			uiActions.setDashboardHeaderAction({
+				label: 'Discard Edits',
+				onClick: handleDiscardEdits,
+			})
+		} else {
+			uiActions.clearDashboardHeaderAction()
+		}
+
+		// Clean up on unmount
+		return () => {
+			uiActions.clearDashboardHeaderAction()
+		}
+	}, [editingProductId, hasDraft, handleDiscardEdits])
 
 	const form = useForm({
 		defaultValues: {},
@@ -87,9 +177,9 @@ export function ProductFormContent({ className = '', showFooter = true }: { clas
 				e.stopPropagation()
 				form.handleSubmit()
 			}}
-			className={`flex flex-col h-full overflow-hidden ${className}`}
+			className={`flex flex-col ${className}`}
 		>
-			<div className="flex-1 overflow-y-auto">
+			<div>
 				{/* Main Tabs: Product and Shipping */}
 				<Tabs
 					value={mainTab}
@@ -191,7 +281,7 @@ export function ProductFormContent({ className = '', showFooter = true }: { clas
 			</div>
 
 			{showFooter && (
-				<div className="mt-auto sticky bottom-0 bg-white border-t pt-4 pb-4">
+				<div className="bg-white border-t pt-4 pb-4 mt-4">
 					<div className="flex gap-2 w-full">
 						{(productSubTab !== 'name' || mainTab === 'shipping') && (
 							<Button

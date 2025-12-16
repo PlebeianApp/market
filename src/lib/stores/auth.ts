@@ -8,6 +8,7 @@ export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
 export const NOSTR_LOCAL_SIGNER_KEY = 'nostr_local_signer_key'
 export const NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY = 'nostr_local_encrypted_signer_key'
 export const NOSTR_AUTO_LOGIN = 'nostr_auto_login'
+export const NOSTR_USER_PUBKEY = 'nostr_user_pubkey'
 
 interface AuthState {
 	user: NDKUser | null
@@ -101,9 +102,25 @@ export const authActions = {
 		}
 	},
 
+	getAvailableNostrExtensions: (): string[] => {
+		const extensions: string[] = []
+		if (typeof window !== 'undefined') {
+			if ((window as any).nostr) extensions.push('nostr')
+			if ((window as any).nos2x) extensions.push('nos2x')
+			if ((window as any).alby) extensions.push('alby')
+		}
+		return extensions
+	},
+
 	loginWithExtension: async () => {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
+
+		// Check if extensions are available before attempting login
+		const availableExtensions = authActions.getAvailableNostrExtensions()
+		if (availableExtensions.length === 0) {
+			throw new Error('No Nostr extension detected. Please install a Nostr browser extension (e.g., Alby, nos2x) before logging in.')
+		}
 
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
@@ -112,6 +129,14 @@ export const authActions = {
 			ndkActions.setSigner(signer)
 
 			const user = await signer.user()
+
+			if (!user || !user.pubkey) {
+				throw new Error('Failed to authenticate with Nostr extension. Please make sure your extension is unlocked and try again.')
+			}
+
+			// Store user pubkey and enable auto-login for persistence
+			localStorage.setItem(NOSTR_USER_PUBKEY, user.pubkey)
+			localStorage.setItem(NOSTR_AUTO_LOGIN, 'true')
 
 			authStore.setState((state) => ({
 				...state,

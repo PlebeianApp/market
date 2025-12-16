@@ -8,26 +8,12 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { WalletSelector } from '@/components/checkout/WalletSelector'
 import { ndkStore } from '@/lib/stores/ndk'
+import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import { NDKUser } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
-
-export interface PaymentInvoiceData {
-	id: string
-	orderId: string
-	bolt11?: string | null
-	amount: number
-	description: string
-	recipientName: string
-	status: 'pending' | 'paid' | 'expired' | 'skipped'
-	expiresAt?: number
-	createdAt: number
-	lightningAddress?: string | null
-	recipientPubkey: string
-	type: 'merchant' | 'v4v'
-}
 
 export interface PaymentContentRef {
 	payAllWithNwc: () => Promise<void>
@@ -41,10 +27,17 @@ interface PaymentContentProps {
 	onSkipPayment?: (invoiceId: string) => void
 	showNavigation?: boolean
 	nwcEnabled?: boolean
+	nwcWalletUri?: string | null // NWC wallet URI to pass to payment processor
 	onNavigate?: (index: number) => void
 	availableWalletsBySeller?: Record<string, any[]> // PaymentDetail[]
 	selectedWallets?: Record<string, string>
 	onWalletChange?: (sellerPubkey: string, walletId: string) => void
+	/**
+	 * Mode controls how "skipped" status is treated:
+	 * - 'checkout': skipped invoices show as completed (used during checkout flow)
+	 * - 'order': skipped invoices can be re-attempted (used in order details)
+	 */
+	mode?: 'checkout' | 'order'
 }
 
 export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>(
@@ -57,232 +50,255 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 			onSkipPayment,
 			showNavigation = true,
 			nwcEnabled = true,
+			nwcWalletUri,
 			onNavigate,
 			availableWalletsBySeller = {},
 			selectedWallets = {},
 			onWalletChange,
+			mode = 'checkout',
 		},
 		ref,
 	) => {
-		const [activeIndex, setActiveIndex] = useState(currentIndex)
-		const [invoiceStates, setInvoiceStates] = useState<Record<string, 'pending' | 'paid' | 'failed' | 'skipped'>>({})
 		const ndkState = useStore(ndkStore)
+		const processorRef = useRef<LightningPaymentProcessorRef | null>(null)
+		const bulkQueueRef = useRef<string[]>([])
+		const isBulkPayingRef = useRef(false)
+		const invoicesRef = useRef<PaymentInvoiceData[]>(invoices)
 
-		// Refs to control all payment processors
-		const processorRefs = useRef<Record<string, LightningPaymentProcessorRef | null>>({})
-
-		// Initialize invoice states
-		useEffect(() => {
-			const newStates: Record<string, 'pending' | 'paid' | 'failed'> = {}
-			invoices.forEach((invoice) => {
-				newStates[invoice.id] = invoice.status === 'paid' ? 'paid' : 'pending'
-			})
-			setInvoiceStates(newStates)
-		}, [invoices])
-
-		// Update active index when currentIndex prop changes
-		useEffect(() => {
-			setActiveIndex(currentIndex)
-		}, [currentIndex])
-
-		// Clamp activeIndex whenever invoices length changes
-		useEffect(() => {
-			if (activeIndex >= invoices.length) {
-				setActiveIndex(Math.max(0, invoices.length - 1))
-			}
-		}, [invoices.length, activeIndex])
-
-		const updateInvoiceState = (invoiceId: string, state: 'pending' | 'paid' | 'failed' | 'skipped') => {
-			setInvoiceStates((prev) => ({
-				...prev,
-				[invoiceId]: state,
-			}))
-		}
-
+		// Clamp index to valid range
+		const activeIndex = Math.min(Math.max(0, currentIndex), Math.max(0, invoices.length - 1))
 		const currentInvoice = invoices[activeIndex]
+		const currentInvoiceRef = useRef<PaymentInvoiceData | undefined>(currentInvoice)
 
-		const handleNavigate = (newIndex: number) => {
-			console.log(`🧭 Navigating from payment ${activeIndex + 1} to ${newIndex + 1}`)
-			setActiveIndex(newIndex)
-			onNavigate?.(newIndex)
-		}
+		// Keep refs in sync to avoid stale closures in bulk flow
+		useEffect(() => {
+			invoicesRef.current = invoices
+			currentInvoiceRef.current = currentInvoice
+		}, [invoices, currentInvoice])
 
+		// Count completed invoices from parent state (single source of truth)
+		// In 'order' mode, only 'paid' counts as completed (skipped can be re-attempted)
+		const isCompletedForProgress = (inv: PaymentInvoiceData) => inv.status === 'paid' || inv.status === 'skipped' || inv.status === 'expired'
+
+		const completedCount = useMemo(() => {
+			if (mode === 'order') {
+				return invoices.filter((inv) => inv.status === 'paid').length
+			}
+			return invoices.filter(isCompletedForProgress).length
+		}, [invoices, mode])
+
+		// Build payment data for current invoice only
+		const currentPaymentData = useMemo((): LightningPaymentData | null => {
+			if (!currentInvoice) return null
+
+			// Determine if this is conceptually a zap invoice (for monitoring purposes)
+			const isZapInvoice = currentInvoice.isZap ?? currentInvoice.type === 'v4v'
+			let recipient: NDKUser | undefined
+
+			if (isZapInvoice && ndkState.ndk) {
+				recipient = ndkState.ndk.getUser({ pubkey: currentInvoice.recipientPubkey })
+			}
+
+			// Use existing bolt11 if available
+			const existingBolt11 = currentInvoice.bolt11 || undefined
+
+			return {
+				amount: currentInvoice.amount,
+				description: currentInvoice.description,
+				recipientName: currentInvoice.recipientName,
+				bolt11: existingBolt11,
+				// isZap controls two things:
+				// 1. Whether to generate a new zap invoice (only if no bolt11)
+				// 2. Whether to monitor for zap receipts (always for zap invoices)
+				// We need isZap=true for monitoring even if we have a bolt11
+				isZap: isZapInvoice,
+				recipient: recipient as NDKUser | undefined,
+				orderId: currentInvoice.orderId,
+				invoiceId: currentInvoice.id,
+			} as LightningPaymentData
+		}, [currentInvoice, ndkState.ndk])
+
+		const handleNavigate = useCallback(
+			(newIndex: number) => {
+				const clampedIndex = Math.min(Math.max(0, newIndex), invoices.length - 1)
+				console.log(`🧭 Navigating to payment ${clampedIndex + 1}`)
+				onNavigate?.(clampedIndex)
+			},
+			[invoices.length, onNavigate],
+		)
+
+		const triggerNextBulkPayment = useCallback(async () => {
+			if (!isBulkPayingRef.current) return
+
+			if (!nwcEnabled) {
+				isBulkPayingRef.current = false
+				toast.error('NWC not available for bulk payments')
+				return
+			}
+
+			const invoicesSnapshot = invoicesRef.current
+			const targetId = bulkQueueRef.current[0]
+			const currentSnapshot = currentInvoiceRef.current
+
+			if (!targetId) {
+				isBulkPayingRef.current = false
+				toast.success('All invoices paid')
+				return
+			}
+
+			if (!currentSnapshot || currentSnapshot.id !== targetId) {
+				const targetIndex = invoicesSnapshot.findIndex((inv) => inv.id === targetId)
+				if (targetIndex === -1) {
+					// Invoice disappeared; drop and continue
+					bulkQueueRef.current.shift()
+					triggerNextBulkPayment()
+					return
+				}
+				onNavigate?.(Math.min(Math.max(0, targetIndex), invoicesSnapshot.length - 1))
+				setTimeout(triggerNextBulkPayment, 200)
+				return
+			}
+
+			if (!processorRef.current?.isReady()) {
+				setTimeout(triggerNextBulkPayment, 250)
+				return
+			}
+
+			try {
+				await processorRef.current.triggerNwcPayment()
+			} catch (error) {
+				console.error('NWC payment failed during bulk run:', error)
+				isBulkPayingRef.current = false
+				bulkQueueRef.current = []
+				toast.error('Bulk payment stopped')
+			}
+		}, [nwcEnabled, onNavigate])
+
+		// Use the invoice ID from the result to ensure we're marking the correct invoice
 		const handlePaymentComplete = useCallback(
 			(result: PaymentResult) => {
-				updateInvoiceState(result.paymentHash || currentInvoice.id, 'paid')
-				onPaymentComplete?.(result.paymentHash || currentInvoice.id, result.preimage || '')
+				// Use paymentHash from result (which contains the invoice ID) as primary source
+				const invoiceId = result.paymentHash || currentInvoice?.id
+				if (!invoiceId) {
+					console.error('❌ No invoice ID available for payment complete')
+					return
+				}
+				console.log(`✅ Payment complete for invoice: ${invoiceId}`)
+				onPaymentComplete?.(invoiceId, result.preimage || '')
 
-				// Auto-advance to the next invoice
-				setTimeout(() => {
-					setActiveIndex((prev) => {
-						const next = prev + 1
-						if (next < invoices.length) {
-							onNavigate?.(next)
-							return next
-						}
-						return prev
-					})
-				}, 1500)
+				if (isBulkPayingRef.current) {
+					bulkQueueRef.current = bulkQueueRef.current.filter((id) => id !== invoiceId)
+					setTimeout(triggerNextBulkPayment, 250)
+				}
 			},
-			[currentInvoice, onPaymentComplete, onNavigate, invoices.length],
+			[currentInvoice?.id, onPaymentComplete, triggerNextBulkPayment],
 		)
 
 		const handlePaymentFailed = useCallback(
 			(result: PaymentResult) => {
-				updateInvoiceState(result.paymentHash || currentInvoice.id, 'failed')
-				onPaymentFailed?.(result.paymentHash || currentInvoice.id, result.error || 'Payment failed')
+				const invoiceId = result.paymentHash || currentInvoice?.id
+				if (!invoiceId) {
+					console.error('❌ No invoice ID available for payment failed')
+					return
+				}
+				console.log(`❌ Payment failed for invoice: ${invoiceId}: ${result.error}`)
+				onPaymentFailed?.(invoiceId, result.error || 'Payment failed')
+
+				if (isBulkPayingRef.current) {
+					isBulkPayingRef.current = false
+					bulkQueueRef.current = []
+				}
 			},
-			[currentInvoice, onPaymentFailed],
+			[currentInvoice?.id, onPaymentFailed],
 		)
 
 		const handleSkipPayment = useCallback(() => {
-			const invoiceId = currentInvoice.id
-			console.log(`⏭️ Skipping payment for invoice:`, invoiceId)
+			if (!currentInvoice) {
+				console.error('❌ No current invoice to skip')
+				return
+			}
+			console.log(`⏭️ Skipping payment for invoice: ${currentInvoice.id}`)
+			onSkipPayment?.(currentInvoice.id)
+			if (isBulkPayingRef.current) {
+				bulkQueueRef.current = bulkQueueRef.current.filter((id) => id !== currentInvoice.id)
+				setTimeout(triggerNextBulkPayment, 200)
+			}
+		}, [currentInvoice, onSkipPayment, triggerNextBulkPayment])
 
-			// Mark as skipped
-			updateInvoiceState(invoiceId, 'skipped')
-			onSkipPayment?.(invoiceId)
-
-			// Auto-advance to the next invoice after a short delay
-			setTimeout(() => {
-				setActiveIndex((prev) => {
-					const next = prev + 1
-					if (next < invoices.length) {
-						onNavigate?.(next)
-						return next
-					}
-					// If this was the last invoice, parent component will handle completion
-					return prev
-				})
-			}, 500)
-		}, [currentInvoice, onSkipPayment, onNavigate, invoices.length])
-
-		// Memoize payment data for all invoices
-		const allPaymentData = useMemo(() => {
-			console.log('🔄 Memoizing payment data for', invoices.length, 'invoices')
-			return invoices.map((invoice) => {
-				// V4V payments should always be zaps
-				// Merchant payments use regular bolt11 invoices
-				const isZap = invoice.type === 'v4v'
-
-				let recipient: NDKUser | undefined
-				if (isZap && ndkState.ndk) {
-					recipient = ndkState.ndk.getUser({ pubkey: invoice.recipientPubkey })
-				}
-
-				console.log(`📋 Processing invoice ${invoice.id}:`, {
-					type: invoice.type,
-					isZap,
-					recipientName: invoice.recipientName,
-					amount: invoice.amount,
-					hasRecipient: !!recipient,
-				})
-
-				return {
-					invoiceId: invoice.id,
-					data: {
-						amount: invoice.amount,
-						description: invoice.description,
-						recipientName: invoice.recipientName,
-						// For zaps, let NDKZapper generate the invoice
-						// For merchant payments, use the pre-generated bolt11
-						bolt11: isZap ? undefined : invoice.bolt11 || undefined,
-						isZap,
-						recipient: isZap ? recipient : undefined,
-						orderId: invoice.orderId,
-						invoiceId: invoice.id,
-					} as LightningPaymentData,
-				}
-			})
-		}, [invoices, ndkState.ndk])
-
-		// Use useCallback to prevent setState during render
+		// Pay all with NWC - navigates through pending invoices and processes them sequentially
 		const payAllWithNwc = useCallback(async () => {
-			const pendingInvoices = invoices.filter((inv) => invoiceStates[inv.id] === 'pending')
-			if (pendingInvoices.length === 0) {
+			if (!nwcEnabled) {
+				toast.error('NWC not available for bulk payments')
+				return
+			}
+
+			if (isBulkPayingRef.current) {
+				toast.info('Bulk payment already in progress')
+				return
+			}
+
+			const pendingInvoiceIds = invoices.filter((inv) => inv.status === 'pending').map((inv) => inv.id)
+			if (pendingInvoiceIds.length === 0) {
 				toast.info('No pending invoices to pay')
 				return
 			}
 
-			toast.info(`Starting bulk payment for ${pendingInvoices.length} invoices...`)
+			toast.info(`Starting payment for ${pendingInvoiceIds.length} invoices...`)
+			bulkQueueRef.current = pendingInvoiceIds
+			isBulkPayingRef.current = true
+			triggerNextBulkPayment()
+		}, [invoices, nwcEnabled, triggerNextBulkPayment])
 
-			for (let i = 0; i < pendingInvoices.length; i++) {
-				const invoice = pendingInvoices[i]
-				const processorRef = processorRefs.current[invoice.id]
+		useImperativeHandle(ref, () => ({ payAllWithNwc }), [payAllWithNwc])
 
-				if (!processorRef?.isReady()) {
-					console.warn(`Payment processor not ready for ${invoice.recipientName}`)
-					continue
-				}
-
-				try {
-					await processorRef.triggerNwcPayment()
-					toast.success(`Payment ${i + 1}/${pendingInvoices.length} completed: ${invoice.recipientName}`)
-
-					// Small delay between payments to avoid overwhelming the wallet
-					if (i < pendingInvoices.length - 1) {
-						await new Promise((resolve) => setTimeout(resolve, 1000))
-					}
-				} catch (error) {
-					console.error(`Bulk payment failed for invoice ${invoice.id}:`, error)
-					toast.error(`Payment failed for ${invoice.recipientName}`)
-					break // Stop on first failure
-				}
-			}
-		}, [invoices, invoiceStates])
-
-		// Expose pay all function via ref
-		useImperativeHandle(
-			ref,
-			() => ({
-				payAllWithNwc,
-			}),
-			[payAllWithNwc],
-		)
-
-		// Early return after all hooks are called
-		if (!currentInvoice) {
-			return <div className="text-sm text-muted-foreground">No invoice selected</div>
+		// Early return if no invoice
+		if (!currentInvoice || !currentPaymentData) {
+			return <div className="text-sm text-muted-foreground p-4">No invoice to display</div>
 		}
 
+		// Check if current invoice is already completed
+		// In 'order' mode, only 'paid' is considered completed (skipped can be re-attempted)
+		const isCurrentCompleted =
+			mode === 'order' ? currentInvoice.status === 'paid' : isCompletedForProgress(currentInvoice)
+
+		// Get wallet info for current invoice
+		const sellerPubkey = currentInvoice.recipientPubkey
+		const availableWallets = availableWalletsBySeller[sellerPubkey] || []
+		const selectedWalletId = selectedWallets[sellerPubkey] || null
+		const isMerchantInvoice = currentInvoice.type === 'merchant'
+
 		return (
-			<div className="lg:space-y-6 lg:px-6 lg:pb-6">
-				{/* Invoice Progress - Moved to top */}
+			<div className="space-y-6 lg:px-6 lg:pb-6">
+				{/* Progress bar */}
 				{invoices.length > 1 && (
-					<div className="space-y-2 mb-4">
+					<div className="space-y-2">
 						<div className="flex justify-between text-sm">
 							<span>Payment Progress</span>
 							<span>
-								{Object.values(invoiceStates).filter((state) => state === 'paid' || state === 'skipped').length} of {invoices.length}{' '}
-								completed
+								{completedCount} of {invoices.length} completed
 							</span>
 						</div>
-						<Progress
-							value={
-								(Object.values(invoiceStates).filter((state) => state === 'paid' || state === 'skipped').length / invoices.length) * 100
-							}
-							className="w-full"
-						/>
+						<Progress value={(completedCount / invoices.length) * 100} className="w-full" />
 					</div>
 				)}
 
-				{/* Navigation Header */}
+				{/* Navigation header */}
 				{showNavigation && invoices.length > 1 && (
 					<div className="flex items-center justify-between">
 						<h3 className="text-lg font-semibold">
 							Payment {activeIndex + 1} of {invoices.length}
 						</h3>
-						<div className="flex items-center gap-6">
-							<Button variant="ghost" size="sm" onClick={() => handleNavigate(Math.max(0, activeIndex - 1))} disabled={activeIndex === 0}>
+						<div className="flex items-center gap-2">
+							<Button variant="ghost" size="sm" onClick={() => handleNavigate(activeIndex - 1)} disabled={activeIndex === 0}>
 								<ChevronLeft className="w-4 h-4" />
 							</Button>
 							<span className="text-sm text-gray-500">
-								{activeIndex + 1} of {invoices.length}
+								{activeIndex + 1} / {invoices.length}
 							</span>
 							<Button
 								variant="ghost"
 								size="sm"
-								onClick={() => handleNavigate(Math.min(invoices.length - 1, activeIndex + 1))}
+								onClick={() => handleNavigate(activeIndex + 1)}
 								disabled={activeIndex === invoices.length - 1}
 							>
 								<ChevronRight className="w-4 h-4" />
@@ -291,59 +307,55 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 					</div>
 				)}
 
-				{/* Render ALL Lightning Payment Processors (hidden except for current) */}
-				{allPaymentData.map(({ invoiceId, data }, index) => {
-					const invoice = invoices[index]
-					const sellerPubkey = invoice?.recipientPubkey
-					const availableWallets = sellerPubkey ? availableWalletsBySeller[sellerPubkey] || [] : []
-					const selectedWalletId = sellerPubkey ? selectedWallets[sellerPubkey] : null
-					const isMerchantInvoice = invoice?.type === 'merchant'
-
-					return (
-						<div
-							key={invoiceId}
-							style={{
-								display:
-									index === activeIndex && invoiceStates[invoiceId] !== 'paid' && invoiceStates[invoiceId] !== 'skipped' ? 'block' : 'none',
-							}}
-						>
-							{/* Wallet Selector for merchant invoices with multiple wallets */}
-							{isMerchantInvoice && availableWallets.length > 0 && onWalletChange && (
-								<div className="mb-4">
-									<WalletSelector
-										wallets={availableWallets.map((w) => ({ ...w, displayName: w.paymentDetail }))}
-										selectedWalletId={selectedWalletId}
-										onSelect={(walletId) => {
-											if (sellerPubkey) {
-												onWalletChange(sellerPubkey, walletId)
-											}
-										}}
-										sellerName={invoice?.recipientName}
-									/>
-								</div>
-							)}
-
-							<LightningPaymentProcessor
-								ref={(el) => {
-									processorRefs.current[invoiceId] = el
-								}}
-								data={data}
-								onPaymentComplete={handlePaymentComplete}
-								onPaymentFailed={handlePaymentFailed}
-								onSkipPayment={handleSkipPayment}
-								className="shadow-none border-0"
-								showManualVerification={true}
-								active={index === activeIndex} // Only the current processor is active
-								showNavigation={invoices.length > 1}
-								currentIndex={activeIndex}
-								totalInvoices={invoices.length}
-								onNavigate={handleNavigate}
-								skippable={true}
-							/>
+				{/* Show completed message if current invoice is done */}
+				{isCurrentCompleted ? (
+					<div className="text-center py-8">
+						<div className="text-green-600 font-medium mb-2">
+							{currentInvoice.status === 'paid' ? '✓ Payment Complete' : '⏭️ Payment Skipped'}
 						</div>
-					)
-				})}
+						<p className="text-sm text-gray-600 mb-4">
+							{currentInvoice.recipientName} - {currentInvoice.amount} sats
+						</p>
+						{activeIndex < invoices.length - 1 && (
+							<Button onClick={() => handleNavigate(activeIndex + 1)} variant="outline">
+								Next Payment <ChevronRight className="w-4 h-4 ml-1" />
+							</Button>
+						)}
+					</div>
+				) : (
+					<>
+						{/* Wallet selector for merchant invoices */}
+						{isMerchantInvoice && availableWallets.length > 0 && onWalletChange && (
+							<div className="mb-4">
+								<WalletSelector
+									wallets={availableWallets.map((w) => ({ ...w, displayName: w.paymentDetail }))}
+									selectedWalletId={selectedWalletId}
+									onSelect={(walletId) => onWalletChange(sellerPubkey, walletId)}
+									sellerName={currentInvoice.recipientName}
+								/>
+							</div>
+						)}
+
+						{/* Single payment processor - key forces remount on invoice change */}
+						<LightningPaymentProcessor
+							key={`processor-${currentInvoice.id}-${activeIndex}`}
+							ref={processorRef}
+							data={currentPaymentData}
+							onPaymentComplete={handlePaymentComplete}
+							onPaymentFailed={handlePaymentFailed}
+							onSkipPayment={handleSkipPayment}
+							className="shadow-none border-0"
+							showManualVerification={true}
+							active={true}
+							showNavigation={false}
+							skippable={true}
+							nwcWalletUri={nwcWalletUri}
+						/>
+					</>
+				)}
 			</div>
 		)
 	},
 )
+
+PaymentContent.displayName = 'PaymentContent'

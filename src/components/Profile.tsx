@@ -45,7 +45,6 @@ export function Profile({ compact = false }: ProfileProps) {
 
 				const user = ndk.getUser({ pubkey })
 				const profilePromise = await user.fetchProfile()
-
 				setProfile(profilePromise)
 			} catch (error) {
 				console.error('Error fetching profile:', error)

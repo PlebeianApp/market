@@ -2,6 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { dashboardNavigation } from '@/config/dashboardNavigation'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
+import { useNotificationMonitor } from '@/hooks/useNotificationMonitor'
 import { cn } from '@/lib/utils'
 import { useAmIAdmin } from '@/queries/app-settings'
 import { useConfigQuery } from '@/queries/config'
@@ -11,6 +12,7 @@ import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useStore } from '@tanstack/react-store'
 import { uiStore, uiActions } from '@/lib/stores/ui'
 import { authStore } from '@/lib/stores/auth'
+import { notificationStore, notificationActions } from '@/lib/stores/notifications'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useLocation, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import React, { useState } from 'react'
@@ -105,6 +107,20 @@ function getCurrentEmoji(showSidebar: boolean, currentPath: string): string | nu
 	return null
 }
 
+// Helper to get notification count for a navigation item
+function getNotificationCount(path: string, unseenOrders: number, unseenMessages: number, unseenPurchases: number): number {
+	if (path === '/dashboard/sales/sales') {
+		return unseenOrders
+	}
+	if (path === '/dashboard/sales/messages') {
+		return unseenMessages
+	}
+	if (path === '/dashboard/account/your-purchases') {
+		return unseenPurchases
+	}
+	return 0
+}
+
 // Component to show when user is not authenticated
 function LoginPrompt() {
 	const handleLoginClick = () => {
@@ -131,10 +147,21 @@ function DashboardLayout() {
 	const isMobile = breakpoint === 'sm' || breakpoint === 'md' || breakpoint === 'lg' // Changed: treat anything below xl (1024px) as mobile
 	const [showSidebar, setShowSidebar] = useState(true)
 	const [parent] = useAutoAnimate()
-	const { dashboardTitle } = useStore(uiStore)
+	const { dashboardTitle, dashboardHeaderAction } = useStore(uiStore)
 	const { isAuthenticated } = useStore(authStore)
+	const { unseenOrders, unseenMessages, unseenPurchases, unseenByConversation } = useStore(notificationStore)
 	const isMessageDetailView =
 		location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages'
+
+	// Initialize notification system
+	React.useEffect(() => {
+		if (isAuthenticated) {
+			notificationActions.initialize()
+		}
+	}, [isAuthenticated])
+
+	// Start monitoring for notifications
+	useNotificationMonitor()
 
 	// Admin checking
 	const { data: config } = useConfigQuery()
@@ -286,15 +313,23 @@ function DashboardLayout() {
 										<nav className="space-y-2 p-4 lg:p-0 text-xl lg:text-base">
 											{section.items.map((item) => {
 												const isActive = matchRoute({ to: item.path, fuzzy: true })
+												const notificationCount = getNotificationCount(item.path, unseenOrders, unseenMessages, unseenPurchases)
 												return (
 													<Link
 														key={item.path}
 														to={item.path}
-														className="block p-4 lg:px-6 lg:py-2 transition-colors font-bold border border-black bg-white rounded lg:border-0 lg:bg-transparent lg:rounded-none data-[status=active]:bg-secondary data-[status=active]:text-white data-[status=active]:border-secondary hover:text-pink-500"
+														className="block p-4 lg:px-6 lg:py-2 transition-colors font-bold border border-black bg-white rounded lg:border-0 lg:bg-transparent lg:rounded-none data-[status=active]:bg-secondary data-[status=active]:text-white data-[status=active]:border-secondary hover:text-pink-500 relative"
 														onClick={handleSidebarItemClick}
 														data-status={isActive ? 'active' : 'inactive'}
 													>
-														{item.title}
+														<span className="flex items-center justify-between">
+															<span>{item.title}</span>
+															{notificationCount > 0 && (
+																<span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 text-xs font-bold text-white bg-pink-500 rounded-full ml-2">
+																	{notificationCount > 99 ? '99+' : notificationCount}
+																</span>
+															)}
+														</span>
 													</Link>
 												)
 											})}
@@ -332,6 +367,16 @@ function DashboardLayout() {
 											{dashboardTitle}
 										</h1>
 									)}
+
+									{/* Header action button (e.g., Discard Edits) */}
+									{dashboardHeaderAction && (
+										<button
+											onClick={dashboardHeaderAction.onClick}
+											className="absolute right-4 lg:right-8 top-1/2 -translate-y-1/2 px-3 py-1 text-sm font-medium bg-pink-500 text-white rounded hover:bg-pink-600 transition-colors"
+										>
+											{dashboardHeaderAction.label}
+										</button>
+									)}
 								</div>
 							)}
 
@@ -348,10 +393,12 @@ function DashboardLayout() {
 												location.pathname === '/dashboard/sales/circular-economy' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/products/products' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/products/collections' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/products/migration-tool' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/products/receiving-payments' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/products/shipping-options' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/account/profile' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/account/making-payments' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/account/receiving-payments' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/account/your-purchases' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/account/network' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/app-settings/app-miscelleneous' && 'p-0 lg:p-0',
@@ -369,10 +416,12 @@ function DashboardLayout() {
 												location.pathname !== '/dashboard/sales/circular-economy' &&
 												location.pathname !== '/dashboard/products/products' &&
 												location.pathname !== '/dashboard/products/collections' &&
+												location.pathname !== '/dashboard/products/migration-tool' &&
 												location.pathname !== '/dashboard/products/receiving-payments' &&
 												location.pathname !== '/dashboard/products/shipping-options' &&
 												location.pathname !== '/dashboard/account/profile' &&
 												location.pathname !== '/dashboard/account/making-payments' &&
+												location.pathname !== '/dashboard/account/receiving-payments' &&
 												location.pathname !== '/dashboard/account/your-purchases' &&
 												location.pathname !== '/dashboard/app-settings/app-miscelleneous' &&
 												location.pathname !== '/dashboard/app-settings/team' &&
@@ -397,10 +446,12 @@ function DashboardLayout() {
 														location.pathname !== '/dashboard/sales/circular-economy' &&
 														location.pathname !== '/dashboard/products/products' &&
 														location.pathname !== '/dashboard/products/collections' &&
+														location.pathname !== '/dashboard/products/migration-tool' &&
 														location.pathname !== '/dashboard/products/receiving-payments' &&
 														location.pathname !== '/dashboard/products/shipping-options' &&
 														location.pathname !== '/dashboard/account/profile' &&
 														location.pathname !== '/dashboard/account/making-payments' &&
+														location.pathname !== '/dashboard/account/receiving-payments' &&
 														location.pathname !== '/dashboard/account/your-purchases' &&
 														location.pathname !== '/dashboard/account/network' && (
 															<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>

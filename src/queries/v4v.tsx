@@ -106,8 +106,22 @@ export const fetchV4VShares = async (pubkey: string): Promise<V4VDTO[]> => {
 			}
 
 			// State 3: V4V event with actual shares
+			// First, deduplicate by pubkey (keep the first occurrence)
+			const seenPubkeys = new Set<string>()
+			const dedupedContent = content.filter((zapTag) => {
+				if (zapTag[0] === 'zap' && zapTag[1]) {
+					const normalized = normalizeAndEncodePubkey(zapTag[1])
+					if (normalized && !seenPubkeys.has(normalized.pubkey)) {
+						seenPubkeys.add(normalized.pubkey)
+						return true
+					}
+					return false
+				}
+				return false
+			})
+
 			const shares = await Promise.all(
-				content
+				dedupedContent
 					.map(async (zapTag, index) => {
 						if (zapTag[0] === 'zap' && zapTag[1] && zapTag[2]) {
 							const pubkeyValue = zapTag[1]
@@ -118,7 +132,7 @@ export const fetchV4VShares = async (pubkey: string): Promise<V4VDTO[]> => {
 								return null
 							}
 
-							let name = 'Community Member'
+							let name = ''
 							try {
 								if (ndk) {
 									const user = ndk.getUser({
@@ -129,8 +143,6 @@ export const fetchV4VShares = async (pubkey: string): Promise<V4VDTO[]> => {
 										name = user.profile.name
 									} else if (user.profile?.displayName) {
 										name = user.profile.displayName
-									} else {
-										console.log('No profile name or displayName found, using default')
 									}
 								}
 							} catch (error) {

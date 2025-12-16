@@ -1,4 +1,5 @@
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
+import { ProfileWalletCheck } from '@/components/ProfileWalletCheck'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -6,17 +7,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
+import { WalletSetupGuide } from '@/components/WalletSetupGuide'
 import { PAYMENT_DETAILS_METHOD, type PaymentDetailsMethod } from '@/lib/constants'
 import { useNDK } from '@/lib/stores/ndk'
 import { isValidNip05 } from '@/lib/utils'
-import {
-	checkAddress,
-	deriveAddresses,
-	isExtendedPublicKey,
-	parsePaymentDetailsFromClipboard,
-	paymentMethodLabels,
-	validateExtendedPublicKey,
-} from '@/lib/utils/paymentDetails'
+import { deriveAddresses, isExtendedPublicKey, parsePaymentDetailsFromClipboard, paymentMethodLabels } from '@/lib/utils/paymentDetails'
 import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
 import {
 	useDeletePaymentDetail,
@@ -31,7 +26,7 @@ import { getProductId, getProductTitle, useProductsByPubkey } from '@/queries/pr
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
 import { format } from 'date-fns'
-import { AnchorIcon, ClipboardIcon, GlobeIcon, PackageIcon, PlusIcon, StarIcon, StoreIcon, TrashIcon, ZapIcon } from 'lucide-react'
+import { ClipboardIcon, GlobeIcon, PackageIcon, PlusIcon, StarIcon, StoreIcon, TrashIcon, ZapIcon } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -185,7 +180,7 @@ function ScopeSelector({ value, scopeId, scopeIds, userPubkey, onChange }: Scope
 	)
 }
 
-export const Route = createFileRoute('/_dashboard-layout/dashboard/products/receiving-payments')({
+export const Route = createFileRoute('/_dashboard-layout/dashboard/account/receiving-payments')({
 	component: ReceivingPaymentsComponent,
 })
 
@@ -357,22 +352,22 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 				}
 				return false
 			}
-			case PAYMENT_DETAILS_METHOD.ON_CHAIN: {
-				if (isExtendedPublicKey(value)) {
-					setConfirmationType('extended_public_key')
-					const validation = validateExtendedPublicKey(value)
-					if (!validation.isValid) {
-						setValidationMessage(validation.error || 'Invalid extended public key')
-						return false
-					}
-					return 'needsConfirmation'
-				}
-				if (value.startsWith('bc1')) {
-					setConfirmationType('single_address')
-					return checkAddress(value) ? 'needsConfirmation' : false
-				}
-				return false
-			}
+			// case PAYMENT_DETAILS_METHOD.ON_CHAIN: {
+			// 	if (isExtendedPublicKey(value)) {
+			// 		setConfirmationType('extended_public_key')
+			// 		const validation = validateExtendedPublicKey(value)
+			// 		if (!validation.isValid) {
+			// 			setValidationMessage(validation.error || 'Invalid extended public key')
+			// 			return false
+			// 		}
+			// 		return 'needsConfirmation'
+			// 	}
+			// 	if (value.startsWith('bc1')) {
+			// 		setConfirmationType('single_address')
+			// 		return checkAddress(value) ? 'needsConfirmation' : false
+			// 	}
+			// 	return false
+			// }
 			default:
 				return false
 		}
@@ -508,8 +503,8 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 		switch (method) {
 			case PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK:
 				return <ZapIcon className="w-5 h-5" />
-			case PAYMENT_DETAILS_METHOD.ON_CHAIN:
-				return <AnchorIcon className="w-5 h-5" />
+			// case PAYMENT_DETAILS_METHOD.ON_CHAIN:
+			// 	return <AnchorIcon className="w-5 h-5" />
 			default:
 				return null
 		}
@@ -761,8 +756,8 @@ function PaymentDetailListItem({ paymentDetail, isOpen, onOpenChange, isDeleting
 
 	const PaymentMethodIcon = ({ method }: { method: PaymentDetailsMethod }) => {
 		switch (method) {
-			case PAYMENT_DETAILS_METHOD.ON_CHAIN:
-				return <AnchorIcon className="w-5 h-5 text-muted-foreground" />
+			// case PAYMENT_DETAILS_METHOD.ON_CHAIN:
+			// 	return <AnchorIcon className="w-5 h-5 text-muted-foreground" />
 			case PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK:
 				return <ZapIcon className="w-5 h-5 text-muted-foreground" />
 			default:
@@ -842,58 +837,82 @@ function ReceivingPaymentsComponent() {
 		return <div>Error loading payment details: {error.message}</div>
 	}
 
+	const hasPaymentDetails = paymentDetails && paymentDetails.length > 0
+
 	return (
 		<div>
 			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
 				<h1 className="text-2xl font-bold">Receiving Payments</h1>
-				<Button
-					onClick={() => handleOpenChange('new', true)}
-					className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
-				>
-					<PlusIcon className="w-5 h-5" />
-					Add Payment Method
-				</Button>
-			</div>
-			<div className="space-y-4 p-4 lg:p-6">
-				<div className="lg:hidden">
+				{hasPaymentDetails && (
 					<Button
 						onClick={() => handleOpenChange('new', true)}
-						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+						className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
 					>
 						<PlusIcon className="w-5 h-5" />
 						Add Payment Method
 					</Button>
-				</div>
-
-				{/* Payment form - shows at top when opened */}
-				{openPaymentDetailId === 'new' && (
-					<Card className="mt-4">
-						<CardHeader>
-							<CardTitle>Add New Payment Detail</CardTitle>
-							<CardDescription>Configure a new way to receive payments</CardDescription>
-						</CardHeader>
-						<CardContent>
-							<PaymentDetailForm
-								paymentDetail={null}
-								isOpen={openPaymentDetailId === 'new'}
-								onOpenChange={(open) => handleOpenChange('new', open)}
-								onSuccess={handleSuccess}
-							/>
-						</CardContent>
-					</Card>
 				)}
+			</div>
+			<div className="space-y-4 p-4 lg:p-6">
+				{!hasPaymentDetails && openPaymentDetailId !== 'new' ? (
+					<>
+						<ProfileWalletCheck />
+						<WalletSetupGuide />
+						<div className="flex justify-center pt-4">
+							<Button
+								onClick={() => handleOpenChange('new', true)}
+								size="lg"
+								className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-6 py-3"
+							>
+								<PlusIcon className="w-5 h-5" />I Already Have a Wallet - Add Payment Method
+							</Button>
+						</div>
+					</>
+				) : (
+					<>
+						<ProfileWalletCheck />
 
-				<div className="space-y-4">
-					{paymentDetails?.map((pd) => (
-						<PaymentDetailListItem
-							key={pd.id}
-							paymentDetail={pd}
-							isOpen={openPaymentDetailId === pd.id}
-							onOpenChange={(open) => handleOpenChange(pd.id, open)}
-							onSuccess={handleSuccess}
-						/>
-					))}
-				</div>
+						<div className="lg:hidden">
+							<Button
+								onClick={() => handleOpenChange('new', true)}
+								className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+							>
+								<PlusIcon className="w-5 h-5" />
+								Add Payment Method
+							</Button>
+						</div>
+
+						{/* Payment form - shows at top when opened */}
+						{openPaymentDetailId === 'new' && (
+							<Card className="mt-4">
+								<CardHeader>
+									<CardTitle>Add New Payment Detail</CardTitle>
+									<CardDescription>Configure a new way to receive payments</CardDescription>
+								</CardHeader>
+								<CardContent>
+									<PaymentDetailForm
+										paymentDetail={null}
+										isOpen={openPaymentDetailId === 'new'}
+										onOpenChange={(open) => handleOpenChange('new', open)}
+										onSuccess={handleSuccess}
+									/>
+								</CardContent>
+							</Card>
+						)}
+
+						<div className="space-y-4">
+							{paymentDetails?.map((pd) => (
+								<PaymentDetailListItem
+									key={pd.id}
+									paymentDetail={pd}
+									isOpen={openPaymentDetailId === pd.id}
+									onOpenChange={(open) => handleOpenChange(pd.id, open)}
+									onSuccess={handleSuccess}
+								/>
+							))}
+						</div>
+					</>
+				)}
 			</div>
 		</div>
 	)

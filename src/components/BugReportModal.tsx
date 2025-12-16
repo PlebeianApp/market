@@ -1,4 +1,5 @@
 import { BugReportItem } from '@/components/BugReportItem'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { useBugReportsInfiniteScroll } from '@/hooks/useBugReportsInfiniteScroll'
 import { BLOSSOM_SERVERS, uploadFileToBlossom } from '@/lib/blossom'
@@ -90,13 +91,12 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 
 			// Use the merged blossom upload function
 			const result = await uploadFileToBlossom(file, {
-				serverUrl: BLOSSOM_SERVERS[0].url, // Use first available server
-				onProgress: (loaded, total) => {
-					const pct = Math.round((loaded / total) * 100)
+				preferredServer: BLOSSOM_SERVERS[0].url, // Use first available server
+				onProgress: (progress: { loaded: number; total: number }) => {
+					const pct = Math.round((progress.loaded / progress.total) * 100)
 					console.log(`Upload progress: ${pct}%`)
 				},
 				maxRetries: 3,
-				retryDelay: 2000,
 			})
 
 			console.log('Blossom upload successful:', result)
@@ -352,13 +352,13 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 		>
 			<div className="bg-white rounded-lg shadow-xl w-[40em] h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
 				{/* Header */}
-				<div className="flex items-center justify-between p-6 border-b border-gray-200">
+				<div className="flex items-center justify-between border-b border-gray-200 p-6">
 					<div className="flex items-center gap-2">
 						<Button
 							variant={activeTab === 'report' ? 'primary' : 'outline'}
 							size="sm"
 							onClick={() => setActiveTab('report')}
-							className="flex items-center gap-2"
+							className={cn('flex items-center gap-2', activeTab !== 'report' && 'text-gray-700 border-gray-300')}
 						>
 							<span className="i-warning w-4 h-4" />
 							Bug Report
@@ -367,7 +367,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 							variant={activeTab === 'viewer' ? 'primary' : 'outline'}
 							size="sm"
 							onClick={() => setActiveTab('viewer')}
-							className="flex items-center gap-2"
+							className={cn('flex items-center gap-2', activeTab !== 'viewer' && 'text-gray-700 border-gray-300')}
 						>
 							<span className="i-search w-4 h-4" />
 							Report Viewer
@@ -385,13 +385,16 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 				</div>
 
 				{/* Content */}
-				<div className="flex-1 flex flex-col p-6">
+				<div className="flex-1 flex flex-col px-6 pt-0 pb-6 min-h-0">
 					{activeTab === 'report' ? (
 						<>
-							<p className="text-gray-600 mb-6">Report a bug you have found</p>
-							<p className="text-gray-600 mb-6">Use the drag and drop or paste to add images of the problem.</p>
-							<p className="text-gray-600 mb-6">The details of your system configuration have been automatically added.</p>
-							<div className="flex-1 flex flex-col">
+							<Alert className="bg-blue-100 text-blue-800 border-blue-200 mb-4">
+								<AlertDescription>
+									Report a bug you have found. Use the drag and drop or paste to add images of the problem. The details of your system
+									configuration have been automatically added.
+								</AlertDescription>
+							</Alert>
+							<div className="flex-1 flex flex-col min-h-0">
 								<textarea
 									ref={textareaRef}
 									value={bugReport}
@@ -402,7 +405,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 									onDrop={handleDrop}
 									placeholder="Describe the bug you encountered..."
 									className={cn(
-										'flex-1 w-full p-4 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent',
+										'flex-1 w-full p-4 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent text-gray-900 placeholder:text-gray-400',
 										isDragOver && 'border-secondary bg-secondary/5',
 										isUploading && 'opacity-50',
 									)}
@@ -423,8 +426,10 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 						</>
 					) : (
 						<>
-							<p className="text-gray-600 mb-6">View bug reports from the community</p>
-							<div className="flex-1 overflow-y-auto">
+							<Alert className="bg-blue-100 text-blue-800 border-blue-200 mb-4">
+								<AlertDescription>View bug reports from the community</AlertDescription>
+							</Alert>
+							<div className="flex-1 overflow-y-auto min-h-0">
 								{isLoadingReports && reports.length === 0 ? (
 									<div className="flex flex-col items-center justify-center py-12">
 										<Loader2 className="w-8 h-8 animate-spin mb-4" />

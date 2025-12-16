@@ -2,7 +2,7 @@
 import { CartSummary } from '@/components/CartSummary'
 import { CheckoutProgress } from '@/components/checkout/CheckoutProgress'
 import { OrderFinalizeComponent } from '@/components/checkout/OrderFinalizeComponent'
-import { PaymentContent, type PaymentContentRef, type PaymentInvoiceData } from '@/components/checkout/PaymentContent'
+import { PaymentContent, type PaymentContentRef } from '@/components/checkout/PaymentContent'
 import { PaymentSummary } from '@/components/checkout/PaymentSummary'
 import { ShippingAddressForm, type CheckoutFormData } from '@/components/checkout/ShippingAddressForm'
 import { WalletSelector, type WalletOption } from '@/components/checkout/WalletSelector'
@@ -13,9 +13,11 @@ import { authStore } from '@/lib/stores/auth'
 import { cartActions, cartStore } from '@/lib/stores/cart'
 import { ndkStore } from '@/lib/stores/ndk'
 import { parseNwcUri, useWallets } from '@/lib/stores/wallet'
+import { persistInvoicesLocally, updatePersistedInvoiceLocally } from '@/lib/utils/invoiceStorage'
 import type { OrderInvoiceSet } from '@/lib/utils/orderUtils'
 import { publishOrderWithDependencies } from '@/publish/orders'
 import { publishPaymentReceipt } from '@/publish/payment'
+import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import { useGenerateInvoiceMutation, useAvailablePaymentOptions, type PaymentDetail } from '@/queries/payment'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useForm } from '@tanstack/react-form'
@@ -115,6 +117,18 @@ function RouteComponent() {
 
 		return hasValidWallets
 	}, [walletsInitialized, wallets])
+
+	// Get the first valid NWC wallet URI to pass to payment processors
+	const nwcWalletUri = useMemo(() => {
+		if (!walletsInitialized) return null
+		const validWallet = wallets.find((wallet) => {
+			if (!wallet.nwcUri) return false
+			const parsed = parseNwcUri(wallet.nwcUri)
+			return parsed !== null && parsed.pubkey && parsed.relay && parsed.secret
+		})
+		return validWallet?.nwcUri || null
+	}, [walletsInitialized, wallets])
+
 	const [orderInvoiceSets, setOrderInvoiceSets] = useState<Record<string, OrderInvoiceSet>>({})
 	const [specOrderIds, setSpecOrderIds] = useState<string[]>([])
 	// Use auto-animate with error handling to prevent DOM manipulation errors
@@ -152,10 +166,25 @@ function RouteComponent() {
 		return total
 	}, [sellers, v4vShares])
 
+	// Keep the progress bar stable even while invoices are being generated
+	const invoiceStepCount = useMemo(() => {
+		return invoices.length > 0 ? invoices.length : totalInvoicesNeeded
+	}, [invoices.length, totalInvoicesNeeded])
+
 	const totalSteps = useMemo(() => {
-		// shipping + summary + (actual invoices) + complete
-		return 2 + invoices.length + 1
-	}, [invoices.length])
+		// shipping + summary + (actual/expected invoices) + complete
+		return 2 + invoiceStepCount + 1
+	}, [invoiceStepCount])
+
+	const isInvoiceCompleteForFlow = (invoice: PaymentInvoiceData) => {
+		return invoice.status === 'paid' || invoice.status === 'skipped' || invoice.status === 'expired'
+	}
+
+	// Ensure currentInvoiceIndex stays within bounds
+	const safeInvoiceIndex = useMemo(() => {
+		if (invoices.length === 0) return 0
+		return Math.min(currentInvoiceIndex, invoices.length - 1)
+	}, [currentInvoiceIndex, invoices.length])
 
 	const currentStepNumber = useMemo(() => {
 		switch (currentStep) {
@@ -164,13 +193,15 @@ function RouteComponent() {
 			case 'summary':
 				return 2
 			case 'payment':
-				return 3 + currentInvoiceIndex
+				// When invoices are still generating, stay on the first payment step
+				const paymentPosition = invoices.length > 0 ? safeInvoiceIndex : 0
+				return 3 + paymentPosition
 			case 'complete':
 				return totalSteps
 			default:
 				return 1
 		}
-	}, [currentStep, currentInvoiceIndex, totalSteps])
+	}, [currentStep, invoices.length, safeInvoiceIndex, totalSteps])
 
 	const progress = useMemo(() => {
 		return ((currentStepNumber - 1) / (totalSteps - 1)) * 100
@@ -183,18 +214,21 @@ function RouteComponent() {
 			case 'summary':
 				return 'Review your order'
 			case 'payment':
-				const currentInvoice = invoices[currentInvoiceIndex]
+				if (invoices.length === 0) {
+					return 'Generating payment invoices...'
+				}
+				const currentInvoice = invoices[safeInvoiceIndex]
 				if (currentInvoice) {
 					const invoiceTypeLabel = currentInvoice.type === 'v4v' ? 'V4V Payment' : 'Payment'
-					return `${invoiceTypeLabel} ${currentInvoiceIndex + 1} of ${invoices.length}: ${currentInvoice.recipientName}`
+					return `${invoiceTypeLabel} ${safeInvoiceIndex + 1} of ${invoices.length}: ${currentInvoice.recipientName}`
 				}
-				return `Processing Lightning payments (${currentInvoiceIndex + 1} of ${invoices.length})`
+				return `Processing Lightning payments (${safeInvoiceIndex + 1} of ${invoices.length})`
 			case 'complete':
 				return 'Order complete'
 			default:
 				return 'Checkout'
 		}
-	}, [currentStep, currentInvoiceIndex, invoices])
+	}, [currentStep, safeInvoiceIndex, invoices])
 
 	// Fetch available payment options when entering payment step (before invoice generation)
 	useEffect(() => {
@@ -230,12 +264,19 @@ function RouteComponent() {
 
 	// Generate Lightning invoices when moving to payment step
 	useEffect(() => {
+		const hasAllOrderIds = specOrderIds.length >= sellers.length && sellers.length > 0
 		if (currentStep === 'payment' && invoices.length === 0 && sellers.length > 0 && !isGeneratingInvoices) {
+			if (!hasAllOrderIds) {
+				console.warn('Waiting for order IDs before generating invoices...')
+				return
+			}
+
 			const generateInvoices = async () => {
 				const newInvoices: PaymentInvoiceData[] = []
 				let invoiceIndex = 0
 
 				try {
+					let sellerPosition = 0
 					for (const sellerPubkey of sellers) {
 						const sellerProducts = productsBySeller[sellerPubkey] || []
 						const data = sellerData[sellerPubkey]
@@ -267,10 +308,12 @@ function RouteComponent() {
 							selectedPaymentDetailId: selectedWalletId,
 						})
 
+						const sellerOrderId = specOrderIds[sellerPosition] || specOrderIds[0] || 'temp-order'
+
 						// Convert to PaymentInvoiceData format
 						const paymentInvoice: PaymentInvoiceData = {
 							id: sellerInvoice.id,
-							orderId: specOrderIds.length > 0 ? specOrderIds[0] : 'temp-order',
+							orderId: sellerOrderId,
 							recipientPubkey: sellerInvoice.sellerPubkey,
 							recipientName: sellerInvoice.sellerName,
 							amount: sellerInvoice.amount,
@@ -281,6 +324,7 @@ function RouteComponent() {
 							status: sellerInvoice.status === 'failed' ? 'expired' : (sellerInvoice.status as 'pending' | 'paid' | 'expired'),
 							type: 'merchant',
 							createdAt: Date.now(),
+							isZap: sellerInvoice.isZap,
 						}
 						newInvoices.push(paymentInvoice)
 
@@ -322,7 +366,7 @@ function RouteComponent() {
 									// Convert to PaymentInvoiceData format
 									const v4vPaymentInvoice: PaymentInvoiceData = {
 										id: recipientInvoice.id,
-										orderId: specOrderIds.length > 0 ? specOrderIds[0] : 'temp-order',
+										orderId: sellerOrderId,
 										recipientPubkey: recipient.pubkey,
 										recipientName: recipient.name,
 										amount: recipientAmount,
@@ -333,6 +377,7 @@ function RouteComponent() {
 										status: recipientInvoice.status === 'failed' ? 'expired' : (recipientInvoice.status as 'pending' | 'paid' | 'expired'),
 										type: 'v4v',
 										createdAt: Date.now(),
+										isZap: recipientInvoice.isZap ?? true,
 									}
 									newInvoices.push(v4vPaymentInvoice)
 									console.log(`✅ Successfully generated V4V invoice for ${recipient.name}`)
@@ -344,10 +389,12 @@ function RouteComponent() {
 								console.log(`⚠️ Skipping V4V recipient ${recipient.name} due to zero percentage`)
 							}
 						}
+						sellerPosition += 1
 					}
 
 					console.log(`Generated ${newInvoices.length} invoices`)
 					setInvoices(newInvoices)
+					persistInvoicesLocally(newInvoices)
 				} catch (error) {
 					console.error('Failed to generate invoices:', error)
 					// Fallback to empty invoices - the user can retry
@@ -378,37 +425,71 @@ function RouteComponent() {
 		},
 	})
 
-	const handlePayInvoice = async (invoiceId: string) => {
-		// Mock Lightning payment processing
-		setInvoices((prev) => prev.map((invoice) => (invoice.id === invoiceId ? { ...invoice, status: 'processing' } : invoice)))
-
-		// Simulate Lightning payment verification delay
-		setTimeout(() => {
-			setInvoices((prev) => prev.map((invoice) => (invoice.id === invoiceId ? { ...invoice, status: 'paid' } : invoice)))
-
-			// Move to next invoice or complete
-			if (currentInvoiceIndex < invoices.length - 1) {
-				setCurrentInvoiceIndex((prev) => prev + 1)
-			} else {
-				setCurrentStep('complete')
+	const findNextPendingInvoiceIndex = (list: PaymentInvoiceData[], fromIndex: number) => {
+		for (let i = fromIndex + 1; i < list.length; i++) {
+			if (list[i].status === 'pending') {
+				return i
 			}
-		}, 3000) // Slightly longer delay to simulate Lightning verification
+		}
+
+		for (let i = 0; i <= fromIndex; i++) {
+			if (list[i].status === 'pending') {
+				return i
+			}
+		}
+
+		return -1
+	}
+
+	const updateInvoiceStatus = (invoiceId: string, changes: Partial<PaymentInvoiceData>, options?: { skipAutoAdvance?: boolean }) => {
+		let nextPendingIndex: number | null = null
+		let allCompleted = false
+
+		setInvoices((prevInvoices) => {
+			const updated = prevInvoices.map((invoice) => (invoice.id === invoiceId ? { ...invoice, ...changes } : invoice))
+
+			allCompleted = updated.length > 0 && updated.every(isInvoiceCompleteForFlow)
+
+			if (!options?.skipAutoAdvance && !allCompleted) {
+				const currentIndex = updated.findIndex((inv) => inv.id === invoiceId)
+				nextPendingIndex = findNextPendingInvoiceIndex(updated, currentIndex === -1 ? safeInvoiceIndex : currentIndex)
+			}
+
+			return updated
+		})
+
+		if (allCompleted) {
+			setCurrentStep('complete')
+		} else if (!options?.skipAutoAdvance && nextPendingIndex !== null && nextPendingIndex !== -1) {
+			// Small delay keeps UI transitions smooth
+			setTimeout(() => setCurrentInvoiceIndex(nextPendingIndex!), 200)
+		}
 	}
 
 	const handlePaymentComplete = async (invoiceId: string, preimage: string, skipAutoAdvance = false) => {
-		console.log(`Payment completed for invoice ${invoiceId} with preimage: ${preimage.substring(0, 16)}...`)
+		console.log(`🎯 handlePaymentComplete called:`, {
+			invoiceId,
+			preimagePreview: preimage.substring(0, 16) + '...',
+			currentInvoiceIndex: safeInvoiceIndex,
+			totalInvoices: invoices.length,
+			invoiceStatuses: invoices.map((inv, i) => `${i}: ${inv.id.substring(0, 8)}... = ${inv.status}`),
+		})
 
 		// Find the invoice to get bolt11 for receipt creation
 		const invoice = invoices.find((inv) => inv.id === invoiceId)
+		const resolvedOrderId = invoice?.orderId && invoice.orderId !== 'temp-order' ? invoice.orderId : specOrderIds[0] || 'unknown-order'
 
 		// Create payment receipt
 		if (invoice) {
 			try {
-				const orderId = invoice.orderId !== 'temp-order' ? invoice.orderId : specOrderIds[0] || 'unknown-order'
 				await publishPaymentReceipt({
-					invoice: { ...invoice, orderId },
+					invoice: { ...invoice, orderId: resolvedOrderId },
 					preimage,
 					bolt11: invoice.bolt11 || '',
+				})
+				updatePersistedInvoiceLocally(resolvedOrderId, invoice.id, {
+					status: 'paid',
+					preimage,
 				})
 			} catch (error) {
 				console.error('Failed to publish payment receipt:', error)
@@ -416,38 +497,14 @@ function RouteComponent() {
 			}
 		}
 
-		setInvoices((prev) =>
-			prev.map((invoice) => {
-				if (invoice.id === invoiceId) {
-					return {
-						...invoice,
-						status: 'paid' as const,
-					}
-				}
-				return invoice
-			}),
+		updateInvoiceStatus(
+			invoiceId,
+			{
+				status: 'paid' as const,
+				preimage,
+			},
+			{ skipAutoAdvance },
 		)
-
-		// Auto-advance on successful payment (unless disabled for bulk operations)
-		if (!skipAutoAdvance) {
-			setTimeout(() => {
-				// Use the setter function to get fresh state
-				setInvoices((currentInvoices) => {
-					const allCompleted = currentInvoices.every((inv) => inv.status === 'paid' || inv.status === 'skipped')
-
-					if (allCompleted) {
-						setCurrentStep('complete')
-					} else if (currentInvoiceIndex < currentInvoices.length - 1) {
-						setCurrentInvoiceIndex((prev) => prev + 1)
-					} else {
-						// If we're at the last invoice but not all are completed, stay here
-						// This can happen with failed payments
-					}
-
-					return currentInvoices // Return unchanged state
-				})
-			}, 1500)
-		}
 	}
 
 	const handlePaymentFailed = (invoiceId: string, error: string) => {
@@ -456,6 +513,10 @@ function RouteComponent() {
 		setInvoices((prev) =>
 			prev.map((invoice) => {
 				if (invoice.id === invoiceId) {
+					const orderId = invoice.orderId !== 'temp-order' ? invoice.orderId : specOrderIds[0] || 'unknown-order'
+					updatePersistedInvoiceLocally(orderId, invoice.id, {
+						status: 'expired',
+					})
 					return {
 						...invoice,
 						status: 'expired' as const,
@@ -471,36 +532,30 @@ function RouteComponent() {
 	const handleSkipPayment = (invoiceId: string) => {
 		console.log(`⏭️ Payment skipped for invoice ${invoiceId}`)
 
+		const invoice = invoices.find((inv) => inv.id === invoiceId)
+		const resolvedOrderId = invoice?.orderId && invoice.orderId !== 'temp-order' ? invoice.orderId : specOrderIds[0] || 'unknown-order'
+
+		if (invoice) {
+			updatePersistedInvoiceLocally(resolvedOrderId, invoice.id, {
+				status: 'skipped',
+			})
+		}
+
 		// Mark invoice as skipped to allow checkout to proceed
-		setInvoices((prev) =>
-			prev.map((invoice) => {
-				if (invoice.id === invoiceId) {
-					return {
-						...invoice,
-						status: 'skipped' as const,
-					}
-				}
-				return invoice
-			}),
-		)
+		updateInvoiceStatus(invoiceId, { status: 'skipped' })
 
 		toast.info('Payment skipped - you can pay this invoice later from your order history')
-
-		// Check if all invoices are now completed (paid or skipped)
-		setTimeout(() => {
-			setInvoices((currentInvoices) => {
-				const allCompleted = currentInvoices.every((inv) => inv.status === 'paid' || inv.status === 'skipped')
-
-				if (allCompleted) {
-					setCurrentStep('complete')
-				} else if (currentInvoiceIndex < currentInvoices.length - 1) {
-					setCurrentInvoiceIndex((prev) => prev + 1)
-				}
-
-				return currentInvoices // Return unchanged state
-			})
-		}, 500)
 	}
+
+	// Safety net: if all invoices are done, move to completion even if a handler was missed
+	useEffect(() => {
+		if (currentStep === 'payment' && invoices.length > 0) {
+			const allCompleted = invoices.every(isInvoiceCompleteForFlow)
+			if (allCompleted) {
+				setCurrentStep('complete')
+			}
+		}
+	}, [currentStep, invoices])
 
 	// Simplified pay all function using PaymentContent ref
 	const handlePayAllInvoices = async () => {
@@ -574,8 +629,18 @@ function RouteComponent() {
 					lightningAddress: newInvoiceData.lightningAddress,
 					expiresAt: newInvoiceData.expiresAt,
 					status: newInvoiceData.status === 'failed' ? 'expired' : (newInvoiceData.status as 'pending' | 'paid' | 'expired'),
+					isZap: newInvoiceData.isZap ?? oldInvoice.isZap,
 				}
 				return updated
+			})
+
+			const resolvedOrderId = oldInvoice.orderId !== 'temp-order' ? oldInvoice.orderId : specOrderIds[0] || 'unknown-order'
+			updatePersistedInvoiceLocally(resolvedOrderId, oldInvoice.id, {
+				bolt11: newInvoiceData.bolt11 || undefined,
+				lightningAddress: newInvoiceData.lightningAddress || undefined,
+				expiresAt: newInvoiceData.expiresAt,
+				isZap: newInvoiceData.isZap ?? oldInvoice.isZap,
+				status: newInvoiceData.status === 'failed' ? 'expired' : (newInvoiceData.status as 'pending' | 'paid' | 'expired'),
 			})
 
 			console.log(`✅ Invoice regenerated successfully`)
@@ -625,9 +690,6 @@ function RouteComponent() {
 	}
 
 	const handleContinueToPayment = async () => {
-		// Move directly to payment step
-		setCurrentStep('payment')
-
 		if (shippingData && sellers.length > 0 && specOrderIds.length === 0) {
 			try {
 				const createdOrderIds = await publishOrderWithDependencies({
@@ -642,10 +704,12 @@ function RouteComponent() {
 			} catch (error) {
 				console.error('Failed to create spec-compliant orders:', error)
 				toast.error(`Order creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
-				// Optionally, revert to summary step
-				// setCurrentStep('summary')
+				return
 			}
 		}
+
+		// Move to payment step once orders exist
+		setCurrentStep('payment')
 	}
 
 	const formatSats = (sats: number): string => {
@@ -734,7 +798,7 @@ function RouteComponent() {
 											{nwcEnabled && <p className="text-xs text-gray-500 mt-1">Use NWC to action all payments at once</p>}
 										</div>
 
-										<PaymentSummary invoices={invoices} currentIndex={currentInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
+										<PaymentSummary invoices={invoices} currentIndex={safeInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
 									</>
 								) : (
 									<div className="max-h-[50vh] overflow-y-auto">
@@ -761,8 +825,8 @@ function RouteComponent() {
 									<Button
 										variant="outline"
 										size="sm"
-										onClick={() => setCurrentInvoiceIndex(Math.max(0, currentInvoiceIndex - 1))}
-										disabled={currentInvoiceIndex === 0}
+										onClick={() => setCurrentInvoiceIndex(Math.max(0, safeInvoiceIndex - 1))}
+										disabled={safeInvoiceIndex === 0}
 									>
 										<ChevronLeft className="w-4 h-4" />
 										Previous
@@ -770,8 +834,8 @@ function RouteComponent() {
 									<Button
 										variant="outline"
 										size="sm"
-										onClick={() => setCurrentInvoiceIndex(Math.min(invoices.length - 1, currentInvoiceIndex + 1))}
-										disabled={currentInvoiceIndex === invoices.length - 1}
+										onClick={() => setCurrentInvoiceIndex(Math.min(invoices.length - 1, safeInvoiceIndex + 1))}
+										disabled={safeInvoiceIndex === invoices.length - 1}
 									>
 										Next
 										<ChevronRight className="w-4 h-4" />
@@ -865,16 +929,18 @@ function RouteComponent() {
 									<PaymentContent
 										ref={paymentContentRef}
 										invoices={invoices}
-										currentIndex={currentInvoiceIndex}
+										currentIndex={safeInvoiceIndex}
 										onPaymentComplete={handlePaymentComplete}
 										onPaymentFailed={handlePaymentFailed}
 										onSkipPayment={handleSkipPayment}
 										showNavigation={false} // We have our own navigation above
 										nwcEnabled={nwcEnabled}
+										nwcWalletUri={nwcWalletUri}
 										onNavigate={setCurrentInvoiceIndex}
 										availableWalletsBySeller={availableWalletsBySeller}
 										selectedWallets={selectedWallets}
 										onWalletChange={handleWalletChange}
+										mode="checkout"
 									/>
 								</div>
 							)}
@@ -937,7 +1003,7 @@ function RouteComponent() {
 								</div>
 
 								<div className="pb-6">
-									<PaymentSummary invoices={invoices} currentIndex={currentInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
+									<PaymentSummary invoices={invoices} currentIndex={safeInvoiceIndex} onSelectInvoice={setCurrentInvoiceIndex} />
 								</div>
 							</>
 						) : (

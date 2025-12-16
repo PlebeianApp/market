@@ -23,6 +23,9 @@ import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 // Re-export productKeys for use in other query files
 export { productKeys }
 
+// Helper to check if an ID looks like a Nostr event ID (64-hex characters)
+export const isEventId = (id: string): boolean => /^[a-f0-9]{64}$/i.test(id)
+
 // --- DATA FETCHING FUNCTIONS ---
 
 /**
@@ -162,6 +165,36 @@ export const fetchProductByATag = async (pubkey: string, dTag: string) => {
 	return await ndk.fetchEvent(filter)
 }
 
+/**
+ * Smart product fetching that handles both event IDs and d-tags
+ * @param id The product identifier (either event ID or d-tag)
+ * @param sellerPubkey Optional seller pubkey (required when id is a d-tag)
+ * @returns The product event or null
+ */
+export const fetchProductSmart = async (id: string, sellerPubkey?: string): Promise<NDKEvent | null> => {
+	if (!id) return null
+
+	// If it looks like an event ID (64 hex chars), fetch by event ID
+	if (isEventId(id)) {
+		try {
+			return await fetchProduct(id)
+		} catch (error) {
+			// If not found by event ID, it might be a malformed d-tag or truly not found
+			console.warn(`Product not found by event ID ${id}:`, error)
+			return null
+		}
+	}
+
+	// Otherwise, it's a d-tag - we need the seller pubkey
+	if (sellerPubkey) {
+		return await fetchProductByATag(sellerPubkey, id)
+	}
+
+	// No seller pubkey provided for a d-tag - can't fetch
+	console.warn(`Cannot fetch product by d-tag "${id}" without seller pubkey`)
+	return null
+}
+
 // --- REACT QUERY OPTIONS ---
 
 /**
@@ -174,6 +207,20 @@ export const productQueryOptions = (id: string) =>
 		queryKey: productKeys.details(id),
 		queryFn: () => fetchProduct(id),
 		staleTime: 300000, // Added staleTime of 5 minutes (300,000 ms)
+	})
+
+/**
+ * React Query options for smart product fetching (handles both event IDs and d-tags)
+ * @param id The product identifier (either event ID or d-tag)
+ * @param sellerPubkey Optional seller pubkey (required when id is a d-tag)
+ * @returns Query options object
+ */
+export const productSmartQueryOptions = (id: string, sellerPubkey?: string) =>
+	queryOptions({
+		queryKey: sellerPubkey ? [...productKeys.details(id), sellerPubkey] : productKeys.details(id),
+		queryFn: () => fetchProductSmart(id, sellerPubkey),
+		staleTime: 300000,
+		enabled: isEventId(id) || !!sellerPubkey, // Only enable if we have enough info to fetch
 	})
 
 /**
@@ -534,48 +581,52 @@ export const getProductSellerPubkey = async (id: string) => {
 
 /**
  * Hook to get the product title
- * @param id Product ID
+ * @param id Product ID (event ID or d-tag)
+ * @param sellerPubkey Optional seller pubkey (required when id is a d-tag)
  * @returns Query result with the product title
  */
-export const useProductTitle = (id: string) => {
+export const useProductTitle = (id: string, sellerPubkey?: string) => {
 	return useQuery({
-		...productQueryOptions(id),
+		...productSmartQueryOptions(id, sellerPubkey),
 		select: getProductTitle,
 	})
 }
 
 /**
  * Hook to get the product description
- * @param id Product ID
+ * @param id Product ID (event ID or d-tag)
+ * @param sellerPubkey Optional seller pubkey (required when id is a d-tag)
  * @returns Query result with the product description
  */
-export const useProductDescription = (id: string) => {
+export const useProductDescription = (id: string, sellerPubkey?: string) => {
 	return useQuery({
-		...productQueryOptions(id),
+		...productSmartQueryOptions(id, sellerPubkey),
 		select: getProductDescription,
 	})
 }
 
 /**
  * Hook to get the product price
- * @param id Product ID
+ * @param id Product ID (event ID or d-tag)
+ * @param sellerPubkey Optional seller pubkey (required when id is a d-tag)
  * @returns Query result with the product price tuple
  */
-export const useProductPrice = (id: string) => {
+export const useProductPrice = (id: string, sellerPubkey?: string) => {
 	return useQuery({
-		...productQueryOptions(id),
+		...productSmartQueryOptions(id, sellerPubkey),
 		select: getProductPrice,
 	})
 }
 
 /**
  * Hook to get the product images
- * @param id Product ID
+ * @param id Product ID (event ID or d-tag)
+ * @param sellerPubkey Optional seller pubkey (required when id is a d-tag)
  * @returns Query result with an array of image tuples
  */
-export const useProductImages = (id: string) => {
+export const useProductImages = (id: string, sellerPubkey?: string) => {
 	return useQuery({
-		...productQueryOptions(id),
+		...productSmartQueryOptions(id, sellerPubkey),
 		select: getProductImages,
 	})
 }
@@ -618,12 +669,13 @@ export const useProductVisibility = (id: string) => {
 
 /**
  * Hook to get the product stock
- * @param id Product ID
+ * @param id Product ID (event ID or d-tag)
+ * @param sellerPubkey Optional seller pubkey (required when id is a d-tag)
  * @returns Query result with the product stock tuple
  */
-export const useProductStock = (id: string) => {
+export const useProductStock = (id: string, sellerPubkey?: string) => {
 	return useQuery({
-		...productQueryOptions(id),
+		...productSmartQueryOptions(id, sellerPubkey),
 		select: getProductStock,
 	})
 }

@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { Nip05Badge } from './Nip05Badge'
 import { ProfileName } from './ProfileName'
+import { nip19 } from 'nostr-tools'
 
 interface UserWithAvatarProps {
 	pubkey: string
@@ -54,10 +55,12 @@ export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge 
 
 	return (
 		<Link
-			to="/profile/$profileId"
+			to={`https://njump.me/${nip19.npubEncode(pubkey)}`}
 			params={{ profileId: pubkey }}
 			className={cn('flex items-center gap-2', className)}
 			onClick={(e) => e.stopPropagation()}
+			target="_blank"
+			rel="noopener noreferrer"
 		>
 			{content}
 		</Link>

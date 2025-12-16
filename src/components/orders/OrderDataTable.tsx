@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ArrowDownNarrowWide, ArrowUpNarrowWide, CheckCircle, Circle, Clock, Filter, Loader, XCircle } from 'lucide-react'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import type { ColumnDef, ColumnFiltersState, FilterFn, SortingState } from '@tanstack/react-table'
 import { flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
@@ -38,6 +39,9 @@ interface OrderDataTableProps<TData> {
 	onStatusFilterChange?: (value: string) => void
 	statusFilter?: string
 	showSearch?: boolean
+	showOrderBy?: boolean
+	onOrderByChange?: (value: string) => void
+	orderBy?: string
 }
 
 export function OrderDataTable<TData>({
@@ -50,6 +54,9 @@ export function OrderDataTable<TData>({
 	onStatusFilterChange,
 	statusFilter = 'any',
 	showSearch = true,
+	showOrderBy = false,
+	onOrderByChange,
+	orderBy = 'newest',
 }: OrderDataTableProps<TData>) {
 	const [sorting, setSorting] = useState<SortingState>([])
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -78,7 +85,7 @@ export function OrderDataTable<TData>({
 			<div className="sticky top-[12.75rem] lg:top-0 z-20 bg-white border-b py-4 px-4 xl:px-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 shadow-sm">
 				{heading && <div className="hidden lg:block flex-1">{heading}</div>}
 
-				<div className="flex flex-col sm:flex-row sm:justify-end items-center gap-4 w-full lg:w-auto">
+				<div className="flex flex-row justify-end items-center gap-2 sm:gap-4 w-full lg:w-auto">
 					{showSearch && (
 						<Input
 							placeholder="Search by Order ID or Buyer..."
@@ -88,19 +95,65 @@ export function OrderDataTable<TData>({
 						/>
 					)}
 
+					{showOrderBy && onOrderByChange && (
+						<div className="w-auto">
+							<Select value={orderBy} onValueChange={onOrderByChange}>
+								<SelectTrigger>
+									<SelectValue placeholder="Order By" />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value="newest">
+										<ArrowDownNarrowWide className="h-4 w-4" />
+										Newest First
+									</SelectItem>
+									<SelectItem value="oldest">
+										<ArrowUpNarrowWide className="h-4 w-4" />
+										Oldest First
+									</SelectItem>
+									<SelectItem value="recently-updated">
+										<ArrowDownNarrowWide className="h-4 w-4" />
+										Recently Updated
+									</SelectItem>
+									<SelectItem value="least-updated">
+										<ArrowUpNarrowWide className="h-4 w-4" />
+										Least Recently Updated
+									</SelectItem>
+								</SelectContent>
+							</Select>
+						</div>
+					)}
+
 					{showStatusFilter && onStatusFilterChange && (
-						<div className="w-full sm:w-auto sm:min-w-64">
+						<div className="w-auto">
 							<Select defaultValue="any" value={statusFilter} onValueChange={onStatusFilterChange}>
 								<SelectTrigger>
 									<SelectValue placeholder="Any Status" />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value="any">Any Status</SelectItem>
-									<SelectItem value="pending">Pending</SelectItem>
-									<SelectItem value="confirmed">Confirmed</SelectItem>
-									<SelectItem value="processing">Processing</SelectItem>
-									<SelectItem value="completed">Completed</SelectItem>
-									<SelectItem value="cancelled">Cancelled</SelectItem>
+									<SelectItem value="any">
+										<Filter className="h-4 w-4" />
+										Any Status
+									</SelectItem>
+									<SelectItem value="pending">
+										<Clock className="h-4 w-4" />
+										Pending
+									</SelectItem>
+									<SelectItem value="confirmed">
+										<CheckCircle className="h-4 w-4" />
+										Confirmed
+									</SelectItem>
+									<SelectItem value="processing">
+										<Loader className="h-4 w-4" />
+										Processing
+									</SelectItem>
+									<SelectItem value="completed">
+										<Circle className="h-4 w-4 fill-current" />
+										Completed
+									</SelectItem>
+									<SelectItem value="cancelled">
+										<XCircle className="h-4 w-4" />
+										Cancelled
+									</SelectItem>
 								</SelectContent>
 							</Select>
 						</div>

@@ -1,3 +1,4 @@
+import { BugReportButton } from '@/components/BugReportButton'
 import { CartButton } from '@/components/CartButton'
 import { CurrencyDropdown } from '@/components/CurrencyDropdown'
 import { MobileMenu } from '@/components/layout/MobileMenu'
@@ -7,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { authActions, authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
+import { notificationStore } from '@/lib/stores/notifications'
 import { uiActions, uiStore } from '@/lib/stores/ui'
 import { useConfigQuery } from '@/queries/config'
 import type { NDKUserProfile } from '@nostr-dev-kit/ndk'
@@ -19,11 +21,15 @@ export function Header() {
 	const { data: config } = useConfigQuery()
 	const { isAuthenticated, isAuthenticating, user } = useStore(authStore)
 	const { mobileMenuOpen } = useStore(uiStore)
+	const { unseenOrders, unseenMessages, unseenPurchases } = useStore(notificationStore)
 	const location = useLocation()
 	const [scrollY, setScrollY] = useState(0)
 	const [profile, setProfile] = useState<NDKUserProfile | null>(null)
 	const breakpoint = useBreakpoint()
 	const isMobile = breakpoint === 'sm' || breakpoint === 'md'
+
+	// Calculate total notification count for dashboard button
+	const totalNotifications = unseenOrders + unseenMessages + unseenPurchases
 
 	// Check if we're on any product page (index page or individual product) or homepage
 	const isProductPage = location.pathname === '/products' || location.pathname.startsWith('/products/')
@@ -172,12 +178,18 @@ export function Header() {
 						<ProductSearch />
 					</div>
 					<div className="flex gap-2">
+						{/* Bug Report Button - visible when authenticated on desktop */}
+						{!isMobile && (
+							<BugReportButton className="!static !w-auto !rounded-lg !shadow-none !bg-primary-border !border-2 !border-transparent hover:!bg-black hover:!border-primary-border-hover p-2 relative hover:[&>span]:text-secondary" />
+						)}
 						{/* Currency Dropdown - always visible on desktop */}
 						{!isMobile && <CurrencyDropdown />}
 
 						{/* Mobile Layout */}
 						{isMobile ? (
 							<>
+								{/* Bug Report Button - visible when authenticated on mobile */}
+								<BugReportButton className="!static !w-auto !rounded-lg !shadow-none !bg-primary-border !border-2 !border-transparent hover:!bg-black hover:!border-primary-border-hover p-2 relative hover:[&>span]:text-secondary" />
 								{/* Account Button/Avatar - changes based on auth state - positioned first when logged in */}
 								{isAuthenticating ? (
 									<Button variant="primary" className="p-2 relative" data-testid="auth-loading">
@@ -224,7 +236,7 @@ export function Header() {
 								) : isAuthenticated ? (
 									<>
 										<CartButton />
-										<Link to="/dashboard" data-testid="dashboard-link">
+										<Link to="/dashboard" data-testid="dashboard-link" className="relative">
 											<Button
 												variant="primary"
 												className={`p-2 relative hover:[&>span]:text-secondary ${
@@ -233,6 +245,11 @@ export function Header() {
 												icon={<span className="i-dashboard w-6 h-6" />}
 												data-testid="dashboard-button"
 											/>
+											{totalNotifications > 0 && (
+												<span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-[10px] font-bold text-white bg-pink-500 rounded-full">
+													{totalNotifications > 99 ? '99+' : totalNotifications}
+												</span>
+											)}
 										</Link>
 										<Profile compact />
 										<Button

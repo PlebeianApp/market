@@ -1,9 +1,9 @@
-import { PAYMENT_DETAILS_METHOD, type PaymentDetailsMethod } from '@/lib/constants'
+import { PAYMENT_DETAILS_METHOD, ZAP_RELAYS, type PaymentDetailsMethod } from '@/lib/constants'
 import { configStore } from '@/lib/stores/config'
 import { ndkActions } from '@/lib/stores/ndk'
 import type { PayWithNwcParams } from '@/publish/payment'
 import { payInvoiceWithNwc, payInvoiceWithWebln } from '@/publish/payment'
-import { LightningAddress } from '@getalby/lightning-tools'
+import { LightningAddress, type Invoice, type NostrProvider } from '@getalby/lightning-tools'
 import { NDKEvent, NDKKind } from '@nostr-dev-kit/ndk'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { nip04, nip19 } from 'nostr-tools'
@@ -513,14 +513,39 @@ export const publishRichPaymentDetail = async (params: PublishRichPaymentDetailP
  */
 export const usePublishRichPaymentDetail = () => {
 	const queryClient = useQueryClient()
+	const signer = ndkActions.getSigner()
 
 	return useMutation({
 		mutationKey: paymentDetailsKeys.publish(),
 		mutationFn: publishRichPaymentDetail,
-		onSuccess: (eventId, variables) => {
+		onSuccess: async (eventId, variables) => {
 			toast.success('Payment details saved successfully')
+
+			// Get current user pubkey to invalidate the correct query
+			let userPubkey = ''
+			if (signer) {
+				try {
+					const user = await signer.user()
+					if (user?.pubkey) {
+						userPubkey = user.pubkey
+					}
+				} catch (error) {
+					console.error('Failed to get user pubkey for cache invalidation:', error)
+				}
+			}
+
 			// Invalidate relevant queries
-			queryClient.invalidateQueries({ queryKey: paymentDetailsKeys.byPubkey(variables.appPubkey || '') })
+			if (userPubkey) {
+				queryClient.invalidateQueries({ queryKey: paymentDetailsKeys.byPubkey(userPubkey) })
+			}
+
+			if (variables.coordinates) {
+				const coordinatesArray = Array.isArray(variables.coordinates) ? variables.coordinates : [variables.coordinates]
+				coordinatesArray.forEach((coord) => {
+					queryClient.invalidateQueries({ queryKey: paymentDetailsKeys.byProductOrCollection(coord) })
+				})
+			}
+
 			return eventId
 		},
 		onError: (error) => {
@@ -600,7 +625,10 @@ export const useUpdatePaymentDetail = () => {
 			}
 
 			if (variables.coordinates) {
-				queryClient.invalidateQueries({ queryKey: paymentDetailsKeys.byProductOrCollection(variables.coordinates) })
+				const coordinatesArray = Array.isArray(variables.coordinates) ? variables.coordinates : [variables.coordinates]
+				coordinatesArray.forEach((coord) => {
+					queryClient.invalidateQueries({ queryKey: paymentDetailsKeys.byProductOrCollection(coord) })
+				})
 			}
 
 			toast.success('Payment details updated successfully')
@@ -746,6 +774,7 @@ export interface GeneratedInvoice {
 	lightningAddress: string | null
 	expiresAt: number | undefined
 	status: 'pending' | 'paid' | 'expired' | 'failed'
+	isZap?: boolean
 }
 
 export interface GenerateInvoiceParams {
@@ -756,6 +785,50 @@ export interface GenerateInvoiceParams {
 	items: Array<{ productId: string; name: string; amount: number; price: number }>
 	type: 'seller' | 'v4v'
 	selectedPaymentDetailId?: string // Optional: Specific payment detail to use (bypasses resolution)
+}
+
+const createZapNostrProvider = async (ndkInstance: ReturnType<typeof ndkActions.getNDK>): Promise<NostrProvider | null> => {
+	if (!ndkInstance || !ndkInstance.signer) {
+		return null
+	}
+
+	const signer = ndkInstance.signer
+
+	const getPubkey = async () => {
+		try {
+			const user = await signer.user()
+			return user?.pubkey || signer.pubkey
+		} catch (error) {
+			console.warn('Failed to resolve signer pubkey for zap invoice:', error)
+			return signer.pubkey
+		}
+	}
+
+	const provider: NostrProvider = {
+		getPublicKey: getPubkey,
+		signEvent: async (event) => {
+			const ndkEvent = new NDKEvent(ndkInstance)
+			ndkEvent.kind = event.kind
+			ndkEvent.content = event.content
+			ndkEvent.tags = event.tags
+			ndkEvent.created_at = event.created_at
+			ndkEvent.pubkey = event.pubkey || (await getPubkey())
+			if (event.id) {
+				ndkEvent.id = event.id
+			}
+
+			await ndkEvent.sign(signer)
+
+			return {
+				...event,
+				id: ndkEvent.id || event.id || '',
+				sig: ndkEvent.sig || event.sig || '',
+				pubkey: ndkEvent.pubkey || (await getPubkey()),
+			}
+		},
+	}
+
+	return provider
 }
 
 /**
@@ -860,7 +933,36 @@ export const generateInvoice = async (params: GenerateInvoiceParams): Promise<Ge
 		const ln = new LightningAddress(lnAddress)
 		await ln.fetch()
 
-		const invoice = await ln.requestInvoice({ satoshi: amountSats, comment: description })
+		const zapSupported = (ln.lnurlpData?.allowsNostr ?? ln.lnurlpData?.rawData?.allowsNostr ?? false) && !!ln.nostrPubkey
+		let invoice: Invoice | null = null
+		let generatedViaZap = false
+
+		if (zapSupported) {
+			try {
+				const nostrProvider = await createZapNostrProvider(ndk)
+				if (nostrProvider) {
+					console.log('⚡ Attempting zap invoice generation via LNURLp')
+					invoice = await ln.zapInvoice(
+						{
+							satoshi: amountSats,
+							comment: description,
+							relays: ZAP_RELAYS,
+							p: sellerPubkey,
+						},
+						{ nostr: nostrProvider },
+					)
+					generatedViaZap = true
+				} else {
+					console.warn('Zap invoice requested but no signer available. Falling back to regular invoice.')
+				}
+			} catch (zapError) {
+				console.warn('Zap invoice generation failed, falling back to regular invoice:', zapError)
+			}
+		}
+
+		if (!invoice) {
+			invoice = await ln.requestInvoice({ satoshi: amountSats, comment: description })
+		}
 
 		if (!invoice.paymentRequest) {
 			throw new Error('Failed to retrieve BOLT11 invoice from lightning address.')
@@ -876,6 +978,7 @@ export const generateInvoice = async (params: GenerateInvoiceParams): Promise<Ge
 			lightningAddress: lnAddress,
 			expiresAt: invoice.expiry,
 			status: 'pending',
+			isZap: generatedViaZap,
 		}
 	} catch (error) {
 		console.error(`❌ Failed to generate invoice for ${lnAddress}:`, error)
@@ -889,6 +992,7 @@ export const generateInvoice = async (params: GenerateInvoiceParams): Promise<Ge
 			lightningAddress: lnAddress,
 			expiresAt: undefined,
 			status: 'failed',
+			isZap: false,
 		}
 	}
 }
@@ -1099,7 +1203,14 @@ export const usePaymentReceiptSubscription = (params: PaymentReceiptSubscription
 					const preimage = paymentTag?.[3] || 'external-payment'
 
 					console.log(`✅ Valid payment receipt detected for ${invoiceId}`)
-					subscription.stop()
+
+					// Defensive stop with try/catch to handle NDK race condition
+					try {
+						subscription.stop()
+					} catch (error) {
+						console.warn('[PaymentReceiptSubscription] Error stopping subscription (can be safely ignored):', error)
+					}
+
 					resolve(preimage)
 				})
 			})

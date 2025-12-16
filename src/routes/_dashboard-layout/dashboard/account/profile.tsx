@@ -192,7 +192,9 @@ function ProfileComponent() {
 					<div className="space-y-6">
 						<div className="space-y-4">
 							<div className="space-y-2">
-								<Label htmlFor="headerImage">Header Image</Label>
+								<Label htmlFor="headerImage">
+									Header Image <span className="text-muted-foreground font-normal">(optional)</span>
+								</Label>
 								<ImageUploader
 									src={profile.banner || null}
 									index={-1}
@@ -206,7 +208,9 @@ function ProfileComponent() {
 							</div>
 
 							<div className="space-y-2">
-								<Label htmlFor="profileImage">Profile Image</Label>
+								<Label htmlFor="profileImage">
+									Profile Image <span className="text-muted-foreground font-normal">(optional)</span>
+								</Label>
 								<ImageUploader
 									src={profile.image || null}
 									index={-1}
@@ -248,7 +252,9 @@ function ProfileComponent() {
 							</div>
 
 							<div className="space-y-2">
-								<Label htmlFor="about">About</Label>
+								<Label htmlFor="about">
+									About <span className="text-muted-foreground font-normal">(optional)</span>
+								</Label>
 								<Textarea
 									id="about"
 									name="about"
@@ -260,7 +266,9 @@ function ProfileComponent() {
 							</div>
 
 							<div className="space-y-2">
-								<Label htmlFor="nip05">Nostr Address (NIP05)</Label>
+								<Label htmlFor="nip05">
+									Nostr Address (NIP05) <span className="text-muted-foreground font-normal">(optional)</span>
+								</Label>
 								<Input
 									id="nip05"
 									name="nip05"
@@ -271,7 +279,9 @@ function ProfileComponent() {
 							</div>
 
 							<div className="space-y-2">
-								<Label htmlFor="lud16">Lightning Address (LUD16)</Label>
+								<Label htmlFor="lud16">
+									Lightning Address (LUD16) <span className="text-muted-foreground font-normal">(optional)</span>
+								</Label>
 								<Input
 									id="lud16"
 									name="lud16"
@@ -282,7 +292,9 @@ function ProfileComponent() {
 							</div>
 
 							<div className="space-y-2">
-								<Label htmlFor="lud06">LNURL (LUD06)</Label>
+								<Label htmlFor="lud06">
+									LNURL (LUD06) <span className="text-muted-foreground font-normal">(optional)</span>
+								</Label>
 								<Input
 									id="lud06"
 									name="lud06"
@@ -293,7 +305,9 @@ function ProfileComponent() {
 							</div>
 
 							<div className="space-y-2">
-								<Label htmlFor="website">Website</Label>
+								<Label htmlFor="website">
+									Website <span className="text-muted-foreground font-normal">(optional)</span>
+								</Label>
 								<Input
 									id="website"
 									name="website"

@@ -221,7 +221,7 @@ function RouteComponent() {
 							)}
 							<div className="flex items-center gap-2">
 								<h2 className="text-1xl font-bold text-white">{truncateText(profile?.name ?? 'Unnamed user', isSmallScreen ? 10 : 50)}</h2>
-								<Nip05Badge pubkey={user?.pubkey || ''} />
+								<Nip05Badge pubkey={user?.pubkey || ''} showAddress nip05={profile?.nip05} />
 							</div>{' '}
 						</div>
 					</Link>

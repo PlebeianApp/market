@@ -58,13 +58,23 @@ export function ItemGrid({ children, className, title, cols = 1, smCols = 3, lgC
 	}
 
 	return (
-		<div>
+		<div className="w-full max-w-full overflow-hidden">
 			{title && (
 				<div className="mb-4">
-					{typeof title === 'string' ? <h1 className="text-2xl font-heading text-center sm:text-left">{title}</h1> : title}
+					{typeof title === 'string' ? <h1 className="text-xl sm:text-2xl font-heading text-center sm:text-left">{title}</h1> : title}
 				</div>
 			)}
-			<div className={cn('grid', colsMap[cols], smColsMap[smCols], lgColsMap[lgCols], xlColsMap[xlCols], gapMap[gap], className)}>
+			<div
+				className={cn(
+					'grid w-full max-w-full',
+					colsMap[cols],
+					smColsMap[smCols],
+					lgColsMap[lgCols],
+					xlColsMap[xlCols],
+					gapMap[gap],
+					className,
+				)}
+			>
 				{children}
 			</div>
 		</div>

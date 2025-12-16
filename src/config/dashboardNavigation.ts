@@ -40,8 +40,8 @@ export const dashboardNavigation: NavSection[] = [
 				path: '/dashboard/products/collections',
 			},
 			{
-				title: '💸 Receive Payments',
-				path: '/dashboard/products/receiving-payments',
+				title: '🔄 Migration Tool',
+				path: '/dashboard/products/migration-tool',
 			},
 			{
 				title: '📫 Shipping Options',
@@ -59,6 +59,10 @@ export const dashboardNavigation: NavSection[] = [
 			{
 				title: '💳 Make Payments',
 				path: '/dashboard/account/making-payments',
+			},
+			{
+				title: '💸 Receive Payments',
+				path: '/dashboard/account/receiving-payments',
 			},
 			{
 				title: '🛍️ Your Purchases',

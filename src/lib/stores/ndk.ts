@@ -35,14 +35,32 @@ export const ndkActions = {
 		const state = ndkStore.state
 		if (state.ndk) return state.ndk
 
-		const LOCAL_ONLY = configStore.state.config.appRelay
-		// const LOCAL_ONLY = false // configStore.state.config.appRelay
-
 		const appRelay = configStore.state.config.appRelay
-		const explicitRelays = LOCAL_ONLY ? ([appRelay].filter(Boolean) as string[]) : relays && relays.length > 0 ? relays : defaultRelaysUrls
+		// Read from Bun.env (set via package.json script)
+		// @ts-ignore - Bun.env is available in Bun runtime
+		const localRelayOnly = typeof Bun !== 'undefined' && Bun.env?.LOCAL_RELAY_ONLY === 'true'
+
+		// Determine which relays to use
+		let explicitRelays: string[]
+
+		if (appRelay) {
+			// We have an app relay configured
+			if (localRelayOnly) {
+				// Dev mode: local relay only
+				explicitRelays = [appRelay]
+			} else {
+				// Production or dev with defaults: app relay + default relays
+				explicitRelays = Array.from(new Set([appRelay, ...defaultRelaysUrls]))
+			}
+		} else {
+			// No app relay: use passed relays or default relays
+			explicitRelays = relays && relays.length > 0 ? relays : defaultRelaysUrls
+		}
 
 		const ndk = new NDK({
 			explicitRelayUrls: explicitRelays,
+			enableOutboxModel: localRelayOnly ? false : true,
+			// aiGuardrails: true,
 		})
 
 		const zapNdk = new NDK({
@@ -112,7 +130,15 @@ export const ndkActions = {
 			console.log('✅ Zap NDK connected to relays:', ZAP_RELAYS)
 		} catch (error) {
 			console.error('Failed to connect Zap NDK:', error)
-			// Don't throw - allow app to continue even if zap relays fail
+			// Don't throw - allow app to continue even if some zap relays fail
+			// Mark as connected if we have any working zap relays
+			const connectedRelays = state.zapNdk?.pool?.connectedRelays() || []
+			if (connectedRelays.length > 0) {
+				ndkStore.setState((state) => ({ ...state, isZapNdkConnected: true }))
+				console.log(`✅ Zap NDK partially connected to ${connectedRelays.length} relays`)
+			} else {
+				console.warn('⚠️ Zap NDK could not connect to any relays. Zap monitoring will be unavailable.')
+			}
 		}
 	},
 

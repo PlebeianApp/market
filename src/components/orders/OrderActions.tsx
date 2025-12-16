@@ -1,13 +1,5 @@
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuLabel,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { ORDER_STATUS, SHIPPING_STATUS } from '@/lib/schemas/order'
 import { cn } from '@/lib/utils'
 import { getStatusStyles } from '@/lib/utils/orderUtils'
@@ -15,7 +7,7 @@ import { useUpdateOrderStatusMutation } from '@/publish/orders'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { getBuyerPubkey, getOrderStatus, getSellerPubkey } from '@/queries/orders'
 import { useUpdateShippingStatusMutation } from '@/queries/shipping'
-import { Check, Clock, MoreHorizontal, ShoppingBag, Truck, X } from 'lucide-react'
+import { Ban, Check, CheckCircle, Clock, Package, Truck, X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Input } from '../ui/input'
@@ -117,12 +109,9 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 		// No need to update order status - shipping status is already set
 	}
 
-	// Check if there are any available actions
-	const hasActions = canCancel || canConfirm || canProcess || canShip || canReceive
-
 	const { bgColor, textColor, iconName, label } = getStatusStyles(order)
 
-	const renderIcon = () => {
+	const renderStatusIcon = () => {
 		switch (iconName) {
 			case 'truck':
 				return <Truck className="h-4 w-4" />
@@ -137,69 +126,66 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 		}
 	}
 
+	// Determine the next action based on role and status
+	const getNextAction = () => {
+		if (isSeller) {
+			if (canConfirm) return { label: 'Confirm', icon: Check, action: () => handleStatusUpdate(ORDER_STATUS.CONFIRMED) }
+			if (canProcess) return { label: 'Process', icon: Package, action: () => handleStatusUpdate(ORDER_STATUS.PROCESSING) }
+			if (canShip) return { label: 'Ship', icon: Truck, action: () => setIsShippingOpen(true) }
+		}
+		if (isBuyer && canReceive) {
+			return { label: 'Received', icon: CheckCircle, action: () => handleStatusUpdate(ORDER_STATUS.COMPLETED) }
+		}
+		return null
+	}
+
+	const nextAction = getNextAction()
+	const isLoading = updateOrderStatus.isPending || updateShippingStatus.isPending
+
 	return (
-		<div className="flex w-full items-center justify-between gap-2 md:w-auto md:justify-end">
-			<div className={cn('flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-1 md:w-32 md:flex-none', bgColor, textColor)}>
-				{renderIcon()}
-				<span className="font-medium capitalize">{label}</span>
+		<div className={cn('flex items-center justify-between gap-2 w-[320px]', className)}>
+			{/* Cancel Button (Left) - Icon only */}
+			{canCancel ? (
+				<Button
+					variant="outline"
+					size="icon"
+					onClick={() => setIsCancelOpen(true)}
+					disabled={isLoading}
+					className="h-8 w-8 shrink-0 text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+					aria-label="Cancel order"
+				>
+					<X className="h-4 w-4" />
+				</Button>
+			) : (
+				<div className="h-8 w-8 shrink-0" /> // Spacer to maintain layout
+			)}
+
+			{/* Status Badge (Center) */}
+			<div className={cn('flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-1.5', bgColor, textColor)}>
+				{renderStatusIcon()}
+				<span className="font-medium capitalize text-sm whitespace-nowrap">{label}</span>
 			</div>
 
-			{hasActions ? (
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-							<span className="sr-only">Open menu</span>
-							<MoreHorizontal className="h-4 w-4" />
-						</Button>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end">
-						<DropdownMenuLabel>Actions</DropdownMenuLabel>
-						<DropdownMenuSeparator />
-
-						{/* Buyer Actions */}
-						{isBuyer && canReceive && (
-							<DropdownMenuItem onClick={() => handleStatusUpdate(ORDER_STATUS.COMPLETED)}>
-								<Check className="mr-2 h-4 w-4" />
-								Confirm Receipt
-							</DropdownMenuItem>
-						)}
-
-						{/* Seller Actions */}
-						{isSeller && canConfirm && (
-							<DropdownMenuItem onClick={() => handleStatusUpdate(ORDER_STATUS.CONFIRMED)}>
-								<Check className="mr-2 h-4 w-4" />
-								Confirm Order
-							</DropdownMenuItem>
-						)}
-
-						{isSeller && canProcess && (
-							<DropdownMenuItem onClick={() => handleStatusUpdate(ORDER_STATUS.PROCESSING)}>
-								<ShoppingBag className="mr-2 h-4 w-4" />
-								Start Processing
-							</DropdownMenuItem>
-						)}
-
-						{/* Shipping action - open dialog */}
-						{isSeller && canShip && (
-							<DropdownMenuItem onClick={() => setIsShippingOpen(true)}>
-								<Truck className="mr-2 h-4 w-4" />
-								Mark as Shipped
-							</DropdownMenuItem>
-						)}
-
-						{/* Cancel action - open dialog */}
-						{canCancel && (
-							<DropdownMenuItem className="text-red-600" onClick={() => setIsCancelOpen(true)}>
-								<X className="mr-2 h-4 w-4" />
-								Cancel Order
-							</DropdownMenuItem>
-						)}
-					</DropdownMenuContent>
-				</DropdownMenu>
+			{/* Next Action Button (Right) */}
+			{nextAction ? (
+				<Button variant="primary" size="sm" onClick={nextAction.action} disabled={isLoading} className="shrink-0">
+					{nextAction.label}
+					<nextAction.icon className="h-4 w-4 ml-1" />
+				</Button>
+			) : status === ORDER_STATUS.COMPLETED ? (
+				<Button variant="ghost" size="sm" disabled className="shrink-0 text-green-600">
+					Done
+					<CheckCircle className="h-4 w-4 ml-1" />
+				</Button>
+			) : status === ORDER_STATUS.CANCELLED ? (
+				<Button variant="ghost" size="sm" disabled className="shrink-0 text-muted-foreground">
+					Cancelled
+					<Ban className="h-4 w-4 ml-1" />
+				</Button>
 			) : (
-				<Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled>
-					<span className="sr-only">No actions available</span>
-					<span className="w-4 h-4" />
+				<Button variant="ghost" size="sm" disabled className="shrink-0 text-muted-foreground">
+					Waiting
+					<Clock className="h-4 w-4 ml-1" />
 				</Button>
 			)}
 

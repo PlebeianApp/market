@@ -13,9 +13,10 @@ function OrderDetailRouteComponent() {
 	const { orderId } = Route.useParams()
 	useDashboardTitle('Order Details')
 
-	const { data: order, isLoading, error } = useOrderById(orderId)
+	const { data: order, isLoading, isFetching, error } = useOrderById(orderId)
+	const isPending = isLoading || (!order && isFetching)
 
-	if (isLoading) {
+	if (isPending) {
 		return (
 			<div className="container mx-auto px-4 py-8">
 				<div className="space-y-6">

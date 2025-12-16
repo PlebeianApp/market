@@ -7,6 +7,7 @@ import { Separator } from '@/components/ui/separator'
 import { submitAppSettings } from '@/lib/appSettings'
 import { createQueryClient } from '@/lib/queryClient'
 import { AppSettingsSchema } from '@/lib/schemas/app'
+import { createHandlerInfoEventData } from '@/publish/nip89'
 import { useConfigQuery } from '@/queries/config'
 import { configKeys } from '@/queries/queryKeyFactory'
 import { useForm, useStore } from '@tanstack/react-form'
@@ -154,29 +155,16 @@ function SetupRoute() {
 					await submitAppSettings(editorsEvent)
 				}
 
-				// Create 31990 event - Submit this THIRD
-				const appSettingsTags: string[][] = [
-					['d', crypto.randomUUID()],
-					['k', '30402'],
-					['k', '30405'],
-					['web', `${window.location.origin}/a/{bech32}`, 'nevent'],
-					['web', `${window.location.origin}/p/{bech32}`, 'nprofile'],
-					['r', config.appRelay],
-				]
-
-				let newEvent = {
-					kind: 31990,
-					created_at: Math.floor(Date.now() / 1000),
-					tags: appSettingsTags,
-					content: JSON.stringify({
-						...value,
-						ownerPk: ownerPubkeyHex,
-					}),
-					pubkey: ownerPubkeyHex,
+				const appSettingsContent = {
+					...value,
+					ownerPk: ownerPubkeyHex,
 				}
 
-				newEvent = finalizeEvent(newEvent, generateSecretKey())
-				await submitAppSettings(newEvent)
+				// Use a fixed handler ID for consistency across setup and seeding
+				const handlerId = 'plebeian-market-handler'
+				let handlerEvent = createHandlerInfoEventData(ownerPubkeyHex, appSettingsContent, config.appRelay, handlerId)
+				handlerEvent = finalizeEvent(handlerEvent, generateSecretKey())
+				await submitAppSettings(handlerEvent)
 
 				// Wait a bit for the events to be processed
 				await new Promise((resolve) => setTimeout(resolve, 1000))

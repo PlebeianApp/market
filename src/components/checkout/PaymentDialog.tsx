@@ -1,5 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
-import { PaymentContent, type PaymentInvoiceData } from './PaymentContent'
+import type { PaymentInvoiceData } from '@/lib/types/invoice'
+import { PaymentContent } from './PaymentContent'
 
 interface PaymentDialogProps {
 	open: boolean
@@ -11,9 +12,10 @@ interface PaymentDialogProps {
 	title?: string
 	showNavigation?: boolean
 	nwcEnabled?: boolean
+	nwcWalletUri?: string | null
+	/** Mode controls how skipped invoices are treated */
+	mode?: 'checkout' | 'order'
 }
-
-export type { PaymentInvoiceData }
 
 export function PaymentDialog({
 	open,
@@ -25,6 +27,8 @@ export function PaymentDialog({
 	title = 'Complete Payment',
 	showNavigation = true,
 	nwcEnabled = true,
+	nwcWalletUri,
+	mode = 'order',
 }: PaymentDialogProps) {
 	if (!invoices.length) return null
 
@@ -47,6 +51,8 @@ export function PaymentDialog({
 					onPaymentFailed={onPaymentFailed}
 					showNavigation={showNavigation}
 					nwcEnabled={nwcEnabled}
+					nwcWalletUri={nwcWalletUri}
+					mode={mode}
 				/>
 			</DialogContent>
 		</Dialog>

@@ -2,7 +2,7 @@ import { Store } from '@tanstack/store'
 import { CURRENCIES } from '@/lib/constants'
 
 // Define types for different UI elements
-export type DrawerType = 'cart' | 'createProduct' | 'createCollection'
+export type DrawerType = 'cart' | 'createProduct' | 'createCollection' | 'conversation'
 export type DialogType = 'login' | 'signup' | 'checkout' | 'product-details' | 'scan-qr' | 'v4v-setup'
 export type ToastType = 'success' | 'error' | 'warning' | 'info'
 export type SupportedCurrency = (typeof CURRENCIES)[number]
@@ -21,6 +21,12 @@ export type NavigationState = {
 	originalResultsPath: string | null // Track the first/original results page
 }
 
+// Dashboard header action structure
+export interface DashboardHeaderAction {
+	label: string
+	onClick: () => void
+}
+
 // UI State interface
 export interface UIState {
 	drawers: Record<DrawerType, boolean>
@@ -29,9 +35,16 @@ export interface UIState {
 	activeElement?: string
 	dialogCallbacks?: Partial<Record<DialogType, any>>
 	dashboardTitle: string
+	dashboardHeaderAction: DashboardHeaderAction | null
 	mobileMenuOpen: boolean
 	navigation: NavigationState
 	selectedCurrency: SupportedCurrency
+	conversationPubkey: string | null // Track which conversation to open
+}
+
+const getSelectedCurrency = (): SupportedCurrency => {
+	const saved = typeof window !== 'undefined' ? localStorage.getItem('selectedCurrency') : null
+	return saved && CURRENCIES.includes(saved as SupportedCurrency) ? (saved as SupportedCurrency) : 'USD'
 }
 
 // Initial state
@@ -40,7 +53,9 @@ const initialState: UIState = {
 		cart: false,
 		createProduct: false,
 		createCollection: false,
+		conversation: false,
 	},
+	conversationPubkey: null,
 	dialogs: {
 		login: false,
 		signup: false,
@@ -52,12 +67,13 @@ const initialState: UIState = {
 	toasts: [],
 	dialogCallbacks: {},
 	dashboardTitle: 'DASHBOARD',
+	dashboardHeaderAction: null,
 	mobileMenuOpen: false,
 	navigation: {
 		productSourcePath: null,
 		originalResultsPath: null,
 	},
-	selectedCurrency: 'USD',
+	selectedCurrency: getSelectedCurrency(),
 }
 
 // Create the store
@@ -236,6 +252,21 @@ export const uiActions = {
 		}))
 	},
 
+	// Dashboard header action
+	setDashboardHeaderAction: (action: DashboardHeaderAction | null) => {
+		uiStore.setState((state) => ({
+			...state,
+			dashboardHeaderAction: action,
+		}))
+	},
+
+	clearDashboardHeaderAction: () => {
+		uiStore.setState((state) => ({
+			...state,
+			dashboardHeaderAction: null,
+		}))
+	},
+
 	// Navigation actions
 	setProductSourcePath: (path: string | null) => {
 		uiStore.setState((state) => ({
@@ -273,9 +304,38 @@ export const uiActions = {
 
 	// Currency actions
 	setCurrency: (currency: SupportedCurrency) => {
+		if (typeof window !== 'undefined') {
+			localStorage.setItem('selectedCurrency', currency)
+		}
+
 		uiStore.setState((state) => ({
 			...state,
 			selectedCurrency: currency,
+		}))
+	},
+
+	// Conversation actions
+	openConversation: (pubkey: string) => {
+		uiStore.setState((state) => ({
+			...state,
+			conversationPubkey: pubkey,
+			drawers: {
+				...state.drawers,
+				conversation: true,
+			},
+			activeElement: 'drawer-conversation',
+		}))
+	},
+
+	closeConversation: () => {
+		uiStore.setState((state) => ({
+			...state,
+			conversationPubkey: null,
+			drawers: {
+				...state.drawers,
+				conversation: false,
+			},
+			activeElement: state.activeElement === 'drawer-conversation' ? undefined : state.activeElement,
 		}))
 	},
 }

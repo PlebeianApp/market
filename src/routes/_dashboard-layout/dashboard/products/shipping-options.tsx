@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
 import { COUNTRIES_ISO, CURRENCIES, SHIPPING_TEMPLATES } from '@/lib/constants'
+import { uiStore } from '@/lib/stores/ui'
 import { useNDK } from '@/lib/stores/ndk'
 import {
 	useDeleteShippingOptionMutation,
@@ -35,7 +36,8 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
-import { AlertCircleIcon, ChevronLeftIcon, PackageIcon, PlusIcon, TrashIcon, TruckIcon, XIcon } from 'lucide-react'
+import { Checkbox } from '@/components/ui/checkbox'
+import { AlertCircleIcon, ChevronLeftIcon, DownloadIcon, PackageIcon, PlusIcon, TrashIcon, TruckIcon, XIcon } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -44,6 +46,7 @@ const SERVICE_TYPES = [
 	{ value: 'express', label: 'Express Shipping' },
 	{ value: 'overnight', label: 'Overnight Shipping' },
 	{ value: 'pickup', label: 'Local Pickup' },
+	{ value: 'digital', label: 'Digital Delivery' },
 ] as const
 
 const WEIGHT_UNITS = ['kg', 'lb', 'g', 'oz']
@@ -67,6 +70,14 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 	const [isSubmitting, setIsSubmitting] = useState(false)
 	const [isOptionalDetailsOpen, setIsOptionalDetailsOpen] = useState(false)
 	const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+	const [isWorldwide, setIsWorldwide] = useState(() => {
+		if (shippingOption) {
+			const countryTag = getShippingCountry(shippingOption)
+			// If countries array is empty or has no entries, it's worldwide
+			return !countryTag || countryTag.slice(1).length === 0
+		}
+		return false
+	})
 
 	const publishMutation = usePublishShippingOptionMutation()
 	const updateMutation = useUpdateShippingOptionMutation()
@@ -75,6 +86,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 	const isEditing = !!shippingOption
 
 	const [formData, setFormData] = useState<ShippingFormData>(() => {
+		const defaultCurrency = uiStore.state.selectedCurrency
 		if (shippingOption) {
 			const priceTag = getShippingPrice(shippingOption)
 			const countryTag = getShippingCountry(shippingOption)
@@ -90,7 +102,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 				title: getShippingTitle(shippingOption),
 				description: getShippingDescription(shippingOption),
 				price: priceTag?.[1] || '',
-				currency: priceTag?.[2] || 'USD',
+				currency: priceTag?.[2] || defaultCurrency,
 				countries: countryTag?.slice(1) || [],
 				service: (serviceTag?.[1] as any) || 'standard',
 				carrier: carrierTag?.[1] || '',
@@ -123,7 +135,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 			title: '',
 			description: '',
 			price: '',
-			currency: 'USD',
+			currency: defaultCurrency,
 			countries: [],
 			service: 'standard',
 			pickupAddress: {
@@ -142,11 +154,12 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 	}, [getUser])
 
 	const resetForm = useCallback(() => {
+		const defaultCurrency = uiStore.state.selectedCurrency
 		setFormData({
 			title: '',
 			description: '',
 			price: '',
-			currency: 'USD',
+			currency: defaultCurrency,
 			countries: [],
 			service: 'standard',
 			pickupAddress: {
@@ -159,6 +172,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 		})
 		setFieldErrors({})
 		setIsSubmitting(false)
+		setIsWorldwide(false)
 	}, [])
 
 	const validateForm = (): boolean => {
@@ -170,16 +184,21 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 		if (!formData.description.trim()) {
 			errors.description = 'Description is required'
 		}
-		if (!formData.price.trim()) {
-			errors.price = 'Price is required'
-		} else if (isNaN(Number(formData.price))) {
-			errors.price = 'Price must be a valid number'
+
+		// Price is not required for digital delivery (always free)
+		if (formData.service !== 'digital') {
+			if (!formData.price.trim()) {
+				errors.price = 'Price is required'
+			} else if (isNaN(Number(formData.price))) {
+				errors.price = 'Price must be a valid number'
+			}
+			if (!formData.currency.trim()) {
+				errors.currency = 'Currency is required'
+			}
 		}
-		if (!formData.currency.trim()) {
-			errors.currency = 'Currency is required'
-		}
-		// Countries are only required for non-pickup services
-		if (formData.service !== 'pickup' && !formData.countries.length) {
+
+		// Countries are only required for non-pickup, non-digital, and non-worldwide services
+		if (formData.service !== 'pickup' && formData.service !== 'digital' && !isWorldwide && !formData.countries.length) {
 			errors.countries = 'At least one country is required'
 		}
 
@@ -257,6 +276,8 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 				return <TruckIcon className="w-5 h-5 text-orange-500" />
 			case 'pickup':
 				return <PackageIcon className="w-5 h-5 text-blue-500" />
+			case 'digital':
+				return <DownloadIcon className="w-5 h-5 text-purple-500" />
 			default:
 				return <TruckIcon className="w-5 h-5" />
 		}
@@ -322,13 +343,28 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 									onValueChange={(templateName) => {
 										const template = SHIPPING_TEMPLATES.find((t) => t.name === templateName)
 										if (template) {
+											// Check if template is worldwide (countries is null)
+											const isWorldwideTemplate = template.countries === null
+											setIsWorldwide(isWorldwideTemplate)
+
+											// Determine service type based on template name
+											let serviceType: 'standard' | 'express' | 'overnight' | 'pickup' | 'digital' = 'standard'
+											if (template.name === 'Local Pickup') {
+												serviceType = 'pickup'
+											} else if (template.name.toLowerCase().includes('digital')) {
+												serviceType = 'digital'
+											} else if (template.name.toLowerCase().includes('express')) {
+												serviceType = 'express'
+											} else if (template.name.toLowerCase().includes('overnight')) {
+												serviceType = 'overnight'
+											}
+
 											setFormData((prev) => ({
 												...prev,
 												title: template.name,
 												price: template.cost,
 												countries: template.countries || [],
-												// Auto-set service type to pickup for Local Pickup template
-												service: template.name === 'Local Pickup' ? 'pickup' : prev.service,
+												service: serviceType,
 											}))
 										}
 									}}
@@ -397,6 +433,11 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 													// Default to USA if no country is set
 													newFormData.countries = ['USA']
 												}
+											} else if (value === 'digital') {
+												// Set price to 0 and clear countries for digital delivery
+												newFormData.price = '0'
+												newFormData.countries = []
+												setIsWorldwide(true)
 											}
 											return newFormData
 										})
@@ -418,70 +459,100 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 								</Select>
 							</div>
 
-							<div className="space-y-2">
-								<Label htmlFor="price" className="font-medium">
-									Price *
-								</Label>
-								<div className="flex gap-2">
-									<Input
-										id="price"
-										data-testid="shipping-price-input"
-										type="number"
-										step="0.01"
-										min="0"
-										value={formData.price}
-										onChange={(e) => {
-											setFormData((prev) => ({ ...prev, price: e.target.value }))
-											if (fieldErrors.price) {
-												setFieldErrors((prev) => ({ ...prev, price: '' }))
-											}
-										}}
-										placeholder="0.00"
-										className={`flex-1 ${fieldErrors.price ? 'border-red-500' : ''}`}
-									/>
-									<Select
-										value={formData.currency}
-										onValueChange={(value) => {
-											setFormData((prev) => ({ ...prev, currency: value }))
-											if (fieldErrors.currency) {
-												setFieldErrors((prev) => ({ ...prev, currency: '' }))
-											}
-										}}
-									>
-										<SelectTrigger
-											className={`w-20 ${fieldErrors.currency ? 'border-red-500' : ''}`}
-											data-testid="shipping-currency-select"
+							{/* Price - Hide for digital delivery (always free) */}
+							{formData.service !== 'digital' && (
+								<div className="space-y-2">
+									<Label htmlFor="price" className="font-medium">
+										Price *
+									</Label>
+									<div className="flex gap-2">
+										<Input
+											id="price"
+											data-testid="shipping-price-input"
+											type="number"
+											step="0.01"
+											min="0"
+											value={formData.price}
+											onChange={(e) => {
+												setFormData((prev) => ({ ...prev, price: e.target.value }))
+												if (fieldErrors.price) {
+													setFieldErrors((prev) => ({ ...prev, price: '' }))
+												}
+											}}
+											placeholder="0.00"
+											className={`flex-1 ${fieldErrors.price ? 'border-red-500' : ''}`}
+										/>
+										<Select
+											value={formData.currency}
+											onValueChange={(value) => {
+												setFormData((prev) => ({ ...prev, currency: value }))
+												if (fieldErrors.currency) {
+													setFieldErrors((prev) => ({ ...prev, currency: '' }))
+												}
+											}}
 										>
-											<SelectValue>{formData.currency}</SelectValue>
-										</SelectTrigger>
-										<SelectContent>
-											{CURRENCIES.map((currency) => (
-												<SelectItem key={currency} value={currency}>
-													{currency}
-												</SelectItem>
-											))}
-										</SelectContent>
-									</Select>
-								</div>
-								{(fieldErrors.price || fieldErrors.currency) && (
-									<div className="flex items-center gap-1 text-sm text-red-600">
-										<AlertCircleIcon className="h-4 w-4" />
-										{fieldErrors.price || fieldErrors.currency}
+											<SelectTrigger
+												className={`w-20 ${fieldErrors.currency ? 'border-red-500' : ''}`}
+												data-testid="shipping-currency-select"
+											>
+												<SelectValue>{formData.currency}</SelectValue>
+											</SelectTrigger>
+											<SelectContent>
+												{CURRENCIES.map((currency) => (
+													<SelectItem key={currency} value={currency}>
+														{currency}
+													</SelectItem>
+												))}
+											</SelectContent>
+										</Select>
 									</div>
-								)}
-							</div>
+									{(fieldErrors.price || fieldErrors.currency) && (
+										<div className="flex items-center gap-1 text-sm text-red-600">
+											<AlertCircleIcon className="h-4 w-4" />
+											{fieldErrors.price || fieldErrors.currency}
+										</div>
+									)}
+								</div>
+							)}
 
-							{/* Countries - Hide for pickup services */}
-							{formData.service !== 'pickup' && (
+							{/* Countries - Hide for pickup and digital delivery services */}
+							{formData.service !== 'pickup' && formData.service !== 'digital' && (
 								<div className="space-y-2">
 									<Label htmlFor="countries" className="font-medium">
 										Countries *
 									</Label>
 
+									{/* Worldwide Checkbox */}
+									<div className="flex items-center space-x-2">
+										<Checkbox
+											id="worldwide"
+											checked={isWorldwide}
+											onCheckedChange={(checked) => {
+												setIsWorldwide(checked === true)
+												if (checked) {
+													// Clear countries when worldwide is selected
+													setFormData((prev) => ({
+														...prev,
+														countries: [],
+													}))
+													// Clear country errors
+													if (fieldErrors.countries) {
+														setFieldErrors((prev) => ({ ...prev, countries: '' }))
+													}
+												}
+											}}
+											data-testid="worldwide-checkbox"
+										/>
+										<Label htmlFor="worldwide" className="text-sm font-normal cursor-pointer">
+											Ship worldwide (no country restrictions)
+										</Label>
+									</div>
+
 									{/* Country Selection */}
 									<div className="space-y-2">
 										<Select
 											key={formData.countries.length}
+											disabled={isWorldwide}
 											onValueChange={(countryCode) => {
 												if (!formData.countries.includes(countryCode)) {
 													setFormData((prev) => ({
@@ -491,8 +562,8 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 												}
 											}}
 										>
-											<SelectTrigger data-testid="shipping-country-select">
-												<SelectValue placeholder="Select countries" />
+											<SelectTrigger data-testid="shipping-country-select" disabled={isWorldwide}>
+												<SelectValue placeholder={isWorldwide ? 'Worldwide - all countries' : 'Select countries'} />
 											</SelectTrigger>
 											<SelectContent>
 												{Object.values(COUNTRIES_ISO)
@@ -506,21 +577,35 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 										</Select>
 
 										<div className="flex flex-wrap gap-2 min-h-[40px] p-2 border rounded-md">
-											{formData.countries.map((countryCode) => (
-												<Badge key={countryCode} variant="secondary" className="flex items-center gap-1 bg-black text-white">
-													{getCountryName(countryCode)}
-													<XIcon
-														className="w-3 h-3 cursor-pointer pointer-events-auto"
-														onClick={() =>
-															setFormData((prev) => ({
-																...prev,
-																countries: prev.countries.filter((c) => c !== countryCode),
-															}))
-														}
-													/>
-												</Badge>
-											))}
-											{formData.countries.length === 0 && <span className="text-muted-foreground text-sm">No countries selected</span>}
+											{isWorldwide ? (
+												<span className="text-muted-foreground text-sm">Worldwide shipping - all countries included</span>
+											) : (
+												<>
+													{formData.countries.map((countryCode) => (
+														<Badge
+															key={countryCode}
+															variant="secondary"
+															className="flex items-center gap-1 bg-black text-white [&>svg]:pointer-events-auto"
+														>
+															{getCountryName(countryCode)}
+															<button
+																type="button"
+																className="ml-1 hover:bg-white/20 rounded-full p-0.5"
+																onClick={(e) => {
+																	e.stopPropagation()
+																	setFormData((prev) => ({
+																		...prev,
+																		countries: prev.countries.filter((c) => c !== countryCode),
+																	}))
+																}}
+															>
+																<XIcon className="w-3 h-3" />
+															</button>
+														</Badge>
+													))}
+													{formData.countries.length === 0 && <span className="text-muted-foreground text-sm">No countries selected</span>}
+												</>
+											)}
 										</div>
 									</div>
 								</div>
