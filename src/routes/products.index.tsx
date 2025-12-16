@@ -249,12 +249,25 @@ function ProductsRoute() {
 
 	// Render product hero content
 	const renderProductHero = () => (
-		<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-16 lg:mt-0">
-			<div className="flex items-center justify-center h-24 lg:h-32">
-				<h1 className="text-4xl lg:text-5xl font-theylive transition-opacity duration-500">{displayTitle || 'Loading...'}</h1>
+		<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-8 lg:mt-0">
+			{/* Featured Product Image */}
+			{backgroundImageUrl && (
+				<Link to={`/products/${currentProductId}`} className="block mb-4 max-w-xs lg:max-w-sm">
+					<div className="relative aspect-square overflow-hidden rounded-lg shadow-xl ring-2 ring-white/20 hover:ring-secondary transition-all">
+						<img
+							src={backgroundImageUrl}
+							alt={displayTitle || 'Featured product'}
+							className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+						/>
+					</div>
+				</Link>
+			)}
+
+			<div className="flex items-center justify-center h-16 lg:h-20">
+				<h1 className="text-2xl lg:text-4xl font-theylive transition-opacity duration-500">{displayTitle || 'Loading...'}</h1>
 			</div>
 
-			<div className="flex flex-col gap-6">
+			<div className="flex flex-col gap-4">
 				<Link to={`/products/${currentProductId}`}>
 					<Button variant="secondary" size="lg">
 						View Product
