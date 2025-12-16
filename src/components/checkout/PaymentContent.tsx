@@ -12,7 +12,7 @@ import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import { NDKUser } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
 
 export interface PaymentContentRef {
@@ -61,18 +61,30 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 	) => {
 		const ndkState = useStore(ndkStore)
 		const processorRef = useRef<LightningPaymentProcessorRef | null>(null)
+		const bulkQueueRef = useRef<string[]>([])
+		const isBulkPayingRef = useRef(false)
+		const invoicesRef = useRef<PaymentInvoiceData[]>(invoices)
 
 		// Clamp index to valid range
 		const activeIndex = Math.min(Math.max(0, currentIndex), Math.max(0, invoices.length - 1))
 		const currentInvoice = invoices[activeIndex]
+		const currentInvoiceRef = useRef<PaymentInvoiceData | undefined>(currentInvoice)
+
+		// Keep refs in sync to avoid stale closures in bulk flow
+		useEffect(() => {
+			invoicesRef.current = invoices
+			currentInvoiceRef.current = currentInvoice
+		}, [invoices, currentInvoice])
 
 		// Count completed invoices from parent state (single source of truth)
 		// In 'order' mode, only 'paid' counts as completed (skipped can be re-attempted)
+		const isCompletedForProgress = (inv: PaymentInvoiceData) => inv.status === 'paid' || inv.status === 'skipped' || inv.status === 'expired'
+
 		const completedCount = useMemo(() => {
 			if (mode === 'order') {
 				return invoices.filter((inv) => inv.status === 'paid').length
 			}
-			return invoices.filter((inv) => inv.status === 'paid' || inv.status === 'skipped').length
+			return invoices.filter(isCompletedForProgress).length
 		}, [invoices, mode])
 
 		// Build payment data for current invoice only
@@ -115,6 +127,53 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 			[invoices.length, onNavigate],
 		)
 
+		const triggerNextBulkPayment = useCallback(async () => {
+			if (!isBulkPayingRef.current) return
+
+			if (!nwcEnabled) {
+				isBulkPayingRef.current = false
+				toast.error('NWC not available for bulk payments')
+				return
+			}
+
+			const invoicesSnapshot = invoicesRef.current
+			const targetId = bulkQueueRef.current[0]
+			const currentSnapshot = currentInvoiceRef.current
+
+			if (!targetId) {
+				isBulkPayingRef.current = false
+				toast.success('All invoices paid')
+				return
+			}
+
+			if (!currentSnapshot || currentSnapshot.id !== targetId) {
+				const targetIndex = invoicesSnapshot.findIndex((inv) => inv.id === targetId)
+				if (targetIndex === -1) {
+					// Invoice disappeared; drop and continue
+					bulkQueueRef.current.shift()
+					triggerNextBulkPayment()
+					return
+				}
+				onNavigate?.(Math.min(Math.max(0, targetIndex), invoicesSnapshot.length - 1))
+				setTimeout(triggerNextBulkPayment, 200)
+				return
+			}
+
+			if (!processorRef.current?.isReady()) {
+				setTimeout(triggerNextBulkPayment, 250)
+				return
+			}
+
+			try {
+				await processorRef.current.triggerNwcPayment()
+			} catch (error) {
+				console.error('NWC payment failed during bulk run:', error)
+				isBulkPayingRef.current = false
+				bulkQueueRef.current = []
+				toast.error('Bulk payment stopped')
+			}
+		}, [nwcEnabled, onNavigate])
+
 		// Use the invoice ID from the result to ensure we're marking the correct invoice
 		const handlePaymentComplete = useCallback(
 			(result: PaymentResult) => {
@@ -126,8 +185,13 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 				}
 				console.log(`✅ Payment complete for invoice: ${invoiceId}`)
 				onPaymentComplete?.(invoiceId, result.preimage || '')
+
+				if (isBulkPayingRef.current) {
+					bulkQueueRef.current = bulkQueueRef.current.filter((id) => id !== invoiceId)
+					setTimeout(triggerNextBulkPayment, 250)
+				}
 			},
-			[currentInvoice?.id, onPaymentComplete],
+			[currentInvoice?.id, onPaymentComplete, triggerNextBulkPayment],
 		)
 
 		const handlePaymentFailed = useCallback(
@@ -139,6 +203,11 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 				}
 				console.log(`❌ Payment failed for invoice: ${invoiceId}: ${result.error}`)
 				onPaymentFailed?.(invoiceId, result.error || 'Payment failed')
+
+				if (isBulkPayingRef.current) {
+					isBulkPayingRef.current = false
+					bulkQueueRef.current = []
+				}
 			},
 			[currentInvoice?.id, onPaymentFailed],
 		)
@@ -150,30 +219,35 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 			}
 			console.log(`⏭️ Skipping payment for invoice: ${currentInvoice.id}`)
 			onSkipPayment?.(currentInvoice.id)
-		}, [currentInvoice, onSkipPayment])
+			if (isBulkPayingRef.current) {
+				bulkQueueRef.current = bulkQueueRef.current.filter((id) => id !== currentInvoice.id)
+				setTimeout(triggerNextBulkPayment, 200)
+			}
+		}, [currentInvoice, onSkipPayment, triggerNextBulkPayment])
 
-		// Pay all with NWC - simplified version that navigates through invoices
+		// Pay all with NWC - navigates through pending invoices and processes them sequentially
 		const payAllWithNwc = useCallback(async () => {
-			const pendingInvoices = invoices.filter((inv) => inv.status === 'pending')
-			if (pendingInvoices.length === 0) {
+			if (!nwcEnabled) {
+				toast.error('NWC not available for bulk payments')
+				return
+			}
+
+			if (isBulkPayingRef.current) {
+				toast.info('Bulk payment already in progress')
+				return
+			}
+
+			const pendingInvoiceIds = invoices.filter((inv) => inv.status === 'pending').map((inv) => inv.id)
+			if (pendingInvoiceIds.length === 0) {
 				toast.info('No pending invoices to pay')
 				return
 			}
 
-			toast.info(`Starting payment for ${pendingInvoices.length} invoices...`)
-
-			// For now, just trigger payment on current invoice if processor is ready
-			if (processorRef.current?.isReady()) {
-				try {
-					await processorRef.current.triggerNwcPayment()
-				} catch (error) {
-					console.error('NWC payment failed:', error)
-					toast.error('Payment failed')
-				}
-			} else {
-				toast.error('Payment processor not ready')
-			}
-		}, [invoices])
+			toast.info(`Starting payment for ${pendingInvoiceIds.length} invoices...`)
+			bulkQueueRef.current = pendingInvoiceIds
+			isBulkPayingRef.current = true
+			triggerNextBulkPayment()
+		}, [invoices, nwcEnabled, triggerNextBulkPayment])
 
 		useImperativeHandle(ref, () => ({ payAllWithNwc }), [payAllWithNwc])
 
@@ -185,7 +259,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 		// Check if current invoice is already completed
 		// In 'order' mode, only 'paid' is considered completed (skipped can be re-attempted)
 		const isCurrentCompleted =
-			mode === 'order' ? currentInvoice.status === 'paid' : currentInvoice.status === 'paid' || currentInvoice.status === 'skipped'
+			mode === 'order' ? currentInvoice.status === 'paid' : isCompletedForProgress(currentInvoice)
 
 		// Get wallet info for current invoice
 		const sellerPubkey = currentInvoice.recipientPubkey

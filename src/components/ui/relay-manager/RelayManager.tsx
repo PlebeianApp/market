@@ -1,17 +1,19 @@
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { useNDK } from '@/lib/stores/ndk'
-import { RelayCard } from './RelayCard'
-import { Plus, RefreshCw, Globe } from 'lucide-react'
-import { useState, useEffect } from 'react'
-import { toast } from 'sonner'
+import { ndkStore, ndkActions } from '@/lib/stores/ndk'
 import type { NDKRelay } from '@nostr-dev-kit/ndk'
+import { useStore } from '@tanstack/react-store'
+import { Globe, Plus, RefreshCw } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
+import { RelayCard } from './RelayCard'
 
 export function RelayManager() {
-	const { ndk, addSingleRelay, removeRelay, connectToDefaultRelays, getRelays } = useNDK()
+	const ndkState = useStore(ndkStore)
+	const { ndk } = ndkState
 	const [newRelayUrl, setNewRelayUrl] = useState('')
 	const [relays, setRelays] = useState<{ explicit: NDKRelay[]; outbox: NDKRelay[] }>({ explicit: [], outbox: [] })
 	const [isLoading, setIsLoading] = useState(false)
@@ -19,17 +21,17 @@ export function RelayManager() {
 	// Update relays when NDK changes
 	useEffect(() => {
 		if (ndk) {
-			const currentRelays = getRelays()
+			const currentRelays = ndkActions.getRelays()
 			setRelays(currentRelays)
 		}
-	}, [ndk, getRelays])
+	}, [ndk, ndkActions.getRelays])
 
 	// Listen for relay changes
 	useEffect(() => {
 		if (!ndk) return
 
 		const updateRelays = () => {
-			const currentRelays = getRelays()
+			const currentRelays = ndkActions.getRelays()
 			setRelays(currentRelays)
 		}
 
@@ -41,7 +43,7 @@ export function RelayManager() {
 			ndk.pool.off('relay:connect', updateRelays)
 			ndk.pool.off('relay:disconnect', updateRelays)
 		}
-	}, [ndk, getRelays])
+	}, [ndk, ndkActions.getRelays])
 
 	const handleAddRelay = async (e: React.FormEvent) => {
 		e.preventDefault()
@@ -49,13 +51,13 @@ export function RelayManager() {
 
 		setIsLoading(true)
 		try {
-			const success = addSingleRelay(newRelayUrl.trim())
+			const success = ndkActions.addSingleRelay(newRelayUrl.trim())
 			if (success) {
 				setNewRelayUrl('')
 				toast.success('Relay added successfully')
 				// Update relay list
 				setTimeout(() => {
-					const currentRelays = getRelays()
+					const currentRelays = ndkActions.getRelays()
 					setRelays(currentRelays)
 				}, 500)
 			} else {
@@ -71,11 +73,11 @@ export function RelayManager() {
 
 	const handleRemoveRelay = async (relayUrl: string) => {
 		try {
-			const success = removeRelay(relayUrl)
+			const success = ndkActions.removeRelay(relayUrl)
 			if (success) {
 				toast.success('Relay removed successfully')
 				// Update relay list
-				const currentRelays = getRelays()
+				const currentRelays = ndkActions.getRelays()
 				setRelays(currentRelays)
 			} else {
 				toast.error('Failed to remove relay')
@@ -88,12 +90,12 @@ export function RelayManager() {
 
 	const handleConnectToDefaults = async () => {
 		try {
-			const success = connectToDefaultRelays()
+			const success = ndkActions.connectToDefaultRelays()
 			if (success) {
 				toast.success('Connected to default relays')
 				// Update relay list
 				setTimeout(() => {
-					const currentRelays = getRelays()
+					const currentRelays = ndkActions.getRelays()
 					setRelays(currentRelays)
 				}, 500)
 			} else {
