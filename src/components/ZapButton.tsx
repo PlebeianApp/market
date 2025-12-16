@@ -1,11 +1,9 @@
 import { ZapDialog } from '@/components/ZapDialog'
-import { ndkActions } from '@/lib/stores/ndk'
 import { cn } from '@/lib/utils'
+import { useZapCapability } from '@/queries/profiles'
 import { NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
 import * as React from 'react'
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { useZapCapability, zapCapabilityQueryOptions } from '@/queries/profiles'
 import { Button } from './ui/button'
 import { Spinner } from './ui/spinner'
 

@@ -8,7 +8,8 @@ export const fetchProfileByNpub = async (npub: string): Promise<NDKUserProfile |
 	if (!ndk) throw new Error('NDK not initialized')
 
 	try {
-		const user = ndk.getUser({ npub })
+		const user = await ndk.fetchUser(npub)
+		if (!user) throw new Error('User not found')
 		return await user.fetchProfile()
 	} catch (e) {
 		console.error('Failed to fetch profile with NDK user method', e)
@@ -21,7 +22,7 @@ export const fetchProfileByNip05 = async (nip05: string): Promise<NDKUserProfile
 	if (!ndk) throw new Error('NDK not initialized')
 
 	try {
-		const user = await ndk.getUserFromNip05(nip05)
+		const user = await ndk.fetchUser(nip05)
 		if (!user) throw new Error('User not found')
 		return await user.fetchProfile()
 	} catch (e) {
@@ -35,20 +36,8 @@ export const fetchProfileByIdentifier = async (identifier: string): Promise<{ pr
 	if (!ndk) throw new Error('NDK not initialized')
 
 	try {
-		if (identifier.includes('@')) {
-			const user = await ndk.getUserFromNip05(identifier)
-			if (!user) return { profile: null, user: null }
-			const profile = await user.fetchProfile()
-			return { profile, user }
-		}
-
-		if (identifier.startsWith('npub')) {
-			const user = ndk.getUser({ npub: identifier })
-			const profile = await user.fetchProfile()
-			return { profile, user }
-		}
-
-		const user = ndk.getUser({ hexpubkey: identifier })
+		const user = await ndk.fetchUser(identifier)
+		if (!user) return { profile: null, user: null }
 		const profile = await user.fetchProfile()
 		return { profile, user }
 	} catch (e) {
@@ -80,7 +69,9 @@ export const validateNip05 = async (pubkey: string): Promise<boolean | null> => 
 	if (!ndk) throw new Error('NDK not initialized')
 
 	try {
-		const user = ndk.getUser({ pubkey })
+		const user = await ndk.fetchUser(pubkey)
+		if (!user) return null
+
 		const profile = await user.fetchProfile()
 		if (!profile?.nip05) return null
 
@@ -126,19 +117,19 @@ export const useProfileNip05 = (pubkey: string) => {
 }
 
 export const checkZapCapability = async (event: NDKEvent | NDKUser): Promise<boolean> => {
-	const signer = ndkActions.getSigner()
-	if (!signer) throw new Error('No signer available')
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	const pubkey = event.pubkey
+	if (!pubkey) return false
 
 	try {
-		if (event instanceof NDKUser) {
-			const zapInfo = await event.getZapInfo()
-			return zapInfo.size > 0
-		} else {
-			const userToZap = await signer.user()
-			if (!userToZap) throw new Error('No user available')
-			const zapInfo = await userToZap.getZapInfo()
-			return zapInfo.size > 0
-		}
+		const baseUser = event instanceof NDKUser ? event : event.author
+		const userToZap = baseUser?.ndk ? baseUser : await ndk.fetchUser(pubkey)
+		if (!userToZap) return false
+
+		const zapInfo = await userToZap.getZapInfo()
+		return zapInfo.size > 0
 	} catch (e) {
 		console.error('Failed to check zap capability:', e)
 		return false
@@ -178,7 +169,8 @@ export const checkZapCapabilityByNpub = async (npub: string): Promise<boolean> =
 		if (!ndk) throw new Error('NDK not initialized')
 
 		// Get user from NDK (ensures NDK instance is attached)
-		const user = ndk.getUser({ npub })
+		const user = await ndk.fetchUser(npub)
+		if (!user) return false
 
 		// Check zap capability - get zap info directly
 		const zapInfo = await user.getZapInfo()
@@ -207,7 +199,8 @@ export const getZapCapabilityInfo = async (npub: string): Promise<ZapCapabilityI
 		if (!ndk) throw new Error('NDK not initialized')
 
 		// Get user from NDK (ensures NDK instance is attached)
-		const user = ndk.getUser({ npub })
+		const user = await ndk.fetchUser(npub)
+		if (!user) return defaultResult
 
 		// Get zap info
 		const zapInfo = await user.getZapInfo()

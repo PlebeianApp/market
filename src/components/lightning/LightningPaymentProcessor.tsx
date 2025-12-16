@@ -166,7 +166,9 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 							invoicePreview: payment.pr.substring(0, 30) + '...',
 						})
 						setInvoice(payment.pr)
-						return undefined // Don't auto-pay, just capture the invoice
+						// Return a placeholder confirmation so zapper doesn't treat this as a failure;
+						// actual payment happens via the processor UI.
+						return { pr: payment.pr }
 					},
 				})
 
@@ -179,6 +181,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 					success: false,
 					error: error instanceof Error ? error.message : 'Failed to generate invoice',
 				})
+				hasRequestedInvoiceRef.current = false
 			} finally {
 				setIsGeneratingInvoice(false)
 			}

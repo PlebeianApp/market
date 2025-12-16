@@ -28,6 +28,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 	const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState<boolean>(false)
 	const [isAnonymousZap, setIsAnonymousZap] = useState<boolean>(false)
 	const [step, setStep] = useState<'amount' | 'generateInvoice'>('amount')
+	const [paymentSessionId, setPaymentSessionId] = useState(0)
 
 	// NDK state for NWC functionality
 	const ndkState = useNDK()
@@ -56,6 +57,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 	// Parse amount to number, handle empty/invalid values
 	const numericAmount = parseInt(amount, 10)
 	const isValidAmount = !isNaN(numericAmount) && numericAmount > 0
+	const canProceedToPayment = isValidAmount && !!lightningAddress
 
 	// Create payment data for the processor
 	const paymentData: LightningPaymentData = useMemo(
@@ -104,6 +106,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 		setAdvancedSettingsOpen(false)
 		setIsAnonymousZap(false)
 		setStep('amount')
+		setPaymentSessionId((id) => id + 1)
 	}
 
 	const handleDialogOpenChange = (open: boolean) => {
@@ -111,6 +114,21 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 			resetState()
 		}
 		onOpenChange(open)
+	}
+
+	const handleContinueToPayment = () => {
+		if (!isValidAmount) {
+			toast.error('Please enter a valid zap amount')
+			return
+		}
+
+		if (!lightningAddress) {
+			toast.error('No Lightning address available for this user')
+			return
+		}
+
+		setPaymentSessionId((id) => id + 1)
+		setStep('generateInvoice')
 	}
 
 	// Show loading state while profile is being fetched
@@ -208,16 +226,17 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 						{/* Footer */}
 						<div className="py-2">
 							<div className="flex gap-2">
-								{hasNwc && (
-									<Button onClick={() => setStep('generateInvoice')} className="flex-1" variant="primary">
-										<Zap className="mr-2 h-4 w-4" />
-										Pay with NWC
-									</Button>
-								)}
-								<Button onClick={() => setStep('generateInvoice')} className={hasNwc ? 'flex-1' : 'w-full'} variant="focus">
+								<Button onClick={handleContinueToPayment} className="w-full" variant="focus" disabled={!canProceedToPayment}>
 									<Zap className="mr-2 h-4 w-4" />
-									Generate Invoice
+									Continue to payment
 								</Button>
+							</div>
+							<div className="text-xs text-muted-foreground mt-2">
+								{!lightningAddress
+									? 'No Lightning address found for this user.'
+									: hasNwc
+										? 'NWC connected — you can pay via NWC, WebLN, or QR in the next step.'
+										: 'You can pay via WebLN or QR in the next step.'}
 							</div>
 						</div>
 					</div>
@@ -237,6 +256,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 						{lightningAddress ? (
 							<div className="w-full overflow-hidden">
 								<LightningPaymentProcessor
+									key={paymentSessionId}
 									data={paymentData}
 									onPaymentComplete={handlePaymentComplete}
 									onPaymentFailed={handlePaymentFailed}
