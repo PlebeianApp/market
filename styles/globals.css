@@ -277,6 +277,18 @@ button {
 	body {
 		@apply bg-background text-foreground;
 	}
+
+	/* Hide number input spinners across all browsers */
+	input[type='number']::-webkit-outer-spin-button,
+	input[type='number']::-webkit-inner-spin-button {
+		-webkit-appearance: none;
+		margin: 0;
+	}
+
+	input[type='number'] {
+		-moz-appearance: textfield;
+		appearance: textfield;
+	}
 }
 
 /* Custom utility classes */
@@ -418,6 +430,8 @@ button {
 
 	.hero-image-container {
 		max-width: 100%;
+		min-height: 0; /* Fix for Firefox: aspect-ratio in grid requires min-height: 0 */
+		overflow: hidden; /* Required alongside min-height: 0 for aspect-ratio in grid */
 	}
 
 	/* Custom utility classes */
