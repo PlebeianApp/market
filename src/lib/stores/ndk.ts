@@ -35,15 +35,31 @@ export const ndkActions = {
 		const state = ndkStore.state
 		if (state.ndk) return state.ndk
 
-		const LOCAL_ONLY = configStore.state.config.appRelay
-		// const LOCAL_ONLY = false // configStore.state.config.appRelay
-
 		const appRelay = configStore.state.config.appRelay
-		const explicitRelays = LOCAL_ONLY ? ([appRelay].filter(Boolean) as string[]) : relays && relays.length > 0 ? relays : defaultRelaysUrls
+		// Read from Bun.env (set via package.json script)
+		// @ts-ignore - Bun.env is available in Bun runtime
+		const localRelayOnly = typeof Bun !== 'undefined' && Bun.env?.LOCAL_RELAY_ONLY === 'true'
+
+		// Determine which relays to use
+		let explicitRelays: string[]
+
+		if (appRelay) {
+			// We have an app relay configured
+			if (localRelayOnly) {
+				// Dev mode: local relay only
+				explicitRelays = [appRelay]
+			} else {
+				// Production or dev with defaults: app relay + default relays
+				explicitRelays = Array.from(new Set([appRelay, ...defaultRelaysUrls]))
+			}
+		} else {
+			// No app relay: use passed relays or default relays
+			explicitRelays = relays && relays.length > 0 ? relays : defaultRelaysUrls
+		}
 
 		const ndk = new NDK({
 			explicitRelayUrls: explicitRelays,
-			enableOutboxModel: LOCAL_ONLY ? false : true,
+			enableOutboxModel: localRelayOnly ? false : true,
 			// aiGuardrails: true,
 		})
 
