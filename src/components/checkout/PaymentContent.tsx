@@ -78,11 +78,13 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 
 		// Count completed invoices from parent state (single source of truth)
 		// In 'order' mode, only 'paid' counts as completed (skipped can be re-attempted)
+		const isCompletedForProgress = (inv: PaymentInvoiceData) => inv.status === 'paid' || inv.status === 'skipped' || inv.status === 'expired'
+
 		const completedCount = useMemo(() => {
 			if (mode === 'order') {
 				return invoices.filter((inv) => inv.status === 'paid').length
 			}
-			return invoices.filter((inv) => inv.status === 'paid' || inv.status === 'skipped').length
+			return invoices.filter(isCompletedForProgress).length
 		}, [invoices, mode])
 
 		// Build payment data for current invoice only
@@ -257,7 +259,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 		// Check if current invoice is already completed
 		// In 'order' mode, only 'paid' is considered completed (skipped can be re-attempted)
 		const isCurrentCompleted =
-			mode === 'order' ? currentInvoice.status === 'paid' : currentInvoice.status === 'paid' || currentInvoice.status === 'skipped'
+			mode === 'order' ? currentInvoice.status === 'paid' : isCompletedForProgress(currentInvoice)
 
 		// Get wallet info for current invoice
 		const sellerPubkey = currentInvoice.recipientPubkey

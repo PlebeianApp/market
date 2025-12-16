@@ -176,6 +176,10 @@ function RouteComponent() {
 		return 2 + invoiceStepCount + 1
 	}, [invoiceStepCount])
 
+	const isInvoiceCompleteForFlow = (invoice: PaymentInvoiceData) => {
+		return invoice.status === 'paid' || invoice.status === 'skipped' || invoice.status === 'expired'
+	}
+
 	// Ensure currentInvoiceIndex stays within bounds
 	const safeInvoiceIndex = useMemo(() => {
 		if (invoices.length === 0) return 0
@@ -444,7 +448,7 @@ function RouteComponent() {
 		setInvoices((prevInvoices) => {
 			const updated = prevInvoices.map((invoice) => (invoice.id === invoiceId ? { ...invoice, ...changes } : invoice))
 
-			allCompleted = updated.length > 0 && updated.every((inv) => inv.status === 'paid' || inv.status === 'skipped')
+			allCompleted = updated.length > 0 && updated.every(isInvoiceCompleteForFlow)
 
 			if (!options?.skipAutoAdvance && !allCompleted) {
 				const currentIndex = updated.findIndex((inv) => inv.id === invoiceId)
@@ -542,6 +546,16 @@ function RouteComponent() {
 
 		toast.info('Payment skipped - you can pay this invoice later from your order history')
 	}
+
+	// Safety net: if all invoices are done, move to completion even if a handler was missed
+	useEffect(() => {
+		if (currentStep === 'payment' && invoices.length > 0) {
+			const allCompleted = invoices.every(isInvoiceCompleteForFlow)
+			if (allCompleted) {
+				setCurrentStep('complete')
+			}
+		}
+	}, [currentStep, invoices])
 
 	// Simplified pay all function using PaymentContent ref
 	const handlePayAllInvoices = async () => {
