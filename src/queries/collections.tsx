@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { collectionKeys, collectionsKeys } from './queryKeyFactory'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 import { FEATURED_ITEMS_CONFIG } from '@/lib/schemas/featured'
+import { naddrFromAddress } from '@/lib/nostr/naddr'
 
 // --- DATA FETCHING FUNCTIONS ---
 /**
@@ -119,13 +120,8 @@ export const fetchCollectionByATag = async (pubkey: string, dTag: string) => {
 	if (!ndk) throw new Error('NDK not initialized')
 	if (!pubkey || !dTag) return null
 
-	const filter: NDKFilter = {
-		kinds: [30405 as NDKKind],
-		authors: [pubkey],
-		'#d': [dTag],
-	}
-
-	return await ndk.fetchEvent(filter)
+	const naddr = naddrFromAddress(30405, pubkey, dTag)
+	return await ndk.fetchEvent(naddr)
 }
 
 /**

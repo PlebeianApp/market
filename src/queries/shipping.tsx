@@ -1,6 +1,7 @@
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND, SHIPPING_STATUS } from '@/lib/schemas/order'
 import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 import { ndkActions } from '@/lib/stores/ndk'
+import { naddrFromAddress } from '@/lib/nostr/naddr'
 import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -53,20 +54,14 @@ export const fetchShippingOptionByCoordinates = async (pubkey: string, dTag: str
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const filter: NDKFilter = {
-		kinds: [SHIPPING_KIND],
-		authors: [pubkey],
-		'#d': [dTag],
-	}
+	const naddr = naddrFromAddress(SHIPPING_KIND, pubkey, dTag)
+	const event = await ndk.fetchEvent(naddr)
 
-	const events = await ndk.fetchEvents(filter)
-	const eventArray = Array.from(events)
-
-	if (eventArray.length === 0) {
+	if (!event) {
 		throw new Error('Shipping option not found')
 	}
 
-	return eventArray[0]
+	return event
 }
 
 /**
