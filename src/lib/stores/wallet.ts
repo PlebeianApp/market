@@ -2,6 +2,8 @@ import { Store } from '@tanstack/store'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
 import { useEffect, useState } from 'react'
+import NDK, { type NDKSigner } from '@nostr-dev-kit/ndk'
+import { NDKNWCWallet } from '@nostr-dev-kit/wallet'
 
 // Wallet interface
 export interface Wallet {
@@ -65,6 +67,38 @@ export const parseNwcUri: NwcUriParser = (uri: string) => {
 		console.error('Failed to parse NWC URI:', e)
 		return null
 	}
+}
+
+export interface NwcClient {
+	nwcUri: string
+	relayUrl: string
+	ndk: NDK
+	wallet: NDKNWCWallet
+}
+
+const nwcClientCache = new Map<string, Promise<NwcClient>>()
+let cachedSigner: NDKSigner | undefined
+
+const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
+	const timeoutPromise = new Promise<never>((_, reject) => {
+		setTimeout(() => reject(new Error(`${label} timeout`)), timeoutMs)
+	})
+	return Promise.race([promise, timeoutPromise])
+}
+
+const cleanupAllCachedNwcWalletListeners = async (): Promise<void> => {
+	const entries = Array.from(nwcClientCache.values())
+	nwcClientCache.clear()
+	await Promise.allSettled(
+		entries.map(async (clientPromise) => {
+			try {
+				const client = await clientPromise
+				client.wallet.removeAllListeners?.()
+			} catch {
+				// ignore
+			}
+		}),
+	)
 }
 
 // Actions for the wallet store
@@ -243,6 +277,76 @@ export const walletActions = {
 	// Get wallets
 	getWallets: (): Wallet[] => {
 		return walletStore.state.wallets
+	},
+
+	/**
+	 * Returns a cached NWC client (NDK + NDKNWCWallet) for a given NWC URI and signer.
+	 * Cache is cleared automatically when signer instance changes.
+	 */
+	getOrCreateNwcClient: async (nwcUri: string, signer: NDKSigner, timeoutMs: number = 10000): Promise<NwcClient | null> => {
+		if (!nwcUri) return null
+		if (!signer) return null
+
+		if (cachedSigner !== signer) {
+			await cleanupAllCachedNwcWalletListeners()
+			cachedSigner = signer
+		}
+
+		const parsed = parseNwcUri(nwcUri)
+		if (!parsed?.relay) return null
+
+		const existing = nwcClientCache.get(nwcUri)
+		if (existing) {
+			try {
+				const client = await existing
+				if (client.relayUrl !== parsed.relay) {
+					try {
+						client.wallet.removeAllListeners?.()
+					} catch {
+						// ignore
+					}
+					nwcClientCache.delete(nwcUri)
+				} else {
+					const connectedRelays = client.ndk?.pool?.connectedRelays?.() || []
+					if (connectedRelays.length === 0) {
+						await withTimeout(client.ndk.connect(), timeoutMs, 'NWC relay connect')
+					}
+					return client
+				}
+			} catch {
+				nwcClientCache.delete(nwcUri)
+			}
+		}
+
+		const createPromise = (async (): Promise<NwcClient> => {
+			const ndk = new NDK({ explicitRelayUrls: [parsed.relay] })
+			ndk.signer = signer
+
+			try {
+				await withTimeout(ndk.connect(), timeoutMs, 'NWC relay connect')
+			} catch (error) {
+				throw error
+			}
+
+			const wallet = new NDKNWCWallet(ndk as any, { pairingCode: nwcUri })
+
+			return {
+				nwcUri,
+				relayUrl: parsed.relay,
+				ndk,
+				wallet,
+			}
+		})()
+
+		nwcClientCache.set(nwcUri, createPromise)
+
+		try {
+			return await createPromise
+		} catch (error) {
+			nwcClientCache.delete(nwcUri)
+			console.error('Failed to create NWC client:', error)
+			return null
+		}
 	},
 }
 

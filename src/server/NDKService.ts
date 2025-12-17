@@ -104,9 +104,8 @@ export class NDKService {
 		}
 	}
 
-	public disconnect(): void {
+	public shutdown(): void {
 		if (this.ndk) {
-			// NDK doesn't have a direct disconnect method, we just set to null
 			this.ndk = null
 		}
 	}
