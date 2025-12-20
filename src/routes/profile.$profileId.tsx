@@ -245,7 +245,7 @@ function RouteComponent() {
 						<ItemGrid
 							title={
 								<div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 text-center sm:text-left">
-									<span className="text-2xl font-heading">More products from</span>
+									<span className="text-2xl font-heading">Products from</span>
 									<ProfileName pubkey={user?.pubkey || ''} className="text-2xl font-heading" />
 								</div>
 							}
