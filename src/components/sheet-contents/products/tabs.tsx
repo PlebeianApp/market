@@ -220,7 +220,7 @@ export function DetailTab() {
 			{/* Currency Dropdown */}
 			<div className="space-y-2">
 				<Label htmlFor="currency" className="text-sm font-medium">
-					Currency <span className="text-red-500">*</span>
+					Choose your local currency <span className="text-red-500">*</span>
 				</Label>
 				<Select value={currency} onValueChange={handleCurrencyChange}>
 					<SelectTrigger>
