@@ -176,6 +176,11 @@ const cartQueryClient = new QueryClient({
 // Helper to check if an ID looks like a Nostr event ID (64-hex characters)
 const isEventId = (id: string): boolean => /^[a-f0-9]{64}$/i.test(id)
 
+// Helper to check if a string is a valid Nostr pubkey (64-hex characters)
+const isValidPubkey = (pubkey: string | undefined | null): pubkey is string => {
+	return typeof pubkey === 'string' && /^[a-f0-9]{64}$/i.test(pubkey)
+}
+
 /**
  * Fetches a product event by ID.
  * Supports both event IDs (64-hex characters) and d-tags.
@@ -314,8 +319,8 @@ export const cartActions = {
 			amount = productData.amount
 		}
 
-		if (!sellerPubkey) {
-			console.error('Cannot add product without seller pubkey')
+		if (!isValidPubkey(sellerPubkey)) {
+			console.error('Cannot add product without valid seller pubkey:', sellerPubkey)
 			return
 		}
 
@@ -957,24 +962,17 @@ export const cartActions = {
 		const state = cartStore.state
 		const grouped: Record<string, CartProduct[]> = {}
 
-		const unknownSeller = 'unknown'
-		grouped[unknownSeller] = []
-
 		Object.values(state.cart.products).forEach((product) => {
-			if (product.sellerPubkey) {
+			// Only group products with valid pubkeys (64-char hex strings)
+			if (isValidPubkey(product.sellerPubkey)) {
 				const sellerPubkey = product.sellerPubkey
 				if (!grouped[sellerPubkey]) {
 					grouped[sellerPubkey] = []
 				}
 				grouped[sellerPubkey].push(product)
 			} else {
-				grouped[unknownSeller].push(product)
-			}
-		})
-
-		Object.keys(grouped).forEach((key) => {
-			if (grouped[key].length === 0) {
-				delete grouped[key]
+				// Log invalid products for debugging but don't crash
+				console.warn('Product has invalid sellerPubkey, skipping:', product.id, product.sellerPubkey)
 			}
 		})
 

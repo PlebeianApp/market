@@ -16,11 +16,27 @@ interface UserWithAvatarProps {
 	disableLink?: boolean
 }
 
+// Helper to check if a string is a valid Nostr pubkey (64-hex characters)
+const isValidPubkey = (pubkey: string): boolean => /^[a-f0-9]{64}$/i.test(pubkey)
+
 export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge = true, disableLink = false }: UserWithAvatarProps) {
-	const { data: profileData, isLoading } = useQuery({
+	// Validate pubkey to prevent crashes with invalid data
+	const validPubkey = isValidPubkey(pubkey)
+
+	const { data: profileData } = useQuery({
 		queryKey: profileKeys.details(pubkey),
 		queryFn: () => fetchProfileByIdentifier(pubkey),
+		enabled: validPubkey, // Only fetch if pubkey is valid
 	})
+
+	// Return placeholder for invalid pubkeys
+	if (!validPubkey) {
+		return (
+			<div className={cn('flex items-center gap-2 text-gray-400', className)}>
+				<span className="text-sm">Unknown seller</span>
+			</div>
+		)
+	}
 
 	const avatarSizeClass = {
 		sm: 'h-6 w-6',
