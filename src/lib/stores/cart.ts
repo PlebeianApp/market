@@ -398,6 +398,12 @@ export const cartActions = {
 		const prevState = cartStore.state
 		const prevProduct = prevState.cart.products[productId]
 
+		// Only update shipping for products that are already in the cart
+		// This prevents creating corrupted entries when ShippingSelector is used on product detail page
+		if (!prevProduct) {
+			return
+		}
+
 		// Validate shipping ID
 		let validatedShippingId = shipping.id || null
 		if (shipping.id && typeof shipping.id === 'string' && shipping.id.trim().length > 0) {
@@ -894,6 +900,8 @@ export const cartActions = {
 	calculateTotalItems: () => {
 		const state = cartStore.state
 		return Object.values(state.cart.products).reduce((total, product) => {
+			// Only count products with valid pubkeys
+			if (!isValidPubkey(product.sellerPubkey)) return total
 			return total + product.amount
 		}, 0)
 	},
