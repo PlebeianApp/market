@@ -17,6 +17,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 	const stock = getProductStock(product)
 	const visibilityTag = getProductVisibility(product)
 	const visibility = visibilityTag?.[1] || 'on-sale'
+	const isOutOfStock = stock !== undefined && parseInt(stock[1], 10) === 0
 	const [isOwnProduct, setIsOwnProduct] = useState(false)
 	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(null)
 	const [isAddingToCart, setIsAddingToCart] = useState(false)
@@ -41,7 +42,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 	const cartQuantity = isInCart ? cart.cart.products[product.id]?.amount || 0 : 0
 
 	const handleAddToCart = async () => {
-		if (isOwnProduct || visibility === 'hidden') return // Don't allow adding own products or hidden products to cart
+		if (isOwnProduct || visibility === 'hidden' || isOutOfStock) return // Don't allow adding own products, hidden products, or out of stock products to cart
 
 		setIsAddingToCart(true)
 		try {
@@ -121,7 +122,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 								<Button
 									className="py-3 px-4 rounded-lg flex-grow font-medium transition-all duration-200 ease-in-out bg-black text-white disabled:bg-gray-400 disabled:cursor-not-allowed"
 									onClick={handleAddToCart}
-									disabled={isAddingToCart || visibility === 'hidden'}
+									disabled={isAddingToCart || visibility === 'hidden' || isOutOfStock}
 								>
 									{isAddingToCart ? (
 										'Adding...'
@@ -140,12 +141,14 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 									isAddingToCart ? 'opacity-75 scale-95' : ''
 								}`}
 								onClick={handleAddToCart}
-								disabled={isOwnProduct || isAddingToCart || visibility === 'hidden'}
+								disabled={isOwnProduct || isAddingToCart || visibility === 'hidden' || isOutOfStock}
 							>
 								{isOwnProduct ? (
 									'Your Product'
 								) : visibility === 'hidden' ? (
 									'Not Available'
+								) : isOutOfStock ? (
+									'Out of Stock'
 								) : showConfirmation ? (
 									<>
 										<Check className="w-4 h-4 mr-2" /> Added!
