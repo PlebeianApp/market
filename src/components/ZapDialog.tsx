@@ -162,6 +162,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 					<DialogTitle>
 						Zap {recipientName} {lightningAddress && <small>({lightningAddress})</small>}
 					</DialogTitle>
+					<DialogDescription className="sr-only">Send a lightning zap to {recipientName}</DialogDescription>
 				</DialogHeader>
 
 				{step === 'amount' && (
@@ -174,8 +175,8 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 									{DEFAULT_ZAP_AMOUNTS.map(({ displayText, amount: presetAmount }) => (
 										<Button
 											key={presetAmount}
-											variant={numericAmount === presetAmount ? 'tertiary' : 'outline'}
-											className="border-2 border-black"
+											variant={numericAmount === presetAmount ? 'focus' : 'outline'}
+											className={numericAmount === presetAmount ? 'border-2' : 'border-2 border-black'}
 											onClick={() => handleAmountButtonClick(presetAmount)}
 										>
 											{displayText}
