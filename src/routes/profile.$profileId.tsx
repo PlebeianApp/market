@@ -11,6 +11,7 @@ import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { useEntityPermissions } from '@/hooks/useEntityPermissions'
 import { getHexColorFingerprintFromHexPubkey, truncateText, checkImageLoadable } from '@/lib/utils'
 import { ndkActions } from '@/lib/stores/ndk'
+import { productFormActions } from '@/lib/stores/product'
 import { uiActions } from '@/lib/stores/ui'
 import { addToBlacklist, removeFromBlacklist } from '@/publish/blacklist'
 import { addToFeaturedUsers, removeFromFeaturedUsers } from '@/publish/featured'
@@ -70,6 +71,13 @@ function RouteComponent() {
 	// Handle edit profile
 	const handleEdit = () => {
 		navigate({ to: '/dashboard/account/profile' })
+	}
+
+	// Handle add product
+	const handleAddProduct = () => {
+		productFormActions.reset()
+		productFormActions.setEditingProductId(null)
+		navigate({ to: '/dashboard/products/products/new' })
 	}
 
 	// Handle message button
@@ -255,8 +263,14 @@ function RouteComponent() {
 							))}
 						</ItemGrid>
 					) : (
-						<div className="flex flex-col items-center justify-center flex-1">
+						<div className="flex flex-col items-center justify-center flex-1 gap-4">
 							<span className="text-2xl font-heading">No products found</span>
+							{permissions.canEdit && (
+								<Button onClick={handleAddProduct} className="flex items-center gap-2">
+									<Plus className="h-5 w-5" />
+									Add Your First Product
+								</Button>
+							)}
 						</div>
 					)}
 				</div>
