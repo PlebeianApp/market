@@ -10,22 +10,30 @@ import { PriceDisplay } from './PriceDisplay'
 import { Button } from './ui/button'
 import { ZapButton } from './ZapButton'
 
-export function ProductCard({ product }: { product: NDKEvent }) {
+export function ProductCard({ product, currentUserPubkey: propUserPubkey }: { product: NDKEvent; currentUserPubkey?: string | null }) {
 	const title = getProductTitle(product)
 	const images = getProductImages(product)
 	const price = getProductPrice(product)
 	const stock = getProductStock(product)
 	const visibilityTag = getProductVisibility(product)
 	const visibility = visibilityTag?.[1] || 'on-sale'
-	const [isOwnProduct, setIsOwnProduct] = useState(false)
-	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(null)
+	// Initialize ownership based on prop if provided (avoids race condition)
+	const [isOwnProduct, setIsOwnProduct] = useState(propUserPubkey ? propUserPubkey === product.pubkey : false)
+	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(propUserPubkey || null)
 	const [isAddingToCart, setIsAddingToCart] = useState(false)
 	const [showConfirmation, setShowConfirmation] = useState(false)
 	const location = useLocation()
 	const cart = useCart()
 
-	// Check if current user is the seller of this product
+	// Check if current user is the seller of this product (only if pubkey not provided via prop)
 	useEffect(() => {
+		// Skip async fetch if we already have the pubkey from props
+		if (propUserPubkey !== undefined) {
+			setCurrentUserPubkey(propUserPubkey)
+			setIsOwnProduct(propUserPubkey === product.pubkey)
+			return
+		}
+
 		const checkIfOwnProduct = async () => {
 			const user = await ndkActions.getUser()
 			if (user?.pubkey) {
@@ -34,7 +42,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 			}
 		}
 		checkIfOwnProduct()
-	}, [product.pubkey])
+	}, [product.pubkey, propUserPubkey])
 
 	// Check if product is already in cart
 	const isInCart = !!cart.cart.products[product.id]
