@@ -141,6 +141,18 @@ function RouteComponent() {
 	const [imageViewerOpen, setImageViewerOpen] = useState(false)
 	const [selectedImageIndex, setSelectedImageIndex] = useState(0)
 	const [shareDialogOpen, setShareDialogOpen] = useState(false)
+	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(null)
+
+	// Fetch current user's pubkey for ProductCard ownership check
+	useEffect(() => {
+		const fetchUserPubkey = async () => {
+			const user = await ndkActions.getUser()
+			if (user?.pubkey) {
+				setCurrentUserPubkey(user.pubkey)
+			}
+		}
+		fetchUserPubkey()
+	}, [])
 
 	// Get app config
 	const { data: config } = useConfigQuery()
@@ -727,9 +739,11 @@ function RouteComponent() {
 			<div className="flex flex-col gap-4 p-4">
 				<h2 className="font-heading text-2xl text-center lg:text-left">More from this seller</h2>
 				<ItemGrid className="gap-4 sm:gap-8">
-					{sellerProducts.map((p) => (
-						<ProductCard key={p.id} product={p} />
-					))}
+					{sellerProducts
+						.filter((p) => p.id !== productId)
+						.map((p) => (
+							<ProductCard key={p.id} product={p} currentUserPubkey={currentUserPubkey} />
+						))}
 				</ItemGrid>
 			</div>
 
