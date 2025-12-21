@@ -41,13 +41,16 @@ function AddCommentForm({ productCoordinates, merchantPubkey }: { productCoordin
 	const handleSubmit = async () => {
 		if (!content.trim()) return
 
-		await publishMutation.mutateAsync({
-			content: content.trim(),
-			productCoordinates,
-			merchantPubkey,
-		})
-
-		setContent('')
+		try {
+			await publishMutation.mutateAsync({
+				content: content.trim(),
+				productCoordinates,
+				merchantPubkey,
+			})
+			setContent('')
+		} catch {
+			// Error handling (toasts) is done in the mutation hook; keep content so user can retry
+		}
 	}
 
 	return (
@@ -116,12 +119,14 @@ export function ProductComments({ productCoordinates, merchantPubkey }: ProductC
 						))}
 
 						{hasMoreComments && !showAll && (
-							<button
+							<Button
+								type="button"
+								variant="ghost"
 								onClick={() => setShowAll(true)}
 								className="w-full text-center py-3 text-secondary hover:text-secondary/80 font-medium"
 							>
 								Show More
-							</button>
+							</Button>
 						)}
 					</div>
 				)}
