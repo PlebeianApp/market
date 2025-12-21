@@ -138,3 +138,8 @@ export const cartKeys = {
 	all: ['cart'] as const,
 	byPubkey: (pubkey: string) => [...cartKeys.all, 'byPubkey', pubkey] as const,
 } as const
+
+export const commentKeys = {
+	all: ['comments'] as const,
+	byProduct: (productCoordinates: string) => [...commentKeys.all, 'byProduct', productCoordinates] as const,
+} as const
