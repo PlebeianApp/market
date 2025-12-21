@@ -215,7 +215,7 @@ export function V4VManager({
 							disabled={totalV4VPercentage === 0}
 							data-testid="add-v4v-recipient-form-button"
 						>
-							+ V4V Recipient
+							Add Recipient
 						</Button>
 						<Button
 							variant="outline"
@@ -223,7 +223,6 @@ export function V4VManager({
 							disabled={localShares.length === 0 || totalV4VPercentage === 0}
 							data-testid="equal-all-v4v-button"
 						>
-							<span className="i-sharing w-5 h-5 mr-2"></span>
 							Equal All
 						</Button>
 					</div>
