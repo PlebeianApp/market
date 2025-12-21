@@ -107,12 +107,14 @@ export function ProductReviews({ productCoordinates, merchantPubkey }: ProductRe
 						))}
 
 						{hasMoreReviews && !showAll && (
-							<button
+							<Button
+								type="button"
+								variant="ghost"
 								onClick={() => setShowAll(true)}
 								className="w-full text-center py-3 text-secondary hover:text-secondary/80 font-medium"
 							>
 								Show More
-							</button>
+							</Button>
 						)}
 					</div>
 				)}

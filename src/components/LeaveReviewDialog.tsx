@@ -55,15 +55,18 @@ export function LeaveReviewDialog({ open, onOpenChange, productCoordinates, merc
 		if (deliveryRating > 0) categoryRatings.push({ category: 'delivery', score: deliveryRating })
 		if (communicationRating > 0) categoryRatings.push({ category: 'communication', score: communicationRating })
 
-		await publishMutation.mutateAsync({
-			content: content.trim(),
-			productCoordinates,
-			thumbRating,
-			categoryRatings,
-		})
-
-		resetForm()
-		onOpenChange(false)
+		try {
+			await publishMutation.mutateAsync({
+				content: content.trim(),
+				productCoordinates,
+				thumbRating,
+				categoryRatings,
+			})
+			resetForm()
+			onOpenChange(false)
+		} catch {
+			// Error handling (toasts) is done in the mutation hook; keep form content so user can retry
+		}
 	}
 
 	const hasAnyRating = valueRating > 0 || qualityRating > 0 || deliveryRating > 0 || communicationRating > 0
