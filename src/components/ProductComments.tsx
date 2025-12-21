@@ -34,13 +34,7 @@ function CommentItem({ comment }: { comment: ProductComment }) {
 	)
 }
 
-function AddCommentForm({
-	productCoordinates,
-	merchantPubkey,
-}: {
-	productCoordinates: string
-	merchantPubkey: string
-}) {
+function AddCommentForm({ productCoordinates, merchantPubkey }: { productCoordinates: string; merchantPubkey: string }) {
 	const [content, setContent] = useState('')
 	const publishMutation = usePublishCommentMutation()
 
