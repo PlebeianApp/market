@@ -280,89 +280,116 @@ export function ProductFormContent({
 				</Tabs>
 			</div>
 
-			{showFooter && (
-				<div className="bg-white border-t pt-4 pb-4 mt-4">
-					<div className="flex gap-2 w-full">
-						{(productSubTab !== 'name' || mainTab === 'shipping') && (
-							<Button
-								type="button"
-								variant="outline"
-								className="flex-1 gap-2 uppercase"
-								onClick={productFormActions.previousTab}
-								data-testid="product-back-button"
-							>
-								<span className="i-back w-6 h-6"></span>
-								Back
-							</Button>
-						)}
+			{showFooter &&
+				(() => {
+					// Check if required fields are missing (for showing error message)
+					const hasName = (formState.name || '').trim().length > 0
+					// Check price based on currency mode - fiat mode uses fiatPrice, sats mode uses price
+					const isFiatMode = formState.currencyMode === 'fiat'
+					const priceValue = isFiatMode ? (formState.fiatPrice || '').trim() : (formState.price || '').trim()
+					const hasPrice = priceValue.length > 0 && !isNaN(Number(priceValue)) && Number(priceValue) >= 0
+					const quantityValue = (formState.quantity || '').trim()
+					const hasQuantity = quantityValue.length > 0 && !isNaN(Number(quantityValue)) && Number(quantityValue) >= 0
+					const hasCategory = !!formState.mainCategory
+					const hasImages = formState.images.length > 0
+					const hasShipping = formState.shippings.some((s) => s.shipping && s.shipping.id)
+					const missingRequired = !hasName || !hasPrice || !hasQuantity || !hasCategory || !hasImages || !hasShipping
+					const showMissingMessage = (mainTab === 'shipping' || editingProductId) && missingRequired
 
-						{mainTab === 'shipping' || editingProductId ? (
-							<form.Subscribe
-								selector={(state) => [state.canSubmit, state.isSubmitting]}
-								children={([canSubmit, isSubmitting]) => {
-									// Check if we need V4V setup for new products
-									if (needsV4VSetup && !editingProductId) {
-										return (
-											<TooltipProvider>
-												<Tooltip>
-													<TooltipTrigger asChild>
-														<Button
-															type="button"
-															variant="secondary"
-															className="flex-1 uppercase"
-															onClick={() => {
-																const publishCallback = async () => {
-																	// After V4V setup, trigger the form submission
-																	form.handleSubmit()
-																}
-																uiActions.openDialog('v4v-setup', publishCallback)
-															}}
-															data-testid="product-setup-v4v-button"
-														>
-															Setup V4V First
-														</Button>
-													</TooltipTrigger>
-													<TooltipContent>
-														<p>You need to configure Value for Value (V4V) settings before publishing your first product</p>
-													</TooltipContent>
-												</Tooltip>
-											</TooltipProvider>
-										)
-									}
+					// Build list of missing fields
+					const missingFields: string[] = []
+					if (!hasName) missingFields.push('name')
+					if (!hasPrice) missingFields.push('price')
+					if (!hasQuantity) missingFields.push('quantity')
+					if (!hasCategory) missingFields.push('category')
+					if (!hasImages) missingFields.push('image')
+					if (!hasShipping) missingFields.push('shipping option')
 
-									return (
-										<Button
-											type="submit"
-											variant="secondary"
-											className="flex-1 uppercase"
-											disabled={isSubmitting || isPublishing || !canSubmit}
-											data-testid="product-save-button"
-										>
-											{isSubmitting || isPublishing
-												? editingProductId
-													? 'Updating...'
-													: 'Publishing...'
-												: editingProductId
-													? 'Update Product'
-													: 'Save'}
-										</Button>
-									)
-								}}
-							/>
-						) : (
-							<Button
-								type="button"
-								variant="secondary"
-								className="flex-1 uppercase"
-								onClick={productFormActions.nextTab}
-								data-testid="product-next-button"
-							>
-								Next
-							</Button>
-						)}
-					</div>
-				</div>
-			)}
+					return (
+						<div className="bg-white border-t pt-4 pb-4 mt-4">
+							<div className="flex gap-2 w-full">
+								{(productSubTab !== 'name' || mainTab === 'shipping') && (
+									<Button
+										type="button"
+										variant="outline"
+										className="flex-1 gap-2 uppercase"
+										onClick={productFormActions.previousTab}
+										data-testid="product-back-button"
+									>
+										<span className="i-back w-6 h-6"></span>
+										Back
+									</Button>
+								)}
+
+								{mainTab === 'shipping' || editingProductId ? (
+									<form.Subscribe
+										selector={(state) => [state.canSubmit, state.isSubmitting]}
+										children={([canSubmit, isSubmitting]) => {
+											// Check if we need V4V setup for new products
+											if (needsV4VSetup && !editingProductId) {
+												return (
+													<TooltipProvider>
+														<Tooltip>
+															<TooltipTrigger asChild>
+																<Button
+																	type="button"
+																	variant="secondary"
+																	className="flex-1 uppercase"
+																	onClick={() => {
+																		const publishCallback = async () => {
+																			// After V4V setup, trigger the form submission
+																			form.handleSubmit()
+																		}
+																		uiActions.openDialog('v4v-setup', publishCallback)
+																	}}
+																	data-testid="product-setup-v4v-button"
+																>
+																	Setup V4V First
+																</Button>
+															</TooltipTrigger>
+															<TooltipContent>
+																<p>You need to configure Value for Value (V4V) settings before publishing your first product</p>
+															</TooltipContent>
+														</Tooltip>
+													</TooltipProvider>
+												)
+											}
+
+											return (
+												<Button
+													type="submit"
+													variant="secondary"
+													className="flex-1 uppercase"
+													disabled={isSubmitting || isPublishing || !canSubmit || missingRequired}
+													data-testid="product-save-button"
+												>
+													{isSubmitting || isPublishing
+														? editingProductId
+															? 'Updating...'
+															: 'Publishing...'
+														: editingProductId
+															? 'Update Product'
+															: 'Save'}
+												</Button>
+											)
+										}}
+									/>
+								) : (
+									<Button
+										type="button"
+										variant="secondary"
+										className="flex-1 uppercase"
+										onClick={productFormActions.nextTab}
+										data-testid="product-next-button"
+									>
+										Next
+									</Button>
+								)}
+							</div>
+							{showMissingMessage && <p className="text-xs text-red-500 mt-2 text-center">Missing: {missingFields.join(', ')}</p>}
+						</div>
+					)
+				})()}
 		</form>
 	)
 }

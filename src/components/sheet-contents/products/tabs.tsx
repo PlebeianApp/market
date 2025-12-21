@@ -566,7 +566,10 @@ export function ImagesTab() {
 			<p className="text-gray-600">We recommend using square images of 1600x1600 and under 2mb.</p>
 
 			<div className="flex flex-col gap-4">
-				<Label>Image Upload</Label>
+				<Label>
+					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Image Upload</span>
+					<span className="text-xs text-gray-500 ml-2">(at least 1 required)</span>
+				</Label>
 
 				{images.map((image, i) => (
 					<ImageUploader
@@ -683,6 +686,10 @@ export function ShippingTab() {
 	return (
 		<div className="space-y-6">
 			<div className="space-y-2">
+				<Label>
+					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Shipping Options</span>
+					<span className="text-xs text-gray-500 ml-2">(at least 1 required)</span>
+				</Label>
 				<p className="text-gray-600">Select shipping options that will be available for this product</p>
 			</div>
 
@@ -716,8 +723,9 @@ export function ShippingTab() {
 											value={shipping.extraCost}
 											onChange={(e) => updateExtraCost(index, e.target.value)}
 											placeholder="Extra cost"
-											className="w-24 text-sm"
+											className="w-28 text-sm"
 										/>
+										{option?.currency && <span className="text-sm text-gray-500">{option.currency}</span>}
 										<Button
 											type="button"
 											variant="outline"
