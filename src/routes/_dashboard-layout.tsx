@@ -260,7 +260,7 @@ function DashboardLayout() {
 					{!showSidebar && isMobile && (
 						<button
 							onClick={handleBackToSidebar}
-							className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 sm:left-3 md:left-4 top-1/2 -translate-y-1/2 w-12 h-12 z-20"
+							className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 sm:left-3 md:left-4 top-1/2 -translate-y-1/2 w-12 h-12 z-20 cursor-pointer"
 							aria-label="Back to sidebar"
 						>
 							<span className="i-back w-6 h-6" />
@@ -352,7 +352,7 @@ function DashboardLayout() {
 								<div className="sticky top-0 z-10 bg-white border-b border-gray-200 pb-4 mb-0 p-4 lg:p-8 flex-shrink-0 flex items-center relative">
 									<button
 										onClick={handleBackToParent}
-										className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
+										className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors cursor-pointer"
 										aria-label={`Back to ${backButtonInfo?.parentTitle}`}
 									>
 										<span className="i-back w-5 h-5" />
