@@ -5,6 +5,7 @@ import { ImageViewerModal } from '@/components/ImageViewerModal'
 import { ItemGrid } from '@/components/ItemGrid'
 import { PriceDisplay } from '@/components/PriceDisplay'
 import { ProductCard } from '@/components/ProductCard'
+import { ProductComments } from '@/components/ProductComments'
 import { ShippingSelector } from '@/components/ShippingSelector'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -577,6 +578,14 @@ function RouteComponent() {
 									</div>
 								</div>
 							</div>
+
+							{/* Comments Section */}
+							<div>
+								<div className="bg-secondary text-white px-4 py-2 text-sm font-medium rounded-t-md">Comments</div>
+								<div className="rounded-lg bg-white p-6 shadow-md rounded-t-none">
+									<ProductComments productCoordinates={productCoords} merchantPubkey={pubkey} />
+								</div>
+							</div>
 						</div>
 					) : (
 						<Tabs defaultValue="description" className="w-full">
@@ -602,7 +611,6 @@ function RouteComponent() {
 								<TabsTrigger
 									value="comments"
 									className="px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
-									disabled
 								>
 									Comments
 								</TabsTrigger>
@@ -716,6 +724,12 @@ function RouteComponent() {
 											</div>
 										</div>
 									</div>
+								</div>
+							</TabsContent>
+
+							<TabsContent value="comments" className="mt-4 border-t-3 border-secondary bg-tertiary">
+								<div className="rounded-lg bg-white p-6 shadow-md">
+									<ProductComments productCoordinates={productCoords} merchantPubkey={pubkey} />
 								</div>
 							</TabsContent>
 						</Tabs>
