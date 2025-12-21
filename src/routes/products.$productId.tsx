@@ -1,3 +1,4 @@
+import { ShareProductDialog } from '@/components/dialogs/ShareProductDialog'
 import { EntityActionsMenu } from '@/components/EntityActionsMenu'
 import { ImageCarousel } from '@/components/ImageCarousel'
 import { ImageViewerModal } from '@/components/ImageViewerModal'
@@ -132,6 +133,7 @@ function RouteComponent() {
 	const [quantity, setQuantity] = useState(1)
 	const [imageViewerOpen, setImageViewerOpen] = useState(false)
 	const [selectedImageIndex, setSelectedImageIndex] = useState(0)
+	const [shareDialogOpen, setShareDialogOpen] = useState(false)
 	const queryClient = useQueryClient()
 
 	// Get app config
@@ -290,6 +292,7 @@ function RouteComponent() {
 										size="icon"
 										className="bg-white/10 hover:bg-white/20"
 										icon={<span className="i-sharing w-6 h-6" />}
+										onClick={() => setShareDialogOpen(true)}
 									/>
 									{/* Entity Actions Menu for admins/editors/owners */}
 									<EntityActionsMenu
@@ -677,6 +680,17 @@ function RouteComponent() {
 				images={formattedImages.map((img) => ({ url: img.url, title: '' }))}
 				currentIndex={selectedImageIndex}
 				onIndexChange={setSelectedImageIndex}
+			/>
+
+			{/* Share Product Dialog */}
+			<ShareProductDialog
+				open={shareDialogOpen}
+				onOpenChange={setShareDialogOpen}
+				productId={productId}
+				title={title}
+				description={description}
+				price={price}
+				currency={priceTag?.[2] || 'sats'}
 			/>
 		</div>
 	)
