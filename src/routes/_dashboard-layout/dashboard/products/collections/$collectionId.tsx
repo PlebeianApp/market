@@ -1,4 +1,4 @@
-import { CollectionFormContent } from '@/components/sheet-contents/NewCollectionContent'
+import { CollectionFormContent } from '@/components/sheet-contents/collections/CollectionFormContent'
 import { authStore } from '@/lib/stores/auth'
 import { collectionFormActions } from '@/lib/stores/collection'
 import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
