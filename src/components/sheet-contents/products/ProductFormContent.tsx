@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
-import { productFormActions, productFormStore } from '@/lib/stores/product'
+import { productFormActions, productFormStore, type ProductFormTab } from '@/lib/stores/product'
 import { uiActions } from '@/lib/stores/ui'
 import { hasProductFormDraft } from '@/lib/utils/productFormStorage'
 import { useV4VShares } from '@/queries/v4v'
@@ -183,7 +183,7 @@ export function ProductFormContent({
 				<Tabs
 					value={activeTab}
 					onValueChange={(value) =>
-						productFormActions.updateValues({ activeTab: value as 'name' | 'detail' | 'spec' | 'category' | 'images' | 'shipping' })
+						productFormActions.updateValues({ activeTab: value as ProductFormTab })
 					}
 					className="w-full"
 				>
