@@ -236,11 +236,7 @@ function DashboardInnerComponent() {
 						</div>
 					) : recentOrders.length === 0 ? (
 						<div className="text-center py-8">
-							<p className="text-muted-foreground mb-4">No orders yet</p>
-							<p className="text-sm text-muted-foreground mb-4">Start by creating a product listing or browsing the marketplace</p>
-							<Link to="/dashboard/products/products/new">
-								<Button>Create Your First Product</Button>
-							</Link>
+							<p className="text-muted-foreground">No orders yet</p>
 						</div>
 					) : (
 						<div className="space-y-4">
@@ -299,11 +295,11 @@ function DashboardInnerComponent() {
 									3
 								</span>
 								<div>
-									<div className="font-semibold">Create your first product</div>
-									<p className="text-sm text-muted-foreground">List an item with photos, description, and pricing</p>
-									<Link to="/dashboard/products/products/new">
+									<div className="font-semibold">Set up shipping options</div>
+									<p className="text-sm text-muted-foreground">Define how you'll deliver products to customers</p>
+									<Link to="/dashboard/products/shipping-options">
 										<Button variant="link" className="p-0 h-auto">
-											Create Product →
+											Configure Shipping →
 										</Button>
 									</Link>
 								</div>
@@ -313,11 +309,11 @@ function DashboardInnerComponent() {
 									4
 								</span>
 								<div>
-									<div className="font-semibold">Set up shipping options</div>
-									<p className="text-sm text-muted-foreground">Define how you'll deliver products to customers</p>
-									<Link to="/dashboard/products/shipping-options">
+									<div className="font-semibold">Create your first product</div>
+									<p className="text-sm text-muted-foreground">List an item with photos, description, and pricing</p>
+									<Link to="/dashboard/products/products/new">
 										<Button variant="link" className="p-0 h-auto">
-											Configure Shipping →
+											Create Product →
 										</Button>
 									</Link>
 								</div>
