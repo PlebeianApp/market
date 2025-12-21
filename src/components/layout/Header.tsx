@@ -262,7 +262,7 @@ export function Header() {
 											<TooltipTrigger asChild>
 												<Button
 													variant="primary"
-													className="p-2 relative hover:[&>span]:text-secondary"
+													className="p-2 relative hover:[&>svg]:text-secondary"
 													onClick={() => authActions.logout()}
 													data-testid="logout-button"
 												>
