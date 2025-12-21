@@ -66,6 +66,72 @@ function useHeroBackground(imageUrl: string, className: string) {
 	}, [imageUrl, className])
 }
 
+// Hook to inject Open Graph and Twitter Card meta tags for social sharing
+interface MetaTagsConfig {
+	title: string
+	description: string
+	image?: string
+	url: string
+	price?: number
+	currency?: string
+}
+
+function useDocumentMeta(config: MetaTagsConfig) {
+	useEffect(() => {
+		const { title, description, image, url, price, currency } = config
+		const elements: HTMLElement[] = []
+
+		// Helper to create and track meta tags
+		const addMeta = (attributes: Record<string, string>) => {
+			const meta = document.createElement('meta')
+			Object.entries(attributes).forEach(([key, value]) => {
+				meta.setAttribute(key, value)
+			})
+			document.head.appendChild(meta)
+			elements.push(meta)
+		}
+
+		// Set document title
+		const originalTitle = document.title
+		document.title = `${title} | Plebeian Market`
+
+		// Open Graph tags
+		addMeta({ property: 'og:type', content: 'product' })
+		addMeta({ property: 'og:title', content: title })
+		addMeta({ property: 'og:description', content: description })
+		addMeta({ property: 'og:url', content: url })
+		addMeta({ property: 'og:site_name', content: 'Plebeian Market' })
+		if (image) {
+			addMeta({ property: 'og:image', content: image })
+		}
+		if (price !== undefined && currency) {
+			addMeta({ property: 'product:price:amount', content: String(price) })
+			addMeta({ property: 'product:price:currency', content: currency })
+		}
+
+		// Twitter Card tags
+		addMeta({ name: 'twitter:card', content: 'summary_large_image' })
+		addMeta({ name: 'twitter:title', content: title })
+		addMeta({ name: 'twitter:description', content: `${description} - ${price} ${currency}` })
+		if (image) {
+			addMeta({ name: 'twitter:image', content: image })
+		}
+
+		// Standard meta description
+		addMeta({ name: 'description', content: description })
+
+		// Cleanup on unmount or when config changes
+		return () => {
+			document.title = originalTitle
+			elements.forEach((el) => {
+				if (el.parentNode) {
+					el.parentNode.removeChild(el)
+				}
+			})
+		}
+	}, [config.title, config.description, config.image, config.url, config.price, config.currency])
+}
+
 declare module '@tanstack/react-router' {
 	interface FileRoutesByPath {
 		'/products/$productId': {
@@ -312,6 +378,20 @@ function RouteComponent() {
 		setSelectedImageIndex(index)
 		setImageViewerOpen(true)
 	}
+
+	// Build product URL and meta description for social sharing
+	const productUrl = typeof window !== 'undefined' ? `${window.location.origin}/products/${productId}` : `/products/${productId}`
+	const metaDescription = description.length > 160 ? `${description.substring(0, 157)}...` : description
+
+	// Inject Open Graph and Twitter Card meta tags
+	useDocumentMeta({
+		title,
+		description: metaDescription,
+		image: backgroundImageUrl || undefined,
+		url: productUrl,
+		price,
+		currency: priceTag?.[2] || 'SATS',
+	})
 
 	return (
 		<div className="flex flex-col gap-4">
