@@ -218,8 +218,8 @@ function DashboardInnerComponent() {
 			{/* Recent Activity */}
 			<Card>
 				<CardHeader>
-					<CardTitle>Recent Orders</CardTitle>
-					<CardDescription>Your latest marketplace activity</CardDescription>
+					<CardTitle>Recent Activity</CardTitle>
+					<CardDescription>Your latest sales and purchases</CardDescription>
 				</CardHeader>
 				<CardContent>
 					{isLoading ? (
