@@ -789,7 +789,13 @@ export const useProductByATag = (pubkey: string, dTag: string) => {
 
 // --- PRODUCT SEARCH (NIP-50) ---
 
-const PRODUCT_SEARCH_RELAYS = ['wss://relay.nostr.band', 'wss://search.nos.today', 'wss://nos.lol']
+const PRODUCT_SEARCH_RELAYS = [
+	'wss://relay.nostr.band',
+	'wss://search.nos.today',
+	'wss://nos.lol',
+	'wss://nostr.wine',
+	'wss://relay.primal.net',
+]
 
 /**
  * Search for product listing events (kind 30402) by free-text query.
@@ -824,13 +830,18 @@ export const fetchProductsBySearch = async (query: string, limit: number = 20) =
 
 	// In some deployments, ndk.fetchEvents may hang if relays are slow/unresponsive.
 	// Race the fetch with a timeout so the UI can recover gracefully.
-	const SEARCH_TIMEOUT_MS = 8000
+	const SEARCH_TIMEOUT_MS = 15000
 	try {
+		console.log(`[Search Relay Debug] Starting product search for "${query}" on relays:`, ndk.pool?.relays ? Array.from(ndk.pool.relays.keys()) : 'unknown')
 		const fetchPromise = ndk
 			.fetchEvents(filter)
-			.then((events) => Array.from(events))
+			.then((events) => {
+				const results = Array.from(events)
+				console.log(`[Search Relay Debug] Product search returned ${results.length} events`)
+				return results
+			})
 			.catch((err) => {
-				console.error('Search fetch failed:', err)
+				console.error('[Search Relay Debug] Search fetch failed:', err)
 				return []
 			})
 
@@ -880,13 +891,18 @@ export const fetchSellersBySearch = async (query: string, limit: number = 10): P
 		limit,
 	}
 
-	const SEARCH_TIMEOUT_MS = 5000 // Shorter timeout for profile search
+	const SEARCH_TIMEOUT_MS = 10000 // Profile search timeout
 	try {
+		console.log(`[Search Relay Debug] Starting profile search for "${query}" on relays:`, ndk.pool?.relays ? Array.from(ndk.pool.relays.keys()) : 'unknown')
 		const fetchPromise = ndk
 			.fetchEvents(filter)
-			.then((events) => Array.from(events).map((e) => e.pubkey))
+			.then((events) => {
+				const results = Array.from(events)
+				console.log(`[Search Relay Debug] Profile search returned ${results.length} events`, results.map((e) => e.pubkey))
+				return results.map((e) => e.pubkey)
+			})
 			.catch((err) => {
-				console.error('Profile search fetch failed:', err)
+				console.error('[Search Relay Debug] Profile search fetch failed:', err)
 				return []
 			})
 
@@ -919,13 +935,38 @@ export const fetchProductsBySearchWithSellers = async (
 	// Run product search and seller search in parallel
 	const [productResults, sellerPubkeys] = await Promise.all([fetchProductsBySearch(query, limit), fetchSellersBySearch(query, 5)])
 
+	// Debug logging to understand search results
+	console.log(`[Search Debug] Query: "${query}"`)
+	console.log(`[Search Debug] NIP-50 product results: ${productResults.length}`, productResults.map((p) => getProductTitle(p)))
+	console.log(`[Search Debug] Seller pubkeys found: ${sellerPubkeys.length}`, sellerPubkeys)
+
 	// If we found matching sellers, fetch their products
 	let sellerProducts: import('@nostr-dev-kit/ndk').NDKEvent[] = []
 	if (sellerPubkeys.length > 0) {
-		// Fetch products from matching sellers (limit per seller to avoid overwhelming)
-		const sellerProductPromises = sellerPubkeys.map((pubkey) => fetchProductsByPubkey(pubkey, false, 10))
-		const sellerProductArrays = await Promise.all(sellerProductPromises)
-		sellerProducts = sellerProductArrays.flat()
+		try {
+			// Fetch products directly by author pubkeys (works across all connected relays including search relays)
+			const filter: NDKFilter = {
+				kinds: [30402],
+				authors: sellerPubkeys,
+				limit: 50,
+			}
+			console.log(`[Search Relay Debug] Fetching products for sellers:`, sellerPubkeys, `from relays:`, ndk.pool?.relays ? Array.from(ndk.pool.relays.keys()) : 'unknown')
+			const events = await ndk.fetchEvents(filter)
+			const allSellerProducts = Array.from(events)
+			console.log(`[Search Debug] Raw seller products: ${allSellerProducts.length}`, allSellerProducts.map((p) => {
+				const vis = p.tags.find((t) => t[0] === 'visibility')?.[1] || 'on-sale'
+				return `${getProductTitle(p)} (${vis})`
+			}))
+			// Filter out hidden products from seller results
+			sellerProducts = allSellerProducts.filter((event) => {
+				const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
+				const visibility = visibilityTag?.[1] || 'on-sale'
+				return visibility !== 'hidden'
+			})
+			console.log(`[Search Debug] Seller products after visibility filter: ${sellerProducts.length}`, sellerProducts.map((p) => getProductTitle(p)))
+		} catch (err) {
+			console.error('Failed to fetch products for sellers:', err)
+		}
 	}
 
 	// Merge and deduplicate results (product results first, then seller products)
