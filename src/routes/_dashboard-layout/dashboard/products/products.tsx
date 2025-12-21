@@ -1,3 +1,4 @@
+import { ShareProductDialog } from '@/components/dialogs/ShareProductDialog'
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -70,6 +71,7 @@ function ProductListItem({
 	isExpanded,
 	onToggleExpanded,
 	onEdit,
+	onShare,
 	onDelete,
 	isDeleting,
 }: {
@@ -77,6 +79,7 @@ function ProductListItem({
 	isExpanded: boolean
 	onToggleExpanded: () => void
 	onEdit: () => void
+	onShare: () => void
 	onDelete: () => void
 	isDeleting: boolean
 }) {
@@ -121,6 +124,17 @@ function ProductListItem({
 				size="sm"
 				onClick={(e) => {
 					e.stopPropagation()
+					onShare()
+				}}
+				aria-label={`Share ${getProductTitle(product)}`}
+			>
+				<span className="i-sharing w-4 h-4" />
+			</Button>
+			<Button
+				variant="ghost"
+				size="sm"
+				onClick={(e) => {
+					e.stopPropagation()
 					onDelete()
 				}}
 				aria-label={`Delete ${getProductTitle(product)}`}
@@ -159,6 +173,8 @@ function ProductsOverviewComponent() {
 	const matchRoute = useMatchRoute()
 	const [expandedProduct, setExpandedProduct] = useState<string | null>(null)
 	const [orderBy, setOrderBy] = useState<string>('newest')
+	const [shareDialogOpen, setShareDialogOpen] = useState(false)
+	const [productToShare, setProductToShare] = useState<any>(null)
 	useDashboardTitle('Products')
 
 	// Auto-animate for smooth list transitions
@@ -225,6 +241,11 @@ function ProductsOverviewComponent() {
 
 	const handleToggleExpanded = (productId: string) => {
 		setExpandedProduct(expandedProduct === productId ? null : productId)
+	}
+
+	const handleShareProductClick = (product: any) => {
+		setProductToShare(product)
+		setShareDialogOpen(true)
 	}
 
 	const handleDeleteProductClick = async (product: any) => {
@@ -311,6 +332,7 @@ function ProductsOverviewComponent() {
 												isExpanded={expandedProduct === product.id}
 												onToggleExpanded={() => handleToggleExpanded(product.id)}
 												onEdit={() => handleEditProductClick(product.id)}
+												onShare={() => handleShareProductClick(product)}
 												onDelete={() => handleDeleteProductClick(product)}
 												isDeleting={deleteMutation.isPending && deleteMutation.variables === getProductId(product)}
 											/>
@@ -328,6 +350,27 @@ function ProductsOverviewComponent() {
 					)}
 				</div>
 			</div>
+
+			{productToShare && (
+				<ShareProductDialog
+					open={shareDialogOpen}
+					onOpenChange={(open) => {
+						setShareDialogOpen(open)
+						if (!open) setProductToShare(null)
+					}}
+					productId={getProductId(productToShare) || productToShare.id}
+					title={getProductTitle(productToShare)}
+					description={productToShare.content || ''}
+					price={(() => {
+						const priceTag = productToShare.tags.find((tag: any) => tag[0] === 'price')
+						return priceTag ? parseFloat(priceTag[1]) : 0
+					})()}
+					currency={(() => {
+						const priceTag = productToShare.tags.find((tag: any) => tag[0] === 'price')
+						return priceTag?.[2] || 'sats'
+					})()}
+				/>
+			)}
 		</div>
 	)
 }
