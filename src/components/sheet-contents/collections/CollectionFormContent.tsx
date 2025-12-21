@@ -146,10 +146,10 @@ export function CollectionFormContent({ className = '', showFooter = true }: { c
 										{isSubmitting || isPublishing
 											? isEditing
 												? 'Updating...'
-												: 'Creating...'
+												: 'Publishing...'
 											: isEditing
 												? 'Update Collection'
-												: 'Create Collection'}
+												: 'Publish Collection'}
 									</Button>
 								)}
 							/>

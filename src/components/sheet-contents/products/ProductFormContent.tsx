@@ -336,7 +336,7 @@ export function ProductFormContent({
 											variant="secondary"
 											className="flex-1 uppercase"
 											disabled={isSubmitting || isPublishing || !canSubmit}
-											data-testid="product-save-button"
+											data-testid="product-publish-button"
 										>
 											{isSubmitting || isPublishing
 												? editingProductId
@@ -344,7 +344,7 @@ export function ProductFormContent({
 													: 'Publishing...'
 												: editingProductId
 													? 'Update Product'
-													: 'Save'}
+													: 'Publish Product'}
 										</Button>
 									)
 								}}

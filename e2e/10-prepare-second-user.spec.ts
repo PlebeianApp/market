@@ -265,8 +265,8 @@ test.describe.serial('10. Prepare Second User Flow', () => {
 		await page.click(`text=${shippingName}`)
 		await page.waitForTimeout(500)
 
-		// Save the product
-		await page.click('[data-testid="product-save-button"]')
+		// Publish the product
+		await page.click('[data-testid="product-publish-button"]')
 
 		// Verify product was created - check that we're redirected to the product page
 		await page.waitForURL('**/products/**', { timeout: 10000 })
