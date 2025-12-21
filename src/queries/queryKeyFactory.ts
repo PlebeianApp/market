@@ -132,3 +132,8 @@ export const migrationKeys = {
 	nip15Products: (userPubkey: string) => [...migrationKeys.all, 'nip15Products', userPubkey] as const,
 	migratedEvents: (userPubkey: string) => [...migrationKeys.all, 'migratedEvents', userPubkey] as const,
 } as const
+
+export const reviewKeys = {
+	all: ['reviews'] as const,
+	byProduct: (productCoordinates: string) => [...reviewKeys.all, 'byProduct', productCoordinates] as const,
+} as const
