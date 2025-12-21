@@ -54,11 +54,12 @@ export type ProductDimensions = {
 	unit: string
 }
 
+export type ProductFormTab = 'name' | 'detail' | 'spec' | 'category' | 'images' | 'shipping'
+
 export interface ProductFormState {
 	editingProductId: string | null
 	isDirty: boolean // Track if form has been modified from saved state
-	mainTab: 'product' | 'shipping'
-	productSubTab: 'name' | 'detail' | 'spec' | 'category' | 'images'
+	activeTab: ProductFormTab
 	name: string
 	description: string
 	price: string
@@ -83,8 +84,7 @@ export interface ProductFormState {
 export const DEFAULT_FORM_STATE: ProductFormState = {
 	editingProductId: null,
 	isDirty: false,
-	mainTab: 'product',
-	productSubTab: 'name',
+	activeTab: 'name',
 	name: '',
 	description: '',
 	price: '',
@@ -143,10 +143,7 @@ export const productFormActions = {
 		}))
 	},
 
-	loadProductForEdit: async (
-		productId: string,
-		options?: { preserveTabState?: { mainTab: 'product' | 'shipping'; productSubTab: 'name' | 'detail' | 'spec' | 'category' | 'images' } },
-	) => {
+	loadProductForEdit: async (productId: string, options?: { preserveTabState?: { activeTab: ProductFormTab } }) => {
 		// Cancel any pending auto-save to prevent interference during load
 		cancelPendingSave()
 
@@ -208,9 +205,8 @@ export const productFormActions = {
 				}
 			})
 
-			// Use preserved tab state if provided, otherwise default to 'product' and 'name'
-			const mainTab = options?.preserveTabState?.mainTab ?? 'product'
-			const productSubTab = options?.preserveTabState?.productSubTab ?? 'name'
+			// Use preserved tab state if provided, otherwise default to 'name'
+			const activeTab = options?.preserveTabState?.activeTab ?? 'name'
 
 			// Determine if this is a fiat or sats price
 			const priceCurrency = priceTag?.[2] || 'SATS'
@@ -241,8 +237,7 @@ export const productFormActions = {
 				weight: weightTag ? { value: weightTag[1], unit: weightTag[2] } : null,
 				dimensions: dimensionsTag ? { value: dimensionsTag[1], unit: dimensionsTag[2] } : null,
 				shippings: shippingOptions,
-				mainTab,
-				productSubTab,
+				activeTab,
 			}))
 		} catch (error) {
 			console.error('Error loading product for edit:', error)
@@ -252,40 +247,29 @@ export const productFormActions = {
 
 	nextTab: () => {
 		productFormStore.setState((state) => {
-			const subTabs = ['name', 'detail', 'spec', 'category', 'images']
-			const currentIndex = subTabs.indexOf(state.productSubTab)
+			const tabs: ProductFormTab[] = ['name', 'detail', 'spec', 'category', 'images', 'shipping']
+			const currentIndex = tabs.indexOf(state.activeTab)
 
-			if (currentIndex < subTabs.length - 1) {
+			if (currentIndex < tabs.length - 1) {
 				return {
 					...state,
-					productSubTab: subTabs[currentIndex + 1] as typeof state.productSubTab,
-				}
-			} else {
-				return {
-					...state,
-					mainTab: 'shipping',
+					activeTab: tabs[currentIndex + 1],
 				}
 			}
+
+			return state
 		})
 	},
 
 	previousTab: () => {
 		productFormStore.setState((state) => {
-			if (state.mainTab === 'shipping') {
-				return {
-					...state,
-					mainTab: 'product',
-					productSubTab: 'images',
-				}
-			}
-
-			const subTabs = ['name', 'detail', 'spec', 'category', 'images']
-			const currentIndex = subTabs.indexOf(state.productSubTab)
+			const tabs: ProductFormTab[] = ['name', 'detail', 'spec', 'category', 'images', 'shipping']
+			const currentIndex = tabs.indexOf(state.activeTab)
 
 			if (currentIndex > 0) {
 				return {
 					...state,
-					productSubTab: subTabs[currentIndex - 1] as typeof state.productSubTab,
+					activeTab: tabs[currentIndex - 1],
 				}
 			}
 
@@ -318,11 +302,10 @@ export const productFormActions = {
 	},
 
 	// Update tab state without marking as dirty (used for navigation, restore after discard, etc.)
-	setTabState: (mainTab: 'product' | 'shipping', productSubTab: 'name' | 'detail' | 'spec' | 'category' | 'images') => {
+	setTabState: (activeTab: ProductFormTab) => {
 		productFormStore.setState((state) => ({
 			...state,
-			mainTab,
-			productSubTab,
+			activeTab,
 		}))
 	},
 
@@ -352,8 +335,7 @@ export const productFormActions = {
 					...state,
 					...draft,
 					// Restore tab state to defaults since we don't persist them
-					mainTab: 'product',
-					productSubTab: 'name',
+					activeTab: 'name',
 					// Mark as dirty since we're loading unsaved changes
 					isDirty: true,
 				}))
