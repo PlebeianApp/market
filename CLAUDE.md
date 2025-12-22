@@ -23,6 +23,8 @@ bun test:e2e:chrome      # Run e2e tests in Chrome only
 
 For local development, run a Nostr relay (e.g., `nak serve` at ws://localhost:10547) and configure `.env` from `.env.example`.
 
+**Important**: Always run `bun run format` before committing or pushing changes.
+
 ## Architecture
 
 ### Data Flow
@@ -45,11 +47,38 @@ For local development, run a Nostr relay (e.g., `nak serve` at ws://localhost:10
 ### Nostr Event Kinds
 
 - 30402: Products
-- 30403: Orders
+- 30403: Orders (legacy)
 - 30405: Collections
 - 30406: Shipping options
 - 1063: Comments (NIP-22)
 - 31990/30078: App settings
+- 31555: Product reviews
+- 14, 16, 17: Order communication (NIP-17 encrypted DMs)
+
+## Gamma Markets Specification
+
+This project implements the [Gamma Markets e-commerce spec](https://github.com/GammaMarkets/market-spec), an extension of NIP-99 developed collaboratively by Nostr marketplace developers (Shopstr, Cypher, Plebeian, Conduit).
+
+### Order Flow
+
+1. Buyer creates order (Kind 16, type 1) with items and shipping
+2. Merchant sends payment request (Kind 16, type 2) or buyer pays automatically
+3. Buyer submits payment receipt (Kind 17) with proof
+4. Merchant confirms and updates status (Kind 16, type 3)
+5. Merchant provides shipping updates (Kind 16, type 4)
+
+### Payment Methods
+
+- Lightning Network via `lud16` addresses
+- eCash tokens (locked to merchant pubkey)
+- Manual processing (merchant-initiated requests)
+- Generic payment proof for fiat gateways
+
+### Key Design Decisions
+
+- No cascading inheritance: products explicitly reference collection attributes
+- All sensitive order communication uses NIP-17 encrypted DMs
+- Merchants recommend preferred apps via NIP-89
 
 ### Authentication
 
