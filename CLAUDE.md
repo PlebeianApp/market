@@ -27,6 +27,8 @@ For local development, run a Nostr relay (e.g., `nak serve` at ws://localhost:10
 
 **Important**: Always run `bun run format` before committing or pushing changes.
 
+**After pushing**: Check GitHub Actions/workflows to confirm there are no failures.
+
 ## Architecture
 
 ### Data Flow
