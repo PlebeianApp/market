@@ -97,3 +97,7 @@ Supports NIP-07 (browser extension), NIP-46 (bunker/remote signing), and local p
 - Forms: TanStack Form + Zod
 - Nostr: NDK (Nostr Development Kit)
 - Testing: Playwright
+
+## UI Components
+
+Always use [Radix UI primitives](https://www.radix-ui.com/primitives/docs/overview/introduction) for UI components. Radix provides accessible, unstyled components that handle focus management, keyboard navigation, and ARIA attributes. See `src/components/` for existing patterns using Radix with Tailwind styling.
