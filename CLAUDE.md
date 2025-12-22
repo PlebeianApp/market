@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Plebeian Market is a decentralized marketplace built on the Nostr protocol. All data is stored on Nostr relays - there is no traditional database. Browser storage (localStorage, sessionStorage, IndexedDB) is only used for user preferences, auth keys, and temporary state like shopping carts.
 
+Plebeian Market originally ran on NIP-15, but the current version uses NIP-99 with a migration path for existing users (see `src/routes/_dashboard-layout/dashboard/products/migration-tool.tsx`).
+
 ## Commands
 
 ```bash
