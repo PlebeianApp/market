@@ -29,6 +29,8 @@ For local development, run a Nostr relay (e.g., `nak serve` at ws://localhost:10
 
 **After pushing**: Check GitHub Actions/workflows to confirm there are no failures.
 
+**Creating issues**: Check `.github/ISSUE_TEMPLATE/` for bug report and feature request templates before creating issues.
+
 ## Architecture
 
 ### Data Flow
