@@ -105,3 +105,7 @@ Supports NIP-07 (browser extension), NIP-46 (bunker/remote signing), and local p
 ## UI Components
 
 Always use [Radix UI primitives](https://www.radix-ui.com/primitives/docs/overview/introduction) for UI components. Radix provides accessible, unstyled components that handle focus management, keyboard navigation, and ARIA attributes. See `src/components/` for existing patterns using Radix with Tailwind styling.
+
+## Design
+
+Figma designs: https://www.figma.com/design/re69Ae2WVk5yKdaGxCbnb5/Plebeian
