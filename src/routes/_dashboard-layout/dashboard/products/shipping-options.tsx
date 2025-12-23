@@ -1130,7 +1130,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 
 						<Button type="submit" disabled={isSubmitting} data-testid="shipping-submit-button">
 							{isSubmitting && <Spinner />}
-							{isEditing ? 'Update' : 'Create'}
+							{isEditing ? 'Update Shipping' : 'Publish Shipping'}
 						</Button>
 					</div>
 				</form>

@@ -72,8 +72,8 @@ export class ProductsPage extends BasePage {
 			}
 		}
 
-		// Save the product
-		await this.page.click('[data-testid="product-save-button"]')
+		// Publish the product
+		await this.page.click('[data-testid="product-publish-button"]')
 		await this.page.waitForTimeout(1000)
 
 		// After creation, we get redirected to the product page
@@ -116,8 +116,8 @@ export class ProductsPage extends BasePage {
 			await this.page.fill('[data-testid="product-price-input"]', updates.price)
 		}
 
-		// Save the updated product using the correct test ID
-		await this.page.click('[data-testid="product-save-button"]')
+		// Update the product
+		await this.page.click('[data-testid="product-publish-button"]')
 		await this.page.waitForTimeout(2000)
 	}
 
