@@ -17,7 +17,6 @@ import { useStore } from '@tanstack/react-store'
 import { Store } from '@tanstack/store'
 import { useEffect } from 'react'
 import { SHIPPING_KIND } from '../schemas/shippingOption'
-import { authStore } from '@/lib/stores/auth'
 
 export interface ProductImage {
 	url: string
@@ -1368,17 +1367,16 @@ export const cartActions = {
 		}))
 	},
 
-	mergeCart: async (userPubkey: string) => {
+	mergeCart: async (buyerPubkey: string | null) => {
 		const state = cartStore.state
 		const { cart } = state
 
-		if (Object.keys(cart.products).length === 0) {
+		if (!buyerPubkey || Object.keys(cart.products).length === 0) {
 			return
 		}
-
 		// Remove products where the user is the seller (can't buy own products)
 		for (const [productId, product] of Object.entries(cart.products)) {
-			if (product.sellerPubkey === userPubkey) {
+			if (product.sellerPubkey === buyerPubkey) {
 				const seller = cart.sellers[product.sellerPubkey]
 				if (seller) {
 					seller.productIds = seller.productIds.filter((id) => id !== productId)
