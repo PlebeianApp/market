@@ -170,7 +170,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 						<div className="py-2">
 							<div className="space-y-2">
 								<Label className="font-bold">Amount</Label>
-								<div className="grid grid-cols-2 gap-2">
+								<div className="grid grid-cols-3 gap-2">
 									{DEFAULT_ZAP_AMOUNTS.map(({ displayText, amount: presetAmount }) => (
 										<Button
 											key={presetAmount}
