@@ -30,6 +30,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 	const [isShippingOpen, setIsShippingOpen] = useState(false)
 
 	const [isStockUpdateOpen, setIsStockUpdateOpen] = useState(false)
+	const [isPaymentConfirmOpen, setIsPaymentConfirmOpen] = useState(false)
 
 	const updateOrderStatus = useUpdateOrderStatusMutation()
 	const updateShippingStatus = useUpdateShippingStatusMutation()
@@ -69,6 +70,11 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 			reason,
 			tracking,
 		})
+	}
+
+	const handleConfirmOrder = () => {
+		handleStatusUpdate(ORDER_STATUS.CONFIRMED)
+		setIsPaymentConfirmOpen(false)
 	}
 
 	const handleCancel = () => {
@@ -129,7 +135,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 	// Determine the next action based on role and status
 	const getNextAction = () => {
 		if (isSeller) {
-			if (canConfirm) return { label: 'Confirm', icon: Check, action: () => handleStatusUpdate(ORDER_STATUS.CONFIRMED) }
+			if (canConfirm) return { label: 'Confirm', icon: Check, action: () => setIsPaymentConfirmOpen(true) }
 			if (canProcess) return { label: 'Process', icon: Package, action: () => handleStatusUpdate(ORDER_STATUS.PROCESSING) }
 			if (canShip) return { label: 'Ship', icon: Truck, action: () => setIsShippingOpen(true) }
 		}
@@ -188,6 +194,31 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 					<Clock className="h-4 w-4 ml-1" />
 				</Button>
 			)}
+
+			{/* Payment Confirmation dialog */}
+			<Dialog open={isPaymentConfirmOpen} onOpenChange={setIsPaymentConfirmOpen}>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>Confirm Payment Received</DialogTitle>
+						<DialogDescription className="break-words">
+							Please confirm that you have received payment for this order with the Order Payment details below before proceeding.
+						</DialogDescription>
+					</DialogHeader>
+
+					<div className="space-y-2 py-4">
+						<p className="text-sm text-muted-foreground">
+							By confirming, you acknowledge that the payment has been received and you are ready to process this order.
+						</p>
+					</div>
+
+					<DialogFooter>
+						<Button variant="outline" onClick={() => setIsPaymentConfirmOpen(false)}>
+							Back
+						</Button>
+						<Button onClick={handleConfirmOrder}>Confirm Payment Received</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
 
 			{/* Shipping dialog */}
 			<Dialog open={isShippingOpen} onOpenChange={setIsShippingOpen}>
