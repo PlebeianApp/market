@@ -1,6 +1,7 @@
 import { ProductCard } from '@/components/ProductCard'
 import { PaymentDialog } from '@/components/checkout/PaymentDialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { authStore } from '@/lib/stores/auth'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import { cn } from '@/lib/utils'
@@ -21,7 +22,7 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { format } from 'date-fns'
-import { CreditCard, MapPin, MessageSquare, Package, Receipt, Truck } from 'lucide-react'
+import { CreditCard, MapPin, MessageSquare, Package, Receipt, Truck, ChevronDown, ChevronUp } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { DetailField } from '../ui/DetailField'
@@ -54,6 +55,8 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	const [paymentDialogOpen, setPaymentDialogOpen] = useState(false)
 	const [selectedInvoiceIndex, setSelectedInvoiceIndex] = useState(0)
 	const [dialogInvoices, setDialogInvoices] = useState<PaymentInvoiceData[]>([])
+
+	const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set())
 
 	if (!order) {
 		return (
@@ -208,6 +211,29 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 		handlePaymentFailed(invoiceId, error)
 	}
 
+	const allProductsExpanded = products.length > 0 && expandedProducts.size === products.length
+	const [timelineExpanded, setTimelineExpanded] = useState(false)
+
+	const toggleAllProducts = () => {
+		if (allProductsExpanded) {
+			setExpandedProducts(new Set())
+		} else {
+			setExpandedProducts(new Set(products.map((p) => p.id)))
+		}
+	}
+
+	const toggleProduct = (productId: string) => {
+		setExpandedProducts((prev) => {
+			const next = new Set(prev)
+			if (next.has(productId)) {
+				next.delete(productId)
+			} else {
+				next.add(productId)
+			}
+			return next
+		})
+	}
+
 	if (!order.order) {
 		return (
 			<div className="text-center py-8">
@@ -294,20 +320,46 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				{products.length > 0 && (
 					<Card>
 						<CardHeader>
-							<CardTitle>Products</CardTitle>
+							<div className="flex items-center justify-between">
+								<CardTitle>Products</CardTitle>
+								<Button variant="ghost" size="sm" onClick={toggleAllProducts} className="text-sm">
+									{allProductsExpanded ? (
+										<>
+											<ChevronUp className="w-4 h-4" />
+										</>
+									) : (
+										<>
+											<ChevronDown className="w-4 h-4" />
+										</>
+									)}
+								</Button>
+							</div>
 						</CardHeader>
 						<CardContent>
 							<div className="grid grid-cols-1 gap-4">
 								{products.map((product) => {
 									const lookupId = getProductId(product) || product.id
 									const quantity = quantityMap.get(lookupId) || quantityMap.get(product.id) || 1
+									const isExpanded = expandedProducts.has(product.id)
+
 									return (
-										<div key={product.id} className="p-4 border rounded-lg">
-											<ProductCard product={product} />
-											<div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
-												<span className="text-sm text-gray-500">Quantity</span>
-												<span className="text-lg font-semibold">{quantity}</span>
-											</div>
+										<div key={product.id} className="border rounded-lg overflow-hidden">
+											<button
+												onClick={() => toggleProduct(product.id)}
+												className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+											>
+												<div className="flex items-center gap-3 flex-1">
+													<span className="font-medium text-left">{product.tags.find((t) => t[0] === 'title')?.[1] || 'Product'}</span>
+													<span className="text-sm text-gray-500">Qty: {quantity}</span>
+												</div>
+												{isExpanded ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
+											</button>
+
+											{isExpanded && (
+												<div className="p-4 border-t border-gray-200 bg-gray-50">
+													<ProductCard product={product} />
+												</div>
+											)}
 										</div>
 									)
 								})}
@@ -408,19 +460,26 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 				{/* Order Timeline */}
 				{allEvents.length > 0 && (
 					<div>
-						<h2 className="text-xl font-bold mb-4">Order Timeline</h2>
-						<div className="space-y-4">
-							{allEvents.map(({ event, type, title, icon }, index) => (
-								<TimelineEventCard
-									key={event.id}
-									event={event}
-									type={type}
-									title={title}
-									icon={icon}
-									timelineIndex={allEvents.length - index}
-								/>
-							))}
+						<div className="flex items-center justify-between mb-4">
+							<h2 className="text-xl font-bold">Order Timeline</h2>
+							<Button variant="ghost" size="sm" onClick={() => setTimelineExpanded(!timelineExpanded)}>
+								{timelineExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+							</Button>
 						</div>
+						{timelineExpanded && (
+							<div className="space-y-4">
+								{allEvents.map(({ event, type, title, icon }, index) => (
+									<TimelineEventCard
+										key={event.id}
+										event={event}
+										type={type}
+										title={title}
+										icon={icon}
+										timelineIndex={allEvents.length - index}
+									/>
+								))}
+							</div>
+						)}
 					</div>
 				)}
 			</div>
