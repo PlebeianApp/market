@@ -286,7 +286,6 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 						<div className={cn('p-4 rounded-t-xl', headerBgColor)}>
 							<div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
 								<div className="flex items-center space-x-2">
-									<Package className="w-5 h-5 text-gray-500" />
 									<div>
 										<p className="text-sm text-gray-500">Products</p>
 										<p className="font-semibold">
@@ -447,9 +446,6 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 									/>
 								))}
 							</div>
-
-							{/* V4V Information */}
-							{sellerV4VShares.length > 0 && <V4VRecipientsCard shares={sellerV4VShares} />}
 						</CardContent>
 					</Card>
 				)}
