@@ -282,7 +282,7 @@ function CollectionsComponent() {
 									<span className="i-market w-5 h-5" />
 									<h3 className="mt-2 text-lg font-semibold text-gray-700">No collections yet</h3>
 									<p className="mt-1 text-sm">
-										Collections are optional. Use them as "Categories," "Favourites," or "Coming Soon," or leave them empty. Your shop, your
+										Collections are optional. Use them as "Categories," "Favorites," or "Coming Soon," or leave them empty. Your shop, your
 										way.
 									</p>
 									<p className="mt-1 text-sm">Click the "Create A Collection" button to create your first one.</p>
