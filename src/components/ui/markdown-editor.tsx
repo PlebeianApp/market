@@ -173,12 +173,12 @@ export function MarkdownEditor({
 					placeholder={placeholder}
 					required={required}
 					data-testid={testId}
-					className="min-h-24 border-2"
+					className="min-h-40 border-2"
 				/>
 			</TabsContent>
 
 			<TabsContent value="preview" className="mt-0">
-				<div className="min-h-24 border-2 rounded-md p-3 bg-white">
+				<div className="min-h-40 border-2 rounded-md p-3 bg-white">
 					{value ? (
 						<MarkdownRenderer content={value} />
 					) : (
