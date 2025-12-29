@@ -38,7 +38,9 @@ ${truncatedDescription}
 
 Price: ${price} ${currency}
 
-${productUrl}`
+${productUrl}
+
+#plebeian`
 			setShareText(defaultText)
 			setIsCopied(false)
 		}
@@ -81,9 +83,10 @@ ${productUrl}`
 			event.kind = 1
 			event.content = shareText
 
-			// Add tags for the product reference
+			// Add tags for the product reference and discoverability
 			event.tags = [
 				['r', productUrl], // Reference to the product URL
+				['t', 'plebeian'], // Hashtag for discoverability
 			]
 
 			// Sign the event
