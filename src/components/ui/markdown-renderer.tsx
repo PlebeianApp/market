@@ -1,4 +1,5 @@
 import ReactMarkdown from 'react-markdown'
+import remarkBreaks from 'remark-breaks'
 
 interface MarkdownRendererProps {
 	content: string
@@ -13,6 +14,7 @@ export function MarkdownRenderer({ content, className = '' }: MarkdownRendererPr
 	return (
 		<div className={`prose prose-gray max-w-none ${className}`}>
 			<ReactMarkdown
+				remarkPlugins={[remarkBreaks]}
 				components={{
 					// Headings
 					h1: ({ children }) => <h1 className="text-2xl font-bold mt-6 mb-4 first:mt-0">{children}</h1>,
