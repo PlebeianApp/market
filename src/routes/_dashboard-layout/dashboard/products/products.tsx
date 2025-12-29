@@ -359,6 +359,7 @@ function ProductsOverviewComponent() {
 						if (!open) setProductToShare(null)
 					}}
 					productId={getProductId(productToShare) || productToShare.id}
+					pubkey={productToShare.pubkey}
 					title={getProductTitle(productToShare)}
 					description={productToShare.content || ''}
 					price={(() => {

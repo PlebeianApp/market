@@ -13,13 +13,23 @@ interface ShareProductDialogProps {
 	open: boolean
 	onOpenChange: (open: boolean) => void
 	productId: string
+	pubkey: string
 	title: string
 	description: string
 	price: number
 	currency: string
 }
 
-export function ShareProductDialog({ open, onOpenChange, productId, title, description, price, currency }: ShareProductDialogProps) {
+export function ShareProductDialog({
+	open,
+	onOpenChange,
+	productId,
+	pubkey,
+	title,
+	description,
+	price,
+	currency,
+}: ShareProductDialogProps) {
 	const { isAuthenticated } = useStore(authStore)
 	const [shareText, setShareText] = useState('')
 	const [isPosting, setIsPosting] = useState(false)
@@ -85,6 +95,7 @@ ${productUrl}
 
 			// Add tags for the product reference and discoverability
 			event.tags = [
+				['a', `30402:${pubkey}:${productId}`], // Reference to the product event (kind:pubkey:d-tag)
 				['r', productUrl], // Reference to the product URL
 				['t', 'plebeian'], // Hashtag for discoverability
 			]

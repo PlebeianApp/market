@@ -687,6 +687,7 @@ function RouteComponent() {
 				open={shareDialogOpen}
 				onOpenChange={setShareDialogOpen}
 				productId={productId}
+				pubkey={pubkey}
 				title={title}
 				description={description}
 				price={price}
