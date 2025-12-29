@@ -111,7 +111,9 @@ ${productUrl}
 			<DialogContent className="sm:max-w-[40em] max-w-[calc(100%-2rem)] max-h-[90vh] overflow-x-hidden overflow-y-auto bg-white">
 				<DialogHeader>
 					<DialogTitle>Share Product</DialogTitle>
-					<DialogDescription>Share this product with others or post it to your Nostr feed.</DialogDescription>
+					<DialogDescription id="share-dialog-description">
+						Share this product with others or post it to your Nostr feed.
+					</DialogDescription>
 				</DialogHeader>
 
 				<div className="space-y-6 py-4">
@@ -122,10 +124,11 @@ ${productUrl}
 							</label>
 							<Textarea
 								id="share-text"
+								aria-describedby="share-dialog-description"
 								value={shareText}
 								onChange={(e) => setShareText(e.target.value)}
-								rows={14}
-								className="resize-none break-all overflow-wrap-anywhere"
+								rows={8}
+								className="resize-none break-words"
 								placeholder="Write something about this product..."
 							/>
 						</div>
