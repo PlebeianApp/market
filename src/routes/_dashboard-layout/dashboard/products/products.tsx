@@ -5,7 +5,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { authStore } from '@/lib/stores/auth'
 import { productFormActions } from '@/lib/stores/product'
 import { useDeleteProductMutation } from '@/publish/products'
-import { getProductId, getProductImages, getProductTitle, productsByPubkeyQueryOptions } from '@/queries/products'
+import { getProductId, getProductImages, getProductPrice, getProductTitle, productsByPubkeyQueryOptions } from '@/queries/products'
+import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery } from '@tanstack/react-query'
@@ -15,14 +16,14 @@ import { PackageIcon, Trash, EyeOff, Clock, Eye } from 'lucide-react'
 import { useState, useMemo } from 'react'
 
 // Component to show basic product information
-function ProductBasicInfo({ product }: { product: any }) {
+function ProductBasicInfo({ product }: { product: NDKEvent }) {
 	const description = product.content || 'No description'
 	const images = getProductImages(product)
-	const priceTag = product.tags.find((tag: any) => tag[0] === 'price')
+	const priceTag = getProductPrice(product)
 	const price = priceTag ? `${priceTag[1]} ${priceTag[2]}` : 'Price not set'
-	const visibilityTag = product.tags.find((tag: any) => tag[0] === 'visibility')
+	const visibilityTag = product.tags.find((tag) => tag[0] === 'visibility')
 	const visibility = visibilityTag?.[1] || 'on-sale'
-	const stockTag = product.tags.find((tag: any) => tag[0] === 'stock')
+	const stockTag = product.tags.find((tag) => tag[0] === 'stock')
 	const stock = stockTag?.[1]
 
 	return (
@@ -75,7 +76,7 @@ function ProductListItem({
 	onDelete,
 	isDeleting,
 }: {
-	product: any
+	product: NDKEvent
 	isExpanded: boolean
 	onToggleExpanded: () => void
 	onEdit: () => void
@@ -83,7 +84,7 @@ function ProductListItem({
 	onDelete: () => void
 	isDeleting: boolean
 }) {
-	const visibilityTag = product.tags.find((tag: any) => tag[0] === 'visibility')
+	const visibilityTag = product.tags.find((tag) => tag[0] === 'visibility')
 	const visibility = visibilityTag?.[1] || 'on-sale'
 
 	const getVisibilityIcon = () => {
@@ -174,7 +175,7 @@ function ProductsOverviewComponent() {
 	const [expandedProduct, setExpandedProduct] = useState<string | null>(null)
 	const [orderBy, setOrderBy] = useState<string>('newest')
 	const [shareDialogOpen, setShareDialogOpen] = useState(false)
-	const [productToShare, setProductToShare] = useState<any>(null)
+	const [productToShare, setProductToShare] = useState<NDKEvent | null>(null)
 	useDashboardTitle('Products')
 
 	// Auto-animate for smooth list transitions
@@ -243,12 +244,12 @@ function ProductsOverviewComponent() {
 		setExpandedProduct(expandedProduct === productId ? null : productId)
 	}
 
-	const handleShareProductClick = (product: any) => {
+	const handleShareProductClick = (product: NDKEvent) => {
 		setProductToShare(product)
 		setShareDialogOpen(true)
 	}
 
-	const handleDeleteProductClick = async (product: any) => {
+	const handleDeleteProductClick = async (product: NDKEvent) => {
 		if (confirm(`Are you sure you want to delete "${getProductTitle(product)}"?`)) {
 			const productDTag = getProductId(product)
 			if (productDTag) {
@@ -361,15 +362,6 @@ function ProductsOverviewComponent() {
 					productId={getProductId(productToShare) || productToShare.id}
 					pubkey={productToShare.pubkey}
 					title={getProductTitle(productToShare)}
-					description={productToShare.content || ''}
-					price={(() => {
-						const priceTag = productToShare.tags.find((tag: any) => tag[0] === 'price')
-						return priceTag ? parseFloat(priceTag[1]) : 0
-					})()}
-					currency={(() => {
-						const priceTag = productToShare.tags.find((tag: any) => tag[0] === 'price')
-						return priceTag?.[2] || 'sats'
-					})()}
 				/>
 			)}
 		</div>

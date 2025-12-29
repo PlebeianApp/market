@@ -689,9 +689,6 @@ function RouteComponent() {
 				productId={productId}
 				pubkey={pubkey}
 				title={title}
-				description={description}
-				price={price}
-				currency={priceTag?.[2] || 'sats'}
 			/>
 		</div>
 	)

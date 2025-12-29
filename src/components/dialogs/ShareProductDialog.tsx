@@ -15,21 +15,9 @@ interface ShareProductDialogProps {
 	productId: string
 	pubkey: string
 	title: string
-	description: string
-	price: number
-	currency: string
 }
 
-export function ShareProductDialog({
-	open,
-	onOpenChange,
-	productId,
-	pubkey,
-	title,
-	description,
-	price,
-	currency,
-}: ShareProductDialogProps) {
+export function ShareProductDialog({ open, onOpenChange, productId, pubkey, title }: ShareProductDialogProps) {
 	const { isAuthenticated } = useStore(authStore)
 	const [shareText, setShareText] = useState('')
 	const [isPosting, setIsPosting] = useState(false)
@@ -41,12 +29,7 @@ export function ShareProductDialog({
 	// Generate default share text when dialog opens
 	useEffect(() => {
 		if (open) {
-			const truncatedDescription = description.length > 150 ? `${description.substring(0, 150)}...` : description
 			const defaultText = `Check out "${title}" on Plebeian!
-
-${truncatedDescription}
-
-Price: ${price} ${currency}
 
 ${productUrl}
 
@@ -54,7 +37,7 @@ ${productUrl}
 			setShareText(defaultText)
 			setIsCopied(false)
 		}
-	}, [open, title, description, price, currency, productUrl])
+	}, [open, title, productUrl])
 
 	const handleCopyUrl = async () => {
 		try {
@@ -81,11 +64,9 @@ ${productUrl}
 				throw new Error('NDK not initialized')
 			}
 
-			// Ensure NDK is connected
-			try {
-				await ndk.connect()
-			} catch (connectError) {
-				console.warn('NDK connection warning:', connectError)
+			// Check if we have a signer
+			if (!ndk.signer) {
+				throw new Error('No signer available. Please log in with a signing method.')
 			}
 
 			// Create kind 1 event (text note)
@@ -100,20 +81,26 @@ ${productUrl}
 				['t', 'plebeian'], // Hashtag for discoverability
 			]
 
-			// Sign the event
-			await event.sign()
+			// Sign the event with timeout
+			const signPromise = event.sign()
+			const signTimeoutPromise = new Promise((_, reject) =>
+				setTimeout(() => reject(new Error('Sign timeout - signer not responding')), 30000)
+			)
+			await Promise.race([signPromise, signTimeoutPromise])
 
 			// Publish with timeout
 			const publishPromise = event.publish()
-			const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Publish timeout after 10 seconds')), 10000))
-
-			await Promise.race([publishPromise, timeoutPromise])
+			const publishTimeoutPromise = new Promise((_, reject) =>
+				setTimeout(() => reject(new Error('Publish timeout after 10 seconds')), 10000)
+			)
+			await Promise.race([publishPromise, publishTimeoutPromise])
 
 			toast.success('Posted to Nostr successfully!')
 			onOpenChange(false)
 		} catch (error) {
 			console.error('Failed to post to Nostr:', error)
-			toast.error('Failed to post to Nostr')
+			const message = error instanceof Error ? error.message : 'Failed to post to Nostr'
+			toast.error(message)
 		} finally {
 			setIsPosting(false)
 		}
