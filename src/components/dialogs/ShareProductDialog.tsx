@@ -118,7 +118,7 @@ ${productUrl}
 					{isAuthenticated && (
 						<div className="space-y-2">
 							<label htmlFor="share-text" className="text-sm font-medium text-gray-700">
-								Post content
+								Content to post to Nostr
 							</label>
 							<Textarea
 								id="share-text"
