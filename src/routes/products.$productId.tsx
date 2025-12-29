@@ -683,13 +683,7 @@ function RouteComponent() {
 			/>
 
 			{/* Share Product Dialog */}
-			<ShareProductDialog
-				open={shareDialogOpen}
-				onOpenChange={setShareDialogOpen}
-				productId={productId}
-				pubkey={pubkey}
-				title={title}
-			/>
+			<ShareProductDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} productId={productId} pubkey={pubkey} title={title} />
 		</div>
 	)
 }

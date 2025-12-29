@@ -84,14 +84,14 @@ ${productUrl}
 			// Sign the event with timeout
 			const signPromise = event.sign()
 			const signTimeoutPromise = new Promise((_, reject) =>
-				setTimeout(() => reject(new Error('Sign timeout - signer not responding')), 30000)
+				setTimeout(() => reject(new Error('Sign timeout - signer not responding')), 30000),
 			)
 			await Promise.race([signPromise, signTimeoutPromise])
 
 			// Publish with timeout
 			const publishPromise = event.publish()
 			const publishTimeoutPromise = new Promise((_, reject) =>
-				setTimeout(() => reject(new Error('Publish timeout after 10 seconds')), 10000)
+				setTimeout(() => reject(new Error('Publish timeout after 10 seconds')), 10000),
 			)
 			await Promise.race([publishPromise, publishTimeoutPromise])
 
@@ -111,9 +111,7 @@ ${productUrl}
 			<DialogContent className="sm:max-w-[40em] max-w-[calc(100%-2rem)] max-h-[90vh] overflow-x-hidden overflow-y-auto bg-white">
 				<DialogHeader>
 					<DialogTitle>Share Product</DialogTitle>
-					<DialogDescription id="share-dialog-description">
-						Share this product with others or post it to your Nostr feed.
-					</DialogDescription>
+					<DialogDescription id="share-dialog-description">Share this product with others or post it to your Nostr feed.</DialogDescription>
 				</DialogHeader>
 
 				<div className="space-y-6 py-4">
