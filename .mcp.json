@@ -3,6 +3,10 @@
 		"nostrbook": {
 			"command": "npx",
 			"args": ["-y", "@nostrbook/mcp@latest"]
+		},
+		"nak": {
+			"command": "nak",
+			"args": ["mcp"]
 		}
 	}
 }

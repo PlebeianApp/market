@@ -3,6 +3,7 @@ import { ItemGrid } from '@/components/ItemGrid'
 import { Nip05Badge } from '@/components/Nip05Badge.tsx'
 import { ProductCard } from '@/components/ProductCard'
 import { Button } from '@/components/ui/button'
+import { MarkdownRenderer } from '@/components/ui/markdown-renderer'
 import { ZapButton } from '@/components/ZapButton.tsx'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { useEntityPermissions } from '@/hooks/useEntityPermissions'
@@ -204,7 +205,7 @@ function RouteComponent() {
 						<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-16 lg:mt-0">
 							<h1 className="text-2xl font-heading text-center sm:text-left">{title}</h1>
 							<div className="flex flex-col items-center justify-center lg:col-span-2 text-md text-white text-center font-medium">
-								{summary}
+								<MarkdownRenderer content={summary} className="text-white [&_a]:text-white [&_a]:underline" />
 							</div>
 						</div>
 					</div>

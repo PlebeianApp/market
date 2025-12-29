@@ -1,6 +1,7 @@
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { MarkdownEditor } from '@/components/ui/markdown-editor'
 import { collectionFormStore, collectionFormActions } from '@/lib/stores/collection'
 import { useForm } from '@tanstack/react-form'
 import { useStore } from '@tanstack/react-store'
@@ -91,17 +92,16 @@ export function InfoTab() {
 						<Label htmlFor={field.name}>
 							<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Description</span>
 						</Label>
-						<textarea
+						<MarkdownEditor
 							id={field.name}
 							name={field.name}
 							value={field.state.value}
 							onBlur={field.handleBlur}
-							onChange={(e) => {
-								field.handleChange(e.target.value)
-								collectionFormActions.updateValues({ description: e.target.value })
+							onChange={(value) => {
+								field.handleChange(value)
+								collectionFormActions.updateValues({ description: value })
 							}}
-							className="border-2 min-h-24 p-2 rounded-md"
-							placeholder="Bitaxe Miners"
+							placeholder="Describe your collection. Supports **markdown** formatting."
 							required
 							data-testid="collection-description-input"
 						/>
