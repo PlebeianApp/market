@@ -1,5 +1,6 @@
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { MarkdownEditor } from '@/components/ui/markdown-editor'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { authStore } from '@/lib/stores/auth'
 import { productFormActions, productFormStore } from '@/lib/stores/product'
@@ -124,17 +125,16 @@ export function NameTab() {
 						<Label htmlFor={field.name}>
 							<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Description</span>
 						</Label>
-						<textarea
+						<MarkdownEditor
 							id={field.name}
 							name={field.name}
 							value={field.state.value}
 							onBlur={field.handleBlur}
-							onChange={(e) => {
-								field.handleChange(e.target.value)
-								productFormActions.updateValues({ description: e.target.value })
+							onChange={(value) => {
+								field.handleChange(value)
+								productFormActions.updateValues({ description: value })
 							}}
-							className="border-2 min-h-24 p-2 rounded-md"
-							placeholder="More information about your product to help your customers"
+							placeholder="More information about your product to help your customers. Supports **markdown** formatting."
 							data-testid="product-description-input"
 							required
 						/>

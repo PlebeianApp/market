@@ -9,6 +9,7 @@ import { ShippingSelector } from '@/components/ShippingSelector'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { MarkdownRenderer } from '@/components/ui/markdown-renderer'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { UserNameWithBadge } from '@/components/UserNameWithBadge'
 import { ZapButton } from '@/components/ZapButton'
@@ -472,7 +473,7 @@ function RouteComponent() {
 							<div>
 								<div className="bg-secondary text-white px-4 py-2 text-sm font-medium rounded-t-md">Description</div>
 								<div className="rounded-lg bg-white p-6 shadow-md rounded-t-none">
-									<p className="whitespace-pre-wrap break-words text-gray-700">{description}</p>
+									<MarkdownRenderer content={description} className="text-gray-700" />
 								</div>
 							</div>
 
@@ -617,7 +618,7 @@ function RouteComponent() {
 
 							<TabsContent value="description" className="mt-4 border-t-3 border-secondary bg-tertiary">
 								<div className="rounded-lg bg-white p-6 shadow-md">
-									<p className="whitespace-pre-wrap break-words text-gray-700">{description}</p>
+									<MarkdownRenderer content={description} className="text-gray-700" />
 								</div>
 							</TabsContent>
 
