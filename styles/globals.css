@@ -326,6 +326,21 @@ button {
 		}
 	}
 
+	.hero-container-carousel {
+		margin-top: -8.5rem;
+		padding-top: 8rem;
+		height: calc(320px + 8rem);
+		overflow: hidden;
+	}
+
+	@media (min-width: 1024px) {
+		.hero-container-carousel {
+			margin-top: -6rem;
+			padding-top: 6rem;
+			height: calc(400px + 6rem);
+		}
+	}
+
 	.hero-container-small {
 		margin-top: -8.5rem;
 		padding-top: 8rem;

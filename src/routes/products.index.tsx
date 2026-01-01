@@ -216,18 +216,21 @@ function ProductsRoute() {
 
 	// Render homepage hero content
 	const renderHomepageHero = () => (
-		<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-16 lg:mt-0">
-			<div className="flex items-center justify-center h-24 lg:h-32">
-				<h1 className="text-4xl lg:text-5xl font-theylive transition-opacity duration-500">Browse Products</h1>
-			</div>
-
-			<div className="flex flex-col gap-6">
+		<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-4 lg:mt-0">
+			{/* Button in same position as product image */}
+			<div className="mb-2 h-40 lg:h-48 flex items-center justify-center">
 				<Button variant="focus" size="lg" onClick={handleStartSelling}>
 					<span className="flex items-center gap-2">
 						<span className="i-nostr w-6 h-6"></span>Start Selling
 					</span>
 				</Button>
+			</div>
 
+			<div className="flex items-center justify-center h-16 lg:h-20">
+				<h1 className="text-2xl lg:text-4xl font-theylive transition-opacity duration-500">Browse Products</h1>
+			</div>
+
+			<div className="flex flex-col gap-4">
 				{/* Pagination dots */}
 				{totalSlides > 1 && (
 					<div className="flex justify-center gap-2">
@@ -249,31 +252,27 @@ function ProductsRoute() {
 
 	// Render product hero content
 	const renderProductHero = () => (
-		<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-8 lg:mt-0">
-			{/* Featured Product Image */}
-			{backgroundImageUrl && (
-				<Link to={`/products/${currentProductId}`} className="block mb-4 max-w-xs lg:max-w-sm">
-					<div className="relative aspect-square overflow-hidden rounded-lg shadow-xl ring-2 ring-white/20 hover:ring-secondary transition-all">
-						<img
-							src={backgroundImageUrl}
-							alt={displayTitle || 'Featured product'}
-							className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-						/>
-					</div>
-				</Link>
-			)}
+		<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-4 lg:mt-0">
+			{/* Featured Product Image - Fixed size container */}
+			<div className="mb-2 w-40 h-40 lg:w-48 lg:h-48">
+				{backgroundImageUrl && (
+					<Link to={`/products/${currentProductId}`} className="block w-full h-full">
+						<div className="relative w-full h-full overflow-hidden rounded-lg shadow-xl ring-2 ring-white/20 hover:ring-secondary transition-all">
+							<img
+								src={backgroundImageUrl}
+								alt={displayTitle || 'Featured product'}
+								className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+							/>
+						</div>
+					</Link>
+				)}
+			</div>
 
 			<div className="flex items-center justify-center h-16 lg:h-20">
 				<h1 className="text-2xl lg:text-4xl font-theylive transition-opacity duration-500">{displayTitle || 'Loading...'}</h1>
 			</div>
 
 			<div className="flex flex-col gap-4">
-				<Link to={`/products/${currentProductId}`}>
-					<Button variant="secondary" size="lg">
-						View Product
-					</Button>
-				</Link>
-
 				{/* Pagination dots */}
 				{totalSlides > 1 && (
 					<div className="flex justify-center gap-2">
@@ -298,7 +297,7 @@ function ProductsRoute() {
 			{isHomepageSlide ? (
 				// Homepage hero styling with random product background
 				<div
-					className={`relative hero-container ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-black'}`}
+					className={`relative hero-container-carousel ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-black'}`}
 					onTouchStart={handleTouchStart}
 					onTouchMove={handleTouchMove}
 					onTouchEnd={handleTouchEnd}
@@ -313,7 +312,7 @@ function ProductsRoute() {
 			) : (
 				// Product hero styling (existing product page style)
 				<div
-					className={`relative hero-container ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-black'}`}
+					className={`relative hero-container-carousel ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-black'}`}
 					onTouchStart={handleTouchStart}
 					onTouchMove={handleTouchMove}
 					onTouchEnd={handleTouchEnd}
