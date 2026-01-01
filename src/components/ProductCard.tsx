@@ -14,9 +14,12 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 	const title = getProductTitle(product)
 	const images = getProductImages(product)
 	const price = getProductPrice(product)
-	const stock = getProductStock(product)
+	const stockTag = getProductStock(product)
+	const stockQuantity = stockTag ? parseInt(stockTag[1]) : undefined
 	const visibilityTag = getProductVisibility(product)
 	const visibility = visibilityTag?.[1] || 'on-sale'
+	// Out of stock if stock is explicitly 0 or undefined (no stock tag), but not for pre-order items
+	const isOutOfStock = visibility !== 'pre-order' && (stockQuantity === undefined || stockQuantity === 0)
 	const [isOwnProduct, setIsOwnProduct] = useState(false)
 	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(null)
 	const [isAddingToCart, setIsAddingToCart] = useState(false)
@@ -41,7 +44,10 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 	const cartQuantity = isInCart ? cart.cart.products[product.id]?.amount || 0 : 0
 
 	const handleAddToCart = async () => {
-		if (isOwnProduct || visibility === 'hidden') return // Don't allow adding own products or hidden products to cart
+		if (isOwnProduct || visibility === 'hidden' || isOutOfStock) return // Don't allow adding own products, hidden products, or out of stock items
+
+		// Check if adding would exceed available stock
+		if (stockQuantity !== undefined && cartQuantity >= stockQuantity) return
 
 		setIsAddingToCart(true)
 		try {
@@ -100,8 +106,10 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 					{/* Stock/Pre-order indicator - right aligned */}
 					{visibility === 'pre-order' ? (
 						<div className="bg-blue-100 text-blue-800 font-medium px-4 py-1 rounded-full text-xs">Pre-order</div>
-					) : stock !== undefined ? (
-						<div className="bg-[var(--light-gray)] font-medium px-4 py-1 rounded-full text-xs">{stock[1]} in stock</div>
+					) : isOutOfStock ? (
+						<div className="bg-red-100 text-red-800 font-medium px-4 py-1 rounded-full text-xs">Out of stock</div>
+					) : stockQuantity !== undefined ? (
+						<div className="bg-[var(--light-gray)] font-medium px-4 py-1 rounded-full text-xs">{stockQuantity} in stock</div>
 					) : null}
 				</div>
 
@@ -121,7 +129,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 								<Button
 									className="py-3 px-4 rounded-lg flex-grow font-medium transition-all duration-200 ease-in-out bg-black text-white disabled:bg-gray-400 disabled:cursor-not-allowed"
 									onClick={handleAddToCart}
-									disabled={isAddingToCart || visibility === 'hidden'}
+									disabled={isAddingToCart || visibility === 'hidden' || (stockQuantity !== undefined && cartQuantity >= stockQuantity)}
 								>
 									{isAddingToCart ? (
 										'Adding...'
@@ -129,6 +137,8 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 										<>
 											<Check className="w-4 h-4 mr-2" /> Added
 										</>
+									) : stockQuantity !== undefined && cartQuantity >= stockQuantity ? (
+										'Max'
 									) : (
 										'Add'
 									)}
@@ -140,12 +150,14 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 									isAddingToCart ? 'opacity-75 scale-95' : ''
 								}`}
 								onClick={handleAddToCart}
-								disabled={isOwnProduct || isAddingToCart || visibility === 'hidden'}
+								disabled={isOwnProduct || isAddingToCart || visibility === 'hidden' || isOutOfStock}
 							>
 								{isOwnProduct ? (
 									'Your Product'
 								) : visibility === 'hidden' ? (
 									'Not Available'
+								) : isOutOfStock ? (
+									'Out of Stock'
 								) : showConfirmation ? (
 									<>
 										<Check className="w-4 h-4 mr-2" /> Added!

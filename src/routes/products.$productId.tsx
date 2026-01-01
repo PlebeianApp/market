@@ -154,6 +154,8 @@ function RouteComponent() {
 	const price = priceTag ? parseFloat(priceTag[1]) : 0
 	const stock = stockTag ? parseInt(stockTag[1]) : undefined
 	const visibility = visibilityTag?.[1] || 'on-sale'
+	// Out of stock if stock is explicitly 0 or undefined (no stock tag), but not for pre-order items
+	const isOutOfStock = visibility !== 'pre-order' && (stock === undefined || stock === 0)
 	const productType = typeTag
 		? {
 				product: typeTag[1],
@@ -380,8 +382,14 @@ function RouteComponent() {
 											>
 												<Plus className="h-6 w-6" />
 											</Button>
-											<Button variant="secondary" onClick={handleAddToCartClick} disabled={stock === 0 || visibility === 'hidden'}>
-												{visibility === 'hidden' ? 'Not Available' : visibility === 'pre-order' ? 'Pre-order' : 'Add to cart'}
+											<Button variant="secondary" onClick={handleAddToCartClick} disabled={isOutOfStock || visibility === 'hidden'}>
+												{visibility === 'hidden'
+													? 'Not Available'
+													: isOutOfStock
+														? 'Out of Stock'
+														: visibility === 'pre-order'
+															? 'Pre-order'
+															: 'Add to cart'}
 											</Button>
 										</div>
 									)}
