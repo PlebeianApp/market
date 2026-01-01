@@ -104,7 +104,12 @@ export const ndkActions = {
 			console.error('Failed to connect NDK:', error)
 			// Don't throw - allow app to continue even if some relays fail
 			// Mark as connected if we have any working relays
-			const connectedRelays = state.ndk?.pool?.connectedRelays() || []
+			let connectedRelays: any[] = []
+			try {
+				connectedRelays = state.ndk?.pool?.connectedRelays() || []
+			} catch (poolError) {
+				console.error('Failed to check connected relays:', poolError)
+			}
 			if (connectedRelays.length > 0) {
 				ndkStore.setState((state) => ({ ...state, isConnected: true }))
 				console.log(`✅ NDK partially connected to ${connectedRelays.length} relays`)
@@ -132,10 +137,15 @@ export const ndkActions = {
 			console.error('Failed to connect Zap NDK:', error)
 			// Don't throw - allow app to continue even if some zap relays fail
 			// Mark as connected if we have any working zap relays
-			const connectedRelays = state.zapNdk?.pool?.connectedRelays() || []
-			if (connectedRelays.length > 0) {
+			let connectedZapRelays: any[] = []
+			try {
+				connectedZapRelays = state.zapNdk?.pool?.connectedRelays() || []
+			} catch (poolError) {
+				console.error('Failed to check connected zap relays:', poolError)
+			}
+			if (connectedZapRelays.length > 0) {
 				ndkStore.setState((state) => ({ ...state, isZapNdkConnected: true }))
-				console.log(`✅ Zap NDK partially connected to ${connectedRelays.length} relays`)
+				console.log(`✅ Zap NDK partially connected to ${connectedZapRelays.length} relays`)
 			} else {
 				console.warn('⚠️ Zap NDK could not connect to any relays. Zap monitoring will be unavailable.')
 			}
