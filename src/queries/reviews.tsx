@@ -32,15 +32,19 @@ export interface AggregateRatings {
 const transformReviewEvent = (event: NDKEvent): ProductReview => {
 	// Extract thumb rating (primary rating)
 	const thumbTag = event.tags.find((t) => t[0] === 'rating' && t[2] === 'thumb')
-	const thumbRating = thumbTag ? parseFloat(thumbTag[1]) : 0
+	const parsedThumb = thumbTag ? parseFloat(thumbTag[1]) : 0
+	const thumbRating = Number.isFinite(parsedThumb) ? parsedThumb : 0
 
 	// Extract category ratings
 	const categoryRatings: CategoryRating[] = event.tags
 		.filter((t) => t[0] === 'rating' && t[2] && t[2] !== 'thumb')
-		.map((t) => ({
-			category: t[2],
-			score: parseFloat(t[1]),
-		}))
+		.map((t) => {
+			const parsed = parseFloat(t[1])
+			return {
+				category: t[2],
+				score: Number.isFinite(parsed) ? parsed : 0,
+			}
+		})
 
 	return {
 		id: event.id,
@@ -64,9 +68,18 @@ const calculateAggregateRatings = (reviews: ProductReview[]): AggregateRatings =
 		}
 	}
 
-	// Calculate overall rating (average of thumb ratings)
-	const overallSum = reviews.reduce((sum, r) => sum + r.thumbRating, 0)
-	const overall = overallSum / reviews.length
+	// Calculate overall rating per gamma_spec.md:
+	// Total Score = (Thumb × 0.5) + (0.5 × (∑(Category Ratings) ÷ Number of Categories))
+	const overall =
+		reviews.reduce((sum, review) => {
+			const thumbPart = review.thumbRating * 0.5
+			const categoryAvg =
+				review.categoryRatings.length > 0
+					? review.categoryRatings.reduce((s, cr) => s + cr.score, 0) / review.categoryRatings.length
+					: review.thumbRating // Fall back to thumb if no categories
+			const categoryPart = categoryAvg * 0.5
+			return sum + thumbPart + categoryPart
+		}, 0) / reviews.length
 
 	// Calculate category averages
 	const categoryAverages: Record<string, { sum: number; count: number }> = {}

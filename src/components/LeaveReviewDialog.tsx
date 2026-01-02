@@ -4,15 +4,15 @@ import { Button } from './ui/button'
 import { Textarea } from './ui/textarea'
 import { StarRatingInput } from './StarRating'
 import { usePublishReviewMutation, type CategoryRating } from '@/publish/reviews'
+import { toast } from 'sonner'
 
 interface LeaveReviewDialogProps {
 	open: boolean
 	onOpenChange: (open: boolean) => void
 	productCoordinates: string
-	merchantPubkey: string
 }
 
-export function LeaveReviewDialog({ open, onOpenChange, productCoordinates, merchantPubkey }: LeaveReviewDialogProps) {
+export function LeaveReviewDialog({ open, onOpenChange, productCoordinates }: LeaveReviewDialogProps) {
 	const [content, setContent] = useState('')
 	const [valueRating, setValueRating] = useState(0)
 	const [qualityRating, setQualityRating] = useState(0)
@@ -36,11 +36,11 @@ export function LeaveReviewDialog({ open, onOpenChange, productCoordinates, merc
 		onOpenChange(newOpen)
 	}
 
-	const handleSubmit = async () => {
-		// At least one rating should be provided
-		const hasRating = valueRating > 0 || qualityRating > 0 || deliveryRating > 0 || communicationRating > 0
+	const hasAnyRating = valueRating > 0 || qualityRating > 0 || deliveryRating > 0 || communicationRating > 0
 
-		if (!hasRating) {
+	const handleSubmit = async () => {
+		if (!hasAnyRating) {
+			toast.error('Please provide at least one rating')
 			return
 		}
 
@@ -69,7 +69,6 @@ export function LeaveReviewDialog({ open, onOpenChange, productCoordinates, merc
 		}
 	}
 
-	const hasAnyRating = valueRating > 0 || qualityRating > 0 || deliveryRating > 0 || communicationRating > 0
 	const canSubmit = hasAnyRating && !publishMutation.isPending
 
 	return (

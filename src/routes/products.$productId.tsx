@@ -583,7 +583,7 @@ function RouteComponent() {
 							<div>
 								<div className="bg-secondary text-white px-4 py-2 text-sm font-medium rounded-t-md">Reviews</div>
 								<div className="rounded-lg bg-white p-6 shadow-md rounded-t-none">
-									<ProductReviews productCoordinates={productCoords} merchantPubkey={pubkey} />
+									<ProductReviews productCoordinates={productCoords} />
 								</div>
 							</div>
 						</div>
@@ -729,7 +729,7 @@ function RouteComponent() {
 
 							<TabsContent value="reviews" className="mt-4 border-t-3 border-secondary bg-tertiary">
 								<div className="rounded-lg bg-white p-6 shadow-md">
-									<ProductReviews productCoordinates={productCoords} merchantPubkey={pubkey} />
+									<ProductReviews productCoordinates={productCoords} />
 								</div>
 							</TabsContent>
 						</Tabs>
