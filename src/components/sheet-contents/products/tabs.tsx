@@ -206,8 +206,7 @@ export function DetailTab() {
 			const fiatValue = parseFloat(fiatPrice) || 0
 			if (fiatValue > 0) {
 				const satsValue = convertCurrencyToSats(fiatValue, currency)
-				// Sats should always be an integer
-				productFormActions.updateValues({ price: Math.round(satsValue).toString() })
+				productFormActions.updateValues({ price: satsValue.toString() })
 			}
 		}
 	}, [storeCurrencyMode, fiatPrice, price, currency, exchangeRates])
