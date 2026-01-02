@@ -100,7 +100,7 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 	}
 
 	return (
-		<div className="space-y-6">
+		<div className="space-y-6 pb-8">
 			{/* Payment Status - only show if invoices exist */}
 			{isPostPayment && (
 				<div className="space-y-3">
