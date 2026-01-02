@@ -112,91 +112,93 @@ export function CartContent({ className = '' }: { className?: string }) {
 
 			<ScrollArea className="flex-1 overflow-y-auto py-2 min-h-0">
 				<div className="space-y-6" ref={parent}>
-					{Object.entries(productsBySeller).map(([sellerPubkey, products]) => {
-						const data = sellerData[sellerPubkey] || {
-							satsTotal: 0,
-							currencyTotals: {},
-							shares: { sellerAmount: 0, communityAmount: 0, sellerPercentage: 90 },
-							shippingSats: 0,
-						}
+					{Object.entries(productsBySeller)
+						.filter(([sellerPubkey]) => sellerPubkey && sellerPubkey.length > 0 && sellerPubkey !== 'unknown')
+						.map(([sellerPubkey, products]) => {
+							const data = sellerData[sellerPubkey] || {
+								satsTotal: 0,
+								currencyTotals: {},
+								shares: { sellerAmount: 0, communityAmount: 0, sellerPercentage: 90 },
+								shippingSats: 0,
+							}
 
-						const optionsForThisSeller = sellerShippingOptions[sellerPubkey] || []
+							const optionsForThisSeller = sellerShippingOptions[sellerPubkey] || []
 
-						return (
-							<div key={sellerPubkey} className="p-4 rounded-lg border shadow-md bg-white">
-								<div className="mb-3">
-									<UserWithAvatar pubkey={sellerPubkey} size="sm" showBadge={false} />
-								</div>
-
-								<ul className="space-y-4">
-									{products.map((product, index) => (
-										<div key={product.id} className={`p-3 rounded-lg ${index % 2 === 0 ? 'bg-gray-100' : 'bg-white'}`}>
-											<CartItem
-												productId={product.id}
-												sellerPubkey={product.sellerPubkey}
-												amount={product.amount}
-												onQuantityChange={handleQuantityChange}
-												onRemove={handleRemoveProduct}
-												hideShipping={true}
-											/>
-										</div>
-									))}
-								</ul>
-
-								<div className={`mt-4 ${!selectedShippingByUser[sellerPubkey] ? 'border-l-4 border-yellow-400 pl-2' : ''}`}>
-									<ShippingSelector
-										options={optionsForThisSeller}
-										selectedId={selectedShippingByUser[sellerPubkey]}
-										onSelect={(option) => handleShippingSelect(sellerPubkey, option)}
-										className="w-full"
-									/>
-								</div>
-
-								{Object.entries(data.currencyTotals).map(([currency, amount]) => (
-									<div key={`${sellerPubkey}-${currency}`} className="flex justify-between mt-4">
-										<p className="text-sm">Products ({currency}):</p>
-										<p className="text-sm">
-											{amount.toFixed(2)} {currency}
-										</p>
-									</div>
-								))}
-
-								<div className="flex justify-between mt-1">
-									<p className="text-sm">Shipping:</p>
-									<p className="text-sm font-semibold">{formatSats(data.shippingSats)} sat</p>
-								</div>
-
-								<div className="flex justify-between mt-1 font-semibold">
-									<p className="text-sm">Total:</p>
-									<p className="text-sm">{formatSats(data.satsTotal)} sat</p>
-								</div>
-
-								<div className="mt-3">
-									<p className="text-sm font-semibold">Payment Breakdown</p>
-
-									<div className="h-2 w-full bg-gray-800 mt-1 rounded-full overflow-hidden">
-										<div className="h-full bg-blue-500" style={{ width: `${data.shares.sellerPercentage}%` }} />
+							return (
+								<div key={sellerPubkey} className="p-4 rounded-lg border shadow-md bg-white">
+									<div className="mb-3">
+										<UserWithAvatar pubkey={sellerPubkey} size="sm" showBadge={false} />
 									</div>
 
-									<div className="flex justify-between mt-1">
-										<p className="text-sm">Merchant: </p>
-										<p className="text-sm">
-											{formatSats(data.shares.sellerAmount)} sat ({data.shares.sellerPercentage.toFixed(2)}%)
-										</p>
+									<ul className="space-y-4">
+										{products.map((product, index) => (
+											<div key={product.id} className={`p-3 rounded-lg ${index % 2 === 0 ? 'bg-gray-100' : 'bg-white'}`}>
+												<CartItem
+													productId={product.id}
+													sellerPubkey={product.sellerPubkey}
+													amount={product.amount}
+													onQuantityChange={handleQuantityChange}
+													onRemove={handleRemoveProduct}
+													hideShipping={true}
+												/>
+											</div>
+										))}
+									</ul>
+
+									<div className={`mt-4 ${!selectedShippingByUser[sellerPubkey] ? 'border-l-4 border-yellow-400 pl-2' : ''}`}>
+										<ShippingSelector
+											options={optionsForThisSeller}
+											selectedId={selectedShippingByUser[sellerPubkey]}
+											onSelect={(option) => handleShippingSelect(sellerPubkey, option)}
+											className="w-full"
+										/>
 									</div>
 
-									{data.shares.communityAmount > 0 && (
-										<div className="flex justify-between">
-											<p className="text-sm">Community Share: </p>
+									{Object.entries(data.currencyTotals).map(([currency, amount]) => (
+										<div key={`${sellerPubkey}-${currency}`} className="flex justify-between mt-4">
+											<p className="text-sm">Products ({currency}):</p>
 											<p className="text-sm">
-												{formatSats(data.shares.communityAmount)} sat ({(100 - data.shares.sellerPercentage).toFixed(2)}%)
+												{amount.toFixed(2)} {currency}
 											</p>
 										</div>
-									)}
+									))}
+
+									<div className="flex justify-between mt-1">
+										<p className="text-sm">Shipping:</p>
+										<p className="text-sm font-semibold">{formatSats(data.shippingSats)} sat</p>
+									</div>
+
+									<div className="flex justify-between mt-1 font-semibold">
+										<p className="text-sm">Total:</p>
+										<p className="text-sm">{formatSats(data.satsTotal)} sat</p>
+									</div>
+
+									<div className="mt-3">
+										<p className="text-sm font-semibold">Payment Breakdown</p>
+
+										<div className="h-2 w-full bg-gray-800 mt-1 rounded-full overflow-hidden">
+											<div className="h-full bg-blue-500" style={{ width: `${data.shares.sellerPercentage}%` }} />
+										</div>
+
+										<div className="flex justify-between mt-1">
+											<p className="text-sm">Merchant: </p>
+											<p className="text-sm">
+												{formatSats(data.shares.sellerAmount)} sat ({data.shares.sellerPercentage.toFixed(2)}%)
+											</p>
+										</div>
+
+										{data.shares.communityAmount > 0 && (
+											<div className="flex justify-between">
+												<p className="text-sm">Community Share: </p>
+												<p className="text-sm">
+													{formatSats(data.shares.communityAmount)} sat ({(100 - data.shares.sellerPercentage).toFixed(2)}%)
+												</p>
+											</div>
+										)}
+									</div>
 								</div>
-							</div>
-						)
-					})}
+							)
+						})}
 				</div>
 			</ScrollArea>
 

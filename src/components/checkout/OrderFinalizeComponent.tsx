@@ -7,6 +7,7 @@ import { Check, MapPin, MessageCircle, SkipForward } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import type { CheckoutFormData } from './ShippingAddressForm'
+import { useProfileName } from '@/queries/profiles'
 
 interface OrderFinalizeComponentProps {
 	shippingData: CheckoutFormData | null
@@ -55,7 +56,7 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 							}
 						}
 
-						return { isPickup: false, sellerName: '', address: '' }
+						return { isPickup: false, sellerName: product.sellerPubkey || 'Unknown Seller', address: '' }
 					} catch (error) {
 						console.error('Error checking shipping service:', error)
 						return null
@@ -99,8 +100,24 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 		uiActions.openConversation(pubkey)
 	}
 
+	function SellerContactButton({ pubkey, fallbackName }: { pubkey: string; fallbackName: string }) {
+		const { data: userName, isLoading } = useProfileName(pubkey)
+		const displayName = isLoading ? 'Seller' : userName || fallbackName
+
+		return (
+			<Button
+				variant="outline"
+				className="w-full flex items-center justify-center gap-2"
+				onClick={() => uiActions.openConversation(pubkey)}
+			>
+				<MessageCircle className="w-4 h-4" />
+				Message {displayName}
+			</Button>
+		)
+	}
+
 	return (
-		<div className="space-y-6">
+		<div className="space-y-6 pb-8">
 			{/* Payment Status - only show if invoices exist */}
 			{isPostPayment && (
 				<div className="space-y-3">
@@ -259,7 +276,7 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 			{/* Seller Contact Section - Show on summary or after payment */}
 			{sellerPubkeys.length > 0 && (
 				<div className="bg-gray-50 rounded-lg p-4">
-					<h3 className="font-medium text-gray-900 mb-3">Need to contact a seller?</h3>
+					<h3 className="font-medium text-gray-900 mb-3">Need to contact the seller?</h3>
 					<div className="space-y-2">
 						{invoices
 							.filter((invoice) => invoice.type === 'merchant')

@@ -1,5 +1,5 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { cn } from '@/lib/utils'
+import { cn, isValidHexKey } from '@/lib/utils'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { profileKeys } from '@/queries/queryKeyFactory'
 import { useQuery } from '@tanstack/react-query'
@@ -16,12 +16,9 @@ interface UserWithAvatarProps {
 	disableLink?: boolean
 }
 
-// Helper to check if a string is a valid Nostr pubkey (64-hex characters)
-const isValidPubkey = (pubkey: string): boolean => /^[a-f0-9]{64}$/i.test(pubkey)
-
 export function UserWithAvatar({ pubkey, className = '', size = 'md', showBadge = true, disableLink = false }: UserWithAvatarProps) {
 	// Validate pubkey to prevent crashes with invalid data
-	const validPubkey = isValidPubkey(pubkey)
+	const validPubkey = isValidHexKey(pubkey)
 
 	const { data: profileData } = useQuery({
 		queryKey: profileKeys.details(pubkey),

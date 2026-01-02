@@ -1,4 +1,5 @@
 import { CURRENCIES } from '@/lib/constants'
+import { isValidHexKey } from '@/lib/utils'
 import type { SupportedCurrency } from '@/queries/external'
 import { btcExchangeRatesQueryOptions, currencyConversionQueryOptions } from '@/queries/external'
 import { getProductId, getProductPrice, getProductSellerPubkey, productQueryOptions, productByATagQueryOptions } from '@/queries/products'
@@ -143,20 +144,70 @@ const initialState: CartState = {
 	sellerShippingOptions: {},
 }
 
+// Helper function to compute productsBySeller from products (used during init and updates)
+function computeProductsBySeller(products: Record<string, CartProduct>): Record<string, CartProduct[]> {
+	const grouped: Record<string, CartProduct[]> = {}
+
+	Object.values(products).forEach((product) => {
+		if (isValidHexKey(product.sellerPubkey ?? '')) {
+			if (!grouped[product.sellerPubkey]) {
+				grouped[product.sellerPubkey] = []
+			}
+			grouped[product.sellerPubkey].push(product)
+		}
+	})
+
+	return grouped
+}
+
 function loadInitialCart(): NormalizedCart {
 	if (typeof sessionStorage !== 'undefined') {
 		const storedCart = sessionStorage.getItem('cart')
 		if (storedCart) {
-			return JSON.parse(storedCart)
+			const cart: NormalizedCart = JSON.parse(storedCart)
+
+			// Validate products - filter out any with invalid/missing sellerPubkey
+			// This prevents count mismatch between badge and cart display
+			const validProducts: Record<string, CartProduct> = {}
+			const invalidProductIds: string[] = []
+
+			for (const [productId, product] of Object.entries(cart.products)) {
+				if (product.sellerPubkey && product.sellerPubkey.length > 0) {
+					validProducts[productId] = product
+				} else {
+					invalidProductIds.push(productId)
+				}
+			}
+
+			if (invalidProductIds.length > 0) {
+				console.warn('Removed invalid cart products without sellerPubkey:', invalidProductIds)
+			}
+
+			cart.products = validProducts
+
+			// Clean up sellers that reference removed products
+			for (const [sellerPubkey, seller] of Object.entries(cart.sellers)) {
+				seller.productIds = seller.productIds.filter((id) => validProducts[id])
+				if (seller.productIds.length === 0) {
+					delete cart.sellers[sellerPubkey]
+				}
+			}
+
+			return cart
 		}
 	}
 	return { sellers: {}, products: {}, orders: {}, invoices: {} }
 }
 
+// Load cart and compute initial productsBySeller synchronously
+const loadedCart = loadInitialCart()
+const initialProductsBySeller = computeProductsBySeller(loadedCart.products)
+
 const initialCartState: CartState = {
 	...initialState,
-	cart: loadInitialCart(),
+	cart: loadedCart,
 	v4vShares: loadInitialV4VShares(),
+	productsBySeller: initialProductsBySeller,
 }
 
 const numSatsInBtc = 100000000 // 100 million sats in 1 BTC
@@ -176,10 +227,6 @@ const cartQueryClient = new QueryClient({
 // Helper to check if an ID looks like a Nostr event ID (64-hex characters)
 const isEventId = (id: string): boolean => /^[a-f0-9]{64}$/i.test(id)
 
-// Helper to check if a string is a valid Nostr pubkey (64-hex characters)
-const isValidPubkey = (pubkey: string | undefined | null): pubkey is string => {
-	return typeof pubkey === 'string' && /^[a-f0-9]{64}$/i.test(pubkey)
-}
 
 /**
  * Fetches a product event by ID.
@@ -319,7 +366,7 @@ export const cartActions = {
 			amount = productData.amount
 		}
 
-		if (!isValidPubkey(sellerPubkey)) {
+		if (!sellerPubkey || !isValidHexKey(sellerPubkey)) {
 			console.error('Cannot add product without valid seller pubkey:', sellerPubkey)
 			return
 		}
@@ -901,7 +948,7 @@ export const cartActions = {
 		const state = cartStore.state
 		return Object.values(state.cart.products).reduce((total, product) => {
 			// Only count products with valid pubkeys
-			if (!isValidPubkey(product.sellerPubkey)) return total
+			if (!isValidHexKey(product.sellerPubkey ?? '')) return total
 			return total + product.amount
 		}, 0)
 	},
@@ -968,21 +1015,8 @@ export const cartActions = {
 
 	groupProductsBySeller: () => {
 		const state = cartStore.state
-		const grouped: Record<string, CartProduct[]> = {}
-
-		Object.values(state.cart.products).forEach((product) => {
-			// Only group products with valid pubkeys (64-char hex strings)
-			if (isValidPubkey(product.sellerPubkey)) {
-				const sellerPubkey = product.sellerPubkey
-				if (!grouped[sellerPubkey]) {
-					grouped[sellerPubkey] = []
-				}
-				grouped[sellerPubkey].push(product)
-			} else {
-				// Log invalid products for debugging but don't crash
-				console.warn('Product has invalid sellerPubkey, skipping:', product.id, product.sellerPubkey)
-			}
-		})
+		// Use the helper function that filters out products without valid sellerPubkey
+		const grouped = computeProductsBySeller(state.cart.products)
 
 		cartStore.setState((state) => ({
 			...state,
