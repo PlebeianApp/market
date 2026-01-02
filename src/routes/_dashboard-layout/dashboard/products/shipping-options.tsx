@@ -463,8 +463,9 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 							{formData.service !== 'digital' && (
 								<div className="space-y-2">
 									<Label htmlFor="price" className="font-medium">
-										Price *
+										Base Cost *
 									</Label>
+									<p className="text-sm text-muted-foreground">Can be adjusted per product</p>
 									<div className="flex gap-2">
 										<Input
 											id="price"
