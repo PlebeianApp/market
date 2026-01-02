@@ -10,7 +10,6 @@ import { Star } from 'lucide-react'
 
 interface ProductReviewsProps {
 	productCoordinates: string
-	merchantPubkey: string
 }
 
 function formatDate(timestamp: number): string {
@@ -51,11 +50,20 @@ function AggregateRatingsDisplay({ productCoordinates }: { productCoordinates: s
 	}
 
 	return (
-		<div className="flex flex-wrap gap-6 mb-6 pb-6 border-b border-gray-200">
-			<StarRatingDisplay label="Value" rating={aggregateRatings.value} />
-			<StarRatingDisplay label="Quality" rating={aggregateRatings.quality} />
-			<StarRatingDisplay label="Delivery" rating={aggregateRatings.delivery} />
-			<StarRatingDisplay label="Communication" rating={aggregateRatings.communication} />
+		<div className="mb-6 pb-6 border-b border-gray-200">
+			<div className="flex items-center gap-3 mb-4">
+				<StarRating rating={aggregateRatings.overall} size="lg" />
+				<span className="text-lg font-medium">{(aggregateRatings.overall * 5).toFixed(1)} / 5</span>
+				<span className="text-gray-500">
+					({aggregateRatings.totalReviews} {aggregateRatings.totalReviews === 1 ? 'review' : 'reviews'})
+				</span>
+			</div>
+			<div className="flex flex-wrap gap-6">
+				<StarRatingDisplay label="Value" rating={aggregateRatings.value} />
+				<StarRatingDisplay label="Quality" rating={aggregateRatings.quality} />
+				<StarRatingDisplay label="Delivery" rating={aggregateRatings.delivery} />
+				<StarRatingDisplay label="Communication" rating={aggregateRatings.communication} />
+			</div>
 		</div>
 	)
 }
@@ -121,12 +129,7 @@ export function ProductReviews({ productCoordinates, merchantPubkey }: ProductRe
 			</div>
 
 			{/* Leave Review Dialog */}
-			<LeaveReviewDialog
-				open={isDialogOpen}
-				onOpenChange={setIsDialogOpen}
-				productCoordinates={productCoordinates}
-				merchantPubkey={merchantPubkey}
-			/>
+			<LeaveReviewDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} productCoordinates={productCoordinates} />
 		</div>
 	)
 }

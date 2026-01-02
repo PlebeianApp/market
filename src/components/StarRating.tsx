@@ -24,8 +24,11 @@ const sizeClasses = {
 export function StarRating({ rating, maxStars = 5, size = 'md', interactive = false, onChange, className }: StarRatingProps) {
 	const [hoverRating, setHoverRating] = useState<number | null>(null)
 
+	// Validate and clamp rating to 0-1 range
+	const validRating = Number.isFinite(rating) ? Math.max(0, Math.min(1, rating)) : 0
+
 	// Convert 0-1 scale to 0-5 scale for display
-	const displayRating = (hoverRating ?? rating) * maxStars
+	const displayRating = (hoverRating ?? validRating) * maxStars
 
 	const handleClick = (starIndex: number) => {
 		if (interactive && onChange) {
