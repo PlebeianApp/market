@@ -182,9 +182,7 @@ export function ProductFormContent({
 				{/* Single level tabs: Name, Detail, Spec, Category, Images, Shipping */}
 				<Tabs
 					value={activeTab}
-					onValueChange={(value) =>
-						productFormActions.updateValues({ activeTab: value as ProductFormTab })
-					}
+					onValueChange={(value) => productFormActions.updateValues({ activeTab: value as ProductFormTab })}
 					className="w-full"
 				>
 					<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-[1px]">
