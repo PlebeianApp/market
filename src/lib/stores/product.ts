@@ -56,6 +56,9 @@ export type ProductDimensions = {
 
 export type ProductFormTab = 'name' | 'detail' | 'spec' | 'category' | 'images' | 'shipping'
 
+// Tab navigation order
+const PRODUCT_FORM_TABS: ProductFormTab[] = ['name', 'detail', 'spec', 'category', 'images', 'shipping']
+
 export interface ProductFormState {
 	editingProductId: string | null
 	isDirty: boolean // Track if form has been modified from saved state
@@ -247,13 +250,12 @@ export const productFormActions = {
 
 	nextTab: () => {
 		productFormStore.setState((state) => {
-			const tabs: ProductFormTab[] = ['name', 'detail', 'spec', 'category', 'images', 'shipping']
-			const currentIndex = tabs.indexOf(state.activeTab)
+			const currentIndex = PRODUCT_FORM_TABS.indexOf(state.activeTab)
 
-			if (currentIndex < tabs.length - 1) {
+			if (currentIndex < PRODUCT_FORM_TABS.length - 1) {
 				return {
 					...state,
-					activeTab: tabs[currentIndex + 1],
+					activeTab: PRODUCT_FORM_TABS[currentIndex + 1],
 				}
 			}
 
@@ -263,13 +265,12 @@ export const productFormActions = {
 
 	previousTab: () => {
 		productFormStore.setState((state) => {
-			const tabs: ProductFormTab[] = ['name', 'detail', 'spec', 'category', 'images', 'shipping']
-			const currentIndex = tabs.indexOf(state.activeTab)
+			const currentIndex = PRODUCT_FORM_TABS.indexOf(state.activeTab)
 
 			if (currentIndex > 0) {
 				return {
 					...state,
-					activeTab: tabs[currentIndex - 1],
+					activeTab: PRODUCT_FORM_TABS[currentIndex - 1],
 				}
 			}
 
