@@ -198,12 +198,12 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 					</DialogHeader>
 
 					<div className="space-y-2 py-4">
-						<Label htmlFor="tracking">Tracking Number (Optional)</Label>
+						<Label htmlFor="tracking">Add Tracking URL</Label>
 						<Input
 							id="tracking"
 							value={trackingNumber}
 							onChange={(e) => setTrackingNumber(e.target.value)}
-							placeholder="Enter tracking number"
+							placeholder="Enter tracking URL"
 						/>
 					</div>
 

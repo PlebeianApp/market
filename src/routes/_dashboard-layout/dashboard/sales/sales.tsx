@@ -90,6 +90,7 @@ function SalesComponent() {
 				showOrderBy={true}
 				onOrderByChange={setOrderBy}
 				orderBy={orderBy}
+				emptyMessage="You haven't sold anything yet."
 			/>
 		</div>
 	)
