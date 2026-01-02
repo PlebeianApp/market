@@ -79,7 +79,7 @@ export interface NwcClient {
 const nwcClientCache = new Map<string, Promise<NwcClient>>()
 let cachedSigner: NDKSigner | undefined
 
-const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
 	const timeoutPromise = new Promise<never>((_, reject) => {
 		setTimeout(() => reject(new Error(`${label} timeout`)), timeoutMs)
 	})

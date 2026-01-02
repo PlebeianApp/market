@@ -39,11 +39,7 @@ export const fetchFeaturedCollections = async (appPubkey: string): Promise<Featu
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const naddr = naddrFromAddress(
-		FEATURED_ITEMS_CONFIG.COLLECTIONS.kind,
-		appPubkey,
-		FEATURED_ITEMS_CONFIG.COLLECTIONS.dTag,
-	)
+	const naddr = naddrFromAddress(FEATURED_ITEMS_CONFIG.COLLECTIONS.kind, appPubkey, FEATURED_ITEMS_CONFIG.COLLECTIONS.dTag)
 	const event = await ndk.fetchEvent(naddr)
 
 	if (!event) return null
