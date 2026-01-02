@@ -45,7 +45,19 @@ function RouteComponent() {
 
 	const [showFullAbout, setShowFullAbout] = useState(false)
 	const [bannerIsLoadable, setBannerIsLoadable] = useState<boolean | null>(null)
+	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(null)
 	const breakpoint = useBreakpoint()
+
+	// Fetch current user's pubkey for ProductCard ownership check
+	useEffect(() => {
+		const fetchUserPubkey = async () => {
+			const currentUser = await ndkActions.getUser()
+			if (currentUser?.pubkey) {
+				setCurrentUserPubkey(currentUser.pubkey)
+			}
+		}
+		fetchUserPubkey()
+	}, [])
 	const isSmallScreen = breakpoint === 'sm'
 	const queryClient = useQueryClient()
 	const aboutText = profile?.about?.trim() ?? ''
@@ -259,7 +271,7 @@ function RouteComponent() {
 							}
 						>
 							{sellerProducts.map((product: NDKEvent) => (
-								<ProductCard key={product.id} product={product} />
+								<ProductCard key={product.id} product={product} currentUserPubkey={currentUserPubkey} />
 							))}
 						</ItemGrid>
 					) : (

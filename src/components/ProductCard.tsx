@@ -10,22 +10,30 @@ import { PriceDisplay } from './PriceDisplay'
 import { Button } from './ui/button'
 import { ZapButton } from './ZapButton'
 
-export function ProductCard({ product }: { product: NDKEvent }) {
+export function ProductCard({ product, currentUserPubkey: propUserPubkey }: { product: NDKEvent; currentUserPubkey?: string | null }) {
 	const title = getProductTitle(product)
 	const images = getProductImages(product)
 	const price = getProductPrice(product)
 	const stock = getProductStock(product)
 	const visibilityTag = getProductVisibility(product)
 	const visibility = visibilityTag?.[1] || 'on-sale'
-	const [isOwnProduct, setIsOwnProduct] = useState(false)
-	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(null)
+	// Initialize ownership based on prop if provided (avoids race condition)
+	const [isOwnProduct, setIsOwnProduct] = useState(propUserPubkey ? propUserPubkey === product.pubkey : false)
+	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(propUserPubkey || null)
 	const [isAddingToCart, setIsAddingToCart] = useState(false)
 	const [showConfirmation, setShowConfirmation] = useState(false)
 	const location = useLocation()
 	const cart = useCart()
 
-	// Check if current user is the seller of this product
+	// Check if current user is the seller of this product (only if pubkey not provided via prop)
 	useEffect(() => {
+		// Skip async fetch if we already have the pubkey from props
+		if (propUserPubkey !== undefined) {
+			setCurrentUserPubkey(propUserPubkey)
+			setIsOwnProduct(propUserPubkey === product.pubkey)
+			return
+		}
+
 		const checkIfOwnProduct = async () => {
 			const user = await ndkActions.getUser()
 			if (user?.pubkey) {
@@ -34,7 +42,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 			}
 		}
 		checkIfOwnProduct()
-	}, [product.pubkey])
+	}, [product.pubkey, propUserPubkey])
 
 	// Check if product is already in cart
 	const isInCart = !!cart.cart.products[product.id]
@@ -111,7 +119,14 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 				{/* Add to cart button */}
 				<div className="flex gap-2">
 					<div className="flex-grow transition-all duration-300 ease-in-out">
-						{isInCart ? (
+						{isOwnProduct ? (
+							<Button
+								className="py-3 px-4 rounded-lg w-full font-medium transition-all duration-300 bg-black text-white disabled:bg-gray-400 disabled:cursor-not-allowed"
+								disabled
+							>
+								Your Product
+							</Button>
+						) : isInCart ? (
 							<div className="flex gap-2 w-full">
 								{/* Show current quantity */}
 								<div className="flex items-center justify-center px-2 h-10 bg-pink-100 text-pink-800 border-2 border-pink-300 rounded-lg text-sm font-medium transition-all duration-200 ease-in-out">
@@ -140,11 +155,9 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 									isAddingToCart ? 'opacity-75 scale-95' : ''
 								}`}
 								onClick={handleAddToCart}
-								disabled={isOwnProduct || isAddingToCart || visibility === 'hidden'}
+								disabled={isAddingToCart || visibility === 'hidden'}
 							>
-								{isOwnProduct ? (
-									'Your Product'
-								) : visibility === 'hidden' ? (
+								{visibility === 'hidden' ? (
 									'Not Available'
 								) : showConfirmation ? (
 									<>
