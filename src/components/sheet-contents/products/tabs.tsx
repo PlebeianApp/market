@@ -568,6 +568,7 @@ export function ImagesTab() {
 			<div className="flex flex-col gap-4">
 				<Label>
 					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Image Upload</span>
+					<span className="sr-only">required</span>
 					<span className="text-xs text-gray-500 ml-2">(at least 1 required)</span>
 				</Label>
 
@@ -688,6 +689,7 @@ export function ShippingTab() {
 			<div className="space-y-2">
 				<Label>
 					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Shipping Options</span>
+					<span className="sr-only">required</span>
 					<span className="text-xs text-gray-500 ml-2">(at least 1 required)</span>
 				</Label>
 				<p className="text-gray-600">Select shipping options that will be available for this product</p>
