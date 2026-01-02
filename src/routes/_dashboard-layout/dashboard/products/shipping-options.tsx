@@ -328,10 +328,9 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 			icon={<ServiceIcon service={formData.service} />}
 			data-testid={isEditing ? `shipping-option-item-${getShippingId(shippingOption)}` : 'add-shipping-option-button'}
 			className="w-full max-w-full overflow-hidden"
-			useCloseIcon={true}
 		>
 			<div className="p-4 border-t">
-				<form onSubmit={handleSubmit} className="space-y-6 w-full max-w-2xl">
+				<form onSubmit={handleSubmit} className="space-y-6 w-full">
 					{/* Use a template */}
 					<div className="space-y-4">
 						<h3 className="text-lg font-semibold">Use a template</h3>
