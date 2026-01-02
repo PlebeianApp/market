@@ -227,7 +227,6 @@ const cartQueryClient = new QueryClient({
 // Helper to check if an ID looks like a Nostr event ID (64-hex characters)
 const isEventId = (id: string): boolean => /^[a-f0-9]{64}$/i.test(id)
 
-
 /**
  * Fetches a product event by ID.
  * Supports both event IDs (64-hex characters) and d-tags.
