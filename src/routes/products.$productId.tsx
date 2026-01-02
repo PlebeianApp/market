@@ -112,7 +112,10 @@ function useDocumentMeta(config: MetaTagsConfig) {
 		// Twitter Card tags
 		addMeta({ name: 'twitter:card', content: 'summary_large_image' })
 		addMeta({ name: 'twitter:title', content: title })
-		addMeta({ name: 'twitter:description', content: `${description} - ${price} ${currency}` })
+		addMeta({
+			name: 'twitter:description',
+			content: price !== undefined && currency ? `${description} - ${price} ${currency}` : description,
+		})
 		if (image) {
 			addMeta({ name: 'twitter:image', content: image })
 		}
