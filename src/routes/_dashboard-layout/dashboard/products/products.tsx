@@ -158,7 +158,7 @@ function ProductsOverviewComponent() {
 	const navigate = useNavigate()
 	const matchRoute = useMatchRoute()
 	const [expandedProduct, setExpandedProduct] = useState<string | null>(null)
-	const [orderBy, setOrderBy] = useState<string>('alphabetical')
+	const [orderBy, setOrderBy] = useState<string>('newest')
 	useDashboardTitle('Products')
 
 	// Auto-animate for smooth list transitions
