@@ -56,7 +56,7 @@ export const publishComment = async ({
 
 	if (parentCommentId && parentCommentPubkey) {
 		// This is a reply to another comment
-		tags.push(['e', parentCommentId, '', parentCommentPubkey])
+		tags.push(['e', parentCommentId])
 		tags.push(['k', '1111']) // Parent is a comment
 		tags.push(['p', parentCommentPubkey])
 	} else {
