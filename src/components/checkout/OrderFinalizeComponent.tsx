@@ -259,7 +259,7 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 			{/* Seller Contact Section - Show on summary or after payment */}
 			{sellerPubkeys.length > 0 && (
 				<div className="bg-gray-50 rounded-lg p-4">
-					<h3 className="font-medium text-gray-900 mb-3">Need to contact a seller?</h3>
+					<h3 className="font-medium text-gray-900 mb-3">Need to contact the seller?</h3>
 					<div className="space-y-2">
 						{invoices
 							.filter((invoice) => invoice.type === 'merchant')
