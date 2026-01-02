@@ -7,6 +7,7 @@ import { Check, MapPin, MessageCircle, SkipForward } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import type { CheckoutFormData } from './ShippingAddressForm'
+import { useProfileName } from '@/queries/profiles'
 
 interface OrderFinalizeComponentProps {
 	shippingData: CheckoutFormData | null
@@ -55,7 +56,7 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 							}
 						}
 
-						return { isPickup: false, sellerName: '', address: '' }
+						return { isPickup: false, sellerName: product.sellerPubkey || 'Unknown Seller', address: '' }
 					} catch (error) {
 						console.error('Error checking shipping service:', error)
 						return null
@@ -97,6 +98,22 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 
 	const handleMessageSeller = (pubkey: string) => {
 		uiActions.openConversation(pubkey)
+	}
+
+	function SellerContactButton({ pubkey, fallbackName }: { pubkey: string; fallbackName: string }) {
+		const { data: userName, isLoading } = useProfileName(pubkey)
+		const displayName = isLoading ? 'Seller' : userName || fallbackName
+
+		return (
+			<Button
+				variant="outline"
+				className="w-full flex items-center justify-center gap-2"
+				onClick={() => uiActions.openConversation(pubkey)}
+			>
+				<MessageCircle className="w-4 h-4" />
+				Message {displayName}
+			</Button>
+		)
 	}
 
 	return (
