@@ -89,6 +89,8 @@ export const authActions = {
 				user,
 				isAuthenticated: true,
 			}))
+			// Merge anonymous cart with authenticated user cart
+			await cartActions.mergeCart(user.pubkey)
 
 			return user
 		} catch (error) {
@@ -144,6 +146,9 @@ export const authActions = {
 				isAuthenticated: true,
 			}))
 
+			// Merge anonymous cart with authenticated user cart
+			await cartActions.mergeCart(user.pubkey)
+
 			return user
 		} catch (error) {
 			authStore.setState((state) => ({
@@ -176,6 +181,9 @@ export const authActions = {
 				isAuthenticated: true,
 			}))
 
+			// Merge anonymous cart with authenticated user cart
+			await cartActions.mergeCart(user.pubkey)
+
 			return user
 		} catch (error) {
 			authStore.setState((state) => ({
@@ -196,8 +204,6 @@ export const authActions = {
 		localStorage.removeItem(NOSTR_CONNECT_KEY)
 		localStorage.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_AUTO_LOGIN)
-		// Clear cart when user logs out
-		cartActions.clear()
 		authStore.setState(() => initialState)
 	},
 
