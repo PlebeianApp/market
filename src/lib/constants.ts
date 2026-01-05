@@ -16,8 +16,9 @@ export const ZAP_RELAYS = [
 	'wss://nos.lol',
 	'wss://relay.nostr.net',
 	'wss://relay.minibits.cash',
-	'wss://relay.coinos.io/',
+	'wss://relay.coinos.io',
 	'wss://nwc.primal.net',
+	'wss://relay.primal.net',
 	// 'ws://localhost:10547',
 ]
 // export const defaultRelaysUrls: string[] = []
@@ -51,6 +52,7 @@ export const CURRENCIES = [
 	'THB', // Thai Baht
 	'IDR', // Indonesian Rupiah
 	'MYR', // Malaysian Ringgit
+	'NGN', // Nigerian Naira
 ] as const
 
 export const DEFAULT_ZAP_AMOUNTS = [

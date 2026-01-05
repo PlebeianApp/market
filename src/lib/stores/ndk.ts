@@ -60,7 +60,7 @@ export const ndkActions = {
 		const ndk = new NDK({
 			explicitRelayUrls: explicitRelays,
 			enableOutboxModel: localRelayOnly ? false : true,
-			// aiGuardrails: true,
+			aiGuardrails: true,
 		})
 
 		const zapNdk = new NDK({

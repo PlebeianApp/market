@@ -63,9 +63,12 @@ export const convertCurrencyToSats = async (currency: string, amount: number): P
 	}
 
 	try {
+		// Normalize currency to uppercase for comparison
+		const normalizedCurrency = currency.toUpperCase()
+
 		// For supported currencies, fetch the exchange rate and convert
-		if (CURRENCIES.includes(currency as SupportedCurrency)) {
-			const rate = await fetchCurrencyExchangeRate(currency as SupportedCurrency)
+		if (CURRENCIES.includes(normalizedCurrency as SupportedCurrency)) {
+			const rate = await fetchCurrencyExchangeRate(normalizedCurrency as SupportedCurrency)
 
 			// Convert to sats: (amount / exchange rate) * sats in 1 BTC
 			return (amount / rate) * numSatsInBtc

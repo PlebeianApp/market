@@ -19,6 +19,7 @@ import { productKeys } from './queryKeyFactory'
 import { getCoordsFromATag, getATagFromCoords } from '@/lib/utils/coords.ts'
 import { discoverNip50Relays } from '@/lib/relays'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
+import { naddrFromAddress } from '@/lib/nostr/naddr'
 
 // Re-export productKeys for use in other query files
 export { productKeys }
@@ -157,12 +158,8 @@ export const fetchProductByATag = async (pubkey: string, dTag: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 	if (!pubkey || !dTag) return null
-	const filter: NDKFilter = {
-		kinds: [30402],
-		authors: [pubkey],
-		'#d': [dTag],
-	}
-	return await ndk.fetchEvent(filter)
+	const naddr = naddrFromAddress(30402, pubkey, dTag)
+	return await ndk.fetchEvent(naddr)
 }
 
 /**

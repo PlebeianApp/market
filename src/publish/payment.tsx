@@ -203,12 +203,7 @@ export const payInvoiceWithNwc = async (params: PayWithNwcParams): Promise<strin
 		console.error('❌ NWC payment failed:', error)
 		throw new Error(`NWC payment failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
 	} finally {
-		// Disconnect the NWC NDK instance
-		try {
-			await nwcNdk.disconnect()
-		} catch (e) {
-			// Ignore cleanup errors
-		}
+		// NDK doesn't expose a disconnect API
 	}
 }
 

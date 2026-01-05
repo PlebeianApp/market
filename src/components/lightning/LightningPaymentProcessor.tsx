@@ -7,11 +7,10 @@ import { QRCode } from '@/components/ui/qr-code'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { authStore } from '@/lib/stores/auth'
 import { ndkActions, ndkStore } from '@/lib/stores/ndk'
-import { parseNwcUri } from '@/lib/stores/wallet'
+import { walletActions } from '@/lib/stores/wallet'
 import { copyToClipboard } from '@/lib/utils'
 import { Invoice } from '@getalby/lightning-tools'
-import NDK, { NDKEvent, NDKUser, NDKZapper } from '@nostr-dev-kit/ndk'
-import { NDKNWCWallet } from '@nostr-dev-kit/wallet'
+import { NDKEvent, NDKUser, NDKZapper } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
 import { ChevronLeft, ChevronRight, Copy, CreditCard, Loader2, Zap } from 'lucide-react'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
@@ -281,7 +280,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 				invoiceId: data.invoiceId,
 			})
 
-			if (!effectiveNwcWalletUri || !ndkState.ndk) {
+			if (!effectiveNwcWalletUri || !ndkState.ndk?.signer) {
 				toast.error('NWC wallet not connected')
 				return
 			}
@@ -291,41 +290,28 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 				return
 			}
 
-			// Parse the NWC URI to get the relay URL
-			const parsedUri = parseNwcUri(effectiveNwcWalletUri)
-			if (!parsedUri || !parsedUri.relay) {
-				console.error('Failed to parse NWC URI or missing relay URL:', effectiveNwcWalletUri)
+			setIsPaymentInProgress(true)
+
+			const nwcClient = await walletActions.getOrCreateNwcClient(effectiveNwcWalletUri, ndkState.ndk.signer)
+			if (!nwcClient) {
+				setIsPaymentInProgress(false)
 				toast.error('Invalid NWC wallet configuration')
 				return
 			}
-
-			setIsPaymentInProgress(true)
-
-			// Create a dedicated NDK instance for this specific NWC wallet
-			const nwcNdk = new NDK({
-				explicitRelayUrls: [parsedUri.relay],
-			})
-
-			// Set the signer from the main NDK instance
-			nwcNdk.signer = ndkState.ndk.signer
 
 			try {
 				console.log('💳 Starting NWC payment:', {
 					invoiceId: data.invoiceId,
 					isZap: data.isZap,
 					amount: data.amount,
-					relay: parsedUri.relay,
+					relay: nwcClient.relayUrl,
 					invoicePreview: invoice.substring(0, 30) + '...',
-				})
-
-				const wallet = new NDKNWCWallet(nwcNdk as any, {
-					pairingCode: effectiveNwcWalletUri,
 				})
 
 				// Pay the invoice directly using lnPay - this works for both zaps and regular invoices
 				// The invoice was already generated (either via zapper or regular LNURL)
 				console.log('📤 Sending lnPay request...')
-				const response = await wallet.lnPay({ pr: invoice })
+				const response = await nwcClient.wallet.lnPay({ pr: invoice })
 
 				console.log('💳 NWC lnPay response:', response)
 
@@ -348,13 +334,6 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 					error: errorMessage,
 					paymentHash: data.invoiceId,
 				})
-			} finally {
-				// Disconnect the NWC NDK instance
-				try {
-					await nwcNdk.disconnect()
-				} catch (e) {
-					// Ignore cleanup errors
-				}
 			}
 		}, [data, invoice, ndkState, effectiveNwcWalletUri, handlePaymentSuccess, onPaymentFailed])
 
