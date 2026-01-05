@@ -11,10 +11,12 @@ import { productFormActions, productFormStore, type ProductShippingForm } from '
 import { uiStore } from '@/lib/stores/ui'
 import { MempoolService } from '@/lib/utils/mempool'
 import { useBtcExchangeRates, type SupportedCurrency } from '@/queries/external'
-import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
+import { usePublishShippingOptionMutation, type ShippingFormData } from '@/publish/shipping'
+import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey, shippingKeys } from '@/queries/shipping'
 import { useForm } from '@tanstack/react-form'
+import { useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
-import { Info, ArrowRightLeft, Loader2, PackageIcon, PlusIcon, TruckIcon, X } from 'lucide-react'
+import { Info, ArrowRightLeft, DownloadIcon, Loader2, PackageIcon, PlusIcon, TruckIcon, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -566,7 +568,10 @@ export function ImagesTab() {
 			<p className="text-gray-600">We recommend using square images of 1600x1600 and under 2mb.</p>
 
 			<div className="flex flex-col gap-4">
-				<Label>Image Upload</Label>
+				<Label>
+					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Image Upload</span>
+					{images.length === 0 && <span className="text-sm text-red-500 ml-2">(At least one image required)</span>}
+				</Label>
 
 				{images.map((image, i) => (
 					<ImageUploader
@@ -596,10 +601,40 @@ export function ImagesTab() {
 	)
 }
 
+// Quick-create shipping templates for new users
+const QUICK_SHIPPING_TEMPLATES: Array<{
+	name: string
+	description: string
+	service: ShippingFormData['service']
+	icon: 'digital' | 'worldwide' | 'pickup'
+}> = [
+	{
+		name: 'Digital Delivery',
+		description: 'For digital products - instant delivery, no shipping cost',
+		service: 'digital',
+		icon: 'digital',
+	},
+	{
+		name: 'Worldwide Standard',
+		description: 'Ship anywhere in the world with standard delivery',
+		service: 'standard',
+		icon: 'worldwide',
+	},
+	{
+		name: 'Local Pickup',
+		description: 'Customer picks up the item at your location',
+		service: 'pickup',
+		icon: 'pickup',
+	},
+]
+
 export function ShippingTab() {
 	const { shippings } = useStore(productFormStore)
 	const { getUser } = useNDK()
+	const queryClient = useQueryClient()
 	const [user, setUser] = useState<any>(null)
+	const [isCreatingShipping, setIsCreatingShipping] = useState(false)
+	const publishShippingMutation = usePublishShippingOptionMutation()
 
 	// Get user on mount
 	useEffect(() => {
@@ -607,6 +642,45 @@ export function ShippingTab() {
 	}, [getUser])
 
 	const shippingOptionsQuery = useShippingOptionsByPubkey(user?.pubkey || '')
+
+	// Quick-create a shipping option from template
+	const handleQuickCreate = async (template: (typeof QUICK_SHIPPING_TEMPLATES)[number]) => {
+		if (isCreatingShipping || !user?.pubkey) return
+
+		setIsCreatingShipping(true)
+		try {
+			const formData: ShippingFormData = {
+				title: template.name,
+				description: template.description,
+				price: '0',
+				currency: 'USD',
+				countries: [], // Empty = worldwide
+				service: template.service,
+				...(template.service === 'pickup' && {
+					pickupAddress: {
+						street: '',
+						city: 'Your City',
+						state: '',
+						postalCode: '',
+						country: 'USA',
+					},
+				}),
+			}
+
+			await publishShippingMutation.mutateAsync(formData)
+
+			// Invalidate and refetch shipping options with the correct pubkey
+			await queryClient.invalidateQueries({ queryKey: shippingKeys.byPubkey(user.pubkey) })
+			await queryClient.invalidateQueries({ queryKey: shippingKeys.all })
+
+			toast.success(`${template.name} shipping option created!`)
+		} catch (error) {
+			console.error('Failed to create shipping option:', error)
+			toast.error('Failed to create shipping option')
+		} finally {
+			setIsCreatingShipping(false)
+		}
+	}
 	const availableShippingOptions = useMemo(() => {
 		if (!shippingOptionsQuery.data || !user?.pubkey) return []
 
@@ -744,9 +818,36 @@ export function ShippingTab() {
 						<span className="ml-2">Loading shipping options...</span>
 					</div>
 				) : availableShippingOptions.length === 0 ? (
-					<div className="text-center p-8 text-gray-500">
-						<p>No shipping options available.</p>
-						<p className="text-sm mt-2">Create shipping options in your dashboard first.</p>
+					<div className="space-y-4">
+						<div className="text-center p-4 text-gray-500">
+							<p>No shipping options available.</p>
+							<p className="text-sm mt-2">Quick-create a shipping option to get started:</p>
+						</div>
+						<div className="grid gap-3">
+							{QUICK_SHIPPING_TEMPLATES.map((template) => (
+								<button
+									key={template.name}
+									type="button"
+									onClick={() => handleQuickCreate(template)}
+									disabled={isCreatingShipping}
+									className="flex items-center gap-3 p-4 border rounded-md hover:bg-gray-50 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+								>
+									{template.icon === 'digital' && <DownloadIcon className="w-5 h-5 text-purple-500 flex-shrink-0" />}
+									{template.icon === 'worldwide' && <TruckIcon className="w-5 h-5 text-blue-500 flex-shrink-0" />}
+									{template.icon === 'pickup' && <PackageIcon className="w-5 h-5 text-green-500 flex-shrink-0" />}
+									<div className="flex-1 min-w-0">
+										<div className="font-medium">{template.name}</div>
+										<div className="text-sm text-gray-500">{template.description}</div>
+									</div>
+									{isCreatingShipping ? (
+										<Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+									) : (
+										<PlusIcon className="w-5 h-5 text-gray-400" />
+									)}
+								</button>
+							))}
+						</div>
+						<p className="text-xs text-gray-400 text-center">You can customize these options later in Dashboard → Shipping Options</p>
 					</div>
 				) : (
 					<div className="grid gap-3">
@@ -759,7 +860,7 @@ export function ShippingTab() {
 										{option.cost} {option.currency} •{' '}
 										{option.countries && option.countries.length > 1
 											? `${option.countries.length} countries`
-											: option.countries?.[0] || 'No countries'}{' '}
+											: option.countries?.[0] || 'Worldwide'}{' '}
 										• {option.service || 'Unknown service'}
 									</div>
 								</div>

@@ -6,12 +6,13 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore } from '@/lib/stores/product'
 import { uiActions } from '@/lib/stores/ui'
 import { hasProductFormDraft } from '@/lib/utils/productFormStorage'
+import { useShippingOptionsByPubkey, isShippingDeleted } from '@/queries/shipping'
 import { useV4VShares } from '@/queries/v4v'
 import { useForm } from '@tanstack/react-form'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { NameTab } from './NameTab'
 import { CategoryTab, DetailTab, ImagesTab, ShippingTab, SpecTab } from './tabs'
@@ -34,7 +35,23 @@ export function ProductFormContent({
 
 	// Get form state from store, including editingProductId
 	const formState = useStore(productFormStore)
-	const { mainTab, productSubTab, editingProductId, isDirty } = formState
+	const { mainTab, productSubTab, editingProductId, isDirty, shippings, formSessionId, name, description, images } = formState
+
+	// Compute validation states
+	const hasValidShipping = shippings.some((ship) => ship.shipping && ship.shipping.id)
+	const hasValidName = name.trim().length > 0
+	const hasValidDescription = description.trim().length > 0
+	const hasValidImages = images.length > 0
+
+	// Compute validation message for tooltip
+	const getValidationMessage = () => {
+		const issues: string[] = []
+		if (!hasValidName) issues.push('Product name is required')
+		if (!hasValidDescription) issues.push('Description is required')
+		if (!hasValidImages) issues.push('At least one image is required')
+		if (!hasValidShipping) issues.push('At least one shipping option is required')
+		return issues
+	}
 
 	// Get user pubkey from auth store directly to avoid timing issues
 	const authState = useStore(authStore)
@@ -44,6 +61,50 @@ export function ProductFormContent({
 	const { data: v4vShares, isLoading: isLoadingV4V } = useV4VShares(userPubkey)
 	const hasV4VSetup = v4vShares && v4vShares.length > 0
 	const needsV4VSetup = !editingProductId && !hasV4VSetup && !isLoadingV4V
+
+	// Check if user has any shipping options configured (for tab ordering)
+	// Query is only enabled when userPubkey is available
+	const {
+		data: userShippingOptions,
+		isLoading: isLoadingUserShipping,
+		isFetched: isShippingFetched,
+	} = useShippingOptionsByPubkey(userPubkey)
+
+	// Determine if we should show shipping tab first (user has no shipping options)
+	const shouldShowShippingFirst = useMemo(() => {
+		// Don't redirect if editing an existing product
+		if (editingProductId) return false
+		// Don't redirect if pubkey not loaded yet (query is disabled)
+		if (!userPubkey) return false
+		// Don't redirect if we haven't fetched shipping data yet
+		if (!isShippingFetched) return false
+		// Don't redirect while loading
+		if (isLoadingUserShipping) return false
+		// Check if user has any non-deleted shipping options
+		// (query data might be cached and include deleted items)
+		if (!userShippingOptions || userShippingOptions.length === 0) return true
+		// Filter out any deleted shipping options from cached data
+		const activeShippingOptions = userShippingOptions.filter((event) => {
+			const dTag = event.tags?.find((t: string[]) => t[0] === 'd')?.[1]
+			return dTag ? !isShippingDeleted(dTag) : true
+		})
+		return activeShippingOptions.length === 0
+	}, [editingProductId, userShippingOptions, isLoadingUserShipping, userPubkey, isShippingFetched])
+
+	// Set initial tab to Shipping when user has no shipping options
+	// Track which formSessionId we've handled to avoid re-triggering on same session
+	const handledSessionIdRef = useRef<number | null>(null)
+
+	useEffect(() => {
+		// Only auto-switch to shipping tab if:
+		// 1. We haven't handled this session yet
+		// 2. User should see shipping first (no shipping options)
+		// 3. We're on the product tab (default initial state)
+		if (handledSessionIdRef.current !== formSessionId && shouldShowShippingFirst && mainTab === 'product') {
+			productFormActions.updateValues({ mainTab: 'shipping' })
+			handledSessionIdRef.current = formSessionId
+		}
+	}, [shouldShowShippingFirst, mainTab, formSessionId])
 
 	// Check for persisted draft on mount (for drafts from previous sessions)
 	const checkForPersistedDraft = useCallback(async () => {
@@ -193,6 +254,7 @@ export function ProductFormContent({
 							data-testid="main-tab-product"
 						>
 							Product
+							{(!hasValidName || !hasValidDescription || !hasValidImages) && <span className="ml-1 text-red-500">*</span>}
 						</TabsTrigger>
 						<TabsTrigger
 							value="shipping"
@@ -200,6 +262,7 @@ export function ProductFormContent({
 							data-testid="main-tab-shipping"
 						>
 							Shipping
+							{!hasValidShipping && <span className="ml-1 text-red-500">*</span>}
 						</TabsTrigger>
 					</TabsList>
 
@@ -220,6 +283,7 @@ export function ProductFormContent({
 									data-testid="product-tab-name"
 								>
 									Name
+									{(!hasValidName || !hasValidDescription) && <span className="ml-1 text-red-500">*</span>}
 								</TabsTrigger>
 								<TabsTrigger
 									value="detail"
@@ -248,6 +312,7 @@ export function ProductFormContent({
 									data-testid="product-tab-images"
 								>
 									Images
+									{!hasValidImages && <span className="ml-1 text-red-500">*</span>}
 								</TabsTrigger>
 							</TabsList>
 
@@ -330,22 +395,43 @@ export function ProductFormContent({
 										)
 									}
 
+									const validationIssues = getValidationMessage()
+									const hasValidationErrors = validationIssues.length > 0
+									const isDisabled = isSubmitting || isPublishing || hasValidationErrors
+
 									return (
-										<Button
-											type="submit"
-											variant="secondary"
-											className="flex-1 uppercase"
-											disabled={isSubmitting || isPublishing || !canSubmit}
-											data-testid="product-publish-button"
-										>
-											{isSubmitting || isPublishing
-												? editingProductId
-													? 'Updating...'
-													: 'Publishing...'
-												: editingProductId
-													? 'Update Product'
-													: 'Publish Product'}
-										</Button>
+										<TooltipProvider>
+											<Tooltip>
+												<TooltipTrigger asChild>
+													<span className="flex-1">
+														<Button
+															type="submit"
+															variant="secondary"
+															className="w-full uppercase"
+															disabled={isDisabled}
+															data-testid="product-publish-button"
+														>
+															{isSubmitting || isPublishing
+																? editingProductId
+																	? 'Updating...'
+																	: 'Publishing...'
+																: editingProductId
+																	? 'Update Product'
+																	: 'Publish Product'}
+														</Button>
+													</span>
+												</TooltipTrigger>
+												{hasValidationErrors && (
+													<TooltipContent>
+														<ul className="list-disc list-inside space-y-1">
+															{validationIssues.map((issue, i) => (
+																<li key={i}>{issue}</li>
+															))}
+														</ul>
+													</TooltipContent>
+												)}
+											</Tooltip>
+										</TooltipProvider>
 									)
 								}}
 							/>
