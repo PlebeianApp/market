@@ -194,9 +194,20 @@ function ProductsOverviewComponent() {
 	const sortedProducts = useMemo(() => {
 		if (!products) return []
 		return [...products].sort((a, b) => {
+			// Alphabetical sorting
+			if (orderBy === 'alphabetical') {
+				const titleA = getProductTitle(a).toLowerCase()
+				const titleB = getProductTitle(b).toLowerCase()
+				return titleA.localeCompare(titleB)
+			}
+			if (orderBy === 'alphabetical-reverse') {
+				const titleA = getProductTitle(a).toLowerCase()
+				const titleB = getProductTitle(b).toLowerCase()
+				return titleB.localeCompare(titleA)
+			}
+			// Time-based sorting
 			const timeA = a.created_at || 0
 			const timeB = b.created_at || 0
-			// For replaceable events, created_at is both creation and update time
 			if (orderBy === 'oldest' || orderBy === 'least-updated') {
 				return timeA - timeB
 			} else {
@@ -255,10 +266,12 @@ function ProductsOverviewComponent() {
 				<h1 className="text-2xl font-bold">Products</h1>
 				<div className="flex items-center gap-4">
 					<Select value={orderBy} onValueChange={setOrderBy}>
-						<SelectTrigger className="w-48">
+						<SelectTrigger className="w-56">
 							<SelectValue placeholder="Order By" />
 						</SelectTrigger>
 						<SelectContent>
+							<SelectItem value="alphabetical">Alphabetically (A-Z)</SelectItem>
+							<SelectItem value="alphabetical-reverse">Alphabetically (Z-A)</SelectItem>
 							<SelectItem value="newest">Newest First</SelectItem>
 							<SelectItem value="oldest">Oldest First</SelectItem>
 							<SelectItem value="recently-updated">Recently Updated</SelectItem>
@@ -281,6 +294,8 @@ function ProductsOverviewComponent() {
 							<SelectValue placeholder="Order By" />
 						</SelectTrigger>
 						<SelectContent>
+							<SelectItem value="alphabetical">Alphabetically (A-Z)</SelectItem>
+							<SelectItem value="alphabetical-reverse">Alphabetically (Z-A)</SelectItem>
 							<SelectItem value="newest">Newest First</SelectItem>
 							<SelectItem value="oldest">Oldest First</SelectItem>
 							<SelectItem value="recently-updated">Recently Updated</SelectItem>
