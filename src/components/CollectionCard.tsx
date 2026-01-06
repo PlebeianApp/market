@@ -1,13 +1,11 @@
-import { NDKEvent } from '@nostr-dev-kit/ndk'
-import { getCollectionImages, getCollectionSummary, getCollectionTitle, getCollectionId } from '@/queries/collections.tsx'
-import { useEffect, useState } from 'react'
 import { ndkActions } from '@/lib/stores/ndk.ts'
 import { uiActions } from '@/lib/stores/ui'
+import { getCollectionId, getCollectionImages, getCollectionSummary, getCollectionTitle } from '@/queries/collections.tsx'
+import { profileByIdentifierQueryOptions, useProfileName } from '@/queries/profiles'
+import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from '@tanstack/react-router'
-import { useProfileName } from '@/queries/profiles'
-import { UserWithAvatar } from '@/components/UserWithAvatar.tsx'
-import { profileByIdentifierQueryOptions } from '@/queries/profiles'
-import { useSuspenseQuery } from '@tanstack/react-query'
+import { useEffect, useState } from 'react'
 
 export function CollectionCard({ collection }: { collection: NDKEvent }) {
 	const title = getCollectionTitle(collection)
@@ -18,6 +16,7 @@ export function CollectionCard({ collection }: { collection: NDKEvent }) {
 	const [isOwnCollection, setIsOwnCollection] = useState(false)
 	const images = getCollectionImages(collection)
 	const { data: name, isLoading } = useProfileName(pubkey)
+	const location = useLocation()
 
 	// Check if current user is the creator of the collection
 	useEffect(() => {
@@ -35,7 +34,10 @@ export function CollectionCard({ collection }: { collection: NDKEvent }) {
 		// This will also store it as originalResultsPath if not already set
 		uiActions.setCollectionSourcePath(location.pathname)
 	}
-	const { data: profileData } = useSuspenseQuery(profileByIdentifierQueryOptions(pubkey))
+	const { data: profileData, isLoading: isLoadingProfile } = useQuery({
+		...profileByIdentifierQueryOptions(pubkey),
+		enabled: !!pubkey,
+	})
 	const { profile, user } = profileData || {}
 
 	return (
@@ -73,14 +75,18 @@ export function CollectionCard({ collection }: { collection: NDKEvent }) {
 				<Link to={`/profile/${pubkey}`}>
 					<div className="text-sm flex flex-row items-center gap-2">
 						by{' '}
-						{profile?.picture && (
+						{profile?.picture && !isLoadingProfile && (
 							<img
 								src={profile.picture}
 								alt={profile.name || 'Profile picture'}
 								className="rounded-full w-1 h-1 sm:w-6 sm:h-6 border-2 border-black"
 							/>
 						)}
-						{profile?.name && <div className="truncate">{profile.name}</div>}
+						{profile?.name && !isLoadingProfile ? (
+							<div className="truncate">{profile.name}</div>
+						) : (
+							<div className="truncate text-gray-500">...</div>
+						)}
 					</div>
 				</Link>
 			</div>

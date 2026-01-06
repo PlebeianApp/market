@@ -1,6 +1,6 @@
 import { defaultRelaysUrls, ZAP_RELAYS } from '@/lib/constants'
 import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
-import type { NDKEvent, NDKSigner, NDKUser } from '@nostr-dev-kit/ndk'
+import type { NDKEvent, NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nostr-dev-kit/ndk'
 import NDK, { NDKKind } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { configStore } from './config'
@@ -29,6 +29,9 @@ const initialState: NDKState = {
 }
 
 export const ndkStore = new Store<NDKState>(initialState)
+
+let configRelaySyncInitialized = false
+let lastSyncedAppRelay: string | undefined
 
 /**
  * Helper to connect an NDK instance with timeout
@@ -73,11 +76,88 @@ function getRelayUrls(overrideRelays?: string[]): string[] {
 
 export const ndkActions = {
 	/**
+	 * Ensure the instance relay (config.appRelay) is always present,
+	 * even before a signer exists (read-only queries must still work).
+	 */
+	ensureAppRelayFromConfig: (): void => {
+		const appRelay = configStore.state.config.appRelay
+		if (!appRelay) return
+
+		// Avoid repeated attempts when config updates but relay is unchanged
+		if (lastSyncedAppRelay === appRelay) return
+
+		// Add/connect to the relay if NDK is ready
+		const added = ndkActions.addSingleRelay(appRelay)
+		if (added) lastSyncedAppRelay = appRelay
+	},
+
+	/**
+	 * Fetch events, but guarantee resolution even if some relays never EOSE.
+	 * This prevents UI loading states from hanging indefinitely.
+	 */
+	fetchEventsWithTimeout: async (
+		filters: NDKFilter | NDKFilter[],
+		opts?: NDKSubscriptionOptions & { timeoutMs?: number },
+	): Promise<Set<NDKEvent>> => {
+		const ndk = ndkStore.state.ndk
+		if (!ndk) throw new Error('NDK not initialized')
+
+		const { timeoutMs = 8000, ...subOpts } = opts ?? {}
+
+		return await new Promise<Set<NDKEvent>>((resolve) => {
+			const events = new Map<string, NDKEvent>()
+			let settled = false
+			let timer: ReturnType<typeof setTimeout> | undefined
+
+			const finalize = (subscription?: { stop: () => void }) => {
+				if (settled) return
+				settled = true
+				if (timer) clearTimeout(timer)
+				subscription?.stop()
+				resolve(new Set(events.values()))
+			}
+
+			const subscription = ndk.subscribe(filters, {
+				...subOpts,
+				closeOnEose: true,
+				onEvent: (event) => {
+					const key = event.deduplicationKey()
+					const existing = events.get(key)
+					if (!existing) {
+						events.set(key, event)
+						return
+					}
+					const existingCreatedAt = existing.created_at || 0
+					const nextCreatedAt = event.created_at || 0
+					if (nextCreatedAt >= existingCreatedAt) {
+						events.set(key, event)
+					}
+				},
+				onEose: () => finalize(subscription),
+				onClose: () => finalize(subscription),
+			})
+
+			timer = setTimeout(() => finalize(subscription), timeoutMs)
+		})
+	},
+
+	/**
 	 * Initialize NDK instances (does not connect yet)
 	 */
 	initialize: (relays?: string[]) => {
 		const state = ndkStore.state
 		if (state.ndk) return state.ndk
+
+		if (!configRelaySyncInitialized) {
+			configRelaySyncInitialized = true
+			configStore.subscribe(({ currentVal }) => {
+				const appRelay = currentVal.config.appRelay
+				if (!appRelay) return
+				if (lastSyncedAppRelay === appRelay) return
+				const added = ndkActions.addSingleRelay(appRelay)
+				if (added) lastSyncedAppRelay = appRelay
+			})
+		}
 
 		const explicitRelays = getRelayUrls(relays)
 		// @ts-ignore
@@ -99,6 +179,9 @@ export const ndkActions = {
 			zapNdk,
 			explicitRelayUrls: explicitRelays,
 		}))
+
+		// If config was already loaded before initialization, ensure appRelay is included.
+		ndkActions.ensureAppRelayFromConfig()
 
 		return ndk
 	},
@@ -161,6 +244,9 @@ export const ndkActions = {
 		try {
 			// Normalize the URL (add wss:// if missing)
 			const normalizedUrl = relayUrl.startsWith('ws://') || relayUrl.startsWith('wss://') ? relayUrl : `wss://${relayUrl}`
+
+			// Already present?
+			if (state.explicitRelayUrls.includes(normalizedUrl)) return true
 
 			state.ndk.addExplicitRelay(normalizedUrl)
 
@@ -367,7 +453,7 @@ export const ndkActions = {
 		const state = ndkStore.state
 		if (!state.zapNdk || !state.isZapNdkConnected) {
 			console.warn('Zap NDK not connected. Cannot create zap subscription.')
-			return () => { }
+			return () => {}
 		}
 
 		const filters: any = {

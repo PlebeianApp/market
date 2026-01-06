@@ -7,9 +7,20 @@ import { createQueryClient } from './lib/queryClient'
 import { routeTree } from './routeTree.gen'
 import type { AppRouterContext } from './lib/router-utils'
 import { configActions, configStore } from './lib/stores/config'
+import { ndkActions } from './lib/stores/ndk'
 
 // Create queryClient once at module level
 const queryClient = createQueryClient()
+
+function DefaultPending() {
+	return (
+		<div className="w-full">
+			<div className="sticky top-0 z-50 h-1 bg-primary/10 overflow-hidden">
+				<div className="h-full w-1/3 bg-primary animate-pulse" />
+			</div>
+		</div>
+	)
+}
 
 // Function to create a router once we have a queryClient
 function createAppRouter(queryClient: QueryClient) {
@@ -20,6 +31,9 @@ function createAppRouter(queryClient: QueryClient) {
 		} as AppRouterContext,
 		defaultPreload: 'intent',
 		defaultPreloadStaleTime: 0,
+		defaultPendingMs: 1500,
+		defaultPendingMinMs: 0,
+		defaultPendingComponent: DefaultPending,
 	})
 }
 
@@ -51,6 +65,8 @@ function App() {
 				}
 				const config = await response.json()
 				configActions.setConfig(config)
+				// Ensure we always connect to the instance relay even without a signer
+				ndkActions.ensureAppRelayFromConfig()
 				setConfigLoaded(true)
 				console.log('Fetched config:', config)
 			} catch (err) {
@@ -98,4 +114,3 @@ if (import.meta.hot) {
 	// The hot module reloading API is not available in production.
 	createRoot(elem).render(<App />)
 }
-
