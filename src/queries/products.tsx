@@ -46,7 +46,7 @@ export const fetchProducts = async (limit: number = 500, tag?: string, includeHi
 		...(tag && { '#t': [tag] }), // Add tag filter if provided
 	}
 
-	const events = await ndk.fetchEvents(filter)
+	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
 	const allEvents = Array.from(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 
 	// Filter out blacklisted products and authors
@@ -83,7 +83,7 @@ export const fetchProductsPaginated = async (limit: number = 20, until?: number,
 		...(tag && { '#t': [tag] }), // Add tag filter if provided
 	}
 
-	const events = await ndk.fetchEvents(filter)
+	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
 	const allEvents = Array.from(events).sort((a, b) => b.created_at! - a.created_at!)
 
 	// Filter out blacklisted products and authors
@@ -136,7 +136,7 @@ export const fetchProductsByPubkey = async (pubkey: string, includeHidden: boole
 		limit: 50,
 	}
 
-	const events = await ndk.fetchEvents(filter)
+	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
 	const allEvents = Array.from(events)
 
 	// Filter out blacklisted products (author check not needed since we're querying by author)

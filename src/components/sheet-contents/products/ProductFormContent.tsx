@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
-import { productFormActions, productFormStore } from '@/lib/stores/product'
+import { productFormActions, productFormStore, type ProductFormTab } from '@/lib/stores/product'
 import { uiActions } from '@/lib/stores/ui'
 import { hasProductFormDraft } from '@/lib/utils/productFormStorage'
 import { useShippingOptionsByPubkey, isShippingDeleted } from '@/queries/shipping'
@@ -35,7 +35,7 @@ export function ProductFormContent({
 
 	// Get form state from store, including editingProductId
 	const formState = useStore(productFormStore)
-	const { mainTab, productSubTab, editingProductId, isDirty, shippings, formSessionId, name, description, images } = formState
+	const { activeTab, editingProductId, isDirty, shippings, formSessionId, name, description, images } = formState
 
 	// Compute validation states
 	const hasValidShipping = shippings.some((ship) => ship.shipping && ship.shipping.id)
@@ -99,12 +99,12 @@ export function ProductFormContent({
 		// Only auto-switch to shipping tab if:
 		// 1. We haven't handled this session yet
 		// 2. User should see shipping first (no shipping options)
-		// 3. We're on the product tab (default initial state)
-		if (handledSessionIdRef.current !== formSessionId && shouldShowShippingFirst && mainTab === 'product') {
-			productFormActions.updateValues({ mainTab: 'shipping' })
+		// 3. We're on the name tab (default initial state)
+		if (handledSessionIdRef.current !== formSessionId && shouldShowShippingFirst && activeTab === 'name') {
+			productFormActions.updateValues({ activeTab: 'shipping' })
 			handledSessionIdRef.current = formSessionId
 		}
-	}, [shouldShowShippingFirst, mainTab, formSessionId])
+	}, [shouldShowShippingFirst, activeTab, formSessionId])
 
 	// Check for persisted draft on mount (for drafts from previous sessions)
 	const checkForPersistedDraft = useCallback(async () => {
@@ -134,8 +134,7 @@ export function ProductFormContent({
 			if (!draftKey) return
 
 			// Preserve current tab state before reset
-			const currentMainTab = formState.mainTab
-			const currentProductSubTab = formState.productSubTab
+			const currentActiveTab = formState.activeTab
 
 			await productFormActions.clearDraftForProduct(draftKey)
 
@@ -144,18 +143,18 @@ export function ProductFormContent({
 			if (productEventId && productDTag) {
 				productFormActions.setEditingProductId(productDTag)
 				await productFormActions.loadProductForEdit(productEventId, {
-					preserveTabState: { mainTab: currentMainTab, productSubTab: currentProductSubTab },
+					preserveTabState: { activeTab: currentActiveTab },
 				})
 			} else {
 				// No product to reload, just reset but restore tabs
 				productFormActions.reset()
-				productFormActions.setTabState(currentMainTab, currentProductSubTab)
+				productFormActions.setTabState(currentActiveTab)
 			}
 
 			setHasDraft(false)
 			uiActions.clearDashboardHeaderAction()
 		}
-	}, [productDTag, editingProductId, productEventId, formState.mainTab, formState.productSubTab])
+	}, [productDTag, editingProductId, productEventId, formState.activeTab])
 
 	// Stable callback that reads from the ref
 	const handleDiscardEdits = useCallback(() => {
@@ -241,104 +240,80 @@ export function ProductFormContent({
 			className={`flex flex-col ${className}`}
 		>
 			<div>
-				{/* Main Tabs: Product and Shipping */}
+				{/* Single level tabs: Name, Detail, Spec, Category, Images, Shipping */}
 				<Tabs
-					value={mainTab}
-					onValueChange={(value) => productFormActions.updateValues({ mainTab: value as 'product' | 'shipping' })}
+					value={activeTab}
+					onValueChange={(value) => productFormActions.updateValues({ activeTab: value as ProductFormTab })}
 					className="w-full"
 				>
-					<TabsList className="w-full rounded-none bg-transparent h-auto p-0 flex">
+					<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-[1px]">
 						<TabsTrigger
-							value="product"
-							className="flex-1 px-4 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
-							data-testid="main-tab-product"
+							value="name"
+							className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+							data-testid="product-tab-name"
 						>
-							Product
-							{(!hasValidName || !hasValidDescription || !hasValidImages) && <span className="ml-1 text-red-500">*</span>}
+							Name
+							{(!hasValidName || !hasValidDescription) && <span className="ml-1 text-red-500">*</span>}
+						</TabsTrigger>
+						<TabsTrigger
+							value="detail"
+							className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+							data-testid="product-tab-detail"
+						>
+							Detail
+						</TabsTrigger>
+						<TabsTrigger
+							value="spec"
+							className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+							data-testid="product-tab-spec"
+						>
+							Spec
+						</TabsTrigger>
+						<TabsTrigger
+							value="category"
+							className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+							data-testid="product-tab-category"
+						>
+							Category
+						</TabsTrigger>
+						<TabsTrigger
+							value="images"
+							className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+							data-testid="product-tab-images"
+						>
+							Images
+							{!hasValidImages && <span className="ml-1 text-red-500">*</span>}
 						</TabsTrigger>
 						<TabsTrigger
 							value="shipping"
-							className="flex-1 px-4 py-2 font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
-							data-testid="main-tab-shipping"
+							className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+							data-testid="product-tab-shipping"
 						>
 							Shipping
 							{!hasValidShipping && <span className="ml-1 text-red-500">*</span>}
 						</TabsTrigger>
 					</TabsList>
 
-					{/* Product Tab Content */}
-					<TabsContent value="product" className="mt-2">
-						{/* Product Sub-Tabs */}
-						<Tabs
-							value={productSubTab}
-							onValueChange={(value) =>
-								productFormActions.updateValues({ productSubTab: value as 'name' | 'detail' | 'spec' | 'category' | 'images' })
-							}
-							className="w-full"
-						>
-							<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-[1px]">
-								<TabsTrigger
-									value="name"
-									className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
-									data-testid="product-tab-name"
-								>
-									Name
-									{(!hasValidName || !hasValidDescription) && <span className="ml-1 text-red-500">*</span>}
-								</TabsTrigger>
-								<TabsTrigger
-									value="detail"
-									className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
-									data-testid="product-tab-detail"
-								>
-									Detail
-								</TabsTrigger>
-								<TabsTrigger
-									value="spec"
-									className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
-									data-testid="product-tab-spec"
-								>
-									Spec
-								</TabsTrigger>
-								<TabsTrigger
-									value="category"
-									className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
-									data-testid="product-tab-category"
-								>
-									Category
-								</TabsTrigger>
-								<TabsTrigger
-									value="images"
-									className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
-									data-testid="product-tab-images"
-								>
-									Images
-									{!hasValidImages && <span className="ml-1 text-red-500">*</span>}
-								</TabsTrigger>
-							</TabsList>
-
-							<TabsContent value="name" className="mt-4">
-								<NameTab />
-							</TabsContent>
-
-							<TabsContent value="detail" className="mt-4">
-								<DetailTab />
-							</TabsContent>
-
-							<TabsContent value="spec" className="mt-4">
-								<SpecTab />
-							</TabsContent>
-
-							<TabsContent value="category" className="mt-4">
-								<CategoryTab />
-							</TabsContent>
-
-							<TabsContent value="images" className="mt-4">
-								<ImagesTab />
-							</TabsContent>
-						</Tabs>
+					<TabsContent value="name" className="mt-4">
+						<NameTab />
 					</TabsContent>
 
-					{/* Shipping Tab Content */}
+					<TabsContent value="detail" className="mt-4">
+						<DetailTab />
+					</TabsContent>
+
+					<TabsContent value="spec" className="mt-4">
+						<SpecTab />
+					</TabsContent>
+
+					<TabsContent value="category" className="mt-4">
+						<CategoryTab />
+					</TabsContent>
+
+					<TabsContent value="images" className="mt-4">
+						<ImagesTab />
+					</TabsContent>
+
 					<TabsContent value="shipping" className="mt-4">
 						<ShippingTab />
 					</TabsContent>
@@ -348,7 +323,7 @@ export function ProductFormContent({
 			{showFooter && (
 				<div className="bg-white border-t pt-4 pb-4 mt-4">
 					<div className="flex gap-2 w-full">
-						{(productSubTab !== 'name' || mainTab === 'shipping') && (
+						{activeTab !== 'name' && (
 							<Button
 								type="button"
 								variant="outline"
@@ -361,7 +336,7 @@ export function ProductFormContent({
 							</Button>
 						)}
 
-						{mainTab === 'shipping' || editingProductId ? (
+						{activeTab === 'shipping' || editingProductId ? (
 							<form.Subscribe
 								selector={(state) => [state.canSubmit, state.isSubmitting]}
 								children={([canSubmit, isSubmitting]) => {

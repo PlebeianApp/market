@@ -1,6 +1,6 @@
 import { defaultRelaysUrls, ZAP_RELAYS } from '@/lib/constants'
 import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
-import type { NDKEvent, NDKSigner, NDKUser } from '@nostr-dev-kit/ndk'
+import type { NDKEvent, NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nostr-dev-kit/ndk'
 import NDK, { NDKKind } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { configStore } from './config'
@@ -8,7 +8,7 @@ import { walletActions, walletStore, type Wallet } from './wallet'
 
 export interface NDKState {
 	ndk: NDK | null
-	zapNdk: NDK | null // Separate NDK instance for zap detection
+	zapNdk: NDK | null
 	isConnecting: boolean
 	isConnected: boolean
 	isZapNdkConnected: boolean
@@ -30,36 +30,142 @@ const initialState: NDKState = {
 
 export const ndkStore = new Store<NDKState>(initialState)
 
+let configRelaySyncInitialized = false
+let lastSyncedAppRelay: string | undefined
+
+/**
+ * Helper to connect an NDK instance with timeout
+ * Returns true if at least one relay connected
+ */
+async function connectNdkWithTimeout(ndk: NDK, timeoutMs: number, label: string): Promise<boolean> {
+	try {
+		await Promise.race([
+			ndk.connect(),
+			new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${label} connection timeout`)), timeoutMs)),
+		])
+		return true
+	} catch (error) {
+		console.warn(`${label} connection issue:`, error)
+		// Check if any relays connected despite the timeout
+		try {
+			const connected = ndk.pool?.connectedRelays() || []
+			if (connected.length > 0) {
+				console.log(`✅ ${label} partially connected to ${connected.length} relays`)
+				return true
+			}
+		} catch {
+			// Ignore pool access errors
+		}
+		return false
+	}
+}
+
+/**
+ * Determine which relays to use based on config and environment
+ */
+function getRelayUrls(overrideRelays?: string[]): string[] {
+	const appRelay = configStore.state.config.appRelay
+	// @ts-ignore - Bun.env is available in Bun runtime
+	const localRelayOnly = typeof Bun !== 'undefined' && Bun.env?.LOCAL_RELAY_ONLY === 'true'
+
+	if (appRelay) {
+		return localRelayOnly ? [appRelay] : Array.from(new Set([appRelay, ...defaultRelaysUrls]))
+	}
+	return overrideRelays?.length ? overrideRelays : defaultRelaysUrls
+}
+
 export const ndkActions = {
+	/**
+	 * Ensure the instance relay (config.appRelay) is always present,
+	 * even before a signer exists (read-only queries must still work).
+	 */
+	ensureAppRelayFromConfig: (): void => {
+		const appRelay = configStore.state.config.appRelay
+		if (!appRelay) return
+
+		// Avoid repeated attempts when config updates but relay is unchanged
+		if (lastSyncedAppRelay === appRelay) return
+
+		// Add/connect to the relay if NDK is ready
+		const added = ndkActions.addSingleRelay(appRelay)
+		if (added) lastSyncedAppRelay = appRelay
+	},
+
+	/**
+	 * Fetch events, but guarantee resolution even if some relays never EOSE.
+	 * This prevents UI loading states from hanging indefinitely.
+	 */
+	fetchEventsWithTimeout: async (
+		filters: NDKFilter | NDKFilter[],
+		opts?: NDKSubscriptionOptions & { timeoutMs?: number },
+	): Promise<Set<NDKEvent>> => {
+		const ndk = ndkStore.state.ndk
+		if (!ndk) throw new Error('NDK not initialized')
+
+		const { timeoutMs = 8000, ...subOpts } = opts ?? {}
+
+		return await new Promise<Set<NDKEvent>>((resolve) => {
+			const events = new Map<string, NDKEvent>()
+			let settled = false
+			let timer: ReturnType<typeof setTimeout> | undefined
+
+			const finalize = (subscription?: { stop: () => void }) => {
+				if (settled) return
+				settled = true
+				if (timer) clearTimeout(timer)
+				subscription?.stop()
+				resolve(new Set(events.values()))
+			}
+
+			const subscription = ndk.subscribe(filters, {
+				...subOpts,
+				closeOnEose: true,
+				onEvent: (event) => {
+					const key = event.deduplicationKey()
+					const existing = events.get(key)
+					if (!existing) {
+						events.set(key, event)
+						return
+					}
+					const existingCreatedAt = existing.created_at || 0
+					const nextCreatedAt = event.created_at || 0
+					if (nextCreatedAt >= existingCreatedAt) {
+						events.set(key, event)
+					}
+				},
+				onEose: () => finalize(subscription),
+				onClose: () => finalize(subscription),
+			})
+
+			timer = setTimeout(() => finalize(subscription), timeoutMs)
+		})
+	},
+
+	/**
+	 * Initialize NDK instances (does not connect yet)
+	 */
 	initialize: (relays?: string[]) => {
 		const state = ndkStore.state
 		if (state.ndk) return state.ndk
 
-		const appRelay = configStore.state.config.appRelay
-		// Read from Bun.env (set via package.json script)
+		if (!configRelaySyncInitialized) {
+			configRelaySyncInitialized = true
+			configStore.subscribe(({ currentVal }) => {
+				const appRelay = currentVal.config.appRelay
+				if (!appRelay) return
+				if (lastSyncedAppRelay === appRelay) return
+				const added = ndkActions.addSingleRelay(appRelay)
+				if (added) lastSyncedAppRelay = appRelay
+			})
+		}
+
+		const explicitRelays = getRelayUrls(relays)
 		// @ts-ignore - Bun.env is available in Bun runtime
 		const localRelayOnly = typeof Bun !== 'undefined' && Bun.env?.LOCAL_RELAY_ONLY === 'true'
 
-		// Determine which relays to use
-		let explicitRelays: string[]
-
-		if (appRelay) {
-			// We have an app relay configured
-			if (localRelayOnly) {
-				// Dev mode: local relay only
-				explicitRelays = [appRelay]
-			} else {
-				// Production or dev with defaults: app relay + default relays
-				explicitRelays = Array.from(new Set([appRelay, ...defaultRelaysUrls]))
-			}
-		} else {
-			// No app relay: use passed relays or default relays
-			explicitRelays = relays && relays.length > 0 ? relays : defaultRelaysUrls
-		}
-
 		const ndk = new NDK({
 			explicitRelayUrls: explicitRelays,
-			enableOutboxModel: localRelayOnly ? false : true,
+			enableOutboxModel: !localRelayOnly,
 			aiGuardrails: true,
 		})
 
@@ -67,78 +173,54 @@ export const ndkActions = {
 			explicitRelayUrls: ZAP_RELAYS,
 		})
 
-		ndkStore.setState((state) => ({
-			...state,
+		ndkStore.setState((s) => ({
+			...s,
 			ndk,
 			zapNdk,
 			explicitRelayUrls: explicitRelays,
 		}))
 
-		if (ndk.signer) {
-			ndkActions.selectAndSetInitialNwcWallet()
-		}
+		// If config was already loaded before initialization, ensure appRelay is included.
+		ndkActions.ensureAppRelayFromConfig()
 
 		return ndk
 	},
 
-	connect: async (timeoutMs: number = 10000): Promise<void> => {
+	/**
+	 * Connect NDK to relays (non-blocking, runs in background)
+	 */
+	connect: async (timeoutMs = 10000): Promise<void> => {
 		const state = ndkStore.state
 		if (!state.ndk || state.isConnected || state.isConnecting) return
 
-		ndkStore.setState((state) => ({ ...state, isConnecting: true }))
+		ndkStore.setState((s) => ({ ...s, isConnecting: true }))
 
 		try {
-			// Add timeout to prevent hanging on unresponsive relays
-			const connectPromise = state.ndk.connect()
-			const timeoutPromise = new Promise<never>((_, reject) => {
-				setTimeout(() => reject(new Error('Connection timeout')), timeoutMs)
-			})
+			const connected = await connectNdkWithTimeout(state.ndk, timeoutMs, 'NDK')
+			ndkStore.setState((s) => ({ ...s, isConnected: connected }))
+			if (connected) console.log('✅ NDK connected to relays')
 
-			await Promise.race([connectPromise, timeoutPromise])
-			ndkStore.setState((state) => ({ ...state, isConnected: true }))
-			console.log('✅ NDK connected to relays')
-
-			// Also connect zap NDK (with timeout)
-			await ndkActions.connectZapNdk(5000)
-		} catch (error) {
-			console.error('Failed to connect NDK:', error)
-			// Don't throw - allow app to continue even if some relays fail
-			// Mark as connected if we have any working relays
-			const connectedRelays = state.ndk?.pool?.connectedRelays() || []
-			if (connectedRelays.length > 0) {
-				ndkStore.setState((state) => ({ ...state, isConnected: true }))
-				console.log(`✅ NDK partially connected to ${connectedRelays.length} relays`)
-			}
+			// Also connect zap NDK in background
+			void ndkActions.connectZapNdk(5000)
 		} finally {
-			ndkStore.setState((state) => ({ ...state, isConnecting: false }))
+			ndkStore.setState((s) => ({ ...s, isConnecting: false }))
 		}
 	},
 
-	connectZapNdk: async (timeoutMs: number = 10000): Promise<void> => {
+	/**
+	 * Connect the dedicated zap monitoring NDK
+	 */
+	connectZapNdk: async (timeoutMs = 10000): Promise<void> => {
 		const state = ndkStore.state
 		if (!state.zapNdk || state.isZapNdkConnected) return
 
-		try {
-			// Add timeout to prevent hanging on unresponsive zap relays
-			const connectPromise = state.zapNdk.connect()
-			const timeoutPromise = new Promise<never>((_, reject) => {
-				setTimeout(() => reject(new Error('Zap connection timeout')), timeoutMs)
-			})
+		const connected = await connectNdkWithTimeout(state.zapNdk, timeoutMs, 'Zap NDK')
+		ndkStore.setState((s) => ({ ...s, isZapNdkConnected: connected }))
 
-			await Promise.race([connectPromise, timeoutPromise])
-			ndkStore.setState((state) => ({ ...state, isZapNdkConnected: true }))
+		if (connected) {
 			console.log('✅ Zap NDK connected to relays:', ZAP_RELAYS)
-		} catch (error) {
-			console.error('Failed to connect Zap NDK:', error)
-			// Don't throw - allow app to continue even if some zap relays fail
-			// Mark as connected if we have any working zap relays
-			const connectedRelays = state.zapNdk?.pool?.connectedRelays() || []
-			if (connectedRelays.length > 0) {
-				ndkStore.setState((state) => ({ ...state, isZapNdkConnected: true }))
-				console.log(`✅ Zap NDK partially connected to ${connectedRelays.length} relays`)
-			} else {
-				console.warn('⚠️ Zap NDK could not connect to any relays. Zap monitoring will be unavailable.')
-			}
+		} else {
+			console.warn('⚠️ Zap NDK could not connect. Zap monitoring will be unavailable.')
 		}
 	},
 
@@ -162,6 +244,9 @@ export const ndkActions = {
 		try {
 			// Normalize the URL (add wss:// if missing)
 			const normalizedUrl = relayUrl.startsWith('ws://') || relayUrl.startsWith('wss://') ? relayUrl : `wss://${relayUrl}`
+
+			// Already present?
+			if (state.explicitRelayUrls.includes(normalizedUrl)) return true
 
 			state.ndk.addExplicitRelay(normalizedUrl)
 
