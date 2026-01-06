@@ -19,58 +19,58 @@ const useFetch = <T,>(url: string) => {
     loading: true,
     error: null
   })
-  
+
   useEffect(() => {
     let cancelled = false
     const controller = new AbortController()
-    
+
     const fetchData = async () => {
       try {
         setState(prev => ({ ...prev, loading: true, error: null }))
-        
-        const response = await fetch(url, { 
-          signal: controller.signal 
+
+        const response = await fetch(url, {
+          signal: controller.signal
         })
-        
+
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`)
         }
-        
+
         const data = await response.json()
-        
+
         if (!cancelled) {
           setState({ data, loading: false, error: null })
         }
       } catch (error) {
         if (!cancelled && error.name !== 'AbortError') {
-          setState({ 
-            data: null, 
-            loading: false, 
-            error: error as Error 
+          setState({
+            data: null,
+            loading: false,
+            error: error as Error
           })
         }
       }
     }
-    
+
     fetchData()
-    
+
     return () => {
       cancelled = true
       controller.abort()
     }
   }, [url])
-  
+
   return state
 }
 
 // Usage
 const UserProfile = ({ userId }: { userId: string }) => {
   const { data, loading, error } = useFetch<User>(`/api/users/${userId}`)
-  
+
   if (loading) return <Spinner />
   if (error) return <ErrorMessage error={error} />
   if (!data) return null
-  
+
   return <UserCard user={data} />
 }
 ```
@@ -98,7 +98,7 @@ const UserForm = () => {
   })
   const [errors, setErrors] = useState<FormErrors>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
-  
+
   const handleChange = useCallback((
     field: keyof UserForm,
     value: string | number
@@ -107,10 +107,10 @@ const UserForm = () => {
     // Clear error when user starts typing
     setErrors(prev => ({ ...prev, [field]: undefined }))
   }, [])
-  
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     // Validate
     const result = userSchema.safeParse(formData)
     if (!result.success) {
@@ -122,7 +122,7 @@ const UserForm = () => {
       setErrors(fieldErrors)
       return
     }
-    
+
     // Submit
     setIsSubmitting(true)
     try {
@@ -134,7 +134,7 @@ const UserForm = () => {
       setIsSubmitting(false)
     }
   }
-  
+
   return (
     <form onSubmit={handleSubmit}>
       <div>
@@ -146,7 +146,7 @@ const UserForm = () => {
         />
         {errors.name && <span className="error">{errors.name}</span>}
       </div>
-      
+
       <div>
         <label htmlFor="email">Email</label>
         <input
@@ -157,7 +157,7 @@ const UserForm = () => {
         />
         {errors.email && <span className="error">{errors.email}</span>}
       </div>
-      
+
       <div>
         <label htmlFor="age">Age</label>
         <input
@@ -168,7 +168,7 @@ const UserForm = () => {
         />
         {errors.age && <span className="error">{errors.age}</span>}
       </div>
-      
+
       <button type="submit" disabled={isSubmitting}>
         {isSubmitting ? 'Submitting...' : 'Submit'}
       </button>
@@ -192,34 +192,34 @@ interface ModalProps {
 
 const Modal = ({ isOpen, onClose, children, title }: ModalProps) => {
   const modalRef = useRef<HTMLDivElement>(null)
-  
+
   // Close on Escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose()
     }
-    
+
     if (isOpen) {
       document.addEventListener('keydown', handleEscape)
       // Prevent body scroll
       document.body.style.overflow = 'hidden'
     }
-    
+
     return () => {
       document.removeEventListener('keydown', handleEscape)
       document.body.style.overflow = 'unset'
     }
   }, [isOpen, onClose])
-  
+
   // Close on backdrop click
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === modalRef.current) {
       onClose()
     }
   }
-  
+
   if (!isOpen) return null
-  
+
   return createPortal(
     <div
       ref={modalRef}
@@ -247,7 +247,7 @@ const Modal = ({ isOpen, onClose, children, title }: ModalProps) => {
 // Usage
 const App = () => {
   const [isOpen, setIsOpen] = useState(false)
-  
+
   return (
     <>
       <button onClick={() => setIsOpen(true)}>Open Modal</button>
@@ -284,14 +284,14 @@ const InfiniteScroll = <T extends { id: string | number },>({
   const [hasMore, setHasMore] = useState(true)
   const observerRef = useRef<IntersectionObserver | null>(null)
   const loadMoreRef = useRef<HTMLDivElement>(null)
-  
+
   const loadMore = useCallback(async () => {
     if (loading || !hasMore) return
-    
+
     setLoading(true)
     try {
       const newItems = await fetchData(page)
-      
+
       if (newItems.length === 0) {
         setHasMore(false)
       } else {
@@ -304,7 +304,7 @@ const InfiniteScroll = <T extends { id: string | number },>({
       setLoading(false)
     }
   }, [page, loading, hasMore, fetchData])
-  
+
   // Set up intersection observer
   useEffect(() => {
     observerRef.current = new IntersectionObserver(
@@ -315,24 +315,24 @@ const InfiniteScroll = <T extends { id: string | number },>({
       },
       { threshold: 0.1 }
     )
-    
+
     const currentRef = loadMoreRef.current
     if (currentRef) {
       observerRef.current.observe(currentRef)
     }
-    
+
     return () => {
       if (observerRef.current && currentRef) {
         observerRef.current.unobserve(currentRef)
       }
     }
   }, [loadMore])
-  
+
   // Initial load
   useEffect(() => {
     loadMore()
   }, [])
-  
+
   return (
     <div>
       {items.map((item, index) => (
@@ -340,7 +340,7 @@ const InfiniteScroll = <T extends { id: string | number },>({
           {renderItem(item, index)}
         </div>
       ))}
-      
+
       <div ref={loadMoreRef}>
         {loading && loader}
         {!loading && !hasMore && endMessage}
@@ -355,7 +355,7 @@ const PostsList = () => {
     const response = await fetch(`/api/posts?page=${page}`)
     return response.json()
   }
-  
+
   return (
     <InfiniteScroll<Post>
       fetchData={fetchPosts}
@@ -392,14 +392,14 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
     // Check localStorage and system preference
     const saved = localStorage.getItem('theme') as Theme | null
     if (saved) return saved
-    
+
     if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
       return 'dark'
     }
-    
+
     return 'light'
   })
-  
+
   useEffect(() => {
     // Update DOM and localStorage
     const root = document.documentElement
@@ -407,11 +407,11 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
     root.classList.add(theme)
     localStorage.setItem('theme', theme)
   }, [theme])
-  
+
   const toggleTheme = () => {
     setTheme(prev => prev === 'light' ? 'dark' : 'light')
   }
-  
+
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
       {children}
@@ -422,7 +422,7 @@ export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
 // Usage
 const ThemeToggle = () => {
   const { theme, toggleTheme } = useTheme()
-  
+
   return (
     <button onClick={toggleTheme} aria-label="Toggle theme">
       {theme === 'light' ? '🌙' : '☀️'}
@@ -438,17 +438,17 @@ import { useState, useEffect, useMemo } from 'react'
 
 const useDebounce = <T,>(value: T, delay: number): T => {
   const [debouncedValue, setDebouncedValue] = useState(value)
-  
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedValue(value)
     }, delay)
-    
+
     return () => {
       clearTimeout(timer)
     }
   }, [value, delay])
-  
+
   return debouncedValue
 }
 
@@ -456,15 +456,15 @@ const SearchPage = () => {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Product[]>([])
   const [loading, setLoading] = useState(false)
-  
+
   const debouncedQuery = useDebounce(query, 500)
-  
+
   useEffect(() => {
     if (!debouncedQuery) {
       setResults([])
       return
     }
-    
+
     const searchProducts = async () => {
       setLoading(true)
       try {
@@ -477,10 +477,10 @@ const SearchPage = () => {
         setLoading(false)
       }
     }
-    
+
     searchProducts()
   }, [debouncedQuery])
-  
+
   return (
     <div>
       <input
@@ -489,9 +489,9 @@ const SearchPage = () => {
         onChange={e => setQuery(e.target.value)}
         placeholder="Search products..."
       />
-      
+
       {loading && <Spinner />}
-      
+
       {!loading && results.length > 0 && (
         <div>
           {results.map(product => (
@@ -499,7 +499,7 @@ const SearchPage = () => {
           ))}
         </div>
       )}
-      
+
       {!loading && query && results.length === 0 && (
         <p>No results found for "{query}"</p>
       )}
@@ -536,7 +536,7 @@ interface TabsProps {
 const Tabs = ({ children, defaultValue, className }: TabsProps) => {
   const [activeTab, setActiveTab] = useState(defaultValue)
   const tabsId = useId()
-  
+
   return (
     <TabsContext.Provider value={{ activeTab, setActiveTab, tabsId }}>
       <div className={className}>
@@ -546,9 +546,9 @@ const Tabs = ({ children, defaultValue, className }: TabsProps) => {
   )
 }
 
-const TabsList = ({ children, className }: { 
+const TabsList = ({ children, className }: {
   children: React.ReactNode
-  className?: string 
+  className?: string
 }) => (
   <div role="tablist" className={className}>
     {children}
@@ -564,7 +564,7 @@ interface TabsTriggerProps {
 const TabsTrigger = ({ value, children, className }: TabsTriggerProps) => {
   const { activeTab, setActiveTab, tabsId } = useTabs()
   const isActive = activeTab === value
-  
+
   return (
     <button
       role="tab"
@@ -587,9 +587,9 @@ interface TabsContentProps {
 
 const TabsContent = ({ value, children, className }: TabsContentProps) => {
   const { activeTab, tabsId } = useTabs()
-  
+
   if (activeTab !== value) return null
-  
+
   return (
     <div
       role="tabpanel"
@@ -613,15 +613,15 @@ const App = () => (
       <TabsTrigger value="settings">Settings</TabsTrigger>
       <TabsTrigger value="notifications">Notifications</TabsTrigger>
     </TabsList>
-    
+
     <TabsContent value="profile">
       <h2>Profile Content</h2>
     </TabsContent>
-    
+
     <TabsContent value="settings">
       <h2>Settings Content</h2>
     </TabsContent>
-    
+
     <TabsContent value="notifications">
       <h2>Notifications Content</h2>
     </TabsContent>
@@ -650,26 +650,26 @@ class ErrorBoundary extends Component<Props, State> {
     super(props)
     this.state = { hasError: false, error: null }
   }
-  
+
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error }
   }
-  
+
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('ErrorBoundary caught:', error, errorInfo)
     this.props.onError?.(error, errorInfo)
   }
-  
+
   reset = () => {
     this.setState({ hasError: false, error: null })
   }
-  
+
   render() {
     if (this.state.hasError && this.state.error) {
       if (this.props.fallback) {
         return this.props.fallback(this.state.error, this.reset)
       }
-      
+
       return (
         <div className="error-boundary">
           <h2>Something went wrong</h2>
@@ -681,7 +681,7 @@ class ErrorBoundary extends Component<Props, State> {
         </div>
       )
     }
-    
+
     return this.props.children
   }
 }
@@ -725,21 +725,21 @@ const useLocalStorage = <T,>(
       return initialValue
     }
   })
-  
+
   // Update localStorage when value changes
   const setValue = useCallback((value: T | ((val: T) => T)) => {
     try {
       const valueToStore = value instanceof Function ? value(storedValue) : value
       setStoredValue(valueToStore)
       window.localStorage.setItem(key, JSON.stringify(valueToStore))
-      
+
       // Dispatch storage event for other tabs
       window.dispatchEvent(new Event('storage'))
     } catch (error) {
       console.error(`Error saving ${key} to localStorage:`, error)
     }
   }, [key, storedValue])
-  
+
   // Remove from localStorage
   const removeValue = useCallback(() => {
     try {
@@ -749,7 +749,7 @@ const useLocalStorage = <T,>(
       console.error(`Error removing ${key} from localStorage:`, error)
     }
   }, [key, initialValue])
-  
+
   // Listen for changes in other tabs
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
@@ -757,11 +757,11 @@ const useLocalStorage = <T,>(
         setStoredValue(JSON.parse(e.newValue))
       }
     }
-    
+
     window.addEventListener('storage', handleStorageChange)
     return () => window.removeEventListener('storage', handleStorageChange)
   }, [key])
-  
+
   return [storedValue, setValue, removeValue]
 }
 
@@ -772,7 +772,7 @@ const UserPreferences = () => {
     language: 'en',
     notifications: true
   })
-  
+
   return (
     <div>
       <label>
@@ -786,7 +786,7 @@ const UserPreferences = () => {
         />
         Enable notifications
       </label>
-      
+
       <button onClick={clearPreferences}>
         Reset to defaults
       </button>
@@ -818,14 +818,14 @@ const PostCard = ({ post }: { post: Post }) => {
       ...update
     })
   )
-  
+
   const handleLike = async () => {
     // Optimistically update UI
-    addOptimistic({ 
+    addOptimistic({
       likes: optimisticPost.likes + 1,
-      isLiked: true 
+      isLiked: true
     })
-    
+
     try {
       // Send server request
       await likePost(post.id)
@@ -834,24 +834,24 @@ const PostCard = ({ post }: { post: Post }) => {
       console.error('Failed to like post:', error)
     }
   }
-  
+
   const handleUnlike = async () => {
-    addOptimistic({ 
+    addOptimistic({
       likes: optimisticPost.likes - 1,
-      isLiked: false 
+      isLiked: false
     })
-    
+
     try {
       await unlikePost(post.id)
     } catch (error) {
       console.error('Failed to unlike post:', error)
     }
   }
-  
+
   return (
     <div className="post-card">
       <p>{optimisticPost.content}</p>
-      <button 
+      <button
         onClick={optimisticPost.isLiked ? handleUnlike : handleLike}
         className={optimisticPost.isLiked ? 'liked' : ''}
       >
@@ -865,6 +865,7 @@ const PostCard = ({ post }: { post: Post }) => {
 ## References
 
 These examples demonstrate:
+
 - Custom hooks for reusable logic
 - Form handling with validation
 - Portal usage for modals
@@ -875,4 +876,3 @@ These examples demonstrate:
 - Error boundaries
 - LocalStorage integration
 - Optimistic updates (React 19)
-
