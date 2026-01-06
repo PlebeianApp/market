@@ -1,6 +1,6 @@
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query'
 import { RouterProvider, createRouter } from '@tanstack/react-router'
-import { StrictMode, useEffect, useState, useMemo } from 'react'
+import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import '../styles/index.css'
 import { createQueryClient } from './lib/queryClient'

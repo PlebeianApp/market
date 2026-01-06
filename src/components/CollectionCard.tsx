@@ -1,33 +1,18 @@
-import { ndkActions } from '@/lib/stores/ndk.ts'
 import { uiActions } from '@/lib/stores/ui'
 import { getCollectionId, getCollectionImages, getCollectionSummary, getCollectionTitle } from '@/queries/collections.tsx'
 import { profileByIdentifierQueryOptions, useProfileName } from '@/queries/profiles'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
 
 export function CollectionCard({ collection }: { collection: NDKEvent }) {
 	const title = getCollectionTitle(collection)
 	const collectionId = getCollectionId(collection)
 	const pubkey = collection.pubkey
 	const summary = getCollectionSummary(collection)
-	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(null)
-	const [isOwnCollection, setIsOwnCollection] = useState(false)
 	const images = getCollectionImages(collection)
 	const { data: name, isLoading } = useProfileName(pubkey)
 	const location = useLocation()
-
-	// Check if current user is the creator of the collection
-	useEffect(() => {
-		const checkIfOwnCollection = async () => {
-			const user = await ndkActions.getUser()
-			if (user?.pubkey) {
-				setCurrentUserPubkey(user.pubkey)
-				setIsOwnCollection(user.pubkey === collection.pubkey)
-			}
-		}
-	}, [collection.pubkey])
 
 	const handleCollectionClick = () => {
 		// Store the current path as the source path

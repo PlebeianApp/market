@@ -160,7 +160,7 @@ export const ndkActions = {
 		}
 
 		const explicitRelays = getRelayUrls(relays)
-		// @ts-ignore
+		// @ts-ignore - Bun.env is available in Bun runtime
 		const localRelayOnly = typeof Bun !== 'undefined' && Bun.env?.LOCAL_RELAY_ONLY === 'true'
 
 		const ndk = new NDK({
