@@ -38,4 +38,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 playwright-report
 test-results
-.claude
+
+# Claude Code local settings (user-specific)
+.claude/settings.local.json
+__pycache__/
