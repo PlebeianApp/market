@@ -99,8 +99,8 @@ export function ProductFormContent({
 		// Only auto-switch to shipping tab if:
 		// 1. We haven't handled this session yet
 		// 2. User should see shipping first (no shipping options)
-		// 3. We're on the name tab (default initial state)
-		if (handledSessionIdRef.current !== formSessionId && shouldShowShippingFirst && activeTab === 'name') {
+		// 3. We're NOT already on the shipping tab
+		if (handledSessionIdRef.current !== formSessionId && shouldShowShippingFirst && activeTab !== 'shipping') {
 			productFormActions.updateValues({ activeTab: 'shipping' })
 			handledSessionIdRef.current = formSessionId
 		}
