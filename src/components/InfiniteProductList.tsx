@@ -91,9 +91,19 @@ export function InfiniteProductList({
 
 	if (isLoading) {
 		return (
-			<div className="flex flex-col items-center justify-center py-12">
-				<Loader2 className="w-8 h-8 animate-spin mb-4" />
-				<p className="text-gray-600">Loading products...</p>
+			<div className={cn('w-full max-w-full overflow-hidden', className)} ref={containerRef}>
+				{title && (
+					<div className="mb-4">
+						{typeof title === 'string' ? <h1 className="text-xl sm:text-2xl font-heading text-center sm:text-left">{title}</h1> : title}
+					</div>
+				)}
+
+				<div className="sr-only" aria-live="polite">
+					Loading products...
+				</div>
+
+				{/* Reserve space so the page doesn't "blink"/jump while products load */}
+				<div className="min-h-[60vh]" />
 			</div>
 		)
 	}

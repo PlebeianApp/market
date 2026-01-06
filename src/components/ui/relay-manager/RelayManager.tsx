@@ -28,20 +28,28 @@ export function RelayManager() {
 
 	// Listen for relay changes
 	useEffect(() => {
-		if (!ndk) return
+		if (!ndk || !ndk.pool) return
 
 		const updateRelays = () => {
 			const currentRelays = ndkActions.getRelays()
 			setRelays(currentRelays)
 		}
 
-		// Listen for relay events
-		ndk.pool.on('relay:connect', updateRelays)
-		ndk.pool.on('relay:disconnect', updateRelays)
+		// Listen for relay events - wrap in try/catch to handle potential errors
+		try {
+			ndk.pool.on('relay:connect', updateRelays)
+			ndk.pool.on('relay:disconnect', updateRelays)
+		} catch (error) {
+			console.error('Failed to attach relay event listeners:', error)
+		}
 
 		return () => {
-			ndk.pool.off('relay:connect', updateRelays)
-			ndk.pool.off('relay:disconnect', updateRelays)
+			try {
+				ndk.pool.off('relay:connect', updateRelays)
+				ndk.pool.off('relay:disconnect', updateRelays)
+			} catch (error) {
+				console.error('Failed to remove relay event listeners:', error)
+			}
 		}
 	}, [ndk, ndkActions.getRelays])
 
