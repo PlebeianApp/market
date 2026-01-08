@@ -43,11 +43,17 @@ async function initializeAppSettings() {
 
 export type NostrMessage = ['EVENT', Event]
 
+// Track initialization state
+let eventHandlerReady = false
+
 getEventHandler()
 	.initialize({
 		appPrivateKey: process.env.APP_PRIVATE_KEY || '',
 		adminPubkeys: [],
 		relayUrl: RELAY_URL,
+	})
+	.then(() => {
+		eventHandlerReady = true
 	})
 	.catch((error) => console.error(error))
 
@@ -115,6 +121,13 @@ export const server = serve({
 
 				if (Array.isArray(data) && data[0] === 'EVENT' && data[1].sig) {
 					console.log('Processing EVENT message')
+
+					// Check if EventHandler is ready
+					if (!eventHandlerReady) {
+						const errorResponse = ['OK', data[1].id, false, 'error: Server initializing, please try again']
+						ws.send(JSON.stringify(errorResponse))
+						return
+					}
 
 					if (!verifyEvent(data[1] as Event)) throw Error('Unable to verify event')
 
