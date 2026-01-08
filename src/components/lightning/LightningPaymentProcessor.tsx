@@ -389,7 +389,16 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 				toast.error(`NWC payment failed: ${errorMessage}`)
 				onPaymentFailed?.({ success: false, invoiceId: data.invoiceId, error: errorMessage })
 			}
-		}, [data.invoiceId, effectiveNwcWalletUri, invoice, ndkState.ndk?.signer, handlePaymentSuccess, onPaymentFailed, stopZapMonitoring, waitForZapReceipt])
+		}, [
+			data.invoiceId,
+			effectiveNwcWalletUri,
+			invoice,
+			ndkState.ndk?.signer,
+			handlePaymentSuccess,
+			onPaymentFailed,
+			stopZapMonitoring,
+			waitForZapReceipt,
+		])
 
 		/**
 		 * Handle WebLN payment

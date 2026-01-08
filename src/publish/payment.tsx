@@ -200,9 +200,9 @@ export const payInvoiceWithNwc = async (params: PayWithNwcParams): Promise<strin
 			return candidate
 		}
 
-			// Some wallets (e.g. Primal) may not return a real Lightning preimage.
-			// Treat the successful response as an ACK and rely on zap receipts / other signals for confirmation.
-			return 'external-payment'
+		// Some wallets (e.g. Primal) may not return a real Lightning preimage.
+		// Treat the successful response as an ACK and rely on zap receipts / other signals for confirmation.
+		return 'external-payment'
 	} catch (error) {
 		console.error('❌ NWC payment failed:', error)
 		throw new Error(`NWC payment failed: ${error instanceof Error ? error.message : 'Unknown error'}`)

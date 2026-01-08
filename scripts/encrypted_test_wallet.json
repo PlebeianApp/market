@@ -1,8 +1,8 @@
 {
-  "version": 1,
-  "description": "Encrypted NWC test wallet for seeding. Decrypt with APP_PRIVATE_KEY.",
-  "encryptedWith": "nip04",
-  "appPubkey": "154d523874b66ef09edfa4775fb6c7e99f11ffc3babfa6a4dd2c804a730175dd",
-  "encryptedWallet": "qhVl3j6RQn0ir4KAEN52y7AsacAA1X8uiSxrT2uNSXU4/4SeCWYmh+Y3VDxO9hYvIr9QoGeXXhH95et2rba74QR2hFQ2VLX/1t0l8zRQlCpOGpyU6RpEReCyjwylUJFmqhzwUQ7/plL0GglM0lS5QgSAfJ7w1kiDZu3Rb9/ZhGRWqhagy9Ndq83K7nhtAQAzDhUgHxgDNSk6c2uAGplaNZ13nVn3GrHcuVqw3BebkW3SgdwycFlBdSmAIzPtoH1dzVFfUJjdqjjGjIK/eu2pYSfBsU6FrUbQbaktE0LS0lY=?iv=UAty2zB9oE5ezkLeFgPu1Q==",
-  "createdAt": "2026-01-08T07:47:40.770Z"
+	"version": 1,
+	"description": "Encrypted NWC test wallet for seeding. Decrypt with APP_PRIVATE_KEY.",
+	"encryptedWith": "nip04",
+	"appPubkey": "154d523874b66ef09edfa4775fb6c7e99f11ffc3babfa6a4dd2c804a730175dd",
+	"encryptedWallet": "qhVl3j6RQn0ir4KAEN52y7AsacAA1X8uiSxrT2uNSXU4/4SeCWYmh+Y3VDxO9hYvIr9QoGeXXhH95et2rba74QR2hFQ2VLX/1t0l8zRQlCpOGpyU6RpEReCyjwylUJFmqhzwUQ7/plL0GglM0lS5QgSAfJ7w1kiDZu3Rb9/ZhGRWqhagy9Ndq83K7nhtAQAzDhUgHxgDNSk6c2uAGplaNZ13nVn3GrHcuVqw3BebkW3SgdwycFlBdSmAIzPtoH1dzVFfUJjdqjjGjIK/eu2pYSfBsU6FrUbQbaktE0LS0lY=?iv=UAty2zB9oE5ezkLeFgPu1Q==",
+	"createdAt": "2026-01-08T07:47:40.770Z"
 }

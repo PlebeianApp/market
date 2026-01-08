@@ -97,10 +97,7 @@ export async function handleNWCPayment(
  * @param options Additional options
  * @returns WalletPayResult with a validated preimage if available
  */
-export async function handleWebLNPayment(
-	bolt11: string,
-	options: { acceptAck?: boolean } = {},
-): Promise<WalletPayResult> {
+export async function handleWebLNPayment(bolt11: string, options: { acceptAck?: boolean } = {}): Promise<WalletPayResult> {
 	const method: WalletPaymentMethod = 'webln'
 	if (!window.webln) {
 		return { ok: false, ack: false, method, error: 'WebLN not available' }

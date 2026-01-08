@@ -109,13 +109,7 @@ export async function loadTestWallet(appPrivateKey: string): Promise<string | nu
 /**
  * Generate wallet names for test wallets
  */
-const walletNames = [
-	'Primary Lightning Wallet',
-	'Backup Wallet',
-	'Daily Spending',
-	'Savings Wallet',
-	'Business Wallet',
-]
+const walletNames = ['Primary Lightning Wallet', 'Backup Wallet', 'Daily Spending', 'Savings Wallet', 'Business Wallet']
 
 /**
  * Create and save NWC wallets for a user using the encrypted test wallet.
