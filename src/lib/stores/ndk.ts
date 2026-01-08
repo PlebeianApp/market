@@ -453,7 +453,7 @@ export const ndkActions = {
 		const state = ndkStore.state
 		if (!state.zapNdk || !state.isZapNdkConnected) {
 			console.warn('Zap NDK not connected. Cannot create zap subscription.')
-			return () => {}
+			return () => { }
 		}
 
 		const filters: any = {
@@ -489,7 +489,7 @@ export const ndkActions = {
 	/**
 	 * Monitors a specific lightning invoice for zap receipts
 	 * @param bolt11 Lightning invoice to monitor
-	 * @param onZapReceived Callback when zap is detected
+	 * @param onZapReceived Callback when zap is detected (receives preimage from receipt)
 	 * @param timeoutMs Optional timeout in milliseconds (default: 30 seconds)
 	 * @returns Cleanup function
 	 */
@@ -504,8 +504,28 @@ export const ndkActions = {
 			const eventBolt11 = event.tagValue('bolt11')
 			if (eventBolt11 === bolt11 && !hasReceivedZap) {
 				hasReceivedZap = true
-				const preimage = event.tagValue('preimage') || event.tagValue('payment_hash') || 'zap-receipt-confirmed'
-				console.log('⚡ Zap receipt detected! Preimage:', preimage.substring(0, 20) + '...')
+
+				// Try to extract preimage from zap receipt per NIP-57
+				// The preimage tag is optional (MAY contain), so we need fallbacks
+				const receiptPreimage = event.tagValue('preimage')
+
+				// Log all available tags for debugging
+				console.log('📋 Zap receipt tags:', {
+					bolt11: eventBolt11?.substring(0, 30) + '...',
+					receiptPreimage: receiptPreimage || 'not included',
+					eventId: event.id,
+					pubkey: event.pubkey.substring(0, 16) + '...',
+					allTags: event.tags.map(t => t[0]),
+				})
+
+				// Use receipt preimage if available, or fall back to event ID
+				// The caller (LightningPaymentProcessor) may override this with wallet preimage
+				const preimage = receiptPreimage || `zap:${event.id}`
+
+				console.log('⚡ Zap receipt detected!', {
+					preimageSource: receiptPreimage ? 'receipt' : 'event-id',
+					preimage: preimage.substring(0, 30) + '...',
+				})
 				onZapReceived(preimage)
 
 				// Cleanup after successful detection

@@ -860,7 +860,7 @@ function RouteComponent() {
 											invoices={[]} // No invoices yet in summary step
 											totalInSats={totalInSats}
 											onNewOrder={goBackToShopping}
-											// Note: onContinueToPayment moved to footer
+										// Note: onContinueToPayment moved to footer
 										/>
 									</div>
 									<div className="flex-shrink-0 bg-white border-t pt-4">
