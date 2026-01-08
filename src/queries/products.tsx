@@ -925,16 +925,16 @@ export const fetchProductsBySearchWithSellers = async (
 	// Run product search and seller search in parallel
 	const [productResults, sellerPubkeys] = await Promise.all([fetchProductsBySearch(query, limit), fetchSellersBySearch(query, 5)])
 
-	// If we found matching sellers, fetch their products
-	// We use fetchProducts() which queries all connected relays where products are stored,
-	// then filter by seller pubkeys. Direct author queries don't work with search-only relays.
+	// If we found matching sellers, fetch their products directly by author pubkey
+	// This queries the regular connected relays (not search relays) which support author filters
 	let sellerProducts: import('@nostr-dev-kit/ndk').NDKEvent[] = []
 	if (sellerPubkeys.length > 0) {
 		try {
-			const allProducts = await fetchProducts(200)
-			sellerProducts = allProducts.filter((product) => sellerPubkeys.includes(product.pubkey))
+			const sellerProductPromises = sellerPubkeys.map((pubkey) => fetchProductsByPubkey(pubkey, false, 20))
+			const sellerProductArrays = await Promise.all(sellerProductPromises)
+			sellerProducts = sellerProductArrays.flat()
 		} catch (err) {
-			console.error('Failed to fetch products for seller filtering:', err)
+			console.error('Failed to fetch seller products:', err)
 		}
 	}
 
