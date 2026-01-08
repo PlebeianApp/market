@@ -92,11 +92,21 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 		const currentPaymentData = useMemo((): LightningPaymentData | null => {
 			if (!currentInvoice) return null
 
-			// Determine if this is conceptually a zap invoice (for monitoring purposes)
-			const isZapInvoice = currentInvoice.isZap ?? currentInvoice.type === 'v4v'
+			// For checkout payments, we should ALWAYS treat Lightning payments as zap-capable
+			// because:
+			// 1. LNURL servers may publish zap receipts even for regular invoices
+			// 2. Some wallets (like Primal) don't return preimages
+			// 3. Zap receipt monitoring provides reliable payment confirmation
+			// 
+			// isZap from invoice generation only indicates if NIP-57 zapInvoice was used,
+			// but the LNURL server may still support/publish zap receipts regardless.
+			const hasRecipientPubkey = !!currentInvoice.recipientPubkey
+			const isZapInvoice = currentInvoice.isZap || currentInvoice.type === 'v4v' || hasRecipientPubkey
+
 			let recipient: NDKUser | undefined
 
-			if (isZapInvoice && ndkState.ndk) {
+			// Create NDKUser for zap monitoring if we have a recipient pubkey
+			if (hasRecipientPubkey && ndkState.ndk) {
 				recipient = ndkState.ndk.getUser({ pubkey: currentInvoice.recipientPubkey })
 			}
 
@@ -108,10 +118,11 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 				description: currentInvoice.description,
 				recipientName: currentInvoice.recipientName,
 				bolt11: existingBolt11,
-				// isZap controls two things:
+				// isZap controls:
 				// 1. Whether to generate a new zap invoice (only if no bolt11)
-				// 2. Whether to monitor for zap receipts (always for zap invoices)
-				// We need isZap=true for monitoring even if we have a bolt11
+				// 2. Whether to monitor for zap receipts
+				// 3. Whether to wait for zap receipt vs requiring wallet preimage
+				// We set isZap=true for all checkout payments to ensure proper handling
 				isZap: isZapInvoice,
 				recipient: recipient as NDKUser | undefined,
 				orderId: currentInvoice.orderId,

@@ -266,7 +266,18 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 					})
 					handlePaymentSuccess(finalPreimage)
 				},
-				90000, // 90 second timeout for zap receipts
+				15000, // 15 second timeout for zap receipts (reduced for faster feedback)
+				// Timeout callback - if no zap receipt arrives, use wallet preimage if available
+				() => {
+					if (walletPreimageRef.current) {
+						console.log('⏰ No zap receipt received, but have wallet preimage - confirming payment')
+						handlePaymentSuccess(walletPreimageRef.current)
+					} else {
+						console.log('⏰ No zap receipt and no wallet preimage - payment may have failed or receipt not propagated')
+						// Don't auto-fail here - user can still manually verify or the payment might have succeeded
+						setIsPaymentInProgress(false)
+					}
+				},
 			)
 
 			setPaymentMonitoring(() => stopMonitoring)
@@ -319,27 +330,42 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 
 				console.log('💳 NWC lnPay response:', response)
 
-				// For zaps: always wait for zap receipt as primary confirmation
-				// Zap receipts are verifiable Nostr events that can be queried at any time
+				// For zaps: decide whether to wait for zap receipt or immediately confirm
+				// Zap receipts only come if invoice was generated via NDKZapper with zap request embedded
 				if (data.isZap) {
-					if (response?.preimage) {
-						// Validate preimage like legacy code does - ensure SHA256(preimage) = payment_hash
+					// Check if we got a valid preimage from wallet
+					const hasValidPreimage = response?.preimage && (() => {
 						const invoiceObj = new Invoice({ pr: invoice })
-						const isValidPreimage = invoiceObj.validatePreimage(response.preimage)
+						return invoiceObj.validatePreimage(response.preimage)
+					})()
 
-						if (isValidPreimage) {
-							console.log('✅ NWC payment sent successfully, preimage validated:', response.preimage.substring(0, 20) + '...')
-							// Store the validated wallet preimage for zap monitoring to use
-							walletPreimageRef.current = response.preimage
-						} else {
-							console.log('⚠️ NWC returned preimage but validation failed (not a real Lightning preimage):', response.preimage.substring(0, 20) + '...')
-							// Don't store invalid preimage - will fall back to zap receipt preimage
-						}
+					if (hasValidPreimage) {
+						console.log('✅ NWC payment sent successfully, preimage validated:', response.preimage.substring(0, 20) + '...')
+						// Store the validated wallet preimage for zap monitoring to use
+						walletPreimageRef.current = response.preimage
+					} else if (response?.preimage) {
+						console.log('⚠️ NWC returned preimage but validation failed:', response.preimage.substring(0, 20) + '...')
 					} else {
 						console.log('✅ NWC payment sent successfully (no preimage returned - common with Primal wallets)')
 					}
-					console.log('👀 Waiting for zap receipt event to confirm payment...')
-					// Keep isPaymentInProgress true - zap receipt monitoring will call handlePaymentSuccess
+
+					// KEY FIX: If we have a pre-generated bolt11, this is a checkout invoice (not a true zap)
+					// The LNURL server won't publish a zap receipt because no zap request was embedded
+					// So we should immediately confirm if we have a preimage, or trust the payment succeeded
+					if (data.bolt11) {
+						console.log('📦 Checkout payment (pre-generated bolt11) - confirming immediately')
+						if (hasValidPreimage) {
+							handlePaymentSuccess(response.preimage)
+						} else {
+							// No preimage available, but NWC call succeeded without error
+							// Trust that the payment went through
+							handlePaymentSuccess('payment-sent-no-preimage')
+						}
+					} else {
+						// True zap invoice (generated via NDKZapper) - wait for zap receipt
+						console.log('👀 Waiting for zap receipt event to confirm payment...')
+						// Keep isPaymentInProgress true - zap receipt monitoring will call handlePaymentSuccess
+					}
 				} else {
 					// For non-zap payments, use preimage as confirmation
 					if (response?.preimage) {
@@ -391,27 +417,42 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 					preimagePreview: result.preimage ? result.preimage.substring(0, 20) + '...' : 'none',
 				})
 
-				// For zaps: always wait for zap receipt as primary confirmation
-				// Zap receipts are verifiable Nostr events that can be queried at any time
+				// For zaps: decide whether to wait for zap receipt or immediately confirm
+				// Zap receipts only come if invoice was generated via NDKZapper with zap request embedded
 				if (data.isZap) {
-					if (result.preimage) {
-						// Validate preimage like legacy code does - ensure SHA256(preimage) = payment_hash
+					// Check if we got a valid preimage from wallet
+					const hasValidPreimage = result.preimage && (() => {
 						const invoiceObj = new Invoice({ pr: invoice })
-						const isValidPreimage = invoiceObj.validatePreimage(result.preimage)
+						return invoiceObj.validatePreimage(result.preimage)
+					})()
 
-						if (isValidPreimage) {
-							console.log('✅ WebLN payment sent successfully, preimage validated:', result.preimage.substring(0, 20) + '...')
-							// Store the validated wallet preimage for zap monitoring to use
-							walletPreimageRef.current = result.preimage
-						} else {
-							console.log('⚠️ WebLN returned preimage but validation failed (not a real Lightning preimage):', result.preimage.substring(0, 20) + '...')
-							// Don't store invalid preimage - will fall back to zap receipt preimage
-						}
+					if (hasValidPreimage) {
+						console.log('✅ WebLN payment sent successfully, preimage validated:', result.preimage.substring(0, 20) + '...')
+						// Store the validated wallet preimage for zap monitoring to use
+						walletPreimageRef.current = result.preimage
+					} else if (result.preimage) {
+						console.log('⚠️ WebLN returned preimage but validation failed:', result.preimage.substring(0, 20) + '...')
 					} else {
 						console.log('✅ WebLN payment sent successfully (no preimage returned)')
 					}
-					console.log('👀 Waiting for zap receipt event to confirm payment...')
-					// Keep isPaymentInProgress true - zap receipt monitoring will call handlePaymentSuccess
+
+					// KEY FIX: If we have a pre-generated bolt11, this is a checkout invoice (not a true zap)
+					// The LNURL server won't publish a zap receipt because no zap request was embedded
+					// So we should immediately confirm if we have a preimage, or trust the payment succeeded
+					if (data.bolt11) {
+						console.log('📦 Checkout payment (pre-generated bolt11) - confirming immediately')
+						if (hasValidPreimage) {
+							handlePaymentSuccess(result.preimage)
+						} else {
+							// No preimage available, but WebLN call succeeded without error
+							// Trust that the payment went through
+							handlePaymentSuccess('payment-sent-no-preimage')
+						}
+					} else {
+						// True zap invoice (generated via NDKZapper) - wait for zap receipt
+						console.log('👀 Waiting for zap receipt event to confirm payment...')
+						// Keep isPaymentInProgress true - zap receipt monitoring will call handlePaymentSuccess
+					}
 				} else {
 					// For non-zap payments, use preimage as confirmation
 					if (result.preimage) {

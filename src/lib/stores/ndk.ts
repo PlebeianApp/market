@@ -491,9 +491,10 @@ export const ndkActions = {
 	 * @param bolt11 Lightning invoice to monitor
 	 * @param onZapReceived Callback when zap is detected (receives preimage from receipt)
 	 * @param timeoutMs Optional timeout in milliseconds (default: 30 seconds)
+	 * @param onTimeout Optional callback when timeout is reached without receiving a zap receipt
 	 * @returns Cleanup function
 	 */
-	monitorZapPayment: (bolt11: string, onZapReceived: (preimage: string) => void, timeoutMs: number = 30000): (() => void) => {
+	monitorZapPayment: (bolt11: string, onZapReceived: (preimage: string) => void, timeoutMs: number = 30000, onTimeout?: () => void): (() => void) => {
 		console.log('👀 Starting zap payment monitoring for invoice:', bolt11.substring(0, 20) + '...')
 
 		let hasReceivedZap = false
@@ -541,7 +542,14 @@ export const ndkActions = {
 		const timeout = setTimeout(() => {
 			if (!hasReceivedZap) {
 				console.log('⏰ Zap monitoring timeout reached for invoice:', bolt11.substring(0, 20) + '...')
-				console.log('💡 Tip: The zap may have succeeded but the receipt may not have propagated to relays yet')
+				if (onTimeout) {
+					console.log('🔄 Triggering timeout callback...')
+					onTimeout()
+				} else {
+					console.log('💡 Tip: The zap may have succeeded but the receipt may not have propagated to relays yet')
+				}
+				// Cleanup on timeout
+				cleanupFunctions.forEach((fn) => fn())
 			}
 		}, timeoutMs)
 

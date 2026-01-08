@@ -23,7 +23,7 @@ import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useForm } from '@tanstack/react-form'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { ChevronLeft, ChevronRight, Zap } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, Zap } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -46,6 +46,7 @@ function RouteComponent() {
 	const [mobileOrderSummaryOpen, setMobileOrderSummaryOpen] = useState(false)
 	const [selectedWallets, setSelectedWallets] = useState<Record<string, string>>({}) // sellerPubkey -> paymentDetailId
 	const [availableWalletsBySeller, setAvailableWalletsBySeller] = useState<Record<string, PaymentDetail[]>>({})
+	const [isCreatingOrder, setIsCreatingOrder] = useState(false) // Loading state for order creation
 
 	// Ref to control PaymentContent
 	const paymentContentRef = useRef<PaymentContentRef>(null)
@@ -691,6 +692,7 @@ function RouteComponent() {
 
 	const handleContinueToPayment = async () => {
 		if (shippingData && sellers.length > 0 && specOrderIds.length === 0) {
+			setIsCreatingOrder(true)
 			try {
 				const createdOrderIds = await publishOrderWithDependencies({
 					shippingData,
@@ -704,12 +706,14 @@ function RouteComponent() {
 			} catch (error) {
 				console.error('Failed to create spec-compliant orders:', error)
 				toast.error(`Order creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+				setIsCreatingOrder(false)
 				return
 			}
 		}
 
 		// Move to payment step once orders exist
 		setCurrentStep('payment')
+		setIsCreatingOrder(false)
 	}
 
 	const formatSats = (sats: number): string => {
@@ -864,8 +868,19 @@ function RouteComponent() {
 										/>
 									</div>
 									<div className="flex-shrink-0 bg-white border-t pt-4">
-										<Button onClick={handleContinueToPayment} className="w-full btn-black">
-											Continue to Payment
+										<Button
+											onClick={handleContinueToPayment}
+											className="w-full btn-black"
+											disabled={isCreatingOrder}
+										>
+											{isCreatingOrder ? (
+												<>
+													<Loader2 className="mr-2 h-4 w-4 animate-spin" />
+													Creating Order...
+												</>
+											) : (
+												'Continue to Payment'
+											)}
 										</Button>
 									</div>
 								</div>
