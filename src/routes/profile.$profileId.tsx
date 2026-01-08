@@ -1,3 +1,4 @@
+import { ShareProfileDialog } from '@/components/dialogs/ShareProfileDialog'
 import { EntityActionsMenu } from '@/components/EntityActionsMenu'
 import { ItemGrid } from '@/components/ItemGrid'
 import { Header } from '@/components/layout/Header'
@@ -45,6 +46,7 @@ function RouteComponent() {
 
 	const [showFullAbout, setShowFullAbout] = useState(false)
 	const [bannerIsLoadable, setBannerIsLoadable] = useState<boolean | null>(null)
+	const [shareDialogOpen, setShareDialogOpen] = useState(false)
 	const breakpoint = useBreakpoint()
 	const isSmallScreen = breakpoint === 'sm'
 	const queryClient = useQueryClient()
@@ -201,7 +203,7 @@ function RouteComponent() {
 							<Button variant="focus" size="icon" onClick={handleMessageClick}>
 								<MessageCircle className="w-5 h-5" />
 							</Button>
-							<Button variant="secondary" size="icon">
+							<Button variant="secondary" size="icon" onClick={() => setShareDialogOpen(true)}>
 								<Share2 className="w-5 h-5" />
 							</Button>
 							{/* Edit button for profile owner */}
@@ -275,6 +277,13 @@ function RouteComponent() {
 					)}
 				</div>
 			</div>
+
+			<ShareProfileDialog
+				open={shareDialogOpen}
+				onOpenChange={setShareDialogOpen}
+				pubkey={user?.pubkey || ''}
+				profileName={profile?.name}
+			/>
 		</div>
 	)
 }
