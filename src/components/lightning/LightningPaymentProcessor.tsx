@@ -106,6 +106,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 		const [invoice, setInvoice] = useState<string | null>(data.bolt11 || null)
 		const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false)
 		const [isPaymentInProgress, setIsPaymentInProgress] = useState(false)
+		const [isCheckingForReceipt, setIsCheckingForReceipt] = useState(false)
 		const [manualPreimage, setManualPreimage] = useState('')
 
 		// Refs for controlling behavior
@@ -141,6 +142,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 				zapMonitorCleanupRef.current()
 				zapMonitorCleanupRef.current = null
 			}
+			setIsCheckingForReceipt(false)
 		}, [])
 
 		/**
@@ -252,16 +254,19 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 
 				return await new Promise((resolve) => {
 					stopZapMonitoring()
+					setIsCheckingForReceipt(true)
 					zapWaiterResolveRef.current = resolve
 					zapMonitorCleanupRef.current = ndkActions.monitorZapPayment(
 						bolt11,
 						(receipt) => {
 							zapWaiterResolveRef.current = null
+							setIsCheckingForReceipt(false)
 							resolve(receipt)
 						},
 						timeoutMs,
 						() => {
 							zapWaiterResolveRef.current = null
+							setIsCheckingForReceipt(false)
 							resolve(null)
 						},
 					)
@@ -269,6 +274,63 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			},
 			[active, monitorZapReceipt, ndkState.isZapNdkConnected, stopZapMonitoring],
 		)
+
+		/**
+		 * Background monitoring for externally-paid invoices (QR / open-in-wallet).
+		 * Mirrors the legacy approach: subscribe as soon as we have an invoice and
+		 * finalize on a matching zap receipt.
+		 */
+		useEffect(() => {
+			if (!invoice || !active || !monitorZapReceipt) return
+			if (isGeneratingInvoice || isPaymentInProgress) return
+			if (hasCompletedRef.current) return
+
+			let disposed = false
+
+			const start = async () => {
+				try {
+					if (!ndkState.isZapNdkConnected) {
+						await ndkActions.connectZapNdk()
+					}
+				} catch (error) {
+					console.warn('Zap NDK not available; background monitoring disabled', error)
+					return
+				}
+
+				if (disposed) return
+
+				stopZapMonitoring()
+				setIsCheckingForReceipt(true)
+
+				zapMonitorCleanupRef.current = ndkActions.createZapReceiptSubscription((event) => {
+					if (hasCompletedRef.current) return
+
+					const receiptPreimage = event.tagValue('preimage') || undefined
+					if (receiptPreimage && validatePreimage(invoice, receiptPreimage)) {
+						handlePaymentSuccess({ type: 'preimage', preimage: receiptPreimage })
+						return
+					}
+
+					handlePaymentSuccess({ type: 'zap_receipt', eventId: event.id })
+				}, invoice)
+			}
+
+			void start()
+
+			return () => {
+				disposed = true
+				stopZapMonitoring()
+			}
+		}, [
+			active,
+			handlePaymentSuccess,
+			invoice,
+			isGeneratingInvoice,
+			isPaymentInProgress,
+			monitorZapReceipt,
+			ndkState.isZapNdkConnected,
+			stopZapMonitoring,
+		])
 
 		/**
 		 * Handle NWC (Nostr Wallet Connect) payment
@@ -585,6 +647,14 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 										</Button>
 									</div>
 								</div>
+
+								{/* Passive monitoring status */}
+								{isCheckingForReceipt && !isPaymentInProgress && (
+									<div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+										<Loader2 className="h-4 w-4 animate-spin" />
+										<span>Checking for payment…</span>
+									</div>
+								)}
 							</div>
 						)}
 

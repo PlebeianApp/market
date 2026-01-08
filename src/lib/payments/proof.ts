@@ -14,9 +14,10 @@ export function paymentProofToReceiptPreimage(proof: PaymentProof): string {
 		case 'preimage':
 			return proof.preimage
 		case 'zap_receipt':
-			return proof.preimage || `zap:${proof.eventId}`
+			// If the receipt includes a valid payment preimage, use it; otherwise store the receipt event id (no prefix).
+			return proof.preimage || proof.eventId
 		case 'wallet_ack':
-			return `ack:${proof.method}:${proof.atMs}`
+			// Avoid type prefixes; an empty string is treated as "external-payment" by receipt consumers.
+			return ''
 	}
 }
-

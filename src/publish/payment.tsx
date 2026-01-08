@@ -200,11 +200,9 @@ export const payInvoiceWithNwc = async (params: PayWithNwcParams): Promise<strin
 			return candidate
 		}
 
-		// Some wallets (e.g. Primal) may not return a real Lightning preimage.
-		// Treat the successful response as an ACK and rely on zap receipts / other signals for confirmation.
-		const ack = `ack:nwc:${Date.now()}`
-		console.log(`✅ NWC payment successful (no valid preimage returned); using ACK: ${ack}`)
-		return ack
+			// Some wallets (e.g. Primal) may not return a real Lightning preimage.
+			// Treat the successful response as an ACK and rely on zap receipts / other signals for confirmation.
+			return 'external-payment'
 	} catch (error) {
 		console.error('❌ NWC payment failed:', error)
 		throw new Error(`NWC payment failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -232,8 +230,8 @@ export const payInvoiceWithWebln = async (bolt11: string): Promise<string> => {
 		return candidate
 	}
 
-	// WebLN is expected to return a preimage, but fall back to ACK if missing/invalid.
-	return `ack:webln:${Date.now()}`
+	// WebLN is expected to return a preimage, but fall back to a generic proof string if missing/invalid.
+	return 'external-payment'
 }
 
 /**
