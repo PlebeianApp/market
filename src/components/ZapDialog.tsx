@@ -62,12 +62,14 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 	// Create payment data for the processor
 	const paymentData: LightningPaymentData = useMemo(
 		() => ({
+			invoiceId: `zap-${recipientPubkey}-${paymentSessionId}`,
 			amount: isValidAmount ? numericAmount : 0,
 			description: zapMessage,
 			recipient: event,
 			isZap: true,
+			monitorZapReceipt: true,
 		}),
-		[numericAmount, zapMessage, event, isValidAmount],
+		[numericAmount, zapMessage, event, isValidAmount, recipientPubkey, paymentSessionId],
 	)
 
 	const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {

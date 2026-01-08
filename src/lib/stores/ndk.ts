@@ -489,12 +489,17 @@ export const ndkActions = {
 	/**
 	 * Monitors a specific lightning invoice for zap receipts
 	 * @param bolt11 Lightning invoice to monitor
-	 * @param onZapReceived Callback when zap is detected (receives preimage from receipt)
+	 * @param onZapReceived Callback when zap is detected (receives eventId and optional receipt preimage)
 	 * @param timeoutMs Optional timeout in milliseconds (default: 30 seconds)
 	 * @param onTimeout Optional callback when timeout is reached without receiving a zap receipt
 	 * @returns Cleanup function
 	 */
-	monitorZapPayment: (bolt11: string, onZapReceived: (preimage: string) => void, timeoutMs: number = 30000, onTimeout?: () => void): (() => void) => {
+	monitorZapPayment: (
+		bolt11: string,
+		onZapReceived: (receipt: { eventId: string; receiptPreimage?: string }) => void,
+		timeoutMs: number = 30000,
+		onTimeout?: () => void,
+	): (() => void) => {
 		console.log('👀 Starting zap payment monitoring for invoice:', bolt11.substring(0, 20) + '...')
 
 		let hasReceivedZap = false
@@ -519,15 +524,12 @@ export const ndkActions = {
 					allTags: event.tags.map(t => t[0]),
 				})
 
-				// Use receipt preimage if available, or fall back to event ID
-				// The caller (LightningPaymentProcessor) may override this with wallet preimage
-				const preimage = receiptPreimage || `zap:${event.id}`
-
 				console.log('⚡ Zap receipt detected!', {
 					preimageSource: receiptPreimage ? 'receipt' : 'event-id',
-					preimage: preimage.substring(0, 30) + '...',
+					receiptPreimage: receiptPreimage ? receiptPreimage.substring(0, 30) + '...' : 'not included',
+					eventId: event.id,
 				})
-				onZapReceived(preimage)
+				onZapReceived({ eventId: event.id, receiptPreimage: receiptPreimage || undefined })
 
 				// Cleanup after successful detection
 				setTimeout(() => {

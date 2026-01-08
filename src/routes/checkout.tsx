@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { CartSummary } from '@/components/CartSummary'
 import { CheckoutProgress } from '@/components/checkout/CheckoutProgress'
 import { OrderFinalizeComponent } from '@/components/checkout/OrderFinalizeComponent'
@@ -322,7 +321,7 @@ function RouteComponent() {
 							bolt11: sellerInvoice.bolt11 || null,
 							lightningAddress: sellerInvoice.lightningAddress || null,
 							expiresAt: sellerInvoice.expiresAt,
-							status: sellerInvoice.status === 'failed' ? 'expired' : (sellerInvoice.status as 'pending' | 'paid' | 'expired'),
+							status: sellerInvoice.status === 'failed' ? 'failed' : (sellerInvoice.status as 'pending' | 'paid' | 'expired'),
 							type: 'merchant',
 							createdAt: Date.now(),
 							isZap: sellerInvoice.isZap,
@@ -375,7 +374,7 @@ function RouteComponent() {
 										bolt11: recipientInvoice.bolt11 || null,
 										lightningAddress: recipientInvoice.lightningAddress || null,
 										expiresAt: recipientInvoice.expiresAt,
-										status: recipientInvoice.status === 'failed' ? 'expired' : (recipientInvoice.status as 'pending' | 'paid' | 'expired'),
+										status: recipientInvoice.status === 'failed' ? 'failed' : (recipientInvoice.status as 'pending' | 'paid' | 'expired'),
 										type: 'v4v',
 										createdAt: Date.now(),
 										isZap: recipientInvoice.isZap ?? true,
@@ -428,13 +427,13 @@ function RouteComponent() {
 
 	const findNextPendingInvoiceIndex = (list: PaymentInvoiceData[], fromIndex: number) => {
 		for (let i = fromIndex + 1; i < list.length; i++) {
-			if (list[i].status === 'pending') {
+			if (list[i].status === 'pending' || list[i].status === 'failed') {
 				return i
 			}
 		}
 
 		for (let i = 0; i <= fromIndex; i++) {
-			if (list[i].status === 'pending') {
+			if (list[i].status === 'pending' || list[i].status === 'failed') {
 				return i
 			}
 		}
@@ -516,11 +515,11 @@ function RouteComponent() {
 				if (invoice.id === invoiceId) {
 					const orderId = invoice.orderId !== 'temp-order' ? invoice.orderId : specOrderIds[0] || 'unknown-order'
 					updatePersistedInvoiceLocally(orderId, invoice.id, {
-						status: 'expired',
+						status: 'failed',
 					})
 					return {
 						...invoice,
-						status: 'expired' as const,
+						status: 'failed' as const,
 					}
 				}
 				return invoice
@@ -629,7 +628,7 @@ function RouteComponent() {
 					bolt11: newInvoiceData.bolt11,
 					lightningAddress: newInvoiceData.lightningAddress,
 					expiresAt: newInvoiceData.expiresAt,
-					status: newInvoiceData.status === 'failed' ? 'expired' : (newInvoiceData.status as 'pending' | 'paid' | 'expired'),
+						status: newInvoiceData.status === 'failed' ? 'failed' : (newInvoiceData.status as 'pending' | 'paid' | 'expired'),
 					isZap: newInvoiceData.isZap ?? oldInvoice.isZap,
 				}
 				return updated
@@ -641,7 +640,7 @@ function RouteComponent() {
 				lightningAddress: newInvoiceData.lightningAddress || undefined,
 				expiresAt: newInvoiceData.expiresAt,
 				isZap: newInvoiceData.isZap ?? oldInvoice.isZap,
-				status: newInvoiceData.status === 'failed' ? 'expired' : (newInvoiceData.status as 'pending' | 'paid' | 'expired'),
+				status: newInvoiceData.status === 'failed' ? 'failed' : (newInvoiceData.status as 'pending' | 'paid' | 'expired'),
 			})
 
 			console.log(`✅ Invoice regenerated successfully`)
@@ -931,14 +930,14 @@ function RouteComponent() {
 									{/* desktop header nav exists; mobile under-QR nav is handled inside LightningPaymentProcessor */}
 
 									{/* Pay All Button - Only show if NWC is enabled and there are unpaid invoices */}
-									{nwcEnabled && invoices.filter((inv) => inv.status === 'pending').length > 1 && (
-										<div className="flex justify-center mb-4">
-											<Button onClick={handlePayAllInvoices} className="btn-product-banner font-medium px-6 py-2" size="lg">
-												<Zap className="w-4 h-4 mr-2" />
-												Pay All with NWC ({invoices.filter((inv) => inv.status === 'pending').length} invoices)
-											</Button>
-										</div>
-									)}
+										{nwcEnabled && invoices.filter((inv) => inv.status === 'pending' || inv.status === 'failed').length > 1 && (
+											<div className="flex justify-center mb-4">
+												<Button onClick={handlePayAllInvoices} className="btn-product-banner font-medium px-6 py-2" size="lg">
+													<Zap className="w-4 h-4 mr-2" />
+													Pay All with NWC ({invoices.filter((inv) => inv.status === 'pending' || inv.status === 'failed').length} invoices)
+												</Button>
+											</div>
+										)}
 
 									{/* Payment Content - Inline instead of modal */}
 									<PaymentContent

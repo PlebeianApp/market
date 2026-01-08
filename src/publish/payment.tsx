@@ -8,6 +8,7 @@ import NDK from '@nostr-dev-kit/ndk'
 import { NDKNWCWallet, NDKWalletStatus } from '@nostr-dev-kit/wallet'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { validatePreimage } from '@/lib/utils/payment.utils'
 
 /**
  * Mutation hook for publishing payment details with query invalidation
@@ -180,25 +181,30 @@ export const payInvoiceWithNwc = async (params: PayWithNwcParams): Promise<strin
 	console.log(`Initiating NWC pay_invoice request for ${params.amount} sats`)
 
 	try {
-		// Create the NIP-47 pay_invoice request payload
-		const nwcRequest = {
-			method: 'pay_invoice',
-			params: {
-				invoice: bolt11,
-			},
-		}
-
-		// Send the NWC request using the wallet's lnPay method
 		const response = await nwcWalletForPayment.lnPay({
 			pr: bolt11,
 		})
 
-		if (!response || !response.preimage) {
-			throw new Error('Payment succeeded but no preimage was returned')
+		const candidate =
+			response?.preimage ||
+			// Some wallets may use different keys (or nest results)
+			(response as any)?.payment_preimage ||
+			(response as any)?.paymentPreimage ||
+			(response as any)?.preimageHex ||
+			(response as any)?.preimage_hex ||
+			(response as any)?.result?.preimage ||
+			undefined
+
+		if (typeof candidate === 'string' && candidate.length > 0 && validatePreimage(bolt11, candidate)) {
+			console.log(`✅ NWC payment successful, preimage: ${candidate.substring(0, 16)}...`)
+			return candidate
 		}
 
-		console.log(`✅ NWC payment successful, preimage: ${response.preimage.substring(0, 16)}...`)
-		return response.preimage
+		// Some wallets (e.g. Primal) may not return a real Lightning preimage.
+		// Treat the successful response as an ACK and rely on zap receipts / other signals for confirmation.
+		const ack = `ack:nwc:${Date.now()}`
+		console.log(`✅ NWC payment successful (no valid preimage returned); using ACK: ${ack}`)
+		return ack
 	} catch (error) {
 		console.error('❌ NWC payment failed:', error)
 		throw new Error(`NWC payment failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
@@ -221,11 +227,13 @@ export const payInvoiceWithWebln = async (bolt11: string): Promise<string> => {
 	await window.webln.enable()
 	const result = await window.webln.sendPayment(bolt11)
 
-	if (!result?.preimage) {
-		throw new Error('Payment failed or was cancelled. No preimage received.')
+	const candidate = result?.preimage
+	if (typeof candidate === 'string' && candidate.length > 0 && validatePreimage(bolt11, candidate)) {
+		return candidate
 	}
 
-	return result.preimage
+	// WebLN is expected to return a preimage, but fall back to ACK if missing/invalid.
+	return `ack:webln:${Date.now()}`
 }
 
 /**

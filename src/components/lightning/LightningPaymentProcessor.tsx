@@ -1,49 +1,45 @@
-// @ts-nocheck
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { QRCode } from '@/components/ui/qr-code'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { authStore } from '@/lib/stores/auth'
 import { ndkActions, ndkStore } from '@/lib/stores/ndk'
-import { walletActions } from '@/lib/stores/wallet'
+import type { PaymentProof } from '@/lib/payments/proof'
+import { paymentProofToReceiptPreimage } from '@/lib/payments/proof'
+import { handleNWCPayment, handleWebLNPayment, hasWebLN, validatePreimage } from '@/lib/utils/payment.utils'
 import { copyToClipboard } from '@/lib/utils'
-import { Invoice } from '@getalby/lightning-tools'
 import { NDKEvent, NDKUser, NDKZapper } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
 import { ChevronLeft, ChevronRight, Copy, CreditCard, Loader2, Zap } from 'lucide-react'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
-// WebLN types
-declare global {
-	interface Window {
-		webln?: {
-			enable(): Promise<void>
-			sendPayment(paymentRequest: string): Promise<{ preimage: string }>
-		}
-	}
-}
-
 export interface LightningPaymentData {
 	amount: number
 	description: string
-	recipient: NDKEvent | NDKUser
+	/** Required when `isZap === true` and no `bolt11` is provided (invoice generation via NDKZapper). */
+	recipient?: NDKEvent | NDKUser
 	recipientName?: string
 	bolt11?: string
 	isZap?: boolean
-	invoiceId?: string
+	invoiceId: string
+	/**
+	 * If enabled, the processor waits for a zap receipt (NIP-57) for the invoice.
+	 * If the receipt contains a preimage, it is the primary confirmation signal.
+	 */
+	monitorZapReceipt?: boolean
 }
 
 export interface PaymentResult {
 	success: boolean
+	invoiceId: string
 	preimage?: string
 	error?: string
-	paymentHash?: string
+	proofType?: PaymentProof['type']
 }
 
-interface PaymentCapabilities {
+export interface PaymentCapabilities {
 	hasNwc: boolean
 	hasWebLn: boolean
 	canManualVerify: boolean
@@ -104,7 +100,6 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 		},
 		ref,
 	) => {
-		const { user } = useStore(authStore)
 		const ndkState = useStore(ndkStore)
 
 		// Component state
@@ -112,12 +107,13 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 		const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false)
 		const [isPaymentInProgress, setIsPaymentInProgress] = useState(false)
 		const [manualPreimage, setManualPreimage] = useState('')
-		const [paymentMonitoring, setPaymentMonitoring] = useState<(() => void) | null>(null)
 
 		// Refs for controlling behavior
 		const hasRequestedInvoiceRef = useRef(false)
 		const hasCompletedRef = useRef(false)
-		const walletPreimageRef = useRef<string | null>(null) // Store wallet preimage for zap monitoring
+		const walletPreimageRef = useRef<string | null>(null)
+		const zapMonitorCleanupRef = useRef<(() => void) | null>(null)
+		const zapWaiterResolveRef = useRef<((receipt: { eventId: string; receiptPreimage?: string } | null) => void) | null>(null)
 		const previousDataRef = useRef<{ amount: number; description: string }>({
 			amount: data.amount,
 			description: data.description,
@@ -129,18 +125,30 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 		// Check payment capabilities
 		const capabilities: PaymentCapabilities = {
 			hasNwc: !!effectiveNwcWalletUri,
-			hasWebLn: typeof window !== 'undefined' && !!window.webln,
+			hasWebLn: hasWebLN(),
 			canManualVerify: showManualVerification,
 		}
 
 		const lightningUrl = invoice ? `lightning:${invoice}` : ''
+		const monitorZapReceipt = data.monitorZapReceipt !== false
+
+		const stopZapMonitoring = useCallback(() => {
+			if (zapWaiterResolveRef.current) {
+				zapWaiterResolveRef.current(null)
+				zapWaiterResolveRef.current = null
+			}
+			if (zapMonitorCleanupRef.current) {
+				zapMonitorCleanupRef.current()
+				zapMonitorCleanupRef.current = null
+			}
+		}, [])
 
 		/**
 		 * Generate a zap invoice using NDKZapper
 		 * This creates the invoice but doesn't automatically pay it
 		 */
 		const generateZapInvoice = useCallback(async () => {
-			if (!data.isZap || isGeneratingInvoice || !ndkState.ndk || !active) return
+			if (!data.isZap || data.bolt11 || !data.recipient || isGeneratingInvoice || !ndkState.ndk || !active) return
 
 			try {
 				setIsGeneratingInvoice(true)
@@ -198,11 +206,10 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 		])
 
 		/**
-		 * Handle successful payment
-		 * Cleanup monitoring and notify parent component
+		 * Finalize success once, stop monitoring, and notify parent.
 		 */
 		const handlePaymentSuccess = useCallback(
-			(preimage: string) => {
+			(proof: PaymentProof) => {
 				// Prevent duplicate success callbacks
 				if (hasCompletedRef.current) {
 					console.log('⚠️ Payment already completed, ignoring duplicate success')
@@ -210,261 +217,166 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 				}
 				hasCompletedRef.current = true
 
+				stopZapMonitoring()
 				console.log('✅ Payment successful:', {
 					invoiceId: data.invoiceId,
-					preimagePreview: preimage.substring(0, 20) + '...',
+					proofType: proof.type,
 				})
-
-				// Stop monitoring
-				if (paymentMonitoring) {
-					paymentMonitoring()
-					setPaymentMonitoring(null)
-				}
 
 				setIsPaymentInProgress(false)
 				onPaymentComplete?.({
 					success: true,
-					preimage,
-					paymentHash: data.invoiceId,
+					invoiceId: data.invoiceId,
+					preimage: paymentProofToReceiptPreimage(proof),
+					proofType: proof.type,
 				})
 			},
-			[paymentMonitoring, onPaymentComplete, data.invoiceId],
+			[onPaymentComplete, data.invoiceId, stopZapMonitoring],
 		)
 
 		/**
-		 * Start monitoring for zap receipts
-		 * Subscribes to zap events and looks for our specific invoice
+		 * Wait for a zap receipt for this invoice (or timeout).
 		 */
-		const startZapMonitoring = useCallback(async () => {
-			if (!invoice || !data.isZap || !active || paymentMonitoring) return
+		const waitForZapReceipt = useCallback(
+			async (bolt11: string, timeoutMs: number): Promise<{ eventId: string; receiptPreimage?: string } | null> => {
+				if (!monitorZapReceipt || !active) return null
 
-			// Ensure zap NDK is connected before starting monitoring
-			if (!ndkState.isZapNdkConnected) {
-				console.log('🔌 Connecting zap NDK for monitoring...')
 				try {
-					await ndkActions.connectZapNdk()
-				} catch (error) {
-					console.error('Failed to connect zap NDK:', error)
-					return
-				}
-			}
-
-			console.log('🔔 Starting zap monitoring:', {
-				invoiceId: data.invoiceId,
-				invoicePreview: invoice.substring(0, 30) + '...',
-			})
-
-			const stopMonitoring = ndkActions.monitorZapPayment(
-				invoice,
-				(receiptPreimage: string) => {
-					// Use wallet preimage if available (real Lightning preimage), otherwise use receipt preimage
-					const finalPreimage = walletPreimageRef.current || receiptPreimage
-					console.log('⚡ Zap receipt detected!', {
-						invoiceId: data.invoiceId,
-						preimageSource: walletPreimageRef.current ? 'wallet' : 'receipt',
-						preimagePreview: finalPreimage.substring(0, 20) + '...',
-					})
-					handlePaymentSuccess(finalPreimage)
-				},
-				15000, // 15 second timeout for zap receipts (reduced for faster feedback)
-				// Timeout callback - if no zap receipt arrives, use wallet preimage if available
-				() => {
-					if (walletPreimageRef.current) {
-						console.log('⏰ No zap receipt received, but have wallet preimage - confirming payment')
-						handlePaymentSuccess(walletPreimageRef.current)
-					} else {
-						console.log('⏰ No zap receipt and no wallet preimage - payment may have failed or receipt not propagated')
-						// Don't auto-fail here - user can still manually verify or the payment might have succeeded
-						setIsPaymentInProgress(false)
+					if (!ndkState.isZapNdkConnected) {
+						await ndkActions.connectZapNdk()
 					}
-				},
-			)
+				} catch (error) {
+					console.warn('Zap NDK not available; skipping zap receipt monitoring', error)
+					return null
+				}
 
-			setPaymentMonitoring(() => stopMonitoring)
-		}, [invoice, data.isZap, data.invoiceId, active, paymentMonitoring, ndkState.isZapNdkConnected, handlePaymentSuccess])
+				return await new Promise((resolve) => {
+					stopZapMonitoring()
+					zapWaiterResolveRef.current = resolve
+					zapMonitorCleanupRef.current = ndkActions.monitorZapPayment(
+						bolt11,
+						(receipt) => {
+							zapWaiterResolveRef.current = null
+							resolve(receipt)
+						},
+						timeoutMs,
+						() => {
+							zapWaiterResolveRef.current = null
+							resolve(null)
+						},
+					)
+				})
+			},
+			[active, monitorZapReceipt, ndkState.isZapNdkConnected, stopZapMonitoring],
+		)
 
 		/**
 		 * Handle NWC (Nostr Wallet Connect) payment
 		 * Uses the configured NWC wallet to pay the invoice
 		 */
 		const handleNwcPayment = useCallback(async () => {
-			console.log('🔄 handleNwcPayment called:', {
-				hasNwcUri: !!effectiveNwcWalletUri,
-				hasNdk: !!ndkState.ndk,
-				hasInvoice: !!invoice,
-				invoiceId: data.invoiceId,
-			})
-
 			if (!effectiveNwcWalletUri || !ndkState.ndk?.signer) {
 				toast.error('NWC wallet not connected')
 				return
 			}
-
 			if (!invoice) {
 				toast.error('No invoice available to pay')
 				return
 			}
 
 			setIsPaymentInProgress(true)
-
-			const nwcClient = await walletActions.getOrCreateNwcClient(effectiveNwcWalletUri, ndkState.ndk.signer)
-			if (!nwcClient) {
-				setIsPaymentInProgress(false)
-				toast.error('Invalid NWC wallet configuration')
-				return
-			}
+			stopZapMonitoring()
+			walletPreimageRef.current = null
 
 			try {
-				console.log('💳 Starting NWC payment:', {
-					invoiceId: data.invoiceId,
-					isZap: data.isZap,
-					amount: data.amount,
-					relay: nwcClient.relayUrl,
-					invoicePreview: invoice.substring(0, 30) + '...',
-				})
-
-				// Pay the invoice directly using lnPay - this works for both zaps and regular invoices
-				// The invoice was already generated (either via zapper or regular LNURL)
-				console.log('📤 Sending lnPay request...')
-				const response = await nwcClient.wallet.lnPay({ pr: invoice })
-
-				console.log('💳 NWC lnPay response:', response)
-
-				// For zaps: decide whether to wait for zap receipt or immediately confirm
-				// Zap receipts only come if invoice was generated via NDKZapper with zap request embedded
-				if (data.isZap) {
-					// Check if we got a valid preimage from wallet
-					const hasValidPreimage = response?.preimage && (() => {
-						const invoiceObj = new Invoice({ pr: invoice })
-						return invoiceObj.validatePreimage(response.preimage)
-					})()
-
-					if (hasValidPreimage) {
-						console.log('✅ NWC payment sent successfully, preimage validated:', response.preimage.substring(0, 20) + '...')
-						// Store the validated wallet preimage for zap monitoring to use
-						walletPreimageRef.current = response.preimage
-					} else if (response?.preimage) {
-						console.log('⚠️ NWC returned preimage but validation failed:', response.preimage.substring(0, 20) + '...')
-					} else {
-						console.log('✅ NWC payment sent successfully (no preimage returned - common with Primal wallets)')
-					}
-
-					// KEY FIX: If we have a pre-generated bolt11, this is a checkout invoice (not a true zap)
-					// The LNURL server won't publish a zap receipt because no zap request was embedded
-					// So we should immediately confirm if we have a preimage, or trust the payment succeeded
-					if (data.bolt11) {
-						console.log('📦 Checkout payment (pre-generated bolt11) - confirming immediately')
-						if (hasValidPreimage) {
-							handlePaymentSuccess(response.preimage)
-						} else {
-							// No preimage available, but NWC call succeeded without error
-							// Trust that the payment went through
-							handlePaymentSuccess('payment-sent-no-preimage')
-						}
-					} else {
-						// True zap invoice (generated via NDKZapper) - wait for zap receipt
-						console.log('👀 Waiting for zap receipt event to confirm payment...')
-						// Keep isPaymentInProgress true - zap receipt monitoring will call handlePaymentSuccess
-					}
-				} else {
-					// For non-zap payments, use preimage as confirmation
-					if (response?.preimage) {
-						console.log('✅ NWC payment successful, preimage:', response.preimage.substring(0, 20) + '...')
-						handlePaymentSuccess(response.preimage)
-					} else {
-						throw new Error('Payment failed: no preimage returned from wallet')
-					}
+				const walletResult = await handleNWCPayment(invoice, effectiveNwcWalletUri, ndkState.ndk.signer, { acceptAck: true })
+				if (!walletResult.ok) {
+					throw new Error(walletResult.error || 'NWC payment failed')
 				}
+
+				if (walletResult.preimage) {
+					walletPreimageRef.current = walletResult.preimage
+				}
+
+				const receipt = await waitForZapReceipt(invoice, 20000)
+				const receiptPreimage = receipt?.receiptPreimage
+				const receiptHasValidPreimage = !!receiptPreimage && validatePreimage(invoice, receiptPreimage)
+
+				if (receiptHasValidPreimage) {
+					handlePaymentSuccess({ type: 'preimage', preimage: receiptPreimage! })
+					return
+				}
+
+				if (walletPreimageRef.current) {
+					handlePaymentSuccess({ type: 'preimage', preimage: walletPreimageRef.current })
+					return
+				}
+
+				if (receipt) {
+					handlePaymentSuccess({ type: 'zap_receipt', eventId: receipt.eventId })
+					return
+				}
+
+				handlePaymentSuccess({ type: 'wallet_ack', method: 'nwc', atMs: Date.now() })
 			} catch (err) {
 				console.error('❌ NWC payment failed:', err)
 				setIsPaymentInProgress(false)
+				stopZapMonitoring()
 
-				const errorMessage = (err as Error).message || 'Payment failed'
+				const errorMessage = err instanceof Error ? err.message : 'Payment failed'
 				toast.error(`NWC payment failed: ${errorMessage}`)
-
-				onPaymentFailed?.({
-					success: false,
-					error: errorMessage,
-					paymentHash: data.invoiceId,
-				})
+				onPaymentFailed?.({ success: false, invoiceId: data.invoiceId, error: errorMessage })
 			}
-		}, [data, invoice, ndkState, effectiveNwcWalletUri, handlePaymentSuccess, onPaymentFailed])
+		}, [data.invoiceId, effectiveNwcWalletUri, invoice, ndkState.ndk?.signer, handlePaymentSuccess, onPaymentFailed, stopZapMonitoring, waitForZapReceipt])
 
 		/**
 		 * Handle WebLN payment
 		 * Uses browser extension (e.g., Alby) to pay the invoice
 		 */
 		const handleWebLnPayment = useCallback(async () => {
-			if (!invoice || !window.webln) {
-				toast.error('WebLN not available')
+			if (!invoice) {
+				toast.error('No invoice available to pay')
 				return
 			}
 
 			try {
 				setIsPaymentInProgress(true)
-				console.log('🌐 Starting WebLN payment:', {
-					invoiceId: data.invoiceId,
-					isZap: data.isZap,
-					invoicePreview: invoice.substring(0, 30) + '...',
-				})
+				stopZapMonitoring()
+				walletPreimageRef.current = null
 
-				await window.webln.enable()
-				const result = await window.webln.sendPayment(invoice)
-
-				console.log('✅ WebLN payment completed:', {
-					invoiceId: data.invoiceId,
-					hasPreimage: !!result.preimage,
-					preimagePreview: result.preimage ? result.preimage.substring(0, 20) + '...' : 'none',
-				})
-
-				// For zaps: decide whether to wait for zap receipt or immediately confirm
-				// Zap receipts only come if invoice was generated via NDKZapper with zap request embedded
-				if (data.isZap) {
-					// Check if we got a valid preimage from wallet
-					const hasValidPreimage = result.preimage && (() => {
-						const invoiceObj = new Invoice({ pr: invoice })
-						return invoiceObj.validatePreimage(result.preimage)
-					})()
-
-					if (hasValidPreimage) {
-						console.log('✅ WebLN payment sent successfully, preimage validated:', result.preimage.substring(0, 20) + '...')
-						// Store the validated wallet preimage for zap monitoring to use
-						walletPreimageRef.current = result.preimage
-					} else if (result.preimage) {
-						console.log('⚠️ WebLN returned preimage but validation failed:', result.preimage.substring(0, 20) + '...')
-					} else {
-						console.log('✅ WebLN payment sent successfully (no preimage returned)')
-					}
-
-					// KEY FIX: If we have a pre-generated bolt11, this is a checkout invoice (not a true zap)
-					// The LNURL server won't publish a zap receipt because no zap request was embedded
-					// So we should immediately confirm if we have a preimage, or trust the payment succeeded
-					if (data.bolt11) {
-						console.log('📦 Checkout payment (pre-generated bolt11) - confirming immediately')
-						if (hasValidPreimage) {
-							handlePaymentSuccess(result.preimage)
-						} else {
-							// No preimage available, but WebLN call succeeded without error
-							// Trust that the payment went through
-							handlePaymentSuccess('payment-sent-no-preimage')
-						}
-					} else {
-						// True zap invoice (generated via NDKZapper) - wait for zap receipt
-						console.log('👀 Waiting for zap receipt event to confirm payment...')
-						// Keep isPaymentInProgress true - zap receipt monitoring will call handlePaymentSuccess
-					}
-				} else {
-					// For non-zap payments, use preimage as confirmation
-					if (result.preimage) {
-						console.log('✅ WebLN payment successful, preimage:', result.preimage.substring(0, 20) + '...')
-						handlePaymentSuccess(result.preimage)
-					} else {
-						throw new Error('Payment failed: no preimage returned from wallet')
-					}
+				const walletResult = await handleWebLNPayment(invoice, { acceptAck: true })
+				if (!walletResult.ok) {
+					throw new Error(walletResult.error || 'WebLN payment failed')
 				}
+
+				if (walletResult.preimage) {
+					walletPreimageRef.current = walletResult.preimage
+				}
+
+				const receipt = await waitForZapReceipt(invoice, 20000)
+				const receiptPreimage = receipt?.receiptPreimage
+				const receiptHasValidPreimage = !!receiptPreimage && validatePreimage(invoice, receiptPreimage)
+
+				if (receiptHasValidPreimage) {
+					handlePaymentSuccess({ type: 'preimage', preimage: receiptPreimage! })
+					return
+				}
+
+				if (walletPreimageRef.current) {
+					handlePaymentSuccess({ type: 'preimage', preimage: walletPreimageRef.current })
+					return
+				}
+
+				if (receipt) {
+					handlePaymentSuccess({ type: 'zap_receipt', eventId: receipt.eventId })
+					return
+				}
+
+				handlePaymentSuccess({ type: 'wallet_ack', method: 'webln', atMs: Date.now() })
 			} catch (error) {
 				console.error('❌ WebLN payment failed:', error)
 				setIsPaymentInProgress(false)
+				stopZapMonitoring()
 
 				const errorMessage = error instanceof Error ? error.message : 'Payment failed'
 				toast.error(`WebLN payment failed: ${errorMessage}`)
@@ -472,10 +384,10 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 				onPaymentFailed?.({
 					success: false,
 					error: errorMessage,
-					paymentHash: data.invoiceId,
+					invoiceId: data.invoiceId,
 				})
 			}
-		}, [invoice, data.isZap, data.invoiceId, handlePaymentSuccess, onPaymentFailed])
+		}, [data.invoiceId, handlePaymentSuccess, invoice, onPaymentFailed, stopZapMonitoring, waitForZapReceipt])
 
 		/**
 		 * Handle manual preimage verification
@@ -493,17 +405,14 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			}
 
 			try {
-				const invoiceObj = new Invoice({ pr: invoice })
-				const isValid = invoiceObj.validatePreimage(manualPreimage)
-
-				if (!isValid) {
+				if (!validatePreimage(invoice, manualPreimage)) {
 					toast.error('Invalid preimage. The preimage does not match this invoice.')
 					return
 				}
 
 				console.log('✅ Manual preimage validated successfully')
 				toast.success('Preimage validated!')
-				handlePaymentSuccess(manualPreimage)
+				handlePaymentSuccess({ type: 'preimage', preimage: manualPreimage })
 			} catch (error) {
 				console.error('❌ Failed to validate preimage:', error)
 				toast.error('Failed to validate preimage: ' + (error instanceof Error ? error.message : 'Unknown error'))
@@ -521,16 +430,12 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 				amount: data.amount,
 			})
 
-			// Stop monitoring
-			if (paymentMonitoring) {
-				paymentMonitoring()
-				setPaymentMonitoring(null)
-			}
+			stopZapMonitoring()
 
 			setIsPaymentInProgress(false)
 			onSkipPayment?.()
 			toast.info('Payment skipped - you can pay this later')
-		}, [data.invoiceId, data.recipientName, data.amount, paymentMonitoring, onSkipPayment])
+		}, [data.invoiceId, data.recipientName, data.amount, onSkipPayment, stopZapMonitoring])
 
 		/**
 		 * Expose ref interface for programmatic control
@@ -546,6 +451,15 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 		)
 
 		/**
+		 * Keep invoice state in sync when a bolt11 is provided by the parent.
+		 */
+		useEffect(() => {
+			if (data.bolt11) {
+				setInvoice(data.bolt11)
+			}
+		}, [data.bolt11])
+
+		/**
 		 * Effect: Generate invoice when component becomes active
 		 */
 		useEffect(() => {
@@ -558,32 +472,12 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			if (!active) {
 				hasRequestedInvoiceRef.current = false
 				hasCompletedRef.current = false
+				stopZapMonitoring()
 			}
-		}, [data.isZap, invoice, isGeneratingInvoice, active, generateZapInvoice])
+		}, [active, data.isZap, generateZapInvoice, invoice, isGeneratingInvoice, stopZapMonitoring])
 
-		/**
-		 * Effect: Start monitoring when invoice is available
-		 */
-		useEffect(() => {
-			if (invoice && data.isZap && !paymentMonitoring && active) {
-				console.log('🔔 Invoice ready, starting zap monitoring:', data.invoiceId)
-				startZapMonitoring()
-			}
-
-			// Stop monitoring when processor becomes inactive
-			if (!active && paymentMonitoring) {
-				console.log('🔕 Processor inactive, stopping monitoring:', data.invoiceId)
-				paymentMonitoring()
-				setPaymentMonitoring(null)
-			}
-
-			// Cleanup on unmount
-			return () => {
-				if (paymentMonitoring) {
-					paymentMonitoring()
-				}
-			}
-		}, [invoice, data.isZap, data.invoiceId, paymentMonitoring, active, startZapMonitoring])
+		// Cleanup on unmount
+		useEffect(() => stopZapMonitoring, [stopZapMonitoring])
 
 		/**
 		 * Effect: Handle data changes (amount/description)
@@ -601,11 +495,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 					descriptionChanged: hasDescriptionChanged,
 				})
 
-				// Cleanup existing monitoring
-				if (paymentMonitoring) {
-					paymentMonitoring()
-					setPaymentMonitoring(null)
-				}
+				stopZapMonitoring()
 
 				// Clear invoice to trigger regeneration
 				setInvoice(null)
@@ -614,7 +504,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			}
 
 			previousDataRef.current = { amount: data.amount, description: data.description }
-		}, [data.amount, data.description, invoice, data.isZap, paymentMonitoring])
+		}, [data.amount, data.description, data.isZap, invoice, stopZapMonitoring])
 
 		return (
 			<TooltipProvider>
