@@ -487,7 +487,7 @@ export const getShippingInfo = (event: NDKEvent) => {
 	const id = getShippingId(event)
 	const title = getShippingTitle(event)
 	const priceTag = getShippingPrice(event)
-	const countryTag = getShippingCountry(event)
+	const countryTag = getShippingCountry(event) || ['country']
 	const serviceTag = getShippingService(event)
 
 	// Return null if any required field is missing
