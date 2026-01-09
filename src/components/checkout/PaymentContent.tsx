@@ -7,10 +7,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { WalletSelector } from '@/components/checkout/WalletSelector'
-import { ndkStore } from '@/lib/stores/ndk'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
-import { NDKUser } from '@nostr-dev-kit/ndk'
-import { useStore } from '@tanstack/react-store'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
@@ -59,7 +56,6 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 		},
 		ref,
 	) => {
-		const ndkState = useStore(ndkStore)
 		const processorRef = useRef<LightningPaymentProcessorRef | null>(null)
 		const bulkQueueRef = useRef<string[]>([])
 		const isBulkPayingRef = useRef(false)
@@ -92,32 +88,18 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 		const currentPaymentData = useMemo((): LightningPaymentData | null => {
 			if (!currentInvoice) return null
 
-			// Determine if this is conceptually a zap invoice (for monitoring purposes)
-			const isZapInvoice = currentInvoice.isZap ?? currentInvoice.type === 'v4v'
-			let recipient: NDKUser | undefined
-
-			if (isZapInvoice && ndkState.ndk) {
-				recipient = ndkState.ndk.getUser({ pubkey: currentInvoice.recipientPubkey })
-			}
-
 			// Use existing bolt11 if available
 			const existingBolt11 = currentInvoice.bolt11 || undefined
 
 			return {
+				invoiceId: currentInvoice.id,
 				amount: currentInvoice.amount,
 				description: currentInvoice.description,
 				recipientName: currentInvoice.recipientName,
 				bolt11: existingBolt11,
-				// isZap controls two things:
-				// 1. Whether to generate a new zap invoice (only if no bolt11)
-				// 2. Whether to monitor for zap receipts (always for zap invoices)
-				// We need isZap=true for monitoring even if we have a bolt11
-				isZap: isZapInvoice,
-				recipient: recipient as NDKUser | undefined,
-				orderId: currentInvoice.orderId,
-				invoiceId: currentInvoice.id,
-			} as LightningPaymentData
-		}, [currentInvoice, ndkState.ndk])
+				monitorZapReceipt: true,
+			}
+		}, [currentInvoice])
 
 		const handleNavigate = useCallback(
 			(newIndex: number) => {
@@ -178,8 +160,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 		// Use the invoice ID from the result to ensure we're marking the correct invoice
 		const handlePaymentComplete = useCallback(
 			(result: PaymentResult) => {
-				// Use paymentHash from result (which contains the invoice ID) as primary source
-				const invoiceId = result.paymentHash || currentInvoice?.id
+				const invoiceId = result.invoiceId || currentInvoice?.id
 				if (!invoiceId) {
 					console.error('❌ No invoice ID available for payment complete')
 					return
@@ -197,7 +178,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 
 		const handlePaymentFailed = useCallback(
 			(result: PaymentResult) => {
-				const invoiceId = result.paymentHash || currentInvoice?.id
+				const invoiceId = result.invoiceId || currentInvoice?.id
 				if (!invoiceId) {
 					console.error('❌ No invoice ID available for payment failed')
 					return
@@ -238,14 +219,14 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 				return
 			}
 
-			const pendingInvoiceIds = invoices.filter((inv) => inv.status === 'pending').map((inv) => inv.id)
-			if (pendingInvoiceIds.length === 0) {
+			const payableInvoiceIds = invoices.filter((inv) => inv.status === 'pending' || inv.status === 'failed').map((inv) => inv.id)
+			if (payableInvoiceIds.length === 0) {
 				toast.info('No pending invoices to pay')
 				return
 			}
 
-			toast.info(`Starting payment for ${pendingInvoiceIds.length} invoices...`)
-			bulkQueueRef.current = pendingInvoiceIds
+			toast.info(`Starting payment for ${payableInvoiceIds.length} invoices...`)
+			bulkQueueRef.current = payableInvoiceIds
 			isBulkPayingRef.current = true
 			triggerNextBulkPayment()
 		}, [invoices, nwcEnabled, triggerNextBulkPayment])
@@ -311,7 +292,11 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 				{isCurrentCompleted ? (
 					<div className="text-center py-8">
 						<div className="text-green-600 font-medium mb-2">
-							{currentInvoice.status === 'paid' ? '✓ Payment Complete' : '⏭️ Payment Skipped'}
+							{currentInvoice.status === 'paid'
+								? '✓ Payment Complete'
+								: currentInvoice.status === 'skipped'
+									? '⏭️ Payment Skipped'
+									: '⏰ Invoice Expired'}
 						</div>
 						<p className="text-sm text-gray-600 mb-4">
 							{currentInvoice.recipientName} - {currentInvoice.amount} sats

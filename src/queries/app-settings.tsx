@@ -1,5 +1,6 @@
 import { ndkActions } from '@/lib/stores/ndk'
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
+import { naddrFromAddress } from '@/lib/nostr/naddr'
+import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { configKeys } from './queryKeyFactory'
@@ -31,23 +32,13 @@ export const fetchAdminSettings = async (appPubkey?: string): Promise<AdminSetti
 		throw new Error('App pubkey is required')
 	}
 
-	const adminListFilter: NDKFilter = {
-		kinds: [30000],
-		authors: [targetPubkey],
-		'#d': ['admins'],
-		limit: 1,
-	}
+	const naddr = naddrFromAddress(30000, targetPubkey, 'admins')
+	const latestEvent = await ndk.fetchEvent(naddr)
 
-	const events = await ndk.fetchEvents(adminListFilter)
-	const eventArray = Array.from(events)
-
-	if (eventArray.length === 0) {
+	if (!latestEvent) {
 		console.log(`No admin settings found for app pubkey: ${targetPubkey}`)
 		return null
 	}
-
-	// Get the latest admin list event
-	const latestEvent = eventArray.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
 
 	// Extract admin pubkeys from 'p' tags
 	const adminPubkeys = latestEvent.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1])
@@ -171,17 +162,10 @@ export const fetchEditorSettings = async (appPubkey?: string): Promise<EditorSet
 		throw new Error('App pubkey is required')
 	}
 
-	const editorListFilter: NDKFilter = {
-		kinds: [30000],
-		authors: [targetPubkey],
-		'#d': ['editors'],
-		limit: 1,
-	}
+	const naddr = naddrFromAddress(30000, targetPubkey, 'editors')
+	const latestEvent = await ndk.fetchEvent(naddr)
 
-	const events = await ndk.fetchEvents(editorListFilter)
-	const eventArray = Array.from(events)
-
-	if (eventArray.length === 0) {
+	if (!latestEvent) {
 		console.log(`No editor settings found for app pubkey: ${targetPubkey}`)
 		// Return empty editor list instead of null for consistency
 		return {
@@ -190,9 +174,6 @@ export const fetchEditorSettings = async (appPubkey?: string): Promise<EditorSet
 			event: null,
 		}
 	}
-
-	// Get the latest editor list event
-	const latestEvent = eventArray.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
 
 	// Extract editor pubkeys from 'p' tags
 	const editorPubkeys = latestEvent.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1])

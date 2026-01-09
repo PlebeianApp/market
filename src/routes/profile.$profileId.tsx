@@ -1,3 +1,4 @@
+import { ShareProfileDialog } from '@/components/dialogs/ShareProfileDialog'
 import { EntityActionsMenu } from '@/components/EntityActionsMenu'
 import { ItemGrid } from '@/components/ItemGrid'
 import { Header } from '@/components/layout/Header'
@@ -11,6 +12,7 @@ import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { useEntityPermissions } from '@/hooks/useEntityPermissions'
 import { getHexColorFingerprintFromHexPubkey, truncateText, checkImageLoadable } from '@/lib/utils'
 import { ndkActions } from '@/lib/stores/ndk'
+import { productFormActions } from '@/lib/stores/product'
 import { uiActions } from '@/lib/stores/ui'
 import { addToBlacklist, removeFromBlacklist } from '@/publish/blacklist'
 import { addToFeaturedUsers, removeFromFeaturedUsers } from '@/publish/featured'
@@ -44,6 +46,7 @@ function RouteComponent() {
 
 	const [showFullAbout, setShowFullAbout] = useState(false)
 	const [bannerIsLoadable, setBannerIsLoadable] = useState<boolean | null>(null)
+	const [shareDialogOpen, setShareDialogOpen] = useState(false)
 	const breakpoint = useBreakpoint()
 	const isSmallScreen = breakpoint === 'sm'
 	const queryClient = useQueryClient()
@@ -70,6 +73,13 @@ function RouteComponent() {
 	// Handle edit profile
 	const handleEdit = () => {
 		navigate({ to: '/dashboard/account/profile' })
+	}
+
+	// Handle add product
+	const handleAddProduct = () => {
+		productFormActions.reset()
+		productFormActions.setEditingProductId(null)
+		navigate({ to: '/dashboard/products/products/new' })
 	}
 
 	// Handle message button
@@ -193,7 +203,7 @@ function RouteComponent() {
 							<Button variant="focus" size="icon" onClick={handleMessageClick}>
 								<MessageCircle className="w-5 h-5" />
 							</Button>
-							<Button variant="secondary" size="icon">
+							<Button variant="secondary" size="icon" onClick={() => setShareDialogOpen(true)}>
 								<Share2 className="w-5 h-5" />
 							</Button>
 							{/* Edit button for profile owner */}
@@ -245,7 +255,7 @@ function RouteComponent() {
 						<ItemGrid
 							title={
 								<div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 text-center sm:text-left">
-									<span className="text-2xl font-heading">More products from</span>
+									<span className="text-2xl font-heading">Products from</span>
 									<ProfileName pubkey={user?.pubkey || ''} className="text-2xl font-heading" />
 								</div>
 							}
@@ -255,12 +265,25 @@ function RouteComponent() {
 							))}
 						</ItemGrid>
 					) : (
-						<div className="flex flex-col items-center justify-center flex-1">
+						<div className="flex flex-col items-center justify-center flex-1 gap-4">
 							<span className="text-2xl font-heading">No products found</span>
+							{permissions.canEdit && (
+								<Button onClick={handleAddProduct} className="flex items-center gap-2">
+									<Plus className="h-5 w-5" />
+									Add Your First Product
+								</Button>
+							)}
 						</div>
 					)}
 				</div>
 			</div>
+
+			<ShareProfileDialog
+				open={shareDialogOpen}
+				onOpenChange={setShareDialogOpen}
+				pubkey={user?.pubkey || ''}
+				profileName={profile?.name}
+			/>
 		</div>
 	)
 }

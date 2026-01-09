@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**Note**: This file is shared in the repo. Do not add developer-specific paths or local configuration here.
+
 ## Project Overview
 
 Plebeian Market is a decentralized marketplace built on the Nostr protocol. All data is stored on Nostr relays - there is no traditional database. Browser storage (localStorage, sessionStorage, IndexedDB) is only used for user preferences, auth keys, and temporary state like shopping carts.
@@ -24,6 +26,24 @@ bun test:e2e:chrome      # Run e2e tests in Chrome only
 ```
 
 For local development, run a Nostr relay (e.g., `nak serve` at ws://localhost:10547) and configure `.env` from `.env.example`.
+
+## Local Development Tools
+
+**nak** (Nostr Army Knife) - Install from [github.com/fiatjaf/nak](https://github.com/fiatjaf/nak). Key commands:
+
+```bash
+nak serve          # Start local relay at ws://localhost:10547
+nak key generate   # Generate new Nostr keypair
+nak decode <nip19> # Decode nip19/nip05 entities
+nak fetch <nip19>  # Fetch events by identifier
+nak mcp            # Start MCP server for AI integration
+```
+
+**Environment files**:
+
+- `.env.example` - Template for production environment variables
+- `.env.dev.example` - Template for local development (uses `nak serve` at ws://localhost:10547)
+- Copy the appropriate template to `.env` and configure
 
 **Important**: Always run `bun run format` before committing or pushing changes.
 

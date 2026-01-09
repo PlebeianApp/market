@@ -1,10 +1,12 @@
+import { ShareProductDialog } from '@/components/dialogs/ShareProductDialog'
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { authStore } from '@/lib/stores/auth'
 import { productFormActions } from '@/lib/stores/product'
 import { useDeleteProductMutation } from '@/publish/products'
-import { getProductId, getProductImages, getProductTitle, productsByPubkeyQueryOptions } from '@/queries/products'
+import { getProductId, getProductImages, getProductPrice, getProductTitle, productsByPubkeyQueryOptions } from '@/queries/products'
+import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery } from '@tanstack/react-query'
@@ -14,14 +16,14 @@ import { PackageIcon, Trash, EyeOff, Clock, Eye } from 'lucide-react'
 import { useState, useMemo } from 'react'
 
 // Component to show basic product information
-function ProductBasicInfo({ product }: { product: any }) {
+function ProductBasicInfo({ product }: { product: NDKEvent }) {
 	const description = product.content || 'No description'
 	const images = getProductImages(product)
-	const priceTag = product.tags.find((tag: any) => tag[0] === 'price')
+	const priceTag = getProductPrice(product)
 	const price = priceTag ? `${priceTag[1]} ${priceTag[2]}` : 'Price not set'
-	const visibilityTag = product.tags.find((tag: any) => tag[0] === 'visibility')
+	const visibilityTag = product.tags.find((tag) => tag[0] === 'visibility')
 	const visibility = visibilityTag?.[1] || 'on-sale'
-	const stockTag = product.tags.find((tag: any) => tag[0] === 'stock')
+	const stockTag = product.tags.find((tag) => tag[0] === 'stock')
 	const stock = stockTag?.[1]
 
 	return (
@@ -70,17 +72,19 @@ function ProductListItem({
 	isExpanded,
 	onToggleExpanded,
 	onEdit,
+	onShare,
 	onDelete,
 	isDeleting,
 }: {
-	product: any
+	product: NDKEvent
 	isExpanded: boolean
 	onToggleExpanded: () => void
 	onEdit: () => void
+	onShare: () => void
 	onDelete: () => void
 	isDeleting: boolean
 }) {
-	const visibilityTag = product.tags.find((tag: any) => tag[0] === 'visibility')
+	const visibilityTag = product.tags.find((tag) => tag[0] === 'visibility')
 	const visibility = visibilityTag?.[1] || 'on-sale'
 
 	const getVisibilityIcon = () => {
@@ -115,6 +119,17 @@ function ProductListItem({
 				aria-label={`Edit ${getProductTitle(product)}`}
 			>
 				<span className="i-edit w-5 h-5" />
+			</Button>
+			<Button
+				variant="ghost"
+				size="sm"
+				onClick={(e) => {
+					e.stopPropagation()
+					onShare()
+				}}
+				aria-label={`Share ${getProductTitle(product)}`}
+			>
+				<span className="i-sharing w-4 h-4" />
 			</Button>
 			<Button
 				variant="ghost"
@@ -159,6 +174,8 @@ function ProductsOverviewComponent() {
 	const matchRoute = useMatchRoute()
 	const [expandedProduct, setExpandedProduct] = useState<string | null>(null)
 	const [orderBy, setOrderBy] = useState<string>('newest')
+	const [shareDialogOpen, setShareDialogOpen] = useState(false)
+	const [productToShare, setProductToShare] = useState<NDKEvent | null>(null)
 	useDashboardTitle('Products')
 
 	// Auto-animate for smooth list transitions
@@ -194,9 +211,20 @@ function ProductsOverviewComponent() {
 	const sortedProducts = useMemo(() => {
 		if (!products) return []
 		return [...products].sort((a, b) => {
+			// Alphabetical sorting
+			if (orderBy === 'alphabetical') {
+				const titleA = getProductTitle(a).toLowerCase()
+				const titleB = getProductTitle(b).toLowerCase()
+				return titleA.localeCompare(titleB)
+			}
+			if (orderBy === 'alphabetical-reverse') {
+				const titleA = getProductTitle(a).toLowerCase()
+				const titleB = getProductTitle(b).toLowerCase()
+				return titleB.localeCompare(titleA)
+			}
+			// Time-based sorting
 			const timeA = a.created_at || 0
 			const timeB = b.created_at || 0
-			// For replaceable events, created_at is both creation and update time
 			if (orderBy === 'oldest' || orderBy === 'least-updated') {
 				return timeA - timeB
 			} else {
@@ -227,7 +255,12 @@ function ProductsOverviewComponent() {
 		setExpandedProduct(expandedProduct === productId ? null : productId)
 	}
 
-	const handleDeleteProductClick = async (product: any) => {
+	const handleShareProductClick = (product: NDKEvent) => {
+		setProductToShare(product)
+		setShareDialogOpen(true)
+	}
+
+	const handleDeleteProductClick = async (product: NDKEvent) => {
 		if (confirm(`Are you sure you want to delete "${getProductTitle(product)}"?`)) {
 			const productDTag = getProductId(product)
 			if (productDTag) {
@@ -255,10 +288,12 @@ function ProductsOverviewComponent() {
 				<h1 className="text-2xl font-bold">Products</h1>
 				<div className="flex items-center gap-4">
 					<Select value={orderBy} onValueChange={setOrderBy}>
-						<SelectTrigger className="w-48">
+						<SelectTrigger className="w-56">
 							<SelectValue placeholder="Order By" />
 						</SelectTrigger>
 						<SelectContent>
+							<SelectItem value="alphabetical">Alphabetically (A-Z)</SelectItem>
+							<SelectItem value="alphabetical-reverse">Alphabetically (Z-A)</SelectItem>
 							<SelectItem value="newest">Newest First</SelectItem>
 							<SelectItem value="oldest">Oldest First</SelectItem>
 							<SelectItem value="recently-updated">Recently Updated</SelectItem>
@@ -281,6 +316,8 @@ function ProductsOverviewComponent() {
 							<SelectValue placeholder="Order By" />
 						</SelectTrigger>
 						<SelectContent>
+							<SelectItem value="alphabetical">Alphabetically (A-Z)</SelectItem>
+							<SelectItem value="alphabetical-reverse">Alphabetically (Z-A)</SelectItem>
 							<SelectItem value="newest">Newest First</SelectItem>
 							<SelectItem value="oldest">Oldest First</SelectItem>
 							<SelectItem value="recently-updated">Recently Updated</SelectItem>
@@ -311,6 +348,7 @@ function ProductsOverviewComponent() {
 												isExpanded={expandedProduct === product.id}
 												onToggleExpanded={() => handleToggleExpanded(product.id)}
 												onEdit={() => handleEditProductClick(product.id)}
+												onShare={() => handleShareProductClick(product)}
 												onDelete={() => handleDeleteProductClick(product)}
 												isDeleting={deleteMutation.isPending && deleteMutation.variables === getProductId(product)}
 											/>
@@ -328,6 +366,19 @@ function ProductsOverviewComponent() {
 					)}
 				</div>
 			</div>
+
+			{productToShare && (
+				<ShareProductDialog
+					open={shareDialogOpen}
+					onOpenChange={(open) => {
+						setShareDialogOpen(open)
+						if (!open) setProductToShare(null)
+					}}
+					productId={getProductId(productToShare) || productToShare.id}
+					pubkey={productToShare.pubkey}
+					title={getProductTitle(productToShare)}
+				/>
+			)}
 		</div>
 	)
 }

@@ -1,5 +1,5 @@
 import NDK from '@nostr-dev-kit/ndk'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import { naddrFromAddress } from '../lib/nostr/naddr'
 import type { AdminManager, EditorManager, BootstrapManager } from './types'
 
 export class NDKService {
@@ -66,14 +66,8 @@ export class NDKService {
 		if (!this.ndk) return
 
 		try {
-			const adminEvents = await this.ndk.fetchEvents({
-				kinds: [30000],
-				authors: [this.appPubkey],
-				'#d': ['admins'],
-				limit: 1,
-			})
-
-			const latestAdminEvent = adminEvents.values().next().value
+			const naddr = naddrFromAddress(30000, this.appPubkey, 'admins')
+			const latestAdminEvent = await this.ndk.fetchEvent(naddr)
 			if (latestAdminEvent) {
 				console.log('Found existing admin list, updating internal list')
 				this.adminManager.updateFromEvent(latestAdminEvent)
@@ -87,14 +81,8 @@ export class NDKService {
 		if (!this.ndk) return
 
 		try {
-			const editorEvents = await this.ndk.fetchEvents({
-				kinds: [30000],
-				authors: [this.appPubkey],
-				'#d': ['editors'],
-				limit: 1,
-			})
-
-			const latestEditorEvent = editorEvents.values().next().value
+			const naddr = naddrFromAddress(30000, this.appPubkey, 'editors')
+			const latestEditorEvent = await this.ndk.fetchEvent(naddr)
 			if (latestEditorEvent) {
 				console.log('Found existing editor list, updating internal list')
 				this.editorManager.updateFromEvent(latestEditorEvent)
@@ -104,9 +92,8 @@ export class NDKService {
 		}
 	}
 
-	public disconnect(): void {
+	public shutdown(): void {
 		if (this.ndk) {
-			// NDK doesn't have a direct disconnect method, we just set to null
 			this.ndk = null
 		}
 	}

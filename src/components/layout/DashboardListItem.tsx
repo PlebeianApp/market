@@ -41,11 +41,11 @@ const DashboardListItem = React.forwardRef<HTMLDivElement, DashboardListItemProp
 				<Card ref={ref} className={cn(isDeleting && 'opacity-50 pointer-events-none', className)} {...props}>
 					<CollapsibleTrigger asChild>
 						<div className="p-4 flex flex-row items-center justify-between cursor-pointer group rounded-lg">
-							<div className="flex items-center gap-4">
-								<div className="p-2 bg-muted rounded-full">{icon ?? <WalletIcon className="h-6 w-6" />}</div>
-								<div className="min-w-0 flex-1">{triggerContent}</div>
+							<div className="flex items-center gap-4 min-w-0 flex-1 overflow-hidden">
+								<div className="p-2 bg-muted rounded-full shrink-0">{icon ?? <WalletIcon className="h-6 w-6" />}</div>
+								<div className="min-w-0 flex-1 overflow-hidden">{triggerContent}</div>
 							</div>
-							<div className="flex items-center gap-2">
+							<div className="flex items-center gap-2 shrink-0 ml-2">
 								{actions}
 								{useCloseIcon ? (
 									isOpen ? (

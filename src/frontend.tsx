@@ -6,7 +6,21 @@ import '../styles/index.css'
 import { createQueryClient } from './lib/queryClient'
 import { routeTree } from './routeTree.gen'
 import type { AppRouterContext } from './lib/router-utils'
-import { configActions } from './lib/stores/config'
+import { configActions, configStore } from './lib/stores/config'
+import { ndkActions } from './lib/stores/ndk'
+
+// Create queryClient once at module level
+const queryClient = createQueryClient()
+
+function DefaultPending() {
+	return (
+		<div className="w-full">
+			<div className="sticky top-0 z-50 h-1 bg-primary/10 overflow-hidden">
+				<div className="h-full w-1/3 bg-primary animate-pulse" />
+			</div>
+		</div>
+	)
+}
 
 // Function to create a router once we have a queryClient
 function createAppRouter(queryClient: QueryClient) {
@@ -17,65 +31,52 @@ function createAppRouter(queryClient: QueryClient) {
 		} as AppRouterContext,
 		defaultPreload: 'intent',
 		defaultPreloadStaleTime: 0,
+		defaultPendingMs: 1500,
+		defaultPendingMinMs: 0,
+		defaultPendingComponent: DefaultPending,
 	})
 }
 
+// Create router once at module level
+const router = createAppRouter(queryClient)
+
 // Main app initialization and rendering
 function App() {
-	const [queryClient, setQueryClient] = useState<QueryClient | null>(null)
-	const [router, setRouter] = useState<any | null>(null)
-	const [isLoading, setIsLoading] = useState(true)
+	const [configLoaded, setConfigLoaded] = useState(configStore.state.isLoaded)
 	const [error, setError] = useState<string | null>(null)
 
+	// Fetch config on mount if not already loaded
 	useEffect(() => {
-		const fetchWithTimeout = async (url: string, timeoutMs = 10000): Promise<Response> => {
-			const controller = new AbortController()
-			const timeout = setTimeout(() => controller.abort(), timeoutMs)
-			try {
-				const res = await fetch(url, { signal: controller.signal })
-				return res
-			} finally {
-				clearTimeout(timeout)
-			}
+		if (configStore.state.isLoaded) {
+			setConfigLoaded(true)
+			return
 		}
 
-		const initialize = async () => {
+		const loadConfig = async () => {
 			try {
-				setIsLoading(true)
+				const controller = new AbortController()
+				const timeout = setTimeout(() => controller.abort(), 10000)
 
-				// First fetch the config
-				const response = await fetchWithTimeout('/api/config', 10000)
+				const response = await fetch('/api/config', { signal: controller.signal })
+				clearTimeout(timeout)
+
 				if (!response.ok) {
 					throw new Error(`Failed to fetch config: ${response.status} ${response.statusText}`)
 				}
 				const config = await response.json()
-
-				// Store the config in the configStore
 				configActions.setConfig(config)
+				// Ensure we always connect to the instance relay even without a signer
+				ndkActions.ensureAppRelayFromConfig()
+				setConfigLoaded(true)
 				console.log('Fetched config:', config)
-
-				// Create queryClient with NDK initialization
-				const client = await createQueryClient()
-				setQueryClient(client)
-
-				// Create router with the queryClient
-				const appRouter = createAppRouter(client)
-
-				setRouter(appRouter)
 			} catch (err) {
-				console.error('Initialization error:', err)
-				setError(err instanceof Error ? err.message : 'Unknown error during initialization')
-			} finally {
-				setIsLoading(false)
+				console.error('Config fetch error:', err)
+				setError(err instanceof Error ? err.message : 'Failed to load configuration')
 			}
 		}
 
-		initialize()
+		loadConfig()
 	}, [])
-
-	if (isLoading) {
-		return <div className="flex justify-center items-center h-screen">Initializing application...</div>
-	}
 
 	if (error) {
 		return (
@@ -88,8 +89,10 @@ function App() {
 		)
 	}
 
-	if (!queryClient || !router) {
-		return <div className="flex justify-center items-center h-screen">Failed to initialize application</div>
+	// Show minimal loading only if config isn't loaded yet
+	// This should be very brief since config fetch is fast
+	if (!configLoaded) {
+		return <div className="flex justify-center items-center h-screen">Loading...</div>
 	}
 
 	return (
