@@ -86,7 +86,7 @@ export const createProductEvent = (
 		['type', formData.productType === 'single' ? 'simple' : 'variable', 'physical'],
 		['visibility', formData.status],
 		['stock', formData.quantity],
-		['summary', formData.description],
+		['summary', ''],
 		...imagesTags,
 		...categoryTags,
 		...specTags,

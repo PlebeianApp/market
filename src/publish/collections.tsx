@@ -39,7 +39,7 @@ export const createCollectionEvent = (
 	event.tags = [
 		['d', id], // Collection identifier
 		['title', formData.name],
-		['summary', formData.description], // Collection summary
+		['summary', ''], // Collection summary
 	]
 
 	// Optional header image

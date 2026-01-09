@@ -113,7 +113,14 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 				{/* Add to cart button */}
 				<div className="flex gap-2">
 					<div className="flex-grow transition-all duration-300 ease-in-out">
-						{isInCart ? (
+						{isOwnProduct ? (
+							<Button
+								className="py-3 px-4 rounded-lg w-full font-medium transition-all duration-300 bg-black text-white disabled:bg-gray-400 disabled:cursor-not-allowed"
+								disabled={true}
+							>
+								Your Product
+							</Button>
+						) : isInCart ? (
 							<div className="flex gap-2 w-full">
 								{/* Show current quantity */}
 								<div className="flex items-center justify-center px-2 h-10 bg-pink-100 text-pink-800 border-2 border-pink-300 rounded-lg text-sm font-medium transition-all duration-200 ease-in-out">
@@ -144,9 +151,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 								onClick={(e) => handleButtonClick(e, handleAddToCart)}
 								disabled={isOwnProduct || isAddingToCart || visibility === 'hidden'}
 							>
-								{isOwnProduct ? (
-									'Your Product'
-								) : visibility === 'hidden' ? (
+								{visibility === 'hidden' ? (
 									'Not Available'
 								) : showConfirmation ? (
 									<>
