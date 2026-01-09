@@ -42,6 +42,7 @@ interface OrderDataTableProps<TData> {
 	showOrderBy?: boolean
 	onOrderByChange?: (value: string) => void
 	orderBy?: string
+	emptyMessage?: string
 }
 
 export function OrderDataTable<TData>({
@@ -57,6 +58,7 @@ export function OrderDataTable<TData>({
 	showOrderBy = false,
 	onOrderByChange,
 	orderBy = 'newest',
+	emptyMessage = 'No orders found.',
 }: OrderDataTableProps<TData>) {
 	const [sorting, setSorting] = useState<SortingState>([])
 	const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -234,7 +236,7 @@ export function OrderDataTable<TData>({
 					</div>
 				) : (
 					<div className="px-4 xl:px-6">
-						<Card className="rounded-md border p-6 text-center mt-4">No orders found.</Card>
+						<Card className="rounded-md border p-6 text-center mt-4">{emptyMessage}</Card>
 					</div>
 				)}
 			</div>

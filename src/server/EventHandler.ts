@@ -190,7 +190,7 @@ export class EventHandler {
 
 	public shutdown(): void {
 		if (this.ndkService) {
-			this.ndkService.disconnect()
+			this.ndkService.shutdown()
 		}
 		this.isInitialized = false
 		console.log('EventHandler shut down')

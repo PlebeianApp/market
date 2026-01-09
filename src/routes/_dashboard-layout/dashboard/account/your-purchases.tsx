@@ -90,6 +90,7 @@ function YourPurchasesComponent() {
 				showOrderBy={true}
 				onOrderByChange={setOrderBy}
 				orderBy={orderBy}
+				emptyMessage="You haven't purchased anything yet."
 			/>
 		</div>
 	)

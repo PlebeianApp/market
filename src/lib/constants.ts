@@ -16,8 +16,9 @@ export const ZAP_RELAYS = [
 	'wss://nos.lol',
 	'wss://relay.nostr.net',
 	'wss://relay.minibits.cash',
-	'wss://relay.coinos.io/',
+	'wss://relay.coinos.io',
 	'wss://nwc.primal.net',
+	'wss://relay.primal.net',
 	// 'ws://localhost:10547',
 ]
 // export const defaultRelaysUrls: string[] = []
@@ -51,15 +52,13 @@ export const CURRENCIES = [
 	'THB', // Thai Baht
 	'IDR', // Indonesian Rupiah
 	'MYR', // Malaysian Ringgit
+	'NGN', // Nigerian Naira
 ] as const
 
 export const DEFAULT_ZAP_AMOUNTS = [
-	{ displayText: '😊 10 sats', amount: 10 },
-	{ displayText: '😄 21 sats', amount: 21 },
-	{ displayText: '🤩 1,000 sats', amount: 1000 },
-	{ displayText: '🚀 10,000 sats', amount: 10000 },
-	{ displayText: '🔥 100,000 sats', amount: 100000 },
-	{ displayText: '🤯 1,000,000 sats', amount: 1000000 },
+	{ displayText: '😊 21 sats', amount: 21 },
+	{ displayText: '🚀 210 sats', amount: 210 },
+	{ displayText: '🔥 2100 sats', amount: 2100 },
 ]
 
 export const HEX_KEYS_REGEX = /^(?:[0-9a-fA-F]{64})$/

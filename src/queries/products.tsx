@@ -19,6 +19,7 @@ import { productKeys } from './queryKeyFactory'
 import { getCoordsFromATag, getATagFromCoords } from '@/lib/utils/coords.ts'
 import { discoverNip50Relays } from '@/lib/relays'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
+import { naddrFromAddress } from '@/lib/nostr/naddr'
 
 // Re-export productKeys for use in other query files
 export { productKeys }
@@ -45,7 +46,7 @@ export const fetchProducts = async (limit: number = 500, tag?: string, includeHi
 		...(tag && { '#t': [tag] }), // Add tag filter if provided
 	}
 
-	const events = await ndk.fetchEvents(filter)
+	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
 	const allEvents = Array.from(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 
 	// Filter out blacklisted products and authors
@@ -82,7 +83,7 @@ export const fetchProductsPaginated = async (limit: number = 20, until?: number,
 		...(tag && { '#t': [tag] }), // Add tag filter if provided
 	}
 
-	const events = await ndk.fetchEvents(filter)
+	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
 	const allEvents = Array.from(events).sort((a, b) => b.created_at! - a.created_at!)
 
 	// Filter out blacklisted products and authors
@@ -123,19 +124,20 @@ export const fetchProduct = async (id: string) => {
  * Fetches all products from a specific pubkey
  * @param pubkey The pubkey of the seller
  * @param includeHidden Whether to include hidden products (default: false, should be true for own products)
+ * @param limit Maximum number of products to return (default: 50)
  * @returns Array of product events sorted by creation date (blacklist filtered, optionally hidden products excluded)
  */
-export const fetchProductsByPubkey = async (pubkey: string, includeHidden: boolean = false) => {
+export const fetchProductsByPubkey = async (pubkey: string, includeHidden: boolean = false, limit: number = 50) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
 	const filter: NDKFilter = {
 		kinds: [30402],
 		authors: [pubkey],
-		limit: 50,
+		limit,
 	}
 
-	const events = await ndk.fetchEvents(filter)
+	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
 	const allEvents = Array.from(events)
 
 	// Filter out blacklisted products (author check not needed since we're querying by author)
@@ -157,12 +159,8 @@ export const fetchProductByATag = async (pubkey: string, dTag: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 	if (!pubkey || !dTag) return null
-	const filter: NDKFilter = {
-		kinds: [30402],
-		authors: [pubkey],
-		'#d': [dTag],
-	}
-	return await ndk.fetchEvent(filter)
+	const naddr = naddrFromAddress(30402, pubkey, dTag)
+	return await ndk.fetchEvent(naddr)
 }
 
 /**
@@ -788,7 +786,13 @@ export const useProductByATag = (pubkey: string, dTag: string) => {
 
 // --- PRODUCT SEARCH (NIP-50) ---
 
-const PRODUCT_SEARCH_RELAYS = ['wss://relay.nostr.band', 'wss://search.nos.today', 'wss://nos.lol']
+const PRODUCT_SEARCH_RELAYS = [
+	'wss://relay.nostr.band',
+	'wss://search.nos.today',
+	'wss://nos.lol',
+	'wss://nostr.wine',
+	'wss://relay.primal.net',
+]
 
 /**
  * Search for product listing events (kind 30402) by free-text query.
@@ -823,13 +827,13 @@ export const fetchProductsBySearch = async (query: string, limit: number = 20) =
 
 	// In some deployments, ndk.fetchEvents may hang if relays are slow/unresponsive.
 	// Race the fetch with a timeout so the UI can recover gracefully.
-	const SEARCH_TIMEOUT_MS = 8000
+	const SEARCH_TIMEOUT_MS = 15000
 	try {
 		const fetchPromise = ndk
 			.fetchEvents(filter)
 			.then((events) => Array.from(events))
 			.catch((err) => {
-				console.error('Search fetch failed:', err)
+				console.error('Product search fetch failed:', err)
 				return []
 			})
 
@@ -847,15 +851,123 @@ export const fetchProductsBySearch = async (query: string, limit: number = 20) =
 	}
 }
 
-/** React Query options for searching products by text */
+/**
+ * Search for profile events (kind 0) by name/displayName.
+ * Uses NIP-50 `search` on relays that support it.
+ * Returns pubkeys of matching profiles.
+ */
+export const fetchSellersBySearch = async (query: string, limit: number = 10): Promise<string[]> => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+	if (!query?.trim()) return []
+
+	// Use the same relay discovery as product search
+	let relays: string[] = []
+	try {
+		relays = await discoverNip50Relays(PRODUCT_SEARCH_RELAYS)
+	} catch (e) {
+		console.warn('NIP-11 discovery failed for profile search, falling back to static search relays')
+	}
+	if (!relays || relays.length === 0) {
+		relays = PRODUCT_SEARCH_RELAYS
+	}
+	try {
+		ndkActions.addExplicitRelay(relays)
+	} catch (error) {
+		console.error('Failed to add discovered search relays for profile search:', error)
+	}
+
+	const filter: NDKFilter = {
+		kinds: [0], // Profile events
+		search: query,
+		limit,
+	}
+
+	const SEARCH_TIMEOUT_MS = 10000 // Profile search timeout
+	try {
+		const fetchPromise = ndk
+			.fetchEvents(filter)
+			.then((events) => Array.from(events).map((e) => e.pubkey))
+			.catch((err) => {
+				console.error('Profile search fetch failed:', err)
+				return []
+			})
+
+		const timeoutPromise = new Promise<string[]>((resolve) => {
+			setTimeout(() => {
+				console.warn(`Profile search timed out after ${SEARCH_TIMEOUT_MS}ms`, { query })
+				resolve([])
+			}, SEARCH_TIMEOUT_MS)
+		})
+
+		return await Promise.race([fetchPromise, timeoutPromise])
+	} catch (e) {
+		console.error('Profile search error:', e)
+		return []
+	}
+}
+
+/**
+ * Combined search that searches both products and seller names.
+ * Returns products matching the query directly OR products from sellers whose name matches.
+ */
+export const fetchProductsBySearchWithSellers = async (
+	query: string,
+	limit: number = 20,
+): Promise<import('@nostr-dev-kit/ndk').NDKEvent[]> => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+	if (!query?.trim()) return []
+
+	// Run product search and seller search in parallel
+	const [productResults, sellerPubkeys] = await Promise.all([fetchProductsBySearch(query, limit), fetchSellersBySearch(query, 5)])
+
+	// If we found matching sellers, fetch their products directly by author pubkey
+	// This queries the regular connected relays (not search relays) which support author filters
+	let sellerProducts: import('@nostr-dev-kit/ndk').NDKEvent[] = []
+	if (sellerPubkeys.length > 0) {
+		try {
+			const sellerProductPromises = sellerPubkeys.map((pubkey) => fetchProductsByPubkey(pubkey, false, 20))
+			const sellerProductArrays = await Promise.all(sellerProductPromises)
+			sellerProducts = sellerProductArrays.flat()
+		} catch (err) {
+			console.error('Failed to fetch seller products:', err)
+		}
+	}
+
+	// Merge and deduplicate results (product results first, then seller products)
+	const seenIds = new Set<string>()
+	const mergedResults: import('@nostr-dev-kit/ndk').NDKEvent[] = []
+
+	// Add product search results first (direct matches are prioritized)
+	for (const product of productResults) {
+		if (!seenIds.has(product.id)) {
+			seenIds.add(product.id)
+			mergedResults.push(product)
+		}
+	}
+
+	// Add seller products (if not already in results)
+	for (const product of sellerProducts) {
+		if (!seenIds.has(product.id)) {
+			seenIds.add(product.id)
+			mergedResults.push(product)
+		}
+	}
+
+	// Return up to the limit
+	return mergedResults.slice(0, limit)
+}
+
+/** React Query options for searching products by text (includes seller name search) */
 export const productsSearchQueryOptions = (query: string, limit: number = 20) =>
 	queryOptions({
 		queryKey: [...productKeys.all, 'search', query, limit],
-		queryFn: () => fetchProductsBySearch(query, limit),
+		queryFn: () => fetchProductsBySearchWithSellers(query, limit),
 		enabled: !!query?.trim(),
 	})
 
-/** Hook to search products by text */
+/** Hook to search products by text (includes seller name search) */
 export const useProductSearch = (query: string, options?: { enabled?: boolean; limit?: number }) => {
 	return useQuery({
 		...productsSearchQueryOptions(query, options?.limit ?? 20),

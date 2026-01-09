@@ -57,20 +57,37 @@ export function ImageCarousel({ images, title, className, onImageChange, onImage
 	}
 
 	return (
-		<div className="h-full flex flex-row gap-4">
-			{/* Preview Images - Always vertical on left */}
-			<div className="w-16 sm:w-20 lg:w-24 flex flex-col flex-shrink-0">
+		<div className="h-full flex flex-col gap-4">
+			{/* Main Carousel */}
+			<Carousel setApi={setApi} className="w-full aspect-square">
+				<CarouselContent>
+					{images.map((image, index) => (
+						<CarouselItem key={index} className="flex items-center justify-center relative aspect-square bg-black">
+							{index === currentIndex && <div className="absolute inset-0 bg-dots-image-overlay pointer-events-none z-0" />}
+							<button
+								onClick={() => onImageClick?.(index)}
+								className="relative z-10 w-full h-full cursor-pointer flex items-center justify-center"
+								aria-label={`View ${title} - Image ${index + 1} in full size`}
+							>
+								<img src={image.url} alt={`${title} - Image ${index + 1}`} className="max-w-full max-h-full object-contain" />
+							</button>
+						</CarouselItem>
+					))}
+				</CarouselContent>
+			</Carousel>
+
+			{/* Preview Images - horizontal row below main image */}
+			{images.length > 1 && (
 				<Carousel
 					setApi={setPreviewApiVertical}
 					opts={{
-						align: 'center',
+						align: 'start',
 					}}
-					orientation="vertical"
 					className="w-full"
 				>
-					<CarouselContent className="-mt-1 max-h-[65vh] lg:max-h-[45vh]">
+					<CarouselContent className="ml-1">
 						{images.map((image, index) => (
-							<CarouselItem key={index} className="pt-1 basis-1/3 p-2">
+							<CarouselItem key={index} className="basis-1/4 sm:basis-1/5 md:basis-1/6 lg:basis-1/6 p-2">
 								<button
 									className={cn(
 										'relative w-full p-1 transition-all flex-shrink-0',
@@ -87,25 +104,7 @@ export function ImageCarousel({ images, title, className, onImageChange, onImage
 						))}
 					</CarouselContent>
 				</Carousel>
-			</div>
-
-			{/* Main Carousel - Square with stable right margin */}
-			<Carousel setApi={setApi} className="flex-1 aspect-square">
-				<CarouselContent>
-					{images.map((image, index) => (
-						<CarouselItem key={index} className="flex items-center justify-center relative aspect-square bg-black">
-							{index === currentIndex && <div className="absolute inset-0 bg-dots-image-overlay pointer-events-none z-0" />}
-							<button
-								onClick={() => onImageClick?.(index)}
-								className="relative z-10 cursor-pointer flex items-center justify-center"
-								aria-label={`View ${title} - Image ${index + 1} in full size`}
-							>
-								<img src={image.url} alt={`${title} - Image ${index + 1}`} className="max-w-full max-h-full object-contain" />
-							</button>
-						</CarouselItem>
-					))}
-				</CarouselContent>
-			</Carousel>
+			)}
 		</div>
 	)
 }

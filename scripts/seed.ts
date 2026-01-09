@@ -145,8 +145,9 @@ async function seedData() {
 		await createPaymentDetailEvent(signer, ndk, onChainPaymentDetail, APP_PUBKEY!)
 
 		// Create NWC wallets for each user (2 wallets with organic names)
+		// Uses the encrypted test wallet if it can be decrypted with APP_PRIVATE_KEY
 		console.log(`Creating NWC wallets for user ${pubkey.substring(0, 8)}...`)
-		await createUserNwcWallets(signer, pubkey, 2)
+		await createUserNwcWallets(signer, pubkey, 2, APP_PRIVATE_KEY)
 
 		// Create relay list (kind 10002) for each user so migration tool can find their products
 		console.log(`Creating relay list for user ${pubkey.substring(0, 8)}...`)

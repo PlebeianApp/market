@@ -16,11 +16,16 @@ export function RelayCard({ relay, onRemove, type }: RelayCardProps) {
 
 	useEffect(() => {
 		const updateStatus = () => {
-			if (relay.connectivity.status === NDKRelayStatus.CONNECTED) {
-				setStatus('connected')
-			} else if (relay.connectivity.status === NDKRelayStatus.CONNECTING) {
-				setStatus('connecting')
-			} else {
+			try {
+				if (relay?.connectivity?.status === NDKRelayStatus.CONNECTED) {
+					setStatus('connected')
+				} else if (relay?.connectivity?.status === NDKRelayStatus.CONNECTING) {
+					setStatus('connecting')
+				} else {
+					setStatus('disconnected')
+				}
+			} catch (error) {
+				console.error('Failed to get relay status:', error)
 				setStatus('disconnected')
 			}
 		}
@@ -28,13 +33,21 @@ export function RelayCard({ relay, onRemove, type }: RelayCardProps) {
 		// Initial status
 		updateStatus()
 
-		// Listen for status changes
-		relay.on('connect', updateStatus)
-		relay.on('disconnect', updateStatus)
+		// Listen for status changes - wrap in try/catch
+		try {
+			relay.on('connect', updateStatus)
+			relay.on('disconnect', updateStatus)
+		} catch (error) {
+			console.error('Failed to attach relay status listeners:', error)
+		}
 
 		return () => {
-			relay.off('connect', updateStatus)
-			relay.off('disconnect', updateStatus)
+			try {
+				relay.off('connect', updateStatus)
+				relay.off('disconnect', updateStatus)
+			} catch (error) {
+				console.error('Failed to remove relay status listeners:', error)
+			}
 		}
 	}, [relay])
 

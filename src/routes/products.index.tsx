@@ -147,9 +147,9 @@ function ProductsRoute() {
 		return () => clearInterval(interval)
 	}, [totalSlides])
 
-	// Current slide data - homepage banner is now at index 1
-	const isHomepageSlide = currentSlideIndex === 1
-	const currentProduct = isHomepageSlide ? null : currentSlideIndex === 0 ? productsForSlides[0] : productsForSlides[currentSlideIndex - 1]
+	// Current slide data - homepage banner is at index 0
+	const isHomepageSlide = currentSlideIndex === 0
+	const currentProduct = isHomepageSlide ? null : productsForSlides[currentSlideIndex - 1]
 	const currentProductId = currentProduct?.id
 
 	// Get current product data (only if not homepage slide)
@@ -241,7 +241,7 @@ function ProductsRoute() {
 								className={`w-3 h-3 rounded-full transition-all duration-300 ${
 									index === currentSlideIndex ? 'bg-white scale-125' : 'bg-white/40 hover:bg-white/60'
 								}`}
-								aria-label={`View ${index === 1 ? 'homepage' : `product ${index === 0 ? 1 : index}`}`}
+								aria-label={`View ${index === 0 ? 'homepage' : `product ${index}`}`}
 							/>
 						))}
 					</div>
@@ -283,7 +283,7 @@ function ProductsRoute() {
 								className={`w-3 h-3 rounded-full transition-all duration-300 ${
 									index === currentSlideIndex ? 'bg-white scale-125' : 'bg-white/40 hover:bg-white/60'
 								}`}
-								aria-label={`View ${index === 1 ? 'homepage' : `product ${index === 0 ? 1 : index}`}`}
+								aria-label={`View ${index === 0 ? 'homepage' : `product ${index}`}`}
 							/>
 						))}
 					</div>
@@ -349,7 +349,7 @@ function ProductsRoute() {
 			)}
 
 			<div className="px-8 py-4">
-				<ItemGrid title="All Products">
+				<ItemGrid title="All Products" className="gap-4 sm:gap-8">
 					{products.map((product) => (
 						<ProductCard key={product.id} product={product} />
 					))}

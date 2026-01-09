@@ -1,8 +1,8 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { FEATURED_ITEMS_CONFIG } from '@/lib/schemas/featured'
 import type { FeaturedProducts, FeaturedCollections, FeaturedUsers } from '@/lib/schemas/featured'
+import { naddrFromAddress } from '@/lib/nostr/naddr'
 import { configKeys } from '@/queries/queryKeyFactory'
-import type { NDKFilter, NDKKind } from '@nostr-dev-kit/ndk'
 import { useQuery } from '@tanstack/react-query'
 
 // --- DATA FETCHING FUNCTIONS ---
@@ -16,15 +16,8 @@ export const fetchFeaturedProducts = async (appPubkey: string): Promise<Featured
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const filter: NDKFilter = {
-		kinds: [FEATURED_ITEMS_CONFIG.PRODUCTS.kind as NDKKind],
-		authors: [appPubkey],
-		'#d': [FEATURED_ITEMS_CONFIG.PRODUCTS.dTag],
-		limit: 1,
-	}
-
-	const events = await ndk.fetchEvents(filter)
-	const event = Array.from(events)[0]
+	const naddr = naddrFromAddress(FEATURED_ITEMS_CONFIG.PRODUCTS.kind, appPubkey, FEATURED_ITEMS_CONFIG.PRODUCTS.dTag)
+	const event = await ndk.fetchEvent(naddr)
 
 	if (!event) return null
 
@@ -46,15 +39,8 @@ export const fetchFeaturedCollections = async (appPubkey: string): Promise<Featu
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const filter: NDKFilter = {
-		kinds: [FEATURED_ITEMS_CONFIG.COLLECTIONS.kind as NDKKind],
-		authors: [appPubkey],
-		'#d': [FEATURED_ITEMS_CONFIG.COLLECTIONS.dTag],
-		limit: 1,
-	}
-
-	const events = await ndk.fetchEvents(filter)
-	const event = Array.from(events)[0]
+	const naddr = naddrFromAddress(FEATURED_ITEMS_CONFIG.COLLECTIONS.kind, appPubkey, FEATURED_ITEMS_CONFIG.COLLECTIONS.dTag)
+	const event = await ndk.fetchEvent(naddr)
 
 	if (!event) return null
 
@@ -76,15 +62,8 @@ export const fetchFeaturedUsers = async (appPubkey: string): Promise<FeaturedUse
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	const filter: NDKFilter = {
-		kinds: [FEATURED_ITEMS_CONFIG.USERS.kind as NDKKind],
-		authors: [appPubkey],
-		'#d': [FEATURED_ITEMS_CONFIG.USERS.dTag],
-		limit: 1,
-	}
-
-	const events = await ndk.fetchEvents(filter)
-	const event = Array.from(events)[0]
+	const naddr = naddrFromAddress(FEATURED_ITEMS_CONFIG.USERS.kind, appPubkey, FEATURED_ITEMS_CONFIG.USERS.dTag)
+	const event = await ndk.fetchEvent(naddr)
 
 	if (!event) return null
 
