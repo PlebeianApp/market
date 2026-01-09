@@ -634,6 +634,14 @@ export function ShippingTab() {
 	const queryClient = useQueryClient()
 	const [user, setUser] = useState<any>(null)
 	const [isCreatingShipping, setIsCreatingShipping] = useState(false)
+	const [showPickupForm, setShowPickupForm] = useState(false)
+	const [pickupAddress, setPickupAddress] = useState({
+		street: '',
+		city: '',
+		state: '',
+		postalCode: '',
+		country: '',
+	})
 	const publishShippingMutation = usePublishShippingOptionMutation()
 
 	// Get user on mount
@@ -647,6 +655,12 @@ export function ShippingTab() {
 	const handleQuickCreate = async (template: (typeof QUICK_SHIPPING_TEMPLATES)[number]) => {
 		if (isCreatingShipping || !user?.pubkey) return
 
+		// For pickup, show the address form instead of creating immediately
+		if (template.service === 'pickup') {
+			setShowPickupForm(true)
+			return
+		}
+
 		setIsCreatingShipping(true)
 		try {
 			const formData: ShippingFormData = {
@@ -656,15 +670,6 @@ export function ShippingTab() {
 				currency: 'USD',
 				countries: [], // Empty = worldwide
 				service: template.service,
-				...(template.service === 'pickup' && {
-					pickupAddress: {
-						street: '',
-						city: 'Your City',
-						state: '',
-						postalCode: '',
-						country: 'USA',
-					},
-				}),
 			}
 
 			await publishShippingMutation.mutateAsync(formData)
@@ -674,6 +679,49 @@ export function ShippingTab() {
 			await queryClient.invalidateQueries({ queryKey: shippingKeys.all })
 
 			toast.success(`${template.name} shipping option created!`)
+		} catch (error) {
+			console.error('Failed to create shipping option:', error)
+			toast.error('Failed to create shipping option')
+		} finally {
+			setIsCreatingShipping(false)
+		}
+	}
+
+	// Handle pickup address form submission
+	const handlePickupSubmit = async () => {
+		if (!user?.pubkey) return
+
+		// Validate required fields
+		if (!pickupAddress.street.trim()) {
+			toast.error('Street address is required')
+			return
+		}
+		if (!pickupAddress.city.trim()) {
+			toast.error('City is required')
+			return
+		}
+
+		setIsCreatingShipping(true)
+		try {
+			const formData: ShippingFormData = {
+				title: 'Local Pickup',
+				description: 'Customer picks up the item at your location',
+				price: '0',
+				currency: 'USD',
+				countries: [],
+				service: 'pickup',
+				pickupAddress: pickupAddress,
+			}
+
+			await publishShippingMutation.mutateAsync(formData)
+
+			// Invalidate and refetch shipping options with the correct pubkey
+			await queryClient.invalidateQueries({ queryKey: shippingKeys.byPubkey(user.pubkey) })
+			await queryClient.invalidateQueries({ queryKey: shippingKeys.all })
+
+			toast.success('Local Pickup shipping option created!')
+			setShowPickupForm(false)
+			setPickupAddress({ street: '', city: '', state: '', postalCode: '', country: '' })
 		} catch (error) {
 			console.error('Failed to create shipping option:', error)
 			toast.error('Failed to create shipping option')
@@ -823,30 +871,130 @@ export function ShippingTab() {
 							<p>No shipping options available.</p>
 							<p className="text-sm mt-2">Quick-create a shipping option to get started:</p>
 						</div>
-						<div className="grid gap-3">
-							{QUICK_SHIPPING_TEMPLATES.map((template) => (
-								<button
-									key={template.name}
-									type="button"
-									onClick={() => handleQuickCreate(template)}
-									disabled={isCreatingShipping}
-									className="flex items-center gap-3 p-4 border rounded-md hover:bg-gray-50 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-								>
-									{template.icon === 'digital' && <DownloadIcon className="w-5 h-5 text-purple-500 flex-shrink-0" />}
-									{template.icon === 'worldwide' && <TruckIcon className="w-5 h-5 text-blue-500 flex-shrink-0" />}
-									{template.icon === 'pickup' && <PackageIcon className="w-5 h-5 text-green-500 flex-shrink-0" />}
-									<div className="flex-1 min-w-0">
-										<div className="font-medium">{template.name}</div>
-										<div className="text-sm text-gray-500">{template.description}</div>
+						{showPickupForm ? (
+							<div className="border rounded-md p-4 space-y-4 bg-gray-50">
+								<div className="flex items-center gap-2">
+									<PackageIcon className="w-5 h-5 text-green-500" />
+									<h4 className="font-medium">Local Pickup Address</h4>
+								</div>
+								<p className="text-sm text-gray-500">Enter the address where customers can pick up their orders:</p>
+								<div className="space-y-3">
+									<div>
+										<Label htmlFor="pickup-street" className="text-sm">
+											Street Address <span className="text-red-500">*</span>
+										</Label>
+										<Input
+											id="pickup-street"
+											value={pickupAddress.street}
+											onChange={(e) => setPickupAddress((prev) => ({ ...prev, street: e.target.value }))}
+											placeholder="123 Main Street"
+											className="mt-1"
+										/>
 									</div>
-									{isCreatingShipping ? (
-										<Loader2 className="w-5 h-5 animate-spin text-gray-400" />
-									) : (
-										<PlusIcon className="w-5 h-5 text-gray-400" />
-									)}
-								</button>
-							))}
-						</div>
+									<div className="grid grid-cols-2 gap-3">
+										<div>
+											<Label htmlFor="pickup-city" className="text-sm">
+												City <span className="text-red-500">*</span>
+											</Label>
+											<Input
+												id="pickup-city"
+												value={pickupAddress.city}
+												onChange={(e) => setPickupAddress((prev) => ({ ...prev, city: e.target.value }))}
+												placeholder="New York"
+												className="mt-1"
+											/>
+										</div>
+										<div>
+											<Label htmlFor="pickup-state" className="text-sm">
+												State/Province
+											</Label>
+											<Input
+												id="pickup-state"
+												value={pickupAddress.state}
+												onChange={(e) => setPickupAddress((prev) => ({ ...prev, state: e.target.value }))}
+												placeholder="NY"
+												className="mt-1"
+											/>
+										</div>
+									</div>
+									<div className="grid grid-cols-2 gap-3">
+										<div>
+											<Label htmlFor="pickup-postal" className="text-sm">
+												Postal Code
+											</Label>
+											<Input
+												id="pickup-postal"
+												value={pickupAddress.postalCode}
+												onChange={(e) => setPickupAddress((prev) => ({ ...prev, postalCode: e.target.value }))}
+												placeholder="10001"
+												className="mt-1"
+											/>
+										</div>
+										<div>
+											<Label htmlFor="pickup-country" className="text-sm">
+												Country
+											</Label>
+											<Input
+												id="pickup-country"
+												value={pickupAddress.country}
+												onChange={(e) => setPickupAddress((prev) => ({ ...prev, country: e.target.value }))}
+												placeholder="USA"
+												className="mt-1"
+											/>
+										</div>
+									</div>
+								</div>
+								<div className="flex gap-2 pt-2">
+									<Button
+										type="button"
+										variant="outline"
+										onClick={() => {
+											setShowPickupForm(false)
+											setPickupAddress({ street: '', city: '', state: '', postalCode: '', country: '' })
+										}}
+										disabled={isCreatingShipping}
+										className="flex-1"
+									>
+										Cancel
+									</Button>
+									<Button type="button" onClick={handlePickupSubmit} disabled={isCreatingShipping} className="flex-1">
+										{isCreatingShipping ? (
+											<>
+												<Loader2 className="w-4 h-4 animate-spin mr-2" />
+												Creating...
+											</>
+										) : (
+											'Create Pickup Option'
+										)}
+									</Button>
+								</div>
+							</div>
+						) : (
+							<div className="grid gap-3">
+								{QUICK_SHIPPING_TEMPLATES.map((template) => (
+									<button
+										key={template.name}
+										type="button"
+										onClick={() => handleQuickCreate(template)}
+										disabled={isCreatingShipping}
+										className="flex items-center gap-3 p-4 border rounded-md hover:bg-gray-50 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+									>
+										{template.icon === 'digital' && <DownloadIcon className="w-5 h-5 text-purple-500 flex-shrink-0" />}
+										{template.icon === 'worldwide' && <TruckIcon className="w-5 h-5 text-blue-500 flex-shrink-0" />}
+										{template.icon === 'pickup' && <PackageIcon className="w-5 h-5 text-green-500 flex-shrink-0" />}
+										<div className="flex-1 min-w-0">
+											<div className="font-medium">{template.name}</div>
+											<div className="text-sm text-gray-500">{template.description}</div>
+										</div>
+										{isCreatingShipping ? (
+											<Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+										) : (
+											<PlusIcon className="w-5 h-5 text-gray-400" />
+										)}
+									</button>
+								))}
+							</div>
+						)}
 						<p className="text-xs text-gray-400 text-center">You can customize these options later in Dashboard → Shipping Options</p>
 					</div>
 				) : (
