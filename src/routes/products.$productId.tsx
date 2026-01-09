@@ -353,36 +353,38 @@ function RouteComponent() {
 								<div className="flex items-center gap-4">
 									{/* Show cart controls for non-owners */}
 									{permissions.canAddToCart && (
-										<div className="flex items-center gap-2">
-											<Button
-												variant="tertiary"
-												size="icon"
-												onClick={() => setQuantity(Math.max(1, quantity - 1))}
-												disabled={quantity <= 1}
-											>
-												<Minus className="h-6 w-6" />
-											</Button>
-											<Input
-												className="w-12 text-center font-medium bg-white text-black"
-												value={quantity}
-												onChange={(e) => {
-													const value = parseInt(e.target.value)
-													if (!isNaN(value) && value > 0 && value <= (stock || Infinity)) {
-														setQuantity(value)
-													}
-												}}
-												min={1}
-												max={stock}
-												type="number"
-											/>
-											<Button
-												variant="tertiary"
-												size="icon"
-												onClick={() => setQuantity(Math.min(stock || quantity + 1, quantity + 1))}
-												disabled={quantity >= (stock || quantity)}
-											>
-												<Plus className="h-6 w-6" />
-											</Button>
+										<div className="flex items-center gap-2 flex-wrap">
+											<div className="flex items-center gap-2 flex-shrink-0">
+												<Button
+													variant="tertiary"
+													size="icon"
+													onClick={() => setQuantity(Math.max(1, quantity - 1))}
+													disabled={quantity <= 1}
+												>
+													<Minus className="h-6 w-6" />
+												</Button>
+												<Input
+													className="w-12 text-center font-medium bg-white text-black"
+													value={quantity}
+													onChange={(e) => {
+														const value = parseInt(e.target.value)
+														if (!isNaN(value) && value > 0 && value <= (stock || Infinity)) {
+															setQuantity(value)
+														}
+													}}
+													min={1}
+													max={stock}
+													type="number"
+												/>
+												<Button
+													variant="tertiary"
+													size="icon"
+													onClick={() => setQuantity(Math.min(stock || quantity + 1, quantity + 1))}
+													disabled={quantity >= (stock || quantity)}
+												>
+													<Plus className="h-6 w-6" />
+												</Button>
+											</div>
 											<Button variant="secondary" onClick={handleAddToCartClick} disabled={stock === 0 || visibility === 'hidden'}>
 												{visibility === 'hidden' ? 'Not Available' : visibility === 'pre-order' ? 'Pre-order' : 'Add to cart'}
 											</Button>
