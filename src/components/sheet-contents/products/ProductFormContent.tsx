@@ -106,6 +106,27 @@ export function ProductFormContent({
 		}
 	}, [shouldShowShippingFirst, activeTab, formSessionId])
 
+	// Track if we started with shipping first (no shipping options)
+	// This is used to determine if we should auto-navigate to name tab after first shipping is added
+	const startedWithShippingFirstRef = useRef<boolean>(false)
+
+	// Track if we've started with shipping first in this session
+	useEffect(() => {
+		if (shouldShowShippingFirst && activeTab === 'shipping') {
+			startedWithShippingFirstRef.current = true
+		}
+	}, [shouldShowShippingFirst, activeTab])
+
+	// Auto-navigate to 'name' tab after first shipping option is added when we started with shipping first
+	useEffect(() => {
+		if (startedWithShippingFirstRef.current && hasValidShipping && activeTab === 'shipping') {
+			// First shipping option added, navigate to name tab
+			productFormActions.updateValues({ activeTab: 'name' })
+			// Reset the flag so we don't auto-navigate again
+			startedWithShippingFirstRef.current = false
+		}
+	}, [hasValidShipping, activeTab])
+
 	// Check for persisted draft on mount (for drafts from previous sessions)
 	const checkForPersistedDraft = useCallback(async () => {
 		const draftKey = productDTag || editingProductId
@@ -336,7 +357,18 @@ export function ProductFormContent({
 							</Button>
 						)}
 
-						{activeTab === 'shipping' || editingProductId ? (
+						{/* Show 'Next' button when shipping tab is shown first and user is on shipping tab */}
+						{shouldShowShippingFirst && activeTab === 'shipping' && !hasValidShipping ? (
+							<Button
+								type="button"
+								variant="secondary"
+								className="flex-1 uppercase"
+								onClick={() => productFormActions.updateValues({ activeTab: 'name' })}
+								data-testid="product-next-button"
+							>
+								Next
+							</Button>
+						) : activeTab === 'shipping' || editingProductId ? (
 							<form.Subscribe
 								selector={(state) => [state.canSubmit, state.isSubmitting]}
 								children={([canSubmit, isSubmitting]) => {

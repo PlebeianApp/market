@@ -651,6 +651,45 @@ export function ShippingTab() {
 
 	const shippingOptionsQuery = useShippingOptionsByPubkey(user?.pubkey || '')
 
+	// Helper to auto-add a shipping option after creation
+	const autoAddShippingOption = async (templateName: string) => {
+		// Wait for the query to refetch and use the result directly
+		const refetchResult = await shippingOptionsQuery.refetch()
+
+		// Find the newly created option by name
+		const refetchedData = refetchResult.data || []
+		const newOption = refetchedData
+			.map((event) => {
+				const info = getShippingInfo(event)
+				if (!info || !info.id || typeof info.id !== 'string' || info.id.trim().length === 0) return null
+				const id = createShippingReference(user.pubkey, info.id)
+				return {
+					id,
+					name: info.title,
+					cost: parseFloat(info.price.amount),
+					currency: info.price.currency,
+					countries: info.countries || [],
+					service: info.service || '',
+					carrier: info.carrier || '',
+				}
+			})
+			.filter(Boolean)
+			.find((opt) => opt && opt.name === templateName) as RichShippingInfo | undefined
+
+		if (newOption && !shippings.some((s) => s.shipping?.id === newOption.id)) {
+			const newShipping: ProductShippingForm = {
+				shipping: {
+					id: newOption.id,
+					name: newOption.name || '',
+				},
+				extraCost: '',
+			}
+			productFormActions.updateValues({
+				shippings: [...shippings, newShipping],
+			})
+		}
+	}
+
 	// Quick-create a shipping option from template
 	const handleQuickCreate = async (template: (typeof QUICK_SHIPPING_TEMPLATES)[number]) => {
 		if (isCreatingShipping || !user?.pubkey) return
@@ -678,7 +717,10 @@ export function ShippingTab() {
 			await queryClient.invalidateQueries({ queryKey: shippingKeys.byPubkey(user.pubkey) })
 			await queryClient.invalidateQueries({ queryKey: shippingKeys.all })
 
-			toast.success(`${template.name} shipping option created!`)
+			// Auto-add the newly created shipping option
+			await autoAddShippingOption(template.name)
+
+			toast.success(`${template.name} shipping option created and added!`)
 		} catch (error) {
 			console.error('Failed to create shipping option:', error)
 			toast.error('Failed to create shipping option')
@@ -719,7 +761,10 @@ export function ShippingTab() {
 			await queryClient.invalidateQueries({ queryKey: shippingKeys.byPubkey(user.pubkey) })
 			await queryClient.invalidateQueries({ queryKey: shippingKeys.all })
 
-			toast.success('Local Pickup shipping option created!')
+			// Auto-add the newly created shipping option
+			await autoAddShippingOption('Local Pickup')
+
+			toast.success('Local Pickup shipping option created and added!')
 			setShowPickupForm(false)
 			setPickupAddress({ street: '', city: '', state: '', postalCode: '', country: '' })
 		} catch (error) {
