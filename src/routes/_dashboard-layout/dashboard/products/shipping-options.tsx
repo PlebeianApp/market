@@ -262,7 +262,9 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 			try {
 				await deleteMutation.mutateAsync(shippingId)
 				onOpenChange(false)
-				onSuccess?.()
+				// Note: Don't call onSuccess() after delete - it triggers a refetch
+				// which would bring back the deleted item from relays that haven't
+				// processed the deletion yet. The optimistic update handles the UI.
 			} catch (error) {
 				toast.error('Failed to delete shipping option')
 			}

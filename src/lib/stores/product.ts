@@ -62,6 +62,7 @@ const PRODUCT_FORM_TABS: ProductFormTab[] = ['name', 'detail', 'spec', 'category
 export interface ProductFormState {
 	editingProductId: string | null
 	isDirty: boolean // Track if form has been modified from saved state
+	formSessionId: number // Incremented on reset to detect new form sessions
 	activeTab: ProductFormTab
 	name: string
 	description: string
@@ -87,6 +88,7 @@ export interface ProductFormState {
 export const DEFAULT_FORM_STATE: ProductFormState = {
 	editingProductId: null,
 	isDirty: false,
+	formSessionId: 0,
 	activeTab: 'name',
 	name: '',
 	description: '',
@@ -282,11 +284,13 @@ export const productFormActions = {
 		// Cancel any pending auto-save to prevent stale data from being written
 		cancelPendingSave()
 
-		productFormStore.setState(() => {
+		productFormStore.setState((state) => {
 			const selectedCurrency = uiStore.state.selectedCurrency
 
 			return {
 				...DEFAULT_FORM_STATE,
+				// Increment formSessionId to signal new form session
+				formSessionId: state.formSessionId + 1,
 				currency: selectedCurrency === 'BTC' ? 'SATS' : selectedCurrency,
 				currencyMode: ['BTC', 'SATS'].includes(selectedCurrency) ? 'sats' : 'fiat',
 			}

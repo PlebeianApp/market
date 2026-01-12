@@ -1,6 +1,7 @@
 import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 import { ndkActions } from '@/lib/stores/ndk'
 import { shippingKeys } from '@/queries/queryKeyFactory'
+import { markShippingAsDeleted } from '@/queries/shipping'
 import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -401,20 +402,59 @@ export const useDeleteShippingOptionMutation = () => {
 			if (!signer) throw new Error('No signer available')
 			return deleteShippingOption(shippingDTag, signer, ndk)
 		},
-		onSuccess: async (result, shippingDTag) => {
-			// Invalidate and refetch queries
-			await queryClient.invalidateQueries({ queryKey: shippingKeys.all })
-			await queryClient.invalidateQueries({ queryKey: shippingKeys.details(shippingDTag) })
+		onMutate: async (shippingDTag) => {
+			// Mark as deleted so future fetches will filter it out
+			markShippingAsDeleted(shippingDTag)
 
+			// Cancel any outgoing refetches to avoid overwriting our optimistic update
+			await queryClient.cancelQueries({ queryKey: shippingKeys.all })
 			if (currentUserPubkey) {
-				await queryClient.invalidateQueries({ queryKey: shippingKeys.byPubkey(currentUserPubkey) })
+				await queryClient.cancelQueries({ queryKey: shippingKeys.byPubkey(currentUserPubkey) })
 			}
 
-			toast.success('Shipping option deleted successfully')
+			// Snapshot the previous values for rollback
+			const previousAll = queryClient.getQueryData(shippingKeys.all)
+			const previousByPubkey = currentUserPubkey ? queryClient.getQueryData(shippingKeys.byPubkey(currentUserPubkey)) : undefined
+
+			// Optimistically remove the shipping option from the cache
+			queryClient.setQueryData(shippingKeys.all, (old: NDKEvent[] | undefined) => {
+				if (!old) return old
+				return old.filter((event) => {
+					const dTag = event.tags.find((t) => t[0] === 'd')?.[1]
+					return dTag !== shippingDTag
+				})
+			})
+
+			if (currentUserPubkey) {
+				queryClient.setQueryData(shippingKeys.byPubkey(currentUserPubkey), (old: NDKEvent[] | undefined) => {
+					if (!old) return old
+					return old.filter((event) => {
+						const dTag = event.tags.find((t) => t[0] === 'd')?.[1]
+						return dTag !== shippingDTag
+					})
+				})
+			}
+
+			// Return context for rollback
+			return { previousAll, previousByPubkey }
 		},
-		onError: (error) => {
+		onError: (error, shippingDTag, context) => {
+			// Rollback to previous values on error
+			if (context?.previousAll) {
+				queryClient.setQueryData(shippingKeys.all, context.previousAll)
+			}
+			if (context?.previousByPubkey && currentUserPubkey) {
+				queryClient.setQueryData(shippingKeys.byPubkey(currentUserPubkey), context.previousByPubkey)
+			}
 			console.error('Failed to delete shipping option:', error)
 			toast.error(error instanceof Error ? error.message : 'Failed to delete shipping option')
+		},
+		onSuccess: async (result, shippingDTag) => {
+			// Remove the specific shipping option from cache without refetching
+			// (Relays may still return deleted events, so we don't invalidate/refetch)
+			queryClient.removeQueries({ queryKey: shippingKeys.details(shippingDTag) })
+
+			toast.success('Shipping option deleted successfully')
 		},
 	})
 }

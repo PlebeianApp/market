@@ -8,6 +8,57 @@ import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/r
 import { toast } from 'sonner'
 import { orderKeys, shippingKeys } from './queryKeyFactory'
 
+// Re-export shippingKeys for use in other files
+export { shippingKeys }
+
+// --- DELETED SHIPPING OPTIONS TRACKING ---
+// Track deleted shipping option IDs to filter them out from relay responses
+// (Relays may still return deleted events until they process the deletion)
+// Persisted to localStorage so deletions survive page reloads
+
+const DELETED_SHIPPING_STORAGE_KEY = 'plebeian_deleted_shipping_ids'
+
+const loadDeletedShippingIds = (): Set<string> => {
+	try {
+		const stored = localStorage.getItem(DELETED_SHIPPING_STORAGE_KEY)
+		if (stored) {
+			const parsed = JSON.parse(stored)
+			if (Array.isArray(parsed)) {
+				return new Set(parsed)
+			}
+		}
+	} catch (e) {
+		console.error('Failed to load deleted shipping IDs from localStorage:', e)
+	}
+	return new Set()
+}
+
+const saveDeletedShippingIds = (ids: Set<string>) => {
+	try {
+		localStorage.setItem(DELETED_SHIPPING_STORAGE_KEY, JSON.stringify([...ids]))
+	} catch (e) {
+		console.error('Failed to save deleted shipping IDs to localStorage:', e)
+	}
+}
+
+const deletedShippingIds = loadDeletedShippingIds()
+
+export const markShippingAsDeleted = (dTag: string) => {
+	deletedShippingIds.add(dTag)
+	saveDeletedShippingIds(deletedShippingIds)
+}
+
+export const isShippingDeleted = (dTag: string) => {
+	return deletedShippingIds.has(dTag)
+}
+
+const filterDeletedShippingOptions = (events: NDKEvent[]): NDKEvent[] => {
+	return events.filter((event) => {
+		const dTag = event.tags.find((t) => t[0] === 'd')?.[1]
+		return dTag ? !deletedShippingIds.has(dTag) : true
+	})
+}
+
 // --- DATA FETCHING FUNCTIONS ---
 
 /**
@@ -24,7 +75,7 @@ export const fetchShippingOptions = async () => {
 	}
 
 	const events = await ndk.fetchEvents(filter)
-	return Array.from(events)
+	return filterDeletedShippingOptions(Array.from(events))
 }
 
 /**
@@ -79,7 +130,7 @@ export const fetchShippingOptionsByPubkey = async (pubkey: string) => {
 	}
 
 	const events = await ndk.fetchEvents(filter)
-	return Array.from(events)
+	return filterDeletedShippingOptions(Array.from(events))
 }
 
 // --- REACT QUERY OPTIONS ---
@@ -490,12 +541,13 @@ export const getShippingInfo = (event: NDKEvent) => {
 	const countryTag = getShippingCountry(event) || ['country']
 	const serviceTag = getShippingService(event)
 
-	// Return null if any required field is missing
-	if (!id || !title || !priceTag || !countryTag || !serviceTag) {
+	// Return null if any required field is missing (country is optional - empty means worldwide)
+	if (!id || !title || !priceTag || !serviceTag) {
 		return null
 	}
 
-	const countries = countryTag.slice(1) // Remove the 'country' tag name, get all country codes
+	// Country tag is optional - empty/missing means worldwide shipping
+	const countries = countryTag ? countryTag.slice(1) : [] // Remove the 'country' tag name, get all country codes
 
 	return {
 		id,
@@ -617,6 +669,7 @@ export const useShippingService = (id: string) => {
 export const useShippingOptionsByPubkey = (pubkey: string) => {
 	return useQuery({
 		...shippingOptionsByPubkeyQueryOptions(pubkey),
+		enabled: !!pubkey,
 	})
 }
 

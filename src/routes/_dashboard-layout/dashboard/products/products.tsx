@@ -10,7 +10,7 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute, Outlet, useMatchRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { PackageIcon, Trash, EyeOff, Clock, Eye } from 'lucide-react'
 import { useState, useMemo } from 'react'
@@ -27,7 +27,7 @@ function ProductBasicInfo({ product }: { product: NDKEvent }) {
 	const stock = stockTag?.[1]
 
 	return (
-		<div className="p-4 bg-gray-50 border-t">
+		<Link to={`/products/${product.id}`} className="block p-4 bg-gray-50 border-t hover:bg-gray-100 transition-colors cursor-pointer">
 			<div className="space-y-3">
 				{images.length > 0 && (
 					<div className="w-full h-32 bg-gray-200 rounded-md overflow-hidden">
@@ -62,8 +62,9 @@ function ProductBasicInfo({ product }: { product: NDKEvent }) {
 						</p>
 					</div>
 				)}
+				<p className="text-xs text-gray-400 text-right">Click to view product page →</p>
 			</div>
-		</div>
+		</Link>
 	)
 }
 
