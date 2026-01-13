@@ -1,6 +1,7 @@
 export type ObjectValues<T> = T[keyof T]
 
 export const defaultRelaysUrls: string[] = [
+	'wss://relay.plebeian.market',
 	'wss://relay.nostr.band',
 	'wss://nos.lol',
 	'wss://relay.nostr.net',
