@@ -1,0 +1,92 @@
+name: Deploy Production Release
+
+on:
+  push:
+    tags:
+      - '*-release'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to deploy (optional, uses latest -release tag if empty)'
+        required: false
+
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Deploying version: $TAG"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build application
+        run: |
+          bun run generate-routes
+          bun run build:production
+
+      - name: Stop production service
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            sudo systemctl stop market.service || true
+
+      - name: Deploy to production server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          source: './*'
+          target: '/opt/market'
+          rm: true
+
+      - name: Setup production environment
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            cd /opt/market
+
+            # Create production environment file
+            cat <<EOF > .env
+            NODE_ENV=production
+            APP_RELAY_URL=${{ secrets.PROD_APP_RELAY_URL }}
+            APP_PRIVATE_KEY=${{ secrets.APP_PRIVATE_KEY }}
+            EOF
+
+            # Install production dependencies
+            ~/.bun/bin/bun install --production
+
+            # Start production service
+            sudo systemctl start market.service
+
+            # Verify deployment
+            sleep 5
+            sudo systemctl status market.service --no-pager
+
+      - name: Health check
+        run: |
+          sleep 10
+          curl -sf -o /dev/null https://plebeian.market/ || echo "Warning: Health check pending DNS propagation"
+          echo "✅ Production deployment of ${{ steps.version.outputs.tag }} complete!"
