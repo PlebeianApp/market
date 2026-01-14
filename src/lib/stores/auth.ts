@@ -3,6 +3,8 @@ import { Store } from '@tanstack/store'
 import { ndkActions } from './ndk'
 import { cartActions } from './cart'
 import { fetchProductsByPubkey } from '@/queries/products'
+import { hasAcceptedTerms, TERMS_ACCEPTED_KEY } from '@/components/dialogs/TermsConditionsDialog'
+import { uiActions } from './ui'
 
 export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
 export const NOSTR_LOCAL_SIGNER_KEY = 'nostr_local_signer_key'
@@ -37,6 +39,7 @@ export const authActions = {
 			const bunkerUrl = localStorage.getItem(NOSTR_CONNECT_KEY)
 			if (privateKey && bunkerUrl) {
 				await authActions.loginWithNip46(bunkerUrl, new NDKPrivateKeySigner(privateKey))
+				authActions.checkAndShowTermsDialog()
 				return
 			}
 
@@ -47,6 +50,7 @@ export const authActions = {
 			}
 
 			await authActions.loginWithExtension()
+			authActions.checkAndShowTermsDialog()
 		} catch (error) {
 			console.error('Authentication failed:', error)
 		} finally {
@@ -65,10 +69,17 @@ export const authActions = {
 			const [, key] = encryptedPrivateKey.split(':')
 			await authActions.loginWithPrivateKey(key)
 			authStore.setState((state) => ({ ...state, needsDecryptionPassword: false }))
+			authActions.checkAndShowTermsDialog()
 		} catch (error) {
 			throw error
 		} finally {
 			authStore.setState((state) => ({ ...state, isAuthenticating: false }))
+		}
+	},
+
+	checkAndShowTermsDialog: () => {
+		if (!hasAcceptedTerms()) {
+			uiActions.openDialog('terms')
 		}
 	},
 

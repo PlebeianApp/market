@@ -1,6 +1,7 @@
 import { LoginDialog } from '@/components/auth/LoginDialog'
 import { QRScannerDialog } from '@/components/wallet/QRScannerDialog'
 import { V4VSetupDialog } from '@/components/dialogs/V4VSetupDialog'
+import { TermsConditionsDialog } from '@/components/dialogs/TermsConditionsDialog'
 import { uiStore } from '@/lib/stores/ui'
 import { useStore } from '@tanstack/react-store'
 import { useMemo } from 'react'
@@ -15,6 +16,7 @@ export function DialogRegistry() {
 		if (dialogs.login) return 'login'
 		if (dialogs['scan-qr']) return 'scan-qr'
 		if (dialogs['v4v-setup']) return 'v4v-setup'
+		if (dialogs.terms) return 'terms'
 		return null
 	}, [dialogs])
 
@@ -81,6 +83,30 @@ export function DialogRegistry() {
 					userPubkey={userPubkey}
 					onConfirm={() => {
 						const callback = dialogCallbacks?.['v4v-setup']
+						if (callback && typeof callback === 'function') {
+							callback()
+						}
+					}}
+				/>
+			),
+		},
+		terms: {
+			content: (
+				<TermsConditionsDialog
+					open={true}
+					onOpenChange={(open) => {
+						if (!open) {
+							uiStore.setState((state) => ({
+								...state,
+								dialogs: {
+									...state.dialogs,
+									terms: false,
+								},
+							}))
+						}
+					}}
+					onAccept={() => {
+						const callback = dialogCallbacks?.terms
 						if (callback && typeof callback === 'function') {
 							callback()
 						}
