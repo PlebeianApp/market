@@ -9,6 +9,13 @@ import type { AppRouterContext } from './lib/router-utils'
 import { configActions, configStore } from './lib/stores/config'
 import { ndkActions } from './lib/stores/ndk'
 
+if (process.env.NODE_ENV !== 'development') {
+	console.log = () => {}
+	console.debug = () => {}
+	console.error = () => {}
+	console.info = () => {}
+}
+
 // Create queryClient once at module level
 const queryClient = createQueryClient()
 
