@@ -9,6 +9,8 @@ import { PrivateKeyLogin } from './PrivateKeyLogin'
 import { BunkerConnect } from './BunkerConnect'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
+import { hasAcceptedTerms } from '@/components/dialogs/TermsConditionsDialog'
+import { uiActions } from '@/lib/stores/ui'
 
 interface LoginDialogProps {
 	open: boolean
@@ -23,6 +25,13 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 
 	const handleError = (error: string) => {
 		console.error(error)
+	}
+
+	const handleLoginSuccess = () => {
+		onOpenChange(false)
+		if (!hasAcceptedTerms()) {
+			uiActions.openDialog('terms')
+		}
 	}
 
 	return (
@@ -72,7 +81,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 							</TabsTrigger>
 						</TabsList>
 						<TabsContent value="private-key" className="w-full max-w-full overflow-hidden">
-							<PrivateKeyLogin onError={handleError} onSuccess={() => onOpenChange(false)} />
+							<PrivateKeyLogin onError={handleError} onSuccess={handleLoginSuccess} />
 						</TabsContent>
 						<TabsContent value="connect" className="w-full max-w-full overflow-hidden">
 							<Tabs defaultValue="qr" className="w-full max-w-full min-w-0">
@@ -94,11 +103,11 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 								</TabsList>
 
 								<TabsContent value="qr" className="w-full max-w-full overflow-hidden">
-									<NostrConnectQR onError={handleError} onSuccess={() => onOpenChange(false)} />
+									<NostrConnectQR onError={handleError} onSuccess={handleLoginSuccess} />
 								</TabsContent>
 
 								<TabsContent value="bunker" className="w-full max-w-full overflow-hidden">
-									<BunkerConnect onError={handleError} onSuccess={() => onOpenChange(false)} />
+									<BunkerConnect onError={handleError} onSuccess={handleLoginSuccess} />
 								</TabsContent>
 							</Tabs>
 						</TabsContent>
@@ -115,7 +124,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 									onClick={() => {
 										setExtensionError(null)
 										loginWithExtension()
-											.then(() => onOpenChange(false))
+											.then(() => handleLoginSuccess())
 											.catch((error) => {
 												console.error(error)
 												setExtensionError(error.message || 'Failed to connect to extension')

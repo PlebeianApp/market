@@ -3,7 +3,7 @@ import { CURRENCIES } from '@/lib/constants'
 
 // Define types for different UI elements
 export type DrawerType = 'cart' | 'createProduct' | 'createCollection' | 'conversation'
-export type DialogType = 'login' | 'signup' | 'checkout' | 'product-details' | 'scan-qr' | 'v4v-setup'
+export type DialogType = 'login' | 'signup' | 'checkout' | 'product-details' | 'scan-qr' | 'v4v-setup' | 'terms'
 export type ToastType = 'success' | 'error' | 'warning' | 'info'
 export type SupportedCurrency = (typeof CURRENCIES)[number]
 
@@ -63,6 +63,7 @@ const initialState: UIState = {
 		'product-details': false,
 		'scan-qr': false,
 		'v4v-setup': false,
+		terms: false,
 	},
 	toasts: [],
 	dialogCallbacks: {},
