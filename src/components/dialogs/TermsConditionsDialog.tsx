@@ -18,8 +18,12 @@ export function TermsConditionsDialog({ open, onOpenChange, onAccept }: TermsCon
 	}
 
 	return (
-		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-2xl">
+		<Dialog open={open} onOpenChange={() => {}}>
+			<DialogContent
+				className="max-w-2xl [&>[data-slot=dialog-close]]:hidden"
+				onInteractOutside={(e) => e.preventDefault()}
+				onEscapeKeyDown={(e) => e.preventDefault()}
+			>
 				<DialogHeader>
 					<DialogTitle>Terms and Conditions</DialogTitle>
 					<DialogDescription>Please read and accept our terms and conditions to continue using Plebeian Market.</DialogDescription>
@@ -146,7 +150,7 @@ export function TermsConditionsDialog({ open, onOpenChange, onAccept }: TermsCon
 				</div>
 
 				<DialogFooter>
-					<Button variant="outline" onClick={() => onOpenChange(false)}>
+					<Button variant="outline" onClick={() => {}}>
 						Decline
 					</Button>
 					<Button onClick={handleAccept}>I Accept</Button>
