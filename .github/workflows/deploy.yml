@@ -27,54 +27,71 @@ jobs:
           bun run generate-routes
           bun run build
 
-      - name: Stop staging service
+      - name: Generate release name
+        id: release
+        run: echo "name=market-$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
+
+      - name: Create releases directory
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.REMOTE_HOST }}
           username: ${{ secrets.REMOTE_USER }}
           password: ${{ secrets.REMOTE_PASSWORD }}
           script: |
-            sudo systemctl stop market-dev.service || true
+            mkdir -p /home/deployer/releases
 
-      - name: Deploy to staging server
+      - name: Deploy to new release directory
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.REMOTE_HOST }}
           username: ${{ secrets.REMOTE_USER }}
           password: ${{ secrets.REMOTE_PASSWORD }}
           source: './*'
-          target: '/home/deployer/market'
-          rm: true
+          target: '/home/deployer/releases/${{ steps.release.outputs.name }}'
 
-      - name: Setup staging environment
+      - name: Setup and swap release (blue-green)
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.REMOTE_HOST }}
           username: ${{ secrets.REMOTE_USER }}
           password: ${{ secrets.REMOTE_PASSWORD }}
           script: |
-            cd /home/deployer/market
+            RELEASE_DIR="/home/deployer/releases/${{ steps.release.outputs.name }}"
+            CURRENT_LINK="/home/deployer/market"
 
-            # Create staging environment file
+            cd "$RELEASE_DIR"
+
+            # Create environment file
             cat <<EOF > .env
             NODE_ENV=production
             APP_RELAY_URL=${{ secrets.APP_RELAY_URL }}
             APP_PRIVATE_KEY=${{ secrets.APP_PRIVATE_KEY }}
             EOF
 
-            # Install production dependencies
+            # Install production dependencies (while old version still running)
             bun install --production
 
-            # Start staging service
+            # Quick swap: stop, update symlink, start (~1-2 seconds downtime)
+            sudo systemctl stop market-dev.service || true
+
+            # Handle migration from directory to symlink (first blue-green deploy)
+            if [ -d "$CURRENT_LINK" ] && [ ! -L "$CURRENT_LINK" ]; then
+              mv "$CURRENT_LINK" "$CURRENT_LINK.old.$(date +%Y%m%d-%H%M%S)"
+            fi
+
+            ln -sfn "$RELEASE_DIR" "$CURRENT_LINK"
             sudo systemctl start market-dev.service
 
             # Verify deployment
-            sleep 5
+            sleep 3
             sudo systemctl status market-dev.service --no-pager
+
+            # Cleanup old releases (keep last 3)
+            cd /home/deployer/releases
+            ls -t | tail -n +4 | xargs -r rm -rf
 
       - name: Health check
         run: |
           sleep 10
-          # Any HTTP response (even 404) means the server is running
-          curl -s -o /dev/null https://staging.plebeian.market/api/config
-          echo "✅ Staging deployment successful!"
+          curl -sf -o /dev/null https://staging.plebeian.market/api/config
+          echo "✅ Staging deployment successful! (blue-green swap)"
