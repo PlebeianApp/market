@@ -91,15 +91,14 @@ export const server = serve({
 	routes: {
 		'/*': index,
 		'/api/config': {
-			GET: async () => {
-				// Always fetch fresh settings from relay
-				const currentSettings = await fetchAppSettings(RELAY_URL as string, APP_PUBLIC_KEY)
+			GET: () => {
+				// Return cached settings loaded at startup
 				return Response.json({
 					appRelay: RELAY_URL,
 					nip46Relay: NIP46_RELAY_URL,
-					appSettings: currentSettings,
+					appSettings: appSettings,
 					appPublicKey: APP_PUBLIC_KEY,
-					needsSetup: !currentSettings,
+					needsSetup: !appSettings,
 				})
 			},
 		},
