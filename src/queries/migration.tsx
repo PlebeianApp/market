@@ -61,6 +61,8 @@ export const fetchNip15Products = async (userPubkey: string): Promise<NDKEvent[]
 	if (appRelay) {
 		try {
 			ndkActions.addExplicitRelay([appRelay])
+			// Small delay to ensure relay connection is established
+			await new Promise((resolve) => setTimeout(resolve, 500))
 		} catch (error) {
 			console.error('Failed to add app relay:', error)
 		}
@@ -169,6 +171,9 @@ export const nip15ProductsQueryOptions = (userPubkey: string) => {
 		queryKey: migrationKeys.nip15Products(userPubkey),
 		queryFn: () => fetchNip15Products(userPubkey),
 		enabled: !!userPubkey,
+		staleTime: 5 * 60 * 1000, // Keep fresh for 5 minutes
+		gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+		refetchOnWindowFocus: false, // Don't refetch on window focus
 	})
 }
 
@@ -180,5 +185,8 @@ export const migratedEventsQueryOptions = (userPubkey: string) => {
 		queryKey: migrationKeys.migratedEvents(userPubkey),
 		queryFn: () => fetchMigratedEvents(userPubkey),
 		enabled: !!userPubkey,
+		staleTime: 5 * 60 * 1000, // Keep fresh for 5 minutes
+		gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+		refetchOnWindowFocus: false, // Don't refetch on window focus
 	})
 }
