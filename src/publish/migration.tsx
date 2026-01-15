@@ -1,11 +1,10 @@
-import { configStore } from '@/lib/stores/config'
 import { createProductEvent, type ProductFormData } from '@/publish/products'
 import NDK, { type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
 
 /**
  * Publishes a migrated product (NIP-99) with migration tags
  * Adds "migrated" tag with the original NIP-15 event ID
- * Publishes to the app relay
+ * Publishes to user's relays (same as regular products)
  */
 export const publishMigratedProduct = async (
 	formData: ProductFormData,
@@ -44,31 +43,9 @@ export const publishMigratedProduct = async (
 	// Add migration tags
 	event.tags.push(['migrated', originalNip15EventId] as NDKTag)
 
-	// Get app relay
-	const appRelay = configStore.state.config.appRelay
-	if (!appRelay) {
-		throw new Error('App relay not configured')
-	}
-
-	// Ensure app relay is added to NDK
-	try {
-		const { ndkActions } = await import('@/lib/stores/ndk')
-		ndkActions.addExplicitRelay([appRelay])
-	} catch (error) {
-		console.error('Failed to add app relay:', error)
-	}
-
-	// Sign the event
+	// Sign and publish to user's relays (same as regular products)
 	await event.sign(signer)
-
-	// Publish to app relay specifically
-	const relay = ndk.pool?.relays.get(appRelay)
-	if (relay) {
-		await relay.publish(event)
-	} else {
-		// Fallback to regular publish if relay not found
-		await event.publish()
-	}
+	await event.publish()
 
 	return event.id
 }
