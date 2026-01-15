@@ -163,15 +163,17 @@ export function Header() {
 						>
 							Community
 						</Link>
-						<Link
-							to="/nostr"
-							className="hover:text-secondary"
-							activeProps={{
-								className: 'text-secondary',
-							}}
-						>
-							Nostr
-						</Link>
+						{config?.appSettings?.showNostrLink && (
+							<Link
+								to="/nostr"
+								className="hover:text-secondary"
+								activeProps={{
+									className: 'text-secondary',
+								}}
+							>
+								Nostr
+							</Link>
+						)}
 					</div>
 				</section>
 				<div className="flex items-center gap-2 lg:gap-4">

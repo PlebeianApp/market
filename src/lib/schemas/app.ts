@@ -14,6 +14,7 @@ export const AppSettingsSchema = z.object({
 		.transform((val) => val || undefined),
 	blossom_server: z.string().url().optional(),
 	nip96_server: z.string().url().optional(),
+	showNostrLink: z.boolean().optional().default(false),
 })
 
 export const ExtendedSettingsSchema = z.object({

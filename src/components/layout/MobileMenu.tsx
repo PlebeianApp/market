@@ -3,6 +3,7 @@ import { Pattern } from '@/components/pattern'
 import { authActions, authStore } from '@/lib/stores/auth'
 import { uiActions, uiStore } from '@/lib/stores/ui'
 import { cn } from '@/lib/utils'
+import { useConfigQuery } from '@/queries/config'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { Link, useMatchRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
@@ -11,6 +12,7 @@ import { useEffect } from 'react'
 export function MobileMenu() {
 	const { mobileMenuOpen } = useStore(uiStore)
 	const { isAuthenticated } = useStore(authStore)
+	const { data: config } = useConfigQuery()
 	const matchRoute = useMatchRoute()
 	const [animationParent] = useAutoAnimate<HTMLDivElement>()
 
@@ -52,7 +54,7 @@ export function MobileMenu() {
 		{ to: '/', label: 'Home' },
 		{ to: '/products', label: 'Products' },
 		{ to: '/community', label: 'Community' },
-		{ to: '/nostr', label: 'Nostr' },
+		...(config?.appSettings?.showNostrLink ? [{ to: '/nostr', label: 'Nostr' }] : []),
 		...(isAuthenticated ? [{ to: '/dashboard', label: 'Dashboard' }] : []),
 	]
 
