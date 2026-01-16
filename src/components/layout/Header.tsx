@@ -84,7 +84,6 @@ export function Header() {
 			return {
 				'--header-bg-opacity': 'linear-gradient(to bottom, rgba(0, 0, 0, 0.75) 0%, rgba(0, 0, 0, 0.5) 50%, rgba(0, 0, 0, 0) 100%)',
 				background: 'var(--header-bg-opacity)',
-				height: '100%',
 			}
 		} else if (scrollY < 160) {
 			const progress = (scrollY - 80) / 80
