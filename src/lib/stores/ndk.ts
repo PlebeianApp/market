@@ -166,7 +166,9 @@ export const ndkActions = {
 		const ndk = new NDK({
 			explicitRelayUrls: explicitRelays,
 			enableOutboxModel: !localRelayOnly,
-			aiGuardrails: true,
+			aiGuardrails: {
+				skip: new Set(['ndk-no-cache']),
+			},
 		})
 
 		const zapNdk = new NDK({
