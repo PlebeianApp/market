@@ -110,10 +110,6 @@ function ProductsRoute() {
 
 	// Separate default categories and other tags
 	const defaultTags = PRODUCT_CATEGORIES.filter((cat) => allTags.includes(cat))
-	const otherTags = allTags.filter((t) => !PRODUCT_CATEGORIES.includes(t as any))
-
-	// Combine: default categories first, then other tags
-	const orderedTags = [...defaultTags, ...otherTags]
 
 	const handleTagClick = (selectedTag: string) => {
 		if (tag === selectedTag) {
@@ -326,14 +322,14 @@ function ProductsRoute() {
 				</div>
 			)}
 			{/* Tag Filter Bar */}
-			{orderedTags.length > 0 && (
+			{defaultTags.length > 0 && (
 				<div className="sticky top-0 z-20 bg-off-black border-b shadow-sm">
 					<div className="px-4 py-3 overflow-x-auto">
 						<div className="flex items-center gap-2 min-w-max">
 							<Badge variant={!tag ? 'primaryActive' : 'primary'} className="cursor-pointer transition-colors" onClick={handleClearFilter}>
 								All
 							</Badge>
-							{orderedTags.map((tagName) => (
+							{defaultTags.map((tagName) => (
 								<Badge
 									key={tagName}
 									variant={tag === tagName ? 'primaryActive' : 'primary'}
