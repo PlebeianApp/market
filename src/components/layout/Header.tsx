@@ -5,6 +5,7 @@ import { MobileMenu } from '@/components/layout/MobileMenu'
 import { ProductSearch } from '@/components/ProductSearch'
 import { Profile } from '@/components/Profile'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { authActions, authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
@@ -83,7 +84,6 @@ export function Header() {
 			return {
 				'--header-bg-opacity': 'linear-gradient(to bottom, rgba(0, 0, 0, 0.75) 0%, rgba(0, 0, 0, 0.5) 50%, rgba(0, 0, 0, 0) 100%)',
 				background: 'var(--header-bg-opacity)',
-				height: '100%',
 			}
 		} else if (scrollY < 160) {
 			const progress = (scrollY - 80) / 80
@@ -162,15 +162,17 @@ export function Header() {
 						>
 							Community
 						</Link>
-						<Link
-							to="/nostr"
-							className="hover:text-secondary"
-							activeProps={{
-								className: 'text-secondary',
-							}}
-						>
-							Nostr
-						</Link>
+						{config?.appSettings?.showNostrLink && (
+							<Link
+								to="/nostr"
+								className="hover:text-secondary"
+								activeProps={{
+									className: 'text-secondary',
+								}}
+							>
+								Nostr
+							</Link>
+						)}
 					</div>
 				</section>
 				<div className="flex items-center gap-2 lg:gap-4">
@@ -236,30 +238,40 @@ export function Header() {
 								) : isAuthenticated ? (
 									<>
 										<CartButton />
-										<Link to="/dashboard" data-testid="dashboard-link" className="relative">
-											<Button
-												variant="primary"
-												className={`p-2 relative hover:[&>span]:text-secondary ${
-													location.pathname.startsWith('/dashboard') ? 'bg-secondary text-black [&>span]:text-black' : ''
-												}`}
-												icon={<span className="i-dashboard w-6 h-6" />}
-												data-testid="dashboard-button"
-											/>
-											{totalNotifications > 0 && (
-												<span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-[10px] font-bold text-white bg-pink-500 rounded-full">
-													{totalNotifications > 99 ? '99+' : totalNotifications}
-												</span>
-											)}
-										</Link>
+										<Tooltip>
+											<TooltipTrigger asChild>
+												<Link to="/dashboard" data-testid="dashboard-link" className="relative">
+													<Button
+														variant="primary"
+														className={`p-2 relative hover:[&>span]:text-secondary ${
+															location.pathname.startsWith('/dashboard') ? 'bg-secondary text-black [&>span]:text-black' : ''
+														}`}
+														icon={<span className="i-dashboard w-6 h-6" />}
+														data-testid="dashboard-button"
+													/>
+													{totalNotifications > 0 && (
+														<span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-[10px] font-bold text-white bg-pink-500 rounded-full">
+															{totalNotifications > 99 ? '99+' : totalNotifications}
+														</span>
+													)}
+												</Link>
+											</TooltipTrigger>
+											<TooltipContent side="bottom">Dashboard</TooltipContent>
+										</Tooltip>
 										<Profile compact />
-										<Button
-											variant="primary"
-											className="p-2 relative hover:[&>span]:text-secondary"
-											onClick={() => authActions.logout()}
-											data-testid="logout-button"
-										>
-											<LogOut className="w-6 h-6" />
-										</Button>
+										<Tooltip>
+											<TooltipTrigger asChild>
+												<Button
+													variant="primary"
+													className="p-2 relative hover:[&>svg]:text-secondary"
+													onClick={() => authActions.logout()}
+													data-testid="logout-button"
+												>
+													<LogOut className="w-6 h-6" />
+												</Button>
+											</TooltipTrigger>
+											<TooltipContent side="bottom">Logout</TooltipContent>
+										</Tooltip>
 									</>
 								) : (
 									<Button

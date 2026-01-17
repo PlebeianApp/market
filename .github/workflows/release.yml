@@ -1,0 +1,110 @@
+name: Deploy Production Release
+
+on:
+  push:
+    tags:
+      - '*-release'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to deploy (optional, uses latest -release tag if empty)'
+        required: false
+
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Deploying version: $TAG"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build application
+        run: |
+          bun run generate-routes
+          bun run build:production
+
+      - name: Generate release name
+        id: release
+        run: echo "name=market-$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
+
+      - name: Create releases directory
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            mkdir -p /opt/releases
+
+      - name: Deploy to new release directory
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          source: './*'
+          target: '/opt/releases/${{ steps.release.outputs.name }}'
+
+      - name: Setup and swap release (blue-green)
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            RELEASE_DIR="/opt/releases/${{ steps.release.outputs.name }}"
+            CURRENT_LINK="/opt/market"
+
+            cd "$RELEASE_DIR"
+
+            # Create production environment file
+            cat <<EOF > .env
+            NODE_ENV=production
+            APP_RELAY_URL=${{ secrets.PROD_APP_RELAY_URL }}
+            APP_PRIVATE_KEY=${{ secrets.APP_PRIVATE_KEY }}
+            EOF
+
+            # Install production dependencies (while old version still running)
+            ~/.bun/bin/bun install --production
+
+            # Quick swap: stop, update symlink, start (~1-2 seconds downtime)
+            sudo systemctl stop market.service || true
+
+            # Handle migration from directory to symlink (first blue-green deploy)
+            if [ -d "$CURRENT_LINK" ] && [ ! -L "$CURRENT_LINK" ]; then
+              mv "$CURRENT_LINK" "$CURRENT_LINK.old.$(date +%Y%m%d-%H%M%S)"
+            fi
+
+            ln -sfn "$RELEASE_DIR" "$CURRENT_LINK"
+            sudo systemctl start market.service
+
+            # Verify deployment
+            sleep 3
+            sudo systemctl status market.service --no-pager
+
+            # Cleanup old releases (keep last 3)
+            cd /opt/releases
+            ls -t | tail -n +4 | xargs -r rm -rf
+
+      - name: Health check
+        run: |
+          sleep 10
+          curl -sf -o /dev/null https://plebeian.market/ || echo "Warning: Health check pending DNS propagation"
+          echo "✅ Production deployment of ${{ steps.version.outputs.tag }} complete! (blue-green swap)"

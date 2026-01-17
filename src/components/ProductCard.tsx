@@ -67,17 +67,21 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 		uiActions.setProductSourcePath(location.pathname)
 	}
 
+	const handleButtonClick = (e: React.MouseEvent, action: () => void) => {
+		e.preventDefault()
+		e.stopPropagation()
+		action()
+	}
+
 	return (
-		<div
-			className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col w-full max-w-full overflow-hidden"
+		<Link
+			to={`/products/${product.id}`}
+			onClick={handleProductClick}
+			className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col w-full max-w-full overflow-hidden hover:shadow-md transition-shadow duration-200 cursor-pointer"
 			data-testid="product-card"
 		>
 			{/* Square aspect ratio container for image */}
-			<Link
-				to={`/products/${product.id}`}
-				className="relative aspect-square overflow-hidden border-b border-zinc-800 block"
-				onClick={handleProductClick}
-			>
+			<div className="relative aspect-square overflow-hidden border-b border-zinc-800 block">
 				{images && images.length > 0 ? (
 					<img
 						src={images[0][1]}
@@ -89,15 +93,13 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 						No image
 					</div>
 				)}
-			</Link>
+			</div>
 
 			<div className="p-2 flex flex-col gap-2 flex-grow">
 				{/* Product title */}
-				<Link to={`/products/${product.id}`} onClick={handleProductClick}>
-					<h2 className="text-sm font-medium border-b border-[var(--light-gray)] pb-2 overflow-hidden text-ellipsis whitespace-nowrap">
-						{title}
-					</h2>
-				</Link>
+				<h2 className="text-sm font-medium border-b border-[var(--light-gray)] pb-2 overflow-hidden text-ellipsis whitespace-nowrap">
+					{title}
+				</h2>
 
 				{/* Pricing section */}
 				<div className="flex justify-between items-center">
@@ -119,7 +121,14 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 				{/* Add to cart button */}
 				<div className="flex gap-2">
 					<div className="flex-grow transition-all duration-300 ease-in-out">
-						{isInCart ? (
+						{isOwnProduct ? (
+							<Button
+								className="py-3 px-4 rounded-lg w-full font-medium transition-all duration-300 bg-black text-white disabled:bg-gray-400 disabled:cursor-not-allowed"
+								disabled={true}
+							>
+								Your Product
+							</Button>
+						) : isInCart ? (
 							<div className="flex gap-2 w-full">
 								{/* Show current quantity */}
 								<div className="flex items-center justify-center px-2 h-10 bg-pink-100 text-pink-800 border-2 border-pink-300 rounded-lg text-sm font-medium transition-all duration-200 ease-in-out">
@@ -128,7 +137,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 								{/* Add more button */}
 								<Button
 									className="py-3 px-4 rounded-lg flex-grow font-medium transition-all duration-200 ease-in-out bg-black text-white disabled:bg-gray-400 disabled:cursor-not-allowed"
-									onClick={handleAddToCart}
+									onClick={(e) => handleButtonClick(e, handleAddToCart)}
 									disabled={isAddingToCart || visibility === 'hidden' || (stockQuantity !== undefined && cartQuantity >= stockQuantity)}
 								>
 									{isAddingToCart ? (
@@ -149,12 +158,10 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 								className={`py-3 px-4 rounded-lg w-full font-medium transition-all duration-300 bg-black text-white disabled:bg-gray-400 disabled:cursor-not-allowed ${
 									isAddingToCart ? 'opacity-75 scale-95' : ''
 								}`}
-								onClick={handleAddToCart}
+								onClick={(e) => handleButtonClick(e, handleAddToCart)}
 								disabled={isOwnProduct || isAddingToCart || visibility === 'hidden' || isOutOfStock}
 							>
-								{isOwnProduct ? (
-									'Your Product'
-								) : visibility === 'hidden' ? (
+								{visibility === 'hidden' ? (
 									'Not Available'
 								) : isOutOfStock ? (
 									'Out of Stock'
@@ -172,9 +179,11 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 							</Button>
 						)}
 					</div>
-					<ZapButton event={product} />
+					<div onClick={(e) => e.stopPropagation()}>
+						<ZapButton event={product} />
+					</div>
 				</div>
 			</div>
-		</div>
+		</Link>
 	)
 }

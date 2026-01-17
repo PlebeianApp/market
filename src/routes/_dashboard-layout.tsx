@@ -50,10 +50,10 @@ const backButtonRoutes: Record<string, { parentPath: string; parentTitle: string
 		parentPath: '/dashboard/products/collections',
 		parentTitle: '🗂️ Collections',
 	},
-	// Dynamic route for order details
+	// Dynamic route for order details - uses browser history to return to correct page (sales or purchases)
 	'/dashboard/orders/': {
-		parentPath: '/dashboard/sales/sales',
-		parentTitle: '💰 Sales',
+		parentPath: '', // Empty path signals to use browser history
+		parentTitle: 'Orders',
 	},
 	// Dynamic route for message details
 	'/dashboard/sales/messages/': {
@@ -245,7 +245,12 @@ function DashboardLayout() {
 
 	const handleBackToParent = () => {
 		if (backButtonInfo) {
-			navigate({ to: backButtonInfo.parentPath })
+			// If parentPath is empty, use browser history to go back (for order details)
+			if (!backButtonInfo.parentPath) {
+				window.history.back()
+			} else {
+				navigate({ to: backButtonInfo.parentPath })
+			}
 		}
 	}
 
@@ -260,7 +265,7 @@ function DashboardLayout() {
 					{!showSidebar && isMobile && (
 						<button
 							onClick={handleBackToSidebar}
-							className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 sm:left-3 md:left-4 top-1/2 -translate-y-1/2 w-12 h-12 z-20"
+							className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 sm:left-3 md:left-4 top-1/2 -translate-y-1/2 w-12 h-12 z-20 cursor-pointer"
 							aria-label="Back to sidebar"
 						>
 							<span className="i-back w-6 h-6" />
@@ -352,11 +357,13 @@ function DashboardLayout() {
 								<div className="sticky top-0 z-10 bg-white border-b border-gray-200 pb-4 mb-0 p-4 lg:p-8 flex-shrink-0 flex items-center relative">
 									<button
 										onClick={handleBackToParent}
-										className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
-										aria-label={`Back to ${backButtonInfo?.parentTitle}`}
+										className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors cursor-pointer"
+										aria-label={backButtonInfo?.parentPath ? `Back to ${backButtonInfo?.parentTitle}` : 'Go back'}
 									>
 										<span className="i-back w-5 h-5" />
-										<span className="text-sm font-medium">Back to {backButtonInfo?.parentTitle}</span>
+										<span className="text-sm font-medium">
+											{backButtonInfo?.parentPath ? `Back to ${backButtonInfo?.parentTitle}` : 'Back'}
+										</span>
 									</button>
 
 									{!isMobile && (

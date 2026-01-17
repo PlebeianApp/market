@@ -21,14 +21,14 @@ export function TrackingInfoDisplay({ trackingNumber, carrier, shippingStatus }:
 						{trackingNumber && (
 							<div className="flex items-center justify-between gap-2">
 								<div className="min-w-0 flex-1">
-									<p className="text-xs font-medium text-purple-700 uppercase tracking-wide">Tracking Number</p>
+									<p className="text-xs font-medium text-purple-700 uppercase tracking-wide">Tracking URL</p>
 									<p className="text-purple-900 font-mono text-sm break-all">{trackingNumber}</p>
 								</div>
 								<Button
 									variant="ghost"
 									size="sm"
 									className="h-8 px-2 text-purple-700 hover:text-purple-900 hover:bg-purple-100 flex-shrink-0"
-									onClick={() => copyToClipboard(trackingNumber, 'Tracking number copied to clipboard')}
+									onClick={() => copyToClipboard(trackingNumber, 'Tracking URL copied to clipboard')}
 								>
 									<Copy className="h-4 w-4" />
 								</Button>

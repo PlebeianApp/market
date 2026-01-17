@@ -262,7 +262,9 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 			try {
 				await deleteMutation.mutateAsync(shippingId)
 				onOpenChange(false)
-				onSuccess?.()
+				// Note: Don't call onSuccess() after delete - it triggers a refetch
+				// which would bring back the deleted item from relays that haven't
+				// processed the deletion yet. The optimistic update handles the UI.
 			} catch (error) {
 				toast.error('Failed to delete shipping option')
 			}
@@ -328,10 +330,9 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 			icon={<ServiceIcon service={formData.service} />}
 			data-testid={isEditing ? `shipping-option-item-${getShippingId(shippingOption)}` : 'add-shipping-option-button'}
 			className="w-full max-w-full overflow-hidden"
-			useCloseIcon={true}
 		>
 			<div className="p-4 border-t">
-				<form onSubmit={handleSubmit} className="space-y-6 w-full max-w-2xl">
+				<form onSubmit={handleSubmit} className="space-y-6 w-full">
 					{/* Use a template */}
 					<div className="space-y-4">
 						<h3 className="text-lg font-semibold">Use a template</h3>
@@ -463,8 +464,9 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 							{formData.service !== 'digital' && (
 								<div className="space-y-2">
 									<Label htmlFor="price" className="font-medium">
-										Price *
+										Base Cost *
 									</Label>
+									<p className="text-sm text-muted-foreground">Can be adjusted per product</p>
 									<div className="flex gap-2">
 										<Input
 											id="price"

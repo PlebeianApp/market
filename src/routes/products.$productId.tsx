@@ -1,3 +1,4 @@
+import { ShareProductDialog } from '@/components/dialogs/ShareProductDialog'
 import { EntityActionsMenu } from '@/components/EntityActionsMenu'
 import { ImageCarousel } from '@/components/ImageCarousel'
 import { ImageViewerModal } from '@/components/ImageViewerModal'
@@ -132,6 +133,7 @@ function RouteComponent() {
 	const [quantity, setQuantity] = useState(1)
 	const [imageViewerOpen, setImageViewerOpen] = useState(false)
 	const [selectedImageIndex, setSelectedImageIndex] = useState(0)
+	const [shareDialogOpen, setShareDialogOpen] = useState(false)
 	const queryClient = useQueryClient()
 
 	// Get app config
@@ -292,6 +294,7 @@ function RouteComponent() {
 										size="icon"
 										className="bg-white/10 hover:bg-white/20"
 										icon={<span className="i-sharing w-6 h-6" />}
+										onClick={() => setShareDialogOpen(true)}
 									/>
 									{/* Entity Actions Menu for admins/editors/owners */}
 									<EntityActionsMenu
@@ -352,36 +355,38 @@ function RouteComponent() {
 								<div className="flex items-center gap-4">
 									{/* Show cart controls for non-owners */}
 									{permissions.canAddToCart && (
-										<div className="flex items-center gap-2">
-											<Button
-												variant="tertiary"
-												size="icon"
-												onClick={() => setQuantity(Math.max(1, quantity - 1))}
-												disabled={quantity <= 1}
-											>
-												<Minus className="h-6 w-6" />
-											</Button>
-											<Input
-												className="w-12 text-center font-medium bg-white text-black"
-												value={quantity}
-												onChange={(e) => {
-													const value = parseInt(e.target.value)
-													if (!isNaN(value) && value > 0 && value <= (stock || Infinity)) {
-														setQuantity(value)
-													}
-												}}
-												min={1}
-												max={stock}
-												type="number"
-											/>
-											<Button
-												variant="tertiary"
-												size="icon"
-												onClick={() => setQuantity(Math.min(stock || quantity + 1, quantity + 1))}
-												disabled={quantity >= (stock || quantity)}
-											>
-												<Plus className="h-6 w-6" />
-											</Button>
+										<div className="flex items-center gap-2 flex-wrap">
+											<div className="flex items-center gap-2 flex-shrink-0">
+												<Button
+													variant="tertiary"
+													size="icon"
+													onClick={() => setQuantity(Math.max(1, quantity - 1))}
+													disabled={quantity <= 1}
+												>
+													<Minus className="h-6 w-6" />
+												</Button>
+												<Input
+													className="w-12 text-center font-medium bg-white text-black"
+													value={quantity}
+													onChange={(e) => {
+														const value = parseInt(e.target.value)
+														if (!isNaN(value) && value > 0 && value <= (stock || Infinity)) {
+															setQuantity(value)
+														}
+													}}
+													min={1}
+													max={stock}
+													type="number"
+												/>
+												<Button
+													variant="tertiary"
+													size="icon"
+													onClick={() => setQuantity(Math.min(stock || quantity + 1, quantity + 1))}
+													disabled={quantity >= (stock || quantity)}
+												>
+													<Plus className="h-6 w-6" />
+												</Button>
+											</div>
 											<Button variant="secondary" onClick={handleAddToCartClick} disabled={isOutOfStock || visibility === 'hidden'}>
 												{visibility === 'hidden'
 													? 'Not Available'
@@ -686,6 +691,9 @@ function RouteComponent() {
 				currentIndex={selectedImageIndex}
 				onIndexChange={setSelectedImageIndex}
 			/>
+
+			{/* Share Product Dialog */}
+			<ShareProductDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} productId={productId} pubkey={pubkey} title={title} />
 		</div>
 	)
 }

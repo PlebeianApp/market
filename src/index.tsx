@@ -43,11 +43,17 @@ async function initializeAppSettings() {
 
 export type NostrMessage = ['EVENT', Event]
 
+// Track initialization state
+let eventHandlerReady = false
+
 getEventHandler()
 	.initialize({
 		appPrivateKey: process.env.APP_PRIVATE_KEY || '',
 		adminPubkeys: [],
 		relayUrl: RELAY_URL,
+	})
+	.then(() => {
+		eventHandlerReady = true
 	})
 	.catch((error) => console.error(error))
 
@@ -85,15 +91,14 @@ export const server = serve({
 	routes: {
 		'/*': index,
 		'/api/config': {
-			GET: async () => {
-				// Always fetch fresh settings from relay
-				const currentSettings = await fetchAppSettings(RELAY_URL as string, APP_PUBLIC_KEY)
+			GET: () => {
+				// Return cached settings loaded at startup
 				return Response.json({
 					appRelay: RELAY_URL,
 					nip46Relay: NIP46_RELAY_URL,
-					appSettings: currentSettings,
+					appSettings: appSettings,
 					appPublicKey: APP_PUBLIC_KEY,
-					needsSetup: !currentSettings,
+					needsSetup: !appSettings,
 				})
 			},
 		},
@@ -115,6 +120,13 @@ export const server = serve({
 
 				if (Array.isArray(data) && data[0] === 'EVENT' && data[1].sig) {
 					console.log('Processing EVENT message')
+
+					// Check if EventHandler is ready
+					if (!eventHandlerReady) {
+						const errorResponse = ['OK', data[1].id, false, 'error: Server initializing, please try again']
+						ws.send(JSON.stringify(errorResponse))
+						return
+					}
 
 					if (!verifyEvent(data[1] as Event)) throw Error('Unable to verify event')
 

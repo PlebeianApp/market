@@ -3,13 +3,14 @@ import { Header } from '@/components/layout/Header'
 import { Pattern } from '@/components/pattern'
 import { SheetRegistry } from '@/components/SheetRegistry'
 import { DialogRegistry } from '@/components/DialogRegistry'
-import { useConfigQuery } from '@/queries/config'
+import { configStore } from '@/lib/stores/config'
 import { useAmIAdmin } from '@/queries/app-settings'
 import { createRootRoute, Outlet, useNavigate, useLocation } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { DecryptPasswordDialog } from '@/components/auth/DecryptPasswordDialog'
 import { Toaster } from 'sonner'
 import { useBlacklistSync } from '@/hooks/useBlacklistSync'
+import { useStore } from '@tanstack/react-store'
 
 export const Route = createRootRoute({
 	component: RootComponent,
@@ -20,7 +21,8 @@ function RootComponent() {
 }
 
 function RootLayout() {
-	const { data: config, isLoading, isError } = useConfigQuery()
+	// Use configStore directly - config is already loaded by frontend.tsx before router renders
+	const config = useStore(configStore, (s) => s.config)
 	const navigate = useNavigate()
 	const { pathname } = window.location
 	const { amIAdmin, isLoading: isLoadingAdmin } = useAmIAdmin(config?.appPublicKey)
@@ -35,27 +37,21 @@ function RootLayout() {
 	useBlacklistSync()
 
 	useEffect(() => {
-		if (isLoading || isError) return
 		if (config?.needsSetup && !isSetupPage) {
 			navigate({ to: '/setup' })
 		} else if (!config?.needsSetup && isSetupPage) {
 			navigate({ to: '/' })
 		}
-	}, [config, navigate, isLoading, isError, isSetupPage])
+	}, [config, navigate, isSetupPage])
 
 	// Protect admin routes
 	useEffect(() => {
-		if (isLoadingAdmin || isLoading || isError) return
+		if (isLoadingAdmin) return
 		if (isAdminRoute && !amIAdmin) {
 			// Redirect non-admins away from admin routes
 			navigate({ to: '/dashboard' })
 		}
-	}, [isAdminRoute, amIAdmin, isLoadingAdmin, isLoading, isError, navigate])
-
-	// If loading, don't render routes
-	if (isLoading) {
-		return <div className="flex justify-center items-center h-screen">Loading...</div>
-	}
+	}, [isAdminRoute, amIAdmin, isLoadingAdmin, navigate])
 
 	// If on setup page, render only the outlet without header/footer
 	if (isSetupPage) {

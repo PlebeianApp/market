@@ -7,16 +7,19 @@ import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
 import { authStore } from '@/lib/stores/auth'
-import { ndkActions } from '@/lib/stores/ndk'
+import { ndkActions, useNDK } from '@/lib/stores/ndk'
 import { configStore } from '@/lib/stores/config'
 import { publishMigratedProduct } from '@/publish/migration'
 import { migrationKeys } from '@/queries/queryKeyFactory'
+import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
+import { useCollectionsByPubkey } from '@/queries/collections'
+import type { RichShippingInfo } from '@/lib/stores/cart'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, X, PlusIcon, Loader2 } from 'lucide-react'
 import { useNavigate } from '@tanstack/react-router'
 
 interface MigrationFormProps {
@@ -30,9 +33,61 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 	const navigate = useNavigate()
 	const [isPublishing, setIsPublishing] = useState(false)
 	const { user } = useStore(authStore)
+	const { getUser } = useNDK()
+	const [ndkUser, setNdkUser] = useState<any>(null)
+
+	// Get user on mount for shipping/collection queries
+	useEffect(() => {
+		getUser().then(setNdkUser)
+	}, [getUser])
 
 	// Parse NIP-15 event
 	const nip15Data = parseNip15Event(nip15Event)
+
+	// Query shipping options for the user
+	const { data: shippingOptionsData, isLoading: isLoadingShipping } = useShippingOptionsByPubkey(ndkUser?.pubkey || '')
+
+	// Query collections for the user
+	const { data: collectionsData, isLoading: isLoadingCollections } = useCollectionsByPubkey(ndkUser?.pubkey || '')
+
+	// Process available shipping options
+	const availableShippingOptions = useMemo(() => {
+		if (!shippingOptionsData || !ndkUser?.pubkey) return []
+
+		return shippingOptionsData
+			.map((event) => {
+				const info = getShippingInfo(event)
+				if (!info || !info.id || typeof info.id !== 'string' || info.id.trim().length === 0) return null
+
+				const id = createShippingReference(ndkUser.pubkey, info.id)
+
+				return {
+					id,
+					name: info.title,
+					cost: parseFloat(info.price.amount),
+					currency: info.price.currency,
+					countries: info.countries || [],
+					service: info.service || '',
+					carrier: info.carrier || '',
+				}
+			})
+			.filter(Boolean) as RichShippingInfo[]
+	}, [shippingOptionsData, ndkUser?.pubkey])
+
+	// Process available collections
+	const availableCollections = useMemo(() => {
+		if (!collectionsData) return []
+
+		return collectionsData.map((event) => {
+			const dTag = event.tags.find((t: string[]) => t[0] === 'd')?.[1] || ''
+			const titleTag = event.tags.find((t: string[]) => t[0] === 'title')?.[1] || ''
+			return {
+				id: dTag,
+				name: titleTag || dTag,
+				pubkey: event.pubkey,
+			}
+		})
+	}, [collectionsData])
 
 	// Initialize form state from NIP-15 data
 	const [formData, setFormData] = useState({
@@ -55,6 +110,74 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 		dimensions: null as { value: string; unit: string } | null,
 		selectedCollection: null as string | null,
 	})
+
+	// Helper functions for managing form fields
+	const addSubCategory = () => {
+		if (formData.categories.length >= 3) {
+			toast.error('You can only add up to 3 sub categories')
+			return
+		}
+		setFormData({
+			...formData,
+			categories: [
+				...formData.categories,
+				{
+					key: `category-${Date.now()}`,
+					name: '',
+					checked: true,
+				},
+			],
+		})
+	}
+
+	const removeSubCategory = (index: number) => {
+		setFormData({
+			...formData,
+			categories: formData.categories.filter((_, i) => i !== index),
+		})
+	}
+
+	const updateSubCategory = (index: number, name: string) => {
+		const newCategories = [...formData.categories]
+		newCategories[index] = { ...newCategories[index], name }
+		setFormData({ ...formData, categories: newCategories })
+	}
+
+	const addShippingOption = (option: RichShippingInfo) => {
+		// Check if shipping option is already added
+		const isAlreadyAdded = formData.shippings.some((s) => s.shipping?.id === option.id)
+		if (isAlreadyAdded) {
+			toast.error('This shipping option is already added')
+			return
+		}
+
+		setFormData({
+			...formData,
+			shippings: [
+				...formData.shippings,
+				{
+					shipping: {
+						id: option.id,
+						name: option.name || '',
+					},
+					extraCost: '',
+				},
+			],
+		})
+	}
+
+	const removeShippingOption = (index: number) => {
+		setFormData({
+			...formData,
+			shippings: formData.shippings.filter((_, i) => i !== index),
+		})
+	}
+
+	const updateShippingExtraCost = (index: number, extraCost: string) => {
+		const newShippings = [...formData.shippings]
+		newShippings[index] = { ...newShippings[index], extraCost }
+		setFormData({ ...formData, shippings: newShippings })
+	}
 
 	const handleSubmit = async () => {
 		if (!formData.name.trim()) {
@@ -294,7 +417,9 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 						</div>
 
 						<div>
-							<Label>Images</Label>
+							<Label>
+								<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Images</span>
+							</Label>
 							<div className="space-y-2 mt-2">
 								{formData.images.map((image, index) => (
 									<ImageUploader
@@ -393,6 +518,219 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 									Add Specification
 								</Button>
 							</div>
+						</div>
+
+						{/* Sub-categories */}
+						{formData.mainCategory && (
+							<div>
+								<Label>Sub Categories (optional)</Label>
+								<p className="text-sm text-gray-500 mt-1 mb-2">Add sub-categories to better describe your product</p>
+								<div className="space-y-2">
+									{formData.categories.map((category, index) => (
+										<div key={category.key} className="flex gap-2">
+											<Input
+												value={category.name}
+												onChange={(e) => updateSubCategory(index, e.target.value)}
+												placeholder={`Sub category ${index + 1}`}
+												className="flex-1"
+											/>
+											<Button type="button" variant="ghost" size="sm" onClick={() => removeSubCategory(index)}>
+												<X className="w-4 h-4" />
+											</Button>
+										</div>
+									))}
+									<Button
+										type="button"
+										variant="outline"
+										onClick={addSubCategory}
+										disabled={formData.categories.length >= 3}
+										className="w-full flex items-center gap-2"
+									>
+										<PlusIcon className="w-4 h-4" />
+										Add Sub Category
+									</Button>
+								</div>
+							</div>
+						)}
+
+						{/* Shipping Options */}
+						<div>
+							<Label>Shipping Options</Label>
+							<p className="text-sm text-gray-500 mt-1 mb-2">Select shipping methods available for this product</p>
+							{isLoadingShipping ? (
+								<div className="flex items-center gap-2 text-gray-500">
+									<Loader2 className="w-4 h-4 animate-spin" />
+									<span>Loading shipping options...</span>
+								</div>
+							) : availableShippingOptions.length === 0 ? (
+								<p className="text-sm text-gray-500">No shipping options configured. You can add them in Dashboard → Shipping Options</p>
+							) : (
+								<div className="space-y-2">
+									{/* Selected shipping options */}
+									{formData.shippings.length > 0 && (
+										<div className="space-y-2 mb-3">
+											<Label className="text-sm text-gray-600">Selected:</Label>
+											{formData.shippings.map((shipping, index) => (
+												<div key={index} className="flex items-center gap-2 p-2 bg-gray-50 rounded border">
+													<div className="flex-1">
+														<span className="font-medium">{shipping.shipping?.name}</span>
+													</div>
+													<Input
+														type="number"
+														step="0.01"
+														min="0"
+														value={shipping.extraCost}
+														onChange={(e) => updateShippingExtraCost(index, e.target.value)}
+														placeholder="Extra cost"
+														className="w-24 text-sm"
+													/>
+													<Button type="button" variant="ghost" size="sm" onClick={() => removeShippingOption(index)}>
+														<X className="w-4 h-4" />
+													</Button>
+												</div>
+											))}
+										</div>
+									)}
+									{/* Available shipping options */}
+									<div className="space-y-2">
+										{availableShippingOptions.map((option) => {
+											const isSelected = formData.shippings.some((s) => s.shipping?.id === option.id)
+											return (
+												<div
+													key={option.id}
+													className={`flex items-center gap-2 p-2 border rounded cursor-pointer hover:bg-gray-50 ${isSelected ? 'opacity-50' : ''}`}
+													onClick={() => !isSelected && addShippingOption(option)}
+												>
+													<div className="flex-1">
+														<div className="font-medium">{option.name}</div>
+														<div className="text-sm text-gray-500">
+															{option.cost} {option.currency} •{' '}
+															{option.countries && option.countries.length > 0
+																? option.countries.length > 1
+																	? `${option.countries.length} countries`
+																	: option.countries[0]
+																: 'Worldwide'}
+														</div>
+													</div>
+													<Button type="button" variant="outline" size="sm" disabled={isSelected}>
+														{isSelected ? 'Added' : 'Add'}
+													</Button>
+												</div>
+											)
+										})}
+									</div>
+								</div>
+							)}
+						</div>
+
+						{/* Weight */}
+						<div>
+							<Label>Weight (optional)</Label>
+							<div className="flex gap-2 mt-2">
+								<Input
+									type="number"
+									step="0.01"
+									min="0"
+									placeholder="Weight value"
+									value={formData.weight?.value || ''}
+									onChange={(e) =>
+										setFormData({
+											...formData,
+											weight: e.target.value ? { value: e.target.value, unit: formData.weight?.unit || 'kg' } : null,
+										})
+									}
+									className="flex-1"
+								/>
+								<Select
+									value={formData.weight?.unit || 'kg'}
+									onValueChange={(value) =>
+										setFormData({
+											...formData,
+											weight: formData.weight ? { ...formData.weight, unit: value } : { value: '', unit: value },
+										})
+									}
+								>
+									<SelectTrigger className="w-24">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="g">g</SelectItem>
+										<SelectItem value="kg">kg</SelectItem>
+										<SelectItem value="oz">oz</SelectItem>
+										<SelectItem value="lb">lb</SelectItem>
+									</SelectContent>
+								</Select>
+							</div>
+						</div>
+
+						{/* Dimensions */}
+						<div>
+							<Label>Dimensions (optional)</Label>
+							<p className="text-sm text-gray-500 mt-1 mb-2">Format: Length x Width x Height</p>
+							<div className="flex gap-2">
+								<Input
+									placeholder="e.g., 10x5x3"
+									value={formData.dimensions?.value || ''}
+									onChange={(e) =>
+										setFormData({
+											...formData,
+											dimensions: e.target.value ? { value: e.target.value, unit: formData.dimensions?.unit || 'cm' } : null,
+										})
+									}
+									className="flex-1"
+								/>
+								<Select
+									value={formData.dimensions?.unit || 'cm'}
+									onValueChange={(value) =>
+										setFormData({
+											...formData,
+											dimensions: formData.dimensions ? { ...formData.dimensions, unit: value } : { value: '', unit: value },
+										})
+									}
+								>
+									<SelectTrigger className="w-24">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="mm">mm</SelectItem>
+										<SelectItem value="cm">cm</SelectItem>
+										<SelectItem value="m">m</SelectItem>
+										<SelectItem value="in">in</SelectItem>
+										<SelectItem value="ft">ft</SelectItem>
+									</SelectContent>
+								</Select>
+							</div>
+						</div>
+
+						{/* Collection */}
+						<div>
+							<Label>Collection (optional)</Label>
+							<p className="text-sm text-gray-500 mt-1 mb-2">Assign this product to a collection</p>
+							{isLoadingCollections ? (
+								<div className="flex items-center gap-2 text-gray-500">
+									<Loader2 className="w-4 h-4 animate-spin" />
+									<span>Loading collections...</span>
+								</div>
+							) : availableCollections.length === 0 ? (
+								<p className="text-sm text-gray-500">No collections found. You can create collections in Dashboard → Collections</p>
+							) : (
+								<Select
+									value={formData.selectedCollection || 'none'}
+									onValueChange={(value) => setFormData({ ...formData, selectedCollection: value === 'none' ? null : value })}
+								>
+									<SelectTrigger>
+										<SelectValue placeholder="Select a collection" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="none">None</SelectItem>
+										{availableCollections.map((collection) => (
+											<SelectItem key={collection.id} value={`30405:${collection.pubkey}:${collection.id}`}>
+												{collection.name}
+											</SelectItem>
+										))}
+									</SelectContent>
+								</Select>
+							)}
 						</div>
 
 						<div className="flex gap-2 pt-4">

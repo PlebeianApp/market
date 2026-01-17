@@ -86,7 +86,7 @@ export const createProductEvent = (
 		['type', formData.productType === 'single' ? 'simple' : 'variable', 'physical'],
 		['visibility', formData.status],
 		['stock', formData.quantity],
-		['summary', formData.description],
+		['summary', ''],
 		...imagesTags,
 		...categoryTags,
 		...specTags,
@@ -127,6 +127,12 @@ export const publishProduct = async (formData: ProductFormData, signer: NDKSigne
 
 	if (!formData.mainCategory) {
 		throw new Error('Main category is required')
+	}
+
+	// Validate shipping options
+	const validShippings = formData.shippings.filter((ship) => ship.shipping && ship.shipping.id)
+	if (validShippings.length === 0) {
+		throw new Error('At least one shipping option is required')
 	}
 
 	const event = createProductEvent(formData, signer, ndk)
@@ -173,6 +179,12 @@ export const updateProduct = async (
 
 	if (!formData.mainCategory) {
 		throw new Error('Main category is required')
+	}
+
+	// Validate shipping options
+	const validShippings = formData.shippings.filter((ship) => ship.shipping && ship.shipping.id)
+	if (validShippings.length === 0) {
+		throw new Error('At least one shipping option is required')
 	}
 
 	// Create event with the same d tag to update the existing product
