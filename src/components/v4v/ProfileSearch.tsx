@@ -201,7 +201,7 @@ export function ProfileSearch({ onSelect, placeholder = 'Search profiles or past
 											onClick={() => handleSelect(npub)}
 											data-testid={`profile-search-result-${event.pubkey}`}
 										>
-											<UserWithAvatar pubkey={event.pubkey} size="sm" showBadge />
+											<UserWithAvatar pubkey={event.pubkey} size="sm" showBadge disableLink={true} />
 											<span className="flex flex-col flex-1">
 												<span className="font-bold">{profile?.name || profile?.displayName || npub.slice(0, 10) + '...'}</span>
 												{profile?.nip05 && <span className="text-xs">{profile.nip05}</span>}
