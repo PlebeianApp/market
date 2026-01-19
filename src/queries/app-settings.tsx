@@ -71,15 +71,28 @@ export const useAdminSettings = (appPubkey?: string) => {
 			'#d': ['admins'],
 		}
 
+		// Track latest event timestamp to avoid reacting to historical events
+		let latestEventTime = 0
+		let receivedEose = false
+
 		const subscription = ndk.subscribe(adminListFilter, {
 			closeOnEose: false, // Keep subscription open
 		})
 
-		// Event handler for admin list updates
+		// Event handler for admin list updates - only react to newer events after EOSE
 		subscription.on('event', (newEvent) => {
-			console.log('Admin list updated, invalidating queries:', newEvent.id)
-			queryClient.invalidateQueries({ queryKey: configKeys.admins(appPubkey) })
-			queryClient.refetchQueries({ queryKey: configKeys.admins(appPubkey) })
+			const eventTime = newEvent.created_at ?? 0
+			if (receivedEose && eventTime > latestEventTime) {
+				queryClient.invalidateQueries({ queryKey: configKeys.admins(appPubkey) })
+				queryClient.refetchQueries({ queryKey: configKeys.admins(appPubkey) })
+			}
+			if (eventTime > latestEventTime) {
+				latestEventTime = eventTime
+			}
+		})
+
+		subscription.on('eose', () => {
+			receivedEose = true
 		})
 
 		// Clean up subscription when unmounting
@@ -202,15 +215,28 @@ export const useEditorSettings = (appPubkey?: string) => {
 			'#d': ['editors'],
 		}
 
+		// Track latest event timestamp to avoid reacting to historical events
+		let latestEventTime = 0
+		let receivedEose = false
+
 		const subscription = ndk.subscribe(editorListFilter, {
 			closeOnEose: false, // Keep subscription open
 		})
 
-		// Event handler for editor list updates
+		// Event handler for editor list updates - only react to newer events after EOSE
 		subscription.on('event', (newEvent) => {
-			console.log('Editor list updated, invalidating queries:', newEvent.id)
-			queryClient.invalidateQueries({ queryKey: configKeys.editors(appPubkey) })
-			queryClient.refetchQueries({ queryKey: configKeys.editors(appPubkey) })
+			const eventTime = newEvent.created_at ?? 0
+			if (receivedEose && eventTime > latestEventTime) {
+				queryClient.invalidateQueries({ queryKey: configKeys.editors(appPubkey) })
+				queryClient.refetchQueries({ queryKey: configKeys.editors(appPubkey) })
+			}
+			if (eventTime > latestEventTime) {
+				latestEventTime = eventTime
+			}
+		})
+
+		subscription.on('eose', () => {
+			receivedEose = true
 		})
 
 		// Clean up subscription when unmounting

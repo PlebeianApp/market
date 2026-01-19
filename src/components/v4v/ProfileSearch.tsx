@@ -9,10 +9,18 @@ import { useQuery } from '@tanstack/react-query'
 import { ndkActions } from '@/lib/stores/ndk'
 import { profileKeys } from '@/queries/queryKeyFactory'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
 
-const SEARCH_RELAYS = ['wss://relay.nostr.band', 'wss://search.nos.today', 'wss://nos.lol']
+// Known relays that support NIP-50 search
+const PROFILE_SEARCH_RELAYS = [
+	'wss://relay.nostr.band',
+	'wss://search.nos.today',
+	'wss://nos.lol',
+	'wss://nostr.wine',
+	'wss://relay.primal.net',
+]
 const DEBOUNCE_MS = 500
+const SEARCH_TIMEOUT_MS = 10000
 
 interface ProfileSearchProps {
 	onSelect: (npub: string) => void
@@ -36,6 +44,11 @@ export function ProfileSearch({ onSelect, placeholder = 'Search profiles or past
 		}
 	}
 
+	// Check if the input is a valid hex pubkey (64 hex chars)
+	const isValidHexPubkey = (input: string): boolean => {
+		return /^[0-9a-f]{64}$/i.test(input)
+	}
+
 	// Use query for searching profiles
 	const {
 		data: searchResults,
@@ -49,25 +62,55 @@ export function ProfileSearch({ onSelect, placeholder = 'Search profiles or past
 			const ndk = ndkActions.getNDK()
 			if (!ndk) throw new Error('NDK not initialized')
 
-			// Connect to search relays if not already connected
-			for (const url of SEARCH_RELAYS) {
-				try {
-					await ndk.addExplicitRelay(url)
-				} catch (error) {
-					console.error(`Failed to connect to relay ${url}:`, error)
-				}
+			// Create a relay set from the NIP-50 search relays
+			const relaySet = NDKRelaySet.fromRelayUrls(PROFILE_SEARCH_RELAYS, ndk)
+
+			// Connect to the search relays if not already connected
+			const connectionResults = await Promise.allSettled(
+				Array.from(relaySet.relays).map(async (relay) => {
+					if (relay.status !== 1) {
+						// 1 = CONNECTED
+						try {
+							await relay.connect()
+							return { url: relay.url, connected: true }
+						} catch {
+							return { url: relay.url, connected: false }
+						}
+					}
+					return { url: relay.url, connected: true }
+				}),
+			)
+
+			// Count successful connections from the results (not relay.status which may not update immediately)
+			const successfulConnections = connectionResults.filter((r) => r.status === 'fulfilled' && r.value.connected).length
+
+			if (successfulConnections === 0) {
+				console.warn('[ProfileSearch] No relays connected, search will fail')
+				return []
 			}
 
-			// Create filter for profile search
+			// Create filter for profile search (NIP-50)
 			const filter = {
 				kinds: [0],
 				search: searchQuery,
 				limit: 20,
 			}
 
-			// Fetch events
-			const events = await ndk.fetchEvents(filter)
-			return Array.from(events)
+			// Race the fetch with a timeout so the UI can recover gracefully
+			try {
+				const fetchPromise = ndk
+					.fetchEvents(filter, { closeOnEose: true }, relaySet)
+					.then((events) => Array.from(events))
+					.catch(() => [])
+
+				const timeoutPromise = new Promise<NDKEvent[]>((resolve) => {
+					setTimeout(() => resolve([]), SEARCH_TIMEOUT_MS)
+				})
+
+				return await Promise.race([fetchPromise, timeoutPromise])
+			} catch {
+				return []
+			}
 		},
 		enabled: false, // Don't run query automatically
 	})
@@ -144,11 +187,16 @@ export function ProfileSearch({ onSelect, placeholder = 'Search profiles or past
 		window.open(`https://njump.me/${npub}`, '_blank', 'noopener,noreferrer')
 	}
 
-	// Check if input is a valid npub
+	// Check if input is a valid npub or hex pubkey
 	useEffect(() => {
 		if (searchQuery.trim()) {
-			if (searchQuery.startsWith('npub') && isValidNpub(searchQuery)) {
-				handleDirectNpubSearch(searchQuery)
+			const trimmed = searchQuery.trim()
+			if (trimmed.startsWith('npub') && isValidNpub(trimmed)) {
+				handleDirectNpubSearch(trimmed)
+			} else if (isValidHexPubkey(trimmed)) {
+				// Convert hex to npub and do direct lookup
+				const npub = nip19.npubEncode(trimmed)
+				handleDirectNpubSearch(npub)
 			} else {
 				debouncedSearch()
 			}
