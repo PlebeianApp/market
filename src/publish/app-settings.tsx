@@ -1,4 +1,5 @@
 import { submitAppSettings } from '@/lib/appSettings'
+import { naddrFromAddress } from '@/lib/nostr/naddr'
 import { ndkActions } from '@/lib/stores/ndk'
 import { fetchAdminSettings, fetchEditorSettings } from '@/queries/app-settings'
 import { configKeys } from '@/queries/queryKeyFactory'
@@ -93,20 +94,12 @@ export const addAdmin = async (newAdminPubkey: string, signer: NDKSigner, ndk: N
 	// Use app pubkey if provided, otherwise fallback to current user's pubkey
 	const targetAppPubkey = appPubkey || currentUser.pubkey
 
-	// Fetch current admin list using app pubkey (where the events are actually stored)
-	const adminListFilter = {
-		kinds: [30000],
-		authors: [targetAppPubkey],
-		'#d': ['admins'],
-		limit: 1,
-	}
-
-	const events = await ndk.fetchEvents(adminListFilter)
-	const eventArray = Array.from(events)
+	// Fetch current admin list using naddr for NIP-33 addressable event
+	const naddr = naddrFromAddress(30000, targetAppPubkey, 'admins')
+	const latestEvent = await ndk.fetchEvent(naddr)
 
 	let currentAdmins: string[] = []
-	if (eventArray.length > 0) {
-		const latestEvent = eventArray.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+	if (latestEvent) {
 		currentAdmins = latestEvent.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1])
 	}
 
@@ -134,22 +127,14 @@ export const removeAdmin = async (adminPubkeyToRemove: string, signer: NDKSigner
 	// Use app pubkey if provided, otherwise fallback to current user's pubkey
 	const targetAppPubkey = appPubkey || currentUser.pubkey
 
-	// Fetch current admin list using app pubkey (where the events are actually stored)
-	const adminListFilter = {
-		kinds: [30000],
-		authors: [targetAppPubkey],
-		'#d': ['admins'],
-		limit: 1,
-	}
+	// Fetch current admin list using naddr for NIP-33 addressable event
+	const naddr = naddrFromAddress(30000, targetAppPubkey, 'admins')
+	const latestEvent = await ndk.fetchEvent(naddr)
 
-	const events = await ndk.fetchEvents(adminListFilter)
-	const eventArray = Array.from(events)
-
-	if (eventArray.length === 0) {
+	if (!latestEvent) {
 		throw new Error('No admin list found')
 	}
 
-	const latestEvent = eventArray.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
 	const currentAdmins = latestEvent.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1])
 
 	// Check if admin exists
@@ -313,20 +298,12 @@ export const addEditor = async (newEditorPubkey: string, signer: NDKSigner, ndk:
 	// Use app pubkey if provided, otherwise fallback to current user's pubkey
 	const targetAppPubkey = appPubkey || currentUser.pubkey
 
-	// Fetch current editor list using app pubkey (where the events are actually stored)
-	const editorListFilter = {
-		kinds: [30000],
-		authors: [targetAppPubkey],
-		'#d': ['editors'],
-		limit: 1,
-	}
-
-	const events = await ndk.fetchEvents(editorListFilter)
-	const eventArray = Array.from(events)
+	// Fetch current editor list using naddr for NIP-33 addressable event
+	const naddr = naddrFromAddress(30000, targetAppPubkey, 'editors')
+	const latestEvent = await ndk.fetchEvent(naddr)
 
 	let currentEditors: string[] = []
-	if (eventArray.length > 0) {
-		const latestEvent = eventArray.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
+	if (latestEvent) {
 		currentEditors = latestEvent.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1])
 	}
 
@@ -354,22 +331,14 @@ export const removeEditor = async (editorPubkeyToRemove: string, signer: NDKSign
 	// Use app pubkey if provided, otherwise fallback to current user's pubkey
 	const targetAppPubkey = appPubkey || currentUser.pubkey
 
-	// Fetch current editor list using app pubkey (where the events are actually stored)
-	const editorListFilter = {
-		kinds: [30000],
-		authors: [targetAppPubkey],
-		'#d': ['editors'],
-		limit: 1,
-	}
+	// Fetch current editor list using naddr for NIP-33 addressable event
+	const naddr = naddrFromAddress(30000, targetAppPubkey, 'editors')
+	const latestEvent = await ndk.fetchEvent(naddr)
 
-	const events = await ndk.fetchEvents(editorListFilter)
-	const eventArray = Array.from(events)
-
-	if (eventArray.length === 0) {
+	if (!latestEvent) {
 		throw new Error('No editor list found')
 	}
 
-	const latestEvent = eventArray.sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0))[0]
 	const currentEditors = latestEvent.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1])
 
 	// Check if editor exists
