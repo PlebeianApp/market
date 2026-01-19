@@ -19,8 +19,8 @@ const PROFILE_SEARCH_RELAYS = [
 	'wss://nostr.wine',
 	'wss://relay.primal.net',
 ]
-const DEBOUNCE_MS = 500
-const SEARCH_TIMEOUT_MS = 10000
+const DEBOUNCE_MS = 300
+const SEARCH_TIMEOUT_MS = 3000
 
 interface ProfileSearchProps {
 	onSelect: (npub: string) => void
@@ -82,7 +82,12 @@ export function ProfileSearch({ onSelect, placeholder = 'Search profiles or past
 			)
 
 			// Count successful connections from the results (not relay.status which may not update immediately)
-			const successfulConnections = connectionResults.filter((r) => r.status === 'fulfilled' && r.value.connected).length
+			const successful = connectionResults.filter((r) => r.status === 'fulfilled' && r.value.connected)
+			const successfulConnections = successful.length
+			console.log(
+				'[ProfileSearch] Connected to relays:',
+				successful.map((r) => (r as PromiseFulfilledResult<{ url: string; connected: boolean }>).value.url),
+			)
 
 			if (successfulConnections === 0) {
 				console.warn('[ProfileSearch] No relays connected, search will fail')
@@ -96,21 +101,31 @@ export function ProfileSearch({ onSelect, placeholder = 'Search profiles or past
 				limit: 20,
 			}
 
-			// Race the fetch with a timeout so the UI can recover gracefully
-			try {
-				const fetchPromise = ndk
-					.fetchEvents(filter, { closeOnEose: true }, relaySet)
-					.then((events) => Array.from(events))
-					.catch(() => [])
+			// Use subscription to collect results as they arrive (more reliable than fetchEvents for NIP-50)
+			return new Promise<NDKEvent[]>((resolve) => {
+				// Deduplicate by pubkey, keeping the newest event for each profile
+				const profilesByPubkey = new Map<string, NDKEvent>()
 
-				const timeoutPromise = new Promise<NDKEvent[]>((resolve) => {
-					setTimeout(() => resolve([]), SEARCH_TIMEOUT_MS)
+				console.log('[ProfileSearch] Searching for:', searchQuery, 'on', successfulConnections, 'relays')
+
+				const sub = ndk.subscribe(filter, { closeOnEose: false }, relaySet)
+
+				sub.on('event', (event: NDKEvent) => {
+					const existing = profilesByPubkey.get(event.pubkey)
+					// Keep the newest event for each pubkey
+					if (!existing || (event.created_at ?? 0) > (existing.created_at ?? 0)) {
+						profilesByPubkey.set(event.pubkey, event)
+					}
 				})
 
-				return await Promise.race([fetchPromise, timeoutPromise])
-			} catch {
-				return []
-			}
+				// Resolve after timeout with deduplicated results
+				setTimeout(() => {
+					sub.stop()
+					const results = Array.from(profilesByPubkey.values())
+					console.log('[ProfileSearch] Finished with', results.length, 'unique profiles')
+					resolve(results)
+				}, SEARCH_TIMEOUT_MS)
+			})
 		},
 		enabled: false, // Don't run query automatically
 	})
