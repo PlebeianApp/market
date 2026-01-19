@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
+import { CURRENCIES, PRODUCT_CATEGORIES, PRODUCTS_TAXONOMY } from '@/lib/constants'
 import type { RichShippingInfo } from '@/lib/stores/cart'
 import { useNDK } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore, type ProductShippingForm } from '@/lib/stores/product'
@@ -390,6 +390,32 @@ export function DetailTab() {
 export function CategoryTab() {
 	const { categories, mainCategory } = useStore(productFormStore)
 	const mainCategories = [...PRODUCT_CATEGORIES]
+	const [inputValue, setInputValue] = useState('')
+
+	// Get suggestions directly from PRODUCTS_TAXONOMY using mainCategory as key
+	const availableSuggestions = useMemo(() => {
+		if (!mainCategory) return []
+
+		// Use the mainCategory directly as key in PRODUCTS_TAXONOMY
+		return PRODUCTS_TAXONOMY[mainCategory] || []
+	}, [mainCategory])
+
+	// Filter suggestions based on input and already selected categories
+	const filteredSuggestions = useMemo(() => {
+		const notSelected = availableSuggestions.filter(
+			(suggestion) => !categories.some((cat) => cat.name.toLowerCase() === suggestion.toLowerCase()),
+		)
+
+		if (!inputValue) {
+			// No input: show first 5 suggestions
+			return notSelected.slice(0, 5)
+		}
+
+		// With input: find matches and show up to 5
+		const matches = notSelected.filter((suggestion) => suggestion.toLowerCase().includes(inputValue.toLowerCase()))
+
+		return matches.slice(0, 5)
+	}, [categories, inputValue, availableSuggestions])
 
 	const handleMainCategorySelect = (value: string) => {
 		productFormActions.updateValues({ mainCategory: value })
@@ -400,14 +426,19 @@ export function CategoryTab() {
 			toast.error('You can only add up to 3 sub categories')
 			return
 		}
-		productFormActions.updateCategories([
-			...categories,
-			{
-				key: `category-${Date.now()}`,
-				name: '',
-				checked: true,
-			},
-		])
+
+		// Add the input value as a category (like pressing Enter)
+		if (inputValue.trim()) {
+			productFormActions.updateCategories([
+				...categories,
+				{
+					key: `category-${Date.now()}`,
+					name: inputValue.trim(),
+					checked: true,
+				},
+			])
+			setInputValue('')
+		}
 	}
 
 	const removeSubCategory = (index: number) => {
@@ -434,6 +465,43 @@ export function CategoryTab() {
 		productFormActions.updateCategories(newCategories)
 	}
 
+	const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+		if (e.key === 'Enter' && inputValue.trim()) {
+			e.preventDefault()
+			if (categories.length >= 3) {
+				toast.error('You can only add up to 3 sub categories')
+				return
+			}
+			productFormActions.updateCategories([
+				...categories,
+				{
+					key: `category-${Date.now()}`,
+					name: inputValue.trim(),
+					checked: true,
+				},
+			])
+			setInputValue('')
+		} else if (e.key === 'Backspace' && !inputValue && categories.length > 0) {
+			removeSubCategory(categories.length - 1)
+		}
+	}
+
+	const addSuggestion = (suggestion: string) => {
+		if (categories.length >= 3) {
+			toast.error('You can only add up to 3 sub categories')
+			return
+		}
+		productFormActions.updateCategories([
+			...categories,
+			{
+				key: `category-${Date.now()}`,
+				name: suggestion,
+				checked: true,
+			},
+		])
+		setInputValue('')
+	}
+
 	return (
 		<div className="space-y-4">
 			<div className="grid w-full gap-1.5">
@@ -456,64 +524,77 @@ export function CategoryTab() {
 
 			{mainCategory && (
 				<>
-					<p className="text-gray-600">Pick a sub category that better represents the nature of your product</p>
+					<p className="text-gray-600">Pick sub categories that better represent the nature of your product</p>
 
 					<div className="space-y-2">
 						<div className="grid w-full gap-1.5">
-							<Label>Sub Category 1</Label>
-							<div className="relative">
-								<Input
-									value={categories[0]?.name || ''}
-									onChange={(e) => updateCategoryName(0, e.target.value)}
-									className="flex-1 border-2 pr-10"
-									placeholder="e.g Bitcoin Miners"
-								/>
-								{categories.length > 0 && (
-									<Button
-										type="button"
-										variant="ghost"
-										className="absolute right-0 top-0 h-full px-2 text-black"
-										onClick={() => removeSubCategory(0)}
+							<Label>Sub Categories (Limit 3)</Label>
+							<div className="relative min-h-[42px] border-2 rounded-md p-2 flex flex-wrap gap-1.5 items-center focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+								{categories.map((category, index) => (
+									<div
+										key={category.key}
+										className="inline-flex items-center gap-1.5 px-3 py-1 bg-primary text-primary-foreground rounded-full text-sm max-w-[200px]"
+										title={category.name || `Category ${index + 1}`}
 									>
-										<span className="i-delete w-5 h-5"></span>
-									</Button>
-								)}
+										<span className="truncate">{category.name || `Category ${index + 1}`}</span>
+										<button
+											type="button"
+											onClick={() => removeSubCategory(index)}
+											className="hover:bg-primary-foreground/20 rounded-full p-0.5 transition-colors flex-shrink-0"
+										>
+											<X className="h-3 w-3" />
+										</button>
+									</div>
+								))}
+								<input
+									type="text"
+									value={inputValue}
+									onChange={(e) => setInputValue(e.target.value)}
+									onKeyDown={handleInputKeyDown}
+									placeholder={
+										categories.length === 0 ? 'Type or select from suggestions below...' : categories.length < 3 ? 'Add another...' : ''
+									}
+									disabled={categories.length >= 3}
+									className="flex-1 min-w-[120px] outline-none bg-transparent placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+								/>
 							</div>
+							<p className="text-xs text-muted-foreground">
+								{inputValue ? 'Showing matching suggestions' : 'Press Enter to add a category, Backspace to remove the last one'}
+							</p>
 						</div>
 
-						{categories.slice(1).map((category, index) => (
-							<div key={category.key} className="grid w-full gap-1.5">
-								<Label>Sub Category {index + 2}</Label>
-								<div className="relative">
-									<Input
-										value={category.name}
-										onChange={(e) => updateCategoryName(index + 1, e.target.value)}
-										className="flex-1 border-2 pr-10"
-										placeholder="e.g Bitcoin Miners"
-									/>
-									<Button
-										type="button"
-										variant="ghost"
-										className="absolute right-0 top-0 h-full px-2 text-black"
-										onClick={() => removeSubCategory(index + 1)}
-									>
-										<span className="i-delete w-5 h-5"></span>
-									</Button>
+						{/* Suggestions */}
+						{categories.length < 3 && filteredSuggestions.length > 0 && (
+							<div className="space-y-2">
+								<Label className="text-xs text-muted-foreground">Suggestions {inputValue && `(matching "${inputValue}")`}:</Label>
+								<div className="flex flex-wrap gap-2">
+									{filteredSuggestions.map((suggestion) => (
+										<button
+											key={suggestion}
+											type="button"
+											onClick={() => addSuggestion(suggestion)}
+											className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-secondary text-secondary-foreground rounded-full text-sm hover:bg-secondary/80 transition-colors border border-border max-w-[250px]"
+											title={suggestion}
+										>
+											<PlusIcon className="h-3 w-3 flex-shrink-0" />
+											<span className="truncate">{suggestion}</span>
+										</button>
+									))}
 								</div>
 							</div>
-						))}
-					</div>
+						)}
 
-					<Button
-						type="button"
-						variant="outline"
-						className="w-full flex gap-2 justify-center mt-4"
-						onClick={addSubCategory}
-						disabled={categories.length >= 3}
-					>
-						<span className="i-plus w-5 h-5"></span>
-						New Sub Category
-					</Button>
+						<Button
+							type="button"
+							variant="outline"
+							className="w-full flex gap-2 justify-center mt-4"
+							onClick={addSubCategory}
+							disabled={categories.length >= 3 || !inputValue.trim()}
+						>
+							<span className="i-plus w-5 h-5"></span>
+							New Sub Category
+						</Button>
+					</div>
 				</>
 			)}
 		</div>
