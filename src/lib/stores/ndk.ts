@@ -167,7 +167,7 @@ export const ndkActions = {
 			explicitRelayUrls: explicitRelays,
 			enableOutboxModel: !localRelayOnly,
 			aiGuardrails: {
-				skip: new Set(['ndk-no-cache']),
+				skip: new Set(['ndk-no-cache', 'fetch-events-usage']),
 			},
 		})
 
@@ -455,7 +455,7 @@ export const ndkActions = {
 		const state = ndkStore.state
 		if (!state.zapNdk || !state.isZapNdkConnected) {
 			console.warn('Zap NDK not connected. Cannot create zap subscription.')
-			return () => {}
+			return () => { }
 		}
 
 		const filters: any = {
