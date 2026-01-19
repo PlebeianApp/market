@@ -1,12 +1,19 @@
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { uiActions } from '@/lib/stores/ui'
 import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Link } from '@tanstack/react-router'
 import { FeaturedSections } from '@/components/FeaturedSections'
 import { InfiniteProductList } from '@/components/InfiniteProductList'
+import { PRODUCT_CATEGORIES } from '@/lib/constants'
+import { getProductCategories } from '@/queries/products'
+import { useSuspenseQuery } from '@tanstack/react-query'
+import { productsQueryOptions } from '@/queries/products'
+import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import { z } from 'zod'
 
 // Hook to inject dynamic CSS for background image
 function useHeroBackground(imageUrl: string, className: string) {
@@ -27,12 +34,50 @@ function useHeroBackground(imageUrl: string, className: string) {
 	}, [imageUrl, className])
 }
 
+const homeSearchSchema = z.object({
+	tag: z.string().optional(),
+})
+
 export const Route = createFileRoute('/')({
 	component: Index,
+	validateSearch: homeSearchSchema,
 })
 
 function Index() {
+	const navigate = useNavigate()
+	const { tag } = Route.useSearch()
 	const { isAuthenticated } = useStore(authStore)
+	// Fetch all products without tag filter to extract all available tags
+	const productsQuery = useSuspenseQuery(productsQueryOptions(500))
+	const products = productsQuery.data as NDKEvent[]
+
+	// Extract all unique tags from products
+	const allTags = useMemo(() => {
+		const tagSet = new Set<string>()
+		products.forEach((product) => {
+			const categories = getProductCategories(product)
+			categories.forEach((cat) => {
+				if (cat[1]) tagSet.add(cat[1])
+			})
+		})
+		return Array.from(tagSet)
+	}, [products])
+
+	// Separate default categories and other tags
+	const defaultTags = PRODUCT_CATEGORIES.filter((cat) => allTags.includes(cat))
+
+	const handleTagClick = (selectedTag: string) => {
+		if (tag === selectedTag) {
+			// If clicking the same tag, clear the filter
+			navigate({ to: '/' })
+		} else {
+			navigate({ to: '/', search: (prev: any) => ({ ...prev, tag: selectedTag }) })
+		}
+	}
+
+	const handleClearFilter = () => {
+		navigate({ to: '/' })
+	}
 
 	// Use the market image for homepage background
 	const marketBackgroundImageUrl = '/images/market-background.jpg'
@@ -72,11 +117,33 @@ function Index() {
 					</div>
 				</div>
 			</div>
-			<FeaturedSections maxItemsPerSection={5} />
+
+			{/* Tag Filter Bar */}
+			{defaultTags.length > 0 && (
+				<div className="sticky top-0 z-20 bg-off-black border-b shadow-sm">
+					<div className="px-4 py-3 overflow-x-auto">
+						<div className="flex items-center gap-2 min-w-max">
+							<Badge variant={!tag ? 'primaryActive' : 'primary'} className="cursor-pointer transition-colors" onClick={handleClearFilter}>
+								All
+							</Badge>
+							{defaultTags.map((tagName) => (
+								<Badge
+									key={tagName}
+									variant={tag === tagName ? 'primaryActive' : 'primary'}
+									className="cursor-pointer transition-colors"
+									onClick={() => handleTagClick(tagName)}
+								>
+									{tagName}
+								</Badge>
+							))}
+						</div>
+					</div>
+				</div>
+			)}
 
 			{/* Infinite Product List */}
 			<div className="px-8 py-4">
-				<InfiniteProductList title="All Products" scrollKey="homepage-products" chunkSize={20} threshold={1000} autoLoad={true} />
+				<InfiniteProductList title="All Products" scrollKey="homepage-products" chunkSize={20} threshold={1000} autoLoad={true} tag={tag} />
 			</div>
 		</div>
 	)

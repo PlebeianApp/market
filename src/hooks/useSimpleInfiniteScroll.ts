@@ -8,6 +8,7 @@ interface UseSimpleInfiniteScrollOptions {
 	maxProducts?: number
 	threshold?: number
 	autoLoad?: boolean
+	tag?: string
 }
 
 interface UseSimpleInfiniteScrollReturn {
@@ -32,9 +33,10 @@ export const useSimpleInfiniteScroll = ({
 	maxProducts = 500,
 	threshold = 1000,
 	autoLoad = true,
+	tag,
 }: UseSimpleInfiniteScrollOptions = {}): UseSimpleInfiniteScrollReturn => {
 	// Fetch all products at once
-	const { data: allProducts = [], isLoading, isError, error } = useQuery(productsQueryOptions(maxProducts))
+	const { data: allProducts = [], isLoading, isError, error } = useQuery(productsQueryOptions(maxProducts, tag))
 
 	// Track current chunk (page)
 	const [currentChunk, setCurrentChunk] = useState(1)
