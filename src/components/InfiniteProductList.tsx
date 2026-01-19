@@ -23,6 +23,8 @@ interface InfiniteProductListProps {
 	className?: string
 	/** Unique key for scroll restoration */
 	scrollKey: string
+	/** Optional tag to filter products by */
+	tag?: string
 }
 
 export function InfiniteProductList({
@@ -33,6 +35,7 @@ export function InfiniteProductList({
 	autoLoad = true,
 	className,
 	scrollKey,
+	tag,
 }: InfiniteProductListProps) {
 	const containerRef = useRef<HTMLDivElement>(null)
 
@@ -42,6 +45,7 @@ export function InfiniteProductList({
 		maxProducts,
 		threshold,
 		autoLoad,
+		tag,
 	})
 
 	// Use scroll restoration hook
