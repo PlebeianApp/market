@@ -89,7 +89,6 @@ const serveStatic = async (path: string) => {
 
 export const server = serve({
 	routes: {
-		'/*': index,
 		'/api/config': {
 			GET: () => {
 				// Return cached settings loaded at startup
@@ -104,6 +103,7 @@ export const server = serve({
 		},
 		'/images/:file': ({ params }) => serveStatic(`images/${params.file}`),
 		'/logo.svg': () => serveStatic('images/logo.svg'),
+		'/*': index,
 	},
 	development: process.env.NODE_ENV !== 'production',
 	fetch(req, server) {
