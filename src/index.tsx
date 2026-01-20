@@ -103,6 +103,7 @@ export const server = serve({
 			},
 		},
 		'/images/:file': ({ params }) => serveStatic(`images/${params.file}`),
+		'/logo.svg': () => serveStatic('images/logo.svg'),
 	},
 	development: process.env.NODE_ENV !== 'production',
 	fetch(req, server) {
