@@ -39,18 +39,18 @@ func main() {
 		IdleTimeout:  120 * time.Second,
 	}
 
-	// Start NWC monitor if configured
-	var nwcMonitor *NWCMonitor
-	if cfg.NwcURI != "" {
-		nwcMonitor, err = NewNWCMonitor(cfg, nostrClient)
+	// Start coinos monitor if configured
+	var coinosMonitor *CoinosMonitor
+	if cfg.CoinosToken != "" {
+		coinosMonitor, err = NewCoinosMonitor(cfg, nostrClient)
 		if err != nil {
-			log.Printf("Warning: Failed to create NWC monitor: %v", err)
+			log.Printf("Warning: Failed to create coinos monitor: %v", err)
 		} else {
-			go nwcMonitor.Start()
-			log.Printf("NWC monitor started")
+			coinosMonitor.Start()
+			log.Printf("Coinos payment monitor started")
 		}
 	} else {
-		log.Printf("NWC not configured - payment monitoring disabled")
+		log.Printf("Coinos not configured - payment monitoring disabled")
 	}
 
 	// Start HTTP server in goroutine
@@ -68,9 +68,9 @@ func main() {
 
 	log.Println("Shutting down server...")
 
-	// Stop NWC monitor
-	if nwcMonitor != nil {
-		nwcMonitor.Stop()
+	// Stop coinos monitor
+	if coinosMonitor != nil {
+		coinosMonitor.Stop()
 	}
 
 	// Shutdown HTTP server with timeout
