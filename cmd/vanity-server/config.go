@@ -13,10 +13,14 @@ type Config struct {
 	UpstreamURL     string // Upstream URL to proxy to (e.g., "https://plebeian.market")
 	RelayURL        string // Nostr relay URL for fetching/publishing events
 	PrivateKey      string // Hex-encoded private key for signing events
-	NwcURI          string // Nostr Wallet Connect URI for payment monitoring
 	Domain          string // Domain for vanity URLs (e.g., "store.plebeian.market")
 	PriceSats       int64  // Price in satoshis per registration
 	DurationSeconds int64  // Duration of registration in seconds
+
+	// Coinos API configuration
+	CoinosAPIURL  string // Coinos API base URL (default: https://coinos.io)
+	CoinosToken   string // Coinos JWT auth token
+	CoinosWebhook string // Webhook URL for payment notifications (optional)
 }
 
 // DefaultConfig returns a Config with default values
@@ -25,6 +29,7 @@ func DefaultConfig() *Config {
 		ListenAddr:      ":8080",
 		PriceSats:       2000,
 		DurationSeconds: 31536000, // 1 year
+		CoinosAPIURL:    "https://coinos.io",
 	}
 }
 
@@ -54,10 +59,19 @@ func LoadConfigFromEnv() (*Config, error) {
 		return nil, fmt.Errorf("VANITY_PRIVATE_KEY is required")
 	}
 
-	if v := os.Getenv("VANITY_NWC_URI"); v != "" {
-		cfg.NwcURI = v
+	// Coinos API configuration
+	if v := os.Getenv("COINOS_API_URL"); v != "" {
+		cfg.CoinosAPIURL = strings.TrimSuffix(v, "/")
 	}
-	// NWC is optional - server can run without payment monitoring
+
+	if v := os.Getenv("COINOS_TOKEN"); v != "" {
+		cfg.CoinosToken = v
+	}
+	// Coinos token is optional - server can run without payment monitoring
+
+	if v := os.Getenv("COINOS_WEBHOOK"); v != "" {
+		cfg.CoinosWebhook = v
+	}
 
 	if v := os.Getenv("VANITY_DOMAIN"); v != "" {
 		cfg.Domain = v
