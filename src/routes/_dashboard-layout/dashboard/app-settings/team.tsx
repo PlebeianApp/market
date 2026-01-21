@@ -1,8 +1,8 @@
 import { UserDisplayComponent } from '@/components/UserDisplayComponent'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ProfileSearch } from '@/components/v4v/ProfileSearch'
 import {
 	useAddAdminMutation,
 	useAddEditorMutation,
@@ -27,7 +27,6 @@ import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { npubToHex } from '@/routes/setup'
 import { createFileRoute } from '@tanstack/react-router'
 import { ArrowDown, ArrowUp, Edit, Globe, Shield, ShieldCheck, Trash2, UserPlus } from 'lucide-react'
-import { useState } from 'react'
 import { toast } from 'sonner'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/app-settings/team')({
@@ -40,10 +39,6 @@ function TeamComponent() {
 	const { data: adminSettings, isLoading: isLoadingAdmins } = useAdminSettings(config?.appPublicKey)
 	const { data: editorSettings, isLoading: isLoadingEditors } = useEditorSettings(config?.appPublicKey)
 	const { amIAdmin, amIOwner, isLoading: isLoadingPermissions } = useUserRole(config?.appPublicKey)
-	const [newAdminInput, setNewAdminInput] = useState('')
-	const [newEditorInput, setNewEditorInput] = useState('')
-	const [isAddingAdmin, setIsAddingAdmin] = useState(false)
-	const [isAddingEditor, setIsAddingEditor] = useState(false)
 
 	// All the mutation hooks
 	const addAdminMutation = useAddAdminMutation()
@@ -59,49 +54,33 @@ function TeamComponent() {
 	const formattedAdmins = getFormattedAdmins(adminSettings)
 	const formattedEditors = getFormattedEditors(editorSettings)
 
-	const handleAddAdmin = async () => {
-		if (!newAdminInput.trim()) {
-			toast.error('Please enter a valid npub or pubkey')
-			return
-		}
-
+	const handleAddAdmin = async (npub: string) => {
 		try {
-			setIsAddingAdmin(true)
-			// Convert npub to hex if needed
-			const hexPubkey = npubToHex(newAdminInput.trim())
+			// Convert npub to hex
+			const hexPubkey = npubToHex(npub)
 			await addAdminMutation.mutateAsync({
 				userPubkey: hexPubkey,
 				appPubkey: config?.appPublicKey,
 			})
-			setNewAdminInput('')
+			toast.success('Administrator added successfully')
 		} catch (error) {
 			console.error('Failed to add admin:', error)
 			toast.error(`Failed to add admin: ${error instanceof Error ? error.message : 'Unknown error'}`)
-		} finally {
-			setIsAddingAdmin(false)
 		}
 	}
 
-	const handleAddEditor = async () => {
-		if (!newEditorInput.trim()) {
-			toast.error('Please enter a valid npub or pubkey')
-			return
-		}
-
+	const handleAddEditor = async (npub: string) => {
 		try {
-			setIsAddingEditor(true)
-			// Convert npub to hex if needed
-			const hexPubkey = npubToHex(newEditorInput.trim())
+			// Convert npub to hex
+			const hexPubkey = npubToHex(npub)
 			await addEditorMutation.mutateAsync({
 				userPubkey: hexPubkey,
 				appPubkey: config?.appPublicKey,
 			})
-			setNewEditorInput('')
+			toast.success('Editor added successfully')
 		} catch (error) {
 			console.error('Failed to add editor:', error)
 			toast.error(`Failed to add editor: ${error instanceof Error ? error.message : 'Unknown error'}`)
-		} finally {
-			setIsAddingEditor(false)
 		}
 	}
 
@@ -406,28 +385,12 @@ function TeamComponent() {
 								<UserPlus className="w-5 h-5" />
 								Add Administrator
 							</CardTitle>
-							<CardDescription>Add a new administrator by entering their npub or public key.</CardDescription>
+							<CardDescription>Search for a user to add as administrator.</CardDescription>
 						</CardHeader>
 						<CardContent className="space-y-4">
 							<div className="space-y-2">
-								<Label htmlFor="newAdmin">Npub or Public Key</Label>
-								<div className="flex gap-2">
-									<Input
-										id="newAdmin"
-										value={newAdminInput}
-										onChange={(e) => setNewAdminInput(e.target.value)}
-										placeholder="npub1... or hex pubkey"
-										className="flex-1"
-									/>
-									<Button onClick={handleAddAdmin} disabled={isAddingAdmin || addAdminMutation.isPending || !newAdminInput.trim()}>
-										{isAddingAdmin || addAdminMutation.isPending ? (
-											<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-										) : (
-											<UserPlus className="w-4 h-4" />
-										)}
-										Add
-									</Button>
-								</div>
+								<Label>Search for User</Label>
+								<ProfileSearch onSelect={handleAddAdmin} placeholder="Search profiles or paste npub..." />
 							</div>
 							<div className="text-xs text-gray-500">
 								Note: New administrators will have full access to manage the marketplace settings and content.
@@ -444,28 +407,12 @@ function TeamComponent() {
 								<UserPlus className="w-5 h-5" />
 								Add Editor
 							</CardTitle>
-							<CardDescription>Add a new editor by entering their npub or public key.</CardDescription>
+							<CardDescription>Search for a user to add as editor.</CardDescription>
 						</CardHeader>
 						<CardContent className="space-y-4">
 							<div className="space-y-2">
-								<Label htmlFor="newEditor">Npub or Public Key</Label>
-								<div className="flex gap-2">
-									<Input
-										id="newEditor"
-										value={newEditorInput}
-										onChange={(e) => setNewEditorInput(e.target.value)}
-										placeholder="npub1... or hex pubkey"
-										className="flex-1"
-									/>
-									<Button onClick={handleAddEditor} disabled={isAddingEditor || addEditorMutation.isPending || !newEditorInput.trim()}>
-										{isAddingEditor || addEditorMutation.isPending ? (
-											<div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-										) : (
-											<UserPlus className="w-4 h-4" />
-										)}
-										Add
-									</Button>
-								</div>
+								<Label>Search for User</Label>
+								<ProfileSearch onSelect={handleAddEditor} placeholder="Search profiles or paste npub..." />
 							</div>
 							<div className="text-xs text-gray-500">
 								Note: New editors will have limited access to manage content but cannot modify administrative settings.
