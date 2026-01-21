@@ -7,10 +7,10 @@ import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useConfigQuery } from '@/queries/config'
-import { useVanitySettings, getVanityForPubkey } from '@/queries/vanity'
+import { useVanitySettings, getVanityForPubkey, getExpiredVanityForPubkey } from '@/queries/vanity'
 import { vanityActions } from '@/lib/stores/vanity'
 import { VANITY_PRICING } from '@/server/VanityManager'
-import { AlertCircle, CheckCircle2, Clock, ExternalLink, Copy, Zap } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Clock, ExternalLink, Copy, Zap, RefreshCw } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -37,6 +37,12 @@ function VanityUrlComponent() {
 	const currentVanity = useMemo(() => {
 		if (!pubkey || !vanitySettings) return null
 		return getVanityForPubkey(vanitySettings, pubkey)
+	}, [pubkey, vanitySettings])
+
+	// Get expired vanity URLs for renewal
+	const expiredVanities = useMemo(() => {
+		if (!pubkey || !vanitySettings) return []
+		return getExpiredVanityForPubkey(vanitySettings, pubkey)
 	}, [pubkey, vanitySettings])
 
 	// Validation state
@@ -104,11 +110,40 @@ function VanityUrlComponent() {
 	const formatExpiration = (timestamp: number) => {
 		const date = new Date(timestamp * 1000)
 		const now = new Date()
-		const daysLeft = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+		const msLeft = date.getTime() - now.getTime()
+
+		// Check if expired
+		if (msLeft <= 0) {
+			return {
+				date: date.toLocaleDateString(),
+				timeLeft: 'Expired',
+				daysLeft: 0,
+				isExpired: true,
+				isExpiringSoon: true,
+			}
+		}
+
+		const secondsLeft = Math.floor(msLeft / 1000)
+		const minutesLeft = Math.floor(msLeft / (1000 * 60))
+		const hoursLeft = Math.floor(msLeft / (1000 * 60 * 60))
+		const daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24))
+
+		let timeLeft: string
+		if (secondsLeft < 60) {
+			timeLeft = `${secondsLeft} seconds`
+		} else if (minutesLeft < 60) {
+			timeLeft = `${minutesLeft} minutes`
+		} else if (hoursLeft < 24) {
+			timeLeft = `${hoursLeft} hours`
+		} else {
+			timeLeft = `${daysLeft} days`
+		}
 
 		return {
 			date: date.toLocaleDateString(),
+			timeLeft,
 			daysLeft,
+			isExpired: false,
 			isExpiringSoon: daysLeft <= 30,
 		}
 	}
@@ -249,7 +284,7 @@ function VanityUrlComponent() {
 										<span className="text-sm text-muted-foreground">Expires: {formatExpiration(currentVanity.validUntil).date}</span>
 										{formatExpiration(currentVanity.validUntil).isExpiringSoon && (
 											<Badge variant="destructive" className="text-xs">
-												{formatExpiration(currentVanity.validUntil).daysLeft} days left
+												{formatExpiration(currentVanity.validUntil).timeLeft} left
 											</Badge>
 										)}
 									</div>
@@ -264,8 +299,49 @@ function VanityUrlComponent() {
 							</Card>
 						)}
 
+						{/* Expired Vanity URLs */}
+						{expiredVanities.length > 0 && (
+							<Card>
+								<CardHeader>
+									<CardTitle className="flex items-center gap-2">
+										<Clock className="h-5 w-5 text-orange-500" />
+										Expired Vanity URLs
+									</CardTitle>
+									<CardDescription>These vanity URLs have expired. Renew them to keep your custom links.</CardDescription>
+								</CardHeader>
+								<CardContent className="space-y-3">
+									{expiredVanities.map((expired) => (
+										<div
+											key={expired.vanityName}
+											className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border border-orange-200"
+										>
+											<div className="flex items-center gap-3">
+												<code className="font-mono text-sm">/{expired.vanityName}</code>
+												<Badge variant="outline" className="text-xs text-orange-600 border-orange-300">
+													Expired {new Date(expired.validUntil * 1000).toLocaleDateString()}
+												</Badge>
+											</div>
+											<Button
+												variant="outline"
+												size="sm"
+												className="flex items-center gap-2"
+												onClick={() => {
+													setVanityName(expired.vanityName)
+													// Scroll to registration section
+													document.getElementById('vanity-register-section')?.scrollIntoView({ behavior: 'smooth' })
+												}}
+											>
+												<RefreshCw className="h-4 w-4" />
+												Renew
+											</Button>
+										</div>
+									))}
+								</CardContent>
+							</Card>
+						)}
+
 						{/* Register New Vanity URL */}
-						<Card>
+						<Card id="vanity-register-section">
 							<CardHeader>
 								<CardTitle>{currentVanity ? 'Change or Extend' : 'Register'} Vanity URL</CardTitle>
 								<CardDescription>Choose a custom URL for your profile. This will be your shareable link.</CardDescription>
@@ -285,13 +361,12 @@ function VanityUrlComponent() {
 									</div>
 									{(validationState.message || isChecking) && (
 										<p
-											className={`text-sm flex items-center gap-1 ${
-												validationState.isAvailable === true
-													? 'text-green-600'
-													: validationState.isAvailable === false
-														? 'text-red-600'
-														: 'text-muted-foreground'
-											}`}
+											className={`text-sm flex items-center gap-1 ${validationState.isAvailable === true
+												? 'text-green-600'
+												: validationState.isAvailable === false
+													? 'text-red-600'
+													: 'text-muted-foreground'
+												}`}
 										>
 											{validationState.isAvailable === true && <CheckCircle2 className="h-4 w-4" />}
 											{validationState.isAvailable === false && <AlertCircle className="h-4 w-4" />}
@@ -302,51 +377,34 @@ function VanityUrlComponent() {
 
 								{/* Pricing Tiers */}
 								<div className="space-y-3">
-									<Label>Pricing</Label>
-									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<Label>Select Duration</Label>
+									<div className="space-y-2">
 										{Object.entries(VANITY_PRICING).map(([key, tier]) => (
-											<div
+											<button
 												key={key}
-												className={`flex items-center justify-between p-4 border rounded-lg transition-colors cursor-pointer hover:border-primary ${
-													!validationState.isValid || validationState.isAvailable === false ? 'opacity-50 hover:opacity-100' : ''
-												}`}
+												type="button"
+												disabled={!validationState.isValid || validationState.isAvailable === false}
+												className={`w-full flex items-center gap-4 p-4 border rounded-lg transition-all hover:border-yellow-500 hover:bg-yellow-500/5 disabled:opacity-50 disabled:cursor-not-allowed`}
 												onClick={() => handleZap(tier)}
 											>
-												<div>
+												<div className="flex items-center justify-center w-10 h-10 rounded-full bg-yellow-500/10">
+													<Zap className="h-5 w-5 text-yellow-500" />
+												</div>
+												<div className="flex-1 text-left">
 													<p className="font-semibold">{tier.label}</p>
-													<p className="text-sm text-muted-foreground">{tier.days} days</p>
+													<p className="text-sm text-muted-foreground">
+														{tier.seconds ? `${tier.seconds} seconds` : `${tier.days} days`} validity
+													</p>
 												</div>
 												<div className="text-right">
-													<p className="font-bold text-lg">{tier.sats.toLocaleString()} sats</p>
+													<p className="font-bold text-lg text-yellow-500">{tier.sats.toLocaleString()}</p>
+													<p className="text-xs text-muted-foreground">sats</p>
 												</div>
-											</div>
+											</button>
 										))}
 									</div>
 								</div>
 
-								{/* How to Register */}
-								<div className="bg-muted/50 p-4 rounded-lg space-y-2">
-									<h4 className="font-semibold flex items-center gap-2">
-										<Zap className="h-4 w-4 text-yellow-500" />
-										How to Register
-									</h4>
-									<ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-										<li>Choose your desired vanity name above</li>
-										<li>
-											Create a zap to this app with:
-											<ul className="ml-4 mt-1 list-disc list-inside">
-												<li>
-													Label: <code className="text-xs bg-muted px-1 rounded">["L", "vanity-register"]</code>
-												</li>
-												<li>
-													Vanity tag: <code className="text-xs bg-muted px-1 rounded">["vanity", "your-name"]</code>
-												</li>
-											</ul>
-										</li>
-										<li>Zap at least 10,000 sats for 6 months or 18,000 sats for 1 year</li>
-										<li>Your vanity URL will be activated within seconds</li>
-									</ol>
-								</div>
 							</CardContent>
 						</Card>
 						<Dialog open={paymentState.isOpen} onOpenChange={(open) => setPaymentState((prev) => ({ ...prev, isOpen: open }))}>

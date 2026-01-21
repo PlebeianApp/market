@@ -48,7 +48,7 @@ const RESERVED_NAMES = new Set([
 export const VANITY_PRICING: Record<string, { sats: number; days: number; seconds?: number; label: string }> = {
     ...(process.env.NODE_ENV === 'development'
         ? {
-            dev: { sats: 10, days: 0, seconds: 90, label: '30 Seconds (Dev)' },
+            dev: { sats: 10, days: 0, seconds: 90, label: '90 Seconds (Dev)' },
         }
         : {}),
     '6mo': { sats: 10000, days: 180, label: '6 Months' },
@@ -74,6 +74,7 @@ export interface VanityManager {
 export class VanityManagerImpl implements VanityManager {
     private vanityRegistry: Map<string, VanityEntry> = new Map()
     private pubkeyToVanity: Map<string, string> = new Map() // Reverse lookup
+    private processedZapReceipts: Set<string> = new Set() // Deduplication
     private eventSigner: EventSigner
     private ndkService: NDKService
     private ndk: NDK | null = null
@@ -125,7 +126,26 @@ export class VanityManagerImpl implements VanityManager {
      * Handle zap receipt and register vanity URL if valid
      */
     public async handleZapReceipt(event: NostrEvent): Promise<void> {
-        console.log(`Received zap receipt: ${event.id}`)
+        // Deduplicate - same receipt may arrive from multiple relays
+        const eventId = event.id
+        if (!eventId) {
+            console.log('Skipping zap receipt: No event ID')
+            return
+        }
+        if (this.processedZapReceipts.has(eventId)) {
+            return
+        }
+        this.processedZapReceipts.add(eventId)
+
+        // Skip old zap receipts (prevents re-processing on server restart)
+        const eventAge = Math.floor(Date.now() / 1000) - (event.created_at || 0)
+        if (eventAge > 300) {
+            // Older than 5 minutes
+            console.log(`Skipping old zap receipt (${eventAge}s old): ${eventId}`)
+            return
+        }
+
+        console.log(`Received zap receipt: ${eventId}`)
 
         // Parse zap request from the receipt
         const zapRequestTag = event.tags.find((t) => t[0] === 'description')

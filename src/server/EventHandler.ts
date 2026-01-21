@@ -85,12 +85,18 @@ export class EventHandler {
 
 			// Also subscribe on dedicated zap relays; some LSPs do not publish receipts to the app relay.
 			const zapRelayUrls = Array.from(new Set([config.relayUrl, ...ZAP_RELAYS].filter(Boolean)))
+			console.log(`Connecting to zap relays: ${zapRelayUrls.join(', ')}`)
 			this.zapNdk = new NDK({ explicitRelayUrls: zapRelayUrls })
 			try {
-				await this.zapNdk.connect()
+				await Promise.race([
+					this.zapNdk.connect(),
+					new Promise((_, reject) => setTimeout(() => reject(new Error('Zap relay connection timeout')), 15000)),
+				])
 				this.subscribeToVanityZaps(this.zapNdk, 'Zap relays')
 			} catch (error) {
 				console.warn('⚠️ Failed to connect zap relay NDK; vanity zap receipts may not be processed:', error)
+				// Try to subscribe anyway in case some relays connected
+				this.subscribeToVanityZaps(this.zapNdk, 'Zap relays (partial)')
 			}
 		}
 

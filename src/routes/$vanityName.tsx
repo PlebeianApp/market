@@ -1,26 +1,10 @@
+import { ProfilePage } from '@/components/pages/ProfilePage'
 import { vanityActions, vanityStore } from '@/lib/stores/vanity'
-import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
-import { useEffect } from 'react'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useEffect, useMemo } from 'react'
 import { useStore } from '@tanstack/react-store'
 
 export const Route = createFileRoute('/$vanityName')({
-	beforeLoad: ({ params }) => {
-		const { vanityName } = params
-
-		// Try to resolve the vanity URL
-		const entry = vanityActions.resolveVanity(vanityName)
-
-		if (entry) {
-			// Redirect to the profile page
-			throw redirect({
-				to: '/profile/$profileId',
-				params: { profileId: entry.pubkey },
-			})
-		}
-
-		// If not found, we'll show the component which handles the "not found" case
-		return { vanityName, entry }
-	},
 	component: VanityRouteComponent,
 })
 
@@ -30,18 +14,18 @@ function VanityRouteComponent() {
 	const isLoaded = useStore(vanityStore, (s) => s.isLoaded)
 	const lastUpdated = useStore(vanityStore, (s) => s.lastUpdated)
 
-	// Double-check resolution in case store wasn't loaded during beforeLoad
-	useEffect(() => {
+	// Resolve vanity URL to pubkey
+	const resolvedPubkey = useMemo(() => {
 		const entry = vanityActions.resolveVanity(vanityName)
-		if (entry) {
-			navigate({
-				to: '/profile/$profileId',
-				params: { profileId: entry.pubkey },
-				replace: true,
-			})
-		}
-	}, [vanityName, navigate, isLoaded, lastUpdated])
+		return entry?.pubkey ?? null
+	}, [vanityName, isLoaded, lastUpdated])
 
+	// Re-check resolution when store updates
+	useEffect(() => {
+		// If still not found after store is loaded, stay on this page (shows 404)
+	}, [vanityName, isLoaded, lastUpdated])
+
+	// Loading state while store syncs
 	if (!isLoaded) {
 		return (
 			<div className="flex items-center justify-center min-h-screen">
@@ -51,6 +35,11 @@ function VanityRouteComponent() {
 				</div>
 			</div>
 		)
+	}
+
+	// Vanity URL resolved - render profile page directly
+	if (resolvedPubkey) {
+		return <ProfilePage profileId={resolvedPubkey} />
 	}
 
 	// Vanity URL not found - show 404-like message

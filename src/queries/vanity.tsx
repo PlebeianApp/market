@@ -162,3 +162,14 @@ export const getVanityForPubkey = (vanitySettings: VanitySettings | null | undef
 
 	return entry || null
 }
+
+/**
+ * Get expired vanity entries for a pubkey (for renewal)
+ */
+export const getExpiredVanityForPubkey = (vanitySettings: VanitySettings | null | undefined, pubkey: string): VanityEntry[] => {
+	if (!vanitySettings || !vanitySettings.entries || !pubkey) return []
+
+	const now = Math.floor(Date.now() / 1000)
+
+	return vanitySettings.entries.filter((e) => e.pubkey === pubkey && e.validUntil <= now)
+}
