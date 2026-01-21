@@ -76,8 +76,8 @@ See full list in `src/server/VanityManager.ts` and `src/lib/stores/vanity.ts`.
 2. User creates zap request with `["L", "vanity-register"]` label and `["vanity", "name"]` tag
 3. App generates an invoice via LNURL-pay (the dashboard uses `/api/vanity/invoice` to avoid browser CORS issues)
 4. User pays invoice
-5. LNSP publishes zap receipt (kind 9735)
-6. Server processes zap, validates, calculates validity
+5. If the wallet provides a payment preimage (NWC/WebLN), the dashboard confirms it via `/api/vanity/confirm`
+6. Otherwise, the LNSP publishes a zap receipt (kind 9735) and the server processes it
 7. Server publishes updated vanity registry
 8. Frontend syncs and vanity URL becomes active
 
