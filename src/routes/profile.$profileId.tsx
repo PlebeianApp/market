@@ -5,6 +5,7 @@ import { Header } from '@/components/layout/Header'
 import { Nip05Badge } from '@/components/Nip05Badge'
 import { ProductCard } from '@/components/ProductCard'
 import { ProfileName } from '@/components/ProfileName'
+import { VanityLinkBadge } from '@/components/vanity/VanityLinkBadge'
 
 import { Button } from '@/components/ui/button'
 import { ZapButton } from '@/components/ZapButton'
@@ -190,11 +191,12 @@ function RouteComponent() {
 								className="rounded-full w-10 h-10 sm:w-16 sm:h-16 border-2 border-black"
 							/>
 						)}
-						<div className="flex items-center gap-2">
+						<div className="flex items-center gap-2 flex-wrap">
 							<h2 className="text-xl sm:text-2xl font-bold text-white">
 								{truncateText(profile?.name ?? 'Unnamed user', isSmallScreen ? 28 : 50)}
 							</h2>
 							<Nip05Badge pubkey={user?.pubkey || ''} showAddress nip05={profile?.nip05} />
+							<VanityLinkBadge pubkey={user?.pubkey} />
 						</div>
 					</div>
 					{!isSmallScreen && (

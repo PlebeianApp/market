@@ -131,3 +131,14 @@ export const migrationKeys = {
 	nip15Products: (userPubkey: string) => [...migrationKeys.all, 'nip15Products', userPubkey] as const,
 	migratedEvents: (userPubkey: string) => [...migrationKeys.all, 'migratedEvents', userPubkey] as const,
 } as const
+
+export const vanityKeys = {
+	all: ['vanity'] as const,
+	config: (domain: string) => [...vanityKeys.all, 'config', domain] as const,
+	confirmationByName: (name: string, domain: string) => [...vanityKeys.all, 'confirmation', name, domain] as const,
+	userRequests: (pubkey: string) => [...vanityKeys.all, 'requests', 'byPubkey', pubkey] as const,
+	userConfirmations: (pubkey: string) => [...vanityKeys.all, 'confirmations', 'byPubkey', pubkey] as const,
+	userDeletions: (pubkey: string) => [...vanityKeys.all, 'deletions', pubkey] as const,
+	userAddresses: (pubkey: string) => [...vanityKeys.all, 'addresses', pubkey] as const,
+	userLinks: (pubkey: string) => [...vanityKeys.all, 'links', pubkey] as const,
+} as const

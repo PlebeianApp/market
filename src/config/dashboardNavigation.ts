@@ -69,6 +69,10 @@ export const dashboardNavigation: NavSection[] = [
 				path: '/dashboard/account/your-purchases',
 			},
 			{
+				title: '🔗 Vanity Addresses',
+				path: '/dashboard/account/vanity-addresses',
+			},
+			{
 				title: '🌐 Network',
 				path: '/dashboard/account/network',
 			},
