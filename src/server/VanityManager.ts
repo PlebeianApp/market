@@ -46,9 +46,11 @@ const RESERVED_NAMES = new Set([
 
 // Pricing tiers: amount in sats -> validity in days (or seconds for dev)
 export const VANITY_PRICING: Record<string, { sats: number; days: number; seconds?: number; label: string }> = {
-    ...(process.env.NODE_ENV === 'development' ? {
-        'dev': { sats: 10, days: 0, seconds: 30, label: '30 Seconds (Dev)' },
-    } : {}),
+    ...(process.env.NODE_ENV === 'development'
+        ? {
+            dev: { sats: 10, days: 0, seconds: 90, label: '30 Seconds (Dev)' },
+        }
+        : {}),
     '6mo': { sats: 10000, days: 180, label: '6 Months' },
     '1yr': { sats: 18000, days: 365, label: '1 Year' },
 }
@@ -123,9 +125,12 @@ export class VanityManagerImpl implements VanityManager {
      * Handle zap receipt and register vanity URL if valid
      */
     public async handleZapReceipt(event: NostrEvent): Promise<void> {
+        console.log(`Received zap receipt: ${event.id}`)
+
         // Parse zap request from the receipt
         const zapRequestTag = event.tags.find((t) => t[0] === 'description')
         if (!zapRequestTag || !zapRequestTag[1]) {
+            console.log('Skipping zap receipt: No description tag')
             return
         }
 
@@ -140,8 +145,11 @@ export class VanityManagerImpl implements VanityManager {
         // Check for vanity-register label
         const labelTag = zapRequest.tags.find((t) => t[0] === 'L' && t[1] === 'vanity-register')
         if (!labelTag) {
+            console.log('Skipping zap receipt: Not a vanity registration zap')
             return // Not a vanity registration zap
         }
+
+        console.log('Processing vanity registration zap:', event.id)
 
         // Extract vanity name from zap request content or tags
         const vanityTag = zapRequest.tags.find((t) => t[0] === 'vanity')
@@ -152,6 +160,7 @@ export class VanityManagerImpl implements VanityManager {
 
         const vanityName = vanityTag[1].toLowerCase()
         const requesterPubkey = zapRequest.pubkey
+        console.log(`Zap requests vanity name: ${vanityName} for pubkey: ${requesterPubkey}`)
 
         // Validate vanity name
         if (!this.isValidVanityName(vanityName)) {
@@ -182,6 +191,7 @@ export class VanityManagerImpl implements VanityManager {
         const amountTag = zapRequest.tags.find((t) => t[0] === 'amount')
         const amountMsats = amountTag ? parseInt(amountTag[1]) : 0
         const amountSats = Math.floor(amountMsats / 1000)
+        console.log(`Zap amount: ${amountSats} sats`)
 
         let validitySeconds = 0
 
@@ -208,6 +218,8 @@ export class VanityManagerImpl implements VanityManager {
             validUntil = existing.validUntil + validitySeconds
         }
 
+        console.log(`Registration valid until: ${new Date(validUntil * 1000).toISOString()}`)
+
         // Update registry
         const newEntry: VanityEntry = {
             vanityName,
@@ -222,7 +234,9 @@ export class VanityManagerImpl implements VanityManager {
         // Publish updated registry event
         await this.publishVanityRegistry()
 
-        console.log(`Vanity URL registered: ${vanityName} -> ${requesterPubkey} (valid until ${new Date(validUntil * 1000).toISOString()})`)
+        console.log(
+            `Vanity URL registered successfully: ${vanityName} -> ${requesterPubkey} (valid until ${new Date(validUntil * 1000).toISOString()})`,
+        )
     }
 
     /**
@@ -237,6 +251,7 @@ export class VanityManagerImpl implements VanityManager {
         const event = new NDKEvent(this.ndk)
         event.kind = 30000
         event.content = ''
+        event.created_at = Math.floor(Date.now() / 1000)
 
         // Build tags
         const tags: string[][] = [['d', 'vanity-urls']]

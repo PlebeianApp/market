@@ -30,12 +30,12 @@ Vanity URLs provide users with memorable, shareable links like `/alice-store` th
 
 ```json
 {
-  "kind": 30000,
-  "tags": [
-    ["d", "vanity-urls"],
-    ["vanity", "alice-store", "<pubkey>", "<validUntil>"]
-  ],
-  "content": ""
+	"kind": 30000,
+	"tags": [
+		["d", "vanity-urls"],
+		["vanity", "alice-store", "<pubkey>", "<validUntil>"]
+	],
+	"content": ""
 }
 ```
 
@@ -43,26 +43,27 @@ Vanity URLs provide users with memorable, shareable links like `/alice-store` th
 
 ```json
 {
-  "kind": 9734,
-  "tags": [
-    ["L", "vanity-register"],
-    ["vanity", "alice-store"],
-    ["p", "<app_pubkey>"],
-    ["amount", "10000000"]
-  ]
+	"kind": 9734,
+	"tags": [
+		["L", "vanity-register"],
+		["vanity", "alice-store"],
+		["p", "<app_pubkey>"],
+		["amount", "10000000"]
+	]
 }
 ```
 
 ## Pricing
 
-| Duration | Amount | Validity |
-|----------|--------|----------|
+| Duration | Amount      | Validity |
+| -------- | ----------- | -------- |
 | 6 Months | 10,000 sats | 180 days |
-| 1 Year | 18,000 sats | 365 days |
+| 1 Year   | 18,000 sats | 365 days |
 
 ## Reserved Names
 
 The following patterns are reserved and cannot be registered:
+
 - Route conflicts: `admin`, `api`, `dashboard`, `profile`, `checkout`, etc.
 - System names: `app`, `static`, `assets`, `public`, etc.
 - Common abuse targets: `login`, `register`, `account`, etc.
@@ -73,7 +74,7 @@ See full list in `src/server/VanityManager.ts` and `src/lib/stores/vanity.ts`.
 
 1. User chooses vanity name in dashboard
 2. User creates zap request with `["L", "vanity-register"]` label and `["vanity", "name"]` tag
-3. User fetches invoice from app's Lightning address
+3. App generates an invoice via LNURL-pay (the dashboard uses `/api/vanity/invoice` to avoid browser CORS issues)
 4. User pays invoice
 5. LNSP publishes zap receipt (kind 9735)
 6. Server processes zap, validates, calculates validity

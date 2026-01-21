@@ -9,6 +9,7 @@ import { EventValidator } from './EventValidator'
 import { EventSigner } from './EventSigner'
 import { NDKService } from './NDKService'
 import NDK from '@nostr-dev-kit/ndk'
+import { ZAP_RELAYS } from '../lib/constants'
 
 export class EventHandler {
 	private static instance: EventHandler
@@ -24,6 +25,8 @@ export class EventHandler {
 	private eventSigner: EventSigner
 	private ndkService: NDKService
 	private ndk: NDK | null = null
+	private zapNdk: NDK | null = null
+	private handledZapReceiptIds: Set<string> = new Set()
 
 	private constructor() {
 		// Initialize with empty managers - components requiring private key will be set up during initialize()
@@ -77,8 +80,18 @@ export class EventHandler {
 			this.vanityManager.setNDK(this.ndk)
 			await this.vanityManager.loadExistingVanityRegistry(this.eventSigner.getAppPubkey())
 
-			// Subscribe to zap receipts for vanity registration
-			this.subscribeToVanityZaps()
+			// Subscribe to zap receipts for vanity registration (app relay)
+			this.subscribeToVanityZaps(this.ndk, 'App relay')
+
+			// Also subscribe on dedicated zap relays; some LSPs do not publish receipts to the app relay.
+			const zapRelayUrls = Array.from(new Set([config.relayUrl, ...ZAP_RELAYS].filter(Boolean)))
+			this.zapNdk = new NDK({ explicitRelayUrls: zapRelayUrls })
+			try {
+				await this.zapNdk.connect()
+				this.subscribeToVanityZaps(this.zapNdk, 'Zap relays')
+			} catch (error) {
+				console.warn('⚠️ Failed to connect zap relay NDK; vanity zap receipts may not be processed:', error)
+			}
 		}
 
 		this.isInitialized = true
@@ -88,29 +101,36 @@ export class EventHandler {
 	/**
 	 * Subscribe to zap receipts for vanity URL registration
 	 */
-	private subscribeToVanityZaps(): void {
-		if (!this.ndk) return
-
+	private subscribeToVanityZaps(ndk: NDK, label: string): void {
 		const appPubkey = this.eventSigner.getAppPubkey()
 
 		// Subscribe to zap receipts where app pubkey is the recipient
-		const sub = this.ndk.subscribe(
+		const sub = ndk.subscribe(
 			{
 				kinds: [9735],
 				'#p': [appPubkey],
 			},
-			{ closeOnEose: false }
+			{ closeOnEose: false },
 		)
 
 		sub.on('event', async (event) => {
 			try {
+				if (event.id) {
+					if (this.handledZapReceiptIds.has(event.id)) return
+					this.handledZapReceiptIds.add(event.id)
+					if (this.handledZapReceiptIds.size > 2000) {
+						// Simple bound to avoid unbounded growth
+						this.handledZapReceiptIds.clear()
+						this.handledZapReceiptIds.add(event.id)
+					}
+				}
 				await this.vanityManager.handleZapReceipt(event.rawEvent())
 			} catch (error) {
 				console.error('Error handling vanity zap receipt:', error)
 			}
 		})
 
-		console.log('Subscribed to vanity zap receipts')
+		console.log(`Subscribed to vanity zap receipts (${label})`)
 	}
 
 	public handleEvent(event: NostrEvent): NostrEvent | null {
