@@ -369,13 +369,13 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 					return
 				}
 
-				if (walletPreimageRef.current) {
-					handlePaymentSuccess({ type: 'preimage', preimage: walletPreimageRef.current })
+				if (receipt) {
+					handlePaymentSuccess({ type: 'zap_receipt', eventId: receipt.eventId })
 					return
 				}
 
-				if (receipt) {
-					handlePaymentSuccess({ type: 'zap_receipt', eventId: receipt.eventId })
+				if (walletPreimageRef.current) {
+					handlePaymentSuccess({ type: 'preimage', preimage: walletPreimageRef.current })
 					return
 				}
 
@@ -433,13 +433,13 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 					return
 				}
 
-				if (walletPreimageRef.current) {
-					handlePaymentSuccess({ type: 'preimage', preimage: walletPreimageRef.current })
+				if (receipt) {
+					handlePaymentSuccess({ type: 'zap_receipt', eventId: receipt.eventId })
 					return
 				}
 
-				if (receipt) {
-					handlePaymentSuccess({ type: 'zap_receipt', eventId: receipt.eventId })
+				if (walletPreimageRef.current) {
+					handlePaymentSuccess({ type: 'preimage', preimage: walletPreimageRef.current })
 					return
 				}
 

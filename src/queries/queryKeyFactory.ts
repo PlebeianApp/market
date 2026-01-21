@@ -65,6 +65,7 @@ export const configKeys = {
 	admins: (appPubkey: string) => [...configKeys.all, 'admins', appPubkey] as const,
 	editors: (appPubkey: string) => [...configKeys.all, 'editors', appPubkey] as const,
 	blacklist: (appPubkey: string) => [...configKeys.all, 'blacklist', appPubkey] as const,
+	vanity: (appPubkey: string) => [...configKeys.all, 'vanity', appPubkey] as const,
 	featuredProducts: (appPubkey: string) => [...configKeys.all, 'featuredProducts', appPubkey] as const,
 	featuredCollections: (appPubkey: string) => [...configKeys.all, 'featuredCollections', appPubkey] as const,
 	featuredUsers: (appPubkey: string) => [...configKeys.all, 'featuredUsers', appPubkey] as const,
