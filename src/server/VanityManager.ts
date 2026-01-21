@@ -64,6 +64,7 @@ export interface VanityEntry {
 export interface VanityManager {
 	handleVanityEvent(event: NostrEvent): Promise<void>
 	handleZapReceipt(event: NostrEvent): Promise<void>
+	registerVanityPurchase(vanityName: string, requesterPubkey: string, amountSats: number): Promise<number | null>
 	resolveVanity(vanityName: string): VanityEntry | null
 	isVanityAvailable(vanityName: string): boolean
 	isReservedName(vanityName: string): boolean
@@ -74,11 +75,12 @@ export interface VanityManager {
 export class VanityManagerImpl implements VanityManager {
 	private vanityRegistry: Map<string, VanityEntry> = new Map()
 	private pubkeyToVanity: Map<string, string> = new Map() // Reverse lookup
-	private processedZapReceipts: Set<string> = new Set() // Deduplication
 	private eventSigner: EventSigner
 	private ndkService: NDKService
 	private ndk: NDK | null = null
 	private appPubkey: string = ''
+	private lastRegistryUpdatedAt: number = 0
+	private processedBolt11: Map<string, number> = new Map()
 
 	constructor(eventSigner: EventSigner, ndkService: NDKService) {
 		this.eventSigner = eventSigner
@@ -98,15 +100,13 @@ export class VanityManagerImpl implements VanityManager {
 	 */
 	public async handleVanityEvent(event: NostrEvent): Promise<void> {
 		console.log('Processing vanity registry event:', event.id)
+		this.lastRegistryUpdatedAt = event.created_at ?? this.lastRegistryUpdatedAt
 
 		// Extract vanity entries from event tags
 		const entries = this.extractVanityEntries(event)
 
-		// Clear and rebuild registry
-		this.vanityRegistry.clear()
-		this.pubkeyToVanity.clear()
-
 		const now = Math.floor(Date.now() / 1000)
+		const bestByPubkey = new Map<string, VanityEntry>()
 
 		for (const entry of entries) {
 			// Skip expired entries
@@ -115,8 +115,21 @@ export class VanityManagerImpl implements VanityManager {
 			}
 
 			const normalizedName = entry.vanityName.toLowerCase()
-			this.vanityRegistry.set(normalizedName, entry)
-			this.pubkeyToVanity.set(entry.pubkey, normalizedName)
+			const existingForPubkey = bestByPubkey.get(entry.pubkey)
+
+			// If multiple entries exist for a pubkey, keep the one with the latest validity.
+			if (!existingForPubkey || entry.validUntil > existingForPubkey.validUntil) {
+				bestByPubkey.set(entry.pubkey, { ...entry, vanityName: normalizedName })
+			}
+		}
+
+		// Clear and rebuild registry with one entry per pubkey
+		this.vanityRegistry.clear()
+		this.pubkeyToVanity.clear()
+
+		for (const entry of bestByPubkey.values()) {
+			this.vanityRegistry.set(entry.vanityName, entry)
+			this.pubkeyToVanity.set(entry.pubkey, entry.vanityName)
 		}
 
 		console.log(`Vanity registry updated: ${this.vanityRegistry.size} active entries`)
@@ -126,31 +139,15 @@ export class VanityManagerImpl implements VanityManager {
 	 * Handle zap receipt and register vanity URL if valid
 	 */
 	public async handleZapReceipt(event: NostrEvent): Promise<void> {
-		// Deduplicate - same receipt may arrive from multiple relays
-		const eventId = event.id
-		if (!eventId) {
-			console.log('Skipping zap receipt: No event ID')
+		// Avoid re-processing historical receipts already reflected in the latest registry event.
+		// This also prevents accidental validity extension during server restarts / Bun HMR reloads.
+		if ((event.created_at ?? 0) <= this.lastRegistryUpdatedAt) {
 			return
 		}
-		if (this.processedZapReceipts.has(eventId)) {
-			return
-		}
-		this.processedZapReceipts.add(eventId)
-
-		// Skip old zap receipts (prevents re-processing on server restart)
-		const eventAge = Math.floor(Date.now() / 1000) - (event.created_at || 0)
-		if (eventAge > 300) {
-			// Older than 5 minutes
-			console.log(`Skipping old zap receipt (${eventAge}s old): ${eventId}`)
-			return
-		}
-
-		console.log(`Received zap receipt: ${eventId}`)
 
 		// Parse zap request from the receipt
 		const zapRequestTag = event.tags.find((t) => t[0] === 'description')
 		if (!zapRequestTag || !zapRequestTag[1]) {
-			console.log('Skipping zap receipt: No description tag')
 			return
 		}
 
@@ -165,10 +162,10 @@ export class VanityManagerImpl implements VanityManager {
 		// Check for vanity-register label
 		const labelTag = zapRequest.tags.find((t) => t[0] === 'L' && t[1] === 'vanity-register')
 		if (!labelTag) {
-			console.log('Skipping zap receipt: Not a vanity registration zap')
 			return // Not a vanity registration zap
 		}
 
+		console.log(`Received vanity registration zap receipt: ${event.id}`)
 		console.log('Processing vanity registration zap:', event.id)
 
 		// Extract vanity name from zap request content or tags
@@ -206,12 +203,56 @@ export class VanityManagerImpl implements VanityManager {
 			console.error('No bolt11 found in zap receipt')
 			return
 		}
+		const bolt11 = bolt11Tag[1]
+		if (bolt11) {
+			// Many clients/LSPs can publish multiple zap receipts for the same payment.
+			// Deduplicate by bolt11 so we don't extend/publish repeatedly.
+			const nowMs = Date.now()
+			const prev = this.processedBolt11.get(bolt11)
+			if (prev && nowMs - prev < 1000 * 60 * 60) {
+				return
+			}
+			this.processedBolt11.set(bolt11, nowMs)
+			// Simple TTL cleanup to avoid unbounded growth
+			if (this.processedBolt11.size > 2000) {
+				for (const [key, ts] of this.processedBolt11.entries()) {
+					if (nowMs - ts > 1000 * 60 * 60) this.processedBolt11.delete(key)
+				}
+			}
+		}
 
 		// Calculate validity based on amount
 		const amountTag = zapRequest.tags.find((t) => t[0] === 'amount')
 		const amountMsats = amountTag ? parseInt(amountTag[1]) : 0
 		const amountSats = Math.floor(amountMsats / 1000)
 		console.log(`Zap amount: ${amountSats} sats`)
+
+		await this.registerVanityPurchase(vanityName, requesterPubkey, amountSats)
+	}
+
+	public async registerVanityPurchase(vanityName: string, requesterPubkey: string, amountSats: number): Promise<number | null> {
+		const normalizedName = vanityName.toLowerCase()
+
+		// Validate vanity name
+		if (!this.isValidVanityName(normalizedName)) {
+			console.error(`Invalid vanity name: ${normalizedName}`)
+			return null
+		}
+
+		if (this.isReservedName(normalizedName)) {
+			console.error(`Reserved vanity name: ${normalizedName}`)
+			return null
+		}
+
+		// Check if already taken by someone else
+		const existing = this.vanityRegistry.get(normalizedName)
+		const now = Math.floor(Date.now() / 1000)
+		if (existing && existing.pubkey !== requesterPubkey && existing.validUntil > now) {
+			console.error(`Vanity name already taken: ${normalizedName}`)
+			return null
+		}
+
+		console.log(`Processing vanity purchase: ${normalizedName} for pubkey: ${requesterPubkey} (${amountSats} sats)`)
 
 		let validitySeconds = 0
 
@@ -226,11 +267,10 @@ export class VanityManagerImpl implements VanityManager {
 			validitySeconds = VANITY_PRICING['6mo'].days * 24 * 60 * 60
 		} else if (!validitySeconds) {
 			console.error(`Insufficient amount for vanity registration: ${amountSats} sats`)
-			return
+			return null
 		}
 
 		// Calculate valid until timestamp
-		const now = Math.floor(Date.now() / 1000)
 		let validUntil = now + validitySeconds
 
 		// If extending existing registration, add to current validity
@@ -242,21 +282,28 @@ export class VanityManagerImpl implements VanityManager {
 
 		// Update registry
 		const newEntry: VanityEntry = {
-			vanityName,
+			vanityName: normalizedName,
 			pubkey: requesterPubkey,
 			validUntil,
 		}
 
 		// Update in-memory registry
-		this.vanityRegistry.set(vanityName, newEntry)
-		this.pubkeyToVanity.set(requesterPubkey, vanityName)
+		// Enforce a single active vanity per pubkey by removing any previous mapping(s) for this pubkey.
+		for (const [key, entry] of this.vanityRegistry.entries()) {
+			if (entry.pubkey === requesterPubkey && key !== normalizedName) {
+				this.vanityRegistry.delete(key)
+			}
+		}
+		this.vanityRegistry.set(normalizedName, newEntry)
+		this.pubkeyToVanity.set(requesterPubkey, normalizedName)
 
 		// Publish updated registry event
 		await this.publishVanityRegistry()
 
 		console.log(
-			`Vanity URL registered successfully: ${vanityName} -> ${requesterPubkey} (valid until ${new Date(validUntil * 1000).toISOString()})`,
+			`Vanity URL registered successfully: ${normalizedName} -> ${requesterPubkey} (valid until ${new Date(validUntil * 1000).toISOString()})`,
 		)
+		return validUntil
 	}
 
 	/**
@@ -289,6 +336,7 @@ export class VanityManagerImpl implements VanityManager {
 				const ndkEvent = new NDKEvent(this.ndk, signedEvent)
 				await ndkEvent.publish()
 				console.log('Vanity registry published:', signedEvent.id)
+				this.lastRegistryUpdatedAt = signedEvent.created_at ?? this.lastRegistryUpdatedAt
 			}
 		} catch (error) {
 			console.error('Failed to publish vanity registry:', error)

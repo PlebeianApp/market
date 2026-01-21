@@ -32,12 +32,19 @@ function VanityUrlComponent() {
 
 	const [vanityName, setVanityName] = useState('')
 	const [isChecking, setIsChecking] = useState(false)
+	const [nowSec, setNowSec] = useState(() => Math.floor(Date.now() / 1000))
+
+	// Keep time-based UI (expiry / active status) fresh without needing a refetch.
+	useEffect(() => {
+		const id = setInterval(() => setNowSec(Math.floor(Date.now() / 1000)), 15_000)
+		return () => clearInterval(id)
+	}, [])
 
 	// Get current user's vanity URL
 	const currentVanity = useMemo(() => {
 		if (!pubkey || !vanitySettings) return null
 		return getVanityForPubkey(vanitySettings, pubkey)
-	}, [pubkey, vanitySettings])
+	}, [pubkey, vanitySettings, nowSec])
 
 	// Get expired vanity URLs for renewal
 	const expiredVanities = useMemo(() => {
@@ -162,18 +169,50 @@ function VanityUrlComponent() {
 		invoice: string
 		amount: number
 		invoiceId: string
+		expectedVanityName: string
+		previousValidUntil: number
 	}>({
 		isOpen: false,
 		invoice: '',
 		amount: 0,
 		invoiceId: '',
+		expectedVanityName: '',
+		previousValidUntil: 0,
 	})
+
+	const closePaymentDialog = () => {
+		setPaymentState((prev) => ({
+			...prev,
+			isOpen: false,
+			invoice: '',
+			amount: 0,
+			invoiceId: '',
+			expectedVanityName: '',
+			previousValidUntil: 0,
+		}))
+	}
+
+	// If the backend updates the vanity registry but the client doesn't detect payment completion
+	// (e.g. zap monitoring relay issues), auto-close the dialog once the expected vanity becomes active.
+	useEffect(() => {
+		if (!paymentState.isOpen) return
+		if (!paymentState.expectedVanityName) return
+		if (!currentVanity) return
+
+		const normalizedExpected = paymentState.expectedVanityName.toLowerCase()
+		if (currentVanity.vanityName.toLowerCase() !== normalizedExpected) return
+		if (currentVanity.validUntil <= nowSec) return
+		if (currentVanity.validUntil <= paymentState.previousValidUntil) return
+
+		closePaymentDialog()
+		toast.success('Vanity URL is active!')
+	}, [currentVanity, nowSec, paymentState.expectedVanityName, paymentState.isOpen, paymentState.previousValidUntil])
 
 	const handleZap = async (tier: (typeof VANITY_PRICING)[string]) => {
 		if (!pubkey || !config?.appPublicKey) {
 			toast.error('App configuration missing')
 			return
-		}
+        }
 
 		if (!validationState.isValid || validationState.isAvailable === false) {
 			toast.error('Please choose a valid and available vanity name')
@@ -186,15 +225,15 @@ function VanityUrlComponent() {
 		try {
 			// 1. Create zap request event
 			const zapRequest = new NDKEvent(ndk)
-			zapRequest.kind = 9734
-			zapRequest.content = ''
-			zapRequest.tags = [
-				['p', config.appPublicKey],
-				['amount', (satsAmount * 1000).toString()],
-				['L', 'vanity-register'],
-				['vanity', normalizedVanityName],
-				['relays', ...Array.from(new Set([config.appRelay, ...ZAP_RELAYS].filter(Boolean)))],
-			]
+            zapRequest.kind = 9734
+            zapRequest.content = ''
+            zapRequest.tags = [
+                ['p', config.appPublicKey],
+                ['amount', (satsAmount * 1000).toString()],
+                ['L', 'vanity-register'],
+                ['vanity', normalizedVanityName],
+                ['relays', ...Array.from(new Set([config.appRelay, ...ZAP_RELAYS].filter(Boolean)))],
+            ]
 
 			await zapRequest.sign()
 			const invoiceId = `vanity-${normalizedVanityName}-${satsAmount}-${Date.now()}`
@@ -225,6 +264,8 @@ function VanityUrlComponent() {
 				invoice: invoiceData.pr,
 				amount: satsAmount,
 				invoiceId,
+				expectedVanityName: normalizedVanityName,
+				previousValidUntil: currentVanity?.validUntil ?? 0,
 			})
 		} catch (error) {
 			console.error('Payment error:', error)
@@ -406,32 +447,54 @@ function VanityUrlComponent() {
 									</div>
 								</div>
 							</CardContent>
-						</Card>
-						<Dialog open={paymentState.isOpen} onOpenChange={(open) => setPaymentState((prev) => ({ ...prev, isOpen: open }))}>
-							<DialogContent className="sm:max-w-md">
-								<DialogHeader>
-									<DialogTitle>Complete Payment</DialogTitle>
-								</DialogHeader>
-								<LightningPaymentProcessor
-									data={{
-										amount: paymentState.amount,
-										invoiceId: paymentState.invoiceId || 'vanity-reg',
-										description: `Vanity URL Registration: ${vanityName}`,
-										bolt11: paymentState.invoice,
-										isZap: true,
-										monitorZapReceipt: true,
-										requireZapReceipt: true,
-									}}
-									onPaymentComplete={() => {
-										setPaymentState((prev) => ({ ...prev, isOpen: false }))
-										toast.success('Zap confirmed! Your vanity URL is being registered.')
-									}}
-									onCancel={() => setPaymentState((prev) => ({ ...prev, isOpen: false }))}
-								/>
-							</DialogContent>
-						</Dialog>
-					</>
-				)}
+							</Card>
+							<Dialog open={paymentState.isOpen} onOpenChange={(open) => setPaymentState((prev) => ({ ...prev, isOpen: open }))}>
+								<DialogContent className="sm:max-w-md">
+									<DialogHeader>
+										<DialogTitle>Complete Payment</DialogTitle>
+									</DialogHeader>
+	                                <LightningPaymentProcessor
+                                    data={{
+                                        amount: paymentState.amount,
+                                        invoiceId: paymentState.invoiceId || 'vanity-reg',
+                                        description: `Vanity URL Registration: ${vanityName}`,
+                                        bolt11: paymentState.invoice,
+                                        isZap: true,
+                                        monitorZapReceipt: true,
+                                    }}
+                                    onPaymentComplete={async (result) => {
+                                        if (result.proofType === 'preimage' && result.preimage) {
+                                            try {
+                                                const res = await fetch('/api/vanity/confirm', {
+                                                    method: 'POST',
+                                                    headers: { 'Content-Type': 'application/json' },
+                                                    body: JSON.stringify({ bolt11: paymentState.invoice, preimage: result.preimage }),
+                                                })
+	                                                if (!res.ok) {
+	                                                    const bodyText = await res.text().catch(() => '')
+	                                                    throw new Error(bodyText || `Failed to confirm payment (${res.status})`)
+	                                                }
+
+	                                                closePaymentDialog()
+	                                                toast.success('Payment confirmed! Your vanity URL is registered.')
+	                                                return
+	                                            } catch (error) {
+	                                                console.error('Vanity confirmation error:', error)
+	                                                toast.error(error instanceof Error ? error.message : 'Failed to confirm payment')
+                                                return
+                                            }
+	                                        }
+
+	                                        // If we don't have a valid preimage, fallback to zap receipt processing on the server.
+	                                        closePaymentDialog()
+	                                        toast.success('Payment sent. Your vanity URL will activate once confirmed.')
+	                                    }}
+	                                    onCancel={closePaymentDialog}
+	                                />
+								</DialogContent>
+							</Dialog>
+						</>
+					)}
 			</div>
 		</div>
 	)
