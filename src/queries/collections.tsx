@@ -23,7 +23,8 @@ export const fetchCollections = async () => {
 		limit: 50,
 	}
 
-	const events = await ndk.fetchEvents(filter)
+	// Use timeout helper to prevent hanging if relays don't respond
+	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 10000 })
 	const allEvents = Array.from(events)
 
 	// Filter out blacklisted collections and authors
@@ -50,7 +51,8 @@ export const fetchCollectionsByPubkey = async (pubkey: string) => {
 		limit: 50,
 	}
 
-	const events = await ndk.fetchEvents(filter)
+	// Use timeout helper to prevent hanging if relays don't respond
+	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 10000 })
 	const allEvents = Array.from(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 
 	// Filter out blacklisted collections (author check not needed since we're querying by author)

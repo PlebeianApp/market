@@ -65,6 +65,17 @@ function useFeaturedCollectionEvents(featuredCollections: string[] | undefined) 
 
 export const Route = createFileRoute('/community/')({
 	component: CommunityRoute,
+	errorComponent: ({ error }) => (
+		<div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 px-4 text-center">
+			<h2 className="text-xl font-semibold">Unable to load collections</h2>
+			<p className="text-muted-foreground max-w-md">
+				{error instanceof Error ? error.message : 'There was a problem connecting to relays. Please try again.'}
+			</p>
+			<Button variant="secondary" onClick={() => window.location.reload()}>
+				Retry
+			</Button>
+		</div>
+	),
 })
 
 function CommunityRoute() {
