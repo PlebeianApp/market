@@ -18,6 +18,8 @@ import {
 import { CollectionCard } from '@/components/CollectionCard'
 import { useV4VMerchants } from '@/queries/v4v'
 import { FeaturedUserCard } from '@/components/FeaturedUserCard'
+import { blacklistStore } from '@/lib/stores/blacklist'
+import { filterBlacklistedPubkeys } from '@/lib/utils/blacklistFilters'
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedCollections } from '@/queries/featured'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -83,6 +85,11 @@ function CommunityRoute() {
 	const collections = collectionsQuery.data
 
 	const { data: merchantPubkeys = [], isLoading: isLoadingMerchants } = useV4VMerchants()
+
+	// Subscribe to blacklist store for reactive updates when blacklist changes
+	useStore(blacklistStore)
+	// Filter out blacklisted merchants
+	const filteredMerchantPubkeys = filterBlacklistedPubkeys(merchantPubkeys)
 
 	// Fetch featured collections for slides
 	const { data: config } = useConfigQuery()
@@ -302,10 +309,10 @@ function CommunityRoute() {
 				<ItemGrid title="Merchants" cols={2} smCols={2} lgCols={2} xlCols={3} gap={16}>
 					{isLoadingMerchants ? (
 						<div className="col-span-full text-center py-8 text-gray-500">Loading merchants...</div>
-					) : merchantPubkeys.length === 0 ? (
+					) : filteredMerchantPubkeys.length === 0 ? (
 						<div className="col-span-full text-center py-8 text-gray-500">No merchants found</div>
 					) : (
-						merchantPubkeys.map((pubkey) => <FeaturedUserCard key={pubkey} userPubkey={pubkey} />)
+						filteredMerchantPubkeys.map((pubkey) => <FeaturedUserCard key={pubkey} userPubkey={pubkey} />)
 					)}
 				</ItemGrid>
 			</div>

@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { nip19 } from 'nostr-tools'
 import { v4 as uuidv4 } from 'uuid'
 import { v4vKeys } from './queryKeyFactory'
+import { filterBlacklistedPubkeys } from '@/lib/utils/blacklistFilters'
 
 function padHexString(hex: string): string {
 	return hex.length % 2 === 1 ? '0' + hex : hex
@@ -272,7 +273,7 @@ export const fetchV4VMerchants = async (): Promise<string[]> => {
 			return []
 		}
 
-		// Get unique pubkeys from the events
+		// Get unique pubkeys from the events and filter out blacklisted ones
 		const pubkeySet = new Set<string>()
 		Array.from(events).forEach((event) => {
 			if (event.pubkey) {
@@ -280,7 +281,7 @@ export const fetchV4VMerchants = async (): Promise<string[]> => {
 			}
 		})
 
-		return Array.from(pubkeySet)
+		return filterBlacklistedPubkeys(Array.from(pubkeySet))
 	} catch (error) {
 		console.error('Error fetching V4V merchants:', error)
 		return []

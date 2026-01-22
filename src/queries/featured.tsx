@@ -4,6 +4,7 @@ import type { FeaturedProducts, FeaturedCollections, FeaturedUsers } from '@/lib
 import { naddrFromAddress } from '@/lib/nostr/naddr'
 import { configKeys } from '@/queries/queryKeyFactory'
 import { useQuery } from '@tanstack/react-query'
+import { filterBlacklistedProductCoords, filterBlacklistedCollectionCoords, filterBlacklistedPubkeys } from '@/lib/utils/blacklistFilters'
 
 // --- DATA FETCHING FUNCTIONS ---
 
@@ -21,8 +22,9 @@ export const fetchFeaturedProducts = async (appPubkey: string): Promise<Featured
 
 	if (!event) return null
 
-	// Extract product coordinates from 'a' tags
-	const featuredProducts = event.tags.filter((tag) => tag[0] === 'a' && tag[1]?.startsWith('30402:')).map((tag) => tag[1])
+	// Extract product coordinates from 'a' tags and filter out blacklisted ones
+	const rawProducts = event.tags.filter((tag) => tag[0] === 'a' && tag[1]?.startsWith('30402:')).map((tag) => tag[1])
+	const featuredProducts = filterBlacklistedProductCoords(rawProducts)
 
 	return {
 		featuredProducts,
@@ -44,8 +46,9 @@ export const fetchFeaturedCollections = async (appPubkey: string): Promise<Featu
 
 	if (!event) return null
 
-	// Extract collection coordinates from 'a' tags
-	const featuredCollections = event.tags.filter((tag) => tag[0] === 'a' && tag[1]?.startsWith('30405:')).map((tag) => tag[1])
+	// Extract collection coordinates from 'a' tags and filter out blacklisted ones
+	const rawCollections = event.tags.filter((tag) => tag[0] === 'a' && tag[1]?.startsWith('30405:')).map((tag) => tag[1])
+	const featuredCollections = filterBlacklistedCollectionCoords(rawCollections)
 
 	return {
 		featuredCollections,
@@ -67,8 +70,9 @@ export const fetchFeaturedUsers = async (appPubkey: string): Promise<FeaturedUse
 
 	if (!event) return null
 
-	// Extract user pubkeys from 'p' tags
-	const featuredUsers = event.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1])
+	// Extract user pubkeys from 'p' tags and filter out blacklisted ones
+	const rawUsers = event.tags.filter((tag) => tag[0] === 'p' && tag[1]).map((tag) => tag[1])
+	const featuredUsers = filterBlacklistedPubkeys(rawUsers)
 
 	return {
 		featuredUsers,
