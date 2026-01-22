@@ -223,7 +223,9 @@ export const productFormActions = {
 				editingProductId: productDTag, // Use the d tag value, not the event ID!
 				name: title,
 				description: description,
-				price: priceValue,
+				// For fiat products, price (sats) will be calculated in the UI from fiatPrice
+				// For sats/BTC products, use the stored value directly
+				price: isFiatCurrency ? '' : priceValue,
 				fiatPrice: isFiatCurrency ? priceValue : '', // Set fiatPrice if currency is fiat
 				currency: priceCurrency,
 				currencyMode: isFiatCurrency ? 'fiat' : 'sats',

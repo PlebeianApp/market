@@ -90,15 +90,18 @@ export function DetailTab() {
 	const handleBitcoinPriceChange = (value: string) => {
 		const numValue = parseFloat(value) || 0
 
-		// Convert to SATS for storage
-		const satsValue = bitcoinUnit === 'SATS' ? numValue : convertBtcToSats(numValue)
-
-		productFormActions.updateValues({ price: satsValue.toString() })
+		// Convert to SATS for storage (sats should always be integers)
+		const satsValue = bitcoinUnit === 'SATS' ? Math.round(numValue) : convertBtcToSats(numValue)
 
 		// Update fiat field if a fiat currency is selected and visible
 		if (currency !== 'SATS' && currency !== 'BTC') {
 			const fiatValue = convertSatsToCurrency(satsValue, currency)
-			setFiatDisplayValue(fiatValue.toFixed(2))
+			const fiatValueStr = fiatValue.toFixed(2)
+			setFiatDisplayValue(fiatValueStr)
+			// Also update state.fiatPrice so it's used when publishing in fiat mode
+			productFormActions.updateValues({ price: satsValue.toString(), fiatPrice: fiatValueStr })
+		} else {
+			productFormActions.updateValues({ price: satsValue.toString() })
 		}
 	}
 
@@ -196,6 +199,17 @@ export function DetailTab() {
 			setFiatDisplayValue(fiatPrice)
 		}
 	}, [storeBitcoinUnit, storeCurrencyMode, fiatPrice])
+
+	// Calculate sats from fiat when loading a fiat-priced product (price is empty, fiatPrice has value)
+	useEffect(() => {
+		if (storeCurrencyMode === 'fiat' && fiatPrice && !price && exchangeRates) {
+			const fiatValue = parseFloat(fiatPrice) || 0
+			if (fiatValue > 0) {
+				const satsValue = convertCurrencyToSats(fiatValue, currency)
+				productFormActions.updateValues({ price: satsValue.toString() })
+			}
+		}
+	}, [storeCurrencyMode, fiatPrice, price, currency, exchangeRates])
 
 	// Update fiat display when currency or price changes (only for auto-conversion from sats)
 	useEffect(() => {
