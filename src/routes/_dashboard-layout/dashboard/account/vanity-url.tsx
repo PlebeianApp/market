@@ -361,12 +361,13 @@ function VanityUrlComponent() {
 									</div>
 									{(validationState.message || isChecking) && (
 										<p
-											className={`text-sm flex items-center gap-1 ${validationState.isAvailable === true
-												? 'text-green-600'
-												: validationState.isAvailable === false
-													? 'text-red-600'
-													: 'text-muted-foreground'
-												}`}
+											className={`text-sm flex items-center gap-1 ${
+												validationState.isAvailable === true
+													? 'text-green-600'
+													: validationState.isAvailable === false
+														? 'text-red-600'
+														: 'text-muted-foreground'
+											}`}
 										>
 											{validationState.isAvailable === true && <CheckCircle2 className="h-4 w-4" />}
 											{validationState.isAvailable === false && <AlertCircle className="h-4 w-4" />}
@@ -404,7 +405,6 @@ function VanityUrlComponent() {
 										))}
 									</div>
 								</div>
-
 							</CardContent>
 						</Card>
 						<Dialog open={paymentState.isOpen} onOpenChange={(open) => setPaymentState((prev) => ({ ...prev, isOpen: open }))}>

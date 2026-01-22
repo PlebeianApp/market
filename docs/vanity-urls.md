@@ -102,17 +102,20 @@ A zap receipt (kind 9735) is published by the Lightning Service Provider (LNSP) 
 
 ```json
 {
-  "id": "abc123...",
-  "pubkey": "lnsp_pubkey...",  // LNSP's pubkey (e.g., coinos.io)
-  "kind": 9735,
-  "created_at": 1705849200,
-  "tags": [
-    ["p", "app_pubkey..."],           // Recipient (app)
-    ["bolt11", "lnbc10u1pj..."],      // Lightning invoice
-    ["description", "{\"id\":\"def456...\",\"pubkey\":\"user_pubkey...\",\"kind\":9734,\"created_at\":1705849100,\"tags\":[[\"L\",\"vanity-register\"],[\"vanity\",\"alice-store\"],[\"p\",\"app_pubkey...\"],[\"amount\",\"10000000\"],[\"relays\",\"wss://relay.damus.io\"]],\"content\":\"\",\"sig\":\"user_signature...\"}"]
-  ],
-  "content": "",
-  "sig": "lnsp_signature..."
+	"id": "abc123...",
+	"pubkey": "lnsp_pubkey...", // LNSP's pubkey (e.g., coinos.io)
+	"kind": 9735,
+	"created_at": 1705849200,
+	"tags": [
+		["p", "app_pubkey..."], // Recipient (app)
+		["bolt11", "lnbc10u1pj..."], // Lightning invoice
+		[
+			"description",
+			"{\"id\":\"def456...\",\"pubkey\":\"user_pubkey...\",\"kind\":9734,\"created_at\":1705849100,\"tags\":[[\"L\",\"vanity-register\"],[\"vanity\",\"alice-store\"],[\"p\",\"app_pubkey...\"],[\"amount\",\"10000000\"],[\"relays\",\"wss://relay.damus.io\"]],\"content\":\"\",\"sig\":\"user_signature...\"}"
+		]
+	],
+	"content": "",
+	"sig": "lnsp_signature..."
 }
 ```
 
@@ -123,23 +126,24 @@ The `description` tag contains the **original zap request (kind 9734)** as a JSO
 #### Step 1: Parse Embedded Zap Request
 
 ```typescript
-const zapRequestTag = event.tags.find(t => t[0] === 'description')
+const zapRequestTag = event.tags.find((t) => t[0] === 'description')
 const zapRequest = JSON.parse(zapRequestTag[1])
 ```
 
 **Extracted zap request:**
+
 ```json
 {
-  "id": "def456...",
-  "pubkey": "user_pubkey...",  // ← This is who gets the vanity URL
-  "kind": 9734,
-  "tags": [
-    ["L", "vanity-register"],   // Label identifying this as vanity registration
-    ["vanity", "alice-store"],  // Requested vanity name
-    ["p", "app_pubkey..."],     // Target app pubkey
-    ["amount", "10000000"]      // Amount in millisats (10,000 sats)
-  ],
-  "sig": "user_signature..."    // User's cryptographic signature
+	"id": "def456...",
+	"pubkey": "user_pubkey...", // ← This is who gets the vanity URL
+	"kind": 9734,
+	"tags": [
+		["L", "vanity-register"], // Label identifying this as vanity registration
+		["vanity", "alice-store"], // Requested vanity name
+		["p", "app_pubkey..."], // Target app pubkey
+		["amount", "10000000"] // Amount in millisats (10,000 sats)
+	],
+	"sig": "user_signature..." // User's cryptographic signature
 }
 ```
 
@@ -148,15 +152,15 @@ const zapRequest = JSON.parse(zapRequestTag[1])
 Check for `["L", "vanity-register"]` tag to identify this as a vanity registration zap:
 
 ```typescript
-const labelTag = zapRequest.tags.find(t => t[0] === 'L' && t[1] === 'vanity-register')
-if (!labelTag) return  // Not a vanity registration
+const labelTag = zapRequest.tags.find((t) => t[0] === 'L' && t[1] === 'vanity-register')
+if (!labelTag) return // Not a vanity registration
 ```
 
 #### Step 3: Extract Vanity Name
 
 ```typescript
-const vanityTag = zapRequest.tags.find(t => t[0] === 'vanity')
-const vanityName = vanityTag[1].toLowerCase()  // "alice-store"
+const vanityTag = zapRequest.tags.find((t) => t[0] === 'vanity')
+const vanityName = vanityTag[1].toLowerCase() // "alice-store"
 ```
 
 #### Step 4: Identity from Signature
@@ -164,7 +168,7 @@ const vanityName = vanityTag[1].toLowerCase()  // "alice-store"
 **This is the key security property:** The `pubkey` field in the zap request is cryptographically signed. Only the holder of the corresponding private key could have created this signature. This proves that `user_pubkey...` authorized this registration.
 
 ```typescript
-const requesterPubkey = zapRequest.pubkey  // Verified by signature
+const requesterPubkey = zapRequest.pubkey // Verified by signature
 ```
 
 #### Step 5: Amount Verification
@@ -172,14 +176,16 @@ const requesterPubkey = zapRequest.pubkey  // Verified by signature
 Verify the payment meets minimum requirements:
 
 ```typescript
-const amountTag = zapRequest.tags.find(t => t[0] === 'amount')
-const amountMsats = parseInt(amountTag[1])  // 10000000
-const amountSats = Math.floor(amountMsats / 1000)  // 10000
+const amountTag = zapRequest.tags.find((t) => t[0] === 'amount')
+const amountMsats = parseInt(amountTag[1]) // 10000000
+const amountSats = Math.floor(amountMsats / 1000) // 10000
 
 // Must meet tier requirements
-if (amountSats >= 18000) validityDays = 365     // 1 year
-else if (amountSats >= 10000) validityDays = 180 // 6 months
-else return  // Insufficient
+if (amountSats >= 18000)
+	validityDays = 365 // 1 year
+else if (amountSats >= 10000)
+	validityDays = 180 // 6 months
+else return // Insufficient
 ```
 
 ### Why This Is Secure
@@ -188,7 +194,7 @@ else return  // Insufficient
 
 2. **LNSP as Witness**: The Lightning Service Provider only publishes a receipt after confirming actual payment. The receipt inherits the signed zap request.
 
-3. **No Replay**: 
+3. **No Replay**:
    - Event IDs are tracked in `processedZapReceipts` Set
    - Receipts older than 5 minutes are rejected
    - Prevents re-registering from old payments
@@ -216,6 +222,7 @@ Multiple layers prevent zap receipts from being processed more than once:
 Generates a Lightning invoice for vanity URL registration. Used by the dashboard to avoid browser CORS issues with LNURL resolution.
 
 **Request:**
+
 ```json
 {
 	"zapRequest": "<signed kind 9734 event JSON>",
@@ -224,6 +231,7 @@ Generates a Lightning invoice for vanity URL registration. Used by the dashboard
 ```
 
 **Response:**
+
 ```json
 {
 	"pr": "lnbc..."
