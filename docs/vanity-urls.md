@@ -94,16 +94,106 @@ See full list in `src/server/VanityManager.ts` and `src/lib/stores/vanity.ts`.
 
 ## Security
 
-### Zap Receipt Verification
+### Zap Receipt Structure
 
-The backend validates zap receipts to ensure authenticity:
+A zap receipt (kind 9735) is published by the Lightning Service Provider (LNSP) after payment. It contains an embedded, **signed zap request** in the `description` tag that proves who initiated the payment.
 
-1. **Zap Request Parsing** - Extracts embedded zap request from `description` tag
-2. **Label Verification** - Confirms `["L", "vanity-register"]` tag is present
-3. **Vanity Name Match** - Validates `["vanity", "<name>"]` tag matches request
-4. **Target Verification** - Confirms zap is sent to the app's pubkey via `["p", "<app_pubkey>"]`
-5. **Amount Validation** - Verifies zap amount meets minimum pricing tier requirements
-6. **Requester Identity** - Only the pubkey that created the zap request is registered
+**Example Zap Receipt (kind 9735):**
+
+```json
+{
+  "id": "abc123...",
+  "pubkey": "lnsp_pubkey...",  // LNSP's pubkey (e.g., coinos.io)
+  "kind": 9735,
+  "created_at": 1705849200,
+  "tags": [
+    ["p", "app_pubkey..."],           // Recipient (app)
+    ["bolt11", "lnbc10u1pj..."],      // Lightning invoice
+    ["description", "{\"id\":\"def456...\",\"pubkey\":\"user_pubkey...\",\"kind\":9734,\"created_at\":1705849100,\"tags\":[[\"L\",\"vanity-register\"],[\"vanity\",\"alice-store\"],[\"p\",\"app_pubkey...\"],[\"amount\",\"10000000\"],[\"relays\",\"wss://relay.damus.io\"]],\"content\":\"\",\"sig\":\"user_signature...\"}"]
+  ],
+  "content": "",
+  "sig": "lnsp_signature..."
+}
+```
+
+The `description` tag contains the **original zap request (kind 9734)** as a JSON string, signed by the user who initiated the payment.
+
+### Step-by-Step Verification Process
+
+#### Step 1: Parse Embedded Zap Request
+
+```typescript
+const zapRequestTag = event.tags.find(t => t[0] === 'description')
+const zapRequest = JSON.parse(zapRequestTag[1])
+```
+
+**Extracted zap request:**
+```json
+{
+  "id": "def456...",
+  "pubkey": "user_pubkey...",  // ← This is who gets the vanity URL
+  "kind": 9734,
+  "tags": [
+    ["L", "vanity-register"],   // Label identifying this as vanity registration
+    ["vanity", "alice-store"],  // Requested vanity name
+    ["p", "app_pubkey..."],     // Target app pubkey
+    ["amount", "10000000"]      // Amount in millisats (10,000 sats)
+  ],
+  "sig": "user_signature..."    // User's cryptographic signature
+}
+```
+
+#### Step 2: Verify Label Tag
+
+Check for `["L", "vanity-register"]` tag to identify this as a vanity registration zap:
+
+```typescript
+const labelTag = zapRequest.tags.find(t => t[0] === 'L' && t[1] === 'vanity-register')
+if (!labelTag) return  // Not a vanity registration
+```
+
+#### Step 3: Extract Vanity Name
+
+```typescript
+const vanityTag = zapRequest.tags.find(t => t[0] === 'vanity')
+const vanityName = vanityTag[1].toLowerCase()  // "alice-store"
+```
+
+#### Step 4: Identity from Signature
+
+**This is the key security property:** The `pubkey` field in the zap request is cryptographically signed. Only the holder of the corresponding private key could have created this signature. This proves that `user_pubkey...` authorized this registration.
+
+```typescript
+const requesterPubkey = zapRequest.pubkey  // Verified by signature
+```
+
+#### Step 5: Amount Verification
+
+Verify the payment meets minimum requirements:
+
+```typescript
+const amountTag = zapRequest.tags.find(t => t[0] === 'amount')
+const amountMsats = parseInt(amountTag[1])  // 10000000
+const amountSats = Math.floor(amountMsats / 1000)  // 10000
+
+// Must meet tier requirements
+if (amountSats >= 18000) validityDays = 365     // 1 year
+else if (amountSats >= 10000) validityDays = 180 // 6 months
+else return  // Insufficient
+```
+
+### Why This Is Secure
+
+1. **Cryptographic Proof of Identity**: The zap request is signed by the user's private key. No one can forge a request claiming to be someone else.
+
+2. **LNSP as Witness**: The Lightning Service Provider only publishes a receipt after confirming actual payment. The receipt inherits the signed zap request.
+
+3. **No Replay**: 
+   - Event IDs are tracked in `processedZapReceipts` Set
+   - Receipts older than 5 minutes are rejected
+   - Prevents re-registering from old payments
+
+4. **Name Collision Protection**: Server checks if vanity name is already taken by a different pubkey with active validity.
 
 ### Duplicate Receipt Prevention
 
