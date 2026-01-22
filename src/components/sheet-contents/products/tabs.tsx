@@ -115,7 +115,7 @@ export function DetailTab() {
 			productFormActions.updateValues({ price: satsValue.toString(), fiatPrice: value })
 		} else if (value === '' || value === '0') {
 			// Clear the price if input is empty or zero
-			productFormActions.updateValues({ price: '0', fiatPrice: '' })
+			productFormActions.updateValues({ price: '0', fiatPrice: '0' })
 		}
 	}
 
