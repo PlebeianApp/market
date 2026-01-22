@@ -18,7 +18,7 @@ import { z } from 'zod'
 import { productKeys } from './queryKeyFactory'
 import { getCoordsFromATag, getATagFromCoords } from '@/lib/utils/coords.ts'
 import { discoverNip50Relays } from '@/lib/relays'
-import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
+import { filterBlacklistedEvents, filterBlacklistedPubkeys } from '@/lib/utils/blacklistFilters'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
 
 // Re-export productKeys for use in other query files
@@ -831,7 +831,7 @@ export const fetchProductsBySearch = async (query: string, limit: number = 20) =
 	try {
 		const fetchPromise = ndk
 			.fetchEvents(filter)
-			.then((events) => Array.from(events))
+			.then((events) => filterBlacklistedEvents(Array.from(events)))
 			.catch((err) => {
 				console.error('Product search fetch failed:', err)
 				return []
@@ -887,7 +887,7 @@ export const fetchSellersBySearch = async (query: string, limit: number = 10): P
 	try {
 		const fetchPromise = ndk
 			.fetchEvents(filter)
-			.then((events) => Array.from(events).map((e) => e.pubkey))
+			.then((events) => filterBlacklistedPubkeys(Array.from(events).map((e) => e.pubkey)))
 			.catch((err) => {
 				console.error('Profile search fetch failed:', err)
 				return []
