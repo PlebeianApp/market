@@ -39,7 +39,7 @@ async function initializeAppSettings() {
 		process.exit(1)
 	}
 }
-;(async () => await initializeAppSettings())()
+; (async () => await initializeAppSettings())()
 
 export type NostrMessage = ['EVENT', Event]
 
@@ -87,13 +87,29 @@ const serveStatic = async (path: string) => {
 	}
 }
 
+/**
+ * Determine the deployment stage based on environment and relay URL
+ */
+function determineStage(): 'production' | 'staging' | 'development' {
+	if (process.env.NODE_ENV !== 'production') {
+		return 'development'
+	}
+	// In production mode, check if this is staging based on relay URL
+	if (RELAY_URL?.includes('staging')) {
+		return 'staging'
+	}
+	return 'production'
+}
+
 export const server = serve({
 	routes: {
 		'/api/config': {
 			GET: () => {
+				const stage = determineStage()
 				// Return cached settings loaded at startup
 				return Response.json({
 					appRelay: RELAY_URL,
+					stage,
 					nip46Relay: NIP46_RELAY_URL,
 					appSettings: appSettings,
 					appPublicKey: APP_PUBLIC_KEY,

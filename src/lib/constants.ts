@@ -1,14 +1,38 @@
 export type ObjectValues<T> = T[keyof T]
 
-export const defaultRelaysUrls: string[] = [
-	'wss://relay.plebeian.market',
+// =============================================================================
+// ENVIRONMENT STAGES
+// =============================================================================
+
+export type Stage = 'production' | 'staging' | 'development'
+
+// =============================================================================
+// RELAY CONFIGURATION
+// =============================================================================
+
+/**
+ * Main relay URL per stage - this is the primary relay for each environment
+ */
+export const MAIN_RELAY_BY_STAGE: Record<Stage, string> = {
+	production: 'wss://relay.plebeian.market',
+	staging: 'wss://relay.staging.plebeian.market',
+	development: 'ws://localhost:10547',
+}
+
+/**
+ * Default public relays that are used in addition to the main relay
+ * These are used for reading events from the broader Nostr network
+ */
+export const DEFAULT_PUBLIC_RELAYS: string[] = [
 	'wss://relay.nostr.band',
 	'wss://nos.lol',
 	'wss://relay.nostr.net',
 	'wss://relay.damus.io',
 	'wss://relay.minibits.cash',
-	// 'ws://localhost:10547',
 ]
+
+// Keep for backward compatibility (deprecated - use DEFAULT_PUBLIC_RELAYS instead)
+export const defaultRelaysUrls: string[] = DEFAULT_PUBLIC_RELAYS
 
 // Dedicated zap detection relays
 export const ZAP_RELAYS = [
@@ -20,9 +44,7 @@ export const ZAP_RELAYS = [
 	'wss://relay.coinos.io',
 	'wss://nwc.primal.net',
 	'wss://relay.primal.net',
-	// 'ws://localhost:10547',
 ]
-// export const defaultRelaysUrls: string[] = []
 
 export const CURRENCIES = [
 	'SATS', // Satoshis

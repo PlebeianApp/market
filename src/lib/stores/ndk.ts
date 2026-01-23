@@ -1,4 +1,4 @@
-import { defaultRelaysUrls, ZAP_RELAYS } from '@/lib/constants'
+import { defaultRelaysUrls, ZAP_RELAYS, DEFAULT_PUBLIC_RELAYS, MAIN_RELAY_BY_STAGE, type Stage } from '@/lib/constants'
 import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
 import type { NDKEvent, NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nostr-dev-kit/ndk'
 import NDK, { NDKKind } from '@nostr-dev-kit/ndk'
@@ -13,6 +13,7 @@ export interface NDKState {
 	isConnected: boolean
 	isZapNdkConnected: boolean
 	explicitRelayUrls: string[]
+	writeRelayUrls: string[] // Relays we're allowed to write to (staging restriction)
 	activeNwcWalletUri: string | null
 	signer?: NDKSigner
 }
@@ -24,6 +25,7 @@ const initialState: NDKState = {
 	isConnected: false,
 	isZapNdkConnected: false,
 	explicitRelayUrls: [],
+	writeRelayUrls: [],
 	activeNwcWalletUri: null,
 	signer: undefined,
 }
@@ -61,17 +63,58 @@ async function connectNdkWithTimeout(ndk: NDK, timeoutMs: number, label: string)
 }
 
 /**
+ * Get the current stage from config
+ */
+function getCurrentStage(): Stage {
+	return configStore.state.config.stage || 'development'
+}
+
+/**
+ * Get the main relay for the current stage
+ */
+export function getMainRelay(): string {
+	const appRelay = configStore.state.config.appRelay
+	if (appRelay) return appRelay // Server-provided appRelay takes precedence
+	return MAIN_RELAY_BY_STAGE[getCurrentStage()]
+}
+
+/**
+ * Get the write relay(s) for the current stage
+ * Staging only writes to the staging relay, all other stages write to all connected relays
+ */
+export function getWriteRelays(): string[] {
+	const stage = getCurrentStage()
+	if (stage === 'staging') {
+		const mainRelay = getMainRelay()
+		return [mainRelay] // Staging ONLY writes to staging relay
+	}
+	// Production and development write to all connected relays
+	return ndkStore.state.explicitRelayUrls
+}
+
+/**
  * Determine which relays to use based on config and environment
  */
 function getRelayUrls(overrideRelays?: string[]): string[] {
-	const appRelay = configStore.state.config.appRelay
+	const stage = getCurrentStage()
 	// @ts-ignore - Bun.env is available in Bun runtime
 	const localRelayOnly = typeof Bun !== 'undefined' && Bun.env?.LOCAL_RELAY_ONLY === 'true'
 
-	if (appRelay) {
-		return localRelayOnly ? [appRelay] : Array.from(new Set([appRelay, ...defaultRelaysUrls]))
+	// Get main relay (from config or stage default)
+	const mainRelay = getMainRelay()
+
+	// Development with local_relay_only: only local relay
+	if (stage === 'development' && localRelayOnly) {
+		return [mainRelay]
 	}
-	return overrideRelays?.length ? overrideRelays : defaultRelaysUrls
+
+	// Override relays take precedence if provided (but always include main relay)
+	if (overrideRelays?.length) {
+		return Array.from(new Set([mainRelay, ...overrideRelays]))
+	}
+
+	// Standard case: main relay + public default relays
+	return Array.from(new Set([mainRelay, ...DEFAULT_PUBLIC_RELAYS]))
 }
 
 export const ndkActions = {
@@ -180,6 +223,8 @@ export const ndkActions = {
 			ndk,
 			zapNdk,
 			explicitRelayUrls: explicitRelays,
+			// Staging only writes to main relay, others write to all
+			writeRelayUrls: getCurrentStage() === 'staging' ? [getMainRelay()] : explicitRelays,
 		}))
 
 		// If config was already loaded before initialization, ensure appRelay is included.
@@ -455,7 +500,7 @@ export const ndkActions = {
 		const state = ndkStore.state
 		if (!state.zapNdk || !state.isZapNdkConnected) {
 			console.warn('Zap NDK not connected. Cannot create zap subscription.')
-			return () => {}
+			return () => { }
 		}
 
 		const filters: any = {
