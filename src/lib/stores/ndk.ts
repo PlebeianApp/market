@@ -225,10 +225,14 @@ export const ndkActions = {
 		const explicitRelays = getRelayUrls(relays)
 		// @ts-ignore - Bun.env is available in Bun runtime
 		const localRelayOnly = typeof Bun !== 'undefined' && Bun.env?.LOCAL_RELAY_ONLY === 'true'
+		const stage = getCurrentStage()
+
+		// Disable outbox model for staging (enforces write-only-to-staging) and local-only dev
+		const enableOutbox = stage !== 'staging' && !localRelayOnly
 
 		const ndk = new NDK({
 			explicitRelayUrls: explicitRelays,
-			enableOutboxModel: !localRelayOnly,
+			enableOutboxModel: enableOutbox,
 			aiGuardrails: {
 				skip: new Set(['ndk-no-cache', 'fetch-events-usage']),
 			},
@@ -533,7 +537,7 @@ export const ndkActions = {
 		const state = ndkStore.state
 		if (!state.zapNdk || !state.isZapNdkConnected) {
 			console.warn('Zap NDK not connected. Cannot create zap subscription.')
-			return () => {}
+			return () => { }
 		}
 
 		const filters: any = {

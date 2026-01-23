@@ -110,6 +110,9 @@ flowchart LR
     APP -->|"publish()"| W1
 ```
 
+> [!IMPORTANT]
+> The **outbox model is disabled** for staging. This prevents NDK from automatically discovering user relay lists and publishing to them, ensuring all writes go only to the staging relay.
+
 ## Development Mode
 
 Development mode supports two configurations via the `LOCAL_RELAY_ONLY` environment variable:
