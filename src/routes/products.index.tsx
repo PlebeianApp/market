@@ -101,7 +101,7 @@ function ProductsRoute() {
 					})
 					.slice(0, 4)
 
-	// Extract all unique tags from products
+	// Extract all unique tags from ALL products (not filtered)
 	const allTags = useMemo(() => {
 		const tagSet = new Set<string>()
 		products.forEach((product) => {
