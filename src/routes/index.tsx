@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { uiActions } from '@/lib/stores/ui'
 import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Link } from '@tanstack/react-router'
 import { FeaturedSections } from '@/components/FeaturedSections'
 import { InfiniteProductList } from '@/components/InfiniteProductList'
@@ -47,7 +47,6 @@ function Index() {
 	const navigate = useNavigate()
 	const { tag } = Route.useSearch()
 	const { isAuthenticated } = useStore(authStore)
-	const productListRef = useRef<HTMLDivElement>(null)
 	// Fetch all products without tag filter to extract all available tags
 	const productsQuery = useSuspenseQuery(productsQueryOptions(500))
 	const products = productsQuery.data as NDKEvent[]
@@ -74,9 +73,6 @@ function Index() {
 		} else {
 			navigate({ to: '/', search: (prev: any) => ({ ...prev, tag: selectedTag }) })
 		}
-		setTimeout(() => {
-			productListRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-		}, 100)
 	}
 
 	const handleClearFilter = () => {
@@ -147,7 +143,7 @@ function Index() {
 			<FeaturedSections maxItemsPerSection={5} />
 
 			{/* Infinite Product List */}
-			<div ref={productListRef} className="px-8 py-4">
+			<div className="px-8 py-4">
 				<InfiniteProductList title="All Products" scrollKey="homepage-products" chunkSize={20} threshold={1000} autoLoad={true} tag={tag} />
 			</div>
 		</div>

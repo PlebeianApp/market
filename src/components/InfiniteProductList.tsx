@@ -93,7 +93,7 @@ export function InfiniteProductList({
 		)
 	}
 
-	if (isLoading) {
+	if (isLoading && products.length === 0) {
 		return (
 			<div className={cn('w-full max-w-full overflow-hidden', className)} ref={containerRef}>
 				{title && (
@@ -102,12 +102,10 @@ export function InfiniteProductList({
 					</div>
 				)}
 
-				<div className="sr-only" aria-live="polite">
-					Loading products...
+				<div className="flex flex-col items-center justify-center py-12 min-h-[60vh]">
+					<Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
+					<p className="text-sm text-gray-500">Loading products...</p>
 				</div>
-
-				{/* Reserve space so the page doesn't "blink"/jump while products load */}
-				<div className="min-h-[60vh]" />
 			</div>
 		)
 	}
