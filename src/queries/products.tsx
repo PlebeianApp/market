@@ -28,14 +28,24 @@ export { productKeys }
 export const isEventId = (id: string): boolean => /^[a-f0-9]{64}$/i.test(id)
 
 /**
- * Checks if a product is in stock (has stock > 0 or no stock tag which means unlimited)
+ * Checks if a product is in stock
+ * Matches ProductCard logic: out of stock if no stock tag (unless pre-order) or stock = 0
  * @param event The product event
- * @returns true if the product is in stock or has no stock limit
+ * @returns true if the product is in stock
  */
 export const isProductInStock = (event: NDKEvent): boolean => {
+	const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
+	const visibility = visibilityTag?.[1] || 'on-sale'
+
+	// Pre-order items are always considered "in stock" for display purposes
+	if (visibility === 'pre-order') return true
+
 	const stockTag = event.tags.find((t) => t[0] === 'stock')
-	if (!stockTag) return true // No stock tag means unlimited availability
+	// No stock tag means out of stock (matching ProductCard behavior)
+	if (!stockTag) return false
+
 	const stockValue = parseInt(stockTag[1], 10)
+	// Stock must be a valid number > 0
 	return !isNaN(stockValue) && stockValue > 0
 }
 
