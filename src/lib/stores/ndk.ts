@@ -1,4 +1,4 @@
-import { defaultRelaysUrls, ZAP_RELAYS, DEFAULT_PUBLIC_RELAYS, MAIN_RELAY_BY_STAGE, type Stage } from '@/lib/constants'
+import { defaultRelaysUrls, ZAP_RELAYS, DEFAULT_PUBLIC_RELAYS, MAIN_RELAY_BY_STAGE, BUG_RELAY, type Stage } from '@/lib/constants'
 import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
 import type { NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nostr-dev-kit/ndk'
 import NDK, { NDKEvent, NDKKind, NDKRelaySet } from '@nostr-dev-kit/ndk'
@@ -80,13 +80,13 @@ export function getMainRelay(): string {
 
 /**
  * Get the write relay(s) for the current stage
- * Staging only writes to the staging relay, all other stages write to all connected relays
+ * Staging writes to staging relay + bug relay, all other stages write to all connected relays
  */
 export function getWriteRelays(): string[] {
 	const stage = getCurrentStage()
 	if (stage === 'staging') {
 		const mainRelay = getMainRelay()
-		return [mainRelay] // Staging ONLY writes to staging relay
+		return [mainRelay, BUG_RELAY] // Staging writes to staging relay + bug relay
 	}
 	// Production and development write to all connected relays
 	return ndkStore.state.explicitRelayUrls
