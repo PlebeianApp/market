@@ -4,10 +4,12 @@ import { AdminManagerImpl } from './AdminManager'
 import { EditorManagerImpl } from './EditorManager'
 import { BootstrapManagerImpl } from './BootstrapManager'
 import { BlacklistManagerImpl } from './BlacklistManager'
+import { VanityManagerImpl } from './VanityManager'
 import { EventValidator } from './EventValidator'
 import { EventSigner } from './EventSigner'
 import { NDKService } from './NDKService'
 import NDK from '@nostr-dev-kit/ndk'
+import { ZAP_RELAYS } from '../lib/constants'
 
 export class EventHandler {
 	private static instance: EventHandler
@@ -18,9 +20,13 @@ export class EventHandler {
 	private editorManager: EditorManagerImpl
 	private bootstrapManager: BootstrapManagerImpl
 	private blacklistManager: BlacklistManagerImpl
+	private vanityManager: VanityManagerImpl
 	private eventValidator: EventValidator
 	private eventSigner: EventSigner
 	private ndkService: NDKService
+	private ndk: NDK | null = null
+	private zapNdk: NDK | null = null
+	private handledZapReceiptIds: Set<string> = new Set()
 
 	private constructor() {
 		// Initialize with empty managers - components requiring private key will be set up during initialize()
@@ -32,6 +38,7 @@ export class EventHandler {
 		this.eventSigner = null as any
 		this.ndkService = null as any
 		this.blacklistManager = null as any
+		this.vanityManager = null as any
 	}
 
 	public static getInstance(): EventHandler {
@@ -54,21 +61,82 @@ export class EventHandler {
 		this.eventValidator = new EventValidator(config.appPrivateKey, this.adminManager, this.editorManager, this.bootstrapManager)
 		this.ndkService = new NDKService(this.eventSigner.getAppPubkey(), this.adminManager, this.editorManager, this.bootstrapManager)
 		this.blacklistManager = new BlacklistManagerImpl(this.eventSigner, this.ndkService)
+		this.vanityManager = new VanityManagerImpl(this.eventSigner, this.ndkService)
 
 		// Initialize NDK service and load existing data
 		await this.ndkService.initialize(config.relayUrl)
 		await this.ndkService.loadExistingData()
 
-		// Set up NDK for blacklist manager and load existing blacklist
+		// Set up NDK for blacklist and vanity managers
 		if (config.relayUrl) {
-			const ndk = new NDK({ explicitRelayUrls: [config.relayUrl] })
-			await ndk.connect()
-			this.blacklistManager.setNDK(ndk)
+			this.ndk = new NDK({ explicitRelayUrls: [config.relayUrl] })
+			await this.ndk.connect()
+
+			// Initialize blacklist
+			this.blacklistManager.setNDK(this.ndk)
 			await this.blacklistManager.loadExistingBlacklist(this.eventSigner.getAppPubkey())
+
+			// Initialize vanity
+			this.vanityManager.setNDK(this.ndk)
+			await this.vanityManager.loadExistingVanityRegistry(this.eventSigner.getAppPubkey())
+
+			// Subscribe to zap receipts for vanity registration (app relay)
+			this.subscribeToVanityZaps(this.ndk, 'App relay')
+
+			// Also subscribe on dedicated zap relays; some LSPs do not publish receipts to the app relay.
+			const zapRelayUrls = Array.from(new Set([config.relayUrl, ...ZAP_RELAYS].filter(Boolean)))
+			console.log(`Connecting to zap relays: ${zapRelayUrls.join(', ')}`)
+			this.zapNdk = new NDK({ explicitRelayUrls: zapRelayUrls })
+			try {
+				await Promise.race([
+					this.zapNdk.connect(),
+					new Promise((_, reject) => setTimeout(() => reject(new Error('Zap relay connection timeout')), 15000)),
+				])
+				this.subscribeToVanityZaps(this.zapNdk, 'Zap relays')
+			} catch (error) {
+				console.warn('⚠️ Failed to connect zap relay NDK; vanity zap receipts may not be processed:', error)
+				// Try to subscribe anyway in case some relays connected
+				this.subscribeToVanityZaps(this.zapNdk, 'Zap relays (partial)')
+			}
 		}
 
 		this.isInitialized = true
 		console.log('EventHandler initialized successfully')
+	}
+
+	/**
+	 * Subscribe to zap receipts for vanity URL registration
+	 */
+	private subscribeToVanityZaps(ndk: NDK, label: string): void {
+		const appPubkey = this.eventSigner.getAppPubkey()
+
+		// Subscribe to zap receipts where app pubkey is the recipient
+		const sub = ndk.subscribe(
+			{
+				kinds: [9735],
+				'#p': [appPubkey],
+			},
+			{ closeOnEose: false },
+		)
+
+		sub.on('event', async (event) => {
+			try {
+				if (event.id) {
+					if (this.handledZapReceiptIds.has(event.id)) return
+					this.handledZapReceiptIds.add(event.id)
+					if (this.handledZapReceiptIds.size > 2000) {
+						// Simple bound to avoid unbounded growth
+						this.handledZapReceiptIds.clear()
+						this.handledZapReceiptIds.add(event.id)
+					}
+				}
+				await this.vanityManager.handleZapReceipt(event.rawEvent())
+			} catch (error) {
+				console.error('Error handling vanity zap receipt:', error)
+			}
+		})
+
+		console.log(`Subscribed to vanity zap receipts (${label})`)
 	}
 
 	public handleEvent(event: NostrEvent): NostrEvent | null {
@@ -117,6 +185,7 @@ export class EventHandler {
 		const isSetupEvent = event.kind === 31990 && event.content.includes('"name":')
 		const isAdminListEvent = event.kind === 30000 && event.tags.some((tag) => tag[0] === 'd' && tag[1] === 'admins')
 		const isEditorListEvent = event.kind === 30000 && event.tags.some((tag) => tag[0] === 'd' && tag[1] === 'editors')
+		const isVanityListEvent = event.kind === 30000 && event.tags.some((tag) => tag[0] === 'd' && tag[1] === 'vanity-urls')
 		const isBlacklistEvent = event.kind === 10000
 
 		if (isSetupEvent) {
@@ -127,6 +196,9 @@ export class EventHandler {
 		} else if (isEditorListEvent) {
 			console.log('Editor list event accepted, updating internal editor list')
 			this.editorManager.updateFromEvent(event)
+		} else if (isVanityListEvent) {
+			console.log('Vanity list event accepted, updating vanity registry')
+			await this.vanityManager.handleVanityEvent(event)
 		} else if (isBlacklistEvent) {
 			console.log('Blacklist event accepted, processing blacklist update')
 			await this.blacklistManager.handleBlacklistEvent(event)
