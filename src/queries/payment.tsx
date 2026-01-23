@@ -314,7 +314,7 @@ export const publishPaymentDetail = async (params: PublishPaymentDetailParams): 
 
 		// Sign and publish
 		await event.sign(signer)
-		await event.publish()
+		await ndkActions.publishEvent(event)
 
 		return event.id
 	} catch (error) {
@@ -661,7 +661,7 @@ export const deletePaymentDetail = async (params: DeletePaymentDetailParams): Pr
 		]
 
 		await event.sign(signer)
-		await event.publish()
+		await ndkActions.publishEvent(event)
 
 		return event.id
 	} catch (error) {

@@ -87,13 +87,25 @@ const serveStatic = async (path: string) => {
 	}
 }
 
+/**
+ * Determine the deployment stage from NODE_ENV
+ */
+function determineStage(): 'production' | 'staging' | 'development' {
+	const env = process.env.NODE_ENV
+	if (env === 'staging') return 'staging'
+	if (env === 'production') return 'production'
+	return 'development'
+}
+
 export const server = serve({
 	routes: {
 		'/api/config': {
 			GET: () => {
+				const stage = determineStage()
 				// Return cached settings loaded at startup
 				return Response.json({
 					appRelay: RELAY_URL,
+					stage,
 					nip46Relay: NIP46_RELAY_URL,
 					appSettings: appSettings,
 					appPublicKey: APP_PUBLIC_KEY,

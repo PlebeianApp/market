@@ -227,7 +227,7 @@ export const publishV4VShares = async (shares: V4VDTO[], userPubkey: string, app
 		}
 
 		await event.sign(signer)
-		await event.publish()
+		await ndkActions.publishEvent(event)
 
 		return true
 	} catch (error) {

@@ -56,7 +56,7 @@ export const saveUserNwcWallets = async (params: SaveUserNwcWalletsParams): Prom
 	]
 
 	await event.sign(signer)
-	const publishedToRelays = await event.publish()
+	const publishedToRelays = await ndkActions.publishEvent(event)
 
 	if (publishedToRelays.size === 0) throw new Error('Failed to publish NWC wallet list event to any relay.')
 

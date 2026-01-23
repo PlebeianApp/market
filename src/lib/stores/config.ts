@@ -1,8 +1,10 @@
 import { Store } from '@tanstack/store'
+import type { Stage } from '@/lib/constants'
 
 interface ConfigState {
 	config: {
 		appRelay?: string
+		stage?: Stage
 		appSettings?: any
 		appPublicKey?: string
 		needsSetup?: boolean
@@ -30,6 +32,10 @@ export const configActions = {
 
 	getAppRelay: () => {
 		return configStore.state.config.appRelay
+	},
+
+	getStage: (): Stage => {
+		return configStore.state.config.stage || 'development'
 	},
 
 	getAppPublicKey: () => {

@@ -1,3 +1,4 @@
+import { ndkActions } from '@/lib/stores/ndk'
 import NDK, { NDKEvent, type NDKSigner } from '@nostr-dev-kit/ndk'
 
 /**
@@ -109,7 +110,7 @@ export const publishHandlerInfo = async (
 	try {
 		const event = createHandlerInfoEvent(signer, ndk, handlerId, appSettings)
 		await event.sign(signer)
-		await event.publish()
+		await ndkActions.publishEvent(event)
 
 		// Return the handler ID
 		const dTag = event.tags.find((tag) => tag[0] === 'd')

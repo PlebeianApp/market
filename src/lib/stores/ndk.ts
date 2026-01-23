@@ -1,7 +1,7 @@
-import { defaultRelaysUrls, ZAP_RELAYS } from '@/lib/constants'
+import { defaultRelaysUrls, ZAP_RELAYS, DEFAULT_PUBLIC_RELAYS, MAIN_RELAY_BY_STAGE, BUG_RELAY, type Stage } from '@/lib/constants'
 import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
-import type { NDKEvent, NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nostr-dev-kit/ndk'
-import NDK, { NDKKind } from '@nostr-dev-kit/ndk'
+import type { NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nostr-dev-kit/ndk'
+import NDK, { NDKEvent, NDKKind, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { configStore } from './config'
 import { walletActions, walletStore, type Wallet } from './wallet'
@@ -13,6 +13,7 @@ export interface NDKState {
 	isConnected: boolean
 	isZapNdkConnected: boolean
 	explicitRelayUrls: string[]
+	writeRelayUrls: string[] // Relays we're allowed to write to (staging restriction)
 	activeNwcWalletUri: string | null
 	signer?: NDKSigner
 }
@@ -24,6 +25,7 @@ const initialState: NDKState = {
 	isConnected: false,
 	isZapNdkConnected: false,
 	explicitRelayUrls: [],
+	writeRelayUrls: [],
 	activeNwcWalletUri: null,
 	signer: undefined,
 }
@@ -61,17 +63,78 @@ async function connectNdkWithTimeout(ndk: NDK, timeoutMs: number, label: string)
 }
 
 /**
+ * Get the current stage from config
+ */
+function getCurrentStage(): Stage {
+	return configStore.state.config.stage || 'development'
+}
+
+/**
+ * Get the main relay for the current stage
+ */
+export function getMainRelay(): string {
+	const appRelay = configStore.state.config.appRelay
+	if (appRelay) return appRelay // Server-provided appRelay takes precedence
+	return MAIN_RELAY_BY_STAGE[getCurrentStage()]
+}
+
+/**
+ * Get the write relay(s) for the current stage
+ * Staging writes to staging relay + bug relay, all other stages write to all connected relays
+ */
+export function getWriteRelays(): string[] {
+	const stage = getCurrentStage()
+	if (stage === 'staging') {
+		const mainRelay = getMainRelay()
+		return [mainRelay, BUG_RELAY] // Staging writes to staging relay + bug relay
+	}
+	// Production and development write to all connected relays
+	return ndkStore.state.explicitRelayUrls
+}
+
+/**
+ * Get an NDKRelaySet configured for write operations
+ * In staging, this returns a relay set containing only the staging relay
+ * In other environments, returns undefined to use default behavior (all relays)
+ */
+export function getWriteRelaySet(): NDKRelaySet | undefined {
+	const ndk = ndkStore.state.ndk
+	if (!ndk) return undefined
+
+	const stage = getCurrentStage()
+	if (stage === 'staging') {
+		const writeRelays = getWriteRelays()
+		console.log(`📝 Staging mode: restricting writes to ${writeRelays.join(', ')}`)
+		return NDKRelaySet.fromRelayUrls(writeRelays, ndk)
+	}
+
+	// Non-staging: return undefined to use default behavior
+	return undefined
+}
+
+/**
  * Determine which relays to use based on config and environment
  */
 function getRelayUrls(overrideRelays?: string[]): string[] {
-	const appRelay = configStore.state.config.appRelay
+	const stage = getCurrentStage()
 	// @ts-ignore - Bun.env is available in Bun runtime
 	const localRelayOnly = typeof Bun !== 'undefined' && Bun.env?.LOCAL_RELAY_ONLY === 'true'
 
-	if (appRelay) {
-		return localRelayOnly ? [appRelay] : Array.from(new Set([appRelay, ...defaultRelaysUrls]))
+	// Get main relay (from config or stage default)
+	const mainRelay = getMainRelay()
+
+	// Development with local_relay_only: only local relay
+	if (stage === 'development' && localRelayOnly) {
+		return [mainRelay]
 	}
-	return overrideRelays?.length ? overrideRelays : defaultRelaysUrls
+
+	// Override relays take precedence if provided (but always include main relay)
+	if (overrideRelays?.length) {
+		return Array.from(new Set([mainRelay, ...overrideRelays]))
+	}
+
+	// Standard case: main relay + public default relays
+	return Array.from(new Set([mainRelay, ...DEFAULT_PUBLIC_RELAYS]))
 }
 
 export const ndkActions = {
@@ -162,10 +225,14 @@ export const ndkActions = {
 		const explicitRelays = getRelayUrls(relays)
 		// @ts-ignore - Bun.env is available in Bun runtime
 		const localRelayOnly = typeof Bun !== 'undefined' && Bun.env?.LOCAL_RELAY_ONLY === 'true'
+		const stage = getCurrentStage()
+
+		// Disable outbox model for staging (enforces write-only-to-staging) and local-only dev
+		const enableOutbox = stage !== 'staging' && !localRelayOnly
 
 		const ndk = new NDK({
 			explicitRelayUrls: explicitRelays,
-			enableOutboxModel: !localRelayOnly,
+			enableOutboxModel: enableOutbox,
 			aiGuardrails: {
 				skip: new Set(['ndk-no-cache', 'fetch-events-usage']),
 			},
@@ -180,6 +247,8 @@ export const ndkActions = {
 			ndk,
 			zapNdk,
 			explicitRelayUrls: explicitRelays,
+			// Staging only writes to main relay, others write to all
+			writeRelayUrls: getCurrentStage() === 'staging' ? [getMainRelay()] : explicitRelays,
 		}))
 
 		// If config was already loaded before initialization, ensure appRelay is included.
@@ -443,6 +512,19 @@ export const ndkActions = {
 
 	getSigner: () => {
 		return ndkStore.state.ndk?.signer
+	},
+
+	/**
+	 * Publish an event respecting the current stage's write restrictions.
+	 * In staging, events are only published to the staging relay.
+	 * In production/development, events are published to all connected relays.
+	 *
+	 * @param event The NDKEvent to publish (must already be signed)
+	 * @returns Promise resolving to the set of relays the event was published to
+	 */
+	publishEvent: async (event: NDKEvent): Promise<Set<any>> => {
+		const relaySet = getWriteRelaySet()
+		return event.publish(relaySet)
 	},
 
 	/**

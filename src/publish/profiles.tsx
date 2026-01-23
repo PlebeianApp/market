@@ -35,7 +35,7 @@ export const updateProfile = async (profile: NDKUserProfile): Promise<void> => {
 	try {
 		// Sign the event
 		await profileEvent.sign(ndk.signer)
-		const publishedRelays = await profileEvent.publish()
+		const publishedRelays = await ndkActions.publishEvent(profileEvent)
 
 		if (publishedRelays.size === 0) {
 			throw new Error('Profile was not published to any relays. Check your relay connections.')

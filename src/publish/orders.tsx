@@ -128,7 +128,7 @@ export const createOrder = async (params: OrderCreateParams): Promise<string> =>
 
 	// Sign and publish the event
 	await event.sign(signer)
-	await event.publish()
+	await ndkActions.publishEvent(event)
 
 	return event.id
 }
@@ -228,7 +228,7 @@ export const updateOrderStatus = async (params: OrderStatusUpdateParams): Promis
 
 	// Sign and publish the event
 	await event.sign(signer)
-	await event.publish()
+	await ndkActions.publishEvent(event)
 
 	return event
 }
@@ -327,7 +327,7 @@ export const createPaymentReceipt = async (params: PaymentReceiptParams): Promis
 
 	// Sign and publish the event
 	await event.sign(signer)
-	await event.publish()
+	await ndkActions.publishEvent(event)
 
 	return event.id
 }
@@ -626,7 +626,7 @@ export async function createGeneralCommunicationEvent(recipientPubkey: string, s
  */
 export async function publishOrderEvent(event: NDKEvent): Promise<boolean> {
 	try {
-		await event.publish()
+		await ndkActions.publishEvent(event)
 		console.log(`Published order event: ${event.kind}`)
 		return true
 	} catch (error) {
@@ -813,7 +813,7 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 		for (const req of paymentRequests) {
 			try {
 				const paymentRequestEvent = await createPaymentRequestEvent(req)
-				await paymentRequestEvent.publish()
+				await ndkActions.publishEvent(paymentRequestEvent)
 				successfulRequests++
 			} catch (error) {
 				console.error(`Failed to create payment request for ${req.notes}:`, error)

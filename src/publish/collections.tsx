@@ -77,7 +77,7 @@ export const publishCollection = async (formData: CollectionFormData, signer: ND
 	try {
 		const event = createCollectionEvent(formData, signer, ndk)
 		await event.sign(signer)
-		await event.publish()
+		await ndkActions.publishEvent(event)
 
 		// Return the collection ID
 		const dTag = event.tags.find((tag) => tag[0] === 'd')
@@ -100,7 +100,7 @@ export const updateCollection = async (
 	try {
 		const event = createCollectionEvent(formData, signer, ndk, collectionId)
 		await event.sign(signer)
-		await event.publish()
+		await ndkActions.publishEvent(event)
 
 		return collectionId
 	} catch (error) {
@@ -124,7 +124,7 @@ export const deleteCollection = async (collectionId: string, signer: NDKSigner, 
 		deleteEvent.tags = [['a', `30405:${pubkey}:${collectionId}`]]
 
 		await deleteEvent.sign(signer)
-		await deleteEvent.publish()
+		await ndkActions.publishEvent(deleteEvent)
 
 		return true
 	} catch (error) {

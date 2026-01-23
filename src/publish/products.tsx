@@ -138,7 +138,7 @@ export const publishProduct = async (formData: ProductFormData, signer: NDKSigne
 	const event = createProductEvent(formData, signer, ndk)
 
 	await event.sign(signer)
-	await event.publish()
+	await ndkActions.publishEvent(event)
 
 	return event.id
 }
@@ -191,7 +191,7 @@ export const updateProduct = async (
 	const event = createProductEvent(formData, signer, ndk, productDTag)
 
 	await event.sign(signer)
-	await event.publish()
+	await ndkActions.publishEvent(event)
 
 	return event.id
 }
@@ -211,7 +211,7 @@ export const deleteProduct = async (productDTag: string, signer: NDKSigner, ndk:
 		deleteEvent.tags = [['a', `30402:${pubkey}:${productDTag}`]]
 
 		await deleteEvent.sign(signer)
-		await deleteEvent.publish()
+		await ndkActions.publishEvent(deleteEvent)
 
 		return true
 	} catch (error) {
