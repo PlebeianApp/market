@@ -6,11 +6,11 @@ This document describes how the Plebeian Market application connects to Nostr re
 
 The application supports three deployment stages, each with different relay behavior:
 
-| Stage | Main Relay | Default Relays | Behavior |
-|-------|-----------|----------------|----------|
-| **Production** | `wss://relay.plebeian.market` | ✅ | Read & write to all |
-| **Staging** | `wss://relay.staging.plebeian.market` | ✅ | Read all, **write only to staging** |
-| **Development** | `ws://localhost:10547` | Configurable | See below |
+| Stage           | Main Relay                            | Default Relays | Behavior                            |
+| --------------- | ------------------------------------- | -------------- | ----------------------------------- |
+| **Production**  | `wss://relay.plebeian.market`         | ✅             | Read & write to all                 |
+| **Staging**     | `wss://relay.staging.plebeian.market` | ✅             | Read all, **write only to staging** |
+| **Development** | `ws://localhost:10547`                | Configurable   | See below                           |
 
 ## Architecture
 
@@ -67,7 +67,7 @@ sequenceDiagram
     Config-->>App: { appRelay, stage, ... }
     App->>NDK: initialize()
     NDK->>NDK: getRelayUrls(stage)
-    
+
     alt Development + LOCAL_RELAY_ONLY=true
         NDK->>Relays: Connect to localhost only
     else Development + LOCAL_RELAY_ONLY=false
@@ -106,7 +106,7 @@ flowchart LR
     APP -->|"subscribe()"| R3
     APP -->|"subscribe()"| R4
     APP -->|"subscribe()"| R5
-    
+
     APP -->|"publish()"| W1
 ```
 
@@ -117,22 +117,22 @@ Development mode supports two configurations via the `LOCAL_RELAY_ONLY` environm
 ```mermaid
 flowchart TB
     DEV[Development Mode]
-    
+
     DEV --> CHECK{LOCAL_RELAY_ONLY?}
-    
+
     CHECK -->|true| LOCAL["Connect to localhost only<br/>ws://localhost:10547"]
     CHECK -->|false| FULL["Connect to localhost + default relays"]
-    
+
     LOCAL --> ISOLATED["Isolated testing<br/>No external network"]
     FULL --> INTEGRATED["Integrated testing<br/>Read from public network"]
 ```
 
 ### When to use each mode
 
-| Mode | Use Case |
-|------|----------|
-| `LOCAL_RELAY_ONLY=true` | Isolated testing, no internet, fast iteration |
-| `LOCAL_RELAY_ONLY=false` | Testing with real data, integration testing |
+| Mode                     | Use Case                                      |
+| ------------------------ | --------------------------------------------- |
+| `LOCAL_RELAY_ONLY=true`  | Isolated testing, no internet, fast iteration |
+| `LOCAL_RELAY_ONLY=false` | Testing with real data, integration testing   |
 
 ## Configuration Files
 
