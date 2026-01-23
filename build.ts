@@ -168,4 +168,34 @@ const outputTable = result.outputs.map((output) => ({
 console.table(outputTable)
 const buildTime = (end - start).toFixed(2)
 
+// Copy public files to dist (including PWA assets)
+const publicDir = path.join(process.cwd(), 'public')
+if (existsSync(publicDir)) {
+	const copyPublicFiles = async (dir: string, base: string = '') => {
+		const entries = (await Bun.file(dir).exists()) ? [] : Array.from(new Bun.Glob('**/*').scanSync(dir))
+		for (const entry of entries) {
+			const srcPath = path.join(dir, entry)
+			const destPath = path.join(outdir, entry)
+			const destDir = path.dirname(destPath)
+
+			// Create destination directory if needed
+			if (!existsSync(destDir)) {
+				await Bun.write(path.join(destDir, '.keep'), '')
+				await rm(path.join(destDir, '.keep'))
+			}
+
+			// Copy file
+			const file = Bun.file(srcPath)
+			if (await file.exists()) {
+				const stats = await file.size
+				if (stats > 0 || entry.endsWith('.json') || entry.endsWith('.js')) {
+					await Bun.write(destPath, file)
+					console.log(`📦 Copied: ${entry}`)
+				}
+			}
+		}
+	}
+	await copyPublicFiles(publicDir)
+}
+
 console.log(`\n✅ Build completed in ${buildTime}ms\n`)

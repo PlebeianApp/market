@@ -1,0 +1,24 @@
+{
+	"name": "Plebeian Market",
+	"short_name": "Plebeian",
+	"description": "Bitcoin-native marketplace powered by Nostr",
+	"start_url": "/",
+	"display": "standalone",
+	"background_color": "#0A0A0A",
+	"theme_color": "#0A0A0A",
+	"orientation": "any",
+	"icons": [
+		{
+			"src": "/images/logo.svg",
+			"sizes": "any",
+			"type": "image/svg+xml",
+			"purpose": "any"
+		},
+		{
+			"src": "/images/Plebeian_Logo_OpenGraph.png",
+			"sizes": "512x512",
+			"type": "image/png",
+			"purpose": "any"
+		}
+	]
+}
