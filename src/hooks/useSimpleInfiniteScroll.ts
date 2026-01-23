@@ -1,6 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { productsQueryOptions } from '@/queries/products'
+import { useStreamingProducts } from './useStreamingProducts'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 
 interface UseSimpleInfiniteScrollOptions {
@@ -24,9 +23,8 @@ interface UseSimpleInfiniteScrollReturn {
 }
 
 /**
- * Simplified infinite scroll hook that preloads all products and displays them in chunks
- * @param options Configuration options
- * @returns Infinite scroll state and controls
+ * Infinite scroll hook that uses streaming products for progressive loading.
+ * Products appear immediately as they arrive from relays, then are chunked for display.
  */
 export const useSimpleInfiniteScroll = ({
 	chunkSize = 20,
@@ -35,11 +33,29 @@ export const useSimpleInfiniteScroll = ({
 	autoLoad = true,
 	tag,
 }: UseSimpleInfiniteScrollOptions = {}): UseSimpleInfiniteScrollReturn => {
-	// Fetch all products at once
-	const { data: allProducts = [], isLoading, isError, error } = useQuery(productsQueryOptions(maxProducts, tag))
+	// Use streaming products - these arrive progressively
+	const {
+		products: allProducts,
+		isStreaming,
+		isConnected,
+	} = useStreamingProducts({
+		limit: maxProducts,
+		tag,
+	})
 
-	// Track current chunk (page)
+	// Track current chunk (page) - start showing products immediately
 	const [currentChunk, setCurrentChunk] = useState(1)
+
+	// Auto-expand chunks as products stream in during initial load
+	useEffect(() => {
+		if (isStreaming && allProducts.length > 0) {
+			// Show all currently available products while streaming
+			const neededChunks = Math.ceil(allProducts.length / chunkSize)
+			if (neededChunks > currentChunk) {
+				setCurrentChunk(neededChunks)
+			}
+		}
+	}, [allProducts.length, isStreaming, chunkSize, currentChunk])
 
 	// Calculate visible products based on current chunk
 	const products = useMemo(() => {
@@ -59,10 +75,10 @@ export const useSimpleInfiniteScroll = ({
 
 	// Load more function
 	const loadMore = useCallback(() => {
-		if (hasMore && !isLoading) {
+		if (hasMore && !isStreaming) {
 			setCurrentChunk((prev) => prev + 1)
 		}
-	}, [hasMore, isLoading])
+	}, [hasMore, isStreaming])
 
 	// Auto-load on scroll
 	useEffect(() => {
@@ -74,21 +90,24 @@ export const useSimpleInfiniteScroll = ({
 			const clientHeight = window.innerHeight
 			const distanceFromBottom = scrollHeight - scrollTop - clientHeight
 
-			if (distanceFromBottom <= threshold && hasMore && !isLoading) {
+			if (distanceFromBottom <= threshold && hasMore && !isStreaming) {
 				loadMore()
 			}
 		}
 
 		window.addEventListener('scroll', handleScroll, { passive: true })
 		return () => window.removeEventListener('scroll', handleScroll)
-	}, [autoLoad, threshold, hasMore, isLoading, loadMore])
+	}, [autoLoad, threshold, hasMore, isStreaming, loadMore])
+
+	// Show loading only when we have no products yet and are still connecting/streaming
+	const isLoading = allProducts.length === 0 && (isStreaming || !isConnected)
 
 	return {
 		products,
 		hasMore,
 		isLoading,
-		isError,
-		error,
+		isError: false,
+		error: null,
 		loadMore,
 		totalProducts: allProducts.length,
 		currentChunk,

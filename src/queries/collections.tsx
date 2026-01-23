@@ -16,7 +16,10 @@ import { naddrFromAddress } from '@/lib/nostr/naddr'
  */
 export const fetchCollections = async () => {
 	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
+	if (!ndk) {
+		console.warn('NDK not ready, returning empty collections list')
+		return []
+	}
 
 	const filter: NDKFilter = {
 		kinds: [30405 as NDKKind], // Product listings in Nostr
@@ -43,7 +46,10 @@ export const fetchCollections = async () => {
  */
 export const fetchCollectionsByPubkey = async (pubkey: string) => {
 	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
+	if (!ndk) {
+		console.warn('NDK not ready, returning empty collections by pubkey list')
+		return []
+	}
 
 	const filter: NDKFilter = {
 		kinds: [30405 as NDKKind], // Collections
@@ -72,7 +78,10 @@ export const fetchCollectionsByPubkey = async (pubkey: string) => {
  */
 export const fetchCollection = async (dTag: string) => {
 	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
+	if (!ndk) {
+		console.warn('NDK not ready, cannot fetch collection')
+		return null
+	}
 	if (!dTag) return null
 
 	const filter: NDKFilter = {
@@ -97,7 +106,10 @@ export const fetchCollection = async (dTag: string) => {
  */
 export const fetchCollectionByEventId = async (id: string) => {
 	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
+	if (!ndk) {
+		console.warn('NDK not ready, cannot fetch collection by event ID')
+		return null
+	}
 	if (!id) return null
 
 	const event = await ndk.fetchEvent({
@@ -119,7 +131,10 @@ export const fetchCollectionByEventId = async (id: string) => {
  */
 export const fetchCollectionByATag = async (pubkey: string, dTag: string) => {
 	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
+	if (!ndk) {
+		console.warn('NDK not ready, cannot fetch collection by a-tag')
+		return null
+	}
 	if (!pubkey || !dTag) return null
 
 	const naddr = naddrFromAddress(30405, pubkey, dTag)
@@ -235,6 +250,7 @@ export const collectionByATagQueryOptions = (pubkey: string, dTag: string) =>
 export const collectionsQueryOptions = queryOptions({
 	queryKey: collectionsKeys.all,
 	queryFn: fetchCollections,
+	staleTime: 30000, // Consider fresh for 30 seconds
 })
 
 /**

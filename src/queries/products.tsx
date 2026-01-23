@@ -60,7 +60,10 @@ export const isProductInStock = (event: NDKEvent): boolean => {
  */
 export const fetchProducts = async (limit: number = 500, tag?: string, includeHidden: boolean = false) => {
 	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
+	if (!ndk) {
+		console.warn('NDK not ready, returning empty product list')
+		return []
+	}
 
 	const filter: NDKFilter = {
 		kinds: [30402], // Product listings in Nostr
@@ -98,7 +101,10 @@ export const fetchProducts = async (limit: number = 500, tag?: string, includeHi
  */
 export const fetchProductsPaginated = async (limit: number = 20, until?: number, tag?: string, includeHidden: boolean = false) => {
 	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
+	if (!ndk) {
+		console.warn('NDK not ready, returning empty paginated product list')
+		return []
+	}
 
 	const filter: NDKFilter = {
 		kinds: [30402], // Product listings in Nostr
@@ -132,16 +138,27 @@ export const fetchProductsPaginated = async (limit: number = 20, until?: number,
  */
 export const fetchProduct = async (id: string) => {
 	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
+	if (!ndk) {
+		console.warn('NDK not ready, cannot fetch product')
+		return null
+	}
 	if (!id) return null
-	const event = await ndk.fetchEvent({
+
+	// Kick off (or join) relay connection, but keep this fetch bounded.
+	// React Query retries handle the eventual-consistency / propagation side.
+	void ndkActions.connect(10000)
+
+	const filter: NDKFilter = {
+		kinds: [30402],
 		ids: [id],
-	})
-	if (!event) {
-		throw new Error('Product not found')
+		limit: 1,
 	}
 
-	return event
+	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
+	const event = Array.from(events)[0] ?? null
+	if (event) return event
+
+	throw new Error('Product not found')
 }
 
 /**
@@ -153,7 +170,10 @@ export const fetchProduct = async (id: string) => {
  */
 export const fetchProductsByPubkey = async (pubkey: string, includeHidden: boolean = false, limit: number = 50) => {
 	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
+	if (!ndk) {
+		console.warn('NDK not ready, returning empty products by pubkey list')
+		return []
+	}
 
 	const filter: NDKFilter = {
 		kinds: [30402],
@@ -254,6 +274,7 @@ export const productsQueryOptions = (limit: number = 500, tag?: string) =>
 	queryOptions({
 		queryKey: tag ? [...productKeys.all, 'tag', tag] : productKeys.all,
 		queryFn: () => fetchProducts(limit, tag),
+		staleTime: 30000, // Consider fresh for 30 seconds
 	})
 
 /**

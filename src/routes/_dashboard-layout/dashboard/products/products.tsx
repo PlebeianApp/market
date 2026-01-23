@@ -5,11 +5,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { authStore } from '@/lib/stores/auth'
 import { productFormActions } from '@/lib/stores/product'
 import { useDeleteProductMutation } from '@/publish/products'
-import { getProductId, getProductImages, getProductPrice, getProductTitle, productsByPubkeyQueryOptions } from '@/queries/products'
+import {
+	getProductId,
+	getProductImages,
+	getProductPrice,
+	getProductTitle,
+	productQueryOptions,
+	productsByPubkeyQueryOptions,
+} from '@/queries/products'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { PackageIcon, Trash, EyeOff, Clock, Eye } from 'lucide-react'
@@ -25,9 +32,14 @@ function ProductBasicInfo({ product }: { product: NDKEvent }) {
 	const visibility = visibilityTag?.[1] || 'on-sale'
 	const stockTag = product.tags.find((tag) => tag[0] === 'stock')
 	const stock = stockTag?.[1]
+	const queryClient = useQueryClient()
 
 	return (
-		<Link to={`/products/${product.id}`} className="block p-4 bg-gray-50 border-t hover:bg-gray-100 transition-colors cursor-pointer">
+		<Link
+			to={`/products/${product.id}`}
+			onClick={() => queryClient.setQueryData(productQueryOptions(product.id).queryKey, product)}
+			className="block p-4 bg-gray-50 border-t hover:bg-gray-100 transition-colors cursor-pointer"
+		>
 			<div className="space-y-3">
 				{images.length > 0 && (
 					<div className="w-full h-32 bg-gray-200 rounded-md overflow-hidden">

@@ -1,8 +1,16 @@
 import { useState, useRef, useEffect } from 'react'
 import { Input } from '@/components/ui/input'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { useProductSearch, getProductTitle, getProductId, getProductImages, getProductPubkey } from '@/queries/products'
+import {
+	useProductSearch,
+	getProductTitle,
+	getProductId,
+	getProductImages,
+	getProductPubkey,
+	productQueryOptions,
+} from '@/queries/products'
 import { UserWithAvatar } from '@/components/UserWithAvatar'
+import { useQueryClient } from '@tanstack/react-query'
 
 const DEBOUNCE_MS = 500
 
@@ -12,6 +20,7 @@ export function ProductSearch() {
 	const searchContainerRef = useRef<HTMLDivElement>(null)
 	const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 	const navigate = useNavigate()
+	const queryClient = useQueryClient()
 
 	const { data: results = [], isFetching, refetch } = useProductSearch(search, { enabled: false, limit: 20 })
 
@@ -99,7 +108,10 @@ export function ProductSearch() {
 										params={{ productId: ev.id }}
 										key={ev.id}
 										className="flex items-center gap-3 p-2 rounded hover:bg-white/5"
-										onClick={() => setShowResults(false)}
+										onClick={() => {
+											queryClient.setQueryData(productQueryOptions(ev.id).queryKey, ev)
+											setShowResults(false)
+										}}
 									>
 										{/* Product Image */}
 										{mainImage && <img src={mainImage} alt={title || 'Product'} className="w-8 h-8 rounded object-cover shrink-0" />}

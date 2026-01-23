@@ -7,7 +7,7 @@ import { PRODUCT_CATEGORIES } from '@/lib/constants'
 import { authStore } from '@/lib/stores/auth'
 import { uiActions } from '@/lib/stores/ui'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { useQueries, useSuspenseQuery } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -76,8 +76,13 @@ export const Route = createFileRoute('/products/')({
 function ProductsRoute() {
 	const navigate = useNavigate()
 	const { tag } = Route.useSearch()
-	const productsQuery = useSuspenseQuery(productsQueryOptions(500, tag))
-	const products = productsQuery.data as NDKEvent[]
+	// Use streaming via InfiniteProductList, but still need some products for featured slides
+	const productsQuery = useQuery({
+		...productsQueryOptions(500, tag),
+		// Retry every 3 seconds if we got empty results (NDK wasn't ready)
+		refetchInterval: (query) => (query.state.data?.length ? false : 3000),
+	})
+	const products = (productsQuery.data ?? []) as NDKEvent[]
 
 	const { isAuthenticated } = useStore(authStore)
 
@@ -345,16 +350,8 @@ function ProductsRoute() {
 			)}
 
 			<div className="px-8 py-4">
-				<ItemGrid title="All Products" className="gap-4 sm:gap-8">
-					{products.map((product) => (
-						<ProductCard key={product.id} product={product} />
-					))}
-				</ItemGrid>
-
-				{/* Infinite Product List */}
-				<div className="mt-8">
-					<InfiniteProductList title="More Products" scrollKey="products-page" chunkSize={20} threshold={1000} autoLoad={true} />
-				</div>
+				{/* Single Infinite Product List with streaming */}
+				<InfiniteProductList title="All Products" scrollKey="products-page" chunkSize={20} threshold={1000} autoLoad={true} tag={tag} />
 			</div>
 		</div>
 	)
