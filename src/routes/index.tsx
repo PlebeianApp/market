@@ -10,7 +10,7 @@ import { FeaturedSections } from '@/components/FeaturedSections'
 import { InfiniteProductList } from '@/components/InfiniteProductList'
 import { PRODUCT_CATEGORIES } from '@/lib/constants'
 import { getProductCategories } from '@/queries/products'
-import { useSuspenseQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { productsQueryOptions } from '@/queries/products'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { z } from 'zod'
@@ -49,8 +49,13 @@ function Index() {
 	const { isAuthenticated } = useStore(authStore)
 	const productListRef = useRef<HTMLDivElement>(null)
 	// Fetch all products without tag filter to extract all available tags
-	const productsQuery = useSuspenseQuery(productsQueryOptions(500))
-	const products = productsQuery.data as NDKEvent[]
+	// Using useQuery (not useSuspenseQuery) for progressive loading - page renders immediately
+	const productsQuery = useQuery({
+		...productsQueryOptions(500),
+		// Retry every 3 seconds if we got empty results (NDK wasn't ready)
+		refetchInterval: (query) => (query.state.data?.length ? false : 3000),
+	})
+	const products = (productsQuery.data ?? []) as NDKEvent[]
 
 	// Extract all unique tags from products
 	const allTags = useMemo(() => {

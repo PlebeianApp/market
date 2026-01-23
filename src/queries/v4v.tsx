@@ -63,7 +63,8 @@ export const fetchV4VShares = async (pubkey: string): Promise<V4VDTO[]> => {
 
 		const ndk = ndkActions.getNDK()
 		if (!ndk) {
-			throw new Error('NDK not initialized')
+			console.warn('NDK not ready, returning empty V4V shares')
+			return []
 		}
 
 		const events = await ndk.fetchEvents({
@@ -260,7 +261,8 @@ export const fetchV4VMerchants = async (): Promise<string[]> => {
 	try {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) {
-			throw new Error('NDK not initialized')
+			console.warn('NDK not ready, returning empty merchants list')
+			return []
 		}
 
 		const events = await ndk.fetchEvents({
