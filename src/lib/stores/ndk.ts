@@ -537,7 +537,7 @@ export const ndkActions = {
 		const state = ndkStore.state
 		if (!state.zapNdk || !state.isZapNdkConnected) {
 			console.warn('Zap NDK not connected. Cannot create zap subscription.')
-			return () => { }
+			return () => {}
 		}
 
 		const filters: any = {
