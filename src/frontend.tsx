@@ -11,10 +11,10 @@ import { ndkActions } from './lib/stores/ndk'
 import { UpdateAvailableDialog } from './components/UpdateAvailableDialog'
 
 if (process.env.NODE_ENV !== 'development') {
-	console.log = () => { }
-	console.debug = () => { }
-	console.error = () => { }
-	console.info = () => { }
+	console.log = () => {}
+	console.debug = () => {}
+	console.error = () => {}
+	console.info = () => {}
 }
 
 // Create queryClient once at module level
