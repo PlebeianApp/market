@@ -167,7 +167,7 @@ async function initializeAppSettings() {
 		process.exit(1)
 	}
 }
-; (async () => await initializeAppSettings())()
+;(async () => await initializeAppSettings())()
 
 export type NostrMessage = ['EVENT', Event]
 
