@@ -76,12 +76,12 @@ function Index() {
 			// If clicking the same tag, clear the filter
 			navigate({ to: '/products' })
 		} else {
-			navigate({ to: '/products', search: { tag: selectedTag } })
+			navigate({ to: '/products', search: (prev: any) => ({ ...prev, tag: selectedTag }) })
 		}
 	}
 
 	const handleClearFilter = () => {
-		navigate({ to: '/products' })
+		navigate({ to: '/' })
 	}
 
 	// Use the market image for homepage background
