@@ -167,7 +167,7 @@ async function initializeAppSettings() {
 		process.exit(1)
 	}
 }
-;(async () => await initializeAppSettings())()
+; (async () => await initializeAppSettings())()
 
 export type NostrMessage = ['EVENT', Event]
 
@@ -204,7 +204,11 @@ const serveStatic = async (path: string) => {
 						? 'text/css'
 						: path.endsWith('.js')
 							? 'application/javascript'
-							: 'application/octet-stream'
+							: path.endsWith('.json')
+								? 'application/json'
+								: path.endsWith('.ico')
+									? 'image/x-icon'
+									: 'application/octet-stream'
 
 		return new Response(f, {
 			headers: { 'Content-Type': contentType },
@@ -350,6 +354,9 @@ export const server = serve({
 		},
 		'/images/:file': ({ params }) => serveStatic(`images/${params.file}`),
 		'/logo.svg': () => serveStatic('images/logo.svg'),
+		'/manifest.json': () => serveStatic('manifest.json'),
+		'/sw.js': () => serveStatic('sw.js'),
+		'/favicon.ico': () => serveStatic('favicon.ico'),
 		'/*': index,
 	},
 	development: process.env.NODE_ENV !== 'production',
