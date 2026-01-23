@@ -1,7 +1,7 @@
 import { defaultRelaysUrls, ZAP_RELAYS, DEFAULT_PUBLIC_RELAYS, MAIN_RELAY_BY_STAGE, type Stage } from '@/lib/constants'
 import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
-import type { NDKEvent, NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nostr-dev-kit/ndk'
-import NDK, { NDKKind } from '@nostr-dev-kit/ndk'
+import type { NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nostr-dev-kit/ndk'
+import NDK, { NDKEvent, NDKKind, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { configStore } from './config'
 import { walletActions, walletStore, type Wallet } from './wallet'
@@ -90,6 +90,26 @@ export function getWriteRelays(): string[] {
 	}
 	// Production and development write to all connected relays
 	return ndkStore.state.explicitRelayUrls
+}
+
+/**
+ * Get an NDKRelaySet configured for write operations
+ * In staging, this returns a relay set containing only the staging relay
+ * In other environments, returns undefined to use default behavior (all relays)
+ */
+export function getWriteRelaySet(): NDKRelaySet | undefined {
+	const ndk = ndkStore.state.ndk
+	if (!ndk) return undefined
+
+	const stage = getCurrentStage()
+	if (stage === 'staging') {
+		const writeRelays = getWriteRelays()
+		console.log(`📝 Staging mode: restricting writes to ${writeRelays.join(', ')}`)
+		return NDKRelaySet.fromRelayUrls(writeRelays, ndk)
+	}
+
+	// Non-staging: return undefined to use default behavior
+	return undefined
 }
 
 /**
@@ -488,6 +508,19 @@ export const ndkActions = {
 
 	getSigner: () => {
 		return ndkStore.state.ndk?.signer
+	},
+
+	/**
+	 * Publish an event respecting the current stage's write restrictions.
+	 * In staging, events are only published to the staging relay.
+	 * In production/development, events are published to all connected relays.
+	 *
+	 * @param event The NDKEvent to publish (must already be signed)
+	 * @returns Promise resolving to the set of relays the event was published to
+	 */
+	publishEvent: async (event: NDKEvent): Promise<Set<any>> => {
+		const relaySet = getWriteRelaySet()
+		return event.publish(relaySet)
 	},
 
 	/**

@@ -1,4 +1,5 @@
 import { createProductEvent, type ProductFormData } from '@/publish/products'
+import { ndkActions } from '@/lib/stores/ndk'
 import NDK, { type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
 
 /**
@@ -45,7 +46,7 @@ export const publishMigratedProduct = async (
 
 	// Sign and publish to user's relays (same as regular products)
 	await event.sign(signer)
-	await event.publish()
+	await ndkActions.publishEvent(event)
 
 	return event.id
 }

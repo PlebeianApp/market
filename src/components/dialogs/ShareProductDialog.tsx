@@ -89,7 +89,7 @@ ${productUrl}
 			await Promise.race([signPromise, signTimeoutPromise])
 
 			// Publish with timeout
-			const publishPromise = event.publish()
+			const publishPromise = ndkActions.publishEvent(event)
 			const publishTimeoutPromise = new Promise((_, reject) =>
 				setTimeout(() => reject(new Error('Publish timeout after 10 seconds')), 10000),
 			)

@@ -245,7 +245,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			console.log('Publishing event...')
 
 			// Add timeout to publish operation
-			const publishPromise = event.publish()
+			const publishPromise = ndkActions.publishEvent(event)
 			const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Publish timeout after 10 seconds')), 10000))
 
 			await Promise.race([publishPromise, timeoutPromise])

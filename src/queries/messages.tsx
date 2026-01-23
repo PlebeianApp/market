@@ -132,7 +132,7 @@ export async function sendChatMessage(recipientPubkey: string, content: string, 
 
 	try {
 		await event.sign() // Attempt to use ndk.signer implicitly
-		await event.publish()
+		await ndkActions.publishEvent(event)
 		return event
 	} catch (error) {
 		console.error('Error sending chat message:', error)

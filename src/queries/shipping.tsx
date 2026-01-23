@@ -481,7 +481,7 @@ export const updateShippingStatus = async (params: ShippingUpdateParams): Promis
 
 	// Sign and publish the event
 	await event.sign(signer)
-	await event.publish()
+	await ndkActions.publishEvent(event)
 
 	return event.id
 }

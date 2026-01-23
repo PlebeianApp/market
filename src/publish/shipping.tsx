@@ -225,7 +225,7 @@ export const publishShippingOption = async (formData: ShippingFormData, signer: 
 	const event = createShippingEvent(formData, signer, ndk)
 
 	await event.sign(signer)
-	await event.publish()
+	await ndkActions.publishEvent(event)
 
 	return event.id
 }
@@ -293,7 +293,7 @@ export const updateShippingOption = async (
 	const event = createShippingEvent(formData, signer, ndk, shippingDTag)
 
 	await event.sign(signer)
-	await event.publish()
+	await ndkActions.publishEvent(event)
 
 	return event.id
 }
@@ -313,7 +313,7 @@ export const deleteShippingOption = async (shippingDTag: string, signer: NDKSign
 		deleteEvent.tags = [['a', `${SHIPPING_KIND}:${pubkey}:${shippingDTag}`]]
 
 		await deleteEvent.sign(signer)
-		await deleteEvent.publish()
+		await ndkActions.publishEvent(deleteEvent)
 
 		return true
 	} catch (error) {

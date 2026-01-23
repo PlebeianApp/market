@@ -285,7 +285,7 @@ export const publishPaymentReceipt = async (params: PublishPaymentReceiptParams)
 
 	try {
 		await event.sign(signer)
-		await event.publish()
+		await ndkActions.publishEvent(event)
 
 		console.log(`✅ Payment receipt published for order ${invoice.orderId}`)
 		return event.id
