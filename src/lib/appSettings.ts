@@ -1,13 +1,14 @@
-import type { NDKFilter, NostrEvent } from '@nostr-dev-kit/ndk'
+import NDK, { type NDKFilter, type NostrEvent } from '@nostr-dev-kit/ndk'
 import { Relay, type Event } from 'nostr-tools'
 import { AppSettingsSchema, type AppSettings } from './schemas/app'
-import { ndkActions } from './stores/ndk'
 
 export async function fetchAppSettings(relayUrl: string, appPubkey: string): Promise<AppSettings | null> {
 	console.log(`Fetching app settings from relay: ${relayUrl} for pubkey: ${appPubkey}`)
 
 	try {
-		const ndk = ndkActions.initialize([relayUrl])
+		// Create a fresh NDK instance for server-side initialization
+		// to avoid shared store issues with ndkActions
+		const ndk = new NDK({ explicitRelayUrls: [relayUrl] })
 		await ndk.connect()
 
 		// NIP-33 parameterized replaceable events (kind 31990) are indexed by pubkey+kind+d tag.
