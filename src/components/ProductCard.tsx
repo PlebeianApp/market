@@ -155,9 +155,8 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 							</div>
 						) : (
 							<Button
-								className={`py-3 px-4 rounded-lg w-full font-medium transition-all duration-300 bg-black text-white disabled:bg-gray-400 disabled:cursor-not-allowed ${
-									isAddingToCart ? 'opacity-75 scale-95' : ''
-								}`}
+								className={`py-3 px-4 rounded-lg w-full font-medium transition-all duration-300 bg-black text-white disabled:bg-gray-400 disabled:cursor-not-allowed ${isAddingToCart ? 'opacity-75 scale-95' : ''
+									}`}
 								onClick={(e) => handleButtonClick(e, handleAddToCart)}
 								disabled={isOwnProduct || isAddingToCart || visibility === 'hidden' || isOutOfStock}
 							>

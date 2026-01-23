@@ -8,12 +8,13 @@ import { routeTree } from './routeTree.gen'
 import type { AppRouterContext } from './lib/router-utils'
 import { configActions, configStore } from './lib/stores/config'
 import { ndkActions } from './lib/stores/ndk'
+import { UpdateAvailableDialog } from './components/UpdateAvailableDialog'
 
 if (process.env.NODE_ENV !== 'development') {
-	console.log = () => {}
-	console.debug = () => {}
-	console.error = () => {}
-	console.info = () => {}
+	console.log = () => { }
+	console.debug = () => { }
+	console.error = () => { }
+	console.info = () => { }
 }
 
 // Create queryClient once at module level
@@ -51,6 +52,46 @@ const router = createAppRouter(queryClient)
 function App() {
 	const [configLoaded, setConfigLoaded] = useState(configStore.state.isLoaded)
 	const [error, setError] = useState<string | null>(null)
+	const [showUpdateDialog, setShowUpdateDialog] = useState(false)
+
+	// Register service worker and listen for updates
+	useEffect(() => {
+		if ('serviceWorker' in navigator && process.env.NODE_ENV !== 'development') {
+			navigator.serviceWorker
+				.register('/sw.js')
+				.then((registration) => {
+					console.log('SW registered:', registration.scope)
+
+					// Check for updates periodically
+					setInterval(() => registration.update(), 60 * 60 * 1000) // hourly
+
+					// Listen for new service worker installing
+					registration.addEventListener('updatefound', () => {
+						const newWorker = registration.installing
+						if (!newWorker) return
+
+						newWorker.addEventListener('statechange', () => {
+							// New SW is installed and waiting, and we have an active controller
+							if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+								setShowUpdateDialog(true)
+							}
+						})
+					})
+				})
+				.catch((err) => {
+					console.error('SW registration failed:', err)
+				})
+
+			// Also detect when a new SW takes control (e.g., skipWaiting was called)
+			navigator.serviceWorker.addEventListener('controllerchange', () => {
+				// Only reload if we're not already reloading
+				if (!sessionStorage.getItem('sw-reload')) {
+					sessionStorage.setItem('sw-reload', 'true')
+					window.location.reload()
+				}
+			})
+		}
+	}, [])
 
 	// Fetch config on mount if not already loaded
 	useEffect(() => {
@@ -106,6 +147,7 @@ function App() {
 		<StrictMode>
 			<QueryClientProvider client={queryClient}>
 				<RouterProvider router={router} />
+				<UpdateAvailableDialog open={showUpdateDialog} onDismiss={() => setShowUpdateDialog(false)} />
 			</QueryClientProvider>
 		</StrictMode>
 	)
