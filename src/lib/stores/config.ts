@@ -35,7 +35,7 @@ export const configActions = {
 	},
 
 	getStage: (): Stage => {
-		return configStore.state.config.stage || 'production'
+		return configStore.state.config.stage || 'development'
 	},
 
 	getAppPublicKey: () => {

@@ -139,18 +139,18 @@ flowchart TB
 ### Environment Variables
 
 ```bash
-# .env.dev (local development)
+# Development (local)
 NODE_ENV=development
 APP_RELAY_URL=ws://localhost:10547
 LOCAL_RELAY_ONLY=true  # Set to 'false' to include default relays
 
+# Staging
+NODE_ENV=staging
+APP_RELAY_URL=wss://relay.staging.plebeian.market
+
 # Production
 NODE_ENV=production
 APP_RELAY_URL=wss://relay.plebeian.market
-
-# Staging
-NODE_ENV=production
-APP_RELAY_URL=wss://relay.staging.plebeian.market
 ```
 
 ## Default Public Relays
