@@ -166,3 +166,23 @@ bun run watch-routes
 This command uses the TanStack Router CLI (`tsr watch`) to monitor your route files and automatically generate the route tree file (`src/routeTree.gen.ts`). This file connects all your route components into a coherent navigation structure.
 
 Without running this command, changes to route files or creating new routes won't be detected until you manually generate the route tree or restart the server.
+
+## Releasing
+
+Production releases are triggered by pushing a tag with the `-release` suffix. The GitHub Actions workflow listens for these tags.
+
+### One-liner
+
+```bash
+git tag v0.2.9-release && git push origin v0.2.9-release
+```
+
+### Steps
+
+1. Ensure all changes are merged to `master`
+2. Check the latest release tag: `git tag --sort=-version:refname | head -1`
+3. Create and push a new tag with incremented version:
+   ```bash
+   git tag vX.Y.Z-release && git push origin vX.Y.Z-release
+   ```
+4. The GitHub Action will automatically build and deploy to production
