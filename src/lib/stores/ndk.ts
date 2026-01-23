@@ -34,6 +34,8 @@ export const ndkStore = new Store<NDKState>(initialState)
 
 let configRelaySyncInitialized = false
 let lastSyncedAppRelay: string | undefined
+let connectPromise: Promise<void> | null = null
+let connectZapPromise: Promise<void> | null = null
 
 /**
  * Helper to connect an NDK instance with timeout
@@ -262,20 +264,30 @@ export const ndkActions = {
 	 */
 	connect: async (timeoutMs = 10000): Promise<void> => {
 		const state = ndkStore.state
-		if (!state.ndk || state.isConnected || state.isConnecting) return
-
-		ndkStore.setState((s) => ({ ...s, isConnecting: true }))
-
-		try {
-			const connected = await connectNdkWithTimeout(state.ndk, timeoutMs, 'NDK')
-			ndkStore.setState((s) => ({ ...s, isConnected: connected }))
-			if (connected) console.log('✅ NDK connected to relays')
-
-			// Also connect zap NDK in background
-			void ndkActions.connectZapNdk(5000)
-		} finally {
-			ndkStore.setState((s) => ({ ...s, isConnecting: false }))
+		if (!state.ndk) return
+		if (state.isConnected) return
+		if (state.isConnecting) {
+			if (connectPromise) return await connectPromise
+			return
 		}
+
+		connectPromise = (async () => {
+			ndkStore.setState((s) => ({ ...s, isConnecting: true }))
+
+			try {
+				const connected = await connectNdkWithTimeout(state.ndk!, timeoutMs, 'NDK')
+				ndkStore.setState((s) => ({ ...s, isConnected: connected }))
+				if (connected) console.log('✅ NDK connected to relays')
+
+				// Also connect zap NDK in background
+				void ndkActions.connectZapNdk(5000)
+			} finally {
+				ndkStore.setState((s) => ({ ...s, isConnecting: false }))
+				connectPromise = null
+			}
+		})()
+
+		return await connectPromise
 	},
 
 	/**
@@ -283,16 +295,24 @@ export const ndkActions = {
 	 */
 	connectZapNdk: async (timeoutMs = 10000): Promise<void> => {
 		const state = ndkStore.state
-		if (!state.zapNdk || state.isZapNdkConnected) return
+		if (!state.zapNdk) return
+		if (state.isZapNdkConnected) return
+		if (connectZapPromise) return await connectZapPromise
 
-		const connected = await connectNdkWithTimeout(state.zapNdk, timeoutMs, 'Zap NDK')
-		ndkStore.setState((s) => ({ ...s, isZapNdkConnected: connected }))
+		connectZapPromise = (async () => {
+			const connected = await connectNdkWithTimeout(state.zapNdk!, timeoutMs, 'Zap NDK')
+			ndkStore.setState((s) => ({ ...s, isZapNdkConnected: connected }))
 
-		if (connected) {
-			console.log('✅ Zap NDK connected to relays:', ZAP_RELAYS)
-		} else {
-			console.warn('⚠️ Zap NDK could not connect. Zap monitoring will be unavailable.')
-		}
+			if (connected) {
+				console.log('✅ Zap NDK connected to relays:', ZAP_RELAYS)
+			} else {
+				console.warn('⚠️ Zap NDK could not connect. Zap monitoring will be unavailable.')
+			}
+		})().finally(() => {
+			connectZapPromise = null
+		})
+
+		return await connectZapPromise
 	},
 
 	addExplicitRelay: (relayUrls: string[]): string[] => {

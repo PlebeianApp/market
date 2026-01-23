@@ -134,14 +134,22 @@ export const fetchProduct = async (id: string) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 	if (!id) return null
-	const event = await ndk.fetchEvent({
+
+	// Kick off (or join) relay connection, but keep this fetch bounded.
+	// React Query retries handle the eventual-consistency / propagation side.
+	void ndkActions.connect(10000)
+
+	const filter: NDKFilter = {
+		kinds: [30402],
 		ids: [id],
-	})
-	if (!event) {
-		throw new Error('Product not found')
+		limit: 1,
 	}
 
-	return event
+	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
+	const event = Array.from(events)[0] ?? null
+	if (event) return event
+
+	throw new Error('Product not found')
 }
 
 /**

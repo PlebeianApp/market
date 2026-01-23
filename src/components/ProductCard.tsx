@@ -1,8 +1,16 @@
 import { cartActions, useCart } from '@/lib/stores/cart'
 import { ndkActions } from '@/lib/stores/ndk'
 import { uiActions } from '@/lib/stores/ui'
-import { getProductImages, getProductPrice, getProductStock, getProductTitle, getProductVisibility } from '@/queries/products'
+import {
+	getProductImages,
+	getProductPrice,
+	getProductStock,
+	getProductTitle,
+	getProductVisibility,
+	productQueryOptions,
+} from '@/queries/products'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation } from '@tanstack/react-router'
 import { Check } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -26,6 +34,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 	const [showConfirmation, setShowConfirmation] = useState(false)
 	const location = useLocation()
 	const cart = useCart()
+	const queryClient = useQueryClient()
 
 	// Check if current user is the seller of this product
 	useEffect(() => {
@@ -62,6 +71,9 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 	}
 
 	const handleProductClick = () => {
+		// Seed the product details cache so the product page can render immediately on navigation.
+		queryClient.setQueryData(productQueryOptions(product.id).queryKey, product)
+
 		// Store the current path as the source path
 		// This will also store it as originalResultsPath if not already set
 		uiActions.setProductSourcePath(location.pathname)

@@ -24,24 +24,24 @@ import { useConfigQuery } from '@/queries/config'
 import { useFeaturedProducts } from '@/queries/featured'
 import {
 	getProductCoordinates,
+	getProductCategories,
+	getProductCreatedAt,
+	getProductDescription,
+	getProductDimensions,
+	getProductImages,
+	getProductPrice,
+	getProductPubkey,
+	getProductSpecs,
+	getProductStock,
+	getProductTitle,
+	getProductType,
+	getProductVisibility,
+	getProductWeight,
 	productQueryOptions,
 	productsByPubkeyQueryOptions,
-	useProductCategories,
-	useProductCreatedAt,
-	useProductDescription,
-	useProductDimensions,
-	useProductImages,
-	useProductPrice,
-	useProductPubkey,
-	useProductSpecs,
-	useProductStock,
-	useProductTitle,
-	useProductType,
-	useProductVisibility,
-	useProductWeight,
 } from '@/queries/products'
-import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, Edit, Minus, Plus, Truck } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -76,18 +76,40 @@ declare module '@tanstack/react-router' {
 
 export const Route = createFileRoute('/products/$productId')({
 	component: RouteComponent,
-	loader: ({ params: { productId } }) => {
-		return { productId }
-	},
+	loader: ({ params: { productId } }) => ({ productId }),
 })
 
 function RouteComponent() {
 	const { productId } = Route.useLoaderData()
-	const { data: product } = useSuspenseQuery(productQueryOptions(productId))
 	const { cart } = useCart()
 	const { mobileMenuOpen } = useStore(uiStore)
 	const navigate = useNavigate()
 	const { navigation } = useStore(uiStore)
+	const queryClient = useQueryClient()
+
+	const productQuery = useQuery({
+		...productQueryOptions(productId),
+		// Relays can be slow to connect/propagate; keep retrying for a while instead of erroring the whole route.
+		retry: (failureCount) => failureCount < 120,
+		retryDelay: (attemptIndex) => Math.min(500 + attemptIndex * 750, 5000),
+	})
+
+	const product = productQuery.data ?? null
+
+	// Derive all product fields from the loaded product event (avoids conditional hook calls / racey dependent queries)
+	const title = getProductTitle(product) || 'Untitled Product'
+	const description = getProductDescription(product) || ''
+	const images = getProductImages(product) || []
+	const priceTag = getProductPrice(product)
+	const typeTag = getProductType(product)
+	const stockTag = getProductStock(product)
+	const visibilityTag = getProductVisibility(product)
+	const specs = getProductSpecs(product) || []
+	const weightTag = getProductWeight(product)
+	const dimensionsTag = getProductDimensions(product)
+	const categories = getProductCategories(product) || []
+	const createdAt = getProductCreatedAt(product) || 0
+	const pubkey = getProductPubkey(product) || ''
 
 	const handleBackClick = () => {
 		if (navigation.originalResultsPath) {
@@ -101,31 +123,11 @@ function RouteComponent() {
 		}
 	}
 
-	if (!product) {
-		return (
-			<div className="flex h-[50vh] flex-col items-center justify-center gap-4">
-				<h1 className="text-2xl font-bold">Product Not Found</h1>
-				<p className="text-gray-600">The product you're looking for doesn't exist.</p>
-			</div>
-		)
-	}
-
-	// Get all product data using hooks
-	const { data: title = 'Untitled Product' } = useProductTitle(productId)
-	const { data: description = '' } = useProductDescription(productId)
-	const { data: images = [] } = useProductImages(productId)
-	const { data: priceTag } = useProductPrice(productId)
-	const { data: typeTag } = useProductType(productId)
-	const { data: stockTag } = useProductStock(productId)
-	const { data: visibilityTag } = useProductVisibility(productId)
-	const { data: specs = [] } = useProductSpecs(productId)
-	const { data: weightTag } = useProductWeight(productId)
-	const { data: dimensionsTag } = useProductDimensions(productId)
-	const { data: categories = [] } = useProductCategories(productId)
-	const { data: createdAt = 0 } = useProductCreatedAt(productId)
-	const { data: pubkey = '' } = useProductPubkey(productId)
-
-	const { data: sellerProducts = [] } = useSuspenseQuery(productsByPubkeyQueryOptions(pubkey || 'placeholder'))
+	const sellerProductsQuery = useQuery({
+		...productsByPubkeyQueryOptions(pubkey),
+		enabled: !!pubkey,
+	})
+	const sellerProducts = sellerProductsQuery.data ?? []
 
 	const breakpoint = useBreakpoint()
 	const isSmallScreen = breakpoint === 'sm'
@@ -134,7 +136,6 @@ function RouteComponent() {
 	const [imageViewerOpen, setImageViewerOpen] = useState(false)
 	const [selectedImageIndex, setSelectedImageIndex] = useState(0)
 	const [shareDialogOpen, setShareDialogOpen] = useState(false)
-	const queryClient = useQueryClient()
 
 	// Get app config
 	const { data: config } = useConfigQuery()
@@ -178,6 +179,50 @@ function RouteComponent() {
 	// Use the hook to inject dynamic CSS for the background image
 	const heroClassName = `hero-bg-${productId.replace(/[^a-zA-Z0-9]/g, '')}`
 	useHeroBackground(backgroundImageUrl, heroClassName)
+
+	// Keep this route resilient during relay warmup: don't error-boundary the whole page for transient misses.
+	if (!product && (productQuery.isLoading || productQuery.isFetching)) {
+		return (
+			<div className="flex h-[50vh] flex-col items-center justify-center gap-3 px-4 text-center">
+				<div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+				<p className="text-muted-foreground">Loading product…</p>
+			</div>
+		)
+	}
+
+	if (!product && productQuery.isError) {
+		return (
+			<div className="flex h-[50vh] flex-col items-center justify-center gap-4 px-4 text-center">
+				<h1 className="text-2xl font-bold">Still loading product</h1>
+				<p className="text-gray-600">{productQuery.error instanceof Error ? productQuery.error.message : 'Please try again.'}</p>
+				<div className="flex flex-wrap items-center justify-center gap-2">
+					<Button
+						variant="secondary"
+						onClick={() => {
+							queryClient.invalidateQueries({ queryKey: productQueryOptions(productId).queryKey })
+						}}
+					>
+						Retry
+					</Button>
+					<Link to="/products" className="inline-flex">
+						<Button variant="outline">Back to products</Button>
+					</Link>
+				</div>
+			</div>
+		)
+	}
+
+	if (!product) {
+		return (
+			<div className="flex h-[50vh] flex-col items-center justify-center gap-4 px-4 text-center">
+				<h1 className="text-2xl font-bold">Product Not Found</h1>
+				<p className="text-gray-600">The product you’re looking for doesn’t exist (or hasn’t propagated to relays yet).</p>
+				<Link to="/products" className="inline-flex">
+					<Button variant="outline">Back to products</Button>
+				</Link>
+			</div>
+		)
+	}
 
 	// Get location from tags if exists
 	const location = product.tags.find((t) => t[0] === 'location')?.[1]

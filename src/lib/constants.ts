@@ -24,7 +24,8 @@ export const MAIN_RELAY_BY_STAGE: Record<Stage, string> = {
  * These are used for reading events from the broader Nostr network
  */
 export const DEFAULT_PUBLIC_RELAYS: string[] = [
-	'wss://relay.nostr.band',
+	'wss://sendit.nosflare.com',
+	'wss://nostr.mom',
 	'wss://nos.lol',
 	'wss://relay.nostr.net',
 	'wss://relay.damus.io',
@@ -40,7 +41,6 @@ export const BUG_RELAY = 'wss://bugs.plebeian.market/'
 // Dedicated zap detection relays
 export const ZAP_RELAYS = [
 	'wss://relay.damus.io',
-	'wss://relay.nostr.band',
 	'wss://nos.lol',
 	'wss://relay.nostr.net',
 	'wss://relay.minibits.cash',
