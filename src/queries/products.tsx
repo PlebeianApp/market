@@ -27,6 +27,28 @@ export { productKeys }
 // Helper to check if an ID looks like a Nostr event ID (64-hex characters)
 export const isEventId = (id: string): boolean => /^[a-f0-9]{64}$/i.test(id)
 
+/**
+ * Checks if a product is in stock
+ * Matches ProductCard logic: out of stock if no stock tag (unless pre-order) or stock = 0
+ * @param event The product event
+ * @returns true if the product is in stock
+ */
+export const isProductInStock = (event: NDKEvent): boolean => {
+	const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
+	const visibility = visibilityTag?.[1] || 'on-sale'
+
+	// Pre-order items are always considered "in stock" for display purposes
+	if (visibility === 'pre-order') return true
+
+	const stockTag = event.tags.find((t) => t[0] === 'stock')
+	// No stock tag means out of stock (matching ProductCard behavior)
+	if (!stockTag) return false
+
+	const stockValue = parseInt(stockTag[1], 10)
+	// Stock must be a valid number > 0
+	return !isNaN(stockValue) && stockValue > 0
+}
+
 // --- DATA FETCHING FUNCTIONS ---
 
 /**
@@ -60,7 +82,9 @@ export const fetchProducts = async (limit: number = 500, tag?: string, includeHi
 	return filteredEvents.filter((event) => {
 		const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
 		const visibility = visibilityTag?.[1] || 'on-sale' // Default to on-sale if not specified
-		return visibility !== 'hidden'
+		if (visibility === 'hidden') return false
+		// Filter out out-of-stock products from card views
+		return isProductInStock(event)
 	})
 }
 
@@ -151,7 +175,9 @@ export const fetchProductsByPubkey = async (pubkey: string, includeHidden: boole
 	return filteredEvents.filter((event) => {
 		const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
 		const visibility = visibilityTag?.[1] || 'on-sale' // Default to on-sale if not specified
-		return visibility !== 'hidden'
+		if (visibility === 'hidden') return false
+		// Filter out out-of-stock products from public views
+		return isProductInStock(event)
 	})
 }
 
@@ -315,7 +341,10 @@ export const fetchProductsByCollection = async (collectionEvent: NDKEvent): Prom
 	const allProducts = results.filter((event) => event !== null) as NDKEvent[]
 
 	// Filter out blacklisted products and authors
-	return filterBlacklistedEvents(allProducts)
+	const filteredProducts = filterBlacklistedEvents(allProducts)
+
+	// Filter out out-of-stock products from collection views
+	return filteredProducts.filter(isProductInStock)
 }
 
 /**
@@ -832,6 +861,7 @@ export const fetchProductsBySearch = async (query: string, limit: number = 20) =
 		const fetchPromise = ndk
 			.fetchEvents(filter)
 			.then((events) => filterBlacklistedEvents(Array.from(events)))
+			.then((events) => events.filter(isProductInStock)) // Filter out out-of-stock products
 			.catch((err) => {
 				console.error('Product search fetch failed:', err)
 				return []
