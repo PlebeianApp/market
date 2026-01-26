@@ -87,6 +87,11 @@ function RouteComponent() {
 	const { navigation } = useStore(uiStore)
 	const queryClient = useQueryClient()
 
+	// Scroll to top when product changes
+	useEffect(() => {
+		window.scrollTo({ top: 0, behavior: 'smooth' })
+	}, [productId])
+
 	const productQuery = useQuery({
 		...productQueryOptions(productId),
 		// Relays can be slow to connect/propagate; keep retrying for a while instead of erroring the whole route.
