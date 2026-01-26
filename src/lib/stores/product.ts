@@ -16,6 +16,7 @@ import {
 	getProductType,
 	getProductVisibility,
 	getProductWeight,
+	isNSFWProduct,
 } from '@/queries/products'
 import { productKeys } from '@/queries/queryKeyFactory'
 import { clearProductFormDraft, getProductFormDraft, saveProductFormDraft } from '@/lib/utils/productFormStorage'
@@ -83,6 +84,8 @@ export interface ProductFormState {
 	// Currency system state
 	bitcoinUnit: 'SATS' | 'BTC'
 	currencyMode: 'sats' | 'fiat'
+	// Content warning
+	isNSFW: boolean
 }
 
 export const DEFAULT_FORM_STATE: ProductFormState = {
@@ -109,6 +112,8 @@ export const DEFAULT_FORM_STATE: ProductFormState = {
 	// Currency system defaults
 	bitcoinUnit: 'SATS',
 	currencyMode: 'sats',
+	// Content warning
+	isNSFW: false,
 }
 
 // Create the store
@@ -243,6 +248,7 @@ export const productFormActions = {
 				dimensions: dimensionsTag ? { value: dimensionsTag[1], unit: dimensionsTag[2] } : null,
 				shippings: shippingOptions,
 				activeTab,
+				isNSFW: isNSFWProduct(event),
 			}))
 		} catch (error) {
 			console.error('Error loading product for edit:', error)
@@ -414,6 +420,7 @@ export const productFormActions = {
 			shippings: state.shippings,
 			weight: state.weight,
 			dimensions: state.dimensions,
+			isNSFW: state.isNSFW,
 		}
 
 		try {

@@ -26,6 +26,7 @@ export interface ProductFormData {
 	}>
 	weight: { value: string; unit: string } | null
 	dimensions: { value: string; unit: string } | null
+	isNSFW: boolean
 }
 
 /**
@@ -78,6 +79,9 @@ export const createProductEvent = (
 	// Add client tag if app pubkey and handler ID are provided (NIP-89)
 	const clientTag = appPubkey && handlerId ? [createClientTag(appPubkey, handlerId)] : []
 
+	// Add content warning tag for NSFW products
+	const contentWarningTag = formData.isNSFW ? [['content-warning', 'nsfw'] as NDKTag] : []
+
 	// Required tags
 	event.tags = [
 		['d', id], // Product identifier - this is the key for updates!
@@ -95,6 +99,7 @@ export const createProductEvent = (
 		...dimensionsTag,
 		...collectionTag,
 		...clientTag,
+		...contentWarningTag,
 	]
 
 	return event
