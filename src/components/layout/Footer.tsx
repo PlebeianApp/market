@@ -1,17 +1,4 @@
-import { uiActions, uiStore } from '@/lib/stores/ui'
-import { useStore } from '@tanstack/react-store'
-
 export function Footer() {
-	const { showNSFWContent } = useStore(uiStore)
-
-	const handleNSFWToggle = () => {
-		if (showNSFWContent) {
-			uiActions.disableNSFWContent()
-		} else {
-			uiActions.openNSFWConfirmation()
-		}
-	}
-
 	return (
 		<footer className="sticky top-0 bg-black p-4 font-bold text-white lg:px-12 flex justify-center">
 			<div className="container flex justify-between items-center flex-col gap-4 md:gap-0 md:flex-row">
@@ -21,9 +8,6 @@ export function Footer() {
 						<a className="underline" href="/faqs">
 							FAQ
 						</a>
-						<button onClick={handleNSFWToggle} className="underline hover:text-secondary transition-colors">
-							Adult content: {showNSFWContent ? 'On' : 'Off'}
-						</button>
 					</div>
 				</div>
 				<div className="text-right flex justify-between items-center gap-6">
