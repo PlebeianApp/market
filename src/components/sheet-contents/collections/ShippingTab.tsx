@@ -123,15 +123,17 @@ export function ShippingTab() {
 									</div>
 									<div className="flex items-center gap-2">
 										<span className="text-sm text-gray-500">Extra cost</span>
-										<Input
-											type="number"
-											step="0.01"
-											min="0"
-											value={shipping.extraCost}
-											onChange={(e) => updateExtraCost(index, e.target.value)}
-											className="w-32 text-sm"
-										/>
-										{option?.currency && <span className="text-sm text-gray-500">{option.currency}</span>}
+										<div className="flex items-center gap-1 mr-2">
+											<Input
+												type="number"
+												step="0.01"
+												min="0"
+												value={shipping.extraCost}
+												onChange={(e) => updateExtraCost(index, e.target.value)}
+												className="w-32 text-sm"
+											/>
+											{option?.currency && <span className="text-sm text-gray-500">{option.currency}</span>}
+										</div>
 										<Button type="button" variant="ghost" size="sm" onClick={() => removeShippingOption(index)}>
 											<span className="i-delete w-4 h-4" />
 										</Button>
