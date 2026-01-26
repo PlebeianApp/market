@@ -129,8 +129,9 @@ export function ShippingTab() {
 											value={shipping.extraCost}
 											onChange={(e) => updateExtraCost(index, e.target.value)}
 											placeholder="Extra cost"
-											className="w-24 text-sm"
+											className="w-36 text-sm"
 										/>
+										{option?.currency && <span className="text-sm text-gray-500">{option.currency}</span>}
 										<Button type="button" variant="ghost" size="sm" onClick={() => removeShippingOption(index)}>
 											<span className="i-delete w-4 h-4" />
 										</Button>
