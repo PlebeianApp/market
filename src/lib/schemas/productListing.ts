@@ -84,6 +84,9 @@ const ProductShippingOptionTagSchema = z.tuple([
 		.optional(), // Optional extra cost
 ])
 
+// Content warning tag for NSFW/sensitive content
+export const ProductContentWarningTagSchema = z.tuple([z.literal('content-warning'), z.literal('nsfw')])
+
 // Complete Product Listing Schema
 export const ProductListingSchema = z.object({
 	kind: z.literal(30402),
@@ -111,6 +114,7 @@ export const ProductListingSchema = z.object({
 				ProductCategoryTagSchema,
 				ProductReferenceTagSchema,
 				ProductShippingOptionTagSchema,
+				ProductContentWarningTagSchema,
 			]),
 		)
 		.refine(

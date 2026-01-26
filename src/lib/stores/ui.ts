@@ -3,7 +3,7 @@ import { CURRENCIES } from '@/lib/constants'
 
 // Define types for different UI elements
 export type DrawerType = 'cart' | 'createProduct' | 'createCollection' | 'conversation'
-export type DialogType = 'login' | 'signup' | 'checkout' | 'product-details' | 'scan-qr' | 'v4v-setup' | 'terms'
+export type DialogType = 'login' | 'signup' | 'checkout' | 'product-details' | 'scan-qr' | 'v4v-setup' | 'terms' | 'nsfw-confirmation'
 export type ToastType = 'success' | 'error' | 'warning' | 'info'
 export type SupportedCurrency = (typeof CURRENCIES)[number]
 
@@ -40,11 +40,17 @@ export interface UIState {
 	navigation: NavigationState
 	selectedCurrency: SupportedCurrency
 	conversationPubkey: string | null // Track which conversation to open
+	showNSFWContent: boolean // Whether to show NSFW/adult content
 }
 
 const getSelectedCurrency = (): SupportedCurrency => {
 	const saved = typeof window !== 'undefined' ? localStorage.getItem('selectedCurrency') : null
 	return saved && CURRENCIES.includes(saved as SupportedCurrency) ? (saved as SupportedCurrency) : 'USD'
+}
+
+const getShowNSFWContent = (): boolean => {
+	if (typeof window === 'undefined') return false
+	return localStorage.getItem('showNSFWContent') === 'true'
 }
 
 // Initial state
@@ -64,6 +70,7 @@ const initialState: UIState = {
 		'scan-qr': false,
 		'v4v-setup': false,
 		terms: false,
+		'nsfw-confirmation': false,
 	},
 	toasts: [],
 	dialogCallbacks: {},
@@ -75,6 +82,7 @@ const initialState: UIState = {
 		originalResultsPath: null,
 	},
 	selectedCurrency: getSelectedCurrency(),
+	showNSFWContent: getShowNSFWContent(),
 }
 
 // Create the store
@@ -337,6 +345,41 @@ export const uiActions = {
 				conversation: false,
 			},
 			activeElement: state.activeElement === 'drawer-conversation' ? undefined : state.activeElement,
+		}))
+	},
+
+	// NSFW content actions
+	enableNSFWContent: () => {
+		if (typeof window !== 'undefined') {
+			localStorage.setItem('showNSFWContent', 'true')
+		}
+		uiStore.setState((state) => ({
+			...state,
+			showNSFWContent: true,
+			dialogs: {
+				...state.dialogs,
+				'nsfw-confirmation': false,
+			},
+		}))
+	},
+
+	disableNSFWContent: () => {
+		if (typeof window !== 'undefined') {
+			localStorage.setItem('showNSFWContent', 'false')
+		}
+		uiStore.setState((state) => ({
+			...state,
+			showNSFWContent: false,
+		}))
+	},
+
+	openNSFWConfirmation: () => {
+		uiStore.setState((state) => ({
+			...state,
+			dialogs: {
+				...state.dialogs,
+				'nsfw-confirmation': true,
+			},
 		}))
 	},
 }

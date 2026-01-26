@@ -7,6 +7,7 @@ import {
 	getProductStock,
 	getProductTitle,
 	getProductVisibility,
+	isNSFWProduct,
 	productQueryOptions,
 } from '@/queries/products'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -28,6 +29,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 	const visibility = visibilityTag?.[1] || 'on-sale'
 	// Out of stock if stock is explicitly 0 or undefined (no stock tag), but not for pre-order items
 	const isOutOfStock = visibility !== 'pre-order' && (stockQuantity === undefined || stockQuantity === 0)
+	const isNSFW = isNSFWProduct(product)
 	const [isOwnProduct, setIsOwnProduct] = useState(false)
 	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(null)
 	const [isAddingToCart, setIsAddingToCart] = useState(false)
@@ -105,6 +107,8 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 						No image
 					</div>
 				)}
+				{/* NSFW badge */}
+				{isNSFW && <div className="absolute top-2 left-2 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">NSFW</div>}
 			</div>
 
 			<div className="p-2 flex flex-col gap-2 flex-grow">
