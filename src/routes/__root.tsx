@@ -31,7 +31,6 @@ function RootLayout() {
 	const isAdminRoute = pathname.startsWith('/dashboard/app-settings')
 	const isSetupPage = location.pathname === '/setup'
 	const isDashboardPage = location.pathname.startsWith('/dashboard')
-	const isProfilePage = location.pathname.startsWith('/profile/')
 	const isCheckoutPage = location.pathname.startsWith('/checkout')
 
 	// Sync blacklist store with backend data
@@ -64,7 +63,7 @@ function RootLayout() {
 
 	return (
 		<div className="relative flex flex-col min-h-screen">
-			{!isProfilePage && <Header />}
+			<Header />
 
 			<main className="flex-grow flex flex-col">
 				<Outlet />
