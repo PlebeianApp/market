@@ -1,5 +1,6 @@
 import { CurrencyDropdown } from '@/components/CurrencyDropdown'
 import { Pattern } from '@/components/pattern'
+import { Switch } from '@/components/ui/switch'
 import { authActions, authStore } from '@/lib/stores/auth'
 import { uiActions, uiStore } from '@/lib/stores/ui'
 import { cn } from '@/lib/utils'
@@ -10,7 +11,7 @@ import { useStore } from '@tanstack/react-store'
 import { useEffect } from 'react'
 
 export function MobileMenu() {
-	const { mobileMenuOpen } = useStore(uiStore)
+	const { mobileMenuOpen, showNSFWContent } = useStore(uiStore)
 	const { isAuthenticated } = useStore(authStore)
 	const { data: config } = useConfigQuery()
 	const matchRoute = useMatchRoute()
@@ -48,6 +49,16 @@ export function MobileMenu() {
 	const handleLogout = () => {
 		authActions.logout()
 		uiActions.closeMobileMenu()
+	}
+
+	const handleNSFWToggle = (checked: boolean) => {
+		if (checked) {
+			// Open confirmation dialog when enabling
+			uiActions.openNSFWConfirmation()
+		} else {
+			// Immediately disable when turning off
+			uiActions.disableNSFWContent()
+		}
 	}
 
 	const menuItems = [
@@ -98,6 +109,12 @@ export function MobileMenu() {
 							{/* Currency Dropdown for mobile */}
 							<div className="py-3 px-6 flex justify-center">
 								<CurrencyDropdown />
+							</div>
+
+							{/* NSFW Content Toggle */}
+							<div className="py-3 px-6 flex items-center justify-center gap-3">
+								<span className="text-white text-sm">Adult content</span>
+								<Switch checked={showNSFWContent} onCheckedChange={handleNSFWToggle} />
 							</div>
 						</nav>
 					</div>

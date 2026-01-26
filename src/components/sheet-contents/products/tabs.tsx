@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,7 +17,7 @@ import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey, s
 import { useForm } from '@tanstack/react-form'
 import { useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
-import { Info, ArrowRightLeft, DownloadIcon, Loader2, PackageIcon, PlusIcon, TruckIcon, X } from 'lucide-react'
+import { Info, ArrowRightLeft, DownloadIcon, Loader2, PackageIcon, PlusIcon, TruckIcon, X, AlertTriangle } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -30,6 +31,7 @@ export function DetailTab() {
 		specs,
 		bitcoinUnit: storeBitcoinUnit,
 		currencyMode: storeCurrencyMode,
+		isNSFW,
 	} = useStore(productFormStore)
 	const { selectedCurrency } = useStore(uiStore)
 	const { data: exchangeRates } = useBtcExchangeRates()
@@ -382,6 +384,26 @@ export function DetailTab() {
 						</SelectItem>
 					</SelectContent>
 				</Select>
+			</div>
+
+			{/* NSFW Content Warning */}
+			<div className="flex items-start space-x-3 p-4 border rounded-lg bg-amber-50/50 border-amber-200">
+				<Checkbox
+					id="nsfw-content"
+					checked={isNSFW}
+					onCheckedChange={(checked) => productFormActions.updateValues({ isNSFW: checked === true })}
+					className="mt-0.5"
+				/>
+				<div className="space-y-1">
+					<Label htmlFor="nsfw-content" className="text-sm font-medium cursor-pointer flex items-center gap-2">
+						<AlertTriangle className="w-4 h-4 text-amber-600" />
+						This product contains adult/sensitive content
+					</Label>
+					<p className="text-xs text-muted-foreground">
+						Check this if your product contains NSFW material, alcohol, tobacco, weapons, or other age-restricted content. Products marked
+						as NSFW will be hidden from users who haven't enabled adult content viewing.
+					</p>
+				</div>
 			</div>
 		</div>
 	)

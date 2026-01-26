@@ -1,5 +1,6 @@
 import {
 	ProductCategoryTagSchema,
+	ProductContentWarningTagSchema,
 	ProductDimensionsTagSchema,
 	ProductImageTagSchema,
 	ProductPriceTagSchema,
@@ -677,6 +678,39 @@ export const getProductCreatedAt = (event: NDKEvent | null): number => event?.cr
 export const getProductPubkey = (event: NDKEvent | null): string => event?.pubkey || ''
 
 /**
+ * Gets the content warning tag from a product event
+ * @param event The product event or null
+ * @returns The content warning tuple or undefined
+ */
+export const getProductContentWarning = (event: NDKEvent | null): z.infer<typeof ProductContentWarningTagSchema> | undefined => {
+	if (!event) return undefined
+	const contentWarningTag = event.tags.find((t) => t[0] === 'content-warning')
+	return contentWarningTag ? (contentWarningTag as z.infer<typeof ProductContentWarningTagSchema>) : undefined
+}
+
+/**
+ * Checks if a product has NSFW content warning
+ * @param event The product event or null
+ * @returns true if the product is marked as NSFW
+ */
+export const isNSFWProduct = (event: NDKEvent | null): boolean => {
+	if (!event) return false
+	const contentWarning = getProductContentWarning(event)
+	return contentWarning?.[1] === 'nsfw'
+}
+
+/**
+ * Filters out NSFW products from an array of events
+ * @param events Array of product events
+ * @param showNSFW Whether to show NSFW products (if true, no filtering is done)
+ * @returns Filtered array of product events
+ */
+export const filterNSFWProducts = (events: NDKEvent[], showNSFW: boolean): NDKEvent[] => {
+	if (showNSFW) return events
+	return events.filter((event) => !isNSFWProduct(event))
+}
+
+/**
  * Gets the event that created a product based on its ID
  * @param id The product event ID
  * @returns A promise that resolves to the NDKEvent or null if not found
@@ -906,6 +940,19 @@ export const useProductsByCollection = (collectionEvent: NDKEvent | null) => {
 export const useProductByATag = (pubkey: string, dTag: string) => {
 	return useQuery({
 		...productByATagQueryOptions(pubkey, dTag),
+	})
+}
+
+/**
+ * Hook to check if a product is NSFW
+ * @param id Product ID (event ID or d-tag)
+ * @param sellerPubkey Optional seller pubkey (required when id is a d-tag)
+ * @returns Query result with boolean indicating if product is NSFW
+ */
+export const useProductIsNSFW = (id: string, sellerPubkey?: string) => {
+	return useQuery({
+		...productSmartQueryOptions(id, sellerPubkey),
+		select: isNSFWProduct,
 	})
 }
 
