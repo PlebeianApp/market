@@ -1,5 +1,6 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { type NDKUserProfile, NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
+import { NDKWoT } from '@nostr-dev-kit/wot'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { profileKeys } from './queryKeyFactory'
 
@@ -253,5 +254,42 @@ export const useZapCapabilityInfo = (npub: string) => {
 	return useQuery({
 		...zapCapabilityInfoQueryOptions(npub),
 		enabled: !!npub && npub.startsWith('npub'),
+	})
+}
+
+export const getWotScore = async (pubkey: string): Promise<number | null> => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+	if (!ndk.activeUser) return null
+
+	try {
+		const wot = new NDKWoT(ndk, pubkey)
+		await wot.load({
+			depth: 2,
+			maxFollows: 1000,
+			timeout: 1000,
+		})
+
+		const score = wot.getScores([pubkey]).get(pubkey) || 0
+		return score
+	} catch (e) {
+		console.error('Error calculating WoT score:', e)
+		return null
+	}
+}
+
+export const wotScoreQueryOptions = (pubkey: string) =>
+	queryOptions({
+		queryKey: profileKeys.wot(pubkey),
+		queryFn: () => getWotScore(pubkey),
+		enabled: !!pubkey,
+		retry: 2,
+		retryDelay: 1000,
+	})
+
+export const useWotScore = (pubkey: string) => {
+	return useQuery({
+		...wotScoreQueryOptions(pubkey),
+		enabled: !!pubkey,
 	})
 }
