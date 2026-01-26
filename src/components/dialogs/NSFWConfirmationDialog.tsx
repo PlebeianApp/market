@@ -40,7 +40,7 @@ export function NSFWConfirmationDialog() {
 					</p>
 				</div>
 
-				<DialogFooter className="gap-2 sm:gap-0">
+				<DialogFooter>
 					<Button variant="outline" onClick={handleCancel}>
 						Cancel
 					</Button>
