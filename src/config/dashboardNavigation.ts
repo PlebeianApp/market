@@ -76,6 +76,10 @@ export const dashboardNavigation: NavSection[] = [
 				title: '🌐 Network',
 				path: '/dashboard/account/network',
 			},
+			{
+				title: '⚙️ Preferences',
+				path: '/dashboard/account/preferences',
+			},
 		],
 	},
 	{
