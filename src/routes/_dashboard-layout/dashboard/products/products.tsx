@@ -99,6 +99,8 @@ function ProductListItem({
 }) {
 	const visibilityTag = product.tags.find((tag) => tag[0] === 'visibility')
 	const visibility = visibilityTag?.[1] || 'on-sale'
+	const images = getProductImages(product)
+	const thumbnailUrl = images.length > 0 ? images[0][1] : null
 
 	const getVisibilityIcon = () => {
 		switch (visibility) {
@@ -114,9 +116,16 @@ function ProductListItem({
 	}
 
 	const triggerContent = (
-		<div className="flex items-center gap-2">
+		<div className="flex items-center gap-3">
+			{thumbnailUrl ? (
+				<img src={thumbnailUrl} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
+			) : (
+				<div className="w-10 h-10 rounded bg-gray-200 flex items-center justify-center shrink-0">
+					<PackageIcon className="w-5 h-5 text-gray-400" />
+				</div>
+			)}
 			{getVisibilityIcon()}
-			<p className="font-semibold">{getProductTitle(product)}</p>
+			<p className="font-semibold truncate">{getProductTitle(product)}</p>
 		</div>
 	)
 
