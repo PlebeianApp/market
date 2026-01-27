@@ -120,12 +120,14 @@ function ProductListItem({
 			{thumbnailUrl ? (
 				<img src={thumbnailUrl} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
 			) : (
-				<div className="w-10 h-10 rounded bg-gray-200 flex items-center justify-center shrink-0">
+				<div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center shrink-0">
 					<PackageIcon className="w-5 h-5 text-gray-400" />
 				</div>
 			)}
-			{getVisibilityIcon()}
-			<p className="font-semibold truncate">{getProductTitle(product)}</p>
+			<div className="flex items-center gap-2 min-w-0">
+				{getVisibilityIcon()}
+				<p className="font-semibold truncate">{getProductTitle(product)}</p>
+			</div>
 		</div>
 	)
 
@@ -179,7 +181,7 @@ function ProductListItem({
 			triggerContent={triggerContent}
 			actions={actions}
 			isDeleting={isDeleting}
-			icon={<PackageIcon className="h-5 w-5 text-black" />}
+			icon={false}
 		>
 			<ProductBasicInfo product={product} />
 		</DashboardListItem>
