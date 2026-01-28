@@ -132,8 +132,14 @@ function getRelayUrls(overrideRelays?: string[]): string[] {
 	// Will be undefined if config hasn't loaded yet, preventing localhost relay in production
 	const mainRelay = getMainRelay()
 
-	// Development with local_relay_only: only local relay
-	if (stage === 'development' && localRelayOnly && mainRelay) {
+	// Development mode: only use local/main relay to prevent polluting public relays
+	// This applies to both server (Bun) and browser environments
+	if (stage === 'development' && mainRelay) {
+		return [mainRelay]
+	}
+
+	// Server-side with LOCAL_RELAY_ONLY flag: only local relay
+	if (localRelayOnly && mainRelay) {
 		return [mainRelay]
 	}
 
@@ -238,8 +244,9 @@ export const ndkActions = {
 		const localRelayOnly = typeof Bun !== 'undefined' && Bun.env?.LOCAL_RELAY_ONLY === 'true'
 		const stage = getCurrentStage()
 
-		// Disable outbox model for staging (enforces write-only-to-staging) and local-only dev
-		const enableOutbox = stage !== 'staging' && !localRelayOnly
+		// Disable outbox model for staging, development, and local-only mode
+		// This prevents NDK from discovering and connecting to additional relays
+		const enableOutbox = stage !== 'staging' && stage !== 'development' && !localRelayOnly
 
 		const ndk = new NDK({
 			explicitRelayUrls: explicitRelays,
@@ -249,8 +256,9 @@ export const ndkActions = {
 			},
 		})
 
-		// Skip Zap NDK in local-relay-only mode (seeding, testing) to prevent publishing to public relays
-		const zapNdk = localRelayOnly
+		// Skip Zap NDK in development mode or local-relay-only mode to prevent connecting to public relays
+		const skipZapNdk = stage === 'development' || localRelayOnly
+		const zapNdk = skipZapNdk
 			? null
 			: new NDK({
 					explicitRelayUrls: ZAP_RELAYS,

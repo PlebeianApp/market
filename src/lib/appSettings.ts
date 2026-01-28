@@ -15,15 +15,34 @@ export async function fetchAppSettings(relayUrl: string, appPubkey: string): Pro
 				skip: new Set(['ndk-no-cache', 'fetch-events-usage']),
 			},
 		})
-		await ndk.connect()
+
+		// Connect with timeout
+		try {
+			await Promise.race([
+				ndk.connect(),
+				new Promise<never>((_, reject) => setTimeout(() => reject(new Error('NDK connect timeout')), 5000)),
+			])
+		} catch (connectErr) {
+			console.warn('NDK connect warning (may still work):', connectErr)
+			// Check if we have any connected relays despite the timeout
+			const connected = ndk.pool?.connectedRelays() || []
+			if (connected.length === 0) {
+				console.error('No relays connected, cannot fetch app settings')
+				return null
+			}
+			console.log(`Connected to ${connected.length} relays despite timeout`)
+		}
 
 		// NIP-33 parameterized replaceable events (kind 31990) are indexed by pubkey+kind+d tag.
-		// Without the "#d" filter many relays will return no results even if such events exist.
+		// Include the d tag filter for better relay compatibility
 		const filter: NDKFilter = {
 			kinds: [31990],
 			authors: [appPubkey],
+			'#d': ['app/settings'],
 			limit: 1,
 		}
+
+		console.log('Fetching with filter:', JSON.stringify(filter))
 
 		// Add a soft timeout so we don't hang forever if the relay is slow.
 		const fetchWithTimeout = <T>(p: Promise<T>, ms: number) =>
@@ -40,6 +59,7 @@ export async function fetchAppSettings(relayUrl: string, appPubkey: string): Pro
 
 		const events = (await fetchWithTimeout(ndk.fetchEvents(filter), 10000)) as Set<any>
 		const eventArray = Array.from(events)
+		console.log(`Fetch returned ${eventArray.length} events`)
 
 		if (eventArray.length === 0) {
 			console.log(`No app settings events found for pubkey: ${appPubkey}`)
