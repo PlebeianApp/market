@@ -9,10 +9,54 @@ import {
 	ReceiptIcon,
 	AlertCircleIcon,
 	MessageSquareIcon,
+	PackageIcon,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchProductByATag, useProductTitle, useProductPrice, useProductImages } from '@/queries/products'
 import { getCoordsFromATag } from '@/lib/utils/coords'
+import { Link } from '@tanstack/react-router'
+
+// Interface for embedded product event data
+interface EmbeddedProductEvent {
+	kind: number
+	id?: string
+	pubkey?: string
+	content?: string
+	tags?: string[][]
+	created_at?: number
+}
+
+// Helper to try parsing content as an embedded product event
+const tryParseEmbeddedProduct = (content: string): EmbeddedProductEvent | null => {
+	if (!content || content.trim() === '') return null
+
+	try {
+		const parsed = JSON.parse(content)
+
+		// Check if it looks like a product event (kind 30402)
+		if (parsed && typeof parsed === 'object') {
+			// Direct kind 30402 event
+			if (parsed.kind === 30402) {
+				return parsed as EmbeddedProductEvent
+			}
+
+			// Check for product-like tags structure (has title, price, d tags)
+			if (Array.isArray(parsed.tags)) {
+				const hasTitle = parsed.tags.some((t: string[]) => t[0] === 'title')
+				const hasPrice = parsed.tags.some((t: string[]) => t[0] === 'price')
+				const hasDTag = parsed.tags.some((t: string[]) => t[0] === 'd')
+
+				if (hasTitle && hasPrice && hasDTag) {
+					return { ...parsed, kind: 30402 } as EmbeddedProductEvent
+				}
+			}
+		}
+	} catch {
+		// Not valid JSON, return null
+	}
+
+	return null
+}
 
 // Helper functions to extract tag information
 const getTags = (event: NDKEvent, tagName: string): string[][] => {
@@ -76,6 +120,48 @@ const OrderItem = ({ itemTag }: { itemTag: string[] }) => {
 }
 
 // --- Sub-components for different message types ---
+
+// Component to display an embedded product from a Kind-16 message
+const EmbeddedProductMessage = ({ productData }: { productData: EmbeddedProductEvent }) => {
+	// Extract product info from tags
+	const tags = productData.tags || []
+	const title = tags.find((t) => t[0] === 'title')?.[1] || 'Untitled Product'
+	const priceTag = tags.find((t) => t[0] === 'price')
+	const price = priceTag ? `${priceTag[1]} ${priceTag[2] || 'SATS'}` : null
+	const images = tags.filter((t) => t[0] === 'image')
+	const imageUrl = images.length > 0 ? images[0][1] : null
+	const productId = tags.find((t) => t[0] === 'd')?.[1]
+	const description = productData.content || ''
+
+	return (
+		<div className="text-sm space-y-2">
+			<div className="flex items-center font-semibold mb-1 text-blue-600">
+				<PackageIcon className="w-4 h-4 mr-2 flex-shrink-0" />
+				Shared Product
+			</div>
+
+			<div className="flex gap-3 p-2 bg-gray-50 rounded-md border border-gray-200">
+				{imageUrl && (
+					<div className="w-16 h-16 flex-shrink-0 rounded-md overflow-hidden bg-gray-100">
+						<img src={imageUrl} alt={title} className="w-full h-full object-cover" />
+					</div>
+				)}
+
+				<div className="flex-1 min-w-0">
+					<p className="font-medium text-sm truncate">{title}</p>
+					{price && <p className="text-xs text-muted-foreground mt-0.5">{price}</p>}
+					{description && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{description}</p>}
+				</div>
+			</div>
+
+			{productId && (
+				<Link to={`/products/${productId}`} className="inline-flex items-center text-xs text-blue-600 hover:text-blue-800 hover:underline">
+					View Product →
+				</Link>
+			)}
+		</div>
+	)
+}
 
 const OrderCreationMessage = ({ event }: { event: NDKEvent }) => {
 	const orderId = getTagValue(event, 'order')
@@ -303,13 +389,20 @@ export function ChatMessageBubble({ event, isCurrentUser }: ChatMessageBubblePro
 					return <OrderStatusUpdateMessage event={event} />
 				case '4':
 					return <ShippingUpdateMessage event={event} />
-				default:
+				default: {
+					// Check if content contains an embedded product event
+					const embeddedProduct = tryParseEmbeddedProduct(event.content)
+					if (embeddedProduct) {
+						return <EmbeddedProductMessage productData={embeddedProduct} />
+					}
+
 					return (
 						<div className="text-sm flex items-center">
 							<AlertCircleIcon className="w-4 h-4 mr-2 flex-shrink-0 text-orange-500" />
 							Unsupported Kind 16 (type: {messageType || 'unknown'})
 						</div>
 					)
+				}
 			}
 		}
 
@@ -340,7 +433,7 @@ export function ChatMessageBubble({ event, isCurrentUser }: ChatMessageBubblePro
 							(Empty message)
 						</p>
 					)}
-					{event.kind !== 14 && hasContent && (
+					{event.kind !== 14 && hasContent && !tryParseEmbeddedProduct(event.content) && (
 						<p className={`text-sm ${structuredPart ? 'mt-2 pt-2 border-t border-opacity-20' : ''}`}>
 							{event.content} {/* Notes for Kind 16/17 */}
 						</p>
