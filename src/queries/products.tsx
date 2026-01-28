@@ -24,6 +24,54 @@ import { naddrFromAddress } from '@/lib/nostr/naddr'
 // Re-export productKeys for use in other query files
 export { productKeys }
 
+// --- DELETED PRODUCTS TRACKING ---
+// Track deleted product IDs to filter them out from relay responses
+// (Relays may still return deleted events until they process the deletion)
+// Persisted to localStorage so deletions survive page reloads
+
+const DELETED_PRODUCTS_STORAGE_KEY = 'plebeian_deleted_product_ids'
+
+const loadDeletedProductIds = (): Set<string> => {
+	try {
+		const stored = localStorage.getItem(DELETED_PRODUCTS_STORAGE_KEY)
+		if (stored) {
+			const parsed = JSON.parse(stored)
+			if (Array.isArray(parsed)) {
+				return new Set(parsed)
+			}
+		}
+	} catch (e) {
+		console.error('Failed to load deleted product IDs from localStorage:', e)
+	}
+	return new Set()
+}
+
+const saveDeletedProductIds = (ids: Set<string>) => {
+	try {
+		localStorage.setItem(DELETED_PRODUCTS_STORAGE_KEY, JSON.stringify([...ids]))
+	} catch (e) {
+		console.error('Failed to save deleted product IDs to localStorage:', e)
+	}
+}
+
+const deletedProductIds = loadDeletedProductIds()
+
+export const markProductAsDeleted = (dTag: string) => {
+	deletedProductIds.add(dTag)
+	saveDeletedProductIds(deletedProductIds)
+}
+
+export const isProductDeleted = (dTag: string) => {
+	return deletedProductIds.has(dTag)
+}
+
+const filterDeletedProducts = (events: NDKEvent[]): NDKEvent[] => {
+	return events.filter((event) => {
+		const dTag = event.tags.find((t) => t[0] === 'd')?.[1]
+		return dTag ? !deletedProductIds.has(dTag) : true
+	})
+}
+
 // Helper to check if an ID looks like a Nostr event ID (64-hex characters)
 export const isEventId = (id: string): boolean => /^[a-f0-9]{64}$/i.test(id)
 
@@ -74,8 +122,8 @@ export const fetchProducts = async (limit: number = 500, tag?: string, includeHi
 	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
 	const allEvents = Array.from(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 
-	// Filter out blacklisted products and authors
-	const filteredEvents = filterBlacklistedEvents(allEvents)
+	// Filter out blacklisted products and authors, then filter out locally-deleted products
+	const filteredEvents = filterDeletedProducts(filterBlacklistedEvents(allEvents))
 
 	// Filter out hidden products unless explicitly included
 	if (includeHidden) {
@@ -116,8 +164,8 @@ export const fetchProductsPaginated = async (limit: number = 20, until?: number,
 	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
 	const allEvents = Array.from(events).sort((a, b) => b.created_at! - a.created_at!)
 
-	// Filter out blacklisted products and authors
-	const filteredEvents = filterBlacklistedEvents(allEvents)
+	// Filter out blacklisted products and authors, then filter out locally-deleted products
+	const filteredEvents = filterDeletedProducts(filterBlacklistedEvents(allEvents))
 
 	// Filter out hidden products unless explicitly included
 	if (includeHidden) {
@@ -185,7 +233,8 @@ export const fetchProductsByPubkey = async (pubkey: string, includeHidden: boole
 	const allEvents = Array.from(events)
 
 	// Filter out blacklisted products (author check not needed since we're querying by author)
-	const filteredEvents = filterBlacklistedEvents(allEvents)
+	// Then filter out locally-deleted products
+	const filteredEvents = filterDeletedProducts(filterBlacklistedEvents(allEvents))
 
 	// Filter out hidden products unless explicitly included
 	if (includeHidden) {
@@ -361,8 +410,8 @@ export const fetchProductsByCollection = async (collectionEvent: NDKEvent): Prom
 	const results = await Promise.all(productPromises)
 	const allProducts = results.filter((event) => event !== null) as NDKEvent[]
 
-	// Filter out blacklisted products and authors
-	const filteredProducts = filterBlacklistedEvents(allProducts)
+	// Filter out blacklisted products and authors, then filter out locally-deleted products
+	const filteredProducts = filterDeletedProducts(filterBlacklistedEvents(allProducts))
 
 	// Filter out out-of-stock products from collection views
 	return filteredProducts.filter(isProductInStock)
@@ -882,6 +931,7 @@ export const fetchProductsBySearch = async (query: string, limit: number = 20) =
 		const fetchPromise = ndk
 			.fetchEvents(filter)
 			.then((events) => filterBlacklistedEvents(Array.from(events)))
+			.then((events) => filterDeletedProducts(events)) // Filter out locally-deleted products
 			.then((events) => events.filter(isProductInStock)) // Filter out out-of-stock products
 			.catch((err) => {
 				console.error('Product search fetch failed:', err)

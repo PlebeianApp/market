@@ -9,6 +9,54 @@ import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 import { FEATURED_ITEMS_CONFIG } from '@/lib/schemas/featured'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
 
+// --- DELETED COLLECTIONS TRACKING ---
+// Track deleted collection IDs to filter them out from relay responses
+// (Relays may still return deleted events until they process the deletion)
+// Persisted to localStorage so deletions survive page reloads
+
+const DELETED_COLLECTIONS_STORAGE_KEY = 'plebeian_deleted_collection_ids'
+
+const loadDeletedCollectionIds = (): Set<string> => {
+	try {
+		const stored = localStorage.getItem(DELETED_COLLECTIONS_STORAGE_KEY)
+		if (stored) {
+			const parsed = JSON.parse(stored)
+			if (Array.isArray(parsed)) {
+				return new Set(parsed)
+			}
+		}
+	} catch (e) {
+		console.error('Failed to load deleted collection IDs from localStorage:', e)
+	}
+	return new Set()
+}
+
+const saveDeletedCollectionIds = (ids: Set<string>) => {
+	try {
+		localStorage.setItem(DELETED_COLLECTIONS_STORAGE_KEY, JSON.stringify([...ids]))
+	} catch (e) {
+		console.error('Failed to save deleted collection IDs to localStorage:', e)
+	}
+}
+
+const deletedCollectionIds = loadDeletedCollectionIds()
+
+export const markCollectionAsDeleted = (dTag: string) => {
+	deletedCollectionIds.add(dTag)
+	saveDeletedCollectionIds(deletedCollectionIds)
+}
+
+export const isCollectionDeleted = (dTag: string) => {
+	return deletedCollectionIds.has(dTag)
+}
+
+const filterDeletedCollections = (events: NDKEvent[]): NDKEvent[] => {
+	return events.filter((event) => {
+		const dTag = event.tags.find((t) => t[0] === 'd')?.[1]
+		return dTag ? !deletedCollectionIds.has(dTag) : true
+	})
+}
+
 // --- DATA FETCHING FUNCTIONS ---
 /**
  * Fetches all collections
@@ -30,8 +78,8 @@ export const fetchCollections = async () => {
 	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 10000 })
 	const allEvents = Array.from(events)
 
-	// Filter out blacklisted collections and authors
-	const filteredEvents = filterBlacklistedEvents(allEvents)
+	// Filter out blacklisted collections and authors, then filter out locally-deleted collections
+	const filteredEvents = filterDeletedCollections(filterBlacklistedEvents(allEvents))
 
 	// Filter out system collections (featured products list)
 	return filteredEvents.filter((event) => {
@@ -62,7 +110,8 @@ export const fetchCollectionsByPubkey = async (pubkey: string) => {
 	const allEvents = Array.from(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 
 	// Filter out blacklisted collections (author check not needed since we're querying by author)
-	const filteredEvents = filterBlacklistedEvents(allEvents)
+	// Then filter out locally-deleted collections
+	const filteredEvents = filterDeletedCollections(filterBlacklistedEvents(allEvents))
 
 	// Filter out system collections (featured products list)
 	return filteredEvents.filter((event) => {
