@@ -271,14 +271,14 @@ function CommunityRoute() {
 			{isHomepageSlide ? (
 				// Homepage hero styling with random collection background
 				<div
-					className={`relative hero-container ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-black'}`}
+					className={`relative hero-container ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-gray-700'}`}
 					onTouchStart={handleTouchStart}
 					onTouchMove={handleTouchMove}
 					onTouchEnd={handleTouchEnd}
 				>
 					<div className="hero-overlays">
-						<div className="absolute inset-0 bg-radial-overlay z-10" />
-						<div className="absolute inset-0 opacity-30 bg-dots-overlay z-10" />
+						<div className="absolute inset-0 bg-radial-overlay z-10 opacity-40" />
+						<div className="absolute inset-0 opacity-20 bg-dots-overlay z-10" />
 					</div>
 
 					<div className="hero-content">{renderHomepageHero()}</div>
@@ -286,14 +286,14 @@ function CommunityRoute() {
 			) : (
 				// Collection hero styling (existing collection page style)
 				<div
-					className={`relative hero-container ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-black'}`}
+					className={`relative hero-container ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-gray-700'}`}
 					onTouchStart={handleTouchStart}
 					onTouchMove={handleTouchMove}
 					onTouchEnd={handleTouchEnd}
 				>
 					<div className="hero-overlays">
-						<div className="absolute inset-0 bg-radial-overlay z-10" />
-						<div className="absolute inset-0 opacity-30 bg-dots-overlay z-10" />
+						<div className="absolute inset-0 bg-radial-overlay z-10 opacity-40" />
+						<div className="absolute inset-0 opacity-20 bg-dots-overlay z-10" />
 					</div>
 
 					<div className="hero-content">{renderCollectionsHero()}</div>
