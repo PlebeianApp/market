@@ -34,6 +34,14 @@ import { createUserNwcWallets } from './gen_wallets'
 
 config()
 
+// Force local relay only mode to prevent connecting to public relays during seeding
+// This must be set before ndkActions.initialize() is called
+// @ts-ignore - Bun.env is available in Bun runtime
+if (typeof Bun !== 'undefined') {
+	Bun.env.LOCAL_RELAY_ONLY = 'true'
+}
+process.env.LOCAL_RELAY_ONLY = 'true'
+
 const RELAY_URL = process.env.APP_RELAY_URL
 const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
 
