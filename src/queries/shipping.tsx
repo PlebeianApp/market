@@ -12,30 +12,38 @@ import { orderKeys, shippingKeys } from './queryKeyFactory'
 export { shippingKeys }
 
 // --- DELETED SHIPPING OPTIONS TRACKING ---
-// Track deleted shipping option IDs to filter them out from relay responses
-// (Relays may still return deleted events until they process the deletion)
-// Persisted to localStorage so deletions survive page reloads
+// Track deleted shipping option d-tags with deletion timestamps to filter them from relay responses.
+// Per NIP-09, deletions only apply to events older than the deletion event.
+// If a new event with the same d-tag is published after the deletion, it should be visible.
+// Persisted to localStorage so deletions survive page reloads.
 
 const DELETED_SHIPPING_STORAGE_KEY = 'plebeian_deleted_shipping_ids'
 
-const loadDeletedShippingIds = (): Set<string> => {
+// Map of d-tag -> deletion timestamp (unix seconds)
+const loadDeletedShippingIds = (): Map<string, number> => {
 	try {
 		const stored = localStorage.getItem(DELETED_SHIPPING_STORAGE_KEY)
 		if (stored) {
 			const parsed = JSON.parse(stored)
+			// Handle legacy format (array of strings) - migrate to new format
 			if (Array.isArray(parsed)) {
-				return new Set(parsed)
+				const now = Math.floor(Date.now() / 1000)
+				return new Map(parsed.map((dTag: string) => [dTag, now]))
+			}
+			// New format: object with d-tag keys and timestamp values
+			if (typeof parsed === 'object' && parsed !== null) {
+				return new Map(Object.entries(parsed))
 			}
 		}
 	} catch (e) {
 		console.error('Failed to load deleted shipping IDs from localStorage:', e)
 	}
-	return new Set()
+	return new Map()
 }
 
-const saveDeletedShippingIds = (ids: Set<string>) => {
+const saveDeletedShippingIds = (ids: Map<string, number>) => {
 	try {
-		localStorage.setItem(DELETED_SHIPPING_STORAGE_KEY, JSON.stringify([...ids]))
+		localStorage.setItem(DELETED_SHIPPING_STORAGE_KEY, JSON.stringify(Object.fromEntries(ids)))
 	} catch (e) {
 		console.error('Failed to save deleted shipping IDs to localStorage:', e)
 	}
@@ -43,19 +51,27 @@ const saveDeletedShippingIds = (ids: Set<string>) => {
 
 const deletedShippingIds = loadDeletedShippingIds()
 
-export const markShippingAsDeleted = (dTag: string) => {
-	deletedShippingIds.add(dTag)
+export const markShippingAsDeleted = (dTag: string, deletionTimestamp?: number) => {
+	// Use provided timestamp or current time
+	const timestamp = deletionTimestamp ?? Math.floor(Date.now() / 1000)
+	deletedShippingIds.set(dTag, timestamp)
 	saveDeletedShippingIds(deletedShippingIds)
 }
 
-export const isShippingDeleted = (dTag: string) => {
-	return deletedShippingIds.has(dTag)
+export const isShippingDeleted = (dTag: string, eventCreatedAt?: number) => {
+	const deletionTimestamp = deletedShippingIds.get(dTag)
+	if (deletionTimestamp === undefined) return false
+	// If no event timestamp provided, assume deleted
+	if (eventCreatedAt === undefined) return true
+	// Per NIP-09: deletion only applies to events older than the deletion
+	return eventCreatedAt < deletionTimestamp
 }
 
 const filterDeletedShippingOptions = (events: NDKEvent[]): NDKEvent[] => {
 	return events.filter((event) => {
 		const dTag = event.tags.find((t) => t[0] === 'd')?.[1]
-		return dTag ? !deletedShippingIds.has(dTag) : true
+		if (!dTag) return true
+		return !isShippingDeleted(dTag, event.created_at)
 	})
 }
 

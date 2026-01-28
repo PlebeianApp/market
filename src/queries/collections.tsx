@@ -9,6 +9,70 @@ import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 import { FEATURED_ITEMS_CONFIG } from '@/lib/schemas/featured'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
 
+// --- DELETED COLLECTIONS TRACKING ---
+// Track deleted collection d-tags with deletion timestamps to filter them from relay responses.
+// Per NIP-09, deletions only apply to events older than the deletion event.
+// If a new event with the same d-tag is published after the deletion, it should be visible.
+// Persisted to localStorage so deletions survive page reloads.
+
+const DELETED_COLLECTIONS_STORAGE_KEY = 'plebeian_deleted_collection_ids'
+
+// Map of d-tag -> deletion timestamp (unix seconds)
+const loadDeletedCollectionIds = (): Map<string, number> => {
+	try {
+		const stored = localStorage.getItem(DELETED_COLLECTIONS_STORAGE_KEY)
+		if (stored) {
+			const parsed = JSON.parse(stored)
+			// Handle legacy format (array of strings) - migrate to new format
+			if (Array.isArray(parsed)) {
+				const now = Math.floor(Date.now() / 1000)
+				return new Map(parsed.map((dTag: string) => [dTag, now]))
+			}
+			// New format: object with d-tag keys and timestamp values
+			if (typeof parsed === 'object' && parsed !== null) {
+				return new Map(Object.entries(parsed))
+			}
+		}
+	} catch (e) {
+		console.error('Failed to load deleted collection IDs from localStorage:', e)
+	}
+	return new Map()
+}
+
+const saveDeletedCollectionIds = (ids: Map<string, number>) => {
+	try {
+		localStorage.setItem(DELETED_COLLECTIONS_STORAGE_KEY, JSON.stringify(Object.fromEntries(ids)))
+	} catch (e) {
+		console.error('Failed to save deleted collection IDs to localStorage:', e)
+	}
+}
+
+const deletedCollectionIds = loadDeletedCollectionIds()
+
+export const markCollectionAsDeleted = (dTag: string, deletionTimestamp?: number) => {
+	// Use provided timestamp or current time
+	const timestamp = deletionTimestamp ?? Math.floor(Date.now() / 1000)
+	deletedCollectionIds.set(dTag, timestamp)
+	saveDeletedCollectionIds(deletedCollectionIds)
+}
+
+export const isCollectionDeleted = (dTag: string, eventCreatedAt?: number) => {
+	const deletionTimestamp = deletedCollectionIds.get(dTag)
+	if (deletionTimestamp === undefined) return false
+	// If no event timestamp provided, assume deleted
+	if (eventCreatedAt === undefined) return true
+	// Per NIP-09: deletion only applies to events older than the deletion
+	return eventCreatedAt < deletionTimestamp
+}
+
+const filterDeletedCollections = (events: NDKEvent[]): NDKEvent[] => {
+	return events.filter((event) => {
+		const dTag = event.tags.find((t) => t[0] === 'd')?.[1]
+		if (!dTag) return true
+		return !isCollectionDeleted(dTag, event.created_at)
+	})
+}
+
 // --- DATA FETCHING FUNCTIONS ---
 /**
  * Fetches all collections
@@ -30,8 +94,8 @@ export const fetchCollections = async () => {
 	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 10000 })
 	const allEvents = Array.from(events)
 
-	// Filter out blacklisted collections and authors
-	const filteredEvents = filterBlacklistedEvents(allEvents)
+	// Filter out blacklisted collections and authors, then filter out locally-deleted collections
+	const filteredEvents = filterDeletedCollections(filterBlacklistedEvents(allEvents))
 
 	// Filter out system collections (featured products list)
 	return filteredEvents.filter((event) => {
@@ -62,7 +126,8 @@ export const fetchCollectionsByPubkey = async (pubkey: string) => {
 	const allEvents = Array.from(events).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 
 	// Filter out blacklisted collections (author check not needed since we're querying by author)
-	const filteredEvents = filterBlacklistedEvents(allEvents)
+	// Then filter out locally-deleted collections
+	const filteredEvents = filterDeletedCollections(filterBlacklistedEvents(allEvents))
 
 	// Filter out system collections (featured products list)
 	return filteredEvents.filter((event) => {

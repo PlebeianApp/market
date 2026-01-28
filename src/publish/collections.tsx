@@ -1,6 +1,7 @@
 import NDK, { NDKEvent, type NDKSigner } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { collectionsKeys } from '@/queries/queryKeyFactory'
+import { markCollectionAsDeleted } from '@/queries/collections'
 import { toast } from 'sonner'
 import { ndkActions } from '@/lib/stores/ndk'
 import type { RichShippingInfo } from '@/lib/stores/cart'
@@ -240,6 +241,10 @@ export const useDeleteCollectionMutation = () => {
 		},
 
 		onSuccess: async (success, collectionId) => {
+			// Mark collection as deleted locally so it's filtered from queries
+			// even if relays still return it
+			markCollectionAsDeleted(collectionId)
+
 			// Get current user pubkey
 			let userPubkey = ''
 			if (signer) {

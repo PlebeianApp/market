@@ -249,9 +249,12 @@ export const ndkActions = {
 			},
 		})
 
-		const zapNdk = new NDK({
-			explicitRelayUrls: ZAP_RELAYS,
-		})
+		// Skip Zap NDK in local-relay-only mode (seeding, testing) to prevent publishing to public relays
+		const zapNdk = localRelayOnly
+			? null
+			: new NDK({
+					explicitRelayUrls: ZAP_RELAYS,
+				})
 
 		// Determine write relays - staging only writes to main relay, others write to all
 		const mainRelay = getMainRelay()
@@ -294,8 +297,10 @@ export const ndkActions = {
 				ndkStore.setState((s) => ({ ...s, isConnected: connected }))
 				if (connected) console.log('✅ NDK connected to relays')
 
-				// Also connect zap NDK in background
-				void ndkActions.connectZapNdk(5000)
+				// Also connect zap NDK in background (if available - skipped in local-relay-only mode)
+				if (state.zapNdk) {
+					void ndkActions.connectZapNdk(5000)
+				}
 			} finally {
 				ndkStore.setState((s) => ({ ...s, isConnecting: false }))
 				connectPromise = null
