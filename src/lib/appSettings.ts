@@ -8,7 +8,13 @@ export async function fetchAppSettings(relayUrl: string, appPubkey: string): Pro
 	try {
 		// Create a fresh NDK instance for server-side initialization
 		// to avoid shared store issues with ndkActions
-		const ndk = new NDK({ explicitRelayUrls: [relayUrl] })
+		const ndk = new NDK({
+			explicitRelayUrls: [relayUrl],
+			// Skip AI guardrails that might filter out events during fetch
+			aiGuardrails: {
+				skip: new Set(['ndk-no-cache', 'fetch-events-usage']),
+			},
+		})
 		await ndk.connect()
 
 		// NIP-33 parameterized replaceable events (kind 31990) are indexed by pubkey+kind+d tag.
