@@ -25,30 +25,38 @@ import { naddrFromAddress } from '@/lib/nostr/naddr'
 export { productKeys }
 
 // --- DELETED PRODUCTS TRACKING ---
-// Track deleted product IDs to filter them out from relay responses
-// (Relays may still return deleted events until they process the deletion)
-// Persisted to localStorage so deletions survive page reloads
+// Track deleted product d-tags with deletion timestamps to filter them from relay responses.
+// Per NIP-09, deletions only apply to events older than the deletion event.
+// If a new event with the same d-tag is published after the deletion, it should be visible.
+// Persisted to localStorage so deletions survive page reloads.
 
 const DELETED_PRODUCTS_STORAGE_KEY = 'plebeian_deleted_product_ids'
 
-const loadDeletedProductIds = (): Set<string> => {
+// Map of d-tag -> deletion timestamp (unix seconds)
+const loadDeletedProductIds = (): Map<string, number> => {
 	try {
 		const stored = localStorage.getItem(DELETED_PRODUCTS_STORAGE_KEY)
 		if (stored) {
 			const parsed = JSON.parse(stored)
+			// Handle legacy format (array of strings) - migrate to new format
 			if (Array.isArray(parsed)) {
-				return new Set(parsed)
+				const now = Math.floor(Date.now() / 1000)
+				return new Map(parsed.map((dTag: string) => [dTag, now]))
+			}
+			// New format: object with d-tag keys and timestamp values
+			if (typeof parsed === 'object' && parsed !== null) {
+				return new Map(Object.entries(parsed))
 			}
 		}
 	} catch (e) {
 		console.error('Failed to load deleted product IDs from localStorage:', e)
 	}
-	return new Set()
+	return new Map()
 }
 
-const saveDeletedProductIds = (ids: Set<string>) => {
+const saveDeletedProductIds = (ids: Map<string, number>) => {
 	try {
-		localStorage.setItem(DELETED_PRODUCTS_STORAGE_KEY, JSON.stringify([...ids]))
+		localStorage.setItem(DELETED_PRODUCTS_STORAGE_KEY, JSON.stringify(Object.fromEntries(ids)))
 	} catch (e) {
 		console.error('Failed to save deleted product IDs to localStorage:', e)
 	}
@@ -56,19 +64,27 @@ const saveDeletedProductIds = (ids: Set<string>) => {
 
 const deletedProductIds = loadDeletedProductIds()
 
-export const markProductAsDeleted = (dTag: string) => {
-	deletedProductIds.add(dTag)
+export const markProductAsDeleted = (dTag: string, deletionTimestamp?: number) => {
+	// Use provided timestamp or current time
+	const timestamp = deletionTimestamp ?? Math.floor(Date.now() / 1000)
+	deletedProductIds.set(dTag, timestamp)
 	saveDeletedProductIds(deletedProductIds)
 }
 
-export const isProductDeleted = (dTag: string) => {
-	return deletedProductIds.has(dTag)
+export const isProductDeleted = (dTag: string, eventCreatedAt?: number) => {
+	const deletionTimestamp = deletedProductIds.get(dTag)
+	if (deletionTimestamp === undefined) return false
+	// If no event timestamp provided, assume deleted
+	if (eventCreatedAt === undefined) return true
+	// Per NIP-09: deletion only applies to events older than the deletion
+	return eventCreatedAt < deletionTimestamp
 }
 
 const filterDeletedProducts = (events: NDKEvent[]): NDKEvent[] => {
 	return events.filter((event) => {
 		const dTag = event.tags.find((t) => t[0] === 'd')?.[1]
-		return dTag ? !deletedProductIds.has(dTag) : true
+		if (!dTag) return true
+		return !isProductDeleted(dTag, event.created_at)
 	})
 }
 

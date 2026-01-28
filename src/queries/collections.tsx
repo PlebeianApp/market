@@ -10,30 +10,38 @@ import { FEATURED_ITEMS_CONFIG } from '@/lib/schemas/featured'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
 
 // --- DELETED COLLECTIONS TRACKING ---
-// Track deleted collection IDs to filter them out from relay responses
-// (Relays may still return deleted events until they process the deletion)
-// Persisted to localStorage so deletions survive page reloads
+// Track deleted collection d-tags with deletion timestamps to filter them from relay responses.
+// Per NIP-09, deletions only apply to events older than the deletion event.
+// If a new event with the same d-tag is published after the deletion, it should be visible.
+// Persisted to localStorage so deletions survive page reloads.
 
 const DELETED_COLLECTIONS_STORAGE_KEY = 'plebeian_deleted_collection_ids'
 
-const loadDeletedCollectionIds = (): Set<string> => {
+// Map of d-tag -> deletion timestamp (unix seconds)
+const loadDeletedCollectionIds = (): Map<string, number> => {
 	try {
 		const stored = localStorage.getItem(DELETED_COLLECTIONS_STORAGE_KEY)
 		if (stored) {
 			const parsed = JSON.parse(stored)
+			// Handle legacy format (array of strings) - migrate to new format
 			if (Array.isArray(parsed)) {
-				return new Set(parsed)
+				const now = Math.floor(Date.now() / 1000)
+				return new Map(parsed.map((dTag: string) => [dTag, now]))
+			}
+			// New format: object with d-tag keys and timestamp values
+			if (typeof parsed === 'object' && parsed !== null) {
+				return new Map(Object.entries(parsed))
 			}
 		}
 	} catch (e) {
 		console.error('Failed to load deleted collection IDs from localStorage:', e)
 	}
-	return new Set()
+	return new Map()
 }
 
-const saveDeletedCollectionIds = (ids: Set<string>) => {
+const saveDeletedCollectionIds = (ids: Map<string, number>) => {
 	try {
-		localStorage.setItem(DELETED_COLLECTIONS_STORAGE_KEY, JSON.stringify([...ids]))
+		localStorage.setItem(DELETED_COLLECTIONS_STORAGE_KEY, JSON.stringify(Object.fromEntries(ids)))
 	} catch (e) {
 		console.error('Failed to save deleted collection IDs to localStorage:', e)
 	}
@@ -41,19 +49,27 @@ const saveDeletedCollectionIds = (ids: Set<string>) => {
 
 const deletedCollectionIds = loadDeletedCollectionIds()
 
-export const markCollectionAsDeleted = (dTag: string) => {
-	deletedCollectionIds.add(dTag)
+export const markCollectionAsDeleted = (dTag: string, deletionTimestamp?: number) => {
+	// Use provided timestamp or current time
+	const timestamp = deletionTimestamp ?? Math.floor(Date.now() / 1000)
+	deletedCollectionIds.set(dTag, timestamp)
 	saveDeletedCollectionIds(deletedCollectionIds)
 }
 
-export const isCollectionDeleted = (dTag: string) => {
-	return deletedCollectionIds.has(dTag)
+export const isCollectionDeleted = (dTag: string, eventCreatedAt?: number) => {
+	const deletionTimestamp = deletedCollectionIds.get(dTag)
+	if (deletionTimestamp === undefined) return false
+	// If no event timestamp provided, assume deleted
+	if (eventCreatedAt === undefined) return true
+	// Per NIP-09: deletion only applies to events older than the deletion
+	return eventCreatedAt < deletionTimestamp
 }
 
 const filterDeletedCollections = (events: NDKEvent[]): NDKEvent[] => {
 	return events.filter((event) => {
 		const dTag = event.tags.find((t) => t[0] === 'd')?.[1]
-		return dTag ? !deletedCollectionIds.has(dTag) : true
+		if (!dTag) return true
+		return !isCollectionDeleted(dTag, event.created_at)
 	})
 }
 
