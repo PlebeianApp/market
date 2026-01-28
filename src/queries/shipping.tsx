@@ -180,6 +180,7 @@ export const shippingOptionByCoordinatesQueryOptions = (pubkey: string, dTag: st
 export const shippingOptionsQueryOptions = queryOptions({
 	queryKey: shippingKeys.all,
 	queryFn: fetchShippingOptions,
+	refetchOnMount: 'always', // Always refetch to pick up deletions
 })
 
 /**

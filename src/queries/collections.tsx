@@ -316,6 +316,7 @@ export const collectionsQueryOptions = queryOptions({
 	queryKey: collectionsKeys.all,
 	queryFn: fetchCollections,
 	staleTime: 30000, // Consider fresh for 30 seconds
+	refetchOnMount: 'always', // Always refetch to pick up deletions
 })
 
 /**

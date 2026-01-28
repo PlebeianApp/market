@@ -340,6 +340,7 @@ export const productsQueryOptions = (limit: number = 500, tag?: string) =>
 		queryKey: tag ? [...productKeys.all, 'tag', tag] : productKeys.all,
 		queryFn: () => fetchProducts(limit, tag),
 		staleTime: 30000, // Consider fresh for 30 seconds
+		refetchOnMount: 'always', // Always refetch to pick up deletions
 	})
 
 /**
