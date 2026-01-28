@@ -150,8 +150,16 @@ export const fetchNwcWalletBalance = async (nwcUri: string): Promise<NwcBalance 
 		}
 	} catch (error: any) {
 		console.error('❌ Error fetching NWC wallet balance:', error)
-		const errorMessage = error?.message || (typeof error === 'string' ? error : 'Failed to fetch balance')
-		toast.error(`Balance fetch failed: ${errorMessage}`)
+		const rawMessage = error?.message || (typeof error === 'string' ? error : '')
+
+		// "Cannot find square root" means the wallet pubkey is all zeros (invalid/missing Lightning key)
+		if (rawMessage.toLowerCase().includes('cannot find square root')) {
+			toast.error('Wallet has no valid Lightning key configured', { id: 'balance-fetch-invalid-key' })
+		} else if (rawMessage) {
+			toast.error(`Balance fetch failed: ${rawMessage}`, { id: 'balance-fetch-error' })
+		} else {
+			toast.error('Failed to fetch balance', { id: 'balance-fetch-error' })
+		}
 		return null
 	} finally {
 		// keep NWC client cached; no explicit disconnect in NDK
