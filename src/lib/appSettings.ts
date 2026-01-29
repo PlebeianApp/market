@@ -38,7 +38,7 @@ export async function fetchAppSettings(relayUrl: string, appPubkey: string): Pro
 		const filter: NDKFilter = {
 			kinds: [31990],
 			authors: [appPubkey],
-			'#d': ['app/settings'],
+			'#d': ['plebeian-market-handler'],
 			limit: 1,
 		}
 
