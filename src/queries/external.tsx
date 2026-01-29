@@ -14,20 +14,79 @@ export const CURRENCY_CACHE_CONFIG = {
 	RESOLVE_TIMEOUT: 5000,
 } as const
 
+// LocalStorage cache key
+const EXCHANGE_RATES_CACHE_KEY = 'btc_exchange_rates'
+
+interface CachedExchangeRates {
+	rates: Record<SupportedCurrency, number>
+	timestamp: number
+}
+
+/**
+ * Gets cached exchange rates from localStorage if not expired
+ * @returns Cached rates or null if expired/not found
+ */
+const getCachedRates = (): Record<SupportedCurrency, number> | null => {
+	try {
+		const cached = localStorage.getItem(EXCHANGE_RATES_CACHE_KEY)
+		if (!cached) return null
+
+		const { rates, timestamp }: CachedExchangeRates = JSON.parse(cached)
+		const now = Date.now()
+
+		// Check if cache has expired (older than STALE_TIME)
+		if (now - timestamp > CURRENCY_CACHE_CONFIG.STALE_TIME) {
+			return null
+		}
+
+		return rates
+	} catch {
+		return null
+	}
+}
+
+/**
+ * Stores exchange rates in localStorage with timestamp
+ */
+const cacheRates = (rates: Record<SupportedCurrency, number>): void => {
+	try {
+		const cacheData: CachedExchangeRates = {
+			rates,
+			timestamp: Date.now(),
+		}
+		localStorage.setItem(EXCHANGE_RATES_CACHE_KEY, JSON.stringify(cacheData))
+	} catch (error) {
+		console.warn('Failed to cache exchange rates:', error)
+	}
+}
+
 // --- DATA FETCHING FUNCTIONS ---
 
 /**
  * Fetches BTC exchange rates against other currencies
+ * Uses localStorage cache if available and not expired
  * @returns Record of currency exchange rates with BTC
  */
 export const fetchBtcExchangeRates = async (): Promise<Record<SupportedCurrency, number>> => {
+	// Check localStorage cache first
+	const cachedRates = getCachedRates()
+	if (cachedRates) {
+		return cachedRates
+	}
+
+	// Cache expired or not found, fetch from API
 	try {
 		const response = await fetch('https://api.yadio.io/exrates/BTC')
 		if (!response.ok) {
 			throw new Error(`HTTP error! status: ${response.status}`)
 		}
 		const data = await response.json()
-		return data.BTC
+		const rates = data.BTC
+
+		// Store in localStorage with timestamp
+		cacheRates(rates)
+
+		return rates
 	} catch (error) {
 		console.error('Failed to fetch BTC exchange rates:', error)
 		throw new Error('Failed to fetch BTC exchange rates')
