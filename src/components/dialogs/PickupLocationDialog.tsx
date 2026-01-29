@@ -1,19 +1,9 @@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Spinner } from '@/components/ui/spinner'
 import { MapPin } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet'
-import L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
-
-// Fix for default marker icons in react-leaflet
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-delete (L.Icon.Default.prototype as any)._getIconUrl
-L.Icon.Default.mergeOptions({
-	iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-	iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-	shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-})
+import maplibregl from 'maplibre-gl'
+import 'maplibre-gl/dist/maplibre-gl.css'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface PickupAddress {
 	street: string
@@ -42,24 +32,6 @@ interface GeocodedLocation {
 	lon: number
 }
 
-// Component to fit map bounds to all markers
-function MapBoundsUpdater({ locations }: { locations: GeocodedLocation[] }) {
-	const map = useMap()
-
-	useEffect(() => {
-		if (locations.length === 0) return
-
-		if (locations.length === 1) {
-			map.setView([locations[0].lat, locations[0].lon], 15)
-		} else {
-			const bounds = L.latLngBounds(locations.map((loc) => [loc.lat, loc.lon]))
-			map.fitBounds(bounds, { padding: [50, 50] })
-		}
-	}, [map, locations])
-
-	return null
-}
-
 function formatAddress(address: PickupAddress): string {
 	return [address.street, address.city, address.state, address.postalCode, address.country].filter(Boolean).join(', ')
 }
@@ -68,6 +40,8 @@ export function PickupLocationDialog({ open, onOpenChange, locations, vendorName
 	const [geocodedLocations, setGeocodedLocations] = useState<GeocodedLocation[]>([])
 	const [loading, setLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
+	const mapContainerRef = useRef<HTMLDivElement>(null)
+	const mapRef = useRef<maplibregl.Map | null>(null)
 
 	useEffect(() => {
 		if (!open || locations.length === 0) return
@@ -127,9 +101,73 @@ export function PickupLocationDialog({ open, onOpenChange, locations, vendorName
 		geocodeAllLocations()
 	}, [open, locations])
 
+	const initMap = useCallback(() => {
+		if (!mapContainerRef.current || geocodedLocations.length === 0) return
+		if (mapRef.current) {
+			mapRef.current.remove()
+			mapRef.current = null
+		}
+
+		const map = new maplibregl.Map({
+			container: mapContainerRef.current,
+			style: {
+				version: 8,
+				sources: {
+					osm: {
+						type: 'raster',
+						tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+						tileSize: 256,
+						attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+					},
+				},
+				layers: [
+					{
+						id: 'osm',
+						type: 'raster',
+						source: 'osm',
+					},
+				],
+			},
+			center: [geocodedLocations[0].lon, geocodedLocations[0].lat],
+			zoom: 15,
+			scrollZoom: false,
+		})
+
+		for (const location of geocodedLocations) {
+			const popup = new maplibregl.Popup({ offset: 25 }).setHTML(
+				`<div style="font-size: 14px;"><p style="font-weight: 500; margin: 0 0 4px 0;">${location.name}</p><p style="margin: 0; color: #71717a;">${location.address}</p></div>`,
+			)
+
+			new maplibregl.Marker().setLngLat([location.lon, location.lat]).setPopup(popup).addTo(map)
+		}
+
+		if (geocodedLocations.length > 1) {
+			const bounds = new maplibregl.LngLatBounds()
+			for (const loc of geocodedLocations) {
+				bounds.extend([loc.lon, loc.lat])
+			}
+			map.fitBounds(bounds, { padding: 50 })
+		}
+
+		mapRef.current = map
+	}, [geocodedLocations])
+
+	// Initialize map when geocoded locations are ready and container is mounted
+	useEffect(() => {
+		if (geocodedLocations.length > 0) {
+			// Small delay to ensure the container is rendered in the DOM
+			const id = requestAnimationFrame(initMap)
+			return () => cancelAnimationFrame(id)
+		}
+	}, [geocodedLocations, initMap])
+
 	// Reset state when dialog closes
 	useEffect(() => {
 		if (!open) {
+			if (mapRef.current) {
+				mapRef.current.remove()
+				mapRef.current = null
+			}
 			setGeocodedLocations([])
 			setError(null)
 		}
@@ -179,28 +217,7 @@ export function PickupLocationDialog({ open, onOpenChange, locations, vendorName
 						) : error ? (
 							<div className="h-full w-full flex items-center justify-center bg-zinc-100 text-muted-foreground text-sm">{error}</div>
 						) : geocodedLocations.length > 0 ? (
-							<MapContainer
-								center={[geocodedLocations[0].lat, geocodedLocations[0].lon]}
-								zoom={15}
-								style={{ height: '100%', width: '100%' }}
-								scrollWheelZoom={false}
-							>
-								<TileLayer
-									attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-									url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-								/>
-								{geocodedLocations.map((location, index) => (
-									<Marker key={index} position={[location.lat, location.lon]}>
-										<Popup>
-											<div className="text-sm">
-												<p className="font-medium">{location.name}</p>
-												<p className="text-muted-foreground">{location.address}</p>
-											</div>
-										</Popup>
-									</Marker>
-								))}
-								<MapBoundsUpdater locations={geocodedLocations} />
-							</MapContainer>
+							<div ref={mapContainerRef} style={{ height: '100%', width: '100%' }} />
 						) : (
 							<div className="h-full w-full flex items-center justify-center bg-zinc-100 text-muted-foreground text-sm">Loading map...</div>
 						)}
