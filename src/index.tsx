@@ -192,7 +192,8 @@ const serveStatic = async (path: string) => {
 	const filePath = join(process.cwd(), baseDir, path)
 	try {
 		const f = file(filePath)
-		if (!f.exists()) {
+		const exists = await f.exists()
+		if (!exists) {
 			return new Response('File not found', { status: 404 })
 		}
 		// Determine content type based on file extension
@@ -359,6 +360,13 @@ export const server = serve({
 		'/manifest.json': () => serveStatic('manifest.json'),
 		'/sw.js': () => serveStatic('sw.js'),
 		'/favicon.ico': () => serveStatic('favicon.ico'),
+		// Static assets - only needed in production when Caddy proxies everything to Bun
+		'/chunk-:hash.js': ({ params }) => serveStatic(`chunk-${params.hash}.js`),
+		'/chunk-:hash.css': ({ params }) => serveStatic(`chunk-${params.hash}.css`),
+		'/:file.ttf': ({ params }) => serveStatic(`${params.file}.ttf`),
+		'/:file.woff': ({ params }) => serveStatic(`${params.file}.woff`),
+		'/:file.woff2': ({ params }) => serveStatic(`${params.file}.woff2`),
+		// SPA fallback - must be last
 		'/*': index,
 	},
 	development: process.env.NODE_ENV !== 'production',

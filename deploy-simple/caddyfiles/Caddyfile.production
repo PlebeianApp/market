@@ -6,25 +6,10 @@
 #   legacy.plebeian.market → Legacy app (port 4173)  - DO NOT MODIFY
 
 plebeian.market {
-	root * /opt/market-production/dist
 	encode gzip
 
-	# API routes → Bun
-	handle /api/* {
-		reverse_proxy localhost:3001
-	}
-
-	# WebSocket → Bun
-	@ws header Connection *Upgrade*
-	handle @ws {
-		reverse_proxy localhost:3001
-	}
-
-	# Static files with SPA fallback (must be last)
-	handle {
-		try_files {path} /index.html
-		file_server
-	}
+	# Proxy everything to Bun - it handles static files and routing
+	reverse_proxy localhost:3001
 }
 
 # Nostr relay (managed separately)
