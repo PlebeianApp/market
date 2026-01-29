@@ -113,7 +113,7 @@ jobs:
           password: ${{ secrets.STAGING_PASSWORD }}
           script: |
             mkdir -p ~/releases ~/logs
-            # Ensure Caddy can access static files
+            mkdir -p ~/releases/${{ needs.build.outputs.release_name }}
             chmod 755 ~
 
       - name: Deploy files
@@ -125,6 +125,7 @@ jobs:
           source: 'deploy-package/*'
           target: '/home/deployer/releases/${{ needs.build.outputs.release_name }}'
           strip_components: 1
+          overwrite: true
 
       - name: Deploy Caddyfile
         uses: appleboy/scp-action@v0.1.7

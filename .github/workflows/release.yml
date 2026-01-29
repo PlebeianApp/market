@@ -129,8 +129,8 @@ jobs:
           script: |
             sudo mkdir -p /opt/releases
             sudo chown $USER:$USER /opt/releases
+            mkdir -p /opt/releases/${{ needs.build.outputs.release_name }}
             mkdir -p ~/logs
-            # Ensure Caddy can access static files (if using home dir)
             chmod 755 ~
 
       - name: Deploy files
@@ -142,6 +142,7 @@ jobs:
           source: 'deploy-package/*'
           target: '/opt/releases/${{ needs.build.outputs.release_name }}'
           strip_components: 1
+          overwrite: true
 
       - name: Deploy Caddyfile
         uses: appleboy/scp-action@v0.1.7
