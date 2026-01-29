@@ -8,10 +8,10 @@ This folder simulates a VPS environment locally for testing the deployment proce
 
 ## When to Use What
 
-| Folder | Purpose | Used By |
-|--------|---------|---------|
-| `deploy/` | Local Docker simulation | Developers testing deployment |
-| `deploy-simple/` | Real deployments | GitHub Actions, manual deploys |
+| Folder           | Purpose                 | Used By                        |
+| ---------------- | ----------------------- | ------------------------------ |
+| `deploy/`        | Local Docker simulation | Developers testing deployment  |
+| `deploy-simple/` | Real deployments        | GitHub Actions, manual deploys |
 
 ## Quick Start (Local Testing with Docker)
 
