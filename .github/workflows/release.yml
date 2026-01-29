@@ -93,8 +93,8 @@ jobs:
               instances: 1,
               exec_mode: 'fork',
               env_file: '.env',
-              error_file: '/var/log/pm2/market-production-error.log',
-              out_file: '/var/log/pm2/market-production-out.log',
+              error_file: process.env.HOME + '/logs/market-production-error.log',
+              out_file: process.env.HOME + '/logs/market-production-out.log',
               log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
               merge_logs: true,
               autorestart: true,
@@ -127,7 +127,11 @@ jobs:
           username: ${{ secrets.PROD_USER }}
           password: ${{ secrets.PROD_PASSWORD }}
           script: |
-            mkdir -p /opt/releases /var/log/pm2
+            sudo mkdir -p /opt/releases
+            sudo chown $USER:$USER /opt/releases
+            mkdir -p ~/logs
+            # Ensure Caddy can access static files (if using home dir)
+            chmod 755 ~
 
       - name: Deploy files
         uses: appleboy/scp-action@v0.1.7
@@ -173,7 +177,8 @@ jobs:
             sudo systemctl disable market.service 2>/dev/null || true
 
             # Swap symlink (blue-green)
-            ln -sfn "$RELEASE_DIR" "$APP_DIR"
+            sudo ln -sfn "$RELEASE_DIR" "$APP_DIR"
+            sudo chown -h $USER:$USER "$APP_DIR"
 
             # Start new version with PM2
             cd "$APP_DIR"
