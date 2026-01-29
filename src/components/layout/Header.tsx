@@ -143,6 +143,7 @@ export function Header() {
 							<img src={config.appSettings.picture} alt={config.appSettings.displayName} className="w-16 px-2" />
 						)}
 					</Link>
+					TEST
 					<div className="hidden sm:flex mx-8 gap-8">
 						<Link
 							to="/products"
