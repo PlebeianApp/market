@@ -105,7 +105,7 @@ jobs:
           NIP46_RELAY_URL=wss://relay.nsec.app
           EOF
 
-      - name: Create releases directory
+      - name: Prepare server directories
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.STAGING_HOST }}
@@ -113,21 +113,20 @@ jobs:
           password: ${{ secrets.STAGING_PASSWORD }}
           script: |
             mkdir -p ~/releases ~/logs
-            mkdir -p ~/releases/${{ needs.build.outputs.release_name }}
             chmod 755 ~
+            rm -rf /tmp/deploy-package
 
-      - name: Deploy files
+      - name: Upload files to tmp
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
           password: ${{ secrets.STAGING_PASSWORD }}
           source: 'deploy-package/*'
-          target: '/home/deployer/releases/${{ needs.build.outputs.release_name }}'
+          target: '/tmp/deploy-package'
           strip_components: 1
-          overwrite: true
 
-      - name: Deploy Caddyfile
+      - name: Upload Caddyfile
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.STAGING_HOST }}
@@ -136,6 +135,15 @@ jobs:
           source: 'deploy-simple/caddyfiles/Caddyfile.staging'
           target: '/tmp'
           strip_components: 2
+
+      - name: Move files to release directory
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          password: ${{ secrets.STAGING_PASSWORD }}
+          script: |
+            mv /tmp/deploy-package ~/releases/${{ needs.build.outputs.release_name }}
 
       - name: Activate release
         uses: appleboy/ssh-action@v1.0.3

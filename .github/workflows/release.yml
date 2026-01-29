@@ -120,7 +120,7 @@ jobs:
           LOG_LEVEL=info
           EOF
 
-      - name: Create releases directory
+      - name: Prepare server directories
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.PROD_HOST }}
@@ -129,22 +129,21 @@ jobs:
           script: |
             sudo mkdir -p /opt/releases
             sudo chown $USER:$USER /opt/releases
-            mkdir -p /opt/releases/${{ needs.build.outputs.release_name }}
             mkdir -p ~/logs
             chmod 755 ~
+            rm -rf /tmp/deploy-package
 
-      - name: Deploy files
+      - name: Upload files to tmp
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
           password: ${{ secrets.PROD_PASSWORD }}
           source: 'deploy-package/*'
-          target: '/opt/releases/${{ needs.build.outputs.release_name }}'
+          target: '/tmp/deploy-package'
           strip_components: 1
-          overwrite: true
 
-      - name: Deploy Caddyfile
+      - name: Upload Caddyfile
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.PROD_HOST }}
@@ -153,6 +152,15 @@ jobs:
           source: 'deploy-simple/caddyfiles/Caddyfile.production'
           target: '/tmp'
           strip_components: 2
+
+      - name: Move files to release directory
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          password: ${{ secrets.PROD_PASSWORD }}
+          script: |
+            mv /tmp/deploy-package /opt/releases/${{ needs.build.outputs.release_name }}
 
       - name: Activate release
         uses: appleboy/ssh-action@v1.0.3
