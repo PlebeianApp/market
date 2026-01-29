@@ -1,0 +1,34 @@
+# Plebeian Market - Production
+#
+# Services:
+#   plebeian.market        → Market app (port 3001)
+#   relay.plebeian.market  → Nostr relay (port 3334) - DO NOT MODIFY
+#   legacy.plebeian.market → Legacy app (port 4173)  - DO NOT MODIFY
+
+plebeian.market {
+	root * /opt/market-production/dist
+	encode gzip
+
+	# API and WebSocket → Bun
+	handle /api/* {
+		reverse_proxy localhost:3001
+	}
+	@ws header Connection *Upgrade*
+	handle @ws {
+		reverse_proxy localhost:3001
+	}
+
+	# Static files, then SPA fallback
+	try_files {path} /index.html
+	file_server
+}
+
+# Nostr relay (managed separately)
+relay.plebeian.market {
+	reverse_proxy localhost:3334
+}
+
+# Legacy version (managed separately)
+legacy.plebeian.market {
+	reverse_proxy localhost:4173
+}

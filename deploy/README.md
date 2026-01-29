@@ -1,6 +1,17 @@
-# Plebeian Market - Deploy
+# Plebeian Market - Local Development Environment
 
-This folder contains everything needed to deploy Plebeian Market to a VPS with full monitoring.
+> **⚠️ This folder is for LOCAL TESTING ONLY using Docker.**
+>
+> For actual staging/production deployments, see [`deploy-simple/`](../deploy-simple/README.md).
+
+This folder simulates a VPS environment locally for testing the deployment process without affecting real servers.
+
+## When to Use What
+
+| Folder | Purpose | Used By |
+|--------|---------|---------|
+| `deploy/` | Local Docker simulation | Developers testing deployment |
+| `deploy-simple/` | Real deployments | GitHub Actions, manual deploys |
 
 ## Quick Start (Local Testing with Docker)
 
@@ -24,6 +35,7 @@ open http://localhost:3000     # Application (direct)
 ```
 
 > **Note**: The Docker simulation has some limitations:
+>
 > - No systemd (Netdata, Prometheus, Grafana won't auto-start)
 > - SSH may have rate limiting after many connections
 > - Use a real VPS for production deployments
@@ -34,10 +46,11 @@ open http://localhost:3000     # Application (direct)
 
 - Docker & Docker Compose
 - `sshpass` (for automated SSH)
+
   ```bash
   # macOS
   brew install hudochenkov/sshpass/sshpass
-  
+
   # Ubuntu/Debian
   apt-get install sshpass
   ```
@@ -52,17 +65,27 @@ open http://localhost:3000     # Application (direct)
 ## Folder Structure
 
 ```
-deploy/
-├── Dockerfile.vps          # Ubuntu 22.04 container with SSH
-├── docker-compose.yml      # Container orchestration
-├── Caddyfile               # Reverse proxy configuration
-├── ecosystem.config.js     # PM2 process configuration
-├── setup-vps.sh            # Installs all dependencies
-├── deploy-app.sh           # Deploys the application
-├── pm2-control.sh          # Remote PM2 control
-├── .env.staging.example    # Staging environment template
-├── .env.production.example # Production environment template
-└── README.md               # This file
+deploy/                       # LOCAL TESTING ONLY
+├── Dockerfile.vps            # Ubuntu 22.04 container with SSH
+├── docker-compose.yml        # Container orchestration
+├── Caddyfile                 # Reverse proxy config (Docker only)
+├── ecosystem.config.cjs      # PM2 config (Docker only)
+├── setup-vps.sh              # Installs dependencies on container
+├── deploy-app.sh             # Deploys to Docker container
+├── pm2-control.sh            # Remote PM2 control
+└── README.md                 # This file
+
+deploy-simple/                # REAL DEPLOYMENTS
+├── deploy.sh                 # Multi-stage deployment script
+├── control.sh                # Service control commands
+├── caddyfiles/               # Stage-specific Caddy configs
+│   ├── Caddyfile.staging
+│   └── Caddyfile.production
+├── env/                      # Environment templates
+│   ├── .env.development.example
+│   ├── .env.staging.example
+│   └── .env.production.example
+└── README.md                 # Deployment documentation
 ```
 
 ## Scripts
@@ -148,6 +171,7 @@ Control PM2 processes without SSH-ing manually:
 ### PM2 Prometheus Exporter (http://localhost:9209/metrics)
 
 Exports PM2 metrics for Prometheus:
+
 - Process CPU and memory usage
 - Restart counts
 - Process status
@@ -155,11 +179,13 @@ Exports PM2 metrics for Prometheus:
 ### Netdata (http://localhost:19999) - Production VPS Only
 
 Real-time system monitoring with:
+
 - CPU, memory, disk, network graphs
 - Per-process resource usage
 - System alerts
 
 > **Note**: Requires systemd to auto-start. In Docker simulation, run manually:
+>
 > ```bash
 > ssh deployer@localhost -p 2222
 > sudo netdata
@@ -168,6 +194,7 @@ Real-time system monitoring with:
 ### Prometheus + Grafana - Production VPS Only
 
 For production VPS with systemd, you can install:
+
 - **Prometheus**: Metrics collection and storage
 - **Grafana**: Dashboards and visualization
 
@@ -190,6 +217,7 @@ The deployment uses blue-green (or "immutable deployment") strategy:
 ```
 
 Benefits:
+
 - **Instant rollback**: Just update symlink to previous release
 - **No downtime**: New version is ready before swap
 - **Clean state**: Each release is isolated
@@ -200,12 +228,14 @@ Benefits:
 ### Caddyfile
 
 Configures the reverse proxy:
+
 - Routes traffic to PM2 apps
 - Handles WebSocket connections
 - Automatic HTTPS (in production)
 - Access logging
 
 Edit for production:
+
 ```caddyfile
 # Change from:
 :80 {
@@ -222,18 +252,22 @@ plebeian.market {
 }
 ```
 
-### ecosystem.config.js
+### ecosystem.config.cjs
 
-PM2 process configuration:
+PM2 process configuration **for Docker simulation only**:
+
 - App name, script, arguments
 - Environment variables
 - Log file locations
 - Restart policies
 - Resource limits
 
+> **Note**: This file is NOT used for real deployments. The `deploy-simple/deploy.sh` script generates `ecosystem.config.cjs` dynamically with stage-specific paths and settings.
+
 ### Environment Files
 
 Copy and customize:
+
 ```bash
 # On staging server
 cp .env.staging.example /home/deployer/market/.env
@@ -268,13 +302,12 @@ nano /opt/market/.env
 
 ### GitHub Actions Integration
 
-Update `.github/workflows/deploy.yml` to use these scripts:
+GitHub Actions workflows use `deploy-simple/` for real deployments:
 
-```yaml
-- name: Deploy to staging
-  run: |
-    ./deploy/deploy-app.sh ${{ secrets.STAGING_HOST }} ${{ secrets.STAGING_USER }} ${{ secrets.STAGING_PASSWORD }}
-```
+- `.github/workflows/deploy.yml` → Staging (on push to master)
+- `.github/workflows/release.yml` → Production (on release tags)
+
+See [`deploy-simple/README.md`](../deploy-simple/README.md) for setup instructions.
 
 ### Security Recommendations
 
@@ -293,6 +326,7 @@ Update `.github/workflows/deploy.yml` to use these scripts:
 ## Troubleshooting
 
 ### Container won't start
+
 ```bash
 docker-compose logs vps
 docker-compose down -v  # Reset volumes
@@ -300,6 +334,7 @@ docker-compose up -d
 ```
 
 ### SSH connection refused
+
 ```bash
 # Wait for container to fully start
 sleep 10
@@ -308,17 +343,20 @@ docker-compose ps
 ```
 
 ### App not starting
+
 ```bash
 ./pm2-control.sh logs
 ./pm2-control.sh status
 ```
 
 ### Grafana not showing data
+
 1. Check Prometheus is running: http://localhost:9090/targets
 2. Check PM2 exporter: http://localhost:9209/metrics
 3. Restart Grafana: `./pm2-control.sh` then manually restart
 
 ### Reset everything
+
 ```bash
 docker-compose down -v
 docker-compose up -d
@@ -328,14 +366,14 @@ docker-compose up -d
 
 ## Port Reference
 
-| Port | Service | Description |
-|------|---------|-------------|
-| 2222 | SSH | Container SSH (maps to 22 inside) |
-| 80 | Caddy | HTTP traffic |
-| 443 | Caddy | HTTPS traffic |
-| 3000 | Market | Staging application |
-| 3001 | Market | Production application |
-| 9090 | Prometheus | Metrics storage |
-| 3003 | Grafana | Dashboards |
-| 19999 | Netdata | Real-time monitoring |
-| 9209 | PM2 Exporter | PM2 metrics endpoint |
+| Port  | Service      | Description                       |
+| ----- | ------------ | --------------------------------- |
+| 2222  | SSH          | Container SSH (maps to 22 inside) |
+| 80    | Caddy        | HTTP traffic                      |
+| 443   | Caddy        | HTTPS traffic                     |
+| 3000  | Market       | Staging application               |
+| 3001  | Market       | Production application            |
+| 9090  | Prometheus   | Metrics storage                   |
+| 3003  | Grafana      | Dashboards                        |
+| 19999 | Netdata      | Real-time monitoring              |
+| 9209  | PM2 Exporter | PM2 metrics endpoint              |
