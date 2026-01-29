@@ -77,7 +77,7 @@ nak mcp            # Start MCP server for AI integration
 - 30405: Collections
 - 30406: Shipping options
 - 1063: Comments (NIP-22)
-- 31990/30078: App settings
+- 31990: App settings (NIP-89 Handler Information, d-tag: `plebeian-market-handler`)
 - 31555: Product reviews
 - 14, 16, 17: Order communication (NIP-17 encrypted DMs)
 
