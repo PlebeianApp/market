@@ -356,7 +356,6 @@ export const server = serve({
 			},
 		},
 		'/images/:file': ({ params }) => serveStatic(`images/${params.file}`),
-		'/logo.svg': () => serveStatic('images/logo.svg'),
 		'/manifest.json': () => serveStatic('manifest.json'),
 		'/sw.js': () => serveStatic('sw.js'),
 		'/favicon.ico': () => serveStatic('favicon.ico'),
