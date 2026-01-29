@@ -9,18 +9,22 @@ plebeian.market {
 	root * /opt/market-production/dist
 	encode gzip
 
-	# API and WebSocket → Bun
+	# API routes → Bun
 	handle /api/* {
 		reverse_proxy localhost:3001
 	}
+
+	# WebSocket → Bun
 	@ws header Connection *Upgrade*
 	handle @ws {
 		reverse_proxy localhost:3001
 	}
 
-	# Static files, then SPA fallback
-	try_files {path} /index.html
-	file_server
+	# Static files with SPA fallback (must be last)
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
 }
 
 # Nostr relay (managed separately)
