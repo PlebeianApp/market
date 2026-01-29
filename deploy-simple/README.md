@@ -150,39 +150,26 @@ nak serve  # Runs on ws://localhost:10547
 Go to Settings → Secrets and variables → Actions → New repository secret
 
 **Staging secrets:**
+
 ```
 STAGING_HOST=staging.plebeian.market
 STAGING_USER=deployer
-STAGING_SSH_KEY=<paste your private SSH key>
+STAGING_PASSWORD=<deployer password>
 STAGING_RELAY_URL=wss://relay.staging.plebeian.market
 STAGING_APP_PRIVATE_KEY=<64-char hex private key>
 ```
 
 **Production secrets:**
+
 ```
 PROD_HOST=plebeian.market
 PROD_USER=deployer
-PROD_SSH_KEY=<paste your private SSH key>
+PROD_PASSWORD=<deployer password>
 PROD_RELAY_URL=wss://relay.plebeian.market
 PROD_APP_PRIVATE_KEY=<64-char hex private key>
-PROD_BLOSSOM_SERVER=https://blossom.plebeian.market
-PROD_NIP96_SERVER=https://media.plebeian.market
 ```
 
-### Step 3: Generate SSH key for GitHub Actions
-
-```bash
-# Generate a dedicated deploy key
-ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/github_deploy_key
-
-# Add public key to VPS
-ssh-copy-id -i ~/.ssh/github_deploy_key.pub deployer@your-server.com
-
-# Copy private key content for GitHub secret
-cat ~/.ssh/github_deploy_key
-```
-
-### Step 4: Generate Nostr private key
+### Step 3: Generate Nostr private key
 
 ```bash
 # Using nak
@@ -194,7 +181,7 @@ nak key generate
 # public key: <64-char hex>
 ```
 
-### Step 5: Deploy
+### Step 4: Deploy
 
 ```bash
 # Staging: Push to master
@@ -496,7 +483,7 @@ The project includes GitHub Actions workflows for automated deployments:
 | ------------------------- | ------------------------------------------------------------- |
 | `STAGING_HOST`            | Staging server hostname                                       |
 | `STAGING_USER`            | SSH username                                                  |
-| `STAGING_SSH_KEY`         | SSH private key                                               |
+| `STAGING_PASSWORD`        | SSH password                                                  |
 | `STAGING_RELAY_URL`       | Nostr relay URL (e.g., `wss://relay.staging.plebeian.market`) |
 | `STAGING_APP_PRIVATE_KEY` | App's Nostr private key (hex)                                 |
 
@@ -506,11 +493,9 @@ The project includes GitHub Actions workflows for automated deployments:
 | ---------------------- | ----------------------------------------------------- |
 | `PROD_HOST`            | Production server hostname                            |
 | `PROD_USER`            | SSH username                                          |
-| `PROD_SSH_KEY`         | SSH private key                                       |
+| `PROD_PASSWORD`        | SSH password                                          |
 | `PROD_RELAY_URL`       | Nostr relay URL (e.g., `wss://relay.plebeian.market`) |
 | `PROD_APP_PRIVATE_KEY` | App's Nostr private key (hex)                         |
-| `PROD_BLOSSOM_SERVER`  | Blossom media server URL                              |
-| `PROD_NIP96_SERVER`    | NIP-96 media server URL                               |
 
 ### Creating a Release
 

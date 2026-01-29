@@ -110,7 +110,7 @@ jobs:
         with:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
-          key: ${{ secrets.STAGING_SSH_KEY }}
+          password: ${{ secrets.STAGING_PASSWORD }}
           script: |
             mkdir -p /home/deployer/releases /home/deployer/logs
 
@@ -119,7 +119,7 @@ jobs:
         with:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
-          key: ${{ secrets.STAGING_SSH_KEY }}
+          password: ${{ secrets.STAGING_PASSWORD }}
           source: 'deploy-package/*'
           target: '/home/deployer/releases/${{ needs.build.outputs.release_name }}'
           strip_components: 1
@@ -129,7 +129,7 @@ jobs:
         with:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
-          key: ${{ secrets.STAGING_SSH_KEY }}
+          password: ${{ secrets.STAGING_PASSWORD }}
           source: 'deploy-simple/caddyfiles/Caddyfile.staging'
           target: '/tmp'
           strip_components: 2
@@ -139,7 +139,7 @@ jobs:
         with:
           host: ${{ secrets.STAGING_HOST }}
           username: ${{ secrets.STAGING_USER }}
-          key: ${{ secrets.STAGING_SSH_KEY }}
+          password: ${{ secrets.STAGING_PASSWORD }}
           script: |
             set -e
             RELEASE_DIR="/home/deployer/releases/${{ needs.build.outputs.release_name }}"

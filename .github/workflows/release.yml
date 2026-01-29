@@ -117,8 +117,6 @@ jobs:
           APP_RELAY_URL=${{ secrets.PROD_RELAY_URL }}
           APP_PRIVATE_KEY=${{ secrets.PROD_APP_PRIVATE_KEY }}
           NIP46_RELAY_URL=wss://relay.nsec.app
-          BLOSSOM_SERVER=${{ secrets.PROD_BLOSSOM_SERVER }}
-          NIP96_SERVER=${{ secrets.PROD_NIP96_SERVER }}
           LOG_LEVEL=info
           EOF
 
@@ -127,7 +125,7 @@ jobs:
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
-          key: ${{ secrets.PROD_SSH_KEY }}
+          password: ${{ secrets.PROD_PASSWORD }}
           script: |
             mkdir -p /opt/releases /var/log/pm2
 
@@ -136,7 +134,7 @@ jobs:
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
-          key: ${{ secrets.PROD_SSH_KEY }}
+          password: ${{ secrets.PROD_PASSWORD }}
           source: 'deploy-package/*'
           target: '/opt/releases/${{ needs.build.outputs.release_name }}'
           strip_components: 1
@@ -146,7 +144,7 @@ jobs:
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
-          key: ${{ secrets.PROD_SSH_KEY }}
+          password: ${{ secrets.PROD_PASSWORD }}
           source: 'deploy-simple/caddyfiles/Caddyfile.production'
           target: '/tmp'
           strip_components: 2
@@ -156,7 +154,7 @@ jobs:
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
-          key: ${{ secrets.PROD_SSH_KEY }}
+          password: ${{ secrets.PROD_PASSWORD }}
           script: |
             set -e
             RELEASE_DIR="/opt/releases/${{ needs.build.outputs.release_name }}"
@@ -205,7 +203,7 @@ jobs:
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
-          key: ${{ secrets.PROD_SSH_KEY }}
+          password: ${{ secrets.PROD_PASSWORD }}
           script: |
             # Verify relay service is untouched
             if curl -sf http://localhost:3334 > /dev/null 2>&1; then
