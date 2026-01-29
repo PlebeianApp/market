@@ -185,9 +185,11 @@ getEventHandler()
 	})
 	.catch((error) => console.error(error))
 
-// Handle static files from the public directory
+// Handle static files from public (dev) or dist (production)
 const serveStatic = async (path: string) => {
-	const filePath = join(process.cwd(), 'public', path)
+	const isDev = process.env.NODE_ENV !== 'production'
+	const baseDir = isDev ? 'public' : 'dist'
+	const filePath = join(process.cwd(), baseDir, path)
 	try {
 		const f = file(filePath)
 		if (!f.exists()) {
