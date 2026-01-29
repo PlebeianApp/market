@@ -7,6 +7,14 @@ import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 
 config()
 
+// Force local relay only mode to prevent connecting to public relays during startup
+// This must be set before ndkActions.initialize() is called
+// @ts-ignore - Bun.env is available in Bun runtime
+if (typeof Bun !== 'undefined') {
+	Bun.env.LOCAL_RELAY_ONLY = 'true'
+}
+process.env.LOCAL_RELAY_ONLY = 'true'
+
 const RELAY_URL = process.env.APP_RELAY_URL
 const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
 
@@ -39,7 +47,7 @@ async function createAppSettingsEvent(signer: NDKPrivateKeySigner) {
 	appHandlerEvent.kind = 31990
 	appHandlerEvent.content = JSON.stringify(appSettings)
 	appHandlerEvent.tags = [
-		['d', 'app/settings'],
+		['d', 'plebeian-market-handler'],
 		['k', '30402'], // Product events
 		['k', '30405'], // Collection events
 		['k', String(SHIPPING_KIND)], // Shipping events

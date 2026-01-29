@@ -13,7 +13,7 @@ interface DashboardListItemProps extends React.HTMLAttributes<HTMLDivElement> {
 	children: React.ReactNode
 	isCollapsible?: boolean
 	isDeleting?: boolean
-	icon?: React.ReactNode
+	icon?: React.ReactNode | false
 	useCloseIcon?: boolean
 }
 
@@ -42,7 +42,7 @@ const DashboardListItem = React.forwardRef<HTMLDivElement, DashboardListItemProp
 					<CollapsibleTrigger asChild>
 						<div className="p-4 flex flex-row items-center justify-between cursor-pointer group rounded-lg">
 							<div className="flex items-center gap-4 min-w-0 flex-1 overflow-hidden">
-								<div className="p-2 bg-muted rounded-full shrink-0">{icon ?? <WalletIcon className="h-6 w-6" />}</div>
+								{icon !== false && <div className="p-2 bg-muted rounded-full shrink-0">{icon ?? <WalletIcon className="h-6 w-6" />}</div>}
 								<div className="min-w-0 flex-1 overflow-hidden">{triggerContent}</div>
 							</div>
 							<div className="flex items-center gap-2 shrink-0 ml-2">

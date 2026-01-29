@@ -27,8 +27,10 @@ interface PaymentRequestWithRecipient {
 }
 
 // Timestamps for seeding (seconds since epoch)
-const MIN_SEED_TIMESTAMP = 1704067200 // January 1, 2024, 00:00:00 UTC
-const MAX_SEED_TIMESTAMP = 1748927999 // June 3, 2025, 23:59:59 UTC
+// Dynamic timestamps: events span the last 30 days to avoid NDK AI guardrails rejecting old events
+const NOW_TIMESTAMP = Math.floor(Date.now() / 1000)
+const MIN_SEED_TIMESTAMP = NOW_TIMESTAMP - 30 * 24 * 60 * 60 // 30 days ago
+const MAX_SEED_TIMESTAMP = NOW_TIMESTAMP - 60 // 1 minute ago (slightly in the past)
 
 // Helper to get a random timestamp within the defined seeding range
 function getRandomPastTimestamp(min = MIN_SEED_TIMESTAMP, max = MAX_SEED_TIMESTAMP): number {

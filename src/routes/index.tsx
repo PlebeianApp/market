@@ -100,10 +100,10 @@ function Index() {
 	return (
 		<div>
 			{/* Hero Section */}
-			<div className={`relative hero-container ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-black'}`}>
+			<div className={`relative hero-container ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-gray-700'}`}>
 				<div className="hero-overlays">
-					<div className="absolute inset-0 bg-radial-overlay z-10" />
-					<div className="absolute inset-0 opacity-30 bg-dots-overlay z-10" />
+					<div className="absolute inset-0 bg-radial-overlay z-10 opacity-40" />
+					<div className="absolute inset-0 opacity-20 bg-dots-overlay z-10" />
 				</div>
 
 				<div className="hero-content">

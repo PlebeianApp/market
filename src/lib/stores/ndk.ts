@@ -65,19 +65,24 @@ async function connectNdkWithTimeout(ndk: NDK, timeoutMs: number, label: string)
 }
 
 /**
- * Get the current stage from config
+ * Get the current stage from config.
+ * Returns undefined if config hasn't been loaded yet.
  */
-function getCurrentStage(): Stage {
+function getCurrentStage(): Stage | undefined {
+	if (!configStore.state.isLoaded) return undefined
 	return configStore.state.config.stage || 'development'
 }
 
 /**
- * Get the main relay for the current stage
+ * Get the main relay for the current stage.
+ * Returns undefined if config hasn't been loaded yet (prevents localhost relay in production).
  */
-export function getMainRelay(): string {
+export function getMainRelay(): string | undefined {
 	const appRelay = configStore.state.config.appRelay
 	if (appRelay) return appRelay // Server-provided appRelay takes precedence
-	return MAIN_RELAY_BY_STAGE[getCurrentStage()]
+	const stage = getCurrentStage()
+	if (!stage) return undefined // Config not loaded yet, don't assume a stage
+	return MAIN_RELAY_BY_STAGE[stage]
 }
 
 /**
@@ -88,7 +93,8 @@ export function getWriteRelays(): string[] {
 	const stage = getCurrentStage()
 	if (stage === 'staging') {
 		const mainRelay = getMainRelay()
-		return [mainRelay, BUG_RELAY] // Staging writes to staging relay + bug relay
+		// Filter out undefined main relay
+		return mainRelay ? [mainRelay, BUG_RELAY] : [BUG_RELAY] // Staging writes to staging relay + bug relay
 	}
 	// Production and development write to all connected relays
 	return ndkStore.state.explicitRelayUrls
@@ -123,20 +129,29 @@ function getRelayUrls(overrideRelays?: string[]): string[] {
 	const localRelayOnly = typeof Bun !== 'undefined' && Bun.env?.LOCAL_RELAY_ONLY === 'true'
 
 	// Get main relay (from config or stage default)
+	// Will be undefined if config hasn't loaded yet, preventing localhost relay in production
 	const mainRelay = getMainRelay()
 
-	// Development with local_relay_only: only local relay
-	if (stage === 'development' && localRelayOnly) {
+	// Development mode: only use local/main relay to prevent polluting public relays
+	// This applies to both server (Bun) and browser environments
+	if (stage === 'development' && mainRelay) {
 		return [mainRelay]
 	}
 
-	// Override relays take precedence if provided (but always include main relay)
-	if (overrideRelays?.length) {
-		return Array.from(new Set([mainRelay, ...overrideRelays]))
+	// Server-side with LOCAL_RELAY_ONLY flag: only local relay
+	if (localRelayOnly && mainRelay) {
+		return [mainRelay]
 	}
 
-	// Standard case: main relay + public default relays
-	return Array.from(new Set([mainRelay, ...DEFAULT_PUBLIC_RELAYS]))
+	// Override relays take precedence if provided (include main relay if available)
+	if (overrideRelays?.length) {
+		const relays = mainRelay ? [mainRelay, ...overrideRelays] : overrideRelays
+		return Array.from(new Set(relays))
+	}
+
+	// Standard case: main relay (if available) + public default relays
+	const relays = mainRelay ? [mainRelay, ...DEFAULT_PUBLIC_RELAYS] : DEFAULT_PUBLIC_RELAYS
+	return Array.from(new Set(relays))
 }
 
 export const ndkActions = {
@@ -229,8 +244,9 @@ export const ndkActions = {
 		const localRelayOnly = typeof Bun !== 'undefined' && Bun.env?.LOCAL_RELAY_ONLY === 'true'
 		const stage = getCurrentStage()
 
-		// Disable outbox model for staging (enforces write-only-to-staging) and local-only dev
-		const enableOutbox = stage !== 'staging' && !localRelayOnly
+		// Disable outbox model for staging, development, and local-only mode
+		// This prevents NDK from discovering and connecting to additional relays
+		const enableOutbox = stage !== 'staging' && stage !== 'development' && !localRelayOnly
 
 		const ndk = new NDK({
 			explicitRelayUrls: explicitRelays,
@@ -240,17 +256,27 @@ export const ndkActions = {
 			},
 		})
 
-		const zapNdk = new NDK({
-			explicitRelayUrls: ZAP_RELAYS,
-		})
+		// Skip Zap NDK in development mode or local-relay-only mode to prevent connecting to public relays
+		const skipZapNdk = stage === 'development' || localRelayOnly
+		const zapNdk = skipZapNdk
+			? null
+			: new NDK({
+					explicitRelayUrls: ZAP_RELAYS,
+				})
+
+		// Determine write relays - staging only writes to main relay, others write to all
+		const mainRelay = getMainRelay()
+		const writeRelays =
+			stage === 'staging' && mainRelay
+				? [mainRelay] // Staging: only main relay
+				: explicitRelays // Others: all explicit relays
 
 		ndkStore.setState((s) => ({
 			...s,
 			ndk,
 			zapNdk,
 			explicitRelayUrls: explicitRelays,
-			// Staging only writes to main relay, others write to all
-			writeRelayUrls: getCurrentStage() === 'staging' ? [getMainRelay()] : explicitRelays,
+			writeRelayUrls: writeRelays,
 		}))
 
 		// If config was already loaded before initialization, ensure appRelay is included.
@@ -279,8 +305,10 @@ export const ndkActions = {
 				ndkStore.setState((s) => ({ ...s, isConnected: connected }))
 				if (connected) console.log('✅ NDK connected to relays')
 
-				// Also connect zap NDK in background
-				void ndkActions.connectZapNdk(5000)
+				// Also connect zap NDK in background (if available - skipped in local-relay-only mode)
+				if (state.zapNdk) {
+					void ndkActions.connectZapNdk(5000)
+				}
 			} finally {
 				ndkStore.setState((s) => ({ ...s, isConnecting: false }))
 				connectPromise = null

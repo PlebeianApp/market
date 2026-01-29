@@ -1,0 +1,8 @@
+# Connection settings (may contain passwords)
+.env.deploy
+.env.deploy.*
+
+# Actual env files (contain secrets)
+env/.env.development
+env/.env.staging
+env/.env.production

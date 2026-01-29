@@ -1,0 +1,93 @@
+# Caddyfile for Plebeian Market
+# This file configures the reverse proxy for staging and production
+
+# Global settings
+{
+    # Email for Let's Encrypt notifications
+    email admin@plebeian.market
+    
+    # For local/testing, use internal CA
+    # Remove this block for production with real SSL
+    local_certs
+}
+
+# Staging environment
+# In production, change to: staging.plebeian.market
+:80 {
+    # Reverse proxy to staging app
+    reverse_proxy localhost:3000 {
+        # Health checks
+        health_uri /api/config
+        health_interval 30s
+        health_timeout 10s
+        
+        # Headers
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+    
+    # WebSocket support
+    @websocket {
+        header Connection *Upgrade*
+        header Upgrade websocket
+    }
+    reverse_proxy @websocket localhost:3000
+    
+    # Logging
+    log {
+        output file /var/log/caddy/staging-access.log {
+            roll_size 100mb
+            roll_keep 5
+        }
+        format json
+    }
+}
+
+# Production environment (uncomment for dual deployment)
+# In production, change to: plebeian.market
+# :443 {
+#     reverse_proxy localhost:3001 {
+#         health_uri /api/config
+#         health_interval 30s
+#         health_timeout 10s
+#         
+#         header_up Host {host}
+#         header_up X-Real-IP {remote_host}
+#         header_up X-Forwarded-For {remote_host}
+#         header_up X-Forwarded-Proto {scheme}
+#     }
+#     
+#     @websocket {
+#         header Connection *Upgrade*
+#         header Upgrade websocket
+#     }
+#     reverse_proxy @websocket localhost:3001
+#     
+#     log {
+#         output file /var/log/caddy/production-access.log {
+#             roll_size 100mb
+#             roll_keep 5
+#         }
+#         format json
+#     }
+# }
+
+# Monitoring endpoints (internal only)
+:9000 {
+    # Netdata
+    reverse_proxy /netdata/* localhost:19999 {
+        header_up Host {host}
+    }
+    
+    # Prometheus
+    reverse_proxy /prometheus/* localhost:9090 {
+        header_up Host {host}
+    }
+    
+    # Grafana
+    reverse_proxy /grafana/* localhost:3003 {
+        header_up Host {host}
+    }
+}

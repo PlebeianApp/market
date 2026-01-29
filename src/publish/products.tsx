@@ -2,6 +2,7 @@ import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 import type { RichShippingInfo } from '@/lib/stores/cart'
 import { ndkActions } from '@/lib/stores/ndk'
 import { productKeys } from '@/queries/queryKeyFactory'
+import { markProductAsDeleted } from '@/queries/products'
 import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -328,6 +329,10 @@ export const useDeleteProductMutation = () => {
 		},
 
 		onSuccess: async (success, productDTag) => {
+			// Mark product as deleted locally so it's filtered from queries
+			// even if relays still return it
+			markProductAsDeleted(productDTag)
+
 			// Get current user pubkey
 			let userPubkey = ''
 			if (signer) {

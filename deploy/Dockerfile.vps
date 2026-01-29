@@ -1,0 +1,57 @@
+# Ubuntu 22.04 VPS Simulation
+# This image simulates a fresh production VPS for testing deployment scripts
+
+FROM ubuntu:22.04
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
+
+# Install only basic packages that would be on a fresh VPS
+RUN apt-get update && apt-get install -y \
+    openssh-server \
+    sudo \
+    curl \
+    wget \
+    git \
+    vim \
+    nano \
+    htop \
+    unzip \
+    ca-certificates \
+    gnupg \
+    lsb-release \
+    && rm -rf /var/lib/apt/lists/*
+
+# Configure SSH
+RUN mkdir -p /var/run/sshd
+RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin no/' /etc/ssh/sshd_config
+RUN sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+
+# Create deployer user (matches production setup)
+RUN useradd -m -s /bin/bash deployer
+RUN echo 'deployer:deployer' | chpasswd
+RUN usermod -aG sudo deployer
+RUN echo 'deployer ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+
+# Create necessary directories
+RUN mkdir -p /home/deployer/releases
+RUN mkdir -p /home/deployer/logs
+RUN chown -R deployer:deployer /home/deployer
+
+# Create entrypoint script
+RUN echo '#!/bin/bash\nmkdir -p /run/sshd\nexec /usr/sbin/sshd -D' > /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Expose ports
+# 22: SSH
+# 80: HTTP (Caddy)
+# 443: HTTPS (Caddy)
+# 3000: Market staging
+# 3001: Market production
+# 10547: ORLY relay
+# 9209: PM2 Prometheus exporter
+EXPOSE 22 80 443 3000 3001 10547 9209
+
+# Start SSH daemon via entrypoint
+CMD ["/entrypoint.sh"]

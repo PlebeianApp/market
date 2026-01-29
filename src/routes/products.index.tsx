@@ -298,14 +298,14 @@ function ProductsRoute() {
 			{isHomepageSlide ? (
 				// Homepage hero styling with random product background
 				<div
-					className={`relative hero-container-carousel ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-black'}`}
+					className={`relative hero-container-carousel ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-gray-700'}`}
 					onTouchStart={handleTouchStart}
 					onTouchMove={handleTouchMove}
 					onTouchEnd={handleTouchEnd}
 				>
 					<div className="hero-overlays">
-						<div className="absolute inset-0 bg-radial-overlay z-10" />
-						<div className="absolute inset-0 opacity-30 bg-dots-overlay z-10" />
+						<div className="absolute inset-0 bg-radial-overlay z-10 opacity-40" />
+						<div className="absolute inset-0 opacity-20 bg-dots-overlay z-10" />
 					</div>
 
 					<div className="hero-content">{renderHomepageHero()}</div>
@@ -313,14 +313,14 @@ function ProductsRoute() {
 			) : (
 				// Product hero styling (existing product page style)
 				<div
-					className={`relative hero-container-carousel ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-black'}`}
+					className={`relative hero-container-carousel ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-gray-700'}`}
 					onTouchStart={handleTouchStart}
 					onTouchMove={handleTouchMove}
 					onTouchEnd={handleTouchEnd}
 				>
 					<div className="hero-overlays">
-						<div className="absolute inset-0 bg-radial-overlay z-10" />
-						<div className="absolute inset-0 opacity-30 bg-dots-overlay z-10" />
+						<div className="absolute inset-0 bg-radial-overlay z-10 opacity-40" />
+						<div className="absolute inset-0 opacity-20 bg-dots-overlay z-10" />
 					</div>
 
 					<div className="hero-content">{renderProductHero()}</div>

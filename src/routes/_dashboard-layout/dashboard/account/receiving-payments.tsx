@@ -291,6 +291,7 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 		}
 		return {
 			id: '',
+			dTag: '',
 			userId: '',
 			paymentMethod: PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK,
 			paymentDetail: '',
@@ -329,6 +330,7 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 	const resetForm = useCallback(() => {
 		setEditedPaymentDetail({
 			id: '',
+			dTag: '',
 			userId: user?.pubkey || '',
 			paymentMethod: PAYMENT_DETAILS_METHOD.LIGHTNING_NETWORK,
 			paymentDetail: '',
@@ -469,9 +471,9 @@ function PaymentDetailForm({ paymentDetail, isOpen, onOpenChange, onSuccess }: P
 	}
 
 	const handleDelete = () => {
-		if (isEditing && editedPaymentDetail.id && user?.pubkey) {
+		if (isEditing && editedPaymentDetail.dTag && user?.pubkey) {
 			deleteMutation.mutate({
-				paymentDetailId: editedPaymentDetail.id,
+				dTag: editedPaymentDetail.dTag,
 				userPubkey: user.pubkey,
 			})
 			onOpenChange(false)
@@ -738,9 +740,9 @@ function PaymentDetailListItem({ paymentDetail, isOpen, onOpenChange, isDeleting
 	const deleteMutation = useDeletePaymentDetail()
 
 	const handleDelete = () => {
-		if (paymentDetail) {
+		if (paymentDetail && paymentDetail.dTag) {
 			deleteMutation.mutate(
-				{ paymentDetailId: paymentDetail.id, userPubkey: paymentDetail.userId },
+				{ dTag: paymentDetail.dTag, userPubkey: paymentDetail.userId },
 				{
 					onSuccess: () => {
 						toast.success('Payment detail deleted successfully')

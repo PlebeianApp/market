@@ -114,7 +114,7 @@ ${productUrl}
 					<DialogDescription id="share-dialog-description">Share this product with others or post it to your Nostr feed.</DialogDescription>
 				</DialogHeader>
 
-				<div className="space-y-6 py-4">
+				<div className="space-y-6 py-4 overflow-x-hidden">
 					{isAuthenticated && (
 						<div className="space-y-2">
 							<label htmlFor="share-text" className="text-sm font-medium text-gray-700">
@@ -126,13 +126,13 @@ ${productUrl}
 								value={shareText}
 								onChange={(e) => setShareText(e.target.value)}
 								rows={8}
-								className="resize-none break-words"
+								className="resize-none break-words whitespace-pre-wrap w-full overflow-wrap-anywhere"
 								placeholder="Write something about this product..."
 							/>
 						</div>
 					)}
 
-					<div className="flex gap-2">
+					<div className="flex gap-2 flex-wrap">
 						<Button variant="tertiary" onClick={handleCopyUrl} className="shrink-0">
 							{isCopied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
 							{isCopied ? 'Copied!' : 'Copy URL'}

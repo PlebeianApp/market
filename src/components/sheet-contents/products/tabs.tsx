@@ -570,6 +570,7 @@ export function ImagesTab() {
 			<div className="flex flex-col gap-4">
 				<Label>
 					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Image Upload</span>
+					<span className="sr-only">required</span>
 					{images.length === 0 && <span className="text-sm text-red-500 ml-2">(At least one image required)</span>}
 				</Label>
 
@@ -847,9 +848,16 @@ export function ShippingTab() {
 		}
 	}
 
+	const hasValidShipping = shippings.some((s) => s.shipping && s.shipping.id)
+
 	return (
 		<div className="space-y-6">
 			<div className="space-y-2">
+				<Label>
+					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Shipping Options</span>
+					<span className="sr-only">required</span>
+					{!hasValidShipping && <span className="text-sm text-red-500 ml-2">(At least one shipping option required)</span>}
+				</Label>
 				<p className="text-gray-600">Select shipping options that will be available for this product</p>
 			</div>
 

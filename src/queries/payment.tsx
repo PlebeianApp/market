@@ -21,11 +21,68 @@ export type PaymentMethod = PaymentDetailsMethod
  */
 export interface PaymentDetail {
 	id: string // Event ID
+	dTag: string // d-tag for addressable event (needed for proper NIP-09 deletion)
 	paymentMethod: PaymentMethod
 	paymentDetail: string // Could be bolt11, btc address, etc.
 	createdAt: number
 	coordinates?: string // Optional product/collection coordinates
 	isDefault?: boolean // Whether this is the default payment method
+}
+
+// --- DELETED PAYMENT DETAILS TRACKING ---
+// Track deleted payment detail d-tags with deletion timestamps to filter them from relay responses.
+// Per NIP-09, deletions only apply to events older than the deletion event.
+// If a new event with the same d-tag is published after the deletion, it should be visible.
+// Persisted to localStorage so deletions survive page reloads.
+
+const DELETED_PAYMENT_DETAILS_STORAGE_KEY = 'plebeian_deleted_payment_detail_ids'
+
+// Map of d-tag -> deletion timestamp (unix seconds)
+const loadDeletedPaymentDetailIds = (): Map<string, number> => {
+	try {
+		const stored = localStorage.getItem(DELETED_PAYMENT_DETAILS_STORAGE_KEY)
+		if (stored) {
+			const parsed = JSON.parse(stored)
+			// Handle legacy format (array of strings) - migrate to new format
+			if (Array.isArray(parsed)) {
+				const now = Math.floor(Date.now() / 1000)
+				return new Map(parsed.map((dTag: string) => [dTag, now]))
+			}
+			// New format: object with d-tag keys and timestamp values
+			if (typeof parsed === 'object' && parsed !== null) {
+				return new Map(Object.entries(parsed))
+			}
+		}
+	} catch (e) {
+		console.error('Failed to load deleted payment detail IDs from localStorage:', e)
+	}
+	return new Map()
+}
+
+const saveDeletedPaymentDetailIds = (ids: Map<string, number>) => {
+	try {
+		localStorage.setItem(DELETED_PAYMENT_DETAILS_STORAGE_KEY, JSON.stringify(Object.fromEntries(ids)))
+	} catch (e) {
+		console.error('Failed to save deleted payment detail IDs to localStorage:', e)
+	}
+}
+
+const deletedPaymentDetailIds = loadDeletedPaymentDetailIds()
+
+export const markPaymentDetailAsDeleted = (dTag: string, deletionTimestamp?: number) => {
+	// Use provided timestamp or current time
+	const timestamp = deletionTimestamp ?? Math.floor(Date.now() / 1000)
+	deletedPaymentDetailIds.set(dTag, timestamp)
+	saveDeletedPaymentDetailIds(deletedPaymentDetailIds)
+}
+
+export const isPaymentDetailDeleted = (dTag: string, eventCreatedAt?: number) => {
+	const deletionTimestamp = deletedPaymentDetailIds.get(dTag)
+	if (deletionTimestamp === undefined) return false
+	// If no event timestamp provided, assume deleted
+	if (eventCreatedAt === undefined) return true
+	// Per NIP-09: deletion only applies to events older than the deletion
+	return eventCreatedAt < deletionTimestamp
 }
 
 /**
@@ -90,8 +147,16 @@ export const fetchPaymentDetail = async (id: string): Promise<PaymentDetail | nu
 			const aTags = event.tags.filter((tag) => tag[0] === 'a')
 			const coordinates = aTags.length > 0 ? aTags.map((t) => t[1]).join(',') : undefined
 
+			// Get d-tag for addressable event identification
+			const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
+			if (!dTag) {
+				console.log('Payment detail event missing d-tag:', id)
+				return null
+			}
+
 			return {
 				id: event.id,
+				dTag,
 				paymentMethod: parsedContent.payment_method || 'other',
 				paymentDetail: parsedContent.payment_detail || '',
 				createdAt: event.created_at || 0,
@@ -146,6 +211,9 @@ export const fetchUserPaymentDetails = async (userPubkey: string): Promise<Payme
 		for (const event of eventsArray) {
 			const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
 			if (!dTag) continue
+
+			// Skip if this d-tag is marked as deleted and event is older than deletion
+			if (isPaymentDetailDeleted(dTag, event.created_at)) continue
 
 			const existingEvent = eventsByDTag.get(dTag)
 			if (!existingEvent || (event.created_at || 0) > (existingEvent.created_at || 0)) {
@@ -216,6 +284,9 @@ export const fetchProductPaymentDetails = async (coordinates: string, userPubkey
 		for (const event of eventsArray) {
 			const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
 			if (!dTag) continue
+
+			// Skip if this d-tag is marked as deleted and event is older than deletion
+			if (isPaymentDetailDeleted(dTag, event.created_at)) continue
 
 			const existingEvent = eventsByDTag.get(dTag)
 			if (!existingEvent || (event.created_at || 0) > (existingEvent.created_at || 0)) {
@@ -366,7 +437,7 @@ export interface UpdatePaymentDetailParams extends PublishRichPaymentDetailParam
  * Interface for deleting payment details
  */
 export interface DeletePaymentDetailParams {
-	paymentDetailId: string
+	dTag: string // d-tag of the payment detail to delete
 	userPubkey: string
 }
 
@@ -643,6 +714,7 @@ export const useUpdatePaymentDetail = () => {
 
 /**
  * Deletes payment details by publishing a deletion event
+ * Uses a-tag for addressable events per NIP-09
  */
 export const deletePaymentDetail = async (params: DeletePaymentDetailParams): Promise<string> => {
 	try {
@@ -653,15 +725,18 @@ export const deletePaymentDetail = async (params: DeletePaymentDetailParams): Pr
 		if (!signer) throw new Error('No signer available')
 
 		// Create a deletion event (NIP-09)
+		// Use a-tag for addressable events (kind 30078)
 		const event = new NDKEvent(ndk)
 		event.kind = 5 // Deletion event
 		event.content = 'Deleted payment detail'
-		event.tags = [
-			['e', params.paymentDetailId], // Event to delete
-		]
+		event.tags = [['a', `${NDKKind.AppSpecificData}:${params.userPubkey}:${params.dTag}`]]
 
 		await event.sign(signer)
 		await ndkActions.publishEvent(event)
+
+		// Mark as deleted locally so it's filtered from queries
+		// even if relays still return it
+		markPaymentDetailAsDeleted(params.dTag)
 
 		return event.id
 	} catch (error) {
