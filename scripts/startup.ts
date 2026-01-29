@@ -47,7 +47,7 @@ async function createAppSettingsEvent(signer: NDKPrivateKeySigner) {
 	appHandlerEvent.kind = 31990
 	appHandlerEvent.content = JSON.stringify(appSettings)
 	appHandlerEvent.tags = [
-		['d', 'app/settings'],
+		['d', 'plebeian-market-handler'],
 		['k', '30402'], // Product events
 		['k', '30405'], // Collection events
 		['k', String(SHIPPING_KIND)], // Shipping events
