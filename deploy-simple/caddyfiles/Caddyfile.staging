@@ -1,0 +1,32 @@
+# Plebeian Market - Staging
+#
+# Services:
+#   staging.plebeian.market       → Market app (port 3000)
+#   relay.staging.plebeian.market → Nostr relay (port 10547)
+#   bugs.plebeian.market          → Bug tracker (port 10548)
+
+staging.plebeian.market {
+	root * /home/deployer/market-staging/dist
+	encode gzip
+
+	# API and WebSocket → Bun
+	handle /api/* {
+		reverse_proxy localhost:3000
+	}
+	@ws header Connection *Upgrade*
+	handle @ws {
+		reverse_proxy localhost:3000
+	}
+
+	# Static files, then SPA fallback
+	try_files {path} /index.html
+	file_server
+}
+
+relay.staging.plebeian.market {
+	reverse_proxy localhost:10547
+}
+
+bugs.plebeian.market {
+	reverse_proxy localhost:10548
+}

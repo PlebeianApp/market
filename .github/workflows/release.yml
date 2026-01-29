@@ -1,4 +1,4 @@
-name: Deploy Production Release
+name: Deploy to Production
 
 on:
   push:
@@ -10,9 +10,16 @@ on:
         description: 'Tag to deploy (optional, uses latest -release tag if empty)'
         required: false
 
+env:
+  BUN_VERSION: 'latest'
+
 jobs:
-  deploy-production:
+  build:
+    name: Build
     runs-on: ubuntu-latest
+    outputs:
+      release_name: ${{ steps.release.outputs.name }}
+      version: ${{ steps.version.outputs.tag }}
 
     steps:
       - name: Checkout code
@@ -28,12 +35,12 @@ jobs:
           echo "Deploying version: $TAG"
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+        uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       - name: Build application
         run: |
@@ -42,69 +49,172 @@ jobs:
 
       - name: Generate release name
         id: release
-        run: echo "name=market-$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
+        run: echo "name=market-production-$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
+
+      - name: Create deployment package
+        run: |
+          mkdir -p deploy-package
+          cp -r dist deploy-package/
+          cp -r src deploy-package/
+          cp package.json bun.lock tsconfig.json deploy-package/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-package
+          path: deploy-package/
+          retention-days: 1
+
+  deploy-production:
+    name: Deploy to Production
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deploy-package
+          path: deploy-package/
+
+      - name: Create ecosystem config
+        run: |
+          cat > deploy-package/ecosystem.config.cjs << 'EOF'
+          module.exports = {
+            apps: [{
+              name: 'market-production',
+              script: 'src/index.tsx',
+              interpreter: process.env.HOME + '/.bun/bin/bun',
+              cwd: '/opt/market-production',
+              instances: 1,
+              exec_mode: 'fork',
+              env_file: '.env',
+              error_file: '/var/log/pm2/market-production-error.log',
+              out_file: '/var/log/pm2/market-production-out.log',
+              log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+              merge_logs: true,
+              autorestart: true,
+              max_restarts: 10,
+              min_uptime: '10s',
+              restart_delay: 5000,
+              max_memory_restart: '1G',
+              kill_timeout: 5000,
+              wait_ready: true,
+              listen_timeout: 10000,
+            }],
+          };
+          EOF
+
+      - name: Create environment file
+        run: |
+          cat > deploy-package/.env << EOF
+          NODE_ENV=production
+          PORT=3001
+          APP_RELAY_URL=${{ secrets.PROD_RELAY_URL }}
+          APP_PRIVATE_KEY=${{ secrets.PROD_APP_PRIVATE_KEY }}
+          NIP46_RELAY_URL=wss://relay.nsec.app
+          LOG_LEVEL=info
+          EOF
 
       - name: Create releases directory
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
-          key: ${{ secrets.PROD_SSH_KEY }}
+          password: ${{ secrets.PROD_PASSWORD }}
           script: |
-            mkdir -p /opt/releases
+            mkdir -p /opt/releases /var/log/pm2
 
-      - name: Deploy to new release directory
-        uses: appleboy/scp-action@master
+      - name: Deploy files
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
-          key: ${{ secrets.PROD_SSH_KEY }}
-          source: './*'
-          target: '/opt/releases/${{ steps.release.outputs.name }}'
+          password: ${{ secrets.PROD_PASSWORD }}
+          source: 'deploy-package/*'
+          target: '/opt/releases/${{ needs.build.outputs.release_name }}'
+          strip_components: 1
 
-      - name: Setup and swap release (blue-green)
-        uses: appleboy/ssh-action@master
+      - name: Deploy Caddyfile
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
-          key: ${{ secrets.PROD_SSH_KEY }}
+          password: ${{ secrets.PROD_PASSWORD }}
+          source: 'deploy-simple/caddyfiles/Caddyfile.production'
+          target: '/tmp'
+          strip_components: 2
+
+      - name: Activate release
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          password: ${{ secrets.PROD_PASSWORD }}
           script: |
-            RELEASE_DIR="/opt/releases/${{ steps.release.outputs.name }}"
-            CURRENT_LINK="/opt/market"
+            set -e
+            RELEASE_DIR="/opt/releases/${{ needs.build.outputs.release_name }}"
+            APP_DIR="/opt/market-production"
 
+            # Install dependencies
             cd "$RELEASE_DIR"
+            export PATH="$HOME/.bun/bin:$PATH"
+            bun install --production
 
-            # Create production environment file
-            cat <<EOF > .env
-            NODE_ENV=production
-            APP_RELAY_URL=${{ secrets.PROD_APP_RELAY_URL }}
-            APP_PRIVATE_KEY=${{ secrets.APP_PRIVATE_KEY }}
-            EOF
+            # Stop current version (PM2 only - don't touch systemd services!)
+            pm2 stop market-production 2>/dev/null || true
 
-            # Install production dependencies (while old version still running)
-            ~/.bun/bin/bun install --production
+            # Stop old systemd service if still running (migration)
+            sudo systemctl stop market.service 2>/dev/null || true
+            sudo systemctl disable market.service 2>/dev/null || true
 
-            # Quick swap: stop, update symlink, start (~1-2 seconds downtime)
-            sudo systemctl stop market.service || true
+            # Swap symlink (blue-green)
+            ln -sfn "$RELEASE_DIR" "$APP_DIR"
 
-            # Handle migration from directory to symlink (first blue-green deploy)
-            if [ -d "$CURRENT_LINK" ] && [ ! -L "$CURRENT_LINK" ]; then
-              mv "$CURRENT_LINK" "$CURRENT_LINK.old.$(date +%Y%m%d-%H%M%S)"
-            fi
+            # Start new version with PM2
+            cd "$APP_DIR"
+            pm2 startOrReload ecosystem.config.cjs --only market-production
+            pm2 save --force
 
-            ln -sfn "$RELEASE_DIR" "$CURRENT_LINK"
-            sudo systemctl start market.service
+            # Update Caddy (preserves relay and legacy services)
+            sudo cp /tmp/Caddyfile.production /etc/caddy/Caddyfile
+            sudo mkdir -p /var/log/caddy
+            sudo caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || \
+              sudo caddy start --config /etc/caddy/Caddyfile --adapter caddyfile
 
-            # Verify deployment
-            sleep 3
-            sudo systemctl status market.service --no-pager
-
-            # Cleanup old releases (keep last 3)
+            # Cleanup old releases (keep last 5 for production)
             cd /opt/releases
-            ls -t | tail -n +4 | xargs -r rm -rf
+            ls -t | grep '^market-production' | tail -n +6 | xargs -r rm -rf
+
+            echo "✅ Production deployment of ${{ needs.build.outputs.version }} complete"
 
       - name: Health check
         run: |
-          sleep 10
-          curl -sf -o /dev/null https://plebeian.market/ || echo "Warning: Health check pending DNS propagation"
-          echo "✅ Production deployment of ${{ steps.version.outputs.tag }} complete! (blue-green swap)"
+          sleep 15
+          curl -sf https://plebeian.market/api/config || echo "⚠️ Health check pending"
+          echo "✅ Production deployment complete"
+
+      - name: Verify relay is still running
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          password: ${{ secrets.PROD_PASSWORD }}
+          script: |
+            # Verify relay service is untouched
+            if curl -sf http://localhost:3334 > /dev/null 2>&1; then
+              echo "✅ Relay service (port 3334) is running"
+            else
+              echo "⚠️ Relay service check - may need manual verification"
+            fi
+
+            # Verify legacy service is untouched
+            if curl -sf http://localhost:4173 > /dev/null 2>&1; then
+              echo "✅ Legacy service (port 4173) is running"
+            else
+              echo "⚠️ Legacy service check - may need manual verification"
+            fi

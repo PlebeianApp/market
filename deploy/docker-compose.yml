@@ -1,0 +1,40 @@
+# VPS Simulation for Plebeian Market
+# Usage:
+#   docker-compose up -d      # Start VPS
+#   docker-compose down       # Stop VPS
+#   docker-compose logs -f    # View logs
+
+services:
+  vps:
+    build:
+      context: .
+      dockerfile: Dockerfile.vps
+    container_name: market-vps
+    hostname: market-vps
+    ports:
+      - '2222:22' # SSH (use 2222 to avoid conflicts)
+      - '80:80' # HTTP
+      - '443:443' # HTTPS
+      - '3000:3000' # Market staging
+      - '3001:3001' # Market production
+      - '10547:10547' # ORLY relay
+      - '9209:9209' # PM2 Prometheus exporter
+    volumes:
+      # Mount deploy folder for easy access
+      - ./:/home/deployer/deploy:ro
+      # Persist data between restarts
+      - vps-home:/home/deployer
+      - vps-var:/var
+      - vps-etc:/etc
+    tmpfs:
+      - /run
+      - /run/lock
+    privileged: true # Required for systemd-like behavior
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+
+volumes:
+  vps-home:
+  vps-var:
+  vps-etc:
