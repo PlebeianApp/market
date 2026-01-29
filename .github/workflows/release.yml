@@ -160,7 +160,8 @@ jobs:
           username: ${{ secrets.PROD_USER }}
           password: ${{ secrets.PROD_PASSWORD }}
           script: |
-            mv /tmp/deploy-package /opt/releases/${{ needs.build.outputs.release_name }}
+            sudo mv /tmp/deploy-package /opt/releases/${{ needs.build.outputs.release_name }}
+            sudo chown -R $USER:$USER /opt/releases/${{ needs.build.outputs.release_name }}
 
       - name: Activate release
         uses: appleboy/ssh-action@v1.0.3
