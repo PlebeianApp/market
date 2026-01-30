@@ -26,7 +26,7 @@ interface CachedExchangeRates {
  * Gets cached exchange rates from localStorage if not expired
  * @returns Cached rates or null if expired/not found
  */
-const getCachedRates = (): Record<SupportedCurrency, number> | null => {
+const getCachedRates = (ignoreExpiry = false): Record<SupportedCurrency, number> | null => {
 	try {
 		const cached = localStorage.getItem(EXCHANGE_RATES_CACHE_KEY)
 		if (!cached) return null
@@ -35,7 +35,7 @@ const getCachedRates = (): Record<SupportedCurrency, number> | null => {
 		const now = Date.now()
 
 		// Check if cache has expired (older than STALE_TIME)
-		if (now - timestamp > CURRENCY_CACHE_CONFIG.STALE_TIME) {
+		if (!ignoreExpiry && now - timestamp > CURRENCY_CACHE_CONFIG.STALE_TIME) {
 			return null
 		}
 
@@ -89,6 +89,12 @@ export const fetchBtcExchangeRates = async (): Promise<Record<SupportedCurrency,
 		return rates
 	} catch (error) {
 		console.error('Failed to fetch BTC exchange rates:', error)
+		// Return stale cached rates rather than crashing the UI
+		const staleRates = getCachedRates(true)
+		if (staleRates) {
+			console.warn('Using stale cached exchange rates as fallback')
+			return staleRates
+		}
 		throw new Error('Failed to fetch BTC exchange rates')
 	}
 }
