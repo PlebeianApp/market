@@ -4,6 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Note**: This file is shared in the repo. Do not add developer-specific paths or local configuration here.
 
+## Git Workflow
+
+- **NEVER commit or push directly to `master`.** Always create a feature/fix branch and open a PR.
+- **NEVER force-push to `master`.**
+- **NEVER SSH into the plebeian.market production VPS.** Deployments are handled exclusively via GitHub Actions (release tags for production, master push for staging).
+- Branch naming: `fix/short-description`, `feat/short-description`, `chore/short-description`.
+
 ## Project Overview
 
 Plebeian Market is a decentralized marketplace built on the Nostr protocol. All data is stored on Nostr relays - there is no traditional database. Browser storage (localStorage, sessionStorage, IndexedDB) is only used for user preferences, auth keys, and temporary state like shopping carts.
