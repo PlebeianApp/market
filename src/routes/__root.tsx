@@ -1,3 +1,4 @@
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { Footer } from '@/components/layout/Footer'
 import { Header } from '@/components/layout/Header'
 import { Pattern } from '@/components/pattern'
@@ -66,7 +67,9 @@ function RootLayout() {
 			<Header />
 
 			<main className="flex-grow flex flex-col">
-				<Outlet />
+				<ErrorBoundary>
+					<Outlet />
+				</ErrorBoundary>
 			</main>
 			<Pattern pattern="page" />
 			{!isDashboardPage && !isCheckoutPage && <Footer />}
