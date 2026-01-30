@@ -8,6 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **NEVER commit or push directly to `master`.** Always create a feature/fix branch and open a PR.
 - **NEVER force-push to `master`.**
+- **NEVER create or push `-release` tags.** Only project maintainers cut releases. Claude's job ends at pushing the branch and opening the PR.
 - **NEVER SSH into the plebeian.market production VPS.** Deployments are handled exclusively via GitHub Actions (release tags for production, master push for staging).
 - Branch naming: `fix/short-description`, `feat/short-description`, `chore/short-description`.
 
