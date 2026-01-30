@@ -77,8 +77,9 @@ function ProductsRoute() {
 	const navigate = useNavigate()
 	const { tag } = Route.useSearch()
 	// Use streaming via InfiniteProductList, but still need some products for featured slides
+	// Fetch ALL products (without tag filter) to ensure tag bar remains consistent
 	const productsQuery = useQuery({
-		...productsQueryOptions(500, tag),
+		...productsQueryOptions(500),
 		// Retry every 3 seconds if we got empty results (NDK wasn't ready)
 		refetchInterval: (query) => (query.state.data?.length ? false : 3000),
 	})
@@ -101,7 +102,7 @@ function ProductsRoute() {
 					})
 					.slice(0, 4)
 
-	// Extract all unique tags from products
+	// Extract all unique tags from ALL products (not filtered)
 	const allTags = useMemo(() => {
 		const tagSet = new Set<string>()
 		products.forEach((product) => {
@@ -114,7 +115,7 @@ function ProductsRoute() {
 	}, [products])
 
 	// Separate default categories and other tags
-	const defaultTags = PRODUCT_CATEGORIES.filter((cat) => allTags.includes(cat))
+	const defaultTags = PRODUCT_CATEGORIES
 
 	const handleTagClick = (selectedTag: string) => {
 		if (tag === selectedTag) {

@@ -74,9 +74,9 @@ function Index() {
 	const handleTagClick = (selectedTag: string) => {
 		if (tag === selectedTag) {
 			// If clicking the same tag, clear the filter
-			navigate({ to: '/' })
+			navigate({ to: '/products' })
 		} else {
-			navigate({ to: '/', search: (prev: any) => ({ ...prev, tag: selectedTag }) })
+			navigate({ to: '/products', search: (prev: any) => ({ ...prev, tag: selectedTag }) })
 		}
 	}
 
