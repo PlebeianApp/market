@@ -9,6 +9,7 @@ import { createClientTag } from './nip89'
 
 export interface CollectionFormData {
 	name: string
+	summary: string
 	description: string
 	headerImageUrl?: string
 	products: string[] // Array of product coordinates
@@ -40,7 +41,7 @@ export const createCollectionEvent = (
 	event.tags = [
 		['d', id], // Collection identifier
 		['title', formData.name],
-		['summary', ''], // Collection summary
+		...(formData.summary ? [['summary', formData.summary]] : []),
 	]
 
 	// Optional header image

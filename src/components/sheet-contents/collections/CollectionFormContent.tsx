@@ -16,7 +16,7 @@ export function CollectionFormContent({ className = '', showFooter = true }: { c
 
 	// Get form state from store
 	const formState = useStore(collectionFormStore)
-	const { isEditing, editingCollectionId, name, description, headerImageUrl, selectedProducts, shippings } = formState
+	const { isEditing, editingCollectionId, name, summary, description, headerImageUrl, selectedProducts, shippings } = formState
 
 	// Get mutation hooks
 	const publishMutation = usePublishCollectionMutation()
@@ -31,6 +31,7 @@ export function CollectionFormContent({ className = '', showFooter = true }: { c
 				// Prepare form data
 				const formData: CollectionFormData = {
 					name,
+					summary,
 					description,
 					headerImageUrl: headerImageUrl || undefined,
 					products: selectedProducts,

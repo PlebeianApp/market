@@ -1,5 +1,5 @@
 import { publishCollection, updateCollection, type CollectionFormData } from '@/publish/collections'
-import { getCollectionShippingOptions } from '@/queries/collections'
+import { getCollectionShippingOptions, getCollectionSummary } from '@/queries/collections'
 import type { RichShippingInfo } from '@/lib/stores/cart'
 import type NDK from '@nostr-dev-kit/ndk'
 import type { NDKSigner, NDKEvent } from '@nostr-dev-kit/ndk'
@@ -13,6 +13,7 @@ export type CollectionShippingForm = {
 export interface CollectionFormState {
 	// Form data
 	name: string
+	summary: string
 	description: string
 	headerImageUrl: string
 	selectedProducts: string[] // Array of product coordinates
@@ -33,6 +34,7 @@ export interface CollectionFormState {
 
 export const DEFAULT_COLLECTION_FORM_STATE: CollectionFormState = {
 	name: '',
+	summary: '',
 	description: '',
 	headerImageUrl: '',
 	selectedProducts: [],
@@ -79,6 +81,7 @@ export const collectionFormActions = {
 	 */
 	loadCollectionForEdit: (event: NDKEvent) => {
 		const titleTag = event.tags.find((tag) => tag[0] === 'title')
+		const summaryTag = getCollectionSummary(event)
 		const imageTag = event.tags.find((tag) => tag[0] === 'image')
 		const dTag = event.tags.find((tag) => tag[0] === 'd')
 		const productTags = event.tags.filter((tag) => tag[0] === 'a')
@@ -100,6 +103,7 @@ export const collectionFormActions = {
 			isEditing: true,
 			editingCollectionId: dTag?.[1] || '',
 			name: titleTag?.[1] || '',
+			summary: summaryTag || '',
 			description: event.content || '',
 			headerImageUrl: imageTag?.[1] || '',
 			selectedProducts: productTags.map((tag) => tag[1]),
@@ -145,6 +149,7 @@ export const collectionFormActions = {
 
 		const formData: CollectionFormData = {
 			name: state.name,
+			summary: state.summary,
 			description: state.description,
 			headerImageUrl: state.headerImageUrl || undefined,
 			products: state.selectedProducts,

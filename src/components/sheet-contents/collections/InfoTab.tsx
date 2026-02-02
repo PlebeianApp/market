@@ -6,16 +6,18 @@ import { useForm } from '@tanstack/react-form'
 import { useStore } from '@tanstack/react-store'
 
 export function InfoTab() {
-	const { name, description, headerImageUrl } = useStore(collectionFormStore)
+	const { name, summary, description, headerImageUrl } = useStore(collectionFormStore)
 
 	const form = useForm({
 		defaultValues: {
 			name: name,
+			summary: summary,
 			description: description,
 		},
 		onSubmit: async ({ value }) => {
 			collectionFormActions.updateValues({
 				name: value.name,
+				summary: value.summary,
 				description: value.description,
 			})
 		},
@@ -76,6 +78,28 @@ export function InfoTab() {
 						{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
 							<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>
 						)}
+					</div>
+				)}
+			</form.Field>
+
+			<form.Field name="summary">
+				{(field) => (
+					<div className="grid w-full gap-1.5">
+						<Label htmlFor={field.name}>Summary (Optional)</Label>
+						<Input
+							id={field.name}
+							name={field.name}
+							value={field.state.value}
+							onBlur={field.handleBlur}
+							onChange={(e) => {
+								field.handleChange(e.target.value)
+								collectionFormActions.updateValues({ summary: e.target.value })
+							}}
+							className="border-2"
+							placeholder="A short summary of your collection"
+							data-testid="collection-summary-input"
+						/>
+						<p className="text-xs text-gray-500">A brief one-line summary displayed in collection listings</p>
 					</div>
 				)}
 			</form.Field>
