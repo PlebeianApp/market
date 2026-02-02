@@ -92,6 +92,7 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 	// Initialize form state from NIP-15 data
 	const [formData, setFormData] = useState({
 		name: nip15Data.name,
+		summary: '',
 		description: nip15Data.description,
 		price: nip15Data.price,
 		currency: nip15Data.currency,
@@ -223,6 +224,7 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 			// Convert form data to ProductFormData format
 			const productFormData = {
 				name: formData.name,
+				summary: formData.summary || '',
 				description: formData.description,
 				price: formData.price,
 				quantity: formData.quantity,

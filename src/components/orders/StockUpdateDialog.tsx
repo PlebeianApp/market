@@ -12,6 +12,7 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import {
 	getProductTitle,
 	getProductDescription,
+	getProductSummary,
 	getProductPrice,
 	getProductImages,
 	getProductSpecs,
@@ -158,6 +159,7 @@ export function StockUpdateDialog({ open, onOpenChange, order, onComplete }: Sto
 
 				const formData: ProductFormData = {
 					name: product.productName,
+					summary: getProductSummary(product.productEvent),
 					description: getProductDescription(product.productEvent),
 					price: priceTag?.[1] || '0',
 					quantity: product.newStock.toString(),
