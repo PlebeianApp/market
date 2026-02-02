@@ -10,6 +10,7 @@ import { createClientTag } from './nip89'
 
 export interface ProductFormData {
 	name: string
+	summary: string
 	description: string
 	price: string
 	quantity: string
@@ -87,7 +88,7 @@ export const createProductEvent = (
 		['type', formData.productType === 'single' ? 'simple' : 'variable', 'physical'],
 		['visibility', formData.status],
 		['stock', formData.quantity],
-		['summary', ''],
+		...(formData.summary ? [['summary', formData.summary] as NDKTag] : []),
 		...imagesTags,
 		...categoryTags,
 		...specTags,

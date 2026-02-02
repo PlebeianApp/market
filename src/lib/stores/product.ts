@@ -12,6 +12,7 @@ import {
 	getProductShippingOptions,
 	getProductSpecs,
 	getProductStock,
+	getProductSummary,
 	getProductTitle,
 	getProductType,
 	getProductVisibility,
@@ -65,6 +66,7 @@ export interface ProductFormState {
 	formSessionId: number // Incremented on reset to detect new form sessions
 	activeTab: ProductFormTab
 	name: string
+	summary: string
 	description: string
 	price: string
 	fiatPrice: string
@@ -91,6 +93,7 @@ export const DEFAULT_FORM_STATE: ProductFormState = {
 	formSessionId: 0,
 	activeTab: 'name',
 	name: '',
+	summary: '',
 	description: '',
 	price: '',
 	fiatPrice: '',
@@ -169,6 +172,7 @@ export const productFormActions = {
 			}
 
 			const title = getProductTitle(event)
+			const summary = getProductSummary(event)
 			const description = getProductDescription(event)
 			const priceTag = getProductPrice(event)
 			const images = getProductImages(event)
@@ -222,6 +226,7 @@ export const productFormActions = {
 				...DEFAULT_FORM_STATE,
 				editingProductId: productDTag, // Use the d tag value, not the event ID!
 				name: title,
+				summary: summary,
 				description: description,
 				price: priceValue,
 				fiatPrice: isFiatCurrency ? priceValue : '', // Set fiatPrice if currency is fiat
@@ -400,6 +405,7 @@ export const productFormActions = {
 		// Convert state to ProductFormData format
 		const formData: ProductFormData = {
 			name: state.name,
+			summary: state.summary,
 			description: state.description,
 			price: finalPrice,
 			quantity: state.quantity,

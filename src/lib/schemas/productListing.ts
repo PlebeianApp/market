@@ -33,7 +33,7 @@ export const ProductVisibilityTagSchema = z.tuple([z.literal('visibility'), z.en
 
 export const ProductStockTagSchema = z.tuple([z.literal('stock'), z.string().regex(/^\d+$/, 'Must be an integer')])
 
-const ProductSummaryTagSchema = z.tuple([z.literal('summary'), z.string()])
+export const ProductSummaryTagSchema = z.tuple([z.literal('summary'), z.string()])
 
 export const ProductSpecTagSchema = z.tuple([
 	z.literal('spec'),
