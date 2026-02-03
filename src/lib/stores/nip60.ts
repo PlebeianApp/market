@@ -302,8 +302,8 @@ export const nip60Actions = {
 
 		// Reload transactions
 		await nip60Actions.loadTransactions()
-		const test = wallet.getMintsWithBalance(10)
-		console.log('[nip60] Mints with balance >= 10:', test)
+		const test = wallet.getMintsWithBalance(1)
+		console.log('[nip60] Mints with balance >= 1:', test)
 
 		console.log('[nip60] Refresh complete')
 	},

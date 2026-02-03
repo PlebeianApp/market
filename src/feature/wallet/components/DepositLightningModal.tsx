@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
@@ -15,9 +15,16 @@ interface DepositLightningModalProps {
 export function DepositLightningModal({ open, onClose }: DepositLightningModalProps) {
 	const { mints, defaultMint, depositInvoice, depositStatus } = useStore(nip60Store)
 	const [amount, setAmount] = useState('')
-	const [selectedMint, setSelectedMint] = useState<string>(defaultMint ?? mints[0] ?? '')
+	const [selectedMint, setSelectedMint] = useState<string>('')
 	const [isGenerating, setIsGenerating] = useState(false)
 	const [copied, setCopied] = useState(false)
+
+	// Sync selectedMint with defaultMint when modal opens or defaultMint changes
+	useEffect(() => {
+		if (open) {
+			setSelectedMint(defaultMint ?? mints[0] ?? '')
+		}
+	}, [open, defaultMint, mints])
 
 	const handleGenerateInvoice = async () => {
 		const amountNum = parseInt(amount, 10)

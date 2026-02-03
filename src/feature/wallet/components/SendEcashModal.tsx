@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
@@ -15,7 +15,14 @@ interface SendEcashModalProps {
 export function SendEcashModal({ open, onClose }: SendEcashModalProps) {
 	const { balance, mints, defaultMint, mintBalances } = useStore(nip60Store)
 	const [amount, setAmount] = useState('')
-	const [selectedMint, setSelectedMint] = useState<string>(defaultMint ?? mints[0] ?? '')
+	const [selectedMint, setSelectedMint] = useState<string>('')
+
+	// Sync selectedMint with defaultMint when modal opens or defaultMint changes
+	useEffect(() => {
+		if (open) {
+			setSelectedMint(defaultMint ?? mints[0] ?? '')
+		}
+	}, [open, defaultMint, mints])
 	const [isGenerating, setIsGenerating] = useState(false)
 	const [generatedToken, setGeneratedToken] = useState<string | null>(null)
 	const [copied, setCopied] = useState(false)
