@@ -6,25 +6,10 @@
 #   bugs.plebeian.market          → Bug tracker (port 10548)
 
 staging.plebeian.market {
-	root * /home/deployer/market-staging/dist
 	encode gzip
 
-	# API routes → Bun
-	handle /api/* {
-		reverse_proxy localhost:3000
-	}
-
-	# WebSocket → Bun
-	@ws header Connection *Upgrade*
-	handle @ws {
-		reverse_proxy localhost:3000
-	}
-
-	# Static files with SPA fallback (must be last)
-	handle {
-		try_files {path} /index.html
-		file_server
-	}
+	# Proxy everything to Bun - it handles static files and routing
+	reverse_proxy localhost:3000
 }
 
 relay.staging.plebeian.market {
