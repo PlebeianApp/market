@@ -1,5 +1,4 @@
 import NDK, { type NDKFilter, type NostrEvent } from '@nostr-dev-kit/ndk'
-import { Relay, type Event } from 'nostr-tools'
 import { AppSettingsSchema, type AppSettings } from './schemas/app'
 
 export async function fetchAppSettings(relayUrl: string, appPubkey: string): Promise<AppSettings | null> {

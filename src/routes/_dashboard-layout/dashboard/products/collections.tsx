@@ -4,7 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { authStore } from '@/lib/stores/auth'
 import { collectionFormActions } from '@/lib/stores/collection'
 
-import { getCollectionId, getCollectionTitle, useCollectionsByPubkey } from '@/queries/collections'
+import { getCollectionId, getCollectionTitle, getCollectionSummary, useCollectionsByPubkey } from '@/queries/collections'
 import { useDeleteCollectionMutation } from '@/publish/collections'
 import { createFileRoute, useNavigate, Outlet, useMatchRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
@@ -16,7 +16,8 @@ import { useAutoAnimate } from '@formkit/auto-animate/react'
 
 // Component to show basic collection information
 function CollectionBasicInfo({ collection }: { collection: any }) {
-	const description = collection.content || 'No description'
+	const summary = getCollectionSummary(collection)
+	const description = collection.content || ''
 	const productCount = collection.tags.filter((tag: any) => tag[0] === 'a').length
 	const headerImage = collection.tags.find((tag: any) => tag[0] === 'image')?.[1]
 
@@ -28,10 +29,18 @@ function CollectionBasicInfo({ collection }: { collection: any }) {
 						<img src={headerImage} alt="Collection header" className="w-full h-full object-cover" />
 					</div>
 				)}
-				<div>
-					<p className="text-sm text-gray-600 mb-1">Description:</p>
-					<p className="text-sm">{description}</p>
-				</div>
+				{summary && (
+					<div>
+						<p className="text-sm text-gray-600 mb-1">Summary:</p>
+						<p className="text-sm">{summary}</p>
+					</div>
+				)}
+				{description && (
+					<div>
+						<p className="text-sm text-gray-600 mb-1">Description:</p>
+						<p className="text-sm">{description}</p>
+					</div>
+				)}
 				<div>
 					<p className="text-sm text-gray-600">
 						Products: <span className="font-medium">{productCount}</span>

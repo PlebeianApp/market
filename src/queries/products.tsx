@@ -5,6 +5,7 @@ import {
 	ProductPriceTagSchema,
 	ProductSpecTagSchema,
 	ProductStockTagSchema,
+	ProductSummaryTagSchema,
 	ProductTitleTagSchema,
 	ProductTypeTagSchema,
 	ProductVisibilityTagSchema,
@@ -493,6 +494,14 @@ export const getProductTitle = (event: NDKEvent | null): z.infer<typeof ProductT
  * @returns The product description string
  */
 export const getProductDescription = (event: NDKEvent | null): string => event?.content || ''
+
+/**
+ * Gets the product summary from a product event
+ * @param event The product event or null
+ * @returns The product summary string
+ */
+export const getProductSummary = (event: NDKEvent | null): z.infer<typeof ProductSummaryTagSchema>[1] =>
+	event?.tags.find((t) => t[0] === 'summary')?.[1] || ''
 
 /**
  * Gets the price tag from a product event

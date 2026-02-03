@@ -8,7 +8,7 @@ import { useForm } from '@tanstack/react-form'
 import { useStore } from '@tanstack/react-store'
 
 export function NameTab() {
-	const { productType, name, description, selectedCollection } = useStore(productFormStore)
+	const { productType, name, summary, description, selectedCollection } = useStore(productFormStore)
 	const { user } = useStore(authStore)
 
 	// Fetch user's collections
@@ -17,6 +17,7 @@ export function NameTab() {
 	const form = useForm({
 		defaultValues: {
 			name: name,
+			summary: summary,
 			description: description,
 			collection: selectedCollection || '',
 			productType: productType,
@@ -24,6 +25,7 @@ export function NameTab() {
 		onSubmit: async ({ value }) => {
 			productFormActions.updateValues({
 				name: value.name,
+				summary: value.summary,
 				description: value.description,
 				productType: value.productType as 'single' | 'variable',
 			})
@@ -112,7 +114,27 @@ export function NameTab() {
 					</div>
 				)}
 			</form.Field>
-
+			<form.Field name="summary">
+				{(field) => (
+					<div className="grid w-full gap-1.5">
+						<Label htmlFor={field.name}>Summary (Optional)</Label>
+						<Input
+							id={field.name}
+							name={field.name}
+							value={field.state.value}
+							onBlur={field.handleBlur}
+							onChange={(e) => {
+								field.handleChange(e.target.value)
+								productFormActions.updateValues({ summary: e.target.value })
+							}}
+							className="border-2"
+							placeholder="A short summary of your product"
+							data-testid="product-summary-input"
+						/>
+						<p className="text-xs text-gray-500">A brief one-line summary displayed in product listings</p>
+					</div>
+				)}
+			</form.Field>
 			<form.Field
 				name="description"
 				validators={{

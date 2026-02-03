@@ -258,14 +258,14 @@ export function ProductFormContent({
 				e.stopPropagation()
 				form.handleSubmit()
 			}}
-			className={`flex flex-col ${className}`}
+			className={`flex flex-col h-full ${className}`}
 		>
-			<div>
+			<div className="flex-1 flex flex-col min-h-0 overflow-hidden max-h-[calc(100vh-200px)]">
 				{/* Single level tabs: Name, Detail, Spec, Category, Images, Shipping */}
 				<Tabs
 					value={activeTab}
 					onValueChange={(value) => productFormActions.updateValues({ activeTab: value as ProductFormTab })}
-					className="w-full"
+					className="w-full flex flex-col flex-1 min-h-0 overflow-hidden"
 				>
 					<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-[1px]">
 						<TabsTrigger
@@ -315,29 +315,31 @@ export function ProductFormContent({
 						</TabsTrigger>
 					</TabsList>
 
-					<TabsContent value="name" className="mt-4">
-						<NameTab />
-					</TabsContent>
+					<div className="flex-1 overflow-y-auto min-h-0">
+						<TabsContent value="name" className="mt-4">
+							<NameTab />
+						</TabsContent>
 
-					<TabsContent value="detail" className="mt-4">
-						<DetailTab />
-					</TabsContent>
+						<TabsContent value="detail" className="mt-4">
+							<DetailTab />
+						</TabsContent>
 
-					<TabsContent value="spec" className="mt-4">
-						<SpecTab />
-					</TabsContent>
+						<TabsContent value="spec" className="mt-4">
+							<SpecTab />
+						</TabsContent>
 
-					<TabsContent value="category" className="mt-4">
-						<CategoryTab />
-					</TabsContent>
+						<TabsContent value="category" className="mt-4">
+							<CategoryTab />
+						</TabsContent>
 
-					<TabsContent value="images" className="mt-4">
-						<ImagesTab />
-					</TabsContent>
+						<TabsContent value="images" className="mt-4">
+							<ImagesTab />
+						</TabsContent>
 
-					<TabsContent value="shipping" className="mt-4">
-						<ShippingTab />
-					</TabsContent>
+						<TabsContent value="shipping" className="mt-4">
+							<ShippingTab />
+						</TabsContent>
+					</div>
 				</Tabs>
 			</div>
 
