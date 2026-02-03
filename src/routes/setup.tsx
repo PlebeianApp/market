@@ -51,7 +51,10 @@ export const Route = createFileRoute('/setup')({
 	component: SetupRoute,
 })
 
-const availableLogos = [{ label: 'Default Logo', value: 'https://plebeian.market/images/logo.svg' }]
+const availableLogos = [
+	{ label: 'Default Logo', value: 'https://plebeian.market/logo.svg' },
+	{ label: 'Alternative Logo', value: 'https://plebeian.market/alt-logo.svg' },
+]
 
 const currencies = ['USD', 'EUR', 'BTC', 'SATS']
 

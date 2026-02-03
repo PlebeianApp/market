@@ -185,15 +185,12 @@ getEventHandler()
 	})
 	.catch((error) => console.error(error))
 
-// Handle static files from public (dev) or dist (production)
+// Handle static files from the public directory
 const serveStatic = async (path: string) => {
-	const isDev = process.env.NODE_ENV !== 'production'
-	const baseDir = isDev ? 'public' : 'dist'
-	const filePath = join(process.cwd(), baseDir, path)
+	const filePath = join(process.cwd(), 'public', path)
 	try {
 		const f = file(filePath)
-		const exists = await f.exists()
-		if (!exists) {
+		if (!f.exists()) {
 			return new Response('File not found', { status: 404 })
 		}
 		// Determine content type based on file extension
@@ -356,16 +353,10 @@ export const server = serve({
 			},
 		},
 		'/images/:file': ({ params }) => serveStatic(`images/${params.file}`),
+		'/logo.svg': () => serveStatic('images/logo.svg'),
 		'/manifest.json': () => serveStatic('manifest.json'),
 		'/sw.js': () => serveStatic('sw.js'),
 		'/favicon.ico': () => serveStatic('favicon.ico'),
-		// Static assets - only needed in production when Caddy proxies everything to Bun
-		'/chunk-:hash.js': ({ params }) => serveStatic(`chunk-${params.hash}.js`),
-		'/chunk-:hash.css': ({ params }) => serveStatic(`chunk-${params.hash}.css`),
-		'/:file.ttf': ({ params }) => serveStatic(`${params.file}.ttf`),
-		'/:file.woff': ({ params }) => serveStatic(`${params.file}.woff`),
-		'/:file.woff2': ({ params }) => serveStatic(`${params.file}.woff2`),
-		// SPA fallback - must be last
 		'/*': index,
 	},
 	development: process.env.NODE_ENV !== 'production',
