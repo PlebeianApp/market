@@ -1,7 +1,9 @@
-import { NDKCashuWallet, type NDKWalletBalance, type NDKWalletTransaction, NDKWalletStatus } from '@nostr-dev-kit/wallet'
+import { NDKCashuWallet, NDKCashuDeposit, type NDKWalletBalance, type NDKWalletTransaction, NDKWalletStatus } from '@nostr-dev-kit/wallet'
 import { NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { ndkStore } from './ndk'
+
+const DEFAULT_MINT_KEY = 'nip60_default_mint'
 
 export interface Nip60State {
 	wallet: NDKCashuWallet | null
@@ -9,8 +11,13 @@ export interface Nip60State {
 	balance: number
 	mintBalances: Record<string, number>
 	mints: string[]
+	defaultMint: string | null
 	transactions: NDKWalletTransaction[]
 	error: string | null
+	// Active deposit tracking
+	activeDeposit: NDKCashuDeposit | null
+	depositInvoice: string | null
+	depositStatus: 'idle' | 'pending' | 'success' | 'error'
 }
 
 const initialState: Nip60State = {
@@ -19,8 +26,12 @@ const initialState: Nip60State = {
 	balance: 0,
 	mintBalances: {},
 	mints: [],
+	defaultMint: typeof localStorage !== 'undefined' ? localStorage.getItem(DEFAULT_MINT_KEY) : null,
 	transactions: [],
 	error: null,
+	activeDeposit: null,
+	depositInvoice: null,
+	depositStatus: 'idle',
 }
 
 export const nip60Store = new Store<Nip60State>(initialState)
@@ -364,6 +375,217 @@ export const nip60Actions = {
 			console.log('[nip60] Wallet published successfully')
 		} catch (err) {
 			console.error('[nip60] Failed to publish wallet:', err)
+			throw err
+		}
+	},
+
+	/**
+	 * Set the default mint for deposits
+	 */
+	setDefaultMint: (mintUrl: string | null): void => {
+		console.log('[nip60] Setting default mint:', mintUrl)
+		if (mintUrl) {
+			localStorage.setItem(DEFAULT_MINT_KEY, mintUrl)
+		} else {
+			localStorage.removeItem(DEFAULT_MINT_KEY)
+		}
+		nip60Store.setState((s) => ({
+			...s,
+			defaultMint: mintUrl,
+		}))
+	},
+
+	/**
+	 * Start a Lightning deposit (mint ecash)
+	 * @param amount Amount in sats to deposit
+	 * @param mint Optional mint URL (uses default if not specified)
+	 */
+	startDeposit: async (amount: number, mint?: string): Promise<string | null> => {
+		const wallet = nip60Store.state.wallet
+		const state = nip60Store.state
+		if (!wallet) {
+			console.warn('[nip60] Cannot deposit without wallet')
+			return null
+		}
+
+		const targetMint = mint ?? state.defaultMint
+		if (!targetMint) {
+			console.warn('[nip60] No mint specified and no default mint set')
+			nip60Store.setState((s) => ({
+				...s,
+				depositStatus: 'error',
+				error: 'No mint specified. Please select a default mint first.',
+			}))
+			return null
+		}
+
+		// Ensure wallet has the target mint configured
+		if (!wallet.mints.includes(targetMint)) {
+			console.log('[nip60] Adding target mint to wallet:', targetMint)
+			wallet.mints = [...wallet.mints, targetMint]
+		}
+
+		try {
+			console.log('[nip60] Starting deposit of', amount, 'sats to mint:', targetMint)
+			nip60Store.setState((s) => ({
+				...s,
+				depositStatus: 'pending',
+				error: null,
+			}))
+
+			const deposit = wallet.deposit(amount, targetMint)
+			const invoice = await deposit.start()
+
+			console.log('[nip60] Deposit invoice generated:', invoice?.substring(0, 50) + '...')
+
+			nip60Store.setState((s) => ({
+				...s,
+				activeDeposit: deposit,
+				depositInvoice: invoice ?? null,
+			}))
+
+			// Listen for deposit completion
+			deposit.on('success', (token) => {
+				console.log('[nip60] Deposit successful, token received:', token)
+				nip60Store.setState((s) => ({
+					...s,
+					depositStatus: 'success',
+					activeDeposit: null,
+					depositInvoice: null,
+				}))
+				// Refresh to update balance
+				void nip60Actions.refresh()
+			})
+
+			deposit.on('error', (err: Error | string) => {
+				console.error('[nip60] Deposit error:', err)
+				nip60Store.setState((s) => ({
+					...s,
+					depositStatus: 'error',
+					error: typeof err === 'string' ? err : err.message,
+					activeDeposit: null,
+					depositInvoice: null,
+				}))
+			})
+
+			return invoice ?? null
+		} catch (err) {
+			console.error('[nip60] Failed to start deposit:', err)
+			nip60Store.setState((s) => ({
+				...s,
+				depositStatus: 'error',
+				error: err instanceof Error ? err.message : 'Failed to start deposit',
+				activeDeposit: null,
+				depositInvoice: null,
+			}))
+			return null
+		}
+	},
+
+	/**
+	 * Cancel an active deposit
+	 */
+	cancelDeposit: (): void => {
+		console.log('[nip60] Cancelling deposit')
+		nip60Store.setState((s) => ({
+			...s,
+			activeDeposit: null,
+			depositInvoice: null,
+			depositStatus: 'idle',
+		}))
+	},
+
+	/**
+	 * Withdraw to Lightning (melt ecash)
+	 * @param invoice Lightning invoice to pay
+	 */
+	withdrawLightning: async (invoice: string): Promise<boolean> => {
+		const wallet = nip60Store.state.wallet
+		if (!wallet) {
+			console.warn('[nip60] Cannot withdraw without wallet')
+			return false
+		}
+
+		try {
+			console.log('[nip60] Withdrawing to Lightning invoice:', invoice.substring(0, 50) + '...')
+			const result = await wallet.lnPay({ pr: invoice })
+			console.log('[nip60] Withdrawal result:', result)
+
+			// Refresh to update balance
+			await nip60Actions.refresh()
+			return true
+		} catch (err) {
+			console.error('[nip60] Failed to withdraw:', err)
+			throw err
+		}
+	},
+
+	/**
+	 * Send eCash - generates a Cashu token string
+	 * @param amount Amount in sats to send
+	 * @param mint Optional mint URL to send from
+	 */
+	sendEcash: async (amount: number, mint?: string): Promise<string | null> => {
+		const wallet = nip60Store.state.wallet
+		const state = nip60Store.state
+		if (!wallet) {
+			console.warn('[nip60] Cannot send without wallet')
+			return null
+		}
+
+		const targetMint = mint ?? state.defaultMint ?? undefined
+
+		// Ensure wallet has mints configured - sync from mintBalances if needed
+		if (wallet.mints.length === 0) {
+			const balanceMints = Object.keys(wallet.mintBalances ?? {})
+			if (balanceMints.length > 0) {
+				console.log('[nip60] Syncing mints from mintBalances:', balanceMints)
+				wallet.mints = balanceMints
+			}
+		}
+
+		// If target mint specified but not in wallet.mints, add it
+		if (targetMint && !wallet.mints.includes(targetMint)) {
+			console.log('[nip60] Adding target mint to wallet:', targetMint)
+			wallet.mints = [...wallet.mints, targetMint]
+		}
+
+		try {
+			console.log('[nip60] Generating eCash token for', amount, 'sats from mint:', targetMint ?? 'any')
+			console.log('[nip60] Wallet mints:', wallet.mints)
+			const result = await wallet.send(amount, targetMint)
+			console.log('[nip60] eCash token generated')
+
+			// Refresh to update balance
+			await nip60Actions.refresh()
+			return result
+		} catch (err) {
+			console.error('[nip60] Failed to send eCash:', err)
+			throw err
+		}
+	},
+
+	/**
+	 * Receive eCash - redeem a Cashu token
+	 * @param token Cashu token string to receive
+	 */
+	receiveEcash: async (token: string): Promise<boolean> => {
+		const wallet = nip60Store.state.wallet
+		if (!wallet) {
+			console.warn('[nip60] Cannot receive without wallet')
+			return false
+		}
+
+		try {
+			console.log('[nip60] Receiving eCash token...')
+			await wallet.receiveToken(token)
+			console.log('[nip60] eCash token received successfully')
+
+			// Refresh to update balance
+			await nip60Actions.refresh()
+			return true
+		} catch (err) {
+			console.error('[nip60] Failed to receive eCash:', err)
 			throw err
 		}
 	},

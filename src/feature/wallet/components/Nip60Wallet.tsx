@@ -1,19 +1,26 @@
 import { authStore } from '@/lib/stores/auth'
 import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
 import { useStore } from '@tanstack/react-store'
-import { ArrowDownLeft, ArrowUpRight, Loader2, Landmark, Plus, RefreshCw, X, Save } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Loader2, Landmark, Plus, RefreshCw, X, Save, Star, Zap, Send, QrCode } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { DepositLightningModal } from './DepositLightningModal'
+import { WithdrawLightningModal } from './WithdrawLightningModal'
+import { SendEcashModal } from './SendEcashModal'
+import { ReceiveEcashModal } from './ReceiveEcashModal'
 
 // Default mints for new wallets
 const DEFAULT_MINTS = ['https://mint.minibits.cash/Bitcoin', 'https://mint.coinos.io', 'https://mint.cubabitcoin.org']
 
+type ModalType = 'deposit' | 'withdraw' | 'send' | 'receive' | null
+
 export function Nip60Wallet() {
 	const { isAuthenticated, user } = useStore(authStore)
-	const { status, balance, mintBalances, mints, transactions, error } = useStore(nip60Store)
+	const { status, balance, mintBalances, mints, defaultMint, transactions, error } = useStore(nip60Store)
 	const [isCreating, setIsCreating] = useState(false)
 	const [isRefreshing, setIsRefreshing] = useState(false)
 	const [newMintUrl, setNewMintUrl] = useState('')
 	const [isSaving, setIsSaving] = useState(false)
+	const [openModal, setOpenModal] = useState<ModalType>(null)
 
 	useEffect(() => {
 		if (!isAuthenticated || !user?.pubkey) {
@@ -60,6 +67,15 @@ export function Nip60Wallet() {
 			await nip60Actions.publishWallet()
 		} finally {
 			setIsSaving(false)
+		}
+	}
+
+	const handleSetDefaultMint = (mintUrl: string) => {
+		// Toggle: if already default, clear it; otherwise set it
+		if (defaultMint === mintUrl) {
+			nip60Actions.setDefaultMint(null)
+		} else {
+			nip60Actions.setDefaultMint(mintUrl)
 		}
 	}
 
@@ -118,12 +134,53 @@ export function Nip60Wallet() {
 				<p className="text-2xl font-bold">{balance.toLocaleString()} sats</p>
 			</div>
 
+			{/* Action Buttons */}
+			<div className="grid grid-cols-2 gap-2 mb-4">
+				<button
+					onClick={() => setOpenModal('deposit')}
+					className="flex items-center justify-center gap-2 px-3 py-2 text-sm bg-green-600 text-white rounded-md hover:bg-green-700"
+				>
+					<Zap className="w-4 h-4" />
+					Deposit
+				</button>
+				<button
+					onClick={() => setOpenModal('withdraw')}
+					disabled={balance === 0}
+					className="flex items-center justify-center gap-2 px-3 py-2 text-sm bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50"
+				>
+					<Zap className="w-4 h-4" />
+					Withdraw
+				</button>
+				<button
+					onClick={() => setOpenModal('receive')}
+					className="flex items-center justify-center gap-2 px-3 py-2 text-sm bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80"
+				>
+					<QrCode className="w-4 h-4" />
+					Receive eCash
+				</button>
+				<button
+					onClick={() => setOpenModal('send')}
+					disabled={balance === 0}
+					className="flex items-center justify-center gap-2 px-3 py-2 text-sm bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 disabled:opacity-50"
+				>
+					<Send className="w-4 h-4" />
+					Send eCash
+				</button>
+			</div>
+
 			<div className="border-t pt-4 mb-4">
 				<p className="text-sm font-medium mb-2">Mints</p>
 				<div className="space-y-2">
 					{mints.map((mint) => (
 						<div key={mint} className="flex items-center justify-between text-sm">
 							<div className="flex items-center gap-2 min-w-0 flex-1">
+								<button
+									onClick={() => handleSetDefaultMint(mint)}
+									className={`p-0.5 ${defaultMint === mint ? 'text-yellow-500' : 'text-muted-foreground hover:text-yellow-500'}`}
+									title={defaultMint === mint ? 'Default mint (click to unset)' : 'Set as default mint'}
+								>
+									<Star className={`w-4 h-4 ${defaultMint === mint ? 'fill-current' : ''}`} />
+								</button>
 								<Landmark className="w-4 h-4 text-muted-foreground shrink-0" />
 								<span className="text-muted-foreground truncate" title={mint}>
 									{new URL(mint).hostname}
@@ -203,6 +260,12 @@ export function Nip60Wallet() {
 					<p>No transactions yet</p>
 				</div>
 			)}
+
+			{/* Modals */}
+			<DepositLightningModal open={openModal === 'deposit'} onClose={() => setOpenModal(null)} />
+			<WithdrawLightningModal open={openModal === 'withdraw'} onClose={() => setOpenModal(null)} />
+			<SendEcashModal open={openModal === 'send'} onClose={() => setOpenModal(null)} />
+			<ReceiveEcashModal open={openModal === 'receive'} onClose={() => setOpenModal(null)} />
 		</div>
 	)
 }
