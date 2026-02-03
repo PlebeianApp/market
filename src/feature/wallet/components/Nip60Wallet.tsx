@@ -1,204 +1,66 @@
 import { authStore } from '@/lib/stores/auth'
-import { ndkActions } from '@/lib/stores/ndk'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { NDKCashuWallet, type NDKWalletBalance } from '@nostr-dev-kit/wallet'
+import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
 import { useStore } from '@tanstack/react-store'
-import { ArrowDownLeft, ArrowUpRight, Loader2 } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Loader2, Landmark, Plus, RefreshCw, X, Save } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
-// NIP-60 Spending History kind
-const CASHU_HISTORY_KIND = 7376
-
-interface Transaction {
-	id: string
-	direction: 'in' | 'out'
-	amount: number
-	unit: string
-	createdAt: number
-}
+// Default mints for new wallets
+const DEFAULT_MINTS = ['https://mint.minibits.cash/Bitcoin', 'https://mint.coinos.io', 'https://mint.cubabitcoin.org']
 
 export function Nip60Wallet() {
 	const { isAuthenticated, user } = useStore(authStore)
-	const [balance, setBalance] = useState<number | null>(null)
-	const [transactions, setTransactions] = useState<Transaction[]>([])
-	const [isLoading, setIsLoading] = useState(true)
-	const [error, setError] = useState<string | null>(null)
+	const { status, balance, mintBalances, mints, transactions, error } = useStore(nip60Store)
+	const [isCreating, setIsCreating] = useState(false)
+	const [isRefreshing, setIsRefreshing] = useState(false)
+	const [newMintUrl, setNewMintUrl] = useState('')
+	const [isSaving, setIsSaving] = useState(false)
 
 	useEffect(() => {
 		if (!isAuthenticated || !user?.pubkey) {
-			setBalance(null)
-			setTransactions([])
-			setIsLoading(false)
 			return
 		}
 
-		let wallet: NDKCashuWallet | undefined
-		let isMounted = true
-
-		const initWallet = async () => {
-			try {
-				setIsLoading(true)
-				setError(null)
-
-				const ndk = ndkActions.getNDK()
-				if (!ndk) {
-					throw new Error('NDK not initialized')
-				}
-
-				// Create wallet - start() will discover existing wallet events
-				wallet = new NDKCashuWallet(ndk)
-
-				// Subscribe to balance updates
-				wallet.on('balance_updated', (newBalance?: NDKWalletBalance) => {
-					console.log('[Nip60Wallet] Balance updated:', newBalance)
-					if (isMounted) {
-						setBalance(newBalance?.amount ?? 0)
-					}
-				})
-
-				// Start the wallet - this discovers existing wallet events
-				console.log('[Nip60Wallet] Starting wallet...')
-				await wallet.start()
-				console.log('[Nip60Wallet] Wallet started, mints:', wallet.mints)
-
-				// Get initial balance
-				const initialBalance = wallet.balance
-				console.log('[Nip60Wallet] Initial balance:', initialBalance)
-				if (isMounted) {
-					setBalance(initialBalance?.amount ?? 0)
-				}
-
-				// Fetch transaction history (kind:7376)
-				const historyEvents = await ndk.fetchEvents([{ kinds: [CASHU_HISTORY_KIND], authors: [user.pubkey], limit: 20 }])
-				console.log('[Nip60Wallet] History events found:', historyEvents.size)
-				console.log(
-					'[Nip60Wallet] History events:',
-					Array.from(historyEvents).map((e) => ({ id: e.id, content: e.content, tags: e.tags, created_at: e.created_at })),
-				)
-
-				const txs: Transaction[] = []
-				for (const historyEvent of Array.from(historyEvents)) {
-					try {
-						const tx = await parseHistoryEvent(historyEvent)
-						if (tx) txs.push(tx)
-					} catch (e) {
-						console.warn('Failed to parse history event:', e)
-					}
-				}
-
-				// Sort by created_at descending (newest first)
-				txs.sort((a, b) => b.createdAt - a.createdAt)
-
-				if (isMounted) {
-					setTransactions(txs)
-					setIsLoading(false)
-				}
-			} catch (err) {
-				console.error('Failed to load NIP-60 wallet:', err)
-				if (isMounted) {
-					setError(err instanceof Error ? err.message : 'Failed to load wallet')
-					setIsLoading(false)
-				}
-			}
+		// Initialize wallet if not already initialized
+		if (status === 'idle') {
+			nip60Actions.initialize(user.pubkey)
 		}
+	}, [isAuthenticated, user?.pubkey, status])
 
-		initWallet()
-
-		return () => {
-			isMounted = false
-			if (wallet) {
-				wallet.removeAllListeners?.()
-			}
-		}
-	}, [isAuthenticated, user?.pubkey])
-
-	async function parseHistoryEvent(event: NDKEvent): Promise<Transaction | null> {
-		const ndk = ndkActions.getNDK()
-		if (!ndk?.signer) return null
-
-		console.log('[Nip60Wallet] Parsing history event:', {
-			id: event.id,
-			contentLength: event.content?.length,
-			contentPreview: event.content?.substring(0, 100),
-			tags: event.tags,
-		})
-
+	const handleCreateWallet = async () => {
+		setIsCreating(true)
 		try {
-			// Check if content exists and is a string
-			if (!event.content || typeof event.content !== 'string' || event.content.trim() === '') {
-				console.log('[Nip60Wallet] Skipping event with empty/invalid content:', event.id)
-				return null
-			}
-
-			let tags: string[][]
-
-			// Check if content is already JSON (unencrypted)
-			if (event.content.startsWith('[')) {
-				try {
-					tags = JSON.parse(event.content) as string[][]
-					console.log('[Nip60Wallet] Content was unencrypted JSON')
-				} catch {
-					// Not valid JSON, try decryption
-					tags = await decryptContent(event, ndk)
-				}
-			} else {
-				// Content is encrypted, decrypt it
-				tags = await decryptContent(event, ndk)
-			}
-
-			let direction: 'in' | 'out' = 'out'
-			let amount = 0
-			let unit = 'sat'
-
-			for (const tag of tags) {
-				if (tag[0] === 'direction') direction = tag[1] as 'in' | 'out'
-				if (tag[0] === 'amount') amount = parseInt(tag[1], 10)
-				if (tag[0] === 'unit') unit = tag[1]
-			}
-
-			console.log('[Nip60Wallet] Parsed transaction:', { direction, amount, unit })
-
-			return {
-				id: event.id,
-				direction,
-				amount,
-				unit,
-				createdAt: event.created_at || 0,
-			}
-		} catch (e) {
-			console.warn('[Nip60Wallet] Failed to decrypt history event:', event.id, e)
-			return null
+			await nip60Actions.createWallet(DEFAULT_MINTS)
+		} finally {
+			setIsCreating(false)
 		}
 	}
 
-	async function decryptContent(event: NDKEvent, ndk: NonNullable<ReturnType<typeof ndkActions.getNDK>>): Promise<string[][]> {
-		// Set the ndk on the event if not set
-		if (!event.ndk) {
-			event.ndk = ndk
-		}
-
-		// Try using NDKEvent's decrypt method first (handles NIP-44 automatically)
+	const handleRefresh = async () => {
+		setIsRefreshing(true)
 		try {
-			const signerUser = await ndk.signer!.user()
-			await event.decrypt(signerUser)
-			console.log('[Nip60Wallet] Decrypted via event.decrypt:', event.content?.substring(0, 200))
-			return JSON.parse(event.content) as string[][]
-		} catch (eventDecryptError) {
-			console.log('[Nip60Wallet] event.decrypt failed:', eventDecryptError)
+			await nip60Actions.refresh()
+		} finally {
+			setIsRefreshing(false)
 		}
+	}
 
-		// Fallback to signer decrypt
+	const handleAddMint = () => {
+		if (!newMintUrl.trim()) return
+		nip60Actions.addMint(newMintUrl)
+		setNewMintUrl('')
+	}
+
+	const handleRemoveMint = (mintUrl: string) => {
+		nip60Actions.removeMint(mintUrl)
+	}
+
+	const handleSaveWallet = async () => {
+		setIsSaving(true)
 		try {
-			const signer = ndk.signer!
-			const user = await signer.user()
-			const decrypted = await signer.decrypt(user, event.content)
-			console.log('[Nip60Wallet] Decrypted via signer.decrypt:', decrypted?.substring(0, 200))
-			return JSON.parse(decrypted) as string[][]
-		} catch (signerDecryptError) {
-			console.log('[Nip60Wallet] signer.decrypt failed:', signerDecryptError)
+			await nip60Actions.publishWallet()
+		} finally {
+			setIsSaving(false)
 		}
-
-		throw new Error('Failed to decrypt content with all methods')
 	}
 
 	if (!isAuthenticated) {
@@ -209,7 +71,7 @@ export function Nip60Wallet() {
 		)
 	}
 
-	if (isLoading) {
+	if (status === 'idle' || status === 'initializing') {
 		return (
 			<div className="flex items-center justify-center p-4">
 				<Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -217,7 +79,7 @@ export function Nip60Wallet() {
 		)
 	}
 
-	if (error) {
+	if (status === 'error') {
 		return (
 			<div className="p-4 text-center text-destructive">
 				<p>{error}</p>
@@ -225,11 +87,91 @@ export function Nip60Wallet() {
 		)
 	}
 
+	if (status === 'no_wallet') {
+		return (
+			<div className="p-4 text-center">
+				<p className="text-muted-foreground mb-4">No Cashu wallet found</p>
+				<button
+					onClick={handleCreateWallet}
+					disabled={isCreating}
+					className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+				>
+					{isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+					Create Wallet
+				</button>
+			</div>
+		)
+	}
+
 	return (
 		<div className="p-4">
-			<div className="text-center mb-4">
+			<div className="text-center mb-4 relative">
+				<button
+					onClick={handleRefresh}
+					disabled={isRefreshing}
+					className="absolute right-0 top-0 p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-50"
+					title="Refresh"
+				>
+					<RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+				</button>
 				<p className="text-sm text-muted-foreground mb-1">Balance</p>
-				<p className="text-2xl font-bold">{balance !== null ? `${balance.toLocaleString()} sats` : '0 sats'}</p>
+				<p className="text-2xl font-bold">{balance.toLocaleString()} sats</p>
+			</div>
+
+			<div className="border-t pt-4 mb-4">
+				<p className="text-sm font-medium mb-2">Mints</p>
+				<div className="space-y-2">
+					{mints.map((mint) => (
+						<div key={mint} className="flex items-center justify-between text-sm">
+							<div className="flex items-center gap-2 min-w-0 flex-1">
+								<Landmark className="w-4 h-4 text-muted-foreground shrink-0" />
+								<span className="text-muted-foreground truncate" title={mint}>
+									{new URL(mint).hostname}
+								</span>
+							</div>
+							<div className="flex items-center gap-2 ml-2">
+								{mintBalances[mint] !== undefined && <span className="font-medium">{mintBalances[mint].toLocaleString()} sats</span>}
+								<button
+									onClick={() => handleRemoveMint(mint)}
+									className="p-1 text-muted-foreground hover:text-destructive"
+									title="Remove mint"
+								>
+									<X className="w-3 h-3" />
+								</button>
+							</div>
+						</div>
+					))}
+					{mints.length === 0 && <p className="text-muted-foreground text-sm">No mints configured</p>}
+				</div>
+
+				{/* Add mint input */}
+				<div className="mt-3 flex gap-2">
+					<input
+						type="url"
+						value={newMintUrl}
+						onChange={(e) => setNewMintUrl(e.target.value)}
+						onKeyDown={(e) => e.key === 'Enter' && handleAddMint()}
+						placeholder="https://mint.example.com"
+						className="flex-1 px-2 py-1.5 text-sm border rounded-md bg-background"
+					/>
+					<button
+						onClick={handleAddMint}
+						disabled={!newMintUrl.trim()}
+						className="px-2 py-1.5 text-sm bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/80 disabled:opacity-50"
+					>
+						<Plus className="w-4 h-4" />
+					</button>
+				</div>
+
+				{/* Save button */}
+				<button
+					onClick={handleSaveWallet}
+					disabled={isSaving}
+					className="mt-3 w-full inline-flex items-center justify-center gap-2 px-3 py-1.5 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
+				>
+					{isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+					Save Wallet
+				</button>
 			</div>
 
 			{transactions.length > 0 && (
@@ -244,11 +186,11 @@ export function Nip60Wallet() {
 									) : (
 										<ArrowUpRight className="w-4 h-4 text-red-500" />
 									)}
-									<span className="text-muted-foreground">{new Date(tx.createdAt * 1000).toLocaleDateString()}</span>
+									<span className="text-muted-foreground">{new Date(tx.timestamp * 1000).toLocaleDateString()}</span>
 								</div>
 								<span className={tx.direction === 'in' ? 'text-green-500' : 'text-red-500'}>
 									{tx.direction === 'in' ? '+' : '-'}
-									{tx.amount.toLocaleString()} {tx.unit}
+									{tx.amount.toLocaleString()} sats
 								</span>
 							</div>
 						))}

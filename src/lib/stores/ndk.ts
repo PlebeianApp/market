@@ -5,6 +5,7 @@ import type { NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nos
 import NDK, { NDKEvent, NDKKind, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { configStore } from './config'
+import { nip60Actions } from './nip60'
 import { walletActions, walletStore, type Wallet } from './wallet'
 
 export interface NDKState {
@@ -446,10 +447,20 @@ export const ndkActions = {
 		ndkStore.setState((s) => ({ ...s, signer }))
 
 		if (signer) {
-			// Load user's relay list from Nostr and wallet preferences
 			await Promise.all([ndkActions.loadRelaysFromNostr(), ndkActions.selectAndSetInitialNwcWallet()])
+
+			// Initialize NIP-60 Cashu wallet
+			try {
+				const user = await signer.user()
+				if (user?.pubkey) {
+					void nip60Actions.initialize(user.pubkey)
+				}
+			} catch (e) {
+				console.error('[ndk] Failed to initialize NIP-60 wallet:', e)
+			}
 		} else {
 			ndkActions.setActiveNwcWalletUri(null)
+			nip60Actions.reset()
 		}
 	},
 
