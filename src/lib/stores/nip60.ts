@@ -49,6 +49,48 @@ function getAllMints(wallet: NDKCashuWallet): string[] {
 	return Array.from(new Set([...configuredMints, ...balanceMints]))
 }
 
+/**
+ * Calculate exact per-mint balances using binary search with getMintsWithBalance.
+ * This is a workaround for when wallet.mintBalances returns stale data.
+ */
+function calculateMintBalancesViaBinarySearch(wallet: NDKCashuWallet): Record<string, number> {
+	const result: Record<string, number> = {}
+	const totalBalance = wallet.balance?.amount ?? 0
+
+	// Get all mints that have any balance
+	const mintsWithBalance = wallet.getMintsWithBalance(1)
+	const allMints = getAllMints(wallet)
+
+	// Initialize all mints with 0
+	for (const mint of allMints) {
+		result[mint] = 0
+	}
+
+	// For each mint with balance, use binary search to find exact amount
+	for (const mint of mintsWithBalance) {
+		// Binary search between 1 and totalBalance to find max amount for this mint
+		let low = 1
+		let high = totalBalance
+		let maxBalance = 0
+
+		while (low <= high) {
+			const mid = Math.floor((low + high) / 2)
+			const mintsAtMid = wallet.getMintsWithBalance(mid)
+
+			if (mintsAtMid.includes(mint)) {
+				maxBalance = mid
+				low = mid + 1
+			} else {
+				high = mid - 1
+			}
+		}
+
+		result[mint] = maxBalance
+	}
+
+	return result
+}
+
 export const nip60Actions = {
 	initialize: async (pubkey: string): Promise<void> => {
 		const state = nip60Store.state
@@ -112,11 +154,26 @@ export const nip60Actions = {
 
 			// Subscribe to balance updates
 			wallet.on('balance_updated', (newBalance?: NDKWalletBalance) => {
-				console.log('[nip60] Balance updated:', newBalance)
+				console.log('[nip60] Balance updated event:', newBalance)
+				const totalBalance = newBalance?.amount ?? 0
+
+				// Get mint balances - use binary search if regular getter seems stale
+				const regularMintBalances = { ...(wallet.mintBalances ?? {}) }
+				const regularSum = Object.values(regularMintBalances).reduce((a, b) => a + b, 0)
+
+				let mintBalances: Record<string, number>
+				if (Math.abs(regularSum - totalBalance) > 1) {
+					console.log('[nip60] balance_updated: mintBalances stale, using binary search')
+					mintBalances = calculateMintBalancesViaBinarySearch(wallet)
+				} else {
+					mintBalances = regularMintBalances
+				}
+
+				console.log('[nip60] balance_updated: calculated mintBalances:', mintBalances)
 				nip60Store.setState((s) => ({
 					...s,
-					balance: newBalance?.amount ?? 0,
-					mintBalances: wallet.mintBalances ?? {},
+					balance: totalBalance,
+					mintBalances,
 					mints: getAllMints(wallet),
 				}))
 			})
@@ -126,13 +183,21 @@ export const nip60Actions = {
 				console.log('[nip60] Wallet status changed:', status)
 				if (status === NDKWalletStatus.READY) {
 					const allMints = getAllMints(wallet)
-					const hasWallet = allMints.length > 0 || (wallet.balance?.amount ?? 0) > 0
+					const totalBalance = wallet.balance?.amount ?? 0
+					const hasWallet = allMints.length > 0 || totalBalance > 0
+
+					// Get mint balances - use binary search if regular getter seems stale
+					const regularMintBalances = { ...(wallet.mintBalances ?? {}) }
+					const regularSum = Object.values(regularMintBalances).reduce((a, b) => a + b, 0)
+					const mintBalances =
+						Math.abs(regularSum - totalBalance) > 1 ? calculateMintBalancesViaBinarySearch(wallet) : regularMintBalances
+
 					nip60Store.setState((s) => ({
 						...s,
 						status: hasWallet ? 'ready' : 'no_wallet',
-						balance: wallet.balance?.amount ?? 0,
+						balance: totalBalance,
 						mints: allMints,
-						mintBalances: wallet.mintBalances ?? {},
+						mintBalances,
 					}))
 				} else if (status === NDKWalletStatus.FAILED) {
 					nip60Store.setState((s) => ({
@@ -153,14 +218,21 @@ export const nip60Actions = {
 			console.log('[nip60] Mint balances:', wallet.mintBalances)
 
 			// Determine if user has an existing wallet (we found a wallet event OR have mints/balance)
-			const hasWallet = walletEvent !== null || allMints.length > 0 || (wallet.balance?.amount ?? 0) > 0
+			const totalBalance = wallet.balance?.amount ?? 0
+			const hasWallet = walletEvent !== null || allMints.length > 0 || totalBalance > 0
+
+			// Get mint balances - use binary search if regular getter seems stale
+			const regularMintBalances = { ...(wallet.mintBalances ?? {}) }
+			const regularSum = Object.values(regularMintBalances).reduce((a, b) => a + b, 0)
+			const initialMintBalances =
+				Math.abs(regularSum - totalBalance) > 1 ? calculateMintBalancesViaBinarySearch(wallet) : regularMintBalances
 
 			nip60Store.setState((s) => ({
 				...s,
 				status: hasWallet ? 'ready' : 'no_wallet',
-				balance: wallet.balance?.amount ?? 0,
+				balance: totalBalance,
 				mints: allMints,
-				mintBalances: wallet.mintBalances ?? {},
+				mintBalances: initialMintBalances,
 			}))
 
 			// Only load transactions if we have a wallet
@@ -291,19 +363,56 @@ export const nip60Actions = {
 		}
 
 		console.log('[nip60] Refreshing wallet data...')
+		console.log('[nip60] Current wallet.balance:', wallet.balance)
+		console.log('[nip60] Current wallet.mintBalances:', wallet.mintBalances)
 
-		// Update balance from wallet
+		// Try to force balance recalculation by checking proofs if method exists
+		if (typeof (wallet as any).checkProofs === 'function') {
+			console.log('[nip60] Checking proofs...')
+			await (wallet as any).checkProofs()
+		}
+
+		// Get the updated balance - read it fresh after recalculation
+		const newBalance = wallet.balance?.amount ?? 0
+
+		// First try the regular mintBalances getter
+		const regularMintBalances = { ...(wallet.mintBalances ?? {}) }
+		console.log('[nip60] wallet.mintBalances getter:', regularMintBalances)
+
+		// Calculate sum of regular mint balances to check if they're stale
+		const regularSum = Object.values(regularMintBalances).reduce((a, b) => a + b, 0)
+		console.log('[nip60] Sum of mintBalances:', regularSum, 'vs total balance:', newBalance)
+
+		// If the sum doesn't match the total balance, use binary search as fallback
+		let newMintBalances: Record<string, number>
+		if (Math.abs(regularSum - newBalance) > 1) {
+			// Balances appear stale, use binary search hack
+			console.log('[nip60] mintBalances appears stale, using binary search calculation...')
+			newMintBalances = calculateMintBalancesViaBinarySearch(wallet)
+			console.log('[nip60] Binary search calculated balances:', newMintBalances)
+		} else {
+			// Regular balances seem correct
+			newMintBalances = regularMintBalances
+			// Still ensure all known mints are present
+			const knownMints = getAllMints(wallet)
+			for (const mint of knownMints) {
+				if (!(mint in newMintBalances)) {
+					newMintBalances[mint] = 0
+				}
+			}
+		}
+
+		console.log('[nip60] After refresh - balance:', newBalance, 'mintBalances:', newMintBalances)
+
 		nip60Store.setState((s) => ({
 			...s,
-			balance: wallet.balance?.amount ?? 0,
-			mintBalances: wallet.mintBalances ?? {},
+			balance: newBalance,
+			mintBalances: newMintBalances,
 			mints: getAllMints(wallet),
 		}))
 
 		// Reload transactions
 		await nip60Actions.loadTransactions()
-		const test = wallet.getMintsWithBalance(1)
-		console.log('[nip60] Mints with balance >= 1:', test)
 
 		console.log('[nip60] Refresh complete')
 	},
@@ -506,17 +615,69 @@ export const nip60Actions = {
 			return false
 		}
 
-		try {
+		// Helper function to attempt withdrawal
+		const attemptWithdraw = async (): Promise<boolean> => {
+			console.log('[nip60] Balance before withdrawal:', wallet.balance, wallet.mintBalances)
 			console.log('[nip60] Withdrawing to Lightning invoice:', invoice.substring(0, 50) + '...')
 			const result = await wallet.lnPay({ pr: invoice })
 			console.log('[nip60] Withdrawal result:', result)
+			console.log('[nip60] Balance after lnPay:', wallet.balance, wallet.mintBalances)
+
+			// Small delay to allow wallet to process the change
+			await new Promise((resolve) => setTimeout(resolve, 500))
 
 			// Refresh to update balance
 			await nip60Actions.refresh()
 			return true
+		}
+
+		try {
+			return await attemptWithdraw()
 		} catch (err) {
-			console.error('[nip60] Failed to withdraw:', err)
+			console.error('[nip60] Failed to withdraw (first attempt):', err)
+
+			// Check if this is a "token already spent" error
+			const errorMessage = err instanceof Error ? err.message : String(err)
+			if (errorMessage.toLowerCase().includes('already spent') || errorMessage.toLowerCase().includes('token spent')) {
+				console.log('[nip60] Token already spent error - consolidating and retrying...')
+
+				// Consolidate tokens to remove spent proofs
+				try {
+					await wallet.consolidateTokens()
+					console.log('[nip60] Consolidation complete, retrying withdrawal...')
+					await nip60Actions.refresh()
+
+					// Retry the withdrawal
+					return await attemptWithdraw()
+				} catch (retryErr) {
+					console.error('[nip60] Retry after consolidation failed:', retryErr)
+					throw retryErr
+				}
+			}
+
 			throw err
+		}
+	},
+
+	/**
+	 * Consolidate tokens - checks for spent proofs and cleans up wallet state
+	 */
+	consolidateTokens: async (): Promise<void> => {
+		const wallet = nip60Store.state.wallet
+		if (!wallet) {
+			console.warn('[nip60] Cannot consolidate without wallet')
+			return
+		}
+
+		try {
+			console.log('[nip60] Consolidating tokens (checking for spent proofs)...')
+			await wallet.consolidateTokens()
+			console.log('[nip60] Token consolidation complete')
+			// Refresh to update balances after consolidation
+			await nip60Actions.refresh()
+		} catch (err) {
+			console.error('[nip60] Failed to consolidate tokens:', err)
+			// Don't throw - consolidation failure shouldn't block operations
 		}
 	},
 
@@ -550,17 +711,63 @@ export const nip60Actions = {
 			wallet.mints = [...wallet.mints, targetMint]
 		}
 
-		try {
+		// Helper function to attempt send
+		const attemptSend = async (): Promise<string | null> => {
 			console.log('[nip60] Generating eCash token for', amount, 'sats from mint:', targetMint ?? 'any')
 			console.log('[nip60] Wallet mints:', wallet.mints)
+			console.log('[nip60] Mint balances:', wallet.mintBalances)
+
+			// Check if we have enough balance at the target mint
+			if (targetMint) {
+				const mintBalance = wallet.mintBalances?.[targetMint] ?? 0
+				console.log('[nip60] Balance at target mint:', mintBalance)
+				if (mintBalance < amount) {
+					throw new Error(`Insufficient balance at ${new URL(targetMint).hostname}. Available: ${mintBalance} sats`)
+				}
+			}
+
 			const result = await wallet.send(amount, targetMint)
 			console.log('[nip60] eCash token generated')
+			console.log('[nip60] Balance after send:', wallet.balance, wallet.mintBalances)
+
+			// Small delay to allow wallet to process the change
+			await new Promise((resolve) => setTimeout(resolve, 500))
 
 			// Refresh to update balance
 			await nip60Actions.refresh()
 			return result
+		}
+
+		try {
+			return await attemptSend()
 		} catch (err) {
-			console.error('[nip60] Failed to send eCash:', err)
+			console.error('[nip60] Failed to send eCash (first attempt):', err)
+
+			// Check if this is a "token already spent" error
+			const errorMessage = err instanceof Error ? err.message : String(err)
+			if (errorMessage.toLowerCase().includes('already spent') || errorMessage.toLowerCase().includes('token spent')) {
+				console.log('[nip60] Token already spent error - consolidating and retrying...')
+
+				// Consolidate tokens to remove spent proofs
+				try {
+					await wallet.consolidateTokens()
+					console.log('[nip60] Consolidation complete, retrying send...')
+					await nip60Actions.refresh()
+
+					// Retry the send
+					return await attemptSend()
+				} catch (retryErr) {
+					console.error('[nip60] Retry after consolidation failed:', retryErr)
+					throw retryErr
+				}
+			}
+
+			// Provide more user-friendly error messages
+			if (err instanceof Error) {
+				if (err.message.includes('amount preferences') || err.message.includes('keyset')) {
+					throw new Error(`Cannot create exact amount of ${amount} sats. Try a different amount or mint.`)
+				}
+			}
 			throw err
 		}
 	},
