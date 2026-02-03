@@ -14,6 +14,7 @@ import { useQuery } from '@tanstack/react-query'
 import { productsQueryOptions } from '@/queries/products'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { z } from 'zod'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 // Hook to inject dynamic CSS for background image
 function useHeroBackground(imageUrl: string, className: string) {
@@ -36,6 +37,7 @@ function useHeroBackground(imageUrl: string, className: string) {
 
 const homeSearchSchema = z.object({
 	tag: z.string().optional(),
+	status: z.enum(['all', 'pre-order', 'out-of-stock']).optional(),
 })
 
 export const Route = createFileRoute('/')({
@@ -45,7 +47,7 @@ export const Route = createFileRoute('/')({
 
 function Index() {
 	const navigate = useNavigate()
-	const { tag } = Route.useSearch()
+	const { tag, status } = Route.useSearch()
 	const { isAuthenticated } = useStore(authStore)
 	// Fetch all products without tag filter to extract all available tags
 	// Using useQuery (not useSuspenseQuery) for progressive loading - page renders immediately
@@ -81,7 +83,11 @@ function Index() {
 	}
 
 	const handleClearFilter = () => {
-		navigate({ to: '/' })
+		navigate({ to: '/', search: (prev: any) => ({ ...prev, tag: undefined }) })
+	}
+
+	const handleStatusChange = (value: string) => {
+		navigate({ to: '/', search: (prev: any) => ({ ...prev, status: value === 'all' ? undefined : value }) })
 	}
 
 	// Use the market image for homepage background
@@ -125,21 +131,39 @@ function Index() {
 			{/* Tag Filter Bar */}
 			{defaultTags.length > 0 && (
 				<div className="sticky top-0 z-20 bg-off-black border-b shadow-sm">
-					<div className="px-4 py-3 overflow-x-auto">
-						<div className="flex items-center gap-2 min-w-max">
-							<Badge variant={!tag ? 'primaryActive' : 'primary'} className="cursor-pointer transition-colors" onClick={handleClearFilter}>
-								All
-							</Badge>
-							{defaultTags.map((tagName) => (
-								<Badge
-									key={tagName}
-									variant={tag === tagName ? 'primaryActive' : 'primary'}
-									className="cursor-pointer transition-colors"
-									onClick={() => handleTagClick(tagName)}
-								>
-									{tagName}
-								</Badge>
-							))}
+					<div className="px-4 py-3">
+						<div className="flex items-center justify-between gap-4">
+							{/* Tags - scrollable on mobile */}
+							<div className="flex-1 overflow-x-auto">
+								<div className="flex items-center gap-2 min-w-max">
+									<Badge variant={!tag ? 'primaryActive' : 'primary'} className="cursor-pointer transition-colors" onClick={handleClearFilter}>
+										All
+									</Badge>
+									{defaultTags.map((tagName) => (
+										<Badge
+											key={tagName}
+											variant={tag === tagName ? 'primaryActive' : 'primary'}
+											className="cursor-pointer transition-colors"
+											onClick={() => handleTagClick(tagName)}
+										>
+											{tagName}
+										</Badge>
+									))}
+								</div>
+							</div>
+							{/* Status filter dropdown - fixed on right */}
+							<div className="shrink-0 pl-2 border-l border-gray-700">
+								<Select value={status || 'all'} onValueChange={handleStatusChange}>
+									<SelectTrigger className="w-[120px] sm:w-[140px] h-8 bg-transparent border-gray-600 text-gray-300 text-xs sm:text-sm">
+										<SelectValue placeholder="Filter" />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="all">All items</SelectItem>
+										<SelectItem value="pre-order">Pre-order</SelectItem>
+										<SelectItem value="out-of-stock">Out of stock</SelectItem>
+									</SelectContent>
+								</Select>
+							</div>
 						</div>
 					</div>
 				</div>
@@ -149,7 +173,7 @@ function Index() {
 
 			{/* Infinite Product List */}
 			<div className="px-8 py-4">
-				<InfiniteProductList title="All Products" scrollKey="homepage-products" chunkSize={20} threshold={1000} autoLoad={true} tag={tag} />
+				<InfiniteProductList title="All Products" scrollKey="homepage-products" chunkSize={20} threshold={1000} autoLoad={true} tag={tag} statusFilter={status} />
 			</div>
 		</div>
 	)
