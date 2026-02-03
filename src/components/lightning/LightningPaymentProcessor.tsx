@@ -29,11 +29,6 @@ export interface LightningPaymentData {
 	 * If the receipt contains a preimage, it is the primary confirmation signal.
 	 */
 	monitorZapReceipt?: boolean
-	/**
-	 * If true and `isZap === true`, do not treat wallet ACK/preimage as final success unless a zap receipt is observed.
-	 * Useful for flows (like vanity URL registration) where the server action depends on a NIP-57 receipt.
-	 */
-	requireZapReceipt?: boolean
 }
 
 export interface PaymentResult {
@@ -137,7 +132,6 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 
 		const lightningUrl = invoice ? `lightning:${invoice}` : ''
 		const monitorZapReceipt = data.monitorZapReceipt !== false
-		const requireZapReceipt = data.requireZapReceipt === true && data.isZap === true
 
 		const stopZapMonitoring = useCallback(() => {
 			if (zapWaiterResolveRef.current) {
@@ -380,12 +374,6 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 					return
 				}
 
-				if (requireZapReceipt) {
-					setIsPaymentInProgress(false)
-					toast.info('Payment sent. Waiting for zap receipt confirmation…')
-					return
-				}
-
 				if (walletPreimageRef.current) {
 					handlePaymentSuccess({ type: 'preimage', preimage: walletPreimageRef.current })
 					return
@@ -450,12 +438,6 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 					return
 				}
 
-				if (requireZapReceipt) {
-					setIsPaymentInProgress(false)
-					toast.info('Payment sent. Waiting for zap receipt confirmation…')
-					return
-				}
-
 				if (walletPreimageRef.current) {
 					handlePaymentSuccess({ type: 'preimage', preimage: walletPreimageRef.current })
 					return
@@ -494,11 +476,6 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			}
 
 			try {
-				if (requireZapReceipt) {
-					toast.error('This payment requires a zap receipt confirmation; preimage-only verification is not supported here.')
-					return
-				}
-
 				if (!validatePreimage(invoice, manualPreimage)) {
 					toast.error('Invalid preimage. The preimage does not match this invoice.')
 					return

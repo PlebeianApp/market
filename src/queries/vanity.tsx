@@ -33,7 +33,8 @@ export const fetchVanitySettings = async (appPubkey?: string): Promise<VanitySet
 		kinds: [30000],
 		authors: [targetPubkey],
 		'#d': ['vanity-urls'],
-		limit: 1,
+		// Some relays ignore ordering guarantees for small limits; fetch a few and pick the newest.
+		limit: 10,
 	}
 
 	const events = await ndk.fetchEvents(vanityFilter)
@@ -158,9 +159,14 @@ export const getVanityForPubkey = (vanitySettings: VanitySettings | null | undef
 
 	const now = Math.floor(Date.now() / 1000)
 
-	const entry = vanitySettings.entries.find((e) => e.pubkey === pubkey && e.validUntil > now)
+	let best: VanityEntry | null = null
+	for (const entry of vanitySettings.entries) {
+		if (entry.pubkey !== pubkey) continue
+		if (entry.validUntil <= now) continue
+		if (!best || entry.validUntil > best.validUntil) best = entry
+	}
 
-	return entry || null
+	return best
 }
 
 /**

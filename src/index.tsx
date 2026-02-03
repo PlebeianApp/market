@@ -4,6 +4,7 @@ import { Relay } from 'nostr-tools'
 import { getPublicKey, verifyEvent, type Event } from 'nostr-tools/pure'
 import NDK from '@nostr-dev-kit/ndk'
 import { bech32 } from '@scure/base'
+import { rememberPendingVanityInvoice } from './server/vanityInvoices'
 import index from './index.html'
 import { fetchAppSettings } from './lib/appSettings'
 import { getEventHandler } from './server'
@@ -32,6 +33,11 @@ type VanityInvoiceRequestBody = {
 		content?: string
 		tags: string[][]
 	}
+}
+
+type VanityConfirmRequestBody = {
+	bolt11: string
+	preimage: string
 }
 
 type LnurlPayData = {
@@ -182,8 +188,11 @@ getEventHandler()
 	})
 	.then(() => {
 		eventHandlerReady = true
+		console.log('✅ EventHandler ready')
 	})
-	.catch((error) => console.error(error))
+	.catch((error) => {
+		console.error('❌ EventHandler failed to initialize:', error)
+	})
 
 // Handle static files from the public directory
 const serveStatic = async (path: string) => {
@@ -244,10 +253,10 @@ export const server = serve({
 					needsSetup: !appSettings,
 				})
 			},
-		},
-		'/api/vanity/invoice': {
-			POST: async (req) => {
-				console.log('📨 /api/vanity/invoice request received')
+			},
+			'/api/vanity/invoice': {
+				POST: async (req) => {
+					console.log('📨 /api/vanity/invoice request received')
 
 				let body: VanityInvoiceRequestBody | null = null
 				try {
@@ -273,14 +282,14 @@ export const server = serve({
 					return jsonError('zapRequest must be signed', 400)
 				}
 
-				const hasTag = (k: string, v?: string) => zapRequest.tags.some((t) => t[0] === k && (v ? t[1] === v : true))
-				if (!hasTag('L', 'vanity-register')) {
-					return jsonError('zapRequest missing ["L","vanity-register"] tag', 400)
-				}
-				const appPubkey = getAppPublicKeyOrThrow()
-				if (!hasTag('p', appPubkey)) {
-					return jsonError('zapRequest must target app pubkey', 400)
-				}
+					const hasTag = (k: string, v?: string) => zapRequest.tags.some((t) => t[0] === k && (v ? t[1] === v : true))
+					if (!hasTag('L', 'vanity-register')) {
+						return jsonError('zapRequest missing ["L","vanity-register"] tag', 400)
+					}
+					const appPubkey = getAppPublicKeyOrThrow()
+					if (!hasTag('p', appPubkey)) {
+						return jsonError('zapRequest must target app pubkey', 400)
+					}
 
 				const vanityTag = zapRequest.tags.find((t) => t[0] === 'vanity')?.[1]?.toLowerCase()
 				if (vanityTag !== vanityName) {
@@ -293,27 +302,41 @@ export const server = serve({
 					return jsonError('zapRequest amount must match amountSats', 400)
 				}
 
-				try {
-					console.log('⚡ Creating vanity invoice:', { vanityName, amountSats })
-					const lightningIdentifier = await getAppLightningIdentifier()
-					const lnurlEndpoint = toLnurlpEndpoint(lightningIdentifier)
+					try {
+						console.log('⚡ Creating vanity invoice:', { vanityName, amountSats })
+						const lightningIdentifier = await getAppLightningIdentifier()
+						const lnurlEndpoint = toLnurlpEndpoint(lightningIdentifier)
 
-					const lnurlRes = await fetch(lnurlEndpoint, { headers: { accept: 'application/json' } })
+						const lnurlRes = await fetch(lnurlEndpoint, { headers: { accept: 'application/json' } })
 					if (!lnurlRes.ok) {
 						return jsonError(`Failed to fetch LNURL-pay data (${lnurlRes.status})`, 502)
 					}
 
-					const lnurlData = (await lnurlRes.json()) as LnurlPayData
-					if (lnurlData.status === 'ERROR') {
-						return jsonError(lnurlData.reason || 'LNURL-pay error', 502)
-					}
+						const lnurlData = (await lnurlRes.json()) as LnurlPayData
+						if (lnurlData.status === 'ERROR') {
+							return jsonError(lnurlData.reason || 'LNURL-pay error', 502)
+						}
+						console.log('ℹ️ LNURL-pay info:', {
+							allowsNostr: lnurlData.allowsNostr,
+							nostrPubkey: lnurlData.nostrPubkey,
+							minSendable: lnurlData.minSendable,
+							maxSendable: lnurlData.maxSendable,
+						})
 
-					if (!lnurlData.callback) {
-						return jsonError('LNURL-pay callback missing', 502)
-					}
-					if (!lnurlData.allowsNostr) {
-						return jsonError('App Lightning address does not support Nostr zaps (allowsNostr=false)', 400)
-					}
+						if (!lnurlData.callback) {
+							return jsonError('LNURL-pay callback missing', 502)
+						}
+						if (!lnurlData.allowsNostr) {
+							return jsonError('App Lightning address does not support Nostr zaps (allowsNostr=false)', 400)
+						}
+						if (lnurlData.nostrPubkey && lnurlData.nostrPubkey !== appPubkey) {
+							// Some LNURL providers return a nostrPubkey that doesn't match the app's key even though
+							// they still generate a usable NIP-57 invoice/receipt. Don't hard-fail here; log it so
+							// misconfiguration is visible without breaking dev flows.
+							console.warn(
+								`⚠️ LNURL nostrPubkey (${lnurlData.nostrPubkey}) does not match app pubkey (${appPubkey}); zap receipts may not be processed if receipts use the LNURL pubkey`,
+							)
+						}
 
 					const amountMsatsToSend = amountSats * 1000
 					if (typeof lnurlData.minSendable === 'number' && amountMsatsToSend < lnurlData.minSendable) {
@@ -340,18 +363,58 @@ export const server = serve({
 						return jsonError(invoiceData.reason || 'Invoice error', 502)
 					}
 
-					if (!invoiceData.pr) {
-						return jsonError('Invoice missing pr', 502)
+						if (!invoiceData.pr) {
+							return jsonError('Invoice missing pr', 502)
+						}
+
+						// Remember this invoice so we can confirm via preimage (when available).
+						try {
+							rememberPendingVanityInvoice({
+								bolt11: invoiceData.pr,
+								amountSats,
+								vanityName,
+								requesterPubkey: zapRequest.pubkey,
+							})
+						} catch (error) {
+							console.warn('Failed to remember pending vanity invoice:', error)
+						}
+
+						console.log('✅ Vanity invoice created')
+						return Response.json({ pr: invoiceData.pr })
+					} catch (error) {
+						console.error('Vanity invoice error:', error)
+						return jsonError(error instanceof Error ? error.message : 'Failed to create invoice', 500)
+					}
+				},
+			},
+			'/api/vanity/confirm': {
+				POST: async (req) => {
+					if (!eventHandlerReady) {
+						return jsonError('Server initializing, please try again', 503)
 					}
 
-					console.log('✅ Vanity invoice created')
-					return Response.json({ pr: invoiceData.pr })
-				} catch (error) {
-					console.error('Vanity invoice error:', error)
-					return jsonError(error instanceof Error ? error.message : 'Failed to create invoice', 500)
-				}
+					let body: VanityConfirmRequestBody | null = null
+					try {
+						body = (await req.json()) as VanityConfirmRequestBody
+					} catch {
+						return jsonError('Invalid JSON body', 400)
+					}
+
+					const bolt11 = String(body?.bolt11 || '')
+					const preimage = String(body?.preimage || '')
+
+					if (!bolt11) return jsonError('bolt11 is required', 400)
+					if (!preimage) return jsonError('preimage is required', 400)
+
+					try {
+						const result = await getEventHandler().confirmVanityInvoicePayment(bolt11, preimage)
+						return Response.json(result)
+					} catch (error) {
+						console.error('Vanity confirm error:', error)
+						return jsonError(error instanceof Error ? error.message : 'Failed to confirm payment', 400)
+					}
+				},
 			},
-		},
 		'/images/:file': ({ params }) => serveStatic(`images/${params.file}`),
 		'/logo.svg': () => serveStatic('images/logo.svg'),
 		'/manifest.json': () => serveStatic('manifest.json'),
@@ -416,3 +479,21 @@ export const server = serve({
 })
 
 console.log(`🚀 Server running at ${server.url}`)
+
+// Clean up on Bun HMR reloads to avoid duplicate relay subscriptions and open sockets.
+if (import.meta.hot) {
+	import.meta.hot.dispose(() => {
+		try {
+			console.log('♻️ HMR dispose: shutting down server + event handler')
+			getEventHandler().shutdown()
+		} catch (error) {
+			console.warn('Failed to shut down EventHandler during HMR dispose:', error)
+		}
+
+		try {
+			server.stop()
+		} catch (error) {
+			console.warn('Failed to stop Bun server during HMR dispose:', error)
+		}
+	})
+}

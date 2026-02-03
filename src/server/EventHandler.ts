@@ -8,8 +8,10 @@ import { VanityManagerImpl } from './VanityManager'
 import { EventValidator } from './EventValidator'
 import { EventSigner } from './EventSigner'
 import { NDKService } from './NDKService'
-import NDK from '@nostr-dev-kit/ndk'
+import NDK, { type NDKSubscription } from '@nostr-dev-kit/ndk'
 import { ZAP_RELAYS } from '../lib/constants'
+import { Invoice } from '@getalby/lightning-tools'
+import { confirmVanityInvoice, getPendingVanityInvoice, wasVanityInvoiceConfirmed } from './vanityInvoices'
 
 export class EventHandler {
 	private static instance: EventHandler
@@ -27,6 +29,8 @@ export class EventHandler {
 	private ndk: NDK | null = null
 	private zapNdk: NDK | null = null
 	private handledZapReceiptIds: Set<string> = new Set()
+	private vanityZapSubscriptions: NDKSubscription[] = []
+	private zapReceiptSince: number = 0
 
 	private constructor() {
 		// Initialize with empty managers - components requiring private key will be set up during initialize()
@@ -69,6 +73,10 @@ export class EventHandler {
 
 		// Set up NDK for blacklist and vanity managers
 		if (config.relayUrl) {
+			// Don't re-process historical receipts on startup (especially during Bun HMR reloads).
+			// Allow a small lookback to catch receipts that arrived during initialization.
+			this.zapReceiptSince = Math.floor(Date.now() / 1000) - 15
+
 			this.ndk = new NDK({ explicitRelayUrls: [config.relayUrl] })
 			await this.ndk.connect()
 
@@ -81,7 +89,7 @@ export class EventHandler {
 			await this.vanityManager.loadExistingVanityRegistry(this.eventSigner.getAppPubkey())
 
 			// Subscribe to zap receipts for vanity registration (app relay)
-			this.subscribeToVanityZaps(this.ndk, 'App relay')
+			this.subscribeToVanityZaps(this.ndk, 'App relay', this.zapReceiptSince)
 
 			// Also subscribe on dedicated zap relays; some LSPs do not publish receipts to the app relay.
 			const zapRelayUrls = Array.from(new Set([config.relayUrl, ...ZAP_RELAYS].filter(Boolean)))
@@ -107,7 +115,7 @@ export class EventHandler {
 	/**
 	 * Subscribe to zap receipts for vanity URL registration
 	 */
-	private subscribeToVanityZaps(ndk: NDK, label: string): void {
+	private subscribeToVanityZaps(ndk: NDK, label: string, since?: number): void {
 		const appPubkey = this.eventSigner.getAppPubkey()
 
 		// Subscribe to zap receipts where app pubkey is the recipient
@@ -115,16 +123,30 @@ export class EventHandler {
 			{
 				kinds: [9735],
 				'#p': [appPubkey],
+				...(since ? { since } : {}),
 			},
 			{ closeOnEose: false },
 		)
 
-		sub.on('event', async (event) => {
-			try {
-				if (event.id) {
-					if (this.handledZapReceiptIds.has(event.id)) return
-					this.handledZapReceiptIds.add(event.id)
-					if (this.handledZapReceiptIds.size > 2000) {
+			sub.on('event', async (event) => {
+				try {
+					if (since && (event.created_at ?? 0) < since) {
+						// Some relays ignore `since` filters; double-check to avoid replaying old receipts.
+						return
+					}
+					if (process.env.VANITY_DEBUG === 'true') {
+						console.log(`⚡ Zap receipt event received (${label}):`, {
+							id: event.id,
+							p: event.tagValue('p'),
+							bolt11: event.tagValue('bolt11')?.substring(0, 24)
+								? `${event.tagValue('bolt11')!.substring(0, 24)}…`
+								: undefined,
+						})
+					}
+					if (event.id) {
+						if (this.handledZapReceiptIds.has(event.id)) return
+						this.handledZapReceiptIds.add(event.id)
+						if (this.handledZapReceiptIds.size > 2000) {
 						// Simple bound to avoid unbounded growth
 						this.handledZapReceiptIds.clear()
 						this.handledZapReceiptIds.add(event.id)
@@ -136,6 +158,7 @@ export class EventHandler {
 			}
 		})
 
+		this.vanityZapSubscriptions.push(sub)
 		console.log(`Subscribed to vanity zap receipts (${label})`)
 	}
 
@@ -261,11 +284,71 @@ export class EventHandler {
 	}
 
 	public shutdown(): void {
+		for (const sub of this.vanityZapSubscriptions) {
+			try {
+				sub.stop()
+			} catch (error) {
+				console.warn('Failed to stop vanity zap subscription:', error)
+			}
+		}
+		this.vanityZapSubscriptions = []
+
+		try {
+			this.ndk?.pool?.relays?.forEach((relay) => relay.disconnect())
+		} catch (error) {
+			console.warn('Failed to disconnect app relay NDK:', error)
+		}
+
+		try {
+			this.zapNdk?.pool?.relays?.forEach((relay) => relay.disconnect())
+		} catch (error) {
+			console.warn('Failed to disconnect zap relay NDK:', error)
+		}
+
 		if (this.ndkService) {
 			this.ndkService.shutdown()
 		}
 		this.isInitialized = false
 		console.log('EventHandler shut down')
+	}
+
+	/**
+	 * Confirm a vanity invoice payment using a preimage.
+	 * This is used for invoices issued by the backend where the wallet provides a preimage (NWC/WebLN).
+	 */
+	public async confirmVanityInvoicePayment(bolt11: string, preimage: string): Promise<{ vanityName: string; validUntil: number }> {
+		if (!this.isInitialized) {
+			throw new Error('EventHandler is not initialized')
+		}
+
+		const pending = getPendingVanityInvoice(bolt11)
+		if (!pending) {
+			if (wasVanityInvoiceConfirmed(bolt11)) {
+				throw new Error('Invoice already confirmed')
+			}
+			throw new Error('Unknown or expired invoice')
+		}
+
+		let isValid = false
+		try {
+			const invoice = new Invoice({ pr: bolt11 })
+			isValid = invoice.validatePreimage(preimage)
+		} catch {
+			isValid = false
+		}
+
+		if (!isValid) {
+			throw new Error('Invalid preimage for invoice')
+		}
+
+		confirmVanityInvoice(bolt11)
+
+		const validUntil = await this.vanityManager.registerVanityPurchase(pending.vanityName, pending.requesterPubkey, pending.amountSats)
+		if (!validUntil) {
+			throw new Error('Failed to register vanity purchase')
+		}
+
+		return { vanityName: pending.vanityName, validUntil }
 	}
 }
 
