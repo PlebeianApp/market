@@ -3,9 +3,10 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { useBugReportsInfiniteScroll } from '@/hooks/useBugReportsInfiniteScroll'
 import { BLOSSOM_SERVERS, uploadFileToBlossom } from '@/lib/blossom'
+import { BUG_RELAY } from '@/lib/constants'
 import { ndkActions } from '@/lib/stores/ndk'
 import { cn } from '@/lib/utils'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
@@ -193,19 +194,8 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			console.log('NDK instance obtained:', !!ndk)
 
 			// Ensure bugs.plebeian.market relay is added for bug reports
-			const relayAdded = ndkActions.addSingleRelay('wss://bugs.plebeian.market/')
-			console.log('Relay added:', relayAdded)
-
-			// Also add some reliable relays as fallback
-			const fallbackRelays = ['wss://relay.nostr.band', 'wss://nos.lol', 'wss://relay.damus.io']
-			fallbackRelays.forEach((relay) => {
-				ndkActions.addSingleRelay(relay)
-			})
-			console.log('Fallback relays added')
-
-			// Log current relay configuration
-			const currentRelays = Array.from(ndk.pool.relays.keys())
-			console.log('Current relays configured:', currentRelays)
+			const relayAdded = ndkActions.addSingleRelay(BUG_RELAY)
+			console.log('Bug relay added:', relayAdded)
 
 			// Check if we have a signer
 			if (!ndk.signer) {
@@ -242,10 +232,11 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			await event.sign()
 			console.log('Event signed, ID:', event.id)
 
-			console.log('Publishing event...')
+			console.log('Publishing event to bug relay only...')
 
-			// Add timeout to publish operation
-			const publishPromise = ndkActions.publishEvent(event)
+			// Publish only to the bug relay - never to public relays
+			const bugRelaySet = NDKRelaySet.fromRelayUrls([BUG_RELAY], ndk)
+			const publishPromise = event.publish(bugRelaySet)
 			const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Publish timeout after 10 seconds')), 10000))
 
 			await Promise.race([publishPromise, timeoutPromise])
