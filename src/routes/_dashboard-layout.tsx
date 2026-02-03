@@ -348,7 +348,7 @@ function DashboardLayout() {
 					{/* Main content - responsive behavior */}
 					{(!showSidebar || !isMobile) && (
 						<div
-							className={`w-full lg:flex-1 lg:max-w-4xl lg:border lg:border-black lg:rounded lg:bg-white flex flex-col lg:max-h-full lg:overflow-hidden ${
+							className={`w-full lg:w-4/5 lg:border lg:border-black lg:rounded lg:bg-white flex flex-col lg:max-h-full lg:overflow-hidden ${
 								isMessageDetailView && isMobile ? 'h-[calc(100vh-8.5rem)]' : ''
 							}`}
 						>
@@ -475,15 +475,6 @@ function DashboardLayout() {
 										<Outlet />
 									</div>
 								)}
-							</div>
-						</div>
-					)}
-
-					{/* Placeholder Container - responsive on desktop */}
-					{!isMobile && (
-						<div className="hidden min-[1470px]:block lg:min-w-0 lg:flex-1 lg:max-w-32 xl:max-w-48 2xl:max-w-64 lg:border lg:border-black lg:rounded bg-white lg:max-h-full lg:overflow-hidden lg:shadow-md">
-							<div className="p-4 lg:px-6 lg:py-4 flex items-center justify-center h-full">
-								<span className="text-3xl">₿</span>
 							</div>
 						</div>
 					)}
