@@ -33,7 +33,7 @@ async function createAppSettingsEvent(signer: NDKPrivateKeySigner) {
 	const appSettings = AppSettingsSchema.parse({
 		name: 'Plebeian Market',
 		displayName: 'Plebeian Market',
-		picture: 'https://plebeian.market/logo.svg',
+		picture: 'https://plebeian.market/images/logo.svg',
 		banner: 'https://plebeian.market/banner.png',
 		ownerPk: devUser1.pk,
 		allowRegister: true,

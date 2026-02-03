@@ -108,7 +108,7 @@ async function seedData() {
 	const appProfile = {
 		name: 'plebeianmarket',
 		displayName: 'Plebeian Market',
-		image: 'https://plebeian.market/logo.svg',
+		image: 'https://plebeian.market/images/logo.svg',
 		banner: 'https://plebeian.market/banner.png',
 		about: 'The Plebeian Market - A decentralized marketplace built on Nostr. Trade freely with Bitcoin.',
 		nip05: 'plebeian@plebeian.market',
