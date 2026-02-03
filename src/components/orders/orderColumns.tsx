@@ -14,8 +14,8 @@ export const baseOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 		cell: ({ row }) => {
 			const orderId = getOrderId(row.original.order)
 			return (
-				<div className="border border-gray-300 rounded px-3 py-1 inline-block">
-					<Link to="/dashboard/orders/$orderId" params={{ orderId: orderId || 'unknown' }} className="font-mono text-xs hover:underline">
+				<div className="bg-gray-200 text-black rounded px-3 py-1 inline-block">
+					<Link to="/dashboard/orders/$orderId" params={{ orderId: orderId || 'unknown' }} className="font-mono text-xs text-black hover:text-gray-600">
 						{orderId ? `${orderId.substring(0, 8)}...` : 'Unknown'}
 					</Link>
 				</div>
@@ -27,7 +27,7 @@ export const baseOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 		header: 'Time & Date',
 		cell: ({ row }) => {
 			const date = getEventDate(row.original.order)
-			return <span className="text-xs text-muted-foreground">{date}</span>
+			return <div className="text-right text-xs font-normal">{date}</div>
 		},
 	},
 	{
@@ -84,7 +84,7 @@ export const purchaseColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 		header: 'Seller',
 		cell: ({ row }) => {
 			const sellerPubkey = getSellerPubkey(row.original.order)
-			return <UserWithAvatar pubkey={sellerPubkey || ''} showBadge={false} size="sm" disableLink={true} />
+			return <UserWithAvatar pubkey={sellerPubkey || ''} showBadge={false} size="sm" disableLink={false} variant="sales" />
 		},
 	},
 	baseOrderColumns[1], // Date
@@ -97,13 +97,34 @@ export const salesColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 	{
 		...baseOrderColumns[0], // Order ID
 		accessorFn: (row) => getOrderId(row.order),
+		cell: ({ row, table }) => {
+			const orderId = getOrderId(row.original.order)
+			// Calculate row number from the end (newest first)
+			const totalRows = table.getRowModel().rows.length
+			const rowNumber = totalRows - row.index
+			
+			return (
+				<div className="flex items-center">
+					{/* Row number with different background */}
+					<div className="bg-gray-300 text-gray-700 rounded-l px-2 py-1 text-xs font-medium min-w-[1.5rem] text-center">
+						{rowNumber}
+					</div>
+					{/* Order ID with original styling */}
+					<div className="bg-gray-200 text-black rounded-r px-3 py-1 inline-block">
+						<Link to="/dashboard/orders/$orderId" params={{ orderId: orderId || 'unknown' }} className="font-mono text-xs text-black hover:text-gray-600">
+							{orderId ? `${orderId.substring(0, 8)}...` : 'Unknown'}
+						</Link>
+					</div>
+				</div>
+			)
+		},
 	},
 	{
 		accessorKey: 'buyer',
 		header: 'Buyer',
 		cell: ({ row }) => {
 			const buyerPubkey = getBuyerPubkey(row.original.order)
-			return <UserWithAvatar pubkey={buyerPubkey || ''} showBadge={false} size="sm" disableLink={true} />
+			return <UserWithAvatar pubkey={buyerPubkey || ''} showBadge={false} size="sm" disableLink={false} variant="sales" />
 		},
 		accessorFn: (row) => getBuyerPubkey(row.order),
 	},

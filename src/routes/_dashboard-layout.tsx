@@ -367,7 +367,7 @@ function DashboardLayout() {
 									</button>
 
 									{!isMobile && (
-										<h1 className="absolute left-1/2 -translate-x-1/2 text-[1.6rem] font-bold flex items-center gap-2">
+										<h1 className="absolute right-4 text-lg font-bold flex items-center gap-2">
 											{isMessageDetailView && chatProfile?.user?.pubkey && (
 												<UserWithAvatar pubkey={chatProfile?.user?.pubkey} size="md" showBadge={false} disableLink={true} />
 											)}

@@ -23,10 +23,10 @@ function MessagesListComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:block sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6">
+			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b h-[73px] px-4 lg:px-6 items-center">
 				<h1 className="text-2xl font-bold">Messages</h1>
 			</div>
-			<div className="space-y-4 p-4 lg:p-8">
+			<div className="space-y-4 pt-4 px-4 xl:px-6 pb-6">
 				{isLoading && (
 					<div className="flex flex-col justify-center items-center py-12">
 						<Loader2 className="w-8 h-8 animate-spin text-primary" />

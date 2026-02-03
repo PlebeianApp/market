@@ -8,6 +8,7 @@ import type { ColumnDef, ColumnFiltersState, FilterFn, SortingState } from '@tan
 import { flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { useMemo, useState } from 'react'
+import { cn } from '@/lib/utils'
 
 const fuzzyFilter: FilterFn<OrderWithRelatedEvents> = (row, columnId, value, addMeta) => {
 	const item = (row.getValue(columnId) as string) || ''
@@ -165,7 +166,7 @@ export function OrderDataTable<TData>({
 
 			<div className="flex-1 overflow-y-auto pb-4">
 				{isLoading ? (
-					<div className="space-y-4 pt-4 px-4 xl:px-6">
+					<div className="space-y-4 pt-4 px-4 xl:px-6 pb-6">
 						{Array(7)
 							.fill(0)
 							.map((_, i) => (
@@ -175,7 +176,7 @@ export function OrderDataTable<TData>({
 							))}
 					</div>
 				) : table.getRowModel().rows?.length ? (
-					<div className="space-y-4 pt-4 px-4 xl:px-6">
+					<div className="space-y-4 pt-4 px-4 xl:px-6 pb-6">
 						{table.getRowModel().rows.map((row) => {
 							const orderId = (row.original as any).order.id || 'unknown'
 							return (
@@ -194,26 +195,31 @@ export function OrderDataTable<TData>({
 
 											return (
 												<>
-													<div className="flex justify-between items-center mb-4">
+													<div className="flex items-center mb-4">
 														{orderIdCell && (
 															<div className="text-sm font-medium">
 																{flexRender(orderIdCell.column.columnDef.cell, orderIdCell.getContext())}
 															</div>
 														)}
 														{actionsCell && (
-															<div className="text-sm">{flexRender(actionsCell.column.columnDef.cell, actionsCell.getContext())}</div>
+															<div className="text-sm ml-auto">{flexRender(actionsCell.column.columnDef.cell, actionsCell.getContext())}</div>
 														)}
 													</div>
 													<div className="space-y-3">
 														{otherCells.map((cell) => (
-															<div key={cell.id} className="flex justify-between items-start">
+															<div key={cell.id} className="flex justify-between items-center">
 																<span className="text-sm font-medium text-gray-600 capitalize min-w-0 flex-shrink-0 mr-3">
 																	{typeof cell.column.columnDef.header === 'string'
 																		? cell.column.columnDef.header
 																		: cell.column.id.replace(/([A-Z])/g, ' $1').trim()}
 																	:
 																</span>
-																<div className="text-sm text-right min-w-0 flex-1">
+																<div className={cn(
+																	"text-sm min-w-0 flex-1",
+																	cell.column.id === 'buyer' || cell.column.id === 'seller' 
+																		? "flex justify-end" 
+																		: "text-right"
+																)}>
 																	{flexRender(cell.column.columnDef.cell, cell.getContext())}
 																</div>
 															</div>

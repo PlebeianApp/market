@@ -116,13 +116,13 @@ function CommunityRoute() {
 
 	const totalSlides = 1 + collectionsForSlides.length // Homepage + collections
 
-	// Auto-slide functionality - change slide every 8 seconds
+	// Auto-slide functionality - change slide every 5 seconds
 	useEffect(() => {
 		if (totalSlides <= 1) return // Don't auto-slide if there's only one slide
 
 		const interval = setInterval(() => {
 			setCurrentSlideIndex((prev) => (prev + 1) % totalSlides)
-		}, 8000) // 8 seconds
+		}, 5000) // 5 seconds
 
 		return () => clearInterval(interval)
 	}, [totalSlides])
@@ -203,11 +203,11 @@ function CommunityRoute() {
 	// Render homepage hero content
 	const renderHomepageHero = () => (
 		<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-16 lg:mt-0">
-			<div className="flex items-center justify-center h-24 lg:h-32">
-				<h1 className="text-4xl lg:text-5xl font-theylive transition-opacity duration-500">Browse Collections</h1>
+			<div className="flex items-center justify-center min-h-24 lg:min-h-32 px-4">
+					<h1 className="text-3xl lg:text-5xl font-theylive transition-opacity duration-500 leading-tight">Sell Stuff for Sats</h1>
 			</div>
 
-			<div className="flex flex-col gap-6">
+			<div className="flex flex-col gap-6 mt-4">
 				<Button variant="focus" size="lg" onClick={handleStartSelling}>
 					<span className="flex items-center gap-2">
 						<span className="i-nostr w-6 h-6"></span>Start Selling
@@ -216,16 +216,32 @@ function CommunityRoute() {
 
 				{/* Pagination dots */}
 				{totalSlides > 1 && (
-					<div className="flex justify-center gap-2">
+					<div className="flex justify-center gap-3">
 						{Array.from({ length: totalSlides }).map((_, index) => (
 							<button
 								key={index}
 								onClick={() => handleDotClick(index)}
-								className={`w-3 h-3 rounded-full transition-all duration-300 ${
-									index === currentSlideIndex ? 'bg-white scale-125' : 'bg-white/40 hover:bg-white/60'
+								className={`relative group transition-all duration-500 ease-out ${
+									index === currentSlideIndex 
+										? 'w-8 h-3' 
+										: 'w-3 h-3 hover:scale-110'
 								}`}
 								aria-label={`View ${index === 1 ? 'homepage' : `collection ${index === 0 ? 1 : index}`}`}
-							/>
+							>
+								<div className={`w-full h-full rounded-full transition-all duration-500 ease-out ${
+									index === currentSlideIndex
+										? 'bg-white shadow-lg shadow-white/50'
+										: 'bg-white/30 group-hover:bg-white/60 backdrop-blur-sm'
+								}`} />
+								{index === currentSlideIndex && (
+									<div className="absolute inset-0 rounded-full bg-gradient-to-r from-white/80 to-white animate-pulse" />
+								)}
+								<div className={`absolute inset-0 rounded-full border transition-all duration-500 ${
+									index === currentSlideIndex
+										? 'border-white/80 shadow-md'
+										: 'border-white/20 group-hover:border-white/40'
+								}`} />
+							</button>
 						))}
 					</div>
 				)}
@@ -236,11 +252,11 @@ function CommunityRoute() {
 	// Render collections hero content
 	const renderCollectionsHero = () => (
 		<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-16 lg:mt-0">
-			<div className="flex items-center justify-center h-24 lg:h-32">
-				<h1 className="text-4xl lg:text-5xl font-theylive transition-opacity duration-500">{displayTitle || 'Loading...'}</h1>
+			<div className="flex items-center justify-center min-h-24 lg:min-h-32 px-4">
+				<h1 className="text-3xl lg:text-5xl font-theylive transition-opacity duration-500 leading-tight">{displayTitle || 'Loading...'}</h1>
 			</div>
 
-			<div className="flex flex-col gap-6">
+			<div className="flex flex-col gap-6 mt-4">
 				<Link to={`/collection/${currentCollectionId}`}>
 					<Button variant="secondary" size="lg">
 						View Collection
@@ -249,16 +265,32 @@ function CommunityRoute() {
 
 				{/* Pagination dots */}
 				{totalSlides > 1 && (
-					<div className="flex justify-center gap-2">
+					<div className="flex justify-center gap-3">
 						{Array.from({ length: totalSlides }).map((_, index) => (
 							<button
 								key={index}
 								onClick={() => handleDotClick(index)}
-								className={`w-3 h-3 rounded-full transition-all duration-300 ${
-									index === currentSlideIndex ? 'bg-white scale-125' : 'bg-white/40 hover:bg-white/60'
+								className={`relative group transition-all duration-500 ease-out ${
+									index === currentSlideIndex 
+										? 'w-8 h-3' 
+										: 'w-3 h-3 hover:scale-110'
 								}`}
 								aria-label={`View ${index === 1 ? 'homepage' : `collection ${index === 0 ? 1 : index}`}`}
-							/>
+							>
+								<div className={`w-full h-full rounded-full transition-all duration-500 ease-out ${
+									index === currentSlideIndex
+										? 'bg-white shadow-lg shadow-white/50'
+										: 'bg-white/30 group-hover:bg-white/60 backdrop-blur-sm'
+								}`} />
+								{index === currentSlideIndex && (
+									<div className="absolute inset-0 rounded-full bg-gradient-to-r from-white/80 to-white animate-pulse" />
+								)}
+								<div className={`absolute inset-0 rounded-full border transition-all duration-500 ${
+									index === currentSlideIndex
+										? 'border-white/80 shadow-md'
+										: 'border-white/20 group-hover:border-white/40'
+								}`} />
+							</button>
 						))}
 					</div>
 				)}

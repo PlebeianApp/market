@@ -79,10 +79,13 @@ export function ProductSearch() {
 				className="px-4 w-full text-md bg-primary/90 text-gray-100 placeholder:text-gray-300 border-none focus-visible:ring-offset-0 focus:ring-2 focus:ring-secondary rounded-[999px] [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
 			/>
 
-			<div className="absolute right-4 top-1/2 -translate-y-1/2 flex gap-2">
+			<div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
 				{search ? (
-					<button onClick={clearSearch} className="text-white/50 hover:text-white transition-colors">
-						<span className="i-close w-5 h-5 text-secondary" />
+					<button 
+						onClick={clearSearch} 
+						className="flex items-center justify-center w-6 h-6 text-white/50 hover:text-white transition-colors rounded-full hover:bg-white/10"
+					>
+						<span className="i-close w-4 h-4 text-secondary" />
 					</button>
 				) : (
 					<span className="i-search w-5 h-5 text-secondary" />
