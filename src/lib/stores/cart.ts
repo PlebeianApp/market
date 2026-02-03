@@ -336,7 +336,7 @@ export const cartActions = {
 		return seller
 	},
 
-	addProduct: async (buyerPubkey: string, productData: CartProduct | NDKEvent | string) => {
+	addProduct: async (buyerPubkey: string | null, productData: CartProduct | NDKEvent | string) => {
 		let productId: string
 		let sellerPubkey: string
 		let amount = 1
@@ -398,7 +398,7 @@ export const cartActions = {
 		await cartActions.updateSellerData()
 	},
 
-	updateProductAmount: async (buyerPubkey: string, productId: string, amount: number) => {
+	updateProductAmount: async (buyerPubkey: string | null, productId: string, amount: number) => {
 		cartStore.setState((state) => {
 			const cart = { ...state.cart }
 			const product = cart.products[productId]
@@ -412,7 +412,7 @@ export const cartActions = {
 		await cartActions.updateSellerData()
 	},
 
-	removeProduct: async (buyerPubkey: string, productId: string) => {
+	removeProduct: async (buyerPubkey: string | null, productId: string) => {
 		cartStore.setState((state) => {
 			const cart = { ...state.cart }
 			const product = cart.products[productId]
@@ -1366,6 +1366,37 @@ export const cartActions = {
 			sellerShippingOptions: newSellerShippingOptions,
 		}))
 	},
+
+	mergeCart: async (buyerPubkey: string | null) => {
+		const state = cartStore.state
+		const { cart } = state
+
+		if (!buyerPubkey || Object.keys(cart.products).length === 0) {
+			return
+		}
+		// Remove products where the user is the seller (can't buy own products)
+		for (const [productId, product] of Object.entries(cart.products)) {
+			if (product.sellerPubkey === buyerPubkey) {
+				const seller = cart.sellers[product.sellerPubkey]
+				if (seller) {
+					seller.productIds = seller.productIds.filter((id) => id !== productId)
+
+					// Clean up empty seller
+					if (seller.productIds.length === 0) {
+						delete cart.sellers[product.sellerPubkey]
+					}
+				}
+
+				// Delete the product itself
+				delete cart.products[productId]
+			}
+		}
+		await cartActions.saveToStorage(cart)
+
+		await cartActions.updateV4VShares()
+		await cartActions.groupProductsBySeller()
+		await cartActions.updateSellerData()
+	},
 }
 
 export function useCart() {
@@ -1422,7 +1453,7 @@ export function useCartTotals() {
 	}
 }
 
-export async function handleAddToCart(userId: string, product: Partial<CartProduct> | NDKEvent | string | null) {
+export async function handleAddToCart(userId: string | null, product: Partial<CartProduct> | NDKEvent | string | null) {
 	if (!product) return false
 
 	if (typeof product === 'string') {
