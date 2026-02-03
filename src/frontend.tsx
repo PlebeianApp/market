@@ -22,9 +22,10 @@ const queryClient = createQueryClient()
 
 function DefaultPending() {
 	return (
-		<div className="w-full">
-			<div className="sticky top-0 z-50 h-1 bg-primary/10 overflow-hidden">
-				<div className="h-full w-1/3 bg-primary animate-pulse" />
+		<div className="flex-1 flex items-center justify-center py-20">
+			<div className="flex flex-col items-center gap-4">
+				<div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+				<p className="text-sm text-muted-foreground">Loading...</p>
 			</div>
 		</div>
 	)
@@ -39,8 +40,8 @@ function createAppRouter(queryClient: QueryClient) {
 		} as AppRouterContext,
 		defaultPreload: 'intent',
 		defaultPreloadStaleTime: 0,
-		defaultPendingMs: 1500,
-		defaultPendingMinMs: 0,
+		defaultPendingMs: 0,
+		defaultPendingMinMs: 200,
 		defaultPendingComponent: DefaultPending,
 	})
 }
