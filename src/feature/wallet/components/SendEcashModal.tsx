@@ -1,32 +1,57 @@
 import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
+import { cashuActions, cashuStore, type PendingToken } from '@/lib/stores/cashu'
+import { nip60Store, nip60Actions, type PendingNip60Token } from '@/lib/stores/nip60'
 import { useStore } from '@tanstack/react-store'
-import { Loader2, Copy, Check, Send } from 'lucide-react'
+import { Loader2, Copy, Check, Send, RotateCcw, Trash2, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { QRCodeSVG } from 'qrcode.react'
+
+// Unified pending token type for UI
+type UnifiedPendingToken = (PendingToken | PendingNip60Token) & { source: 'cashu' | 'nip60' }
 
 interface SendEcashModalProps {
 	open: boolean
 	onClose: () => void
 }
 
+type View = 'form' | 'token' | 'pending'
+
 export function SendEcashModal({ open, onClose }: SendEcashModalProps) {
-	const { balance, mints, defaultMint, mintBalances } = useStore(nip60Store)
+	const { mints, defaultMint, mintBalances, balance: nip60Balance, pendingTokens: nip60PendingTokens } = useStore(nip60Store)
+	const { status: cashuStatus, balances: cashuBalances, pendingTokens: cashuPendingTokens } = useStore(cashuStore)
+
+	// Always use nip60 balances for display since that's where the actual proofs are stored
+	// Coco has its own IndexedDB storage which may be empty
+	const balances = mintBalances
+	const totalBalance = nip60Balance
+
 	const [amount, setAmount] = useState('')
 	const [selectedMint, setSelectedMint] = useState<string>('')
+	const [isGenerating, setIsGenerating] = useState(false)
+	const [generatedToken, setGeneratedToken] = useState<string | null>(null)
+	const [copied, setCopied] = useState(false)
+	const [error, setError] = useState<string | null>(null)
+	const [view, setView] = useState<View>('form')
+	const [isReclaiming, setIsReclaiming] = useState<string | null>(null)
 
 	// Sync selectedMint with defaultMint when modal opens or defaultMint changes
 	useEffect(() => {
 		if (open) {
 			setSelectedMint(defaultMint ?? mints[0] ?? '')
+			// Initialize cashu if not ready
+			if (cashuStatus === 'idle') {
+				cashuActions.initialize()
+			}
 		}
-	}, [open, defaultMint, mints])
-	const [isGenerating, setIsGenerating] = useState(false)
-	const [generatedToken, setGeneratedToken] = useState<string | null>(null)
-	const [copied, setCopied] = useState(false)
-	const [error, setError] = useState<string | null>(null)
+	}, [open, defaultMint, mints, cashuStatus])
+
+	// Combine pending tokens from both stores
+	const activePendingTokens: UnifiedPendingToken[] = [
+		...cashuPendingTokens.filter((t) => t.status === 'pending').map((t) => ({ ...t, source: 'cashu' as const })),
+		...nip60PendingTokens.filter((t) => t.status === 'pending').map((t) => ({ ...t, source: 'nip60' as const })),
+	].sort((a, b) => b.createdAt - a.createdAt)
 
 	const handleGenerate = async () => {
 		const amountNum = parseInt(amount, 10)
@@ -35,17 +60,36 @@ export function SendEcashModal({ open, onClose }: SendEcashModalProps) {
 			return
 		}
 
-		if (amountNum > balance) {
-			toast.error('Insufficient balance')
+		// Check balance at selected mint
+		const mintBalance = selectedMint ? (balances[selectedMint] ?? 0) : totalBalance
+		if (amountNum > mintBalance) {
+			toast.error(`Insufficient balance at ${selectedMint ? new URL(selectedMint).hostname : 'wallet'}`)
 			return
 		}
 
 		setIsGenerating(true)
 		setError(null)
 		try {
-			const token = await nip60Actions.sendEcash(amountNum, selectedMint || undefined)
+			// Check if coco has balance at the selected mint
+			const cashuMintBalance = cashuBalances[selectedMint] ?? 0
+			const useCoco = cashuStatus === 'ready' && selectedMint && cashuMintBalance >= amountNum
+
+			let token: string | null = null
+
+			if (useCoco) {
+				// Use coco if it has sufficient balance
+				console.log('[SendEcash] Using coco for send')
+				token = await cashuActions.send(selectedMint, amountNum)
+			} else {
+				// Fall back to nip60 which has the actual proofs from Nostr
+				console.log('[SendEcash] Using nip60 for send (coco balance:', cashuMintBalance, ')')
+				const { nip60Actions } = await import('@/lib/stores/nip60')
+				token = await nip60Actions.sendEcash(amountNum, selectedMint || undefined)
+			}
+
 			if (token) {
 				setGeneratedToken(token)
+				setView('token')
 				toast.success('eCash token generated!')
 			} else {
 				throw new Error('Failed to generate token')
@@ -59,10 +103,11 @@ export function SendEcashModal({ open, onClose }: SendEcashModalProps) {
 		}
 	}
 
-	const handleCopyToken = async () => {
-		if (!generatedToken) return
+	const handleCopyToken = async (tokenString?: string) => {
+		const token = tokenString || generatedToken
+		if (!token) return
 		try {
-			await navigator.clipboard.writeText(generatedToken)
+			await navigator.clipboard.writeText(token)
 			setCopied(true)
 			toast.success('Token copied to clipboard')
 			setTimeout(() => setCopied(false), 2000)
@@ -71,16 +116,48 @@ export function SendEcashModal({ open, onClose }: SendEcashModalProps) {
 		}
 	}
 
+	const handleReclaim = async (pendingToken: UnifiedPendingToken) => {
+		setIsReclaiming(pendingToken.id)
+		try {
+			let success: boolean
+			if (pendingToken.source === 'cashu') {
+				success = await cashuActions.reclaimToken(pendingToken.id)
+			} else {
+				success = await nip60Actions.reclaimToken(pendingToken.id)
+			}
+			if (success) {
+				toast.success('Token reclaimed! Funds returned to wallet.')
+			} else {
+				toast.info('Token already claimed by recipient')
+			}
+		} catch (err) {
+			const message = err instanceof Error ? err.message : 'Failed to reclaim token'
+			toast.error(message)
+		} finally {
+			setIsReclaiming(null)
+		}
+	}
+
+	const handleRemovePendingToken = (token: UnifiedPendingToken) => {
+		if (token.source === 'cashu') {
+			cashuActions.removePendingToken(token.id)
+		} else {
+			nip60Actions.removePendingToken(token.id)
+		}
+		toast.success('Token removed from history')
+	}
+
 	const handleClose = () => {
 		setAmount('')
 		setGeneratedToken(null)
 		setCopied(false)
 		setError(null)
+		setView('form')
 		onClose()
 	}
 
 	// Get mints that have balance
-	const mintsWithBalance = mints.filter((mint) => (mintBalances[mint] ?? 0) > 0)
+	const mintsWithBalance = mints.filter((mint) => (balances[mint] ?? 0) > 0)
 
 	return (
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
@@ -90,10 +167,26 @@ export function SendEcashModal({ open, onClose }: SendEcashModalProps) {
 						<Send className="w-5 h-5 text-purple-500" />
 						Send eCash
 					</DialogTitle>
-					<DialogDescription>Generate a Cashu token to send eCash (Balance: {balance.toLocaleString()} sats)</DialogDescription>
+					<DialogDescription>Generate a Cashu token to send eCash (Balance: {totalBalance.toLocaleString()} sats)</DialogDescription>
 				</DialogHeader>
 
-				{generatedToken ? (
+				{/* Tab buttons for pending tokens */}
+				{activePendingTokens.length > 0 && view === 'form' && (
+					<div className="flex gap-2 mb-2">
+						<button
+							onClick={() => setView('form')}
+							className={`text-sm px-3 py-1 rounded-md ${view === 'form' ? 'bg-primary text-primary-foreground' : 'bg-secondary'}`}
+						>
+							New Token
+						</button>
+						<button onClick={() => setView('pending')} className="text-sm px-3 py-1 rounded-md bg-secondary flex items-center gap-1">
+							<AlertCircle className="w-3 h-3" />
+							Pending ({activePendingTokens.length})
+						</button>
+					</div>
+				)}
+
+				{view === 'token' && generatedToken ? (
 					<div className="space-y-4">
 						<div className="flex justify-center">
 							<div className="p-4 bg-white rounded-lg">
@@ -110,14 +203,67 @@ export function SendEcashModal({ open, onClose }: SendEcashModalProps) {
 								/>
 							</div>
 							<div className="flex justify-end">
-								<Button variant="outline" size="sm" onClick={handleCopyToken} className="gap-2">
+								<Button variant="outline" size="sm" onClick={() => handleCopyToken()} className="gap-2">
 									{copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
 									{copied ? 'Copied!' : 'Copy Token'}
 								</Button>
 							</div>
 						</div>
 						<p className="text-sm text-muted-foreground text-center">Share this token with the recipient. It can only be redeemed once.</p>
+						<p className="text-xs text-muted-foreground text-center">
+							Token saved to pending list. You can reclaim it if the recipient doesn't claim it.
+						</p>
 						<div className="flex justify-end gap-2">
+							<Button variant="outline" onClick={() => setView('form')}>
+								Send Another
+							</Button>
+							<Button onClick={handleClose}>Done</Button>
+						</div>
+					</div>
+				) : view === 'pending' ? (
+					<div className="space-y-4">
+						<div className="space-y-2 max-h-64 overflow-y-auto">
+							{activePendingTokens.map((token) => (
+								<div key={token.id} className="p-3 bg-muted rounded-lg space-y-2">
+									<div className="flex justify-between items-start">
+										<div>
+											<p className="font-medium">{token.amount.toLocaleString()} sats</p>
+											<p className="text-xs text-muted-foreground">
+												{new URL(token.mintUrl).hostname} • {new Date(token.createdAt).toLocaleDateString()}
+											</p>
+										</div>
+										<div className="flex gap-1">
+											<Button variant="ghost" size="sm" onClick={() => handleCopyToken(token.token)} title="Copy token">
+												<Copy className="w-4 h-4" />
+											</Button>
+											<Button
+												variant="ghost"
+												size="sm"
+												onClick={() => handleReclaim(token)}
+												disabled={isReclaiming === token.id}
+												title="Try to reclaim"
+											>
+												{isReclaiming === token.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+											</Button>
+											<Button
+												variant="ghost"
+												size="sm"
+												onClick={() => handleRemovePendingToken(token)}
+												title="Remove from list"
+												className="text-destructive hover:text-destructive"
+											>
+												<Trash2 className="w-4 h-4" />
+											</Button>
+										</div>
+									</div>
+									<div className="text-xs font-mono bg-background p-2 rounded truncate">{token.token.slice(0, 50)}...</div>
+								</div>
+							))}
+						</div>
+						<div className="flex justify-end gap-2">
+							<Button variant="outline" onClick={() => setView('form')}>
+								Back
+							</Button>
 							<Button onClick={handleClose}>Done</Button>
 						</div>
 					</div>
@@ -132,26 +278,32 @@ export function SendEcashModal({ open, onClose }: SendEcashModalProps) {
 								placeholder="Enter amount in sats"
 								className="w-full px-3 py-2 text-sm border rounded-md bg-background"
 								min="1"
-								max={balance}
+								max={totalBalance}
 							/>
 						</div>
 
-						{mintsWithBalance.length > 1 && (
+						{mintsWithBalance.length > 0 && (
 							<div className="space-y-2">
-								<label className="text-sm font-medium">From Mint (optional)</label>
+								<label className="text-sm font-medium">From Mint</label>
 								<select
 									value={selectedMint}
 									onChange={(e) => setSelectedMint(e.target.value)}
 									className="w-full px-3 py-2 text-sm border rounded-md bg-background"
 								>
-									<option value="">Any mint</option>
 									{mintsWithBalance.map((mint) => (
 										<option key={mint} value={mint}>
-											{new URL(mint).hostname} ({mintBalances[mint]?.toLocaleString() ?? 0} sats)
+											{new URL(mint).hostname} ({(balances[mint] ?? 0).toLocaleString()} sats)
 										</option>
 									))}
 								</select>
 							</div>
+						)}
+
+						{cashuStatus === 'initializing' && (
+							<p className="text-sm text-muted-foreground flex items-center gap-2">
+								<Loader2 className="w-4 h-4 animate-spin" />
+								Initializing wallet...
+							</p>
 						)}
 
 						{error && <p className="text-sm text-destructive">{error}</p>}
@@ -160,7 +312,7 @@ export function SendEcashModal({ open, onClose }: SendEcashModalProps) {
 							<Button variant="outline" onClick={handleClose}>
 								Cancel
 							</Button>
-							<Button onClick={handleGenerate} disabled={isGenerating || !amount}>
+							<Button onClick={handleGenerate} disabled={isGenerating || !amount || !selectedMint || cashuStatus === 'initializing'}>
 								{isGenerating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
 								Generate Token
 							</Button>

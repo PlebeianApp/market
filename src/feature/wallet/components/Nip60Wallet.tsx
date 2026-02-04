@@ -1,13 +1,12 @@
 import { authStore } from '@/lib/stores/auth'
 import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
 import { useStore } from '@tanstack/react-store'
-import { ArrowDownLeft, ArrowUpRight, Loader2, Landmark, Plus, RefreshCw, X, Save, Star, Zap, Send, QrCode, Combine } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Loader2, Landmark, Plus, RefreshCw, X, Save, Star, Zap, Send, QrCode } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { DepositLightningModal } from './DepositLightningModal'
 import { WithdrawLightningModal } from './WithdrawLightningModal'
 import { SendEcashModal } from './SendEcashModal'
 import { ReceiveEcashModal } from './ReceiveEcashModal'
-import { toast } from 'sonner'
 
 // Default mints for new wallets
 const DEFAULT_MINTS = ['https://mint.minibits.cash/Bitcoin', 'https://mint.coinos.io', 'https://mint.cubabitcoin.org']
@@ -19,7 +18,6 @@ export function Nip60Wallet() {
 	const { status, balance, mintBalances, mints, defaultMint, transactions, error } = useStore(nip60Store)
 	const [isCreating, setIsCreating] = useState(false)
 	const [isRefreshing, setIsRefreshing] = useState(false)
-	const [isConsolidating, setIsConsolidating] = useState(false)
 	const [newMintUrl, setNewMintUrl] = useState('')
 	const [isSaving, setIsSaving] = useState(false)
 	const [openModal, setOpenModal] = useState<ModalType>(null)
@@ -47,21 +45,10 @@ export function Nip60Wallet() {
 	const handleRefresh = async () => {
 		setIsRefreshing(true)
 		try {
-			await nip60Actions.refresh()
+			// Always consolidate on manual refresh to clean up spent proofs
+			await nip60Actions.refresh({ consolidate: true })
 		} finally {
 			setIsRefreshing(false)
-		}
-	}
-
-	const handleConsolidate = async () => {
-		setIsConsolidating(true)
-		try {
-			await nip60Actions.consolidateTokens()
-			toast.success('Wallet consolidated successfully')
-		} catch (err) {
-			toast.error('Failed to consolidate wallet')
-		} finally {
-			setIsConsolidating(false)
 		}
 	}
 
@@ -138,18 +125,10 @@ export function Nip60Wallet() {
 			<div className="text-center mb-4 relative">
 				<div className="absolute right-0 top-0 flex gap-1">
 					<button
-						onClick={handleConsolidate}
-						disabled={isConsolidating || balance === 0}
-						className="p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-50"
-						title="Consolidate tokens (fix spent token errors)"
-					>
-						<Combine className={`h-4 w-4 ${isConsolidating ? 'animate-pulse' : ''}`} />
-					</button>
-					<button
 						onClick={handleRefresh}
 						disabled={isRefreshing}
 						className="p-1.5 text-muted-foreground hover:text-foreground disabled:opacity-50"
-						title="Refresh"
+						title="Refresh & sync wallet"
 					>
 						<RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
 					</button>

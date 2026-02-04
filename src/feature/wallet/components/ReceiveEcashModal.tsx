@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { cashuActions, cashuStore } from '@/lib/stores/cashu'
 import { nip60Actions } from '@/lib/stores/nip60'
+import { useStore } from '@tanstack/react-store'
 import { Loader2, Check, QrCode, ScanLine } from 'lucide-react'
 import { toast } from 'sonner'
 import { Scanner } from '@yudiel/react-qr-scanner'
@@ -12,11 +14,19 @@ interface ReceiveEcashModalProps {
 }
 
 export function ReceiveEcashModal({ open, onClose }: ReceiveEcashModalProps) {
+	const { status: cashuStatus } = useStore(cashuStore)
 	const [token, setToken] = useState('')
 	const [isReceiving, setIsReceiving] = useState(false)
 	const [isSuccess, setIsSuccess] = useState(false)
 	const [showScanner, setShowScanner] = useState(false)
 	const [error, setError] = useState<string | null>(null)
+
+	// Initialize cashu when modal opens
+	useEffect(() => {
+		if (open && cashuStatus === 'idle') {
+			cashuActions.initialize()
+		}
+	}, [open, cashuStatus])
 
 	const handleReceive = async () => {
 		if (!token.trim()) {
@@ -34,6 +44,9 @@ export function ReceiveEcashModal({ open, onClose }: ReceiveEcashModalProps) {
 		setIsReceiving(true)
 		setError(null)
 		try {
+			// Always use nip60 for receiving since that's where the wallet proofs are stored
+			// This ensures the proofs are synced to Nostr events for cross-device access
+			console.log('[Receive] Using nip60 for receive')
 			await nip60Actions.receiveEcash(normalizedToken)
 			setIsSuccess(true)
 			toast.success('eCash received successfully!')
@@ -125,13 +138,20 @@ export function ReceiveEcashModal({ open, onClose }: ReceiveEcashModalProps) {
 							</div>
 						</div>
 
+						{cashuStatus === 'initializing' && (
+							<p className="text-sm text-muted-foreground flex items-center gap-2">
+								<Loader2 className="w-4 h-4 animate-spin" />
+								Initializing wallet...
+							</p>
+						)}
+
 						{error && <p className="text-sm text-destructive">{error}</p>}
 
 						<div className="flex justify-end gap-2">
 							<Button variant="outline" onClick={handleClose}>
 								Cancel
 							</Button>
-							<Button onClick={handleReceive} disabled={isReceiving || !token.trim()}>
+							<Button onClick={handleReceive} disabled={isReceiving || !token.trim() || cashuStatus === 'initializing'}>
 								{isReceiving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
 								Receive
 							</Button>

@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
+import { cashuActions, cashuStore } from '@/lib/stores/cashu'
+import { nip60Store, nip60Actions } from '@/lib/stores/nip60'
 import { useStore } from '@tanstack/react-store'
 import { Loader2, Check, Zap, ScanLine } from 'lucide-react'
 import { toast } from 'sonner'
@@ -13,12 +14,30 @@ interface WithdrawLightningModalProps {
 }
 
 export function WithdrawLightningModal({ open, onClose }: WithdrawLightningModalProps) {
-	const { balance } = useStore(nip60Store)
+	const { balance: nip60Balance, mints, defaultMint, mintBalances } = useStore(nip60Store)
+	const { status: cashuStatus, balances: cashuBalances } = useStore(cashuStore)
+
+	// Always use nip60 balances for display since that's where the actual proofs are stored
+	const balance = nip60Balance
+	const balances = mintBalances
+
 	const [invoice, setInvoice] = useState('')
+	const [selectedMint, setSelectedMint] = useState<string>('')
 	const [isWithdrawing, setIsWithdrawing] = useState(false)
 	const [isSuccess, setIsSuccess] = useState(false)
 	const [showScanner, setShowScanner] = useState(false)
 	const [error, setError] = useState<string | null>(null)
+
+	// Sync selectedMint with defaultMint when modal opens
+	useEffect(() => {
+		if (open) {
+			setSelectedMint(defaultMint ?? mints[0] ?? '')
+			// Initialize cashu if not ready
+			if (cashuStatus === 'idle') {
+				cashuActions.initialize()
+			}
+		}
+	}, [open, defaultMint, mints, cashuStatus])
 
 	const handleWithdraw = async () => {
 		if (!invoice.trim()) {
@@ -33,12 +52,29 @@ export function WithdrawLightningModal({ open, onClose }: WithdrawLightningModal
 			return
 		}
 
+		if (!selectedMint) {
+			toast.error('Please select a mint')
+			return
+		}
+
 		setIsWithdrawing(true)
 		setError(null)
 		try {
 			// Remove lightning: prefix if present
 			const cleanInvoice = invoice.replace(/^lightning:/i, '').trim()
-			await nip60Actions.withdrawLightning(cleanInvoice)
+
+			// Check if coco has balance at the selected mint
+			const cashuMintBalance = cashuBalances[selectedMint] ?? 0
+			const useCoco = cashuStatus === 'ready' && cashuMintBalance > 0
+
+			if (useCoco) {
+				console.log('[Withdraw] Using coco for melt')
+				await cashuActions.melt(selectedMint, cleanInvoice)
+			} else {
+				console.log('[Withdraw] Using nip60 for melt (coco balance:', cashuMintBalance, ')')
+				await nip60Actions.withdrawLightning(cleanInvoice)
+			}
+
 			setIsSuccess(true)
 			toast.success('Withdrawal successful!')
 		} catch (err) {
@@ -65,11 +101,15 @@ export function WithdrawLightningModal({ open, onClose }: WithdrawLightningModal
 
 	const handleClose = () => {
 		setInvoice('')
+		setSelectedMint('')
 		setIsSuccess(false)
 		setShowScanner(false)
 		setError(null)
 		onClose()
 	}
+
+	// Get mints that have balance
+	const mintsWithBalance = mints.filter((mint) => (balances[mint] ?? 0) > 0)
 
 	return (
 		<Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
@@ -113,6 +153,23 @@ export function WithdrawLightningModal({ open, onClose }: WithdrawLightningModal
 					</div>
 				) : (
 					<div className="space-y-4">
+						{mintsWithBalance.length > 0 && (
+							<div className="space-y-2">
+								<label className="text-sm font-medium">From Mint</label>
+								<select
+									value={selectedMint}
+									onChange={(e) => setSelectedMint(e.target.value)}
+									className="w-full px-3 py-2 text-sm border rounded-md bg-background"
+								>
+									{mintsWithBalance.map((mint) => (
+										<option key={mint} value={mint}>
+											{new URL(mint).hostname} ({(balances[mint] ?? 0).toLocaleString()} sats)
+										</option>
+									))}
+								</select>
+							</div>
+						)}
+
 						<div className="space-y-2">
 							<label className="text-sm font-medium">Lightning Invoice</label>
 							<div className="flex gap-2">
@@ -131,13 +188,23 @@ export function WithdrawLightningModal({ open, onClose }: WithdrawLightningModal
 							</div>
 						</div>
 
+						{cashuStatus === 'initializing' && (
+							<p className="text-sm text-muted-foreground flex items-center gap-2">
+								<Loader2 className="w-4 h-4 animate-spin" />
+								Initializing wallet...
+							</p>
+						)}
+
 						{error && <p className="text-sm text-destructive">{error}</p>}
 
 						<div className="flex justify-end gap-2">
 							<Button variant="outline" onClick={handleClose}>
 								Cancel
 							</Button>
-							<Button onClick={handleWithdraw} disabled={isWithdrawing || !invoice.trim()}>
+							<Button
+								onClick={handleWithdraw}
+								disabled={isWithdrawing || !invoice.trim() || !selectedMint || cashuStatus === 'initializing'}
+							>
 								{isWithdrawing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
 								Withdraw
 							</Button>
