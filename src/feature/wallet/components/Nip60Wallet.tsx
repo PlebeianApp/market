@@ -49,7 +49,7 @@ export function Nip60Wallet() {
 	const [newMintUrl, setNewMintUrl] = useState('')
 	const [isSaving, setIsSaving] = useState(false)
 	const [openModal, setOpenModal] = useState<ModalType>(null)
-	const [showProofs, setShowProofs] = useState(false)
+	const [openSection, setOpenSection] = useState<'mints' | 'transactions' | 'proofs' | null>(null)
 	const [expandedMints, setExpandedMints] = useState<Set<string>>(new Set())
 
 	// Get proofs from wallet state
@@ -250,7 +250,8 @@ export function Nip60Wallet() {
 				</Button>
 			</div>
 
-			<div className="border-t pt-4 mb-4 overflow-hidden">
+			{/* Default Mint Selector */}
+			<div className="border-t pt-4 mb-2 overflow-hidden">
 				<p className="text-sm font-medium mb-2">Default Mint</p>
 				{mints.length > 0 ? (
 					<Select value={defaultMint ?? ''} onValueChange={(value) => nip60Actions.setDefaultMint(value || null)}>
@@ -286,18 +287,22 @@ export function Nip60Wallet() {
 				) : (
 					<p className="text-muted-foreground text-sm">No mints configured</p>
 				)}
+			</div>
 
-				{/* Manage mints */}
-				<Collapsible className="mt-3 overflow-hidden">
+			{/* Unified Accordion: Mints, Transactions, Proofs */}
+			<div className="border-t pt-2 space-y-1 overflow-hidden">
+				{/* Manage Mints */}
+				<Collapsible open={openSection === 'mints'} onOpenChange={(open) => setOpenSection(open ? 'mints' : null)}>
 					<CollapsibleTrigger asChild>
-						<Button variant="ghost" size="sm" className="w-full justify-start gap-2 px-2 overflow-hidden">
+						<Button variant="ghost" size="sm" className="w-full justify-start gap-2 px-0 overflow-hidden">
 							<ChevronRight className="w-4 h-4 shrink-0 transition-transform [[data-state=open]>&]:rotate-90" />
-							<span className="truncate">Manage Mints ({mints.length})</span>
+							<Landmark className="w-4 h-4 shrink-0" />
+							<span className="truncate flex-1 text-left">Mints ({mints.length})</span>
 						</Button>
 					</CollapsibleTrigger>
-					<CollapsibleContent className="space-y-2 pt-2 overflow-hidden">
+					<CollapsibleContent className="space-y-2 pt-2 pl-6 overflow-hidden">
 						{mints.map((mint) => (
-							<div key={mint} className="flex items-center justify-between text-sm pl-6 gap-2">
+							<div key={mint} className="flex items-center justify-between text-sm gap-2">
 								<span className="text-muted-foreground truncate min-w-0" title={mint}>
 									{new URL(mint).hostname}
 								</span>
@@ -311,7 +316,7 @@ export function Nip60Wallet() {
 								</div>
 							</div>
 						))}
-						<div className="flex gap-2 pl-6">
+						<div className="flex gap-2">
 							<Input
 								type="url"
 								value={newMintUrl}
@@ -324,105 +329,103 @@ export function Nip60Wallet() {
 								<Plus className="w-4 h-4" />
 							</Button>
 						</div>
+						<Button
+							variant="primary"
+							size="sm"
+							onClick={handleSaveWallet}
+							disabled={isSaving}
+							className="w-full"
+							icon={isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+						>
+							Save Wallet
+						</Button>
 					</CollapsibleContent>
 				</Collapsible>
 
-				{/* Save button */}
-				<Button
-					variant="primary"
-					size="sm"
-					onClick={handleSaveWallet}
-					disabled={isSaving}
-					className="mt-3 w-full"
-					icon={isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-				>
-					Save Wallet
-				</Button>
-			</div>
-
-			{/* Transactions Section */}
-			<Collapsible className="border-t pt-4 overflow-hidden">
-				<CollapsibleTrigger asChild>
-					<Button variant="ghost" size="sm" className="w-full justify-start gap-2 px-0 overflow-hidden">
-						<ChevronRight className="w-4 h-4 shrink-0 transition-transform [[data-state=open]>&]:rotate-90" />
-						<Receipt className="w-4 h-4 shrink-0" />
-						<span className="truncate">Transactions ({transactions.length})</span>
-					</Button>
-				</CollapsibleTrigger>
-				<CollapsibleContent>
-					{transactions.length > 0 ? (
-						<div className="space-y-2 max-h-48 overflow-y-auto mt-2">
-							{transactions.map((tx) => (
-								<div key={tx.id} className="flex items-center justify-between text-sm gap-2">
-									<div className="flex items-center gap-2 min-w-0">
-										{tx.direction === 'in' ? (
-											<ArrowDownLeft className="w-4 h-4 text-green-500 shrink-0" />
-										) : (
-											<ArrowUpRight className="w-4 h-4 text-red-500 shrink-0" />
-										)}
-										<span className="text-muted-foreground truncate">{new Date(tx.timestamp * 1000).toLocaleDateString()}</span>
+				{/* Transactions */}
+				<Collapsible open={openSection === 'transactions'} onOpenChange={(open) => setOpenSection(open ? 'transactions' : null)}>
+					<CollapsibleTrigger asChild>
+						<Button variant="ghost" size="sm" className="w-full justify-start gap-2 px-0 overflow-hidden">
+							<ChevronRight className="w-4 h-4 shrink-0 transition-transform [[data-state=open]>&]:rotate-90" />
+							<Receipt className="w-4 h-4 shrink-0" />
+							<span className="truncate flex-1 text-left">Transactions ({transactions.length})</span>
+						</Button>
+					</CollapsibleTrigger>
+					<CollapsibleContent>
+						{transactions.length > 0 ? (
+							<div className="space-y-2 max-h-48 overflow-y-auto mt-2 pl-6">
+								{transactions.map((tx) => (
+									<div key={tx.id} className="flex items-center justify-between text-sm gap-2">
+										<div className="flex items-center gap-2 min-w-0">
+											{tx.direction === 'in' ? (
+												<ArrowDownLeft className="w-4 h-4 text-green-500 shrink-0" />
+											) : (
+												<ArrowUpRight className="w-4 h-4 text-red-500 shrink-0" />
+											)}
+											<span className="text-muted-foreground truncate">{new Date(tx.timestamp * 1000).toLocaleDateString()}</span>
+										</div>
+										<span className={`shrink-0 ${tx.direction === 'in' ? 'text-green-500' : 'text-red-500'}`}>
+											{tx.direction === 'in' ? '+' : '-'}
+											{tx.amount.toLocaleString()}
+										</span>
 									</div>
-									<span className={`shrink-0 ${tx.direction === 'in' ? 'text-green-500' : 'text-red-500'}`}>
-										{tx.direction === 'in' ? '+' : '-'}
-										{tx.amount.toLocaleString()}
-									</span>
-								</div>
-							))}
-						</div>
-					) : (
-						<p className="text-muted-foreground text-sm mt-2">No transactions yet</p>
-					)}
-				</CollapsibleContent>
-			</Collapsible>
-
-			{/* Proofs Section */}
-			<Collapsible open={showProofs} onOpenChange={setShowProofs} className="border-t pt-4 overflow-hidden">
-				<CollapsibleTrigger asChild>
-					<Button variant="ghost" size="sm" className="w-full justify-start gap-2 px-0 overflow-hidden">
-						<ChevronRight className="w-4 h-4 shrink-0 transition-transform [[data-state=open]>&]:rotate-90" />
-						<Coins className="w-4 h-4 shrink-0" />
-						<span className="truncate">Proofs ({Array.from(proofsByMint.values()).flat().length})</span>
-					</Button>
-				</CollapsibleTrigger>
-				<CollapsibleContent>
-					<div className="space-y-2 max-h-64 overflow-y-auto overflow-x-hidden mt-2">
-						{proofsByMint.size === 0 ? (
-							<p className="text-sm text-muted-foreground">No proofs in wallet</p>
+								))}
+							</div>
 						) : (
-							Array.from(proofsByMint.entries()).map(([mint, proofs]) => (
-								<Collapsible key={mint} open={expandedMints.has(mint)} onOpenChange={() => toggleMintExpanded(mint)}>
-									<div className="bg-muted/50 rounded-md p-2 overflow-hidden">
-										<CollapsibleTrigger asChild>
-											<Button variant="ghost" size="sm" className="w-full justify-start gap-2 px-1 h-auto py-1 overflow-hidden">
-												<ChevronRight className="w-3 h-3 shrink-0 transition-transform [[data-state=open]>&]:rotate-90" />
-												<span className="font-medium truncate flex-1 text-left min-w-0">{new URL(mint).hostname}</span>
-												<span className="text-muted-foreground text-xs shrink-0 whitespace-nowrap">
-													{proofs.length} • {proofs.reduce((s, p) => s + p.amount, 0).toLocaleString()}
-												</span>
-											</Button>
-										</CollapsibleTrigger>
-										<CollapsibleContent>
-											<div className="mt-2 space-y-1 pl-5 overflow-hidden">
-												{proofs.map((proof, idx) => (
-													<div
-														key={`${proof.id}-${proof.secret.slice(0, 8)}-${idx}`}
-														className="flex items-center justify-between text-xs bg-background rounded px-2 py-1 gap-2"
-													>
-														<span className="font-mono text-muted-foreground truncate min-w-0" title={`Keyset: ${proof.id}`}>
-															{proof.id.slice(0, 8)}...
-														</span>
-														<span className="font-medium shrink-0">{proof.amount}</span>
-													</div>
-												))}
-											</div>
-										</CollapsibleContent>
-									</div>
-								</Collapsible>
-							))
+							<p className="text-muted-foreground text-sm mt-2 pl-6">No transactions yet</p>
 						)}
-					</div>
-				</CollapsibleContent>
-			</Collapsible>
+					</CollapsibleContent>
+				</Collapsible>
+
+				{/* Proofs */}
+				<Collapsible open={openSection === 'proofs'} onOpenChange={(open) => setOpenSection(open ? 'proofs' : null)}>
+					<CollapsibleTrigger asChild>
+						<Button variant="ghost" size="sm" className="w-full justify-start gap-2 px-0 overflow-hidden">
+							<ChevronRight className="w-4 h-4 shrink-0 transition-transform [[data-state=open]>&]:rotate-90" />
+							<Coins className="w-4 h-4 shrink-0" />
+							<span className="truncate flex-1 text-left">Proofs ({Array.from(proofsByMint.values()).flat().length})</span>
+						</Button>
+					</CollapsibleTrigger>
+					<CollapsibleContent>
+						<div className="space-y-2 max-h-48 overflow-y-auto overflow-x-hidden mt-2 pl-6">
+							{proofsByMint.size === 0 ? (
+								<p className="text-sm text-muted-foreground">No proofs in wallet</p>
+							) : (
+								Array.from(proofsByMint.entries()).map(([mint, proofs]) => (
+									<Collapsible key={mint} open={expandedMints.has(mint)} onOpenChange={() => toggleMintExpanded(mint)}>
+										<div className="bg-muted/50 rounded-md p-2 overflow-hidden">
+											<CollapsibleTrigger asChild>
+												<Button variant="ghost" size="sm" className="w-full justify-start gap-2 px-1 h-auto py-1 overflow-hidden">
+													<ChevronRight className="w-3 h-3 shrink-0 transition-transform [[data-state=open]>&]:rotate-90" />
+													<span className="font-medium truncate flex-1 text-left min-w-0">{new URL(mint).hostname}</span>
+													<span className="text-muted-foreground text-xs shrink-0 whitespace-nowrap">
+														{proofs.length} • {proofs.reduce((s, p) => s + p.amount, 0).toLocaleString()}
+													</span>
+												</Button>
+											</CollapsibleTrigger>
+											<CollapsibleContent>
+												<div className="mt-2 space-y-1 pl-5 overflow-hidden">
+													{proofs.map((proof, idx) => (
+														<div
+															key={`${proof.id}-${proof.secret.slice(0, 8)}-${idx}`}
+															className="flex items-center justify-between text-xs bg-background rounded px-2 py-1 gap-2"
+														>
+															<span className="font-mono text-muted-foreground truncate min-w-0" title={`Keyset: ${proof.id}`}>
+																{proof.id.slice(0, 8)}...
+															</span>
+															<span className="font-medium shrink-0">{proof.amount}</span>
+														</div>
+													))}
+												</div>
+											</CollapsibleContent>
+										</div>
+									</Collapsible>
+								))
+							)}
+						</div>
+					</CollapsibleContent>
+				</Collapsible>
+			</div>
 
 			{/* Modals */}
 			<DepositLightningModal open={openModal === 'deposit'} onClose={() => setOpenModal(null)} />
