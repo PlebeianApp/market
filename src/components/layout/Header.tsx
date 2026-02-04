@@ -271,7 +271,7 @@ export function Header() {
 												</TooltipTrigger>
 												<TooltipContent side="bottom">Wallet</TooltipContent>
 											</Tooltip>
-											<PopoverContent className="md:w-96 w-[calc(100vw-2rem)]" align="end">
+											<PopoverContent className="md:w-96 w-[calc(100vw-2rem)] bg-primary rounded-lg" align="end">
 												<Nip60Wallet />
 											</PopoverContent>
 										</Popover>

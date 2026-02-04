@@ -184,7 +184,7 @@ export function Nip60Wallet() {
 
 	if (!isAuthenticated) {
 		return (
-			<div className="p-4 text-center text-muted-foreground">
+			<div className="p-4 text-center text-gray-400 bg-primary rounded-lg">
 				<p>Please log in to view your wallet</p>
 			</div>
 		)
@@ -192,15 +192,15 @@ export function Nip60Wallet() {
 
 	if (status === 'idle' || status === 'initializing') {
 		return (
-			<div className="flex items-center justify-center p-4">
-				<Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+			<div className="flex items-center justify-center p-4 bg-primary rounded-lg">
+				<Loader2 className="h-6 w-6 animate-spin text-gray-400" />
 			</div>
 		)
 	}
 
 	if (status === 'error') {
 		return (
-			<div className="p-4 text-center text-destructive">
+			<div className="p-4 text-center text-red-400 bg-primary rounded-lg">
 				<p>{error}</p>
 			</div>
 		)
@@ -208,11 +208,12 @@ export function Nip60Wallet() {
 
 	if (status === 'no_wallet') {
 		return (
-			<div className="p-4 text-center w-80">
-				<p className="text-muted-foreground mb-4">No Cashu wallet found</p>
+			<div className="p-4 text-center w-80 bg-primary rounded-lg">
+				<p className="text-gray-400 mb-4">No Cashu wallet found</p>
 				<Button
 					onClick={handleCreateWallet}
 					disabled={isCreating}
+					variant="secondary"
 					icon={isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
 				>
 					Create Wallet
@@ -222,43 +223,36 @@ export function Nip60Wallet() {
 	}
 
 	return (
-		<div className="p-4 max-w-full overflow-hidden">
+		<div className="p-4 max-w-full overflow-hidden bg-primary rounded-lg text-white">
 			<div className="text-center mb-4 relative">
 				<div className="absolute right-0 top-0 flex gap-1">
-					<Button variant="ghost" size="icon" onClick={handleRefresh} disabled={isRefreshing} title="Refresh & sync wallet">
+					<Button variant="dark-ghost" size="icon" onClick={handleRefresh} disabled={isRefreshing} title="Refresh & sync wallet">
 						<RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
 					</Button>
 				</div>
-				<p className="text-sm text-muted-foreground mb-1">Balance</p>
-				<p className="text-2xl font-bold">{balance.toLocaleString()} sats</p>
+				<p className="text-sm text-gray-400 mb-1">Balance</p>
+				<p className="text-2xl font-bold text-white">{balance.toLocaleString()} sats</p>
 			</div>
 
 			{/* Action Buttons */}
 			<div className="grid grid-cols-2 gap-2 mb-4">
-				<Button
-					variant="tertiary"
-					size="sm"
-					onClick={() => setOpenModal('deposit')}
-					className="bg-green-600 hover:bg-green-700 border-green-700"
-					icon={<Zap className="w-4 h-4" />}
-				>
+				<Button variant="success" size="sm" onClick={() => setOpenModal('deposit')} icon={<Zap className="w-4 h-4" />}>
 					Deposit
 				</Button>
 				<Button
-					variant="tertiary"
+					variant="warning"
 					size="sm"
 					onClick={() => setOpenModal('withdraw')}
 					disabled={balance === 0}
-					className="bg-orange-600 hover:bg-orange-700 border-orange-700"
 					icon={<Zap className="w-4 h-4" />}
 				>
 					Withdraw
 				</Button>
-				<Button variant="secondary" size="sm" onClick={() => setOpenModal('receive')} icon={<QrCode className="w-4 h-4" />}>
+				<Button variant="dark-muted" size="sm" onClick={() => setOpenModal('receive')} icon={<QrCode className="w-4 h-4" />}>
 					Receive eCash
 				</Button>
 				<Button
-					variant="secondary"
+					variant="dark-muted"
 					size="sm"
 					onClick={() => setOpenModal('send')}
 					disabled={balance === 0}
@@ -270,17 +264,17 @@ export function Nip60Wallet() {
 
 			{/* Default Mint Selector */}
 			<div className="pt-2 mb-2 overflow-hidden">
-				<p className="text-sm font-medium mb-2">Default Mint</p>
+				<p className="text-sm font-medium mb-2 text-gray-300">Default Mint</p>
 				{mints.length > 0 ? (
 					<Select value={defaultMint ?? ''} onValueChange={(value) => nip60Actions.setDefaultMint(value || null)}>
-						<SelectTrigger className="w-full">
+						<SelectTrigger className="w-full bg-white/10 border-white/20 text-white hover:bg-white/15">
 							<SelectValue placeholder="Select a default mint">
 								{defaultMint ? (
 									<span className="flex items-center gap-2 truncate">
 										<Star className="w-4 h-4 text-yellow-500 fill-current shrink-0" />
 										<span className="truncate">{getMintHostname(defaultMint)}</span>
 										{mintBalances[defaultMint] !== undefined && (
-											<span className="text-muted-foreground shrink-0">({mintBalances[defaultMint].toLocaleString()})</span>
+											<span className="text-gray-400 shrink-0">({mintBalances[defaultMint].toLocaleString()})</span>
 										)}
 									</span>
 								) : (
@@ -288,14 +282,14 @@ export function Nip60Wallet() {
 								)}
 							</SelectValue>
 						</SelectTrigger>
-						<SelectContent className="max-w-[calc(100vw-2rem)]">
+						<SelectContent className="max-w-[calc(100vw-2rem)] bg-primary border-white/20">
 							{mints.map((mint) => (
-								<SelectItem key={mint} value={mint}>
+								<SelectItem key={mint} value={mint} className="text-white hover:bg-white/10 focus:bg-white/10 focus:text-white">
 									<div className="flex items-center gap-2">
 										<Landmark className="w-4 h-4 shrink-0" />
 										<span className="truncate">{getMintHostname(mint)}</span>
 										{mintBalances[mint] !== undefined && (
-											<span className="text-muted-foreground shrink-0">({mintBalances[mint].toLocaleString()})</span>
+											<span className="text-gray-400 shrink-0">({mintBalances[mint].toLocaleString()})</span>
 										)}
 									</div>
 								</SelectItem>
@@ -303,7 +297,7 @@ export function Nip60Wallet() {
 						</SelectContent>
 					</Select>
 				) : (
-					<p className="text-muted-foreground text-sm">No mints configured</p>
+					<p className="text-gray-400 text-sm">No mints configured</p>
 				)}
 			</div>
 
@@ -312,7 +306,7 @@ export function Nip60Wallet() {
 				{/* Toggle buttons row */}
 				<div className="flex gap-1 mb-2">
 					<Button
-						variant={openSection === 'mints' ? 'secondary' : 'ghost'}
+						variant={openSection === 'mints' ? 'dark-active' : 'dark-subtle'}
 						size="sm"
 						onClick={() => setOpenSection(openSection === 'mints' ? null : 'mints')}
 						className="flex-1 gap-1.5 px-2"
@@ -322,7 +316,7 @@ export function Nip60Wallet() {
 						<span className="text-xs">{mints.length}</span>
 					</Button>
 					<Button
-						variant={openSection === 'transactions' ? 'secondary' : 'ghost'}
+						variant={openSection === 'transactions' ? 'dark-active' : 'dark-subtle'}
 						size="sm"
 						onClick={() => setOpenSection(openSection === 'transactions' ? null : 'transactions')}
 						className="flex-1 gap-1.5 px-2"
@@ -332,7 +326,7 @@ export function Nip60Wallet() {
 						<span className="text-xs">{transactions.length}</span>
 					</Button>
 					<Button
-						variant={openSection === 'proofs' ? 'secondary' : 'ghost'}
+						variant={openSection === 'proofs' ? 'dark-active' : 'dark-subtle'}
 						size="sm"
 						onClick={() => setOpenSection(openSection === 'proofs' ? null : 'proofs')}
 						className="flex-1 gap-1.5 px-2"
@@ -343,7 +337,7 @@ export function Nip60Wallet() {
 					</Button>
 					{activePendingTokens.length > 0 && (
 						<Button
-							variant={openSection === 'pending' ? 'secondary' : 'ghost'}
+							variant={openSection === 'pending' ? 'dark-active' : 'dark-subtle'}
 							size="sm"
 							onClick={() => setOpenSection(openSection === 'pending' ? null : 'pending')}
 							className="flex-1 gap-1.5 px-2"
@@ -357,17 +351,15 @@ export function Nip60Wallet() {
 
 				{/* Content panels */}
 				{openSection === 'mints' && (
-					<div className="space-y-2 pt-2 overflow-hidden border-t">
+					<div className="space-y-2 pt-2 overflow-hidden border-t border-white/10">
 						{mints.map((mint) => (
 							<div key={mint} className="flex items-center justify-between text-sm gap-2">
-								<span className="text-muted-foreground truncate min-w-0" title={mint}>
+								<span className="text-gray-300 truncate min-w-0" title={mint}>
 									{getMintHostname(mint)}
 								</span>
 								<div className="flex items-center gap-1 shrink-0">
-									{mintBalances[mint] !== undefined && (
-										<span className="text-xs text-muted-foreground">{mintBalances[mint].toLocaleString()}</span>
-									)}
-									<Button variant="ghost" size="icon" onClick={() => handleRemoveMint(mint)} title="Remove mint" className="h-6 w-6">
+									{mintBalances[mint] !== undefined && <span className="text-xs text-gray-400">{mintBalances[mint].toLocaleString()}</span>}
+									<Button variant="dark-ghost" size="icon" onClick={() => handleRemoveMint(mint)} title="Remove mint" className="h-6 w-6">
 										<X className="w-3 h-3" />
 									</Button>
 								</div>
@@ -380,14 +372,14 @@ export function Nip60Wallet() {
 								onChange={(e) => setNewMintUrl(e.target.value)}
 								onKeyDown={(e) => e.key === 'Enter' && handleAddMint()}
 								placeholder="https://mint.example.com"
-								className="flex-1 h-8 text-sm min-w-0"
+								className="flex-1 h-8 text-sm min-w-0 bg-white/10 border-white/20 text-white placeholder:text-gray-500"
 							/>
-							<Button variant="secondary" size="sm" onClick={handleAddMint} disabled={!newMintUrl.trim()} className="h-8 px-2 shrink-0">
+							<Button variant="dark-muted" size="sm" onClick={handleAddMint} disabled={!newMintUrl.trim()} className="h-8 px-2 shrink-0">
 								<Plus className="w-4 h-4" />
 							</Button>
 						</div>
 						<Button
-							variant="primary"
+							variant="dark-active"
 							size="sm"
 							onClick={handleSaveWallet}
 							disabled={isSaving}
@@ -400,20 +392,20 @@ export function Nip60Wallet() {
 				)}
 
 				{openSection === 'transactions' && (
-					<div className="pt-2 overflow-hidden border-t">
+					<div className="pt-2 overflow-hidden border-t border-white/10">
 						{transactions.length > 0 ? (
 							<div className="space-y-2 max-h-48 overflow-y-auto">
 								{transactions.map((tx) => (
 									<div key={tx.id} className="flex items-center justify-between text-sm gap-2">
 										<div className="flex items-center gap-2 min-w-0">
 											{tx.direction === 'in' ? (
-												<ArrowDownLeft className="w-4 h-4 text-green-500 shrink-0" />
+												<ArrowDownLeft className="w-4 h-4 text-green-400 shrink-0" />
 											) : (
-												<ArrowUpRight className="w-4 h-4 text-red-500 shrink-0" />
+												<ArrowUpRight className="w-4 h-4 text-red-400 shrink-0" />
 											)}
-											<span className="text-muted-foreground truncate">{new Date(tx.timestamp * 1000).toLocaleDateString()}</span>
+											<span className="text-gray-400 truncate">{new Date(tx.timestamp * 1000).toLocaleDateString()}</span>
 										</div>
-										<span className={`shrink-0 ${tx.direction === 'in' ? 'text-green-500' : 'text-red-500'}`}>
+										<span className={`shrink-0 ${tx.direction === 'in' ? 'text-green-400' : 'text-red-400'}`}>
 											{tx.direction === 'in' ? '+' : '-'}
 											{tx.amount.toLocaleString()}
 										</span>
@@ -421,24 +413,24 @@ export function Nip60Wallet() {
 								))}
 							</div>
 						) : (
-							<p className="text-muted-foreground text-sm">No transactions yet</p>
+							<p className="text-gray-400 text-sm">No transactions yet</p>
 						)}
 					</div>
 				)}
 
 				{openSection === 'proofs' && (
-					<div className="space-y-2 max-h-48 overflow-y-auto overflow-x-hidden pt-2 border-t">
+					<div className="space-y-2 max-h-48 overflow-y-auto overflow-x-hidden pt-2 border-t border-white/10">
 						{proofsByMint.size === 0 ? (
-							<p className="text-sm text-muted-foreground">No proofs in wallet</p>
+							<p className="text-sm text-gray-400">No proofs in wallet</p>
 						) : (
 							Array.from(proofsByMint.entries()).map(([mint, proofs]) => (
 								<Collapsible key={mint} open={expandedMints.has(mint)} onOpenChange={() => toggleMintExpanded(mint)}>
-									<div className="bg-muted/50 rounded-md p-2 overflow-hidden">
+									<div className="bg-white/5 rounded-md p-2 overflow-hidden">
 										<CollapsibleTrigger asChild>
-											<Button variant="ghost" size="sm" className="w-full justify-start gap-2 px-1 h-auto py-1 overflow-hidden">
+											<Button variant="dark-ghost" size="sm" className="w-full justify-start gap-2 px-1 h-auto py-1 overflow-hidden">
 												<ChevronRight className="w-3 h-3 shrink-0 transition-transform [[data-state=open]>&]:rotate-90" />
-												<span className="font-medium truncate flex-1 text-left min-w-0">{getMintHostname(mint)}</span>
-												<span className="text-muted-foreground text-xs shrink-0 whitespace-nowrap">
+												<span className="font-medium truncate flex-1 text-left min-w-0 text-white">{getMintHostname(mint)}</span>
+												<span className="text-gray-400 text-xs shrink-0 whitespace-nowrap">
 													{proofs.length} • {proofs.reduce((s, p) => s + p.amount, 0).toLocaleString()}
 												</span>
 											</Button>
@@ -448,12 +440,12 @@ export function Nip60Wallet() {
 												{proofs.map((proof, idx) => (
 													<div
 														key={`${proof.id}-${proof.secret.slice(0, 8)}-${idx}`}
-														className="flex items-center justify-between text-xs bg-background rounded px-2 py-1 gap-2"
+														className="flex items-center justify-between text-xs bg-white/10 rounded px-2 py-1 gap-2"
 													>
-														<span className="font-mono text-muted-foreground truncate min-w-0" title={`Keyset: ${proof.id}`}>
+														<span className="font-mono text-gray-400 truncate min-w-0" title={`Keyset: ${proof.id}`}>
 															{proof.id.slice(0, 8)}...
 														</span>
-														<span className="font-medium shrink-0">{proof.amount}</span>
+														<span className="font-medium text-white shrink-0">{proof.amount}</span>
 													</div>
 												))}
 											</div>
@@ -466,24 +458,30 @@ export function Nip60Wallet() {
 				)}
 
 				{openSection === 'pending' && (
-					<div className="space-y-2 max-h-48 overflow-y-auto pt-2 border-t">
+					<div className="space-y-2 max-h-48 overflow-y-auto pt-2 border-t border-white/10">
 						{activePendingTokens.map((token) => (
-							<div key={token.id} className="flex items-center justify-between p-2 bg-muted rounded-lg gap-2">
+							<div key={token.id} className="flex items-center justify-between p-2 bg-white/5 rounded-lg gap-2">
 								<div className="min-w-0">
-									<p className="font-medium text-sm">{token.amount.toLocaleString()} sats</p>
-									<p className="text-xs text-muted-foreground truncate">
+									<p className="font-medium text-sm text-white">{token.amount.toLocaleString()} sats</p>
+									<p className="text-xs text-gray-400 truncate">
 										{getMintHostname(token.mintUrl)} • {new Date(token.createdAt).toLocaleDateString()}
 									</p>
 								</div>
 								<div className="flex gap-0.5 shrink-0">
-									<Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewingToken(token)} title="View token">
+									<Button variant="dark-ghost" size="icon" className="h-7 w-7" onClick={() => setViewingToken(token)} title="View token">
 										<Eye className="w-3.5 h-3.5" />
 									</Button>
-									<Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleCopyToken(token.token)} title="Copy token">
+									<Button
+										variant="dark-ghost"
+										size="icon"
+										className="h-7 w-7"
+										onClick={() => handleCopyToken(token.token)}
+										title="Copy token"
+									>
 										<Copy className="w-3.5 h-3.5" />
 									</Button>
 									<Button
-										variant="ghost"
+										variant="dark-ghost"
 										size="icon"
 										className="h-7 w-7"
 										onClick={() => handleReclaim(token)}
@@ -493,9 +491,9 @@ export function Nip60Wallet() {
 										{isReclaiming === token.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
 									</Button>
 									<Button
-										variant="ghost"
+										variant="dark-destructive"
 										size="icon"
-										className="h-7 w-7 text-destructive hover:text-destructive"
+										className="h-7 w-7"
 										onClick={() => handleRemovePendingToken(token)}
 										title="Remove from list"
 									>

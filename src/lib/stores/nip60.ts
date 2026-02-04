@@ -127,28 +127,20 @@ export const nip60Actions = {
 		}))
 
 		try {
-			console.log('[nip60] Initializing wallet for pubkey:', pubkey)
-			console.log('[nip60] NDK signer:', ndk.signer ? 'present' : 'missing')
-			console.log('[nip60] NDK pool relays:', Array.from(ndk.pool?.relays?.keys() ?? []))
-
 			// First, try to fetch the existing wallet event (kind 17375)
 			const walletEvent = await ndk.fetchEvent({ kinds: [17375], authors: [pubkey] })
-			console.log('[nip60] Wallet event fetch result:', walletEvent ? 'found' : 'not found')
 
 			let wallet: NDKCashuWallet
 
 			if (walletEvent) {
 				// Load wallet from existing event - this decrypts and loads mints/privkeys
-				console.log('[nip60] Loading wallet from event:', walletEvent.id)
 				const loadedWallet = await NDKCashuWallet.from(walletEvent)
 				if (!loadedWallet) {
 					throw new Error('Failed to load wallet from event')
 				}
 				wallet = loadedWallet
-				console.log('[nip60] Wallet loaded from event, mints:', wallet.mints)
 			} else {
 				// No wallet event found - create a new wallet instance
-				console.log('[nip60] No wallet event found, creating new instance')
 				wallet = new NDKCashuWallet(ndk)
 			}
 
@@ -157,7 +149,6 @@ export const nip60Actions = {
 				const relayUrls = Array.from(ndk.pool?.relays?.keys() ?? [])
 				if (relayUrls.length > 0) {
 					wallet.relaySet = NDKRelaySet.fromRelayUrls(relayUrls, ndk)
-					console.log('[nip60] Configured wallet relaySet with:', relayUrls)
 				}
 			}
 
@@ -169,9 +160,7 @@ export const nip60Actions = {
 
 			// Subscribe to balance updates
 			wallet.on('balance_updated', () => {
-				console.log('[nip60] Balance updated event')
 				const { totalBalance, mintBalances } = getBalancesFromState(wallet)
-				console.log('[nip60] balance_updated:', { totalBalance, mintBalances })
 				nip60Store.setState((s) => ({
 					...s,
 					balance: totalBalance,
@@ -182,7 +171,6 @@ export const nip60Actions = {
 
 			// Listen for status changes
 			wallet.on('status_changed', (status: NDKWalletStatus) => {
-				console.log('[nip60] Wallet status changed:', status)
 				if (status === NDKWalletStatus.READY) {
 					const { totalBalance, mintBalances } = getBalancesFromState(wallet)
 					const allMints = getAllMints(wallet)
@@ -208,11 +196,6 @@ export const nip60Actions = {
 			await wallet.start({ pubkey })
 			const { totalBalance, mintBalances } = getBalancesFromState(wallet)
 			const allMints = getAllMints(wallet)
-			console.log('[nip60] Wallet started')
-			console.log('[nip60] Configured mints:', wallet.mints)
-			console.log('[nip60] All mints (including from balances):', allMints)
-			console.log('[nip60] Balance:', totalBalance)
-			console.log('[nip60] Mint balances:', mintBalances)
 
 			// Determine if user has an existing wallet (we found a wallet event OR have mints/balance)
 			const hasWallet = walletEvent !== null || allMints.length > 0 || totalBalance > 0
@@ -250,10 +233,7 @@ export const nip60Actions = {
 		}
 
 		try {
-			console.log('[nip60] Fetching transactions using wallet.fetchTransactions()...')
 			const txs = await wallet.fetchTransactions()
-			console.log('[nip60] Transactions fetched:', txs.length)
-
 			nip60Store.setState((s) => ({
 				...s,
 				transactions: txs,
@@ -276,9 +256,7 @@ export const nip60Actions = {
 			transactionUnsubscribe = null
 		}
 
-		console.log('[nip60] Subscribing to transaction updates...')
 		transactionUnsubscribe = wallet.subscribeTransactions((tx: NDKWalletTransaction) => {
-			console.log('[nip60] New transaction received:', tx)
 			nip60Store.setState((s) => {
 				// Check if transaction already exists
 				const exists = s.transactions.some((t) => t.id === tx.id)
@@ -304,10 +282,7 @@ export const nip60Actions = {
 		}
 
 		try {
-			console.log('[nip60] Creating new wallet with mints:', mints)
 			const result = await NDKCashuWallet.create(wallet.ndk, mints)
-			console.log('[nip60] Wallet created:', result)
-
 			// Re-initialize to pick up the new wallet
 			nip60Store.setState(() => initialState)
 			const ndk = ndkStore.state.ndk
@@ -358,14 +333,10 @@ export const nip60Actions = {
 
 		const shouldConsolidate = options?.consolidate ?? false
 
-		console.log('[nip60] Refreshing wallet data...', shouldConsolidate ? '(with consolidation)' : '')
-
 		// Consolidate tokens if requested - this checks for spent proofs
 		if (shouldConsolidate) {
 			try {
-				console.log('[nip60] Consolidating tokens (checking for spent proofs)...')
 				await wallet.consolidateTokens()
-				console.log('[nip60] Token consolidation complete')
 			} catch (err) {
 				console.error('[nip60] Failed to consolidate tokens:', err)
 				// Continue with refresh even if consolidation fails
@@ -374,7 +345,6 @@ export const nip60Actions = {
 
 		// Get balances directly from wallet state (source of truth)
 		const { totalBalance, mintBalances } = getBalancesFromState(wallet)
-		console.log('[nip60] After refresh - balance:', totalBalance, 'mintBalances:', mintBalances)
 
 		nip60Store.setState((s) => ({
 			...s,
@@ -385,8 +355,6 @@ export const nip60Actions = {
 
 		// Reload transactions
 		await nip60Actions.loadTransactions()
-
-		console.log('[nip60] Refresh complete')
 	},
 
 	/**
@@ -409,7 +377,6 @@ export const nip60Actions = {
 			return
 		}
 
-		console.log('[nip60] Adding mint:', normalizedUrl)
 		wallet.mints = [...wallet.mints, normalizedUrl]
 
 		// Update store state
@@ -429,7 +396,6 @@ export const nip60Actions = {
 			return
 		}
 
-		console.log('[nip60] Removing mint:', mintUrl)
 		wallet.mints = wallet.mints.filter((m) => m !== mintUrl)
 
 		// Update store state - note: mints with balance will still show even after removal from config
@@ -451,9 +417,7 @@ export const nip60Actions = {
 		}
 
 		try {
-			console.log('[nip60] Publishing wallet with mints:', wallet.mints)
 			await wallet.publish()
-			console.log('[nip60] Wallet published successfully')
 		} catch (err) {
 			console.error('[nip60] Failed to publish wallet:', err)
 			throw err
@@ -464,7 +428,6 @@ export const nip60Actions = {
 	 * Set the default mint for deposits
 	 */
 	setDefaultMint: (mintUrl: string | null): void => {
-		console.log('[nip60] Setting default mint:', mintUrl)
 		if (mintUrl) {
 			localStorage.setItem(DEFAULT_MINT_KEY, mintUrl)
 		} else {
@@ -502,12 +465,10 @@ export const nip60Actions = {
 
 		// Ensure wallet has the target mint configured
 		if (!wallet.mints.includes(targetMint)) {
-			console.log('[nip60] Adding target mint to wallet:', targetMint)
 			wallet.mints = [...wallet.mints, targetMint]
 		}
 
 		try {
-			console.log('[nip60] Starting deposit of', amount, 'sats to mint:', targetMint)
 			nip60Store.setState((s) => ({
 				...s,
 				depositStatus: 'pending',
@@ -517,8 +478,6 @@ export const nip60Actions = {
 			const deposit = wallet.deposit(amount, targetMint)
 			const invoice = await deposit.start()
 
-			console.log('[nip60] Deposit invoice generated:', invoice?.substring(0, 50) + '...')
-
 			nip60Store.setState((s) => ({
 				...s,
 				activeDeposit: deposit,
@@ -527,7 +486,6 @@ export const nip60Actions = {
 
 			// Listen for deposit completion
 			deposit.on('success', (token) => {
-				console.log('[nip60] Deposit successful, token received:', token)
 				nip60Store.setState((s) => ({
 					...s,
 					depositStatus: 'success',
@@ -567,7 +525,6 @@ export const nip60Actions = {
 	 * Cancel an active deposit
 	 */
 	cancelDeposit: (): void => {
-		console.log('[nip60] Cancelling deposit')
 		nip60Store.setState((s) => ({
 			...s,
 			activeDeposit: null,
@@ -589,12 +546,7 @@ export const nip60Actions = {
 
 		// Helper function to attempt withdrawal
 		const attemptWithdraw = async (): Promise<boolean> => {
-			console.log('[nip60] Balance before withdrawal:', wallet.balance, wallet.mintBalances)
-			console.log('[nip60] Withdrawing to Lightning invoice:', invoice.substring(0, 50) + '...')
 			const result = await wallet.lnPay({ pr: invoice })
-			console.log('[nip60] Withdrawal result:', result)
-			console.log('[nip60] Balance after lnPay:', wallet.balance, wallet.mintBalances)
-
 			// Small delay to allow wallet to process the change
 			await new Promise((resolve) => setTimeout(resolve, 500))
 
@@ -616,10 +568,8 @@ export const nip60Actions = {
 				errorMessage.toLowerCase().includes('proof not found')
 
 			if (isStateError) {
-				console.log('[nip60] State sync error - consolidating and retrying...')
 				try {
 					await wallet.consolidateTokens()
-					console.log('[nip60] Consolidation complete, retrying withdrawal...')
 					await nip60Actions.refresh()
 
 					// Retry the withdrawal
@@ -668,7 +618,6 @@ export const nip60Actions = {
 		}
 
 		const mintBalance = mintBalances[targetMint] ?? 0
-		console.log('[nip60] Balance at target mint:', targetMint, mintBalance)
 		if (mintBalance < amount) {
 			throw new Error(`Insufficient balance at ${getMintHostname(targetMint)}. Available: ${mintBalance} sats`)
 		}
@@ -680,22 +629,12 @@ export const nip60Actions = {
 			throw new Error(`No proofs available at ${getMintHostname(targetMint)}. Try refreshing your wallet.`)
 		}
 
-		console.log('[nip60] Generating eCash token for', amount, 'sats from', targetMint)
-		console.log(
-			'[nip60] Available proofs:',
-			mintProofs.length,
-			'Total:',
-			mintProofs.reduce((s, p) => s + p.amount, 0),
-		)
-
 		// Select proofs to use
 		const { selected: selectedProofs, total: selectedTotal } = selectProofs(mintProofs, amount)
 
 		if (selectedTotal < amount) {
 			throw new Error(`Could not select enough proofs. Need ${amount}, have ${selectedTotal}`)
 		}
-
-		console.log('[nip60] Selected proofs:', selectedProofs.length, 'Total:', selectedTotal)
 
 		try {
 			// Create CashuWallet for mint operations
@@ -713,11 +652,9 @@ export const nip60Actions = {
 				tokenProofs = selectedProofs
 			} else {
 				// Need to swap for exact amount + change
-				console.log('[nip60] Swapping proofs to get exact amount...')
 				const swapResult = await cashuWallet.swap(amount, selectedProofs)
 				tokenProofs = swapResult.send
 				changeProofs = swapResult.keep
-				console.log('[nip60] Swap complete. Send:', tokenProofs.length, 'Keep:', changeProofs.length)
 			}
 
 			// Create the token
@@ -725,8 +662,6 @@ export const nip60Actions = {
 				mint: targetMint,
 				proofs: tokenProofs,
 			})
-
-			console.log('[nip60] Token created:', token.substring(0, 50) + '...')
 
 			// Save to pending tokens IMMEDIATELY before any state updates
 			const pendingToken: PendingNip60Token = {
@@ -742,8 +677,6 @@ export const nip60Actions = {
 			savePendingTokens(pendingTokens)
 			nip60Store.setState((s) => ({ ...s, pendingTokens }))
 
-			console.log('[nip60] Token saved to pending list:', pendingToken.id)
-
 			// The proofs we used are now "spent" at the mint.
 			// NDKCashuWallet stores proofs in Nostr events, and the wallet will detect
 			// spent proofs on the next consolidateTokens() call.
@@ -757,7 +690,6 @@ export const nip60Actions = {
 					// Receive the change proofs back into the wallet
 					const changeToken = getEncodedToken({ mint: targetMint, proofs: changeProofs })
 					await wallet.receiveToken(changeToken)
-					console.log('[nip60] Change proofs added back to wallet')
 				} catch (changeErr) {
 					console.error('[nip60] Failed to add change proofs (will recover on consolidation):', changeErr)
 				}
@@ -765,7 +697,6 @@ export const nip60Actions = {
 
 			// Consolidate to sync state (detect spent proofs)
 			try {
-				console.log('[nip60] Consolidating to sync wallet state...')
 				await wallet.consolidateTokens()
 			} catch (consolidateErr) {
 				console.error('[nip60] Consolidation error (non-fatal):', consolidateErr)
@@ -781,7 +712,6 @@ export const nip60Actions = {
 			// Check if this is a "proofs already spent" error from the mint
 			const errorMessage = err instanceof Error ? err.message : String(err)
 			if (errorMessage.toLowerCase().includes('already spent') || errorMessage.toLowerCase().includes('token spent')) {
-				console.log('[nip60] Proofs were spent - consolidating...')
 				try {
 					await wallet.consolidateTokens()
 					await nip60Actions.refresh()
@@ -814,9 +744,7 @@ export const nip60Actions = {
 		}
 
 		try {
-			console.log('[nip60] Receiving eCash token...')
 			await wallet.receiveToken(token)
-			console.log('[nip60] eCash token received successfully')
 
 			// Refresh to update balance
 			await nip60Actions.refresh()
@@ -833,7 +761,6 @@ export const nip60Actions = {
 	loadPendingTokens: (): void => {
 		const tokens = loadPendingTokens()
 		nip60Store.setState((s) => ({ ...s, pendingTokens: tokens }))
-		console.log('[nip60] Loaded pending tokens:', tokens.length)
 	},
 
 	/**
@@ -851,8 +778,6 @@ export const nip60Actions = {
 			throw new Error('Pending token not found')
 		}
 
-		console.log('[nip60] Attempting to reclaim token:', tokenId)
-
 		try {
 			// Try to receive the token back
 			await wallet.receiveToken(pendingToken.token)
@@ -864,13 +789,8 @@ export const nip60Actions = {
 
 			// Refresh balances
 			await nip60Actions.refresh()
-
-			console.log('[nip60] Token reclaimed successfully')
 			return true
 		} catch (err) {
-			// Token was already claimed by recipient
-			console.log('[nip60] Token already claimed:', err)
-
 			// Mark as claimed
 			const pendingTokens = nip60Store.state.pendingTokens.map((t) => (t.id === tokenId ? { ...t, status: 'claimed' as const } : t))
 			savePendingTokens(pendingTokens)
@@ -887,7 +807,6 @@ export const nip60Actions = {
 		const pendingTokens = nip60Store.state.pendingTokens.filter((t) => t.id !== tokenId)
 		savePendingTokens(pendingTokens)
 		nip60Store.setState((s) => ({ ...s, pendingTokens }))
-		console.log('[nip60] Pending token removed:', tokenId)
 	},
 
 	/**
