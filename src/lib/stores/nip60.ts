@@ -741,7 +741,12 @@ export const nip60Actions = {
 		}
 
 		console.log('[nip60] Generating eCash token for', amount, 'sats from', targetMint)
-		console.log('[nip60] Available proofs:', mintProofs.length, 'Total:', mintProofs.reduce((s, p) => s + p.amount, 0))
+		console.log(
+			'[nip60] Available proofs:',
+			mintProofs.length,
+			'Total:',
+			mintProofs.reduce((s, p) => s + p.amount, 0),
+		)
 
 		// Select proofs to use
 		const { selected: selectedProofs, total: selectedTotal } = selectProofs(mintProofs, amount)
@@ -835,10 +840,7 @@ export const nip60Actions = {
 
 			// Check if this is a "proofs already spent" error from the mint
 			const errorMessage = err instanceof Error ? err.message : String(err)
-			if (
-				errorMessage.toLowerCase().includes('already spent') ||
-				errorMessage.toLowerCase().includes('token spent')
-			) {
+			if (errorMessage.toLowerCase().includes('already spent') || errorMessage.toLowerCase().includes('token spent')) {
 				console.log('[nip60] Proofs were spent - consolidating...')
 				try {
 					await wallet.consolidateTokens()
@@ -916,9 +918,7 @@ export const nip60Actions = {
 			await wallet.receiveToken(pendingToken.token)
 
 			// Update status to reclaimed
-			const pendingTokens = nip60Store.state.pendingTokens.map((t) =>
-				t.id === tokenId ? { ...t, status: 'reclaimed' as const } : t
-			)
+			const pendingTokens = nip60Store.state.pendingTokens.map((t) => (t.id === tokenId ? { ...t, status: 'reclaimed' as const } : t))
 			savePendingTokens(pendingTokens)
 			nip60Store.setState((s) => ({ ...s, pendingTokens }))
 
@@ -932,9 +932,7 @@ export const nip60Actions = {
 			console.log('[nip60] Token already claimed:', err)
 
 			// Mark as claimed
-			const pendingTokens = nip60Store.state.pendingTokens.map((t) =>
-				t.id === tokenId ? { ...t, status: 'claimed' as const } : t
-			)
+			const pendingTokens = nip60Store.state.pendingTokens.map((t) => (t.id === tokenId ? { ...t, status: 'claimed' as const } : t))
 			savePendingTokens(pendingTokens)
 			nip60Store.setState((s) => ({ ...s, pendingTokens }))
 

@@ -1,8 +1,24 @@
 import { authStore } from '@/lib/stores/auth'
 import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
 import { useStore } from '@tanstack/react-store'
-import { ArrowDownLeft, ArrowUpRight, Loader2, Landmark, Plus, RefreshCw, X, Save, Star, Zap, Send, QrCode } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import {
+	ArrowDownLeft,
+	ArrowUpRight,
+	Loader2,
+	Landmark,
+	Plus,
+	RefreshCw,
+	X,
+	Save,
+	Star,
+	Zap,
+	Send,
+	QrCode,
+	ChevronDown,
+	ChevronRight,
+	Coins,
+} from 'lucide-react'
+import { useEffect, useState, useMemo } from 'react'
 import { DepositLightningModal } from './DepositLightningModal'
 import { WithdrawLightningModal } from './WithdrawLightningModal'
 import { SendEcashModal } from './SendEcashModal'
@@ -13,6 +29,14 @@ const DEFAULT_MINTS = ['https://mint.minibits.cash/Bitcoin', 'https://mint.coino
 
 type ModalType = 'deposit' | 'withdraw' | 'send' | 'receive' | null
 
+interface ProofInfo {
+	id: string
+	amount: number
+	secret: string
+	C: string
+	mint?: string
+}
+
 export function Nip60Wallet() {
 	const { isAuthenticated, user } = useStore(authStore)
 	const { status, balance, mintBalances, mints, defaultMint, transactions, error } = useStore(nip60Store)
@@ -21,6 +45,71 @@ export function Nip60Wallet() {
 	const [newMintUrl, setNewMintUrl] = useState('')
 	const [isSaving, setIsSaving] = useState(false)
 	const [openModal, setOpenModal] = useState<ModalType>(null)
+	const [showProofs, setShowProofs] = useState(false)
+	const [expandedMints, setExpandedMints] = useState<Set<string>>(new Set())
+
+	// Get proofs from wallet state
+	const proofsByMint = useMemo(() => {
+		const wallet = nip60Actions.getWallet()
+		if (!wallet) return new Map<string, ProofInfo[]>()
+
+		const result = new Map<string, ProofInfo[]>()
+
+		try {
+			const dump = wallet.state.dump()
+			const dumpProofs = dump.proofs as unknown
+
+			if (Array.isArray(dumpProofs)) {
+				for (const entry of dumpProofs) {
+					if (entry && typeof entry === 'object') {
+						// Handle ProofEntry structure: { mint, proofs }
+						if ('mint' in entry && 'proofs' in entry && Array.isArray(entry.proofs)) {
+							const mintUrl = entry.mint as string
+							const proofs = entry.proofs as ProofInfo[]
+							result.set(mintUrl, proofs)
+						}
+						// Handle flat proof with mint attached
+						else if ('mint' in entry && 'C' in entry && 'amount' in entry) {
+							const mintUrl = (entry as ProofInfo).mint || 'unknown'
+							const existing = result.get(mintUrl) || []
+							existing.push(entry as ProofInfo)
+							result.set(mintUrl, existing)
+						}
+					}
+				}
+			}
+
+			// Also try getProofs for each mint
+			if (result.size === 0 && typeof wallet.state.getProofs === 'function') {
+				for (const mint of mints) {
+					try {
+						const proofs = wallet.state.getProofs({ mint })
+						if (Array.isArray(proofs) && proofs.length > 0) {
+							result.set(mint, proofs as ProofInfo[])
+						}
+					} catch {
+						// ignore
+					}
+				}
+			}
+		} catch (e) {
+			console.error('[Nip60Wallet] Failed to get proofs:', e)
+		}
+
+		return result
+	}, [balance, mints]) // Re-compute when balance or mints change
+
+	const toggleMintExpanded = (mint: string) => {
+		setExpandedMints((prev) => {
+			const next = new Set(prev)
+			if (next.has(mint)) {
+				next.delete(mint)
+			} else {
+				next.add(mint)
+			}
+			return next
+		})
+	}
 
 	useEffect(() => {
 		if (!isAuthenticated || !user?.pubkey) {
@@ -263,6 +352,54 @@ export function Nip60Wallet() {
 					<p>No transactions yet</p>
 				</div>
 			)}
+
+			{/* Proofs Section */}
+			<div className="border-t pt-4">
+				<button onClick={() => setShowProofs(!showProofs)} className="flex items-center gap-2 text-sm font-medium mb-2 w-full text-left">
+					{showProofs ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+					<Coins className="w-4 h-4" />
+					Proofs ({Array.from(proofsByMint.values()).flat().length})
+				</button>
+
+				{showProofs && (
+					<div className="space-y-2 max-h-64 overflow-y-auto">
+						{proofsByMint.size === 0 ? (
+							<p className="text-sm text-muted-foreground">No proofs in wallet</p>
+						) : (
+							Array.from(proofsByMint.entries()).map(([mint, proofs]) => (
+								<div key={mint} className="bg-muted/50 rounded-md p-2">
+									<button onClick={() => toggleMintExpanded(mint)} className="flex items-center gap-2 text-sm w-full text-left">
+										{expandedMints.has(mint) ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+										<span className="font-medium truncate flex-1">{new URL(mint).hostname}</span>
+										<span className="text-muted-foreground">
+											{proofs.length} proof{proofs.length !== 1 ? 's' : ''} • {proofs.reduce((s, p) => s + p.amount, 0).toLocaleString()}{' '}
+											sats
+										</span>
+									</button>
+
+									{expandedMints.has(mint) && (
+										<div className="mt-2 space-y-1 pl-5">
+											{proofs.map((proof, idx) => (
+												<div
+													key={`${proof.id}-${proof.secret.slice(0, 8)}-${idx}`}
+													className="flex items-center justify-between text-xs bg-background rounded px-2 py-1"
+												>
+													<div className="flex items-center gap-2 min-w-0">
+														<span className="font-mono text-muted-foreground" title={`Keyset: ${proof.id}`}>
+															{proof.id.slice(0, 8)}...
+														</span>
+													</div>
+													<span className="font-medium">{proof.amount} sats</span>
+												</div>
+											))}
+										</div>
+									)}
+								</div>
+							))
+						)}
+					</div>
+				)}
+			</div>
 
 			{/* Modals */}
 			<DepositLightningModal open={openModal === 'deposit'} onClose={() => setOpenModal(null)} />
