@@ -3,19 +3,13 @@ import { NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { CashuMint, CashuWallet, getEncodedToken, getDecodedToken, type Proof } from '@cashu/cashu-ts'
 import { ndkStore } from './ndk'
-import { authStore } from './auth'
+import { loadUserData, saveUserData, getProofsForMint, getMintHostname, type PendingToken } from '@/lib/wallet'
 
 const DEFAULT_MINT_KEY = 'nip60_default_mint'
 const PENDING_TOKENS_KEY = 'nip60_pending_tokens'
 
-export interface PendingNip60Token {
-	id: string
-	token: string
-	amount: number
-	mintUrl: string
-	createdAt: number
-	status: 'pending' | 'claimed' | 'reclaimed'
-}
+// Re-export for backward compatibility
+export type PendingNip60Token = PendingToken
 
 export interface Nip60State {
 	wallet: NDKCashuWallet | null
@@ -58,30 +52,9 @@ function generateId(): string {
 	return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
-function loadPendingTokens(): PendingNip60Token[] {
-	try {
-		const pubkey = authStore.state.user?.pubkey
-		if (!pubkey) return []
+const loadPendingTokens = (): PendingToken[] => loadUserData<PendingToken[]>(PENDING_TOKENS_KEY, [])
 
-		const key = `${PENDING_TOKENS_KEY}_${pubkey.slice(0, 8)}`
-		const stored = localStorage.getItem(key)
-		return stored ? JSON.parse(stored) : []
-	} catch {
-		return []
-	}
-}
-
-function savePendingTokens(tokens: PendingNip60Token[]) {
-	try {
-		const pubkey = authStore.state.user?.pubkey
-		if (!pubkey) return
-
-		const key = `${PENDING_TOKENS_KEY}_${pubkey.slice(0, 8)}`
-		localStorage.setItem(key, JSON.stringify(tokens))
-	} catch (e) {
-		console.error('[nip60] Failed to save pending tokens:', e)
-	}
-}
+const savePendingTokens = (tokens: PendingToken[]): void => saveUserData(PENDING_TOKENS_KEY, tokens)
 
 /**
  * Select proofs from available proofs to meet the target amount.
@@ -680,7 +653,6 @@ export const nip60Actions = {
 		}
 
 		// Get current state
-		const dump = wallet.state.dump()
 		const { totalBalance, mintBalances } = getBalancesFromState(wallet)
 
 		// Determine target mint
@@ -698,46 +670,14 @@ export const nip60Actions = {
 		const mintBalance = mintBalances[targetMint] ?? 0
 		console.log('[nip60] Balance at target mint:', targetMint, mintBalance)
 		if (mintBalance < amount) {
-			throw new Error(`Insufficient balance at ${new URL(targetMint).hostname}. Available: ${mintBalance} sats`)
+			throw new Error(`Insufficient balance at ${getMintHostname(targetMint)}. Available: ${mintBalance} sats`)
 		}
 
-		// Get proofs for this mint from wallet state
-		// The dump structure varies, so we handle it dynamically
-		let mintProofs: Proof[] = []
-
-		// Try to extract proofs from dump
-		const dumpProofs = dump.proofs as unknown
-		if (Array.isArray(dumpProofs)) {
-			for (const entry of dumpProofs) {
-				// Check if entry has mint and proofs (ProofEntry structure)
-				if (entry && typeof entry === 'object' && 'mint' in entry && entry.mint === targetMint) {
-					if ('proofs' in entry && Array.isArray(entry.proofs)) {
-						mintProofs = entry.proofs as Proof[]
-						break
-					}
-					// Entry might be a proof itself with mint attached
-					if ('C' in entry && 'amount' in entry && 'secret' in entry && 'id' in entry) {
-						mintProofs.push(entry as Proof)
-					}
-				}
-			}
-		}
-
-		// If still no proofs, try getting from wallet.state.getProofs
-		if (mintProofs.length === 0 && typeof wallet.state.getProofs === 'function') {
-			try {
-				// getProofs takes GetOpts object with mint filter
-				const allProofs = wallet.state.getProofs({ mint: targetMint })
-				if (Array.isArray(allProofs)) {
-					mintProofs = allProofs as Proof[]
-				}
-			} catch {
-				// getProofs might have different signature, ignore
-			}
-		}
+		// Get proofs for this mint using shared utility
+		const mintProofs = getProofsForMint(wallet, targetMint)
 
 		if (mintProofs.length === 0) {
-			throw new Error(`No proofs available at ${new URL(targetMint).hostname}. Try refreshing your wallet.`)
+			throw new Error(`No proofs available at ${getMintHostname(targetMint)}. Try refreshing your wallet.`)
 		}
 
 		console.log('[nip60] Generating eCash token for', amount, 'sats from', targetMint)

@@ -11,19 +11,13 @@ import { initializeCoco, Manager, getEncodedToken } from 'coco-cashu-core'
 import { IndexedDbRepositories } from 'coco-cashu-indexeddb'
 import { authStore } from './auth'
 import { nip60Store } from './nip60'
+import { loadUserData, saveUserData, type PendingToken } from '@/lib/wallet'
 
 const CASHU_SEED_KEY = 'cashu_wallet_seed'
 const PENDING_TOKENS_KEY = 'cashu_pending_tokens'
 
-export interface PendingToken {
-	id: string
-	token: string
-	amount: number
-	mintUrl: string
-	createdAt: number
-	// Status: 'pending' means not yet claimed, 'claimed' means recipient has claimed
-	status: 'pending' | 'claimed' | 'reclaimed'
-}
+// Re-export for backward compatibility
+export type { PendingToken }
 
 export interface CashuState {
 	manager: Manager | null
@@ -50,30 +44,9 @@ function generateId(): string {
 	return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
-function loadPendingTokens(): PendingToken[] {
-	try {
-		const pubkey = authStore.state.user?.pubkey
-		if (!pubkey) return []
+const loadPendingTokens = (): PendingToken[] => loadUserData<PendingToken[]>(PENDING_TOKENS_KEY, [])
 
-		const key = `${PENDING_TOKENS_KEY}_${pubkey.slice(0, 8)}`
-		const stored = localStorage.getItem(key)
-		return stored ? JSON.parse(stored) : []
-	} catch {
-		return []
-	}
-}
-
-function savePendingTokens(tokens: PendingToken[]) {
-	try {
-		const pubkey = authStore.state.user?.pubkey
-		if (!pubkey) return
-
-		const key = `${PENDING_TOKENS_KEY}_${pubkey.slice(0, 8)}`
-		localStorage.setItem(key, JSON.stringify(tokens))
-	} catch (e) {
-		console.error('[cashu] Failed to save pending tokens:', e)
-	}
-}
+const savePendingTokens = (tokens: PendingToken[]): void => saveUserData(PENDING_TOKENS_KEY, tokens)
 
 /**
  * Get or generate a seed for the wallet.

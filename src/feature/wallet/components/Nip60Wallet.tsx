@@ -27,19 +27,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { extractProofsByMint, getMintHostname, type ProofInfo } from '@/lib/wallet'
 
 // Default mints for new wallets
 const DEFAULT_MINTS = ['https://mint.minibits.cash/Bitcoin', 'https://mint.coinos.io', 'https://mint.cubabitcoin.org']
 
 type ModalType = 'deposit' | 'withdraw' | 'send' | 'receive' | null
-
-interface ProofInfo {
-	id: string
-	amount: number
-	secret: string
-	C: string
-	mint?: string
-}
 
 export function Nip60Wallet() {
 	const { isAuthenticated, user } = useStore(authStore)
@@ -52,55 +45,11 @@ export function Nip60Wallet() {
 	const [openSection, setOpenSection] = useState<'mints' | 'transactions' | 'proofs' | null>(null)
 	const [expandedMints, setExpandedMints] = useState<Set<string>>(new Set())
 
-	// Get proofs from wallet state
+	// Get proofs from wallet state using shared utility
 	const proofsByMint = useMemo(() => {
 		const wallet = nip60Actions.getWallet()
 		if (!wallet) return new Map<string, ProofInfo[]>()
-
-		const result = new Map<string, ProofInfo[]>()
-
-		try {
-			const dump = wallet.state.dump()
-			const dumpProofs = dump.proofs as unknown
-
-			if (Array.isArray(dumpProofs)) {
-				for (const entry of dumpProofs) {
-					if (entry && typeof entry === 'object') {
-						// Handle ProofEntry structure: { mint, proofs }
-						if ('mint' in entry && 'proofs' in entry && Array.isArray(entry.proofs)) {
-							const mintUrl = entry.mint as string
-							const proofs = entry.proofs as ProofInfo[]
-							result.set(mintUrl, proofs)
-						}
-						// Handle flat proof with mint attached
-						else if ('mint' in entry && 'C' in entry && 'amount' in entry) {
-							const mintUrl = (entry as ProofInfo).mint || 'unknown'
-							const existing = result.get(mintUrl) || []
-							existing.push(entry as ProofInfo)
-							result.set(mintUrl, existing)
-						}
-					}
-				}
-			}
-
-			// Also try getProofs for each mint
-			if (result.size === 0 && typeof wallet.state.getProofs === 'function') {
-				for (const mint of mints) {
-					try {
-						const proofs = wallet.state.getProofs({ mint })
-						if (Array.isArray(proofs) && proofs.length > 0) {
-							result.set(mint, proofs as ProofInfo[])
-						}
-					} catch {
-						// ignore
-					}
-				}
-			}
-		} catch (e) {
-			console.error('[Nip60Wallet] Failed to get proofs:', e)
-		}
-
-		return result
+		return extractProofsByMint(wallet, mints)
 	}, [balance, mints]) // Re-compute when balance or mints change
 
 	const toggleMintExpanded = (mint: string) => {
@@ -260,7 +209,7 @@ export function Nip60Wallet() {
 								{defaultMint ? (
 									<span className="flex items-center gap-2 truncate">
 										<Star className="w-4 h-4 text-yellow-500 fill-current shrink-0" />
-										<span className="truncate">{new URL(defaultMint).hostname}</span>
+										<span className="truncate">{getMintHostname(defaultMint)}</span>
 										{mintBalances[defaultMint] !== undefined && (
 											<span className="text-muted-foreground shrink-0">({mintBalances[defaultMint].toLocaleString()})</span>
 										)}
@@ -275,7 +224,7 @@ export function Nip60Wallet() {
 								<SelectItem key={mint} value={mint}>
 									<div className="flex items-center gap-2">
 										<Landmark className="w-4 h-4 shrink-0" />
-										<span className="truncate">{new URL(mint).hostname}</span>
+										<span className="truncate">{getMintHostname(mint)}</span>
 										{mintBalances[mint] !== undefined && (
 											<span className="text-muted-foreground shrink-0">({mintBalances[mint].toLocaleString()})</span>
 										)}
@@ -331,7 +280,7 @@ export function Nip60Wallet() {
 						{mints.map((mint) => (
 							<div key={mint} className="flex items-center justify-between text-sm gap-2">
 								<span className="text-muted-foreground truncate min-w-0" title={mint}>
-									{new URL(mint).hostname}
+									{getMintHostname(mint)}
 								</span>
 								<div className="flex items-center gap-1 shrink-0">
 									{mintBalances[mint] !== undefined && (
@@ -407,7 +356,7 @@ export function Nip60Wallet() {
 										<CollapsibleTrigger asChild>
 											<Button variant="ghost" size="sm" className="w-full justify-start gap-2 px-1 h-auto py-1 overflow-hidden">
 												<ChevronRight className="w-3 h-3 shrink-0 transition-transform [[data-state=open]>&]:rotate-90" />
-												<span className="font-medium truncate flex-1 text-left min-w-0">{new URL(mint).hostname}</span>
+												<span className="font-medium truncate flex-1 text-left min-w-0">{getMintHostname(mint)}</span>
 												<span className="text-muted-foreground text-xs shrink-0 whitespace-nowrap">
 													{proofs.length} • {proofs.reduce((s, p) => s + p.amount, 0).toLocaleString()}
 												</span>
