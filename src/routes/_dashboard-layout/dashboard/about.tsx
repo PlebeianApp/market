@@ -193,10 +193,27 @@ function AboutComponent() {
 							</CardTitle>
 							<CardDescription>Use these public keys to verify that events are genuinely from this app or its owner</CardDescription>
 						</CardHeader>
-						<CardContent className="space-y-4">
-							{appNpub && appPubkey && <PubkeyField label="App Public Key" npub={appNpub} hex={appPubkey} icon={Shield} />}
+						<CardContent className="space-y-6">
+							{appNpub && appPubkey && (
+								<div className="space-y-2">
+									<PubkeyField label="App Public Key" npub={appNpub} hex={appPubkey} icon={Shield} />
+									<p className="text-xs text-muted-foreground pl-3">
+										This is the Nostr identity of this marketplace instance. Administrators can trigger the app to sign events on their
+										behalf, including featured items, blacklists, vanity URLs, and app configuration. Events signed by this key are official
+										actions from this marketplace.
+									</p>
+								</div>
+							)}
 
-							{ownerNpub && ownerPubkey && <PubkeyField label="Owner Public Key" npub={ownerNpub} hex={ownerPubkey} icon={User} />}
+							{ownerNpub && ownerPubkey && (
+								<div className="space-y-2">
+									<PubkeyField label="Owner Public Key" npub={ownerNpub} hex={ownerPubkey} icon={User} />
+									<p className="text-xs text-muted-foreground pl-3">
+										The owner is the person who originally set up this marketplace instance. Only the owner can add or remove
+										administrators. The owner has full control over the marketplace configuration and team management.
+									</p>
+								</div>
+							)}
 
 							{!appNpub && !ownerNpub && <p className="text-muted-foreground text-sm">No public keys available</p>}
 						</CardContent>
