@@ -1,5 +1,6 @@
 import { defaultRelaysUrls, ZAP_RELAYS, DEFAULT_PUBLIC_RELAYS, MAIN_RELAY_BY_STAGE, BUG_RELAY, type Stage } from '@/lib/constants'
 import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
+import { fetchUserRelayListWithPreferences } from '@/queries/relay-list'
 import type { NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nostr-dev-kit/ndk'
 import NDK, { NDKEvent, NDKKind, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
@@ -445,9 +446,49 @@ export const ndkActions = {
 		ndkStore.setState((s) => ({ ...s, signer }))
 
 		if (signer) {
-			await ndkActions.selectAndSetInitialNwcWallet()
+			// Load user's relay list from Nostr and wallet preferences
+			await Promise.all([ndkActions.loadRelaysFromNostr(), ndkActions.selectAndSetInitialNwcWallet()])
 		} else {
 			ndkActions.setActiveNwcWalletUri(null)
+		}
+	},
+
+	/**
+	 * Load user's relay list from Nostr (kind 10002)
+	 * This enables the outbox model to work properly by adding user's preferred relays
+	 */
+	loadRelaysFromNostr: async (): Promise<void> => {
+		const ndk = ndkStore.state.ndk
+		if (!ndk || !ndk.signer) {
+			console.warn('NDK or signer not available for loading relays')
+			return
+		}
+
+		let user: NDKUser | null = null
+		try {
+			user = await ndk.signer.user()
+		} catch (e) {
+			console.error('Error getting user from signer:', e)
+			return
+		}
+
+		if (!user || !user.pubkey) {
+			console.warn('User or user pubkey not available from signer')
+			return
+		}
+
+		try {
+			const relayPrefs = await fetchUserRelayListWithPreferences(user.pubkey)
+			if (relayPrefs && relayPrefs.length > 0) {
+				console.log(`📡 Loading ${relayPrefs.length} relays from user's Nostr relay list`)
+				for (const relay of relayPrefs) {
+					ndkActions.addSingleRelay(relay.url)
+				}
+			} else {
+				console.log('📡 No relay list found on Nostr for user')
+			}
+		} catch (error) {
+			console.error('Failed to load relays from Nostr:', error)
 		}
 	},
 
