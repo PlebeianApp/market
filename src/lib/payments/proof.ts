@@ -1,4 +1,4 @@
-export type WalletPaymentMethod = 'nwc' | 'webln'
+export type WalletPaymentMethod = 'nwc' | 'webln' | 'nip60'
 
 export type PaymentProof =
 	| { type: 'preimage'; preimage: string }

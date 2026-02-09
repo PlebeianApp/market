@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label'
 import { QRCode } from '@/components/ui/qr-code'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { ndkActions, ndkStore } from '@/lib/stores/ndk'
+import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
 import type { PaymentProof } from '@/lib/payments/proof'
 import { paymentProofToReceiptPreimage } from '@/lib/payments/proof'
 import { handleNWCPayment, handleWebLNPayment, hasWebLN, validatePreimage } from '@/lib/utils/payment.utils'
@@ -46,6 +47,7 @@ export interface PaymentResult {
 
 export interface PaymentCapabilities {
 	hasNwc: boolean
+	hasNip60: boolean
 	hasWebLn: boolean
 	canManualVerify: boolean
 }
@@ -106,6 +108,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 		ref,
 	) => {
 		const ndkState = useStore(ndkStore)
+		const nip60State = useStore(nip60Store)
 
 		// Component state
 		const [invoice, setInvoice] = useState<string | null>(data.bolt11 || null)
@@ -131,6 +134,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 		// Check payment capabilities
 		const capabilities: PaymentCapabilities = {
 			hasNwc: !!effectiveNwcWalletUri,
+			hasNip60: nip60State.status === 'ready' && !!nip60State.wallet,
 			hasWebLn: hasWebLN(),
 			canManualVerify: showManualVerification,
 		}
@@ -408,6 +412,7 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 			ndkState.ndk?.signer,
 			handlePaymentSuccess,
 			onPaymentFailed,
+			requireZapReceipt,
 			stopZapMonitoring,
 			waitForZapReceipt,
 		])
@@ -476,7 +481,81 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 					invoiceId: data.invoiceId,
 				})
 			}
-		}, [data.invoiceId, handlePaymentSuccess, invoice, onPaymentFailed, stopZapMonitoring, waitForZapReceipt])
+		}, [data.invoiceId, handlePaymentSuccess, invoice, onPaymentFailed, requireZapReceipt, stopZapMonitoring, waitForZapReceipt])
+
+		/**
+		 * Handle Lightning payment via NIP-60 wallet (Cashu melt).
+		 */
+		const handleNip60Payment = useCallback(async () => {
+			if (!invoice) {
+				toast.error('No invoice available to pay')
+				return
+			}
+			if (nip60State.status !== 'ready' || !nip60State.wallet) {
+				toast.error('NIP-60 wallet not connected')
+				return
+			}
+
+			setIsPaymentInProgress(true)
+			stopZapMonitoring()
+			walletPreimageRef.current = null
+
+			try {
+				const walletResult = await nip60Actions.payLightningInvoice(invoice)
+				if (walletResult.preimage && validatePreimage(invoice, walletResult.preimage)) {
+					walletPreimageRef.current = walletResult.preimage
+				}
+
+				const receipt = await waitForZapReceipt(invoice, 20000)
+				const receiptPreimage = receipt?.receiptPreimage
+				const receiptHasValidPreimage = !!receiptPreimage && validatePreimage(invoice, receiptPreimage)
+
+				if (receiptHasValidPreimage) {
+					handlePaymentSuccess({ type: 'preimage', preimage: receiptPreimage! })
+					return
+				}
+
+				if (receipt) {
+					handlePaymentSuccess({ type: 'zap_receipt', eventId: receipt.eventId })
+					return
+				}
+
+				if (requireZapReceipt) {
+					setIsPaymentInProgress(false)
+					toast.info('Payment sent. Waiting for zap receipt confirmation…')
+					return
+				}
+
+				if (walletPreimageRef.current) {
+					handlePaymentSuccess({ type: 'preimage', preimage: walletPreimageRef.current })
+					return
+				}
+
+				handlePaymentSuccess({ type: 'wallet_ack', method: 'nip60', atMs: Date.now() })
+			} catch (error) {
+				console.error('❌ NIP-60 wallet payment failed:', error)
+				setIsPaymentInProgress(false)
+				stopZapMonitoring()
+
+				const errorMessage = error instanceof Error ? error.message : 'Payment failed'
+				toast.error(`NIP-60 payment failed: ${errorMessage}`)
+				onPaymentFailed?.({
+					success: false,
+					error: errorMessage,
+					invoiceId: data.invoiceId,
+				})
+			}
+		}, [
+			data.invoiceId,
+			handlePaymentSuccess,
+			invoice,
+			nip60State.status,
+			nip60State.wallet,
+			onPaymentFailed,
+			requireZapReceipt,
+			stopZapMonitoring,
+			waitForZapReceipt,
+		])
 
 		/**
 		 * Handle manual preimage verification
@@ -693,7 +772,15 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 						{/* Payment buttons */}
 						{invoice && !isGeneratingInvoice && (
 							<div className="space-y-3">
-								<div className="flex flex-col gap-2 sm:flex-row">
+								<div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+									{/* NIP-60 Payment Button */}
+									{capabilities.hasNip60 && (
+										<Button onClick={handleNip60Payment} disabled={isPaymentInProgress} className="w-full sm:flex-1" variant="outline">
+											<Zap className="h-4 w-4 mr-2" />
+											Pay with NIP-60 Wallet
+										</Button>
+									)}
+
 									{/* NWC Payment Button */}
 									{!capabilities.hasNwc ? (
 										<Tooltip>

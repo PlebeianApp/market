@@ -1,5 +1,5 @@
 import { NDKCashuWallet, NDKCashuDeposit, type NDKWalletBalance, type NDKWalletTransaction, NDKWalletStatus } from '@nostr-dev-kit/wallet'
-import { NDKRelaySet } from '@nostr-dev-kit/ndk'
+import { NDKEvent, NDKNutzap, NDKRelaySet, NDKUser, NDKZapper } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { CashuMint, CashuWallet, getEncodedToken, getDecodedToken, type Proof } from '@cashu/cashu-ts'
 import { ndkStore } from './ndk'
@@ -10,6 +10,15 @@ const PENDING_TOKENS_KEY = 'nip60_pending_tokens'
 
 // Re-export for backward compatibility
 export type PendingNip60Token = PendingToken
+
+export interface Nip60LightningPaymentResult {
+	preimage?: string
+}
+
+export interface Nip60NutzapResult {
+	eventId: string
+	event: NDKNutzap
+}
 
 export interface Nip60State {
 	wallet: NDKCashuWallet | null
@@ -55,6 +64,23 @@ function generateId(): string {
 const loadPendingTokens = (): PendingToken[] => loadUserData<PendingToken[]>(PENDING_TOKENS_KEY, [])
 
 const savePendingTokens = (tokens: PendingToken[]): void => saveUserData(PENDING_TOKENS_KEY, tokens)
+
+function extractPreimageCandidate(result: unknown): string | undefined {
+	if (!result || typeof result !== 'object') return undefined
+	const r = result as Record<string, unknown>
+
+	const candidates = [
+		r.preimage,
+		r.payment_preimage,
+		r.paymentPreimage,
+		r.preimage_hex,
+		r.preimageHex,
+		(r.result as any)?.preimage,
+		(r.response as any)?.preimage,
+	].filter((v): v is string => typeof v === 'string' && v.length > 0)
+
+	return candidates[0]
+}
 
 /**
  * Select proofs from available proofs to meet the target amount.
@@ -534,31 +560,26 @@ export const nip60Actions = {
 	},
 
 	/**
-	 * Withdraw to Lightning (melt ecash)
-	 * @param invoice Lightning invoice to pay
+	 * Pay a Lightning invoice using this NIP-60 wallet.
+	 * Returns preimage when the wallet provides it.
 	 */
-	withdrawLightning: async (invoice: string): Promise<boolean> => {
+	payLightningInvoice: async (invoice: string): Promise<Nip60LightningPaymentResult> => {
 		const wallet = nip60Store.state.wallet
-		if (!wallet) {
-			console.warn('[nip60] Cannot withdraw without wallet')
-			return false
+		if (!wallet || nip60Store.state.status !== 'ready') {
+			throw new Error('NIP-60 wallet not ready')
 		}
 
-		// Helper function to attempt withdrawal
-		const attemptWithdraw = async (): Promise<boolean> => {
+		const attemptPayInvoice = async (): Promise<Nip60LightningPaymentResult> => {
 			const result = await wallet.lnPay({ pr: invoice })
-			// Small delay to allow wallet to process the change
 			await new Promise((resolve) => setTimeout(resolve, 500))
-
-			// Refresh to update balance
 			await nip60Actions.refresh()
-			return true
+			return { preimage: extractPreimageCandidate(result) }
 		}
 
 		try {
-			return await attemptWithdraw()
+			return await attemptPayInvoice()
 		} catch (err) {
-			console.error('[nip60] Failed to withdraw (first attempt):', err)
+			console.error('[nip60] Failed to pay lightning invoice (first attempt):', err)
 			const errorMessage = err instanceof Error ? err.message : String(err)
 
 			// Handle state sync errors - consolidate and retry
@@ -571,19 +592,65 @@ export const nip60Actions = {
 				try {
 					await wallet.consolidateTokens()
 					await nip60Actions.refresh()
-
-					// Retry the withdrawal
-					return await attemptWithdraw()
+					return await attemptPayInvoice()
 				} catch (retryErr) {
 					console.error('[nip60] Retry after consolidation failed:', retryErr)
-					// Always refresh to show accurate balance
 					await nip60Actions.refresh()
 					throw retryErr
 				}
 			}
 
-			// Always refresh after error to sync state
 			await nip60Actions.refresh()
+			throw err
+		}
+	},
+
+	/**
+	 * Send a NIP-61 nutzap from this NIP-60 wallet.
+	 */
+	zapWithNutzap: async (params: { target: NDKEvent | NDKUser; amountSats: number; comment?: string }): Promise<Nip60NutzapResult> => {
+		const wallet = nip60Store.state.wallet
+		const ndk = ndkStore.state.ndk
+		if (!wallet || nip60Store.state.status !== 'ready') {
+			throw new Error('NIP-60 wallet not ready')
+		}
+		if (!ndk || !ndk.signer) {
+			throw new Error('NDK signer not available')
+		}
+
+		const { target, amountSats, comment } = params
+		if (!Number.isFinite(amountSats) || amountSats <= 0) {
+			throw new Error('Invalid zap amount')
+		}
+
+		const zapper = new NDKZapper(target, amountSats * 1000, 'msat', {
+			ndk,
+			signer: ndk.signer,
+			comment,
+			cashuPay: async (payment) => wallet.cashuPay(payment),
+		})
+
+		const results = await zapper.zap(['nip61'])
+		const nutzap = Array.from(results.values()).find((result): result is NDKNutzap => result instanceof NDKNutzap)
+		if (!nutzap) {
+			const error = Array.from(results.values()).find((result): result is Error => result instanceof Error)
+			throw new Error(error?.message || 'Failed to send nutzap')
+		}
+
+		await nip60Actions.refresh()
+		return { eventId: nutzap.id, event: nutzap }
+	},
+
+	/**
+	 * Withdraw to Lightning (melt ecash)
+	 * @param invoice Lightning invoice to pay
+	 */
+	withdrawLightning: async (invoice: string): Promise<boolean> => {
+		try {
+			await nip60Actions.payLightningInvoice(invoice)
+			return true
+		} catch (err) {
+			console.error('[nip60] Failed to withdraw:', err)
 			throw err
 		}
 	},
