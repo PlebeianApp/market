@@ -20,7 +20,7 @@ export function RelayManager() {
 	const ndkState = useStore(ndkStore)
 	const { ndk } = ndkState
 	const { user } = useStore(authStore)
-	const userPubkey = user?.pk
+	const userPubkey = user?.pubkey
 
 	const [newRelayUrl, setNewRelayUrl] = useState('')
 	const [relays, setRelays] = useState<{ explicit: NDKRelay[]; outbox: NDKRelay[] }>({ explicit: [], outbox: [] })
