@@ -56,6 +56,8 @@ export const nip60Store = new Store<Nip60State>(initialState)
 
 // Keep track of transaction subscription cleanup
 let transactionUnsubscribe: (() => void) | null = null
+let autoCleanupPromise: Promise<void> | null = null
+let lastAutoCleanupAt = 0
 
 function generateId(): string {
 	return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
@@ -237,6 +239,8 @@ export const nip60Actions = {
 			// Only load transactions if we have a wallet
 			if (hasWallet) {
 				void nip60Actions.loadTransactions()
+				// Perform a background cleanup pass so spent proofs are removed without manual refresh.
+				void nip60Actions.runAutoCleanup({ force: true })
 			}
 
 			// Load pending tokens from localStorage
@@ -294,7 +298,44 @@ export const nip60Actions = {
 					transactions: [tx, ...s.transactions],
 				}
 			})
+
+			// Outgoing payments can leave stale proofs visible until consolidation.
+			// Run cleanup in the background to keep balances accurate without manual refresh.
+			if (tx.direction === 'out') {
+				void nip60Actions.runAutoCleanup()
+			}
 		})
+	},
+
+	/**
+	 * Consolidate spent proofs and refresh wallet state in the background.
+	 * Uses dedupe + cooldown so we can call this from multiple lifecycle points safely.
+	 */
+	runAutoCleanup: async (options?: { force?: boolean; minIntervalMs?: number }): Promise<void> => {
+		const wallet = nip60Store.state.wallet
+		if (!wallet) return
+
+		const force = options?.force ?? false
+		const minIntervalMs = options?.minIntervalMs ?? 30_000
+		const now = Date.now()
+
+		if (!force && now - lastAutoCleanupAt < minIntervalMs) return
+		if (autoCleanupPromise) return await autoCleanupPromise
+
+		autoCleanupPromise = (async () => {
+			try {
+				await nip60Actions.refresh({ consolidate: true })
+				lastAutoCleanupAt = Date.now()
+			} catch (err) {
+				console.error('[nip60] Auto cleanup failed:', err)
+			}
+		})()
+
+		try {
+			await autoCleanupPromise
+		} finally {
+			autoCleanupPromise = null
+		}
 	},
 
 	/**
@@ -572,7 +613,7 @@ export const nip60Actions = {
 		const attemptPayInvoice = async (): Promise<Nip60LightningPaymentResult> => {
 			const result = await wallet.lnPay({ pr: invoice })
 			await new Promise((resolve) => setTimeout(resolve, 500))
-			await nip60Actions.refresh()
+			await nip60Actions.runAutoCleanup({ force: true, minIntervalMs: 0 })
 			return { preimage: extractPreimageCandidate(result) }
 		}
 
@@ -637,7 +678,7 @@ export const nip60Actions = {
 			throw new Error(error?.message || 'Failed to send nutzap')
 		}
 
-		await nip60Actions.refresh()
+		await nip60Actions.runAutoCleanup({ force: true, minIntervalMs: 0 })
 		return { eventId: nutzap.id, event: nutzap }
 	},
 
