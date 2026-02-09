@@ -1,6 +1,8 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { useStreamingProducts } from './useStreamingProducts'
+import { getProductTitle } from '@/queries/products'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import type { SortOption } from '@/components/ProductFilters'
 
 interface UseSimpleInfiniteScrollOptions {
 	chunkSize?: number
@@ -8,6 +10,9 @@ interface UseSimpleInfiniteScrollOptions {
 	threshold?: number
 	autoLoad?: boolean
 	tag?: string
+	showOutOfStock?: boolean
+	hidePreorder?: boolean
+	sort?: SortOption
 }
 
 interface UseSimpleInfiniteScrollReturn {
@@ -32,16 +37,50 @@ export const useSimpleInfiniteScroll = ({
 	threshold = 1000,
 	autoLoad = true,
 	tag,
+	showOutOfStock = false,
+	hidePreorder = false,
+	sort = 'newest',
 }: UseSimpleInfiniteScrollOptions = {}): UseSimpleInfiniteScrollReturn => {
 	// Use streaming products - these arrive progressively
 	const {
-		products: allProducts,
+		products: streamedProducts,
 		isStreaming,
 		isConnected,
 	} = useStreamingProducts({
 		limit: maxProducts,
 		tag,
+		showOutOfStock,
+		hidePreorder,
 	})
+
+	// Apply sorting to streamed products
+	const allProducts = useMemo(() => {
+		const sorted = [...streamedProducts]
+		switch (sort) {
+			case 'oldest':
+				sorted.sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
+				break
+			case 'a-z':
+				sorted.sort((a, b) => {
+					const titleA = getProductTitle(a)?.toLowerCase() || ''
+					const titleB = getProductTitle(b)?.toLowerCase() || ''
+					return titleA.localeCompare(titleB)
+				})
+				break
+			case 'z-a':
+				sorted.sort((a, b) => {
+					const titleA = getProductTitle(a)?.toLowerCase() || ''
+					const titleB = getProductTitle(b)?.toLowerCase() || ''
+					return titleB.localeCompare(titleA)
+				})
+				break
+			case 'newest':
+			default:
+				sorted.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+				break
+		}
+		return sorted
+	}, [streamedProducts, sort])
 
 	// Track current chunk (page) - start showing products immediately
 	const [currentChunk, setCurrentChunk] = useState(1)

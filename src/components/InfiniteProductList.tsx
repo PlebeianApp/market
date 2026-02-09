@@ -7,6 +7,7 @@ import { Loader2 } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import type { ReactNode } from 'react'
+import type { SortOption } from '@/components/ProductFilters'
 
 interface InfiniteProductListProps {
 	/** Title to display above the product grid */
@@ -25,6 +26,12 @@ interface InfiniteProductListProps {
 	scrollKey: string
 	/** Optional tag to filter products by */
 	tag?: string
+	/** Whether to show out of stock products */
+	showOutOfStock?: boolean
+	/** Whether to hide pre-order products */
+	hidePreorder?: boolean
+	/** Sort order for products */
+	sort?: SortOption
 }
 
 export function InfiniteProductList({
@@ -36,6 +43,9 @@ export function InfiniteProductList({
 	className,
 	scrollKey,
 	tag,
+	showOutOfStock = false,
+	hidePreorder = false,
+	sort = 'newest',
 }: InfiniteProductListProps) {
 	const containerRef = useRef<HTMLDivElement>(null)
 
@@ -46,6 +56,9 @@ export function InfiniteProductList({
 		threshold,
 		autoLoad,
 		tag,
+		showOutOfStock,
+		hidePreorder,
+		sort,
 	})
 
 	// Use scroll restoration hook

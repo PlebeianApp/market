@@ -1,6 +1,5 @@
 import { InfiniteProductList } from '@/components/InfiniteProductList'
-import { ItemGrid } from '@/components/ItemGrid'
-import { ProductCard } from '@/components/ProductCard'
+import { ProductFilters, defaultProductFilters, type ProductFilterState } from '@/components/ProductFilters'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { PRODUCT_CATEGORIES } from '@/lib/constants'
@@ -76,6 +75,7 @@ export const Route = createFileRoute('/products/')({
 function ProductsRoute() {
 	const navigate = useNavigate()
 	const { tag } = Route.useSearch()
+	const [filters, setFilters] = useState<ProductFilterState>(defaultProductFilters)
 	// Use streaming via InfiniteProductList, but still need some products for featured slides
 	// Fetch ALL products (without tag filter) to ensure tag bar remains consistent
 	const productsQuery = useQuery({
@@ -328,9 +328,9 @@ function ProductsRoute() {
 				</div>
 			)}
 			{/* Tag Filter Bar */}
-			{defaultTags.length > 0 && (
-				<div className="sticky top-0 z-20 bg-off-black border-b shadow-sm">
-					<div className="px-4 py-3 overflow-x-auto">
+			<div className="sticky top-0 z-20 bg-off-black border-b shadow-sm">
+				<div className="px-4 py-3 flex items-center justify-between gap-4">
+					<div className="overflow-x-auto flex-1">
 						<div className="flex items-center gap-2 min-w-max">
 							<Badge variant={!tag ? 'primaryActive' : 'primary'} className="cursor-pointer transition-colors" onClick={handleClearFilter}>
 								All
@@ -347,12 +347,23 @@ function ProductsRoute() {
 							))}
 						</div>
 					</div>
+					<ProductFilters filters={filters} onFiltersChange={setFilters} />
 				</div>
-			)}
+			</div>
 
 			<div className="px-8 py-4">
 				{/* Single Infinite Product List with streaming */}
-				<InfiniteProductList title="All Products" scrollKey="products-page" chunkSize={20} threshold={1000} autoLoad={true} tag={tag} />
+				<InfiniteProductList
+					title="All Products"
+					scrollKey="products-page"
+					chunkSize={20}
+					threshold={1000}
+					autoLoad={true}
+					tag={tag}
+					showOutOfStock={filters.showOutOfStock}
+					hidePreorder={filters.hidePreorder}
+					sort={filters.sort}
+				/>
 			</div>
 		</div>
 	)

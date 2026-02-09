@@ -12,6 +12,10 @@ interface UseStreamingProductsOptions {
 	tag?: string
 	/** Whether to include hidden products */
 	includeHidden?: boolean
+	/** Whether to show out of stock products */
+	showOutOfStock?: boolean
+	/** Whether to hide pre-order products */
+	hidePreorder?: boolean
 }
 
 interface UseStreamingProductsReturn {
@@ -33,6 +37,8 @@ export function useStreamingProducts({
 	limit = 500,
 	tag,
 	includeHidden = false,
+	showOutOfStock = false,
+	hidePreorder = false,
 }: UseStreamingProductsOptions = {}): UseStreamingProductsReturn {
 	const [products, setProducts] = useState<NDKEvent[]>([])
 	const [isStreaming, setIsStreaming] = useState(true)
@@ -50,12 +56,17 @@ export function useStreamingProducts({
 			seenIds.current.add(key)
 
 			// Check visibility
-			if (!includeHidden) {
-				const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
-				const visibility = visibilityTag?.[1] || 'on-sale'
-				if (visibility === 'hidden') return
-				if (!isProductInStock(event)) return
-			}
+			const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
+			const visibility = visibilityTag?.[1] || 'on-sale'
+
+			// Filter hidden products (unless includeHidden is true)
+			if (!includeHidden && visibility === 'hidden') return
+
+			// Filter pre-order products (if hidePreorder is true)
+			if (hidePreorder && visibility === 'pre-order') return
+
+			// Filter out-of-stock products (unless showOutOfStock is true)
+			if (!showOutOfStock && !isProductInStock(event)) return
 
 			// Add product and sort by created_at (newest first)
 			setProducts((prev) => {
@@ -68,7 +79,7 @@ export function useStreamingProducts({
 				return updated.slice(0, limit)
 			})
 		},
-		[includeHidden, limit],
+		[includeHidden, showOutOfStock, hidePreorder, limit],
 	)
 
 	useEffect(() => {
@@ -117,7 +128,7 @@ export function useStreamingProducts({
 			subscription.stop()
 			subscriptionRef.current = null
 		}
-	}, [isConnected, tag, limit, addProduct])
+	}, [isConnected, tag, limit, addProduct, showOutOfStock, hidePreorder])
 
 	return {
 		products,
