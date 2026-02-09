@@ -8,16 +8,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
 import { authStore } from '@/lib/stores/auth'
 import { ndkActions, useNDK } from '@/lib/stores/ndk'
-import { configStore } from '@/lib/stores/config'
-import { publishMigratedProduct } from '@/publish/migration'
+import { publishMigratedProduct, type MigrationProgress } from '@/publish/migration'
 import { migrationKeys } from '@/queries/queryKeyFactory'
 import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useCollectionsByPubkey } from '@/queries/collections'
+import { MigrationProgressDialog, type MigrationStep, type RelayStatus } from './MigrationProgressDialog'
 import type { RichShippingInfo } from '@/lib/stores/cart'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { toast } from 'sonner'
 import { ArrowLeft, X, PlusIcon, Loader2 } from 'lucide-react'
 import { useNavigate } from '@tanstack/react-router'
@@ -28,6 +28,14 @@ interface MigrationFormProps {
 	onSuccess: () => void
 }
 
+const INITIAL_STEPS: MigrationStep[] = [
+	{ id: 'preparing', label: 'Preparing product data...', status: 'pending' },
+	{ id: 'signing', label: 'Waiting for signature...', status: 'pending' },
+	{ id: 'publishing', label: 'Publishing to relays...', status: 'pending' },
+	{ id: 'syncing', label: 'Syncing data from relays...', status: 'pending' },
+	{ id: 'complete', label: 'Migration complete!', status: 'pending' },
+]
+
 export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormProps) {
 	const queryClient = useQueryClient()
 	const navigate = useNavigate()
@@ -35,6 +43,68 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 	const { user } = useStore(authStore)
 	const { getUser } = useNDK()
 	const [ndkUser, setNdkUser] = useState<any>(null)
+
+	// Progress dialog state
+	const [showProgress, setShowProgress] = useState(false)
+	const [steps, setSteps] = useState<MigrationStep[]>(INITIAL_STEPS)
+	const [relayStatuses, setRelayStatuses] = useState<RelayStatus[]>([])
+	const [migrationError, setMigrationError] = useState<string | undefined>()
+
+	const resetProgress = useCallback(() => {
+		setSteps(INITIAL_STEPS)
+		setRelayStatuses([])
+		setMigrationError(undefined)
+	}, [])
+
+	const updateStepStatus = useCallback((stepId: string, status: MigrationStep['status']) => {
+		setSteps((prev) =>
+			prev.map((step) => {
+				if (step.id === stepId) {
+					return { ...step, status }
+				}
+				// Mark previous steps as complete when a new step becomes active
+				if (status === 'active') {
+					const stepIndex = prev.findIndex((s) => s.id === stepId)
+					const currentIndex = prev.findIndex((s) => s.id === step.id)
+					if (currentIndex < stepIndex && step.status === 'active') {
+						return { ...step, status: 'complete' }
+					}
+				}
+				return step
+			}),
+		)
+	}, [])
+
+	const handleProgress = useCallback(
+		(progress: MigrationProgress) => {
+			switch (progress.step) {
+				case 'preparing':
+					updateStepStatus('preparing', 'active')
+					break
+				case 'signing':
+					updateStepStatus('preparing', 'complete')
+					updateStepStatus('signing', 'active')
+					break
+				case 'publishing':
+					updateStepStatus('signing', 'complete')
+					updateStepStatus('publishing', 'active')
+					// Initialize relay statuses when we get the relay list
+					if (progress.relayUrls) {
+						setRelayStatuses(progress.relayUrls.map((url) => ({ url, status: 'pending' })))
+					}
+					// Update individual relay status
+					if (progress.relayUrl && progress.relayStatus) {
+						setRelayStatuses((prev) => prev.map((r) => (r.url === progress.relayUrl ? { ...r, status: progress.relayStatus! } : r)))
+					}
+					break
+				case 'done':
+					updateStepStatus('publishing', 'complete')
+					// Don't start syncing yet - that happens in handleSubmit
+					break
+			}
+		},
+		[updateStepStatus],
+	)
 
 	// Get user on mount for shipping/collection queries
 	useEffect(() => {
@@ -206,21 +276,25 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 			return
 		}
 
+		const ndk = ndkActions.getNDK()
+		const signer = ndkActions.getSigner()
+
+		if (!ndk) {
+			toast.error('NDK not initialized')
+			return
+		}
+
+		if (!signer) {
+			toast.error('You need to connect your wallet first')
+			return
+		}
+
+		// Reset and show progress dialog
+		resetProgress()
+		setShowProgress(true)
+		setIsPublishing(true)
+
 		try {
-			setIsPublishing(true)
-			const ndk = ndkActions.getNDK()
-			const signer = ndkActions.getSigner()
-
-			if (!ndk) {
-				toast.error('NDK not initialized')
-				return
-			}
-
-			if (!signer) {
-				toast.error('You need to connect your wallet first')
-				return
-			}
-
 			// Convert form data to ProductFormData format
 			const productFormData = {
 				name: formData.name,
@@ -241,15 +315,24 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 				dimensions: formData.dimensions,
 			}
 
-			const newProductId = await publishMigratedProduct(productFormData, nip15Event.id, signer, ndk)
+			const newProductId = await publishMigratedProduct(productFormData, nip15Event.id, signer, ndk, handleProgress)
 
-			// Invalidate queries
+			// Start syncing step - invalidate queries (this is the slow part)
+			updateStepStatus('syncing', 'active')
 			if (user?.pubkey) {
 				await queryClient.invalidateQueries({ queryKey: migrationKeys.all })
 				await queryClient.invalidateQueries({ queryKey: migrationKeys.nip15Products(user.pubkey) })
 				await queryClient.invalidateQueries({ queryKey: migrationKeys.migratedEvents(user.pubkey) })
 			}
+			updateStepStatus('syncing', 'complete')
 
+			// Mark complete
+			updateStepStatus('complete', 'complete')
+
+			// Brief delay to show completion state before navigating
+			await new Promise((resolve) => setTimeout(resolve, 500))
+
+			setShowProgress(false)
 			toast.success('Product migrated successfully!')
 			onSuccess()
 
@@ -257,14 +340,38 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 			navigate({ to: '/products/$productId', params: { productId: newProductId } })
 		} catch (error) {
 			console.error('Error migrating product:', error)
-			toast.error(`Failed to migrate product: ${error instanceof Error ? error.message : String(error)}`)
+			const errorMessage = error instanceof Error ? error.message : String(error)
+
+			// Update step status to show error
+			setSteps((prev) => prev.map((step) => (step.status === 'active' ? { ...step, status: 'error' } : step)))
+			setMigrationError(errorMessage)
 		} finally {
 			setIsPublishing(false)
 		}
 	}
 
+	const handleRetry = () => {
+		setShowProgress(false)
+		// Small delay before retrying
+		setTimeout(() => handleSubmit(), 100)
+	}
+
+	const handleCancel = () => {
+		setShowProgress(false)
+		resetProgress()
+	}
+
 	return (
 		<div className="p-4 lg:p-6 space-y-6">
+			<MigrationProgressDialog
+				open={showProgress}
+				steps={steps}
+				relayStatuses={relayStatuses}
+				error={migrationError}
+				onRetry={handleRetry}
+				onCancel={handleCancel}
+			/>
+
 			<Button variant="ghost" onClick={onBack} className="mb-4">
 				<ArrowLeft className="w-4 h-4 mr-2" />
 				Back to list
