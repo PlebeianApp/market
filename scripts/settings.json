@@ -1,0 +1,17 @@
+{
+	"kind": 31990,
+	"id": "e4cc71b24b77c632698ee0c9f9dc48024e251d73041fca73fdb680b3afca770b",
+	"pubkey": "7b3979f5936f590541eb4f51c2ce3094194d1c57386e706dd05aca98766a7ceb",
+	"created_at": 1768302517,
+	"tags": [
+		["d", "plebeian-market-handler"],
+		["k", "30402"],
+		["k", "30405"],
+		["web", "https://plebeian.market/product/<bech32>", "naddr"],
+		["web", "https://plebeian.market/a/<bech32>", "naddr"],
+		["web", "https://plebeian.market/collection/<bech32>", "naddr"],
+		["r", "wss://relay.plebeian.market"]
+	],
+	"content": "{\"name\":\"production\",\"displayName\":\"Plebeian Market\",\"picture\":\"https://plebeian.market/images/logo.svg\",\"banner\":\"https://plebeian.market/banner.svg\",\"ownerPk\":\"4c800257a588a82849d049817c2bdaad984b25a45ad9f6dad66e47d3b47e3b2f\",\"contactEmail\":\"\",\"allowRegister\":true,\"defaultCurrency\":\"USD\"}",
+	"sig": "447668ff5b47b6a44cfa8f6ee9536d545ab4eff7d5ac1ab9e0ee367dca2bbb4276e27ff2a8fcc9e52aca3c7ccbf980d2d4cb3c5edd58a3d613bd6047a964a89d"
+}

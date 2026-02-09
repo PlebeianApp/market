@@ -191,7 +191,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 							</Button>
 						)}
 					</div>
-					<div onClick={(e) => e.stopPropagation()}>
+					<div>
 						<ZapButton event={product} />
 					</div>
 				</div>

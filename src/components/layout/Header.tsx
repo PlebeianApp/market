@@ -5,7 +5,9 @@ import { MobileMenu } from '@/components/layout/MobileMenu'
 import { ProductSearch } from '@/components/ProductSearch'
 import { Profile } from '@/components/Profile'
 import { Button } from '@/components/ui/button'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Nip60Wallet } from '@/feature/wallet/components/Nip60Wallet'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { authActions, authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
@@ -15,7 +17,7 @@ import { useConfigQuery } from '@/queries/config'
 import type { NDKUserProfile } from '@nostr-dev-kit/ndk'
 import { Link, useLocation } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Loader2, LogOut, Menu, X } from 'lucide-react'
+import { Loader2, LogOut, Menu, Wallet, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
 export function Header() {
@@ -258,6 +260,21 @@ export function Header() {
 											</TooltipTrigger>
 											<TooltipContent side="bottom">Dashboard</TooltipContent>
 										</Tooltip>
+										<Popover>
+											<Tooltip>
+												<TooltipTrigger asChild>
+													<PopoverTrigger asChild>
+														<Button variant="primary" className="p-2 relative hover:[&>svg]:text-secondary" data-testid="wallet-button">
+															<Wallet className="w-6 h-6" />
+														</Button>
+													</PopoverTrigger>
+												</TooltipTrigger>
+												<TooltipContent side="bottom">Wallet</TooltipContent>
+											</Tooltip>
+											<PopoverContent className="md:w-96 w-[calc(100vw-2rem)] bg-primary rounded-lg" align="end">
+												<Nip60Wallet />
+											</PopoverContent>
+										</Popover>
 										<Profile compact />
 										<Tooltip>
 											<TooltipTrigger asChild>

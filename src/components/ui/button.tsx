@@ -23,6 +23,15 @@ const buttonVariants = cva(
 				ghost: 'hover:border-primary-border border-none',
 				link: 'text-secondary border-none underline-offset-4 hover:underline',
 				none: 'border-0 p-0 text-base justify-start',
+
+				// Dark background variants (for use inside dark containers)
+				'dark-ghost': 'bg-transparent hover:bg-white/10 text-gray-400 hover:text-white border-0',
+				'dark-subtle': 'bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white border-0',
+				'dark-muted': 'bg-white/10 hover:bg-white/20 text-white border-0',
+				'dark-active': 'bg-white/20 text-white border-0',
+				success: 'bg-green-600 hover:bg-green-700 text-white border-0',
+				warning: 'bg-orange-600 hover:bg-orange-700 text-white border-0',
+				'dark-destructive': 'bg-transparent hover:bg-red-500/20 text-red-400 hover:text-red-300 border-0',
 			},
 			size: {
 				default: 'h-10 px-4 py-2',
