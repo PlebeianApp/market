@@ -412,6 +412,7 @@ function DashboardLayout() {
 												location.pathname === '/dashboard/app-settings/team' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/app-settings/blacklists' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/app-settings/featured-items' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/about' && 'p-0 lg:p-0',
 											)}
 										>
 											{/* Only show title here if there's no back button */}
@@ -434,9 +435,8 @@ function DashboardLayout() {
 												location.pathname !== '/dashboard/app-settings/team' &&
 												location.pathname !== '/dashboard/app-settings/blacklists' &&
 												location.pathname !== '/dashboard/app-settings/featured-items' &&
-												location.pathname !== '/dashboard/account/network' && (
-													<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>
-												)}
+												location.pathname !== '/dashboard/account/network' &&
+												location.pathname !== '/dashboard/about' && <h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>}
 											{!isAuthenticated ? (
 												<LoginPrompt />
 											) : (
@@ -460,9 +460,8 @@ function DashboardLayout() {
 														location.pathname !== '/dashboard/account/making-payments' &&
 														location.pathname !== '/dashboard/account/receiving-payments' &&
 														location.pathname !== '/dashboard/account/your-purchases' &&
-														location.pathname !== '/dashboard/account/network' && (
-															<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>
-														)}
+														location.pathname !== '/dashboard/account/network' &&
+														location.pathname !== '/dashboard/about' && <h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>}
 													<Outlet />
 												</>
 											)}

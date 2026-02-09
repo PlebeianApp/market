@@ -104,4 +104,13 @@ export const dashboardNavigation: NavSection[] = [
 			},
 		],
 	},
+	{
+		title: 'INFO',
+		items: [
+			{
+				title: 'ℹ️ About',
+				path: '/dashboard/about',
+			},
+		],
+	},
 ]
