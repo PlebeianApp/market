@@ -32,7 +32,8 @@ const INITIAL_STEPS: MigrationStep[] = [
 	{ id: 'preparing', label: 'Preparing product data...', status: 'pending' },
 	{ id: 'signing', label: 'Waiting for signature...', status: 'pending' },
 	{ id: 'publishing', label: 'Publishing to relays...', status: 'pending' },
-	{ id: 'finalizing', label: 'Finalizing...', status: 'pending' },
+	{ id: 'syncing', label: 'Syncing data from relays...', status: 'pending' },
+	{ id: 'complete', label: 'Migration complete!', status: 'pending' },
 ]
 
 export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormProps) {
@@ -70,7 +71,7 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 					}
 				}
 				return step
-			})
+			}),
 		)
 	}, [])
 
@@ -93,18 +94,16 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 					}
 					// Update individual relay status
 					if (progress.relayUrl && progress.relayStatus) {
-						setRelayStatuses((prev) =>
-							prev.map((r) => (r.url === progress.relayUrl ? { ...r, status: progress.relayStatus! } : r))
-						)
+						setRelayStatuses((prev) => prev.map((r) => (r.url === progress.relayUrl ? { ...r, status: progress.relayStatus! } : r)))
 					}
 					break
 				case 'done':
 					updateStepStatus('publishing', 'complete')
-					updateStepStatus('finalizing', 'active')
+					// Don't start syncing yet - that happens in handleSubmit
 					break
 			}
 		},
-		[updateStepStatus]
+		[updateStepStatus],
 	)
 
 	// Get user on mount for shipping/collection queries
@@ -318,15 +317,17 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 
 			const newProductId = await publishMigratedProduct(productFormData, nip15Event.id, signer, ndk, handleProgress)
 
-			// Mark finalizing as complete
-			updateStepStatus('finalizing', 'complete')
-
-			// Invalidate queries
+			// Start syncing step - invalidate queries (this is the slow part)
+			updateStepStatus('syncing', 'active')
 			if (user?.pubkey) {
 				await queryClient.invalidateQueries({ queryKey: migrationKeys.all })
 				await queryClient.invalidateQueries({ queryKey: migrationKeys.nip15Products(user.pubkey) })
 				await queryClient.invalidateQueries({ queryKey: migrationKeys.migratedEvents(user.pubkey) })
 			}
+			updateStepStatus('syncing', 'complete')
+
+			// Mark complete
+			updateStepStatus('complete', 'complete')
 
 			// Brief delay to show completion state before navigating
 			await new Promise((resolve) => setTimeout(resolve, 500))
@@ -342,9 +343,7 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 			const errorMessage = error instanceof Error ? error.message : String(error)
 
 			// Update step status to show error
-			setSteps((prev) =>
-				prev.map((step) => (step.status === 'active' ? { ...step, status: 'error' } : step))
-			)
+			setSteps((prev) => prev.map((step) => (step.status === 'active' ? { ...step, status: 'error' } : step)))
 			setMigrationError(errorMessage)
 		} finally {
 			setIsPublishing(false)

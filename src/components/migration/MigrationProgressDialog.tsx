@@ -48,14 +48,7 @@ function RelayStatusIcon({ status }: { status: RelayStatus['status'] }) {
 	}
 }
 
-export function MigrationProgressDialog({
-	open,
-	steps,
-	relayStatuses,
-	error,
-	onRetry,
-	onCancel,
-}: MigrationProgressDialogProps) {
+export function MigrationProgressDialog({ open, steps, relayStatuses, error, onRetry, onCancel }: MigrationProgressDialogProps) {
 	const completedRelays = relayStatuses.filter((r) => r.status === 'success').length
 	const totalRelays = relayStatuses.length
 	const progressPercent = totalRelays > 0 ? (completedRelays / totalRelays) * 100 : 0
@@ -80,22 +73,34 @@ export function MigrationProgressDialog({
 
 						{/* Steps */}
 						<div className="space-y-3">
-							{steps.map((step) => (
-								<div key={step.id} className="flex items-center gap-3">
-									<StepIcon status={step.status} />
-									<span
-										className={cn(
-											'text-sm',
-											step.status === 'pending' && 'text-muted-foreground',
-											step.status === 'active' && 'text-foreground font-medium',
-											step.status === 'complete' && 'text-muted-foreground',
-											step.status === 'error' && 'text-destructive'
-										)}
-									>
-										{step.label}
-									</span>
-								</div>
-							))}
+							{steps.map((step) => {
+								// Style the final "complete" step differently
+								if (step.id === 'complete') {
+									if (step.status !== 'complete') return null
+									return (
+										<div key={step.id} className="flex items-center gap-3 pt-2 border-t">
+											<CheckCircle2 className="w-6 h-6 text-green-600" />
+											<span className="text-sm font-medium text-green-600">{step.label}</span>
+										</div>
+									)
+								}
+								return (
+									<div key={step.id} className="flex items-center gap-3">
+										<StepIcon status={step.status} />
+										<span
+											className={cn(
+												'text-sm',
+												step.status === 'pending' && 'text-muted-foreground',
+												step.status === 'active' && 'text-foreground font-medium',
+												step.status === 'complete' && 'text-muted-foreground',
+												step.status === 'error' && 'text-destructive',
+											)}
+										>
+											{step.label}
+										</span>
+									</div>
+								)
+							})}
 						</div>
 
 						{/* Relay Status (shown during publishing) */}
