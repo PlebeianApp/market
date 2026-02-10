@@ -12,6 +12,8 @@ interface UseStreamingProductsOptions {
 	tag?: string
 	/** Whether to include hidden products */
 	includeHidden?: boolean
+	/** Status filter: 'pre-order' or 'out-of-stock' */
+	statusFilter?: 'pre-order' | 'out-of-stock'
 }
 
 interface UseStreamingProductsReturn {
@@ -33,6 +35,7 @@ export function useStreamingProducts({
 	limit = 500,
 	tag,
 	includeHidden = false,
+	statusFilter,
 }: UseStreamingProductsOptions = {}): UseStreamingProductsReturn {
 	const [products, setProducts] = useState<NDKEvent[]>([])
 	const [isStreaming, setIsStreaming] = useState(true)
@@ -50,11 +53,25 @@ export function useStreamingProducts({
 			seenIds.current.add(key)
 
 			// Check visibility
-			if (!includeHidden) {
-				const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
-				const visibility = visibilityTag?.[1] || 'on-sale'
-				if (visibility === 'hidden') return
-				if (!isProductInStock(event)) return
+			const visibilityTag = event.tags.find((t) => t[0] === 'visibility')
+			const visibility = visibilityTag?.[1] || 'on-sale'
+
+			// Check stock status
+			const inStock = isProductInStock(event)
+
+			// Apply status filter
+			if (statusFilter === 'pre-order') {
+				// Only show pre-order items
+				if (visibility !== 'pre-order') return
+			} else if (statusFilter === 'out-of-stock') {
+				// Only show out-of-stock items (not pre-order and not in stock)
+				if (visibility === 'pre-order' || inStock) return
+			} else {
+				// Default behavior: hide hidden products and out-of-stock
+				if (!includeHidden) {
+					if (visibility === 'hidden') return
+					if (!inStock) return
+				}
 			}
 
 			// Add product and sort by created_at (newest first)
@@ -68,7 +85,7 @@ export function useStreamingProducts({
 				return updated.slice(0, limit)
 			})
 		},
-		[includeHidden, limit],
+		[includeHidden, limit, statusFilter],
 	)
 
 	useEffect(() => {
@@ -117,7 +134,7 @@ export function useStreamingProducts({
 			subscription.stop()
 			subscriptionRef.current = null
 		}
-	}, [isConnected, tag, limit, addProduct])
+	}, [isConnected, tag, limit, addProduct, statusFilter])
 
 	return {
 		products,

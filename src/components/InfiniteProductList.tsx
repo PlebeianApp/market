@@ -25,6 +25,8 @@ interface InfiniteProductListProps {
 	scrollKey: string
 	/** Optional tag to filter products by */
 	tag?: string
+	/** Status filter: 'pre-order' or 'out-of-stock' */
+	statusFilter?: 'pre-order' | 'out-of-stock'
 }
 
 export function InfiniteProductList({
@@ -36,6 +38,7 @@ export function InfiniteProductList({
 	className,
 	scrollKey,
 	tag,
+	statusFilter,
 }: InfiniteProductListProps) {
 	const containerRef = useRef<HTMLDivElement>(null)
 
@@ -46,6 +49,7 @@ export function InfiniteProductList({
 		threshold,
 		autoLoad,
 		tag,
+		statusFilter,
 	})
 
 	// Use scroll restoration hook

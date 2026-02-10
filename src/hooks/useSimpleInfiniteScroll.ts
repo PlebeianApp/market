@@ -8,6 +8,8 @@ interface UseSimpleInfiniteScrollOptions {
 	threshold?: number
 	autoLoad?: boolean
 	tag?: string
+	/** Status filter: 'pre-order' or 'out-of-stock' */
+	statusFilter?: 'pre-order' | 'out-of-stock'
 }
 
 interface UseSimpleInfiniteScrollReturn {
@@ -32,6 +34,7 @@ export const useSimpleInfiniteScroll = ({
 	threshold = 1000,
 	autoLoad = true,
 	tag,
+	statusFilter,
 }: UseSimpleInfiniteScrollOptions = {}): UseSimpleInfiniteScrollReturn => {
 	// Use streaming products - these arrive progressively
 	const {
@@ -41,6 +44,7 @@ export const useSimpleInfiniteScroll = ({
 	} = useStreamingProducts({
 		limit: maxProducts,
 		tag,
+		statusFilter,
 	})
 
 	// Track current chunk (page) - start showing products immediately
