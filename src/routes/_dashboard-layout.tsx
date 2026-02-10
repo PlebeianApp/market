@@ -478,15 +478,6 @@ function DashboardLayout() {
 							</div>
 						</div>
 					)}
-
-					{/* Placeholder Container - responsive on desktop */}
-					{!isMobile && (
-						<div className="hidden min-[1470px]:block lg:min-w-0 lg:flex-1 lg:max-w-32 xl:max-w-48 2xl:max-w-64 lg:border lg:border-black lg:rounded bg-white lg:max-h-full lg:overflow-hidden lg:shadow-md">
-							<div className="p-4 lg:px-6 lg:py-4 flex items-center justify-center h-full">
-								<span className="text-3xl">₿</span>
-							</div>
-						</div>
-					)}
 				</div>
 			</div>
 		</div>
