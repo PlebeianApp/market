@@ -6,6 +6,7 @@ import NDK from '@nostr-dev-kit/ndk'
 import { bech32 } from '@scure/base'
 import index from './index.html'
 import { fetchAppSettings } from './lib/appSettings'
+import { AppSettingsSchema } from './lib/schemas/app'
 import { getEventHandler } from './server'
 import { join } from 'path'
 import { file } from 'bun'
@@ -389,6 +390,18 @@ export const server = serve({
 					if (resignedEvent) {
 						const relay = await Relay.connect(RELAY_URL as string)
 						await relay.publish(resignedEvent as Event)
+
+						// Update cached appSettings when a kind 31990 event is published
+						if (resignedEvent.kind === 31990) {
+							try {
+								const parsed = AppSettingsSchema.parse(JSON.parse(resignedEvent.content))
+								appSettings = parsed
+								console.log('App settings cache updated from new kind 31990 event')
+							} catch (e) {
+								console.warn('Failed to update app settings cache:', e)
+							}
+						}
+
 						const okResponse = ['OK', resignedEvent.id, true, '']
 						ws.send(JSON.stringify(okResponse))
 					} else {
