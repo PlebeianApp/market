@@ -1,3 +1,4 @@
+import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -15,6 +16,8 @@ import { createHandlerInfoEventData } from '@/publish/nip89'
 import { useForm, useStore } from '@tanstack/react-form'
 import { createFileRoute } from '@tanstack/react-router'
 import { finalizeEvent, generateSecretKey, nip19 } from 'nostr-tools'
+import { Copy, Check } from 'lucide-react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/app-settings/app-miscelleneous')({
@@ -124,16 +127,6 @@ function AppMiscelleneousComponent() {
 		)
 	}
 
-	const ownerNpub = appSettings?.ownerPk
-		? (() => {
-				try {
-					return nip19.npubEncode(appSettings.ownerPk)
-				} catch {
-					return appSettings.ownerPk
-				}
-			})()
-		: ''
-
 	return (
 		<div>
 			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
@@ -160,11 +153,7 @@ function AppMiscelleneousComponent() {
 				<div className="border rounded-lg p-4 space-y-4">
 					<h3 className="text-lg font-semibold">Identity</h3>
 
-					<div>
-						<Label className="font-medium">Owner</Label>
-						<Input value={ownerNpub} disabled className="border-2 bg-gray-50 text-muted-foreground mt-1" />
-						<p className="text-xs text-muted-foreground mt-1">Owner public key cannot be changed.</p>
-					</div>
+					<OwnerField ownerPk={appSettings?.ownerPk} />
 
 					<form.Field
 						name="name"
@@ -525,6 +514,43 @@ function AppMiscelleneousComponent() {
 					)}
 				/>
 			</form>
+		</div>
+	)
+}
+
+function OwnerField({ ownerPk }: { ownerPk?: string }) {
+	const [copied, setCopied] = useState(false)
+
+	const ownerNpub = ownerPk
+		? (() => {
+				try {
+					return nip19.npubEncode(ownerPk)
+				} catch {
+					return ownerPk
+				}
+			})()
+		: ''
+
+	const handleCopy = () => {
+		if (!ownerNpub) return
+		navigator.clipboard.writeText(ownerNpub)
+		setCopied(true)
+		setTimeout(() => setCopied(false), 2000)
+	}
+
+	return (
+		<div>
+			<Label className="font-medium">Owner</Label>
+			<div className="mt-1 mb-1">
+				{ownerPk ? <UserWithAvatar pubkey={ownerPk} disableLink size="md" /> : <span className="text-muted-foreground">Unknown</span>}
+			</div>
+			<div className="flex items-center gap-2">
+				<Input value={ownerNpub} disabled className="border-2 bg-gray-50 text-muted-foreground" />
+				<Button type="button" variant="outline" size="icon" className="shrink-0" onClick={handleCopy}>
+					{copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+				</Button>
+			</div>
+			<p className="text-xs text-muted-foreground mt-1">Owner public key cannot be changed.</p>
 		</div>
 	)
 }
