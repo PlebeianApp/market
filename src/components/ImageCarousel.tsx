@@ -1,5 +1,6 @@
 import { cn } from '@/lib/utils'
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel'
+import { LazyImage } from '@/components/ui/lazy-image'
 import { ImageOff } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
@@ -69,7 +70,14 @@ export function ImageCarousel({ images, title, className, onImageChange, onImage
 								className="relative z-10 w-full h-full cursor-pointer flex items-center justify-center"
 								aria-label={`View ${title} - Image ${index + 1} in full size`}
 							>
-								<img src={image.url} alt={`${title} - Image ${index + 1}`} className="max-w-full max-h-full object-contain" />
+								<LazyImage
+									src={image.url}
+									alt={`${title} - Image ${index + 1}`}
+									className="object-contain"
+									containerClassName="w-full h-full flex items-center justify-center"
+									aspectRatio=""
+									lazy={index !== 0}
+								/>
 							</button>
 						</CarouselItem>
 					))}
@@ -96,7 +104,7 @@ export function ImageCarousel({ images, title, className, onImageChange, onImage
 									onClick={() => handlePreviewClick(index)}
 								>
 									<div className="aspect-square w-full overflow-hidden relative bg-black border border-gray-800">
-										<img className="h-full w-full object-cover" src={image.url} alt={`${title} thumbnail ${index + 1}`} />
+										<LazyImage src={image.url} alt={`${title} thumbnail ${index + 1}`} containerClassName="h-full w-full" aspectRatio="" />
 									</div>
 									{index === currentIndex && <div className="absolute bottom-1 right-1 w-2 h-2 bg-primary rounded-full" />}
 								</button>

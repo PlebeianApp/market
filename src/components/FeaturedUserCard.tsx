@@ -1,4 +1,5 @@
 import { Card } from '@/components/ui/card'
+import { LazyImage } from '@/components/ui/lazy-image'
 import {
 	getProductImages,
 	getProductPrice,
@@ -50,10 +51,17 @@ function MiniProductCard({ productCoords }: { productCoords: string }) {
 			<div className="group cursor-pointer">
 				<div className="aspect-square rounded-lg overflow-hidden mb-2 bg-gray-100">
 					{images && images.length > 0 ? (
-						<img
+						<LazyImage
 							src={images[0][1]}
 							alt={title}
-							className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+							className="group-hover:scale-105 transition-transform duration-200"
+							containerClassName="w-full h-full"
+							aspectRatio=""
+							fallback={
+								<div className="w-full h-full bg-gray-200 flex items-center justify-center">
+									<span className="text-gray-400 text-xs">No Image</span>
+								</div>
+							}
 						/>
 					) : (
 						<div className="w-full h-full bg-gray-200 flex items-center justify-center">
@@ -98,10 +106,11 @@ export function FeaturedUserCard({ userPubkey }: FeaturedUserCardProps) {
 				{/* Avatar on the left */}
 				<div className="flex-shrink-0 w-[200px] h-full">
 					<Link to="/profile/$profileId" params={{ profileId: pubkeyString }}>
-						<img
+						<LazyImage
 							src={picture || `https://robohash.org/${pubkeyString}?set=set4&size=200x200`}
 							alt={displayName.toString()}
-							className="w-full h-full object-cover"
+							containerClassName="w-full h-full"
+							aspectRatio=""
 						/>
 					</Link>
 				</div>
@@ -133,10 +142,12 @@ export function FeaturedUserCard({ userPubkey }: FeaturedUserCardProps) {
 										const images = getProductImages(product)
 										return (
 											<Link key={product.id} to="/product/$productId" params={{ productId: product.id }} className="block">
-												<img
+												<LazyImage
 													src={images?.[0]?.[1] || '/images/placeholder.png'}
 													alt="Product"
-													className="w-12 h-12 rounded object-cover hover:opacity-80 transition-opacity"
+													className="rounded hover:opacity-80 transition-opacity"
+													containerClassName="w-12 h-12"
+													aspectRatio=""
 												/>
 											</Link>
 										)

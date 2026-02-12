@@ -253,6 +253,16 @@ button {
 	--color-sidebar: var(--sidebar-background);
 	--animate-accordion-down: accordion-down 0.2s ease-out;
 	--animate-accordion-up: accordion-up 0.2s ease-out;
+	--animate-shimmer: shimmer 1.5s infinite;
+
+	@keyframes shimmer {
+		0% {
+			transform: translateX(-100%);
+		}
+		100% {
+			transform: translateX(100%);
+		}
+	}
 
 	@keyframes accordion-down {
 		from {

@@ -1,6 +1,7 @@
 import { ShareProductDialog } from '@/components/dialogs/ShareProductDialog'
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
 import { Button } from '@/components/ui/button'
+import { LazyImage } from '@/components/ui/lazy-image'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { authStore } from '@/lib/stores/auth'
 import { productFormActions } from '@/lib/stores/product'
@@ -43,7 +44,7 @@ function ProductBasicInfo({ product }: { product: NDKEvent }) {
 			<div className="space-y-3">
 				{images.length > 0 && (
 					<div className="w-full h-32 bg-gray-200 rounded-md overflow-hidden">
-						<img src={images[0][1]} alt="Product image" className="w-full h-full object-cover" />
+						<LazyImage src={images[0][1]} alt="Product image" containerClassName="w-full h-full" aspectRatio="" />
 					</div>
 				)}
 				<div>
@@ -118,7 +119,7 @@ function ProductListItem({
 	const triggerContent = (
 		<div className="flex items-center gap-3">
 			{thumbnailUrl ? (
-				<img src={thumbnailUrl} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
+				<LazyImage src={thumbnailUrl} alt="" className="rounded" containerClassName="w-10 h-10 shrink-0" aspectRatio="" />
 			) : (
 				<div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center shrink-0">
 					<PackageIcon className="w-5 h-5 text-gray-400" />

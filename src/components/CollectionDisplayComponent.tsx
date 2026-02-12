@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { LazyImage } from '@/components/ui/lazy-image'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import { collectionQueryOptions, getCollectionTitle, getCollectionSummary, getCollectionImages } from '@/queries/collections'
@@ -50,7 +51,7 @@ export function CollectionDisplayComponent({
 				{/* Collection Image */}
 				<div className="w-16 h-16 bg-gray-200 rounded-md overflow-hidden flex-shrink-0">
 					{imageUrl ? (
-						<img src={imageUrl} alt={title} className="w-full h-full object-cover" />
+						<LazyImage src={imageUrl} alt={title} containerClassName="w-full h-full" aspectRatio="" />
 					) : (
 						<div className="w-full h-full bg-gray-300 flex items-center justify-center text-gray-500 text-xs">No Image</div>
 					)}
