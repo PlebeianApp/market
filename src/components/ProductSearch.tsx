@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Input } from '@/components/ui/input'
+import { LazyImage } from '@/components/ui/lazy-image'
 import { Link, useNavigate } from '@tanstack/react-router'
 import {
 	useProductSearch,
@@ -114,7 +115,16 @@ export function ProductSearch() {
 										}}
 									>
 										{/* Product Image */}
-										{mainImage && <img src={mainImage} alt={title || 'Product'} className="w-8 h-8 rounded object-cover shrink-0" />}
+										{mainImage && (
+											<LazyImage
+												src={mainImage}
+												alt={title || 'Product'}
+												className="rounded object-cover"
+												containerClassName="w-8 h-8 shrink-0"
+												aspectRatio=""
+												lazy={false}
+											/>
+										)}
 
 										{/* Content Section */}
 										<div className="flex-1 min-w-0 flex items-center gap-2">

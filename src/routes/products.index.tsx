@@ -3,6 +3,7 @@ import { ItemGrid } from '@/components/ItemGrid'
 import { ProductCard } from '@/components/ProductCard'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { LazyImage } from '@/components/ui/lazy-image'
 import { PRODUCT_CATEGORIES } from '@/lib/constants'
 import { authStore } from '@/lib/stores/auth'
 import { uiActions } from '@/lib/stores/ui'
@@ -22,6 +23,7 @@ import {
 } from '../queries/products'
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedProducts } from '@/queries/featured'
+import { useResponsiveBackgroundUrl } from '@/queries/responsive-image'
 
 // Hook to inject dynamic CSS for background image
 function useHeroBackground(imageUrl: string, className: string) {
@@ -167,11 +169,15 @@ function ProductsRoute() {
 	// Use the market image for homepage background instead of random product
 	const marketBackgroundImageUrl = '/images/market-background.jpg'
 
+	// Resolve responsive variants for background images
+	const resolvedBackgroundUrl = useResponsiveBackgroundUrl(backgroundImageUrl)
+	const resolvedMarketBackgroundUrl = useResponsiveBackgroundUrl(marketBackgroundImageUrl)
+
 	// Use the hook to inject dynamic CSS for the background image
 	const heroClassName = currentProductId ? `hero-bg-products-${currentProductId.replace(/[^a-zA-Z0-9]/g, '')}` : 'hero-bg-products-default'
 	const marketHeroClassName = 'hero-bg-market'
-	useHeroBackground(backgroundImageUrl, heroClassName)
-	useHeroBackground(marketBackgroundImageUrl, marketHeroClassName)
+	useHeroBackground(resolvedBackgroundUrl, heroClassName)
+	useHeroBackground(resolvedMarketBackgroundUrl, marketHeroClassName)
 
 	const handleStartSelling = () => {
 		if (isAuthenticated) {
@@ -259,13 +265,14 @@ function ProductsRoute() {
 			<div className="mb-2 w-40 h-40 lg:w-48 lg:h-48">
 				{backgroundImageUrl && (
 					<Link to={`/products/${currentProductId}`} className="block w-full h-full">
-						<div className="relative w-full h-full overflow-hidden rounded-lg shadow-xl ring-2 ring-white/20 hover:ring-secondary transition-all">
-							<img
-								src={backgroundImageUrl}
-								alt={displayTitle || 'Featured product'}
-								className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-							/>
-						</div>
+						<LazyImage
+							src={backgroundImageUrl}
+							alt={displayTitle || 'Featured product'}
+							className="hover:scale-105 transition-transform duration-300"
+							containerClassName="w-full h-full rounded-lg shadow-xl ring-2 ring-white/20 hover:ring-secondary transition-all"
+							aspectRatio=""
+							lazy={false}
+						/>
 					</Link>
 				)}
 			</div>

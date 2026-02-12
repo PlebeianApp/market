@@ -106,3 +106,38 @@ export function useResponsiveImageUrl(src: string, containerRef: React.RefObject
 
 	return best ? best.url : src
 }
+
+/**
+ * Hook: resolve the best responsive image URL for a CSS background-image.
+ *
+ * Similar to useResponsiveImageUrl but uses the viewport width instead of a
+ * container ref, since background images are typically full-width hero sections.
+ *
+ * @param src - Original image URL (typically a Blossom URL)
+ */
+export function useResponsiveBackgroundUrl(src: string): string {
+	const sha256 = extractSha256FromUrl(src)
+	const logged = useRef(false)
+
+	const { data: variants } = useQuery({
+		queryKey: responsiveImageKeys.byHash(sha256 ?? ''),
+		queryFn: () => fetchVariantsForHash(sha256!),
+		enabled: !!sha256,
+		staleTime: 5 * 60 * 1000,
+		gcTime: 30 * 60 * 1000,
+	})
+
+	if (!variants || !sha256) return src
+
+	const width = typeof window !== 'undefined' ? window.innerWidth : 1024
+	const pixelRatio = typeof window !== 'undefined' ? window.devicePixelRatio : 1
+
+	const best = selectVariant(variants, width, pixelRatio)
+
+	if (best && !logged.current) {
+		logged.current = true
+		console.log(`[variants:bg] ${sha256.slice(0, 12)}: viewport=${width}px dpr=${pixelRatio} → ${best.variant}(${best.width}px)`)
+	}
+
+	return best ? best.url : src
+}

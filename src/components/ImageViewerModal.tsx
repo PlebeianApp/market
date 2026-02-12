@@ -1,7 +1,8 @@
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { useResponsiveImageUrl } from '@/queries/responsive-image'
 import { X, ZoomIn, ZoomOut, RotateCw, Download, ChevronLeft, ChevronRight } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 interface ImageViewerModalProps {
 	isOpen: boolean
@@ -14,6 +15,11 @@ interface ImageViewerModalProps {
 export function ImageViewerModal({ isOpen, onClose, images, currentIndex, onIndexChange }: ImageViewerModalProps) {
 	const [zoom, setZoom] = useState(100)
 	const [rotation, setRotation] = useState(0)
+	const imageContainerRef = useRef<HTMLDivElement>(null)
+
+	// Resolve responsive variant for the current image (selects best variant for viewport)
+	const currentImageUrl = images[currentIndex]?.url || ''
+	const resolvedSrc = useResponsiveImageUrl(currentImageUrl, imageContainerRef)
 
 	// Reset zoom and rotation when modal opens/closes or image changes
 	useEffect(() => {
@@ -170,9 +176,9 @@ export function ImageViewerModal({ isOpen, onClose, images, currentIndex, onInde
 						</div>
 					)}
 
-					<div className="relative flex items-center justify-center w-full h-full p-16">
+					<div ref={imageContainerRef} className="relative flex items-center justify-center w-full h-full p-16">
 						<img
-							src={images[currentIndex]?.url}
+							src={resolvedSrc}
 							alt={images[currentIndex]?.title}
 							className="max-w-full max-h-full object-contain transition-transform duration-200"
 							style={{
