@@ -2,13 +2,11 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { authStore } from '@/lib/stores/auth'
-import { ndkActions } from '@/lib/stores/ndk'
 import { cn } from '@/lib/utils'
-import type { NDKUserProfile } from '@nostr-dev-kit/ndk'
+import { useProfile } from '@/queries/profiles'
 import { useStore } from '@tanstack/react-store'
 import { useNavigate, useLocation } from '@tanstack/react-router'
 import { Loader2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
 
 interface ProfileProps {
 	compact?: boolean
@@ -16,45 +14,14 @@ interface ProfileProps {
 
 export function Profile({ compact = false }: ProfileProps) {
 	const authState = useStore(authStore)
-	const [profile, setProfile] = useState<NDKUserProfile | null>(null)
-	const [isLoading, setIsLoading] = useState(true)
 	const navigate = useNavigate()
 	const location = useLocation()
 
+	const { data, isPending, fetchStatus } = useProfile(authState.user?.pubkey)
+	const profile = data?.profile ?? null
+
 	// Check if we're on the user's own profile page
 	const isOnOwnProfile = authState.user?.pubkey && location.pathname === `/profile/${authState.user.pubkey}`
-
-	useEffect(() => {
-		if (!authState.user?.pubkey) {
-			setIsLoading(false)
-			return
-		}
-
-		const fetchProfile = async () => {
-			const pubkey = authState.user?.pubkey
-			if (!pubkey) {
-				setIsLoading(false)
-				return
-			}
-
-			try {
-				const ndk = ndkActions.getNDK()
-				if (!ndk) {
-					throw new Error('NDK not initialized')
-				}
-
-				const user = ndk.getUser({ pubkey })
-				const profilePromise = await user.fetchProfile()
-				setProfile(profilePromise)
-			} catch (error) {
-				console.error('Error fetching profile:', error)
-			} finally {
-				setIsLoading(false)
-			}
-		}
-
-		fetchProfile()
-	}, [authState.user?.pubkey])
 
 	const displayName = profile?.name || 'Local User'
 
@@ -64,11 +31,8 @@ export function Profile({ compact = false }: ProfileProps) {
 		}
 	}
 
-	if (isLoading && Date.now() - performance.now() < 500) {
-		return null
-	}
-
-	if (isLoading) {
+	// Only show spinner while actively fetching for the first time
+	if (isPending && fetchStatus === 'fetching') {
 		return (
 			<Button variant="ghost" size={compact ? 'icon' : 'default'} disabled>
 				<Loader2 className={cn('h-4 w-4 animate-spin', !compact && 'mr-2')} />

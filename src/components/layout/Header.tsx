@@ -10,11 +10,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { Nip60Wallet } from '@/feature/wallet/components/Nip60Wallet'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { authActions, authStore } from '@/lib/stores/auth'
-import { ndkActions } from '@/lib/stores/ndk'
 import { notificationStore } from '@/lib/stores/notifications'
 import { uiActions, uiStore } from '@/lib/stores/ui'
 import { useConfigQuery } from '@/queries/config'
-import type { NDKUserProfile } from '@nostr-dev-kit/ndk'
 import { Link, useLocation } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { Loader2, LogOut, Menu, Wallet, X } from 'lucide-react'
@@ -27,7 +25,6 @@ export function Header() {
 	const { unseenOrders, unseenMessages, unseenPurchases } = useStore(notificationStore)
 	const location = useLocation()
 	const [scrollY, setScrollY] = useState(0)
-	const [profile, setProfile] = useState<NDKUserProfile | null>(null)
 	const breakpoint = useBreakpoint()
 	const isMobile = breakpoint === 'sm' || breakpoint === 'md'
 
@@ -101,29 +98,6 @@ export function Header() {
 			}
 		}
 	}
-
-	// Fetch user profile when authenticated
-	useEffect(() => {
-		if (!user?.pubkey || !isAuthenticated) {
-			setProfile(null)
-			return
-		}
-
-		const fetchProfile = async () => {
-			try {
-				const ndk = ndkActions.getNDK()
-				if (!ndk) return
-
-				const ndkUser = ndk.getUser({ pubkey: user.pubkey })
-				const userProfile = await ndkUser.fetchProfile()
-				setProfile(userProfile)
-			} catch (error) {
-				console.error('Error fetching profile:', error)
-			}
-		}
-
-		fetchProfile()
-	}, [user?.pubkey, isAuthenticated])
 
 	function handleLoginClick() {
 		uiActions.openDialog('login')
