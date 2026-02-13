@@ -35,11 +35,18 @@ export const fetchProfileByIdentifier = async (identifier: string): Promise<{ pr
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
+	const timeoutMs = 8000
 	try {
-		const user = await ndk.fetchUser(identifier)
-		if (!user) return { profile: null, user: null }
-		const profile = await user.fetchProfile()
-		return { profile, user }
+		const result = await Promise.race([
+			(async () => {
+				const user = await ndk.fetchUser(identifier)
+				if (!user) return { profile: null, user: null }
+				const profile = await user.fetchProfile()
+				return { profile, user }
+			})(),
+			new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Profile fetch timed out')), timeoutMs)),
+		])
+		return result
 	} catch (e) {
 		console.error('Failed to fetch profile with identifier:', e)
 		return { profile: null, user: null }
@@ -113,6 +120,16 @@ export const useProfileNip05 = (pubkey: string) => {
 	return useQuery({
 		...profileByIdentifierQueryOptions(pubkey),
 		select: getProfileNip05,
+	})
+}
+
+export const useProfile = (pubkey: string | undefined) => {
+	return useQuery({
+		queryKey: profileKeys.details(pubkey ?? ''),
+		queryFn: () => fetchProfileByIdentifier(pubkey!),
+		enabled: !!pubkey,
+		staleTime: 5 * 60 * 1000,
+		retry: 2,
 	})
 }
 

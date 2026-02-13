@@ -1,50 +1,16 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
 import { authStore } from '@/lib/stores/auth'
-import { ndkActions } from '@/lib/stores/ndk'
-import type { NDKUserProfile } from '@nostr-dev-kit/ndk'
+import { useProfile } from '@/queries/profiles'
 import { useStore } from '@tanstack/react-store'
 import { CheckCircle2Icon, InfoIcon } from 'lucide-react'
-import { useEffect, useState } from 'react'
 
 export function ProfileWalletCheck() {
-	const [profile, setProfile] = useState<NDKUserProfile | null>(null)
-	const [isLoading, setIsLoading] = useState(true)
 	const authState = useStore(authStore)
+	const { data, isPending, fetchStatus } = useProfile(authState.user?.pubkey)
+	const profile = data?.profile ?? null
 
-	useEffect(() => {
-		if (!authState.user?.pubkey) {
-			setIsLoading(false)
-			return
-		}
-
-		const fetchProfile = async () => {
-			const pubkey = authState.user?.pubkey
-			if (!pubkey) {
-				setIsLoading(false)
-				return
-			}
-
-			try {
-				const ndk = ndkActions.getNDK()
-				if (!ndk) {
-					throw new Error('NDK not initialized')
-				}
-
-				const user = ndk.getUser({ pubkey })
-				const profilePromise = await user.fetchProfile()
-				setProfile(profilePromise)
-			} catch (error) {
-				console.error('Error fetching profile:', error)
-			} finally {
-				setIsLoading(false)
-			}
-		}
-
-		fetchProfile()
-	}, [authState.user?.pubkey])
-
-	if (isLoading) {
+	if (isPending && fetchStatus === 'fetching') {
 		return (
 			<Card className="border-blue-200 bg-blue-50">
 				<CardHeader>
