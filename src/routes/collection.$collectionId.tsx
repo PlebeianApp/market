@@ -23,6 +23,7 @@ import { useConfigQuery } from '@/queries/config'
 import { useFeaturedCollections } from '@/queries/featured'
 import { useProductsByCollection } from '@/queries/products'
 import { profileByIdentifierQueryOptions, useProfileName } from '@/queries/profiles'
+import { useResponsiveBackgroundUrl } from '@/queries/responsive-image'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
@@ -97,9 +98,10 @@ function RouteComponent() {
 	// Use the market image for homepage background
 	// const marketBackgroundImageUrl = '/images/market-background.jpg'
 	const marketBackgroundImageUrl = currentImages.length > 0 ? currentImages[0][1] : '/images/market-background.jpg'
+	const resolvedBackgroundUrl = useResponsiveBackgroundUrl(marketBackgroundImageUrl)
 	const marketHeroClassName = 'hero-bg-market'
-	// Get background image from current collection (only if not homepage slide)
-	useHeroBackground(marketBackgroundImageUrl, marketHeroClassName)
+	// Get background image from current collection, resolved to best responsive variant
+	useHeroBackground(resolvedBackgroundUrl, marketHeroClassName)
 	const queryClient = useQueryClient()
 
 	// Get app config

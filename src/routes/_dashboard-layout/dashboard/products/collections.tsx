@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { LazyImage } from '@/components/ui/lazy-image'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { authStore } from '@/lib/stores/auth'
 import { collectionFormActions } from '@/lib/stores/collection'
@@ -25,9 +26,14 @@ function CollectionBasicInfo({ collection }: { collection: any }) {
 		<div className="p-4 bg-gray-50 border-t">
 			<div className="space-y-3">
 				{headerImage && (
-					<div className="w-full h-32 bg-gray-200 rounded-md overflow-hidden">
-						<img src={headerImage} alt="Collection header" className="w-full h-full object-cover" />
-					</div>
+					<LazyImage
+						src={headerImage}
+						alt="Collection header"
+						className="object-cover rounded-md"
+						containerClassName="w-full h-32 bg-gray-200 rounded-md"
+						aspectRatio=""
+						lazy={false}
+					/>
 				)}
 				{summary && (
 					<div>

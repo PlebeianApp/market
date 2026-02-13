@@ -1,4 +1,5 @@
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import { LazyImage } from '@/components/ui/lazy-image'
 import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { format } from 'date-fns' // For formatting timestamp
 import {
@@ -98,9 +99,14 @@ const OrderItem = ({ itemTag }: { itemTag: string[] }) => {
 	return (
 		<li className="flex items-center gap-3 py-2 border-b border-gray-100 last:border-0">
 			{images.length > 0 && (
-				<div className="h-12 w-12 flex-shrink-0 rounded-md border overflow-hidden bg-gray-100">
-					<img src={images[0][1]} alt={title || 'Product image'} className="h-full w-full object-cover object-center" />
-				</div>
+				<LazyImage
+					src={images[0][1]}
+					alt={title || 'Product image'}
+					className="object-cover object-center"
+					containerClassName="h-12 w-12 flex-shrink-0 rounded-md border bg-gray-100"
+					aspectRatio=""
+					lazy={false}
+				/>
 			)}
 
 			<div className="flex-1 min-w-0">
@@ -142,9 +148,14 @@ const EmbeddedProductMessage = ({ productData }: { productData: EmbeddedProductE
 
 			<div className="flex gap-3 p-2 bg-gray-50 rounded-md border border-gray-200">
 				{imageUrl && (
-					<div className="w-16 h-16 flex-shrink-0 rounded-md overflow-hidden bg-gray-100">
-						<img src={imageUrl} alt={title} className="w-full h-full object-cover" />
-					</div>
+					<LazyImage
+						src={imageUrl}
+						alt={title}
+						className="object-cover"
+						containerClassName="w-16 h-16 flex-shrink-0 rounded-md bg-gray-100"
+						aspectRatio=""
+						lazy={false}
+					/>
 				)}
 
 				<div className="flex-1 min-w-0">

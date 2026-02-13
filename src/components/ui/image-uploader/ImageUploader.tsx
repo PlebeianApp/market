@@ -2,7 +2,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { uploadFileToBlossom, BLOSSOM_SERVERS } from '@/lib/blossom'
+import { uploadFileToBlossom, uploadResponsiveImage, BLOSSOM_SERVERS } from '@/lib/blossom'
+import { isSupportedImageForVariants } from '@/lib/image-scaler'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 interface ImageUploaderProps {
@@ -47,28 +48,46 @@ export function ImageUploader({
   async function performBlossomUpload(file: File) {
     setIsLoading(true)
     try {
-      const result = await uploadFileToBlossom(file, {
-        preferredServer: selectedServer,
-        onProgress: (progress) => {
-          const pct = Math.round((progress.loaded / progress.total) * 100)
-          console.log(`Upload progress: ${pct}%`)
-        },
-        onError: (error, serverUrl) => {
-          console.error(`Upload error on ${serverUrl}:`, error)
-        },
-        maxRetries: 3,
-        debug: false,
-      })
+      let url: string
+
+      if (isSupportedImageForVariants(file)) {
+        // Use responsive upload: generates variants, uploads each, publishes kind 1063 binding
+        const result = await uploadResponsiveImage(file, {
+          preferredServer: selectedServer,
+          onOverallProgress: (pct) => {
+            console.log(`Upload progress: ${pct}%`)
+          },
+          onError: (error, serverUrl) => {
+            console.error(`Upload error on ${serverUrl}:`, error)
+          },
+          maxRetries: 3,
+        })
+        url = result.url
+      } else {
+        // Plain upload for videos and unsupported types
+        const result = await uploadFileToBlossom(file, {
+          preferredServer: selectedServer,
+          onProgress: (progress) => {
+            const pct = Math.round((progress.loaded / progress.total) * 100)
+            console.log(`Upload progress: ${pct}%`)
+          },
+          onError: (error, serverUrl) => {
+            console.error(`Upload error on ${serverUrl}:`, error)
+          },
+          maxRetries: 3,
+        })
+        url = result.url
+      }
 
       // Update the input value with the uploaded URL
-      setInputValue(result.url)
+      setInputValue(url)
 
       // Keep input editable so URL is visible and can be edited
       setInputEditable(false)
 
       // Save the uploaded image - this will trigger parent to update src prop
       // which will then update localSrc through the useEffect
-      onSave({ url: result.url, index })
+      onSave({ url, index })
 
       toast.success('Image uploaded successfully')
     } catch (err: any) {

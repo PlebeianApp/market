@@ -3,6 +3,7 @@ import { Input } from '@/components/ui/input'
 import { Minus, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useProductTitle, useProductPrice, useProductImages, useProductStock } from '@/queries/products'
+import { LazyImage } from '@/components/ui/lazy-image'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ShippingSelector } from '@/components/ShippingSelector'
 import { cartActions, cartStore } from '@/lib/stores/cart'
@@ -108,11 +109,16 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 				{/* Product Image */}
 				{images && images.length > 0 ? (
 					<div className="h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0 rounded-md border overflow-hidden">
-						<img
+						<LazyImage
 							src={images[0][1]}
 							alt={title || 'Product image'}
-							className="h-full w-full object-cover object-center"
-							style={{ maxWidth: '100%', maxHeight: '100%' }}
+							containerClassName="h-full w-full"
+							aspectRatio=""
+							fallback={
+								<span className="text-xs text-center px-1 leading-tight" style={{ lineHeight: '1.1' }}>
+									{title ? title.split(' ').slice(0, 2).join(' ') : 'No image'}
+								</span>
+							}
 						/>
 					</div>
 				) : (

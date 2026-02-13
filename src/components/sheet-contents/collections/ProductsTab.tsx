@@ -1,4 +1,5 @@
 import { Checkbox } from '@/components/ui/checkbox'
+import { LazyImage } from '@/components/ui/lazy-image'
 import { authStore } from '@/lib/stores/auth'
 import { collectionFormStore, collectionFormActions } from '@/lib/stores/collection'
 import { useProductsByPubkey } from '@/queries/products'
@@ -77,7 +78,16 @@ export function ProductsTab() {
 							/>
 
 							<div className="flex items-center space-x-3 flex-1">
-								{product.imageUrl && <img src={product.imageUrl} alt={product.title} className="w-10 h-10 object-cover rounded" />}
+								{product.imageUrl && (
+									<LazyImage
+										src={product.imageUrl}
+										alt={product.title}
+										className="object-cover rounded"
+										containerClassName="w-10 h-10"
+										aspectRatio=""
+										lazy={false}
+									/>
+								)}
 								<div className="flex-1">
 									<label htmlFor={product.coordinates} className="text-sm font-medium cursor-pointer">
 										{product.title}

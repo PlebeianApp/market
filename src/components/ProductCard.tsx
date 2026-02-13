@@ -16,6 +16,7 @@ import { Check } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { PriceDisplay } from './PriceDisplay'
 import { Button } from './ui/button'
+import { LazyImage } from './ui/lazy-image'
 import { ZapButton } from './ZapButton'
 
 export function ProductCard({ product }: { product: NDKEvent }) {
@@ -95,10 +96,13 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 			{/* Square aspect ratio container for image */}
 			<div className="relative aspect-square overflow-hidden border-b border-zinc-800 block">
 				{images && images.length > 0 ? (
-					<img
+					<LazyImage
 						src={images[0][1]}
 						alt={title}
-						className="w-full h-full object-cover rounded-t-[calc(var(--radius)-1px)] hover:scale-105 transition-transform duration-200"
+						className="rounded-t-[calc(var(--radius)-1px)] hover:scale-105 transition-transform duration-200"
+						containerClassName="w-full h-full"
+						aspectRatio=""
+						fallback={<div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400">No image</div>}
 					/>
 				) : (
 					<div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400 rounded-lg hover:bg-gray-200 transition-colors duration-200">

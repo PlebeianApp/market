@@ -127,6 +127,11 @@ export const messageKeys = {
 		[...messageKeys.all, 'conversation', currentUserPubkey || 'na', otherUserPubkey || 'na'] as const,
 } as const
 
+export const responsiveImageKeys = {
+	all: ['responsiveImage'] as const,
+	byHash: (sha256: string) => [...responsiveImageKeys.all, 'byHash', sha256] as const,
+} as const
+
 export const migrationKeys = {
 	all: ['migration'] as const,
 	nip15Products: (userPubkey: string) => [...migrationKeys.all, 'nip15Products', userPubkey] as const,

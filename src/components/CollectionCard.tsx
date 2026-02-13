@@ -1,3 +1,4 @@
+import { LazyImage } from '@/components/ui/lazy-image'
 import { uiActions } from '@/lib/stores/ui'
 import { getCollectionId, getCollectionImages, getCollectionSummary, getCollectionTitle } from '@/queries/collections.tsx'
 import { profileByIdentifierQueryOptions, useProfileName } from '@/queries/profiles'
@@ -34,10 +35,13 @@ export function CollectionCard({ collection }: { collection: NDKEvent }) {
 				onClick={handleCollectionClick}
 			>
 				{images && images.length > 0 ? (
-					<img
+					<LazyImage
 						src={images[0][1]}
 						alt={title}
-						className="w-full h-full object-cover rounded-t-[calc(var(--radius)-1px)] hover:scale-105 transition-transform duration-200"
+						className="rounded-t-[calc(var(--radius)-1px)] hover:scale-105 transition-transform duration-200"
+						containerClassName="w-full h-full"
+						aspectRatio=""
+						fallback={<div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400">No image</div>}
 					/>
 				) : (
 					<div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400 rounded-lg hover:bg-gray-200 transition-colors duration-200">

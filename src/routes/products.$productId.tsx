@@ -22,6 +22,7 @@ import { addToFeaturedProducts, removeFromFeaturedProducts } from '@/publish/fea
 import { useBlacklistSettings } from '@/queries/blacklist'
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedProducts } from '@/queries/featured'
+import { useResponsiveBackgroundUrl } from '@/queries/responsive-image'
 import {
 	getProductCoordinates,
 	getProductCategories,
@@ -180,12 +181,13 @@ function RouteComponent() {
 		order: image[3] ? parseInt(image[3]) : undefined,
 	}))
 
-	// Get first image URL for background
+	// Get first image URL for background, resolved to best responsive variant
 	const backgroundImageUrl = formattedImages[0]?.url || ''
+	const resolvedBackgroundUrl = useResponsiveBackgroundUrl(backgroundImageUrl)
 
 	// Use the hook to inject dynamic CSS for the background image
 	const heroClassName = `hero-bg-${productId.replace(/[^a-zA-Z0-9]/g, '')}`
-	useHeroBackground(backgroundImageUrl, heroClassName)
+	useHeroBackground(resolvedBackgroundUrl, heroClassName)
 
 	// Keep this route resilient during relay warmup: don't error-boundary the whole page for transient misses.
 	if (!product && (productQuery.isLoading || productQuery.isFetching)) {
