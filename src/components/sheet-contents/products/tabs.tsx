@@ -912,8 +912,8 @@ export function ShippingTab() {
 											min="0"
 											value={shipping.extraCost}
 											onChange={(e) => updateExtraCost(index, e.target.value)}
-											placeholder="Extra cost"
-											className="w-24 text-sm"
+											placeholder="Add cost specific to this product"
+											className="w-40 sm:w-56 md:w-76 text-sm"
 										/>
 										<Button
 											type="button"
