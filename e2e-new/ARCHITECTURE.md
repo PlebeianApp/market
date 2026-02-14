@@ -113,7 +113,7 @@ sequenceDiagram
     SR->>NAK: Publish Kind 30000 (admin list)
     SR->>NAK: Publish Kind 10002 (relay list)
     Note over SR: App settings now on relay
-    PW->>APP: Start dev server (port 3000)
+    PW->>APP: Start dev server (port 3333)
     Note over APP: Fetches & caches appSettings from relay
     PW->>GS: Run global setup (logging only)
     PW->>PW: Run test suites
@@ -130,19 +130,28 @@ import { hexToBytes } from '@noble/hashes/utils'
 export const TEST_APP_PRIVATE_KEY = 'e2e0000000000000000000000000000000000000000000000000000000000001'
 export const TEST_APP_PUBLIC_KEY = getPublicKey(hexToBytes(TEST_APP_PRIVATE_KEY))
 export const RELAY_URL = 'ws://localhost:10547'
-export const BASE_URL = 'http://localhost:3000'
+// Use a dedicated port (3333) to prevent reusing a production-connected dev server.
+// Without this, reuseExistingServer would silently use an existing :3000 server
+// that may be connected to public relays, leaking test data to production.
+export const TEST_PORT = 3333
+export const BASE_URL = `http://localhost:${TEST_PORT}`
 ```
 
 ### Config: `playwright.config.ts`
 
 ```ts
-import { TEST_APP_PRIVATE_KEY, RELAY_URL, BASE_URL } from './test-config'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { TEST_APP_PRIVATE_KEY, RELAY_URL, BASE_URL, TEST_PORT } from './test-config'
+
+const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
 export default defineConfig({
 	testDir: './tests',
 	fullyParallel: false,
 	workers: 1,
 	retries: process.env.CI ? 2 : 0,
+	reporter: process.env.CI ? 'github' : 'list',
 
 	use: {
 		baseURL: BASE_URL,
@@ -155,21 +164,28 @@ export default defineConfig({
 
 	webServer: [
 		{
-			command: 'nak serve',
+			command: 'nak serve --hostname 0.0.0.0',
 			port: 10547,
 			reuseExistingServer: !process.env.CI,
+			stdout: 'pipe',
+			stderr: 'pipe',
 		},
 		{
 			// Seed relay FIRST, then start dev server.
 			// Dev server caches appSettings at startup, so events must
 			// exist on the relay before it initializes.
 			command: 'bun e2e-new/seed-relay.ts && NODE_ENV=test bun dev',
-			port: 3000,
+			cwd: PROJECT_ROOT,
+			port: TEST_PORT,
 			reuseExistingServer: !process.env.CI,
+			stdout: 'pipe',
+			stderr: 'pipe',
 			env: {
 				NODE_ENV: 'test',
+				PORT: String(TEST_PORT),
 				APP_RELAY_URL: RELAY_URL,
 				APP_PRIVATE_KEY: TEST_APP_PRIVATE_KEY,
+				LOCAL_RELAY_ONLY: 'true',
 			},
 		},
 	],
@@ -832,7 +848,7 @@ test.describe('Product Management', () => {
 		// --- Name Tab ---
 		const titleInput = merchantPage.getByTestId('product-name-input')
 		await expect(titleInput).toBeVisible({ timeout: 10_000 })
-		await titleInput.fill('E2E Test Product')
+		await titleInput.fill('E2E New Test Product')
 		await merchantPage.getByTestId('product-description-input').fill('A product created by the e2e test suite')
 		await merchantPage.getByTestId('product-next-button').click()
 
@@ -883,7 +899,7 @@ test.describe('Product Management', () => {
 		}
 
 		// Verify: app redirects to product page after publish
-		await expect(merchantPage.getByRole('heading', { name: 'E2E Test Product', level: 1 })).toBeVisible({ timeout: 15_000 })
+		await expect(merchantPage.getByRole('heading', { name: 'E2E New Test Product', level: 1 })).toBeVisible({ timeout: 15_000 })
 	})
 
 	test('seeded products appear in public marketplace', async ({ page }) => {
@@ -971,40 +987,44 @@ Key points:
 
 ```bash
 # Run all e2e tests (new suite)
-bunx playwright test --config e2e-new/playwright.config.ts
-
-# Run a specific feature
-bunx playwright test --config e2e-new/playwright.config.ts --grep "Product Management"
-
-# Run a specific test file
-bunx playwright test --config e2e-new/playwright.config.ts e2e-new/tests/products.spec.ts
+bun test:e2e-new
 
 # Run with visible browser
-bunx playwright test --config e2e-new/playwright.config.ts --headed
+bun test:e2e-new:headed
 
 # Run with Playwright UI mode (interactive debugging)
-bunx playwright test --config e2e-new/playwright.config.ts --ui
+bun test:e2e-new:ui
 
 # Debug a specific test
-bunx playwright test --config e2e-new/playwright.config.ts --debug e2e-new/tests/products.spec.ts
+bun test:e2e-new:debug
+
+# Run a specific feature
+bun test:e2e-new -- --grep "Product Management"
+
+# Run a specific test file
+bun test:e2e-new -- e2e-new/tests/products.spec.ts
 ```
+
+> **Note**: The `bun test:e2e-new` scripts include `NODE_OPTIONS='--dns-result-order=ipv4first'` to work around macOS IPv4/IPv6 resolution issues (see Pitfalls section).
 
 ### Local Development Workflow
 
 For faster iteration, start the relay and dev server manually:
 
 ```bash
-# Terminal 1: Start relay
-nak serve
+# Terminal 1: Start relay (bind to all interfaces)
+nak serve --hostname 0.0.0.0
 
-# Terminal 2: Seed and start dev server
-bun e2e-new/seed-relay.ts && NODE_ENV=test APP_RELAY_URL=ws://localhost:10547 APP_PRIVATE_KEY=e2e0000000000000000000000000000000000000000000000000000000000001 bun dev
+# Terminal 2: Seed and start dev server on test port
+bun e2e-new/seed-relay.ts && NODE_ENV=test PORT=3333 LOCAL_RELAY_ONLY=true APP_RELAY_URL=ws://localhost:10547 APP_PRIVATE_KEY=e2e0000000000000000000000000000000000000000000000000000000000001 bun dev
 
 # Terminal 3: Run tests (reuses existing servers)
-bunx playwright test --config e2e-new/playwright.config.ts
+bun test:e2e-new
 ```
 
 With `reuseExistingServer: true` (the default for non-CI), Playwright will use the already-running servers instead of starting new ones.
+
+> **Critical**: Always start the dev server on port 3333 (not 3000). If you start it on port 3000, `reuseExistingServer` may silently reuse your production-connected dev server instead.
 
 ---
 
@@ -1041,6 +1061,43 @@ The product publish button validates multiple required fields:
 ### Terms & Conditions Modal
 
 A modal T&C dialog blocks all dashboard interaction until accepted. It checks `localStorage.getItem('plebeian_terms_accepted')`. Pre-set this in the auth fixture's `addInitScript` to prevent it from appearing.
+
+### Production Data Leak via `reuseExistingServer`
+
+**This is the most critical pitfall.** Playwright's `reuseExistingServer: true` silently reuses any server already running on the target port. If a developer has a normal dev server running on port 3000 (connected to production relays), Playwright will use it instead of starting the isolated test server. Test data (products, profiles) gets published to production relays.
+
+**Solution**: Use a dedicated test port (3333) that no normal dev workflow uses. The test server is configured with `PORT: String(TEST_PORT)` in the webServer env. This ensures `reuseExistingServer` only reuses a server that was started with test configuration.
+
+### IPv4/IPv6 Mismatch on macOS
+
+`nak serve` binds to IPv4 `127.0.0.1` by default. Node.js (used by Playwright) resolves `localhost` to `::1` (IPv6) on macOS, causing connection failures. Playwright's webServer health check times out after 60 seconds with no useful error message.
+
+**Solution**: Two-part fix:
+
+1. `nak serve --hostname 0.0.0.0` — binds to all interfaces (both IPv4 and IPv6)
+2. `NODE_OPTIONS='--dns-result-order=ipv4first'` in package.json scripts — forces Node.js to prefer IPv4
+
+> **Note**: Using `url: 'http://127.0.0.1:10547'` instead of `port: 10547` doesn't work because `nak serve` returns HTTP 404 on GET requests, which Playwright rejects (it only accepts 2xx/3xx/400-403).
+
+### Playwright webServer `cwd`
+
+Playwright runs webServer commands from the **config file's directory** (e.g., `e2e-new/`), not the project root. The command `bun e2e-new/seed-relay.ts` would resolve to `e2e-new/e2e-new/seed-relay.ts`. **Solution**: Set `cwd: PROJECT_ROOT` on the webServer entry.
+
+### ESM Module Compatibility
+
+Playwright loads the config as an ES module where `__dirname` is not available. Use `import.meta.url` with `fileURLToPath` instead:
+
+```ts
+const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+```
+
+### Reporter Choice
+
+Playwright's `html` reporter produces no terminal output during the test run, making it look like the process is hanging. Use `list` reporter for local development and `github` for CI.
+
+### NDK Outbox Model in Tests
+
+The NDK outbox model discovers and connects to additional relays beyond the explicit list, which would leak test data to public relays. The app disables outbox when `stage !== 'development'` (see `src/lib/stores/ndk.ts`). Since `NODE_ENV='test'` maps to the `'development'` stage via `determineStage()` in `src/index.tsx`, outbox is automatically disabled for test runs. The `LOCAL_RELAY_ONLY=true` env provides an additional safety layer.
 
 ---
 

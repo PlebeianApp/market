@@ -27,7 +27,7 @@ test.describe('Product Management', () => {
 		// --- Name Tab ---
 		const titleInput = merchantPage.getByTestId('product-name-input')
 		await expect(titleInput).toBeVisible({ timeout: 10_000 })
-		await titleInput.fill('E2E Test Product')
+		await titleInput.fill('E2E LEAK Test Product')
 
 		const descriptionInput = merchantPage.getByTestId('product-description-input')
 		await descriptionInput.fill('A product created by the e2e test suite')
@@ -102,7 +102,7 @@ test.describe('Product Management', () => {
 		}
 
 		// Verify: the product page should show the product title (app redirects after publish)
-		await expect(merchantPage.getByRole('heading', { name: 'E2E Test Product', level: 1 })).toBeVisible({ timeout: 15_000 })
+		await expect(merchantPage.getByRole('heading', { name: 'E2E New Test Product', level: 1 })).toBeVisible({ timeout: 15_000 })
 	})
 
 	test('seeded products appear in public marketplace', async ({ page }) => {

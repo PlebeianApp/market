@@ -12,4 +12,8 @@ export const TEST_APP_PRIVATE_KEY = 'e2e0000000000000000000000000000000000000000
 export const TEST_APP_PUBLIC_KEY = getPublicKey(hexToBytes(TEST_APP_PRIVATE_KEY))
 
 export const RELAY_URL = 'ws://localhost:10547'
-export const BASE_URL = 'http://localhost:3000'
+// Use a dedicated port (3333) to prevent reusing a production-connected dev server.
+// Without this, reuseExistingServer would silently use an existing :3000 server
+// that may be connected to public relays, leaking test data to production.
+export const TEST_PORT = 3333
+export const BASE_URL = `http://localhost:${TEST_PORT}`

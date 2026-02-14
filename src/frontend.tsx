@@ -7,7 +7,9 @@ import { createQueryClient } from './lib/queryClient'
 import { routeTree } from './routeTree.gen'
 import type { AppRouterContext } from './lib/router-utils'
 import { configActions, configStore } from './lib/stores/config'
-import { ndkActions } from './lib/stores/ndk'
+import { ndkActions, ndkStore } from './lib/stores/ndk'
+import { authActions } from './lib/stores/auth'
+import { walletActions } from './lib/stores/wallet'
 import { UpdateAvailableDialog } from './components/UpdateAvailableDialog'
 
 if (process.env.NODE_ENV !== 'development') {
@@ -114,10 +116,27 @@ function App() {
 				}
 				const config = await response.json()
 				configActions.setConfig(config)
-				// Ensure we always connect to the instance relay even without a signer
+				console.log('Fetched config:', { stage: config.stage, appRelay: config.appRelay })
+
+				// Initialize NDK AFTER config is loaded so stage-based relay selection works.
+				// Previously this ran at module level (before config), causing development/test
+				// environments to connect to public relays instead of only the local relay.
+				ndkActions.initialize()
 				ndkActions.ensureAppRelayFromConfig()
+
+				// Log which relays NDK will connect to (dry-run verification)
+				const relayUrls = ndkStore.state.explicitRelayUrls
+				console.log(`NDK initialized with ${relayUrls.length} relay(s):`, relayUrls)
+
+				ndkActions.connect().catch((err) => {
+					console.warn('Background NDK connection issue:', err)
+				})
+
+				// Auth and wallet init depend on NDK being ready
+				void authActions.getAuthFromLocalStorageAndLogin()
+				void walletActions.initialize()
+
 				setConfigLoaded(true)
-				console.log('Fetched config:', config)
 			} catch (err) {
 				console.error('Config fetch error:', err)
 				setError(err instanceof Error ? err.message : 'Failed to load configuration')

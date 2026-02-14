@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, devices } from '@playwright/test'
-import { TEST_APP_PRIVATE_KEY, RELAY_URL, BASE_URL } from './test-config'
+import { TEST_APP_PRIVATE_KEY, RELAY_URL, BASE_URL, TEST_PORT } from './test-config'
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -42,14 +42,16 @@ export default defineConfig({
 			// exist on the relay before it initializes.
 			command: 'bun e2e-new/seed-relay.ts && NODE_ENV=test bun dev',
 			cwd: PROJECT_ROOT,
-			port: 3000,
+			port: TEST_PORT,
 			reuseExistingServer: !process.env.CI,
 			stdout: 'pipe',
 			stderr: 'pipe',
 			env: {
 				NODE_ENV: 'test',
+				PORT: String(TEST_PORT),
 				APP_RELAY_URL: RELAY_URL,
 				APP_PRIVATE_KEY: TEST_APP_PRIVATE_KEY,
+				LOCAL_RELAY_ONLY: 'true',
 			},
 		},
 	],
