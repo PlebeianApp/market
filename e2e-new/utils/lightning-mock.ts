@@ -42,6 +42,9 @@ export class LightningMock {
 	/** All invoices "paid" via the WebLN mock. */
 	paidInvoices: string[] = []
 
+	/** Maps each bolt11 to its corresponding zap request JSON (for multi-invoice scenarios). */
+	zapRequestsByBolt11: Map<string, string> = new Map()
+
 	private constructor() {}
 
 	/**
@@ -98,18 +101,19 @@ export class LightningMock {
 		await page.route(`https://${MOCK_LNURL_DOMAIN}/**`, async (route) => {
 			const url = new URL(route.request().url())
 
-			// Capture zap request if present (Kind 9734 JSON, URL-encoded)
-			const nostrParam = url.searchParams.get('nostr')
-			if (nostrParam) {
-				mock.lastZapRequest = nostrParam
-			}
-
 			// Extract amount for a more realistic-looking invoice
 			const amountMsats = url.searchParams.get('amount') || '21000'
 
 			// Generate a fake but unique BOLT11 string
 			const bolt11 = `lnbc${amountMsats}n1mock${++invoiceCounter}${Date.now()}`
 			mock.lastBolt11 = bolt11
+
+			// Capture zap request if present (Kind 9734 JSON, URL-encoded)
+			const nostrParam = url.searchParams.get('nostr')
+			if (nostrParam) {
+				mock.lastZapRequest = nostrParam
+				mock.zapRequestsByBolt11.set(bolt11, nostrParam)
+			}
 
 			await route.fulfill({
 				status: 200,
@@ -134,11 +138,14 @@ export class LightningMock {
 		try {
 			const tags: string[][] = [['bolt11', bolt11]]
 
+			// Look up the zap request for this specific bolt11, falling back to the last one
+			const zapRequestJson = this.zapRequestsByBolt11.get(bolt11) || this.lastZapRequest
+
 			// Extract recipient pubkey and zap request from stored state
-			if (this.lastZapRequest) {
+			if (zapRequestJson) {
 				try {
-					const zapRequest = JSON.parse(this.lastZapRequest)
-					tags.push(['description', this.lastZapRequest])
+					const zapRequest = JSON.parse(zapRequestJson)
+					tags.push(['description', zapRequestJson])
 
 					// Extract 'p' tag from zap request
 					const pTag = zapRequest.tags?.find((t: string[]) => t[0] === 'p')

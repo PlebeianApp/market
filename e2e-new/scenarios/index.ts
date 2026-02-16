@@ -3,7 +3,7 @@ import { Relay, useWebSocketImplementation } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils'
 import WebSocket from 'ws'
 import { devUser1, devUser2, WALLETED_USER_LUD16 } from '../../src/lib/fixtures'
-import { RELAY_URL, TEST_APP_PUBLIC_KEY } from '../test-config'
+import { RELAY_URL, TEST_APP_PRIVATE_KEY, TEST_APP_PUBLIC_KEY } from '../test-config'
 
 useWebSocketImplementation(WebSocket)
 
@@ -57,6 +57,7 @@ async function seedBase(relay: Relay) {
 	console.log('  Seeding: base (user profiles)')
 	await seedUserProfile(relay, devUser1, 'TestMerchant', 'Test Merchant')
 	await seedUserProfile(relay, devUser2, 'TestBuyer', 'Test Buyer')
+	await seedUserProfile(relay, { sk: TEST_APP_PRIVATE_KEY, pk: TEST_APP_PUBLIC_KEY }, 'TestApp', 'Test App')
 }
 
 async function seedMerchant(relay: Relay) {
