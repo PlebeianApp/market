@@ -57,7 +57,9 @@ export function InvoiceCard({ invoice, index, totalInvoices, isBuyer, isGenerati
 						<CreditCard className="w-5 h-5 text-gray-400 flex-shrink-0" />
 					)}
 					<div className="min-w-0">
-						<h4 className="font-medium truncate">{invoice.type === 'merchant' ? 'Merchant Payment' : invoice.recipientName}</h4>
+						<h4 className="font-medium truncate">
+							{invoice.type === 'merchant' ? `${invoice.recipientName} (Merchant)` : `${invoice.recipientName} (v4v)`}
+						</h4>
 						<p className="text-sm text-muted-foreground">
 							{invoice.amount.toLocaleString()} sats
 							{invoiceToUse.expiresAt && (
