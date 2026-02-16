@@ -2,7 +2,7 @@ import { test as base, expect, type Page } from '@playwright/test'
 import { RelayMonitor } from './relay-monitor'
 import { setupAuthContext, type TestUser } from './auth'
 import { ensureScenario, type ScenarioName } from '../scenarios'
-import { devUser1, devUser2 } from '../../src/lib/fixtures'
+import { devUser1, devUser2, devUser3 } from '../../src/lib/fixtures'
 
 type TestFixtures = {
 	/** Page with devUser1 logged in (merchant / app owner) */
@@ -10,6 +10,9 @@ type TestFixtures = {
 
 	/** Page with devUser2 logged in (buyer) */
 	buyerPage: Page
+
+	/** Page with devUser3 logged in (no seeded profile — fresh user) */
+	newUserPage: Page
 
 	/** Relay monitor attached to the default page */
 	relayMonitor: RelayMonitor
@@ -48,6 +51,20 @@ export const test = base.extend<TestFixtures>({
 		await ensureScenario(scenario)
 		const context = await browser.newContext()
 		await setupAuthContext(context, devUser2)
+		const page = await context.newPage()
+
+		await page.goto('/')
+		await page.waitForLoadState('networkidle')
+		await expect(page.locator('header')).toBeVisible({ timeout: 10_000 })
+
+		await use(page)
+		await context.close()
+	},
+
+	newUserPage: async ({ browser, scenario }, use) => {
+		await ensureScenario(scenario)
+		const context = await browser.newContext()
+		await setupAuthContext(context, devUser3)
 		const page = await context.newPage()
 
 		await page.goto('/')
