@@ -83,8 +83,10 @@ async function seedMerchant(relay: Relay) {
 		detail: WALLETED_USER_LUD16,
 	})
 
-	// Seed V4V shares (empty array = user takes 100%, bypasses V4V setup dialog)
-	await seedV4VShares(relay, devUser1.sk)
+	// Seed V4V shares with 10% going to the app (community share)
+	await seedV4VShares(relay, devUser1.sk, [['zap', TEST_APP_PUBLIC_KEY, '0.1']])
+
+	const user1ShippingRefs = [`30406:${devUser1.pk}:worldwide-standard`, `30406:${devUser1.pk}:digital-delivery`]
 
 	await seedProduct(relay, devUser1.sk, {
 		title: 'Bitcoin Hardware Wallet',
@@ -93,6 +95,8 @@ async function seedMerchant(relay: Relay) {
 		currency: 'SATS',
 		status: 'on-sale',
 		category: 'Bitcoin',
+		stock: '10',
+		shippingOptions: user1ShippingRefs,
 	})
 
 	await seedProduct(relay, devUser1.sk, {
@@ -102,6 +106,8 @@ async function seedMerchant(relay: Relay) {
 		currency: 'SATS',
 		status: 'on-sale',
 		category: 'Clothing',
+		stock: '10',
+		shippingOptions: user1ShippingRefs,
 	})
 }
 
@@ -128,6 +134,8 @@ async function seedMarketplace(relay: Relay) {
 		currency: 'SATS',
 		status: 'on-sale',
 		category: 'Bitcoin',
+		stock: '10',
+		shippingOptions: [`30406:${devUser2.pk}:express-shipping`],
 	})
 }
 
@@ -191,7 +199,16 @@ async function seedPaymentDetail(relay: Relay, skHex: string, appPubkey: string,
 async function seedProduct(
 	relay: Relay,
 	skHex: string,
-	opts: { title: string; description: string; price: string; currency: string; status: string; category: string },
+	opts: {
+		title: string
+		description: string
+		price: string
+		currency: string
+		status: string
+		category: string
+		stock?: string
+		shippingOptions?: string[]
+	},
 ) {
 	const dTag = opts.title.toLowerCase().replace(/\s+/g, '-')
 	await publish(relay, skHex, {
@@ -205,22 +222,25 @@ async function seedProduct(
 			['status', opts.status],
 			['t', opts.category],
 			['image', 'https://cdn.satellite.earth/f8f1513ec22f966626dc05342a3bb1f36096d28dd0e6eeae640b5df44f2c7c84.png'],
+			...(opts.stock ? [['stock', opts.stock]] : []),
+			...(opts.shippingOptions ? opts.shippingOptions.map((ref) => ['shipping_option', ref]) : []),
 		],
 	})
 	console.log(`    Published product: ${opts.title}`)
 }
 
-async function seedV4VShares(relay: Relay, skHex: string) {
+async function seedV4VShares(relay: Relay, skHex: string, shares: string[][] = []) {
 	await publish(relay, skHex, {
 		kind: 30078,
 		created_at: Math.floor(Date.now() / 1000),
-		content: JSON.stringify([]),
+		content: JSON.stringify(shares),
 		tags: [
 			['d', 'v4v-default'],
 			['l', 'v4v_share'],
 		],
 	})
-	console.log('    Published V4V shares (empty = 100% to user)')
+	const pct = shares.length > 0 ? shares.reduce((sum, s) => sum + parseFloat(s[2] || '0') * 100, 0) : 0
+	console.log(`    Published V4V shares (${pct}% to community)`)
 }
 
 /**
