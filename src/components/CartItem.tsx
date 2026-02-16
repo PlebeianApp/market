@@ -103,7 +103,7 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 	}
 
 	return (
-		<li className="flex flex-col py-4 border-b border-gray-300 [.bg-gray-100_&]:border-white">
+		<li className="flex flex-col py-4 border-b border-gray-300 [.bg-gray-100_&]:border-white" data-testid={`cart-item-${productId}`}>
 			<div className="flex flex-col sm:flex-row sm:items-center gap-4">
 				{/* Product Image */}
 				{images && images.length > 0 ? (
@@ -137,7 +137,14 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 					{/* Quantity Controls */}
 					<div className="flex items-center mt-2">
 						<div className="flex items-center space-x-2">
-							<Button variant="outline" size="icon" className="h-8 w-8" onClick={handleDecrementClick} disabled={amount <= 1}>
+							<Button
+								variant="outline"
+								size="icon"
+								className="h-8 w-8"
+								onClick={handleDecrementClick}
+								disabled={amount <= 1}
+								data-testid="cart-item-decrement"
+							>
 								<Minus size={14} />
 							</Button>
 
@@ -149,9 +156,17 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 								onBlur={handleQuantityBlur}
 								min={1}
 								max={stockQuantity}
+								data-testid="cart-item-quantity"
 							/>
 
-							<Button variant="outline" size="icon" className="h-8 w-8" onClick={handleIncrementClick} disabled={amount >= stockQuantity}>
+							<Button
+								variant="outline"
+								size="icon"
+								className="h-8 w-8"
+								onClick={handleIncrementClick}
+								disabled={amount >= stockQuantity}
+								data-testid="cart-item-increment"
+							>
 								<Plus size={14} />
 							</Button>
 						</div>
@@ -162,6 +177,7 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 							size="icon"
 							className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 sm:self-center sm:ml-auto self-start"
 							onClick={() => onRemove(productId)}
+							data-testid="cart-item-remove"
 						>
 							<Trash2 size={16} />
 						</Button>

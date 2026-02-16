@@ -36,7 +36,7 @@ export function PaymentDialog({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-lg">
+			<DialogContent data-testid="payment-dialog" className="max-w-lg">
 				<DialogHeader>
 					<DialogTitle className="flex items-center justify-between">{title}</DialogTitle>
 					<DialogDescription>

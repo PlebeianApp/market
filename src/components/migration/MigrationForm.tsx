@@ -9,6 +9,7 @@ import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
 import { authStore } from '@/lib/stores/auth'
 import { ndkActions, useNDK } from '@/lib/stores/ndk'
 import { publishMigratedProduct, type MigrationProgress } from '@/publish/migration'
+import { parseNip15Event } from '@/queries/migration'
 import { migrationKeys } from '@/queries/queryKeyFactory'
 import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useCollectionsByPubkey } from '@/queries/collections'
@@ -855,55 +856,4 @@ export function MigrationForm({ nip15Event, onBack, onSuccess }: MigrationFormPr
 			</div>
 		</div>
 	)
-}
-
-/**
- * Parses a NIP-15 event (kind 30018) into a readable format
- */
-function parseNip15Event(event: NDKEvent) {
-	let productData: {
-		id: string
-		name: string
-		description: string
-		price: string
-		currency: string
-		quantity: number | null
-		images: string[]
-		specs: Array<[string, string]>
-		stall_id?: string
-	} = {
-		id: '',
-		name: '',
-		description: '',
-		price: '0',
-		currency: 'USD',
-		quantity: null,
-		images: [],
-		specs: [],
-	}
-
-	try {
-		const content = JSON.parse(event.content)
-		productData = {
-			id: content.id || '',
-			name: content.name || '',
-			description: content.description || '',
-			price: content.price?.toString() || '0',
-			currency: content.currency || 'USD',
-			quantity: content.quantity ?? null,
-			images: content.images || [],
-			specs: content.specs || [],
-			stall_id: content.stall_id,
-		}
-	} catch (error) {
-		console.error('Failed to parse NIP-15 event content:', error)
-		// Fallback: try to extract from tags
-		const dTag = event.tags.find((tag) => tag[0] === 'd')
-		if (dTag) {
-			productData.id = dTag[1] || ''
-		}
-		productData.description = event.content || ''
-	}
-
-	return productData
 }

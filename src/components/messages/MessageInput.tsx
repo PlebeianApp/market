@@ -28,6 +28,7 @@ export function MessageInput({ onSendMessage, isSending }: MessageInputProps) {
 		<div className="flex-wrap items-center gap-2 p-4 border-t bg-background sticky bottom-0">
 			<div className="relative w-full">
 				<Textarea
+					data-testid="message-textarea"
 					value={message}
 					onChange={(e) => setMessage(e.target.value)}
 					onKeyPress={handleKeyPress}
@@ -37,6 +38,7 @@ export function MessageInput({ onSendMessage, isSending }: MessageInputProps) {
 					disabled={isSending}
 				/>
 				<Button
+					data-testid="send-message-button"
 					onClick={handleSend}
 					disabled={isSending || message.trim() === ''}
 					size="icon"

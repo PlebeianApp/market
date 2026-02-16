@@ -4,10 +4,11 @@ import { uiActions } from '@/lib/stores/ui'
 import { getShippingEvent, getShippingPickupAddressString, getShippingService } from '@/queries/shipping'
 import { useStore } from '@tanstack/react-store'
 import { Check, MapPin, MessageCircle, SkipForward } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import type { CheckoutFormData } from './ShippingAddressForm'
 import { useProfileName } from '@/queries/profiles'
+import { formatSatsAmount, groupInvoicesByStatus, isPostPaymentState, extractUniqueSellers } from '@/lib/utils/orderUtils'
 
 interface OrderFinalizeComponentProps {
 	shippingData: CheckoutFormData | null
@@ -21,10 +22,6 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 	const { cart } = useStore(cartStore)
 	const [pickupAddresses, setPickupAddresses] = useState<Array<{ sellerName: string; address: string }>>([])
 	const [isAllPickup, setIsAllPickup] = useState(false)
-
-	const formatSats = (sats: number): string => {
-		return Math.round(sats).toLocaleString()
-	}
 
 	// Check for pickup orders and collect pickup addresses
 	useEffect(() => {
@@ -80,21 +77,16 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 		checkPickupOrders()
 	}, [cart.products])
 
-	const allInvoicesPaid = invoices.every((invoice) => invoice.status === 'paid')
-	const allInvoicesCompleted = invoices.every((invoice) => invoice.status === 'paid' || invoice.status === 'skipped')
-	const paidInvoices = invoices.filter((invoice) => invoice.status === 'paid')
-	const skippedInvoices = invoices.filter((invoice) => invoice.status === 'skipped')
-	const pendingInvoices = invoices.filter((invoice) => invoice.status === 'pending')
-	const expiredInvoices = invoices.filter((invoice) => invoice.status === 'expired')
-
-	// If this is the final summary (after payments), show completion state
-	const isPostPayment = invoices.length > 0 && invoices.some((invoice) => invoice.status !== 'pending')
-
-	// Extract unique seller pubkeys from invoices
-	const sellerPubkeys = useMemo(() => {
-		const pubkeys = invoices.filter((invoice) => invoice.type === 'merchant').map((invoice) => invoice.recipientPubkey)
-		return Array.from(new Set(pubkeys))
-	}, [invoices])
+	const {
+		paid: paidInvoices,
+		skipped: skippedInvoices,
+		pending: pendingInvoices,
+		expired: expiredInvoices,
+		allPaid: allInvoicesPaid,
+		allCompleted: allInvoicesCompleted,
+	} = groupInvoicesByStatus(invoices)
+	const isPostPayment = isPostPaymentState(invoices)
+	const sellerPubkeys = extractUniqueSellers(invoices)
 
 	const handleMessageSeller = (pubkey: string) => {
 		uiActions.openConversation(pubkey)
@@ -117,7 +109,7 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 	}
 
 	return (
-		<div className="space-y-6 pb-8">
+		<div data-testid="order-finalize" className="space-y-6 pb-8">
 			{/* Payment Status - only show if invoices exist */}
 			{isPostPayment && (
 				<div className="space-y-3">
@@ -224,12 +216,12 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 				<div className="space-y-2">
 					<div className="flex justify-between text-sm">
 						<span className="text-gray-600">Subtotal:</span>
-						<span className="font-medium">{formatSats(totalInSats)} sats</span>
+						<span className="font-medium">{formatSatsAmount(totalInSats)} sats</span>
 					</div>
 					<div className="border-t pt-2 mt-3">
 						<div className="flex justify-between font-semibold text-lg">
 							<span>Total:</span>
-							<span>{formatSats(totalInSats)} sats</span>
+							<span>{formatSatsAmount(totalInSats)} sats</span>
 						</div>
 					</div>
 				</div>
@@ -250,7 +242,7 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 									{invoice.status === 'expired' && <span className="w-4 h-4 rounded-full bg-red-400"></span>}
 								</div>
 								<div className="text-right">
-									<span className="text-sm font-medium">{formatSats(invoice.amount)} sats</span>
+									<span className="text-sm font-medium">{formatSatsAmount(invoice.amount)} sats</span>
 									{isPostPayment && <div className="text-xs text-gray-500 capitalize">{invoice.status}</div>}
 								</div>
 							</div>

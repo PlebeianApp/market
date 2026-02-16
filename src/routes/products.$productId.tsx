@@ -316,7 +316,7 @@ function RouteComponent() {
 	}
 
 	return (
-		<div className="flex flex-col gap-4">
+		<div className="flex flex-col gap-4" data-testid="product-detail-page">
 			<div className="relative z-10">
 				<div className={`relative hero-container-product ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-black'}`}>
 					<div className="hero-overlays">
@@ -338,7 +338,9 @@ function RouteComponent() {
 
 						<div className="flex flex-col gap-4 text-white w-full max-w-[600px] mx-auto lg:max-w-none">
 							<div className="flex items-center justify-between">
-								<h1 className="text-3xl font-semibold lg:pl-0">{title}</h1>
+								<h1 className="text-3xl font-semibold lg:pl-0" data-testid="product-title">
+									{title}
+								</h1>
 								<div className="flex items-center gap-2">
 									<ZapButton event={product} />
 									<Button
@@ -365,14 +367,16 @@ function RouteComponent() {
 								</div>
 							</div>
 
-							<PriceDisplay
-								priceValue={price}
-								originalCurrency={priceTag?.[2] || 'SATS'}
-								className="space-y-1"
-								showSatsPrice={true}
-								showOriginalPrice={true}
-								showRootCurrency={true}
-							/>
+							<div data-testid="product-price">
+								<PriceDisplay
+									priceValue={price}
+									originalCurrency={priceTag?.[2] || 'SATS'}
+									className="space-y-1"
+									showSatsPrice={true}
+									showOriginalPrice={true}
+									showRootCurrency={true}
+								/>
+							</div>
 
 							{visibility === 'pre-order' ? (
 								<Badge variant="primary" className="bg-blue-500">
@@ -414,6 +418,7 @@ function RouteComponent() {
 													size="icon"
 													onClick={() => setQuantity(Math.max(1, quantity - 1))}
 													disabled={quantity <= 1}
+													data-testid="minus-quantity-button"
 												>
 													<Minus className="h-6 w-6" />
 												</Button>
@@ -429,17 +434,24 @@ function RouteComponent() {
 													min={1}
 													max={stock}
 													type="number"
+													data-testid="quantity-input"
 												/>
 												<Button
 													variant="tertiary"
 													size="icon"
 													onClick={() => setQuantity(Math.min(stock || quantity + 1, quantity + 1))}
 													disabled={quantity >= (stock || quantity)}
+													data-testid="plus-quantity-button"
 												>
 													<Plus className="h-6 w-6" />
 												</Button>
 											</div>
-											<Button variant="secondary" onClick={handleAddToCartClick} disabled={isOutOfStock || visibility === 'hidden'}>
+											<Button
+												variant="secondary"
+												onClick={handleAddToCartClick}
+												disabled={isOutOfStock || visibility === 'hidden'}
+												data-testid="add-to-cart-button"
+											>
 												{visibility === 'hidden'
 													? 'Not Available'
 													: isOutOfStock

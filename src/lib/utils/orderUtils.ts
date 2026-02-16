@@ -108,6 +108,45 @@ export function updateInvoiceStatus(invoiceSet: OrderInvoiceSet, invoiceId: stri
 	}
 }
 
+import type { PaymentInvoiceData } from '@/lib/types/invoice'
+
+/**
+ * Format a sats amount for display (number only, no suffix).
+ */
+export function formatSatsAmount(sats: number): string {
+	return Math.round(sats).toLocaleString()
+}
+
+/**
+ * Group invoices by their payment status.
+ */
+export function groupInvoicesByStatus(invoices: PaymentInvoiceData[]) {
+	return {
+		paid: invoices.filter((invoice) => invoice.status === 'paid'),
+		skipped: invoices.filter((invoice) => invoice.status === 'skipped'),
+		pending: invoices.filter((invoice) => invoice.status === 'pending'),
+		expired: invoices.filter((invoice) => invoice.status === 'expired'),
+		allPaid: invoices.every((invoice) => invoice.status === 'paid'),
+		allCompleted: invoices.every((invoice) => invoice.status === 'paid' || invoice.status === 'skipped'),
+	}
+}
+
+/**
+ * Determine if checkout is in the post-payment phase
+ * (at least one invoice has moved beyond 'pending').
+ */
+export function isPostPaymentState(invoices: PaymentInvoiceData[]): boolean {
+	return invoices.length > 0 && invoices.some((invoice) => invoice.status !== 'pending')
+}
+
+/**
+ * Extract unique seller pubkeys from merchant-type invoices.
+ */
+export function extractUniqueSellers(invoices: PaymentInvoiceData[]): string[] {
+	const pubkeys = invoices.filter((invoice) => invoice.type === 'merchant').map((invoice) => invoice.recipientPubkey)
+	return Array.from(new Set(pubkeys))
+}
+
 import { ORDER_STATUS } from '../schemas/order'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { getOrderStatus } from '@/queries/orders'

@@ -120,7 +120,7 @@ export function InfiniteProductList({
 	}
 
 	return (
-		<div className={cn('w-full max-w-full overflow-hidden', className)} ref={containerRef}>
+		<div className={cn('w-full max-w-full overflow-hidden', className)} ref={containerRef} data-testid="infinite-product-list">
 			{/* Title */}
 			{title && (
 				<div className="mb-4">
@@ -138,7 +138,14 @@ export function InfiniteProductList({
 			{/* Load more button */}
 			{hasMore && (
 				<div className="flex justify-center py-8 min-h-[80px] items-center">
-					<Button onClick={loadMore} variant="outline" size="lg" className="min-w-[200px] h-12" disabled={isLoading}>
+					<Button
+						onClick={loadMore}
+						variant="outline"
+						size="lg"
+						className="min-w-[200px] h-12"
+						disabled={isLoading}
+						data-testid="load-more-button"
+					>
 						{isLoading ? (
 							<>
 								<Loader2 className="w-4 h-4 animate-spin mr-2" />

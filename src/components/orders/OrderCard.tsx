@@ -31,6 +31,7 @@ export function OrderCard({ orderData, userPubkey }: OrderCardProps) {
 
 	return (
 		<Link
+			data-testid="order-card"
 			to="/dashboard/orders/$orderId"
 			params={{ orderId: orderData.order.id }}
 			className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent transition-colors"

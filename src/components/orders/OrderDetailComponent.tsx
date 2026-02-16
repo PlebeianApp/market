@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { authStore } from '@/lib/stores/auth'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import { cn } from '@/lib/utils'
-import { getCoordsFromATag } from '@/lib/utils/coords'
 import { getStatusStyles } from '@/lib/utils/orderUtils'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { getProductId, productSmartQueryOptions } from '@/queries/products'
@@ -30,7 +29,15 @@ import { OrderActions } from './OrderActions'
 import { TimelineEventCard } from './TimelineEventCard'
 
 // Imported helpers and components
-import { getOrderId, getOrderItems, getSellerPubkey, getShippingRef, getTotalAmount } from './orderDetailHelpers'
+import {
+	getOrderId,
+	getOrderItems,
+	getSellerPubkey,
+	getShippingRef,
+	getTotalAmount,
+	parseOrderItemRefs,
+	parseShippingCoordinates,
+} from './orderDetailHelpers'
 import { useOrderInvoices } from './useOrderInvoices'
 import {
 	DeliveryAddressDisplay,
@@ -89,28 +96,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 	// Get product references and quantities from order
 	const orderItems = getOrderItems(orderEvent)
-	const parsedOrderItems = useMemo(
-		() =>
-			orderItems.map((item) => {
-				let coords: { identifier: string; pubkey: string } | null = null
-
-				if (item.productRef.includes(':')) {
-					try {
-						const parsed = getCoordsFromATag(item.productRef)
-						coords = { identifier: parsed.identifier, pubkey: parsed.pubkey }
-					} catch (err) {
-						console.warn('Failed to parse product reference as a-tag', err)
-					}
-				}
-
-				return {
-					...item,
-					lookupId: coords?.identifier || item.productRef,
-					itemSellerPubkey: coords?.pubkey || sellerPubkey,
-				}
-			}),
-		[orderItems, sellerPubkey],
-	)
+	const parsedOrderItems = useMemo(() => parseOrderItemRefs(orderItems, sellerPubkey), [orderItems, sellerPubkey])
 
 	// Create a quantity map keyed by the product lookup id (prefer d-tag over event id)
 	const quantityMap = useMemo(() => {
@@ -157,18 +143,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	})
 
 	// Parse shipping reference and fetch shipping option details
-	const parsedShippingData = useMemo(() => {
-		if (!shippingRef) return null
-
-		if (shippingRef.includes(':')) {
-			const parts = shippingRef.split(':')
-			if (parts.length === 3 && parts[0] === '30406') {
-				return { pubkey: parts[1], dTag: parts[2] }
-			}
-		}
-
-		return null
-	}, [shippingRef])
+	const parsedShippingData = useMemo(() => parseShippingCoordinates(shippingRef), [shippingRef])
 
 	// Fetch shipping option by coordinates if we have parsed data
 	const { data: shippingOptionByCoords } = useQuery({
@@ -252,7 +227,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	].sort((a, b) => (b.event.created_at || 0) - (a.event.created_at || 0))
 
 	return (
-		<div className="container mx-auto px-4 py-4">
+		<div data-testid="order-detail" className="container mx-auto px-4 py-4">
 			<div className="space-y-6">
 				{/* Order Header */}
 				<Card>
@@ -285,7 +260,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 								value={orderEvent.created_at ? format(new Date(orderEvent.created_at * 1000), 'dd.MM.yyyy, HH:mm') : 'N/A'}
 							/>
 							<DetailField label="Role:" value={isBuyer ? 'Buyer' : isOrderSeller ? 'Seller' : 'Observer'} />
-							<DetailField label="Status:" value={orderStatus.charAt(0).toUpperCase() + orderStatus.slice(1)} />
+							<DetailField label="Status:" value={orderStatus.charAt(0).toUpperCase() + orderStatus.slice(1)} data-testid="order-status" />
 						</div>
 					</CardContent>
 				</Card>

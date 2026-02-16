@@ -98,7 +98,7 @@ function Index() {
 	}
 
 	return (
-		<div>
+		<div data-testid="homepage">
 			{/* Hero Section */}
 			<div className={`relative hero-container ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-gray-700'}`}>
 				<div className="hero-overlays">

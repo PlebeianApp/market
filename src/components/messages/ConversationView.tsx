@@ -88,7 +88,7 @@ export function ConversationView({ otherUserPubkey, onTitleChange, showHeader = 
 	}
 
 	return (
-		<div className="flex flex-col h-full">
+		<div data-testid="conversation-view" className="flex flex-col h-full">
 			{/* Optional Header */}
 			{showHeader && (
 				<div className="flex-shrink-0 border-b bg-background p-4">
@@ -97,7 +97,7 @@ export function ConversationView({ otherUserPubkey, onTitleChange, showHeader = 
 			)}
 
 			{/* Messages Area */}
-			<div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+			<div data-testid="messages-list" className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
 				{isLoading && (
 					<div className="flex justify-center items-center h-full">
 						<Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -113,7 +113,7 @@ export function ConversationView({ otherUserPubkey, onTitleChange, showHeader = 
 					</div>
 				)}
 				{!isLoading && !error && messages && messages.length === 0 && (
-					<div className="text-center text-muted-foreground pt-10">
+					<div data-testid="empty-state" className="text-center text-muted-foreground pt-10">
 						<p>No messages yet. Start the conversation!</p>
 					</div>
 				)}

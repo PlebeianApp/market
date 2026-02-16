@@ -190,3 +190,57 @@ export const migratedEventsQueryOptions = (userPubkey: string) => {
 		refetchOnWindowFocus: false, // Don't refetch on window focus
 	})
 }
+
+export interface Nip15ParsedProduct {
+	id: string
+	name: string
+	description: string
+	price: string
+	currency: string
+	quantity: number | null
+	images: string[]
+	specs: Array<[string, string]>
+	stall_id?: string
+}
+
+/**
+ * Parses a NIP-15 event (kind 30018) into a readable product format.
+ * Handles JSON content with fallback to tag extraction on parse failure.
+ */
+export function parseNip15Event(event: NDKEvent): Nip15ParsedProduct {
+	let productData: Nip15ParsedProduct = {
+		id: '',
+		name: '',
+		description: '',
+		price: '0',
+		currency: 'USD',
+		quantity: null,
+		images: [],
+		specs: [],
+	}
+
+	try {
+		const content = JSON.parse(event.content)
+		productData = {
+			id: content.id || '',
+			name: content.name || '',
+			description: content.description || '',
+			price: content.price?.toString() || '0',
+			currency: content.currency || 'USD',
+			quantity: content.quantity ?? null,
+			images: content.images || [],
+			specs: content.specs || [],
+			stall_id: content.stall_id,
+		}
+	} catch (error) {
+		console.error('Failed to parse NIP-15 event content:', error)
+		// Fallback: try to extract from tags
+		const dTag = event.tags.find((tag) => tag[0] === 'd')
+		if (dTag) {
+			productData.id = dTag[1] || ''
+		}
+		productData.description = event.content || ''
+	}
+
+	return productData
+}

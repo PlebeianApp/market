@@ -1,4 +1,5 @@
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
+import { getCoordsFromATag } from '@/lib/utils/coords'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 
 /**
@@ -188,4 +189,46 @@ export const getStatusColor = (status: string) => {
 		default:
 			return 'bg-gray-100 text-gray-800 border-gray-300'
 	}
+}
+
+/**
+ * Parse order item product references, resolving a-tag coordinates when present.
+ */
+export function parseOrderItemRefs(
+	orderItems: Array<{ productRef: string; quantity: number }>,
+	fallbackSellerPubkey: string,
+): Array<{ productRef: string; quantity: number; lookupId: string; itemSellerPubkey: string }> {
+	return orderItems.map((item) => {
+		let coords: { identifier: string; pubkey: string } | null = null
+
+		if (item.productRef.includes(':')) {
+			try {
+				const parsed = getCoordsFromATag(item.productRef)
+				coords = { identifier: parsed.identifier, pubkey: parsed.pubkey }
+			} catch {
+				// Not a valid a-tag, fall through
+			}
+		}
+
+		return {
+			...item,
+			lookupId: coords?.identifier || item.productRef,
+			itemSellerPubkey: coords?.pubkey || fallbackSellerPubkey,
+		}
+	})
+}
+
+/**
+ * Parse a shipping reference string into pubkey + dTag if it's a 30406 coordinate.
+ * Returns null if the reference is not a valid coordinate.
+ */
+export function parseShippingCoordinates(shippingRef: string | undefined): { pubkey: string; dTag: string } | null {
+	if (!shippingRef || !shippingRef.includes(':')) return null
+
+	const parts = shippingRef.split(':')
+	if (parts.length === 3 && parts[0] === '30406') {
+		return { pubkey: parts[1], dTag: parts[2] }
+	}
+
+	return null
 }

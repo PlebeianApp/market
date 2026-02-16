@@ -89,10 +89,13 @@ export function FeaturedSections({ className, maxItemsPerSection = 5 }: Featured
 	let sectionIndex = 0
 
 	return (
-		<div className={cn('w-full max-w-full overflow-hidden', className)}>
+		<div className={cn('w-full max-w-full overflow-hidden', className)} data-testid="featured-sections">
 			{/* Featured Products */}
 			{displayProducts.length > 0 && (
-				<section className={cn('w-full max-w-full py-12 overflow-hidden', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
+				<section
+					data-testid="featured-products"
+					className={cn('w-full max-w-full py-12 overflow-hidden', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}
+				>
 					<div className="px-4 sm:px-8 max-w-full">
 						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-2">
 							<div className="flex items-center gap-3">
@@ -120,7 +123,10 @@ export function FeaturedSections({ className, maxItemsPerSection = 5 }: Featured
 
 			{/* Featured Collections */}
 			{displayCollections.length > 0 && (
-				<section className={cn('w-full max-w-full py-12 overflow-hidden', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
+				<section
+					data-testid="featured-collections"
+					className={cn('w-full max-w-full py-12 overflow-hidden', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}
+				>
 					<div className="px-4 sm:px-8 max-w-full">
 						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-2">
 							<div className="flex items-center gap-3">
@@ -148,7 +154,10 @@ export function FeaturedSections({ className, maxItemsPerSection = 5 }: Featured
 
 			{/* Featured Users */}
 			{displayUsers.length > 0 && (
-				<section className={cn('w-full max-w-full py-12 overflow-hidden', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
+				<section
+					data-testid="featured-sellers"
+					className={cn('w-full max-w-full py-12 overflow-hidden', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}
+				>
 					<div className="px-4 sm:px-8 max-w-full">
 						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-2">
 							<div className="flex items-center gap-3">

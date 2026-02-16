@@ -18,10 +18,13 @@ export function CartButton() {
 	return (
 		<Tooltip>
 			<TooltipTrigger asChild>
-				<Button variant="primary" className="p-2 relative hover:[&>span]:text-secondary" onClick={handleClick}>
+				<Button variant="primary" className="p-2 relative hover:[&>span]:text-secondary" onClick={handleClick} data-testid="cart-button">
 					<span className="i-basket w-6 h-6" />
 					{totalItems > 0 && (
-						<span className="absolute -top-1 -right-1 bg-secondary text-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+						<span
+							className="absolute -top-1 -right-1 bg-secondary text-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center"
+							data-testid="cart-item-count"
+						>
 							{totalItems > 99 ? '99+' : totalItems}
 						</span>
 					)}

@@ -5,14 +5,21 @@ import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore, type ProductFormTab } from '@/lib/stores/product'
 import { uiActions } from '@/lib/stores/ui'
-import { hasProductFormDraft } from '@/lib/utils/productFormStorage'
-import { useShippingOptionsByPubkey, isShippingDeleted } from '@/queries/shipping'
+import {
+	validateProduct,
+	hasValidName as checkValidName,
+	hasValidDescription as checkValidDescription,
+	hasValidImages as checkValidImages,
+	hasValidShipping as checkValidShipping,
+} from '@/lib/utils/productValidator'
+import { useProductFormNavigation } from '@/hooks/useProductFormNavigation'
+import { useProductDraft } from '@/hooks/useProductDraft'
 import { useV4VShares } from '@/queries/v4v'
 import { useForm } from '@tanstack/react-form'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { NameTab } from './NameTab'
 import { CategoryTab, DetailTab, ImagesTab, ShippingTab, SpecTab } from './tabs'
@@ -29,29 +36,20 @@ export function ProductFormContent({
 	productEventId?: string | null
 }) {
 	const [isPublishing, setIsPublishing] = useState(false)
-	const [hasDraft, setHasDraft] = useState(false)
 	const navigate = useNavigate()
 	const queryClient = useQueryClient()
 
 	// Get form state from store, including editingProductId
-	const formState = useStore(productFormStore)
-	const { activeTab, editingProductId, isDirty, shippings, formSessionId, name, description, images } = formState
+	const { activeTab, editingProductId, isDirty, shippings, formSessionId, name, description, images } = useStore(productFormStore)
 
 	// Compute validation states
-	const hasValidShipping = shippings.some((ship) => ship.shipping && ship.shipping.id)
-	const hasValidName = name.trim().length > 0
-	const hasValidDescription = description.trim().length > 0
-	const hasValidImages = images.length > 0
+	const hasValidShipping = checkValidShipping(shippings)
+	const hasValidName = checkValidName(name)
+	const hasValidDescription = checkValidDescription(description)
+	const hasValidImages = checkValidImages(images)
 
 	// Compute validation message for tooltip
-	const getValidationMessage = () => {
-		const issues: string[] = []
-		if (!hasValidName) issues.push('Product name is required')
-		if (!hasValidDescription) issues.push('Description is required')
-		if (!hasValidImages) issues.push('At least one image is required')
-		if (!hasValidShipping) issues.push('At least one shipping option is required')
-		return issues
-	}
+	const getValidationMessage = () => validateProduct({ name, description, images, shippings }).issues
 
 	// Get user pubkey from auth store directly to avoid timing issues
 	const authState = useStore(authStore)
@@ -62,147 +60,23 @@ export function ProductFormContent({
 	const hasV4VSetup = v4vShares && v4vShares.length > 0
 	const needsV4VSetup = !editingProductId && !hasV4VSetup && !isLoadingV4V
 
-	// Check if user has any shipping options configured (for tab ordering)
-	// Query is only enabled when userPubkey is available
-	const {
-		data: userShippingOptions,
-		isLoading: isLoadingUserShipping,
-		isFetched: isShippingFetched,
-	} = useShippingOptionsByPubkey(userPubkey)
+	// Auto-manage tab navigation (shipping-first flow for new users)
+	const { shouldShowShippingFirst } = useProductFormNavigation({
+		userPubkey,
+		editingProductId,
+		activeTab,
+		formSessionId,
+		hasValidShipping,
+	})
 
-	// Determine if we should show shipping tab first (user has no shipping options)
-	const shouldShowShippingFirst = useMemo(() => {
-		// Don't redirect if editing an existing product
-		if (editingProductId) return false
-		// Don't redirect if pubkey not loaded yet (query is disabled)
-		if (!userPubkey) return false
-		// Don't redirect if we haven't fetched shipping data yet
-		if (!isShippingFetched) return false
-		// Don't redirect while loading
-		if (isLoadingUserShipping) return false
-		// Check if user has any non-deleted shipping options
-		// (query data might be cached and include deleted items)
-		if (!userShippingOptions || userShippingOptions.length === 0) return true
-		// Filter out any deleted shipping options from cached data
-		const activeShippingOptions = userShippingOptions.filter((event) => {
-			const dTag = event.tags?.find((t: string[]) => t[0] === 'd')?.[1]
-			return dTag ? !isShippingDeleted(dTag) : true
-		})
-		return activeShippingOptions.length === 0
-	}, [editingProductId, userShippingOptions, isLoadingUserShipping, userPubkey, isShippingFetched])
-
-	// Set initial tab to Shipping when user has no shipping options
-	// Track which formSessionId we've handled to avoid re-triggering on same session
-	const handledSessionIdRef = useRef<number | null>(null)
-
-	useEffect(() => {
-		// Only auto-switch to shipping tab if:
-		// 1. We haven't handled this session yet
-		// 2. User should see shipping first (no shipping options)
-		// 3. We're NOT already on the shipping tab
-		if (handledSessionIdRef.current !== formSessionId && shouldShowShippingFirst && activeTab !== 'shipping') {
-			productFormActions.updateValues({ activeTab: 'shipping' })
-			handledSessionIdRef.current = formSessionId
-		}
-	}, [shouldShowShippingFirst, activeTab, formSessionId])
-
-	// Track if we started with shipping first (no shipping options)
-	// This is used to determine if we should auto-navigate to name tab after first shipping is added
-	const startedWithShippingFirstRef = useRef<boolean>(false)
-
-	// Track if we've started with shipping first in this session
-	useEffect(() => {
-		if (shouldShowShippingFirst && activeTab === 'shipping') {
-			startedWithShippingFirstRef.current = true
-		}
-	}, [shouldShowShippingFirst, activeTab])
-
-	// Auto-navigate to 'name' tab after first shipping option is added when we started with shipping first
-	useEffect(() => {
-		if (startedWithShippingFirstRef.current && hasValidShipping && activeTab === 'shipping') {
-			// First shipping option added, navigate to name tab
-			productFormActions.updateValues({ activeTab: 'name' })
-			// Reset the flag so we don't auto-navigate again
-			startedWithShippingFirstRef.current = false
-		}
-	}, [hasValidShipping, activeTab])
-
-	// Check for persisted draft on mount (for drafts from previous sessions)
-	const checkForPersistedDraft = useCallback(async () => {
-		const draftKey = productDTag || editingProductId
-		if (draftKey) {
-			const exists = await hasProductFormDraft(draftKey)
-			if (exists) {
-				setHasDraft(true)
-			}
-		}
-	}, [productDTag, editingProductId])
-
-	// Update hasDraft when isDirty changes (for immediate feedback on current session changes)
-	useEffect(() => {
-		if (editingProductId && isDirty) {
-			setHasDraft(true)
-		}
-	}, [editingProductId, isDirty])
-
-	// Store the discard function in a ref to avoid stale closures in the header action
-	const discardEditsRef = useRef<(() => Promise<void>) | null>(null)
-
-	// Update the ref whenever dependencies change
-	useEffect(() => {
-		discardEditsRef.current = async () => {
-			const draftKey = productDTag || editingProductId
-			if (!draftKey) return
-
-			// Preserve current tab state before reset
-			const currentActiveTab = formState.activeTab
-
-			await productFormActions.clearDraftForProduct(draftKey)
-
-			// If we have a productEventId, reload the product from the network using the event ID
-			// Pass the preserved tab state to avoid flicker
-			if (productEventId && productDTag) {
-				productFormActions.setEditingProductId(productDTag)
-				await productFormActions.loadProductForEdit(productEventId, {
-					preserveTabState: { activeTab: currentActiveTab },
-				})
-			} else {
-				// No product to reload, just reset but restore tabs
-				productFormActions.reset()
-				productFormActions.setTabState(currentActiveTab)
-			}
-
-			setHasDraft(false)
-			uiActions.clearDashboardHeaderAction()
-		}
-	}, [productDTag, editingProductId, productEventId, formState.activeTab])
-
-	// Stable callback that reads from the ref
-	const handleDiscardEdits = useCallback(() => {
-		discardEditsRef.current?.()
-	}, [])
-
-	// Check for persisted draft on mount
-	useEffect(() => {
-		checkForPersistedDraft()
-	}, [checkForPersistedDraft])
-
-	// Update dashboard header action when draft state changes
-	useEffect(() => {
-		if (editingProductId && hasDraft) {
-			uiActions.setDashboardHeaderAction({
-				label: 'Discard Edits',
-				onClick: handleDiscardEdits,
-			})
-		} else {
-			uiActions.clearDashboardHeaderAction()
-		}
-
-		// Clean up on unmount
-		return () => {
-			uiActions.clearDashboardHeaderAction()
-		}
-	}, [editingProductId, hasDraft, handleDiscardEdits])
+	// Draft persistence and "Discard Edits" header action
+	useProductDraft({
+		productDTag: productDTag ?? null,
+		productEventId: productEventId ?? null,
+		editingProductId,
+		isDirty,
+		activeTab,
+	})
 
 	const form = useForm({
 		defaultValues: {},

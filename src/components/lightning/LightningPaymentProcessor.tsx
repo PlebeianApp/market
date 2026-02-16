@@ -8,6 +8,7 @@ import { ndkActions, ndkStore } from '@/lib/stores/ndk'
 import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
 import type { PaymentProof } from '@/lib/payments/proof'
 import { paymentProofToReceiptPreimage } from '@/lib/payments/proof'
+import { resolvePaymentProof } from '@/lib/payments/paymentOrchestrator'
 import { handleNWCPayment, handleWebLNPayment, hasWebLN, validatePreimage } from '@/lib/utils/payment.utils'
 import { copyToClipboard } from '@/lib/utils'
 import { NDKEvent, NDKUser, NDKZapper } from '@nostr-dev-kit/ndk'
@@ -370,32 +371,20 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 					walletPreimageRef.current = walletResult.preimage
 				}
 
-				const receipt = await waitForZapReceipt(invoice, 20000)
-				const receiptPreimage = receipt?.receiptPreimage
-				const receiptHasValidPreimage = !!receiptPreimage && validatePreimage(invoice, receiptPreimage)
+				const proof = await resolvePaymentProof({
+					bolt11: invoice,
+					method: 'nwc',
+					walletResult: { preimage: walletPreimageRef.current ?? undefined },
+					requireZapReceipt,
+					waitForZapReceipt,
+				})
 
-				if (receiptHasValidPreimage) {
-					handlePaymentSuccess({ type: 'preimage', preimage: receiptPreimage! })
-					return
-				}
-
-				if (receipt) {
-					handlePaymentSuccess({ type: 'zap_receipt', eventId: receipt.eventId })
-					return
-				}
-
-				if (requireZapReceipt) {
+				if (proof) {
+					handlePaymentSuccess(proof)
+				} else {
 					setIsPaymentInProgress(false)
 					toast.info('Payment sent. Waiting for zap receipt confirmation…')
-					return
 				}
-
-				if (walletPreimageRef.current) {
-					handlePaymentSuccess({ type: 'preimage', preimage: walletPreimageRef.current })
-					return
-				}
-
-				handlePaymentSuccess({ type: 'wallet_ack', method: 'nwc', atMs: Date.now() })
 			} catch (err) {
 				console.error('❌ NWC payment failed:', err)
 				setIsPaymentInProgress(false)
@@ -441,32 +430,20 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 					walletPreimageRef.current = walletResult.preimage
 				}
 
-				const receipt = await waitForZapReceipt(invoice, 20000)
-				const receiptPreimage = receipt?.receiptPreimage
-				const receiptHasValidPreimage = !!receiptPreimage && validatePreimage(invoice, receiptPreimage)
+				const proof = await resolvePaymentProof({
+					bolt11: invoice,
+					method: 'webln',
+					walletResult: { preimage: walletPreimageRef.current ?? undefined },
+					requireZapReceipt,
+					waitForZapReceipt,
+				})
 
-				if (receiptHasValidPreimage) {
-					handlePaymentSuccess({ type: 'preimage', preimage: receiptPreimage! })
-					return
-				}
-
-				if (receipt) {
-					handlePaymentSuccess({ type: 'zap_receipt', eventId: receipt.eventId })
-					return
-				}
-
-				if (requireZapReceipt) {
+				if (proof) {
+					handlePaymentSuccess(proof)
+				} else {
 					setIsPaymentInProgress(false)
 					toast.info('Payment sent. Waiting for zap receipt confirmation…')
-					return
 				}
-
-				if (walletPreimageRef.current) {
-					handlePaymentSuccess({ type: 'preimage', preimage: walletPreimageRef.current })
-					return
-				}
-
-				handlePaymentSuccess({ type: 'wallet_ack', method: 'webln', atMs: Date.now() })
 			} catch (error) {
 				console.error('❌ WebLN payment failed:', error)
 				setIsPaymentInProgress(false)
@@ -506,32 +483,20 @@ export const LightningPaymentProcessor = forwardRef<LightningPaymentProcessorRef
 					walletPreimageRef.current = walletResult.preimage
 				}
 
-				const receipt = await waitForZapReceipt(invoice, 20000)
-				const receiptPreimage = receipt?.receiptPreimage
-				const receiptHasValidPreimage = !!receiptPreimage && validatePreimage(invoice, receiptPreimage)
+				const proof = await resolvePaymentProof({
+					bolt11: invoice,
+					method: 'nip60',
+					walletResult: { preimage: walletPreimageRef.current ?? undefined },
+					requireZapReceipt,
+					waitForZapReceipt,
+				})
 
-				if (receiptHasValidPreimage) {
-					handlePaymentSuccess({ type: 'preimage', preimage: receiptPreimage! })
-					return
-				}
-
-				if (receipt) {
-					handlePaymentSuccess({ type: 'zap_receipt', eventId: receipt.eventId })
-					return
-				}
-
-				if (requireZapReceipt) {
+				if (proof) {
+					handlePaymentSuccess(proof)
+				} else {
 					setIsPaymentInProgress(false)
 					toast.info('Payment sent. Waiting for zap receipt confirmation…')
-					return
 				}
-
-				if (walletPreimageRef.current) {
-					handlePaymentSuccess({ type: 'preimage', preimage: walletPreimageRef.current })
-					return
-				}
-
-				handlePaymentSuccess({ type: 'wallet_ack', method: 'nip60', atMs: Date.now() })
 			} catch (error) {
 				console.error('❌ NIP-60 wallet payment failed:', error)
 				setIsPaymentInProgress(false)

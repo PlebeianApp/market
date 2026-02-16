@@ -34,6 +34,7 @@ export function ConversationListItem({ conversation }: ConversationListItemProps
 
 	return (
 		<Link
+			data-testid="conversation-list-item"
 			to={`/dashboard/sales/messages/${pubkey}`}
 			className="block w-full"
 			activeProps={{

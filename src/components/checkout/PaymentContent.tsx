@@ -8,6 +8,13 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { WalletSelector } from '@/components/checkout/WalletSelector'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
+import {
+	getPayableInvoiceIds,
+	findInvoiceIndex,
+	removeFromQueue,
+	countCompletedInvoices,
+	isInvoiceCompleted,
+} from '@/lib/payments/bulkPaymentQueue'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react'
 import { toast } from 'sonner'
@@ -72,17 +79,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 			currentInvoiceRef.current = currentInvoice
 		}, [invoices, currentInvoice])
 
-		// Count completed invoices from parent state (single source of truth)
-		// In 'order' mode, only 'paid' counts as completed (skipped can be re-attempted)
-		const isCompletedForProgress = (inv: PaymentInvoiceData) =>
-			inv.status === 'paid' || inv.status === 'skipped' || inv.status === 'expired'
-
-		const completedCount = useMemo(() => {
-			if (mode === 'order') {
-				return invoices.filter((inv) => inv.status === 'paid').length
-			}
-			return invoices.filter(isCompletedForProgress).length
-		}, [invoices, mode])
+		const completedCount = useMemo(() => countCompletedInvoices(invoices, mode), [invoices, mode])
 
 		// Build payment data for current invoice only
 		const currentPaymentData = useMemo((): LightningPaymentData | null => {
@@ -130,7 +127,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 			}
 
 			if (!currentSnapshot || currentSnapshot.id !== targetId) {
-				const targetIndex = invoicesSnapshot.findIndex((inv) => inv.id === targetId)
+				const targetIndex = findInvoiceIndex(invoicesSnapshot, targetId)
 				if (targetIndex === -1) {
 					// Invoice disappeared; drop and continue
 					bulkQueueRef.current.shift()
@@ -169,7 +166,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 				onPaymentComplete?.(invoiceId, result.preimage || '')
 
 				if (isBulkPayingRef.current) {
-					bulkQueueRef.current = bulkQueueRef.current.filter((id) => id !== invoiceId)
+					bulkQueueRef.current = removeFromQueue(bulkQueueRef.current, invoiceId)
 					setTimeout(triggerNextBulkPayment, 250)
 				}
 			},
@@ -202,7 +199,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 			console.log(`⏭️ Skipping payment for invoice: ${currentInvoice.id}`)
 			onSkipPayment?.(currentInvoice.id)
 			if (isBulkPayingRef.current) {
-				bulkQueueRef.current = bulkQueueRef.current.filter((id) => id !== currentInvoice.id)
+				bulkQueueRef.current = removeFromQueue(bulkQueueRef.current, currentInvoice.id)
 				setTimeout(triggerNextBulkPayment, 200)
 			}
 		}, [currentInvoice, onSkipPayment, triggerNextBulkPayment])
@@ -219,7 +216,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 				return
 			}
 
-			const payableInvoiceIds = invoices.filter((inv) => inv.status === 'pending' || inv.status === 'failed').map((inv) => inv.id)
+			const payableInvoiceIds = getPayableInvoiceIds(invoices)
 			if (payableInvoiceIds.length === 0) {
 				toast.info('No pending invoices to pay')
 				return
@@ -238,9 +235,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 			return <div className="text-sm text-muted-foreground p-4">No invoice to display</div>
 		}
 
-		// Check if current invoice is already completed
-		// In 'order' mode, only 'paid' is considered completed (skipped can be re-attempted)
-		const isCurrentCompleted = mode === 'order' ? currentInvoice.status === 'paid' : isCompletedForProgress(currentInvoice)
+		const isCurrentCompleted = isInvoiceCompleted(currentInvoice, mode)
 
 		// Get wallet info for current invoice
 		const sellerPubkey = currentInvoice.recipientPubkey
@@ -249,7 +244,7 @@ export const PaymentContent = forwardRef<PaymentContentRef, PaymentContentProps>
 		const isMerchantInvoice = currentInvoice.type === 'merchant'
 
 		return (
-			<div className="space-y-6 lg:px-6 lg:pb-6">
+			<div data-testid="payment-content" className="space-y-6 lg:px-6 lg:pb-6">
 				{/* Progress bar */}
 				{invoices.length > 1 && (
 					<div className="space-y-2">

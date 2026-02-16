@@ -97,7 +97,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 	}
 
 	return (
-		<div className={`flex flex-col h-full overflow-hidden px-4 sm:px-6 ${className}`}>
+		<div className={`flex flex-col h-full overflow-hidden px-4 sm:px-6 ${className}`} data-testid="cart-content">
 			{missingShippingCount > 0 && (
 				<div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
 					<div className="flex">
@@ -213,7 +213,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 							<p className="text-sm">Shipping:</p>
 							<p className="text-sm">{formatSats(totalShippingInSats)} sat</p>
 						</div>
-						<div className="flex justify-between text-lg font-bold">
+						<div className="flex justify-between text-lg font-bold" data-testid="cart-total">
 							<p>Total:</p>
 							<p>{formatSats(totalInSats)} sat</p>
 						</div>
@@ -228,6 +228,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 								className="flex-1 text-red-500 hover:bg-red-50 hover:text-red-600 border-red-200"
 								onClick={() => cartActions.clear()}
 								disabled={totalItems === 0}
+								data-testid="cart-clear-button"
 							>
 								Clear
 							</Button>
@@ -236,6 +237,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 								className="flex-1 btn-product-banner"
 								disabled={!hasAllShippingMethods || totalItems === 0}
 								title={!hasAllShippingMethods ? 'Please select shipping options for all items' : ''}
+								data-testid="cart-checkout-button"
 								onClick={() => {
 									uiActions.closeDrawer('cart')
 									navigate({ to: '/checkout' })
