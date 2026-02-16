@@ -89,23 +89,29 @@ export function getMainRelay(): string | undefined {
 
 /**
  * Get the write relay(s) for the current stage
- * Staging writes to staging relay + bug relay, all other stages write to all connected relays
+ * Staging: staging relay + bug relay
+ * Development: main relay only (prevents leaking test/dev data to public relays)
+ * Production: all connected relays
  */
 export function getWriteRelays(): string[] {
 	const stage = getCurrentStage()
 	if (stage === 'staging') {
 		const mainRelay = getMainRelay()
-		// Filter out undefined main relay
-		return mainRelay ? [mainRelay, BUG_RELAY] : [BUG_RELAY] // Staging writes to staging relay + bug relay
+		return mainRelay ? [mainRelay, BUG_RELAY] : [BUG_RELAY]
 	}
-	// Production and development write to all connected relays
+	if (stage === 'development') {
+		const mainRelay = getMainRelay()
+		return mainRelay ? [mainRelay] : []
+	}
+	// Production: write to all connected relays
 	return ndkStore.state.explicitRelayUrls
 }
 
 /**
- * Get an NDKRelaySet configured for write operations
- * In staging, this returns a relay set containing only the staging relay
- * In other environments, returns undefined to use default behavior (all relays)
+ * Get an NDKRelaySet configured for write operations.
+ * Staging: only staging relay + bug relay
+ * Development: only the main relay (prevents leaking to public relays)
+ * Production: undefined (NDK default = all connected relays)
  */
 export function getWriteRelaySet(): NDKRelaySet | undefined {
 	const ndk = ndkStore.state.ndk
@@ -117,8 +123,13 @@ export function getWriteRelaySet(): NDKRelaySet | undefined {
 		console.log(`📝 Staging mode: restricting writes to ${writeRelays.join(', ')}`)
 		return NDKRelaySet.fromRelayUrls(writeRelays, ndk)
 	}
+	if (stage === 'development') {
+		const writeRelays = getWriteRelays()
+		console.log(`📝 Development mode: restricting writes to ${writeRelays.join(', ')}`)
+		return NDKRelaySet.fromRelayUrls(writeRelays, ndk)
+	}
 
-	// Non-staging: return undefined to use default behavior
+	// Production: return undefined to use default behavior (all relays)
 	return undefined
 }
 
