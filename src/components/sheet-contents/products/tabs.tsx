@@ -1052,30 +1052,26 @@ export function ShippingTab() {
 					</div>
 				) : (
 					<div className="grid gap-3">
-						{availableShippingOptions.map((option) => (
-							<div key={option.id} className="flex items-center gap-3 p-3 border rounded-md hover:bg-gray-50">
-								{option.service && <ServiceIcon service={option.service} />}
-								<div className="flex-1">
-									<div className="font-medium">{option.name}</div>
-									<div className="text-sm text-gray-500">
-										{option.cost} {option.currency} •{' '}
-										{option.countries && option.countries.length > 1
-											? `${option.countries.length} countries`
-											: option.countries?.[0] || 'Worldwide'}{' '}
-										• {option.service || 'Unknown service'}
+						{availableShippingOptions
+							.filter((option) => !shippings.some((s) => s.shipping?.id === option.id))
+							.map((option) => (
+								<div key={option.id} className="flex items-center gap-3 p-3 border rounded-md hover:bg-gray-50">
+									{option.service && <ServiceIcon service={option.service} />}
+									<div className="flex-1">
+										<div className="font-medium">{option.name}</div>
+										<div className="text-sm text-gray-500">
+											{option.cost} {option.currency} •{' '}
+											{option.countries && option.countries.length > 1
+												? `${option.countries.length} countries`
+												: option.countries?.[0] || 'Worldwide'}{' '}
+											• {option.service || 'Unknown service'}
+										</div>
 									</div>
+									<Button type="button" variant="outline" size="sm" onClick={() => addShippingOption(option)}>
+										Add
+									</Button>
 								</div>
-								<Button
-									type="button"
-									variant="outline"
-									size="sm"
-									onClick={() => addShippingOption(option)}
-									disabled={shippings.some((s) => s.shipping?.id === option.id)}
-								>
-									{shippings.some((s) => s.shipping?.id === option.id) ? 'Added' : 'Add'}
-								</Button>
-							</div>
-						))}
+							))}
 					</div>
 				)}
 			</div>
