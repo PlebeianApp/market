@@ -5,6 +5,7 @@ import { cartActions } from './cart'
 import { fetchProductsByPubkey } from '@/queries/products'
 import { hasAcceptedTerms, TERMS_ACCEPTED_KEY } from '@/components/dialogs/TermsConditionsDialog'
 import { uiActions } from './ui'
+import { withTimeout } from '@/lib/utils/timeout'
 
 export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
 export const NOSTR_LOCAL_SIGNER_KEY = 'nostr_local_signer_key'
@@ -177,7 +178,12 @@ export const authActions = {
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 			const signer = new NDKNip46Signer(ndk, bunkerUrl, localSigner)
-			await signer.blockUntilReady()
+
+			// NDK's blockUntilReady() can hang forever if the remote signer or
+			// the NIP-46 relay is unresponsive. Wrap it with a timeout so the
+			// UI can recover and show an error instead of spinning indefinitely.
+			await withTimeout(signer.blockUntilReady(), 30_000, 'NIP-46 bunker connection')
+
 			ndkActions.setSigner(signer)
 			const user = await signer.user()
 
@@ -189,6 +195,10 @@ export const authActions = {
 
 			return user
 		} catch (error) {
+			// On failure, clear the stored bunker credentials so a stale URL
+			// doesn't cause auto-login to hang on every page load.
+			localStorage.removeItem(NOSTR_LOCAL_SIGNER_KEY)
+			localStorage.removeItem(NOSTR_CONNECT_KEY)
 			authStore.setState((state) => ({
 				...state,
 				isAuthenticated: false,

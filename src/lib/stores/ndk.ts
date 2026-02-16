@@ -7,6 +7,7 @@ import { Store } from '@tanstack/store'
 import { configStore } from './config'
 import { nip60Actions } from './nip60'
 import { walletActions, walletStore, type Wallet } from './wallet'
+import { withTimeout } from '@/lib/utils/timeout'
 
 export interface NDKState {
 	ndk: NDK | null
@@ -45,10 +46,7 @@ let connectZapPromise: Promise<void> | null = null
  */
 async function connectNdkWithTimeout(ndk: NDK, timeoutMs: number, label: string): Promise<boolean> {
 	try {
-		await Promise.race([
-			ndk.connect(),
-			new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`${label} connection timeout`)), timeoutMs)),
-		])
+		await withTimeout(ndk.connect(), timeoutMs, `${label} connection`)
 		return true
 	} catch (error) {
 		console.warn(`${label} connection issue:`, error)

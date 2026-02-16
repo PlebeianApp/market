@@ -4,6 +4,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DEFAULT_NIP46_RELAYS } from '@/lib/constants'
 import { authActions } from '@/lib/stores/auth'
 import { copyToClipboard } from '@/lib/utils'
+import { withTimeout } from '@/lib/utils/timeout'
 import { useConfigQuery } from '@/queries/config'
 import NDK, { NDKEvent, NDKKind, NDKPrivateKeySigner } from '@nostr-dev-kit/ndk'
 import { CopyIcon, Loader2 } from 'lucide-react'
@@ -52,13 +53,16 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 			activeSubscriptionRef.current = null
 		}
 
-		// Clean up the NIP-46 NDK instance
+		// Disconnect the NIP-46 NDK instance (closes relay WebSockets)
 		if (nip46NdkRef.current) {
 			try {
-				nip46NdkRef.current = null
+				for (const relay of nip46NdkRef.current.pool.relays.values()) {
+					relay.disconnect()
+				}
 			} catch (e) {
-				console.error('Error cleaning up NIP-46 NDK:', e)
+				console.error('Error disconnecting NIP-46 NDK:', e)
 			}
+			nip46NdkRef.current = null
 		}
 
 		setListening(false)
@@ -210,11 +214,13 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 			nip46NdkRef.current = ndk
 
 			try {
-				await ndk.connect()
+				await withTimeout(ndk.connect(), 10_000, 'NIP-46 relay connection')
 			} catch (error) {
 				console.error('Failed to connect to NIP-46 relay:', error)
-				setConnectionStatus('error')
-				if (onError) onError('Failed to connect to NIP-46 relay')
+				if (isMountedRef.current) {
+					setConnectionStatus('error')
+					if (onError) onError('Failed to connect to NIP-46 relay. Check your network connection.')
+				}
 				return
 			}
 

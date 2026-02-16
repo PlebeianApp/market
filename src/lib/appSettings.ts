@@ -1,5 +1,6 @@
 import NDK, { type NDKFilter, type NostrEvent } from '@nostr-dev-kit/ndk'
 import { AppSettingsSchema, type AppSettings } from './schemas/app'
+import { withTimeout } from '@/lib/utils/timeout'
 
 export async function fetchAppSettings(relayUrl: string, appPubkey: string): Promise<AppSettings | null> {
 	console.log(`Fetching app settings from relay: ${relayUrl} for pubkey: ${appPubkey}`)
@@ -17,10 +18,7 @@ export async function fetchAppSettings(relayUrl: string, appPubkey: string): Pro
 
 		// Connect with timeout
 		try {
-			await Promise.race([
-				ndk.connect(),
-				new Promise<never>((_, reject) => setTimeout(() => reject(new Error('NDK connect timeout')), 5000)),
-			])
+			await withTimeout(ndk.connect(), 5000, 'NDK connect')
 		} catch (connectErr) {
 			console.warn('NDK connect warning (may still work):', connectErr)
 			// Check if we have any connected relays despite the timeout
@@ -44,19 +42,7 @@ export async function fetchAppSettings(relayUrl: string, appPubkey: string): Pro
 		console.log('Fetching with filter:', JSON.stringify(filter))
 
 		// Add a soft timeout so we don't hang forever if the relay is slow.
-		const fetchWithTimeout = <T>(p: Promise<T>, ms: number) =>
-			new Promise<T>((resolve, reject) => {
-				const id = setTimeout(() => reject(new Error(`fetchEvents timeout after ${ms}ms`)), ms)
-				p.then((v) => {
-					clearTimeout(id)
-					resolve(v)
-				}).catch((e) => {
-					clearTimeout(id)
-					reject(e)
-				})
-			})
-
-		const events = (await fetchWithTimeout(ndk.fetchEvents(filter), 10000)) as Set<any>
+		const events = (await withTimeout(ndk.fetchEvents(filter), 10000, 'fetchEvents')) as Set<any>
 		const eventArray = Array.from(events)
 		console.log(`Fetch returned ${eventArray.length} events`)
 

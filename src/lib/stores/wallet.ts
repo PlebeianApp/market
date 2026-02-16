@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { useEffect, useState } from 'react'
 import NDK, { type NDKSigner } from '@nostr-dev-kit/ndk'
 import { NDKNWCWallet } from '@nostr-dev-kit/wallet'
+import { withTimeout } from '@/lib/utils/timeout'
 
 // Wallet interface
 export interface Wallet {
@@ -78,13 +79,6 @@ export interface NwcClient {
 
 const nwcClientCache = new Map<string, Promise<NwcClient>>()
 let cachedSigner: NDKSigner | undefined
-
-const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
-	const timeoutPromise = new Promise<never>((_, reject) => {
-		setTimeout(() => reject(new Error(`${label} timeout`)), timeoutMs)
-	})
-	return Promise.race([promise, timeoutPromise])
-}
 
 const cleanupAllCachedNwcWalletListeners = async (): Promise<void> => {
 	const entries = Array.from(nwcClientCache.values())

@@ -5,6 +5,7 @@ import { useBugReportsInfiniteScroll } from '@/hooks/useBugReportsInfiniteScroll
 import { BLOSSOM_SERVERS, uploadFileToBlossom } from '@/lib/blossom'
 import { BUG_RELAY } from '@/lib/constants'
 import { ndkActions } from '@/lib/stores/ndk'
+import { withTimeout } from '@/lib/utils/timeout'
 import { cn } from '@/lib/utils'
 import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { Loader2 } from 'lucide-react'
@@ -236,10 +237,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 
 			// Publish only to the bug relay - never to public relays
 			const bugRelaySet = NDKRelaySet.fromRelayUrls([BUG_RELAY], ndk)
-			const publishPromise = event.publish(bugRelaySet)
-			const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Publish timeout after 10 seconds')), 10000))
-
-			await Promise.race([publishPromise, timeoutPromise])
+			await withTimeout(event.publish(bugRelaySet), 10000, 'Publish bug report')
 			console.log('Event published successfully!')
 
 			// Log the event details for debugging

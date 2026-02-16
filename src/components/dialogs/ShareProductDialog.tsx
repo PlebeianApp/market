@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Textarea } from '@/components/ui/textarea'
 import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
+import { withTimeout } from '@/lib/utils/timeout'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
 import { Check, Copy } from 'lucide-react'
@@ -82,18 +83,10 @@ ${productUrl}
 			]
 
 			// Sign the event with timeout
-			const signPromise = event.sign()
-			const signTimeoutPromise = new Promise((_, reject) =>
-				setTimeout(() => reject(new Error('Sign timeout - signer not responding')), 30000),
-			)
-			await Promise.race([signPromise, signTimeoutPromise])
+			await withTimeout(event.sign(), 30000, 'Sign event')
 
 			// Publish with timeout
-			const publishPromise = ndkActions.publishEvent(event)
-			const publishTimeoutPromise = new Promise((_, reject) =>
-				setTimeout(() => reject(new Error('Publish timeout after 10 seconds')), 10000),
-			)
-			await Promise.race([publishPromise, publishTimeoutPromise])
+			await withTimeout(ndkActions.publishEvent(event), 10000, 'Publish event')
 
 			toast.success('Posted to Nostr successfully!')
 			onOpenChange(false)
