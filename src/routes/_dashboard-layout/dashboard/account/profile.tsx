@@ -281,6 +281,38 @@ function ProfileComponent() {
 							<div className="space-y-2">
 								<Label htmlFor="lud16">
 									Lightning Address (LUD16) <span className="text-muted-foreground font-normal">(optional)</span>
+									<div className="text-xs text-muted-foreground mt-1 font-normal">
+										Recommended wallets: (
+										<a href="https://coinos.io" target="_blank" rel="noopener noreferrer" className="underline hover:text-pink-500">
+											CoinOS
+										</a>
+										,{' '}
+										<a href="https://primal.net" target="_blank" rel="noopener noreferrer" className="underline hover:text-pink-500">
+											Primal
+										</a>
+										,{' '}
+										<a href="https://lnbits.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-pink-500">
+											LNBits
+										</a>
+										,{' '}
+										<a href="https://minibits.cash" target="_blank" rel="noopener noreferrer" className="underline hover:text-pink-500">
+											Minibits
+										</a>
+										,{' '}
+										<a
+											href="https://app.mutinywallet.com/setup"
+											target="_blank"
+											rel="noopener noreferrer"
+											className="underline hover:text-pink-500"
+										>
+											Mutiny
+										</a>
+										,{' '}
+										<a href="https://getalby.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-pink-500">
+											Alby
+										</a>
+										)
+									</div>
 								</Label>
 								<Input
 									id="lud16"
