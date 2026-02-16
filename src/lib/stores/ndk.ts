@@ -269,13 +269,12 @@ export const ndkActions = {
 			},
 		})
 
-		// Skip Zap NDK in development mode or local-relay-only mode to prevent connecting to public relays
-		const skipZapNdk = stage === 'development' || localRelayOnly
-		const zapNdk = skipZapNdk
-			? null
-			: new NDK({
-					explicitRelayUrls: ZAP_RELAYS,
-				})
+		// In development / local-relay-only mode, monitor zaps on the local relays instead of public ZAP_RELAYS.
+		// This avoids connecting to public infrastructure while still enabling zap receipt monitoring.
+		const zapNdk =
+			stage === 'development' || localRelayOnly
+				? new NDK({ explicitRelayUrls: explicitRelays })
+				: new NDK({ explicitRelayUrls: ZAP_RELAYS })
 
 		// Determine write relays - staging only writes to main relay, others write to all
 		const mainRelay = getMainRelay()
