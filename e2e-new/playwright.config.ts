@@ -33,6 +33,7 @@ export default defineConfig({
 			command: 'nak serve --hostname 0.0.0.0',
 			port: 10547,
 			reuseExistingServer: !process.env.CI,
+			timeout: process.env.CI ? 120_000 : 60_000,
 			stdout: 'pipe',
 			stderr: 'pipe',
 		},
@@ -44,6 +45,7 @@ export default defineConfig({
 			cwd: PROJECT_ROOT,
 			port: TEST_PORT,
 			reuseExistingServer: !process.env.CI,
+			timeout: process.env.CI ? 120_000 : 60_000,
 			stdout: 'pipe',
 			stderr: 'pipe',
 			env: {

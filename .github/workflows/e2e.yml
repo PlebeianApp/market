@@ -26,10 +26,16 @@ jobs:
           go-version: '>=1.22'
 
       - name: Install nak
-        run: go install github.com/fiatjaf/nak@latest
+        run: |
+          go install github.com/fiatjaf/nak@latest
+          which nak
+          nak --version || nak -h | head -1
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Generate routes
+        run: bun run generate-routes
 
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
