@@ -24,6 +24,12 @@ test.describe('Product Management', () => {
 	test('can create a new product', async ({ merchantPage }) => {
 		await merchantPage.goto('/dashboard/products/products/new')
 
+		// Wait for the product form's shipping query to complete before interacting.
+		// This prevents a race condition where the form briefly shows the Name tab,
+		// then redirects to Shipping tab once the query confirms shipping state.
+		const productForm = merchantPage.locator('[data-testid="product-form"][data-shipping-loaded="true"]')
+		await expect(productForm).toBeVisible({ timeout: 15_000 })
+
 		// --- Name Tab ---
 		const titleInput = merchantPage.getByTestId('product-name-input')
 		await expect(titleInput).toBeVisible({ timeout: 10_000 })
@@ -36,7 +42,7 @@ test.describe('Product Management', () => {
 		await merchantPage.getByTestId('product-next-button').click()
 
 		// --- Detail Tab ---
-		const priceInput = merchantPage.getByTestId('product-price-input').or(merchantPage.getByLabel(/price/i).first())
+		const priceInput = merchantPage.getByLabel(/price/i).first()
 		await expect(priceInput).toBeVisible({ timeout: 5_000 })
 		await priceInput.fill('10000')
 

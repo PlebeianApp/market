@@ -44,7 +44,7 @@ jobs:
           nohup nak serve --hostname 0.0.0.0 > /tmp/relay.log 2>&1 &
           echo "Waiting for relay on port 10547..."
           for i in $(seq 1 10); do
-            if nc -z localhost 10547 2>/dev/null; then
+            if (echo > /dev/tcp/localhost/10547) 2>/dev/null; then
               echo "Relay is ready"
               exit 0
             fi

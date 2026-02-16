@@ -259,6 +259,8 @@ export function ProductFormContent({
 				form.handleSubmit()
 			}}
 			className={`flex flex-col h-full ${className}`}
+			data-testid="product-form"
+			data-shipping-loaded={isShippingFetched || !!editingProductId}
 		>
 			<div className="flex-1 flex flex-col min-h-0 overflow-hidden max-h-[calc(100vh-200px)]">
 				{/* Single level tabs: Name, Detail, Spec, Category, Images, Shipping */}

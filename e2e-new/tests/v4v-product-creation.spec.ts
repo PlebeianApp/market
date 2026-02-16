@@ -16,14 +16,19 @@ test.describe('V4V Product Creation Flow', () => {
 
 		await newUserPage.goto('/dashboard/products/products/new')
 
-		// The form may auto-redirect to the Shipping tab (no shipping options)
-		// or stay on the Name tab (has shipping from a previous run).
+		// Wait for the product form's shipping query to complete before interacting.
+		// Without this, the form briefly shows the Name tab (default) while the shipping
+		// query is loading, then redirects to the Shipping tab once it confirms no
+		// shipping options exist. This race condition causes flaky failures on CI.
+		const productForm = newUserPage.locator('[data-testid="product-form"][data-shipping-loaded="true"]')
+		await expect(productForm).toBeVisible({ timeout: 15_000 })
+
 		const titleInput = newUserPage.getByTestId('product-name-input')
 		const digitalDeliveryButton = newUserPage.getByRole('button', { name: /Digital Delivery/i })
 
-		// Wait for either the Name tab or the Shipping tab quick-create templates
-		await expect(titleInput.or(digitalDeliveryButton)).toBeVisible({ timeout: 15_000 })
-
+		// Now that shipping data is loaded, the form is in its final tab state:
+		// - Shipping tab (no shipping options) → need to quick-create
+		// - Name tab (has shipping from a previous run) → proceed directly
 		if (await digitalDeliveryButton.isVisible().catch(() => false)) {
 			// No shipping options — create Digital Delivery via quick-create template
 			await digitalDeliveryButton.click()
@@ -33,8 +38,6 @@ test.describe('V4V Product Creation Flow', () => {
 		}
 
 		// --- Name Tab ---
-		// Wait for the description input too — ensures the tab has fully rendered
-		// and the form has settled after any shipping quick-create.
 		const descriptionInput = newUserPage.getByTestId('product-description-input')
 		await expect(descriptionInput).toBeVisible({ timeout: 10_000 })
 
@@ -47,7 +50,7 @@ test.describe('V4V Product Creation Flow', () => {
 		await newUserPage.getByTestId('product-next-button').click()
 
 		// --- Detail Tab ---
-		const priceInput = newUserPage.getByTestId('product-price-input').or(newUserPage.getByLabel(/price/i).first())
+		const priceInput = newUserPage.getByLabel(/price/i).first()
 		await expect(priceInput).toBeVisible({ timeout: 10_000 })
 		await priceInput.fill('10000')
 
