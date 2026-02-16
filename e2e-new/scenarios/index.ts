@@ -222,3 +222,17 @@ async function seedV4VShares(relay: Relay, skHex: string) {
 	})
 	console.log('    Published V4V shares (empty = 100% to user)')
 }
+
+/**
+ * Reset V4V shares for a user by publishing an empty Kind 30078 event.
+ * This replaces any existing V4V shares so the V4V setup dialog will appear
+ * during product creation.
+ */
+export async function resetV4VForUser(skHex: string): Promise<void> {
+	const relay = await Relay.connect(RELAY_URL)
+	try {
+		await seedV4VShares(relay, skHex)
+	} finally {
+		relay.close()
+	}
+}
