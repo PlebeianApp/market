@@ -6,6 +6,10 @@ test.use({ scenario: 'base' })
 
 test.describe('V4V Product Creation Flow', () => {
 	test('new user creating first product triggers V4V dialog and value is reflected on dashboard', async ({ newUserPage }) => {
+		// This test covers shipping quick-create, full form fill, V4V dialog, and dashboard
+		// verification — give it more time than the default 30s, especially on CI.
+		test.setTimeout(60_000)
+
 		// Reset V4V shares so the V4V setup dialog will appear during product creation.
 		// This is needed because previous test runs may have saved V4V shares for devUser3.
 		await resetV4VForUser(devUser3.sk)
@@ -29,13 +33,22 @@ test.describe('V4V Product Creation Flow', () => {
 		}
 
 		// --- Name Tab ---
+		// Wait for the description input too — ensures the tab has fully rendered
+		// and the form has settled after any shipping quick-create.
+		const descriptionInput = newUserPage.getByTestId('product-description-input')
+		await expect(descriptionInput).toBeVisible({ timeout: 10_000 })
+
 		await titleInput.fill('V4V Test Product')
-		await newUserPage.getByTestId('product-description-input').fill('Product for testing V4V setup flow')
+		await descriptionInput.fill('Product for testing V4V setup flow')
+
+		// Verify values stuck before navigating (guards against form re-renders clearing values)
+		await expect(titleInput).toHaveValue('V4V Test Product')
+
 		await newUserPage.getByTestId('product-next-button').click()
 
 		// --- Detail Tab ---
 		const priceInput = newUserPage.getByTestId('product-price-input').or(newUserPage.getByLabel(/price/i).first())
-		await expect(priceInput).toBeVisible({ timeout: 5_000 })
+		await expect(priceInput).toBeVisible({ timeout: 10_000 })
 		await priceInput.fill('10000')
 
 		const quantityInput = newUserPage.getByTestId('product-quantity-input').or(newUserPage.getByLabel(/quantity/i))
