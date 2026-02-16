@@ -42,7 +42,8 @@ test.describe('Product Management', () => {
 		await merchantPage.getByTestId('product-next-button').click()
 
 		// --- Detail Tab ---
-		const priceInput = merchantPage.getByLabel(/price/i).first()
+		// The bitcoin price input (id="bitcoin-price") is always visible on the Detail tab.
+		const priceInput = merchantPage.locator('#bitcoin-price')
 		await expect(priceInput).toBeVisible({ timeout: 5_000 })
 		await priceInput.fill('10000')
 

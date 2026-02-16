@@ -37,11 +37,11 @@ export const test = base.extend<TestFixtures>({
 		await setupAuthContext(context, devUser1)
 		const page = await context.newPage()
 
-		// Navigate and wait for the app to load
 		await page.goto('/')
 		await page.waitForLoadState('networkidle')
-		// Give the auto-login a moment to complete
-		await expect(page.locator('header')).toBeVisible({ timeout: 10_000 })
+		// Wait for NIP-07 auto-login to complete — the dashboard link only
+		// appears in the header once isAuthenticated flips to true.
+		await expect(page.getByTestId('dashboard-link')).toBeVisible({ timeout: 15_000 })
 
 		await use(page)
 		await context.close()
@@ -55,7 +55,7 @@ export const test = base.extend<TestFixtures>({
 
 		await page.goto('/')
 		await page.waitForLoadState('networkidle')
-		await expect(page.locator('header')).toBeVisible({ timeout: 10_000 })
+		await expect(page.getByTestId('dashboard-link')).toBeVisible({ timeout: 15_000 })
 
 		await use(page)
 		await context.close()
@@ -69,7 +69,7 @@ export const test = base.extend<TestFixtures>({
 
 		await page.goto('/')
 		await page.waitForLoadState('networkidle')
-		await expect(page.locator('header')).toBeVisible({ timeout: 10_000 })
+		await expect(page.getByTestId('dashboard-link')).toBeVisible({ timeout: 15_000 })
 
 		await use(page)
 		await context.close()

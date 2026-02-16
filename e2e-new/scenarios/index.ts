@@ -363,3 +363,23 @@ export async function seedV4VWithRecipients(skHex: string, recipients: Array<{ p
 		relay.close()
 	}
 }
+
+/**
+ * Ensure a user has at least one shipping option on the relay.
+ * Prevents the shipping-first flow in the product form which is
+ * prone to React re-render timing issues in tests.
+ */
+export async function ensureShippingForUser(skHex: string): Promise<void> {
+	const relay = await Relay.connect(RELAY_URL)
+	try {
+		await seedShippingOption(relay, skHex, {
+			title: 'Digital Delivery',
+			price: '0',
+			currency: 'USD',
+			service: 'digital',
+			countries: [],
+		})
+	} finally {
+		relay.close()
+	}
+}
