@@ -28,35 +28,37 @@ export default defineConfig({
 		},
 	],
 
-	webServer: [
-		{
-			command: 'nak serve --hostname 0.0.0.0',
-			port: 10547,
-			reuseExistingServer: !process.env.CI,
-			timeout: process.env.CI ? 120_000 : 60_000,
-			stdout: 'pipe',
-			stderr: 'pipe',
-		},
-		{
-			// Seed the relay with app settings, then start the dev server.
-			// The dev server caches appSettings at startup, so events must
-			// exist on the relay before it initializes.
-			command: 'bun e2e-new/seed-relay.ts && NODE_ENV=test bun dev',
-			cwd: PROJECT_ROOT,
-			port: TEST_PORT,
-			reuseExistingServer: !process.env.CI,
-			timeout: process.env.CI ? 120_000 : 60_000,
-			stdout: 'pipe',
-			stderr: 'pipe',
-			env: {
-				NODE_ENV: 'test',
-				PORT: String(TEST_PORT),
-				APP_RELAY_URL: RELAY_URL,
-				APP_PRIVATE_KEY: TEST_APP_PRIVATE_KEY,
-				LOCAL_RELAY_ONLY: 'true',
-			},
-		},
-	],
+	// On CI, servers are started manually in the workflow for better visibility.
+	// Locally, Playwright manages the relay and dev server automatically.
+	webServer: process.env.CI
+		? []
+		: [
+				{
+					command: 'nak serve --hostname 0.0.0.0',
+					port: 10547,
+					reuseExistingServer: true,
+					stdout: 'pipe',
+					stderr: 'pipe',
+				},
+				{
+					// Seed the relay with app settings, then start the dev server.
+					// The dev server caches appSettings at startup, so events must
+					// exist on the relay before it initializes.
+					command: 'bun e2e-new/seed-relay.ts && NODE_ENV=test bun dev',
+					cwd: PROJECT_ROOT,
+					port: TEST_PORT,
+					reuseExistingServer: true,
+					stdout: 'pipe',
+					stderr: 'pipe',
+					env: {
+						NODE_ENV: 'test',
+						PORT: String(TEST_PORT),
+						APP_RELAY_URL: RELAY_URL,
+						APP_PRIVATE_KEY: TEST_APP_PRIVATE_KEY,
+						LOCAL_RELAY_ONLY: 'true',
+					},
+				},
+			],
 
 	globalSetup: './global-setup.ts',
 	globalTeardown: './global-teardown.ts',

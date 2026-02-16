@@ -28,8 +28,7 @@ jobs:
       - name: Install nak
         run: |
           go install github.com/fiatjaf/nak@latest
-          which nak
-          nak --version || nak -h | head -1
+          echo "nak installed at: $(which nak)"
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -40,8 +39,54 @@ jobs:
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
+      - name: Start relay
+        run: |
+          nohup nak serve --hostname 0.0.0.0 > /tmp/relay.log 2>&1 &
+          echo "Waiting for relay on port 10547..."
+          for i in $(seq 1 30); do
+            if nc -z localhost 10547 2>/dev/null; then
+              echo "Relay is ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::Relay failed to start. Logs:"
+          cat /tmp/relay.log
+          exit 1
+
+      - name: Seed relay and start dev server
+        run: |
+          bun e2e-new/seed-relay.ts
+          nohup bun dev > /tmp/devserver.log 2>&1 &
+          echo "Waiting for dev server on port 3333..."
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:3333/api/config > /dev/null 2>&1; then
+              echo "Dev server is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::Dev server failed to start. Logs:"
+          cat /tmp/devserver.log
+          exit 1
+        env:
+          NODE_ENV: test
+          PORT: '3333'
+          APP_RELAY_URL: ws://localhost:10547
+          APP_PRIVATE_KEY: e2e0000000000000000000000000000000000000000000000000000000000001
+          LOCAL_RELAY_ONLY: 'true'
+
       - name: Run e2e tests
         run: bun test:e2e-new
+
+      - name: Show server logs on failure
+        if: failure()
+        run: |
+          echo "=== Relay logs ==="
+          cat /tmp/relay.log 2>/dev/null || echo "(no relay log)"
+          echo ""
+          echo "=== Dev server logs ==="
+          cat /tmp/devserver.log 2>/dev/null || echo "(no dev server log)"
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
