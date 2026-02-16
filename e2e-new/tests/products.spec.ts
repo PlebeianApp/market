@@ -111,6 +111,64 @@ test.describe('Product Management', () => {
 		await expect(merchantPage.getByRole('heading', { name: 'E2E non leaking Test Product', level: 1 })).toBeVisible({ timeout: 15_000 })
 	})
 
+	test('can edit an existing product', async ({ merchantPage }) => {
+		test.setTimeout(60_000)
+
+		await merchantPage.goto('/dashboard/products/products')
+
+		// Wait for seeded products to load
+		await expect(merchantPage.getByText('Bitcoin Hardware Wallet')).toBeVisible({ timeout: 10_000 })
+
+		// Click edit button on "Bitcoin Hardware Wallet"
+		await merchantPage.getByRole('button', { name: 'Edit Bitcoin Hardware Wallet' }).click()
+
+		// Wait for the edit form to load with shipping data
+		const productForm = merchantPage.locator('[data-testid="product-form"][data-shipping-loaded="true"]')
+		await expect(productForm).toBeVisible({ timeout: 15_000 })
+
+		// Verify the form is pre-populated with existing title
+		const titleInput = merchantPage.getByTestId('product-name-input')
+		await expect(titleInput).toHaveValue('Bitcoin Hardware Wallet')
+
+		// Update the title
+		await titleInput.clear()
+		await titleInput.fill('Bitcoin Hardware Wallet Pro')
+
+		// Navigate to Detail tab by clicking the tab directly (edit mode has no Next button)
+		await merchantPage.getByRole('tab', { name: 'Detail' }).click()
+		const priceInput = merchantPage.getByLabel(/price/i).first()
+		await expect(priceInput).toBeVisible({ timeout: 5_000 })
+		await priceInput.clear()
+		await priceInput.fill('55000')
+
+		// Click "Update Product"
+		await merchantPage.getByTestId('product-publish-button').click()
+
+		// After update, the app redirects to the product list
+		await expect(merchantPage.getByText('Bitcoin Hardware Wallet Pro')).toBeVisible({ timeout: 15_000 })
+
+		// Original name (exact match) should no longer appear
+		await expect(merchantPage.getByText('Bitcoin Hardware Wallet', { exact: true })).not.toBeVisible()
+	})
+
+	test('can delete a product', async ({ merchantPage }) => {
+		test.setTimeout(60_000)
+
+		await merchantPage.goto('/dashboard/products/products')
+
+		// Wait for seeded product to load
+		await expect(merchantPage.getByText('Nostr T-Shirt')).toBeVisible({ timeout: 10_000 })
+
+		// Auto-accept the browser confirm dialog
+		merchantPage.on('dialog', (dialog) => dialog.accept())
+
+		// Click delete button on "Nostr T-Shirt"
+		await merchantPage.getByRole('button', { name: 'Delete Nostr T-Shirt' }).click()
+
+		// Verify product is removed from the list
+		await expect(merchantPage.getByText('Nostr T-Shirt')).not.toBeVisible({ timeout: 10_000 })
+	})
+
 	test('seeded products appear in public marketplace', async ({ page }) => {
 		// Use unauthenticated page
 		await page.goto('/products')
