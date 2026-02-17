@@ -330,13 +330,7 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 						<SelectItem value="custom">Custom relay...</SelectItem>
 					</SelectContent>
 				</Select>
-				{isCustomRelay && (
-					<Input
-						placeholder="wss://..."
-						value={customRelay}
-						onChange={(e) => setCustomRelay(e.target.value)}
-					/>
-				)}
+				{isCustomRelay && <Input placeholder="wss://..." value={customRelay} onChange={(e) => setCustomRelay(e.target.value)} />}
 			</div>
 
 			{generatingConnectionUrl ? (
