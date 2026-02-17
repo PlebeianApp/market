@@ -30,11 +30,11 @@ The workflow will:
 
 Uses the same secrets as the market app deploy (already configured):
 
-| Secret             | Description                 |
-| ------------------ | --------------------------- |
-| `STAGING_HOST`     | `staging.plebeian.market`   |
-| `STAGING_USER`     | `deployer`                  |
-| `STAGING_PASSWORD` | SSH password for deployer   |
+| Secret             | Description               |
+| ------------------ | ------------------------- |
+| `STAGING_HOST`     | `staging.plebeian.market` |
+| `STAGING_USER`     | `deployer`                |
+| `STAGING_PASSWORD` | SSH password for deployer |
 
 The ORLY repo URL is hardcoded in the workflow (public repo).
 
