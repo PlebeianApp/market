@@ -1,6 +1,10 @@
 # dependencies (bun install)
 node_modules
 
+# playwright
+playwright-report
+test-results
+
 # output
 out
 dist

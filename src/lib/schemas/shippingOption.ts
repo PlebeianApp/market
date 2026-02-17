@@ -18,7 +18,7 @@ export const ShippingPriceTagSchema = z.tuple([
 	iso4217Currency,
 ])
 export const ShippingCountryTagSchema = z.tuple([z.literal('country'), iso3166Country, z.array(iso3166Country).optional()])
-export const ShippingServiceTagSchema = z.tuple([z.literal('service'), z.enum(['standard', 'express', 'overnight', 'pickup'])])
+export const ShippingServiceTagSchema = z.tuple([z.literal('service'), z.enum(['standard', 'express', 'overnight', 'pickup', 'digital'])])
 
 // Optional Tags
 export const ShippingCarrierTagSchema = z.tuple([z.literal('carrier'), z.string()])

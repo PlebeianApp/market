@@ -1,5 +1,4 @@
-import { CURRENCIES } from '@/lib/constants'
-import { isValidHexKey } from '@/lib/utils'
+import { CURRENCIES, HEX_KEYS_REGEX } from '@/lib/constants'
 import type { SupportedCurrency } from '@/queries/external'
 import { btcExchangeRatesQueryOptions, currencyConversionQueryOptions } from '@/queries/external'
 import { getProductId, getProductPrice, getProductSellerPubkey, productQueryOptions, productByATagQueryOptions } from '@/queries/products'
@@ -149,7 +148,7 @@ function computeProductsBySeller(products: Record<string, CartProduct>): Record<
 	const grouped: Record<string, CartProduct[]> = {}
 
 	Object.values(products).forEach((product) => {
-		if (isValidHexKey(product.sellerPubkey ?? '')) {
+		if (HEX_KEYS_REGEX.test(product.sellerPubkey ?? '')) {
 			if (!grouped[product.sellerPubkey]) {
 				grouped[product.sellerPubkey] = []
 			}
@@ -365,7 +364,7 @@ export const cartActions = {
 			amount = productData.amount
 		}
 
-		if (!sellerPubkey || !isValidHexKey(sellerPubkey)) {
+		if (!sellerPubkey || !HEX_KEYS_REGEX.test(sellerPubkey)) {
 			console.error('Cannot add product without valid seller pubkey:', sellerPubkey)
 			return
 		}
@@ -947,7 +946,7 @@ export const cartActions = {
 		const state = cartStore.state
 		return Object.values(state.cart.products).reduce((total, product) => {
 			// Only count products with valid pubkeys
-			if (!isValidHexKey(product.sellerPubkey ?? '')) return total
+			if (!HEX_KEYS_REGEX.test(product.sellerPubkey ?? '')) return total
 			return total + product.amount
 		}, 0)
 	},

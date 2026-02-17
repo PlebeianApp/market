@@ -23,6 +23,18 @@ export const MAIN_RELAY_BY_STAGE: Record<Stage, string> = {
  * Default public relays that are used in addition to the main relay
  * These are used for reading events from the broader Nostr network
  */
+export const DEFAULT_NIP46_RELAYS = [
+	{ value: 'wss://relay.plebeian.market', label: 'relay.plebeian.market' },
+	{ value: 'wss://relay.nsec.app', label: 'relay.nsec.app' },
+	{ value: 'wss://relay.damus.io', label: 'relay.damus.io' },
+	{ value: 'wss://nos.lol', label: 'nos.lol' },
+	{ value: 'wss://relay.primal.net', label: 'relay.primal.net' },
+]
+
+/**
+ * Default public relays that are used in addition to the main relay
+ * These are used for reading events from the broader Nostr network
+ */
 export const DEFAULT_PUBLIC_RELAYS: string[] = [
 	'wss://sendit.nosflare.com',
 	'wss://nostr.mom',

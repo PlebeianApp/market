@@ -575,7 +575,7 @@ export const fetchOrdersBySeller = async (sellerPubkey: string): Promise<OrderWi
 
 		// Sort all events by created_at (newest first)
 		related.paymentRequests.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-		related.shippingUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+		related.statusUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 		related.shippingUpdates.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 		related.generalMessages.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 		related.paymentReceipts.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))

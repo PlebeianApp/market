@@ -3,7 +3,7 @@ import { cartStore } from '@/lib/stores/cart'
 import { uiActions } from '@/lib/stores/ui'
 import { getShippingEvent, getShippingPickupAddressString, getShippingService } from '@/queries/shipping'
 import { useStore } from '@tanstack/react-store'
-import { Check, MapPin, MessageCircle, SkipForward } from 'lucide-react'
+import { Check, Download, MapPin, MessageCircle, SkipForward } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import type { PaymentInvoiceData } from '@/lib/types/invoice'
 import type { CheckoutFormData } from './ShippingAddressForm'
@@ -21,22 +21,26 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 	const { cart } = useStore(cartStore)
 	const [pickupAddresses, setPickupAddresses] = useState<Array<{ sellerName: string; address: string }>>([])
 	const [isAllPickup, setIsAllPickup] = useState(false)
+	const [isAllDigital, setIsAllDigital] = useState(false)
+	const [noAddressRequired, setNoAddressRequired] = useState(false)
 
 	const formatSats = (sats: number): string => {
 		return Math.round(sats).toLocaleString()
 	}
 
-	// Check for pickup orders and collect pickup addresses
+	// Check for pickup/digital orders and collect pickup addresses
 	useEffect(() => {
-		const checkPickupOrders = async () => {
+		const checkShippingOrders = async () => {
 			const products = Object.values(cart.products)
 			if (products.length === 0) {
 				setIsAllPickup(false)
+				setIsAllDigital(false)
+				setNoAddressRequired(false)
 				setPickupAddresses([])
 				return
 			}
 
-			const pickupData = await Promise.all(
+			const serviceData = await Promise.all(
 				products.map(async (product) => {
 					if (!product.shippingMethodId) return null
 
@@ -45,18 +49,28 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 						if (!shippingEvent) return null
 
 						const serviceTag = getShippingService(shippingEvent)
-						const isPickup = serviceTag?.[1] === 'pickup'
+						const serviceType = serviceTag?.[1]
 
-						if (isPickup) {
+						if (serviceType === 'pickup') {
 							const pickupAddressString = getShippingPickupAddressString(shippingEvent)
 							return {
 								isPickup: true,
+								isDigital: false,
 								sellerName: product.sellerPubkey || 'Unknown Seller',
 								address: pickupAddressString || 'Pickup address not specified',
 							}
 						}
 
-						return { isPickup: false, sellerName: product.sellerPubkey || 'Unknown Seller', address: '' }
+						if (serviceType === 'digital') {
+							return {
+								isPickup: false,
+								isDigital: true,
+								sellerName: product.sellerPubkey || 'Unknown Seller',
+								address: '',
+							}
+						}
+
+						return { isPickup: false, isDigital: false, sellerName: product.sellerPubkey || 'Unknown Seller', address: '' }
 					} catch (error) {
 						console.error('Error checking shipping service:', error)
 						return null
@@ -64,11 +78,15 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 				}),
 			)
 
-			const validPickupData = pickupData.filter(Boolean)
-			const allPickup = validPickupData.every((data) => data?.isPickup)
-			const pickupItems = validPickupData.filter((data) => data?.isPickup)
+			const validData = serviceData.filter(Boolean)
+			const allPickup = validData.every((data) => data?.isPickup)
+			const allDigital = validData.every((data) => data?.isDigital)
+			const allNoAddress = validData.every((data) => data?.isPickup || data?.isDigital)
+			const pickupItems = validData.filter((data) => data?.isPickup)
 
 			setIsAllPickup(allPickup)
+			setIsAllDigital(allDigital)
+			setNoAddressRequired(allNoAddress)
 			setPickupAddresses(
 				pickupItems.map((item) => ({
 					sellerName: item?.sellerName || 'Unknown Seller',
@@ -77,7 +95,7 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 			)
 		}
 
-		checkPickupOrders()
+		checkShippingOrders()
 	}, [cart.products])
 
 	const allInvoicesPaid = invoices.every((invoice) => invoice.status === 'paid')
@@ -176,7 +194,7 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 				</div>
 			)}
 
-			{/* Shipping/Pickup Address */}
+			{/* Shipping/Pickup/Digital Address */}
 			{isAllPickup ? (
 				<div className="bg-green-50 p-4 rounded-lg border border-green-200">
 					<div className="flex items-center gap-2 mb-3">
@@ -193,6 +211,20 @@ export function OrderFinalizeComponent({ shippingData, invoices, totalInSats, on
 							</div>
 						))}
 					</div>
+				</div>
+			) : isAllDigital ? (
+				<div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+					<div className="flex items-center gap-2 mb-2">
+						<Download className="h-5 w-5 text-purple-600" />
+						<h3 className="font-medium text-purple-800">Digital Delivery</h3>
+					</div>
+					<p className="text-sm text-purple-700">Items will be delivered digitally. Check your messages for delivery details.</p>
+					{shippingData?.email && <p className="text-sm text-purple-600 mt-2">Email: {shippingData.email}</p>}
+				</div>
+			) : noAddressRequired ? (
+				<div className="bg-indigo-50 p-4 rounded-lg border border-indigo-200">
+					<h3 className="font-medium text-indigo-800 mb-2">No Shipping Required</h3>
+					<p className="text-sm text-indigo-700">Items are for pickup or digital delivery.</p>
 				</div>
 			) : (
 				shippingData && (

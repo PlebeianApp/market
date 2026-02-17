@@ -1,5 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DEFAULT_NIP46_RELAYS } from '@/lib/constants'
 import { authActions } from '@/lib/stores/auth'
 import { copyToClipboard } from '@/lib/utils'
 import { useConfigQuery } from '@/queries/config'
@@ -21,6 +23,10 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 	const [listening, setListening] = useState(false)
 	const [generatingConnectionUrl, setGeneratingConnectionUrl] = useState(false)
 	const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
+	const [selectedRelay, setSelectedRelay] = useState(DEFAULT_NIP46_RELAYS[0].value)
+	const [customRelay, setCustomRelay] = useState('')
+	const isCustomRelay = selectedRelay === 'custom'
+	const activeRelay = isCustomRelay ? customRelay : selectedRelay
 
 	// Generate secret once and keep it stable
 	const tempSecretRef = useRef<string>(Math.random().toString(36).substring(2, 15))
@@ -97,10 +103,10 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 
 	const connectionUrl = useMemo(() => {
 		if (!localPubkey || !config) return null
-		const relay = config.nip46Relay || 'wss://relay.nsec.app'
+		if (isCustomRelay && !customRelay) return null
 
 		const params = new URLSearchParams()
-		params.set('relay', relay)
+		params.set('relay', activeRelay)
 		params.set(
 			'metadata',
 			JSON.stringify({
@@ -113,20 +119,19 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 		params.set('token', tempSecret)
 
 		return `nostrconnect://${localPubkey}?` + params.toString()
-	}, [localPubkey, config, tempSecret])
+	}, [localPubkey, config, tempSecret, activeRelay, isCustomRelay, customRelay])
 
 	const constructBunkerUrl = useCallback(
 		(event: NDKEvent) => {
 			const baseUrl = `bunker://${event.pubkey}?`
-			const relay = config?.nip46Relay || 'wss://relay.nsec.app'
 
 			const params = new URLSearchParams()
-			params.set('relay', relay)
+			params.set('relay', activeRelay)
 			params.set('secret', tempSecret)
 
 			return baseUrl + params.toString()
 		},
-		[config, tempSecret],
+		[activeRelay, tempSecret],
 	)
 
 	const triggerSuccess = useCallback(() => {
@@ -198,11 +203,8 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 			setListening(true)
 			setConnectionStatus('connecting')
 
-			// Create a dedicated NDK instance connected to the NIP-46 relay
-			const nip46Relay = config.nip46Relay || 'wss://relay.nsec.app'
-
 			const ndk = new NDK({
-				explicitRelayUrls: [nip46Relay],
+				explicitRelayUrls: [activeRelay],
 			})
 
 			nip46NdkRef.current = ndk
@@ -259,9 +261,11 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 							responseEvent.content = JSON.stringify(response)
 
 							try {
-								await responseEvent.sign(localSigner)
+								// Encrypt BEFORE signing — signing computes the event ID
+								// from the content, so the content must be final (encrypted).
 								// @ts-ignore - The NDK API requires a string pubkey here despite type definitions
 								await responseEvent.encrypt(undefined, localSigner, event.pubkey)
+								await responseEvent.sign(localSigner)
 								await responseEvent.publish()
 							} catch (err) {
 								console.error('Error sending NIP-46 approval:', err)
@@ -303,13 +307,31 @@ export function NostrConnectQR({ onError, onSuccess }: NostrConnectQRProps) {
 		}
 
 		initNip46Connection()
-	}, [connectionUrl, localPubkey, localSigner, tempSecret, config, onError, handleLoginWithNip46Signer, cleanup])
+	}, [connectionUrl, localPubkey, localSigner, tempSecret, config, onError, handleLoginWithNip46Signer, cleanup, activeRelay])
 
 	return (
 		<div className="flex flex-col items-center gap-4 py-4 w-full max-w-full overflow-hidden">
 			{connectionStatus === 'error' && (
 				<div className="bg-destructive/10 text-destructive rounded p-2 mb-2 text-sm w-full">Connection failed. Please try again.</div>
 			)}
+
+			<div className="w-full space-y-2">
+				<label className="text-sm font-medium">Relay</label>
+				<Select value={selectedRelay} onValueChange={setSelectedRelay}>
+					<SelectTrigger className="w-full">
+						<SelectValue />
+					</SelectTrigger>
+					<SelectContent>
+						{DEFAULT_NIP46_RELAYS.map((relay) => (
+							<SelectItem key={relay.value} value={relay.value}>
+								{relay.label}
+							</SelectItem>
+						))}
+						<SelectItem value="custom">Custom relay...</SelectItem>
+					</SelectContent>
+				</Select>
+				{isCustomRelay && <Input placeholder="wss://..." value={customRelay} onChange={(e) => setCustomRelay(e.target.value)} />}
+			</div>
 
 			{generatingConnectionUrl ? (
 				<div className="flex flex-col items-center gap-2 py-8">

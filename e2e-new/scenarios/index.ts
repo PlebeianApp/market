@@ -79,6 +79,21 @@ async function seedMerchant(relay: Relay) {
 		countries: [],
 	})
 
+	await seedShippingOption(relay, devUser1.sk, {
+		title: 'Local Pickup - Bitcoin Store',
+		price: '0',
+		currency: 'sats',
+		service: 'pickup',
+		countries: [],
+		pickupAddress: {
+			street: '456 Satoshi Lane',
+			city: 'Austin',
+			state: 'TX',
+			postalCode: '78701',
+			country: 'US',
+		},
+	})
+
 	await seedPaymentDetail(relay, devUser1.sk, TEST_APP_PUBLIC_KEY, {
 		method: 'LIGHTNING_NETWORK',
 		detail: WALLETED_USER_LUD16,
@@ -109,6 +124,30 @@ async function seedMerchant(relay: Relay) {
 		category: 'Clothing',
 		stock: '10',
 		shippingOptions: user1ShippingRefs,
+	})
+
+	// Digital-only product
+	await seedProduct(relay, devUser1.sk, {
+		title: 'Bitcoin E-Book',
+		description: 'A comprehensive guide to Bitcoin. Digital delivery - no shipping required.',
+		price: '5000',
+		currency: 'SATS',
+		status: 'on-sale',
+		category: 'Bitcoin',
+		stock: '100',
+		shippingOptions: [`30406:${devUser1.pk}:digital-delivery`],
+	})
+
+	// Pickup-only product
+	await seedProduct(relay, devUser1.sk, {
+		title: 'Bitcoin Conference Ticket',
+		description: 'Attend the local Bitcoin meetup. Pick up your ticket at the Bitcoin Store.',
+		price: '10000',
+		currency: 'SATS',
+		status: 'on-sale',
+		category: 'Bitcoin',
+		stock: '50',
+		shippingOptions: [`30406:${devUser1.pk}:local-pickup---bitcoin-store`],
 	})
 }
 
@@ -160,8 +199,35 @@ async function seedUserProfile(relay: Relay, user: { sk: string; pk: string }, n
 async function seedShippingOption(
 	relay: Relay,
 	skHex: string,
-	opts: { title: string; price: string; currency: string; service: string; countries: string[] },
+	opts: {
+		title: string
+		price: string
+		currency: string
+		service: string
+		countries: string[]
+		pickupAddress?: { street: string; city: string; state?: string; postalCode?: string; country?: string }
+	},
 ) {
+	const pickupTags: string[][] = []
+	if (opts.pickupAddress) {
+		if (opts.pickupAddress.street) pickupTags.push(['pickup-street', opts.pickupAddress.street])
+		if (opts.pickupAddress.city) pickupTags.push(['pickup-city', opts.pickupAddress.city])
+		if (opts.pickupAddress.state) pickupTags.push(['pickup-state', opts.pickupAddress.state])
+		if (opts.pickupAddress.postalCode) pickupTags.push(['pickup-postal-code', opts.pickupAddress.postalCode])
+		if (opts.pickupAddress.country) pickupTags.push(['pickup-country', opts.pickupAddress.country])
+		// Legacy combined address
+		const combined = [
+			opts.pickupAddress.street,
+			opts.pickupAddress.city,
+			opts.pickupAddress.state,
+			opts.pickupAddress.postalCode,
+			opts.pickupAddress.country,
+		]
+			.filter(Boolean)
+			.join(', ')
+		if (combined) pickupTags.push(['pickup-address', combined])
+	}
+
 	await publish(relay, skHex, {
 		kind: 30406,
 		created_at: Math.floor(Date.now() / 1000),
@@ -172,6 +238,7 @@ async function seedShippingOption(
 			['price', opts.price, opts.currency],
 			['service', opts.service],
 			...opts.countries.map((c) => ['country', c]),
+			...pickupTags,
 		],
 	})
 	console.log(`    Published shipping: ${opts.title}`)

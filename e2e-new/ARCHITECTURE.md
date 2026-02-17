@@ -12,6 +12,7 @@
 - [Waiting Strategy](#5-waiting-strategy)
 - [Relay Monitoring](#6-relay-monitoring)
 - [Test Organization](#7-test-organization)
+- [Test Utilities (Mocks)](#8-test-utilities-mocks)
 - [File Structure](#file-structure)
 - [Example Test](#example-test-products-feature)
 - [Running Tests](#running-tests)
@@ -800,6 +801,139 @@ Even though tests can run independently, when running the full suite we want an 
 
 ---
 
+## 8. Test Utilities (Mocks)
+
+The `utils/` directory contains standalone mock implementations that simulate external systems (remote signers, Lightning payments, relay queries) without hitting real services. All mocks communicate with the local test relay via raw WebSocket or `nostr-tools`.
+
+### NIP-46 Remote Signer Mock (`utils/nip46-mock.ts`)
+
+Simulates a remote signer (e.g. nsec.app, Amber) for testing NIP-46 Nostr Connect authentication. Uses raw WebSocket connections and `nostr-tools` for encryption/signing.
+
+**Supports two flows:**
+
+1. **QR code flow (`respondToConnect`)** — The app displays a `nostrconnect://` URL. The mock parses it, connects to the relay specified in the URL, sends a `connect` request with the token, receives the app's approval, sends an `ack`, then handles subsequent signer requests (`get_public_key`, `sign_event`).
+
+2. **Bunker URL flow (`startSignerLoop`)** — The app connects to the mock via a `bunker://` URL. The mock listens on the relay for incoming NIP-46 requests and responds to `connect`, `get_public_key`, `sign_event`, `nip04_encrypt`, and `nip04_decrypt`.
+
+```mermaid
+sequenceDiagram
+    participant App as App (browser)
+    participant Relay as Local Relay
+    participant Mock as Nip46Mock (Node.js)
+
+    Note over App,Mock: QR Code Flow
+    App->>App: Display nostrconnect:// URL
+    Mock->>Relay: Connect + subscribe (Kind 24133)
+    Mock->>Relay: Publish connect request (with token)
+    Relay->>App: Deliver connect request
+    App->>Relay: Publish approval response
+    Relay->>Mock: Deliver approval
+    Mock->>Relay: Publish ack
+    Relay->>App: Deliver ack → triggers login
+    App->>Relay: Publish get_public_key request
+    Relay->>Mock: Deliver request
+    Mock->>Relay: Publish public key response
+```
+
+**Key design decisions:**
+
+- Uses a **single unified message handler** attached once at WebSocket open. This avoids race conditions from adding/removing handlers at different times.
+- **Buffers events** that arrive before the handler is set, then drains them when the handler is registered.
+- **Auto-detects encryption** (NIP-04 vs NIP-44) on incoming messages by checking for `?iv=` in the content.
+- **Retries on "mute" rejections** with fresh events (new `created_at`) to avoid relay deduplication.
+
+**Usage in tests:**
+
+```ts
+const mock = new Nip46Mock(devUser2.sk)
+
+// QR code flow: extract URL from the UI, pass to mock
+await mock.respondToConnect(nostrconnectUrl)
+
+// Bunker URL flow: start loop first, then navigate
+const cleanup = await mock.startSignerLoop(RELAY_URL)
+// … fill bunker URL in UI …
+
+// Always clean up
+mock.close()
+```
+
+> **Pitfall: Relay selection.** The QR code component lets users select which NIP-46 relay to use. In tests, the default relay (relay.nsec.app) is unreachable. The test must select "Custom relay…" and enter the local relay URL (`ws://localhost:10547`) before extracting the `nostrconnect://` URL. See the auth spec's QR code test for the pattern.
+
+### Lightning Payment Mock (`utils/lightning-mock.ts`)
+
+Simulates the full Lightning payment flow for testing zap payments without real money. Uses a three-layer architecture:
+
+```mermaid
+graph TB
+    subgraph "Layer 1: HTTP Interception"
+        L1A["LNURL-pay discovery<br/>(.well-known/lnurlp/*)"]
+        L1B["LNURL callback<br/>(invoice generation)"]
+    end
+
+    subgraph "Layer 2: Browser Mock"
+        L2["window.webln<br/>(sendPayment)"]
+    end
+
+    subgraph "Layer 3: Relay Bridge"
+        L3A["exposeFunction<br/>(__e2eOnLightningPayment)"]
+        L3B["Publish Kind 9735<br/>(zap receipt)"]
+    end
+
+    L1A -->|"Returns metadata +<br/>nostrPubkey"| L1B
+    L1B -->|"Returns fake BOLT11"| L2
+    L2 -->|"Calls exposed function"| L3A
+    L3A -->|"Publishes to relay"| L3B
+```
+
+**How the layers work together:**
+
+1. **LNURL HTTP interception** — Playwright's `page.route()` intercepts requests to `.well-known/lnurlp/*` and returns LNURL-pay metadata with a mock callback URL. A second route intercepts the callback, captures the zap request (Kind 9734), and returns a fake BOLT11 invoice.
+
+2. **WebLN browser mock** — Injected via `page.addInitScript()`. When the app calls `window.webln.sendPayment(bolt11)`, it bridges to Node.js via an exposed function.
+
+3. **Zap receipt bridge** — The exposed function (`__e2eOnLightningPayment`) runs in Node.js, connects to the local relay via `nostr-tools`, and publishes a Kind 9735 zap receipt signed by the mock's LNURL server key. The app sees this receipt arrive on the relay and confirms the payment.
+
+**Key design decisions:**
+
+- The mock uses a **fixed LNURL server keypair**. The public key is returned in LNURL-pay metadata as `nostrPubkey`, so the app trusts zap receipts signed by this key.
+- Invoices are **fake BOLT11 strings** (not valid Lightning invoices). This is fine because no real payment processing happens.
+- The mock **tracks all paid invoices** and maps each BOLT11 to its zap request, supporting multi-invoice test scenarios.
+
+**Usage in tests:**
+
+```ts
+// Must be called BEFORE page.goto()
+const lnMock = await LightningMock.setup(page)
+
+// … trigger payment in the UI …
+
+// Assert payment was processed
+expect(lnMock.paidInvoices.length).toBe(1)
+```
+
+### Relay Query Utility (`utils/relay-query.ts`)
+
+Lightweight helper for querying Nostr events directly from the relay in test assertions. Connects, subscribes with a filter, collects events until EOSE, and disconnects.
+
+```ts
+// Query all order events from a specific user
+const orders = await queryRelayEvents({
+	kinds: [16],
+	authors: [devUser2.pk],
+})
+
+// Helper: extract a tag value
+const orderId = getTagValue(orders[0], 'd')
+
+// Helper: filter events by tag
+const confirmed = filterByTag(orders, 'type', '3')
+```
+
+Uses `nostr-tools/relay` (not NDK) with explicit `relay.close()` to prevent Node.js from hanging. Includes a 10-second safety timeout.
+
+---
+
 ## File Structure
 
 ```
@@ -819,7 +953,13 @@ e2e-new/
   scenarios/
     index.ts                 # Cumulative scenario seeding (nostr-tools + ws)
 
+  utils/
+    nip46-mock.ts            # NIP-46 remote signer mock (QR code + bunker flows)
+    lightning-mock.ts         # Lightning/LNURL/WebLN mock with zap receipts
+    relay-query.ts           # Direct relay query helper for test assertions
+
   tests/
+    auth.spec.ts             # Authentication flows (scenario: base)
     navigation.spec.ts       # Dashboard navigation (scenario: base)
     products.spec.ts         # Product CRUD + marketplace (scenario: merchant)
     # Future:

@@ -29,49 +29,61 @@ interface ShippingAddressFormProps {
 export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAddressFormProps) {
 	const { cart } = useStore(cartStore)
 	const [isAllPickup, setIsAllPickup] = useState(false)
+	const [isAllDigital, setIsAllDigital] = useState(false)
+	const [noAddressRequired, setNoAddressRequired] = useState(false)
 	const [pickupAddresses, setPickupAddresses] = useState<Array<{ title: string; address: string }>>([])
 
-	// Check if all shipping methods are pickup type and fetch pickup addresses
+	// Check if all shipping methods are pickup/digital type and fetch pickup addresses
 	useEffect(() => {
-		const checkPickupStatus = async () => {
+		const checkShippingStatus = async () => {
 			const products = Object.values(cart.products)
 			if (products.length === 0) {
 				setIsAllPickup(false)
+				setIsAllDigital(false)
+				setNoAddressRequired(false)
 				setPickupAddresses([])
 				return
 			}
 
-			const pickupData = await Promise.all(
+			const serviceData = await Promise.all(
 				products.map(async (product) => {
-					if (!product.shippingMethodId) return { isPickup: false, title: '', address: '' }
+					if (!product.shippingMethodId) return { isPickup: false, isDigital: false, title: '', address: '' }
 
 					try {
 						const shippingEvent = await getShippingEvent(product.shippingMethodId)
-						if (!shippingEvent) return { isPickup: false, title: '', address: '' }
+						if (!shippingEvent) return { isPickup: false, isDigital: false, title: '', address: '' }
 
 						const serviceTag = getShippingService(shippingEvent)
-						const isPickup = serviceTag?.[1] === 'pickup'
+						const serviceType = serviceTag?.[1]
 
-						if (isPickup) {
+						if (serviceType === 'pickup') {
 							const title = getShippingTitle(shippingEvent)
 							const address = getShippingPickupAddressString(shippingEvent)
-							return { isPickup: true, title, address: address || 'Address not specified' }
+							return { isPickup: true, isDigital: false, title, address: address || 'Address not specified' }
 						}
 
-						return { isPickup: false, title: '', address: '' }
+						if (serviceType === 'digital') {
+							return { isPickup: false, isDigital: true, title: '', address: '' }
+						}
+
+						return { isPickup: false, isDigital: false, title: '', address: '' }
 					} catch (error) {
 						console.error('Error checking shipping service:', error)
-						return { isPickup: false, title: '', address: '' }
+						return { isPickup: false, isDigital: false, title: '', address: '' }
 					}
 				}),
 			)
 
-			const allPickup = pickupData.every((data) => data.isPickup)
+			const allPickup = serviceData.every((data) => data.isPickup)
+			const allDigital = serviceData.every((data) => data.isDigital)
+			const allNoAddress = serviceData.every((data) => data.isPickup || data.isDigital)
+
 			setIsAllPickup(allPickup)
+			setIsAllDigital(allDigital)
+			setNoAddressRequired(allNoAddress)
 
 			if (allPickup) {
-				// Get unique pickup addresses
-				const uniqueAddresses = pickupData
+				const uniqueAddresses = serviceData
 					.filter((data) => data.isPickup)
 					.reduce(
 						(acc, data) => {
@@ -90,7 +102,7 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 			}
 		}
 
-		checkPickupStatus()
+		checkShippingStatus()
 	}, [cart.products])
 	return (
 		<div className="flex flex-col h-full">
@@ -110,8 +122,8 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 							name="name"
 							validators={{
 								onChange: ({ value }: { value: string }) => {
-									// Name is only required for non-pickup orders
-									if (!isAllPickup && !value.trim()) return 'Name is required'
+									// Name is only required when a physical address is needed
+									if (!noAddressRequired && !value.trim()) return 'Name is required'
 									if (value.trim() && value.trim().length < 2) return 'Name must be at least 2 characters'
 									return undefined
 								},
@@ -119,7 +131,7 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 							children={(field: any) => (
 								<div>
 									<Label htmlFor={field.name} className="text-sm font-medium">
-										Full Name {!isAllPickup && <span className="text-red-500">*</span>}
+										Full Name {!noAddressRequired && <span className="text-red-500">*</span>}
 									</Label>
 									<Input
 										id={field.name}
@@ -128,7 +140,7 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 										value={field.state.value}
 										onChange={(e) => field.handleChange(e.target.value)}
 										onBlur={field.handleBlur}
-										required={!isAllPickup}
+										required={!noAddressRequired}
 									/>
 									{field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
 										<p className="text-xs text-red-500 mt-1">{field.state.meta.errors[0]}</p>
@@ -215,16 +227,37 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 						</div>
 					)}
 
-					{/* Address - Only show if not all pickup */}
-					{!isAllPickup && (
+					{/* Digital delivery notification */}
+					{isAllDigital && (
+						<div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+							<h3 className="text-sm font-medium text-purple-800 mb-2">Digital Delivery</h3>
+							<p className="text-sm text-purple-700">
+								All items in your order will be delivered digitally. No shipping address is required. Check your messages for delivery
+								details after purchase.
+							</p>
+						</div>
+					)}
+
+					{/* Mixed pickup + digital notification */}
+					{noAddressRequired && !isAllPickup && !isAllDigital && (
+						<div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+							<h3 className="text-sm font-medium text-indigo-800 mb-2">No Shipping Required</h3>
+							<p className="text-sm text-indigo-700">
+								All items in your order are either for pickup or digital delivery. No shipping address is required.
+							</p>
+						</div>
+					)}
+
+					{/* Address - Only show when physical shipping is needed */}
+					{!noAddressRequired && (
 						<>
 							<form.Field
 								name="firstLineOfAddress"
 								validators={{
 									onChange: ({ value }: { value: string }) =>
-										!isAllPickup && !value.trim()
+										!noAddressRequired && !value.trim()
 											? 'Address is required'
-											: !isAllPickup && value.trim().length < 5
+											: !noAddressRequired && value.trim().length < 5
 												? 'Please enter a complete address'
 												: undefined,
 								}}
@@ -240,7 +273,7 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 											value={field.state.value}
 											onChange={(e) => field.handleChange(e.target.value)}
 											onBlur={field.handleBlur}
-											required={!isAllPickup}
+											required={!noAddressRequired}
 										/>
 										{field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
 											<p className="text-xs text-red-500 mt-1">{field.state.meta.errors[0]}</p>
@@ -256,9 +289,9 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 										name="city"
 										validators={{
 											onChange: ({ value }: { value: string }) =>
-												!isAllPickup && !value.trim()
+												!noAddressRequired && !value.trim()
 													? 'City is required'
-													: !isAllPickup && value.trim().length < 2
+													: !noAddressRequired && value.trim().length < 2
 														? 'Please enter a valid city name'
 														: undefined,
 										}}
@@ -273,7 +306,7 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 													onChange={(value) => field.handleChange(value)}
 													onBlur={field.handleBlur}
 													placeholder="e.g. San Francisco"
-													required={!isAllPickup}
+													required={!noAddressRequired}
 													selectedCountry={selectedCountry}
 												/>
 												{field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
@@ -289,9 +322,9 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 								name="zipPostcode"
 								validators={{
 									onChange: ({ value }: { value: string }) =>
-										!isAllPickup && !value.trim()
+										!noAddressRequired && !value.trim()
 											? 'ZIP/Postcode is required'
-											: !isAllPickup && value.trim().length < 3
+											: !noAddressRequired && value.trim().length < 3
 												? 'Please enter a valid ZIP/Postcode'
 												: undefined,
 								}}
@@ -307,7 +340,7 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 											value={field.state.value}
 											onChange={(e) => field.handleChange(e.target.value)}
 											onBlur={field.handleBlur}
-											required={!isAllPickup}
+											required={!noAddressRequired}
 										/>
 										{field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
 											<p className="text-xs text-red-500 mt-1">{field.state.meta.errors[0]}</p>
@@ -320,9 +353,9 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 								name="country"
 								validators={{
 									onChange: ({ value }: { value: string }) =>
-										!isAllPickup && !value.trim()
+										!noAddressRequired && !value.trim()
 											? 'Country is required'
-											: !isAllPickup && !isValidCountry(value)
+											: !noAddressRequired && !isValidCountry(value)
 												? 'Please select a valid country from the list'
 												: undefined,
 								}}
@@ -337,7 +370,7 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 											onChange={(value) => field.handleChange(value)}
 											onBlur={field.handleBlur}
 											placeholder="e.g. United Kingdom"
-											required={!isAllPickup}
+											required={!noAddressRequired}
 										/>
 										{field.state.meta.isTouched && field.state.meta.errors.length > 0 && (
 											<p className="text-xs text-red-500 mt-1">{field.state.meta.errors[0]}</p>

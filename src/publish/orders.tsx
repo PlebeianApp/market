@@ -12,11 +12,12 @@ import { getShippingEvent, getShippingService } from '@/queries/shipping'
 // import type { CartProduct, SellerData, V4VShare } from '@/lib/stores/cart'
 
 /**
- * Helper function to check if all products in a list are pickup orders
+ * Helper function to check if all products require no shipping address
+ * (either pickup or digital delivery)
  */
-async function checkIfAllProductsArePickup(products: CartProduct[]): Promise<boolean> {
+async function checkIfNoAddressRequired(products: CartProduct[]): Promise<boolean> {
 	try {
-		const pickupChecks = await Promise.all(
+		const checks = await Promise.all(
 			products.map(async (product) => {
 				if (!product.shippingMethodId) return false
 
@@ -25,7 +26,8 @@ async function checkIfAllProductsArePickup(products: CartProduct[]): Promise<boo
 					if (!shippingEvent) return false
 
 					const serviceTag = getShippingService(shippingEvent)
-					return serviceTag?.[1] === 'pickup'
+					const serviceType = serviceTag?.[1]
+					return serviceType === 'pickup' || serviceType === 'digital'
 				} catch (error) {
 					console.error('Error checking shipping service:', error)
 					return false
@@ -33,9 +35,9 @@ async function checkIfAllProductsArePickup(products: CartProduct[]): Promise<boo
 			}),
 		)
 
-		return pickupChecks.every((isPickup) => isPickup)
+		return checks.every((noAddress) => noAddress)
 	} catch (error) {
-		console.error('Error checking if all products are pickup:', error)
+		console.error('Error checking if no address required:', error)
 		return false
 	}
 }
@@ -729,8 +731,11 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 
 		if (sellerProducts.length === 0 || !data) continue
 
-		// Check if all products for this seller are pickup orders
-		const isAllPickup = await checkIfAllProductsArePickup(sellerProducts)
+		// Check if all products require no shipping address (pickup or digital)
+		const noAddressRequired = await checkIfNoAddressRequired(sellerProducts)
+
+		// Extract shippingRef from the first product that has a shipping method
+		const shippingRef = sellerProducts.find((p) => p.shippingMethodId)?.shippingMethodId || undefined
 
 		const orderData: OrderCreationData = {
 			merchantPubkey: sellerPubkey,
@@ -740,8 +745,8 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 				quantity: product.amount,
 			})),
 			totalAmountSats: data.satsTotal,
-			// Only include shipping address if not all pickup
-			shippingAddress: isAllPickup ? undefined : shippingData,
+			shippingRef: shippingRef || undefined,
+			shippingAddress: noAddressRequired ? undefined : shippingData,
 			email: shippingData.email || 'customer@example.com',
 			notes: `Order for ${sellerProducts.length} item(s) from seller.`,
 		}
