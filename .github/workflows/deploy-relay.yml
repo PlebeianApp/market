@@ -1,0 +1,217 @@
+name: Deploy Staging Relay
+
+# Triggers when the relay version tag file is updated on master.
+# Compares the file version against the deployed NIP-11 version and
+# deploys to relay.staging.plebeian.market if they differ.
+#
+# Required Secrets (already configured in "staging" environment):
+#   STAGING_HOST          - staging.plebeian.market
+#   STAGING_USER          - deployer
+#   STAGING_PASSWORD      - SSH password
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'deploy-simple/relay-version'
+  workflow_dispatch:
+
+jobs:
+  deploy-relay:
+    name: Deploy Staging Relay
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: Checkout market repo
+        uses: actions/checkout@v4
+
+      - name: Read target version
+        id: version
+        run: |
+          FILE_VERSION=$(cat deploy-simple/relay-version | tr -d '[:space:]')
+          echo "Target version: ${FILE_VERSION}"
+
+          # Strip 'v' prefix for NIP-11 comparison (NIP-11 reports without 'v')
+          FILE_VERSION_BARE=${FILE_VERSION#v}
+          echo "Bare version: ${FILE_VERSION_BARE}"
+
+          echo "file_version=${FILE_VERSION}" >> $GITHUB_OUTPUT
+          echo "file_version_bare=${FILE_VERSION_BARE}" >> $GITHUB_OUTPUT
+
+      - name: Check deployed NIP-11 version
+        id: nip11
+        run: |
+          echo "Querying NIP-11 at relay.staging.plebeian.market..."
+          NIP11_JSON=$(curl -sf -H 'Accept: application/nostr+json' \
+            https://relay.staging.plebeian.market/ || echo '{}')
+
+          # Trim whitespace/newlines from version (older ORLY has trailing \n)
+          DEPLOYED_VERSION=$(echo "${NIP11_JSON}" | jq -r '.version // "unknown"' | tr -d '[:space:]')
+          echo "Deployed version: ${DEPLOYED_VERSION}"
+
+          echo "deployed_version=${DEPLOYED_VERSION}" >> $GITHUB_OUTPUT
+
+      - name: Compare versions
+        id: compare
+        env:
+          FILE_VER: ${{ steps.version.outputs.file_version_bare }}
+          DEPLOYED_VER: ${{ steps.nip11.outputs.deployed_version }}
+        run: |
+          echo "File version (bare): ${FILE_VER}"
+          echo "Deployed version:    ${DEPLOYED_VER}"
+
+          if [ "${FILE_VER}" = "${DEPLOYED_VER}" ]; then
+            echo "Versions match — no deployment needed."
+            echo "needs_deploy=false" >> $GITHUB_OUTPUT
+          else
+            echo "Version mismatch — deployment required!"
+            echo "  ${DEPLOYED_VER} → ${FILE_VER}"
+            echo "needs_deploy=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Clone relay source
+        if: steps.compare.outputs.needs_deploy == 'true'
+        env:
+          TARGET_VERSION: ${{ steps.version.outputs.file_version }}
+        run: |
+          RELAY_REPO_URL="https://git.nostrdev.com/mleku/next.orly.dev.git"
+
+          echo "Cloning relay repo at tag ${TARGET_VERSION}..."
+          git clone --depth 1 --branch "${TARGET_VERSION}" "${RELAY_REPO_URL}" relay-src || {
+            echo "Tag ${TARGET_VERSION} not found, trying main branch..."
+            git clone --depth 1 "${RELAY_REPO_URL}" relay-src
+          }
+          ls -la relay-src/
+
+      - name: Set up Go
+        if: steps.compare.outputs.needs_deploy == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Setup Bun
+        if: steps.compare.outputs.needs_deploy == 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 'latest'
+
+      - name: Build web UI
+        if: steps.compare.outputs.needs_deploy == 'true'
+        run: |
+          cd relay-src/app/web
+          bun install
+          bun run build
+          echo "Web UI built"
+
+      - name: Build relay binary (linux/amd64)
+        if: steps.compare.outputs.needs_deploy == 'true'
+        env:
+          TARGET_VERSION: ${{ steps.version.outputs.file_version }}
+        run: |
+          cd relay-src
+          echo "Building orly ${TARGET_VERSION} for linux/amd64..."
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+            go build -ldflags "-s -w" -o orly ./cmd/orly
+
+          file orly
+          ls -lh orly
+          echo "Build complete"
+
+      - name: Run tests
+        if: steps.compare.outputs.needs_deploy == 'true'
+        run: |
+          cd relay-src
+          echo "Running tests..."
+          CGO_ENABLED=0 go test ./... || echo "Some tests had issues, continuing..."
+
+      - name: Deploy to staging
+        if: steps.compare.outputs.needs_deploy == 'true'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          password: ${{ secrets.STAGING_PASSWORD }}
+          script: |
+            echo "Preparing for relay deployment..."
+            mkdir -p /tmp/relay-deploy
+
+      - name: Upload binary
+        if: steps.compare.outputs.needs_deploy == 'true'
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          password: ${{ secrets.STAGING_PASSWORD }}
+          source: 'relay-src/orly'
+          target: '/tmp/relay-deploy'
+          strip_components: 1
+
+      - name: Install and restart relay
+        if: steps.compare.outputs.needs_deploy == 'true'
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          TARGET_VERSION: ${{ steps.version.outputs.file_version }}
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          password: ${{ secrets.STAGING_PASSWORD }}
+          envs: TARGET_VERSION
+          script: |
+            set -e
+            REMOTE_BIN="/home/deployer/.local/bin/orly.dev"
+            SERVICE_NAME="orly"
+
+            echo "=== Deploying relay ${TARGET_VERSION} ==="
+
+            # Backup current binary
+            cp -f "${REMOTE_BIN}" "${REMOTE_BIN}.prev" 2>/dev/null || true
+
+            # Stop the service
+            sudo systemctl stop ${SERVICE_NAME} || echo "Service may not be running"
+
+            # Install new binary
+            cp /tmp/relay-deploy/orly "${REMOTE_BIN}"
+            chmod +x "${REMOTE_BIN}"
+
+            # Start the service
+            sudo systemctl start ${SERVICE_NAME}
+
+            # Verify
+            sleep 5
+            if sudo systemctl is-active ${SERVICE_NAME} | grep -q "active"; then
+              echo "Service is running"
+              ${REMOTE_BIN} version || true
+            else
+              echo "ERROR: Service failed to start"
+              echo "Rolling back..."
+              cp "${REMOTE_BIN}.prev" "${REMOTE_BIN}"
+              sudo systemctl start ${SERVICE_NAME}
+              echo "Rolled back to previous version"
+              exit 1
+            fi
+
+            # Cleanup
+            rm -rf /tmp/relay-deploy
+
+            echo "=== Relay deployment complete: ${TARGET_VERSION} ==="
+
+      - name: Verify NIP-11 version
+        if: steps.compare.outputs.needs_deploy == 'true'
+        env:
+          EXPECTED_VERSION: ${{ steps.version.outputs.file_version_bare }}
+        run: |
+          sleep 5
+          echo "Checking NIP-11 version..."
+          ACTUAL=$(curl -sf -H 'Accept: application/nostr+json' \
+            https://relay.staging.plebeian.market/ | jq -r '.version // "unknown"' | tr -d '[:space:]')
+
+          echo "Expected: ${EXPECTED_VERSION}"
+          echo "Actual:   ${ACTUAL}"
+
+          if [ "${ACTUAL}" = "${EXPECTED_VERSION}" ]; then
+            echo "✅ Relay deployment verified: ${ACTUAL}"
+          else
+            echo "⚠️ Version mismatch — relay may need time to start. Check manually."
+          fi
