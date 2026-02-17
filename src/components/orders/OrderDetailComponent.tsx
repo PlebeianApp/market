@@ -21,7 +21,7 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { format } from 'date-fns'
-import { CreditCard, MapPin, MessageSquare, Package, Receipt, Truck } from 'lucide-react'
+import { CreditCard, Download, MapPin, MessageSquare, Package, Receipt, Truck } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { DetailField } from '../ui/DetailField'
@@ -188,6 +188,7 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 	// Extract shipping information
 	const shippingInfo = shippingOption ? getShippingInfo(shippingOption) : null
 	const isPickupService = shippingOption ? getShippingService(shippingOption)?.[1] === 'pickup' : false
+	const isDigitalService = shippingOption ? getShippingService(shippingOption)?.[1] === 'digital' : false
 	const pickupAddress = shippingOption && isPickupService ? getShippingPickupAddressString(shippingOption) : null
 
 	const products = productQueries.map((query) => query.data).filter(Boolean) as NDKEvent[]
@@ -321,8 +322,16 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 					<Card>
 						<CardHeader>
 							<div className="flex items-center gap-2">
-								{isPickupService ? <MapPin className="w-5 h-5" /> : <Truck className="w-5 h-5" />}
-								<CardTitle>{isPickupService ? 'Pickup Information' : 'Shipping Information'}</CardTitle>
+								{isPickupService ? (
+									<MapPin className="w-5 h-5" />
+								) : isDigitalService ? (
+									<Download className="w-5 h-5" />
+								) : (
+									<Truck className="w-5 h-5" />
+								)}
+								<CardTitle>
+									{isPickupService ? 'Pickup Information' : isDigitalService ? 'Digital Delivery' : 'Shipping Information'}
+								</CardTitle>
 							</div>
 						</CardHeader>
 						<CardContent>
@@ -331,7 +340,21 @@ export function OrderDetailComponent({ order }: OrderDetailComponentProps) {
 
 								{isPickupService && pickupAddress && <PickupAddressDisplay pickupAddress={pickupAddress} />}
 
-								{!isPickupService && shippingAddress && <DeliveryAddressDisplay shippingAddress={shippingAddress} />}
+								{isDigitalService && (
+									<div className="mt-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+										<div className="flex items-start gap-2">
+											<Download className="w-4 h-4 text-purple-600 mt-0.5" />
+											<div>
+												<p className="font-medium text-purple-900">Digital Delivery</p>
+												<p className="text-sm text-purple-800 mt-1">
+													This item will be delivered digitally. Check your messages for delivery details.
+												</p>
+											</div>
+										</div>
+									</div>
+								)}
+
+								{!isPickupService && !isDigitalService && shippingAddress && <DeliveryAddressDisplay shippingAddress={shippingAddress} />}
 
 								{/* Tracking Information */}
 								<TrackingInfoDisplay

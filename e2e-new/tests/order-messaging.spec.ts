@@ -13,7 +13,7 @@ test.use({ scenario: 'merchant' })
 async function completeCheckout(page: Page) {
 	// Add product to cart
 	await page.goto('/products')
-	const productCard = page.locator('[data-testid="product-card"]').first()
+	const productCard = page.locator('[data-testid="product-card"]').filter({ hasText: 'Bitcoin Hardware Wallet' })
 	await expect(productCard).toBeVisible({ timeout: 15_000 })
 	await productCard.getByRole('button', { name: /Add to Cart/i }).click()
 	await expect(productCard.getByRole('button', { name: /Add/i })).toBeVisible()

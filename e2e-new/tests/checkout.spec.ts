@@ -19,7 +19,7 @@ test.describe('Checkout', () => {
 		// ─── 2. Add product to cart ─────────────────────────────────
 		await buyerPage.goto('/products')
 
-		const productCard = buyerPage.locator('[data-testid="product-card"]').first()
+		const productCard = buyerPage.locator('[data-testid="product-card"]').filter({ hasText: 'Bitcoin Hardware Wallet' })
 		await expect(productCard).toBeVisible({ timeout: 15_000 })
 
 		await productCard.getByRole('button', { name: /Add to Cart/i }).click()
