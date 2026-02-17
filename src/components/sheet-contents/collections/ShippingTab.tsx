@@ -110,14 +110,16 @@ export function ShippingTab() {
 							const option = availableShippingOptions.find((opt) => opt.id === shipping.shipping?.id)
 							return (
 								<div key={index} className="flex items-center gap-3 p-3 border rounded-md bg-gray-50">
-									{option && <ServiceIcon service={option.service} />}
+									{option && <ServiceIcon service={option.service ?? 'standard'} />}
 									<div className="flex-1">
 										<div className="font-medium">{shipping.shipping?.name}</div>
 										{option && (
 											<div className="text-sm text-gray-500">
 												{option.cost} {option.currency} •{' '}
-												{option.countries?.length > 1 ? `${option.countries.length} countries` : option.countries?.[0] || 'No countries'} •{' '}
-												{option.service}
+												{(option.countries?.length ?? 0) > 1
+													? `${option.countries?.length} countries`
+													: option.countries?.[0] || 'No countries'}{' '}
+												• {option.service}
 											</div>
 										)}
 									</div>
@@ -169,43 +171,34 @@ export function ShippingTab() {
 
 				{availableShippingOptions.length > 0 && (
 					<div className="space-y-2">
-						{availableShippingOptions.map((option) => {
-							const isAdded = shippings.some((s) => s.shipping?.id === option.id)
-							return (
+						{availableShippingOptions
+							.filter((option) => !shippings.some((s) => s.shipping?.id === option.id))
+							.map((option) => (
 								<div key={option.id} className="flex items-center gap-3 p-3 border rounded-md hover:bg-gray-50">
-									<ServiceIcon service={option.service} />
+									<ServiceIcon service={option.service ?? 'standard'} />
 									<div className="flex-1">
 										<div className="font-medium">{option.name}</div>
 										<div className="text-sm text-gray-500">
 											{option.cost} {option.currency} •{' '}
-											{option.countries?.length > 1 ? `${option.countries.length} countries` : option.countries?.[0] || 'No countries'} •{' '}
-											{option.service}
+											{option.countries && option.countries.length > 1
+												? `${option.countries.length} countries`
+												: option.countries?.[0] || 'No countries'}{' '}
+											• {option.service}
 											{option.carrier && ` • ${option.carrier}`}
 										</div>
 									</div>
 									<Button
 										type="button"
-										variant={isAdded ? 'outline' : 'secondary'}
+										variant="secondary"
 										size="sm"
-										onClick={() => (isAdded ? null : addShippingOption(option))}
-										disabled={isAdded}
+										onClick={() => addShippingOption(option)}
 										data-testid={`add-shipping-option-${option.name?.replace(/\s+/g, '-').toLowerCase() || 'unknown'}`}
 									>
-										{isAdded ? (
-											<>
-												<CheckIcon className="w-4 h-4 mr-1" />
-												Added
-											</>
-										) : (
-											<>
-												<PlusIcon className="w-4 h-4 mr-1" />
-												Add
-											</>
-										)}
+										<PlusIcon className="w-4 h-4 mr-1" />
+										Add
 									</Button>
 								</div>
-							)
-						})}
+							))}
 					</div>
 				)}
 			</div>
