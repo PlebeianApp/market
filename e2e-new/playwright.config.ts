@@ -56,6 +56,7 @@ export default defineConfig({
 						APP_RELAY_URL: RELAY_URL,
 						APP_PRIVATE_KEY: TEST_APP_PRIVATE_KEY,
 						LOCAL_RELAY_ONLY: 'true',
+						NIP46_RELAY_URL: RELAY_URL,
 					},
 				},
 			],

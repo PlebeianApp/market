@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { authActions, NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY } from '@/lib/stores/auth'
-import { generateSecretKey, nip19 } from 'nostr-tools'
+import { generateSecretKey, getPublicKey, nip19 } from 'nostr-tools'
 import { useEffect, useRef, useState } from 'react'
 import { Copy, Eye, EyeOff, Loader2 } from 'lucide-react'
 
@@ -76,7 +76,8 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 	const encryptAndStoreKey = async (key: string, password: string) => {
 		try {
 			const normalizedKey = normalizePrivateKey(key)
-			const pubkey = nip19.decode(normalizedKey).data as string
+			const secretKeyBytes = nip19.decode(normalizedKey).data as Uint8Array
+			const pubkey = getPublicKey(secretKeyBytes)
 			const encryptedKey = `${pubkey}:${normalizedKey}`
 			localStorage.setItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY, encryptedKey)
 			setHasStoredKey(true)
