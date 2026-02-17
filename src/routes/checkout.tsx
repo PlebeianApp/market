@@ -281,6 +281,8 @@ function RouteComponent() {
 						const sellerProducts = productsBySeller[sellerPubkey] || []
 						const data = sellerData[sellerPubkey]
 						const totalAmount = data?.satsTotal || 0
+						const shippingAmount = data?.shippingSats || 0
+						const productSubtotal = totalAmount - shippingAmount
 						const shares = data?.shares
 						const v4vRecipients = v4vShares[sellerPubkey] || []
 
@@ -332,7 +334,7 @@ function RouteComponent() {
 						for (const recipient of v4vRecipients) {
 							// Calculate the recipient's amount based on their percentage
 							const recipientPercentage = recipient.percentage > 1 ? recipient.percentage / 100 : recipient.percentage
-							const calculatedAmount = totalAmount * recipientPercentage
+							const calculatedAmount = productSubtotal * recipientPercentage
 
 							// Round up to ensure minimum 1 sat for any V4V recipient with > 0% share
 							const recipientAmount = recipientPercentage > 0 ? Math.max(1, Math.floor(calculatedAmount)) : 0
