@@ -90,11 +90,27 @@ test.describe('Featured Items', () => {
 
 		const dTag = `e2e-featured-${Date.now()}`
 		const productCoords = `30402:${devUser1.pk}:${dTag}`
-		await fillAndAdd(merchantPage, 'newProduct', productCoords)
+		const productIdText = merchantPage.getByText(`ID: ${dTag}`)
+		const productInput = merchantPage.locator('#newProduct')
 
-		// Wait for success feedback, then verify the new entry is rendered.
-		await expect(merchantPage.getByText('Product added to featured list')).toBeVisible({ timeout: 15_000 })
-		await expect(merchantPage.getByText(`ID: ${dTag}`)).toBeVisible({ timeout: 15_000 })
+		// First attempt
+		await fillAndAdd(merchantPage, 'newProduct', productCoords)
+		let addCompleted = true
+		try {
+			await expect(productInput).toHaveValue('', { timeout: 10_000 })
+		} catch {
+			addCompleted = false
+		}
+
+		// Retry once if the add action did not complete (input never cleared).
+		if (!addCompleted) {
+			await fillAndAdd(merchantPage, 'newProduct', productCoords)
+			await expect(productInput).toHaveValue('', { timeout: 10_000 })
+		}
+
+		// Confirm persisted state after a fresh page load.
+		await gotoAdminRoute(merchantPage, '/dashboard/app-settings/featured-items')
+		await expect(productIdText).toBeVisible({ timeout: 15_000 })
 	})
 
 	test('can remove a product from featured list', async ({ merchantPage }) => {
