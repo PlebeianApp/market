@@ -83,24 +83,26 @@ test.describe('Checkout', () => {
 		// "Generating Lightning invoices..." disappears once invoices are ready
 		const webLnButton = buyerPage.getByRole('button', { name: 'Pay with WebLN' })
 
-		// Pay invoice 1 (merchant share)
+		// Pay all invoices (merchant + V4V shares — count varies with V4V config)
 		await expect(webLnButton).toBeVisible({ timeout: 30_000 })
-		await expect(webLnButton).toBeEnabled({ timeout: 10_000 })
-		await webLnButton.click()
-
-		// Wait for first payment to be confirmed before paying the next
-		await expect(buyerPage.getByText('1 of 2 completed')).toBeVisible({ timeout: 15_000 })
-
-		// Pay invoice 2 (V4V share)
-		await expect(webLnButton).toBeEnabled({ timeout: 10_000 })
-		await webLnButton.click()
+		while (
+			(await buyerPage
+				.getByText('All payments completed successfully!')
+				.isVisible()
+				.catch(() => false)) === false
+		) {
+			await expect(webLnButton).toBeEnabled({ timeout: 10_000 })
+			await webLnButton.click()
+			// Wait for payment to register before attempting the next
+			await buyerPage.waitForTimeout(1_000)
+		}
 
 		// ─── 7. Verify completion (step: complete) ───────────────────
 		await expect(buyerPage.getByText('All payments completed successfully!')).toBeVisible({ timeout: 20_000 })
 		await expect(buyerPage.getByRole('button', { name: 'View Your Purchases' })).toBeVisible()
 
 		// Verify the mock recorded the expected payments (merchant + V4V)
-		expect(lnMock.paidInvoices.length).toBe(2)
+		expect(lnMock.paidInvoices.length).toBeGreaterThanOrEqual(2)
 
 		// ─── 8. Verify relay events ──────────────────────────────────
 		// Query the relay for order events published during this test

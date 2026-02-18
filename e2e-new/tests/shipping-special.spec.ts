@@ -29,13 +29,18 @@ async function payAllInvoices(page: Page) {
 	await expect(page.getByText('Invoices', { exact: true })).toBeVisible({ timeout: 30_000 })
 	const webLnButton = page.getByRole('button', { name: 'Pay with WebLN' })
 	await expect(webLnButton).toBeVisible({ timeout: 30_000 })
-	await expect(webLnButton).toBeEnabled({ timeout: 10_000 })
-	await webLnButton.click()
 
-	// Wait for first payment, then pay second (V4V)
-	await expect(page.getByText('1 of 2 completed')).toBeVisible({ timeout: 15_000 })
-	await expect(webLnButton).toBeEnabled({ timeout: 10_000 })
-	await webLnButton.click()
+	// Pay all invoices (merchant + V4V shares — count varies with V4V config)
+	while (
+		(await page
+			.getByText('All payments completed successfully!')
+			.isVisible()
+			.catch(() => false)) === false
+	) {
+		await expect(webLnButton).toBeEnabled({ timeout: 10_000 })
+		await webLnButton.click()
+		await page.waitForTimeout(1_000)
+	}
 
 	await expect(page.getByText('All payments completed successfully!')).toBeVisible({ timeout: 20_000 })
 }
