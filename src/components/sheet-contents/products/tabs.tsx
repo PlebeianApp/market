@@ -115,9 +115,12 @@ export function DetailTab() {
 			const satsValue = convertCurrencyToSats(numValue, currency)
 			// Store both the sats value (for display) and the fiat value (for publishing)
 			productFormActions.updateValues({ price: satsValue.toString(), fiatPrice: value })
-		} else if (value === '' || value === '0') {
-			// Clear the price if input is empty or zero
+		} else if (value === '0') {
+			// Set the price to zero if the input is zero
 			productFormActions.updateValues({ price: '0', fiatPrice: '0' })
+		} else if (value === '') {
+			// Clear the price if input is empty
+			productFormActions.updateValues({ price: '', fiatPrice: '' })
 		}
 	}
 
