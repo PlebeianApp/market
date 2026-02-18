@@ -162,10 +162,21 @@ async function seedMarketplace(relay: Relay) {
 		countries: ['US'],
 	})
 
+	await seedShippingOption(relay, devUser2.sk, {
+		title: 'Digital Delivery',
+		price: '0',
+		currency: 'sats',
+		service: 'digital',
+		countries: [],
+	})
+
 	await seedPaymentDetail(relay, devUser2.sk, TEST_APP_PUBLIC_KEY, {
 		method: 'LIGHTNING_NETWORK',
 		detail: WALLETED_USER_LUD16,
 	})
+
+	// Seed V4V shares for second merchant (10% to app, matching devUser1)
+	await seedV4VShares(relay, devUser2.sk, [['zap', TEST_APP_PUBLIC_KEY, '0.1']])
 
 	await seedProduct(relay, devUser2.sk, {
 		title: 'Lightning Node Setup Guide',
@@ -175,7 +186,7 @@ async function seedMarketplace(relay: Relay) {
 		status: 'on-sale',
 		category: 'Bitcoin',
 		stock: '10',
-		shippingOptions: [`30406:${devUser2.pk}:express-shipping`],
+		shippingOptions: [`30406:${devUser2.pk}:express-shipping`, `30406:${devUser2.pk}:digital-delivery`],
 	})
 }
 
@@ -320,6 +331,21 @@ export async function resetV4VForUser(skHex: string): Promise<void> {
 	const relay = await Relay.connect(RELAY_URL)
 	try {
 		await seedV4VShares(relay, skHex)
+	} finally {
+		relay.close()
+	}
+}
+
+/**
+ * Seed V4V shares with specific recipients for a user.
+ * Each recipient is a tuple of [pubkey, percentage] where percentage is a
+ * decimal fraction (e.g. 0.1 for 10%).
+ */
+export async function seedV4VWithRecipients(skHex: string, recipients: Array<{ pubkey: string; percentage: number }>): Promise<void> {
+	const relay = await Relay.connect(RELAY_URL)
+	try {
+		const shares = recipients.map((r) => ['zap', r.pubkey, String(r.percentage)])
+		await seedV4VShares(relay, skHex, shares)
 	} finally {
 		relay.close()
 	}
