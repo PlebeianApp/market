@@ -3,8 +3,11 @@ import { useScrollRestoration } from '@/hooks/useScrollRestoration'
 import { ProductCard } from '@/components/ProductCard'
 import { ItemGrid } from '@/components/ItemGrid'
 import { Button } from '@/components/ui/button'
+import { uiStore } from '@/lib/stores/ui'
+import { filterNSFWProducts } from '@/queries/products'
+import { useStore } from '@tanstack/react-store'
 import { Loader2 } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import type { ReactNode } from 'react'
 import type { SortOption } from '@/components/ProductFilters'
@@ -48,9 +51,19 @@ export function InfiniteProductList({
 	sort = 'newest',
 }: InfiniteProductListProps) {
 	const containerRef = useRef<HTMLDivElement>(null)
+	const { showNSFWContent } = useStore(uiStore)
 
 	// Use simplified infinite scroll hook
-	const { products, isLoading, isError, error, hasMore, loadMore, totalProducts, currentChunk } = useSimpleInfiniteScroll({
+	const {
+		products: rawProducts,
+		isLoading,
+		isError,
+		error,
+		hasMore,
+		loadMore,
+		totalProducts,
+		currentChunk,
+	} = useSimpleInfiniteScroll({
 		chunkSize,
 		maxProducts,
 		threshold,
@@ -60,6 +73,9 @@ export function InfiniteProductList({
 		hidePreorder,
 		sort,
 	})
+
+	// Filter out NSFW products if user hasn't enabled viewing
+	const products = useMemo(() => filterNSFWProducts(rawProducts, showNSFWContent), [rawProducts, showNSFWContent])
 
 	// Use scroll restoration hook
 	const { scrollElementRef, saveScrollPosition, restoreScrollPosition } = useScrollRestoration({

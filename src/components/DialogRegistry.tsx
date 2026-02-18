@@ -2,6 +2,7 @@ import { LoginDialog } from '@/components/auth/LoginDialog'
 import { QRScannerDialog } from '@/components/wallet/QRScannerDialog'
 import { V4VSetupDialog } from '@/components/dialogs/V4VSetupDialog'
 import { TermsConditionsDialog } from '@/components/dialogs/TermsConditionsDialog'
+import { NSFWConfirmationDialog } from '@/components/dialogs/NSFWConfirmationDialog'
 import { uiStore } from '@/lib/stores/ui'
 import { useStore } from '@tanstack/react-store'
 import { useMemo } from 'react'
@@ -17,6 +18,7 @@ export function DialogRegistry() {
 		if (dialogs['scan-qr']) return 'scan-qr'
 		if (dialogs['v4v-setup']) return 'v4v-setup'
 		if (dialogs.terms) return 'terms'
+		if (dialogs['nsfw-confirmation']) return 'nsfw-confirmation'
 		return null
 	}, [dialogs])
 
@@ -113,6 +115,9 @@ export function DialogRegistry() {
 					}}
 				/>
 			),
+		},
+		'nsfw-confirmation': {
+			content: <NSFWConfirmationDialog />,
 		},
 	}
 

@@ -38,13 +38,14 @@ import {
 	getProductType,
 	getProductVisibility,
 	getProductWeight,
+	isNSFWProduct,
 	productQueryOptions,
 	productsByPubkeyQueryOptions,
 } from '@/queries/products'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { ArrowLeft, Edit, Minus, Plus, Truck } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Edit, Minus, Plus, Truck } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -83,9 +84,8 @@ export const Route = createFileRoute('/products/$productId')({
 function RouteComponent() {
 	const { productId } = Route.useLoaderData()
 	const { cart } = useCart()
-	const { mobileMenuOpen } = useStore(uiStore)
+	const { mobileMenuOpen, showNSFWContent, navigation } = useStore(uiStore)
 	const navigate = useNavigate()
-	const { navigation } = useStore(uiStore)
 	const queryClient = useQueryClient()
 
 	// Scroll to top when product changes
@@ -223,10 +223,32 @@ function RouteComponent() {
 		return (
 			<div className="flex h-[50vh] flex-col items-center justify-center gap-4 px-4 text-center">
 				<h1 className="text-2xl font-bold">Product Not Found</h1>
-				<p className="text-gray-600">The product you’re looking for doesn’t exist (or hasn’t propagated to relays yet).</p>
+				<p className="text-gray-600">The product you're looking for doesn't exist (or hasn't propagated to relays yet).</p>
 				<Link to="/products" className="inline-flex">
 					<Button variant="outline">Back to products</Button>
 				</Link>
+			</div>
+		)
+	}
+
+	// Check if this is an NSFW product and user hasn't enabled viewing
+	const productIsNSFW = isNSFWProduct(product)
+	if (productIsNSFW && !showNSFWContent) {
+		return (
+			<div className="flex h-[50vh] flex-col items-center justify-center gap-4 px-4 text-center">
+				<AlertTriangle className="w-16 h-16 text-amber-500" />
+				<h1 className="text-2xl font-bold">Adult Content</h1>
+				<p className="text-gray-600 max-w-md">
+					This product contains adult or sensitive content. To view it, you need to enable adult content viewing in your settings.
+				</p>
+				<div className="flex gap-3">
+					<Link to="/products" className="inline-flex">
+						<Button variant="outline">Back to products</Button>
+					</Link>
+					<Button variant="default" onClick={() => uiActions.openNSFWConfirmation()} className="bg-amber-600 hover:bg-amber-700">
+						Enable adult content
+					</Button>
+				</div>
 			</div>
 		)
 	}

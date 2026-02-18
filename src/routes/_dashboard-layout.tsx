@@ -408,6 +408,7 @@ function DashboardLayout() {
 												location.pathname === '/dashboard/account/receiving-payments' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/account/your-purchases' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/account/network' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/account/preferences' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/app-settings/app-miscelleneous' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/app-settings/team' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/app-settings/blacklists' && 'p-0 lg:p-0',
@@ -436,7 +437,10 @@ function DashboardLayout() {
 												location.pathname !== '/dashboard/app-settings/blacklists' &&
 												location.pathname !== '/dashboard/app-settings/featured-items' &&
 												location.pathname !== '/dashboard/account/network' &&
-												location.pathname !== '/dashboard/about' && <h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>}
+												location.pathname !== '/dashboard/about' &&
+												location.pathname !== '/dashboard/account/preferences' && (
+													<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>
+												)}
 											{!isAuthenticated ? (
 												<LoginPrompt />
 											) : (
@@ -461,7 +465,10 @@ function DashboardLayout() {
 														location.pathname !== '/dashboard/account/receiving-payments' &&
 														location.pathname !== '/dashboard/account/your-purchases' &&
 														location.pathname !== '/dashboard/account/network' &&
-														location.pathname !== '/dashboard/about' && <h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>}
+														location.pathname !== '/dashboard/about' &&
+														location.pathname !== '/dashboard/account/preferences' && (
+															<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>
+														)}
 													<Outlet />
 												</>
 											)}
