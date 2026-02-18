@@ -7,6 +7,7 @@
 import { finalizeEvent, type EventTemplate } from 'nostr-tools/pure'
 import { Relay } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils'
+import { devUser1 } from '../src/lib/fixtures'
 import { TEST_APP_PRIVATE_KEY, TEST_APP_PUBLIC_KEY, RELAY_URL } from './test-config'
 
 const skBytes = hexToBytes(TEST_APP_PRIVATE_KEY)
@@ -46,13 +47,17 @@ async function main() {
 	console.log('  Published app settings (Kind 31990)')
 
 	// Publish Kind 30000 (Admin List)
+	// Include devUser1 so the server recognises them as admin at startup.
+	// The server caches the admin list via a one-time fetch — events published
+	// later (e.g. by test scenarios) won't update the server's cache.
 	await publish({
 		kind: 30000,
 		created_at: Math.floor(Date.now() / 1000),
 		content: '',
 		tags: [
-			['d', 'admin'],
+			['d', 'admins'],
 			['p', TEST_APP_PUBLIC_KEY],
+			['p', devUser1.pk],
 		],
 	})
 	console.log('  Published admin list (Kind 30000)')

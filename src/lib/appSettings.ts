@@ -110,7 +110,7 @@ export interface AppSettingsSubmitData {
 
 export async function submitAppSettings(data: NostrEvent): Promise<void> {
 	return new Promise((resolve, reject) => {
-		const wsUrl = `${window.location.protocol === 'https:' ? `wss://${window.location.hostname}` : `ws://${window.location.hostname}:3000`}`
+		const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`
 		console.log(`Connecting to WebSocket at ${wsUrl}`)
 
 		const ws = new WebSocket(wsUrl)
