@@ -1,3 +1,4 @@
+import { PickupLocationDialog } from '@/components/dialogs/PickupLocationDialog'
 import { ShareProfileDialog } from '@/components/dialogs/ShareProfileDialog'
 import { EntityActionsMenu } from '@/components/EntityActionsMenu'
 import { ItemGrid } from '@/components/ItemGrid'
@@ -19,12 +20,13 @@ import { useConfigQuery } from '@/queries/config'
 import { useFeaturedUsers } from '@/queries/featured'
 import { productsByPubkeyQueryOptions } from '@/queries/products'
 import { profileByIdentifierQueryOptions } from '@/queries/profiles'
+import { useShippingOptionsByPubkey, getShippingService, getShippingPickupAddress, getShippingTitle } from '@/queries/shipping'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { Edit, MessageCircle, Minus, Plus, Share2 } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { Edit, MapPin, MessageCircle, Minus, Plus, Share2 } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 
 interface ProfilePageProps {
@@ -43,6 +45,7 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 	const [showFullAbout, setShowFullAbout] = useState(false)
 	const [bannerIsLoadable, setBannerIsLoadable] = useState<boolean | null>(null)
 	const [shareDialogOpen, setShareDialogOpen] = useState(false)
+	const [pickupLocationDialogOpen, setPickupLocationDialogOpen] = useState(false)
 	const breakpoint = useBreakpoint()
 	const isSmallScreen = breakpoint === 'sm'
 	const queryClient = useQueryClient()
@@ -65,6 +68,39 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 
 	const isBlacklisted = blacklistSettings?.blacklistedPubkeys.includes(user?.pubkey || '') || false
 	const isFeatured = featuredData?.featuredUsers.includes(user?.pubkey || '') || false
+
+	// Get vendor's shipping options to check for pickup locations
+	const { data: shippingOptions } = useShippingOptionsByPubkey(user?.pubkey || '')
+
+	// Find all pickup shipping options with addresses
+	const pickupLocations = useMemo(() => {
+		if (!shippingOptions) return []
+
+		const locations: Array<{
+			name: string
+			address: {
+				street: string
+				city: string
+				state: string
+				postalCode: string
+				country: string
+			}
+		}> = []
+
+		for (const option of shippingOptions) {
+			const serviceTag = getShippingService(option)
+			if (serviceTag && serviceTag[1] === 'pickup') {
+				const address = getShippingPickupAddress(option)
+				if (address && (address.street || address.city)) {
+					locations.push({
+						name: getShippingTitle(option),
+						address,
+					})
+				}
+			}
+		}
+		return locations
+	}, [shippingOptions])
 
 	// Handle edit profile
 	const handleEdit = () => {
@@ -189,6 +225,11 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 							<Button variant="focus" size="icon" onClick={handleMessageClick}>
 								<MessageCircle className="w-5 h-5" />
 							</Button>
+							{pickupLocations.length > 0 && (
+								<Button variant="secondary" size="icon" onClick={() => setPickupLocationDialogOpen(true)}>
+									<MapPin className="w-5 h-5" />
+								</Button>
+							)}
 							<Button variant="secondary" size="icon" onClick={() => setShareDialogOpen(true)}>
 								<Share2 className="w-5 h-5" />
 							</Button>
@@ -270,6 +311,15 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 				pubkey={user?.pubkey || ''}
 				profileName={profile?.name}
 			/>
+
+			{pickupLocations.length > 0 && (
+				<PickupLocationDialog
+					open={pickupLocationDialogOpen}
+					onOpenChange={setPickupLocationDialogOpen}
+					locations={pickupLocations}
+					vendorName={profile?.name}
+				/>
+			)}
 		</div>
 	)
 }
