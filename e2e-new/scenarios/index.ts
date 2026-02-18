@@ -58,6 +58,19 @@ async function seedBase(relay: Relay) {
 	await seedUserProfile(relay, devUser1, 'TestMerchant', 'Test Merchant')
 	await seedUserProfile(relay, devUser2, 'TestBuyer', 'Test Buyer')
 	await seedUserProfile(relay, { sk: TEST_APP_PRIVATE_KEY, pk: TEST_APP_PUBLIC_KEY }, 'TestApp', 'Test App')
+
+	// Add devUser1 to admin list so they can access app-settings routes
+	await publish(relay, TEST_APP_PRIVATE_KEY, {
+		kind: 30000,
+		created_at: Math.floor(Date.now() / 1000),
+		content: '',
+		tags: [
+			['d', 'admins'],
+			['p', TEST_APP_PUBLIC_KEY],
+			['p', devUser1.pk],
+		],
+	})
+	console.log('    Published admin list with devUser1')
 }
 
 async function seedMerchant(relay: Relay) {
