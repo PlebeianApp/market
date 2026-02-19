@@ -4,6 +4,7 @@ import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { auctionKeys } from './queryKeyFactory'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
+import { naddrFromAddress } from '@/lib/nostr/naddr'
 
 export type AuctionBidStats = {
 	count: number
@@ -78,6 +79,28 @@ export const fetchAuctions = async (limit: number = 200) => {
 	return filterDeletedAuctions(filterBlacklistedEvents(Array.from(events))).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
 
+export const fetchAuction = async (id: string) => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) {
+		console.warn('NDK not ready, cannot fetch auction')
+		return null
+	}
+	if (!id) return null
+
+	const filter: NDKFilter = {
+		kinds: [30408],
+		ids: [id],
+		limit: 1,
+	}
+
+	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
+	const event = Array.from(events)[0] ?? null
+	if (!event) return null
+	const dTag = getAuctionId(event)
+	if (dTag && isAuctionDeleted(dTag, event.created_at)) return null
+	return filterBlacklistedEvents([event])[0] || null
+}
+
 export const fetchAuctionsByPubkey = async (pubkey: string, limit: number = 100) => {
 	if (!pubkey) return []
 	const ndk = ndkActions.getNDK()
@@ -91,6 +114,18 @@ export const fetchAuctionsByPubkey = async (pubkey: string, limit: number = 100)
 
 	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
 	return filterDeletedAuctions(filterBlacklistedEvents(Array.from(events))).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+}
+
+export const fetchAuctionByATag = async (pubkey: string, dTag: string) => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+	if (!pubkey || !dTag) return null
+
+	const naddr = naddrFromAddress(30408, pubkey, dTag)
+	const event = await ndk.fetchEvent(naddr)
+	if (!event) return null
+	if (isAuctionDeleted(dTag, event.created_at)) return null
+	return filterBlacklistedEvents([event])[0] || null
 }
 
 export const fetchAuctionBids = async (auctionEventId: string, limit: number = 500) => {
@@ -141,6 +176,22 @@ export const auctionsByPubkeyQueryOptions = (pubkey: string, limit: number = 100
 		enabled: !!pubkey,
 	})
 
+export const auctionQueryOptions = (id: string) =>
+	queryOptions({
+		queryKey: auctionKeys.details(id),
+		queryFn: () => fetchAuction(id),
+		staleTime: 300000,
+		enabled: !!id,
+	})
+
+export const auctionByATagQueryOptions = (pubkey: string, dTag: string) =>
+	queryOptions({
+		queryKey: auctionKeys.byATag(pubkey, dTag),
+		queryFn: () => fetchAuctionByATag(pubkey, dTag),
+		staleTime: 300000,
+		enabled: !!(pubkey && dTag),
+	})
+
 export const auctionBidStatsQueryOptions = (auctionEventId: string, startingBid: number = 0) =>
 	queryOptions({
 		queryKey: [...auctionKeys.bidStats(auctionEventId), startingBid],
@@ -155,6 +206,11 @@ export const getAuctionId = (event: NDKEvent | null): string => event?.tags.find
 export const getAuctionTitle = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'title')?.[1] || 'Untitled Auction'
 
 export const getAuctionSummary = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'summary')?.[1] || ''
+
+export const getAuctionCategories = (event: NDKEvent | null): string[] => {
+	if (!event) return []
+	return event.tags.filter((tag) => tag[0] === 't' && !!tag[1]).map((tag) => tag[1])
+}
 
 export const getAuctionImages = (event: NDKEvent | null): Array<string[]> => {
 	if (!event) return []

@@ -4,7 +4,12 @@ import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
 import { ORDER_STATUS, SHIPPING_STATUS } from '@/lib/schemas/order'
 import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 import { ndkActions } from '@/lib/stores/ndk'
-import { createFeaturedCollectionsEvent, createFeaturedProductsEvent, createFeaturedUsersEvent } from '@/publish/featured'
+import {
+	createFeaturedAuctionsEvent,
+	createFeaturedCollectionsEvent,
+	createFeaturedProductsEvent,
+	createFeaturedUsersEvent,
+} from '@/publish/featured'
 import { hexToBytes } from '@noble/hashes/utils'
 import { NDKPrivateKeySigner, NDKEvent } from '@nostr-dev-kit/ndk'
 import { config } from 'dotenv'
@@ -729,6 +734,7 @@ async function seedData() {
 	// Get random collection coordinates for featured collections (4 collections)
 	// Use the actual collection coordinates from seeded collections
 	const featuredCollectionCoords = allCollectionCoords.slice(0, 5)
+	const featuredAuctionCoords = allAuctionEvents.map((auction) => auction.auctionCoordinates).slice(0, 8)
 
 	try {
 		// Publish featured users
@@ -753,6 +759,14 @@ async function seedData() {
 			const featuredProductsEvent = createFeaturedProductsEvent({ featuredProducts: featuredProductCoords }, appSigner, ndk)
 			await featuredProductsEvent.sign(appSigner)
 			await featuredProductsEvent.publish()
+		}
+
+		// Publish featured auctions
+		if (featuredAuctionCoords.length > 0) {
+			console.log(`Publishing ${featuredAuctionCoords.length} featured auctions...`)
+			const featuredAuctionsEvent = createFeaturedAuctionsEvent({ featuredAuctions: featuredAuctionCoords }, appSigner, ndk)
+			await featuredAuctionsEvent.sign(appSigner)
+			await featuredAuctionsEvent.publish()
 		}
 
 		console.log('Featured items created successfully!')
