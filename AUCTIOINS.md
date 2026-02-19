@@ -113,24 +113,24 @@ Important:
 
 ```jsonc
 {
-  "kind": 30408,
-  "content": "Vintage camera, tested, ships worldwide",
-  "tags": [
-    ["d", "auction-7f0b9a"],
-    ["title", "Vintage Camera Auction"],
-    ["a", "30402:<seller-pubkey>:<product-d-tag>"],
-    ["auction_type", "english"],
-    ["start_at", "1766202000"],
-    ["end_at", "1766288400"],
-    ["currency", "SAT"],
-    ["reserve", "50000"],
-    ["bid_increment", "1000"],
-    ["mint", "https://mint.minibits.cash/Bitcoin"],
-    ["mint", "https://mint.coinos.io"],
-    ["escrow_pubkey", "<market-escrow-pubkey>"],
-    ["settlement_policy", "cashu_p2pk_v1"],
-    ["schema", "auction_v1"]
-  ]
+	"kind": 30408,
+	"content": "Vintage camera, tested, ships worldwide",
+	"tags": [
+		["d", "auction-7f0b9a"],
+		["title", "Vintage Camera Auction"],
+		["a", "30402:<seller-pubkey>:<product-d-tag>"],
+		["auction_type", "english"],
+		["start_at", "1766202000"],
+		["end_at", "1766288400"],
+		["currency", "SAT"],
+		["reserve", "50000"],
+		["bid_increment", "1000"],
+		["mint", "https://mint.minibits.cash/Bitcoin"],
+		["mint", "https://mint.coinos.io"],
+		["escrow_pubkey", "<market-escrow-pubkey>"],
+		["settlement_policy", "cashu_p2pk_v1"],
+		["schema", "auction_v1"],
+	],
 }
 ```
 
@@ -219,19 +219,19 @@ This yields:
 
 Note:
 
-- Direct lock to seller pubkey alone is unsafe for v1 (seller can spend early).  
+- Direct lock to seller pubkey alone is unsafe for v1 (seller can spend early).
 - Seller payout is completed by escrow service after close.
 
 ## 5.3 cashu-ts shape
 
 ```ts
 const { keep, send } = await wallet.send(amount, proofs, {
-  p2pk: {
-    pubkey: escrowPubkey,
-    locktime: endAt + settlementGraceSeconds,
-    refundKeys: [bidderRefundPubkey]
-  }
-});
+	p2pk: {
+		pubkey: escrowPubkey,
+		locktime: endAt + settlementGraceSeconds,
+		refundKeys: [bidderRefundPubkey],
+	},
+})
 ```
 
 `send` proofs are encoded and delivered only via encrypted channel.
@@ -538,14 +538,14 @@ V1 MUST enforce:
 
 ## 14. Security model summary
 
-| Threat | Mitigation | Residual risk |
-| --- | --- | --- |
-| Fake bids | Commitment+payload verification, DLEQ, NUT-07 | Mint downtime can delay verification |
-| End-time tampering | Root ID pinning + immutable fields | Seller can publish confusing shadow updates |
-| Sniping | Deterministic anti-sniping extension | None if enabled and implemented consistently |
-| Double-spend | Unspent checks before accept and before settlement | Race window remains between check and final spend |
-| Seller fraud | Escrow-first lock policy + public settlement evidence | Social/reputation layer still required |
-| Escrow non-cooperation | Refund key + locktime recovery path | Capital lockup until timeout |
+| Threat                 | Mitigation                                            | Residual risk                                     |
+| ---------------------- | ----------------------------------------------------- | ------------------------------------------------- |
+| Fake bids              | Commitment+payload verification, DLEQ, NUT-07         | Mint downtime can delay verification              |
+| End-time tampering     | Root ID pinning + immutable fields                    | Seller can publish confusing shadow updates       |
+| Sniping                | Deterministic anti-sniping extension                  | None if enabled and implemented consistently      |
+| Double-spend           | Unspent checks before accept and before settlement    | Race window remains between check and final spend |
+| Seller fraud           | Escrow-first lock policy + public settlement evidence | Social/reputation layer still required            |
+| Escrow non-cooperation | Refund key + locktime recovery path                   | Capital lockup until timeout                      |
 
 ## 15. Implementation Appendix (Cashu Examples)
 
@@ -554,103 +554,103 @@ These examples keep bearer tokens out of public bid events. Public bid carries c
 ### 15.1 Create bid lock + commitment (bidder)
 
 ```ts
-import { CashuMint, CashuWallet, getEncodedToken, type Proof } from '@cashu/cashu-ts';
-import { sha256 } from '@noble/hashes/sha256';
-import { bytesToHex } from '@noble/hashes/utils';
+import { CashuMint, CashuWallet, getEncodedToken, type Proof } from '@cashu/cashu-ts'
+import { sha256 } from '@noble/hashes/sha256'
+import { bytesToHex } from '@noble/hashes/utils'
 
 type CreateBidInput = {
-  mintUrl: string;
-  bidAmount: number;
-  auctionRootEventId: string;
-  sellerPubkey: string;
-  lockPubkey: string; // escrow pubkey or HD-derived child pubkey
-  refundPubkey: string;
-  locktime: number;
-  existingProofs: Proof[];
-};
+	mintUrl: string
+	bidAmount: number
+	auctionRootEventId: string
+	sellerPubkey: string
+	lockPubkey: string // escrow pubkey or HD-derived child pubkey
+	refundPubkey: string
+	locktime: number
+	existingProofs: Proof[]
+}
 
 export async function createLockedBid(input: CreateBidInput) {
-  const mint = new CashuMint(input.mintUrl);
-  const wallet = new CashuWallet(mint);
-  await wallet.loadMint();
+	const mint = new CashuMint(input.mintUrl)
+	const wallet = new CashuWallet(mint)
+	await wallet.loadMint()
 
-  const { send: lockedProofs, keep: changeProofs } = await wallet.send(input.bidAmount, input.existingProofs, {
-    includeDleq: true,
-    p2pk: {
-      pubkey: input.lockPubkey,
-      locktime: input.locktime,
-      refundKeys: [input.refundPubkey]
-    }
-  });
+	const { send: lockedProofs, keep: changeProofs } = await wallet.send(input.bidAmount, input.existingProofs, {
+		includeDleq: true,
+		p2pk: {
+			pubkey: input.lockPubkey,
+			locktime: input.locktime,
+			refundKeys: [input.refundPubkey],
+		},
+	})
 
-  const cashuToken = getEncodedToken({ mint: input.mintUrl, proofs: lockedProofs });
-  const bidNonce = crypto.randomUUID();
+	const cashuToken = getEncodedToken({ mint: input.mintUrl, proofs: lockedProofs })
+	const bidNonce = crypto.randomUUID()
 
-  // NOTE: Use canonical JSON in production if available.
-  const privatePayload = {
-    auction_root_event_id: input.auctionRootEventId,
-    amount: input.bidAmount,
-    mint: input.mintUrl,
-    cashu_token: cashuToken,
-    refund_pubkey: input.refundPubkey,
-    lock_script_descriptor: {
-      pubkey: input.lockPubkey,
-      locktime: input.locktime
-    },
-    nonce: bidNonce
-  };
+	// NOTE: Use canonical JSON in production if available.
+	const privatePayload = {
+		auction_root_event_id: input.auctionRootEventId,
+		amount: input.bidAmount,
+		mint: input.mintUrl,
+		cashu_token: cashuToken,
+		refund_pubkey: input.refundPubkey,
+		lock_script_descriptor: {
+			pubkey: input.lockPubkey,
+			locktime: input.locktime,
+		},
+		nonce: bidNonce,
+	}
 
-  const commitment = bytesToHex(sha256(new TextEncoder().encode(JSON.stringify(privatePayload))));
+	const commitment = bytesToHex(sha256(new TextEncoder().encode(JSON.stringify(privatePayload))))
 
-  const publicBidTags = [
-    ['e', input.auctionRootEventId],
-    ['p', input.sellerPubkey],
-    ['amount', String(input.bidAmount)],
-    ['currency', 'SAT'],
-    ['mint', input.mintUrl],
-    ['commitment', commitment],
-    ['locktime', String(input.locktime)],
-    ['refund_pubkey', input.refundPubkey],
-    ['bid_nonce', bidNonce]
-  ];
+	const publicBidTags = [
+		['e', input.auctionRootEventId],
+		['p', input.sellerPubkey],
+		['amount', String(input.bidAmount)],
+		['currency', 'SAT'],
+		['mint', input.mintUrl],
+		['commitment', commitment],
+		['locktime', String(input.locktime)],
+		['refund_pubkey', input.refundPubkey],
+		['bid_nonce', bidNonce],
+	]
 
-  return { publicBidTags, privatePayload, changeProofs };
+	return { publicBidTags, privatePayload, changeProofs }
 }
 ```
 
 ### 15.2 Claim winning bid (seller/escrow)
 
 ```ts
-import { CashuMint, CashuWallet, type Proof } from '@cashu/cashu-ts';
+import { CashuMint, CashuWallet, type Proof } from '@cashu/cashu-ts'
 
 export async function claimWinningBid(
-  mintUrl: string,
-  lockedProofs: Proof[],
-  spendingPrivkey: string // escrow/seller key matching lock pubkey
+	mintUrl: string,
+	lockedProofs: Proof[],
+	spendingPrivkey: string, // escrow/seller key matching lock pubkey
 ) {
-  const mint = new CashuMint(mintUrl);
-  const wallet = new CashuWallet(mint);
-  await wallet.loadMint();
+	const mint = new CashuMint(mintUrl)
+	const wallet = new CashuWallet(mint)
+	await wallet.loadMint()
 
-  return wallet.receive({ mint: mintUrl, proofs: lockedProofs }, { privkey: spendingPrivkey });
+	return wallet.receive({ mint: mintUrl, proofs: lockedProofs }, { privkey: spendingPrivkey })
 }
 ```
 
 ### 15.3 Reclaim losing bid after locktime (bidder)
 
 ```ts
-import { CashuMint, CashuWallet, type Proof } from '@cashu/cashu-ts';
+import { CashuMint, CashuWallet, type Proof } from '@cashu/cashu-ts'
 
 export async function reclaimExpiredBid(
-  mintUrl: string,
-  lockedProofs: Proof[],
-  refundPrivkey: string // key matching refund_pubkey
+	mintUrl: string,
+	lockedProofs: Proof[],
+	refundPrivkey: string, // key matching refund_pubkey
 ) {
-  const mint = new CashuMint(mintUrl);
-  const wallet = new CashuWallet(mint);
-  await wallet.loadMint();
+	const mint = new CashuMint(mintUrl)
+	const wallet = new CashuWallet(mint)
+	await wallet.loadMint()
 
-  return wallet.receive({ mint: mintUrl, proofs: lockedProofs }, { privkey: refundPrivkey });
+	return wallet.receive({ mint: mintUrl, proofs: lockedProofs }, { privkey: refundPrivkey })
 }
 ```
 
