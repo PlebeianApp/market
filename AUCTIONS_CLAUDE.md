@@ -32,15 +32,15 @@ This document specifies a decentralized auction system built on the Nostr protoc
 
 ### Key Concepts
 
-| Term | Definition |
-|------|-----------|
-| **Vadium** | Earnest money / deposit / collateral. Cashu tokens locked as proof of bid seriousness. |
-| **P2PK Lock** | NUT-11 spending condition that locks cashu tokens to a specific public key. |
-| **Timelock** | NUT-11 condition that makes locked tokens reclaimable by a refund key after a unix timestamp. |
-| **Refund Key** | The bidder's cashu pubkey, included in the token's spending conditions, enabling self-refund after timelock. |
-| **Settlement Window** | Period after auction end during which the seller must claim winning tokens. |
-| **Anti-snipe Extension** | Automatic auction extension when bids arrive near the end time. |
-| **Event ID Pinning** | Tracking the original event ID (not the `a` address) to prevent parameter manipulation. |
+| Term                     | Definition                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| **Vadium**               | Earnest money / deposit / collateral. Cashu tokens locked as proof of bid seriousness.                       |
+| **P2PK Lock**            | NUT-11 spending condition that locks cashu tokens to a specific public key.                                  |
+| **Timelock**             | NUT-11 condition that makes locked tokens reclaimable by a refund key after a unix timestamp.                |
+| **Refund Key**           | The bidder's cashu pubkey, included in the token's spending conditions, enabling self-refund after timelock. |
+| **Settlement Window**    | Period after auction end during which the seller must claim winning tokens.                                  |
+| **Anti-snipe Extension** | Automatic auction extension when bids arrive near the end time.                                              |
+| **Event ID Pinning**     | Tracking the original event ID (not the `a` address) to prevent parameter manipulation.                      |
 
 ### Prior Art
 
@@ -67,12 +67,12 @@ The most common auction format. Ascending bids with a fixed end time.
 
 ### Future Types (not implemented initially)
 
-| Type | Description |
-|------|-------------|
-| `dutch` | Descending price. Seller sets a high start price that decreases over time. First bidder to accept wins. |
-| `sealed_first` | Sealed first-price. Bids are encrypted (NIP-17 DMs). Highest bid wins, pays their bid. |
-| `sealed_second` | Sealed second-price (Vickrey). Highest bid wins but pays the second-highest price. |
-| `reserve` | English with hidden reserve price. Auction only completes if reserve is met. |
+| Type            | Description                                                                                             |
+| --------------- | ------------------------------------------------------------------------------------------------------- |
+| `dutch`         | Descending price. Seller sets a high start price that decreases over time. First bidder to accept wins. |
+| `sealed_first`  | Sealed first-price. Bids are encrypted (NIP-17 DMs). Highest bid wins, pays their bid.                  |
+| `sealed_second` | Sealed second-price (Vickrey). Highest bid wins but pays the second-highest price.                      |
+| `reserve`       | English with hidden reserve price. Auction only completes if reserve is met.                            |
 
 The `auction_type` tag in the auction event determines which rules apply. Clients MUST reject bids that don't conform to the declared type's rules.
 
@@ -222,15 +222,18 @@ Created by a bidder to place a bid. The event contains cashu proofs (P2PK-locked
 Each proof's `secret` field MUST be a NUT-10 well-known secret with kind `P2PK`:
 
 ```jsonc
-["P2PK", {
-  "nonce": "<random-hex>",
-  "data": "<seller-cashu-pubkey>",        // 02-prefixed pubkey the seller will use to claim
-  "tags": [
-    ["sigflag", "SIG_INPUTS"],
-    ["locktime", "<auction-end + settlement-window>"],  // Unix timestamp
-    ["refund", "<bidder-cashu-pubkey>"]    // Bidder can reclaim after locktime
-  ]
-}]
+[
+	"P2PK",
+	{
+		"nonce": "<random-hex>",
+		"data": "<seller-cashu-pubkey>", // 02-prefixed pubkey the seller will use to claim
+		"tags": [
+			["sigflag", "SIG_INPUTS"],
+			["locktime", "<auction-end + settlement-window>"], // Unix timestamp
+			["refund", "<bidder-cashu-pubkey>"], // Bidder can reclaim after locktime
+		],
+	},
+]
 ```
 
 - `data`: The seller's cashu receiving pubkey (from their NIP-60 wallet or kind 10019 event). MUST be `02`-prefixed for nostr↔cashu compatibility.
@@ -289,12 +292,12 @@ Created by the seller (or platform on seller's behalf) to announce auction resul
 
 #### Settlement Statuses
 
-| Status | Meaning |
-|--------|---------|
-| `completed` | Auction ended successfully, winner determined. |
-| `cancelled` | Seller cancelled the auction (ideally before first bid). |
+| Status            | Meaning                                                          |
+| ----------------- | ---------------------------------------------------------------- |
+| `completed`       | Auction ended successfully, winner determined.                   |
+| `cancelled`       | Seller cancelled the auction (ideally before first bid).         |
 | `reserve_not_met` | Highest bid did not meet reserve price. All bids are refundable. |
-| `no_bids` | Auction ended with zero valid bids. |
+| `no_bids`         | Auction ended with zero valid bids.                              |
 
 ---
 
@@ -367,10 +370,12 @@ locktime = auction.end_time + auction.settlement_window
 ```
 
 Where:
+
 - `end_time` is from the **original** (pinned) auction event
 - `settlement_window` defaults to 86400 seconds (24 hours)
 
 This means:
+
 - The seller has `settlement_window` seconds after the auction ends to claim the winning bid.
 - ALL bidders (including losers) can reclaim their tokens after `locktime`.
 - If the seller never claims (goes offline, loses keys), no funds are permanently lost.
@@ -389,6 +394,7 @@ The seller MUST declare one or more trusted mints in their auction event via `mi
 Bidders MUST use tokens from a listed mint. Bids with tokens from unlisted mints are invalid.
 
 Sellers SHOULD:
+
 - List 2-3 well-known, reputable mints for bidder convenience.
 - Verify mints support required NUTs before listing them.
 - Consider mint liquidity (bidders need to be able to swap into these mints).
@@ -398,14 +404,14 @@ Sellers SHOULD:
 Verification can be performed by any observer (clients, platform, other bidders):
 
 **Offline verification** (no mint contact needed):
+
 1. Parse proof's `secret` field, verify it's a valid NUT-10 P2PK secret.
 2. Verify `data` matches the seller's declared cashu pubkey.
 3. Verify `locktime` matches `end_time + settlement_window`.
 4. Verify `refund` contains a valid pubkey.
 5. Verify DLEQ proof (NUT-12) against the mint's public keyset.
 
-**Online verification** (requires mint contact):
-6. Query mint's NUT-07 endpoint to check token spend state (UNSPENT, PENDING, SPENT).
+**Online verification** (requires mint contact): 6. Query mint's NUT-07 endpoint to check token spend state (UNSPENT, PENDING, SPENT).
 
 Offline verification is sufficient for most purposes. Online verification (step 6) provides additional assurance but introduces latency and mint availability dependency.
 
@@ -418,10 +424,12 @@ The seller MUST have a cashu-specific pubkey for receiving P2PK-locked tokens. T
 - The pubkey MUST be `02`-prefixed for nostr↔cashu compatibility.
 
 Bidders discover the seller's cashu pubkey from:
+
 1. The seller's `kind:10019` event (`pubkey` tag), OR
 2. A dedicated tag in the auction event (for convenience)
 
 For simplicity, the auction event SHOULD include a `p2pk_pubkey` tag:
+
 ```jsonc
 ["p2pk_pubkey", "<02-prefixed-seller-cashu-pubkey>"]
 ```
@@ -628,28 +636,33 @@ sequenceDiagram
 ### 5.8 Cancellation & Edge Cases
 
 #### Seller Cancels Before Any Bids
+
 - Seller publishes settlement (kind 1024, `status=cancelled`).
 - No tokens to refund.
 - Seller SHOULD publish a new version of the auction event with `visibility=hidden` or delete it (NIP-09).
 
 #### Seller Cancels After Bids Placed
+
 - Seller publishes settlement (kind 1024, `status=cancelled`).
 - ALL bidders' tokens become reclaimable after locktime.
 - Seller SHOULD proactively refund all bidders.
 - Platform SHOULD flag this seller for poor behavior.
 
 #### Winner Defaults (Vadium Mode)
+
 - Winner doesn't complete payment within a reasonable time.
 - Seller claims vadium as compensation.
 - Seller MAY award to the second-highest bidder by publishing a new settlement.
 - Seller MAY relist the item.
 
 #### Seller Goes Offline
+
 - Seller never publishes a settlement or claims tokens.
 - ALL bidders reclaim their tokens after locktime via refund keys.
 - No funds are permanently lost (this is the key safety property of the timelock design).
 
 #### Disputed Results
+
 - Since bids are public and verifiable, any observer can independently determine the valid highest bid.
 - If the seller announces a wrong winner, the community can verify.
 - The platform SHOULD validate settlement events against the bid history.
@@ -663,6 +676,7 @@ sequenceDiagram
 **Threat**: Bidder publishes a bid event with invalid or already-spent cashu tokens.
 
 **Mitigation**:
+
 - **DLEQ verification** (NUT-12): Any observer can verify proofs are valid signatures from the mint, offline.
 - **Token state check** (NUT-07): Platform queries the mint to verify tokens are unspent.
 - **Amount validation**: Platform verifies sum of proof amounts >= required amount.
@@ -673,6 +687,7 @@ sequenceDiagram
 **Threat**: Seller uses alt accounts to drive up the price.
 
 **Mitigation**:
+
 - All bids contain real cashu tokens — shill bidding has a real cost (tokens are locked until locktime).
 - Nostr identity reputation systems help identify suspicious patterns.
 - Platform can analyze bidding patterns (new accounts, bid timing, amounts).
@@ -683,6 +698,7 @@ sequenceDiagram
 **Threat**: Bidder waits until the last second to place a winning bid, preventing counter-bids.
 
 **Mitigation**:
+
 - **Anti-snipe extension**: Configurable per auction (`snipe_threshold` + `snipe_extension`).
 - Deterministic computation: any client can verify the effective end time.
 
@@ -691,6 +707,7 @@ sequenceDiagram
 **Threat**: Seller changes auction end time or parameters after bids are placed.
 
 **Mitigation**:
+
 - **Event ID pinning**: Platform tracks the original event ID, not the `a` address.
 - Bids reference the event ID via `e` tag — updating the auction orphans existing bids from the new version.
 - Platform rejects parameter changes to pinned auctions after first bid.
@@ -700,6 +717,7 @@ sequenceDiagram
 **Threat**: Bidder uses the same cashu tokens in multiple bids (on this auction or others).
 
 **Mitigation**:
+
 - **NUT-07 state check**: Platform checks tokens are UNSPENT before accepting a bid.
 - **Periodic re-checks**: Platform can periodically re-verify token states during the auction.
 - If tokens are found to be spent (double-spend attempt), the bid is invalidated and removed.
@@ -709,6 +727,7 @@ sequenceDiagram
 **Threat**: Flooding the auction with low-value bids to disrupt or grief.
 
 **Mitigation**:
+
 - Every bid requires locking real cashu tokens — spam has a real cost.
 - Minimum bid increment (`min_increment`) prevents trivial bid increases.
 - Platform can rate-limit bid events per pubkey.
@@ -719,6 +738,7 @@ sequenceDiagram
 **Threat**: Seller claims all bidders' tokens, not just the winner's.
 
 **Mitigation**:
+
 - **Timelock safety net**: After `locktime`, ALL bidders can reclaim via refund keys regardless of seller behavior. The worst case is that bidders wait longer, not that funds are permanently lost.
 - **Public accountability**: All bids and settlements are public. A seller claiming non-winner tokens is provably malicious.
 - **Reputation damage**: Verifiable fraud destroys the seller's Nostr identity reputation.
@@ -864,15 +884,18 @@ Bids are encrypted NIP-17 DMs (kind 14/16) to the seller instead of public event
 For high-value auctions, tokens could be locked with `n_sigs=2` requiring both seller and platform signatures:
 
 ```jsonc
-["P2PK", {
-  "data": "<seller-pubkey>",
-  "tags": [
-    ["pubkeys", "<platform-pubkey>"],
-    ["n_sigs", "2"],
-    ["locktime", "<...>"],
-    ["refund", "<bidder-pubkey>"]
-  ]
-}]
+[
+	"P2PK",
+	{
+		"data": "<seller-pubkey>",
+		"tags": [
+			["pubkeys", "<platform-pubkey>"],
+			["n_sigs", "2"],
+			["locktime", "<...>"],
+			["refund", "<bidder-pubkey>"],
+		],
+	},
+]
 ```
 
 This prevents the seller from unilaterally claiming losing bids while still allowing the platform to co-sign the winner's claim.
@@ -908,6 +931,7 @@ For `reserve` type auctions, use a commit-reveal scheme:
 Currently, the locktime is calculated from the declared `end_time`, but anti-snipe extensions push the effective end time later. This means the settlement window shrinks for auctions with many snipe extensions.
 
 **Options**:
+
 - (a) Accept shorter settlement window (seller should set generous `settlement_window` to absorb this).
 - (b) Require locktime to be `end_time + max_possible_extensions + settlement_window` (more conservative, bidders lock funds longer).
 - (c) Use a separate "max_auction_duration" that covers worst-case extensions.
@@ -917,6 +941,7 @@ Currently, the locktime is calculated from the declared `end_time`, but anti-sni
 Bidders who are outbid have tokens locked until `locktime`. If they want to bid again, they need additional funds. This could discourage active bidding.
 
 **Options**:
+
 - (a) Accept it (keep it simple, tokens are safe and reclaimable).
 - (b) Seller-assisted refund (optional, better UX).
 - (c) Platform-assisted refund service.
@@ -927,6 +952,7 @@ Bidders who are outbid have tokens locked until `locktime`. If they want to bid 
 How should bidders reliably discover the seller's cashu pubkey?
 
 **Options**:
+
 - (a) From `kind:10019` event (NIP-61 standard).
 - (b) From a dedicated `p2pk_pubkey` tag in the auction event.
 - (c) Both (redundant but convenient).
@@ -936,6 +962,7 @@ How should bidders reliably discover the seller's cashu pubkey?
 Should bidders be able to bid with tokens from different mints in the same bid event? (Multiple `u` tags, proofs from different mints.)
 
 **Options**:
+
 - (a) Single mint per bid (simpler validation).
 - (b) Multiple mints per bid (more flexible, complex validation).
 
@@ -950,6 +977,7 @@ If a bidder's available tokens don't split evenly to the exact bid amount, how i
 ### Q7: What if the Mint Goes Down?
 
 If a trusted mint goes offline during the auction:
+
 - Existing bids with proofs from that mint can't be verified (NUT-07).
 - The seller can't claim tokens from that mint.
 - Bidders can't reclaim tokens.
@@ -964,39 +992,39 @@ This is a fundamental risk of cashu. Mitigation: use reputable mints, allow mult
 
 ```jsonc
 {
-  "id": "abc123...",
-  "kind": 30408,
-  "pubkey": "<seller-nostr-pubkey>",
-  "created_at": 1735600000,
-  "content": "Rare vintage mechanical keyboard in excellent condition. Cherry MX Blue switches, full ANSI layout.",
-  "tags": [
-    ["d", "vintage-keyboard-001"],
-    ["title", "Vintage Cherry MX Mechanical Keyboard"],
-    ["auction_type", "english"],
-    ["start_time", "1735686400"],
-    ["end_time", "1735772800"],
-    ["starting_bid", "5000", "sat"],
-    ["min_increment", "500"],
-    ["unit", "sat"],
-    ["mint", "https://mint.minibits.cash/Bitcoin"],
-    ["mint", "https://stablenut.umint.cash"],
-    ["vadium_type", "full"],
-    ["settlement_window", "86400"],
-    ["snipe_threshold", "300"],
-    ["snipe_extension", "300"],
-    ["p2pk_pubkey", "02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed"],
-    ["image", "https://example.com/keyboard1.jpg", "800x600", "0"],
-    ["image", "https://example.com/keyboard2.jpg", "800x600", "1"],
-    ["summary", "Rare vintage Cherry MX Blue mechanical keyboard"],
-    ["type", "physical"],
-    ["spec", "switch-type", "Cherry MX Blue"],
-    ["spec", "layout", "ANSI Full"],
-    ["spec", "condition", "Excellent"],
-    ["shipping_option", "30406:<seller-pubkey>:standard-shipping"],
-    ["t", "keyboards"],
-    ["t", "vintage"],
-    ["t", "mechanical"]
-  ]
+	"id": "abc123...",
+	"kind": 30408,
+	"pubkey": "<seller-nostr-pubkey>",
+	"created_at": 1735600000,
+	"content": "Rare vintage mechanical keyboard in excellent condition. Cherry MX Blue switches, full ANSI layout.",
+	"tags": [
+		["d", "vintage-keyboard-001"],
+		["title", "Vintage Cherry MX Mechanical Keyboard"],
+		["auction_type", "english"],
+		["start_time", "1735686400"],
+		["end_time", "1735772800"],
+		["starting_bid", "5000", "sat"],
+		["min_increment", "500"],
+		["unit", "sat"],
+		["mint", "https://mint.minibits.cash/Bitcoin"],
+		["mint", "https://stablenut.umint.cash"],
+		["vadium_type", "full"],
+		["settlement_window", "86400"],
+		["snipe_threshold", "300"],
+		["snipe_extension", "300"],
+		["p2pk_pubkey", "02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed"],
+		["image", "https://example.com/keyboard1.jpg", "800x600", "0"],
+		["image", "https://example.com/keyboard2.jpg", "800x600", "1"],
+		["summary", "Rare vintage Cherry MX Blue mechanical keyboard"],
+		["type", "physical"],
+		["spec", "switch-type", "Cherry MX Blue"],
+		["spec", "layout", "ANSI Full"],
+		["spec", "condition", "Excellent"],
+		["shipping_option", "30406:<seller-pubkey>:standard-shipping"],
+		["t", "keyboards"],
+		["t", "vintage"],
+		["t", "mechanical"],
+	],
 }
 ```
 
@@ -1004,20 +1032,23 @@ This is a fundamental risk of cashu. Mitigation: use reputable mints, allow mult
 
 ```jsonc
 {
-  "id": "bid789...",
-  "kind": 1023,
-  "pubkey": "<bidder-nostr-pubkey>",
-  "created_at": 1735700000,
-  "content": "",
-  "tags": [
-    ["e", "abc123...", "wss://relay.example.com", "auction"],
-    ["amount", "7500"],
-    ["proof", "{\"amount\":4,\"C\":\"02698c4e2b5f9534cd0687d87513c759790cf829aa5739184a3e3735471fbda904\",\"id\":\"009a1f293253e41e\",\"secret\":\"[\\\"P2PK\\\",{\\\"nonce\\\":\\\"b00bdd0467b0090a25bdf2d2f0d45ac4e355c482c1418350f273a04fedaaee83\\\",\\\"data\\\":\\\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\\\",\\\"tags\\\":[[\\\"sigflag\\\",\\\"SIG_INPUTS\\\"],[\\\"locktime\\\",\\\"1735859200\\\"],[\\\"refund\\\",\\\"03aabbcc...\\\"]]}]\",\"dleq\":{\"e\":\"...\",\"s\":\"...\",\"r\":\"...\"}}"],
-    ["proof", "{\"amount\":2,\"C\":\"...\",\"id\":\"...\",\"secret\":\"...\",\"dleq\":{...}}"],
-    ["proof", "{\"amount\":1,\"C\":\"...\",\"id\":\"...\",\"secret\":\"...\",\"dleq\":{...}}"],
-    ["u", "https://mint.minibits.cash/Bitcoin"],
-    ["unit", "sat"]
-  ]
+	"id": "bid789...",
+	"kind": 1023,
+	"pubkey": "<bidder-nostr-pubkey>",
+	"created_at": 1735700000,
+	"content": "",
+	"tags": [
+		["e", "abc123...", "wss://relay.example.com", "auction"],
+		["amount", "7500"],
+		[
+			"proof",
+			"{\"amount\":4,\"C\":\"02698c4e2b5f9534cd0687d87513c759790cf829aa5739184a3e3735471fbda904\",\"id\":\"009a1f293253e41e\",\"secret\":\"[\\\"P2PK\\\",{\\\"nonce\\\":\\\"b00bdd0467b0090a25bdf2d2f0d45ac4e355c482c1418350f273a04fedaaee83\\\",\\\"data\\\":\\\"02eaee8939e3565e48cc62967e2fde9d8e2a4b3ec0081f29eceff5c64ef10ac1ed\\\",\\\"tags\\\":[[\\\"sigflag\\\",\\\"SIG_INPUTS\\\"],[\\\"locktime\\\",\\\"1735859200\\\"],[\\\"refund\\\",\\\"03aabbcc...\\\"]]}]\",\"dleq\":{\"e\":\"...\",\"s\":\"...\",\"r\":\"...\"}}",
+		],
+		["proof", "{\"amount\":2,\"C\":\"...\",\"id\":\"...\",\"secret\":\"...\",\"dleq\":{...}}"],
+		["proof", "{\"amount\":1,\"C\":\"...\",\"id\":\"...\",\"secret\":\"...\",\"dleq\":{...}}"],
+		["u", "https://mint.minibits.cash/Bitcoin"],
+		["unit", "sat"],
+	],
 }
 ```
 
@@ -1027,18 +1058,18 @@ Note: The `locktime` in each proof's secret is `1735859200` = `end_time (1735772
 
 ```jsonc
 {
-  "id": "settle456...",
-  "kind": 1024,
-  "pubkey": "<seller-nostr-pubkey>",
-  "created_at": 1735772900,
-  "content": "Auction completed! Congratulations to the winner.",
-  "tags": [
-    ["e", "abc123...", "wss://relay.example.com", "auction"],
-    ["status", "completed"],
-    ["winner", "<winning-bidder-pubkey>"],
-    ["e", "bid789...", "wss://relay.example.com", "winner"],
-    ["amount", "7500"]
-  ]
+	"id": "settle456...",
+	"kind": 1024,
+	"pubkey": "<seller-nostr-pubkey>",
+	"created_at": 1735772900,
+	"content": "Auction completed! Congratulations to the winner.",
+	"tags": [
+		["e", "abc123...", "wss://relay.example.com", "auction"],
+		["status", "completed"],
+		["winner", "<winning-bidder-pubkey>"],
+		["e", "bid789...", "wss://relay.example.com", "winner"],
+		["amount", "7500"],
+	],
 }
 ```
 
@@ -1049,40 +1080,36 @@ Note: The `locktime` in each proof's secret is `1735859200` = `end_time (1735772
 Using `cashu-ts`, the bid token creation flow:
 
 ```typescript
-import { CashuMint, CashuWallet, getEncodedTokenV4 } from "@cashu/cashu-ts";
+import { CashuMint, CashuWallet, getEncodedTokenV4 } from '@cashu/cashu-ts'
 
 async function createBidTokens(
-  mintUrl: string,
-  bidAmount: number,
-  sellerCashuPubkey: string,  // 02-prefixed
-  auctionEndTime: number,     // unix timestamp
-  settlementWindow: number,   // seconds
-  bidderCashuPubkey: string,  // 02-prefixed, for refund
-  existingProofs: Proof[]     // from bidder's NIP-60 wallet
+	mintUrl: string,
+	bidAmount: number,
+	sellerCashuPubkey: string, // 02-prefixed
+	auctionEndTime: number, // unix timestamp
+	settlementWindow: number, // seconds
+	bidderCashuPubkey: string, // 02-prefixed, for refund
+	existingProofs: Proof[], // from bidder's NIP-60 wallet
 ) {
-  const mint = new CashuMint(mintUrl);
-  const wallet = new CashuWallet(mint);
-  await wallet.loadMint();
+	const mint = new CashuMint(mintUrl)
+	const wallet = new CashuWallet(mint)
+	await wallet.loadMint()
 
-  const locktime = auctionEndTime + settlementWindow;
+	const locktime = auctionEndTime + settlementWindow
 
-  // Swap existing proofs into P2PK-locked proofs
-  const { send: lockedProofs, keep: changeProofs } = await wallet.send(
-    bidAmount,
-    existingProofs,
-    {
-      includeDleq: true,
-      p2pk: {
-        pubkey: sellerCashuPubkey,
-        locktime: locktime,
-        refundKeys: [bidderCashuPubkey],
-      },
-    }
-  );
+	// Swap existing proofs into P2PK-locked proofs
+	const { send: lockedProofs, keep: changeProofs } = await wallet.send(bidAmount, existingProofs, {
+		includeDleq: true,
+		p2pk: {
+			pubkey: sellerCashuPubkey,
+			locktime: locktime,
+			refundKeys: [bidderCashuPubkey],
+		},
+	})
 
-  // lockedProofs → include in bid event as "proof" tags
-  // changeProofs → return to bidder's NIP-60 wallet
-  return { lockedProofs, changeProofs };
+	// lockedProofs → include in bid event as "proof" tags
+	// changeProofs → return to bidder's NIP-60 wallet
+	return { lockedProofs, changeProofs }
 }
 ```
 
@@ -1090,21 +1117,18 @@ Seller claiming winning tokens:
 
 ```typescript
 async function claimWinningBid(
-  mintUrl: string,
-  lockedProofs: Proof[],        // from the winning bid event
-  sellerCashuPrivkey: string    // corresponds to the P2PK pubkey
+	mintUrl: string,
+	lockedProofs: Proof[], // from the winning bid event
+	sellerCashuPrivkey: string, // corresponds to the P2PK pubkey
 ) {
-  const mint = new CashuMint(mintUrl);
-  const wallet = new CashuWallet(mint);
-  await wallet.loadMint();
+	const mint = new CashuMint(mintUrl)
+	const wallet = new CashuWallet(mint)
+	await wallet.loadMint()
 
-  // Receive (swap) the locked proofs using seller's private key
-  const unlockedProofs = await wallet.receive(
-    { mint: mintUrl, proofs: lockedProofs },
-    { privkey: sellerCashuPrivkey }
-  );
+	// Receive (swap) the locked proofs using seller's private key
+	const unlockedProofs = await wallet.receive({ mint: mintUrl, proofs: lockedProofs }, { privkey: sellerCashuPrivkey })
 
-  return unlockedProofs;
+	return unlockedProofs
 }
 ```
 
@@ -1112,21 +1136,18 @@ Bidder reclaiming after locktime:
 
 ```typescript
 async function reclaimExpiredBid(
-  mintUrl: string,
-  lockedProofs: Proof[],         // from the bid event
-  bidderCashuPrivkey: string     // corresponds to the refund pubkey
+	mintUrl: string,
+	lockedProofs: Proof[], // from the bid event
+	bidderCashuPrivkey: string, // corresponds to the refund pubkey
 ) {
-  const mint = new CashuMint(mintUrl);
-  const wallet = new CashuWallet(mint);
-  await wallet.loadMint();
+	const mint = new CashuMint(mintUrl)
+	const wallet = new CashuWallet(mint)
+	await wallet.loadMint()
 
-  // After locktime has passed, the refund key becomes active
-  const reclaimedProofs = await wallet.receive(
-    { mint: mintUrl, proofs: lockedProofs },
-    { privkey: bidderCashuPrivkey }
-  );
+	// After locktime has passed, the refund key becomes active
+	const reclaimedProofs = await wallet.receive({ mint: mintUrl, proofs: lockedProofs }, { privkey: bidderCashuPrivkey })
 
-  return reclaimedProofs;
+	return reclaimedProofs
 }
 ```
 
@@ -1134,11 +1155,11 @@ async function reclaimExpiredBid(
 
 ## Appendix C: Kind Number Summary
 
-| Kind | Name | Type | Description |
-|------|------|------|-------------|
-| `30408` | Auction Listing | Addressable | Seller creates an auction with parameters and product details |
-| `1023` | Auction Bid | Regular | Bidder places a bid with P2PK-locked cashu tokens |
-| `1024` | Auction Settlement | Regular | Seller announces auction results (winner, cancelled, etc.) |
+| Kind    | Name               | Type        | Description                                                   |
+| ------- | ------------------ | ----------- | ------------------------------------------------------------- |
+| `30408` | Auction Listing    | Addressable | Seller creates an auction with parameters and product details |
+| `1023`  | Auction Bid        | Regular     | Bidder places a bid with P2PK-locked cashu tokens             |
+| `1024`  | Auction Settlement | Regular     | Seller announces auction results (winner, cancelled, etc.)    |
 
 **Note**: These kind numbers are proposed and not yet registered. They may change during NIP standardization. Kind `30408` is in the addressable range (30000-39999) alongside other Gamma marketplace kinds (30402, 30405, 30406). Kinds `1023` and `1024` are regular events, sequentially following NIP-15's auction-related kinds (1021, 1022) to signal conceptual relation.
 
@@ -1146,14 +1167,14 @@ async function reclaimExpiredBid(
 
 ## Appendix D: Security Model Summary
 
-| Threat | Mitigation | Residual Risk |
-|--------|-----------|---------------|
-| Fake bids (invalid tokens) | DLEQ verification + NUT-07 state check | Mint downtime prevents online verification |
-| Shill bidding | Real cost (locked tokens), reputation, public auditability | Determined seller with funds can still shill |
-| Bid sniping | Anti-snipe extension (deterministic) | None (fully mitigated if enabled) |
-| End-time manipulation | Event ID pinning | Seller could create confusing duplicate auctions |
-| Double-spend tokens | NUT-07 state check, periodic re-verification | Race condition window between check and mint swap |
-| Spam bids | Token lockup cost, min_increment, rate limiting | Attacker with funds can still spam (costly) |
-| Seller steals all bids | Timelock + refund keys (worst case: wait for locktime) | Funds temporarily locked; seller reputation destroyed |
-| Mint goes offline | Multiple trusted mints, reasonable durations | Fundamental cashu risk, not fully mitigable |
-| Seller never settles | All bidders self-refund after locktime | Item not sold, but no funds lost |
+| Threat                     | Mitigation                                                 | Residual Risk                                         |
+| -------------------------- | ---------------------------------------------------------- | ----------------------------------------------------- |
+| Fake bids (invalid tokens) | DLEQ verification + NUT-07 state check                     | Mint downtime prevents online verification            |
+| Shill bidding              | Real cost (locked tokens), reputation, public auditability | Determined seller with funds can still shill          |
+| Bid sniping                | Anti-snipe extension (deterministic)                       | None (fully mitigated if enabled)                     |
+| End-time manipulation      | Event ID pinning                                           | Seller could create confusing duplicate auctions      |
+| Double-spend tokens        | NUT-07 state check, periodic re-verification               | Race condition window between check and mint swap     |
+| Spam bids                  | Token lockup cost, min_increment, rate limiting            | Attacker with funds can still spam (costly)           |
+| Seller steals all bids     | Timelock + refund keys (worst case: wait for locktime)     | Funds temporarily locked; seller reputation destroyed |
+| Mint goes offline          | Multiple trusted mints, reasonable durations               | Fundamental cashu risk, not fully mitigable           |
+| Seller never settles       | All bidders self-refund after locktime                     | Item not sold, but no funds lost                      |
