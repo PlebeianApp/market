@@ -220,12 +220,13 @@ export function Header() {
 
 	// Check if we're on any product page (index page or individual product) or homepage
 	const isProductPage = location.pathname === '/products' || location.pathname.startsWith('/products/')
+	const isAuctionPage = location.pathname === '/auctions' || location.pathname.startsWith('/auctions/')
 	const isProfilePage = location.pathname.startsWith('/profile/')
 	const isHomepage = location.pathname === '/'
 	const isCommunityPage = location.pathname === '/community'
 	const isCollectionPage = location.pathname.startsWith('/collection/')
 	const isNostrPage = location.pathname === '/nostr'
-	const shouldUseTransparentHeader = isProductPage || isHomepage || isProfilePage || isCommunityPage || isCollectionPage
+	const shouldUseTransparentHeader = isProductPage || isAuctionPage || isHomepage || isProfilePage || isCommunityPage || isCollectionPage
 
 	// Scroll detection for pages with transparent headers
 	useEffect(() => {
@@ -311,6 +312,15 @@ export function Header() {
 							}}
 						>
 							Products
+						</Link>
+						<Link
+							to="/auctions"
+							className="hover:text-secondary"
+							activeProps={{
+								className: 'text-secondary',
+							}}
+						>
+							Auctions
 						</Link>
 						<Link
 							to="/community"

@@ -25,6 +25,7 @@ import {
 } from './gen_orders'
 import { createPaymentDetailEvent, generateLightningPaymentDetail, generateOnChainPaymentDetail } from './gen_payment_details'
 import { createProductEvent, generateProductData } from './gen_products'
+import { createAuctionBidEvent, createAuctionEvent, generateAuctionData } from './gen_auctions'
 import { createNip15ProductEvent, generateNip15ProductData } from './gen_nip15_products'
 import { createReviewEvent, generateReviewData } from './gen_review'
 import { createShippingEvent, generatePickupShippingData, generateShippingData } from './gen_shipping'
@@ -87,13 +88,25 @@ async function seedData() {
 	const SHIPPING_OPTIONS_PER_USER = 4
 	const COLLECTIONS_PER_USER = 3
 	const REVIEWS_PER_USER = 2
+	const AUCTIONS_PER_USER = 5
 	const ORDERS_PER_PAIR = 6 // Increased to demonstrate all order states
 
 	console.log('Connecting to Nostr...')
 	console.log(ndkActions.getNDK()?.explicitRelayUrls)
 	await ndkActions.connect()
 	const productsByUser: Record<string, string[]> = {}
+	const auctionsByUser: Record<string, string[]> = {}
 	const allProductRefs: string[] = []
+	const allAuctionEvents: Array<{
+		eventId: string
+		auctionCoordinates: string
+		sellerPubkey: string
+		startAt: number
+		endAt: number
+		startingBid: number
+		bidIncrement: number
+		mint: string
+	}> = []
 	const shippingsByUser: Record<string, string[]> = {}
 	const userPubkeys: string[] = []
 	const allCollectionCoords: string[] = []
@@ -250,6 +263,69 @@ async function seedData() {
 					allProductRefs.push(productRef)
 				}
 			}
+		}
+
+		console.log(`Creating auctions for user ${pubkey.substring(0, 8)}...`)
+		auctionsByUser[pubkey] = []
+		for (let j = 0; j < AUCTIONS_PER_USER; j++) {
+			const auctionData = generateAuctionData({
+				sellerPubkey: pubkey,
+				availableShippingRefs: shippingsByUser[pubkey] || [],
+				trustedMints: ['https://nofees.testnut.cashu.space'],
+			})
+
+			const auctionEvent = await createAuctionEvent(signer, ndk, auctionData)
+			if (!auctionEvent) continue
+
+			const auctionId = auctionData.tags.find((tag) => tag[0] === 'd')?.[1]
+			const startAt = parseInt(auctionData.tags.find((tag) => tag[0] === 'start_at')?.[1] || '0', 10)
+			const endAt = parseInt(auctionData.tags.find((tag) => tag[0] === 'end_at')?.[1] || '0', 10)
+			const startingBid = parseInt(auctionData.tags.find((tag) => tag[0] === 'starting_bid')?.[1] || '0', 10)
+			const bidIncrement = parseInt(auctionData.tags.find((tag) => tag[0] === 'bid_increment')?.[1] || '1', 10)
+			const mint = auctionData.tags.find((tag) => tag[0] === 'mint')?.[1] || 'https://nofees.testnut.cashu.space'
+
+			if (!auctionId) continue
+			const coords = `30408:${pubkey}:${auctionId}`
+			auctionsByUser[pubkey].push(coords)
+			allAuctionEvents.push({
+				eventId: auctionEvent.id,
+				auctionCoordinates: coords,
+				sellerPubkey: pubkey,
+				startAt,
+				endAt,
+				startingBid,
+				bidIncrement,
+				mint,
+			})
+		}
+	}
+
+	console.log('Creating auction bids...')
+	for (const auction of allAuctionEvents) {
+		const eligibleBidders = userPubkeys.map((pubkey, index) => ({ pubkey, index })).filter((user) => user.pubkey !== auction.sellerPubkey)
+
+		const bidsCount = faker.number.int({ min: 1, max: 6 })
+		let currentBidAmount = auction.startingBid
+
+		for (let i = 0; i < bidsCount; i++) {
+			const bidder = faker.helpers.arrayElement(eligibleBidders)
+			const bidderSigner = new NDKPrivateKeySigner(devUsers[bidder.index].sk)
+			await bidderSigner.blockUntilReady()
+
+			currentBidAmount += auction.bidIncrement * faker.number.int({ min: 1, max: 3 })
+			const maxBidTimestamp = Math.min(auction.endAt - 10, NOW_TIMESTAMP - 10)
+			const minBidTimestamp = Math.max(auction.startAt + 10, maxBidTimestamp - 60 * 60 * 24)
+			const bidTimestamp = minBidTimestamp < maxBidTimestamp ? faker.number.int({ min: minBidTimestamp, max: maxBidTimestamp }) : undefined
+
+			await createAuctionBidEvent({
+				signer: bidderSigner,
+				ndk,
+				auctionEventId: auction.eventId,
+				auctionCoordinates: auction.auctionCoordinates,
+				amount: currentBidAmount,
+				mint: auction.mint,
+				createdAt: bidTimestamp,
+			})
 		}
 	}
 
