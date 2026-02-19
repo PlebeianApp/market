@@ -69,13 +69,21 @@ test.describe('Order Lifecycle', () => {
 		await expect(webLnButton).toBeEnabled({ timeout: 10_000 })
 		await webLnButton.click()
 
-		// Wait for first payment confirmation
-		await expect(buyerPage.getByText('1 of 2 completed')).toBeVisible({ timeout: 15_000 })
+		// Wait for first payment confirmation (invoice count varies with V4V config)
+		await expect(buyerPage.getByText(/1 of \d+ completed/)).toBeVisible({ timeout: 15_000 })
 
-		// Skip V4V invoice (button text is "Pay Later" when an invoice exists)
-		const skipButton = buyerPage.getByRole('button', { name: /Pay Later/i })
-		await expect(skipButton).toBeVisible({ timeout: 10_000 })
-		await skipButton.click()
+		// Skip all remaining V4V invoices (count varies with V4V config)
+		while (
+			(await buyerPage
+				.getByText('Checkout completed!')
+				.isVisible()
+				.catch(() => false)) === false
+		) {
+			const skipButton = buyerPage.getByRole('button', { name: /Pay Later/i })
+			await expect(skipButton).toBeVisible({ timeout: 10_000 })
+			await skipButton.click()
+			await buyerPage.waitForTimeout(1_000)
+		}
 
 		// Verify checkout completed (skipped counts as complete for checkout flow)
 		await expect(buyerPage.getByText('Checkout completed!')).toBeVisible({ timeout: 20_000 })
@@ -101,8 +109,8 @@ test.describe('Order Lifecycle', () => {
 		// Wait for order detail page to load
 		await expect(buyerPage.getByText('Order ID:')).toBeVisible({ timeout: 15_000 })
 
-		// Find the unpaid V4V invoice and click Pay
-		const payButton = buyerPage.getByRole('button', { name: /Pay.*sats/i })
+		// Find the first unpaid V4V invoice and click Pay (multiple may exist)
+		const payButton = buyerPage.getByRole('button', { name: /Pay.*sats/i }).first()
 		await expect(payButton).toBeVisible({ timeout: 15_000 })
 		await payButton.click()
 
@@ -146,18 +154,22 @@ test.describe('Order Lifecycle', () => {
 		// ─── 1. Complete checkout (pay all invoices) ──────────────────
 		await checkoutToPaymentStep(buyerPage)
 
+		// Pay all invoices (merchant + V4V shares — count varies with V4V config)
 		const webLnButton = buyerPage.getByRole('button', { name: 'Pay with WebLN' })
 		await expect(webLnButton).toBeVisible({ timeout: 30_000 })
-		await expect(webLnButton).toBeEnabled({ timeout: 10_000 })
-		await webLnButton.click()
-
-		await expect(buyerPage.getByText('1 of 2 completed')).toBeVisible({ timeout: 15_000 })
-
-		await expect(webLnButton).toBeEnabled({ timeout: 10_000 })
-		await webLnButton.click()
+		while (
+			(await buyerPage
+				.getByText('All payments completed successfully!')
+				.isVisible()
+				.catch(() => false)) === false
+		) {
+			await expect(webLnButton).toBeEnabled({ timeout: 10_000 })
+			await webLnButton.click()
+			await buyerPage.waitForTimeout(1_000)
+		}
 
 		await expect(buyerPage.getByText('All payments completed successfully!')).toBeVisible({ timeout: 20_000 })
-		expect(lnMock.paidInvoices.length).toBe(2)
+		expect(lnMock.paidInvoices.length).toBeGreaterThanOrEqual(2)
 
 		// ─── 2. Merchant: navigate to order detail ────────────────────
 		await merchantPage.goto('/dashboard/sales/sales')

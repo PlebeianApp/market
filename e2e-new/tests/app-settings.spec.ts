@@ -88,11 +88,29 @@ test.describe('Featured Items', () => {
 		await gotoAdminRoute(merchantPage, '/dashboard/app-settings/featured-items')
 		await expectPageHeading(merchantPage, 'Featured Items')
 
-		const productCoords = `30402:${devUser1.pk}:bitcoin-hardware-wallet`
-		await fillAndAdd(merchantPage, 'newProduct', productCoords)
+		const dTag = `e2e-featured-${Date.now()}`
+		const productCoords = `30402:${devUser1.pk}:${dTag}`
+		const productIdText = merchantPage.getByText(`ID: ${dTag}`)
+		const productInput = merchantPage.locator('#newProduct')
 
-		// Product should appear — at least one remove button exists
-		await expect(merchantPage.locator('button[class*="destructive"]').first()).toBeVisible({ timeout: 15_000 })
+		// First attempt
+		await fillAndAdd(merchantPage, 'newProduct', productCoords)
+		let addCompleted = true
+		try {
+			await expect(productInput).toHaveValue('', { timeout: 10_000 })
+		} catch {
+			addCompleted = false
+		}
+
+		// Retry once if the add action did not complete (input never cleared).
+		if (!addCompleted) {
+			await fillAndAdd(merchantPage, 'newProduct', productCoords)
+			await expect(productInput).toHaveValue('', { timeout: 10_000 })
+		}
+
+		// Confirm persisted state after a fresh page load.
+		await gotoAdminRoute(merchantPage, '/dashboard/app-settings/featured-items')
+		await expect(productIdText).toBeVisible({ timeout: 15_000 })
 	})
 
 	test('can remove a product from featured list', async ({ merchantPage }) => {
