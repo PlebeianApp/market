@@ -8,6 +8,13 @@ export const productKeys = {
 	paginated: (limit: number, until?: number) => [...productKeys.all, 'paginated', limit, until] as const,
 } as const
 
+export const auctionKeys = {
+	all: ['auctions'] as const,
+	details: (id: string) => [...auctionKeys.all, id] as const,
+	bidStats: (auctionId: string) => [...auctionKeys.all, 'bidStats', auctionId] as const,
+	byPubkey: (pubkey: string) => [...auctionKeys.all, 'byPubkey', pubkey] as const,
+} as const
+
 export const orderKeys = {
 	all: ['orders'] as const,
 	details: (id: string) => [...orderKeys.all, id] as const,

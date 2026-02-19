@@ -387,6 +387,7 @@ function DashboardLayout() {
 												location.pathname.startsWith('/dashboard/sales/messages') && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/sales/circular-economy' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/products/products' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/products/auctions' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/products/collections' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/products/migration-tool' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/products/receiving-payments' && 'p-0 lg:p-0',
@@ -414,6 +415,7 @@ function DashboardLayout() {
 												!location.pathname.startsWith('/dashboard/sales/messages') &&
 												location.pathname !== '/dashboard/sales/circular-economy' &&
 												location.pathname !== '/dashboard/products/products' &&
+												location.pathname !== '/dashboard/products/auctions' &&
 												location.pathname !== '/dashboard/products/collections' &&
 												location.pathname !== '/dashboard/products/migration-tool' &&
 												location.pathname !== '/dashboard/products/receiving-payments' &&
@@ -448,6 +450,7 @@ function DashboardLayout() {
 														location.pathname !== '/dashboard/app-settings/featured-items' &&
 														location.pathname !== '/dashboard/sales/circular-economy' &&
 														location.pathname !== '/dashboard/products/products' &&
+														location.pathname !== '/dashboard/products/auctions' &&
 														location.pathname !== '/dashboard/products/collections' &&
 														location.pathname !== '/dashboard/products/migration-tool' &&
 														location.pathname !== '/dashboard/products/receiving-payments' &&
