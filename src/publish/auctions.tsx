@@ -23,6 +23,13 @@ export interface AuctionFormData {
 	isNSFW: boolean
 }
 
+export interface AuctionBidFormData {
+	auctionEventId: string
+	auctionCoordinates: string
+	amount: number
+	mint?: string
+}
+
 const parseUnixTimestamp = (isoDateTime?: string): number | null => {
 	if (!isoDateTime) return null
 	const timestampMs = new Date(isoDateTime).getTime()
@@ -190,6 +197,59 @@ export const useDeleteAuctionMutation = () => {
 		onError: (error) => {
 			console.error('Failed to delete auction:', error)
 			toast.error(`Failed to delete auction: ${error instanceof Error ? error.message : String(error)}`)
+		},
+	})
+}
+
+const DEFAULT_BID_MINT = 'https://nofees.testnut.cashu.space'
+
+export const publishAuctionBid = async (formData: AuctionBidFormData, signer: NDKSigner, ndk: NDK): Promise<string> => {
+	if (!formData.auctionEventId) throw new Error('Auction event id is required')
+	if (!formData.auctionCoordinates) throw new Error('Auction coordinates are required')
+	if (!Number.isFinite(formData.amount) || formData.amount <= 0) throw new Error('Bid amount must be a positive number')
+
+	const event = new NDKEvent(ndk)
+	event.kind = 1023
+	event.content = JSON.stringify({
+		type: 'cashu_bid_commitment',
+		amount: formData.amount,
+		mint: formData.mint || DEFAULT_BID_MINT,
+	})
+	event.tags = [
+		['e', formData.auctionEventId],
+		['a', formData.auctionCoordinates],
+		['amount', String(formData.amount), 'SAT'],
+		['mint', formData.mint || DEFAULT_BID_MINT],
+		['status', 'locked'],
+		['schema', 'auction_bid_v1'],
+	]
+
+	await event.sign(signer)
+	await ndkActions.publishEvent(event)
+	return event.id
+}
+
+export const usePublishAuctionBidMutation = () => {
+	const queryClient = useQueryClient()
+	const ndk = ndkActions.getNDK()
+	const signer = ndkActions.getSigner()
+
+	return useMutation({
+		mutationFn: async (formData: AuctionBidFormData) => {
+			if (!ndk) throw new Error('NDK not initialized')
+			if (!signer) throw new Error('No signer available')
+			return publishAuctionBid(formData, signer, ndk)
+		},
+		onSuccess: async (_eventId, variables) => {
+			await queryClient.invalidateQueries({ queryKey: auctionKeys.bids(variables.auctionEventId) })
+			await queryClient.invalidateQueries({ queryKey: auctionKeys.bidStats(variables.auctionEventId) })
+			await queryClient.invalidateQueries({ queryKey: auctionKeys.details(variables.auctionEventId) })
+			await queryClient.invalidateQueries({ queryKey: auctionKeys.all })
+			toast.success('Bid submitted')
+		},
+		onError: (error) => {
+			console.error('Failed to publish auction bid:', error)
+			toast.error(`Failed to submit bid: ${error instanceof Error ? error.message : String(error)}`)
 		},
 	})
 }
