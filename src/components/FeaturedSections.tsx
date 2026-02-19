@@ -2,17 +2,19 @@ import { CollectionCard } from '@/components/CollectionCard'
 import { FeaturedUserCard } from '@/components/FeaturedUserCard'
 import { ItemGrid } from '@/components/ItemGrid'
 import { ProductCard } from '@/components/ProductCard'
+import { AuctionCard } from '@/components/AuctionCard'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { cn } from '@/lib/utils'
 import { collectionByATagQueryOptions } from '@/queries/collections'
 import { useConfigQuery } from '@/queries/config'
-import { useFeaturedCollections, useFeaturedProducts, useFeaturedUsers } from '@/queries/featured'
+import { useFeaturedAuctions, useFeaturedCollections, useFeaturedProducts, useFeaturedUsers } from '@/queries/featured'
+import { auctionByATagQueryOptions } from '@/queries/auctions'
 import { productByATagQueryOptions } from '@/queries/products'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { ArrowRight, FolderOpen, Package, Users } from 'lucide-react'
+import { ArrowRight, FolderOpen, Gavel, Package, Users } from 'lucide-react'
 
 interface FeaturedSectionsProps {
 	className?: string
@@ -71,17 +73,42 @@ function FeaturedCollectionItem({ collectionCoords }: { collectionCoords: string
 	return <CollectionCard collection={collection} />
 }
 
+function FeaturedAuctionItem({ auctionCoords }: { auctionCoords: string }) {
+	const [, pubkey, dTag] = auctionCoords.split(':')
+
+	const { data: auction, isLoading } = useQuery({
+		...auctionByATagQueryOptions(pubkey, dTag),
+		enabled: !!(pubkey && dTag),
+	})
+
+	if (isLoading) {
+		return (
+			<div className="animate-pulse">
+				<div className="bg-gray-200 aspect-square rounded-lg mb-2"></div>
+				<div className="bg-gray-200 h-4 rounded mb-1"></div>
+				<div className="bg-gray-200 h-3 rounded w-2/3"></div>
+			</div>
+		)
+	}
+
+	if (!auction) return null
+
+	return <AuctionCard auction={auction} />
+}
+
 // FeaturedUserItem has been replaced with FeaturedUserCard component
 
 // Main component for displaying all featured sections
 export function FeaturedSections({ className, maxItemsPerSection = 5 }: FeaturedSectionsProps) {
 	const { data: config } = useConfigQuery()
 	const { data: featuredProducts } = useFeaturedProducts(config?.appPublicKey || '')
+	const { data: featuredAuctions } = useFeaturedAuctions(config?.appPublicKey || '')
 	const { data: featuredCollections } = useFeaturedCollections(config?.appPublicKey || '')
 	const { data: featuredUsers } = useFeaturedUsers(config?.appPublicKey || '')
 
 	// Limit items per section
 	const displayProducts = featuredProducts?.featuredProducts?.slice(0, maxItemsPerSection) || []
+	const displayAuctions = featuredAuctions?.featuredAuctions?.slice(0, maxItemsPerSection) || []
 	const displayCollections = featuredCollections?.featuredCollections?.slice(0, maxItemsPerSection) || []
 	const displayUsers = featuredUsers?.featuredUsers?.slice(0, maxItemsPerSection) || []
 
@@ -118,14 +145,42 @@ export function FeaturedSections({ className, maxItemsPerSection = 5 }: Featured
 				</section>
 			)}
 
+			{/* Featured Auctions */}
+			{displayAuctions.length > 0 && (
+				<section className={cn('w-full max-w-full py-12 overflow-hidden', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
+					<div className="px-4 sm:px-8 max-w-full">
+						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-2">
+							<div className="flex items-center gap-3">
+								<Gavel className="w-6 h-6 text-primary text-white shrink-0" />
+								<h2 className="text-xl sm:text-2xl font-heading text-white">Featured Auctions</h2>
+							</div>
+							{featuredAuctions?.featuredAuctions && featuredAuctions.featuredAuctions.length > maxItemsPerSection && (
+								<div className="w-full sm:w-auto flex justify-end">
+									<Link to="/auctions" className="flex items-center gap-2 text-primary hover:underline">
+										<Button variant="ghost" size="sm" className="gap-2">
+											View All <ArrowRight className="w-4 h-4" />
+										</Button>
+									</Link>
+								</div>
+							)}
+						</div>
+						<ItemGrid className="gap-4 sm:gap-8">
+							{displayAuctions.map((auctionCoords: string) => (
+								<FeaturedAuctionItem key={auctionCoords} auctionCoords={auctionCoords} />
+							))}
+						</ItemGrid>
+					</div>
+				</section>
+			)}
+
 			{/* Featured Collections */}
 			{displayCollections.length > 0 && (
 				<section className={cn('w-full max-w-full py-12 overflow-hidden', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
 					<div className="px-4 sm:px-8 max-w-full">
 						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-2">
 							<div className="flex items-center gap-3">
-								<FolderOpen className="w-6 h-6 text-primary text-white shrink-0" />
-								<h2 className="text-xl sm:text-2xl font-heading text-white">Featured Collections</h2>
+								<FolderOpen className="w-6 h-6 text-primary text-black shrink-0" />
+								<h2 className="text-xl sm:text-2xl font-heading text-black">Featured Collections</h2>
 							</div>
 							{featuredCollections?.featuredCollections && featuredCollections.featuredCollections.length > maxItemsPerSection && (
 								<div className="w-full sm:w-auto flex justify-end">
