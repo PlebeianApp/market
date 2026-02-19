@@ -11,6 +11,9 @@ export type AuctionBidStats = {
 	currentPrice: number
 }
 
+const AUCTION_KIND = 30408 as unknown as NonNullable<NDKFilter['kinds']>[number]
+const AUCTION_BID_KIND = 1023 as unknown as NonNullable<NDKFilter['kinds']>[number]
+
 const DELETED_AUCTIONS_STORAGE_KEY = 'plebeian_deleted_auction_ids'
 
 const loadDeletedAuctionIds = (): Map<string, number> => {
@@ -71,7 +74,7 @@ export const fetchAuctions = async (limit: number = 200) => {
 	}
 
 	const filter: NDKFilter = {
-		kinds: [30408],
+		kinds: [AUCTION_KIND],
 		limit,
 	}
 
@@ -88,7 +91,7 @@ export const fetchAuction = async (id: string) => {
 	if (!id) return null
 
 	const filter: NDKFilter = {
-		kinds: [30408],
+		kinds: [AUCTION_KIND],
 		ids: [id],
 		limit: 1,
 	}
@@ -107,7 +110,7 @@ export const fetchAuctionsByPubkey = async (pubkey: string, limit: number = 100)
 	if (!ndk) return []
 
 	const filter: NDKFilter = {
-		kinds: [30408],
+		kinds: [AUCTION_KIND],
 		authors: [pubkey],
 		limit,
 	}
@@ -134,7 +137,7 @@ export const fetchAuctionBids = async (auctionEventId: string, limit: number = 5
 	if (!ndk) return []
 
 	const filter: NDKFilter = {
-		kinds: [1023],
+		kinds: [AUCTION_BID_KIND],
 		'#e': [auctionEventId],
 		limit,
 	}
@@ -190,6 +193,15 @@ export const auctionByATagQueryOptions = (pubkey: string, dTag: string) =>
 		queryFn: () => fetchAuctionByATag(pubkey, dTag),
 		staleTime: 300000,
 		enabled: !!(pubkey && dTag),
+	})
+
+export const auctionBidsQueryOptions = (auctionEventId: string, limit: number = 500) =>
+	queryOptions({
+		queryKey: auctionKeys.bids(auctionEventId),
+		queryFn: () => fetchAuctionBids(auctionEventId, limit),
+		enabled: !!auctionEventId,
+		staleTime: 5000,
+		refetchInterval: 5000,
 	})
 
 export const auctionBidStatsQueryOptions = (auctionEventId: string, startingBid: number = 0) =>
@@ -253,6 +265,73 @@ export const getAuctionStartingBid = (event: NDKEvent | null): number => {
 	return 0
 }
 
+export const getAuctionBidIncrement = (event: NDKEvent | null): number => {
+	if (!event) return 1
+	const tag = event.tags.find((t) => t[0] === 'bid_increment')
+	const parsed = tag?.[1] ? parseInt(tag[1], 10) : NaN
+	return !isNaN(parsed) && parsed > 0 ? parsed : 1
+}
+
+export const getAuctionReserve = (event: NDKEvent | null): number => {
+	if (!event) return 0
+	const tag = event.tags.find((t) => t[0] === 'reserve')
+	const parsed = tag?.[1] ? parseInt(tag[1], 10) : NaN
+	return !isNaN(parsed) ? parsed : 0
+}
+
+export const getAuctionType = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'auction_type')?.[1] || 'english'
+
+export const getAuctionCurrency = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'currency')?.[1] || 'SAT'
+
+export const getAuctionMints = (event: NDKEvent | null): string[] => {
+	if (!event) return []
+	return event.tags.filter((tag) => tag[0] === 'mint' && !!tag[1]).map((tag) => tag[1])
+}
+
+export const getAuctionEscrowPubkey = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'escrow_pubkey')?.[1] || ''
+
+export const getAuctionSettlementPolicy = (event: NDKEvent | null): string =>
+	event?.tags.find((t) => t[0] === 'settlement_policy')?.[1] || ''
+
+export const getAuctionSchema = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'schema')?.[1] || ''
+
+export const getAuctionShippingOptions = (event: NDKEvent | null): string[] => {
+	if (!event) return []
+	return event.tags.filter((tag) => tag[0] === 'shipping_option' && !!tag[1]).map((tag) => tag[1])
+}
+
+export const getBidAmount = (bidEvent: NDKEvent | null): number => {
+	if (!bidEvent) return 0
+	const amountTag = bidEvent.tags.find((tag) => tag[0] === 'amount')?.[1]
+	const parsed = amountTag ? parseInt(amountTag, 10) : NaN
+	if (!isNaN(parsed)) return parsed
+
+	try {
+		const parsedContent = JSON.parse(bidEvent.content || '{}')
+		const contentAmount = parseInt(parsedContent?.amount || '0', 10)
+		return !isNaN(contentAmount) ? contentAmount : 0
+	} catch {
+		return 0
+	}
+}
+
+export const getBidMint = (bidEvent: NDKEvent | null): string => {
+	if (!bidEvent) return ''
+	const tagMint = bidEvent.tags.find((tag) => tag[0] === 'mint')?.[1]
+	if (tagMint) return tagMint
+	try {
+		const parsedContent = JSON.parse(bidEvent.content || '{}')
+		return parsedContent?.mint || ''
+	} catch {
+		return ''
+	}
+}
+
+export const getBidStatus = (bidEvent: NDKEvent | null): string => {
+	if (!bidEvent) return 'unknown'
+	return bidEvent.tags.find((tag) => tag[0] === 'status')?.[1] || 'unknown'
+}
+
 export const isNSFWAuction = (event: NDKEvent | null): boolean => {
 	if (!event) return false
 	return event.tags.find((t) => t[0] === 'content-warning')?.[1] === 'nsfw'
@@ -266,4 +345,9 @@ export const filterNSFWAuctions = (events: NDKEvent[], showNSFW: boolean): NDKEv
 export const useAuctionBidStats = (auctionEventId: string, startingBid: number = 0) =>
 	useQuery({
 		...auctionBidStatsQueryOptions(auctionEventId, startingBid),
+	})
+
+export const useAuctionBids = (auctionEventId: string, limit: number = 500) =>
+	useQuery({
+		...auctionBidsQueryOptions(auctionEventId, limit),
 	})

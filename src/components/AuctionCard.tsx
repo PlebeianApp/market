@@ -1,6 +1,20 @@
-import { getAuctionEndAt, getAuctionImages, getAuctionStartingBid, getAuctionTitle, useAuctionBidStats } from '@/queries/auctions'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { ndkActions } from '@/lib/stores/ndk'
+import { usePublishAuctionBidMutation } from '@/publish/auctions'
+import {
+	getAuctionBidIncrement,
+	getAuctionEndAt,
+	getAuctionId,
+	getAuctionImages,
+	getAuctionMints,
+	getAuctionStartingBid,
+	getAuctionTitle,
+	useAuctionBidStats,
+} from '@/queries/auctions'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { useEffect, useState } from 'react'
+import { Link } from '@tanstack/react-router'
+import { useEffect, useMemo, useState } from 'react'
 
 function formatAuctionCountdown(secondsRemaining: number): string {
 	if (secondsRemaining <= 0) return 'Ended'
@@ -19,9 +33,27 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 	const images = getAuctionImages(auction)
 	const endAt = getAuctionEndAt(auction)
 	const startingBid = getAuctionStartingBid(auction)
+	const bidIncrement = getAuctionBidIncrement(auction)
+	const acceptedMints = getAuctionMints(auction)
+	const auctionDTag = getAuctionId(auction)
+	const auctionCoordinates = auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 	const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
+	const [bidAmountInput, setBidAmountInput] = useState('')
+	const [isOwnAuction, setIsOwnAuction] = useState(false)
 	const secondsRemaining = Math.max(0, endAt - now)
 	const { data: bidStats } = useAuctionBidStats(auction.id, startingBid)
+	const bidMutation = usePublishAuctionBidMutation()
+
+	const currentPrice = bidStats?.currentPrice ?? startingBid
+	const bidsCount = bidStats?.count ?? 0
+	const endDateLabel = endAt ? new Date(endAt * 1000).toLocaleString() : 'N/A'
+	const ended = endAt > 0 ? now >= endAt : false
+	const parsedBidAmount = parseInt(bidAmountInput || '0', 10)
+
+	const minBid = useMemo(() => {
+		const floorBid = currentPrice + Math.max(1, bidIncrement)
+		return Math.max(startingBid, floorBid)
+	}, [bidIncrement, currentPrice, startingBid])
 
 	useEffect(() => {
 		const timer = window.setInterval(() => {
@@ -30,18 +62,56 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 		return () => window.clearInterval(timer)
 	}, [])
 
-	const currentPrice = bidStats?.currentPrice ?? startingBid
-	const bidsCount = bidStats?.count ?? 0
-	const endDateLabel = endAt ? new Date(endAt * 1000).toLocaleString() : 'N/A'
-	const ended = endAt > 0 ? now >= endAt : false
+	useEffect(() => {
+		const checkIfOwnAuction = async () => {
+			const user = await ndkActions.getUser()
+			if (!user?.pubkey) return
+			setIsOwnAuction(user.pubkey === auction.pubkey)
+		}
+
+		checkIfOwnAuction()
+	}, [auction.pubkey])
+
+	useEffect(() => {
+		setBidAmountInput(String(minBid))
+	}, [minBid])
+
+	const handleButtonClick = (e: React.MouseEvent, action: () => void) => {
+		e.preventDefault()
+		e.stopPropagation()
+		action()
+	}
+
+	const handleSubmitBid = async () => {
+		if (!auctionCoordinates || !auctionDTag || ended || isOwnAuction) return
+
+		const parsedAmount = parseInt(bidAmountInput || '0', 10)
+		if (!Number.isFinite(parsedAmount) || parsedAmount < minBid) return
+
+		await bidMutation.mutateAsync({
+			auctionEventId: auction.id,
+			auctionCoordinates,
+			amount: parsedAmount,
+			mint: acceptedMints[0],
+		})
+	}
 
 	return (
-		<div className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col w-full max-w-full overflow-hidden">
+		<Link
+			to={`/auctions/${auction.id}`}
+			className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col w-full max-w-full overflow-hidden hover:shadow-md transition-shadow duration-200 cursor-pointer"
+		>
 			<div className="relative aspect-square overflow-hidden border-b border-zinc-800 block">
 				{images.length > 0 ? (
-					<img src={images[0][1]} alt={title} className="w-full h-full object-cover rounded-t-[calc(var(--radius)-1px)]" />
+					<img
+						src={images[0][1]}
+						alt={title}
+						className="w-full h-full object-cover rounded-t-[calc(var(--radius)-1px)] hover:scale-105 transition-transform duration-200"
+					/>
 				) : (
-					<div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400 rounded-lg">No image</div>
+					<div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400 rounded-lg hover:bg-gray-200 transition-colors duration-200">
+						No image
+					</div>
 				)}
 				<div
 					className={`absolute top-2 right-2 text-[10px] font-bold px-2 py-1 rounded ${ended ? 'bg-zinc-700 text-white' : 'bg-green-600 text-white'}`}
@@ -55,25 +125,41 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 					{title}
 				</h2>
 
-				<div className="grid grid-cols-2 gap-2 text-xs">
-					<div className="bg-zinc-50 rounded p-2 border">
-						<p className="text-zinc-500">Current price</p>
-						<p className="font-semibold">{currentPrice.toLocaleString()} sats</p>
-					</div>
-					<div className="bg-zinc-50 rounded p-2 border">
-						<p className="text-zinc-500">Bids</p>
-						<p className="font-semibold">{bidsCount}</p>
-					</div>
-					<div className="bg-zinc-50 rounded p-2 border col-span-2">
-						<p className="text-zinc-500">End time</p>
-						<p className="font-semibold">{endDateLabel}</p>
-					</div>
-					<div className={`rounded p-2 border col-span-2 ${ended ? 'bg-zinc-100' : 'bg-amber-50 border-amber-200'}`}>
-						<p className="text-zinc-500">Countdown</p>
-						<p className="font-semibold">{formatAuctionCountdown(secondsRemaining)}</p>
-					</div>
+				<div className="flex justify-between items-center">
+					<div className="text-sm font-semibold">{currentPrice.toLocaleString()} sats</div>
+					<div className="bg-[var(--light-gray)] font-medium px-4 py-1 rounded-full text-xs">{bidsCount} bids</div>
 				</div>
+
+				<div className="text-xs text-gray-600 flex justify-between gap-2">
+					<span className="truncate">Ends: {endDateLabel}</span>
+					<span className={`font-medium ${ended ? 'text-zinc-600' : 'text-amber-700'}`}>{formatAuctionCountdown(secondsRemaining)}</span>
+				</div>
+
+				<div className="flex-grow"></div>
+
+				<div className="flex gap-2">
+					<Input
+						type="number"
+						min={minBid}
+						step={Math.max(1, bidIncrement)}
+						value={bidAmountInput}
+						onChange={(e) => setBidAmountInput(e.target.value)}
+						onClick={(e) => {
+							e.stopPropagation()
+						}}
+						className="h-10"
+						disabled={ended || isOwnAuction || bidMutation.isPending}
+					/>
+					<Button
+						className="py-3 px-4 rounded-lg font-medium bg-black text-white disabled:bg-gray-400 disabled:cursor-not-allowed"
+						onClick={(e) => handleButtonClick(e, () => void handleSubmitBid())}
+						disabled={ended || isOwnAuction || bidMutation.isPending || !Number.isFinite(parsedBidAmount) || parsedBidAmount < minBid}
+					>
+						{isOwnAuction ? 'Your Auction' : ended ? 'Ended' : bidMutation.isPending ? 'Bidding...' : 'Bid'}
+					</Button>
+				</div>
+				<div className="text-[11px] text-gray-500">Min bid: {minBid.toLocaleString()} sats</div>
 			</div>
-		</div>
+		</Link>
 	)
 }
