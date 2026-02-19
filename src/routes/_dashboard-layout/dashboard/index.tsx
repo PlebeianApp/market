@@ -152,6 +152,18 @@ function DashboardInnerComponent() {
 							</Button>
 						</Link>
 
+						<Link to="/dashboard/products/auctions">
+							<Button variant="outline" className="w-full justify-start h-auto py-4">
+								<div className="flex items-start gap-3">
+									<span className="text-2xl">🔨</span>
+									<div className="text-left">
+										<div className="font-semibold">My Auctions</div>
+										<div className="text-xs text-muted-foreground">Manage your auction listings</div>
+									</div>
+								</div>
+							</Button>
+						</Link>
+
 						<Link to="/dashboard/sales/sales">
 							<Button variant="outline" className="w-full justify-start h-auto py-4">
 								<div className="flex items-start gap-3">

@@ -36,6 +36,10 @@ export const dashboardNavigation: NavSection[] = [
 				path: '/dashboard/products/products',
 			},
 			{
+				title: '🔨 My Auctions',
+				path: '/dashboard/products/auctions',
+			},
+			{
 				title: '🗂️ Collections',
 				path: '/dashboard/products/collections',
 			},
