@@ -22,7 +22,9 @@ import {
 	getAuctionEscrowPubkey,
 	getAuctionId,
 	getAuctionImages,
+	getAuctionKeyScheme,
 	getAuctionMints,
+	getAuctionP2pkXpub,
 	getAuctionReserve,
 	getAuctionSchema,
 	getAuctionSettlementPolicy,
@@ -123,6 +125,8 @@ function AuctionDetailRoute() {
 	const categories = getAuctionCategories(auction)
 	const trustedMints = getAuctionMints(auction)
 	const escrowPubkey = getAuctionEscrowPubkey(auction)
+	const keyScheme = getAuctionKeyScheme(auction)
+	const p2pkXpub = getAuctionP2pkXpub(auction)
 	const settlementPolicy = getAuctionSettlementPolicy(auction)
 	const schema = getAuctionSchema(auction)
 	const shippingOptions = getAuctionShippingOptions(auction)
@@ -130,13 +134,13 @@ function AuctionDetailRoute() {
 	const auctionCoordinates = auctionDTag && auction ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 
 	const ended = endAt > 0 ? now >= endAt : false
-	const { data: bidStats } = useAuctionBidStats(auctionId, startingBid)
+	const { data: bidStats } = useAuctionBidStats(auctionId, startingBid, auctionCoordinates)
 	const currentPrice = bidStats?.currentPrice ?? startingBid
 	const bidsCount = bidStats?.count ?? 0
 	const minBid = Math.max(startingBid, currentPrice + Math.max(1, bidIncrement))
 	const parsedBidAmount = parseInt(bidAmountInput || '0', 10)
 
-	const bidsQuery = useAuctionBids(auctionId, 500)
+	const bidsQuery = useAuctionBids(auctionId, 500, auctionCoordinates)
 	const bids = bidsQuery.data ?? []
 	const newestBids = useMemo(() => [...bids].sort((a, b) => (b.created_at || 0) - (a.created_at || 0)), [bids])
 
@@ -187,12 +191,21 @@ function AuctionDetailRoute() {
 			return
 		}
 
-		await bidMutation.mutateAsync({
-			auctionEventId: auction.id,
-			auctionCoordinates,
-			amount: parsedAmount,
-			mint: trustedMints[0],
-		})
+		try {
+			await bidMutation.mutateAsync({
+				auctionEventId: auction.id,
+				auctionCoordinates,
+				amount: parsedAmount,
+				auctionEndAt: endAt,
+				sellerPubkey: auction.pubkey,
+				escrowPubkey: escrowPubkey || auction.pubkey,
+				keyScheme,
+				p2pkXpub,
+				mint: trustedMints[0],
+			})
+		} catch {
+			// Error toast is handled by mutation onError.
+		}
 	}
 
 	if (!auction && (auctionQuery.isLoading || auctionQuery.isFetching)) {
@@ -371,6 +384,16 @@ function AuctionDetailRoute() {
 								<span className="font-medium break-all">{escrowPubkey || 'N/A'}</span>
 							</div>
 							<div className="flex justify-between gap-3">
+								<span className="text-gray-500">Key scheme</span>
+								<span className="font-medium">{keyScheme}</span>
+							</div>
+							{p2pkXpub && (
+								<div className="flex justify-between gap-3">
+									<span className="text-gray-500">P2PK xpub</span>
+									<span className="font-medium break-all">{p2pkXpub}</span>
+								</div>
+							)}
+							<div className="flex justify-between gap-3">
 								<span className="text-gray-500">Settlement policy</span>
 								<span className="font-medium">{settlementPolicy || 'N/A'}</span>
 							</div>
@@ -422,6 +445,16 @@ function AuctionDetailRoute() {
 										</div>
 										<div>
 											<span className="text-gray-500">Mint:</span> {getBidMint(bidEvent) || 'N/A'}
+										</div>
+										<div>
+											<span className="text-gray-500">Key scheme:</span>{' '}
+											{bidEvent.tags.find((tag) => tag[0] === 'key_scheme')?.[1] || 'static_p2pk'}
+										</div>
+										<div>
+											<span className="text-gray-500">Locktime:</span>{' '}
+											{bidEvent.tags.find((tag) => tag[0] === 'locktime')?.[1]
+												? new Date(parseInt(bidEvent.tags.find((tag) => tag[0] === 'locktime')?.[1] || '0', 10) * 1000).toLocaleString()
+												: 'N/A'}
 										</div>
 										<div>
 											<span className="text-gray-500">Time:</span>{' '}

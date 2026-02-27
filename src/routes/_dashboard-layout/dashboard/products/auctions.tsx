@@ -37,11 +37,13 @@ function AuctionBasicInfo({ auction }: { auction: NDKEvent }) {
 	const summary = getAuctionSummary(auction) || auction.content || 'No description'
 	const images = getAuctionImages(auction)
 	const startingBid = getAuctionStartingBid(auction)
+	const auctionDTag = getAuctionId(auction)
+	const auctionCoordinates = auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 	const startAt = getAuctionStartAt(auction)
 	const endAt = getAuctionEndAt(auction)
 	const now = Math.floor(Date.now() / 1000)
 	const status = formatAuctionStatus(startAt, endAt, now)
-	const { data: bidStats } = useAuctionBidStats(auction.id, startingBid)
+	const { data: bidStats } = useAuctionBidStats(auction.id, startingBid, auctionCoordinates)
 	const currentBid = bidStats?.currentPrice ?? startingBid
 	const bidsCount = bidStats?.count ?? 0
 
