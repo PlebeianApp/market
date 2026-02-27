@@ -88,19 +88,22 @@ function ProductsRoute() {
 	const { isAuthenticated } = useStore(authStore)
 
 	// Fetch featured products for slides
-	const { data: config } = useConfigQuery()
-	const { data: featuredProductsData } = useFeaturedProducts(config?.appPublicKey || '')
+	const { data: config, isLoading: isLoadingConfig } = useConfigQuery()
+	const { data: featuredProductsData, isLoading: isLoadingFeatured } = useFeaturedProducts(config?.appPublicKey || '')
 	const featuredProductEvents = useFeaturedProductEvents(featuredProductsData?.featuredProducts)
+	const isFeaturedLoading = isLoadingConfig || isLoadingFeatured
 
-	// Use featured products for slides, fallback to recent products if no featured products
+	// Use featured products for slides, fallback to recent products only after featured data has loaded
 	const productsForSlides =
 		featuredProductEvents.length > 0
 			? featuredProductEvents
-			: products
-					.filter((product: NDKEvent) => {
-						return product.tags.some((tag: string[]) => tag[0] === 'image' && tag[1])
-					})
-					.slice(0, 4)
+			: isFeaturedLoading
+				? [] // Don't flash generic products while featured are still loading
+				: products
+						.filter((product: NDKEvent) => {
+							return product.tags.some((tag: string[]) => tag[0] === 'image' && tag[1])
+						})
+						.slice(0, 4)
 
 	// Extract all unique tags from ALL products (not filtered)
 	const allTags = useMemo(() => {

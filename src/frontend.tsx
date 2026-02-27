@@ -11,6 +11,7 @@ import { ndkActions, ndkStore } from './lib/stores/ndk'
 import { authActions } from './lib/stores/auth'
 import { walletActions } from './lib/stores/wallet'
 import { UpdateAvailableDialog } from './components/UpdateAvailableDialog'
+import { configKeys } from './queries/queryKeyFactory'
 
 if (process.env.NODE_ENV !== 'development') {
 	console.log = () => {}
@@ -116,6 +117,8 @@ function App() {
 				}
 				const config = await response.json()
 				configActions.setConfig(config)
+				// Prime React Query cache so useConfigQuery() doesn't re-fetch
+				queryClient.setQueryData(configKeys.all, config)
 				console.log('Fetched config:', { stage: config.stage, appRelay: config.appRelay })
 
 				// Initialize NDK AFTER config is loaded so stage-based relay selection works.
