@@ -276,7 +276,9 @@ async function seedData() {
 			const auctionData = generateAuctionData({
 				sellerPubkey: pubkey,
 				availableShippingRefs: shippingsByUser[pubkey] || [],
-				trustedMints: ['https://nofees.testnut.cashu.space'],
+				trustedMints: ['https://testnut.cashu.space', 'https://nofees.testnut.cashu.space'],
+				keyScheme: 'hd_p2pk',
+				p2pkXpub: XPUB,
 			})
 
 			const auctionEvent = await createAuctionEvent(signer, ndk, auctionData)

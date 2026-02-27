@@ -23,6 +23,8 @@ const INITIAL_FORM: AuctionFormData = {
 	categories: [],
 	imageUrls: [],
 	trustedMints: [DEFAULT_MINT],
+	keyScheme: 'static_p2pk',
+	p2pkXpub: '',
 	isNSFW: false,
 }
 
@@ -47,6 +49,7 @@ export function AuctionFormContent() {
 		formData.startingBid.trim().length > 0 &&
 		formData.endAt.trim().length > 0 &&
 		formData.bidIncrement.trim().length > 0 &&
+		(formData.keyScheme !== 'hd_p2pk' || formData.p2pkXpub.trim().length > 0) &&
 		parseListInput(imagesInput).length > 0
 
 	const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -219,6 +222,36 @@ export function AuctionFormContent() {
 					placeholder={DEFAULT_MINT}
 				/>
 			</div>
+
+			<div className="grid w-full gap-1.5">
+				<Label>Lock Key Scheme</Label>
+				<Select
+					value={formData.keyScheme}
+					onValueChange={(value: 'static_p2pk' | 'hd_p2pk') => setFormData((prev) => ({ ...prev, keyScheme: value }))}
+				>
+					<SelectTrigger>
+						<SelectValue placeholder="Select lock key scheme" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="static_p2pk">static_p2pk</SelectItem>
+						<SelectItem value="hd_p2pk">hd_p2pk</SelectItem>
+					</SelectContent>
+				</Select>
+			</div>
+
+			{formData.keyScheme === 'hd_p2pk' && (
+				<div className="grid w-full gap-1.5">
+					<Label htmlFor="auction-p2pk-xpub">
+						<span className="after:content-['*'] after:ml-0.5 after:text-red-500">P2PK XPUB</span>
+					</Label>
+					<Input
+						id="auction-p2pk-xpub"
+						value={formData.p2pkXpub}
+						onChange={(e) => setFormData((prev) => ({ ...prev, p2pkXpub: e.target.value }))}
+						placeholder="xpub..."
+					/>
+				</div>
+			)}
 
 			<div className="flex items-start space-x-3 p-3 border rounded-lg bg-amber-50/50 border-amber-200">
 				<Checkbox
