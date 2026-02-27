@@ -1,4 +1,5 @@
 import { ndkActions } from '@/lib/stores/ndk'
+import { AUCTION_SETTLEMENT_GRACE_SECONDS, nip60Actions, type AuctionP2pkKeyScheme } from '@/lib/stores/nip60'
 import { markAuctionAsDeleted } from '@/queries/auctions'
 import { auctionKeys } from '@/queries/queryKeyFactory'
 import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
@@ -20,6 +21,8 @@ export interface AuctionFormData {
 	categories: string[]
 	imageUrls: string[]
 	trustedMints: string[]
+	keyScheme: AuctionP2pkKeyScheme
+	p2pkXpub: string
 	isNSFW: boolean
 }
 
@@ -27,6 +30,11 @@ export interface AuctionBidFormData {
 	auctionEventId: string
 	auctionCoordinates: string
 	amount: number
+	auctionEndAt: number
+	sellerPubkey: string
+	escrowPubkey: string
+	keyScheme: AuctionP2pkKeyScheme
+	p2pkXpub?: string
 	mint?: string
 }
 
@@ -53,6 +61,7 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 	const bidIncrement = formData.bidIncrement.trim() || '1'
 	const reserve = formData.reserve.trim() || '0'
 	const trustedMints = formData.trustedMints.length > 0 ? formData.trustedMints : [DEFAULT_AUCTION_MINT]
+	const keyScheme: AuctionP2pkKeyScheme = formData.keyScheme || 'static_p2pk'
 
 	const imageTags = formData.imageUrls.map((url, index) => ['image', url, '800x600', String(index)] as NDKTag)
 	const categoryTags: NDKTag[] = []
@@ -79,6 +88,8 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 		['reserve', reserve],
 		...trustedMints.map((mint) => ['mint', mint] as NDKTag),
 		['escrow_pubkey', ownerPubkey],
+		['key_scheme', keyScheme],
+		...(keyScheme === 'hd_p2pk' && formData.p2pkXpub.trim() ? ([['p2pk_xpub', formData.p2pkXpub.trim()] as NDKTag] as NDKTag[]) : []),
 		['settlement_policy', 'cashu_p2pk_v1'],
 		['schema', 'auction_v1'],
 		...imageTags,
@@ -104,6 +115,9 @@ export const publishAuction = async (formData: AuctionFormData, signer: NDKSigne
 	}
 	if (!formData.endAt) {
 		throw new Error('Auction end time is required')
+	}
+	if (formData.keyScheme === 'hd_p2pk' && !formData.p2pkXpub.trim()) {
+		throw new Error('p2pk_xpub is required for hd_p2pk auctions')
 	}
 
 	const now = Math.floor(Date.now() / 1000)
@@ -206,27 +220,72 @@ const DEFAULT_BID_MINT = 'https://nofees.testnut.cashu.space'
 export const publishAuctionBid = async (formData: AuctionBidFormData, signer: NDKSigner, ndk: NDK): Promise<string> => {
 	if (!formData.auctionEventId) throw new Error('Auction event id is required')
 	if (!formData.auctionCoordinates) throw new Error('Auction coordinates are required')
+	if (!formData.sellerPubkey) throw new Error('Seller pubkey is required')
 	if (!Number.isFinite(formData.amount) || formData.amount <= 0) throw new Error('Bid amount must be a positive number')
+	if (!Number.isFinite(formData.auctionEndAt) || formData.auctionEndAt <= 0) throw new Error('Auction end time is required for locking')
 
-	const event = new NDKEvent(ndk)
-	event.kind = 1023
-	event.content = JSON.stringify({
-		type: 'cashu_bid_commitment',
+	const now = Math.floor(Date.now() / 1000)
+	if (now >= formData.auctionEndAt) {
+		throw new Error('Auction already ended')
+	}
+
+	const bidderPubkey = (await signer.user()).pubkey
+	const bidNonce = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+	const locktime = Math.max(formData.auctionEndAt + AUCTION_SETTLEMENT_GRACE_SECONDS, now + 60)
+
+	const lockedBid = await nip60Actions.lockAuctionBidFunds({
 		amount: formData.amount,
 		mint: formData.mint || DEFAULT_BID_MINT,
+		lockPubkey: formData.escrowPubkey || formData.sellerPubkey,
+		locktime,
+		refundPubkey: bidderPubkey,
+		keyScheme: formData.keyScheme || 'static_p2pk',
+		p2pkXpub: formData.p2pkXpub,
 	})
-	event.tags = [
-		['e', formData.auctionEventId],
-		['a', formData.auctionCoordinates],
-		['amount', String(formData.amount), 'SAT'],
-		['mint', formData.mint || DEFAULT_BID_MINT],
-		['status', 'locked'],
-		['schema', 'auction_bid_v1'],
-	]
 
-	await event.sign(signer)
-	await ndkActions.publishEvent(event)
-	return event.id
+	try {
+		const event = new NDKEvent(ndk)
+		event.kind = 1023
+		event.content = JSON.stringify({
+			type: 'cashu_bid_commitment',
+			amount: formData.amount,
+			mint: lockedBid.mintUrl,
+			commitment: lockedBid.commitment,
+			key_scheme: lockedBid.keyScheme,
+		})
+		event.tags = [
+			['e', formData.auctionEventId],
+			['a', formData.auctionCoordinates],
+			['p', formData.sellerPubkey],
+			['amount', String(formData.amount), 'SAT'],
+			['currency', 'SAT'],
+			['mint', lockedBid.mintUrl],
+			['commitment', lockedBid.commitment],
+			['locktime', String(lockedBid.locktime)],
+			['refund_pubkey', lockedBid.refundPubkey],
+			['created_for_end_at', String(formData.auctionEndAt)],
+			['bid_nonce', bidNonce],
+			['key_scheme', lockedBid.keyScheme],
+			['status', 'locked'],
+			['schema', 'auction_bid_v1'],
+		]
+		if (lockedBid.derivationPath) {
+			event.tags.push(['derivation_path', lockedBid.derivationPath])
+		}
+		if (lockedBid.childPubkey) {
+			event.tags.push(['child_pubkey', lockedBid.childPubkey])
+		}
+
+		await event.sign(signer)
+		await ndkActions.publishEvent(event)
+		return event.id
+	} catch (error) {
+		throw new Error(
+			`Bid event publish failed after locking funds. Reclaim pending token ${lockedBid.tokenId} from wallet. ${
+				error instanceof Error ? error.message : String(error)
+			}`,
+		)
+	}
 }
 
 export const usePublishAuctionBidMutation = () => {

@@ -3,6 +3,7 @@ import { faker } from '@faker-js/faker'
 import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev-kit/ndk'
 
 type AuctionStatus = 'live' | 'ended'
+type AuctionKeyScheme = 'static_p2pk' | 'hd_p2pk'
 
 export type GeneratedAuctionData = {
 	kind: 30408
@@ -16,9 +17,13 @@ export function generateAuctionData(params: {
 	availableShippingRefs?: string[]
 	trustedMints?: string[]
 	status?: AuctionStatus
+	keyScheme?: AuctionKeyScheme
+	p2pkXpub?: string
 }): GeneratedAuctionData {
 	const { sellerPubkey, availableShippingRefs = [], trustedMints = ['https://nofees.testnut.cashu.space'] } = params
 	const status = params.status ?? (Math.random() < 0.2 ? 'ended' : 'live')
+	const keyScheme = params.keyScheme ?? 'static_p2pk'
+	const p2pkXpub = params.p2pkXpub?.trim() || ''
 	const now = Math.floor(Date.now() / 1000)
 
 	const startAt = now - faker.number.int({ min: 60 * 60, max: 60 * 60 * 48 })
@@ -73,6 +78,8 @@ export function generateAuctionData(params: {
 			['reserve', String(reserve)],
 			...trustedMints.map((mint) => ['mint', mint] as NDKTag),
 			['escrow_pubkey', sellerPubkey],
+			['key_scheme', keyScheme],
+			...(keyScheme === 'hd_p2pk' && p2pkXpub ? ([['p2pk_xpub', p2pkXpub] as NDKTag] as NDKTag[]) : []),
 			['settlement_policy', 'cashu_p2pk_v1'],
 			['schema', 'auction_v1'],
 			...images,
