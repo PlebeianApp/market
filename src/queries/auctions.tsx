@@ -131,23 +131,37 @@ export const fetchAuctionByATag = async (pubkey: string, dTag: string) => {
 	return filterBlacklistedEvents([event])[0] || null
 }
 
-export const fetchAuctionBids = async (auctionEventId: string, limit: number = 500) => {
-	if (!auctionEventId) return []
+export const fetchAuctionBids = async (auctionEventId: string, limit: number = 500, auctionCoordinates?: string) => {
+	if (!auctionEventId && !auctionCoordinates) return []
 	const ndk = ndkActions.getNDK()
 	if (!ndk) return []
 
-	const filter: NDKFilter = {
-		kinds: [AUCTION_BID_KIND],
-		'#e': [auctionEventId],
-		limit,
+	const filters: NDKFilter[] = []
+	if (auctionEventId) {
+		filters.push({
+			kinds: [AUCTION_BID_KIND],
+			'#e': [auctionEventId],
+			limit,
+		})
+	}
+	if (auctionCoordinates) {
+		filters.push({
+			kinds: [AUCTION_BID_KIND],
+			'#a': [auctionCoordinates],
+			limit,
+		})
 	}
 
-	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
+	const events = await ndkActions.fetchEventsWithTimeout(filters.length === 1 ? filters[0] : filters, { timeoutMs: 8000 })
 	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
 }
 
-export const fetchAuctionBidStats = async (auctionEventId: string, startingBid: number = 0): Promise<AuctionBidStats> => {
-	const bids = await fetchAuctionBids(auctionEventId)
+export const fetchAuctionBidStats = async (
+	auctionEventId: string,
+	startingBid: number = 0,
+	auctionCoordinates?: string,
+): Promise<AuctionBidStats> => {
+	const bids = await fetchAuctionBids(auctionEventId, 500, auctionCoordinates)
 	let currentPrice = startingBid
 
 	for (const bid of bids) {
@@ -195,20 +209,20 @@ export const auctionByATagQueryOptions = (pubkey: string, dTag: string) =>
 		enabled: !!(pubkey && dTag),
 	})
 
-export const auctionBidsQueryOptions = (auctionEventId: string, limit: number = 500) =>
+export const auctionBidsQueryOptions = (auctionEventId: string, limit: number = 500, auctionCoordinates?: string) =>
 	queryOptions({
-		queryKey: auctionKeys.bids(auctionEventId),
-		queryFn: () => fetchAuctionBids(auctionEventId, limit),
-		enabled: !!auctionEventId,
+		queryKey: [...auctionKeys.bids(auctionEventId || auctionCoordinates || ''), auctionCoordinates || ''],
+		queryFn: () => fetchAuctionBids(auctionEventId, limit, auctionCoordinates),
+		enabled: !!(auctionEventId || auctionCoordinates),
 		staleTime: 5000,
 		refetchInterval: 5000,
 	})
 
-export const auctionBidStatsQueryOptions = (auctionEventId: string, startingBid: number = 0) =>
+export const auctionBidStatsQueryOptions = (auctionEventId: string, startingBid: number = 0, auctionCoordinates?: string) =>
 	queryOptions({
-		queryKey: [...auctionKeys.bidStats(auctionEventId), startingBid],
-		queryFn: () => fetchAuctionBidStats(auctionEventId, startingBid),
-		enabled: !!auctionEventId,
+		queryKey: [...auctionKeys.bidStats(auctionEventId || auctionCoordinates || ''), startingBid, auctionCoordinates || ''],
+		queryFn: () => fetchAuctionBidStats(auctionEventId, startingBid, auctionCoordinates),
+		enabled: !!(auctionEventId || auctionCoordinates),
 		staleTime: 10000,
 		refetchInterval: 10000,
 	})
@@ -288,6 +302,13 @@ export const getAuctionMints = (event: NDKEvent | null): string[] => {
 	return event.tags.filter((tag) => tag[0] === 'mint' && !!tag[1]).map((tag) => tag[1])
 }
 
+export const getAuctionKeyScheme = (event: NDKEvent | null): 'static_p2pk' | 'hd_p2pk' => {
+	if (!event) return 'static_p2pk'
+	return event.tags.find((tag) => tag[0] === 'key_scheme')?.[1] === 'hd_p2pk' ? 'hd_p2pk' : 'static_p2pk'
+}
+
+export const getAuctionP2pkXpub = (event: NDKEvent | null): string => event?.tags.find((tag) => tag[0] === 'p2pk_xpub')?.[1] || ''
+
 export const getAuctionEscrowPubkey = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'escrow_pubkey')?.[1] || ''
 
 export const getAuctionSettlementPolicy = (event: NDKEvent | null): string =>
@@ -342,12 +363,12 @@ export const filterNSFWAuctions = (events: NDKEvent[], showNSFW: boolean): NDKEv
 	return events.filter((event) => !isNSFWAuction(event))
 }
 
-export const useAuctionBidStats = (auctionEventId: string, startingBid: number = 0) =>
+export const useAuctionBidStats = (auctionEventId: string, startingBid: number = 0, auctionCoordinates?: string) =>
 	useQuery({
-		...auctionBidStatsQueryOptions(auctionEventId, startingBid),
+		...auctionBidStatsQueryOptions(auctionEventId, startingBid, auctionCoordinates),
 	})
 
-export const useAuctionBids = (auctionEventId: string, limit: number = 500) =>
+export const useAuctionBids = (auctionEventId: string, limit: number = 500, auctionCoordinates?: string) =>
 	useQuery({
-		...auctionBidsQueryOptions(auctionEventId, limit),
+		...auctionBidsQueryOptions(auctionEventId, limit, auctionCoordinates),
 	})
