@@ -1,8 +1,10 @@
 import { NDKCashuWallet, NDKCashuDeposit, type NDKWalletBalance, type NDKWalletTransaction, NDKWalletStatus } from '@nostr-dev-kit/wallet'
-import { NDKEvent, NDKNutzap, NDKRelaySet, NDKUser, NDKZapper } from '@nostr-dev-kit/ndk'
+import { NDKEvent, NDKNutzap, NDKRelaySet, NDKUser, NDKZapper, type NDKFilter } from '@nostr-dev-kit/ndk'
 import { Store } from '@tanstack/store'
 import { CashuMint, CashuWallet, getEncodedToken, getDecodedToken, type Proof } from '@cashu/cashu-ts'
-import { ndkStore } from './ndk'
+import { HDKey } from '@scure/bip32'
+import { BUG_RELAY } from '@/lib/constants'
+import { ndkActions, ndkStore } from './ndk'
 import { loadUserData, saveUserData, getProofsForMint, getMintHostname, type PendingToken } from '@/lib/wallet'
 
 const DEFAULT_MINT_KEY = 'nip60_default_mint'
@@ -18,6 +20,50 @@ export interface Nip60LightningPaymentResult {
 export interface Nip60NutzapResult {
 	eventId: string
 	event: NDKNutzap
+}
+
+export interface Nip60TestMintResult {
+	mintUrl: string
+	amount: number
+	quoteId: string
+	proofsMinted: number
+}
+
+export interface Nip60DevAuctionBidResult {
+	bidEventId: string
+	auctionEventId: string
+	auctionCoordinates: string
+	auctionTitle: string
+	mintUrl: string
+	bidAmount: number
+	minBid: number
+	topUpAmount: number
+}
+
+export type AuctionP2pkKeyScheme = 'static_p2pk' | 'hd_p2pk'
+
+export interface LockAuctionBidFundsParams {
+	amount: number
+	mint?: string
+	lockPubkey?: string
+	locktime: number
+	refundPubkey: string
+	keyScheme?: AuctionP2pkKeyScheme
+	p2pkXpub?: string
+}
+
+export interface LockAuctionBidFundsResult {
+	tokenId: string
+	token: string
+	amount: number
+	mintUrl: string
+	lockPubkey: string
+	locktime: number
+	refundPubkey: string
+	commitment: string
+	keyScheme: AuctionP2pkKeyScheme
+	derivationPath?: string
+	childPubkey?: string
 }
 
 export interface Nip60State {
@@ -52,6 +98,21 @@ const initialState: Nip60State = {
 	pendingTokens: [],
 }
 
+const DEV_TEST_MINT_URL = process.env.APP_DEV_TEST_MINT_URL || 'https://nofees.testnut.cashu.space'
+export const NIP60_DEV_TEST_MINTS = Array.from(
+	new Set([DEV_TEST_MINT_URL, 'https://testnut.cashu.space'].map((mint) => mint.trim().replace(/\/$/, '')).filter(Boolean)),
+)
+const NIP60_WALLET_KIND = 17375 as unknown as NonNullable<NDKFilter['kinds']>[number]
+const NIP60_WALLET_FETCH_TIMEOUT_MS = 5000
+const NIP60_WALLET_LOAD_TIMEOUT_MS = 5000
+const NIP60_WALLET_START_TIMEOUT_MS = 7000
+const AUCTION_KIND = 30408 as unknown as NonNullable<NDKFilter['kinds']>[number]
+const AUCTION_BID_KIND = 1023 as unknown as NonNullable<NDKFilter['kinds']>[number]
+export const AUCTION_SETTLEMENT_GRACE_SECONDS = 3600
+
+const HD_DERIVATION_PATH_DEPTH = 5
+const HD_MAX_INDEX = 0x7fffffff
+
 export const nip60Store = new Store<Nip60State>(initialState)
 
 // Keep track of transaction subscription cleanup
@@ -63,9 +124,97 @@ function generateId(): string {
 	return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
 }
 
+const normalizeMintUrl = (mintUrl: string): string => mintUrl.trim().replace(/\/$/, '')
+
+const getDevTestMintCandidates = (preferredMintUrl?: string): string[] => {
+	const preferred = preferredMintUrl ? [normalizeMintUrl(preferredMintUrl)] : []
+	return Array.from(new Set([...preferred, ...NIP60_DEV_TEST_MINTS].filter(Boolean)))
+}
+
+const normalizeRelayUrl = (relayUrl: string): string => relayUrl.trim().replace(/\/+$/, '')
+const isBugRelayUrl = (relayUrl: string): boolean => normalizeRelayUrl(relayUrl) === normalizeRelayUrl(BUG_RELAY)
+
+const getFirstTagValue = (event: NDKEvent, tagName: string): string => event.tags.find((tag) => tag[0] === tagName)?.[1] || ''
+
+const getTagValues = (event: NDKEvent, tagName: string): string[] =>
+	event.tags.filter((tag) => tag[0] === tagName && !!tag[1]).map((tag) => tag[1])
+
+const parseNonNegativeInt = (value: string, fallback: number = 0): number => {
+	const parsed = parseInt(value, 10)
+	return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
+}
+
+const getRandomNonHardenedIndex = (): number => {
+	if (globalThis.crypto?.getRandomValues) {
+		const values = new Uint32Array(1)
+		globalThis.crypto.getRandomValues(values)
+		return values[0] % HD_MAX_INDEX
+	}
+	return Math.floor(Math.random() * HD_MAX_INDEX)
+}
+
+const generateDerivationPath = (): string => {
+	const levels = Array.from({ length: HD_DERIVATION_PATH_DEPTH }, () => getRandomNonHardenedIndex())
+	return `m/${levels.join('/')}`
+}
+
+const deriveChildPubkeyFromXpub = (xpub: string, path: string): string => {
+	const hdRoot = HDKey.fromExtendedKey(xpub.trim())
+	const child = hdRoot.derive(path)
+	if (!child.publicKey) {
+		throw new Error('Failed to derive child pubkey from p2pk_xpub')
+	}
+	return toHex(child.publicKey)
+}
+
+const toHex = (bytes: Uint8Array): string =>
+	Array.from(bytes)
+		.map((b) => b.toString(16).padStart(2, '0'))
+		.join('')
+
+const sha256Hex = async (value: string): Promise<string> => {
+	if (!globalThis.crypto?.subtle) {
+		return ''
+	}
+	const encoded = new TextEncoder().encode(value)
+	const digest = await globalThis.crypto.subtle.digest('SHA-256', encoded)
+	return toHex(new Uint8Array(digest))
+}
+
+const isLocalDevHost = (): boolean => {
+	if (typeof window === 'undefined') return false
+	const host = window.location.hostname
+	return host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local')
+}
+
+export const isNip60WalletDevModeEnabled = (): boolean => {
+	const explicit = process.env.APP_NIP60_DEV_MODE
+	if (explicit === 'true') return true
+	if (explicit === 'false') return false
+
+	const env = process.env.NODE_ENV
+	return env !== 'production' || isLocalDevHost()
+}
+
+export const NIP60_WALLET_DEV_MODE = isNip60WalletDevModeEnabled()
+
 const loadPendingTokens = (): PendingToken[] => loadUserData<PendingToken[]>(PENDING_TOKENS_KEY, [])
 
 const savePendingTokens = (tokens: PendingToken[]): void => saveUserData(PENDING_TOKENS_KEY, tokens)
+
+const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> => {
+	let timer: ReturnType<typeof setTimeout> | undefined
+	try {
+		return await Promise.race([
+			promise,
+			new Promise<never>((_, reject) => {
+				timer = setTimeout(() => reject(new Error(`${label} timeout after ${timeoutMs}ms`)), timeoutMs)
+			}),
+		])
+	} finally {
+		if (timer) clearTimeout(timer)
+	}
+}
 
 function extractPreimageCandidate(result: unknown): string | undefined {
 	if (!result || typeof result !== 'object') return undefined
@@ -155,26 +304,58 @@ export const nip60Actions = {
 		}))
 
 		try {
-			// First, try to fetch the existing wallet event (kind 17375)
-			const walletEvent = await ndk.fetchEvent({ kinds: [17375], authors: [pubkey] })
+			// First, try to fetch the existing wallet event (kind 17375) with timeout.
+			let walletEvent: NDKEvent | null = null
+			try {
+				const events = Array.from(
+					await ndkActions.fetchEventsWithTimeout(
+						{
+							kinds: [NIP60_WALLET_KIND],
+							authors: [pubkey],
+							limit: 5,
+						},
+						{ timeoutMs: NIP60_WALLET_FETCH_TIMEOUT_MS },
+					),
+				)
+				walletEvent = events.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))[0] ?? null
+			} catch (fetchErr) {
+				console.warn('[nip60] Wallet event fetch timed out or failed, continuing with empty wallet:', fetchErr)
+			}
 
 			let wallet: NDKCashuWallet
 
 			if (walletEvent) {
-				// Load wallet from existing event - this decrypts and loads mints/privkeys
-				const loadedWallet = await NDKCashuWallet.from(walletEvent)
-				if (!loadedWallet) {
-					throw new Error('Failed to load wallet from event')
+				try {
+					// Load wallet from existing event - this decrypts and loads mints/privkeys
+					const loadedWallet = await withTimeout(
+						NDKCashuWallet.from(walletEvent),
+						NIP60_WALLET_LOAD_TIMEOUT_MS,
+						'nip60 wallet decrypt/load',
+					)
+					if (!loadedWallet) {
+						throw new Error('Failed to load wallet from event')
+					}
+					wallet = loadedWallet
+				} catch (loadErr) {
+					console.warn('[nip60] Failed to load wallet event, falling back to new wallet instance:', loadErr)
+					wallet = new NDKCashuWallet(ndk)
 				}
-				wallet = loadedWallet
 			} else {
 				// No wallet event found - create a new wallet instance
 				wallet = new NDKCashuWallet(ndk)
 			}
 
-			// Configure the wallet's relaySet from NDK's connected relays if not already set.
+			// In dev mode, ensure test mints are available even for existing wallets.
+			if (NIP60_WALLET_DEV_MODE) {
+				wallet.mints = Array.from(new Set([...(wallet.mints ?? []), ...NIP60_DEV_TEST_MINTS]))
+			}
+
+			// Configure the wallet's relaySet from NDK's connected relays if not already set
 			if (!wallet.relaySet) {
-				const relayUrls = Array.from(ndk.pool?.relays?.keys() ?? [])
+				const connectedRelayUrls = (ndk.pool?.connectedRelays?.() ?? []).map((relay) => relay.url)
+				const fallbackRelayUrls = Array.from(ndk.pool?.relays?.keys() ?? [])
+				const relayCandidates = connectedRelayUrls.length > 0 ? connectedRelayUrls : fallbackRelayUrls
+				const relayUrls = relayCandidates.map(normalizeRelayUrl).filter((url) => !!url && !isBugRelayUrl(url))
 				if (relayUrls.length > 0) {
 					wallet.relaySet = NDKRelaySet.fromRelayUrls(relayUrls, ndk)
 				}
@@ -220,8 +401,15 @@ export const nip60Actions = {
 				}
 			})
 
-			// Start the wallet - this subscribes to token events and loads balance
-			await wallet.start({ pubkey })
+			// Start the wallet - this subscribes to token events and loads balance.
+			// In local relay-only mode, this can hang if relays don't respond; force timeout so UI can recover.
+			let startTimedOut = false
+			try {
+				await withTimeout(wallet.start({ pubkey }), NIP60_WALLET_START_TIMEOUT_MS, 'nip60 wallet start')
+			} catch (startErr) {
+				startTimedOut = true
+				console.warn('[nip60] Wallet start timed out, continuing with fallback state:', startErr)
+			}
 			const { totalBalance, mintBalances } = getBalancesFromState(wallet)
 			const allMints = getAllMints(wallet)
 
@@ -238,9 +426,11 @@ export const nip60Actions = {
 
 			// Only load transactions if we have a wallet
 			if (hasWallet) {
-				void nip60Actions.loadTransactions()
-				// Perform a background cleanup pass so spent proofs are removed without manual refresh.
-				void nip60Actions.runAutoCleanup({ force: true })
+				if (!startTimedOut) {
+					void nip60Actions.loadTransactions()
+					// Perform a background cleanup pass so spent proofs are removed without manual refresh.
+					void nip60Actions.runAutoCleanup({ force: true })
+				}
 			}
 
 			// Load pending tokens from localStorage
@@ -696,6 +886,175 @@ export const nip60Actions = {
 		}
 	},
 
+	lockAuctionBidFunds: async (params: LockAuctionBidFundsParams): Promise<LockAuctionBidFundsResult> => {
+		const wallet = nip60Store.state.wallet
+		const state = nip60Store.state
+		if (!wallet || state.status !== 'ready') {
+			throw new Error('NIP-60 wallet not ready')
+		}
+
+		const amount = Math.floor(params.amount)
+		if (!Number.isFinite(amount) || amount <= 0) {
+			throw new Error('Bid amount must be a positive integer')
+		}
+
+		const keyScheme: AuctionP2pkKeyScheme = params.keyScheme ?? 'static_p2pk'
+		const locktime = Math.floor(params.locktime)
+		if (!Number.isFinite(locktime) || locktime <= 0) {
+			throw new Error('Invalid bid locktime')
+		}
+
+		const refundPubkey = params.refundPubkey?.trim()
+		if (!refundPubkey) {
+			throw new Error('Refund pubkey is required')
+		}
+
+		// Ensure spent proofs are purged before selecting funds for a new bid.
+		// Without this, stale proofs can make balance appear spendable when they are not.
+		try {
+			await wallet.consolidateTokens()
+		} catch (err) {
+			console.error('[nip60] Pre-bid consolidation failed (continuing):', err)
+		}
+
+		const { totalBalance, mintBalances } = getBalancesFromState(wallet)
+		let targetMint = params.mint ?? state.defaultMint ?? undefined
+		if (!targetMint) {
+			targetMint = Object.keys(mintBalances).find((mint) => mintBalances[mint] >= amount)
+		}
+		if (!targetMint) {
+			throw new Error(`No mint with sufficient balance. Available: ${totalBalance} sats`)
+		}
+
+		const mintBalance = mintBalances[targetMint] ?? 0
+		if (mintBalance < amount) {
+			throw new Error(`Insufficient balance at ${getMintHostname(targetMint)}. Available: ${mintBalance} sats`)
+		}
+
+		let derivationPath: string | undefined
+		let childPubkey: string | undefined
+		let lockPubkey = params.lockPubkey?.trim() || ''
+
+		if (keyScheme === 'hd_p2pk') {
+			const xpub = params.p2pkXpub?.trim()
+			if (!xpub) {
+				throw new Error('Auction uses hd_p2pk but is missing p2pk_xpub')
+			}
+			derivationPath = generateDerivationPath()
+			childPubkey = deriveChildPubkeyFromXpub(xpub, derivationPath)
+			lockPubkey = childPubkey
+		}
+
+		if (!lockPubkey) {
+			throw new Error('Missing auction lock pubkey')
+		}
+
+		const mintProofs = getProofsForMint(wallet, targetMint)
+		if (mintProofs.length === 0) {
+			throw new Error(`No proofs available at ${getMintHostname(targetMint)}. Try refreshing your wallet.`)
+		}
+
+		const { selected: selectedProofs, total: selectedTotal } = selectProofs(mintProofs, amount)
+		if (selectedTotal < amount) {
+			throw new Error(`Could not select enough proofs. Need ${amount}, have ${selectedTotal}`)
+		}
+
+		try {
+			const cashuMint = new CashuMint(targetMint)
+			const cashuWallet = new CashuWallet(cashuMint)
+			await cashuWallet.loadMint()
+
+			const buildSendOptions = (includeDleq: boolean) => ({
+				includeDleq,
+				p2pk: {
+					pubkey: lockPubkey,
+					locktime,
+					refundKeys: [refundPubkey],
+				},
+			})
+
+			let lockedProofs: Proof[] = []
+			let changeProofs: Proof[] = []
+
+			try {
+				const result = await cashuWallet.send(amount, selectedProofs, buildSendOptions(true))
+				lockedProofs = result.send
+				changeProofs = result.keep
+			} catch (primaryErr) {
+				const message = primaryErr instanceof Error ? primaryErr.message.toLowerCase() : String(primaryErr).toLowerCase()
+				const insufficient = message.includes('not enough funds available to send')
+				if (!insufficient) {
+					throw primaryErr
+				}
+
+				// Some wallet states contain proofs without DLEQ metadata.
+				// Retry without DLEQ requirement using full mint proofs for demo reliability.
+				const retry = await cashuWallet.send(amount, mintProofs, buildSendOptions(false))
+				lockedProofs = retry.send
+				changeProofs = retry.keep
+			}
+
+			if (!lockedProofs.length) {
+				throw new Error('Mint returned no locked proofs for bid')
+			}
+
+			const token = getEncodedToken({
+				mint: targetMint,
+				proofs: lockedProofs,
+			})
+			const tokenAmount = lockedProofs.reduce((sum, proof) => sum + proof.amount, 0)
+			const tokenId = generateId()
+
+			const pendingToken: PendingNip60Token = {
+				id: tokenId,
+				token,
+				amount: tokenAmount,
+				mintUrl: targetMint,
+				createdAt: Date.now(),
+				status: 'pending',
+			}
+			const pendingTokens = [...nip60Store.state.pendingTokens, pendingToken]
+			savePendingTokens(pendingTokens)
+			nip60Store.setState((s) => ({ ...s, pendingTokens }))
+
+			if (changeProofs.length > 0) {
+				try {
+					const changeToken = getEncodedToken({ mint: targetMint, proofs: changeProofs })
+					await wallet.receiveToken(changeToken)
+				} catch (changeErr) {
+					console.error('[nip60] Failed to receive bid change proofs (non-fatal):', changeErr)
+				}
+			}
+
+			try {
+				await wallet.consolidateTokens()
+			} catch (consolidateErr) {
+				console.error('[nip60] Bid lock consolidation error (non-fatal):', consolidateErr)
+			}
+
+			await nip60Actions.refresh()
+
+			const commitment = await sha256Hex(token)
+
+			return {
+				tokenId,
+				token,
+				amount: tokenAmount,
+				mintUrl: targetMint,
+				lockPubkey,
+				locktime,
+				refundPubkey,
+				commitment,
+				keyScheme,
+				derivationPath,
+				childPubkey,
+			}
+		} catch (err) {
+			console.error('[nip60] Failed to lock auction bid funds:', err)
+			throw err
+		}
+	},
+
 	/**
 	 * Send eCash - generates a Cashu token string
 	 * Uses cashu-ts directly to avoid NDKCashuWallet state sync bugs.
@@ -837,6 +1196,252 @@ export const nip60Actions = {
 			}
 
 			throw err
+		}
+	},
+
+	/**
+	 * Dev-only helper: mint free test ecash from no-fee testnut mint and receive it into NIP-60 wallet.
+	 */
+	mintTestEcash: async (
+		amount: number,
+		mintUrl: string = DEV_TEST_MINT_URL,
+		options?: { allowFallback?: boolean },
+	): Promise<Nip60TestMintResult> => {
+		if (!NIP60_WALLET_DEV_MODE) {
+			throw new Error('Dev wallet actions are disabled in this environment')
+		}
+
+		const wallet = nip60Store.state.wallet
+		if (!wallet || nip60Store.state.status !== 'ready') {
+			throw new Error('NIP-60 wallet not ready')
+		}
+
+		const mintAmount = Math.floor(amount)
+		if (!Number.isFinite(mintAmount) || mintAmount <= 0) {
+			throw new Error('Mint amount must be a positive integer')
+		}
+		const allowFallback = options?.allowFallback ?? true
+		const normalizedPreferredMint = mintUrl.trim().replace(/\/$/, '')
+		const candidates = allowFallback
+			? getDevTestMintCandidates(mintUrl)
+			: normalizedPreferredMint
+				? [normalizedPreferredMint]
+				: getDevTestMintCandidates(mintUrl)
+		let lastError: unknown = null
+
+		for (const targetMint of candidates) {
+			try {
+				const mint = new CashuMint(targetMint)
+				const cashuWallet = new CashuWallet(mint)
+				const quote = await cashuWallet.createMintQuote(mintAmount)
+				const proofs = await cashuWallet.mintProofs(mintAmount, quote.quote)
+
+				if (!proofs.length) {
+					throw new Error('Mint returned no proofs')
+				}
+
+				const token = getEncodedToken({
+					mint: targetMint,
+					proofs,
+				})
+
+				await wallet.receiveToken(token)
+
+				if (!wallet.mints.includes(targetMint)) {
+					wallet.mints = [...wallet.mints, targetMint]
+				}
+				if (!nip60Store.state.defaultMint) {
+					nip60Actions.setDefaultMint(targetMint)
+				}
+
+				await nip60Actions.refresh()
+
+				return {
+					mintUrl: targetMint,
+					amount: mintAmount,
+					quoteId: quote.quote,
+					proofsMinted: proofs.length,
+				}
+			} catch (err) {
+				lastError = err
+			}
+		}
+
+		const reason = lastError instanceof Error ? lastError.message : String(lastError)
+		throw new Error(`Failed to mint test ecash from dev mints [${candidates.join(', ')}]: ${reason}`)
+	},
+
+	/**
+	 * Dev-only helper: pick a live seeded auction, top up with test ecash if needed, and publish a locked bid event.
+	 */
+	placeDevBidOnSeededAuction: async (params?: {
+		preferredBidAmount?: number
+		preferredMintUrl?: string
+	}): Promise<Nip60DevAuctionBidResult> => {
+		if (!NIP60_WALLET_DEV_MODE) {
+			throw new Error('Dev wallet actions are disabled in this environment')
+		}
+
+		const wallet = nip60Store.state.wallet
+		if (!wallet || nip60Store.state.status !== 'ready') {
+			throw new Error('NIP-60 wallet not ready')
+		}
+
+		const ndk = ndkStore.state.ndk
+		const signer = ndk?.signer
+		if (!ndk || !signer) {
+			throw new Error('NDK signer not available')
+		}
+
+		const bidderPubkey = (await signer.user()).pubkey
+		const preferredMint = params?.preferredMintUrl ? normalizeMintUrl(params.preferredMintUrl) : ''
+		const devMintCandidates = getDevTestMintCandidates(preferredMint)
+		const now = Math.floor(Date.now() / 1000)
+
+		const auctionEvents = Array.from(
+			await ndkActions.fetchEventsWithTimeout(
+				{
+					kinds: [AUCTION_KIND],
+					limit: 300,
+				},
+				{ timeoutMs: 8000 },
+			),
+		)
+
+		type CandidateAuction = {
+			event: NDKEvent
+			dTag: string
+			title: string
+			startAt: number
+			endAt: number
+			startingBid: number
+			bidIncrement: number
+			acceptedMints: string[]
+			escrowPubkey: string
+			keyScheme: AuctionP2pkKeyScheme
+			p2pkXpub: string
+		}
+
+		const candidates: CandidateAuction[] = auctionEvents
+			.map((event) => {
+				const dTag = getFirstTagValue(event, 'd')
+				const title = getFirstTagValue(event, 'title') || 'Untitled Auction'
+				const startAt = parseNonNegativeInt(getFirstTagValue(event, 'start_at'), 0)
+				const endAt = parseNonNegativeInt(getFirstTagValue(event, 'end_at'), 0)
+				const startingBid = parseNonNegativeInt(getFirstTagValue(event, 'starting_bid') || getFirstTagValue(event, 'price'), 0)
+				const bidIncrement = Math.max(1, parseNonNegativeInt(getFirstTagValue(event, 'bid_increment'), 1))
+				const acceptedMints = getTagValues(event, 'mint').map(normalizeMintUrl)
+				const escrowPubkey = getFirstTagValue(event, 'escrow_pubkey') || event.pubkey
+				const rawKeyScheme = getFirstTagValue(event, 'key_scheme')
+				const keyScheme: AuctionP2pkKeyScheme = rawKeyScheme === 'hd_p2pk' ? 'hd_p2pk' : 'static_p2pk'
+				const p2pkXpub = getFirstTagValue(event, 'p2pk_xpub')
+				return { event, dTag, title, startAt, endAt, startingBid, bidIncrement, acceptedMints, escrowPubkey, keyScheme, p2pkXpub }
+			})
+			.filter((auction) => {
+				if (!auction.dTag) return false
+				if (auction.event.pubkey === bidderPubkey) return false
+				if (auction.endAt <= now) return false
+				if (auction.startAt > now) return false
+				return true
+			})
+			.sort((a, b) => a.endAt - b.endAt)
+
+		const selected =
+			candidates.find((auction) => auction.acceptedMints.some((mint) => devMintCandidates.includes(mint))) ||
+			candidates.find((auction) => auction.acceptedMints.length > 0)
+
+		if (!selected) {
+			throw new Error('No live seeded auction found for bidding')
+		}
+
+		const bidMint = selected.acceptedMints.find((mint) => devMintCandidates.includes(mint)) || selected.acceptedMints[0]
+		const bidEvents = Array.from(
+			await ndkActions.fetchEventsWithTimeout(
+				{
+					kinds: [AUCTION_BID_KIND],
+					'#e': [selected.event.id],
+					limit: 500,
+				},
+				{ timeoutMs: 8000 },
+			),
+		)
+		const highestBid = bidEvents.reduce((max, bidEvent) => {
+			const amount = parseNonNegativeInt(getFirstTagValue(bidEvent, 'amount'), 0)
+			return amount > max ? amount : max
+		}, selected.startingBid)
+
+		const minBid = Math.max(selected.startingBid, highestBid + selected.bidIncrement)
+		const requestedAmount = params?.preferredBidAmount ? Math.floor(params.preferredBidAmount) : minBid
+		const bidAmount = Number.isFinite(requestedAmount) && requestedAmount >= minBid ? requestedAmount : minBid
+
+		const { mintBalances } = getBalancesFromState(wallet)
+		const existingMintBalance = mintBalances[bidMint] ?? 0
+		const topUpAmount = Math.max(0, bidAmount - existingMintBalance)
+		let effectiveBidMint = bidMint
+		if (topUpAmount > 0) {
+			const mintResult = await nip60Actions.mintTestEcash(topUpAmount, bidMint)
+			effectiveBidMint = mintResult.mintUrl
+		}
+
+		const locktime = Math.max(selected.endAt + AUCTION_SETTLEMENT_GRACE_SECONDS, now + 60)
+		const lockedBid = await nip60Actions.lockAuctionBidFunds({
+			amount: bidAmount,
+			mint: effectiveBidMint,
+			lockPubkey: selected.escrowPubkey,
+			locktime,
+			refundPubkey: bidderPubkey,
+			keyScheme: selected.keyScheme,
+			p2pkXpub: selected.p2pkXpub,
+		})
+
+		const auctionCoordinates = `30408:${selected.event.pubkey}:${selected.dTag}`
+		const bidNonce = globalThis.crypto?.randomUUID?.() || generateId()
+
+		const bidEvent = new NDKEvent(ndk)
+		bidEvent.kind = 1023
+		bidEvent.content = JSON.stringify({
+			type: 'cashu_bid_commitment',
+			amount: bidAmount,
+			mint: lockedBid.mintUrl,
+			commitment: lockedBid.commitment,
+			key_scheme: lockedBid.keyScheme,
+			dev_mode: true,
+		})
+		bidEvent.tags = [
+			['e', selected.event.id],
+			['a', auctionCoordinates],
+			['p', selected.event.pubkey],
+			['amount', String(bidAmount), 'SAT'],
+			['currency', 'SAT'],
+			['mint', lockedBid.mintUrl],
+			['commitment', lockedBid.commitment],
+			['locktime', String(lockedBid.locktime)],
+			['refund_pubkey', lockedBid.refundPubkey],
+			['created_for_end_at', String(selected.endAt)],
+			['bid_nonce', bidNonce],
+			['status', 'locked'],
+			['schema', 'auction_bid_v1'],
+			['key_scheme', lockedBid.keyScheme],
+		]
+		if (lockedBid.derivationPath) {
+			bidEvent.tags.push(['derivation_path', lockedBid.derivationPath])
+		}
+		if (lockedBid.childPubkey) {
+			bidEvent.tags.push(['child_pubkey', lockedBid.childPubkey])
+		}
+
+		await bidEvent.sign(signer)
+		await ndkActions.publishEvent(bidEvent)
+
+		return {
+			bidEventId: bidEvent.id,
+			auctionEventId: selected.event.id,
+			auctionCoordinates,
+			auctionTitle: selected.title,
+			mintUrl: lockedBid.mintUrl,
+			bidAmount,
+			minBid,
+			topUpAmount,
 		}
 	},
 

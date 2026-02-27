@@ -5,9 +5,12 @@ import { usePublishAuctionBidMutation } from '@/publish/auctions'
 import {
 	getAuctionBidIncrement,
 	getAuctionEndAt,
+	getAuctionEscrowPubkey,
 	getAuctionId,
 	getAuctionImages,
+	getAuctionKeyScheme,
 	getAuctionMints,
+	getAuctionP2pkXpub,
 	getAuctionStartingBid,
 	getAuctionTitle,
 	useAuctionBidStats,
@@ -35,13 +38,16 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 	const startingBid = getAuctionStartingBid(auction)
 	const bidIncrement = getAuctionBidIncrement(auction)
 	const acceptedMints = getAuctionMints(auction)
+	const keyScheme = getAuctionKeyScheme(auction)
+	const p2pkXpub = getAuctionP2pkXpub(auction)
+	const escrowPubkey = getAuctionEscrowPubkey(auction) || auction.pubkey
 	const auctionDTag = getAuctionId(auction)
 	const auctionCoordinates = auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 	const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
 	const [bidAmountInput, setBidAmountInput] = useState('')
 	const [isOwnAuction, setIsOwnAuction] = useState(false)
 	const secondsRemaining = Math.max(0, endAt - now)
-	const { data: bidStats } = useAuctionBidStats(auction.id, startingBid)
+	const { data: bidStats } = useAuctionBidStats(auction.id, startingBid, auctionCoordinates)
 	const bidMutation = usePublishAuctionBidMutation()
 
 	const currentPrice = bidStats?.currentPrice ?? startingBid
@@ -76,31 +82,31 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 		setBidAmountInput(String(minBid))
 	}, [minBid])
 
-	const handleButtonClick = (e: React.MouseEvent, action: () => void) => {
-		e.preventDefault()
-		e.stopPropagation()
-		action()
-	}
-
 	const handleSubmitBid = async () => {
 		if (!auctionCoordinates || !auctionDTag || ended || isOwnAuction) return
 
 		const parsedAmount = parseInt(bidAmountInput || '0', 10)
 		if (!Number.isFinite(parsedAmount) || parsedAmount < minBid) return
 
-		await bidMutation.mutateAsync({
-			auctionEventId: auction.id,
-			auctionCoordinates,
-			amount: parsedAmount,
-			mint: acceptedMints[0],
-		})
+		try {
+			await bidMutation.mutateAsync({
+				auctionEventId: auction.id,
+				auctionCoordinates,
+				amount: parsedAmount,
+				auctionEndAt: endAt,
+				sellerPubkey: auction.pubkey,
+				escrowPubkey,
+				keyScheme,
+				p2pkXpub,
+				mint: acceptedMints[0],
+			})
+		} catch {
+			// Error toast is handled by mutation onError.
+		}
 	}
 
 	return (
-		<Link
-			to={`/auctions/${auction.id}`}
-			className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col w-full max-w-full overflow-hidden hover:shadow-md transition-shadow duration-200 cursor-pointer"
-		>
+		<div className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col w-full max-w-full overflow-hidden hover:shadow-md transition-shadow duration-200">
 			<div className="relative aspect-square overflow-hidden border-b border-zinc-800 block">
 				{images.length > 0 ? (
 					<img
@@ -122,7 +128,9 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 
 			<div className="p-2 flex flex-col gap-2 flex-grow">
 				<h2 className="text-sm font-medium border-b border-[var(--light-gray)] pb-2 overflow-hidden text-ellipsis whitespace-nowrap">
-					{title}
+					<Link to={`/auctions/${auction.id}`} className="hover:underline">
+						{title}
+					</Link>
 				</h2>
 
 				<div className="flex justify-between items-center">
@@ -144,15 +152,12 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 						step={Math.max(1, bidIncrement)}
 						value={bidAmountInput}
 						onChange={(e) => setBidAmountInput(e.target.value)}
-						onClick={(e) => {
-							e.stopPropagation()
-						}}
 						className="h-10"
 						disabled={ended || isOwnAuction || bidMutation.isPending}
 					/>
 					<Button
 						className="py-3 px-4 rounded-lg font-medium bg-black text-white disabled:bg-gray-400 disabled:cursor-not-allowed"
-						onClick={(e) => handleButtonClick(e, () => void handleSubmitBid())}
+						onClick={() => void handleSubmitBid()}
 						disabled={ended || isOwnAuction || bidMutation.isPending || !Number.isFinite(parsedBidAmount) || parsedBidAmount < minBid}
 					>
 						{isOwnAuction ? 'Your Auction' : ended ? 'Ended' : bidMutation.isPending ? 'Bidding...' : 'Bid'}
@@ -160,6 +165,6 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 				</div>
 				<div className="text-[11px] text-gray-500">Min bid: {minBid.toLocaleString()} sats</div>
 			</div>
-		</Link>
+		</div>
 	)
 }
