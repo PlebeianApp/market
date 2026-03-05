@@ -182,7 +182,7 @@ export const auctionsQueryOptions = (limit: number = 200) =>
 	queryOptions({
 		queryKey: auctionKeys.all,
 		queryFn: () => fetchAuctions(limit),
-		staleTime: 15000,
+		staleTime: 30000,
 		refetchOnMount: 'always',
 	})
 
