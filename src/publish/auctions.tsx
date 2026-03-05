@@ -1,6 +1,6 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { AUCTION_SETTLEMENT_GRACE_SECONDS, nip60Actions, type AuctionP2pkKeyScheme } from '@/lib/stores/nip60'
-import { markAuctionAsDeleted } from '@/queries/auctions'
+import { getBidAmount, getBidStatus, markAuctionAsDeleted } from '@/queries/auctions'
 import { auctionKeys } from '@/queries/queryKeyFactory'
 import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -216,6 +216,22 @@ export const useDeleteAuctionMutation = () => {
 }
 
 const DEFAULT_BID_MINT = 'https://nofees.testnut.cashu.space'
+const AUCTION_BID_KIND = 1023
+
+const ACTIVE_BID_STATUSES = new Set(['locked', 'accepted', 'active', 'unknown'])
+
+const resolveLatestActiveBidByBidder = (bids: NDKEvent[], bidderPubkey: string): NDKEvent | null => {
+	const bidderBids = bids.filter((bid) => bid.pubkey === bidderPubkey && ACTIVE_BID_STATUSES.has(getBidStatus(bid)))
+	if (!bidderBids.length) return null
+
+	return bidderBids.sort((a, b) => {
+		const amountDelta = getBidAmount(b) - getBidAmount(a)
+		if (amountDelta !== 0) return amountDelta
+		const createdAtDelta = (b.created_at || 0) - (a.created_at || 0)
+		if (createdAtDelta !== 0) return createdAtDelta
+		return b.id.localeCompare(a.id)
+	})[0]
+}
 
 export const publishAuctionBid = async (formData: AuctionBidFormData, signer: NDKSigner, ndk: NDK): Promise<string> => {
 	if (!formData.auctionEventId) throw new Error('Auction event id is required')
@@ -230,11 +246,41 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 	}
 
 	const bidderPubkey = (await signer.user()).pubkey
+	const ownBidFilters = [
+		{
+			kinds: [AUCTION_BID_KIND],
+			authors: [bidderPubkey],
+			'#e': [formData.auctionEventId],
+			limit: 200,
+		},
+		...(formData.auctionCoordinates
+			? [
+					{
+						kinds: [AUCTION_BID_KIND],
+						authors: [bidderPubkey],
+						'#a': [formData.auctionCoordinates],
+						limit: 200,
+					},
+				]
+			: []),
+	]
+	const existingBids = Array.from(await ndkActions.fetchEventsWithTimeout(ownBidFilters.length === 1 ? ownBidFilters[0] : ownBidFilters, { timeoutMs: 2500 }))
+	const previousBid = resolveLatestActiveBidByBidder(existingBids, bidderPubkey)
+	const previousAmount = previousBid ? getBidAmount(previousBid) : 0
+	if (previousAmount > 0 && formData.amount <= previousAmount) {
+		throw new Error(`Rebid must exceed your current bid of ${previousAmount.toLocaleString()} sats`)
+	}
+
+	const deltaAmount = Math.max(0, formData.amount - previousAmount)
+	if (deltaAmount <= 0) {
+		throw new Error('No additional funds required for this rebid')
+	}
+
 	const bidNonce = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 	const locktime = Math.max(formData.auctionEndAt + AUCTION_SETTLEMENT_GRACE_SECONDS, now + 60)
 
 	const lockedBid = await nip60Actions.lockAuctionBidFunds({
-		amount: formData.amount,
+		amount: deltaAmount,
 		mint: formData.mint || DEFAULT_BID_MINT,
 		lockPubkey: formData.escrowPubkey || formData.sellerPubkey,
 		locktime,
@@ -249,6 +295,8 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 		event.content = JSON.stringify({
 			type: 'cashu_bid_commitment',
 			amount: formData.amount,
+			delta_amount: deltaAmount,
+			prev_amount: previousAmount,
 			mint: lockedBid.mintUrl,
 			commitment: lockedBid.commitment,
 			key_scheme: lockedBid.keyScheme,
@@ -258,6 +306,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 			['a', formData.auctionCoordinates],
 			['p', formData.sellerPubkey],
 			['amount', String(formData.amount), 'SAT'],
+			['delta_amount', String(deltaAmount), 'SAT'],
 			['currency', 'SAT'],
 			['mint', lockedBid.mintUrl],
 			['commitment', lockedBid.commitment],
@@ -269,6 +318,10 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 			['status', 'locked'],
 			['schema', 'auction_bid_v1'],
 		]
+		if (previousBid) {
+			event.tags.push(['prev_bid', previousBid.id])
+			event.tags.push(['prev_amount', String(previousAmount), 'SAT'])
+		}
 		if (lockedBid.derivationPath) {
 			event.tags.push(['derivation_path', lockedBid.derivationPath])
 		}

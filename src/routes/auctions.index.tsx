@@ -80,7 +80,9 @@ function AuctionsRoute() {
 
 	const auctionsQuery = useQuery({
 		...auctionsQueryOptions(500),
-		refetchInterval: (query) => (query.state.data?.length ? 30000 : 3000),
+		// Match products behavior: keep retrying quickly until we have data,
+		// then stop interval polling and rely on normal invalidation/refetch.
+		refetchInterval: (query) => (query.state.data?.length ? false : 3000),
 	})
 
 	const auctions = filterNSFWAuctions((auctionsQuery.data ?? []) as NDKEvent[], showNSFWContent)
@@ -289,33 +291,6 @@ function AuctionsRoute() {
 		</div>
 	)
 
-	if (auctionsQuery.isLoading && auctions.length === 0) {
-		return (
-			<div className="max-w-screen-xl mx-auto px-4 py-8">
-				<div className="flex flex-col items-center justify-center py-16 min-h-[60vh]">
-					<Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
-					<p className="text-sm text-gray-500">Loading auctions...</p>
-				</div>
-			</div>
-		)
-	}
-
-	if (auctionsQuery.isError) {
-		return (
-			<div className="max-w-screen-xl mx-auto px-4 py-8">
-				<div className="flex flex-col items-center justify-center py-16 text-center gap-4">
-					<h2 className="text-xl font-semibold">Unable to load auctions</h2>
-					<p className="text-muted-foreground max-w-md">
-						{auctionsQuery.error instanceof Error ? auctionsQuery.error.message : 'There was a problem loading auctions. Please try again.'}
-					</p>
-					<Button variant="secondary" onClick={() => auctionsQuery.refetch()}>
-						Retry
-					</Button>
-				</div>
-			</div>
-		)
-	}
-
 	return (
 		<div>
 			{isHomepageSlide ? (
@@ -383,7 +358,22 @@ function AuctionsRoute() {
 			</div>
 
 			<div className="px-8 py-4">
-				{filteredAndSortedAuctions.length === 0 ? (
+				{auctionsQuery.isError && auctions.length === 0 ? (
+					<div className="flex flex-col items-center justify-center py-16 text-center gap-4 min-h-[40vh]">
+						<h2 className="text-xl font-semibold">Unable to load auctions</h2>
+						<p className="text-muted-foreground max-w-md">
+							{auctionsQuery.error instanceof Error ? auctionsQuery.error.message : 'There was a problem loading auctions. Please try again.'}
+						</p>
+						<Button variant="secondary" onClick={() => auctionsQuery.refetch()}>
+							Retry
+						</Button>
+					</div>
+				) : auctionsQuery.isLoading && auctions.length === 0 ? (
+					<div className="flex flex-col items-center justify-center py-16 min-h-[40vh]">
+						<Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
+						<p className="text-sm text-gray-500">Loading auctions...</p>
+					</div>
+				) : filteredAndSortedAuctions.length === 0 ? (
 					<div className="flex flex-col items-center justify-center py-16 text-center gap-2 min-h-[40vh]">
 						<h2 className="text-xl font-semibold">No auctions found</h2>
 						<p className="text-muted-foreground">Try adjusting your filters or check back soon.</p>
