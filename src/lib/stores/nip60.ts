@@ -144,6 +144,25 @@ const parseNonNegativeInt = (value: string, fallback: number = 0): number => {
 	return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
 }
 
+const ACTIVE_BID_STATUSES = new Set(['locked', 'accepted', 'active', 'unknown'])
+
+const resolveLatestActiveBidByBidder = (bidEvents: NDKEvent[], bidderPubkey: string): NDKEvent | null => {
+	const bidderBids = bidEvents.filter((bidEvent) => {
+		if (bidEvent.pubkey !== bidderPubkey) return false
+		const status = getFirstTagValue(bidEvent, 'status') || 'unknown'
+		return ACTIVE_BID_STATUSES.has(status)
+	})
+	if (!bidderBids.length) return null
+
+	return bidderBids.sort((a, b) => {
+		const amountDelta = parseNonNegativeInt(getFirstTagValue(b, 'amount'), 0) - parseNonNegativeInt(getFirstTagValue(a, 'amount'), 0)
+		if (amountDelta !== 0) return amountDelta
+		const createdAtDelta = (b.created_at || 0) - (a.created_at || 0)
+		if (createdAtDelta !== 0) return createdAtDelta
+		return b.id.localeCompare(a.id)
+	})[0]
+}
+
 const getRandomNonHardenedIndex = (): number => {
 	if (globalThis.crypto?.getRandomValues) {
 		const values = new Uint32Array(1)
@@ -909,14 +928,6 @@ export const nip60Actions = {
 			throw new Error('Refund pubkey is required')
 		}
 
-		// Ensure spent proofs are purged before selecting funds for a new bid.
-		// Without this, stale proofs can make balance appear spendable when they are not.
-		try {
-			await wallet.consolidateTokens()
-		} catch (err) {
-			console.error('[nip60] Pre-bid consolidation failed (continuing):', err)
-		}
-
 		const { totalBalance, mintBalances } = getBalancesFromState(wallet)
 		let targetMint = params.mint ?? state.defaultMint ?? undefined
 		if (!targetMint) {
@@ -987,11 +998,31 @@ export const nip60Actions = {
 					throw primaryErr
 				}
 
-				// Some wallet states contain proofs without DLEQ metadata.
-				// Retry without DLEQ requirement using full mint proofs for demo reliability.
-				const retry = await cashuWallet.send(amount, mintProofs, buildSendOptions(false))
-				lockedProofs = retry.send
-				changeProofs = retry.keep
+				try {
+					// Some wallet states contain proofs without DLEQ metadata.
+					// Retry without DLEQ requirement using full mint proofs for demo reliability.
+					const retry = await cashuWallet.send(amount, mintProofs, buildSendOptions(false))
+					lockedProofs = retry.send
+					changeProofs = retry.keep
+				} catch (secondaryErr) {
+					const secondaryMessage = secondaryErr instanceof Error ? secondaryErr.message.toLowerCase() : String(secondaryErr).toLowerCase()
+					const stillInsufficient = secondaryMessage.includes('not enough funds available to send')
+					if (!stillInsufficient) {
+						throw secondaryErr
+					}
+
+					// Last-resort path: reconcile wallet state, then retry once.
+					try {
+						await wallet.consolidateTokens()
+					} catch (consolidateErr) {
+						console.error('[nip60] Consolidation during bid send retry failed:', consolidateErr)
+					}
+
+					const refreshedProofs = getProofsForMint(wallet, targetMint)
+					const retryAfterConsolidate = await cashuWallet.send(amount, refreshedProofs, buildSendOptions(false))
+					lockedProofs = retryAfterConsolidate.send
+					changeProofs = retryAfterConsolidate.keep
+				}
 			}
 
 			if (!lockedProofs.length) {
@@ -1017,22 +1048,30 @@ export const nip60Actions = {
 			savePendingTokens(pendingTokens)
 			nip60Store.setState((s) => ({ ...s, pendingTokens }))
 
-			if (changeProofs.length > 0) {
-				try {
-					const changeToken = getEncodedToken({ mint: targetMint, proofs: changeProofs })
-					await wallet.receiveToken(changeToken)
-				} catch (changeErr) {
-					console.error('[nip60] Failed to receive bid change proofs (non-fatal):', changeErr)
+			// Wallet state reconciliation is intentionally async so bid publishing
+			// is not blocked by local wallet maintenance operations.
+			void (async () => {
+				if (changeProofs.length > 0) {
+					try {
+						const changeToken = getEncodedToken({ mint: targetMint, proofs: changeProofs })
+						await wallet.receiveToken(changeToken)
+					} catch (changeErr) {
+						console.error('[nip60] Failed to receive bid change proofs (non-fatal):', changeErr)
+					}
 				}
-			}
 
-			try {
-				await wallet.consolidateTokens()
-			} catch (consolidateErr) {
-				console.error('[nip60] Bid lock consolidation error (non-fatal):', consolidateErr)
-			}
+				try {
+					await wallet.consolidateTokens()
+				} catch (consolidateErr) {
+					console.error('[nip60] Bid lock consolidation error (non-fatal):', consolidateErr)
+				}
 
-			await nip60Actions.refresh()
+				try {
+					await nip60Actions.refresh()
+				} catch (refreshErr) {
+					console.error('[nip60] Bid lock refresh error (non-fatal):', refreshErr)
+				}
+			})()
 
 			const commitment = await sha256Hex(token)
 
@@ -1373,10 +1412,20 @@ export const nip60Actions = {
 		const minBid = Math.max(selected.startingBid, highestBid + selected.bidIncrement)
 		const requestedAmount = params?.preferredBidAmount ? Math.floor(params.preferredBidAmount) : minBid
 		const bidAmount = Number.isFinite(requestedAmount) && requestedAmount >= minBid ? requestedAmount : minBid
+		const previousBid = resolveLatestActiveBidByBidder(bidEvents, bidderPubkey)
+		const previousAmount = previousBid ? parseNonNegativeInt(getFirstTagValue(previousBid, 'amount'), 0) : 0
+		if (previousAmount > 0 && bidAmount <= previousAmount) {
+			throw new Error(`Rebid must exceed your current bid of ${previousAmount.toLocaleString()} sats`)
+		}
+
+		const deltaAmount = Math.max(0, bidAmount - previousAmount)
+		if (deltaAmount <= 0) {
+			throw new Error('No additional funds required for this rebid')
+		}
 
 		const { mintBalances } = getBalancesFromState(wallet)
 		const existingMintBalance = mintBalances[bidMint] ?? 0
-		const topUpAmount = Math.max(0, bidAmount - existingMintBalance)
+		const topUpAmount = Math.max(0, deltaAmount - existingMintBalance)
 		let effectiveBidMint = bidMint
 		if (topUpAmount > 0) {
 			const mintResult = await nip60Actions.mintTestEcash(topUpAmount, bidMint)
@@ -1385,7 +1434,7 @@ export const nip60Actions = {
 
 		const locktime = Math.max(selected.endAt + AUCTION_SETTLEMENT_GRACE_SECONDS, now + 60)
 		const lockedBid = await nip60Actions.lockAuctionBidFunds({
-			amount: bidAmount,
+			amount: deltaAmount,
 			mint: effectiveBidMint,
 			lockPubkey: selected.escrowPubkey,
 			locktime,
@@ -1402,6 +1451,8 @@ export const nip60Actions = {
 		bidEvent.content = JSON.stringify({
 			type: 'cashu_bid_commitment',
 			amount: bidAmount,
+			delta_amount: deltaAmount,
+			prev_amount: previousAmount,
 			mint: lockedBid.mintUrl,
 			commitment: lockedBid.commitment,
 			key_scheme: lockedBid.keyScheme,
@@ -1412,6 +1463,7 @@ export const nip60Actions = {
 			['a', auctionCoordinates],
 			['p', selected.event.pubkey],
 			['amount', String(bidAmount), 'SAT'],
+			['delta_amount', String(deltaAmount), 'SAT'],
 			['currency', 'SAT'],
 			['mint', lockedBid.mintUrl],
 			['commitment', lockedBid.commitment],
@@ -1423,6 +1475,10 @@ export const nip60Actions = {
 			['schema', 'auction_bid_v1'],
 			['key_scheme', lockedBid.keyScheme],
 		]
+		if (previousBid) {
+			bidEvent.tags.push(['prev_bid', previousBid.id])
+			bidEvent.tags.push(['prev_amount', String(previousAmount), 'SAT'])
+		}
 		if (lockedBid.derivationPath) {
 			bidEvent.tags.push(['derivation_path', lockedBid.derivationPath])
 		}
