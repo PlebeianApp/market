@@ -6,22 +6,31 @@ import { uiActions } from '@/lib/stores/ui'
 import { useDeleteAuctionMutation } from '@/publish/auctions'
 import {
 	auctionsByPubkeyQueryOptions,
+	getAuctionBidIncrement,
+	getAuctionCurrency,
 	getAuctionEndAt,
+	getAuctionEscrowPubkey,
 	getAuctionId,
 	getAuctionImages,
+	getAuctionKeyScheme,
+	getAuctionMints,
+	getAuctionReserve,
+	getAuctionSchema,
+	getAuctionSettlementPolicy,
 	getAuctionStartAt,
 	getAuctionStartingBid,
 	getAuctionSummary,
 	getAuctionTitle,
+	getAuctionType,
 	useAuctionBidStats,
 } from '@/queries/auctions'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Clock, Copy, Gavel, Trash } from 'lucide-react'
+import { Clock, Copy, ExternalLink, Gavel, Shield, Trash, Pencil } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -33,12 +42,28 @@ function formatAuctionStatus(startAt: number, endAt: number, now: number): strin
 	return 'Live'
 }
 
+const formatMaybeDate = (timestamp: number): string => {
+	if (!timestamp) return 'N/A'
+	return new Date(timestamp * 1000).toLocaleString()
+}
+
+const shortenHex = (value: string, left: number = 12, right: number = 10): string => {
+	if (!value) return 'N/A'
+	if (value.length <= left + right + 1) return value
+	return `${value.slice(0, left)}...${value.slice(-right)}`
+}
+
+const getAuctionCoordinates = (auction: NDKEvent): string => {
+	const auctionDTag = getAuctionId(auction)
+	return auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
+}
+
 function AuctionBasicInfo({ auction }: { auction: NDKEvent }) {
 	const summary = getAuctionSummary(auction) || auction.content || 'No description'
 	const images = getAuctionImages(auction)
 	const startingBid = getAuctionStartingBid(auction)
 	const auctionDTag = getAuctionId(auction)
-	const auctionCoordinates = auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
+	const auctionCoordinates = getAuctionCoordinates(auction)
 	const startAt = getAuctionStartAt(auction)
 	const endAt = getAuctionEndAt(auction)
 	const now = Math.floor(Date.now() / 1000)
@@ -46,10 +71,30 @@ function AuctionBasicInfo({ auction }: { auction: NDKEvent }) {
 	const { data: bidStats } = useAuctionBidStats(auction.id, startingBid, auctionCoordinates)
 	const currentBid = bidStats?.currentPrice ?? startingBid
 	const bidsCount = bidStats?.count ?? 0
+	const reserve = getAuctionReserve(auction)
+	const bidIncrement = getAuctionBidIncrement(auction)
+	const auctionType = getAuctionType(auction)
+	const currency = getAuctionCurrency(auction)
+	const escrowPubkey = getAuctionEscrowPubkey(auction)
+	const keyScheme = getAuctionKeyScheme(auction)
+	const settlementPolicy = getAuctionSettlementPolicy(auction)
+	const schema = getAuctionSchema(auction)
+	const trustedMints = getAuctionMints(auction)
+	const publicAuctionPath = `/auctions/${auction.id}`
+
+	const copyText = async (label: string, value: string) => {
+		try {
+			await navigator.clipboard.writeText(value)
+			toast.success(`${label} copied`)
+		} catch (error) {
+			console.error(`Failed to copy ${label.toLowerCase()}:`, error)
+			toast.error(`Failed to copy ${label.toLowerCase()}`)
+		}
+	}
 
 	return (
 		<div className="block p-4 bg-gray-50 border-t">
-			<div className="space-y-3">
+			<div className="space-y-4">
 				{images.length > 0 && (
 					<div className="w-full h-32 bg-gray-200 rounded-md overflow-hidden">
 						<img src={images[0][1]} alt="Auction image" className="w-full h-full object-cover" />
@@ -77,9 +122,86 @@ function AuctionBasicInfo({ auction }: { auction: NDKEvent }) {
 					<p className="text-gray-600">
 						Current bid: <span className="font-medium">{currentBid.toLocaleString()} sats</span>
 					</p>
-					<p className="text-gray-600 col-span-2">
-						Ends: <span className="font-medium">{endAt ? new Date(endAt * 1000).toLocaleString() : 'N/A'}</span>
+					<p className="text-gray-600">
+						Bid increment: <span className="font-medium">{bidIncrement.toLocaleString()} sats</span>
 					</p>
+					<p className="text-gray-600">
+						Reserve: <span className="font-medium">{reserve.toLocaleString()} sats</span>
+					</p>
+					<p className="text-gray-600">
+						Type: <span className="font-medium capitalize">{auctionType}</span>
+					</p>
+					<p className="text-gray-600">
+						Currency: <span className="font-medium">{currency}</span>
+					</p>
+					<p className="text-gray-600 col-span-2">
+						Starts: <span className="font-medium">{formatMaybeDate(startAt)}</span>
+					</p>
+					<p className="text-gray-600 col-span-2">
+						Ends: <span className="font-medium">{formatMaybeDate(endAt)}</span>
+					</p>
+				</div>
+
+				<div className="p-3 rounded-md border bg-white space-y-2">
+					<p className="text-sm font-semibold flex items-center gap-2">
+						<Shield className="w-4 h-4" />
+						Settlement & Locking
+					</p>
+					<p className="text-xs text-gray-600">
+						Escrow pubkey: <span className="font-medium text-foreground">{shortenHex(escrowPubkey)}</span>
+					</p>
+					<p className="text-xs text-gray-600">
+						Key scheme: <span className="font-medium text-foreground">{keyScheme}</span>
+					</p>
+					<p className="text-xs text-gray-600">
+						Settlement policy: <span className="font-medium text-foreground">{settlementPolicy || 'N/A'}</span>
+					</p>
+					<p className="text-xs text-gray-600">
+						Schema: <span className="font-medium text-foreground">{schema || 'N/A'}</span>
+					</p>
+					<div className="text-xs text-gray-600">
+						Trusted mints:
+						{trustedMints.length > 0 ? (
+							<ul className="mt-1 list-disc pl-4 space-y-0.5">
+								{trustedMints.map((mint) => (
+									<li key={mint} className="break-all">
+										{mint}
+									</li>
+								))}
+							</ul>
+						) : (
+							<span className="font-medium text-foreground ml-1">N/A</span>
+						)}
+					</div>
+				</div>
+
+				<div className="grid gap-2 text-xs text-gray-600">
+					<p className="break-all">
+						Event id: <span className="font-medium text-foreground">{auction.id}</span>
+					</p>
+					<p className="break-all">
+						Coordinate: <span className="font-medium text-foreground">{auctionCoordinates || 'N/A'}</span>
+					</p>
+					<p className="break-all">
+						d tag: <span className="font-medium text-foreground">{auctionDTag || 'N/A'}</span>
+					</p>
+				</div>
+
+				<div className="flex flex-wrap items-center gap-2 pt-1">
+					<Link to={publicAuctionPath}>
+						<Button variant="outline" size="sm" className="gap-2">
+							<ExternalLink className="w-3.5 h-3.5" />
+							View Public Auction
+						</Button>
+					</Link>
+					<Button variant="ghost" size="sm" onClick={() => copyText('Event ID', auction.id)}>
+						Copy Event ID
+					</Button>
+					{auctionCoordinates && (
+						<Button variant="ghost" size="sm" onClick={() => copyText('Auction Coordinate', auctionCoordinates)}>
+							Copy Coordinate
+						</Button>
+					)}
 				</div>
 			</div>
 		</div>
@@ -90,15 +212,19 @@ function AuctionListItem({
 	auction,
 	isExpanded,
 	onToggleExpanded,
+	onManage,
 	onDelete,
 	onCopyId,
+	onCopyUrl,
 	isDeleting,
 }: {
 	auction: NDKEvent
 	isExpanded: boolean
 	onToggleExpanded: () => void
+	onManage: () => void
 	onDelete: () => void
 	onCopyId: () => void
+	onCopyUrl: () => void
 	isDeleting: boolean
 }) {
 	const startAt = getAuctionStartAt(auction)
@@ -133,11 +259,33 @@ function AuctionListItem({
 				size="sm"
 				onClick={(e) => {
 					e.stopPropagation()
+					onCopyUrl()
+				}}
+				aria-label={`Copy public auction URL for ${getAuctionTitle(auction)}`}
+			>
+				<ExternalLink className="w-4 h-4" />
+			</Button>
+			<Button
+				variant="ghost"
+				size="sm"
+				onClick={(e) => {
+					e.stopPropagation()
 					onCopyId()
 				}}
 				aria-label={`Copy event id for ${getAuctionTitle(auction)}`}
 			>
 				<Copy className="w-4 h-4" />
+			</Button>
+			<Button
+				variant="ghost"
+				size="sm"
+				onClick={(e) => {
+					e.stopPropagation()
+					onManage()
+				}}
+				aria-label={`Manage ${getAuctionTitle(auction)}`}
+			>
+				<Pencil className="w-4 h-4" />
 			</Button>
 			<Button
 				variant="ghost"
@@ -177,12 +325,20 @@ export const Route = createFileRoute('/_dashboard-layout/dashboard/products/auct
 })
 
 function AuctionsOverviewComponent() {
-	useDashboardTitle('My Auctions')
 	const { user, isAuthenticated } = useStore(authStore)
+	const navigate = useNavigate()
+	const matchRoute = useMatchRoute()
 	const [expandedAuction, setExpandedAuction] = useState<string | null>(null)
 	const [orderBy, setOrderBy] = useState<AuctionOrder>('newest')
 	const deleteMutation = useDeleteAuctionMutation()
 	const [animationParent] = useAutoAnimate()
+
+	const isOnChildRoute = matchRoute({
+		to: '/dashboard/products/auctions/$auctionId',
+		fuzzy: true,
+	})
+
+	useDashboardTitle(isOnChildRoute ? 'Auction Details' : 'My Auctions')
 
 	const {
 		data: auctions,
@@ -226,8 +382,26 @@ function AuctionsOverviewComponent() {
 		}
 	}
 
+	const handleCopyAuctionUrl = async (auction: NDKEvent) => {
+		try {
+			const url = `${window.location.origin}/auctions/${auction.id}`
+			await navigator.clipboard.writeText(url)
+			toast.success('Auction URL copied')
+		} catch (error) {
+			console.error('Failed to copy auction URL:', error)
+			toast.error('Failed to copy auction URL')
+		}
+	}
+
 	const handleCreateAuction = () => {
 		uiActions.openDrawer('createAuction')
+	}
+
+	const handleManageAuction = (auctionEventId: string) => {
+		navigate({
+			to: '/dashboard/products/auctions/$auctionId',
+			params: { auctionId: auctionEventId },
+		})
 	}
 
 	if (!isAuthenticated || !user) {
@@ -236,6 +410,10 @@ function AuctionsOverviewComponent() {
 				<p>Please log in to manage your auctions.</p>
 			</div>
 		)
+	}
+
+	if (isOnChildRoute) {
+		return <Outlet />
 	}
 
 	return (
@@ -254,6 +432,12 @@ function AuctionsOverviewComponent() {
 							<SelectItem value="ending-latest">Ending Latest</SelectItem>
 						</SelectContent>
 					</Select>
+					<Link to="/auctions">
+						<Button variant="outline" className="gap-2">
+							<ExternalLink className="w-4 h-4" />
+							View Public Auctions
+						</Button>
+					</Link>
 					<Button
 						onClick={handleCreateAuction}
 						className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
@@ -319,8 +503,10 @@ function AuctionsOverviewComponent() {
 										auction={auction}
 										isExpanded={expandedAuction === auction.id}
 										onToggleExpanded={() => setExpandedAuction((prev) => (prev === auction.id ? null : auction.id))}
+										onManage={() => handleManageAuction(auction.id)}
 										onDelete={() => handleDeleteAuction(auction)}
 										onCopyId={() => handleCopyAuctionId(auction)}
+										onCopyUrl={() => handleCopyAuctionUrl(auction)}
 										isDeleting={deleteMutation.isPending && deleteMutation.variables === getAuctionId(auction)}
 									/>
 								</li>

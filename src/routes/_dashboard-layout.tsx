@@ -49,6 +49,11 @@ const backButtonRoutes: Record<string, { parentPath: string; parentTitle: string
 		parentPath: '/dashboard/products/collections',
 		parentTitle: '🗂️ Collections',
 	},
+	// Dynamic route for auction details/settlement
+	'/dashboard/products/auctions/': {
+		parentPath: '/dashboard/products/auctions',
+		parentTitle: '🔨 My Auctions',
+	},
 	// Dynamic route for order details - uses browser history to return to correct page (sales or purchases)
 	'/dashboard/orders/': {
 		parentPath: '', // Empty path signals to use browser history
@@ -76,6 +81,11 @@ function getBackButtonInfo(currentPath: string): { parentPath: string; parentTit
 	// Check for collection edit pages (pattern: /dashboard/products/collections/[collectionId])
 	if (currentPath.startsWith('/dashboard/products/collections/') && currentPath !== '/dashboard/products/collections') {
 		return backButtonRoutes['/dashboard/products/collections/']
+	}
+
+	// Check for auction detail pages (pattern: /dashboard/products/auctions/[auctionId])
+	if (currentPath.startsWith('/dashboard/products/auctions/') && currentPath !== '/dashboard/products/auctions') {
+		return backButtonRoutes['/dashboard/products/auctions/']
 	}
 
 	// Check for order detail pages (pattern: /dashboard/orders/[orderId])
@@ -226,6 +236,10 @@ function DashboardLayout() {
 			// Check if we're on a collection creation/edit page and navigate accordingly
 			else if (location.pathname.startsWith('/dashboard/products/collections/')) {
 				navigate({ to: '/dashboard/products/collections' })
+			}
+			// Check if we're on an auction detail page and navigate accordingly
+			else if (location.pathname.startsWith('/dashboard/products/auctions/')) {
+				navigate({ to: '/dashboard/products/auctions' })
 			}
 			// Check if we're on an order detail page and navigate accordingly
 			else if (location.pathname.startsWith('/dashboard/orders/')) {
@@ -399,7 +413,7 @@ function DashboardLayout() {
 												location.pathname.startsWith('/dashboard/sales/messages') && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/sales/circular-economy' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/products/products' && 'p-0 lg:p-0',
-												location.pathname === '/dashboard/products/auctions' && 'p-0 lg:p-0',
+												location.pathname.startsWith('/dashboard/products/auctions') && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/products/collections' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/products/migration-tool' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/products/receiving-payments' && 'p-0 lg:p-0',
