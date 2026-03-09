@@ -52,6 +52,7 @@ import { Route as DashboardLayoutDashboardProductsProductsNewRouteImport } from 
 import { Route as DashboardLayoutDashboardProductsProductsProductIdRouteImport } from './routes/_dashboard-layout/dashboard/products/products/$productId'
 import { Route as DashboardLayoutDashboardProductsCollectionsNewRouteImport } from './routes/_dashboard-layout/dashboard/products/collections/new'
 import { Route as DashboardLayoutDashboardProductsCollectionsCollectionIdRouteImport } from './routes/_dashboard-layout/dashboard/products/collections/$collectionId'
+import { Route as DashboardLayoutDashboardProductsAuctionsAuctionIdRouteImport } from './routes/_dashboard-layout/dashboard/products/auctions.$auctionId'
 
 const SetupRoute = SetupRouteImport.update({
   id: '/setup',
@@ -294,6 +295,12 @@ const DashboardLayoutDashboardProductsCollectionsCollectionIdRoute =
     path: '/$collectionId',
     getParentRoute: () => DashboardLayoutDashboardProductsCollectionsRoute,
   } as any)
+const DashboardLayoutDashboardProductsAuctionsAuctionIdRoute =
+  DashboardLayoutDashboardProductsAuctionsAuctionIdRouteImport.update({
+    id: '/$auctionId',
+    path: '/$auctionId',
+    getParentRoute: () => DashboardLayoutDashboardProductsAuctionsRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -325,7 +332,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/app-settings/featured-items': typeof DashboardLayoutDashboardAppSettingsFeaturedItemsRoute
   '/dashboard/app-settings/team': typeof DashboardLayoutDashboardAppSettingsTeamRoute
   '/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
-  '/dashboard/products/auctions': typeof DashboardLayoutDashboardProductsAuctionsRoute
+  '/dashboard/products/auctions': typeof DashboardLayoutDashboardProductsAuctionsRouteWithChildren
   '/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
   '/dashboard/products/migration-tool': typeof DashboardLayoutDashboardProductsMigrationToolRoute
   '/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
@@ -333,6 +340,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
   '/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
   '/dashboard/sales/sales': typeof DashboardLayoutDashboardSalesSalesRoute
+  '/dashboard/products/auctions/$auctionId': typeof DashboardLayoutDashboardProductsAuctionsAuctionIdRoute
   '/dashboard/products/collections/$collectionId': typeof DashboardLayoutDashboardProductsCollectionsCollectionIdRoute
   '/dashboard/products/collections/new': typeof DashboardLayoutDashboardProductsCollectionsNewRoute
   '/dashboard/products/products/$productId': typeof DashboardLayoutDashboardProductsProductsProductIdRoute
@@ -369,7 +377,7 @@ export interface FileRoutesByTo {
   '/dashboard/app-settings/featured-items': typeof DashboardLayoutDashboardAppSettingsFeaturedItemsRoute
   '/dashboard/app-settings/team': typeof DashboardLayoutDashboardAppSettingsTeamRoute
   '/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
-  '/dashboard/products/auctions': typeof DashboardLayoutDashboardProductsAuctionsRoute
+  '/dashboard/products/auctions': typeof DashboardLayoutDashboardProductsAuctionsRouteWithChildren
   '/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
   '/dashboard/products/migration-tool': typeof DashboardLayoutDashboardProductsMigrationToolRoute
   '/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
@@ -377,6 +385,7 @@ export interface FileRoutesByTo {
   '/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
   '/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
   '/dashboard/sales/sales': typeof DashboardLayoutDashboardSalesSalesRoute
+  '/dashboard/products/auctions/$auctionId': typeof DashboardLayoutDashboardProductsAuctionsAuctionIdRoute
   '/dashboard/products/collections/$collectionId': typeof DashboardLayoutDashboardProductsCollectionsCollectionIdRoute
   '/dashboard/products/collections/new': typeof DashboardLayoutDashboardProductsCollectionsNewRoute
   '/dashboard/products/products/$productId': typeof DashboardLayoutDashboardProductsProductsProductIdRoute
@@ -415,7 +424,7 @@ export interface FileRoutesById {
   '/_dashboard-layout/dashboard/app-settings/featured-items': typeof DashboardLayoutDashboardAppSettingsFeaturedItemsRoute
   '/_dashboard-layout/dashboard/app-settings/team': typeof DashboardLayoutDashboardAppSettingsTeamRoute
   '/_dashboard-layout/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
-  '/_dashboard-layout/dashboard/products/auctions': typeof DashboardLayoutDashboardProductsAuctionsRoute
+  '/_dashboard-layout/dashboard/products/auctions': typeof DashboardLayoutDashboardProductsAuctionsRouteWithChildren
   '/_dashboard-layout/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
   '/_dashboard-layout/dashboard/products/migration-tool': typeof DashboardLayoutDashboardProductsMigrationToolRoute
   '/_dashboard-layout/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
@@ -423,6 +432,7 @@ export interface FileRoutesById {
   '/_dashboard-layout/dashboard/sales/circular-economy': typeof DashboardLayoutDashboardSalesCircularEconomyRoute
   '/_dashboard-layout/dashboard/sales/messages': typeof DashboardLayoutDashboardSalesMessagesRouteWithChildren
   '/_dashboard-layout/dashboard/sales/sales': typeof DashboardLayoutDashboardSalesSalesRoute
+  '/_dashboard-layout/dashboard/products/auctions/$auctionId': typeof DashboardLayoutDashboardProductsAuctionsAuctionIdRoute
   '/_dashboard-layout/dashboard/products/collections/$collectionId': typeof DashboardLayoutDashboardProductsCollectionsCollectionIdRoute
   '/_dashboard-layout/dashboard/products/collections/new': typeof DashboardLayoutDashboardProductsCollectionsNewRoute
   '/_dashboard-layout/dashboard/products/products/$productId': typeof DashboardLayoutDashboardProductsProductsProductIdRoute
@@ -469,6 +479,7 @@ export interface FileRouteTypes {
     | '/dashboard/sales/circular-economy'
     | '/dashboard/sales/messages'
     | '/dashboard/sales/sales'
+    | '/dashboard/products/auctions/$auctionId'
     | '/dashboard/products/collections/$collectionId'
     | '/dashboard/products/collections/new'
     | '/dashboard/products/products/$productId'
@@ -513,6 +524,7 @@ export interface FileRouteTypes {
     | '/dashboard/sales/circular-economy'
     | '/dashboard/sales/messages'
     | '/dashboard/sales/sales'
+    | '/dashboard/products/auctions/$auctionId'
     | '/dashboard/products/collections/$collectionId'
     | '/dashboard/products/collections/new'
     | '/dashboard/products/products/$productId'
@@ -558,6 +570,7 @@ export interface FileRouteTypes {
     | '/_dashboard-layout/dashboard/sales/circular-economy'
     | '/_dashboard-layout/dashboard/sales/messages'
     | '/_dashboard-layout/dashboard/sales/sales'
+    | '/_dashboard-layout/dashboard/products/auctions/$auctionId'
     | '/_dashboard-layout/dashboard/products/collections/$collectionId'
     | '/_dashboard-layout/dashboard/products/collections/new'
     | '/_dashboard-layout/dashboard/products/products/$productId'
@@ -887,8 +900,30 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardLayoutDashboardProductsCollectionsCollectionIdRouteImport
       parentRoute: typeof DashboardLayoutDashboardProductsCollectionsRoute
     }
+    '/_dashboard-layout/dashboard/products/auctions/$auctionId': {
+      id: '/_dashboard-layout/dashboard/products/auctions/$auctionId'
+      path: '/$auctionId'
+      fullPath: '/dashboard/products/auctions/$auctionId'
+      preLoaderRoute: typeof DashboardLayoutDashboardProductsAuctionsAuctionIdRouteImport
+      parentRoute: typeof DashboardLayoutDashboardProductsAuctionsRoute
+    }
   }
 }
+
+interface DashboardLayoutDashboardProductsAuctionsRouteChildren {
+  DashboardLayoutDashboardProductsAuctionsAuctionIdRoute: typeof DashboardLayoutDashboardProductsAuctionsAuctionIdRoute
+}
+
+const DashboardLayoutDashboardProductsAuctionsRouteChildren: DashboardLayoutDashboardProductsAuctionsRouteChildren =
+  {
+    DashboardLayoutDashboardProductsAuctionsAuctionIdRoute:
+      DashboardLayoutDashboardProductsAuctionsAuctionIdRoute,
+  }
+
+const DashboardLayoutDashboardProductsAuctionsRouteWithChildren =
+  DashboardLayoutDashboardProductsAuctionsRoute._addFileChildren(
+    DashboardLayoutDashboardProductsAuctionsRouteChildren,
+  )
 
 interface DashboardLayoutDashboardProductsCollectionsRouteChildren {
   DashboardLayoutDashboardProductsCollectionsCollectionIdRoute: typeof DashboardLayoutDashboardProductsCollectionsCollectionIdRoute
@@ -956,7 +991,7 @@ interface DashboardLayoutRouteChildren {
   DashboardLayoutDashboardAppSettingsFeaturedItemsRoute: typeof DashboardLayoutDashboardAppSettingsFeaturedItemsRoute
   DashboardLayoutDashboardAppSettingsTeamRoute: typeof DashboardLayoutDashboardAppSettingsTeamRoute
   DashboardLayoutDashboardOrdersOrderIdRoute: typeof DashboardLayoutDashboardOrdersOrderIdRoute
-  DashboardLayoutDashboardProductsAuctionsRoute: typeof DashboardLayoutDashboardProductsAuctionsRoute
+  DashboardLayoutDashboardProductsAuctionsRoute: typeof DashboardLayoutDashboardProductsAuctionsRouteWithChildren
   DashboardLayoutDashboardProductsCollectionsRoute: typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
   DashboardLayoutDashboardProductsMigrationToolRoute: typeof DashboardLayoutDashboardProductsMigrationToolRoute
   DashboardLayoutDashboardProductsProductsRoute: typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
@@ -994,7 +1029,7 @@ const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
   DashboardLayoutDashboardOrdersOrderIdRoute:
     DashboardLayoutDashboardOrdersOrderIdRoute,
   DashboardLayoutDashboardProductsAuctionsRoute:
-    DashboardLayoutDashboardProductsAuctionsRoute,
+    DashboardLayoutDashboardProductsAuctionsRouteWithChildren,
   DashboardLayoutDashboardProductsCollectionsRoute:
     DashboardLayoutDashboardProductsCollectionsRouteWithChildren,
   DashboardLayoutDashboardProductsMigrationToolRoute:

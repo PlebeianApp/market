@@ -38,6 +38,17 @@ export interface AuctionBidFormData {
 	mint?: string
 }
 
+export interface AuctionSettlementFormData {
+	auctionEventId: string
+	auctionCoordinates?: string
+	status: 'settled' | 'reserve_not_met' | 'cancelled'
+	closeAt?: number
+	winningBidEventId?: string
+	winnerPubkey?: string
+	finalAmount?: number
+	reason?: string
+}
+
 const parseUnixTimestamp = (isoDateTime?: string): number | null => {
 	if (!isoDateTime) return null
 	const timestampMs = new Date(isoDateTime).getTime()
@@ -362,6 +373,85 @@ export const usePublishAuctionBidMutation = () => {
 		onError: (error) => {
 			console.error('Failed to publish auction bid:', error)
 			toast.error(`Failed to submit bid: ${error instanceof Error ? error.message : String(error)}`)
+		},
+	})
+}
+
+export const publishAuctionSettlement = async (
+	formData: AuctionSettlementFormData,
+	signer: NDKSigner,
+	ndk: NDK,
+): Promise<string> => {
+	if (!formData.auctionEventId) throw new Error('Auction event id is required')
+	if (!formData.status) throw new Error('Settlement status is required')
+
+	const closeAt = formData.closeAt ?? Math.floor(Date.now() / 1000)
+	const finalAmount = Math.max(0, Math.floor(formData.finalAmount ?? 0))
+	const winningBidEventId = formData.winningBidEventId || ''
+	const winnerPubkey = formData.winnerPubkey || ''
+
+	if (formData.status === 'settled') {
+		if (!winningBidEventId) throw new Error('Winning bid event id is required for settled auctions')
+		if (!winnerPubkey) throw new Error('Winner pubkey is required for settled auctions')
+		if (finalAmount <= 0) throw new Error('Final amount must be greater than zero for settled auctions')
+	}
+
+	const event = new NDKEvent(ndk)
+	event.kind = 1024
+	event.content = JSON.stringify({
+		type: 'auction_settlement',
+		status: formData.status,
+		winning_bid: winningBidEventId || null,
+		winner: winnerPubkey || null,
+		final_amount: finalAmount,
+		reason: formData.reason || null,
+	})
+	event.tags = [
+		['e', formData.auctionEventId],
+		['status', formData.status],
+		['close_at', String(closeAt)],
+		['winning_bid', winningBidEventId],
+		['winner', winnerPubkey],
+		['final_amount', String(finalAmount), 'SAT'],
+		['schema', 'auction_settlement_v1'],
+	]
+	if (formData.auctionCoordinates) {
+		event.tags.push(['a', formData.auctionCoordinates])
+	}
+	if (winnerPubkey) {
+		event.tags.push(['p', winnerPubkey])
+	}
+	if (formData.reason?.trim()) {
+		event.tags.push(['reason', formData.reason.trim()])
+	}
+
+	await event.sign(signer)
+	await ndkActions.publishEvent(event)
+	return event.id
+}
+
+export const usePublishAuctionSettlementMutation = () => {
+	const queryClient = useQueryClient()
+	const ndk = ndkActions.getNDK()
+	const signer = ndkActions.getSigner()
+
+	return useMutation({
+		mutationFn: async (formData: AuctionSettlementFormData) => {
+			if (!ndk) throw new Error('NDK not initialized')
+			if (!signer) throw new Error('No signer available')
+			return publishAuctionSettlement(formData, signer, ndk)
+		},
+		onSuccess: async (_eventId, variables) => {
+			await queryClient.invalidateQueries({ queryKey: auctionKeys.details(variables.auctionEventId) })
+			await queryClient.invalidateQueries({ queryKey: auctionKeys.bids(variables.auctionEventId) })
+			await queryClient.invalidateQueries({ queryKey: auctionKeys.bidStats(variables.auctionEventId) })
+			await queryClient.invalidateQueries({ queryKey: auctionKeys.settlements(variables.auctionEventId) })
+			await queryClient.invalidateQueries({ queryKey: auctionKeys.all })
+			toast.success('Auction settlement published')
+		},
+		onError: (error) => {
+			console.error('Failed to publish auction settlement:', error)
+			toast.error(`Failed to publish settlement: ${error instanceof Error ? error.message : String(error)}`)
 		},
 	})
 }
