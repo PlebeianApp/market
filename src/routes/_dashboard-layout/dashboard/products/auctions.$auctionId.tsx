@@ -1,3 +1,4 @@
+import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -161,7 +162,8 @@ function DashboardAuctionDetailRoute() {
 	const bidIncrement = getAuctionBidIncrement(auction)
 	const startAt = getAuctionStartAt(auction)
 	const endAt = getAuctionEndAt(auction)
-	const now = Math.floor(Date.now() / 1000)
+	const countdown = useAuctionCountdown(endAt, { showSeconds: true })
+	const now = countdown.now
 	const status = formatAuctionStatus(startAt, endAt, now)
 	const ended = status === 'Ended'
 	const isOwner = !!(auction && user?.pubkey && auction.pubkey === user.pubkey)
@@ -317,10 +319,7 @@ function DashboardAuctionDetailRoute() {
 							<StatCard label="Current price" value={formatSats(currentPrice)} eyebrow="Live pulse" />
 							<StatCard label="Reserve" value={formatSats(reserve)} eyebrow={reserveMet ? 'Ready to settle' : 'Threshold'} />
 							<StatCard label="Opening bid" value={formatSats(startingBid)} />
-							<StatCard
-								label={status === 'Scheduled' ? 'Starts' : 'Ends'}
-								value={formatMaybeDate(status === 'Scheduled' ? startAt : endAt)}
-							/>
+							<AuctionCountdown endAt={endAt} countdown={countdown} showSeconds variant="panel" label="Ends in" showAbsoluteTime />
 						</div>
 
 						<div className="grid gap-3 md:grid-cols-2">
