@@ -47,6 +47,7 @@ function ProfileComponent() {
 		lud16: '',
 		lud06: '',
 		website: '',
+		pickupMapLink: '',
 	})
 
 	// Update profile mutation
@@ -78,6 +79,7 @@ function ProfileComponent() {
 				lud16: fetchedProfile.lud16 || '',
 				lud06: fetchedProfile.lud06 || '',
 				website: fetchedProfile.website || '',
+				pickupMapLink: (fetchedProfile as any).pickupMapLink || '',
 			})
 		}
 	}, [fetchedProfile])
@@ -129,7 +131,8 @@ function ProfileComponent() {
 			formData.nip05 !== (originalProfile.nip05 || '') ||
 			formData.lud16 !== (originalProfile.lud16 || '') ||
 			formData.lud06 !== (originalProfile.lud06 || '') ||
-			formData.website !== (originalProfile.website || '')
+			formData.website !== (originalProfile.website || '') ||
+			formData.pickupMapLink !== ((originalProfile as any).pickupMapLink || '')
 
 		// Check image changes
 		// Handle both image and picture field formats from kind 0 metadata
@@ -347,6 +350,31 @@ function ProfileComponent() {
 									onChange={(e) => setFormData((prev) => ({ ...prev, website: e.target.value }))}
 									placeholder="https://yourwebsite.com"
 								/>
+							</div>
+
+							<div className="border-t pt-6 mt-6 space-y-4">
+								<div>
+									<h3 className="text-base font-semibold">BTC Map</h3>
+									<p className="text-xs text-muted-foreground mt-1">
+										Add a pickup location to show on your profile. Find your coordinates on{' '}
+										<a href="https://btcmap.org" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline">
+											BTC Map
+										</a>
+									</p>
+								</div>
+
+								<div className="space-y-2">
+									<Label htmlFor="pickupMapLink">
+										Map Link <span className="text-muted-foreground font-normal">(optional)</span>
+									</Label>
+									<Input
+										id="pickupMapLink"
+										name="pickupMapLink"
+										value={formData.pickupMapLink}
+										onChange={(e) => setFormData((prev) => ({ ...prev, pickupMapLink: e.target.value }))}
+										placeholder="e.g., https://btcmap.org/map#40.7128/-74.0060"
+									/>
+								</div>
 							</div>
 
 							<Button
