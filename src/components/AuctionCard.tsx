@@ -1,3 +1,4 @@
+import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { ndkActions } from '@/lib/stores/ndk'
@@ -19,18 +20,6 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Link } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 
-function formatAuctionCountdown(secondsRemaining: number): string {
-	if (secondsRemaining <= 0) return 'Ended'
-	const days = Math.floor(secondsRemaining / 86400)
-	const hours = Math.floor((secondsRemaining % 86400) / 3600)
-	const minutes = Math.floor((secondsRemaining % 3600) / 60)
-	const seconds = secondsRemaining % 60
-
-	if (days > 0) return `${days}d ${hours}h`
-	if (hours > 0) return `${hours}h ${minutes}m`
-	return `${minutes}m ${seconds}s`
-}
-
 export function AuctionCard({ auction }: { auction: NDKEvent }) {
 	const title = getAuctionTitle(auction)
 	const images = getAuctionImages(auction)
@@ -43,30 +32,21 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 	const escrowPubkey = getAuctionEscrowPubkey(auction) || auction.pubkey
 	const auctionDTag = getAuctionId(auction)
 	const auctionCoordinates = auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
-	const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
 	const [bidAmountInput, setBidAmountInput] = useState('')
 	const [isOwnAuction, setIsOwnAuction] = useState(false)
-	const secondsRemaining = Math.max(0, endAt - now)
+	const countdown = useAuctionCountdown(endAt, { showSeconds: true })
 	const { data: bidStats } = useAuctionBidStats(auction.id, startingBid, auctionCoordinates)
 	const bidMutation = usePublishAuctionBidMutation()
 
 	const currentPrice = bidStats?.currentPrice ?? startingBid
 	const bidsCount = bidStats?.count ?? 0
-	const endDateLabel = endAt ? new Date(endAt * 1000).toLocaleString() : 'N/A'
-	const ended = endAt > 0 ? now >= endAt : false
+	const ended = countdown.isEnded
 	const parsedBidAmount = parseInt(bidAmountInput || '0', 10)
 
 	const minBid = useMemo(() => {
 		const floorBid = currentPrice + Math.max(1, bidIncrement)
 		return Math.max(startingBid, floorBid)
 	}, [bidIncrement, currentPrice, startingBid])
-
-	useEffect(() => {
-		const timer = window.setInterval(() => {
-			setNow(Math.floor(Date.now() / 1000))
-		}, 1000)
-		return () => window.clearInterval(timer)
-	}, [])
 
 	useEffect(() => {
 		const checkIfOwnAuction = async () => {
@@ -138,9 +118,8 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 					<div className="bg-[var(--light-gray)] font-medium px-4 py-1 rounded-full text-xs">{bidsCount} bids</div>
 				</div>
 
-				<div className="text-xs text-gray-600 flex justify-between gap-2">
-					<span className="truncate">Ends: {endDateLabel}</span>
-					<span className={`font-medium ${ended ? 'text-zinc-600' : 'text-amber-700'}`}>{formatAuctionCountdown(secondsRemaining)}</span>
+				<div className="text-xs text-gray-600">
+					<AuctionCountdown endAt={endAt} countdown={countdown} showSeconds variant="inline" className="w-full justify-between" />
 				</div>
 
 				<div className="flex-grow"></div>

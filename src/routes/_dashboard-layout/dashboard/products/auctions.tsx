@@ -1,3 +1,4 @@
+import { AuctionCountdown } from '@/components/AuctionCountdown'
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -140,6 +141,9 @@ function AuctionBasicInfo({ auction }: { auction: NDKEvent }) {
 					<p className="text-gray-600 col-span-2">
 						Ends: <span className="font-medium">{formatMaybeDate(endAt)}</span>
 					</p>
+					<div className="col-span-2">
+						<AuctionCountdown endAt={endAt} showSeconds variant="inline" className="max-w-full" />
+					</div>
 				</div>
 
 				<div className="p-3 rounded-md border bg-white space-y-2">
@@ -245,9 +249,10 @@ function AuctionListItem({
 			)}
 			<div className="min-w-0">
 				<p className="font-semibold truncate">{getAuctionTitle(auction)}</p>
-				<p className="text-xs text-muted-foreground truncate">
-					{status} • {endAt ? new Date(endAt * 1000).toLocaleString() : 'No end'}
-				</p>
+				<div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+					<span>{status}</span>
+					<AuctionCountdown endAt={endAt} showSeconds variant="inline" className="px-2 py-1 text-[10px]" />
+				</div>
 			</div>
 		</div>
 	)
