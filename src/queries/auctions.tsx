@@ -11,8 +11,11 @@ export type AuctionBidStats = {
 	currentPrice: number
 }
 
+export type AuctionSettlementStatus = 'settled' | 'reserve_not_met' | 'cancelled' | 'unknown'
+
 const AUCTION_KIND = 30408 as unknown as NonNullable<NDKFilter['kinds']>[number]
 const AUCTION_BID_KIND = 1023 as unknown as NonNullable<NDKFilter['kinds']>[number]
+const AUCTION_SETTLEMENT_KIND = 1024 as unknown as NonNullable<NDKFilter['kinds']>[number]
 
 const DELETED_AUCTIONS_STORAGE_KEY = 'plebeian_deleted_auction_ids'
 
@@ -156,6 +159,31 @@ export const fetchAuctionBids = async (auctionEventId: string, limit: number = 5
 	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
 }
 
+export const fetchAuctionSettlements = async (auctionEventId: string, limit: number = 100, auctionCoordinates?: string) => {
+	if (!auctionEventId && !auctionCoordinates) return []
+	const ndk = ndkActions.getNDK()
+	if (!ndk) return []
+
+	const filters: NDKFilter[] = []
+	if (auctionEventId) {
+		filters.push({
+			kinds: [AUCTION_SETTLEMENT_KIND],
+			'#e': [auctionEventId],
+			limit,
+		})
+	}
+	if (auctionCoordinates) {
+		filters.push({
+			kinds: [AUCTION_SETTLEMENT_KIND],
+			'#a': [auctionCoordinates],
+			limit,
+		})
+	}
+
+	const events = await ndkActions.fetchEventsWithTimeout(filters.length === 1 ? filters[0] : filters, { timeoutMs: 8000 })
+	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+}
+
 export const fetchAuctionBidStats = async (
 	auctionEventId: string,
 	startingBid: number = 0,
@@ -225,6 +253,15 @@ export const auctionBidStatsQueryOptions = (auctionEventId: string, startingBid:
 		enabled: !!(auctionEventId || auctionCoordinates),
 		staleTime: 10000,
 		refetchInterval: 10000,
+	})
+
+export const auctionSettlementsQueryOptions = (auctionEventId: string, limit: number = 100, auctionCoordinates?: string) =>
+	queryOptions({
+		queryKey: [...auctionKeys.settlements(auctionEventId || auctionCoordinates || ''), auctionCoordinates || ''],
+		queryFn: () => fetchAuctionSettlements(auctionEventId, limit, auctionCoordinates),
+		enabled: !!(auctionEventId || auctionCoordinates),
+		staleTime: 5000,
+		refetchInterval: 5000,
 	})
 
 export const getAuctionId = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'd')?.[1] || ''
@@ -353,6 +390,25 @@ export const getBidStatus = (bidEvent: NDKEvent | null): string => {
 	return bidEvent.tags.find((tag) => tag[0] === 'status')?.[1] || 'unknown'
 }
 
+export const getAuctionSettlementStatus = (settlementEvent: NDKEvent | null): AuctionSettlementStatus => {
+	if (!settlementEvent) return 'unknown'
+	const status = settlementEvent.tags.find((tag) => tag[0] === 'status')?.[1]
+	if (status === 'settled' || status === 'reserve_not_met' || status === 'cancelled') return status
+	return 'unknown'
+}
+
+export const getAuctionSettlementWinningBid = (settlementEvent: NDKEvent | null): string =>
+	settlementEvent?.tags.find((tag) => tag[0] === 'winning_bid')?.[1] || ''
+
+export const getAuctionSettlementWinner = (settlementEvent: NDKEvent | null): string =>
+	settlementEvent?.tags.find((tag) => tag[0] === 'winner')?.[1] || ''
+
+export const getAuctionSettlementFinalAmount = (settlementEvent: NDKEvent | null): number => {
+	if (!settlementEvent) return 0
+	const parsed = parseInt(settlementEvent.tags.find((tag) => tag[0] === 'final_amount')?.[1] || '0', 10)
+	return Number.isFinite(parsed) ? parsed : 0
+}
+
 export const isNSFWAuction = (event: NDKEvent | null): boolean => {
 	if (!event) return false
 	return event.tags.find((t) => t[0] === 'content-warning')?.[1] === 'nsfw'
@@ -371,4 +427,9 @@ export const useAuctionBidStats = (auctionEventId: string, startingBid: number =
 export const useAuctionBids = (auctionEventId: string, limit: number = 500, auctionCoordinates?: string) =>
 	useQuery({
 		...auctionBidsQueryOptions(auctionEventId, limit, auctionCoordinates),
+	})
+
+export const useAuctionSettlements = (auctionEventId: string, limit: number = 100, auctionCoordinates?: string) =>
+	useQuery({
+		...auctionSettlementsQueryOptions(auctionEventId, limit, auctionCoordinates),
 	})
