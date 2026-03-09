@@ -1,4 +1,5 @@
 import { AuctionCard } from '@/components/AuctionCard'
+import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
 import { ImageCarousel } from '@/components/ImageCarousel'
 import { ImageViewerModal } from '@/components/ImageViewerModal'
 import { ItemGrid } from '@/components/ItemGrid'
@@ -45,17 +46,6 @@ import { ArrowLeft, Clock, Gavel, Hash, Shield, Wallet } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
-function formatCountdown(secondsRemaining: number): string {
-	if (secondsRemaining <= 0) return 'Ended'
-	const days = Math.floor(secondsRemaining / 86400)
-	const hours = Math.floor((secondsRemaining % 86400) / 3600)
-	const minutes = Math.floor((secondsRemaining % 3600) / 60)
-	const seconds = secondsRemaining % 60
-	if (days > 0) return `${days}d ${hours}h ${minutes}m`
-	if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`
-	return `${minutes}m ${seconds}s`
-}
-
 function useHeroBackground(imageUrl: string, className: string) {
 	useEffect(() => {
 		if (!imageUrl) return
@@ -85,7 +75,6 @@ function AuctionDetailRoute() {
 	const [imageViewerOpen, setImageViewerOpen] = useState(false)
 	const [bidAmountInput, setBidAmountInput] = useState('')
 	const [isOwnAuction, setIsOwnAuction] = useState(false)
-	const [now, setNow] = useState(() => Math.floor(Date.now() / 1000))
 	const bidMutation = usePublishAuctionBidMutation()
 
 	const auctionQuery = useQuery({
@@ -116,7 +105,7 @@ function AuctionDetailRoute() {
 
 	const startAt = getAuctionStartAt(auction)
 	const endAt = getAuctionEndAt(auction)
-	const secondsRemaining = Math.max(0, endAt - now)
+	const countdown = useAuctionCountdown(endAt, { showSeconds: true })
 	const startingBid = getAuctionStartingBid(auction)
 	const bidIncrement = getAuctionBidIncrement(auction)
 	const reserve = getAuctionReserve(auction)
@@ -133,7 +122,7 @@ function AuctionDetailRoute() {
 	const auctionDTag = getAuctionId(auction)
 	const auctionCoordinates = auctionDTag && auction ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 
-	const ended = endAt > 0 ? now >= endAt : false
+	const ended = countdown.isEnded
 	const { data: bidStats } = useAuctionBidStats(auctionId, startingBid, auctionCoordinates)
 	const currentPrice = bidStats?.currentPrice ?? startingBid
 	const bidsCount = bidStats?.count ?? 0
@@ -154,13 +143,6 @@ function AuctionDetailRoute() {
 			.filter((item) => item.id !== auctionId)
 			.slice(0, 5)
 	}, [auctionId, sellerAuctionsQuery.data])
-
-	useEffect(() => {
-		const timer = window.setInterval(() => {
-			setNow(Math.floor(Date.now() / 1000))
-		}, 1000)
-		return () => window.clearInterval(timer)
-	}, [])
 
 	useEffect(() => {
 		setBidAmountInput(String(minBid))
@@ -300,10 +282,13 @@ function AuctionDetailRoute() {
 									<div className="text-white/70 text-xs">Ends at</div>
 									<div className="font-semibold">{endAt ? new Date(endAt * 1000).toLocaleString() : 'N/A'}</div>
 								</div>
-								<div className="bg-black/35 border border-white/20 rounded p-2">
-									<div className="text-white/70 text-xs">Countdown</div>
-									<div className="font-semibold">{formatCountdown(secondsRemaining)}</div>
-								</div>
+								<AuctionCountdown
+									endAt={endAt}
+									countdown={countdown}
+									showSeconds
+									variant="panel"
+									label="Ends in"
+								/>
 							</div>
 
 							<div className="flex gap-2 items-center">
