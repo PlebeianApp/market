@@ -87,6 +87,15 @@ const APP_PUBKEY = getPublicKey(hexToBytes(APP_PRIVATE_KEY))
 
 const ndk = ndkActions.initialize([RELAY_URL])
 const devUsers = [devUser1, devUser2, devUser3, devUser4, devUser5]
+const QUICK_END_AUCTIONS_PER_USER = 1
+const QUICK_END_SECONDS = 75
+
+function setTagValue(tags: string[][], tagName: string, value: string) {
+	const tag = tags.find((currentTag) => currentTag[0] === tagName)
+	if (tag) {
+		tag[1] = value
+	}
+}
 
 async function seedData() {
 	const PRODUCTS_PER_USER = 10
@@ -280,6 +289,14 @@ async function seedData() {
 				keyScheme: 'hd_p2pk',
 				p2pkXpub: XPUB,
 			})
+
+			if (j < QUICK_END_AUCTIONS_PER_USER) {
+				const quickEndNow = Math.floor(Date.now() / 1000)
+				const quickEndAt = quickEndNow + QUICK_END_SECONDS + j * 5
+				const quickStartAt = quickEndNow - 60 * 60
+				setTagValue(auctionData.tags, 'start_at', String(quickStartAt))
+				setTagValue(auctionData.tags, 'end_at', String(quickEndAt))
+			}
 
 			const auctionEvent = await createAuctionEvent(signer, ndk, auctionData)
 			if (!auctionEvent) continue
