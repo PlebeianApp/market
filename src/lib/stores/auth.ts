@@ -171,15 +171,17 @@ export const authActions = {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
 
-		localStorage.setItem(NOSTR_LOCAL_SIGNER_KEY, localSigner.privateKey || '')
-		localStorage.setItem(NOSTR_CONNECT_KEY, bunkerUrl)
-
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 			const signer = new NDKNip46Signer(ndk, bunkerUrl, localSigner)
 			await signer.blockUntilReady()
 			ndkActions.setSigner(signer)
 			const user = await signer.user()
+
+			// Wait until user is logged in successfully before saving the bunkerURL/private key.
+
+			localStorage.setItem(NOSTR_LOCAL_SIGNER_KEY, localSigner.privateKey || '')
+			localStorage.setItem(NOSTR_CONNECT_KEY, bunkerUrl)
 
 			authStore.setState((state) => ({
 				...state,
