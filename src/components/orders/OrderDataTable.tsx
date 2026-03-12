@@ -166,13 +166,9 @@ export function OrderDataTable<TData>({
 			<div className="flex-1 overflow-y-auto pb-4">
 				{isLoading ? (
 					<div className="space-y-4 pt-4 px-4 xl:px-6">
-						{Array(7)
-							.fill(0)
-							.map((_, i) => (
-								<div key={i} className="rounded-md border border-gray-200 p-6 text-center">
-									Loading...
-								</div>
-							))}
+						<div className="p-6 text-center">
+							Loading...
+						</div>
 					</div>
 				) : table.getRowModel().rows?.length ? (
 					<div className="space-y-4 pt-4 px-4 xl:px-6">
