@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ArrowDownNarrowWide, ArrowUpNarrowWide, CheckCircle, Circle, Clock, Filter, Loader, XCircle } from 'lucide-react'
+import { ArrowDownNarrowWide, ArrowUpNarrowWide, CheckCircle, Circle, Clock, Filter, Loader, Loader2, XCircle } from 'lucide-react'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import type { ColumnDef, ColumnFiltersState, FilterFn, SortingState } from '@tanstack/react-table'
 import { flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable } from '@tanstack/react-table'
@@ -165,10 +165,9 @@ export function OrderDataTable<TData>({
 
 			<div className="flex-1 overflow-y-auto pb-4">
 				{isLoading ? (
-					<div className="space-y-4 pt-4 px-4 xl:px-6">
-						<div className="p-6 text-center">
-							Loading...
-						</div>
+					<div className="flex justify-center items-center h-full mt-8">
+						<Loader2 className="w-8 h-8 animate-spin text-primary" />
+						<p className="ml-2">Loading sales...</p>
 					</div>
 				) : table.getRowModel().rows?.length ? (
 					<div className="space-y-4 pt-4 px-4 xl:px-6">
