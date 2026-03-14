@@ -35,7 +35,11 @@ jobs:
 
       - name: Install nak
         run: |
-          go install github.com/fiatjaf/nak@latest
+          git clone --depth 1 https://github.com/fiatjaf/nak.git /tmp/nak
+          cd /tmp/nak
+          GOBIN="$(go env GOPATH)/bin"
+          mkdir -p "$GOBIN"
+          go build -o "$GOBIN/nak" .
           echo "nak installed at: $(which nak)"
 
       - name: Install dependencies
