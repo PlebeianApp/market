@@ -57,9 +57,11 @@ function App() {
 	const [error, setError] = useState<string | null>(null)
 	const [showUpdateDialog, setShowUpdateDialog] = useState(false)
 
-	// Register service worker and listen for updates
+	// Register service worker and listen for updates (production only —
+	// in development/test the SW's skipWaiting + clients.claim cycle causes
+	// non-deterministic page reloads that break Playwright navigation)
 	useEffect(() => {
-		if ('serviceWorker' in navigator && process.env.NODE_ENV !== 'development') {
+		if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
 			navigator.serviceWorker
 				.register('/sw.js')
 				.then((registration) => {
