@@ -1,0 +1,109 @@
+---
+- name: Deploy Market Frontend
+  hosts: local
+  become: true
+
+  vars:
+    app_name: market
+    app_user: c03rad0r
+    app_dir: /home/c03rad0r/market
+    bun_install_dir: /home/c03rad0r/.bun
+    env_file: '{{ app_dir }}/.env'
+
+  tasks:
+    - name: Ensure curl is installed
+      apt:
+        name: curl
+        state: present
+        update_cache: yes
+
+    - name: Install Bun if not installed
+      become_user: '{{ app_user }}'
+      shell: |
+        curl -fsSL https://bun.sh/install | bash
+      args:
+        creates: '{{ bun_install_dir }}/bin/bun'
+
+    - name: Ensure Bun is in PATH for systemd
+      copy:
+        dest: /etc/profile.d/bun.sh
+        content: 'export PATH="{{ bun_install_dir }}/bin:$PATH"'
+        mode: 0755
+
+    - name: Install dependencies
+      become_user: '{{ app_user }}'
+      environment:
+        PATH: '{{ bun_install_dir }}/bin:{{ ansible_env.PATH }}'
+      command: bun install
+      args:
+        chdir: '{{ app_dir }}'
+
+    - name: Ensure .env exists (copy from example if missing)
+      become_user: '{{ app_user }}'
+      copy:
+        src: '{{ app_dir }}/.env.example'
+        dest: '{{ app_dir }}/.env'
+        remote_src: yes
+        force: no
+      ignore_errors: yes
+
+    - name: Ensure PORT is set to 3000
+      become_user: '{{ app_user }}'
+      lineinfile:
+        path: '{{ app_dir }}/.env'
+        regexp: '^PORT='
+        line: 'PORT=3000'
+        create: yes
+
+    - name: Ensure APP_RELAY_URL default exists
+      become_user: '{{ app_user }}'
+      lineinfile:
+        path: '{{ app_dir }}/.env'
+        regexp: '^APP_RELAY_URL='
+        line: 'APP_RELAY_URL=ws://localhost:10547'
+        create: yes
+
+    - name: Build application
+      become_user: '{{ app_user }}'
+      environment:
+        PATH: '{{ bun_install_dir }}/bin:{{ ansible_env.PATH }}'
+      command: bun run build
+      args:
+        chdir: '{{ app_dir }}'
+
+    - name: Install systemd service
+      template:
+        src: templates/market.service.j2
+        dest: /etc/systemd/system/{{ app_name }}.service
+        mode: 0644
+
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable service
+      systemd:
+        name: '{{ app_name }}'
+        enabled: yes
+
+    - name: Restart service
+      systemd:
+        name: '{{ app_name }}'
+        state: restarted
+
+    - name: Print access instructions
+      debug:
+        msg:
+          - '✅ Deployment complete.'
+          - ''
+          - 'To verify service status:'
+          - '  systemctl status {{ app_name }}'
+          - ''
+          - 'To view live logs:'
+          - '  journalctl -u {{ app_name }} -f'
+          - ''
+          - 'To access the app locally:'
+          - '  http://localhost:3000'
+          - ''
+          - 'If running on a remote machine, use:'
+          - '  http://<server-ip>:3000'

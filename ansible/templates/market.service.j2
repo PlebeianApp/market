@@ -1,0 +1,16 @@
+[Unit]
+Description=Market Frontend
+After=network.target
+
+[Service]
+Type=simple
+User={{ app_user }}
+WorkingDirectory={{ app_dir }}
+Environment=PATH=/home/{{ app_user }}/.bun/bin:/usr/bin:/bin
+EnvironmentFile=-{{ app_dir }}/.env
+ExecStart=/home/{{ app_user }}/.bun/bin/bunx serve {{ app_dir }}/dist -l 3000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
