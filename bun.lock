@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "plebeian.market",
@@ -12,7 +13,7 @@
         "@nostr-dev-kit/ndk": "2.18.1",
         "@nostr-dev-kit/ndk-cache-dexie": "2.6.44",
         "@nostr-dev-kit/sessions": "^0.6.3",
-        "@nostr-dev-kit/wallet": "^0.8.10",
+        "@nostr-dev-kit/wallet": "1.0.0-beta.71",
         "@nostr-dev-kit/wot": "^0.3.6",
         "@radix-ui/react-accordion": "^1.2.12",
         "@radix-ui/react-avatar": "^1.1.11",
