@@ -1,10 +1,13 @@
 import { AuctionCard } from '@/components/AuctionCard'
 import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
+import { Badge } from '@/components/ui/badge'
 import { ImageCarousel } from '@/components/ImageCarousel'
 import { ImageViewerModal } from '@/components/ImageViewerModal'
 import { ItemGrid } from '@/components/ItemGrid'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { ndkActions } from '@/lib/stores/ndk'
 import { uiStore } from '@/lib/stores/ui'
@@ -42,8 +45,8 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { ArrowLeft, Clock, Gavel, Hash, Shield, Wallet } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { ArrowLeft, Gavel, Truck, UserRound } from 'lucide-react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 function useHeroBackground(imageUrl: string, className: string) {
@@ -62,6 +65,49 @@ function useHeroBackground(imageUrl: string, className: string) {
 			document.head.removeChild(style)
 		}
 	}, [imageUrl, className])
+}
+
+function formatSats(value: number): string {
+	return `${value.toLocaleString()} sats`
+}
+
+function formatMaybeDate(timestamp: number): string {
+	if (!timestamp) return 'N/A'
+	return new Date(timestamp * 1000).toLocaleString()
+}
+
+function shortenHex(value: string, left: number = 10, right: number = 8): string {
+	if (!value) return 'N/A'
+	if (value.length <= left + right + 1) return value
+	return `${value.slice(0, left)}...${value.slice(-right)}`
+}
+
+function ShopperStat({ label, value, helper }: { label: string; value: string; helper?: string }) {
+	return (
+		<div className="rounded-xl border border-zinc-200 bg-white px-4 py-4 shadow-sm">
+			<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{label}</p>
+			<p className="mt-2 text-2xl font-semibold tracking-tight text-zinc-950">{value}</p>
+			{helper && <p className="mt-2 text-sm leading-6 text-zinc-500">{helper}</p>}
+		</div>
+	)
+}
+
+function ShopperInfoRow({ label, value }: { label: string; value: ReactNode }) {
+	return (
+		<div className="flex items-start justify-between gap-4 border-b border-zinc-200/80 py-3 last:border-b-0">
+			<span className="text-sm font-medium text-zinc-500">{label}</span>
+			<span className="text-sm font-semibold text-right text-zinc-950">{value}</span>
+		</div>
+	)
+}
+
+function TechnicalDataRow({ label, value }: { label: string; value: ReactNode }) {
+	return (
+		<div className="rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3">
+			<p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{label}</p>
+			<div className="mt-1 break-all text-sm font-medium text-zinc-900">{value}</div>
+		</div>
+	)
 }
 
 export const Route = createFileRoute('/auctions/$auctionId')({
@@ -282,13 +328,7 @@ function AuctionDetailRoute() {
 									<div className="text-white/70 text-xs">Ends at</div>
 									<div className="font-semibold">{endAt ? new Date(endAt * 1000).toLocaleString() : 'N/A'}</div>
 								</div>
-								<AuctionCountdown
-									endAt={endAt}
-									countdown={countdown}
-									showSeconds
-									variant="panel"
-									label="Ends in"
-								/>
+								<AuctionCountdown endAt={endAt} countdown={countdown} showSeconds variant="panel" label="Ends in" />
 							</div>
 
 							<div className="flex gap-2 items-center">
@@ -314,197 +354,285 @@ function AuctionDetailRoute() {
 				</div>
 			</div>
 
-			<div className="px-4 lg:px-8 py-4 space-y-6">
-				<div className="bg-white border border-zinc-800 rounded-lg p-4">
-					<h2 className="text-lg font-semibold mb-3">Description</h2>
-					<p className="text-sm text-gray-700 whitespace-pre-wrap">{description || 'No description provided.'}</p>
-				</div>
+			<div className="mx-auto w-full max-w-7xl px-4 py-6">
+				<Tabs defaultValue="overview" className="w-full">
+					<TabsList className="w-full h-auto flex flex-wrap justify-start gap-2 bg-transparent p-0">
+						<TabsTrigger
+							value="overview"
+							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+						>
+							Overview
+						</TabsTrigger>
+						<TabsTrigger
+							value="description"
+							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+						>
+							Description
+						</TabsTrigger>
+						<TabsTrigger
+							value="bids"
+							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+						>
+							Bids
+						</TabsTrigger>
+						<TabsTrigger
+							value="seller"
+							className="rounded-none px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black"
+						>
+							Seller
+						</TabsTrigger>
+					</TabsList>
 
-				<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-					<div className="bg-white border border-zinc-800 rounded-lg p-4">
-						<h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-							<Hash className="w-4 h-4" />
-							Auction Details
-						</h2>
-						<div className="space-y-2 text-sm">
-							<div className="flex justify-between gap-3">
-								<span className="text-gray-500">Type</span>
-								<span className="font-medium">{auctionType}</span>
-							</div>
-							<div className="flex justify-between gap-3">
-								<span className="text-gray-500">Currency</span>
-								<span className="font-medium">{currency}</span>
-							</div>
-							<div className="flex justify-between gap-3">
-								<span className="text-gray-500">Starting bid</span>
-								<span className="font-medium">{startingBid.toLocaleString()} sats</span>
-							</div>
-							<div className="flex justify-between gap-3">
-								<span className="text-gray-500">Bid increment</span>
-								<span className="font-medium">{bidIncrement.toLocaleString()} sats</span>
-							</div>
-							<div className="flex justify-between gap-3">
-								<span className="text-gray-500">Reserve</span>
-								<span className="font-medium">{reserve.toLocaleString()} sats</span>
-							</div>
-							<div className="flex justify-between gap-3">
-								<span className="text-gray-500">Start time</span>
-								<span className="font-medium">{startAt ? new Date(startAt * 1000).toLocaleString() : 'N/A'}</span>
-							</div>
-							<div className="flex justify-between gap-3">
-								<span className="text-gray-500">End time</span>
-								<span className="font-medium">{endAt ? new Date(endAt * 1000).toLocaleString() : 'N/A'}</span>
-							</div>
-						</div>
-					</div>
-
-					<div className="bg-white border border-zinc-800 rounded-lg p-4">
-						<h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-							<Shield className="w-4 h-4" />
-							Settlement & Metadata
-						</h2>
-						<div className="space-y-2 text-sm">
-							<div className="flex justify-between gap-3">
-								<span className="text-gray-500">Escrow pubkey</span>
-								<span className="font-medium break-all">{escrowPubkey || 'N/A'}</span>
-							</div>
-							<div className="flex justify-between gap-3">
-								<span className="text-gray-500">Key scheme</span>
-								<span className="font-medium">{keyScheme}</span>
-							</div>
-							{p2pkXpub && (
-								<div className="flex justify-between gap-3">
-									<span className="text-gray-500">P2PK xpub</span>
-									<span className="font-medium break-all">{p2pkXpub}</span>
-								</div>
-							)}
-							<div className="flex justify-between gap-3">
-								<span className="text-gray-500">Settlement policy</span>
-								<span className="font-medium">{settlementPolicy || 'N/A'}</span>
-							</div>
-							<div className="flex justify-between gap-3">
-								<span className="text-gray-500">Schema</span>
-								<span className="font-medium">{schema || 'N/A'}</span>
-							</div>
-							<div className="pt-2">
-								<div className="text-gray-500 mb-1 flex items-center gap-2">
-									<Wallet className="w-4 h-4" />
-									Trusted mints
-								</div>
-								{trustedMints.length === 0 ? (
-									<div className="text-gray-600">No mints declared</div>
-								) : (
-									<ul className="list-disc list-inside space-y-1 text-gray-700">
-										{trustedMints.map((mint) => (
-											<li key={mint} className="break-all">
-												{mint}
-											</li>
-										))}
-									</ul>
-								)}
-							</div>
-						</div>
-					</div>
-				</div>
-
-				<div className="bg-white border border-zinc-800 rounded-lg p-4">
-					<h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-						<Clock className="w-4 h-4" />
-						Live Bids
-					</h2>
-					<p className="text-xs text-gray-500 mb-3">Updates every 5 seconds.</p>
-					{newestBids.length === 0 ? (
-						<div className="text-sm text-gray-600">No bids yet.</div>
-					) : (
-						<div className="space-y-2">
-							{newestBids.map((bidEvent) => (
-								<div key={bidEvent.id} className="border rounded p-3 bg-zinc-50">
-									<div className="flex items-center justify-between gap-2">
-										<div className="font-semibold">{getBidAmount(bidEvent).toLocaleString()} sats</div>
-										<div className="text-xs uppercase bg-zinc-200 px-2 py-0.5 rounded">{getBidStatus(bidEvent)}</div>
-									</div>
-									<div className="mt-2 text-xs text-gray-600 flex flex-col gap-1">
-										<div className="flex items-center gap-2">
-											<span className="text-gray-500">Bidder:</span>
-											<UserWithAvatar pubkey={bidEvent.pubkey} size="sm" disableLink={true} />
-										</div>
-										<div>
-											<span className="text-gray-500">Mint:</span> {getBidMint(bidEvent) || 'N/A'}
-										</div>
-										<div>
-											<span className="text-gray-500">Key scheme:</span>{' '}
-											{bidEvent.tags.find((tag) => tag[0] === 'key_scheme')?.[1] || 'static_p2pk'}
-										</div>
-										<div>
-											<span className="text-gray-500">Locktime:</span>{' '}
-											{bidEvent.tags.find((tag) => tag[0] === 'locktime')?.[1]
-												? new Date(parseInt(bidEvent.tags.find((tag) => tag[0] === 'locktime')?.[1] || '0', 10) * 1000).toLocaleString()
-												: 'N/A'}
-										</div>
-										<div>
-											<span className="text-gray-500">Time:</span>{' '}
-											{bidEvent.created_at ? new Date(bidEvent.created_at * 1000).toLocaleString() : 'N/A'}
-										</div>
-										<div className="break-all">
-											<span className="text-gray-500">Bid event:</span> {bidEvent.id}
+					<TabsContent value="overview" className="mt-4 border-t-3 border-secondary bg-tertiary">
+						<div className="space-y-6 rounded-lg bg-white p-6 shadow-md">
+							<div className="grid gap-4 lg:grid-cols-[1.25fr_0.95fr]">
+								<div className="space-y-4">
+									<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
+										<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Auction snapshot</p>
+										<p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-700">{summary || 'No summary provided.'}</p>
+										<div className="mt-4 flex flex-wrap gap-2">
+											<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
+												{auctionType}
+											</Badge>
+											<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
+												{currency}
+											</Badge>
+											<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
+												{bidsCount} {bidsCount === 1 ? 'bid' : 'bids'}
+											</Badge>
 										</div>
 									</div>
-								</div>
-							))}
-						</div>
-					)}
-				</div>
 
-				<div className="bg-white border border-zinc-800 rounded-lg p-4">
-					<h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-						<Gavel className="w-4 h-4" />
-						Other Info
-					</h2>
-					<div className="space-y-3 text-sm">
-						<div>
-							<div className="text-gray-500 mb-1">Categories</div>
-							<div className="flex flex-wrap gap-2">
-								{categories.length > 0
-									? categories.map((category) => (
-											<span key={category} className="px-2 py-1 bg-gray-100 rounded">
-												{category}
-											</span>
-										))
-									: 'No categories'}
+									<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+										<ShopperStat label="Current price" value={formatSats(currentPrice)} helper="The highest valid bid currently visible." />
+										<ShopperStat label="Opening bid" value={formatSats(startingBid)} helper="Where the auction started." />
+										<ShopperStat label="Bid increment" value={formatSats(bidIncrement)} helper="Minimum raise required between bids." />
+										<ShopperStat
+											label="Reserve"
+											value={formatSats(reserve)}
+											helper="Seller threshold that decides whether the winner can settle."
+										/>
+										<ShopperStat label="Starts" value={formatMaybeDate(startAt)} helper="Bidding window opening time." />
+										<ShopperStat label="Ends" value={formatMaybeDate(endAt)} helper="Bidding window closing time." />
+									</div>
+								</div>
+
+								<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+									<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+										<UserRound className="h-4 w-4" />
+										Seller & fulfilment
+									</div>
+									<div className="mt-4 space-y-1">
+										<ShopperInfoRow label="Seller" value={<UserWithAvatar pubkey={auction.pubkey} disableLink={true} />} />
+										<ShopperInfoRow
+											label="Categories"
+											value={
+												categories.length > 0 ? (
+													<span className="inline-flex flex-wrap justify-end gap-1.5">
+														{categories.slice(0, 3).map((category) => (
+															<span key={category} className="rounded-full bg-zinc-100 px-2 py-1 text-xs font-semibold text-zinc-700">
+																{category}
+															</span>
+														))}
+													</span>
+												) : (
+													'None listed'
+												)
+											}
+										/>
+										<ShopperInfoRow
+											label="Shipping options"
+											value={shippingOptions.length > 0 ? `${shippingOptions.length} listed` : 'None listed'}
+										/>
+									</div>
+
+									<Accordion type="single" collapsible className="mt-5 rounded-xl border border-zinc-200 px-4">
+										<AccordionItem value="settlement" className="border-none">
+											<AccordionTrigger className="py-4 text-sm font-semibold text-zinc-900 hover:no-underline">
+												Settlement & technical details
+											</AccordionTrigger>
+											<AccordionContent className="space-y-3 pb-4">
+												<TechnicalDataRow label="Escrow pubkey" value={escrowPubkey || 'N/A'} />
+												<TechnicalDataRow label="Key scheme" value={keyScheme} />
+												{p2pkXpub && <TechnicalDataRow label="P2PK xpub" value={p2pkXpub} />}
+												<TechnicalDataRow label="Settlement policy" value={settlementPolicy || 'N/A'} />
+												<TechnicalDataRow label="Schema" value={schema || 'N/A'} />
+												<TechnicalDataRow
+													label="Trusted mints"
+													value={
+														trustedMints.length > 0 ? (
+															<ul className="space-y-1">
+																{trustedMints.map((mint) => (
+																	<li key={mint}>{mint}</li>
+																))}
+															</ul>
+														) : (
+															'No mints declared'
+														)
+													}
+												/>
+											</AccordionContent>
+										</AccordionItem>
+									</Accordion>
+								</div>
 							</div>
 						</div>
-						<div>
-							<div className="text-gray-500 mb-1">Shipping options</div>
-							{shippingOptions.length > 0 ? (
-								<ul className="list-disc list-inside text-gray-700">
-									{shippingOptions.map((option) => (
-										<li key={option} className="break-all">
-											{option}
-										</li>
-									))}
-								</ul>
+					</TabsContent>
+
+					<TabsContent value="description" className="mt-4 border-t-3 border-secondary bg-tertiary">
+						<div className="grid gap-6 rounded-lg bg-white p-6 shadow-md lg:grid-cols-[1.4fr_0.8fr]">
+							<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+								<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Description</p>
+								{summary && <p className="mt-3 border-b border-zinc-200 pb-4 text-sm italic text-zinc-500">{summary}</p>}
+								<p className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-zinc-700">
+									{description || 'No description provided.'}
+								</p>
+							</div>
+
+							<div className="space-y-4">
+								<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
+									<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+										<Gavel className="h-4 w-4" />
+										Categories
+									</div>
+									<div className="mt-4 flex flex-wrap gap-2">
+										{categories.length > 0 ? (
+											categories.map((category) => (
+												<span
+													key={category}
+													className="rounded-full border border-zinc-300 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700"
+												>
+													{category}
+												</span>
+											))
+										) : (
+											<p className="text-sm text-zinc-500">No categories listed.</p>
+										)}
+									</div>
+								</div>
+
+								<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
+									<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+										<Truck className="h-4 w-4" />
+										Shipping options
+									</div>
+									<div className="mt-4">
+										{shippingOptions.length > 0 ? (
+											<ul className="space-y-2 text-sm text-zinc-700">
+												{shippingOptions.map((option) => (
+													<li key={option} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 break-all">
+														{option}
+													</li>
+												))}
+											</ul>
+										) : (
+											<p className="text-sm text-zinc-500">No shipping options listed.</p>
+										)}
+									</div>
+								</div>
+							</div>
+						</div>
+					</TabsContent>
+
+					<TabsContent value="bids" className="mt-4 border-t-3 border-secondary bg-tertiary">
+						<div className="space-y-5 rounded-lg bg-white p-6 shadow-md">
+							<div className="flex flex-wrap items-center justify-between gap-3">
+								<div>
+									<h2 className="text-xl font-semibold text-zinc-950">Live bids</h2>
+									<p className="mt-1 text-sm text-zinc-500">
+										Updates every 5 seconds. Bid amounts stay up front; event wiring lives behind each bid&apos;s details toggle.
+									</p>
+								</div>
+								<Badge variant="outline" className="border-zinc-300 bg-zinc-50 text-zinc-700">
+									{newestBids.length} recorded
+								</Badge>
+							</div>
+
+							{newestBids.length === 0 ? (
+								<div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-5 py-6 text-sm text-zinc-500">
+									No bids yet.
+								</div>
 							) : (
-								<div className="text-gray-600">No shipping options listed</div>
+								<div className="space-y-4">
+									{newestBids.map((bidEvent) => {
+										const locktime = bidEvent.tags.find((tag) => tag[0] === 'locktime')?.[1]
+										const bidKeyScheme = bidEvent.tags.find((tag) => tag[0] === 'key_scheme')?.[1] || 'static_p2pk'
+										return (
+											<div key={bidEvent.id} className="rounded-xl border border-zinc-200 bg-zinc-50/70 px-4 py-4">
+												<div className="flex flex-wrap items-start justify-between gap-3">
+													<div>
+														<p className="text-2xl font-semibold tracking-tight text-zinc-950">{formatSats(getBidAmount(bidEvent))}</p>
+														<p className="mt-1 text-sm text-zinc-500">
+															Recorded {bidEvent.created_at ? new Date(bidEvent.created_at * 1000).toLocaleString() : 'at an unknown time'}
+														</p>
+													</div>
+													<Badge variant="outline" className="border-zinc-300 bg-white text-zinc-700">
+														{getBidStatus(bidEvent)}
+													</Badge>
+												</div>
+
+												<div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-zinc-700">
+													<UserWithAvatar pubkey={bidEvent.pubkey} size="sm" disableLink={true} />
+													<span className="text-zinc-400">•</span>
+													<span>{getBidMint(bidEvent) || 'No mint declared'}</span>
+												</div>
+
+												<Accordion type="single" collapsible className="mt-4 rounded-xl border border-zinc-200 bg-white px-4">
+													<AccordionItem value={`bid-${bidEvent.id}`} className="border-none">
+														<AccordionTrigger className="py-4 text-sm font-semibold text-zinc-900 hover:no-underline">
+															Bid event details
+														</AccordionTrigger>
+														<AccordionContent className="space-y-3 pb-4">
+															<TechnicalDataRow label="Bidder pubkey" value={bidEvent.pubkey} />
+															<TechnicalDataRow label="Mint" value={getBidMint(bidEvent) || 'N/A'} />
+															<TechnicalDataRow label="Key scheme" value={bidKeyScheme} />
+															<TechnicalDataRow
+																label="Locktime"
+																value={locktime ? new Date(parseInt(locktime, 10) * 1000).toLocaleString() : 'N/A'}
+															/>
+															<TechnicalDataRow label="Bid event ID" value={bidEvent.id} />
+														</AccordionContent>
+													</AccordionItem>
+												</Accordion>
+											</div>
+										)
+									})}
+								</div>
 							)}
 						</div>
-						<div>
-							<div className="text-gray-500 mb-1">Seller</div>
-							<UserWithAvatar pubkey={auction.pubkey} />
-						</div>
-					</div>
-				</div>
+					</TabsContent>
 
-				{moreFromSeller.length > 0 && (
-					<div>
-						<h2 className="text-xl font-semibold mb-4">More from this seller</h2>
-						<ItemGrid className="gap-4 sm:gap-8">
-							{moreFromSeller.map((item) => (
-								<AuctionCard key={item.id} auction={item} />
-							))}
-						</ItemGrid>
-					</div>
-				)}
+					<TabsContent value="seller" className="mt-4 border-t-3 border-secondary bg-tertiary">
+						<div className="rounded-lg bg-white p-6 shadow-md">
+							<div className="rounded-xl border border-zinc-200 bg-zinc-50 px-5 py-5">
+								<div className="flex items-center gap-2 text-sm font-semibold text-zinc-900">
+									<UserRound className="h-4 w-4" />
+									Seller
+								</div>
+								<div className="mt-4">
+									<UserWithAvatar pubkey={auction.pubkey} className="items-center" />
+								</div>
+								<div className="mt-5 space-y-1">
+									<ShopperInfoRow label="Seller key" value={shortenHex(auction.pubkey)} />
+									<ShopperInfoRow label="Auction status" value={ended ? 'Ended' : 'Live'} />
+									<ShopperInfoRow label="Countdown" value={countdown.displayLabel} />
+								</div>
+							</div>
+						</div>
+					</TabsContent>
+				</Tabs>
 			</div>
+
+			{moreFromSeller.length > 0 && (
+				<div className="flex flex-col gap-4 p-4">
+					<h2 className="font-heading text-2xl text-center lg:text-left">More from this seller</h2>
+					<ItemGrid className="gap-4 sm:gap-6">
+						{moreFromSeller.map((item) => (
+							<AuctionCard key={item.id} auction={item} />
+						))}
+					</ItemGrid>
+				</div>
+			)}
 
 			<ImageViewerModal
 				isOpen={imageViewerOpen}
