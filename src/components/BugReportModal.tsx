@@ -193,9 +193,8 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 			}
 			console.log('NDK instance obtained:', !!ndk)
 
-			// Ensure bugs.plebeian.market relay is added for bug reports
-			const relayAdded = ndkActions.addSingleRelay(BUG_RELAY)
-			console.log('Bug relay added:', relayAdded)
+			// Bug relay is used via dedicated relay set - not added to main pool
+			console.log('Using dedicated bug relay set for publishing')
 
 			// Check if we have a signer
 			if (!ndk.signer) {

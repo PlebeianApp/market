@@ -47,7 +47,7 @@ export const DEFAULT_PUBLIC_RELAYS: string[] = [
 // Keep for backward compatibility (deprecated - use DEFAULT_PUBLIC_RELAYS instead)
 export const defaultRelaysUrls: string[] = DEFAULT_PUBLIC_RELAYS
 
-// Bug reports relay - always writable even in staging
+// Bug reports relay - used via dedicated relay set, not added to main NDK pool
 export const BUG_RELAY = 'wss://bugs.plebeian.market/'
 
 // Dedicated zap detection relays
