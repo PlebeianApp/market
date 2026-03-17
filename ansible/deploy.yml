@@ -91,6 +91,22 @@
       args:
         chdir: '{{ app_dir }}'
 
+    - name: Run startup initialization
+      become_user: '{{ app_user }}'
+      environment:
+        PATH: '{{ bun_install_dir }}/bin:{{ ansible_env.PATH }}'
+      command: bun run startup
+      args:
+        chdir: '{{ app_dir }}'
+
+    - name: Seed marketplace data (shipping, products, etc.)
+      become_user: '{{ app_user }}'
+      environment:
+        PATH: '{{ bun_install_dir }}/bin:{{ ansible_env.PATH }}'
+      command: bun run seed
+      args:
+        chdir: '{{ app_dir }}'
+
     - name: Install systemd service
       template:
         src: templates/market.service.j2
