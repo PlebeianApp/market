@@ -1,6 +1,7 @@
 [Unit]
-Description=Market Frontend
-After=network.target
+Description=Plebeian Market (Bun Fullstack)
+After=network.target nak.service
+Requires=nak.service
 
 [Service]
 Type=simple
@@ -8,7 +9,7 @@ User={{ app_user }}
 WorkingDirectory={{ app_dir }}
 Environment=PATH=/home/{{ app_user }}/.bun/bin:/usr/bin:/bin
 EnvironmentFile=-{{ app_dir }}/.env
-ExecStart=/home/{{ app_user }}/.bun/bin/bunx serve {{ app_dir }}/dist -l 3000
+ExecStart=/bin/bash -c "cd {{ app_dir }} && /home/{{ app_user }}/.bun/bin/bun run startup || true && /home/{{ app_user }}/.bun/bin/bun start"
 Restart=always
 RestartSec=5
 

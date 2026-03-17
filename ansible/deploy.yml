@@ -63,6 +63,26 @@
         line: 'APP_RELAY_URL=ws://localhost:10547'
         create: yes
 
+    - name: Read existing APP_PRIVATE_KEY
+      become_user: '{{ app_user }}'
+      shell: "grep '^APP_PRIVATE_KEY=' {{ app_dir }}/.env | cut -d '=' -f2 || true"
+      register: existing_key
+      changed_when: false
+
+    - name: Generate private key if missing or invalid
+      become_user: '{{ app_user }}'
+      shell: 'openssl rand -hex 32'
+      register: generated_key
+      when: existing_key.stdout | length != 64
+
+    - name: Ensure valid APP_PRIVATE_KEY exists
+      become_user: '{{ app_user }}'
+      lineinfile:
+        path: '{{ app_dir }}/.env'
+        regexp: '^APP_PRIVATE_KEY='
+        line: 'APP_PRIVATE_KEY={{ (existing_key.stdout if existing_key.stdout | length == 64 else generated_key.stdout) }}'
+        create: yes
+
     - name: Build application
       become_user: '{{ app_user }}'
       environment:
@@ -76,19 +96,59 @@
         src: templates/market.service.j2
         dest: /etc/systemd/system/{{ app_name }}.service
         mode: 0644
+      notify:
+        - Reload systemd
+        - Restart market
 
+    - name: Install nak relay service
+      template:
+        src: templates/nak.service.j2
+        dest: /etc/systemd/system/nak.service
+        mode: 0644
+      notify:
+        - Reload systemd
+        - Restart nak
+
+    - name: Install nak binary to /usr/local/bin
+      copy:
+        src: '{{ app_dir }}/nak-v0.19.0-linux-amd64'
+        dest: '/usr/local/bin/nak'
+        mode: '0755'
+        remote_src: yes
+
+  handlers:
     - name: Reload systemd
       systemd:
         daemon_reload: yes
+
+    - name: Restart market
+      systemd:
+        name: '{{ app_name }}'
+        state: restarted
+
+    - name: Restart nak
+      systemd:
+        name: 'nak'
+        state: restarted
 
     - name: Enable service
       systemd:
         name: '{{ app_name }}'
         enabled: yes
 
+    - name: Enable nak relay service
+      systemd:
+        name: 'nak'
+        enabled: yes
+
     - name: Restart service
       systemd:
         name: '{{ app_name }}'
+        state: restarted
+
+    - name: Restart nak relay
+      systemd:
+        name: 'nak'
         state: restarted
 
     - name: Print access instructions

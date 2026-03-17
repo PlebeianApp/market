@@ -1,0 +1,14 @@
+[Unit]
+Description=Nak Nostr Relay
+After=network.target
+
+[Service]
+Type=simple
+User={{ app_user }}
+WorkingDirectory={{ app_dir }}
+ExecStart=/usr/local/bin/nak serve
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

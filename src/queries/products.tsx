@@ -37,6 +37,7 @@ const DELETED_PRODUCTS_STORAGE_KEY = 'plebeian_deleted_product_ids'
 // Map of d-tag -> deletion timestamp (unix seconds)
 const loadDeletedProductIds = (): Map<string, number> => {
 	try {
+		if (typeof localStorage === 'undefined') return new Map()
 		const stored = localStorage.getItem(DELETED_PRODUCTS_STORAGE_KEY)
 		if (stored) {
 			const parsed = JSON.parse(stored)
