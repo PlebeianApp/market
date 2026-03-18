@@ -50,6 +50,21 @@ async function fillAndAdd(page: Page, inputId: string, value: string) {
 	await input.locator('../..').getByRole('button', { name: 'Add' }).click()
 }
 
+async function expectInputCleared(page: Page, inputId: string) {
+	await expect(page.locator(`#${inputId}`)).toHaveValue('', { timeout: 15_000 })
+}
+
+async function clickDestructiveButtonForText(page: Page, text: string) {
+	const rowText = page.getByText(text)
+	await expect(rowText).toBeVisible({ timeout: 15_000 })
+
+	const row = rowText.locator('xpath=ancestor::div[contains(@class,"flex") and contains(@class,"items-center")][1]')
+	await row.locator('button[class*="destructive"]').click()
+	await expect(rowText).not.toBeVisible({ timeout: 15_000 })
+}
+
+const compactPubkey = (pubkey: string) => `${pubkey.slice(0, 8)}...${pubkey.slice(-8)}`
+
 // --- App Settings (Miscellaneous) ---
 // Note: The app-miscelleneous page is owner-only. devUser1 is an admin but NOT the owner
 // (the owner is TEST_APP_PUBLIC_KEY). So devUser1 sees "You don't have permission".
@@ -117,20 +132,12 @@ test.describe('Featured Items', () => {
 		await gotoAdminRoute(merchantPage, '/dashboard/app-settings/featured-items')
 		await expectPageHeading(merchantPage, 'Featured Items')
 
-		// First add a product so we have something to remove
-		const productCoords = `30402:${devUser1.pk}:nostr-t-shirt`
+		// Add a uniquely identifiable coordinate so the remove assertion targets the exact row
+		const dTag = `e2e-remove-${Date.now()}`
+		const productCoords = `30402:${devUser1.pk}:${dTag}`
 		await fillAndAdd(merchantPage, 'newProduct', productCoords)
-
-		// Wait for at least one remove button
-		const removeButtons = merchantPage.locator('button[class*="destructive"]')
-		await expect(removeButtons.first()).toBeVisible({ timeout: 15_000 })
-		const countAfterAdd = await removeButtons.count()
-
-		// Remove the last item
-		await removeButtons.last().click()
-
-		// One fewer remove button than after the add
-		await expect(removeButtons).toHaveCount(countAfterAdd - 1, { timeout: 15_000 })
+		await expectInputCleared(merchantPage, 'newProduct')
+		await clickDestructiveButtonForText(merchantPage, `ID: ${dTag}`)
 	})
 
 	test('collections tab shows empty state', async ({ merchantPage }) => {
@@ -203,18 +210,18 @@ test.describe('Blacklists', () => {
 		await gotoAdminRoute(merchantPage, '/dashboard/app-settings/blacklists')
 		await expectPageHeading(merchantPage, 'Blacklists')
 
-		// First add a user so we have something to remove
-		await fillAndAdd(merchantPage, 'newUser', devUser2.pk)
+		const userLabel = `Pubkey: ${compactPubkey(devUser2.pk)}`
+		if (
+			!(await merchantPage
+				.getByText(userLabel)
+				.isVisible()
+				.catch(() => false))
+		) {
+			await fillAndAdd(merchantPage, 'newUser', devUser2.pk)
+			await expectInputCleared(merchantPage, 'newUser')
+		}
 
-		const removeButtons = merchantPage.locator('button[class*="destructive"]')
-		await expect(removeButtons.first()).toBeVisible({ timeout: 15_000 })
-		const countAfterAdd = await removeButtons.count()
-
-		// Remove the last item
-		await removeButtons.last().click()
-
-		// One fewer remove button than after the add
-		await expect(removeButtons).toHaveCount(countAfterAdd - 1, { timeout: 15_000 })
+		await clickDestructiveButtonForText(merchantPage, userLabel)
 	})
 
 	test('can add a product to blacklist by coordinate', async ({ merchantPage }) => {

@@ -758,6 +758,18 @@ export const fetchOrderById = async (orderId: string): Promise<OrderWithRelatedE
 export const useOrderById = (orderId: string) => {
 	const queryClient = useQueryClient()
 	const ndk = ndkActions.getNDK()
+	const orderQuery = useQuery({
+		queryKey: orderKeys.details(orderId),
+		queryFn: () => fetchOrderById(orderId),
+		enabled: !!orderId,
+		staleTime: Infinity,
+		refetchOnMount: true,
+		refetchOnWindowFocus: false,
+		refetchOnReconnect: false,
+	})
+
+	const fetchedOrderEventId = orderQuery.data?.order.id
+	const logicalOrderId = orderQuery.data?.order.tags.find((tag) => tag[0] === 'order')?.[1]
 
 	// Set up a live subscription to monitor events for this order
 	useEffect(() => {
@@ -773,16 +785,19 @@ export const useOrderById = (orderId: string) => {
 		})
 
 		const refreshOrderDetails = () => {
-			queryClient.invalidateQueries({ queryKey: orderKeys.details(orderId) })
+			void queryClient.invalidateQueries({ queryKey: orderKeys.details(orderId) })
+			void queryClient.refetchQueries({ queryKey: orderKeys.details(orderId) })
 		}
 
 		// Event handler for all events related to this order
 		subscription.on('event', (newEvent) => {
-			// Check if this event is related to our order
-			const orderTag = newEvent.tags.find((tag) => tag[0] === 'order')
-			if (!orderTag?.[1] || orderTag[1] !== orderId) return
+			const taggedOrderId = newEvent.tags.find((tag) => tag[0] === 'order')?.[1]
+			const matchesRouteId = newEvent.id === orderId || taggedOrderId === orderId
+			const matchesFetchedOrder = !!taggedOrderId && (taggedOrderId === logicalOrderId || taggedOrderId === fetchedOrderEventId)
 
 			// Any related event should refresh order details (status, shipping, payment requests/receipts, messages)
+			if (!matchesRouteId && !matchesFetchedOrder) return
+
 			refreshOrderDetails()
 		})
 
@@ -790,17 +805,9 @@ export const useOrderById = (orderId: string) => {
 		return () => {
 			subscription.stop()
 		}
-	}, [orderId, ndk, queryClient])
+	}, [fetchedOrderEventId, logicalOrderId, ndk, orderId, queryClient])
 
-	return useQuery({
-		queryKey: orderKeys.details(orderId),
-		queryFn: () => fetchOrderById(orderId),
-		enabled: !!orderId,
-		staleTime: Infinity,
-		refetchOnMount: true,
-		refetchOnWindowFocus: false,
-		refetchOnReconnect: false,
-	})
+	return orderQuery
 }
 
 /**

@@ -1,4 +1,4 @@
-import { defaultRelaysUrls, ZAP_RELAYS, DEFAULT_PUBLIC_RELAYS, MAIN_RELAY_BY_STAGE, BUG_RELAY, type Stage } from '@/lib/constants'
+import { defaultRelaysUrls, ZAP_RELAYS, DEFAULT_PUBLIC_RELAYS, MAIN_RELAY_BY_STAGE, type Stage } from '@/lib/constants'
 import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
 import { fetchUserRelayListWithPreferences } from '@/queries/relay-list'
 import type { NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nostr-dev-kit/ndk'
@@ -97,7 +97,7 @@ export function getWriteRelays(): string[] {
 	const stage = getCurrentStage()
 	if (stage === 'staging') {
 		const mainRelay = getMainRelay()
-		return mainRelay ? [mainRelay, BUG_RELAY] : [BUG_RELAY]
+		return mainRelay ? [mainRelay] : []
 	}
 	if (stage === 'development') {
 		const mainRelay = getMainRelay()

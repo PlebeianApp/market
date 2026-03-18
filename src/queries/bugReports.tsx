@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { ndkActions } from '@/lib/stores/ndk'
 import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
+import { NDKRelaySet } from '@nostr-dev-kit/ndk'
 
 export interface BugReport {
 	id: string
@@ -26,9 +27,6 @@ export const fetchBugReports = async (limit: number = 20, until?: number): Promi
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	// Ensure bugs.plebeian.market relay is added
-	ndkActions.addSingleRelay('wss://bugs.plebeian.market/')
-
 	const filter: NDKFilter = {
 		kinds: [1], // kind 1 is text notes
 		'#t': ['plebian2beta'], // tag filter for plebian2beta
@@ -36,7 +34,9 @@ export const fetchBugReports = async (limit: number = 20, until?: number): Promi
 		...(until && { until }),
 	}
 
-	const events = await ndk.fetchEvents(filter)
+	// Use a dedicated relay set for bug reports instead of adding to the main pool
+	const bugRelaySet = NDKRelaySet.fromRelayUrls(['wss://bugs.plebeian.market/'], ndk)
+	const events = await ndk.fetchEvents(filter, { subId: 'bug-reports' }, bugRelaySet)
 	const bugReports = Array.from(events)
 		.map(
 			(event): BugReport => ({

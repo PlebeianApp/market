@@ -266,8 +266,8 @@ export const useUpdateOrderStatusMutation = () => {
 				await queryClient.invalidateQueries({ queryKey: orderKeys.bySeller(currentUserPubkey) })
 			}
 
-			// Trigger a refetch to show updated status
-			queryClient.refetchQueries({ queryKey: orderKeys.details(params.orderEventId) })
+			// Trigger a refetch to show updated status before the mutation fully settles.
+			await queryClient.refetchQueries({ queryKey: orderKeys.details(params.orderEventId) })
 		},
 		onError: (error) => {
 			console.error('Failed to update order status:', error)
