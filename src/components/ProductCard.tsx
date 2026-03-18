@@ -27,6 +27,7 @@ export function ProductCard({ product, currentUserPubkey: propUserPubkey }: { pr
 	const stockQuantity = stockTag ? parseInt(stockTag[1]) : undefined
 	const visibilityTag = getProductVisibility(product)
 	const visibility = visibilityTag?.[1] || 'on-sale'
+	const isNSFW = isNSFWProduct(product)
 	// Out of stock if stock is explicitly 0 or undefined (no stock tag), but not for pre-order items
 	const isOutOfStock = visibility !== 'pre-order' && (stockQuantity === undefined || stockQuantity === 0)
 	// Initialize ownership based on prop if provided (avoids race condition)
