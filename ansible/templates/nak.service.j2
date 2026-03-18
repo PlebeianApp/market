@@ -6,6 +6,8 @@ After=network.target
 Type=simple
 User={{ app_user }}
 WorkingDirectory={{ app_dir }}
+Environment=NAK_HOST=0.0.0.0
+Environment=NAK_PORT=10547
 ExecStart=/usr/local/bin/nak serve
 Restart=always
 RestartSec=5

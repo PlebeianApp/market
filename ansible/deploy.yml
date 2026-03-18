@@ -91,21 +91,6 @@
       args:
         chdir: '{{ app_dir }}'
 
-    - name: Run startup initialization
-      become_user: '{{ app_user }}'
-      environment:
-        PATH: '{{ bun_install_dir }}/bin:{{ ansible_env.PATH }}'
-      command: bun run startup
-      args:
-        chdir: '{{ app_dir }}'
-
-    - name: Seed marketplace data (shipping, products, etc.)
-      become_user: '{{ app_user }}'
-      environment:
-        PATH: '{{ bun_install_dir }}/bin:{{ ansible_env.PATH }}'
-      command: bun run seed
-      args:
-        chdir: '{{ app_dir }}'
 
     - name: Install systemd service
       template:
@@ -131,6 +116,38 @@
         dest: '/usr/local/bin/nak'
         mode: '0755'
         remote_src: yes
+
+    - name: Reload systemd after installing services
+      systemd:
+        daemon_reload: yes
+
+    - name: Restart nak relay immediately
+      systemd:
+        name: nak
+        state: restarted
+        enabled: yes
+
+    - name: Wait for relay to be available
+      wait_for:
+        host: 127.0.0.1
+        port: 10547
+        timeout: 15
+
+    - name: Run startup initialization
+      become_user: '{{ app_user }}'
+      environment:
+        PATH: '{{ bun_install_dir }}/bin:{{ ansible_env.PATH }}'
+      command: bun run startup
+      args:
+        chdir: '{{ app_dir }}'
+
+    - name: Seed marketplace data (shipping, products, etc.)
+      become_user: '{{ app_user }}'
+      environment:
+        PATH: '{{ bun_install_dir }}/bin:{{ ansible_env.PATH }}'
+      command: bun run seed
+      args:
+        chdir: '{{ app_dir }}'
 
   handlers:
     - name: Reload systemd
