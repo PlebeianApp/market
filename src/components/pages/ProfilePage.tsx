@@ -27,10 +27,34 @@ import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Edit, MapPin, MessageCircle, Minus, Plus, Share2 } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
+import { useAllShopProfiles, mergeShopWithProfile, groupProductsByStall, type ShopProfile } from '@/queries/shopProfile'
+import { Store } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface ProfilePageProps {
 	profileId: string
+}
+
+function StallHeader({ stall }: { stall: ShopProfile }) {
+	return (
+		<div className="flex items-center gap-3 mb-4 px-6">
+			{stall.picture ? (
+				<img src={stall.picture} alt={stall.name} className="w-8 h-8 rounded-full object-cover border border-zinc-200" />
+			) : (
+				<div className="w-8 h-8 rounded-full bg-zinc-100 flex items-center justify-center">
+					<Store className="w-4 h-4 text-zinc-400" />
+				</div>
+			)}
+			<h3 className="text-base font-heading font-semibold text-zinc-700">{stall.name}</h3>
+			{stall.location && (
+				<span className="text-xs text-zinc-400 flex items-center gap-1">
+					<MapPin className="w-3 h-3" />
+					{stall.location}
+				</span>
+			)}
+			{stall.currency && <span className="text-xs text-zinc-400">{stall.currency}</span>}
+		</div>
+	)
 }
 
 export function ProfilePage({ profileId }: ProfilePageProps) {
@@ -41,6 +65,13 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 	const { profile, user } = profileData || {}
 
 	const { data: sellerProducts } = useSuspenseQuery(productsByPubkeyQueryOptions(user?.pubkey || ''))
+	const { data: allStalls = [], isLoading: isLoadingStalls } = useAllShopProfiles(user?.pubkey)
+	const primaryStall = allStalls[0] ?? null
+	const displayName = mergeShopWithProfile(primaryStall?.name, profile?.name) ?? 'Unnamed user'
+	const displayAbout = mergeShopWithProfile(primaryStall?.description, profile?.about)
+	const displayBanner = mergeShopWithProfile(primaryStall?.banner, profile?.banner)
+	const displayPicture = mergeShopWithProfile(primaryStall?.picture, profile?.image ?? (profile as any)?.picture)
+	const displayLocation = primaryStall?.location ?? null
 
 	const [showFullAbout, setShowFullAbout] = useState(false)
 	const [bannerIsLoadable, setBannerIsLoadable] = useState<boolean | null>(null)
@@ -49,7 +80,7 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 	const breakpoint = useBreakpoint()
 	const isSmallScreen = breakpoint === 'sm'
 	const queryClient = useQueryClient()
-	const aboutText = profile?.about?.trim() ?? ''
+	const aboutText = displayAbout?.trim() ?? ''
 	const hasAbout = aboutText.length > 0
 	const truncationLength = isSmallScreen ? 70 : 250
 	const aboutTruncated = truncateText(aboutText, truncationLength)
@@ -101,6 +132,11 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 		}
 		return locations
 	}, [shippingOptions])
+
+	const { grouped, ungroupedProducts } = useMemo(() => groupProductsByStall(allStalls, sellerProducts ?? []), [allStalls, sellerProducts])
+	const hasStalls = allStalls.length > 0
+	const totalProducts = (sellerProducts ?? []).length
+	const stallsSettled = !isLoadingStalls
 
 	// Handle edit profile
 	const handleEdit = () => {
@@ -175,22 +211,22 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 	// Check if banner image is loadable
 	useEffect(() => {
 		const validateBanner = async () => {
-			if (profile?.banner) {
-				const isLoadable = await checkImageLoadable(profile.banner)
+			if (displayBanner) {
+				const isLoadable = await checkImageLoadable(displayBanner)
 				setBannerIsLoadable(isLoadable)
 			} else {
 				setBannerIsLoadable(null)
 			}
 		}
 		validateBanner()
-	}, [profile?.banner])
+	}, [displayBanner])
 
 	return (
 		<div className="relative min-h-screen flex flex-col">
 			<div className="absolute top-0 left-0 right-0 z-0 h-[40vh] sm:h-[40vh] md:h-[50vh] overflow-hidden">
-				{profile?.banner && bannerIsLoadable === true ? (
+				{displayBanner && bannerIsLoadable === true ? (
 					<div className="w-[150%] sm:w-full h-full -ml-[25%] sm:ml-0">
-						<img src={profile.banner} alt="profile-banner" className="w-full h-full object-cover" />
+						<img src={displayBanner} alt="shop-banner" className="w-full h-full object-cover" />
 					</div>
 				) : (
 					<div
@@ -205,17 +241,27 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 			<div className="flex flex-col relative z-10 pt-[18vh] sm:pt-[22vh] md:pt-[30vh] flex-1">
 				<div className="flex flex-row justify-between px-8 py-4 bg-black items-center">
 					<div className="flex flex-row items-center gap-4">
-						{profile?.picture && (
-							<img
-								src={profile.picture}
-								alt={profile.name || 'Profile picture'}
-								className="rounded-full w-10 h-10 sm:w-16 sm:h-16 border-2 border-black"
-							/>
+						{displayPicture && (
+							<img src={displayPicture} alt={displayName} className="rounded-full w-10 h-10 sm:w-16 sm:h-16 border-2 border-black" />
 						)}
 						<div className="flex items-center gap-2">
-							<h2 className="text-xl sm:text-2xl font-bold text-white">
-								{truncateText(profile?.name ?? 'Unnamed user', isSmallScreen ? 28 : 50)}
-							</h2>
+							<div>
+								<h2 className="text-xl sm:text-2xl font-bold text-white">{truncateText(displayName, isSmallScreen ? 28 : 50)}</h2>
+								<div className="flex items-center gap-3 mt-0.5">
+									{displayLocation && (
+										<p className="text-xs text-gray-400 flex items-center gap-1">
+											<MapPin className="w-3 h-3" />
+											{displayLocation}
+										</p>
+									)}
+									{allStalls.length > 1 && (
+										<span className="text-xs text-gray-400 flex items-center gap-1">
+											<Store className="w-3 h-3" />
+											{allStalls.length} stalls
+										</span>
+									)}
+								</div>
+							</div>
 							<Nip05Badge pubkey={user?.pubkey || ''} showAddress nip05={profile?.nip05} />
 						</div>
 					</div>
@@ -277,21 +323,8 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 					)}
 				</div>
 
-				<div className="p-4 flex-1 flex flex-col">
-					{sellerProducts && sellerProducts.length > 0 ? (
-						<ItemGrid
-							title={
-								<div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 text-center sm:text-left">
-									<span className="text-2xl font-heading">Products from</span>
-									<ProfileName pubkey={user?.pubkey || ''} className="text-2xl font-heading" />
-								</div>
-							}
-						>
-							{sellerProducts.map((product: NDKEvent) => (
-								<ProductCard key={product.id} product={product} />
-							))}
-						</ItemGrid>
-					) : (
+				<div className="relative z-10 flex-1 flex flex-col gap-8 bg-white border-t border-zinc-200 pt-4">
+					{totalProducts === 0 ? (
 						<div className="flex flex-col items-center justify-center flex-1 gap-4">
 							<span className="text-2xl font-heading">No products found</span>
 							{permissions.canEdit && (
@@ -301,23 +334,65 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 								</Button>
 							)}
 						</div>
+					) : !stallsSettled || !hasStalls ? (
+						<ItemGrid
+							title={
+								<div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 text-center sm:text-left">
+									<span className="text-2xl font-heading">Products from</span>
+									<ProfileName pubkey={user?.pubkey || ''} className="text-2xl font-heading" />
+								</div>
+							}
+						>
+							{(sellerProducts ?? []).map((product: NDKEvent) => (
+								<ProductCard key={product.id} product={product} />
+							))}
+						</ItemGrid>
+					) : (
+						<>
+							{grouped.map(({ stall, products }) => (
+								<div key={stall.id}>
+									<StallHeader stall={stall} />
+									{products.length > 0 ? (
+										<div className="px-6">
+											<ItemGrid>
+												{products.map((product: NDKEvent) => (
+													<ProductCard key={product.id} product={product} />
+												))}
+											</ItemGrid>
+										</div>
+									) : (
+										<p className="text-sm text-zinc-400 py-4 px-6">No products in this stall yet.</p>
+									)}
+								</div>
+							))}
+
+							{ungroupedProducts.length > 0 && (
+								<div>
+									<div className="pt-4 border-t border-zinc-100 px-6">
+										<h3 className="text-base font-heading font-semibold mb-4 text-zinc-400">Other products</h3>
+									</div>
+									<div className="p-6">
+										<ItemGrid>
+											{ungroupedProducts.map((product: NDKEvent) => (
+												<ProductCard key={product.id} product={product} />
+											))}
+										</ItemGrid>
+									</div>
+								</div>
+							)}
+						</>
 					)}
 				</div>
 			</div>
 
-			<ShareProfileDialog
-				open={shareDialogOpen}
-				onOpenChange={setShareDialogOpen}
-				pubkey={user?.pubkey || ''}
-				profileName={profile?.name}
-			/>
+			<ShareProfileDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} pubkey={user?.pubkey || ''} profileName={displayName} />
 
 			{pickupLocations.length > 0 && (
 				<PickupLocationDialog
 					open={pickupLocationDialogOpen}
 					onOpenChange={setPickupLocationDialogOpen}
 					locations={pickupLocations}
-					vendorName={profile?.name}
+					vendorName={displayName}
 				/>
 			)}
 		</div>
