@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { UserWithAvatar } from '@/components/UserWithAvatar'
+import { WotBadge } from '@/components/WotScore'
 import { Loader2, ExternalLink } from 'lucide-react'
 import { nip19 } from 'nostr-tools'
 import { Link } from '@tanstack/react-router'
@@ -272,6 +273,7 @@ export function ProfileSearch({ onSelect, placeholder = 'Search profiles or past
 													{npub.slice(0, 12)}... {npub.slice(-6)}
 												</span>
 											</span>
+											<WotBadge pubkey={event.pubkey} />
 											<Link
 												to="/profile/$profileId"
 												params={{ profileId: event.pubkey }}
