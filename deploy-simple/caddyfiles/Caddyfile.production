@@ -2,8 +2,8 @@
 #
 # Services:
 #   plebeian.market        → Market app (port 3001)
-#   relay.plebeian.market  → Nostr relay (port 3334) - DO NOT MODIFY
-#   legacy.plebeian.market → Legacy app (port 4173)  - DO NOT MODIFY
+#   relay.plebeian.market  → Nostr relay (port 3334)
+#   legacy.plebeian.market → Legacy app (port 4173)
 
 plebeian.market {
 	root * /opt/market-production/dist

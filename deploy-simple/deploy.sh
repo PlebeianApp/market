@@ -14,13 +14,13 @@
 #   ./deploy.sh <stage> [user@host[:port]]
 #
 # Examples:
-#   ./deploy.sh development                    # Local Docker (localhost:2222)
+#   ./deploy.sh development deployer@dev.example.com
 #   ./deploy.sh staging user@staging.example.com
 #   ./deploy.sh production user@prod.example.com
 #   SSH_KEY=~/.ssh/id_rsa ./deploy.sh production user@prod.example.com
 #
 # Stages:
-#   development - Local testing (port 3000, local relay)
+#   development - Development server (explicit host required)
 #   staging     - Staging server (port 3000, staging relay)
 #   production  - Production server (port 3001, production relay)
 #
@@ -67,10 +67,9 @@ fi
 # -----------------------------------------------------------------------------
 case "$STAGE" in
     development)
-        SSH_HOST="${SSH_HOST:-localhost}"
-        SSH_PORT="${SSH_PORT:-2222}"
+        SSH_HOST="${SSH_HOST:-}"
+        SSH_PORT="${SSH_PORT:-22}"
         SSH_USER="${SSH_USER:-deployer}"
-        SSH_PASSWORD="${SSH_PASSWORD:-deployer}"
         APP_PORT="${APP_PORT:-3000}"
         PM2_APP_NAME="market-development"
         ;;
@@ -89,6 +88,12 @@ case "$STAGE" in
         PM2_APP_NAME="market-production"
         ;;
 esac
+
+if [[ "$STAGE" == "development" && -z "$SSH_HOST" ]]; then
+    echo "❌ Development stage requires an explicit target or SSH_HOST."
+    echo "   Example: ./deploy.sh development deployer@dev.example.com"
+    exit 1
+fi
 
 # -----------------------------------------------------------------------------
 # Paths and configuration
@@ -243,15 +248,6 @@ echo "   ✓ Release swapped"
 # -----------------------------------------------------------------------------
 echo ""
 echo "📦 Starting services..."
-
-# Start ORLY relay if development and not running
-if [[ "$STAGE" == "development" ]]; then
-    run_ssh "if ! pgrep -x orly > /dev/null; then
-        echo '   Starting ORLY relay...'
-        ORLY_PORT=10547 nohup /usr/local/bin/orly > $REMOTE_BASE/logs/orly.log 2>&1 &
-        sleep 2
-    fi"
-fi
 
 # Start/reload app with PM2
 run_ssh_bun "cd $REMOTE_APP_DIR && pm2 startOrReload ecosystem.config.cjs --only $PM2_APP_NAME"

@@ -23,6 +23,7 @@
 		"seed": "bun run scripts/seed.ts",
 		"startup": "bun run scripts/startup.ts",
 		"build-icons": "bun run scripts/build-icons.ts",
+		"migrate:relay": "bun run scripts/migrate-relay.ts",
 		"test:e2e": "playwright test",
 		"test:e2e:headed": "playwright test --headed",
 		"test:e2e:ui": "playwright test --ui",

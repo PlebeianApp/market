@@ -172,10 +172,9 @@ export const nip60Actions = {
 				wallet = new NDKCashuWallet(ndk)
 			}
 
-			// Configure the wallet's relaySet from NDK's connected relays if not already set
-			// Filter out non-essential relays (e.g. bug report relay) that may fail to connect
+			// Configure the wallet's relaySet from NDK's connected relays if not already set.
 			if (!wallet.relaySet) {
-				const relayUrls = Array.from(ndk.pool?.relays?.keys() ?? []).filter((url) => !url.includes('bugs.plebeian.market'))
+				const relayUrls = Array.from(ndk.pool?.relays?.keys() ?? [])
 				if (relayUrls.length > 0) {
 					wallet.relaySet = NDKRelaySet.fromRelayUrls(relayUrls, ndk)
 				}

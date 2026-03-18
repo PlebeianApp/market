@@ -17,7 +17,7 @@
 # Commands:
 #   status       Show status of all services
 #   logs [n]     View application logs (last n lines, default 100)
-#   logs-relay   View ORLY relay logs (development only)
+#   logs-relay   View relay service logs
 #   restart      Restart the application
 #   stop         Stop the application
 #   start        Start the application
@@ -60,13 +60,17 @@ fi
 
 # Defaults
 STAGE="${STAGE:-development}"
-SSH_HOST="${SSH_HOST:-localhost}"
+SSH_HOST="${SSH_HOST:-}"
 SSH_PORT="${SSH_PORT:-22}"
 SSH_USER="${SSH_USER:-deployer}"
-SSH_PASSWORD="${SSH_PASSWORD:-deployer}"
 PM2_APP_NAME="${PM2_APP_NAME:-market-$STAGE}"
 REMOTE_BASE="/home/$SSH_USER"
 REMOTE_APP_DIR="${REMOTE_APP_DIR:-$REMOTE_BASE/market-$STAGE}"
+
+if [[ -z "$SSH_HOST" && ! "$COMMAND" =~ ^(help|--help|-h)$ ]]; then
+    echo "⚠ No deployment target configured. Run ./deploy.sh first or set SSH_HOST."
+    exit 1
+fi
 
 # -----------------------------------------------------------------------------
 # SSH setup
@@ -99,14 +103,16 @@ case "$COMMAND" in
         echo ""
         echo "Current Release:"
         run_ssh "readlink $REMOTE_APP_DIR 2>/dev/null | xargs basename || echo '  Not deployed'"
-        if [[ "$STAGE" == "development" ]]; then
-            echo ""
-            echo "ORLY Relay:"
-            if run_ssh "pgrep -x orly > /dev/null" 2>/dev/null; then
-                echo "  ✓ Running (PID: $(run_ssh 'pgrep -x orly'))"
+        echo ""
+        echo "Relay Service:"
+        if run_ssh "systemctl cat market-relay >/dev/null 2>&1"; then
+            if run_ssh "systemctl is-active market-relay >/dev/null 2>&1"; then
+                echo "  ✓ Running"
             else
                 echo "  ✗ Not running"
             fi
+        else
+            echo "  - Not managed on this host"
         fi
         ;;
 
@@ -118,13 +124,9 @@ case "$COMMAND" in
         ;;
 
     logs-relay)
-        if [[ "$STAGE" != "development" ]]; then
-            echo "⚠ ORLY relay logs only available in development stage"
-            exit 1
-        fi
-        echo "📜 ORLY Relay Logs (Ctrl+C to exit)"
+        echo "📜 Relay Service Logs (Ctrl+C to exit)"
         echo "═════════════════════════════════════════════════════════════════"
-        run_ssh "tail -f $REMOTE_BASE/logs/orly.log"
+        run_ssh "sudo journalctl -u market-relay -f -n 100 --no-pager"
         ;;
 
     restart)
@@ -205,7 +207,7 @@ case "$COMMAND" in
         echo "Commands:"
         echo "  status         Show status of all services"
         echo "  logs [n]       View last n app log lines (default: 100)"
-        echo "  logs-relay     View ORLY relay logs (development only)"
+        echo "  logs-relay     View relay service logs"
         echo "  restart        Restart the application"
         echo "  stop           Stop the application"
         echo "  start          Start the application"

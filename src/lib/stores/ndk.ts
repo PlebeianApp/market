@@ -89,7 +89,7 @@ export function getMainRelay(): string | undefined {
 
 /**
  * Get the write relay(s) for the current stage
- * Staging: staging relay + bug relay
+ * Staging: main relay only
  * Development: main relay only (prevents leaking test/dev data to public relays)
  * Production: all connected relays
  */
@@ -109,7 +109,7 @@ export function getWriteRelays(): string[] {
 
 /**
  * Get an NDKRelaySet configured for write operations.
- * Staging: only staging relay + bug relay
+ * Staging: only the main relay
  * Development: only the main relay (prevents leaking to public relays)
  * Production: undefined (NDK default = all connected relays)
  */

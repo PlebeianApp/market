@@ -6,6 +6,36 @@ Scripts for seeding the marketplace with test data including users, products, co
 
 ## Available Scripts
 
+### `migrate-relay.ts`
+
+Copies events from one relay to another at the Nostr protocol layer.
+
+**Usage:**
+
+```bash
+# Migrate bug reports onto the standard app relay
+SOURCE_RELAYS=wss://bugs.plebeian.market \
+TARGET_RELAYS=wss://relay.plebeian.market \
+TAG_T=plebian2beta \
+bun run scripts/migrate-relay.ts
+
+# Full relay migration
+SOURCE_RELAYS=wss://relay.plebeian.market \
+TARGET_RELAYS=wss://relay-new.internal.example \
+bun run scripts/migrate-relay.ts
+```
+
+**Optional filter variables:**
+
+- `AUTHORS` - Comma-separated pubkeys
+- `KINDS` - Comma-separated kinds
+- `TAG_T` - Comma-separated `t` tag values
+- `SINCE` - Unix timestamp lower bound
+- `UNTIL` - Unix timestamp upper bound
+- `LIMIT` - Maximum number of events
+- `DRY_RUN` - Set to `true` to fetch without publishing
+- `MAX_WAIT_MS` - Relay subscription timeout
+
 ### `seed.ts`
 
 Main seeding script that creates a complete test environment.

@@ -1,0 +1,18 @@
+[Unit]
+Description=Plebeian Market Relay
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=deployer
+Group=deployer
+EnvironmentFile=/etc/market-relay.env
+WorkingDirectory=/home/deployer
+ExecStart=/usr/local/bin/market-relay
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
