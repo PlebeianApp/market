@@ -191,14 +191,14 @@ export const productFormActions = {
 			const dimensionsTag = getProductDimensions(event)
 			const shippingTags = getProductShippingOptions(event)
 
-			const mainCategoryFromTags = categories.find((tag) => tag.length === 2 && tag[0] === 't')?.[1]
-			const subCategoriesFromTags = categories
-				.filter((tag) => tag.length > 2 && tag[0] === 't')
-				.map((tag, index) => ({
-					key: `category-${Date.now()}-${index}`,
-					name: tag[1],
-					checked: true,
-				}))
+			// First category from NDKEvent is considered "Main" category.
+			// The next 3 are the "sub-categories".
+			const mainCategoryFromTags = categories.at(0)?.at(1)
+			const subCategoriesFromTags = categories.slice(1, 4).map((tag, index) => ({
+				key: `category-${Date.now()}-${index}`,
+				name: tag[1],
+				checked: true,
+			}))
 
 			// Parse shipping options
 			const shippingOptions: ProductShippingForm[] = shippingTags.map((tag) => {
