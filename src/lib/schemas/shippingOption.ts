@@ -32,6 +32,14 @@ export const ShippingDurationTagSchema = z.tuple([
 export const ShippingLocationTagSchema = z.tuple([z.literal('location'), z.string()])
 export const ShippingGeohashTagSchema = z.tuple([z.literal('g'), geohash])
 export const ShippingPickupAddressTagSchema = z.tuple([z.literal('pickup-address'), z.string()])
+export const ShippingPickupLatTagSchema = z.tuple([
+	z.literal('pickup-lat'),
+	z.string().regex(/^-?\d+(\.\d+)?$/, 'Must be a valid latitude'),
+])
+export const ShippingPickupLonTagSchema = z.tuple([
+	z.literal('pickup-lon'),
+	z.string().regex(/^-?\d+(\.\d+)?$/, 'Must be a valid longitude'),
+])
 
 // Weight and Dimension Constraints
 export const ShippingWeightMinTagSchema = z.tuple([
