@@ -17,7 +17,7 @@ import (
 	"fiatjaf.com/nostr"
 	"fiatjaf.com/nostr/eventstore"
 	eventstorebleve "fiatjaf.com/nostr/eventstore/bleve"
-	eventstorelmdb "fiatjaf.com/nostr/eventstore/lmdb"
+	eventstoreboltdb "fiatjaf.com/nostr/eventstore/boltdb"
 	"fiatjaf.com/nostr/khatru"
 	"fiatjaf.com/nostr/khatru/policies"
 	"fiatjaf.com/nostr/nip11"
@@ -142,11 +142,11 @@ func loadConfig() (config, error) {
 }
 
 func openStore(cfg config) (eventstore.Store, func(), error) {
-	rawStore := &eventstorelmdb.LMDBBackend{
-		Path: cfg.RawEventStore,
+	rawStore := &eventstoreboltdb.BoltBackend{
+		Path: filepath.Join(cfg.RawEventStore, "events.db"),
 	}
 	if err := rawStore.Init(); err != nil {
-		return nil, nil, fmt.Errorf("init LMDB raw store: %w", err)
+		return nil, nil, fmt.Errorf("init BoltDB raw store: %w", err)
 	}
 
 	searchStore := &eventstorebleve.BleveBackend{

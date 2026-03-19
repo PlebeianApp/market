@@ -79,6 +79,8 @@ restart_and_verify() {
 
 if ! restart_and_verify; then
 	echo "Relay restart failed, restoring previous version"
+	sudo systemctl status "$SERVICE_NAME" --no-pager || true
+	sudo journalctl -u "$SERVICE_NAME" -n 100 --no-pager || true
 	restore_if_exists "$TMP_PREV_DIR/market-relay" "$REMOTE_BIN"
 	restore_if_exists "$TMP_PREV_DIR/market-relay.env" "$REMOTE_ENV"
 	restore_if_exists "$TMP_PREV_DIR/market-relay.service" "$REMOTE_SERVICE"
