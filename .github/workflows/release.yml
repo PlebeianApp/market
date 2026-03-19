@@ -13,6 +13,10 @@ on:
 env:
   BUN_VERSION: 'latest'
 
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Build
@@ -25,12 +29,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
 
-      - name: Extract version from tag
+      - name: Resolve release tag
         id: version
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
+          git fetch --tags --force
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TAG="${{ github.event.inputs.tag }}"
+            if [[ -z "$TAG" ]]; then
+              TAG="$(git tag --list '*-release' --sort=-version:refname | head -n 1)"
+            fi
+
+            if [[ -z "$TAG" ]]; then
+              echo "::error::No release tag found"
+              exit 1
+            fi
+
+            git checkout "refs/tags/$TAG"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "Deploying version: $TAG"
 
@@ -74,6 +95,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ needs.build.outputs.version }}
 
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -112,6 +135,7 @@ jobs:
       - name: Create environment file
         run: |
           cat > deploy-package/.env << EOF
+          APP_STAGE=production
           NODE_ENV=production
           PORT=3001
           APP_RELAY_URL=${{ secrets.PROD_RELAY_URL }}
@@ -170,9 +194,29 @@ jobs:
           username: ${{ secrets.PROD_USER }}
           password: ${{ secrets.PROD_PASSWORD }}
           script: |
-            set -e
+            set -euo pipefail
             RELEASE_DIR="/opt/releases/${{ needs.build.outputs.release_name }}"
             APP_DIR="/opt/market-production"
+            PREVIOUS_RELEASE="$(readlink -f "$APP_DIR" || true)"
+            CADDY_BACKUP="$(mktemp)"
+            sudo cp /etc/caddy/Caddyfile "$CADDY_BACKUP" 2>/dev/null || true
+
+            rollback() {
+              echo "Deployment failed, restoring previous release"
+              if [[ -f "$CADDY_BACKUP" ]]; then
+                sudo cp "$CADDY_BACKUP" /etc/caddy/Caddyfile || true
+                sudo caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || true
+              fi
+              if [[ -n "$PREVIOUS_RELEASE" && -d "$PREVIOUS_RELEASE" ]]; then
+                sudo ln -sfn "$PREVIOUS_RELEASE" "$APP_DIR"
+                sudo chown -h $USER:$USER "$APP_DIR"
+                cd "$APP_DIR"
+                pm2 startOrReload ecosystem.config.cjs --only market-production || true
+                pm2 save --force || true
+              fi
+            }
+
+            trap rollback ERR
 
             # Install dependencies
             cd "$RELEASE_DIR"
@@ -205,12 +249,15 @@ jobs:
             cd /opt/releases
             ls -t | grep '^market-production' | tail -n +6 | xargs -r rm -rf
 
+            rm -f "$CADDY_BACKUP"
+            trap - ERR
+
             echo "✅ Production deployment of ${{ needs.build.outputs.version }} complete"
 
       - name: Health check
         run: |
           sleep 15
-          curl -sf https://plebeian.market/api/config || echo "⚠️ Health check pending"
+          curl -sf https://plebeian.market/api/config
           echo "✅ Production deployment complete"
 
       - name: Verify relay is still running

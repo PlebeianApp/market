@@ -1,0 +1,75 @@
+name: Promote to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Which semantic version component to increment
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+jobs:
+  tag-release:
+    name: Create Release Tag
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Create next release tag
+        env:
+          BUMP: ${{ github.event.inputs.bump }}
+        run: |
+          set -euo pipefail
+          git fetch --tags --force
+
+          LATEST_TAG="$(git tag --list '*-release' --sort=-version:refname | head -n 1)"
+          VERSION="${LATEST_TAG%-release}"
+          VERSION="${VERSION#v}"
+
+          if [[ -z "$VERSION" ]]; then
+            VERSION="0.0.0"
+          fi
+
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+
+          case "$BUMP" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+            *)
+              echo "::error::Unsupported bump: $BUMP"
+              exit 1
+              ;;
+          esac
+
+          NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}-release"
+          echo "Creating tag ${NEW_TAG}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "$NEW_TAG"
+          git push origin "$NEW_TAG"
+
+          echo "✅ Created ${NEW_TAG}. Production deploy will start from release.yml."

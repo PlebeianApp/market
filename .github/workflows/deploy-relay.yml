@@ -121,9 +121,19 @@ jobs:
             set -e
             chmod +x /tmp/relay-deploy/install-relay.sh
             /tmp/relay-deploy/install-relay.sh staging /tmp/relay-deploy
-            sudo cp /tmp/relay-deploy/Caddyfile.staging /etc/caddy/Caddyfile
-            sudo caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || \
-              sudo caddy start --config /etc/caddy/Caddyfile --adapter caddyfile
+            CADDY_BACKUP="$(mktemp)"
+            sudo cp /etc/caddy/Caddyfile "$CADDY_BACKUP" 2>/dev/null || true
+            if ! { sudo cp /tmp/relay-deploy/Caddyfile.staging /etc/caddy/Caddyfile && \
+              (sudo caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || \
+               sudo caddy start --config /etc/caddy/Caddyfile --adapter caddyfile); }; then
+              echo "Caddy reload failed, restoring previous config"
+              if [[ -f "$CADDY_BACKUP" ]]; then
+                sudo cp "$CADDY_BACKUP" /etc/caddy/Caddyfile || true
+                sudo caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || true
+              fi
+              exit 1
+            fi
+            rm -f "$CADDY_BACKUP"
 
       - name: Verify staging relay
         env:
@@ -177,9 +187,19 @@ jobs:
             set -e
             chmod +x /tmp/relay-deploy/install-relay.sh
             /tmp/relay-deploy/install-relay.sh production /tmp/relay-deploy
-            sudo cp /tmp/relay-deploy/Caddyfile.production /etc/caddy/Caddyfile
-            sudo caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || \
-              sudo caddy start --config /etc/caddy/Caddyfile --adapter caddyfile
+            CADDY_BACKUP="$(mktemp)"
+            sudo cp /etc/caddy/Caddyfile "$CADDY_BACKUP" 2>/dev/null || true
+            if ! { sudo cp /tmp/relay-deploy/Caddyfile.production /etc/caddy/Caddyfile && \
+              (sudo caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || \
+               sudo caddy start --config /etc/caddy/Caddyfile --adapter caddyfile); }; then
+              echo "Caddy reload failed, restoring previous config"
+              if [[ -f "$CADDY_BACKUP" ]]; then
+                sudo cp "$CADDY_BACKUP" /etc/caddy/Caddyfile || true
+                sudo caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || true
+              fi
+              exit 1
+            fi
+            rm -f "$CADDY_BACKUP"
 
       - name: Verify production relay
         env:

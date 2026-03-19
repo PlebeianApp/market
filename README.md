@@ -169,7 +169,10 @@ Without running this command, changes to route files or creating new routes won'
 
 ## Releasing
 
-Production releases are triggered by pushing a tag with the `-release` suffix. The GitHub Actions workflow listens for these tags.
+Staging deploys automatically after the `E2E Tests` workflow succeeds on `master`.
+Production deploys require the `production` environment approval and can be triggered
+either by pushing a `*-release` tag or by running the `Promote to Production`
+workflow, which creates the next release tag for you.
 
 ### One-liner
 
@@ -180,9 +183,11 @@ git tag v0.2.9-release && git push origin v0.2.9-release
 ### Steps
 
 1. Ensure all changes are merged to `master`
-2. Check the latest release tag: `git tag --sort=-version:refname | head -1`
-3. Create and push a new tag with incremented version:
+2. Wait for staging deployment to finish successfully
+3. Either:
+   Create and push a new tag with incremented version:
    ```bash
    git tag vX.Y.Z-release && git push origin vX.Y.Z-release
    ```
-4. The GitHub Action will automatically build and deploy to production
+4. Or run `Promote to Production` in GitHub Actions and choose `patch`, `minor`, or `major`
+5. The `Deploy to Production` workflow will build and deploy the selected tag after approval

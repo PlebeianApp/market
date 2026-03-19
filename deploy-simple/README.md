@@ -124,6 +124,10 @@ bun run dev
 
 ## Setting Up GitHub Actions
 
+GitHub Actions are the canonical deployment path for `staging` and `production`.
+The shell scripts in this directory are now best treated as manual fallback or
+development helpers.
+
 ### Step 1: Create GitHub Environments
 
 1. Go to your repo → Settings → Environments
@@ -169,12 +173,14 @@ nak key generate
 ### Step 4: Deploy
 
 ```bash
-# Staging: Push to master
+# Staging: merge to master, then wait for E2E Tests to finish and trigger staging deploy
 git push origin master
 
-# Production: Create a release tag
+# Production option 1: Create a release tag manually
 git tag v1.0.0-release
 git push origin v1.0.0-release
+
+# Production option 2: Run the "Promote to Production" workflow in GitHub Actions
 ```
 
 ---
@@ -282,6 +288,7 @@ deploy-simple/
 
 | Variable          | Description                                              |
 | ----------------- | -------------------------------------------------------- |
+| `APP_STAGE`       | Explicit stage override (`staging`, `production`, etc.)  |
 | `NODE_ENV`        | `development`, `staging`, or `production`                |
 | `PORT`            | Application port (3000 for staging, 3001 for production) |
 | `APP_RELAY_URL`   | Nostr relay WebSocket URL                                |
@@ -450,15 +457,21 @@ The project includes GitHub Actions workflows for automated deployments:
 
 ### Staging (`.github/workflows/deploy.yml`)
 
-- **Trigger:** Push to `master` branch
+- **Trigger:** Successful completion of `E2E Tests` on `master`, or manual dispatch
 - **Environment:** `staging`
 - **URL:** https://staging.plebeian.market
 
 ### Production (`.github/workflows/release.yml`)
 
-- **Trigger:** Push tag matching `*-release` (e.g., `v1.0.0-release`)
+- **Trigger:** Push tag matching `*-release` (e.g., `v1.0.0-release`), or manual dispatch to redeploy an existing release tag
 - **Environment:** `production` (requires approval)
 - **URL:** https://plebeian.market
+
+### Production Promotion (`.github/workflows/promote-production.yml`)
+
+- **Trigger:** Manual dispatch
+- **Purpose:** Create and push the next `*-release` tag automatically (`patch`, `minor`, or `major`)
+- **Follow-up:** The production deploy workflow starts from the created tag
 
 ### Required GitHub Secrets
 

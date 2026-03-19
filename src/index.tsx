@@ -224,6 +224,11 @@ const serveStatic = async (path: string) => {
  * Determine the deployment stage from NODE_ENV
  */
 function determineStage(): 'production' | 'staging' | 'development' {
+	const explicitStage = process.env.APP_STAGE
+	if (explicitStage === 'staging' || explicitStage === 'production' || explicitStage === 'development') {
+		return explicitStage
+	}
+
 	const env = process.env.NODE_ENV
 	if (env === 'staging') return 'staging'
 	if (env === 'production') return 'production'

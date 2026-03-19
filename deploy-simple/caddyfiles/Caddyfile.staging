@@ -2,7 +2,7 @@
 #
 # Services:
 #   staging.plebeian.market       → Market app (port 3000)
-#   relay.staging.plebeian.market → Nostr relay (port 10547)
+#   relay.staging.plebeian.market → Nostr relay (port 10549)
 
 staging.plebeian.market {
 	root * /home/deployer/market-staging/dist

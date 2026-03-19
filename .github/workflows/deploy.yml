@@ -1,17 +1,24 @@
 name: Deploy to Staging
 
 on:
-  push:
-    branches:
-      - master
+  workflow_run:
+    workflows:
+      - E2E Tests
+    types:
+      - completed
   workflow_dispatch:
 
 env:
   BUN_VERSION: 'latest'
 
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     outputs:
       release_name: ${{ steps.release.outputs.name }}
@@ -19,6 +26,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -54,12 +63,15 @@ jobs:
   deploy-staging:
     name: Deploy to Staging
     needs: build
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     environment: staging
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
 
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -98,6 +110,7 @@ jobs:
       - name: Create environment file
         run: |
           cat > deploy-package/.env << EOF
+          APP_STAGE=staging
           NODE_ENV=production
           PORT=3000
           APP_RELAY_URL=${{ secrets.STAGING_RELAY_URL }}
@@ -152,9 +165,28 @@ jobs:
           username: ${{ secrets.STAGING_USER }}
           password: ${{ secrets.STAGING_PASSWORD }}
           script: |
-            set -e
+            set -euo pipefail
             RELEASE_DIR="/home/deployer/releases/${{ needs.build.outputs.release_name }}"
             APP_DIR="/home/deployer/market-staging"
+            PREVIOUS_RELEASE="$(readlink -f "$APP_DIR" || true)"
+            CADDY_BACKUP="$(mktemp)"
+            sudo cp /etc/caddy/Caddyfile "$CADDY_BACKUP" 2>/dev/null || true
+
+            rollback() {
+              echo "Deployment failed, restoring previous release"
+              if [[ -f "$CADDY_BACKUP" ]]; then
+                sudo cp "$CADDY_BACKUP" /etc/caddy/Caddyfile || true
+                sudo caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || true
+              fi
+              if [[ -n "$PREVIOUS_RELEASE" && -d "$PREVIOUS_RELEASE" ]]; then
+                ln -sfn "$PREVIOUS_RELEASE" "$APP_DIR"
+                cd "$APP_DIR"
+                pm2 startOrReload ecosystem.config.cjs --only market-staging || true
+                pm2 save --force || true
+              fi
+            }
+
+            trap rollback ERR
 
             # Install dependencies
             cd "$RELEASE_DIR"
@@ -181,6 +213,9 @@ jobs:
             # Cleanup old releases (keep last 3)
             cd /home/deployer/releases
             ls -t | grep '^market-staging' | tail -n +4 | xargs -r rm -rf
+
+            rm -f "$CADDY_BACKUP"
+            trap - ERR
 
             echo "✅ Staging deployment complete"
 

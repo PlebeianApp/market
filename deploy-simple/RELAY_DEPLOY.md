@@ -77,4 +77,5 @@ bun run scripts/migrate-relay.ts
 ## Rollback
 
 If a deploy fails, `install-relay.sh` restores the previous binary, env file,
-and service unit before exiting non-zero.
+and service unit before exiting non-zero. The workflow also restores the
+previous Caddy config if the new relay Caddyfile fails to reload.
