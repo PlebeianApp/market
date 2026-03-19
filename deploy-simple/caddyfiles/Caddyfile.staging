@@ -27,5 +27,5 @@ staging.plebeian.market {
 }
 
 relay.staging.plebeian.market {
-	reverse_proxy localhost:10547
+	reverse_proxy localhost:10549
 }
