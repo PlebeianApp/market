@@ -67,6 +67,10 @@ for dir in "$RELAY_DATA_DIR" "$RELAY_RAW_DB_DIR"; do
 	sudo chown "$USER:$USER" "$dir"
 done
 
+if [[ -e "$RELAY_SEARCH_INDEX_DIR" ]]; then
+	sudo chown -R "$USER:$USER" "$RELAY_SEARCH_INDEX_DIR"
+fi
+
 sudo systemctl daemon-reload
 sudo systemctl enable "$SERVICE_NAME"
 
