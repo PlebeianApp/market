@@ -54,6 +54,64 @@ ssh deployer@staging.plebeian.market 'sudo journalctl -u market-relay -n 50 --no
 
 For production, replace the hostname with `relay.plebeian.market`.
 
+## Inspect App Setup Events
+
+The app setup flow writes these relay events:
+
+- app settings: `kind=31990`, `d=plebeian-market-handler`
+- admin list: `kind=30000`, `d=admins`
+- editor list: `kind=30000`, `d=editors`
+
+The current app pubkey on both staging and production is:
+
+```text
+7b3979f5936f590541eb4f51c2ce3094194d1c57386e706dd05aca98766a7ceb
+```
+
+The commands below query the relay directly with `nak`.
+
+For repeatable operational checks and republishing, use the repo-owned script
+folder [deploy-simple/scripts/app-settings](/Users/schlaus/workspace/market/deploy-simple/scripts/app-settings).
+
+```bash
+bun run deploy:app-settings:inspect -- --stage staging
+bun run deploy:app-settings:inspect -- --stage production
+```
+
+To republish directly with the app private key:
+
+```bash
+bun run deploy:app-settings:publish -- \
+  --stage staging \
+  --secret-key "$APP_PRIVATE_KEY" \
+  --settings-file deploy-simple/scripts/app-settings/examples/settings.example.json \
+  --admins-file deploy-simple/scripts/app-settings/examples/admins.example.json \
+  --editors-file deploy-simple/scripts/app-settings/examples/editors.example.json
+```
+
+### Staging
+
+```bash
+nak req -k 31990 -a 7b3979f5936f590541eb4f51c2ce3094194d1c57386e706dd05aca98766a7ceb --tag d=plebeian-market-handler wss://relay.staging.plebeian.market | jq '.content |= (fromjson? // .)'
+
+nak req -k 30000 -a 7b3979f5936f590541eb4f51c2ce3094194d1c57386e706dd05aca98766a7ceb --tag d=admins wss://relay.staging.plebeian.market | jq '{id, created_at, pubkey, admins: [.tags[] | select(.[0] == "p") | .[1]]}'
+
+nak req -k 30000 -a 7b3979f5936f590541eb4f51c2ce3094194d1c57386e706dd05aca98766a7ceb --tag d=editors wss://relay.staging.plebeian.market | jq '{id, created_at, pubkey, editors: [.tags[] | select(.[0] == "p") | .[1]]}'
+```
+
+### Production
+
+```bash
+nak req -k 31990 -a 7b3979f5936f590541eb4f51c2ce3094194d1c57386e706dd05aca98766a7ceb --tag d=plebeian-market-handler wss://relay.plebeian.market | jq '.content |= (fromjson? // .)'
+
+nak req -k 30000 -a 7b3979f5936f590541eb4f51c2ce3094194d1c57386e706dd05aca98766a7ceb --tag d=admins wss://relay.plebeian.market | jq '{id, created_at, pubkey, admins: [.tags[] | select(.[0] == "p") | .[1]]}'
+
+nak req -k 30000 -a 7b3979f5936f590541eb4f51c2ce3094194d1c57386e706dd05aca98766a7ceb --tag d=editors wss://relay.plebeian.market | jq '{id, created_at, pubkey, editors: [.tags[] | select(.[0] == "p") | .[1]]}'
+```
+
+If a command prints nothing beyond the relay connection line, that event is not
+present on the relay.
+
 ## Data Migration
 
 Use [scripts/migrate-relay.ts](/Users/schlaus/workspace/market/scripts/migrate-relay.ts)
