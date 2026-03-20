@@ -24,6 +24,8 @@
 		"startup": "bun run scripts/startup.ts",
 		"build-icons": "bun run scripts/build-icons.ts",
 		"migrate:relay": "bun run scripts/migrate-relay.ts",
+		"deploy:app-settings:inspect": "bun run deploy-simple/scripts/app-settings/inspect.ts",
+		"deploy:app-settings:publish": "bun run deploy-simple/scripts/app-settings/publish.ts",
 		"test:e2e": "playwright test",
 		"test:e2e:headed": "playwright test --headed",
 		"test:e2e:ui": "playwright test --ui",

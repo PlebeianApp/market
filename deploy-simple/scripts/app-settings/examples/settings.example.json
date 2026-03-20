@@ -1,0 +1,13 @@
+{
+	"name": "staging",
+	"displayName": "Plebeian Market Staging",
+	"picture": "https://staging.plebeian.market/images/logo.svg",
+	"banner": "https://staging.plebeian.market/banner.svg",
+	"ownerPk": "ec79b568bdea63ca6091f5b84b0c639c10a0919e175fa09a4de3154f82906f25",
+	"contactEmail": "ops@example.com",
+	"allowRegister": true,
+	"defaultCurrency": "USD",
+	"blossom_server": "https://blossom.staging.plebeian.market",
+	"nip96_server": "https://nip96.staging.plebeian.market",
+	"showNostrLink": false
+}

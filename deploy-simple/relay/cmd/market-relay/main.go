@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"iter"
 	"log"
 	"net/http"
 	"os"
@@ -40,6 +41,11 @@ type config struct {
 	SupportedNIPs   []int
 	ReadHeaderMs    time.Duration
 	ShutdownTimeout time.Duration
+}
+
+type compositeStore struct {
+	raw    *eventstoreboltdb.BoltBackend
+	search *eventstorebleve.BleveBackend
 }
 
 func main() {
@@ -171,7 +177,10 @@ func openStore(cfg config) (eventstore.Store, func(), error) {
 		closeMaybe(rawStore)
 	}
 
-	return searchStore, cleanup, nil
+	return &compositeStore{
+		raw:    rawStore,
+		search: searchStore,
+	}, cleanup, nil
 }
 
 func closeMaybe(v any) {
@@ -180,6 +189,89 @@ func closeMaybe(v any) {
 			log.Printf("close failed: %v", err)
 		}
 	}
+}
+
+func (s *compositeStore) Init() error {
+	return nil
+}
+
+func (s *compositeStore) Close() {
+	closeMaybe(s.search)
+	closeMaybe(s.raw)
+}
+
+func (s *compositeStore) QueryEvents(filter nostr.Filter, maxLimit int) iter.Seq[nostr.Event] {
+	if len(strings.TrimSpace(filter.Search)) >= 2 {
+		return s.search.QueryEvents(filter, maxLimit)
+	}
+	return s.raw.QueryEvents(filter, maxLimit)
+}
+
+func (s *compositeStore) DeleteEvent(id nostr.ID) error {
+	if err := s.raw.DeleteEvent(id); err != nil {
+		return err
+	}
+	if err := s.search.DeleteEvent(id); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *compositeStore) SaveEvent(evt nostr.Event) error {
+	if err := s.raw.SaveEvent(evt); err != nil {
+		return err
+	}
+	if err := s.search.SaveEvent(evt); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *compositeStore) ReplaceEvent(evt nostr.Event) error {
+	filter := nostr.Filter{Kinds: []nostr.Kind{evt.Kind}, Authors: []nostr.PubKey{evt.PubKey}}
+	if evt.Kind.IsAddressable() {
+		filter.Tags = nostr.TagMap{"d": []string{evt.Tags.GetD()}}
+	}
+
+	var previous []nostr.Event
+	for existing := range s.raw.QueryEvents(filter, 10) {
+		previous = append(previous, existing)
+	}
+
+	if err := s.raw.ReplaceEvent(evt); err != nil {
+		return err
+	}
+
+	for _, existing := range previous {
+		if existing.ID == evt.ID {
+			continue
+		}
+		if err := s.search.DeleteEvent(existing.ID); err != nil {
+			return err
+		}
+	}
+
+	stored := false
+	for existing := range s.raw.QueryEvents(nostr.Filter{IDs: []nostr.ID{evt.ID}}, 1) {
+		if existing.ID == evt.ID {
+			stored = true
+			break
+		}
+	}
+	if stored {
+		if err := s.search.SaveEvent(evt); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *compositeStore) CountEvents(filter nostr.Filter) (uint32, error) {
+	if len(strings.TrimSpace(filter.Search)) >= 2 {
+		return 0, errors.New("count with search filter is not supported")
+	}
+	return s.raw.CountEvents(filter)
 }
 
 func envOr(key, fallback string) string {
