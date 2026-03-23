@@ -12,7 +12,7 @@ const NODE_ENV = process.env.NODE_ENV || 'development'
 
 function getRelays(): string[] {
 	const appRelay = process.env.APP_RELAY_URL
-	const cvmRelays = ['wss://relay.contextvm.org', 'wss://relay2.contextvm.org', 'wss://cvm.otherstuff.ai']
+	const cvmRelays = ['wss://relay.contextvm.org', 'wss://relay2.contextvm.org']
 
 	switch (NODE_ENV) {
 		case 'production':

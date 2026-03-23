@@ -93,7 +93,7 @@ export const CURRENCIES = [
 	'NGN', // Nigerian Naira
 ] as const
 
-const CURRENCY_CVM_RELAYS = ['wss://relay.contextvm.org', 'wss://relay2.contextvm.org', 'wss://cvm.otherstuff.ai']
+const CURRENCY_CVM_RELAYS = ['wss://relay.contextvm.org', 'wss://relay2.contextvm.org']
 
 export function getCurrencyServerRelays(): string[] {
 	const env = process.env.NODE_ENV || 'development'
