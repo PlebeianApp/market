@@ -15,6 +15,7 @@ export interface CommentData {
 	createdAt: number
 	productAddress: string
 	parentId?: string
+	replies?: CommentData[]
 }
 
 const parseCommentEvent = (event: NDKEvent): CommentData => {
@@ -38,7 +39,16 @@ const isTopLevelComment = (event: NDKEvent): boolean => {
 	return !hasParentKind
 }
 
-export const fetchCommentsByProduct = async (productAddress: string): Promise<CommentData[]> => {
+const sortByCreatedAt = (comments: CommentData[]): void => {
+	comments.sort((a, b) => a.createdAt - b.createdAt)
+	for (const comment of comments) {
+		if (comment.replies && comment.replies.length > 0) {
+			sortByCreatedAt(comment.replies)
+		}
+	}
+}
+
+export const fetchAllCommentsByProduct = async (productAddress: string): Promise<CommentData[]> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) {
 		console.warn('NDK not ready, returning empty comments list')
@@ -54,17 +64,39 @@ export const fetchCommentsByProduct = async (productAddress: string): Promise<Co
 	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
 	const allEvents = Array.from(events)
 
-	const topLevelComments = allEvents.filter(isTopLevelComment)
+	const commentMap = new Map<string, CommentData>()
+	const topLevelComments: CommentData[] = []
 
-	const sortedComments = topLevelComments.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+	for (const event of allEvents) {
+		const comment: CommentData = { ...parseCommentEvent(event), replies: [] }
+		commentMap.set(comment.id, comment)
+	}
 
-	return sortedComments.map(parseCommentEvent)
+	const commentArray = Array.from(commentMap.values())
+	for (const comment of commentArray) {
+		if (comment.parentId) {
+			const parent = commentMap.get(comment.parentId)
+			if (parent) {
+				parent.replies!.push(comment)
+			} else {
+				topLevelComments.push(comment)
+			}
+		} else {
+			topLevelComments.push(comment)
+		}
+	}
+
+	sortByCreatedAt(topLevelComments)
+
+	topLevelComments.sort((a, b) => b.createdAt - a.createdAt)
+
+	return topLevelComments
 }
 
 export const commentsQueryOptions = (productAddress: string) =>
 	queryOptions({
 		queryKey: commentKeys.byProduct(productAddress.split(':')[1] || '', productAddress.split(':')[2] || ''),
-		queryFn: () => fetchCommentsByProduct(productAddress),
+		queryFn: () => fetchAllCommentsByProduct(productAddress),
 		staleTime: 60000,
 		refetchInterval: 30000,
 	})

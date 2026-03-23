@@ -56,6 +56,16 @@ export const publishComment = async (
 	return event.id
 }
 
+export const deleteComment = async (commentId: string, signer: NDKSigner, ndk: NDK): Promise<void> => {
+	const deleteEvent = new NDKEvent(ndk)
+	deleteEvent.kind = 5 // NIP-09 deletion
+	deleteEvent.content = 'Comment deleted'
+	deleteEvent.tags = [['e', commentId]]
+
+	await deleteEvent.sign(signer)
+	await ndkActions.publishEvent(deleteEvent)
+}
+
 export const usePublishComment = (productAddress: string, onSuccess?: () => void) => {
 	const queryClient = useQueryClient()
 
@@ -77,6 +87,32 @@ export const usePublishComment = (productAddress: string, onSuccess?: () => void
 		},
 		onError: (error: Error) => {
 			toast.error(error.message || 'Failed to post comment')
+			throw error
+		},
+	})
+}
+
+export const useDeleteComment = (productAddress: string, onSuccess?: () => void) => {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		mutationFn: (commentId: string) => {
+			const ndk = ndkActions.getNDK()
+			const signer = ndkActions.getSigner()
+			if (!ndk || !signer) {
+				throw new Error('Not logged in')
+			}
+			return deleteComment(commentId, signer, ndk)
+		},
+		onSuccess: () => {
+			const pubkey = productAddress.split(':')[1]
+			const dTag = productAddress.split(':')[2]
+			queryClient.invalidateQueries({ queryKey: commentKeys.byProduct(pubkey, dTag) })
+			toast.success('Comment deleted')
+			onSuccess?.()
+		},
+		onError: (error: Error) => {
+			toast.error(error.message || 'Failed to delete comment')
 			throw error
 		},
 	})
