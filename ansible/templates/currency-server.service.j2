@@ -1,0 +1,17 @@
+[Unit]
+Description=Plebeian Currency ContextVM Server
+After=network.target nak.service
+Requires=nak.service
+
+[Service]
+Type=simple
+User={{ app_user }}
+WorkingDirectory={{ app_dir }}
+Environment=PATH=/home/{{ app_user }}/.bun/bin:/usr/bin:/bin
+EnvironmentFile=-{{ app_dir }}/.env
+ExecStart=/home/{{ app_user }}/.bun/bin/bun run contextvm/currency-server.ts
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
