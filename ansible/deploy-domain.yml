@@ -1,0 +1,115 @@
+---
+- name: Deploy Nginx + HTTPS for Market Domain
+  hosts: all
+  become: true
+
+  vars:
+    market_domain: '{{ market_domain | mandatory }}'
+    cf_api_email: '{{ cf_api_email | mandatory }}'
+    cf_dns_api_token: '{{ cf_dns_api_token | mandatory }}'
+    acme_email: '{{ acme_email | mandatory }}'
+    certbot_dns_plugin: certbot-dns-cloudflare
+    certbot_email: '{{ acme_email }}'
+    web_root: /var/www/{{ market_domain }}
+    cert_path: /etc/letsencrypt/live/{{ market_domain }}
+
+  tasks:
+    - name: Install Nginx
+      apt:
+        name:
+          - nginx
+          - certbot
+          - python3-certbot-nginx
+          - python3-certbot-dns-cloudflare
+        state: present
+        update_cache: yes
+
+    - name: Create Cloudflare credentials file
+      copy:
+        content: |
+          dns_cloudflare_api_token = {{ cf_dns_api_token }}
+        dest: /etc/letsencrypt/cloudflare-credentials.ini
+        mode: 0600
+        owner: root
+
+    - name: Create web root directory
+      file:
+        path: '{{ web_root }}'
+        state: directory
+        mode: 0755
+
+    - name: Install Nginx site config (HTTP only initially)
+      template:
+        src: templates/nginx.conf.j2
+        dest: /etc/nginx/sites-available/{{ market_domain }}
+        mode: 0644
+      notify:
+        - Reload Nginx
+
+    - name: Enable Nginx site
+      file:
+        src: /etc/nginx/sites-available/{{ market_domain }}
+        dest: /etc/nginx/sites-enabled/{{ market_domain }}
+        state: link
+      notify:
+        - Reload Nginx
+
+    - name: Remove default Nginx site if present
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify:
+        - Reload Nginx
+
+    - name: Provision TLS certificate via Cloudflare DNS-01
+      command: >
+        certbot certonly
+        --dns-cloudflare
+        --dns-cloudflare-credentials /etc/letsencrypt/cloudflare-credentials.ini
+        --dns-cloudflare-propagation-seconds 30
+        --email {{ certbot_email }}
+        --agree-tos
+        --non-interactive
+        -d {{ market_domain }}
+      args:
+        creates: '{{ cert_path }}/fullchain.pem'
+
+    - name: Install Nginx site config (HTTPS)
+      template:
+        src: templates/nginx-ssl.conf.j2
+        dest: /etc/nginx/sites-available/{{ market_domain }}
+        mode: 0644
+      notify:
+        - Reload Nginx
+
+    - name: Add certbot renewal cron
+      copy:
+        content: |
+          #!/bin/bash
+          certbot renew --quiet --deploy-hook "systemctl reload nginx"
+        dest: /etc/cron.daily/certbot-renew
+        mode: 0755
+        owner: root
+
+    - name: Ensure firewall allows HTTP and HTTPS
+      ufw:
+        rule: allow
+        port: '{{ item }}'
+        proto: tcp
+      loop:
+        - '80'
+        - '443'
+      ignore_errors: yes
+
+  handlers:
+    - name: Reload Nginx
+      systemd:
+        name: nginx
+        state: reloaded
+        enabled: yes
+
+    - name: Restart Nginx
+      systemd:
+        name: nginx
+        state: restarted
+        enabled: yes

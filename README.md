@@ -191,3 +191,89 @@ git tag v0.2.9-release && git push origin v0.2.9-release
    ```
 4. Or run `Promote to Production` in GitHub Actions and choose `patch`, `minor`, or `major`
 5. The `Deploy to Production` workflow will build and deploy the selected tag after approval
+
+## Deployment
+
+Deployment is managed via Ansible playbooks and a Makefile. All deployment secrets are stored in `deploy.env` (gitignored).
+
+### Setup
+
+1. Copy the secrets template and fill in your values:
+   ```bash
+   cp deploy.env.example deploy.env
+   ```
+2. Edit `deploy.env` with your VPS IP, SSH key path, domain, Cloudflare credentials, etc.
+
+### Make Targets
+
+| Target               | Description                                                 |
+| -------------------- | ----------------------------------------------------------- |
+| `make deploy-local`  | Deploy to localhost via systemd (prompts for sudo password) |
+| `make deploy`        | Deploy to remote VPS via SSH                                |
+| `make deploy-domain` | Deploy + Nginx reverse proxy + HTTPS (Cloudflare DNS-01)    |
+| `make status`        | Show service status on VPS                                  |
+| `make logs`          | Tail service logs on VPS                                    |
+| `make seed`          | Run seed script on VPS                                      |
+
+### Local Deployment
+
+```bash
+make deploy-local
+```
+
+This installs Bun, builds the app, sets up systemd services for both `market` (port 3000) and `nak` relay (port 10547), seeds marketplace data, and starts everything.
+
+### Remote VPS Deployment
+
+```bash
+make deploy
+```
+
+Deploys to the VPS specified in `deploy.env` via SSH. Installs Bun, builds the app, configures systemd services.
+
+### Custom Domain + HTTPS
+
+```bash
+make deploy        # first, deploy the app
+make deploy-domain # then, add Nginx + Let's Encrypt
+```
+
+Sets up Nginx as a reverse proxy, provisions a TLS certificate via Cloudflare DNS-01 challenge, and configures auto-renewal.
+
+### Remote Operations
+
+```bash
+make status        # check service status
+make logs          # tail live logs
+make seed          # re-seed marketplace data
+```
+
+## Testing
+
+E2E tests are run with Playwright. The test suite manages its own relay and dev server automatically.
+
+### Running Tests
+
+```bash
+make test          # run all E2E tests (headless)
+make test-headed   # run with browser visible
+make test-ui       # run with Playwright UI
+make test-debug    # run in debug mode
+```
+
+### What's Tested
+
+The test suite covers the full marketplace workflow:
+
+- **Products** — listing, creation, editing, deletion, public marketplace display
+- **Checkout** — add to cart, select shipping, fill address, pay invoices, verify relay events
+- **Multi-seller marketplace** — products from multiple merchants, multi-merchant cart, V4V payment breakdown
+- **Cart** — add/remove items, quantity changes, persistence across navigation/reload
+- **Auth** — extension login, private key login, NIP-46 Nostr Connect, logout
+- **Payments** — Lightning payment config, NWC wallet management, invoice handling
+- **Navigation** — page loads, dashboard sections, routing
+- **Shipping** — option creation, digital delivery, local pickup
+
+### Test Infrastructure
+
+Tests use an isolated relay on port 10547 and dev server on port 34567. The relay is seeded with deterministic test data (user profiles, products, shipping options) before each scenario. Auth is mocked via NIP-07 extension injection, and Lightning payments are mocked via LNURL interception.
