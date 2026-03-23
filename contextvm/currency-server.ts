@@ -60,7 +60,7 @@ async function main() {
 	const relays = getRelays()
 	const relayPool = new ApplesauceRelayPool(relays)
 	const serverPubkey = await signer.getPublicKey()
-	const isPublic = NODE_ENV === 'production'
+	const isPublic = true
 
 	console.log(`=== Plebeian Currency ContextVM Server ===`)
 	console.log(`Public key: ${serverPubkey}`)

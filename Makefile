@@ -121,7 +121,7 @@ deploy-local: stop-local check-deploy-env
 			-c local \
 			-e "ansible_become_method=su" \
 			-e "ansible_become_password=$$PASS" \
-			-e "app_dir=$(LOCAL_APP_DIR)" \
+			-e "app_dir=$(CURDIR)" \
 			-e "app_user=$(LOCAL_APP_USER)" \
 			-e "bun_install_dir=/home/$(LOCAL_APP_USER)/.bun"; unset PASS'
 
