@@ -3,29 +3,6 @@ import type { Page } from '@playwright/test'
 
 test.use({ scenario: 'merchant' })
 
-const MOCK_YADIO_RATES = {
-	USD: 97500,
-	EUR: 89700,
-	GBP: 76200,
-	JPY: 14600000,
-}
-
-function setupYadioMock(page: Page) {
-	page.route('**/api.yadio.io/**', async (route) => {
-		await route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({ BTC: MOCK_YADIO_RATES }),
-		})
-	})
-}
-
-function blockContextVmRelays(page: Page) {
-	page.route('**/relay.contextvm.org/**', (route) => route.abort())
-	page.route('**/relay2.contextvm.org/**', (route) => route.abort())
-	page.route('**/cvm.otherstuff.ai/**', (route) => route.abort())
-}
-
 async function safeGoto(page: Page, url: string): Promise<void> {
 	const targetPath = url.split('?')[0]
 
@@ -50,18 +27,17 @@ async function safeGoto(page: Page, url: string): Promise<void> {
 	await page.goto(url)
 }
 
-async function waitForText(page: Page, locator: ReturnType<Page['locator']>, text: string, timeout = 15000): Promise<void> {
+async function waitForFiatPrice(page: Page, locator: ReturnType<Page['locator']>, timeout = 20000): Promise<string> {
+	let lastText = ''
 	await expect(async () => {
-		const content = await locator.textContent()
-		expect(content).toContain(text)
+		lastText = (await locator.textContent()) || ''
+		expect(lastText).toMatch(/\d[\d,.]+\s*(USD|EUR|GBP|JPY|CHF|CAD|AUD)/i)
 	}).toPass({ timeout })
+	return lastText
 }
 
 test.describe('BTC price display', () => {
 	test('products load and show product cards with sats prices', async ({ merchantPage }) => {
-		setupYadioMock(merchantPage)
-		blockContextVmRelays(merchantPage)
-
 		await safeGoto(merchantPage, '/products')
 
 		const card = merchantPage.locator('[data-testid="product-card"]').first()
@@ -71,22 +47,22 @@ test.describe('BTC price display', () => {
 		expect(productText).toMatch(/\d[\d,]*\s*sats/i)
 	})
 
-	test('product cards show fiat price from exchange rates', async ({ merchantPage }) => {
-		setupYadioMock(merchantPage)
-		blockContextVmRelays(merchantPage)
-
+	test('product cards show fiat price from real exchange rates', async ({ merchantPage }) => {
 		await safeGoto(merchantPage, '/products')
 
 		const card = merchantPage.locator('[data-testid="product-card"]').first()
 		await expect(card).toBeVisible({ timeout: 20000 })
 
-		await waitForText(merchantPage, card, 'USD')
+		const cardText = await waitForFiatPrice(merchantPage, card)
+
+		const fiatMatch = cardText.match(/([\d,.]+)\s*(USD|EUR|GBP|JPY|CHF|CAD|AUD)/i)
+		expect(fiatMatch).not.toBeNull()
+		if (fiatMatch) {
+			console.log(`  Real fiat price found: ${fiatMatch[1]} ${fiatMatch[2]}`)
+		}
 	})
 
 	test('currency dropdown switches displayed fiat price to EUR', async ({ merchantPage }) => {
-		setupYadioMock(merchantPage)
-		blockContextVmRelays(merchantPage)
-
 		await safeGoto(merchantPage, '/products')
 
 		const card = merchantPage.locator('[data-testid="product-card"]').first()
@@ -105,13 +81,16 @@ test.describe('BTC price display', () => {
 		const updatedText = await currencyButton.innerText()
 		expect(updatedText.trim()).toBe('EUR')
 
-		await waitForText(merchantPage, card, 'EUR')
+		const cardText = await waitForFiatPrice(merchantPage, card)
+
+		const eurMatch = cardText.match(/([\d,.]+)\s*EUR/i)
+		expect(eurMatch).not.toBeNull()
+		if (eurMatch) {
+			console.log(`  Real EUR price found: ${eurMatch[1]} EUR`)
+		}
 	})
 
 	test('product detail page shows price', async ({ merchantPage }) => {
-		setupYadioMock(merchantPage)
-		blockContextVmRelays(merchantPage)
-
 		await safeGoto(merchantPage, '/products')
 
 		const firstCard = merchantPage.locator('[data-testid="product-card"]').first()
@@ -120,27 +99,29 @@ test.describe('BTC price display', () => {
 
 		await merchantPage.waitForLoadState('networkidle')
 
-		await expect(merchantPage.getByText(/\d[\d,]*\s*sats/i).first()).toBeVisible({ timeout: 10000 })
+		const satsText = merchantPage.getByText(/\d[\d,]*\s*sats/i).first()
+		await expect(satsText).toBeVisible({ timeout: 10000 })
+
+		const priceContent = await satsText.textContent()
+		console.log(`  Product detail sats price: ${priceContent}`)
 	})
 
 	test('fiat price is a reasonable number (not NaN, not zero)', async ({ merchantPage }) => {
-		setupYadioMock(merchantPage)
-		blockContextVmRelays(merchantPage)
-
 		await safeGoto(merchantPage, '/products')
 
 		const card = merchantPage.locator('[data-testid="product-card"]').first()
 		await expect(card).toBeVisible({ timeout: 20000 })
 
-		await expect(async () => {
-			const cardText = await card.textContent()
-			const match = cardText.match(/[\d,.]+\s*(USD|EUR|GBP|JPY)/i)
-			expect(match).not.toBeNull()
-			if (!match) return
-			const numStr = match[0].replace(/[^0-9.]/g, '')
+		const cardText = await waitForFiatPrice(merchantPage, card)
+
+		const match = cardText.match(/([\d,.]+)\s*(USD|EUR|GBP|JPY|CHF|CAD|AUD)/i)
+		expect(match).not.toBeNull()
+		if (match) {
+			const numStr = match[1].replace(/,/g, '')
 			const num = parseFloat(numStr)
 			expect(num).toBeGreaterThan(0)
-			expect(num).toBeLessThan(1000000)
-		}).toPass({ timeout: 15000 })
+			expect(num).toBeLessThan(500000)
+			console.log(`  Verified real price: ${match[1]} ${match[2]}`)
+		}
 	})
 })
