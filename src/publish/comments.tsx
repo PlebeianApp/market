@@ -1,106 +1,83 @@
+import { COMMENT_KIND, PRODUCT_KIND } from '@/lib/schemas/productComment'
 import { ndkActions } from '@/lib/stores/ndk'
 import { commentKeys } from '@/queries/queryKeyFactory'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
-// NIP-22 Comment kind
-const COMMENT_KIND = 1111
+export const createCommentEvent = (
+	productAddress: string,
+	content: string,
+	signer: NDKSigner,
+	ndk: NDK,
+	parentCommentId?: string,
+): NDKEvent => {
+	const event = new NDKEvent(ndk)
+	event.kind = COMMENT_KIND
+	event.content = content
 
-interface PublishCommentParams {
-	content: string
-	productCoordinates: string // Format: "30018:<pubkey>:<d-tag>"
-	merchantPubkey: string
-	parentCommentId?: string // For replies to other comments
-	parentCommentPubkey?: string
-}
+	const tags: NDKTag[] = []
 
-/**
- * Publishes a NIP-22 comment on a product
- */
-export const publishComment = async ({
-	content,
-	productCoordinates,
-	merchantPubkey,
-	parentCommentId,
-	parentCommentPubkey,
-}: PublishCommentParams): Promise<NDKEvent> => {
-	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
-	if (!ndk.signer) throw new Error('No signer available')
+	tags.push(['A', productAddress])
 
-	const user = await ndk.signer.user()
-	if (!user) throw new Error('No active user')
+	const productKind = PRODUCT_KIND.toString()
+	tags.push(['K', productKind])
 
-	const connectedRelays = ndk.pool?.connectedRelays() || []
-	if (connectedRelays.length === 0) {
-		throw new Error('No connected relays. Please check your relay connections and try again.')
-	}
-
-	// Create NIP-22 comment event
-	const commentEvent = new NDKEvent(ndk)
-	commentEvent.kind = COMMENT_KIND
-	commentEvent.content = content
-	commentEvent.created_at = Math.floor(Date.now() / 1000)
-	commentEvent.pubkey = user.pubkey
-
-	// NIP-22 tags structure:
-	// - Uppercase tags (A, K, P) for root scope (the product)
-	// - Lowercase tags (a, e, k, p) for parent item
-	const tags: string[][] = []
-
-	// Root scope: the product (addressable event)
-	tags.push(['A', productCoordinates])
-	tags.push(['K', '30018']) // Product kind
-	tags.push(['P', merchantPubkey])
-
-	if (parentCommentId && parentCommentPubkey) {
-		// This is a reply to another comment
+	if (parentCommentId) {
 		tags.push(['e', parentCommentId])
-		tags.push(['k', '1111']) // Parent is a comment
-		tags.push(['p', parentCommentPubkey])
-	} else {
-		// Top-level comment on the product
-		tags.push(['a', productCoordinates])
-		tags.push(['k', '30018'])
-		tags.push(['p', merchantPubkey])
+		tags.push(['k', COMMENT_KIND.toString()])
 	}
 
-	commentEvent.tags = tags
+	event.tags = tags
 
-	try {
-		await commentEvent.sign(ndk.signer)
-		const publishedRelays = await commentEvent.publish()
-
-		if (publishedRelays.size === 0) {
-			throw new Error('Comment was not published to any relays.')
-		}
-
-		return commentEvent
-	} catch (error) {
-		console.error('Error publishing comment:', error)
-		throw error
-	}
+	return event
 }
 
-/**
- * Mutation hook for publishing a comment
- */
-export const usePublishCommentMutation = () => {
+export const publishComment = async (
+	productAddress: string,
+	content: string,
+	signer: NDKSigner,
+	ndk: NDK,
+	parentCommentId?: string,
+): Promise<string> => {
+	if (!content.trim()) {
+		throw new Error('Comment content is required')
+	}
+
+	if (content.length > 10000) {
+		throw new Error('Comment is too long (max 10000 characters)')
+	}
+
+	const event = createCommentEvent(productAddress, content.trim(), signer, ndk, parentCommentId)
+
+	await event.sign(signer)
+	await ndkActions.publishEvent(event)
+
+	return event.id
+}
+
+export const usePublishComment = (productAddress: string, onSuccess?: () => void) => {
 	const queryClient = useQueryClient()
 
 	return useMutation({
-		mutationFn: publishComment,
-		onSuccess: async (_, variables) => {
-			// Invalidate comments query to refetch
-			await queryClient.invalidateQueries({
-				queryKey: commentKeys.byProduct(variables.productCoordinates),
-			})
-			toast.success('Comment posted!')
+		mutationFn: ({ content, parentCommentId }: { content: string; parentCommentId?: string }) => {
+			const ndk = ndkActions.getNDK()
+			const signer = ndkActions.getSigner()
+			if (!ndk || !signer) {
+				throw new Error('Not logged in')
+			}
+			return publishComment(productAddress, content, signer, ndk, parentCommentId)
 		},
-		onError: (error) => {
-			console.error('Failed to publish comment:', error)
-			toast.error('Failed to post comment')
+		onSuccess: () => {
+			const pubkey = productAddress.split(':')[1]
+			const dTag = productAddress.split(':')[2]
+			queryClient.invalidateQueries({ queryKey: commentKeys.byProduct(pubkey, dTag) })
+			toast.success('Comment posted')
+			onSuccess?.()
+		},
+		onError: (error: Error) => {
+			toast.error(error.message || 'Failed to post comment')
+			throw error
 		},
 	})
 }

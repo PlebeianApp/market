@@ -39,10 +39,12 @@ import {
 	getProductType,
 	getProductVisibility,
 	getProductWeight,
+	getProductId,
 	isNSFWProduct,
 	productQueryOptions,
 	productsByPubkeyQueryOptions,
 } from '@/queries/products'
+import { getProductCommentAddress } from '@/queries/comments'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
@@ -608,7 +610,7 @@ function RouteComponent() {
 							<div>
 								<div className="bg-secondary text-white px-4 py-2 text-sm font-medium rounded-t-md">Comments</div>
 								<div className="rounded-lg bg-white p-6 shadow-md rounded-t-none">
-									<ProductComments productCoordinates={productCoords} merchantPubkey={pubkey} />
+									<ProductComments productAddress={getProductCommentAddress(pubkey || '', product ? getProductId(product) : '')} />
 								</div>
 							</div>
 						</div>
@@ -755,7 +757,7 @@ function RouteComponent() {
 
 							<TabsContent value="comments" className="mt-4 border-t-3 border-secondary bg-tertiary">
 								<div className="rounded-lg bg-white p-6 shadow-md">
-									<ProductComments productCoordinates={productCoords} merchantPubkey={pubkey} />
+									<ProductComments productAddress={getProductCommentAddress(pubkey || '', product ? getProductId(product) : '')} />
 								</div>
 							</TabsContent>
 						</Tabs>

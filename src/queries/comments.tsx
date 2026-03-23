@@ -1,64 +1,81 @@
+import { COMMENT_KIND, PRODUCT_KIND, getCommentAuthor, getCommentParentId, getCommentRootAddress } from '@/lib/schemas/productComment'
 import { ndkActions } from '@/lib/stores/ndk'
-import { commentKeys } from './queryKeyFactory'
+import type { NDKFilter } from '@nostr-dev-kit/ndk'
+import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { queryOptions, useQuery } from '@tanstack/react-query'
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
+import { commentKeys } from './queryKeyFactory'
 
-// NIP-22 Comment kind
-const COMMENT_KIND = 1111
+export { commentKeys }
 
-export interface ProductComment {
+export interface CommentData {
 	id: string
-	content: string
+	pubkey: string
 	authorPubkey: string
+	content: string
 	createdAt: number
-	parentId?: string // For threaded replies
+	productAddress: string
+	parentId?: string
 }
 
-const transformCommentEvent = (event: NDKEvent): ProductComment => {
-	// Get parent event id if this is a reply to another comment
-	const parentTag = event.tags.find((t) => t[0] === 'e' && event.tags.some((kt) => kt[0] === 'k' && kt[1] === '1111'))
-	const parentId = parentTag?.[1]
+const parseCommentEvent = (event: NDKEvent): CommentData => {
+	const authorPubkey = getCommentAuthor(event) ?? event.pubkey
+	const productAddress = getCommentRootAddress(event) ?? ''
+	const parentId = getCommentParentId(event)
 
 	return {
 		id: event.id,
+		pubkey: event.pubkey,
+		authorPubkey,
 		content: event.content,
-		authorPubkey: event.pubkey,
 		createdAt: event.created_at ?? Math.floor(Date.now() / 1000),
+		productAddress,
 		parentId,
 	}
 }
 
-/**
- * Fetches NIP-22 comments for a product
- * @param productCoordinates - The product coordinates in format "30018:<pubkey>:<d-tag>"
- */
-export const fetchProductComments = async (productCoordinates: string): Promise<ProductComment[]> => {
-	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
-
-	// NIP-22 comments reference the root with an A tag for addressable events
-	const filter: NDKFilter = {
-		kinds: [COMMENT_KIND],
-		'#A': [productCoordinates],
-	}
-
-	const events = await ndk.fetchEvents(filter)
-	const comments = Array.from(events).map(transformCommentEvent)
-
-	// Sort by oldest first (chronological order for comments)
-	return comments.sort((a, b) => a.createdAt - b.createdAt)
+const isTopLevelComment = (event: NDKEvent): boolean => {
+	const hasParentKind = event.tags.some((t) => t[0] === 'k')
+	return !hasParentKind
 }
 
-export const productCommentsQueryOptions = (productCoordinates: string) =>
+export const fetchCommentsByProduct = async (productAddress: string): Promise<CommentData[]> => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) {
+		console.warn('NDK not ready, returning empty comments list')
+		return []
+	}
+
+	const filter: NDKFilter = {
+		kinds: [COMMENT_KIND],
+		'#A': [productAddress],
+		limit: 100,
+	}
+
+	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
+	const allEvents = Array.from(events)
+
+	const topLevelComments = allEvents.filter(isTopLevelComment)
+
+	const sortedComments = topLevelComments.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+
+	return sortedComments.map(parseCommentEvent)
+}
+
+export const commentsQueryOptions = (productAddress: string) =>
 	queryOptions({
-		queryKey: commentKeys.byProduct(productCoordinates),
-		queryFn: () => fetchProductComments(productCoordinates),
-		enabled: !!productCoordinates,
+		queryKey: commentKeys.byProduct(productAddress.split(':')[1] || '', productAddress.split(':')[2] || ''),
+		queryFn: () => fetchCommentsByProduct(productAddress),
+		staleTime: 60000,
+		refetchInterval: 30000,
 	})
 
-/**
- * Hook to fetch comments for a product
- */
-export const useProductComments = (productCoordinates: string) => {
-	return useQuery(productCommentsQueryOptions(productCoordinates))
+export const useComments = (productAddress: string) => {
+	return useQuery({
+		...commentsQueryOptions(productAddress),
+		enabled: !!productAddress,
+	})
+}
+
+export const getProductCommentAddress = (productPubkey: string, productDTag: string): string => {
+	return `${PRODUCT_KIND}:${productPubkey}:${productDTag}`
 }
