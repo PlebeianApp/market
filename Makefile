@@ -69,29 +69,29 @@ stop-local:
 	@echo "==> Stopping local services..."
 	@-lsof -t -i :3000 2>/dev/null | xargs kill 2>/dev/null || true
 	@-lsof -t -i :10547 2>/dev/null | xargs kill 2>/dev/null || true
-	@echo "c03rad0r123" | sudo -S systemctl stop market nak 2>/dev/null || true
+	@sudo systemctl stop market nak 2>/dev/null || true
 	@sleep 2
 	@echo "==> Ports 3000 and 10547 cleared."
 
 status-local:
-	@echo "c03rad0r123" | sudo -S systemctl status market --no-pager 2>/dev/null || echo "market service not found"
+	@sudo systemctl status market --no-pager 2>/dev/null || echo "market service not found"
 	@echo "---"
-	@echo "c03rad0r123" | sudo -S systemctl status nak --no-pager 2>/dev/null || echo "nak service not found"
+	@sudo systemctl status nak --no-pager 2>/dev/null || echo "nak service not found"
 
 logs-local:
 	journalctl -u market -u nak -f
 
 deploy-local: stop-local check-deploy-env
 	@echo "==> Deploying to localhost..."
-	@read -s -p "Sudo password: " PASS && echo && \
-	ansible-playbook ansible/deploy.yml \
-		-i localhost, \
-		-c local \
-		-e "ansible_become_method=su" \
-		-e "ansible_become_password=$$PASS" \
-		-e "app_dir=$(LOCAL_APP_DIR)" \
-		-e "app_user=$(LOCAL_APP_USER)" \
-		-e "bun_install_dir=/home/$(LOCAL_APP_USER)/.bun"; unset PASS
+	@bash -c 'read -s -p "Sudo password: " PASS && echo && \
+		ansible-playbook ansible/deploy.yml \
+			-i localhost, \
+			-c local \
+			-e "ansible_become_method=su" \
+			-e "ansible_become_password=$$PASS" \
+			-e "app_dir=$(LOCAL_APP_DIR)" \
+			-e "app_user=$(LOCAL_APP_USER)" \
+			-e "bun_install_dir=/home/$(LOCAL_APP_USER)/.bun"; unset PASS'
 
 # ---------------------------------------------------------------------------
 # Deployment: remote VPS via SSH
