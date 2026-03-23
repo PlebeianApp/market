@@ -37,6 +37,9 @@ ansible/
 .cache
 *.tsbuildinfo
 
+# SQLite database for currency server cache
+contextvm/data/
+
 # IntelliJ based IDEs
 .idea
 

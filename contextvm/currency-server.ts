@@ -2,6 +2,9 @@ import { NostrServerTransport, PrivateKeySigner, ApplesauceRelayPool } from '@co
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { fetchAllSources, SUPPORTED_FIAT, type AggregatedRates, type FiatCode } from './tools/price-sources'
 import { getBtcPriceInputSchema, getBtcPriceOutputSchema, getBtcPriceSingleInputSchema, getBtcPriceSingleOutputSchema } from './schemas'
+import { RatesCache } from './tools/rates-cache'
+import { mkdirSync } from 'node:fs'
+import { dirname } from 'node:path'
 
 const SERVER_PRIVATE_KEY = process.env.CURRENCY_SERVER_KEY || '2300f5fff5642341946758cad8214f2c54f3c40fba5ba51b616452b197fd3e71'
 
@@ -9,45 +12,45 @@ const NODE_ENV = process.env.NODE_ENV || 'development'
 
 function getRelays(): string[] {
 	const appRelay = process.env.APP_RELAY_URL
+	const cvmRelays = ['wss://relay.contextvm.org', 'wss://relay2.contextvm.org', 'wss://cvm.otherstuff.ai']
 
 	switch (NODE_ENV) {
 		case 'production':
-			return [
-				appRelay || 'wss://relay.plebeian.market',
-				'wss://relay.contextvm.org',
-				'wss://relay2.contextvm.org',
-				'wss://cvm.otherstuff.ai',
-			]
+			return [appRelay || 'wss://relay.plebeian.market', ...cvmRelays]
 		case 'staging':
-			return [
-				appRelay || 'wss://relay.staging.plebeian.market',
-				'wss://relay.contextvm.org',
-				'wss://relay2.contextvm.org',
-				'wss://cvm.otherstuff.ai',
-			]
+			return [appRelay || 'wss://relay.staging.plebeian.market', ...cvmRelays]
 		default:
-			return [appRelay || 'ws://localhost:10547', 'wss://relay.contextvm.org', 'wss://relay2.contextvm.org', 'wss://cvm.otherstuff.ai']
+			return [appRelay || 'ws://localhost:10547']
 	}
+}
+
+function getCachePath(): string {
+	return process.env.CURRENCY_CACHE_PATH || './contextvm/data/rates-cache.sqlite'
 }
 
 const CACHE_TTL_MS = 2 * 60 * 1000
 
-let cachedRates: AggregatedRates | null = null
-let cacheTimer: ReturnType<typeof setTimeout> | null = null
+let cache: RatesCache
+
+function getCache(): RatesCache {
+	if (!cache) {
+		const cachePath = getCachePath()
+		mkdirSync(dirname(cachePath), { recursive: true })
+		cache = new RatesCache(cachePath)
+	}
+	return cache
+}
 
 async function getRates(forceRefresh = false): Promise<AggregatedRates> {
-	if (!forceRefresh && cachedRates && Date.now() - cachedRates.fetchedAt < CACHE_TTL_MS) {
-		return { ...cachedRates, cached: true }
+	if (!forceRefresh) {
+		const cached = getCache().get('btc-rates')
+		if (cached) {
+			return { ...JSON.parse(cached), cached: true }
+		}
 	}
 
 	const rates = await fetchAllSources()
-	cachedRates = rates
-
-	if (cacheTimer) clearTimeout(cacheTimer)
-	cacheTimer = setTimeout(() => {
-		cachedRates = null
-		cacheTimer = null
-	}, CACHE_TTL_MS)
+	getCache().set('btc-rates', JSON.stringify(rates), CACHE_TTL_MS)
 
 	return { ...rates, cached: false }
 }
@@ -57,12 +60,15 @@ async function main() {
 	const relays = getRelays()
 	const relayPool = new ApplesauceRelayPool(relays)
 	const serverPubkey = await signer.getPublicKey()
+	const isPublic = NODE_ENV === 'production'
 
 	console.log(`=== Plebeian Currency ContextVM Server ===`)
 	console.log(`Public key: ${serverPubkey}`)
 	console.log(`Environment: ${NODE_ENV}`)
+	console.log(`Public server: ${isPublic}`)
 	console.log(`Relays: ${relays.join(', ')}`)
 	console.log(`Cache TTL: ${CACHE_TTL_MS / 1000}s`)
+	console.log(`Cache path: ${getCachePath()}`)
 	console.log(`Supported currencies: ${SUPPORTED_FIAT.length}`)
 	console.log()
 
@@ -157,7 +163,7 @@ async function main() {
 	const serverTransport = new NostrServerTransport({
 		signer,
 		relayHandler: relayPool,
-		isPublicServer: true,
+		isPublicServer: isPublic,
 		serverInfo: {
 			name: 'Plebeian Currency Server',
 			website: 'https://plebeian.market',

@@ -1,7 +1,7 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { currencyKeys } from './queryKeyFactory'
 import { CURRENCIES } from '@/lib/constants'
-import { CURRENCY_SERVER_PUBKEY, CURRENCY_CONTEXTVM_RELAYS } from '@/lib/constants'
+import { CURRENCY_SERVER_PUBKEY, getCurrencyServerRelays } from '@/lib/constants'
 
 const numSatsInBtc = 100000000
 export type SupportedCurrency = (typeof CURRENCIES)[number]
@@ -35,7 +35,8 @@ async function getContextVmClient() {
 			const signer = new PrivateKeySigner(hexKey)
 
 			const mainRelay = typeof window !== 'undefined' ? await getMainRelayFromConfig() : undefined
-			const relays = mainRelay ? [mainRelay, ...CURRENCY_CONTEXTVM_RELAYS] : CURRENCY_CONTEXTVM_RELAYS
+			const cvmRelays = getCurrencyServerRelays()
+			const relays = mainRelay ? [mainRelay, ...cvmRelays] : cvmRelays
 			const relayPool = new ApplesauceRelayPool(relays)
 
 			const transport = new NostrClientTransport({
