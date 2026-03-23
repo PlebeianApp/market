@@ -135,10 +135,5 @@ export const migrationKeys = {
 
 export const commentKeys = {
 	all: ['comments'] as const,
-	byProduct: (pubkey: string, dTag: string) => [...commentKeys.all, pubkey, dTag] as const,
-} as const
-
-export const commentKeys = {
-	all: ['comments'] as const,
 	byProduct: (productCoordinates: string) => [...commentKeys.all, 'byProduct', productCoordinates] as const,
 } as const
