@@ -1,5 +1,10 @@
 import { describe, test, expect, beforeEach, afterEach, mock, spyOn } from 'bun:test'
 
+const originalWarn = console.warn
+const originalError = console.error
+console.warn = () => {}
+console.error = () => {}
+
 mock.module('@contextvm/sdk', () => ({
 	NostrClientTransport: class {
 		constructor() {
@@ -60,8 +65,6 @@ function jsonOk(body: unknown): Response {
 }
 
 describe('external.tsx - fetchBtcExchangeRates', () => {
-	beforeEach(() => {})
-
 	afterEach(() => {
 		globalThis.fetch = ORIGINAL_FETCH
 	})
