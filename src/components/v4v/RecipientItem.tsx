@@ -1,5 +1,4 @@
 import { Button } from '@/components/ui/button'
-import { UserWithAvatar } from '@/components/UserWithAvatar'
 import type { V4VDTO } from '@/lib/stores/cart'
 import { nip19 } from 'nostr-tools'
 import { Slider } from '@/components/ui/slider'
@@ -11,6 +10,7 @@ import { useZapCapabilityInfo } from '@/queries/profiles'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Spinner } from '@/components/ui/spinner'
+import { UserCard } from '../UserCard'
 
 interface RecipientItemProps {
 	share: V4VDTO
@@ -65,7 +65,7 @@ export function RecipientItem({ share, onRemove, onPercentageChange, color: prov
 			style={{ borderLeftWidth: '4px', borderLeftColor: color }}
 		>
 			<div className="flex items-center gap-2 p-3">
-				<UserWithAvatar pubkey={pubkey} size="sm" showBadge={false} />
+				<UserCard pubkey={pubkey} size="xs" />
 
 				{/* Zap capability badges */}
 				<div className="flex items-center gap-1">

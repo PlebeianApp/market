@@ -3,6 +3,7 @@ import { ItemGrid } from '@/components/ItemGrid'
 import { Nip05Badge } from '@/components/Nip05Badge.tsx'
 import { ProductCard } from '@/components/ProductCard'
 import { Button } from '@/components/ui/button'
+import { UserCard } from '@/components/UserCard'
 import { ZapButton } from '@/components/ZapButton.tsx'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { useEntityPermissions } from '@/hooks/useEntityPermissions'
@@ -210,21 +211,7 @@ function RouteComponent() {
 					</div>
 				</div>
 				<div className="flex flex-row justify-between px-4 py-2 bg-black items-center">
-					<Link to={`/profile/${pubkey}`}>
-						<div className="flex flex-row items-center gap-4">
-							{profile?.picture && (
-								<img
-									src={profile.picture}
-									alt={profile.name || 'Profile picture'}
-									className="rounded-full w-10 h-10 sm:w-8 sm:h-8 border-2 border-black"
-								/>
-							)}
-							<div className="flex items-center gap-2">
-								<h2 className="text-1xl font-bold text-white">{truncateText(profile?.name ?? 'Unnamed user', isSmallScreen ? 10 : 50)}</h2>
-								<Nip05Badge pubkey={user?.pubkey || ''} showAddress nip05={profile?.nip05} />
-							</div>{' '}
-						</div>
-					</Link>
+					<UserCard pubkey={pubkey} size="md" className="[&>h2]:text-white" />
 					{!isSmallScreen && (
 						<div className="flex gap-2">
 							{user && <ZapButton event={user} />}

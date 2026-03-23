@@ -1,10 +1,10 @@
 import { useBreakpoint } from '@/hooks/useBreakpoint'
-import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { notificationStore } from '@/lib/stores/notifications'
 import { Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { Card } from '@/components/ui/card'
 import { MessageSquareText } from 'lucide-react'
+import { UserCard } from '../UserCard'
 
 export interface ConversationItemData {
 	pubkey: string
@@ -58,7 +58,7 @@ export function ConversationListItem({ conversation }: ConversationListItemProps
 					<div className="flex-1 flex flex-col gap-1">
 						{/* Top Row: Avatar and Date */}
 						<div className="flex items-center justify-between">
-							<UserWithAvatar pubkey={pubkey} size="md" disableLink={true} showBadge={false} />
+							<UserCard pubkey={pubkey} size="sm" onPress="none" />
 							{!isMobile && dateElement}
 						</div>
 						{/* Bottom Row: Snippet */}

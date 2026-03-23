@@ -1,4 +1,3 @@
-import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { ChatMessageBubble } from '@/components/messages/ChatMessageBubble'
 import { MessageInput } from '@/components/messages/MessageInput'
 import { Button } from '@/components/ui/button'

@@ -1,6 +1,5 @@
 import CartItem from '@/components/CartItem'
 import { ShippingSelector } from '@/components/ShippingSelector'
-import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { RichShippingInfo } from '@/lib/stores/cart'
@@ -11,6 +10,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useMemo, useState } from 'react'
 import { EmptyCartScreen } from './EmptyCartScreen'
+import { UserCard } from '@/components/UserCard'
 
 export function CartContent({ className = '' }: { className?: string }) {
 	const {
@@ -127,7 +127,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 							return (
 								<div key={sellerPubkey} className="p-4 rounded-lg border shadow-md bg-white">
 									<div className="mb-3">
-										<UserWithAvatar pubkey={sellerPubkey} size="sm" showBadge={false} />
+										<UserCard pubkey={sellerPubkey} size="sm" subtitle="nip-05" />
 									</div>
 
 									<ul className="space-y-4">
