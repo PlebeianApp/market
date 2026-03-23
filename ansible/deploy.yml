@@ -1,6 +1,6 @@
 ---
 - name: Deploy Market Frontend
-  hosts: local
+  hosts: all
   become: true
 
   vars:
@@ -91,7 +91,6 @@
       args:
         chdir: '{{ app_dir }}'
 
-
     - name: Install systemd service
       template:
         src: templates/market.service.j2
@@ -116,6 +115,8 @@
         dest: '/usr/local/bin/nak'
         mode: '0755'
         remote_src: yes
+      when: lookup('file', app_dir + '/nak-v0.19.0-linux-amd64', errors='ignore') is defined
+      ignore_errors: yes
 
     - name: Reload systemd after installing services
       systemd:
