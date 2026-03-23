@@ -93,6 +93,10 @@ export const CURRENCIES = [
 	'NGN', // Nigerian Naira
 ] as const
 
+export const CURRENCY_CONTEXTVM_RELAYS: string[] = ['wss://relay.contextvm.org', 'wss://relay2.contextvm.org', 'wss://cvm.otherstuff.ai']
+
+export const CURRENCY_SERVER_PUBKEY = '29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15'
+
 export const DEFAULT_ZAP_AMOUNTS = [
 	{ displayText: '😊 21 sats', amount: 21 },
 	{ displayText: '🚀 210 sats', amount: 210 },
