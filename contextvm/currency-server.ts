@@ -20,7 +20,7 @@ function getRelays(): string[] {
 		case 'staging':
 			return [appRelay || 'wss://relay.staging.plebeian.market', ...cvmRelays]
 		default:
-			return [appRelay || 'ws://localhost:10547']
+			return [appRelay || 'ws://localhost:10547', ...cvmRelays]
 	}
 }
 
