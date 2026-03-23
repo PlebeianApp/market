@@ -13,43 +13,6 @@ export const CURRENCY_CACHE_CONFIG = {
 	RESOLVE_TIMEOUT: 5000,
 } as const
 
-const EXCHANGE_RATES_CACHE_KEY = 'btc_exchange_rates'
-
-interface CachedExchangeRates {
-	rates: Record<SupportedCurrency, number>
-	timestamp: number
-}
-
-const getCachedRates = (): Record<SupportedCurrency, number> | null => {
-	try {
-		const cached = localStorage.getItem(EXCHANGE_RATES_CACHE_KEY)
-		if (!cached) return null
-
-		const { rates, timestamp }: CachedExchangeRates = JSON.parse(cached)
-		const now = Date.now()
-
-		if (now - timestamp > CURRENCY_CACHE_CONFIG.STALE_TIME) {
-			return null
-		}
-
-		return rates
-	} catch {
-		return null
-	}
-}
-
-const cacheRates = (rates: Record<SupportedCurrency, number>): void => {
-	try {
-		const cacheData: CachedExchangeRates = {
-			rates,
-			timestamp: Date.now(),
-		}
-		localStorage.setItem(EXCHANGE_RATES_CACHE_KEY, JSON.stringify(cacheData))
-	} catch (error) {
-		console.warn('Failed to cache exchange rates:', error)
-	}
-}
-
 let contextVmClient: any = null
 let contextVmInitPromise: Promise<any> | null = null
 
@@ -71,7 +34,7 @@ async function getContextVmClient() {
 				.join('')
 			const signer = new PrivateKeySigner(hexKey)
 
-			const mainRelay = typeof window !== 'undefined' ? getMainRelayFromConfig() : undefined
+			const mainRelay = typeof window !== 'undefined' ? await getMainRelayFromConfig() : undefined
 			const relays = mainRelay ? [mainRelay, ...CURRENCY_CONTEXTVM_RELAYS] : CURRENCY_CONTEXTVM_RELAYS
 			const relayPool = new ApplesauceRelayPool(relays)
 
@@ -96,17 +59,13 @@ async function getContextVmClient() {
 	return contextVmInitPromise
 }
 
-function getMainRelayFromConfig(): string | undefined {
+async function getMainRelayFromConfig(): Promise<string | undefined> {
 	try {
-		const stored = localStorage.getItem('app-config')
-		if (stored) {
-			const config = JSON.parse(stored)
-			if (config?.appRelay) return config.appRelay
-		}
+		const { configStore } = await import('@/lib/stores/config')
+		return configStore.state.config.appRelay
 	} catch {
-		// ignore
+		return undefined
 	}
-	return undefined
 }
 
 const CONTEXTVM_CALL_TIMEOUT = 3000
@@ -142,11 +101,6 @@ async function fetchFromContextVm(): Promise<Record<string, number> | null> {
 }
 
 export const fetchBtcExchangeRates = async (): Promise<Record<SupportedCurrency, number>> => {
-	const cachedRates = getCachedRates()
-	if (cachedRates) {
-		return cachedRates
-	}
-
 	let rates: Record<string, number> | null = null
 
 	rates = await fetchFromContextVm()
@@ -165,7 +119,6 @@ export const fetchBtcExchangeRates = async (): Promise<Record<SupportedCurrency,
 		}
 	}
 
-	cacheRates(rates as Record<SupportedCurrency, number>)
 	return rates as Record<SupportedCurrency, number>
 }
 

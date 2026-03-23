@@ -1,16 +1,5 @@
 import { describe, test, expect, beforeEach, afterEach, mock, spyOn } from 'bun:test'
 
-const storage = new Map<string, string>()
-Object.defineProperty(globalThis, 'localStorage', {
-	value: {
-		getItem: (key: string) => storage.get(key) ?? null,
-		setItem: (key: string, value: string) => storage.set(key, value),
-		removeItem: (key: string) => storage.delete(key),
-		clear: () => storage.clear(),
-	},
-	writable: true,
-})
-
 mock.module('@contextvm/sdk', () => ({
 	NostrClientTransport: class {
 		constructor() {
@@ -37,10 +26,9 @@ mock.module('@modelcontextprotocol/sdk/client', () => ({
 	},
 }))
 
-import { convertCurrencyToSats, fetchBtcExchangeRates, CURRENCY_CACHE_CONFIG } from '../external'
+import { convertCurrencyToSats, fetchBtcExchangeRates } from '../external'
 
 const ORIGINAL_FETCH = globalThis.fetch
-const EXCHANGE_RATES_CACHE_KEY = 'btc_exchange_rates'
 
 const MOCK_RATES: Record<string, number> = {
 	SATS: 1,
@@ -49,18 +37,6 @@ const MOCK_RATES: Record<string, number> = {
 	EUR: 92000,
 	GBP: 78000,
 	JPY: 15000000,
-}
-
-function setCachedRates(rates: Record<string, number>, ageMs = 0) {
-	const cacheData = {
-		rates,
-		timestamp: Date.now() - ageMs,
-	}
-	localStorage.setItem(EXCHANGE_RATES_CACHE_KEY, JSON.stringify(cacheData))
-}
-
-function clearCachedRates() {
-	localStorage.removeItem(EXCHANGE_RATES_CACHE_KEY)
 }
 
 function mockGlobalFetch(responses: Record<string, () => Response | Promise<Response>>) {
@@ -84,41 +60,13 @@ function jsonOk(body: unknown): Response {
 }
 
 describe('external.tsx - fetchBtcExchangeRates', () => {
-	beforeEach(() => {
-		storage.clear()
-	})
+	beforeEach(() => {})
 
 	afterEach(() => {
 		globalThis.fetch = ORIGINAL_FETCH
-		storage.clear()
 	})
 
-	test('returns cached rates from localStorage without network call', async () => {
-		setCachedRates(MOCK_RATES, 0)
-
-		const result = await fetchBtcExchangeRates()
-
-		expect(result.USD).toBe(100000)
-		expect(result.EUR).toBe(92000)
-		expect(result.GBP).toBe(78000)
-	})
-
-	test('ignores expired cache (older than STALE_TIME)', async () => {
-		setCachedRates(MOCK_RATES, CURRENCY_CACHE_CONFIG.STALE_TIME + 1000)
-
-		mockGlobalFetch({
-			'api.yadio.io': () => jsonOk({ BTC: { USD: 101000, EUR: 93000 } }),
-		})
-
-		const result = await fetchBtcExchangeRates()
-
-		expect(result.USD).toBe(101000)
-		expect(result.EUR).toBe(93000)
-	})
-
-	test('falls back to Yadio API when ContextVM is unavailable', async () => {
-		clearCachedRates()
-
+	test('fetches fresh rates from Yadio when ContextVM is unavailable', async () => {
 		mockGlobalFetch({
 			'api.yadio.io': () => jsonOk({ BTC: { USD: 102000, EUR: 94000, GBP: 80000 } }),
 		})
@@ -131,8 +79,6 @@ describe('external.tsx - fetchBtcExchangeRates', () => {
 	})
 
 	test('throws when both ContextVM and Yadio fail', async () => {
-		clearCachedRates()
-
 		mockGlobalFetch({
 			'api.yadio.io': () => new Response('error', { status: 500 }),
 		})
@@ -140,31 +86,48 @@ describe('external.tsx - fetchBtcExchangeRates', () => {
 		await expect(fetchBtcExchangeRates()).rejects.toThrow('Failed to fetch BTC exchange rates')
 	})
 
-	test('caches successful Yadio fetch in localStorage', async () => {
-		clearCachedRates()
+	test('throws when Yadio returns non-JSON error', async () => {
+		mockGlobalFetch({
+			'api.yadio.io': () => new Response('Service Unavailable', { status: 503 }),
+		})
 
+		await expect(fetchBtcExchangeRates()).rejects.toThrow('Failed to fetch BTC exchange rates')
+	})
+
+	test('does not cache rates in localStorage', async () => {
 		mockGlobalFetch({
 			'api.yadio.io': () => jsonOk({ BTC: { USD: 103000 } }),
 		})
 
 		await fetchBtcExchangeRates()
 
-		const stored = localStorage.getItem(EXCHANGE_RATES_CACHE_KEY)
-		expect(stored).not.toBeNull()
-		const parsed = JSON.parse(stored!)
-		expect(parsed.rates.USD).toBe(103000)
-		expect(parsed.timestamp).toBeGreaterThan(0)
+		const stored = globalThis.localStorage?.getItem('btc_exchange_rates')
+		expect(stored).toBeUndefined()
+	})
+
+	test('always fetches fresh rates on every call', async () => {
+		let callCount = 0
+		mockGlobalFetch({
+			'api.yadio.io': () => {
+				callCount++
+				return jsonOk({ BTC: { USD: 100000 + callCount * 1000 } })
+			},
+		})
+
+		const result1 = await fetchBtcExchangeRates()
+		const result2 = await fetchBtcExchangeRates()
+		const result3 = await fetchBtcExchangeRates()
+
+		expect(result1.USD).toBe(101000)
+		expect(result2.USD).toBe(102000)
+		expect(result3.USD).toBe(103000)
+		expect(callCount).toBe(3)
 	})
 })
 
 describe('external.tsx - convertCurrencyToSats', () => {
-	beforeEach(() => {
-		storage.clear()
-	})
-
 	afterEach(() => {
 		globalThis.fetch = ORIGINAL_FETCH
-		storage.clear()
 	})
 
 	test('returns amount directly for sats currency', async () => {
@@ -208,7 +171,9 @@ describe('external.tsx - convertCurrencyToSats', () => {
 	})
 
 	test('converts USD to sats correctly', async () => {
-		setCachedRates(MOCK_RATES)
+		mockGlobalFetch({
+			'api.yadio.io': () => jsonOk({ BTC: MOCK_RATES }),
+		})
 
 		const result = await convertCurrencyToSats('USD', 100)
 
@@ -219,7 +184,9 @@ describe('external.tsx - convertCurrencyToSats', () => {
 	})
 
 	test('converts EUR to sats correctly', async () => {
-		setCachedRates(MOCK_RATES)
+		mockGlobalFetch({
+			'api.yadio.io': () => jsonOk({ BTC: MOCK_RATES }),
+		})
 
 		const result = await convertCurrencyToSats('EUR', 92)
 
@@ -230,7 +197,9 @@ describe('external.tsx - convertCurrencyToSats', () => {
 	})
 
 	test('handles currency case insensitively', async () => {
-		setCachedRates(MOCK_RATES)
+		mockGlobalFetch({
+			'api.yadio.io': () => jsonOk({ BTC: MOCK_RATES }),
+		})
 
 		const result = await convertCurrencyToSats('usd', 50)
 
@@ -241,8 +210,6 @@ describe('external.tsx - convertCurrencyToSats', () => {
 	})
 
 	test('returns null when exchange rate fetch fails', async () => {
-		clearCachedRates()
-
 		mockGlobalFetch({
 			'api.yadio.io': () => new Response('error', { status: 500 }),
 		})
