@@ -82,8 +82,8 @@ Signed by seller.
 - `vadium_ratio_bps`: default `10000` (100%).
 - `schema`: version marker, e.g. `auction_v1`.
 - `shipping_option`: if auction is for physical good.
-- `key_scheme`: `static_p2pk | hd_p2pk` (default `static_p2pk`).
-- `p2pk_xpub`: seller/escrow xpub used only when `key_scheme=hd_p2pk`.
+- `key_scheme`: `hd_p2pk`.
+- `p2pk_xpub`: required seller/escrow xpub used for per-bid child key derivation.
 
 ### Immutable vs mutable tags
 

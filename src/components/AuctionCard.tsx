@@ -76,7 +76,6 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 				auctionEndAt: endAt,
 				sellerPubkey: auction.pubkey,
 				escrowPubkey,
-				keyScheme,
 				p2pkXpub,
 				mint: acceptedMints[0],
 			})
