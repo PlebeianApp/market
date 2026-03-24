@@ -4,6 +4,7 @@ import { profileByIdentifierQueryOptions, useProfileName } from '@/queries/profi
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from '@tanstack/react-router'
+import { UserCard } from './UserCard'
 
 export function CollectionCard({ collection }: { collection: NDKEvent }) {
 	const title = getCollectionTitle(collection)
@@ -59,19 +60,7 @@ export function CollectionCard({ collection }: { collection: NDKEvent }) {
 				<div className="flex-grow"></div>
 				<Link to={`/profile/${pubkey}`}>
 					<div className="text-sm flex flex-row items-center gap-2">
-						by{' '}
-						{profile?.picture && !isLoadingProfile && (
-							<img
-								src={profile.picture}
-								alt={profile.name || 'Profile picture'}
-								className="rounded-full w-1 h-1 sm:w-6 sm:h-6 border-2 border-black"
-							/>
-						)}
-						{profile?.name && !isLoadingProfile ? (
-							<div className="truncate">{profile.name}</div>
-						) : (
-							<div className="truncate text-gray-500">...</div>
-						)}
+						by <UserCard pubkey={pubkey} size="xs" />
 					</div>
 				</Link>
 			</div>

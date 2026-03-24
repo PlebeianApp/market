@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { UserNameWithBadge } from '@/components/UserNameWithBadge'
+import { UserCard } from '@/components/UserCard'
 import { ZapButton } from '@/components/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { useEntityPermissions } from '@/hooks/useEntityPermissions'
@@ -245,7 +245,7 @@ function RouteComponent() {
 					<Link to="/products" className="inline-flex">
 						<Button variant="outline">Back to products</Button>
 					</Link>
-					<Button variant="default" onClick={() => uiActions.openNSFWConfirmation()} className="bg-amber-600 hover:bg-amber-700">
+					<Button variant="primary" onClick={() => uiActions.openNSFWConfirmation()} className="bg-amber-600 hover:bg-amber-700">
 						Enable adult content
 					</Button>
 				</div>
@@ -262,7 +262,7 @@ function RouteComponent() {
 		if (!product || visibility === 'hidden') return
 
 		// Just add the product ID to the cart with the specified quantity
-		await cartActions.addProduct(pubkey, {
+		await cartActions.addProduct({
 			id: productId,
 			amount: quantity,
 			shippingMethodId: null,
@@ -482,10 +482,8 @@ function RouteComponent() {
 								</div>
 							)}
 
-							<div className="flex items-center gap-2">
-								<span>Sold by:</span>
-								<UserNameWithBadge pubkey={pubkey} />
-							</div>
+							<span>Sold by:</span>
+							<UserCard pubkey={pubkey} size="md" />
 						</div>
 					</div>
 				</div>

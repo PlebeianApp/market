@@ -330,6 +330,16 @@ button {
 		background-repeat: no-repeat;
 	}
 
+	.bg-hero-image-margin {
+		margin-top: -8.5rem;
+	}
+
+	@media (min-width: 1024px) {
+		.bg-hero-image-margin {
+			margin-top: -6rem;
+		}
+	}
+
 	.hero-container {
 		margin-top: -8.5rem;
 		padding-top: 8rem;

@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '../fixtures'
 import { devUser1, devUser2 } from '../../src/lib/fixtures'
+import { nip19 } from 'nostr-tools'
 
 test.use({ scenario: 'merchant' })
 
@@ -58,12 +59,15 @@ async function clickDestructiveButtonForText(page: Page, text: string) {
 	const rowText = page.getByText(text)
 	await expect(rowText).toBeVisible({ timeout: 15_000 })
 
-	const row = rowText.locator('xpath=ancestor::div[contains(@class,"flex") and contains(@class,"items-center")][1]')
+	const row = rowText.locator('xpath=ancestor::div[contains(@class,"flex") and contains(@class,"items-center")]')
 	await row.locator('button[class*="destructive"]').click()
 	await expect(rowText).not.toBeVisible({ timeout: 15_000 })
 }
 
-const compactPubkey = (pubkey: string) => `${pubkey.slice(0, 8)}...${pubkey.slice(-8)}`
+const compactNpub = (pubkey: string) => {
+	const npub = nip19.npubEncode(pubkey)
+	return `${npub.slice(0, 9)}..${npub.slice(-6)}`
+}
 
 // --- App Settings (Miscellaneous) ---
 // Note: The app-miscelleneous page is owner-only. devUser1 is an admin but NOT the owner
@@ -210,7 +214,8 @@ test.describe('Blacklists', () => {
 		await gotoAdminRoute(merchantPage, '/dashboard/app-settings/blacklists')
 		await expectPageHeading(merchantPage, 'Blacklists')
 
-		const userLabel = `Pubkey: ${compactPubkey(devUser2.pk)}`
+		const userLabel = compactNpub(devUser2.pk)
+
 		if (
 			!(await merchantPage
 				.getByText(userLabel)

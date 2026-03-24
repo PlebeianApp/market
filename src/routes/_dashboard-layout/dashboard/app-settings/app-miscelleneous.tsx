@@ -1,4 +1,3 @@
-import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -19,6 +18,7 @@ import { finalizeEvent, generateSecretKey, nip19 } from 'nostr-tools'
 import { Copy, Check } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { UserCard } from '@/components/UserCard'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/app-settings/app-miscelleneous')({
 	component: AppMiscelleneousComponent,
@@ -542,7 +542,7 @@ function OwnerField({ ownerPk }: { ownerPk?: string }) {
 		<div>
 			<Label className="font-medium">Owner</Label>
 			<div className="mt-1 mb-1">
-				{ownerPk ? <UserWithAvatar pubkey={ownerPk} disableLink size="md" /> : <span className="text-muted-foreground">Unknown</span>}
+				{ownerPk ? <UserCard pubkey={ownerPk} size="md" onPress="none" /> : <span className="text-muted-foreground">Unknown</span>}
 			</div>
 			<div className="flex items-center gap-2">
 				<Input value={ownerNpub} disabled className="border-2 bg-gray-50 text-muted-foreground" />

@@ -335,7 +335,7 @@ export const cartActions = {
 		return seller
 	},
 
-	addProduct: async (buyerPubkey: string, productData: CartProduct | NDKEvent | string) => {
+	addProduct: async (productData: CartProduct | NDKEvent | string) => {
 		let productId: string
 		let sellerPubkey: string
 		let amount = 1
@@ -1425,12 +1425,12 @@ export async function handleAddToCart(userId: string, product: Partial<CartProdu
 	if (!product) return false
 
 	if (typeof product === 'string') {
-		await cartActions.addProduct(userId, product)
+		await cartActions.addProduct(product)
 		return true
 	}
 
 	if (product instanceof NDKEvent) {
-		await cartActions.addProduct(userId, product)
+		await cartActions.addProduct(product)
 		return true
 	}
 
@@ -1445,7 +1445,7 @@ export async function handleAddToCart(userId: string, product: Partial<CartProdu
 			sellerPubkey: product.sellerPubkey || '',
 		}
 
-		await cartActions.addProduct(userId, cartProduct)
+		await cartActions.addProduct(cartProduct)
 		return true
 	}
 

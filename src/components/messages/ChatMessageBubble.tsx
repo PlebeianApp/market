@@ -1,5 +1,4 @@
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
-import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { format } from 'date-fns' // For formatting timestamp
 import {
 	ShoppingCartIcon,
