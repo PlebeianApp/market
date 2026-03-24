@@ -52,6 +52,27 @@ test.describe('Currency ContextVM', () => {
 		}
 	})
 
+	test('no TypeError from @contextvm/sdk in browser console', async ({ merchantPage }) => {
+		await safeGoto(merchantPage, '/products')
+
+		const card = merchantPage.locator('[data-testid="product-card"]').first()
+		await expect(card).toBeVisible({ timeout: 20000 })
+
+		const consoleErrors: string[] = []
+		merchantPage.on('console', (msg) => {
+			if (msg.type() === 'error') {
+				consoleErrors.push(msg.text())
+			}
+		})
+
+		await merchantPage.waitForTimeout(5000)
+
+		const sdkErrors = consoleErrors.filter(
+			(e) => e.includes('@contextvm/sdk') || e.includes('oy is not a function') || e.includes('destination is not a function'),
+		)
+		expect(sdkErrors).toEqual([])
+	})
+
 	test('currency dropdown changes displayed price to real EUR rate', async ({ merchantPage }) => {
 		await safeGoto(merchantPage, '/products')
 

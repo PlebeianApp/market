@@ -1,30 +1,12 @@
-import { describe, test, expect, beforeEach, afterEach, mock, spyOn } from 'bun:test'
+import { describe, test, expect, afterEach, mock, spyOn } from 'bun:test'
 
 const originalWarn = console.warn
 const originalError = console.error
 console.warn = () => {}
 console.error = () => {}
 
-mock.module('@contextvm/sdk', () => ({
-	NostrClientTransport: class {
-		constructor() {
-			throw new Error('mocked: no real relay connections in tests')
-		}
-	},
-	PrivateKeySigner: class {
-		constructor() {
-			throw new Error('mocked: no real relay connections in tests')
-		}
-	},
-	ApplesauceRelayPool: class {
-		constructor() {
-			throw new Error('mocked: no real relay connections in tests')
-		}
-	},
-}))
-
-mock.module('@modelcontextprotocol/sdk/client', () => ({
-	Client: class {
+mock.module('@/lib/contextvm-client', () => ({
+	ContextVmClient: class {
 		constructor() {
 			throw new Error('mocked: no real relay connections in tests')
 		}

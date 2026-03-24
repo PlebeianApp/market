@@ -35,8 +35,9 @@
 		"test:e2e-new:ui": "NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e-new/playwright.config.ts --ui",
 		"test:e2e-new:debug": "NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e-new/playwright.config.ts --debug",
 		"dev:currency-server": "bun run contextvm/currency-server.ts",
-		"test:unit": "bun test contextvm/ src/queries/__tests__/",
-		"test:unit:watch": "bun test --watch contextvm/ src/queries/__tests__/"
+		"test:unit": "bun test contextvm/ src/queries/__tests__/ src/lib/__tests__/contextvm-client.test.ts",
+		"test:unit:watch": "bun test --watch contextvm/ src/queries/__tests__/ src/lib/__tests__/contextvm-client.test.ts",
+		"test:integration": "bun test src/lib/__tests__/contextvm-client.integration.test.ts"
 	},
 	"dependencies": {
 		"@contextvm/sdk": "^0.7.5",

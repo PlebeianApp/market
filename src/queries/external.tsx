@@ -13,7 +13,7 @@ export const CURRENCY_CACHE_CONFIG = {
 	RESOLVE_TIMEOUT: 5000,
 } as const
 
-let contextVmClient: any = null
+let contextVmClient: InstanceType<typeof import('@/lib/contextvm-client').ContextVmClient> | null = null
 let contextVmInitPromise: Promise<any> | null = null
 
 async function getContextVmClient() {
@@ -22,32 +22,20 @@ async function getContextVmClient() {
 
 	contextVmInitPromise = (async () => {
 		try {
-			const [{ Client }, { NostrClientTransport, PrivateKeySigner }, { ApplesauceRelayPool }] = await Promise.all([
-				import('@modelcontextprotocol/sdk/client'),
-				import('@contextvm/sdk'),
-				import('@contextvm/sdk'),
-			])
+			const { ContextVmClient } = await import('@/lib/contextvm-client')
 
-			const ephemeralKey = crypto.getRandomValues(new Uint8Array(32))
-			const hexKey = Array.from(ephemeralKey)
-				.map((b) => b.toString(16).padStart(2, '0'))
-				.join('')
-			const signer = new PrivateKeySigner(hexKey)
+			const privateKey = crypto.getRandomValues(new Uint8Array(32))
 
 			const mainRelay = typeof window !== 'undefined' ? await getMainRelayFromConfig() : undefined
 			const cvmRelays = getCurrencyServerRelays()
 			const relays = mainRelay ? [mainRelay, ...cvmRelays] : cvmRelays
-			const relayPool = new ApplesauceRelayPool(relays)
 
-			const transport = new NostrClientTransport({
-				signer,
-				relayHandler: relayPool,
+			const client = new ContextVmClient({
+				privateKey,
+				relays,
 				serverPubkey: CURRENCY_SERVER_PUBKEY,
-				isStateless: true,
 			})
 
-			const client = new Client({ name: 'plebeian-market', version: '1.0.0' })
-			await client.connect(transport)
 			contextVmClient = client
 			return client
 		} catch (error) {
@@ -88,13 +76,12 @@ async function fetchFromContextVm(): Promise<Record<string, number> | null> {
 			return null
 		}
 
-		const structured = (result as any)?.structuredContent
-		if (!structured?.rates || structured.error) {
-			console.warn('ContextVM returned error:', structured?.error)
+		if (!result?.rates || result.error) {
+			console.warn('ContextVM returned error:', result?.error)
 			return null
 		}
 
-		return structured.rates as Record<string, number>
+		return result.rates as Record<string, number>
 	} catch (error) {
 		console.warn('ContextVM fetch failed:', error)
 		return null
