@@ -90,6 +90,22 @@ export const CURRENCIES = [
 	'NGN', // Nigerian Naira
 ] as const
 
+const CURRENCY_CVM_RELAYS = ['wss://relay.contextvm.org', 'wss://relay2.contextvm.org']
+
+export function getCurrencyServerRelays(): string[] {
+	const env = process.env.NODE_ENV || 'development'
+	switch (env) {
+		case 'production':
+			return [...CURRENCY_CVM_RELAYS]
+		case 'staging':
+			return [...CURRENCY_CVM_RELAYS]
+		default:
+			return ['ws://localhost:10547', ...CURRENCY_CVM_RELAYS]
+	}
+}
+
+export const CURRENCY_SERVER_PUBKEY = '29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15'
+
 export const DEFAULT_ZAP_AMOUNTS = [
 	{ displayText: '😊 21 sats', amount: 21 },
 	{ displayText: '🚀 210 sats', amount: 210 },

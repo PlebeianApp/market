@@ -26,10 +26,19 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .env.production.local
 .env.local
 
+# deployment secrets and automation (local tooling, not part of this branch)
+deploy.env
+deploy.env.example
+Makefile
+ansible/
+
 # caches
 .eslintcache
 .cache
 *.tsbuildinfo
+
+# SQLite database for currency server cache
+contextvm/data/
 
 # IntelliJ based IDEs
 .idea

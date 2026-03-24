@@ -36,13 +36,19 @@
 		"test:e2e-new": "NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e-new/playwright.config.ts",
 		"test:e2e-new:headed": "NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e-new/playwright.config.ts --headed",
 		"test:e2e-new:ui": "NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e-new/playwright.config.ts --ui",
-		"test:e2e-new:debug": "NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e-new/playwright.config.ts --debug"
+		"test:e2e-new:debug": "NODE_OPTIONS='--dns-result-order=ipv4first' playwright test --config=e2e-new/playwright.config.ts --debug",
+		"dev:currency-server": "bun run contextvm/currency-server.ts",
+		"test:unit": "bun test contextvm/ src/queries/__tests__/ src/lib/__tests__/contextvm-client.test.ts",
+		"test:unit:watch": "bun test --watch contextvm/ src/queries/__tests__/ src/lib/__tests__/contextvm-client.test.ts",
+		"test:integration": "bun test src/lib/__tests__/contextvm-client.integration.test.ts"
 	},
 	"dependencies": {
+		"@contextvm/sdk": "^0.7.5",
 		"@faker-js/faker": "^10.2.0",
 		"@formkit/auto-animate": "^0.9.0",
 		"@getalby/lightning-tools": "^6.0.0",
 		"@hookform/resolvers": "^5.2.2",
+		"@modelcontextprotocol/sdk": "^1.27.1",
 		"@nostr-dev-kit/blossom": "^7.0.0",
 		"@nostr-dev-kit/ndk": "2.18.1",
 		"@nostr-dev-kit/ndk-cache-dexie": "2.6.44",
