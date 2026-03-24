@@ -214,7 +214,7 @@ export function Nip60Wallet() {
 		setIsDevMinting(true)
 		try {
 			const preferredMintUrl = defaultMint || mints[0]
-			const result = await nip60Actions.mintTestEcash(amount, preferredMintUrl, { allowFallback: false })
+			const result = await nip60Actions.mintTestEcash(amount, preferredMintUrl)
 			setLastDevMint(result)
 			toast.success(`Minted ${result.amount.toLocaleString()} sats from ${getMintHostname(result.mintUrl)}`)
 		} catch (err) {
