@@ -149,6 +149,7 @@ SOURCE_RELAYS=wss://relay.plebeian.market \
 TARGET_RELAYS=wss://relay-new.internal.example \
 bun run scripts/migrate-relay.ts
 ```
+
 ## Troubleshooting
 
 ### Quick diagnosis checklist
@@ -269,10 +270,10 @@ sudo journalctl -u SERVICE -f
 
 Multiple relay services may run on the same host:
 
-| Service | Domain                              | Description        |
-| ------- | ----------------------------------- | ------------------ |
-| `orly`  | `relay.staging.plebeian.market`     | Main staging relay |
-| `bugs`  | `bugs.plebeian.market`              | Bugs relay         |
+| Service | Domain                          | Description        |
+| ------- | ------------------------------- | ------------------ |
+| `orly`  | `relay.staging.plebeian.market` | Main staging relay |
+| `bugs`  | `bugs.plebeian.market`          | Bugs relay         |
 
 Use the list command above to discover all running relay services.
 
@@ -292,6 +293,7 @@ Use the list command above to discover all running relay services.
 If a deploy fails, `install-relay.sh` restores the previous binary, env file,
 and service unit before exiting non-zero. The workflow also restores the
 previous Caddy config if the new relay Caddyfile fails to reload.
+
 - The binary is named `orly.dev` on staging (historical), not `orly`
 - Production uses `/usr/local/bin/orly` as the binary path
 - The relay runs as the `deployer` user, not root
