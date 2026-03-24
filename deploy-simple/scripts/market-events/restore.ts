@@ -96,9 +96,7 @@ async function resolveScopeFiles(
 	manifest: Awaited<ReturnType<typeof loadManifest>>,
 ): Promise<string[]> {
 	if (manifest) {
-		const files = manifest.scopes
-			.filter((scope) => scopes.includes(scope.name))
-			.map((scope) => join(baseDir, scope.file))
+		const files = manifest.scopes.filter((scope) => scopes.includes(scope.name)).map((scope) => join(baseDir, scope.file))
 
 		if (files.length > 0) {
 			return files

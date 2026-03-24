@@ -261,7 +261,12 @@ function assertEvent(event: Event, path: string, lineNumber: number): void {
 	if (typeof event.id !== 'string' || typeof event.pubkey !== 'string' || typeof event.sig !== 'string') {
 		throw new Error(`Invalid event shape in ${path}:${lineNumber}`)
 	}
-	if (typeof event.kind !== 'number' || typeof event.created_at !== 'number' || !Array.isArray(event.tags) || typeof event.content !== 'string') {
+	if (
+		typeof event.kind !== 'number' ||
+		typeof event.created_at !== 'number' ||
+		!Array.isArray(event.tags) ||
+		typeof event.content !== 'string'
+	) {
 		throw new Error(`Invalid event fields in ${path}:${lineNumber}`)
 	}
 }
@@ -319,7 +324,10 @@ export function resolveOutputDirectory(rawPath: string | undefined, stage: Stage
 }
 
 export function timestampForPath(date: Date): string {
-	return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z')
+	return date
+		.toISOString()
+		.replace(/[-:]/g, '')
+		.replace(/\.\d{3}Z$/, 'Z')
 }
 
 export function parseOptionalNumber(value: string | undefined, label: string): number | undefined {
