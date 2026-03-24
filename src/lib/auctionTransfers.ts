@@ -84,7 +84,8 @@ export const parseAuctionRefundEnvelope = (value: string): AuctionRefundEnvelope
 	try {
 		const parsed = JSON.parse(value)
 		if (!isRecord(parsed) || parsed.type !== AUCTION_REFUND_TOPIC) return null
-		if (typeof parsed.auctionEventId !== 'string' || typeof parsed.sellerPubkey !== 'string' || typeof parsed.recipientPubkey !== 'string') return null
+		if (typeof parsed.auctionEventId !== 'string' || typeof parsed.sellerPubkey !== 'string' || typeof parsed.recipientPubkey !== 'string')
+			return null
 		if (!Array.isArray(parsed.sourceBidEventIds) || !Array.isArray(parsed.refunds)) return null
 		const sourceBidEventIds = parsed.sourceBidEventIds.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
 		const refunds = parsed.refunds
