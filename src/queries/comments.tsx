@@ -28,11 +28,51 @@ const transformCommentEvent = (event: NDKEvent): ProductComment => {
 	}
 }
 
+// Comment threads formatting
+
+export interface ProductCommentThread extends ProductComment {
+	children: ProductCommentThread[]
+}
+
+const sortCommentThreadByDate = (thread: ProductCommentThread) => {
+	// Sort thread children
+	thread.children.sort((a, b) => a.createdAt - b.createdAt)
+
+	// Recursive call to each child
+	thread.children.forEach(sortCommentThreadByDate)
+}
+
+const sortCommentsIntoThreads = (comments: ProductComment[]): ProductCommentThread[] => {
+	// Create a map based on comment ids for fast access
+	const mapIdentifiers = new Map<string, ProductCommentThread>()
+	comments.forEach((c) => mapIdentifiers.set(c.id, { ...c, children: [] }))
+
+	// Initialize threads map
+	const threads: ProductCommentThread[] = []
+
+	// For each comment:
+	for (const comment of comments) {
+		// Get comment from map to apply / keep children
+		const commentThreadable = mapIdentifiers.get(comment.id) ?? { children: [], ...comment }
+
+		if (comment.parentId) {
+			// If comment has parent id, then add that comment to the parent comment's thread
+			const parentComment = mapIdentifiers.get(comment.parentId)
+			parentComment?.children.push(commentThreadable)
+		} else {
+			// Else, comment becomes its own thread
+			threads.push(commentThreadable)
+		}
+	}
+
+	return threads
+}
+
 /**
  * Fetches NIP-22 comments for a product
  * @param productCoordinates - The product coordinates in format "30018:<pubkey>:<d-tag>"
  */
-export const fetchProductComments = async (productCoordinates: string): Promise<ProductComment[]> => {
+export const fetchProductComments = async (productCoordinates: string): Promise<ProductCommentThread[]> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -45,8 +85,13 @@ export const fetchProductComments = async (productCoordinates: string): Promise<
 	const events = await ndk.fetchEvents(filter)
 	const comments = Array.from(events).map(transformCommentEvent)
 
-	// Sort by oldest first (chronological order for comments)
-	return comments.sort((a, b) => a.createdAt - b.createdAt)
+	// Sort comments into threads
+	const threads = sortCommentsIntoThreads(comments)
+
+	// Sort threads by date recursively
+	threads.forEach(sortCommentThreadByDate)
+
+	return threads
 }
 
 export const productCommentsQueryOptions = (productCoordinates: string) =>
