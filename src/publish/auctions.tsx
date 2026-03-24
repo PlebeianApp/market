@@ -318,15 +318,13 @@ const buildActiveBidChains = (bids: NDKEvent[]): BidChainGroup[] => {
 	}))
 }
 
-const publishEncryptedAuctionTransfer = async (
-	params: {
-		recipientPubkey: string
-		senderSigner: NDKSigner
-		ndk: NDK
-		tags: NDKTag[]
-		content: AuctionBidTokenEnvelope | AuctionRefundEnvelope
-	},
-): Promise<NDKEvent> => {
+const publishEncryptedAuctionTransfer = async (params: {
+	recipientPubkey: string
+	senderSigner: NDKSigner
+	ndk: NDK
+	tags: NDKTag[]
+	content: AuctionBidTokenEnvelope | AuctionRefundEnvelope
+}): Promise<NDKEvent> => {
 	const event = new NDKEvent(params.ndk)
 	event.kind = AUCTION_TRANSFER_DM_KIND
 	event.content = JSON.stringify(params.content)
@@ -634,21 +632,19 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		throw new Error('Only hd_p2pk auction settlement is supported')
 	}
 
-	const auctionCoordinates = formData.auctionCoordinates || (() => {
-		const dTag = getFirstTagValue(auctionEvent, 'd')
-		return dTag ? `30408:${auctionEvent.pubkey}:${dTag}` : ''
-	})()
+	const auctionCoordinates =
+		formData.auctionCoordinates ||
+		(() => {
+			const dTag = getFirstTagValue(auctionEvent, 'd')
+			return dTag ? `30408:${auctionEvent.pubkey}:${dTag}` : ''
+		})()
 	const escrowPubkey = getFirstTagValue(auctionEvent, 'escrow_pubkey') || auctionEvent.pubkey
 	const auctionP2pkXpub = getFirstTagValue(auctionEvent, 'p2pk_xpub').trim()
 	if (!auctionP2pkXpub) {
 		throw new Error('Auction is missing p2pk_xpub')
 	}
 	const walletEscrowPrivkey = await nip60Actions.ensureWalletPrivkey(escrowPubkey, sellerPubkey)
-	const escrowSigner = walletEscrowPrivkey
-		? new NDKPrivateKeySigner(walletEscrowPrivkey)
-		: sellerPubkey === escrowPubkey
-			? signer
-			: null
+	const escrowSigner = walletEscrowPrivkey ? new NDKPrivateKeySigner(walletEscrowPrivkey) : sellerPubkey === escrowPubkey ? signer : null
 	if (!escrowSigner) {
 		throw new Error('Current wallet or signer cannot decrypt this auction escrow key')
 	}
@@ -687,9 +683,17 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 				]
 			: []),
 	]
-	const bids = Array.from(await ndkActions.fetchEventsWithTimeout(bidFilters.length === 1 ? bidFilters[0] : bidFilters, { timeoutMs: 5000 }))
+	const bids = Array.from(
+		await ndkActions.fetchEventsWithTimeout(bidFilters.length === 1 ? bidFilters[0] : bidFilters, { timeoutMs: 5000 }),
+	)
 	const activeBidChains = buildActiveBidChains(bids)
-	const envelopeByBidEventId = await fetchAuctionBidTokenEnvelopes(formData.auctionEventId, auctionCoordinates, escrowPubkey, escrowSigner, ndk)
+	const envelopeByBidEventId = await fetchAuctionBidTokenEnvelopes(
+		formData.auctionEventId,
+		auctionCoordinates,
+		escrowPubkey,
+		escrowSigner,
+		ndk,
+	)
 	const redeemBidEnvelope = async (bid: NDKEvent, amount: number, token: string): Promise<void> => {
 		const derivationPath = getFirstTagValue(bid, 'derivation_path')
 		if (!derivationPath) {
