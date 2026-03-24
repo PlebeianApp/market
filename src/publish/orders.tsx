@@ -61,6 +61,14 @@ interface SellerData {
 	}
 }
 
+let lastOrderUpdateCreatedAt = 0
+
+const getNextOrderUpdateCreatedAt = () => {
+	const now = Math.floor(Date.now() / 1000)
+	lastOrderUpdateCreatedAt = Math.max(now, lastOrderUpdateCreatedAt + 1)
+	return lastOrderUpdateCreatedAt
+}
+
 export type OrderCreateParams = {
 	productRef: string // Product reference in format 30402:<pubkey>:<d-tag>
 	sellerPubkey: string // Merchant's pubkey
@@ -214,6 +222,7 @@ export const updateOrderStatus = async (params: OrderStatusUpdateParams): Promis
 	// Create the order status event
 	const event = new NDKEvent(ndk)
 	event.kind = ORDER_PROCESS_KIND
+	event.created_at = getNextOrderUpdateCreatedAt()
 	event.content = params.reason || `Order status updated to ${params.status}`
 	event.tags = [
 		['p', recipientPubkey],
