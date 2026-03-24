@@ -275,7 +275,9 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 				]
 			: []),
 	]
-	const existingBids = Array.from(await ndkActions.fetchEventsWithTimeout(ownBidFilters.length === 1 ? ownBidFilters[0] : ownBidFilters, { timeoutMs: 2500 }))
+	const existingBids = Array.from(
+		await ndkActions.fetchEventsWithTimeout(ownBidFilters.length === 1 ? ownBidFilters[0] : ownBidFilters, { timeoutMs: 2500 }),
+	)
 	const previousBid = resolveLatestActiveBidByBidder(existingBids, bidderPubkey)
 	const previousAmount = previousBid ? getBidAmount(previousBid) : 0
 	if (previousAmount > 0 && formData.amount <= previousAmount) {
@@ -377,11 +379,7 @@ export const usePublishAuctionBidMutation = () => {
 	})
 }
 
-export const publishAuctionSettlement = async (
-	formData: AuctionSettlementFormData,
-	signer: NDKSigner,
-	ndk: NDK,
-): Promise<string> => {
+export const publishAuctionSettlement = async (formData: AuctionSettlementFormData, signer: NDKSigner, ndk: NDK): Promise<string> => {
 	if (!formData.auctionEventId) throw new Error('Auction event id is required')
 	if (!formData.status) throw new Error('Settlement status is required')
 
