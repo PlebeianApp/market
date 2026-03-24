@@ -3,7 +3,7 @@
 	"displayName": "Plebeian Market",
 	"picture": "https://plebeian.market/images/logo.svg",
 	"banner": "https://plebeian.market/banner.svg",
-	"ownerPk": "ec79b568bdea63ca6091f5b84b0c639c10a0919e175fa09a4de3154f82906f25",
+	"ownerPk": "",
 	"contactEmail": "ops@example.com",
 	"allowRegister": true,
 	"defaultCurrency": "USD",
