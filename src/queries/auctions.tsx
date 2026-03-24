@@ -339,9 +339,9 @@ export const getAuctionMints = (event: NDKEvent | null): string[] => {
 	return event.tags.filter((tag) => tag[0] === 'mint' && !!tag[1]).map((tag) => tag[1])
 }
 
-export const getAuctionKeyScheme = (event: NDKEvent | null): 'static_p2pk' | 'hd_p2pk' => {
-	if (!event) return 'static_p2pk'
-	return event.tags.find((tag) => tag[0] === 'key_scheme')?.[1] === 'hd_p2pk' ? 'hd_p2pk' : 'static_p2pk'
+export const getAuctionKeyScheme = (event: NDKEvent | null): 'hd_p2pk' => {
+	if (!event) return 'hd_p2pk'
+	return 'hd_p2pk'
 }
 
 export const getAuctionP2pkXpub = (event: NDKEvent | null): string => event?.tags.find((tag) => tag[0] === 'p2pk_xpub')?.[1] || ''

@@ -3,7 +3,6 @@ import { faker } from '@faker-js/faker'
 import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev-kit/ndk'
 
 type AuctionStatus = 'live' | 'ended'
-type AuctionKeyScheme = 'static_p2pk' | 'hd_p2pk'
 
 export type GeneratedAuctionData = {
 	kind: 30408
@@ -14,16 +13,21 @@ export type GeneratedAuctionData = {
 
 export function generateAuctionData(params: {
 	sellerPubkey: string
+	escrowPubkey: string
 	availableShippingRefs?: string[]
 	trustedMints?: string[]
 	status?: AuctionStatus
-	keyScheme?: AuctionKeyScheme
 	p2pkXpub?: string
 }): GeneratedAuctionData {
-	const { sellerPubkey, availableShippingRefs = [], trustedMints = ['https://nofees.testnut.cashu.space'] } = params
+	const { sellerPubkey, escrowPubkey, availableShippingRefs = [], trustedMints = ['https://nofees.testnut.cashu.space'] } = params
 	const status = params.status ?? (Math.random() < 0.2 ? 'ended' : 'live')
-	const keyScheme = params.keyScheme ?? 'static_p2pk'
 	const p2pkXpub = params.p2pkXpub?.trim() || ''
+	if (!p2pkXpub) {
+		throw new Error('p2pkXpub is required for hd_p2pk auction generation')
+	}
+	if (!escrowPubkey.trim()) {
+		throw new Error('escrowPubkey is required for hd_p2pk auction generation')
+	}
 	const now = Math.floor(Date.now() / 1000)
 
 	const startAt = now - faker.number.int({ min: 60 * 60, max: 60 * 60 * 48 })
@@ -77,9 +81,9 @@ export function generateAuctionData(params: {
 			['bid_increment', String(bidIncrement)],
 			['reserve', String(reserve)],
 			...trustedMints.map((mint) => ['mint', mint] as NDKTag),
-			['escrow_pubkey', sellerPubkey],
-			['key_scheme', keyScheme],
-			...(keyScheme === 'hd_p2pk' && p2pkXpub ? ([['p2pk_xpub', p2pkXpub] as NDKTag] as NDKTag[]) : []),
+			['escrow_pubkey', escrowPubkey],
+			['key_scheme', 'hd_p2pk'],
+			['p2pk_xpub', p2pkXpub],
 			['settlement_policy', 'cashu_p2pk_v1'],
 			['schema', 'auction_v1'],
 			...images,

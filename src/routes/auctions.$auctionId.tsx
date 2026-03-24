@@ -227,7 +227,6 @@ function AuctionDetailRoute() {
 				auctionEndAt: endAt,
 				sellerPubkey: auction.pubkey,
 				escrowPubkey: escrowPubkey || auction.pubkey,
-				keyScheme,
 				p2pkXpub,
 				mint: trustedMints[0],
 			})
@@ -556,7 +555,7 @@ function AuctionDetailRoute() {
 								<div className="space-y-4">
 									{newestBids.map((bidEvent) => {
 										const locktime = bidEvent.tags.find((tag) => tag[0] === 'locktime')?.[1]
-										const bidKeyScheme = bidEvent.tags.find((tag) => tag[0] === 'key_scheme')?.[1] || 'static_p2pk'
+										const bidKeyScheme = bidEvent.tags.find((tag) => tag[0] === 'key_scheme')?.[1] || 'hd_p2pk'
 										return (
 											<div key={bidEvent.id} className="rounded-xl border border-zinc-200 bg-zinc-50/70 px-4 py-4">
 												<div className="flex flex-wrap items-start justify-between gap-3">
