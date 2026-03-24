@@ -15,7 +15,16 @@ import {
 	parseAuctionRefundEnvelope,
 } from '@/lib/auctionTransfers'
 import { getAuctionHdAccountFromWalletKeys } from '@/lib/auctionHd'
-import { CashuMint, CashuWallet, CheckStateEnum, getEncodedToken, getTokenMetadata, type MintKeys, type MintKeyset, type Proof } from '@cashu/cashu-ts'
+import {
+	CashuMint,
+	CashuWallet,
+	CheckStateEnum,
+	getEncodedToken,
+	getTokenMetadata,
+	type MintKeys,
+	type MintKeyset,
+	type Proof,
+} from '@cashu/cashu-ts'
 import { NDKEvent, NDKNutzap, NDKRelaySet, NDKUser, NDKZapper, type NDKFilter } from '@nostr-dev-kit/ndk'
 import { NDKCashuDeposit, NDKCashuWallet, NDKWalletStatus, type NDKWalletTransaction } from '@nostr-dev-kit/wallet'
 import { HDKey } from '@scure/bip32'
@@ -388,10 +397,7 @@ const loadAuctionTransferMessageIds = (): string[] => loadUserData<string[]>(AUC
 
 const saveAuctionTransferMessageIds = (messageIds: string[]): void => saveUserData(AUCTION_TRANSFER_MESSAGE_IDS_KEY, messageIds)
 
-const updatePendingTokenRecord = (
-	tokenId: string,
-	updater: (token: PendingNip60Token) => PendingNip60Token,
-): PendingNip60Token | null => {
+const updatePendingTokenRecord = (tokenId: string, updater: (token: PendingNip60Token) => PendingNip60Token): PendingNip60Token | null => {
 	let updatedToken: PendingNip60Token | null = null
 	const pendingTokens = nip60Store.state.pendingTokens.map((token) => {
 		if (token.id !== tokenId) return token
@@ -558,8 +564,11 @@ const receiveTokenIntoWallet = async (
 	}
 }
 
-const receiveTokenWithPrivkey = async (wallet: NDKCashuWallet, token: string, privkey: string): Promise<{ amount: number; mintUrl: string }> =>
-	receiveTokenIntoWallet(wallet, token, { privkey })
+const receiveTokenWithPrivkey = async (
+	wallet: NDKCashuWallet,
+	token: string,
+	privkey: string,
+): Promise<{ amount: number; mintUrl: string }> => receiveTokenIntoWallet(wallet, token, { privkey })
 
 /**
  * Select proofs from available proofs to meet the target amount.
@@ -953,7 +962,10 @@ export const nip60Actions = {
 
 		const resolvedOwnerPubkey =
 			ownerPubkey ??
-			(await ndkStore.state.ndk?.signer?.user().then((user) => user.pubkey).catch(() => '')) ??
+			(await ndkStore.state.ndk?.signer
+				?.user()
+				.then((user) => user.pubkey)
+				.catch(() => '')) ??
 			''
 		if (!resolvedOwnerPubkey) return null
 
