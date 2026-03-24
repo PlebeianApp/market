@@ -14,6 +14,7 @@ import { UserCard } from '@/components/UserCard'
 import { ZapButton } from '@/components/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { useEntityPermissions } from '@/hooks/useEntityPermissions'
+import { authStore } from '@/lib/stores/auth'
 import { cartActions, useCart, type RichShippingInfo } from '@/lib/stores/cart'
 import { ndkActions } from '@/lib/stores/ndk'
 import { uiActions, uiStore } from '@/lib/stores/ui'
@@ -143,18 +144,6 @@ function RouteComponent() {
 	const [imageViewerOpen, setImageViewerOpen] = useState(false)
 	const [selectedImageIndex, setSelectedImageIndex] = useState(0)
 	const [shareDialogOpen, setShareDialogOpen] = useState(false)
-	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(null)
-
-	// Fetch current user's pubkey for ProductCard ownership check
-	useEffect(() => {
-		const fetchUserPubkey = async () => {
-			const user = await ndkActions.getUser()
-			if (user?.pubkey) {
-				setCurrentUserPubkey(user.pubkey)
-			}
-		}
-		fetchUserPubkey()
-	}, [])
 
 	// Get app config
 	const { data: config } = useConfigQuery()
@@ -767,7 +756,7 @@ function RouteComponent() {
 						{sellerProducts
 							.filter((p) => p.id !== productId)
 							.map((p) => (
-								<ProductCard key={p.id} product={p} currentUserPubkey={currentUserPubkey} />
+								<ProductCard key={p.id} product={p} />
 							))}
 					</ItemGrid>
 				</div>

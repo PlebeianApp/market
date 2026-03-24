@@ -18,8 +18,13 @@ import { useEffect, useState } from 'react'
 import { PriceDisplay } from './PriceDisplay'
 import { Button } from './ui/button'
 import { ZapButton } from './ZapButton'
+import { authStore, useAuth } from '@/lib/stores/auth'
 
-export function ProductCard({ product, currentUserPubkey: propUserPubkey }: { product: NDKEvent; currentUserPubkey?: string | null }) {
+export interface ProductCardProps {
+	product: NDKEvent
+}
+
+export function ProductCard({ product }: ProductCardProps) {
 	const title = getProductTitle(product)
 	const images = getProductImages(product)
 	const price = getProductPrice(product)
@@ -30,33 +35,14 @@ export function ProductCard({ product, currentUserPubkey: propUserPubkey }: { pr
 	const isNSFW = isNSFWProduct(product)
 	// Out of stock if stock is explicitly 0 or undefined (no stock tag), but not for pre-order items
 	const isOutOfStock = visibility !== 'pre-order' && (stockQuantity === undefined || stockQuantity === 0)
-	// Initialize ownership based on prop if provided (avoids race condition)
-	const [isOwnProduct, setIsOwnProduct] = useState(propUserPubkey ? propUserPubkey === product.pubkey : false)
-	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(propUserPubkey || null)
 	const [isAddingToCart, setIsAddingToCart] = useState(false)
 	const [showConfirmation, setShowConfirmation] = useState(false)
 	const location = useLocation()
 	const cart = useCart()
 	const queryClient = useQueryClient()
+	const { user, isAuthenticated } = useAuth()
 
-	// Check if current user is the seller of this product (only if pubkey not provided via prop)
-	useEffect(() => {
-		// Skip async fetch if we already have the pubkey from props
-		if (propUserPubkey !== undefined) {
-			setCurrentUserPubkey(propUserPubkey)
-			setIsOwnProduct(propUserPubkey === product.pubkey)
-			return
-		}
-
-		const checkIfOwnProduct = async () => {
-			const user = await ndkActions.getUser()
-			if (user?.pubkey) {
-				setCurrentUserPubkey(user.pubkey)
-				setIsOwnProduct(user.pubkey === product.pubkey)
-			}
-		}
-		checkIfOwnProduct()
-	}, [product.pubkey, propUserPubkey])
+	const isOwnProduct = isAuthenticated && user?.pubkey === product.author.pubkey
 
 	// Check if product is already in cart
 	const isInCart = !!cart.cart.products[product.id]
