@@ -29,6 +29,7 @@ import { fetchCollection, fetchCollectionByEventId, getCollectionId } from '@/qu
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedAuctions, useFeaturedCollections, useFeaturedProducts, useFeaturedUsers } from '@/queries/featured'
 import { fetchProduct, getProductId } from '@/queries/products'
+import { configKeys } from '@/queries/queryKeyFactory'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { npubToHex } from '@/routes/setup'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -167,7 +168,20 @@ function FeaturedItemsComponent() {
 			if (!ndk || !signer) throw new Error('NDK or signer not available')
 			return addToFeaturedProducts(productCoords, signer, ndk, appPubkey)
 		},
-		onSuccess: () => {
+		onSuccess: (_eventId, variables) => {
+			const appPubkey = variables.appPubkey || config?.appPublicKey
+			if (appPubkey) {
+				queryClient.setQueryData(
+					configKeys.featuredProducts(appPubkey),
+					(prev: { featuredProducts?: string[]; lastUpdated?: number } | null) => ({
+						featuredProducts: prev?.featuredProducts?.includes(variables.productCoords)
+							? prev.featuredProducts
+							: [...(prev?.featuredProducts || []), variables.productCoords],
+						lastUpdated: Date.now() / 1000,
+					}),
+				)
+				queryClient.invalidateQueries({ queryKey: configKeys.featuredProducts(appPubkey) })
+			}
 			queryClient.invalidateQueries({ queryKey: ['config'] })
 		},
 	})
@@ -177,7 +191,22 @@ function FeaturedItemsComponent() {
 			if (!ndk || !signer) throw new Error('NDK or signer not available')
 			return removeFromFeaturedProducts(productCoords, signer, ndk, appPubkey)
 		},
-		onSuccess: () => {
+		onSuccess: (_eventId, variables) => {
+			const appPubkey = variables.appPubkey || config?.appPublicKey
+			if (appPubkey) {
+				queryClient.setQueryData(
+					configKeys.featuredProducts(appPubkey),
+					(prev: { featuredProducts?: string[]; lastUpdated?: number } | null) => {
+						if (!prev) return prev
+						return {
+							...prev,
+							featuredProducts: (prev.featuredProducts || []).filter((coords) => coords !== variables.productCoords),
+							lastUpdated: Date.now() / 1000,
+						}
+					},
+				)
+				queryClient.invalidateQueries({ queryKey: configKeys.featuredProducts(appPubkey) })
+			}
 			queryClient.invalidateQueries({ queryKey: ['config'] })
 		},
 	})
