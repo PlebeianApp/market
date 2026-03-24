@@ -362,7 +362,9 @@ function AuctionsRoute() {
 					<div className="flex flex-col items-center justify-center py-16 text-center gap-4 min-h-[40vh]">
 						<h2 className="text-xl font-semibold">Unable to load auctions</h2>
 						<p className="text-muted-foreground max-w-md">
-							{auctionsQuery.error instanceof Error ? auctionsQuery.error.message : 'There was a problem loading auctions. Please try again.'}
+							{auctionsQuery.error instanceof Error
+								? auctionsQuery.error.message
+								: 'There was a problem loading auctions. Please try again.'}
 						</p>
 						<Button variant="secondary" onClick={() => auctionsQuery.refetch()}>
 							Retry
