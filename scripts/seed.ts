@@ -37,6 +37,9 @@ import { createShippingEvent, generatePickupShippingData, generateShippingData }
 import { createUserProfileEvent, generateUserProfileData } from './gen_user'
 import { createV4VSharesEvent } from './gen_v4v'
 import { createUserNwcWallets } from './gen_wallets'
+import { getAuctionXpubFromWalletKeys } from '@/lib/auctionHd'
+import { NDKRelaySet } from '@nostr-dev-kit/ndk'
+import { NDKCashuWallet } from '@nostr-dev-kit/wallet'
 
 config()
 
@@ -88,12 +91,57 @@ const APP_PUBKEY = getPublicKey(hexToBytes(APP_PRIVATE_KEY))
 const ndk = ndkActions.initialize([RELAY_URL])
 const devUsers = [devUser1, devUser2, devUser3, devUser4, devUser5]
 const QUICK_END_AUCTIONS_PER_USER = 1
-const QUICK_END_SECONDS = 75
+const QUICK_END_SECONDS = 80
 
 function setTagValue(tags: string[][], tagName: string, value: string) {
 	const tag = tags.find((currentTag) => currentTag[0] === tagName)
 	if (tag) {
 		tag[1] = value
+	}
+}
+
+async function ensureAuctionWalletForSeller(
+	signer: NDKPrivateKeySigner,
+	pubkey: string,
+	mints: string[],
+): Promise<{ escrowPubkey: string; p2pkXpub: string }> {
+	const previousSigner = ndk.signer
+	ndk.signer = signer
+
+	try {
+		const walletEvent = Array.from(
+			await ndkActions.fetchEventsWithTimeout(
+				{
+					kinds: [17375],
+					authors: [pubkey],
+					limit: 5,
+				},
+				{ timeoutMs: 4000 },
+			),
+		).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))[0]
+
+		const wallet = walletEvent ? await NDKCashuWallet.from(walletEvent) : new NDKCashuWallet(ndk)
+		if (!wallet) {
+			throw new Error(`Failed to load NIP-60 wallet for ${pubkey}`)
+		}
+
+		wallet.mints = Array.from(new Set([...(wallet.mints ?? []), ...mints]))
+		wallet.relaySet = NDKRelaySet.fromRelayUrls([RELAY_URL!], ndk)
+
+		const escrowPubkey = await wallet.getP2pk()
+		const walletPrivkey = wallet.privkeys.get(escrowPubkey)?.privateKey
+		if (!walletPrivkey) {
+			throw new Error(`Wallet private key for ${escrowPubkey} is not available`)
+		}
+
+		if (!walletEvent) {
+			await wallet.publish()
+		}
+
+		const p2pkXpub = await getAuctionXpubFromWalletKeys(escrowPubkey, walletPrivkey)
+		return { escrowPubkey, p2pkXpub }
+	} finally {
+		ndk.signer = previousSigner
 	}
 }
 
@@ -112,6 +160,16 @@ async function seedData() {
 	const auctionsByUser: Record<string, string[]> = {}
 	const allProductRefs: string[] = []
 	const allAuctionEvents: Array<{
+		eventId: string
+		auctionCoordinates: string
+		sellerPubkey: string
+		startAt: number
+		endAt: number
+		startingBid: number
+		bidIncrement: number
+		mint: string
+	}> = []
+	const seededBidAuctionEvents: Array<{
 		eventId: string
 		auctionCoordinates: string
 		sellerPubkey: string
@@ -281,21 +339,27 @@ async function seedData() {
 
 		console.log(`Creating auctions for user ${pubkey.substring(0, 8)}...`)
 		auctionsByUser[pubkey] = []
+		const trustedAuctionMints = ['https://testnut.cashu.space', 'https://nofees.testnut.cashu.space']
+		const auctionWallet = await ensureAuctionWalletForSeller(signer, pubkey, trustedAuctionMints)
 		for (let j = 0; j < AUCTIONS_PER_USER; j++) {
+			const isQuickSettleAuction = j < QUICK_END_AUCTIONS_PER_USER
 			const auctionData = generateAuctionData({
 				sellerPubkey: pubkey,
+				escrowPubkey: auctionWallet.escrowPubkey,
 				availableShippingRefs: shippingsByUser[pubkey] || [],
-				trustedMints: ['https://testnut.cashu.space', 'https://nofees.testnut.cashu.space'],
-				keyScheme: 'hd_p2pk',
-				p2pkXpub: XPUB,
+				trustedMints: trustedAuctionMints,
+				p2pkXpub: auctionWallet.p2pkXpub,
 			})
 
-			if (j < QUICK_END_AUCTIONS_PER_USER) {
+			if (isQuickSettleAuction) {
 				const quickEndNow = Math.floor(Date.now() / 1000)
-				const quickEndAt = quickEndNow + QUICK_END_SECONDS + j * 5
-				const quickStartAt = quickEndNow - 60 * 60
+				const quickEndAt = quickEndNow + QUICK_END_SECONDS
+				const quickStartAt = quickEndNow - 60
 				setTagValue(auctionData.tags, 'start_at', String(quickStartAt))
 				setTagValue(auctionData.tags, 'end_at', String(quickEndAt))
+				setTagValue(auctionData.tags, 'title', `Quick settle auction for ${pubkey.slice(0, 8)}`)
+				setTagValue(auctionData.tags, 'summary', 'Fixture auction for settlement testing. No seeded bids.')
+				setTagValue(auctionData.tags, 'reserve', '0')
 			}
 
 			const auctionEvent = await createAuctionEvent(signer, ndk, auctionData)
@@ -321,11 +385,23 @@ async function seedData() {
 				bidIncrement,
 				mint,
 			})
+			if (!isQuickSettleAuction) {
+				seededBidAuctionEvents.push({
+					eventId: auctionEvent.id,
+					auctionCoordinates: coords,
+					sellerPubkey: pubkey,
+					startAt,
+					endAt,
+					startingBid,
+					bidIncrement,
+					mint,
+				})
+			}
 		}
 	}
 
 	console.log('Creating auction bids...')
-	for (const auction of allAuctionEvents) {
+	for (const auction of seededBidAuctionEvents) {
 		const eligibleBidders = userPubkeys.map((pubkey, index) => ({ pubkey, index })).filter((user) => user.pubkey !== auction.sellerPubkey)
 
 		const bidsCount = faker.number.int({ min: 1, max: 6 })

@@ -401,7 +401,7 @@ function DashboardAuctionDetailRoute() {
 											const amount = getBidAmount(bidEvent)
 											const isTop = !!topBid && bidEvent.id === topBid.id
 											const locktime = bidEvent.tags.find((tag) => tag[0] === 'locktime')?.[1]
-											const keyScheme = bidEvent.tags.find((tag) => tag[0] === 'key_scheme')?.[1] || 'static_p2pk'
+											const keyScheme = bidEvent.tags.find((tag) => tag[0] === 'key_scheme')?.[1] || 'hd_p2pk'
 											const createdAt = bidEvent.created_at ? new Date(bidEvent.created_at * 1000).toLocaleString() : 'N/A'
 
 											return (
