@@ -1,5 +1,5 @@
 import { getMintHostname, getProofsForMint, loadUserData, saveUserData, type PendingToken } from '@/lib/wallet'
-import { CashuMint, CashuWallet, getEncodedToken, type MintKeys, type MintKeyset, type Proof } from '@cashu/cashu-ts'
+import { CashuMint, CashuWallet, CheckStateEnum, getEncodedToken, type MintKeys, type MintKeyset, type Proof } from '@cashu/cashu-ts'
 import { NDKEvent, NDKNutzap, NDKRelaySet, NDKUser, NDKZapper, type NDKFilter } from '@nostr-dev-kit/ndk'
 import { NDKCashuDeposit, NDKCashuWallet, NDKWalletStatus, type NDKWalletTransaction } from '@nostr-dev-kit/wallet'
 import { HDKey } from '@scure/bip32'
@@ -181,6 +181,63 @@ const createCashuWalletForMint = async (targetMint: string): Promise<{ cashuWall
 				keys: mintKeys,
 			}),
 			keysetId: mintKeys.id,
+		}
+	}
+}
+
+const consolidateMintProofs = async (wallet: NDKCashuWallet, mint: string): Promise<void> => {
+	const allProofs = wallet.state.getProofs({ mint, includeDeleted: true, onlyAvailable: false })
+	if (allProofs.length === 0) return
+
+	const { cashuWallet } = await createCashuWalletForMint(mint)
+	const proofStates = await cashuWallet.checkProofsStates(allProofs)
+
+	const spentProofs: Proof[] = []
+	const unspentProofs: Proof[] = []
+	const pendingProofs: Proof[] = []
+
+	allProofs.forEach((proof, index) => {
+		const state = proofStates[index]?.state
+		if (state === CheckStateEnum.SPENT) {
+			spentProofs.push(proof)
+		} else if (state === CheckStateEnum.UNSPENT) {
+			unspentProofs.push(proof)
+		} else {
+			pendingProofs.push(proof)
+		}
+	})
+
+	if (spentProofs.length === 0) return
+
+	if (pendingProofs.length > 0) {
+		const pendingAmount = pendingProofs.reduce((sum, proof) => sum + proof.amount, 0)
+		wallet.state.reserveProofs(pendingProofs, pendingAmount)
+	}
+
+	await wallet.state.update(
+		{
+			mint,
+			store: [...unspentProofs, ...pendingProofs],
+			destroy: spentProofs,
+		},
+		'Consolidate',
+	)
+}
+
+const consolidateWalletProofs = async (wallet: NDKCashuWallet): Promise<void> => {
+	const mints = Array.from(
+		wallet.state
+			.getMintsProofs({
+				validStates: new Set(['available', 'reserved', 'deleted']),
+			})
+			.keys(),
+	).filter(Boolean)
+
+	for (const mint of mints) {
+		try {
+			await consolidateMintProofs(wallet, mint)
+		} catch (err) {
+			console.error(`[nip60] Failed to consolidate mint ${mint}:`, err)
 		}
 	}
 }
@@ -649,6 +706,21 @@ export const nip60Actions = {
 		return nip60Store.state.wallet
 	},
 
+	consolidateProofs: async (): Promise<void> => {
+		const wallet = nip60Store.state.wallet
+		if (!wallet) {
+			console.warn('[nip60] Cannot consolidate without wallet')
+			return
+		}
+
+		try {
+			await consolidateWalletProofs(wallet)
+		} catch (err) {
+			console.error('[nip60] Failed to consolidate tokens:', err)
+			throw err
+		}
+	},
+
 	/**
 	 * Refresh wallet balance and transactions
 	 * @param options.consolidate If true, consolidate tokens first (checks for spent proofs)
@@ -665,7 +737,7 @@ export const nip60Actions = {
 		// Consolidate tokens if requested - this checks for spent proofs
 		if (shouldConsolidate) {
 			try {
-				await wallet.consolidateTokens()
+				await nip60Actions.consolidateProofs()
 			} catch (err) {
 				console.error('[nip60] Failed to consolidate tokens:', err)
 				// Continue with refresh even if consolidation fails
@@ -893,7 +965,7 @@ export const nip60Actions = {
 
 			if (isStateError) {
 				try {
-					await wallet.consolidateTokens()
+					await nip60Actions.consolidateProofs()
 					await nip60Actions.refresh()
 					return await attemptPayInvoice()
 				} catch (retryErr) {
@@ -1064,7 +1136,7 @@ export const nip60Actions = {
 
 					// Last-resort path: reconcile wallet state, then retry once.
 					try {
-						await wallet.consolidateTokens()
+						await nip60Actions.consolidateProofs()
 					} catch (consolidateErr) {
 						console.error('[nip60] Consolidation during bid send retry failed:', consolidateErr)
 					}
@@ -1114,7 +1186,7 @@ export const nip60Actions = {
 				}
 
 				try {
-					await wallet.consolidateTokens()
+					await nip60Actions.consolidateProofs()
 				} catch (consolidateErr) {
 					console.error('[nip60] Bid lock consolidation error (non-fatal):', consolidateErr)
 				}
@@ -1252,7 +1324,7 @@ export const nip60Actions = {
 
 			// Consolidate to sync state (detect spent proofs)
 			try {
-				await wallet.consolidateTokens()
+				await nip60Actions.consolidateProofs()
 			} catch (consolidateErr) {
 				console.error('[nip60] Consolidation error (non-fatal):', consolidateErr)
 			}
@@ -1268,7 +1340,7 @@ export const nip60Actions = {
 			const errorMessage = err instanceof Error ? err.message : String(err)
 			if (errorMessage.toLowerCase().includes('already spent') || errorMessage.toLowerCase().includes('token spent')) {
 				try {
-					await wallet.consolidateTokens()
+					await nip60Actions.consolidateProofs()
 					await nip60Actions.refresh()
 				} catch (consolidateErr) {
 					console.error('[nip60] Consolidation failed:', consolidateErr)
