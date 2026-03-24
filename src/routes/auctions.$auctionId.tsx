@@ -8,7 +8,6 @@ import { ItemGrid } from '@/components/ItemGrid'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { ndkActions } from '@/lib/stores/ndk'
 import { uiStore } from '@/lib/stores/ui'
 import { usePublishAuctionBidMutation } from '@/publish/auctions'
@@ -48,6 +47,7 @@ import { useStore } from '@tanstack/react-store'
 import { ArrowLeft, Gavel, Truck, UserRound } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
+import { AvatarUser } from '@/components/AvatarUser'
 
 function useHeroBackground(imageUrl: string, className: string) {
 	useEffect(() => {
@@ -422,7 +422,7 @@ function AuctionDetailRoute() {
 										Seller & fulfilment
 									</div>
 									<div className="mt-4 space-y-1">
-										<ShopperInfoRow label="Seller" value={<UserWithAvatar pubkey={auction.pubkey} disableLink={true} />} />
+										<ShopperInfoRow label="Seller" value={<AvatarUser pubkey={auction.pubkey} />} />
 										<ShopperInfoRow
 											label="Categories"
 											value={
@@ -571,7 +571,7 @@ function AuctionDetailRoute() {
 												</div>
 
 												<div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-zinc-700">
-													<UserWithAvatar pubkey={bidEvent.pubkey} size="sm" disableLink={true} />
+													<AvatarUser pubkey={bidEvent.pubkey} />
 													<span className="text-zinc-400">•</span>
 													<span>{getBidMint(bidEvent) || 'No mint declared'}</span>
 												</div>
@@ -609,7 +609,7 @@ function AuctionDetailRoute() {
 									Seller
 								</div>
 								<div className="mt-4">
-									<UserWithAvatar pubkey={auction.pubkey} className="items-center" />
+									<AvatarUser pubkey={bidEvent.pubkey} />
 								</div>
 								<div className="mt-5 space-y-1">
 									<ShopperInfoRow label="Seller key" value={shortenHex(auction.pubkey)} />
