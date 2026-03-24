@@ -1,11 +1,10 @@
-import { NDKCashuWallet, NDKCashuDeposit, type NDKWalletBalance, type NDKWalletTransaction, NDKWalletStatus } from '@nostr-dev-kit/wallet'
+import { getMintHostname, getProofsForMint, loadUserData, saveUserData, type PendingToken } from '@/lib/wallet'
+import { CashuMint, CashuWallet, getEncodedToken, type MintKeys, type MintKeyset, type Proof } from '@cashu/cashu-ts'
 import { NDKEvent, NDKNutzap, NDKRelaySet, NDKUser, NDKZapper, type NDKFilter } from '@nostr-dev-kit/ndk'
-import { Store } from '@tanstack/store'
-import { CashuMint, CashuWallet, getEncodedToken, getDecodedToken, type Proof } from '@cashu/cashu-ts'
+import { NDKCashuDeposit, NDKCashuWallet, NDKWalletStatus, type NDKWalletTransaction } from '@nostr-dev-kit/wallet'
 import { HDKey } from '@scure/bip32'
-import { BUG_RELAY } from '@/lib/constants'
+import { Store } from '@tanstack/store'
 import { ndkActions, ndkStore } from './ndk'
-import { loadUserData, saveUserData, getProofsForMint, getMintHostname, type PendingToken } from '@/lib/wallet'
 
 const DEFAULT_MINT_KEY = 'nip60_default_mint'
 const PENDING_TOKENS_KEY = 'nip60_pending_tokens'
@@ -98,9 +97,13 @@ const initialState: Nip60State = {
 	pendingTokens: [],
 }
 
-const DEV_TEST_MINT_URL = process.env.APP_DEV_TEST_MINT_URL || 'https://nofees.testnut.cashu.space'
+const DEV_TEST_MINT_URL = process.env.APP_DEV_TEST_MINT_URL || 'https://testnut.cashu.space'
 export const NIP60_DEV_TEST_MINTS = Array.from(
-	new Set([DEV_TEST_MINT_URL, 'https://testnut.cashu.space'].map((mint) => mint.trim().replace(/\/$/, '')).filter(Boolean)),
+	new Set(
+		[DEV_TEST_MINT_URL, 'https://testnut.cashu.space', 'https://nofees.testnut.cashu.space']
+			.map((mint) => mint.trim().replace(/\/$/, ''))
+			.filter(Boolean),
+	),
 )
 const NIP60_WALLET_KIND = 17375 as unknown as NonNullable<NDKFilter['kinds']>[number]
 const NIP60_WALLET_FETCH_TIMEOUT_MS = 5000
@@ -127,12 +130,62 @@ function generateId(): string {
 const normalizeMintUrl = (mintUrl: string): string => mintUrl.trim().replace(/\/$/, '')
 
 const getDevTestMintCandidates = (preferredMintUrl?: string): string[] => {
-	const preferred = preferredMintUrl ? [normalizeMintUrl(preferredMintUrl)] : []
+	const normalizedPreferredMint = preferredMintUrl ? normalizeMintUrl(preferredMintUrl) : ''
+	const preferred = normalizedPreferredMint && NIP60_DEV_TEST_MINTS.includes(normalizedPreferredMint) ? [normalizedPreferredMint] : []
 	return Array.from(new Set([...preferred, ...NIP60_DEV_TEST_MINTS].filter(Boolean)))
 }
 
+const isKeysetVerificationError = (err: unknown): err is Error => err instanceof Error && err.message.includes("Couldn't verify keyset ID")
+
+const getErrorMessage = (err: unknown): string => (err instanceof Error ? err.message : String(err))
+
+const getDevTestMintKeyset = async (cashuMint: CashuMint, targetMint: string): Promise<{ keysets: MintKeyset[]; mintKeys: MintKeys }> => {
+	const keysetResponse = await cashuMint.getKeySets()
+	const satKeysets = keysetResponse.keysets.filter((keyset) => keyset.unit === 'sat')
+	const activeSatKeyset = satKeysets.find((keyset) => keyset.active) ?? satKeysets[0]
+	if (!activeSatKeyset) {
+		throw new Error(`Mint ${getMintHostname(targetMint)} has no sat keysets`)
+	}
+
+	const keysResponse = await cashuMint.getKeys(activeSatKeyset.id)
+	const mintKeys = keysResponse.keysets.find((keyset) => keyset.id === activeSatKeyset.id) ?? keysResponse.keysets[0]
+	if (!mintKeys) {
+		throw new Error(`Mint ${getMintHostname(targetMint)} returned no keys for keyset ${activeSatKeyset.id}`)
+	}
+
+	return {
+		keysets: satKeysets,
+		mintKeys,
+	}
+}
+
+const createCashuWalletForMint = async (targetMint: string): Promise<{ cashuWallet: CashuWallet; keysetId?: string }> => {
+	const normalizedTargetMint = normalizeMintUrl(targetMint)
+	const cashuMint = new CashuMint(normalizedTargetMint)
+	const cashuWallet = new CashuWallet(cashuMint)
+
+	try {
+		await cashuWallet.loadMint()
+		return { cashuWallet }
+	} catch (err) {
+		if (!NIP60_WALLET_DEV_MODE || !NIP60_DEV_TEST_MINTS.includes(normalizedTargetMint) || !isKeysetVerificationError(err)) {
+			throw err
+		}
+
+		// testnut is currently serving a keyset ID that cashu-ts rejects. Seed the dev wallet
+		// with the raw keyset metadata so we can keep exercising the faucet flow in dev mode.
+		const { keysets, mintKeys } = await getDevTestMintKeyset(cashuMint, normalizedTargetMint)
+		return {
+			cashuWallet: new CashuWallet(cashuMint, {
+				keysets,
+				keys: mintKeys,
+			}),
+			keysetId: mintKeys.id,
+		}
+	}
+}
+
 const normalizeRelayUrl = (relayUrl: string): string => relayUrl.trim().replace(/\/+$/, '')
-const isBugRelayUrl = (relayUrl: string): boolean => normalizeRelayUrl(relayUrl) === normalizeRelayUrl(BUG_RELAY)
 
 const getFirstTagValue = (event: NDKEvent, tagName: string): string => event.tags.find((tag) => tag[0] === tagName)?.[1] || ''
 
@@ -374,7 +427,7 @@ export const nip60Actions = {
 				const connectedRelayUrls = (ndk.pool?.connectedRelays?.() ?? []).map((relay) => relay.url)
 				const fallbackRelayUrls = Array.from(ndk.pool?.relays?.keys() ?? [])
 				const relayCandidates = connectedRelayUrls.length > 0 ? connectedRelayUrls : fallbackRelayUrls
-				const relayUrls = relayCandidates.map(normalizeRelayUrl).filter((url) => !!url && !isBugRelayUrl(url))
+				const relayUrls = relayCandidates.map(normalizeRelayUrl).filter((url) => !!url)
 				if (relayUrls.length > 0) {
 					wallet.relaySet = NDKRelaySet.fromRelayUrls(relayUrls, ndk)
 				}
@@ -971,9 +1024,7 @@ export const nip60Actions = {
 		}
 
 		try {
-			const cashuMint = new CashuMint(targetMint)
-			const cashuWallet = new CashuWallet(cashuMint)
-			await cashuWallet.loadMint()
+			const { cashuWallet } = await createCashuWalletForMint(targetMint)
 
 			const buildSendOptions = (includeDleq: boolean) => ({
 				includeDleq,
@@ -1053,8 +1104,10 @@ export const nip60Actions = {
 			void (async () => {
 				if (changeProofs.length > 0) {
 					try {
-						const changeToken = getEncodedToken({ mint: targetMint, proofs: changeProofs })
-						await wallet.receiveToken(changeToken)
+						await wallet.state.update({
+							store: changeProofs,
+							mint: targetMint,
+						})
 					} catch (changeErr) {
 						console.error('[nip60] Failed to receive bid change proofs (non-fatal):', changeErr)
 					}
@@ -1143,12 +1196,7 @@ export const nip60Actions = {
 		}
 
 		try {
-			// Create CashuWallet for mint operations
-			const cashuMint = new CashuMint(targetMint)
-			const cashuWallet = new CashuWallet(cashuMint)
-
-			// Load mint keys
-			await cashuWallet.loadMint()
+			const { cashuWallet } = await createCashuWalletForMint(targetMint)
 
 			let tokenProofs: Proof[]
 			let changeProofs: Proof[] = []
@@ -1193,9 +1241,10 @@ export const nip60Actions = {
 			// For change proofs, we need to add them back to the wallet
 			if (changeProofs.length > 0) {
 				try {
-					// Receive the change proofs back into the wallet
-					const changeToken = getEncodedToken({ mint: targetMint, proofs: changeProofs })
-					await wallet.receiveToken(changeToken)
+					await wallet.state.update({
+						store: changeProofs,
+						mint: targetMint,
+					})
 				} catch (changeErr) {
 					console.error('[nip60] Failed to add change proofs (will recover on consolidation):', changeErr)
 				}
@@ -1239,7 +1288,7 @@ export const nip60Actions = {
 	},
 
 	/**
-	 * Dev-only helper: mint free test ecash from no-fee testnut mint and receive it into NIP-60 wallet.
+	 * Dev-only helper: mint free test ecash from configured dev mints into the NIP-60 wallet.
 	 */
 	mintTestEcash: async (
 		amount: number,
@@ -1266,28 +1315,25 @@ export const nip60Actions = {
 			: normalizedPreferredMint
 				? [normalizedPreferredMint]
 				: getDevTestMintCandidates(mintUrl)
-		let lastError: unknown = null
+		const failures: string[] = []
 
 		for (const targetMint of candidates) {
 			try {
-				const mint = new CashuMint(targetMint)
-				const cashuWallet = new CashuWallet(mint)
+				const { cashuWallet, keysetId } = await createCashuWalletForMint(targetMint)
 				const quote = await cashuWallet.createMintQuote(mintAmount)
-				const proofs = await cashuWallet.mintProofs(mintAmount, quote.quote)
+				const proofs = await cashuWallet.mintProofs(mintAmount, quote.quote, keysetId ? { keysetId } : undefined)
 
 				if (!proofs.length) {
 					throw new Error('Mint returned no proofs')
 				}
 
-				const token = getEncodedToken({
+				await wallet.state.update({
+					store: proofs,
 					mint: targetMint,
-					proofs,
 				})
 
-				await wallet.receiveToken(token)
-
 				if (!wallet.mints.includes(targetMint)) {
-					wallet.mints = [...wallet.mints, targetMint]
+					nip60Actions.addMint(targetMint)
 				}
 				if (!nip60Store.state.defaultMint) {
 					nip60Actions.setDefaultMint(targetMint)
@@ -1302,12 +1348,11 @@ export const nip60Actions = {
 					proofsMinted: proofs.length,
 				}
 			} catch (err) {
-				lastError = err
+				failures.push(`${targetMint}: ${getErrorMessage(err)}`)
 			}
 		}
 
-		const reason = lastError instanceof Error ? lastError.message : String(lastError)
-		throw new Error(`Failed to mint test ecash from dev mints [${candidates.join(', ')}]: ${reason}`)
+		throw new Error(`Failed to mint test ecash from dev mints: ${failures.join('; ')}`)
 	},
 
 	/**
