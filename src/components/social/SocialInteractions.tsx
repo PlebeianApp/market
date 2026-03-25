@@ -2,6 +2,7 @@ import React from 'react'
 import { ZapButton } from './ZapButton'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Button } from '../ui/button'
+import { ShareButton } from './ShareButton'
 
 interface SocialInteractionsProps {
 	event: NDKEvent
@@ -13,17 +14,8 @@ const SocialInteractions = ({ event }: SocialInteractionsProps) => {
 			<div className="grid grid-cols-1 gap-2">
 				<ReactionButton />
 				<CommentButton />
-				<RepostButton />
 				<ZapButton event={event} />
-				{/** Share Button */}
-				<Button
-					variant="primary"
-					size="icon"
-					className="bg-white/10 hover:bg-white/20"
-					icon={<span className="i-sharing w-6 h-6" />}
-					tooltip="Share"
-					onClick={() => setShareDialogOpen(true)}
-				/>
+				<ShareButton event={event} />
 			</div>
 		</div>
 	)

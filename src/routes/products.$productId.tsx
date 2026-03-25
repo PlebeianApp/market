@@ -1,4 +1,3 @@
-import { ShareProductDialog } from '@/components/dialogs/ShareProductDialog'
 import { EntityActionsMenu } from '@/components/EntityActionsMenu'
 import { ImageCarousel } from '@/components/ImageCarousel'
 import { ImageViewerModal } from '@/components/ImageViewerModal'
@@ -50,6 +49,7 @@ import { useStore } from '@tanstack/react-store'
 import { AlertTriangle, ArrowLeft, Edit, Minus, Plus, Truck } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { ShareButton } from '@/components/social/ShareButton'
 
 // Hook to inject dynamic CSS
 function useHeroBackground(imageUrl: string, className: string) {
@@ -144,7 +144,6 @@ function RouteComponent() {
 	const [quantity, setQuantity] = useState(1)
 	const [imageViewerOpen, setImageViewerOpen] = useState(false)
 	const [selectedImageIndex, setSelectedImageIndex] = useState(0)
-	const [shareDialogOpen, setShareDialogOpen] = useState(false)
 
 	// Get app config
 	const { data: config } = useConfigQuery()
@@ -365,14 +364,7 @@ function RouteComponent() {
 								<h1 className="text-3xl font-semibold lg:pl-0">{title}</h1>
 								<div className="flex items-center gap-2">
 									<ZapButton event={product} />
-									<Button
-										variant="primary"
-										size="icon"
-										className="bg-white/10 hover:bg-white/20"
-										icon={<span className="i-sharing w-6 h-6" />}
-										tooltip="Share"
-										onClick={() => setShareDialogOpen(true)}
-									/>
+									<ShareButton event={product} />
 									{/* Entity Actions Menu for admins/editors/owners */}
 									<EntityActionsMenu
 										permissions={permissions}
@@ -785,9 +777,6 @@ function RouteComponent() {
 				currentIndex={selectedImageIndex}
 				onIndexChange={setSelectedImageIndex}
 			/>
-
-			{/* Share Product Dialog */}
-			<ShareProductDialog open={shareDialogOpen} onOpenChange={setShareDialogOpen} productId={productId} pubkey={pubkey} title={title} />
 		</div>
 	)
 }
