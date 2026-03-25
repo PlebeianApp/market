@@ -110,9 +110,7 @@ function RouteComponent() {
 	})()
 
 	// Use smart query that handles both event IDs and d-tags
-	const queryOptions = isEventId(productId)
-		? productQueryOptions(productId)
-		: productSmartQueryOptions(effectiveDTag, sellerPubkey)
+	const queryOptions = isEventId(productId) ? productQueryOptions(productId) : productSmartQueryOptions(effectiveDTag, sellerPubkey)
 
 	const productQuery = useQuery({
 		...queryOptions,

@@ -49,7 +49,12 @@ test.describe('Product Comments - Core', () => {
 		await merchantPage.waitForTimeout(500)
 		await merchantPage.locator('button:has-text("Post Comment")').click()
 		await expect(merchantPage.locator(`text=${commentText}`)).toBeVisible({ timeout: 15000 })
-		await expect(merchantPage.locator('[role="tabpanel"]').filter({ hasText: /Comments/ }).locator('text=/\\(\\d+\\)/')).toBeVisible()
+		await expect(
+			merchantPage
+				.locator('[role="tabpanel"]')
+				.filter({ hasText: /Comments/ })
+				.locator('text=/\\(\\d+\\)/'),
+		).toBeVisible()
 	})
 
 	test('can reply to comment with inline form', async ({ merchantPage }) => {
@@ -64,19 +69,19 @@ test.describe('Product Comments - Core', () => {
 
 		// Click Reply button on the first comment
 		await merchantPage.locator('text=Reply').first().click()
-		
+
 		// Wait for the reply form to appear
 		await expect(merchantPage.locator('button:has-text("Post Reply")')).toBeVisible({ timeout: 5000 })
-		
+
 		const replyText = `Reply comment ${Date.now()}`
 		// Find the reply textarea by placeholder
 		const replyTextarea = merchantPage.locator('textarea[placeholder*="reply"]')
 		await replyTextarea.click()
 		await replyTextarea.fill(replyText)
-		
+
 		// Wait for React state to update
 		await merchantPage.waitForTimeout(1000)
-		
+
 		// Click Post Reply button
 		await merchantPage.locator('button:has-text("Post Reply")').click()
 		await expect(merchantPage.locator(`text=${replyText}`)).toBeVisible({ timeout: 15000 })
@@ -109,7 +114,7 @@ test.describe('Product Comments - Core', () => {
 		// Verify delete button exists and is clickable
 		const deleteButton = merchantPage.locator('button svg.lucide-trash-2').last()
 		await expect(deleteButton).toBeVisible()
-		
+
 		// Handle the confirmation dialog
 		merchantPage.on('dialog', async (dialog) => {
 			await dialog.accept()
