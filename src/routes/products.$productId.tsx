@@ -40,8 +40,10 @@ import {
 	getProductVisibility,
 	getProductWeight,
 	getProductId,
+	isEventId,
 	isNSFWProduct,
 	productQueryOptions,
+	productSmartQueryOptions,
 	productsByPubkeyQueryOptions,
 } from '@/queries/products'
 import { getProductCommentAddress } from '@/queries/comments'
@@ -96,8 +98,24 @@ function RouteComponent() {
 		window.scrollTo({ top: 0, behavior: 'smooth' })
 	}, [productId])
 
+	// Parse productId to handle both address format (kind:pubkey:dtag) and d-tag only
+	const { effectiveDTag, sellerPubkey } = (() => {
+		const parts = productId.split(':')
+		if (parts.length === 3 && parts[0] === '30402') {
+			// Address format: 30402:pubkey:dtag
+			return { effectiveDTag: parts[2], sellerPubkey: parts[1] }
+		}
+		// Just a d-tag - we can't fetch without pubkey, so use original id
+		return { effectiveDTag: productId, sellerPubkey: undefined }
+	})()
+
+	// Use smart query that handles both event IDs and d-tags
+	const queryOptions = isEventId(productId)
+		? productQueryOptions(productId)
+		: productSmartQueryOptions(effectiveDTag, sellerPubkey)
+
 	const productQuery = useQuery({
-		...productQueryOptions(productId),
+		...queryOptions,
 		// Relays can be slow to connect/propagate; keep retrying for a while instead of erroring the whole route.
 		retry: (failureCount) => failureCount < 120,
 		retryDelay: (attemptIndex) => Math.min(500 + attemptIndex * 750, 5000),
