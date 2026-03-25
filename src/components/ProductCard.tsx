@@ -17,7 +17,7 @@ import { Check } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { PriceDisplay } from './PriceDisplay'
 import { Button } from './ui/button'
-import { ZapButton } from './ZapButton'
+import { ZapButton } from './social/ZapButton'
 
 export function ProductCard({ product }: { product: NDKEvent }) {
 	const title = getProductTitle(product)

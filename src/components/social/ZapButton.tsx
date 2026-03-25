@@ -1,11 +1,11 @@
-import { ZapDialog } from '@/components/ZapDialog'
+import { ZapDialog } from '../dialogs/ZapDialog'
 import { cn } from '@/lib/utils'
 import { useZapCapability } from '@/queries/profiles'
 import { NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
 import * as React from 'react'
 import { useState } from 'react'
-import { Button } from './ui/button'
-import { Spinner } from './ui/spinner'
+import { Button } from '../ui/button'
+import { Spinner } from '../ui/spinner'
 
 interface ZapButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 	event: NDKEvent | NDKUser
