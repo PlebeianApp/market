@@ -50,6 +50,7 @@ import { AlertTriangle, ArrowLeft, Edit, Minus, Plus, Truck } from 'lucide-react
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { ShareButton } from '@/components/social/ShareButton'
+import SocialInteractions from '@/components/social/SocialInteractions'
 
 // Hook to inject dynamic CSS
 function useHeroBackground(imageUrl: string, className: string) {
@@ -363,8 +364,6 @@ function RouteComponent() {
 							<div className="flex items-center justify-between">
 								<h1 className="text-3xl font-semibold lg:pl-0">{title}</h1>
 								<div className="flex items-center gap-2">
-									<ZapButton event={product} />
-									<ShareButton event={product} />
 									{/* Entity Actions Menu for admins/editors/owners */}
 									<EntityActionsMenu
 										permissions={permissions}
@@ -479,6 +478,8 @@ function RouteComponent() {
 
 							<span>Sold by:</span>
 							<UserCard pubkey={pubkey} size="md" />
+
+							<SocialInteractions event={product} />
 						</div>
 					</div>
 				</div>
