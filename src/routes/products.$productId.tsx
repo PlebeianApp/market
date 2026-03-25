@@ -370,6 +370,7 @@ function RouteComponent() {
 										size="icon"
 										className="bg-white/10 hover:bg-white/20"
 										icon={<span className="i-sharing w-6 h-6" />}
+										tooltip="Share"
 										onClick={() => setShareDialogOpen(true)}
 									/>
 									{/* Entity Actions Menu for admins/editors/owners */}
