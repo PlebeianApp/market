@@ -5,12 +5,12 @@ import { useStore } from '@tanstack/react-store'
 import { useState } from 'react'
 import { Button } from './ui/button'
 import { Textarea } from './ui/textarea'
-import { UserNameWithBadge } from './UserNameWithBadge'
 import { CircleX, MessageSquare, Reply, X } from 'lucide-react'
 import { useUserProfile } from '@/queries/bugReports'
 import { ProfileName } from './ProfileName'
 import { useProfileName } from '@/queries/profiles'
 import { npubEncode } from 'nostr-tools/nip19'
+import { UserCard } from './UserCard'
 
 interface IdentifierProductComment {
 	id: string
@@ -59,7 +59,7 @@ function CommentItem({ comment, onPressReply, isReply = false, parentAuthorPubke
 		<>
 			<div className="border-b border-gray-200 py-4 last:border-b-0">
 				<div className="flex items-center justify-between mb-3">
-					<UserNameWithBadge pubkey={comment.authorPubkey} />
+					<UserCard pubkey={comment.authorPubkey} />
 					<span className="text-sm text-gray-500">{formatDate(comment.createdAt)}</span>
 				</div>
 
