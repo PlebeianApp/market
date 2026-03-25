@@ -47,48 +47,28 @@ export function ZapButton({ event, className, onClick, onPointerDown, type, ...p
 		setDialogOpen(open)
 	}
 
+	const isDisabled = checkingZapCapability || !canAuthorReceiveZaps || isZapping
+	const icon = checkingZapCapability ? <Spinner /> : <span className={cn('i-lightning w-6 h-6', isZapping && 'animate-bounce')} />
+
 	return (
 		<>
-			{checkingZapCapability ? (
-				<Button
-					variant="focus"
-					size="icon"
-					className={cn('gap-2', isZapping && 'animate-pulse', className)}
-					{...props}
-					type={type ?? 'button'}
-					onClick={handleButtonInteraction}
-					onPointerDown={handleButtonPointerDown}
-					disabled={true}
-					icon={<Spinner />}
-				/>
-			) : canAuthorReceiveZaps ? (
-				<Button
-					variant="focus"
-					size="icon"
-					className={cn('gap-2', isZapping && 'animate-pulse', className)}
-					{...props}
-					type={type ?? 'button'}
-					onClick={(e) => {
-						handleButtonInteraction(e)
+			<Button
+				variant="focus"
+				size="icon"
+				className={cn('gap-2', isZapping && 'animate-pulse', className)}
+				{...props}
+				type={type ?? 'button'}
+				tooltip="Zap"
+				onClick={(e) => {
+					handleButtonInteraction(e)
+					if (!isDisabled) {
 						void handleClick()
-					}}
-					onPointerDown={handleButtonPointerDown}
-					disabled={isZapping || !canAuthorReceiveZaps}
-					icon={<span className={cn('i-lightning w-6 h-6', isZapping && 'animate-bounce')} />}
-				/>
-			) : (
-				<Button
-					variant="focus"
-					size="icon"
-					className={cn('gap-2', isZapping && 'animate-pulse', className)}
-					{...props}
-					type={type ?? 'button'}
-					onClick={handleButtonInteraction}
-					onPointerDown={handleButtonPointerDown}
-					disabled={true}
-					icon={<span className={cn('i-lightning w-6 h-6', isZapping && 'animate-bounce')} />}
-				/>
-			)}
+					}
+				}}
+				onPointerDown={handleButtonPointerDown}
+				disabled={isDisabled}
+				icon={icon}
+			/>
 			<ZapDialog isOpen={dialogOpen} onOpenChange={handleOpenChange} event={event} onZapComplete={handleZapComplete} />
 		</>
 	)
