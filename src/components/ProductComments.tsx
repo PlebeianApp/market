@@ -1,6 +1,6 @@
 import { useProductComments, type ProductComment, type ProductCommentThread } from '@/queries/comments'
 import { usePublishCommentMutation } from '@/publish/comments'
-import { authStore } from '@/lib/stores/auth'
+import { authStore, useAuth } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
 import { useState } from 'react'
 import { Button } from './ui/button'
@@ -41,6 +41,9 @@ interface CommentItemProps {
 }
 
 function CommentItem({ comment, onPressReply, isReply = false, parentAuthorPubkey }: CommentItemProps) {
+	// Get is authenticated for showing/hiding "Reply" button
+	const { user, isAuthenticated } = useAuth()
+
 	// Get parent comment author name, if applicable
 	const { data: userParentAuthor, isLoading } = useUserProfile(parentAuthorPubkey ?? '')
 	const npubUserParentAuthor = parentAuthorPubkey ? npubEncode(parentAuthorPubkey) : null
@@ -64,15 +67,17 @@ function CommentItem({ comment, onPressReply, isReply = false, parentAuthorPubke
 
 				<p className="text-gray-700 whitespace-pre-wrap mb-1">{comment.content}</p>
 
-				<button
-					className="text-sm font-medium text-gray-600 hover:text-gray-400 cursor-pointer p-2 rounded"
-					onClick={() => onPressReply({ id: comment.id, authorPubkey: comment.authorPubkey })}
-				>
-					<div className="flex gap-2 normal-case items-center">
-						<Reply />
-						Reply...
-					</div>
-				</button>
+				{isAuthenticated && (
+					<button
+						className="text-sm font-medium text-gray-600 hover:text-gray-400 cursor-pointer p-2 rounded"
+						onClick={() => onPressReply({ id: comment.id, authorPubkey: comment.authorPubkey })}
+					>
+						<div className="flex gap-2 normal-case items-center">
+							<Reply />
+							Reply...
+						</div>
+					</button>
+				)}
 			</div>
 			<div className={'flex-col gap-2 ' + classIndentTopLevelComment}>
 				{comment.children.map((commentChild) => (
