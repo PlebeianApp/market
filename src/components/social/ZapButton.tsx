@@ -48,14 +48,18 @@ export function ZapButton({ event, className, onClick, onPointerDown, type, ...p
 	}
 
 	const isDisabled = checkingZapCapability || !canAuthorReceiveZaps || isZapping
-	const icon = checkingZapCapability ? <Spinner /> : <span className={cn('i-lightning w-6 h-6', isZapping && 'animate-bounce')} />
+	const icon = checkingZapCapability ? <Spinner /> : <span className={cn('i-lightning w-6 h-6 group-hover:animate-bounce')} />
 
 	return (
 		<>
 			<Button
 				variant="focus"
 				size="icon"
-				className={cn('gap-2', isZapping && 'animate-pulse', className)}
+				className={cn(
+					'group border-focus border-2 bg-transparent text-focus hover:bg-focus hover:text-black hover:animate-pulse',
+					'gap-2',
+					className,
+				)}
 				{...props}
 				type={type ?? 'button'}
 				tooltip="Zap"

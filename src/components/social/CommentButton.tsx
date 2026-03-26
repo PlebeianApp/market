@@ -43,9 +43,9 @@ export function CommentButton({ event, className, onClick, onPointerDown, ...pro
 			<Button
 				variant="outline"
 				size="icon"
-				className={' ' + className}
-				{...props}
+				className={'border-light-gray border-2 bg-transparent text-light-gray hover:text-black ' + className}
 				type="button"
+				{...props}
 				tooltip="Comment"
 				onClick={(e) => {
 					handleButtonInteraction(e)
@@ -57,7 +57,7 @@ export function CommentButton({ event, className, onClick, onPointerDown, ...pro
 				}}
 				onPointerDown={handleButtonPointerDown}
 				disabled={!event.ndk}
-				icon={<MessageSquare className="text-black w-6 h-6" />}
+				icon={<MessageSquare className="w-6 h-6" />}
 			/>
 
 			{/* Comment Dialog */}

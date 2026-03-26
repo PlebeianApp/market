@@ -14,8 +14,8 @@ const SocialInteractions = ({ event }: SocialInteractionsProps) => {
 	return (
 		<div className="max-w-md py-2 flex gap-2 justify-start">
 			<ReactionButton event={event} />
-			<CommentButton event={event} />
 			<ZapButton event={event} />
+			<CommentButton event={event} />
 			<ShareButton event={event} />
 		</div>
 	)
