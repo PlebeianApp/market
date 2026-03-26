@@ -51,6 +51,25 @@ async function publish(relay: Relay, skHex: string, template: EventTemplate) {
 	return event
 }
 
+export async function resetRemoteCartForUser(skHex: string): Promise<void> {
+	const relay = await Relay.connect(RELAY_URL)
+
+	try {
+		await publish(relay, skHex, {
+			kind: 30078,
+			created_at: Math.floor(Date.now() / 1000),
+			content: JSON.stringify({
+				version: 1,
+				updatedAt: Math.floor(Date.now() / 1000),
+				items: [],
+			}),
+			tags: [['d', 'plebeian-market-cart']],
+		})
+	} finally {
+		relay.close()
+	}
+}
+
 // --- Seeding functions ---
 
 async function seedBase(relay: Relay) {
