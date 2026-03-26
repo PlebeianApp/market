@@ -1,9 +1,5 @@
 import { CURRENCIES, HEX_KEYS_REGEX } from '@/lib/constants'
-import {
-	normalizePersistedCart,
-	rehydrateCartFromLiveData,
-	serializeCartIntent,
-} from '@/lib/cart-persistence'
+import { normalizePersistedCart, rehydrateCartFromLiveData, serializeCartIntent } from '@/lib/cart-persistence'
 import { fetchLatestCartSnapshot } from '@/queries/cart'
 import type { SupportedCurrency } from '@/queries/external'
 import { btcExchangeRatesQueryOptions, currencyConversionQueryOptions } from '@/queries/external'
@@ -509,10 +505,7 @@ export const cartActions = {
 			}
 
 			if (shouldAdoptRemote) {
-				const liveProducts: Record<
-					string,
-					{ productRef: string; sellerPubkey: string; productId: string; shippingRefs: string[] }
-				> = {}
+				const liveProducts: Record<string, { productRef: string; sellerPubkey: string; productId: string; shippingRefs: string[] }> = {}
 				const liveShipping: Record<string, { shippingRef: string; sellerPubkey: string }> = {}
 
 				for (const item of normalizedRemote.items) {
@@ -527,9 +520,7 @@ export const cartActions = {
 						productRef: item.productRef,
 						sellerPubkey: productEvent.pubkey,
 						productId: productDTag,
-						shippingRefs: productEvent.tags
-							.filter((tag) => tag[0] === 'shipping_option' && tag[1])
-							.map((tag) => tag[1]),
+						shippingRefs: productEvent.tags.filter((tag) => tag[0] === 'shipping_option' && tag[1]).map((tag) => tag[1]),
 					}
 
 					if (item.shippingRef && !liveShipping[item.shippingRef]) {

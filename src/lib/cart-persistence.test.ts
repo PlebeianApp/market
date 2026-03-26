@@ -161,10 +161,7 @@ describe('cart persistence helpers', () => {
 		const serialized = serializeCartIntent(cart)
 
 		expect(serialized.version).toBe(1)
-		expect(serialized.items.map((item) => item.productRef)).toEqual([
-			`30402:${sellerA}:product-a`,
-			`30402:${sellerB}:product-b`,
-		])
+		expect(serialized.items.map((item) => item.productRef)).toEqual([`30402:${sellerA}:product-a`, `30402:${sellerB}:product-b`])
 		expect(serialized.items[1]?.shippingRef).toBe(`30406:${sellerB}:ship-1`)
 	})
 })
