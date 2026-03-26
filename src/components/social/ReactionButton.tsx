@@ -3,6 +3,8 @@ import { NDKEvent } from '@nostr-dev-kit/ndk'
 import * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
+import { usePublishReactionMutation } from '@/publish/reactions'
+import { useEventReactions } from '@/queries/reactions'
 
 interface ReactionButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 	event: NDKEvent
@@ -10,6 +12,8 @@ interface ReactionButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEleme
 
 export function ReactionButton({ event, className, onClick, onPointerDown, ...props }: ReactionButtonProps) {
 	const [reaction, setReaction] = useState<string>('')
+	const [existingReactions, setExistingReactions] = useState<Record<string, string>>({})
+	const mutation = usePublishReactionMutation()
 
 	const closeTimerRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -75,6 +79,23 @@ export function ReactionButton({ event, className, onClick, onPointerDown, ...pr
 			? 'border-secondary bg-transparent hover:bg-secondary active:bg-secondary/80 text-secondary hover:text-white'
 			: 'bg-secondary hover:bg-secondary/80 active:bg-secondary/70 text-white hover:text-light-gray'
 
+	// Publish reaction when button is clicked
+	const handlePublishReaction = async () => {
+		if (!reaction || !event.id || !event.pubkey) return
+
+		try {
+			await mutation.mutateAsync({
+				emoji: reaction,
+				eventId: event.id,
+				authorPubkey: event.pubkey,
+			})
+			setReaction('')
+			setExistingReactions((prev) => ({ ...prev, [reaction]: '' }))
+		} catch (error) {
+			console.error('Failed to publish reaction:', error)
+		}
+	}
+
 	return (
 		<>
 			<Popover open={isOpen}>
@@ -117,8 +138,16 @@ export function ReactionButton({ event, className, onClick, onPointerDown, ...pr
 					{commonEmojis.map((emoji) => (
 						<button
 							key={emoji}
-							className="text-3xl px-2 py-1 border-transparent hover:border-light-gray/30 active:border-light-gray/40 active:bg-light-gray/20 border-2 rounded"
-							onClick={() => handleReaction(emoji)}
+							className={`text-3xl px-2 py-1 border-2 rounded ${
+								existingReactions[emoji]
+									? 'border-secondary bg-secondary/10'
+									: 'border-transparent hover:border-light-gray/30 active:border-light-gray/40 active:bg-light-gray/20'
+							}`}
+							onClick={() => {
+								handleReaction(emoji)
+								// Publish the reaction
+								handlePublishReaction()
+							}}
 						>
 							{emoji}
 						</button>

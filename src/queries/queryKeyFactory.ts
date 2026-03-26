@@ -143,3 +143,8 @@ export const commentKeys = {
 	all: ['comments'] as const,
 	byProduct: (productCoordinates: string) => [...commentKeys.all, 'byProduct', productCoordinates] as const,
 } as const
+
+export const reactionKeys = {
+	all: ['reactions'] as const,
+	byEvent: (eventId: string, authorPubkey: string) => [...reactionKeys.all, 'byEvent', eventId, authorPubkey] as const,
+} as const
