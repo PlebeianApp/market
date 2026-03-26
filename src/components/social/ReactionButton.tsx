@@ -46,7 +46,8 @@ export function ReactionButton({ event, className, onClick, onPointerDown, ...pr
 	}
 
 	const handleReaction = (emoji: string) => {
-		// TODO
+		setReaction(emoji)
+		setIsOpen(false)
 	}
 
 	const handleButtonInteraction = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -81,7 +82,7 @@ export function ReactionButton({ event, className, onClick, onPointerDown, ...pr
 					<Button
 						variant="outline"
 						size="icon"
-						className={'border-2 ' + classNameButton + ' ' + className}
+						className={'border-2 focus:outline-none ' + classNameButton + ' ' + className}
 						{...props}
 						type="button"
 						onClick={(e) => {
@@ -117,7 +118,7 @@ export function ReactionButton({ event, className, onClick, onPointerDown, ...pr
 						<button
 							key={emoji}
 							className="text-3xl px-2 py-1 border-transparent hover:border-light-gray/30 active:border-light-gray/40 active:bg-light-gray/20 border-2 rounded"
-							onClick={() => setReaction(emoji)}
+							onClick={() => handleReaction(emoji)}
 						>
 							{emoji}
 						</button>
