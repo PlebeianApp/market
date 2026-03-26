@@ -377,16 +377,16 @@ test.describe('Cart - Persistence', () => {
 		await expect(dialog.getByText('Bitcoin Hardware Wallet')).toBeVisible({ timeout: 10_000 })
 	})
 
-	test('clearing cart removes all items after reload', async ({ newUserPage }) => {
-		await safeGoto(newUserPage, '/products')
-		await waitForProducts(newUserPage)
+	test('clearing cart removes all items after reload', async ({ buyerPage }) => {
+		await safeGoto(buyerPage, '/products')
+		await waitForProducts(buyerPage)
 
-		await addWalletToCart(newUserPage)
-		await addGuideToCart(newUserPage)
+		await addWalletToCart(buyerPage)
+		await addGuideToCart(buyerPage)
 
 		// Open cart and clear it
-		await openCart(newUserPage)
-		const dialog = cartDialog(newUserPage)
+		await openCart(buyerPage)
+		const dialog = cartDialog(buyerPage)
 		await expect(dialog.getByText('Bitcoin Hardware Wallet')).toBeVisible({ timeout: 10_000 })
 
 		// Click the "Clear" button at the bottom of the cart
@@ -398,13 +398,13 @@ test.describe('Cart - Persistence', () => {
 		await expect(dialog.getByText('Lightning Node Setup Guide')).not.toBeVisible()
 
 		// Close and reload to confirm persistence of the cleared state
-		await newUserPage.keyboard.press('Escape')
-		await newUserPage.reload()
-		await newUserPage.waitForLoadState('networkidle')
+		await buyerPage.keyboard.press('Escape')
+		await buyerPage.reload()
+		await buyerPage.waitForLoadState('networkidle')
 
 		// Re-open cart — should still be empty (no phantom items)
-		await openCart(newUserPage)
-		const dialogAfter = cartDialog(newUserPage)
+		await openCart(buyerPage)
+		const dialogAfter = cartDialog(buyerPage)
 		// Cart should not contain these products
 		await expect(dialogAfter.getByText('Bitcoin Hardware Wallet')).not.toBeVisible({ timeout: 3_000 })
 	})
