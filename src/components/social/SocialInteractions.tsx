@@ -7,6 +7,8 @@ import { ReactionButton } from './ReactionButton'
 import { CommentButton } from './CommentButton'
 import { useEventReactions } from '@/queries/reactions'
 import { ndkActions } from '@/lib/stores/ndk'
+import type { Reaction } from '@/queries/reactions'
+import { ReactionsDialog } from '../dialogs/ReactionsDialog'
 
 interface SocialInteractionsProps {
 	event: NDKEvent
@@ -14,6 +16,14 @@ interface SocialInteractionsProps {
 
 const SocialInteractions = ({ event }: SocialInteractionsProps) => {
 	const { data: reactions, error } = useEventReactions(event)
+
+	const [openReactionDialog, setOpenReactionDialog] = useState(false)
+	const [selectedReaction, setSelectedReaction] = useState<Map<string, Reaction[]> | null>(null)
+
+	const handleReactionClick = (reactionMap: Map<string, Reaction[]>) => {
+		setSelectedReaction(reactionMap)
+		setOpenReactionDialog(true)
+	}
 
 	return (
 		<>
@@ -24,14 +34,22 @@ const SocialInteractions = ({ event }: SocialInteractionsProps) => {
 				<ShareButton event={event} />
 			</div>
 			<div className="flex flex-wrap gap-1">
-				{reactions &&
-					Array.from(reactions).map(([content, values]) => (
-						<div className="bg-primary-foreground rounded-full py-1 px-2 text-black">
-							<span className="text-lg">{content}</span>
-							<span className="ml-1">{values.length}</span>
-						</div>
-					))}
+				{reactions && reactions.size > 0
+					? Array.from(reactions.entries()).map(([content, values]) => (
+							<Button
+								key={content}
+								variant="outline"
+								size="sm"
+								className="bg-primary-foreground rounded-full py-1 px-2 text-black hover:bg-secondary hover:text-white"
+								onClick={() => handleReactionClick(reactions)}
+							>
+								<span className="text-lg">{content}</span>
+								<span className="ml-1">{values.length}</span>
+							</Button>
+						))
+					: null}
 			</div>
+			{selectedReaction && <ReactionsDialog event={event} reactions={selectedReaction} onOpenChange={setOpenReactionDialog} />}
 		</>
 	)
 }
