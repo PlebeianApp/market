@@ -14,8 +14,12 @@ interface ReactionButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEleme
 
 export function ReactionButton({ event, className, ...props }: ReactionButtonProps) {
 	const mutation = usePublishReactionMutation()
+	// TODO: This should be changed for getting exclusively one's own reactions, and have them ordered by creation date descending.
 	const { data: reactions } = useEventReactions(event)
 	const { user, isAuthenticated } = useAuth()
+
+	// Popover open status
+	const [isOpen, setIsOpen] = useState(false)
 
 	const closeTimerRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -37,49 +41,16 @@ export function ReactionButton({ event, className, ...props }: ReactionButtonPro
 		}, 200) // Adjust delay as needed
 	}
 
-	const handleTriggerEnter = () => {
+	const handlePopoverOpen = () => {
 		if (!isAuthenticated) return
 
 		clearCloseTimer()
 		setIsOpen(true)
 	}
 
-	const handleTriggerLeave = () => {
-		scheduleClose()
-	}
-
-	const handlePopoverEnter = () => {
-		clearCloseTimer()
-		setIsOpen(true)
-	}
-
-	const handlePopoverLeave = () => {
-		scheduleClose()
-	}
-
-	const handleReaction = (emoji: string) => {
-		if (!isAuthenticated) return
-
-		setIsOpen(false)
-
-		handlePublishReaction(emoji)
-	}
-
-	const handleButtonInteraction = (e: React.MouseEvent<HTMLButtonElement>) => {
+	const handleStopPropagation = (e: React.MouseEvent<HTMLButtonElement>) => {
 		e.preventDefault()
 		e.stopPropagation()
-
-		if (!isAuthenticated) {
-			toast.error('You must be logged in to react.')
-		}
-	}
-
-	const handleButtonPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
-		e.stopPropagation()
-
-		if (!isAuthenticated) {
-			toast.error('You must be logged in to react.')
-		}
 	}
 
 	useEffect(() => {
@@ -88,17 +59,13 @@ export function ReactionButton({ event, className, ...props }: ReactionButtonPro
 		}
 	}, [])
 
-	const [isOpen, setIsOpen] = useState(false)
-
-	const commonEmojis = ['❤️', '😂', '🔥', '💰', '👀']
-
-	const classNameButton = currentReaction
-		? 'bg-secondary hover:bg-secondary/80 active:bg-secondary/70 text-white hover:text-light-gray'
-		: 'border-secondary bg-transparent hover:bg-secondary active:bg-secondary/80 text-secondary hover:text-white'
-
 	// Publish reaction when button is clicked
 	const handlePublishReaction = async (emoji: string) => {
+		if (!isAuthenticated) return
+
 		if (!emoji || !event.id || !event.pubkey) return
+
+		setIsOpen(false)
 
 		try {
 			// Pass the event object directly to the mutation
@@ -111,12 +78,25 @@ export function ReactionButton({ event, className, ...props }: ReactionButtonPro
 		}
 	}
 
-	// Check if user has already reacted with this emoji
-	const hasReacted = (emoji: string) => {
-		if (!reactions) return false
-		const reactionList = reactions.get(emoji)
-		return reactionList?.some((r) => r.authorPubkey === user?.pubkey && r.emoji === emoji) ?? false
+	// Delete the reaction selected
+	const handleDeleteReaction = async (emoji?: string) => {
+		if (!isAuthenticated) return
+
+		const reaction = emoji ?? currentReaction
+
+		if (!reaction || !event.id || !event.pubkey) return
+
+		setIsOpen(false)
+
+		// TODO: Publish deletion request for reaction.
+		// We need to actually use the latest reaction in event format and request deletion for it.
 	}
+
+	const commonEmojis = ['❤️', '😂', '🔥', '💰', '👀']
+
+	const classNameButton = currentReaction
+		? 'bg-secondary hover:bg-secondary/80 active:bg-secondary/70 text-white hover:text-light-gray'
+		: 'border-secondary bg-transparent hover:bg-secondary active:bg-secondary/80 text-secondary hover:text-white'
 
 	return (
 		<>
@@ -129,17 +109,22 @@ export function ReactionButton({ event, className, ...props }: ReactionButtonPro
 						{...props}
 						type="button"
 						onClick={(e) => {
-							handleButtonInteraction(e)
+							handleStopPropagation(e)
+
+							if (!isAuthenticated) {
+								toast.error('You must be logged in to react.')
+								return
+							}
+
 							if (!currentReaction) {
-								handleReaction('❤️')
+								handlePublishReaction('❤️')
 							} else {
-								// TODO: Delete reaction
-								// setReaction('')
+								handleDeleteReaction()
 							}
 						}}
-						onPointerEnter={handleTriggerEnter}
-						onPointerLeave={handleTriggerLeave}
-						onPointerDown={handleButtonPointerDown}
+						onPointerEnter={handlePopoverOpen}
+						onPointerLeave={scheduleClose}
+						onPointerDown={handleStopPropagation}
 						disabled={!event.ndk}
 						/** Only show tooltip when not conflicting with popover */
 						tooltip={isAuthenticated ? undefined : 'React'}
@@ -157,8 +142,8 @@ export function ReactionButton({ event, className, ...props }: ReactionButtonPro
 					/>
 				</PopoverTrigger>
 				<PopoverContent
-					onMouseEnter={handlePopoverEnter}
-					onMouseLeave={handlePopoverLeave}
+					onMouseEnter={handlePopoverOpen}
+					onMouseLeave={scheduleClose}
 					style={{ width: 'auto' }}
 					className="flex flex-wrap gap-0 p-2 bg-primary/60 border-tertiary-hover/60 rounded-xl"
 				>
@@ -167,7 +152,7 @@ export function ReactionButton({ event, className, ...props }: ReactionButtonPro
 							key={emoji}
 							className="text-3xl px-2 py-1 border-2 rounded border-transparent hover:border-light-gray/30 active:border-light-gray/40 active:bg-light-gray/20"
 							onClick={() => {
-								handleReaction(emoji)
+								handlePublishReaction(emoji)
 							}}
 						>
 							{emoji}

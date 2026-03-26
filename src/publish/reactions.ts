@@ -12,6 +12,13 @@ interface PublishReactionParams {
 	event: NDKEvent
 }
 
+interface PublishDeletionParams {
+	emoji: string
+	targetEventId: string
+	targetEventKind: string | undefined
+	targetAuthorPubkey: string
+}
+
 /**
  * Publishes a NIP-25 reaction to an event
  *
@@ -77,6 +84,68 @@ export const publishReaction = async ({ emoji, event }: PublishReactionParams): 
 }
 
 /**
+ * Publishes a deletion event for reactions (NIP-09)
+ * This event references reactions to be deleted using 'e' tags
+ *
+ * @param emoji - The emoji being deleted
+ * @param targetEventId - The ID of the target event being reacted to
+ * @param targetEventKind - The kind of the target event
+ * @param targetAuthorPubkey - The pubkey of the target event author
+ * @returns Promise that resolves to the published deletion event
+ */
+export const publishDeletionEvent = async (params: PublishDeletionParams): Promise<NDKEvent> => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+	if (!ndk.signer) throw new Error('No signer available')
+
+	const user = await ndk.signer.user()
+	if (!user) throw new Error('No active user')
+
+	const connectedRelays = ndk.pool?.connectedRelays() || []
+	if (connectedRelays.length === 0) {
+		throw new Error('No connected relays. Please check your relay connections and try again.')
+	}
+
+	// Create deletion event (kind 5)
+	const deletionEvent = new NDKEvent(ndk)
+	deletionEvent.kind = 5
+	deletionEvent.content = `Removed reaction: ${params.emoji}`
+	deletionEvent.created_at = Math.floor(Date.now() / 1000)
+	deletionEvent.pubkey = user.pubkey
+
+	// Build tags according to NIP-09 deletion request format
+	const tags: string[][] = []
+
+	// Add 'a' tag with the reaction coordinates
+	if (params.targetEventKind && params.targetAuthorPubkey) {
+		const aTag = ['a', `${params.targetEventKind}:${params.targetAuthorPubkey}:${params.targetEventId}`]
+		tags.push(aTag)
+	}
+
+	// Add 'k' tag with the kind of the target event
+	if (params.targetEventKind) {
+		const kTag = ['k', params.targetEventKind]
+		tags.push(kTag)
+	}
+
+	deletionEvent.tags = tags
+
+	try {
+		await deletionEvent.sign(ndk.signer)
+		const publishedRelays = await deletionEvent.publish()
+
+		if (publishedRelays.size === 0) {
+			throw new Error('Deletion event was not published to any relays.')
+		}
+
+		return deletionEvent
+	} catch (error) {
+		console.error('Error publishing deletion event:', error)
+		throw error
+	}
+}
+
+/**
  * Mutation hook for publishing a reaction
  */
 export const usePublishReactionMutation = () => {
@@ -94,6 +163,26 @@ export const usePublishReactionMutation = () => {
 		onError: (error) => {
 			console.error('Failed to publish reaction:', error)
 			toast.error('Failed to post reaction')
+		},
+	})
+}
+
+/**
+ * Mutation hook for publishing a deletion event
+ */
+export const usePublishDeletionMutation = () => {
+	const queryClient = useQueryClient()
+
+	return useMutation({
+		mutationFn: publishDeletionEvent,
+		onSuccess: async () => {
+			// Invalidate reactions query for the target event
+			// Note: We need to pass the actual event to invalidate properly
+			// This will be handled by the caller passing the event
+		},
+		onError: (error) => {
+			console.error('Failed to publish deletion event:', error)
+			toast.error('Failed to remove reaction')
 		},
 	})
 }

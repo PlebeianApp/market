@@ -28,7 +28,7 @@ export interface Reaction {
 	emoji: string
 	createdAt: number
 	authorPubkey: string
-	targetEventKind?: string
+	targetEventKind: string
 	targetEventId: string
 	targetAuthorPubkey: string
 }
@@ -45,7 +45,7 @@ const transformReactionEvent = (event: NDKEvent): Reaction => {
 		emoji: event.content,
 		createdAt: event.created_at ?? Math.floor(Date.now() / 1000),
 		authorPubkey: event.pubkey,
-		targetEventKind: kTag,
+		targetEventKind: kTag || '',
 		targetEventId: eTag?.[1] || '',
 		targetAuthorPubkey: pTag?.[1] || '',
 	}
@@ -92,7 +92,16 @@ export const groupReactionsByContent = (reactions: Reaction[]): Map<string, Reac
 		}
 
 		// Use Set to prevent duplicate reactions from same user
-		grouped.get(emoji)!.push(reaction)
+		// Filter out reactions from the same user with the same emoji
+		const existingReactions = grouped.get(emoji) || []
+
+		// Note that the efficiency here is pretty bad – O(n^2) – but for small lists it might be better than
+		// creating additional data structures.
+		const hasSameUserReaction = existingReactions.some((r) => r.authorPubkey === reaction.authorPubkey && r.emoji === emoji)
+
+		if (!hasSameUserReaction) {
+			grouped.get(emoji)!.push(reaction)
+		}
 	})
 
 	return grouped
@@ -128,6 +137,8 @@ export const fetchEventReactions = async (event: NDKEvent): Promise<Map<string, 
 	return groupReactionsSorted
 }
 
+// TODO: Similar to the above, but fetch Own-User Event Reactions
+
 /**
  * Hook to fetch reactions for an event
  */
@@ -138,3 +149,5 @@ export const useEventReactions = (event: NDKEvent) => {
 		enabled: !!event,
 	})
 }
+
+// TODO: Similar to the above, but fetch Own-User Event Reactions
