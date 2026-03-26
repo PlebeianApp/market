@@ -4,8 +4,9 @@ import * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { usePublishReactionMutation } from '@/publish/reactions'
-import { useEventReactions } from '@/queries/reactions'
+import { useEventReactions, useReactionsByUser } from '@/queries/reactions'
 import { useAuth } from '@/lib/stores/auth'
+import { usePublishDeletionMutation } from '@/publish/reactions'
 import { toast } from 'sonner'
 
 interface ReactionButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -14,18 +15,18 @@ interface ReactionButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEleme
 
 export function ReactionButton({ event, className, ...props }: ReactionButtonProps) {
 	const mutation = usePublishReactionMutation()
-	// TODO: This should be changed for getting exclusively one's own reactions, and have them ordered by creation date descending.
-	const { data: reactions } = useEventReactions(event)
+	const deletionMutation = usePublishDeletionMutation()
 	const { user, isAuthenticated } = useAuth()
+	const { data: reactions, error } = useReactionsByUser(user?.pubkey ?? '', event)
+
+	console.log('Reactions: ', reactions)
 
 	// Popover open status
 	const [isOpen, setIsOpen] = useState(false)
 
 	const closeTimerRef = useRef<NodeJS.Timeout | null>(null)
 
-	const currentReaction = reactions
-		? Array.from(reactions)?.find(([emoji, list]) => list.some((r) => r.authorPubkey === user?.pubkey))?.[0]
-		: undefined
+	const latestReaction = reactions?.[0]
 
 	const clearCloseTimer = () => {
 		if (closeTimerRef.current) {
@@ -82,19 +83,29 @@ export function ReactionButton({ event, className, ...props }: ReactionButtonPro
 	const handleDeleteReaction = async (emoji?: string) => {
 		if (!isAuthenticated) return
 
-		const reaction = emoji ?? currentReaction
+		const reaction = emoji ?? latestReaction
 
 		if (!reaction || !event.id || !event.pubkey) return
 
 		setIsOpen(false)
 
-		// TODO: Publish deletion request for reaction.
-		// We need to actually use the latest reaction in event format and request deletion for it.
+		if (!latestReaction) return
+
+		try {
+			// Pass the event object directly to the mutation
+			await deletionMutation.mutateAsync({
+				targetEvent: latestReaction.targetEvent,
+			})
+			toast.success('Reaction removed!')
+		} catch (error) {
+			console.error('Failed to delete reaction:', error)
+			toast.error('Failed to remove reaction')
+		}
 	}
 
 	const commonEmojis = ['❤️', '😂', '🔥', '💰', '👀']
 
-	const classNameButton = currentReaction
+	const classNameButton = latestReaction
 		? 'bg-secondary hover:bg-secondary/80 active:bg-secondary/70 text-white hover:text-light-gray'
 		: 'border-secondary bg-transparent hover:bg-secondary active:bg-secondary/80 text-secondary hover:text-white'
 
@@ -116,7 +127,7 @@ export function ReactionButton({ event, className, ...props }: ReactionButtonPro
 								return
 							}
 
-							if (!currentReaction) {
+							if (!latestReaction) {
 								handlePublishReaction('❤️')
 							} else {
 								handleDeleteReaction()
@@ -129,11 +140,11 @@ export function ReactionButton({ event, className, ...props }: ReactionButtonPro
 						/** Only show tooltip when not conflicting with popover */
 						tooltip={isAuthenticated ? undefined : 'React'}
 						icon={
-							currentReaction ? (
-								currentReaction === '❤️' ? (
+							latestReaction ? (
+								latestReaction.emoji === '❤️' ? (
 									<span className="i-heart-fill w-6 h-6" />
 								) : (
-									<span className="text-2xl">{currentReaction}</span>
+									<span className="text-2xl">{latestReaction.emoji}</span>
 								)
 							) : (
 								<span className="i-heart w-6 h-6" />

@@ -1,7 +1,7 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { reactionKeys } from './queryKeyFactory'
 import { queryOptions, useQuery } from '@tanstack/react-query'
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
+import { NDKEvent, type NDKFilter } from '@nostr-dev-kit/ndk'
 
 /**
  * NIP-25 Reaction kind
@@ -11,6 +11,7 @@ import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
  */
 const REACTION_KIND = 7
 // const REACTION_KIND_EXTERNAL = 17
+const DELETION_KIND = 5
 
 /**
  * Configuration for custom character-to-emoji mappings.
@@ -28,12 +29,13 @@ export interface Reaction {
 	emoji: string
 	createdAt: number
 	authorPubkey: string
-	targetEventKind: string
-	targetEventId: string
-	targetAuthorPubkey: string
+	targetEvent: NDKEvent
 }
 
 const transformReactionEvent = (event: NDKEvent): Reaction => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw Error('NDK must be initialized.')
+
 	// If there are more than 1 e-tags (not recommended), the event being reacted to should be the last one.
 	const eTag = event.tags.filter((t) => t[0] === 'e')?.[-1]
 	// Similar for p-tags
@@ -45,9 +47,11 @@ const transformReactionEvent = (event: NDKEvent): Reaction => {
 		emoji: event.content,
 		createdAt: event.created_at ?? Math.floor(Date.now() / 1000),
 		authorPubkey: event.pubkey,
-		targetEventKind: kTag || '',
-		targetEventId: eTag?.[1] || '',
-		targetAuthorPubkey: pTag?.[1] || '',
+		targetEvent: new NDKEvent(ndk, {
+			id: eTag?.[1] || '',
+			kind: parseInt(kTag || ''),
+			pubkey: pTag?.[1] || '',
+		}),
 	}
 }
 
@@ -107,12 +111,32 @@ export const groupReactionsByContent = (reactions: Reaction[]): Map<string, Reac
 	return grouped
 }
 
+export const filterForLatestReactionsOnly = (reactions: Reaction[]): Reaction[] => {
+	const reactionsByUserEmoji = new Map<string, Reaction>()
+
+	// Use a concatenation of user, emoji and event to select only the most recent reaction
+	reactions.forEach((reaction) => {
+		const identifier = reaction.targetEvent.id + reaction.authorPubkey + reaction.emoji
+		const existingEntry = reactionsByUserEmoji.get(identifier)
+
+		// If unique pair is most recent, then keep newest version.
+		// If no existing entry exists, then also save
+		// Else, discard older conflicting entry. (Nothing to do)
+		if (!existingEntry || (existingEntry && reaction.createdAt > existingEntry.createdAt)) {
+			reactionsByUserEmoji.set(identifier, reaction)
+		}
+	})
+
+	// Return values of map (unique reactions only)
+	return Array.from(reactionsByUserEmoji.values())
+}
+
 /**
  * Fetches reactions for a specific event (kind 1 text notes)
  * @param targetEvent - The event to fetch reactions for
  * @returns Reactions grouped by reaction content/emoji in map format
  */
-export const fetchEventReactions = async (event: NDKEvent): Promise<Map<string, Reaction[]>> => {
+export const fetchEventReactions = async (event: NDKEvent, userPubkey?: string): Promise<Map<string, Reaction[]>> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -137,17 +161,75 @@ export const fetchEventReactions = async (event: NDKEvent): Promise<Map<string, 
 	return groupReactionsSorted
 }
 
-// TODO: Similar to the above, but fetch Own-User Event Reactions
+/**
+ * Fetches reactions for the current user's events
+ * @param event - The event to fetch reactions for (optional, for filtering)
+ * @param userPubkey - The pubkey of the current user
+ * @returns Promise that resolves to reactions from the current user
+ */
+export const fetchReactionsByUser = async (userPubkey: string, event?: NDKEvent): Promise<Reaction[]> => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	// Fetch all reactions from the current user
+	const filterReactions: NDKFilter = {
+		kinds: [REACTION_KIND],
+		authors: [userPubkey],
+		limit: 100,
+	}
+
+	// If event is provided, filter by that event
+	if (event) {
+		filterReactions['#e'] = [event.id]
+		filterReactions['#p'] = [event.pubkey]
+		filterReactions['#k'] = [event.kind.toString()]
+	}
+
+	const eventsReactions = await ndk.fetchEvents(filterReactions)
+	const reactions = Array.from(eventsReactions).map(transformReactionEvent)
+
+	const reactionsUnique = filterForLatestReactionsOnly(reactions)
+
+	const filterDeletions: NDKFilter = {
+		kinds: [DELETION_KIND],
+	}
+
+	filterDeletions['#e'] = reactionsUnique.map((reaction) => reaction.id)
+
+	const eventsDeletions = await ndk.fetchEvents(filterDeletions)
+
+	// Create O(1)-complexity reference table with all deleted reaction IDs
+	const idsReactionsDeleted = new Set<string>()
+	Array.from(eventsDeletions)
+		.flatMap((e) => e.tags.filter((t) => t[0] === 'e'))
+		.map((t) => t?.[1])
+		.forEach((id) => idsReactionsDeleted.add(id))
+
+	// Filter by checking if reaction has been deleted
+	const reactionsFiltered = reactionsUnique.filter((reaction) => !idsReactionsDeleted.has(reaction.id))
+
+	// Sort by latest first
+	return reactionsFiltered.sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1))
+}
 
 /**
  * Hook to fetch reactions for an event
  */
-export const useEventReactions = (event: NDKEvent) => {
+export const useEventReactions = (event: NDKEvent, userPubkey?: string) => {
 	return useQuery({
 		queryKey: reactionKeys.byEvent(event.id, event.pubkey),
-		queryFn: () => fetchEventReactions(event),
+		queryFn: () => fetchEventReactions(event, userPubkey),
 		enabled: !!event,
 	})
 }
 
-// TODO: Similar to the above, but fetch Own-User Event Reactions
+/**
+ * Hook to fetch reactions from the current user
+ */
+export const useReactionsByUser = (userPubkey: string, event?: NDKEvent) => {
+	return useQuery({
+		queryKey: event ? reactionKeys.byEventUser(userPubkey, event.id, event.pubkey) : reactionKeys.byUser(userPubkey),
+		queryFn: () => fetchReactionsByUser(userPubkey, event),
+		enabled: !!userPubkey,
+	})
+}
