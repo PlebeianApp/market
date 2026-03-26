@@ -14,6 +14,7 @@ interface PublishReactionParams {
 
 interface PublishDeletionParams {
 	emoji: string
+	// TODO: Refactor to only take one property, "targetEvent: NDKEvent" and extract properties from there.
 	targetEventId: string
 	targetEventKind: string | undefined
 	targetAuthorPubkey: string
