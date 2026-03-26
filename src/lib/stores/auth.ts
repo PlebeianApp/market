@@ -101,6 +101,8 @@ export const authActions = {
 				isAuthenticated: true,
 			}))
 
+			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk)
+
 			return user
 		} catch (error) {
 			authStore.setState((state) => ({
@@ -155,6 +157,8 @@ export const authActions = {
 				isAuthenticated: true,
 			}))
 
+			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk)
+
 			return user
 		} catch (error) {
 			authStore.setState((state) => ({
@@ -189,6 +193,8 @@ export const authActions = {
 				isAuthenticated: true,
 			}))
 
+			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk)
+
 			return user
 		} catch (error) {
 			authStore.setState((state) => ({
@@ -210,7 +216,7 @@ export const authActions = {
 		localStorage.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_AUTO_LOGIN)
 		// Clear cart when user logs out
-		cartActions.clear()
+		cartActions.clear({ publishRemote: false, reason: 'logout' })
 		authStore.setState(() => initialState)
 	},
 
