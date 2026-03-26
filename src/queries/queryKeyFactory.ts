@@ -147,4 +147,7 @@ export const commentKeys = {
 export const reactionKeys = {
 	all: ['reactions'] as const,
 	byEvent: (eventId: string, authorPubkey: string) => [...reactionKeys.all, 'byEvent', eventId, authorPubkey] as const,
+	byEventUser: (eventId: string, authorPubkey: string, pubkey: string) =>
+		[...reactionKeys.all, 'byEventUser', eventId, authorPubkey, pubkey] as const,
+	byUser: (pubkey: string) => [...reactionKeys.all, 'byUser', pubkey] as const,
 } as const

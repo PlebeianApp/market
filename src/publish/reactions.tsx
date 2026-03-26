@@ -13,11 +13,7 @@ interface PublishReactionParams {
 }
 
 interface PublishDeletionParams {
-	emoji: string
-	// TODO: Refactor to only take one property, "targetEvent: NDKEvent" and extract properties from there.
-	targetEventId: string
-	targetEventKind: string | undefined
-	targetAuthorPubkey: string
+	targetEvent: NDKEvent
 }
 
 /**
@@ -88,10 +84,7 @@ export const publishReaction = async ({ emoji, event }: PublishReactionParams): 
  * Publishes a deletion event for reactions (NIP-09)
  * This event references reactions to be deleted using 'e' tags
  *
- * @param emoji - The emoji being deleted
- * @param targetEventId - The ID of the target event being reacted to
- * @param targetEventKind - The kind of the target event
- * @param targetAuthorPubkey - The pubkey of the target event author
+ * @param targetEvent - The Reaction object of the reaction to delete
  * @returns Promise that resolves to the published deletion event
  */
 export const publishDeletionEvent = async (params: PublishDeletionParams): Promise<NDKEvent> => {
@@ -110,24 +103,28 @@ export const publishDeletionEvent = async (params: PublishDeletionParams): Promi
 	// Create deletion event (kind 5)
 	const deletionEvent = new NDKEvent(ndk)
 	deletionEvent.kind = 5
-	deletionEvent.content = `Removed reaction: ${params.emoji}`
+	deletionEvent.content = `Removed reaction: ${params.targetEvent.content}`
 	deletionEvent.created_at = Math.floor(Date.now() / 1000)
 	deletionEvent.pubkey = user.pubkey
 
 	// Build tags according to NIP-09 deletion request format
 	const tags: string[][] = []
 
+	// Add 'e' tag with the reaction event id (the reaction event itself)
+	const eTag = ['e', params.targetEvent.id]
+	tags.push(eTag)
+
 	// Add 'a' tag with the reaction coordinates
-	if (params.targetEventKind && params.targetAuthorPubkey) {
-		const aTag = ['a', `${params.targetEventKind}:${params.targetAuthorPubkey}:${params.targetEventId}`]
-		tags.push(aTag)
-	}
+	const aTag = ['a', `${params.targetEvent.id}:${params.targetEvent.pubkey}:${params.targetEvent.id}`]
+	tags.push(aTag)
+
+	// Add 'p' tag with the target event author pubkey
+	const pTag = ['p', params.targetEvent.pubkey]
+	tags.push(pTag)
 
 	// Add 'k' tag with the kind of the target event
-	if (params.targetEventKind) {
-		const kTag = ['k', params.targetEventKind]
-		tags.push(kTag)
-	}
+	const kTag = ['k', params.targetEvent.kind.toString()]
+	tags.push(kTag)
 
 	deletionEvent.tags = tags
 
@@ -176,10 +173,12 @@ export const usePublishDeletionMutation = () => {
 
 	return useMutation({
 		mutationFn: publishDeletionEvent,
-		onSuccess: async () => {
+		onSuccess: async (_, variables) => {
 			// Invalidate reactions query for the target event
-			// Note: We need to pass the actual event to invalidate properly
-			// This will be handled by the caller passing the event
+			await queryClient.invalidateQueries({
+				queryKey: reactionKeys.byEvent(variables.targetEvent.id, variables.targetEvent.pubkey),
+			})
+			toast.success('Reaction removed!')
 		},
 		onError: (error) => {
 			console.error('Failed to publish deletion event:', error)
