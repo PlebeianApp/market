@@ -64,6 +64,7 @@ export const test = base.extend<TestFixtures>({
 
 	newUserPage: async ({ browser, scenario }, use) => {
 		await ensureScenario(scenario)
+		await resetRemoteCartForUser(devUser3.sk)
 		const context = await browser.newContext()
 		await setupAuthContext(context, devUser3)
 		const page = await context.newPage()
