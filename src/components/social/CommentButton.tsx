@@ -31,7 +31,7 @@ export function CommentButton({ event, className, onClick, onPointerDown, ...pro
 
 	const handlePostComment = async () => {
 		if (!isAuthenticated) {
-			toast.error('You must be logged in to comment')
+			toast.error('You must be logged in to comment.')
 			return
 		}
 
