@@ -78,6 +78,26 @@ const normalizeEmoji = (emoji: string): string => {
 	return emoji
 }
 
+export const filterForLatestReactionsOnly = (reactions: Reaction[]): Reaction[] => {
+	const reactionsByUserEmoji = new Map<string, Reaction>()
+
+	// Use a concatenation of user, emoji and event to select only the most recent reaction
+	reactions.forEach((reaction) => {
+		const identifier = reaction.targetEvent.id + reaction.authorPubkey + reaction.emoji
+		const existingEntry = reactionsByUserEmoji.get(identifier)
+
+		// If unique pair is most recent, then keep newest version.
+		// If no existing entry exists, then also save
+		// Else, discard older conflicting entry. (Nothing to do)
+		if (!existingEntry || (existingEntry && reaction.createdAt > existingEntry.createdAt)) {
+			reactionsByUserEmoji.set(identifier, reaction)
+		}
+	})
+
+	// Return values of map (unique reactions only)
+	return Array.from(reactionsByUserEmoji.values())
+}
+
 /**
  * Groups reactions by content/emoji, mapping each reaction to the pubkeys that used it
  * @param reactions - Array of Reaction objects
@@ -111,24 +131,36 @@ export const groupReactionsByContent = (reactions: Reaction[]): Map<string, Reac
 	return grouped
 }
 
-export const filterForLatestReactionsOnly = (reactions: Reaction[]): Reaction[] => {
-	const reactionsByUserEmoji = new Map<string, Reaction>()
+/** Handles processing for:
+ * 1) uniqueness of author - targetEvent - content/emoji. Only keeps latest unique reaction
+ * 2) queries for deletion and filters out deleted reactions
+ */
+const filterReactionsValid = async (reactions: Reaction[]): Promise<Reaction[]> => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
 
-	// Use a concatenation of user, emoji and event to select only the most recent reaction
-	reactions.forEach((reaction) => {
-		const identifier = reaction.targetEvent.id + reaction.authorPubkey + reaction.emoji
-		const existingEntry = reactionsByUserEmoji.get(identifier)
+	const reactionsUnique = filterForLatestReactionsOnly(reactions)
 
-		// If unique pair is most recent, then keep newest version.
-		// If no existing entry exists, then also save
-		// Else, discard older conflicting entry. (Nothing to do)
-		if (!existingEntry || (existingEntry && reaction.createdAt > existingEntry.createdAt)) {
-			reactionsByUserEmoji.set(identifier, reaction)
-		}
-	})
+	const filterDeletions: NDKFilter = {
+		kinds: [DELETION_KIND],
+		'#e': reactionsUnique.map((reaction) => reaction.id),
+	}
 
-	// Return values of map (unique reactions only)
-	return Array.from(reactionsByUserEmoji.values())
+	console.log('Deletions Filter: ', filterDeletions)
+
+	const eventsDeletions = await ndk.fetchEvents(filterDeletions)
+
+	console.log('Deletions: ', eventsDeletions)
+
+	// Create O(1)-complexity reference table with all deleted reaction IDs
+	const idsReactionsDeleted = new Set<string>()
+	Array.from(eventsDeletions)
+		.flatMap((e) => e.tags.filter((t) => t[0] === 'e'))
+		.map((t) => t?.[1])
+		.forEach((id) => idsReactionsDeleted.add(id))
+
+	// Filter by checking if reaction has been deleted
+	return reactionsUnique.filter((reaction) => !idsReactionsDeleted.has(reaction.id))
 }
 
 /**
@@ -151,9 +183,10 @@ export const fetchEventReactions = async (event: NDKEvent, userPubkey?: string):
 
 	const events = await ndk.fetchEvents(filter)
 	const reactions = Array.from(events).map(transformReactionEvent)
+	const reactionsFiltered = await filterReactionsValid(reactions)
 
 	// Group reactions by content/emoji
-	const groupReactions = groupReactionsByContent(reactions)
+	const groupReactions = groupReactionsByContent(reactionsFiltered)
 
 	// Sort reaction groups by highest count
 	const groupReactionsSorted = new Map(Array.from(groupReactions).sort((a, b) => (a[1].length > b[1].length ? -1 : 1)))
@@ -186,27 +219,11 @@ export const fetchReactionsByUser = async (userPubkey: string, event?: NDKEvent)
 	}
 
 	const eventsReactions = await ndk.fetchEvents(filterReactions)
+
+	console.log('Reaction Events: ', eventsReactions)
+
 	const reactions = Array.from(eventsReactions).map(transformReactionEvent)
-
-	const reactionsUnique = filterForLatestReactionsOnly(reactions)
-
-	const filterDeletions: NDKFilter = {
-		kinds: [DELETION_KIND],
-	}
-
-	filterDeletions['#e'] = reactionsUnique.map((reaction) => reaction.id)
-
-	const eventsDeletions = await ndk.fetchEvents(filterDeletions)
-
-	// Create O(1)-complexity reference table with all deleted reaction IDs
-	const idsReactionsDeleted = new Set<string>()
-	Array.from(eventsDeletions)
-		.flatMap((e) => e.tags.filter((t) => t[0] === 'e'))
-		.map((t) => t?.[1])
-		.forEach((id) => idsReactionsDeleted.add(id))
-
-	// Filter by checking if reaction has been deleted
-	const reactionsFiltered = reactionsUnique.filter((reaction) => !idsReactionsDeleted.has(reaction.id))
+	const reactionsFiltered = await filterReactionsValid(reactions)
 
 	// Sort by latest first
 	return reactionsFiltered.sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1))

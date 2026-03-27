@@ -1,6 +1,6 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { reactionKeys } from '@/queries/queryKeyFactory'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 
@@ -88,17 +88,14 @@ export const publishReaction = async ({ emoji, event }: PublishReactionParams): 
  * @returns Promise that resolves to the published deletion event
  */
 export const publishDeletionEvent = async (params: PublishDeletionParams): Promise<NDKEvent> => {
+	console.log('Requesting deletion...')
+
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 	if (!ndk.signer) throw new Error('No signer available')
 
 	const user = await ndk.signer.user()
 	if (!user) throw new Error('No active user')
-
-	const connectedRelays = ndk.pool?.connectedRelays() || []
-	if (connectedRelays.length === 0) {
-		throw new Error('No connected relays. Please check your relay connections and try again.')
-	}
 
 	// Create deletion event (kind 5)
 	const deletionEvent = new NDKEvent(ndk)
@@ -115,7 +112,7 @@ export const publishDeletionEvent = async (params: PublishDeletionParams): Promi
 	tags.push(eTag)
 
 	// Add 'a' tag with the reaction coordinates
-	const aTag = ['a', `${params.targetEvent.id}:${params.targetEvent.pubkey}:${params.targetEvent.id}`]
+	const aTag = ['a', `${params.targetEvent.kind}:${params.targetEvent.pubkey}:${params.targetEvent.id}`]
 	tags.push(aTag)
 
 	// Add 'p' tag with the target event author pubkey
@@ -130,11 +127,7 @@ export const publishDeletionEvent = async (params: PublishDeletionParams): Promi
 
 	try {
 		await deletionEvent.sign(ndk.signer)
-		const publishedRelays = await deletionEvent.publish()
-
-		if (publishedRelays.size === 0) {
-			throw new Error('Deletion event was not published to any relays.')
-		}
+		await deletionEvent.publish()
 
 		return deletionEvent
 	} catch (error) {

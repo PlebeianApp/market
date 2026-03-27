@@ -1,8 +1,9 @@
-import { useEventReactions, type Reaction } from '@/queries/reactions'
+import { useEventReactions, useReactionsByUser, type Reaction } from '@/queries/reactions'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useState } from 'react'
 import { Button } from '../ui/button'
 import { ReactionsDialog } from '../dialogs/ReactionsDialog'
+import { useAuth } from '@/lib/stores/auth'
 
 // TODO: Add extends normal React Node/div properties
 interface ReactionsListProps {
@@ -10,8 +11,11 @@ interface ReactionsListProps {
 }
 
 export const ReactionsList = ({ event }: ReactionsListProps) => {
-	// TODO: Would make sense for highlighting purposes to fetch all own-user's reactions as well.
-	const { data: reactions, error } = useEventReactions(event)
+	const { data: reactions } = useEventReactions(event)
+	const { user, isAuthenticated } = useAuth()
+	const { data: reactionsOwnUser } = useReactionsByUser(user?.pubkey ?? '', event)
+
+	console.log('Reactions event: ', reactions)
 
 	const [openReactionDialog, setOpenReactionDialog] = useState(false)
 	const [selectedReaction, setSelectedReaction] = useState<Map<string, Reaction[]> | null>(null)
@@ -35,7 +39,14 @@ export const ReactionsList = ({ event }: ReactionsListProps) => {
 								key={content}
 								variant="outline"
 								size="sm"
-								className="bg-primary-foreground rounded-full py-1 px-2 text-black hover:bg-secondary hover:text-white"
+								className={
+									'rounded-full py-1 px-2 ' +
+									(reactionsOwnUser?.find((r) => r.emoji == content)
+										? // If user had this reaction
+											'bg-secondary hover:bg-secondary/80 text-white hover:text-white'
+										: // Else
+											'bg-primary-foreground hover:primary-foreground-hover text-black')
+								}
 								onClick={() => handleReactionClick(reactions)}
 							>
 								<span className="text-lg">{content}</span>

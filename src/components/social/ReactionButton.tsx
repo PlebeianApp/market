@@ -8,6 +8,7 @@ import { useEventReactions, useReactionsByUser } from '@/queries/reactions'
 import { useAuth } from '@/lib/stores/auth'
 import { usePublishDeletionMutation } from '@/publish/reactions'
 import { toast } from 'sonner'
+import { ndkActions } from '@/lib/stores/ndk'
 
 interface ReactionButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 	event: NDKEvent
@@ -18,8 +19,6 @@ export function ReactionButton({ event, className, ...props }: ReactionButtonPro
 	const deletionMutation = usePublishDeletionMutation()
 	const { user, isAuthenticated } = useAuth()
 	const { data: reactions, error } = useReactionsByUser(user?.pubkey ?? '', event)
-
-	console.log('Reactions: ', reactions)
 
 	// Popover open status
 	const [isOpen, setIsOpen] = useState(false)
@@ -80,22 +79,32 @@ export function ReactionButton({ event, className, ...props }: ReactionButtonPro
 	}
 
 	// Delete the reaction selected
-	const handleDeleteReaction = async (emoji?: string) => {
+	const handleDeleteReaction = async () => {
 		if (!isAuthenticated) return
 
-		const reaction = emoji ?? latestReaction
-
-		if (!reaction || !event.id || !event.pubkey) return
+		if (!latestReaction || !event.id || !event.pubkey) return
 
 		setIsOpen(false)
 
-		if (!latestReaction) return
+		const ndk = ndkActions.getNDK()
+
+		if (!ndk) return
+
+		const targetEvent = new NDKEvent(ndk, {
+			id: latestReaction.id,
+			pubkey: latestReaction.authorPubkey,
+			kind: 7,
+			content: latestReaction.emoji,
+		})
+
+		console.log('Attempting to delete event: ', targetEvent)
 
 		try {
 			// Pass the event object directly to the mutation
 			await deletionMutation.mutateAsync({
-				targetEvent: latestReaction.targetEvent,
+				targetEvent: targetEvent,
 			})
+
 			toast.success('Reaction removed!')
 		} catch (error) {
 			console.error('Failed to delete reaction:', error)
@@ -126,6 +135,10 @@ export function ReactionButton({ event, className, ...props }: ReactionButtonPro
 								toast.error('You must be logged in to react.')
 								return
 							}
+
+							// DEBUG:
+							handleDeleteReaction()
+							return
 
 							if (!latestReaction) {
 								handlePublishReaction('❤️')
