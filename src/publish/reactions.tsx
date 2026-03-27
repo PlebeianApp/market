@@ -1,5 +1,6 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { reactionKeys } from '@/queries/queryKeyFactory'
+import type { Reaction } from '@/queries/reactions'
 import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -13,7 +14,7 @@ interface PublishReactionParams {
 }
 
 interface PublishDeletionParams {
-	targetEvent: NDKEvent
+	reactionEvent: Reaction
 }
 
 /**
@@ -83,11 +84,10 @@ export const publishReaction = async ({ emoji, event }: PublishReactionParams): 
 /**
  * Publishes a deletion event for reactions (NIP-09)
  * This event references reactions to be deleted using 'e' tags
- *
- * @param targetEvent - The Reaction object of the reaction to delete
- * @returns Promise that resolves to the published deletion event
+ * @param reactionEvent Reaction Event to Delete
+ * @returns Promise awaiting deletion event publish
  */
-export const publishDeletionEvent = async (params: PublishDeletionParams): Promise<NDKEvent> => {
+export const publishDeletionEvent = async ({ reactionEvent }: PublishDeletionParams): Promise<NDKEvent> => {
 	console.log('Requesting deletion...')
 
 	const ndk = ndkActions.getNDK()
@@ -100,7 +100,7 @@ export const publishDeletionEvent = async (params: PublishDeletionParams): Promi
 	// Create deletion event (kind 5)
 	const deletionEvent = new NDKEvent(ndk)
 	deletionEvent.kind = 5
-	deletionEvent.content = `Removed reaction: ${params.targetEvent.content}`
+	deletionEvent.content = `Removed reaction: ${reactionEvent.emoji}`
 	deletionEvent.created_at = Math.floor(Date.now() / 1000)
 	deletionEvent.pubkey = user.pubkey
 
@@ -108,19 +108,19 @@ export const publishDeletionEvent = async (params: PublishDeletionParams): Promi
 	const tags: string[][] = []
 
 	// Add 'e' tag with the reaction event id (the reaction event itself)
-	const eTag = ['e', params.targetEvent.id]
+	const eTag = ['e', reactionEvent.id]
 	tags.push(eTag)
 
 	// Add 'a' tag with the reaction coordinates
-	const aTag = ['a', `${params.targetEvent.kind}:${params.targetEvent.pubkey}:${params.targetEvent.id}`]
+	const aTag = ['a', `${REACTION_KIND}:${reactionEvent.authorPubkey}:${reactionEvent.id}`]
 	tags.push(aTag)
 
 	// Add 'p' tag with the target event author pubkey
-	const pTag = ['p', params.targetEvent.pubkey]
+	const pTag = ['p', reactionEvent.authorPubkey]
 	tags.push(pTag)
 
 	// Add 'k' tag with the kind of the target event
-	const kTag = ['k', params.targetEvent.kind.toString()]
+	const kTag = ['k', REACTION_KIND.toString()]
 	tags.push(kTag)
 
 	deletionEvent.tags = tags
@@ -169,9 +169,8 @@ export const usePublishDeletionMutation = () => {
 		onSuccess: async (_, variables) => {
 			// Invalidate reactions query for the target event
 			await queryClient.invalidateQueries({
-				queryKey: reactionKeys.byEvent(variables.targetEvent.id, variables.targetEvent.pubkey),
+				queryKey: reactionKeys.byEvent(variables.reactionEvent.targetEvent.id, variables.reactionEvent.targetEvent.pubkey),
 			})
-			toast.success('Reaction removed!')
 		},
 		onError: (error) => {
 			console.error('Failed to publish deletion event:', error)

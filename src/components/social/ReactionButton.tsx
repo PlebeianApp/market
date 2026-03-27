@@ -4,7 +4,7 @@ import * as React from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { usePublishReactionMutation } from '@/publish/reactions'
-import { useEventReactions, useReactionsByUser } from '@/queries/reactions'
+import { useEventReactions } from '@/queries/reactions'
 import { useAuth } from '@/lib/stores/auth'
 import { usePublishDeletionMutation } from '@/publish/reactions'
 import { toast } from 'sonner'
@@ -15,16 +15,17 @@ interface ReactionButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEleme
 }
 
 export function ReactionButton({ event, className, ...props }: ReactionButtonProps) {
-	const mutation = usePublishReactionMutation()
-	const deletionMutation = usePublishDeletionMutation()
 	const { user, isAuthenticated } = useAuth()
-	const { data: reactions, error } = useReactionsByUser(user?.pubkey ?? '', event)
+	const { data: reactionsAll, error } = useEventReactions(event)
+	const mutationPublish = usePublishReactionMutation()
+	const mutationDelete = usePublishDeletionMutation()
 
 	// Popover open status
 	const [isOpen, setIsOpen] = useState(false)
-
 	const closeTimerRef = useRef<NodeJS.Timeout | null>(null)
 
+	// Filter reactions for own user
+	const reactions = reactionsAll?.filter((reaction) => reaction.authorPubkey == user?.pubkey)
 	const latestReaction = reactions?.[0]
 
 	const clearCloseTimer = () => {
@@ -67,49 +68,25 @@ export function ReactionButton({ event, className, ...props }: ReactionButtonPro
 
 		setIsOpen(false)
 
-		try {
-			// Pass the event object directly to the mutation
-			await mutation.mutateAsync({
-				emoji,
-				event,
-			})
-		} catch (error) {
-			console.error('Failed to publish reaction:', error)
-		}
+		// Pass the event object directly to the mutation
+		await mutationPublish.mutateAsync({
+			emoji,
+			event,
+		})
 	}
 
 	// Delete the reaction selected
 	const handleDeleteReaction = async () => {
 		if (!isAuthenticated) return
 
-		if (!latestReaction || !event.id || !event.pubkey) return
+		if (!latestReaction || !latestReaction.id || !latestReaction.authorPubkey) return
 
 		setIsOpen(false)
 
-		const ndk = ndkActions.getNDK()
-
-		if (!ndk) return
-
-		const targetEvent = new NDKEvent(ndk, {
-			id: latestReaction.id,
-			pubkey: latestReaction.authorPubkey,
-			kind: 7,
-			content: latestReaction.emoji,
+		// Pass the event object directly to the mutation
+		await mutationDelete.mutateAsync({
+			reactionEvent: latestReaction,
 		})
-
-		console.log('Attempting to delete event: ', targetEvent)
-
-		try {
-			// Pass the event object directly to the mutation
-			await deletionMutation.mutateAsync({
-				targetEvent: targetEvent,
-			})
-
-			toast.success('Reaction removed!')
-		} catch (error) {
-			console.error('Failed to delete reaction:', error)
-			toast.error('Failed to remove reaction')
-		}
 	}
 
 	const commonEmojis = ['❤️', '😂', '🔥', '💰', '👀']
@@ -129,16 +106,13 @@ export function ReactionButton({ event, className, ...props }: ReactionButtonPro
 						{...props}
 						type="button"
 						onClick={(e) => {
+							// TODO: Handle mobile - open dialog using handlePopoverOpen (don't select reaction yet)
 							handleStopPropagation(e)
 
 							if (!isAuthenticated) {
 								toast.error('You must be logged in to react.')
 								return
 							}
-
-							// DEBUG:
-							handleDeleteReaction()
-							return
 
 							if (!latestReaction) {
 								handlePublishReaction('❤️')
