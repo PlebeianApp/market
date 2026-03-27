@@ -14,6 +14,10 @@ export interface FeaturedCollectionsData {
 	featuredCollections: string[] // Array of collection coordinates in order
 }
 
+export interface FeaturedAuctionsData {
+	featuredAuctions: string[] // Array of auction coordinates in order
+}
+
 export interface FeaturedUsersData {
 	featuredUsers: string[] // Array of user pubkeys in order
 }
@@ -55,6 +59,23 @@ export const createFeaturedCollectionsEvent = (data: FeaturedCollectionsData, si
 	// Add collection references as 'a' tags in order
 	for (const collectionCoords of data.featuredCollections) {
 		tags.push(['a', collectionCoords])
+	}
+
+	event.tags = tags
+	return event
+}
+
+/**
+ * Creates a Kind 30409 featured auctions event
+ */
+export const createFeaturedAuctionsEvent = (data: FeaturedAuctionsData, signer: NDKSigner, ndk: NDK): NDKEvent => {
+	const event = new NDKEvent(ndk)
+	event.kind = FEATURED_ITEMS_CONFIG.AUCTIONS.kind
+	event.content = ''
+
+	const tags: NDKTag[] = [['d', FEATURED_ITEMS_CONFIG.AUCTIONS.dTag]]
+	for (const auctionCoords of data.featuredAuctions) {
+		tags.push(['a', auctionCoords])
 	}
 
 	event.tags = tags
@@ -120,6 +141,22 @@ export const publishFeaturedCollections = async (data: FeaturedCollectionsData, 
 	// Submit through WebSocket interface
 	await submitAppSettings(event.rawEvent())
 
+	return event.id
+}
+
+/**
+ * Publishes featured auctions through WebSocket interface
+ */
+export const publishFeaturedAuctions = async (data: FeaturedAuctionsData, signer: NDKSigner, ndk: NDK): Promise<string> => {
+	for (const coords of data.featuredAuctions) {
+		if (!validateCoordinates(coords, 30408)) {
+			throw new Error(`Invalid auction coordinates format: ${coords}`)
+		}
+	}
+
+	const event = createFeaturedAuctionsEvent(data, signer, ndk)
+	await event.sign(signer)
+	await submitAppSettings(event.rawEvent())
 	return event.id
 }
 
@@ -302,6 +339,72 @@ export const reorderFeaturedCollections = async (orderedCollections: string[], s
 }
 
 /**
+ * Similar functions for auctions
+ */
+export const addToFeaturedAuctions = async (auctionCoords: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> => {
+	const currentUser = await signer.user()
+	if (!currentUser || !currentUser.pubkey) {
+		throw new Error('Unable to get current user pubkey')
+	}
+
+	const targetAppPubkey = appPubkey || currentUser.pubkey
+
+	const filter = {
+		kinds: [FEATURED_ITEMS_CONFIG.AUCTIONS.kind as NDKKind],
+		authors: [targetAppPubkey],
+		'#d': [FEATURED_ITEMS_CONFIG.AUCTIONS.dTag],
+		limit: 1,
+	}
+
+	const events = await ndk.fetchEvents(filter)
+	const currentEvent = Array.from(events)[0]
+	const currentAuctions = currentEvent?.tags.filter((tag: string[]) => tag[0] === 'a').map((tag: string[]) => tag[1]) || []
+
+	if (currentAuctions.includes(auctionCoords)) {
+		throw new Error('Auction is already featured')
+	}
+
+	const updatedAuctions = [...currentAuctions, auctionCoords]
+	return publishFeaturedAuctions({ featuredAuctions: updatedAuctions }, signer, ndk)
+}
+
+export const removeFromFeaturedAuctions = async (
+	auctionCoords: string,
+	signer: NDKSigner,
+	ndk: NDK,
+	appPubkey?: string,
+): Promise<string> => {
+	const currentUser = await signer.user()
+	if (!currentUser || !currentUser.pubkey) {
+		throw new Error('Unable to get current user pubkey')
+	}
+
+	const targetAppPubkey = appPubkey || currentUser.pubkey
+
+	const filter = {
+		kinds: [FEATURED_ITEMS_CONFIG.AUCTIONS.kind],
+		authors: [targetAppPubkey],
+		'#d': [FEATURED_ITEMS_CONFIG.AUCTIONS.dTag],
+		limit: 1,
+	}
+
+	const events = await ndk.fetchEvents(filter)
+	const currentEvent = Array.from(events)[0]
+	const currentAuctions = currentEvent?.tags.filter((tag: string[]) => tag[0] === 'a').map((tag: string[]) => tag[1]) || []
+
+	if (!currentAuctions.includes(auctionCoords)) {
+		throw new Error('Auction is not featured')
+	}
+
+	const updatedAuctions = currentAuctions.filter((coords: string) => coords !== auctionCoords)
+	return publishFeaturedAuctions({ featuredAuctions: updatedAuctions }, signer, ndk)
+}
+
+export const reorderFeaturedAuctions = async (orderedAuctions: string[], signer: NDKSigner, ndk: NDK): Promise<string> => {
+	return publishFeaturedAuctions({ featuredAuctions: orderedAuctions }, signer, ndk)
+}
+
+/**
  * Similar functions for users
  */
 export const addToFeaturedUsers = async (userPubkey: string, signer: NDKSigner, ndk: NDK, appPubkey?: string): Promise<string> => {
@@ -441,6 +544,44 @@ export const usePublishFeaturedCollectionsMutation = () => {
 		onError: (error) => {
 			console.error('Failed to update featured collections:', error)
 			toast.error(`Failed to update featured collections: ${error instanceof Error ? error.message : String(error)}`)
+		},
+	})
+}
+
+export const usePublishFeaturedAuctionsMutation = () => {
+	const queryClient = useQueryClient()
+	const ndk = ndkActions.getNDK()
+	const signer = ndkActions.getSigner()
+
+	return useMutation({
+		mutationFn: async (data: FeaturedAuctionsData) => {
+			if (!ndk) throw new Error('NDK not initialized')
+			if (!signer) throw new Error('No signer available')
+
+			return publishFeaturedAuctions(data, signer, ndk)
+		},
+
+		onSuccess: async (eventId) => {
+			let userPubkey = ''
+			if (signer) {
+				const user = await signer.user()
+				if (user && user.pubkey) {
+					userPubkey = user.pubkey
+				}
+			}
+
+			queryClient.invalidateQueries({ queryKey: configKeys.all })
+			if (userPubkey) {
+				queryClient.invalidateQueries({ queryKey: configKeys.featuredAuctions(userPubkey) })
+			}
+
+			toast.success('Featured auctions updated successfully')
+			return eventId
+		},
+
+		onError: (error) => {
+			console.error('Failed to update featured auctions:', error)
+			toast.error(`Failed to update featured auctions: ${error instanceof Error ? error.message : String(error)}`)
 		},
 	})
 }

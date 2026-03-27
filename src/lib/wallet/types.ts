@@ -8,6 +8,20 @@ export interface ProofInfo extends Proof {
 	mint?: string
 }
 
+export interface AuctionBidPendingTokenContext {
+	kind: 'auction_bid'
+	auctionEventId: string
+	auctionCoordinates?: string
+	bidEventId?: string
+	sellerPubkey: string
+	escrowPubkey: string
+	lockPubkey: string
+	refundPubkey: string
+	locktime: number
+}
+
+export type PendingTokenContext = AuctionBidPendingTokenContext
+
 /**
  * Pending token that has been generated but not yet claimed.
  * Used for recovery if the app crashes or user wants to reclaim.
@@ -19,6 +33,7 @@ export interface PendingToken {
 	mintUrl: string
 	createdAt: number
 	status: 'pending' | 'claimed' | 'reclaimed'
+	context?: PendingTokenContext
 }
 
 /**

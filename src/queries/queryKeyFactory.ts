@@ -8,6 +8,17 @@ export const productKeys = {
 	paginated: (limit: number, until?: number) => [...productKeys.all, 'paginated', limit, until] as const,
 } as const
 
+export const auctionKeys = {
+	all: ['auctions'] as const,
+	details: (id: string) => [...auctionKeys.all, id] as const,
+	bidStats: (auctionId: string) => [...auctionKeys.all, 'bidStats', auctionId] as const,
+	bids: (auctionId: string) => [...auctionKeys.all, 'bids', auctionId] as const,
+	byBidder: (pubkey: string) => [...auctionKeys.all, 'byBidder', pubkey] as const,
+	settlements: (auctionId: string) => [...auctionKeys.all, 'settlements', auctionId] as const,
+	byPubkey: (pubkey: string) => [...auctionKeys.all, 'byPubkey', pubkey] as const,
+	byATag: (pubkey: string, dTag: string) => [...auctionKeys.all, 'byATag', pubkey, dTag] as const,
+} as const
+
 export const orderKeys = {
 	all: ['orders'] as const,
 	details: (id: string) => [...orderKeys.all, id] as const,
@@ -69,6 +80,7 @@ export const configKeys = {
 	vanity: (appPubkey: string) => [...configKeys.all, 'vanity', appPubkey] as const,
 	featuredProducts: (appPubkey: string) => [...configKeys.all, 'featuredProducts', appPubkey] as const,
 	featuredCollections: (appPubkey: string) => [...configKeys.all, 'featuredCollections', appPubkey] as const,
+	featuredAuctions: (appPubkey: string) => [...configKeys.all, 'featuredAuctions', appPubkey] as const,
 	featuredUsers: (appPubkey: string) => [...configKeys.all, 'featuredUsers', appPubkey] as const,
 } as const
 
