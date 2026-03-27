@@ -8,7 +8,6 @@ import { CommentButton } from './CommentButton'
 import { useEventReactions } from '@/queries/reactions'
 import { ndkActions } from '@/lib/stores/ndk'
 import type { Reaction } from '@/queries/reactions'
-import { ReactionsDialog } from '../dialogs/ReactionsDialog'
 import { ReactionsList } from './ReactionsList'
 
 interface SocialInteractionsProps {
