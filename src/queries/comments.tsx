@@ -1,40 +1,44 @@
 import { ndkActions } from '@/lib/stores/ndk'
-import { commentKeys } from './queryKeyFactory'
+import { NDKEvent, type NDKFilter } from '@nostr-dev-kit/ndk'
 import { queryOptions, useQuery } from '@tanstack/react-query'
-import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
+import { commentKeys } from './queryKeyFactory'
+import { getCoordinates, getCoordinatesOrId } from '@/lib/nostr/coordinates'
+import { isAddressableKind } from 'nostr-tools/kinds'
 
-// NIP-22 Comment kind
+// NIP-22 Comment Kind
 const COMMENT_KIND = 1111
 
-export interface ProductComment {
+export interface Comment {
 	id: string
-	content: string
 	authorPubkey: string
+	content: string
 	createdAt: number
-	parentId?: string // For threaded replies
+	/** Root of the comment thread, e.g. Product Listing */
+	targetEventId: string
+	targetEventPubkey: string
+	targetEventKind: number
+	targetEventCoordinates?: string
+	/** Parent comment in event format, if the comment is part of a thread */
+	parentComment?: Comment
+	children: Comment[]
 }
 
-const transformCommentEvent = (event: NDKEvent): ProductComment => {
-	// Get parent event id if this is a reply to another comment
-	const parentTag = event.tags.find((t) => t[0] === 'e' && event.tags.some((kt) => kt[0] === 'k' && kt[1] === '1111'))
-	const parentId = parentTag?.[1]
-
+const transformCommentEvent = (event: NDKEvent, eventTarget: NDKEvent, parent?: Comment): Comment => {
 	return {
 		id: event.id,
 		content: event.content,
 		authorPubkey: event.pubkey,
 		createdAt: event.created_at ?? Math.floor(Date.now() / 1000),
-		parentId,
+		targetEventId: eventTarget.id,
+		targetEventPubkey: eventTarget.pubkey,
+		targetEventKind: eventTarget.kind,
+		targetEventCoordinates: getCoordinates(eventTarget),
+		parentComment: parent,
+		children: [],
 	}
 }
 
-// Comment threads formatting
-
-export interface ProductCommentThread extends ProductComment {
-	children: ProductCommentThread[]
-}
-
-const sortCommentThreadByDate = (thread: ProductCommentThread) => {
+const sortCommentThreadByDate = (thread: Comment) => {
 	// Sort thread children
 	thread.children.sort((a, b) => a.createdAt - b.createdAt)
 
@@ -42,68 +46,93 @@ const sortCommentThreadByDate = (thread: ProductCommentThread) => {
 	thread.children.forEach(sortCommentThreadByDate)
 }
 
-const sortCommentsIntoThreads = (comments: ProductComment[]): ProductCommentThread[] => {
-	// Create a map based on comment ids for fast access
-	const mapIdentifiers = new Map<string, ProductCommentThread>()
-	comments.forEach((c) => mapIdentifiers.set(c.id, { ...c, children: [] }))
-
-	// Initialize threads map
-	const threads: ProductCommentThread[] = []
-
-	// For each comment:
-	for (const comment of comments) {
-		// Get comment from map to apply / keep children
-		const commentThreadable = mapIdentifiers.get(comment.id) ?? { children: [], ...comment }
-
-		if (comment.parentId) {
-			// If comment has parent id, then add that comment to the parent comment's thread
-			const parentComment = mapIdentifiers.get(comment.parentId)
-			parentComment?.children.push(commentThreadable)
-		} else {
-			// Else, comment becomes its own thread
-			threads.push(commentThreadable)
-		}
-	}
-
-	return threads
-}
-
 /**
  * Fetches NIP-22 comments for a product
  * @param productCoordinates - The product coordinates in format "30018:<pubkey>:<d-tag>"
  */
-export const fetchProductComments = async (productCoordinates: string): Promise<ProductCommentThread[]> => {
+export const fetchProductComments = async (event: NDKEvent): Promise<Comment[]> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
-	// NIP-22 comments reference the root with an A tag for addressable events
-	const filter: NDKFilter = {
-		kinds: [COMMENT_KIND],
-		'#A': [productCoordinates],
+	const filters: NDKFilter[] = []
+	const filtersReplies: NDKFilter[] = []
+
+	// Build the filter based on whether the target is addressable or regular
+	if (isAddressableKind(event.kind) && event.dTag) {
+		// Addressable Event
+		const coordinates = getCoordinates(event)
+
+		filters.push({
+			kinds: [COMMENT_KIND],
+			'#a': [coordinates],
+		})
+
+		filtersReplies.push({
+			kinds: [COMMENT_KIND],
+			'#A': [coordinates],
+		})
+	} else {
+		// Regular Event (e.g., Kind 1, 4, etc.)
+		filters.push({
+			kinds: [COMMENT_KIND],
+			'#e': [event.id],
+		})
+
+		filtersReplies.push({
+			kinds: [COMMENT_KIND],
+			'#E': [event.id],
+		})
 	}
 
-	const events = await ndk.fetchEvents(filter)
-	const comments = Array.from(events).map(transformCommentEvent)
+	const [events, replies] = await Promise.all([ndk.fetchEvents(filters), ndk.fetchEvents(filtersReplies)])
 
-	// Sort comments into threads
-	const threads = sortCommentsIntoThreads(comments)
+	// Transform events into comments, using a map for fast access
+	const mapCommentsById = new Map<string, Comment>()
+	const mapRepliesById = new Map<string, Comment>()
+
+	// Top-level comments
+	events.forEach((e) => mapCommentsById.set(e.id, transformCommentEvent(e, event)))
+
+	// Replies - No parent set for now, those are added with children later
+	replies.forEach((e) => mapRepliesById.set(e.id, transformCommentEvent(e, event)))
+
+	// Sort replies into threads - Add children & parents
+	replies.forEach((e) => {
+		const comment = mapRepliesById.get(e.id)
+
+		if (!comment) return
+
+		const parentId = e.tags.find((t) => t[0] === 'e')?.at(1)
+		const parentComment = parentId ? (mapCommentsById.get(parentId) ?? mapRepliesById.get(parentId)) : undefined
+
+		if (parentComment) {
+			parentComment.children.push(comment)
+			comment.parentComment = parentComment
+		}
+	})
+
+	const commentThreads = Array.from(mapCommentsById.values())
+
+	// Sort comments by date
+	commentThreads.sort((a, b) => a.createdAt - b.createdAt)
 
 	// Sort threads by date recursively
-	threads.forEach(sortCommentThreadByDate)
+	commentThreads.forEach(sortCommentThreadByDate)
 
-	return threads
+	return commentThreads
 }
-
-export const productCommentsQueryOptions = (productCoordinates: string) =>
-	queryOptions({
-		queryKey: commentKeys.byProduct(productCoordinates),
-		queryFn: () => fetchProductComments(productCoordinates),
-		enabled: !!productCoordinates,
-	})
 
 /**
  * Hook to fetch comments for a product
  */
-export const useProductComments = (productCoordinates: string) => {
-	return useQuery(productCommentsQueryOptions(productCoordinates))
+export const useComments = (event: NDKEvent) => {
+	const targetCoordinates = getCoordinatesOrId(event)
+
+	return useQuery(
+		queryOptions({
+			queryKey: commentKeys.byProduct(targetCoordinates),
+			queryFn: () => fetchProductComments(event),
+			enabled: !!targetCoordinates,
+		}),
+	)
 }
