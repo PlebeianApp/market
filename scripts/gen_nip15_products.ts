@@ -1,4 +1,5 @@
 import { faker } from '@faker-js/faker'
+import { ndkActions } from '@/lib/stores/ndk'
 import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev-kit/ndk'
 
 /**
@@ -94,12 +95,9 @@ export async function createNip15ProductEvent(
 
 	event.tags = tags
 
-	// Set created_at to be in the past (older than NIP-99 products)
-	event.created_at = Math.floor(Date.now() / 1000) - faker.number.int({ min: 86400, max: 2592000 }) // 1-30 days ago
-
 	try {
 		await event.sign(signer)
-		await event.publish()
+		await ndkActions.publishEvent(event)
 		console.log(`Published NIP-15 product: ${productData.name}`)
 		return true
 	} catch (error) {
