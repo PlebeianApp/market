@@ -1,9 +1,9 @@
-import { useEventReactions, useReactionsByUser, type Reaction } from '@/queries/reactions'
+import { groupReactionsByContent, useEventReactions, type Reaction } from '@/queries/reactions'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useState } from 'react'
 import { Button } from '../ui/button'
-import { ReactionsDialog } from '../dialogs/ReactionsDialog'
 import { useAuth } from '@/lib/stores/auth'
+import { usePublishDeletionMutation, usePublishReactionMutation } from '@/publish/reactions'
 
 // TODO: Add extends normal React Node/div properties
 interface ReactionsListProps {
@@ -11,30 +11,56 @@ interface ReactionsListProps {
 }
 
 export const ReactionsList = ({ event }: ReactionsListProps) => {
-	const { data: reactions } = useEventReactions(event)
 	const { user, isAuthenticated } = useAuth()
-	const { data: reactionsOwnUser } = useReactionsByUser(user?.pubkey ?? '', event)
+	const { data: reactions } = useEventReactions(event)
+	const reactionsGrouped = reactions && groupReactionsByContent(reactions)
+	const reactionsOwnUser = reactions?.filter((reaction) => reaction.authorPubkey == user?.pubkey)
 
-	console.log('Reactions event: ', reactions)
+	const mutationPublish = usePublishReactionMutation()
+	const mutationDelete = usePublishDeletionMutation()
 
-	const [openReactionDialog, setOpenReactionDialog] = useState(false)
-	const [selectedReaction, setSelectedReaction] = useState<Map<string, Reaction[]> | null>(null)
+	const handleReactionClick = (content: string) => {
+		const reaction = reactionsOwnUser?.find((reaction) => reaction.emoji === content)
 
-	const handleReactionClick = (reactionMap: Map<string, Reaction[]>) => {
-		setSelectedReaction(reactionMap)
-		setOpenReactionDialog(true)
+		if (reaction) {
+			// If reaction has already been made by user, request deletion
+			handleDeleteReaction(reaction)
+		} else {
+			// Else, add reaction to event
+			handlePublishReaction(content)
+		}
 	}
 
-	// TODO:
-	// Update such that pressing on a button either:
-	// - publishes that reaction if the reaction hasn't been made by the user
-	// - deletes that reaction if already published by the user
+	// Publish reaction when button is clicked
+	const handlePublishReaction = async (emoji: string) => {
+		if (!isAuthenticated) return
+
+		if (!emoji || !event.id || !event.pubkey) return
+
+		// Pass the event object directly to the mutation
+		await mutationPublish.mutateAsync({
+			emoji,
+			event,
+		})
+	}
+
+	// Delete the reaction selected
+	const handleDeleteReaction = async (reaction: Reaction) => {
+		if (!isAuthenticated) return
+
+		if (!reaction.id || !reaction.authorPubkey) return
+
+		// Pass the event object directly to the mutation
+		await mutationDelete.mutateAsync({
+			reactionEvent: reaction,
+		})
+	}
 
 	return (
 		<>
 			<div className="flex flex-wrap gap-1">
-				{reactions && reactions.size > 0
-					? Array.from(reactions.entries()).map(([content, values]) => (
+				{reactionsGrouped && reactionsGrouped.size > 0
+					? Array.from(reactionsGrouped.entries()).map(([content, values]) => (
 							<Button
 								key={content}
 								variant="outline"
@@ -47,7 +73,7 @@ export const ReactionsList = ({ event }: ReactionsListProps) => {
 										: // Else
 											'bg-primary-foreground hover:primary-foreground-hover text-black')
 								}
-								onClick={() => handleReactionClick(reactions)}
+								onClick={() => handleReactionClick(content)}
 							>
 								<span className="text-lg">{content}</span>
 								<span className="ml-1">{values.length}</span>
@@ -55,7 +81,6 @@ export const ReactionsList = ({ event }: ReactionsListProps) => {
 						))
 					: null}
 			</div>
-			{selectedReaction && <ReactionsDialog event={event} reactions={selectedReaction} onOpenChange={setOpenReactionDialog} />}
 		</>
 	)
 }

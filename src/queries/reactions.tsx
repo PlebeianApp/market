@@ -37,9 +37,9 @@ const transformReactionEvent = (event: NDKEvent): Reaction => {
 	if (!ndk) throw Error('NDK must be initialized.')
 
 	// If there are more than 1 e-tags (not recommended), the event being reacted to should be the last one.
-	const eTag = event.tags.filter((t) => t[0] === 'e')?.[-1]
+	const eTag = event.tags.filter((t) => t[0] === 'e')?.slice(-1)[0]
 	// Similar for p-tags
-	const pTag = event.tags.filter((t) => t[0] === 'p')?.[-1]
+	const pTag = event.tags.filter((t) => t[0] === 'p')?.slice(-1)[0]
 	const kTag = event.tags.find((t) => t[0] === 'k')?.[1]
 
 	return {
@@ -49,8 +49,8 @@ const transformReactionEvent = (event: NDKEvent): Reaction => {
 		authorPubkey: event.pubkey,
 		targetEvent: new NDKEvent(ndk, {
 			id: eTag?.[1] || '',
-			kind: parseInt(kTag || ''),
 			pubkey: pTag?.[1] || '',
+			kind: parseInt(kTag || ''),
 		}),
 	}
 }
@@ -146,11 +146,7 @@ const filterReactionsValid = async (reactions: Reaction[]): Promise<Reaction[]> 
 		'#e': reactionsUnique.map((reaction) => reaction.id),
 	}
 
-	console.log('Deletions Filter: ', filterDeletions)
-
 	const eventsDeletions = await ndk.fetchEvents(filterDeletions)
-
-	console.log('Deletions: ', eventsDeletions)
 
 	// Create O(1)-complexity reference table with all deleted reaction IDs
 	const idsReactionsDeleted = new Set<string>()
@@ -168,7 +164,7 @@ const filterReactionsValid = async (reactions: Reaction[]): Promise<Reaction[]> 
  * @param targetEvent - The event to fetch reactions for
  * @returns Reactions grouped by reaction content/emoji in map format
  */
-export const fetchEventReactions = async (event: NDKEvent, userPubkey?: string): Promise<Map<string, Reaction[]>> => {
+export const fetchEventReactions = async (event: NDKEvent): Promise<Reaction[]> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 
@@ -183,70 +179,29 @@ export const fetchEventReactions = async (event: NDKEvent, userPubkey?: string):
 
 	const events = await ndk.fetchEvents(filter)
 	const reactions = Array.from(events).map(transformReactionEvent)
-	const reactionsFiltered = await filterReactionsValid(reactions)
 
-	// Group reactions by content/emoji
-	const groupReactions = groupReactionsByContent(reactionsFiltered)
-
-	// Sort reaction groups by highest count
-	const groupReactionsSorted = new Map(Array.from(groupReactions).sort((a, b) => (a[1].length > b[1].length ? -1 : 1)))
-
-	return groupReactionsSorted
-}
-
-/**
- * Fetches reactions for the current user's events
- * @param event - The event to fetch reactions for (optional, for filtering)
- * @param userPubkey - The pubkey of the current user
- * @returns Promise that resolves to reactions from the current user
- */
-export const fetchReactionsByUser = async (userPubkey: string, event?: NDKEvent): Promise<Reaction[]> => {
-	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
-
-	// Fetch all reactions from the current user
-	const filterReactions: NDKFilter = {
-		kinds: [REACTION_KIND],
-		authors: [userPubkey],
-		limit: 100,
-	}
-
-	// If event is provided, filter by that event
-	if (event) {
-		filterReactions['#e'] = [event.id]
-		filterReactions['#p'] = [event.pubkey]
-		filterReactions['#k'] = [event.kind.toString()]
-	}
-
-	const eventsReactions = await ndk.fetchEvents(filterReactions)
-
-	console.log('Reaction Events: ', eventsReactions)
-
-	const reactions = Array.from(eventsReactions).map(transformReactionEvent)
+	// Filter out deleted reactions
 	const reactionsFiltered = await filterReactionsValid(reactions)
 
 	// Sort by latest first
 	return reactionsFiltered.sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1))
 }
 
-/**
- * Hook to fetch reactions for an event
- */
-export const useEventReactions = (event: NDKEvent, userPubkey?: string) => {
-	return useQuery({
-		queryKey: reactionKeys.byEvent(event.id, event.pubkey),
-		queryFn: () => fetchEventReactions(event, userPubkey),
-		enabled: !!event,
-	})
+export const sortReactionsIntoGroups = (reactions: Reaction[]): Map<string, Reaction[]> => {
+	// Group reactions by content/emoji
+	const groupReactions = groupReactionsByContent(reactions)
+
+	// Sort reaction groups by highest count first
+	return new Map(Array.from(groupReactions).sort((a, b) => (a[1].length > b[1].length ? -1 : 1)))
 }
 
 /**
- * Hook to fetch reactions from the current user
+ * Hook to fetch reactions for an event
  */
-export const useReactionsByUser = (userPubkey: string, event?: NDKEvent) => {
+export const useEventReactions = (event: NDKEvent) => {
 	return useQuery({
-		queryKey: event ? reactionKeys.byEventUser(userPubkey, event.id, event.pubkey) : reactionKeys.byUser(userPubkey),
-		queryFn: () => fetchReactionsByUser(userPubkey, event),
-		enabled: !!userPubkey,
+		queryKey: reactionKeys.byEvent(event.id, event.pubkey),
+		queryFn: () => fetchEventReactions(event),
+		enabled: !!event,
 	})
 }
