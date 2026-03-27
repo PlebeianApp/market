@@ -1,7 +1,10 @@
+import { getCoordinates, getCoordinatesOrId } from '@/lib/nostr/coordinates'
+import { type Comment } from '@/queries/comments'
 import { ndkActions } from '@/lib/stores/ndk'
 import { commentKeys } from '@/queries/queryKeyFactory'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { isAddressableKind } from 'nostr-tools/kinds'
 import { toast } from 'sonner'
 
 // NIP-22 Comment kind
@@ -9,22 +12,15 @@ const COMMENT_KIND = 1111
 
 interface PublishCommentParams {
 	content: string
-	productCoordinates: string // Format: "30018:<pubkey>:<d-tag>"
-	merchantPubkey: string
-	parentCommentId?: string // For replies to other comments
-	parentCommentPubkey?: string
+	targetEvent: NDKEvent // The event being commented on (Product, Comment, etc.)
+	parentComment?: Comment // For replies to other comments
 }
 
 /**
- * Publishes a NIP-22 comment on a product
+ * Publishes a NIP-22 comment on a target event (Product, Comment, etc.)
+ * Automatically handles both addressable (A/a tags) and regular (E/e tags) events.
  */
-export const publishComment = async ({
-	content,
-	productCoordinates,
-	merchantPubkey,
-	parentCommentId,
-	parentCommentPubkey,
-}: PublishCommentParams): Promise<NDKEvent> => {
+export const publishComment = async ({ content, targetEvent, parentComment }: PublishCommentParams): Promise<NDKEvent> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
 	if (!ndk.signer) throw new Error('No signer available')
@@ -44,26 +40,49 @@ export const publishComment = async ({
 	commentEvent.created_at = Math.floor(Date.now() / 1000)
 	commentEvent.pubkey = user.pubkey
 
-	// NIP-22 tags structure:
-	// - Uppercase tags (A, K, P) for root scope (the product)
-	// - Lowercase tags (a, e, k, p) for parent item
 	const tags: string[][] = []
 
-	// Root scope: the product (addressable event)
-	tags.push(['A', productCoordinates])
-	tags.push(['K', '30018']) // Product kind
-	tags.push(['P', merchantPubkey])
+	// Determine if the target is addressable
+	const isTargetAddressable = isAddressableKind(targetEvent.kind)
+	const targetCoordinates = isTargetAddressable ? getCoordinates(targetEvent) : null
 
-	if (parentCommentId && parentCommentPubkey) {
-		// This is a reply to another comment
-		tags.push(['e', parentCommentId])
-		tags.push(['k', '1111']) // Parent is a comment
-		tags.push(['p', parentCommentPubkey])
+	// === ROOT SCOPE (Uppercase) ===
+	if (isTargetAddressable && targetCoordinates) {
+		// Addressable Event (e.g., NIP-99 Product 30402)
+		tags.push(['A', targetCoordinates])
 	} else {
-		// Top-level comment on the product
-		tags.push(['a', productCoordinates])
-		tags.push(['k', '30018'])
-		tags.push(['p', merchantPubkey])
+		// Regular Event (e.g., Kind 1, 4, etc.)
+		tags.push(['E', targetEvent.id])
+	}
+
+	// Root Kind
+	tags.push(['K', targetEvent.kind.toString()])
+
+	// Root Pubkey
+	tags.push(['P', targetEvent.pubkey])
+
+	// === PARENT SCOPE (Lowercase) ===
+	if (parentComment) {
+		// This is a reply to another comment
+
+		// Note: In NIP-22, replies to comments often use 'e' if the comment is treated as a regular event,
+		// or 'a' if the comment is addressable. Since we don't have the full parent event here,
+		// we default to 'e' for replies unless we know the parent is addressable.
+
+		tags.push(['e', parentComment.id])
+		tags.push(['k', '1111']) // Parent should be a comment (kind '1111')
+		tags.push(['p', parentComment?.authorPubkey])
+	} else {
+		// Top-level comment on the target
+		if (isTargetAddressable && targetCoordinates) {
+			// Addressable Target
+			tags.push(['a', targetCoordinates])
+		} else {
+			// Regular Target
+			tags.push(['e', targetEvent.id])
+		}
+		tags.push(['k', targetEvent.kind.toString()])
+		tags.push(['p', targetEvent.pubkey])
 	}
 
 	commentEvent.tags = tags
@@ -91,10 +110,11 @@ export const usePublishCommentMutation = () => {
 
 	return useMutation({
 		mutationFn: publishComment,
-		onSuccess: async (_, variables) => {
-			// Invalidate comments query to refetch
+		onSuccess: async (event, variables) => {
+			const targetCoordinates = getCoordinatesOrId(variables.targetEvent)
+
 			await queryClient.invalidateQueries({
-				queryKey: commentKeys.byProduct(variables.productCoordinates),
+				queryKey: commentKeys.byProduct(targetCoordinates),
 			})
 			toast.success('Comment posted!')
 		},
