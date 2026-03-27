@@ -186,7 +186,7 @@ export function ProductComments({ productCoordinates, merchantPubkey }: ProductC
 			)}
 
 			{/* Comments List */}
-			<div>
+			<div data-testid="product-comments">
 				{isLoading && <p className="text-gray-500 text-center py-4">Loading comments...</p>}
 
 				{error && <p className="text-red-600 text-center py-4">Failed to load comments</p>}

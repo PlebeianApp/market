@@ -58,7 +58,7 @@ export const ReactionsList = ({ event }: ReactionsListProps) => {
 
 	return (
 		<>
-			<div className="flex flex-wrap gap-1">
+			<div className="flex flex-wrap gap-1" data-testid="reactions-list">
 				{reactionsGrouped && reactionsGrouped.size > 0
 					? Array.from(reactionsGrouped.entries()).map(([content, values]) => (
 							<Button
