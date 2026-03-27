@@ -105,6 +105,7 @@ export function ReactionButton({ event, className, ...props }: ReactionButtonPro
 						className={'border-2 focus:outline-none ' + classNameButton + ' ' + className}
 						{...props}
 						type="button"
+						data-testid="reaction-button"
 						onClick={(e) => {
 							// TODO: Handle mobile - open dialog using handlePopoverOpen (don't select reaction yet)
 							handleStopPropagation(e)
