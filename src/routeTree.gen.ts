@@ -34,6 +34,7 @@ import { Route as DashboardLayoutDashboardProductsShippingOptionsRouteImport } f
 import { Route as DashboardLayoutDashboardProductsProductsRouteImport } from './routes/_dashboard-layout/dashboard/products/products'
 import { Route as DashboardLayoutDashboardProductsMigrationToolRouteImport } from './routes/_dashboard-layout/dashboard/products/migration-tool'
 import { Route as DashboardLayoutDashboardProductsCollectionsRouteImport } from './routes/_dashboard-layout/dashboard/products/collections'
+import { Route as DashboardLayoutDashboardProductsBidsRouteImport } from './routes/_dashboard-layout/dashboard/products/bids'
 import { Route as DashboardLayoutDashboardProductsAuctionsRouteImport } from './routes/_dashboard-layout/dashboard/products/auctions'
 import { Route as DashboardLayoutDashboardOrdersOrderIdRouteImport } from './routes/_dashboard-layout/dashboard/orders/$orderId'
 import { Route as DashboardLayoutDashboardAppSettingsTeamRouteImport } from './routes/_dashboard-layout/dashboard/app-settings/team'
@@ -178,6 +179,11 @@ const DashboardLayoutDashboardProductsCollectionsRoute = DashboardLayoutDashboar
 	path: '/dashboard/products/collections',
 	getParentRoute: () => DashboardLayoutRoute,
 } as any)
+const DashboardLayoutDashboardProductsBidsRoute = DashboardLayoutDashboardProductsBidsRouteImport.update({
+	id: '/dashboard/products/bids',
+	path: '/dashboard/products/bids',
+	getParentRoute: () => DashboardLayoutRoute,
+} as any)
 const DashboardLayoutDashboardProductsAuctionsRoute = DashboardLayoutDashboardProductsAuctionsRouteImport.update({
 	id: '/dashboard/products/auctions',
 	path: '/dashboard/products/auctions',
@@ -306,6 +312,7 @@ export interface FileRoutesByFullPath {
 	'/dashboard/app-settings/team': typeof DashboardLayoutDashboardAppSettingsTeamRoute
 	'/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
 	'/dashboard/products/auctions': typeof DashboardLayoutDashboardProductsAuctionsRouteWithChildren
+	'/dashboard/products/bids': typeof DashboardLayoutDashboardProductsBidsRoute
 	'/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
 	'/dashboard/products/migration-tool': typeof DashboardLayoutDashboardProductsMigrationToolRoute
 	'/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
@@ -351,6 +358,7 @@ export interface FileRoutesByTo {
 	'/dashboard/app-settings/team': typeof DashboardLayoutDashboardAppSettingsTeamRoute
 	'/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
 	'/dashboard/products/auctions': typeof DashboardLayoutDashboardProductsAuctionsRouteWithChildren
+	'/dashboard/products/bids': typeof DashboardLayoutDashboardProductsBidsRoute
 	'/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
 	'/dashboard/products/migration-tool': typeof DashboardLayoutDashboardProductsMigrationToolRoute
 	'/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
@@ -398,6 +406,7 @@ export interface FileRoutesById {
 	'/_dashboard-layout/dashboard/app-settings/team': typeof DashboardLayoutDashboardAppSettingsTeamRoute
 	'/_dashboard-layout/dashboard/orders/$orderId': typeof DashboardLayoutDashboardOrdersOrderIdRoute
 	'/_dashboard-layout/dashboard/products/auctions': typeof DashboardLayoutDashboardProductsAuctionsRouteWithChildren
+	'/_dashboard-layout/dashboard/products/bids': typeof DashboardLayoutDashboardProductsBidsRoute
 	'/_dashboard-layout/dashboard/products/collections': typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
 	'/_dashboard-layout/dashboard/products/migration-tool': typeof DashboardLayoutDashboardProductsMigrationToolRoute
 	'/_dashboard-layout/dashboard/products/products': typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
@@ -445,6 +454,7 @@ export interface FileRouteTypes {
 		| '/dashboard/app-settings/team'
 		| '/dashboard/orders/$orderId'
 		| '/dashboard/products/auctions'
+		| '/dashboard/products/bids'
 		| '/dashboard/products/collections'
 		| '/dashboard/products/migration-tool'
 		| '/dashboard/products/products'
@@ -490,6 +500,7 @@ export interface FileRouteTypes {
 		| '/dashboard/app-settings/team'
 		| '/dashboard/orders/$orderId'
 		| '/dashboard/products/auctions'
+		| '/dashboard/products/bids'
 		| '/dashboard/products/collections'
 		| '/dashboard/products/migration-tool'
 		| '/dashboard/products/products'
@@ -536,6 +547,7 @@ export interface FileRouteTypes {
 		| '/_dashboard-layout/dashboard/app-settings/team'
 		| '/_dashboard-layout/dashboard/orders/$orderId'
 		| '/_dashboard-layout/dashboard/products/auctions'
+		| '/_dashboard-layout/dashboard/products/bids'
 		| '/_dashboard-layout/dashboard/products/collections'
 		| '/_dashboard-layout/dashboard/products/migration-tool'
 		| '/_dashboard-layout/dashboard/products/products'
@@ -747,6 +759,13 @@ declare module '@tanstack/react-router' {
 			preLoaderRoute: typeof DashboardLayoutDashboardProductsCollectionsRouteImport
 			parentRoute: typeof DashboardLayoutRoute
 		}
+		'/_dashboard-layout/dashboard/products/bids': {
+			id: '/_dashboard-layout/dashboard/products/bids'
+			path: '/dashboard/products/bids'
+			fullPath: '/dashboard/products/bids'
+			preLoaderRoute: typeof DashboardLayoutDashboardProductsBidsRouteImport
+			parentRoute: typeof DashboardLayoutRoute
+		}
 		'/_dashboard-layout/dashboard/products/auctions': {
 			id: '/_dashboard-layout/dashboard/products/auctions'
 			path: '/dashboard/products/auctions'
@@ -951,6 +970,7 @@ interface DashboardLayoutRouteChildren {
 	DashboardLayoutDashboardAppSettingsTeamRoute: typeof DashboardLayoutDashboardAppSettingsTeamRoute
 	DashboardLayoutDashboardOrdersOrderIdRoute: typeof DashboardLayoutDashboardOrdersOrderIdRoute
 	DashboardLayoutDashboardProductsAuctionsRoute: typeof DashboardLayoutDashboardProductsAuctionsRouteWithChildren
+	DashboardLayoutDashboardProductsBidsRoute: typeof DashboardLayoutDashboardProductsBidsRoute
 	DashboardLayoutDashboardProductsCollectionsRoute: typeof DashboardLayoutDashboardProductsCollectionsRouteWithChildren
 	DashboardLayoutDashboardProductsMigrationToolRoute: typeof DashboardLayoutDashboardProductsMigrationToolRoute
 	DashboardLayoutDashboardProductsProductsRoute: typeof DashboardLayoutDashboardProductsProductsRouteWithChildren
@@ -976,6 +996,7 @@ const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
 	DashboardLayoutDashboardAppSettingsTeamRoute: DashboardLayoutDashboardAppSettingsTeamRoute,
 	DashboardLayoutDashboardOrdersOrderIdRoute: DashboardLayoutDashboardOrdersOrderIdRoute,
 	DashboardLayoutDashboardProductsAuctionsRoute: DashboardLayoutDashboardProductsAuctionsRouteWithChildren,
+	DashboardLayoutDashboardProductsBidsRoute: DashboardLayoutDashboardProductsBidsRoute,
 	DashboardLayoutDashboardProductsCollectionsRoute: DashboardLayoutDashboardProductsCollectionsRouteWithChildren,
 	DashboardLayoutDashboardProductsMigrationToolRoute: DashboardLayoutDashboardProductsMigrationToolRoute,
 	DashboardLayoutDashboardProductsProductsRoute: DashboardLayoutDashboardProductsProductsRouteWithChildren,

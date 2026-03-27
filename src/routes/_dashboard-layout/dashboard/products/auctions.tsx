@@ -31,7 +31,7 @@ import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Clock, Copy, ExternalLink, Gavel, Shield, Trash, Pencil } from 'lucide-react'
+import { Clock, Copy, ExternalLink, Gavel, Pencil, Shield, Trash } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -343,7 +343,7 @@ function AuctionsOverviewComponent() {
 		fuzzy: true,
 	})
 
-	useDashboardTitle(isOnChildRoute ? 'Auction Details' : 'My Auctions')
+	useDashboardTitle(isOnChildRoute ? 'Auction Details' : 'Auctions')
 
 	const {
 		data: auctions,
@@ -424,7 +424,7 @@ function AuctionsOverviewComponent() {
 	return (
 		<div>
 			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
-				<h1 className="text-2xl font-bold">My Auctions</h1>
+				<h1 className="text-2xl font-bold">Auctions</h1>
 				<div className="flex items-center gap-4">
 					<Select value={orderBy} onValueChange={(value) => setOrderBy(value as AuctionOrder)}>
 						<SelectTrigger className="w-56">
