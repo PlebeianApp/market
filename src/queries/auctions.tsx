@@ -159,6 +159,22 @@ export const fetchAuctionBids = async (auctionEventId: string, limit: number = 5
 	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
 }
 
+export const fetchAuctionBidsByBidder = async (pubkey: string, limit: number = 500) => {
+	if (!pubkey) return []
+	const ndk = ndkActions.getNDK()
+	if (!ndk) return []
+
+	const events = await ndkActions.fetchEventsWithTimeout(
+		{
+			kinds: [AUCTION_BID_KIND],
+			authors: [pubkey],
+			limit,
+		},
+		{ timeoutMs: 8000 },
+	)
+	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+}
+
 export const fetchAuctionSettlements = async (auctionEventId: string, limit: number = 100, auctionCoordinates?: string) => {
 	if (!auctionEventId && !auctionCoordinates) return []
 	const ndk = ndkActions.getNDK()
@@ -242,6 +258,15 @@ export const auctionBidsQueryOptions = (auctionEventId: string, limit: number = 
 		queryKey: [...auctionKeys.bids(auctionEventId || auctionCoordinates || ''), auctionCoordinates || ''],
 		queryFn: () => fetchAuctionBids(auctionEventId, limit, auctionCoordinates),
 		enabled: !!(auctionEventId || auctionCoordinates),
+		staleTime: 5000,
+		refetchInterval: 5000,
+	})
+
+export const auctionBidsByBidderQueryOptions = (pubkey: string, limit: number = 500) =>
+	queryOptions({
+		queryKey: auctionKeys.byBidder(pubkey),
+		queryFn: () => fetchAuctionBidsByBidder(pubkey, limit),
+		enabled: !!pubkey,
 		staleTime: 5000,
 		refetchInterval: 5000,
 	})
@@ -373,6 +398,12 @@ export const getBidAmount = (bidEvent: NDKEvent | null): number => {
 	}
 }
 
+export const getBidAuctionEventId = (bidEvent: NDKEvent | null): string => bidEvent?.tags.find((tag) => tag[0] === 'e')?.[1] || ''
+
+export const getBidAuctionCoordinates = (bidEvent: NDKEvent | null): string => bidEvent?.tags.find((tag) => tag[0] === 'a')?.[1] || ''
+
+export const getBidSellerPubkey = (bidEvent: NDKEvent | null): string => bidEvent?.tags.find((tag) => tag[0] === 'p')?.[1] || ''
+
 export const getBidMint = (bidEvent: NDKEvent | null): string => {
 	if (!bidEvent) return ''
 	const tagMint = bidEvent.tags.find((tag) => tag[0] === 'mint')?.[1]
@@ -388,6 +419,12 @@ export const getBidMint = (bidEvent: NDKEvent | null): string => {
 export const getBidStatus = (bidEvent: NDKEvent | null): string => {
 	if (!bidEvent) return 'unknown'
 	return bidEvent.tags.find((tag) => tag[0] === 'status')?.[1] || 'unknown'
+}
+
+export const getBidLocktime = (bidEvent: NDKEvent | null): number => {
+	if (!bidEvent) return 0
+	const parsed = parseInt(bidEvent.tags.find((tag) => tag[0] === 'locktime')?.[1] || '0', 10)
+	return Number.isFinite(parsed) ? parsed : 0
 }
 
 export const getAuctionSettlementStatus = (settlementEvent: NDKEvent | null): AuctionSettlementStatus => {
@@ -427,6 +464,11 @@ export const useAuctionBidStats = (auctionEventId: string, startingBid: number =
 export const useAuctionBids = (auctionEventId: string, limit: number = 500, auctionCoordinates?: string) =>
 	useQuery({
 		...auctionBidsQueryOptions(auctionEventId, limit, auctionCoordinates),
+	})
+
+export const useAuctionBidsByBidder = (pubkey: string, limit: number = 500) =>
+	useQuery({
+		...auctionBidsByBidderQueryOptions(pubkey, limit),
 	})
 
 export const useAuctionSettlements = (auctionEventId: string, limit: number = 100, auctionCoordinates?: string) =>
