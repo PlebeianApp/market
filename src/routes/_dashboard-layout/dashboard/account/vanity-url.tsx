@@ -385,7 +385,7 @@ function VanityUrlComponent() {
 												key={key}
 												type="button"
 												disabled={!validationState.isValid || validationState.isAvailable === false}
-												className={`w-full flex items-center gap-4 p-4 border rounded-lg transition-all hover:border-yellow-500 hover:bg-yellow-500/5 disabled:opacity-50 disabled:cursor-not-allowed`}
+												className={`w-full flex items-center gap-4 p-4 border rounded-lg transition-all hover:border-yellow-500 hover:bg-yellow-500/5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer`}
 												onClick={() => handleZap(tier)}
 											>
 												<div className="flex items-center justify-center w-10 h-10 rounded-full bg-yellow-500/10">
