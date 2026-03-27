@@ -1,7 +1,7 @@
 import { test as base, expect, type Page } from '@playwright/test'
 import { RelayMonitor } from './relay-monitor'
 import { setupAuthContext, type TestUser } from './auth'
-import { ensureScenario, type ScenarioName } from '../scenarios'
+import { ensureScenario, resetRemoteCartForUser, type ScenarioName } from '../scenarios'
 import { devUser1, devUser2, devUser3 } from '../../src/lib/fixtures'
 
 type TestFixtures = {
@@ -49,6 +49,7 @@ export const test = base.extend<TestFixtures>({
 
 	buyerPage: async ({ browser, scenario }, use) => {
 		await ensureScenario(scenario)
+		await resetRemoteCartForUser(devUser2.sk)
 		const context = await browser.newContext()
 		await setupAuthContext(context, devUser2)
 		const page = await context.newPage()
@@ -63,6 +64,7 @@ export const test = base.extend<TestFixtures>({
 
 	newUserPage: async ({ browser, scenario }, use) => {
 		await ensureScenario(scenario)
+		await resetRemoteCartForUser(devUser3.sk)
 		const context = await browser.newContext()
 		await setupAuthContext(context, devUser3)
 		const page = await context.newPage()

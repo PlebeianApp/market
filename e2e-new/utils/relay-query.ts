@@ -60,3 +60,45 @@ export function getTagValue(event: RelayEvent, tagName: string): string | undefi
 export function filterByTag(events: RelayEvent[], tagName: string, tagValue: string): RelayEvent[] {
 	return events.filter((e) => e.tags.some((t) => t[0] === tagName && t[1] === tagValue))
 }
+
+function compareRelayEventsDesc(a: RelayEvent, b: RelayEvent): number {
+	const byCreatedAt = (b.created_at || 0) - (a.created_at || 0)
+	if (byCreatedAt !== 0) return byCreatedAt
+	if (a.id < b.id) return 1
+	if (a.id > b.id) return -1
+	return 0
+}
+
+export async function waitForLatestCartSnapshotToBeEmpty(opts: {
+	pubkey: string
+	timeoutMs?: number
+	pollMs?: number
+}): Promise<RelayEvent> {
+	const { pubkey, timeoutMs = 10_000, pollMs = 200 } = opts
+	const startedAt = Date.now()
+
+	while (Date.now() - startedAt < timeoutMs) {
+		const events = await queryRelayEvents({
+			authors: [pubkey],
+			kinds: [30078],
+			'#d': ['plebeian-market-cart'],
+			limit: 20,
+		})
+
+		const latest = [...events].sort(compareRelayEventsDesc)[0]
+		if (latest) {
+			try {
+				const parsed = JSON.parse(latest.content) as { items?: unknown }
+				if (Array.isArray(parsed.items) && parsed.items.length === 0) {
+					return latest
+				}
+			} catch {
+				// Ignore malformed events and keep polling until timeout.
+			}
+		}
+
+		await new Promise((resolve) => setTimeout(resolve, pollMs))
+	}
+
+	throw new Error(`Timed out waiting for empty remote cart snapshot for pubkey ${pubkey}`)
+}

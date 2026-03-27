@@ -226,7 +226,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 							<Button
 								variant="outline"
 								className="flex-1 text-red-500 hover:bg-red-50 hover:text-red-600 border-red-200"
-								onClick={() => cartActions.clear()}
+								onClick={() => cartActions.clearForUserIntent()}
 								disabled={totalItems === 0}
 							>
 								Clear
