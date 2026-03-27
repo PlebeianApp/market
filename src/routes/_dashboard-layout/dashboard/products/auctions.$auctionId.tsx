@@ -262,7 +262,7 @@ function DashboardAuctionDetailRoute() {
 			<div className="p-6 space-y-3">
 				<p className="text-red-600">{auctionQuery.error instanceof Error ? auctionQuery.error.message : 'Auction not found'}</p>
 				<Link to="/dashboard/products/auctions">
-					<Button variant="outline">Back to My Auctions</Button>
+					<Button variant="outline">Back to Auctions</Button>
 				</Link>
 			</div>
 		)
