@@ -1,0 +1,437 @@
+import { finalizeEvent, type EventTemplate, type VerifiedEvent } from 'nostr-tools/pure'
+import { Relay, useWebSocketImplementation } from 'nostr-tools/relay'
+import { hexToBytes } from '@noble/hashes/utils'
+import WebSocket from 'ws'
+import { devUser1, devUser2, WALLETED_USER_LUD16 } from '../../src/lib/fixtures'
+import { RELAY_URL, TEST_APP_PRIVATE_KEY, TEST_APP_PUBLIC_KEY } from '../test-config'
+import type { NDKEvent } from '@nostr-dev-kit/ndk'
+
+// --- Helper to sign and publish ---
+
+export async function publish(relay: Relay, skHex: string, template: EventTemplate) {
+	const skBytes = hexToBytes(skHex)
+	const event = finalizeEvent(template, skBytes)
+	await relay.publish(event)
+	return event
+}
+
+// --- Seeding functions ---
+
+export async function seedBase(relay: Relay) {
+	console.log('  Seeding: base (user profiles)')
+	await seedUserProfile(relay, devUser1, 'TestMerchant', 'Test Merchant')
+	await seedUserProfile(relay, devUser2, 'TestBuyer', 'Test Buyer')
+	await seedUserProfile(relay, { sk: TEST_APP_PRIVATE_KEY, pk: TEST_APP_PUBLIC_KEY }, 'TestApp', 'Test App')
+
+	// Add devUser1 to admin list so they can access app-settings routes
+	await publish(relay, TEST_APP_PRIVATE_KEY, {
+		kind: 30000,
+		created_at: Math.floor(Date.now() / 1000),
+		content: '',
+		tags: [
+			['d', 'admins'],
+			['p', TEST_APP_PUBLIC_KEY],
+			['p', devUser1.pk],
+		],
+	})
+	console.log('    Published admin list with devUser1')
+}
+
+export async function seedMerchant(relay: Relay) {
+	console.log('  Seeding: merchant (shipping, payments, products)')
+
+	await seedShippingOption(relay, devUser1.sk, {
+		title: 'Worldwide Standard',
+		price: '5000',
+		currency: 'sats',
+		service: 'standard',
+		countries: ['US', 'CA', 'GB', 'DE'],
+	})
+
+	await seedShippingOption(relay, devUser1.sk, {
+		title: 'Digital Delivery',
+		price: '0',
+		currency: 'sats',
+		service: 'digital',
+		countries: [],
+	})
+
+	await seedShippingOption(relay, devUser1.sk, {
+		title: 'Local Pickup - Bitcoin Store',
+		price: '0',
+		currency: 'sats',
+		service: 'pickup',
+		countries: [],
+		pickupAddress: {
+			street: '456 Satoshi Lane',
+			city: 'Austin',
+			state: 'TX',
+			postalCode: '78701',
+			country: 'US',
+		},
+	})
+
+	await seedPaymentDetail(relay, devUser1.sk, TEST_APP_PUBLIC_KEY, {
+		method: 'LIGHTNING_NETWORK',
+		detail: WALLETED_USER_LUD16,
+	})
+
+	// Seed V4V shares with 10% going to the app (community share)
+	await seedV4VShares(relay, devUser1.sk, [['zap', TEST_APP_PUBLIC_KEY, '0.1']])
+
+	const user1ShippingRefs = [`30406:${devUser1.pk}:worldwide-standard`, `30406:${devUser1.pk}:digital-delivery`]
+
+	await seedProduct(relay, devUser1.sk, {
+		title: 'Bitcoin Hardware Wallet',
+		description: 'Secure cold storage for your sats. Keep your bitcoin safe with this hardware wallet.',
+		price: '50000',
+		currency: 'SATS',
+		status: 'on-sale',
+		category: 'Bitcoin',
+		stock: '10',
+		shippingOptions: user1ShippingRefs,
+	})
+
+	await seedProduct(relay, devUser1.sk, {
+		title: 'Nostr T-Shirt',
+		description: 'Show your love for the Nostr protocol with this comfortable cotton t-shirt.',
+		price: '15000',
+		currency: 'SATS',
+		status: 'on-sale',
+		category: 'Clothing',
+		stock: '10',
+		shippingOptions: user1ShippingRefs,
+	})
+
+	// Digital-only product
+	await seedProduct(relay, devUser1.sk, {
+		title: 'Bitcoin E-Book',
+		description: 'A comprehensive guide to Bitcoin. Digital delivery - no shipping required.',
+		price: '5000',
+		currency: 'SATS',
+		status: 'on-sale',
+		category: 'Bitcoin',
+		stock: '100',
+		shippingOptions: [`30406:${devUser1.pk}:digital-delivery`],
+	})
+
+	// Pickup-only product
+	await seedProduct(relay, devUser1.sk, {
+		title: 'Bitcoin Conference Ticket',
+		description: 'Attend the local Bitcoin meetup. Pick up your ticket at the Bitcoin Store.',
+		price: '10000',
+		currency: 'SATS',
+		status: 'on-sale',
+		category: 'Bitcoin',
+		stock: '50',
+		shippingOptions: [`30406:${devUser1.pk}:local-pickup---bitcoin-store`],
+	})
+}
+
+export async function seedMarketplace(relay: Relay) {
+	console.log('  Seeding: marketplace (second merchant)')
+
+	await seedShippingOption(relay, devUser2.sk, {
+		title: 'Express Shipping',
+		price: '10000',
+		currency: 'sats',
+		service: 'express',
+		countries: ['US'],
+	})
+
+	await seedShippingOption(relay, devUser2.sk, {
+		title: 'Digital Delivery',
+		price: '0',
+		currency: 'sats',
+		service: 'digital',
+		countries: [],
+	})
+
+	await seedPaymentDetail(relay, devUser2.sk, TEST_APP_PUBLIC_KEY, {
+		method: 'LIGHTNING_NETWORK',
+		detail: WALLETED_USER_LUD16,
+	})
+
+	// Seed V4V shares for second merchant (10% to app, matching devUser1)
+	await seedV4VShares(relay, devUser2.sk, [['zap', TEST_APP_PUBLIC_KEY, '0.1']])
+
+	await seedProduct(relay, devUser2.sk, {
+		title: 'Lightning Node Setup Guide',
+		description: 'Comprehensive guide to setting up your own Lightning Network node.',
+		price: '25000',
+		currency: 'SATS',
+		status: 'on-sale',
+		category: 'Bitcoin',
+		stock: '10',
+		shippingOptions: [`30406:${devUser2.pk}:express-shipping`, `30406:${devUser2.pk}:digital-delivery`],
+	})
+}
+
+// --- Low-level seed helpers ---
+
+export async function seedUserProfile(
+	relay: Relay,
+	user: { sk: string; pk: string },
+	name: string,
+	displayName: string,
+): Promise<VerifiedEvent> {
+	const event = await publish(relay, user.sk, {
+		kind: 0,
+		created_at: Math.floor(Date.now() / 1000),
+		content: JSON.stringify({
+			name,
+			display_name: displayName,
+			about: `Test user ${name}`,
+			lud16: WALLETED_USER_LUD16,
+		}),
+		tags: [],
+	})
+	console.log(`    Published profile: ${name}`)
+	return event
+}
+
+export async function seedShippingOption(
+	relay: Relay,
+	skHex: string,
+	opts: {
+		title: string
+		price: string
+		currency: string
+		service: string
+		countries: string[]
+		pickupAddress?: { street: string; city: string; state?: string; postalCode?: string; country?: string }
+	},
+): Promise<VerifiedEvent> {
+	const pickupTags: string[][] = []
+	if (opts.pickupAddress) {
+		if (opts.pickupAddress.street) pickupTags.push(['pickup-street', opts.pickupAddress.street])
+		if (opts.pickupAddress.city) pickupTags.push(['pickup-city', opts.pickupAddress.city])
+		if (opts.pickupAddress.state) pickupTags.push(['pickup-state', opts.pickupAddress.state])
+		if (opts.pickupAddress.postalCode) pickupTags.push(['pickup-postal-code', opts.pickupAddress.postalCode])
+		if (opts.pickupAddress.country) pickupTags.push(['pickup-country', opts.pickupAddress.country])
+		// Legacy combined address
+		const combined = [
+			opts.pickupAddress.street,
+			opts.pickupAddress.city,
+			opts.pickupAddress.state,
+			opts.pickupAddress.postalCode,
+			opts.pickupAddress.country,
+		]
+			.filter(Boolean)
+			.join(', ')
+		if (combined) pickupTags.push(['pickup-address', combined])
+	}
+
+	const event = await publish(relay, skHex, {
+		kind: 30406,
+		created_at: Math.floor(Date.now() / 1000),
+		content: `Shipping: ${opts.title}`,
+		tags: [
+			['d', opts.title.toLowerCase().replace(/\s+/g, '-')],
+			['title', opts.title],
+			['price', opts.price, opts.currency],
+			['service', opts.service],
+			...opts.countries.map((c) => ['country', c]),
+			...pickupTags,
+		],
+	})
+	console.log(`    Published shipping: ${opts.title}`)
+	return event
+}
+
+export async function seedPaymentDetail(
+	relay: Relay,
+	skHex: string,
+	appPubkey: string,
+	opts: { method: string; detail: string },
+): Promise<VerifiedEvent> {
+	const event = await publish(relay, skHex, {
+		kind: 30078,
+		created_at: Math.floor(Date.now() / 1000),
+		content: JSON.stringify({
+			payment_method: opts.method,
+			payment_detail: opts.detail,
+			stall_id: null,
+			stall_name: 'General',
+			is_default: true,
+		}),
+		tags: [
+			['d', `payment-${Date.now()}`],
+			['l', 'payment_detail'],
+			['p', appPubkey],
+		],
+	})
+	console.log(`    Published payment: ${opts.method}`)
+	return event
+}
+
+export async function seedProduct(
+	relay: Relay,
+	skHex: string,
+	opts: {
+		title: string
+		description: string
+		price: string
+		currency: string
+		status: string
+		category: string
+		stock?: string
+		shippingOptions?: string[]
+	},
+): Promise<VerifiedEvent> {
+	const dTag = opts.title.toLowerCase().replace(/\s+/g, '-')
+	const event = await publish(relay, skHex, {
+		kind: 30402,
+		created_at: Math.floor(Date.now() / 1000),
+		content: opts.description,
+		tags: [
+			['d', dTag],
+			['title', opts.title],
+			['price', opts.price, opts.currency],
+			['status', opts.status],
+			['t', opts.category],
+			['image', 'https://cdn.satellite.earth/f8f1513ec22f966626dc05342a3bb1f36096d28dd0e6eeae640b5df44f2c7c84.png'],
+			...(opts.stock ? [['stock', opts.stock]] : []),
+			...(opts.shippingOptions ? opts.shippingOptions.map((ref) => ['shipping_option', ref]) : []),
+		],
+	})
+
+	console.log(`    Published product: ${opts.title}`)
+	return event
+}
+
+export async function seedComment(
+	relay: Relay,
+	skHex: string,
+	opts: {
+		content: string
+		// Root scope (what we're commenting on)
+		rootEventId: string
+		rootEventPubkey: string
+		rootKind: number // e.g., 30402 for products
+		// Parent scope (for replies - optional for top-level comments)
+		parentEventId?: string
+		parentEventPubkey?: string
+		parentKind?: number
+		// Relay hints
+		relayUrl?: string
+	},
+): Promise<VerifiedEvent> {
+	const tags: string[][] = []
+
+	// === ROOT SCOPE TAGS (uppercase) ===
+
+	// Root event reference (E tag for event IDs)
+	// For replaceable/addressable events like products (kind 30023/30402), use A tag
+	if (opts.rootKind === 30402) {
+		// Products are addressable events - use A tag
+		const dTag = opts.rootEventId.split(':')[2] || opts.rootEventId
+		tags.push(['A', `$${opts.rootKind}:$${opts.rootEventPubkey}:${dTag}`, opts.relayUrl || '', opts.rootEventPubkey])
+	} else {
+		// Regular events - use E tag
+		tags.push(['E', opts.rootEventId, opts.relayUrl || '', opts.rootEventPubkey])
+	}
+
+	// Root kind
+	tags.push(['K', opts.rootKind.toString()])
+
+	// Root author pubkey
+	tags.push(['P', opts.rootEventPubkey, opts.relayUrl || ''])
+
+	// === PARENT SCOPE TAGS (lowercase) ===
+
+	// For top-level comments, parent = root
+	// For replies, parent = the comment we're replying to
+
+	if (opts.parentEventId && opts.parentEventPubkey && opts.parentKind) {
+		// Reply to another comment
+		if (opts.parentKind === 1111) {
+			// Replying to a comment - use E tag for the comment event
+			tags.push(['e', opts.parentEventId, opts.relayUrl || '', opts.parentEventPubkey])
+		} else {
+			// Replying to the root event directly
+			if (opts.parentKind === 30402) {
+				// Addressable event
+				const dTag = opts.parentEventId.split(':')[2] || opts.parentEventId
+				tags.push(['a', `$${opts.parentKind}:$${opts.parentEventPubkey}:${dTag}`, opts.relayUrl || '', opts.parentEventPubkey])
+			} else {
+				tags.push(['e', opts.parentEventId, opts.relayUrl || '', opts.parentEventPubkey])
+			}
+		}
+
+		// Parent kind
+		tags.push(['k', opts.parentKind.toString()])
+
+		// Parent author pubkey
+		tags.push(['p', opts.parentEventPubkey, opts.relayUrl || ''])
+	} else {
+		// Top-level comment - parent = root
+		if (opts.rootKind === 30402) {
+			const dTag = opts.rootEventId.split(':')[2] || opts.rootEventId
+			tags.push(['a', `$${opts.rootKind}:$${opts.rootEventPubkey}:${dTag}`, opts.relayUrl || '', opts.rootEventPubkey])
+		} else {
+			tags.push(['e', opts.rootEventId, opts.relayUrl || '', opts.rootEventPubkey])
+		}
+
+		// Parent kind (same as root for top-level)
+		tags.push(['k', opts.rootKind.toString()])
+
+		// Parent author pubkey (same as root for top-level)
+		tags.push(['p', opts.rootEventPubkey, opts.relayUrl || ''])
+	}
+
+	const event = await publish(relay, skHex, {
+		kind: 1111,
+		created_at: Math.floor(Date.now() / 1000),
+		content: opts.content,
+		tags,
+	})
+
+	console.log(`    Published comment: "$${opts.content.substring(0, 30)}$${opts.content.length > 30 ? '...' : ''}"`)
+	return event
+}
+
+export async function seedV4VShares(relay: Relay, skHex: string, shares: string[][] = []): Promise<VerifiedEvent> {
+	const event = await publish(relay, skHex, {
+		kind: 30078,
+		created_at: Math.floor(Date.now() / 1000),
+		content: JSON.stringify(shares),
+		tags: [
+			['d', 'v4v-default'],
+			['l', 'v4v_share'],
+		],
+	})
+	const pct = shares.length > 0 ? shares.reduce((sum, s) => sum + parseFloat(s[2] || '0') * 100, 0) : 0
+	console.log(`    Published V4V shares (${pct}% to community)`)
+
+	return event
+}
+
+/**
+ * Reset V4V shares for a user by publishing an empty Kind 30078 event.
+ * This replaces any existing V4V shares so the V4V setup dialog will appear
+ * during product creation.
+ */
+export async function resetV4VForUser(skHex: string): Promise<void> {
+	const relay = await Relay.connect(RELAY_URL)
+	try {
+		await seedV4VShares(relay, skHex)
+	} finally {
+		relay.close()
+	}
+}
+
+/**
+ * Seed V4V shares with specific recipients for a user.
+ * Each recipient is a tuple of [pubkey, percentage] where percentage is a
+ * decimal fraction (e.g. 0.1 for 10%).
+ */
+export async function seedV4VWithRecipients(skHex: string, recipients: Array<{ pubkey: string; percentage: number }>): Promise<void> {
+	const relay = await Relay.connect(RELAY_URL)
+	try {
+		const shares = recipients.map((r) => ['zap', r.pubkey, String(r.percentage)])
+		await seedV4VShares(relay, skHex, shares)
+	} finally {
+		relay.close()
+	}
+}
