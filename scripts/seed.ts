@@ -91,7 +91,7 @@ const APP_PUBKEY = getPublicKey(hexToBytes(APP_PRIVATE_KEY))
 const ndk = ndkActions.initialize([RELAY_URL])
 const devUsers = [devUser1, devUser2, devUser3, devUser4, devUser5]
 const QUICK_END_AUCTIONS_PER_USER = 1
-const QUICK_END_SECONDS = 80
+const QUICK_END_SECONDS = 120
 
 function setTagValue(tags: string[][], tagName: string, value: string) {
 	const tag = tags.find((currentTag) => currentTag[0] === tagName)

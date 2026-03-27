@@ -157,7 +157,7 @@ function DashboardInnerComponent() {
 								<div className="flex items-start gap-3">
 									<span className="text-2xl">🔨</span>
 									<div className="text-left">
-										<div className="font-semibold">My Auctions</div>
+										<div className="font-semibold">Auctions</div>
 										<div className="text-xs text-muted-foreground">Manage your auction listings</div>
 									</div>
 								</div>
