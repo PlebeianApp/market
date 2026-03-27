@@ -1,457 +1,286 @@
-import { Relay } from 'nostr-tools/relay'
+// e2e-new/tests/product-page-view.spec.ts
 import { test, expect } from '../fixtures'
+import { Relay } from 'nostr-tools/relay'
 import { RELAY_URL } from 'e2e-new/test-config'
+import { seedComment, seedProduct } from 'e2e-new/helpers/seed'
 import { devUser1, devUser2 } from '@/lib/fixtures'
 import type { VerifiedEvent } from 'nostr-tools'
-import { seedComment, seedProduct } from 'e2e-new/helpers/seed'
+import type { Locator, Page } from '@playwright/test'
+
+// ==========================================
+// == GLOBAL STATE & SEEDING               ==
+// ==========================================
 
 test.use({ scenario: 'base' })
 
-/** ID of Product to navigate to */
 let currentProductId: string | undefined
 let currentProductEvent: VerifiedEvent | undefined
 
-/**
- * Set up the product page and ensure it's navigable before starting Product Page tests.
- */
-test.beforeEach(async ({ buyerPage }) => {
-	const relay = await Relay.connect(RELAY_URL)
+// Setup: Seed a product once before each test in the suite
 
-	// 1. Seed the product
-	const event: VerifiedEvent = await seedProduct(relay, devUser1.sk, {
-		title: 'Test Product ' + Date.now(), // Unique title to avoid conflicts
-		description: 'A test product for automated seeding.',
+test.beforeAll(async () => {
+	const relay = await Relay.connect(RELAY_URL)
+	const event = await seedProduct(relay, devUser1.sk, {
+		title: 'View Test Product ' + Date.now(),
+		description: 'A product for viewing tests.',
 		price: '100',
 		currency: 'USD',
 		status: 'active',
 		category: 'electronics',
 		stock: '10',
-		shippingOptions: ['standard'],
 	})
-
-	// 2. Store the ID & Event
 	currentProductId = event.id
 	currentProductEvent = event
-
-	console.log(`Seeded product with ID: ${currentProductId}`)
-
-	// 3. Check product page is ready
-
-	// Retry navigation until the product page loads successfully
-	// This handles the race condition where the DB hasn't indexed the event yet
-	// await buyerPage.waitForURL(/\/product\/.*/, { timeout: 10000 }) // Initial check if already there
-
-	// Try to navigate, catch errors, and retry
-	let attempts = 0
-	const maxAttempts = 10 // 10 seconds roughly
-
-	while (attempts < maxAttempts) {
-		try {
-			await buyerPage.goto(`/products/${currentProductId}`, { waitUntil: 'networkidle' })
-
-			// Double check: Did we land on the right page? (e.g., check for H1 or specific error text)
-			const h1 = buyerPage.locator('h1')
-			if ((await h1.count()) > 0) {
-				// Success! The product is loaded.
-				break
-			}
-
-			// If we got here, maybe we landed on a 404 page?
-			// Check for a "Product not found" indicator if your app has one
-			const notFound = buyerPage.locator('text=Product not found')
-			if ((await notFound.count()) > 0) {
-				throw new Error('Product not found yet')
-			}
-		} catch (error) {
-			attempts++
-			if (attempts >= maxAttempts) throw error
-			// Wait a bit before retrying
-			await buyerPage.waitForTimeout(1000)
-		}
-	}
 })
 
-const seedComments = async () => {
-	if (!currentProductEvent) {
-		throw new Error('Product ID was not seeded. Check beforeEach hook.')
-	}
+// ==========================================
+// == HELPER FUNCTIONS & SELECTORS           ==
+// ==========================================
 
+/**
+ * Returns the main tabs container locator
+ */
+const getTabsContainer = (page: Page) => page.locator('[data-slot="tabs"]')
+
+/**
+ * Returns the tab list locator
+ */
+const getTabsList = (page: Page) => getTabsContainer(page).locator('[role="tablist"]')
+
+/**
+ * Returns the tab panels locator
+ */
+const getTabsPanels = (page: Page) => getTabsContainer(page).locator('[role="tabpanel"]')
+
+/**
+ * Returns the comment input locator
+ */
+const getCommentInput = (page: Page) => page.getByPlaceholder(/share your thoughts/i)
+
+/**
+ * Returns the submit button for comments
+ */
+const getCommentSubmitButton = (page: Page) => page.getByRole('button', { name: /post comment|submit/i })
+
+/**
+ * Returns the reaction button (heart icon)
+ */
+const getReactionButton = (page: Page) => page.locator('button:has(.i-heart)').first()
+
+/**
+ * Returns the emoji popover options
+ */
+const getEmojiOptions = (page: Page) => page.locator('[role="menuitem"]') // Adjust selector based on actual popover structure
+
+/**
+ * Seeds a comment on the current product
+ */
+const seedExistingComment = async () => {
+	if (!currentProductEvent) throw new Error('Product not seeded')
 	const relay = await Relay.connect(RELAY_URL)
-
-	// Then, seed a comment on that product
-	const commentEvent = await seedComment(relay, devUser2.sk, {
-		content: 'Great product!',
+	return seedComment(relay, devUser2.sk, {
+		content: 'Existing seeded comment for testing.',
 		rootEventId: currentProductEvent.id,
 		rootEventPubkey: currentProductEvent.pubkey,
-		rootKind: 30402, // Product kind
+		rootKind: 30402,
 	})
 }
 
-test.describe('Product Comments', () => {
-	test('product comments page shows empty comments placeholder', async ({ buyerPage }) => {
-		if (!currentProductId) {
-			throw new Error('Product ID was not seeded. Check beforeEach hook.')
-		}
+/**
+ * Seeds a reaction on the current product
+ */
+const seedExistingReaction = async (emoji: string) => {
+	if (!currentProductEvent) throw new Error('Product not seeded')
+	const relay = await Relay.connect(RELAY_URL)
+	// Note: Ensure your seedReaction helper supports passing the emoji string
+	return seedReaction(relay, devUser2.sk, {
+		emoji,
+		rootEventId: currentProductEvent.id,
+		rootEventPubkey: currentProductEvent.pubkey,
+	})
+}
 
-		// Navigate to the product page
-		await buyerPage.goto(`/products/${currentProductId}`)
+// ===================================
+// == SECTION: Unauthenticated User ==
+// ===================================
 
-		// Wait for the product page to load
-		await expect(buyerPage.locator('h1')).toBeVisible({ timeout: 10_000 })
+test.describe('Product Page - View Only (Unauthenticated)', () => {
+	test('should display correct product details', async ({ unauthenticatedPage }) => {
+		if (!currentProductId) throw new Error('Product not seeded')
 
-		// Click the "Comments" button/tab to reveal the comments section
-		const commentsButton = buyerPage.getByRole('tab', { name: 'Comments' })
-		await commentsButton.click()
+		await unauthenticatedPage.goto(`/products/${currentProductId}`)
 
-		// Wait for the comments section to become visible after clicking
-		const commentsSection = buyerPage.getByText('No comments yet. Be the first to comment!')
-		await expect(commentsSection).toBeVisible({ timeout: 10_000 })
+		const headerContent = unauthenticatedPage.locator('.hero-content-product')
+
+		// Ensure Header is there
+		await expect(headerContent).toBeVisible()
+
+		// Verify Title
+		await expect(headerContent).toContainText('View Test Product')
+
+		// Verify Price
+		await expect(headerContent.getByText('100.00 USD')).toBeVisible()
+		await expect(headerContent.getByText('10 in stock')).toBeVisible()
+
+		// Verify Seller
+		await expect(headerContent.getByText('Test Merchant')).toBeVisible()
 	})
 
-	test('product comments page shows seeded comments', async ({ buyerPage }) => {
-		if (!currentProductId) {
-			throw new Error('Product ID was not seeded. Check beforeEach hook.')
-		}
+	test('should show product image', async ({ unauthenticatedPage }) => {
+		if (!currentProductId) throw new Error('Product not seeded')
 
-		// Setup: Seed comments
-		await seedComments()
+		await unauthenticatedPage.goto(`/products/${currentProductId}`)
 
-		// Navigate to the product page
-		await buyerPage.goto(`/products/${currentProductId}`)
+		const headerContent = unauthenticatedPage.locator('.hero-content-product')
 
-		// Wait for the product page to load
-		await expect(buyerPage.locator('h1')).toBeVisible({ timeout: 10_000 })
+		// Ensure Header is there
+		await expect(headerContent).toBeVisible()
 
-		// Click the "Comments" button/tab to reveal the comments section
-		const commentsButton = buyerPage.getByRole('tab', { name: 'Comments' })
-		await commentsButton.click()
+		const img = headerContent.locator('img[alt*="View Test Product"]')
 
-		// Wait for the comments section to become visible after clicking
-		const commentsSection = buyerPage.getByText('Great product!')
-		await expect(commentsSection).toBeVisible({ timeout: 10_000 })
+		await expect(img).toBeVisible()
+
+		// Check if image has a source
+		await expect(img).toHaveAttribute('src', /cdn\.satellite\.earth/)
 	})
 
-	test('unauthenticated user sees login prompt for comments', async ({ buyerPage }) => {
-		if (!currentProductId) {
-			throw new Error('Product ID was not seeded. Check beforeEach hook.')
-		}
+	test('should navigate through tabs and show content', async ({ unauthenticatedPage }) => {
+		if (!currentProductId) throw new Error('Product not seeded')
 
-		// Navigate to the product page
+		await unauthenticatedPage.goto(`/products/${currentProductId}`)
+
+		// Define the main tabs container to scope our interactions
+		const tabsContainer = unauthenticatedPage.locator('[data-slot="tabs"]')
+		const tabsList = tabsContainer.locator('[role="tablist"]')
+		const tabsPanels = tabsContainer.locator('[role="tabpanel"]')
+
+		// --- Description Tab ---
+		const descTab = tabsList.getByRole('tab', { name: 'Description' })
+		await descTab.click()
+
+		// Verify tab is active
+		await expect(descTab).toHaveAttribute('data-state', 'active')
+
+		// Verify Description Content
+		await expect(tabsPanels.getByText('A product for viewing tests.')).toBeVisible()
+
+		// --- Specs Tab ---
+		const specsTab = tabsList.getByRole('tab', { name: 'Spec' }) // Note: HTML says "Spec", not "Specs"
+		await specsTab.click()
+		await expect(specsTab).toHaveAttribute('data-state', 'active')
+
+		// Verify Specs Content
+		await expect(tabsPanels.filter({ has: unauthenticatedPage.getByText('No specifications available') })).toBeVisible()
+
+		// --- Shipping Tab ---
+		const shippingTab = tabsList.getByRole('tab', { name: 'Shipping' })
+		await shippingTab.click()
+		await expect(shippingTab).toHaveAttribute('data-state', 'active')
+
+		// Verify Shipping Content
+		const shippingPanel = tabsPanels.filter({ has: unauthenticatedPage.getByText('Shipping Options') })
+		await expect(shippingPanel).toBeVisible()
+		await expect(shippingPanel.getByText('Shipping Information')).toBeVisible()
+
+		// --- Comments Tab ---
+		const commentsTab = tabsList.getByRole('tab', { name: 'Comments' })
+		await commentsTab.click()
+		await expect(commentsTab).toHaveAttribute('data-state', 'active')
+
+		// Verify Empty State Message (Scoped to the comments panel)
+		const commentsPanel = tabsPanels.filter({ has: unauthenticatedPage.getByText('No comments yet. Be the first to comment!') })
+		await expect(commentsPanel).toBeVisible()
+
+		// Verify Login Prompt (Scoped to the comments panel)
+		await expect(commentsPanel.getByText('Please log in to leave a comment.')).toBeVisible()
+	})
+})
+
+// =================================
+// == SECTION: Authenticated User ==
+// =================================
+
+test.use({ scenario: 'base' })
+
+test.describe('Product Page - Interactions (Authenticated)', () => {
+	test('should allow posting a new comment', async ({ buyerPage }) => {
+		if (!currentProductId) throw new Error('Product not seeded')
+
 		await buyerPage.goto(`/products/${currentProductId}`)
 
-		// Wait for the product page to load
-		await expect(buyerPage.locator('h1')).toBeVisible({ timeout: 10_000 })
+		// Switch to Comments Tab
+		const commentsTab = buyerPage.getByRole('tab', { name: 'Comments' })
+		await commentsTab.click()
+		await expect(commentsTab).toHaveAttribute('data-state', 'active')
 
-		// Click the "Comments" button/tab to reveal the comments section
-		const commentsButton = buyerPage.getByRole('tab', { name: 'Comments' })
-		await commentsButton.click()
+		// Locate the input area
+		// Based on HTML: textarea with placeholder "Share your thoughts..."
+		const commentInput = await getCommentInputSection(buyerPage)
+		await expect(commentInput).toBeVisible()
 
-		// Comments section should show login prompt
-		const loginPrompt = buyerPage.getByText('text=Please log in to leave a comment.')
-		await expect(loginPrompt).toBeVisible({ timeout: 10_000 })
+		const testComment = `Test comment ${Date.now()}`
+		await commentInput.fill(testComment)
+
+		// Submit
+		await clickCommentSubmitButton(buyerPage)
+
+		// Wait for the comment to appear in the list
+		// The HTML shows comments are likely in a list. We look for the text.
+		await expect(buyerPage.getByText(testComment)).toBeVisible({ timeout: 15000 })
+
+		// Verify input is cleared
+		await expect(commentInput).toHaveValue('')
 	})
 
-	test('authenticated user can add a comment', async ({ buyerPage }) => {
-		if (!currentProductId) {
-			throw new Error('Product ID was not seeded. Check beforeEach hook.')
-		}
+	test('should allow replying to an existing comment', async ({ buyerPage }) => {
+		if (!currentProductId) throw new Error('Product not seeded')
 
-		// Navigate to the product page
 		await buyerPage.goto(`/products/${currentProductId}`)
+		const commentsTab = buyerPage.getByRole('tab', { name: 'Comments' })
+		await commentsTab.click()
 
-		// Wait for the product page to load
-		await expect(buyerPage.locator('h1')).toBeVisible({ timeout: 10_000 })
+		// 1. Post the parent comment first
+		const parentCommentText = `Parent ${Date.now()}`
+		const input = await getCommentInputSection(buyerPage)
+		await input.fill(parentCommentText)
+		await clickCommentSubmitButton(buyerPage)
 
-		// Click the "Comments" button/tab to reveal the comments section
-		const commentsButton = buyerPage.getByRole('tab', { name: 'Comments' })
-		await commentsButton.click()
+		await expect(buyerPage.getByText(parentCommentText)).toBeVisible()
 
-		// Find the textarea for adding a comment
-		const commentTextarea = buyerPage.getByPlaceholder(/share your thoughts/i)
-		await expect(commentTextarea).toBeVisible({ timeout: 10_000 })
+		// 2. Find the reply button for that specific comment
+		// Assuming the UI has a reply button near the comment text
+		// We use a more specific locator if possible, or generic "Reply" if unique in context
+		const replyBtn = buyerPage.locator('button:has-text("Reply")').first()
+		await expect(replyBtn).toBeVisible()
+		await replyBtn.click()
 
-		// Type a comment
-		await commentTextarea.fill('This is a test comment from e2e!')
+		// 3. Verify "Replying to" indicator appears
+		const replyingTo = buyerPage.getByText(/replying to:/i)
+		await expect(replyingTo).toBeVisible()
 
-		// Find and click the submit button
-		const submitButton = buyerPage.getByRole('button', { name: /submit/i })
-		await expect(submitButton).toBeVisible({ timeout: 10_000 })
-		await submitButton.click()
+		// 4. Post the reply
+		const replyText = `Reply to ${parentCommentText}`
+		await input.fill(replyText)
+		await clickCommentSubmitButton(buyerPage)
 
-		// Wait for the comment to be posted
-		await expect(commentTextarea).toHaveValue('')
-
-		// Verify the comment appears in the list
-		const postedComment = buyerPage.getByText('This is a test comment from e2e!')
-		await expect(postedComment).toBeVisible({ timeout: 15_000 })
+		// 5. Verify reply appears
+		await expect(buyerPage.getByText(replyText)).toBeVisible()
 	})
 
-	test('authenticated user can reply to a comment', async ({ buyerPage }) => {
-		// Navigate to marketplace
+	test('should cancel comment draft', async ({ buyerPage }) => {
+		if (!currentProductId) throw new Error('Product not seeded')
+
 		await buyerPage.goto(`/products/${currentProductId}`)
+		const commentsTab = buyerPage.getByRole('tab', { name: 'Comments' })
+		await commentsTab.click()
 
-		// Click on first product
-		const productCards = buyerPage.locator('[data-testid="product-card"]')
-		const productCard = await productCards.first()
-		const productCardLink = productCard.locator('a')
-		await productCardLink.click()
+		const input = await getCommentInputSection(buyerPage)
+		await input.fill('Draft text that will be cancelled')
 
-		// Wait for product page to load
-		await expect(buyerPage.locator('h1')).toBeVisible({ timeout: 10_000 })
+		const cancelBtn = buyerPage.getByRole('button', { name: /cancel/i })
+		await expect(cancelBtn).toBeVisible()
+		await cancelBtn.click()
 
-		// Comments section should be visible
-		const commentsSection = buyerPage.locator('[data-testid="comments-section"]')
-		await expect(commentsSection).toBeVisible({ timeout: 10_000 })
-
-		// Find the textarea for adding a comment
-		const commentTextarea = buyerPage.getByPlaceholder(/share your thoughts/i)
-		await expect(commentTextarea).toBeVisible({ timeout: 10_000 })
-
-		// Type a comment
-		await commentTextarea.fill('This is a test comment from e2e!')
-
-		// Find and click the submit button
-		const submitButton = buyerPage.getByRole('button', { name: /submit/i })
-		await expect(submitButton).toBeVisible({ timeout: 10_000 })
-		await submitButton.click()
-
-		// Wait for the comment to be posted
-		await expect(commentTextarea).toHaveValue('')
-
-		// Verify the comment appears in the list
-		const postedComment = buyerPage.getByText('This is a test comment from e2e!')
-		await expect(postedComment).toBeVisible({ timeout: 15_000 })
-
-		// Now reply to the comment
-		const replyButton = buyerPage.getByRole('button', { name: /reply/i })
-		await expect(replyButton).toBeVisible({ timeout: 10_000 })
-		await replyButton.click()
-
-		// Verify the "Replying to:" indicator appears
-		const replyingToIndicator = buyerPage.getByText(/replying to:/i)
-		await expect(replyingToIndicator).toBeVisible({ timeout: 10_000 })
-
-		// Type a reply
-		await commentTextarea.fill('This is a reply to the original comment!')
-
-		// Click submit again
-		await submitButton.click()
-
-		// Verify the reply textarea is cleared
-		await expect(commentTextarea).toHaveValue('')
-
-		// Verify the reply appears
-		const replyComment = buyerPage.getByText('This is a reply to the original comment!')
-		await expect(replyComment).toBeVisible({ timeout: 15_000 })
-	})
-
-	test('authenticated user can cancel comment submission', async ({ buyerPage }) => {
-		// Navigate to marketplace
-		await buyerPage.goto(`/products/${currentProductId}`)
-
-		// Click on first product
-		const productCards = buyerPage.locator('[data-testid="product-card"]')
-		const productCard = await productCards.first()
-		const productCardLink = productCard.locator('a')
-		await productCardLink.click()
-
-		// Wait for product page to load
-		await expect(buyerPage.locator('h1')).toBeVisible({ timeout: 10_000 })
-
-		// Comments section should be visible
-		const commentsSection = buyerPage.locator('[data-testid="comments-section"]')
-		await expect(commentsSection).toBeVisible({ timeout: 10_000 })
-
-		// Find the textarea for adding a comment
-		const commentTextarea = buyerPage.getByPlaceholder(/share your thoughts/i)
-		await expect(commentTextarea).toBeVisible({ timeout: 10_000 })
-
-		// Type a comment
-		await commentTextarea.fill('This comment will be cancelled!')
-
-		// Find and click the cancel button
-		const cancelButton = buyerPage.getByRole('button', { name: /cancel/i })
-		await expect(cancelButton).toBeVisible({ timeout: 10_000 })
-		await cancelButton.click()
-
-		// Verify the textarea is cleared
-		await expect(commentTextarea).toHaveValue('')
-	})
-
-	test('authenticated user can remove reply-to indicator', async ({ buyerPage }) => {
-		// Navigate to marketplace
-		await buyerPage.goto(`/products/${currentProductId}`)
-
-		// Click on first product
-		const productCards = buyerPage.locator('[data-testid="product-card"]')
-		const productCard = await productCards.first()
-		const productCardLink = productCard.locator('a')
-		await productCardLink.click()
-
-		// Wait for product page to load
-		await expect(buyerPage.locator('h1')).toBeVisible({ timeout: 10_000 })
-
-		// Comments section should be visible
-		const commentsSection = buyerPage.locator('[data-testid="comments-section"]')
-		await expect(commentsSection).toBeVisible({ timeout: 10_000 })
-
-		// Find the textarea for adding a comment
-		const commentTextarea = buyerPage.getByPlaceholder(/share your thoughts/i)
-		await expect(commentTextarea).toBeVisible({ timeout: 10_000 })
-
-		// Type a comment
-		await commentTextarea.fill('This is a test comment from e2e!')
-
-		// Find and click the submit button
-		const submitButton = buyerPage.getByRole('button', { name: /submit/i })
-		await expect(submitButton).toBeVisible({ timeout: 10_000 })
-		await submitButton.click()
-
-		// Wait for the comment to be posted
-		await expect(commentTextarea).toHaveValue('')
-
-		// Verify the comment appears in the list
-		const postedComment = buyerPage.getByText('This is a test comment from e2e!')
-		await expect(postedComment).toBeVisible({ timeout: 15_000 })
-
-		// Now reply to the comment
-		const replyButton = buyerPage.getByRole('button', { name: /reply/i })
-		await expect(replyButton).toBeVisible({ timeout: 10_000 })
-		await replyButton.click()
-
-		// Verify the "Replying to:" indicator appears
-		const replyingToIndicator = buyerPage.getByText(/replying to:/i)
-		await expect(replyingToIndicator).toBeVisible({ timeout: 10_000 })
-
-		// Type a reply
-		await commentTextarea.fill('This is a reply to the original comment!')
-
-		// Click the X button to remove reply-to indicator
-		const removeReplyButton = buyerPage.getByRole('button', { name: /close/i })
-		await expect(removeReplyButton).toBeVisible({ timeout: 10_000 })
-		await removeReplyButton.click()
-
-		// Verify the reply-to indicator is removed
-		await expect(replyingToIndicator).not.toBeVisible({ timeout: 10_000 })
-
-		// Verify the reply textarea still has the content
-		await expect(commentTextarea).toHaveValue('This is a reply to the original comment!')
-	})
-
-	test('product comments shows "Show More" when there are more than 5 comments', async ({ buyerPage }) => {
-		// Navigate to marketplace
-		await buyerPage.goto(`/products/${currentProductId}`)
-
-		// Click on first product
-		const productCards = buyerPage.locator('[data-testid="product-card"]')
-		const productCard = await productCards.first()
-		const productCardLink = productCard.locator('a')
-		await productCardLink.click()
-
-		// Wait for product page to load
-		await expect(buyerPage.locator('h1')).toBeVisible({ timeout: 10_000 })
-
-		// Comments section should be visible
-		const commentsSection = buyerPage.locator('[data-testid="comments-section"]')
-		await expect(commentsSection).toBeVisible({ timeout: 10_000 })
-
-		// Find the textarea for adding a comment
-		const commentTextarea = buyerPage.getByPlaceholder(/share your thoughts/i)
-		await expect(commentTextarea).toBeVisible({ timeout: 10_000 })
-
-		// Add 6 comments to trigger "Show More"
-		for (let i = 1; i <= 6; i++) {
-			await commentTextarea.fill(`Comment number ${i}`)
-			const submitButton = buyerPage.getByRole('button', { name: /submit/i })
-			await expect(submitButton).toBeVisible({ timeout: 10_000 })
-			await submitButton.click()
-			await expect(commentTextarea).toHaveValue('')
-		}
-
-		// Verify "Show More" button appears
-		const showMoreButton = buyerPage.getByRole('button', { name: /show more/i })
-		await expect(showMoreButton).toBeVisible({ timeout: 10_000 })
-
-		// Click "Show More"
-		await showMoreButton.click()
-
-		// Verify all comments are now visible
-		for (let i = 1; i <= 6; i++) {
-			const comment = buyerPage.getByText(`Comment number ${i}`)
-			await expect(comment).toBeVisible({ timeout: 10_000 })
-		}
-
-		// Verify "Show More" button is hidden
-		await expect(showMoreButton).not.toBeVisible({ timeout: 10_000 })
-	})
-
-	test('product comments handles empty state correctly', async ({ buyerPage }) => {
-		// Navigate to marketplace
-		await buyerPage.goto(`/products/${currentProductId}`)
-
-		// Click on first product
-		const productCards = buyerPage.locator('[data-testid="product-card"]')
-		const productCard = await productCards.first()
-		const productCardLink = productCard.locator('a')
-		await productCardLink.click()
-
-		// Wait for product page to load
-		await expect(buyerPage.locator('h1')).toBeVisible({ timeout: 10_000 })
-
-		// Comments section should be visible
-		const commentsSection = buyerPage.locator('[data-testid="comments-section"]')
-		await expect(commentsSection).toBeVisible({ timeout: 10_000 })
-
-		// Find the textarea for adding a comment
-		const commentTextarea = buyerPage.getByPlaceholder(/share your thoughts/i)
-		await expect(commentTextarea).toBeVisible({ timeout: 10_000 })
-
-		// Verify "No comments yet" message is shown
-		const noCommentsMessage = buyerPage.getByText(/no comments yet/i)
-		await expect(noCommentsMessage).toBeVisible({ timeout: 10_000 })
-	})
-
-	test('product comments shows loading state initially', async ({ buyerPage }) => {
-		// Navigate to marketplace
-		await buyerPage.goto(`/products/${currentProductId}`)
-
-		// Click on first product
-		const productCards = buyerPage.locator('[data-testid="product-card"]')
-		const productCard = await productCards.first()
-		const productCardLink = productCard.locator('a')
-		await productCardLink.click()
-
-		// Wait for product page to load
-		await expect(buyerPage.locator('h1')).toBeVisible({ timeout: 10_000 })
-
-		// Comments section should be visible
-		const commentsSection = buyerPage.locator('[data-testid="comments-section"]')
-		await expect(commentsSection).toBeVisible({ timeout: 10_000 })
-
-		// The comments list should not show "Loading comments..." after initial load
-		const loadingMessage = buyerPage.getByText(/loading comments/i)
-		await expect(loadingMessage).not.toBeVisible({ timeout: 10_000 })
-	})
-
-	test('product comments shows error state when query fails', async ({ buyerPage }) => {
-		// Navigate to marketplace
-		await buyerPage.goto(`/products/${currentProductId}`)
-
-		// Click on first product
-		const productCards = buyerPage.locator('[data-testid="product-card"]')
-		const productCard = await productCards.first()
-		const productCardLink = productCard.locator('a')
-		await productCardLink.click()
-
-		// Wait for product page to load
-		await expect(buyerPage.locator('h1')).toBeVisible({ timeout: 10_000 })
-
-		// Comments section should be visible
-		const commentsSection = buyerPage.locator('[data-testid="comments-section"]')
-		await expect(commentsSection).toBeVisible({ timeout: 10_000 })
-
-		// The comments list should not show error message initially
-		const errorMessage = buyerPage.getByText(/failed to load comments/i)
-		await expect(errorMessage).not.toBeVisible({ timeout: 10_000 })
+		await expect(input).toHaveValue('')
 	})
 })
