@@ -10,6 +10,7 @@ import { EventSigner } from './EventSigner'
 import { NDKService } from './NDKService'
 import NDK from '@nostr-dev-kit/ndk'
 import { ZAP_RELAYS } from '../lib/constants'
+import type { ZapPurchaseManager, ZapPurchaseEntry } from './ZapPurchaseManager'
 
 export class EventHandler {
 	private static instance: EventHandler
@@ -27,6 +28,9 @@ export class EventHandler {
 	private ndk: NDK | null = null
 	private zapNdk: NDK | null = null
 	private handledZapReceiptIds: Set<string> = new Set()
+
+	// Registered zap purchase managers (vanity URLs, nip05)
+	private purchaseManagers: ZapPurchaseManager<ZapPurchaseEntry>[] = []
 
 	private constructor() {
 		// Initialize with empty managers - components requiring private key will be set up during initialize()
@@ -61,7 +65,10 @@ export class EventHandler {
 		this.eventValidator = new EventValidator(config.appPrivateKey, this.adminManager, this.editorManager, this.bootstrapManager)
 		this.ndkService = new NDKService(this.eventSigner.getAppPubkey(), this.adminManager, this.editorManager, this.bootstrapManager)
 		this.blacklistManager = new BlacklistManagerImpl(this.eventSigner, this.ndkService)
-		this.vanityManager = new VanityManagerImpl(this.eventSigner, this.ndkService)
+		this.vanityManager = new VanityManagerImpl(this.eventSigner)
+
+		// Register all zap purchase managers
+		this.purchaseManagers = [this.vanityManager]
 
 		// Initialize NDK service and load existing data
 		await this.ndkService.initialize(config.relayUrl)
@@ -80,8 +87,8 @@ export class EventHandler {
 			this.vanityManager.setNDK(this.ndk)
 			await this.vanityManager.loadExistingVanityRegistry(this.eventSigner.getAppPubkey())
 
-			// Subscribe to zap receipts for vanity registration (app relay)
-			this.subscribeToVanityZaps(this.ndk, 'App relay')
+			// Subscribe to zap receipts for all purchase managers (app relay)
+			this.subscribeToZapPurchases(this.ndk, 'App relay')
 
 			// Also subscribe on dedicated zap relays; some LSPs do not publish receipts to the app relay.
 			const zapRelayUrls = Array.from(new Set([config.relayUrl, ...ZAP_RELAYS].filter(Boolean)))
@@ -92,11 +99,11 @@ export class EventHandler {
 					this.zapNdk.connect(),
 					new Promise((_, reject) => setTimeout(() => reject(new Error('Zap relay connection timeout')), 15000)),
 				])
-				this.subscribeToVanityZaps(this.zapNdk, 'Zap relays')
+				this.subscribeToZapPurchases(this.zapNdk, 'Zap relays')
 			} catch (error) {
-				console.warn('⚠️ Failed to connect zap relay NDK; vanity zap receipts may not be processed:', error)
-				// Try to subscribe anyway in case some relays connected
-				this.subscribeToVanityZaps(this.zapNdk, 'Zap relays (partial)')
+				console.warn('⚠️ Failed to connect zap relay NDK; zap purchase receipts may not be processed:', error)
+				// Subscribe anyway in case some relays connected
+				this.subscribeToZapPurchases(this.zapNdk, 'Zap relays (partial)')
 			}
 		}
 
@@ -105,9 +112,11 @@ export class EventHandler {
 	}
 
 	/**
-	 * Subscribe to zap receipts for vanity URL registration
+	 * Subscribe to zap receipts for all registered purchase managers.
+	 * Each manager self-filters by its own label tag, so a single subscription
+	 * routes receipts to vanity URLs, badges, NIP-05.
 	 */
-	private subscribeToVanityZaps(ndk: NDK, label: string): void {
+	private subscribeToZapPurchases(ndk: NDK, label: string): void {
 		const appPubkey = this.eventSigner.getAppPubkey()
 
 		// Subscribe to zap receipts where app pubkey is the recipient
@@ -130,13 +139,17 @@ export class EventHandler {
 						this.handledZapReceiptIds.add(event.id)
 					}
 				}
-				await this.vanityManager.handleZapReceipt(event.rawEvent())
+				// Route to all purchase managers; each filters by its own label
+				const raw = event.rawEvent()
+				for (const manager of this.purchaseManagers) {
+					await manager.handleZapReceipt(raw)
+				}
 			} catch (error) {
-				console.error('Error handling vanity zap receipt:', error)
+				console.error('Error handling zap purchase receipt:', error)
 			}
 		})
 
-		console.log(`Subscribed to vanity zap receipts (${label})`)
+		console.log(`Subscribed to zap purchase receipts (${label})`)
 	}
 
 	public handleEvent(event: NostrEvent): NostrEvent | null {
@@ -185,7 +198,6 @@ export class EventHandler {
 		const isSetupEvent = event.kind === 31990 && event.content.includes('"name":')
 		const isAdminListEvent = event.kind === 30000 && event.tags.some((tag) => tag[0] === 'd' && tag[1] === 'admins')
 		const isEditorListEvent = event.kind === 30000 && event.tags.some((tag) => tag[0] === 'd' && tag[1] === 'editors')
-		const isVanityListEvent = event.kind === 30000 && event.tags.some((tag) => tag[0] === 'd' && tag[1] === 'vanity-urls')
 		const isBlacklistEvent = event.kind === 10000
 
 		if (isSetupEvent) {
@@ -196,12 +208,20 @@ export class EventHandler {
 		} else if (isEditorListEvent) {
 			console.log('Editor list event accepted, updating internal editor list')
 			this.editorManager.updateFromEvent(event)
-		} else if (isVanityListEvent) {
-			console.log('Vanity list event accepted, updating vanity registry')
-			await this.vanityManager.handleVanityEvent(event)
 		} else if (isBlacklistEvent) {
 			console.log('Blacklist event accepted, processing blacklist update')
 			await this.blacklistManager.handleBlacklistEvent(event)
+		}
+
+		// Route registry events to matching purchase managers
+		for (const manager of this.purchaseManagers) {
+			if (
+				event.kind === manager.config.registryEventKind &&
+				event.tags.some((tag) => tag[0] === 'd' && tag[1] === manager.config.registryDTag)
+			) {
+				console.log(`Registry event accepted for [${manager.config.registryDTag}]`)
+				await manager.handleRegistryEvent(event)
+			}
 		}
 	}
 
@@ -248,6 +268,21 @@ export class EventHandler {
 			throw new Error('EventHandler is not initialized')
 		}
 		return this.blacklistManager.getBlacklistedPubkeys()
+	}
+
+	/**
+	 * Get a registered purchase manager by its zap label.
+	 * Used by invoice route handlers to delegate to the correct manager.
+	 */
+	public getPurchaseManager(zapLabel: string): ZapPurchaseManager<ZapPurchaseEntry> | undefined {
+		return this.purchaseManagers.find((m) => m.config.zapLabel === zapLabel)
+	}
+
+	/**
+	 * Get the vanity URL purchase manager.
+	 */
+	public getVanityManager(): VanityManagerImpl {
+		return this.vanityManager
 	}
 
 	public getStats() {

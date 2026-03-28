@@ -13,10 +13,9 @@ import { VANITY_PRICING } from '@/server/VanityManager'
 import { AlertCircle, CheckCircle2, Clock, ExternalLink, Copy, Zap, RefreshCw } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { LightningPaymentProcessor } from '@/components/lightning/LightningPaymentProcessor'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { ZAP_RELAYS } from '@/lib/constants'
+import { purchaseVanityForPubkey } from '@/lib/zapPurchase'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/account/vanity-url')({
 	component: VanityUrlComponent,
@@ -180,51 +179,17 @@ function VanityUrlComponent() {
 			return
 		}
 
-		const satsAmount = tier.sats
-		const normalizedVanityName = vanityName.toLowerCase()
-
 		try {
-			// 1. Create zap request event
-			const zapRequest = new NDKEvent(ndk)
-			zapRequest.kind = 9734
-			zapRequest.content = ''
-			zapRequest.tags = [
-				['p', config.appPublicKey],
-				['amount', (satsAmount * 1000).toString()],
-				['L', 'vanity-register'],
-				['vanity', normalizedVanityName],
-				['relays', ...Array.from(new Set([config.appRelay, ...ZAP_RELAYS].filter(Boolean)))],
-			]
-
-			await zapRequest.sign()
-			const invoiceId = `vanity-${normalizedVanityName}-${satsAmount}-${Date.now()}`
-
-			// 2. Request a zap-compatible invoice from the server (avoids LNURL CORS issues in-browser)
-			const invoiceRes = await fetch('/api/vanity/invoice', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					amountSats: satsAmount,
-					vanityName: normalizedVanityName,
-					zapRequest: zapRequest.rawEvent(),
-				}),
-			})
-
-			if (!invoiceRes.ok) {
-				const bodyText = await invoiceRes.text().catch(() => '')
-				throw new Error(bodyText || `Failed to create invoice (${invoiceRes.status})`)
-			}
-
-			const invoiceData = (await invoiceRes.json()) as { pr?: string; error?: string }
-			if (!invoiceData.pr) {
-				throw new Error(invoiceData.error || 'Failed to create invoice')
-			}
+			const { pr, invoiceId } = await purchaseVanityForPubkey(
+				{ ndk, appPubkey: config.appPublicKey, appRelay: config.appRelay },
+				{ name: vanityName, amountSats: tier.sats },
+			)
 
 			setPaymentState({
 				isOpen: true,
-				invoice: invoiceData.pr,
-				amount: satsAmount,
-				invoiceId,
+				invoice: pr,
+				amount: tier.sats,
+				invoiceId: invoiceId,
 			})
 		} catch (error) {
 			console.error('Payment error:', error)

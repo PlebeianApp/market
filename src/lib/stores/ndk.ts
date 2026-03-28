@@ -269,12 +269,10 @@ export const ndkActions = {
 			},
 		})
 
-		// In development / local-relay-only mode, monitor zaps on the local relays instead of public ZAP_RELAYS.
-		// This avoids connecting to public infrastructure while still enabling zap receipt monitoring.
-		const zapNdk =
-			stage === 'development' || localRelayOnly
-				? new NDK({ explicitRelayUrls: explicitRelays })
-				: new NDK({ explicitRelayUrls: ZAP_RELAYS })
+		// Always monitor zap receipts on public ZAP_RELAYS (plus the app relay).
+		// LSPs publish zap receipts to their own public relays, not the local/app relay,
+		// so we must subscribe there to detect paid invoices.
+		const zapNdk = new NDK({ explicitRelayUrls: [...new Set([...ZAP_RELAYS, ...explicitRelays])] })
 
 		// Determine write relays - staging only writes to main relay, others write to all
 		const mainRelay = getMainRelay()

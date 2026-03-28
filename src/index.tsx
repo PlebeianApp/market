@@ -8,6 +8,8 @@ import index from './index.html'
 import { fetchAppSettings } from './lib/appSettings'
 import { AppSettingsSchema } from './lib/schemas/app'
 import { getEventHandler } from './server'
+import { ZapInvoiceError } from './server/ZapPurchaseManager'
+import type { ZapPurchaseInvoiceRequestBody } from './server/ZapPurchaseManager'
 import { join } from 'path'
 import { file } from 'bun'
 
@@ -21,36 +23,6 @@ const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
 
 let appSettings: Awaited<ReturnType<typeof fetchAppSettings>> = null
 let APP_PUBLIC_KEY: string
-
-type VanityInvoiceRequestBody = {
-	amountSats: number
-	vanityName: string
-	zapRequest: {
-		pubkey: string
-		sig?: string
-		created_at?: number
-		kind?: number
-		content?: string
-		tags: string[][]
-	}
-}
-
-type LnurlPayData = {
-	callback?: string
-	maxSendable?: number
-	minSendable?: number
-	commentAllowed?: number
-	allowsNostr?: boolean
-	nostrPubkey?: string
-	status?: 'ERROR'
-	reason?: string
-}
-
-type LnurlInvoiceData = {
-	pr?: string
-	status?: 'ERROR'
-	reason?: string
-}
 
 let invoiceNdk: NDK | null = null
 let invoiceNdkConnectPromise: Promise<void> | null = null
@@ -251,109 +223,51 @@ export const server = serve({
 				})
 			},
 		},
-		'/api/vanity/invoice': {
+		//Generic zap purchase invoice endpoint.
+		//Auto-resolves the correct `ZapPurchaseManager` from the zap request's `L` tag.
+		'/api/zapPurchase': {
 			POST: async (req) => {
-				console.log('📨 /api/vanity/invoice request received')
+				console.log('📨 /api/zapPurchase request received')
 
-				let body: VanityInvoiceRequestBody | null = null
+				let body: ZapPurchaseInvoiceRequestBody
 				try {
-					body = (await req.json()) as VanityInvoiceRequestBody
+					body = (await req.json()) as ZapPurchaseInvoiceRequestBody
 				} catch {
 					return jsonError('Invalid JSON body', 400)
 				}
 
-				const amountSats = Number(body?.amountSats)
-				const vanityName = String(body?.vanityName || '').toLowerCase()
-				const zapRequest = body?.zapRequest
-
-				if (!Number.isFinite(amountSats) || amountSats <= 0) {
-					return jsonError('amountSats must be a positive number', 400)
-				}
-				if (!vanityName) {
-					return jsonError('vanityName is required', 400)
-				}
-				if (!zapRequest || !Array.isArray(zapRequest.tags)) {
-					return jsonError('zapRequest is required', 400)
-				}
-				if (!zapRequest.sig) {
-					return jsonError('zapRequest must be signed', 400)
+				// Auto-resolve the correct manager from the zap request's L (label) tag
+				const { amountSats, registryKey, zapRequest } = body
+				const zapLabel = zapRequest?.tags?.find((t) => t[0] === 'L')?.[1]
+				if (!zapLabel) {
+					return jsonError('zapRequest missing L tag', 400)
 				}
 
-				const hasTag = (k: string, v?: string) => zapRequest.tags.some((t) => t[0] === k && (v ? t[1] === v : true))
-				if (!hasTag('L', 'vanity-register')) {
-					return jsonError('zapRequest missing ["L","vanity-register"] tag', 400)
-				}
-				const appPubkey = getAppPublicKeyOrThrow()
-				if (!hasTag('p', appPubkey)) {
-					return jsonError('zapRequest must target app pubkey', 400)
-				}
-
-				const vanityTag = zapRequest.tags.find((t) => t[0] === 'vanity')?.[1]?.toLowerCase()
-				if (vanityTag !== vanityName) {
-					return jsonError('zapRequest vanity tag must match vanityName', 400)
-				}
-
-				const amountMsatsTag = zapRequest.tags.find((t) => t[0] === 'amount')?.[1]
-				const amountMsats = amountMsatsTag ? Number(amountMsatsTag) : NaN
-				if (!Number.isFinite(amountMsats) || amountMsats !== amountSats * 1000) {
-					return jsonError('zapRequest amount must match amountSats', 400)
+				const manager = getEventHandler().getPurchaseManager(zapLabel)
+				if (!manager) {
+					return jsonError(`Unknown purchase type: ${zapLabel}`, 400)
 				}
 
 				try {
-					console.log('⚡ Creating vanity invoice:', { vanityName, amountSats })
+					const appPubkey = getAppPublicKeyOrThrow()
 					const lightningIdentifier = await getAppLightningIdentifier()
-					const lnurlEndpoint = toLnurlpEndpoint(lightningIdentifier)
 
-					const lnurlRes = await fetch(lnurlEndpoint, { headers: { accept: 'application/json' } })
-					if (!lnurlRes.ok) {
-						return jsonError(`Failed to fetch LNURL-pay data (${lnurlRes.status})`, 502)
-					}
+					console.log(`⚡ Creating ${zapLabel} invoice:`, { registryKey, amountSats })
 
-					const lnurlData = (await lnurlRes.json()) as LnurlPayData
-					if (lnurlData.status === 'ERROR') {
-						return jsonError(lnurlData.reason || 'LNURL-pay error', 502)
-					}
+					const result = await manager.generateInvoice(
+						{ amountSats, registryKey, zapRequest },
+						appPubkey,
+						lightningIdentifier,
+						toLnurlpEndpoint,
+					)
 
-					if (!lnurlData.callback) {
-						return jsonError('LNURL-pay callback missing', 502)
-					}
-					if (!lnurlData.allowsNostr) {
-						return jsonError('App Lightning address does not support Nostr zaps (allowsNostr=false)', 400)
-					}
-
-					const amountMsatsToSend = amountSats * 1000
-					if (typeof lnurlData.minSendable === 'number' && amountMsatsToSend < lnurlData.minSendable) {
-						return jsonError(`Amount below minimum (${Math.ceil(lnurlData.minSendable / 1000)} sats)`, 400)
-					}
-					if (typeof lnurlData.maxSendable === 'number' && amountMsatsToSend > lnurlData.maxSendable) {
-						return jsonError(`Amount above maximum (${Math.floor(lnurlData.maxSendable / 1000)} sats)`, 400)
-					}
-
-					const callbackUrl = new URL(lnurlData.callback)
-					callbackUrl.searchParams.set('amount', amountMsatsToSend.toString())
-					callbackUrl.searchParams.set('nostr', JSON.stringify(zapRequest))
-					if (lnurlData.commentAllowed && lnurlData.commentAllowed > 0) {
-						callbackUrl.searchParams.set('comment', `Vanity URL: ${vanityName}`)
-					}
-
-					const invoiceRes = await fetch(callbackUrl.toString(), { headers: { accept: 'application/json' } })
-					if (!invoiceRes.ok) {
-						return jsonError(`Failed to fetch invoice (${invoiceRes.status})`, 502)
-					}
-
-					const invoiceData = (await invoiceRes.json()) as LnurlInvoiceData
-					if (invoiceData.status === 'ERROR') {
-						return jsonError(invoiceData.reason || 'Invoice error', 502)
-					}
-
-					if (!invoiceData.pr) {
-						return jsonError('Invoice missing pr', 502)
-					}
-
-					console.log('✅ Vanity invoice created')
-					return Response.json({ pr: invoiceData.pr })
+					console.log(`✅ ${zapLabel} invoice created`)
+					return Response.json(result)
 				} catch (error) {
-					console.error('Vanity invoice error:', error)
+					console.error(`${zapLabel} invoice error:`, error)
+					if (error instanceof ZapInvoiceError) {
+						return jsonError(error.message, error.status)
+					}
 					return jsonError(error instanceof Error ? error.message : 'Failed to create invoice', 500)
 				}
 			},
