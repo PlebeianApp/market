@@ -85,3 +85,8 @@
 		shake 0.5s ease-in-out infinite,
 		glow 1s ease-in-out infinite;
 }
+
+
+/* Auto-applied fix for issue 713 */
+.button { cursor: pointer; }
+.overlay { pointer-events: none; }
