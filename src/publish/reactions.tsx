@@ -1,8 +1,10 @@
+import { getCoordinates, getCoordinatesOrId } from '@/lib/nostr/coordinates'
 import { ndkActions } from '@/lib/stores/ndk'
 import { reactionKeys } from '@/queries/queryKeyFactory'
 import type { Reaction } from '@/queries/reactions'
 import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { isAddressableKind } from 'nostr-tools/kinds'
 import { toast } from 'sonner'
 
 // NIP-25 Reaction kind
@@ -47,14 +49,16 @@ export const publishReaction = async ({ emoji, event }: PublishReactionParams): 
 	// Build tags according to NIP-25 specification
 	const tags: string[][] = []
 
-	// Add 'e' tag with target event id
-	// The relay hint is optional and typically added by the relay itself
-	const eTag = ['e', event.id]
-	tags.push(eTag)
-
-	// Add 'a' tag with coordinates (kind:pubkey:d-tag) - same as e tag
-	const aTag = ['a', `${event.kind}:${event.pubkey}:${event.id}`]
-	tags.push(aTag)
+	if (isAddressableKind(event.kind)) {
+		// Add 'a' tag with coordinates (kind:pubkey:d-tag)
+		const coordinates = getCoordinates(event)
+		const aTag = ['a', coordinates]
+		tags.push(aTag)
+	} else {
+		// Add 'e' tag with target event id
+		const eTag = ['e', event.id]
+		tags.push(eTag)
+	}
 
 	// Add 'p' tag with target event author pubkey
 	const pTag = ['p', event.pubkey]
@@ -111,15 +115,18 @@ export const publishDeletionEvent = async ({ reactionEvent }: PublishDeletionPar
 	const eTag = ['e', reactionEvent.id]
 	tags.push(eTag)
 
-	// Add 'a' tag with the reaction coordinates
-	const aTag = ['a', `${REACTION_KIND}:${reactionEvent.authorPubkey}:${reactionEvent.id}`]
-	tags.push(aTag)
-
-	// Add 'p' tag with the target event author pubkey
+	// Add 'p' tag with the reaction event author pubkey
 	const pTag = ['p', reactionEvent.authorPubkey]
 	tags.push(pTag)
 
-	// Add 'k' tag with the kind of the target event
+	if (isAddressableKind(reactionEvent.targetEvent.kind)) {
+		// Add 'a' tag with coordinates for reaction target (kind:pubkey:d-tag)
+		const coordinates = getCoordinates(reactionEvent.targetEvent)
+		const aTag = ['a', `${reactionEvent.targetEvent.kind}:${reactionEvent.targetEvent.pubkey}:${coordinates}`]
+		tags.push(aTag)
+	}
+
+	// Add 'k' tag with the kind of the reaction event
 	const kTag = ['k', REACTION_KIND.toString()]
 	tags.push(kTag)
 

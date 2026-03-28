@@ -2,6 +2,8 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { reactionKeys } from './queryKeyFactory'
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { NDKEvent, type NDKFilter } from '@nostr-dev-kit/ndk'
+import { isAddressableKind } from 'nostr-tools/kinds'
+import { getCoordinates } from '@/lib/nostr/coordinates'
 
 /**
  * NIP-25 Reaction kind
@@ -32,26 +34,16 @@ export interface Reaction {
 	targetEvent: NDKEvent
 }
 
-const transformReactionEvent = (event: NDKEvent): Reaction => {
+const transformReactionEvent = (event: NDKEvent, targetEvent: NDKEvent): Reaction => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw Error('NDK must be initialized.')
-
-	// If there are more than 1 e-tags (not recommended), the event being reacted to should be the last one.
-	const eTag = event.tags.filter((t) => t[0] === 'e')?.slice(-1)[0]
-	// Similar for p-tags
-	const pTag = event.tags.filter((t) => t[0] === 'p')?.slice(-1)[0]
-	const kTag = event.tags.find((t) => t[0] === 'k')?.[1]
 
 	return {
 		id: event.id,
 		emoji: event.content,
 		createdAt: event.created_at ?? Math.floor(Date.now() / 1000),
 		authorPubkey: event.pubkey,
-		targetEvent: new NDKEvent(ndk, {
-			id: eTag?.[1] || '',
-			pubkey: pTag?.[1] || '',
-			kind: parseInt(kTag || ''),
-		}),
+		targetEvent: targetEvent,
 	}
 }
 
@@ -171,14 +163,21 @@ export const fetchEventReactions = async (event: NDKEvent): Promise<Reaction[]> 
 	// Fetch reactions that reference this specific event
 	const filter: NDKFilter = {
 		kinds: [REACTION_KIND],
-		'#e': [event.id],
 		'#k': [event.kind.toString()],
 		'#p': [event.pubkey],
 		limit: 100,
 	}
 
+	if (isAddressableKind(event.kind)) {
+		filter['#a'] = [getCoordinates(event)]
+	} else {
+		filter['#e'] = [event.id]
+	}
+
+	console.log(filter)
+
 	const events = await ndk.fetchEvents(filter)
-	const reactions = Array.from(events).map(transformReactionEvent)
+	const reactions = Array.from(events).map((e) => transformReactionEvent(e, event))
 
 	// Filter out deleted reactions
 	const reactionsFiltered = await filterReactionsValid(reactions)
