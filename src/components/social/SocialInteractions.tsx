@@ -12,15 +12,16 @@ import { ReactionsList } from './ReactionsList'
 
 interface SocialInteractionsProps {
 	event: NDKEvent
+	onCommentButtonPressed?: () => void
 }
 
-const SocialInteractions = ({ event }: SocialInteractionsProps) => {
+const SocialInteractions = ({ event, onCommentButtonPressed }: SocialInteractionsProps) => {
 	return (
 		<>
 			<div className="max-w-md py-2 flex gap-2 justify-start">
 				<ReactionButton event={event} />
 				<ZapButton event={event} />
-				<CommentButton event={event} />
+				<CommentButton event={event} onClick={onCommentButtonPressed} />
 				<ShareButton event={event} />
 			</div>
 			<ReactionsList event={event} />

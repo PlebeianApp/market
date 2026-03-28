@@ -21,7 +21,16 @@ export function CommentButton({ event, className, onClick, onPointerDown, ...pro
 	const handleButtonInteraction = (e: React.MouseEvent<HTMLButtonElement>) => {
 		e.preventDefault()
 		e.stopPropagation()
-		onClick?.(e)
+
+		if (onClick) {
+			onClick?.(e)
+		} else {
+			if (isAuthenticated) {
+				setDialogOpen(true)
+			} else {
+				toast.error('Please log in to comment')
+			}
+		}
 	}
 
 	const handleButtonPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
@@ -49,11 +58,6 @@ export function CommentButton({ event, className, onClick, onPointerDown, ...pro
 				tooltip="Comment"
 				onClick={(e) => {
 					handleButtonInteraction(e)
-					if (isAuthenticated) {
-						setDialogOpen(true)
-					} else {
-						toast.error('Please log in to comment')
-					}
 				}}
 				onPointerDown={handleButtonPointerDown}
 				disabled={!event.ndk}

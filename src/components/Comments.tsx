@@ -136,7 +136,7 @@ function AddCommentForm({ targetEvent, parentComment, onRemoveReplyTo }: AddComm
 				)}
 			</div>
 			<Textarea
-				id="comment"
+				id="comment-input"
 				value={content}
 				onChange={(e) => setContent(e.target.value)}
 				placeholder="Share your thoughts about this product..."
@@ -167,7 +167,7 @@ export function Comments({ targetEvent }: CommentsProps) {
 	const hasMoreComments = comments && comments.length > 5
 
 	return (
-		<div className="space-y-6">
+		<div className="space-y-6" id="comments-section">
 			{/* Add Comment Form - only show for authenticated users */}
 			{isAuthenticated ? (
 				<AddCommentForm targetEvent={targetEvent} parentComment={parentComment} onRemoveReplyTo={() => setParentComment(undefined)} />

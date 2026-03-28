@@ -48,11 +48,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { AlertTriangle, ArrowLeft, Edit, Minus, Plus, Truck } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type JSXElementConstructor, type ReactElement, type ReactNode, type ReactPortal } from 'react'
 import { toast } from 'sonner'
 import { ShareButton } from '@/components/social/ShareButton'
 import SocialInteractions from '@/components/social/SocialInteractions'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import { scrollToElementWithOffset } from '@/lib/utils/ui'
 
 // Hook to inject dynamic CSS
 function useHeroBackground(imageUrl: string, className: string) {
@@ -271,6 +272,8 @@ function RouteComponent() {
 	const [quantity, setQuantity] = useState(1)
 	const [imageViewerOpen, setImageViewerOpen] = useState(false)
 	const [selectedImageIndex, setSelectedImageIndex] = useState(0)
+	const commentsSectionRef = useRef<HTMLDivElement>(null)
+	const commentInputRef = useRef<HTMLTextAreaElement>(null)
 
 	// Get app config
 	const { data: config } = useConfigQuery()
@@ -462,6 +465,29 @@ function RouteComponent() {
 		setImageViewerOpen(true)
 	}
 
+	const handleNavigateToComments = () => {
+		// 1. Open tab view to comments tab
+
+		if (!isMobileOrTablet) {
+			// Desktop: switch to comments tab
+			setCurrentTab(TabProductPage.comments)
+		}
+
+		setTimeout(() => {
+			// 2. Scroll to comments section after short delay (to load comments tab)
+			const commentsSection = document.getElementById('comments-section')
+			if (commentsSection) {
+				scrollToElementWithOffset(commentsSection, isMobileOrTablet ? 220 : 300)
+			}
+
+			// 3. Focus comments input handler
+			const textarea = document.getElementById('comment-input') as HTMLTextAreaElement
+			if (textarea) {
+				textarea.focus({ preventScroll: true })
+			}
+		}, 100)
+	}
+
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="relative z-10">
@@ -602,7 +628,7 @@ function RouteComponent() {
 							<span>Sold by:</span>
 							<UserCard pubkey={pubkey} size="md" />
 
-							<SocialInteractions event={product} />
+							<SocialInteractions event={product} onCommentButtonPressed={handleNavigateToComments} />
 						</div>
 					</div>
 				</div>
@@ -612,7 +638,7 @@ function RouteComponent() {
 							{Object.values(TabProductPage).map(
 								(tab) =>
 									!getIsTabDisabled(tab) && (
-							<div>
+										<div>
 											<div className="bg-secondary text-white px-4 py-2 text-sm font-medium rounded-t-md">{tab}</div>
 											{getTabContent(tab, product, true)}
 										</div>
@@ -623,21 +649,21 @@ function RouteComponent() {
 						<Tabs defaultValue={TabProductPage.description} value={currentTab} className="w-full">
 							<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-2 justify-start">
 								{Object.values(TabProductPage).map((tab) => (
-								<TabsTrigger
+									<TabsTrigger
 										value={tab}
 										onClick={() => setCurrentTab(tab)}
-									className="px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+										className="px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
 										disabled={getIsTabDisabled(tab)}
-								>
+									>
 										{tab}
-								</TabsTrigger>
+									</TabsTrigger>
 								))}
 							</TabsList>
 
 							{Object.values(TabProductPage).map((tab) => (
 								<TabsContent value={tab} className="mt-4 border-t-3 border-secondary bg-tertiary">
 									{getTabContent(tab, product, false)}
-							</TabsContent>
+								</TabsContent>
 							))}
 						</Tabs>
 					)}
