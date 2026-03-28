@@ -42,6 +42,7 @@ import {
 	isNSFWProduct,
 	productQueryOptions,
 	productsByPubkeyQueryOptions,
+	getProductLocation,
 } from '@/queries/products'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
@@ -51,6 +52,7 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { ShareButton } from '@/components/social/ShareButton'
 import SocialInteractions from '@/components/social/SocialInteractions'
+import type { NDKEvent } from '@nostr-dev-kit/ndk'
 
 // Hook to inject dynamic CSS
 function useHeroBackground(imageUrl: string, className: string) {
@@ -84,12 +86,144 @@ export const Route = createFileRoute('/products/$productId')({
 	loader: ({ params: { productId } }) => ({ productId }),
 })
 
+enum TabProductPage {
+	description = 'Description',
+	spec = 'Spec',
+	shipping = 'Shipping',
+	comments = 'Comments',
+	reviews = 'Reviews',
+}
+
+/** Get whether a tab should be enabled (can navigate to) or not.
+ * Currently only disable reviews as we work on the functionality.
+ */
+const getIsTabDisabled = (tab: TabProductPage) => tab === TabProductPage.reviews
+
+const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView: boolean) => {
+	const wrapContent = (content: ReactNode) => <div className="rounded-lg bg-white p-6 shadow-md">{content}</div>
+
+	const summary = getProductSummary(eventProduct)
+	const description = getProductDescription(eventProduct)
+	const weightTag = getProductWeight(eventProduct)
+	const location = getProductLocation(eventProduct)
+	const specs = getProductSpecs(eventProduct)
+	const dimensionsTag = getProductDimensions(eventProduct)
+
+	switch (tab) {
+		case TabProductPage.description:
+			return wrapContent(
+				<>
+					{summary && <p className="text-gray-600 italic mb-4 pb-4 border-b border-gray-200">{summary}</p>}
+					<p className="whitespace-pre-wrap break-words text-gray-700">{description}</p>
+				</>,
+			)
+		case TabProductPage.spec:
+			const className = isMobileView ? 'grid gap-4 grid-cols-1' : 'grid gap-4 grid-cols-2'
+			return wrapContent(
+				<div className={className}>
+					{weightTag && (
+						<div className="flex flex-col">
+							<span className="text-base font-medium text-gray-500">Weight</span>
+							<span className="text-base text-gray-900">
+								{weightTag[1]} {weightTag[2]}
+							</span>
+						</div>
+					)}
+					{dimensionsTag && (
+						<div className="flex flex-col">
+							<span className="text-base font-medium text-gray-500">Dimensions (L×W×H)</span>
+							<span className="text-base text-gray-900 break-all">
+								{dimensionsTag[1]
+									.split('x')
+									.map((num) => parseFloat(num).toFixed(1))
+									.join('×')}{' '}
+								{dimensionsTag[2]}
+							</span>
+						</div>
+					)}
+					{specs.map((spec, index) => (
+						<div key={index} className="flex flex-col">
+							<span className="text-base font-medium text-gray-500 capitalize">{spec[1]}</span>
+							<span className="text-base text-gray-900 break-all">{spec[2]}</span>
+						</div>
+					))}
+					{specs.length === 0 && !weightTag && !dimensionsTag && <p className="text-gray-700 col-span-2">No specifications available</p>}
+				</div>,
+			)
+		case TabProductPage.shipping:
+			return wrapContent(
+				<div className="flex flex-col gap-6">
+					<div className="flex items-center gap-3">
+						<Truck className="h-6 w-6 text-gray-500" />
+						<h3 className="text-lg font-medium">Shipping Options</h3>
+					</div>
+
+					<div className="flex flex-wrap md:flex-nowrap gap-6">
+						<div className="w-full md:w-1/2 min-w-0">
+							<p className="text-sm text-gray-500 mb-4">Select a shipping method to see estimated costs and delivery times.</p>
+
+							<div className="w-full">
+								<ShippingSelector
+									productId={eventProduct.id}
+									onSelect={(option: RichShippingInfo) => {
+										// Optional notification could go here
+									}}
+									className="w-full"
+								/>
+							</div>
+
+							<div className="mt-4">
+								<p className="text-sm text-gray-500">Shipping costs will be added to the final price in the cart.</p>
+							</div>
+						</div>
+
+						<div className="w-full md:w-1/2 min-w-0 bg-gray-50 p-4 rounded-md">
+							<h4 className="font-medium mb-2">Shipping Information</h4>
+
+							{weightTag && (
+								<div className="flex flex-col mb-2">
+									<span className="text-base font-medium text-gray-500">Weight:</span>
+									<span className="text-base text-gray-900">
+										{weightTag[1]} {weightTag[2]}
+									</span>
+								</div>
+							)}
+
+							{dimensionsTag && (
+								<div className="flex flex-col mb-2">
+									<span className="text-base font-medium text-gray-500">Dimensions:</span>
+									<span className="text-base text-gray-900">
+										<span className="break-all">{dimensionsTag[1]}</span> {dimensionsTag[2]}
+									</span>
+								</div>
+							)}
+
+							{location && (
+								<div className="flex flex-col mb-2">
+									<span className="text-base font-medium text-gray-500">Ships from:</span>
+									<span className="text-base text-gray-900">{location}</span>
+								</div>
+							)}
+
+							<div className="mt-3 text-sm text-gray-500">Delivery times are estimates and may vary based on your location.</div>
+						</div>
+					</div>
+				</div>,
+			)
+		case TabProductPage.comments:
+			return wrapContent(<Comments targetEvent={eventProduct} />)
+		case TabProductPage.reviews:
+			return <p>Product Reviews are not implemented yet.</p>
+	}
+}
+
 function RouteComponent() {
 	const { productId } = Route.useLoaderData()
 	const { cart } = useCart()
 	const { mobileMenuOpen, showNSFWContent, navigation } = useStore(uiStore)
 	const navigate = useNavigate()
 	const queryClient = useQueryClient()
+	const [currentTab, setCurrentTab] = useState<TabProductPage>(TabProductPage.description)
 
 	// Scroll to top when product changes
 	useEffect(() => {
@@ -107,18 +241,11 @@ function RouteComponent() {
 
 	// Derive all product fields from the loaded product event (avoids conditional hook calls / racey dependent queries)
 	const title = getProductTitle(product) || 'Untitled Product'
-	const summary = getProductSummary(product) || ''
-	const description = getProductDescription(product) || ''
 	const images = getProductImages(product) || []
 	const priceTag = getProductPrice(product)
 	const typeTag = getProductType(product)
 	const stockTag = getProductStock(product)
 	const visibilityTag = getProductVisibility(product)
-	const specs = getProductSpecs(product) || []
-	const weightTag = getProductWeight(product)
-	const dimensionsTag = getProductDimensions(product)
-	const categories = getProductCategories(product) || []
-	const createdAt = getProductCreatedAt(product) || 0
 	const pubkey = getProductPubkey(product) || ''
 
 	const handleBackClick = () => {
@@ -140,7 +267,6 @@ function RouteComponent() {
 	const sellerProducts = sellerProductsQuery.data ?? []
 
 	const breakpoint = useBreakpoint()
-	const isSmallScreen = breakpoint === 'sm'
 	const isMobileOrTablet = breakpoint === 'sm' || breakpoint === 'md'
 	const [quantity, setQuantity] = useState(1)
 	const [imageViewerOpen, setImageViewerOpen] = useState(false)
@@ -254,9 +380,6 @@ function RouteComponent() {
 			</div>
 		)
 	}
-
-	// Get location from tags if exists
-	const location = product.tags.find((t) => t[0] === 'location')?.[1]
 
 	// Handle adding product to cart
 	const handleAddToCartClick = async () => {
@@ -486,271 +609,36 @@ function RouteComponent() {
 				<div className="relative z-20 mx-auto max-w-7xl px-4 py-6 -mt-12">
 					{isMobileOrTablet ? (
 						<div className="flex flex-col gap-6">
-							{/* Description Section */}
+							{Object.values(TabProductPage).map(
+								(tab) =>
+									!getIsTabDisabled(tab) && (
 							<div>
-								<div className="bg-secondary text-white px-4 py-2 text-sm font-medium rounded-t-md">Description</div>
-								<div className="rounded-lg bg-white p-6 shadow-md rounded-t-none">
-									{summary && <p className="text-gray-600 italic mb-4 pb-4 border-b border-gray-200">{summary}</p>}
-									<p className="whitespace-pre-wrap break-words text-gray-700">{description}</p>
-								</div>
-							</div>
-
-							{/* Specs Section */}
-							<div>
-								<div className="bg-secondary text-white px-4 py-2 text-sm font-medium rounded-t-md">Spec</div>
-								<div className="rounded-lg bg-white p-6 shadow-md rounded-t-none">
-									<div className="grid grid-cols-1 gap-4">
-										{weightTag && (
-											<div className="flex flex-col">
-												<span className="text-base font-medium text-gray-500">Weight</span>
-												<span className="text-base text-gray-900">
-													{weightTag[1]} {weightTag[2]}
-												</span>
-											</div>
-										)}
-										{dimensionsTag && (
-											<div className="flex flex-col">
-												<span className="text-base font-medium text-gray-500">Dimensions (L×W×H)</span>
-												<span className="text-base text-gray-900 break-all">
-													{dimensionsTag[1]
-														.split('x')
-														.map((num) => parseFloat(num).toFixed(1))
-														.join('×')}{' '}
-													{dimensionsTag[2]}
-												</span>
-											</div>
-										)}
-										{specs.map((spec, index) => (
-											<div key={index} className="flex flex-col">
-												<span className="text-base font-medium text-gray-500 capitalize">{spec[1]}</span>
-												<span className="text-base text-gray-900 break-all">{spec[2]}</span>
-											</div>
-										))}
-										{specs.length === 0 && !weightTag && !dimensionsTag && (
-											<p className="text-gray-700 col-span-2">No specifications available</p>
-										)}
-									</div>
-								</div>
-							</div>
-
-							{/* Shipping Section */}
-							<div>
-								<div className="bg-secondary text-white px-4 py-2 text-sm font-medium rounded-t-md">Shipping</div>
-								<div className="rounded-lg bg-white p-6 shadow-md rounded-t-none">
-									<div className="flex flex-col gap-6">
-										<div className="flex items-center gap-3">
-											<Truck className="h-6 w-6 text-gray-500" />
-											<h3 className="text-lg font-medium">Shipping Options</h3>
+											<div className="bg-secondary text-white px-4 py-2 text-sm font-medium rounded-t-md">{tab}</div>
+											{getTabContent(tab, product, true)}
 										</div>
-
-										<div className="flex flex-wrap md:flex-nowrap gap-6">
-											<div className="w-full md:w-1/2 min-w-0">
-												<p className="text-sm text-gray-500 mb-4">Select a shipping method to see estimated costs and delivery times.</p>
-
-												<div className="w-full">
-													<ShippingSelector
-														productId={productId}
-														onSelect={(option: RichShippingInfo) => {
-															// Optional notification could go here
-														}}
-														className="w-full"
-													/>
-												</div>
-
-												<div className="mt-4">
-													<p className="text-sm text-gray-500">Shipping costs will be added to the final price in the cart.</p>
-												</div>
-											</div>
-
-											<div className="w-full md:w-1/2 min-w-0 bg-gray-50 p-4 rounded-md">
-												<h4 className="font-medium mb-2">Shipping Information</h4>
-
-												{weightTag && (
-													<div className="flex flex-col mb-2">
-														<span className="text-base font-medium text-gray-500">Weight:</span>
-														<span className="text-base text-gray-900">
-															{weightTag[1]} {weightTag[2]}
-														</span>
-													</div>
-												)}
-
-												{dimensionsTag && (
-													<div className="flex flex-col mb-2">
-														<span className="text-base font-medium text-gray-500">Dimensions:</span>
-														<span className="text-base text-gray-900">
-															<span className="break-all">{dimensionsTag[1]}</span> {dimensionsTag[2]}
-														</span>
-													</div>
-												)}
-
-												{location && (
-													<div className="flex flex-col mb-2">
-														<span className="text-base font-medium text-gray-500">Ships from:</span>
-														<span className="text-base text-gray-900">{location}</span>
-													</div>
-												)}
-
-												<div className="mt-3 text-sm text-gray-500">Delivery times are estimates and may vary based on your location.</div>
-											</div>
-										</div>
-									</div>
-								</div>
-							</div>
-
-							{/* Comments Section */}
-							<div>
-								<div className="bg-secondary text-white px-4 py-2 text-sm font-medium rounded-t-md">Comments</div>
-								<div className="rounded-lg bg-white p-6 shadow-md rounded-t-none">
-									<Comments targetEvent={product} />
-								</div>
-							</div>
+									),
+							)}
 						</div>
 					) : (
-						<Tabs defaultValue="description" className="w-full">
+						<Tabs defaultValue={TabProductPage.description} value={currentTab} className="w-full">
 							<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-2 justify-start">
+								{Object.values(TabProductPage).map((tab) => (
 								<TabsTrigger
-									value="description"
+										value={tab}
+										onClick={() => setCurrentTab(tab)}
 									className="px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+										disabled={getIsTabDisabled(tab)}
 								>
-									Description
+										{tab}
 								</TabsTrigger>
-								<TabsTrigger
-									value="specs"
-									className="px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
-								>
-									Spec
-								</TabsTrigger>
-								<TabsTrigger
-									value="shipping"
-									className="px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
-								>
-									Shipping
-								</TabsTrigger>
-								<TabsTrigger
-									value="comments"
-									className="px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
-								>
-									Comments
-								</TabsTrigger>
-								<TabsTrigger
-									value="reviews"
-									className="px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
-									disabled
-								>
-									Reviews
-								</TabsTrigger>
+								))}
 							</TabsList>
 
-							<TabsContent value="description" className="mt-4 border-t-3 border-secondary bg-tertiary">
-								<div className="rounded-lg bg-white p-6 shadow-md">
-									{summary && <p className="text-gray-600 italic mb-4 pb-4 border-b border-gray-200">{summary}</p>}
-									<p className="whitespace-pre-wrap break-words text-gray-700">{description}</p>
-								</div>
+							{Object.values(TabProductPage).map((tab) => (
+								<TabsContent value={tab} className="mt-4 border-t-3 border-secondary bg-tertiary">
+									{getTabContent(tab, product, false)}
 							</TabsContent>
-
-							<TabsContent value="specs" className="mt-4 border-t-3 border-secondary bg-tertiary">
-								<div className="rounded-lg bg-white p-6 shadow-md">
-									<div className="grid grid-cols-2 gap-4">
-										{weightTag && (
-											<div className="flex flex-col">
-												<span className="text-base font-medium text-gray-500">Weight</span>
-												<span className="text-base text-gray-900">
-													{weightTag[1]} {weightTag[2]}
-												</span>
-											</div>
-										)}
-										{dimensionsTag && (
-											<div className="flex flex-col">
-												<span className="text-base font-medium text-gray-500">Dimensions (L×W×H)</span>
-												<span className="text-base text-gray-900 break-all">
-													{dimensionsTag[1]
-														.split('x')
-														.map((num) => parseFloat(num).toFixed(1))
-														.join('×')}{' '}
-													{dimensionsTag[2]}
-												</span>
-											</div>
-										)}
-										{specs.map((spec, index) => (
-											<div key={index} className="flex flex-col">
-												<span className="text-base font-medium text-gray-500 capitalize">{spec[1]}</span>
-												<span className="text-base text-gray-900 break-all">{spec[2]}</span>
-											</div>
-										))}
-										{specs.length === 0 && !weightTag && !dimensionsTag && (
-											<p className="text-gray-700 col-span-2">No specifications available</p>
-										)}
-									</div>
-								</div>
-							</TabsContent>
-
-							<TabsContent value="shipping" className="mt-4 border-t-3 border-secondary bg-tertiary">
-								<div className="rounded-lg bg-white p-6 shadow-md">
-									<div className="flex flex-col gap-6">
-										<div className="flex items-center gap-3">
-											<Truck className="h-6 w-6 text-gray-500" />
-											<h3 className="text-lg font-medium">Shipping Options</h3>
-										</div>
-
-										<div className="flex flex-wrap md:flex-nowrap gap-6">
-											<div className="w-full md:w-1/2 min-w-0">
-												<p className="text-sm text-gray-500 mb-4">Select a shipping method to see estimated costs and delivery times.</p>
-
-												<div className="w-full">
-													<ShippingSelector
-														productId={productId}
-														onSelect={(option: RichShippingInfo) => {
-															// Optional notification could go here
-														}}
-														className="w-full"
-													/>
-												</div>
-
-												<div className="mt-4">
-													<p className="text-sm text-gray-500">Shipping costs will be added to the final price in the cart.</p>
-												</div>
-											</div>
-
-											<div className="w-full md:w-1/2 min-w-0 bg-gray-50 p-4 rounded-md">
-												<h4 className="font-medium mb-2">Shipping Information</h4>
-
-												{weightTag && (
-													<div className="flex flex-col mb-2">
-														<span className="text-base font-medium text-gray-500">Weight:</span>
-														<span className="text-base text-gray-900">
-															{weightTag[1]} {weightTag[2]}
-														</span>
-													</div>
-												)}
-
-												{dimensionsTag && (
-													<div className="flex flex-col mb-2">
-														<span className="text-base font-medium text-gray-500">Dimensions:</span>
-														<span className="text-base text-gray-900">
-															<span className="break-all">{dimensionsTag[1]}</span> {dimensionsTag[2]}
-														</span>
-													</div>
-												)}
-
-												{location && (
-													<div className="flex flex-col mb-2">
-														<span className="text-base font-medium text-gray-500">Ships from:</span>
-														<span className="text-base text-gray-900">{location}</span>
-													</div>
-												)}
-
-												<div className="mt-3 text-sm text-gray-500">Delivery times are estimates and may vary based on your location.</div>
-											</div>
-										</div>
-									</div>
-								</div>
-							</TabsContent>
-
-							<TabsContent value="comments" className="mt-4 border-t-3 border-secondary bg-tertiary">
-								<div className="rounded-lg bg-white p-6 shadow-md">
-									<Comments targetEvent={product} />
-								</div>
-							</TabsContent>
+							))}
 						</Tabs>
 					)}
 				</div>

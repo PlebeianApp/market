@@ -683,6 +683,13 @@ export const getProductCreatedAt = (event: NDKEvent | null): number => event?.cr
 export const getProductPubkey = (event: NDKEvent | null): string => event?.pubkey || ''
 
 /**
+ * Gets the location for product from the event tags
+ * @param event The product event or null
+ * @returns The location in string format or empty string
+ */
+export const getProductLocation = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'location')?.[1] || ''
+
+/**
  * Gets the content warning tag from a product event
  * @param event The product event or null
  * @returns The content warning tuple or undefined
