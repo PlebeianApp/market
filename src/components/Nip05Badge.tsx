@@ -1,6 +1,6 @@
-import { getProfileNip05, nip05ValidationQueryOptions, useProfile } from '@/queries/profiles'
+import { nip05ValidationQueryOptions, useProfile } from '@/queries/profiles'
 import { useQuery } from '@tanstack/react-query'
-import { BadgeAlert, BadgeCheck, CircleQuestionMark, Loader2 } from 'lucide-react'
+import { BadgeAlert, BadgeCheck, Loader2 } from 'lucide-react'
 
 interface Nip05BadgeProps {
 	pubkey?: string
@@ -21,17 +21,20 @@ function elideNip05Address(nip05: string): string {
 }
 
 export function Nip05Badge({ pubkey, className = '', showAddress = true }: Nip05BadgeProps) {
-	if (pubkey == null) return null
-
-	const { data: profile, error } = useProfile(pubkey)
+	const safePubkey = pubkey ?? ''
+	const { data: profile } = useProfile(safePubkey)
 	const nip05 = profile?.profile?.nip05
+	const shouldValidate = Boolean(safePubkey && nip05 && nip05.length > 0)
+
+	const { data: isVerified, isLoading } = useQuery({
+		...nip05ValidationQueryOptions(safePubkey),
+		enabled: shouldValidate,
+	})
 
 	// Handle "no NIP-05" case - no badge, no text
-	if (profile == null || nip05 == null || nip05.length == 0) {
+	if (!safePubkey || profile == null || nip05 == null || nip05.length == 0) {
 		return null
 	}
-
-	const { data: isVerified, isLoading } = useQuery(nip05ValidationQueryOptions(pubkey))
 
 	return (
 		<div className="flex items-end gap-1">
