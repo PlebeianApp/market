@@ -50,6 +50,11 @@ export const postKeys = {
 	details: (id: string) => [...postKeys.all, id] as const,
 } as const
 
+export const productCommentKeys = {
+	all: ['productComments'] as const,
+	list: (productCoords: string) => [...productCommentKeys.all, productCoords] as const,
+} as const
+
 export const userKeys = {
 	all: ['users'] as const,
 	details: (pubkey: string) => ['user', pubkey] as const,
