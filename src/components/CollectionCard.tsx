@@ -1,8 +1,6 @@
 import { uiActions } from '@/lib/stores/ui'
 import { getCollectionId, getCollectionImages, getCollectionSummary, getCollectionTitle } from '@/queries/collections.tsx'
-import { profileByIdentifierQueryOptions, useProfileName } from '@/queries/profiles'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
-import { useQuery } from '@tanstack/react-query'
 import { Link, useLocation } from '@tanstack/react-router'
 import { UserCard } from './UserCard'
 
@@ -12,7 +10,6 @@ export function CollectionCard({ collection }: { collection: NDKEvent }) {
 	const pubkey = collection.pubkey
 	const summary = getCollectionSummary(collection)
 	const images = getCollectionImages(collection)
-	const { data: name, isLoading } = useProfileName(pubkey)
 	const location = useLocation()
 
 	const handleCollectionClick = () => {
@@ -20,12 +17,6 @@ export function CollectionCard({ collection }: { collection: NDKEvent }) {
 		// This will also store it as originalResultsPath if not already set
 		uiActions.setCollectionSourcePath(location.pathname)
 	}
-	const { data: profileData, isLoading: isLoadingProfile } = useQuery({
-		...profileByIdentifierQueryOptions(pubkey),
-		enabled: !!pubkey,
-	})
-	const { profile, user } = profileData || {}
-
 	return (
 		<div className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col" data-testid="product-card">
 			{/* Square aspect ratio container for image */}
@@ -58,11 +49,9 @@ export function CollectionCard({ collection }: { collection: NDKEvent }) {
 
 				{/* Add a flex spacer to push the collection author to the bottom */}
 				<div className="flex-grow"></div>
-				<Link to={`/profile/${pubkey}`}>
-					<div className="text-sm flex flex-row items-center gap-2">
-						by <UserCard pubkey={pubkey} size="xs" />
-					</div>
-				</Link>
+				<div className="text-sm flex flex-row items-center gap-2">
+					by <UserCard pubkey={pubkey} size="xs" />
+				</div>
 			</div>
 		</div>
 	)
