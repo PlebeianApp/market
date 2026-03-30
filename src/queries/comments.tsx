@@ -18,12 +18,18 @@ export interface Comment {
 	targetEventPubkey: string
 	targetEventKind: number
 	targetEventCoordinates?: string
-	/** Parent comment in event format, if the comment is part of a thread */
-	parentComment?: Comment
-	children: Comment[]
+	/** Comment parent Id */
+	parentId?: string
 }
 
-const transformCommentEvent = (event: NDKEvent, eventTarget: NDKEvent, parent?: Comment): Comment => {
+export interface CommentThread extends Comment {
+	parentComment?: Comment
+	children: CommentThread[]
+}
+
+const transformCommentEvent = (event: NDKEvent, eventTarget: NDKEvent): Comment => {
+	const parentId = event.tags.find((t) => t[0] === 'e')?.at(1)
+
 	return {
 		id: event.id,
 		content: event.content,
@@ -33,12 +39,15 @@ const transformCommentEvent = (event: NDKEvent, eventTarget: NDKEvent, parent?: 
 		targetEventPubkey: eventTarget.pubkey,
 		targetEventKind: eventTarget.kind,
 		targetEventCoordinates: getCoordinates(eventTarget),
-		parentComment: parent,
-		children: [],
+		parentId,
 	}
 }
 
-const sortCommentThreadByDate = (thread: Comment) => {
+const transformCommentEventAsThread = (event: NDKEvent, eventTarget: NDKEvent, parent?: Comment) => {
+	return { ...transformCommentEvent(event, eventTarget), parent, children: [] }
+}
+
+const sortCommentThreadByDate = (thread: CommentThread) => {
 	// Sort thread children
 	thread.children.sort((a, b) => a.createdAt - b.createdAt)
 
@@ -86,28 +95,34 @@ export const fetchProductComments = async (event: NDKEvent): Promise<Comment[]> 
 
 	const [events, replies] = await Promise.all([ndk.fetchEvents(filters), ndk.fetchEvents(filtersReplies)])
 
-	// Transform events into comments, using a map for fast access
-	const mapCommentsById = new Map<string, Comment>()
-	const mapRepliesById = new Map<string, Comment>()
+	const comments = Array<Comment>()
 
-	// Top-level comments
-	events.forEach((e) => mapCommentsById.set(e.id, transformCommentEvent(e, event)))
+	events.forEach((e) => comments.push(transformCommentEvent(e, event)))
+	replies.forEach((e) => comments.push(transformCommentEvent(e, event)))
 
-	// Replies - No parent set for now, those are added with children later
-	replies.forEach((e) => mapRepliesById.set(e.id, transformCommentEvent(e, event)))
+	return comments
+}
+
+export const transformCommentsMapIntoThreads = (comments: Comment[]): CommentThread[] => {
+	// Put comments into map for higher efficiency
+	const mapCommentsById = new Map<string, CommentThread>()
+	comments.forEach((c) => mapCommentsById.set(c.id, { ...c, children: [] }))
+
+	// Replies - No parent set for now, those are added with children late
 
 	// Sort replies into threads - Add children & parents
-	replies.forEach((e) => {
-		const comment = mapRepliesById.get(e.id)
+	mapCommentsById.forEach((comment) => {
+		if (!comment.parentId) return
 
-		if (!comment) return
-
-		const parentId = e.tags.find((t) => t[0] === 'e')?.at(1)
-		const parentComment = parentId ? (mapCommentsById.get(parentId) ?? mapRepliesById.get(parentId)) : undefined
+		const parentComment = mapCommentsById.get(comment.parentId)
 
 		if (parentComment) {
+			// If child has parent, add connections
 			parentComment.children.push(comment)
 			comment.parentComment = parentComment
+
+			// Remove item from map as to only keep top-level parents
+			mapCommentsById.delete(comment.id)
 		}
 	})
 

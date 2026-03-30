@@ -1,4 +1,9 @@
-import { useComments, type Comment } from '@/queries/comments'
+import {
+	transformCommentsMapIntoThreads as transformCommentsIntoThreads,
+	useComments,
+	type Comment,
+	type CommentThread,
+} from '@/queries/comments'
 import { usePublishCommentMutation } from '@/publish/comments'
 import { authStore, useAuth } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
@@ -14,7 +19,7 @@ import { UserCard } from './UserCard'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 
 interface CommentItemProps {
-	comment: Comment
+	comment: CommentThread
 	onPressReply: (comment: Comment) => void
 	isReply?: boolean
 	parent?: Comment
@@ -163,8 +168,9 @@ export function Comments({ targetEvent }: CommentsProps) {
 
 	const [parentComment, setParentComment] = useState<Comment | undefined>()
 
-	const displayedComments = showAll ? comments : comments?.slice(0, 5)
-	const hasMoreComments = comments && comments.length > 5
+	const commentThreads = comments && transformCommentsIntoThreads(comments)
+	const displayedComments = showAll ? commentThreads : commentThreads?.slice(0, 5)
+	const hasMoreComments = commentThreads && commentThreads.length > 5
 
 	return (
 		<div className="space-y-6" id="comments-section">
