@@ -174,8 +174,6 @@ export const fetchEventReactions = async (event: NDKEvent): Promise<Reaction[]> 
 		filter['#e'] = [event.id]
 	}
 
-	console.log(filter)
-
 	const events = await ndk.fetchEvents(filter)
 	const reactions = Array.from(events).map((e) => transformReactionEvent(e, event))
 

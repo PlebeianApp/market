@@ -11,9 +11,8 @@ import { useState } from 'react'
 import { Button } from './ui/button'
 import { Textarea } from './ui/textarea'
 import { CircleX, MessageSquare, Reply, X } from 'lucide-react'
-import { useUserProfile } from '@/queries/bugReports'
 import { ProfileName } from './ProfileName'
-import { useProfileName } from '@/queries/profiles'
+import { useProfile, useProfileName } from '@/queries/profiles'
 import { npubEncode } from 'nostr-tools/nip19'
 import { UserCard } from './UserCard'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -22,12 +21,11 @@ interface CommentItemProps {
 	comment: CommentThread
 	onPressReply: (comment: Comment) => void
 	isReply?: boolean
-	parent?: Comment
 }
 
 interface AddCommentProps {
 	targetEvent: NDKEvent
-	parentComment?: Comment
+	replyingTo?: Comment
 	onRemoveReplyTo?: () => void
 }
 
@@ -44,16 +42,18 @@ function formatDate(timestamp: number): string {
 	})
 }
 
-function CommentItem({ comment, onPressReply, isReply = false, parent }: CommentItemProps) {
+function CommentItem({ comment, onPressReply, isReply = false }: CommentItemProps) {
 	// Get is authenticated for showing/hiding "Reply" button
-	const { user, isAuthenticated } = useAuth()
+	const { user: userSelf, isAuthenticated } = useAuth()
 
 	// Get parent comment author name, if applicable
-	const { data: userParentAuthor, isLoading } = useUserProfile(parent?.authorPubkey ?? '')
-	const npubUserParentAuthor = parent?.authorPubkey ? npubEncode(parent?.authorPubkey) : null
+	const pubkeyAuthorParentComment = comment?.parentComment?.authorPubkey ?? ''
+	const { data: dataUserParent, isLoading } = useProfile(pubkeyAuthorParentComment)
+	const { user: userParent, profile: profileUserParent } = dataUserParent ?? {}
+	const npubUserParentAuthor = comment?.parentComment?.authorPubkey ? npubEncode(pubkeyAuthorParentComment) : null
 	const textUserParentAuthor =
-		userParentAuthor?.displayName ??
-		userParentAuthor?.name ??
+		profileUserParent?.name ??
+		profileUserParent?.displayName ??
 		(npubUserParentAuthor ? npubUserParentAuthor.slice(0, 9) + '..' + npubUserParentAuthor.slice(-6) : '')
 
 	// Only add an indent for threaded replies if the comment is a top-level comment (i.e. `isReply === false`)
@@ -85,29 +85,24 @@ function CommentItem({ comment, onPressReply, isReply = false, parent }: Comment
 			</div>
 			<div className={'flex-col gap-2 ' + classIndentTopLevelComment}>
 				{comment.children.map((commentChild) => (
-					<CommentItem
-						key={commentChild.id}
-						comment={commentChild}
-						isReply
-						onPressReply={() => onPressReply(commentChild)}
-						parent={comment.parentComment}
-					/>
+					<CommentItem key={commentChild.id} comment={commentChild} isReply onPressReply={() => onPressReply(commentChild)} />
 				))}
 			</div>
 		</>
 	)
 }
 
-function AddCommentForm({ targetEvent, parentComment, onRemoveReplyTo }: AddCommentProps) {
+function AddCommentForm({ targetEvent, replyingTo: parentComment, onRemoveReplyTo }: AddCommentProps) {
 	const [content, setContent] = useState('')
 	const publishMutation = usePublishCommentMutation()
 
 	/** Reply to - display user name */
-	const { data: userReplyingTo, isLoading } = useUserProfile(parentComment?.authorPubkey ?? '')
+	const { data: dataUserReplyingTo, isLoading } = useProfile(parentComment?.authorPubkey ?? '')
+	const { user: userReplyingTo, profile: profileUserReplyingTo } = dataUserReplyingTo ?? {}
 	const npubUserReplyingTo = parentComment?.authorPubkey ? npubEncode(parentComment?.authorPubkey) : null
 	const textUserReplyingTo =
-		userReplyingTo?.displayName ??
-		userReplyingTo?.name ??
+		profileUserReplyingTo?.displayName ??
+		profileUserReplyingTo?.name ??
 		(npubUserReplyingTo ? npubUserReplyingTo.slice(0, 9) + '..' + npubUserReplyingTo.slice(-6) : '')
 
 	const handleSubmit = async () => {
@@ -176,7 +171,7 @@ export function Comments({ targetEvent }: CommentsProps) {
 		<div className="space-y-6" id="comments-section">
 			{/* Add Comment Form - only show for authenticated users */}
 			{isAuthenticated ? (
-				<AddCommentForm targetEvent={targetEvent} parentComment={parentComment} onRemoveReplyTo={() => setParentComment(undefined)} />
+				<AddCommentForm targetEvent={targetEvent} replyingTo={parentComment} onRemoveReplyTo={() => setParentComment(undefined)} />
 			) : (
 				<div className="bg-gray-50 p-4 rounded-lg text-center">
 					<p className="text-gray-600">Please log in to leave a comment.</p>
