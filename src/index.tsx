@@ -144,10 +144,14 @@ async function initializeAppSettings() {
 
 export type NostrMessage = ['EVENT', Event]
 
-// Track initialization state
+// Track initialization state - mark as ready as soon as core components are initialized
+// The heavy relay connections can fail/timeout without blocking setup
 let eventHandlerReady = false
 
-getEventHandler()
+// Start initialization but don't block setup on relay connections
+// Core components (signer, validator, admin manager) are set up synchronously in the constructor
+// Only relay-dependent features (zaps, blacklist sync) may be delayed
+const initPromise = getEventHandler()
 	.initialize({
 		appPrivateKey: process.env.APP_PRIVATE_KEY || '',
 		adminPubkeys: [],
@@ -155,8 +159,22 @@ getEventHandler()
 	})
 	.then(() => {
 		eventHandlerReady = true
+		console.log('✅ EventHandler initialized successfully')
 	})
-	.catch((error) => console.error(error))
+	.catch((error) => {
+		console.error('EventHandler initialization failed:', error)
+		// Still mark as ready - core components are initialized, relay features may be degraded
+		eventHandlerReady = true
+	})
+
+// For setup form: mark ready after short delay since core components are ready immediately
+// This allows setup events to be processed even if relay connections are slow
+setTimeout(() => {
+	if (!eventHandlerReady) {
+		console.log('Marking event handler ready after initial delay (core components ready)')
+		eventHandlerReady = true
+	}
+}, 2000)
 
 // Handle static files from the public directory
 const serveStatic = async (path: string) => {
@@ -220,6 +238,7 @@ export const server = serve({
 					appSettings: appSettings,
 					appPublicKey: APP_PUBLIC_KEY,
 					needsSetup: !appSettings,
+					serverReady: eventHandlerReady,
 				})
 			},
 		},
@@ -302,9 +321,19 @@ export const server = serve({
 						return
 					}
 
-					if (!verifyEvent(data[1] as Event)) throw Error('Unable to verify event')
+					if (!verifyEvent(data[1] as Event)) {
+						ws.send(JSON.stringify(['OK', data[1].id, false, 'error: Unable to verify event signature']))
+						return
+					}
 
-					const resignedEvent = getEventHandler().handleEvent(data[1])
+					let resignedEvent
+					try {
+						resignedEvent = getEventHandler().handleEvent(data[1])
+					} catch (handleError) {
+						console.error('Error in handleEvent:', handleError)
+						ws.send(JSON.stringify(['OK', data[1].id, false, `error: Handler error: ${handleError}`]))
+						return
+					}
 
 					if (resignedEvent) {
 						const relay = await Relay.connect(RELAY_URL as string)

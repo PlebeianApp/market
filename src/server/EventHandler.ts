@@ -70,25 +70,47 @@ export class EventHandler {
 		// Register all zap purchase managers
 		this.purchaseManagers = [this.vanityManager]
 
-		// Initialize NDK service and load existing data
-		await this.ndkService.initialize(config.relayUrl)
-		await this.ndkService.loadExistingData()
+		// Initialize NDK service and load existing data with timeout
+		try {
+			await Promise.race([
+				this.ndkService.initialize(config.relayUrl),
+				new Promise((_, reject) => setTimeout(() => reject(new Error('NDK service init timeout')), 10000)),
+			])
+		} catch (e) {
+			console.warn('⚠️ NDK service init failed, continuing anyway:', e)
+		}
+
+		try {
+			await Promise.race([
+				this.ndkService.loadExistingData(),
+				new Promise((_, reject) => setTimeout(() => reject(new Error('Load existing data timeout')), 10000)),
+			])
+		} catch (e) {
+			console.warn('⚠️ Load existing data failed, continuing anyway:', e)
+		}
 
 		// Set up NDK for blacklist and vanity managers
 		if (config.relayUrl) {
 			this.ndk = new NDK({ explicitRelayUrls: [config.relayUrl] })
-			await this.ndk.connect()
+			try {
+				await Promise.race([
+					this.ndk.connect(),
+					new Promise((_, reject) => setTimeout(() => reject(new Error('App relay NDK connect timeout')), 10000)),
+				])
 
-			// Initialize blacklist
-			this.blacklistManager.setNDK(this.ndk)
-			await this.blacklistManager.loadExistingBlacklist(this.eventSigner.getAppPubkey())
+				// Initialize blacklist
+				this.blacklistManager.setNDK(this.ndk)
+				await this.blacklistManager.loadExistingBlacklist(this.eventSigner.getAppPubkey())
 
-			// Initialize vanity
-			this.vanityManager.setNDK(this.ndk)
-			await this.vanityManager.loadExistingVanityRegistry(this.eventSigner.getAppPubkey())
+				// Initialize vanity
+				this.vanityManager.setNDK(this.ndk)
+				await this.vanityManager.loadExistingVanityRegistry(this.eventSigner.getAppPubkey())
 
-			// Subscribe to zap receipts for all purchase managers (app relay)
-			this.subscribeToZapPurchases(this.ndk, 'App relay')
+				// Subscribe to zap receipts for all purchase managers (app relay)
+				this.subscribeToZapPurchases(this.ndk, 'App relay')
+			} catch (e) {
+				console.warn('⚠️ App relay NDK setup failed, continuing anyway:', e)
+			}
 
 			// Also subscribe on dedicated zap relays; some LSPs do not publish receipts to the app relay.
 			const zapRelayUrls = Array.from(new Set([config.relayUrl, ...ZAP_RELAYS].filter(Boolean)))

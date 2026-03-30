@@ -9,6 +9,7 @@ interface Config {
 	appSettings: AppSettings | null
 	appPublicKey: string
 	needsSetup: boolean
+	serverReady: boolean
 }
 
 let cachedConfig: Config | null = null

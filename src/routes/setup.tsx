@@ -90,6 +90,11 @@ function SetupRoute() {
 		},
 		onSubmit: async ({ value }) => {
 			try {
+				if (!config?.serverReady) {
+					toast.error('Server is still initializing. Please wait...')
+					return
+				}
+
 				if (!config?.appRelay) {
 					toast.error('Please enter a relay URL')
 					return
@@ -568,9 +573,14 @@ function SetupRoute() {
 								<form.Subscribe
 									selector={(state) => [state.canSubmit, state.isSubmitting]}
 									children={([canSubmit, isSubmitting]) => (
-										<Button type="submit" className="w-full" disabled={isSubmitting || !canSubmit}>
-											{isSubmitting ? 'Submitting...' : 'Submit'}
-										</Button>
+										<>
+											{!config?.serverReady && (
+												<div className="text-sm text-muted-foreground text-center mb-2">Waiting for server to be ready...</div>
+											)}
+											<Button type="submit" className="w-full" disabled={isSubmitting || !canSubmit || !config?.serverReady}>
+												{isSubmitting ? 'Submitting...' : !config?.serverReady ? 'Waiting...' : 'Submit'}
+											</Button>
+										</>
 									)}
 								/>
 							</form>
