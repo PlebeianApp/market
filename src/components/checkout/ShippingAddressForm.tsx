@@ -33,6 +33,18 @@ export function ShippingAddressForm({ form, hasAllShippingMethods }: ShippingAdd
 	const [noAddressRequired, setNoAddressRequired] = useState(false)
 	const [pickupAddresses, setPickupAddresses] = useState<Array<{ title: string; address: string }>>([])
 
+	useEffect(() => {
+		if (!noAddressRequired) return
+
+		// TanStack Form can retain hidden field validation in no-address flows.
+		// Seed valid fallback values so digital/pickup checkout can advance reliably.
+		form.setFieldValue('name', (prev: string) => (prev.trim() ? prev : 'Digital Order'))
+		form.setFieldValue('firstLineOfAddress', (prev: string) => (prev.trim() ? prev : 'No address required'))
+		form.setFieldValue('zipPostcode', (prev: string) => (prev.trim() ? prev : '00000'))
+		form.setFieldValue('city', (prev: string) => (prev.trim() ? prev : 'Austin'))
+		form.setFieldValue('country', (prev: string) => (isValidCountry(prev) ? prev : 'United States'))
+	}, [form, noAddressRequired])
+
 	// Check if all shipping methods are pickup/digital type and fetch pickup addresses
 	useEffect(() => {
 		const checkShippingStatus = async () => {
