@@ -413,7 +413,7 @@ export async function seedReaction(
 			// We will throw an error if 'd' tag is missing for addressable events.
 			throw new Error(`targetDTag is required for addressable event kind ${opts.targetKind}. Please provide it or fetch the event first.`)
 		}
-		const aTagValue = `$${opts.targetKind}:$${opts.targetEventPubkey}:${opts.targetDTag}`
+		const aTagValue = `${opts.targetKind}:${opts.targetEventPubkey}:${opts.targetDTag}`
 		tags.push(['a', aTagValue, opts.relayUrl || '', opts.targetEventPubkey])
 	}
 
