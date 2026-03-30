@@ -4,7 +4,7 @@ import { hexToBytes } from '@noble/hashes/utils'
 import WebSocket from 'ws'
 import { devUser1, devUser2, WALLETED_USER_LUD16 } from '../../src/lib/fixtures'
 import { RELAY_URL, TEST_APP_PRIVATE_KEY, TEST_APP_PUBLIC_KEY } from '../test-config'
-import { seedBase, seedMerchant, seedMarketplace } from 'e2e-new/helpers/seed'
+import { seedBase, seedMerchant, seedMarketplace, seedV4VShares } from 'e2e-new/helpers/seed'
 
 useWebSocketImplementation(WebSocket)
 
@@ -50,6 +50,20 @@ async function publish(relay: Relay, skHex: string, template: EventTemplate) {
 	const event = finalizeEvent(template, skBytes)
 	await relay.publish(event)
 	return event
+}
+
+/**
+ * Reset V4V shares for a user by publishing an empty Kind 30078 event.
+ * This replaces any existing V4V shares so the V4V setup dialog will appear
+ * during product creation.
+ */
+export async function resetV4VForUser(skHex: string): Promise<void> {
+	const relay = await Relay.connect(RELAY_URL)
+	try {
+		await seedV4VShares(relay, skHex)
+	} finally {
+		relay.close()
+	}
 }
 
 export async function resetRemoteCartForUser(skHex: string): Promise<void> {
