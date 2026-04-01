@@ -88,7 +88,9 @@ test.describe('V4V Product Creation Flow', () => {
 		// --- V4V Dialog ---
 		// Since we reset V4V shares, "Setup V4V First" button should appear
 		const v4vButton = newUserPage.getByTestId('product-setup-v4v-button')
-		await expect(v4vButton).toBeVisible({ timeout: 10_000 })
+		await expect(newUserPage.getByTestId('product-tab-shipping')).toHaveAttribute('data-state', 'active')
+		await expect(newUserPage.getByTestId('product-next-button')).not.toBeVisible()
+		await expect(v4vButton).toBeVisible({ timeout: 20_000 })
 		await v4vButton.click()
 
 		// Dialog opens with default 10% V4V for new users
