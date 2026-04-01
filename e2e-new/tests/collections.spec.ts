@@ -102,7 +102,7 @@ async function createCollection(
 	options?: {
 		productName?: string
 		shippingTestId?: string
-	}
+	},
 ) {
 	await openNewCollection(page)
 	await fillCollectionInfo(page, fields)
