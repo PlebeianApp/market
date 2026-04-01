@@ -29,12 +29,12 @@ describe('RatesCache', () => {
 		expect(result).toBe('{"USD": 100000}')
 	})
 
-	test('returns null for expired entry', () => {
-		cache.set('rates', '{"USD": 100000}', 1)
+	test('returns null for expired entry', async () => {
+		cache.set('rates', '{"USD": 100000}', 100)
 		expect(cache.get('rates')).toBe('{"USD": 100000}')
 
-		const result = new Promise((resolve) => setTimeout(() => resolve(cache.get('rates')), 50))
-		expect(result).resolves.toBeNull()
+		await new Promise((resolve) => setTimeout(resolve, 150))
+		expect(cache.get('rates')).toBeNull()
 	})
 
 	test('overwrites existing key', () => {

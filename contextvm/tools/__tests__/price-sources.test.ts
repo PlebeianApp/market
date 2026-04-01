@@ -283,6 +283,100 @@ describe('price-sources', () => {
 		})
 	})
 
+	describe('endpoint contracts', () => {
+		test('uses expected Yadio endpoint', async () => {
+			const urls: string[] = []
+			fetchSpy = spyOn(globalThis, 'fetch').mockImplementation((async (url: string) => {
+				urls.push(url)
+				return jsonOk({ BTC: { USD: 100000 } })
+			}) as any)
+
+			await fetchYadioRates()
+
+			expect(urls).toHaveLength(1)
+			expect(urls[0]).toBe('https://api.yadio.io/exrates/BTC')
+		})
+
+		test('uses CoinDesk Data API endpoint with expected query params', async () => {
+			const urls: string[] = []
+			fetchSpy = spyOn(globalThis, 'fetch').mockImplementation((async (url: string) => {
+				urls.push(url)
+				return jsonOk({ Data: { 'BTC-USD': { VALUE: 100000 } } })
+			}) as any)
+
+			await fetchCoinDeskRates()
+
+			expect(urls).toHaveLength(1)
+			const firstUrl = new URL(urls[0])
+			expect(firstUrl.origin).toBe('https://data-api.coindesk.com')
+			expect(firstUrl.pathname).toBe('/index/cc/v1/latest/tick')
+			expect(firstUrl.searchParams.get('market')).toBe('ccix')
+			expect(firstUrl.searchParams.get('groups')).toBe('VALUE')
+
+			const instruments = firstUrl.searchParams.get('instruments') || ''
+			for (const fiat of SUPPORTED_FIAT) {
+				expect(instruments).toContain(`BTC-${fiat}`)
+			}
+		})
+
+		test('falls back to cryptocompare host only after coindesk host fails', async () => {
+			const urls: string[] = []
+			fetchSpy = spyOn(globalThis, 'fetch').mockImplementation((async (url: string) => {
+				urls.push(url)
+				if (url.includes('data-api.coindesk.com')) {
+					return new Response('error', { status: 503 })
+				}
+				if (url.includes('data-api.cryptocompare.com')) {
+					return jsonOk({ Data: { 'BTC-USD': { VALUE: 100000 } } })
+				}
+				return new Response('not found', { status: 404 })
+			}) as any)
+
+			await fetchCoinDeskRates()
+
+			expect(urls).toHaveLength(2)
+			expect(urls[0]).toContain('data-api.coindesk.com')
+			expect(urls[1]).toContain('data-api.cryptocompare.com')
+		})
+
+		test('uses expected CoinGecko endpoint with full fiat list', async () => {
+			const urls: string[] = []
+			fetchSpy = spyOn(globalThis, 'fetch').mockImplementation((async (url: string) => {
+				urls.push(url)
+				return jsonOk({ bitcoin: { usd: 100000 } })
+			}) as any)
+
+			await fetchCoinGeckoRates()
+
+			expect(urls).toHaveLength(1)
+			const endpoint = new URL(urls[0])
+			expect(endpoint.origin).toBe('https://api.coingecko.com')
+			expect(endpoint.pathname).toBe('/api/v3/simple/price')
+			expect(endpoint.searchParams.get('ids')).toBe('bitcoin')
+
+			const listed = (endpoint.searchParams.get('vs_currencies') || '').split(',')
+			for (const fiat of SUPPORTED_FIAT) {
+				expect(listed).toContain(fiat.toLowerCase())
+			}
+		})
+
+		test('uses Binance ticker endpoint for BTCUSDT', async () => {
+			const urls: string[] = []
+			fetchSpy = spyOn(globalThis, 'fetch').mockImplementation((async (url: string) => {
+				urls.push(url)
+				if (url.includes('symbol=BTCUSDT')) {
+					return jsonOk({ symbol: 'BTCUSDT', price: '100000' })
+				}
+				return new Response('error', { status: 500 })
+			}) as any)
+
+			await fetchBinanceRates()
+
+			expect(urls.length).toBeGreaterThan(0)
+			expect(urls[0]).toBe('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT')
+		})
+	})
+
 	describe('fetchAllSources', () => {
 		test('returns aggregated rates with median when all sources succeed', async () => {
 			mockFetch({

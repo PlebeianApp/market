@@ -108,3 +108,42 @@ bun run dev
 - This confirms intended behavior:
   - Primary pricing feed: ContextVM currency server (multi-source aggregation + cache)
   - Fallback pricing feed: Yadio when ContextVM is unavailable
+
+### Relevant Test Commands (Pre-PR)
+
+Run these before opening the PR:
+
+```bash
+# Core unit tests for pricing sources + cache + server
+bun test contextvm/tools/__tests__/price-sources.test.ts
+bun test contextvm/__tests__/currency-server.test.ts
+
+# Broader ContextVM/unit suite
+bun run test:unit
+
+# ContextVM client integration test
+bun run test:integration
+```
+
+### Manual Runtime Verification Commands
+
+```bash
+# Verify ContextVM pricing response and cache behavior (TTL = 60s)
+bun run scripts/fetch-btc-price.ts ws://localhost:10547
+bun run scripts/fetch-btc-price.ts ws://localhost:10547
+```
+
+Expected:
+
+- First call: `Cached: false`
+- Second call (within 60s): `Cached: true`
+- `Sources succeeded` includes `yadio, coindesk, binance, coingecko`
+- `Sources failed: none`
+
+### Test Results (Latest Run)
+
+- `bun test contextvm/tools/__tests__/price-sources.test.ts` passed (`29 pass, 0 fail`).
+- `bun test contextvm/tools/__tests__/rates-cache.test.ts` passed (`8 pass, 0 fail`).
+- `bun test contextvm/__tests__/currency-server.test.ts` passed (`7 pass, 0 fail`).
+- `bun run test:unit` passed (`86 pass, 0 fail`).
+- `bun run test:integration` passed (`5 pass, 0 fail`).
