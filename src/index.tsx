@@ -231,8 +231,6 @@ function determineStage(): 'production' | 'staging' | 'development' {
 }
 
 export const server = serve({
-	hostname: '0.0.0.0',
-	port: parseInt(process.env.PORT || '3000'),
 	routes: {
 		'/api/config': {
 			GET: () => {

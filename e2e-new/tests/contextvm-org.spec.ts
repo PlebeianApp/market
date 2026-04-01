@@ -3,9 +3,13 @@ import { test, expect } from '@playwright/test'
 const SERVER_URL = 'https://contextvm.org/s/29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15'
 const EXPECTED_PUBKEY = '29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15'
 
-const TEST_PRIVATE_KEY = process.env.TEST_CONTEXTVM_NSEC || 'eb1021aeaec60f2bef13c588be23935b5dde947cdd51209fc3589de6b1433e3b'
+const TEST_PRIVATE_KEY = process.env.TEST_CONTEXTVM_NSEC
 
 async function loginToContextVm(page: import('@playwright/test').Page) {
+	if (!TEST_PRIVATE_KEY) {
+		throw new Error('Missing TEST_CONTEXTVM_NSEC environment variable')
+	}
+
 	const loginBtn = page.locator('header button', { hasText: /^Login$/ })
 	await loginBtn.click()
 	await page.waitForTimeout(1000)
@@ -100,6 +104,10 @@ test.describe('ContextVM.org - Server Page (no login required)', () => {
 })
 
 test.describe('ContextVM.org - Tool Forms (login required)', () => {
+	test.beforeEach(async ({}, testInfo) => {
+		testInfo.skip(!TEST_PRIVATE_KEY, 'Set TEST_CONTEXTVM_NSEC to run login-required ContextVM.org tests.')
+	})
+
 	test('get_btc_price tool has refresh checkbox input', async ({ page }) => {
 		await page.goto(SERVER_URL, { waitUntil: 'networkidle', timeout: 30000 })
 		await loginToContextVm(page)
@@ -126,8 +134,8 @@ test.describe('ContextVM.org - Tool Forms (login required)', () => {
 test.describe('ContextVM.org - Tool Execution (login + currency server required)', () => {
 	test.beforeEach(async ({}, testInfo) => {
 		testInfo.skip(
-			!process.env.RUN_CONTEXTVM_EXECUTION_TESTS,
-			'Set RUN_CONTEXTVM_EXECUTION_TESTS=true to run these tests. Requires running currency server.',
+			!TEST_PRIVATE_KEY || !process.env.RUN_CONTEXTVM_EXECUTION_TESTS,
+			'Set TEST_CONTEXTVM_NSEC and RUN_CONTEXTVM_EXECUTION_TESTS=true to run these tests. Requires running currency server.',
 		)
 	})
 
