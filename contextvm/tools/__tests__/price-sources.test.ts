@@ -41,15 +41,10 @@ function createYadioResponse(rates: Record<string, number>) {
 	return () => jsonOk({ BTC: rates })
 }
 
-function createCoinDeskResponse(usd: number, eur: number, gbp: number) {
+function createCoinDeskResponse(rates: Partial<Record<string, number>>) {
 	return () =>
 		jsonOk({
-			bpi: {
-				USD: { code: 'USD', rate: usd.toLocaleString(), rate_float: usd, description: 'US Dollar' },
-				EUR: { code: 'EUR', rate: eur.toLocaleString(), rate_float: eur, description: 'Euro' },
-				GBP: { code: 'GBP', rate: gbp.toLocaleString(), rate_float: gbp, description: 'British Pound' },
-			},
-			time: { updated: 'test', updatedISO: 'test' },
+			Data: Object.fromEntries(Object.entries(rates).map(([code, value]) => [`BTC-${code}`, { VALUE: value }])),
 		})
 }
 
@@ -120,13 +115,13 @@ describe('price-sources', () => {
 		})
 
 		test('throws on timeout', async () => {
-			fetchSpy = spyOn(globalThis, 'fetch').mockImplementation((_url: string) => {
+			fetchSpy = spyOn(globalThis, 'fetch').mockImplementation(((_url: string) => {
 				return new Promise<Response>((_resolve, reject) => {
 					setTimeout(() => {
 						reject(new TypeError('Failed to fetch'))
 					}, 10)
 				})
-			})
+			}) as any)
 
 			await expect(fetchYadioRates()).rejects.toThrow()
 		})
@@ -145,9 +140,9 @@ describe('price-sources', () => {
 	})
 
 	describe('fetchCoinDeskRates', () => {
-		test('parses BPI format and extracts USD/EUR/GBP', async () => {
+		test('parses latest tick format and extracts requested fiat rates', async () => {
 			mockFetch({
-				'api.coindesk.com': createCoinDeskResponse(100000, 92000, 78000),
+				'data-api.coindesk.com': createCoinDeskResponse({ USD: 100000, EUR: 92000, GBP: 78000 }),
 			})
 
 			const result = await fetchCoinDeskRates()
@@ -158,23 +153,35 @@ describe('price-sources', () => {
 			expect(result.rates.GBP).toBe(78000)
 		})
 
-		test('throws when bpi structure is wrong', async () => {
+		test('throws when response structure is wrong', async () => {
 			mockFetch({
-				'api.coindesk.com': () => jsonOk({ bpi: {} }),
+				'data-api.coindesk.com': () => jsonOk({ bpi: {} }),
+				'data-api.cryptocompare.com': () => jsonOk({ bpi: {} }),
+			})
+
+			await expect(fetchCoinDeskRates()).rejects.toThrow('unexpected response format')
+		})
+
+		test('throws on non-200 response', async () => {
+			mockFetch({
+				'data-api.coindesk.com': () => new Response('error', { status: 503 }),
+				'data-api.cryptocompare.com': () => new Response('error', { status: 503 }),
+			})
+
+			await expect(fetchCoinDeskRates()).rejects.toThrow('CoinDesk HTTP 503')
+		})
+
+		test('falls back to cryptocompare endpoint when coindesk host fails', async () => {
+			mockFetch({
+				'data-api.coindesk.com': () => new Response('error', { status: 503 }),
+				'data-api.cryptocompare.com': createCoinDeskResponse({ USD: 100000, EUR: 92000 }),
 			})
 
 			const result = await fetchCoinDeskRates()
 
 			expect(result.source).toBe('coindesk')
-			expect(Object.keys(result.rates).length).toBe(0)
-		})
-
-		test('throws on non-200 response', async () => {
-			mockFetch({
-				'api.coindesk.com': () => new Response('error', { status: 503 }),
-			})
-
-			await expect(fetchCoinDeskRates()).rejects.toThrow('CoinDesk HTTP 503')
+			expect(result.rates.USD).toBe(100000)
+			expect(result.rates.EUR).toBe(92000)
 		})
 	})
 
@@ -280,7 +287,7 @@ describe('price-sources', () => {
 		test('returns aggregated rates with median when all sources succeed', async () => {
 			mockFetch({
 				'api.yadio.io': createYadioResponse({ USD: 100000, EUR: 92000, GBP: 78000 }),
-				'api.coindesk.com': createCoinDeskResponse(100100, 92100, 78100),
+				'data-api.coindesk.com': createCoinDeskResponse({ USD: 100100, EUR: 92100, GBP: 78100 }),
 				'api.binance.com/api/v3/ticker/price?symbol=BTCUSDT': createBinanceUsdtResponse(100200),
 				'api.coingecko.com': createCoinGeckoResponse({ usd: 100300, eur: 92300, gbp: 78300 }),
 			})
@@ -297,7 +304,7 @@ describe('price-sources', () => {
 		test('calculates median correctly for even number of values', async () => {
 			mockFetch({
 				'api.yadio.io': createYadioResponse({ USD: 100000, EUR: 92000 }),
-				'api.coindesk.com': createCoinDeskResponse(100100, 92100, 78000),
+				'data-api.coindesk.com': createCoinDeskResponse({ USD: 100100, EUR: 92100, GBP: 78000 }),
 				'api.binance.com/api/v3/ticker/price?symbol=BTCUSDT': createBinanceUsdtResponse(100200),
 				'api.coingecko.com': createCoinGeckoResponse({ usd: 100300, eur: 92300 }),
 			})
@@ -323,7 +330,8 @@ describe('price-sources', () => {
 		test('returns rates from successful sources when some fail', async () => {
 			mockFetch({
 				'api.yadio.io': createYadioResponse({ USD: 100000, EUR: 92000 }),
-				'api.coindesk.com': () => new Response('error', { status: 500 }),
+				'data-api.coindesk.com': () => new Response('error', { status: 500 }),
+				'data-api.cryptocompare.com': () => new Response('error', { status: 500 }),
 				'api.binance.com/api/v3/ticker/price?symbol=BTCUSDT': createBinanceUsdtResponse(100200),
 				'api.coingecko.com': createCoinGeckoResponse({ usd: 100300, eur: 92300 }),
 			})
@@ -339,7 +347,8 @@ describe('price-sources', () => {
 		test('throws when all sources fail', async () => {
 			mockFetch({
 				'api.yadio.io': () => new Response('error', { status: 500 }),
-				'api.coindesk.com': () => new Response('error', { status: 500 }),
+				'data-api.coindesk.com': () => new Response('error', { status: 500 }),
+				'data-api.cryptocompare.com': () => new Response('error', { status: 500 }),
 				'api.binance.com': () => new Response('error', { status: 500 }),
 				'api.coingecko.com': () => new Response('error', { status: 500 }),
 			})
@@ -350,7 +359,8 @@ describe('price-sources', () => {
 		test('works correctly when only 1 source succeeds', async () => {
 			mockFetch({
 				'api.yadio.io': createYadioResponse({ USD: 100000 }),
-				'api.coindesk.com': () => new Response('error', { status: 500 }),
+				'data-api.coindesk.com': () => new Response('error', { status: 500 }),
+				'data-api.cryptocompare.com': () => new Response('error', { status: 500 }),
 				'api.binance.com': () => new Response('error', { status: 500 }),
 				'api.coingecko.com': () => new Response('error', { status: 500 }),
 			})
@@ -365,7 +375,7 @@ describe('price-sources', () => {
 		test('includes currencies available from at least one source', async () => {
 			mockFetch({
 				'api.yadio.io': createYadioResponse({ USD: 100000 }),
-				'api.coindesk.com': createCoinDeskResponse(100100, 92000, 78000),
+				'data-api.coindesk.com': createCoinDeskResponse({ USD: 100100, EUR: 92000, GBP: 78000 }),
 				'api.binance.com/api/v3/ticker/price?symbol=BTCUSDT': createBinanceUsdtResponse(100200),
 				'api.coingecko.com': createCoinGeckoResponse({ usd: 100300 }),
 			})

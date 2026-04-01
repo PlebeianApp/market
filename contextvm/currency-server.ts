@@ -28,7 +28,7 @@ function getCachePath(): string {
 	return process.env.CURRENCY_CACHE_PATH || './contextvm/data/rates-cache.sqlite'
 }
 
-const CACHE_TTL_MS = 2 * 60 * 1000
+const CACHE_TTL_MS = 1 * 60 * 1000
 
 let cache: RatesCache
 

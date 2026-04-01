@@ -63,13 +63,49 @@ export async function fetchYadioRates(): Promise<SourceResult> {
 }
 
 export async function fetchCoinDeskRates(): Promise<SourceResult> {
-	const response = await fetchWithTimeout('https://api.coindesk.com/v1/bpi/currentprice.json')
-	if (!response.ok) throw new Error(`CoinDesk HTTP ${response.status}`)
-	const data = await response.json()
+	const instruments = SUPPORTED_FIAT.map((code) => `BTC-${code}`).join(',')
+	const query = `market=ccix&instruments=${encodeURIComponent(instruments)}&groups=VALUE`
+	const endpoints = [
+		`https://data-api.coindesk.com/index/cc/v1/latest/tick?${query}`,
+		`https://data-api.cryptocompare.com/index/cc/v1/latest/tick?${query}`,
+	]
+
+	let data: any = null
+	let lastError: Error | null = null
+
+	for (const url of endpoints) {
+		try {
+			const response = await fetchWithTimeout(url)
+			if (!response.ok) {
+				lastError = new Error(`CoinDesk HTTP ${response.status}`)
+				continue
+			}
+
+			const parsed = await response.json()
+			if (!parsed?.Data || typeof parsed.Data !== 'object') {
+				lastError = new Error('CoinDesk: unexpected response format')
+				continue
+			}
+
+			data = parsed
+			break
+		} catch (error) {
+			lastError = error as Error
+		}
+	}
+
+	if (!data) {
+		throw lastError || new Error('CoinDesk: all endpoints failed')
+	}
+
 	const rates: Partial<Record<FiatCode, number>> = {}
-	if (typeof data.bpi?.USD?.rate_float === 'number') rates.USD = data.bpi.USD.rate_float
-	if (typeof data.bpi?.EUR?.rate_float === 'number') rates.EUR = data.bpi.EUR.rate_float
-	if (typeof data.bpi?.GBP?.rate_float === 'number') rates.GBP = data.bpi.GBP.rate_float
+	for (const code of SUPPORTED_FIAT) {
+		const instrument = `BTC-${code}`
+		const value = data.Data?.[instrument]?.VALUE
+		if (typeof value === 'number' && value > 0) {
+			rates[code] = value
+		}
+	}
 	return { source: 'coindesk', rates, fetchedAt: Date.now() }
 }
 
