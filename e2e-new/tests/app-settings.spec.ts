@@ -98,7 +98,6 @@ test.describe('App Settings', () => {
 // --- Featured Items ---
 
 test.beforeEach(async () => {
-	console.log('TEST === RUNNING BEFORE EACH')
 	await resetAppFeaturedList()
 })
 
