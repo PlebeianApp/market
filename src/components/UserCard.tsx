@@ -1,12 +1,10 @@
-import { profileByIdentifierQueryOptions, useProfile } from '@/queries/profiles'
+import { useProfile } from '@/queries/profiles'
 import { AvatarUser } from './AvatarUser'
-import { useSuspenseQuery } from 'node_modules/@tanstack/react-query/build/modern/useSuspenseQuery'
 import { useState } from 'react'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { Nip05Badge } from './Nip05Badge'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Link, useNavigate } from '@tanstack/react-router'
-import { authStore, useAuth } from '@/lib/stores/auth'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Link } from '@tanstack/react-router'
 
 interface UserCardProps {
 	pubkey: string
@@ -18,8 +16,8 @@ interface UserCardProps {
 }
 
 export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-05', onPress = 'profile' }: UserCardProps) {
-	const { data: profileData, error } = useProfile(pubkey)
-	const { profile, user } = profileData || {}
+	const { data: profileData } = useProfile(pubkey)
+	const { user } = profileData || {}
 
 	const breakpoint = useBreakpoint()
 	const compact = breakpoint === 'md' || breakpoint === 'sm'
@@ -135,7 +133,9 @@ export function UserCard({ pubkey, className = '', size = 'md', subtitle = 'nip-
 					) : (
 						<h2 className={classSizeName + ' truncate min-w-0 ' + className}>{textTitle}</h2>
 					)}
-					<Nip05Badge pubkey={user?.pubkey} className={classSizeNIP05 + ' ' + className} showAddress={showNip05AddressAfterBadge} />
+					{user?.pubkey && (
+						<Nip05Badge pubkey={user.pubkey} className={classSizeNIP05 + ' ' + className} showAddress={showNip05AddressAfterBadge} />
+					)}
 				</div>
 
 				{showSubtitle &&
