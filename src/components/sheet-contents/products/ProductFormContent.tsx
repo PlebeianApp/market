@@ -302,7 +302,7 @@ export function ProductFormContent({
 							<CategoryTab />
 						</TabsContent>
 
-						<TabsContent value="images" className="mt-4">
+						<TabsContent value="images" className="mt-4 overflow-hidden">
 							<ImagesTab />
 						</TabsContent>
 

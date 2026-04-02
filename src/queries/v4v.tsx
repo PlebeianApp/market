@@ -3,7 +3,6 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { nip19 } from 'nostr-tools'
-import { v4 as uuidv4 } from 'uuid'
 import { v4vKeys } from './queryKeyFactory'
 import { filterBlacklistedPubkeys } from '@/lib/utils/blacklistFilters'
 
@@ -219,7 +218,7 @@ export const publishV4VShares = async (shares: V4VDTO[], userPubkey: string, app
 		event.kind = 30078
 		event.content = JSON.stringify(zapTags)
 		event.tags = [
-			['d', uuidv4()],
+			['d', 'v4v_share'],
 			['l', 'v4v_share'],
 		]
 
