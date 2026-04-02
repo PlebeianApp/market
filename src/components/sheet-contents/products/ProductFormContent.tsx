@@ -91,41 +91,8 @@ export function ProductFormContent({
 		return activeShippingOptions.length === 0
 	}, [editingProductId, userShippingOptions, isLoadingUserShipping, userPubkey, isShippingFetched])
 
-	// Set initial tab to Shipping when user has no shipping options
-	// Track which formSessionId we've handled to avoid re-triggering on same session
-	const handledSessionIdRef = useRef<number | null>(null)
-
-	useEffect(() => {
-		// Only auto-switch to shipping tab if:
-		// 1. We haven't handled this session yet
-		// 2. User should see shipping first (no shipping options)
-		// 3. We're NOT already on the shipping tab
-		if (handledSessionIdRef.current !== formSessionId && shouldShowShippingFirst && activeTab !== 'shipping') {
-			productFormActions.updateValues({ activeTab: 'shipping' })
-			handledSessionIdRef.current = formSessionId
-		}
-	}, [shouldShowShippingFirst, activeTab, formSessionId])
-
-	// Track if we started with shipping first (no shipping options)
-	// This is used to determine if we should auto-navigate to name tab after first shipping is added
-	const startedWithShippingFirstRef = useRef<boolean>(false)
-
-	// Track if we've started with shipping first in this session
-	useEffect(() => {
-		if (shouldShowShippingFirst && activeTab === 'shipping') {
-			startedWithShippingFirstRef.current = true
-		}
-	}, [shouldShowShippingFirst, activeTab])
-
-	// Auto-navigate to 'name' tab after first shipping option is added when we started with shipping first
-	useEffect(() => {
-		if (startedWithShippingFirstRef.current && hasValidShipping && activeTab === 'shipping') {
-			// First shipping option added, navigate to name tab
-			productFormActions.updateValues({ activeTab: 'name' })
-			// Reset the flag so we don't auto-navigate again
-			startedWithShippingFirstRef.current = false
-		}
-	}, [hasValidShipping, activeTab])
+	// Form always starts at Name tab - user navigates manually
+	// Removed auto-navigation that caused confusion after adding shipping
 
 	// Check for persisted draft on mount (for drafts from previous sessions)
 	const checkForPersistedDraft = useCallback(async () => {
@@ -261,6 +228,7 @@ export function ProductFormContent({
 			className={`flex flex-col h-full ${className}`}
 			data-testid="product-form"
 			data-shipping-loaded={isShippingFetched || !!editingProductId}
+			data-v4v-loaded={!isLoadingV4V}
 		>
 			<div className="flex-1 flex flex-col min-h-0 overflow-hidden max-h-[calc(100vh-200px)]">
 				{/* Single level tabs: Name, Detail, Spec, Category, Images, Shipping */}

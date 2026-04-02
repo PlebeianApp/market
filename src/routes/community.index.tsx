@@ -113,7 +113,15 @@ function CommunityRoute() {
 				? [] // Don't flash generic collections while featured are still loading
 				: collections
 						.filter((collection: NDKEvent) => {
-							return collection.tags.some((tag: string[]) => tag[0] === 'image' && tag[1])
+							// Must have an image
+							const hasImage = collection.tags.some((tag: string[]) => tag[0] === 'image' && tag[1])
+							// Must have a valid title (not empty)
+							const title = getCollectionTitle(collection)
+							const hasTitle = title && title !== ''
+							// Must have a valid ID (not empty)
+							const collectionId = getCollectionId(collection)
+							const hasId = collectionId && collectionId !== ''
+							return hasImage && hasTitle && hasId
 						})
 						.slice(0, 4)
 
@@ -244,11 +252,17 @@ function CommunityRoute() {
 			</div>
 
 			<div className="flex flex-col gap-6">
-				<Link to={`/collection/${currentCollectionId}`}>
-					<Button variant="secondary" size="lg">
-						View Collection
+				{currentCollectionId ? (
+					<Link to={`/collection/${currentCollectionId}`}>
+						<Button variant="secondary" size="lg">
+							View Collection
+						</Button>
+					</Link>
+				) : (
+					<Button variant="secondary" size="lg" disabled>
+						No Collection Available
 					</Button>
-				</Link>
+				)}
 
 				{/* Pagination dots */}
 				{totalSlides > 1 && (

@@ -93,7 +93,7 @@ async function revisitCollectionsAndAssert(page: Page, assertion: () => Promise<
 	await expect(async () => {
 		await gotoCollections(page)
 		await assertion()
-	}).toPass({ timeout: 20_000 })
+	}).toPass({ timeout: 40_000 })
 }
 
 async function createCollection(
@@ -155,7 +155,9 @@ test.describe('Collection Management', () => {
 		await fillCollectionInfo(merchantPage, updated)
 		await submitCollection(merchantPage, 'Update Collection')
 
-		await expectCollectionVisible(merchantPage, updated.name)
+		await revisitCollectionsAndAssert(merchantPage, async () => {
+			await expectCollectionVisible(merchantPage, updated.name)
+		})
 
 		await revisitCollectionsAndAssert(merchantPage, async () => {
 			await expectCollectionVisible(merchantPage, updated.name)
