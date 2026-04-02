@@ -121,3 +121,16 @@ export async function purchaseVanityForPubkey(
 		amountSats: options.amountSats,
 	})
 }
+
+export async function purchaseNip05ForPubkey(
+	ctx: PurchaseContext,
+	options: { username: string; amountSats: number },
+): Promise<ZapPurchaseInvoiceResult> {
+	return zapPurchase({
+		...ctx,
+		zapLabel: 'nip05-register',
+		registryTag: 'nip05',
+		registryKey: options.username.toLowerCase(),
+		amountSats: options.amountSats,
+	})
+}
