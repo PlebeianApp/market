@@ -73,6 +73,7 @@ case "$STAGE" in
         SSH_PASSWORD="${SSH_PASSWORD:-deployer}"
         APP_PORT="${APP_PORT:-3000}"
         PM2_APP_NAME="market-development"
+        PM2_CURRENCY_APP_NAME="market-development-currency-server"
         ;;
     staging)
         SSH_HOST="${SSH_HOST:-staging.plebeian.market}"
@@ -80,6 +81,7 @@ case "$STAGE" in
         SSH_USER="${SSH_USER:-deployer}"
         APP_PORT="${APP_PORT:-3000}"
         PM2_APP_NAME="market-staging"
+        PM2_CURRENCY_APP_NAME="market-staging-currency-server"
         ;;
     production)
         SSH_HOST="${SSH_HOST:-plebeian.market}"
@@ -87,6 +89,7 @@ case "$STAGE" in
         SSH_USER="${SSH_USER:-deployer}"
         APP_PORT="${APP_PORT:-3001}"
         PM2_APP_NAME="market-production"
+        PM2_CURRENCY_APP_NAME="market-production-currency-server"
         ;;
 esac
 
@@ -144,6 +147,7 @@ echo "  Target:   $SSH_USER@$SSH_HOST:$SSH_PORT"
 echo "  Release:  $RELEASE_NAME"
 echo "  App Port: $APP_PORT"
 echo "  PM2 Name: $PM2_APP_NAME"
+echo "  PM2 Currency: $PM2_CURRENCY_APP_NAME"
 echo ""
 echo "═══════════════════════════════════════════════════════════════════════════"
 
@@ -170,6 +174,8 @@ trap "rm -rf $TEMP_DIR" EXIT
 cp -r "$PROJECT_DIR/dist" "$TEMP_DIR/"
 # src/ - server code for API (run by Bun/PM2)
 cp -r "$PROJECT_DIR/src" "$TEMP_DIR/"
+# contextvm/ - currency server runtime code
+cp -r "$PROJECT_DIR/contextvm" "$TEMP_DIR/"
 # Dependencies
 cp "$PROJECT_DIR/package.json" "$TEMP_DIR/"
 cp "$PROJECT_DIR/bun.lock" "$TEMP_DIR/"
@@ -198,6 +204,24 @@ module.exports = {
     kill_timeout: 5000,
     wait_ready: true,
     listen_timeout: 10000,
+  }, {
+    name: '$PM2_CURRENCY_APP_NAME',
+    script: 'contextvm/currency-server.ts',
+    interpreter: process.env.HOME + '/.bun/bin/bun',
+    cwd: '$REMOTE_APP_DIR',
+    instances: 1,
+    exec_mode: 'fork',
+    env_file: '.env',
+    error_file: '$REMOTE_BASE/logs/$PM2_CURRENCY_APP_NAME-error.log',
+    out_file: '$REMOTE_BASE/logs/$PM2_CURRENCY_APP_NAME-out.log',
+    log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+    merge_logs: true,
+    autorestart: true,
+    max_restarts: 10,
+    min_uptime: '10s',
+    restart_delay: 5000,
+    max_memory_restart: '500M',
+    kill_timeout: 5000,
   }],
 };
 EOF
@@ -235,6 +259,7 @@ echo "   ✓ Dependencies installed"
 echo ""
 echo "📦 Swapping releases..."
 run_ssh "pm2 stop $PM2_APP_NAME 2>/dev/null || true"
+run_ssh "pm2 stop $PM2_CURRENCY_APP_NAME 2>/dev/null || true"
 run_ssh "ln -sfn $REMOTE_BASE/releases/$RELEASE_NAME $REMOTE_APP_DIR"
 echo "   ✓ Release swapped"
 
@@ -362,6 +387,7 @@ ${SSH_KEY:+SSH_KEY=$SSH_KEY}
 ${SSH_PASSWORD:+SSH_PASSWORD=$SSH_PASSWORD}
 APP_PORT=$APP_PORT
 PM2_APP_NAME=$PM2_APP_NAME
+PM2_CURRENCY_APP_NAME=$PM2_CURRENCY_APP_NAME
 REMOTE_APP_DIR=$REMOTE_APP_DIR
 EOF
 
