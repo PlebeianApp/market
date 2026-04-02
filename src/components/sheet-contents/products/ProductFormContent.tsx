@@ -91,20 +91,32 @@ export function ProductFormContent({
 		return activeShippingOptions.length === 0
 	}, [editingProductId, userShippingOptions, isLoadingUserShipping, userPubkey, isShippingFetched])
 
-	// Set initial tab to Shipping when user has no shipping options
+	// Determine the first tab that has validation issues (for new products)
+	// This replaces the old "jump to shipping if no shipping" logic
+	const getFirstInvalidTab = useCallback(() => {
+		if (!hasValidName) return 'name'
+		if (!hasValidDescription) return 'detail'
+		if (!hasValidImages) return 'images'
+		if (!hasValidShipping) return 'shipping'
+		return 'name' // default starting tab
+	}, [hasValidName, hasValidDescription, hasValidImages, hasValidShipping])
+
+	// Set initial tab based on validation (first tab with missing required data)
 	// Track which formSessionId we've handled to avoid re-triggering on same session
 	const handledSessionIdRef = useRef<number | null>(null)
 
+	// For new products (not editing), auto-navigate to first invalid tab
+	// For editing products, keep current tab
 	useEffect(() => {
-		// Only auto-switch to shipping tab if:
-		// 1. We haven't handled this session yet
-		// 2. User should see shipping first (no shipping options)
-		// 3. We're NOT already on the shipping tab
-		if (handledSessionIdRef.current !== formSessionId && shouldShowShippingFirst && activeTab !== 'shipping') {
-			productFormActions.updateValues({ activeTab: 'shipping' })
+		// Only auto-switch for new products (no editingProductId)
+		if (handledSessionIdRef.current !== formSessionId && !editingProductId) {
+			const firstInvalid = getFirstInvalidTab()
+			if (firstInvalid !== activeTab) {
+				productFormActions.updateValues({ activeTab: firstInvalid })
+			}
 			handledSessionIdRef.current = formSessionId
 		}
-	}, [shouldShowShippingFirst, activeTab, formSessionId])
+	}, [formSessionId, activeTab, editingProductId, getFirstInvalidTab])
 
 	// Track if we started with shipping first (no shipping options)
 	// This is used to determine if we should auto-navigate to name tab after first shipping is added
