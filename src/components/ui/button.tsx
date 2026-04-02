@@ -3,13 +3,13 @@ import { Slot } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
 
 import { cn } from '@/lib/utils'
-import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip'
 
 export interface ButtonProps extends React.ComponentProps<'button'> {
-  tooltip?: string;
-  asChild?: boolean
-		icon?: React.ReactNode
-		iconPosition?: IconPosition
+	tooltip?: string
+	asChild?: boolean
+	icon?: React.ReactNode
+	iconPosition?: IconPosition
 }
 
 const buttonVariants = cva(
@@ -67,14 +67,13 @@ function Button({
 	iconPosition = 'left',
 	children,
 	...props
-}: ButtonProps &
-	VariantProps<typeof buttonVariants>) {
+}: ButtonProps & VariantProps<typeof buttonVariants>) {
 	const Comp = asChild ? Slot : 'button'
 
 	const hasIcon = !!icon
 	const buttonClasses = cn(buttonVariants({ variant, size, className }), hasIcon && 'inline-flex items-center gap-2')
 
-	const {tooltip} = props
+	const { tooltip } = props
 	const content = (
 		<Comp data-slot="button" className={buttonClasses} {...props}>
 			{hasIcon && iconPosition === 'right' ? (
@@ -92,12 +91,12 @@ function Button({
 	)
 
 	if (tooltip) {
-		return <Tooltip>
-			<TooltipTrigger asChild>
-                {content}
-            </TooltipTrigger>
-			<TooltipContent side="bottom">{tooltip}</TooltipContent>
-		</Tooltip>
+		return (
+			<Tooltip>
+				<TooltipTrigger asChild>{content}</TooltipTrigger>
+				<TooltipContent side="bottom">{tooltip}</TooltipContent>
+			</Tooltip>
+		)
 	}
 
 	return content
