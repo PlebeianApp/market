@@ -20,7 +20,7 @@ test.describe('V4V Product Creation Flow', () => {
 		// Without this, the form briefly shows the Name tab (default) while the shipping
 		// query is loading, then redirects to the Shipping tab once it confirms no
 		// shipping options exist. This race condition causes flaky failures on CI.
-		const productForm = newUserPage.locator('[data-testid="product-form"][data-shipping-loaded="true"]')
+		const productForm = newUserPage.locator('[data-testid="product-form"][data-shipping-loaded="true"][data-v4v-loaded="true"]')
 		await expect(productForm).toBeVisible({ timeout: 15_000 })
 
 		const titleInput = newUserPage.getByTestId('product-name-input')
