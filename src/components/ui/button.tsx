@@ -5,8 +5,11 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 
-interface ButtonProps extends React.ComponentProps<'button'> {
+export interface ButtonProps extends React.ComponentProps<'button'> {
   tooltip?: string;
+  asChild?: boolean
+		icon?: React.ReactNode
+		iconPosition?: IconPosition
 }
 
 const buttonVariants = cva(
@@ -65,11 +68,7 @@ function Button({
 	children,
 	...props
 }: ButtonProps &
-	VariantProps<typeof buttonVariants> & {
-		asChild?: boolean
-		icon?: React.ReactNode
-		iconPosition?: IconPosition
-	}) {
+	VariantProps<typeof buttonVariants>) {
 	const Comp = asChild ? Slot : 'button'
 
 	const hasIcon = !!icon

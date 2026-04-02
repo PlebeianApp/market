@@ -13,6 +13,8 @@ export interface Comment {
 	authorPubkey: string
 	content: string
 	createdAt: number
+	/** Reference to the same comment as an event */
+	event: NDKEvent
 	/** Root of the comment thread, e.g. Product Listing */
 	targetEventId: string
 	targetEventPubkey: string
@@ -35,6 +37,7 @@ const transformCommentEvent = (event: NDKEvent, eventTarget: NDKEvent): Comment 
 		content: event.content,
 		authorPubkey: event.pubkey,
 		createdAt: event.created_at ?? Math.floor(Date.now() / 1000),
+		event: event,
 		targetEventId: eventTarget.id,
 		targetEventPubkey: eventTarget.pubkey,
 		targetEventKind: eventTarget.kind,

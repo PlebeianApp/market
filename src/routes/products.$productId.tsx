@@ -628,7 +628,7 @@ function RouteComponent() {
 							<span>Sold by:</span>
 							<UserCard pubkey={pubkey} size="md" />
 
-							<SocialInteractions event={product} onCommentButtonPressed={handleNavigateToComments} />
+							<SocialInteractions event={product} onCommentButtonPressed={handleNavigateToComments} className="dark" />
 						</div>
 					</div>
 				</div>

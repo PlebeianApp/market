@@ -1,15 +1,15 @@
-import { Button } from '@/components/ui/button'
+import { Button, type ButtonProps } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useStore } from '@tanstack/react-store'
 import { MessageSquare } from 'lucide-react'
-import { useState } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
 
-interface CommentButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface CommentButtonProps extends ButtonProps {
 	event: NDKEvent
 }
 
@@ -47,21 +47,25 @@ export function CommentButton({ event, className, onClick, onPointerDown, ...pro
 		// TODO
 	}
 
+	// Default values for props
+	const icon = props.icon ?? <MessageSquare className="w-6 h-6" />
+	const tooltip = props.tooltip ?? 'Comment'
+
 	return (
 		<>
 			<Button
 				variant="outline"
 				size="icon"
-				className={'border-light-gray border-2 bg-transparent text-light-gray hover:text-black ' + className}
+				className={'border-foreground border-2 bg-transparent hover:bg-foreground hover:text-background ' + className}
 				type="button"
 				{...props}
-				tooltip="Comment"
+				tooltip={tooltip}
+				icon={icon}
 				onClick={(e) => {
 					handleButtonInteraction(e)
 				}}
 				onPointerDown={handleButtonPointerDown}
-				disabled={!event.ndk}
-				icon={<MessageSquare className="w-6 h-6" />}
+				disabled={props.disabled || !event.ndk}
 			/>
 
 			{/* Comment Dialog */}

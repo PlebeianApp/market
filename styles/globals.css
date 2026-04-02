@@ -252,6 +252,7 @@ button {
 	--color-sidebar-foreground: var(--sidebar-foreground);
 	--color-sidebar: var(--sidebar-background);
 	--color-light-gray: var(--light-gray);
+	--color-neo-purple: var(--neo-purple);
 	--animate-accordion-down: accordion-down 0.2s ease-out;
 	--animate-accordion-up: accordion-up 0.2s ease-out;
 

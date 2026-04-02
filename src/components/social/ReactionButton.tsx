@@ -92,8 +92,8 @@ export function ReactionButton({ event, className, ...props }: ReactionButtonPro
 	const commonEmojis = ['❤️', '😂', '🔥', '💰', '👀']
 
 	const classNameButton = latestReaction
-		? 'bg-secondary hover:bg-secondary/80 active:bg-secondary/70 text-white hover:text-light-gray'
-		: 'border-secondary bg-transparent hover:bg-secondary active:bg-secondary/80 text-secondary hover:text-white'
+		? 'bg-neo-purple hover:bg-neo-purple/80 active:bg-neo-purple/70 text-white hover:text-light-gray'
+		: 'border-neo-purple bg-transparent hover:bg-neo-purple active:bg-neo-purple/80 text-neo-purple hover:text-white'
 
 	return (
 		<>

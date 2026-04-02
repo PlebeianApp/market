@@ -16,6 +16,8 @@ import { useProfile, useProfileName } from '@/queries/profiles'
 import { npubEncode } from 'nostr-tools/nip19'
 import { UserCard } from './UserCard'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
+import SocialInteractions from './social/SocialInteractions'
+import { toast } from 'sonner'
 
 interface CommentItemProps {
 	comment: CommentThread
@@ -82,6 +84,18 @@ function CommentItem({ comment, onPressReply, isReply = false }: CommentItemProp
 						</div>
 					</button>
 				)}
+
+				<SocialInteractions
+					event={comment.event}
+					onCommentButtonPressed={() => {
+						if (!isAuthenticated) {
+							toast.error('You must be logged in to comment')
+							return
+						}
+						onPressReply(comment)
+					}}
+					showCommentAsReplyIcon
+				/>
 			</div>
 			<div className={'flex-col gap-2 ' + classIndentTopLevelComment}>
 				{comment.children.map((commentChild) => (

@@ -69,9 +69,9 @@ export const ReactionsList = ({ event }: ReactionsListProps) => {
 									'rounded-full py-1 px-2 ' +
 									(reactionsOwnUser?.find((r) => r.emoji == content)
 										? // If user had this reaction
-											'bg-secondary hover:bg-secondary/80 text-white hover:text-white'
+											'bg-neo-purple hover:bg-neo-purple/80 text-white hover:text-white'
 										: // Else
-											'bg-primary-foreground hover:primary-foreground-hover text-black')
+											'bg-purple-50 text-black hover:bg-pink-100 hover:text-black')
 								}
 								onClick={() => handleReactionClick(content)}
 							>

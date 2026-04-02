@@ -10,24 +10,37 @@ import { ndkActions } from '@/lib/stores/ndk'
 import type { Reaction } from '@/queries/reactions'
 import { ReactionsList } from './ReactionsList'
 import { ZapsList } from './ZapsList'
+import { Reply } from 'lucide-react'
 
-interface SocialInteractionsProps {
+interface SocialInteractionsProps extends React.ComponentProps<'div'> {
 	event: NDKEvent
 	onCommentButtonPressed?: () => void
+	showCommentAsReplyIcon?: boolean
 }
 
-const SocialInteractions = ({ event, onCommentButtonPressed }: SocialInteractionsProps) => {
+const SocialInteractions = ({
+	event,
+	onCommentButtonPressed,
+	showCommentAsReplyIcon = false,
+	className,
+	...props
+}: SocialInteractionsProps) => {
 	return (
-		<>
-			<div className="max-w-md py-2 flex gap-2 justify-start">
+		<div className={'flex flex-col gap-2 ' + className}>
+			<div className="max-w-md flex gap-1 justify-start">
 				<ReactionButton event={event} />
 				<ZapButton event={event} />
-				<CommentButton event={event} onClick={onCommentButtonPressed} />
+				<CommentButton
+					event={event}
+					onClick={onCommentButtonPressed}
+					icon={showCommentAsReplyIcon ? <Reply className="w-6 h-6" /> : undefined}
+					tooltip={showCommentAsReplyIcon ? 'Reply' : undefined}
+				/>
 				<ShareButton event={event} />
 			</div>
 			<ZapsList event={event} />
 			<ReactionsList event={event} />
-		</>
+		</div>
 	)
 }
 

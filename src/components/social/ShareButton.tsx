@@ -18,7 +18,7 @@ export const ShareButton = ({ event, itemName: itemNameProp, className, onClick,
 			<Button
 				variant="outline"
 				size="icon"
-				className="border-light-gray border-2 bg-transparent text-light-gray hover:text-black"
+				className={'border-foreground border-2 bg-transparent hover:bg-foreground hover:text-background ' + className}
 				icon={<span className="i-sharing w-6 h-6" />}
 				tooltip="Share"
 				{...props}
