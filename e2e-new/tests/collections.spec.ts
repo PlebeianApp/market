@@ -155,7 +155,9 @@ test.describe('Collection Management', () => {
 		await fillCollectionInfo(merchantPage, updated)
 		await submitCollection(merchantPage, 'Update Collection')
 
-		await expectCollectionVisible(merchantPage, updated.name)
+		await revisitCollectionsAndAssert(merchantPage, async () => {
+			await expectCollectionVisible(merchantPage, updated.name)
+		})
 
 		await revisitCollectionsAndAssert(merchantPage, async () => {
 			await expectCollectionVisible(merchantPage, updated.name)
