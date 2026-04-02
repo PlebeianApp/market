@@ -115,7 +115,7 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 	// Handle add product
 	const handleAddProduct = () => {
 		productFormActions.reset()
-		navigate({ to: '/dashboard/products/draft' })
+		navigate({ to: '/dashboard/products/products/new' })
 	}
 
 	// Handle message button
