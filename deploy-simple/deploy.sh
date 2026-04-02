@@ -280,6 +280,7 @@ fi
 
 # Start/reload app with PM2
 run_ssh_bun "cd $REMOTE_APP_DIR && pm2 startOrReload ecosystem.config.cjs --only $PM2_APP_NAME"
+run_ssh_bun "cd $REMOTE_APP_DIR && pm2 startOrReload ecosystem.config.cjs --only $PM2_CURRENCY_APP_NAME"
 run_ssh "pm2 save --force"
 echo "   ✓ Services started"
 
