@@ -91,53 +91,8 @@ export function ProductFormContent({
 		return activeShippingOptions.length === 0
 	}, [editingProductId, userShippingOptions, isLoadingUserShipping, userPubkey, isShippingFetched])
 
-	// Determine the first tab that has validation issues (for new products)
-	// This replaces the old "jump to shipping if no shipping" logic
-	const getFirstInvalidTab = useCallback(() => {
-		if (!hasValidName) return 'name'
-		if (!hasValidDescription) return 'detail'
-		if (!hasValidImages) return 'images'
-		if (!hasValidShipping) return 'shipping'
-		return 'name' // default starting tab
-	}, [hasValidName, hasValidDescription, hasValidImages, hasValidShipping])
-
-	// Set initial tab based on validation (first tab with missing required data)
-	// Track which formSessionId we've handled to avoid re-triggering on same session
-	const handledSessionIdRef = useRef<number | null>(null)
-
-	// For new products (not editing), auto-navigate to first invalid tab
-	// For editing products, keep current tab
-	useEffect(() => {
-		// Only auto-switch for new products (no editingProductId)
-		if (handledSessionIdRef.current !== formSessionId && !editingProductId) {
-			const firstInvalid = getFirstInvalidTab()
-			if (firstInvalid !== activeTab) {
-				productFormActions.updateValues({ activeTab: firstInvalid })
-			}
-			handledSessionIdRef.current = formSessionId
-		}
-	}, [formSessionId, activeTab, editingProductId, getFirstInvalidTab])
-
-	// Track if we started with shipping first (no shipping options)
-	// This is used to determine if we should auto-navigate to name tab after first shipping is added
-	const startedWithShippingFirstRef = useRef<boolean>(false)
-
-	// Track if we've started with shipping first in this session
-	useEffect(() => {
-		if (shouldShowShippingFirst && activeTab === 'shipping') {
-			startedWithShippingFirstRef.current = true
-		}
-	}, [shouldShowShippingFirst, activeTab])
-
-	// Auto-navigate to 'name' tab after first shipping option is added when we started with shipping first
-	useEffect(() => {
-		if (startedWithShippingFirstRef.current && hasValidShipping && activeTab === 'shipping') {
-			// First shipping option added, navigate to name tab
-			productFormActions.updateValues({ activeTab: 'name' })
-			// Reset the flag so we don't auto-navigate again
-			startedWithShippingFirstRef.current = false
-		}
-	}, [hasValidShipping, activeTab])
+	// Form always starts at Name tab - user navigates manually
+	// Removed auto-navigation that caused confusion after adding shipping
 
 	// Check for persisted draft on mount (for drafts from previous sessions)
 	const checkForPersistedDraft = useCallback(async () => {
