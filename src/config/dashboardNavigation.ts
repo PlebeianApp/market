@@ -57,6 +57,10 @@ export const dashboardNavigation: NavSection[] = [
 				path: '/dashboard/account/vanity-url',
 			},
 			{
+				title: '📧 Nostr Address',
+				path: '/dashboard/account/nostr-address',
+			},
+			{
 				title: '👤 Profile',
 				path: '/dashboard/account/profile',
 			},
