@@ -13,7 +13,7 @@ export const CURRENCY_CACHE_CONFIG = {
 	RESOLVE_TIMEOUT: 5000,
 } as const
 
-let contextVmClient: InstanceType<typeof import('@/lib/contextvm-client').ContextVmClient> | null = null
+let contextVmClient: InstanceType<typeof import('@/lib/plebeian-currency-client').PlebeianCurrencyClient> | null = null
 let contextVmInitPromise: Promise<any> | null = null
 
 async function getContextVmClient() {
@@ -22,7 +22,11 @@ async function getContextVmClient() {
 
 	contextVmInitPromise = (async () => {
 		try {
-			const { ContextVmClient } = await import('@/lib/contextvm-client')
+			const { PlebeianCurrencyClient } = await import('@/lib/plebeian-currency-client')
+
+			// Keep browser runtime on nostr-tools transport for now.
+			// We intentionally avoid direct browser usage of generated @contextvm/sdk clients
+			// because this path previously triggered frontend runtime regressions.
 
 			const privateKey = crypto.getRandomValues(new Uint8Array(32))
 
@@ -30,7 +34,7 @@ async function getContextVmClient() {
 			const cvmRelays = getCurrencyServerRelays()
 			const relays = mainRelay ? [mainRelay, ...cvmRelays] : cvmRelays
 
-			const client = new ContextVmClient({
+			const client = new PlebeianCurrencyClient({
 				privateKey,
 				relays,
 				serverPubkey: CURRENCY_SERVER_PUBKEY,

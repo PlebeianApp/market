@@ -1,14 +1,14 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
-import { ContextVmClient } from '../contextvm-client'
+import { PlebeianCurrencyClient } from '../plebeian-currency-client'
 
 const RELAY_URL = process.env.RELAY_URL || 'ws://localhost:10547'
 const SERVER_PUBKEY = '29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15'
 
-describe('ContextVmClient integration', () => {
-	let client: ContextVmClient
+describe('PlebeianCurrencyClient integration', () => {
+	let client: PlebeianCurrencyClient
 
 	beforeAll(() => {
-		client = new ContextVmClient({
+		client = new PlebeianCurrencyClient({
 			privateKey: crypto.getRandomValues(new Uint8Array(32)),
 			relays: [RELAY_URL],
 			serverPubkey: SERVER_PUBKEY,

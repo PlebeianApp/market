@@ -5,8 +5,8 @@ const originalError = console.error
 console.warn = () => {}
 console.error = () => {}
 
-mock.module('@/lib/contextvm-client', () => ({
-	ContextVmClient: class {
+mock.module('@/lib/plebeian-currency-client', () => ({
+	PlebeianCurrencyClient: class {
 		constructor() {
 			throw new Error('mocked: no real relay connections in tests')
 		}
