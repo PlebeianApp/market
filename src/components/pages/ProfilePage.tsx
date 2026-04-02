@@ -10,6 +10,7 @@ import { ZapButton } from '@/components/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { useEntityPermissions } from '@/hooks/useEntityPermissions'
 import { getHexColorFingerprintFromHexPubkey, truncateText, checkImageLoadable } from '@/lib/utils'
+import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
 import { productFormActions } from '@/lib/stores/product'
 import { uiActions } from '@/lib/stores/ui'
@@ -24,6 +25,7 @@ import { useShippingOptionsByPubkey, getShippingService, getShippingPickupAddres
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
+import { useStore } from '@tanstack/react-store'
 import { Edit, MapPin, MessageCircle, Minus, Plus, Share2, Timer } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
@@ -41,6 +43,8 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 	const { profile, user } = profileData || {}
 
 	const { data: sellerProducts } = useSuspenseQuery(productsByPubkeyQueryOptions(user?.pubkey || ''))
+
+	const { isAuthenticated } = useStore(authStore)
 
 	const [showFullAbout, setShowFullAbout] = useState(false)
 	const [bannerIsLoadable, setBannerIsLoadable] = useState<boolean | null>(null)
@@ -116,6 +120,10 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 
 	// Handle message button
 	const handleMessageClick = () => {
+		if (!isAuthenticated) {
+			uiActions.openDialog('login')
+			return
+		}
 		if (user?.pubkey) {
 			uiActions.openConversation(user.pubkey)
 		}
@@ -209,7 +217,7 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 					{!isSmallScreen && (
 						<div className="flex gap-2">
 							{user && <ZapButton event={user} />}
-							<Button variant="focus" size="icon" onClick={handleMessageClick}>
+							<Button variant="focus" size="icon" onClick={handleMessageClick} title={!isAuthenticated ? 'Log in to send messages' : ''}>
 								<MessageCircle className="w-5 h-5" />
 							</Button>
 							{pickupLocations.length > 0 && (
