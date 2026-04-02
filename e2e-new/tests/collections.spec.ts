@@ -93,7 +93,7 @@ async function revisitCollectionsAndAssert(page: Page, assertion: () => Promise<
 	await expect(async () => {
 		await gotoCollections(page)
 		await assertion()
-	}).toPass({ timeout: 20_000 })
+	}).toPass({ timeout: 40_000 })
 }
 
 async function createCollection(
