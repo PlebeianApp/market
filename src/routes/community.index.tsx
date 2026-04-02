@@ -252,11 +252,17 @@ function CommunityRoute() {
 			</div>
 
 			<div className="flex flex-col gap-6">
-				<Link to={`/collection/${currentCollectionId}`}>
-					<Button variant="secondary" size="lg">
-						View Collection
+				{currentCollectionId ? (
+					<Link to={`/collection/${currentCollectionId}`}>
+						<Button variant="secondary" size="lg">
+							View Collection
+						</Button>
+					</Link>
+				) : (
+					<Button variant="secondary" size="lg" disabled>
+						No Collection Available
 					</Button>
-				</Link>
+				)}
 
 				{/* Pagination dots */}
 				{totalSlides > 1 && (
