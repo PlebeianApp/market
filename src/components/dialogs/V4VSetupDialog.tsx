@@ -45,7 +45,7 @@ export function V4VSetupDialog({ open, onOpenChange, userPubkey, onConfirm }: V4
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+			<DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
 				<DialogHeader>
 					<DialogTitle>Set up Value for Value (V4V)</DialogTitle>
 					<DialogDescription>
