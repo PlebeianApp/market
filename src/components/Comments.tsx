@@ -73,18 +73,6 @@ function CommentItem({ comment, onPressReply, isReply = false }: CommentItemProp
 
 				<p className="text-gray-700 whitespace-pre-wrap mb-1">{comment.content}</p>
 
-				{isAuthenticated && (
-					<button
-						className="text-sm font-medium text-gray-600 hover:text-gray-400 cursor-pointer p-2 rounded"
-						onClick={() => onPressReply(comment)}
-					>
-						<div className="flex gap-2 normal-case items-center">
-							<Reply />
-							Reply...
-						</div>
-					</button>
-				)}
-
 				<SocialInteractions
 					event={comment.event}
 					onCommentButtonPressed={() => {
@@ -95,6 +83,7 @@ function CommentItem({ comment, onPressReply, isReply = false }: CommentItemProp
 						onPressReply(comment)
 					}}
 					showCommentAsReplyIcon
+					className="comment-social-interactions"
 				/>
 			</div>
 			<div className={'flex-col gap-2 ' + classIndentTopLevelComment}>

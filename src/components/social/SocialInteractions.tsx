@@ -26,7 +26,7 @@ const SocialInteractions = ({
 	...props
 }: SocialInteractionsProps) => {
 	return (
-		<div className={'flex flex-col gap-2 ' + className}>
+		<div className={'flex flex-col gap-2 ' + className} data-testid="social-interactions">
 			<div className="max-w-md flex gap-1 justify-start">
 				<ReactionButton event={event} />
 				<ZapButton event={event} />

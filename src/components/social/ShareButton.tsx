@@ -23,6 +23,7 @@ export const ShareButton = ({ event, itemName: itemNameProp, className, onClick,
 				tooltip="Share"
 				{...props}
 				onClick={() => setShareDialogOpen(true)}
+				data-testid="share-button"
 			/>
 
 			{/* Share Dialog */}

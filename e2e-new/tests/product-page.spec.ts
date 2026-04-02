@@ -72,6 +72,18 @@ const getReactionsList = (page: Page): Locator => {
 	return page.getByTestId('reactions-list')
 }
 
+const getZapButton = (page: Page): Locator => {
+	return page.getByTestId('zap-button')
+}
+
+const getCommentButton = (page: Page): Locator => {
+	return page.getByTestId('comment-button')
+}
+
+const getShareButton = (page: Page): Locator => {
+	return page.getByTestId('share-button')
+}
+
 /**
  * Verifies the reaction button is in the "filled" (active) state.
  */
@@ -79,7 +91,7 @@ const expectReactionButtonToBeFilled = async (page: Page, expectedEmoji?: string
 	const button = getReactionButton(page)
 
 	// Check for the filled background class
-	await expect(button).toHaveClass(/bg-secondary/)
+	await expect(button).toHaveClass(/bg-neo-purple/)
 
 	// Check for white text (indicates filled state)
 	await expect(button).toHaveClass(/text-white/)
@@ -104,8 +116,8 @@ const expectReactionButtonToBeUnfilled = async (page: Page): Promise<void> => {
 	// Check for transparent background
 	await expect(button).toHaveClass(/bg-transparent/)
 
-	// Check for secondary text color
-	await expect(button).toHaveClass(/text-secondary/)
+	// Check for neo-purple text color (unfilled state)
+	await expect(button).toHaveClass(/text-neo-purple/)
 
 	// Verify the icon is the outline version
 	const icon = button.locator('.i-heart')
@@ -150,6 +162,8 @@ const seedExistingReaction = async (emoji: string) => {
 test.use({ scenario: 'base' })
 
 test.describe('Product Page - View Only (Unauthenticated)', () => {
+	// --- SocialInteractions Tests ---
+
 	test('should display correct product details', async ({ unauthenticatedPage }) => {
 		if (!currentProductId) throw new Error('Product not seeded')
 
@@ -211,6 +225,128 @@ test.describe('Product Page - View Only (Unauthenticated)', () => {
 		await expect(commentsPanel).toBeVisible()
 		await expect(commentsPanel.getByText('Please log in to leave a comment.')).toBeVisible()
 	})
+
+	test('should display SocialInteractions component at product level', async ({ unauthenticatedPage }) => {
+		if (!currentProductId) throw new Error('Product not seeded')
+		await unauthenticatedPage.goto(`/products/${currentProductId}`)
+
+		// Verify ReactionButton is visible
+		await expect(getReactionButton(unauthenticatedPage)).toBeVisible()
+
+		// Verify ZapButton is visible
+		await expect(getZapButton(unauthenticatedPage)).toBeVisible()
+
+		// Verify CommentButton is visible
+		await expect(getCommentButton(unauthenticatedPage)).toBeVisible()
+
+		// Verify ShareButton is visible
+		await expect(getShareButton(unauthenticatedPage)).toBeVisible()
+	})
+
+	test('should display ReactionsList for product reactions', async ({ buyerPage }) => {
+		if (!currentProductId) throw new Error('Product not seeded')
+		await buyerPage.goto(`/products/${currentProductId}`)
+
+		// Verify ReactionsList container exists (even if empty)
+		const reactionsList = getReactionsList(buyerPage)
+		await expect(reactionsList).toBeAttached() // Use beAttached instead of beVisible since it might be empty
+	})
+
+	test('should show login prompt when clicking reaction button (unauthenticated)', async ({ unauthenticatedPage }) => {
+		if (!currentProductId) throw new Error('Product not seeded')
+		await unauthenticatedPage.goto(`/products/${currentProductId}`)
+
+		// Click the reaction button
+		await getReactionButton(unauthenticatedPage).click()
+
+		// Verify login prompt appears
+		await expect(unauthenticatedPage.getByText(/You must be logged in/i)).toBeVisible()
+	})
+
+	test('can view existing reactions from other users', async ({ unauthenticatedPage }) => {
+		if (!currentProductId) throw new Error('Product not seeded')
+		await unauthenticatedPage.goto(`/products/${currentProductId}`)
+
+		// Seed a reaction from devUser2 (different user)
+		await seedExistingReaction('🔥')
+
+		await unauthenticatedPage.goto(`/products/${currentProductId}`)
+
+		// Attempt to find the emoji in the reaction list area
+		await expect(getReactionsList(unauthenticatedPage).getByText('🔥')).toBeVisible({ timeout: 10000 })
+	})
+	test('should navigate to comments tab when clicking product-level comment button', async ({ unauthenticatedPage }) => {
+		if (!currentProductId) throw new Error('Product not seeded')
+		await unauthenticatedPage.goto(`/products/${currentProductId}`)
+
+		// Click the comment button in SocialInteractions
+		await getCommentButton(unauthenticatedPage).click()
+
+		// Verify we're on the comments tab
+		const commentsTab = getTabsList(unauthenticatedPage).getByRole('tab', { name: 'Comments' })
+		await expect(commentsTab).toHaveAttribute('data-state', 'active')
+	})
+
+	test('should display SocialInteractions for each comment', async ({ unauthenticatedPage }) => {
+		if (!currentProductId) throw new Error('Product not seeded')
+		await seedExistingComment()
+		await unauthenticatedPage.goto(`/products/${currentProductId}`)
+
+		const commentsTab = getTabsList(unauthenticatedPage).getByRole('tab', { name: 'Comments' })
+		await commentsTab.click()
+
+		// Wait for comment to load
+		await unauthenticatedPage.getByText('Existing seeded comment for testing.').waitFor()
+
+		// Verify each comment has its own SocialInteractions
+		const commentSocialInteractions = unauthenticatedPage.locator('[data-testid="product-comments"] .comment-social-interactions')
+		await expect(commentSocialInteractions).toBeVisible()
+
+		// Verify reaction button on comment
+		const commentReactionBtn = commentSocialInteractions.locator('[data-testid="reaction-button"]').first()
+		await expect(commentReactionBtn).toBeVisible()
+
+		// Verify zap button on comment
+		const commentZapBtn = commentSocialInteractions.locator('[data-testid="zap-button"]').first()
+		await expect(commentZapBtn).toBeVisible()
+
+		// Verify share button on comment
+		const commentShareBtn = commentSocialInteractions.locator('[data-testid="share-button"]').first()
+		await expect(commentShareBtn).toBeVisible()
+	})
+
+	test('should show existing reactions on a comment', async ({ unauthenticatedPage }) => {
+		if (!currentProductId) throw new Error('Product not seeded')
+
+		// Seed a reaction on the comment
+		const relay = await Relay.connect(RELAY_URL)
+		const commentEvent = await seedComment(relay, devUser2.sk, {
+			content: 'Comment for reaction testing.',
+			rootEventId: currentProductEvent!.id,
+			rootEventPubkey: currentProductEvent!.pubkey,
+			rootEventDTag: currentProductEvent!.tags.find((tag) => tag[0] == 'd')?.[1],
+			rootKind: currentProductEvent!.kind,
+		})
+		await seedReaction(relay, devUser3.sk, {
+			emoji: '🔥',
+			targetEventId: commentEvent.id,
+			targetEventPubkey: commentEvent.pubkey,
+			targetDTag: commentEvent.tags.find((tag) => tag[0] == 'd')?.[1],
+			targetKind: commentEvent.kind,
+		})
+
+		await unauthenticatedPage.goto(`/products/${currentProductId}`)
+
+		const commentsTab = getTabsList(unauthenticatedPage).getByRole('tab', { name: 'Comments' })
+		await commentsTab.click()
+
+		// Wait for comment to load
+		await unauthenticatedPage.getByText('Comment for reaction testing.').waitFor()
+
+		// Verify reaction appears on comment
+		const commentSocialInteractions = unauthenticatedPage.locator('[data-testid="product-comments"] .comment-social-interactions')
+		await expect(commentSocialInteractions.getByText('🔥')).toBeVisible()
+	})
 })
 
 // ==========================================
@@ -249,8 +385,12 @@ test.describe('Product Page - Interactions & Social (Authenticated)', () => {
 		const commentsTab = getTabsList(buyerPage).getByRole('tab', { name: 'Comments' })
 		await commentsTab.click()
 
-		// Press reply button on comment
-		const replyBtn = buyerPage.locator('button:has-text("Reply")').first()
+		// Wait for comment to load
+		await buyerPage.getByText('Existing seeded comment for testing.').waitFor()
+
+		// Press reply button on comment's SocialInteractions
+		const commentSocialInteractions = buyerPage.locator('[data-testid="product-comments"] .comment-social-interactions')
+		const replyBtn = commentSocialInteractions.locator('[data-testid="comment-button"]').first()
 		await expect(replyBtn).toBeVisible({ timeout: 15000 })
 		await replyBtn.click()
 
@@ -321,19 +461,6 @@ test.describe('Product Page - Interactions & Social (Authenticated)', () => {
 		await expectReactionButtonToBeUnfilled(buyerPage)
 	})
 
-	test('can view existing reactions from other users', async ({ buyerPage }) => {
-		if (!currentProductId) throw new Error('Product not seeded')
-		await buyerPage.goto(`/products/${currentProductId}`)
-
-		// Seed a reaction from devUser2 (different user)
-		await seedExistingReaction('🔥')
-
-		await buyerPage.goto(`/products/${currentProductId}`)
-
-		// Attempt to find the emoji in the reaction list area
-		await expect(getReactionsList(buyerPage).getByText('🔥')).toBeVisible({ timeout: 10000 })
-	})
-
 	test('can click an existing reaction to add it', async ({ buyerPage }) => {
 		if (!currentProductId) throw new Error('Product not seeded')
 
@@ -372,5 +499,65 @@ test.describe('Product Page - Interactions & Social (Authenticated)', () => {
 		// Verify removal
 		await expect(reactionBtn).toBeVisible()
 		await expect(reactionBtn.getByText('1')).toBeVisible()
+	})
+
+	// --- SocialInteractions Tests ---
+
+	test('should allow replying to comment via SocialInteractions', async ({ buyerPage }) => {
+		if (!currentProductId) throw new Error('Product not seeded')
+		await seedExistingComment()
+		await buyerPage.goto(`/products/${currentProductId}`)
+
+		const commentsTab = getTabsList(buyerPage).getByRole('tab', { name: 'Comments' })
+		await commentsTab.click()
+
+		// Wait for comment to load
+		await buyerPage.getByText('Existing seeded comment for testing.').waitFor()
+
+		// Click reply button on comment's SocialInteractions
+		const commentSocialInteractions = buyerPage.locator('[data-testid="product-comments"] .comment-social-interactions')
+		const replyBtn = commentSocialInteractions.locator('[data-testid="comment-button"]').first()
+		await replyBtn.click()
+
+		// Check for reply indicator above input
+		await expect(buyerPage.getByText(/replying to:/i)).toBeVisible()
+
+		// Post reply
+		const replyText = `Reply via SocialInteractions`
+		const input = getCommentInput(buyerPage)
+		await input.fill(replyText)
+		await getCommentSubmitButton(buyerPage).click()
+
+		await expect(buyerPage.locator('[data-testid="product-comments"]').getByText(replyText)).toBeVisible()
+	})
+
+	test('should allow adding reaction to a comment', async ({ buyerPage }) => {
+		if (!currentProductId) throw new Error('Product not seeded')
+		await seedExistingComment()
+		await buyerPage.goto(`/products/${currentProductId}`)
+
+		const commentsTab = getTabsList(buyerPage).getByRole('tab', { name: 'Comments' })
+		await commentsTab.click()
+
+		// Wait for comment to load
+		await buyerPage.getByText('Existing seeded comment for testing.').waitFor()
+
+		// Find comment's reaction button
+		const commentSocialInteractions = buyerPage.locator('[data-testid="product-comments"] .comment-social-interactions')
+		const commentReactionBtn = commentSocialInteractions.locator('[data-testid="reaction-button"]').first()
+
+		// Hover to open popover
+		await commentReactionBtn.hover()
+
+		// Select emoji
+		await buyerPage.getByText('❤️').click()
+
+		// Verify reaction was added - check for filled state
+		await expect(commentReactionBtn).toHaveClass(/bg-neo-purple/)
+
+		// Verify the emoji appears with count in the reactions list
+		const commentReactionsList = commentSocialInteractions.locator('[data-testid="reactions-list"]')
+		await expect(commentReactionsList.getByText('❤️')).toBeVisible()
+		await expect(commentReactionsList.getByText('1')).toBeVisible()
 	})
 })

@@ -61,6 +61,7 @@ export function CommentButton({ event, className, onClick, onPointerDown, ...pro
 				{...props}
 				tooltip={tooltip}
 				icon={icon}
+				data-testid="comment-button"
 				onClick={(e) => {
 					handleButtonInteraction(e)
 				}}

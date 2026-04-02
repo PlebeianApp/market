@@ -63,6 +63,7 @@ export function ZapButton({ event, className, onClick, onPointerDown, type, ...p
 				{...props}
 				type={type ?? 'button'}
 				tooltip="Zap"
+				data-testid="zap-button"
 				onClick={(e) => {
 					handleButtonInteraction(e)
 					if (!isDisabled) {

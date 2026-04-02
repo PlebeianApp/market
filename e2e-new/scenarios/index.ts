@@ -4,6 +4,7 @@ import { hexToBytes } from '@noble/hashes/utils'
 import WebSocket from 'ws'
 import { devUser1, devUser2, WALLETED_USER_LUD16 } from '../../src/lib/fixtures'
 import { RELAY_URL, TEST_APP_PRIVATE_KEY, TEST_APP_PUBLIC_KEY } from '../test-config'
+import { isAddressableKind } from 'nostr-tools/kinds'
 
 useWebSocketImplementation(WebSocket)
 
@@ -470,7 +471,7 @@ export async function seedReaction(
 	tags.push(['e', opts.targetEventId, opts.relayUrl || '', opts.targetEventPubkey])
 
 	// 2. 'a' tag (for addressable events: 30402, 1111, etc.)
-	if (opts.targetKind === 30402 || opts.targetKind === 1111) {
+	if (isAddressableKind(opts.targetKind)) {
 		if (!opts.targetDTag) {
 			// We will throw an error if 'd' tag is missing for addressable events.
 			throw new Error(`targetDTag is required for addressable event kind ${opts.targetKind}. Please provide it or fetch the event first.`)
