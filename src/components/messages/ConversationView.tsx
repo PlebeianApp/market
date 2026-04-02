@@ -57,8 +57,8 @@ export function ConversationView({ otherUserPubkey, onTitleChange }: Conversatio
 	const sendMessageMutation = useMutation({
 		mutationFn: async (content: string) => {
 			// Safety net: check auth before attempting to send
-			const authState = authStore.getState()
-			if (!authState.isAuthenticated) {
+			const authState = authStore.state
+			if (!authState?.isAuthenticated) {
 				throw new Error('Please log in to send messages')
 			}
 
