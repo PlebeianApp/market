@@ -31,7 +31,7 @@ export type GetBtcPriceSingleOutput = {
 	error?: string
 }
 
-export class PlebeianCurrencyServerClient {
+export class PlebeianServerClient {
 	static readonly SERVER_PUBKEY = '29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15'
 	static readonly DEFAULT_RELAYS = ['wss://relay.contextvm.org', 'wss://relay2.contextvm.org']
 
@@ -39,7 +39,7 @@ export class PlebeianCurrencyServerClient {
 	private transport: Transport
 
 	constructor(options: Partial<NostrTransportOptions> & { privateKey?: string; relays?: string[] } = {}) {
-		this.client = new Client({ name: 'PlebeianCurrencyServerClient', version: '1.0.0' })
+		this.client = new Client({ name: 'PlebeianServerClient', version: '1.0.0' })
 
 		const resolvedPrivateKey =
 			options.privateKey ||
@@ -50,12 +50,12 @@ export class PlebeianCurrencyServerClient {
 				.join('')
 
 		const signer = options.signer || new PrivateKeySigner(resolvedPrivateKey)
-		const relays = options.relays || PlebeianCurrencyServerClient.DEFAULT_RELAYS
+		const relays = options.relays || PlebeianServerClient.DEFAULT_RELAYS
 		const relayHandler = options.relayHandler || new ApplesauceRelayPool(relays)
 		const { privateKey: _, ...rest } = options
 
 		this.transport = new NostrClientTransport({
-			serverPubkey: options.serverPubkey || PlebeianCurrencyServerClient.SERVER_PUBKEY,
+			serverPubkey: options.serverPubkey || PlebeianServerClient.SERVER_PUBKEY,
 			signer,
 			relayHandler,
 			isStateless: true,
