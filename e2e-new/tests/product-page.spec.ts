@@ -2,16 +2,14 @@
 import { test, expect } from '../fixtures'
 import { Relay } from 'nostr-tools/relay'
 import { RELAY_URL } from 'e2e-new/test-config'
-import { seedComment, seedProduct, seedReaction } from 'e2e-new/helpers/seed'
 import { devUser1, devUser2, devUser3 } from '@/lib/fixtures'
 import { kinds, type VerifiedEvent } from 'nostr-tools'
 import type { Locator, Page } from '@playwright/test'
+import { seedComment, seedProduct, seedReaction } from 'e2e-new/scenarios'
 
 // ==========================================
 // == GLOBAL STATE & SEEDING               ==
 // ==========================================
-
-test.use({ scenario: 'base' })
 
 let currentProductId: string | undefined
 let currentProductEvent: VerifiedEvent | undefined
@@ -28,6 +26,7 @@ test.beforeAll(async () => {
 		status: 'active',
 		category: 'electronics',
 		stock: '10',
+		dTag: 'test-product',
 	})
 	currentProductId = event.id
 	currentProductEvent = event
@@ -146,6 +145,8 @@ const seedExistingReaction = async (emoji: string) => {
 // ==========================================
 // == SECTION: Unauthenticated User (View)   ==
 // ==========================================
+
+test.use({ scenario: 'base' })
 
 test.describe('Product Page - View Only (Unauthenticated)', () => {
 	test('should display correct product details', async ({ unauthenticatedPage }) => {
@@ -321,6 +322,7 @@ test.describe('Product Page - Interactions & Social (Authenticated)', () => {
 
 	test('can view existing reactions from other users', async ({ buyerPage }) => {
 		if (!currentProductId) throw new Error('Product not seeded')
+		await buyerPage.goto(`/products/${currentProductId}`)
 
 		// Seed a reaction from devUser2 (different user)
 		await seedExistingReaction('🔥')
