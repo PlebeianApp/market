@@ -3,6 +3,8 @@ name: Unit and Integration Tests
 on:
   push:
     branches:
+      - main
+      - master
       - 'feature/**'
   pull_request:
     branches: [main, master]
