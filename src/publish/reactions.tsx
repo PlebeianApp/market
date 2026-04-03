@@ -118,14 +118,6 @@ export const publishDeletionEvent = async ({ reactionEvent }: PublishDeletionPar
 	const pTag = ['p', reactionEvent.authorPubkey]
 	tags.push(pTag)
 
-	if (isAddressableKind(reactionEvent.targetEvent.kind)) {
-		// Add 'a' tag with coordinates for reaction target (kind:pubkey:d-tag)
-		const targetAddress = reactionEvent.targetEvent.tagAddress()
-
-		const aTag = ['a', targetAddress]
-		tags.push(aTag)
-	}
-
 	// Add 'k' tag with the kind of the reaction event
 	const kTag = ['k', REACTION_KIND.toString()]
 	tags.push(kTag)
