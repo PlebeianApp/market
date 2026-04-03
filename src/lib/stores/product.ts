@@ -318,7 +318,7 @@ export const productFormActions = {
 	},
 
 	// Update tab state without marking as dirty (used for navigation, restore after discard, etc.)
-	setTabState: (activeTab: ProductFormTab) => {
+	setActiveTab: (activeTab: ProductFormTab) => {
 		productFormStore.setState((state) => ({
 			...state,
 			activeTab,

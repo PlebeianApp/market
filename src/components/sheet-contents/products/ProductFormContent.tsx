@@ -101,7 +101,7 @@ export function ProductFormContent({
 		// 2. User should see shipping first (no shipping options)
 		// 3. We're NOT already on the shipping tab
 		if (handledSessionIdRef.current !== formSessionId && shouldShowShippingFirst && activeTab !== 'shipping') {
-			productFormActions.updateValues({ activeTab: 'shipping' })
+			productFormActions.setActiveTab('shipping')
 			handledSessionIdRef.current = formSessionId
 		}
 	}, [shouldShowShippingFirst, activeTab, formSessionId])
@@ -121,7 +121,7 @@ export function ProductFormContent({
 	useEffect(() => {
 		if (startedWithShippingFirstRef.current && hasValidShipping && activeTab === 'shipping') {
 			// First shipping option added, navigate to name tab
-			productFormActions.updateValues({ activeTab: 'name' })
+			productFormActions.setActiveTab('name')
 			// Reset the flag so we don't auto-navigate again
 			startedWithShippingFirstRef.current = false
 		}
@@ -169,7 +169,7 @@ export function ProductFormContent({
 			} else {
 				// No product to reload, just reset but restore tabs
 				productFormActions.reset()
-				productFormActions.setTabState(currentActiveTab)
+				productFormActions.setActiveTab(currentActiveTab)
 			}
 
 			setHasDraft(false)
@@ -266,7 +266,7 @@ export function ProductFormContent({
 				{/* Single level tabs: Name, Detail, Spec, Category, Images, Shipping */}
 				<Tabs
 					value={activeTab}
-					onValueChange={(value) => productFormActions.updateValues({ activeTab: value as ProductFormTab })}
+					onValueChange={(value) => productFormActions.setActiveTab(value as ProductFormTab)}
 					className="w-full flex flex-col flex-1 min-h-0 overflow-hidden"
 				>
 					<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-[1px]">
@@ -367,7 +367,7 @@ export function ProductFormContent({
 								type="button"
 								variant="secondary"
 								className="flex-1 uppercase"
-								onClick={() => productFormActions.updateValues({ activeTab: 'name' })}
+								onClick={() => productFormActions.setActiveTab('name')}
 								data-testid="product-next-button"
 							>
 								Next
