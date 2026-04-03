@@ -10,6 +10,7 @@ import type { RichShippingInfo } from '@/lib/stores/cart'
 import { useNDK } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore, type ProductShippingForm } from '@/lib/stores/product'
 import { uiStore } from '@/lib/stores/ui'
+import { resolveProductShippingSelections } from '@/lib/utils/productShippingSelections'
 import { MempoolService } from '@/lib/utils/mempool'
 import { useBtcExchangeRates, type SupportedCurrency } from '@/queries/external'
 import { usePublishShippingOptionMutation, type ShippingFormData } from '@/publish/shipping'
@@ -702,12 +703,9 @@ export function ShippingTab() {
 			.filter(Boolean)
 			.find((opt) => opt && opt.name === templateName) as RichShippingInfo | undefined
 
-		if (newOption && !shippings.some((s) => s.shipping?.id === newOption.id)) {
+		if (newOption && !shippings.some((s) => s.shippingRef === newOption.id)) {
 			const newShipping: ProductShippingForm = {
-				shipping: {
-					id: newOption.id,
-					name: newOption.name || '',
-				},
+				shippingRef: newOption.id,
 				extraCost: '',
 			}
 			productFormActions.updateValues({
@@ -825,17 +823,14 @@ export function ShippingTab() {
 
 	const addShippingOption = (option: RichShippingInfo) => {
 		// Check if shipping option is already added
-		const isAlreadyAdded = shippings.some((s) => s.shipping?.id === option.id)
+		const isAlreadyAdded = shippings.some((s) => s.shippingRef === option.id)
 		if (isAlreadyAdded) {
 			toast.error('This shipping option is already added')
 			return
 		}
 
 		const newShipping: ProductShippingForm = {
-			shipping: {
-				id: option.id,
-				name: option.name || '',
-			},
+			shippingRef: option.id,
 			extraCost: '',
 		}
 
@@ -873,7 +868,14 @@ export function ShippingTab() {
 		}
 	}
 
-	const hasValidShipping = shippings.some((s) => s.shipping && s.shipping.id)
+	const resolvedSelectedShippings = useMemo(
+		() => resolveProductShippingSelections(shippings, availableShippingOptions),
+		[shippings, availableShippingOptions],
+	)
+
+	const hasValidShipping = shippingOptionsQuery.isFetched
+		? resolvedSelectedShippings.some((shipping) => shipping.isResolved)
+		: shippings.some((shipping) => !!shipping.shippingRef)
 
 	return (
 		<div className="space-y-6">
@@ -891,14 +893,16 @@ export function ShippingTab() {
 				<div className="space-y-4">
 					<h3 className="font-medium">Selected Shipping Options</h3>
 					<div className="space-y-3">
-						{shippings.map((shipping, index) => {
-							const option = availableShippingOptions.find((opt) => opt.id === shipping.shipping?.id)
+						{resolvedSelectedShippings.map((shipping, index) => {
+							const option = shipping.option
 							return (
 								<div key={index} className="flex items-center gap-3 p-3 border rounded-md bg-gray-50">
-									{option && option.service && <ServiceIcon service={option.service} />}
+									{option?.service ? <ServiceIcon service={option.service} /> : <AlertTriangle className="w-4 h-4 text-amber-500" />}
 									<div className="flex-1">
-										<div className="font-medium">{shipping.shipping?.name}</div>
-										{option && (
+										<div className="font-medium">
+											{option?.name || (shippingOptionsQuery.isFetched ? 'Unavailable shipping option' : 'Resolving shipping option...')}
+										</div>
+										{option ? (
 											<div className="text-sm text-gray-500">
 												{option.cost} {option.currency} •{' '}
 												{option.countries && option.countries.length > 1
@@ -906,6 +910,10 @@ export function ShippingTab() {
 													: option.countries?.[0] || 'No countries'}{' '}
 												• {option.service || 'Unknown service'}
 											</div>
+										) : shippingOptionsQuery.isFetched ? (
+											<div className="text-sm text-amber-600">This shipping reference is no longer available: {shipping.shippingRef}</div>
+										) : (
+											<div className="text-sm text-gray-500">Looking up current shipping metadata...</div>
 										)}
 									</div>
 									<div className="flex items-center gap-2">
@@ -1078,7 +1086,7 @@ export function ShippingTab() {
 				) : (
 					<div className="grid gap-3">
 						{availableShippingOptions
-							.filter((option) => !shippings.some((s) => s.shipping?.id === option.id))
+							.filter((option) => !shippings.some((s) => s.shippingRef === option.id))
 							.map((option) => (
 								<div key={option.id} className="flex items-center gap-3 p-3 border rounded-md hover:bg-gray-50">
 									{option.service && <ServiceIcon service={option.service} />}
