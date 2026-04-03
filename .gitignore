@@ -31,6 +31,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .cache
 *.tsbuildinfo
 
+# SQLite database for currency server cache
+contextvm/data/
+
 # IntelliJ based IDEs
 .idea
 
@@ -46,3 +49,11 @@ test-results
 # Claude Code local settings (user-specific)
 .claude/settings.local.json
 __pycache__/
+
+# Local OpenCode artifacts
+/.opencode/
+/Makefile
+/scripts/docs_summary.py
+/scripts/gitignore_audit.py
+/scripts/verify_subagents.py
+/tatus
