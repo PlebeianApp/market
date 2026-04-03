@@ -8,11 +8,11 @@ describe('product form navigation semantics', () => {
 
 	beforeEach(() => {
 		timeoutCalls = 0
-		globalThis.setTimeout = (((_handler: TimerHandler, _timeout?: number) => {
+		globalThis.setTimeout = ((_handler: TimerHandler, _timeout?: number) => {
 			timeoutCalls += 1
 			return timeoutCalls as unknown as ReturnType<typeof setTimeout>
-		}) as typeof setTimeout)
-		globalThis.clearTimeout = (((_id?: ReturnType<typeof setTimeout>) => {}) as typeof clearTimeout)
+		}) as typeof setTimeout
+		globalThis.clearTimeout = ((_id?: ReturnType<typeof setTimeout>) => {}) as typeof clearTimeout
 
 		productFormStore.setState(() => DEFAULT_FORM_STATE)
 	})
