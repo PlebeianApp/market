@@ -138,3 +138,22 @@ export const cartKeys = {
 	all: ['cart'] as const,
 	byPubkey: (pubkey: string) => [...cartKeys.all, 'byPubkey', pubkey] as const,
 } as const
+
+export const commentKeys = {
+	all: ['comments'] as const,
+	byProduct: (productCoordinates: string) => [...commentKeys.all, 'byProduct', productCoordinates] as const,
+} as const
+
+export const reactionKeys = {
+	all: ['reactions'] as const,
+	byEvent: (eventId: string, authorPubkey: string) => [...reactionKeys.all, 'byEvent', eventId, authorPubkey] as const,
+	byEventUser: (eventId: string, authorPubkey: string, pubkey: string) =>
+		[...reactionKeys.all, 'byEventUser', eventId, authorPubkey, pubkey] as const,
+	byUser: (pubkey: string) => [...reactionKeys.all, 'byUser', pubkey] as const,
+} as const
+
+export const zapKeys = {
+	all: ['zaps'] as const,
+	byEvent: (eventId: string, recipientPubkey: string) => [...zapKeys.all, 'byEvent', eventId, recipientPubkey] as const,
+	byProvider: (userPubkey: string, targetEventId?: string) => [...zapKeys.all, 'provider', userPubkey, targetEventId || 'all'] as const,
+} as const

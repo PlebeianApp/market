@@ -26,7 +26,7 @@ function AvatarUser({ pubkey, className }: AvatarUserProps) {
 				// If no profile picture, return fallback avatar
 				<AvatarPrimitive.Fallback
 					data-slot="avatar-fallback"
-					className="bg-secondary text-white flex size-full items-center justify-center rounded-full text-center"
+					className="bg-neo-purple text-white flex size-full items-center justify-center rounded-full text-center"
 				>
 					{getFallbackText()}
 				</AvatarPrimitive.Fallback>

@@ -17,8 +17,8 @@ import { Check } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { PriceDisplay } from './PriceDisplay'
 import { Button } from './ui/button'
-import { ZapButton } from './ZapButton'
 import { authStore, useAuth } from '@/lib/stores/auth'
+import { ZapButton } from './social/ZapButton'
 
 export interface ProductCardProps {
 	product: NDKEvent
