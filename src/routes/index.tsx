@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { productFormActions } from '@/lib/stores/product'
 import { uiActions } from '@/lib/stores/ui'
 import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
@@ -91,7 +92,7 @@ function Index() {
 
 	const handleStartSelling = () => {
 		if (isAuthenticated) {
-			uiActions.openDrawer('createProduct')
+			productFormActions.openCreateProductDrawer()
 		} else {
 			uiActions.openDialog('login')
 		}

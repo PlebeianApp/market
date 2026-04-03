@@ -54,13 +54,10 @@ function EditProductComponent() {
 			if (hasDraft) {
 				// Auto-load the draft instead of prompting
 				setInitState('loading-draft')
-				productFormActions.setEditingProductId(productDTag)
 				await productFormActions.loadDraftForProduct(productDTag)
 				setInitState('ready')
 			} else {
 				setInitState('loading-product')
-				productFormActions.reset()
-				productFormActions.setEditingProductId(productDTag)
 				await productFormActions.loadProductForEdit(productId)
 				setInitState('ready')
 			}

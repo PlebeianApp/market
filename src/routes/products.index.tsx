@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { PRODUCT_CATEGORIES } from '@/lib/constants'
 import { authStore } from '@/lib/stores/auth'
+import { productFormActions } from '@/lib/stores/product'
 import { uiActions } from '@/lib/stores/ui'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQueries, useQuery } from '@tanstack/react-query'
@@ -178,7 +179,7 @@ function ProductsRoute() {
 
 	const handleStartSelling = () => {
 		if (isAuthenticated) {
-			uiActions.openDrawer('createProduct')
+			productFormActions.openCreateProductDrawer()
 		} else {
 			uiActions.openDialog('login')
 		}
