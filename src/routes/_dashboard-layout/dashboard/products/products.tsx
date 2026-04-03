@@ -261,8 +261,6 @@ function ProductsOverviewComponent() {
 	const deleteMutation = useDeleteProductMutation()
 
 	const handleAddProductClick = () => {
-		productFormActions.reset()
-		productFormActions.setEditingProductId(null)
 		navigate({
 			to: '/dashboard/products/products/new',
 		})

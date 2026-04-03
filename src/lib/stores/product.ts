@@ -22,7 +22,7 @@ import {
 import { productKeys } from '@/queries/queryKeyFactory'
 import { clearProductFormDraft, getProductFormDraft, saveProductFormDraft } from '@/lib/utils/productFormStorage'
 import type { RichShippingInfo } from './cart'
-import { uiStore } from '@/lib/stores/ui'
+import { uiActions, uiStore } from '@/lib/stores/ui'
 import NDK, { type NDKSigner } from '@nostr-dev-kit/ndk'
 import { QueryClient } from '@tanstack/react-query'
 import { Store } from '@tanstack/store'
@@ -147,8 +147,39 @@ const debouncedSave = () => {
 	}, SAVE_DEBOUNCE_MS)
 }
 
+const getFreshSessionState = (state: ProductFormState, overrides: Partial<ProductFormState> = {}): ProductFormState => {
+	const selectedCurrency = uiStore.state.selectedCurrency
+
+	return {
+		...DEFAULT_FORM_STATE,
+		formSessionId: state.formSessionId + 1,
+		currency: selectedCurrency === 'BTC' ? 'SATS' : selectedCurrency,
+		currencyMode: ['BTC', 'SATS'].includes(selectedCurrency) ? 'sats' : 'fiat',
+		...overrides,
+	}
+}
+
 // Create actions object
 export const productFormActions = {
+	startCreateProductSession: () => {
+		// Cancel any pending auto-save to prevent stale data from being written
+		cancelPendingSave()
+
+		productFormStore.setState((state) => getFreshSessionState(state, { editingProductId: null }))
+	},
+
+	startEditProductSession: (productId: string) => {
+		// Cancel any pending auto-save to prevent stale data from being written
+		cancelPendingSave()
+
+		productFormStore.setState((state) => getFreshSessionState(state, { editingProductId: productId }))
+	},
+
+	openCreateProductDrawer: () => {
+		productFormActions.startCreateProductSession()
+		uiActions.openDrawer('createProduct')
+	},
+
 	setEditingProductId: (productId: string | null) => {
 		productFormStore.setState((state) => ({
 			...state,
@@ -227,37 +258,38 @@ export const productFormActions = {
 			const priceValue = priceTag?.[1] || ''
 			const isFiatCurrency = priceCurrency !== 'SATS' && priceCurrency !== 'BTC'
 
-			productFormStore.setState((state) => ({
-				...DEFAULT_FORM_STATE,
-				editingProductId: productDTag, // Use the d tag value, not the event ID!
-				name: title,
-				summary: summary,
-				description: description,
-				price: priceValue,
-				fiatPrice: isFiatCurrency ? priceValue : '', // Set fiatPrice if currency is fiat
-				currency: priceCurrency,
-				currencyMode: isFiatCurrency ? 'fiat' : 'sats',
-				bitcoinUnit: priceCurrency === 'BTC' ? 'BTC' : 'SATS',
-				quantity: stockTag?.[1] || '',
-				status: visibilityTag?.[1] || 'hidden',
-				productType: typeTag?.[1] === 'simple' ? 'single' : 'variable',
-				mainCategory: mainCategoryFromTags || null,
-				selectedCollection: collection,
-				categories: subCategoriesFromTags || [],
-				images: images.map((img, index) => ({
-					imageUrl: img[1],
-					imageOrder: parseInt(img[3] || index.toString(), 10),
-				})),
-				specs: specs.map((spec) => ({ key: spec[1], value: spec[2] })),
-				weight: weightTag ? { value: weightTag[1], unit: weightTag[2] } : null,
-				dimensions: dimensionsTag ? { value: dimensionsTag[1], unit: dimensionsTag[2] } : null,
-				shippings: shippingOptions,
-				activeTab,
-				isNSFW: isNSFWProduct(event),
-			}))
+			productFormStore.setState((state) =>
+				getFreshSessionState(state, {
+					editingProductId: productDTag, // Use the d tag value, not the event ID!
+					name: title,
+					summary: summary,
+					description: description,
+					price: priceValue,
+					fiatPrice: isFiatCurrency ? priceValue : '', // Set fiatPrice if currency is fiat
+					currency: priceCurrency,
+					currencyMode: isFiatCurrency ? 'fiat' : 'sats',
+					bitcoinUnit: priceCurrency === 'BTC' ? 'BTC' : 'SATS',
+					quantity: stockTag?.[1] || '',
+					status: visibilityTag?.[1] || 'hidden',
+					productType: typeTag?.[1] === 'simple' ? 'single' : 'variable',
+					mainCategory: mainCategoryFromTags || null,
+					selectedCollection: collection,
+					categories: subCategoriesFromTags || [],
+					images: images.map((img, index) => ({
+						imageUrl: img[1],
+						imageOrder: parseInt(img[3] || index.toString(), 10),
+					})),
+					specs: specs.map((spec) => ({ key: spec[1], value: spec[2] })),
+					weight: weightTag ? { value: weightTag[1], unit: weightTag[2] } : null,
+					dimensions: dimensionsTag ? { value: dimensionsTag[1], unit: dimensionsTag[2] } : null,
+					shippings: shippingOptions,
+					activeTab,
+					isNSFW: isNSFWProduct(event),
+				}),
+			)
 		} catch (error) {
 			console.error('Error loading product for edit:', error)
-			productFormActions.reset()
+			productFormActions.startCreateProductSession()
 		}
 	},
 
@@ -291,21 +323,10 @@ export const productFormActions = {
 		})
 	},
 
+	// Legacy compatibility alias.
+	// Prefer startCreateProductSession() for explicit create-mode initialization.
 	reset: () => {
-		// Cancel any pending auto-save to prevent stale data from being written
-		cancelPendingSave()
-
-		productFormStore.setState((state) => {
-			const selectedCurrency = uiStore.state.selectedCurrency
-
-			return {
-				...DEFAULT_FORM_STATE,
-				// Increment formSessionId to signal new form session
-				formSessionId: state.formSessionId + 1,
-				currency: selectedCurrency === 'BTC' ? 'SATS' : selectedCurrency,
-				currencyMode: ['BTC', 'SATS'].includes(selectedCurrency) ? 'sats' : 'fiat',
-			}
-		})
+		productFormActions.startCreateProductSession()
 	},
 
 	updateValues: (values: Partial<ProductFormState>) => {
@@ -347,14 +368,24 @@ export const productFormActions = {
 		try {
 			const draft = await getProductFormDraft(productId)
 			if (draft) {
-				productFormStore.setState((state) => ({
-					...state,
-					...draft,
-					// Restore tab state to defaults since we don't persist them
-					activeTab: 'name',
-					// Mark as dirty since we're loading unsaved changes
-					isDirty: true,
-				}))
+				const {
+					editingProductId: _editingProductId,
+					formSessionId: _formSessionId,
+					activeTab: _activeTab,
+					isDirty: _isDirty,
+					...draftValues
+				} = draft
+
+				productFormStore.setState((state) =>
+					getFreshSessionState(state, {
+						...draftValues,
+						editingProductId: productId,
+						// Restore tab state to defaults since we don't persist them
+						activeTab: 'name',
+						// Mark as dirty since we're loading unsaved changes
+						isDirty: true,
+					}),
+				)
 				return true
 			}
 			return false
