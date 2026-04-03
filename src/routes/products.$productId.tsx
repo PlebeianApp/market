@@ -5,6 +5,7 @@ import { ImageViewerModal } from '@/components/ImageViewerModal'
 import { ItemGrid } from '@/components/ItemGrid'
 import { PriceDisplay } from '@/components/PriceDisplay'
 import { ProductCard } from '@/components/ProductCard'
+import { ProductComments } from '@/components/ProductComments'
 import { ShippingSelector } from '@/components/ShippingSelector'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -39,10 +40,14 @@ import {
 	getProductType,
 	getProductVisibility,
 	getProductWeight,
+	getProductId,
+	isEventId,
 	isNSFWProduct,
 	productQueryOptions,
+	productSmartQueryOptions,
 	productsByPubkeyQueryOptions,
 } from '@/queries/products'
+import { getProductCommentAddress } from '@/queries/comments'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
@@ -94,8 +99,22 @@ function RouteComponent() {
 		window.scrollTo({ top: 0, behavior: 'smooth' })
 	}, [productId])
 
+	// Parse productId to handle both address format (kind:pubkey:dtag) and d-tag only
+	const { effectiveDTag, sellerPubkey } = (() => {
+		const parts = productId.split(':')
+		if (parts.length === 3 && parts[0] === '30402') {
+			// Address format: 30402:pubkey:dtag
+			return { effectiveDTag: parts[2], sellerPubkey: parts[1] }
+		}
+		// Just a d-tag - we can't fetch without pubkey, so use original id
+		return { effectiveDTag: productId, sellerPubkey: undefined }
+	})()
+
+	// Use smart query that handles both event IDs and d-tags
+	const queryOptions = isEventId(productId) ? productQueryOptions(productId) : productSmartQueryOptions(effectiveDTag, sellerPubkey)
+
 	const productQuery = useQuery({
-		...productQueryOptions(productId),
+		...queryOptions,
 		// Relays can be slow to connect/propagate; keep retrying for a while instead of erroring the whole route.
 		retry: (failureCount) => failureCount < 120,
 		retryDelay: (attemptIndex) => Math.min(500 + attemptIndex * 750, 5000),
@@ -601,6 +620,14 @@ function RouteComponent() {
 									</div>
 								</div>
 							</div>
+
+							{/* Comments Section */}
+							<div>
+								<div className="bg-secondary text-white px-4 py-2 text-sm font-medium rounded-t-md">Comments</div>
+								<div className="rounded-lg bg-white p-6 shadow-md rounded-t-none">
+									<ProductComments productAddress={getProductCommentAddress(pubkey || '', product ? getProductId(product) : '')} />
+								</div>
+							</div>
 						</div>
 					) : (
 						<Tabs defaultValue="description" className="w-full">
@@ -626,7 +653,6 @@ function RouteComponent() {
 								<TabsTrigger
 									value="comments"
 									className="px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
-									disabled
 								>
 									Comments
 								</TabsTrigger>
@@ -741,6 +767,12 @@ function RouteComponent() {
 											</div>
 										</div>
 									</div>
+								</div>
+							</TabsContent>
+
+							<TabsContent value="comments" className="mt-4 border-t-3 border-secondary bg-tertiary">
+								<div className="rounded-lg bg-white p-6 shadow-md">
+									<ProductComments productAddress={getProductCommentAddress(pubkey || '', product ? getProductId(product) : '')} />
 								</div>
 							</TabsContent>
 						</Tabs>

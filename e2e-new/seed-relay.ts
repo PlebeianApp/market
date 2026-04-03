@@ -9,6 +9,7 @@ import { Relay } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils'
 import { devUser1 } from '../src/lib/fixtures'
 import { TEST_APP_PRIVATE_KEY, TEST_APP_PUBLIC_KEY, RELAY_URL } from './test-config'
+import { ensureScenario } from './scenarios'
 
 const skBytes = hexToBytes(TEST_APP_PRIVATE_KEY)
 
@@ -70,6 +71,11 @@ async function main() {
 		tags: [['r', RELAY_URL]],
 	})
 	console.log('  Published relay list (Kind 10002)')
+
+	// Seed merchant scenario with products, shipping, payments, etc.
+	// This ensures products are available when tests query them.
+	await ensureScenario('merchant')
+	console.log('  Seeded merchant scenario (products, shipping, payments)')
 
 	relay.close()
 	console.log('--- Relay seeding complete ---\n')

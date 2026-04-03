@@ -33,14 +33,16 @@ export const test = base.extend<TestFixtures>({
 
 	merchantPage: async ({ browser, scenario }, use) => {
 		await ensureScenario(scenario)
-		const context = await browser.newContext()
+		// Create fresh browser context for each test to avoid state leakage
+		const context = await browser.newContext({ storageState: undefined })
 		await setupAuthContext(context, devUser1)
 		const page = await context.newPage()
 
 		// Navigate and wait for the app to load
 		await page.goto('/')
-		await page.waitForLoadState('networkidle')
-		// Give the auto-login a moment to complete
+		await page.waitForLoadState('domcontentloaded')
+		// Give the auto-login more time to complete
+		await page.waitForTimeout(2000)
 		await expect(page.locator('header')).toBeVisible({ timeout: 10_000 })
 
 		await use(page)
