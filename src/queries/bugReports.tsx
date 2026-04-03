@@ -54,48 +54,6 @@ export const fetchBugReports = async (limit: number = 20, until?: number): Promi
 	return bugReports
 }
 
-/**
- * Fetches user profile (kind 0 event) for a given pubkey
- */
-export const fetchUserProfile = async (pubkey: string): Promise<UserProfile | null> => {
-	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
-
-	const filter: NDKFilter = {
-		kinds: [0], // kind 0 is profile metadata
-		authors: [pubkey],
-		limit: 1,
-	}
-
-	const events = await ndk.fetchEvents(filter)
-	const eventArray = Array.from(events)
-
-	if (eventArray.length === 0) {
-		return null
-	}
-
-	const event = eventArray[0]
-	let profile: UserProfile
-
-	try {
-		const content = JSON.parse(event.content)
-		profile = {
-			pubkey,
-			name: content.name,
-			displayName: content.display_name,
-			picture: content.picture,
-			about: content.about,
-		}
-	} catch (error) {
-		console.error('Failed to parse profile content:', error)
-		profile = {
-			pubkey,
-		}
-	}
-
-	return profile
-}
-
 // Query keys
 export const bugReportKeys = {
 	all: ['bugReports'] as const,
@@ -112,21 +70,7 @@ export const bugReportsQueryOptions = (limit: number = 20, until?: number) => ({
 	staleTime: 5 * 60 * 1000, // 5 minutes
 })
 
-// React Query options for user profiles
-export const userProfileQueryOptions = (pubkey: string) => ({
-	queryKey: bugReportKeys.profile(pubkey),
-	queryFn: () => fetchUserProfile(pubkey),
-	staleTime: 10 * 60 * 1000, // 10 minutes
-})
-
 // Hooks
 export const useBugReports = (limit: number = 20, until?: number) => {
 	return useQuery(bugReportsQueryOptions(limit, until))
-}
-
-export const useUserProfile = (pubkey: string) => {
-	return useQuery({
-		...userProfileQueryOptions(pubkey),
-		enabled: !!pubkey,
-	})
 }

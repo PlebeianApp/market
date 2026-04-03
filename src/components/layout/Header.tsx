@@ -20,15 +20,6 @@ import { cn } from '@/lib/utils'
 import { useProfile } from '@/queries/profiles'
 import { BugReportModal } from '../BugReportModal'
 
-function HeaderTooltip({ children, tooltipText }: { children: React.ReactNode; tooltipText: string }) {
-	return (
-		<Tooltip>
-			<TooltipTrigger asChild>{children}</TooltipTrigger>
-			<TooltipContent side="bottom">{tooltipText}</TooltipContent>
-		</Tooltip>
-	)
-}
-
 const LoginButton = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>((props, ref) => {
 	return (
 		<Button
@@ -37,6 +28,7 @@ const LoginButton = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTM
 			icon={<span className="i-account w-6 h-6" />}
 			data-testid="login-button"
 			ref={ref}
+			tooltip="Log In"
 			{...props}
 			onClick={() => uiActions.openDialog('login')}
 		/>
@@ -50,6 +42,7 @@ const LogoutButton = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HT
 			className="p-2 relative hover:[&>svg]:text-secondary"
 			data-testid="logout-button"
 			ref={ref}
+			tooltip="Log Out"
 			{...props}
 			onClick={() => authActions.logout()}
 		>
@@ -94,6 +87,7 @@ const ProfileButton = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<H
 				isOnOwnProfile && 'bg-secondary text-black hover:bg-secondary hover:text-black',
 			)}
 			ref={ref}
+			tooltip="Go to profile"
 			{...props}
 			onClick={handleProfileClick}
 		>
@@ -124,7 +118,7 @@ const CartButton = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTML
 	}
 
 	return (
-		<Button variant="primary" className="p-2 relative hover:text-secondary" ref={ref} {...props} onClick={handleClick}>
+		<Button variant="primary" tooltip="View cart" className="p-2 relative hover:text-secondary" ref={ref} {...props} onClick={handleClick}>
 			<span className="i-basket w-6 h-6" />
 			{totalItems > 0 && (
 				<span className="absolute -top-2.5 -right-2.5 bg-secondary text-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
@@ -151,6 +145,7 @@ const DashboardButton = forwardRef<HTMLButtonElement, DashboardButtonProps>((pro
 				}`}
 				icon={<span className="i-dashboard w-6 h-6" />}
 				data-testid="dashboard-button"
+				tooltip="Dashboard"
 				ref={ref}
 				{...props}
 			/>
@@ -166,13 +161,12 @@ const DashboardButton = forwardRef<HTMLButtonElement, DashboardButtonProps>((pro
 function WalletButton() {
 	return (
 		<Popover>
-			<HeaderTooltip tooltipText="Wallet">
-				<PopoverTrigger asChild>
-					<Button variant="primary" className="p-2 relative hover:[&>svg]:text-secondary" data-testid="wallet-button">
-						<Wallet className="w-6 h-6" />
-					</Button>
-				</PopoverTrigger>
-			</HeaderTooltip>
+			<PopoverTrigger asChild>
+				<Button variant="primary" tooltip="Wallet" className="p-2 relative hover:[&>svg]:text-secondary" data-testid="wallet-button">
+					<Wallet className="w-6 h-6" />
+				</Button>
+			</PopoverTrigger>
+
 			<PopoverContent className="md:w-96 w-[calc(100vw-2rem)] bg-primary rounded-lg" align="end">
 				<Nip60Wallet />
 			</PopoverContent>
@@ -193,25 +187,19 @@ export function BugReportButton({ className }: BugReportButtonProps) {
 
 	return (
 		<>
-			<Tooltip>
-				<TooltipTrigger asChild>
-					<Button
-						variant="outline"
-						size="icon"
-						onClick={handleBugReport}
-						className={cn(
-							'fixed bottom-16 right-16 z-50 h-10 w-10 px-4 py-2 rounded-full bg-black text-white hover:bg-black hover:text-secondary shadow-lg transition-colors',
-							className,
-						)}
-						aria-label="Report a bug"
-					>
-						<span className="i-bug w-6 h-6 px-2 py-0 hover:bg-black hover:text-secondary" />
-					</Button>
-				</TooltipTrigger>
-				<TooltipContent>
-					<p>Report a bug</p>
-				</TooltipContent>
-			</Tooltip>
+			<Button
+				variant="outline"
+				size="icon"
+				onClick={handleBugReport}
+				tooltip="Report a bug"
+				className={cn(
+					'fixed bottom-16 right-16 z-50 h-10 w-10 px-4 py-2 rounded-full bg-black text-white hover:bg-black hover:text-secondary shadow-lg transition-colors',
+					className,
+				)}
+				aria-label="Report a bug"
+			>
+				<span className="i-bug w-6 h-6 px-2 py-0 hover:bg-black hover:text-secondary" />
+			</Button>
 			<BugReportModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onReopen={() => setIsModalOpen(true)} />
 		</>
 	)
@@ -360,16 +348,10 @@ export function Header() {
 						{!isMobile && <CurrencyDropdown />}
 
 						{/* Cart Button */}
-						<HeaderTooltip tooltipText="View cart">
-							<CartButton />
-						</HeaderTooltip>
+						<CartButton />
 
 						{/* Dashboard Button - Desktop & authenticated only */}
-						{isAuthenticated && !isMobile && (
-							<HeaderTooltip tooltipText="Dashboard">
-								<DashboardButton totalNotifications={totalNotifications} />
-							</HeaderTooltip>
-						)}
+						{isAuthenticated && !isMobile && <DashboardButton totalNotifications={totalNotifications} />}
 
 						{/* Wallet Button - Desktop & authenticated only */}
 						{isAuthenticated && !isMobile && <WalletButton />}
@@ -380,21 +362,13 @@ export function Header() {
 								<Loader2 className="h-4 w-4 animate-spin" />
 							</Button>
 						) : isAuthenticated ? (
-							<HeaderTooltip tooltipText="Go to profile">
-								<ProfileButton />
-							</HeaderTooltip>
+							<ProfileButton />
 						) : (
-							<HeaderTooltip tooltipText="Log In">
-								<LoginButton />
-							</HeaderTooltip>
+							<LoginButton />
 						)}
 
 						{/* Log-Out Button, only display on Desktop & when authenticated */}
-						{isAuthenticated && !isMobile && (
-							<HeaderTooltip tooltipText="Log Out">
-								<LogoutButton />
-							</HeaderTooltip>
-						)}
+						{isAuthenticated && !isMobile && <LogoutButton />}
 
 						{/* Mobile Drop-down Menu */}
 						{isMobile && (

@@ -136,6 +136,7 @@ function ProductListItem({
 			<Button
 				variant="ghost"
 				size="sm"
+				tooltip="Edit"
 				onClick={(e) => {
 					e.stopPropagation()
 					onEdit()
@@ -147,6 +148,7 @@ function ProductListItem({
 			<Button
 				variant="ghost"
 				size="sm"
+				tooltip="Share"
 				onClick={(e) => {
 					e.stopPropagation()
 					onShare()
@@ -158,6 +160,7 @@ function ProductListItem({
 			<Button
 				variant="ghost"
 				size="sm"
+				tooltip="Delete"
 				onClick={(e) => {
 					e.stopPropagation()
 					onDelete()

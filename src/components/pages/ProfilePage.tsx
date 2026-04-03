@@ -6,7 +6,7 @@ import { Nip05Badge } from '@/components/Nip05Badge'
 import { ProductCard } from '@/components/ProductCard'
 import { ProfileName } from '@/components/ProfileName'
 import { Button } from '@/components/ui/button'
-import { ZapButton } from '@/components/ZapButton'
+import { ZapButton } from '@/components/social/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { useEntityPermissions } from '@/hooks/useEntityPermissions'
 import { getHexColorFingerprintFromHexPubkey, truncateText, checkImageLoadable } from '@/lib/utils'
@@ -209,15 +209,15 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 					{!isSmallScreen && (
 						<div className="flex gap-2">
 							{user && <ZapButton event={user} />}
-							<Button variant="focus" size="icon" onClick={handleMessageClick}>
+							<Button variant="focus" size="icon" tooltip="Message" onClick={handleMessageClick}>
 								<MessageCircle className="w-5 h-5" />
 							</Button>
 							{pickupLocations.length > 0 && (
-								<Button variant="secondary" size="icon" onClick={() => setPickupLocationDialogOpen(true)}>
+								<Button variant="secondary" size="icon" tooltip="Set Pickup Location" onClick={() => setPickupLocationDialogOpen(true)}>
 									<MapPin className="w-5 h-5" />
 								</Button>
 							)}
-							<Button variant="secondary" size="icon" onClick={() => setShareDialogOpen(true)}>
+							<Button variant="secondary" size="icon" tooltip="Share" onClick={() => setShareDialogOpen(true)}>
 								<Share2 className="w-5 h-5" />
 							</Button>
 							{/* Edit button for profile owner */}

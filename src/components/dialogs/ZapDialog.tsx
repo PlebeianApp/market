@@ -8,9 +8,9 @@ import { DEFAULT_ZAP_AMOUNTS } from '@/lib/constants'
 import { useNDK } from '@/lib/stores/ndk'
 import { nip60Actions, nip60Store } from '@/lib/stores/nip60'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
-import { profileKeys } from '@/queries/queryKeyFactory'
+import { profileKeys, zapKeys } from '@/queries/queryKeyFactory'
 import { NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { Loader2, Zap } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
@@ -42,6 +42,7 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 	const [isSubmittingNutzap, setIsSubmittingNutzap] = useState<boolean>(false)
 	const [step, setStep] = useState<'amount' | 'generateInvoice'>('amount')
 	const [paymentSessionId, setPaymentSessionId] = useState(0)
+	const queryClient = useQueryClient()
 
 	// NDK state for NWC functionality
 	const ndkState = useNDK()
@@ -124,6 +125,12 @@ export function ZapDialog({ isOpen, onOpenChange, event, onZapComplete }: ZapDia
 			console.log('Zap payment completed:', result)
 			onZapComplete?.()
 			toast.success('Zap successful! 🤙')
+
+			// Invalidate zaps query
+			const eventId = event instanceof NDKEvent ? event.id : undefined
+			queryClient.invalidateQueries({
+				queryKey: zapKeys.byProvider(event.pubkey, eventId),
+			})
 
 			setTimeout(() => {
 				onOpenChange(false)

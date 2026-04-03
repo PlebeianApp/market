@@ -14,6 +14,9 @@ type TestFixtures = {
 	/** Page with devUser3 logged in (no seeded profile — fresh user) */
 	newUserPage: Page
 
+	/** Unauthenticated user for viewing public versions of pages */
+	unauthenticatedPage: Page
+
 	/** Relay monitor attached to the default page */
 	relayMonitor: RelayMonitor
 
@@ -72,6 +75,21 @@ export const test = base.extend<TestFixtures>({
 		await page.goto('/')
 		await page.waitForLoadState('networkidle')
 		await expect(page.locator('header')).toBeVisible({ timeout: 10_000 })
+
+		await use(page)
+		await context.close()
+	},
+
+	unauthenticatedPage: async ({ browser, scenario }, use) => {
+		await ensureScenario(scenario)
+		const context = await browser.newContext()
+		// Do NOT call setupAuthContext here. This leaves the user logged out.
+		const page = await context.newPage()
+
+		await page.goto('/')
+		await page.waitForLoadState('networkidle')
+		// Verify we are NOT logged in (check for login button visibility)
+		await expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })
 
 		await use(page)
 		await context.close()

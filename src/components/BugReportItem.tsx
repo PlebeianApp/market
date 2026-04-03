@@ -1,9 +1,9 @@
 import { Button } from '@/components/ui/button'
 import { AvatarUser } from '@/components/AvatarUser'
-import { useUserProfile } from '@/queries/bugReports'
 import { useNavigate } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
 import type { BugReport } from '@/queries/bugReports'
+import { useProfile } from '@/queries/profiles'
 
 interface BugReportItemProps {
 	report: BugReport
@@ -12,7 +12,8 @@ interface BugReportItemProps {
 
 export function BugReportItem({ report, className }: BugReportItemProps) {
 	const navigate = useNavigate()
-	const { data: profile, isLoading: isLoadingProfile } = useUserProfile(report.pubkey)
+	const { data: dataUser, isLoading: isLoadingProfile } = useProfile(report.pubkey)
+	const { user, profile } = dataUser ?? {}
 
 	const handleProfileClick = () => {
 		navigate({ to: '/profile/$profileId', params: { profileId: report.pubkey } })
