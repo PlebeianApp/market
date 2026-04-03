@@ -228,9 +228,10 @@ export const fetchCollectionById = async (id: string): Promise<NDKEvent | null> 
 
 /**
  * Gets the collection title from an event
+ * Returns empty string if no title tag exists
  */
 export const getCollectionTitle = (event: NDKEvent | null): z.infer<typeof CollectionTitleTagSchema>[1] =>
-	event?.tags.find((t) => t[0] === 'title')?.[1] || 'Untitled Collection'
+	event?.tags.find((t) => t[0] === 'title')?.[1] || ''
 
 /**
  * Get the collection summary from an event

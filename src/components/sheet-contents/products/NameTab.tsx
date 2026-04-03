@@ -12,7 +12,7 @@ export function NameTab() {
 	const { user } = useStore(authStore)
 
 	// Fetch user's collections
-	const { data: collections = [] } = useCollectionsByPubkey(user?.pubkey || '')
+	const { data: collections = [], isLoading: isLoadingCollections } = useCollectionsByPubkey(user?.pubkey || '')
 
 	const form = useForm({
 		defaultValues: {
@@ -39,27 +39,32 @@ export function NameTab() {
 				<Select
 					value={selectedCollection || 'none'}
 					onValueChange={(value) => productFormActions.updateValues({ selectedCollection: value === 'none' ? null : value })}
+					disabled={isLoadingCollections}
 				>
 					<SelectTrigger className="border-2" data-testid="product-collection-select">
-						<SelectValue placeholder="Select a collection" />
+						<SelectValue placeholder={isLoadingCollections ? 'Loading collections...' : 'Select a collection'} />
 					</SelectTrigger>
 					<SelectContent>
 						<SelectItem value="none" data-testid="collection-option-none">
 							Not In A Collection
 						</SelectItem>
-						{collections.map((collection) => {
-							const collectionId = getCollectionId(collection)
-							const collectionTitle = getCollectionTitle(collection)
-							return (
-								<SelectItem
-									key={collectionId}
-									value={collectionId}
-									data-testid={`collection-option-${collectionTitle?.toLowerCase().replace(/\s+/g, '-') || 'unknown'}`}
-								>
-									{collectionTitle}
-								</SelectItem>
-							)
-						})}
+						{collections.length === 0 && !isLoadingCollections ? (
+							<div className="px-2 py-1.5 text-sm text-muted-foreground">No collections yet. Create one in Dashboard → Collections.</div>
+						) : (
+							collections.map((collection) => {
+								const collectionId = getCollectionId(collection)
+								const collectionTitle = getCollectionTitle(collection)
+								return (
+									<SelectItem
+										key={collectionId}
+										value={collectionId}
+										data-testid={`collection-option-${collectionTitle?.toLowerCase().replace(/\s+/g, '-') || 'unknown'}`}
+									>
+										{collectionTitle}
+									</SelectItem>
+								)
+							})
+						)}
 					</SelectContent>
 				</Select>
 			</div>

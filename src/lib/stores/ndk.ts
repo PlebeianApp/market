@@ -632,6 +632,14 @@ export const ndkActions = {
 	 */
 	publishEvent: async (event: NDKEvent): Promise<Set<any>> => {
 		const relaySet = getWriteRelaySet()
+
+		const kind = event.kind
+		const isReplaceable = (kind >= 10000 && kind < 20000) || (kind >= 30000 && kind < 40000)
+
+		if (isReplaceable) {
+			return event.publishReplaceable(relaySet)
+		}
+
 		return event.publish(relaySet)
 	},
 
