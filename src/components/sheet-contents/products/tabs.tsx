@@ -10,13 +10,13 @@ import type { RichShippingInfo } from '@/lib/stores/cart'
 import { useNDK } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore, type ProductShippingForm } from '@/lib/stores/product'
 import { uiStore } from '@/lib/stores/ui'
+import { attachShippingOptionByRef } from '@/lib/utils/productShippingQuickCreate'
 import { resolveProductShippingSelections } from '@/lib/utils/productShippingSelections'
 import { MempoolService } from '@/lib/utils/mempool'
 import { useBtcExchangeRates, type SupportedCurrency } from '@/queries/external'
 import { usePublishShippingOptionMutation, type ShippingFormData } from '@/publish/shipping'
-import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey, shippingKeys } from '@/queries/shipping'
+import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useForm } from '@tanstack/react-form'
-import { useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { Info, ArrowRightLeft, DownloadIcon, Loader2, PackageIcon, PlusIcon, TruckIcon, X, AlertTriangle } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -658,7 +658,6 @@ const QUICK_SHIPPING_TEMPLATES: Array<{
 export function ShippingTab() {
 	const { shippings } = useStore(productFormStore)
 	const { getUser } = useNDK()
-	const queryClient = useQueryClient()
 	const [user, setUser] = useState<any>(null)
 	const [isCreatingShipping, setIsCreatingShipping] = useState(false)
 	const [showPickupForm, setShowPickupForm] = useState(false)
@@ -677,42 +676,6 @@ export function ShippingTab() {
 	}, [getUser])
 
 	const shippingOptionsQuery = useShippingOptionsByPubkey(user?.pubkey || '')
-
-	// Helper to auto-add a shipping option after creation
-	const autoAddShippingOption = async (templateName: string) => {
-		// Wait for the query to refetch and use the result directly
-		const refetchResult = await shippingOptionsQuery.refetch()
-
-		// Find the newly created option by name
-		const refetchedData = refetchResult.data || []
-		const newOption = refetchedData
-			.map((event) => {
-				const info = getShippingInfo(event)
-				if (!info || !info.id || typeof info.id !== 'string' || info.id.trim().length === 0) return null
-				const id = createShippingReference(user.pubkey, info.id)
-				return {
-					id,
-					name: info.title,
-					cost: parseFloat(info.price.amount),
-					currency: info.price.currency,
-					countries: info.countries || [],
-					service: info.service || '',
-					carrier: info.carrier || '',
-				}
-			})
-			.filter(Boolean)
-			.find((opt) => opt && opt.name === templateName) as RichShippingInfo | undefined
-
-		if (newOption && !shippings.some((s) => s.shippingRef === newOption.id)) {
-			const newShipping: ProductShippingForm = {
-				shippingRef: newOption.id,
-				extraCost: '',
-			}
-			productFormActions.updateValues({
-				shippings: [...shippings, newShipping],
-			})
-		}
-	}
 
 	// Quick-create a shipping option from template
 	const handleQuickCreate = async (template: (typeof QUICK_SHIPPING_TEMPLATES)[number]) => {
@@ -735,14 +698,11 @@ export function ShippingTab() {
 				service: template.service,
 			}
 
-			await publishShippingMutation.mutateAsync(formData)
+			const publishedShipping = await publishShippingMutation.mutateAsync(formData)
 
-			// Invalidate and refetch shipping options with the correct pubkey
-			await queryClient.invalidateQueries({ queryKey: shippingKeys.byPubkey(user.pubkey) })
-			await queryClient.invalidateQueries({ queryKey: shippingKeys.all })
-
-			// Auto-add the newly created shipping option
-			await autoAddShippingOption(template.name)
+			productFormActions.updateValues({
+				shippings: attachShippingOptionByRef(productFormStore.state.shippings, publishedShipping.shippingRef),
+			})
 
 			toast.success(`${template.name} shipping option created and added!`)
 		} catch (error) {
@@ -779,14 +739,11 @@ export function ShippingTab() {
 				pickupAddress: pickupAddress,
 			}
 
-			await publishShippingMutation.mutateAsync(formData)
+			const publishedShipping = await publishShippingMutation.mutateAsync(formData)
 
-			// Invalidate and refetch shipping options with the correct pubkey
-			await queryClient.invalidateQueries({ queryKey: shippingKeys.byPubkey(user.pubkey) })
-			await queryClient.invalidateQueries({ queryKey: shippingKeys.all })
-
-			// Auto-add the newly created shipping option
-			await autoAddShippingOption('Local Pickup')
+			productFormActions.updateValues({
+				shippings: attachShippingOptionByRef(productFormStore.state.shippings, publishedShipping.shippingRef),
+			})
 
 			toast.success('Local Pickup shipping option created and added!')
 			setShowPickupForm(false)
