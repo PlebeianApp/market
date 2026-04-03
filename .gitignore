@@ -49,3 +49,11 @@ test-results
 # Claude Code local settings (user-specific)
 .claude/settings.local.json
 __pycache__/
+
+# Local OpenCode artifacts
+/.opencode/
+/Makefile
+/scripts/docs_summary.py
+/scripts/gitignore_audit.py
+/scripts/verify_subagents.py
+/tatus
