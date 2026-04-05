@@ -2,7 +2,7 @@ import { finalizeEvent, type EventTemplate } from 'nostr-tools/pure'
 import { Relay, useWebSocketImplementation } from 'nostr-tools/relay'
 import { hexToBytes } from '@noble/hashes/utils'
 import WebSocket from 'ws'
-import { devUser1, devUser2, WALLETED_USER_LUD16 } from '../../src/lib/fixtures'
+import { devUser1, devUser2, TEST_WALLETED_USER_LUD16 } from '../../src/lib/fixtures'
 import { RELAY_URL, TEST_APP_PRIVATE_KEY, TEST_APP_PUBLIC_KEY } from '../test-config'
 
 useWebSocketImplementation(WebSocket)
@@ -128,7 +128,7 @@ async function seedMerchant(relay: Relay) {
 
 	await seedPaymentDetail(relay, devUser1.sk, TEST_APP_PUBLIC_KEY, {
 		method: 'LIGHTNING_NETWORK',
-		detail: WALLETED_USER_LUD16,
+		detail: TEST_WALLETED_USER_LUD16,
 	})
 
 	// Seed V4V shares with 10% going to the app (community share)
@@ -204,7 +204,7 @@ async function seedMarketplace(relay: Relay) {
 
 	await seedPaymentDetail(relay, devUser2.sk, TEST_APP_PUBLIC_KEY, {
 		method: 'LIGHTNING_NETWORK',
-		detail: WALLETED_USER_LUD16,
+		detail: TEST_WALLETED_USER_LUD16,
 	})
 
 	// Seed V4V shares for second merchant (10% to app, matching devUser1)
@@ -232,7 +232,7 @@ async function seedUserProfile(relay: Relay, user: { sk: string; pk: string }, n
 			name,
 			display_name: displayName,
 			about: `Test user ${name}`,
-			lud16: WALLETED_USER_LUD16,
+			lud16: TEST_WALLETED_USER_LUD16,
 		}),
 		tags: [],
 	})
