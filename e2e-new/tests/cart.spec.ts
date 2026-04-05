@@ -284,7 +284,7 @@ test.describe('Cart - Multiple Merchants', () => {
 		await expect(dialog.getByText('Nostr T-Shirt')).toBeVisible()
 
 		// They're grouped under the same seller, so only 1 shipping selector
-		const shippingTriggers = dialog.getByText('Select shipping method')
+		const shippingTriggers = dialog.locator('[data-slot="select-trigger"]:visible').getByText('Select shipping method')
 		await expect(shippingTriggers).toHaveCount(1, { timeout: 10_000 })
 	})
 

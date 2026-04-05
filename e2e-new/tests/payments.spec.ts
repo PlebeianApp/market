@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test'
 import { test, expect } from '../fixtures'
 import { setupLnurlMock } from '../helpers/lnurl-mock'
 import { queryRelayEvents, filterByTag } from '../utils/relay-query'
-import { WALLETED_USER_LUD16, devUser1, devUser2 } from '../../src/lib/fixtures'
+import { TEST_WALLETED_USER_LUD16, devUser1, devUser2 } from '../../src/lib/fixtures'
 
 test.use({ scenario: 'merchant' })
 
@@ -88,7 +88,7 @@ test.describe('Receiving Payments Configuration', () => {
 
 		// The seeded Lightning address should appear on the page (multiple elements may match
 		// since the address shows in both the profile card and payment detail list items)
-		await expect(merchantPage.getByText(WALLETED_USER_LUD16).first()).toBeVisible({ timeout: 10_000 })
+		await expect(merchantPage.getByText(TEST_WALLETED_USER_LUD16).first()).toBeVisible({ timeout: 10_000 })
 
 		// Payment method label should show "Lightning Address"
 		await expect(merchantPage.getByText(/lightning address/i).first()).toBeVisible()
@@ -121,7 +121,7 @@ test.describe('Receiving Payments Configuration', () => {
 
 		// Wait for auth + the seeded payment detail to load
 		await expect(merchantPage.getByRole('heading', { name: /receiving payments/i })).toBeVisible({ timeout: 15_000 })
-		await expect(merchantPage.getByText(WALLETED_USER_LUD16).first()).toBeVisible({ timeout: 10_000 })
+		await expect(merchantPage.getByText(TEST_WALLETED_USER_LUD16).first()).toBeVisible({ timeout: 10_000 })
 
 		// Count delete buttons before deletion
 		const deleteButtons = merchantPage.getByRole('button', { name: /delete payment detail/i })

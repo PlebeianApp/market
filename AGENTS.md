@@ -12,6 +12,20 @@ bd close <id>         # Complete work
 bd sync               # Sync with git
 ```
 
+## Quality Gates
+
+```bash
+npm run format:check  # Check code formatting
+npm run build         # Build and type check
+npm run test:e2e-new  # Run e2e tests (requires dev server)
+```
+
+## Companion Files
+
+- **TESTING_TEAM.md** - Known issues, workarounds, and test records
+- **src/lib/stores/ndk.ts** - publishEvent with replaceable event handling
+- **src/components/sheet-contents/products/ProductFormContent.tsx** - Test data attributes
+
 ## Landing the Plane (Session Completion)
 
 **When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.

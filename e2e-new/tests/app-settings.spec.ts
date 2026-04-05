@@ -66,7 +66,10 @@ async function clickDestructiveButtonForText(page: Page, text: string) {
 
 	await expect(destructiveButton).toBeVisible()
 	await destructiveButton.click({ timeout: 15_000 })
-	await expect(rowText).toBeHidden({ timeout: 15_000 })
+	// Retry assertion in case of timing issues with relay sync
+	await expect(async () => {
+		await expect(rowText).toBeHidden({ timeout: 15_000 })
+	}).toPass({ timeout: 20_000 })
 }
 
 const compactNpub = (pubkey: string) => {

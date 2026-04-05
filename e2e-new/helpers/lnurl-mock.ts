@@ -9,9 +9,9 @@ const FAKE_BOLT11 =
 	'lnbc500u1pjtest0pp5qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqsp5qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq9q7sqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqgpqysgqa0a0a'
 
 export interface LnurlMockOptions {
-	/** The Lightning address domain to intercept (default: coinos.io) */
+	/** The Lightning address domain to intercept (default: lnurl.e2e.test) */
 	domain?: string
-	/** The Lightning address username to intercept (default: plebeianuser) */
+	/** The Lightning address username to intercept (default: test) */
 	username?: string
 	/** If true, fail the LNURL metadata fetch before invoice generation starts */
 	failMetadata?: boolean
@@ -37,8 +37,8 @@ export interface LnurlMockOptions {
  * This mock intercepts both requests so no real HTTP calls leave the browser.
  */
 export async function setupLnurlMock(page: Page, options?: LnurlMockOptions): Promise<void> {
-	const domain = options?.domain ?? 'coinos.io'
-	const username = options?.username ?? 'plebeianuser'
+	const domain = options?.domain ?? 'lnurl.e2e.test'
+	const username = options?.username ?? 'test'
 	const bolt11 = options?.bolt11 ?? FAKE_BOLT11
 	const minSendable = options?.minSendable ?? 1_000
 	const maxSendable = options?.maxSendable ?? 100_000_000_000
