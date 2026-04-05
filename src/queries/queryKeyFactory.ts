@@ -133,6 +133,11 @@ export const migrationKeys = {
 	all: ['migration'] as const,
 	nip15Products: (userPubkey: string) => [...migrationKeys.all, 'nip15Products', userPubkey] as const,
 	migratedEvents: (userPubkey: string) => [...migrationKeys.all, 'migratedEvents', userPubkey] as const,
+}
+
+export const commentKeys = {
+	all: ['comments'] as const,
+	byProduct: (productCoordinates: string) => [...commentKeys.all, 'byProduct', productCoordinates] as const,
 } as const
 
 export const cartKeys = {
