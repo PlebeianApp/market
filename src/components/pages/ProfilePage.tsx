@@ -20,7 +20,6 @@ import { useConfigQuery } from '@/queries/config'
 import { useFeaturedUsers } from '@/queries/featured'
 import { productsByPubkeyQueryOptions } from '@/queries/products'
 import { profileByIdentifierQueryOptions } from '@/queries/profiles'
-import { useShippingOptionsByPubkey, getShippingService, getShippingPickupAddress, getShippingTitle } from '@/queries/shipping'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
@@ -70,38 +69,17 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 	const isBlacklisted = blacklistSettings?.blacklistedPubkeys.includes(user?.pubkey || '') || false
 	const isFeatured = featuredData?.featuredUsers.includes(user?.pubkey || '') || false
 
-	// Get vendor's shipping options to check for pickup locations
-	const { data: shippingOptions } = useShippingOptionsByPubkey(user?.pubkey || '')
+	// Get pickup location from profile metadata
+	const pickupLocation = useMemo(() => {
+		const mapLink = (profile as any)?.pickupMapLink as string | undefined
 
-	// Find all pickup shipping options with addresses
-	const pickupLocations = useMemo(() => {
-		if (!shippingOptions) return []
+		if (!mapLink) return null
 
-		const locations: Array<{
-			name: string
-			address: {
-				street: string
-				city: string
-				state: string
-				postalCode: string
-				country: string
-			}
-		}> = []
-
-		for (const option of shippingOptions) {
-			const serviceTag = getShippingService(option)
-			if (serviceTag && serviceTag[1] === 'pickup') {
-				const address = getShippingPickupAddress(option)
-				if (address && (address.street || address.city)) {
-					locations.push({
-						name: getShippingTitle(option),
-						address,
-					})
-				}
-			}
+		return {
+			name: profile?.name ? `${profile.name}'s Location` : 'Pickup Location',
+			mapLink,
 		}
-		return locations
-	}, [shippingOptions])
+	}, [profile])
 
 	// Handle edit profile
 	const handleEdit = () => {
@@ -212,7 +190,7 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 							<Button variant="focus" size="icon" onClick={handleMessageClick}>
 								<MessageCircle className="w-5 h-5" />
 							</Button>
-							{pickupLocations.length > 0 && (
+							{pickupLocation && (
 								<Button variant="secondary" size="icon" onClick={() => setPickupLocationDialogOpen(true)}>
 									<MapPin className="w-5 h-5" />
 								</Button>
@@ -299,11 +277,11 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 				profileName={profile?.name}
 			/>
 
-			{pickupLocations.length > 0 && (
+			{pickupLocation && (
 				<PickupLocationDialog
 					open={pickupLocationDialogOpen}
 					onOpenChange={setPickupLocationDialogOpen}
-					locations={pickupLocations}
+					locations={[pickupLocation]}
 					vendorName={profile?.name}
 				/>
 			)}
