@@ -1,4 +1,6 @@
 import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
+import { AvatarUser } from '@/components/AvatarUser'
+import { OrderActions } from '@/components/orders/OrderActions'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -33,13 +35,15 @@ import {
 	getBidStatus,
 	useAuctionBids,
 	useAuctionBidStats,
+	useAuctionClaimOrders,
 	useAuctionSettlements,
 } from '@/queries/auctions'
+import { type OrderWithRelatedEvents, useOrderById } from '@/queries/orders'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Clock, Copy, ExternalLink, Gavel, Shield } from 'lucide-react'
+import { Clock, Copy, ExternalLink, Gavel, Package, Shield } from 'lucide-react'
 import { useMemo } from 'react'
 import { toast } from 'sonner'
 
@@ -205,6 +209,16 @@ function DashboardAuctionDetailRoute() {
 	const settlementLocked = !!latestSettlement
 	const latestSettlementStatus = latestSettlement ? getAuctionSettlementStatus(latestSettlement) : 'unknown'
 	const reserveLabel = bidCount === 0 ? 'Waiting for bids' : reserveMet ? 'Reserve met' : 'Below reserve'
+
+	// Auction claim order (winner's shipping details)
+	const settlementWinner = getAuctionSettlementWinner(latestSettlement)
+	const claimOrdersQuery = useAuctionClaimOrders(auctionCoordinates)
+	const claimOrders = claimOrdersQuery.data ?? []
+	const winnerClaimOrder = claimOrders.find((order) => order.pubkey === settlementWinner) ?? null
+	const winnerClaimOrderId = winnerClaimOrder?.id ?? ''
+
+	const claimOrderDetailQuery = useOrderById(winnerClaimOrderId)
+	const claimOrderWithEvents: OrderWithRelatedEvents | null = claimOrderDetailQuery.data ?? null
 
 	const submitSettlement = async (mode: 'settled' | 'reserve_not_met' | 'cancelled') => {
 		if (!auction) return
@@ -608,6 +622,75 @@ function DashboardAuctionDetailRoute() {
 							</Accordion>
 						</CardContent>
 					</Card>
+
+					{/* Fulfilment — only visible once settled with a winner */}
+					{latestSettlementStatus === 'settled' && settlementWinner && (
+						<Card className="border-black/10 shadow-sm">
+							<CardHeader className="pb-4">
+								<CardTitle className="flex items-center gap-2 text-xl">
+									<Package className="h-5 w-5" />
+									Fulfilment
+								</CardTitle>
+								<CardDescription>
+									Post-settlement delivery flow. Once the winner submits their address you can process and ship the item using the same
+									controls as regular orders.
+								</CardDescription>
+							</CardHeader>
+							<CardContent className="space-y-4">
+								<div className="rounded-2xl border border-zinc-200 bg-white p-4">
+									<div className="flex items-center justify-between gap-2">
+										<p className="text-sm font-medium text-zinc-600">Winner</p>
+										<AvatarUser pubkey={settlementWinner} />
+									</div>
+									<div className="mt-3">
+										<OverviewItem
+											label="Final amount"
+											value={`${getAuctionSettlementFinalAmount(latestSettlement).toLocaleString()} sats`}
+										/>
+									</div>
+								</div>
+
+								{!winnerClaimOrder && (
+									<div className="rounded-xl border border-dashed border-amber-300 bg-amber-50/70 p-4 text-sm text-amber-800">
+										Waiting for the winner to submit their shipping address.
+									</div>
+								)}
+
+								{winnerClaimOrder && !claimOrderWithEvents && (
+									<div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">Loading order details...</div>
+								)}
+
+								{claimOrderWithEvents && user?.pubkey && (
+									<div className="space-y-3">
+										{/* Shipping address from the claim order */}
+										{(() => {
+											const addressTag = claimOrderWithEvents.order.tags.find((t) => t[0] === 'address')?.[1]
+											if (!addressTag) return null
+											return (
+												<div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+													<p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Shipping address</p>
+													<p className="mt-2 whitespace-pre-wrap text-sm text-zinc-900">{addressTag}</p>
+												</div>
+											)
+										})()}
+
+										{/* Email if provided */}
+										{(() => {
+											const email = claimOrderWithEvents.order.tags.find((t) => t[0] === 'email')?.[1]
+											if (!email) return null
+											return <OverviewItem label="Contact email" value={email} />
+										})()}
+
+										{/* Order actions — reuses the standard confirm → process → ship flow */}
+										<div className="rounded-xl border border-zinc-200 bg-white p-4">
+											<p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Order progress</p>
+											<OrderActions order={claimOrderWithEvents} userPubkey={user.pubkey} />
+										</div>
+									</div>
+								)}
+							</CardContent>
+						</Card>
+					)}
 
 					<Card className="border-black/10 shadow-sm">
 						<CardHeader className="pb-4">

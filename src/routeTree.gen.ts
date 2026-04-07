@@ -46,6 +46,7 @@ import { Route as DashboardLayoutDashboardAccountVanityUrlRouteImport } from './
 import { Route as DashboardLayoutDashboardAccountReceivingPaymentsRouteImport } from './routes/_dashboard-layout/dashboard/account/receiving-payments'
 import { Route as DashboardLayoutDashboardAccountProfileRouteImport } from './routes/_dashboard-layout/dashboard/account/profile'
 import { Route as DashboardLayoutDashboardAccountPreferencesRouteImport } from './routes/_dashboard-layout/dashboard/account/preferences'
+import { Route as DashboardLayoutDashboardAccountNostrAddressRouteImport } from './routes/_dashboard-layout/dashboard/account/nostr-address'
 import { Route as DashboardLayoutDashboardAccountNetworkRouteImport } from './routes/_dashboard-layout/dashboard/account/network'
 import { Route as DashboardLayoutDashboardAccountMakingPaymentsRouteImport } from './routes/_dashboard-layout/dashboard/account/making-payments'
 import { Route as DashboardLayoutDashboardSalesMessagesPubkeyRouteImport } from './routes/_dashboard-layout/dashboard/sales/messages/$pubkey'
@@ -239,6 +240,11 @@ const DashboardLayoutDashboardAccountPreferencesRoute = DashboardLayoutDashboard
 	path: '/dashboard/account/preferences',
 	getParentRoute: () => DashboardLayoutRoute,
 } as any)
+const DashboardLayoutDashboardAccountNostrAddressRoute = DashboardLayoutDashboardAccountNostrAddressRouteImport.update({
+	id: '/dashboard/account/nostr-address',
+	path: '/dashboard/account/nostr-address',
+	getParentRoute: () => DashboardLayoutRoute,
+} as any)
 const DashboardLayoutDashboardAccountNetworkRoute = DashboardLayoutDashboardAccountNetworkRouteImport.update({
 	id: '/dashboard/account/network',
 	path: '/dashboard/account/network',
@@ -301,6 +307,7 @@ export interface FileRoutesByFullPath {
 	'/dashboard/': typeof DashboardLayoutDashboardIndexRoute
 	'/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
 	'/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
+	'/dashboard/account/nostr-address': typeof DashboardLayoutDashboardAccountNostrAddressRoute
 	'/dashboard/account/preferences': typeof DashboardLayoutDashboardAccountPreferencesRoute
 	'/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
 	'/dashboard/account/receiving-payments': typeof DashboardLayoutDashboardAccountReceivingPaymentsRoute
@@ -347,6 +354,7 @@ export interface FileRoutesByTo {
 	'/dashboard': typeof DashboardLayoutDashboardIndexRoute
 	'/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
 	'/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
+	'/dashboard/account/nostr-address': typeof DashboardLayoutDashboardAccountNostrAddressRoute
 	'/dashboard/account/preferences': typeof DashboardLayoutDashboardAccountPreferencesRoute
 	'/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
 	'/dashboard/account/receiving-payments': typeof DashboardLayoutDashboardAccountReceivingPaymentsRoute
@@ -395,6 +403,7 @@ export interface FileRoutesById {
 	'/_dashboard-layout/dashboard/': typeof DashboardLayoutDashboardIndexRoute
 	'/_dashboard-layout/dashboard/account/making-payments': typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
 	'/_dashboard-layout/dashboard/account/network': typeof DashboardLayoutDashboardAccountNetworkRoute
+	'/_dashboard-layout/dashboard/account/nostr-address': typeof DashboardLayoutDashboardAccountNostrAddressRoute
 	'/_dashboard-layout/dashboard/account/preferences': typeof DashboardLayoutDashboardAccountPreferencesRoute
 	'/_dashboard-layout/dashboard/account/profile': typeof DashboardLayoutDashboardAccountProfileRoute
 	'/_dashboard-layout/dashboard/account/receiving-payments': typeof DashboardLayoutDashboardAccountReceivingPaymentsRoute
@@ -443,6 +452,7 @@ export interface FileRouteTypes {
 		| '/dashboard/'
 		| '/dashboard/account/making-payments'
 		| '/dashboard/account/network'
+		| '/dashboard/account/nostr-address'
 		| '/dashboard/account/preferences'
 		| '/dashboard/account/profile'
 		| '/dashboard/account/receiving-payments'
@@ -489,6 +499,7 @@ export interface FileRouteTypes {
 		| '/dashboard'
 		| '/dashboard/account/making-payments'
 		| '/dashboard/account/network'
+		| '/dashboard/account/nostr-address'
 		| '/dashboard/account/preferences'
 		| '/dashboard/account/profile'
 		| '/dashboard/account/receiving-payments'
@@ -536,6 +547,7 @@ export interface FileRouteTypes {
 		| '/_dashboard-layout/dashboard/'
 		| '/_dashboard-layout/dashboard/account/making-payments'
 		| '/_dashboard-layout/dashboard/account/network'
+		| '/_dashboard-layout/dashboard/account/nostr-address'
 		| '/_dashboard-layout/dashboard/account/preferences'
 		| '/_dashboard-layout/dashboard/account/profile'
 		| '/_dashboard-layout/dashboard/account/receiving-payments'
@@ -843,6 +855,13 @@ declare module '@tanstack/react-router' {
 			preLoaderRoute: typeof DashboardLayoutDashboardAccountPreferencesRouteImport
 			parentRoute: typeof DashboardLayoutRoute
 		}
+		'/_dashboard-layout/dashboard/account/nostr-address': {
+			id: '/_dashboard-layout/dashboard/account/nostr-address'
+			path: '/dashboard/account/nostr-address'
+			fullPath: '/dashboard/account/nostr-address'
+			preLoaderRoute: typeof DashboardLayoutDashboardAccountNostrAddressRouteImport
+			parentRoute: typeof DashboardLayoutRoute
+		}
 		'/_dashboard-layout/dashboard/account/network': {
 			id: '/_dashboard-layout/dashboard/account/network'
 			path: '/dashboard/account/network'
@@ -959,6 +978,7 @@ interface DashboardLayoutRouteChildren {
 	DashboardLayoutDashboardIndexRoute: typeof DashboardLayoutDashboardIndexRoute
 	DashboardLayoutDashboardAccountMakingPaymentsRoute: typeof DashboardLayoutDashboardAccountMakingPaymentsRoute
 	DashboardLayoutDashboardAccountNetworkRoute: typeof DashboardLayoutDashboardAccountNetworkRoute
+	DashboardLayoutDashboardAccountNostrAddressRoute: typeof DashboardLayoutDashboardAccountNostrAddressRoute
 	DashboardLayoutDashboardAccountPreferencesRoute: typeof DashboardLayoutDashboardAccountPreferencesRoute
 	DashboardLayoutDashboardAccountProfileRoute: typeof DashboardLayoutDashboardAccountProfileRoute
 	DashboardLayoutDashboardAccountReceivingPaymentsRoute: typeof DashboardLayoutDashboardAccountReceivingPaymentsRoute
@@ -985,6 +1005,7 @@ const DashboardLayoutRouteChildren: DashboardLayoutRouteChildren = {
 	DashboardLayoutDashboardIndexRoute: DashboardLayoutDashboardIndexRoute,
 	DashboardLayoutDashboardAccountMakingPaymentsRoute: DashboardLayoutDashboardAccountMakingPaymentsRoute,
 	DashboardLayoutDashboardAccountNetworkRoute: DashboardLayoutDashboardAccountNetworkRoute,
+	DashboardLayoutDashboardAccountNostrAddressRoute: DashboardLayoutDashboardAccountNostrAddressRoute,
 	DashboardLayoutDashboardAccountPreferencesRoute: DashboardLayoutDashboardAccountPreferencesRoute,
 	DashboardLayoutDashboardAccountProfileRoute: DashboardLayoutDashboardAccountProfileRoute,
 	DashboardLayoutDashboardAccountReceivingPaymentsRoute: DashboardLayoutDashboardAccountReceivingPaymentsRoute,
