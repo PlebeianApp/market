@@ -1,13 +1,17 @@
+import { AuctionClaimDialog } from '@/components/AuctionClaimDialog'
 import { AuctionCountdown } from '@/components/AuctionCountdown'
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { authStore } from '@/lib/stores/auth'
 import { nip60Actions, nip60Store, type PendingNip60Token } from '@/lib/stores/nip60'
 import { getMintHostname } from '@/lib/wallet'
 import {
+	auctionClaimOrdersQueryOptions,
 	auctionQueryOptions,
 	auctionSettlementsQueryOptions,
 	getAuctionEndAt,
+	getAuctionId,
 	getAuctionSettlementFinalAmount,
 	getAuctionSettlementStatus,
 	getAuctionSettlementWinner,
@@ -27,7 +31,7 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQueries } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Clock, ExternalLink, Loader2, RotateCcw, Trophy } from 'lucide-react'
+import { CheckCircle, Clock, ExternalLink, Loader2, MapPin, RotateCcw, Trophy } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -195,6 +199,7 @@ function BidsOverviewComponent() {
 	const [expandedBidGroup, setExpandedBidGroup] = useState<string | null>(null)
 	const [reclaimingGroup, setReclaimingGroup] = useState<string | null>(null)
 	const [isRefreshingBids, setIsRefreshingBids] = useState(false)
+	const [claimDialogGroup, setClaimDialogGroup] = useState<string | null>(null)
 	const [animationParent] = useAutoAnimate()
 
 	const { data: myBids, isLoading, error } = useAuctionBidsByBidder(user?.pubkey ?? '', 500)
@@ -257,6 +262,17 @@ function BidsOverviewComponent() {
 			...auctionSettlementsQueryOptions(group.auctionEventId, 20),
 			refetchInterval: 5000,
 		})),
+	})
+
+	// Claim orders for won auctions — fetched by auction coordinates
+	const claimOrderResults = useQueries({
+		queries: bidGroups.map((group) => {
+			const coordinates = group.auctionCoordinates || ''
+			return {
+				...auctionClaimOrdersQueryOptions(coordinates),
+				enabled: !!coordinates,
+			}
+		}),
 	})
 
 	const handleRefreshBidStatuses = async () => {
@@ -367,6 +383,12 @@ function BidsOverviewComponent() {
 							)
 							const mintLabel = getMintHostname(getBidMint(group.latestBid) || group.pendingTokens[0]?.mintUrl || '') || 'Unknown mint'
 
+							// Fulfilment state for winning bids
+							const isWinningBid = state.label === 'Winning bid'
+							const claimOrders = claimOrderResults[index]?.data ?? []
+							const myClaimOrder = claimOrders.find((o) => o.pubkey === user.pubkey)
+							const hasClaimed = !!myClaimOrder
+
 							return (
 								<li key={group.key}>
 									<DashboardListItem
@@ -392,9 +414,33 @@ function BidsOverviewComponent() {
 														)}
 													</div>
 												</div>
-												<span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${state.toneClass}`}>
-													{state.label}
-												</span>
+												<div className="flex flex-wrap items-center gap-1.5 shrink-0">
+													<span
+														className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${state.toneClass}`}
+													>
+														{state.label}
+													</span>
+													{isWinningBid && (
+														<Badge
+															variant="outline"
+															className={
+																hasClaimed
+																	? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+																	: 'border-amber-200 bg-amber-50 text-amber-700'
+															}
+														>
+															{hasClaimed ? (
+																<>
+																	<CheckCircle className="mr-1 h-3 w-3" /> Claimed
+																</>
+															) : (
+																<>
+																	<MapPin className="mr-1 h-3 w-3" /> Address needed
+																</>
+															)}
+														</Badge>
+													)}
+												</div>
 											</div>
 										}
 										actions={
@@ -465,6 +511,39 @@ function BidsOverviewComponent() {
 												</div>
 											)}
 
+											{/* Fulfilment section for winning bids */}
+											{isWinningBid && settlement && (
+												<div
+													className={`rounded-lg border px-3 py-3 text-sm ${hasClaimed ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}
+												>
+													<p className="font-semibold flex items-center gap-2">
+														{hasClaimed ? (
+															<>
+																<CheckCircle className="h-4 w-4 text-emerald-600" /> Shipping details submitted
+															</>
+														) : (
+															<>
+																<MapPin className="h-4 w-4 text-amber-600" /> Shipping address required
+															</>
+														)}
+													</p>
+													{hasClaimed ? (
+														<p className="mt-1 text-xs text-emerald-700">
+															Your address has been sent to the seller. Track order progress on the auction page.
+														</p>
+													) : (
+														<div className="mt-2">
+															<p className="text-xs text-amber-700 mb-2">
+																Submit your shipping address so the seller can send you the item.
+															</p>
+															<Button size="sm" onClick={() => setClaimDialogGroup(group.key)}>
+																Submit Shipping Address
+															</Button>
+														</div>
+													)}
+												</div>
+											)}
+
 											<div className="flex flex-wrap items-center gap-2">
 												<Link to={`/auctions/${group.auctionEventId}`}>
 													<Button variant="outline" size="sm" className="gap-2">
@@ -519,6 +598,34 @@ function BidsOverviewComponent() {
 					</ul>
 				)}
 			</div>
+
+			{/* Claim dialog for winning bids — rendered once, driven by claimDialogGroup state */}
+			{(() => {
+				if (!claimDialogGroup) return null
+				const groupIndex = bidGroups.findIndex((g) => g.key === claimDialogGroup)
+				if (groupIndex === -1) return null
+				const group = bidGroups[groupIndex]
+				const auction = auctionResults[groupIndex]?.data ?? null
+				const settlement = settlementResults[groupIndex]?.data?.[0] ?? null
+				if (!auction || !settlement) return null
+
+				const dTag = getAuctionId(auction)
+				const coordinates = dTag ? `30408:${auction.pubkey}:${dTag}` : group.auctionCoordinates || ''
+
+				return (
+					<AuctionClaimDialog
+						open
+						onOpenChange={(open) => {
+							if (!open) setClaimDialogGroup(null)
+						}}
+						auctionEventId={group.auctionEventId}
+						auctionCoordinates={coordinates}
+						settlementEventId={settlement.id}
+						sellerPubkey={group.sellerPubkey}
+						finalAmount={getAuctionSettlementFinalAmount(settlement)}
+					/>
+				)
+			})()}
 		</div>
 	)
 }

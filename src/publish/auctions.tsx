@@ -10,13 +10,15 @@ import {
 	getMarkedEventIds,
 	parseAuctionBidTokenEnvelope,
 } from '@/lib/auctionTransfers'
+import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { ndkActions } from '@/lib/stores/ndk'
 import { AUCTION_SETTLEMENT_GRACE_SECONDS, nip60Actions, type AuctionP2pkKeyScheme } from '@/lib/stores/nip60'
 import { getBidAmount, getBidStatus, markAuctionAsDeleted } from '@/queries/auctions'
-import { auctionKeys } from '@/queries/queryKeyFactory'
+import { auctionKeys, orderKeys } from '@/queries/queryKeyFactory'
 import NDK, { NDKEvent, NDKPrivateKeySigner, NDKUser, type NDKFilter, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { v4 as uuidv4 } from 'uuid'
 
 const DEFAULT_AUCTION_MINT = 'https://nofees.testnut.cashu.space'
 
@@ -852,6 +854,105 @@ export const usePublishAuctionSettlementMutation = () => {
 		onError: (error) => {
 			console.error('Failed to publish auction settlement:', error)
 			toast.error(`Failed to publish settlement: ${error instanceof Error ? error.message : String(error)}`)
+		},
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Auction Claim Order — winner submits shipping address after settlement
+// ---------------------------------------------------------------------------
+
+export interface AuctionClaimFormData {
+	auctionEventId: string
+	auctionCoordinates: string
+	settlementEventId: string
+	sellerPubkey: string
+	finalAmount: number
+	shippingAddress: {
+		name: string
+		firstLineOfAddress: string
+		city: string
+		zipPostcode: string
+		country: string
+		additionalInformation?: string
+	}
+	email?: string
+	phone?: string
+	notes?: string
+}
+
+/**
+ * Creates a Kind 16 order event that references the won auction.
+ * This is identical to a normal order creation but uses an `a` tag
+ * pointing at the auction coordinate and an `e` tag pointing at the
+ * settlement event instead of product `item` tags.
+ */
+export const publishAuctionClaimOrder = async (formData: AuctionClaimFormData): Promise<string> => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	const signer = ndkActions.getSigner()
+	if (!signer) throw new Error('No active user')
+
+	const orderId = uuidv4()
+
+	const addressParts = [
+		formData.shippingAddress.name,
+		formData.shippingAddress.firstLineOfAddress,
+		formData.shippingAddress.additionalInformation,
+		formData.shippingAddress.city,
+		formData.shippingAddress.zipPostcode,
+		formData.shippingAddress.country,
+	].filter(Boolean)
+
+	const tags: NDKTag[] = [
+		['p', formData.sellerPubkey],
+		['subject', `Auction claim for ${formData.auctionEventId.substring(0, 8)}`],
+		['type', ORDER_MESSAGE_TYPE.ORDER_CREATION],
+		['order', orderId],
+		['amount', String(formData.finalAmount)],
+		// Link to auction & settlement
+		['a', formData.auctionCoordinates],
+		['e', formData.auctionEventId],
+		['e', formData.settlementEventId, '', 'settlement'],
+		['address', addressParts.join('\n')],
+	]
+
+	if (formData.email) tags.push(['email', formData.email])
+	if (formData.phone) tags.push(['phone', formData.phone])
+	if (formData.notes) tags.push(['notes', formData.notes])
+
+	const event = new NDKEvent(ndk)
+	event.kind = ORDER_PROCESS_KIND
+	event.content = formData.notes || 'Auction win — shipping details enclosed'
+	event.tags = tags
+
+	await event.sign(signer)
+	await ndkActions.publishEvent(event)
+
+	return event.id
+}
+
+export const usePublishAuctionClaimOrderMutation = () => {
+	const queryClient = useQueryClient()
+	const ndk = ndkActions.getNDK()
+	const currentUserPubkey = ndk?.activeUser?.pubkey
+
+	return useMutation({
+		mutationFn: publishAuctionClaimOrder,
+		onSuccess: async (_orderId, variables) => {
+			await queryClient.invalidateQueries({ queryKey: auctionKeys.settlements(variables.auctionEventId) })
+			await queryClient.invalidateQueries({ queryKey: auctionKeys.details(variables.auctionEventId) })
+			await queryClient.invalidateQueries({ queryKey: orderKeys.all })
+			if (currentUserPubkey) {
+				await queryClient.invalidateQueries({ queryKey: orderKeys.byBuyer(currentUserPubkey) })
+				await queryClient.invalidateQueries({ queryKey: orderKeys.byPubkey(currentUserPubkey) })
+			}
+			toast.success('Shipping details submitted — the seller has been notified')
+		},
+		onError: (error) => {
+			console.error('Failed to submit auction claim:', error)
+			toast.error(`Failed to submit claim: ${error instanceof Error ? error.message : String(error)}`)
 		},
 	})
 }

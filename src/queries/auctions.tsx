@@ -1,3 +1,4 @@
+import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { ndkActions } from '@/lib/stores/ndk'
 import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -474,4 +475,47 @@ export const useAuctionBidsByBidder = (pubkey: string, limit: number = 500) =>
 export const useAuctionSettlements = (auctionEventId: string, limit: number = 100, auctionCoordinates?: string) =>
 	useQuery({
 		...auctionSettlementsQueryOptions(auctionEventId, limit, auctionCoordinates),
+	})
+
+// ---------------------------------------------------------------------------
+// Auction Claim Order — Kind 16 order events linked to an auction via `a` tag
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetches the Kind 16 order event(s) created by the auction winner after settlement.
+ * These are identified by having an `a` tag matching the auction coordinates and a
+ * `type` tag of ORDER_CREATION ('1').
+ */
+export const fetchAuctionClaimOrders = async (auctionCoordinates: string): Promise<NDKEvent[]> => {
+	if (!auctionCoordinates) return []
+	const ndk = ndkActions.getNDK()
+	if (!ndk) return []
+
+	const filter: NDKFilter = {
+		kinds: [ORDER_PROCESS_KIND as unknown as NonNullable<NDKFilter['kinds']>[number]],
+		'#a': [auctionCoordinates],
+		limit: 20,
+	}
+
+	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 6000 })
+	return Array.from(events)
+		.filter((e) => {
+			const type = e.tags.find((t) => t[0] === 'type')?.[1]
+			return type === ORDER_MESSAGE_TYPE.ORDER_CREATION
+		})
+		.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+}
+
+export const auctionClaimOrdersQueryOptions = (auctionCoordinates: string) =>
+	queryOptions({
+		queryKey: [...auctionKeys.all, 'claimOrders', auctionCoordinates],
+		queryFn: () => fetchAuctionClaimOrders(auctionCoordinates),
+		enabled: !!auctionCoordinates,
+		staleTime: 10000,
+		refetchInterval: 10000,
+	})
+
+export const useAuctionClaimOrders = (auctionCoordinates: string) =>
+	useQuery({
+		...auctionClaimOrdersQueryOptions(auctionCoordinates),
 	})
