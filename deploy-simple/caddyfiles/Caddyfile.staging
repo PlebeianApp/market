@@ -2,7 +2,30 @@
 #
 # Services:
 #   staging.plebeian.market       → Market app (port 3000)
+#   auctionsdev.plebeian.market   → Auctions feature app (port 3002)
 #   relay.staging.plebeian.market → Nostr relay (port 10549)
+
+auctionsdev.plebeian.market {
+	root * /home/deployer/market-auctionsdev/dist
+	encode gzip
+
+	# API routes → Bun
+	handle /api/* {
+		reverse_proxy localhost:3002
+	}
+
+	# WebSocket → Bun
+	@ws header Connection *Upgrade*
+	handle @ws {
+		reverse_proxy localhost:3002
+	}
+
+	# Static files with SPA fallback (must be last)
+	handle {
+		try_files {path} /index.html
+		file_server
+	}
+}
 
 staging.plebeian.market {
 	root * /home/deployer/market-staging/dist

@@ -1,4 +1,4 @@
-name: Deploy to Staging
+name: Deploy
 
 on:
   workflow_run:
@@ -10,15 +10,67 @@ on:
 
 env:
   BUN_VERSION: 'latest'
+  STAGING_BRANCH: master
+  AUCTIONSDEV_BRANCH: feature/nut-auctions-rebase
 
 concurrency:
-  group: deploy-staging
+  group: deploy-${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
+  prepare:
+    name: Resolve deployment target
+    runs-on: ubuntu-latest
+    outputs:
+      should_deploy: ${{ steps.target.outputs.should_deploy }}
+      deploy_name: ${{ steps.target.outputs.deploy_name }}
+      release_prefix: ${{ steps.target.outputs.release_prefix }}
+      pm2_app_name: ${{ steps.target.outputs.pm2_app_name }}
+      app_dir: ${{ steps.target.outputs.app_dir }}
+      app_port: ${{ steps.target.outputs.app_port }}
+      healthcheck_url: ${{ steps.target.outputs.healthcheck_url }}
+      branch_name: ${{ steps.target.outputs.branch_name }}
+
+    steps:
+      - name: Resolve branch deployment config
+        id: target
+        env:
+          BRANCH_NAME: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_branch || github.ref_name }}
+        run: |
+          echo "branch_name=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+
+          case "$BRANCH_NAME" in
+            "$STAGING_BRANCH")
+              {
+                echo "should_deploy=true"
+                echo "deploy_name=staging"
+                echo "release_prefix=market-staging"
+                echo "pm2_app_name=market-staging"
+                echo "app_dir=/home/deployer/market-staging"
+                echo "app_port=3000"
+                echo "healthcheck_url=https://staging.plebeian.market/api/config"
+              } >> "$GITHUB_OUTPUT"
+              ;;
+            "$AUCTIONSDEV_BRANCH")
+              {
+                echo "should_deploy=true"
+                echo "deploy_name=auctionsdev"
+                echo "release_prefix=market-auctionsdev"
+                echo "pm2_app_name=market-auctionsdev"
+                echo "app_dir=/home/deployer/market-auctionsdev"
+                echo "app_port=3002"
+                echo "healthcheck_url=https://auctionsdev.plebeian.market/api/config"
+              } >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "should_deploy=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
   build:
     name: Build
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master' && github.event.workflow_run.event == 'push')
+    needs: prepare
+    if: needs.prepare.outputs.should_deploy == 'true' && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
     runs-on: ubuntu-latest
     outputs:
       release_name: ${{ steps.release.outputs.name }}
@@ -27,7 +79,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -44,7 +96,7 @@ jobs:
 
       - name: Generate release name
         id: release
-        run: echo "name=market-staging-$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
+        run: echo "name=${{ needs.prepare.outputs.release_prefix }}-$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
 
       - name: Create deployment package
         run: |
@@ -60,10 +112,10 @@ jobs:
           path: deploy-package/
           retention-days: 1
 
-  deploy-staging:
-    name: Deploy to Staging
-    needs: build
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master' && github.event.workflow_run.event == 'push')
+  deploy:
+    name: Deploy
+    needs: [prepare, build]
+    if: needs.prepare.outputs.should_deploy == 'true' && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
     runs-on: ubuntu-latest
     environment: staging
 
@@ -71,7 +123,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
       - name: Download artifact
         uses: actions/download-artifact@v4
@@ -84,15 +136,15 @@ jobs:
           cat > deploy-package/ecosystem.config.cjs << 'EOF'
           module.exports = {
             apps: [{
-              name: 'market-staging',
+              name: '${{ needs.prepare.outputs.pm2_app_name }}',
               script: 'src/index.tsx',
               interpreter: process.env.HOME + '/.bun/bin/bun',
-              cwd: '/home/deployer/market-staging',
+              cwd: '${{ needs.prepare.outputs.app_dir }}',
               instances: 1,
               exec_mode: 'fork',
               env_file: '.env',
-              error_file: '/home/deployer/logs/market-staging-error.log',
-              out_file: '/home/deployer/logs/market-staging-out.log',
+              error_file: '/home/deployer/logs/${{ needs.prepare.outputs.pm2_app_name }}-error.log',
+              out_file: '/home/deployer/logs/${{ needs.prepare.outputs.pm2_app_name }}-out.log',
               log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
               merge_logs: true,
               autorestart: true,
@@ -112,7 +164,7 @@ jobs:
           cat > deploy-package/.env << EOF
           APP_STAGE=staging
           NODE_ENV=production
-          PORT=3000
+          PORT=${{ needs.prepare.outputs.app_port }}
           APP_RELAY_URL=${{ secrets.STAGING_RELAY_URL }}
           APP_PRIVATE_KEY=${{ secrets.STAGING_APP_PRIVATE_KEY }}
           NIP46_RELAY_URL=wss://relay.nsec.app
@@ -167,7 +219,9 @@ jobs:
           script: |
             set -euo pipefail
             RELEASE_DIR="/home/deployer/releases/${{ needs.build.outputs.release_name }}"
-            APP_DIR="/home/deployer/market-staging"
+            APP_DIR="${{ needs.prepare.outputs.app_dir }}"
+            PM2_APP_NAME="${{ needs.prepare.outputs.pm2_app_name }}"
+            RELEASE_PREFIX="${{ needs.prepare.outputs.release_prefix }}"
             PREVIOUS_RELEASE="$(readlink -f "$APP_DIR" || true)"
             CADDY_BACKUP="$(mktemp)"
             sudo cp /etc/caddy/Caddyfile "$CADDY_BACKUP" 2>/dev/null || true
@@ -181,7 +235,7 @@ jobs:
               if [[ -n "$PREVIOUS_RELEASE" && -d "$PREVIOUS_RELEASE" ]]; then
                 ln -sfn "$PREVIOUS_RELEASE" "$APP_DIR"
                 cd "$APP_DIR"
-                pm2 startOrReload ecosystem.config.cjs --only market-staging || true
+                pm2 startOrReload ecosystem.config.cjs --only "$PM2_APP_NAME" || true
                 pm2 save --force || true
               fi
             }
@@ -194,14 +248,14 @@ jobs:
             bun install --production
 
             # Stop current version
-            pm2 stop market-staging 2>/dev/null || true
+            pm2 stop "$PM2_APP_NAME" 2>/dev/null || true
 
             # Swap symlink (blue-green)
             ln -sfn "$RELEASE_DIR" "$APP_DIR"
 
             # Start new version with PM2
             cd "$APP_DIR"
-            pm2 startOrReload ecosystem.config.cjs --only market-staging
+            pm2 startOrReload ecosystem.config.cjs --only "$PM2_APP_NAME"
             pm2 save --force
 
             # Update Caddy
@@ -212,15 +266,15 @@ jobs:
 
             # Cleanup old releases (keep last 3)
             cd /home/deployer/releases
-            ls -t | grep '^market-staging' | tail -n +4 | xargs -r rm -rf
+            ls -t | grep "^$RELEASE_PREFIX" | tail -n +4 | xargs -r rm -rf
 
             rm -f "$CADDY_BACKUP"
             trap - ERR
 
-            echo "✅ Staging deployment complete"
+            echo "✅ Deployment complete for $PM2_APP_NAME"
 
       - name: Health check
         run: |
           sleep 10
-          curl -sf https://staging.plebeian.market/api/config
+          curl -sf ${{ needs.prepare.outputs.healthcheck_url }}
           echo "✅ Health check passed"
