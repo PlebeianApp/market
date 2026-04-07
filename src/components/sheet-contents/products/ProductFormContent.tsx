@@ -6,7 +6,7 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore, type ProductFormTab } from '@/lib/stores/product'
 import { uiActions } from '@/lib/stores/ui'
 import { hasProductFormDraft } from '@/lib/utils/productFormStorage'
-import { useShippingOptionsByPubkey, isShippingDeleted } from '@/queries/shipping'
+import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey, isShippingDeleted } from '@/queries/shipping'
 import { useV4VShares } from '@/queries/v4v'
 import { useForm } from '@tanstack/react-form'
 import { useQueryClient } from '@tanstack/react-query'
@@ -38,7 +38,6 @@ export function ProductFormContent({
 	const { activeTab, editingProductId, isDirty, shippings, formSessionId, name, description, images } = formState
 
 	// Compute validation states
-	const hasValidShipping = shippings.some((ship) => ship.shipping && ship.shipping.id)
 	const hasValidName = name.trim().length > 0
 	const hasValidDescription = description.trim().length > 0
 	const hasValidImages = images.length > 0
@@ -70,6 +69,23 @@ export function ProductFormContent({
 		isFetched: isShippingFetched,
 	} = useShippingOptionsByPubkey(userPubkey)
 
+	const resolvedShippingRefs = useMemo(() => {
+		if (!userShippingOptions) return new Set<string>()
+
+		return new Set(
+			userShippingOptions
+				.filter((event) => {
+					const dTag = event.tags?.find((t: string[]) => t[0] === 'd')?.[1]
+					return dTag ? !isShippingDeleted(dTag, event.created_at) : true
+				})
+				.map((event) => {
+					const info = getShippingInfo(event)
+					return info ? createShippingReference(event.pubkey, info.id) : null
+				})
+				.filter((shippingRef): shippingRef is string => !!shippingRef),
+		)
+	}, [userShippingOptions])
+
 	// Determine if we should show shipping tab first (user has no shipping options)
 	const shouldShowShippingFirst = useMemo(() => {
 		// Don't redirect if editing an existing product
@@ -90,6 +106,10 @@ export function ProductFormContent({
 		})
 		return activeShippingOptions.length === 0
 	}, [editingProductId, userShippingOptions, isLoadingUserShipping, userPubkey, isShippingFetched])
+
+	const hasValidShipping = useMemo(() => {
+		return shippings.some((ship) => ship.shippingRef && (!isShippingFetched || resolvedShippingRefs.has(ship.shippingRef)))
+	}, [shippings, isShippingFetched, resolvedShippingRefs])
 
 	// Set initial tab to Shipping when user has no shipping options
 	// Track which formSessionId we've handled to avoid re-triggering on same session

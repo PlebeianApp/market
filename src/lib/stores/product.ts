@@ -21,7 +21,7 @@ import {
 } from '@/queries/products'
 import { productKeys } from '@/queries/queryKeyFactory'
 import { clearProductFormDraft, getProductFormDraft, saveProductFormDraft } from '@/lib/utils/productFormStorage'
-import type { RichShippingInfo } from './cart'
+import { normalizeProductShippingSelections, type ProductShippingSelection } from '@/lib/utils/productShippingSelections'
 import { uiStore } from '@/lib/stores/ui'
 import NDK, { type NDKSigner } from '@nostr-dev-kit/ndk'
 import { QueryClient } from '@tanstack/react-query'
@@ -36,10 +36,7 @@ export type ProductShipping = {
 	cost: string
 }
 
-export type ProductShippingForm = {
-	shipping: Pick<RichShippingInfo, 'id' | 'name'> | null
-	extraCost: string
-}
+export type ProductShippingForm = ProductShippingSelection
 
 export type ProductSpec = {
 	key: string
@@ -201,23 +198,10 @@ export const productFormActions = {
 			}))
 
 			// Parse shipping options
-			const shippingOptions: ProductShippingForm[] = shippingTags.map((tag) => {
-				// tag format: ['shipping_option', 'shipping_reference', 'extra_cost?']
-				const shippingRef = tag[1] // e.g., "30406:pubkey:shippingId"
-				const extraCost = tag[2] || ''
-
-				// Extract shipping name from reference (we'll use a simplified version for now)
-				// In a real app, you'd want to fetch the actual shipping option details
-				const shippingName = `Shipping Option (${shippingRef.split(':')[2] || 'unknown'})`
-
-				return {
-					shipping: {
-						id: shippingRef,
-						name: shippingName,
-					},
-					extraCost,
-				}
-			})
+			const shippingOptions: ProductShippingForm[] = shippingTags.map((tag) => ({
+				shippingRef: tag[1] || '',
+				extraCost: tag[2] || '',
+			}))
 
 			// Use preserved tab state if provided, otherwise default to 'name'
 			const activeTab = options?.preserveTabState?.activeTab ?? 'name'
@@ -309,9 +293,17 @@ export const productFormActions = {
 	},
 
 	updateValues: (values: Partial<ProductFormState>) => {
+		const normalizedValues =
+			values.shippings !== undefined
+				? {
+						...values,
+						shippings: normalizeProductShippingSelections(values.shippings as ProductShippingForm[]),
+					}
+				: values
+
 		productFormStore.setState((state) => ({
 			...state,
-			...values,
+			...normalizedValues,
 			isDirty: true,
 		}))
 		debouncedSave()
@@ -347,9 +339,12 @@ export const productFormActions = {
 		try {
 			const draft = await getProductFormDraft(productId)
 			if (draft) {
+				const normalizedShippings = normalizeProductShippingSelections(draft.shippings as ProductShippingForm[])
+
 				productFormStore.setState((state) => ({
 					...state,
 					...draft,
+					shippings: normalizedShippings,
 					// Restore tab state to defaults since we don't persist them
 					activeTab: 'name',
 					// Mark as dirty since we're loading unsaved changes
@@ -423,7 +418,7 @@ export const productFormActions = {
 			categories: state.categories,
 			images: state.images,
 			specs: state.specs,
-			shippings: state.shippings,
+			shippings: normalizeProductShippingSelections(state.shippings),
 			weight: state.weight,
 			dimensions: state.dimensions,
 			isNSFW: state.isNSFW,
