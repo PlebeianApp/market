@@ -52,7 +52,7 @@ import { cn } from '@/lib/utils'
 // Unified pending token type for UI
 type UnifiedPendingToken = (PendingToken | PendingNip60Token) & { source: 'cashu' | 'nip60' }
 
-// Default mints for new wallets (dev mode adds test mints)
+// Default mints for new wallets (dev/staging mode adds test mints)
 const DEFAULT_MINTS = Array.from(
 	new Set([
 		'https://mint.minibits.cash/Bitcoin',
@@ -325,8 +325,8 @@ export function Nip60Wallet() {
 
 			{NIP60_WALLET_DEV_MODE && (
 				<div className="mb-4 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 space-y-2">
-					<p className="text-xs uppercase tracking-wide text-amber-300 font-semibold">Auction Dev Tools</p>
-					<p className="text-xs text-amber-100/80">Dev-only wallet actions for seeded auctions and fallback testnut mints.</p>
+					<p className="text-xs uppercase tracking-wide text-amber-300 font-semibold">Auction Test Tools</p>
+					<p className="text-xs text-amber-100/80">Available on staging and local dev for seeded auctions and fallback testnut mints.</p>
 
 					<div className="flex gap-2">
 						<Input
