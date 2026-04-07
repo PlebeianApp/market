@@ -1,4 +1,5 @@
 import { AuctionCard } from '@/components/AuctionCard'
+import { AuctionClaimDialog } from '@/components/AuctionClaimDialog'
 import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Badge } from '@/components/ui/badge'
@@ -15,6 +16,9 @@ import {
 	auctionQueryOptions,
 	auctionsByPubkeyQueryOptions,
 	filterNSFWAuctions,
+	getAuctionSettlementFinalAmount,
+	getAuctionSettlementStatus,
+	getAuctionSettlementWinner,
 	getBidAmount,
 	getBidMint,
 	getBidStatus,
@@ -40,11 +44,13 @@ import {
 	isNSFWAuction,
 	useAuctionBids,
 	useAuctionBidStats,
+	useAuctionClaimOrders,
+	useAuctionSettlements,
 } from '@/queries/auctions'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { ArrowLeft, Gavel, Truck, UserRound } from 'lucide-react'
+import { ArrowLeft, Gavel, Trophy, Truck, UserRound } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AvatarUser } from '@/components/AvatarUser'
@@ -121,6 +127,8 @@ function AuctionDetailRoute() {
 	const [imageViewerOpen, setImageViewerOpen] = useState(false)
 	const [bidAmountInput, setBidAmountInput] = useState('')
 	const [isOwnAuction, setIsOwnAuction] = useState(false)
+	const [currentUserPubkey, setCurrentUserPubkey] = useState('')
+	const [claimDialogOpen, setClaimDialogOpen] = useState(false)
 	const bidMutation = usePublishAuctionBidMutation()
 
 	const auctionQuery = useQuery({
@@ -190,6 +198,18 @@ function AuctionDetailRoute() {
 			.slice(0, 5)
 	}, [auctionId, sellerAuctionsQuery.data])
 
+	// Settlement and claim order state
+	const settlementsQuery = useAuctionSettlements(auctionId, 10, auctionCoordinates)
+	const latestSettlement = (settlementsQuery.data ?? [])[0] || null
+	const settlementStatus = getAuctionSettlementStatus(latestSettlement)
+	const settlementWinner = getAuctionSettlementWinner(latestSettlement)
+	const settlementFinalAmount = getAuctionSettlementFinalAmount(latestSettlement)
+	const isWinner = !!(currentUserPubkey && settlementWinner && currentUserPubkey === settlementWinner)
+
+	const claimOrdersQuery = useAuctionClaimOrders(auctionCoordinates)
+	const claimOrders = claimOrdersQuery.data ?? []
+	const hasClaimOrder = claimOrders.some((order) => order.pubkey === currentUserPubkey)
+
 	useEffect(() => {
 		setBidAmountInput(String(minBid))
 	}, [minBid])
@@ -199,6 +219,7 @@ function AuctionDetailRoute() {
 			if (!auction) return
 			const user = await ndkActions.getUser()
 			if (!user?.pubkey) return
+			setCurrentUserPubkey(user.pubkey)
 			setIsOwnAuction(user.pubkey === auction.pubkey)
 		}
 
@@ -352,6 +373,34 @@ function AuctionDetailRoute() {
 					</div>
 				</div>
 			</div>
+
+			{/* Winner banner — shown to the auction winner after settlement */}
+			{isWinner && settlementStatus === 'settled' && (
+				<div className="mx-auto w-full max-w-7xl px-4">
+					<div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
+						<div className="flex flex-wrap items-center justify-between gap-4">
+							<div className="flex items-center gap-3">
+								<div className="rounded-full bg-emerald-100 p-2">
+									<Trophy className="h-5 w-5 text-emerald-700" />
+								</div>
+								<div>
+									<h3 className="text-lg font-semibold text-emerald-950">You won this auction!</h3>
+									<p className="text-sm text-emerald-800">
+										Final price: <span className="font-semibold">{settlementFinalAmount.toLocaleString()} sats</span>
+									</p>
+								</div>
+							</div>
+							{hasClaimOrder ? (
+								<div className="rounded-lg border border-emerald-300 bg-white px-4 py-2 text-sm font-medium text-emerald-800">
+									Shipping details submitted — awaiting seller
+								</div>
+							) : (
+								<Button onClick={() => setClaimDialogOpen(true)}>Submit Shipping Address</Button>
+							)}
+						</div>
+					</div>
+				</div>
+			)}
 
 			<div className="mx-auto w-full max-w-7xl px-4 py-6">
 				<Tabs defaultValue="overview" className="w-full">
@@ -640,6 +689,18 @@ function AuctionDetailRoute() {
 				currentIndex={selectedImageIndex}
 				onIndexChange={setSelectedImageIndex}
 			/>
+
+			{isWinner && latestSettlement && auction && (
+				<AuctionClaimDialog
+					open={claimDialogOpen}
+					onOpenChange={setClaimDialogOpen}
+					auctionEventId={auction.id}
+					auctionCoordinates={auctionCoordinates}
+					settlementEventId={latestSettlement.id}
+					sellerPubkey={auction.pubkey}
+					finalAmount={settlementFinalAmount}
+				/>
+			)}
 		</div>
 	)
 }
