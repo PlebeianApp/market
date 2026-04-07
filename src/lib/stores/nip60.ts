@@ -383,6 +383,9 @@ export const isNip60WalletDevModeEnabled = (): boolean => {
 	if (explicit === 'true') return true
 	if (explicit === 'false') return false
 
+	const stage = process.env.APP_STAGE
+	if (stage === 'staging') return true
+
 	const env = process.env.NODE_ENV
 	return env !== 'production' || isLocalDevHost()
 }
