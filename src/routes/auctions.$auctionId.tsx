@@ -609,7 +609,7 @@ function AuctionDetailRoute() {
 									Seller
 								</div>
 								<div className="mt-4">
-									<AvatarUser pubkey={bidEvent.pubkey} />
+									<AvatarUser pubkey={auction.pubkey} />
 								</div>
 								<div className="mt-5 space-y-1">
 									<ShopperInfoRow label="Seller key" value={shortenHex(auction.pubkey)} />
