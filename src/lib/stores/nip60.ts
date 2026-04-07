@@ -30,6 +30,7 @@ import { NDKCashuDeposit, NDKCashuWallet, NDKWalletStatus, type NDKWalletTransac
 import { HDKey } from '@scure/bip32'
 import { Store } from '@tanstack/store'
 import { ndkActions, ndkStore } from './ndk'
+import { configStore } from './config'
 
 const DEFAULT_MINT_KEY = 'nip60_default_mint'
 const PENDING_TOKENS_KEY = 'nip60_pending_tokens'
@@ -169,7 +170,7 @@ const getErrorMessage = (err: unknown): string => (err instanceof Error ? err.me
 const ensureWalletRuntimeDefaults = (wallet: NDKCashuWallet, ndk: NDKEvent['ndk']): void => {
 	if (!ndk) return
 
-	if (NIP60_WALLET_DEV_MODE) {
+	if (isNip60WalletDevModeEnabled()) {
 		wallet.mints = Array.from(new Set([...(wallet.mints ?? []), ...NIP60_DEV_TEST_MINTS]))
 	}
 
@@ -213,7 +214,7 @@ const createCashuWalletForMint = async (targetMint: string): Promise<{ cashuWall
 		await cashuWallet.loadMint()
 		return { cashuWallet }
 	} catch (err) {
-		if (!NIP60_WALLET_DEV_MODE || !NIP60_DEV_TEST_MINTS.includes(normalizedTargetMint) || !isKeysetVerificationError(err)) {
+		if (!isNip60WalletDevModeEnabled() || !NIP60_DEV_TEST_MINTS.includes(normalizedTargetMint) || !isKeysetVerificationError(err)) {
 			throw err
 		}
 
@@ -383,7 +384,7 @@ export const isNip60WalletDevModeEnabled = (): boolean => {
 	if (explicit === 'true') return true
 	if (explicit === 'false') return false
 
-	const stage = process.env.APP_STAGE
+	const stage = configStore.state.isLoaded ? configStore.state.config.stage : process.env.APP_STAGE
 	if (stage === 'staging') return true
 
 	const env = process.env.NODE_ENV
@@ -1663,7 +1664,7 @@ export const nip60Actions = {
 		mintUrl: string = DEV_TEST_MINT_URL,
 		options?: { allowFallback?: boolean },
 	): Promise<Nip60TestMintResult> => {
-		if (!NIP60_WALLET_DEV_MODE) {
+		if (!isNip60WalletDevModeEnabled()) {
 			throw new Error('Dev wallet actions are disabled in this environment')
 		}
 
@@ -1730,7 +1731,7 @@ export const nip60Actions = {
 		preferredBidAmount?: number
 		preferredMintUrl?: string
 	}): Promise<Nip60DevAuctionBidResult> => {
-		if (!NIP60_WALLET_DEV_MODE) {
+		if (!isNip60WalletDevModeEnabled()) {
 			throw new Error('Dev wallet actions are disabled in this environment')
 		}
 
