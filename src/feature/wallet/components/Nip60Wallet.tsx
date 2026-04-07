@@ -1,9 +1,10 @@
 import { authStore } from '@/lib/stores/auth'
+import { configStore } from '@/lib/stores/config'
 import {
 	nip60Actions,
 	nip60Store,
 	NIP60_DEV_TEST_MINTS,
-	NIP60_WALLET_DEV_MODE,
+	isNip60WalletDevModeEnabled,
 	type PendingNip60Token,
 	type Nip60DevAuctionBidResult,
 	type Nip60TestMintResult,
@@ -51,20 +52,11 @@ import { QRCodeSVG } from 'qrcode.react'
 // Unified pending token type for UI
 type UnifiedPendingToken = (PendingToken | PendingNip60Token) & { source: 'cashu' | 'nip60' }
 
-// Default mints for new wallets (dev/staging mode adds test mints)
-const DEFAULT_MINTS = Array.from(
-	new Set([
-		'https://mint.minibits.cash/Bitcoin',
-		'https://mint.coinos.io',
-		'https://mint.cubabitcoin.org',
-		...(NIP60_WALLET_DEV_MODE ? NIP60_DEV_TEST_MINTS : []),
-	]),
-)
-
 type ModalType = 'deposit' | 'withdraw' | 'send' | 'receive' | null
 
 export function Nip60Wallet() {
 	const { isAuthenticated, user } = useStore(authStore)
+	const appStage = useStore(configStore, (state) => state.config.stage)
 	const { status, balance, mintBalances, mints, defaultMint, transactions, error, pendingTokens: nip60PendingTokens } = useStore(nip60Store)
 	const { pendingTokens: cashuPendingTokens } = useStore(cashuStore)
 	const [isCreating, setIsCreating] = useState(false)
@@ -83,6 +75,19 @@ export function Nip60Wallet() {
 	const [isDevBidding, setIsDevBidding] = useState(false)
 	const [lastDevMint, setLastDevMint] = useState<Nip60TestMintResult | null>(null)
 	const [lastDevBid, setLastDevBid] = useState<Nip60DevAuctionBidResult | null>(null)
+	const walletDevMode = appStage === 'staging' || isNip60WalletDevModeEnabled()
+	const defaultMints = useMemo(
+		() =>
+			Array.from(
+				new Set([
+					'https://mint.minibits.cash/Bitcoin',
+					'https://mint.coinos.io',
+					'https://mint.cubabitcoin.org',
+					...(walletDevMode ? NIP60_DEV_TEST_MINTS : []),
+				]),
+			),
+		[walletDevMode],
+	)
 
 	// Combine pending tokens from both stores
 	const activePendingTokens: UnifiedPendingToken[] = useMemo(
@@ -127,7 +132,7 @@ export function Nip60Wallet() {
 	const handleCreateWallet = async () => {
 		setIsCreating(true)
 		try {
-			await nip60Actions.createWallet(DEFAULT_MINTS)
+			await nip60Actions.createWallet(defaultMints)
 		} finally {
 			setIsCreating(false)
 		}
@@ -324,7 +329,7 @@ export function Nip60Wallet() {
 				</Button>
 			</div>
 
-			{NIP60_WALLET_DEV_MODE && (
+			{walletDevMode && (
 				<div className="mb-4 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 space-y-2">
 					<p className="text-xs uppercase tracking-wide text-amber-300 font-semibold">Auction Test Tools</p>
 					<p className="text-xs text-amber-100/80">Available on staging and local dev for seeded auctions and fallback testnut mints.</p>
