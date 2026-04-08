@@ -6,16 +6,113 @@ import { NDKEvent, type NDKUser, type NDKFilter } from '@nostr-dev-kit/ndk'
 import { messageKeys } from './queryKeyFactory'
 
 const MESSAGE_KINDS = [14, 16, 17]
+const SUPPORTED_KINDS = new Set(MESSAGE_KINDS)
 
-// Helper to get a snippet from content
-const getSnippet = (content: string, length = 50) => {
-	return content.length > length ? `${content.substring(0, length)}...` : content
+
+
+const looksLikeJSON = (content: string): boolean => {
+	if (!content) return false
+	const trimmed = content.trim()
+	return (trimmed.startsWith('{') || trimmed.startsWith('[')) && (trimmed.endsWith('}') || trimmed.endsWith(']'))
 }
 
-/**
- * Hook to fetch a list of conversations for the current user.
- * A conversation is defined by unique pubkeys the user has interacted with via message kinds.
- */
+
+
+const extractMetadataFromNestedEvent = (content: string): { title?: string; description?: string; preview?: string; altTag?: string; kind?: number } => {
+	if (!content || !looksLikeJSON(content)) {
+		return {}
+	}
+
+	try {
+		const parsed = JSON.parse(content)
+		if (parsed && typeof parsed === 'object') {
+
+			const tags = parsed.tags || []
+			const title = tags.find((t: string[]) => t[0] === 'title')?.[1]
+			const description = tags.find((t: string[]) => t[0] === 'description')?.[1]
+			const summary = tags.find((t: string[]) => t[0] === 'summary')?.[1]
+			const altTag = tags.find((t: string[]) => t[0] === 'alt')?.[1]
+			const innerContent = parsed.content
+			const kind = parsed.kind
+
+			return {
+				title: title ? title.substring(0, 40) : undefined,
+				description: description || summary ? (description || summary).substring(0, 50) : undefined,
+				altTag: altTag ? altTag.substring(0, 60) : undefined,
+				preview: innerContent && typeof innerContent === 'string' ? innerContent.substring(0, 50) : undefined,
+				kind: kind
+			}
+		}
+	} catch {
+
+	}
+
+	return {}
+}
+
+
+
+const getMessageSnippet = (event: NDKEvent, maxLength = 50): string => {
+	const { kind, content } = event
+
+
+	const truncate = (text: string, len: number) => {
+		return text.length > len ? `${text.substring(0, len)}...` : text
+	}
+
+
+	if (kind === 14) {
+		return content && content.trim() ? truncate(content.trim(), maxLength) : '(No content)'
+	}
+
+
+	if (kind === 16 || kind === 17) {
+		// Check if this is an image repost
+		const hasImeta = event.tags?.some((t) => t[0] === 'imeta')
+		if (hasImeta) return '[image]'
+
+		// Try to extract metadata from nested event in content
+		const metadata = extractMetadataFromNestedEvent(content)
+		if (metadata.altTag) return truncate(metadata.altTag, maxLength)
+		if (metadata.title) return truncate(metadata.title, maxLength)
+		if (metadata.description) return truncate(metadata.description, maxLength)
+		if (metadata.preview) return truncate(metadata.preview, maxLength)
+
+		// Check wrapper event tags for structured data
+		const amount = event.tags?.find((t) => t[0] === 'amount')?.[1]
+		const orderId = event.tags?.find((t) => t[0] === 'order')?.[1]
+		if (amount) return `Amount: ${amount} sats`
+		if (orderId) return `Order: ${orderId.substring(0, 12)}...`
+
+		// Fallback to plain content if it's not JSON
+		if (content && content.trim() && !looksLikeJSON(content)) {
+			return truncate(content.trim(), maxLength)
+		}
+
+		return '(Message)'
+	}
+
+
+	if (content && content.trim() && !looksLikeJSON(content)) {
+		return truncate(content.trim(), maxLength)
+	}
+
+
+	const metadata = extractMetadataFromNestedEvent(content)
+	if (metadata.title) return truncate(metadata.title, maxLength)
+	if (metadata.description) return truncate(metadata.description, maxLength)
+
+
+		const altTag = event.tags?.find((t) => t[0] === 'alt')?.[1]
+	if (altTag && altTag.trim()) {
+		return truncate(altTag.trim(), maxLength)
+	}
+
+	return `(Message)`
+}
+
+
+
 export function useConversationsList() {
 	const ndk = ndkActions.getNDK()
 	const { user: currentUser } = useStore(authStore)
@@ -63,7 +160,7 @@ export function useConversationsList() {
 					// Profile might be fetched asynchronously by NDK, UI should handle potential undefined state initially
 					profile: otherUser.profile,
 					lastMessageAt: lastEvent.created_at,
-					lastMessageSnippet: getSnippet(lastEvent.content || (lastEvent.kind === 14 ? 'No content' : 'Event')),
+					lastMessageSnippet: getMessageSnippet(lastEvent),
 					lastMessageKind: lastEvent.kind,
 				}))
 				.sort((a, b) => (b.lastMessageAt ?? 0) - (a.lastMessageAt ?? 0))

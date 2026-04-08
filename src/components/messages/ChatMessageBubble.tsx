@@ -77,7 +77,191 @@ interface ChatMessageBubbleProps {
 	isCurrentUser: boolean
 }
 
-// Component to display a single order item with product details
+const extractActualContent = (content: string): string | null => {
+	if (!content || !content.trim()) return null
+	
+	const trimmed = content.trim()
+	const looksLikeJSON = (trimmed.startsWith('{') || trimmed.startsWith('[')) && (trimmed.endsWith('}') || trimmed.endsWith(']'))
+	
+	if (!looksLikeJSON) return content
+	
+	try {
+		const parsed = JSON.parse(content)
+		if (parsed && typeof parsed === 'object' && 'content' in parsed) {
+			const innerContent = parsed.content
+			if (typeof innerContent === 'string') {
+				return innerContent
+			}
+		}
+	} catch {
+
+	}
+	
+	return null
+}
+
+
+const extractNestedEventMetadata = (content: string): { parsed?: any; metadata?: Record<string, string> } => {
+	if (!content || !content.trim()) return {}
+
+	const trimmed = content.trim()
+	const looksLikeJSON = (trimmed.startsWith('{') || trimmed.startsWith('[')) && (trimmed.endsWith('}') || trimmed.endsWith(']'))
+
+	if (!looksLikeJSON) return {}
+
+	try {
+		const parsed = JSON.parse(content)
+		if (parsed && typeof parsed === 'object' && parsed.tags && Array.isArray(parsed.tags)) {
+			const metadata: Record<string, string> = {}
+			for (const tag of parsed.tags) {
+				if (Array.isArray(tag) && tag.length > 1) {
+					const key = tag[0]
+					const value = tag[1]
+
+					if (['title', 'description', 'image', 'alt'].includes(key) && !metadata[key]) {
+						metadata[key] = value
+					}
+				}
+			}
+			return { parsed, metadata: Object.keys(metadata).length > 0 ? metadata : undefined }
+		}
+	} catch {
+
+	}
+
+	return {}
+}
+
+
+const UniversalEventViewer = ({ nestedEvent }: { nestedEvent: any }) => {
+	if (!nestedEvent || typeof nestedEvent !== 'object') return null
+
+	const getTags = (tagName: string) => {
+		const tags = nestedEvent.tags || []
+		return tags.filter((t: string[]) => t[0] === tagName).map((t: string[]) => t.slice(1))
+	}
+
+
+	const title = getTags('title')[0]?.[0]
+	const summary = getTags('summary')[0]?.[0]
+	const description = getTags('description')[0]?.[0]
+	const image = getTags('image')[0]?.[0]
+	const alt = getTags('alt')[0]?.[0]
+	const content = nestedEvent.content || ''
+	const kind = nestedEvent.kind
+
+
+	const hashTags = getTags('t').map((t) => t[0])
+	const options = getTags('option').map((t) => ({ id: t[0], label: t[1] }))
+	const relays = getTags('relay').map((t) => t[0])
+
+
+	const cleanContent = content
+		.replace(/[#*_`]/g, '')
+		.replace(/<[^>]*>/g, '')
+		.trim()
+
+
+		const hasImage = !!image
+	const hasTitle = !!title
+	const hasContent = cleanContent.length > 20
+	const hasOptions = options.length > 0
+	const hasHashtags = hashTags.length > 0
+
+	return (
+		<div className="max-w-md rounded-lg border border-border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+
+			{hasImage && (
+				<div className="w-full h-40 bg-muted overflow-hidden">
+					<img src={image} alt={title || 'Event image'} className="w-full h-full object-cover" />
+				</div>
+			)}
+
+
+			<div className={`p-4 space-y-2 ${hasImage ? '' : ''}`}>
+
+				{hasTitle && <h3 className="font-semibold text-sm text-foreground line-clamp-2">{title}</h3>}
+				{!hasTitle && alt && <h3 className="font-semibold text-sm text-foreground line-clamp-2">{alt}</h3>}
+
+
+				{summary && <p className="text-xs text-muted-foreground font-medium">{summary}</p>}
+				{!summary && description && <p className="text-xs text-muted-foreground font-medium">{description}</p>}
+
+
+				{hasContent && !summary && (
+					<div className="text-xs text-foreground line-clamp-4 whitespace-pre-wrap leading-relaxed">
+						{cleanContent}
+					</div>
+				)}
+
+
+				{hasOptions && (
+					<div className="space-y-1.5 pt-2 border-t border-border">
+						<span className="text-xs font-medium text-muted-foreground">Options:</span>
+						<ul className="space-y-1">
+							{options.map((opt: any, idx: number) => (
+								<li key={idx} className="flex items-start gap-2 text-xs text-foreground">
+									<span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary flex-shrink-0 font-medium">
+										{idx + 1}
+									</span>
+									<span className="leading-tight pt-0.5">{opt.label}</span>
+								</li>
+							))}
+						</ul>
+					</div>
+				)}
+
+
+				{hasHashtags && (
+					<div className="flex flex-wrap gap-1 pt-2">
+						{hashTags.slice(0, 6).map((tag: string, idx: number) => (
+							<span key={idx} className="inline-block bg-muted/50 px-2 py-0.5 rounded text-xs text-muted-foreground">
+								#{tag}
+							</span>
+						))}
+						{hashTags.length > 6 && (
+							<span className="inline-block text-xs text-muted-foreground pt-0.5">+{hashTags.length - 6}</span>
+						)}
+					</div>
+				)}
+
+
+				{!hasContent && !hasTitle && relays.length > 0 && (
+					<div className="text-xs text-muted-foreground pt-2 border-t border-border">
+						<span className="font-medium">Relays:</span>
+						<ul className="mt-1 space-y-0.5">
+							{relays.slice(0, 3).map((relay: string, idx: number) => (
+								<li key={idx} className="text-xs break-all">{relay}</li>
+							))}
+							{relays.length > 3 && <li className="text-xs">+{relays.length - 3} more</li>}
+						</ul>
+					</div>
+				)}
+			</div>
+
+
+			{kind && (
+				<div className="px-4 py-2 bg-muted/20 border-t border-border text-xs text-muted-foreground">
+					Kind {kind}
+				</div>
+			)}
+		</div>
+	)
+}
+
+const GenericEventViewer = ({ event }: { event: NDKEvent }) => {
+	const { parsed: nestedEvent } = extractNestedEventMetadata(event.content)
+
+
+	if (nestedEvent && typeof nestedEvent === 'object' && (nestedEvent.id || nestedEvent.kind)) {
+		return <UniversalEventViewer nestedEvent={nestedEvent} />
+	}
+
+
+	return null
+}
+
+
 const OrderItem = ({ itemTag }: { itemTag: string[] }) => {
 	const itemName = itemTag[0] || 'Unknown Item'
 	const aTag = itemTag[1]
@@ -395,12 +579,8 @@ export function ChatMessageBubble({ event, isCurrentUser }: ChatMessageBubblePro
 						return <EmbeddedProductMessage productData={embeddedProduct} />
 					}
 
-					return (
-						<div className="text-sm flex items-center">
-							<AlertCircleIcon className="w-4 h-4 mr-2 flex-shrink-0 text-orange-500" />
-							Unsupported Kind 16 (type: {messageType || 'unknown'})
-						</div>
-					)
+					// For unknown Kind, show generic data viewer
+					return <GenericEventViewer event={event} />
 				}
 			}
 		}
@@ -409,36 +589,37 @@ export function ChatMessageBubble({ event, isCurrentUser }: ChatMessageBubblePro
 			return <PaymentReceiptMessage event={event} />
 		}
 
-		return (
-			<div className="text-sm flex items-center">
-				<AlertCircleIcon className="w-4 h-4 mr-2 flex-shrink-0 text-red-500" />
-				Unsupported Message Kind ({event.kind})
-			</div>
-		)
+		// For unsupported kinds: use generic event viewer
+		return <GenericEventViewer event={event} />
 	}
 
 	const structuredPart = renderStructuredContent()
 	const hasContent = event.content && event.content.trim() !== ''
+
+
+	const looksLikeJSON = (content: string): boolean => {
+		const trimmed = content.trim()
+		return (trimmed.startsWith('{') || trimmed.startsWith('[')) && (trimmed.endsWith('}') || trimmed.endsWith(']'))
+	}
 
 	return (
 		<div className={`flex flex-wrap items-end gap-2 ${alignment} mb-2 w-full`}>
 			<div className="flex flex-col max-w-[85%] sm:max-w-[75%] md:max-w-[65%] lg:max-w-[55%] min-w-0">
 				<div className={`px-3 py-2 rounded-lg shadow ${bubbleStyles} break-words`}>
 					{structuredPart}
-					{event.kind === 14 && hasContent && <p className="text-sm">{event.content}</p>}
-					{event.kind === 14 && !hasContent && (
-						<p className="text-sm italic text-muted-foreground/70 flex items-center">
-							<MessageSquareIcon className="w-3 h-3 mr-1 flex-shrink-0" />
-							(Empty message)
-						</p>
-					)}
-					{event.kind !== 14 && hasContent && !tryParseEmbeddedProduct(event.content) && (
-						<p className={`text-sm ${structuredPart ? 'mt-2 pt-2 border-t border-opacity-20' : ''}`}>
-							{event.content} {/* Notes for Kind 16/17 */}
-						</p>
-					)}
-					{!structuredPart && !hasContent && event.kind !== 14 && (
-						<p className="text-sm italic text-muted-foreground/70">(No displayable content for this message type)</p>
+					{/* Kind 14: Direct messages - show actual content */}
+					{event.kind === 14 && (
+						<>
+							{(() => {
+								const actualContent = extractActualContent(event.content)
+								const contentToShow = actualContent || event.content
+								return contentToShow && contentToShow.trim() ? (
+									<p className="text-sm">{contentToShow}</p>
+								) : (
+									<p className="text-sm text-muted-foreground/70">(Empty message)</p>
+								)
+							})()}
+						</>
 					)}
 				</div>
 				{event.created_at && (
