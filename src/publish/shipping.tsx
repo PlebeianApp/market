@@ -183,11 +183,7 @@ export const createShippingEvent = (
 /**
  * Publishes a new shipping option
  */
-export const publishShippingOption = async (
-	formData: ShippingFormData,
-	signer: NDKSigner,
-	ndk: NDK,
-): Promise<PublishedShippingOption> => {
+export const publishShippingOption = async (formData: ShippingFormData, signer: NDKSigner, ndk: NDK): Promise<PublishedShippingOption> => {
 	// Validation
 	if (!formData.title.trim()) {
 		throw new Error('Shipping title is required')
