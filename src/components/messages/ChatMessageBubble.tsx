@@ -133,7 +133,16 @@ const extractNestedEventMetadata = (content: string): { parsed?: any; metadata?:
 }
 
 
-const UniversalEventViewer = ({ nestedEvent }: { nestedEvent: any }) => {
+interface NestedEvent {
+	id?: string
+	kind?: number
+	content?: string
+	tags?: string[][]
+	created_at?: number
+	pubkey?: string
+}
+
+const UniversalEventViewer = ({ nestedEvent }: { nestedEvent: NestedEvent | null }) => {
 	if (!nestedEvent || typeof nestedEvent !== 'object') return null
 
 	const getTags = (tagName: string) => {
@@ -178,7 +187,7 @@ const UniversalEventViewer = ({ nestedEvent }: { nestedEvent: any }) => {
 			)}
 
 
-			<div className={`p-4 space-y-2 ${hasImage ? '' : ''}`}>
+			<div className="p-4 space-y-2">
 
 				{hasTitle && <h3 className="font-semibold text-sm text-foreground line-clamp-2">{title}</h3>}
 				{!hasTitle && alt && <h3 className="font-semibold text-sm text-foreground line-clamp-2">{alt}</h3>}

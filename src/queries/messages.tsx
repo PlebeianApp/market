@@ -6,10 +6,8 @@ import { NDKEvent, type NDKUser, type NDKFilter } from '@nostr-dev-kit/ndk'
 import { messageKeys } from './queryKeyFactory'
 
 const MESSAGE_KINDS = [14, 16, 17]
-const SUPPORTED_KINDS = new Set(MESSAGE_KINDS)
 
-
-
+/** Check if content looks like JSON (potentially unsupported data) */
 const looksLikeJSON = (content: string): boolean => {
 	if (!content) return false
 	const trimmed = content.trim()
@@ -43,18 +41,17 @@ const extractMetadataFromNestedEvent = (content: string): { title?: string; desc
 				kind: kind
 			}
 		}
-	} catch {
-
+	} catch (error) {
+		console.warn('Failed to parse nested event metadata:', error)
 	}
 
 	return {}
 }
 
 
-
+/** Generate a user-friendly preview snippet from a message event */
 const getMessageSnippet = (event: NDKEvent, maxLength = 50): string => {
 	const { kind, content } = event
-
 
 	const truncate = (text: string, len: number) => {
 		return text.length > len ? `${text.substring(0, len)}...` : text
@@ -92,18 +89,12 @@ const getMessageSnippet = (event: NDKEvent, maxLength = 50): string => {
 		return '(Message)'
 	}
 
-
-	if (content && content.trim() && !looksLikeJSON(content)) {
-		return truncate(content.trim(), maxLength)
-	}
-
-
+	// For unsupported kinds: try to extract metadata or alt tag
 	const metadata = extractMetadataFromNestedEvent(content)
 	if (metadata.title) return truncate(metadata.title, maxLength)
 	if (metadata.description) return truncate(metadata.description, maxLength)
 
-
-		const altTag = event.tags?.find((t) => t[0] === 'alt')?.[1]
+	const altTag = event.tags?.find((t) => t[0] === 'alt')?.[1]
 	if (altTag && altTag.trim()) {
 		return truncate(altTag.trim(), maxLength)
 	}
