@@ -1,5 +1,7 @@
 import type { Page } from '@playwright/test'
 import { test, expect } from '../fixtures'
+import { devUser1 } from '@/lib/fixtures'
+import { resetCollectionsByUser, seedCollection } from 'e2e-new/scenarios'
 
 test.use({ scenario: 'merchant' })
 
@@ -113,6 +115,10 @@ async function createCollection(
 	await expectCollectionVisible(page, fields.name)
 }
 
+test.beforeEach(async () => {
+	await resetCollectionsByUser(devUser1.sk, devUser1.pk)
+})
+
 test.describe('Collection Management', () => {
 	test('collections list page is accessible', async ({ merchantPage }) => {
 		await gotoCollections(merchantPage)
@@ -143,7 +149,8 @@ test.describe('Collection Management', () => {
 			summary: 'Updated summary',
 		}
 
-		await createCollection(merchantPage, original)
+		// Seed pre-existing collection
+		await seedCollection(devUser1.sk, original)
 
 		await gotoCollections(merchantPage)
 		await collectionEditButton(merchantPage, original.name).click()
@@ -152,10 +159,12 @@ test.describe('Collection Management', () => {
 		await expect(merchantPage.getByTestId('collection-description-input')).toHaveValue(original.description)
 		await expect(merchantPage.getByTestId('collection-summary-input')).toHaveValue(original.summary)
 
+		// Fill & submit updated info
+
 		await fillCollectionInfo(merchantPage, updated)
 		await submitCollection(merchantPage, 'Update Collection')
 
-		await expectCollectionVisible(merchantPage, updated.name)
+		// Re-visit collections page to check contents
 
 		await revisitCollectionsAndAssert(merchantPage, async () => {
 			await expectCollectionVisible(merchantPage, updated.name)
