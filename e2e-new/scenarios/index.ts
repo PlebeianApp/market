@@ -518,27 +518,49 @@ export async function resetAppBlacklist() {
 	console.log(`    Reset app Blacklist.`)
 }
 
+/**
+ * @param addressItem Address of the item to be featured (e.g. 30402:<pubkey>:<dtag>)
+ * @param kindList kind of the "featured" list, either: 30405 (products), 30003 (collections) or 30000 (users)
+ * @param dTagList d-tag of the "featured" list, one of: product, user, or collection
+ */
+export async function seedAppFeaturedItem(
+	addressItem: string,
+	kindList: number,
+	dTagList: 'featured_products' | 'featured_collections' | 'featured_users',
+) {
+	const relay = await Relay.connect(RELAY_URL)
+
+	await publish(relay, TEST_APP_PRIVATE_KEY, {
+		kind: kindList,
+		created_at: Math.floor(Date.now() / 1000),
+		content: '',
+		tags: [
+			['d', dTagList],
+			['a', addressItem],
+		],
+	})
+}
+
 export async function resetAppFeaturedList() {
 	const relay = await Relay.connect(RELAY_URL)
-	const skAdmin = devUser1.sk
 
 	await Promise.all([
 		// Products
-		publish(relay, skAdmin, {
+		publish(relay, TEST_APP_PRIVATE_KEY, {
 			kind: 30405,
 			created_at: Math.floor(Date.now() / 1000),
 			content: '',
 			tags: [['d', 'featured_products']],
 		}),
 		// Collections
-		publish(relay, skAdmin, {
+		publish(relay, TEST_APP_PRIVATE_KEY, {
 			kind: 30003,
 			created_at: Math.floor(Date.now() / 1000),
 			content: '',
 			tags: [['d', 'featured_collections']],
 		}),
 		// Users
-		publish(relay, skAdmin, {
+		publish(relay, TEST_APP_PRIVATE_KEY, {
 			kind: 30000,
 			created_at: Math.floor(Date.now() / 1000),
 			content: '',

@@ -1,7 +1,7 @@
 import { test, expect } from '../fixtures'
 import { devUser1, devUser2, devUser3 } from '../../src/lib/fixtures'
 import { nip19 } from 'nostr-tools'
-import { resetAppBlacklist, resetAppFeaturedList } from 'e2e-new/scenarios'
+import { resetAppBlacklist, resetAppFeaturedList, seedAppFeaturedItem } from 'e2e-new/scenarios'
 import { npubEncode } from 'nostr-tools/nip19'
 import type { Page } from '@playwright/test'
 
@@ -143,14 +143,18 @@ test.describe('Featured Items', () => {
 	})
 
 	test('can remove a product from featured list', async ({ merchantPage }) => {
+		const dTag = `e2e-remove-${Date.now()}`
+		const productCoords = `30402:${devUser1.pk}:${dTag}`
+
+		await seedAppFeaturedItem(productCoords, 30405, 'featured_products')
+
 		await gotoAdminRoute(merchantPage, '/dashboard/app-settings/featured-items')
 		await expectPageHeading(merchantPage, 'Featured Items')
 
 		// Add a uniquely identifiable coordinate so the remove assertion targets the exact row
-		const dTag = `e2e-remove-${Date.now()}`
-		const productCoords = `30402:${devUser1.pk}:${dTag}`
-		await fillAndAdd(merchantPage, 'newProduct', productCoords)
-		await expectInputCleared(merchantPage, 'newProduct')
+		// await fillAndAdd(merchantPage, 'newProduct', productCoords)
+		// await expectInputCleared(merchantPage, 'newProduct')
+
 		await clickDestructiveButtonForText(merchantPage, `ID: ${dTag}`)
 	})
 
