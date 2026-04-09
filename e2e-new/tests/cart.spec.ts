@@ -38,6 +38,18 @@ async function safeGoto(page: Page, url: string): Promise<void> {
 	await page.goto(url)
 }
 
+async function resetLocalStorageCart(page: Page): Promise<void> {
+	// Reset the browser/localstorage cart
+	await page.evaluate(() =>
+		window.sessionStorage.setItem(
+			'cart',
+			`{"version":1,"updatedAt":${Math.floor(Date.now() / 1000)},"cart":{"sellers":{},"products":{},"orders":{},"invoices":{}}}`,
+		),
+	)
+
+	console.log('    Cleared current cart in localstorage.')
+}
+
 /** Open the cart drawer via the basket icon in the header. */
 async function openCart(page: Page): Promise<void> {
 	await page
@@ -172,6 +184,8 @@ test.describe('Cart - Change Quantity', () => {
 	})
 
 	test('can decrement product quantity using the minus button', async ({ newUserPage }) => {
+		await resetLocalStorageCart(newUserPage)
+
 		await safeGoto(newUserPage, '/products')
 		await waitForProducts(newUserPage)
 

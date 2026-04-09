@@ -69,6 +69,8 @@ export async function resetRemoteCartForUser(skHex: string): Promise<void> {
 	} finally {
 		relay.close()
 	}
+
+	console.log('    Reset remote cart for user.')
 }
 
 // --- Seeding functions ---
