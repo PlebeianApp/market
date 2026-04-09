@@ -22,6 +22,7 @@ import {
 } from '../queries/products'
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedProducts } from '@/queries/featured'
+import { SelectableBadge } from '@/components/shared/SelectableBadge'
 
 // Hook to inject dynamic CSS for background image
 function useHeroBackground(imageUrl: string, className: string) {
@@ -336,18 +337,18 @@ function ProductsRoute() {
 				<div className="flex justify-between items-center gap-4 px-4 py-3">
 					<div className="flex-1 overflow-x-auto">
 						<div className="flex items-center gap-2 min-w-max">
-							<Badge variant={!tag ? 'primaryActive' : 'primary'} className="transition-colors cursor-pointer" onClick={handleClearFilter}>
+							<SelectableBadge isSelected={!tag} className="transition-colors cursor-pointer" onClick={handleClearFilter}>
 								All
-							</Badge>
+							</SelectableBadge>
 							{defaultTags.map((tagName) => (
-								<Badge
+								<SelectableBadge
 									key={tagName}
-									variant={tag === tagName ? 'primaryActive' : 'primary'}
+									isSelected={tag === tagName}
 									className="transition-colors cursor-pointer"
 									onClick={() => handleTagClick(tagName)}
 								>
 									{tagName}
-								</Badge>
+								</SelectableBadge>
 							))}
 						</div>
 					</div>

@@ -15,6 +15,7 @@ import { useQuery } from '@tanstack/react-query'
 import { productsQueryOptions } from '@/queries/products'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { z } from 'zod'
+import { SelectableBadge } from '@/components/shared/SelectableBadge'
 
 // Hook to inject dynamic CSS for background image
 function useHeroBackground(imageUrl: string, className: string) {
@@ -128,18 +129,13 @@ function Index() {
 				<div className="top-0 z-20 sticky bg-off-black shadow-sm border-b">
 					<div className="px-4 py-3 overflow-x-auto">
 						<div className="flex items-center gap-2 min-w-max">
-							<Badge variant={!tag ? 'primaryActive' : 'primary'} className="transition-colors cursor-pointer" onClick={handleClearFilter}>
+							<SelectableBadge isSelected className="transition-colors cursor-pointer" onClick={handleClearFilter}>
 								All
-							</Badge>
+							</SelectableBadge>
 							{defaultTags.map((tagName) => (
-								<Badge
-									key={tagName}
-									variant={tag === tagName ? 'primaryActive' : 'primary'}
-									className="transition-colors cursor-pointer"
-									onClick={() => handleTagClick(tagName)}
-								>
+								<SelectableBadge key={tagName} className="transition-colors cursor-pointer" onClick={() => handleTagClick(tagName)}>
 									{tagName}
-								</Badge>
+								</SelectableBadge>
 							))}
 						</div>
 					</div>
