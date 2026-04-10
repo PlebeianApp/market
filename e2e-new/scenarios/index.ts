@@ -5,9 +5,6 @@ import WebSocket from 'ws'
 import { devUser1, devUser2, WALLETED_USER_LUD16 } from '../../src/lib/fixtures'
 import { RELAY_URL, TEST_APP_PRIVATE_KEY, TEST_APP_PUBLIC_KEY } from '../test-config'
 import { isAddressableKind } from 'nostr-tools/kinds'
-import { SimplePool } from 'nostr-tools/pool'
-import type { Filter } from 'nostr-tools'
-import type { NostrEvent } from '@nostr-dev-kit/ndk'
 
 useWebSocketImplementation(WebSocket)
 
@@ -55,19 +52,6 @@ async function publish(relay: Relay, skHex: string, template: EventTemplate) {
 	return event
 }
 
-async function fetch(relay: Relay, filter: Filter): Promise<NostrEvent[]> {
-	const pool = new SimplePool()
-	const relays = [relay.url]
-
-	// One-time fetch using querySync (returns an array of events once received)
-	const events = await pool.querySync(relays, filter)
-
-	// Close the pool after fetching
-	pool.close(relays)
-
-	return events
-}
-
 export async function resetRemoteCartForUser(skHex: string): Promise<void> {
 	const relay = await Relay.connect(RELAY_URL)
 
@@ -87,33 +71,6 @@ export async function resetRemoteCartForUser(skHex: string): Promise<void> {
 	}
 
 	console.log('    Reset remote cart for user.')
-}
-
-export async function resetCollectionsByUser(skHex: string, pkHex: string): Promise<void> {
-	// Fetch all collections by user
-	const relay = await Relay.connect(RELAY_URL)
-
-	const events = await fetch(relay, { kinds: [30405], authors: [pkHex] })
-
-	if (events.length === 0) {
-		console.log('    No collections from user to delete, skipping.')
-		return
-	}
-
-	// Delete all collections by this user, simply by using id
-
-	const deletion: EventTemplate = {
-		kind: 5,
-		created_at: Math.floor(Date.now() / 1000),
-		content: '',
-		tags: [],
-	}
-
-	events.forEach((e) => deletion.tags.push(['e', e.id ?? '']))
-
-	await publish(relay, skHex, deletion)
-
-	console.log('    Deleted ' + events.length + ' collections from user.')
 }
 
 // --- Seeding functions ---
@@ -407,33 +364,6 @@ export async function seedProduct(
 
 	console.log(`    Published product: ${opts.title}`)
 	return event
-}
-
-export async function seedCollection(
-	skHex: string,
-	opts: {
-		name: string
-		description: string
-		summary: string
-	},
-) {
-	const relay = await Relay.connect(RELAY_URL)
-
-	const id = crypto.randomUUID()
-	const event: EventTemplate = {
-		kind: 30405,
-		content: opts.description,
-		created_at: Math.floor(Date.now() / 1000),
-		tags: [
-			['d', id],
-			['title', opts.name],
-			['summary', opts.summary],
-		],
-	}
-
-	await publish(relay, skHex, event)
-
-	console.log('    Created collection with ID: ' + id)
 }
 
 export async function seedComment(
