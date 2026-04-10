@@ -151,10 +151,6 @@ test.describe('Featured Items', () => {
 		await gotoAdminRoute(merchantPage, '/dashboard/app-settings/featured-items')
 		await expectPageHeading(merchantPage, 'Featured Items')
 
-		// Add a uniquely identifiable coordinate so the remove assertion targets the exact row
-		// await fillAndAdd(merchantPage, 'newProduct', productCoords)
-		// await expectInputCleared(merchantPage, 'newProduct')
-
 		await clickDestructiveButtonForText(merchantPage, `ID: ${dTag}`)
 	})
 
