@@ -3,6 +3,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 import { PRODUCT_CATEGORIES } from '@/lib/constants'
 import { usePublishAuctionMutation, type AuctionFormData } from '@/publish/auctions'
 import { useNavigate } from '@tanstack/react-router'
@@ -38,7 +39,8 @@ export function AuctionFormContent() {
 	const publishMutation = usePublishAuctionMutation()
 	const [formData, setFormData] = useState<AuctionFormData>(INITIAL_FORM)
 	const [subCategoryInput, setSubCategoryInput] = useState('')
-	const [imagesInput, setImagesInput] = useState('')
+	const [images, setImages] = useState<{ imageUrl: string; imageOrder: number }[]>([])
+	const [showNewUploader, setShowNewUploader] = useState(true)
 	const [mintsInput, setMintsInput] = useState(DEFAULT_MINT)
 
 	const canSubmit =
@@ -47,7 +49,40 @@ export function AuctionFormContent() {
 		formData.startingBid.trim().length > 0 &&
 		formData.endAt.trim().length > 0 &&
 		formData.bidIncrement.trim().length > 0 &&
-		parseListInput(imagesInput).length > 0
+		images.length > 0
+
+	const handleSaveImage = ({ url, index }: { url: string; index: number }) => {
+		if (index >= 0) {
+			const newImages = [...images]
+			newImages[index] = { ...newImages[index], imageUrl: url }
+			setImages(newImages)
+		} else {
+			setImages((prev) => [...prev, { imageUrl: url, imageOrder: prev.length }])
+			setShowNewUploader(true)
+		}
+	}
+
+	const handleDeleteImage = (index: number) => {
+		setImages((prev) => prev.filter((_, i) => i !== index).map((img, i) => ({ ...img, imageOrder: i })))
+	}
+
+	const handlePromoteImage = (index: number) => {
+		if (index <= 0) return
+		const newImages = [...images]
+		const temp = newImages[index]
+		newImages[index] = newImages[index - 1]
+		newImages[index - 1] = temp
+		setImages(newImages.map((img, i) => ({ ...img, imageOrder: i })))
+	}
+
+	const handleDemoteImage = (index: number) => {
+		if (index >= images.length - 1) return
+		const newImages = [...images]
+		const temp = newImages[index]
+		newImages[index] = newImages[index + 1]
+		newImages[index + 1] = temp
+		setImages(newImages.map((img, i) => ({ ...img, imageOrder: i })))
+	}
 
 	const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault()
@@ -55,7 +90,7 @@ export function AuctionFormContent() {
 
 		const nextFormData: AuctionFormData = {
 			...formData,
-			imageUrls: parseListInput(imagesInput),
+			imageUrls: images.map((img) => img.imageUrl),
 			trustedMints: parseListInput(mintsInput),
 			categories: parseListInput(subCategoryInput),
 		}
@@ -197,16 +232,35 @@ export function AuctionFormContent() {
 			</div>
 
 			<div className="grid w-full gap-1.5">
-				<Label htmlFor="auction-images">
-					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Image URLs (comma or newline separated)</span>
+				<Label>
+					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Images</span>
+					{images.length === 0 && <span className="text-sm text-red-500 ml-2">(At least one image required)</span>}
 				</Label>
-				<textarea
-					id="auction-images"
-					value={imagesInput}
-					onChange={(e) => setImagesInput(e.target.value)}
-					className="border-2 min-h-20 p-2 rounded-md"
-					placeholder="https://..."
-				/>
+				<div className="flex flex-col gap-4">
+					{images.map((image, i) => (
+						<ImageUploader
+							key={i}
+							src={image.imageUrl}
+							index={i}
+							imagesLength={images.length}
+							onSave={handleSaveImage}
+							onDelete={handleDeleteImage}
+							onPromote={handlePromoteImage}
+							onDemote={handleDemoteImage}
+						/>
+					))}
+					{showNewUploader && (
+						<ImageUploader
+							key={`new-${images.length}`}
+							src={null}
+							index={-1}
+							imagesLength={0}
+							onSave={handleSaveImage}
+							onDelete={() => setShowNewUploader(false)}
+							initialUrl=""
+						/>
+					)}
+				</div>
 			</div>
 
 			<div className="grid w-full gap-1.5">
