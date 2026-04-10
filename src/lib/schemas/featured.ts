@@ -5,8 +5,8 @@ import { z } from 'zod'
  */
 export const FeaturedItemSchema = z.object({
 	itemId: z.string(), // The identifier (pubkey for users, d-tag for collections/products)
-	itemType: z.enum(['user', 'collection', 'product']),
-	coordinates: z.string().optional(), // Full coordinates for collections/products (e.g., "30405:pubkey:d-tag")
+	itemType: z.enum(['user', 'collection', 'product', 'auction']),
+	coordinates: z.string().optional(), // Full coordinates for collections/products/auctions (e.g., "30405:pubkey:d-tag")
 	order: z.number().int().min(0), // Order position (0-based)
 	addedBy: z.string().length(64, 'Invalid addedBy pubkey length'),
 	addedAt: z.number(),
@@ -47,6 +47,17 @@ export const FeaturedCollectionsSchema = z.object({
 export type FeaturedCollections = z.infer<typeof FeaturedCollectionsSchema>
 
 /**
+ * Schema for featured auctions settings (kind 30409)
+ * Uses dedicated featured-auctions format with d: "featured_auctions"
+ */
+export const FeaturedAuctionsSchema = z.object({
+	featuredAuctions: z.array(z.string()), // Array of auction coordinates "30408:pubkey:d-tag"
+	lastUpdated: z.number().optional(),
+})
+
+export type FeaturedAuctions = z.infer<typeof FeaturedAuctionsSchema>
+
+/**
  * Schema for featured users settings (kind 30000)
  * Uses NIP-51 list format with d: "featured_users"
  */
@@ -63,6 +74,7 @@ export type FeaturedUsers = z.infer<typeof FeaturedUsersSchema>
 export const AllFeaturedItemsSchema = z.object({
 	products: FeaturedProductsSchema.optional(),
 	collections: FeaturedCollectionsSchema.optional(),
+	auctions: FeaturedAuctionsSchema.optional(),
 	users: FeaturedUsersSchema.optional(),
 })
 
@@ -79,6 +91,10 @@ export const FEATURED_ITEMS_CONFIG = {
 	COLLECTIONS: {
 		kind: 30003, // NIP-51 list kind
 		dTag: 'featured_collections',
+	},
+	AUCTIONS: {
+		kind: 30409, // Dedicated featured auctions kind
+		dTag: 'featured_auctions',
 	},
 	USERS: {
 		kind: 30000, // NIP-51 list kind

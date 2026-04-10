@@ -148,6 +148,11 @@ STAGING_RELAY_URL=wss://relay.staging.plebeian.market
 STAGING_APP_PRIVATE_KEY=<64-char hex private key>
 ```
 
+The `auctionsdev` deployment reuses the same staging secrets and relay. Its
+isolated runtime settings are part of the workflow: `market-auctionsdev`,
+`/home/deployer/market-auctionsdev`, port `3002`, and
+`https://auctionsdev.plebeian.market`.
+
 **Production secrets:**
 
 ```
@@ -175,6 +180,9 @@ nak key generate
 ```bash
 # Staging: merge to master, then wait for E2E Tests to finish and trigger staging deploy
 git push origin master
+
+# Auctions dev: push the auctions feature branch and it will deploy to auctionsdev.plebeian.market
+git push origin feature/nut-auctions-rebase
 
 # Production option 1: Create a release tag manually
 git tag v1.0.0-release
@@ -272,6 +280,7 @@ The VPS must have these installed:
 | ------------- | ---- | ---------------------------- | ------------------------------ |
 | `development` | 3000 | Local (ws://localhost:10547) | Local app or explicit dev host |
 | `staging`     | 3000 | Staging relay                | Pre-production testing         |
+| `auctionsdev` | 3002 | Staging relay                | Auctions feature branch stage  |
 | `production`  | 3001 | Production relay             | Live environment               |
 
 ## Environment Files
@@ -280,19 +289,20 @@ The VPS must have these installed:
 deploy-simple/
 ├── env/
 │   ├── .env.development.example   # Copy to .env.development
+│   ├── .env.auctionsdev.example   # Copy to .env.auctionsdev
 │   ├── .env.staging.example       # Copy to .env.staging
 │   └── .env.production.example    # Copy to .env.production
 ```
 
 ### Required Variables
 
-| Variable          | Description                                              |
-| ----------------- | -------------------------------------------------------- |
-| `APP_STAGE`       | Explicit stage override (`staging`, `production`, etc.)  |
-| `NODE_ENV`        | `development`, `staging`, or `production`                |
-| `PORT`            | Application port (3000 for staging, 3001 for production) |
-| `APP_RELAY_URL`   | Nostr relay WebSocket URL                                |
-| `APP_PRIVATE_KEY` | Server's Nostr private key (hex format)                  |
+| Variable          | Description                                                        |
+| ----------------- | ------------------------------------------------------------------ |
+| `APP_STAGE`       | Explicit stage override (`staging`, `production`, etc.)            |
+| `NODE_ENV`        | `development`, `staging`, or `production`                          |
+| `PORT`            | Application port (3000 staging, 3002 auctionsdev, 3001 production) |
+| `APP_RELAY_URL`   | Nostr relay WebSocket URL                                          |
+| `APP_PRIVATE_KEY` | Server's Nostr private key (hex format)                            |
 
 ### Optional Variables
 
@@ -311,6 +321,7 @@ deploy-simple/
 # Deploy to specific stage
 ./deploy.sh development deployer@dev.example.com
 ./deploy.sh staging user@staging.example.com
+./deploy.sh auctionsdev user@staging.example.com
 ./deploy.sh production user@prod.example.com
 
 # With SSH key
@@ -330,6 +341,7 @@ SSH_PORT=2222 ./deploy.sh staging user@example.com
 # Specify stage explicitly
 ./control.sh development status
 ./control.sh staging logs 50
+./control.sh auctionsdev status
 ./control.sh production restart
 
 # Available commands
