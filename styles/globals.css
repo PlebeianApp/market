@@ -470,20 +470,20 @@ button {
 	/* Components e.g. buttons, input */
 
 	button {
-  		cursor: pointer;
+		cursor: pointer;
 	}
 
 	.btn-border-highlight {
 		background-color: var(--primary);
 		color: var(--primary-foreground);
-		
+
 		/* Border */
 		border: 2px solid var(--primary-border);
-		border-radius: 0.25rem; 
-		
+		border-radius: 0.25rem;
+
 		/* Padding */
 		padding: 0.5rem; /* Matches 'p-2' (0.5rem) */
-		
+
 		/* Positioning */
 		position: relative;
 
@@ -495,13 +495,13 @@ button {
 			height: 1.5rem; /* Force h-6 (24px) if not set */
 			stroke-width: 2; /* Ensures "thicker" lines (Lucide default is usually 2) */
 		}
-		
+
 		/* Hover States */
 		&:hover {
 			background-color: transparent;
 			color: var(--primary-foreground-hover);
 			border-color: var(--primary-border-hover);
-			
+
 			/* Nested selector for span inside */
 			& > span {
 				color: var(--secondary);
