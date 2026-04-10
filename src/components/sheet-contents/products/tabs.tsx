@@ -615,6 +615,7 @@ export function ImagesTab() {
 
 				{needsUploader && (
 					<ImageUploader
+						key={`new-${images.length}`}
 						src={null}
 						index={-1}
 						imagesLength={0}

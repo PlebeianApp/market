@@ -4,7 +4,7 @@ import { useConfigQuery } from '@/queries/config'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { Check, Copy, ExternalLink, Github, Info, Mail, Server, Shield, User } from 'lucide-react'
+import { Check, Copy, ExternalLink, FolderGit2, Info, Mail, Server, Shield, User } from 'lucide-react'
 import { nip19 } from 'nostr-tools'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -246,7 +246,7 @@ function AboutComponent() {
 					<Card>
 						<CardHeader>
 							<CardTitle className="text-lg flex items-center gap-2">
-								<Github className="w-5 h-5" />
+								<FolderGit2 className="w-5 h-5" />
 								About Plebeian Market
 							</CardTitle>
 						</CardHeader>
@@ -261,7 +261,7 @@ function AboutComponent() {
 								rel="noopener noreferrer"
 								className="flex items-center gap-3 p-3 border rounded-md bg-muted/50 hover:bg-muted transition-colors"
 							>
-								<Github className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+								<FolderGit2 className="w-5 h-5 text-muted-foreground flex-shrink-0" />
 								<div>
 									<p className="text-sm font-medium text-muted-foreground">Repository</p>
 									<p className="font-medium text-blue-600">PlebeianApp/market</p>

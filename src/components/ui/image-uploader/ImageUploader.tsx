@@ -88,6 +88,8 @@ export function ImageUploader({
       setInputValue(src)
     } else if (initialUrl) {
       setInputValue(initialUrl)
+    } else {
+      setInputValue('')
     }
   }, [src, initialUrl])
 
