@@ -12,7 +12,10 @@ import { Toaster } from 'sonner'
 import { useBlacklistSync } from '@/hooks/useBlacklistSync'
 import { useVanitySync } from '@/hooks/useVanitySync'
 import { useNip05Sync } from '@/hooks/useNip05Sync'
+import { useNotificationMonitor } from '@/hooks/useNotificationMonitor'
 import { useStore } from '@tanstack/react-store'
+import { authStore } from '@/lib/stores/auth'
+import { notificationActions } from '@/lib/stores/notifications'
 
 export const Route = createRootRoute({
 	component: RootComponent,
@@ -30,6 +33,7 @@ function RootLayout() {
 	const { amIAdmin, isLoading: isLoadingAdmin } = useAmIAdmin(config?.appPublicKey)
 	const location = useLocation()
 	const isAdminRoute = pathname.startsWith('/dashboard/app-settings')
+	const { isAuthenticated } = useStore(authStore)
 	const isSetupPage = location.pathname === '/setup'
 	const isDashboardPage = location.pathname.startsWith('/dashboard')
 	const isCheckoutPage = location.pathname.startsWith('/checkout')
@@ -42,6 +46,14 @@ function RootLayout() {
 
 	// Sync NIP-05 store with backend data
 	useNip05Sync()
+
+	// Initialize and monitor notifications globally
+	useEffect(() => {
+		if (isAuthenticated) {
+			notificationActions.initialize()
+		}
+	}, [isAuthenticated])
+	useNotificationMonitor()
 
 	useEffect(() => {
 		if (config?.needsSetup && !isSetupPage) {

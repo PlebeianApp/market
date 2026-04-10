@@ -1,7 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { dashboardNavigation } from '@/config/dashboardNavigation'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
-import { useNotificationMonitor } from '@/hooks/useNotificationMonitor'
 import { cn } from '@/lib/utils'
 import { useAmIAdmin } from '@/queries/app-settings'
 import { useConfigQuery } from '@/queries/config'
@@ -11,7 +10,7 @@ import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useStore } from '@tanstack/react-store'
 import { uiStore, uiActions } from '@/lib/stores/ui'
 import { authStore } from '@/lib/stores/auth'
-import { notificationStore, notificationActions } from '@/lib/stores/notifications'
+import { notificationStore } from '@/lib/stores/notifications'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useLocation, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import React, { useState } from 'react'
@@ -151,17 +150,6 @@ function DashboardLayout() {
 	const { unseenOrders, unseenMessages, unseenPurchases, unseenByConversation } = useStore(notificationStore)
 	const isMessageDetailView =
 		location.pathname.startsWith('/dashboard/sales/messages/') && location.pathname !== '/dashboard/sales/messages'
-
-	// Initialize notification system
-	React.useEffect(() => {
-		if (isAuthenticated) {
-			notificationActions.initialize()
-		}
-	}, [isAuthenticated])
-
-	// Start monitoring for notifications
-	useNotificationMonitor()
-
 	// Admin checking
 	const { data: config } = useConfigQuery()
 	const { amIAdmin, isLoading: isLoadingAdmin } = useAmIAdmin(config?.appPublicKey)
