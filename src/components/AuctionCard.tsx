@@ -86,7 +86,7 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 
 	return (
 		<div className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col w-full max-w-full overflow-hidden hover:shadow-md transition-shadow duration-200">
-			<div className="relative aspect-square overflow-hidden border-b border-zinc-800 block">
+			<Link to={`/auctions/${auction.id}`} className="relative aspect-square overflow-hidden border-b border-zinc-800 block">
 				{images.length > 0 ? (
 					<img
 						src={images[0][1]}
@@ -103,7 +103,7 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 				>
 					{ended ? 'ENDED' : 'LIVE'}
 				</div>
-			</div>
+			</Link>
 
 			<div className="p-2 flex flex-col gap-2 flex-grow">
 				<h2 className="text-sm font-medium border-b border-[var(--light-gray)] pb-2 overflow-hidden text-ellipsis whitespace-nowrap">
