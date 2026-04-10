@@ -74,23 +74,23 @@ const getCommentSubmitButtonReply = (comment: Locator) => comment.getByRole('but
 /**
  * Helper to get the reaction button locator
  */
-const getReactionButton = (page: Page): Locator => {
+const getReactionButton = (page: Page | Locator): Locator => {
 	return page.getByTestId('reaction-button')
 }
 
-const getReactionsList = (page: Page): Locator => {
+const getReactionsList = (page: Page | Locator): Locator => {
 	return page.getByTestId('reactions-list')
 }
 
-const getZapButton = (page: Page): Locator => {
+const getZapButton = (page: Page | Locator): Locator => {
 	return page.getByTestId('zap-button')
 }
 
-const getCommentButton = (page: Page): Locator => {
+const getCommentButton = (page: Page | Locator): Locator => {
 	return page.getByTestId('comment-button')
 }
 
-const getShareButton = (page: Page): Locator => {
+const getShareButton = (page: Page | Locator): Locator => {
 	return page.getByTestId('share-button')
 }
 
@@ -240,25 +240,27 @@ test.describe('Product Page - View Only (Unauthenticated)', () => {
 		if (!currentProductId) throw new Error('Product not seeded')
 		await unauthenticatedPage.goto(`/products/${currentProductId}`)
 
+		const headerContent = unauthenticatedPage.locator('.hero-content-product')
+
 		// Verify ReactionButton is visible
-		await expect(getReactionButton(unauthenticatedPage)).toBeVisible()
+		await expect(getReactionButton(headerContent)).toBeVisible()
 
 		// Verify ZapButton is visible
-		await expect(getZapButton(unauthenticatedPage)).toBeVisible()
+		await expect(getZapButton(headerContent)).toBeVisible()
 
 		// Verify CommentButton is visible
-		await expect(getCommentButton(unauthenticatedPage)).toBeVisible()
+		await expect(getCommentButton(headerContent)).toBeVisible()
 
 		// Verify ShareButton is visible
-		await expect(getShareButton(unauthenticatedPage)).toBeVisible()
+		await expect(getShareButton(headerContent)).toBeVisible()
 	})
 
-	test('should display ReactionsList for product reactions', async ({ buyerPage }) => {
+	test('should display ReactionsList for product reactions', async ({ unauthenticatedPage }) => {
 		if (!currentProductId) throw new Error('Product not seeded')
-		await buyerPage.goto(`/products/${currentProductId}`)
+		await unauthenticatedPage.goto(`/products/${currentProductId}`)
 
 		// Verify ReactionsList container exists (even if empty)
-		const reactionsList = getReactionsList(buyerPage)
+		const reactionsList = getReactionsList(unauthenticatedPage)
 		await expect(reactionsList).toBeAttached() // Use beAttached instead of beVisible since it might be empty
 	})
 
@@ -558,14 +560,11 @@ test.describe('Product Page - Interactions & Social (Authenticated)', () => {
 		const commentSocialInteractions = buyerPage.locator('[data-testid="product-comments"] .comment-social-interactions')
 		const commentReactionBtn = commentSocialInteractions.locator('[data-testid="reaction-button"]').first()
 
-		// Hover to open popover
-		await commentReactionBtn.hover()
+		// Click reaction button to select default reaction
+		await commentReactionBtn.click()
 
-		// Select emoji
-		await buyerPage.getByText('❤️').click()
-
-		// Verify reaction was added - check for filled state
-		await expect(commentReactionBtn).toHaveClass(/bg-neo-purple/)
+		// Check for reaction button to update to filled state (icon version/ghost variant)
+		await expect(commentReactionBtn.locator('.i-heart-fill')).toBeVisible()
 
 		// Verify the emoji appears with count
 		const commentContainer = buyerPage.getByTestId('product-comments')
