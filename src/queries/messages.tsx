@@ -14,9 +14,9 @@ const looksLikeJSON = (content: string): boolean => {
 	return (trimmed.startsWith('{') || trimmed.startsWith('[')) && (trimmed.endsWith('}') || trimmed.endsWith(']'))
 }
 
-
-
-const extractMetadataFromNestedEvent = (content: string): { title?: string; description?: string; preview?: string; altTag?: string; kind?: number } => {
+const extractMetadataFromNestedEvent = (
+	content: string,
+): { title?: string; description?: string; preview?: string; altTag?: string; kind?: number } => {
 	if (!content || !looksLikeJSON(content)) {
 		return {}
 	}
@@ -24,7 +24,6 @@ const extractMetadataFromNestedEvent = (content: string): { title?: string; desc
 	try {
 		const parsed = JSON.parse(content)
 		if (parsed && typeof parsed === 'object') {
-
 			const tags = parsed.tags || []
 			const title = tags.find((t: string[]) => t[0] === 'title')?.[1]
 			const description = tags.find((t: string[]) => t[0] === 'description')?.[1]
@@ -38,7 +37,7 @@ const extractMetadataFromNestedEvent = (content: string): { title?: string; desc
 				description: description || summary ? (description || summary).substring(0, 50) : undefined,
 				altTag: altTag ? altTag.substring(0, 60) : undefined,
 				preview: innerContent && typeof innerContent === 'string' ? innerContent.substring(0, 50) : undefined,
-				kind: kind
+				kind: kind,
 			}
 		}
 	} catch (error) {
@@ -48,7 +47,6 @@ const extractMetadataFromNestedEvent = (content: string): { title?: string; desc
 	return {}
 }
 
-
 /** Generate a user-friendly preview snippet from a message event */
 const getMessageSnippet = (event: NDKEvent, maxLength = 50): string => {
 	const { kind, content } = event
@@ -57,11 +55,9 @@ const getMessageSnippet = (event: NDKEvent, maxLength = 50): string => {
 		return text.length > len ? `${text.substring(0, len)}...` : text
 	}
 
-
 	if (kind === 14) {
 		return content && content.trim() ? truncate(content.trim(), maxLength) : '(No content)'
 	}
-
 
 	if (kind === 16 || kind === 17) {
 		// Check if this is an image repost
@@ -101,8 +97,6 @@ const getMessageSnippet = (event: NDKEvent, maxLength = 50): string => {
 
 	return `(Message)`
 }
-
-
 
 export function useConversationsList() {
 	const ndk = ndkActions.getNDK()

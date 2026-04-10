@@ -79,12 +79,12 @@ interface ChatMessageBubbleProps {
 
 const extractActualContent = (content: string): string | null => {
 	if (!content || !content.trim()) return null
-	
+
 	const trimmed = content.trim()
 	const looksLikeJSON = (trimmed.startsWith('{') || trimmed.startsWith('[')) && (trimmed.endsWith('}') || trimmed.endsWith(']'))
-	
+
 	if (!looksLikeJSON) return content
-	
+
 	try {
 		const parsed = JSON.parse(content)
 		if (parsed && typeof parsed === 'object' && 'content' in parsed) {
@@ -93,13 +93,10 @@ const extractActualContent = (content: string): string | null => {
 				return innerContent
 			}
 		}
-	} catch {
+	} catch {}
 
-	}
-	
 	return null
 }
-
 
 const extractNestedEventMetadata = (content: string): { parsed?: any; metadata?: Record<string, string> } => {
 	if (!content || !content.trim()) return {}
@@ -125,13 +122,10 @@ const extractNestedEventMetadata = (content: string): { parsed?: any; metadata?:
 			}
 			return { parsed, metadata: Object.keys(metadata).length > 0 ? metadata : undefined }
 		}
-	} catch {
-
-	}
+	} catch {}
 
 	return {}
 }
-
 
 interface NestedEvent {
 	id?: string
@@ -150,7 +144,6 @@ const UniversalEventViewer = ({ nestedEvent }: { nestedEvent: NestedEvent | null
 		return tags.filter((t: string[]) => t[0] === tagName).map((t: string[]) => t.slice(1))
 	}
 
-
 	const title = getTags('title')[0]?.[0]
 	const summary = getTags('summary')[0]?.[0]
 	const description = getTags('description')[0]?.[0]
@@ -159,19 +152,16 @@ const UniversalEventViewer = ({ nestedEvent }: { nestedEvent: NestedEvent | null
 	const content = nestedEvent.content || ''
 	const kind = nestedEvent.kind
 
-
 	const hashTags = getTags('t').map((t) => t[0])
 	const options = getTags('option').map((t) => ({ id: t[0], label: t[1] }))
 	const relays = getTags('relay').map((t) => t[0])
-
 
 	const cleanContent = content
 		.replace(/[#*_`]/g, '')
 		.replace(/<[^>]*>/g, '')
 		.trim()
 
-
-		const hasImage = !!image
+	const hasImage = !!image
 	const hasTitle = !!title
 	const hasContent = cleanContent.length > 20
 	const hasOptions = options.length > 0
@@ -179,30 +169,22 @@ const UniversalEventViewer = ({ nestedEvent }: { nestedEvent: NestedEvent | null
 
 	return (
 		<div className="max-w-md rounded-lg border border-border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-
 			{hasImage && (
 				<div className="w-full h-40 bg-muted overflow-hidden">
 					<img src={image} alt={title || 'Event image'} className="w-full h-full object-cover" />
 				</div>
 			)}
 
-
 			<div className="p-4 space-y-2">
-
 				{hasTitle && <h3 className="font-semibold text-sm text-foreground line-clamp-2">{title}</h3>}
 				{!hasTitle && alt && <h3 className="font-semibold text-sm text-foreground line-clamp-2">{alt}</h3>}
-
 
 				{summary && <p className="text-xs text-muted-foreground font-medium">{summary}</p>}
 				{!summary && description && <p className="text-xs text-muted-foreground font-medium">{description}</p>}
 
-
 				{hasContent && !summary && (
-					<div className="text-xs text-foreground line-clamp-4 whitespace-pre-wrap leading-relaxed">
-						{cleanContent}
-					</div>
+					<div className="text-xs text-foreground line-clamp-4 whitespace-pre-wrap leading-relaxed">{cleanContent}</div>
 				)}
-
 
 				{hasOptions && (
 					<div className="space-y-1.5 pt-2 border-t border-border">
@@ -220,7 +202,6 @@ const UniversalEventViewer = ({ nestedEvent }: { nestedEvent: NestedEvent | null
 					</div>
 				)}
 
-
 				{hasHashtags && (
 					<div className="flex flex-wrap gap-1 pt-2">
 						{hashTags.slice(0, 6).map((tag: string, idx: number) => (
@@ -228,19 +209,18 @@ const UniversalEventViewer = ({ nestedEvent }: { nestedEvent: NestedEvent | null
 								#{tag}
 							</span>
 						))}
-						{hashTags.length > 6 && (
-							<span className="inline-block text-xs text-muted-foreground pt-0.5">+{hashTags.length - 6}</span>
-						)}
+						{hashTags.length > 6 && <span className="inline-block text-xs text-muted-foreground pt-0.5">+{hashTags.length - 6}</span>}
 					</div>
 				)}
-
 
 				{!hasContent && !hasTitle && relays.length > 0 && (
 					<div className="text-xs text-muted-foreground pt-2 border-t border-border">
 						<span className="font-medium">Relays:</span>
 						<ul className="mt-1 space-y-0.5">
 							{relays.slice(0, 3).map((relay: string, idx: number) => (
-								<li key={idx} className="text-xs break-all">{relay}</li>
+								<li key={idx} className="text-xs break-all">
+									{relay}
+								</li>
 							))}
 							{relays.length > 3 && <li className="text-xs">+{relays.length - 3} more</li>}
 						</ul>
@@ -248,12 +228,7 @@ const UniversalEventViewer = ({ nestedEvent }: { nestedEvent: NestedEvent | null
 				)}
 			</div>
 
-
-			{kind && (
-				<div className="px-4 py-2 bg-muted/20 border-t border-border text-xs text-muted-foreground">
-					Kind {kind}
-				</div>
-			)}
+			{kind && <div className="px-4 py-2 bg-muted/20 border-t border-border text-xs text-muted-foreground">Kind {kind}</div>}
 		</div>
 	)
 }
@@ -261,15 +236,12 @@ const UniversalEventViewer = ({ nestedEvent }: { nestedEvent: NestedEvent | null
 const GenericEventViewer = ({ event }: { event: NDKEvent }) => {
 	const { parsed: nestedEvent } = extractNestedEventMetadata(event.content)
 
-
 	if (nestedEvent && typeof nestedEvent === 'object' && (nestedEvent.id || nestedEvent.kind)) {
 		return <UniversalEventViewer nestedEvent={nestedEvent} />
 	}
 
-
 	return null
 }
-
 
 const OrderItem = ({ itemTag }: { itemTag: string[] }) => {
 	const itemName = itemTag[0] || 'Unknown Item'
@@ -604,7 +576,6 @@ export function ChatMessageBubble({ event, isCurrentUser }: ChatMessageBubblePro
 
 	const structuredPart = renderStructuredContent()
 	const hasContent = event.content && event.content.trim() !== ''
-
 
 	const looksLikeJSON = (content: string): boolean => {
 		const trimmed = content.trim()
