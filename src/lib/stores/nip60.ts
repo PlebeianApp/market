@@ -172,7 +172,7 @@ export const nip60Actions = {
 				wallet = new NDKCashuWallet(ndk)
 			}
 
-			// Configure the wallet's relaySet from NDK's connected relays if not already set
+			// Configure the wallet's relaySet from NDK's connected relays if not already set.
 			if (!wallet.relaySet) {
 				const relayUrls = Array.from(ndk.pool?.relays?.keys() ?? [])
 				if (relayUrls.length > 0) {

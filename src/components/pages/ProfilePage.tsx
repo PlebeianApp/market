@@ -6,7 +6,7 @@ import { Nip05Badge } from '@/components/Nip05Badge'
 import { ProductCard } from '@/components/ProductCard'
 import { ProfileName } from '@/components/ProfileName'
 import { Button } from '@/components/ui/button'
-import { ZapButton } from '@/components/ZapButton'
+import { ZapButton } from '@/components/social/ZapButton'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { useEntityPermissions } from '@/hooks/useEntityPermissions'
 import { getHexColorFingerprintFromHexPubkey, truncateText, checkImageLoadable } from '@/lib/utils'
@@ -22,12 +22,12 @@ import { productsByPubkeyQueryOptions } from '@/queries/products'
 import { profileByIdentifierQueryOptions } from '@/queries/profiles'
 import { useShippingOptionsByPubkey, getShippingService, getShippingPickupAddress, getShippingTitle } from '@/queries/shipping'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
-import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { Edit, MapPin, MessageCircle, Minus, Plus, Share2 } from 'lucide-react'
+import { Edit, MapPin, MessageCircle, Minus, Plus, Share2, Timer } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
+import { UserCard } from '../UserCard'
 
 interface ProfilePageProps {
 	profileId: string
@@ -54,6 +54,7 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 	const truncationLength = isSmallScreen ? 70 : 250
 	const aboutTruncated = truncateText(aboutText, truncationLength)
 	const shouldTruncateAbout = hasAbout && aboutTruncated !== aboutText
+	const isMobile = breakpoint === 'sm' || breakpoint === 'md'
 
 	// Get app config
 	const { data: config } = useConfigQuery()
@@ -117,6 +118,7 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 	const handleMessageClick = () => {
 		if (user?.pubkey) {
 			uiActions.openConversation(user.pubkey)
+			console.log('Opening conversation with', user.pubkey)
 		}
 	}
 
@@ -187,7 +189,7 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 
 	return (
 		<div className="relative min-h-screen flex flex-col">
-			<div className="absolute top-0 left-0 right-0 z-0 h-[40vh] sm:h-[40vh] md:h-[50vh] overflow-hidden">
+			<div className="absolute top-0 left-0 right-0 z-0 h-[40vh] sm:h-[40vh] md:h-[50vh] overflow-hidden bg-hero-image-margin">
 				{profile?.banner && bannerIsLoadable === true ? (
 					<div className="w-[150%] sm:w-full h-full -ml-[25%] sm:ml-0">
 						<img src={profile.banner} alt="profile-banner" className="w-full h-full object-cover" />
@@ -203,34 +205,20 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 				)}
 			</div>
 			<div className="flex flex-col relative z-10 pt-[18vh] sm:pt-[22vh] md:pt-[30vh] flex-1">
-				<div className="flex flex-row justify-between px-8 py-4 bg-black items-center">
-					<div className="flex flex-row items-center gap-4">
-						{profile?.picture && (
-							<img
-								src={profile.picture}
-								alt={profile.name || 'Profile picture'}
-								className="rounded-full w-10 h-10 sm:w-16 sm:h-16 border-2 border-black"
-							/>
-						)}
-						<div className="flex items-center gap-2">
-							<h2 className="text-xl sm:text-2xl font-bold text-white">
-								{truncateText(profile?.name ?? 'Unnamed user', isSmallScreen ? 28 : 50)}
-							</h2>
-							<Nip05Badge pubkey={user?.pubkey || ''} showAddress nip05={profile?.nip05} />
-						</div>
-					</div>
+				<div className="flex flex-row justify-between px-4 py-4 bg-black items-center">
+					<UserCard pubkey={user?.pubkey ?? ''} className="[&>h2]:text-white" subtitle="npub" onPress="copy-npub" />
 					{!isSmallScreen && (
 						<div className="flex gap-2">
 							{user && <ZapButton event={user} />}
-							<Button variant="focus" size="icon" onClick={handleMessageClick}>
+							<Button variant="focus" size="icon" tooltip="Message" onClick={handleMessageClick}>
 								<MessageCircle className="w-5 h-5" />
 							</Button>
 							{pickupLocations.length > 0 && (
-								<Button variant="secondary" size="icon" onClick={() => setPickupLocationDialogOpen(true)}>
+								<Button variant="secondary" size="icon" tooltip="Set Pickup Location" onClick={() => setPickupLocationDialogOpen(true)}>
 									<MapPin className="w-5 h-5" />
 								</Button>
 							)}
-							<Button variant="secondary" size="icon" onClick={() => setShareDialogOpen(true)}>
+							<Button variant="secondary" size="icon" tooltip="Share" onClick={() => setShareDialogOpen(true)}>
 								<Share2 className="w-5 h-5" />
 							</Button>
 							{/* Edit button for profile owner */}
@@ -259,7 +247,7 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 
 				<div
 					ref={animationParent}
-					className="flex flex-row items-center justify-between px-8 py-4 bg-zinc-900 text-white text-xs sm:text-sm min-h-[52px]"
+					className="flex flex-row items-center justify-between px-4 py-4 bg-zinc-900 text-white text-xs sm:text-sm min-h-[52px]"
 				>
 					{hasAbout ? (
 						shouldTruncateAbout ? (

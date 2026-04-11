@@ -1,4 +1,3 @@
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { dashboardNavigation } from '@/config/dashboardNavigation'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
@@ -16,7 +15,7 @@ import { notificationStore, notificationActions } from '@/lib/stores/notificatio
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useLocation, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import React, { useState } from 'react'
-import { UserWithAvatar } from '@/components/UserWithAvatar'
+import { UserCard } from '@/components/UserCard'
 
 export const Route = createFileRoute('/_dashboard-layout')({
 	component: DashboardLayout,
@@ -279,7 +278,7 @@ function DashboardLayout() {
 						) : (
 							<>
 								{isMessageDetailView && chatProfile ? (
-									<UserWithAvatar pubkey={chatProfile?.user?.pubkey || ''} size="md" showBadge={false} disableLink={true} />
+									<UserCard pubkey={chatProfile?.user?.pubkey || ''} size="sm" className="[&>h2]:text-white" />
 								) : (
 									<>
 										{dashboardEmoji && <span className="text-2xl">{dashboardEmoji}</span>}
@@ -348,7 +347,7 @@ function DashboardLayout() {
 					{/* Main content - responsive behavior */}
 					{(!showSidebar || !isMobile) && (
 						<div
-							className={`w-full lg:flex-1 lg:max-w-4xl lg:border lg:border-black lg:rounded lg:bg-white flex flex-col lg:max-h-full lg:overflow-hidden ${
+							className={`w-full lg:flex-1 lg:max-w-[67rem] lg:border lg:border-black lg:rounded lg:bg-white flex flex-col lg:max-h-full lg:overflow-hidden ${
 								isMessageDetailView && isMobile ? 'h-[calc(100vh-8.5rem)]' : ''
 							}`}
 						>
@@ -368,10 +367,11 @@ function DashboardLayout() {
 
 									{!isMobile && (
 										<h1 className="absolute left-1/2 -translate-x-1/2 text-[1.6rem] font-bold flex items-center gap-2">
-											{isMessageDetailView && chatProfile?.user?.pubkey && (
-												<UserWithAvatar pubkey={chatProfile?.user?.pubkey} size="md" showBadge={false} disableLink={true} />
+											{isMessageDetailView && chatProfile?.user?.pubkey ? (
+												<UserCard pubkey={chatProfile?.user?.pubkey} size="md" />
+											) : (
+												dashboardTitle
 											)}
-											{dashboardTitle}
 										</h1>
 									)}
 
@@ -410,6 +410,7 @@ function DashboardLayout() {
 												location.pathname === '/dashboard/account/network' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/account/preferences' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/account/vanity-url' && 'p-0 lg:p-0',
+												location.pathname === '/dashboard/account/nostr-address' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/app-settings/app-miscelleneous' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/app-settings/team' && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/app-settings/blacklists' && 'p-0 lg:p-0',
@@ -440,7 +441,8 @@ function DashboardLayout() {
 												location.pathname !== '/dashboard/account/network' &&
 												location.pathname !== '/dashboard/about' &&
 												location.pathname !== '/dashboard/account/preferences' &&
-												location.pathname !== '/dashboard/account/vanity-url' && (
+												location.pathname !== '/dashboard/account/vanity-url' &&
+												location.pathname !== '/dashboard/account/nostr-address' && (
 													<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>
 												)}
 											{!isAuthenticated ? (
@@ -469,7 +471,8 @@ function DashboardLayout() {
 														location.pathname !== '/dashboard/account/network' &&
 														location.pathname !== '/dashboard/about' &&
 														location.pathname !== '/dashboard/account/preferences' &&
-														location.pathname !== '/dashboard/account/vanity-url' && (
+														location.pathname !== '/dashboard/account/vanity-url' &&
+														location.pathname !== '/dashboard/account/nostr-address' && (
 															<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>
 														)}
 													<Outlet />

@@ -101,6 +101,8 @@ export const authActions = {
 				isAuthenticated: true,
 			}))
 
+			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk)
+
 			return user
 		} catch (error) {
 			authStore.setState((state) => ({
@@ -155,6 +157,8 @@ export const authActions = {
 				isAuthenticated: true,
 			}))
 
+			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk)
+
 			return user
 		} catch (error) {
 			authStore.setState((state) => ({
@@ -171,9 +175,6 @@ export const authActions = {
 		const ndk = ndkActions.getNDK()
 		if (!ndk) throw new Error('NDK not initialized')
 
-		localStorage.setItem(NOSTR_LOCAL_SIGNER_KEY, localSigner.privateKey || '')
-		localStorage.setItem(NOSTR_CONNECT_KEY, bunkerUrl)
-
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 			const signer = new NDKNip46Signer(ndk, bunkerUrl, localSigner)
@@ -181,11 +182,18 @@ export const authActions = {
 			ndkActions.setSigner(signer)
 			const user = await signer.user()
 
+			// Wait until user is logged in successfully before saving the bunkerURL/private key.
+
+			localStorage.setItem(NOSTR_LOCAL_SIGNER_KEY, localSigner.privateKey || '')
+			localStorage.setItem(NOSTR_CONNECT_KEY, bunkerUrl)
+
 			authStore.setState((state) => ({
 				...state,
 				user,
 				isAuthenticated: true,
 			}))
+
+			void cartActions.reconcileRemoteCartForUser(user.pubkey, signer, ndk)
 
 			return user
 		} catch (error) {
@@ -208,7 +216,7 @@ export const authActions = {
 		localStorage.removeItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
 		localStorage.removeItem(NOSTR_AUTO_LOGIN)
 		// Clear cart when user logs out
-		cartActions.clear()
+		cartActions.clear({ publishRemote: false, reason: 'logout' })
 		authStore.setState(() => initialState)
 	},
 

@@ -18,9 +18,12 @@ export { shippingKeys }
 // Persisted to localStorage so deletions survive page reloads.
 
 const DELETED_SHIPPING_STORAGE_KEY = 'plebeian_deleted_shipping_ids'
+const hasLocalStorage = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
 
 // Map of d-tag -> deletion timestamp (unix seconds)
 const loadDeletedShippingIds = (): Map<string, number> => {
+	if (!hasLocalStorage()) return new Map()
+
 	try {
 		const stored = localStorage.getItem(DELETED_SHIPPING_STORAGE_KEY)
 		if (stored) {
@@ -42,6 +45,8 @@ const loadDeletedShippingIds = (): Map<string, number> => {
 }
 
 const saveDeletedShippingIds = (ids: Map<string, number>) => {
+	if (!hasLocalStorage()) return
+
 	try {
 		localStorage.setItem(DELETED_SHIPPING_STORAGE_KEY, JSON.stringify(Object.fromEntries(ids)))
 	} catch (e) {
@@ -534,8 +539,8 @@ export const useUpdateShippingStatusMutation = () => {
 				await queryClient.invalidateQueries({ queryKey: orderKeys.bySeller(currentUserPubkey) })
 			}
 
-			// Trigger a refetch to show updated status
-			queryClient.refetchQueries({ queryKey: orderKeys.details(params.orderEventId) })
+			// Trigger a refetch to show updated status before the mutation fully settles.
+			await queryClient.refetchQueries({ queryKey: orderKeys.details(params.orderEventId) })
 		},
 		onError: (error) => {
 			console.error('Failed to update shipping status:', error)

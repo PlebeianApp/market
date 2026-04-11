@@ -1,8 +1,8 @@
 import type { Page } from '@playwright/test'
 import { test, expect } from '../fixtures'
 import { setupLnurlMock } from '../helpers/lnurl-mock'
-import { RelayMonitor } from '../fixtures/relay-monitor'
-import { WALLETED_USER_LUD16 } from '../../src/lib/fixtures'
+import { queryRelayEvents, filterByTag } from '../utils/relay-query'
+import { WALLETED_USER_LUD16, devUser1, devUser2 } from '../../src/lib/fixtures'
 
 test.use({ scenario: 'merchant' })
 
@@ -45,6 +45,34 @@ async function safeGoto(page: Page, url: string): Promise<void> {
 
 	// Last resort: final navigation attempt (let it throw naturally if it fails)
 	await page.goto(url)
+}
+
+/**
+ * The buyer has no NWC wallet configured, so checkout shows a persistent Sonner
+ * toast that can overlap CTA buttons. Keep the toast visible for debugging, but
+ * make it non-blocking so button clicks stay deterministic.
+ */
+async function neutralizeBlockingToasts(page: Page): Promise<void> {
+	await page.evaluate(() => {
+		const styleId = 'e2e-sonner-pointer-guard'
+		if (!document.getElementById(styleId)) {
+			const style = document.createElement('style')
+			style.id = styleId
+			style.textContent = `
+				[data-sonner-toast],
+				[data-sonner-toast] *,
+				[data-sonner-toaster],
+				[data-sonner-toaster] * {
+					pointer-events: none !important;
+				}
+			`
+			document.head.appendChild(style)
+		}
+
+		document.querySelectorAll('[data-sonner-toast]').forEach((toast) => {
+			;(toast as HTMLElement).style.pointerEvents = 'none'
+		})
+	})
 }
 
 // ---------------------------------------------------------------------------
@@ -206,87 +234,86 @@ test.describe('NWC Wallet Management', () => {
 // ---------------------------------------------------------------------------
 
 /**
- * Add a seeded product to the cart via the UI and proceed to checkout.
- * This is the realistic user flow: browse → add to cart → select shipping → checkout.
+ * Add a seeded product to the cart via the public marketplace and proceed to checkout.
+ * This mirrors the stable path used by the dedicated checkout specs.
  */
 async function addProductAndGoToCheckout(page: Page): Promise<void> {
 	await safeGoto(page, '/products')
+	await neutralizeBlockingToasts(page)
 
-	// Wait for seeded product to appear
-	await expect(async () => {
-		const content = await page.locator('main').textContent()
-		expect(content).toContain('Bitcoin Hardware Wallet')
-	}).toPass({ timeout: 30_000 })
+	const productCard = page.locator('[data-testid="product-card"]').filter({ hasText: 'Bitcoin Hardware Wallet' })
+	await expect(productCard).toBeVisible({ timeout: 30_000 })
+	await productCard.getByRole('button', { name: /add to cart/i }).click()
+	await expect(productCard.getByRole('button', { name: /add/i })).toBeVisible({ timeout: 10_000 })
 
-	// Click product card → detail page
-	await page.getByText('Bitcoin Hardware Wallet').first().click()
-	await expect(page.getByRole('button', { name: /add to cart/i })).toBeVisible({ timeout: 10_000 })
-	await page.getByRole('button', { name: /add to cart/i }).click()
+	await page
+		.getByRole('button')
+		.filter({ has: page.locator('.i-basket') })
+		.click()
 
-	// Cart drawer opens
-	await expect(page.getByRole('heading', { name: /your cart/i })).toBeVisible({ timeout: 5_000 })
-
-	// Select shipping method — Radix Select combobox inside the cart dialog.
-	// Scope to the dialog to avoid matching the currency selector in the header.
+	await expect(page.getByRole('heading', { name: /your cart/i })).toBeVisible({ timeout: 10_000 })
 	const cartDialog = page.getByRole('dialog', { name: /your cart/i })
 	const shippingCombobox = cartDialog.getByRole('combobox')
 	await expect(shippingCombobox).toBeVisible({ timeout: 5_000 })
 	await shippingCombobox.click()
+	await page.getByRole('option', { name: /worldwide standard/i }).click()
 
-	// Radix Select options are portaled to <body>, so we must search the whole page
-	await page.getByRole('option', { name: /digital delivery/i }).click()
-
-	// Click Checkout in the cart drawer (closes drawer, navigates to /checkout)
 	const checkoutButton = cartDialog.getByRole('button', { name: /^checkout$/i })
 	await expect(checkoutButton).toBeEnabled({ timeout: 5_000 })
 	await checkoutButton.click()
+
+	await expect(page.getByText('Shipping Address', { exact: true })).toBeVisible({ timeout: 15_000 })
 }
 
 /**
- * Fill the shipping address form on the checkout page.
- * Handles text inputs, the PhoneInput component, and comboboxes for City/Country.
+ * Fill the checkout shipping form using the field ids defined by ShippingAddressForm.
+ * This keeps the test aligned with the real form validation rules.
  */
 async function fillShippingForm(page: Page, name: string): Promise<void> {
-	await expect(page.getByLabel(/full name/i)).toBeVisible({ timeout: 10_000 })
-	await page.getByLabel(/full name/i).fill(name)
+	await expect(page.getByText('Shipping Address', { exact: true })).toBeVisible({ timeout: 15_000 })
+	await page.locator('#name').fill(name)
+	await page.locator('#firstLineOfAddress').fill('123 Test Street, Apt 4B')
+	await page.locator('#zipPostcode').fill('SW1A 1AA')
+	await page.locator('#country').fill('United Kingdom')
+	await page.locator('[data-country-item]').filter({ hasText: 'United Kingdom' }).first().click()
+	await page.locator('#city').fill('London')
+	await page.keyboard.press('Escape')
 
-	// Phone input (required) — PhoneInput renders an <input type="tel">
-	const phoneInput = page.locator('input[type="tel"]').first()
-	if (await phoneInput.isVisible({ timeout: 2_000 }).catch(() => false)) {
-		await phoneInput.fill('2025551234')
+	await neutralizeBlockingToasts(page)
+	const submitButton = page.locator('button[form="shipping-form"]')
+	await expect(submitButton).toBeEnabled({ timeout: 10_000 })
+	await submitButton.click()
+	await expect(page.getByText('Order Summary')).toBeVisible({ timeout: 15_000 })
+}
+
+async function continueFromSummaryToPayment(page: Page): Promise<void> {
+	await expect(page.getByText('Order Summary')).toBeVisible({ timeout: 15_000 })
+	await neutralizeBlockingToasts(page)
+	const continueButton = page.getByRole('button', { name: /continue to payment/i })
+	await expect(continueButton).toBeEnabled({ timeout: 10_000 })
+	await continueButton.click()
+}
+
+async function skipAllInvoices(page: Page): Promise<void> {
+	await expect(page.getByText('Invoices', { exact: true })).toBeVisible({ timeout: 30_000 })
+
+	while (
+		(await page
+			.getByText('Checkout completed!')
+			.isVisible()
+			.catch(() => false)) === false
+	) {
+		const skipButton = page.getByRole('button', { name: /skip payment|pay later/i })
+		await expect(skipButton.first()).toBeVisible({ timeout: 10_000 })
+		await neutralizeBlockingToasts(page)
+		await skipButton.first().click()
+		await page.waitForTimeout(500)
 	}
-
-	// Street address (required)
-	const addressInput = page.getByLabel(/street address/i).first()
-	if (await addressInput.isVisible({ timeout: 2_000 }).catch(() => false)) {
-		await addressInput.fill('123 Test Street')
-	}
-
-	// City (required, combobox — fill then Tab to accept)
-	const cityInput = page.getByLabel(/city/i).first()
-	if (await cityInput.isVisible({ timeout: 2_000 }).catch(() => false)) {
-		await cityInput.fill('New York')
-		await page.keyboard.press('Tab')
-	}
-
-	// ZIP/Postal Code (required)
-	const zipInput = page.getByLabel(/zip/i).first()
-	if (await zipInput.isVisible({ timeout: 2_000 }).catch(() => false)) {
-		await zipInput.fill('10001')
-	}
-
-	// Country (required, combobox — fill then Tab to accept)
-	const countryInput = page.getByLabel(/country/i).first()
-	if (await countryInput.isVisible({ timeout: 2_000 }).catch(() => false)) {
-		await countryInput.fill('United States')
-		await page.keyboard.press('Tab')
-	}
-
-	// Submit the shipping form — both the shipping and summary steps use "Continue to Payment"
-	await page.getByRole('button', { name: /continue to payment/i }).click()
 }
 
 test.describe('Checkout Flow', () => {
+	test.describe.configure({ timeout: 120_000 })
+
 	test('empty cart shows redirect message', async ({ buyerPage }) => {
 		// Navigate directly to checkout with no items in cart
 		await safeGoto(buyerPage, '/checkout')
@@ -300,136 +327,78 @@ test.describe('Checkout Flow', () => {
 	})
 
 	test('full checkout flow with mocked Lightning invoices', async ({ buyerPage }) => {
-		test.setTimeout(120_000)
-
-		// Setup LNURL mock to intercept Lightning address resolution
 		await setupLnurlMock(buyerPage)
 
-		// Step 1: Add product to cart and navigate to checkout
-		await addProductAndGoToCheckout(buyerPage)
+		await test.step('Add product and proceed to checkout', async () => {
+			await addProductAndGoToCheckout(buyerPage)
+		})
 
-		// Step 2: Fill shipping form and submit
-		await fillShippingForm(buyerPage, 'Test Buyer')
+		await test.step('Fill shipping step and advance to summary', async () => {
+			await fillShippingForm(buyerPage, 'Test Buyer')
+		})
 
-		// Step 3: Order Summary — wait for the review step
-		await expect(buyerPage.getByText(/review your order/i)).toBeVisible({ timeout: 10_000 })
+		await test.step('Create the order and open the payment step', async () => {
+			await continueFromSummaryToPayment(buyerPage)
+			await expect(buyerPage.getByText('Invoices', { exact: true })).toBeVisible({ timeout: 30_000 })
+		})
 
-		// Click "Continue to Payment" — triggers order creation (Kind 16 events)
-		const continueButton = buyerPage.getByRole('button', { name: /continue to payment/i })
-		await expect(continueButton).toBeVisible({ timeout: 5_000 })
-		await continueButton.click()
-
-		// Step 4: Payment — wait for invoices or error state
-		await expect(async () => {
-			const pageText = await buyerPage.locator('body').textContent()
-			const hasPaymentContent =
-				pageText?.includes('lnbc') ||
-				pageText?.includes('Unable to generate') ||
-				pageText?.includes('Skip') ||
-				pageText?.includes('Pay') ||
-				pageText?.includes('Invoices') ||
-				pageText?.includes('invoice')
-			expect(hasPaymentContent).toBeTruthy()
-		}).toPass({ timeout: 30_000 })
-
-		// If there are skip buttons, click them to move past payment
-		const skipButton = buyerPage.getByRole('button', { name: /skip|pay later/i }).first()
-		if (await skipButton.isVisible({ timeout: 3_000 }).catch(() => false)) {
-			await skipButton.click()
-		}
-
-		// Step 5: Completion or skip through remaining invoices
-		await expect(async () => {
-			const pageText = await buyerPage.locator('body').textContent()
-			const isComplete =
-				pageText?.includes('Order complete') ||
-				pageText?.includes('order complete') ||
-				pageText?.includes('Thank you') ||
-				pageText?.includes('Checkout completed!') ||
-				pageText?.includes('All payments completed successfully!')
-			if (!isComplete) {
-				const nextSkip = buyerPage.getByRole('button', { name: /skip|pay later/i }).first()
-				if (await nextSkip.isVisible({ timeout: 1_000 }).catch(() => false)) {
-					await nextSkip.click()
-				}
-			}
-			expect(isComplete).toBeTruthy()
-		}).toPass({ timeout: 35_000 })
+		await test.step('Skip all mocked invoices and finish checkout', async () => {
+			await skipAllInvoices(buyerPage)
+			await expect(buyerPage.getByText('Checkout completed!')).toBeVisible({ timeout: 20_000 })
+			await expect(buyerPage.getByRole('button', { name: /view your purchases/i })).toBeVisible()
+		})
 	})
 
 	test('checkout publishes order events to relay', async ({ buyerPage }) => {
-		test.setTimeout(120_000)
+		const testStartTime = Math.floor(Date.now() / 1000) - 5
 
-		// Attach relay monitor to the buyer's page
-		const monitor = new RelayMonitor(buyerPage)
-		await monitor.start()
-
-		// Setup LNURL mock
 		await setupLnurlMock(buyerPage)
 
-		// Add product to cart and navigate to checkout
 		await addProductAndGoToCheckout(buyerPage)
-
-		// Fill shipping form and submit
 		await fillShippingForm(buyerPage, 'Relay Test Buyer')
+		await continueFromSummaryToPayment(buyerPage)
+		await expect(buyerPage.getByText('Invoices', { exact: true })).toBeVisible({ timeout: 30_000 })
 
-		// Summary → Continue to Payment (this publishes order events)
-		await expect(buyerPage.getByText(/review your order/i)).toBeVisible({ timeout: 10_000 })
-
-		// Clear monitor to only capture events from order creation onwards
-		monitor.clear()
-
-		const continueButton = buyerPage.getByRole('button', { name: /continue to payment/i })
-		await expect(continueButton).toBeVisible({ timeout: 5_000 })
-		await continueButton.click()
-
-		// Wait for order events to be published
-		// NDK wraps Kind 16 in NIP-17 gift wraps (Kind 1059), so check for either
 		await expect(async () => {
-			const kind16Events = monitor.findSentEventsByKind(16)
-			const kind1059Events = monitor.findSentEventsByKind(1059)
-			const allSent = monitor.getAllEvents().filter((e) => e.direction === 'sent')
+			const orderCreationEvents = filterByTag(
+				await queryRelayEvents({
+					kinds: [16],
+					'#p': [devUser1.pk],
+					since: testStartTime,
+				}),
+				'type',
+				'1',
+			)
+			const paymentRequestEvents = filterByTag(
+				await queryRelayEvents({
+					kinds: [16],
+					'#p': [devUser2.pk],
+					since: testStartTime,
+				}),
+				'type',
+				'2',
+			)
 
-			// At least some events should have been sent after clicking "Continue to Payment"
-			const hasOrderEvents = kind16Events.length > 0 || kind1059Events.length > 0 || allSent.length > 0
-			expect(hasOrderEvents).toBeTruthy()
-		}).toPass({ timeout: 35_000 })
-
-		// Print summary for debugging in CI
-		monitor.printSummary()
+			expect(orderCreationEvents.length).toBeGreaterThan(0)
+			expect(paymentRequestEvents.length).toBeGreaterThan(0)
+		}).toPass({ timeout: 20_000 })
 	})
 
-	test('handles invoice generation failure gracefully', async ({ buyerPage }) => {
-		test.setTimeout(120_000)
+	test('allows buyer to defer an invoice and continue checkout', async ({ buyerPage }) => {
+		await setupLnurlMock(buyerPage)
 
-		// Setup LNURL mock that returns errors for invoice callback
-		await setupLnurlMock(buyerPage, { failCallback: true })
-
-		// Use the same UI flow (no sessionStorage injection, which triggers an app bug)
 		await addProductAndGoToCheckout(buyerPage)
-
-		// Fill shipping form and submit
 		await fillShippingForm(buyerPage, 'Error Test Buyer')
+		await continueFromSummaryToPayment(buyerPage)
 
-		// Summary → Continue to Payment
-		await expect(buyerPage.getByText(/review your order/i)).toBeVisible({ timeout: 10_000 })
+		await expect(buyerPage.getByText('Invoices', { exact: true })).toBeVisible({ timeout: 30_000 })
+		const payLaterButton = buyerPage.getByRole('button', { name: /pay later/i })
+		await expect(payLaterButton).toBeVisible({ timeout: 10_000 })
+		await neutralizeBlockingToasts(buyerPage)
+		await payLaterButton.click()
 
-		const continueButton = buyerPage.getByRole('button', { name: /continue to payment/i })
-		await expect(continueButton).toBeVisible({ timeout: 5_000 })
-		await continueButton.click()
-
-		// Payment step should show error state from the failed LNURL callback
-		await expect(async () => {
-			const pageText = await buyerPage.locator('body').textContent()
-			const hasContent =
-				pageText?.includes('Unable to generate') ||
-				pageText?.includes('failed') ||
-				pageText?.includes('Error') ||
-				pageText?.includes('error') ||
-				pageText?.includes('Skip') ||
-				pageText?.includes('Try Again') ||
-				pageText?.includes('Go Back')
-			expect(hasContent).toBeTruthy()
-		}).toPass({ timeout: 30_000 })
+		await expect(buyerPage.getByText(/1 of \d+ completed/i)).toBeVisible({ timeout: 15_000 })
+		await expect(buyerPage.getByText(/skipped/i).first()).toBeVisible({ timeout: 10_000 })
+		await expect(buyerPage.getByRole('button', { name: /pay later/i })).toBeVisible({ timeout: 10_000 })
 	})
 })

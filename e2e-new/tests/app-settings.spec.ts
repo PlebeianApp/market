@@ -1,5 +1,9 @@
-import { test, expect, type Page } from '../fixtures'
-import { devUser1, devUser2 } from '../../src/lib/fixtures'
+import { test, expect } from '../fixtures'
+import { devUser1, devUser2, devUser3 } from '../../src/lib/fixtures'
+import { nip19 } from 'nostr-tools'
+import { resetAppBlacklist, resetAppFeaturedList } from 'e2e-new/scenarios'
+import { npubEncode } from 'nostr-tools/nip19'
+import type { Page } from '@playwright/test'
 
 test.use({ scenario: 'merchant' })
 
@@ -50,6 +54,27 @@ async function fillAndAdd(page: Page, inputId: string, value: string) {
 	await input.locator('../..').getByRole('button', { name: 'Add' }).click()
 }
 
+async function expectInputCleared(page: Page, inputId: string) {
+	await expect(page.locator(`#${inputId}`)).toHaveValue('', { timeout: 15_000 })
+}
+
+async function clickDestructiveButtonForText(page: Page, text: string) {
+	const rowText = page.getByText(text)
+	await expect(rowText).toBeVisible({ timeout: 15_000 })
+
+	const row = rowText.locator('xpath=ancestor::div[contains(@class,"flex") and contains(@class,"items-center")]')
+	const destructiveButton = row.locator('button[class*="destructive"]')
+
+	await expect(destructiveButton).toBeVisible()
+	await destructiveButton.click({ timeout: 15_000 })
+	await expect(rowText).toBeHidden({ timeout: 15_000 })
+}
+
+const compactNpub = (pubkey: string) => {
+	const npub = nip19.npubEncode(pubkey)
+	return `${npub.slice(0, 9)}..${npub.slice(-6)}`
+}
+
 // --- App Settings (Miscellaneous) ---
 // Note: The app-miscelleneous page is owner-only. devUser1 is an admin but NOT the owner
 // (the owner is TEST_APP_PUBLIC_KEY). So devUser1 sees "You don't have permission".
@@ -72,6 +97,10 @@ test.describe('App Settings', () => {
 })
 
 // --- Featured Items ---
+
+test.beforeEach(async () => {
+	await resetAppFeaturedList()
+})
 
 test.describe('Featured Items', () => {
 	test('admin can view featured items page with tabs', async ({ merchantPage }) => {
@@ -117,20 +146,12 @@ test.describe('Featured Items', () => {
 		await gotoAdminRoute(merchantPage, '/dashboard/app-settings/featured-items')
 		await expectPageHeading(merchantPage, 'Featured Items')
 
-		// First add a product so we have something to remove
-		const productCoords = `30402:${devUser1.pk}:nostr-t-shirt`
+		// Add a uniquely identifiable coordinate so the remove assertion targets the exact row
+		const dTag = `e2e-remove-${Date.now()}`
+		const productCoords = `30402:${devUser1.pk}:${dTag}`
 		await fillAndAdd(merchantPage, 'newProduct', productCoords)
-
-		// Wait for at least one remove button
-		const removeButtons = merchantPage.locator('button[class*="destructive"]')
-		await expect(removeButtons.first()).toBeVisible({ timeout: 15_000 })
-		const countAfterAdd = await removeButtons.count()
-
-		// Remove the last item
-		await removeButtons.last().click()
-
-		// One fewer remove button than after the add
-		await expect(removeButtons).toHaveCount(countAfterAdd - 1, { timeout: 15_000 })
+		await expectInputCleared(merchantPage, 'newProduct')
+		await clickDestructiveButtonForText(merchantPage, `ID: ${dTag}`)
 	})
 
 	test('collections tab shows empty state', async ({ merchantPage }) => {
@@ -152,10 +173,12 @@ test.describe('Featured Items', () => {
 		const usersPanel = merchantPage.getByRole('tabpanel', { name: /Users/ })
 		await expect(usersPanel).toBeVisible()
 
-		await fillAndAdd(merchantPage, 'newUser', devUser2.pk)
+		await fillAndAdd(merchantPage, 'newUser', devUser3.pk)
 
-		// User should appear — at least one remove button should exist in the Users tab
-		await expect(usersPanel.locator('button[class*="destructive"]').first()).toBeVisible({ timeout: 15_000 })
+		// User should appear - Verify for first & last 6 digits of npub are displayed
+		const userNpub = npubEncode(devUser3.pk)
+		await expect(usersPanel.getByText(userNpub.slice(0, 6))).toBeVisible({ timeout: 15_000 })
+		await expect(usersPanel.getByText(userNpub.slice(-6))).toBeVisible({ timeout: 15_000 })
 	})
 
 	test('permissions section shows admin role', async ({ merchantPage }) => {
@@ -177,6 +200,10 @@ test.describe('Featured Items', () => {
 })
 
 // --- Blacklists ---
+
+test.beforeEach(async () => {
+	await resetAppBlacklist()
+})
 
 test.describe('Blacklists', () => {
 	test('admin can view blacklists page with tabs', async ({ merchantPage }) => {
@@ -202,19 +229,11 @@ test.describe('Blacklists', () => {
 	test('can remove a user from blacklist', async ({ merchantPage }) => {
 		await gotoAdminRoute(merchantPage, '/dashboard/app-settings/blacklists')
 		await expectPageHeading(merchantPage, 'Blacklists')
+		await fillAndAdd(merchantPage, 'newUser', devUser3.pk)
 
-		// First add a user so we have something to remove
-		await fillAndAdd(merchantPage, 'newUser', devUser2.pk)
+		const userLabel = compactNpub(devUser3.pk)
 
-		const removeButtons = merchantPage.locator('button[class*="destructive"]')
-		await expect(removeButtons.first()).toBeVisible({ timeout: 15_000 })
-		const countAfterAdd = await removeButtons.count()
-
-		// Remove the last item
-		await removeButtons.last().click()
-
-		// One fewer remove button than after the add
-		await expect(removeButtons).toHaveCount(countAfterAdd - 1, { timeout: 15_000 })
+		await clickDestructiveButtonForText(merchantPage, userLabel)
 	})
 
 	test('can add a product to blacklist by coordinate', async ({ merchantPage }) => {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { UserWithAvatar } from '@/components/UserWithAvatar'
+import { WotBadge } from '@/components/WotScore'
 import { Loader2, ExternalLink } from 'lucide-react'
 import { nip19 } from 'nostr-tools'
 import { Link } from '@tanstack/react-router'
@@ -10,6 +10,7 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { profileKeys } from '@/queries/queryKeyFactory'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk'
+import { UserCard } from '../UserCard'
 
 // Known relays that support NIP-50 search
 const PROFILE_SEARCH_RELAYS = [
@@ -264,7 +265,7 @@ export function ProfileSearch({ onSelect, placeholder = 'Search profiles or past
 											onClick={() => handleSelect(npub)}
 											data-testid={`profile-search-result-${event.pubkey}`}
 										>
-											<UserWithAvatar pubkey={event.pubkey} size="sm" showBadge disableLink={true} />
+											<UserCard pubkey={event.pubkey} size="xs" onPress="none" />
 											<span className="flex flex-col flex-1">
 												<span className="font-bold">{profile?.name || profile?.displayName || npub.slice(0, 10) + '...'}</span>
 												{profile?.nip05 && <span className="text-xs">{profile.nip05}</span>}
@@ -272,6 +273,7 @@ export function ProfileSearch({ onSelect, placeholder = 'Search profiles or past
 													{npub.slice(0, 12)}... {npub.slice(-6)}
 												</span>
 											</span>
+											<WotBadge pubkey={event.pubkey} />
 											<Link
 												to="/profile/$profileId"
 												params={{ profileId: event.pubkey }}

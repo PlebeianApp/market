@@ -42,6 +42,7 @@ export const profileKeys = {
 	nip05: (p: string) => [...profileKeys.all, 'nip05', p] as const,
 	detailsByNip05: (nip05: string) => [...profileKeys.all, 'byNip05', nip05] as const,
 	zapCapability: (p: string) => [...profileKeys.all, 'zapCapability', p] as const,
+	wot: (p: string) => [...profileKeys.all, 'wot', p] as const,
 } as const
 
 export const postKeys = {
@@ -66,6 +67,7 @@ export const configKeys = {
 	editors: (appPubkey: string) => [...configKeys.all, 'editors', appPubkey] as const,
 	blacklist: (appPubkey: string) => [...configKeys.all, 'blacklist', appPubkey] as const,
 	vanity: (appPubkey: string) => [...configKeys.all, 'vanity', appPubkey] as const,
+	nip05: (appPubkey: string) => [...configKeys.all, 'nip05', appPubkey] as const,
 	featuredProducts: (appPubkey: string) => [...configKeys.all, 'featuredProducts', appPubkey] as const,
 	featuredCollections: (appPubkey: string) => [...configKeys.all, 'featuredCollections', appPubkey] as const,
 	featuredUsers: (appPubkey: string) => [...configKeys.all, 'featuredUsers', appPubkey] as const,
@@ -85,6 +87,7 @@ export const currencyKeys = {
 
 export const v4vKeys = {
 	all: ['v4v'] as const,
+	userConfig: (pubkey: string) => [...v4vKeys.all, 'config', pubkey] as const,
 	userShares: (pubkey: string) => [...v4vKeys.all, 'shares', pubkey] as const,
 	publishShare: () => [...v4vKeys.all, 'publish'] as const,
 	merchants: () => [...v4vKeys.all, 'merchants'] as const,
@@ -131,4 +134,28 @@ export const migrationKeys = {
 	all: ['migration'] as const,
 	nip15Products: (userPubkey: string) => [...migrationKeys.all, 'nip15Products', userPubkey] as const,
 	migratedEvents: (userPubkey: string) => [...migrationKeys.all, 'migratedEvents', userPubkey] as const,
+} as const
+
+export const cartKeys = {
+	all: ['cart'] as const,
+	byPubkey: (pubkey: string) => [...cartKeys.all, 'byPubkey', pubkey] as const,
+} as const
+
+export const commentKeys = {
+	all: ['comments'] as const,
+	byProduct: (productCoordinates: string) => [...commentKeys.all, 'byProduct', productCoordinates] as const,
+} as const
+
+export const reactionKeys = {
+	all: ['reactions'] as const,
+	byEvent: (eventId: string, authorPubkey: string) => [...reactionKeys.all, 'byEvent', eventId, authorPubkey] as const,
+	byEventUser: (eventId: string, authorPubkey: string, pubkey: string) =>
+		[...reactionKeys.all, 'byEventUser', eventId, authorPubkey, pubkey] as const,
+	byUser: (pubkey: string) => [...reactionKeys.all, 'byUser', pubkey] as const,
+} as const
+
+export const zapKeys = {
+	all: ['zaps'] as const,
+	byEvent: (eventId: string, recipientPubkey: string) => [...zapKeys.all, 'byEvent', eventId, recipientPubkey] as const,
+	byProvider: (userPubkey: string, targetEventId?: string) => [...zapKeys.all, 'provider', userPubkey, targetEventId || 'all'] as const,
 } as const

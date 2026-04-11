@@ -1,4 +1,4 @@
-import { defaultRelaysUrls, ZAP_RELAYS, DEFAULT_PUBLIC_RELAYS, MAIN_RELAY_BY_STAGE, BUG_RELAY, type Stage } from '@/lib/constants'
+import { defaultRelaysUrls, ZAP_RELAYS, DEFAULT_PUBLIC_RELAYS, MAIN_RELAY_BY_STAGE, type Stage } from '@/lib/constants'
 import { fetchNwcWalletBalance, fetchUserNwcWallets } from '@/queries/wallet'
 import { fetchUserRelayListWithPreferences } from '@/queries/relay-list'
 import type { NDKFilter, NDKSigner, NDKSubscriptionOptions, NDKUser } from '@nostr-dev-kit/ndk'
@@ -89,7 +89,7 @@ export function getMainRelay(): string | undefined {
 
 /**
  * Get the write relay(s) for the current stage
- * Staging: staging relay + bug relay
+ * Staging: main relay only
  * Development: main relay only (prevents leaking test/dev data to public relays)
  * Production: all connected relays
  */
@@ -97,7 +97,7 @@ export function getWriteRelays(): string[] {
 	const stage = getCurrentStage()
 	if (stage === 'staging') {
 		const mainRelay = getMainRelay()
-		return mainRelay ? [mainRelay, BUG_RELAY] : [BUG_RELAY]
+		return mainRelay ? [mainRelay] : []
 	}
 	if (stage === 'development') {
 		const mainRelay = getMainRelay()
@@ -109,7 +109,7 @@ export function getWriteRelays(): string[] {
 
 /**
  * Get an NDKRelaySet configured for write operations.
- * Staging: only staging relay + bug relay
+ * Staging: only the main relay
  * Development: only the main relay (prevents leaking to public relays)
  * Production: undefined (NDK default = all connected relays)
  */
@@ -269,12 +269,10 @@ export const ndkActions = {
 			},
 		})
 
-		// In development / local-relay-only mode, monitor zaps on the local relays instead of public ZAP_RELAYS.
-		// This avoids connecting to public infrastructure while still enabling zap receipt monitoring.
-		const zapNdk =
-			stage === 'development' || localRelayOnly
-				? new NDK({ explicitRelayUrls: explicitRelays })
-				: new NDK({ explicitRelayUrls: ZAP_RELAYS })
+		// Always monitor zap receipts on public ZAP_RELAYS (plus the app relay).
+		// LSPs publish zap receipts to their own public relays, not the local/app relay,
+		// so we must subscribe there to detect paid invoices.
+		const zapNdk = new NDK({ explicitRelayUrls: [...new Set([...ZAP_RELAYS, ...explicitRelays])] })
 
 		// Determine write relays - staging only writes to main relay, others write to all
 		const mainRelay = getMainRelay()

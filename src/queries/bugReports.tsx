@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { ndkActions } from '@/lib/stores/ndk'
+import { getMainRelay, ndkActions } from '@/lib/stores/ndk'
 import type { NDKEvent, NDKFilter } from '@nostr-dev-kit/ndk'
+import { NDKRelaySet } from '@nostr-dev-kit/ndk'
 
 export interface BugReport {
 	id: string
@@ -19,15 +20,14 @@ export interface UserProfile {
 }
 
 /**
- * Fetches bug reports (kind 1 events) from bugs.plebeian.market relay
+ * Fetches bug reports (kind 1 events) from the standard app relay
  * with t tag "plebian2beta"
  */
 export const fetchBugReports = async (limit: number = 20, until?: number): Promise<BugReport[]> => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) throw new Error('NDK not initialized')
-
-	// Ensure bugs.plebeian.market relay is added
-	ndkActions.addSingleRelay('wss://bugs.plebeian.market/')
+	const relayUrl = getMainRelay()
+	if (!relayUrl) throw new Error('App relay not configured')
 
 	const filter: NDKFilter = {
 		kinds: [1], // kind 1 is text notes
@@ -36,7 +36,9 @@ export const fetchBugReports = async (limit: number = 20, until?: number): Promi
 		...(until && { until }),
 	}
 
-	const events = await ndk.fetchEvents(filter)
+	// Query the app relay explicitly so bug report history stays on the standard relay.
+	const bugRelaySet = NDKRelaySet.fromRelayUrls([relayUrl], ndk)
+	const events = await ndk.fetchEvents(filter, { subId: 'bug-reports' }, bugRelaySet)
 	const bugReports = Array.from(events)
 		.map(
 			(event): BugReport => ({
@@ -50,48 +52,6 @@ export const fetchBugReports = async (limit: number = 20, until?: number): Promi
 		.sort((a, b) => b.createdAt - a.createdAt) // Sort by newest first
 
 	return bugReports
-}
-
-/**
- * Fetches user profile (kind 0 event) for a given pubkey
- */
-export const fetchUserProfile = async (pubkey: string): Promise<UserProfile | null> => {
-	const ndk = ndkActions.getNDK()
-	if (!ndk) throw new Error('NDK not initialized')
-
-	const filter: NDKFilter = {
-		kinds: [0], // kind 0 is profile metadata
-		authors: [pubkey],
-		limit: 1,
-	}
-
-	const events = await ndk.fetchEvents(filter)
-	const eventArray = Array.from(events)
-
-	if (eventArray.length === 0) {
-		return null
-	}
-
-	const event = eventArray[0]
-	let profile: UserProfile
-
-	try {
-		const content = JSON.parse(event.content)
-		profile = {
-			pubkey,
-			name: content.name,
-			displayName: content.display_name,
-			picture: content.picture,
-			about: content.about,
-		}
-	} catch (error) {
-		console.error('Failed to parse profile content:', error)
-		profile = {
-			pubkey,
-		}
-	}
-
-	return profile
 }
 
 // Query keys
@@ -110,21 +70,7 @@ export const bugReportsQueryOptions = (limit: number = 20, until?: number) => ({
 	staleTime: 5 * 60 * 1000, // 5 minutes
 })
 
-// React Query options for user profiles
-export const userProfileQueryOptions = (pubkey: string) => ({
-	queryKey: bugReportKeys.profile(pubkey),
-	queryFn: () => fetchUserProfile(pubkey),
-	staleTime: 10 * 60 * 1000, // 10 minutes
-})
-
 // Hooks
 export const useBugReports = (limit: number = 20, until?: number) => {
 	return useQuery(bugReportsQueryOptions(limit, until))
-}
-
-export const useUserProfile = (pubkey: string) => {
-	return useQuery({
-		...userProfileQueryOptions(pubkey),
-		enabled: !!pubkey,
-	})
 }

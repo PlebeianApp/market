@@ -1,22 +1,209 @@
-import { BugReportButton } from '@/components/BugReportButton'
-import { CartButton } from '@/components/CartButton'
 import { CurrencyDropdown } from '@/components/CurrencyDropdown'
 import { MobileMenu } from '@/components/layout/MobileMenu'
 import { ProductSearch } from '@/components/ProductSearch'
-import { Profile } from '@/components/Profile'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Nip60Wallet } from '@/feature/wallet/components/Nip60Wallet'
 import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { authActions, authStore } from '@/lib/stores/auth'
 import { notificationStore } from '@/lib/stores/notifications'
 import { uiActions, uiStore } from '@/lib/stores/ui'
 import { useConfigQuery } from '@/queries/config'
-import { Link, useLocation } from '@tanstack/react-router'
+import { Link, useNavigate, useLocation } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { Loader2, LogOut, Menu, Wallet, X } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { forwardRef, useEffect, useState } from 'react'
+import { cartStore } from '@/lib/stores/cart'
+import { AvatarUser } from '@/components/AvatarUser'
+import { cn } from '@/lib/utils'
+import { useProfile } from '@/queries/profiles'
+import { BugReportModal } from '../BugReportModal'
+
+const LoginButton = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>((props, ref) => {
+	return (
+		<Button
+			variant="primary"
+			className="p-2 relative hover:[&>span]:text-secondary"
+			icon={<span className="i-account w-6 h-6" />}
+			data-testid="login-button"
+			ref={ref}
+			tooltip="Log In"
+			{...props}
+			onClick={() => uiActions.openDialog('login')}
+		/>
+	)
+})
+
+const LogoutButton = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>((props, ref) => {
+	return (
+		<Button
+			variant="primary"
+			className="p-2 relative hover:[&>svg]:text-secondary"
+			data-testid="logout-button"
+			ref={ref}
+			tooltip="Log Out"
+			{...props}
+			onClick={() => authActions.logout()}
+		>
+			<LogOut className="w-6 h-6" />
+		</Button>
+	)
+})
+
+const ProfileButton = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>((props, ref) => {
+	const authState = useStore(authStore)
+	const navigate = useNavigate()
+	const location = useLocation()
+
+	const { data, isPending, fetchStatus } = useProfile(authState.user?.pubkey)
+
+	// Check if we're on the user's own profile page
+	const isOnOwnProfile = authState.user?.pubkey && location.pathname === `/profile/${authState.user.pubkey}`
+
+	const handleProfileClick = () => {
+		if (authState.isAuthenticated && authState.user?.pubkey) {
+			navigate({ to: '/profile/$profileId', params: { profileId: authState.user.pubkey } })
+		}
+	}
+
+	// Only show spinner while actively fetching for the first time
+	if (isPending && fetchStatus === 'fetching') {
+		return (
+			<Button variant="ghost" size={'icon'} disabled>
+				<Loader2 className={cn('h-4 w-4 animate-spin')} />
+			</Button>
+		)
+	}
+
+	// Both desktop and mobile - simple button that navigates to profile when authenticated
+	return (
+		<Button
+			variant={authState.isAuthenticated ? 'primary' : 'outline'}
+			size={'icon'}
+			className={cn(
+				'p-2 w-full relative',
+				!authState.isAuthenticated && 'text-muted-foreground hover:text-foreground',
+				isOnOwnProfile && 'bg-secondary text-black hover:bg-secondary hover:text-black',
+			)}
+			ref={ref}
+			tooltip="Go to profile"
+			{...props}
+			onClick={handleProfileClick}
+		>
+			{authState.isAuthenticated ? (
+				<AvatarUser pubkey={authState.user?.pubkey} className="w-6 h-6" />
+			) : (
+				<>
+					{authState.isAuthenticated ? (
+						<span className={cn('i-account w-6 h-6', isOnOwnProfile && 'text-black')} />
+					) : (
+						<span className="i-account w-6 h-6" />
+					)}
+				</>
+			)}
+		</Button>
+	)
+})
+
+const CartButton = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>((props, ref) => {
+	const { cart } = useStore(cartStore)
+
+	const totalItems = Object.values(cart.products).reduce((total, product) => {
+		return total + product.amount
+	}, 0)
+
+	const handleClick = () => {
+		uiActions.openDrawer('cart')
+	}
+
+	return (
+		<Button variant="primary" tooltip="View cart" className="p-2 relative hover:text-secondary" ref={ref} {...props} onClick={handleClick}>
+			<span className="i-basket w-6 h-6" />
+			{totalItems > 0 && (
+				<span className="absolute -top-2.5 -right-2.5 bg-secondary text-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+					{totalItems > 99 ? '99+' : totalItems}
+				</span>
+			)}
+		</Button>
+	)
+})
+
+interface DashboardButtonProps {
+	totalNotifications?: number
+}
+
+const DashboardButton = forwardRef<HTMLButtonElement, DashboardButtonProps>((props, ref) => {
+	const totalNotifications = props.totalNotifications ?? 0
+
+	return (
+		<Link to="/dashboard" data-testid="dashboard-link" className="relative">
+			<Button
+				variant="primary"
+				className={`p-2 relative hover:[&>span]:text-secondary ${
+					location.pathname.startsWith('/dashboard') ? 'bg-secondary text-black [&>span]:text-black' : ''
+				}`}
+				icon={<span className="i-dashboard w-6 h-6" />}
+				data-testid="dashboard-button"
+				tooltip="Dashboard"
+				ref={ref}
+				{...props}
+			/>
+			{totalNotifications > 0 && (
+				<span className="absolute -top-2 -right-2 bg-secondary text-black text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+					{totalNotifications > 99 ? '99+' : totalNotifications}
+				</span>
+			)}
+		</Link>
+	)
+})
+
+function WalletButton() {
+	return (
+		<Popover>
+			<PopoverTrigger asChild>
+				<Button variant="primary" tooltip="Wallet" className="p-2 relative hover:[&>svg]:text-secondary" data-testid="wallet-button">
+					<Wallet className="w-6 h-6" />
+				</Button>
+			</PopoverTrigger>
+
+			<PopoverContent className="md:w-96 w-[calc(100vw-2rem)] bg-primary rounded-lg" align="end">
+				<Nip60Wallet />
+			</PopoverContent>
+		</Popover>
+	)
+}
+
+interface BugReportButtonProps {
+	className?: string
+}
+
+export function BugReportButton({ className }: BugReportButtonProps) {
+	const [isModalOpen, setIsModalOpen] = useState(false)
+
+	const handleBugReport = () => {
+		setIsModalOpen(true)
+	}
+
+	return (
+		<>
+			<Button
+				variant="outline"
+				size="icon"
+				onClick={handleBugReport}
+				tooltip="Report a bug"
+				className={cn(
+					'fixed bottom-16 right-16 z-50 h-10 w-10 px-4 py-2 rounded-full bg-black text-white hover:bg-black hover:text-secondary shadow-lg transition-colors',
+					className,
+				)}
+				aria-label="Report a bug"
+			>
+				<span className="i-bug w-6 h-6 px-2 py-0 hover:bg-black hover:text-secondary" />
+			</Button>
+			<BugReportModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onReopen={() => setIsModalOpen(true)} />
+		</>
+	)
+}
 
 export function Header() {
 	const { data: config } = useConfigQuery()
@@ -99,10 +286,6 @@ export function Header() {
 		}
 	}
 
-	function handleLoginClick() {
-		uiActions.openDialog('login')
-	}
-
 	function handleMobileMenuClick() {
 		uiActions.toggleMobileMenu()
 	}
@@ -156,124 +339,53 @@ export function Header() {
 						<ProductSearch />
 					</div>
 					<div className="flex gap-2">
-						{/* Bug Report Button - visible when authenticated on desktop */}
-						{!isMobile && (
+						{/* Bug Report Button - Only when authenticated */}
+						{isAuthenticated && (
 							<BugReportButton className="!static !w-auto !rounded-lg !shadow-none !bg-primary-border !border-2 !border-transparent hover:!bg-black hover:!border-primary-border-hover p-2 relative hover:[&>span]:text-secondary" />
 						)}
-						{/* Currency Dropdown - always visible on desktop */}
+
+						{/* Currency Selector - Desktop Only */}
 						{!isMobile && <CurrencyDropdown />}
 
-						{/* Mobile Layout */}
-						{isMobile ? (
-							<>
-								{/* Bug Report Button - visible when authenticated on mobile */}
-								<BugReportButton className="!static !w-auto !rounded-lg !shadow-none !bg-primary-border !border-2 !border-transparent hover:!bg-black hover:!border-primary-border-hover p-2 relative hover:[&>span]:text-secondary" />
-								{/* Account Button/Avatar - changes based on auth state - positioned first when logged in */}
-								{isAuthenticating ? (
-									<Button variant="primary" className="p-2 relative" data-testid="auth-loading">
-										<Loader2 className="h-4 w-4 animate-spin" />
-									</Button>
-								) : isAuthenticated ? (
-									<Profile compact />
-								) : (
-									<Button
-										variant="primary"
-										className="p-2 relative hover:[&>span]:text-secondary"
-										icon={<span className="i-account w-6 h-6" />}
-										onClick={handleLoginClick}
-										data-testid="login-button"
-									/>
-								)}
+						{/* Cart Button */}
+						<CartButton />
 
-								{/* Cart Button - always visible on mobile */}
-								<CartButton />
+						{/* Dashboard Button - Desktop & authenticated only */}
+						{isAuthenticated && !isMobile && <DashboardButton totalNotifications={totalNotifications} />}
 
-								{/* Menu Button - always visible on mobile */}
-								<Button
-									variant="primary"
-									className="p-2 relative hover:bg-secondary/20"
-									onClick={handleMobileMenuClick}
-									data-testid="mobile-menu-button"
-								>
-									<span className="sr-only">{mobileMenuOpen ? 'Close menu' : 'Open menu'}</span>
-									<Menu
-										className={`transition-transform duration-300 ease-in-out ${mobileMenuOpen ? 'rotate-90 scale-0' : 'rotate-0 scale-100'}`}
-									/>
-									<X
-										className={`absolute transition-transform duration-300 ease-in-out ${mobileMenuOpen ? 'rotate-0 scale-100' : '-rotate-90 scale-0'}`}
-									/>
-								</Button>
-							</>
+						{/* Wallet Button - Desktop & authenticated only */}
+						{isAuthenticated && !isMobile && <WalletButton />}
+
+						{/* Profile Button/Avatar, or Log-In Button if not authenticated */}
+						{isAuthenticating ? (
+							<Button variant="primary" className="p-2 relative" data-testid="auth-loading">
+								<Loader2 className="h-4 w-4 animate-spin" />
+							</Button>
+						) : isAuthenticated ? (
+							<ProfileButton />
 						) : (
-							/* Desktop Layout - unchanged */
-							<>
-								{isAuthenticating ? (
-									<Button variant="primary" className="p-2 relative" data-testid="auth-loading">
-										<Loader2 className="h-4 w-4 animate-spin" />
-									</Button>
-								) : isAuthenticated ? (
-									<>
-										<CartButton />
-										<Tooltip>
-											<TooltipTrigger asChild>
-												<Link to="/dashboard" data-testid="dashboard-link" className="relative">
-													<Button
-														variant="primary"
-														className={`p-2 relative hover:[&>span]:text-secondary ${
-															location.pathname.startsWith('/dashboard') ? 'bg-secondary text-black [&>span]:text-black' : ''
-														}`}
-														icon={<span className="i-dashboard w-6 h-6" />}
-														data-testid="dashboard-button"
-													/>
-													{totalNotifications > 0 && (
-														<span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-[10px] font-bold text-white bg-pink-500 rounded-full">
-															{totalNotifications > 99 ? '99+' : totalNotifications}
-														</span>
-													)}
-												</Link>
-											</TooltipTrigger>
-											<TooltipContent side="bottom">Dashboard</TooltipContent>
-										</Tooltip>
-										<Popover>
-											<Tooltip>
-												<TooltipTrigger asChild>
-													<PopoverTrigger asChild>
-														<Button variant="primary" className="p-2 relative hover:[&>svg]:text-secondary" data-testid="wallet-button">
-															<Wallet className="w-6 h-6" />
-														</Button>
-													</PopoverTrigger>
-												</TooltipTrigger>
-												<TooltipContent side="bottom">Wallet</TooltipContent>
-											</Tooltip>
-											<PopoverContent className="md:w-96 w-[calc(100vw-2rem)] bg-primary rounded-lg" align="end">
-												<Nip60Wallet />
-											</PopoverContent>
-										</Popover>
-										<Profile compact />
-										<Tooltip>
-											<TooltipTrigger asChild>
-												<Button
-													variant="primary"
-													className="p-2 relative hover:[&>svg]:text-secondary"
-													onClick={() => authActions.logout()}
-													data-testid="logout-button"
-												>
-													<LogOut className="w-6 h-6" />
-												</Button>
-											</TooltipTrigger>
-											<TooltipContent side="bottom">Logout</TooltipContent>
-										</Tooltip>
-									</>
-								) : (
-									<Button
-										variant="primary"
-										className="p-2 relative hover:[&>span]:text-secondary"
-										icon={<span className="i-account w-6 h-6" />}
-										onClick={handleLoginClick}
-										data-testid="login-button"
-									/>
-								)}
-							</>
+							<LoginButton />
+						)}
+
+						{/* Log-Out Button, only display on Desktop & when authenticated */}
+						{isAuthenticated && !isMobile && <LogoutButton />}
+
+						{/* Mobile Drop-down Menu */}
+						{isMobile && (
+							<Button
+								variant="primary"
+								className="p-2 relative hover:bg-secondary/20"
+								onClick={handleMobileMenuClick}
+								data-testid="mobile-menu-button"
+							>
+								<span className="sr-only">{mobileMenuOpen ? 'Close menu' : 'Open menu'}</span>
+								<Menu
+									className={`transition-transform duration-300 ease-in-out ${mobileMenuOpen ? 'rotate-90 scale-0' : 'rotate-0 scale-100'}`}
+								/>
+								<X
+									className={`absolute transition-transform duration-300 ease-in-out ${mobileMenuOpen ? 'rotate-0 scale-100' : '-rotate-90 scale-0'}`}
+								/>
+							</Button>
 						)}
 					</div>
 				</div>

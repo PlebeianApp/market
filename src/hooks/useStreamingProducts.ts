@@ -16,6 +16,8 @@ interface UseStreamingProductsOptions {
 	showOutOfStock?: boolean
 	/** Whether to hide pre-order products */
 	hidePreorder?: boolean
+	/** Country name to filter products by location */
+	country?: string
 }
 
 interface UseStreamingProductsReturn {
@@ -39,6 +41,7 @@ export function useStreamingProducts({
 	includeHidden = false,
 	showOutOfStock = false,
 	hidePreorder = false,
+	country = '',
 }: UseStreamingProductsOptions = {}): UseStreamingProductsReturn {
 	const [products, setProducts] = useState<NDKEvent[]>([])
 	const [isStreaming, setIsStreaming] = useState(true)
@@ -68,6 +71,12 @@ export function useStreamingProducts({
 			// Filter out-of-stock products (unless showOutOfStock is true)
 			if (!showOutOfStock && !isProductInStock(event)) return
 
+			// Filter by country (match against location tag)
+			if (country) {
+				const location = event.tags.find((t) => t[0] === 'location')?.[1] || ''
+				if (!location.toLowerCase().includes(country.toLowerCase())) return
+			}
+
 			// Add product and sort by created_at (newest first)
 			setProducts((prev) => {
 				const filtered = filterBlacklistedEvents([event])
@@ -79,7 +88,7 @@ export function useStreamingProducts({
 				return updated.slice(0, limit)
 			})
 		},
-		[includeHidden, showOutOfStock, hidePreorder, limit],
+		[includeHidden, showOutOfStock, hidePreorder, country, limit],
 	)
 
 	useEffect(() => {
@@ -128,7 +137,7 @@ export function useStreamingProducts({
 			subscription.stop()
 			subscriptionRef.current = null
 		}
-	}, [isConnected, tag, limit, addProduct, showOutOfStock, hidePreorder])
+	}, [isConnected, tag, limit, addProduct, showOutOfStock, hidePreorder, country])
 
 	return {
 		products,

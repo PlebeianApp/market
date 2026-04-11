@@ -13,6 +13,7 @@ interface UseSimpleInfiniteScrollOptions {
 	showOutOfStock?: boolean
 	hidePreorder?: boolean
 	sort?: SortOption
+	country?: string
 }
 
 interface UseSimpleInfiniteScrollReturn {
@@ -40,6 +41,7 @@ export const useSimpleInfiniteScroll = ({
 	showOutOfStock = false,
 	hidePreorder = false,
 	sort = 'newest',
+	country = '',
 }: UseSimpleInfiniteScrollOptions = {}): UseSimpleInfiniteScrollReturn => {
 	// Use streaming products - these arrive progressively
 	const {
@@ -51,6 +53,7 @@ export const useSimpleInfiniteScroll = ({
 		tag,
 		showOutOfStock,
 		hidePreorder,
+		country,
 	})
 
 	// Apply sorting to streamed products

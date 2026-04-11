@@ -1,12 +1,11 @@
-import { nip05ValidationQueryOptions } from '@/queries/profiles'
+import { nip05ValidationQueryOptions, useProfile } from '@/queries/profiles'
 import { useQuery } from '@tanstack/react-query'
-import { BadgeAlert, BadgeCheck, CircleQuestionMark } from 'lucide-react'
+import { BadgeAlert, BadgeCheck, Loader2 } from 'lucide-react'
 
 interface Nip05BadgeProps {
-	pubkey: string
+	pubkey?: string
 	className?: string
 	showAddress?: boolean
-	nip05?: string
 }
 
 /**
@@ -21,34 +20,32 @@ function elideNip05Address(nip05: string): string {
 	return nip05
 }
 
-export function Nip05Badge({ pubkey, className = '', showAddress = false, nip05 }: Nip05BadgeProps) {
-	const { data: isVerified, isLoading } = useQuery(nip05ValidationQueryOptions(pubkey))
+export function Nip05Badge({ pubkey, className = '', showAddress = true }: Nip05BadgeProps) {
+	const safePubkey = pubkey ?? ''
+	const { data: profile } = useProfile(safePubkey)
+	const nip05 = profile?.profile?.nip05
+	const shouldValidate = Boolean(safePubkey && nip05 && nip05.length > 0)
 
-	if (isLoading) {
-		return (
-			<div className="flex items-center gap-2">
-				<CircleQuestionMark className={`h-6 w-6 ${className} text-blue-500 animate-pulse`} />
-				{showAddress && nip05 && <span className="text-sm text-gray-400">{elideNip05Address(nip05)}</span>}
-			</div>
-		)
+	const { data: isVerified, isLoading } = useQuery({
+		...nip05ValidationQueryOptions(safePubkey),
+		enabled: shouldValidate,
+	})
+
+	// Handle "no NIP-05" case - no badge, no text
+	if (!safePubkey || profile == null || nip05 == null || nip05.length == 0) {
+		return null
 	}
 
-	if (isVerified === null) {
-		return <CircleQuestionMark className={`h-6 w-6 ${className} text-black`} />
-	}
-
-	if (isVerified === true) {
-		return (
-			<div className="flex items-center gap-2">
-				<BadgeCheck style={{ fill: 'var(--secondary)', color: 'var(--primary)' }} className={`w-6 h-6 mt-1 ${className}`} />
-				{showAddress && nip05 && <span className="text-sm text-white">{elideNip05Address(nip05)}</span>}
-			</div>
-		)
-	}
-
-	if (isVerified === false) {
-		return <BadgeAlert style={{ fill: 'var(--destructive)', color: 'var(--primary)' }} className={`w-6 h-6 mt-1 ${className}`} />
-	}
-
-	return null
+	return (
+		<div className="flex items-end gap-1">
+			{isLoading ? (
+				<Loader2 className="h-4 w-4 animate-spin" />
+			) : isVerified ? (
+				<BadgeCheck style={{ fill: 'var(--secondary)', color: 'var(--primary)' }} className={`w-6 h-6 ${className}`} />
+			) : (
+				<BadgeAlert style={{ fill: 'var(--destructive)', color: 'var(--primary)' }} className={`w-6 h-6 ${className}`} />
+			)}
+			{showAddress && nip05 && <span className={'text-gray-400 ' + className}>{elideNip05Address(nip05)}</span>}
+		</div>
+	)
 }

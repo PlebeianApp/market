@@ -9,8 +9,8 @@ import {
 	getProductPubkey,
 	productQueryOptions,
 } from '@/queries/products'
-import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { useQueryClient } from '@tanstack/react-query'
+import { UserCard } from './UserCard'
 
 const DEBOUNCE_MS = 500
 
@@ -122,7 +122,7 @@ export function ProductSearch() {
 											{sellerPubkey && (
 												<>
 													<span className="text-xs text-gray-400">by</span>
-													<UserWithAvatar pubkey={sellerPubkey} size="sm" showBadge={false} disableLink={true} />
+													<UserCard pubkey={sellerPubkey} size="xs" onPress="none" />
 												</>
 											)}
 										</div>

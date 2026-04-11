@@ -35,6 +35,8 @@ interface InfiniteProductListProps {
 	hidePreorder?: boolean
 	/** Sort order for products */
 	sort?: SortOption
+	/** Country name to filter products by location */
+	country?: string
 }
 
 export function InfiniteProductList({
@@ -49,6 +51,7 @@ export function InfiniteProductList({
 	showOutOfStock = false,
 	hidePreorder = false,
 	sort = 'newest',
+	country = '',
 }: InfiniteProductListProps) {
 	const containerRef = useRef<HTMLDivElement>(null)
 	const { showNSFWContent } = useStore(uiStore)
@@ -72,6 +75,7 @@ export function InfiniteProductList({
 		showOutOfStock,
 		hidePreorder,
 		sort,
+		country,
 	})
 
 	// Filter out NSFW products if user hasn't enabled viewing

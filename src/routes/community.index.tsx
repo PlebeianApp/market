@@ -92,9 +92,10 @@ function CommunityRoute() {
 	const filteredMerchantPubkeys = filterBlacklistedPubkeys(merchantPubkeys)
 
 	// Fetch featured collections for slides
-	const { data: config } = useConfigQuery()
-	const { data: featuredCollectionsData } = useFeaturedCollections(config?.appPublicKey || '')
+	const { data: config, isLoading: isLoadingConfig } = useConfigQuery()
+	const { data: featuredCollectionsData, isLoading: isLoadingFeatured } = useFeaturedCollections(config?.appPublicKey || '')
 	const featuredCollectionEvents = useFeaturedCollectionEvents(featuredCollectionsData?.featuredCollections)
+	const isFeaturedLoading = isLoadingConfig || isLoadingFeatured
 
 	const { isAuthenticated } = useStore(authStore)
 	const [currentSlideIndex, setCurrentSlideIndex] = useState(0)
@@ -104,15 +105,17 @@ function CommunityRoute() {
 	const touchEndX = useRef<number>(0)
 	const minSwipeDistance = 50
 
-	// Use featured collections for slides, fallback to recent collections if no featured collections
+	// Use featured collections for slides, fallback to recent collections only after featured data has loaded
 	const collectionsForSlides =
 		featuredCollectionEvents.length > 0
 			? featuredCollectionEvents
-			: collections
-					.filter((collection: NDKEvent) => {
-						return collection.tags.some((tag: string[]) => tag[0] === 'image' && tag[1])
-					})
-					.slice(0, 4)
+			: isFeaturedLoading
+				? [] // Don't flash generic collections while featured are still loading
+				: collections
+						.filter((collection: NDKEvent) => {
+							return collection.tags.some((tag: string[]) => tag[0] === 'image' && tag[1])
+						})
+						.slice(0, 4)
 
 	const totalSlides = 1 + collectionsForSlides.length // Homepage + collections
 

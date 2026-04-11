@@ -1,6 +1,5 @@
 import CartItem from '@/components/CartItem'
 import { ShippingSelector } from '@/components/ShippingSelector'
-import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { Separator } from '@/components/ui/separator'
 import type { RichShippingInfo } from '@/lib/stores/cart'
 import { cartActions, cartStore } from '@/lib/stores/cart'
@@ -8,6 +7,7 @@ import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useStore } from '@tanstack/react-store'
 import { ChevronDown } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { UserCard } from './UserCard'
 
 interface CartSummaryProps {
 	className?: string
@@ -128,7 +128,7 @@ export function CartSummary({
 					return (
 						<div key={sellerPubkey} className="p-4 rounded-lg border shadow-md bg-white">
 							<div className="mb-4">
-								<UserWithAvatar pubkey={sellerPubkey} size="sm" showBadge={false} />
+								<UserCard pubkey={sellerPubkey} size="sm" subtitle="nip-05" />
 							</div>
 
 							<ul className="space-y-6">

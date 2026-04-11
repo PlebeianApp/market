@@ -117,7 +117,8 @@ test.describe('Checkout', () => {
 
 		// ─── 9. Verify seller sees the order ─────────────────────────
 		await merchantPage.goto('/dashboard/sales/sales')
-		await expect(merchantPage.getByRole('heading', { name: 'Sales' })).toBeVisible({ timeout: 15_000 })
+		await expect(merchantPage.getByText('Loading sales...')).toBeVisible({ timeout: 15_000 })
+
 		// Wait for order rows to render (innerText only returns visible text,
 		// avoiding the hidden mobile-layout duplicates)
 		await merchantPage.waitForFunction(() => document.body.innerText.includes('sats') && document.body.innerText.includes('Pending'), {

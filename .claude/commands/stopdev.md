@@ -12,7 +12,7 @@ Stop all running development servers.
 
 2. Kill the relay server:
    ```bash
-   pkill -f "next.orly.dev serve" || true
+   pkill -f "nak serve" || true
    ```
 
 ## Notes

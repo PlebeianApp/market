@@ -2,8 +2,7 @@
 #
 # Services:
 #   staging.plebeian.market       → Market app (port 3000)
-#   relay.staging.plebeian.market → Nostr relay (port 10547)
-#   bugs.plebeian.market          → Bug tracker (port 10548)
+#   relay.staging.plebeian.market → Nostr relay (port 10549)
 
 staging.plebeian.market {
 	root * /home/deployer/market-staging/dist
@@ -28,9 +27,5 @@ staging.plebeian.market {
 }
 
 relay.staging.plebeian.market {
-	reverse_proxy localhost:10547
-}
-
-bugs.plebeian.market {
-	reverse_proxy localhost:10548
+	reverse_proxy localhost:10549
 }

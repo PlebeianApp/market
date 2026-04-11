@@ -23,7 +23,7 @@ cp env/.env.development.example env/.env.development
 nano env/.env.development
 
 # 3. Deploy
-./deploy.sh development deployer@localhost:2222
+./deploy.sh development deployer@dev.example.com
 
 # 4. Check status
 ./control.sh development status
@@ -100,27 +100,9 @@ caddy version
 
 ## Local Development Setup
 
-### Using Docker (Recommended)
-
-```bash
-# Start the VPS simulation
-cd deploy
-docker-compose up -d
-
-# Wait for container to start
-sleep 5
-
-# Run VPS setup (installs Bun, PM2, Caddy, ORLY)
-./setup-vps.sh
-
-# Deploy the app
-cd ../deploy-simple
-cp env/.env.development.example env/.env.development
-./deploy.sh development deployer@localhost:2222
-
-# Access the app
-open http://localhost
-```
+The old `deploy/` VPS simulation has been removed. For local work, run the app
+locally and point it at a local relay, or use `deploy.sh development` against an
+explicit development host.
 
 ### Using a local relay (nak)
 
@@ -131,13 +113,20 @@ go install github.com/fiatjaf/nak@latest
 # Start local relay
 nak serve  # Runs on ws://localhost:10547
 
-# Deploy with local env
-./deploy.sh development deployer@localhost:2222
+# Run the app locally
+bun run dev
+
+# Or deploy to an explicit development host
+./deploy.sh development deployer@dev.example.com
 ```
 
 ---
 
 ## Setting Up GitHub Actions
+
+GitHub Actions are the canonical deployment path for `staging` and `production`.
+The shell scripts in this directory are now best treated as manual fallback or
+development helpers.
 
 ### Step 1: Create GitHub Environments
 
@@ -184,12 +173,14 @@ nak key generate
 ### Step 4: Deploy
 
 ```bash
-# Staging: Push to master
+# Staging: merge to master, then wait for E2E Tests to finish and trigger staging deploy
 git push origin master
 
-# Production: Create a release tag
+# Production option 1: Create a release tag manually
 git tag v1.0.0-release
 git push origin v1.0.0-release
+
+# Production option 2: Run the "Promote to Production" workflow in GitHub Actions
 ```
 
 ---
@@ -268,20 +259,20 @@ ssh deployer@plebeian.market "sudo rm /etc/systemd/system/market.service"
 
 The VPS must have these installed:
 
-| Tool      | Purpose                | Install Command                                                                 |
-| --------- | ---------------------- | ------------------------------------------------------------------------------- |
-| **Bun**   | JavaScript runtime     | `curl -fsSL https://bun.sh/install \| bash`                                     |
-| **PM2**   | Process manager        | `npm install -g pm2`                                                            |
-| **Caddy** | Reverse proxy          | See [Caddy docs](https://caddyserver.com/docs/install)                          |
-| **ORLY**  | Nostr relay (dev only) | Download from [releases](https://git.nostrdev.com/mleku/next.orly.dev/releases) |
+| Tool      | Purpose            | Install Command                                        |
+| --------- | ------------------ | ------------------------------------------------------ |
+| **Bun**   | JavaScript runtime | `curl -fsSL https://bun.sh/install \| bash`            |
+| **PM2**   | Process manager    | `npm install -g pm2`                                   |
+| **Caddy** | Reverse proxy      | See [Caddy docs](https://caddyserver.com/docs/install) |
+| **nak**   | Local Nostr relay  | `go install github.com/fiatjaf/nak@latest`             |
 
 ## Stages
 
-| Stage         | Port | Relay                        | Description            |
-| ------------- | ---- | ---------------------------- | ---------------------- |
-| `development` | 3000 | Local (ws://localhost:10547) | Local Docker testing   |
-| `staging`     | 3000 | Staging relay                | Pre-production testing |
-| `production`  | 3001 | Production relay             | Live environment       |
+| Stage         | Port | Relay                        | Description                    |
+| ------------- | ---- | ---------------------------- | ------------------------------ |
+| `development` | 3000 | Local (ws://localhost:10547) | Local app or explicit dev host |
+| `staging`     | 3000 | Staging relay                | Pre-production testing         |
+| `production`  | 3001 | Production relay             | Live environment               |
 
 ## Environment Files
 
@@ -297,6 +288,7 @@ deploy-simple/
 
 | Variable          | Description                                              |
 | ----------------- | -------------------------------------------------------- |
+| `APP_STAGE`       | Explicit stage override (`staging`, `production`, etc.)  |
 | `NODE_ENV`        | `development`, `staging`, or `production`                |
 | `PORT`            | Application port (3000 for staging, 3001 for production) |
 | `APP_RELAY_URL`   | Nostr relay WebSocket URL                                |
@@ -317,7 +309,7 @@ deploy-simple/
 
 ```bash
 # Deploy to specific stage
-./deploy.sh development                    # Local Docker (localhost:2222)
+./deploy.sh development deployer@dev.example.com
 ./deploy.sh staging user@staging.example.com
 ./deploy.sh production user@prod.example.com
 
@@ -343,7 +335,7 @@ SSH_PORT=2222 ./deploy.sh staging user@example.com
 # Available commands
 ./control.sh [stage] status       # Show service status
 ./control.sh [stage] logs [n]     # View last n log lines
-./control.sh [stage] logs-relay   # View ORLY logs (dev only)
+./control.sh [stage] logs-relay   # View relay service logs
 ./control.sh [stage] restart      # Restart application
 ./control.sh [stage] stop         # Stop application
 ./control.sh [stage] start        # Start application
@@ -465,15 +457,21 @@ The project includes GitHub Actions workflows for automated deployments:
 
 ### Staging (`.github/workflows/deploy.yml`)
 
-- **Trigger:** Push to `master` branch
+- **Trigger:** Successful completion of `E2E Tests` on `master`, or manual dispatch
 - **Environment:** `staging`
 - **URL:** https://staging.plebeian.market
 
 ### Production (`.github/workflows/release.yml`)
 
-- **Trigger:** Push tag matching `*-release` (e.g., `v1.0.0-release`)
+- **Trigger:** Push tag matching `*-release` (e.g., `v1.0.0-release`), or manual dispatch to redeploy an existing release tag
 - **Environment:** `production` (requires approval)
 - **URL:** https://plebeian.market
+
+### Production Promotion (`.github/workflows/promote-production.yml`)
+
+- **Trigger:** Manual dispatch
+- **Purpose:** Create and push the next `*-release` tag automatically (`patch`, `minor`, or `major`)
+- **Follow-up:** The production deploy workflow starts from the created tag
 
 ### Required GitHub Secrets
 
@@ -507,8 +505,9 @@ git push origin v1.0.0-release
 
 ### Production Caddyfile
 
-The production Caddyfile (`caddyfiles/Caddyfile.production`) preserves existing services:
+The production Caddyfile (`caddyfiles/Caddyfile.production`) manages the public
+relay and preserves the legacy app:
 
 - `plebeian.market` → Market app (PM2, port 3001)
-- `relay.plebeian.market` → Nostr relay (port 3334) - **NOT MODIFIED**
-- `legacy.plebeian.market` → Legacy version (port 4173) - **NOT MODIFIED**
+- `relay.plebeian.market` → Nostr relay (port 3334)
+- `legacy.plebeian.market` → Legacy version (port 4173)

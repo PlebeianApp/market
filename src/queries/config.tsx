@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { configKeys } from './queryKeyFactory'
 import type { AppSettings } from '../lib/schemas/app'
+import { configActions } from '@/lib/stores/config'
 
 interface Config {
 	appRelay: string
@@ -8,6 +9,7 @@ interface Config {
 	appSettings: AppSettings | null
 	appPublicKey: string
 	needsSetup: boolean
+	serverReady: boolean
 }
 
 let cachedConfig: Config | null = null
@@ -20,6 +22,7 @@ const fetchConfig = async (): Promise<Config> => {
 	const config: Config = await response.json()
 	console.log('Fetched config:', config)
 	cachedConfig = config
+	configActions.setConfig(config)
 	return config
 }
 

@@ -1,6 +1,6 @@
 import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
-import type { RichShippingInfo } from '@/lib/stores/cart'
 import { ndkActions } from '@/lib/stores/ndk'
+import { normalizeProductShippingSelections, type ProductShippingSelectionInput } from '@/lib/utils/productShippingSelections'
 import { productKeys } from '@/queries/queryKeyFactory'
 import { markProductAsDeleted } from '@/queries/products'
 import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
@@ -22,10 +22,7 @@ export interface ProductFormData {
 	categories: Array<{ key: string; name: string; checked: boolean }>
 	images: Array<{ imageUrl: string; imageOrder: number }>
 	specs: Array<{ key: string; value: string }>
-	shippings: Array<{
-		shipping: Pick<RichShippingInfo, 'id' | 'name'> | null
-		extraCost: string
-	}>
+	shippings: ProductShippingSelectionInput[]
 	weight: { value: string; unit: string } | null
 	dimensions: { value: string; unit: string } | null
 	isNSFW: boolean
@@ -63,13 +60,14 @@ export const createProductEvent = (
 
 	const specTags = formData.specs.map((spec) => ['spec', spec.key, spec.value] as NDKTag)
 
-	const shippingTags = formData.shippings
-		.filter((ship) => ship.shipping && ship.shipping.id)
+	const normalizedShippings = normalizeProductShippingSelections(formData.shippings)
+
+	const shippingTags = normalizedShippings
+		.filter((ship) => ship.shippingRef)
 		.map((ship) => {
-			// shipping.id is already a full reference like "30406:pubkey:id"
 			return ship.extraCost
-				? (['shipping_option', ship.shipping!.id, ship.extraCost] as NDKTag)
-				: (['shipping_option', ship.shipping!.id] as NDKTag)
+				? (['shipping_option', ship.shippingRef, ship.extraCost] as NDKTag)
+				: (['shipping_option', ship.shippingRef] as NDKTag)
 		})
 
 	const weightTag = formData.weight ? [['weight', formData.weight.value, formData.weight.unit] as NDKTag] : []
@@ -137,7 +135,7 @@ export const publishProduct = async (formData: ProductFormData, signer: NDKSigne
 	}
 
 	// Validate shipping options
-	const validShippings = formData.shippings.filter((ship) => ship.shipping && ship.shipping.id)
+	const validShippings = normalizeProductShippingSelections(formData.shippings).filter((ship) => ship.shippingRef)
 	if (validShippings.length === 0) {
 		throw new Error('At least one shipping option is required')
 	}
@@ -189,7 +187,7 @@ export const updateProduct = async (
 	}
 
 	// Validate shipping options
-	const validShippings = formData.shippings.filter((ship) => ship.shipping && ship.shipping.id)
+	const validShippings = normalizeProductShippingSelections(formData.shippings).filter((ship) => ship.shippingRef)
 	if (validShippings.length === 0) {
 		throw new Error('At least one shipping option is required')
 	}

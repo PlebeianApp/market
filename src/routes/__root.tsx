@@ -11,6 +11,7 @@ import { DecryptPasswordDialog } from '@/components/auth/DecryptPasswordDialog'
 import { Toaster } from 'sonner'
 import { useBlacklistSync } from '@/hooks/useBlacklistSync'
 import { useVanitySync } from '@/hooks/useVanitySync'
+import { useNip05Sync } from '@/hooks/useNip05Sync'
 import { useStore } from '@tanstack/react-store'
 
 export const Route = createRootRoute({
@@ -38,6 +39,9 @@ function RootLayout() {
 
 	// Sync vanity store with backend data
 	useVanitySync()
+
+	// Sync NIP-05 store with backend data
+	useNip05Sync()
 
 	useEffect(() => {
 		if (config?.needsSetup && !isSetupPage) {

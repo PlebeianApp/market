@@ -8,6 +8,8 @@ import index from './index.html'
 import { fetchAppSettings } from './lib/appSettings'
 import { AppSettingsSchema } from './lib/schemas/app'
 import { getEventHandler } from './server'
+import { ZapInvoiceError } from './server/ZapPurchaseManager'
+import type { ZapPurchaseInvoiceRequestBody } from './server/ZapPurchaseManager'
 import { join } from 'path'
 import { file } from 'bun'
 
@@ -21,36 +23,6 @@ const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
 
 let appSettings: Awaited<ReturnType<typeof fetchAppSettings>> = null
 let APP_PUBLIC_KEY: string
-
-type VanityInvoiceRequestBody = {
-	amountSats: number
-	vanityName: string
-	zapRequest: {
-		pubkey: string
-		sig?: string
-		created_at?: number
-		kind?: number
-		content?: string
-		tags: string[][]
-	}
-}
-
-type LnurlPayData = {
-	callback?: string
-	maxSendable?: number
-	minSendable?: number
-	commentAllowed?: number
-	allowsNostr?: boolean
-	nostrPubkey?: string
-	status?: 'ERROR'
-	reason?: string
-}
-
-type LnurlInvoiceData = {
-	pr?: string
-	status?: 'ERROR'
-	reason?: string
-}
 
 let invoiceNdk: NDK | null = null
 let invoiceNdkConnectPromise: Promise<void> | null = null
@@ -172,10 +144,14 @@ async function initializeAppSettings() {
 
 export type NostrMessage = ['EVENT', Event]
 
-// Track initialization state
+// Track initialization state - mark as ready as soon as core components are initialized
+// The heavy relay connections can fail/timeout without blocking setup
 let eventHandlerReady = false
 
-getEventHandler()
+// Start initialization but don't block setup on relay connections
+// Core components (signer, validator, admin manager) are set up synchronously in the constructor
+// Only relay-dependent features (zaps, blacklist sync) may be delayed
+const initPromise = getEventHandler()
 	.initialize({
 		appPrivateKey: process.env.APP_PRIVATE_KEY || '',
 		adminPubkeys: [],
@@ -183,8 +159,22 @@ getEventHandler()
 	})
 	.then(() => {
 		eventHandlerReady = true
+		console.log('✅ EventHandler initialized successfully')
 	})
-	.catch((error) => console.error(error))
+	.catch((error) => {
+		console.error('EventHandler initialization failed:', error)
+		// Still mark as ready - core components are initialized, relay features may be degraded
+		eventHandlerReady = true
+	})
+
+// For setup form: mark ready after short delay since core components are ready immediately
+// This allows setup events to be processed even if relay connections are slow
+setTimeout(() => {
+	if (!eventHandlerReady) {
+		console.log('Marking event handler ready after initial delay (core components ready)')
+		eventHandlerReady = true
+	}
+}, 2000)
 
 // Handle static files from the public directory
 const serveStatic = async (path: string) => {
@@ -224,6 +214,11 @@ const serveStatic = async (path: string) => {
  * Determine the deployment stage from NODE_ENV
  */
 function determineStage(): 'production' | 'staging' | 'development' {
+	const explicitStage = process.env.APP_STAGE
+	if (explicitStage === 'staging' || explicitStage === 'production' || explicitStage === 'development') {
+		return explicitStage
+	}
+
 	const env = process.env.NODE_ENV
 	if (env === 'staging') return 'staging'
 	if (env === 'production') return 'production'
@@ -243,117 +238,74 @@ export const server = serve({
 					appSettings: appSettings,
 					appPublicKey: APP_PUBLIC_KEY,
 					needsSetup: !appSettings,
+					serverReady: eventHandlerReady,
 				})
 			},
 		},
-		'/api/vanity/invoice': {
+		//Generic zap purchase invoice endpoint.
+		//Auto-resolves the correct `ZapPurchaseManager` from the zap request's `L` tag.
+		'/api/zapPurchase': {
 			POST: async (req) => {
-				console.log('📨 /api/vanity/invoice request received')
+				console.log('📨 /api/zapPurchase request received')
 
-				let body: VanityInvoiceRequestBody | null = null
+				let body: ZapPurchaseInvoiceRequestBody
 				try {
-					body = (await req.json()) as VanityInvoiceRequestBody
+					body = (await req.json()) as ZapPurchaseInvoiceRequestBody
 				} catch {
 					return jsonError('Invalid JSON body', 400)
 				}
 
-				const amountSats = Number(body?.amountSats)
-				const vanityName = String(body?.vanityName || '').toLowerCase()
-				const zapRequest = body?.zapRequest
-
-				if (!Number.isFinite(amountSats) || amountSats <= 0) {
-					return jsonError('amountSats must be a positive number', 400)
-				}
-				if (!vanityName) {
-					return jsonError('vanityName is required', 400)
-				}
-				if (!zapRequest || !Array.isArray(zapRequest.tags)) {
-					return jsonError('zapRequest is required', 400)
-				}
-				if (!zapRequest.sig) {
-					return jsonError('zapRequest must be signed', 400)
+				// Auto-resolve the correct manager from the zap request's L (label) tag
+				const { amountSats, registryKey, zapRequest } = body
+				const zapLabel = zapRequest?.tags?.find((t) => t[0] === 'L')?.[1]
+				if (!zapLabel) {
+					return jsonError('zapRequest missing L tag', 400)
 				}
 
-				const hasTag = (k: string, v?: string) => zapRequest.tags.some((t) => t[0] === k && (v ? t[1] === v : true))
-				if (!hasTag('L', 'vanity-register')) {
-					return jsonError('zapRequest missing ["L","vanity-register"] tag', 400)
-				}
-				const appPubkey = getAppPublicKeyOrThrow()
-				if (!hasTag('p', appPubkey)) {
-					return jsonError('zapRequest must target app pubkey', 400)
-				}
-
-				const vanityTag = zapRequest.tags.find((t) => t[0] === 'vanity')?.[1]?.toLowerCase()
-				if (vanityTag !== vanityName) {
-					return jsonError('zapRequest vanity tag must match vanityName', 400)
-				}
-
-				const amountMsatsTag = zapRequest.tags.find((t) => t[0] === 'amount')?.[1]
-				const amountMsats = amountMsatsTag ? Number(amountMsatsTag) : NaN
-				if (!Number.isFinite(amountMsats) || amountMsats !== amountSats * 1000) {
-					return jsonError('zapRequest amount must match amountSats', 400)
+				const manager = getEventHandler().getPurchaseManager(zapLabel)
+				if (!manager) {
+					return jsonError(`Unknown purchase type: ${zapLabel}`, 400)
 				}
 
 				try {
-					console.log('⚡ Creating vanity invoice:', { vanityName, amountSats })
+					const appPubkey = getAppPublicKeyOrThrow()
 					const lightningIdentifier = await getAppLightningIdentifier()
-					const lnurlEndpoint = toLnurlpEndpoint(lightningIdentifier)
 
-					const lnurlRes = await fetch(lnurlEndpoint, { headers: { accept: 'application/json' } })
-					if (!lnurlRes.ok) {
-						return jsonError(`Failed to fetch LNURL-pay data (${lnurlRes.status})`, 502)
-					}
+					console.log(`⚡ Creating ${zapLabel} invoice:`, { registryKey, amountSats })
 
-					const lnurlData = (await lnurlRes.json()) as LnurlPayData
-					if (lnurlData.status === 'ERROR') {
-						return jsonError(lnurlData.reason || 'LNURL-pay error', 502)
-					}
+					const result = await manager.generateInvoice(
+						{ amountSats, registryKey, zapRequest },
+						appPubkey,
+						lightningIdentifier,
+						toLnurlpEndpoint,
+					)
 
-					if (!lnurlData.callback) {
-						return jsonError('LNURL-pay callback missing', 502)
-					}
-					if (!lnurlData.allowsNostr) {
-						return jsonError('App Lightning address does not support Nostr zaps (allowsNostr=false)', 400)
-					}
-
-					const amountMsatsToSend = amountSats * 1000
-					if (typeof lnurlData.minSendable === 'number' && amountMsatsToSend < lnurlData.minSendable) {
-						return jsonError(`Amount below minimum (${Math.ceil(lnurlData.minSendable / 1000)} sats)`, 400)
-					}
-					if (typeof lnurlData.maxSendable === 'number' && amountMsatsToSend > lnurlData.maxSendable) {
-						return jsonError(`Amount above maximum (${Math.floor(lnurlData.maxSendable / 1000)} sats)`, 400)
-					}
-
-					const callbackUrl = new URL(lnurlData.callback)
-					callbackUrl.searchParams.set('amount', amountMsatsToSend.toString())
-					callbackUrl.searchParams.set('nostr', JSON.stringify(zapRequest))
-					if (lnurlData.commentAllowed && lnurlData.commentAllowed > 0) {
-						callbackUrl.searchParams.set('comment', `Vanity URL: ${vanityName}`)
-					}
-
-					const invoiceRes = await fetch(callbackUrl.toString(), { headers: { accept: 'application/json' } })
-					if (!invoiceRes.ok) {
-						return jsonError(`Failed to fetch invoice (${invoiceRes.status})`, 502)
-					}
-
-					const invoiceData = (await invoiceRes.json()) as LnurlInvoiceData
-					if (invoiceData.status === 'ERROR') {
-						return jsonError(invoiceData.reason || 'Invoice error', 502)
-					}
-
-					if (!invoiceData.pr) {
-						return jsonError('Invoice missing pr', 502)
-					}
-
-					console.log('✅ Vanity invoice created')
-					return Response.json({ pr: invoiceData.pr })
+					console.log(`✅ ${zapLabel} invoice created`)
+					return Response.json(result)
 				} catch (error) {
-					console.error('Vanity invoice error:', error)
+					console.error(`${zapLabel} invoice error:`, error)
+					if (error instanceof ZapInvoiceError) {
+						return jsonError(error.message, error.status)
+					}
 					return jsonError(error instanceof Error ? error.message : 'Failed to create invoice', 500)
 				}
 			},
 		},
 		'/images/:file': ({ params }) => serveStatic(`images/${params.file}`),
+		'/.well-known/nostr.json': {
+			GET: (req) => {
+				const url = new URL(req.url)
+				const name = url.searchParams.get('name') ?? undefined
+				const nip05Manager = getEventHandler().getNip05Manager()
+				const result = nip05Manager.buildNostrJson(name)
+				return Response.json(result, {
+					headers: {
+						'Access-Control-Allow-Origin': '*',
+						'Cache-Control': 'max-age=300',
+					},
+				})
+			},
+		},
 		'/manifest.json': () => serveStatic('manifest.json'),
 		'/sw.js': () => serveStatic('sw.js'),
 		'/favicon.ico': () => serveStatic('favicon.ico'),
@@ -383,9 +335,19 @@ export const server = serve({
 						return
 					}
 
-					if (!verifyEvent(data[1] as Event)) throw Error('Unable to verify event')
+					if (!verifyEvent(data[1] as Event)) {
+						ws.send(JSON.stringify(['OK', data[1].id, false, 'error: Unable to verify event signature']))
+						return
+					}
 
-					const resignedEvent = getEventHandler().handleEvent(data[1])
+					let resignedEvent
+					try {
+						resignedEvent = getEventHandler().handleEvent(data[1])
+					} catch (handleError) {
+						console.error('Error in handleEvent:', handleError)
+						ws.send(JSON.stringify(['OK', data[1].id, false, `error: Handler error: ${handleError}`]))
+						return
+					}
 
 					if (resignedEvent) {
 						const relay = await Relay.connect(RELAY_URL as string)

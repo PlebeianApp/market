@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ORDER_STATUS, SHIPPING_STATUS } from '@/lib/schemas/order'
 import { cn } from '@/lib/utils'
 import { getStatusStyles } from '@/lib/utils/orderUtils'
@@ -7,6 +8,7 @@ import { useUpdateOrderStatusMutation } from '@/publish/orders'
 import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { getBuyerPubkey, getOrderStatus, getSellerPubkey } from '@/queries/orders'
 import { useUpdateShippingStatusMutation } from '@/queries/shipping'
+import { useBreakpoint } from '@/hooks/useBreakpoint'
 import { Ban, Check, CheckCircle, Clock, Package, Truck, X } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
@@ -147,52 +149,93 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 
 	const nextAction = getNextAction()
 	const isLoading = updateOrderStatus.isPending || updateShippingStatus.isPending
+	const breakpoint = useBreakpoint()
+	const badgeIconOnly = breakpoint === 'sm'
 
 	return (
-		<div className={cn('flex items-center justify-between gap-2 w-[320px]', className)}>
+		<div className={cn('flex items-center justify-between gap-2 w-full', className)}>
 			{/* Cancel Button (Left) - Icon only */}
 			{canCancel ? (
-				<Button
-					variant="outline"
-					size="icon"
-					onClick={() => setIsCancelOpen(true)}
-					disabled={isLoading}
-					className="h-8 w-8 shrink-0 text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
-					aria-label="Cancel order"
-				>
-					<X className="h-4 w-4" />
-				</Button>
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Button
+							variant="outline"
+							size="icon"
+							onClick={() => setIsCancelOpen(true)}
+							disabled={isLoading}
+							className="h-8 w-8 shrink-0 text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+							aria-label="Cancel order"
+						>
+							<X className="h-4 w-4" />
+						</Button>
+					</TooltipTrigger>
+					<TooltipContent side="bottom">Cancel order</TooltipContent>
+				</Tooltip>
 			) : (
-				<div className="h-8 w-8 shrink-0" /> // Spacer to maintain layout
+				<div className="h-8 w-8 shrink-0" />
 			)}
 
 			{/* Status Badge (Center) */}
-			<div className={cn('flex flex-1 items-center justify-center gap-2 rounded-md px-4 py-1.5', bgColor, textColor)}>
-				{renderStatusIcon()}
-				<span className="font-medium capitalize text-sm whitespace-nowrap">{label}</span>
-			</div>
-
-			{/* Next Action Button (Right) */}
-			{nextAction ? (
-				<Button variant="primary" size="sm" onClick={nextAction.action} disabled={isLoading} className="shrink-0">
-					{nextAction.label}
-					<nextAction.icon className="h-4 w-4 ml-1" />
-				</Button>
-			) : status === ORDER_STATUS.COMPLETED ? (
-				<Button variant="ghost" size="sm" disabled className="shrink-0 text-green-600">
-					Done
-					<CheckCircle className="h-4 w-4 ml-1" />
-				</Button>
-			) : status === ORDER_STATUS.CANCELLED ? (
-				<Button variant="ghost" size="sm" disabled className="shrink-0 text-muted-foreground">
-					Cancelled
-					<Ban className="h-4 w-4 ml-1" />
-				</Button>
+			{badgeIconOnly ? (
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<div className={cn('flex w-8 items-center justify-center rounded-md p-1', bgColor, textColor)}>{renderStatusIcon()}</div>
+					</TooltipTrigger>
+					<TooltipContent side="bottom" className="capitalize">
+						{label}
+					</TooltipContent>
+				</Tooltip>
 			) : (
-				<Button variant="ghost" size="sm" disabled className="shrink-0 text-muted-foreground">
-					Waiting
-					<Clock className="h-4 w-4 ml-1" />
-				</Button>
+				<div className={cn('flex w-[7rem] items-center justify-center gap-1.5 rounded-md px-2 py-1', bgColor, textColor)}>
+					{renderStatusIcon()}
+					<span className="font-medium capitalize text-xs whitespace-nowrap">{label}</span>
+				</div>
+			)}
+
+			{/* Next Action Button (Right) - icon only with tooltip */}
+			{nextAction ? (
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Button
+							variant="primary"
+							size="icon"
+							onClick={nextAction.action}
+							disabled={isLoading}
+							className="h-8 w-8 shrink-0"
+							aria-label={nextAction.label}
+						>
+							<nextAction.icon className="h-4 w-4" />
+						</Button>
+					</TooltipTrigger>
+					<TooltipContent side="bottom">{nextAction.label}</TooltipContent>
+				</Tooltip>
+			) : status === ORDER_STATUS.COMPLETED ? (
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Button variant="ghost" size="icon" disabled className="h-8 w-8 shrink-0 text-green-600" aria-label="Done">
+							<CheckCircle className="h-4 w-4" />
+						</Button>
+					</TooltipTrigger>
+					<TooltipContent side="bottom">Done</TooltipContent>
+				</Tooltip>
+			) : status === ORDER_STATUS.CANCELLED ? (
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Button variant="ghost" size="icon" disabled className="h-8 w-8 shrink-0 text-muted-foreground" aria-label="Cancelled">
+							<Ban className="h-4 w-4" />
+						</Button>
+					</TooltipTrigger>
+					<TooltipContent side="bottom">Cancelled</TooltipContent>
+				</Tooltip>
+			) : (
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<Button variant="ghost" size="icon" disabled className="h-8 w-8 shrink-0 text-muted-foreground" aria-label="Waiting">
+							<Clock className="h-4 w-4" />
+						</Button>
+					</TooltipTrigger>
+					<TooltipContent side="bottom">Waiting</TooltipContent>
+				</Tooltip>
 			)}
 
 			{/* Payment Confirmation dialog */}

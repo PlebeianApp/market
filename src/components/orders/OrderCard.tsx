@@ -33,18 +33,20 @@ export function OrderCard({ orderData, userPubkey }: OrderCardProps) {
 		<Link
 			to="/dashboard/orders/$orderId"
 			params={{ orderId: orderData.order.id }}
-			className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent transition-colors"
+			className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent transition-colors overflow-hidden"
 		>
-			<div className="flex items-center gap-4">
-				<div className="flex items-center justify-center w-12 h-12 rounded-full bg-pink-400 text-2xl">{isBuyer ? '🛍️' : '💰'}</div>
-				<div>
-					<div className="font-medium">
+			<div className="flex items-center gap-4 min-w-0">
+				<div className="flex items-center justify-center w-12 h-12 rounded-full bg-pink-400 text-2xl shrink-0">{isBuyer ? '🛍️' : '💰'}</div>
+				<div className="min-w-0">
+					<div className="font-medium truncate">
 						{isBuyer ? 'Purchase' : 'Sale'} #{orderData.order.id.slice(0, 8)}
 					</div>
 					<div className="text-sm text-muted-foreground">{new Date((orderData.order.created_at || 0) * 1000).toLocaleDateString()}</div>
 				</div>
 			</div>
-			<Badge variant={getBadgeVariant(status)}>{status}</Badge>
+			<Badge variant={getBadgeVariant(status)} className="shrink-0">
+				{status}
+			</Badge>
 		</Link>
 	)
 }

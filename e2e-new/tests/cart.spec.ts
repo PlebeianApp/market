@@ -1,5 +1,8 @@
 import type { Page } from '@playwright/test'
 import { test, expect } from '../fixtures'
+import { devUser1, devUser2 } from '../../src/lib/fixtures'
+import { waitForLatestCartSnapshotToBeEmpty } from '../utils/relay-query'
+import { resetRemoteCartForUser } from 'e2e-new/scenarios'
 
 test.use({ scenario: 'marketplace' })
 
@@ -87,6 +90,11 @@ async function waitForProducts(page: Page): Promise<void> {
 // A. Remove Items from Cart
 // ---------------------------------------------------------------------------
 
+test.beforeEach(async () => {
+	// Clear cart for active user
+	await resetRemoteCartForUser(devUser1.sk)
+})
+
 test.describe('Cart - Remove Items', () => {
 	test('can remove a single item from cart', async ({ newUserPage }) => {
 		await safeGoto(newUserPage, '/products')
@@ -135,6 +143,11 @@ test.describe('Cart - Remove Items', () => {
 // ---------------------------------------------------------------------------
 // B. Change Quantity
 // ---------------------------------------------------------------------------
+
+test.beforeEach(async () => {
+	// Clear cart for active user
+	await resetRemoteCartForUser(devUser1.sk)
+})
 
 test.describe('Cart - Change Quantity', () => {
 	test('can increment product quantity using the plus button', async ({ newUserPage }) => {
@@ -295,9 +308,11 @@ test.describe('Cart - Multiple Merchants', () => {
 		await expect(dialog.getByText('Bitcoin Hardware Wallet')).not.toBeVisible({ timeout: 5_000 })
 		await expect(dialog.getByText('Lightning Node Setup Guide')).toBeVisible()
 
-		// Only 1 shipping selector should remain (for the remaining seller)
-		const shippingTriggers = dialog.getByText('Select shipping method')
-		await expect(shippingTriggers).toHaveCount(1, { timeout: 10_000 })
+		// Only 1 live shipping selector control should remain for the remaining seller.
+		// Count the actual select triggers rather than raw text so exiting animated nodes
+		// don't get mistaken for an active seller section.
+		const shippingSelectors = dialog.locator('[data-slot="select-trigger"]:visible')
+		await expect(shippingSelectors).toHaveCount(1, { timeout: 10_000 })
 	})
 })
 
@@ -377,16 +392,16 @@ test.describe('Cart - Persistence', () => {
 		await expect(dialog.getByText('Bitcoin Hardware Wallet')).toBeVisible({ timeout: 10_000 })
 	})
 
-	test('clearing cart removes all items after reload', async ({ newUserPage }) => {
-		await safeGoto(newUserPage, '/products')
-		await waitForProducts(newUserPage)
+	test('clearing cart removes all items after reload', async ({ buyerPage }) => {
+		await safeGoto(buyerPage, '/products')
+		await waitForProducts(buyerPage)
 
-		await addWalletToCart(newUserPage)
-		await addGuideToCart(newUserPage)
+		await addWalletToCart(buyerPage)
+		await addTShirtToCart(buyerPage)
 
 		// Open cart and clear it
-		await openCart(newUserPage)
-		const dialog = cartDialog(newUserPage)
+		await openCart(buyerPage)
+		const dialog = cartDialog(buyerPage)
 		await expect(dialog.getByText('Bitcoin Hardware Wallet')).toBeVisible({ timeout: 10_000 })
 
 		// Click the "Clear" button at the bottom of the cart
@@ -395,16 +410,17 @@ test.describe('Cart - Persistence', () => {
 
 		// Cart should now show empty state
 		await expect(dialog.getByText('Bitcoin Hardware Wallet')).not.toBeVisible({ timeout: 5_000 })
-		await expect(dialog.getByText('Lightning Node Setup Guide')).not.toBeVisible()
+		await expect(dialog.getByText('Nostr T-Shirt')).not.toBeVisible()
+		await waitForLatestCartSnapshotToBeEmpty({ pubkey: devUser2.pk })
 
 		// Close and reload to confirm persistence of the cleared state
-		await newUserPage.keyboard.press('Escape')
-		await newUserPage.reload()
-		await newUserPage.waitForLoadState('networkidle')
+		await buyerPage.keyboard.press('Escape')
+		await buyerPage.reload()
+		await buyerPage.waitForLoadState('networkidle')
 
 		// Re-open cart — should still be empty (no phantom items)
-		await openCart(newUserPage)
-		const dialogAfter = cartDialog(newUserPage)
+		await openCart(buyerPage)
+		const dialogAfter = cartDialog(buyerPage)
 		// Cart should not contain these products
 		await expect(dialogAfter.getByText('Bitcoin Hardware Wallet')).not.toBeVisible({ timeout: 3_000 })
 	})

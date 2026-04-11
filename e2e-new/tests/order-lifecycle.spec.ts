@@ -159,7 +159,7 @@ test.describe('Order Lifecycle', () => {
 
 		// ─── 2. Merchant: navigate to order detail ────────────────────
 		await merchantPage.goto('/dashboard/sales/sales')
-		await expect(merchantPage.getByRole('heading', { name: 'Sales' })).toBeVisible({ timeout: 15_000 })
+		await expect(merchantPage.getByText('Loading sales...')).toBeVisible({ timeout: 15_000 })
 
 		// Wait for order with Pending status
 		await merchantPage.waitForFunction(() => document.body.innerText.includes('sats') && document.body.innerText.includes('Pending'), {

@@ -1,7 +1,7 @@
 import { test as base, expect, type Page } from '@playwright/test'
 import { RelayMonitor } from './relay-monitor'
 import { setupAuthContext, type TestUser } from './auth'
-import { ensureScenario, type ScenarioName } from '../scenarios'
+import { ensureScenario, resetRemoteCartForUser, type ScenarioName } from '../scenarios'
 import { devUser1, devUser2, devUser3 } from '../../src/lib/fixtures'
 
 type TestFixtures = {
@@ -13,6 +13,9 @@ type TestFixtures = {
 
 	/** Page with devUser3 logged in (no seeded profile — fresh user) */
 	newUserPage: Page
+
+	/** Unauthenticated user for viewing public versions of pages */
+	unauthenticatedPage: Page
 
 	/** Relay monitor attached to the default page */
 	relayMonitor: RelayMonitor
@@ -49,6 +52,7 @@ export const test = base.extend<TestFixtures>({
 
 	buyerPage: async ({ browser, scenario }, use) => {
 		await ensureScenario(scenario)
+		await resetRemoteCartForUser(devUser2.sk)
 		const context = await browser.newContext()
 		await setupAuthContext(context, devUser2)
 		const page = await context.newPage()
@@ -63,6 +67,7 @@ export const test = base.extend<TestFixtures>({
 
 	newUserPage: async ({ browser, scenario }, use) => {
 		await ensureScenario(scenario)
+		await resetRemoteCartForUser(devUser3.sk)
 		const context = await browser.newContext()
 		await setupAuthContext(context, devUser3)
 		const page = await context.newPage()
@@ -70,6 +75,21 @@ export const test = base.extend<TestFixtures>({
 		await page.goto('/')
 		await page.waitForLoadState('networkidle')
 		await expect(page.locator('header')).toBeVisible({ timeout: 10_000 })
+
+		await use(page)
+		await context.close()
+	},
+
+	unauthenticatedPage: async ({ browser, scenario }, use) => {
+		await ensureScenario(scenario)
+		const context = await browser.newContext()
+		// Do NOT call setupAuthContext here. This leaves the user logged out.
+		const page = await context.newPage()
+
+		await page.goto('/')
+		await page.waitForLoadState('networkidle')
+		// Verify we are NOT logged in (check for login button visibility)
+		await expect(page.getByTestId('login-button')).toBeVisible({ timeout: 10_000 })
 
 		await use(page)
 		await context.close()

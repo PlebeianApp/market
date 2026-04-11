@@ -33,9 +33,12 @@ export { productKeys }
 // Persisted to localStorage so deletions survive page reloads.
 
 const DELETED_PRODUCTS_STORAGE_KEY = 'plebeian_deleted_product_ids'
+const hasLocalStorage = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
 
 // Map of d-tag -> deletion timestamp (unix seconds)
 const loadDeletedProductIds = (): Map<string, number> => {
+	if (!hasLocalStorage()) return new Map()
+
 	try {
 		const stored = localStorage.getItem(DELETED_PRODUCTS_STORAGE_KEY)
 		if (stored) {
@@ -57,6 +60,8 @@ const loadDeletedProductIds = (): Map<string, number> => {
 }
 
 const saveDeletedProductIds = (ids: Map<string, number>) => {
+	if (!hasLocalStorage()) return
+
 	try {
 		localStorage.setItem(DELETED_PRODUCTS_STORAGE_KEY, JSON.stringify(Object.fromEntries(ids)))
 	} catch (e) {
@@ -676,6 +681,13 @@ export const getProductCreatedAt = (event: NDKEvent | null): number => event?.cr
  * @returns The pubkey (string)
  */
 export const getProductPubkey = (event: NDKEvent | null): string => event?.pubkey || ''
+
+/**
+ * Gets the location for product from the event tags
+ * @param event The product event or null
+ * @returns The location in string format or empty string
+ */
+export const getProductLocation = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'location')?.[1] || ''
 
 /**
  * Gets the content warning tag from a product event

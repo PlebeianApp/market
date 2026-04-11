@@ -3,8 +3,8 @@ import type { OrderWithRelatedEvents } from '@/queries/orders'
 import { formatSats, getBuyerPubkey, getEventDate, getOrderAmount, getOrderId, getSellerPubkey } from '@/queries/orders'
 import { Link } from '@tanstack/react-router'
 import type { ColumnDef } from '@tanstack/react-table'
-import { UserWithAvatar } from '../UserWithAvatar'
 import { OrderActions } from './OrderActions'
+import { UserCard } from '../UserCard'
 
 // Base columns that are common to all order lists
 export const baseOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
@@ -84,7 +84,7 @@ export const purchaseColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 		header: 'Seller',
 		cell: ({ row }) => {
 			const sellerPubkey = getSellerPubkey(row.original.order)
-			return <UserWithAvatar pubkey={sellerPubkey || ''} showBadge={false} size="sm" disableLink={true} />
+			return <UserCard pubkey={sellerPubkey || ''} size="xs" onPress="none" />
 		},
 	},
 	baseOrderColumns[1], // Date
@@ -103,7 +103,7 @@ export const salesColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 		header: 'Buyer',
 		cell: ({ row }) => {
 			const buyerPubkey = getBuyerPubkey(row.original.order)
-			return <UserWithAvatar pubkey={buyerPubkey || ''} showBadge={false} size="sm" disableLink={true} />
+			return <UserCard pubkey={buyerPubkey || ''} size="xs" onPress="none" />
 		},
 		accessorFn: (row) => getBuyerPubkey(row.order),
 	},
@@ -120,7 +120,7 @@ export const fullOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 		header: 'Seller',
 		cell: ({ row }) => {
 			const sellerPubkey = getSellerPubkey(row.original.order)
-			return <UserWithAvatar pubkey={sellerPubkey || ''} showBadge={false} size="sm" disableLink={true} />
+			return <UserCard pubkey={sellerPubkey || ''} size="xs" onPress="none" />
 		},
 	},
 	{
@@ -128,7 +128,7 @@ export const fullOrderColumns: ColumnDef<OrderWithRelatedEvents>[] = [
 		header: 'Buyer',
 		cell: ({ row }) => {
 			const buyerPubkey = getBuyerPubkey(row.original.order)
-			return <UserWithAvatar pubkey={buyerPubkey || ''} showBadge={false} size="sm" disableLink={true} />
+			return <UserCard pubkey={buyerPubkey || ''} size="xs" onPress="none" />
 		},
 	},
 	baseOrderColumns[1], // Date

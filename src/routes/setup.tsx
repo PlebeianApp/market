@@ -5,13 +5,13 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
 import { submitAppSettings } from '@/lib/appSettings'
-import { createQueryClient } from '@/lib/queryClient'
 import { AppSettingsSchema } from '@/lib/schemas/app'
 import { createHandlerInfoEventData } from '@/publish/nip89'
 import { useConfigQuery } from '@/queries/config'
 import { configKeys } from '@/queries/queryKeyFactory'
 import { useForm, useStore } from '@tanstack/react-form'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useQueryClient } from '@tanstack/react-query'
 import { finalizeEvent, generateSecretKey, nip19 } from 'nostr-tools'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
@@ -58,6 +58,7 @@ const currencies = ['USD', 'EUR', 'BTC', 'SATS']
 function SetupRoute() {
 	const { data: config } = useConfigQuery()
 	const navigate = useNavigate()
+	const queryClient = useQueryClient()
 	const [adminsList, setAdminsList] = useState<string[]>([])
 	const [editorsList, setEditorsList] = useState<string[]>([])
 	const [inputValue, setInputValue] = useState('')
@@ -89,6 +90,11 @@ function SetupRoute() {
 		},
 		onSubmit: async ({ value }) => {
 			try {
+				if (!config?.serverReady) {
+					toast.error('Server is still initializing. Please wait...')
+					return
+				}
+
 				if (!config?.appRelay) {
 					toast.error('Please enter a relay URL')
 					return
@@ -166,9 +172,18 @@ function SetupRoute() {
 				// Wait a bit for the events to be processed
 				await new Promise((resolve) => setTimeout(resolve, 1000))
 
-				const queryClient = await createQueryClient([config.appRelay])
 				await queryClient.invalidateQueries({ queryKey: configKeys.all })
 				await queryClient.refetchQueries({ queryKey: configKeys.all })
+
+				const refreshedConfig = queryClient.getQueryData<{
+					appSettings: z.infer<typeof AppSettingsSchema> | null
+					needsSetup: boolean
+				}>(configKeys.all)
+
+				if (refreshedConfig?.needsSetup || !refreshedConfig?.appSettings) {
+					toast.error('Setup event was submitted but the server still reports setup incomplete')
+					return
+				}
 
 				toast.success('App settings successfully updated!')
 				navigate({ to: '/' })
@@ -558,9 +573,14 @@ function SetupRoute() {
 								<form.Subscribe
 									selector={(state) => [state.canSubmit, state.isSubmitting]}
 									children={([canSubmit, isSubmitting]) => (
-										<Button type="submit" className="w-full" disabled={isSubmitting || !canSubmit}>
-											{isSubmitting ? 'Submitting...' : 'Submit'}
-										</Button>
+										<>
+											{!config?.serverReady && (
+												<div className="text-sm text-muted-foreground text-center mb-2">Waiting for server to be ready...</div>
+											)}
+											<Button type="submit" className="w-full" disabled={isSubmitting || !canSubmit || !config?.serverReady}>
+												{isSubmitting ? 'Submitting...' : !config?.serverReady ? 'Waiting...' : 'Submit'}
+											</Button>
+										</>
 									)}
 								/>
 							</form>

@@ -17,9 +17,14 @@ import { Check } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { PriceDisplay } from './PriceDisplay'
 import { Button } from './ui/button'
-import { ZapButton } from './ZapButton'
+import { authStore, useAuth } from '@/lib/stores/auth'
+import { ZapButton } from './social/ZapButton'
 
-export function ProductCard({ product }: { product: NDKEvent }) {
+export interface ProductCardProps {
+	product: NDKEvent
+}
+
+export function ProductCard({ product }: ProductCardProps) {
 	const title = getProductTitle(product)
 	const images = getProductImages(product)
 	const price = getProductPrice(product)
@@ -27,28 +32,17 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 	const stockQuantity = stockTag ? parseInt(stockTag[1]) : undefined
 	const visibilityTag = getProductVisibility(product)
 	const visibility = visibilityTag?.[1] || 'on-sale'
+	const isNSFW = isNSFWProduct(product)
 	// Out of stock if stock is explicitly 0 or undefined (no stock tag), but not for pre-order items
 	const isOutOfStock = visibility !== 'pre-order' && (stockQuantity === undefined || stockQuantity === 0)
-	const isNSFW = isNSFWProduct(product)
-	const [isOwnProduct, setIsOwnProduct] = useState(false)
-	const [currentUserPubkey, setCurrentUserPubkey] = useState<string | null>(null)
 	const [isAddingToCart, setIsAddingToCart] = useState(false)
 	const [showConfirmation, setShowConfirmation] = useState(false)
 	const location = useLocation()
 	const cart = useCart()
 	const queryClient = useQueryClient()
+	const { user, isAuthenticated } = useAuth()
 
-	// Check if current user is the seller of this product
-	useEffect(() => {
-		const checkIfOwnProduct = async () => {
-			const user = await ndkActions.getUser()
-			if (user?.pubkey) {
-				setCurrentUserPubkey(user.pubkey)
-				setIsOwnProduct(user.pubkey === product.pubkey)
-			}
-		}
-		checkIfOwnProduct()
-	}, [product.pubkey])
+	const isOwnProduct = isAuthenticated && user?.pubkey === product.author.pubkey
 
 	// Check if product is already in cart
 	const isInCart = !!cart.cart.products[product.id]
@@ -62,9 +56,7 @@ export function ProductCard({ product }: { product: NDKEvent }) {
 
 		setIsAddingToCart(true)
 		try {
-			const userPubkey = await ndkActions.getUser()
-			if (!userPubkey) return
-			await cartActions.addProduct(userPubkey.pubkey, product)
+			await cartActions.addProduct(product)
 			setShowConfirmation(true)
 			setTimeout(() => setShowConfirmation(false), 1200)
 		} finally {

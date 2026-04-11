@@ -1,143 +1,157 @@
-# Staging Relay Deployment
+# Relay Deployment
 
-How to deploy the ORLY relay to `relay.staging.plebeian.market`.
+The relay is now deployed from this repository with a repo-owned `khatru`
+application under [deploy-simple/relay](/Users/schlaus/workspace/market/deploy-simple/relay).
 
-## Automated (GitHub Actions)
+## What Deploys
 
-The `deploy-relay.yml` workflow triggers when `deploy-simple/relay-version`
-is changed on `master`.
+The relay deploy workflow ships these artifacts together:
 
-### How to trigger
+1. `market-relay` binary built from `deploy-simple/relay/cmd/market-relay`
+2. `market-relay.service` systemd unit
+3. committed stage config from `deploy-simple/relay/config`
+4. stage Caddyfile from `deploy-simple/caddyfiles`
+5. `install-relay.sh` to converge the host state
 
-```bash
-# 1. Edit the version file to the desired ORLY release tag
-echo "v0.60.4" > deploy-simple/relay-version
+## Workflow
 
-# 2. Commit and push (or PR → merge to master)
-git add deploy-simple/relay-version
-git commit -m "chore: bump staging relay to v0.60.4"
-git push origin master
-```
+The GitHub Actions workflow is [deploy-relay.yml](/Users/schlaus/workspace/market/.github/workflows/deploy-relay.yml).
 
-The workflow will:
+- Pushes to `master` that touch `deploy-simple/relay/**` deploy staging
+- `workflow_dispatch` can deploy `staging`, `production`, or `all`
 
-1. Read the version from `deploy-simple/relay-version`
-2. Query NIP-11 at `https://relay.staging.plebeian.market/` for the deployed version
-3. Skip if versions already match
-4. Clone the ORLY repo at the specified tag, build, test, and deploy
+Production uses the same installer and binary as staging. The only differences
+are the committed stage config and the GitHub environment secrets for SSH.
 
-### Required secrets
+## Stage Config
 
-Uses the same secrets as the market app deploy (already configured):
+- [staging.env](/Users/schlaus/workspace/market/deploy-simple/relay/config/staging.env)
+- [production.env](/Users/schlaus/workspace/market/deploy-simple/relay/config/production.env)
 
-| Secret             | Description               |
-| ------------------ | ------------------------- |
-| `STAGING_HOST`     | `staging.plebeian.market` |
-| `STAGING_USER`     | `deployer`                |
-| `STAGING_PASSWORD` | SSH password for deployer |
+Those files are intentionally committed so relay operational state stays
+declarative in git.
 
-The ORLY repo URL is hardcoded in the workflow (public repo).
+## Remote Layout
 
-## Manual Procedure
+The installer converges the host to this layout:
 
-### Step 1: Check current version
+- Binary: `/usr/local/bin/market-relay`
+- Service: `market-relay`
+- Env file: `/etc/market-relay.env`
+- Data dir: `/var/lib/market-relay`
+- Search index: `/var/lib/market-relay/search`
+- Raw event store: `/var/lib/market-relay/raw`
 
-```bash
-curl -s -H 'Accept: application/nostr+json' https://relay.staging.plebeian.market/ | jq '.version'
-# e.g. "0.52.17"
-```
+## Verification
 
-### Step 2: Clone and build
+After deploy, verify:
 
 ```bash
-# Clone the ORLY relay repo at the desired tag
-git clone --depth 1 --branch v0.60.3 \
-  ssh://git@git.nostrdev.com:29418/mleku/next.orly.dev.git relay-src
-cd relay-src
-
-# Build the web UI
-cd app/web && bun install && bun run build && cd ../..
-
-# Build the binary (target: linux/amd64)
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o orly ./cmd/orly
-
-# Verify architecture
-file orly
-# ELF 64-bit LSB executable, x86-64
+curl -s -H 'Accept: application/nostr+json' https://relay.staging.plebeian.market/ | jq .
+ssh deployer@staging.plebeian.market 'sudo systemctl status market-relay --no-pager'
+ssh deployer@staging.plebeian.market 'sudo journalctl -u market-relay -n 50 --no-pager'
 ```
 
-### Step 3: Deploy
+For production, replace the hostname with `relay.plebeian.market`.
+
+## Inspect App Setup Events
+
+The app setup flow writes these relay events:
+
+- app settings: `kind=31990`, `d=plebeian-market-handler`
+- admin list: `kind=30000`, `d=admins`
+- editor list: `kind=30000`, `d=editors`
+
+The current app pubkey on both staging and production is:
+
+```text
+7b3979f5936f590541eb4f51c2ce3094194d1c57386e706dd05aca98766a7ceb
+```
+
+The commands below query the relay directly with `nak`.
+
+For repeatable operational checks and republishing, use the repo-owned script
+folder [deploy-simple/scripts/app-settings](/Users/schlaus/workspace/market/deploy-simple/scripts/app-settings).
 
 ```bash
-# SSH details
-HOST="staging.plebeian.market"
-USER="deployer"    # or root
-REMOTE_BIN="/home/deployer/.local/bin/orly.dev"
-
-# Upload the binary
-scp orly ${USER}@${HOST}:/tmp/orly-new
-
-# SSH in and swap
-ssh ${USER}@${HOST} << 'DEPLOY'
-  set -e
-  REMOTE_BIN="/home/deployer/.local/bin/orly.dev"
-
-  # Backup
-  cp -f ${REMOTE_BIN} ${REMOTE_BIN}.prev
-
-  # Stop
-  sudo systemctl stop orly
-
-  # Install
-  cp /tmp/orly-new ${REMOTE_BIN}
-  chmod +x ${REMOTE_BIN}
-
-  # Start
-  sudo systemctl start orly
-
-  # Verify
-  sleep 5
-  sudo systemctl is-active orly
-  ${REMOTE_BIN} version
-
-  # Cleanup
-  rm /tmp/orly-new
-DEPLOY
+bun run deploy:app-settings:inspect -- --stage staging
+bun run deploy:app-settings:inspect -- --stage production
 ```
 
-### Step 4: Verify
+To republish directly with the app private key:
 
 ```bash
-# Check NIP-11 version
-curl -s -H 'Accept: application/nostr+json' https://relay.staging.plebeian.market/ | jq '.version'
-
-# Check logs
-ssh root@staging.plebeian.market 'journalctl -u orly -n 20 --no-pager'
+bun run deploy:app-settings:publish -- \
+  --stage staging \
+  --secret-key "$APP_PRIVATE_KEY" \
+  --settings-file deploy-simple/scripts/app-settings/examples/settings.example.json \
+  --admins-file deploy-simple/scripts/app-settings/examples/admins.example.json \
+  --editors-file deploy-simple/scripts/app-settings/examples/editors.example.json
 ```
 
-### Rollback
+### Staging
 
 ```bash
-ssh root@staging.plebeian.market \
-  'cp /home/deployer/.local/bin/orly.dev.prev /home/deployer/.local/bin/orly.dev && sudo systemctl restart orly'
+nak req -k 31990 -a 7b3979f5936f590541eb4f51c2ce3094194d1c57386e706dd05aca98766a7ceb --tag d=plebeian-market-handler wss://relay.staging.plebeian.market | jq '.content |= (fromjson? // .)'
+
+nak req -k 30000 -a 7b3979f5936f590541eb4f51c2ce3094194d1c57386e706dd05aca98766a7ceb --tag d=admins wss://relay.staging.plebeian.market | jq '{id, created_at, pubkey, admins: [.tags[] | select(.[0] == "p") | .[1]]}'
+
+nak req -k 30000 -a 7b3979f5936f590541eb4f51c2ce3094194d1c57386e706dd05aca98766a7ceb --tag d=editors wss://relay.staging.plebeian.market | jq '{id, created_at, pubkey, editors: [.tags[] | select(.[0] == "p") | .[1]]}'
 ```
 
-## Server Details
+### Production
 
-| Item         | Value                                    |
-| ------------ | ---------------------------------------- |
-| Host         | staging.plebeian.market (176.58.119.108) |
-| User         | deployer                                 |
-| Binary       | `/home/deployer/.local/bin/orly.dev`     |
-| Service      | `orly` (systemd)                         |
-| Port         | 10547 (behind Caddy reverse proxy)       |
-| NIP-11       | `https://relay.staging.plebeian.market/` |
-| Architecture | x86_64 (amd64)                           |
-| OS           | Ubuntu 24.04                             |
+```bash
+nak req -k 31990 -a 7b3979f5936f590541eb4f51c2ce3094194d1c57386e706dd05aca98766a7ceb --tag d=plebeian-market-handler wss://relay.plebeian.market | jq '.content |= (fromjson? // .)'
 
-## Notes
+nak req -k 30000 -a 7b3979f5936f590541eb4f51c2ce3094194d1c57386e706dd05aca98766a7ceb --tag d=admins wss://relay.plebeian.market | jq '{id, created_at, pubkey, admins: [.tags[] | select(.[0] == "p") | .[1]]}'
 
-- The binary is named `orly.dev` on the server (historical), not `orly`
-- The relay runs as the `deployer` user, not root
-- Caddy handles TLS termination and reverse proxies to port 10547
-- The market app runs separately on port 3000 (managed by PM2)
+nak req -k 30000 -a 7b3979f5936f590541eb4f51c2ce3094194d1c57386e706dd05aca98766a7ceb --tag d=editors wss://relay.plebeian.market | jq '{id, created_at, pubkey, editors: [.tags[] | select(.[0] == "p") | .[1]]}'
+```
+
+If a command prints nothing beyond the relay connection line, that event is not
+present on the relay.
+
+## Back Up Market Events
+
+For repo-owned backups and restores of market events defined in
+[SPEC.md](/Users/schlaus/workspace/market/SPEC.md), use
+[deploy-simple/scripts/market-events](/Users/schlaus/workspace/market/deploy-simple/scripts/market-events).
+
+```bash
+bun run deploy:market-events:backup -- --stage staging
+bun run deploy:market-events:backup -- --stage production
+
+bun run deploy:market-events:restore -- \
+  --stage staging \
+  --in-dir deploy-simple/backups/market-staging-20260320T000000Z
+```
+
+The backup script writes one NDJSON file per scope plus `all.ndjson` and a
+`manifest.json`, so you can inspect or edit the backup before restoring it.
+
+## Data Migration
+
+Use [scripts/migrate-relay.ts](/Users/schlaus/workspace/market/scripts/migrate-relay.ts)
+to copy events from an old relay to the new relay at the Nostr protocol layer.
+
+Examples:
+
+```bash
+# Migrate bug reports into the main app relay
+SOURCE_RELAYS=wss://bugs.plebeian.market \
+TARGET_RELAYS=wss://relay.plebeian.market \
+TAG_T=plebian2beta \
+bun run scripts/migrate-relay.ts
+
+# Full relay copy
+SOURCE_RELAYS=wss://relay.plebeian.market \
+TARGET_RELAYS=wss://relay-new.internal.example \
+bun run scripts/migrate-relay.ts
+```
+
+## Rollback
+
+If a deploy fails, `install-relay.sh` restores the previous binary, env file,
+and service unit before exiting non-zero. The workflow also restores the
+previous Caddy config if the new relay Caddyfile fails to reload.

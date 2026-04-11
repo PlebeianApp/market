@@ -3,7 +3,8 @@ import { FEATURED_ITEMS_CONFIG } from '@/lib/schemas/featured'
 import type { FeaturedProducts, FeaturedCollections, FeaturedUsers } from '@/lib/schemas/featured'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
 import { configKeys } from '@/queries/queryKeyFactory'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import { filterBlacklistedProductCoords, filterBlacklistedCollectionCoords, filterBlacklistedPubkeys } from '@/lib/utils/blacklistFilters'
 
 // --- DATA FETCHING FUNCTIONS ---
@@ -82,12 +83,45 @@ export const fetchFeaturedUsers = async (appPubkey: string): Promise<FeaturedUse
 
 // --- REACT QUERY HOOKS ---
 
+const useFeaturedSettingsSubscription = (appPubkey: string, queryKey: readonly unknown[], expectedKind: number, expectedDTag: string) => {
+	const queryClient = useQueryClient()
+	const ndk = ndkActions.getNDK()
+
+	useEffect(() => {
+		if (!appPubkey || !ndk) return
+
+		const subscription = ndk.subscribe(
+			{
+				kinds: [expectedKind],
+				authors: [appPubkey],
+			},
+			{
+				closeOnEose: false,
+			},
+		)
+
+		subscription.on('event', (event) => {
+			const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1]
+			if (dTag !== expectedDTag) return
+
+			void queryClient.invalidateQueries({ queryKey })
+		})
+
+		return () => {
+			subscription.stop()
+		}
+	}, [appPubkey, expectedDTag, expectedKind, ndk, queryClient, queryKey])
+}
+
 /**
  * Hook to fetch featured products
  */
 export const useFeaturedProducts = (appPubkey: string) => {
+	const queryKey = configKeys.featuredProducts(appPubkey)
+	useFeaturedSettingsSubscription(appPubkey, queryKey, FEATURED_ITEMS_CONFIG.PRODUCTS.kind, FEATURED_ITEMS_CONFIG.PRODUCTS.dTag)
+
 	return useQuery({
-		queryKey: configKeys.featuredProducts(appPubkey),
+		queryKey,
 		queryFn: () => fetchFeaturedProducts(appPubkey),
 		enabled: !!appPubkey,
 		staleTime: 5 * 60 * 1000, // 5 minutes
@@ -98,8 +132,11 @@ export const useFeaturedProducts = (appPubkey: string) => {
  * Hook to fetch featured collections
  */
 export const useFeaturedCollections = (appPubkey: string) => {
+	const queryKey = configKeys.featuredCollections(appPubkey)
+	useFeaturedSettingsSubscription(appPubkey, queryKey, FEATURED_ITEMS_CONFIG.COLLECTIONS.kind, FEATURED_ITEMS_CONFIG.COLLECTIONS.dTag)
+
 	return useQuery({
-		queryKey: configKeys.featuredCollections(appPubkey),
+		queryKey,
 		queryFn: () => fetchFeaturedCollections(appPubkey),
 		enabled: !!appPubkey,
 		staleTime: 5 * 60 * 1000, // 5 minutes
@@ -110,8 +147,11 @@ export const useFeaturedCollections = (appPubkey: string) => {
  * Hook to fetch featured users
  */
 export const useFeaturedUsers = (appPubkey: string) => {
+	const queryKey = configKeys.featuredUsers(appPubkey)
+	useFeaturedSettingsSubscription(appPubkey, queryKey, FEATURED_ITEMS_CONFIG.USERS.kind, FEATURED_ITEMS_CONFIG.USERS.dTag)
+
 	return useQuery({
-		queryKey: configKeys.featuredUsers(appPubkey),
+		queryKey,
 		queryFn: () => fetchFeaturedUsers(appPubkey),
 		enabled: !!appPubkey,
 		staleTime: 5 * 60 * 1000, // 5 minutes

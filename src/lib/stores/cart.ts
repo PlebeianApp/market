@@ -1,4 +1,6 @@
 import { CURRENCIES, HEX_KEYS_REGEX } from '@/lib/constants'
+import { normalizePersistedCart, rehydrateCartFromLiveData, serializeCartIntent } from '@/lib/cart-persistence'
+import { fetchLatestCartSnapshot } from '@/queries/cart'
 import type { SupportedCurrency } from '@/queries/external'
 import { btcExchangeRatesQueryOptions, currencyConversionQueryOptions } from '@/queries/external'
 import { getProductId, getProductPrice, getProductSellerPubkey, productQueryOptions, productByATagQueryOptions } from '@/queries/products'
@@ -10,7 +12,10 @@ import {
 	shippingOptionByCoordinatesQueryOptions,
 } from '@/queries/shipping'
 import { v4VForUserQuery } from '@/queries/v4v'
-import { NDKEvent } from '@nostr-dev-kit/ndk'
+import { publishCartSnapshot } from '@/publish/cart'
+import type { PersistedCartContent } from '@/lib/schemas/cartPersistence'
+import { ndkActions } from '@/lib/stores/ndk'
+import NDK, { NDKEvent, type NDKSigner } from '@nostr-dev-kit/ndk'
 import { QueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { Store } from '@tanstack/store'
@@ -114,11 +119,33 @@ interface CartState {
 	shippingByCurrency: Record<string, number>
 	totalByCurrency: Record<string, number>
 	sellerShippingOptions: Record<string, RichShippingInfo[]>
+	hasRemoteCartHydrated: boolean
+	isReconcilingRemoteCart: boolean
+	suppressRemotePublish: boolean
+	lastRemoteSnapshotUpdatedAt: number | null
+	lastCartIntentUpdatedAt: number | null
+}
+
+const CART_STORAGE_KEY = 'cart'
+const V4V_SHARES_STORAGE_KEY = 'v4vShares'
+const LOCAL_CART_STORAGE_VERSION = 1 as const
+
+const createEmptyNormalizedCart = (): NormalizedCart => ({
+	sellers: {},
+	products: {},
+	orders: {},
+	invoices: {},
+})
+
+type LocalCartEnvelope = {
+	version: typeof LOCAL_CART_STORAGE_VERSION
+	updatedAt: number | null
+	cart: NormalizedCart
 }
 
 function loadInitialV4VShares(): Record<string, V4VDTO[]> {
 	if (typeof sessionStorage !== 'undefined') {
-		const storedShares = sessionStorage.getItem('v4vShares')
+		const storedShares = sessionStorage.getItem(V4V_SHARES_STORAGE_KEY)
 		if (storedShares) {
 			try {
 				return JSON.parse(storedShares)
@@ -141,6 +168,11 @@ const initialState: CartState = {
 	shippingByCurrency: {},
 	totalByCurrency: {},
 	sellerShippingOptions: {},
+	hasRemoteCartHydrated: false,
+	isReconcilingRemoteCart: false,
+	suppressRemotePublish: false,
+	lastRemoteSnapshotUpdatedAt: null,
+	lastCartIntentUpdatedAt: null,
 }
 
 // Helper function to compute productsBySeller from products (used during init and updates)
@@ -161,9 +193,11 @@ function computeProductsBySeller(products: Record<string, CartProduct>): Record<
 
 function loadInitialCart(): NormalizedCart {
 	if (typeof sessionStorage !== 'undefined') {
-		const storedCart = sessionStorage.getItem('cart')
+		const storedCart = sessionStorage.getItem(CART_STORAGE_KEY)
 		if (storedCart) {
-			const cart: NormalizedCart = JSON.parse(storedCart)
+			const parsed = JSON.parse(storedCart)
+			const cart: NormalizedCart =
+				parsed && typeof parsed === 'object' && 'cart' in parsed ? (parsed.cart as NormalizedCart) : (parsed as NormalizedCart)
 
 			// Validate products - filter out any with invalid/missing sellerPubkey
 			// This prevents count mismatch between badge and cart display
@@ -195,7 +229,22 @@ function loadInitialCart(): NormalizedCart {
 			return cart
 		}
 	}
-	return { sellers: {}, products: {}, orders: {}, invoices: {} }
+	return createEmptyNormalizedCart()
+}
+
+function loadInitialCartIntentUpdatedAt(): number | null {
+	if (typeof sessionStorage === 'undefined') return null
+
+	const raw = sessionStorage.getItem(CART_STORAGE_KEY)
+	if (!raw) return null
+
+	try {
+		const parsed = JSON.parse(raw) as Partial<LocalCartEnvelope>
+		const updatedAt = parsed?.updatedAt
+		return typeof updatedAt === 'number' && Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : null
+	} catch {
+		return null
+	}
 }
 
 // Load cart and compute initial productsBySeller synchronously
@@ -207,9 +256,12 @@ const initialCartState: CartState = {
 	cart: loadedCart,
 	v4vShares: loadInitialV4VShares(),
 	productsBySeller: initialProductsBySeller,
+	lastCartIntentUpdatedAt: loadInitialCartIntentUpdatedAt(),
 }
 
 const numSatsInBtc = 100000000 // 100 million sats in 1 BTC
+let cartRemotePublishDebounceMs = 500
+let remotePublishTimeout: ReturnType<typeof setTimeout> | null = null
 
 export const cartStore = new Store<CartState>(initialCartState)
 
@@ -226,12 +278,53 @@ const cartQueryClient = new QueryClient({
 // Helper to check if an ID looks like a Nostr event ID (64-hex characters)
 const isEventId = (id: string): boolean => /^[a-f0-9]{64}$/i.test(id)
 
+type CartSyncDependencies = {
+	now: () => number
+	fetchLatestCartSnapshot: (userPubkey: string) => Promise<PersistedCartContent | null>
+	publishCartSnapshot: (snapshot: PersistedCartContent, signer: NDKSigner, ndk: NDK) => Promise<string>
+	getSigner: () => NDKSigner | undefined
+	getNDK: () => NDK | null
+	getProductEvent: (id: string, sellerPubkey?: string) => Promise<NDKEvent | null>
+	getShippingEvent: (shippingReferenceId: string) => Promise<NDKEvent | null>
+}
+
+function defaultNow(): number {
+	return Math.floor(Date.now() / 1000)
+}
+
+function clearRemotePublishTimeout() {
+	if (remotePublishTimeout) {
+		clearTimeout(remotePublishTimeout)
+		remotePublishTimeout = null
+	}
+}
+
+function toLocalCartEnvelope(cart: NormalizedCart, updatedAt: number | null): LocalCartEnvelope {
+	return {
+		version: LOCAL_CART_STORAGE_VERSION,
+		updatedAt,
+		cart,
+	}
+}
+
+function parseCoordinateRef(reference: string, expectedKind: string): { pubkey: string; identifier: string } | null {
+	const firstSeparator = reference.indexOf(':')
+	const secondSeparator = reference.indexOf(':', firstSeparator + 1)
+	if (firstSeparator <= 0 || secondSeparator <= firstSeparator + 1) return null
+	if (reference.slice(0, firstSeparator) !== expectedKind) return null
+
+	return {
+		pubkey: reference.slice(firstSeparator + 1, secondSeparator),
+		identifier: reference.slice(secondSeparator + 1),
+	}
+}
+
 /**
  * Fetches a product event by ID.
  * Supports both event IDs (64-hex characters) and d-tags.
  * For d-tags, the sellerPubkey is required.
  */
-const getProductEvent = async (id: string, sellerPubkey?: string): Promise<NDKEvent | null> => {
+const fetchProductEventFromQueries = async (id: string, sellerPubkey?: string): Promise<NDKEvent | null> => {
 	try {
 		// If it looks like an event ID (64 hex chars), query by event ID
 		if (isEventId(id)) {
@@ -254,7 +347,7 @@ const getProductEvent = async (id: string, sellerPubkey?: string): Promise<NDKEv
 	}
 }
 
-const getShippingEvent = async (shippingReferenceId: string): Promise<NDKEvent | null> => {
+const fetchShippingEventFromQueries = async (shippingReferenceId: string): Promise<NDKEvent | null> => {
 	try {
 		if (shippingReferenceId.startsWith(`${SHIPPING_KIND}:`)) {
 			const parts = shippingReferenceId.split(':')
@@ -276,10 +369,30 @@ const getShippingEvent = async (shippingReferenceId: string): Promise<NDKEvent |
 	}
 }
 
+const defaultCartSyncDependencies: CartSyncDependencies = {
+	now: defaultNow,
+	fetchLatestCartSnapshot,
+	publishCartSnapshot,
+	getSigner: () => ndkActions.getSigner(),
+	getNDK: () => ndkActions.getNDK() as NDK | null,
+	getProductEvent: fetchProductEventFromQueries,
+	getShippingEvent: fetchShippingEventFromQueries,
+}
+
+let cartSyncDependencies: CartSyncDependencies = {
+	...defaultCartSyncDependencies,
+}
+
+const getProductEvent = async (id: string, sellerPubkey?: string): Promise<NDKEvent | null> =>
+	cartSyncDependencies.getProductEvent(id, sellerPubkey)
+
+export const getShippingEvent = async (shippingReferenceId: string): Promise<NDKEvent | null> =>
+	cartSyncDependencies.getShippingEvent(shippingReferenceId)
+
 export const cartActions = {
-	saveToStorage: async (cart: NormalizedCart) => {
+	saveToStorage: async (cart: NormalizedCart, updatedAt: number | null = cartStore.state.lastCartIntentUpdatedAt) => {
 		if (typeof sessionStorage !== 'undefined') {
-			const serializableCart = JSON.parse(
+			const serializableCart: NormalizedCart = JSON.parse(
 				JSON.stringify({
 					sellers: cart.sellers,
 					products: cart.products,
@@ -288,13 +401,160 @@ export const cartActions = {
 				}),
 			)
 
-			sessionStorage.setItem('cart', JSON.stringify(serializableCart))
+			sessionStorage.setItem(CART_STORAGE_KEY, JSON.stringify(toLocalCartEnvelope(serializableCart, updatedAt)))
 		}
+	},
+
+	persistCartIntentLocally: (cart: NormalizedCart, updatedAt: number = cartSyncDependencies.now()) => {
+		cartActions.saveToStorage(cart, updatedAt)
+		return updatedAt
 	},
 
 	saveV4VSharesToStorage: (shares: Record<string, V4VDTO[]>) => {
 		if (typeof sessionStorage !== 'undefined') {
-			sessionStorage.setItem('v4vShares', JSON.stringify(shares))
+			sessionStorage.setItem(V4V_SHARES_STORAGE_KEY, JSON.stringify(shares))
+		}
+	},
+
+	scheduleRemotePublish: () => {
+		clearRemotePublishTimeout()
+
+		const state = cartStore.state
+		const signer = cartSyncDependencies.getSigner()
+		const ndk = cartSyncDependencies.getNDK()
+
+		if (!signer || !ndk) return
+		if (state.isReconcilingRemoteCart || state.suppressRemotePublish) return
+
+		remotePublishTimeout = setTimeout(async () => {
+			remotePublishTimeout = null
+
+			const latestState = cartStore.state
+			const latestSigner = cartSyncDependencies.getSigner()
+			const latestNdk = cartSyncDependencies.getNDK()
+
+			if (!latestSigner || !latestNdk) return
+			if (latestState.isReconcilingRemoteCart || latestState.suppressRemotePublish) return
+
+			try {
+				const snapshot = serializeCartIntent(latestState.cart)
+				await cartSyncDependencies.publishCartSnapshot(snapshot, latestSigner, latestNdk)
+				cartStore.setState((currentState) => ({
+					...currentState,
+					lastRemoteSnapshotUpdatedAt: snapshot.updatedAt,
+				}))
+			} catch (error) {
+				console.error('Failed to publish cart snapshot:', error)
+			}
+		}, cartRemotePublishDebounceMs)
+	},
+
+	applyRemoteCartLocally: async (cart: NormalizedCart, updatedAt: number) => {
+		clearRemotePublishTimeout()
+		const nextCart = {
+			...cartStore.state.cart,
+			sellers: cart.sellers,
+			products: cart.products,
+		}
+		cartStore.setState((state) => ({
+			...state,
+			cart: nextCart,
+			productsBySeller: computeProductsBySeller(cart.products),
+			lastCartIntentUpdatedAt: updatedAt,
+			lastRemoteSnapshotUpdatedAt: updatedAt,
+		}))
+		cartActions.persistCartIntentLocally(nextCart, updatedAt)
+		await cartActions.updateV4VShares()
+		await cartActions.updateSellerData()
+		await cartActions.fetchAndSetSellerShippingOptions()
+	},
+
+	reconcileRemoteCartForUser: async (pubkey: string, signer?: NDKSigner, ndk?: NDK | null) => {
+		if (!pubkey || !signer || !ndk) return
+
+		clearRemotePublishTimeout()
+		cartStore.setState((state) => ({
+			...state,
+			isReconcilingRemoteCart: true,
+			suppressRemotePublish: true,
+		}))
+
+		try {
+			const remoteSnapshot = await cartSyncDependencies.fetchLatestCartSnapshot(pubkey)
+			if (!remoteSnapshot) {
+				cartStore.setState((state) => ({
+					...state,
+					hasRemoteCartHydrated: true,
+					isReconcilingRemoteCart: false,
+					suppressRemotePublish: false,
+				}))
+				return
+			}
+
+			const normalizedRemote = normalizePersistedCart(remoteSnapshot)
+			const localUpdatedAt = cartStore.state.lastCartIntentUpdatedAt
+			const localHasItems = Object.keys(cartStore.state.cart.products).length > 0
+
+			let shouldAdoptRemote = false
+			if (!localHasItems) {
+				shouldAdoptRemote = true
+			} else if (localUpdatedAt && localUpdatedAt > 0) {
+				shouldAdoptRemote = normalizedRemote.updatedAt > localUpdatedAt
+			} else {
+				shouldAdoptRemote = false
+			}
+
+			if (shouldAdoptRemote) {
+				const liveProducts: Record<string, { productRef: string; sellerPubkey: string; productId: string; shippingRefs: string[] }> = {}
+				const liveShipping: Record<string, { shippingRef: string; sellerPubkey: string }> = {}
+
+				for (const item of normalizedRemote.items) {
+					const productCoords = parseCoordinateRef(item.productRef, '30402')
+					if (!productCoords) continue
+
+					const productEvent = await cartSyncDependencies.getProductEvent(productCoords.identifier, productCoords.pubkey)
+					const productDTag = getProductId(productEvent)
+					if (!productEvent || !productDTag || productEvent.pubkey !== productCoords.pubkey) continue
+
+					liveProducts[item.productRef] = {
+						productRef: item.productRef,
+						sellerPubkey: productEvent.pubkey,
+						productId: productDTag,
+						shippingRefs: productEvent.tags.filter((tag) => tag[0] === 'shipping_option' && tag[1]).map((tag) => tag[1]),
+					}
+
+					if (item.shippingRef && !liveShipping[item.shippingRef]) {
+						const shippingCoords = parseCoordinateRef(item.shippingRef, String(SHIPPING_KIND))
+						if (!shippingCoords) continue
+						const shippingEvent = await cartSyncDependencies.getShippingEvent(item.shippingRef)
+						if (!shippingEvent || shippingEvent.pubkey !== shippingCoords.pubkey) continue
+
+						liveShipping[item.shippingRef] = {
+							shippingRef: item.shippingRef,
+							sellerPubkey: shippingEvent.pubkey,
+						}
+					}
+				}
+
+				const rehydrated = rehydrateCartFromLiveData(normalizedRemote, liveProducts, liveShipping)
+				await cartActions.applyRemoteCartLocally(rehydrated.cart, rehydrated.updatedAt)
+			}
+
+			cartStore.setState((state) => ({
+				...state,
+				hasRemoteCartHydrated: true,
+				isReconcilingRemoteCart: false,
+				suppressRemotePublish: false,
+				lastRemoteSnapshotUpdatedAt: normalizedRemote.updatedAt,
+			}))
+		} catch (error) {
+			console.error('Failed to reconcile remote cart:', error)
+			cartStore.setState((state) => ({
+				...state,
+				hasRemoteCartHydrated: true,
+				isReconcilingRemoteCart: false,
+				suppressRemotePublish: false,
+			}))
 		}
 	},
 
@@ -335,10 +595,11 @@ export const cartActions = {
 		return seller
 	},
 
-	addProduct: async (buyerPubkey: string, productData: CartProduct | NDKEvent | string) => {
+	addProduct: async (productData: CartProduct | NDKEvent | string) => {
 		let productId: string
 		let sellerPubkey: string
 		let amount = 1
+		const updatedAt = cartSyncDependencies.now()
 
 		if (typeof productData === 'string') {
 			productId = productData
@@ -388,60 +649,84 @@ export const cartActions = {
 				seller.productIds.push(productId)
 			}
 
-			cartActions.saveToStorage(cart)
-			return { ...state, cart }
+			cartActions.persistCartIntentLocally(cart, updatedAt)
+			return { ...state, cart, lastCartIntentUpdatedAt: updatedAt }
 		})
 
 		await cartActions.updateV4VShares()
 		await cartActions.groupProductsBySeller()
 		await cartActions.updateSellerData()
+		cartActions.scheduleRemotePublish()
 	},
 
 	updateProductAmount: async (buyerPubkey: string, productId: string, amount: number) => {
+		const updatedAt = cartSyncDependencies.now()
 		cartStore.setState((state) => {
 			const cart = { ...state.cart }
 			const product = cart.products[productId]
 			if (product) {
 				product.amount = amount
 			}
-			cartActions.saveToStorage(cart)
-			return { ...state, cart }
+			cartActions.persistCartIntentLocally(cart, updatedAt)
+			return { ...state, cart, lastCartIntentUpdatedAt: updatedAt }
 		})
 
 		await cartActions.updateSellerData()
+		cartActions.scheduleRemotePublish()
 	},
 
 	removeProduct: async (buyerPubkey: string, productId: string) => {
+		const updatedAt = cartSyncDependencies.now()
 		cartStore.setState((state) => {
-			const cart = { ...state.cart }
-			const product = cart.products[productId]
+			const existingProduct = state.cart.products[productId]
+			if (!existingProduct) {
+				return state
+			}
 
-			if (product && product.sellerPubkey) {
-				const seller = cart.sellers[product.sellerPubkey]
+			const nextProducts = { ...state.cart.products }
+			delete nextProducts[productId]
+
+			const nextSellers = { ...state.cart.sellers }
+			if (existingProduct.sellerPubkey) {
+				const seller = nextSellers[existingProduct.sellerPubkey]
 				if (seller) {
-					seller.productIds = seller.productIds.filter((id) => id !== productId)
-
-					// Clean up empty seller
-					if (seller.productIds.length === 0) {
-						delete cart.sellers[product.sellerPubkey]
+					const nextProductIds = seller.productIds.filter((id) => id !== productId)
+					if (nextProductIds.length === 0) {
+						delete nextSellers[existingProduct.sellerPubkey]
+					} else {
+						nextSellers[existingProduct.sellerPubkey] = {
+							...seller,
+							productIds: nextProductIds,
+						}
 					}
 				}
 			}
 
-			delete cart.products[productId]
+			const cart = {
+				...state.cart,
+				sellers: nextSellers,
+				products: nextProducts,
+			}
+			const nextProductsBySeller = computeProductsBySeller(nextProducts)
 
-			cartActions.saveToStorage(cart)
-			return { ...state, cart }
+			cartActions.persistCartIntentLocally(cart, updatedAt)
+			return {
+				...state,
+				cart,
+				productsBySeller: nextProductsBySeller,
+				lastCartIntentUpdatedAt: updatedAt,
+			}
 		})
 
 		await cartActions.updateV4VShares()
-		await cartActions.groupProductsBySeller()
 		await cartActions.updateSellerData()
+		cartActions.scheduleRemotePublish()
 	},
 
 	setShippingMethod: async (productId: string, shipping: Partial<RichShippingInfo>) => {
 		const prevState = cartStore.state
 		const prevProduct = prevState.cart.products[productId]
+		const updatedAt = cartSyncDependencies.now()
 
 		// Only update shipping for products that are already in the cart
 		// This prevents creating corrupted entries when ShippingSelector is used on product detail page
@@ -477,15 +762,17 @@ export const cartActions = {
 					},
 				},
 			}
-			cartActions.saveToStorage(newCart)
+			cartActions.persistCartIntentLocally(newCart, updatedAt)
 			return {
 				...state,
 				cart: newCart,
+				lastCartIntentUpdatedAt: updatedAt,
 			}
 		})
 
 		// Immediately update seller data to recalculate shipping costs
 		await cartActions.updateSellerData()
+		cartActions.scheduleRemotePublish()
 	},
 
 	getShippingMethod: (productId: string): string | null => {
@@ -493,19 +780,39 @@ export const cartActions = {
 		return state.cart.products[productId]?.shippingMethodId || null
 	},
 
-	clear: () => {
+	clear: (options?: { publishRemote?: boolean; reason?: 'explicit' | 'logout' | 'remote-reconcile' }) => {
+		const publishRemote = options?.publishRemote ?? false
+		const updatedAt = publishRemote ? cartSyncDependencies.now() : null
+
+		clearRemotePublishTimeout()
+
 		// Clear sessionStorage first to prevent reloading
 		if (typeof sessionStorage !== 'undefined') {
-			sessionStorage.removeItem('cart')
-			sessionStorage.removeItem('v4vShares')
+			sessionStorage.removeItem(V4V_SHARES_STORAGE_KEY)
+			if (updatedAt === null) {
+				sessionStorage.removeItem(CART_STORAGE_KEY)
+			} else {
+				sessionStorage.setItem(CART_STORAGE_KEY, JSON.stringify(toLocalCartEnvelope(createEmptyNormalizedCart(), updatedAt)))
+			}
 		}
 
 		// Reset cart store to initial state
-		cartStore.setState(() => ({
+		cartStore.setState((state) => ({
 			...initialState,
-			cart: { sellers: {}, products: {}, orders: {}, invoices: {} },
+			cart: createEmptyNormalizedCart(),
 			v4vShares: {},
+			hasRemoteCartHydrated: state.hasRemoteCartHydrated,
+			lastRemoteSnapshotUpdatedAt: state.lastRemoteSnapshotUpdatedAt,
+			lastCartIntentUpdatedAt: updatedAt,
 		}))
+
+		if (publishRemote) {
+			cartActions.scheduleRemotePublish()
+		}
+	},
+
+	clearForUserIntent: () => {
+		cartActions.clear({ publishRemote: true, reason: 'explicit' })
 	},
 
 	clearKeys: (keys: (keyof NormalizedCart)[]) => {
@@ -520,14 +827,19 @@ export const cartActions = {
 	},
 
 	handleProductUpdate: async (action: string, productId: string, amount?: number) => {
+		const updatedAt = cartSyncDependencies.now()
 		cartStore.setState((state) => {
-			const cart = { ...state.cart }
-			const product = cart.products[productId]
+			const nextProducts = { ...state.cart.products }
+			const nextSellers = { ...state.cart.sellers }
+			const product = nextProducts[productId]
 
 			switch (action) {
 				case 'increment':
 					if (product) {
-						product.amount += 1
+						nextProducts[productId] = {
+							...product,
+							amount: product.amount + 1,
+						}
 					}
 					break
 				case 'decrement':
@@ -536,16 +848,24 @@ export const cartActions = {
 
 						if (newAmount === 0) {
 							// Remove product from seller's product list
-							const seller = cart.sellers[product.sellerPubkey]
+							const seller = nextSellers[product.sellerPubkey]
 							if (seller) {
-								seller.productIds = seller.productIds.filter((id: string) => id !== productId)
-								if (seller.productIds.length === 0) {
-									delete cart.sellers[product.sellerPubkey]
+								const nextProductIds = seller.productIds.filter((id: string) => id !== productId)
+								if (nextProductIds.length === 0) {
+									delete nextSellers[product.sellerPubkey]
+								} else {
+									nextSellers[product.sellerPubkey] = {
+										...seller,
+										productIds: nextProductIds,
+									}
 								}
 							}
-							delete cart.products[productId]
+							delete nextProducts[productId]
 						} else {
-							product.amount = newAmount
+							nextProducts[productId] = {
+								...product,
+								amount: newAmount,
+							}
 						}
 					}
 					break
@@ -553,42 +873,67 @@ export const cartActions = {
 					if (amount !== undefined && product) {
 						if (amount <= 0) {
 							// Remove product from seller's product list
-							const seller = cart.sellers[product.sellerPubkey]
+							const seller = nextSellers[product.sellerPubkey]
 							if (seller) {
-								seller.productIds = seller.productIds.filter((id: string) => id !== productId)
-								if (seller.productIds.length === 0) {
-									delete cart.sellers[product.sellerPubkey]
+								const nextProductIds = seller.productIds.filter((id: string) => id !== productId)
+								if (nextProductIds.length === 0) {
+									delete nextSellers[product.sellerPubkey]
+								} else {
+									nextSellers[product.sellerPubkey] = {
+										...seller,
+										productIds: nextProductIds,
+									}
 								}
 							}
-							delete cart.products[productId]
+							delete nextProducts[productId]
 						} else {
-							product.amount = amount
+							nextProducts[productId] = {
+								...product,
+								amount,
+							}
 						}
 					}
 					break
 				case 'remove': {
 					if (product) {
 						// Remove product from seller's product list
-						const seller = cart.sellers[product.sellerPubkey]
+						const seller = nextSellers[product.sellerPubkey]
 						if (seller) {
-							seller.productIds = seller.productIds.filter((id: string) => id !== productId)
-							if (seller.productIds.length === 0) {
-								delete cart.sellers[product.sellerPubkey]
+							const nextProductIds = seller.productIds.filter((id: string) => id !== productId)
+							if (nextProductIds.length === 0) {
+								delete nextSellers[product.sellerPubkey]
+							} else {
+								nextSellers[product.sellerPubkey] = {
+									...seller,
+									productIds: nextProductIds,
+								}
 							}
 						}
-						delete cart.products[productId]
+						delete nextProducts[productId]
 					}
 					break
 				}
 			}
 
-			cartActions.saveToStorage(cart)
-			return { ...state, cart }
+			const cart = {
+				...state.cart,
+				sellers: nextSellers,
+				products: nextProducts,
+			}
+			const nextProductsBySeller = computeProductsBySeller(nextProducts)
+
+			cartActions.persistCartIntentLocally(cart, updatedAt)
+			return {
+				...state,
+				cart,
+				productsBySeller: nextProductsBySeller,
+				lastCartIntentUpdatedAt: updatedAt,
+			}
 		})
 
 		await cartActions.updateV4VShares()
-		await cartActions.groupProductsBySeller()
 		await cartActions.updateSellerData()
+		cartActions.scheduleRemotePublish()
 	},
 
 	convertToSats: async (currency: string, amount: number): Promise<number> => {
@@ -1367,6 +1712,43 @@ export const cartActions = {
 	},
 }
 
+export const cartTestUtils = {
+	setSyncDependencies: (overrides: Partial<CartSyncDependencies>) => {
+		cartSyncDependencies = {
+			...cartSyncDependencies,
+			...overrides,
+		}
+	},
+	resetSyncDependencies: () => {
+		cartSyncDependencies = {
+			...defaultCartSyncDependencies,
+		}
+	},
+	setPublishDebounceMs: (value: number) => {
+		cartRemotePublishDebounceMs = value
+	},
+	clearScheduledRemotePublish: () => {
+		clearRemotePublishTimeout()
+	},
+	resetStore: () => {
+		clearRemotePublishTimeout()
+		if (typeof sessionStorage !== 'undefined') {
+			sessionStorage.removeItem(CART_STORAGE_KEY)
+			sessionStorage.removeItem(V4V_SHARES_STORAGE_KEY)
+		}
+		cartStore.setState(() => ({
+			...initialState,
+			cart: createEmptyNormalizedCart(),
+			v4vShares: {},
+			lastCartIntentUpdatedAt: null,
+			lastRemoteSnapshotUpdatedAt: null,
+			hasRemoteCartHydrated: false,
+			isReconcilingRemoteCart: false,
+			suppressRemotePublish: false,
+		}))
+	},
+}
+
 export function useCart() {
 	const storeState = useStore(cartStore)
 
@@ -1425,12 +1807,12 @@ export async function handleAddToCart(userId: string, product: Partial<CartProdu
 	if (!product) return false
 
 	if (typeof product === 'string') {
-		await cartActions.addProduct(userId, product)
+		await cartActions.addProduct(product)
 		return true
 	}
 
 	if (product instanceof NDKEvent) {
-		await cartActions.addProduct(userId, product)
+		await cartActions.addProduct(product)
 		return true
 	}
 
@@ -1445,7 +1827,7 @@ export async function handleAddToCart(userId: string, product: Partial<CartProdu
 			sellerPubkey: product.sellerPubkey || '',
 		}
 
-		await cartActions.addProduct(userId, cartProduct)
+		await cartActions.addProduct(cartProduct)
 		return true
 	}
 

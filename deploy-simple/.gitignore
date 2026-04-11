@@ -6,3 +6,6 @@
 env/.env.development
 env/.env.staging
 env/.env.production
+
+# Local backup artifacts
+backups/

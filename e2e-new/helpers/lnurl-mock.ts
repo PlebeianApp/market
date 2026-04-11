@@ -13,6 +13,8 @@ export interface LnurlMockOptions {
 	domain?: string
 	/** The Lightning address username to intercept (default: plebeianuser) */
 	username?: string
+	/** If true, fail the LNURL metadata fetch before invoice generation starts */
+	failMetadata?: boolean
 	/** The minSendable in millisats (default: 1_000 = 1 sat) */
 	minSendable?: number
 	/** The maxSendable in millisats (default: 100_000_000_000 = 100k sats) */
@@ -42,9 +44,22 @@ export async function setupLnurlMock(page: Page, options?: LnurlMockOptions): Pr
 	const maxSendable = options?.maxSendable ?? 100_000_000_000
 	const allowsNostr = options?.allowsNostr ?? true
 	const callbackUrl = `https://${domain}/lnurlp/${username}/callback`
+	const context = page.context()
 
 	// 1. Intercept LNURL-pay metadata request
-	await page.route(`https://${domain}/.well-known/lnurlp/${username}`, (route) => {
+	await context.route(`https://${domain}/.well-known/lnurlp/${username}`, (route) => {
+		if (options?.failMetadata) {
+			route.fulfill({
+				status: 503,
+				contentType: 'application/json',
+				body: JSON.stringify({
+					status: 'ERROR',
+					reason: 'Mocked LNURL metadata failure for testing',
+				}),
+			})
+			return
+		}
+
 		route.fulfill({
 			status: 200,
 			contentType: 'application/json',
@@ -61,7 +76,7 @@ export async function setupLnurlMock(page: Page, options?: LnurlMockOptions): Pr
 	})
 
 	// 2. Intercept invoice generation callback
-	await page.route(`https://${domain}/lnurlp/${username}/callback**`, (route) => {
+	await context.route(`https://${domain}/lnurlp/${username}/callback**`, (route) => {
 		if (options?.failCallback) {
 			route.fulfill({
 				status: 200,

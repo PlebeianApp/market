@@ -1,4 +1,3 @@
-import { UserWithAvatar } from '@/components/UserWithAvatar'
 import { ChatMessageBubble } from '@/components/messages/ChatMessageBubble'
 import { MessageInput } from '@/components/messages/MessageInput'
 import { Button } from '@/components/ui/button'
@@ -11,21 +10,20 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 
 interface ConversationViewProps {
 	/** The pubkey of the other user in the conversation */
 	otherUserPubkey: string
 	/** Optional callback when title changes (for sheet header updates) */
 	onTitleChange?: (title: string) => void
-	/** Whether to show the user avatar header (disable for sheets that show it separately) */
-	showHeader?: boolean
 }
 
 /**
  * Reusable conversation view component that displays messages and allows sending
  * Can be used in sheets, dialogs, or as a standalone page component
  */
-export function ConversationView({ otherUserPubkey, onTitleChange, showHeader = true }: ConversationViewProps) {
+export function ConversationView({ otherUserPubkey, onTitleChange }: ConversationViewProps) {
 	const { user: currentUser } = useStore(authStore)
 	const queryClient = useQueryClient()
 	const messagesEndRef = useRef<HTMLDivElement | null>(null)
@@ -78,7 +76,7 @@ export function ConversationView({ otherUserPubkey, onTitleChange, showHeader = 
 		onError: (err) => {
 			setIsSending(false)
 			console.error('Error sending message:', err)
-			alert(`Failed to send message: ${err instanceof Error ? err.message : 'Unknown error'}`)
+			toast.error(`Failed to send message: ${err instanceof Error ? err.message : 'Unknown error'}`)
 		},
 	})
 
@@ -89,13 +87,6 @@ export function ConversationView({ otherUserPubkey, onTitleChange, showHeader = 
 
 	return (
 		<div className="flex flex-col h-full">
-			{/* Optional Header */}
-			{showHeader && (
-				<div className="flex-shrink-0 border-b bg-background p-4">
-					<UserWithAvatar pubkey={otherUserPubkey} size="md" showBadge={true} disableLink={false} />
-				</div>
-			)}
-
 			{/* Messages Area */}
 			<div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
 				{isLoading && (

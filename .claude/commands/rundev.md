@@ -7,7 +7,7 @@ Start the development environment with existing database (no seeding).
 1. Start the local relay server in the background:
 
    ```bash
-   next.orly.dev serve &
+   nak serve &
    ```
 
 2. Wait for relay to be ready, then start the dev server:
