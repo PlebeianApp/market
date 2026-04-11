@@ -36,6 +36,15 @@ async function waitForFiatPrice(page: Page, locator: ReturnType<Page['locator']>
 	return lastText
 }
 
+async function waitForSatsPrice(page: Page, locator: ReturnType<Page['locator']>, timeout = 20000): Promise<string> {
+	let lastText = ''
+	await expect(async () => {
+		lastText = (await locator.textContent()) || ''
+		expect(lastText).toMatch(/\d[\d,]*\s*sats/i)
+	}).toPass({ timeout })
+	return lastText
+}
+
 test.describe('BTC price display', () => {
 	test('products load and show product cards with sats prices', async ({ merchantPage }) => {
 		await safeGoto(merchantPage, '/products')
@@ -43,7 +52,7 @@ test.describe('BTC price display', () => {
 		const card = merchantPage.locator('[data-testid="product-card"]').first()
 		await expect(card).toBeVisible({ timeout: 20000 })
 
-		const productText = await card.textContent()
+		const productText = await waitForSatsPrice(merchantPage, card)
 		expect(productText).toMatch(/\d[\d,]*\s*sats/i)
 	})
 

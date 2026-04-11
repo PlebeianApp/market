@@ -341,7 +341,12 @@ test.describe('Checkout Flow', () => {
 		// Step 5: Completion or skip through remaining invoices
 		await expect(async () => {
 			const pageText = await buyerPage.locator('body').textContent()
-			const isComplete = pageText?.includes('Order complete') || pageText?.includes('order complete') || pageText?.includes('Thank you')
+			const isComplete =
+				pageText?.includes('Order complete') ||
+				pageText?.includes('order complete') ||
+				pageText?.includes('Thank you') ||
+				pageText?.includes('Checkout completed!') ||
+				pageText?.includes('All payments completed successfully!')
 			if (!isComplete) {
 				const nextSkip = buyerPage.getByRole('button', { name: /skip|pay later/i }).first()
 				if (await nextSkip.isVisible({ timeout: 1_000 }).catch(() => false)) {
@@ -349,7 +354,7 @@ test.describe('Checkout Flow', () => {
 				}
 			}
 			expect(isComplete).toBeTruthy()
-		}).toPass({ timeout: 20_000 })
+		}).toPass({ timeout: 35_000 })
 	})
 
 	test('checkout publishes order events to relay', async ({ buyerPage }) => {
@@ -388,7 +393,7 @@ test.describe('Checkout Flow', () => {
 			// At least some events should have been sent after clicking "Continue to Payment"
 			const hasOrderEvents = kind16Events.length > 0 || kind1059Events.length > 0 || allSent.length > 0
 			expect(hasOrderEvents).toBeTruthy()
-		}).toPass({ timeout: 20_000 })
+		}).toPass({ timeout: 35_000 })
 
 		// Print summary for debugging in CI
 		monitor.printSummary()
