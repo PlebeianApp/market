@@ -49,3 +49,4 @@ test-results
 # Claude Code local settings (user-specific)
 .claude/settings.local.json
 __pycache__/
+.opencode
