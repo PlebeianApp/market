@@ -41,6 +41,7 @@ function RouteComponent() {
 	const [currentStep, setCurrentStep] = useState<CheckoutStep>('shipping')
 	const [currentInvoiceIndex, setCurrentInvoiceIndex] = useState(0)
 	const [invoices, setInvoices] = useState<PaymentInvoiceData[]>([])
+	const [invoiceGenerationNonce, setInvoiceGenerationNonce] = useState(0)
 	const [shippingData, setShippingData] = useState<CheckoutFormData | null>(null)
 	const [mobileOrderSummaryOpen, setMobileOrderSummaryOpen] = useState(false)
 	const [selectedWallets, setSelectedWallets] = useState<Record<string, string>>({}) // sellerPubkey -> paymentDetailId
@@ -55,6 +56,7 @@ function RouteComponent() {
 		setCurrentStep('shipping')
 		setCurrentInvoiceIndex(0)
 		setInvoices([])
+		setInvoiceGenerationNonce(0)
 		setShippingData(null)
 		setOrderInvoiceSets({})
 		setSpecOrderIds([])
@@ -406,7 +408,7 @@ function RouteComponent() {
 
 			generateInvoices()
 		}
-	}, [currentStep, sellers, productsBySeller, sellerData, v4vShares, invoices.length, isGeneratingInvoices, generateInvoice, specOrderIds])
+	}, [currentStep, sellers, productsBySeller, sellerData, v4vShares, invoices.length, isGeneratingInvoices, generateInvoice, specOrderIds, invoiceGenerationNonce])
 
 	const form = useForm({
 		defaultValues: {
@@ -908,7 +910,7 @@ function RouteComponent() {
 										<Button
 											onClick={() => {
 												setInvoices([])
-												// This will trigger the useEffect to regenerate invoices
+												setInvoiceGenerationNonce((n) => n + 1)
 											}}
 											variant="outline"
 											className="mr-2"
