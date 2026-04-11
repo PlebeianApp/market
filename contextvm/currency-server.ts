@@ -6,7 +6,7 @@ import { RatesCache } from './tools/rates-cache'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 
-const SERVER_PRIVATE_KEY = process.env.CURRENCY_SERVER_KEY || '2300f5fff5642341946758cad8214f2c54f3c40fba5ba51b616452b197fd3e71'
+const SERVER_PRIVATE_KEY = process.env.CVM_SERVER_KEY || '2300f5fff5642341946758cad8214f2c54f3c40fba5ba51b616452b197fd3e71'
 
 const NODE_ENV = process.env.NODE_ENV || 'development'
 

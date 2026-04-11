@@ -55,3 +55,10 @@ Makefile
 scripts/docs_summary.py
 scripts/gitignore_audit.py
 scripts/verify_subagents.py
+# Local OpenCode artifacts
+/.opencode/
+/Makefile
+/scripts/docs_summary.py
+/scripts/gitignore_audit.py
+/scripts/verify_subagents.py
+/tatus
