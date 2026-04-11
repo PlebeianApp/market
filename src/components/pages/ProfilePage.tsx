@@ -118,6 +118,7 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 	const handleMessageClick = () => {
 		if (user?.pubkey) {
 			uiActions.openConversation(user.pubkey)
+			console.log('Opening conversation with', user.pubkey)
 		}
 	}
 

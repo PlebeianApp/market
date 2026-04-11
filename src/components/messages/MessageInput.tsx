@@ -1,5 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { authStore } from '@/lib/stores/auth'
+import { useStore } from '@tanstack/react-store'
 import { Send } from 'lucide-react'
 import { useState } from 'react'
 
@@ -10,6 +12,8 @@ interface MessageInputProps {
 
 export function MessageInput({ onSendMessage, isSending }: MessageInputProps) {
 	const [message, setMessage] = useState('')
+	const { user } = useStore(authStore)
+	const isLoggedIn = !!user
 
 	const handleSend = async () => {
 		if (message.trim() === '') return
@@ -31,14 +35,14 @@ export function MessageInput({ onSendMessage, isSending }: MessageInputProps) {
 					value={message}
 					onChange={(e) => setMessage(e.target.value)}
 					onKeyPress={handleKeyPress}
-					placeholder="Type your message..."
+					placeholder={isLoggedIn ? 'Type your message...' : 'Log in to send messages'}
 					className="w-full flex-grow resize-none p-2 pr-12 border rounded-lg focus:ring-2 focus:ring-primary"
 					rows={1}
-					disabled={isSending}
+					disabled={isSending || !isLoggedIn}
 				/>
 				<Button
 					onClick={handleSend}
-					disabled={isSending || message.trim() === ''}
+					disabled={isSending || !isLoggedIn || message.trim() === ''}
 					size="icon"
 					className="absolute right-2.5 top-1/2 -translate-y-1/2 h-7 w-7"
 				>

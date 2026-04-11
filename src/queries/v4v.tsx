@@ -7,6 +7,13 @@ import { v4 as uuidv4 } from 'uuid'
 import { v4vKeys } from './queryKeyFactory'
 import { filterBlacklistedPubkeys } from '@/lib/utils/blacklistFilters'
 
+export type V4VConfigurationState = 'unknown' | 'never-configured' | 'configured-zero' | 'configured-nonzero'
+
+export interface V4VConfiguration {
+	shares: V4VDTO[]
+	state: V4VConfigurationState
+}
+
 function padHexString(hex: string): string {
 	return hex.length % 2 === 1 ? '0' + hex : hex
 }
@@ -43,28 +50,113 @@ function normalizeAndEncodePubkey(value: string): { pubkey: string; npub: string
 	}
 }
 
-/**
- * Fetches V4V shares for a user
- *
- * Three distinct states:
- * 1. No V4V event exists → returns [] (user never configured V4V)
- * 2. V4V event with empty content [] → returns [] (user configured V4V but chose 0%, takes 100%)
- * 3. V4V event with shares → returns shares array
- *
- * NOTE: States 1 and 2 both return [], but state 2 has an event published.
- * The difference is important for UI logic (has the user made a choice vs never configured).
- */
-export const fetchV4VShares = async (pubkey: string): Promise<V4VDTO[]> => {
+function getMostRecentV4VEvent(events: Set<NDKEvent>): NDKEvent | null {
+	let mostRecentEvent: NDKEvent | null = null
+	let mostRecentTimestamp = 0
+
+	for (const event of Array.from(events)) {
+		if (event.created_at && event.created_at > mostRecentTimestamp) {
+			mostRecentEvent = event
+			mostRecentTimestamp = event.created_at
+		}
+	}
+
+	return mostRecentEvent
+}
+
+export function resolveV4VConfigurationState(event: Pick<NDKEvent, 'content'> | null | undefined): V4VConfigurationState {
+	if (!event) {
+		return 'never-configured'
+	}
+
+	try {
+		const content = JSON.parse(event.content)
+		if (!Array.isArray(content)) {
+			console.warn('V4V event content is not an array')
+			return 'unknown'
+		}
+
+		return content.length === 0 ? 'configured-zero' : 'configured-nonzero'
+	} catch (error) {
+		console.error('Error parsing V4V share content:', error)
+		return 'unknown'
+	}
+}
+
+async function parseV4VSharesFromEvent(event: NDKEvent, ndk: ReturnType<typeof ndkActions.getNDK>): Promise<V4VDTO[]> {
+	const content = JSON.parse(event.content)
+	if (!Array.isArray(content) || content.length === 0) {
+		return []
+	}
+
+	const seenPubkeys = new Set<string>()
+	const dedupedContent = content.filter((zapTag) => {
+		if (zapTag[0] === 'zap' && zapTag[1]) {
+			const normalized = normalizeAndEncodePubkey(zapTag[1])
+			if (normalized && !seenPubkeys.has(normalized.pubkey)) {
+				seenPubkeys.add(normalized.pubkey)
+				return true
+			}
+			return false
+		}
+		return false
+	})
+
+	const shares = await Promise.all(
+		dedupedContent
+			.map(async (zapTag, index) => {
+				if (zapTag[0] === 'zap' && zapTag[1] && zapTag[2]) {
+					const pubkeyValue = zapTag[1]
+					const percentage = parseFloat(zapTag[2]) || 5
+
+					const normalized = normalizeAndEncodePubkey(pubkeyValue)
+					if (!normalized) {
+						return null
+					}
+
+					let name = ''
+					try {
+						if (ndk) {
+							const user = ndk.getUser({
+								pubkey: normalized.pubkey,
+							})
+							await user.fetchProfile()
+							if (user.profile?.name) {
+								name = user.profile.name
+							} else if (user.profile?.displayName) {
+								name = user.profile.displayName
+							}
+						}
+					} catch (error) {
+						console.warn('Error fetching profile for V4V share:', error)
+					}
+
+					return {
+						id: `v4v-${index}-${normalized.pubkey.substring(0, 8)}`,
+						pubkey: normalized.pubkey,
+						name,
+						percentage,
+					}
+				}
+				return null
+			})
+			.filter(Boolean),
+	)
+
+	return shares.filter(Boolean) as V4VDTO[]
+}
+
+export const fetchV4VConfiguration = async (pubkey: string): Promise<V4VConfiguration> => {
 	try {
 		if (!pubkey || pubkey.trim() === '') {
-			console.warn('fetchV4VShares: Empty pubkey provided')
-			return []
+			console.warn('fetchV4VConfiguration: Empty pubkey provided')
+			return { shares: [], state: 'unknown' }
 		}
 
 		const ndk = ndkActions.getNDK()
 		if (!ndk) {
-			console.warn('NDK not ready, returning empty V4V shares')
-			return []
+			console.warn('NDK not ready, returning unknown V4V configuration')
+			return { shares: [], state: 'unknown' }
 		}
 
 		const events = await ndk.fetchEvents({
@@ -73,117 +165,53 @@ export const fetchV4VShares = async (pubkey: string): Promise<V4VDTO[]> => {
 			'#l': ['v4v_share'],
 		})
 
-		// State 1: No V4V event exists (never configured)
 		if (!events || events.size === 0) {
-			return []
+			return { shares: [], state: 'never-configured' }
 		}
 
-		let mostRecentEvent: NDKEvent | null = null
-		let mostRecentTimestamp = 0
+		const mostRecentEvent = getMostRecentV4VEvent(events)
+		const state = resolveV4VConfigurationState(mostRecentEvent)
 
-		const eventsArray = Array.from(events)
-
-		for (const event of eventsArray) {
-			if (event.created_at && event.created_at > mostRecentTimestamp) {
-				mostRecentEvent = event
-				mostRecentTimestamp = event.created_at
-			}
+		if (!mostRecentEvent || state === 'never-configured' || state === 'configured-zero') {
+			return { shares: [], state }
 		}
 
-		if (!mostRecentEvent) {
-			return []
+		if (state === 'unknown') {
+			return { shares: [], state }
 		}
 
-		try {
-			const content = JSON.parse(mostRecentEvent.content)
-
-			if (!Array.isArray(content)) {
-				console.warn('V4V event content is not an array')
-				return []
-			}
-
-			// State 2: V4V event exists but with empty array (user takes 100%)
-			if (content.length === 0) {
-				return []
-			}
-
-			// State 3: V4V event with actual shares
-			// First, deduplicate by pubkey (keep the first occurrence)
-			const seenPubkeys = new Set<string>()
-			const dedupedContent = content.filter((zapTag) => {
-				if (zapTag[0] === 'zap' && zapTag[1]) {
-					const normalized = normalizeAndEncodePubkey(zapTag[1])
-					if (normalized && !seenPubkeys.has(normalized.pubkey)) {
-						seenPubkeys.add(normalized.pubkey)
-						return true
-					}
-					return false
-				}
-				return false
-			})
-
-			const shares = await Promise.all(
-				dedupedContent
-					.map(async (zapTag, index) => {
-						if (zapTag[0] === 'zap' && zapTag[1] && zapTag[2]) {
-							const pubkeyValue = zapTag[1]
-							const percentage = parseFloat(zapTag[2]) || 5 // Default to 5% if invalid
-
-							const normalized = normalizeAndEncodePubkey(pubkeyValue)
-							if (!normalized) {
-								return null
-							}
-
-							let name = ''
-							try {
-								if (ndk) {
-									const user = ndk.getUser({
-										pubkey: normalized.pubkey,
-									})
-									await user.fetchProfile()
-									if (user.profile?.name) {
-										name = user.profile.name
-									} else if (user.profile?.displayName) {
-										name = user.profile.displayName
-									}
-								}
-							} catch (error) {
-								console.warn('Error fetching profile for V4V share:', error)
-							}
-
-							const shareObj = {
-								id: `v4v-${index}-${normalized.pubkey.substring(0, 8)}`,
-								pubkey: normalized.pubkey,
-								name,
-								percentage,
-							}
-
-							return shareObj
-						}
-						return null
-					})
-					.filter(Boolean),
-			)
-
-			return shares.filter(Boolean) as V4VDTO[]
-		} catch (error) {
-			console.error('Error parsing V4V share content:', error)
-			return []
+		const shares = await parseV4VSharesFromEvent(mostRecentEvent, ndk)
+		return {
+			shares,
+			state: shares.length > 0 ? 'configured-nonzero' : 'unknown',
 		}
+	} catch (error) {
+		console.error('Error fetching V4V configuration:', error)
+		return { shares: [], state: 'unknown' }
+	}
+}
+
+export const fetchV4VShares = async (pubkey: string): Promise<V4VDTO[]> => {
+	const { shares } = await fetchV4VConfiguration(pubkey)
+	return shares
+}
+
+export const v4VForUserQuery = async (userPubkey: string): Promise<V4VDTO[]> => {
+	try {
+		const { shares } = await fetchV4VConfiguration(userPubkey)
+		return shares
 	} catch (error) {
 		console.error('Error fetching V4V shares:', error)
 		return []
 	}
 }
 
-export const v4VForUserQuery = async (userPubkey: string): Promise<V4VDTO[]> => {
-	try {
-		const shares = await fetchV4VShares(userPubkey)
-		return shares
-	} catch (error) {
-		console.error('Error fetching V4V shares:', error)
-		return []
-	}
+export const useV4VConfiguration = (pubkey: string) => {
+	return useQuery({
+		queryKey: v4vKeys.userConfig(pubkey),
+		queryFn: () => fetchV4VConfiguration(pubkey),
+		enabled: !!pubkey,
+	})
 }
 
 export const useV4VShares = (pubkey: string) => {
@@ -245,6 +273,7 @@ export const usePublishV4VShares = () => {
 		mutationFn: (params: { shares: V4VDTO[]; userPubkey: string; appPubkey?: string }) =>
 			publishV4VShares(params.shares, params.userPubkey, params.appPubkey),
 		onSuccess: (_, variables) => {
+			queryClient.invalidateQueries({ queryKey: v4vKeys.userConfig(variables.userPubkey) })
 			// Invalidate the specific user's V4V shares query
 			queryClient.invalidateQueries({ queryKey: v4vKeys.userShares(variables.userPubkey) })
 			// Also invalidate all V4V queries to be safe

@@ -5,13 +5,14 @@ import { resetV4VForUser } from '../scenarios'
 test.use({ scenario: 'base' })
 
 test.describe('V4V Product Creation Flow', () => {
-	test('new user creating first product triggers V4V dialog and value is reflected on dashboard', async ({ newUserPage }) => {
-		// This test covers shipping quick-create, full form fill, V4V dialog, and dashboard
-		// verification — give it more time than the default 30s, especially on CI.
+	test('configured-zero user can publish first product without V4V setup blocker', async ({ newUserPage }) => {
+		// This test covers the PR 5 semantic-gating contract only:
+		// configured-zero must not block first-product publish.
+		// Give it more time than the default 30s, especially on CI.
 		test.setTimeout(60_000)
 
-		// Reset V4V shares so the V4V setup dialog will appear during product creation.
-		// This is needed because previous test runs may have saved V4V shares for devUser3.
+		// Reset V4V shares by publishing an empty event. Under the semantic split,
+		// this is a valid configured-zero state rather than "never configured".
 		await resetV4VForUser(devUser3.sk)
 
 		await newUserPage.goto('/dashboard/products/products/new')
@@ -41,11 +42,11 @@ test.describe('V4V Product Creation Flow', () => {
 		const descriptionInput = newUserPage.getByTestId('product-description-input')
 		await expect(descriptionInput).toBeVisible({ timeout: 10_000 })
 
-		await titleInput.fill('V4V Test Product')
-		await descriptionInput.fill('Product for testing V4V setup flow')
+		await titleInput.fill('V4V Zero Test Product')
+		await descriptionInput.fill('Product for testing configured-zero V4V publish flow')
 
 		// Verify values stuck before navigating (guards against form re-renders clearing values)
-		await expect(titleInput).toHaveValue('V4V Test Product')
+		await expect(titleInput).toHaveValue('V4V Zero Test Product')
 
 		await newUserPage.getByTestId('product-next-button').click()
 
@@ -85,38 +86,19 @@ test.describe('V4V Product Creation Flow', () => {
 			await addButton.click()
 		}
 
-		// --- V4V Dialog ---
-		// Since we reset V4V shares, "Setup V4V First" button should appear
+		// --- Publish Without V4V Blocker ---
+		// Configured-zero is a valid configured state, so product creation should
+		// not be blocked by the V4V setup button.
 		const v4vButton = newUserPage.getByTestId('product-setup-v4v-button')
+		const publishButton = newUserPage.getByTestId('product-publish-button')
 		await expect(newUserPage.getByTestId('product-tab-shipping')).toHaveAttribute('data-state', 'active')
 		await expect(newUserPage.getByTestId('product-next-button')).not.toBeVisible()
-		await expect(v4vButton).toBeVisible({ timeout: 20_000 })
-		await v4vButton.click()
-
-		// Dialog opens with default 10% V4V for new users
-		await expect(newUserPage.getByText('Set up Value for Value (V4V)')).toBeVisible({ timeout: 5_000 })
-
-		// Verify the slider defaults to 10% (non-zero)
-		const slider = newUserPage.locator('[role="slider"]').first()
-		await expect(slider).toHaveAttribute('aria-valuenow', '10')
-
-		// Verify the percentage labels
-		await expect(newUserPage.getByText('V4V: 10%')).toBeVisible()
-		await expect(newUserPage.getByText('Seller: 90%')).toBeVisible()
-
-		// Confirm & Save (publishes Kind 30078, then triggers product publish)
-		await newUserPage.getByTestId('confirm-v4v-setup-button').click()
+		await expect(v4vButton).not.toBeVisible()
+		await expect(publishButton).toBeVisible({ timeout: 20_000 })
+		await publishButton.click()
 
 		// --- Product Published ---
 		// App redirects to product page after publish
-		await expect(newUserPage.getByRole('heading', { name: 'V4V Test Product', level: 1 })).toBeVisible({ timeout: 15_000 })
-
-		// --- Verify V4V on Circular Economy Dashboard ---
-		await newUserPage.goto('/dashboard/sales/circular-economy')
-		await expect(newUserPage.getByRole('heading', { name: 'Circular Economy' })).toBeVisible({ timeout: 10_000 })
-
-		// The saved 10% V4V should be reflected
-		await expect(newUserPage.getByText('V4V: 10%')).toBeVisible({ timeout: 10_000 })
-		await expect(newUserPage.getByText('Seller: 90%')).toBeVisible()
+		await expect(newUserPage.getByRole('heading', { name: 'V4V Zero Test Product', level: 1 })).toBeVisible({ timeout: 15_000 })
 	})
 })
