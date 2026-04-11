@@ -108,12 +108,39 @@ In each case CI reached the payment step far enough for the `Invoices` heading t
 
 This points to an unresolved payment/invoice readiness problem. The current evidence does **not** show that the split-branch refactor created a brand-new class of failure. More likely, the refactor centralized the waits but the underlying payment-step flake still exists.
 
+### Artifact-based diagnosis from checkout failure
+
+Inspected local CI artifacts for:
+
+- `test-results/checkout-Checkout-buyer-ca-01c27-full-purchase-with-shipping-chromium/error-context.md`
+- `test-results/checkout-Checkout-buyer-ca-01c27-full-purchase-with-shipping-chromium/test-failed-1.png`
+- retry artifacts for the same test
+
+Observed UI state at the failing `Invoices` step:
+
+- the page is on the payment screen, not redirected away
+- the `Invoices` heading is visible
+- the app is **not** merely slow to reveal `Pay with WebLN`
+- instead the invoice panel shows an explicit error state:
+  - `Unable to generate payment invoices`
+  - `TRY AGAIN`
+  - `GO BACK`
+- the progress bar/header text still shows `Generating payment invoices...`
+
+Implication:
+
+- the current helper assumption is wrong for this failure mode
+- the problem is not just "wait longer for WebLN"
+- at least one real CI failure path is invoice-generation failure before any actionable payment button is rendered
+- the next change should account for this explicit error state rather than only polling for WebLN or skip/pay-later visibility
+
 ### Current assessment
 
 - The branch successfully isolated the payment-related failure area.
 - The branch also revealed unrelated E2E flakiness elsewhere in the suite.
 - The branch is **not yet ready** to merge into the integration branch.
 - There is not enough evidence yet to conclude that the split-branch changes themselves caused the payment failures.
+- We now have direct artifact evidence that one common failure mode is invoice-generation error UI, not just delayed rendering of the WebLN button.
 
 ### Recommendation
 
