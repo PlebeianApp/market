@@ -7,7 +7,7 @@ import { productFormActions, productFormStore, type ProductFormTab } from '@/lib
 import { uiActions } from '@/lib/stores/ui'
 import { hasProductFormDraft } from '@/lib/utils/productFormStorage'
 import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey, isShippingDeleted } from '@/queries/shipping'
-import { useV4VShares } from '@/queries/v4v'
+import { useV4VConfiguration } from '@/queries/v4v'
 import { useForm } from '@tanstack/react-form'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { NameTab } from './NameTab'
 import { CategoryTab, DetailTab, ImagesTab, ShippingTab, SpecTab } from './tabs'
+import { shouldRequireV4VSetup } from './v4vSetup'
 
 export function ProductFormContent({
 	className = '',
@@ -56,10 +57,13 @@ export function ProductFormContent({
 	const authState = useStore(authStore)
 	const userPubkey = authState.user?.pubkey || ''
 
-	// Check V4V shares (only for new products)
-	const { data: v4vShares, isLoading: isLoadingV4V } = useV4VShares(userPubkey)
-	const hasV4VSetup = v4vShares && v4vShares.length > 0
-	const needsV4VSetup = !editingProductId && !hasV4VSetup && !isLoadingV4V
+	// Check semantic V4V setup state for new products.
+	const { data: v4vConfiguration, isLoading: isLoadingV4V } = useV4VConfiguration(userPubkey)
+	const needsV4VSetup = shouldRequireV4VSetup({
+		editingProductId,
+		isLoadingV4V,
+		v4vConfigurationState: v4vConfiguration?.state ?? 'unknown',
+	})
 
 	// Check if user has any shipping options configured (for tab ordering)
 	// Query is only enabled when userPubkey is available

@@ -10,6 +10,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 
 interface ConversationViewProps {
 	/** The pubkey of the other user in the conversation */
@@ -75,7 +76,7 @@ export function ConversationView({ otherUserPubkey, onTitleChange }: Conversatio
 		onError: (err) => {
 			setIsSending(false)
 			console.error('Error sending message:', err)
-			alert(`Failed to send message: ${err instanceof Error ? err.message : 'Unknown error'}`)
+			toast.error(`Failed to send message: ${err instanceof Error ? err.message : 'Unknown error'}`)
 		},
 	})
 
