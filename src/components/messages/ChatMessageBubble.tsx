@@ -13,6 +13,7 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { fetchProductByATag, useProductTitle, useProductPrice, useProductImages } from '@/queries/products'
 import { getCoordsFromATag } from '@/lib/utils/coords'
+import { extractActualContent, isSafeImageUrl } from '@/lib/utils/message-content'
 import { Link } from '@tanstack/react-router'
 
 // Interface for embedded product event data
@@ -75,27 +76,6 @@ const getTagValue = (
 interface ChatMessageBubbleProps {
 	event: NDKEvent
 	isCurrentUser: boolean
-}
-
-const extractActualContent = (content: string): string | null => {
-	if (!content || !content.trim()) return null
-
-	const trimmed = content.trim()
-	const looksLikeJSON = (trimmed.startsWith('{') || trimmed.startsWith('[')) && (trimmed.endsWith('}') || trimmed.endsWith(']'))
-
-	if (!looksLikeJSON) return content
-
-	try {
-		const parsed = JSON.parse(content)
-		if (parsed && typeof parsed === 'object' && 'content' in parsed) {
-			const innerContent = parsed.content
-			if (typeof innerContent === 'string') {
-				return innerContent
-			}
-		}
-	} catch {}
-
-	return null
 }
 
 const extractNestedEventMetadata = (content: string): { parsed?: any; metadata?: Record<string, string> } => {
@@ -161,7 +141,7 @@ const UniversalEventViewer = ({ nestedEvent }: { nestedEvent: NestedEvent | null
 		.replace(/<[^>]*>/g, '')
 		.trim()
 
-	const hasImage = !!image
+	const hasImage = !!image && isSafeImageUrl(image)
 	const hasTitle = !!title
 	const hasContent = cleanContent.length > 20
 	const hasOptions = options.length > 0
@@ -171,7 +151,7 @@ const UniversalEventViewer = ({ nestedEvent }: { nestedEvent: NestedEvent | null
 		<div className="max-w-md rounded-lg border border-border bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow">
 			{hasImage && (
 				<div className="w-full h-40 bg-muted overflow-hidden">
-					<img src={image} alt={title || 'Event image'} className="w-full h-full object-cover" />
+					<img src={image!} alt={title || 'Event image'} className="w-full h-full object-cover" />
 				</div>
 			)}
 
@@ -577,11 +557,6 @@ export function ChatMessageBubble({ event, isCurrentUser }: ChatMessageBubblePro
 	const structuredPart = renderStructuredContent()
 	const hasContent = event.content && event.content.trim() !== ''
 
-	const looksLikeJSON = (content: string): boolean => {
-		const trimmed = content.trim()
-		return (trimmed.startsWith('{') || trimmed.startsWith('[')) && (trimmed.endsWith('}') || trimmed.endsWith(']'))
-	}
-
 	return (
 		<div className={`flex flex-wrap items-end gap-2 ${alignment} mb-2 w-full`}>
 			<div className="flex flex-col max-w-[85%] sm:max-w-[75%] md:max-w-[65%] lg:max-w-[55%] min-w-0">
@@ -601,6 +576,8 @@ export function ChatMessageBubble({ event, isCurrentUser }: ChatMessageBubblePro
 							})()}
 						</>
 					)}
+					{/* Fallback for non-kind-14 messages: show raw content if no structured renderer matched */}
+					{event.kind !== 14 && !structuredPart && hasContent && <p className="text-sm">{event.content}</p>}
 				</div>
 				{event.created_at && (
 					<span className={`text-xs text-muted-foreground mt-1 px-1 ${isCurrentUser ? 'text-right' : 'text-left'}`}>

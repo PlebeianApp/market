@@ -4,15 +4,9 @@ import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
 import { NDKEvent, type NDKUser, type NDKFilter } from '@nostr-dev-kit/ndk'
 import { messageKeys } from './queryKeyFactory'
+import { looksLikeJSON, extractActualContent } from '@/lib/utils/message-content'
 
 const MESSAGE_KINDS = [14, 16, 17]
-
-/** Check if content looks like JSON (potentially unsupported data) */
-const looksLikeJSON = (content: string): boolean => {
-	if (!content) return false
-	const trimmed = content.trim()
-	return (trimmed.startsWith('{') || trimmed.startsWith('[')) && (trimmed.endsWith('}') || trimmed.endsWith(']'))
-}
 
 const extractMetadataFromNestedEvent = (
 	content: string,
@@ -41,7 +35,10 @@ const extractMetadataFromNestedEvent = (
 			}
 		}
 	} catch (error) {
-		console.warn('Failed to parse nested event metadata:', error)
+		// Silent failure for malformed JSON - this is expected on adversarial relay data
+		if (process.env.NODE_ENV === 'development') {
+			console.warn('Failed to parse nested event metadata:', error)
+		}
 	}
 
 	return {}
@@ -56,7 +53,10 @@ const getMessageSnippet = (event: NDKEvent, maxLength = 50): string => {
 	}
 
 	if (kind === 14) {
-		return content && content.trim() ? truncate(content.trim(), maxLength) : '(No content)'
+		// Use the same extraction logic as the bubble display for consistency
+		const actualContent = extractActualContent(content)
+		const contentToShow = actualContent || content
+		return contentToShow && contentToShow.trim() ? truncate(contentToShow.trim(), maxLength) : '(No content)'
 	}
 
 	if (kind === 16 || kind === 17) {
