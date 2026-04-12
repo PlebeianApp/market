@@ -4,6 +4,7 @@ import { authStore } from '@/lib/stores/auth'
 import { useStore } from '@tanstack/react-store'
 import { NDKEvent, type NDKUser, type NDKFilter } from '@nostr-dev-kit/ndk'
 import { messageKeys } from './queryKeyFactory'
+import { toast } from 'sonner'
 
 const MESSAGE_KINDS = [14, 16, 17]
 
@@ -111,14 +112,14 @@ export async function sendChatMessage(recipientPubkey: string, content: string, 
 	if (!ndk || !currentUser) {
 		// Simplified check, main check is for ndk.signer below
 		console.error('NDK or current user not available for sending message')
-		alert('User not available. Please ensure you are logged in.')
+		toast.error('User not available. Please ensure you are logged in.')
 		return undefined
 	}
 
 	if (!ndk.signer) {
 		// Check for ndk.signer directly
 		console.error('NDK signer not available for sending message')
-		alert('Signer not available. Please ensure you are logged in correctly.')
+		toast.error('Signer not available. Please ensure you are logged in correctly.')
 		return undefined
 	}
 
@@ -136,7 +137,7 @@ export async function sendChatMessage(recipientPubkey: string, content: string, 
 		return event
 	} catch (error) {
 		console.error('Error sending chat message:', error)
-		alert(`Error sending message: ${error instanceof Error ? error.message : String(error)}`)
+		toast.error(`Error sending message: ${error instanceof Error ? error.message : String(error)}`)
 		return undefined
 	}
 }
