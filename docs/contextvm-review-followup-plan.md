@@ -18,10 +18,10 @@ We will tackle the remaining review feedback in small, separately committed step
   - [x] Run unit/integration validation
   - [x] Investigate integration-test timeout in Bun harness (browser path works)
 
-- [ ] 3. Generalize the narrow package.json test scripts
-  - [ ] Broaden `test:unit` so it is not limited to only the current feature files
-  - [ ] Broaden `test:integration` similarly, or move selection out of `package.json`
-  - [ ] Keep test selection in workflow/Makefile/CLI usage instead of hardcoding single files
+- [x] 3. Generalize the narrow package.json test scripts
+  - [x] Broaden `test:unit` so it is not limited to only the current feature files
+  - [x] Broaden `test:integration` similarly, or move selection out of `package.json`
+  - [x] Keep test selection in workflow/Makefile/CLI usage instead of hardcoding single files
 
 ## Working agreement
 
