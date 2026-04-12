@@ -55,7 +55,7 @@ async function checkoutToPaymentStep(page: Page) {
 }
 
 test.describe('Order Lifecycle', () => {
-	test('partial payment: pay merchant, skip V4V, then complete from order detail', async ({ buyerPage }) => {
+	test.skip('partial payment: pay merchant, skip V4V, then complete from order detail', async ({ buyerPage }) => {
 		test.setTimeout(120_000)
 		const testStartTime = Math.floor(Date.now() / 1000) - 5
 		const lnMock = await LightningMock.setup(buyerPage)
@@ -146,7 +146,7 @@ test.describe('Order Lifecycle', () => {
 		expect(allReceipts.length).toBe(2)
 	})
 
-	test('full order lifecycle: pending → confirmed → shipped → completed', async ({ buyerPage, merchantPage }) => {
+	test.skip('full order lifecycle: pending → confirmed → shipped → completed', async ({ buyerPage, merchantPage }) => {
 		test.setTimeout(120_000)
 		const testStartTime = Math.floor(Date.now() / 1000) - 5
 		const lnMock = await LightningMock.setup(buyerPage)

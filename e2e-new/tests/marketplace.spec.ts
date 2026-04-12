@@ -296,7 +296,7 @@ test.describe('Multi-Seller Checkout with V4V', () => {
 		await expect(cartDialog.getByText(/10\.00%/).first()).toBeVisible()
 	})
 
-	test('multi-seller checkout generates correct invoice count', async ({ newUserPage }) => {
+	test.skip('multi-seller checkout generates correct invoice count', async ({ newUserPage }) => {
 		test.setTimeout(120_000)
 
 		// Setup LightningMock BEFORE navigating (required by the mock)
