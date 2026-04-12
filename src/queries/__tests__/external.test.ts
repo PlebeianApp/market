@@ -6,7 +6,7 @@ console.warn = () => {}
 console.error = () => {}
 
 mock.module('@/lib/ctxcn-client', () => ({
-	ContextVmClient: class {
+	PlebianCurrencyClient: class {
 		constructor() {
 			throw new Error('mocked: no real relay connections in tests')
 		}

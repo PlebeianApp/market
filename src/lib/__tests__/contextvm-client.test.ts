@@ -6,7 +6,7 @@ const originalError = console.error
 console.warn = () => {}
 console.error = () => {}
 
-describe('ContextVmClient unit tests', () => {
+describe('PlebianCurrencyClient unit tests', () => {
 	test('constructor derives public key from private key', () => {
 		const privateKey = crypto.getRandomValues(new Uint8Array(32))
 		const publicKey = getPublicKey(privateKey)

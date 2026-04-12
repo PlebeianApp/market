@@ -14,16 +14,16 @@ export const CURRENCY_CACHE_CONFIG = {
 	RESOLVE_TIMEOUT: 5000,
 } as const
 
-let contextVmClient: InstanceType<typeof import('@/lib/ctxcn-client').ContextVmClient> | null = null
-let contextVmInitPromise: Promise<any> | null = null
+let currencyClient: InstanceType<typeof import('@/lib/ctxcn-client').PlebianCurrencyClient> | null = null
+let currencyClientInitPromise: Promise<any> | null = null
 
-async function getContextVmClient() {
-	if (contextVmClient) return contextVmClient
-	if (contextVmInitPromise) return contextVmInitPromise
+async function getCurrencyClient() {
+	if (currencyClient) return currencyClient
+	if (currencyClientInitPromise) return currencyClientInitPromise
 
-	contextVmInitPromise = (async () => {
+	currencyClientInitPromise = (async () => {
 		try {
-			const { ContextVmClient } = await import('@/lib/ctxcn-client')
+			const { PlebianCurrencyClient } = await import('@/lib/ctxcn-client')
 
 			const privateKey = crypto.getRandomValues(new Uint8Array(32))
 
@@ -31,22 +31,22 @@ async function getContextVmClient() {
 			const cvmRelays = getCurrencyServerRelays()
 			const relays = mainRelay ? [mainRelay, ...cvmRelays] : cvmRelays
 
-			const client = new ContextVmClient({
+			const client = new PlebianCurrencyClient({
 				privateKey,
 				relays,
 				serverPubkey: configStore.state.config.currencyServerPubkey || CURRENCY_SERVER_PUBKEY,
 			})
 
-			contextVmClient = client
+			currencyClient = client
 			return client
 		} catch (error) {
 			console.warn('Failed to initialize ContextVM currency client:', error)
-			contextVmInitPromise = null
+			currencyClientInitPromise = null
 			return null
 		}
 	})()
 
-	return contextVmInitPromise
+	return currencyClientInitPromise
 }
 
 async function getMainRelayFromConfig(): Promise<string | undefined> {
@@ -62,7 +62,7 @@ const CONTEXTVM_CALL_TIMEOUT = 5000
 
 async function fetchFromContextVm(): Promise<Record<string, number> | null> {
 	try {
-		const client = await getContextVmClient()
+		const client = await getCurrencyClient()
 		if (!client) return null
 
 		const startedAt = Date.now()

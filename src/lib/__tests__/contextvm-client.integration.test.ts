@@ -1,7 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { config } from 'dotenv'
 import { getPublicKey } from 'nostr-tools/pure'
-import { ContextVmClient } from '../ctxcn-client'
+import { PlebianCurrencyClient } from '../ctxcn-client'
 import { getCurrencyServerRelays } from '@/lib/constants'
 
 config({ path: ['.env.local', '.env'] })
@@ -12,11 +12,11 @@ const DERIVED_SERVER_PUBKEY = getPublicKey(new Uint8Array(Buffer.from(SERVER_PRI
 const SERVER_PUBKEY = process.env.CURRENCY_SERVER_PUBKEY || DERIVED_SERVER_PUBKEY
 const RELAYS = Array.from(new Set([RELAY_URL, ...getCurrencyServerRelays()]))
 
-describe('ContextVmClient integration', () => {
-	let client: ContextVmClient | undefined
+describe('PlebianCurrencyClient integration', () => {
+	let client: PlebianCurrencyClient | undefined
 
 	beforeAll(() => {
-		client = new ContextVmClient({
+		client = new PlebianCurrencyClient({
 			privateKey: crypto.getRandomValues(new Uint8Array(32)),
 			relays: RELAYS,
 			serverPubkey: SERVER_PUBKEY,
@@ -35,7 +35,7 @@ describe('ContextVmClient integration', () => {
 		expect(RELAYS).toContain('ws://localhost:10547')
 		expect(RELAYS.length).toBeGreaterThan(0)
 		expect(() => {
-			client = new ContextVmClient({
+			client = new PlebianCurrencyClient({
 				privateKey: crypto.getRandomValues(new Uint8Array(32)),
 				relays: RELAYS,
 				serverPubkey: SERVER_PUBKEY,

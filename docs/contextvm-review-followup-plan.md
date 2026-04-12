@@ -24,9 +24,9 @@ We will tackle the remaining review feedback in small, separately committed step
   - [x] Keep test selection in workflow/Makefile/CLI usage instead of hardcoding single files
 
 - [ ] 4. Align ContextVM naming and server/client terminology
-  - [x] Rename `currency-server.ts` to `server.ts` if the review still expects the shorter server name
-  - [ ] Standardize the generated client naming (`PlebianCurrenycServerClient` → `PlebianServerClient` → `PlebianCurrencyClient` as applicable)
-  - [ ] Replace any typoed or transitional names in docs, code, and tests
+  - [x] Rename the server entrypoint to `server.ts`
+  - [x] Standardize the generated client naming (`PlebianCurrenycServerClient` → `PlebianServerClient` → `PlebianCurrencyClient` as applicable)
+  - [x] Replace any typoed or transitional names in docs, code, and tests
   - [ ] Treat `CVM_SERVER_KEY` as the shared server key for multiple ContextVM tools, not just currency pricing
 
 - [ ] 5. Finalize the ctxcn generation/check-in workflow

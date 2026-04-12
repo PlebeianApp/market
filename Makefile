@@ -85,7 +85,7 @@ dev-contextvm: install
 	relay_bin="$$(command -v nak 2>/dev/null || printf '%s/go/bin/nak' "$$HOME")"; \
 	"$$relay_bin" serve --hostname 0.0.0.0 >/tmp/contextvm-relay.log 2>&1 & relay_pid=$$!; \
 	sleep 2; \
-	APP_RELAY_URL="$(RELAY_URL)" "$(BUN)" run dev:currency-server >/tmp/contextvm-currency-server.log 2>&1 & server_pid=$$!; \
+	APP_RELAY_URL="$(RELAY_URL)" "$(BUN)" run dev:contextvm-server >/tmp/contextvm-currency-server.log 2>&1 & server_pid=$$!; \
 	i=0; until "$(BUN)" run scripts/fetch-btc-price.ts "$(RELAY_URL)" >/tmp/contextvm-currency-server-check.log 2>&1; do \
 		i=$$((i + 1)); \
 		if [ $$i -ge 30 ]; then \
