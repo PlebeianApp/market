@@ -150,8 +150,8 @@ manual-happy-path: install
 browser-contextvm: install
 	@set -e; \
 	trap 'kill $$app_pid $$server_pid $$relay_pid >/dev/null 2>&1 || true' EXIT INT TERM; \
-	pkill -f 'dev:contextvm-server|dev:seed|e2e-new/seed-relay.ts|nak serve' 2>/dev/null || true; \
-	lsof -ti:10547 -ti:3000 2>/dev/null | xargs -r kill -9 2>/dev/null || true; \
+	pkill -f 'dev:contextvm-server|dev:seed|bun --hot src/index.tsx|e2e-new/seed-relay.ts|nak serve' 2>/dev/null || true; \
+	lsof -ti:10547 -ti:3000 -ti:34567 2>/dev/null | xargs -r kill -9 2>/dev/null || true; \
 	sleep 2; \
 	test_app_private_key="$$(nak key generate)"; \
 	relay_bin="$$(command -v nak 2>/dev/null || printf '%s/go/bin/nak' "$$HOME")"; \
@@ -178,10 +178,19 @@ browser-contextvm: install
 		sleep 1; \
 	done; \
 	APP_PRIVATE_KEY="$$test_app_private_key" APP_RELAY_URL="$(RELAY_URL)" LOCAL_RELAY_ONLY=true NIP46_RELAY_URL="$(RELAY_URL)" PORT=3000 "$(BUN)" run dev:seed >/tmp/contextvm-browser-app.log 2>&1 & app_pid=$$!; \
-	i=0; until "$(BUN)" -e 'const r = await fetch("http://localhost:3000/products"); process.exit(r.ok ? 0 : 1)'; do \
+	i=0; until "$(BUN)" -e 'const config = await fetch("http://localhost:3000/api/config").then((r) => r.json()); process.exit(config.needsSetup ? 1 : 0)'; do \
 		i=$$((i + 1)); \
 		if [ $$i -ge 60 ]; then \
-			echo "error: app did not become ready"; \
+			echo "error: app config did not become ready"; \
+			echo "app log: /tmp/contextvm-browser-app.log"; \
+			exit 1; \
+		fi; \
+		sleep 1; \
+	done; \
+	i=0; until "$(BUN)" -e 'const res = await fetch("http://localhost:3000/products"); const html = await res.text(); process.exit(res.ok && !html.includes("No products found") ? 0 : 1)'; do \
+		i=$$((i + 1)); \
+		if [ $$i -ge 60 ]; then \
+			echo "error: products were not seeded or visible"; \
 			echo "app log: /tmp/contextvm-browser-app.log"; \
 			exit 1; \
 		fi; \
