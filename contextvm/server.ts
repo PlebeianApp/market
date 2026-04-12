@@ -12,16 +12,13 @@ const NODE_ENV = process.env.NODE_ENV || 'development'
 
 function getRelays(): string[] {
 	const appRelay = process.env.APP_RELAY_URL
-	const cvmRelays = ['wss://relay.contextvm.org', 'wss://relay2.contextvm.org']
+	const publicRelays = ['wss://relay.contextvm.org', 'wss://relay2.contextvm.org']
 
-	switch (NODE_ENV) {
-		case 'production':
-			return [appRelay || 'wss://relay.plebeian.market', ...cvmRelays]
-		case 'staging':
-			return [appRelay || 'wss://relay.staging.plebeian.market', ...cvmRelays]
-		default:
-			return [appRelay || 'ws://localhost:10547', ...cvmRelays]
+	if (NODE_ENV === 'production') {
+		return [appRelay || 'wss://relay.plebeian.market', ...publicRelays]
 	}
+
+	return [appRelay || 'ws://localhost:10547']
 }
 
 function getCachePath(): string {
@@ -60,7 +57,7 @@ async function main() {
 	const relays = getRelays()
 	const relayPool = new ApplesauceRelayPool(relays)
 	const serverPubkey = await signer.getPublicKey()
-	const isPublic = true
+	const isPublic = NODE_ENV === 'production'
 
 	console.log(`=== Plebeian Currency ContextVM Server ===`)
 	console.log(`Public key: ${serverPubkey}`)
