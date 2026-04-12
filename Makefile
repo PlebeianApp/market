@@ -150,6 +150,9 @@ manual-happy-path: install
 browser-contextvm: install
 	@set -e; \
 	trap 'kill $$app_pid $$server_pid $$relay_pid >/dev/null 2>&1 || true' EXIT INT TERM; \
+	pkill -f 'dev:contextvm-server|dev:seed|e2e-new/seed-relay.ts|nak serve' 2>/dev/null || true; \
+	lsof -ti:10547 -ti:3000 2>/dev/null | xargs -r kill -9 2>/dev/null || true; \
+	sleep 2; \
 	test_app_private_key="$$(nak key generate)"; \
 	relay_bin="$$(command -v nak 2>/dev/null || printf '%s/go/bin/nak' "$$HOME")"; \
 	"$$relay_bin" serve --port 10547 --hostname 0.0.0.0 >/tmp/contextvm-browser-relay.log 2>&1 & relay_pid=$$!; \
