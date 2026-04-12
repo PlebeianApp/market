@@ -50,3 +50,5 @@ test-results
 .claude/settings.local.json
 __pycache__/
 .opencode
+.opencode/
+contextvm/
