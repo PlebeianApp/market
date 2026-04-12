@@ -11,12 +11,12 @@ We will tackle the remaining review feedback in small, separately committed step
   - [x] Create a local `.env.local` with generated keys
   - [x] Verify the local/dev default still works
 
-- [ ] 2. Replace the hand-written ContextVM client with the checked-in generated client
+- [x] 2. Replace the hand-written ContextVM client with the checked-in generated client
   - [x] Generate the `ctxcn` client in the expected checked-in location
   - [x] Swap frontend code to use the generated client
-  - [ ] Remove any obsolete hand-written client code if it is no longer needed
-  - [ ] Run unit/integration validation
-  - [ ] Investigate integration-test timeout in Bun harness (browser path works)
+  - [x] Remove any obsolete hand-written client code if it is no longer needed
+  - [x] Run unit/integration validation
+  - [x] Investigate integration-test timeout in Bun harness (browser path works)
 
 - [ ] 3. Generalize the narrow package.json test scripts
   - [ ] Broaden `test:unit` so it is not limited to only the current feature files

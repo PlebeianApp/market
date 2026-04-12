@@ -20,7 +20,7 @@ Verify all of the following on a fresh local run:
 - `contextvm/tools/price-sources.ts`
 - `contextvm/tools/rates-cache.ts`
 - `src/queries/external.tsx`
-- `src/lib/contextvm-client.ts`
+- `src/lib/ctxcn-client.ts`
 - `src/lib/constants.ts`
 - `scripts/fetch-btc-price.ts`
 - `.env.local.example`

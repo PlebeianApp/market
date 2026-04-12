@@ -28,7 +28,7 @@ The goal is to reconstruct the **smallest useful subset** of `get-currency-conte
 
 ### Frontend/client integration
 
-- `src/lib/contextvm-client.ts`
+- `src/lib/ctxcn-client.ts`
 - `src/lib/constants.ts`
 - `src/lib/__tests__/contextvm-client.test.ts`
 - `src/lib/__tests__/contextvm-client.integration.test.ts`
