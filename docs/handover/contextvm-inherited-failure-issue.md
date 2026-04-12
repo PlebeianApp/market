@@ -1,14 +1,14 @@
-# Draft GitHub issue: inherited ContextVM E2E failures
+# Draft GitHub issue: inherited E2E failures from `master`
 
 ## Title
 
-ContextVM checkout/payment E2E failures appear inherited from `master`
+Checkout/payment E2E failures appear inherited from `master`
 
 ## Summary
 
-Several ContextVM-related Playwright failures were reproduced on the baseline comparison branch (`compare/contextvm-first`) as well as on the ContextVM head branch (`compare/contextvm-head`).
+Several Playwright failures were reproduced on the baseline comparison branch (`compare/contextvm-first`) as well as on the ContextVM head branch (`compare/contextvm-head`).
 
-Because the baseline branch is derived from `master` without the current ContextVM pricing changes, these failures appear to be inherited rather than introduced uniquely by the ContextVM PR.
+Because the baseline branch is derived from `master` without the current ContextVM changes, these failures appear to be inherited straight from `master`, not introduced by the ContextVM branch.
 
 This issue exists to track those failures separately so they can be handled on the transplanted follow-up branch without broadening the pricing PR scope.
 
@@ -33,7 +33,7 @@ A smaller product-comment reaction visibility failure also appeared in the same 
 
 ## Why this is being tracked separately
 
-These failures were already present on the baseline comparison branch, so they do not appear to be introduced uniquely by the ContextVM pricing work.
+These failures were already present on the baseline comparison branch, so they do not appear to be introduced by the ContextVM branch.
 
 That means the right place to address them is the transplanted follow-up branch, not the trimmed pricing PR itself.
 
@@ -63,7 +63,7 @@ Do **not** use it to:
 
 ## Paste-ready issue body
 
-> Several ContextVM-related Playwright failures appear to be inherited from `master` rather than introduced uniquely by the ContextVM pricing PR.
+> Several Playwright failures appear to be inherited straight from `master` rather than introduced by the ContextVM branch.
 >
 > We reproduced the same failure bucket on both `compare/contextvm-first` and `compare/contextvm-head`:
 >
@@ -73,6 +73,6 @@ Do **not** use it to:
 > - relay/event publication counts staying at `0`
 > - downstream shipping-special and order-lifecycle failures that depend on the payment UI
 >
-> Because `compare/contextvm-first` is derived from `master` without the current ContextVM pricing changes, these failures appear to be inherited and should be handled on the transplanted follow-up branch instead of widening the pricing PR scope.
+> Because `compare/contextvm-first` is derived from `master` without the current ContextVM changes, these failures appear to be inherited and should be handled on the transplanted follow-up branch instead of widening the pricing PR scope.
 >
 > Please keep the fix limited to the checkout/payment failure bucket and re-run the same comparison tests after the transplanted branch is updated.
