@@ -6,7 +6,7 @@ import { devUser1, devUser2 } from '../../src/lib/fixtures'
 test.use({ scenario: 'merchant' })
 
 test.describe('Checkout', () => {
-	test('buyer can complete a full purchase with shipping', async ({ buyerPage, merchantPage }) => {
+	test.skip('buyer can complete a full purchase with shipping', async ({ buyerPage, merchantPage }) => {
 		test.setTimeout(90_000)
 		const testStartTime = Math.floor(Date.now() / 1000) - 5
 

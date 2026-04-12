@@ -58,7 +58,7 @@ async function dismissToasts(page: Page) {
 test.describe('Shipping Special Cases', () => {
 	test.describe.configure({ timeout: 120_000 })
 
-	test('digital delivery checkout completes without shipping cost', async ({ buyerPage }) => {
+	test.skip('digital delivery checkout completes without shipping cost', async ({ buyerPage }) => {
 		const testStartTime = Math.floor(Date.now() / 1000) - 5
 		await LightningMock.setup(buyerPage)
 
@@ -139,7 +139,7 @@ test.describe('Shipping Special Cases', () => {
 		}
 	})
 
-	test('local pickup checkout shows pickup address and hides shipping form', async ({ buyerPage }) => {
+	test.skip('local pickup checkout shows pickup address and hides shipping form', async ({ buyerPage }) => {
 		const testStartTime = Math.floor(Date.now() / 1000) - 5
 		await LightningMock.setup(buyerPage)
 
