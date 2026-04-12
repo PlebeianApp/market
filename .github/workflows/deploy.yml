@@ -51,6 +51,7 @@ jobs:
           mkdir -p deploy-package
           cp -r dist deploy-package/
           cp -r src deploy-package/
+          cp -r contextvm deploy-package/
           cp package.json bun.lock tsconfig.json deploy-package/
 
       - name: Upload artifact
@@ -83,27 +84,50 @@ jobs:
         run: |
           cat > deploy-package/ecosystem.config.cjs << 'EOF'
           module.exports = {
-            apps: [{
-              name: 'market-staging',
-              script: 'src/index.tsx',
-              interpreter: process.env.HOME + '/.bun/bin/bun',
-              cwd: '/home/deployer/market-staging',
-              instances: 1,
-              exec_mode: 'fork',
-              env_file: '.env',
-              error_file: '/home/deployer/logs/market-staging-error.log',
-              out_file: '/home/deployer/logs/market-staging-out.log',
-              log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
-              merge_logs: true,
-              autorestart: true,
-              max_restarts: 10,
-              min_uptime: '10s',
-              restart_delay: 5000,
-              max_memory_restart: '500M',
-              kill_timeout: 5000,
-              wait_ready: true,
-              listen_timeout: 10000,
-            }],
+            apps: [
+              {
+                name: 'market-staging',
+                script: 'src/index.tsx',
+                interpreter: process.env.HOME + '/.bun/bin/bun',
+                cwd: '/home/deployer/market-staging',
+                instances: 1,
+                exec_mode: 'fork',
+                env_file: '.env',
+                error_file: '/home/deployer/logs/market-staging-error.log',
+                out_file: '/home/deployer/logs/market-staging-out.log',
+                log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+                merge_logs: true,
+                autorestart: true,
+                max_restarts: 10,
+                min_uptime: '10s',
+                restart_delay: 5000,
+                max_memory_restart: '500M',
+                kill_timeout: 5000,
+                wait_ready: true,
+                listen_timeout: 10000,
+              },
+              {
+                name: 'market-contextvm-staging',
+                script: 'contextvm/server.ts',
+                interpreter: process.env.HOME + '/.bun/bin/bun',
+                cwd: '/home/deployer/market-staging',
+                instances: 1,
+                exec_mode: 'fork',
+                env_file: '.env',
+                error_file: '/home/deployer/logs/market-contextvm-staging-error.log',
+                out_file: '/home/deployer/logs/market-contextvm-staging-out.log',
+                log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+                merge_logs: true,
+                autorestart: true,
+                max_restarts: 10,
+                min_uptime: '10s',
+                restart_delay: 5000,
+                max_memory_restart: '500M',
+                kill_timeout: 5000,
+                wait_ready: true,
+                listen_timeout: 10000,
+              },
+            ],
           };
           EOF
 
@@ -115,6 +139,7 @@ jobs:
           PORT=3000
           APP_RELAY_URL=${{ secrets.STAGING_RELAY_URL }}
           APP_PRIVATE_KEY=${{ secrets.STAGING_APP_PRIVATE_KEY }}
+          CVM_SERVER_KEY=${{ secrets.STAGING_CVM_SERVER_KEY }}
           NIP46_RELAY_URL=wss://relay.nsec.app
           EOF
 

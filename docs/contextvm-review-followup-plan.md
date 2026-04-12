@@ -27,18 +27,18 @@ We will tackle the remaining review feedback in small, separately committed step
   - [x] Rename the server entrypoint to `server.ts`
   - [x] Standardize the generated client naming (`PlebianCurrenycServerClient` → `PlebianServerClient` → `PlebianCurrencyClient` as applicable)
   - [x] Replace any typoed or transitional names in docs, code, and tests
-  - [ ] Treat `CVM_SERVER_KEY` as the shared server key for multiple ContextVM tools, not just currency pricing
+  - [x] Treat `CVM_SERVER_KEY` as the shared server key for multiple ContextVM tools, not just currency pricing
 
-- [ ] 5. Finalize the ctxcn generation/check-in workflow
-  - [ ] Keep `ctxcn.config.json` checked in as the source for client generation
-  - [ ] Ensure the generated client stays checked in so we do not need to regenerate it manually every time
-  - [ ] Confirm frontend code imports the checked-in generated client directly
-  - [ ] Document the dev/update flow for adding future ContextVM tools
+- [x] 5. Finalize the ctxcn generation/check-in workflow
+  - [x] Keep `ctxcn.config.json` checked in as the source for client generation
+  - [x] Ensure the generated client stays checked in so we do not need to regenerate it manually every time
+  - [x] Confirm frontend code imports the checked-in generated client directly
+  - [x] Document the dev/update flow for adding future ContextVM tools
 
-- [ ] 6. Wire runtime and deployment behavior
-  - [ ] Only announce the currency server to public relays in production
-  - [ ] Add the ContextVM server startup to `deploy.sh` / pm2 as requested
-  - [ ] Verify deployment/runtime env config matches the new naming and key handling
+- [x] 6. Wire runtime and deployment behavior
+  - [x] Only announce the currency server to public relays in production
+  - [x] Add the ContextVM server startup to `deploy.sh` / pm2 as requested
+  - [x] Verify deployment/runtime env config matches the new naming and key handling
 
 ## Working agreement
 

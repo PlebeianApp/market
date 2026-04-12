@@ -74,7 +74,7 @@ If you need to regenerate fresh keys, run:
 ```bash
 APP_PRIVATE_KEY="$(nak key generate)"
 CVM_SERVER_KEY="$(nak key generate)"
-CURRENCY_SERVER_PUBKEY="$(nak key public "$CVM_SERVER_KEY")"
+CVM_SERVER_PUBKEY="$(nak key public "$CVM_SERVER_KEY")"
 ```
 
 Then write them into `.env.local` with:
@@ -86,7 +86,7 @@ APP_RELAY_URL=ws://localhost:10547
 LOCAL_RELAY_ONLY=true
 APP_PRIVATE_KEY=${APP_PRIVATE_KEY}
 CVM_SERVER_KEY=${CVM_SERVER_KEY}
-CURRENCY_SERVER_PUBKEY=${CURRENCY_SERVER_PUBKEY}
+CVM_SERVER_PUBKEY=${CVM_SERVER_PUBKEY}
 EOF
 ```
 
@@ -97,7 +97,7 @@ Expected:
 - `.env.local` exists locally
 - it is ignored by git
 - it contains valid 64-character hex keys or valid `nsec...` values if your setup supports them
-- `CURRENCY_SERVER_PUBKEY` matches the public key derived from `CVM_SERVER_KEY`
+- `CVM_SERVER_PUBKEY` matches the public key derived from `CVM_SERVER_KEY`
 
 ## Step 4: initialize the app data
 
@@ -153,7 +153,7 @@ If both calls say `Cached: true`, the cache was already populated earlier.
 
 If the call times out, the currency server is not yet running or not yet fully initialized.
 
-If the server is running but the call still times out, check that `CURRENCY_SERVER_PUBKEY` matches the actual public key printed by the currency server.
+If the server is running but the call still times out, check that `CVM_SERVER_PUBKEY` matches the actual public key printed by the server.
 
 ## Evidence captured in this session
 
@@ -285,7 +285,7 @@ Fix:
 
 - confirm `bun run dev:contextvm-server` is still running
 - wait until it prints `Server is running and listening for requests on Nostr...`
-- confirm `CURRENCY_SERVER_PUBKEY` matches the public key printed by the server
+- confirm `CVM_SERVER_PUBKEY` matches the public key printed by the server
 
 ### First fetch is already cached
 
@@ -306,7 +306,7 @@ The fetch script or browser bundle is probably pointed at the wrong server pubke
 Fix:
 
 - use the pubkey printed by the server
-- or set `CURRENCY_SERVER_PUBKEY` in `.env.local` to the derived public key for `CVM_SERVER_KEY`
+- or set `CVM_SERVER_PUBKEY` in `.env.local` to the derived public key for `CVM_SERVER_KEY`
 - hard refresh the browser so the updated config is loaded
 
 ## Notes

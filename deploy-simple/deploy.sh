@@ -72,6 +72,7 @@ case "$STAGE" in
         SSH_USER="${SSH_USER:-deployer}"
         APP_PORT="${APP_PORT:-3000}"
         PM2_APP_NAME="market-development"
+        PM2_CONTEXTVM_APP_NAME="market-contextvm-development"
         ;;
     staging)
         SSH_HOST="${SSH_HOST:-staging.plebeian.market}"
@@ -79,6 +80,7 @@ case "$STAGE" in
         SSH_USER="${SSH_USER:-deployer}"
         APP_PORT="${APP_PORT:-3000}"
         PM2_APP_NAME="market-staging"
+        PM2_CONTEXTVM_APP_NAME="market-contextvm-staging"
         ;;
     production)
         SSH_HOST="${SSH_HOST:-plebeian.market}"
@@ -86,6 +88,7 @@ case "$STAGE" in
         SSH_USER="${SSH_USER:-deployer}"
         APP_PORT="${APP_PORT:-3001}"
         PM2_APP_NAME="market-production"
+        PM2_CONTEXTVM_APP_NAME="market-contextvm-production"
         ;;
 esac
 
@@ -175,6 +178,8 @@ trap "rm -rf $TEMP_DIR" EXIT
 cp -r "$PROJECT_DIR/dist" "$TEMP_DIR/"
 # src/ - server code for API (run by Bun/PM2)
 cp -r "$PROJECT_DIR/src" "$TEMP_DIR/"
+# contextvm/ - ContextVM server code (run by Bun/PM2)
+cp -r "$PROJECT_DIR/contextvm" "$TEMP_DIR/"
 # Dependencies
 cp "$PROJECT_DIR/package.json" "$TEMP_DIR/"
 cp "$PROJECT_DIR/bun.lock" "$TEMP_DIR/"
@@ -183,27 +188,50 @@ cp "$PROJECT_DIR/tsconfig.json" "$TEMP_DIR/"
 # Generate stage-specific ecosystem config
 cat > "$TEMP_DIR/ecosystem.config.cjs" << EOF
 module.exports = {
-  apps: [{
-    name: '$PM2_APP_NAME',
-    script: 'src/index.tsx',
-    interpreter: process.env.HOME + '/.bun/bin/bun',
-    cwd: '$REMOTE_APP_DIR',
-    instances: 1,
-    exec_mode: 'fork',
-    env_file: '.env',
-    error_file: '$REMOTE_BASE/logs/$PM2_APP_NAME-error.log',
-    out_file: '$REMOTE_BASE/logs/$PM2_APP_NAME-out.log',
-    log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
-    merge_logs: true,
-    autorestart: true,
-    max_restarts: 10,
-    min_uptime: '10s',
-    restart_delay: 5000,
-    max_memory_restart: '500M',
-    kill_timeout: 5000,
-    wait_ready: true,
-    listen_timeout: 10000,
-  }],
+  apps: [
+    {
+      name: '$PM2_APP_NAME',
+      script: 'src/index.tsx',
+      interpreter: process.env.HOME + '/.bun/bin/bun',
+      cwd: '$REMOTE_APP_DIR',
+      instances: 1,
+      exec_mode: 'fork',
+      env_file: '.env',
+      error_file: '$REMOTE_BASE/logs/$PM2_APP_NAME-error.log',
+      out_file: '$REMOTE_BASE/logs/$PM2_APP_NAME-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      merge_logs: true,
+      autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
+      restart_delay: 5000,
+      max_memory_restart: '500M',
+      kill_timeout: 5000,
+      wait_ready: true,
+      listen_timeout: 10000,
+    },
+    {
+      name: '$PM2_CONTEXTVM_APP_NAME',
+      script: 'contextvm/server.ts',
+      interpreter: process.env.HOME + '/.bun/bin/bun',
+      cwd: '$REMOTE_APP_DIR',
+      instances: 1,
+      exec_mode: 'fork',
+      env_file: '.env',
+      error_file: '$REMOTE_BASE/logs/$PM2_CONTEXTVM_APP_NAME-error.log',
+      out_file: '$REMOTE_BASE/logs/$PM2_CONTEXTVM_APP_NAME-out.log',
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+      merge_logs: true,
+      autorestart: true,
+      max_restarts: 10,
+      min_uptime: '10s',
+      restart_delay: 5000,
+      max_memory_restart: '500M',
+      kill_timeout: 5000,
+      wait_ready: true,
+      listen_timeout: 10000,
+    },
+  ],
 };
 EOF
 
@@ -239,7 +267,7 @@ echo "   ✓ Dependencies installed"
 # -----------------------------------------------------------------------------
 echo ""
 echo "📦 Swapping releases..."
-run_ssh "pm2 stop $PM2_APP_NAME 2>/dev/null || true"
+run_ssh "pm2 stop $PM2_APP_NAME $PM2_CONTEXTVM_APP_NAME 2>/dev/null || true"
 run_ssh "ln -sfn $REMOTE_BASE/releases/$RELEASE_NAME $REMOTE_APP_DIR"
 echo "   ✓ Release swapped"
 
@@ -249,8 +277,8 @@ echo "   ✓ Release swapped"
 echo ""
 echo "📦 Starting services..."
 
-# Start/reload app with PM2
-run_ssh_bun "cd $REMOTE_APP_DIR && pm2 startOrReload ecosystem.config.cjs --only $PM2_APP_NAME"
+# Start/reload app and ContextVM server with PM2
+run_ssh_bun "cd $REMOTE_APP_DIR && pm2 startOrReload ecosystem.config.cjs"
 run_ssh "pm2 save --force"
 echo "   ✓ Services started"
 

@@ -9,7 +9,7 @@ config({ path: ['.env.local', '.env'] })
 const RELAY_URL = process.env.RELAY_URL || process.env.APP_RELAY_URL || 'ws://localhost:10547'
 const SERVER_PRIVATE_KEY = process.env.CVM_SERVER_KEY || '2300f5fff5642341946758cad8214f2c54f3c40fba5ba51b616452b197fd3e71'
 const DERIVED_SERVER_PUBKEY = getPublicKey(new Uint8Array(Buffer.from(SERVER_PRIVATE_KEY, 'hex')))
-const SERVER_PUBKEY = process.env.CURRENCY_SERVER_PUBKEY || DERIVED_SERVER_PUBKEY
+const SERVER_PUBKEY = process.env.CVM_SERVER_PUBKEY || DERIVED_SERVER_PUBKEY
 const RELAYS = Array.from(new Set([RELAY_URL, ...getCurrencyServerRelays()]))
 
 describe('PlebianCurrencyClient integration', () => {

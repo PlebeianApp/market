@@ -1,7 +1,7 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { currencyKeys } from './queryKeyFactory'
 import { CURRENCIES } from '@/lib/constants'
-import { CURRENCY_SERVER_PUBKEY, getCurrencyServerRelays } from '@/lib/constants'
+import { CVM_SERVER_PUBKEY, getCurrencyServerRelays } from '@/lib/constants'
 import { configStore } from '@/lib/stores/config'
 
 const numSatsInBtc = 100000000
@@ -34,7 +34,7 @@ async function getCurrencyClient() {
 			const client = new PlebianCurrencyClient({
 				privateKey,
 				relays,
-				serverPubkey: configStore.state.config.currencyServerPubkey || CURRENCY_SERVER_PUBKEY,
+				serverPubkey: configStore.state.config.cvmServerPubkey || CVM_SERVER_PUBKEY,
 			})
 
 			currencyClient = client

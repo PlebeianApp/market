@@ -107,8 +107,7 @@ export function getCurrencyServerRelays(): string[] {
 	}
 }
 
-export const CURRENCY_SERVER_PUBKEY =
-	process.env.CURRENCY_SERVER_PUBKEY || '29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15'
+export const CVM_SERVER_PUBKEY = process.env.CVM_SERVER_PUBKEY || '29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15'
 
 export const DEFAULT_ZAP_AMOUNTS = [
 	{ displayText: '😊 21 sats', amount: 21 },
