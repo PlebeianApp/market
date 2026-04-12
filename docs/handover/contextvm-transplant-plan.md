@@ -4,7 +4,7 @@
 
 Create a fresh follow-up branch that carries only the changes needed to address the issues observed in `compare/contextvm-first`, without keeping the unrelated branch baggage.
 
-This is the first execution step after the skip issue is drafted.
+This is the first execution step before drafting the inherited-failure issue so the issue can reference the transplanted branch.
 
 ## Branch strategy
 

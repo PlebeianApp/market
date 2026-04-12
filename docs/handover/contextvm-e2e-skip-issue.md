@@ -8,7 +8,7 @@ Temporarily skip failing ContextVM-related Playwright tests in `feature/get-curr
 
 The following Playwright tests were temporarily skipped so CI can move forward while the underlying checkout/payment and product-interaction failures are investigated.
 
-This issue should be created before the transplant step so the follow-up branch has the reasoning documented up front:
+Create this issue after the transplant branch exists so the issue can reference the transplanted branch and its scope:
 
 - `e2e-new/tests/checkout.spec.ts`
 - `e2e-new/tests/marketplace.spec.ts`

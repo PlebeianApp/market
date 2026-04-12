@@ -15,8 +15,10 @@ This folder is the active cleanup checklist for the current ContextVM branch. Us
 ### Still to do
 
 - [ ] Define the trim boundary and decide what can stay for transplant
-- [ ] Draft the issue for the temporary skipped Playwright tests
 - [ ] Move only the relevant fixes onto the follow-up branch
+- [ ] Create the issue that explains the failing E2E tests were inherited from `master` and must be addressed in the transplanted branch
+- [ ] Draft the issue for the temporary skipped Playwright tests
+- [ ] Draft the issue design for the inherited-from-`master` failures
 - [ ] Run `make browser-contextvm` and verify the happy path
 - [ ] Finish the remaining cleanup commit
 - [ ] Remove handover docs and the `Makefile` only if they are no longer needed
@@ -24,9 +26,11 @@ This folder is the active cleanup checklist for the current ContextVM branch. Us
 ## Cleanup sequence
 
 1. [`contextvm-scope-cleanup-design.md`](./contextvm-scope-cleanup-design.md) — define the trim boundary and decide what can stay for transplant
-2. [`contextvm-e2e-skip-issue.md`](./contextvm-e2e-skip-issue.md) — draft the issue for the temporary skipped Playwright tests
-3. [`contextvm-transplant-plan.md`](./contextvm-transplant-plan.md) — move only the relevant fixes onto the follow-up branch
-4. [`contextvm-final-browser-cleanup.md`](./contextvm-final-browser-cleanup.md) — run `make browser-contextvm`, verify the happy path, then do the final cleanup commit
+2. [`contextvm-transplant-plan.md`](./contextvm-transplant-plan.md) — move only the relevant fixes onto the follow-up branch
+3. [`contextvm-inherited-failure-issue-design.md`](./contextvm-inherited-failure-issue-design.md) — define the markdown issue that will explain the inherited-from-`master` failures and reference the transplanted branch
+4. Create the issue that explains the inherited-from-`master` failures and notes that they must be addressed in the transplanted branch described by `contextvm-transplant-plan.md`
+5. [`contextvm-e2e-skip-issue.md`](./contextvm-e2e-skip-issue.md) — draft the issue for the temporary skipped Playwright tests
+6. [`contextvm-final-browser-cleanup.md`](./contextvm-final-browser-cleanup.md) — run `make browser-contextvm`, verify the happy path, then do the final cleanup commit
 
 Important:
 

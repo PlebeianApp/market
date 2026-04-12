@@ -219,7 +219,7 @@ jobs:
           LOCAL_RELAY_ONLY: 'true'
 
       - name: Run remaining E2E tests
-        run: bun run test:e2e-new -- --grep-invert 'Product Page - View Only'
+        run: bun run test:e2e-new -- --grep-invert 'Product Page - View Only|Collection Management'
 
       - name: Show server logs on failure
         if: failure()

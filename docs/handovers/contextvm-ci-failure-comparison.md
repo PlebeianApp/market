@@ -77,6 +77,7 @@ These were flaky in the CI output, but not part of the primary failure bucket:
 
 - `e2e-new/tests/collections.spec.ts`
   - `can edit a collection`
+  - this is a separate collection-management regression and appears out of scope for the ContextVM pricing change
 - `e2e-new/tests/marketplace.spec.ts`
   - `multi-seller checkout generates correct invoice count` was reported as flaky in the summary, but it is still related to the checkout path and may need follow-up.
 
