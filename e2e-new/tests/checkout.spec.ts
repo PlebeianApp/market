@@ -1,12 +1,13 @@
 import { test, expect } from '../fixtures'
 import { LightningMock } from '../utils/lightning-mock'
+import { payAllInvoicesWithWebLn } from '../utils/payment-waits'
 import { queryRelayEvents, filterByTag } from '../utils/relay-query'
 import { devUser1, devUser2 } from '../../src/lib/fixtures'
 
 test.use({ scenario: 'merchant' })
 
 test.describe('Checkout', () => {
-	test.skip('buyer can complete a full purchase with shipping', async ({ buyerPage, merchantPage }) => {
+	test('buyer can complete a full purchase with shipping', async ({ buyerPage, merchantPage }) => {
 		test.setTimeout(90_000)
 		const testStartTime = Math.floor(Date.now() / 1000) - 5
 
@@ -76,26 +77,7 @@ test.describe('Checkout', () => {
 		await continueToPayment.click()
 
 		// ─── 6. Pay invoices (step: payment) ─────────────────────────
-		// Wait for the payment step to load and invoices to be generated
-		await expect(buyerPage.getByText('Invoices', { exact: true })).toBeVisible({ timeout: 30_000 })
-
-		// Wait for invoice generation to complete
-		// "Generating Lightning invoices..." disappears once invoices are ready
-		const webLnButton = buyerPage.getByRole('button', { name: 'Pay with WebLN' })
-
-		// Pay all invoices (merchant + V4V shares — count varies with V4V config)
-		await expect(webLnButton).toBeVisible({ timeout: 30_000 })
-		while (
-			(await buyerPage
-				.getByText('All payments completed successfully!')
-				.isVisible()
-				.catch(() => false)) === false
-		) {
-			await expect(webLnButton).toBeEnabled({ timeout: 10_000 })
-			await webLnButton.click()
-			// Wait for payment to register before attempting the next
-			await buyerPage.waitForTimeout(1_000)
-		}
+		await payAllInvoicesWithWebLn(buyerPage)
 
 		// ─── 7. Verify completion (step: complete) ───────────────────
 		await expect(buyerPage.getByText('All payments completed successfully!')).toBeVisible({ timeout: 20_000 })

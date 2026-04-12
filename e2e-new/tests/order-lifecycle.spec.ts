@@ -1,5 +1,6 @@
 import { test, expect } from '../fixtures'
 import { LightningMock } from '../utils/lightning-mock'
+import { payAllInvoicesWithWebLn, waitForWebLnButton } from '../utils/payment-waits'
 import { queryRelayEvents, filterByTag, getTagValue } from '../utils/relay-query'
 import { devUser1, devUser2 } from '../../src/lib/fixtures'
 import type { Page } from '@playwright/test'
@@ -55,7 +56,7 @@ async function checkoutToPaymentStep(page: Page) {
 }
 
 test.describe('Order Lifecycle', () => {
-	test.skip('partial payment: pay merchant, skip V4V, then complete from order detail', async ({ buyerPage }) => {
+	test('partial payment: pay merchant, skip V4V, then complete from order detail', async ({ buyerPage }) => {
 		test.setTimeout(120_000)
 		const testStartTime = Math.floor(Date.now() / 1000) - 5
 		const lnMock = await LightningMock.setup(buyerPage)
@@ -64,8 +65,7 @@ test.describe('Order Lifecycle', () => {
 		await checkoutToPaymentStep(buyerPage)
 
 		// Pay invoice 1 (merchant share) with WebLN
-		const webLnButton = buyerPage.getByRole('button', { name: 'Pay with WebLN' })
-		await expect(webLnButton).toBeVisible({ timeout: 30_000 })
+		const webLnButton = await waitForWebLnButton(buyerPage)
 		await expect(webLnButton).toBeEnabled({ timeout: 10_000 })
 		await webLnButton.click()
 
@@ -146,7 +146,7 @@ test.describe('Order Lifecycle', () => {
 		expect(allReceipts.length).toBe(2)
 	})
 
-	test.skip('full order lifecycle: pending → confirmed → shipped → completed', async ({ buyerPage, merchantPage }) => {
+	test('full order lifecycle: pending → confirmed → shipped → completed', async ({ buyerPage, merchantPage }) => {
 		test.setTimeout(120_000)
 		const testStartTime = Math.floor(Date.now() / 1000) - 5
 		const lnMock = await LightningMock.setup(buyerPage)
@@ -154,21 +154,7 @@ test.describe('Order Lifecycle', () => {
 		// ─── 1. Complete checkout (pay all invoices) ──────────────────
 		await checkoutToPaymentStep(buyerPage)
 
-		// Pay all invoices (merchant + V4V shares — count varies with V4V config)
-		const webLnButton = buyerPage.getByRole('button', { name: 'Pay with WebLN' })
-		await expect(webLnButton).toBeVisible({ timeout: 30_000 })
-		while (
-			(await buyerPage
-				.getByText('All payments completed successfully!')
-				.isVisible()
-				.catch(() => false)) === false
-		) {
-			await expect(webLnButton).toBeEnabled({ timeout: 10_000 })
-			await webLnButton.click()
-			await buyerPage.waitForTimeout(1_000)
-		}
-
-		await expect(buyerPage.getByText('All payments completed successfully!')).toBeVisible({ timeout: 20_000 })
+		await payAllInvoicesWithWebLn(buyerPage)
 		expect(lnMock.paidInvoices.length).toBeGreaterThanOrEqual(2)
 
 		// ─── 2. Merchant: navigate to order detail ────────────────────

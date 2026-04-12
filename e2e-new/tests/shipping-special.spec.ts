@@ -1,5 +1,6 @@
 import { test, expect } from '../fixtures'
 import { LightningMock } from '../utils/lightning-mock'
+import { payAllInvoicesWithWebLn } from '../utils/payment-waits'
 import { queryRelayEvents, filterByTag } from '../utils/relay-query'
 import { devUser1, devUser2 } from '../../src/lib/fixtures'
 import type { Page } from '@playwright/test'
@@ -25,26 +26,6 @@ async function addProductAndOpenCart(page: Page, productName: string) {
 		.click()
 }
 
-async function payAllInvoices(page: Page) {
-	await expect(page.getByText('Invoices', { exact: true })).toBeVisible({ timeout: 30_000 })
-	const webLnButton = page.getByRole('button', { name: 'Pay with WebLN' })
-	await expect(webLnButton).toBeVisible({ timeout: 30_000 })
-
-	// Pay all invoices (merchant + V4V shares — count varies with V4V config)
-	while (
-		(await page
-			.getByText('All payments completed successfully!')
-			.isVisible()
-			.catch(() => false)) === false
-	) {
-		await expect(webLnButton).toBeEnabled({ timeout: 10_000 })
-		await webLnButton.click()
-		await page.waitForTimeout(1_000)
-	}
-
-	await expect(page.getByText('All payments completed successfully!')).toBeVisible({ timeout: 20_000 })
-}
-
 /**
  * Helper: dismiss persistent Sonner toast notifications that may overlay buttons.
  * The "Could not load wallets" error toast appears because the test buyer has no NWC wallet.
@@ -58,7 +39,7 @@ async function dismissToasts(page: Page) {
 test.describe('Shipping Special Cases', () => {
 	test.describe.configure({ timeout: 120_000 })
 
-	test.skip('digital delivery checkout completes without shipping cost', async ({ buyerPage }) => {
+	test('digital delivery checkout completes without shipping cost', async ({ buyerPage }) => {
 		const testStartTime = Math.floor(Date.now() / 1000) - 5
 		await LightningMock.setup(buyerPage)
 
@@ -95,7 +76,7 @@ test.describe('Shipping Special Cases', () => {
 		await continueToPayment.click()
 
 		// ─── 6. Pay invoices ─────────────────────────────────────────
-		await payAllInvoices(buyerPage)
+		await payAllInvoicesWithWebLn(buyerPage)
 
 		// ─── 7. Navigate to order detail ─────────────────────────────
 		await buyerPage.getByRole('button', { name: 'View Your Purchases' }).click()
@@ -139,7 +120,7 @@ test.describe('Shipping Special Cases', () => {
 		}
 	})
 
-	test.skip('local pickup checkout shows pickup address and hides shipping form', async ({ buyerPage }) => {
+	test('local pickup checkout shows pickup address and hides shipping form', async ({ buyerPage }) => {
 		const testStartTime = Math.floor(Date.now() / 1000) - 5
 		await LightningMock.setup(buyerPage)
 
@@ -181,7 +162,7 @@ test.describe('Shipping Special Cases', () => {
 		await continueToPayment.click()
 
 		// ─── 6. Pay invoices ─────────────────────────────────────────
-		await payAllInvoices(buyerPage)
+		await payAllInvoicesWithWebLn(buyerPage)
 
 		// ─── 7. Navigate to order detail ─────────────────────────────
 		await buyerPage.getByRole('button', { name: 'View Your Purchases' }).click()
