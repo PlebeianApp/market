@@ -1,8 +1,8 @@
-# Draft GitHub issue: temporary E2E skips for ContextVM branch
+# Draft GitHub issue: temporary E2E skips inherited from `master`
 
 ## Title
 
-Temporarily skip failing ContextVM-related Playwright tests in `feature/get-currency-context-vm`
+Temporarily skip failing Playwright tests inherited from `master`
 
 ## Summary
 
@@ -21,7 +21,7 @@ Create this issue after the transplant branch exists so the issue can reference 
 
 ## Why these tests were skipped
 
-These failures were reproduced on `compare/contextvm-first`, which is the baseline branch used for the comparison and is derived from `master` without significant feature changes. That means the failures do **not** appear to be introduced uniquely by the ContextVM branch.
+These failures were reproduced on `compare/contextvm-first`, which is the baseline branch used for the comparison and is derived from `master` without the current ContextVM changes. That means the failures do **not** appear to be introduced by the ContextVM branch.
 
 Because the baseline already shows the same failure class, the temporary skips are acceptable as an investigation aid while the transplant branch is being prepared.
 
@@ -32,7 +32,7 @@ The observed failures were mostly the same class of issues across both branches:
 - product comment reaction visibility failures
 - flaky multi-seller / shipping-special test cases
 
-Because the baseline branch already exhibits the same failure mode, the skips are a **temporary stabilization measure**, not a statement that the ContextVM refactor is the root cause.
+Because the baseline branch already exhibits the same failure mode, the skips are a **temporary stabilization measure**, not a statement that the ContextVM branch is the root cause.
 
 ## Evidence to include in the issue
 
