@@ -6,7 +6,7 @@ We will tackle the remaining review feedback in small, separately committed step
 
 - [x] 1. Fix the environment variable naming mismatch
   - [x] Update `.env.example` to use `CVM_SERVER_KEY`
-  - [x] Update `contextvm/currency-server.ts` to read `CVM_SERVER_KEY`
+  - [x] Update `contextvm/server.ts` to read `CVM_SERVER_KEY`
   - [x] Add `.env.local.example` for the happy path
   - [x] Create a local `.env.local` with generated keys
   - [x] Verify the local/dev default still works
@@ -22,6 +22,23 @@ We will tackle the remaining review feedback in small, separately committed step
   - [x] Broaden `test:unit` so it is not limited to only the current feature files
   - [x] Broaden `test:integration` similarly, or move selection out of `package.json`
   - [x] Keep test selection in workflow/Makefile/CLI usage instead of hardcoding single files
+
+- [ ] 4. Align ContextVM naming and server/client terminology
+  - [x] Rename `currency-server.ts` to `server.ts` if the review still expects the shorter server name
+  - [ ] Standardize the generated client naming (`PlebianCurrenycServerClient` → `PlebianServerClient` → `PlebianCurrencyClient` as applicable)
+  - [ ] Replace any typoed or transitional names in docs, code, and tests
+  - [ ] Treat `CVM_SERVER_KEY` as the shared server key for multiple ContextVM tools, not just currency pricing
+
+- [ ] 5. Finalize the ctxcn generation/check-in workflow
+  - [ ] Keep `ctxcn.config.json` checked in as the source for client generation
+  - [ ] Ensure the generated client stays checked in so we do not need to regenerate it manually every time
+  - [ ] Confirm frontend code imports the checked-in generated client directly
+  - [ ] Document the dev/update flow for adding future ContextVM tools
+
+- [ ] 6. Wire runtime and deployment behavior
+  - [ ] Only announce the currency server to public relays in production
+  - [ ] Add the ContextVM server startup to `deploy.sh` / pm2 as requested
+  - [ ] Verify deployment/runtime env config matches the new naming and key handling
 
 ## Working agreement
 

@@ -56,7 +56,7 @@ jobs:
           nohup "$HOME/go/bin/nak" serve --hostname 0.0.0.0 > /tmp/relay.log 2>&1 &
           RELAY_PID=$!
 
-          NODE_ENV=development APP_RELAY_URL=ws://localhost:10547 CVM_SERVER_KEY=2300f5fff5642341946758cad8214f2c54f3c40fba5ba51b616452b197fd3e71 nohup bun run contextvm/currency-server.ts > /tmp/currency-server.log 2>&1 &
+          NODE_ENV=development APP_RELAY_URL=ws://localhost:10547 CVM_SERVER_KEY=2300f5fff5642341946758cad8214f2c54f3c40fba5ba51b616452b197fd3e71 nohup bun run contextvm/server.ts > /tmp/currency-server.log 2>&1 &
           SERVER_PID=$!
 
           echo "Waiting for relay on port 10547..."

@@ -1,6 +1,6 @@
 SHELL := /usr/bin/env bash
 
-.PHONY: help install bootstrap format format-check test-price-core test-unit test-integration test-integration-local test-e2e-new test-e2e-pricing test-pricing dev-contextvm currency-server fetch-btc-price manual-happy-path browser-contextvm
+.PHONY: help install bootstrap format format-check test-price-core test-unit test-integration test-integration-local test-e2e-new test-e2e-pricing test-pricing dev-contextvm contextvm-server fetch-btc-price manual-happy-path browser-contextvm
 
 RELAY_URL ?= ws://localhost:10547
 PLAYWRIGHT_ARGS ?=
@@ -15,11 +15,11 @@ help:
 	@echo "  make test-price-core        - run the core ContextVM pricing unit tests"
 	@echo "  make test-unit              - run the broader ContextVM/unit suite"
 	@echo "  make test-integration       - run the ContextVM client integration test"
-	@echo "  make test-integration-local - start local relay + currency server, then run integration"
+	@echo "  make test-integration-local - start local relay + ContextVM server, then run integration"
 	@echo "  make test-e2e-new           - run the E2E suite with optional PLAYWRIGHT_ARGS"
 	@echo "  make test-e2e-pricing       - run the pricing-focused E2E subset"
 	@echo "  make test-pricing           - run the pricing-focused validation bundle"
-	@echo "  make currency-server        - start the ContextVM currency server"
+	@echo "  make contextvm-server       - start the ContextVM server"
 	@echo "  make fetch-btc-price        - probe BTC price via the local relay"
 	@echo "  make manual-happy-path      - print the local ContextVM manual verification plan"
 	@echo "  make browser-contextvm      - start relay + currency server + app for browser validation"
@@ -134,8 +134,8 @@ test-e2e-pricing: test-e2e-new
 test-pricing: test-price-core test-unit test-integration-local
 	@echo 'Run "make test-e2e-pricing" separately if you want the Playwright BTC price flow.'
 
-currency-server: install
-	APP_RELAY_URL="$(RELAY_URL)" "$(BUN)" run dev:currency-server
+contextvm-server: install
+	APP_RELAY_URL="$(RELAY_URL)" "$(BUN)" run dev:contextvm-server
 
 fetch-btc-price: install
 	"$(BUN)" run scripts/fetch-btc-price.ts "$(RELAY_URL)"
@@ -154,7 +154,7 @@ browser-contextvm: install
 	relay_bin="$$(command -v nak 2>/dev/null || printf '%s/go/bin/nak' "$$HOME")"; \
 	"$$relay_bin" serve --hostname 0.0.0.0 >/tmp/contextvm-browser-relay.log 2>&1 & relay_pid=$$!; \
 	sleep 2; \
-	APP_RELAY_URL="$(RELAY_URL)" "$(BUN)" run dev:currency-server >/tmp/contextvm-browser-currency-server.log 2>&1 & server_pid=$$!; \
+	APP_RELAY_URL="$(RELAY_URL)" "$(BUN)" run dev:contextvm-server >/tmp/contextvm-browser-currency-server.log 2>&1 & server_pid=$$!; \
 	i=0; until "$(BUN)" run scripts/fetch-btc-price.ts "$(RELAY_URL)" >/tmp/contextvm-browser-price-check.log 2>&1; do \
 		i=$$((i + 1)); \
 		if [ $$i -ge 30 ]; then \

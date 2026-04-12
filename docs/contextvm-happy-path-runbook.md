@@ -15,7 +15,7 @@ Verify all of the following on a fresh local run:
 
 ## Files and components involved
 
-- `contextvm/currency-server.ts`
+- `contextvm/server.ts`
 - `contextvm/schemas.ts`
 - `contextvm/tools/price-sources.ts`
 - `contextvm/tools/rates-cache.ts`
@@ -118,12 +118,12 @@ Expected:
 
 If `bun run startup` fails with `Invalid private key provided`, the key is not valid.
 
-## Step 5: start the currency server
+## Step 5: start the ContextVM server
 
 In Terminal C:
 
 ```bash
-NODE_ENV=development APP_RELAY_URL=ws://localhost:10547 bun run dev:currency-server
+NODE_ENV=development APP_RELAY_URL=ws://localhost:10547 bun run dev:contextvm-server
 ```
 
 Expected startup output includes:
@@ -164,7 +164,7 @@ bun install
 nak serve --hostname 0.0.0.0
 bun run startup
 bun run seed
-NODE_ENV=development APP_RELAY_URL=ws://localhost:10547 bun run dev:currency-server
+NODE_ENV=development APP_RELAY_URL=ws://localhost:10547 bun run dev:contextvm-server
 bun run scripts/fetch-btc-price.ts ws://localhost:10547
 bun run scripts/fetch-btc-price.ts ws://localhost:10547
 bun run dev
@@ -283,7 +283,7 @@ The currency server is not running yet, it has not finished initializing, or the
 
 Fix:
 
-- confirm `bun run dev:currency-server` is still running
+- confirm `bun run dev:contextvm-server` is still running
 - wait until it prints `Server is running and listening for requests on Nostr...`
 - confirm `CURRENCY_SERVER_PUBKEY` matches the public key printed by the server
 

@@ -14,7 +14,7 @@ The goal is to reconstruct the **smallest useful subset** of `get-currency-conte
 
 ### Core ContextVM server
 
-- `contextvm/currency-server.ts`
+- `contextvm/server.ts`
 - `contextvm/schemas.ts`
 - `contextvm/tools/price-sources.ts`
 - `contextvm/tools/rates-cache.ts`
