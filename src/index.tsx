@@ -242,7 +242,12 @@ function determineStage(): 'production' | 'staging' | 'development' {
 	return 'development'
 }
 
+const PORT = Number(process.env.PORT || 3000)
+
+console.log(`App port: ${PORT}`)
+
 export const server = serve({
+	port: PORT,
 	routes: {
 		'/api/config': {
 			GET: () => {

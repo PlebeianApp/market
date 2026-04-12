@@ -99,7 +99,7 @@ export async function createNip15ProductEvent(
 
 	try {
 		await event.sign(signer)
-		await event.publish()
+		await event.publishReplaceable()
 		console.log(`Published NIP-15 product: ${productData.name}`)
 		return true
 	} catch (error) {

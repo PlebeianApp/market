@@ -150,8 +150,26 @@ manual-happy-path: install
 browser-contextvm: install
 	@set -e; \
 	trap 'kill $$app_pid $$server_pid $$relay_pid >/dev/null 2>&1 || true' EXIT INT TERM; \
-	pkill -f 'dev:contextvm-server|dev:seed|bun --hot src/index.tsx|e2e-new/seed-relay.ts|nak serve' 2>/dev/null || true; \
-	lsof -ti:10547 -ti:3000 -ti:34567 2>/dev/null | xargs -r kill -9 2>/dev/null || true; \
+	show_port_listeners() { \
+		for port in 3000 10547 34567; do \
+			echo "== lsof -nP -iTCP:$$port -sTCP:LISTEN =="; \
+			lsof -nP -iTCP:$$port -sTCP:LISTEN || true; \
+		done; \
+	}; \
+	show_port_listeners; \
+	pkill -f 'dev:contextvm-server|dev:seed|bun --hot src/index.tsx|src/index.tsx --host|bun run dev|bun run startup|e2e-new/seed-relay.ts|nak serve' 2>/dev/null || true; \
+	i=0; until [ -z "$$(lsof -ti:10547 -ti:3000 -ti:34567 2>/dev/null || true)" ]; do \
+		lsof -ti:10547 -ti:3000 -ti:34567 2>/dev/null | xargs -r kill -9 2>/dev/null || true; \
+		i=$$((i + 1)); \
+		if [ $$i -ge 10 ]; then \
+			echo "error: unable to free browser-contextvm ports"; \
+			lsof -iTCP:10547 -sTCP:LISTEN -n -P || true; \
+			lsof -iTCP:3000 -sTCP:LISTEN -n -P || true; \
+			lsof -iTCP:34567 -sTCP:LISTEN -n -P || true; \
+			exit 1; \
+		fi; \
+		sleep 1; \
+	done; \
 	sleep 2; \
 	test_app_private_key="$$(nak key generate)"; \
 	relay_bin="$$(command -v nak 2>/dev/null || printf '%s/go/bin/nak' "$$HOME")"; \
@@ -177,8 +195,15 @@ browser-contextvm: install
 		fi; \
 		sleep 1; \
 	done; \
-	APP_PRIVATE_KEY="$$test_app_private_key" APP_RELAY_URL="$(RELAY_URL)" LOCAL_RELAY_ONLY=true NIP46_RELAY_URL="$(RELAY_URL)" PORT=3000 "$(BUN)" run dev:seed >/tmp/contextvm-browser-app.log 2>&1 & app_pid=$$!; \
-	i=0; until "$(BUN)" -e 'const config = await fetch("http://localhost:3000/api/config").then((r) => r.json()); process.exit(config.needsSetup ? 1 : 0)'; do \
+	lsof -ti:3000 2>/dev/null | xargs -r kill -9 2>/dev/null || true; \
+	sleep 1; \
+	browser_port="$$(for p in $$(seq 34567 34667); do if ! lsof -iTCP:$$p -sTCP:LISTEN >/dev/null 2>&1; then echo $$p; break; fi; done)"; \
+	if [ -z "$$browser_port" ]; then \
+		echo "error: unable to find a free browser-contextvm port"; \
+		exit 1; \
+	fi; \
+	APP_PRIVATE_KEY="$$test_app_private_key" APP_RELAY_URL="$(RELAY_URL)" LOCAL_RELAY_ONLY=true NIP46_RELAY_URL="$(RELAY_URL)" BROWSER_CONTEXTVM_PORT="$$browser_port" sh -c '"$(BUN)" run startup && "$(BUN)" run seed && PORT="$BROWSER_CONTEXTVM_PORT" "$(BUN)" --hot src/index.tsx --host 0.0.0.0' >/tmp/contextvm-browser-app.log 2>&1 & app_pid=$$!; \
+	i=0; until "$(BUN)" -e 'const port = process.env.BROWSER_CONTEXTVM_PORT; const config = await fetch(`http://localhost:${port}/api/config`).then((r) => r.json()); process.exit(config.needsSetup ? 1 : 0)'; do \
 		i=$$((i + 1)); \
 		if [ $$i -ge 60 ]; then \
 			echo "error: app config did not become ready"; \
@@ -187,7 +212,7 @@ browser-contextvm: install
 		fi; \
 		sleep 1; \
 	done; \
-	i=0; until "$(BUN)" -e 'const res = await fetch("http://localhost:3000/products"); const html = await res.text(); process.exit(res.ok && !html.includes("No products found") ? 0 : 1)'; do \
+	i=0; until "$(BUN)" -e 'const port = process.env.BROWSER_CONTEXTVM_PORT; const res = await fetch(`http://localhost:${port}/products`); const html = await res.text(); process.exit(res.ok && !html.includes("No products found") ? 0 : 1)'; do \
 		i=$$((i + 1)); \
 		if [ $$i -ge 60 ]; then \
 			echo "error: products were not seeded or visible"; \
@@ -196,7 +221,7 @@ browser-contextvm: install
 		fi; \
 		sleep 1; \
 	done; \
-	echo "Browser path ready: http://localhost:3000/products"; \
+	echo "Browser path ready: http://localhost:$$browser_port/products"; \
 	echo "Open DevTools and confirm ContextVM logs + BTC pricing."; \
 	echo "Logs: /tmp/contextvm-browser-relay.log /tmp/contextvm-browser-relay-seed.log /tmp/contextvm-browser-currency-server.log /tmp/contextvm-browser-app.log"; \
 	wait $$relay_pid $$server_pid $$app_pid
