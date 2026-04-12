@@ -11,14 +11,15 @@ This folder is the active cleanup checklist for the current ContextVM branch. Us
 - [x] Explain that `make browser-contextvm` should stay available until final validation is complete
 - [x] Clarify that archived notes under `docs/handovers/` are still present only for review/validation
 - [x] Clarify that any final removal of `Makefile` or handover docs belongs in the last cleanup step
+- [x] Draft the inherited-failure issue design doc
+- [x] Draft the inherited-failure GitHub issue body
 
 ### Still to do
 
 - [ ] Define the trim boundary and decide what can stay for transplant
 - [ ] Move only the relevant fixes onto the follow-up branch
-- [ ] Create the issue that explains the failing E2E tests were inherited from `master` and must be addressed in the transplanted branch
+- [ ] Create the GitHub issue that explains the inherited-from-`master` failures and must be addressed in the transplanted branch
 - [ ] Draft the issue for the temporary skipped Playwright tests
-- [ ] Draft the issue design for the inherited-from-`master` failures
 - [ ] Run `make browser-contextvm` and verify the happy path
 - [ ] Finish the remaining cleanup commit
 - [ ] Remove handover docs and the `Makefile` only if they are no longer needed
@@ -28,9 +29,10 @@ This folder is the active cleanup checklist for the current ContextVM branch. Us
 1. [`contextvm-scope-cleanup-design.md`](./contextvm-scope-cleanup-design.md) — define the trim boundary and decide what can stay for transplant
 2. [`contextvm-transplant-plan.md`](./contextvm-transplant-plan.md) — move only the relevant fixes onto the follow-up branch
 3. [`contextvm-inherited-failure-issue-design.md`](./contextvm-inherited-failure-issue-design.md) — define the markdown issue that will explain the inherited-from-`master` failures and reference the transplanted branch
-4. Create the issue that explains the inherited-from-`master` failures and notes that they must be addressed in the transplanted branch described by `contextvm-transplant-plan.md`
-5. [`contextvm-e2e-skip-issue.md`](./contextvm-e2e-skip-issue.md) — draft the issue for the temporary skipped Playwright tests
-6. [`contextvm-final-browser-cleanup.md`](./contextvm-final-browser-cleanup.md) — run `make browser-contextvm`, verify the happy path, then do the final cleanup commit
+4. [`contextvm-inherited-failure-issue.md`](./contextvm-inherited-failure-issue.md) — the paste-ready issue body for the inherited failure bucket
+5. Create the GitHub issue that explains the inherited-from-`master` failures and notes that they must be addressed in the transplanted branch described by `contextvm-transplant-plan.md`
+6. [`contextvm-e2e-skip-issue.md`](./contextvm-e2e-skip-issue.md) — draft the issue for the temporary skipped Playwright tests
+7. [`contextvm-final-browser-cleanup.md`](./contextvm-final-browser-cleanup.md) — run `make browser-contextvm`, verify the happy path, then do the final cleanup commit
 
 Important:
 
