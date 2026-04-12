@@ -2,7 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { NostrClientTransport, PrivateKeySigner, ApplesauceRelayPool } from '@contextvm/sdk'
 
 const RELAY_URL = process.argv[2] || 'ws://100.90.22.201:10547'
-const CURRENCY_SERVER_PUBKEY = '29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15'
+const CURRENCY_SERVER_PUBKEY = process.env.CURRENCY_SERVER_PUBKEY || '29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15'
 
 const ephemeralKey = crypto.getRandomValues(new Uint8Array(32))
 const hexKey = Array.from(ephemeralKey)

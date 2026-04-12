@@ -1,0 +1,10 @@
+{
+	"client": {
+		"source": "src/lib/ctxcn-client.ts",
+		"legacyWrapper": "src/lib/contextvm-client.ts"
+	},
+	"notes": [
+		"Checked in client artifact for browser-safe ContextVM usage.",
+		"The legacy wrapper remains temporarily for compatibility while imports are migrated."
+	]
+}

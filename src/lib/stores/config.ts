@@ -7,6 +7,7 @@ interface ConfigState {
 		stage?: Stage
 		appSettings?: any
 		appPublicKey?: string
+		currencyServerPubkey?: string
 		needsSetup?: boolean
 		[key: string]: any
 	}

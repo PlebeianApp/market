@@ -8,6 +8,7 @@ interface Config {
 	nip46Relay: string
 	appSettings: AppSettings | null
 	appPublicKey: string
+	currencyServerPubkey?: string
 	needsSetup: boolean
 	serverReady: boolean
 }

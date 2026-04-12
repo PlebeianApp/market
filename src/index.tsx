@@ -23,6 +23,7 @@ const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
 
 let appSettings: Awaited<ReturnType<typeof fetchAppSettings>> = null
 let APP_PUBLIC_KEY: string
+let CURRENCY_SERVER_PUBKEY: string
 
 let invoiceNdk: NDK | null = null
 let invoiceNdkConnectPromise: Promise<void> | null = null
@@ -39,6 +40,23 @@ function getAppPublicKeyOrThrow(): string {
 	const privateKeyBytes = new Uint8Array(Buffer.from(APP_PRIVATE_KEY, 'hex'))
 	APP_PUBLIC_KEY = getPublicKey(privateKeyBytes)
 	return APP_PUBLIC_KEY
+}
+
+function getCurrencyServerPublicKey(): string {
+	if (CURRENCY_SERVER_PUBKEY) return CURRENCY_SERVER_PUBKEY
+	if (process.env.CURRENCY_SERVER_PUBKEY) {
+		CURRENCY_SERVER_PUBKEY = process.env.CURRENCY_SERVER_PUBKEY
+		return CURRENCY_SERVER_PUBKEY
+	}
+
+	const serverPrivateKey = process.env.CVM_SERVER_KEY
+	if (serverPrivateKey && /^[0-9a-fA-F]{64}$/.test(serverPrivateKey)) {
+		CURRENCY_SERVER_PUBKEY = getPublicKey(new Uint8Array(Buffer.from(serverPrivateKey, 'hex')))
+		return CURRENCY_SERVER_PUBKEY
+	}
+
+	CURRENCY_SERVER_PUBKEY = '29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15'
+	return CURRENCY_SERVER_PUBKEY
 }
 
 function decodeLnurlBech32(lnurl: string): string | null {
@@ -237,6 +255,7 @@ export const server = serve({
 					nip46Relay: NIP46_RELAY_URL,
 					appSettings: appSettings,
 					appPublicKey: APP_PUBLIC_KEY,
+					currencyServerPubkey: getCurrencyServerPublicKey(),
 					needsSetup: !appSettings,
 					serverReady: eventHandlerReady,
 				})

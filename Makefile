@@ -1,6 +1,6 @@
 SHELL := /usr/bin/env bash
 
-.PHONY: help install bootstrap format format-check test-price-core test-unit test-integration test-integration-local test-e2e-new test-e2e-pricing test-pricing dev-contextvm currency-server fetch-btc-price manual-happy-path
+.PHONY: help install bootstrap format format-check test-price-core test-unit test-integration test-integration-local test-e2e-new test-e2e-pricing test-pricing dev-contextvm currency-server fetch-btc-price manual-happy-path browser-contextvm
 
 RELAY_URL ?= ws://localhost:10547
 PLAYWRIGHT_ARGS ?=
@@ -22,6 +22,7 @@ help:
 	@echo "  make currency-server        - start the ContextVM currency server"
 	@echo "  make fetch-btc-price        - probe BTC price via the local relay"
 	@echo "  make manual-happy-path      - print the local ContextVM manual verification plan"
+	@echo "  make browser-contextvm      - start relay + currency server + app for browser validation"
 
 install:
 	@if [ ! -x "$(BUN)" ]; then \
@@ -145,3 +146,36 @@ manual-happy-path: install
 	@echo "3) Browser/Terminal: make fetch-btc-price"
 	@echo "4) Terminal C: export APP_PRIVATE_KEY=\"$$(nak key generate)\" && bun run startup && bun run dev"
 	@echo "5) Browser: open http://localhost:3000/products, verify fiat pricing and EUR switch"
+
+browser-contextvm: install
+	@set -e; \
+	trap 'kill $$app_pid $$server_pid $$relay_pid >/dev/null 2>&1 || true' EXIT INT TERM; \
+	test_app_private_key="$$(nak key generate)"; \
+	relay_bin="$$(command -v nak 2>/dev/null || printf '%s/go/bin/nak' "$$HOME")"; \
+	"$$relay_bin" serve --hostname 0.0.0.0 >/tmp/contextvm-browser-relay.log 2>&1 & relay_pid=$$!; \
+	sleep 2; \
+	APP_RELAY_URL="$(RELAY_URL)" "$(BUN)" run dev:currency-server >/tmp/contextvm-browser-currency-server.log 2>&1 & server_pid=$$!; \
+	i=0; until "$(BUN)" run scripts/fetch-btc-price.ts "$(RELAY_URL)" >/tmp/contextvm-browser-price-check.log 2>&1; do \
+		i=$$((i + 1)); \
+		if [ $$i -ge 30 ]; then \
+			echo "error: currency server did not become ready"; \
+			echo "relay log: /tmp/contextvm-browser-relay.log"; \
+			echo "server log: /tmp/contextvm-browser-currency-server.log"; \
+			exit 1; \
+		fi; \
+		sleep 1; \
+	done; \
+	APP_PRIVATE_KEY="$$test_app_private_key" APP_RELAY_URL="$(RELAY_URL)" LOCAL_RELAY_ONLY=true NIP46_RELAY_URL="$(RELAY_URL)" PORT=3000 "$(BUN)" run dev:seed >/tmp/contextvm-browser-app.log 2>&1 & app_pid=$$!; \
+	i=0; until "$(BUN)" -e 'const r = await fetch("http://localhost:3000/products"); process.exit(r.ok ? 0 : 1)'; do \
+		i=$$((i + 1)); \
+		if [ $$i -ge 60 ]; then \
+			echo "error: app did not become ready"; \
+			echo "app log: /tmp/contextvm-browser-app.log"; \
+			exit 1; \
+		fi; \
+		sleep 1; \
+	done; \
+	echo "Browser path ready: http://localhost:3000/products"; \
+	echo "Open DevTools and confirm ContextVM logs + BTC pricing."; \
+	echo "Logs: /tmp/contextvm-browser-relay.log /tmp/contextvm-browser-currency-server.log /tmp/contextvm-browser-app.log"; \
+	wait $$relay_pid $$server_pid $$app_pid

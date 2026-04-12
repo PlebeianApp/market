@@ -5,7 +5,7 @@ const originalError = console.error
 console.warn = () => {}
 console.error = () => {}
 
-mock.module('@/lib/contextvm-client', () => ({
+mock.module('@/lib/ctxcn-client', () => ({
 	ContextVmClient: class {
 		constructor() {
 			throw new Error('mocked: no real relay connections in tests')

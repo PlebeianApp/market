@@ -2,6 +2,7 @@ import { queryOptions, useQuery } from '@tanstack/react-query'
 import { currencyKeys } from './queryKeyFactory'
 import { CURRENCIES } from '@/lib/constants'
 import { CURRENCY_SERVER_PUBKEY, getCurrencyServerRelays } from '@/lib/constants'
+import { configStore } from '@/lib/stores/config'
 
 const numSatsInBtc = 100000000
 export type SupportedCurrency = (typeof CURRENCIES)[number]
@@ -13,7 +14,7 @@ export const CURRENCY_CACHE_CONFIG = {
 	RESOLVE_TIMEOUT: 5000,
 } as const
 
-let contextVmClient: InstanceType<typeof import('@/lib/contextvm-client').ContextVmClient> | null = null
+let contextVmClient: InstanceType<typeof import('@/lib/ctxcn-client').ContextVmClient> | null = null
 let contextVmInitPromise: Promise<any> | null = null
 
 async function getContextVmClient() {
@@ -22,7 +23,7 @@ async function getContextVmClient() {
 
 	contextVmInitPromise = (async () => {
 		try {
-			const { ContextVmClient } = await import('@/lib/contextvm-client')
+			const { ContextVmClient } = await import('@/lib/ctxcn-client')
 
 			const privateKey = crypto.getRandomValues(new Uint8Array(32))
 
@@ -33,7 +34,7 @@ async function getContextVmClient() {
 			const client = new ContextVmClient({
 				privateKey,
 				relays,
-				serverPubkey: CURRENCY_SERVER_PUBKEY,
+				serverPubkey: configStore.state.config.currencyServerPubkey || CURRENCY_SERVER_PUBKEY,
 			})
 
 			contextVmClient = client
@@ -57,13 +58,15 @@ async function getMainRelayFromConfig(): Promise<string | undefined> {
 	}
 }
 
-const CONTEXTVM_CALL_TIMEOUT = 3000
+const CONTEXTVM_CALL_TIMEOUT = 5000
 
 async function fetchFromContextVm(): Promise<Record<string, number> | null> {
 	try {
 		const client = await getContextVmClient()
 		if (!client) return null
 
+		const startedAt = Date.now()
+		console.info(`ContextVM BTC fetch starting (timeout ${CONTEXTVM_CALL_TIMEOUT}ms)`)
 		const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), CONTEXTVM_CALL_TIMEOUT))
 		const callPromise = client.callTool({
 			name: 'get_btc_price',
@@ -72,15 +75,16 @@ async function fetchFromContextVm(): Promise<Record<string, number> | null> {
 
 		const result = await Promise.race([callPromise, timeout])
 		if (result === null) {
-			console.warn('ContextVM call timed out')
+			console.warn(`ContextVM call timed out after ${Date.now() - startedAt}ms`)
 			return null
 		}
 
 		if (!result?.rates || result.error) {
-			console.warn('ContextVM returned error:', result?.error)
+			console.warn('ContextVM returned error:', result?.error ?? 'missing rates')
 			return null
 		}
 
+		console.info(`ContextVM BTC fetch succeeded in ${Date.now() - startedAt}ms`)
 		return result.rates as Record<string, number>
 	} catch (error) {
 		console.warn('ContextVM fetch failed:', error)
@@ -94,6 +98,7 @@ export const fetchBtcExchangeRates = async (): Promise<Record<SupportedCurrency,
 	rates = await fetchFromContextVm()
 
 	if (!rates) {
+		console.info('Falling back to Yadio BTC rates')
 		try {
 			const response = await fetch('https://api.yadio.io/exrates/BTC')
 			if (!response.ok) {

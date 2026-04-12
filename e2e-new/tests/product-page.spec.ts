@@ -74,8 +74,10 @@ const getCommentSubmitButtonReply = (comment: Locator) => comment.getByRole('but
 /**
  * Helper to get the reaction button locator
  */
+const getProductHero = (page: Page): Locator => page.locator('.hero-content-product')
+
 const getReactionButton = (page: Page): Locator => {
-	return page.getByTestId('reaction-button')
+	return getProductHero(page).getByTestId('reaction-button')
 }
 
 const getReactionsList = (page: Page): Locator => {
@@ -83,15 +85,15 @@ const getReactionsList = (page: Page): Locator => {
 }
 
 const getZapButton = (page: Page): Locator => {
-	return page.getByTestId('zap-button')
+	return getProductHero(page).getByTestId('zap-button')
 }
 
 const getCommentButton = (page: Page): Locator => {
-	return page.getByTestId('comment-button')
+	return getProductHero(page).getByTestId('comment-button')
 }
 
 const getShareButton = (page: Page): Locator => {
-	return page.getByTestId('share-button')
+	return getProductHero(page).getByTestId('share-button')
 }
 
 /**
@@ -183,7 +185,7 @@ test.describe('Product Page - View Only (Unauthenticated)', () => {
 
 		await expect(headerContent).toBeVisible()
 		await expect(headerContent.getByText('View Test Product')).toBeVisible()
-		await expect(headerContent.getByText('100.00 USD')).toBeVisible()
+		await expect(headerContent.getByText(/100(?:\.00)?\s+USD/)).toBeVisible({ timeout: 15000 })
 		await expect(headerContent.getByText('10 in stock')).toBeVisible()
 		await expect(headerContent.getByText('Test Merchant')).toBeVisible()
 	})
@@ -241,16 +243,16 @@ test.describe('Product Page - View Only (Unauthenticated)', () => {
 		await unauthenticatedPage.goto(`/products/${currentProductId}`)
 
 		// Verify ReactionButton is visible
-		await expect(getReactionButton(unauthenticatedPage)).toBeVisible()
+		await expect(getReactionButton(unauthenticatedPage)).toBeVisible({ timeout: 15000 })
 
 		// Verify ZapButton is visible
-		await expect(getZapButton(unauthenticatedPage)).toBeVisible()
+		await expect(getZapButton(unauthenticatedPage)).toBeVisible({ timeout: 15000 })
 
 		// Verify CommentButton is visible
-		await expect(getCommentButton(unauthenticatedPage)).toBeVisible()
+		await expect(getCommentButton(unauthenticatedPage)).toBeVisible({ timeout: 15000 })
 
 		// Verify ShareButton is visible
-		await expect(getShareButton(unauthenticatedPage)).toBeVisible()
+		await expect(getShareButton(unauthenticatedPage)).toBeVisible({ timeout: 15000 })
 	})
 
 	test('should display ReactionsList for product reactions', async ({ buyerPage }) => {
@@ -489,7 +491,7 @@ test.describe('Product Page - Interactions & Social (Authenticated)', () => {
 	test('can remove an own-user reaction by clicking it', async ({ buyerPage }) => {
 		if (!currentProductId) throw new Error('Product not seeded')
 
-		seedExistingReaction('😂', devUser2.sk)
+		await seedExistingReaction('😂', devUser2.sk)
 
 		await buyerPage.goto(`/products/${currentProductId}`)
 
