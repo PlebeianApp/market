@@ -2,11 +2,7 @@ import { ProductFormContent } from '@/components/sheet-contents/NewProductConten
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { authStore } from '@/lib/stores/auth'
-import {
-	resolveProductWorkflow,
-	type ShippingSetupState,
-	type V4VSetupState,
-} from '@/lib/workflow/productWorkflowResolver'
+import { resolveProductWorkflow, type ShippingSetupState, type V4VSetupState } from '@/lib/workflow/productWorkflowResolver'
 import { productFormActions } from '@/lib/stores/product'
 import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useV4VConfiguration } from '@/queries/v4v'

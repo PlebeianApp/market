@@ -39,7 +39,7 @@ export function resolveProductWorkflow(input: ProductWorkflowResolverInput): Pro
 	}
 
 	const shouldStartAtShipping = input.shippingState === 'empty'
-	const initialTab: ProductFormTab = shouldStartAtShipping ? 'shipping' : requestedTab ?? 'name'
+	const initialTab: ProductFormTab = shouldStartAtShipping ? 'shipping' : (requestedTab ?? 'name')
 
 	return {
 		mode,

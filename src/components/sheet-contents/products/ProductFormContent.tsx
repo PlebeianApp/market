@@ -67,10 +67,7 @@ export function ProductFormContent({
 
 	// Check if user has any shipping options configured (for tab ordering)
 	// Query is only enabled when userPubkey is available
-	const {
-		data: userShippingOptions,
-		isFetched: isShippingFetched,
-	} = useShippingOptionsByPubkey(userPubkey)
+	const { data: userShippingOptions, isFetched: isShippingFetched } = useShippingOptionsByPubkey(userPubkey)
 
 	const resolvedShippingRefs = useMemo(() => {
 		if (!userShippingOptions) return new Set<string>()
