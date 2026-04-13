@@ -1,10 +1,8 @@
 import { cn } from '@/lib/utils'
-import { Clock3 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import ProgressBar from './shared/ProgressBar'
 
 type AuctionCountdownUrgency = 'calm' | 'hour' | 'minutes' | 'final' | 'ended'
-
-type AuctionCountdownVariant = 'inline' | 'panel'
 
 export interface AuctionCountdownState {
 	now: number
@@ -13,6 +11,7 @@ export interface AuctionCountdownState {
 	urgency: AuctionCountdownUrgency
 	displayLabel: string
 	absoluteLabel: string
+	totalDuration: number // Added to help calculate progress
 }
 
 function getUrgency(secondsRemaining: number): AuctionCountdownUrgency {
@@ -23,21 +22,22 @@ function getUrgency(secondsRemaining: number): AuctionCountdownUrgency {
 	return 'calm'
 }
 
-function formatAuctionCountdown(secondsRemaining: number, showSeconds: boolean): string {
-	if (secondsRemaining <= 0) return 'Ended'
-
-	const days = Math.floor(secondsRemaining / 86400)
-	const hours = Math.floor((secondsRemaining % 86400) / 3600)
-	const minutes = Math.floor((secondsRemaining % 3600) / 60)
-	const seconds = secondsRemaining % 60
-
-	const parts: string[] = []
-	if (days > 0) parts.push(`${days}d`)
-	if (hours > 0 || days > 0) parts.push(`${hours.toString().padStart(days > 0 ? 2 : 1, '0')}h`)
-	if (minutes > 0 || hours > 0 || days > 0) parts.push(`${minutes.toString().padStart(hours > 0 || days > 0 ? 2 : 1, '0')}m`)
-	if (showSeconds || parts.length === 0) parts.push(`${seconds.toString().padStart(parts.length > 0 ? 2 : 1, '0')}s`)
-
-	return parts.join(' ')
+// Helper to get the specific color based on urgency
+function getProgressColor(urgency: AuctionCountdownUrgency): string {
+	switch (urgency) {
+		case 'calm':
+			return '#18b9fe' // Light Blue (>24h)
+		case 'hour':
+			return '#ffd53d' // Yellow (>6h)
+		case 'minutes':
+			return '#ff9f43' // Orange (>1h)
+		case 'final':
+			return '#bf4040' // Red (15m - 0m)
+		case 'ended':
+			return '#e7e3e8' // White/Light Grey (Finished)
+		default:
+			return '#18b9fe'
+	}
 }
 
 export function useAuctionCountdown(endAt: number, options?: { showSeconds?: boolean }): AuctionCountdownState {
@@ -56,91 +56,52 @@ export function useAuctionCountdown(endAt: number, options?: { showSeconds?: boo
 
 	return useMemo(() => {
 		const secondsRemaining = endAt > 0 ? Math.max(0, endAt - now) : 0
+		const totalDuration = endAt > 0 ? endAt - (Math.floor(Date.now() / 1000) - secondsRemaining) : 0
+
+		// Fallback for totalDuration if start time is unknown, assume a large number or 0
+		const safeTotalDuration = totalDuration > 0 ? totalDuration : 86400 * 30 // Default to 30 days if unknown
+
 		return {
 			now,
 			secondsRemaining,
 			isEnded: endAt > 0 ? secondsRemaining <= 0 : false,
-			urgency: endAt > 0 ? getUrgency(secondsRemaining) : 'calm',
-			displayLabel: endAt > 0 ? formatAuctionCountdown(secondsRemaining, showSeconds) : 'No end date',
+			urgency: endAt > 0 ? getUrgency(secondsRemaining) : 'ended',
+			displayLabel: endAt > 0 ? 'Ended' : 'No end date', // Simplified label
 			absoluteLabel: endAt > 0 ? new Date(endAt * 1000).toLocaleString() : 'No end date',
+			totalDuration: safeTotalDuration,
 		}
 	}, [endAt, now, showSeconds])
-}
-
-const urgencyClasses: Record<AuctionCountdownUrgency, { shell: string; dot: string; text: string }> = {
-	calm: {
-		shell: 'border-zinc-200 bg-zinc-50 text-zinc-700',
-		dot: 'bg-zinc-400',
-		text: 'text-zinc-900',
-	},
-	hour: {
-		shell: 'border-amber-200 bg-amber-50 text-amber-800',
-		dot: 'bg-amber-500',
-		text: 'text-amber-950',
-	},
-	minutes: {
-		shell: 'border-orange-300 bg-orange-50 text-orange-900',
-		dot: 'bg-orange-500',
-		text: 'text-orange-950',
-	},
-	final: {
-		shell: 'border-rose-300 bg-rose-50 text-rose-900 shadow-[0_0_0_1px_rgba(244,63,94,0.08)]',
-		dot: 'bg-rose-500',
-		text: 'text-rose-950',
-	},
-	ended: {
-		shell: 'border-rose-300 bg-rose-100 text-rose-900',
-		dot: 'bg-rose-700',
-		text: 'text-rose-950',
-	},
 }
 
 export function AuctionCountdown({
 	endAt,
 	countdown,
-	showSeconds = false,
-	variant = 'inline',
-	label = 'Ends in',
-	endedLabel = 'Auction ended',
-	showAbsoluteTime = false,
 	className,
 }: {
 	endAt: number
 	countdown?: AuctionCountdownState
-	showSeconds?: boolean
-	variant?: AuctionCountdownVariant
-	label?: string
-	endedLabel?: string
-	showAbsoluteTime?: boolean
 	className?: string
 }) {
-	const state = countdown ?? useAuctionCountdown(endAt, { showSeconds })
-	const urgency = urgencyClasses[state.urgency]
-	const displayTitle = state.isEnded ? endedLabel : label
+	const state = countdown ?? useAuctionCountdown(endAt)
 
-	if (variant === 'panel') {
-		return (
-			<div className={cn('rounded-xl border p-4', urgency.shell, className)} title={state.absoluteLabel}>
-				<div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em]">
-					<span className={cn('h-2.5 w-2.5 rounded-full', urgency.dot)} />
-					<Clock3 className="h-3.5 w-3.5" />
-					<span>{displayTitle}</span>
-				</div>
-				<div className={cn('mt-3 font-mono text-2xl font-semibold tabular-nums tracking-tight', urgency.text)}>{state.displayLabel}</div>
-				{showAbsoluteTime && <div className="mt-2 text-xs opacity-75">Closes {state.absoluteLabel}</div>}
-			</div>
-		)
+	// 1. Calculate Inverse Progress (0 = empty, 1 = full)
+	// If ended, force to 1 (full) to show the "finished" color
+	let progress = 0
+	if (state.totalDuration > 0) {
+		const elapsed = state.totalDuration - state.secondsRemaining
+		progress = Math.min(Math.max(elapsed / state.totalDuration, 0), 1)
 	}
 
+	if (state.isEnded) {
+		progress = 1 // Ensure bar is full when ended
+	}
+
+	// 2. Get Dynamic Color
+	const color = getProgressColor(state.urgency)
+
 	return (
-		<div
-			className={cn('inline-flex min-w-0 items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium', urgency.shell, className)}
-			title={state.absoluteLabel}
-		>
-			<span className={cn('h-2 w-2 shrink-0 rounded-full', urgency.dot)} />
-			<Clock3 className="h-3.5 w-3.5 shrink-0" />
-			<span className="truncate uppercase tracking-[0.14em]">{displayTitle}</span>
-			<span className={cn('font-mono text-sm font-semibold tabular-nums tracking-tight', urgency.text)}>{state.displayLabel}</span>
+		<div className={cn('inline-flex items-center justify-center', className)}>
+			<ProgressBar progress={progress} color={color} height={12} maxWidth={120} fillDuration={1} />
 		</div>
 	)
 }
