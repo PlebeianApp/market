@@ -1,16 +1,29 @@
-import React from 'react'
+import React, { useEffect, useMemo } from 'react'
+import { cn } from '@/lib/utils'
 
 interface ProgressBarProps extends React.HTMLAttributes<HTMLDivElement> {
 	/** The percentage of the bar to fill (0-100). This will be held steady. */
 	progress: number
 	/** Duration of the initial fill animation (only used if progress is 0 initially) */
 	fillDuration?: number
-	/** Color of the bar and border */
+	/** Color of the bar, border, and glow */
 	color?: string
 	/** Height of the bar in pixels */
 	height?: number
 	/** Max width of the bar in pixels */
 	maxWidth?: number
+	/** Enable the pulsing glow effect */
+	glow?: boolean
+	/** Width of the white stripe line in pixels (default: 2) */
+	stripeWidth?: number
+	/** Gap between stripes in pixels (default: 8, total repeat = width + gap) */
+	stripeGap?: number
+	/** Opacity of the white stripes (0-1, default: 0.3) */
+	stripeOpacity?: number
+	/** Speed of the stripe animation in seconds (default: 1) */
+	stripeSpeed?: number
+	/** Angle of the stripes in degrees (default: 45) */
+	stripeAngle?: number
 }
 
 const ProgressBar: React.FC<ProgressBarProps> = ({
@@ -19,37 +32,50 @@ const ProgressBar: React.FC<ProgressBarProps> = ({
 	color = '#05e35e',
 	height = 20,
 	maxWidth = 500,
-	className, // Extract className explicitly
-	style, // Extract style explicitly to merge
+	glow = false,
+	stripeWidth = 2,
+	stripeGap = 8,
+	stripeOpacity = 0.3,
+	stripeSpeed = 1,
+	stripeAngle = 45,
+	className,
+	style,
 	...props
 }) => {
-	const progressPct = Math.min(Math.max(progress * 100, 0), 100) // Clamp between 0 and 100
+	const progressPct = Math.min(Math.max(progress * 100, 0), 100)
+	const stripeRepeat = stripeWidth + stripeGap
 
-	// Constants for the stripe pattern
-	const stripeRepeat = 20 // Total width of one pattern unit (line + gap)
-	const stripeLineWidth = 2 // Width of the white line
-	const animationSpeed = 1 // Seconds for one full loop of stripes
+	const instanceId = useMemo(() => `pb-${Math.random().toString(36).slice(2, 9)}`, [])
 
-	// Inject static keyframes ONCE.
-	// We do NOT include progressPct here to avoid re-calculating the animation frame.
-	React.useEffect(() => {
-		const styleId = 'progress-bar-static-keyframes'
-		if (!document.getElementById(styleId)) {
-			const style = document.createElement('style')
-			style.id = styleId
-			style.innerHTML = `
-				@keyframes fill-once {
-					from { width: 0%; }
-					to { width: 100%; } /* We will override the 'to' width via inline style if needed, but here we use a trick */
-				}
-				@keyframes move-stripes {
-					0% { background-position: 0 0; }
-					100% { background-position: -${stripeRepeat}px 0; } /* Move exactly one pattern width */
-				}
-			`
-			document.head.appendChild(style)
+	// Helper to convert hex to RGB for box-shadow
+	const hexToRgb = (hex: string) => {
+		const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+		return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '0, 0, 0'
+	}
+
+	// Inject UNIQUE keyframes for this instance
+	useEffect(() => {
+		const styleId = `progress-bar-${instanceId}`
+		const style = document.createElement('style')
+		style.id = styleId
+		style.innerHTML = `
+			@keyframes move-stripes-${instanceId} {
+				0% { background-position: 0 0; }
+				100% { background-position: -${stripeRepeat}px 0; }
+			}
+			@keyframes pulse-glow-${instanceId} {
+				0%, 100% { box-shadow: 0 0 0 0 rgba(${hexToRgb(color)}, 0); }
+				50% { box-shadow: 0 0 15px 5px rgba(${hexToRgb(color)}, 0.6); }
+			}
+		`
+		document.head.appendChild(style)
+
+		// Cleanup on unmount
+		return () => {
+			const existing = document.getElementById(styleId)
+			if (existing) existing.remove()
 		}
-	}, []) // Empty dependency array: runs only once on mount
+	}, [color, stripeRepeat, instanceId])
 
 	const containerStyle: React.CSSProperties = {
 		padding: '2px',
@@ -60,40 +86,35 @@ const ProgressBar: React.FC<ProgressBarProps> = ({
 		borderRadius: '4px',
 		overflow: 'hidden',
 		position: 'relative',
+		// Apply glow animation if enabled
+		animation: glow ? `pulse-glow-${instanceId} 2s ease-in-out infinite` : 'none',
 	}
 
-	// The bar style
 	const barStyle: React.CSSProperties = {
 		height: '100%',
-		width: `${progressPct}%`, // Static width based on prop
-
-		// 1. Base Color (Green)
+		width: `${progressPct}%`,
 		backgroundColor: color,
 
-		// 2. The Gradient (White Lines on Green)
-		// transparent (gap) -> white (line) -> transparent (gap)
+		// Dynamic Gradient
 		backgroundImage: `repeating-linear-gradient(
-			45deg, 
-			white, 
-			white ${stripeLineWidth}px, 
-			transparent ${stripeLineWidth}px, 
+			${stripeAngle}deg, 
+			rgba(255, 255, 255, ${stripeOpacity}), 
+			rgba(255, 255, 255, ${stripeOpacity}) ${stripeWidth}px, 
+			transparent ${stripeWidth}px, 
 			transparent ${stripeRepeat}px
 		)`,
 
-		// 3. Ensure background size matches the pattern exactly
 		backgroundSize: `${stripeRepeat}px ${height}px`,
 
-		// 4. Animations
-
-		animation: `move-stripes ${animationSpeed}s linear infinite`,
-
+		// Animations
+		animation: `move-stripes-${instanceId} ${stripeSpeed}s linear infinite`,
 		transition: `width ${fillDuration}s cubic-bezier(0.4, 0, 0.2, 1)`,
 
 		...style,
 	}
 
 	return (
-		<div style={containerStyle} className={className} {...props}>
+		<div style={containerStyle} className={cn(className)} {...props}>
 			<div style={barStyle} />
 		</div>
 	)
