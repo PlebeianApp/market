@@ -127,7 +127,7 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 				</div>
 
 				<div className="text-xs text-gray-600">
-					<AuctionCountdown endAt={effectiveEndAt} countdown={countdown} showSeconds variant="inline" className="w-full justify-between" />
+					<AuctionCountdown auction={auction} className="w-full justify-between" compact />
 				</div>
 
 				<div className="flex-grow"></div>
