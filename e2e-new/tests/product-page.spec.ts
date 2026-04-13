@@ -51,6 +51,12 @@ const getTabsList = (page: Page) => getTabsContainer(page).locator('[role="tabli
  */
 const getTabsPanels = (page: Page) => getTabsContainer(page).locator('[role="tabpanel"]')
 
+const getProductHero = (page: Page) => page.locator('.hero-content-product')
+
+const getProductLevelSocialInteractions = (page: Page): Locator => {
+	return getProductHero(page).getByTestId('social-interactions')
+}
+
 /**
  * Returns the comment input locator
  */
@@ -246,7 +252,11 @@ test.describe('Product Page - View Only (Unauthenticated)', () => {
 		if (!currentProductId) throw new Error('Product not seeded')
 		await unauthenticatedPage.goto(`/products/${currentProductId}`)
 
+		const productSocialInteractions = getProductLevelSocialInteractions(unauthenticatedPage)
+		await expect(productSocialInteractions).toBeVisible()
+
 		// Verify ReactionButton is visible
+<<<<<<< HEAD
 		await expect(getReactionButton(unauthenticatedPage)).toBeVisible({ timeout: 15000 })
 
 		// Verify ZapButton is visible
@@ -257,6 +267,18 @@ test.describe('Product Page - View Only (Unauthenticated)', () => {
 
 		// Verify ShareButton is visible
 		await expect(getShareButton(unauthenticatedPage)).toBeVisible({ timeout: 15000 })
+=======
+		await expect(productSocialInteractions.getByTestId('reaction-button')).toBeVisible()
+
+		// Verify ZapButton is visible
+		await expect(productSocialInteractions.getByTestId('zap-button')).toBeVisible()
+
+		// Verify CommentButton is visible
+		await expect(productSocialInteractions.getByTestId('comment-button')).toBeVisible()
+
+		// Verify ShareButton is visible
+		await expect(productSocialInteractions.getByTestId('share-button')).toBeVisible()
+>>>>>>> ca74b20b (test: align comment reaction assertion with rendered UI contract)
 	})
 
 	test('should display ReactionsList for product reactions', async ({ buyerPage }) => {
@@ -563,9 +585,12 @@ test.describe('Product Page - Interactions & Social (Authenticated)', () => {
 		// Wait for comment to load
 		await buyerPage.getByText('Existing seeded comment for testing.').waitFor()
 
-		// Find comment's reaction button
-		const commentSocialInteractions = buyerPage.locator('[data-testid="product-comments"] .comment-social-interactions')
-		const commentReactionBtn = commentSocialInteractions.locator('[data-testid="reaction-button"]').first()
+		const commentContainer = buyerPage.getByTestId('product-comments')
+		const commentItem = commentContainer.locator('div.relative.border-b.border-gray-200', {
+			has: buyerPage.getByText('Existing seeded comment for testing.'),
+		})
+		const commentSocialInteractions = commentItem.locator('.comment-social-interactions')
+		const commentReactionBtn = commentSocialInteractions.getByTestId('reaction-button')
 
 		// Hover to open popover
 		await commentReactionBtn.hover()
@@ -579,6 +604,7 @@ test.describe('Product Page - Interactions & Social (Authenticated)', () => {
 		await expect(commentReactionBtn).toHaveClass(/bg-neo-purple/)
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 		// Verify the emoji appears with count
 		const commentContainer = buyerPage.getByTestId('product-comments')
 		await expect(commentContainer.getByText('❤️')).toBeVisible()
@@ -589,5 +615,12 @@ test.describe('Product Page - Interactions & Social (Authenticated)', () => {
 		await expect(reactionChip).toBeVisible()
 		await expect(reactionChip).toContainText('1')
 >>>>>>> 8e20ef62 (test: stabilize product-page social interaction selectors)
+=======
+		// Comment rows combine zaps and reactions as children, so there is no
+		// standalone `reactions-list` wrapper here. Assert against the combined
+		// post-action surface within this specific comment row instead.
+		const commentPostActionSurface = commentSocialInteractions.locator('div.flex.flex-wrap.gap-2')
+		await expect(commentPostActionSurface).toContainText(/❤️\s*1/)
+>>>>>>> ca74b20b (test: align comment reaction assertion with rendered UI contract)
 	})
 })
