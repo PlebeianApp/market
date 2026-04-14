@@ -37,7 +37,8 @@
 		"dev:contextvm-server": "bun run contextvm/server.ts",
 		"test:unit": "bun test $(find contextvm src/queries/__tests__ src/lib/__tests__ -type f -name '*.test.ts' ! -name '*.integration.test.ts' | sort)",
 		"test:unit:watch": "bun test --watch $(find contextvm src/queries/__tests__ src/lib/__tests__ -type f -name '*.test.ts' ! -name '*.integration.test.ts' | sort)",
-		"test:integration": "bun test $(find src/lib/__tests__ -type f -name '*.integration.test.ts' | sort)"	},
+		"test:integration": "bun test $(find src/lib/__tests__ -type f -name '*.integration.test.ts' | sort)"
+	},
 	"dependencies": {
 		"@contextvm/sdk": "^0.7.5",
 		"@faker-js/faker": "^10.4.0",
