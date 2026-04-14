@@ -3,8 +3,9 @@ import { useEffect, useMemo, useState } from 'react'
 import ProgressBar from './shared/ProgressBar'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { getAuctionEndAt, getAuctionStartAt } from '@/queries/auctions'
+import { Badge } from './ui/badge'
 
-type AuctionCountdownUrgency = 'calm' | 'hour' | 'minutes' | 'final' | 'ended'
+type AuctionCountdownUrgency = 'calm' | 'lastDay' | 'lastHour' | 'endingSoon' | 'finalBids' | 'ended'
 
 export interface AuctionCountdownState {
 	now: number
@@ -18,10 +19,11 @@ export interface AuctionCountdownState {
 
 function getUrgency(secondsRemaining: number): AuctionCountdownUrgency {
 	if (secondsRemaining <= 0) return 'ended'
-	if (secondsRemaining <= 60) return 'final'
-	if (secondsRemaining <= 600) return 'minutes'
-	if (secondsRemaining <= 3600) return 'hour'
-	return 'calm'
+	if (secondsRemaining < 15) return 'finalBids' // < 15s - Final bids
+	if (secondsRemaining <= 900) return 'endingSoon' // 15s - 15m (900s)
+	if (secondsRemaining <= 3600) return 'lastHour' // 15m - 1h
+	if (secondsRemaining <= 86400) return 'lastDay' // 1h - 24h
+	return 'calm' // 24h+
 }
 
 // Helper to get the specific color based on urgency
@@ -29,16 +31,55 @@ function getProgressColor(urgency: AuctionCountdownUrgency): string {
 	switch (urgency) {
 		case 'calm':
 			return '#18b9fe' // Light Blue
-		case 'hour':
+		case 'lastDay':
 			return '#ffd53d' // Yellow
-		case 'minutes':
+		case 'lastHour':
 			return '#ff9f43' // Orange
-		case 'final':
+		case 'endingSoon':
 			return '#bf4040' // Red
+		case 'finalBids':
+			return '#ff3eb5' // Pink
 		case 'ended':
 			return '#e7e3e8' // White/Light Grey
 		default:
 			return '#18b9fe'
+	}
+}
+
+// Helper to format the text label
+function formatTimeLeft(seconds: number): string {
+	if (seconds <= 0) return 'Ended'
+
+	const days = Math.floor(seconds / 86400)
+	const hours = Math.floor((seconds % 86400) / 3600)
+	const minutes = Math.floor((seconds % 3600) / 60)
+	const secs = Math.round(seconds % 60)
+
+	if (days > 0) {
+		return `${days} day${days > 1 ? 's' : ''} left`
+	}
+	if (hours > 0) {
+		return `${hours} hour${hours > 1 ? 's' : ''} left`
+	}
+	// Show MM:SS for minutes and seconds
+	return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+}
+
+// Map urgency to the new CSS class names
+function getBadgeClassName(urgency: AuctionCountdownUrgency): string {
+	switch (urgency) {
+		case 'calm':
+			return 'badge-info'
+		case 'lastDay':
+			return 'badge-yellow' // or 'badge-warn' depending on preference
+		case 'lastHour':
+			return 'badge-warn'
+		case 'endingSoon':
+			return 'badge-error'
+		case 'finalBids':
+			return 'badge-pink'
+		default:
+			return 'badge-neutral'
 	}
 }
 
@@ -82,93 +123,50 @@ export function AuctionCountdown({ auction, className }: { auction: NDKEvent; cl
 	const remaining = endTime - currentTime
 
 	const urgency = getUrgency(remaining)
+	const color = getProgressColor(urgency)
+	const textLabel = formatTimeLeft(remaining)
 
 	// 1. Calculate Inverse Progress
 	let progress = 0
 	if (totalDuration > 0) {
 		const elapsed = totalDuration - remaining
-		progress = Math.min(Math.max(elapsed / totalDuration, 0), 1)
+		progress = 1 - Math.min(Math.max(elapsed / totalDuration, 0), 1)
 	}
 	if (remaining < 0) progress = 1
 
-	// 2. Get Dynamic Color
-	const color = getProgressColor(urgency)
-
-	// 3. Configure ProgressBar Props based on Urgency
+	// 2. Configure ProgressBar Props based on Urgency
 	const progressConfig = useMemo(() => {
 		switch (urgency) {
 			case 'calm':
-				// Smooth gradient, slow, no glow
-				return {
-					glow: false,
-					stripeWidth: 20, // Wide lines
-					stripeGap: 20, // Same width = smooth gradient effect
-					stripeOpacity: 0.15, // Very subtle
-					stripeSpeed: 2.5, // Slow
-					stripeAngle: 45,
-				}
-			case 'hour':
-				// Yellow: Bars, medium speed, glow
-				return {
-					glow: true,
-					stripeWidth: 3,
-					stripeGap: 10,
-					stripeOpacity: 0.4,
-					stripeSpeed: 1.5,
-					stripeAngle: 45,
-				}
-			case 'minutes':
-				// Orange: Denser bars, faster, glow
-				return {
-					glow: true,
-					stripeWidth: 3,
-					stripeGap: 6,
-					stripeOpacity: 0.6,
-					stripeSpeed: 0.8,
-					stripeAngle: 45,
-				}
-			case 'final':
-				// Red: Dense bars, fast, strong glow
-				return {
-					glow: true,
-					stripeWidth: 3,
-					stripeGap: 4,
-					stripeOpacity: 0.8,
-					stripeSpeed: 0.4,
-					stripeAngle: 45,
-				}
+				return { glow: false, stripeWidth: 20, stripeGap: 20, stripeOpacity: 0.15, stripeSpeed: 2.5, stripeAngle: 45 }
+			case 'lastDay':
+				return { glow: true, stripeWidth: 3, stripeGap: 10, stripeOpacity: 0.4, stripeSpeed: 1.5, stripeAngle: 45 }
+			case 'lastHour':
+				return { glow: true, stripeWidth: 3, stripeGap: 6, stripeOpacity: 0.6, stripeSpeed: 0.8, stripeAngle: 45 }
+			case 'endingSoon':
+				return { glow: true, stripeWidth: 3, stripeGap: 4, stripeOpacity: 0.8, stripeSpeed: 0.4, stripeAngle: 45 }
+			case 'finalBids':
+				return { glow: true, stripeWidth: 2, stripeGap: 2, stripeOpacity: 0.8, stripeSpeed: 0.2, stripeAngle: 45 }
 			case 'ended':
-				// White: No animation, solid
-				return {
-					glow: false,
-					stripeWidth: 0, // No stripes
-					stripeGap: 10,
-					stripeOpacity: 0, // Transparent stripes = solid color
-					stripeSpeed: 0, // No animation
-					stripeAngle: 0,
-				}
+				return { glow: false, stripeWidth: 0, stripeGap: 10, stripeOpacity: 0, stripeSpeed: 0, stripeAngle: 0 }
 			default:
-				return {
-					glow: false,
-					stripeWidth: 2,
-					stripeGap: 8,
-					stripeOpacity: 0.3,
-					stripeSpeed: 1,
-					stripeAngle: 45,
-				}
+				return { glow: false, stripeWidth: 2, stripeGap: 8, stripeOpacity: 0.3, stripeSpeed: 1, stripeAngle: 45 }
 		}
 	}, [urgency])
 
+	const badgeClass = getBadgeClassName(urgency)
+
 	return (
-		<div className={cn('inline-flex items-center justify-center', className)}>
-			<ProgressBar
-				progress={progress}
-				color={color}
-				fillDuration={1}
-				height={16}
-				// Spread the dynamic config
-				{...progressConfig}
-			/>
+		<div className={cn('flex flex-col items-start gap-2', className)}>
+			{/* Shadcn Badge Component */}
+			<Badge variant="secondary" className={cn('px-3 py-1.5 text-xs font-semibold tracking-wide shadow-sm', badgeClass)}>
+				{textLabel}
+			</Badge>
+
+			{/* Progress Bar */}
+			<div className="w-full">
+				<ProgressBar progress={progress} color={color} fillDuration={1} height={16} {...progressConfig} />
+			</div>
 		</div>
 	)
 }
