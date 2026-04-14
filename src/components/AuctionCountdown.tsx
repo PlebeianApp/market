@@ -101,9 +101,9 @@ function getBadgeClassName(urgency: AuctionCountdownUrgency): string {
 		case 'calm':
 			return 'badge-info'
 		case 'lastDay':
-			return 'badge-yellow' // or 'badge-warn' depending on preference
-		case 'lastHour':
 			return 'badge-warn'
+		case 'lastHour':
+			return 'badge-amber'
 		case 'endingSoon':
 			return 'badge-error'
 		case 'finalBids':
@@ -191,7 +191,15 @@ export function AuctionCountdown({ auction, className, compact = false }: { auct
 		<div className={cn('flex flex-col items-start gap-2', className)}>
 			<div className="flex flex-row gap-2 items-center">
 				{/* Shadcn Badge Component */}
-				<Badge variant="secondary" className={cn('px-3 py-1.5 text-xs font-semibold tracking-wide shadow-sm', badgeClass)}>
+				<Badge
+					variant="outline"
+					className={cn(
+						'px-3 py-1.5 text-xs font-semibold tracking-wide shadow-sm border-2',
+						badgeClass,
+						// Overrides for badge class (bg -> primary, fg -> primary fg, border -> primary border. No hover state)
+						' bg-primary hover:bg-primary text-primary-foreground hover:text-primary-foreground border-primary-border hover:border-primary-border',
+					)}
+				>
 					{textLabel}
 				</Badge>
 				{!compact && <span className="text-foreground/80">{endTimeLabel}</span>}

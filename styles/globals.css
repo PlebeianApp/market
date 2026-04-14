@@ -475,44 +475,48 @@ button {
 	/* Badge variants */
 
 	/* INFO - Light Blue */
-	.badge-info {
-		--light-gray: hsl(210, 100%, 96%); /* Very light blue bg */
-		--primary-foreground: hsl(210, 100%, 20%); /* Dark blue text */
-		--primary-border-hover: hsl(210, 100%, 85%); /* Light blue border on hover */
-	}
+.badge-info {
+  /* Based on --neo-blue */
+  --primary: #d8f3ff;
+  --primary-foreground: #076289;
+  --primary-border: #afe7ff;
+}
 
 	/* WARN - Yellow */
 	.badge-warn {
-		--light-gray: hsl(48, 100%, 96%); /* Very light yellow bg */
-		--primary-foreground: hsl(48, 100%, 20%); /* Dark yellow text */
-		--primary-border-hover: hsl(48, 100%, 85%); /* Light yellow border on hover */
+		/* Based on --focus */
+		--primary: #fff3c9;
+		--primary-foreground: #705700;
+		--primary-border: #ffe484;
 	}
 
 	/* ERROR - Red */
 	.badge-error {
-		--light-gray: hsl(0, 100%, 96%); /* Very light red bg */
-		--primary-foreground: hsl(0, 100%, 20%); /* Dark red text */
-		--primary-border-hover: hsl(0, 100%, 85%); /* Light red border on hover */
+		/* Based on --destructive */
+		--primary: #f7baba;
+		--primary-foreground: #8d0a0a;
+		--primary-border: #f19999;
 	}
 
 	/* PINK - Pink */
 	.badge-pink {
-		--light-gray: hsl(330, 100%, 96%); /* Very light pink bg */
-		--primary-foreground: hsl(330, 100%, 20%); /* Dark pink text */
-		--primary-border-hover: hsl(330, 100%, 85%); /* Light pink border on hover */
+		/* Based on --secondary / "plebeian pink" */
+		--primary: #ffceec;
+		--primary-foreground: #97005d;
+		--primary-border: #fc9fd9;
 	}
 
-	/* YELLOW - (Alternative Yellow, e.g., Amber) */
-	.badge-yellow {
-		--light-gray: hsl(45, 100%, 96%); /* Very light amber bg */
-		--primary-foreground: hsl(45, 100%, 20%); /* Dark amber text */
-		--primary-border-hover: hsl(45, 100%, 85%); /* Light amber border on hover */
+	/* AMBER - Amber */
+	.badge-amber {
+		--primary: #ffd8a8;
+		--primary-foreground: #b46300;
+		--primary-border: #ffc884;
 	}
 
 	/* NEUTRAL - Grey */
 	.badge-neutral {
-		--light-gray: hsl(0, 0%, 96%); /* Very light grey bg */
-		--primary-foreground: hsl(0, 0%, 20%); /* Dark grey text */
-		--primary-border-hover: hsl(0, 0%, 85%); /* Light grey border on hover */
+		--primary: hsl(0, 0%, 96%);
+		--primary-foreground: hsl(0, 0%, 20%);
+		--primary-border: hsl(0, 0%, 85%);
 	}
 }
