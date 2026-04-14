@@ -1,6 +1,7 @@
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { ButtonGroup } from '@/components/ui/button-group' // Ensure this exists, or use a div with flex
 import { usePublishAuctionBidMutation } from '@/publish/auctions'
 import {
 	getAuctionEndAt,
@@ -18,6 +19,8 @@ import { toast } from 'sonner'
 import { useMemo, useState, useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuctionCountdown } from './AuctionCountdown'
+import { Pencil, Plus, Minus, X, CircleX } from 'lucide-react'
+import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/input-group'
 
 interface AuctionBidderProps {
 	auction: NDKEvent
@@ -29,7 +32,7 @@ export function AuctionBidder({ auction, currentUserPubkey, onBidSuccess }: Auct
 	const queryClient = useQueryClient()
 	const bidMutation = usePublishAuctionBidMutation()
 
-	// Derive auction state from helpers
+	// Derive auction state
 	const auctionId = auction.id
 	const startTime = getAuctionStartAt(auction)
 	const endTime = getAuctionEndAt(auction)
@@ -40,7 +43,6 @@ export function AuctionBidder({ auction, currentUserPubkey, onBidSuccess }: Auct
 	const trustedMints = getAuctionMints(auction)
 	const auctionDTag = getAuctionId(auction)
 
-	// Coordinates for the bid
 	const auctionCoordinates = auctionDTag && auction ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 
 	const endAt = getAuctionEndAt(auction)
@@ -55,8 +57,9 @@ export function AuctionBidder({ auction, currentUserPubkey, onBidSuccess }: Auct
 	const isEnded = endTime <= currentTime
 	const isOwnAuction = currentUserPubkey === auction.pubkey
 
-	// Local state for input
+	// State for input and view mode ('input' or 'quick')
 	const [bidAmountInput, setBidAmountInput] = useState<string>('')
+	const [isEditing, setIsEditing] = useState(false)
 
 	// Parse the input safely
 	const parsedBidAmount = useMemo(() => {
@@ -66,8 +69,10 @@ export function AuctionBidder({ auction, currentUserPubkey, onBidSuccess }: Auct
 
 	// Initialize input to min bid on mount or when min changes
 	useEffect(() => {
-		setBidAmountInput(String(minBid))
-	}, [minBid])
+		if (!isEditing) {
+			setBidAmountInput(String(minBid))
+		}
+	}, [minBid, isEditing])
 
 	// Disable logic
 	const isDisabledInput = isEnded || isOwnAuction || bidMutation.isPending
@@ -80,6 +85,32 @@ export function AuctionBidder({ auction, currentUserPubkey, onBidSuccess }: Auct
 		if (bidMutation.isPending) return 'Submitting...'
 		return 'Place Bid'
 	}, [isOwnAuction, isEnded, bidMutation.isPending])
+
+	// Quick Action Handlers
+	const handleQuickAdd = (amount: number) => {
+		const newAmount = currentPrice + amount
+		setBidAmountInput(String(newAmount))
+
+		// Submit bid
+		handleSubmitBid()
+	}
+
+	const handleQuickMultiply = (amount: number) => {
+		// Provide fallback in case increment is higher than current price * amount
+		const newAmount = Math.max(currentPrice * amount, minBid)
+		setBidAmountInput(String(newAmount))
+
+		// Submit bid
+		handleSubmitBid()
+	}
+
+	const handleEditToggle = () => {
+		setIsEditing(!isEditing)
+		if (!isEditing) {
+			// If switching to edit, ensure input has a value
+			if (!bidAmountInput) setBidAmountInput(String(minBid))
+		}
+	}
 
 	const handleSubmitBid = async () => {
 		if (!auction || !auctionCoordinates || ended || isOwnAuction) return
@@ -101,34 +132,98 @@ export function AuctionBidder({ auction, currentUserPubkey, onBidSuccess }: Auct
 				p2pkXpub,
 				mint: trustedMints[0],
 			})
+			queryClient.invalidateQueries({ queryKey: ['auction', auction.id] })
+			queryClient.invalidateQueries({ queryKey: ['auctionBids', auction.id] })
+			toast.success('Bid placed successfully')
+			setBidAmountInput(String(minBid))
+			setIsEditing(false)
+			onBidSuccess?.()
 		} catch {
-			// Error toast is handled by mutation onError.
+			// Error handled by mutation
 		}
 	}
 
 	return (
-		<div className="flex flex-col gap-2">
-			<div className="flex gap-2 items-center w-full max-w-md">
-				<Input
-					type="number"
-					min={minBid}
-					step={Math.max(1, bidIncrement)}
-					value={bidAmountInput}
-					onChange={(e) => setBidAmountInput(e.target.value)}
-					placeholder={`Min: ${minBid.toLocaleString()}`}
-					className="bg-white text-black w-full"
-					disabled={isDisabledInput}
-				/>
+		<div className="flex flex-col gap-3 w-full max-w-md">
+			{/* Main Action Area */}
+			<div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+				{isEditing ? (
+					// EDIT MODE: Input Field
+					<InputGroup>
+						<InputGroupInput
+							type="number"
+							min={minBid}
+							step={Math.max(1, bidIncrement)}
+							value={bidAmountInput}
+							onChange={(e) => setBidAmountInput(e.target.value)}
+							placeholder={`Min: ${minBid.toLocaleString()}`}
+							disabled={isDisabledInput}
+							autoFocus
+						/>
+						<InputGroupAddon align="inline-end">
+							<CircleX onClick={handleEditToggle} className="size-4" />
+						</InputGroupAddon>
+					</InputGroup>
+				) : (
+					// QUICK ACTION MODE: Button Group
+					<ButtonGroup className="w-full sm:w-auto">
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={() => handleQuickAdd(bidIncrement)}
+							tooltip="Minimum Bid Increment"
+							disabled={isDisabledInput}
+							className="flex-1 sm:flex-none"
+						>
+							<Plus className="h-3 w-3 mr-1" /> {bidIncrement} sats
+						</Button>
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={() => handleQuickAdd(bidIncrement * 2)}
+							tooltip="2x Minimum Bid Increment"
+							disabled={isDisabledInput}
+							className="flex-1 sm:flex-none"
+						>
+							<Plus className="h-3 w-3 mr-1" /> {bidIncrement * 2} sats
+						</Button>
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={() => handleQuickMultiply(2)}
+							tooltip="2x Current Bid"
+							disabled={isDisabledInput}
+							className="flex-1 sm:flex-none"
+						>
+							<X className="size-3 mr-1" /> 2
+						</Button>
+						<Button
+							variant="outline"
+							size="sm"
+							onClick={handleEditToggle}
+							tooltip="Customize Bid Amount"
+							disabled={isDisabledInput}
+							className="flex-1 sm:flex-none"
+							title="Customize bid"
+						>
+							<Pencil className="h-3 w-3" />
+						</Button>
+					</ButtonGroup>
+				)}
+
+				{/* Place Bid Button */}
 				<Button
 					onClick={handleSubmitBid}
 					disabled={isDisabledBid}
 					variant={isOwnAuction ? 'secondary' : 'primary'}
-					className="whitespace-nowrap"
+					className="whitespace-nowrap w-full sm:w-auto"
 				>
 					{buttonText}
 				</Button>
 			</div>
-			<div className="text-xs text-white/80">Minimum allowed bid: {minBid.toLocaleString()} sats</div>
+
+			{/* Minimum Bid Info */}
+			<div className="text-xs text-white/80 pl-1">Minimum allowed bid: {minBid.toLocaleString()} sats</div>
 		</div>
 	)
 }

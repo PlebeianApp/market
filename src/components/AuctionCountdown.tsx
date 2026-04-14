@@ -144,7 +144,7 @@ export function useAuctionCountdown(endAt: number, options?: { showSeconds?: boo
 	}, [endAt, now, showSeconds])
 }
 
-export function AuctionCountdown({ auction, className }: { auction: NDKEvent; className?: string }) {
+export function AuctionCountdown({ auction, className, compact = false }: { auction: NDKEvent; className?: string; compact?: boolean }) {
 	const startTime = getAuctionStartAt(auction)
 	const endTime = getAuctionEndAt(auction)
 	const currentTime = Date.now() / 1000
@@ -194,7 +194,7 @@ export function AuctionCountdown({ auction, className }: { auction: NDKEvent; cl
 				<Badge variant="secondary" className={cn('px-3 py-1.5 text-xs font-semibold tracking-wide shadow-sm', badgeClass)}>
 					{textLabel}
 				</Badge>
-				<span className="text-foreground/80">{endTimeLabel}</span>
+				{!compact && <span className="text-foreground/80">{endTimeLabel}</span>}
 			</div>
 
 			{/* Progress Bar */}
