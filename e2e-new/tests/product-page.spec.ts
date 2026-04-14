@@ -80,7 +80,6 @@ const getCommentSubmitButtonReply = (comment: Locator) => comment.getByRole('but
 /**
  * Helper to get the reaction button locator
  */
-const getProductHero = (page: Page): Locator => page.locator('.hero-content-product')
 
 const getReactionButton = (page: Page): Locator => {
 	return getProductHero(page).getByTestId('reaction-button')
@@ -256,18 +255,6 @@ test.describe('Product Page - View Only (Unauthenticated)', () => {
 		await expect(productSocialInteractions).toBeVisible()
 
 		// Verify ReactionButton is visible
-<<<<<<< HEAD
-		await expect(getReactionButton(unauthenticatedPage)).toBeVisible({ timeout: 15000 })
-
-		// Verify ZapButton is visible
-		await expect(getZapButton(unauthenticatedPage)).toBeVisible({ timeout: 15000 })
-
-		// Verify CommentButton is visible
-		await expect(getCommentButton(unauthenticatedPage)).toBeVisible({ timeout: 15000 })
-
-		// Verify ShareButton is visible
-		await expect(getShareButton(unauthenticatedPage)).toBeVisible({ timeout: 15000 })
-=======
 		await expect(productSocialInteractions.getByTestId('reaction-button')).toBeVisible()
 
 		// Verify ZapButton is visible
@@ -278,7 +265,6 @@ test.describe('Product Page - View Only (Unauthenticated)', () => {
 
 		// Verify ShareButton is visible
 		await expect(productSocialInteractions.getByTestId('share-button')).toBeVisible()
->>>>>>> ca74b20b (test: align comment reaction assertion with rendered UI contract)
 	})
 
 	test('should display ReactionsList for product reactions', async ({ buyerPage }) => {
@@ -602,25 +588,10 @@ test.describe('Product Page - Interactions & Social (Authenticated)', () => {
 
 		// Verify reaction was added - check for filled state
 		await expect(commentReactionBtn).toHaveClass(/bg-neo-purple/)
-
-<<<<<<< HEAD
-<<<<<<< HEAD
-		// Verify the emoji appears with count
-		const commentContainer = buyerPage.getByTestId('product-comments')
-		await expect(commentContainer.getByText('❤️')).toBeVisible()
-=======
 		// Verify the reaction chip appears on the same comment with count 1
 		const commentReactionsList = commentSocialInteractions.getByTestId('reactions-list').first()
 		const reactionChip = commentReactionsList.getByRole('button', { name: /❤️/ })
 		await expect(reactionChip).toBeVisible()
 		await expect(reactionChip).toContainText('1')
->>>>>>> 8e20ef62 (test: stabilize product-page social interaction selectors)
-=======
-		// Comment rows combine zaps and reactions as children, so there is no
-		// standalone `reactions-list` wrapper here. Assert against the combined
-		// post-action surface within this specific comment row instead.
-		const commentPostActionSurface = commentSocialInteractions.locator('div.flex.flex-wrap.gap-2')
-		await expect(commentPostActionSurface).toContainText(/❤️\s*1/)
->>>>>>> ca74b20b (test: align comment reaction assertion with rendered UI contract)
 	})
 })
