@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -15,6 +16,8 @@ import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { Plus, X } from 'lucide-react'
 import { useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+
+type AuctionImage = { imageUrl: string; imageOrder: number }
 
 type AuctionTab = 'name' | 'auction' | 'category' | 'spec' | 'images' | 'shipping'
 
@@ -332,21 +335,82 @@ function SpecTab({ formData, setFormData }: TabProps) {
 	)
 }
 
-function ImagesTab({ imagesInput, setImagesInput }: { imagesInput: string; setImagesInput: Dispatch<SetStateAction<string>> }) {
+function ImagesTab({ images, setImages }: { images: AuctionImage[]; setImages: Dispatch<SetStateAction<AuctionImage[]>> }) {
+	const [needsUploader, setNeedsUploader] = useState(true)
+
+	const handleSaveImage = ({ url, index }: { url: string; index: number }) => {
+		if (index >= 0) {
+			setImages((prev) => {
+				const next = [...prev]
+				next[index] = { ...next[index], imageUrl: url }
+				return next
+			})
+		} else {
+			setImages((prev) => [...prev, { imageUrl: url, imageOrder: prev.length }])
+			setNeedsUploader(true)
+		}
+	}
+
+	const handleDeleteImage = (index: number) => {
+		setImages((prev) => prev.filter((_, i) => i !== index).map((img, i) => ({ ...img, imageOrder: i })))
+	}
+
+	const handlePromoteImage = (index: number) => {
+		if (index <= 0) return
+		setImages((prev) => {
+			const next = [...prev]
+			const tmp = next[index]
+			next[index] = next[index - 1]
+			next[index - 1] = tmp
+			return next.map((img, i) => ({ ...img, imageOrder: i }))
+		})
+	}
+
+	const handleDemoteImage = (index: number) => {
+		setImages((prev) => {
+			if (index >= prev.length - 1) return prev
+			const next = [...prev]
+			const tmp = next[index]
+			next[index] = next[index + 1]
+			next[index + 1] = tmp
+			return next.map((img, i) => ({ ...img, imageOrder: i }))
+		})
+	}
+
 	return (
-		<div className="flex flex-col gap-4">
-			<div className="grid w-full gap-1.5">
-				<Label htmlFor="auction-images">
-					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Image URLs (comma or newline separated)</span>
+		<div className="space-y-4">
+			<p className="text-gray-600">We recommend using square images of 1600x1600 and under 2mb.</p>
+
+			<div className="flex flex-col gap-4">
+				<Label>
+					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Image Upload</span>
+					<span className="sr-only">required</span>
+					{images.length === 0 && <span className="text-sm text-red-500 ml-2">(At least one image required)</span>}
 				</Label>
-				<textarea
-					id="auction-images"
-					value={imagesInput}
-					onChange={(e) => setImagesInput(e.target.value)}
-					className="border-2 min-h-32 p-2 rounded-md"
-					placeholder="https://cdn.example/photo-1.jpg&#10;https://cdn.example/photo-2.jpg"
-				/>
-				<p className="text-xs text-zinc-500">At least one image is required. The first image is used as the hero.</p>
+
+				{images.map((image, i) => (
+					<ImageUploader
+						key={i}
+						src={image.imageUrl}
+						index={i}
+						imagesLength={images.length}
+						onSave={handleSaveImage}
+						onDelete={handleDeleteImage}
+						onPromote={handlePromoteImage}
+						onDemote={handleDemoteImage}
+					/>
+				))}
+
+				{needsUploader && (
+					<ImageUploader
+						src={null}
+						index={-1}
+						imagesLength={0}
+						onSave={handleSaveImage}
+						onDelete={() => setNeedsUploader(false)}
+						initialUrl=""
+					/>
+				)}
 			</div>
 		</div>
 	)
@@ -527,15 +591,15 @@ export function AuctionFormContent() {
 	)
 
 	const [formData, setFormData] = useState<AuctionFormData>(() => ({ ...INITIAL_FORM, trustedMints: [...availableMints] }))
+	const [images, setImages] = useState<AuctionImage[]>([])
 	const [activeTab, setActiveTab] = useState<AuctionTab>('name')
 	const [subCategoryInput, setSubCategoryInput] = useState('')
-	const [imagesInput, setImagesInput] = useState('')
 
 	const hasValidName = formData.title.trim().length > 0
 	const hasValidDescription = formData.description.trim().length > 0
 	const hasValidBidding =
 		formData.startingBid.trim().length > 0 && formData.bidIncrement.trim().length > 0 && formData.endAt.trim().length > 0
-	const hasValidImages = parseListInput(imagesInput).length > 0
+	const hasValidImages = images.filter((img) => img.imageUrl.trim().length > 0).length > 0
 	const hasValidMints = formData.trustedMints.length > 0
 
 	const canSubmit = hasValidName && hasValidDescription && hasValidBidding && hasValidImages && hasValidMints
@@ -546,7 +610,11 @@ export function AuctionFormContent() {
 
 		const nextFormData: AuctionFormData = {
 			...formData,
-			imageUrls: parseListInput(imagesInput),
+			imageUrls: images
+				.slice()
+				.sort((a, b) => a.imageOrder - b.imageOrder)
+				.map((img) => img.imageUrl)
+				.filter((url) => url.trim().length > 0),
 			categories: parseListInput(subCategoryInput),
 			specs: formData.specs.filter((spec: AuctionSpecEntry) => spec.key.trim() && spec.value.trim()),
 		}
@@ -611,7 +679,7 @@ export function AuctionFormContent() {
 							<SpecTab formData={formData} setFormData={setFormData} />
 						</TabsContent>
 						<TabsContent value="images" className="mt-4">
-							<ImagesTab imagesInput={imagesInput} setImagesInput={setImagesInput} />
+							<ImagesTab images={images} setImages={setImages} />
 						</TabsContent>
 						<TabsContent value="shipping" className="mt-4">
 							<ShippingTab formData={formData} setFormData={setFormData} userPubkey={userPubkey} />
