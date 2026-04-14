@@ -54,6 +54,7 @@ import { ArrowLeft, Gavel, Trophy, Truck, UserRound } from 'lucide-react'
 import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { AvatarUser } from '@/components/AvatarUser'
+import { AuctionBidder } from '@/components/AuctionBidder'
 
 function useHeroBackground(imageUrl: string, className: string) {
 	useEffect(() => {
@@ -181,7 +182,6 @@ function AuctionDetailRoute() {
 	const currentPrice = bidStats?.currentPrice ?? startingBid
 	const bidsCount = bidStats?.count ?? 0
 	const minBid = Math.max(startingBid, currentPrice + Math.max(1, bidIncrement))
-	const parsedBidAmount = parseInt(bidAmountInput || '0', 10)
 
 	const bidsQuery = useAuctionBids(auctionId, 500, auctionCoordinates)
 	const bids = bidsQuery.data ?? []
@@ -229,31 +229,6 @@ function AuctionDetailRoute() {
 	const handleImageClick = (index: number) => {
 		setSelectedImageIndex(index)
 		setImageViewerOpen(true)
-	}
-
-	const handleSubmitBid = async () => {
-		if (!auction || !auctionCoordinates || ended || isOwnAuction) return
-
-		const parsedAmount = parseInt(bidAmountInput || '0', 10)
-		if (!Number.isFinite(parsedAmount) || parsedAmount < minBid) {
-			toast.error(`Bid must be at least ${minBid.toLocaleString()} sats`)
-			return
-		}
-
-		try {
-			await bidMutation.mutateAsync({
-				auctionEventId: auction.id,
-				auctionCoordinates,
-				amount: parsedAmount,
-				auctionEndAt: endAt,
-				sellerPubkey: auction.pubkey,
-				escrowPubkey: escrowPubkey || auction.pubkey,
-				p2pkXpub,
-				mint: trustedMints[0],
-			})
-		} catch {
-			// Error toast is handled by mutation onError.
-		}
 	}
 
 	if (!auction && (auctionQuery.isLoading || auctionQuery.isFetching)) {
@@ -309,7 +284,7 @@ function AuctionDetailRoute() {
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="relative z-10">
-				<div className={`relative hero-container-product ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-black'}`}>
+				<div className={`relative dark hero-container-product ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-black'}`}>
 					<div className="hero-overlays">
 						<div className="absolute inset-0 bg-radial-overlay" />
 						<div className="absolute inset-0 opacity-30 bg-dots-overlay" />
@@ -337,38 +312,17 @@ function AuctionDetailRoute() {
 
 							<div className="grid grid-cols-2 gap-3 text-sm">
 								<div className="bg-black/35 border border-white/20 rounded p-2">
-									<div className="text-white/70 text-xs">Current price</div>
+									<div className="text-white/70 text-xs">{ended ? 'Final price' : 'Current price'}</div>
 									<div className="font-semibold">{currentPrice.toLocaleString()} sats</div>
 								</div>
 								<div className="bg-black/35 border border-white/20 rounded p-2">
 									<div className="text-white/70 text-xs">Bids</div>
 									<div className="font-semibold">{bidsCount}</div>
 								</div>
-								<div className="bg-black/35 border border-white/20 rounded p-2">
-									<div className="text-white/70 text-xs">Ends at</div>
-									<div className="font-semibold">{endAt ? new Date(endAt * 1000).toLocaleString() : 'N/A'}</div>
-								</div>
-								<AuctionCountdown endAt={endAt} countdown={countdown} showSeconds variant="panel" label="Ends in" />
+								<AuctionCountdown auction={auction} className="w-100" />
 							</div>
 
-							<div className="flex gap-2 items-center">
-								<Input
-									type="number"
-									min={minBid}
-									step={Math.max(1, bidIncrement)}
-									value={bidAmountInput}
-									onChange={(e) => setBidAmountInput(e.target.value)}
-									className="bg-white text-black"
-									disabled={ended || bidMutation.isPending}
-								/>
-								<Button
-									onClick={() => void handleSubmitBid()}
-									disabled={ended || isOwnAuction || bidMutation.isPending || !Number.isFinite(parsedBidAmount) || parsedBidAmount < minBid}
-								>
-									{isOwnAuction ? 'Your Auction' : ended ? 'Auction Ended' : bidMutation.isPending ? 'Submitting...' : 'Place Bid'}
-								</Button>
-							</div>
-							<div className="text-xs text-white/80">Minimum allowed bid: {minBid.toLocaleString()} sats</div>
+							<AuctionBidder auction={auction} />
 						</div>
 					</div>
 				</div>
@@ -452,7 +406,11 @@ function AuctionDetailRoute() {
 									</div>
 
 									<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-										<ShopperStat label="Current price" value={formatSats(currentPrice)} helper="The highest valid bid currently visible." />
+										<ShopperStat
+											label={ended ? 'Final price' : 'Current price'}
+											value={formatSats(currentPrice)}
+											helper={ended ? 'The final bid price the item sold at.' : 'The highest valid bid currently visible.'}
+										/>
 										<ShopperStat label="Opening bid" value={formatSats(startingBid)} helper="Where the auction started." />
 										<ShopperStat label="Bid increment" value={formatSats(bidIncrement)} helper="Minimum raise required between bids." />
 										<ShopperStat

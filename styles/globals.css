@@ -112,7 +112,7 @@ button {
 	/* secondary */
 	--secondary: #ff3eb5;
 	--secondary-hover: #0a0a0a;
-	--secondary-foreground: #0a0a0a;
+	--secondary-foreground: #312222;
 	--secondary-foreground-hover: #ff3eb5;
 	--secondary-border: #ff3eb5;
 	--secondary-border-hover: #ff3eb5;
@@ -168,8 +168,8 @@ button {
 	--card-foreground: hsl(0 0% 98%);
 	--popover: hsl(240 10% 3.9%);
 	--popover-foreground: hsl(0 0% 98%);
-	--primary: hsl(0 0% 98%);
-	--primary-foreground: hsl(240 5.9% 10%);
+	--primary: #ff3eb5;
+	--primary-foreground: white;
 	--secondary: hsl(240 3.7% 15.9%);
 	--secondary-foreground: hsl(0 0% 98%);
 	--muted: hsl(240 3.7% 15.9%);

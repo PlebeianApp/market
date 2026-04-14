@@ -65,6 +65,36 @@ function formatTimeLeft(seconds: number): string {
 	return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
 }
 
+// Helper to format the End Time label (Today/Tomorrow/Date)
+function formatEndTimeLabel(endTimestamp: number, isEnded: boolean): string {
+	const endDate = new Date(endTimestamp * 1000)
+	const now = new Date()
+
+	// Normalize to start of day for comparison
+	const endDateStr = endDate.toDateString()
+	const todayStr = now.toDateString()
+
+	// Check for tomorrow
+	const tomorrow = new Date(now)
+	tomorrow.setDate(tomorrow.getDate() + 1)
+	const tomorrowStr = tomorrow.toDateString()
+
+	const timeStr = endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+
+	if (isEnded) {
+		return `Ended on ${endDate.toLocaleDateString()} at ${timeStr}`
+	}
+
+	if (endDateStr === todayStr) {
+		return `Ends today at ${timeStr}`
+	}
+	if (endDateStr === tomorrowStr) {
+		return `Ends tomorrow at ${timeStr}`
+	}
+
+	return `Ends on ${endDate.toLocaleDateString()} at ${timeStr}`
+}
+
 // Map urgency to the new CSS class names
 function getBadgeClassName(urgency: AuctionCountdownUrgency): string {
 	switch (urgency) {
@@ -125,6 +155,7 @@ export function AuctionCountdown({ auction, className }: { auction: NDKEvent; cl
 	const urgency = getUrgency(remaining)
 	const color = getProgressColor(urgency)
 	const textLabel = formatTimeLeft(remaining)
+	const endTimeLabel = formatEndTimeLabel(endTime, remaining <= 0)
 
 	// 1. Calculate Inverse Progress
 	let progress = 0
@@ -158,10 +189,13 @@ export function AuctionCountdown({ auction, className }: { auction: NDKEvent; cl
 
 	return (
 		<div className={cn('flex flex-col items-start gap-2', className)}>
-			{/* Shadcn Badge Component */}
-			<Badge variant="secondary" className={cn('px-3 py-1.5 text-xs font-semibold tracking-wide shadow-sm', badgeClass)}>
-				{textLabel}
-			</Badge>
+			<div className="flex flex-row gap-2 items-center">
+				{/* Shadcn Badge Component */}
+				<Badge variant="secondary" className={cn('px-3 py-1.5 text-xs font-semibold tracking-wide shadow-sm', badgeClass)}>
+					{textLabel}
+				</Badge>
+				<span className="text-foreground/80">{endTimeLabel}</span>
+			</div>
 
 			{/* Progress Bar */}
 			<div className="w-full">

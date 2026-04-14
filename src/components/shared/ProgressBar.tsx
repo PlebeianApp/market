@@ -10,8 +10,6 @@ interface ProgressBarProps extends React.HTMLAttributes<HTMLDivElement> {
 	color?: string
 	/** Height of the bar in pixels */
 	height?: number
-	/** Max width of the bar in pixels */
-	maxWidth?: number
 	/** Enable the pulsing glow effect */
 	glow?: boolean
 	/** Width of the white stripe line in pixels (default: 2) */
@@ -31,7 +29,6 @@ const ProgressBar: React.FC<ProgressBarProps> = ({
 	fillDuration = 1,
 	color = '#05e35e',
 	height = 20,
-	maxWidth = 500,
 	glow = false,
 	stripeWidth = 2,
 	stripeGap = 8,
@@ -80,7 +77,6 @@ const ProgressBar: React.FC<ProgressBarProps> = ({
 	const containerStyle: React.CSSProperties = {
 		padding: '2px',
 		width: '100%',
-		maxWidth: `${maxWidth}px`,
 		border: `3px solid ${color}`,
 		height: `${height}px`,
 		borderRadius: '4px',
