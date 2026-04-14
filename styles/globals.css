@@ -475,44 +475,44 @@ button {
 	/* Badge variants */
 
 	/* INFO - Light Blue */
-.badge-info {
-  --light-gray: hsl(210, 100%, 96%);       /* Very light blue bg */
-  --primary-foreground: hsl(210, 100%, 20%); /* Dark blue text */
-  --primary-border-hover: hsl(210, 100%, 85%); /* Light blue border on hover */
-}
+	.badge-info {
+		--light-gray: hsl(210, 100%, 96%); /* Very light blue bg */
+		--primary-foreground: hsl(210, 100%, 20%); /* Dark blue text */
+		--primary-border-hover: hsl(210, 100%, 85%); /* Light blue border on hover */
+	}
 
-/* WARN - Yellow */
-.badge-warn {
-  --light-gray: hsl(48, 100%, 96%);       /* Very light yellow bg */
-  --primary-foreground: hsl(48, 100%, 20%); /* Dark yellow text */
-  --primary-border-hover: hsl(48, 100%, 85%); /* Light yellow border on hover */
-}
+	/* WARN - Yellow */
+	.badge-warn {
+		--light-gray: hsl(48, 100%, 96%); /* Very light yellow bg */
+		--primary-foreground: hsl(48, 100%, 20%); /* Dark yellow text */
+		--primary-border-hover: hsl(48, 100%, 85%); /* Light yellow border on hover */
+	}
 
-/* ERROR - Red */
-.badge-error {
-  --light-gray: hsl(0, 100%, 96%);        /* Very light red bg */
-  --primary-foreground: hsl(0, 100%, 20%);  /* Dark red text */
-  --primary-border-hover: hsl(0, 100%, 85%);  /* Light red border on hover */
-}
+	/* ERROR - Red */
+	.badge-error {
+		--light-gray: hsl(0, 100%, 96%); /* Very light red bg */
+		--primary-foreground: hsl(0, 100%, 20%); /* Dark red text */
+		--primary-border-hover: hsl(0, 100%, 85%); /* Light red border on hover */
+	}
 
-/* PINK - Pink */
-.badge-pink {
-  --light-gray: hsl(330, 100%, 96%);      /* Very light pink bg */
-  --primary-foreground: hsl(330, 100%, 20%); /* Dark pink text */
-  --primary-border-hover: hsl(330, 100%, 85%); /* Light pink border on hover */
-}
+	/* PINK - Pink */
+	.badge-pink {
+		--light-gray: hsl(330, 100%, 96%); /* Very light pink bg */
+		--primary-foreground: hsl(330, 100%, 20%); /* Dark pink text */
+		--primary-border-hover: hsl(330, 100%, 85%); /* Light pink border on hover */
+	}
 
-/* YELLOW - (Alternative Yellow, e.g., Amber) */
-.badge-yellow {
-  --light-gray: hsl(45, 100%, 96%);       /* Very light amber bg */
-  --primary-foreground: hsl(45, 100%, 20%); /* Dark amber text */
-  --primary-border-hover: hsl(45, 100%, 85%); /* Light amber border on hover */
-}
+	/* YELLOW - (Alternative Yellow, e.g., Amber) */
+	.badge-yellow {
+		--light-gray: hsl(45, 100%, 96%); /* Very light amber bg */
+		--primary-foreground: hsl(45, 100%, 20%); /* Dark amber text */
+		--primary-border-hover: hsl(45, 100%, 85%); /* Light amber border on hover */
+	}
 
-/* NEUTRAL - Grey */
-.badge-neutral {
-  --light-gray: hsl(0, 0%, 96%);          /* Very light grey bg */
-  --primary-foreground: hsl(0, 0%, 20%);    /* Dark grey text */
-  --primary-border-hover: hsl(0, 0%, 85%);    /* Light grey border on hover */
-}
+	/* NEUTRAL - Grey */
+	.badge-neutral {
+		--light-gray: hsl(0, 0%, 96%); /* Very light grey bg */
+		--primary-foreground: hsl(0, 0%, 20%); /* Dark grey text */
+		--primary-border-hover: hsl(0, 0%, 85%); /* Light grey border on hover */
+	}
 }
