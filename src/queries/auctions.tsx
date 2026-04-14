@@ -379,9 +379,24 @@ export const getAuctionSettlementPolicy = (event: NDKEvent | null): string =>
 
 export const getAuctionSchema = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'schema')?.[1] || ''
 
-export const getAuctionShippingOptions = (event: NDKEvent | null): string[] => {
+export const getAuctionShippingOptions = (event: NDKEvent | null): Array<{ shippingRef: string; extraCost: string }> => {
 	if (!event) return []
-	return event.tags.filter((tag) => tag[0] === 'shipping_option' && !!tag[1]).map((tag) => tag[1])
+	return event.tags
+		.filter((tag) => tag[0] === 'shipping_option' && !!tag[1])
+		.map((tag) => ({
+			shippingRef: tag[1],
+			extraCost: typeof tag[2] === 'string' ? tag[2] : '',
+		}))
+}
+
+export const getAuctionSpecs = (event: NDKEvent | null): Array<{ key: string; value: string }> => {
+	if (!event) return []
+	return event.tags
+		.filter((tag) => tag[0] === 'spec' && !!tag[1])
+		.map((tag) => ({
+			key: tag[1],
+			value: typeof tag[2] === 'string' ? tag[2] : '',
+		}))
 }
 
 export const getBidAmount = (bidEvent: NDKEvent | null): number => {

@@ -13,6 +13,11 @@ import {
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { ndkActions } from '@/lib/stores/ndk'
 import { AUCTION_SETTLEMENT_GRACE_SECONDS, nip60Actions, type AuctionP2pkKeyScheme } from '@/lib/stores/nip60'
+import {
+	normalizeProductShippingSelections,
+	type ProductShippingSelection,
+	type ProductShippingSelectionInput,
+} from '@/lib/utils/productShippingSelections'
 import { getBidAmount, getBidStatus, markAuctionAsDeleted } from '@/queries/auctions'
 import { auctionKeys, orderKeys } from '@/queries/queryKeyFactory'
 import NDK, { NDKEvent, NDKPrivateKeySigner, NDKUser, type NDKFilter, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
@@ -21,6 +26,11 @@ import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
 
 const DEFAULT_AUCTION_MINT = 'https://nofees.testnut.cashu.space'
+
+export interface AuctionSpecEntry {
+	key: string
+	value: string
+}
 
 export interface AuctionFormData {
 	title: string
@@ -34,6 +44,8 @@ export interface AuctionFormData {
 	mainCategory: string
 	categories: string[]
 	imageUrls: string[]
+	specs: AuctionSpecEntry[]
+	shippings: ProductShippingSelectionInput[]
 	trustedMints: string[]
 	isNSFW: boolean
 }
@@ -96,6 +108,15 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 		}
 	}
 
+	const specTags: NDKTag[] = (formData.specs ?? [])
+		.filter((spec) => spec && spec.key.trim() && spec.value.trim())
+		.map((spec) => ['spec', spec.key.trim(), spec.value.trim()] as NDKTag)
+
+	const normalizedShippings: ProductShippingSelection[] = normalizeProductShippingSelections(formData.shippings)
+	const shippingTags: NDKTag[] = normalizedShippings.map((ship) =>
+		ship.extraCost ? (['shipping_option', ship.shippingRef, ship.extraCost] as NDKTag) : (['shipping_option', ship.shippingRef] as NDKTag),
+	)
+
 	event.tags = [
 		['d', id],
 		['title', formData.title],
@@ -116,6 +137,8 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 		['schema', 'auction_v1'],
 		...imageTags,
 		...categoryTags,
+		...specTags,
+		...shippingTags,
 		...(formData.isNSFW ? ([['content-warning', 'nsfw'] as NDKTag] as NDKTag[]) : []),
 	]
 

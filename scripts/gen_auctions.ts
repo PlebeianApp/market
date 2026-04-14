@@ -59,9 +59,20 @@ export function generateAuctionData(params: {
 			faker.number.int({ min: 1, max: Math.min(2, availableShippingRefs.length) }),
 		)
 		for (const shippingRef of selectedRefs) {
-			shippingTags.push(['shipping_option', shippingRef])
+			const includeExtraCost = faker.datatype.boolean()
+			if (includeExtraCost) {
+				shippingTags.push(['shipping_option', shippingRef, String(faker.number.int({ min: 100, max: 5_000 }))])
+			} else {
+				shippingTags.push(['shipping_option', shippingRef])
+			}
 		}
 	}
+
+	const specTags: NDKTag[] = Array.from({ length: faker.number.int({ min: 2, max: 5 }) }, () => [
+		'spec',
+		faker.commerce.productAdjective(),
+		faker.commerce.productMaterial(),
+	])
 
 	return {
 		kind: 30408,
@@ -88,6 +99,7 @@ export function generateAuctionData(params: {
 			['schema', 'auction_v1'],
 			...images,
 			...categoryTags,
+			...specTags,
 			...shippingTags,
 		],
 	}

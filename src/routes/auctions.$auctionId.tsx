@@ -36,6 +36,7 @@ import {
 	getAuctionSchema,
 	getAuctionSettlementPolicy,
 	getAuctionShippingOptions,
+	getAuctionSpecs,
 	getAuctionStartAt,
 	getAuctionStartingBid,
 	getAuctionSummary,
@@ -47,6 +48,8 @@ import {
 	useAuctionClaimOrders,
 	useAuctionSettlements,
 } from '@/queries/auctions'
+import { getShippingInfo, shippingOptionByCoordinatesQueryOptions } from '@/queries/shipping'
+import { useQueries } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
@@ -173,8 +176,38 @@ function AuctionDetailRoute() {
 	const settlementPolicy = getAuctionSettlementPolicy(auction)
 	const schema = getAuctionSchema(auction)
 	const shippingOptions = getAuctionShippingOptions(auction)
+	const specs = getAuctionSpecs(auction)
 	const auctionDTag = getAuctionId(auction)
 	const auctionCoordinates = auctionDTag && auction ? `30408:${auction.pubkey}:${auctionDTag}` : ''
+
+	const parsedShippingRefs = useMemo(
+		() =>
+			shippingOptions.map((item) => {
+				const parts = item.shippingRef.split(':')
+				if (parts.length === 3 && parts[0] === '30406') {
+					return { ...item, pubkey: parts[1], dTag: parts[2] }
+				}
+				return { ...item, pubkey: '', dTag: '' }
+			}),
+		[shippingOptions],
+	)
+
+	const shippingQueryResults = useQueries({
+		queries: parsedShippingRefs.map(({ pubkey, dTag }) => ({
+			...shippingOptionByCoordinatesQueryOptions(pubkey, dTag),
+			enabled: !!pubkey && !!dTag,
+		})),
+	})
+
+	const resolvedShippingOptions = useMemo(
+		() =>
+			parsedShippingRefs.map((entry, index) => {
+				const event = shippingQueryResults[index]?.data ?? null
+				const info = event ? getShippingInfo(event) : null
+				return { ...entry, info }
+			}),
+		[parsedShippingRefs, shippingQueryResults],
+	)
 
 	const ended = countdown.isEnded
 	const { data: bidStats } = useAuctionBidStats(auctionId, startingBid, auctionCoordinates)
@@ -529,12 +562,28 @@ function AuctionDetailRoute() {
 
 					<TabsContent value="description" className="mt-4 border-t-3 border-secondary bg-tertiary">
 						<div className="grid gap-6 rounded-lg bg-white p-6 shadow-md lg:grid-cols-[1.4fr_0.8fr]">
-							<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-								<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Description</p>
-								{summary && <p className="mt-3 border-b border-zinc-200 pb-4 text-sm italic text-zinc-500">{summary}</p>}
-								<p className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-zinc-700">
-									{description || 'No description provided.'}
-								</p>
+							<div className="space-y-4">
+								<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+									<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Description</p>
+									{summary && <p className="mt-3 border-b border-zinc-200 pb-4 text-sm italic text-zinc-500">{summary}</p>}
+									<p className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-zinc-700">
+										{description || 'No description provided.'}
+									</p>
+								</div>
+
+								{specs.length > 0 && (
+									<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+										<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Specifications</p>
+										<dl className="mt-4 divide-y divide-zinc-200">
+											{specs.map((spec, index) => (
+												<div key={`${spec.key}-${index}`} className="flex items-start justify-between gap-4 py-2">
+													<dt className="text-sm font-medium text-zinc-500">{spec.key}</dt>
+													<dd className="text-sm font-semibold text-right text-zinc-900 break-words">{spec.value}</dd>
+												</div>
+											))}
+										</dl>
+									</div>
+								)}
 							</div>
 
 							<div className="space-y-4">
@@ -565,13 +614,29 @@ function AuctionDetailRoute() {
 										Shipping options
 									</div>
 									<div className="mt-4">
-										{shippingOptions.length > 0 ? (
+										{resolvedShippingOptions.length > 0 ? (
 											<ul className="space-y-2 text-sm text-zinc-700">
-												{shippingOptions.map((option) => (
-													<li key={option} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 break-all">
-														{option}
-													</li>
-												))}
+												{resolvedShippingOptions.map((option, index) => {
+													const extraCostNumber = option.extraCost ? Number(option.extraCost) : 0
+													const hasExtraCost = !Number.isNaN(extraCostNumber) && extraCostNumber > 0
+													return (
+														<li key={`${option.shippingRef}-${index}`} className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
+															{option.info ? (
+																<div className="space-y-1">
+																	<p className="font-medium text-zinc-900">{option.info.title}</p>
+																	<p className="text-xs text-zinc-600">
+																		Base: {option.info.price.amount} {option.info.price.currency}
+																		{option.info.service ? ` · ${option.info.service}` : ''}
+																		{option.info.carrier ? ` · ${option.info.carrier}` : ''}
+																	</p>
+																	{hasExtraCost && <p className="text-xs text-zinc-600">Auction extra cost: {extraCostNumber}</p>}
+																</div>
+															) : (
+																<p className="break-all text-xs text-zinc-500">{option.shippingRef}</p>
+															)}
+														</li>
+													)
+												})}
 											</ul>
 										) : (
 											<p className="text-sm text-zinc-500">No shipping options listed.</p>
