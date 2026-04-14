@@ -31,6 +31,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 .cache
 *.tsbuildinfo
 
+# SQLite database for currency server cache
+contextvm/data/
+
 # IntelliJ based IDEs
 .idea
 

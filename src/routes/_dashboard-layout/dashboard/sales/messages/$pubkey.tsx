@@ -12,6 +12,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { Loader2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
 
 export const Route = createFileRoute('/_dashboard-layout/dashboard/sales/messages/$pubkey')({
 	component: ConversationDetailComponent,
@@ -67,7 +68,7 @@ function ConversationDetailComponent() {
 		onError: (err) => {
 			setIsSending(false)
 			console.error('Error sending message:', err)
-			alert(`Failed to send message: ${err instanceof Error ? err.message : 'Unknown error'}`)
+			toast.error(`Failed to send message: ${err instanceof Error ? err.message : 'Unknown error'}`)
 		},
 	})
 

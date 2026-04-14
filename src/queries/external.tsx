@@ -1,103 +1,120 @@
 import { queryOptions, useQuery } from '@tanstack/react-query'
 import { currencyKeys } from './queryKeyFactory'
 import { CURRENCIES } from '@/lib/constants'
+import { CVM_SERVER_PUBKEY, getCurrencyServerRelays } from '@/lib/constants'
+import { configStore } from '@/lib/stores/config'
 
-// Constants
 const numSatsInBtc = 100000000
 export type SupportedCurrency = (typeof CURRENCIES)[number]
 
-// Configuration for currency exchange rate fetching
 export const CURRENCY_CACHE_CONFIG = {
-	STALE_TIME: 1000 * 60 * 5, // 5 minutes
+	STALE_TIME: 1000 * 60 * 5,
 	RETRY_DELAY: 1000,
 	RETRY_COUNT: 2,
 	RESOLVE_TIMEOUT: 5000,
 } as const
 
-// LocalStorage cache key
-const EXCHANGE_RATES_CACHE_KEY = 'btc_exchange_rates'
+let currencyClient: InstanceType<typeof import('@/lib/ctxcn-client').PlebianCurrencyClient> | null = null
+let currencyClientInitPromise: Promise<any> | null = null
 
-interface CachedExchangeRates {
-	rates: Record<SupportedCurrency, number>
-	timestamp: number
+async function getCurrencyClient() {
+	if (currencyClient) return currencyClient
+	if (currencyClientInitPromise) return currencyClientInitPromise
+
+	currencyClientInitPromise = (async () => {
+		try {
+			const { PlebianCurrencyClient } = await import('@/lib/ctxcn-client')
+
+			const privateKey = crypto.getRandomValues(new Uint8Array(32))
+
+			const mainRelay = typeof window !== 'undefined' ? await getMainRelayFromConfig() : undefined
+			const cvmRelays = getCurrencyServerRelays()
+			const relays = mainRelay ? [mainRelay, ...cvmRelays] : cvmRelays
+
+			const client = new PlebianCurrencyClient({
+				privateKey,
+				relays,
+				serverPubkey: configStore.state.config.cvmServerPubkey || CVM_SERVER_PUBKEY,
+			})
+
+			currencyClient = client
+			return client
+		} catch (error) {
+			console.warn('Failed to initialize ContextVM currency client:', error)
+			currencyClientInitPromise = null
+			return null
+		}
+	})()
+
+	return currencyClientInitPromise
 }
 
-/**
- * Gets cached exchange rates from localStorage if not expired
- * @returns Cached rates or null if expired/not found
- */
-const getCachedRates = (): Record<SupportedCurrency, number> | null => {
+async function getMainRelayFromConfig(): Promise<string | undefined> {
 	try {
-		const cached = localStorage.getItem(EXCHANGE_RATES_CACHE_KEY)
-		if (!cached) return null
+		const { configStore } = await import('@/lib/stores/config')
+		return configStore.state.config.appRelay
+	} catch {
+		return undefined
+	}
+}
 
-		const { rates, timestamp }: CachedExchangeRates = JSON.parse(cached)
-		const now = Date.now()
+const CONTEXTVM_CALL_TIMEOUT = 5000
 
-		// Check if cache has expired (older than STALE_TIME)
-		if (now - timestamp > CURRENCY_CACHE_CONFIG.STALE_TIME) {
+async function fetchFromContextVm(): Promise<Record<string, number> | null> {
+	try {
+		const client = await getCurrencyClient()
+		if (!client) return null
+
+		const startedAt = Date.now()
+		console.info(`ContextVM BTC fetch starting (timeout ${CONTEXTVM_CALL_TIMEOUT}ms)`)
+		const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), CONTEXTVM_CALL_TIMEOUT))
+		const callPromise = client.callTool({
+			name: 'get_btc_price',
+			arguments: {},
+		})
+
+		const result = await Promise.race([callPromise, timeout])
+		if (result === null) {
+			console.warn(`ContextVM call timed out after ${Date.now() - startedAt}ms`)
 			return null
 		}
 
-		return rates
-	} catch {
+		if (!result?.rates || result.error) {
+			console.warn('ContextVM returned error:', result?.error ?? 'missing rates')
+			return null
+		}
+
+		console.info(`ContextVM BTC fetch succeeded in ${Date.now() - startedAt}ms`)
+		return result.rates as Record<string, number>
+	} catch (error) {
+		console.warn('ContextVM fetch failed:', error)
 		return null
 	}
 }
 
-/**
- * Stores exchange rates in localStorage with timestamp
- */
-const cacheRates = (rates: Record<SupportedCurrency, number>): void => {
-	try {
-		const cacheData: CachedExchangeRates = {
-			rates,
-			timestamp: Date.now(),
-		}
-		localStorage.setItem(EXCHANGE_RATES_CACHE_KEY, JSON.stringify(cacheData))
-	} catch (error) {
-		console.warn('Failed to cache exchange rates:', error)
-	}
-}
-
-// --- DATA FETCHING FUNCTIONS ---
-
-/**
- * Fetches BTC exchange rates against other currencies
- * Uses localStorage cache if available and not expired
- * @returns Record of currency exchange rates with BTC
- */
 export const fetchBtcExchangeRates = async (): Promise<Record<SupportedCurrency, number>> => {
-	// Check localStorage cache first
-	const cachedRates = getCachedRates()
-	if (cachedRates) {
-		return cachedRates
-	}
+	let rates: Record<string, number> | null = null
 
-	// Cache expired or not found, fetch from API
-	try {
-		const response = await fetch('https://api.yadio.io/exrates/BTC')
-		if (!response.ok) {
-			throw new Error(`HTTP error! status: ${response.status}`)
+	rates = await fetchFromContextVm()
+
+	if (!rates) {
+		console.info('Falling back to Yadio BTC rates')
+		try {
+			const response = await fetch('https://api.yadio.io/exrates/BTC')
+			if (!response.ok) {
+				throw new Error(`HTTP error! status: ${response.status}`)
+			}
+			const data = await response.json()
+			rates = data.BTC
+		} catch (error) {
+			console.error('Failed to fetch BTC exchange rates (ContextVM + Yadio fallback):', error)
+			throw new Error('Failed to fetch BTC exchange rates')
 		}
-		const data = await response.json()
-		const rates = data.BTC
-
-		// Store in localStorage with timestamp
-		cacheRates(rates)
-
-		return rates
-	} catch (error) {
-		console.error('Failed to fetch BTC exchange rates:', error)
-		throw new Error('Failed to fetch BTC exchange rates')
 	}
+
+	return rates as Record<SupportedCurrency, number>
 }
 
-/**
- * Fetches the exchange rate for a specific currency
- * @param currency The currency code (e.g., 'USD', 'EUR')
- * @returns The exchange rate value
- */
 export const fetchCurrencyExchangeRate = async (currency: SupportedCurrency): Promise<number> => {
 	const rates = await fetchBtcExchangeRates()
 	if (!rates || !rates[currency]) {
@@ -106,30 +123,19 @@ export const fetchCurrencyExchangeRate = async (currency: SupportedCurrency): Pr
 	return rates[currency]
 }
 
-/**
- * Converts an amount from a specified currency to sats
- * @param currency The source currency
- * @param amount The amount to convert
- * @returns The equivalent amount in sats
- */
 export const convertCurrencyToSats = async (currency: string, amount: number): Promise<number | null> => {
-	// Skip conversion if amount is too small or currency is not provided
 	if (!currency || !amount || amount <= 0.0001) return null
 
-	// If already in sats, return the amount directly
 	if (['sats', 'sat'].includes(currency.toLowerCase())) {
 		return amount
 	}
 
 	try {
-		// Normalize currency to uppercase for comparison
 		const normalizedCurrency = currency.toUpperCase()
 
-		// For supported currencies, fetch the exchange rate and convert
 		if (CURRENCIES.includes(normalizedCurrency as SupportedCurrency)) {
 			const rate = await fetchCurrencyExchangeRate(normalizedCurrency as SupportedCurrency)
 
-			// Convert to sats: (amount / exchange rate) * sats in 1 BTC
 			return (amount / rate) * numSatsInBtc
 		} else {
 			console.warn(`Unsupported currency: ${currency}`)
@@ -141,21 +147,12 @@ export const convertCurrencyToSats = async (currency: string, amount: number): P
 	}
 }
 
-// --- REACT QUERY OPTIONS ---
-
-/**
- * React Query options for fetching BTC exchange rates
- */
 export const btcExchangeRatesQueryOptions = queryOptions({
 	queryKey: currencyKeys.btc(),
 	queryFn: fetchBtcExchangeRates,
 	staleTime: CURRENCY_CACHE_CONFIG.STALE_TIME,
 })
 
-/**
- * React Query options for fetching a specific currency exchange rate
- * @param currency The currency code
- */
 export const currencyExchangeRateQueryOptions = (currency: SupportedCurrency) =>
 	queryOptions({
 		queryKey: currencyKeys.forCurrency(currency),
@@ -165,11 +162,6 @@ export const currencyExchangeRateQueryOptions = (currency: SupportedCurrency) =>
 		retryDelay: CURRENCY_CACHE_CONFIG.RETRY_DELAY,
 	})
 
-/**
- * React Query options for converting currency to sats
- * @param currency The source currency
- * @param amount The amount to convert
- */
 export const currencyConversionQueryOptions = (currency: string, amount: number) =>
 	queryOptions({
 		queryKey: currencyKeys.conversion(currency, amount),
@@ -179,38 +171,17 @@ export const currencyConversionQueryOptions = (currency: string, amount: number)
 		retry: CURRENCY_CACHE_CONFIG.RETRY_COUNT,
 	})
 
-// --- REACT QUERY HOOKS ---
-
-/**
- * Hook to get all BTC exchange rates
- * @returns Query result with exchange rates
- */
 export const useBtcExchangeRates = () => {
 	return useQuery(btcExchangeRatesQueryOptions)
 }
 
-/**
- * Hook to get a specific currency exchange rate
- * @param currency The currency code
- * @returns Query result with the exchange rate
- */
 export const useCurrencyExchangeRate = (currency: SupportedCurrency) => {
 	return useQuery(currencyExchangeRateQueryOptions(currency))
 }
 
-/**
- * Hook to convert an amount from one currency to sats
- * @param currency The source currency
- * @param amount The amount to convert
- * @returns Query result with the converted amount in sats
- */
 export const useCurrencyConversion = (currency: string, amount: number) => {
 	return useQuery(currencyConversionQueryOptions(currency, amount))
 }
 
-/**
- * Creates a query to convert currency to sats
- * This matches the exact function signature from the template
- */
 export const createCurrencyConversionQuery = (fromCurrency: string, amount: number) =>
 	useQuery(currencyConversionQueryOptions(fromCurrency, amount))

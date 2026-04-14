@@ -77,6 +77,7 @@ jobs:
           mkdir -p deploy-package
           cp -r dist deploy-package/
           cp -r src deploy-package/
+          cp -r contextvm deploy-package/
           cp package.json bun.lock tsconfig.json deploy-package/
 
       - name: Upload artifact
@@ -108,27 +109,50 @@ jobs:
         run: |
           cat > deploy-package/ecosystem.config.cjs << 'EOF'
           module.exports = {
-            apps: [{
-              name: 'market-production',
-              script: 'src/index.tsx',
-              interpreter: process.env.HOME + '/.bun/bin/bun',
-              cwd: '/opt/market-production',
-              instances: 1,
-              exec_mode: 'fork',
-              env_file: '.env',
-              error_file: process.env.HOME + '/logs/market-production-error.log',
-              out_file: process.env.HOME + '/logs/market-production-out.log',
-              log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
-              merge_logs: true,
-              autorestart: true,
-              max_restarts: 10,
-              min_uptime: '10s',
-              restart_delay: 5000,
-              max_memory_restart: '1G',
-              kill_timeout: 5000,
-              wait_ready: true,
-              listen_timeout: 10000,
-            }],
+            apps: [
+              {
+                name: 'market-production',
+                script: 'src/index.tsx',
+                interpreter: process.env.HOME + '/.bun/bin/bun',
+                cwd: '/opt/market-production',
+                instances: 1,
+                exec_mode: 'fork',
+                env_file: '.env',
+                error_file: process.env.HOME + '/logs/market-production-error.log',
+                out_file: process.env.HOME + '/logs/market-production-out.log',
+                log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+                merge_logs: true,
+                autorestart: true,
+                max_restarts: 10,
+                min_uptime: '10s',
+                restart_delay: 5000,
+                max_memory_restart: '1G',
+                kill_timeout: 5000,
+                wait_ready: true,
+                listen_timeout: 10000,
+              },
+              {
+                name: 'market-contextvm-production',
+                script: 'contextvm/server.ts',
+                interpreter: process.env.HOME + '/.bun/bin/bun',
+                cwd: '/opt/market-production',
+                instances: 1,
+                exec_mode: 'fork',
+                env_file: '.env',
+                error_file: process.env.HOME + '/logs/market-contextvm-production-error.log',
+                out_file: process.env.HOME + '/logs/market-contextvm-production-out.log',
+                log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+                merge_logs: true,
+                autorestart: true,
+                max_restarts: 10,
+                min_uptime: '10s',
+                restart_delay: 5000,
+                max_memory_restart: '1G',
+                kill_timeout: 5000,
+                wait_ready: true,
+                listen_timeout: 10000,
+              },
+            ],
           };
           EOF
 
@@ -140,6 +164,7 @@ jobs:
           PORT=3001
           APP_RELAY_URL=${{ secrets.PROD_RELAY_URL }}
           APP_PRIVATE_KEY=${{ secrets.PROD_APP_PRIVATE_KEY }}
+          CVM_SERVER_KEY=${{ secrets.PROD_CVM_SERVER_KEY }}
           NIP46_RELAY_URL=wss://relay.nsec.app
           LOG_LEVEL=info
           EOF
@@ -211,7 +236,7 @@ jobs:
                 sudo ln -sfn "$PREVIOUS_RELEASE" "$APP_DIR"
                 sudo chown -h $USER:$USER "$APP_DIR"
                 cd "$APP_DIR"
-                pm2 startOrReload ecosystem.config.cjs --only market-production || true
+                pm2 startOrReload ecosystem.config.cjs || true
                 pm2 save --force || true
               fi
             }
@@ -224,7 +249,7 @@ jobs:
             bun install --production
 
             # Stop current version (PM2 only - don't touch systemd services!)
-            pm2 stop market-production 2>/dev/null || true
+            pm2 stop market-production market-contextvm-production 2>/dev/null || true
 
             # Stop old systemd service if still running (migration)
             sudo systemctl stop market.service 2>/dev/null || true
@@ -236,7 +261,7 @@ jobs:
 
             # Start new version with PM2
             cd "$APP_DIR"
-            pm2 startOrReload ecosystem.config.cjs --only market-production
+            pm2 startOrReload ecosystem.config.cjs
             pm2 save --force
 
             # Update Caddy (preserves relay and legacy services)
