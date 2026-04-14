@@ -132,10 +132,7 @@ export function AuctionBidder({ auction, currentUserPubkey, onBidSuccess }: Auct
 				p2pkXpub,
 				mint: trustedMints[0],
 			})
-			queryClient.invalidateQueries({ queryKey: ['auction', auction.id] })
-			queryClient.invalidateQueries({ queryKey: ['auctionBids', auction.id] })
 			toast.success('Bid placed successfully')
-			setBidAmountInput(String(minBid))
 			setIsEditing(false)
 			onBidSuccess?.()
 		} catch {
