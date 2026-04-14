@@ -272,6 +272,7 @@ The VPS must have these installed:
 | ------------- | ---- | ---------------------------- | ------------------------------ |
 | `development` | 3000 | Local (ws://localhost:10547) | Local app or explicit dev host |
 | `staging`     | 3000 | Staging relay                | Pre-production testing         |
+| `auctionsdev` | 3002 | Staging relay                | Auctions feature staging       |
 | `production`  | 3001 | Production relay             | Live environment               |
 
 ## Environment Files
@@ -280,6 +281,7 @@ The VPS must have these installed:
 deploy-simple/
 ├── env/
 │   ├── .env.development.example   # Copy to .env.development
+│   ├── .env.auctionsdev.example   # Copy to .env.auctionsdev
 │   ├── .env.staging.example       # Copy to .env.staging
 │   └── .env.production.example    # Copy to .env.production
 ```
