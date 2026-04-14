@@ -61,29 +61,60 @@ Kind values below are proposal values for discussion before final NIP/spec assig
 
 Signed by seller.
 
+Auction listings are **self-describing**: they carry the same product-shaped
+metadata as a kind `30402` product listing (see `gamma_spec.md` §3 for field
+semantics), plus auction-specific bidding, timing, and settlement tags. There
+is intentionally no product reference (`a` tag) in v1 — an auction is a
+product with additional properties, not a wrapper around one. Clients MUST
+render auctions from the event itself without needing a sibling product
+listing.
+
 ### Required tags
 
 - `d`: auction identifier.
 - `title`: display title.
-- `a`: product reference (`30402:<seller-pubkey>:<product-d-tag>`) or collection reference.
 - `auction_type`: `english` (v1 required).
 - `start_at`: unix seconds.
 - `end_at`: unix seconds.
 - `currency`: `SAT` (v1 required).
-- `reserve`: minimum acceptable final price (optional can be `0`, but tag required in v1 for explicitness).
+- `reserve`: minimum acceptable final price (may be `0`, but tag required in v1 for explicitness).
 - `bid_increment`: minimum step in sats.
 - `mint`: trusted mint URL. MAY repeat.
 - `escrow_pubkey`: auction escrow/service pubkey for locked bid handling.
 - `settlement_policy`: `cashu_p2pk_v1`.
 
-### Optional tags
+### Optional auction tags
 
 - `extension_rule`: e.g. `none` (v1 default), `anti_sniping:<seconds>` (future).
 - `vadium_ratio_bps`: default `10000` (100%).
 - `schema`: version marker, e.g. `auction_v1`.
-- `shipping_option`: if auction is for physical good.
 - `key_scheme`: `hd_p2pk`.
 - `p2pk_xpub`: required seller/escrow xpub used for per-bid child key derivation.
+
+### Optional product-shaped tags
+
+These tags carry the same semantics as on kind `30402` product listings.
+See `gamma_spec.md` §3 for full field definitions.
+
+- `summary`: short description for list views.
+- `image`: product image `[<url>, <dimensions>, <sorting-order>]`. MAY repeat.
+- `spec`: free-form key/value specification `[<key>, <value>]` (e.g.
+  `["spec", "Material", "Brass"]`). MAY repeat. Displayed on the auction
+  detail view so bidders can inspect item attributes without having to
+  consult an external product listing.
+- `t`: category/tag. MAY repeat.
+- `content-warning`: set to `nsfw` for adult or sensitive content.
+- `shipping_option`: reference to a kind `30406` shipping option, formatted
+  as `["shipping_option", "30406:<pubkey>:<d-tag>", "<extra-cost>"]`. The
+  third element is an optional extra cost (in the auction's currency) added
+  on top of the shipping option's base price for this specific auction.
+  MAY repeat. Used for physical goods that need to be shipped after
+  settlement; fulfilment flows reuse the gamma spec order/shipping
+  messages (kind `16` type `4`).
+- `weight`: `[<value>, <unit>]` using ISO 80000-1.
+- `dim`: `[<l>x<w>x<h>, <unit>]` using ISO 80000-1.
+- `location`: human-readable location string.
+- `g`: geohash for location-based search.
 
 ### Immutable vs mutable tags
 
@@ -118,7 +149,7 @@ Important:
 	"tags": [
 		["d", "auction-7f0b9a"],
 		["title", "Vintage Camera Auction"],
-		["a", "30402:<seller-pubkey>:<product-d-tag>"],
+		["summary", "Leica M3 in collector-grade condition"],
 		["auction_type", "english"],
 		["start_at", "1766202000"],
 		["end_at", "1766288400"],
@@ -130,6 +161,18 @@ Important:
 		["escrow_pubkey", "<market-escrow-pubkey>"],
 		["settlement_policy", "cashu_p2pk_v1"],
 		["schema", "auction_v1"],
+
+		// Product-shaped fields
+		["image", "https://cdn.example/m3-front.jpg", "1200x800", "0"],
+		["image", "https://cdn.example/m3-back.jpg", "1200x800", "1"],
+		["spec", "Brand", "Leica"],
+		["spec", "Model", "M3"],
+		["spec", "Year", "1958"],
+		["spec", "Condition", "Excellent"],
+		["t", "cameras"],
+		["t", "collectibles"],
+		["shipping_option", "30406:<seller-pubkey>:standard-intl", "2500"],
+		["weight", "580", "g"],
 	],
 }
 ```
@@ -498,11 +541,16 @@ V1 MUST enforce:
 
 ## 11.2 Gamma spec integration
 
-- Auction can reference products with `a:30402:<pubkey>:<d-tag>`.
+- Auction events are self-describing and reuse the product-shaped tags
+  defined in `gamma_spec.md` §3 (`image`, `spec`, `t`, `summary`,
+  `shipping_option`, `weight`, `dim`, `location`, `g`, `content-warning`).
+  v1 does **not** define a product reference from auction to product —
+  the auction event is the single source of truth for its item.
 - Post-auction communication SHOULD use existing encrypted order flow:
   - kind `16` type `1/2/3/4` for order/payment/status/shipping.
   - kind `17` for payment receipts when applicable.
-- Physical delivery follows existing shipping option model (`30406`).
+- Physical delivery follows the existing shipping option model (`30406`),
+  referenced directly from the auction via `shipping_option` tags.
 
 ---
 
