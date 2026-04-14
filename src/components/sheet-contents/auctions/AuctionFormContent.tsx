@@ -4,8 +4,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { PRODUCT_CATEGORIES } from '@/lib/constants'
+import { DEFAULT_TRUSTED_MINTS, PRODUCT_CATEGORIES } from '@/lib/constants'
 import { authStore } from '@/lib/stores/auth'
+import { configStore } from '@/lib/stores/config'
+import { isNip60WalletDevModeEnabled, NIP60_DEV_TEST_MINTS } from '@/lib/stores/nip60'
 import { normalizeProductShippingSelections, type ProductShippingSelection } from '@/lib/utils/productShippingSelections'
 import { usePublishAuctionMutation, type AuctionFormData, type AuctionSpecEntry } from '@/publish/auctions'
 import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
@@ -13,8 +15,6 @@ import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { Plus, X } from 'lucide-react'
 import { useMemo, useState, type Dispatch, type SetStateAction } from 'react'
-
-const DEFAULT_MINT = 'https://testnut.cashu.space'
 
 type AuctionTab = 'name' | 'auction' | 'category' | 'spec' | 'images' | 'shipping'
 
@@ -32,7 +32,7 @@ const INITIAL_FORM: AuctionFormData = {
 	imageUrls: [],
 	specs: [],
 	shippings: [],
-	trustedMints: [DEFAULT_MINT],
+	trustedMints: [],
 	isNSFW: false,
 }
 
@@ -103,12 +103,21 @@ function NameTab({ formData, setFormData }: TabProps) {
 	)
 }
 
-function AuctionTabContent({
-	formData,
-	setFormData,
-	mintsInput,
-	setMintsInput,
-}: TabProps & { mintsInput: string; setMintsInput: Dispatch<SetStateAction<string>> }) {
+function AuctionTabContent({ formData, setFormData, availableMints }: TabProps & { availableMints: readonly string[] }) {
+	const selectedMints = formData.trustedMints
+	const unselectedMints = availableMints.filter((mint) => !selectedMints.includes(mint))
+	const canRemove = selectedMints.length > 1
+
+	const removeMint = (mint: string) => {
+		if (!canRemove) return
+		setFormData((prev) => ({ ...prev, trustedMints: prev.trustedMints.filter((m) => m !== mint) }))
+	}
+
+	const addMint = (mint: string) => {
+		if (selectedMints.includes(mint)) return
+		setFormData((prev) => ({ ...prev, trustedMints: [...prev.trustedMints, mint] }))
+	}
+
 	return (
 		<div className="flex flex-col gap-4">
 			<div className="grid sm:grid-cols-2 gap-4">
@@ -173,15 +182,50 @@ function AuctionTabContent({
 			</div>
 
 			<div className="grid w-full gap-1.5">
-				<Label htmlFor="auction-mints">Trusted Mints (comma or newline separated)</Label>
-				<textarea
-					id="auction-mints"
-					value={mintsInput}
-					onChange={(e) => setMintsInput(e.target.value)}
-					className="border-2 min-h-16 p-2 rounded-md"
-					placeholder={DEFAULT_MINT}
-				/>
-				<p className="text-xs text-zinc-500">Bids will be rejected unless the token is minted by one of these mints.</p>
+				<Label>Trusted Mints</Label>
+				<p className="text-xs text-zinc-500">
+					Bids will be rejected unless the token is minted by one of these mints. At least one is required.
+				</p>
+
+				<div className="space-y-2 mt-1">
+					{selectedMints.map((mint) => (
+						<div key={mint} className="flex items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2">
+							<span className="truncate text-sm text-zinc-900" title={mint}>
+								{mint}
+							</span>
+							<Button
+								type="button"
+								variant="outline"
+								size="sm"
+								onClick={() => removeMint(mint)}
+								disabled={!canRemove}
+								className="text-red-600 hover:text-red-700 disabled:opacity-40"
+								title={canRemove ? 'Remove mint' : 'At least one mint is required'}
+							>
+								<X className="w-4 h-4" />
+							</Button>
+						</div>
+					))}
+				</div>
+
+				{unselectedMints.length > 0 && (
+					<div className="space-y-2 mt-3">
+						<p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Add a mint</p>
+						{unselectedMints.map((mint) => (
+							<button
+								key={mint}
+								type="button"
+								onClick={() => addMint(mint)}
+								className="flex w-full items-center justify-between gap-2 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-2 text-left text-sm text-zinc-700 hover:border-secondary"
+							>
+								<span className="truncate" title={mint}>
+									{mint}
+								</span>
+								<Plus className="w-4 h-4 text-zinc-500 shrink-0" />
+							</button>
+						))}
+					</div>
+				)}
 			</div>
 
 			<div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
@@ -474,20 +518,27 @@ export function AuctionFormContent() {
 	const publishMutation = usePublishAuctionMutation()
 	const authState = useStore(authStore)
 	const userPubkey = authState.user?.pubkey || ''
+	const appStage = useStore(configStore, (state) => state.config.stage)
+	const walletDevMode = appStage === 'staging' || isNip60WalletDevModeEnabled()
 
-	const [formData, setFormData] = useState<AuctionFormData>(INITIAL_FORM)
+	const availableMints = useMemo(
+		() => Array.from(new Set([...DEFAULT_TRUSTED_MINTS, ...(walletDevMode ? NIP60_DEV_TEST_MINTS : [])])),
+		[walletDevMode],
+	)
+
+	const [formData, setFormData] = useState<AuctionFormData>(() => ({ ...INITIAL_FORM, trustedMints: [...availableMints] }))
 	const [activeTab, setActiveTab] = useState<AuctionTab>('name')
 	const [subCategoryInput, setSubCategoryInput] = useState('')
 	const [imagesInput, setImagesInput] = useState('')
-	const [mintsInput, setMintsInput] = useState(DEFAULT_MINT)
 
 	const hasValidName = formData.title.trim().length > 0
 	const hasValidDescription = formData.description.trim().length > 0
 	const hasValidBidding =
 		formData.startingBid.trim().length > 0 && formData.bidIncrement.trim().length > 0 && formData.endAt.trim().length > 0
 	const hasValidImages = parseListInput(imagesInput).length > 0
+	const hasValidMints = formData.trustedMints.length > 0
 
-	const canSubmit = hasValidName && hasValidDescription && hasValidBidding && hasValidImages
+	const canSubmit = hasValidName && hasValidDescription && hasValidBidding && hasValidImages && hasValidMints
 
 	const handleSubmit = async (event: React.BaseSyntheticEvent) => {
 		event.preventDefault()
@@ -496,7 +547,6 @@ export function AuctionFormContent() {
 		const nextFormData: AuctionFormData = {
 			...formData,
 			imageUrls: parseListInput(imagesInput),
-			trustedMints: parseListInput(mintsInput),
 			categories: parseListInput(subCategoryInput),
 			specs: formData.specs.filter((spec: AuctionSpecEntry) => spec.key.trim() && spec.value.trim()),
 		}
@@ -514,7 +564,7 @@ export function AuctionFormContent() {
 
 	const tabs: { value: AuctionTab; label: string; showAsterisk: boolean }[] = [
 		{ value: 'name', label: 'Name', showAsterisk: !hasValidName || !hasValidDescription },
-		{ value: 'auction', label: 'Auction', showAsterisk: !hasValidBidding },
+		{ value: 'auction', label: 'Auction', showAsterisk: !hasValidBidding || !hasValidMints },
 		{ value: 'category', label: 'Category', showAsterisk: false },
 		{ value: 'spec', label: 'Spec', showAsterisk: false },
 		{ value: 'images', label: 'Images', showAsterisk: !hasValidImages },
@@ -547,7 +597,7 @@ export function AuctionFormContent() {
 							<NameTab formData={formData} setFormData={setFormData} />
 						</TabsContent>
 						<TabsContent value="auction" className="mt-4">
-							<AuctionTabContent formData={formData} setFormData={setFormData} mintsInput={mintsInput} setMintsInput={setMintsInput} />
+							<AuctionTabContent formData={formData} setFormData={setFormData} availableMints={availableMints} />
 						</TabsContent>
 						<TabsContent value="category" className="mt-4">
 							<CategoryTab
