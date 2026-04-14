@@ -1,8 +1,10 @@
 import { Button } from '@/components/ui/button'
+import { Calendar } from '@/components/ui/calendar'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ImageUploader } from '@/components/ui/image-uploader/ImageUploader'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DEFAULT_TRUSTED_MINTS, PRODUCT_CATEGORIES } from '@/lib/constants'
@@ -14,7 +16,7 @@ import { usePublishAuctionMutation, type AuctionFormData, type AuctionSpecEntry 
 import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Plus, X } from 'lucide-react'
+import { CalendarIcon, Plus, X } from 'lucide-react'
 import { useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 
 type AuctionImage = { imageUrl: string; imageOrder: number }
@@ -106,13 +108,195 @@ function NameTab({ formData, setFormData }: TabProps) {
 	)
 }
 
-function AuctionTabContent({ formData, setFormData, availableMints }: TabProps & { availableMints: readonly string[] }) {
+type StartMode = 'immediate' | 'scheduled'
+type EndMode = 'duration' | 'absolute'
+
+const DURATION_PRESETS: { label: string; seconds: number }[] = [
+	{ label: '1h', seconds: 3600 },
+	{ label: '6h', seconds: 6 * 3600 },
+	{ label: '1d', seconds: 86400 },
+	{ label: '3d', seconds: 3 * 86400 },
+	{ label: '7d', seconds: 7 * 86400 },
+	{ label: '14d', seconds: 14 * 86400 },
+	{ label: '30d', seconds: 30 * 86400 },
+]
+
+const MIN_DURATION_HOURS = 1
+const MAX_DURATION_HOURS = 30 * 24
+
+function pad2(n: number): string {
+	return n.toString().padStart(2, '0')
+}
+
+function toDatetimeLocal(date: Date): string {
+	return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`
+}
+
+function parseDatetimeLocalSeconds(value: string): number | null {
+	if (!value) return null
+	const ts = new Date(value).getTime()
+	return Number.isNaN(ts) ? null : Math.floor(ts / 1000)
+}
+
+function formatDuration(totalSeconds: number): string {
+	if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return '0 minutes'
+	const days = Math.floor(totalSeconds / 86400)
+	const hours = Math.floor((totalSeconds % 86400) / 3600)
+	const minutes = Math.floor((totalSeconds % 3600) / 60)
+	const parts: string[] = []
+	if (days > 0) parts.push(`${days} day${days === 1 ? '' : 's'}`)
+	if (hours > 0) parts.push(`${hours} hour${hours === 1 ? '' : 's'}`)
+	if (days === 0 && minutes > 0) parts.push(`${minutes} minute${minutes === 1 ? '' : 's'}`)
+	return parts.length > 0 ? parts.join(' ') : '< 1 minute'
+}
+
+function formatAbsolute(tsSeconds: number): string {
+	if (!tsSeconds) return '—'
+	return new Date(tsSeconds * 1000).toLocaleString()
+}
+
+function DateTimePicker({
+	value,
+	onChange,
+	placeholder = 'Pick a date & time',
+}: {
+	value: string
+	onChange: (next: string) => void
+	placeholder?: string
+}) {
+	const [open, setOpen] = useState(false)
+	const seconds = parseDatetimeLocalSeconds(value)
+	const date = seconds ? new Date(seconds * 1000) : undefined
+	const timeValue = date ? `${pad2(date.getHours())}:${pad2(date.getMinutes())}` : '12:00'
+
+	const handleDateSelect = (next: Date | undefined) => {
+		if (!next) return
+		const merged = new Date(next)
+		if (date) {
+			merged.setHours(date.getHours(), date.getMinutes(), 0, 0)
+		} else {
+			merged.setHours(12, 0, 0, 0)
+		}
+		onChange(toDatetimeLocal(merged))
+	}
+
+	const handleTimeChange = (time: string) => {
+		const [hStr, mStr] = time.split(':')
+		const h = parseInt(hStr ?? '', 10)
+		const m = parseInt(mStr ?? '', 10)
+		if (Number.isNaN(h) || Number.isNaN(m)) return
+		const base = date ? new Date(date) : new Date()
+		base.setHours(h, m, 0, 0)
+		onChange(toDatetimeLocal(base))
+	}
+
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<Button type="button" variant="outline" className="w-full justify-start gap-2 font-normal">
+					<CalendarIcon className="h-4 w-4 text-zinc-500 shrink-0" />
+					<span className={date ? 'text-zinc-900' : 'text-zinc-500'}>{date ? date.toLocaleString() : placeholder}</span>
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent className="w-auto p-0" align="start">
+				<Calendar mode="single" selected={date} onSelect={handleDateSelect} captionLayout="dropdown" />
+				<div className="border-t p-3 space-y-2">
+					<Label htmlFor="datetime-picker-time" className="text-xs text-zinc-600">
+						Time
+					</Label>
+					<Input id="datetime-picker-time" type="time" value={timeValue} onChange={(e) => handleTimeChange(e.target.value)} />
+				</div>
+			</PopoverContent>
+		</Popover>
+	)
+}
+
+function BidLadderViz({ startingBid, bidIncrement, reserve }: { startingBid: number; bidIncrement: number; reserve: number }) {
+	const validStart = Number.isFinite(startingBid) && startingBid >= 0
+	const validInc = Number.isFinite(bidIncrement) && bidIncrement > 0
+
+	if (!validStart || !validInc) {
+		return (
+			<div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-4 py-3 text-xs text-zinc-500">
+				Enter a starting bid and bid increment to preview the bid ladder.
+			</div>
+		)
+	}
+
+	const hasReserve = Number.isFinite(reserve) && reserve > startingBid
+	const bidsToReserve = hasReserve ? Math.ceil((reserve - startingBid) / bidIncrement) : 0
+	const maxTicks = 24
+	const tickCount = hasReserve ? Math.min(bidsToReserve, maxTicks) : 0
+
+	return (
+		<div className="rounded-lg border border-zinc-200 bg-white px-4 py-4">
+			<p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Bid ladder preview</p>
+
+			<div className="relative mt-3 h-12 rounded-md bg-gradient-to-r from-emerald-100 via-amber-50 to-amber-100">
+				{Array.from({ length: tickCount }).map((_, i) => (
+					<div key={i} className="absolute top-2 bottom-2 w-px bg-zinc-400/70" style={{ left: `${((i + 1) / (tickCount + 1)) * 100}%` }} />
+				))}
+				<div className="absolute left-0 top-0 bottom-0 w-1.5 rounded-l-md bg-emerald-500" />
+				{hasReserve && <div className="absolute right-0 top-0 bottom-0 w-1.5 rounded-r-md bg-amber-500" />}
+			</div>
+
+			<div className="mt-3 flex items-end justify-between gap-4 text-xs">
+				<div>
+					<p className="font-semibold text-emerald-700">{startingBid.toLocaleString()} sats</p>
+					<p className="text-zinc-500">Starting bid</p>
+				</div>
+				<div className="text-center">
+					<p className="font-semibold text-zinc-900">+{bidIncrement.toLocaleString()}</p>
+					<p className="text-zinc-500">per bid</p>
+				</div>
+				{hasReserve ? (
+					<div className="text-right">
+						<p className="font-semibold text-amber-700">{reserve.toLocaleString()} sats</p>
+						<p className="text-zinc-500">Reserve</p>
+					</div>
+				) : (
+					<div className="text-right">
+						<p className="font-semibold text-zinc-600">No reserve</p>
+						<p className="text-zinc-500">Highest bid wins</p>
+					</div>
+				)}
+			</div>
+
+			{hasReserve && (
+				<p className="mt-3 text-xs text-zinc-600">
+					<span className="font-semibold text-zinc-900">{bidsToReserve}</span> bid{bidsToReserve === 1 ? '' : 's'} of{' '}
+					<span className="font-semibold text-zinc-900">{bidIncrement.toLocaleString()} sats</span> needed to clear the reserve.
+				</p>
+			)}
+		</div>
+	)
+}
+
+function AuctionTabContent({
+	formData,
+	setFormData,
+	availableMints,
+	startMode,
+	setStartMode,
+	endMode,
+	setEndMode,
+	durationSeconds,
+	setDurationSeconds,
+}: TabProps & {
+	availableMints: readonly string[]
+	startMode: StartMode
+	setStartMode: Dispatch<SetStateAction<StartMode>>
+	endMode: EndMode
+	setEndMode: Dispatch<SetStateAction<EndMode>>
+	durationSeconds: number
+	setDurationSeconds: Dispatch<SetStateAction<number>>
+}) {
 	const selectedMints = formData.trustedMints
 	const unselectedMints = availableMints.filter((mint) => !selectedMints.includes(mint))
-	const canRemove = selectedMints.length > 1
+	const canRemoveMint = selectedMints.length > 1
 
 	const removeMint = (mint: string) => {
-		if (!canRemove) return
+		if (!canRemoveMint) return
 		setFormData((prev) => ({ ...prev, trustedMints: prev.trustedMints.filter((m) => m !== mint) }))
 	}
 
@@ -120,6 +304,53 @@ function AuctionTabContent({ formData, setFormData, availableMints }: TabProps &
 		if (selectedMints.includes(mint)) return
 		setFormData((prev) => ({ ...prev, trustedMints: [...prev.trustedMints, mint] }))
 	}
+
+	const startingBidNum = parseInt(formData.startingBid, 10)
+	const bidIncrementNum = parseInt(formData.bidIncrement, 10)
+	const reserveNum = parseInt(formData.reserve, 10)
+
+	const effectiveStartSeconds = useMemo(() => {
+		if (startMode === 'immediate') return Math.floor(Date.now() / 1000)
+		const parsed = formData.startAt ? parseDatetimeLocalSeconds(formData.startAt) : null
+		return parsed ?? Math.floor(Date.now() / 1000)
+	}, [startMode, formData.startAt])
+
+	const virtualEndSeconds = useMemo(() => {
+		if (endMode === 'duration') return effectiveStartSeconds + durationSeconds
+		return parseDatetimeLocalSeconds(formData.endAt) ?? 0
+	}, [endMode, effectiveStartSeconds, durationSeconds, formData.endAt])
+
+	const virtualDurationSeconds = useMemo(() => {
+		if (endMode === 'duration') return durationSeconds
+		if (!virtualEndSeconds) return 0
+		return Math.max(0, virtualEndSeconds - effectiveStartSeconds)
+	}, [endMode, durationSeconds, virtualEndSeconds, effectiveStartSeconds])
+
+	const handleStartImmediate = () => {
+		setStartMode('immediate')
+		setFormData((prev) => ({ ...prev, startAt: '' }))
+	}
+
+	const handleStartScheduled = () => {
+		setStartMode('scheduled')
+		setFormData((prev) => (prev.startAt ? prev : { ...prev, startAt: toDatetimeLocal(new Date(Date.now() + 15 * 60 * 1000)) }))
+	}
+
+	const handleEndAsDuration = () => {
+		setEndMode('duration')
+		setFormData((prev) => ({ ...prev, endAt: '' }))
+	}
+
+	const handleEndAsAbsolute = () => {
+		setEndMode('absolute')
+		setFormData((prev) => {
+			if (prev.endAt) return prev
+			const initial = new Date((effectiveStartSeconds + durationSeconds) * 1000)
+			return { ...prev, endAt: toDatetimeLocal(initial) }
+		})
+	}
+
+	const durationHours = Math.max(MIN_DURATION_HOURS, Math.round(durationSeconds / 3600))
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -161,27 +392,122 @@ function AuctionTabContent({ formData, setFormData, availableMints }: TabProps &
 				/>
 			</div>
 
-			<div className="grid sm:grid-cols-2 gap-4">
-				<div className="grid w-full gap-1.5">
-					<Label htmlFor="auction-start-at">Start Time (optional)</Label>
-					<Input
-						id="auction-start-at"
-						type="datetime-local"
-						value={formData.startAt}
-						onChange={(e) => setFormData((prev) => ({ ...prev, startAt: e.target.value }))}
-					/>
+			<BidLadderViz startingBid={startingBidNum} bidIncrement={bidIncrementNum} reserve={reserveNum} />
+
+			<div className="grid w-full gap-2 rounded-lg border border-zinc-200 bg-white px-4 py-4">
+				<div className="flex items-center justify-between gap-2">
+					<Label>Start Time</Label>
+					<div className="inline-flex rounded-md border border-zinc-200 bg-zinc-50 p-0.5 text-xs">
+						<button
+							type="button"
+							onClick={handleStartImmediate}
+							className={`px-3 py-1 rounded ${startMode === 'immediate' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-600 hover:text-zinc-900'}`}
+						>
+							Immediate
+						</button>
+						<button
+							type="button"
+							onClick={handleStartScheduled}
+							className={`px-3 py-1 rounded ${startMode === 'scheduled' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-600 hover:text-zinc-900'}`}
+						>
+							Schedule
+						</button>
+					</div>
 				</div>
-				<div className="grid w-full gap-1.5">
-					<Label htmlFor="auction-end-at">
+
+				{startMode === 'immediate' ? (
+					<p className="text-xs text-zinc-500">The auction goes live the moment you publish.</p>
+				) : (
+					<DateTimePicker
+						value={formData.startAt ?? ''}
+						onChange={(next) => setFormData((prev) => ({ ...prev, startAt: next }))}
+						placeholder="Pick a start date & time"
+					/>
+				)}
+			</div>
+
+			<div className="grid w-full gap-3 rounded-lg border border-zinc-200 bg-white px-4 py-4">
+				<div className="flex items-center justify-between gap-2">
+					<Label>
 						<span className="after:content-['*'] after:ml-0.5 after:text-red-500">End Time</span>
 					</Label>
-					<Input
-						id="auction-end-at"
-						type="datetime-local"
-						value={formData.endAt}
-						onChange={(e) => setFormData((prev) => ({ ...prev, endAt: e.target.value }))}
-					/>
+					<div className="inline-flex rounded-md border border-zinc-200 bg-zinc-50 p-0.5 text-xs">
+						<button
+							type="button"
+							onClick={handleEndAsDuration}
+							className={`px-3 py-1 rounded ${endMode === 'duration' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-600 hover:text-zinc-900'}`}
+						>
+							Duration
+						</button>
+						<button
+							type="button"
+							onClick={handleEndAsAbsolute}
+							className={`px-3 py-1 rounded ${endMode === 'absolute' ? 'bg-white text-zinc-900 shadow-sm' : 'text-zinc-600 hover:text-zinc-900'}`}
+						>
+							End date
+						</button>
+					</div>
 				</div>
+
+				{endMode === 'duration' ? (
+					<div className="space-y-3">
+						<div className="flex flex-wrap gap-1.5">
+							{DURATION_PRESETS.map((preset) => {
+								const isActive = durationSeconds === preset.seconds
+								return (
+									<button
+										key={preset.label}
+										type="button"
+										onClick={() => setDurationSeconds(preset.seconds)}
+										className={`rounded-full px-3 py-1 text-xs font-semibold border ${
+											isActive
+												? 'border-secondary bg-secondary text-white'
+												: 'border-zinc-300 bg-white text-zinc-700 hover:border-secondary'
+										}`}
+									>
+										{preset.label}
+									</button>
+								)
+							})}
+						</div>
+
+						<div>
+							<input
+								type="range"
+								min={MIN_DURATION_HOURS}
+								max={MAX_DURATION_HOURS}
+								step={1}
+								value={durationHours}
+								onChange={(e) => setDurationSeconds(parseInt(e.target.value, 10) * 3600)}
+								className="w-full accent-secondary"
+							/>
+							<div className="flex items-center justify-between text-[10px] text-zinc-500">
+								<span>1h</span>
+								<span>30d</span>
+							</div>
+						</div>
+
+						<div className="rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+							<p>
+								<span className="font-semibold text-zinc-900">Runs for:</span> {formatDuration(durationSeconds)}
+							</p>
+							<p className="mt-0.5">
+								<span className="font-semibold text-zinc-900">Ends:</span> {formatAbsolute(virtualEndSeconds)}
+							</p>
+						</div>
+					</div>
+				) : (
+					<div className="space-y-2">
+						<DateTimePicker
+							value={formData.endAt}
+							onChange={(next) => setFormData((prev) => ({ ...prev, endAt: next }))}
+							placeholder="Pick an end date & time"
+						/>
+						{virtualEndSeconds > 0 && (
+							<p className="text-xs text-zinc-500">Runs for approximately {formatDuration(virtualDurationSeconds)}.</p>
+						)}
+					</div>
+				)}
 			</div>
 
 			<div className="grid w-full gap-1.5">
@@ -201,9 +527,9 @@ function AuctionTabContent({ formData, setFormData, availableMints }: TabProps &
 								variant="outline"
 								size="sm"
 								onClick={() => removeMint(mint)}
-								disabled={!canRemove}
+								disabled={!canRemoveMint}
 								className="text-red-600 hover:text-red-700 disabled:opacity-40"
-								title={canRemove ? 'Remove mint' : 'At least one mint is required'}
+								title={canRemoveMint ? 'Remove mint' : 'At least one mint is required'}
 							>
 								<X className="w-4 h-4" />
 							</Button>
@@ -594,11 +920,15 @@ export function AuctionFormContent() {
 	const [images, setImages] = useState<AuctionImage[]>([])
 	const [activeTab, setActiveTab] = useState<AuctionTab>('name')
 	const [subCategoryInput, setSubCategoryInput] = useState('')
+	const [startMode, setStartMode] = useState<StartMode>('immediate')
+	const [endMode, setEndMode] = useState<EndMode>('duration')
+	const [durationSeconds, setDurationSeconds] = useState<number>(24 * 60 * 60)
 
 	const hasValidName = formData.title.trim().length > 0
 	const hasValidDescription = formData.description.trim().length > 0
-	const hasValidBidding =
-		formData.startingBid.trim().length > 0 && formData.bidIncrement.trim().length > 0 && formData.endAt.trim().length > 0
+	const hasValidBiddingAmounts = formData.startingBid.trim().length > 0 && formData.bidIncrement.trim().length > 0
+	const hasValidEndTime = endMode === 'duration' ? durationSeconds > 0 : formData.endAt.trim().length > 0
+	const hasValidBidding = hasValidBiddingAmounts && hasValidEndTime
 	const hasValidImages = images.filter((img) => img.imageUrl.trim().length > 0).length > 0
 	const hasValidMints = formData.trustedMints.length > 0
 
@@ -608,8 +938,18 @@ export function AuctionFormContent() {
 		event.preventDefault()
 		event.stopPropagation()
 
+		const effectiveStartAt = startMode === 'immediate' ? '' : (formData.startAt ?? '')
+		let effectiveEndAt = formData.endAt
+		if (endMode === 'duration') {
+			const parsedStart = formData.startAt ? parseDatetimeLocalSeconds(formData.startAt) : null
+			const startSeconds = startMode === 'immediate' ? Math.floor(Date.now() / 1000) : (parsedStart ?? Math.floor(Date.now() / 1000))
+			effectiveEndAt = toDatetimeLocal(new Date((startSeconds + durationSeconds) * 1000))
+		}
+
 		const nextFormData: AuctionFormData = {
 			...formData,
+			startAt: effectiveStartAt,
+			endAt: effectiveEndAt,
 			imageUrls: images
 				.slice()
 				.sort((a, b) => a.imageOrder - b.imageOrder)
@@ -665,7 +1005,17 @@ export function AuctionFormContent() {
 							<NameTab formData={formData} setFormData={setFormData} />
 						</TabsContent>
 						<TabsContent value="auction" className="mt-4">
-							<AuctionTabContent formData={formData} setFormData={setFormData} availableMints={availableMints} />
+							<AuctionTabContent
+								formData={formData}
+								setFormData={setFormData}
+								availableMints={availableMints}
+								startMode={startMode}
+								setStartMode={setStartMode}
+								endMode={endMode}
+								setEndMode={setEndMode}
+								durationSeconds={durationSeconds}
+								setDurationSeconds={setDurationSeconds}
+							/>
 						</TabsContent>
 						<TabsContent value="category" className="mt-4">
 							<CategoryTab
