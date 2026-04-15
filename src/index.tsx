@@ -14,13 +14,15 @@ import {
 	buildActiveAuctionBidChains,
 	compareAuctionBidChainPriority,
 	getAuctionBidAmount,
+	getAuctionEffectiveEndAt,
 	getAuctionEndAt,
 	getAuctionReserveAmount,
 	getAuctionTagValue,
+	getAuctionWindowValidBids,
 	type AuctionSettlementPlanResponse,
 	type AuctionSettlementPublishStatus,
 } from './lib/auctionSettlement'
-import { auctionP2pkPubkeysMatch, inspectAuctionP2pkPubkey, inspectAuctionP2pkSecret, normalizeAuctionP2pkPubkey } from './lib/auctionP2pk'
+import { auctionP2pkPubkeysMatch, normalizeAuctionP2pkPubkey } from './lib/auctionP2pk'
 import { AUCTION_BID_TOKEN_TOPIC, parseAuctionBidTokenEnvelope } from './lib/auctionTransfers'
 import { AppSettingsSchema } from './lib/schemas/app'
 import { getEventHandler } from './server'
@@ -180,29 +182,7 @@ async function signAuctionTokenWithAppKey(token: string): Promise<string> {
 	const mintUrl = normalizeMintUrl(getTokenMetadata(token).mint)
 	const keysets = await getMintKeysets(mintUrl)
 	const decoded = getDecodedToken(token, keysets)
-	console.log('[auction:settlement-plan] pre-sign token summary', {
-		mintUrl,
-		proofCount: decoded.proofs.length,
-		proofs: decoded.proofs.map((proof, index) => ({
-			index,
-			amount: proof.amount,
-			witnessCount:
-				typeof proof.witness === 'string' ? (JSON.parse(proof.witness).signatures?.length ?? 0) : (proof.witness?.signatures?.length ?? 0),
-			secret: inspectAuctionP2pkSecret(proof.secret),
-		})),
-	})
 	decoded.proofs = signP2PKProofs(decoded.proofs, APP_PRIVATE_KEY!, true)
-	console.log('[auction:settlement-plan] post-sign token summary', {
-		mintUrl,
-		proofCount: decoded.proofs.length,
-		proofs: decoded.proofs.map((proof, index) => ({
-			index,
-			amount: proof.amount,
-			witnessCount:
-				typeof proof.witness === 'string' ? (JSON.parse(proof.witness).signatures?.length ?? 0) : (proof.witness?.signatures?.length ?? 0),
-			secret: inspectAuctionP2pkSecret(proof.secret),
-		})),
-	})
 	return getEncodedToken(decoded)
 }
 
@@ -231,11 +211,6 @@ async function buildAuctionSettlementPlan(params: {
 	}
 	if (getAuctionTagValue(auctionEvent, 'settlement_policy') !== 'cashu_p2pk_2of2_v1') {
 		throw new Error('Auction settlement policy is not cashu_p2pk_2of2_v1')
-	}
-
-	const endAt = getAuctionEndAt(auctionEvent)
-	if (!endAt || closeAt < endAt) {
-		throw new Error('Auction has not ended yet')
 	}
 
 	const existingSettlements = await ndk.fetchEvents({
@@ -271,6 +246,11 @@ async function buildAuctionSettlementPlan(params: {
 			: []),
 	]
 	const bidEvents = Array.from(await ndk.fetchEvents(bidFilters.length === 1 ? bidFilters[0] : bidFilters))
+	const effectiveEndAt = getAuctionEffectiveEndAt(auctionEvent, bidEvents)
+	const nominalEndAt = getAuctionEndAt(auctionEvent)
+	if (!nominalEndAt || closeAt < effectiveEndAt) {
+		throw new Error('Auction has not ended yet')
+	}
 
 	const envelopeFilters = [
 		{
@@ -302,14 +282,6 @@ async function buildAuctionSettlementPlan(params: {
 			const envelope = parseAuctionBidTokenEnvelope(decryptable.content)
 			if (!envelope || envelope.auctionEventId !== params.auctionEventId) continue
 			if (!auctionP2pkPubkeysMatch(envelope.escrowPubkey, appCashuPubkey)) continue
-			console.log('[auction:settlement-plan] decrypted envelope', {
-				bidEventId: envelope.bidEventId,
-				bidderPubkey: envelope.bidderPubkey,
-				lockPubkey: inspectAuctionP2pkPubkey(envelope.lockPubkey),
-				escrowPubkey: inspectAuctionP2pkPubkey(envelope.escrowPubkey),
-				refundPubkey: inspectAuctionP2pkPubkey(envelope.refundPubkey),
-				locktime: envelope.locktime,
-			})
 			const tokenCommitment = await sha256Hex(envelope.token)
 			if (tokenCommitment !== envelope.commitment) continue
 			envelopeByBidId.set(envelope.bidEventId, envelope)
@@ -318,7 +290,7 @@ async function buildAuctionSettlementPlan(params: {
 		}
 	}
 
-	const eligibleChains = buildActiveAuctionBidChains(bidEvents)
+	const eligibleChains = buildActiveAuctionBidChains(getAuctionWindowValidBids(auctionEvent, bidEvents))
 		.filter((group) =>
 			group.chain.every((bid) => {
 				const envelope = envelopeByBidId.get(bid.id)

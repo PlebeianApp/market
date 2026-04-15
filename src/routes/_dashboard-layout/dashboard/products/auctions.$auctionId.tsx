@@ -6,19 +6,25 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { authStore } from '@/lib/stores/auth'
+import { getAuctionWindowValidBids } from '@/lib/auctionSettlement'
 import { usePublishAuctionSettlementMutation } from '@/publish/auctions'
 import {
 	auctionQueryOptions,
+	getAuctionBidCountFromBids,
 	getAuctionBidIncrement,
+	getAuctionCurrentPriceFromBids,
 	getAuctionCurrency,
+	getAuctionEffectiveEndAt,
 	getAuctionEndAt,
 	getAuctionEscrowPubkey,
 	getAuctionId,
 	getAuctionImages,
 	getAuctionKeyScheme,
+	getAuctionMaxEndAt,
 	getAuctionMints,
 	getAuctionP2pkXpub,
 	getAuctionReserve,
+	getAuctionRootEventId,
 	getAuctionSchema,
 	getAuctionSettlementFinalAmount,
 	getAuctionSettlementPolicy,
@@ -34,7 +40,6 @@ import {
 	getBidMint,
 	getBidStatus,
 	useAuctionBids,
-	useAuctionBidStats,
 	useAuctionClaimOrders,
 	useAuctionSettlements,
 } from '@/queries/auctions'
@@ -160,16 +165,13 @@ function DashboardAuctionDetailRoute() {
 		const dTag = getAuctionId(auction)
 		return dTag ? `30408:${auction.pubkey}:${dTag}` : ''
 	}, [auction])
+	const auctionRootEventId = getAuctionRootEventId(auction)
 
 	const startingBid = getAuctionStartingBid(auction)
 	const reserve = getAuctionReserve(auction)
 	const bidIncrement = getAuctionBidIncrement(auction)
 	const startAt = getAuctionStartAt(auction)
 	const endAt = getAuctionEndAt(auction)
-	const countdown = useAuctionCountdown(endAt, { showSeconds: true })
-	const now = countdown.now
-	const status = formatAuctionStatus(startAt, endAt, now)
-	const ended = status === 'Ended'
 	const isOwner = !!(auction && user?.pubkey && auction.pubkey === user.pubkey)
 	const auctionType = getAuctionType(auction)
 	const currency = getAuctionCurrency(auction)
@@ -178,21 +180,25 @@ function DashboardAuctionDetailRoute() {
 	const summary = getAuctionSummary(auction) || auction?.content || 'No summary provided yet.'
 	const previewImage = getAuctionImages(auction)[0]?.[1]
 
-	const bidsQuery = useAuctionBids(auctionId, 500, auctionCoordinates)
+	const bidsQuery = useAuctionBids(auctionRootEventId || auctionId, 500, auctionCoordinates)
 	const bids = bidsQuery.data ?? []
-	const bidStatsQuery = useAuctionBidStats(auctionId, startingBid, auctionCoordinates)
-	const bidStats = bidStatsQuery.data
-	const currentPrice = bidStats?.currentPrice ?? startingBid
-	const bidCount = bidStats?.count ?? bids.length
+	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
+	const countdown = useAuctionCountdown(effectiveEndAt, { showSeconds: true })
+	const now = countdown.now
+	const status = formatAuctionStatus(startAt, effectiveEndAt, now)
+	const ended = status === 'Ended'
+	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
+	const bidCount = getAuctionBidCountFromBids(auction, bids)
 
-	const settlementsQuery = useAuctionSettlements(auctionId, 100, auctionCoordinates)
+	const settlementsQuery = useAuctionSettlements(auctionRootEventId || auctionId, 100, auctionCoordinates)
 	const settlements = settlementsQuery.data ?? []
 	const latestSettlement = settlements[0] || null
 	const settlementMutation = usePublishAuctionSettlementMutation()
 
 	const topBid = useMemo(() => {
-		if (bids.length === 0) return null
-		return [...bids]
+		const validBids = auction ? getAuctionWindowValidBids(auction, bids) : bids
+		if (validBids.length === 0) return null
+		return [...validBids]
 			.sort((a, b) => {
 				const amountDelta = getBidAmount(b) - getBidAmount(a)
 				if (amountDelta !== 0) return amountDelta
@@ -201,7 +207,7 @@ function DashboardAuctionDetailRoute() {
 				return b.id.localeCompare(a.id)
 			})
 			.at(0)
-	}, [bids])
+	}, [auction, bids])
 
 	const bidsByNewest = useMemo(() => [...bids].sort((a, b) => (b.created_at || 0) - (a.created_at || 0)), [bids])
 
@@ -250,7 +256,7 @@ function DashboardAuctionDetailRoute() {
 
 		try {
 			await settlementMutation.mutateAsync({
-				auctionEventId: auction.id,
+				auctionEventId: auctionRootEventId || auction.id,
 				auctionCoordinates,
 				status: mode,
 				winningBidEventId: mode === 'settled' ? topBid?.id : '',
@@ -332,14 +338,14 @@ function DashboardAuctionDetailRoute() {
 							<StatCard label="Current price" value={formatSats(currentPrice)} eyebrow="Live pulse" />
 							<StatCard label="Reserve" value={formatSats(reserve)} eyebrow={reserveMet ? 'Ready to settle' : 'Threshold'} />
 							<StatCard label="Opening bid" value={formatSats(startingBid)} />
-							<AuctionCountdown endAt={endAt} countdown={countdown} showSeconds variant="panel" label="Ends in" showAbsoluteTime />
+							<AuctionCountdown endAt={effectiveEndAt} countdown={countdown} showSeconds variant="panel" label="Ends in" showAbsoluteTime />
 						</div>
 
 						<div className="grid gap-3 md:grid-cols-2">
 							<OverviewItem label="Auction type" value={auctionType} helper="Primary format shown to buyers." />
 							<OverviewItem label="Currency" value={currency} helper="Display currency for bidding." />
 							<OverviewItem label="Bid increment" value={formatSats(bidIncrement)} helper="Minimum raise between bids." />
-							<OverviewItem label="Schedule" value={`${formatMaybeDate(startAt)} to ${formatMaybeDate(endAt)}`} />
+							<OverviewItem label="Schedule" value={`${formatMaybeDate(startAt)} to ${formatMaybeDate(effectiveEndAt)}`} />
 						</div>
 					</div>
 				</div>

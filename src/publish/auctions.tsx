@@ -21,7 +21,7 @@ import {
 	type ProductShippingSelection,
 	type ProductShippingSelectionInput,
 } from '@/lib/utils/productShippingSelections'
-import { inspectAuctionP2pkPubkey, toCompressedAuctionP2pkPubkey } from '@/lib/auctionP2pk'
+import { toCompressedAuctionP2pkPubkey } from '@/lib/auctionP2pk'
 import { getBidAmount, getBidStatus, markAuctionAsDeleted } from '@/queries/auctions'
 import { auctionKeys, orderKeys } from '@/queries/queryKeyFactory'
 import NDK, { NDKEvent, NDKUser, type NDKFilter, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
@@ -45,6 +45,10 @@ export interface AuctionFormData {
 	reserve: string
 	startAt?: string
 	endAt: string
+	antiSnipingEnabled: boolean
+	antiSnipingWindowSeconds: string
+	antiSnipingExtensionSeconds: string
+	antiSnipingMaxExtensions: string
 	mainCategory: string
 	categories: string[]
 	imageUrls: string[]
@@ -58,7 +62,8 @@ export interface AuctionBidFormData {
 	auctionEventId: string
 	auctionCoordinates: string
 	amount: number
-	auctionEndAt: number
+	auctionEffectiveEndAt: number
+	auctionLocktimeAt: number
 	sellerPubkey: string
 	escrowPubkey: string
 	escrowIdentityPubkey?: string
@@ -82,6 +87,14 @@ const parseUnixTimestamp = (isoDateTime?: string): number | null => {
 	const timestampMs = new Date(isoDateTime).getTime()
 	if (Number.isNaN(timestampMs)) return null
 	return Math.floor(timestampMs / 1000)
+}
+
+const parsePositiveInt = (value: string, fieldName: string): number => {
+	const parsed = parseInt(value, 10)
+	if (!Number.isFinite(parsed) || parsed <= 0) {
+		throw new Error(`${fieldName} must be greater than 0`)
+	}
+	return parsed
 }
 
 const getAuctionEscrowPubkeyOrThrow = (): string => {
@@ -113,6 +126,16 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 	const startingBid = formData.startingBid.trim() || '0'
 	const bidIncrement = formData.bidIncrement.trim() || '1'
 	const reserve = formData.reserve.trim() || '0'
+	const antiSnipingEnabled = formData.antiSnipingEnabled === true
+	const antiSnipingWindowSeconds = antiSnipingEnabled ? parsePositiveInt(formData.antiSnipingWindowSeconds, 'Anti-sniping window') : 0
+	const antiSnipingExtensionSeconds = antiSnipingEnabled
+		? parsePositiveInt(formData.antiSnipingExtensionSeconds, 'Anti-sniping extension')
+		: 0
+	const antiSnipingMaxExtensions = antiSnipingEnabled
+		? parsePositiveInt(formData.antiSnipingMaxExtensions, 'Max anti-sniping extensions')
+		: 0
+	const extensionRule = antiSnipingEnabled ? `anti_sniping:${antiSnipingWindowSeconds}:${antiSnipingExtensionSeconds}` : 'none'
+	const maxEndAt = antiSnipingEnabled ? endAt + antiSnipingExtensionSeconds * antiSnipingMaxExtensions : 0
 	const trustedMints = formData.trustedMints.length > 0 ? formData.trustedMints : [DEFAULT_AUCTION_MINT]
 	const keyScheme: AuctionP2pkKeyScheme = 'hd_p2pk'
 	const escrowPubkey = getAuctionEscrowPubkeyOrThrow()
@@ -154,6 +177,8 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 		...trustedMints.map((mint) => ['mint', mint] as NDKTag),
 		['escrow_pubkey', escrowPubkey],
 		['escrow_identity', escrowIdentityPubkey],
+		['extension_rule', extensionRule],
+		...(antiSnipingEnabled ? ([['max_end_at', String(maxEndAt)] as NDKTag] as NDKTag[]) : []),
 		['key_scheme', keyScheme],
 		['p2pk_xpub', p2pkXpub],
 		['settlement_policy', 'cashu_p2pk_2of2_v1'],
@@ -193,6 +218,11 @@ export const publishAuction = async (formData: AuctionFormData, signer: NDKSigne
 	}
 	if (endAtTs <= startAtTs) {
 		throw new Error('Auction end time must be after start time')
+	}
+	if (formData.antiSnipingEnabled) {
+		parsePositiveInt(formData.antiSnipingWindowSeconds, 'Anti-sniping window')
+		parsePositiveInt(formData.antiSnipingExtensionSeconds, 'Anti-sniping extension')
+		parsePositiveInt(formData.antiSnipingMaxExtensions, 'Max anti-sniping extensions')
 	}
 	if (formData.imageUrls.length === 0) {
 		throw new Error('At least one image is required')
@@ -326,10 +356,15 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 	if (!formData.auctionCoordinates) throw new Error('Auction coordinates are required')
 	if (!formData.sellerPubkey) throw new Error('Seller pubkey is required')
 	if (!Number.isFinite(formData.amount) || formData.amount <= 0) throw new Error('Bid amount must be a positive number')
-	if (!Number.isFinite(formData.auctionEndAt) || formData.auctionEndAt <= 0) throw new Error('Auction end time is required for locking')
+	if (!Number.isFinite(formData.auctionEffectiveEndAt) || formData.auctionEffectiveEndAt <= 0) {
+		throw new Error('Auction effective end time is required for bidding')
+	}
+	if (!Number.isFinite(formData.auctionLocktimeAt) || formData.auctionLocktimeAt <= 0) {
+		throw new Error('Auction locktime base is required for bid locking')
+	}
 
 	const now = Math.floor(Date.now() / 1000)
-	if (now >= formData.auctionEndAt) {
+	if (now >= formData.auctionEffectiveEndAt) {
 		throw new Error('Auction already ended')
 	}
 
@@ -368,7 +403,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 
 	const bidderWalletP2pk = await nip60Actions.getWalletCashuP2pk()
 	const bidNonce = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-	const locktime = Math.max(formData.auctionEndAt + AUCTION_SETTLEMENT_GRACE_SECONDS, now + 60)
+	const locktime = Math.max(formData.auctionLocktimeAt + AUCTION_SETTLEMENT_GRACE_SECONDS, now + 60)
 
 	const lockedBid = await nip60Actions.lockAuctionBidFunds({
 		amount: deltaAmount,
@@ -405,7 +440,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 			['commitment', lockedBid.commitment],
 			['locktime', String(lockedBid.locktime)],
 			['refund_pubkey', lockedBid.refundPubkey],
-			['created_for_end_at', String(formData.auctionEndAt)],
+			['created_for_end_at', String(formData.auctionEffectiveEndAt)],
 			['bid_nonce', bidNonce],
 			['key_scheme', lockedBid.keyScheme],
 			['status', 'locked'],
@@ -496,7 +531,6 @@ export const usePublishAuctionBidMutation = () => {
 		},
 		onSuccess: async (_eventId, variables) => {
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.bids(variables.auctionEventId) })
-			await queryClient.invalidateQueries({ queryKey: auctionKeys.bidStats(variables.auctionEventId) })
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.details(variables.auctionEventId) })
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.all })
 			toast.success('Bid submitted')
@@ -573,14 +607,6 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 			throw new Error('Settlement plan did not provide a valid winning bid')
 		}
 		for (const winnerToken of settlementPlan.winnerTokens) {
-			console.log('[auction:settlement] winner token before seller receive', {
-				bidEventId: winnerToken.bidEventId,
-				amount: winnerToken.amount,
-				totalBidAmount: winnerToken.totalBidAmount,
-				derivationPath: winnerToken.derivationPath,
-				childPubkey: inspectAuctionP2pkPubkey(winnerToken.childPubkey),
-				refundPubkey: inspectAuctionP2pkPubkey(winnerToken.refundPubkey),
-			})
 			const childPrivkey = await nip60Actions.getAuctionHdChildPrivkey({
 				derivationPath: winnerToken.derivationPath,
 				expectedPubkey: winnerToken.childPubkey || undefined,
@@ -648,7 +674,6 @@ export const usePublishAuctionSettlementMutation = () => {
 		onSuccess: async (_eventId, variables) => {
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.details(variables.auctionEventId) })
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.bids(variables.auctionEventId) })
-			await queryClient.invalidateQueries({ queryKey: auctionKeys.bidStats(variables.auctionEventId) })
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.settlements(variables.auctionEventId) })
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.all })
 			toast.success('Auction settlement published')

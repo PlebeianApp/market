@@ -17,8 +17,6 @@ import {
 import {
 	auctionP2pkPubkeysMatch,
 	deriveAuctionChildP2pkPubkeyFromXpub,
-	inspectAuctionP2pkPubkey,
-	inspectAuctionP2pkSecret,
 	normalizeAuctionDerivationPath,
 	toCompressedAuctionP2pkPubkey,
 } from '@/lib/auctionP2pk'
@@ -27,7 +25,6 @@ import {
 	CashuMint,
 	CashuWallet,
 	CheckStateEnum,
-	getDecodedToken,
 	getEncodedToken,
 	getTokenMetadata,
 	type MintKeys,
@@ -595,27 +592,6 @@ const receiveTokenIntoWallet = async (
 			mintUrl,
 		}
 	} catch (error) {
-		try {
-			const keysets = await cashuWallet.getKeySets()
-			const decoded = getDecodedToken(token, keysets)
-			console.log('[nip60] receive token debug summary', {
-				mintUrl,
-				privkeyProvided: !!options?.privkey,
-				privkeyLength: options?.privkey?.length ?? 0,
-				proofCount: decoded.proofs.length,
-				proofs: decoded.proofs.map((proof, index) => ({
-					index,
-					amount: proof.amount,
-					witnessCount:
-						typeof proof.witness === 'string'
-							? (JSON.parse(proof.witness).signatures?.length ?? 0)
-							: (proof.witness?.signatures?.length ?? 0),
-					secret: inspectAuctionP2pkSecret(proof.secret),
-				})),
-			})
-		} catch (debugError) {
-			console.error('[nip60] Failed to build receive token debug summary:', debugError)
-		}
 		throw error
 	}
 }

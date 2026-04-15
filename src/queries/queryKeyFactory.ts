@@ -11,7 +11,6 @@ export const productKeys = {
 export const auctionKeys = {
 	all: ['auctions'] as const,
 	details: (id: string) => [...auctionKeys.all, id] as const,
-	bidStats: (auctionId: string) => [...auctionKeys.all, 'bidStats', auctionId] as const,
 	bids: (auctionId: string) => [...auctionKeys.all, 'bids', auctionId] as const,
 	byBidder: (pubkey: string) => [...auctionKeys.all, 'byBidder', pubkey] as const,
 	settlements: (auctionId: string) => [...auctionKeys.all, 'settlements', auctionId] as const,
