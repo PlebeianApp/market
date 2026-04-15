@@ -16,6 +16,7 @@ import {
 	auctionQueryOptions,
 	auctionsByPubkeyQueryOptions,
 	filterNSFWAuctions,
+	getAuctionBidCountFromBids,
 	getAuctionSettlementFinalAmount,
 	getAuctionSettlementStatus,
 	getAuctionSettlementWinner,
@@ -24,6 +25,8 @@ import {
 	getBidStatus,
 	getAuctionBidIncrement,
 	getAuctionCategories,
+	getAuctionCurrentPriceFromBids,
+	getAuctionEffectiveEndAt,
 	getAuctionCurrency,
 	getAuctionEndAt,
 	getAuctionEscrowIdentityPubkey,
@@ -31,9 +34,11 @@ import {
 	getAuctionId,
 	getAuctionImages,
 	getAuctionKeyScheme,
+	getAuctionMaxEndAt,
 	getAuctionMints,
 	getAuctionP2pkXpub,
 	getAuctionReserve,
+	getAuctionRootEventId,
 	getAuctionSchema,
 	getAuctionSettlementPolicy,
 	getAuctionShippingOptions,
@@ -45,7 +50,6 @@ import {
 	getAuctionType,
 	isNSFWAuction,
 	useAuctionBids,
-	useAuctionBidStats,
 	useAuctionClaimOrders,
 	useAuctionSettlements,
 } from '@/queries/auctions'
@@ -163,7 +167,6 @@ function AuctionDetailRoute() {
 
 	const startAt = getAuctionStartAt(auction)
 	const endAt = getAuctionEndAt(auction)
-	const countdown = useAuctionCountdown(endAt, { showSeconds: true })
 	const startingBid = getAuctionStartingBid(auction)
 	const bidIncrement = getAuctionBidIncrement(auction)
 	const reserve = getAuctionReserve(auction)
@@ -180,6 +183,7 @@ function AuctionDetailRoute() {
 	const shippingOptions = getAuctionShippingOptions(auction)
 	const specs = getAuctionSpecs(auction)
 	const auctionDTag = getAuctionId(auction)
+	const auctionRootEventId = getAuctionRootEventId(auction)
 	const auctionCoordinates = auctionDTag && auction ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 
 	const parsedShippingRefs = useMemo(
@@ -211,15 +215,15 @@ function AuctionDetailRoute() {
 		[parsedShippingRefs, shippingQueryResults],
 	)
 
+	const bidsQuery = useAuctionBids(auctionRootEventId || auctionId, 500, auctionCoordinates)
+	const bids = bidsQuery.data ?? []
+	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
+	const countdown = useAuctionCountdown(effectiveEndAt, { showSeconds: true })
 	const ended = countdown.isEnded
-	const { data: bidStats } = useAuctionBidStats(auctionId, startingBid, auctionCoordinates)
-	const currentPrice = bidStats?.currentPrice ?? startingBid
-	const bidsCount = bidStats?.count ?? 0
+	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
+	const bidsCount = getAuctionBidCountFromBids(auction, bids)
 	const minBid = Math.max(startingBid, currentPrice + Math.max(1, bidIncrement))
 	const parsedBidAmount = parseInt(bidAmountInput || '0', 10)
-
-	const bidsQuery = useAuctionBids(auctionId, 500, auctionCoordinates)
-	const bids = bidsQuery.data ?? []
 	const newestBids = useMemo(() => [...bids].sort((a, b) => (b.created_at || 0) - (a.created_at || 0)), [bids])
 
 	const sellerAuctionsQuery = useQuery({
@@ -234,7 +238,7 @@ function AuctionDetailRoute() {
 	}, [auctionId, sellerAuctionsQuery.data])
 
 	// Settlement and claim order state
-	const settlementsQuery = useAuctionSettlements(auctionId, 10, auctionCoordinates)
+	const settlementsQuery = useAuctionSettlements(auctionRootEventId || auctionId, 10, auctionCoordinates)
 	const latestSettlement = (settlementsQuery.data ?? [])[0] || null
 	const settlementStatus = getAuctionSettlementStatus(latestSettlement)
 	const settlementWinner = getAuctionSettlementWinner(latestSettlement)
@@ -281,10 +285,11 @@ function AuctionDetailRoute() {
 				return
 			}
 			await bidMutation.mutateAsync({
-				auctionEventId: auction.id,
+				auctionEventId: auctionRootEventId || auction.id,
 				auctionCoordinates,
 				amount: parsedAmount,
-				auctionEndAt: endAt,
+				auctionEffectiveEndAt: effectiveEndAt,
+				auctionLocktimeAt: getAuctionMaxEndAt(auction) || effectiveEndAt,
 				sellerPubkey: auction.pubkey,
 				escrowPubkey,
 				escrowIdentityPubkey: escrowIdentityPubkey || auction.pubkey,
@@ -386,9 +391,9 @@ function AuctionDetailRoute() {
 								</div>
 								<div className="bg-black/35 border border-white/20 rounded p-2">
 									<div className="text-white/70 text-xs">Ends at</div>
-									<div className="font-semibold">{endAt ? new Date(endAt * 1000).toLocaleString() : 'N/A'}</div>
+									<div className="font-semibold">{effectiveEndAt ? new Date(effectiveEndAt * 1000).toLocaleString() : 'N/A'}</div>
 								</div>
-								<AuctionCountdown endAt={endAt} countdown={countdown} showSeconds variant="panel" label="Ends in" />
+								<AuctionCountdown endAt={effectiveEndAt} countdown={countdown} showSeconds variant="panel" label="Ends in" />
 							</div>
 
 							<div className="flex gap-2 items-center">
@@ -501,7 +506,7 @@ function AuctionDetailRoute() {
 											helper="Seller threshold that decides whether the winner can settle."
 										/>
 										<ShopperStat label="Starts" value={formatMaybeDate(startAt)} helper="Bidding window opening time." />
-										<ShopperStat label="Ends" value={formatMaybeDate(endAt)} helper="Bidding window closing time." />
+										<ShopperStat label="Ends" value={formatMaybeDate(effectiveEndAt)} helper="Effective bidding close time." />
 									</div>
 								</div>
 
@@ -766,7 +771,7 @@ function AuctionDetailRoute() {
 				<AuctionClaimDialog
 					open={claimDialogOpen}
 					onOpenChange={setClaimDialogOpen}
-					auctionEventId={auction.id}
+					auctionEventId={auctionRootEventId || auction.id}
 					auctionCoordinates={auctionCoordinates}
 					settlementEventId={latestSettlement.id}
 					sellerPubkey={auction.pubkey}

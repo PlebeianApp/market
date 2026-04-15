@@ -32,6 +32,10 @@ const INITIAL_FORM: AuctionFormData = {
 	reserve: '0',
 	startAt: '',
 	endAt: '',
+	antiSnipingEnabled: false,
+	antiSnipingWindowSeconds: '300',
+	antiSnipingExtensionSeconds: '300',
+	antiSnipingMaxExtensions: '12',
 	mainCategory: '',
 	categories: [],
 	imageUrls: [],
@@ -308,6 +312,9 @@ function AuctionTabContent({
 	const startingBidNum = parseInt(formData.startingBid, 10)
 	const bidIncrementNum = parseInt(formData.bidIncrement, 10)
 	const reserveNum = parseInt(formData.reserve, 10)
+	const antiSnipingWindowSeconds = parseInt(formData.antiSnipingWindowSeconds, 10)
+	const antiSnipingExtensionSeconds = parseInt(formData.antiSnipingExtensionSeconds, 10)
+	const antiSnipingMaxExtensions = parseInt(formData.antiSnipingMaxExtensions, 10)
 
 	const effectiveStartSeconds = useMemo(() => {
 		if (startMode === 'immediate') return Math.floor(Date.now() / 1000)
@@ -325,6 +332,14 @@ function AuctionTabContent({
 		if (!virtualEndSeconds) return 0
 		return Math.max(0, virtualEndSeconds - effectiveStartSeconds)
 	}, [endMode, durationSeconds, virtualEndSeconds, effectiveStartSeconds])
+
+	const antiSnipingHardStopSeconds = useMemo(() => {
+		if (!formData.antiSnipingEnabled) return 0
+		if (!virtualEndSeconds) return 0
+		if (!Number.isFinite(antiSnipingExtensionSeconds) || antiSnipingExtensionSeconds <= 0) return 0
+		if (!Number.isFinite(antiSnipingMaxExtensions) || antiSnipingMaxExtensions <= 0) return 0
+		return virtualEndSeconds + antiSnipingExtensionSeconds * antiSnipingMaxExtensions
+	}, [formData.antiSnipingEnabled, virtualEndSeconds, antiSnipingExtensionSeconds, antiSnipingMaxExtensions])
 
 	const handleStartImmediate = () => {
 		setStartMode('immediate')
@@ -507,6 +522,75 @@ function AuctionTabContent({
 							<p className="text-xs text-zinc-500">Runs for approximately {formatDuration(virtualDurationSeconds)}.</p>
 						)}
 					</div>
+				)}
+			</div>
+
+			<div className="grid w-full gap-3 rounded-lg border border-zinc-200 bg-white px-4 py-4">
+				<div className="flex items-start gap-3">
+					<Checkbox
+						id="auction-anti-sniping"
+						checked={formData.antiSnipingEnabled}
+						onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, antiSnipingEnabled: checked === true }))}
+						className="mt-0.5"
+					/>
+					<div className="space-y-1">
+						<Label htmlFor="auction-anti-sniping" className="cursor-pointer">
+							Bounded anti-sniping
+						</Label>
+						<p className="text-xs text-zinc-500">
+							Extend the auction when a valid bid lands near the end, but cap the total extension so bidders know the worst-case lockup.
+						</p>
+					</div>
+				</div>
+
+				{formData.antiSnipingEnabled && (
+					<>
+						<div className="grid gap-3 sm:grid-cols-3">
+							<div className="grid w-full gap-1.5">
+								<Label htmlFor="auction-anti-sniping-window">Window (seconds)</Label>
+								<Input
+									id="auction-anti-sniping-window"
+									type="number"
+									min="1"
+									value={formData.antiSnipingWindowSeconds}
+									onChange={(e) => setFormData((prev) => ({ ...prev, antiSnipingWindowSeconds: e.target.value }))}
+								/>
+							</div>
+							<div className="grid w-full gap-1.5">
+								<Label htmlFor="auction-anti-sniping-extension">Extension (seconds)</Label>
+								<Input
+									id="auction-anti-sniping-extension"
+									type="number"
+									min="1"
+									value={formData.antiSnipingExtensionSeconds}
+									onChange={(e) => setFormData((prev) => ({ ...prev, antiSnipingExtensionSeconds: e.target.value }))}
+								/>
+							</div>
+							<div className="grid w-full gap-1.5">
+								<Label htmlFor="auction-anti-sniping-max-extensions">Max extensions</Label>
+								<Input
+									id="auction-anti-sniping-max-extensions"
+									type="number"
+									min="1"
+									value={formData.antiSnipingMaxExtensions}
+									onChange={(e) => setFormData((prev) => ({ ...prev, antiSnipingMaxExtensions: e.target.value }))}
+								/>
+							</div>
+						</div>
+
+						<div className="rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-700">
+							<p>
+								<span className="font-semibold text-zinc-900">Rule:</span>{' '}
+								{Number.isFinite(antiSnipingWindowSeconds) && antiSnipingWindowSeconds > 0
+									? `extend by ${antiSnipingExtensionSeconds || 0}s when a bid arrives in the last ${antiSnipingWindowSeconds}s.`
+									: 'Enter a valid anti-sniping window.'}
+							</p>
+							<p className="mt-0.5">
+								<span className="font-semibold text-zinc-900">Hard stop:</span>{' '}
+								{antiSnipingHardStopSeconds ? formatAbsolute(antiSnipingHardStopSeconds) : 'Waiting for a valid end time and extension policy.'}
+							</p>
+						</div>
+					</>
 				)}
 			</div>
 
@@ -928,7 +1012,15 @@ export function AuctionFormContent() {
 	const hasValidDescription = formData.description.trim().length > 0
 	const hasValidBiddingAmounts = formData.startingBid.trim().length > 0 && formData.bidIncrement.trim().length > 0
 	const hasValidEndTime = endMode === 'duration' ? durationSeconds > 0 : formData.endAt.trim().length > 0
-	const hasValidBidding = hasValidBiddingAmounts && hasValidEndTime
+	const hasValidAntiSniping =
+		!formData.antiSnipingEnabled ||
+		(formData.antiSnipingWindowSeconds.trim().length > 0 &&
+			parseInt(formData.antiSnipingWindowSeconds, 10) > 0 &&
+			formData.antiSnipingExtensionSeconds.trim().length > 0 &&
+			parseInt(formData.antiSnipingExtensionSeconds, 10) > 0 &&
+			formData.antiSnipingMaxExtensions.trim().length > 0 &&
+			parseInt(formData.antiSnipingMaxExtensions, 10) > 0)
+	const hasValidBidding = hasValidBiddingAmounts && hasValidEndTime && hasValidAntiSniping
 	const hasValidImages = images.filter((img) => img.imageUrl.trim().length > 0).length > 0
 	const hasValidMints = formData.trustedMints.length > 0
 

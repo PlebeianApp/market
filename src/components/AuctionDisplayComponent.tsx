@@ -2,7 +2,17 @@ import { AuctionCountdown } from '@/components/AuctionCountdown'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { getCoordsFromATag } from '@/lib/utils/coords'
-import { auctionByATagQueryOptions, getAuctionEndAt, getAuctionImages, getAuctionSummary, getAuctionTitle } from '@/queries/auctions'
+import {
+	auctionByATagQueryOptions,
+	getAuctionEffectiveEndAt,
+	getAuctionEndAt,
+	getAuctionId,
+	getAuctionImages,
+	getAuctionRootEventId,
+	getAuctionSummary,
+	getAuctionTitle,
+	useAuctionBids,
+} from '@/queries/auctions'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 
@@ -40,8 +50,14 @@ export function AuctionDisplayComponent({
 	const summary = auction ? getAuctionSummary(auction) : 'No summary available'
 	const images = auction ? getAuctionImages(auction) : []
 	const imageUrl = images.length > 0 ? images[0][1] : null
+	const auctionDTag = getAuctionId(auction)
+	const auctionCoordinatesValue = auction && auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
+	const auctionRootEventId = getAuctionRootEventId(auction)
+	const bidsQuery = useAuctionBids(auctionRootEventId || '', 500, auctionCoordinatesValue || undefined)
+	const bids = bidsQuery.data ?? []
 	const endAt = auction ? getAuctionEndAt(auction) : 0
-	const endAtLabel = endAt ? new Date(endAt * 1000).toLocaleString() : 'No end date'
+	const effectiveEndAt = auction ? getAuctionEffectiveEndAt(auction, bids) || endAt : 0
+	const endAtLabel = effectiveEndAt ? new Date(effectiveEndAt * 1000).toLocaleString() : 'No end date'
 
 	return (
 		<Card className="p-4">
@@ -58,7 +74,7 @@ export function AuctionDisplayComponent({
 					<h3 className="font-semibold text-sm truncate">{title}</h3>
 					<p className="text-xs text-gray-600 mt-1 line-clamp-2">{summary}</p>
 					<div className="mt-2">
-						<AuctionCountdown endAt={endAt} showSeconds variant="inline" className="max-w-full" />
+						<AuctionCountdown endAt={effectiveEndAt} showSeconds variant="inline" className="max-w-full" />
 					</div>
 					<p className="text-xs text-gray-500 mt-1">Closes: {endAtLabel}</p>
 					<p className="text-xs text-gray-400 mt-1">ID: {coords.identifier}</p>
