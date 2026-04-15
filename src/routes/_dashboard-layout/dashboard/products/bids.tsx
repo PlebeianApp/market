@@ -132,7 +132,7 @@ const getBidGroupState = (
 			label: 'Outbid',
 			helper:
 				trackedTokens > 0
-					? 'Seller settlement should return funds automatically; reclaim is the fallback after locktime.'
+					? 'Your bid stays timelocked until reclaim opens after locktime.'
 					: 'This device has no tracked reclaim token for the bid chain.',
 			toneClass: 'border-zinc-200 bg-zinc-50 text-zinc-700',
 			reclaimableTokens: [],
@@ -144,7 +144,7 @@ const getBidGroupState = (
 			label: 'Reserve not met',
 			helper:
 				trackedTokens > 0
-					? 'Funds should come back automatically on settlement, or manually after locktime.'
+					? 'Reclaim opens automatically after the bid locktime.'
 					: 'This device has no tracked reclaim token for the bid chain.',
 			toneClass: 'border-violet-200 bg-violet-50 text-violet-700',
 			reclaimableTokens: [],
@@ -156,7 +156,7 @@ const getBidGroupState = (
 			label: 'Auction cancelled',
 			helper:
 				trackedTokens > 0
-					? 'Funds should come back automatically on settlement, or manually after locktime.'
+					? 'Reclaim opens automatically after the bid locktime.'
 					: 'This device has no tracked reclaim token for the bid chain.',
 			toneClass: 'border-rose-200 bg-rose-50 text-rose-700',
 			reclaimableTokens: [],
@@ -180,7 +180,7 @@ const getBidGroupState = (
 		label: 'Bid recorded',
 		helper:
 			trackedTokens > 0
-				? 'Waiting for seller settlement or locktime reclaim.'
+				? 'Waiting for settlement or for locktime reclaim to open.'
 				: 'This device is missing the local reclaim token for this bid.',
 		toneClass: 'border-zinc-200 bg-zinc-50 text-zinc-700',
 		reclaimableTokens: [],
@@ -323,9 +323,7 @@ function BidsOverviewComponent() {
 			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between gap-4">
 				<div>
 					<h1 className="text-2xl font-bold">Bids</h1>
-					<p className="text-sm text-muted-foreground">
-						Automatic refunds arrive after seller settlement. If that never happens, reclaim opens after the bid locktime.
-					</p>
+					<p className="text-sm text-muted-foreground">Bids stay locked until settlement or until reclaim opens at the bid locktime.</p>
 				</div>
 				<Button variant="outline" size="sm" className="gap-2" onClick={handleRefreshBidStatuses} disabled={isRefreshingBids}>
 					{isRefreshingBids ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
@@ -335,9 +333,7 @@ function BidsOverviewComponent() {
 
 			<div className="space-y-6 p-4 lg:p-6">
 				<div className="lg:hidden space-y-3">
-					<p className="text-sm text-muted-foreground">
-						Automatic refunds arrive after seller settlement. If that never happens, reclaim opens after the bid locktime.
-					</p>
+					<p className="text-sm text-muted-foreground">Bids stay locked until settlement or until reclaim opens at the bid locktime.</p>
 					<Button variant="outline" className="w-full gap-2" onClick={handleRefreshBidStatuses} disabled={isRefreshingBids}>
 						{isRefreshingBids ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
 						Refresh Refunds

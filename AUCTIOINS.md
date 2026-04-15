@@ -259,7 +259,11 @@ Use NUT-11 P2PK secret with:
 - `locktime`: `max_end_at + settlement_grace_seconds` if anti-sniping is enabled, otherwise `end_at + settlement_grace_seconds`.
 - `refund`: bidder refund pubkey.
 - `n_sigs_refund=1`.
-- `sigflag=SIG_ALL`.
+- `sigflag=SIG_INPUTS` (v1). `SIG_ALL` is **deferred** until cashu-ts
+  implements SIG_ALL signing. cashu-ts currently signs only `sha256(secret)`
+  (SIG_INPUTS semantics); SIG_ALL-locked proofs cannot be redeemed through
+  the standard wallet flow until library support lands. The 2-of-2 multisig
+  still enforces joint control of pre-expiry spends.
 
 `settlement_grace_seconds` default suggestion: 3600 seconds.
 
@@ -283,19 +287,19 @@ The recommended per-bid `Secret` shape is:
 
 ```json
 [
-  "P2PK",
-  {
-    "nonce": "<random>",
-    "data": "<seller_child_pubkey>",
-    "tags": [
-      ["sigflag", "SIG_ALL"],
-      ["n_sigs", "2"],
-      ["locktime", "<locktime_unix_seconds>"],
-      ["pubkeys", "<escrow_pubkey>"],
-      ["refund", "<bidder_refund_pubkey>"],
-      ["n_sigs_refund", "1"]
-    ]
-  }
+	"P2PK",
+	{
+		"nonce": "<random>",
+		"data": "<seller_child_pubkey>",
+		"tags": [
+			["sigflag", "SIG_INPUTS"],
+			["n_sigs", "2"],
+			["locktime", "<locktime_unix_seconds>"],
+			["pubkeys", "<escrow_pubkey>"],
+			["refund", "<bidder_refund_pubkey>"],
+			["n_sigs_refund", "1"]
+		]
+	}
 ]
 ```
 
@@ -303,7 +307,9 @@ Interpretation:
 
 - Before `locktime`, both `seller_child_pubkey` and `escrow_pubkey` must sign.
 - After `locktime`, the bidder refund pubkey can also spend.
-- `SIG_ALL` is strongly recommended so the service co-signs the actual transaction outputs, not just the input proof ownership.
+- `SIG_ALL` is the long-term target (binds service co-signature to actual
+  transaction outputs, not just input ownership), but is deferred until
+  cashu-ts supports signing the inputs+outputs digest. v1 uses `SIG_INPUTS`.
 
 ## 5.4 cashu-ts shape
 
@@ -316,7 +322,7 @@ const p2pk = new P2PKBuilder()
 	.lockUntil(locktime)
 	.addRefundPubkey(bidderRefundPubkey)
 	.requireRefundSignatures(1)
-	.addTag('sigflag', 'SIG_ALL')
+	// v1 uses SIG_INPUTS (cashu-ts does not yet implement SIG_ALL signing).
 	.toOptions()
 
 const { keep, send } = await wallet.ops.send(amount, proofs).asP2PK(p2pk).run()

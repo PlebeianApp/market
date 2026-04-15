@@ -374,6 +374,9 @@ export const getAuctionP2pkXpub = (event: NDKEvent | null): string => event?.tag
 
 export const getAuctionEscrowPubkey = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'escrow_pubkey')?.[1] || ''
 
+export const getAuctionEscrowIdentityPubkey = (event: NDKEvent | null): string =>
+	event?.tags.find((t) => t[0] === 'escrow_identity')?.[1] || ''
+
 export const getAuctionSettlementPolicy = (event: NDKEvent | null): string =>
 	event?.tags.find((t) => t[0] === 'settlement_policy')?.[1] || ''
 

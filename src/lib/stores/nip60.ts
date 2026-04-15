@@ -14,18 +14,28 @@ import {
 	AUCTION_TRANSFER_DM_KIND,
 	parseAuctionRefundEnvelope,
 } from '@/lib/auctionTransfers'
+import {
+	auctionP2pkPubkeysMatch,
+	deriveAuctionChildP2pkPubkeyFromXpub,
+	inspectAuctionP2pkPubkey,
+	inspectAuctionP2pkSecret,
+	normalizeAuctionDerivationPath,
+	toCompressedAuctionP2pkPubkey,
+} from '@/lib/auctionP2pk'
 import { getAuctionHdAccountFromWalletKeys } from '@/lib/auctionHd'
 import {
 	CashuMint,
 	CashuWallet,
 	CheckStateEnum,
+	getDecodedToken,
 	getEncodedToken,
 	getTokenMetadata,
 	type MintKeys,
 	type MintKeyset,
 	type Proof,
 } from '@cashu/cashu-ts'
-import { NDKEvent, NDKNutzap, NDKRelaySet, NDKUser, NDKZapper, type NDKFilter } from '@nostr-dev-kit/ndk'
+import { secp256k1 } from '@noble/curves/secp256k1'
+import { NDKEvent, NDKNutzap, NDKRelaySet, NDKUser, NDKZapper, type NDKFilter, type NDKTag } from '@nostr-dev-kit/ndk'
 import { NDKCashuDeposit, NDKCashuWallet, NDKWalletStatus, type NDKWalletTransaction } from '@nostr-dev-kit/wallet'
 import { HDKey } from '@scure/bip32'
 import { Store } from '@tanstack/store'
@@ -71,7 +81,7 @@ export type AuctionP2pkKeyScheme = 'hd_p2pk'
 export interface LockAuctionBidFundsParams {
 	amount: number
 	mint?: string
-	lockPubkey?: string
+	escrowPubkey: string
 	locktime: number
 	refundPubkey: string
 	auctionEventId?: string
@@ -84,6 +94,7 @@ export interface LockAuctionBidFundsResult {
 	tokenId: string
 	token: string
 	amount: number
+	escrowPubkey: string
 	mintUrl: string
 	lockPubkey: string
 	locktime: number
@@ -333,36 +344,33 @@ const generateDerivationPath = (): string => {
 	return `m/${levels.join('/')}`
 }
 
-const normalizeDerivationPath = (path: string): string => {
-	const trimmed = path.trim()
-	if (!trimmed) {
-		throw new Error('Missing derivation path')
-	}
-	return trimmed.startsWith('m/') || trimmed === 'm' ? trimmed : `m/${trimmed.replace(/^\/+/, '')}`
-}
-
-const deriveChildPubkeyFromXpub = (xpub: string, path: string): string => {
-	const hdRoot = HDKey.fromExtendedKey(xpub.trim())
-	const child = hdRoot.derive(normalizeDerivationPath(path))
-	if (!child.publicKey) {
-		throw new Error('Failed to derive child pubkey from p2pk_xpub')
-	}
-	return toHex(child.publicKey)
-}
-
 const deriveChildPrivkeyFromXpriv = (xpriv: string, path: string): string => {
 	const hdRoot = HDKey.fromExtendedKey(xpriv.trim())
-	const child = hdRoot.derive(normalizeDerivationPath(path))
+	const child = hdRoot.derive(normalizeAuctionDerivationPath(path))
 	if (!child.privateKey) {
 		throw new Error('Failed to derive child private key from auction xpriv')
 	}
 	return toHex(child.privateKey)
 }
 
+const getCompressedCashuPubkeyFromPrivkey = (privkey: string): string => toHex(secp256k1.getPublicKey(hexToUint8(privkey.trim()), true))
+
 const toHex = (bytes: Uint8Array): string =>
 	Array.from(bytes)
 		.map((b) => b.toString(16).padStart(2, '0'))
 		.join('')
+
+const hexToUint8 = (hex: string): Uint8Array => {
+	const normalized = hex.trim()
+	if (normalized.length % 2 !== 0) {
+		throw new Error('Hex string must have an even length')
+	}
+	const bytes = new Uint8Array(normalized.length / 2)
+	for (let index = 0; index < normalized.length; index += 2) {
+		bytes[index / 2] = parseInt(normalized.slice(index, index + 2), 16)
+	}
+	return bytes
+}
 
 const sha256Hex = async (value: string): Promise<string> => {
 	if (!globalThis.crypto?.subtle) {
@@ -462,7 +470,16 @@ function extractPreimageCandidate(result: unknown): string | undefined {
 
 const getWalletPrivkeyForPubkey = (wallet: NDKCashuWallet, pubkey?: string): string | null => {
 	if (!pubkey) return null
-	return wallet.privkeys.get(pubkey)?.privateKey || null
+	const exact = wallet.privkeys.get(pubkey)?.privateKey
+	if (exact) return exact
+
+	for (const [walletPubkey, signer] of wallet.privkeys.entries()) {
+		if (auctionP2pkPubkeysMatch(walletPubkey, pubkey) && signer.privateKey) {
+			return signer.privateKey
+		}
+	}
+
+	return null
 }
 
 const adoptWalletAccess = async (targetWallet: NDKCashuWallet, sourceWallet: NDKCashuWallet): Promise<void> => {
@@ -531,6 +548,16 @@ const getOrCreateWalletP2pk = async (wallet: NDKCashuWallet): Promise<string> =>
 	return p2pk
 }
 
+const getOrCreateWalletCashuP2pk = async (wallet: NDKCashuWallet): Promise<string> => {
+	const walletP2pk = await getOrCreateWalletP2pk(wallet)
+	const walletPrivkey = getWalletPrivkeyForPubkey(wallet, walletP2pk)
+	if (!walletPrivkey) {
+		throw new Error('Current wallet does not expose a private key for Cashu P2PK')
+	}
+
+	return getCompressedCashuPubkeyFromPrivkey(walletPrivkey)
+}
+
 const getAuctionHdAccountFromWallet = async (wallet: NDKCashuWallet): Promise<HDKey> => {
 	const walletP2pk = await getOrCreateWalletP2pk(wallet)
 	const walletPrivkey = getWalletPrivkeyForPubkey(wallet, walletP2pk)
@@ -551,20 +578,45 @@ const receiveTokenIntoWallet = async (
 	const mintUrl = normalizeMintUrl(getTokenMetadata(token).mint)
 	const proofsWeHave = getProofsForMint(wallet, mintUrl)
 	const { cashuWallet, keysetId } = await createCashuWalletForMint(mintUrl)
-	const receivedProofs = await cashuWallet.receive(token, {
-		proofsWeHave,
-		...(options?.privkey ? { privkey: options.privkey } : {}),
-		...(keysetId ? { keysetId } : {}),
-	})
+	try {
+		const receivedProofs = await cashuWallet.receive(token, {
+			proofsWeHave,
+			...(options?.privkey ? { privkey: options.privkey } : {}),
+			...(keysetId ? { keysetId } : {}),
+		})
 
-	await wallet.state.update({
-		store: receivedProofs,
-		mint: mintUrl,
-	})
+		await wallet.state.update({
+			store: receivedProofs,
+			mint: mintUrl,
+		})
 
-	return {
-		amount: receivedProofs.reduce((sum, proof) => sum + proof.amount, 0),
-		mintUrl,
+		return {
+			amount: receivedProofs.reduce((sum, proof) => sum + proof.amount, 0),
+			mintUrl,
+		}
+	} catch (error) {
+		try {
+			const keysets = await cashuWallet.getKeySets()
+			const decoded = getDecodedToken(token, keysets)
+			console.log('[nip60] receive token debug summary', {
+				mintUrl,
+				privkeyProvided: !!options?.privkey,
+				privkeyLength: options?.privkey?.length ?? 0,
+				proofCount: decoded.proofs.length,
+				proofs: decoded.proofs.map((proof, index) => ({
+					index,
+					amount: proof.amount,
+					witnessCount:
+						typeof proof.witness === 'string'
+							? (JSON.parse(proof.witness).signatures?.length ?? 0)
+							: (proof.witness?.signatures?.length ?? 0),
+					secret: inspectAuctionP2pkSecret(proof.secret),
+				})),
+			})
+		} catch (debugError) {
+			console.error('[nip60] Failed to build receive token debug summary:', debugError)
+		}
+		throw error
 	}
 }
 
@@ -914,6 +966,15 @@ export const nip60Actions = {
 		return await getOrCreateWalletP2pk(wallet)
 	},
 
+	getWalletCashuP2pk: async (): Promise<string> => {
+		const wallet = nip60Store.state.wallet
+		if (!wallet || nip60Store.state.status !== 'ready') {
+			throw new Error('NIP-60 wallet not ready')
+		}
+
+		return await getOrCreateWalletCashuP2pk(wallet)
+	},
+
 	getAuctionP2pkXpub: async (): Promise<string> => {
 		const wallet = nip60Store.state.wallet
 		if (!wallet || nip60Store.state.status !== 'ready') {
@@ -942,8 +1003,8 @@ export const nip60Actions = {
 		}
 
 		if (params.expectedPubkey) {
-			const derivedPubkey = deriveChildPubkeyFromXpub(xpub, params.derivationPath)
-			if (derivedPubkey !== params.expectedPubkey) {
+			const derivedPubkey = deriveAuctionChildP2pkPubkeyFromXpub(xpub, params.derivationPath)
+			if (!auctionP2pkPubkeysMatch(derivedPubkey, params.expectedPubkey)) {
 				throw new Error('Auction bid child pubkey does not match current wallet-derived HD root')
 			}
 		}
@@ -1340,9 +1401,26 @@ export const nip60Actions = {
 			throw new Error('Invalid bid locktime')
 		}
 
-		const refundPubkey = params.refundPubkey?.trim()
-		if (!refundPubkey) {
+		const rawRefundPubkey = params.refundPubkey?.trim()
+		if (!rawRefundPubkey) {
 			throw new Error('Refund pubkey is required')
+		}
+		let refundPubkey: string
+		try {
+			refundPubkey = toCompressedAuctionP2pkPubkey(rawRefundPubkey)
+		} catch (error) {
+			throw new Error(`Refund pubkey is invalid: ${error instanceof Error ? error.message : String(error)}`)
+		}
+
+		const rawEscrowPubkey = params.escrowPubkey?.trim()
+		if (!rawEscrowPubkey) {
+			throw new Error('Escrow pubkey is required')
+		}
+		let escrowPubkey: string
+		try {
+			escrowPubkey = toCompressedAuctionP2pkPubkey(rawEscrowPubkey)
+		} catch (error) {
+			throw new Error(`Escrow pubkey is invalid: ${error instanceof Error ? error.message : String(error)}`)
 		}
 
 		const { totalBalance, mintBalances } = getBalancesFromState(wallet)
@@ -1365,7 +1443,7 @@ export const nip60Actions = {
 		}
 
 		const derivationPath = generateDerivationPath()
-		const childPubkey = deriveChildPubkeyFromXpub(xpub, derivationPath)
+		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(xpub, derivationPath)
 		const lockPubkey = childPubkey
 
 		const mintProofs = getProofsForMint(wallet, targetMint)
@@ -1381,12 +1459,18 @@ export const nip60Actions = {
 		try {
 			const { cashuWallet } = await createCashuWalletForMint(targetMint)
 
+			// NOTE: SIG_ALL is omitted intentionally. cashu-ts only implements SIG_INPUTS signing
+			// (signatures are computed over sha256(secret)); it has no code path for hashing
+			// inputs+outputs together, so SIG_ALL-locked proofs cannot be redeemed through
+			// wallet.receive/send. The 2-of-2 multisig here still prevents unilateral spends.
 			const buildSendOptions = (includeDleq: boolean) => ({
 				includeDleq,
 				p2pk: {
-					pubkey: lockPubkey,
+					pubkey: [lockPubkey, escrowPubkey],
 					locktime,
 					refundKeys: [refundPubkey],
+					requiredSignatures: 2,
+					requiredRefundSignatures: 1,
 				},
 			})
 
@@ -1448,7 +1532,7 @@ export const nip60Actions = {
 							auctionEventId: params.auctionEventId,
 							auctionCoordinates: params.auctionCoordinates,
 							sellerPubkey: params.sellerPubkey,
-							escrowPubkey: lockPubkey,
+							escrowPubkey,
 							lockPubkey,
 							refundPubkey,
 							locktime,
@@ -1501,6 +1585,7 @@ export const nip60Actions = {
 				tokenId,
 				token,
 				amount: tokenAmount,
+				escrowPubkey,
 				mintUrl: targetMint,
 				lockPubkey,
 				locktime,
@@ -1771,6 +1856,7 @@ export const nip60Actions = {
 			bidIncrement: number
 			acceptedMints: string[]
 			escrowPubkey: string
+			escrowIdentityPubkey: string
 			p2pkXpub: string
 		}
 
@@ -1784,8 +1870,21 @@ export const nip60Actions = {
 				const bidIncrement = Math.max(1, parseNonNegativeInt(getFirstTagValue(event, 'bid_increment'), 1))
 				const acceptedMints = getTagValues(event, 'mint').map(normalizeMintUrl)
 				const escrowPubkey = getFirstTagValue(event, 'escrow_pubkey') || event.pubkey
+				const escrowIdentityPubkey = getFirstTagValue(event, 'escrow_identity') || event.pubkey
 				const p2pkXpub = getFirstTagValue(event, 'p2pk_xpub')
-				return { event, dTag, title, startAt, endAt, startingBid, bidIncrement, acceptedMints, escrowPubkey, p2pkXpub }
+				return {
+					event,
+					dTag,
+					title,
+					startAt,
+					endAt,
+					startingBid,
+					bidIncrement,
+					acceptedMints,
+					escrowPubkey,
+					escrowIdentityPubkey,
+					p2pkXpub,
+				}
 			})
 			.filter((auction) => {
 				if (!auction.dTag) return false
@@ -1845,11 +1944,11 @@ export const nip60Actions = {
 
 		const auctionCoordinates = `30408:${selected.event.pubkey}:${selected.dTag}`
 		const locktime = Math.max(selected.endAt + AUCTION_SETTLEMENT_GRACE_SECONDS, now + 60)
-		const bidderRefundPubkey = await nip60Actions.getWalletP2pk()
+		const bidderRefundPubkey = await nip60Actions.getWalletCashuP2pk()
 		const lockedBid = await nip60Actions.lockAuctionBidFunds({
 			amount: deltaAmount,
 			mint: effectiveBidMint,
-			lockPubkey: selected.escrowPubkey,
+			escrowPubkey: selected.escrowPubkey,
 			locktime,
 			refundPubkey: bidderRefundPubkey,
 			auctionEventId: selected.event.id,
@@ -1900,16 +1999,14 @@ export const nip60Actions = {
 		}
 
 		await bidEvent.sign(signer)
-		const bidEnvelopeEvent = new NDKEvent(ndk)
-		bidEnvelopeEvent.kind = AUCTION_TRANSFER_DM_KIND
-		bidEnvelopeEvent.content = JSON.stringify({
+		const bidEnvelopeContent = {
 			type: AUCTION_BID_TOKEN_TOPIC,
 			auctionEventId: selected.event.id,
 			auctionCoordinates,
 			bidEventId: bidEvent.id,
 			bidderPubkey,
 			sellerPubkey: selected.event.pubkey,
-			escrowPubkey: selected.escrowPubkey,
+			escrowPubkey: lockedBid.escrowPubkey,
 			refundPubkey: lockedBid.refundPubkey,
 			lockPubkey: lockedBid.lockPubkey,
 			locktime: lockedBid.locktime,
@@ -1920,9 +2017,8 @@ export const nip60Actions = {
 			bidNonce,
 			token: lockedBid.token,
 			createdAt: Date.now(),
-		})
-		bidEnvelopeEvent.tags = [
-			['p', selected.escrowPubkey],
+		}
+		const bidEnvelopeTags: NDKTag[] = [
 			['t', AUCTION_BID_TOKEN_TOPIC],
 			['e', selected.event.id],
 			['e', bidEvent.id, '', AUCTION_BID_ENVELOPE_MARKER],
@@ -1930,9 +2026,15 @@ export const nip60Actions = {
 			['mint', lockedBid.mintUrl],
 			['commitment', lockedBid.commitment],
 		]
-		await bidEnvelopeEvent.encrypt(new NDKUser({ pubkey: selected.escrowPubkey }), signer, 'nip44')
-		await bidEnvelopeEvent.sign(signer)
-		await ndkActions.publishEvent(bidEnvelopeEvent)
+		for (const recipientPubkey of Array.from(new Set([selected.event.pubkey, selected.escrowIdentityPubkey]))) {
+			const bidEnvelopeEvent = new NDKEvent(ndk)
+			bidEnvelopeEvent.kind = AUCTION_TRANSFER_DM_KIND
+			bidEnvelopeEvent.content = JSON.stringify(bidEnvelopeContent)
+			bidEnvelopeEvent.tags = [['p', recipientPubkey], ...bidEnvelopeTags]
+			await bidEnvelopeEvent.encrypt(new NDKUser({ pubkey: recipientPubkey }), signer, 'nip44')
+			await bidEnvelopeEvent.sign(signer)
+			await ndkActions.publishEvent(bidEnvelopeEvent)
+		}
 		await ndkActions.publishEvent(bidEvent)
 		nip60Actions.updatePendingTokenContext(lockedBid.tokenId, {
 			kind: 'auction_bid',
@@ -1940,7 +2042,7 @@ export const nip60Actions = {
 			auctionCoordinates,
 			bidEventId: bidEvent.id,
 			sellerPubkey: selected.event.pubkey,
-			escrowPubkey: selected.escrowPubkey,
+			escrowPubkey: lockedBid.escrowPubkey,
 			lockPubkey: lockedBid.lockPubkey,
 			refundPubkey: lockedBid.refundPubkey,
 			locktime: lockedBid.locktime,
@@ -2072,6 +2174,12 @@ export const nip60Actions = {
 
 		try {
 			const auctionContext = resolveAuctionBidPendingContext(pendingToken)
+			if (auctionContext) {
+				const now = Math.floor(Date.now() / 1000)
+				if (auctionContext.locktime > now) {
+					throw new Error('Auction bid refund is still timelocked')
+				}
+			}
 			const refundPrivkey = getWalletPrivkeyForPubkey(wallet, auctionContext?.refundPubkey)
 
 			if (auctionContext && refundPrivkey) {
@@ -2089,11 +2197,7 @@ export const nip60Actions = {
 			await nip60Actions.refresh()
 			return true
 		} catch (err) {
-			// Mark as claimed
-			const pendingTokens = nip60Store.state.pendingTokens.map((t) => (t.id === tokenId ? { ...t, status: 'claimed' as const } : t))
-			savePendingTokens(pendingTokens)
-			nip60Store.setState((s) => ({ ...s, pendingTokens }))
-
+			console.error('[nip60] Failed to reclaim token:', err)
 			return false
 		}
 	},

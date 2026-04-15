@@ -220,14 +220,14 @@ function DashboardAuctionDetailRoute() {
 	const claimOrderDetailQuery = useOrderById(winnerClaimOrderId)
 	const claimOrderWithEvents: OrderWithRelatedEvents | null = claimOrderDetailQuery.data ?? null
 
-	const submitSettlement = async (mode: 'settled' | 'reserve_not_met' | 'cancelled') => {
+	const submitSettlement = async (mode: 'settled' | 'reserve_not_met') => {
 		if (!auction) return
 		if (!isOwner) {
 			toast.error('Only the auction owner can settle this auction')
 			return
 		}
 
-		if (mode !== 'cancelled' && !ended) {
+		if (!ended) {
 			toast.error('Auction must be ended before publishing this settlement')
 			return
 		}
@@ -256,7 +256,6 @@ function DashboardAuctionDetailRoute() {
 				winningBidEventId: mode === 'settled' ? topBid?.id : '',
 				winnerPubkey: mode === 'settled' ? topBid?.pubkey : '',
 				finalAmount: mode === 'settled' ? getBidAmount(topBid) : 0,
-				reason: mode === 'cancelled' ? 'seller_cancelled' : '',
 			})
 		} catch {
 			// Toast handled in mutation hook.
@@ -543,14 +542,6 @@ function DashboardAuctionDetailRoute() {
 									onClick={() => void submitSettlement('reserve_not_met')}
 								>
 									Reserve Not Met
-								</Button>
-								<Button
-									variant="destructive"
-									className="w-full"
-									disabled={!isOwner || settlementLocked || settlementMutation.isPending}
-									onClick={() => void submitSettlement('cancelled')}
-								>
-									Cancel Auction
 								</Button>
 							</div>
 

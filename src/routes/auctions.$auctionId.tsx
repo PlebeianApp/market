@@ -26,6 +26,7 @@ import {
 	getAuctionCategories,
 	getAuctionCurrency,
 	getAuctionEndAt,
+	getAuctionEscrowIdentityPubkey,
 	getAuctionEscrowPubkey,
 	getAuctionId,
 	getAuctionImages,
@@ -171,6 +172,7 @@ function AuctionDetailRoute() {
 	const categories = getAuctionCategories(auction)
 	const trustedMints = getAuctionMints(auction)
 	const escrowPubkey = getAuctionEscrowPubkey(auction)
+	const escrowIdentityPubkey = getAuctionEscrowIdentityPubkey(auction)
 	const keyScheme = getAuctionKeyScheme(auction)
 	const p2pkXpub = getAuctionP2pkXpub(auction)
 	const settlementPolicy = getAuctionSettlementPolicy(auction)
@@ -274,13 +276,18 @@ function AuctionDetailRoute() {
 		}
 
 		try {
+			if (!escrowPubkey) {
+				toast.error('This auction is missing a Cashu escrow pubkey and cannot accept bids.')
+				return
+			}
 			await bidMutation.mutateAsync({
 				auctionEventId: auction.id,
 				auctionCoordinates,
 				amount: parsedAmount,
 				auctionEndAt: endAt,
 				sellerPubkey: auction.pubkey,
-				escrowPubkey: escrowPubkey || auction.pubkey,
+				escrowPubkey,
+				escrowIdentityPubkey: escrowIdentityPubkey || auction.pubkey,
 				p2pkXpub,
 				mint: trustedMints[0],
 			})

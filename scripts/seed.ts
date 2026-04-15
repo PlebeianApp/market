@@ -10,7 +10,8 @@ import {
 	createFeaturedProductsEvent,
 	createFeaturedUsersEvent,
 } from '@/publish/featured'
-import { hexToBytes } from '@noble/hashes/utils'
+import { bytesToHex, hexToBytes } from '@noble/hashes/utils'
+import { secp256k1 } from '@noble/curves/secp256k1'
 import { NDKPrivateKeySigner, NDKEvent } from '@nostr-dev-kit/ndk'
 import { config } from 'dotenv'
 import { getPublicKey } from 'nostr-tools/pure'
@@ -87,6 +88,9 @@ if (!APP_PRIVATE_KEY) {
 
 // Derive the public key from the private key
 const APP_PUBKEY = getPublicKey(hexToBytes(APP_PRIVATE_KEY))
+// Cashu P2PK requires compressed secp256k1 (66 hex chars with 02/03 prefix);
+// the nostr identity pubkey is x-only (64 hex chars) and is not a valid P2PK lock pubkey.
+const APP_CASHU_PUBKEY = bytesToHex(secp256k1.getPublicKey(hexToBytes(APP_PRIVATE_KEY), true))
 
 const ndk = ndkActions.initialize([RELAY_URL])
 const devUsers = [devUser1, devUser2, devUser3, devUser4, devUser5]
@@ -345,7 +349,8 @@ async function seedData() {
 			const isQuickSettleAuction = j < QUICK_END_AUCTIONS_PER_USER
 			const auctionData = generateAuctionData({
 				sellerPubkey: pubkey,
-				escrowPubkey: auctionWallet.escrowPubkey,
+				escrowPubkey: APP_CASHU_PUBKEY,
+				escrowIdentityPubkey: APP_PUBKEY!,
 				availableShippingRefs: shippingsByUser[pubkey] || [],
 				trustedMints: trustedAuctionMints,
 				p2pkXpub: auctionWallet.p2pkXpub,

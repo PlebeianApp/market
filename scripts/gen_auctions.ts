@@ -14,12 +14,13 @@ export type GeneratedAuctionData = {
 export function generateAuctionData(params: {
 	sellerPubkey: string
 	escrowPubkey: string
+	escrowIdentityPubkey: string
 	availableShippingRefs?: string[]
 	trustedMints?: string[]
 	status?: AuctionStatus
 	p2pkXpub?: string
 }): GeneratedAuctionData {
-	const { sellerPubkey, escrowPubkey, availableShippingRefs = [], trustedMints = ['https://nofees.testnut.cashu.space'] } = params
+	const { escrowPubkey, escrowIdentityPubkey, availableShippingRefs = [], trustedMints = ['https://nofees.testnut.cashu.space'] } = params
 	const status = params.status ?? (Math.random() < 0.2 ? 'ended' : 'live')
 	const p2pkXpub = params.p2pkXpub?.trim() || ''
 	if (!p2pkXpub) {
@@ -27,6 +28,12 @@ export function generateAuctionData(params: {
 	}
 	if (!escrowPubkey.trim()) {
 		throw new Error('escrowPubkey is required for hd_p2pk auction generation')
+	}
+	if (!/^0[23][0-9a-f]{64}$/i.test(escrowPubkey.trim())) {
+		throw new Error('escrowPubkey must be compressed secp256k1 hex (66 chars with 02/03 prefix)')
+	}
+	if (!escrowIdentityPubkey.trim()) {
+		throw new Error('escrowIdentityPubkey is required for hd_p2pk auction generation')
 	}
 	const now = Math.floor(Date.now() / 1000)
 
@@ -93,9 +100,10 @@ export function generateAuctionData(params: {
 			['reserve', String(reserve)],
 			...trustedMints.map((mint) => ['mint', mint] as NDKTag),
 			['escrow_pubkey', escrowPubkey],
+			['escrow_identity', escrowIdentityPubkey],
 			['key_scheme', 'hd_p2pk'],
 			['p2pk_xpub', p2pkXpub],
-			['settlement_policy', 'cashu_p2pk_v1'],
+			['settlement_policy', 'cashu_p2pk_2of2_v1'],
 			['schema', 'auction_v1'],
 			...images,
 			...categoryTags,

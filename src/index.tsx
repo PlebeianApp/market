@@ -2,16 +2,34 @@ import { serve } from 'bun'
 import { config } from 'dotenv'
 import { Relay } from 'nostr-tools'
 import { getPublicKey, verifyEvent, type Event } from 'nostr-tools/pure'
-import NDK from '@nostr-dev-kit/ndk'
+import NDK, { NDKKind } from '@nostr-dev-kit/ndk'
 import { bech32 } from '@scure/base'
+import { secp256k1 } from '@noble/curves/secp256k1'
+import { bytesToHex } from '@noble/hashes/utils'
 import index from './index.html'
 import { fetchAppSettings } from './lib/appSettings'
+import {
+	AUCTION_BID_KIND,
+	AUCTION_SETTLEMENT_KIND,
+	buildActiveAuctionBidChains,
+	compareAuctionBidChainPriority,
+	getAuctionBidAmount,
+	getAuctionEndAt,
+	getAuctionReserveAmount,
+	getAuctionTagValue,
+	type AuctionSettlementPlanResponse,
+	type AuctionSettlementPublishStatus,
+} from './lib/auctionSettlement'
+import { auctionP2pkPubkeysMatch, inspectAuctionP2pkPubkey, inspectAuctionP2pkSecret, normalizeAuctionP2pkPubkey } from './lib/auctionP2pk'
+import { AUCTION_BID_TOKEN_TOPIC, parseAuctionBidTokenEnvelope } from './lib/auctionTransfers'
 import { AppSettingsSchema } from './lib/schemas/app'
 import { getEventHandler } from './server'
 import { ZapInvoiceError } from './server/ZapPurchaseManager'
 import type { ZapPurchaseInvoiceRequestBody } from './server/ZapPurchaseManager'
 import { join } from 'path'
 import { file } from 'bun'
+import { CashuMint, getDecodedToken, getEncodedToken, getTokenMetadata, type MintKeyset } from '@cashu/cashu-ts'
+import { NDKEvent, NDKPrivateKeySigner, NDKUser } from '@nostr-dev-kit/ndk'
 
 import.meta.hot.accept()
 
@@ -23,15 +41,28 @@ const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
 
 let appSettings: Awaited<ReturnType<typeof fetchAppSettings>> = null
 let APP_PUBLIC_KEY: string
+let APP_CASHU_PUBLIC_KEY: string
 let CVM_SERVER_PUBKEY: string
 
 let invoiceNdk: NDK | null = null
 let invoiceNdkConnectPromise: Promise<void> | null = null
 let cachedAppLightningIdentifier: { value: string; fetchedAtMs: number } | null = null
+let appAuctionSigner: NDKPrivateKeySigner | null = null
+const mintKeysetCache = new Map<string, MintKeyset[]>()
 
 function jsonError(message: string, status = 400) {
 	return Response.json({ error: message }, { status })
 }
+
+const sha256Hex = async (value: string): Promise<string> => {
+	const encoded = new TextEncoder().encode(value)
+	const digest = await globalThis.crypto.subtle.digest('SHA-256', encoded)
+	return Array.from(new Uint8Array(digest))
+		.map((byte) => byte.toString(16).padStart(2, '0'))
+		.join('')
+}
+
+const normalizeMintUrl = (mintUrl: string): string => mintUrl.trim().replace(/\/$/, '')
 
 function getAppPublicKeyOrThrow(): string {
 	if (APP_PUBLIC_KEY) return APP_PUBLIC_KEY
@@ -40,6 +71,15 @@ function getAppPublicKeyOrThrow(): string {
 	const privateKeyBytes = new Uint8Array(Buffer.from(APP_PRIVATE_KEY, 'hex'))
 	APP_PUBLIC_KEY = getPublicKey(privateKeyBytes)
 	return APP_PUBLIC_KEY
+}
+
+function getAppCashuPublicKeyOrThrow(): string {
+	if (APP_CASHU_PUBLIC_KEY) return APP_CASHU_PUBLIC_KEY
+	if (!APP_PRIVATE_KEY) throw new Error('Missing APP_PRIVATE_KEY')
+
+	const privateKeyBytes = new Uint8Array(Buffer.from(APP_PRIVATE_KEY, 'hex'))
+	APP_CASHU_PUBLIC_KEY = bytesToHex(secp256k1.getPublicKey(privateKeyBytes, true))
+	return APP_CASHU_PUBLIC_KEY
 }
 
 function getCvmServerPublicKey(): string {
@@ -108,6 +148,247 @@ async function ensureInvoiceNdkConnected(): Promise<NDK> {
 	}
 	await invoiceNdkConnectPromise
 	return invoiceNdk
+}
+
+async function getAppAuctionSigner(): Promise<NDKPrivateKeySigner> {
+	if (appAuctionSigner) return appAuctionSigner
+	if (!APP_PRIVATE_KEY) throw new Error('Missing APP_PRIVATE_KEY')
+	appAuctionSigner = new NDKPrivateKeySigner(APP_PRIVATE_KEY)
+	await appAuctionSigner.blockUntilReady()
+	return appAuctionSigner
+}
+
+async function getMintKeysets(mintUrl: string): Promise<MintKeyset[]> {
+	const normalizedMintUrl = normalizeMintUrl(mintUrl)
+	const cached = mintKeysetCache.get(normalizedMintUrl)
+	if (cached) return cached
+
+	const cashuMint = new CashuMint(normalizedMintUrl)
+	const keysetResponse = await cashuMint.getKeySets()
+	const satKeysets = keysetResponse.keysets.filter((keyset) => keyset.unit === 'sat')
+	const keysets = satKeysets.length > 0 ? satKeysets : keysetResponse.keysets
+	if (keysets.length === 0) {
+		throw new Error(`Mint ${normalizedMintUrl} returned no keysets`)
+	}
+
+	mintKeysetCache.set(normalizedMintUrl, keysets)
+	return keysets
+}
+
+async function signAuctionTokenWithAppKey(token: string): Promise<string> {
+	const { signP2PKProofs } = await import('@cashu/cashu-ts/crypto/client/NUT11')
+	const mintUrl = normalizeMintUrl(getTokenMetadata(token).mint)
+	const keysets = await getMintKeysets(mintUrl)
+	const decoded = getDecodedToken(token, keysets)
+	console.log('[auction:settlement-plan] pre-sign token summary', {
+		mintUrl,
+		proofCount: decoded.proofs.length,
+		proofs: decoded.proofs.map((proof, index) => ({
+			index,
+			amount: proof.amount,
+			witnessCount:
+				typeof proof.witness === 'string' ? (JSON.parse(proof.witness).signatures?.length ?? 0) : (proof.witness?.signatures?.length ?? 0),
+			secret: inspectAuctionP2pkSecret(proof.secret),
+		})),
+	})
+	decoded.proofs = signP2PKProofs(decoded.proofs, APP_PRIVATE_KEY!, true)
+	console.log('[auction:settlement-plan] post-sign token summary', {
+		mintUrl,
+		proofCount: decoded.proofs.length,
+		proofs: decoded.proofs.map((proof, index) => ({
+			index,
+			amount: proof.amount,
+			witnessCount:
+				typeof proof.witness === 'string' ? (JSON.parse(proof.witness).signatures?.length ?? 0) : (proof.witness?.signatures?.length ?? 0),
+			secret: inspectAuctionP2pkSecret(proof.secret),
+		})),
+	})
+	return getEncodedToken(decoded)
+}
+
+async function buildAuctionSettlementPlan(params: {
+	auctionEventId: string
+	auctionCoordinates?: string
+	status: AuctionSettlementPublishStatus
+}): Promise<AuctionSettlementPlanResponse> {
+	const ndk = await ensureInvoiceNdkConnected()
+	const appPubkey = getAppPublicKeyOrThrow()
+	const appCashuPubkey = getAppCashuPublicKeyOrThrow()
+	const appSigner = await getAppAuctionSigner()
+	const closeAt = Math.floor(Date.now() / 1000)
+
+	const auctionEvent = await ndk.fetchEvent({
+		kinds: [30408 as NDKKind],
+		ids: [params.auctionEventId],
+	})
+	if (!auctionEvent) {
+		throw new Error('Auction not found')
+	}
+
+	const auctionEscrowPubkey = normalizeAuctionP2pkPubkey(getAuctionTagValue(auctionEvent, 'escrow_pubkey'))
+	if (!auctionP2pkPubkeysMatch(auctionEscrowPubkey, appCashuPubkey)) {
+		throw new Error('Auction is not configured for this app escrow service')
+	}
+	if (getAuctionTagValue(auctionEvent, 'settlement_policy') !== 'cashu_p2pk_2of2_v1') {
+		throw new Error('Auction settlement policy is not cashu_p2pk_2of2_v1')
+	}
+
+	const endAt = getAuctionEndAt(auctionEvent)
+	if (!endAt || closeAt < endAt) {
+		throw new Error('Auction has not ended yet')
+	}
+
+	const existingSettlements = await ndk.fetchEvents({
+		kinds: [AUCTION_SETTLEMENT_KIND],
+		'#e': [params.auctionEventId],
+		limit: 20,
+	})
+	if (existingSettlements.size > 0) {
+		throw new Error('Settlement already published for this auction')
+	}
+
+	const auctionCoordinates =
+		params.auctionCoordinates ||
+		(() => {
+			const dTag = getAuctionTagValue(auctionEvent, 'd')
+			return dTag ? `30408:${auctionEvent.pubkey}:${dTag}` : undefined
+		})()
+
+	const bidFilters = [
+		{
+			kinds: [AUCTION_BID_KIND],
+			'#e': [params.auctionEventId],
+			limit: 500,
+		},
+		...(auctionCoordinates
+			? [
+					{
+						kinds: [AUCTION_BID_KIND],
+						'#a': [auctionCoordinates],
+						limit: 500,
+					},
+				]
+			: []),
+	]
+	const bidEvents = Array.from(await ndk.fetchEvents(bidFilters.length === 1 ? bidFilters[0] : bidFilters))
+
+	const envelopeFilters = [
+		{
+			kinds: [14],
+			'#p': [appPubkey],
+			'#t': [AUCTION_BID_TOKEN_TOPIC],
+			'#e': [params.auctionEventId],
+			limit: 500,
+		},
+		...(auctionCoordinates
+			? [
+					{
+						kinds: [14],
+						'#p': [appPubkey],
+						'#t': [AUCTION_BID_TOKEN_TOPIC],
+						'#a': [auctionCoordinates],
+						limit: 500,
+					},
+				]
+			: []),
+	]
+	const envelopeEvents = Array.from(await ndk.fetchEvents(envelopeFilters.length === 1 ? envelopeFilters[0] : envelopeFilters))
+	const envelopeByBidId = new Map<string, ReturnType<typeof parseAuctionBidTokenEnvelope>>()
+
+	for (const event of envelopeEvents) {
+		try {
+			const decryptable = new NDKEvent(ndk, event.rawEvent())
+			await decryptable.decrypt(new NDKUser({ pubkey: event.pubkey }), appSigner, 'nip44')
+			const envelope = parseAuctionBidTokenEnvelope(decryptable.content)
+			if (!envelope || envelope.auctionEventId !== params.auctionEventId) continue
+			if (!auctionP2pkPubkeysMatch(envelope.escrowPubkey, appCashuPubkey)) continue
+			console.log('[auction:settlement-plan] decrypted envelope', {
+				bidEventId: envelope.bidEventId,
+				bidderPubkey: envelope.bidderPubkey,
+				lockPubkey: inspectAuctionP2pkPubkey(envelope.lockPubkey),
+				escrowPubkey: inspectAuctionP2pkPubkey(envelope.escrowPubkey),
+				refundPubkey: inspectAuctionP2pkPubkey(envelope.refundPubkey),
+				locktime: envelope.locktime,
+			})
+			const tokenCommitment = await sha256Hex(envelope.token)
+			if (tokenCommitment !== envelope.commitment) continue
+			envelopeByBidId.set(envelope.bidEventId, envelope)
+		} catch (error) {
+			console.error('[auction] Failed to decrypt app bid envelope:', error)
+		}
+	}
+
+	const eligibleChains = buildActiveAuctionBidChains(bidEvents)
+		.filter((group) =>
+			group.chain.every((bid) => {
+				const envelope = envelopeByBidId.get(bid.id)
+				if (!envelope) return false
+				return getAuctionTagValue(bid, 'commitment') === envelope.commitment
+			}),
+		)
+		.sort(compareAuctionBidChainPriority)
+
+	const reserve = getAuctionReserveAmount(auctionEvent)
+	const winnerChain = eligibleChains[0]
+	const winnerAmount = winnerChain ? getAuctionBidAmount(winnerChain.latestBid) : 0
+	const resolvedStatus: AuctionSettlementPublishStatus = winnerChain && winnerAmount >= reserve ? 'settled' : 'reserve_not_met'
+
+	if (resolvedStatus !== params.status) {
+		if (params.status === 'settled') {
+			throw new Error('No valid reserve-meeting winner is available for settlement')
+		}
+		throw new Error('A valid reserve-meeting winner exists; reserve_not_met is not allowed')
+	}
+
+	if (!winnerChain || resolvedStatus !== 'settled') {
+		return {
+			auctionEventId: params.auctionEventId,
+			auctionCoordinates,
+			status: 'reserve_not_met',
+			closeAt,
+			reserve,
+			finalAmount: 0,
+			winnerTokens: [],
+		}
+	}
+
+	const winnerTokens: AuctionSettlementPlanResponse['winnerTokens'] = []
+	for (const bid of winnerChain.chain) {
+		const envelope = envelopeByBidId.get(bid.id)
+		if (!envelope) {
+			throw new Error(`Missing private token envelope for winning bid ${bid.id}`)
+		}
+		const derivationPath = getAuctionTagValue(bid, 'derivation_path')
+		const childPubkey = getAuctionTagValue(bid, 'child_pubkey')
+		if (!derivationPath || !childPubkey) {
+			throw new Error(`Winning bid ${bid.id} is missing derivation metadata`)
+		}
+		winnerTokens.push({
+			bidEventId: bid.id,
+			bidderPubkey: envelope.bidderPubkey,
+			derivationPath,
+			childPubkey: normalizeAuctionP2pkPubkey(childPubkey),
+			mintUrl: envelope.mintUrl,
+			amount: envelope.amount,
+			totalBidAmount: envelope.totalBidAmount,
+			commitment: envelope.commitment,
+			locktime: envelope.locktime,
+			refundPubkey: envelope.refundPubkey,
+			token: await signAuctionTokenWithAppKey(envelope.token),
+		})
+	}
+
+	return {
+		auctionEventId: params.auctionEventId,
+		auctionCoordinates,
+		status: 'settled',
+		closeAt,
+		reserve,
+		winningBidEventId: winnerChain.latestBid.id,
+		winnerPubkey: winnerChain.bidderPubkey,
+		finalAmount: winnerAmount,
+		winnerTokens,
+	}
 }
 
 async function getAppLightningIdentifier(): Promise<string> {
@@ -259,6 +540,7 @@ export const server = serve({
 					nip46Relay: NIP46_RELAY_URL,
 					appSettings: appSettings,
 					appPublicKey: APP_PUBLIC_KEY,
+					appCashuPublicKey: getAppCashuPublicKeyOrThrow(),
 					cvmServerPubkey: getCvmServerPublicKey(),
 					needsSetup: !appSettings,
 					serverReady: eventHandlerReady,
@@ -311,6 +593,32 @@ export const server = serve({
 						return jsonError(error.message, error.status)
 					}
 					return jsonError(error instanceof Error ? error.message : 'Failed to create invoice', 500)
+				}
+			},
+		},
+		'/api/auctions/settlement-plan': {
+			POST: async (req) => {
+				let body: { auctionEventId?: string; auctionCoordinates?: string; status?: AuctionSettlementPublishStatus }
+				try {
+					body = (await req.json()) as { auctionEventId?: string; auctionCoordinates?: string; status?: AuctionSettlementPublishStatus }
+				} catch {
+					return jsonError('Invalid JSON body', 400)
+				}
+
+				if (!body.auctionEventId || (body.status !== 'settled' && body.status !== 'reserve_not_met')) {
+					return jsonError('auctionEventId and a valid settlement status are required', 400)
+				}
+
+				try {
+					const plan = await buildAuctionSettlementPlan({
+						auctionEventId: body.auctionEventId,
+						auctionCoordinates: body.auctionCoordinates,
+						status: body.status,
+					})
+					return Response.json(plan)
+				} catch (error) {
+					console.error('Auction settlement planning failed:', error)
+					return jsonError(error instanceof Error ? error.message : 'Failed to build auction settlement plan', 400)
 				}
 			},
 		},

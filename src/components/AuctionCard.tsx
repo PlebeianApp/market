@@ -6,6 +6,7 @@ import { usePublishAuctionBidMutation } from '@/publish/auctions'
 import {
 	getAuctionBidIncrement,
 	getAuctionEndAt,
+	getAuctionEscrowIdentityPubkey,
 	getAuctionEscrowPubkey,
 	getAuctionId,
 	getAuctionImages,
@@ -30,6 +31,7 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 	const keyScheme = getAuctionKeyScheme(auction)
 	const p2pkXpub = getAuctionP2pkXpub(auction)
 	const escrowPubkey = getAuctionEscrowPubkey(auction) || auction.pubkey
+	const escrowIdentityPubkey = getAuctionEscrowIdentityPubkey(auction) || auction.pubkey
 	const auctionDTag = getAuctionId(auction)
 	const auctionCoordinates = auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 	const [bidAmountInput, setBidAmountInput] = useState('')
@@ -76,6 +78,7 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 				auctionEndAt: endAt,
 				sellerPubkey: auction.pubkey,
 				escrowPubkey,
+				escrowIdentityPubkey,
 				p2pkXpub,
 				mint: acceptedMints[0],
 			})
