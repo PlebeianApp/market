@@ -14,6 +14,7 @@ import {
 	getAuctionCategories,
 	getAuctionEndAt,
 	getAuctionImages,
+	getAuctionMaxEndAt,
 	getAuctionStartingBid,
 	getAuctionTitle,
 } from '@/queries/auctions'
@@ -116,8 +117,8 @@ function AuctionsRoute() {
 
 		if (!filters.showEnded) {
 			filtered = filtered.filter((auction) => {
-				const endAt = getAuctionEndAt(auction)
-				return endAt > 0 && endAt > now
+				const visibleEndAt = getAuctionMaxEndAt(auction) || getAuctionEndAt(auction)
+				return visibleEndAt > 0 && visibleEndAt > now
 			})
 		}
 
@@ -128,8 +129,8 @@ function AuctionsRoute() {
 				break
 			case 'ending-soon':
 				sorted.sort((a, b) => {
-					const aEnd = getAuctionEndAt(a)
-					const bEnd = getAuctionEndAt(b)
+					const aEnd = getAuctionMaxEndAt(a) || getAuctionEndAt(a)
+					const bEnd = getAuctionMaxEndAt(b) || getAuctionEndAt(b)
 					const aEnded = aEnd > 0 && aEnd <= now
 					const bEnded = bEnd > 0 && bEnd <= now
 					if (aEnded !== bEnded) return aEnded ? 1 : -1

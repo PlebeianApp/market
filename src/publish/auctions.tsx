@@ -1,26 +1,40 @@
 import {
 	AUCTION_BID_ENVELOPE_MARKER,
 	AUCTION_BID_TOKEN_TOPIC,
-	AUCTION_REFUND_SOURCE_MARKER,
-	AUCTION_REFUND_TOPIC,
 	AUCTION_TRANSFER_DM_KIND,
 	type AuctionBidTokenEnvelope,
-	type AuctionRefundEnvelope,
-	type AuctionRefundTransfer,
-	getMarkedEventIds,
-	parseAuctionBidTokenEnvelope,
 } from '@/lib/auctionTransfers'
+import {
+	AUCTION_BID_KIND,
+	AUCTION_KIND,
+	AUCTION_SETTLEMENT_KIND,
+	AuctionSettlementPublishStatus,
+	getAuctionTagValue,
+	type AuctionSettlementPlanResponse,
+} from '@/lib/auctionSettlement'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
+import { configStore } from '@/lib/stores/config'
 import { ndkActions } from '@/lib/stores/ndk'
 import { AUCTION_SETTLEMENT_GRACE_SECONDS, nip60Actions, type AuctionP2pkKeyScheme } from '@/lib/stores/nip60'
+import {
+	normalizeProductShippingSelections,
+	type ProductShippingSelection,
+	type ProductShippingSelectionInput,
+} from '@/lib/utils/productShippingSelections'
+import { toCompressedAuctionP2pkPubkey } from '@/lib/auctionP2pk'
 import { getBidAmount, getBidStatus, markAuctionAsDeleted } from '@/queries/auctions'
 import { auctionKeys, orderKeys } from '@/queries/queryKeyFactory'
-import NDK, { NDKEvent, NDKPrivateKeySigner, NDKUser, type NDKFilter, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
+import NDK, { NDKEvent, NDKUser, type NDKFilter, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
 
 const DEFAULT_AUCTION_MINT = 'https://nofees.testnut.cashu.space'
+
+export interface AuctionSpecEntry {
+	key: string
+	value: string
+}
 
 export interface AuctionFormData {
 	title: string
@@ -31,9 +45,15 @@ export interface AuctionFormData {
 	reserve: string
 	startAt?: string
 	endAt: string
+	antiSnipingEnabled: boolean
+	antiSnipingWindowSeconds: string
+	antiSnipingExtensionSeconds: string
+	antiSnipingMaxExtensions: string
 	mainCategory: string
 	categories: string[]
 	imageUrls: string[]
+	specs: AuctionSpecEntry[]
+	shippings: ProductShippingSelectionInput[]
 	trustedMints: string[]
 	isNSFW: boolean
 }
@@ -42,9 +62,11 @@ export interface AuctionBidFormData {
 	auctionEventId: string
 	auctionCoordinates: string
 	amount: number
-	auctionEndAt: number
+	auctionEffectiveEndAt: number
+	auctionLocktimeAt: number
 	sellerPubkey: string
 	escrowPubkey: string
+	escrowIdentityPubkey?: string
 	p2pkXpub?: string
 	mint?: string
 }
@@ -52,7 +74,7 @@ export interface AuctionBidFormData {
 export interface AuctionSettlementFormData {
 	auctionEventId: string
 	auctionCoordinates?: string
-	status: 'settled' | 'reserve_not_met' | 'cancelled'
+	status: AuctionSettlementPublishStatus
 	closeAt?: number
 	winningBidEventId?: string
 	winnerPubkey?: string
@@ -65,6 +87,30 @@ const parseUnixTimestamp = (isoDateTime?: string): number | null => {
 	const timestampMs = new Date(isoDateTime).getTime()
 	if (Number.isNaN(timestampMs)) return null
 	return Math.floor(timestampMs / 1000)
+}
+
+const parsePositiveInt = (value: string, fieldName: string): number => {
+	const parsed = parseInt(value, 10)
+	if (!Number.isFinite(parsed) || parsed <= 0) {
+		throw new Error(`${fieldName} must be greater than 0`)
+	}
+	return parsed
+}
+
+const getAuctionEscrowPubkeyOrThrow = (): string => {
+	const appPubkey = configStore.state.config.appCashuPublicKey?.trim()
+	if (!appPubkey) {
+		throw new Error('App Cashu escrow pubkey is unavailable. Wait for app config to load and try again.')
+	}
+	return toCompressedAuctionP2pkPubkey(appPubkey)
+}
+
+const getAuctionEscrowIdentityPubkeyOrThrow = (): string => {
+	const appPubkey = configStore.state.config.appPublicKey?.trim()
+	if (!appPubkey) {
+		throw new Error('App escrow identity pubkey is unavailable. Wait for app config to load and try again.')
+	}
+	return appPubkey
 }
 
 export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKSigner, ndk: NDK, auctionId?: string): Promise<NDKEvent> => {
@@ -80,9 +126,20 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 	const startingBid = formData.startingBid.trim() || '0'
 	const bidIncrement = formData.bidIncrement.trim() || '1'
 	const reserve = formData.reserve.trim() || '0'
+	const antiSnipingEnabled = formData.antiSnipingEnabled === true
+	const antiSnipingWindowSeconds = antiSnipingEnabled ? parsePositiveInt(formData.antiSnipingWindowSeconds, 'Anti-sniping window') : 0
+	const antiSnipingExtensionSeconds = antiSnipingEnabled
+		? parsePositiveInt(formData.antiSnipingExtensionSeconds, 'Anti-sniping extension')
+		: 0
+	const antiSnipingMaxExtensions = antiSnipingEnabled
+		? parsePositiveInt(formData.antiSnipingMaxExtensions, 'Max anti-sniping extensions')
+		: 0
+	const extensionRule = antiSnipingEnabled ? `anti_sniping:${antiSnipingWindowSeconds}:${antiSnipingExtensionSeconds}` : 'none'
+	const maxEndAt = antiSnipingEnabled ? endAt + antiSnipingExtensionSeconds * antiSnipingMaxExtensions : 0
 	const trustedMints = formData.trustedMints.length > 0 ? formData.trustedMints : [DEFAULT_AUCTION_MINT]
 	const keyScheme: AuctionP2pkKeyScheme = 'hd_p2pk'
-	const escrowPubkey = await nip60Actions.getWalletP2pk()
+	const escrowPubkey = getAuctionEscrowPubkeyOrThrow()
+	const escrowIdentityPubkey = getAuctionEscrowIdentityPubkeyOrThrow()
 	const p2pkXpub = await nip60Actions.getAuctionP2pkXpub()
 
 	const imageTags = formData.imageUrls.map((url, index) => ['image', url, '800x600', String(index)] as NDKTag)
@@ -95,6 +152,15 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 			categoryTags.push(['t', category.trim()] as NDKTag)
 		}
 	}
+
+	const specTags: NDKTag[] = (formData.specs ?? [])
+		.filter((spec) => spec && spec.key.trim() && spec.value.trim())
+		.map((spec) => ['spec', spec.key.trim(), spec.value.trim()] as NDKTag)
+
+	const normalizedShippings: ProductShippingSelection[] = normalizeProductShippingSelections(formData.shippings)
+	const shippingTags: NDKTag[] = normalizedShippings.map((ship) =>
+		ship.extraCost ? (['shipping_option', ship.shippingRef, ship.extraCost] as NDKTag) : (['shipping_option', ship.shippingRef] as NDKTag),
+	)
 
 	event.tags = [
 		['d', id],
@@ -110,12 +176,17 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 		['reserve', reserve],
 		...trustedMints.map((mint) => ['mint', mint] as NDKTag),
 		['escrow_pubkey', escrowPubkey],
+		['escrow_identity', escrowIdentityPubkey],
+		['extension_rule', extensionRule],
+		...(antiSnipingEnabled ? ([['max_end_at', String(maxEndAt)] as NDKTag] as NDKTag[]) : []),
 		['key_scheme', keyScheme],
 		['p2pk_xpub', p2pkXpub],
-		['settlement_policy', 'cashu_p2pk_v1'],
+		['settlement_policy', 'cashu_p2pk_2of2_v1'],
 		['schema', 'auction_v1'],
 		...imageTags,
 		...categoryTags,
+		...specTags,
+		...shippingTags,
 		...(formData.isNSFW ? ([['content-warning', 'nsfw'] as NDKTag] as NDKTag[]) : []),
 	]
 
@@ -147,6 +218,11 @@ export const publishAuction = async (formData: AuctionFormData, signer: NDKSigne
 	}
 	if (endAtTs <= startAtTs) {
 		throw new Error('Auction end time must be after start time')
+	}
+	if (formData.antiSnipingEnabled) {
+		parsePositiveInt(formData.antiSnipingWindowSeconds, 'Anti-sniping window')
+		parsePositiveInt(formData.antiSnipingExtensionSeconds, 'Anti-sniping extension')
+		parsePositiveInt(formData.antiSnipingMaxExtensions, 'Max anti-sniping extensions')
 	}
 	if (formData.imageUrls.length === 0) {
 		throw new Error('At least one image is required')
@@ -235,89 +311,14 @@ export const useDeleteAuctionMutation = () => {
 }
 
 const DEFAULT_BID_MINT = 'https://nofees.testnut.cashu.space'
-const AUCTION_KIND = 30408 as unknown as NonNullable<NDKFilter['kinds']>[number]
-const AUCTION_BID_KIND = 1023 as unknown as NonNullable<NDKFilter['kinds']>[number]
-const AUCTION_SETTLEMENT_KIND = 1024 as unknown as NonNullable<NDKFilter['kinds']>[number]
 
 const ACTIVE_BID_STATUSES = new Set(['locked', 'accepted', 'active', 'unknown'])
 
-const normalizeMintUrl = (mintUrl: string): string => mintUrl.trim().replace(/\/$/, '')
-
-const getFirstTagValue = (event: NDKEvent, tagName: string): string => event.tags.find((tag) => tag[0] === tagName)?.[1] || ''
-
-const parseNonNegativeInt = (value?: string, fallback: number = 0): number => {
-	const parsed = value ? parseInt(value, 10) : NaN
-	return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
-}
-
-const getBidDeltaAmount = (bid: NDKEvent): number => {
-	const deltaTag = getFirstTagValue(bid, 'delta_amount')
-	if (deltaTag) return parseNonNegativeInt(deltaTag, 0)
-	const amount = getBidAmount(bid)
-	const previousAmount = parseNonNegativeInt(getFirstTagValue(bid, 'prev_amount'), 0)
-	return Math.max(0, amount - previousAmount)
-}
+const getFirstTagValue = getAuctionTagValue
 
 const isSpentTokenError = (error: unknown): boolean => {
 	const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
 	return message.includes('already spent') || message.includes('token spent') || message.includes('proof not found')
-}
-
-type BidChainGroup = {
-	bidderPubkey: string
-	latestBid: NDKEvent
-	chain: NDKEvent[]
-}
-
-const collectBidChain = (latestBid: NDKEvent, bidById: Map<string, NDKEvent>): NDKEvent[] => {
-	const chain: NDKEvent[] = []
-	const seen = new Set<string>()
-	let current: NDKEvent | undefined = latestBid
-
-	while (current && !seen.has(current.id)) {
-		chain.unshift(current)
-		seen.add(current.id)
-		const previousBidId = getFirstTagValue(current, 'prev_bid')
-		if (!previousBidId) break
-		const previousBid = bidById.get(previousBidId)
-		if (!previousBid) {
-			throw new Error(`Missing previous bid event ${previousBidId} for bid ${latestBid.id}`)
-		}
-		current = previousBid
-	}
-
-	return chain
-}
-
-const buildActiveBidChains = (bids: NDKEvent[]): BidChainGroup[] => {
-	const latestByBidder = new Map<string, NDKEvent>()
-	for (const bid of bids) {
-		if (!ACTIVE_BID_STATUSES.has(getBidStatus(bid))) continue
-		const existing = latestByBidder.get(bid.pubkey)
-		if (!existing) {
-			latestByBidder.set(bid.pubkey, bid)
-			continue
-		}
-
-		const amountDelta = getBidAmount(bid) - getBidAmount(existing)
-		if (amountDelta > 0) {
-			latestByBidder.set(bid.pubkey, bid)
-			continue
-		}
-		if (amountDelta === 0) {
-			const createdAtDelta = (bid.created_at || 0) - (existing.created_at || 0)
-			if (createdAtDelta > 0 || (createdAtDelta === 0 && bid.id.localeCompare(existing.id) > 0)) {
-				latestByBidder.set(bid.pubkey, bid)
-			}
-		}
-	}
-
-	const bidById = new Map(bids.map((bid) => [bid.id, bid]))
-	return Array.from(latestByBidder.entries()).map(([bidderPubkey, latestBid]) => ({
-		bidderPubkey,
-		latestBid,
-		chain: collectBidChain(latestBid, bidById),
-	}))
 }
 
 const publishEncryptedAuctionTransfer = async (params: {
@@ -325,7 +326,7 @@ const publishEncryptedAuctionTransfer = async (params: {
 	senderSigner: NDKSigner
 	ndk: NDK
 	tags: NDKTag[]
-	content: AuctionBidTokenEnvelope | AuctionRefundEnvelope
+	content: AuctionBidTokenEnvelope
 }): Promise<NDKEvent> => {
 	const event = new NDKEvent(params.ndk)
 	event.kind = AUCTION_TRANSFER_DM_KIND
@@ -335,73 +336,6 @@ const publishEncryptedAuctionTransfer = async (params: {
 	await event.sign(params.senderSigner)
 	await ndkActions.publishEvent(event)
 	return event
-}
-
-const fetchAuctionBidTokenEnvelopes = async (
-	auctionEventId: string,
-	auctionCoordinates: string | undefined,
-	escrowPubkey: string,
-	escrowSigner: NDKSigner,
-	ndk: NDK,
-): Promise<Map<string, AuctionBidTokenEnvelope>> => {
-	const filters: NDKFilter[] = [
-		{
-			kinds: [AUCTION_TRANSFER_DM_KIND],
-			'#p': [escrowPubkey],
-			'#t': [AUCTION_BID_TOKEN_TOPIC],
-			'#e': [auctionEventId],
-			limit: 500,
-		},
-	]
-	if (auctionCoordinates) {
-		filters.push({
-			kinds: [AUCTION_TRANSFER_DM_KIND],
-			'#p': [escrowPubkey],
-			'#t': [AUCTION_BID_TOKEN_TOPIC],
-			'#a': [auctionCoordinates],
-			limit: 500,
-		})
-	}
-
-	const events = Array.from(await ndkActions.fetchEventsWithTimeout(filters.length === 1 ? filters[0] : filters, { timeoutMs: 5000 }))
-	const envelopes = new Map<string, AuctionBidTokenEnvelope>()
-
-	for (const event of events) {
-		try {
-			const decryptable = new NDKEvent(ndk, event.rawEvent())
-			await decryptable.decrypt(new NDKUser({ pubkey: event.pubkey }), escrowSigner, 'nip44')
-			const envelope = parseAuctionBidTokenEnvelope(decryptable.content)
-			if (!envelope || envelope.auctionEventId !== auctionEventId) continue
-			envelopes.set(envelope.bidEventId, envelope)
-		} catch (error) {
-			console.error('[auctions] Failed to decrypt bid escrow envelope:', error)
-		}
-	}
-
-	return envelopes
-}
-
-const fetchExistingRefundEventIds = async (
-	auctionEventId: string,
-	sellerPubkey: string,
-	bidderPubkey: string,
-	ndk: NDK,
-): Promise<Set<string>> => {
-	const events = Array.from(
-		await ndkActions.fetchEventsWithTimeout(
-			{
-				kinds: [AUCTION_TRANSFER_DM_KIND],
-				authors: [sellerPubkey],
-				'#p': [bidderPubkey],
-				'#t': [AUCTION_REFUND_TOPIC],
-				'#e': [auctionEventId],
-				limit: 100,
-			},
-			{ timeoutMs: 4000 },
-		),
-	)
-
-	return new Set(events.flatMap((event) => getMarkedEventIds(event.tags, AUCTION_REFUND_SOURCE_MARKER)))
 }
 
 const resolveLatestActiveBidByBidder = (bids: NDKEvent[], bidderPubkey: string): NDKEvent | null => {
@@ -422,10 +356,15 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 	if (!formData.auctionCoordinates) throw new Error('Auction coordinates are required')
 	if (!formData.sellerPubkey) throw new Error('Seller pubkey is required')
 	if (!Number.isFinite(formData.amount) || formData.amount <= 0) throw new Error('Bid amount must be a positive number')
-	if (!Number.isFinite(formData.auctionEndAt) || formData.auctionEndAt <= 0) throw new Error('Auction end time is required for locking')
+	if (!Number.isFinite(formData.auctionEffectiveEndAt) || formData.auctionEffectiveEndAt <= 0) {
+		throw new Error('Auction effective end time is required for bidding')
+	}
+	if (!Number.isFinite(formData.auctionLocktimeAt) || formData.auctionLocktimeAt <= 0) {
+		throw new Error('Auction locktime base is required for bid locking')
+	}
 
 	const now = Math.floor(Date.now() / 1000)
-	if (now >= formData.auctionEndAt) {
+	if (now >= formData.auctionEffectiveEndAt) {
 		throw new Error('Auction already ended')
 	}
 
@@ -462,14 +401,14 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 		throw new Error('No additional funds required for this rebid')
 	}
 
-	const bidderWalletP2pk = await nip60Actions.getWalletP2pk()
+	const bidderWalletP2pk = await nip60Actions.getWalletCashuP2pk()
 	const bidNonce = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-	const locktime = Math.max(formData.auctionEndAt + AUCTION_SETTLEMENT_GRACE_SECONDS, now + 60)
+	const locktime = Math.max(formData.auctionLocktimeAt + AUCTION_SETTLEMENT_GRACE_SECONDS, now + 60)
 
 	const lockedBid = await nip60Actions.lockAuctionBidFunds({
 		amount: deltaAmount,
 		mint: formData.mint || DEFAULT_BID_MINT,
-		lockPubkey: formData.escrowPubkey || formData.sellerPubkey,
+		escrowPubkey: formData.escrowPubkey || formData.sellerPubkey,
 		locktime,
 		refundPubkey: bidderWalletP2pk,
 		auctionEventId: formData.auctionEventId,
@@ -501,7 +440,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 			['commitment', lockedBid.commitment],
 			['locktime', String(lockedBid.locktime)],
 			['refund_pubkey', lockedBid.refundPubkey],
-			['created_for_end_at', String(formData.auctionEndAt)],
+			['created_for_end_at', String(formData.auctionEffectiveEndAt)],
 			['bid_nonce', bidNonce],
 			['key_scheme', lockedBid.keyScheme],
 			['status', 'locked'],
@@ -519,38 +458,44 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 		}
 
 		await event.sign(signer)
-		await publishEncryptedAuctionTransfer({
-			recipientPubkey: formData.escrowPubkey || formData.sellerPubkey,
-			senderSigner: signer,
-			ndk,
-			tags: [
-				['t', AUCTION_BID_TOKEN_TOPIC],
-				['e', formData.auctionEventId],
-				['e', event.id, '', AUCTION_BID_ENVELOPE_MARKER],
-				['a', formData.auctionCoordinates],
-				['mint', lockedBid.mintUrl],
-				['commitment', lockedBid.commitment],
-			],
-			content: {
-				type: AUCTION_BID_TOKEN_TOPIC,
-				auctionEventId: formData.auctionEventId,
-				auctionCoordinates: formData.auctionCoordinates,
-				bidEventId: event.id,
-				bidderPubkey,
-				sellerPubkey: formData.sellerPubkey,
-				escrowPubkey: formData.escrowPubkey || formData.sellerPubkey,
-				refundPubkey: lockedBid.refundPubkey,
-				lockPubkey: lockedBid.lockPubkey,
-				locktime: lockedBid.locktime,
-				mintUrl: lockedBid.mintUrl,
-				amount: lockedBid.amount,
-				totalBidAmount: formData.amount,
-				commitment: lockedBid.commitment,
-				bidNonce,
-				token: lockedBid.token,
-				createdAt: Date.now(),
-			},
-		})
+		const transferTags: NDKTag[] = [
+			['t', AUCTION_BID_TOKEN_TOPIC],
+			['e', formData.auctionEventId],
+			['e', event.id, '', AUCTION_BID_ENVELOPE_MARKER],
+			['a', formData.auctionCoordinates],
+			['mint', lockedBid.mintUrl],
+			['commitment', lockedBid.commitment],
+		]
+		const transferContent: AuctionBidTokenEnvelope = {
+			type: AUCTION_BID_TOKEN_TOPIC,
+			auctionEventId: formData.auctionEventId,
+			auctionCoordinates: formData.auctionCoordinates,
+			bidEventId: event.id,
+			bidderPubkey,
+			sellerPubkey: formData.sellerPubkey,
+			escrowPubkey: lockedBid.escrowPubkey,
+			refundPubkey: lockedBid.refundPubkey,
+			lockPubkey: lockedBid.lockPubkey,
+			locktime: lockedBid.locktime,
+			mintUrl: lockedBid.mintUrl,
+			amount: lockedBid.amount,
+			totalBidAmount: formData.amount,
+			commitment: lockedBid.commitment,
+			bidNonce,
+			token: lockedBid.token,
+			createdAt: Date.now(),
+		}
+		const escrowIdentityPubkey = formData.escrowIdentityPubkey?.trim() || getAuctionEscrowIdentityPubkeyOrThrow()
+		const transferRecipients = Array.from(new Set([formData.sellerPubkey, escrowIdentityPubkey]))
+		for (const recipientPubkey of transferRecipients) {
+			await publishEncryptedAuctionTransfer({
+				recipientPubkey,
+				senderSigner: signer,
+				ndk,
+				tags: transferTags,
+				content: transferContent,
+			})
+		}
 		await ndkActions.publishEvent(event)
 		nip60Actions.updatePendingTokenContext(lockedBid.tokenId, {
 			kind: 'auction_bid',
@@ -558,7 +503,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 			auctionCoordinates: formData.auctionCoordinates,
 			bidEventId: event.id,
 			sellerPubkey: formData.sellerPubkey,
-			escrowPubkey: formData.escrowPubkey || formData.sellerPubkey,
+			escrowPubkey: lockedBid.escrowPubkey,
 			lockPubkey: lockedBid.lockPubkey,
 			refundPubkey: lockedBid.refundPubkey,
 			locktime: lockedBid.locktime,
@@ -586,7 +531,6 @@ export const usePublishAuctionBidMutation = () => {
 		},
 		onSuccess: async (_eventId, variables) => {
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.bids(variables.auctionEventId) })
-			await queryClient.invalidateQueries({ queryKey: auctionKeys.bidStats(variables.auctionEventId) })
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.details(variables.auctionEventId) })
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.all })
 			toast.success('Bid submitted')
@@ -601,17 +545,6 @@ export const usePublishAuctionBidMutation = () => {
 export const publishAuctionSettlement = async (formData: AuctionSettlementFormData, signer: NDKSigner, ndk: NDK): Promise<string> => {
 	if (!formData.auctionEventId) throw new Error('Auction event id is required')
 	if (!formData.status) throw new Error('Settlement status is required')
-
-	const closeAt = formData.closeAt ?? Math.floor(Date.now() / 1000)
-	const finalAmount = Math.max(0, Math.floor(formData.finalAmount ?? 0))
-	const winningBidEventId = formData.winningBidEventId || ''
-	const winnerPubkey = formData.winnerPubkey || ''
-
-	if (formData.status === 'settled') {
-		if (!winningBidEventId) throw new Error('Winning bid event id is required for settled auctions')
-		if (!winnerPubkey) throw new Error('Winner pubkey is required for settled auctions')
-		if (finalAmount <= 0) throw new Error('Final amount must be greater than zero for settled auctions')
-	}
 
 	const sellerUser = await signer.user()
 	const sellerPubkey = sellerUser.pubkey
@@ -640,167 +573,62 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 			const dTag = getFirstTagValue(auctionEvent, 'd')
 			return dTag ? `30408:${auctionEvent.pubkey}:${dTag}` : ''
 		})()
-	const escrowPubkey = getFirstTagValue(auctionEvent, 'escrow_pubkey') || auctionEvent.pubkey
 	const auctionP2pkXpub = getFirstTagValue(auctionEvent, 'p2pk_xpub').trim()
 	if (!auctionP2pkXpub) {
 		throw new Error('Auction is missing p2pk_xpub')
-	}
-	const walletEscrowPrivkey = await nip60Actions.ensureWalletPrivkey(escrowPubkey, sellerPubkey)
-	const escrowSigner = walletEscrowPrivkey ? new NDKPrivateKeySigner(walletEscrowPrivkey) : sellerPubkey === escrowPubkey ? signer : null
-	if (!escrowSigner) {
-		throw new Error('Current wallet or signer cannot decrypt this auction escrow key')
 	}
 	const walletAuctionXpub = await nip60Actions.getAuctionP2pkXpub()
 	if (walletAuctionXpub !== auctionP2pkXpub) {
 		throw new Error('Auction p2pk_xpub does not match the current wallet-derived auction HD root')
 	}
-
-	const existingSettlements = Array.from(
-		await ndkActions.fetchEventsWithTimeout(
-			{
-				kinds: [AUCTION_SETTLEMENT_KIND],
-				'#e': [formData.auctionEventId],
-				limit: 20,
-			},
-			{ timeoutMs: 3000 },
-		),
-	)
-	if (existingSettlements.length > 0) {
-		throw new Error('Settlement already published for this auction')
+	const settlementPlanResponse = await fetch('/api/auctions/settlement-plan', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({
+			auctionEventId: formData.auctionEventId,
+			auctionCoordinates,
+			status: formData.status,
+		}),
+	})
+	if (!settlementPlanResponse.ok) {
+		const error = (await settlementPlanResponse.json().catch(() => null)) as { error?: string } | null
+		throw new Error(error?.error || `Failed to prepare settlement plan (${settlementPlanResponse.status})`)
 	}
-
-	const bidFilters: NDKFilter[] = [
-		{
-			kinds: [AUCTION_BID_KIND],
-			'#e': [formData.auctionEventId],
-			limit: 500,
-		},
-		...(auctionCoordinates
-			? [
-					{
-						kinds: [AUCTION_BID_KIND],
-						'#a': [auctionCoordinates],
-						limit: 500,
-					},
-				]
-			: []),
-	]
-	const bids = Array.from(
-		await ndkActions.fetchEventsWithTimeout(bidFilters.length === 1 ? bidFilters[0] : bidFilters, { timeoutMs: 5000 }),
-	)
-	const activeBidChains = buildActiveBidChains(bids)
-	const envelopeByBidEventId = await fetchAuctionBidTokenEnvelopes(
-		formData.auctionEventId,
-		auctionCoordinates,
-		escrowPubkey,
-		escrowSigner,
-		ndk,
-	)
-	const redeemBidEnvelope = async (bid: NDKEvent, amount: number, token: string): Promise<void> => {
-		const derivationPath = getFirstTagValue(bid, 'derivation_path')
-		if (!derivationPath) {
-			throw new Error(`Bid ${bid.id} is missing derivation_path`)
-		}
-		const expectedPubkey = getFirstTagValue(bid, 'child_pubkey') || undefined
-		const childPrivkey = await nip60Actions.getAuctionHdChildPrivkey({ derivationPath, expectedPubkey })
-		try {
-			await nip60Actions.receiveLockedEcash(token, childPrivkey)
-		} catch (error) {
-			if (!isSpentTokenError(error)) throw error
-		}
-	}
-
+	const settlementPlan = (await settlementPlanResponse.json()) as AuctionSettlementPlanResponse
+	const closeAt = settlementPlan.closeAt || formData.closeAt || Math.floor(Date.now() / 1000)
+	const winningBidEventId = settlementPlan.winningBidEventId || ''
+	const winnerPubkey = settlementPlan.winnerPubkey || ''
+	const finalAmount = Math.max(0, Math.floor(settlementPlan.finalAmount ?? 0))
 	let winnerPayoutAmount = 0
 	const settlementTags: NDKTag[] = []
 
-	if (formData.status === 'settled') {
-		const winnerChain = activeBidChains.find((group) => group.latestBid.id === winningBidEventId && group.bidderPubkey === winnerPubkey)
-		if (!winnerChain) {
-			throw new Error('Winning bid chain could not be resolved')
+	if (settlementPlan.status === 'settled') {
+		if (!winningBidEventId || !winnerPubkey || finalAmount <= 0) {
+			throw new Error('Settlement plan did not provide a valid winning bid')
 		}
-
-		const winnerEnvelopes = winnerChain.chain.map((bid) => {
-			const envelope = envelopeByBidEventId.get(bid.id)
-			if (!envelope) throw new Error(`Missing private bid token for winning bid ${bid.id}`)
-			return envelope
-		})
-
-		for (const [index, envelope] of winnerEnvelopes.entries()) {
-			await redeemBidEnvelope(winnerChain.chain[index], envelope.amount, envelope.token)
-			winnerPayoutAmount += envelope.amount
+		for (const winnerToken of settlementPlan.winnerTokens) {
+			const childPrivkey = await nip60Actions.getAuctionHdChildPrivkey({
+				derivationPath: winnerToken.derivationPath,
+				expectedPubkey: winnerToken.childPubkey || undefined,
+			})
+			try {
+				await nip60Actions.receiveLockedEcash(winnerToken.token, childPrivkey)
+			} catch (error) {
+				if (!isSpentTokenError(error)) throw error
+			}
+			winnerPayoutAmount += winnerToken.amount
 		}
-
 		if (winnerPayoutAmount !== finalAmount) {
 			throw new Error(`Winning bid proofs total ${winnerPayoutAmount} sats, expected ${finalAmount} sats`)
 		}
-
 		settlementTags.push(['payout', winningBidEventId, String(winnerPayoutAmount), 'redeemed'])
-	}
-
-	const refundGroups = activeBidChains.filter((group) => formData.status !== 'settled' || group.latestBid.id !== winningBidEventId)
-
-	for (const group of refundGroups) {
-		const sourceBidIds = group.chain.map((bid) => bid.id)
-		const existingRefundIds = await fetchExistingRefundEventIds(formData.auctionEventId, sellerPubkey, group.bidderPubkey, ndk)
-		const alreadyRefunded = sourceBidIds.every((bidId) => existingRefundIds.has(bidId))
-
-		if (!alreadyRefunded) {
-			const envelopes = group.chain.map((bid) => {
-				const envelope = envelopeByBidEventId.get(bid.id)
-				if (!envelope) throw new Error(`Missing private bid token for refund bid ${bid.id}`)
-				return envelope
-			})
-
-			for (const [index, envelope] of envelopes.entries()) {
-				await redeemBidEnvelope(group.chain[index], envelope.amount, envelope.token)
-			}
-
-			const refundAmountsByMint = new Map<string, number>()
-			for (const envelope of envelopes) {
-				const mintUrl = normalizeMintUrl(envelope.mintUrl)
-				refundAmountsByMint.set(mintUrl, (refundAmountsByMint.get(mintUrl) ?? 0) + envelope.amount)
-			}
-
-			const refunds: AuctionRefundTransfer[] = []
-			for (const [mintUrl, amount] of Array.from(refundAmountsByMint.entries())) {
-				const token = await nip60Actions.sendEcash(amount, mintUrl)
-				if (!token) {
-					throw new Error(`Failed to prepare ${amount} sat refund for ${group.bidderPubkey}`)
-				}
-				refunds.push({ mintUrl, amount, token })
-			}
-
-			await publishEncryptedAuctionTransfer({
-				recipientPubkey: group.bidderPubkey,
-				senderSigner: signer,
-				ndk,
-				tags: [
-					['t', AUCTION_REFUND_TOPIC],
-					['e', formData.auctionEventId],
-					...(auctionCoordinates ? ([['a', auctionCoordinates]] as NDKTag[]) : []),
-					...sourceBidIds.map((bidId) => ['e', bidId, '', AUCTION_REFUND_SOURCE_MARKER] as NDKTag),
-				],
-				content: {
-					type: AUCTION_REFUND_TOPIC,
-					auctionEventId: formData.auctionEventId,
-					auctionCoordinates,
-					sellerPubkey,
-					recipientPubkey: group.bidderPubkey,
-					sourceBidEventIds: sourceBidIds,
-					refunds,
-					createdAt: Date.now(),
-				},
-			})
-		}
-
-		settlementTags.push(['refund', group.latestBid.id, group.bidderPubkey, alreadyRefunded ? 'already_sent' : 'sent'])
 	}
 
 	const event = new NDKEvent(ndk)
 	event.kind = AUCTION_SETTLEMENT_KIND
 	event.content = JSON.stringify({
 		type: 'auction_settlement',
-		status: formData.status,
+		status: settlementPlan.status,
 		winning_bid: winningBidEventId || null,
 		winner: winnerPubkey || null,
 		final_amount: finalAmount,
@@ -809,7 +637,7 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	})
 	event.tags = [
 		['e', formData.auctionEventId],
-		['status', formData.status],
+		['status', settlementPlan.status],
 		['close_at', String(closeAt)],
 		['winning_bid', winningBidEventId],
 		['winner', winnerPubkey],
@@ -846,7 +674,6 @@ export const usePublishAuctionSettlementMutation = () => {
 		onSuccess: async (_eventId, variables) => {
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.details(variables.auctionEventId) })
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.bids(variables.auctionEventId) })
-			await queryClient.invalidateQueries({ queryKey: auctionKeys.bidStats(variables.auctionEventId) })
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.settlements(variables.auctionEventId) })
 			await queryClient.invalidateQueries({ queryKey: auctionKeys.all })
 			toast.success('Auction settlement published')

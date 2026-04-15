@@ -8,7 +8,10 @@ import { useDeleteAuctionMutation } from '@/publish/auctions'
 import {
 	auctionsByPubkeyQueryOptions,
 	getAuctionBidIncrement,
+	getAuctionBidCountFromBids,
 	getAuctionCurrency,
+	getAuctionCurrentPriceFromBids,
+	getAuctionEffectiveEndAt,
 	getAuctionEndAt,
 	getAuctionEscrowPubkey,
 	getAuctionId,
@@ -16,6 +19,7 @@ import {
 	getAuctionKeyScheme,
 	getAuctionMints,
 	getAuctionReserve,
+	getAuctionRootEventId,
 	getAuctionSchema,
 	getAuctionSettlementPolicy,
 	getAuctionStartAt,
@@ -23,7 +27,7 @@ import {
 	getAuctionSummary,
 	getAuctionTitle,
 	getAuctionType,
-	useAuctionBidStats,
+	useAuctionBids,
 } from '@/queries/auctions'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
@@ -64,14 +68,17 @@ function AuctionBasicInfo({ auction }: { auction: NDKEvent }) {
 	const images = getAuctionImages(auction)
 	const startingBid = getAuctionStartingBid(auction)
 	const auctionDTag = getAuctionId(auction)
+	const auctionRootEventId = getAuctionRootEventId(auction)
 	const auctionCoordinates = getAuctionCoordinates(auction)
 	const startAt = getAuctionStartAt(auction)
 	const endAt = getAuctionEndAt(auction)
+	const bidsQuery = useAuctionBids(auctionRootEventId || auction.id, 500, auctionCoordinates)
+	const bids = bidsQuery.data ?? []
+	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
 	const now = Math.floor(Date.now() / 1000)
-	const status = formatAuctionStatus(startAt, endAt, now)
-	const { data: bidStats } = useAuctionBidStats(auction.id, startingBid, auctionCoordinates)
-	const currentBid = bidStats?.currentPrice ?? startingBid
-	const bidsCount = bidStats?.count ?? 0
+	const status = formatAuctionStatus(startAt, effectiveEndAt, now)
+	const currentBid = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
+	const bidsCount = getAuctionBidCountFromBids(auction, bids)
 	const reserve = getAuctionReserve(auction)
 	const bidIncrement = getAuctionBidIncrement(auction)
 	const auctionType = getAuctionType(auction)
@@ -139,10 +146,10 @@ function AuctionBasicInfo({ auction }: { auction: NDKEvent }) {
 						Starts: <span className="font-medium">{formatMaybeDate(startAt)}</span>
 					</p>
 					<p className="text-gray-600 col-span-2">
-						Ends: <span className="font-medium">{formatMaybeDate(endAt)}</span>
+						Ends: <span className="font-medium">{formatMaybeDate(effectiveEndAt)}</span>
 					</p>
 					<div className="col-span-2">
-						<AuctionCountdown endAt={endAt} showSeconds variant="inline" className="max-w-full" />
+						<AuctionCountdown endAt={effectiveEndAt} showSeconds variant="inline" className="max-w-full" />
 					</div>
 				</div>
 
@@ -233,8 +240,13 @@ function AuctionListItem({
 }) {
 	const startAt = getAuctionStartAt(auction)
 	const endAt = getAuctionEndAt(auction)
+	const auctionRootEventId = getAuctionRootEventId(auction)
+	const auctionCoordinates = getAuctionCoordinates(auction)
+	const bidsQuery = useAuctionBids(auctionRootEventId || auction.id, 500, auctionCoordinates)
+	const bids = bidsQuery.data ?? []
+	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
 	const now = Math.floor(Date.now() / 1000)
-	const status = formatAuctionStatus(startAt, endAt, now)
+	const status = formatAuctionStatus(startAt, effectiveEndAt, now)
 	const images = getAuctionImages(auction)
 	const thumbnailUrl = images.length > 0 ? images[0][1] : null
 
@@ -251,7 +263,7 @@ function AuctionListItem({
 				<p className="font-semibold truncate">{getAuctionTitle(auction)}</p>
 				<div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
 					<span>{status}</span>
-					<AuctionCountdown endAt={endAt} showSeconds variant="inline" className="px-2 py-1 text-[10px]" />
+					<AuctionCountdown endAt={effectiveEndAt} showSeconds variant="inline" className="px-2 py-1 text-[10px]" />
 				</div>
 			</div>
 		</div>

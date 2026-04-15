@@ -1,5 +1,20 @@
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { ndkActions } from '@/lib/stores/ndk'
+import {
+	AUCTION_BID_KIND,
+	AUCTION_KIND,
+	AUCTION_ROOT_EVENT_ID_TAG,
+	AUCTION_SETTLEMENT_KIND,
+	getAuctionCurrentPrice as computeAuctionCurrentPrice,
+	getAuctionEffectiveEndAt as computeAuctionEffectiveEndAt,
+	getAuctionEndAt as getAuctionEndAtValue,
+	getAuctionExtensionRule as parseAuctionExtensionRule,
+	getAuctionMaxEndAt as getAuctionMaxEndAtValue,
+	getAuctionRootEventId as getAuctionRootEventIdValue,
+	getAuctionStartAt as getAuctionStartAtValue,
+	getAuctionWindowValidBids,
+	resolveAuctionVersionSet,
+} from '@/lib/auctionSettlement'
 import type { NDKFilter } from '@nostr-dev-kit/ndk'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { queryOptions, useQuery } from '@tanstack/react-query'
@@ -7,16 +22,7 @@ import { auctionKeys } from './queryKeyFactory'
 import { filterBlacklistedEvents } from '@/lib/utils/blacklistFilters'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
 
-export type AuctionBidStats = {
-	count: number
-	currentPrice: number
-}
-
 export type AuctionSettlementStatus = 'settled' | 'reserve_not_met' | 'cancelled' | 'unknown'
-
-const AUCTION_KIND = 30408 as unknown as NonNullable<NDKFilter['kinds']>[number]
-const AUCTION_BID_KIND = 1023 as unknown as NonNullable<NDKFilter['kinds']>[number]
-const AUCTION_SETTLEMENT_KIND = 1024 as unknown as NonNullable<NDKFilter['kinds']>[number]
 
 const DELETED_AUCTIONS_STORAGE_KEY = 'plebeian_deleted_auction_ids'
 
@@ -70,6 +76,67 @@ const filterDeletedAuctions = (events: NDKEvent[]): NDKEvent[] => {
 	})
 }
 
+const dedupeEventsById = (events: NDKEvent[]): NDKEvent[] => {
+	const eventsById = new Map<string, NDKEvent>()
+	for (const event of events) {
+		eventsById.set(event.id, event)
+	}
+	return Array.from(eventsById.values())
+}
+
+const cloneAuctionEventWithRootId = (ndk: NonNullable<ReturnType<typeof ndkActions.getNDK>>, event: NDKEvent, rootEventId: string): NDKEvent => {
+	const cloned = new NDKEvent(ndk, event.rawEvent())
+	cloned.tags = [...cloned.tags.filter((tag) => tag[0] !== AUCTION_ROOT_EVENT_ID_TAG), [AUCTION_ROOT_EVENT_ID_TAG, rootEventId]]
+	return cloned
+}
+
+const getAuctionGroupingKey = (event: NDKEvent): string => {
+	const dTag = getAuctionId(event)
+	return dTag ? `${event.pubkey}:${dTag}` : event.id
+}
+
+const resolveCanonicalAuctionEvent = (
+	ndk: NonNullable<ReturnType<typeof ndkActions.getNDK>>,
+	events: NDKEvent[],
+): NDKEvent | null => {
+	const resolved = resolveAuctionVersionSet(events)
+	if (!resolved) return null
+	return cloneAuctionEventWithRootId(ndk, resolved.displayEvent, resolved.rootEventId)
+}
+
+const collapseAuctionVersions = (
+	ndk: NonNullable<ReturnType<typeof ndkActions.getNDK>>,
+	events: NDKEvent[],
+): NDKEvent[] => {
+	const groupedEvents = new Map<string, NDKEvent[]>()
+	for (const event of events) {
+		const key = getAuctionGroupingKey(event)
+		const group = groupedEvents.get(key)
+		if (group) group.push(event)
+		else groupedEvents.set(key, [event])
+	}
+
+	return Array.from(groupedEvents.values())
+		.map((group) => resolveCanonicalAuctionEvent(ndk, group))
+		.filter((event): event is NDKEvent => !!event)
+}
+
+const fetchAuctionVersionEvents = async (pubkey: string, dTag: string, limit: number = 50): Promise<NDKEvent[]> => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk || !pubkey || !dTag) return []
+
+	const events = await ndkActions.fetchEventsWithTimeout(
+		{
+			kinds: [AUCTION_KIND],
+			authors: [pubkey],
+			'#d': [dTag],
+			limit,
+		},
+		{ timeoutMs: 8000 },
+	)
+	return filterDeletedAuctions(filterBlacklistedEvents(Array.from(events)))
+}
+
 export const fetchAuctions = async (limit: number = 200) => {
 	const ndk = ndkActions.getNDK()
 	if (!ndk) {
@@ -83,7 +150,9 @@ export const fetchAuctions = async (limit: number = 200) => {
 	}
 
 	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
-	return filterDeletedAuctions(filterBlacklistedEvents(Array.from(events))).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+	return collapseAuctionVersions(ndk, filterDeletedAuctions(filterBlacklistedEvents(Array.from(events)))).sort(
+		(a, b) => (b.created_at || 0) - (a.created_at || 0),
+	)
 }
 
 export const fetchAuction = async (id: string) => {
@@ -105,7 +174,10 @@ export const fetchAuction = async (id: string) => {
 	if (!event) return null
 	const dTag = getAuctionId(event)
 	if (dTag && isAuctionDeleted(dTag, event.created_at)) return null
-	return filterBlacklistedEvents([event])[0] || null
+	if (!dTag) return filterBlacklistedEvents([event])[0] || null
+
+	const versionEvents = await fetchAuctionVersionEvents(event.pubkey, dTag)
+	return resolveCanonicalAuctionEvent(ndk, dedupeEventsById([event, ...versionEvents]))
 }
 
 export const fetchAuctionsByPubkey = async (pubkey: string, limit: number = 100) => {
@@ -120,7 +192,9 @@ export const fetchAuctionsByPubkey = async (pubkey: string, limit: number = 100)
 	}
 
 	const events = await ndkActions.fetchEventsWithTimeout(filter, { timeoutMs: 8000 })
-	return filterDeletedAuctions(filterBlacklistedEvents(Array.from(events))).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+	return collapseAuctionVersions(ndk, filterDeletedAuctions(filterBlacklistedEvents(Array.from(events)))).sort(
+		(a, b) => (b.created_at || 0) - (a.created_at || 0),
+	)
 }
 
 export const fetchAuctionByATag = async (pubkey: string, dTag: string) => {
@@ -128,11 +202,16 @@ export const fetchAuctionByATag = async (pubkey: string, dTag: string) => {
 	if (!ndk) throw new Error('NDK not initialized')
 	if (!pubkey || !dTag) return null
 
-	const naddr = naddrFromAddress(30408, pubkey, dTag)
-	const event = await ndk.fetchEvent(naddr)
-	if (!event) return null
-	if (isAuctionDeleted(dTag, event.created_at)) return null
-	return filterBlacklistedEvents([event])[0] || null
+	const versionEvents = await fetchAuctionVersionEvents(pubkey, dTag)
+	if (versionEvents.length === 0) {
+		const naddr = naddrFromAddress(30408, pubkey, dTag)
+		const event = await ndk.fetchEvent(naddr)
+		if (!event) return null
+		if (isAuctionDeleted(dTag, event.created_at)) return null
+		return resolveCanonicalAuctionEvent(ndk, [event])
+	}
+
+	return resolveCanonicalAuctionEvent(ndk, versionEvents)
 }
 
 export const fetchAuctionBids = async (auctionEventId: string, limit: number = 500, auctionCoordinates?: string) => {
@@ -201,28 +280,6 @@ export const fetchAuctionSettlements = async (auctionEventId: string, limit: num
 	return filterBlacklistedEvents(Array.from(events)).sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
 }
 
-export const fetchAuctionBidStats = async (
-	auctionEventId: string,
-	startingBid: number = 0,
-	auctionCoordinates?: string,
-): Promise<AuctionBidStats> => {
-	const bids = await fetchAuctionBids(auctionEventId, 500, auctionCoordinates)
-	let currentPrice = startingBid
-
-	for (const bid of bids) {
-		const amountTag = bid.tags.find((t) => t[0] === 'amount')
-		const amount = amountTag?.[1] ? parseInt(amountTag[1], 10) : NaN
-		if (!isNaN(amount) && amount > currentPrice) {
-			currentPrice = amount
-		}
-	}
-
-	return {
-		count: bids.length,
-		currentPrice,
-	}
-}
-
 export const auctionsQueryOptions = (limit: number = 200) =>
 	queryOptions({
 		queryKey: auctionKeys.all,
@@ -272,15 +329,6 @@ export const auctionBidsByBidderQueryOptions = (pubkey: string, limit: number = 
 		refetchInterval: 5000,
 	})
 
-export const auctionBidStatsQueryOptions = (auctionEventId: string, startingBid: number = 0, auctionCoordinates?: string) =>
-	queryOptions({
-		queryKey: [...auctionKeys.bidStats(auctionEventId || auctionCoordinates || ''), startingBid, auctionCoordinates || ''],
-		queryFn: () => fetchAuctionBidStats(auctionEventId, startingBid, auctionCoordinates),
-		enabled: !!(auctionEventId || auctionCoordinates),
-		staleTime: 10000,
-		refetchInterval: 10000,
-	})
-
 export const auctionSettlementsQueryOptions = (auctionEventId: string, limit: number = 100, auctionCoordinates?: string) =>
 	queryOptions({
 		queryKey: [...auctionKeys.settlements(auctionEventId || auctionCoordinates || ''), auctionCoordinates || ''],
@@ -291,6 +339,7 @@ export const auctionSettlementsQueryOptions = (auctionEventId: string, limit: nu
 	})
 
 export const getAuctionId = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'd')?.[1] || ''
+export const getAuctionRootEventId = (event: NDKEvent | null): string => (event ? getAuctionRootEventIdValue(event) : '')
 
 export const getAuctionTitle = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'title')?.[1] || 'Untitled Auction'
 
@@ -313,16 +362,21 @@ export const getAuctionImages = (event: NDKEvent | null): Array<string[]> => {
 }
 
 export const getAuctionEndAt = (event: NDKEvent | null): number => {
-	if (!event) return 0
-	const tag = event.tags.find((t) => t[0] === 'end_at')
-	return tag?.[1] ? parseInt(tag[1], 10) || 0 : 0
+	return event ? getAuctionEndAtValue(event) : 0
 }
 
 export const getAuctionStartAt = (event: NDKEvent | null): number => {
-	if (!event) return 0
-	const tag = event.tags.find((t) => t[0] === 'start_at')
-	return tag?.[1] ? parseInt(tag[1], 10) || 0 : 0
+	return event ? getAuctionStartAtValue(event) : 0
 }
+
+export const getAuctionEffectiveEndAt = (event: NDKEvent | null, bids: NDKEvent[] = []): number => {
+	if (!event) return 0
+	return computeAuctionEffectiveEndAt(event, bids)
+}
+
+export const getAuctionMaxEndAt = (event: NDKEvent | null): number => (event ? getAuctionMaxEndAtValue(event) : 0)
+
+export const getAuctionExtensionRule = (event: NDKEvent | null): string => (event ? parseAuctionExtensionRule(event).raw : 'none')
 
 export const getAuctionStartingBid = (event: NDKEvent | null): number => {
 	if (!event) return 0
@@ -374,14 +428,32 @@ export const getAuctionP2pkXpub = (event: NDKEvent | null): string => event?.tag
 
 export const getAuctionEscrowPubkey = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'escrow_pubkey')?.[1] || ''
 
+export const getAuctionEscrowIdentityPubkey = (event: NDKEvent | null): string =>
+	event?.tags.find((t) => t[0] === 'escrow_identity')?.[1] || ''
+
 export const getAuctionSettlementPolicy = (event: NDKEvent | null): string =>
 	event?.tags.find((t) => t[0] === 'settlement_policy')?.[1] || ''
 
 export const getAuctionSchema = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'schema')?.[1] || ''
 
-export const getAuctionShippingOptions = (event: NDKEvent | null): string[] => {
+export const getAuctionShippingOptions = (event: NDKEvent | null): Array<{ shippingRef: string; extraCost: string }> => {
 	if (!event) return []
-	return event.tags.filter((tag) => tag[0] === 'shipping_option' && !!tag[1]).map((tag) => tag[1])
+	return event.tags
+		.filter((tag) => tag[0] === 'shipping_option' && !!tag[1])
+		.map((tag) => ({
+			shippingRef: tag[1],
+			extraCost: typeof tag[2] === 'string' ? tag[2] : '',
+		}))
+}
+
+export const getAuctionSpecs = (event: NDKEvent | null): Array<{ key: string; value: string }> => {
+	if (!event) return []
+	return event.tags
+		.filter((tag) => tag[0] === 'spec' && !!tag[1])
+		.map((tag) => ({
+			key: tag[1],
+			value: typeof tag[2] === 'string' ? tag[2] : '',
+		}))
 }
 
 export const getBidAmount = (bidEvent: NDKEvent | null): number => {
@@ -428,6 +500,12 @@ export const getBidLocktime = (bidEvent: NDKEvent | null): number => {
 	return Number.isFinite(parsed) ? parsed : 0
 }
 
+export const getAuctionCurrentPriceFromBids = (auction: NDKEvent | null, bids: NDKEvent[], startingBid: number = 0): number =>
+	auction ? computeAuctionCurrentPrice(auction, bids, startingBid) : bids.reduce((max, bid) => Math.max(max, getBidAmount(bid)), startingBid)
+
+export const getAuctionBidCountFromBids = (auction: NDKEvent | null, bids: NDKEvent[]): number =>
+	auction ? getAuctionWindowValidBids(auction, bids).length : bids.length
+
 export const getAuctionSettlementStatus = (settlementEvent: NDKEvent | null): AuctionSettlementStatus => {
 	if (!settlementEvent) return 'unknown'
 	const status = settlementEvent.tags.find((tag) => tag[0] === 'status')?.[1]
@@ -456,11 +534,6 @@ export const filterNSFWAuctions = (events: NDKEvent[], showNSFW: boolean): NDKEv
 	if (showNSFW) return events
 	return events.filter((event) => !isNSFWAuction(event))
 }
-
-export const useAuctionBidStats = (auctionEventId: string, startingBid: number = 0, auctionCoordinates?: string) =>
-	useQuery({
-		...auctionBidStatsQueryOptions(auctionEventId, startingBid, auctionCoordinates),
-	})
 
 export const useAuctionBids = (auctionEventId: string, limit: number = 500, auctionCoordinates?: string) =>
 	useQuery({

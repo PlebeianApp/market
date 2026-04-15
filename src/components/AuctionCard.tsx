@@ -5,16 +5,22 @@ import { ndkActions } from '@/lib/stores/ndk'
 import { usePublishAuctionBidMutation } from '@/publish/auctions'
 import {
 	getAuctionBidIncrement,
+	getAuctionBidCountFromBids,
+	getAuctionCurrentPriceFromBids,
+	getAuctionEffectiveEndAt,
 	getAuctionEndAt,
+	getAuctionEscrowIdentityPubkey,
 	getAuctionEscrowPubkey,
 	getAuctionId,
 	getAuctionImages,
 	getAuctionKeyScheme,
+	getAuctionMaxEndAt,
 	getAuctionMints,
 	getAuctionP2pkXpub,
+	getAuctionRootEventId,
 	getAuctionStartingBid,
 	getAuctionTitle,
-	useAuctionBidStats,
+	useAuctionBids,
 } from '@/queries/auctions'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Link } from '@tanstack/react-router'
@@ -30,16 +36,20 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 	const keyScheme = getAuctionKeyScheme(auction)
 	const p2pkXpub = getAuctionP2pkXpub(auction)
 	const escrowPubkey = getAuctionEscrowPubkey(auction) || auction.pubkey
+	const escrowIdentityPubkey = getAuctionEscrowIdentityPubkey(auction) || auction.pubkey
 	const auctionDTag = getAuctionId(auction)
+	const auctionRootEventId = getAuctionRootEventId(auction)
 	const auctionCoordinates = auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 	const [bidAmountInput, setBidAmountInput] = useState('')
 	const [isOwnAuction, setIsOwnAuction] = useState(false)
-	const countdown = useAuctionCountdown(endAt, { showSeconds: true })
-	const { data: bidStats } = useAuctionBidStats(auction.id, startingBid, auctionCoordinates)
+	const bidsQuery = useAuctionBids(auctionRootEventId || auction.id, 500, auctionCoordinates)
+	const bids = bidsQuery.data ?? []
+	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
+	const countdown = useAuctionCountdown(effectiveEndAt, { showSeconds: true })
 	const bidMutation = usePublishAuctionBidMutation()
 
-	const currentPrice = bidStats?.currentPrice ?? startingBid
-	const bidsCount = bidStats?.count ?? 0
+	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
+	const bidsCount = getAuctionBidCountFromBids(auction, bids)
 	const ended = countdown.isEnded
 	const parsedBidAmount = parseInt(bidAmountInput || '0', 10)
 
@@ -70,12 +80,14 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 
 		try {
 			await bidMutation.mutateAsync({
-				auctionEventId: auction.id,
+				auctionEventId: auctionRootEventId || auction.id,
 				auctionCoordinates,
 				amount: parsedAmount,
-				auctionEndAt: endAt,
+				auctionEffectiveEndAt: effectiveEndAt,
+				auctionLocktimeAt: getAuctionMaxEndAt(auction) || effectiveEndAt,
 				sellerPubkey: auction.pubkey,
 				escrowPubkey,
+				escrowIdentityPubkey,
 				p2pkXpub,
 				mint: acceptedMints[0],
 			})
@@ -118,7 +130,7 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 				</div>
 
 				<div className="text-xs text-gray-600">
-					<AuctionCountdown endAt={endAt} countdown={countdown} showSeconds variant="inline" className="w-full justify-between" />
+					<AuctionCountdown endAt={effectiveEndAt} countdown={countdown} showSeconds variant="inline" className="w-full justify-between" />
 				</div>
 
 				<div className="flex-grow"></div>

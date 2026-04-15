@@ -1,3 +1,4 @@
+import { DEFAULT_TRUSTED_MINTS } from '@/lib/constants'
 import { authStore } from '@/lib/stores/auth'
 import { configStore } from '@/lib/stores/config'
 import {
@@ -77,15 +78,7 @@ export function Nip60Wallet() {
 	const [lastDevBid, setLastDevBid] = useState<Nip60DevAuctionBidResult | null>(null)
 	const walletDevMode = appStage === 'staging' || isNip60WalletDevModeEnabled()
 	const defaultMints = useMemo(
-		() =>
-			Array.from(
-				new Set([
-					'https://mint.minibits.cash/Bitcoin',
-					'https://mint.coinos.io',
-					'https://mint.cubabitcoin.org',
-					...(walletDevMode ? NIP60_DEV_TEST_MINTS : []),
-				]),
-			),
+		() => Array.from(new Set([...DEFAULT_TRUSTED_MINTS, ...(walletDevMode ? NIP60_DEV_TEST_MINTS : [])])),
 		[walletDevMode],
 	)
 

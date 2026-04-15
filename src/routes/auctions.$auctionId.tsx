@@ -16,6 +16,7 @@ import {
 	auctionQueryOptions,
 	auctionsByPubkeyQueryOptions,
 	filterNSFWAuctions,
+	getAuctionBidCountFromBids,
 	getAuctionSettlementFinalAmount,
 	getAuctionSettlementStatus,
 	getAuctionSettlementWinner,
@@ -24,18 +25,24 @@ import {
 	getBidStatus,
 	getAuctionBidIncrement,
 	getAuctionCategories,
+	getAuctionCurrentPriceFromBids,
+	getAuctionEffectiveEndAt,
 	getAuctionCurrency,
 	getAuctionEndAt,
+	getAuctionEscrowIdentityPubkey,
 	getAuctionEscrowPubkey,
 	getAuctionId,
 	getAuctionImages,
 	getAuctionKeyScheme,
+	getAuctionMaxEndAt,
 	getAuctionMints,
 	getAuctionP2pkXpub,
 	getAuctionReserve,
+	getAuctionRootEventId,
 	getAuctionSchema,
 	getAuctionSettlementPolicy,
 	getAuctionShippingOptions,
+	getAuctionSpecs,
 	getAuctionStartAt,
 	getAuctionStartingBid,
 	getAuctionSummary,
@@ -43,10 +50,11 @@ import {
 	getAuctionType,
 	isNSFWAuction,
 	useAuctionBids,
-	useAuctionBidStats,
 	useAuctionClaimOrders,
 	useAuctionSettlements,
 } from '@/queries/auctions'
+import { getShippingInfo, shippingOptionByCoordinatesQueryOptions } from '@/queries/shipping'
+import { useQueries } from '@tanstack/react-query'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
@@ -159,7 +167,6 @@ function AuctionDetailRoute() {
 
 	const startAt = getAuctionStartAt(auction)
 	const endAt = getAuctionEndAt(auction)
-	const countdown = useAuctionCountdown(endAt, { showSeconds: true })
 	const startingBid = getAuctionStartingBid(auction)
 	const bidIncrement = getAuctionBidIncrement(auction)
 	const reserve = getAuctionReserve(auction)
@@ -168,23 +175,55 @@ function AuctionDetailRoute() {
 	const categories = getAuctionCategories(auction)
 	const trustedMints = getAuctionMints(auction)
 	const escrowPubkey = getAuctionEscrowPubkey(auction)
+	const escrowIdentityPubkey = getAuctionEscrowIdentityPubkey(auction)
 	const keyScheme = getAuctionKeyScheme(auction)
 	const p2pkXpub = getAuctionP2pkXpub(auction)
 	const settlementPolicy = getAuctionSettlementPolicy(auction)
 	const schema = getAuctionSchema(auction)
 	const shippingOptions = getAuctionShippingOptions(auction)
+	const specs = getAuctionSpecs(auction)
 	const auctionDTag = getAuctionId(auction)
+	const auctionRootEventId = getAuctionRootEventId(auction)
 	const auctionCoordinates = auctionDTag && auction ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 
+	const parsedShippingRefs = useMemo(
+		() =>
+			shippingOptions.map((item) => {
+				const parts = item.shippingRef.split(':')
+				if (parts.length === 3 && parts[0] === '30406') {
+					return { ...item, pubkey: parts[1], dTag: parts[2] }
+				}
+				return { ...item, pubkey: '', dTag: '' }
+			}),
+		[shippingOptions],
+	)
+
+	const shippingQueryResults = useQueries({
+		queries: parsedShippingRefs.map(({ pubkey, dTag }) => ({
+			...shippingOptionByCoordinatesQueryOptions(pubkey, dTag),
+			enabled: !!pubkey && !!dTag,
+		})),
+	})
+
+	const resolvedShippingOptions = useMemo(
+		() =>
+			parsedShippingRefs.map((entry, index) => {
+				const event = shippingQueryResults[index]?.data ?? null
+				const info = event ? getShippingInfo(event) : null
+				return { ...entry, info }
+			}),
+		[parsedShippingRefs, shippingQueryResults],
+	)
+
+	const bidsQuery = useAuctionBids(auctionRootEventId || auctionId, 500, auctionCoordinates)
+	const bids = bidsQuery.data ?? []
+	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
+	const countdown = useAuctionCountdown(effectiveEndAt, { showSeconds: true })
 	const ended = countdown.isEnded
-	const { data: bidStats } = useAuctionBidStats(auctionId, startingBid, auctionCoordinates)
-	const currentPrice = bidStats?.currentPrice ?? startingBid
-	const bidsCount = bidStats?.count ?? 0
+	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
+	const bidsCount = getAuctionBidCountFromBids(auction, bids)
 	const minBid = Math.max(startingBid, currentPrice + Math.max(1, bidIncrement))
 	const parsedBidAmount = parseInt(bidAmountInput || '0', 10)
-
-	const bidsQuery = useAuctionBids(auctionId, 500, auctionCoordinates)
-	const bids = bidsQuery.data ?? []
 	const newestBids = useMemo(() => [...bids].sort((a, b) => (b.created_at || 0) - (a.created_at || 0)), [bids])
 
 	const sellerAuctionsQuery = useQuery({
@@ -199,7 +238,7 @@ function AuctionDetailRoute() {
 	}, [auctionId, sellerAuctionsQuery.data])
 
 	// Settlement and claim order state
-	const settlementsQuery = useAuctionSettlements(auctionId, 10, auctionCoordinates)
+	const settlementsQuery = useAuctionSettlements(auctionRootEventId || auctionId, 10, auctionCoordinates)
 	const latestSettlement = (settlementsQuery.data ?? [])[0] || null
 	const settlementStatus = getAuctionSettlementStatus(latestSettlement)
 	const settlementWinner = getAuctionSettlementWinner(latestSettlement)
@@ -241,13 +280,19 @@ function AuctionDetailRoute() {
 		}
 
 		try {
+			if (!escrowPubkey) {
+				toast.error('This auction is missing a Cashu escrow pubkey and cannot accept bids.')
+				return
+			}
 			await bidMutation.mutateAsync({
-				auctionEventId: auction.id,
+				auctionEventId: auctionRootEventId || auction.id,
 				auctionCoordinates,
 				amount: parsedAmount,
-				auctionEndAt: endAt,
+				auctionEffectiveEndAt: effectiveEndAt,
+				auctionLocktimeAt: getAuctionMaxEndAt(auction) || effectiveEndAt,
 				sellerPubkey: auction.pubkey,
-				escrowPubkey: escrowPubkey || auction.pubkey,
+				escrowPubkey,
+				escrowIdentityPubkey: escrowIdentityPubkey || auction.pubkey,
 				p2pkXpub,
 				mint: trustedMints[0],
 			})
@@ -346,9 +391,9 @@ function AuctionDetailRoute() {
 								</div>
 								<div className="bg-black/35 border border-white/20 rounded p-2">
 									<div className="text-white/70 text-xs">Ends at</div>
-									<div className="font-semibold">{endAt ? new Date(endAt * 1000).toLocaleString() : 'N/A'}</div>
+									<div className="font-semibold">{effectiveEndAt ? new Date(effectiveEndAt * 1000).toLocaleString() : 'N/A'}</div>
 								</div>
-								<AuctionCountdown endAt={endAt} countdown={countdown} showSeconds variant="panel" label="Ends in" />
+								<AuctionCountdown endAt={effectiveEndAt} countdown={countdown} showSeconds variant="panel" label="Ends in" />
 							</div>
 
 							<div className="flex gap-2 items-center">
@@ -461,7 +506,7 @@ function AuctionDetailRoute() {
 											helper="Seller threshold that decides whether the winner can settle."
 										/>
 										<ShopperStat label="Starts" value={formatMaybeDate(startAt)} helper="Bidding window opening time." />
-										<ShopperStat label="Ends" value={formatMaybeDate(endAt)} helper="Bidding window closing time." />
+										<ShopperStat label="Ends" value={formatMaybeDate(effectiveEndAt)} helper="Effective bidding close time." />
 									</div>
 								</div>
 
@@ -529,12 +574,28 @@ function AuctionDetailRoute() {
 
 					<TabsContent value="description" className="mt-4 border-t-3 border-secondary bg-tertiary">
 						<div className="grid gap-6 rounded-lg bg-white p-6 shadow-md lg:grid-cols-[1.4fr_0.8fr]">
-							<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
-								<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Description</p>
-								{summary && <p className="mt-3 border-b border-zinc-200 pb-4 text-sm italic text-zinc-500">{summary}</p>}
-								<p className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-zinc-700">
-									{description || 'No description provided.'}
-								</p>
+							<div className="space-y-4">
+								<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+									<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Description</p>
+									{summary && <p className="mt-3 border-b border-zinc-200 pb-4 text-sm italic text-zinc-500">{summary}</p>}
+									<p className="mt-4 whitespace-pre-wrap break-words text-sm leading-7 text-zinc-700">
+										{description || 'No description provided.'}
+									</p>
+								</div>
+
+								{specs.length > 0 && (
+									<div className="rounded-xl border border-zinc-200 bg-white px-5 py-5 shadow-sm">
+										<p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Specifications</p>
+										<dl className="mt-4 divide-y divide-zinc-200">
+											{specs.map((spec, index) => (
+												<div key={`${spec.key}-${index}`} className="flex items-start justify-between gap-4 py-2">
+													<dt className="text-sm font-medium text-zinc-500">{spec.key}</dt>
+													<dd className="text-sm font-semibold text-right text-zinc-900 break-words">{spec.value}</dd>
+												</div>
+											))}
+										</dl>
+									</div>
+								)}
 							</div>
 
 							<div className="space-y-4">
@@ -565,13 +626,29 @@ function AuctionDetailRoute() {
 										Shipping options
 									</div>
 									<div className="mt-4">
-										{shippingOptions.length > 0 ? (
+										{resolvedShippingOptions.length > 0 ? (
 											<ul className="space-y-2 text-sm text-zinc-700">
-												{shippingOptions.map((option) => (
-													<li key={option} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 break-all">
-														{option}
-													</li>
-												))}
+												{resolvedShippingOptions.map((option, index) => {
+													const extraCostNumber = option.extraCost ? Number(option.extraCost) : 0
+													const hasExtraCost = !Number.isNaN(extraCostNumber) && extraCostNumber > 0
+													return (
+														<li key={`${option.shippingRef}-${index}`} className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
+															{option.info ? (
+																<div className="space-y-1">
+																	<p className="font-medium text-zinc-900">{option.info.title}</p>
+																	<p className="text-xs text-zinc-600">
+																		Base: {option.info.price.amount} {option.info.price.currency}
+																		{option.info.service ? ` · ${option.info.service}` : ''}
+																		{option.info.carrier ? ` · ${option.info.carrier}` : ''}
+																	</p>
+																	{hasExtraCost && <p className="text-xs text-zinc-600">Auction extra cost: {extraCostNumber}</p>}
+																</div>
+															) : (
+																<p className="break-all text-xs text-zinc-500">{option.shippingRef}</p>
+															)}
+														</li>
+													)
+												})}
 											</ul>
 										) : (
 											<p className="text-sm text-zinc-500">No shipping options listed.</p>
@@ -694,7 +771,7 @@ function AuctionDetailRoute() {
 				<AuctionClaimDialog
 					open={claimDialogOpen}
 					onOpenChange={setClaimDialogOpen}
-					auctionEventId={auction.id}
+					auctionEventId={auctionRootEventId || auction.id}
 					auctionCoordinates={auctionCoordinates}
 					settlementEventId={latestSettlement.id}
 					sellerPubkey={auction.pubkey}

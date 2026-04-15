@@ -61,29 +61,62 @@ Kind values below are proposal values for discussion before final NIP/spec assig
 
 Signed by seller.
 
+Auction listings are **self-describing**: they carry the same product-shaped
+metadata as a kind `30402` product listing (see `gamma_spec.md` §3 for field
+semantics), plus auction-specific bidding, timing, and settlement tags. There
+is intentionally no product reference (`a` tag) in v1 — an auction is a
+product with additional properties, not a wrapper around one. Clients MUST
+render auctions from the event itself without needing a sibling product
+listing.
+
 ### Required tags
 
 - `d`: auction identifier.
 - `title`: display title.
-- `a`: product reference (`30402:<seller-pubkey>:<product-d-tag>`) or collection reference.
 - `auction_type`: `english` (v1 required).
 - `start_at`: unix seconds.
 - `end_at`: unix seconds.
 - `currency`: `SAT` (v1 required).
-- `reserve`: minimum acceptable final price (optional can be `0`, but tag required in v1 for explicitness).
+- `reserve`: minimum acceptable final price (may be `0`, but tag required in v1 for explicitness).
 - `bid_increment`: minimum step in sats.
 - `mint`: trusted mint URL. MAY repeat.
-- `escrow_pubkey`: auction escrow/service pubkey for locked bid handling.
-- `settlement_policy`: `cashu_p2pk_v1`.
+- `escrow_pubkey`: auction service cosigner pubkey used in the bid lock's 2-of-2 spend condition.
+- `settlement_policy`: `cashu_p2pk_2of2_v1`.
 
-### Optional tags
+### Optional auction tags
 
-- `extension_rule`: e.g. `none` (v1 default), `anti_sniping:<seconds>` (future).
+- `extension_rule`: `none` (v1 default), `anti_sniping:<window_seconds>:<extension_seconds>`.
+- `max_end_at`: hard upper bound for `effective_end_at`. REQUIRED if anti-sniping is enabled.
 - `vadium_ratio_bps`: default `10000` (100%).
 - `schema`: version marker, e.g. `auction_v1`.
-- `shipping_option`: if auction is for physical good.
 - `key_scheme`: `hd_p2pk`.
-- `p2pk_xpub`: required seller/escrow xpub used for per-bid child key derivation.
+- `p2pk_xpub`: seller HD xpub used for per-bid seller child key derivation.
+- `escrow_identity`: optional Nostr pubkey or handler reference identifying the service operating `escrow_pubkey`.
+
+### Optional product-shaped tags
+
+These tags carry the same semantics as on kind `30402` product listings.
+See `gamma_spec.md` §3 for full field definitions.
+
+- `summary`: short description for list views.
+- `image`: product image `[<url>, <dimensions>, <sorting-order>]`. MAY repeat.
+- `spec`: free-form key/value specification `[<key>, <value>]` (e.g.
+  `["spec", "Material", "Brass"]`). MAY repeat. Displayed on the auction
+  detail view so bidders can inspect item attributes without having to
+  consult an external product listing.
+- `t`: category/tag. MAY repeat.
+- `content-warning`: set to `nsfw` for adult or sensitive content.
+- `shipping_option`: reference to a kind `30406` shipping option, formatted
+  as `["shipping_option", "30406:<pubkey>:<d-tag>", "<extra-cost>"]`. The
+  third element is an optional extra cost (in the auction's currency) added
+  on top of the shipping option's base price for this specific auction.
+  MAY repeat. Used for physical goods that need to be shipped after
+  settlement; fulfilment flows reuse the gamma spec order/shipping
+  messages (kind `16` type `4`).
+- `weight`: `[<value>, <unit>]` using ISO 80000-1.
+- `dim`: `[<l>x<w>x<h>, <unit>]` using ISO 80000-1.
+- `location`: human-readable location string.
+- `g`: geohash for location-based search.
 
 ### Immutable vs mutable tags
 
@@ -95,6 +128,9 @@ Immutable after first publish:
 - `currency`
 - `mint` set
 - `escrow_pubkey`
+- `p2pk_xpub`
+- `extension_rule`
+- `max_end_at`
 - `settlement_policy`
 
 Mutable:
@@ -118,7 +154,7 @@ Important:
 	"tags": [
 		["d", "auction-7f0b9a"],
 		["title", "Vintage Camera Auction"],
-		["a", "30402:<seller-pubkey>:<product-d-tag>"],
+		["summary", "Leica M3 in collector-grade condition"],
 		["auction_type", "english"],
 		["start_at", "1766202000"],
 		["end_at", "1766288400"],
@@ -128,8 +164,20 @@ Important:
 		["mint", "https://mint.minibits.cash/Bitcoin"],
 		["mint", "https://mint.coinos.io"],
 		["escrow_pubkey", "<market-escrow-pubkey>"],
-		["settlement_policy", "cashu_p2pk_v1"],
+		["settlement_policy", "cashu_p2pk_2of2_v1"],
 		["schema", "auction_v1"],
+
+		// Product-shaped fields
+		["image", "https://cdn.example/m3-front.jpg", "1200x800", "0"],
+		["image", "https://cdn.example/m3-back.jpg", "1200x800", "1"],
+		["spec", "Brand", "Leica"],
+		["spec", "Model", "M3"],
+		["spec", "Year", "1958"],
+		["spec", "Condition", "Excellent"],
+		["t", "cameras"],
+		["t", "collectibles"],
+		["shipping_option", "30406:<seller-pubkey>:standard-intl", "2500"],
+		["weight", "580", "g"],
 	],
 }
 ```
@@ -202,57 +250,103 @@ Signed by seller or escrow service key declared by policy.
 
 A bid without enforceable value is spam. V1 requires a bid token that is cryptographically locked with refund path.
 
-## 5.2 Proposed lock profile: `cashu_p2pk_v1`
+## 5.2 Proposed lock profile: `cashu_p2pk_2of2_v1`
 
 Use NUT-11 P2PK secret with:
 
-- lock owner key: `escrow_pubkey` (from auction listing).
-- `locktime`: `end_at + settlement_grace_seconds`.
+- Locktime multisig keys: seller derived child pubkey + `escrow_pubkey`.
+- `n_sigs=2`.
+- `locktime`: `max_end_at + settlement_grace_seconds` if anti-sniping is enabled, otherwise `end_at + settlement_grace_seconds`.
 - `refund`: bidder refund pubkey.
+- `n_sigs_refund=1`.
+- `sigflag=SIG_INPUTS` (v1). `SIG_ALL` is **deferred** until cashu-ts
+  implements SIG_ALL signing. cashu-ts currently signs only `sha256(secret)`
+  (SIG_INPUTS semantics); SIG_ALL-locked proofs cannot be redeemed through
+  the standard wallet flow until library support lands. The 2-of-2 multisig
+  still enforces joint control of pre-expiry spends.
 
 `settlement_grace_seconds` default suggestion: 3600 seconds.
 
 This yields:
 
-- Escrow can settle winner before/after end.
+- Seller cannot spend early alone.
+- App/service cannot spend or rug alone.
+- Reserve becomes enforceable by cosigner policy: the service simply refuses to co-sign payout unless auction rules are satisfied.
 - If escrow fails/stalls, bidder can reclaim after locktime using refund key.
 
 Note:
 
 - Direct lock to seller pubkey alone is unsafe for v1 (seller can spend early).
-- Seller payout is completed by escrow service after close.
+- Direct lock to app/service pubkey alone is also unsafe for v1 (service can rug).
+- In NUT-11, the refund path is additive after `locktime`: after expiry the 2-of-2 lock path still works, and the refund path also becomes valid.
+- This is joint control, not unilateral custody. The app/service is a required co-signer for pre-expiry settlement, not the sole holder of bid funds.
 
-## 5.3 cashu-ts shape
+## 5.3 Exact NUT-11 tag layout
+
+The recommended per-bid `Secret` shape is:
+
+```json
+[
+	"P2PK",
+	{
+		"nonce": "<random>",
+		"data": "<seller_child_pubkey>",
+		"tags": [
+			["sigflag", "SIG_INPUTS"],
+			["n_sigs", "2"],
+			["locktime", "<locktime_unix_seconds>"],
+			["pubkeys", "<escrow_pubkey>"],
+			["refund", "<bidder_refund_pubkey>"],
+			["n_sigs_refund", "1"]
+		]
+	}
+]
+```
+
+Interpretation:
+
+- Before `locktime`, both `seller_child_pubkey` and `escrow_pubkey` must sign.
+- After `locktime`, the bidder refund pubkey can also spend.
+- `SIG_ALL` is the long-term target (binds service co-signature to actual
+  transaction outputs, not just input ownership), but is deferred until
+  cashu-ts supports signing the inputs+outputs digest. v1 uses `SIG_INPUTS`.
+
+## 5.4 cashu-ts shape
 
 ```ts
-const { keep, send } = await wallet.send(amount, proofs, {
-	p2pk: {
-		pubkey: escrowPubkey,
-		locktime: endAt + settlementGraceSeconds,
-		refundKeys: [bidderRefundPubkey],
-	},
-})
+import { P2PKBuilder } from '@cashu/cashu-ts'
+
+const p2pk = new P2PKBuilder()
+	.addLockPubkey([sellerChildPubkey, escrowPubkey])
+	.requireLockSignatures(2)
+	.lockUntil(locktime)
+	.addRefundPubkey(bidderRefundPubkey)
+	.requireRefundSignatures(1)
+	// v1 uses SIG_INPUTS (cashu-ts does not yet implement SIG_ALL signing).
+	.toOptions()
+
+const { keep, send } = await wallet.ops.send(amount, proofs).asP2PK(p2pk).run()
 ```
 
 `send` proofs are encoded and delivered only via encrypted channel.
 
-## 5.4 HD custody mode (`hd_p2pk`)
+## 5.5 HD custody mode (`hd_p2pk`)
 
-Instead of one static lock key, auctions may use HD-derived per-bid keys.
+Instead of one static seller key, auctions use HD-derived per-bid seller keys.
 
 Flow:
 
 - Auction publishes `key_scheme=hd_p2pk` and `p2pk_xpub`.
 - Bidder derives a child pubkey from `p2pk_xpub` + agreed path.
-- Bid locks to that child pubkey.
-- Seller/escrow derives matching child private key from xpriv and spends winner bid.
+- Bid locks to that child pubkey plus the app/service `escrow_pubkey` in a 2-of-2 lock.
+- Seller derives matching child private key from xpriv and co-signs winner settlement with the app/service.
 
 Recommended constraints:
 
 - Use non-hardened path levels only if bidders must derive from xpub.
 - Never export child private keys or reveal them in logs/UI.
 - Do not reuse paths across bids.
-- Keep refund+locktime rules unchanged from `cashu_p2pk_v1`.
+- Keep refund+locktime rules unchanged from `cashu_p2pk_2of2_v1`.
 
 Recommended derivation root:
 
@@ -292,22 +386,22 @@ Deterministic close input set:
 
 ## 6.1 Effective end time (anti-sniping)
 
-If `extension_rule=anti_sniping:<seconds>` is enabled, clients/indexers compute `effective_end_at` deterministically:
+If `extension_rule=anti_sniping:<window_seconds>:<extension_seconds>` is enabled, clients/indexers compute `effective_end_at` deterministically and cap it at `max_end_at`:
 
 ```text
 effective_end_at = end_at
 for each valid bid ordered by (created_at, id):
   remaining = effective_end_at - bid.created_at
-  if 0 < remaining < snipe_threshold_seconds:
-    effective_end_at += snipe_extension_seconds
+  if 0 < remaining < snipe_window_seconds:
+    effective_end_at = min(effective_end_at + snipe_extension_seconds, max_end_at)
 ```
 
 Critical policy:
 
 - Settlement MUST use `effective_end_at`, not raw `end_at`.
-- Locktime policy MUST account for possible extensions:
-  - either conservative locktime at bid creation (recommended), or
-  - large enough fixed `settlement_grace_seconds`.
+- Anti-sniping is only acceptable with a hard upper bound (`max_end_at` or an equivalent `max_extensions` derivation).
+- Bid locktime MUST be fixed up front to `max_end_at + settlement_grace_seconds`, so existing bidders never need to re-sign bids when the auction is extended.
+- Without a hard upper bound, anti-sniping is not acceptable for this profile because bidder capital can be prolonged indefinitely.
 
 ---
 
@@ -467,7 +561,8 @@ Keep these generic fields from day 1:
 - `auction_type`: `english | dutch | sealed_first_price | sealed_second_price`
 - `bid_visibility`: `open | commit_reveal`
 - `price_rule`: `highest_wins | lowest_wins`
-- `extension_rule`: `none | anti_sniping:<seconds>`
+- `extension_rule`: `none | anti_sniping:<window_seconds>:<extension_seconds>`
+- `max_end_at`: hard upper bound for any auction with anti-sniping
 - `vadium_ratio_bps`: deposit ratio
 - `settlement_policy`: lock/payout strategy identifier
 
@@ -494,15 +589,21 @@ V1 MUST enforce:
 - Enforce immutable auction mechanics after first valid bid.
 - Compute `effective_end_at` deterministically and expose it in UI.
 - Re-verify candidate winning bid proofs shortly before settlement.
+- Refuse to co-sign winner payout unless reserve, timing, and bid-validity rules are satisfied.
 - Track settlement deadlines and alert seller/escrow on pending close.
 
 ## 11.2 Gamma spec integration
 
-- Auction can reference products with `a:30402:<pubkey>:<d-tag>`.
+- Auction events are self-describing and reuse the product-shaped tags
+  defined in `gamma_spec.md` §3 (`image`, `spec`, `t`, `summary`,
+  `shipping_option`, `weight`, `dim`, `location`, `g`, `content-warning`).
+  v1 does **not** define a product reference from auction to product —
+  the auction event is the single source of truth for its item.
 - Post-auction communication SHOULD use existing encrypted order flow:
   - kind `16` type `1/2/3/4` for order/payment/status/shipping.
   - kind `17` for payment receipts when applicable.
-- Physical delivery follows existing shipping option model (`30406`).
+- Physical delivery follows the existing shipping option model (`30406`),
+  referenced directly from the auction via `shipping_option` tags.
 
 ---
 
