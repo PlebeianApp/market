@@ -590,7 +590,7 @@ export function ImagesTab() {
 	}
 
 	return (
-		<div className="space-y-4">
+		<div className="space-y-4 overflow-visible" data-testid="product-images-tab-panel">
 			<p className="text-gray-600">We recommend using square images of 1600x1600 and under 2mb.</p>
 
 			<div className="flex flex-col gap-4">
