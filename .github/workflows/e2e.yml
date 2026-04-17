@@ -2,9 +2,9 @@ name: E2E Tests
 
 on:
   push:
-    branches: [main, master, feature/nut-auctions-rebase]
+    branches: [main, master, 'auctions/**']
   pull_request:
-    branches: [main, master, feature/nut-auctions-rebase]
+    branches: [main, master, 'auctions/**']
   workflow_dispatch:
   schedule:
     - cron: '0 6 * * 1'

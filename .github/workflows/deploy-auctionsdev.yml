@@ -1,6 +1,8 @@
 name: Deploy AuctionsDev
 
 on:
+  push:
+    branches: ['auctions/**']
   workflow_dispatch:
 
 env:
