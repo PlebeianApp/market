@@ -287,8 +287,8 @@ export const compareAuctionBidChainPriority = (left: AuctionBidChainGroup, right
 	const amountDelta = getAuctionBidAmount(right.latestBid) - getAuctionBidAmount(left.latestBid)
 	if (amountDelta !== 0) return amountDelta
 
-	const createdAtDelta = (right.latestBid.created_at || 0) - (left.latestBid.created_at || 0)
+	const createdAtDelta = (left.latestBid.created_at || 0) - (right.latestBid.created_at || 0)
 	if (createdAtDelta !== 0) return createdAtDelta
 
-	return right.latestBid.id.localeCompare(left.latestBid.id)
+	return left.latestBid.id.localeCompare(right.latestBid.id)
 }
