@@ -1,13 +1,13 @@
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import type { ProductWorkflowResolution } from '@/lib/workflow/productWorkflowResolver'
 import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore, type ProductFormTab } from '@/lib/stores/product'
 import { uiActions } from '@/lib/stores/ui'
 import { hasProductFormDraft } from '@/lib/utils/productFormStorage'
 import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey, isShippingDeleted } from '@/queries/shipping'
-import { useV4VConfiguration } from '@/queries/v4v'
 import { useForm } from '@tanstack/react-form'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
@@ -16,18 +16,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { NameTab } from './NameTab'
 import { CategoryTab, DetailTab, ImagesTab, ShippingTab, SpecTab } from './tabs'
-import { shouldRequireV4VSetup } from './v4vSetup'
 
 export function ProductFormContent({
 	className = '',
 	showFooter = true,
 	productDTag,
 	productEventId,
+	workflow,
 }: {
 	className?: string
 	showFooter?: boolean
 	productDTag?: string | null
 	productEventId?: string | null
+	workflow?: ProductWorkflowResolution
 }) {
 	const [isPublishing, setIsPublishing] = useState(false)
 	const [hasDraft, setHasDraft] = useState(false)
@@ -36,7 +37,14 @@ export function ProductFormContent({
 
 	// Get form state from store, including editingProductId
 	const formState = useStore(productFormStore)
-	const { activeTab, editingProductId, isDirty, shippings, formSessionId, name, description, images } = formState
+	const { activeTab, editingProductId, isDirty, shippings, name, description, images } = formState
+	const resolvedWorkflow: ProductWorkflowResolution = workflow ?? {
+		mode: editingProductId ? 'edit' : 'create',
+		isBootstrapReady: true,
+		initialTab: activeTab,
+		shouldStartAtShipping: false,
+		requiresV4VSetup: false,
+	}
 
 	// Compute validation states
 	const hasValidName = name.trim().length > 0
@@ -57,21 +65,9 @@ export function ProductFormContent({
 	const authState = useStore(authStore)
 	const userPubkey = authState.user?.pubkey || ''
 
-	// Check semantic V4V setup state for new products.
-	const { data: v4vConfiguration, isLoading: isLoadingV4V } = useV4VConfiguration(userPubkey)
-	const needsV4VSetup = shouldRequireV4VSetup({
-		editingProductId,
-		isLoadingV4V,
-		v4vConfigurationState: v4vConfiguration?.state ?? 'unknown',
-	})
-
 	// Check if user has any shipping options configured (for tab ordering)
 	// Query is only enabled when userPubkey is available
-	const {
-		data: userShippingOptions,
-		isLoading: isLoadingUserShipping,
-		isFetched: isShippingFetched,
-	} = useShippingOptionsByPubkey(userPubkey)
+	const { data: userShippingOptions, isFetched: isShippingFetched } = useShippingOptionsByPubkey(userPubkey)
 
 	const resolvedShippingRefs = useMemo(() => {
 		if (!userShippingOptions) return new Set<string>()
@@ -90,66 +86,21 @@ export function ProductFormContent({
 		)
 	}, [userShippingOptions])
 
-	// Determine if we should show shipping tab first (user has no shipping options)
-	const shouldShowShippingFirst = useMemo(() => {
-		// Don't redirect if editing an existing product
-		if (editingProductId) return false
-		// Don't redirect if pubkey not loaded yet (query is disabled)
-		if (!userPubkey) return false
-		// Don't redirect if we haven't fetched shipping data yet
-		if (!isShippingFetched) return false
-		// Don't redirect while loading
-		if (isLoadingUserShipping) return false
-		// Check if user has any non-deleted shipping options
-		// (query data might be cached and include deleted items)
-		if (!userShippingOptions || userShippingOptions.length === 0) return true
-		// Filter out any deleted shipping options from cached data
-		const activeShippingOptions = userShippingOptions.filter((event) => {
-			const dTag = event.tags?.find((t: string[]) => t[0] === 'd')?.[1]
-			return dTag ? !isShippingDeleted(dTag) : true
-		})
-		return activeShippingOptions.length === 0
-	}, [editingProductId, userShippingOptions, isLoadingUserShipping, userPubkey, isShippingFetched])
+	const hasSelectedShipping = useMemo(() => {
+		return shippings.some((ship) => !!ship.shippingRef)
+	}, [shippings])
 
 	const hasValidShipping = useMemo(() => {
 		return shippings.some((ship) => ship.shippingRef && (!isShippingFetched || resolvedShippingRefs.has(ship.shippingRef)))
 	}, [shippings, isShippingFetched, resolvedShippingRefs])
 
-	// Set initial tab to Shipping when user has no shipping options
-	// Track which formSessionId we've handled to avoid re-triggering on same session
-	const handledSessionIdRef = useRef<number | null>(null)
-
+	// Once the draft has a shipping reference, move out of the shipping-first bootstrap step
+	// without waiting for query cache propagation to catch up.
 	useEffect(() => {
-		// Only auto-switch to shipping tab if:
-		// 1. We haven't handled this session yet
-		// 2. User should see shipping first (no shipping options)
-		// 3. We're NOT already on the shipping tab
-		if (handledSessionIdRef.current !== formSessionId && shouldShowShippingFirst && activeTab !== 'shipping') {
-			productFormActions.setActiveTab('shipping')
-			handledSessionIdRef.current = formSessionId
-		}
-	}, [shouldShowShippingFirst, activeTab, formSessionId])
-
-	// Track if we started with shipping first (no shipping options)
-	// This is used to determine if we should auto-navigate to name tab after first shipping is added
-	const startedWithShippingFirstRef = useRef<boolean>(false)
-
-	// Track if we've started with shipping first in this session
-	useEffect(() => {
-		if (shouldShowShippingFirst && activeTab === 'shipping') {
-			startedWithShippingFirstRef.current = true
-		}
-	}, [shouldShowShippingFirst, activeTab])
-
-	// Auto-navigate to 'name' tab after first shipping option is added when we started with shipping first
-	useEffect(() => {
-		if (startedWithShippingFirstRef.current && hasValidShipping && activeTab === 'shipping') {
-			// First shipping option added, navigate to name tab
+		if (resolvedWorkflow.shouldStartAtShipping && hasSelectedShipping && activeTab === 'shipping') {
 			productFormActions.setActiveTab('name')
-			// Reset the flag so we don't auto-navigate again
-			startedWithShippingFirstRef.current = false
 		}
-	}, [hasValidShipping, activeTab])
+	}, [resolvedWorkflow.shouldStartAtShipping, hasSelectedShipping, activeTab])
 
 	// Check for persisted draft on mount (for drafts from previous sessions)
 	const checkForPersistedDraft = useCallback(async () => {
@@ -385,8 +336,8 @@ export function ProductFormContent({
 							</Button>
 						)}
 
-						{/* Show 'Next' button when shipping tab is shown first and user is on shipping tab */}
-						{shouldShowShippingFirst && activeTab === 'shipping' && !hasValidShipping ? (
+						{/* Show 'Next' button when shipping tab is the resolved first step and user is still onboarding shipping */}
+						{resolvedWorkflow.shouldStartAtShipping && activeTab === 'shipping' && !hasValidShipping ? (
 							<Button
 								type="button"
 								variant="secondary"
@@ -401,7 +352,7 @@ export function ProductFormContent({
 								selector={(state) => [state.canSubmit, state.isSubmitting]}
 								children={([canSubmit, isSubmitting]) => {
 									// Check if we need V4V setup for new products
-									if (needsV4VSetup && !editingProductId) {
+									if (resolvedWorkflow.requiresV4VSetup && !editingProductId) {
 										return (
 											<TooltipProvider>
 												<Tooltip>

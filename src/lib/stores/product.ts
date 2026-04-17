@@ -130,6 +130,25 @@ const cancelPendingSave = () => {
 	}
 }
 
+const createResetState = (
+	state: ProductFormState,
+	options?: {
+		activeTab?: ProductFormTab
+		editingProductId?: string | null
+	},
+): ProductFormState => {
+	const selectedCurrency = uiStore.state.selectedCurrency
+
+	return {
+		...DEFAULT_FORM_STATE,
+		formSessionId: state.formSessionId + 1,
+		activeTab: options?.activeTab ?? DEFAULT_FORM_STATE.activeTab,
+		editingProductId: options?.editingProductId ?? null,
+		currency: selectedCurrency === 'BTC' ? 'SATS' : selectedCurrency,
+		currencyMode: ['BTC', 'SATS'].includes(selectedCurrency) ? 'sats' : 'fiat',
+	}
+}
+
 const debouncedSave = () => {
 	cancelPendingSave()
 
@@ -307,10 +326,11 @@ export const productFormActions = {
 		})
 	},
 
-	// Legacy compatibility alias.
-	// Prefer startCreateProductSession() for explicit create-mode initialization.
-	reset: () => {
-		productFormActions.startCreateProductSession()
+	reset: (options?: { activeTab?: ProductFormTab; editingProductId?: string | null }) => {
+		// Cancel any pending auto-save to prevent stale data from being written
+		cancelPendingSave()
+
+		productFormStore.setState((state) => createResetState(state, options))
 	},
 
 	updateValues: (values: Partial<ProductFormState>) => {
@@ -356,7 +376,7 @@ export const productFormActions = {
 		debouncedSave()
 	},
 
-	loadDraftForProduct: async (productId: string): Promise<boolean> => {
+	loadDraftForProduct: async (productId: string, options?: { activeTab?: ProductFormTab }): Promise<boolean> => {
 		try {
 			const draft = await getProductFormDraft(productId)
 			if (draft) {
@@ -370,15 +390,17 @@ export const productFormActions = {
 
 				const normalizedShippings = normalizeProductShippingSelections((draftValues.shippings as ProductShippingForm[] | undefined) ?? [])
 
-				productFormStore.setState((state) =>
-					getFreshSessionState(state, {
-						...draftValues,
-						shippings: normalizedShippings,
-						editingProductId: productId,
-						activeTab: 'name',
-						isDirty: true,
+				productFormStore.setState((state) => ({
+					...createResetState(state, {
+						activeTab: options?.activeTab ?? 'name',
+						editingProductId: draft.editingProductId ?? productId,
 					}),
-				)
+					...draft,
+					shippings: normalizedShippings,
+					activeTab: options?.activeTab ?? 'name',
+					// Mark as dirty since we're loading unsaved changes
+					isDirty: true,
+				}))
 				return true
 			}
 			return false

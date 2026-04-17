@@ -1,6 +1,7 @@
 import { ProductFormContent } from '@/components/sheet-contents/NewProductContent'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { resolveProductWorkflow } from '@/lib/workflow/productWorkflowResolver'
 import { authStore } from '@/lib/stores/auth'
 import { productFormActions } from '@/lib/stores/product'
 import { hasProductFormDraft } from '@/lib/utils/productFormStorage'
@@ -39,6 +40,12 @@ function EditProductComponent() {
 
 	// Get the d tag value - this is what we use for draft storage (consistent with editingProductId)
 	const productDTag = product ? getProductId(product) : null
+	const workflow = resolveProductWorkflow({
+		mode: 'edit',
+		editingProductId: productDTag,
+		shippingState: 'unknown',
+		v4vConfigurationState: 'unknown',
+	})
 
 	const initializeForm = useCallback(async () => {
 		if (!productDTag) return
@@ -47,6 +54,10 @@ function EditProductComponent() {
 
 		try {
 			setInitState('checking')
+			productFormActions.reset({
+				activeTab: workflow.initialTab,
+				editingProductId: productDTag,
+			})
 
 			// Use productDTag for draft lookup (same key used for saving)
 			const hasDraft = await hasProductFormDraft(productDTag)
@@ -54,17 +65,21 @@ function EditProductComponent() {
 			if (hasDraft) {
 				// Auto-load the draft instead of prompting
 				setInitState('loading-draft')
-				await productFormActions.loadDraftForProduct(productDTag)
+				await productFormActions.loadDraftForProduct(productDTag, {
+					activeTab: workflow.initialTab,
+				})
 				setInitState('ready')
 			} else {
 				setInitState('loading-product')
-				await productFormActions.loadProductForEdit(productId)
+				await productFormActions.loadProductForEdit(productId, {
+					preserveTabState: { activeTab: workflow.initialTab },
+				})
 				setInitState('ready')
 			}
 		} finally {
 			lockRef.current = false
 		}
-	}, [productId, productDTag])
+	}, [productId, productDTag, workflow.initialTab])
 
 	// Effect to reset state when productId changes
 	useEffect(() => {
@@ -123,5 +138,5 @@ function EditProductComponent() {
 	}
 
 	// Ready to show the form - pass productDTag for draft checking and productId for reloading
-	return <ProductFormContent showFooter={true} productDTag={productDTag} productEventId={productId} />
+	return <ProductFormContent showFooter={true} productDTag={productDTag} productEventId={productId} workflow={workflow} />
 }
