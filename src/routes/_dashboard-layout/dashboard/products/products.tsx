@@ -21,6 +21,7 @@ import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from '@tans
 import { useStore } from '@tanstack/react-store'
 import { PackageIcon, Trash, EyeOff, Clock, Eye } from 'lucide-react'
 import { useState, useMemo } from 'react'
+import { TooltipButton } from '@/components/shared/TooltipButton'
 
 // Component to show basic product information
 function ProductBasicInfo({ product }: { product: NDKEvent }) {
@@ -38,26 +39,26 @@ function ProductBasicInfo({ product }: { product: NDKEvent }) {
 		<Link
 			to={`/products/${product.id}`}
 			onClick={() => queryClient.setQueryData(productQueryOptions(product.id).queryKey, product)}
-			className="block p-4 bg-gray-50 border-t hover:bg-gray-100 transition-colors cursor-pointer"
+			className="block bg-gray-50 hover:bg-gray-100 p-4 border-t transition-colors cursor-pointer"
 		>
 			<div className="space-y-3">
 				{images.length > 0 && (
-					<div className="w-full h-32 bg-gray-200 rounded-md overflow-hidden">
+					<div className="bg-gray-200 rounded-md w-full h-32 overflow-hidden">
 						<img src={images[0][1]} alt="Product image" className="w-full h-full object-cover" />
 					</div>
 				)}
 				<div>
-					<p className="text-sm text-gray-600 mb-1">Description:</p>
+					<p className="mb-1 text-gray-600 text-sm">Description:</p>
 					<p className="text-sm">{description}</p>
 				</div>
 				<div className="flex justify-between">
 					<div>
-						<p className="text-sm text-gray-600">
+						<p className="text-gray-600 text-sm">
 							Price: <span className="font-medium">{price}</span>
 						</p>
 					</div>
 					<div>
-						<p className="text-sm text-gray-600">
+						<p className="text-gray-600 text-sm">
 							Visibility:{' '}
 							<span
 								className={`font-medium capitalize ${visibility === 'hidden' ? 'text-gray-500' : visibility === 'pre-order' ? 'text-blue-600' : 'text-green-600'}`}
@@ -69,12 +70,12 @@ function ProductBasicInfo({ product }: { product: NDKEvent }) {
 				</div>
 				{stock && (
 					<div>
-						<p className="text-sm text-gray-600">
+						<p className="text-gray-600 text-sm">
 							Stock: <span className="font-medium">{stock} in stock</span>
 						</p>
 					</div>
 				)}
-				<p className="text-xs text-gray-400 text-right">Click to view product page →</p>
+				<p className="text-gray-400 text-xs text-right">Click to view product page →</p>
 			</div>
 		</Link>
 	)
@@ -118,9 +119,9 @@ function ProductListItem({
 	const triggerContent = (
 		<div className="flex items-center gap-3">
 			{thumbnailUrl ? (
-				<img src={thumbnailUrl} alt="" className="w-10 h-10 rounded object-cover shrink-0" />
+				<img src={thumbnailUrl} alt="" className="rounded w-10 h-10 object-cover shrink-0" />
 			) : (
-				<div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center shrink-0">
+				<div className="flex justify-center items-center bg-gray-100 rounded w-10 h-10 shrink-0">
 					<PackageIcon className="w-5 h-5 text-gray-400" />
 				</div>
 			)}
@@ -133,7 +134,7 @@ function ProductListItem({
 
 	const actions = (
 		<>
-			<Button
+			<TooltipButton
 				variant="ghost"
 				size="sm"
 				tooltip="Edit"
@@ -143,9 +144,9 @@ function ProductListItem({
 				}}
 				aria-label={`Edit ${getProductTitle(product)}`}
 			>
-				<span className="i-edit w-5 h-5" />
-			</Button>
-			<Button
+				<span className="w-5 h-5 i-edit" />
+			</TooltipButton>
+			<TooltipButton
 				variant="ghost"
 				size="sm"
 				tooltip="Share"
@@ -155,9 +156,9 @@ function ProductListItem({
 				}}
 				aria-label={`Share ${getProductTitle(product)}`}
 			>
-				<span className="i-sharing w-4 h-4" />
-			</Button>
-			<Button
+				<span className="w-4 h-4 i-sharing" />
+			</TooltipButton>
+			<TooltipButton
 				variant="ghost"
 				size="sm"
 				tooltip="Delete"
@@ -169,11 +170,11 @@ function ProductListItem({
 				disabled={isDeleting}
 			>
 				{isDeleting ? (
-					<div className="animate-spin h-4 w-4 border-2 border-destructive border-t-transparent rounded-full" />
+					<div className="border-2 border-destructive border-t-transparent rounded-full w-4 h-4 animate-spin" />
 				) : (
 					<Trash className="w-4 h-4 text-destructive" />
 				)}
-			</Button>
+			</TooltipButton>
 		</>
 	)
 
@@ -309,8 +310,8 @@ function ProductsOverviewComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
-				<h1 className="text-2xl font-bold">Products</h1>
+			<div className="hidden top-0 z-10 sticky lg:flex justify-between items-center bg-white px-4 lg:px-6 py-4 border-b">
+				<h1 className="font-bold text-2xl">Products</h1>
 				<div className="flex items-center gap-4">
 					<Select value={orderBy} onValueChange={setOrderBy}>
 						<SelectTrigger className="w-56">
@@ -328,9 +329,9 @@ function ProductsOverviewComponent() {
 					<Button
 						onClick={handleAddProductClick}
 						data-testid="add-product-button"
-						className="bg-neutral-800 hover:bg-neutral-700 text-white flex items-center gap-2 px-4 py-2 text-sm font-semibold"
+						className="flex items-center gap-2 bg-neutral-800 hover:bg-neutral-700 px-4 py-2 font-semibold text-white text-sm"
 					>
-						<span className="i-product w-5 h-5" /> Add A Product
+						<span className="w-5 h-5 i-product" /> Add A Product
 					</Button>
 				</div>
 			</div>
@@ -352,15 +353,15 @@ function ProductsOverviewComponent() {
 					<Button
 						onClick={handleAddProductClick}
 						data-testid="add-product-button-mobile"
-						className="w-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center gap-2 py-3 text-base font-semibold rounded-t-md rounded-b-none border-b border-neutral-600"
+						className="flex justify-center items-center gap-2 bg-neutral-800 hover:bg-neutral-700 py-3 border-neutral-600 border-b rounded-t-md rounded-b-none w-full font-semibold text-white text-base"
 					>
-						<span className="i-product w-5 h-5" /> Add A Product
+						<span className="w-5 h-5 i-product" /> Add A Product
 					</Button>
 				</div>
 
 				<div>
-					{isLoading && <div className="p-6 text-center text-gray-500 mt-4">Loading your products...</div>}
-					{error && <div className="p-6 text-center text-red-600 mt-4">Failed to load products: {error.message}</div>}
+					{isLoading && <div className="mt-4 p-6 text-gray-500 text-center">Loading your products...</div>}
+					{error && <div className="mt-4 p-6 text-red-600 text-center">Failed to load products: {error.message}</div>}
 
 					{!isLoading && !error && (
 						<>
@@ -381,9 +382,9 @@ function ProductsOverviewComponent() {
 									))}
 								</ul>
 							) : (
-								<div className="text-center text-gray-500 py-10 px-6">
-									<span className="i-product w-5 h-5" />
-									<h3 className="mt-2 text-lg font-semibold text-gray-700">No products yet</h3>
+								<div className="px-6 py-10 text-gray-500 text-center">
+									<span className="w-5 h-5 i-product" />
+									<h3 className="mt-2 font-semibold text-gray-700 text-lg">No products yet</h3>
 									<p className="mt-1 text-sm">Click the "Add A Product" button to create your first one.</p>
 								</div>
 							)}

@@ -24,12 +24,11 @@ export function CurrencyDropdown() {
 			<Tooltip open={isOpen ? false : undefined}>
 				<TooltipTrigger asChild>
 					<Button
-						variant="primary"
-						className="p-2 px-3 relative flex items-center gap-1 hover:[&>span]:text-secondary hover:[&>svg]:text-secondary"
+						className="relative flex items-center gap-1 p-2 px-3 btn-border-highlight hover:[&>span]:text-secondary hover:[&>svg]:text-secondary"
 						onClick={toggleDropdown}
 						data-testid="currency-dropdown-button"
 					>
-						<span className="text-sm font-medium">{selectedCurrency}</span>
+						<span className="font-medium text-sm">{selectedCurrency}</span>
 						<ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
 					</Button>
 				</TooltipTrigger>
@@ -39,10 +38,10 @@ export function CurrencyDropdown() {
 			{isOpen && (
 				<>
 					{/* Backdrop to close dropdown when clicking outside */}
-					<div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+					<div className="z-40 fixed inset-0" onClick={() => setIsOpen(false)} />
 
 					{/* Dropdown menu */}
-					<div className="absolute right-0 top-full mt-1 bg-primary rounded-lg shadow-lg z-50 min-w-24 max-h-60 overflow-y-auto">
+					<div className="top-full right-0 z-50 absolute bg-primary shadow-lg mt-1 rounded-lg min-w-24 max-h-60 overflow-y-auto">
 						{CURRENCIES.map((currency) => (
 							<Button
 								key={currency}

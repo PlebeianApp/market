@@ -127,10 +127,10 @@ function LoginPrompt() {
 	}
 
 	return (
-		<div className="flex items-center justify-center h-full">
+		<div className="flex justify-center items-center h-full">
 			<div className="flex flex-col items-center space-y-4">
-				<p className="text-lg text-muted-foreground">Please log in to view</p>
-				<Button variant="primary" onClick={handleLoginClick}>
+				<p className="text-muted-foreground text-lg">Please log in to view</p>
+				<Button variant="default" onClick={handleLoginClick}>
 					Login
 				</Button>
 			</div>
@@ -258,21 +258,21 @@ function DashboardLayout() {
 	return (
 		<div className="lg:flex lg:flex-col lg:h-[calc(100vh-5rem)]">
 			{/* Header - responsive for mobile/desktop */}
-			<div className="lg:hidden sticky top-[8.5rem] z-10">
-				<h1 className="font-heading p-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center relative">
+			<div className="lg:hidden top-[8.5rem] z-10 sticky">
+				<h1 className="relative flex justify-center items-center gap-2 bg-secondary-black p-4 font-heading text-secondary text-center">
 					{/* Mobile back button - only visible on small screens when not showing sidebar */}
 					{!showSidebar && isMobile && (
 						<button
 							onClick={handleBackToSidebar}
-							className="flex items-center justify-center text-secondary focus:outline-none absolute left-2 sm:left-3 md:left-4 top-1/2 -translate-y-1/2 w-12 h-12 z-20 cursor-pointer"
+							className="top-1/2 left-2 sm:left-3 md:left-4 z-20 absolute flex justify-center items-center focus:outline-none w-12 h-12 text-secondary -translate-y-1/2 cursor-pointer"
 							aria-label="Back to sidebar"
 						>
-							<span className="i-back w-6 h-6" />
+							<span className="w-6 h-6 i-back" />
 						</button>
 					)}
 
 					{/* Title */}
-					<span className="w-full truncate px-8 sm:px-12 md:px-16 text-3xl flex items-center justify-center gap-2 min-w-0">
+					<span className="flex justify-center items-center gap-2 px-8 sm:px-12 md:px-16 w-full min-w-0 text-3xl truncate">
 						{showSidebar || !isMobile ? (
 							'Dashboard'
 						) : (
@@ -282,7 +282,7 @@ function DashboardLayout() {
 								) : (
 									<>
 										{dashboardEmoji && <span className="text-2xl">{dashboardEmoji}</span>}
-										<span className="truncate min-w-0 flex-1 text-center">{dashboardTitleWithoutEmoji}</span>
+										<span className="flex-1 min-w-0 text-center truncate">{dashboardTitleWithoutEmoji}</span>
 									</>
 								)}
 							</>
@@ -291,7 +291,7 @@ function DashboardLayout() {
 
 					{/* Mobile emoji - only visible on small screens when not showing sidebar */}
 					{!showSidebar && emoji && isMobile && !dashboardEmoji && (
-						<span className="absolute right-2 sm:right-3 md:right-4 top-1/2 -translate-y-1/2 text-2xl select-none w-12 h-12 flex items-center justify-center z-20">
+						<span className="top-1/2 right-2 sm:right-3 md:right-4 z-20 absolute flex justify-center items-center w-12 h-12 text-2xl -translate-y-1/2 select-none">
 							{emoji}
 						</span>
 					)}
@@ -299,22 +299,22 @@ function DashboardLayout() {
 			</div>
 
 			<div className="hidden lg:block">
-				<h1 className="font-heading py-2 px-4 bg-secondary-black text-secondary flex items-center gap-2 justify-center text-center lg:justify-start relative">
+				<h1 className="relative flex justify-center lg:justify-start items-center gap-2 bg-secondary-black px-4 py-2 font-heading text-secondary text-center">
 					Dashboard
 				</h1>
 			</div>
 
 			{/* Main container - responsive layout */}
-			<div className="lg:flex lg:pt-6 lg:px-6 lg:pb-4 lg:gap-6 lg:flex-1 lg:overflow-hidden lg:max-w-none lg:min-h-0">
-				<div ref={parent} className="lg:flex lg:w-full lg:gap-6">
+			<div className="lg:flex lg:flex-1 lg:gap-6 lg:px-6 lg:pt-6 lg:pb-4 lg:max-w-none lg:min-h-0 lg:overflow-hidden">
+				<div ref={parent} className="lg:flex lg:gap-6 lg:w-full">
 					{/* Sidebar - responsive behavior */}
 					{(showSidebar || !isMobile) && (
-						<aside className="w-full lg:w-80 lg:overflow-y-auto lg:border lg:border-black lg:rounded lg:max-h-full lg:bg-white lg:flex-shrink-0">
+						<aside className="lg:flex-shrink-0 lg:bg-white lg:border lg:border-black lg:rounded w-full lg:w-80 lg:max-h-full lg:overflow-y-auto">
 							<div className="lg:space-y-2">
 								{filteredNavigation.map((section) => (
 									<div key={section.title}>
-										<h3 className="font-heading bg-tertiary-black text-white px-4 py-2 mb-0 lg:mb-2">{section.title}</h3>
-										<nav className="space-y-2 p-4 lg:p-0 text-xl lg:text-base">
+										<h3 className="bg-tertiary-black mb-0 lg:mb-2 px-4 py-2 font-heading text-white">{section.title}</h3>
+										<nav className="space-y-2 p-4 lg:p-0 lg:text-base text-xl">
 											{section.items.map((item) => {
 												const isActive = matchRoute({ to: item.path, fuzzy: true })
 												const notificationCount = getNotificationCount(item.path, unseenOrders, unseenMessages, unseenPurchases)
@@ -322,14 +322,14 @@ function DashboardLayout() {
 													<Link
 														key={item.path}
 														to={item.path}
-														className="block p-4 lg:px-6 lg:py-2 transition-colors font-bold border border-black bg-white rounded lg:border-0 lg:bg-transparent lg:rounded-none data-[status=active]:bg-secondary data-[status=active]:text-white data-[status=active]:border-secondary hover:text-pink-500 relative"
+														className="block relative bg-white data-[status=active]:bg-secondary lg:bg-transparent p-4 lg:px-6 lg:py-2 border border-black data-[status=active]:border-secondary lg:border-0 rounded lg:rounded-none font-bold data-[status=active]:text-white hover:text-pink-500 transition-colors"
 														onClick={handleSidebarItemClick}
 														data-status={isActive ? 'active' : 'inactive'}
 													>
-														<span className="flex items-center justify-between">
+														<span className="flex justify-between items-center">
 															<span>{item.title}</span>
 															{notificationCount > 0 && (
-																<span className="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-2 text-xs font-bold text-white bg-pink-500 rounded-full ml-2">
+																<span className="inline-flex justify-center items-center bg-pink-500 ml-2 px-2 rounded-full min-w-[1.5rem] h-6 font-bold text-white text-xs">
 																	{notificationCount > 99 ? '99+' : notificationCount}
 																</span>
 															)}
@@ -353,20 +353,20 @@ function DashboardLayout() {
 						>
 							{/* Desktop back button and title - fixed to top of container */}
 							{needsBackButton && (
-								<div className="sticky top-0 z-10 bg-white border-b border-gray-200 pb-4 mb-0 p-4 lg:p-8 flex-shrink-0 flex items-center relative">
+								<div className="top-0 z-10 relative sticky flex flex-shrink-0 items-center bg-white mb-0 p-4 lg:p-8 pb-4 border-gray-200 border-b">
 									<button
 										onClick={handleBackToParent}
 										className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors cursor-pointer"
 										aria-label={backButtonInfo?.parentPath ? `Back to ${backButtonInfo?.parentTitle}` : 'Go back'}
 									>
-										<span className="i-back w-5 h-5" />
-										<span className="text-sm font-medium">
+										<span className="w-5 h-5 i-back" />
+										<span className="font-medium text-sm">
 											{backButtonInfo?.parentPath ? `Back to ${backButtonInfo?.parentTitle}` : 'Back'}
 										</span>
 									</button>
 
 									{!isMobile && (
-										<h1 className="absolute left-1/2 -translate-x-1/2 text-[1.6rem] font-bold flex items-center gap-2">
+										<h1 className="left-1/2 absolute flex items-center gap-2 font-bold text-[1.6rem] -translate-x-1/2">
 											{isMessageDetailView && chatProfile?.user?.pubkey ? (
 												<UserCard pubkey={chatProfile?.user?.pubkey} size="md" />
 											) : (
@@ -379,7 +379,7 @@ function DashboardLayout() {
 									{dashboardHeaderAction && (
 										<button
 											onClick={dashboardHeaderAction.onClick}
-											className="absolute right-4 lg:right-8 top-1/2 -translate-y-1/2 px-3 py-1 text-sm font-medium bg-pink-500 text-white rounded hover:bg-pink-600 transition-colors"
+											className="top-1/2 right-4 lg:right-8 absolute bg-pink-500 hover:bg-pink-600 px-3 py-1 rounded font-medium text-white text-sm transition-colors -translate-y-1/2"
 										>
 											{dashboardHeaderAction.label}
 										</button>
@@ -394,7 +394,7 @@ function DashboardLayout() {
 									<div className="h-full">
 										<div
 											className={cn(
-												'p-4 bg-white lg:p-8 lg:bg-transparent h-full',
+												'bg-white lg:bg-transparent p-4 lg:p-8 h-full',
 												location.pathname === '/dashboard/sales/sales' && 'p-0 lg:p-0',
 												location.pathname.startsWith('/dashboard/sales/messages') && 'p-0 lg:p-0',
 												location.pathname === '/dashboard/sales/circular-economy' && 'p-0 lg:p-0',
@@ -443,7 +443,7 @@ function DashboardLayout() {
 												location.pathname !== '/dashboard/account/preferences' &&
 												location.pathname !== '/dashboard/account/vanity-url' &&
 												location.pathname !== '/dashboard/account/nostr-address' && (
-													<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>
+													<h1 className="mb-4 font-bold text-[1.6rem]">{dashboardTitle}</h1>
 												)}
 											{!isAuthenticated ? (
 												<LoginPrompt />
@@ -473,7 +473,7 @@ function DashboardLayout() {
 														location.pathname !== '/dashboard/account/preferences' &&
 														location.pathname !== '/dashboard/account/vanity-url' &&
 														location.pathname !== '/dashboard/account/nostr-address' && (
-															<h1 className="text-[1.6rem] font-bold mb-4">{dashboardTitle}</h1>
+															<h1 className="mb-4 font-bold text-[1.6rem]">{dashboardTitle}</h1>
 														)}
 													<Outlet />
 												</>

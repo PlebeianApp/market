@@ -1,122 +1,64 @@
-import * as React from 'react'
-import { Slot } from '@radix-ui/react-slot'
-import { cva, type VariantProps } from 'class-variance-authority'
+import * as React from "react"
+import { cva, type VariantProps } from "class-variance-authority"
+import { Slot } from "radix-ui"
 
-import { cn } from '@/lib/utils'
-import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip'
-
-export interface ButtonProps extends React.ComponentProps<'button'> {
-	tooltip?: string
-	disabledTooltip?: string
-	asChild?: boolean
-	icon?: React.ReactNode
-	iconPosition?: IconPosition
-}
-
-export type ButtonVariant = "primary" | "secondary" | "tertiary" | "focus" | "destructive" | "outline" | "ghost" | "link" | "none" | "dark-ghost" | "dark-subtle" | "dark-muted" | "dark-active" | "success" | "warning" | "dark-destructive"
+import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-	'inline-flex items-center justify-center whitespace-nowrap rounded-lg text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border-2 border-black box hover:translated cursor-pointer',
-	{
-		variants: {
-			variant: {
-				primary:
-					'bg-primary text-primary-foreground border-primary-border hover:bg-transparent hover:text-primary-foreground-hover hover:border-primary-border-hover active:ho',
-				secondary:
-					'bg-secondary text-secondary-foreground border-secondary-border hover:bg-transparent hover:text-secondary-foreground-hover hover:border-secondary-border-hover uppercase',
-				tertiary:
-					'bg-tertiary text-tertiary-foreground border-tertiary-border hover:bg-tertiary-hover hover:text-tertiary-foreground-hover hover:border-tertiary-border-hover',
-				focus:
-					'bg-focus text-focus-foreground border-focus-border hover:bg-transparent hover:text-focus-foreground-hover hover:border-focus-border-hover',
-				destructive: 'bg-destructive text-destructive-foreground hover:bg-transparent hover:text-destructive-foreground',
-
-				outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
-				ghost: 'hover:border-primary-border border-none',
-				link: 'text-secondary border-none underline-offset-4 hover:underline',
-				none: 'border-0 p-0 text-base justify-start',
-
-				// Dark background variants (for use inside dark containers)
-				'dark-ghost': 'bg-transparent hover:bg-white/10 text-gray-400 hover:text-white border-0',
-				'dark-subtle': 'bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white border-0',
-				'dark-muted': 'bg-white/10 hover:bg-white/20 text-white border-0',
-				'dark-active': 'bg-white/20 text-white border-0',
-				success: 'bg-green-600 hover:bg-green-700 text-white border-0',
-				warning: 'bg-orange-600 hover:bg-orange-700 text-white border-0',
-				'dark-destructive': 'bg-transparent hover:bg-red-500/20 text-red-400 hover:text-red-300 border-0',
-			},
-			size: {
-				default: 'h-10 px-4 py-2',
-				sm: 'h-9 px-3',
-				lg: 'h-11  px-8',
-				icon: 'h-10 aspect-square',
-				none: 'h-6 w-fit',
-			},
-		},
-		defaultVariants: {
-			variant: 'primary',
-			size: 'default',
-		},
-	},
+  "inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  {
+    variants: {
+      variant: {
+        default: "bg-primary text-primary-foreground hover:bg-primary/90",
+        destructive:
+          "bg-destructive text-white hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40",
+        outline:
+          "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+        secondary:
+          "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+        ghost:
+          "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
+        link: "text-primary underline-offset-4 hover:underline",
+      },
+      size: {
+        default: "h-9 px-4 py-2 has-[>svg]:px-3",
+        xs: "h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
+        sm: "h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5",
+        lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
+        icon: "size-9",
+        "icon-xs": "size-6 rounded-md [&_svg:not([class*='size-'])]:size-3",
+        "icon-sm": "size-8",
+        "icon-lg": "size-10",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+      size: "default",
+    },
+  }
 )
 
-type IconPosition = 'left' | 'right'
-
 function Button({
-	className,
-	variant,
-	size,
-	asChild = false,
-	icon,
-	iconPosition = 'left',
-	children,
-	...props
-}: ButtonProps & VariantProps<typeof buttonVariants>) {
-	const Comp = asChild ? Slot : 'button'
+  className,
+  variant = "default",
+  size = "default",
+  asChild = false,
+  ...props
+}: React.ComponentProps<"button"> &
+  VariantProps<typeof buttonVariants> & {
+    asChild?: boolean
+  }) {
+  const Comp = asChild ? Slot.Root : "button"
 
-	const hasIcon = !!icon
-	const buttonClasses = cn(buttonVariants({ variant, size, className }), hasIcon && 'inline-flex items-center gap-2')
-
-	const content = (
-		<Comp data-slot="button" className={buttonClasses} {...props}>
-			{hasIcon && iconPosition === 'right' ? (
-				<>
-					{children}
-					{icon}
-				</>
-			) : (
-				<>
-					{hasIcon && icon}
-					{children}
-				</>
-			)}
-		</Comp>
-	)
-
-	const { tooltip, disabledTooltip } = props
-
-	if (props.disabled && disabledTooltip) {
-		return (
-			<Tooltip>
-				<TooltipTrigger asChild>
-					<span>
-						{content}
-					</span>
-				</TooltipTrigger>
-				<TooltipContent side="bottom">{disabledTooltip}</TooltipContent>
-			</Tooltip>
-		)
-	}
-	
-	if (tooltip) {
-		return (
-			<Tooltip>
-				<TooltipTrigger asChild>{content}</TooltipTrigger>
-				<TooltipContent side="bottom">{tooltip}</TooltipContent>
-			</Tooltip>
-		)
-	}
-
-	return content
+  return (
+    <Comp
+      data-slot="button"
+      data-variant={variant}
+      data-size={size}
+      className={cn(buttonVariants({ variant, size, className }))}
+      {...props}
+    />
+  )
 }
 
 export { Button, buttonVariants }

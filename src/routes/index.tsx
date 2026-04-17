@@ -15,6 +15,7 @@ import { useQuery } from '@tanstack/react-query'
 import { productsQueryOptions } from '@/queries/products'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { z } from 'zod'
+import { SelectableBadge } from '@/components/shared/SelectableBadge'
 
 // Hook to inject dynamic CSS for background image
 function useHeroBackground(imageUrl: string, className: string) {
@@ -103,20 +104,20 @@ function Index() {
 			{/* Hero Section */}
 			<div className={`relative hero-container ${marketBackgroundImageUrl ? `bg-hero-image ${marketHeroClassName}` : 'bg-gray-700'}`}>
 				<div className="hero-overlays">
-					<div className="absolute inset-0 bg-radial-overlay z-10 opacity-40" />
-					<div className="absolute inset-0 opacity-20 bg-dots-overlay z-10" />
+					<div className="z-10 absolute inset-0 bg-radial-overlay opacity-40" />
+					<div className="z-10 absolute inset-0 bg-dots-overlay opacity-20" />
 				</div>
 
 				<div className="hero-content">
-					<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-16 lg:mt-0">
-						<div className="flex items-center justify-center h-24 lg:h-32">
-							<h1 className="text-4xl lg:text-5xl font-theylive transition-opacity duration-500">Buy & Sell Stuff with sats</h1>
+					<div className="z-20 relative flex flex-col justify-center items-center lg:col-span-2 mt-16 lg:mt-0 text-white text-center">
+						<div className="flex justify-center items-center h-24 lg:h-32">
+							<h1 className="font-theylive text-4xl lg:text-5xl transition-opacity duration-500">Buy & Sell Stuff with sats</h1>
 						</div>
 
 						<div className="flex flex-col gap-6">
-							<Button variant="focus" size="lg" onClick={handleStartSelling}>
+							<Button variant="secondary" size="lg" onClick={handleStartSelling}>
 								<span className="flex items-center gap-2">
-									<span className="i-nostr w-6 h-6"></span>Start Selling
+									<span className="size-6 i-nostr"></span>Start Selling
 								</span>
 							</Button>
 						</div>
@@ -125,21 +126,16 @@ function Index() {
 			</div>
 			{/* Tag Filter Bar */}
 			{defaultTags.length > 0 && (
-				<div className="sticky top-0 z-20 bg-off-black border-b shadow-sm">
+				<div className="top-0 z-20 sticky bg-off-black shadow-sm border-b">
 					<div className="px-4 py-3 overflow-x-auto">
 						<div className="flex items-center gap-2 min-w-max">
-							<Badge variant={!tag ? 'primaryActive' : 'primary'} className="cursor-pointer transition-colors" onClick={handleClearFilter}>
+							<SelectableBadge isSelected className="transition-colors cursor-pointer" onClick={handleClearFilter}>
 								All
-							</Badge>
+							</SelectableBadge>
 							{defaultTags.map((tagName) => (
-								<Badge
-									key={tagName}
-									variant={tag === tagName ? 'primaryActive' : 'primary'}
-									className="cursor-pointer transition-colors"
-									onClick={() => handleTagClick(tagName)}
-								>
+								<SelectableBadge key={tagName} className="transition-colors cursor-pointer" onClick={() => handleTagClick(tagName)}>
 									{tagName}
-								</Badge>
+								</SelectableBadge>
 							))}
 						</div>
 					</div>

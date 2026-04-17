@@ -13,6 +13,7 @@ import { useBlacklistSync } from '@/hooks/useBlacklistSync'
 import { useVanitySync } from '@/hooks/useVanitySync'
 import { useNip05Sync } from '@/hooks/useNip05Sync'
 import { useStore } from '@tanstack/react-store'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 export const Route = createRootRoute({
 	component: RootComponent,
@@ -66,20 +67,22 @@ function RootLayout() {
 	}
 
 	return (
-		<div className="relative flex flex-col min-h-screen">
-			<Header />
+		<TooltipProvider>
+			<div className="relative flex flex-col min-h-screen">
+				<Header />
 
-			<main className="flex-grow flex flex-col">
-				<Outlet />
-			</main>
-			<Pattern pattern="page" />
-			{!isDashboardPage && !isCheckoutPage && <Footer />}
-			{/* Having some build error with this rn */}
-			{/* <TanStackRouterDevtools /> */}
-			<DecryptPasswordDialog />
-			<SheetRegistry />
-			<DialogRegistry />
-			<Toaster />
-		</div>
+				<main className="flex flex-col flex-grow">
+					<Outlet />
+				</main>
+				<Pattern pattern="page" />
+				{!isDashboardPage && !isCheckoutPage && <Footer />}
+				{/* Having some build error with this rn */}
+				{/* <TanStackRouterDevtools /> */}
+				<DecryptPasswordDialog />
+				<SheetRegistry />
+				<DialogRegistry />
+				<Toaster />
+			</div>
+		</TooltipProvider>
 	)
 }

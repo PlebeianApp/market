@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { ZapButton } from './ZapButton'
 import NDK, { NDKEvent } from '@nostr-dev-kit/ndk'
-import { Button, type ButtonVariant } from '../ui/button'
 import { ShareButton } from './ShareButton'
 import { ReactionButton } from './ReactionButton'
 import { CommentButton } from './CommentButton'
@@ -11,6 +10,7 @@ import type { Reaction } from '@/queries/reactions'
 import { ReactionsList } from './ReactionsList'
 import { ZapsList } from './ZapsList'
 import { Reply } from 'lucide-react'
+import type { ButtonVariant } from '../shared/ButtonProps'
 
 interface SocialInteractionsProps extends React.ComponentProps<'div'> {
 	event: NDKEvent

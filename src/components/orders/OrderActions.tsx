@@ -122,13 +122,13 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 	const renderStatusIcon = () => {
 		switch (iconName) {
 			case 'truck':
-				return <Truck className="h-4 w-4" />
+				return <Truck className="w-4 h-4" />
 			case 'tick':
-				return <Check className="h-4 w-4" />
+				return <Check className="w-4 h-4" />
 			case 'clock':
-				return <Clock className="h-4 w-4" />
+				return <Clock className="w-4 h-4" />
 			case 'cross':
-				return <X className="h-4 w-4" />
+				return <X className="w-4 h-4" />
 			default:
 				return null
 		}
@@ -153,7 +153,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 	const badgeIconOnly = breakpoint === 'sm'
 
 	return (
-		<div className={cn('flex items-center justify-between gap-2 w-full', className)}>
+		<div className={cn('flex justify-between items-center gap-2 w-full', className)}>
 			{/* Cancel Button (Left) - Icon only */}
 			{canCancel ? (
 				<Tooltip>
@@ -163,32 +163,32 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 							size="icon"
 							onClick={() => setIsCancelOpen(true)}
 							disabled={isLoading}
-							className="h-8 w-8 shrink-0 text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+							className="hover:bg-destructive/10 border-destructive/50 w-8 h-8 text-destructive hover:text-destructive shrink-0"
 							aria-label="Cancel order"
 						>
-							<X className="h-4 w-4" />
+							<X className="w-4 h-4" />
 						</Button>
 					</TooltipTrigger>
 					<TooltipContent side="bottom">Cancel order</TooltipContent>
 				</Tooltip>
 			) : (
-				<div className="h-8 w-8 shrink-0" />
+				<div className="w-8 h-8 shrink-0" />
 			)}
 
 			{/* Status Badge (Center) */}
 			{badgeIconOnly ? (
 				<Tooltip>
 					<TooltipTrigger asChild>
-						<div className={cn('flex w-8 items-center justify-center rounded-md p-1', bgColor, textColor)}>{renderStatusIcon()}</div>
+						<div className={cn('flex justify-center items-center p-1 rounded-md w-8', bgColor, textColor)}>{renderStatusIcon()}</div>
 					</TooltipTrigger>
 					<TooltipContent side="bottom" className="capitalize">
 						{label}
 					</TooltipContent>
 				</Tooltip>
 			) : (
-				<div className={cn('flex w-[7rem] items-center justify-center gap-1.5 rounded-md px-2 py-1', bgColor, textColor)}>
+				<div className={cn('flex justify-center items-center gap-1.5 px-2 py-1 rounded-md w-[7rem]', bgColor, textColor)}>
 					{renderStatusIcon()}
-					<span className="font-medium capitalize text-xs whitespace-nowrap">{label}</span>
+					<span className="font-medium text-xs capitalize whitespace-nowrap">{label}</span>
 				</div>
 			)}
 
@@ -197,14 +197,14 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 				<Tooltip>
 					<TooltipTrigger asChild>
 						<Button
-							variant="primary"
+							variant="default"
 							size="icon"
 							onClick={nextAction.action}
 							disabled={isLoading}
-							className="h-8 w-8 shrink-0"
+							className="w-8 h-8 shrink-0"
 							aria-label={nextAction.label}
 						>
-							<nextAction.icon className="h-4 w-4" />
+							<nextAction.icon className="w-4 h-4" />
 						</Button>
 					</TooltipTrigger>
 					<TooltipContent side="bottom">{nextAction.label}</TooltipContent>
@@ -212,8 +212,8 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 			) : status === ORDER_STATUS.COMPLETED ? (
 				<Tooltip>
 					<TooltipTrigger asChild>
-						<Button variant="ghost" size="icon" disabled className="h-8 w-8 shrink-0 text-green-600" aria-label="Done">
-							<CheckCircle className="h-4 w-4" />
+						<Button variant="ghost" size="icon" disabled className="w-8 h-8 text-green-600 shrink-0" aria-label="Done">
+							<CheckCircle className="w-4 h-4" />
 						</Button>
 					</TooltipTrigger>
 					<TooltipContent side="bottom">Done</TooltipContent>
@@ -221,8 +221,8 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 			) : status === ORDER_STATUS.CANCELLED ? (
 				<Tooltip>
 					<TooltipTrigger asChild>
-						<Button variant="ghost" size="icon" disabled className="h-8 w-8 shrink-0 text-muted-foreground" aria-label="Cancelled">
-							<Ban className="h-4 w-4" />
+						<Button variant="ghost" size="icon" disabled className="w-8 h-8 text-muted-foreground shrink-0" aria-label="Cancelled">
+							<Ban className="w-4 h-4" />
 						</Button>
 					</TooltipTrigger>
 					<TooltipContent side="bottom">Cancelled</TooltipContent>
@@ -230,8 +230,8 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 			) : (
 				<Tooltip>
 					<TooltipTrigger asChild>
-						<Button variant="ghost" size="icon" disabled className="h-8 w-8 shrink-0 text-muted-foreground" aria-label="Waiting">
-							<Clock className="h-4 w-4" />
+						<Button variant="ghost" size="icon" disabled className="w-8 h-8 text-muted-foreground shrink-0" aria-label="Waiting">
+							<Clock className="w-4 h-4" />
 						</Button>
 					</TooltipTrigger>
 					<TooltipContent side="bottom">Waiting</TooltipContent>
@@ -249,7 +249,7 @@ export function OrderActions({ order, userPubkey, variant = 'outline', className
 					</DialogHeader>
 
 					<div className="space-y-2 py-4">
-						<p className="text-sm text-muted-foreground">
+						<p className="text-muted-foreground text-sm">
 							By confirming, you acknowledge that the payment has been received and you are ready to process this order.
 						</p>
 					</div>

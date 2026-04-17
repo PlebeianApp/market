@@ -11,6 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
 import { hasAcceptedTerms } from '@/components/dialogs/TermsConditionsDialog'
 import { uiActions } from '@/lib/stores/ui'
+import { cn } from '@/lib/utils'
 
 interface LoginDialogProps {
 	open: boolean
@@ -34,6 +35,26 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 		}
 	}
 
+	const classNameTab = cn(
+		// Layout & Spacing
+		'flex-1 px-1 sm:px-2 py-2 text-sm sm:text-base font-medium rounded-none',
+
+		// Reset Shadows (Crucial for removing the "glow" or drop shadow)
+		'shadow-none!',
+
+		// Base State (Inactive): Thin Primary Border
+		'border-x-0 border-t-0 border-b border-primary',
+		'text-black hover:text-secondary',
+
+		// Active State: Switch to Secondary Border, Remove Shadow
+		'data-[state=active]:border-secondary',
+		'data-[state=active]:text-secondary',
+		'data-[state=active]:shadow-none',
+
+		// Hide the internal ShadCN "after:" line indicator
+		'after:hidden',
+	)
+
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent
@@ -41,7 +62,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 				data-testid="login-dialog"
 			>
 				{/* Header Section */}
-				<div className="relative bg-black text-white px-4 sm:px-6 py-6 overflow-hidden w-full max-w-full">
+				<div className="relative bg-black px-4 sm:px-6 py-6 w-full max-w-full overflow-hidden text-white">
 					<div
 						className="absolute inset-0 opacity-80"
 						style={{
@@ -50,32 +71,25 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 							backgroundRepeat: 'repeat',
 						}}
 					/>
-					<div className="relative z-10">
-						<h2 className="text-xl font-semibold mb-2">Login</h2>
-						<p className="text-sm text-gray-300">Choose your preferred login method below.</p>
+					<div className="z-10 relative">
+						<h2 className="mb-2 font-semibold text-xl">Login</h2>
+						<p className="text-gray-300 text-sm">Choose your preferred login method below.</p>
 					</div>
 				</div>
-				<div className="px-4 sm:px-6 pt-0 pb-6 overflow-hidden w-full max-w-full">
-					<Tabs defaultValue="extension" className="w-full max-w-full min-w-0" value={activeTab} onValueChange={setActiveTab}>
-						<TabsList className="w-full rounded-none bg-transparent h-auto p-0 flex">
-							<TabsTrigger
-								value="extension"
-								data-testid="extension-tab"
-								className="flex-1 px-1 sm:px-2 py-2 text-sm sm:text-base font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
-							>
+				<div className="px-4 sm:px-6 pt-0 pb-6 w-full max-w-full overflow-hidden">
+					<Tabs defaultValue="extension" className="w-full min-w-0 max-w-full" value={activeTab}>
+						<TabsList className="flex bg-transparent p-0 rounded-none w-full h-auto">
+							<TabsTrigger value="extension" data-testid="extension-tab" className={classNameTab} onClick={() => setActiveTab('extension')}>
 								Extension
 							</TabsTrigger>
-							<TabsTrigger
-								value="connect"
-								data-testid="connect-tab"
-								className="flex-1 px-1 sm:px-2 py-2 text-sm sm:text-base font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
-							>
+							<TabsTrigger value="connect" data-testid="connect-tab" className={classNameTab} onClick={() => setActiveTab('connect')}>
 								N-Connect
 							</TabsTrigger>
 							<TabsTrigger
 								value="private-key"
 								data-testid="private-key-tab"
-								className="flex-1 px-1 sm:px-2 py-2 text-sm sm:text-base font-medium data-[state=active]:text-secondary border-b-1 data-[state=active]:border-secondary data-[state=inactive]:text-black rounded-none"
+								className={classNameTab}
+								onClick={() => setActiveTab('private-key')}
 							>
 								Private Key
 							</TabsTrigger>
@@ -84,19 +98,19 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 							<PrivateKeyLogin onError={handleError} onSuccess={handleLoginSuccess} />
 						</TabsContent>
 						<TabsContent value="connect" className="w-full max-w-full overflow-hidden">
-							<Tabs defaultValue="qr" className="w-full max-w-full min-w-0">
-								<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-[1px]">
+							<Tabs defaultValue="qr" className="w-full min-w-0 max-w-full">
+								<TabsList className="flex flex-wrap gap-[1px] bg-transparent p-0 w-full h-auto">
 									<TabsTrigger
 										value="qr"
 										data-testid="qr-tab"
-										className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+										className="flex-1 data-[state=active]:bg-secondary data-[state=inactive]:bg-gray-100 px-4 py-2 rounded-none font-medium data-[state=active]:text-white data-[state=inactive]:text-black text-xs"
 									>
 										QR Code
 									</TabsTrigger>
 									<TabsTrigger
 										value="bunker"
 										data-testid="bunker-tab"
-										className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+										className="flex-1 data-[state=active]:bg-secondary data-[state=inactive]:bg-gray-100 px-4 py-2 rounded-none font-medium data-[state=active]:text-white data-[state=inactive]:text-black text-xs"
 									>
 										Bunker URL
 									</TabsTrigger>
@@ -113,9 +127,9 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 						</TabsContent>
 						<TabsContent value="extension" className="w-full max-w-full overflow-hidden">
 							<div className="space-y-4 py-4">
-								<p className="text-sm text-muted-foreground">Login using your Nostr browser extension (e.g., Alby, nos2x).</p>
+								<p className="text-muted-foreground text-sm">Login using your Nostr browser extension (e.g., Alby, nos2x).</p>
 								{extensionError && (
-									<div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded text-sm" role="alert">
+									<div className="bg-red-50 px-4 py-3 border border-red-200 rounded text-red-700 text-sm" role="alert">
 										<p className="font-medium">Login Failed</p>
 										<p>{extensionError}</p>
 									</div>
@@ -139,7 +153,7 @@ export function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
 						</TabsContent>
 					</Tabs>
 					<div className="flex items-center space-x-2">
-						<Label htmlFor="auto-login" className=" flex gap-2 text-sm text-muted-foreground items-center">
+						<Label htmlFor="auto-login" className="flex items-center gap-2 text-muted-foreground text-sm">
 							<Checkbox
 								id="auto-login"
 								checked={enableAutoLogin}

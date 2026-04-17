@@ -68,9 +68,9 @@ function useFeaturedCollectionEvents(featuredCollections: string[] | undefined) 
 export const Route = createFileRoute('/community/')({
 	component: CommunityRoute,
 	errorComponent: ({ error }) => (
-		<div className="flex flex-col items-center justify-center min-h-[50vh] gap-4 px-4 text-center">
-			<h2 className="text-xl font-semibold">Unable to load collections</h2>
-			<p className="text-muted-foreground max-w-md">
+		<div className="flex flex-col justify-center items-center gap-4 px-4 min-h-[50vh] text-center">
+			<h2 className="font-semibold text-xl">Unable to load collections</h2>
+			<p className="max-w-md text-muted-foreground">
 				{error instanceof Error ? error.message : 'There was a problem connecting to relays. Please try again.'}
 			</p>
 			<Button variant="secondary" onClick={() => window.location.reload()}>
@@ -205,15 +205,15 @@ function CommunityRoute() {
 
 	// Render homepage hero content
 	const renderHomepageHero = () => (
-		<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-16 lg:mt-0">
-			<div className="flex items-center justify-center h-24 lg:h-32">
-				<h1 className="text-4xl lg:text-5xl font-theylive transition-opacity duration-500">Browse Collections</h1>
+		<div className="z-20 relative flex flex-col justify-center items-center lg:col-span-2 mt-16 lg:mt-0 text-white text-center">
+			<div className="flex justify-center items-center h-24 lg:h-32">
+				<h1 className="font-theylive text-4xl lg:text-5xl transition-opacity duration-500">Browse Collections</h1>
 			</div>
 
 			<div className="flex flex-col gap-6">
-				<Button variant="focus" size="lg" onClick={handleStartSelling}>
+				<Button variant="secondary" size="lg" onClick={handleStartSelling}>
 					<span className="flex items-center gap-2">
-						<span className="i-nostr w-6 h-6"></span>Start Selling
+						<span className="size-6 i-nostr"></span>Start Selling
 					</span>
 				</Button>
 
@@ -238,9 +238,9 @@ function CommunityRoute() {
 
 	// Render collections hero content
 	const renderCollectionsHero = () => (
-		<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-16 lg:mt-0">
-			<div className="flex items-center justify-center h-24 lg:h-32">
-				<h1 className="text-4xl lg:text-5xl font-theylive transition-opacity duration-500">{displayTitle || 'Loading...'}</h1>
+		<div className="z-20 relative flex flex-col justify-center items-center lg:col-span-2 mt-16 lg:mt-0 text-white text-center">
+			<div className="flex justify-center items-center h-24 lg:h-32">
+				<h1 className="font-theylive text-4xl lg:text-5xl transition-opacity duration-500">{displayTitle || 'Loading...'}</h1>
 			</div>
 
 			<div className="flex flex-col gap-6">
@@ -280,8 +280,8 @@ function CommunityRoute() {
 					onTouchEnd={handleTouchEnd}
 				>
 					<div className="hero-overlays">
-						<div className="absolute inset-0 bg-radial-overlay z-10 opacity-40" />
-						<div className="absolute inset-0 opacity-20 bg-dots-overlay z-10" />
+						<div className="z-10 absolute inset-0 bg-radial-overlay opacity-40" />
+						<div className="z-10 absolute inset-0 bg-dots-overlay opacity-20" />
 					</div>
 
 					<div className="hero-content">{renderHomepageHero()}</div>
@@ -295,15 +295,15 @@ function CommunityRoute() {
 					onTouchEnd={handleTouchEnd}
 				>
 					<div className="hero-overlays">
-						<div className="absolute inset-0 bg-radial-overlay z-10 opacity-40" />
-						<div className="absolute inset-0 opacity-20 bg-dots-overlay z-10" />
+						<div className="z-10 absolute inset-0 bg-radial-overlay opacity-40" />
+						<div className="z-10 absolute inset-0 bg-dots-overlay opacity-20" />
 					</div>
 
 					<div className="hero-content">{renderCollectionsHero()}</div>
 				</div>
 			)}
 
-			<div className="px-4 py-4 flex flex-col gap-12">
+			<div className="flex flex-col gap-12 px-4 py-4">
 				<ItemGrid title="Collections">
 					{collections.map((collection) => (
 						<CollectionCard key={collection.id} collection={collection} />
@@ -311,9 +311,9 @@ function CommunityRoute() {
 				</ItemGrid>
 				<ItemGrid title="Merchants" cols={2} smCols={2} lgCols={2} xlCols={3} gap={16}>
 					{isLoadingMerchants ? (
-						<div className="col-span-full text-center py-8 text-gray-500">Loading merchants...</div>
+						<div className="col-span-full py-8 text-gray-500 text-center">Loading merchants...</div>
 					) : filteredMerchantPubkeys.length === 0 ? (
-						<div className="col-span-full text-center py-8 text-gray-500">No merchants found</div>
+						<div className="col-span-full py-8 text-gray-500 text-center">No merchants found</div>
 					) : (
 						filteredMerchantPubkeys.map((pubkey) => <FeaturedUserCard key={pubkey} userPubkey={pubkey} />)
 					)}

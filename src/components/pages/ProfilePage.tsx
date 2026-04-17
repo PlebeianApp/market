@@ -28,6 +28,7 @@ import { Edit, MapPin, MessageCircle, Minus, Plus, Share2, Timer } from 'lucide-
 import { useState, useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
 import { UserCard } from '../UserCard'
+import { TooltipButton } from '../shared/TooltipButton'
 
 interface ProfilePageProps {
 	profileId: string
@@ -188,10 +189,10 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 	}, [profile?.banner])
 
 	return (
-		<div className="relative min-h-screen flex flex-col">
-			<div className="absolute top-0 left-0 right-0 z-0 h-[40vh] sm:h-[40vh] md:h-[50vh] overflow-hidden bg-hero-image-margin">
+		<div className="relative flex flex-col min-h-screen">
+			<div className="top-0 right-0 left-0 z-0 absolute bg-hero-image-margin h-[40vh] sm:h-[40vh] md:h-[50vh] overflow-hidden">
 				{profile?.banner && bannerIsLoadable === true ? (
-					<div className="w-[150%] sm:w-full h-full -ml-[25%] sm:ml-0">
+					<div className="-ml-[25%] sm:ml-0 w-[150%] sm:w-full h-full">
 						<img src={profile.banner} alt="profile-banner" className="w-full h-full object-cover" />
 					</div>
 				) : (
@@ -204,27 +205,38 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 					/>
 				)}
 			</div>
-			<div className="flex flex-col relative z-10 pt-[18vh] sm:pt-[22vh] md:pt-[30vh] flex-1">
-				<div className="flex flex-row justify-between px-4 py-4 bg-black items-center">
+			<div className="z-10 relative flex flex-col flex-1 pt-[18vh] sm:pt-[22vh] md:pt-[30vh]">
+				<div className="flex flex-row justify-between items-center bg-black px-4 py-4">
 					<UserCard pubkey={user?.pubkey ?? ''} className="[&>h2]:text-white" subtitle="npub" onPress="copy-npub" />
 					{!isSmallScreen && (
 						<div className="flex gap-2">
 							{user && <ZapButton event={user} />}
-							<Button variant="focus" size="icon" tooltip="Message" onClick={handleMessageClick}>
-								<MessageCircle className="w-5 h-5" />
-							</Button>
+							<TooltipButton
+								variant="outline"
+								size="icon"
+								tooltip="Message"
+								onClick={handleMessageClick}
+								className="bg-transparent hover:bg-background border-2 border-background rounded text-background hover:text-foreground"
+							>
+								<MessageCircle className="size-5" />
+							</TooltipButton>
 							{pickupLocations.length > 0 && (
-								<Button variant="secondary" size="icon" tooltip="Set Pickup Location" onClick={() => setPickupLocationDialogOpen(true)}>
-									<MapPin className="w-5 h-5" />
-								</Button>
+								<TooltipButton
+									variant="secondary"
+									size="icon"
+									tooltip="Set Pickup Location"
+									onClick={() => setPickupLocationDialogOpen(true)}
+								>
+									<MapPin className="size-5" />
+								</TooltipButton>
 							)}
-							<Button variant="secondary" size="icon" tooltip="Share" onClick={() => setShareDialogOpen(true)}>
-								<Share2 className="w-5 h-5" />
-							</Button>
+							<TooltipButton variant="secondary" size="icon" tooltip="Share" onClick={() => setShareDialogOpen(true)}>
+								<Share2 className="size-5" />
+							</TooltipButton>
 							{/* Edit button for profile owner */}
 							{permissions.canEdit && (
 								<Button variant="secondary" onClick={handleEdit} className="flex items-center gap-2">
-									<Edit className="h-5 w-5" />
+									<Edit className="size-5" />
 									<span className="hidden md:inline">Edit Profile</span>
 								</Button>
 							)}
@@ -247,7 +259,7 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 
 				<div
 					ref={animationParent}
-					className="flex flex-row items-center justify-between px-4 py-4 bg-zinc-900 text-white text-xs sm:text-sm min-h-[52px]"
+					className="flex flex-row justify-between items-center bg-zinc-900 px-4 py-4 min-h-[52px] text-white text-xs sm:text-sm"
 				>
 					{hasAbout ? (
 						shouldTruncateAbout ? (
@@ -265,13 +277,13 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 					)}
 				</div>
 
-				<div className="p-4 flex-1 flex flex-col">
+				<div className="flex flex-col flex-1 p-4">
 					{sellerProducts && sellerProducts.length > 0 ? (
 						<ItemGrid
 							title={
-								<div className="flex flex-col sm:flex-row sm:items-center sm:gap-2 text-center sm:text-left">
-									<span className="text-2xl font-heading">Products from</span>
-									<ProfileName pubkey={user?.pubkey || ''} className="text-2xl font-heading" />
+								<div className="flex sm:flex-row flex-col sm:items-center sm:gap-2 sm:text-left text-center">
+									<span className="font-heading text-2xl">Products from</span>
+									<ProfileName pubkey={user?.pubkey || ''} className="font-heading text-2xl" />
 								</div>
 							}
 						>
@@ -280,11 +292,11 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 							))}
 						</ItemGrid>
 					) : (
-						<div className="flex flex-col items-center justify-center flex-1 gap-4">
-							<span className="text-2xl font-heading">No products found</span>
+						<div className="flex flex-col flex-1 justify-center items-center gap-4">
+							<span className="font-heading text-2xl">No products found</span>
 							{permissions.canEdit && (
 								<Button onClick={handleAddProduct} className="flex items-center gap-2">
-									<Plus className="h-5 w-5" />
+									<Plus className="w-5 h-5" />
 									Add Your First Product
 								</Button>
 							)}

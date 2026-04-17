@@ -101,7 +101,7 @@ enum TabProductPage {
 const getIsTabDisabled = (tab: TabProductPage) => tab === TabProductPage.reviews
 
 const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView: boolean) => {
-	const wrapContent = (content: ReactNode) => <div className="rounded-lg bg-white p-6 shadow-md">{content}</div>
+	const wrapContent = (content: ReactNode) => <div className="bg-white shadow-md p-6 rounded-lg">{content}</div>
 
 	const summary = getProductSummary(eventProduct)
 	const description = getProductDescription(eventProduct)
@@ -114,8 +114,8 @@ const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView
 		case TabProductPage.description:
 			return wrapContent(
 				<>
-					{summary && <p className="text-gray-600 italic mb-4 pb-4 border-b border-gray-200">{summary}</p>}
-					<p className="whitespace-pre-wrap break-words text-gray-700">{description}</p>
+					{summary && <p className="mb-4 pb-4 border-gray-200 border-b text-gray-600 italic">{summary}</p>}
+					<p className="text-gray-700 break-words whitespace-pre-wrap">{description}</p>
 				</>,
 			)
 		case TabProductPage.spec:
@@ -124,16 +124,16 @@ const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView
 				<div className={className}>
 					{weightTag && (
 						<div className="flex flex-col">
-							<span className="text-base font-medium text-gray-500">Weight</span>
-							<span className="text-base text-gray-900">
+							<span className="font-medium text-gray-500 text-base">Weight</span>
+							<span className="text-gray-900 text-base">
 								{weightTag[1]} {weightTag[2]}
 							</span>
 						</div>
 					)}
 					{dimensionsTag && (
 						<div className="flex flex-col">
-							<span className="text-base font-medium text-gray-500">Dimensions (L×W×H)</span>
-							<span className="text-base text-gray-900 break-all">
+							<span className="font-medium text-gray-500 text-base">Dimensions (L×W×H)</span>
+							<span className="text-gray-900 text-base break-all">
 								{dimensionsTag[1]
 									.split('x')
 									.map((num) => parseFloat(num).toFixed(1))
@@ -144,24 +144,24 @@ const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView
 					)}
 					{specs.map((spec, index) => (
 						<div key={index} className="flex flex-col">
-							<span className="text-base font-medium text-gray-500 capitalize">{spec[1]}</span>
-							<span className="text-base text-gray-900 break-all">{spec[2]}</span>
+							<span className="font-medium text-gray-500 text-base capitalize">{spec[1]}</span>
+							<span className="text-gray-900 text-base break-all">{spec[2]}</span>
 						</div>
 					))}
-					{specs.length === 0 && !weightTag && !dimensionsTag && <p className="text-gray-700 col-span-2">No specifications available</p>}
+					{specs.length === 0 && !weightTag && !dimensionsTag && <p className="col-span-2 text-gray-700">No specifications available</p>}
 				</div>,
 			)
 		case TabProductPage.shipping:
 			return wrapContent(
 				<div className="flex flex-col gap-6">
 					<div className="flex items-center gap-3">
-						<Truck className="h-6 w-6 text-gray-500" />
-						<h3 className="text-lg font-medium">Shipping Options</h3>
+						<Truck className="w-6 h-6 text-gray-500" />
+						<h3 className="font-medium text-lg">Shipping Options</h3>
 					</div>
 
 					<div className="flex flex-wrap md:flex-nowrap gap-6">
 						<div className="w-full md:w-1/2 min-w-0">
-							<p className="text-sm text-gray-500 mb-4">Select a shipping method to see estimated costs and delivery times.</p>
+							<p className="mb-4 text-gray-500 text-sm">Select a shipping method to see estimated costs and delivery times.</p>
 
 							<div className="w-full">
 								<ShippingSelector
@@ -174,17 +174,17 @@ const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView
 							</div>
 
 							<div className="mt-4">
-								<p className="text-sm text-gray-500">Shipping costs will be added to the final price in the cart.</p>
+								<p className="text-gray-500 text-sm">Shipping costs will be added to the final price in the cart.</p>
 							</div>
 						</div>
 
-						<div className="w-full md:w-1/2 min-w-0 bg-gray-50 p-4 rounded-md">
-							<h4 className="font-medium mb-2">Shipping Information</h4>
+						<div className="bg-gray-50 p-4 rounded-md w-full md:w-1/2 min-w-0">
+							<h4 className="mb-2 font-medium">Shipping Information</h4>
 
 							{weightTag && (
 								<div className="flex flex-col mb-2">
-									<span className="text-base font-medium text-gray-500">Weight:</span>
-									<span className="text-base text-gray-900">
+									<span className="font-medium text-gray-500 text-base">Weight:</span>
+									<span className="text-gray-900 text-base">
 										{weightTag[1]} {weightTag[2]}
 									</span>
 								</div>
@@ -192,8 +192,8 @@ const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView
 
 							{dimensionsTag && (
 								<div className="flex flex-col mb-2">
-									<span className="text-base font-medium text-gray-500">Dimensions:</span>
-									<span className="text-base text-gray-900">
+									<span className="font-medium text-gray-500 text-base">Dimensions:</span>
+									<span className="text-gray-900 text-base">
 										<span className="break-all">{dimensionsTag[1]}</span> {dimensionsTag[2]}
 									</span>
 								</div>
@@ -201,12 +201,12 @@ const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView
 
 							{location && (
 								<div className="flex flex-col mb-2">
-									<span className="text-base font-medium text-gray-500">Ships from:</span>
-									<span className="text-base text-gray-900">{location}</span>
+									<span className="font-medium text-gray-500 text-base">Ships from:</span>
+									<span className="text-gray-900 text-base">{location}</span>
 								</div>
 							)}
 
-							<div className="mt-3 text-sm text-gray-500">Delivery times are estimates and may vary based on your location.</div>
+							<div className="mt-3 text-gray-500 text-sm">Delivery times are estimates and may vary based on your location.</div>
 						</div>
 					</div>
 				</div>,
@@ -321,8 +321,8 @@ function RouteComponent() {
 	// Keep this route resilient during relay warmup: don't error-boundary the whole page for transient misses.
 	if (!product && (productQuery.isLoading || productQuery.isFetching)) {
 		return (
-			<div className="flex h-[50vh] flex-col items-center justify-center gap-3 px-4 text-center">
-				<div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+			<div className="flex flex-col justify-center items-center gap-3 px-4 h-[50vh] text-center">
+				<div className="border-4 border-primary border-t-transparent rounded-full w-8 h-8 animate-spin" />
 				<p className="text-muted-foreground">Loading product…</p>
 			</div>
 		)
@@ -330,10 +330,10 @@ function RouteComponent() {
 
 	if (!product && productQuery.isError) {
 		return (
-			<div className="flex h-[50vh] flex-col items-center justify-center gap-4 px-4 text-center">
-				<h1 className="text-2xl font-bold">Still loading product</h1>
+			<div className="flex flex-col justify-center items-center gap-4 px-4 h-[50vh] text-center">
+				<h1 className="font-bold text-2xl">Still loading product</h1>
 				<p className="text-gray-600">{productQuery.error instanceof Error ? productQuery.error.message : 'Please try again.'}</p>
-				<div className="flex flex-wrap items-center justify-center gap-2">
+				<div className="flex flex-wrap justify-center items-center gap-2">
 					<Button
 						variant="secondary"
 						onClick={() => {
@@ -352,8 +352,8 @@ function RouteComponent() {
 
 	if (!product) {
 		return (
-			<div className="flex h-[50vh] flex-col items-center justify-center gap-4 px-4 text-center">
-				<h1 className="text-2xl font-bold">Product Not Found</h1>
+			<div className="flex flex-col justify-center items-center gap-4 px-4 h-[50vh] text-center">
+				<h1 className="font-bold text-2xl">Product Not Found</h1>
 				<p className="text-gray-600">The product you're looking for doesn't exist (or hasn't propagated to relays yet).</p>
 				<Link to="/products" className="inline-flex">
 					<Button variant="outline">Back to products</Button>
@@ -366,17 +366,17 @@ function RouteComponent() {
 	const productIsNSFW = isNSFWProduct(product)
 	if (productIsNSFW && !showNSFWContent) {
 		return (
-			<div className="flex h-[50vh] flex-col items-center justify-center gap-4 px-4 text-center">
+			<div className="flex flex-col justify-center items-center gap-4 px-4 h-[50vh] text-center">
 				<AlertTriangle className="w-16 h-16 text-amber-500" />
-				<h1 className="text-2xl font-bold">Adult Content</h1>
-				<p className="text-gray-600 max-w-md">
+				<h1 className="font-bold text-2xl">Adult Content</h1>
+				<p className="max-w-md text-gray-600">
 					This product contains adult or sensitive content. To view it, you need to enable adult content viewing in your settings.
 				</p>
 				<div className="flex gap-3">
 					<Link to="/products" className="inline-flex">
 						<Button variant="outline">Back to products</Button>
 					</Link>
-					<Button variant="primary" onClick={() => uiActions.openNSFWConfirmation()} className="bg-amber-600 hover:bg-amber-700">
+					<Button onClick={() => uiActions.openNSFWConfirmation()} className="bg-amber-600 hover:bg-amber-700">
 						Enable adult content
 					</Button>
 				</div>
@@ -490,17 +490,17 @@ function RouteComponent() {
 
 	return (
 		<div className="flex flex-col gap-4">
-			<div className="relative z-10">
+			<div className="z-10 relative">
 				<div className={`relative hero-container-product ${backgroundImageUrl ? `bg-hero-image ${heroClassName}` : 'bg-black'}`}>
 					<div className="hero-overlays">
 						<div className="absolute inset-0 bg-radial-overlay" />
-						<div className="absolute inset-0 opacity-30 bg-dots-overlay" />
+						<div className="absolute inset-0 bg-dots-overlay opacity-30" />
 					</div>
 
 					<div className="hero-content-product">
 						{!mobileMenuOpen && (
-							<button onClick={handleBackClick} className="back-button col-span-full">
-								<ArrowLeft className="h-4 w-6" />
+							<button onClick={handleBackClick} className="col-span-full back-button">
+								<ArrowLeft className="w-6 h-4" />
 								<span>Back to results</span>
 							</button>
 						)}
@@ -509,9 +509,9 @@ function RouteComponent() {
 							<ImageCarousel images={formattedImages} title={title} onImageClick={handleImageClick} />
 						</div>
 
-						<div className="flex flex-col gap-2 text-white w-full max-w-[600px] mx-auto lg:max-w-none">
-							<div className="flex items-center justify-between">
-								<h1 className="text-3xl font-semibold lg:pl-0">{title}</h1>
+						<div className="flex flex-col gap-2 mx-auto w-full max-w-[600px] lg:max-w-none text-white">
+							<div className="flex justify-between items-center">
+								<h1 className="lg:pl-0 font-semibold text-3xl">{title}</h1>
 								<div className="flex items-center gap-2">
 									{/* Entity Actions Menu for admins/editors/owners */}
 									<EntityActionsMenu
@@ -540,11 +540,9 @@ function RouteComponent() {
 							/>
 
 							{visibility === 'pre-order' ? (
-								<Badge variant="primary" className="bg-blue-500">
-									Pre-order
-								</Badge>
+								<Badge className="bg-blue-500">Pre-order</Badge>
 							) : (
-								<Badge variant="primary">{stock !== undefined ? `${stock} in stock` : 'Out of stock'}</Badge>
+								<Badge>{stock !== undefined ? `${stock} in stock` : 'Out of stock'}</Badge>
 							)}
 
 							{(() => {
@@ -572,18 +570,19 @@ function RouteComponent() {
 								<div className="flex items-center gap-4">
 									{/* Show cart controls for non-owners */}
 									{permissions.canAddToCart && (
-										<div className="flex items-center gap-2 flex-wrap">
-											<div className="flex items-center gap-2 flex-shrink-0">
+										<div className="flex flex-wrap items-center gap-2">
+											<div className="flex flex-shrink-0 items-center gap-2">
 												<Button
-													variant="tertiary"
+													variant="outline"
+													className="text-foreground"
 													size="icon"
 													onClick={() => setQuantity(Math.max(1, quantity - 1))}
 													disabled={quantity <= 1}
 												>
-													<Minus className="h-6 w-6" />
+													<Minus className="w-6 h-6" />
 												</Button>
 												<Input
-													className="w-12 text-center font-medium bg-white text-black"
+													className="bg-white w-12 font-medium text-black text-center"
 													value={quantity}
 													onChange={(e) => {
 														const value = parseInt(e.target.value)
@@ -596,12 +595,13 @@ function RouteComponent() {
 													type="number"
 												/>
 												<Button
-													variant="tertiary"
+													variant="outline"
+													className="text-foreground"
 													size="icon"
 													onClick={() => setQuantity(Math.min(stock || quantity + 1, quantity + 1))}
 													disabled={quantity >= (stock || quantity)}
 												>
-													<Plus className="h-6 w-6" />
+													<Plus className="w-6 h-6" />
 												</Button>
 											</div>
 											<Button variant="secondary" onClick={handleAddToCartClick} disabled={isOutOfStock || visibility === 'hidden'}>
@@ -618,7 +618,7 @@ function RouteComponent() {
 									{/* Show edit button for owners */}
 									{permissions.canEdit && (
 										<Button variant="secondary" onClick={handleEdit} className="flex items-center gap-2">
-											<Edit className="h-5 w-5" />
+											<Edit className="w-5 h-5" />
 											<span>Edit Product</span>
 										</Button>
 									)}
@@ -632,14 +632,14 @@ function RouteComponent() {
 						</div>
 					</div>
 				</div>
-				<div className="relative z-20 mx-auto max-w-7xl px-4 py-6 -mt-12">
+				<div className="z-20 relative mx-auto -mt-12 px-4 py-6 max-w-7xl">
 					{isMobileOrTablet ? (
 						<div className="flex flex-col gap-6">
 							{Object.values(TabProductPage).map(
 								(tab) =>
 									!getIsTabDisabled(tab) && (
 										<div>
-											<div className="bg-secondary text-white px-4 py-2 text-sm font-medium rounded-t-md">{tab}</div>
+											<div className="bg-secondary px-4 py-2 rounded-t-md font-medium text-white text-sm">{tab}</div>
 											{getTabContent(tab, product, true)}
 										</div>
 									),
@@ -647,12 +647,12 @@ function RouteComponent() {
 						</div>
 					) : (
 						<Tabs defaultValue={TabProductPage.description} value={currentTab} className="w-full">
-							<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-2 justify-start">
+							<TabsList className="flex flex-wrap justify-start gap-2 bg-transparent p-0 h-auto">
 								{Object.values(TabProductPage).map((tab) => (
 									<TabsTrigger
 										value={tab}
 										onClick={() => setCurrentTab(tab)}
-										className="px-4 py-2 text-sm font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+										className="data-[state=active]:bg-secondary data-[state=inactive]:bg-gray-100 px-4 py-2 rounded-none font-medium data-[state=active]:text-white data-[state=inactive]:text-black text-sm"
 										disabled={getIsTabDisabled(tab)}
 									>
 										{tab}
@@ -661,7 +661,7 @@ function RouteComponent() {
 							</TabsList>
 
 							{Object.values(TabProductPage).map((tab) => (
-								<TabsContent value={tab} className="mt-4 border-t-3 border-secondary bg-tertiary">
+								<TabsContent value={tab} className="bg-tertiary mt-4 border-secondary border-t-3">
 									{getTabContent(tab, product, false)}
 								</TabsContent>
 							))}
@@ -673,7 +673,7 @@ function RouteComponent() {
 			{/* More from this seller */}
 			{sellerProducts.filter((p) => p.id !== productId).length > 0 && (
 				<div className="flex flex-col gap-4 p-4">
-					<h2 className="font-heading text-2xl text-center lg:text-left">More from this seller</h2>
+					<h2 className="font-heading text-2xl lg:text-left text-center">More from this seller</h2>
 					<ItemGrid className="gap-4 sm:gap-8">
 						{sellerProducts
 							.filter((p) => p.id !== productId)
