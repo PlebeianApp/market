@@ -349,8 +349,7 @@ async function seedData() {
 			const isQuickSettleAuction = j < QUICK_END_AUCTIONS_PER_USER
 			const auctionData = generateAuctionData({
 				sellerPubkey: pubkey,
-				escrowPubkey: APP_CASHU_PUBKEY,
-				escrowIdentityPubkey: APP_PUBKEY!,
+				pathIssuerPubkey: APP_PUBKEY!,
 				availableShippingRefs: shippingsByUser[pubkey] || [],
 				trustedMints: trustedAuctionMints,
 				p2pkXpub: auctionWallet.p2pkXpub,

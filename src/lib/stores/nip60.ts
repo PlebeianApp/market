@@ -78,20 +78,29 @@ export type AuctionP2pkKeyScheme = 'hd_p2pk'
 export interface LockAuctionBidFundsParams {
 	amount: number
 	mint?: string
-	escrowPubkey: string
 	locktime: number
 	refundPubkey: string
+	/**
+	 * Child pubkey (compressed secp256k1 hex) issued by the auction's path
+	 * oracle. This is the 1-of-1 P2PK spend key on the resulting locked
+	 * Cashu proofs. The bidder MUST have already verified (via
+	 * verifyAuctionPathGrant) that this pubkey was derived from the
+	 * auction's p2pk_xpub before calling lockAuctionBidFunds.
+	 */
+	lockPubkey: string
 	auctionEventId?: string
 	auctionCoordinates?: string
 	sellerPubkey?: string
-	p2pkXpub?: string
+	pathIssuerPubkey?: string
+	derivationPath?: string
+	childPubkey?: string
+	grantId?: string
 }
 
 export interface LockAuctionBidFundsResult {
 	tokenId: string
 	token: string
 	amount: number
-	escrowPubkey: string
 	mintUrl: string
 	lockPubkey: string
 	locktime: number
@@ -100,6 +109,7 @@ export interface LockAuctionBidFundsResult {
 	keyScheme: AuctionP2pkKeyScheme
 	derivationPath?: string
 	childPubkey?: string
+	grantId?: string
 }
 
 export interface Nip60State {
@@ -1388,15 +1398,15 @@ export const nip60Actions = {
 			throw new Error(`Refund pubkey is invalid: ${error instanceof Error ? error.message : String(error)}`)
 		}
 
-		const rawEscrowPubkey = params.escrowPubkey?.trim()
-		if (!rawEscrowPubkey) {
-			throw new Error('Escrow pubkey is required')
+		const rawLockPubkey = params.lockPubkey?.trim()
+		if (!rawLockPubkey) {
+			throw new Error('Lock pubkey is required — the bidder must obtain a path grant before locking')
 		}
-		let escrowPubkey: string
+		let lockPubkey: string
 		try {
-			escrowPubkey = toCompressedAuctionP2pkPubkey(rawEscrowPubkey)
+			lockPubkey = toCompressedAuctionP2pkPubkey(rawLockPubkey)
 		} catch (error) {
-			throw new Error(`Escrow pubkey is invalid: ${error instanceof Error ? error.message : String(error)}`)
+			throw new Error(`Lock pubkey is invalid: ${error instanceof Error ? error.message : String(error)}`)
 		}
 
 		const { totalBalance, mintBalances } = getBalancesFromState(wallet)
@@ -1413,15 +1423,6 @@ export const nip60Actions = {
 			throw new Error(`Insufficient balance at ${getMintHostname(targetMint)}. Available: ${mintBalance} sats`)
 		}
 
-		const xpub = params.p2pkXpub?.trim()
-		if (!xpub) {
-			throw new Error('Auction is missing p2pk_xpub')
-		}
-
-		const derivationPath = generateDerivationPath()
-		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(xpub, derivationPath)
-		const lockPubkey = childPubkey
-
 		const mintProofs = getProofsForMint(wallet, targetMint)
 		if (mintProofs.length === 0) {
 			throw new Error(`No proofs available at ${getMintHostname(targetMint)}. Try refreshing your wallet.`)
@@ -1435,18 +1436,15 @@ export const nip60Actions = {
 		try {
 			const { cashuWallet } = await createCashuWalletForMint(targetMint)
 
-			// NOTE: SIG_ALL is omitted intentionally. cashu-ts only implements SIG_INPUTS signing
-			// (signatures are computed over sha256(secret)); it has no code path for hashing
-			// inputs+outputs together, so SIG_ALL-locked proofs cannot be redeemed through
-			// wallet.receive/send. The 2-of-2 multisig here still prevents unilateral spends.
+			// 1-of-1 P2PK lock. The seller alone cannot spend pre-locktime because
+			// the derivation path that produced `lockPubkey` is held secret by the
+			// auction's path oracle — see AUCTIONS.md §5.2.
 			const buildSendOptions = (includeDleq: boolean) => ({
 				includeDleq,
 				p2pk: {
-					pubkey: [lockPubkey, escrowPubkey],
+					pubkey: lockPubkey,
 					locktime,
 					refundKeys: [refundPubkey],
-					requiredSignatures: 2,
-					requiredRefundSignatures: 1,
 				},
 			})
 
@@ -1508,10 +1506,13 @@ export const nip60Actions = {
 							auctionEventId: params.auctionEventId,
 							auctionCoordinates: params.auctionCoordinates,
 							sellerPubkey: params.sellerPubkey,
-							escrowPubkey,
+							pathIssuerPubkey: params.pathIssuerPubkey || '',
 							lockPubkey,
 							refundPubkey,
 							locktime,
+							derivationPath: params.derivationPath,
+							childPubkey: params.childPubkey,
+							grantId: params.grantId,
 						}
 					: undefined
 
@@ -1561,15 +1562,15 @@ export const nip60Actions = {
 				tokenId,
 				token,
 				amount: tokenAmount,
-				escrowPubkey,
 				mintUrl: targetMint,
 				lockPubkey,
 				locktime,
 				refundPubkey,
 				commitment,
 				keyScheme,
-				derivationPath,
-				childPubkey,
+				derivationPath: params.derivationPath,
+				childPubkey: params.childPubkey || lockPubkey,
+				grantId: params.grantId,
 			}
 		} catch (err) {
 			console.error('[nip60] Failed to lock auction bid funds:', err)
@@ -1831,8 +1832,7 @@ export const nip60Actions = {
 			startingBid: number
 			bidIncrement: number
 			acceptedMints: string[]
-			escrowPubkey: string
-			escrowIdentityPubkey: string
+			pathIssuerPubkey: string
 			p2pkXpub: string
 		}
 
@@ -1845,8 +1845,7 @@ export const nip60Actions = {
 				const startingBid = parseNonNegativeInt(getFirstTagValue(event, 'starting_bid') || getFirstTagValue(event, 'price'), 0)
 				const bidIncrement = Math.max(1, parseNonNegativeInt(getFirstTagValue(event, 'bid_increment'), 1))
 				const acceptedMints = getTagValues(event, 'mint').map(normalizeMintUrl)
-				const escrowPubkey = getFirstTagValue(event, 'escrow_pubkey') || event.pubkey
-				const escrowIdentityPubkey = getFirstTagValue(event, 'escrow_identity') || event.pubkey
+				const pathIssuerPubkey = getFirstTagValue(event, 'path_issuer') || getFirstTagValue(event, 'escrow_identity') || event.pubkey
 				const p2pkXpub = getFirstTagValue(event, 'p2pk_xpub')
 				return {
 					event,
@@ -1857,8 +1856,7 @@ export const nip60Actions = {
 					startingBid,
 					bidIncrement,
 					acceptedMints,
-					escrowPubkey,
-					escrowIdentityPubkey,
+					pathIssuerPubkey,
 					p2pkXpub,
 				}
 			})
@@ -1921,16 +1919,55 @@ export const nip60Actions = {
 		const auctionCoordinates = `30408:${selected.event.pubkey}:${selected.dTag}`
 		const locktime = Math.max(selected.endAt + AUCTION_SETTLEMENT_GRACE_SECONDS, now + 60)
 		const bidderRefundPubkey = await nip60Actions.getWalletCashuP2pk()
+
+		// Path-oracle flow: request a fresh derivation path from the issuer HTTP
+		// endpoint, verify it against the auction's p2pk_xpub (§5.6), then lock.
+		const pathResponse = await fetch('/api/auctions/path-request', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				auctionEventId: selected.event.id,
+				auctionCoordinates,
+				bidderPubkey,
+				bidderRefundPubkey,
+			}),
+		})
+		if (!pathResponse.ok) {
+			const error = (await pathResponse.json().catch(() => null)) as { error?: string } | null
+			throw new Error(error?.error || `Failed to obtain auction path grant (${pathResponse.status})`)
+		}
+		const pathGrant = (await pathResponse.json()) as {
+			grantId: string
+			derivationPath: string
+			childPubkey: string
+			pathIssuerPubkey: string
+			xpub: string
+			issuedAt: number
+			expiresAt: number
+		}
+		const { verifyAuctionPathGrant } = await import('@/lib/auctionP2pk')
+		verifyAuctionPathGrant({
+			xpub: pathGrant.xpub,
+			derivationPath: pathGrant.derivationPath,
+			childPubkey: pathGrant.childPubkey,
+			expectedXpub: selected.p2pkXpub,
+			expectedIssuer: selected.pathIssuerPubkey,
+			grantIssuer: pathGrant.pathIssuerPubkey,
+		})
+
 		const lockedBid = await nip60Actions.lockAuctionBidFunds({
 			amount: deltaAmount,
 			mint: effectiveBidMint,
-			escrowPubkey: selected.escrowPubkey,
 			locktime,
 			refundPubkey: bidderRefundPubkey,
+			lockPubkey: pathGrant.childPubkey,
 			auctionEventId: selected.event.id,
 			auctionCoordinates,
 			sellerPubkey: selected.event.pubkey,
-			p2pkXpub: selected.p2pkXpub,
+			pathIssuerPubkey: pathGrant.pathIssuerPubkey,
+			derivationPath: pathGrant.derivationPath,
+			childPubkey: pathGrant.childPubkey,
+			grantId: pathGrant.grantId,
 		})
 		const bidNonce = globalThis.crypto?.randomUUID?.() || generateId()
 
@@ -1962,16 +1999,13 @@ export const nip60Actions = {
 			['status', 'locked'],
 			['schema', 'auction_bid_v1'],
 			['key_scheme', lockedBid.keyScheme],
+			['child_pubkey', lockedBid.childPubkey || lockedBid.lockPubkey],
+			['path_issuer', pathGrant.pathIssuerPubkey],
+			...(lockedBid.grantId ? ([['path_grant_id', lockedBid.grantId]] as NDKTag[]) : []),
 		]
 		if (previousBid) {
 			bidEvent.tags.push(['prev_bid', previousBid.id])
 			bidEvent.tags.push(['prev_amount', String(previousAmount), 'SAT'])
-		}
-		if (lockedBid.derivationPath) {
-			bidEvent.tags.push(['derivation_path', lockedBid.derivationPath])
-		}
-		if (lockedBid.childPubkey) {
-			bidEvent.tags.push(['child_pubkey', lockedBid.childPubkey])
 		}
 
 		await bidEvent.sign(signer)
@@ -1982,7 +2016,7 @@ export const nip60Actions = {
 			bidEventId: bidEvent.id,
 			bidderPubkey,
 			sellerPubkey: selected.event.pubkey,
-			escrowPubkey: lockedBid.escrowPubkey,
+			pathIssuerPubkey: pathGrant.pathIssuerPubkey,
 			refundPubkey: lockedBid.refundPubkey,
 			lockPubkey: lockedBid.lockPubkey,
 			locktime: lockedBid.locktime,
@@ -1991,6 +2025,7 @@ export const nip60Actions = {
 			totalBidAmount: bidAmount,
 			commitment: lockedBid.commitment,
 			bidNonce,
+			grantId: lockedBid.grantId,
 			token: lockedBid.token,
 			createdAt: Date.now(),
 		}
@@ -2002,7 +2037,10 @@ export const nip60Actions = {
 			['mint', lockedBid.mintUrl],
 			['commitment', lockedBid.commitment],
 		]
-		for (const recipientPubkey of Array.from(new Set([selected.event.pubkey, selected.escrowIdentityPubkey]))) {
+		// In path-oracle mode only the path issuer needs the private token envelope;
+		// the seller obtains the path (and therefore redemption ability) via the
+		// settlement release DM. We still DM the seller for visibility/audit.
+		for (const recipientPubkey of Array.from(new Set([pathGrant.pathIssuerPubkey, selected.event.pubkey]))) {
 			const bidEnvelopeEvent = new NDKEvent(ndk)
 			bidEnvelopeEvent.kind = AUCTION_TRANSFER_DM_KIND
 			bidEnvelopeEvent.content = JSON.stringify(bidEnvelopeContent)
@@ -2018,10 +2056,13 @@ export const nip60Actions = {
 			auctionCoordinates,
 			bidEventId: bidEvent.id,
 			sellerPubkey: selected.event.pubkey,
-			escrowPubkey: lockedBid.escrowPubkey,
+			pathIssuerPubkey: pathGrant.pathIssuerPubkey,
 			lockPubkey: lockedBid.lockPubkey,
 			refundPubkey: lockedBid.refundPubkey,
 			locktime: lockedBid.locktime,
+			derivationPath: lockedBid.derivationPath,
+			childPubkey: lockedBid.childPubkey,
+			grantId: lockedBid.grantId,
 		})
 
 		return {

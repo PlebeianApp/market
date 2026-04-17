@@ -8,9 +8,10 @@ import {
 	AUCTION_BID_KIND,
 	AUCTION_KIND,
 	AUCTION_SETTLEMENT_KIND,
-	AuctionSettlementPublishStatus,
+	AUCTION_SETTLEMENT_POLICY,
 	getAuctionTagValue,
 	type AuctionSettlementPlanResponse,
+	type AuctionSettlementPublishStatus,
 } from '@/lib/auctionSettlement'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { configStore } from '@/lib/stores/config'
@@ -21,7 +22,8 @@ import {
 	type ProductShippingSelection,
 	type ProductShippingSelectionInput,
 } from '@/lib/utils/productShippingSelections'
-import { toCompressedAuctionP2pkPubkey } from '@/lib/auctionP2pk'
+import { verifyAuctionPathGrant } from '@/lib/auctionP2pk'
+import { rememberAuctionPathGrant } from '@/lib/auctionPathOracle'
 import { getBidAmount, getBidStatus, markAuctionAsDeleted } from '@/queries/auctions'
 import { auctionKeys, orderKeys } from '@/queries/queryKeyFactory'
 import NDK, { NDKEvent, NDKUser, type NDKFilter, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
@@ -65,10 +67,77 @@ export interface AuctionBidFormData {
 	auctionEffectiveEndAt: number
 	auctionLocktimeAt: number
 	sellerPubkey: string
-	escrowPubkey: string
-	escrowIdentityPubkey?: string
-	p2pkXpub?: string
+	/**
+	 * Nostr pubkey of the auction's path issuer (the oracle). The bidder
+	 * requests a derivation-path grant from this pubkey before locking funds.
+	 */
+	pathIssuerPubkey: string
+	p2pkXpub: string
 	mint?: string
+}
+
+export interface AuctionPathGrantResponse {
+	grantId: string
+	requestId: string
+	auctionEventId: string
+	auctionCoordinates: string
+	bidderPubkey: string
+	pathIssuerPubkey: string
+	xpub: string
+	derivationPath: string
+	childPubkey: string
+	issuedAt: number
+	expiresAt: number
+}
+
+export const requestAuctionPathGrant = async (params: {
+	auctionEventId: string
+	auctionCoordinates: string
+	bidderPubkey: string
+	bidderRefundPubkey: string
+	expectedPathIssuer: string
+	expectedXpub: string
+}): Promise<AuctionPathGrantResponse> => {
+	const requestId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+	const response = await fetch('/api/auctions/path-request', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({
+			requestId,
+			auctionEventId: params.auctionEventId,
+			auctionCoordinates: params.auctionCoordinates,
+			bidderPubkey: params.bidderPubkey,
+			bidderRefundPubkey: params.bidderRefundPubkey,
+		}),
+	})
+	if (!response.ok) {
+		const err = (await response.json().catch(() => null)) as { error?: string } | null
+		throw new Error(err?.error || `Failed to obtain auction path grant (${response.status})`)
+	}
+	const grant = (await response.json()) as AuctionPathGrantResponse
+	verifyAuctionPathGrant({
+		xpub: grant.xpub,
+		derivationPath: grant.derivationPath,
+		childPubkey: grant.childPubkey,
+		expectedXpub: params.expectedXpub,
+		expectedIssuer: params.expectedPathIssuer,
+		grantIssuer: grant.pathIssuerPubkey,
+	})
+	rememberAuctionPathGrant({
+		grantId: grant.grantId,
+		requestId: grant.requestId,
+		auctionEventId: grant.auctionEventId,
+		auctionCoordinates: grant.auctionCoordinates,
+		bidderPubkey: grant.bidderPubkey,
+		pathIssuerPubkey: grant.pathIssuerPubkey,
+		xpub: grant.xpub,
+		derivationPath: grant.derivationPath,
+		childPubkey: grant.childPubkey,
+		issuedAt: grant.issuedAt,
+		expiresAt: grant.expiresAt,
+		status: 'issued',
+	})
+	return grant
 }
 
 export interface AuctionSettlementFormData {
@@ -97,18 +166,10 @@ const parsePositiveInt = (value: string, fieldName: string): number => {
 	return parsed
 }
 
-const getAuctionEscrowPubkeyOrThrow = (): string => {
-	const appPubkey = configStore.state.config.appCashuPublicKey?.trim()
-	if (!appPubkey) {
-		throw new Error('App Cashu escrow pubkey is unavailable. Wait for app config to load and try again.')
-	}
-	return toCompressedAuctionP2pkPubkey(appPubkey)
-}
-
-const getAuctionEscrowIdentityPubkeyOrThrow = (): string => {
+const getAuctionPathIssuerPubkeyOrThrow = (): string => {
 	const appPubkey = configStore.state.config.appPublicKey?.trim()
 	if (!appPubkey) {
-		throw new Error('App escrow identity pubkey is unavailable. Wait for app config to load and try again.')
+		throw new Error('App path-issuer pubkey is unavailable. Wait for app config to load and try again.')
 	}
 	return appPubkey
 }
@@ -138,8 +199,7 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 	const maxEndAt = antiSnipingEnabled ? endAt + antiSnipingExtensionSeconds * antiSnipingMaxExtensions : 0
 	const trustedMints = formData.trustedMints.length > 0 ? formData.trustedMints : [DEFAULT_AUCTION_MINT]
 	const keyScheme: AuctionP2pkKeyScheme = 'hd_p2pk'
-	const escrowPubkey = getAuctionEscrowPubkeyOrThrow()
-	const escrowIdentityPubkey = getAuctionEscrowIdentityPubkeyOrThrow()
+	const pathIssuerPubkey = getAuctionPathIssuerPubkeyOrThrow()
 	const p2pkXpub = await nip60Actions.getAuctionP2pkXpub()
 
 	const imageTags = formData.imageUrls.map((url, index) => ['image', url, '800x600', String(index)] as NDKTag)
@@ -175,13 +235,12 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 		['bid_increment', bidIncrement],
 		['reserve', reserve],
 		...trustedMints.map((mint) => ['mint', mint] as NDKTag),
-		['escrow_pubkey', escrowPubkey],
-		['escrow_identity', escrowIdentityPubkey],
+		['path_issuer', pathIssuerPubkey],
 		['extension_rule', extensionRule],
 		...(antiSnipingEnabled ? ([['max_end_at', String(maxEndAt)] as NDKTag] as NDKTag[]) : []),
 		['key_scheme', keyScheme],
 		['p2pk_xpub', p2pkXpub],
-		['settlement_policy', 'cashu_p2pk_2of2_v1'],
+		['settlement_policy', AUCTION_SETTLEMENT_POLICY],
 		['schema', 'auction_v1'],
 		...imageTags,
 		...categoryTags,
@@ -355,6 +414,8 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 	if (!formData.auctionEventId) throw new Error('Auction event id is required')
 	if (!formData.auctionCoordinates) throw new Error('Auction coordinates are required')
 	if (!formData.sellerPubkey) throw new Error('Seller pubkey is required')
+	if (!formData.pathIssuerPubkey) throw new Error('Auction path issuer pubkey is required')
+	if (!formData.p2pkXpub) throw new Error('Auction p2pk_xpub is required for path verification')
 	if (!Number.isFinite(formData.amount) || formData.amount <= 0) throw new Error('Bid amount must be a positive number')
 	if (!Number.isFinite(formData.auctionEffectiveEndAt) || formData.auctionEffectiveEndAt <= 0) {
 		throw new Error('Auction effective end time is required for bidding')
@@ -405,16 +466,32 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 	const bidNonce = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 	const locktime = Math.max(formData.auctionLocktimeAt + AUCTION_SETTLEMENT_GRACE_SECONDS, now + 60)
 
+	// Path-oracle pre-bid step: request and verify a derivation path. The
+	// bidder-side verifyAuctionPathGrant inside requestAuctionPathGrant is the
+	// non-negotiable §5.6 check — skipping it would let a malicious issuer
+	// substitute a pubkey it controls.
+	const grant = await requestAuctionPathGrant({
+		auctionEventId: formData.auctionEventId,
+		auctionCoordinates: formData.auctionCoordinates,
+		bidderPubkey,
+		bidderRefundPubkey: bidderWalletP2pk,
+		expectedPathIssuer: formData.pathIssuerPubkey,
+		expectedXpub: formData.p2pkXpub,
+	})
+
 	const lockedBid = await nip60Actions.lockAuctionBidFunds({
 		amount: deltaAmount,
 		mint: formData.mint || DEFAULT_BID_MINT,
-		escrowPubkey: formData.escrowPubkey || formData.sellerPubkey,
 		locktime,
 		refundPubkey: bidderWalletP2pk,
+		lockPubkey: grant.childPubkey,
 		auctionEventId: formData.auctionEventId,
 		auctionCoordinates: formData.auctionCoordinates,
 		sellerPubkey: formData.sellerPubkey,
-		p2pkXpub: formData.p2pkXpub,
+		pathIssuerPubkey: grant.pathIssuerPubkey,
+		derivationPath: grant.derivationPath,
+		childPubkey: grant.childPubkey,
+		grantId: grant.grantId,
 	})
 
 	try {
@@ -445,16 +522,13 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 			['key_scheme', lockedBid.keyScheme],
 			['status', 'locked'],
 			['schema', 'auction_bid_v1'],
+			['child_pubkey', grant.childPubkey],
+			['path_issuer', grant.pathIssuerPubkey],
+			['path_grant_id', grant.grantId],
 		]
 		if (previousBid) {
 			event.tags.push(['prev_bid', previousBid.id])
 			event.tags.push(['prev_amount', String(previousAmount), 'SAT'])
-		}
-		if (lockedBid.derivationPath) {
-			event.tags.push(['derivation_path', lockedBid.derivationPath])
-		}
-		if (lockedBid.childPubkey) {
-			event.tags.push(['child_pubkey', lockedBid.childPubkey])
 		}
 
 		await event.sign(signer)
@@ -473,7 +547,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 			bidEventId: event.id,
 			bidderPubkey,
 			sellerPubkey: formData.sellerPubkey,
-			escrowPubkey: lockedBid.escrowPubkey,
+			pathIssuerPubkey: grant.pathIssuerPubkey,
 			refundPubkey: lockedBid.refundPubkey,
 			lockPubkey: lockedBid.lockPubkey,
 			locktime: lockedBid.locktime,
@@ -482,11 +556,15 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 			totalBidAmount: formData.amount,
 			commitment: lockedBid.commitment,
 			bidNonce,
+			grantId: grant.grantId,
 			token: lockedBid.token,
 			createdAt: Date.now(),
 		}
-		const escrowIdentityPubkey = formData.escrowIdentityPubkey?.trim() || getAuctionEscrowIdentityPubkeyOrThrow()
-		const transferRecipients = Array.from(new Set([formData.sellerPubkey, escrowIdentityPubkey]))
+		// Path-oracle delivery rule: only the issuer strictly needs the token to
+		// enforce settlement. We still forward a copy to the seller so they can
+		// see bids landing, but redemption ability flows through the issuer's
+		// `auction_path_release_v1` envelope at settlement time.
+		const transferRecipients = Array.from(new Set([grant.pathIssuerPubkey, formData.sellerPubkey]))
 		for (const recipientPubkey of transferRecipients) {
 			await publishEncryptedAuctionTransfer({
 				recipientPubkey,
@@ -503,10 +581,13 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 			auctionCoordinates: formData.auctionCoordinates,
 			bidEventId: event.id,
 			sellerPubkey: formData.sellerPubkey,
-			escrowPubkey: lockedBid.escrowPubkey,
+			pathIssuerPubkey: grant.pathIssuerPubkey,
 			lockPubkey: lockedBid.lockPubkey,
 			refundPubkey: lockedBid.refundPubkey,
 			locktime: lockedBid.locktime,
+			derivationPath: grant.derivationPath,
+			childPubkey: grant.childPubkey,
+			grantId: grant.grantId,
 		})
 		return event.id
 	} catch (error) {
@@ -650,6 +731,9 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	}
 	if (winnerPubkey) {
 		event.tags.push(['p', winnerPubkey])
+	}
+	if (settlementPlan.releaseId) {
+		event.tags.push(['path_release_id', settlementPlan.releaseId])
 	}
 	if (formData.reason?.trim()) {
 		event.tags.push(['reason', formData.reason.trim()])

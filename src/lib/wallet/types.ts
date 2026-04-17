@@ -14,10 +14,13 @@ export interface AuctionBidPendingTokenContext {
 	auctionCoordinates?: string
 	bidEventId?: string
 	sellerPubkey: string
-	escrowPubkey: string
+	pathIssuerPubkey: string
 	lockPubkey: string
 	refundPubkey: string
 	locktime: number
+	derivationPath?: string
+	childPubkey?: string
+	grantId?: string
 }
 
 export type PendingTokenContext = AuctionBidPendingTokenContext

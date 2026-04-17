@@ -587,7 +587,9 @@ function AuctionTabContent({
 							</p>
 							<p className="mt-0.5">
 								<span className="font-semibold text-zinc-900">Hard stop:</span>{' '}
-								{antiSnipingHardStopSeconds ? formatAbsolute(antiSnipingHardStopSeconds) : 'Waiting for a valid end time and extension policy.'}
+								{antiSnipingHardStopSeconds
+									? formatAbsolute(antiSnipingHardStopSeconds)
+									: 'Waiting for a valid end time and extension policy.'}
 							</p>
 						</div>
 					</>

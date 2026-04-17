@@ -17,6 +17,7 @@ import {
 	getAuctionEffectiveEndAt,
 	getAuctionEndAt,
 	getAuctionEscrowPubkey,
+	getAuctionPathIssuer,
 	getAuctionId,
 	getAuctionImages,
 	getAuctionKeyScheme,
@@ -563,10 +564,17 @@ function DashboardAuctionDetailRoute() {
 									<AccordionTrigger className="text-sm font-semibold hover:no-underline">Advanced settlement wiring</AccordionTrigger>
 									<AccordionContent className="space-y-3">
 										<TechnicalRow
-											label="Escrow pubkey"
-											value={getAuctionEscrowPubkey(auction) || 'N/A'}
-											copyValue={getAuctionEscrowPubkey(auction) || undefined}
+											label="Path issuer"
+											value={getAuctionPathIssuer(auction) || 'N/A'}
+											copyValue={getAuctionPathIssuer(auction) || undefined}
 										/>
+										{getAuctionEscrowPubkey(auction) && (
+											<TechnicalRow
+												label="Legacy escrow pubkey"
+												value={getAuctionEscrowPubkey(auction)}
+												copyValue={getAuctionEscrowPubkey(auction) || undefined}
+											/>
+										)}
 										<TechnicalRow label="Key scheme" value={getAuctionKeyScheme(auction)} />
 										{p2pkXpub && <TechnicalRow label="P2PK xpub" value={p2pkXpub} copyValue={p2pkXpub} />}
 										<TechnicalRow label="Settlement policy" value={getAuctionSettlementPolicy(auction) || 'N/A'} />

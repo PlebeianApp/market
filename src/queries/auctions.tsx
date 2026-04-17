@@ -84,7 +84,11 @@ const dedupeEventsById = (events: NDKEvent[]): NDKEvent[] => {
 	return Array.from(eventsById.values())
 }
 
-const cloneAuctionEventWithRootId = (ndk: NonNullable<ReturnType<typeof ndkActions.getNDK>>, event: NDKEvent, rootEventId: string): NDKEvent => {
+const cloneAuctionEventWithRootId = (
+	ndk: NonNullable<ReturnType<typeof ndkActions.getNDK>>,
+	event: NDKEvent,
+	rootEventId: string,
+): NDKEvent => {
 	const cloned = new NDKEvent(ndk, event.rawEvent())
 	cloned.tags = [...cloned.tags.filter((tag) => tag[0] !== AUCTION_ROOT_EVENT_ID_TAG), [AUCTION_ROOT_EVENT_ID_TAG, rootEventId]]
 	return cloned
@@ -95,19 +99,13 @@ const getAuctionGroupingKey = (event: NDKEvent): string => {
 	return dTag ? `${event.pubkey}:${dTag}` : event.id
 }
 
-const resolveCanonicalAuctionEvent = (
-	ndk: NonNullable<ReturnType<typeof ndkActions.getNDK>>,
-	events: NDKEvent[],
-): NDKEvent | null => {
+const resolveCanonicalAuctionEvent = (ndk: NonNullable<ReturnType<typeof ndkActions.getNDK>>, events: NDKEvent[]): NDKEvent | null => {
 	const resolved = resolveAuctionVersionSet(events)
 	if (!resolved) return null
 	return cloneAuctionEventWithRootId(ndk, resolved.displayEvent, resolved.rootEventId)
 }
 
-const collapseAuctionVersions = (
-	ndk: NonNullable<ReturnType<typeof ndkActions.getNDK>>,
-	events: NDKEvent[],
-): NDKEvent[] => {
+const collapseAuctionVersions = (ndk: NonNullable<ReturnType<typeof ndkActions.getNDK>>, events: NDKEvent[]): NDKEvent[] => {
 	const groupedEvents = new Map<string, NDKEvent[]>()
 	for (const event of events) {
 		const key = getAuctionGroupingKey(event)
@@ -426,10 +424,26 @@ export const getAuctionKeyScheme = (event: NDKEvent | null): 'hd_p2pk' => {
 
 export const getAuctionP2pkXpub = (event: NDKEvent | null): string => event?.tags.find((tag) => tag[0] === 'p2pk_xpub')?.[1] || ''
 
+/**
+ * @deprecated Historical Cashu cosigner pubkey from the 2-of-2 profile. Kept so existing
+ * auction events still render useful metadata. New auctions (path-oracle v1) do not emit
+ * this tag.
+ */
 export const getAuctionEscrowPubkey = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'escrow_pubkey')?.[1] || ''
 
+/**
+ * @deprecated Previous name for the path issuer. `path_issuer` takes precedence when both exist.
+ * See `getAuctionPathIssuer`.
+ */
 export const getAuctionEscrowIdentityPubkey = (event: NDKEvent | null): string =>
 	event?.tags.find((t) => t[0] === 'escrow_identity')?.[1] || ''
+
+/**
+ * Nostr pubkey of the auction's path issuer (aka the app running the path oracle). Falls
+ * back to the legacy `escrow_identity` tag so bids on older auctions keep routing correctly.
+ */
+export const getAuctionPathIssuer = (event: NDKEvent | null): string =>
+	event?.tags.find((t) => t[0] === 'path_issuer')?.[1] || event?.tags.find((t) => t[0] === 'escrow_identity')?.[1] || ''
 
 export const getAuctionSettlementPolicy = (event: NDKEvent | null): string =>
 	event?.tags.find((t) => t[0] === 'settlement_policy')?.[1] || ''
@@ -501,7 +515,9 @@ export const getBidLocktime = (bidEvent: NDKEvent | null): number => {
 }
 
 export const getAuctionCurrentPriceFromBids = (auction: NDKEvent | null, bids: NDKEvent[], startingBid: number = 0): number =>
-	auction ? computeAuctionCurrentPrice(auction, bids, startingBid) : bids.reduce((max, bid) => Math.max(max, getBidAmount(bid)), startingBid)
+	auction
+		? computeAuctionCurrentPrice(auction, bids, startingBid)
+		: bids.reduce((max, bid) => Math.max(max, getBidAmount(bid)), startingBid)
 
 export const getAuctionBidCountFromBids = (auction: NDKEvent | null, bids: NDKEvent[]): number =>
 	auction ? getAuctionWindowValidBids(auction, bids).length : bids.length

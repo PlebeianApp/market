@@ -6,6 +6,7 @@ import {
 	normalizeAuctionDerivationPath,
 	normalizeAuctionP2pkPubkey,
 	toCompressedAuctionP2pkPubkey,
+	verifyAuctionPathGrant,
 } from '@/lib/auctionP2pk'
 
 const toHex = (bytes: Uint8Array): string =>
@@ -47,6 +48,61 @@ describe('auctionP2pk', () => {
 	test('normalizeAuctionP2pkPubkey rejects invalid encodings', () => {
 		expect(() => normalizeAuctionP2pkPubkey('zz')).toThrow('hex encoded')
 		expect(() => normalizeAuctionP2pkPubkey('04deadbeef')).toThrow('x-only or compressed')
+	})
+
+	test('verifyAuctionPathGrant accepts valid grants and rejects tampered ones', () => {
+		const seed = Uint8Array.from({ length: 32 }, (_, index) => index + 1)
+		const account = HDKey.fromMasterSeed(seed).derive("m/30408'/0'/0'")
+		const xpub = account.publicExtendedKey
+		if (!xpub) throw new Error('Failed to derive test xpub')
+
+		const path = '7/11/13/17/19'
+		const childPubkey = deriveAuctionChildP2pkPubkeyFromXpub(xpub, path)
+
+		expect(() =>
+			verifyAuctionPathGrant({
+				xpub,
+				derivationPath: path,
+				childPubkey,
+				expectedXpub: xpub,
+				expectedIssuer: 'issuer-pk',
+				grantIssuer: 'ISSUER-PK',
+			}),
+		).not.toThrow()
+
+		expect(() =>
+			verifyAuctionPathGrant({
+				xpub,
+				derivationPath: path,
+				childPubkey,
+				expectedXpub: xpub,
+				expectedIssuer: 'issuer-pk',
+				grantIssuer: 'different-issuer',
+			}),
+		).toThrow('issuer')
+
+		expect(() =>
+			verifyAuctionPathGrant({
+				xpub,
+				derivationPath: path,
+				childPubkey,
+				expectedXpub: `${xpub}-wrong`,
+				expectedIssuer: 'issuer-pk',
+				grantIssuer: 'issuer-pk',
+			}),
+		).toThrow('xpub')
+
+		const mismatchedChild = deriveAuctionChildP2pkPubkeyFromXpub(xpub, '1/2/3/4/5')
+		expect(() =>
+			verifyAuctionPathGrant({
+				xpub,
+				derivationPath: path,
+				childPubkey: mismatchedChild,
+				expectedXpub: xpub,
+				expectedIssuer: 'issuer-pk',
+				grantIssuer: 'issuer-pk',
+			}),
+		).toThrow('derivation path')
 	})
 
 	test('toCompressedAuctionP2pkPubkey preserves compressed form and rejects x-only', () => {
