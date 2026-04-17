@@ -1,24 +1,20 @@
-name: Deploy to Staging
+name: Deploy AuctionsDev
 
 on:
-  workflow_run:
-    workflows:
-      - E2E Tests
-    types:
-      - completed
+  push:
+    branches: ['auctions/**']
   workflow_dispatch:
 
 env:
   BUN_VERSION: 'latest'
 
 concurrency:
-  group: deploy-staging
+  group: deploy-auctionsdev
   cancel-in-progress: true
 
 jobs:
   build:
     name: Build
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     outputs:
       release_name: ${{ steps.release.outputs.name }}
@@ -26,8 +22,6 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -44,40 +38,36 @@ jobs:
 
       - name: Generate release name
         id: release
-        run: echo "name=market-staging-$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
+        run: echo "name=market-auctionsdev-$(date +%Y%m%d-%H%M%S)" >> $GITHUB_OUTPUT
 
       - name: Create deployment package
         run: |
           mkdir -p deploy-package
           cp -r dist deploy-package/
           cp -r src deploy-package/
-          cp -r contextvm deploy-package/
           cp package.json bun.lock tsconfig.json deploy-package/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: deploy-package
+          name: deploy-package-auctionsdev
           path: deploy-package/
           retention-days: 1
 
-  deploy-staging:
-    name: Deploy to Staging
+  deploy:
+    name: Deploy to AuctionsDev
     needs: build
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'master' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
     environment: staging
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.ref }}
 
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
-          name: deploy-package
+          name: deploy-package-auctionsdev
           path: deploy-package/
 
       - name: Create ecosystem config
@@ -86,36 +76,15 @@ jobs:
           module.exports = {
             apps: [
               {
-                name: 'market-staging',
+                name: 'market-auctionsdev',
                 script: 'src/index.tsx',
                 interpreter: process.env.HOME + '/.bun/bin/bun',
-                cwd: '/home/deployer/market-staging',
+                cwd: '/home/deployer/market-auctionsdev',
                 instances: 1,
                 exec_mode: 'fork',
                 env_file: '.env',
-                error_file: '/home/deployer/logs/market-staging-error.log',
-                out_file: '/home/deployer/logs/market-staging-out.log',
-                log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
-                merge_logs: true,
-                autorestart: true,
-                max_restarts: 10,
-                min_uptime: '10s',
-                restart_delay: 5000,
-                max_memory_restart: '500M',
-                kill_timeout: 5000,
-                wait_ready: true,
-                listen_timeout: 10000,
-              },
-              {
-                name: 'market-contextvm-staging',
-                script: 'contextvm/server.ts',
-                interpreter: process.env.HOME + '/.bun/bin/bun',
-                cwd: '/home/deployer/market-staging',
-                instances: 1,
-                exec_mode: 'fork',
-                env_file: '.env',
-                error_file: '/home/deployer/logs/market-contextvm-staging-error.log',
-                out_file: '/home/deployer/logs/market-contextvm-staging-out.log',
+                error_file: '/home/deployer/logs/market-auctionsdev-error.log',
+                out_file: '/home/deployer/logs/market-auctionsdev-out.log',
                 log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
                 merge_logs: true,
                 autorestart: true,
@@ -136,7 +105,7 @@ jobs:
           cat > deploy-package/.env << EOF
           APP_STAGE=staging
           NODE_ENV=production
-          PORT=3000
+          PORT=3002
           APP_RELAY_URL=${{ secrets.STAGING_RELAY_URL }}
           APP_PRIVATE_KEY=${{ secrets.STAGING_APP_PRIVATE_KEY }}
           CVM_SERVER_KEY=${{ secrets.STAGING_CVM_SERVER_KEY }}
@@ -192,7 +161,7 @@ jobs:
           script: |
             set -euo pipefail
             RELEASE_DIR="/home/deployer/releases/${{ needs.build.outputs.release_name }}"
-            APP_DIR="/home/deployer/market-staging"
+            APP_DIR="/home/deployer/market-auctionsdev"
             PREVIOUS_RELEASE="$(readlink -f "$APP_DIR" || true)"
             CADDY_BACKUP="$(mktemp)"
             sudo cp /etc/caddy/Caddyfile "$CADDY_BACKUP" 2>/dev/null || true
@@ -206,30 +175,25 @@ jobs:
               if [[ -n "$PREVIOUS_RELEASE" && -d "$PREVIOUS_RELEASE" ]]; then
                 ln -sfn "$PREVIOUS_RELEASE" "$APP_DIR"
                 cd "$APP_DIR"
-                pm2 startOrReload ecosystem.config.cjs --only market-staging || true
+                pm2 startOrReload ecosystem.config.cjs --only market-auctionsdev || true
                 pm2 save --force || true
               fi
             }
 
             trap rollback ERR
 
-            # Install dependencies
             cd "$RELEASE_DIR"
             export PATH="$HOME/.bun/bin:$PATH"
             bun install --production
 
-            # Stop current version
-            pm2 stop market-staging 2>/dev/null || true
+            pm2 stop market-auctionsdev 2>/dev/null || true
 
-            # Swap symlink (blue-green)
             ln -sfn "$RELEASE_DIR" "$APP_DIR"
 
-            # Start new version with PM2
             cd "$APP_DIR"
-            pm2 startOrReload ecosystem.config.cjs --only market-staging
+            pm2 startOrReload ecosystem.config.cjs --only market-auctionsdev
             pm2 save --force
 
-            # Update Caddy
             grep -q 'auctionsdev\.plebeian\.market' /tmp/Caddyfile.staging
             sudo cp /tmp/Caddyfile.staging /etc/caddy/Caddyfile
             sudo mkdir -p /var/log/caddy
@@ -237,17 +201,18 @@ jobs:
               sudo caddy start --config /etc/caddy/Caddyfile --adapter caddyfile
             grep -q 'auctionsdev\.plebeian\.market' /etc/caddy/Caddyfile
 
-            # Cleanup old releases (keep last 3)
+            curl -sf http://localhost:3002/api/config >/dev/null
+
             cd /home/deployer/releases
-            ls -t | grep '^market-staging' | tail -n +4 | xargs -r rm -rf
+            ls -t | grep '^market-auctionsdev' | tail -n +4 | xargs -r rm -rf
 
             rm -f "$CADDY_BACKUP"
             trap - ERR
 
-            echo "✅ Staging deployment complete"
+            echo "✅ AuctionsDev deployment complete"
 
       - name: Health check
         run: |
           sleep 10
-          curl -sf https://staging.plebeian.market/api/config
-          echo "✅ Health check passed"
+          curl -sf https://auctionsdev.plebeian.market/api/config
+          echo "✅ AuctionsDev health check passed"

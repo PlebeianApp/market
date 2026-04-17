@@ -121,6 +121,7 @@ jobs:
             set -e
             chmod +x /tmp/relay-deploy/install-relay.sh
             /tmp/relay-deploy/install-relay.sh staging /tmp/relay-deploy
+            grep -q 'auctionsdev\.plebeian\.market' /tmp/relay-deploy/Caddyfile.staging
             CADDY_BACKUP="$(mktemp)"
             sudo cp /etc/caddy/Caddyfile "$CADDY_BACKUP" 2>/dev/null || true
             if ! { sudo cp /tmp/relay-deploy/Caddyfile.staging /etc/caddy/Caddyfile && \
@@ -133,6 +134,7 @@ jobs:
               fi
               exit 1
             fi
+            grep -q 'auctionsdev\.plebeian\.market' /etc/caddy/Caddyfile
             rm -f "$CADDY_BACKUP"
 
       - name: Verify staging relay
