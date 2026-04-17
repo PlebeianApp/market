@@ -11,6 +11,8 @@ import { fetchAppSettings } from './lib/appSettings'
 import {
 	AUCTION_BID_KIND,
 	AUCTION_SETTLEMENT_KIND,
+	AUCTION_SETTLEMENT_POLICY,
+	AUCTION_LEGACY_SETTLEMENT_POLICIES,
 	buildActiveAuctionBidChains,
 	compareAuctionBidChainPriority,
 	getAuctionBidAmount,
@@ -22,15 +24,30 @@ import {
 	type AuctionSettlementPlanResponse,
 	type AuctionSettlementPublishStatus,
 } from './lib/auctionSettlement'
-import { auctionP2pkPubkeysMatch, normalizeAuctionP2pkPubkey } from './lib/auctionP2pk'
+import { auctionP2pkPubkeysMatch, normalizeAuctionP2pkPubkey, deriveAuctionChildP2pkPubkeyFromXpub } from './lib/auctionP2pk'
 import { AUCTION_BID_TOKEN_TOPIC, parseAuctionBidTokenEnvelope } from './lib/auctionTransfers'
+import {
+	AUCTION_PATH_GRANT_DEFAULT_TTL_SECONDS,
+	AUCTION_PATH_REGISTRY_KIND,
+	AUCTION_PATH_REGISTRY_SCHEMA,
+	allocateAuctionPath,
+	buildAuctionPathRegistry,
+	extractAuctionPathRegistryEvent,
+	findAuctionPathEntryByChildPubkey,
+	getAuctionPathRegistryFilter,
+	getAuctionPathRegistryTags,
+	parseAuctionPathRegistry,
+	upsertAuctionPathEntry,
+	type AuctionPathRegistry,
+	type AuctionPathRegistryEntry,
+} from './lib/auctionPathOracle'
 import { AppSettingsSchema } from './lib/schemas/app'
 import { getEventHandler } from './server'
 import { ZapInvoiceError } from './server/ZapPurchaseManager'
 import type { ZapPurchaseInvoiceRequestBody } from './server/ZapPurchaseManager'
 import { join } from 'path'
 import { file } from 'bun'
-import { CashuMint, getDecodedToken, getEncodedToken, getTokenMetadata, type MintKeyset } from '@cashu/cashu-ts'
+import { CashuMint, type MintKeyset } from '@cashu/cashu-ts'
 import { NDKEvent, NDKPrivateKeySigner, NDKUser } from '@nostr-dev-kit/ndk'
 
 import.meta.hot.accept()
@@ -177,13 +194,176 @@ async function getMintKeysets(mintUrl: string): Promise<MintKeyset[]> {
 	return keysets
 }
 
-async function signAuctionTokenWithAppKey(token: string): Promise<string> {
-	const { signP2PKProofs } = await import('@cashu/cashu-ts/crypto/client/NUT11')
-	const mintUrl = normalizeMintUrl(getTokenMetadata(token).mint)
-	const keysets = await getMintKeysets(mintUrl)
-	const decoded = getDecodedToken(token, keysets)
-	decoded.proofs = signP2PKProofs(decoded.proofs, APP_PRIVATE_KEY!, true)
-	return getEncodedToken(decoded)
+// Path-oracle helpers -------------------------------------------------------
+//
+// Under cashu_p2pk_path_oracle_v1, the app is the path issuer. It holds the
+// mapping from (auction, bid) to the HD derivation path that produced the
+// Cashu lock pubkey. The mapping is persisted on Nostr as a kind 30410 event
+// encrypted to the app's own pubkey (NIP-44). A short-lived in-memory cache
+// avoids a relay round-trip per bid but is never authoritative.
+
+const pathRegistryCache = new Map<string, { registry: AuctionPathRegistry; fetchedAtMs: number }>()
+const PATH_REGISTRY_CACHE_TTL_MS = 5_000
+
+async function fetchAuctionPathRegistry(auctionEventId: string): Promise<AuctionPathRegistry | null> {
+	const cached = pathRegistryCache.get(auctionEventId)
+	if (cached && Date.now() - cached.fetchedAtMs < PATH_REGISTRY_CACHE_TTL_MS) {
+		return cached.registry
+	}
+	const ndk = await ensureInvoiceNdkConnected()
+	const appPubkey = getAppPublicKeyOrThrow()
+	const appSigner = await getAppAuctionSigner()
+	const events = Array.from(await ndk.fetchEvents(getAuctionPathRegistryFilter(auctionEventId, appPubkey)))
+	const latest = extractAuctionPathRegistryEvent(events)
+	if (!latest) return null
+	try {
+		const decryptable = new NDKEvent(ndk, latest.rawEvent())
+		await decryptable.decrypt(new NDKUser({ pubkey: appPubkey }), appSigner, 'nip44')
+		const registry = parseAuctionPathRegistry(decryptable.content)
+		if (!registry) return null
+		pathRegistryCache.set(auctionEventId, { registry, fetchedAtMs: Date.now() })
+		return registry
+	} catch (error) {
+		console.error('[auction] Failed to decrypt path registry:', error)
+		return null
+	}
+}
+
+async function publishAuctionPathRegistry(registry: AuctionPathRegistry): Promise<void> {
+	const ndk = await ensureInvoiceNdkConnected()
+	const appPubkey = getAppPublicKeyOrThrow()
+	const appSigner = await getAppAuctionSigner()
+	const event = new NDKEvent(ndk)
+	event.kind = AUCTION_PATH_REGISTRY_KIND
+	event.content = JSON.stringify(registry)
+	event.tags = getAuctionPathRegistryTags(registry, appPubkey)
+	await event.encrypt(new NDKUser({ pubkey: appPubkey }), appSigner, 'nip44')
+	await event.sign(appSigner)
+	await event.publish()
+	pathRegistryCache.set(registry.auctionEventId, { registry, fetchedAtMs: Date.now() })
+}
+
+async function loadAuctionEvent(auctionEventId: string): Promise<NDKEvent> {
+	const ndk = await ensureInvoiceNdkConnected()
+	const auctionEvent = await ndk.fetchEvent({
+		kinds: [30408 as NDKKind],
+		ids: [auctionEventId],
+	})
+	if (!auctionEvent) {
+		throw new Error('Auction not found')
+	}
+	const policy = getAuctionTagValue(auctionEvent, 'settlement_policy')
+	if (
+		policy &&
+		policy !== AUCTION_SETTLEMENT_POLICY &&
+		!AUCTION_LEGACY_SETTLEMENT_POLICIES.includes(policy as (typeof AUCTION_LEGACY_SETTLEMENT_POLICIES)[number])
+	) {
+		throw new Error(`Auction settlement policy ${policy} is not supported`)
+	}
+	return auctionEvent
+}
+
+function getAuctionPathIssuerFromEvent(auctionEvent: NDKEvent): string {
+	const pathIssuer = getAuctionTagValue(auctionEvent, 'path_issuer')
+	if (pathIssuer) return pathIssuer
+	const legacy = getAuctionTagValue(auctionEvent, 'escrow_identity')
+	return legacy || auctionEvent.pubkey
+}
+
+async function buildAuctionPathGrant(params: {
+	requestId: string
+	auctionEventId: string
+	auctionCoordinates: string
+	bidderPubkey: string
+	bidderRefundPubkey: string
+}): Promise<{
+	grantId: string
+	requestId: string
+	auctionEventId: string
+	auctionCoordinates: string
+	bidderPubkey: string
+	pathIssuerPubkey: string
+	xpub: string
+	derivationPath: string
+	childPubkey: string
+	issuedAt: number
+	expiresAt: number
+}> {
+	const appPubkey = getAppPublicKeyOrThrow()
+	const auctionEvent = await loadAuctionEvent(params.auctionEventId)
+	const issuerPubkey = getAuctionPathIssuerFromEvent(auctionEvent)
+	if (issuerPubkey !== appPubkey) {
+		throw new Error('Auction is not configured for this path issuer')
+	}
+
+	const xpub = getAuctionTagValue(auctionEvent, 'p2pk_xpub').trim()
+	if (!xpub) {
+		throw new Error('Auction is missing p2pk_xpub')
+	}
+
+	const now = Math.floor(Date.now() / 1000)
+	const startAt = Number(getAuctionTagValue(auctionEvent, 'start_at') || 0)
+	const endAt = Number(getAuctionTagValue(auctionEvent, 'end_at') || 0)
+	const maxEndAt = Number(getAuctionTagValue(auctionEvent, 'max_end_at') || 0)
+	const effectiveEnd = Math.max(endAt, maxEndAt) || endAt
+	if (startAt && now < startAt) {
+		throw new Error('Auction has not started yet')
+	}
+	if (effectiveEnd && now >= effectiveEnd) {
+		throw new Error('Auction already ended')
+	}
+
+	const registry = (await fetchAuctionPathRegistry(params.auctionEventId)) ?? {
+		type: AUCTION_PATH_REGISTRY_SCHEMA,
+		auctionEventId: params.auctionEventId,
+		auctionCoordinates: params.auctionCoordinates,
+		xpub,
+		entries: [],
+		updatedAt: Date.now(),
+	}
+	if (registry.xpub && registry.xpub !== xpub) {
+		throw new Error('Auction xpub changed since registry was initialised')
+	}
+
+	const allocated = allocateAuctionPath({
+		auctionEventId: params.auctionEventId,
+		auctionCoordinates: params.auctionCoordinates,
+		xpub,
+		bidderPubkey: params.bidderPubkey,
+		existingEntries: registry.entries,
+	})
+
+	const newEntry: AuctionPathRegistryEntry = {
+		bidderPubkey: params.bidderPubkey,
+		derivationPath: allocated.derivationPath,
+		childPubkey: allocated.childPubkey,
+		grantId: allocated.grantId,
+		grantedAt: allocated.grantedAt,
+		status: 'issued',
+	}
+	const updatedRegistry = buildAuctionPathRegistry({
+		auctionEventId: params.auctionEventId,
+		auctionCoordinates: params.auctionCoordinates,
+		xpub,
+		entries: upsertAuctionPathEntry(registry.entries, newEntry),
+	})
+	await publishAuctionPathRegistry(updatedRegistry)
+
+	const issuedAt = allocated.grantedAt
+	const expiresAt = issuedAt + AUCTION_PATH_GRANT_DEFAULT_TTL_SECONDS
+	return {
+		grantId: allocated.grantId,
+		requestId: params.requestId,
+		auctionEventId: params.auctionEventId,
+		auctionCoordinates: params.auctionCoordinates,
+		bidderPubkey: params.bidderPubkey,
+		pathIssuerPubkey: issuerPubkey,
+		xpub,
+		derivationPath: allocated.derivationPath,
+		childPubkey: allocated.childPubkey,
+		issuedAt,
+		expiresAt,
+	}
 }
 
 async function buildAuctionSettlementPlan(params: {
@@ -193,24 +373,18 @@ async function buildAuctionSettlementPlan(params: {
 }): Promise<AuctionSettlementPlanResponse> {
 	const ndk = await ensureInvoiceNdkConnected()
 	const appPubkey = getAppPublicKeyOrThrow()
-	const appCashuPubkey = getAppCashuPublicKeyOrThrow()
 	const appSigner = await getAppAuctionSigner()
 	const closeAt = Math.floor(Date.now() / 1000)
 
-	const auctionEvent = await ndk.fetchEvent({
-		kinds: [30408 as NDKKind],
-		ids: [params.auctionEventId],
-	})
-	if (!auctionEvent) {
-		throw new Error('Auction not found')
+	const auctionEvent = await loadAuctionEvent(params.auctionEventId)
+	const issuerPubkey = getAuctionPathIssuerFromEvent(auctionEvent)
+	if (issuerPubkey !== appPubkey) {
+		throw new Error('Auction is not configured for this path issuer')
 	}
 
-	const auctionEscrowPubkey = normalizeAuctionP2pkPubkey(getAuctionTagValue(auctionEvent, 'escrow_pubkey'))
-	if (!auctionP2pkPubkeysMatch(auctionEscrowPubkey, appCashuPubkey)) {
-		throw new Error('Auction is not configured for this app escrow service')
-	}
-	if (getAuctionTagValue(auctionEvent, 'settlement_policy') !== 'cashu_p2pk_2of2_v1') {
-		throw new Error('Auction settlement policy is not cashu_p2pk_2of2_v1')
+	const xpub = getAuctionTagValue(auctionEvent, 'p2pk_xpub').trim()
+	if (!xpub) {
+		throw new Error('Auction is missing p2pk_xpub')
 	}
 
 	const existingSettlements = await ndk.fetchEvents({
@@ -281,7 +455,7 @@ async function buildAuctionSettlementPlan(params: {
 			await decryptable.decrypt(new NDKUser({ pubkey: event.pubkey }), appSigner, 'nip44')
 			const envelope = parseAuctionBidTokenEnvelope(decryptable.content)
 			if (!envelope || envelope.auctionEventId !== params.auctionEventId) continue
-			if (!auctionP2pkPubkeysMatch(envelope.escrowPubkey, appCashuPubkey)) continue
+			if (envelope.pathIssuerPubkey !== appPubkey) continue
 			const tokenCommitment = await sha256Hex(envelope.token)
 			if (tokenCommitment !== envelope.commitment) continue
 			envelopeByBidId.set(envelope.bidEventId, envelope)
@@ -290,12 +464,20 @@ async function buildAuctionSettlementPlan(params: {
 		}
 	}
 
+	const registry = await fetchAuctionPathRegistry(params.auctionEventId)
 	const eligibleChains = buildActiveAuctionBidChains(getAuctionWindowValidBids(auctionEvent, bidEvents))
 		.filter((group) =>
 			group.chain.every((bid) => {
 				const envelope = envelopeByBidId.get(bid.id)
 				if (!envelope) return false
-				return getAuctionTagValue(bid, 'commitment') === envelope.commitment
+				if (getAuctionTagValue(bid, 'commitment') !== envelope.commitment) return false
+				// Every bid in a valid chain must come from a path that the
+				// issuer actually granted (otherwise the bidder self-generated
+				// a path and the seller could redeem prematurely — see §9.1).
+				const bidChildPubkey = getAuctionTagValue(bid, 'child_pubkey')
+				if (!bidChildPubkey) return false
+				const entry = findAuctionPathEntryByChildPubkey(registry, bidChildPubkey)
+				return !!entry
 			}),
 		)
 		.sort(compareAuctionBidChainPriority)
@@ -324,30 +506,61 @@ async function buildAuctionSettlementPlan(params: {
 		}
 	}
 
+	const releaseId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 	const winnerTokens: AuctionSettlementPlanResponse['winnerTokens'] = []
+	const releasedEntries: AuctionPathRegistryEntry[] = registry?.entries ? [...registry.entries] : []
 	for (const bid of winnerChain.chain) {
 		const envelope = envelopeByBidId.get(bid.id)
 		if (!envelope) {
 			throw new Error(`Missing private token envelope for winning bid ${bid.id}`)
 		}
-		const derivationPath = getAuctionTagValue(bid, 'derivation_path')
-		const childPubkey = getAuctionTagValue(bid, 'child_pubkey')
-		if (!derivationPath || !childPubkey) {
-			throw new Error(`Winning bid ${bid.id} is missing derivation metadata`)
+		const bidChildPubkey = getAuctionTagValue(bid, 'child_pubkey')
+		if (!bidChildPubkey) {
+			throw new Error(`Winning bid ${bid.id} is missing child_pubkey`)
+		}
+		const registryEntry = findAuctionPathEntryByChildPubkey(registry, bidChildPubkey)
+		if (!registryEntry) {
+			throw new Error(`Winning bid ${bid.id} was not granted by the path oracle`)
+		}
+		// Defence-in-depth: re-derive the pubkey from xpub + stored path. If
+		// the registry entry was tampered with, this throws before releasing.
+		const redeployedChildPubkey = deriveAuctionChildP2pkPubkeyFromXpub(xpub, registryEntry.derivationPath)
+		if (!auctionP2pkPubkeysMatch(redeployedChildPubkey, registryEntry.childPubkey)) {
+			throw new Error('Registry path does not re-derive to the recorded child pubkey')
 		}
 		winnerTokens.push({
 			bidEventId: bid.id,
 			bidderPubkey: envelope.bidderPubkey,
-			derivationPath,
-			childPubkey: normalizeAuctionP2pkPubkey(childPubkey),
+			derivationPath: registryEntry.derivationPath,
+			childPubkey: normalizeAuctionP2pkPubkey(registryEntry.childPubkey),
 			mintUrl: envelope.mintUrl,
 			amount: envelope.amount,
 			totalBidAmount: envelope.totalBidAmount,
 			commitment: envelope.commitment,
 			locktime: envelope.locktime,
 			refundPubkey: envelope.refundPubkey,
-			token: await signAuctionTokenWithAppKey(envelope.token),
+			token: envelope.token,
 		})
+		const updated: AuctionPathRegistryEntry = {
+			...registryEntry,
+			status: 'released',
+			releasedAt: Math.floor(Date.now() / 1000),
+			releaseTargetPubkey: auctionEvent.pubkey,
+			bidEventId: bid.id,
+		}
+		const index = releasedEntries.findIndex((entry) => entry.grantId === registryEntry.grantId)
+		if (index >= 0) releasedEntries[index] = updated
+	}
+
+	if (registry && releasedEntries.length) {
+		await publishAuctionPathRegistry(
+			buildAuctionPathRegistry({
+				auctionEventId: params.auctionEventId,
+				auctionCoordinates: auctionCoordinates || registry.auctionCoordinates,
+				xpub,
+				entries: releasedEntries,
+			}),
+		)
 	}
 
 	return {
@@ -360,6 +573,7 @@ async function buildAuctionSettlementPlan(params: {
 		winnerPubkey: winnerChain.bidderPubkey,
 		finalAmount: winnerAmount,
 		winnerTokens,
+		releaseId,
 	}
 }
 
@@ -565,6 +779,40 @@ export const server = serve({
 						return jsonError(error.message, error.status)
 					}
 					return jsonError(error instanceof Error ? error.message : 'Failed to create invoice', 500)
+				}
+			},
+		},
+		'/api/auctions/path-request': {
+			POST: async (req) => {
+				let body: {
+					requestId?: string
+					auctionEventId?: string
+					auctionCoordinates?: string
+					bidderPubkey?: string
+					bidderRefundPubkey?: string
+				}
+				try {
+					body = (await req.json()) as typeof body
+				} catch {
+					return jsonError('Invalid JSON body', 400)
+				}
+
+				if (!body.auctionEventId || !body.bidderPubkey || !body.bidderRefundPubkey) {
+					return jsonError('auctionEventId, bidderPubkey, and bidderRefundPubkey are required', 400)
+				}
+
+				try {
+					const grant = await buildAuctionPathGrant({
+						requestId: body.requestId || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+						auctionEventId: body.auctionEventId,
+						auctionCoordinates: body.auctionCoordinates || '',
+						bidderPubkey: body.bidderPubkey,
+						bidderRefundPubkey: body.bidderRefundPubkey,
+					})
+					return Response.json(grant)
+				} catch (error) {
+					console.error('Auction path request failed:', error)
+					return jsonError(error instanceof Error ? error.message : 'Failed to issue auction path grant', 400)
 				}
 			},
 		},

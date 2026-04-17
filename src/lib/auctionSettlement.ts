@@ -6,6 +6,9 @@ export const AUCTION_SETTLEMENT_KIND = 1024 as unknown as NonNullable<NDKFilter[
 export const ACTIVE_AUCTION_BID_STATUSES = new Set(['locked', 'accepted', 'active', 'unknown'])
 export const AUCTION_ROOT_EVENT_ID_TAG = 'auction_root_event_id'
 
+export const AUCTION_SETTLEMENT_POLICY = 'cashu_p2pk_path_oracle_v1'
+export const AUCTION_LEGACY_SETTLEMENT_POLICIES = ['cashu_p2pk_2of2_v1'] as const
+
 const AUCTION_IMMUTABLE_SINGLE_TAGS = [
 	'auction_type',
 	'start_at',
@@ -15,8 +18,7 @@ const AUCTION_IMMUTABLE_SINGLE_TAGS = [
 	'starting_bid',
 	'bid_increment',
 	'reserve',
-	'escrow_pubkey',
-	'escrow_identity',
+	'path_issuer',
 	'key_scheme',
 	'p2pk_xpub',
 	'extension_rule',
@@ -68,6 +70,8 @@ export interface AuctionSettlementPlanResponse {
 	winnerPubkey?: string
 	finalAmount: number
 	winnerTokens: AuctionSettlementWinnerToken[]
+	/** Identifier echoed into the kind 1024 settlement event for issuer audit. */
+	releaseId?: string
 }
 
 export const getAuctionTagValue = (event: NDKEvent, tagName: string): string => event.tags.find((tag) => tag[0] === tagName)?.[1] || ''
@@ -96,9 +100,11 @@ export const getAuctionBidStatus = (bidEvent: NDKEvent): string => getAuctionTag
 export const getAuctionReserveAmount = (auctionEvent: NDKEvent): number =>
 	parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'reserve'), 0)
 
-export const getAuctionStartAt = (auctionEvent: NDKEvent): number => parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'start_at'), 0)
+export const getAuctionStartAt = (auctionEvent: NDKEvent): number =>
+	parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'start_at'), 0)
 export const getAuctionEndAt = (auctionEvent: NDKEvent): number => parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'end_at'), 0)
-export const getAuctionMaxEndAt = (auctionEvent: NDKEvent): number => parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'max_end_at'), 0)
+export const getAuctionMaxEndAt = (auctionEvent: NDKEvent): number =>
+	parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'max_end_at'), 0)
 export const getAuctionRootEventId = (auctionEvent: NDKEvent): string =>
 	getAuctionTagValue(auctionEvent, AUCTION_ROOT_EVENT_ID_TAG) || auctionEvent.id
 export const getAuctionCoordinate = (auctionEvent: NDKEvent): string => {
@@ -106,7 +112,8 @@ export const getAuctionCoordinate = (auctionEvent: NDKEvent): string => {
 	return dTag ? `${AUCTION_KIND}:${auctionEvent.pubkey}:${dTag}` : ''
 }
 
-const normalizeComparableValueList = (values: string[]): string[] => Array.from(new Set(values.filter(Boolean))).sort((left, right) => left.localeCompare(right))
+const normalizeComparableValueList = (values: string[]): string[] =>
+	Array.from(new Set(values.filter(Boolean))).sort((left, right) => left.localeCompare(right))
 
 export const getAuctionExtensionRule = (auctionEvent: NDKEvent): AuctionExtensionRule => {
 	const raw = getAuctionTagValue(auctionEvent, 'extension_rule') || 'none'
@@ -213,15 +220,13 @@ export const getAuctionWindowValidBids = (auctionEvent: NDKEvent, bids: NDKEvent
 	const startAt = getAuctionStartAt(auctionEvent)
 	const effectiveEndAt = getAuctionEffectiveEndAt(auctionEvent, bids)
 
-	return [...bids]
-		.sort(compareAuctionBidChronologyAscending)
-		.filter((bid) => {
-			if (!ACTIVE_AUCTION_BID_STATUSES.has(getAuctionBidStatus(bid))) return false
-			if (getAuctionTagValue(bid, 'e') !== auctionRootEventId) return false
+	return [...bids].sort(compareAuctionBidChronologyAscending).filter((bid) => {
+		if (!ACTIVE_AUCTION_BID_STATUSES.has(getAuctionBidStatus(bid))) return false
+		if (getAuctionTagValue(bid, 'e') !== auctionRootEventId) return false
 
-			const bidCreatedAt = bid.created_at || 0
-			return bidCreatedAt >= startAt && bidCreatedAt <= effectiveEndAt
-		})
+		const bidCreatedAt = bid.created_at || 0
+		return bidCreatedAt >= startAt && bidCreatedAt <= effectiveEndAt
+	})
 }
 
 export const getAuctionCurrentPrice = (auctionEvent: NDKEvent, bids: NDKEvent[], startingBid: number = 0): number =>

@@ -9,14 +9,13 @@ import {
 	getAuctionCurrentPriceFromBids,
 	getAuctionEffectiveEndAt,
 	getAuctionEndAt,
-	getAuctionEscrowIdentityPubkey,
-	getAuctionEscrowPubkey,
 	getAuctionId,
 	getAuctionImages,
 	getAuctionKeyScheme,
 	getAuctionMaxEndAt,
 	getAuctionMints,
 	getAuctionP2pkXpub,
+	getAuctionPathIssuer,
 	getAuctionRootEventId,
 	getAuctionStartingBid,
 	getAuctionTitle,
@@ -35,8 +34,7 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 	const acceptedMints = getAuctionMints(auction)
 	const keyScheme = getAuctionKeyScheme(auction)
 	const p2pkXpub = getAuctionP2pkXpub(auction)
-	const escrowPubkey = getAuctionEscrowPubkey(auction) || auction.pubkey
-	const escrowIdentityPubkey = getAuctionEscrowIdentityPubkey(auction) || auction.pubkey
+	const pathIssuerPubkey = getAuctionPathIssuer(auction) || auction.pubkey
 	const auctionDTag = getAuctionId(auction)
 	const auctionRootEventId = getAuctionRootEventId(auction)
 	const auctionCoordinates = auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
@@ -86,8 +84,7 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 				auctionEffectiveEndAt: effectiveEndAt,
 				auctionLocktimeAt: getAuctionMaxEndAt(auction) || effectiveEndAt,
 				sellerPubkey: auction.pubkey,
-				escrowPubkey,
-				escrowIdentityPubkey,
+				pathIssuerPubkey,
 				p2pkXpub,
 				mint: acceptedMints[0],
 			})

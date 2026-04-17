@@ -32,6 +32,7 @@ import {
 	getAuctionEscrowIdentityPubkey,
 	getAuctionEscrowPubkey,
 	getAuctionId,
+	getAuctionPathIssuer,
 	getAuctionImages,
 	getAuctionKeyScheme,
 	getAuctionMaxEndAt,
@@ -176,6 +177,7 @@ function AuctionDetailRoute() {
 	const trustedMints = getAuctionMints(auction)
 	const escrowPubkey = getAuctionEscrowPubkey(auction)
 	const escrowIdentityPubkey = getAuctionEscrowIdentityPubkey(auction)
+	const pathIssuerPubkey = getAuctionPathIssuer(auction)
 	const keyScheme = getAuctionKeyScheme(auction)
 	const p2pkXpub = getAuctionP2pkXpub(auction)
 	const settlementPolicy = getAuctionSettlementPolicy(auction)
@@ -280,8 +282,12 @@ function AuctionDetailRoute() {
 		}
 
 		try {
-			if (!escrowPubkey) {
-				toast.error('This auction is missing a Cashu escrow pubkey and cannot accept bids.')
+			if (!pathIssuerPubkey) {
+				toast.error('This auction is missing a path_issuer pubkey and cannot accept bids.')
+				return
+			}
+			if (!p2pkXpub) {
+				toast.error('This auction is missing a p2pk_xpub and cannot accept bids.')
 				return
 			}
 			await bidMutation.mutateAsync({
@@ -291,8 +297,7 @@ function AuctionDetailRoute() {
 				auctionEffectiveEndAt: effectiveEndAt,
 				auctionLocktimeAt: getAuctionMaxEndAt(auction) || effectiveEndAt,
 				sellerPubkey: auction.pubkey,
-				escrowPubkey,
-				escrowIdentityPubkey: escrowIdentityPubkey || auction.pubkey,
+				pathIssuerPubkey,
 				p2pkXpub,
 				mint: trustedMints[0],
 			})
@@ -545,7 +550,11 @@ function AuctionDetailRoute() {
 												Settlement & technical details
 											</AccordionTrigger>
 											<AccordionContent className="space-y-3 pb-4">
-												<TechnicalDataRow label="Escrow pubkey" value={escrowPubkey || 'N/A'} />
+												<TechnicalDataRow label="Path issuer" value={pathIssuerPubkey || 'N/A'} />
+												{escrowPubkey && <TechnicalDataRow label="Legacy escrow pubkey" value={escrowPubkey} />}
+												{escrowIdentityPubkey && !pathIssuerPubkey && (
+													<TechnicalDataRow label="Legacy escrow identity" value={escrowIdentityPubkey} />
+												)}
 												<TechnicalDataRow label="Key scheme" value={keyScheme} />
 												{p2pkXpub && <TechnicalDataRow label="P2PK xpub" value={p2pkXpub} />}
 												<TechnicalDataRow label="Settlement policy" value={settlementPolicy || 'N/A'} />
