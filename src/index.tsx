@@ -4,15 +4,12 @@ import { Relay } from 'nostr-tools'
 import { getPublicKey, verifyEvent, type Event } from 'nostr-tools/pure'
 import NDK, { NDKKind } from '@nostr-dev-kit/ndk'
 import { bech32 } from '@scure/base'
-import { secp256k1 } from '@noble/curves/secp256k1'
-import { bytesToHex } from '@noble/hashes/utils'
 import index from './index.html'
 import { fetchAppSettings } from './lib/appSettings'
 import {
 	AUCTION_BID_KIND,
 	AUCTION_SETTLEMENT_KIND,
 	AUCTION_SETTLEMENT_POLICY,
-	AUCTION_LEGACY_SETTLEMENT_POLICIES,
 	buildActiveAuctionBidChains,
 	compareAuctionBidChainPriority,
 	getAuctionBidAmount,
@@ -60,7 +57,6 @@ const APP_PRIVATE_KEY = process.env.APP_PRIVATE_KEY
 
 let appSettings: Awaited<ReturnType<typeof fetchAppSettings>> = null
 let APP_PUBLIC_KEY: string
-let APP_CASHU_PUBLIC_KEY: string
 let CVM_SERVER_PUBKEY: string
 
 let invoiceNdk: NDK | null = null
@@ -90,15 +86,6 @@ function getAppPublicKeyOrThrow(): string {
 	const privateKeyBytes = new Uint8Array(Buffer.from(APP_PRIVATE_KEY, 'hex'))
 	APP_PUBLIC_KEY = getPublicKey(privateKeyBytes)
 	return APP_PUBLIC_KEY
-}
-
-function getAppCashuPublicKeyOrThrow(): string {
-	if (APP_CASHU_PUBLIC_KEY) return APP_CASHU_PUBLIC_KEY
-	if (!APP_PRIVATE_KEY) throw new Error('Missing APP_PRIVATE_KEY')
-
-	const privateKeyBytes = new Uint8Array(Buffer.from(APP_PRIVATE_KEY, 'hex'))
-	APP_CASHU_PUBLIC_KEY = bytesToHex(secp256k1.getPublicKey(privateKeyBytes, true))
-	return APP_CASHU_PUBLIC_KEY
 }
 
 function getCvmServerPublicKey(): string {
@@ -253,21 +240,14 @@ async function loadAuctionEvent(auctionEventId: string): Promise<NDKEvent> {
 		throw new Error('Auction not found')
 	}
 	const policy = getAuctionTagValue(auctionEvent, 'settlement_policy')
-	if (
-		policy &&
-		policy !== AUCTION_SETTLEMENT_POLICY &&
-		!AUCTION_LEGACY_SETTLEMENT_POLICIES.includes(policy as (typeof AUCTION_LEGACY_SETTLEMENT_POLICIES)[number])
-	) {
+	if (policy && policy !== AUCTION_SETTLEMENT_POLICY) {
 		throw new Error(`Auction settlement policy ${policy} is not supported`)
 	}
 	return auctionEvent
 }
 
 function getAuctionPathIssuerFromEvent(auctionEvent: NDKEvent): string {
-	const pathIssuer = getAuctionTagValue(auctionEvent, 'path_issuer')
-	if (pathIssuer) return pathIssuer
-	const legacy = getAuctionTagValue(auctionEvent, 'escrow_identity')
-	return legacy || auctionEvent.pubkey
+	return getAuctionTagValue(auctionEvent, 'path_issuer') || auctionEvent.pubkey
 }
 
 async function buildAuctionPathGrant(params: {
@@ -726,7 +706,6 @@ export const server = serve({
 					nip46Relay: NIP46_RELAY_URL,
 					appSettings: appSettings,
 					appPublicKey: APP_PUBLIC_KEY,
-					appCashuPublicKey: getAppCashuPublicKeyOrThrow(),
 					cvmServerPubkey: getCvmServerPublicKey(),
 					needsSetup: !appSettings,
 					serverReady: eventHandlerReady,

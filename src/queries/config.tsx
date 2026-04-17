@@ -8,7 +8,6 @@ interface Config {
 	nip46Relay: string
 	appSettings: AppSettings | null
 	appPublicKey: string
-	appCashuPublicKey: string
 	cvmServerPubkey?: string
 	needsSetup: boolean
 	serverReady: boolean

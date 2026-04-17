@@ -159,8 +159,6 @@ const NIP60_WALLET_START_TIMEOUT_MS = 7000
 const AUCTION_KIND = 30408 as unknown as NonNullable<NDKFilter['kinds']>[number]
 const AUCTION_BID_KIND = 1023 as unknown as NonNullable<NDKFilter['kinds']>[number]
 export const AUCTION_SETTLEMENT_GRACE_SECONDS = 3600
-const HD_DERIVATION_PATH_DEPTH = 5
-const HD_MAX_INDEX = 0x7fffffff
 
 export const nip60Store = new Store<Nip60State>(initialState)
 
@@ -335,20 +333,6 @@ const resolveLatestActiveBidByBidder = (bidEvents: NDKEvent[], bidderPubkey: str
 		if (createdAtDelta !== 0) return createdAtDelta
 		return b.id.localeCompare(a.id)
 	})[0]
-}
-
-const getRandomNonHardenedIndex = (): number => {
-	if (globalThis.crypto?.getRandomValues) {
-		const values = new Uint32Array(1)
-		globalThis.crypto.getRandomValues(values)
-		return values[0] % HD_MAX_INDEX
-	}
-	return Math.floor(Math.random() * HD_MAX_INDEX)
-}
-
-const generateDerivationPath = (): string => {
-	const levels = Array.from({ length: HD_DERIVATION_PATH_DEPTH }, () => getRandomNonHardenedIndex())
-	return `m/${levels.join('/')}`
 }
 
 const deriveChildPrivkeyFromXpriv = (xpriv: string, path: string): string => {
@@ -1845,7 +1829,7 @@ export const nip60Actions = {
 				const startingBid = parseNonNegativeInt(getFirstTagValue(event, 'starting_bid') || getFirstTagValue(event, 'price'), 0)
 				const bidIncrement = Math.max(1, parseNonNegativeInt(getFirstTagValue(event, 'bid_increment'), 1))
 				const acceptedMints = getTagValues(event, 'mint').map(normalizeMintUrl)
-				const pathIssuerPubkey = getFirstTagValue(event, 'path_issuer') || getFirstTagValue(event, 'escrow_identity') || event.pubkey
+				const pathIssuerPubkey = getFirstTagValue(event, 'path_issuer') || event.pubkey
 				const p2pkXpub = getFirstTagValue(event, 'p2pk_xpub')
 				return {
 					event,

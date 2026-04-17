@@ -7,7 +7,6 @@ export const ACTIVE_AUCTION_BID_STATUSES = new Set(['locked', 'accepted', 'activ
 export const AUCTION_ROOT_EVENT_ID_TAG = 'auction_root_event_id'
 
 export const AUCTION_SETTLEMENT_POLICY = 'cashu_p2pk_path_oracle_v1'
-export const AUCTION_LEGACY_SETTLEMENT_POLICIES = ['cashu_p2pk_2of2_v1'] as const
 
 const AUCTION_IMMUTABLE_SINGLE_TAGS = [
 	'auction_type',

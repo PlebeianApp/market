@@ -13,7 +13,6 @@ import {
 	getAuctionCurrentPriceFromBids,
 	getAuctionEffectiveEndAt,
 	getAuctionEndAt,
-	getAuctionEscrowPubkey,
 	getAuctionPathIssuer,
 	getAuctionId,
 	getAuctionImages,
@@ -84,7 +83,6 @@ function AuctionBasicInfo({ auction }: { auction: NDKEvent }) {
 	const bidIncrement = getAuctionBidIncrement(auction)
 	const auctionType = getAuctionType(auction)
 	const currency = getAuctionCurrency(auction)
-	const escrowPubkey = getAuctionEscrowPubkey(auction)
 	const pathIssuer = getAuctionPathIssuer(auction)
 	const keyScheme = getAuctionKeyScheme(auction)
 	const settlementPolicy = getAuctionSettlementPolicy(auction)
@@ -163,11 +161,6 @@ function AuctionBasicInfo({ auction }: { auction: NDKEvent }) {
 					<p className="text-xs text-gray-600">
 						Path issuer: <span className="font-medium text-foreground">{shortenHex(pathIssuer) || 'N/A'}</span>
 					</p>
-					{escrowPubkey && (
-						<p className="text-xs text-gray-600">
-							Legacy escrow pubkey: <span className="font-medium text-foreground">{shortenHex(escrowPubkey)}</span>
-						</p>
-					)}
 					<p className="text-xs text-gray-600">
 						Key scheme: <span className="font-medium text-foreground">{keyScheme}</span>
 					</p>

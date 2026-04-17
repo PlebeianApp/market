@@ -10,8 +10,7 @@ import {
 	createFeaturedProductsEvent,
 	createFeaturedUsersEvent,
 } from '@/publish/featured'
-import { bytesToHex, hexToBytes } from '@noble/hashes/utils'
-import { secp256k1 } from '@noble/curves/secp256k1'
+import { hexToBytes } from '@noble/hashes/utils'
 import { NDKPrivateKeySigner, NDKEvent } from '@nostr-dev-kit/ndk'
 import { config } from 'dotenv'
 import { getPublicKey } from 'nostr-tools/pure'
@@ -88,9 +87,6 @@ if (!APP_PRIVATE_KEY) {
 
 // Derive the public key from the private key
 const APP_PUBKEY = getPublicKey(hexToBytes(APP_PRIVATE_KEY))
-// Cashu P2PK requires compressed secp256k1 (66 hex chars with 02/03 prefix);
-// the nostr identity pubkey is x-only (64 hex chars) and is not a valid P2PK lock pubkey.
-const APP_CASHU_PUBKEY = bytesToHex(secp256k1.getPublicKey(hexToBytes(APP_PRIVATE_KEY), true))
 
 const ndk = ndkActions.initialize([RELAY_URL])
 const devUsers = [devUser1, devUser2, devUser3, devUser4, devUser5]
@@ -104,11 +100,7 @@ function setTagValue(tags: string[][], tagName: string, value: string) {
 	}
 }
 
-async function ensureAuctionWalletForSeller(
-	signer: NDKPrivateKeySigner,
-	pubkey: string,
-	mints: string[],
-): Promise<{ escrowPubkey: string; p2pkXpub: string }> {
+async function ensureAuctionWalletForSeller(signer: NDKPrivateKeySigner, pubkey: string, mints: string[]): Promise<{ p2pkXpub: string }> {
 	const previousSigner = ndk.signer
 	ndk.signer = signer
 
@@ -132,18 +124,18 @@ async function ensureAuctionWalletForSeller(
 		wallet.mints = Array.from(new Set([...(wallet.mints ?? []), ...mints]))
 		wallet.relaySet = NDKRelaySet.fromRelayUrls([RELAY_URL!], ndk)
 
-		const escrowPubkey = await wallet.getP2pk()
-		const walletPrivkey = wallet.privkeys.get(escrowPubkey)?.privateKey
+		const walletP2pk = await wallet.getP2pk()
+		const walletPrivkey = wallet.privkeys.get(walletP2pk)?.privateKey
 		if (!walletPrivkey) {
-			throw new Error(`Wallet private key for ${escrowPubkey} is not available`)
+			throw new Error(`Wallet private key for ${walletP2pk} is not available`)
 		}
 
 		if (!walletEvent) {
 			await wallet.publish()
 		}
 
-		const p2pkXpub = await getAuctionXpubFromWalletKeys(escrowPubkey, walletPrivkey)
-		return { escrowPubkey, p2pkXpub }
+		const p2pkXpub = await getAuctionXpubFromWalletKeys(walletP2pk, walletPrivkey)
+		return { p2pkXpub }
 	} finally {
 		ndk.signer = previousSigner
 	}

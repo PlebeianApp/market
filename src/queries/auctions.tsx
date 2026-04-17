@@ -424,26 +424,8 @@ export const getAuctionKeyScheme = (event: NDKEvent | null): 'hd_p2pk' => {
 
 export const getAuctionP2pkXpub = (event: NDKEvent | null): string => event?.tags.find((tag) => tag[0] === 'p2pk_xpub')?.[1] || ''
 
-/**
- * @deprecated Historical Cashu cosigner pubkey from the 2-of-2 profile. Kept so existing
- * auction events still render useful metadata. New auctions (path-oracle v1) do not emit
- * this tag.
- */
-export const getAuctionEscrowPubkey = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'escrow_pubkey')?.[1] || ''
-
-/**
- * @deprecated Previous name for the path issuer. `path_issuer` takes precedence when both exist.
- * See `getAuctionPathIssuer`.
- */
-export const getAuctionEscrowIdentityPubkey = (event: NDKEvent | null): string =>
-	event?.tags.find((t) => t[0] === 'escrow_identity')?.[1] || ''
-
-/**
- * Nostr pubkey of the auction's path issuer (aka the app running the path oracle). Falls
- * back to the legacy `escrow_identity` tag so bids on older auctions keep routing correctly.
- */
-export const getAuctionPathIssuer = (event: NDKEvent | null): string =>
-	event?.tags.find((t) => t[0] === 'path_issuer')?.[1] || event?.tags.find((t) => t[0] === 'escrow_identity')?.[1] || ''
+/** Nostr pubkey of the auction's path issuer (the app running the path oracle). */
+export const getAuctionPathIssuer = (event: NDKEvent | null): string => event?.tags.find((t) => t[0] === 'path_issuer')?.[1] || ''
 
 export const getAuctionSettlementPolicy = (event: NDKEvent | null): string =>
 	event?.tags.find((t) => t[0] === 'settlement_policy')?.[1] || ''

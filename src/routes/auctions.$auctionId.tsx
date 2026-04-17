@@ -29,8 +29,6 @@ import {
 	getAuctionEffectiveEndAt,
 	getAuctionCurrency,
 	getAuctionEndAt,
-	getAuctionEscrowIdentityPubkey,
-	getAuctionEscrowPubkey,
 	getAuctionId,
 	getAuctionPathIssuer,
 	getAuctionImages,
@@ -175,8 +173,6 @@ function AuctionDetailRoute() {
 	const auctionType = getAuctionType(auction)
 	const categories = getAuctionCategories(auction)
 	const trustedMints = getAuctionMints(auction)
-	const escrowPubkey = getAuctionEscrowPubkey(auction)
-	const escrowIdentityPubkey = getAuctionEscrowIdentityPubkey(auction)
 	const pathIssuerPubkey = getAuctionPathIssuer(auction)
 	const keyScheme = getAuctionKeyScheme(auction)
 	const p2pkXpub = getAuctionP2pkXpub(auction)
@@ -551,10 +547,6 @@ function AuctionDetailRoute() {
 											</AccordionTrigger>
 											<AccordionContent className="space-y-3 pb-4">
 												<TechnicalDataRow label="Path issuer" value={pathIssuerPubkey || 'N/A'} />
-												{escrowPubkey && <TechnicalDataRow label="Legacy escrow pubkey" value={escrowPubkey} />}
-												{escrowIdentityPubkey && !pathIssuerPubkey && (
-													<TechnicalDataRow label="Legacy escrow identity" value={escrowIdentityPubkey} />
-												)}
 												<TechnicalDataRow label="Key scheme" value={keyScheme} />
 												{p2pkXpub && <TechnicalDataRow label="P2PK xpub" value={p2pkXpub} />}
 												<TechnicalDataRow label="Settlement policy" value={settlementPolicy || 'N/A'} />
