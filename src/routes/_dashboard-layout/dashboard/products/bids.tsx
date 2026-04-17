@@ -4,7 +4,7 @@ import { DashboardListItem } from '@/components/layout/DashboardListItem'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { authStore } from '@/lib/stores/auth'
-import { nip60Actions, nip60Store, type PendingNip60Token } from '@/lib/stores/nip60'
+import { formatReclaimWaitSeconds, getAuctionReclaimReadyAt, nip60Actions, nip60Store, type PendingNip60Token } from '@/lib/stores/nip60'
 import { getMintHostname } from '@/lib/wallet'
 import {
 	auctionClaimOrdersQueryOptions,
@@ -32,7 +32,7 @@ import { useQueries } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { CheckCircle, Clock, ExternalLink, Loader2, MapPin, RotateCcw, Trophy } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 type BidGroup = {
@@ -63,6 +63,21 @@ const getPendingAuctionBidTokens = (tokens: PendingNip60Token[]): PendingNip60To
 
 const getPendingTokenLocktime = (token: PendingNip60Token): number => token.context?.locktime ?? 0
 
+/**
+ * Earliest timestamp at which this pending bid leg can actually be reclaimed,
+ * accounting for both the authoritative proof-secret locktime and the ~30s
+ * skew buffer applied inside the wallet's reclaim path. Using the same helper
+ * here keeps the "Reclaim available" banner consistent with the reclaim gate
+ * (so users don't see "Reclaim available" and then "Bid refund opens in …").
+ */
+const getPendingTokenReclaimReadyAt = (token: PendingNip60Token): number => getAuctionReclaimReadyAt(token.token, token.context?.locktime)
+
+const getBidGroupReclaimReadyAt = (tokens: PendingNip60Token[]): number =>
+	tokens.reduce((max, token) => {
+		const readyAt = getPendingTokenReclaimReadyAt(token)
+		return readyAt > max ? readyAt : max
+	}, 0)
+
 const getLatestBidForGroup = (bids: NDKEvent[]): NDKEvent =>
 	[...bids].sort((a, b) => {
 		const amountDelta = getBidAmount(b) - getBidAmount(a)
@@ -82,8 +97,13 @@ const getBidGroupState = (
 	helper: string
 	toneClass: string
 	reclaimableTokens: PendingNip60Token[]
+	reclaimReadyAt: number
 } => {
-	const reclaimableTokens = group.pendingTokens.filter((token) => token.status === 'pending' && getPendingTokenLocktime(token) <= now)
+	// Gate on the same readyAt the wallet will check — including the skew buffer —
+	// so "Reclaim available" never precedes "Bid refund opens in X" again.
+	const reclaimableTokens = group.pendingTokens.filter((token) => token.status === 'pending' && getPendingTokenReclaimReadyAt(token) <= now)
+	const pendingTokens = group.pendingTokens.filter((token) => token.status === 'pending')
+	const reclaimReadyAt = getBidGroupReclaimReadyAt(pendingTokens)
 	const trackedTokens = group.pendingTokens.length
 	const allClaimed = trackedTokens > 0 && group.pendingTokens.every((token) => token.status === 'claimed')
 	const allReclaimed = trackedTokens > 0 && group.pendingTokens.every((token) => token.status === 'reclaimed')
@@ -97,6 +117,7 @@ const getBidGroupState = (
 			helper: 'This bid won the auction and should settle to the seller.',
 			toneClass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
 			reclaimableTokens: [],
+			reclaimReadyAt,
 		}
 	}
 
@@ -106,6 +127,7 @@ const getBidGroupState = (
 			helper: 'The seller settlement refund has already been claimed into your wallet.',
 			toneClass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
 			reclaimableTokens: [],
+			reclaimReadyAt,
 		}
 	}
 
@@ -115,6 +137,7 @@ const getBidGroupState = (
 			helper: 'You reclaimed this locked bid chain back into your wallet after locktime.',
 			toneClass: 'border-sky-200 bg-sky-50 text-sky-700',
 			reclaimableTokens: [],
+			reclaimReadyAt,
 		}
 	}
 
@@ -124,42 +147,53 @@ const getBidGroupState = (
 			helper: `${reclaimableTokens.length} locked bid ${reclaimableTokens.length === 1 ? 'leg is' : 'legs are'} past locktime and can be reclaimed now.`,
 			toneClass: 'border-amber-200 bg-amber-50 text-amber-700',
 			reclaimableTokens,
+			reclaimReadyAt,
 		}
 	}
+
+	const waitingForReclaim = pendingTokens.length > 0 && reclaimReadyAt > now
+	// Sentinel helper value — the renderer replaces this with a live countdown.
+	const countdownHelper = `__COUNTDOWN__:${reclaimReadyAt}`
 
 	if (settlementStatus === 'settled') {
 		return {
 			label: 'Outbid',
-			helper:
-				trackedTokens > 0
+			helper: waitingForReclaim
+				? countdownHelper
+				: trackedTokens > 0
 					? 'Your bid stays timelocked until reclaim opens after locktime.'
 					: 'This device has no tracked reclaim token for the bid chain.',
 			toneClass: 'border-zinc-200 bg-zinc-50 text-zinc-700',
 			reclaimableTokens: [],
+			reclaimReadyAt,
 		}
 	}
 
 	if (settlementStatus === 'reserve_not_met') {
 		return {
 			label: 'Reserve not met',
-			helper:
-				trackedTokens > 0
+			helper: waitingForReclaim
+				? countdownHelper
+				: trackedTokens > 0
 					? 'Reclaim opens automatically after the bid locktime.'
 					: 'This device has no tracked reclaim token for the bid chain.',
 			toneClass: 'border-violet-200 bg-violet-50 text-violet-700',
 			reclaimableTokens: [],
+			reclaimReadyAt,
 		}
 	}
 
 	if (settlementStatus === 'cancelled') {
 		return {
 			label: 'Auction cancelled',
-			helper:
-				trackedTokens > 0
+			helper: waitingForReclaim
+				? countdownHelper
+				: trackedTokens > 0
 					? 'Reclaim opens automatically after the bid locktime.'
 					: 'This device has no tracked reclaim token for the bid chain.',
 			toneClass: 'border-rose-200 bg-rose-50 text-rose-700',
 			reclaimableTokens: [],
+			reclaimReadyAt,
 		}
 	}
 
@@ -170,9 +204,12 @@ const getBidGroupState = (
 	if (latestLocktime > now) {
 		return {
 			label: 'Locked',
-			helper: `No settlement refund yet. Manual reclaim opens after ${formatMaybeDate(latestLocktime)}.`,
+			helper: waitingForReclaim
+				? countdownHelper
+				: `No settlement refund yet. Manual reclaim opens after ${formatMaybeDate(latestLocktime)}.`,
 			toneClass: 'border-blue-200 bg-blue-50 text-blue-700',
 			reclaimableTokens: [],
+			reclaimReadyAt,
 		}
 	}
 
@@ -184,6 +221,7 @@ const getBidGroupState = (
 				: 'This device is missing the local reclaim token for this bid.',
 		toneClass: 'border-zinc-200 bg-zinc-50 text-zinc-700',
 		reclaimableTokens: [],
+		reclaimReadyAt,
 	}
 }
 
@@ -199,6 +237,13 @@ function BidsOverviewComponent() {
 	const [expandedBidGroup, setExpandedBidGroup] = useState<string | null>(null)
 	const [reclaimingGroup, setReclaimingGroup] = useState<string | null>(null)
 	const [isRefreshingBids, setIsRefreshingBids] = useState(false)
+	// Ticks every second so reclaim countdowns and the "Locked → Reclaim
+	// available" state transition update without a page refresh.
+	const [nowTick, setNowTick] = useState(() => Math.floor(Date.now() / 1000))
+	useEffect(() => {
+		const id = window.setInterval(() => setNowTick(Math.floor(Date.now() / 1000)), 1000)
+		return () => window.clearInterval(id)
+	}, [])
 	const [claimDialogGroup, setClaimDialogGroup] = useState<string | null>(null)
 	const [animationParent] = useAutoAnimate()
 
@@ -288,23 +333,31 @@ function BidsOverviewComponent() {
 		if (reclaimableTokens.length === 0) return
 
 		setReclaimingGroup(group.key)
+		let reclaimedCount = 0
+		const failures: string[] = []
 		try {
-			let reclaimedCount = 0
 			for (const token of reclaimableTokens) {
-				const success = await nip60Actions.reclaimToken(token.id)
-				if (success) reclaimedCount += 1
+				try {
+					await nip60Actions.reclaimToken(token.id)
+					reclaimedCount += 1
+				} catch (legError) {
+					const message = legError instanceof Error ? legError.message : String(legError)
+					console.error(`Failed to reclaim bid leg ${token.id}:`, legError)
+					failures.push(message)
+				}
 			}
 
+			const groupIndex = bidGroups.findIndex((item) => item.key === group.key)
+			const auctionTitle = getAuctionTitle(auctionResults[groupIndex]?.data ?? null) || 'auction'
+
 			if (reclaimedCount > 0) {
-				const groupIndex = bidGroups.findIndex((item) => item.key === group.key)
-				const auctionTitle = getAuctionTitle(auctionResults[groupIndex]?.data ?? null) || 'auction'
 				toast.success(`Reclaimed ${reclaimedCount} bid ${reclaimedCount === 1 ? 'leg' : 'legs'} for ${auctionTitle}`)
-			} else {
-				toast.error('No bid legs could be reclaimed')
 			}
-		} catch (reclaimError) {
-			console.error('Failed to reclaim bid group:', reclaimError)
-			toast.error(reclaimError instanceof Error ? reclaimError.message : 'Failed to reclaim bid')
+			if (failures.length > 0) {
+				// Surface the underlying mint/wallet error rather than hiding behind
+				// a generic "no bid legs could be reclaimed" toast.
+				toast.error(failures[0])
+			}
 		} finally {
 			setReclaimingGroup(null)
 		}
@@ -366,8 +419,11 @@ function BidsOverviewComponent() {
 						{bidGroups.map((group, index) => {
 							const auction = auctionResults[index]?.data ?? null
 							const settlement = settlementResults[index]?.data?.[0] ?? null
-							const now = Math.floor(Date.now() / 1000)
+							const now = nowTick
 							const state = getBidGroupState(group, settlement, user.pubkey, now)
+							const helperText = state.helper.startsWith('__COUNTDOWN__:')
+								? `Reclaim opens in ${formatReclaimWaitSeconds(state.reclaimReadyAt - now)}`
+								: state.helper
 							const totalTrackedAmount = group.pendingTokens.reduce((sum, token) => sum + token.amount, 0)
 							const claimedCount = group.pendingTokens.filter((token) => token.status === 'claimed').length
 							const reclaimedCount = group.pendingTokens.filter((token) => token.status === 'reclaimed').length
@@ -457,7 +513,7 @@ function BidsOverviewComponent() {
 										<div className="space-y-4">
 											<div className={`rounded-lg border px-3 py-2 text-sm ${state.toneClass}`}>
 												<p className="font-semibold">{state.label}</p>
-												<p className="mt-1 text-xs">{state.helper}</p>
+												<p className="mt-1 text-xs">{helperText}</p>
 											</div>
 
 											<div className="grid grid-cols-2 gap-3 text-sm">

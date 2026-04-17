@@ -25,12 +25,14 @@ import {
 	CashuMint,
 	CashuWallet,
 	CheckStateEnum,
+	getDecodedToken,
 	getEncodedToken,
 	getTokenMetadata,
 	type MintKeys,
 	type MintKeyset,
 	type Proof,
 } from '@cashu/cashu-ts'
+import { getP2PKLocktime } from '@cashu/cashu-ts/crypto/client/NUT11'
 import { secp256k1 } from '@noble/curves/secp256k1'
 import { NDKEvent, NDKNutzap, NDKRelaySet, NDKUser, NDKZapper, type NDKFilter, type NDKTag } from '@nostr-dev-kit/ndk'
 import { NDKCashuDeposit, NDKCashuWallet, NDKWalletStatus, type NDKWalletTransaction } from '@nostr-dev-kit/wallet'
@@ -159,6 +161,62 @@ const NIP60_WALLET_START_TIMEOUT_MS = 7000
 const AUCTION_KIND = 30408 as unknown as NonNullable<NDKFilter['kinds']>[number]
 const AUCTION_BID_KIND = 1023 as unknown as NonNullable<NDKFilter['kinds']>[number]
 export const AUCTION_SETTLEMENT_GRACE_SECONDS = 3600
+/**
+ * Wall-clock skew buffer added on top of a proof's embedded P2PK locktime before
+ * the client attempts a refund-path reclaim. Guards against the local clock
+ * briefly racing ahead of the mint's, which would produce a
+ * "Witness is missing for p2pk signature" error from the mint.
+ */
+export const AUCTION_RECLAIM_SKEW_BUFFER_SECONDS = 30
+
+/**
+ * Resolve the earliest-reclaim timestamp for a bid token. We prefer the
+ * authoritative locktime embedded in each proof's NUT-11 P2PK secret, but fall
+ * back to the caller-supplied `contextLocktime` (the value the bidder stashed
+ * when they placed the bid) when the secret parse turns up no usable value —
+ * otherwise a token whose secret isn't parseable would look "never ready" and
+ * produce the misleading "in a moment" error. A small buffer is always added
+ * on top to ride out client/mint clock drift.
+ */
+export const getAuctionReclaimReadyAt = (token: string, contextLocktime?: number): number => {
+	const fallback = contextLocktime && contextLocktime > 0 ? contextLocktime : 0
+	let maxLocktime = fallback
+	try {
+		const decoded = getDecodedToken(token)
+		if (decoded?.proofs?.length) {
+			for (const proof of decoded.proofs) {
+				try {
+					const locktime = getP2PKLocktime(proof.secret)
+					if (Number.isFinite(locktime) && locktime > maxLocktime) maxLocktime = locktime
+				} catch {
+					// Proof isn't a P2PK secret — doesn't contribute a locktime.
+				}
+			}
+		}
+	} catch {
+		// Token won't decode — rely on the context fallback below.
+	}
+	return maxLocktime + AUCTION_RECLAIM_SKEW_BUFFER_SECONDS
+}
+
+/** Human-readable "Xs / Xm / Xh" label for a pending-reclaim wait period. */
+export const formatReclaimWaitSeconds = (seconds: number): string => {
+	if (!Number.isFinite(seconds) || seconds <= 0) return 'a moment'
+	if (seconds < 60) return `${Math.ceil(seconds)}s`
+	const minutes = Math.ceil(seconds / 60)
+	if (minutes < 60) return `${minutes}m`
+	const hours = Math.ceil(seconds / 3600)
+	return `${hours}h`
+}
+
+/** Helper for UI: compute the ready-at across every pending leg of a bid group. */
+export const getAuctionReclaimReadyAtForGroup = (tokens: { token: string; context?: { locktime?: number } }[]): number => {
+	if (!tokens.length) return 0
+	return tokens.reduce((max, entry) => {
+		const readyAt = getAuctionReclaimReadyAt(entry.token, entry.context?.locktime)
+		return readyAt > max ? readyAt : max
+	}, 0)
+}
 
 export const nip60Store = new Store<Nip60State>(initialState)
 
@@ -2148,6 +2206,11 @@ export const nip60Actions = {
 			saveAuctionTransferMessageIds(Array.from(processedIds))
 			await nip60Actions.refresh()
 		}
+
+		// After ingesting any issuer-sent refund envelopes, sweep remaining
+		// pending bids whose locktime has expired. This is the "losers self-
+		// refund via locktime path" from AUCTIONS.md §8.1 — made automatic.
+		await nip60Actions.autoReclaimTimelockedBids()
 	},
 
 	/**
@@ -2159,10 +2222,15 @@ export const nip60Actions = {
 	},
 
 	/**
-	 * Reclaim a pending token (if recipient hasn't claimed it yet)
-	 * This receives the token back into our wallet
+	 * Reclaim a pending token (if the recipient hasn't claimed it yet).
+	 *
+	 * Source of truth for the timelock is the Cashu proof secret itself, not the
+	 * cached auction context (which may be stale/missing from an older session).
+	 * A small skew buffer guards against the local clock briefly leading the
+	 * mint's, which would otherwise surface as a "Witness is missing" mint
+	 * error. Errors propagate so the caller can show the real message.
 	 */
-	reclaimToken: async (tokenId: string): Promise<boolean> => {
+	reclaimToken: async (tokenId: string): Promise<void> => {
 		const wallet = nip60Store.state.wallet
 		if (!wallet) {
 			throw new Error('Wallet not initialized')
@@ -2173,33 +2241,58 @@ export const nip60Actions = {
 			throw new Error('Pending token not found')
 		}
 
-		try {
-			const auctionContext = resolveAuctionBidPendingContext(pendingToken)
-			if (auctionContext) {
-				const now = Math.floor(Date.now() / 1000)
-				if (auctionContext.locktime > now) {
-					throw new Error('Auction bid refund is still timelocked')
-				}
-			}
-			const refundPrivkey = getWalletPrivkeyForPubkey(wallet, auctionContext?.refundPubkey)
+		const auctionContext = resolveAuctionBidPendingContext(pendingToken)
+		const now = Math.floor(Date.now() / 1000)
+		const reclaimReadyAt = getAuctionReclaimReadyAt(pendingToken.token, auctionContext?.locktime)
+		if (reclaimReadyAt > now) {
+			const waitSeconds = reclaimReadyAt - now
+			throw new Error(`Bid refund opens in ${formatReclaimWaitSeconds(waitSeconds)}`)
+		}
 
-			if (auctionContext && refundPrivkey) {
+		const refundPrivkey = auctionContext ? getWalletPrivkeyForPubkey(wallet, auctionContext.refundPubkey) : null
+
+		try {
+			if (refundPrivkey) {
 				await receiveTokenWithPrivkey(wallet, pendingToken.token, refundPrivkey)
 			} else {
 				await receiveTokenIntoWallet(wallet, pendingToken.token)
 			}
 
-			// Update status to reclaimed
+			// Mark reclaimed so auto-reclaim won't retry it.
 			const pendingTokens = nip60Store.state.pendingTokens.map((t) => (t.id === tokenId ? { ...t, status: 'reclaimed' as const } : t))
 			savePendingTokens(pendingTokens)
 			nip60Store.setState((s) => ({ ...s, pendingTokens }))
 
-			// Refresh balances
 			await nip60Actions.refresh()
-			return true
 		} catch (err) {
 			console.error('[nip60] Failed to reclaim token:', err)
-			return false
+			throw err
+		}
+	},
+
+	/**
+	 * Silently reclaim every pending auction bid whose P2PK timelock has expired.
+	 * Called during wallet init + refresh; errors are swallowed (spent-proof
+	 * races, transient mint outages) — the manual Reclaim button remains the
+	 * user-facing fallback for anything that stays stuck.
+	 */
+	autoReclaimTimelockedBids: async (): Promise<void> => {
+		const wallet = nip60Store.state.wallet
+		if (!wallet || nip60Store.state.status !== 'ready') return
+
+		const now = Math.floor(Date.now() / 1000)
+		const candidates = nip60Store.state.pendingTokens.filter((token) => {
+			const context = resolveAuctionBidPendingContext(token)
+			if (token.status !== 'pending' || !context) return false
+			return getAuctionReclaimReadyAt(token.token, context.locktime) <= now
+		})
+
+		for (const token of candidates) {
+			try {
+				await nip60Actions.reclaimToken(token.id)
+			} catch (err) {
+				console.warn(`[nip60] Auto-reclaim skipped for token ${token.id}:`, err instanceof Error ? err.message : err)
+			}
 		}
 	},
 

@@ -143,7 +143,13 @@ export const requestAuctionPathGrant = async (params: {
 export interface AuctionSettlementFormData {
 	auctionEventId: string
 	auctionCoordinates?: string
-	status: AuctionSettlementPublishStatus
+	/**
+	 * Optional expected outcome. When omitted the backend computes it from the
+	 * bids + reserve and the client publishes whatever it resolves to. Provide
+	 * this only if the caller wants a safety assertion that their expectation
+	 * matches reality — mismatch causes the backend to reject.
+	 */
+	status?: AuctionSettlementPublishStatus
 	closeAt?: number
 	winningBidEventId?: string
 	winnerPubkey?: string
@@ -172,6 +178,20 @@ const getAuctionPathIssuerPubkeyOrThrow = (): string => {
 		throw new Error('App path-issuer pubkey is unavailable. Wait for app config to load and try again.')
 	}
 	return appPubkey
+}
+
+/**
+ * Wrap an error thrown from a specific step of the bid flow with a tag that
+ * names the step. Makes the eventual toast unambiguous about whether the
+ * rate limit / failure came from the mint, the issuer, or the relay.
+ */
+const tagBidError = (step: string, cause: unknown): Error => {
+	const detail = cause instanceof Error ? cause.message : String(cause)
+	const tagged = new Error(`[${step}] ${detail}`)
+	if (cause instanceof Error && cause.stack) {
+		tagged.stack = cause.stack
+	}
+	return tagged
 }
 
 export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKSigner, ndk: NDK, auctionId?: string): Promise<NDKEvent> => {
@@ -560,21 +580,28 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 			token: lockedBid.token,
 			createdAt: Date.now(),
 		}
-		// Path-oracle delivery rule: only the issuer strictly needs the token to
-		// enforce settlement. We still forward a copy to the seller so they can
-		// see bids landing, but redemption ability flows through the issuer's
-		// `auction_path_release_v1` envelope at settlement time.
-		const transferRecipients = Array.from(new Set([grant.pathIssuerPubkey, formData.sellerPubkey]))
-		for (const recipientPubkey of transferRecipients) {
+		// Path-oracle delivery rule: only the issuer needs the token envelope —
+		// they're the ones who release the derivation path at settlement. The
+		// seller receives the path separately via `auction_path_release_v1`,
+		// so duplicating the envelope to them adds a relay publish per bid
+		// without giving them anything they can act on. The public bid event
+		// is enough for the seller's UI to track bids landing.
+		try {
 			await publishEncryptedAuctionTransfer({
-				recipientPubkey,
+				recipientPubkey: grant.pathIssuerPubkey,
 				senderSigner: signer,
 				ndk,
 				tags: transferTags,
 				content: transferContent,
 			})
+		} catch (transferError) {
+			throw tagBidError('Failed to deliver bid token envelope to issuer', transferError)
 		}
-		await ndkActions.publishEvent(event)
+		try {
+			await ndkActions.publishEvent(event)
+		} catch (publishError) {
+			throw tagBidError('Failed to publish bid commitment event', publishError)
+		}
 		nip60Actions.updatePendingTokenContext(lockedBid.tokenId, {
 			kind: 'auction_bid',
 			auctionEventId: formData.auctionEventId,
@@ -625,7 +652,6 @@ export const usePublishAuctionBidMutation = () => {
 
 export const publishAuctionSettlement = async (formData: AuctionSettlementFormData, signer: NDKSigner, ndk: NDK): Promise<string> => {
 	if (!formData.auctionEventId) throw new Error('Auction event id is required')
-	if (!formData.status) throw new Error('Settlement status is required')
 
 	const sellerUser = await signer.user()
 	const sellerPubkey = sellerUser.pubkey
@@ -668,7 +694,8 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 		body: JSON.stringify({
 			auctionEventId: formData.auctionEventId,
 			auctionCoordinates,
-			status: formData.status,
+			// status deliberately omitted — backend derives the correct outcome
+			// from bids + reserve so the client never has to pick.
 		}),
 	})
 	if (!settlementPlanResponse.ok) {

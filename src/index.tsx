@@ -349,7 +349,12 @@ async function buildAuctionPathGrant(params: {
 async function buildAuctionSettlementPlan(params: {
 	auctionEventId: string
 	auctionCoordinates?: string
-	status: AuctionSettlementPublishStatus
+	/**
+	 * Seller's best guess at the outcome. Optional — when omitted the backend
+	 * computes the status itself. When provided, backend will still reject a
+	 * mismatch so the seller never publishes the wrong outcome.
+	 */
+	status?: AuctionSettlementPublishStatus
 }): Promise<AuctionSettlementPlanResponse> {
 	const ndk = await ensureInvoiceNdkConnected()
 	const appPubkey = getAppPublicKeyOrThrow()
@@ -467,7 +472,7 @@ async function buildAuctionSettlementPlan(params: {
 	const winnerAmount = winnerChain ? getAuctionBidAmount(winnerChain.latestBid) : 0
 	const resolvedStatus: AuctionSettlementPublishStatus = winnerChain && winnerAmount >= reserve ? 'settled' : 'reserve_not_met'
 
-	if (resolvedStatus !== params.status) {
+	if (params.status && resolvedStatus !== params.status) {
 		if (params.status === 'settled') {
 			throw new Error('No valid reserve-meeting winner is available for settlement')
 		}
@@ -804,8 +809,11 @@ export const server = serve({
 					return jsonError('Invalid JSON body', 400)
 				}
 
-				if (!body.auctionEventId || (body.status !== 'settled' && body.status !== 'reserve_not_met')) {
-					return jsonError('auctionEventId and a valid settlement status are required', 400)
+				if (!body.auctionEventId) {
+					return jsonError('auctionEventId is required', 400)
+				}
+				if (body.status !== undefined && body.status !== 'settled' && body.status !== 'reserve_not_met') {
+					return jsonError('status must be "settled" or "reserve_not_met" when provided', 400)
 				}
 
 				try {

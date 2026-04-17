@@ -226,7 +226,7 @@ function DashboardAuctionDetailRoute() {
 	const claimOrderDetailQuery = useOrderById(winnerClaimOrderId)
 	const claimOrderWithEvents: OrderWithRelatedEvents | null = claimOrderDetailQuery.data ?? null
 
-	const submitSettlement = async (mode: 'settled' | 'reserve_not_met') => {
+	const submitSettlement = async () => {
 		if (!auction) return
 		if (!isOwner) {
 			toast.error('Only the auction owner can settle this auction')
@@ -243,25 +243,14 @@ function DashboardAuctionDetailRoute() {
 			return
 		}
 
-		if (mode === 'settled') {
-			if (!topBid) {
-				toast.error('Cannot settle winner without bids')
-				return
-			}
-			if (!reserveMet) {
-				toast.error('Reserve not met; use "Reserve Not Met" settlement')
-				return
-			}
-		}
-
 		try {
+			// Don't pre-compute the status client-side: the backend derives it
+			// from bids + reserve and the settlement event reflects whatever
+			// the backend returns. This keeps the two outcomes (settled /
+			// reserve_not_met) behind a single action.
 			await settlementMutation.mutateAsync({
 				auctionEventId: auctionRootEventId || auction.id,
 				auctionCoordinates,
-				status: mode,
-				winningBidEventId: mode === 'settled' ? topBid?.id : '',
-				winnerPubkey: mode === 'settled' ? topBid?.pubkey : '',
-				finalAmount: mode === 'settled' ? getBidAmount(topBid) : 0,
 			})
 		} catch {
 			// Toast handled in mutation hook.
@@ -533,22 +522,21 @@ function DashboardAuctionDetailRoute() {
 							</div>
 
 							<div className="space-y-2">
-								<p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Settlement actions</p>
+								<p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Settlement action</p>
 								<Button
-									className="w-full"
-									disabled={!isOwner || settlementLocked || !ended || !topBid || !reserveMet || settlementMutation.isPending}
-									onClick={() => void submitSettlement('settled')}
-								>
-									Settle Winner
-								</Button>
-								<Button
-									variant="outline"
 									className="w-full"
 									disabled={!isOwner || settlementLocked || !ended || settlementMutation.isPending}
-									onClick={() => void submitSettlement('reserve_not_met')}
+									onClick={() => void submitSettlement()}
 								>
-									Reserve Not Met
+									{settlementMutation.isPending ? 'Publishing…' : 'Publish Settlement'}
 								</Button>
+								<p className="text-[11px] leading-relaxed text-zinc-500">
+									{topBid && reserveMet
+										? `Will settle winner at ${getBidAmount(topBid).toLocaleString()} sats.`
+										: topBid
+											? 'Top bid is below the reserve — settlement will record reserve_not_met.'
+											: 'No valid bids — settlement will record reserve_not_met.'}
+								</p>
 							</div>
 
 							<div className="rounded-xl border border-dashed border-zinc-300 bg-white/70 p-3 text-xs text-zinc-600">
