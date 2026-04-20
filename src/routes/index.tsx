@@ -126,7 +126,7 @@ function Index() {
 			{/* Tag Filter Bar */}
 			{defaultTags.length > 0 && (
 				<div className="sticky top-0 z-20 bg-off-black border-b shadow-sm">
-					<div className="px-4 py-3 overflow-x-auto">
+					<div className="hide-scrollbar overflow-x-auto px-4 py-3">
 						<div className="flex items-center gap-2 min-w-max">
 							<Badge variant={!tag ? 'primaryActive' : 'primary'} className="cursor-pointer transition-colors" onClick={handleClearFilter}>
 								All

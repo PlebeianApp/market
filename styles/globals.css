@@ -78,6 +78,15 @@
 	font-synthesis: none;
 }
 
+.hide-scrollbar {
+	-ms-overflow-style: none;
+	scrollbar-width: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+	display: none;
+}
+
 /* Add specific sizes for different heading levels */
 h1.font-heading {
 	font-size: 2.4rem;
