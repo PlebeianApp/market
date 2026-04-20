@@ -324,7 +324,7 @@ function AuctionsRoute() {
 
 			<div className="sticky top-0 z-20 bg-off-black border-b shadow-sm">
 				<div className="px-4 py-3 flex items-center justify-between gap-4">
-					<div className="overflow-x-auto flex-1">
+					<div className="hide-scrollbar overflow-x-auto flex-1">
 						<div className="flex items-center gap-2 min-w-max">
 							<Badge variant={!tag ? 'primaryActive' : 'primary'} className="cursor-pointer transition-colors" onClick={handleClearFilter}>
 								All
