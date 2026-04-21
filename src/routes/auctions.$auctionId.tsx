@@ -338,7 +338,7 @@ function AuctionDetailRoute() {
 							<ImageCarousel images={formattedImages} title={title} onImageClick={handleImageClick} />
 						</div>
 
-						<div className="flex flex-col gap-4 text-white w-full max-w-[600px] mx-auto lg:max-w-none">
+						<div className="flex flex-col gap-2 text-white w-full max-w-[600px] mx-auto lg:max-w-none">
 							<div className="flex items-center justify-between gap-4">
 								<h1 className="text-3xl font-semibold">{title}</h1>
 								<div className={`text-xs font-bold px-2 py-1 rounded ${ended ? 'bg-zinc-700' : 'bg-green-600'}`}>
@@ -359,7 +359,6 @@ function AuctionDetailRoute() {
 								</div>
 							</div>
 							<AuctionCountdown auction={auction} className="w-full gap-3" />
-
 							<AuctionBidder auction={auction} />
 						</div>
 					</div>
