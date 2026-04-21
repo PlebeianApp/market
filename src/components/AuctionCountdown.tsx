@@ -53,8 +53,11 @@ function getProgressColor(urgency: AuctionCountdownUrgency): string {
 	}
 }
 
-// Helper to format the text label
-function formatTimeLeft(seconds: number): string {
+/**
+ * Formats seconds into a simple, human-readable string (e.g., "2 days left", "45 minutes left").
+ * Prioritizes the largest unit of time.
+ */
+function formatTimeLeftSimple(seconds: number): string {
 	if (seconds <= 0) return 'Ended'
 
 	const days = Math.floor(seconds / 86400)
@@ -68,8 +71,49 @@ function formatTimeLeft(seconds: number): string {
 	if (hours > 0) {
 		return `${hours} hour${hours > 1 ? 's' : ''} left`
 	}
-	// Show MM:SS for minutes and seconds
-	return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+
+	if (minutes > 0) {
+		return `${minutes} minute${minutes > 1 ? 's' : ''} left`
+	}
+	// Fallback for very short times
+	return `${secs} second${secs !== 1 ? 's' : ''} left`
+}
+
+/**
+ * Formats seconds into a detailed countdown: DDd HH:MM:SS or HH:MM:SS or MM:SS.
+ * - Always shows Minutes and Seconds (MM:SS).
+ * - Shows Hours conditionally if > 1 hour.
+ * - Shows Days conditionally if > 1 day.
+ */
+function formatCountdownDetailed(seconds: number): string {
+	if (seconds <= 0) return '--:--'
+
+	const days = Math.floor(seconds / 86400)
+	const hours = Math.floor((seconds % 86400) / 3600)
+	const minutes = Math.floor((seconds % 3600) / 60)
+	const secs = seconds % 60
+
+	// Format the core MM:SS part
+	const mm = minutes.toString().padStart(2, '0')
+	const ss = Math.round(secs).toString().padStart(2, '0')
+	const coreTime = `${mm}:${ss}`
+
+	// Add Hours if > 0 (but we only show HH if days are 0, otherwise we show days)
+	// Actually, the prompt says: "hours and days should show conditionally if the time is larger than one hour and one day"
+	// Usually, if days > 0, we show days. If days == 0 but hours > 0, we show hours.
+
+	if (days > 0) {
+		const hh = hours.toString().padStart(2, '0')
+		return `${days}d ${hh}:${mm}:${ss}`
+	}
+
+	if (hours > 0) {
+		const hh = hours.toString().padStart(2, '0')
+		return `${hh}:${mm}:${ss}`
+	}
+
+	// If less than an hour, just MM:SS
+	return coreTime
 }
 
 // Helper to format the End Time label (Today/Tomorrow/Date)
@@ -168,8 +212,6 @@ export function AuctionCountdown({ auction, className, compact = false }: { auct
 
 	const urgency = getUrgency(remaining)
 	const color = getProgressColor(urgency)
-	const textLabel = formatTimeLeft(remaining)
-	const endTimeLabel = formatEndTimeLabel(endTime, remaining <= 0)
 
 	// 1. Calculate Inverse Progress
 	let progress = 0
@@ -201,22 +243,31 @@ export function AuctionCountdown({ auction, className, compact = false }: { auct
 
 	const badgeClass = getBadgeClassName(urgency)
 
+	const contentTimeLeftDetailed = (
+		<span className="text-foreground whitespace-nowrap text-base font-semibold">{formatCountdownDetailed(remaining)}</span>
+	)
+
 	return (
 		<div className={cn('flex flex-col items-start gap-2', className)}>
-			<div className="flex flex-row gap-2 items-center">
-				{/* Shadcn Badge Component */}
-				<Badge
-					variant="outline"
-					className={cn(
-						'px-3 py-1.5 text-xs font-semibold tracking-wide shadow-sm border-2',
-						badgeClass,
-						// Overrides for badge class (bg -> primary, fg -> primary fg, border -> primary border. No hover state)
-						' bg-primary hover:bg-primary text-primary-foreground hover:text-primary-foreground border-primary-border hover:border-primary-border',
-					)}
-				>
-					{textLabel}
-				</Badge>
-				{!compact && <span className="text-foreground/80">{endTimeLabel}</span>}
+			<div className="flex flex-row justify-between items-center w-full">
+				<div className="flex flex-row gap-4 items-center">
+					{/* Shadcn Badge Component */}
+					<Badge
+						variant="outline"
+						className={cn(
+							'px-3 py-1.5 text-xs font-semibold tracking-wide shadow-sm border-2',
+							badgeClass,
+							// Overrides for badge class (bg -> primary, fg -> primary fg, border -> primary border. No hover state)
+							' bg-primary hover:bg-primary text-primary-foreground hover:text-primary-foreground border-primary-border hover:border-primary-border',
+						)}
+					>
+						{formatTimeLeftSimple(remaining)}
+					</Badge>
+					{!compact && contentTimeLeftDetailed}
+				</div>
+
+				{/* Rightmost Element: "Absolute" end time */}
+				{compact ? contentTimeLeftDetailed : <span className="text-foreground/80">{formatEndTimeLabel(endTime, remaining <= 0)}</span>}
 			</div>
 
 			{/* Progress Bar */}
