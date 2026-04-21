@@ -92,7 +92,7 @@ describe('auctionSettlement helpers', () => {
 		expect(bobChain?.chain.map((bid) => bid.id)).toEqual(['bob-1'])
 	})
 
-	test('compareAuctionBidChainPriority prefers higher amount, then later timestamp, then lexicographic id', () => {
+	test('compareAuctionBidChainPriority prefers higher amount, then earlier timestamp, then lexicographic id', () => {
 		const lower = {
 			bidderPubkey: 'alice',
 			latestBid: makeBid({ id: 'a', pubkey: 'alice', amount: 1000, createdAt: 10 }),
@@ -103,15 +103,32 @@ describe('auctionSettlement helpers', () => {
 			latestBid: makeBid({ id: 'b', pubkey: 'bob', amount: 1200, createdAt: 5 }),
 			chain: [],
 		}
-		const laterTie = {
+		const earlierTie = {
 			bidderPubkey: 'carol',
-			latestBid: makeBid({ id: 'c', pubkey: 'carol', amount: 1200, createdAt: 6 }),
+			latestBid: makeBid({ id: 'c', pubkey: 'carol', amount: 1200, createdAt: 4 }),
 			chain: [],
 		}
 
-		const sorted = [lower, higher, laterTie].sort(compareAuctionBidChainPriority)
+		const sorted = [lower, higher, earlierTie].sort(compareAuctionBidChainPriority)
 
 		expect(sorted.map((entry) => entry.latestBid.id)).toEqual(['c', 'b', 'a'])
+	})
+
+	test('compareAuctionBidChainPriority prefers smaller event id when amount and created_at match', () => {
+		const smallerId = {
+			bidderPubkey: 'alice',
+			latestBid: makeBid({ id: 'aaa', pubkey: 'alice', amount: 1200, createdAt: 5 }),
+			chain: [],
+		}
+		const largerId = {
+			bidderPubkey: 'bob',
+			latestBid: makeBid({ id: 'bbb', pubkey: 'bob', amount: 1200, createdAt: 5 }),
+			chain: [],
+		}
+
+		const sorted = [largerId, smallerId].sort(compareAuctionBidChainPriority)
+
+		expect(sorted.map((entry) => entry.latestBid.id)).toEqual(['aaa', 'bbb'])
 	})
 
 	test('resolveAuctionVersionSet pins the first publish as root and ignores immutable changes', () => {
