@@ -552,12 +552,12 @@ button {
 	/* Badge variants */
 
 	/* INFO - Light Blue */
-.badge-info {
-  /* Based on --neo-blue */
-  --primary: #d8f3ff;
-  --primary-foreground: #076289;
-  --primary-border: #afe7ff;
-}
+	.badge-info {
+		/* Based on --neo-blue */
+		--primary: #d8f3ff;
+		--primary-foreground: #076289;
+		--primary-border: #afe7ff;
+	}
 
 	/* WARN - Yellow */
 	.badge-warn {
