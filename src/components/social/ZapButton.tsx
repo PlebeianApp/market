@@ -4,12 +4,12 @@ import { useZapCapability } from '@/queries/profiles'
 import { NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
 import * as React from 'react'
 import { useState } from 'react'
-import { Button, type ButtonVariant } from '../ui/button'
 import { Spinner } from '../ui/spinner'
+import { TooltipButton } from '../shared/TooltipButton'
+import type { ButtonProps } from '../shared/ButtonProps'
 
-interface ZapButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+interface ZapButtonProps extends ButtonProps {
 	event: NDKEvent | NDKUser
-	variant?: ButtonVariant
 }
 
 export function ZapButton({ event, className, onClick, onPointerDown, type, variant, ...props }: ZapButtonProps) {
@@ -49,14 +49,17 @@ export function ZapButton({ event, className, onClick, onPointerDown, type, vari
 	}
 
 	const isDisabled = checkingZapCapability || !canAuthorReceiveZaps || isZapping
-	const icon = checkingZapCapability ? <Spinner /> : <span className={cn('i-lightning w-6 h-6 group-hover:animate-bounce')} />
+	const icon = checkingZapCapability ? <Spinner /> : <span className={cn('w-6 h-6 group-hover:animate-bounce i-lightning')} />
 
 	return (
 		<>
-			<Button
-				variant={variant ?? 'focus'}
+			<TooltipButton
+				variant={variant ?? 'default'}
 				size="icon"
-				className={cn('group border-focus bg-transparent text-focus hover:bg-focus hover:text-black hover:animate-pulse gap-2', className)}
+				className={cn(
+					'group gap-2 bg-transparent hover:bg-focus border-2 border-focus rounded text-focus hover:text-black hover:animate-pulse',
+					className,
+				)}
 				{...props}
 				type={type ?? 'button'}
 				tooltip="Zap"
@@ -70,8 +73,9 @@ export function ZapButton({ event, className, onClick, onPointerDown, type, vari
 				}}
 				onPointerDown={handleButtonPointerDown}
 				disabled={isDisabled}
-				icon={icon}
-			/>
+			>
+				{icon}
+			</TooltipButton>
 			<ZapDialog isOpen={dialogOpen} onOpenChange={handleOpenChange} event={event} onZapComplete={handleZapComplete} />
 		</>
 	)

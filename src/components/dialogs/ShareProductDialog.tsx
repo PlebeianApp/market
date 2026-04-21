@@ -108,7 +108,7 @@ ${productUrl}
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className="sm:max-w-[40em] max-w-[calc(100%-2rem)] max-h-[90vh] overflow-x-hidden overflow-y-auto bg-white">
+			<DialogContent className="bg-white max-w-[calc(100%-2rem)] sm:max-w-[40em] max-h-[90vh] overflow-x-hidden overflow-y-auto">
 				<DialogHeader>
 					<DialogTitle>Share Product</DialogTitle>
 					<DialogDescription id="share-dialog-description">Share this product with others or post it to your Nostr feed.</DialogDescription>
@@ -117,7 +117,7 @@ ${productUrl}
 				<div className="space-y-6 py-4 overflow-x-hidden">
 					{isAuthenticated && (
 						<div className="space-y-2">
-							<label htmlFor="share-text" className="text-sm font-medium text-gray-700">
+							<label htmlFor="share-text" className="font-medium text-gray-700 text-sm">
 								Content to post to Nostr
 							</label>
 							<Textarea
@@ -126,15 +126,15 @@ ${productUrl}
 								value={shareText}
 								onChange={(e) => setShareText(e.target.value)}
 								rows={8}
-								className="resize-none break-words whitespace-pre-wrap w-full overflow-wrap-anywhere"
+								className="w-full overflow-wrap-anywhere break-words whitespace-pre-wrap resize-none"
 								placeholder="Write something about this product..."
 							/>
 						</div>
 					)}
 
-					<div className="flex gap-2 flex-wrap">
-						<Button variant="tertiary" onClick={handleCopyUrl} className="shrink-0">
-							{isCopied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+					<div className="flex flex-wrap gap-2">
+						<Button variant="outline" onClick={handleCopyUrl} className="shrink-0">
+							{isCopied ? <Check className="mr-2 w-4 h-4" /> : <Copy className="mr-2 w-4 h-4" />}
 							{isCopied ? 'Copied!' : 'Copy URL'}
 						</Button>
 
@@ -142,9 +142,9 @@ ${productUrl}
 							<Button
 								onClick={handlePostToNostr}
 								disabled={isPosting || !shareText.trim()}
-								className="flex-1 flex items-center justify-center gap-2 bg-secondary hover:bg-secondary/90 text-white"
+								className="flex flex-1 justify-center items-center gap-2"
 							>
-								<span className="i-send-message w-4 h-4" />
+								<span className="w-4 h-4 i-send-message" />
 								{isPosting ? 'Posting...' : 'Post to Nostr'}
 							</Button>
 						)}

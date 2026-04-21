@@ -129,12 +129,12 @@ function AppMiscelleneousComponent() {
 
 	return (
 		<div>
-			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
-				<h1 className="text-2xl font-bold">App Settings</h1>
+			<div className="hidden top-0 z-10 sticky lg:flex justify-between items-center bg-white px-4 lg:px-6 py-4 border-b">
+				<h1 className="font-bold text-2xl">App Settings</h1>
 				<form.Subscribe
 					selector={(state) => [state.canSubmit, state.isSubmitting]}
 					children={([canSubmit, isSubmitting]) => (
-						<Button type="button" disabled={isSubmitting || !canSubmit} onClick={() => form.handleSubmit()} variant="primary">
+						<Button type="button" disabled={isSubmitting || !canSubmit} onClick={() => form.handleSubmit()}>
 							{isSubmitting ? 'Saving...' : 'Save Settings'}
 						</Button>
 					)}
@@ -150,8 +150,8 @@ function AppMiscelleneousComponent() {
 				className="space-y-6 p-4 lg:p-6"
 			>
 				{/* Identity Section */}
-				<div className="border rounded-lg p-4 space-y-4">
-					<h3 className="text-lg font-semibold">Identity</h3>
+				<div className="space-y-4 p-4 border rounded-lg">
+					<h3 className="font-semibold text-lg">Identity</h3>
 
 					<OwnerField ownerPk={appSettings?.ownerPk} />
 
@@ -167,19 +167,19 @@ function AppMiscelleneousComponent() {
 						{(field) => (
 							<div>
 								<Label className="font-medium" htmlFor={field.name}>
-									<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Instance name</span>
+									<span className="after:ml-0.5 after:text-red-500 after:content-['*']">Instance name</span>
 								</Label>
 								<Input
 									id={field.name}
 									required
-									className="border-2 mt-1"
+									className="mt-1 border-2"
 									value={field.state.value}
 									onChange={(e) => field.handleChange(e.target.value)}
 									onBlur={field.handleBlur}
 									placeholder="Instance name"
 								/>
 								{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
-									<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>
+									<div className="mt-1 text-red-500 text-sm">{field.state.meta.errors.join(', ')}</div>
 								)}
 							</div>
 						)}
@@ -197,19 +197,19 @@ function AppMiscelleneousComponent() {
 						{(field) => (
 							<div>
 								<Label className="font-medium" htmlFor={field.name}>
-									<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Display name</span>
+									<span className="after:ml-0.5 after:text-red-500 after:content-['*']">Display name</span>
 								</Label>
 								<Input
 									id={field.name}
 									required
-									className="border-2 mt-1"
+									className="mt-1 border-2"
 									value={field.state.value}
 									onChange={(e) => field.handleChange(e.target.value)}
 									onBlur={field.handleBlur}
 									placeholder="Display name"
 								/>
 								{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
-									<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>
+									<div className="mt-1 text-red-500 text-sm">{field.state.meta.errors.join(', ')}</div>
 								)}
 							</div>
 						)}
@@ -233,7 +233,7 @@ function AppMiscelleneousComponent() {
 								</Label>
 								<Input
 									id={field.name}
-									className="border-2 mt-1"
+									className="mt-1 border-2"
 									value={field.state.value}
 									onChange={(e) => field.handleChange(e.target.value)}
 									onBlur={field.handleBlur}
@@ -241,7 +241,7 @@ function AppMiscelleneousComponent() {
 									type="email"
 								/>
 								{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
-									<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>
+									<div className="mt-1 text-red-500 text-sm">{field.state.meta.errors.join(', ')}</div>
 								)}
 							</div>
 						)}
@@ -249,8 +249,8 @@ function AppMiscelleneousComponent() {
 				</div>
 
 				{/* Branding Section */}
-				<div className="border rounded-lg p-4 space-y-4">
-					<h3 className="text-lg font-semibold">Branding</h3>
+				<div className="space-y-4 p-4 border rounded-lg">
+					<h3 className="font-semibold text-lg">Branding</h3>
 
 					<form.Field
 						name="picture"
@@ -269,21 +269,21 @@ function AppMiscelleneousComponent() {
 						{(field) => (
 							<div>
 								<Label className="font-medium" htmlFor={field.name}>
-									<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Logo URL</span>
+									<span className="after:ml-0.5 after:text-red-500 after:content-['*']">Logo URL</span>
 								</Label>
 								<Input
 									id={field.name}
-									className="border-2 mt-1"
+									className="mt-1 border-2"
 									value={field.state.value}
 									onChange={(e) => field.handleChange(e.target.value)}
 									onBlur={field.handleBlur}
 									placeholder="https://example.com/logo.png"
 								/>
 								{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
-									<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>
+									<div className="mt-1 text-red-500 text-sm">{field.state.meta.errors.join(', ')}</div>
 								)}
 								{field.state.value && !field.state.meta.errors?.length && (
-									<div className="mt-2 flex justify-center">
+									<div className="flex justify-center mt-2">
 										<img
 											className="max-w-28 max-h-28 object-contain"
 											src={field.state.value}
@@ -322,23 +322,23 @@ function AppMiscelleneousComponent() {
 						{(field) => (
 							<div>
 								<Label className="font-medium" htmlFor={field.name}>
-									<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Banner URL</span>
+									<span className="after:ml-0.5 after:text-red-500 after:content-['*']">Banner URL</span>
 								</Label>
 								<Input
 									id={field.name}
-									className="border-2 mt-1"
+									className="mt-1 border-2"
 									value={field.state.value}
 									onChange={(e) => field.handleChange(e.target.value)}
 									onBlur={field.handleBlur}
 									placeholder="https://example.com/banner.png"
 								/>
 								{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
-									<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>
+									<div className="mt-1 text-red-500 text-sm">{field.state.meta.errors.join(', ')}</div>
 								)}
 								{field.state.value && !field.state.meta.errors?.length && (
 									<div className="mt-2">
 										<img
-											className="max-h-32 w-full object-cover rounded"
+											className="rounded w-full max-h-32 object-cover"
 											src={field.state.value}
 											alt="Banner preview"
 											onError={(e) => {
@@ -360,8 +360,8 @@ function AppMiscelleneousComponent() {
 				</div>
 
 				{/* General Settings Section */}
-				<div className="border rounded-lg p-4 space-y-4">
-					<h3 className="text-lg font-semibold">General</h3>
+				<div className="space-y-4 p-4 border rounded-lg">
+					<h3 className="font-semibold text-lg">General</h3>
 
 					<form.Field name="defaultCurrency">
 						{(field) => (
@@ -370,7 +370,7 @@ function AppMiscelleneousComponent() {
 									Default currency
 								</Label>
 								<Select onValueChange={(value) => field.handleChange(value)} value={field.state.value}>
-									<SelectTrigger className="border-2 mt-1">
+									<SelectTrigger className="mt-1 border-2">
 										<SelectValue placeholder="Currency" />
 									</SelectTrigger>
 									<SelectContent>
@@ -397,7 +397,7 @@ function AppMiscelleneousComponent() {
 									<Label htmlFor={field.name} className="font-medium cursor-pointer">
 										Allow registration
 									</Label>
-									<p className="text-sm text-muted-foreground">When enabled, new users can register on this instance.</p>
+									<p className="text-muted-foreground text-sm">When enabled, new users can register on this instance.</p>
 								</div>
 							</div>
 						)}
@@ -415,7 +415,7 @@ function AppMiscelleneousComponent() {
 									<Label htmlFor={field.name} className="font-medium cursor-pointer">
 										Show Nostr link in navigation
 									</Label>
-									<p className="text-sm text-muted-foreground">When enabled, a "Nostr" link will appear in the main navigation menu.</p>
+									<p className="text-muted-foreground text-sm">When enabled, a "Nostr" link will appear in the main navigation menu.</p>
 								</div>
 							</div>
 						)}
@@ -423,9 +423,9 @@ function AppMiscelleneousComponent() {
 				</div>
 
 				{/* Servers Section */}
-				<div className="border rounded-lg p-4 space-y-4">
-					<h3 className="text-lg font-semibold">Servers</h3>
-					<p className="text-sm text-muted-foreground">Configure file storage servers. Leave empty to use defaults.</p>
+				<div className="space-y-4 p-4 border rounded-lg">
+					<h3 className="font-semibold text-lg">Servers</h3>
+					<p className="text-muted-foreground text-sm">Configure file storage servers. Leave empty to use defaults.</p>
 
 					<form.Field
 						name="blossom_server"
@@ -449,14 +449,14 @@ function AppMiscelleneousComponent() {
 								</Label>
 								<Input
 									id={field.name}
-									className="border-2 mt-1"
+									className="mt-1 border-2"
 									value={field.state.value}
 									onChange={(e) => field.handleChange(e.target.value)}
 									onBlur={field.handleBlur}
 									placeholder="https://blossom.example.com"
 								/>
 								{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
-									<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>
+									<div className="mt-1 text-red-500 text-sm">{field.state.meta.errors.join(', ')}</div>
 								)}
 							</div>
 						)}
@@ -484,14 +484,14 @@ function AppMiscelleneousComponent() {
 								</Label>
 								<Input
 									id={field.name}
-									className="border-2 mt-1"
+									className="mt-1 border-2"
 									value={field.state.value}
 									onChange={(e) => field.handleChange(e.target.value)}
 									onBlur={field.handleBlur}
 									placeholder="https://nip96.example.com"
 								/>
 								{field.state.meta.errors?.length > 0 && field.state.meta.isTouched && (
-									<div className="text-red-500 text-sm mt-1">{field.state.meta.errors.join(', ')}</div>
+									<div className="mt-1 text-red-500 text-sm">{field.state.meta.errors.join(', ')}</div>
 								)}
 							</div>
 						)}
@@ -508,7 +508,7 @@ function AppMiscelleneousComponent() {
 				<form.Subscribe
 					selector={(state) => [state.canSubmit, state.isSubmitting]}
 					children={([canSubmit, isSubmitting]) => (
-						<Button type="submit" className="w-full lg:hidden" disabled={isSubmitting || !canSubmit} variant="primary">
+						<Button type="submit" className="lg:hidden w-full" disabled={isSubmitting || !canSubmit}>
 							{isSubmitting ? 'Saving...' : 'Save Settings'}
 						</Button>
 					)}
@@ -545,12 +545,12 @@ function OwnerField({ ownerPk }: { ownerPk?: string }) {
 				{ownerPk ? <UserCard pubkey={ownerPk} size="md" onPress="none" /> : <span className="text-muted-foreground">Unknown</span>}
 			</div>
 			<div className="flex items-center gap-2">
-				<Input value={ownerNpub} disabled className="border-2 bg-gray-50 text-muted-foreground" />
+				<Input value={ownerNpub} disabled className="bg-gray-50 border-2 text-muted-foreground" />
 				<Button type="button" variant="outline" size="icon" className="shrink-0" onClick={handleCopy}>
-					{copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+					{copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
 				</Button>
 			</div>
-			<p className="text-xs text-muted-foreground mt-1">Owner public key cannot be changed.</p>
+			<p className="mt-1 text-muted-foreground text-xs">Owner public key cannot be changed.</p>
 		</div>
 	)
 }

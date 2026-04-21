@@ -81,7 +81,7 @@ export function V4VManager({
 
 	return (
 		<div className={`space-y-6 ${className}`}>
-			<Alert className="bg-blue-100 text-blue-800 border-blue-200">
+			<Alert className="bg-blue-100 border-blue-200 text-blue-800">
 				<AlertDescription>
 					PM (Beta) Is Powered By Your Generosity. Your Contribution Is The Only Thing That Enables Us To Continue Creating Free And Open
 					Source Solutions 🙏
@@ -89,11 +89,11 @@ export function V4VManager({
 			</Alert>
 
 			<div className="space-y-4">
-				<h2 className="text-xl font-semibold">Split of total sales</h2>
+				<h2 className="font-semibold text-xl">Split of total sales</h2>
 
 				{/* Total V4V percentage slider */}
 				<div className="mt-4">
-					<div className="flex justify-between text-sm text-muted-foreground mb-2">
+					<div className="flex justify-between mb-2 text-muted-foreground text-sm">
 						<span>Seller: {formattedSellerPercentage}%</span>
 						<span>V4V: {formattedTotalV4V}%</span>
 					</div>
@@ -101,7 +101,7 @@ export function V4VManager({
 				</div>
 
 				{/* Emoji animation section */}
-				<div className="text-center my-8">
+				<div className="my-8 text-center">
 					<div
 						className={`p-4 rounded-full bg-gray-200 inline-flex items-center justify-center ${emojiClass}`}
 						style={{
@@ -115,16 +115,16 @@ export function V4VManager({
 				</div>
 
 				{/* First bar - Total split between seller and V4V */}
-				<div className="w-full h-12 flex rounded-md overflow-hidden">
+				<div className="flex rounded-md w-full h-12 overflow-hidden">
 					<div
-						className="bg-green-600 flex items-center justify-start pl-4 text-white font-medium"
+						className="flex justify-start items-center bg-green-600 pl-4 font-medium text-white"
 						style={{ width: `${sellerPercentage}%` }}
 					>
 						{formattedSellerPercentage}%
 					</div>
 					{totalV4VPercentage > 0 && (
 						<div
-							className="bg-fuchsia-500 flex items-center justify-center text-white font-medium"
+							className="flex justify-center items-center bg-fuchsia-500 font-medium text-white"
 							style={{ width: `${totalV4VPercentage}%` }}
 						>
 							V4V
@@ -132,11 +132,11 @@ export function V4VManager({
 					)}
 				</div>
 
-				<h2 className="text-xl font-semibold mt-6">V4V split between recipients</h2>
+				<h2 className="mt-6 font-semibold text-xl">V4V split between recipients</h2>
 
 				{/* Second bar - Split between V4V recipients */}
 				{localShares.length > 0 && totalV4VPercentage > 0 ? (
-					<div className="w-full h-12 flex rounded-md overflow-hidden">
+					<div className="flex rounded-md w-full h-12 overflow-hidden">
 						{localShares.map((share, index) => (
 							<div
 								key={share.id}
@@ -172,7 +172,7 @@ export function V4VManager({
 
 				{/* Add new recipient form */}
 				{showAddForm ? (
-					<div className="space-y-4 mt-6 border p-4 rounded-lg">
+					<div className="space-y-4 mt-6 p-4 border rounded-lg">
 						<div className="flex-1">
 							<ProfileSearch onSelect={handleProfileSelect} placeholder="Search profiles or paste npub..." />
 
@@ -187,13 +187,13 @@ export function V4VManager({
 						</div>
 						{localShares.length > 0 && (
 							<div className="space-y-2">
-								<div className="flex justify-between text-sm text-muted-foreground">
+								<div className="flex justify-between text-muted-foreground text-sm">
 									<span>Share percentage: {newRecipientShare}%</span>
 								</div>
 								<Slider value={[newRecipientShare]} min={1} max={100} step={1} onValueChange={(value) => setNewRecipientShare(value[0])} />
 							</div>
 						)}
-						<div className="flex flex-wrap gap-2 items-center">
+						<div className="flex flex-wrap items-center gap-2">
 							<Button
 								className="flex-grow sm:flex-grow-0"
 								onClick={handleAddRecipient}
@@ -208,7 +208,7 @@ export function V4VManager({
 						</div>
 					</div>
 				) : (
-					<div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
+					<div className="gap-4 grid grid-cols-1 sm:grid-cols-2 mt-6">
 						<Button
 							variant="outline"
 							onClick={() => setShowAddForm(true)}
@@ -237,7 +237,7 @@ export function V4VManager({
 									Cancel
 								</Button>
 								<Button
-									variant="focus"
+									variant="default"
 									className="flex-1"
 									onClick={handleSave}
 									disabled={publishMutation.isPending || (showChangesIndicator && !hasChanges)}
@@ -254,7 +254,7 @@ export function V4VManager({
 							</div>
 						) : (
 							<Button
-								variant="focus"
+								variant="default"
 								className="w-full"
 								onClick={handleSave}
 								disabled={publishMutation.isPending || (showChangesIndicator && !hasChanges)}

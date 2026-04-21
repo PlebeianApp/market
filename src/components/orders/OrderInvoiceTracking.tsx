@@ -84,10 +84,10 @@ export function OrderInvoiceTracking({
 			{/* Overall Status */}
 			<Card>
 				<CardHeader>
-					<CardTitle className="flex items-center justify-between">
+					<CardTitle className="flex justify-between items-center">
 						<span>Payment Status</span>
 						<div className="flex items-center gap-2">
-							<Badge variant={invoiceSet.status === 'complete' ? 'primary' : 'secondary'}>{invoiceSet.status.toUpperCase()}</Badge>
+							<Badge variant={invoiceSet.status === 'complete' ? 'default' : 'secondary'}>{invoiceSet.status.toUpperCase()}</Badge>
 							{onRefresh && (
 								<Button variant="outline" size="sm" onClick={onRefresh}>
 									<RefreshCw className="w-4 h-4" />
@@ -107,7 +107,7 @@ export function OrderInvoiceTracking({
 						<Progress value={completionPercentage} className="h-2" />
 					</div>
 
-					<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+					<div className="gap-4 grid grid-cols-2 md:grid-cols-4 text-sm">
 						<div>
 							<div className="text-gray-600">Total Amount</div>
 							<div className="font-semibold">{invoiceSet.totalAmount.toLocaleString()} sats</div>
@@ -144,23 +144,23 @@ export function OrderInvoiceTracking({
 					<CardContent className="space-y-4">
 						{merchantInvoices.map((invoice) => (
 							<div key={invoice.id} className="space-y-3">
-								<div className="flex items-center justify-between">
+								<div className="flex justify-between items-center">
 									<div className="flex items-center gap-2">
 										{getStatusIcon(invoice.status)}
 										<span className="font-medium">Invoice {invoice.id.substring(0, 8)}...</span>
 										<Badge className={getStatusColor(invoice.status)}>{invoice.status}</Badge>
 									</div>
-									<div className="text-sm text-gray-600">{invoice.amountSats.toLocaleString()} sats</div>
+									<div className="text-gray-600 text-sm">{invoice.amountSats.toLocaleString()} sats</div>
 								</div>
 
 								{invoice.bolt11 && showQRCodes && invoice.status === 'pending' && (
-									<div className="flex flex-col md:flex-row gap-4">
+									<div className="flex md:flex-row flex-col gap-4">
 										<div className="flex-shrink-0">
 											<QRCode value={invoice.bolt11} size={150} title="Lightning Invoice" description="Scan to pay with Lightning" />
 										</div>
 										<div className="flex-1 space-y-2">
-											<div className="text-sm text-gray-600">Lightning Invoice</div>
-											<div className="bg-gray-50 p-2 rounded border text-xs font-mono break-all">{invoice.bolt11}</div>
+											<div className="text-gray-600 text-sm">Lightning Invoice</div>
+											<div className="bg-gray-50 p-2 border rounded font-mono text-xs break-all">{invoice.bolt11}</div>
 											<div className="flex gap-2">
 												<Button
 													variant="outline"
@@ -172,13 +172,13 @@ export function OrderInvoiceTracking({
 													{copySuccess === invoice.id ? 'Copied!' : 'Copy Invoice'}
 												</Button>
 											</div>
-											{invoice.expiresAt && <div className="text-xs text-gray-500">{formatTimeRemaining(invoice.expiresAt)}</div>}
+											{invoice.expiresAt && <div className="text-gray-500 text-xs">{formatTimeRemaining(invoice.expiresAt)}</div>}
 										</div>
 									</div>
 								)}
 
 								{invoice.status === 'paid' && (
-									<div className="bg-green-50 p-3 rounded border border-green-200">
+									<div className="bg-green-50 p-3 border border-green-200 rounded">
 										<div className="flex items-center gap-2 text-green-800">
 											<Check className="w-4 h-4" />
 											<span className="font-medium">Payment Confirmed</span>
@@ -187,8 +187,8 @@ export function OrderInvoiceTracking({
 								)}
 
 								{(invoice.status === 'failed' || invoice.status === 'expired') && onReattemptPayment && (
-									<div className="bg-red-50 p-3 rounded border border-red-200">
-										<div className="flex items-center justify-between">
+									<div className="bg-red-50 p-3 border border-red-200 rounded">
+										<div className="flex justify-between items-center">
 											<div className="flex items-center gap-2 text-red-800">
 												<AlertTriangle className="w-4 h-4" />
 												<span className="font-medium">Payment {invoice.status === 'expired' ? 'Expired' : 'Failed'}</span>
@@ -197,13 +197,13 @@ export function OrderInvoiceTracking({
 												variant="outline"
 												size="sm"
 												onClick={() => onReattemptPayment(invoice.id, invoice.sellerPubkey, invoice.amountSats)}
-												className="text-red-700 border-red-300 hover:bg-red-100"
+												className="hover:bg-red-100 border-red-300 text-red-700"
 											>
-												<RefreshCw className="w-4 h-4 mr-1" />
+												<RefreshCw className="mr-1 w-4 h-4" />
 												Request New Invoice
 											</Button>
 										</div>
-										<div className="text-sm text-red-700 mt-1">
+										<div className="mt-1 text-red-700 text-sm">
 											{invoice.status === 'expired'
 												? 'This payment request has expired. Request a new invoice to continue.'
 												: 'Payment failed. Request a new invoice to try again.'}
@@ -229,23 +229,23 @@ export function OrderInvoiceTracking({
 					<CardContent className="space-y-4">
 						{v4vInvoices.map((invoice) => (
 							<div key={invoice.id} className="space-y-3">
-								<div className="flex items-center justify-between">
+								<div className="flex justify-between items-center">
 									<div className="flex items-center gap-2">
 										{getStatusIcon(invoice.status)}
 										<span className="font-medium">V4V {invoice.id.substring(0, 8)}...</span>
 										<Badge className={getStatusColor(invoice.status)}>{invoice.status}</Badge>
 									</div>
-									<div className="text-sm text-gray-600">{invoice.amountSats.toLocaleString()} sats</div>
+									<div className="text-gray-600 text-sm">{invoice.amountSats.toLocaleString()} sats</div>
 								</div>
 
 								{invoice.bolt11 && showQRCodes && invoice.status === 'pending' && (
-									<div className="flex flex-col md:flex-row gap-4">
+									<div className="flex md:flex-row flex-col gap-4">
 										<div className="flex-shrink-0">
 											<QRCode value={invoice.bolt11} size={120} title="V4V Lightning Invoice" description="Value for Value payment" />
 										</div>
 										<div className="flex-1 space-y-2">
-											<div className="text-sm text-gray-600">V4V Lightning Invoice</div>
-											<div className="bg-gray-50 p-2 rounded border text-xs font-mono break-all">{invoice.bolt11}</div>
+											<div className="text-gray-600 text-sm">V4V Lightning Invoice</div>
+											<div className="bg-gray-50 p-2 border rounded font-mono text-xs break-all">{invoice.bolt11}</div>
 											<div className="flex gap-2">
 												<Button
 													variant="outline"
@@ -257,14 +257,14 @@ export function OrderInvoiceTracking({
 													{copySuccess === invoice.id ? 'Copied!' : 'Copy'}
 												</Button>
 											</div>
-											{invoice.expiresAt && <div className="text-xs text-gray-500">{formatTimeRemaining(invoice.expiresAt)}</div>}
+											{invoice.expiresAt && <div className="text-gray-500 text-xs">{formatTimeRemaining(invoice.expiresAt)}</div>}
 										</div>
 									</div>
 								)}
 
 								{(invoice.status === 'failed' || invoice.status === 'expired') && onReattemptPayment && (
-									<div className="bg-red-50 p-3 rounded border border-red-200">
-										<div className="flex items-center justify-between">
+									<div className="bg-red-50 p-3 border border-red-200 rounded">
+										<div className="flex justify-between items-center">
 											<div className="flex items-center gap-2 text-red-800">
 												<AlertTriangle className="w-4 h-4" />
 												<span className="font-medium">V4V Payment {invoice.status === 'expired' ? 'Expired' : 'Failed'}</span>
@@ -273,13 +273,13 @@ export function OrderInvoiceTracking({
 												variant="outline"
 												size="sm"
 												onClick={() => onReattemptPayment(invoice.id, invoice.sellerPubkey, invoice.amountSats)}
-												className="text-red-700 border-red-300 hover:bg-red-100"
+												className="hover:bg-red-100 border-red-300 text-red-700"
 											>
-												<RefreshCw className="w-4 h-4 mr-1" />
+												<RefreshCw className="mr-1 w-4 h-4" />
 												Request New Invoice
 											</Button>
 										</div>
-										<div className="text-sm text-red-700 mt-1">
+										<div className="mt-1 text-red-700 text-sm">
 											{invoice.status === 'expired'
 												? 'This V4V payment request has expired. Request a new invoice to continue.'
 												: 'V4V payment failed. Request a new invoice to try again.'}
@@ -294,7 +294,7 @@ export function OrderInvoiceTracking({
 
 			{/* Summary Actions */}
 			{pendingInvoices.length > 0 && (
-				<Card className="border-yellow-200 bg-yellow-50">
+				<Card className="bg-yellow-50 border-yellow-200">
 					<CardContent className="p-4">
 						<div className="flex items-center gap-2 text-yellow-800">
 							<Clock className="w-4 h-4" />
@@ -302,13 +302,13 @@ export function OrderInvoiceTracking({
 								{pendingInvoices.length} invoice{pendingInvoices.length !== 1 ? 's' : ''} awaiting payment
 							</span>
 						</div>
-						<div className="text-sm text-yellow-700 mt-1">Please complete all payments to finalize your order.</div>
+						<div className="mt-1 text-yellow-700 text-sm">Please complete all payments to finalize your order.</div>
 					</CardContent>
 				</Card>
 			)}
 
 			{failedInvoices.length > 0 && (
-				<Card className="border-red-200 bg-red-50">
+				<Card className="bg-red-50 border-red-200">
 					<CardContent className="p-4">
 						<div className="flex items-center gap-2 text-red-800">
 							<AlertTriangle className="w-4 h-4" />
@@ -316,7 +316,7 @@ export function OrderInvoiceTracking({
 								{failedInvoices.length} invoice{failedInvoices.length !== 1 ? 's' : ''} failed or expired
 							</span>
 						</div>
-						<div className="text-sm text-red-700 mt-1">Contact support if you need assistance with failed payments.</div>
+						<div className="mt-1 text-red-700 text-sm">Contact support if you need assistance with failed payments.</div>
 					</CardContent>
 				</Card>
 			)}

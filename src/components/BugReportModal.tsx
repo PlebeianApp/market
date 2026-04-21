@@ -339,30 +339,30 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 
 	return (
 		<div
-			className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+			className="z-50 fixed inset-0 flex justify-center items-center bg-black/50 backdrop-blur-sm"
 			onClick={onClose}
 			onKeyDown={handleKeyDown}
 		>
-			<div className="bg-white rounded-lg shadow-xl w-[40em] h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+			<div className="flex flex-col bg-white shadow-xl rounded-lg w-[40em] h-[80vh]" onClick={(e) => e.stopPropagation()}>
 				{/* Header */}
-				<div className="flex items-center justify-between border-b border-gray-200 p-6">
+				<div className="flex justify-between items-center p-6 border-gray-200 border-b">
 					<div className="flex items-center gap-2">
 						<Button
-							variant={activeTab === 'report' ? 'primary' : 'outline'}
+							variant={activeTab === 'report' ? 'default' : 'outline'}
 							size="sm"
 							onClick={() => setActiveTab('report')}
 							className={cn('flex items-center gap-2', activeTab !== 'report' && 'text-gray-700 border-gray-300')}
 						>
-							<span className="i-warning w-4 h-4" />
+							<span className="w-4 h-4 i-warning" />
 							Bug Report
 						</Button>
 						<Button
-							variant={activeTab === 'viewer' ? 'primary' : 'outline'}
+							variant={activeTab === 'viewer' ? 'default' : 'outline'}
 							size="sm"
 							onClick={() => setActiveTab('viewer')}
 							className={cn('flex items-center gap-2', activeTab !== 'viewer' && 'text-gray-700 border-gray-300')}
 						>
-							<span className="i-search w-4 h-4" />
+							<span className="w-4 h-4 i-search" />
 							Report Viewer
 						</Button>
 					</div>
@@ -370,24 +370,24 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 						variant="ghost"
 						size="icon"
 						onClick={onClose}
-						className="h-8 w-8 text-gray-500 hover:text-gray-700"
+						className="w-8 h-8 text-gray-500 hover:text-gray-700"
 						aria-label="Close bug report modal"
 					>
-						<span className="i-close w-5 h-5" />
+						<span className="w-5 h-5 i-close" />
 					</Button>
 				</div>
 
 				{/* Content */}
-				<div className="flex-1 flex flex-col px-6 pt-0 pb-6 min-h-0">
+				<div className="flex flex-col flex-1 px-6 pt-0 pb-6 min-h-0">
 					{activeTab === 'report' ? (
 						<>
-							<Alert className="bg-blue-100 text-blue-800 border-blue-200 mb-4">
+							<Alert className="bg-blue-100 mb-4 border-blue-200 text-blue-800">
 								<AlertDescription>
 									Report a bug you have found. Use the drag and drop or paste to add images of the problem. The details of your system
 									configuration have been automatically added.
 								</AlertDescription>
 							</Alert>
-							<div className="flex-1 flex flex-col min-h-0">
+							<div className="flex flex-col flex-1 min-h-0">
 								<textarea
 									ref={textareaRef}
 									value={bugReport}
@@ -398,7 +398,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 									onDrop={handleDrop}
 									placeholder="Describe the bug you encountered..."
 									className={cn(
-										'flex-1 w-full p-4 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-secondary focus:border-transparent text-gray-900 placeholder:text-gray-400',
+										'flex-1 p-4 border border-gray-300 focus:border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary w-full text-gray-900 placeholder:text-gray-400 resize-none',
 										isDragOver && 'border-secondary bg-secondary/5',
 										isUploading && 'opacity-50',
 									)}
@@ -406,31 +406,31 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 									disabled={isUploading}
 								/>
 								{isDragOver && (
-									<div className="absolute inset-0 flex items-center justify-center bg-secondary/10 border-2 border-dashed border-secondary rounded-lg pointer-events-none">
-										<p className="text-secondary font-medium">Drop image files here</p>
+									<div className="absolute inset-0 flex justify-center items-center bg-secondary/10 border-2 border-secondary border-dashed rounded-lg pointer-events-none">
+										<p className="font-medium text-secondary">Drop image files here</p>
 									</div>
 								)}
 								{isUploading && (
-									<div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-lg pointer-events-none">
-										<p className="text-gray-600 font-medium">Uploading image...</p>
+									<div className="absolute inset-0 flex justify-center items-center bg-white/80 rounded-lg pointer-events-none">
+										<p className="font-medium text-gray-600">Uploading image...</p>
 									</div>
 								)}
 							</div>
 						</>
 					) : (
 						<>
-							<Alert className="bg-blue-100 text-blue-800 border-blue-200 mb-4">
+							<Alert className="bg-blue-100 mb-4 border-blue-200 text-blue-800">
 								<AlertDescription>View bug reports from the community</AlertDescription>
 							</Alert>
-							<div className="flex-1 overflow-y-auto min-h-0">
+							<div className="flex-1 min-h-0 overflow-y-auto">
 								{isLoadingReports && reports.length === 0 ? (
-									<div className="flex flex-col items-center justify-center py-12">
-										<Loader2 className="w-8 h-8 animate-spin mb-4" />
+									<div className="flex flex-col justify-center items-center py-12">
+										<Loader2 className="mb-4 w-8 h-8 animate-spin" />
 										<p className="text-gray-600">Loading bug reports...</p>
 									</div>
 								) : reports.length === 0 ? (
-									<div className="flex flex-col items-center justify-center py-12 text-center">
-										<h3 className="text-lg font-semibold text-gray-900 mb-2">No bug reports found</h3>
+									<div className="flex flex-col justify-center items-center py-12 text-center">
+										<h3 className="mb-2 font-semibold text-gray-900 text-lg">No bug reports found</h3>
 										<p className="text-gray-600">There are no bug reports available at the moment.</p>
 									</div>
 								) : (
@@ -443,7 +443,7 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 												<Button onClick={loadMore} variant="outline" disabled={isLoadingReports}>
 													{isLoadingReports ? (
 														<>
-															<Loader2 className="w-4 h-4 animate-spin mr-2" />
+															<Loader2 className="mr-2 w-4 h-4 animate-spin" />
 															Loading...
 														</>
 													) : (
@@ -461,13 +461,13 @@ Cookies: ${info.cookieEnabled ? 'Enabled' : 'Disabled'}`
 
 				{/* Footer */}
 				{activeTab === 'report' && (
-					<div className="flex justify-end items-center p-6 border-t border-gray-200">
+					<div className="flex justify-end items-center p-6 border-gray-200 border-t">
 						<Button
 							onClick={handleSend}
 							disabled={!bugReport.trim() || isUploading}
 							className="flex items-center gap-2 bg-secondary hover:bg-secondary/90 text-white"
 						>
-							<span className="i-send-message w-4 h-4" />
+							<span className="w-4 h-4 i-send-message" />
 							Send
 						</Button>
 					</div>
