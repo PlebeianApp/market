@@ -180,7 +180,7 @@ export function AuctionBidder({ auction, currentUserPubkey, onBidSuccess }: Auct
 							disabled={isDisabledInput}
 							className="flex-1 sm:flex-none cursor-pointer"
 						>
-							<Plus className="h-3 w-3 mr-1" /> {bidIncrement} sats
+							{minBid.toLocaleString()} sats
 						</Button>
 						<Button
 							variant="outline"
@@ -190,7 +190,7 @@ export function AuctionBidder({ auction, currentUserPubkey, onBidSuccess }: Auct
 							disabled={isDisabledInput}
 							className="flex-1 sm:flex-none cursor-pointer"
 						>
-							<Plus className="h-3 w-3 mr-1" /> {bidIncrement * 2} sats
+							{(minBid + bidIncrement).toLocaleString()} sats
 						</Button>
 						<Button
 							variant="outline"
