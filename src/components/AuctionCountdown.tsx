@@ -243,10 +243,6 @@ export function AuctionCountdown({ auction, className, compact = false }: { auct
 
 	const badgeClass = getBadgeClassName(urgency)
 
-	const contentTimeLeftDetailed = (
-		<span className="text-foreground whitespace-nowrap text-base font-semibold">{formatCountdownDetailed(remaining)}</span>
-	)
-
 	return (
 		<div className={cn('flex flex-col items-start gap-2', className)}>
 			<div className="flex flex-row justify-between items-center w-full">
@@ -263,11 +259,17 @@ export function AuctionCountdown({ auction, className, compact = false }: { auct
 					>
 						{formatTimeLeftSimple(remaining)}
 					</Badge>
-					{!compact && contentTimeLeftDetailed}
+					{!compact && (
+						<span className="text-foreground whitespace-nowrap text-base font-semibold">{formatCountdownDetailed(remaining)}</span>
+					)}
 				</div>
 
 				{/* Rightmost Element: "Absolute" end time */}
-				{compact ? contentTimeLeftDetailed : <span className="text-foreground/80">{formatEndTimeLabel(endTime, remaining <= 0)}</span>}
+				{compact ? (
+					<span className="text-foreground whitespace-nowrap text-base text-end font-semibold">{formatCountdownDetailed(remaining)}</span>
+				) : (
+					<span className="text-foreground/80 text-end">{formatEndTimeLabel(endTime, remaining <= 0)}</span>
+				)}
 			</div>
 
 			{/* Progress Bar */}
