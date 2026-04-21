@@ -20,16 +20,18 @@ import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { toast } from 'sonner'
 import { useMemo, useState, useEffect } from 'react'
 import { useAuctionCountdown } from './AuctionCountdown'
-import { Pencil, Plus, Minus, X, CircleX } from 'lucide-react'
+import { Pencil, Plus, Minus, X, CircleX, TheaterIcon } from 'lucide-react'
 import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/input-group'
+import { cn } from '@/lib/utils'
 
 interface AuctionBidderProps {
 	auction: NDKEvent
 	currentUserPubkey?: string
 	onBidSuccess?: () => void
+	compact?: boolean
 }
 
-export function AuctionBidder({ auction, currentUserPubkey, onBidSuccess }: AuctionBidderProps) {
+export function AuctionBidder({ auction, currentUserPubkey, onBidSuccess, compact = false }: AuctionBidderProps) {
 	const bidMutation = usePublishAuctionBidMutation()
 
 	// Derive auction state
@@ -148,10 +150,22 @@ export function AuctionBidder({ auction, currentUserPubkey, onBidSuccess }: Auct
 		}
 	}
 
+	if (ended) {
+		return (
+			<div className="flex flex-col gap-3 w-full max-w-md">
+				<Button disabled variant={isOwnAuction ? 'secondary' : 'primary'} className="whitespace-nowrap w-full sm:w-auto">
+					{buttonText}
+				</Button>
+
+				<div className="text-xs text-foreground/80 pl-1">Final bid was: {currentPrice.toLocaleString()} sats</div>
+			</div>
+		)
+	}
+
 	return (
 		<div className="flex flex-col gap-3 w-full max-w-md">
 			{/* Main Action Area */}
-			<div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+			<div className={cn('flex flex-col sm:flex-row gap-2 items-stretch sm:items-center', compact && 'w-full flex-row')}>
 				{isEditing ? (
 					// EDIT MODE: Input Field
 					<InputGroup>
@@ -171,44 +185,48 @@ export function AuctionBidder({ auction, currentUserPubkey, onBidSuccess }: Auct
 					</InputGroup>
 				) : (
 					// QUICK ACTION MODE: Button Group
-					<ButtonGroup className="w-full sm:w-auto">
+					<ButtonGroup className={cn('w-full sm:w-auto', compact && 'sm:w-full')}>
 						<Button
 							variant="outline"
 							size="sm"
 							onClick={() => handleQuickAdd(bidIncrement)}
 							tooltip="Minimum Bid Increment"
 							disabled={isDisabledInput}
-							className="flex-1 sm:flex-none cursor-pointer"
+							className={cn('cursor-pointer flex-1', compact ? 'flex-1' : 'flex-1 sm:flex-none')}
 						>
 							{minBid.toLocaleString()} sats
 						</Button>
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={() => handleQuickAdd(bidIncrement * 2)}
-							tooltip="2x Minimum Bid Increment"
-							disabled={isDisabledInput}
-							className="flex-1 sm:flex-none cursor-pointer"
-						>
-							{(minBid + bidIncrement).toLocaleString()} sats
-						</Button>
-						<Button
-							variant="outline"
-							size="sm"
-							onClick={() => handleQuickMultiply(2)}
-							tooltip="2x Current Bid"
-							disabled={isDisabledInput}
-							className="flex-1 sm:flex-none cursor-pointer"
-						>
-							<X className="size-3 mr-1" /> 2
-						</Button>
+						{!compact && (
+							<>
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => handleQuickAdd(bidIncrement * 2)}
+									tooltip="2x Minimum Bid Increment"
+									disabled={isDisabledInput}
+									className="flex-1 sm:flex-none cursor-pointer"
+								>
+									{(minBid + bidIncrement).toLocaleString()} sats
+								</Button>
+								<Button
+									variant="outline"
+									size="sm"
+									onClick={() => handleQuickMultiply(2)}
+									tooltip="2x Current Bid"
+									disabled={isDisabledInput}
+									className="flex-1 sm:flex-none cursor-pointer"
+								>
+									<X className="size-3 mr-1" /> 2
+								</Button>
+							</>
+						)}
 						<Button
 							variant="outline"
 							size="sm"
 							onClick={handleEditToggle}
 							tooltip="Customize Bid Amount"
 							disabled={isDisabledInput}
-							className="flex-1 sm:flex-none cursor-pointer"
+							className="flex-none cursor-pointer"
 							title="Customize bid"
 						>
 							<Pencil className="h-3 w-3" />
@@ -228,7 +246,7 @@ export function AuctionBidder({ auction, currentUserPubkey, onBidSuccess }: Auct
 			</div>
 
 			{/* Minimum Bid Info */}
-			<div className="text-xs text-white/80 pl-1">Minimum allowed bid: {minBid.toLocaleString()} sats</div>
+			<div className="text-xs text-foreground/80 pl-1">Minimum allowed bid: {minBid.toLocaleString()} sats</div>
 		</div>
 	)
 }
