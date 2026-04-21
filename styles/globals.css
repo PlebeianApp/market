@@ -528,4 +528,13 @@ button {
 		--primary-foreground: hsl(0, 0%, 20%);
 		--primary-border: hsl(0, 0%, 85%);
 	}
+
+	/* Custom CSS Targetting Selected ToggleGroupItems */
+	/* Target ToggleGroupItems that are currently selected (checked) */
+	button[role="radio"][aria-checked="true"][data-variant="outline"] {
+		/* Example: Override background and text color when selected */
+		border-width: 0.1rem !important;
+		background-color: color-mix(var(--neo-purple) 10%, transparent 90%);
+		border-color: var(--neo-purple) !important;
+	}
 }
