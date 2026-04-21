@@ -357,10 +357,6 @@ function AuctionDetailRoute() {
 									<div className="text-white/70 text-xs">Bids</div>
 									<div className="font-semibold">{bidsCount}</div>
 								</div>
-								<div className="bg-black/35 border border-white/20 rounded p-2">
-									<div className="text-white/70 text-xs">Ends at</div>
-									<div className="font-semibold">{effectiveEndAt ? new Date(effectiveEndAt * 1000).toLocaleString() : 'N/A'}</div>
-								</div>
 							</div>
 							<AuctionCountdown auction={auction} className="w-full gap-3" />
 
