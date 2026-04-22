@@ -338,7 +338,10 @@ function BidsOverviewComponent() {
 		try {
 			for (const token of reclaimableTokens) {
 				try {
-					await nip60Actions.reclaimToken(token.id)
+					// manual:true lets the user override the auto-reclaim
+					// "permanently failed" flag in case they want to retry a
+					// token the sweeper has given up on.
+					await nip60Actions.reclaimToken(token.id, { manual: true })
 					reclaimedCount += 1
 				} catch (legError) {
 					const message = legError instanceof Error ? legError.message : String(legError)
