@@ -16,7 +16,7 @@ import {
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { configStore } from '@/lib/stores/config'
 import { ndkActions } from '@/lib/stores/ndk'
-import { AUCTION_SETTLEMENT_GRACE_SECONDS, nip60Actions, type AuctionP2pkKeyScheme } from '@/lib/stores/nip60'
+import { getAuctionSettlementGraceSeconds, nip60Actions, type AuctionP2pkKeyScheme } from '@/lib/stores/nip60'
 import {
 	normalizeProductShippingSelections,
 	type ProductShippingSelection,
@@ -484,7 +484,7 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 
 	const bidderWalletP2pk = await nip60Actions.getWalletCashuP2pk()
 	const bidNonce = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-	const locktime = Math.max(formData.auctionLocktimeAt + AUCTION_SETTLEMENT_GRACE_SECONDS, now + 60)
+	const locktime = Math.max(formData.auctionLocktimeAt + getAuctionSettlementGraceSeconds(), now + 60)
 
 	// Path-oracle pre-bid step: request and verify a derivation path. The
 	// bidder-side verifyAuctionPathGrant inside requestAuctionPathGrant is the

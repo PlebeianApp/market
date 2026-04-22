@@ -160,7 +160,22 @@ const NIP60_WALLET_LOAD_TIMEOUT_MS = 5000
 const NIP60_WALLET_START_TIMEOUT_MS = 7000
 const AUCTION_KIND = 30408 as unknown as NonNullable<NDKFilter['kinds']>[number]
 const AUCTION_BID_KIND = 1023 as unknown as NonNullable<NDKFilter['kinds']>[number]
-export const AUCTION_SETTLEMENT_GRACE_SECONDS = 3600
+/**
+ * Seconds added between the auction's nominal end and the Cashu P2PK locktime
+ * on each bid leg. This is the window the seller has to settle before bidders
+ * can walk away with their collateral via the refund path.
+ *
+ * Production: 3600s (1 h) — comfortably covers settlement + occasional retries.
+ * Dev / local / staging: 30s — fast enough to exercise the reclaim flow end-to-end
+ *   in a single test run (quick-settle auctions end ~2 min out, so a 30s grace
+ *   makes reclaim open ~2.5 min after bid placement).
+ */
+const AUCTION_SETTLEMENT_GRACE_PROD_SECONDS = 3600
+const AUCTION_SETTLEMENT_GRACE_DEV_SECONDS = 30
+export const getAuctionSettlementGraceSeconds = (): number =>
+	isNip60WalletDevModeEnabled() ? AUCTION_SETTLEMENT_GRACE_DEV_SECONDS : AUCTION_SETTLEMENT_GRACE_PROD_SECONDS
+/** @deprecated prefer `getAuctionSettlementGraceSeconds()`; still exported for legacy consumers. */
+export const AUCTION_SETTLEMENT_GRACE_SECONDS = AUCTION_SETTLEMENT_GRACE_PROD_SECONDS
 /**
  * Wall-clock skew buffer added on top of a proof's embedded P2PK locktime before
  * the client attempts a refund-path reclaim. Guards against the local clock
@@ -1986,7 +2001,7 @@ export const nip60Actions = {
 		}
 
 		const auctionCoordinates = `30408:${selected.event.pubkey}:${selected.dTag}`
-		const locktime = Math.max(selected.endAt + AUCTION_SETTLEMENT_GRACE_SECONDS, now + 60)
+		const locktime = Math.max(selected.endAt + getAuctionSettlementGraceSeconds(), now + 60)
 		const bidderRefundPubkey = await nip60Actions.getWalletCashuP2pk()
 
 		// Path-oracle flow: request a fresh derivation path from the issuer HTTP
@@ -2405,6 +2420,23 @@ export const nip60Actions = {
 		const pendingTokens = nip60Store.state.pendingTokens.filter((t) => t.id !== tokenId)
 		savePendingTokens(pendingTokens)
 		nip60Store.setState((s) => ({ ...s, pendingTokens }))
+	},
+
+	/**
+	 * Bulk-remove pending tokens by id. Used by the Bids UI to drop orphaned
+	 * lock attempts from localStorage in one click. Does NOT touch the mint
+	 * — the locked sats stay there and can only be reclaimed by a wallet that
+	 * still holds the original refund privkey.
+	 */
+	removePendingTokens: (tokenIds: string[]): number => {
+		if (!tokenIds.length) return 0
+		const idSet = new Set(tokenIds)
+		const before = nip60Store.state.pendingTokens.length
+		const pendingTokens = nip60Store.state.pendingTokens.filter((t) => !idSet.has(t.id))
+		if (pendingTokens.length === before) return 0
+		savePendingTokens(pendingTokens)
+		nip60Store.setState((s) => ({ ...s, pendingTokens }))
+		return before - pendingTokens.length
 	},
 
 	/**
