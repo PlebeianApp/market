@@ -249,6 +249,15 @@ function BidsOverviewComponent() {
 
 	const { data: myBids, isLoading, error } = useAuctionBidsByBidder(user?.pubkey ?? '', 500)
 
+	// Pending tokens are kept in localStorage scoped to the bidder's pubkey, so
+	// they survive relay resets. When a lock succeeds at the mint but the
+	// subsequent bid-event publish fails (rate-limit storm, network blip, or
+	// the wallet is later recreated by dev seed), the token stays here as an
+	// orphan — it points at a bid event the relay doesn't have, and often at
+	// a refund privkey the current wallet doesn't hold. We split pendingTokens
+	// into "real" tokens (attached to an actual bid event on the relay) and
+	// "orphans" so the UI only shows legitimate bid legs and offers a single
+	// action to clear the dead weight.
 	const bidGroups = useMemo(() => {
 		const auctionBidTokens = getPendingAuctionBidTokens(pendingTokens)
 		const groups = new Map<string, BidGroup>()
@@ -278,12 +287,17 @@ function BidsOverviewComponent() {
 
 		for (const group of groups.values()) {
 			group.latestBid = getLatestBidForGroup(group.bids)
+			const groupBidIds = new Set(group.bids.map((bid: NDKEvent) => bid.id))
 			group.pendingTokens = auctionBidTokens
 				.filter((token) => {
 					const context = token.context
 					if (context?.kind !== 'auction_bid') return false
-					if (context.auctionEventId === group.auctionEventId) return true
-					return !!group.auctionCoordinates && context.auctionCoordinates === group.auctionCoordinates
+					// Only attach tokens backed by a bid event that actually
+					// landed in this group. Tokens whose bidEventId we've
+					// never seen are orphans (lock succeeded, publish
+					// didn't) and belong in the stale bucket instead.
+					if (!context.bidEventId || !groupBidIds.has(context.bidEventId)) return false
+					return true
 				})
 				.sort((a, b) => b.createdAt - a.createdAt)
 		}
@@ -294,6 +308,29 @@ function BidsOverviewComponent() {
 			return getBidAmount(b.latestBid) - getBidAmount(a.latestBid)
 		})
 	}, [myBids, pendingTokens])
+
+	const orphanedTokens = useMemo(() => {
+		const liveBidEventIds = new Set((myBids ?? []).map((bid) => bid.id))
+		return getPendingAuctionBidTokens(pendingTokens).filter((token) => {
+			const context = token.context
+			if (context?.kind !== 'auction_bid') return false
+			if (!context.bidEventId) return true
+			return !liveBidEventIds.has(context.bidEventId)
+		})
+	}, [myBids, pendingTokens])
+
+	const orphanedAmount = orphanedTokens.reduce((sum, token) => sum + token.amount, 0)
+
+	const handleClearOrphans = () => {
+		if (orphanedTokens.length === 0) return
+		const count = orphanedTokens.length
+		const removed = nip60Actions.removePendingTokens(orphanedTokens.map((token) => token.id))
+		if (removed > 0) {
+			toast.success(
+				`Cleared ${count} orphaned lock ${count === 1 ? 'attempt' : 'attempts'}. The sats remain at the mint and can only be recovered by the wallet that originally placed them.`,
+			)
+		}
+	}
 
 	const auctionResults = useQueries({
 		queries: bidGroups.map((group) => ({
@@ -395,6 +432,24 @@ function BidsOverviewComponent() {
 						Refresh Refunds
 					</Button>
 				</div>
+
+				{orphanedTokens.length > 0 && (
+					<div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+						<p className="font-semibold">
+							{orphanedTokens.length} orphaned lock {orphanedTokens.length === 1 ? 'attempt' : 'attempts'} tracked locally (
+							{orphanedAmount.toLocaleString()} sats)
+						</p>
+						<p className="mt-1 text-xs leading-relaxed">
+							These are lock attempts whose bid event never made it to the relay — usually from a failed bid during a rate-limit storm, or
+							from a wallet that was since recreated. They stay in your browser's localStorage because they're not on any relay. Clearing
+							them only removes the local record; the locked sats remain at the mint and can be recovered only by the wallet that originally
+							placed them.
+						</p>
+						<Button variant="outline" size="sm" className="mt-2" onClick={handleClearOrphans}>
+							Clear {orphanedTokens.length} orphan{orphanedTokens.length === 1 ? '' : 's'}
+						</Button>
+					</div>
+				)}
 
 				{isLoading && (
 					<div className="text-center py-8 text-gray-500">
