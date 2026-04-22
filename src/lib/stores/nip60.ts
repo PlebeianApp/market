@@ -168,6 +168,22 @@ export const AUCTION_SETTLEMENT_GRACE_SECONDS = 3600
  * "Witness is missing for p2pk signature" error from the mint.
  */
 export const AUCTION_RECLAIM_SKEW_BUFFER_SECONDS = 30
+/**
+ * Minimum wall-clock gap between auto-reclaim sweeps. Without this the sweep
+ * would fire on every wallet refresh (and every bid) and hammer the mint with
+ * /swap calls per pending token, causing HTTP 429s that block the bid flow.
+ */
+const AUCTION_AUTO_RECLAIM_MIN_INTERVAL_MS = 60_000
+/** Exponential backoff (seconds) between successive reclaim retries per token. */
+const AUCTION_RECLAIM_BACKOFF_SECONDS = [30, 120, 600, 1800, 7200]
+/**
+ * Substrings in a mint error message that indicate the refund path will never
+ * work for this token — retrying burns rate-limit budget for no reason. These
+ * come from cashu-ts / mint responses when the proof's lock secret can't be
+ * satisfied with any key the wallet holds.
+ */
+const AUCTION_RECLAIM_PERMANENT_ERROR_KEYWORDS = ['witness is missing', 'signature is not valid', 'spending conditions not met']
+let auctionAutoReclaimLastSweepMs = 0
 
 /**
  * Resolve the earliest-reclaim timestamp for a bid token. We prefer the
@@ -216,6 +232,17 @@ export const getAuctionReclaimReadyAtForGroup = (tokens: { token: string; contex
 		const readyAt = getAuctionReclaimReadyAt(entry.token, entry.context?.locktime)
 		return readyAt > max ? readyAt : max
 	}, 0)
+}
+
+const getReclaimBackoffSeconds = (previousAttempts: number): number => {
+	if (previousAttempts <= 0) return 0
+	const index = Math.min(previousAttempts - 1, AUCTION_RECLAIM_BACKOFF_SECONDS.length - 1)
+	return AUCTION_RECLAIM_BACKOFF_SECONDS[index]
+}
+
+const isPermanentReclaimFailure = (err: unknown): boolean => {
+	const message = (err instanceof Error ? err.message : String(err)).toLowerCase()
+	return AUCTION_RECLAIM_PERMANENT_ERROR_KEYWORDS.some((keyword) => message.includes(keyword))
 }
 
 export const nip60Store = new Store<Nip60State>(initialState)
@@ -2227,10 +2254,11 @@ export const nip60Actions = {
 	 * Source of truth for the timelock is the Cashu proof secret itself, not the
 	 * cached auction context (which may be stale/missing from an older session).
 	 * A small skew buffer guards against the local clock briefly leading the
-	 * mint's, which would otherwise surface as a "Witness is missing" mint
-	 * error. Errors propagate so the caller can show the real message.
+	 * mint's. Errors propagate so the caller can show the real message. A
+	 * manual invocation resets `reclaimPermanentlyFailed` so the user can
+	 * retry tokens auto-reclaim has given up on.
 	 */
-	reclaimToken: async (tokenId: string): Promise<void> => {
+	reclaimToken: async (tokenId: string, options?: { manual?: boolean }): Promise<void> => {
 		const wallet = nip60Store.state.wallet
 		if (!wallet) {
 			throw new Error('Wallet not initialized')
@@ -2259,12 +2287,40 @@ export const nip60Actions = {
 			}
 
 			// Mark reclaimed so auto-reclaim won't retry it.
-			const pendingTokens = nip60Store.state.pendingTokens.map((t) => (t.id === tokenId ? { ...t, status: 'reclaimed' as const } : t))
+			const pendingTokens = nip60Store.state.pendingTokens.map((t) =>
+				t.id === tokenId
+					? {
+							...t,
+							status: 'reclaimed' as const,
+							lastReclaimAttemptAt: now,
+							reclaimFailureReason: undefined,
+							reclaimPermanentlyFailed: false,
+						}
+					: t,
+			)
 			savePendingTokens(pendingTokens)
 			nip60Store.setState((s) => ({ ...s, pendingTokens }))
 
 			await nip60Actions.refresh()
 		} catch (err) {
+			const attempts = (pendingToken.reclaimAttempts ?? 0) + 1
+			const permanent = isPermanentReclaimFailure(err)
+			const reason = err instanceof Error ? err.message : String(err)
+			const pendingTokens = nip60Store.state.pendingTokens.map((t) =>
+				t.id === tokenId
+					? {
+							...t,
+							reclaimAttempts: attempts,
+							lastReclaimAttemptAt: now,
+							reclaimFailureReason: reason,
+							// Manual retry resets the "permanent" flag so the user can try again.
+							reclaimPermanentlyFailed: options?.manual ? false : permanent || t.reclaimPermanentlyFailed,
+						}
+					: t,
+			)
+			savePendingTokens(pendingTokens)
+			nip60Store.setState((s) => ({ ...s, pendingTokens }))
+
 			console.error('[nip60] Failed to reclaim token:', err)
 			throw err
 		}
@@ -2272,19 +2328,30 @@ export const nip60Actions = {
 
 	/**
 	 * Silently reclaim every pending auction bid whose P2PK timelock has expired.
-	 * Called during wallet init + refresh; errors are swallowed (spent-proof
-	 * races, transient mint outages) — the manual Reclaim button remains the
-	 * user-facing fallback for anything that stays stuck.
+	 * Throttled to at most one sweep per AUCTION_AUTO_RECLAIM_MIN_INTERVAL_MS and
+	 * skips tokens that are in cooldown or marked permanently-failed, so a bad
+	 * token can't loop the bid flow into 429s from the mint.
 	 */
 	autoReclaimTimelockedBids: async (): Promise<void> => {
 		const wallet = nip60Store.state.wallet
 		if (!wallet || nip60Store.state.status !== 'ready') return
 
-		const now = Math.floor(Date.now() / 1000)
+		const nowMs = Date.now()
+		if (nowMs - auctionAutoReclaimLastSweepMs < AUCTION_AUTO_RECLAIM_MIN_INTERVAL_MS) return
+		auctionAutoReclaimLastSweepMs = nowMs
+
+		const now = Math.floor(nowMs / 1000)
 		const candidates = nip60Store.state.pendingTokens.filter((token) => {
+			if (token.status !== 'pending') return false
+			if (token.reclaimPermanentlyFailed) return false
 			const context = resolveAuctionBidPendingContext(token)
-			if (token.status !== 'pending' || !context) return false
-			return getAuctionReclaimReadyAt(token.token, context.locktime) <= now
+			if (!context) return false
+			if (getAuctionReclaimReadyAt(token.token, context.locktime) > now) return false
+			// Exponential backoff per token so a transient mint error doesn't
+			// turn into a tight retry loop.
+			const cooldown = getReclaimBackoffSeconds(token.reclaimAttempts ?? 0)
+			const last = token.lastReclaimAttemptAt ?? 0
+			return now - last >= cooldown
 		})
 
 		for (const token of candidates) {

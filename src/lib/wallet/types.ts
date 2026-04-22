@@ -37,6 +37,19 @@ export interface PendingToken {
 	createdAt: number
 	status: 'pending' | 'claimed' | 'reclaimed'
 	context?: PendingTokenContext
+	/** Attempt counter for reclaim retries — drives exponential backoff. */
+	reclaimAttempts?: number
+	/** Unix seconds of the last reclaim attempt (successful or failed). */
+	lastReclaimAttemptAt?: number
+	/** Human-readable reason the last reclaim attempt failed, preserved for UX. */
+	reclaimFailureReason?: string
+	/**
+	 * Marked true when the mint *permanently* rejects a refund-path spend for
+	 * this token (e.g. the locking secret uses a different keyset or the
+	 * refund keys don't match what the wallet has). Auto-reclaim skips these
+	 * so we don't hammer the mint; a manual retry resets the flag.
+	 */
+	reclaimPermanentlyFailed?: boolean
 }
 
 /**
