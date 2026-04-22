@@ -2279,10 +2279,45 @@ export const nip60Actions = {
 
 		const refundPrivkey = auctionContext ? getWalletPrivkeyForPubkey(wallet, auctionContext.refundPubkey) : null
 
+		// If this is an auction bid but we don't hold the refund privkey, stop
+		// immediately. Falling through to an unsigned swap just spams the mint
+		// with rejected requests ("Witness is missing") and eats rate-limit
+		// budget. The typical cause is a wallet rotation / reseed — the bid
+		// was placed with a different wallet than the one loaded right now.
+		if (auctionContext && !refundPrivkey) {
+			const walletPrivkeyCount = wallet.privkeys.size
+			console.warn(
+				`[nip60] Reclaim aborted: wallet does not hold a privkey matching refundPubkey ${auctionContext.refundPubkey}. ` +
+					`Wallet has ${walletPrivkeyCount} privkey(s). The bid may have been placed with a different wallet.`,
+			)
+			const reason =
+				'This wallet does not hold the refund private key for this bid. It was probably placed from a different wallet or before a key rotation. The locked sats stay at the mint — they can only be reclaimed by the wallet that originally placed the bid.'
+			const updatedTokens = nip60Store.state.pendingTokens.map((t) =>
+				t.id === tokenId
+					? {
+							...t,
+							reclaimAttempts: (t.reclaimAttempts ?? 0) + 1,
+							lastReclaimAttemptAt: now,
+							reclaimFailureReason: reason,
+							// Key mismatch is permanent — a new privkey won't
+							// appear. Mark so auto-reclaim skips forever. A
+							// manual retry from the UI will clear the flag in
+							// case the user imports the original wallet later.
+							reclaimPermanentlyFailed: !options?.manual,
+						}
+					: t,
+			)
+			savePendingTokens(updatedTokens)
+			nip60Store.setState((s) => ({ ...s, pendingTokens: updatedTokens }))
+			throw new Error(reason)
+		}
+
 		try {
 			if (refundPrivkey) {
 				await receiveTokenWithPrivkey(wallet, pendingToken.token, refundPrivkey)
 			} else {
+				// Non-auction pending token (e.g. a regular sendEcash token
+				// the recipient hasn't claimed). Best-effort unsigned receive.
 				await receiveTokenIntoWallet(wallet, pendingToken.token)
 			}
 
