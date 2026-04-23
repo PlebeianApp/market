@@ -382,11 +382,17 @@ function AuctionsRoute() {
 						<p className="text-muted-foreground">Try adjusting your filters or check back soon.</p>
 					</div>
 				) : (
-					<ItemGrid className="gap-4 sm:gap-8">
-						{filteredAndSortedAuctions.map((auction) => (
-							<AuctionCard key={auction.id} auction={auction} />
-						))}
-					</ItemGrid>
+					<>
+						<div className="mb-4">
+							<h1 className="text-xl sm:text-2xl font-heading text-center sm:text-left">All Auctions</h1>
+						</div>
+
+						<ItemGrid className="gap-4 sm:gap-8">
+							{filteredAndSortedAuctions.map((auction) => (
+								<AuctionCard key={auction.id} auction={auction} />
+							))}
+						</ItemGrid>
+					</>
 				)}
 			</div>
 		</div>
