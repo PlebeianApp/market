@@ -17,6 +17,7 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 	const [encryptionPassword, setEncryptionPassword] = useState('')
 	const [confirmPassword, setConfirmPassword] = useState('')
 	const [passwordError, setPasswordError] = useState('')
+	const [keyError, setKeyError] = useState<string | null>(null) // New state for key validation
 	const [isLoading, setIsLoading] = useState(false)
 	const [hasStoredKey, setHasStoredKey] = useState(false)
 	const [storedPubkey, setStoredPubkey] = useState<string | null>(null)
@@ -32,7 +33,6 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 		if (storedKey) {
 			setHasStoredKey(true)
 			try {
-				// Extract pubkey from stored key format: "pubkey:ncryptsec..."
 				const [pubkey] = storedKey.split(':')
 				setStoredPubkey(pubkey)
 			} catch (e) {
@@ -57,33 +57,67 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 		}
 	}, [showPrivateKey])
 
-	// Normalize private key input - accept both nsec and 64-char hex format
+	/**
+	 * Validates and normalizes the private key input.
+	 * Accepts:
+	 * 1. Valid nsec1... string
+	 * 2. Valid 64-character hex string (converts to nsec)
+	 * Returns the normalized nsec string or throws an error.
+	 */
 	const normalizePrivateKey = (key: string): string => {
 		const trimmedKey = key.trim()
 
-		// Check if it's a 64-character hex string
-		if (/^[0-9a-fA-F]{64}$/.test(trimmedKey)) {
-			// Convert hex to Uint8Array and encode as nsec
-			const hexBytes = new Uint8Array(32)
-			for (let i = 0; i < 32; i++) {
-				hexBytes[i] = parseInt(trimmedKey.slice(i * 2, i * 2 + 2), 16)
-			}
-			return nip19.nsecEncode(hexBytes)
+		if (!trimmedKey) {
+			throw new Error('Private key cannot be empty')
 		}
 
-		// Return as-is if it's already in nsec format or other format
-		return trimmedKey
+		// Case 1: Already in nsec format
+		if (trimmedKey.startsWith('nsec1')) {
+			try {
+				// Validate the bech32 encoding
+				const decoded = nip19.decode(trimmedKey)
+				if (decoded.type !== 'nsec') {
+					throw new Error('Invalid nsec format')
+				}
+				return trimmedKey
+			} catch (e) {
+				throw new Error('Invalid nsec format: Failed to decode')
+			}
+		}
+
+		// Case 2: Hex format
+		if (/^[0-9a-fA-F]{64}$/.test(trimmedKey)) {
+			try {
+				// Convert hex to Uint8Array
+				const hexBytes = new Uint8Array(32)
+				for (let i = 0; i < 32; i++) {
+					hexBytes[i] = parseInt(trimmedKey.slice(i * 2, i * 2 + 2), 16)
+				}
+				// Encode as nsec
+				return nip19.nsecEncode(hexBytes)
+			} catch (e) {
+				throw new Error('Failed to convert hex to nsec')
+			}
+		}
+
+		// Invalid format
+		if (trimmedKey.length === 64) {
+			throw new Error('Invalid hex key: Must contain only characters 0-9 and a-f')
+		}
+
+		throw new Error('Invalid format: Please enter a valid nsec1... key or a 64-character hex key')
 	}
 
 	// Encrypt and store key using nostr-tools encrypt function
 	const encryptAndStoreKey = async (key: string, password: string) => {
 		try {
+			// Ensure we have a valid nsec before proceeding
 			const normalizedKey = normalizePrivateKey(key)
 			const { data: secretKeyBytes } = nip19.decode(normalizedKey) as { data: Uint8Array }
 			const pubkey = getPublicKey(secretKeyBytes)
 
 			// Use nostr-tools encrypt function
-			const encryptedKey = encrypt(secretKeyBytes, password) // Encrypt with default parameters (logN = 16, ksb = 2)
+			const encryptedKey = encrypt(secretKeyBytes, password) // Encrypt with default parameters
 
 			// Store in format: "pubkey:ncryptsec..."
 			const storedFormat = `${pubkey}:${encryptedKey}`
@@ -98,6 +132,8 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 	const handleValidatePrivateKey = async () => {
 		try {
 			setIsLoading(true)
+			setKeyError(null)
+
 			const normalizedKey = normalizePrivateKey(privateKey)
 			await authActions.loginWithPrivateKey(normalizedKey)
 			setPrivateKey('')
@@ -112,7 +148,15 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 
 	const handleContinue = () => {
 		if (!privateKey) return
-		setShowPasswordInput(true)
+
+		// Validate before showing password input
+		try {
+			normalizePrivateKey(privateKey)
+			setKeyError(null)
+			setShowPasswordInput(true)
+		} catch (error) {
+			setKeyError(error instanceof Error ? error.message : 'Invalid key format')
+		}
 	}
 
 	const handleCopyToClipboard = async () => {
@@ -169,13 +213,9 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 				throw new Error('No stored key found')
 			}
 
-			// Extract the ncryptsec part (format: "pubkey:ncryptsec...")
 			const [, encryptedKey] = storedKey.split(':')
-
-			// Use nostr-tools decrypt function
 			const decryptedBytes = decrypt(encryptedKey, encryptionPassword)
 
-			// Convert Uint8Array to hex string
 			const privateKeyHex = Array.from(decryptedBytes)
 				.map((byte) => byte.toString(16).padStart(2, '0'))
 				.join('')
@@ -196,6 +236,18 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 		setEncryptionPassword('')
 		setConfirmPassword('')
 		setPasswordError('')
+		setKeyError(null)
+	}
+
+	// Helper to check if current input is valid for enabling the button
+	const isKeyValid = () => {
+		if (!privateKey) return false
+		try {
+			normalizePrivateKey(privateKey)
+			return true
+		} catch {
+			return false
+		}
 	}
 
 	if (hasStoredKey) {
@@ -272,7 +324,7 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 		<div className="space-y-4 py-4 w-full max-w-full overflow-hidden">
 			<div className="space-y-2 max-w-full">
 				<div className="flex justify-between items-center gap-2 flex-wrap">
-					<Label htmlFor="private-key">Private Key (nsec)</Label>
+					<Label htmlFor="private-key">Private Key (nsec or hex)</Label>
 					<Button
 						variant="outline"
 						size="sm"
@@ -281,6 +333,7 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 							setPrivateKey(nip19.nsecEncode(newPrivateKey))
 							setShowPrivateKey(true)
 							setShowGeneratedKeyWarning(true)
+							setKeyError(null) // Clear errors on generation
 						}}
 						data-testid="generate-key-button"
 					>
@@ -291,15 +344,18 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 					<Input
 						id="private-key"
 						type={showPrivateKey ? 'text' : 'password'}
-						placeholder="nsec1..."
+						placeholder="nsec1... or 64-char hex"
 						value={privateKey}
-						onChange={(e) => setPrivateKey(e.target.value)}
+						onChange={(e) => {
+							setPrivateKey(e.target.value)
+							if (keyError) setKeyError(null) // Clear error on change
+						}}
 						onKeyDown={(e) => {
-							if (e.key === 'Enter' && privateKey) {
+							if (e.key === 'Enter') {
 								handleContinue()
 							}
 						}}
-						className={`pr-20 min-w-0 ${showPrivateKey ? 'text-red-500' : ''}`}
+						className={`pr-20 min-w-0 ${keyError ? 'border-red-500 focus-visible:ring-red-500' : ''} ${showPrivateKey ? 'text-red-500' : ''}`}
 						data-testid="private-key-input"
 					/>
 					<Button
@@ -324,6 +380,13 @@ export function PrivateKeyLogin({ onError, onSuccess }: PrivateKeyLoginProps) {
 						{showPrivateKey ? <EyeOff className="h-4 w-4 text-gray-500" /> : <Eye className="h-4 w-4 text-gray-500" />}
 					</Button>
 				</div>
+
+				{keyError && (
+					<div className="flex items-center gap-2 text-sm text-red-500">
+						<span>{keyError}</span>
+					</div>
+				)}
+
 				{showGeneratedKeyWarning && (
 					<div className="space-y-2">
 						<p className="text-sm text-red-500 font-medium">⚠️ Copy this text and save it somewhere safe, it cannot be recovered.</p>
