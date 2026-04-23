@@ -20,7 +20,7 @@ interface AuctionFiltersProps {
 
 export const defaultAuctionFilters: AuctionFilterState = {
 	showEnded: true,
-	sort: 'newest',
+	sort: 'ending-soon',
 }
 
 export function AuctionFilters({ filters, onFiltersChange, className }: AuctionFiltersProps) {
@@ -75,11 +75,11 @@ export function AuctionFilters({ filters, onFiltersChange, className }: AuctionF
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value="newest">Newest first</SelectItem>
-									<SelectItem value="oldest">Oldest first</SelectItem>
 									<SelectItem value="ending-soon">Ending soon</SelectItem>
+									<SelectItem value="newest">Newest first</SelectItem>
 									<SelectItem value="highest-starting-bid">Highest starting bid</SelectItem>
 									<SelectItem value="title-a-z">Title (A-Z)</SelectItem>
+									<SelectItem value="oldest">Oldest first</SelectItem>
 								</SelectContent>
 							</Select>
 						</div>
