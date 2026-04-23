@@ -123,7 +123,9 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 
 				<div className="flex justify-between items-center">
 					<div className="text-sm font-semibold">{currentPrice.toLocaleString()} sats</div>
-					<div className="bg-[var(--light-gray)] font-medium px-4 py-1 rounded-full text-xs">{bidsCount} bids</div>
+					<div className="bg-[var(--light-gray)] font-medium px-4 py-1 rounded-full text-xs">
+						{bidsCount} {bidsCount === 1 ? 'Bid' : 'Bids'}
+					</div>
 				</div>
 
 				<div className="text-xs text-gray-600">
