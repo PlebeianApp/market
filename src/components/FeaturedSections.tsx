@@ -204,7 +204,7 @@ export function FeaturedSections({ className, maxItemsPerSection = 5 }: Featured
 				<section className={cn('w-full max-w-full py-12 overflow-hidden', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
 					<div className="px-4 sm:px-8 max-w-full">
 						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-2">
-							<div className="flex items-center gap-3">
+							<div className="flex items-center gap-3 dark text-foreground">
 								<Users className="w-6 h-6 text-primary shrink-0" />
 								<h2 className="text-xl sm:text-2xl font-heading">Featured Sellers</h2>
 							</div>
