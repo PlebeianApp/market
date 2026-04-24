@@ -24,6 +24,7 @@ import {
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Link } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
+import { AuctionBidder } from './AuctionBidder'
 
 export function AuctionCard({ auction }: { auction: NDKEvent }) {
 	const title = getAuctionTitle(auction)
@@ -127,30 +128,10 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 				</div>
 
 				<div className="text-xs text-gray-600">
-					<AuctionCountdown endAt={effectiveEndAt} countdown={countdown} showSeconds variant="inline" className="w-full justify-between" />
+					<AuctionCountdown auction={auction} className="w-full justify-between" compact />
 				</div>
 
-				<div className="flex-grow"></div>
-
-				<div className="flex gap-2">
-					<Input
-						type="number"
-						min={minBid}
-						step={Math.max(1, bidIncrement)}
-						value={bidAmountInput}
-						onChange={(e) => setBidAmountInput(e.target.value)}
-						className="h-10"
-						disabled={ended || isOwnAuction || bidMutation.isPending}
-					/>
-					<Button
-						className="py-3 px-4 rounded-lg font-medium bg-black text-white disabled:bg-gray-400 disabled:cursor-not-allowed"
-						onClick={() => void handleSubmitBid()}
-						disabled={ended || isOwnAuction || bidMutation.isPending || !Number.isFinite(parsedBidAmount) || parsedBidAmount < minBid}
-					>
-						{isOwnAuction ? 'Your Auction' : ended ? 'Ended' : bidMutation.isPending ? 'Bidding...' : 'Bid'}
-					</Button>
-				</div>
-				<div className="text-[11px] text-gray-500">Min bid: {minBid.toLocaleString()} sats</div>
+				<AuctionBidder auction={auction} compact />
 			</div>
 		</div>
 	)

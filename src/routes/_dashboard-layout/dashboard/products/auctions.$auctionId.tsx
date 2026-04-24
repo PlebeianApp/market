@@ -327,7 +327,7 @@ function DashboardAuctionDetailRoute() {
 							<StatCard label="Current price" value={formatSats(currentPrice)} eyebrow="Live pulse" />
 							<StatCard label="Reserve" value={formatSats(reserve)} eyebrow={reserveMet ? 'Ready to settle' : 'Threshold'} />
 							<StatCard label="Opening bid" value={formatSats(startingBid)} />
-							<AuctionCountdown endAt={effectiveEndAt} countdown={countdown} showSeconds variant="panel" label="Ends in" showAbsoluteTime />
+							<AuctionCountdown auction={auction} />
 						</div>
 
 						<div className="grid gap-3 md:grid-cols-2">
