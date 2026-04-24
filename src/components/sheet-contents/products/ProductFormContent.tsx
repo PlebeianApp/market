@@ -46,6 +46,14 @@ export function ProductFormContent({
 		requiresV4VSetup: false,
 	}
 
+	useEffect(() => {
+		if (process.env.NODE_ENV === 'development' && !workflow && !editingProductId && resolvedWorkflow.mode === 'create') {
+			console.warn(
+				'ProductFormContent mounted in create mode without a canonical workflow prop. This fallback is temporary and unsupported.',
+			)
+		}
+	}, [workflow, editingProductId, resolvedWorkflow.mode])
+
 	// Compute validation states
 	const hasValidName = name.trim().length > 0
 	const hasValidDescription = description.trim().length > 0
