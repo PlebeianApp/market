@@ -2,10 +2,9 @@ import { ProductFormContent } from '@/components/sheet-contents/NewProductConten
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { authStore } from '@/lib/stores/auth'
-import { resolveProductWorkflow, type ShippingSetupState, type V4VSetupState } from '@/lib/workflow/productWorkflowResolver'
+import { resolveProductWorkflow } from '@/lib/workflow/productWorkflowResolver'
+import { useProductCreateReadiness } from '@/lib/workflow/useProductCreateReadiness'
 import { productFormActions } from '@/lib/stores/product'
-import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
-import { useV4VConfiguration } from '@/queries/v4v'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { createFileRoute } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
@@ -23,44 +22,16 @@ function NewProductComponent() {
 	const [isBootstrapped, setIsBootstrapped] = useState(false)
 	const hasBootstrappedRef = useRef(false)
 
-	const shippingQuery = useShippingOptionsByPubkey(userPubkey)
-	const v4vQuery = useV4VConfiguration(userPubkey)
-
-	const shippingState = useMemo<ShippingSetupState>(() => {
-		if (!userPubkey) return 'loading'
-		if (!shippingQuery.isFetched) return shippingQuery.isLoading ? 'loading' : 'unknown'
-
-		const activeShippingRefs = new Set(
-			(shippingQuery.data ?? [])
-				.filter((event) => {
-					const dTag = event.tags?.find((tag: string[]) => tag[0] === 'd')?.[1]
-					return dTag ? !isShippingDeleted(dTag, event.created_at) : true
-				})
-				.map((event) => {
-					const info = getShippingInfo(event)
-					return info ? createShippingReference(event.pubkey, info.id) : null
-				})
-				.filter((shippingRef): shippingRef is string => !!shippingRef),
-		)
-
-		return activeShippingRefs.size === 0 ? 'empty' : 'ready'
-	}, [userPubkey, shippingQuery.data, shippingQuery.isFetched, shippingQuery.isLoading])
-
-	const v4vState = useMemo<V4VSetupState>(() => {
-		if (!userPubkey) return 'loading'
-		if (v4vQuery.isLoading) return 'loading'
-
-		return v4vQuery.data?.state ?? 'unknown'
-	}, [userPubkey, v4vQuery.data?.state, v4vQuery.isLoading])
+	const readiness = useProductCreateReadiness(userPubkey)
 
 	const workflow = useMemo(
 		() =>
 			resolveProductWorkflow({
 				mode: 'create',
-				shippingState,
-				v4vConfigurationState: v4vState,
+				shippingState: readiness.shippingState,
+				v4vConfigurationState: readiness.v4vConfigurationState,
 			}),
-		[shippingState, v4vState],
+		[readiness.shippingState, readiness.v4vConfigurationState],
 	)
 
 	useEffect(() => {

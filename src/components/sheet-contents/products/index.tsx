@@ -2,9 +2,8 @@ import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/compo
 import { authActions, authStore } from '@/lib/stores/auth'
 import type { ProductFormState } from '@/lib/stores/product'
 import { DEFAULT_FORM_STATE, productFormActions, productFormStore } from '@/lib/stores/product'
-import { resolveProductWorkflow, type ShippingSetupState, type V4VSetupState } from '@/lib/workflow/productWorkflowResolver'
-import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
-import { useV4VConfiguration } from '@/queries/v4v'
+import { resolveProductWorkflow } from '@/lib/workflow/productWorkflowResolver'
+import { useProductCreateReadiness } from '@/lib/workflow/useProductCreateReadiness'
 import { useStore } from '@tanstack/react-store'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ProductFormContent } from './ProductFormContent'
@@ -29,9 +28,7 @@ export function NewProductContent({
 	const { user, isAuthenticated } = useStore(authStore)
 	const userPubkey = user?.pubkey ?? ''
 	const hasBootstrappedRef = useRef(false)
-
-	const shippingQuery = useShippingOptionsByPubkey(userPubkey)
-	const v4vQuery = useV4VConfiguration(userPubkey)
+	const readiness = useProductCreateReadiness(userPubkey)
 
 	// Function to check if the form has been modified from its default state
 	const isFormModified = (currentState: ProductFormState) => {
@@ -57,42 +54,15 @@ export function NewProductContent({
 
 	const [showForm, setShowForm] = useState(hasStartedFormOrIsEditing)
 
-	const shippingState = useMemo<ShippingSetupState>(() => {
-		if (!userPubkey) return 'loading'
-		if (!shippingQuery.isFetched) return shippingQuery.isLoading ? 'loading' : 'unknown'
-
-		const activeShippingRefs = new Set(
-			(shippingQuery.data ?? [])
-				.filter((event) => {
-					const dTag = event.tags?.find((tag: string[]) => tag[0] === 'd')?.[1]
-					return dTag ? !isShippingDeleted(dTag, event.created_at) : true
-				})
-				.map((event) => {
-					const info = getShippingInfo(event)
-					return info ? createShippingReference(event.pubkey, info.id) : null
-				})
-				.filter((shippingRef): shippingRef is string => !!shippingRef),
-		)
-
-		return activeShippingRefs.size === 0 ? 'empty' : 'ready'
-	}, [userPubkey, shippingQuery.data, shippingQuery.isFetched, shippingQuery.isLoading])
-
-	const v4vState = useMemo<V4VSetupState>(() => {
-		if (!userPubkey) return 'loading'
-		if (v4vQuery.isLoading) return 'loading'
-
-		return v4vQuery.data?.state ?? 'unknown'
-	}, [userPubkey, v4vQuery.data?.state, v4vQuery.isLoading])
-
 	const workflow = useMemo(
 		() =>
 			resolveProductWorkflow({
 				mode: editingProductId ? 'edit' : 'create',
 				editingProductId,
-				shippingState,
-				v4vConfigurationState: v4vState,
+				shippingState: readiness.shippingState,
+				v4vConfigurationState: readiness.v4vConfigurationState,
 			}),
-		[editingProductId, shippingState, v4vState],
+		[editingProductId, readiness.shippingState, readiness.v4vConfigurationState],
 	)
 
 	// Check if user has products when component mounts or user changes
