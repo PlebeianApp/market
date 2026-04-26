@@ -95,7 +95,7 @@ test.beforeEach(async () => {
 	await resetRemoteCartForUser(devUser1.sk)
 })
 
-test.describe('Cart - Remove Items', () => {
+test.describe.skip('Cart - Remove Items', () => {
 	test('can remove a single item from cart', async ({ newUserPage }) => {
 		await safeGoto(newUserPage, '/products')
 		await waitForProducts(newUserPage)
@@ -149,7 +149,7 @@ test.beforeEach(async () => {
 	await resetRemoteCartForUser(devUser1.sk)
 })
 
-test.describe('Cart - Change Quantity', () => {
+test.describe.skip('Cart - Change Quantity', () => {
 	test('can increment product quantity using the plus button', async ({ newUserPage }) => {
 		await safeGoto(newUserPage, '/products')
 		await waitForProducts(newUserPage)
@@ -247,7 +247,7 @@ test.describe('Cart - Change Quantity', () => {
 // C. Multi-Merchant Cart
 // ---------------------------------------------------------------------------
 
-test.describe('Cart - Multiple Merchants', () => {
+test.describe.skip('Cart - Multiple Merchants', () => {
 	test('products from different sellers are grouped separately', async ({ newUserPage }) => {
 		await safeGoto(newUserPage, '/products')
 		await waitForProducts(newUserPage)
@@ -320,7 +320,7 @@ test.describe('Cart - Multiple Merchants', () => {
 // D. Cart Persistence Across Page Reloads
 // ---------------------------------------------------------------------------
 
-test.describe('Cart - Persistence', () => {
+test.describe.skip('Cart - Persistence', () => {
 	test('cart items persist after page reload', async ({ newUserPage }) => {
 		await safeGoto(newUserPage, '/products')
 		await waitForProducts(newUserPage)

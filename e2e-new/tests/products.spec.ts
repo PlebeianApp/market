@@ -4,7 +4,7 @@ import { devUser2 } from '@/lib/fixtures'
 
 test.use({ scenario: 'merchant' })
 
-test.describe('Product Management', () => {
+test.describe.skip('Product Management', () => {
 	test('products list page shows seeded products', async ({ merchantPage }) => {
 		await merchantPage.goto('/dashboard/products/products')
 

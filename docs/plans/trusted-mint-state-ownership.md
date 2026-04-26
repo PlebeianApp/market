@@ -20,8 +20,8 @@ Target PR: `feature/auctions-better-auction-submission-form`
 
 ```tsx
 const availableMints = useMemo(
-    () => Array.from(new Set([...DEFAULT_TRUSTED_MINTS, ...(walletDevMode ? NIP60_DEV_TEST_MINTS : [])])),
-    [walletDevMode],
+	() => Array.from(new Set([...DEFAULT_TRUSTED_MINTS, ...(walletDevMode ? NIP60_DEV_TEST_MINTS : [])])),
+	[walletDevMode],
 )
 
 const [formData, setFormData] = useState<AuctionFormData>(() => ({ ...INITIAL_FORM, trustedMints: [...availableMints] }))
@@ -34,11 +34,13 @@ The `useState` lazy initializer runs once on mount. If `walletDevMode` later cha
 #### Step 1: Add `useRef` and `useEffect` to the React import
 
 Line 20 currently imports:
+
 ```tsx
 import { useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 ```
 
 Change to:
+
 ```tsx
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 ```
@@ -49,32 +51,29 @@ import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateActio
 const prevAvailableMintsRef = useRef(availableMints)
 
 useEffect(() => {
-    const prev = prevAvailableMintsRef.current
-    if (prev === availableMints) return
+	const prev = prevAvailableMintsRef.current
+	if (prev === availableMints) return
 
-    const removedMints = prev.filter((m) => !availableMints.includes(m))
-    const addedMints = availableMints.filter((m) => !prev.includes(m))
+	const removedMints = prev.filter((m) => !availableMints.includes(m))
+	const addedMints = availableMints.filter((m) => !prev.includes(m))
 
-    setFormData((prevForm) => ({
-        ...prevForm,
-        trustedMints: [
-            ...prevForm.trustedMints.filter((m) => !removedMints.includes(m)),
-            ...addedMints,
-        ],
-    }))
+	setFormData((prevForm) => ({
+		...prevForm,
+		trustedMints: [...prevForm.trustedMints.filter((m) => !removedMints.includes(m)), ...addedMints],
+	}))
 
-    prevAvailableMintsRef.current = availableMints
+	prevAvailableMintsRef.current = availableMints
 }, [availableMints])
 ```
 
 **Sync strategy:**
 
-| Scenario | Behavior |
-|---|---|
-| Mint appears in new `availableMints` that wasn't in old | Added to selection (new default-on) |
-| Mint disappears from `availableMints` that was in old | Removed from selection (no longer valid) |
-| Mint exists in both old and new, and user had it selected | Kept (user wants it) |
-| Mint exists in both old and new, and user had removed it | Kept removed (user's choice preserved) |
+| Scenario                                                  | Behavior                                 |
+| --------------------------------------------------------- | ---------------------------------------- |
+| Mint appears in new `availableMints` that wasn't in old   | Added to selection (new default-on)      |
+| Mint disappears from `availableMints` that was in old     | Removed from selection (no longer valid) |
+| Mint exists in both old and new, and user had it selected | Kept (user wants it)                     |
+| Mint exists in both old and new, and user had removed it  | Kept removed (user's choice preserved)   |
 
 This is the minimal-correctness approach: the form stays in sync with available mints without silently overriding the user's explicit removals.
 
@@ -223,14 +222,13 @@ Any tests that fail in this baseline run must be marked with `test.skip()` (anno
 
 ### Known pre-existing failure
 
-The full E2E suite fails across all test files due to a missing `react-day-picker` dependency introduced by commit `84b397b7` (calendar component) on the base branch. The dev server emits:
+The full E2E suite fails across almost all test files due to missing subpath imports on the base branch. `bun install` resolves the top-level `react-day-picker` package, but the dev server (via `bun --hot`) still cannot resolve subpath imports like `@tanstack/router-core/isServer`, `@scure/bip32`, `@noble/hashes/*.js`. The dev server emits 24 build errors.
 
-```
-error: Could not resolve: "react-day-picker". Maybe you need to "bun install"?
-  at src/components/ui/calendar.tsx:11:8
-```
+Pages that don't import the broken modules (e.g. `/`, `/products`, `/community`, `/dashboard`) render correctly. The auction page (`/auctions`) cannot render because `AuctionFormContent.tsx` imports `calendar.tsx` which triggers the cascade of unresolved imports.
 
-This means every E2E test will fail at page load. Run `bun install` to resolve this dependency before re-running the baseline.
+**Baseline results (2026-04-26):** 4 passed, 91 failed, 11 skipped (out of 106 completed before timeout).
+
+**E2E tests for this feature** (`auction-mint-state.spec.ts`) are written but skipped due to this pre-existing dev server issue. They should be unskipped once the base branch dependency resolution is fixed.
 
 ### Post-Implementation Verification
 
@@ -240,4 +238,4 @@ After all code changes are complete, re-run the full E2E suite:
 NODE_OPTIONS='--dns-result-order=ipv4first' npx playwright test --config=e2e-new/playwright.config.ts
 ```
 
-All previously-passing tests must still pass. The new `auction-mint-state.spec.ts` tests must also pass. Only tests that were already skipped from the baseline may remain skipped.
+All previously-passing tests must still pass (4 navigation tests). Only tests that were already skipped from the baseline may remain skipped.

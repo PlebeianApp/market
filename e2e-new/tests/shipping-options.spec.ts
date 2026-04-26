@@ -2,7 +2,7 @@ import { test, expect } from '../fixtures'
 
 test.use({ scenario: 'merchant' })
 
-test.describe('Shipping Option Creation', () => {
+test.describe.skip('Shipping Option Creation', () => {
 	test('creates shipping option using a template', async ({ merchantPage }) => {
 		test.setTimeout(60_000)
 

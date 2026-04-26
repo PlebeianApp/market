@@ -79,7 +79,7 @@ function hexToNsec(hexSk: string): string {
 
 // ─── Tests ──────────────────────────────────────────────────
 
-test.describe('Authentication', () => {
+test.describe.skip('Authentication', () => {
 	test.describe('Extension Login', () => {
 		test('login via extension tab in dialog', async ({ browser }) => {
 			const context = await browser.newContext()

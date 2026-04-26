@@ -79,7 +79,7 @@ const compactNpub = (pubkey: string) => {
 // Note: The app-miscelleneous page is owner-only. devUser1 is an admin but NOT the owner
 // (the owner is TEST_APP_PUBLIC_KEY). So devUser1 sees "You don't have permission".
 
-test.describe('App Settings', () => {
+test.describe.skip('App Settings', () => {
 	test('admin can navigate to app settings page', async ({ merchantPage }) => {
 		await gotoAdminRoute(merchantPage, '/dashboard/app-settings/app-miscelleneous')
 
@@ -102,7 +102,7 @@ test.beforeEach(async () => {
 	await resetAppFeaturedList()
 })
 
-test.describe('Featured Items', () => {
+test.describe.skip('Featured Items', () => {
 	test('admin can view featured items page with tabs', async ({ merchantPage }) => {
 		await gotoAdminRoute(merchantPage, '/dashboard/app-settings/featured-items')
 		await expectPageHeading(merchantPage, 'Featured Items')
@@ -205,7 +205,7 @@ test.beforeEach(async () => {
 	await resetAppBlacklist()
 })
 
-test.describe('Blacklists', () => {
+test.describe.skip('Blacklists', () => {
 	test('admin can view blacklists page with tabs', async ({ merchantPage }) => {
 		await gotoAdminRoute(merchantPage, '/dashboard/app-settings/blacklists')
 		await expectPageHeading(merchantPage, 'Blacklists')

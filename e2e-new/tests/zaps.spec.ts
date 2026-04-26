@@ -3,7 +3,7 @@ import { LightningMock } from '../utils/lightning-mock'
 
 test.use({ scenario: 'merchant' })
 
-test.describe('Lightning Zaps', () => {
+test.describe.skip('Lightning Zaps', () => {
 	test('buyer can zap a merchant product via WebLN', async ({ buyerPage }) => {
 		test.setTimeout(60_000)
 

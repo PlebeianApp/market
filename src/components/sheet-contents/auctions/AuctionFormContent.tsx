@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DEFAULT_TRUSTED_MINTS, PRODUCT_CATEGORIES } from '@/lib/constants'
+import { syncMintSelection } from '@/lib/auctionMintSync'
 import { authStore } from '@/lib/stores/auth'
 import { configStore } from '@/lib/stores/config'
 import { isNip60WalletDevModeEnabled, NIP60_DEV_TEST_MINTS } from '@/lib/stores/nip60'
@@ -17,7 +18,7 @@ import { createShippingReference, getShippingInfo, isShippingDeleted, useShippin
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { CalendarIcon, Plus, X } from 'lucide-react'
-import { useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 
 type AuctionImage = { imageUrl: string; imageOrder: number }
 
@@ -917,6 +918,19 @@ export function AuctionFormContent() {
 	)
 
 	const [formData, setFormData] = useState<AuctionFormData>(() => ({ ...INITIAL_FORM, trustedMints: [...availableMints] }))
+	const prevAvailableMintsRef = useRef(availableMints)
+
+	useEffect(() => {
+		const prev = prevAvailableMintsRef.current
+		if (prev === availableMints) return
+
+		setFormData((prevForm) => ({
+			...prevForm,
+			trustedMints: syncMintSelection(prev, availableMints, prevForm.trustedMints),
+		}))
+
+		prevAvailableMintsRef.current = availableMints
+	}, [availableMints])
 	const [images, setImages] = useState<AuctionImage[]>([])
 	const [activeTab, setActiveTab] = useState<AuctionTab>('name')
 	const [subCategoryInput, setSubCategoryInput] = useState('')
