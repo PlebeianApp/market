@@ -210,3 +210,34 @@ NODE_OPTIONS='--dns-result-order=ipv4first' npx playwright test --config=e2e-new
 6. `bun run format:check` passes
 7. `bun test:unit` passes
 8. Playwright E2E tests pass with no regressions
+
+## Pre-Implementation Baseline
+
+Before making any code changes, run the full E2E suite to identify pre-existing failures:
+
+```bash
+NODE_OPTIONS='--dns-result-order=ipv4first' npx playwright test --config=e2e-new/playwright.config.ts
+```
+
+Any tests that fail in this baseline run must be marked with `test.skip()` (annotated with a comment referencing this branch and the baseline date) before proceeding with implementation. This ensures that any post-implementation failures can be confidently attributed to this branch's changes.
+
+### Known pre-existing failure
+
+The full E2E suite fails across all test files due to a missing `react-day-picker` dependency introduced by commit `84b397b7` (calendar component) on the base branch. The dev server emits:
+
+```
+error: Could not resolve: "react-day-picker". Maybe you need to "bun install"?
+  at src/components/ui/calendar.tsx:11:8
+```
+
+This means every E2E test will fail at page load. Run `bun install` to resolve this dependency before re-running the baseline.
+
+### Post-Implementation Verification
+
+After all code changes are complete, re-run the full E2E suite:
+
+```bash
+NODE_OPTIONS='--dns-result-order=ipv4first' npx playwright test --config=e2e-new/playwright.config.ts
+```
+
+All previously-passing tests must still pass. The new `auction-mint-state.spec.ts` tests must also pass. Only tests that were already skipped from the baseline may remain skipped.

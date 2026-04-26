@@ -52,3 +52,5 @@ __pycache__/
 
 .opencode/
 contextvm/
+deploy.env
+nak-v0.19.0-linux-amd64
