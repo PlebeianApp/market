@@ -2,7 +2,7 @@ import { test, expect } from '../fixtures'
 
 test.use({ scenario: 'base' })
 
-test.describe.skip('User Profile', () => {
+test.describe('User Profile', () => {
 	test('user can save a profile', async ({ newUserPage }) => {
 		await newUserPage.goto('/dashboard/account/profile')
 

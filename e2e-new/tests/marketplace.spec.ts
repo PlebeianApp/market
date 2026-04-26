@@ -177,7 +177,7 @@ async function proceedToPaymentStep(page: Page): Promise<void> {
 // A. Marketplace Display
 // ---------------------------------------------------------------------------
 
-test.describe.skip('Marketplace Display', () => {
+test.describe('Marketplace Display', () => {
 	test('shows products from multiple sellers', async ({ newUserPage }) => {
 		await safeGoto(newUserPage, '/products')
 
@@ -211,7 +211,7 @@ test.describe.skip('Marketplace Display', () => {
 // B. Multi-Merchant Cart
 // ---------------------------------------------------------------------------
 
-test.describe.skip('Multi-Merchant Cart', () => {
+test.describe('Multi-Merchant Cart', () => {
 	test('can add products from two different sellers to cart', async ({ newUserPage }) => {
 		await addProductsFromBothSellers(newUserPage)
 
@@ -267,7 +267,7 @@ test.describe.skip('Multi-Merchant Cart', () => {
 // C. Multi-Seller Checkout with V4V
 // ---------------------------------------------------------------------------
 
-test.describe.skip('Multi-Seller Checkout with V4V', () => {
+test.describe('Multi-Seller Checkout with V4V', () => {
 	test('cart shows V4V payment breakdown per seller', async ({ newUserPage }) => {
 		// Both merchants already have V4V configured (10% to TEST_APP_PUBLIC_KEY)
 		// from the marketplace scenario seeding.
@@ -367,7 +367,7 @@ test.describe.skip('Multi-Seller Checkout with V4V', () => {
 // D. V4V Dashboard Management
 // ---------------------------------------------------------------------------
 
-test.describe.skip('V4V Dashboard Management', () => {
+test.describe('V4V Dashboard Management', () => {
 	test('circular economy page shows V4V configuration', async ({ merchantPage }) => {
 		await safeGoto(merchantPage, '/dashboard/sales/circular-economy')
 

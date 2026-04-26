@@ -2,7 +2,7 @@ import { test, expect } from '../fixtures'
 
 test.use({ scenario: 'merchant' })
 
-test.describe.skip('Buyer Purchase Flow', () => {
+test.describe('Buyer Purchase Flow', () => {
 	test('buyer adds two products to cart and totals are correct', async ({ buyerPage }) => {
 		test.setTimeout(60_000)
 

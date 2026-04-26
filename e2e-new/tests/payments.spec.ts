@@ -79,7 +79,7 @@ async function neutralizeBlockingToasts(page: Page): Promise<void> {
 // A. Receiving Payments Configuration (merchant dashboard)
 // ---------------------------------------------------------------------------
 
-test.describe.skip('Receiving Payments Configuration', () => {
+test.describe('Receiving Payments Configuration', () => {
 	test('displays existing seeded payment details', async ({ merchantPage }) => {
 		await safeGoto(merchantPage, '/dashboard/account/receiving-payments')
 
@@ -140,7 +140,7 @@ test.describe.skip('Receiving Payments Configuration', () => {
 // B. NWC Wallet Management (buyer dashboard)
 // ---------------------------------------------------------------------------
 
-test.describe.skip('NWC Wallet Management', () => {
+test.describe('NWC Wallet Management', () => {
 	test('empty state shows add wallet prompt', async ({ buyerPage }) => {
 		await safeGoto(buyerPage, '/dashboard/account/making-payments')
 
@@ -311,7 +311,7 @@ async function skipAllInvoices(page: Page): Promise<void> {
 	}
 }
 
-test.describe.skip('Checkout Flow', () => {
+test.describe('Checkout Flow', () => {
 	test.describe.configure({ timeout: 120_000 })
 
 	test('empty cart shows redirect message', async ({ buyerPage }) => {

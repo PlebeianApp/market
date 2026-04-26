@@ -173,7 +173,7 @@ const seedExistingReaction = async (emoji: string, skUser = devUser3.sk) => {
 
 test.use({ scenario: 'base' })
 
-test.describe.skip('Product Page - View Only (Unauthenticated)', () => {
+test.describe('Product Page - View Only (Unauthenticated)', () => {
 	// --- SocialInteractions Tests ---
 
 	test('should display correct product details', async ({ unauthenticatedPage }) => {
@@ -363,7 +363,7 @@ test.describe.skip('Product Page - View Only (Unauthenticated)', () => {
 // == SECTION: Authenticated User (Interact) ==
 // ==========================================
 
-test.describe.skip('Product Page - Interactions & Social (Authenticated)', () => {
+test.describe('Product Page - Interactions & Social (Authenticated)', () => {
 	// --- Comment Tests ---
 
 	test('should allow posting a new comment', async ({ buyerPage }) => {

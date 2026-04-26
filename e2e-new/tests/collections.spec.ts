@@ -113,7 +113,7 @@ async function createCollection(
 	await expectCollectionVisible(page, fields.name)
 }
 
-test.describe.skip('Collection Management', () => {
+test.describe('Collection Management', () => {
 	test('collections list page is accessible', async ({ merchantPage }) => {
 		await gotoCollections(merchantPage)
 	})

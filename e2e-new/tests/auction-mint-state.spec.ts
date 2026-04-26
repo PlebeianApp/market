@@ -3,7 +3,7 @@ import { test, expect } from '../fixtures'
 
 test.use({ scenario: 'merchant' })
 
-test.describe.skip('Auction Mint State — skipped: dev server build errors prevent auction page render (base branch issue, 2026-04-26)', () => {
+test.describe('Auction Mint State', () => {
 	test('trusted mints initialize with available mints', async ({ merchantPage }) => {
 		test.setTimeout(60_000)
 
@@ -32,13 +32,13 @@ test.describe.skip('Auction Mint State — skipped: dev server build errors prev
 		const removeButtons = merchantPage.getByTitle('Remove mint')
 		await expect(removeButtons.first()).toBeVisible({ timeout: 10_000 })
 
-		const initialCount = await merchantPage.locator('span[title^="https://mint"]').count()
+		const initialCount = await removeButtons.count()
 
 		await removeButtons.first().click()
 
-		const afterCount = await merchantPage.locator('span[title^="https://mint"]').count()
+		const afterCount = await removeButtons.count()
 		expect(afterCount).toBe(initialCount - 1)
 
-		await expect(merchantPage.getByTitle('At least one mint is required').or(merchantPage.getByTitle('Remove mint'))).toBeVisible()
+		await expect(merchantPage.getByTitle('At least one mint is required').or(merchantPage.getByTitle('Remove mint')).first()).toBeVisible()
 	})
 })

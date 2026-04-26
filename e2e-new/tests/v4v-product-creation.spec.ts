@@ -4,7 +4,7 @@ import { resetV4VForUser } from '../scenarios'
 
 test.use({ scenario: 'base' })
 
-test.describe.skip('V4V Product Creation Flow', () => {
+test.describe('V4V Product Creation Flow', () => {
 	test('configured-zero user can publish first product without V4V setup blocker', async ({ newUserPage }) => {
 		// This test covers the PR 5 semantic-gating contract only:
 		// configured-zero must not block first-product publish.
