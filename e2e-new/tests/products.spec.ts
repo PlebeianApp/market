@@ -1,8 +1,66 @@
-import { seedShippingOptionForUser } from 'e2e-new/scenarios'
+import type { Browser, Page } from '@playwright/test'
 import { test, expect } from '../fixtures'
-import { devUser2 } from '@/lib/fixtures'
+import { setupAuthContext } from '../fixtures/auth'
+import { ensureScenario } from '../scenarios'
+import { bytesToHex } from '@noble/hashes/utils'
+import { generateSecretKey, getPublicKey } from 'nostr-tools/pure'
 
 test.use({ scenario: 'merchant' })
+
+async function waitForProductForm(page: Page) {
+	const productForm = page.locator('[data-testid="product-form"][data-shipping-loaded="true"]')
+	await expect(productForm).toBeVisible({ timeout: 15_000 })
+	return productForm
+}
+
+async function addProductImage(page: Page, imageUrl = 'https://placehold.co/600x600') {
+	const imageInput = page.getByTestId('image-url-input')
+	await expect(imageInput).toBeVisible({ timeout: 5_000 })
+	await imageInput.fill(imageUrl)
+	await page.getByTestId('image-save-button').click()
+}
+
+async function fillRequiredStepsUntilShipping(page: Page, productName = 'Workflow Product') {
+	await page.getByTestId('product-name-input').fill(productName)
+	await page.getByTestId('product-description-input').fill('Workflow test description')
+	await page.getByTestId('product-next-button').click()
+
+	await page.getByLabel(/price/i).first().fill('10000')
+	await page
+		.getByTestId('product-quantity-input')
+		.or(page.getByLabel(/quantity/i))
+		.fill('5')
+	await page.getByTestId('product-next-button').click()
+
+	await page.getByTestId('product-next-button').click()
+
+	await page.getByTestId('product-main-category-select').click()
+	await page.getByTestId('main-category-bitcoin').click()
+	await page.getByTestId('product-next-button').click()
+
+	await addProductImage(page)
+	await page.getByTestId('product-next-button').click()
+}
+
+async function createFreshUserPage(browser: Browser) {
+	await ensureScenario('base')
+
+	const sk = generateSecretKey()
+	const user = {
+		sk: bytesToHex(sk),
+		pk: getPublicKey(sk),
+	}
+
+	const context = await browser.newContext()
+	await setupAuthContext(context, user)
+
+	const page = await context.newPage()
+	await page.goto('/')
+	await page.waitForLoadState('networkidle')
+	await expect(page.locator('header')).toBeVisible({ timeout: 10_000 })
+
+	return { context, page }
+}
 
 test.describe('Product Management', () => {
 	test('products list page shows seeded products', async ({ merchantPage }) => {
@@ -23,12 +81,160 @@ test.describe('Product Management', () => {
 		await expect(merchantPage.getByTestId('product-name-input')).toBeVisible({ timeout: 5_000 })
 	})
 
+	test('cannot advance from name tab when title is missing', async ({ merchantPage }) => {
+		await merchantPage.goto('/dashboard/products/products/new')
+		await waitForProductForm(merchantPage)
+
+		await merchantPage.getByTestId('product-description-input').fill('Description without a title')
+
+		await expect(merchantPage.getByTestId('product-next-button')).toBeDisabled()
+		await expect(merchantPage.getByTestId('product-name-input')).toBeVisible()
+		await expect(merchantPage.getByLabel(/price/i).first()).not.toBeVisible()
+	})
+
+	test('new account starts on the correct first step', async ({ browser }) => {
+		const { context, page } = await createFreshUserPage(browser)
+
+		try {
+			await page.goto('/dashboard/products/products/new')
+			await waitForProductForm(page)
+
+			await expect(page.getByTestId('product-name-input')).toBeVisible({ timeout: 10_000 })
+			await expect(page.getByTestId('product-tab-name')).toHaveAttribute('data-state', 'active')
+			await expect(page.getByRole('button', { name: /Digital Delivery/i })).not.toBeVisible()
+		} finally {
+			await context.close()
+		}
+	})
+
+	test('required indicators match the workflow validation model', async ({ merchantPage }) => {
+		await merchantPage.goto('/dashboard/products/products/new')
+		await waitForProductForm(merchantPage)
+
+		await expect(merchantPage.getByTestId('product-tab-name')).toContainText('*')
+		await expect(merchantPage.getByTestId('product-tab-detail')).toContainText('*')
+		await expect(merchantPage.getByTestId('product-tab-spec')).not.toContainText('*')
+		await expect(merchantPage.getByTestId('product-tab-category')).toContainText('*')
+		await expect(merchantPage.getByTestId('product-tab-images')).toContainText('*')
+		await expect(merchantPage.getByTestId('product-tab-shipping')).toContainText('*')
+	})
+
+	test('cannot click forward to later tabs when earlier required tabs are incomplete', async ({ merchantPage }) => {
+		await merchantPage.goto('/dashboard/products/products/new')
+		await waitForProductForm(merchantPage)
+
+		await merchantPage.getByRole('tab', { name: 'Images' }).click()
+
+		await expect(merchantPage.getByText('Complete Name before moving to Images').first()).toBeVisible({ timeout: 5_000 })
+		await expect(merchantPage.getByTestId('product-name-input')).toBeVisible()
+		await expect(merchantPage.getByTestId('image-url-input')).not.toBeVisible()
+	})
+
+	test('missing required fields block progression on detail and category steps', async ({ merchantPage }) => {
+		await merchantPage.goto('/dashboard/products/products/new')
+		await waitForProductForm(merchantPage)
+
+		await merchantPage.getByTestId('product-name-input').fill('Step Blocking Product')
+		await merchantPage.getByTestId('product-description-input').fill('Step validation should block progress')
+		await merchantPage.getByTestId('product-next-button').click()
+
+		await expect(merchantPage.getByTestId('product-next-button')).toBeDisabled()
+		await merchantPage.getByLabel(/price/i).first().fill('10000')
+		await expect(merchantPage.getByTestId('product-next-button')).toBeDisabled()
+		await merchantPage
+			.getByTestId('product-quantity-input')
+			.or(merchantPage.getByLabel(/quantity/i))
+			.fill('5')
+		await expect(merchantPage.getByTestId('product-next-button')).toBeEnabled()
+
+		await merchantPage.getByTestId('product-next-button').click()
+		await merchantPage.getByTestId('product-next-button').click()
+
+		await expect(merchantPage.getByTestId('product-next-button')).toBeDisabled()
+		await merchantPage.getByTestId('product-main-category-select').click()
+		await merchantPage.getByTestId('main-category-bitcoin').click()
+		await expect(merchantPage.getByTestId('product-next-button')).toBeEnabled()
+	})
+
+	test('backward navigation still works', async ({ merchantPage }) => {
+		await merchantPage.goto('/dashboard/products/products/new')
+		await waitForProductForm(merchantPage)
+
+		await merchantPage.getByTestId('product-name-input').fill('Back Nav Product')
+		await merchantPage.getByTestId('product-description-input').fill('Back navigation should still work')
+		await merchantPage.getByTestId('product-next-button').click()
+
+		await expect(merchantPage.getByLabel(/price/i).first()).toBeVisible({ timeout: 5_000 })
+
+		await merchantPage.getByTestId('product-back-button').click()
+
+		await expect(merchantPage.getByTestId('product-name-input')).toBeVisible()
+		await expect(merchantPage.getByTestId('product-name-input')).toHaveValue('Back Nav Product')
+	})
+
+	test('publish remains disabled until the full required set is valid', async ({ merchantPage }) => {
+		await merchantPage.goto('/dashboard/products/products/new')
+		await waitForProductForm(merchantPage)
+
+		await fillRequiredStepsUntilShipping(merchantPage, 'Publish Guard Product')
+
+		const publishButton = merchantPage.getByTestId('product-publish-button')
+		await expect(publishButton).toBeDisabled()
+
+		const addButton = merchantPage.getByRole('button', { name: /^add$/i }).first()
+		await expect(addButton).toBeVisible({ timeout: 5_000 })
+		await addButton.click()
+
+		await expect(publishButton).toBeEnabled({ timeout: 5_000 })
+	})
+
+	test('last step uses final action semantics instead of wrapping to the first tab', async ({ merchantPage }) => {
+		await merchantPage.goto('/dashboard/products/products/new')
+		await waitForProductForm(merchantPage)
+		await fillRequiredStepsUntilShipping(merchantPage, 'Terminal Step Product')
+
+		await expect(merchantPage.getByTestId('product-tab-shipping')).toHaveAttribute('data-state', 'active')
+		await expect(merchantPage.getByTestId('product-next-button')).not.toBeVisible()
+		await expect(merchantPage.getByTestId('product-publish-button')).toBeVisible()
+		await expect(merchantPage.getByTestId('product-name-input')).not.toBeVisible()
+	})
+
+	test('images tab uses a single effective scroll container', async ({ merchantPage }) => {
+		await merchantPage.goto('/dashboard/products/products/new')
+		await waitForProductForm(merchantPage)
+		await fillRequiredStepsUntilShipping(merchantPage, 'Images Scroll Product')
+
+		await merchantPage.getByTestId('product-back-button').click()
+		await expect(merchantPage.getByTestId('product-images-tab-panel')).toBeVisible()
+
+		const scrollInfo = await merchantPage.evaluate(() => {
+			const panel = document.querySelector('[data-testid="product-images-tab-panel"]') as HTMLElement | null
+			const scrollContainer = document.querySelector('[data-testid="product-form-scroll-container"]') as HTMLElement | null
+
+			if (!panel || !scrollContainer) {
+				return null
+			}
+
+			const nestedScrollableDescendants = Array.from(panel.querySelectorAll<HTMLElement>('*')).filter((element) => {
+				const style = window.getComputedStyle(element)
+				return ['auto', 'scroll'].includes(style.overflowY) && element.scrollHeight > element.clientHeight
+			})
+
+			return {
+				outerOverflowY: window.getComputedStyle(scrollContainer).overflowY,
+				nestedScrollableCount: nestedScrollableDescendants.length,
+			}
+		})
+
+		expect(scrollInfo).not.toBeNull()
+		expect(scrollInfo?.outerOverflowY).toBe('auto')
+		expect(scrollInfo?.nestedScrollableCount).toBe(0)
+	})
+
 	test('can create a new product', async ({ merchantPage }) => {
 		await merchantPage.goto('/dashboard/products/products/new')
 
-		// Wait for the product form's shipping query to complete before interacting.
-		// This prevents a race condition where the form briefly shows the Name tab,
-		// then redirects to Shipping tab once the query confirms shipping state.
+		// Wait for product-form initialization to settle before interacting.
 		const productForm = merchantPage.locator('[data-testid="product-form"][data-shipping-loaded="true"]')
 		await expect(productForm).toBeVisible({ timeout: 15_000 })
 
