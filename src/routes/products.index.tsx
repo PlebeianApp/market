@@ -224,20 +224,18 @@ function ProductsRoute() {
 	// Render homepage hero content
 	const renderHomepageHero = () => (
 		<div className="z-20 relative flex flex-col justify-center items-center lg:col-span-2 mt-4 lg:mt-0 text-white text-center">
-			{/* Button in same position as product image */}
-			<div className="flex justify-center items-center mb-2 h-40 lg:h-48">
-				<Button variant="secondary" size="lg" onClick={handleStartSelling}>
+			<div className="flex justify-center items-center h-24 lg:h-32">
+				<h1 className="font-theylive text-4xl lg:text-5xl transition-opacity duration-500">Browse Products</h1>
+			</div>
+
+			<div className="flex flex-col gap-6 items-center">
+				<Button variant="secondary" size="lg" onClick={handleStartSelling} className="bg-focus rounded hover:bg-focus-foreground-hover">
 					<span className="flex items-center gap-2">
-						<span className="size-6 i-nostr"></span>Start Selling
+						<span className="size-6 i-nostr" />
+						Start Selling
 					</span>
 				</Button>
-			</div>
 
-			<div className="flex justify-center items-center h-16 lg:h-20">
-				<h1 className="font-theylive text-2xl lg:text-4xl transition-opacity duration-500">Browse Products</h1>
-			</div>
-
-			<div className="flex flex-col gap-4">
 				{/* Pagination dots */}
 				{totalSlides > 1 && (
 					<div className="flex justify-center gap-2">
