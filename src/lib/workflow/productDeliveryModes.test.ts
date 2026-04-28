@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+	canonicalizeProductDeliveryService,
 	productDeliveryModeAllowsProductExtraCost,
 	productDeliveryModeRequiresShippingCost,
 	productDeliveryModeUsesCoverage,
@@ -46,5 +47,22 @@ describe('product delivery modes', () => {
 		expect(productDeliveryModeUsesCoverage('pickup')).toBe(false)
 		expect(productDeliveryModeUsesCoverage('digital')).toBe(false)
 		expect(productDeliveryModeUsesCoverage('physical')).toBe(true)
+	})
+
+	test('canonicalizes pickup aliases before persistence', () => {
+		expect(canonicalizeProductDeliveryService('local-pickup')).toBe('pickup')
+		expect(canonicalizeProductDeliveryService('store_collection')).toBe('pickup')
+	})
+
+	test('canonicalizes digital aliases before persistence', () => {
+		expect(canonicalizeProductDeliveryService('digital-delivery')).toBe('digital')
+		expect(canonicalizeProductDeliveryService('instant_download')).toBe('digital')
+	})
+
+	test('canonicalizes physical aliases before persistence', () => {
+		expect(canonicalizeProductDeliveryService('express-shipping')).toBe('express')
+		expect(canonicalizeProductDeliveryService('overnight-delivery')).toBe('overnight')
+		expect(canonicalizeProductDeliveryService('worldwide-standard')).toBe('standard')
+		expect(canonicalizeProductDeliveryService('carrier-rate')).toBe('standard')
 	})
 })

@@ -11,6 +11,7 @@ import { COUNTRIES_ISO, CURRENCIES, SHIPPING_TEMPLATES } from '@/lib/constants'
 import { uiStore } from '@/lib/stores/ui'
 import { useNDK } from '@/lib/stores/ndk'
 import {
+	canonicalizeProductDeliveryService,
 	getProductDeliveryModeLabel,
 	productDeliveryModeRequiresShippingCost,
 	productDeliveryModeUsesCoverage,
@@ -64,11 +65,13 @@ const DURATION_UNITS = [
 ] as const
 
 const normalizeShippingFormDataForDeliveryMode = (formData: ShippingFormData, defaultCurrency: string): ShippingFormData => {
-	const deliveryMode = resolveProductDeliveryMode(formData.service)
+	const service = canonicalizeProductDeliveryService(formData.service)
+	const deliveryMode = resolveProductDeliveryMode(service)
 
 	if (deliveryMode === 'digital') {
 		return {
 			...formData,
+			service,
 			price: '0',
 			currency: formData.currency || defaultCurrency,
 			countries: [],
@@ -80,13 +83,17 @@ const normalizeShippingFormDataForDeliveryMode = (formData: ShippingFormData, de
 
 		return {
 			...formData,
+			service,
 			price: '0',
 			currency: formData.currency || defaultCurrency,
 			countries: pickupCountry ? [pickupCountry] : formData.countries,
 		}
 	}
 
-	return formData
+	return {
+		...formData,
+		service,
+	}
 }
 
 interface ShippingOptionFormProps {

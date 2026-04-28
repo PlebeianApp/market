@@ -2,6 +2,8 @@ export const PRODUCT_DELIVERY_MODES = ['pickup', 'digital', 'physical'] as const
 
 export type ProductDeliveryMode = (typeof PRODUCT_DELIVERY_MODES)[number]
 
+export type CanonicalProductDeliveryService = 'standard' | 'express' | 'overnight' | 'pickup' | 'digital'
+
 export type ProductDeliveryModeInput =
 	| string
 	| null
@@ -35,6 +37,18 @@ export const resolveProductDeliveryMode = (input: ProductDeliveryModeInput): Pro
 	if (normalized.includes('pickup') || normalized.includes('pick up') || normalized.includes('collection')) return 'pickup'
 
 	return 'physical'
+}
+
+export const canonicalizeProductDeliveryService = (input: ProductDeliveryModeInput): CanonicalProductDeliveryService => {
+	const normalized = normalizeDeliveryModeInput(input)
+	const deliveryMode = resolveProductDeliveryMode(input)
+
+	if (deliveryMode === 'pickup') return 'pickup'
+	if (deliveryMode === 'digital') return 'digital'
+	if (normalized.includes('overnight')) return 'overnight'
+	if (normalized.includes('express')) return 'express'
+
+	return 'standard'
 }
 
 export const productDeliveryModeAllowsProductExtraCost = (mode: ProductDeliveryMode): boolean => mode === 'physical'
