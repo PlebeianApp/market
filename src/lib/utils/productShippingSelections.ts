@@ -1,4 +1,5 @@
 import type { RichShippingInfo } from '@/lib/stores/cart'
+import { shippingServiceDisallowsProductExtraCost } from '@/lib/workflow/productDeliveryModes'
 
 export type ProductShippingSelection = {
 	shippingRef: string
@@ -37,10 +38,6 @@ export const normalizeProductShippingExtraCost = (input: string | null | undefin
 	const sanitized = sanitizeProductShippingExtraCostInput(input ?? '')
 	if (!sanitized || sanitized === '.') return ''
 	return sanitized.endsWith('.') ? sanitized.slice(0, -1) : sanitized
-}
-
-export const shippingServiceDisallowsProductExtraCost = (service: string | null | undefined): boolean => {
-	return service === 'digital' || service === 'pickup'
 }
 
 export const normalizeProductShippingSelection = (input: ProductShippingSelectionInput): ProductShippingSelection | null => {

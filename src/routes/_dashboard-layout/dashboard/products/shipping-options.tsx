@@ -11,6 +11,12 @@ import { COUNTRIES_ISO, CURRENCIES, SHIPPING_TEMPLATES } from '@/lib/constants'
 import { uiStore } from '@/lib/stores/ui'
 import { useNDK } from '@/lib/stores/ndk'
 import {
+	getProductDeliveryModeLabel,
+	productDeliveryModeRequiresShippingCost,
+	productDeliveryModeUsesCoverage,
+	resolveProductDeliveryMode,
+} from '@/lib/workflow/productDeliveryModes'
+import {
 	useDeleteShippingOptionMutation,
 	usePublishShippingOptionMutation,
 	useUpdateShippingOptionMutation,
@@ -56,6 +62,32 @@ const DURATION_UNITS = [
 	{ value: 'W', label: 'Weeks' },
 	{ value: 'M', label: 'Months' },
 ] as const
+
+const normalizeShippingFormDataForDeliveryMode = (formData: ShippingFormData, defaultCurrency: string): ShippingFormData => {
+	const deliveryMode = resolveProductDeliveryMode(formData.service)
+
+	if (deliveryMode === 'digital') {
+		return {
+			...formData,
+			price: '0',
+			currency: formData.currency || defaultCurrency,
+			countries: [],
+		}
+	}
+
+	if (deliveryMode === 'pickup') {
+		const pickupCountry = formData.pickupAddress?.country || formData.countries[0]
+
+		return {
+			...formData,
+			price: '0',
+			currency: formData.currency || defaultCurrency,
+			countries: pickupCountry ? [pickupCountry] : formData.countries,
+		}
+	}
+
+	return formData
+}
 
 interface ShippingOptionFormProps {
 	shippingOption: NDKEvent | null
@@ -147,6 +179,9 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 			},
 		}
 	})
+	const deliveryMode = resolveProductDeliveryMode(formData.service)
+	const shouldShowShippingCost = productDeliveryModeRequiresShippingCost(deliveryMode)
+	const shouldShowCoverage = productDeliveryModeUsesCoverage(deliveryMode)
 
 	// Get user on mount
 	useEffect(() => {
@@ -175,38 +210,37 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 		setIsWorldwide(false)
 	}, [])
 
-	const validateForm = (): boolean => {
+	const validateForm = (draft: ShippingFormData = formData): boolean => {
 		const errors: Record<string, string> = {}
+		const draftDeliveryMode = resolveProductDeliveryMode(draft.service)
 
-		if (!formData.title.trim()) {
+		if (!draft.title.trim()) {
 			errors.title = 'Title is required'
 		}
-		if (!formData.description.trim()) {
+		if (!draft.description.trim()) {
 			errors.description = 'Description is required'
 		}
 
-		// Price is not required for digital delivery (always free)
-		if (formData.service !== 'digital') {
-			if (!formData.price.trim()) {
+		if (productDeliveryModeRequiresShippingCost(draftDeliveryMode)) {
+			if (!draft.price.trim()) {
 				errors.price = 'Price is required'
-			} else if (isNaN(Number(formData.price))) {
+			} else if (isNaN(Number(draft.price)) || Number(draft.price) < 0) {
 				errors.price = 'Price must be a valid number'
 			}
-			if (!formData.currency.trim()) {
+			if (!draft.currency.trim()) {
 				errors.currency = 'Currency is required'
 			}
 		}
 
-		// Countries are only required for non-pickup, non-digital, and non-worldwide services
-		if (formData.service !== 'pickup' && formData.service !== 'digital' && !isWorldwide && !formData.countries.length) {
+		if (productDeliveryModeUsesCoverage(draftDeliveryMode) && !isWorldwide && !draft.countries.length) {
 			errors.countries = 'At least one country is required'
 		}
 
-		if (formData.service === 'pickup') {
-			if (!formData.pickupAddress?.street?.trim()) {
+		if (draftDeliveryMode === 'pickup') {
+			if (!draft.pickupAddress?.street?.trim()) {
 				errors.pickupStreet = 'Street address is required for local pickup'
 			}
-			if (!formData.pickupAddress?.city?.trim()) {
+			if (!draft.pickupAddress?.city?.trim()) {
 				errors.pickupCity = 'City is required for local pickup'
 			}
 		}
@@ -218,12 +252,15 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
 
-		if (!validateForm()) {
+		const normalizedFormData = normalizeShippingFormDataForDeliveryMode(formData, uiStore.state.selectedCurrency)
+
+		if (!validateForm(normalizedFormData)) {
 			toast.error('Please fill in all required fields')
 			return
 		}
 
 		setIsSubmitting(true)
+		setFormData(normalizedFormData)
 
 		try {
 			if (isEditing) {
@@ -233,11 +270,11 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 				}
 				await updateMutation.mutateAsync({
 					shippingDTag: shippingId,
-					formData,
+					formData: normalizedFormData,
 				})
 				toast.success('Shipping option updated successfully')
 			} else {
-				await publishMutation.mutateAsync(formData)
+				await publishMutation.mutateAsync(normalizedFormData)
 				toast.success('Shipping option created successfully')
 			}
 
@@ -272,22 +309,16 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 	}
 
 	const ServiceIcon = ({ service }: { service: string }) => {
-		switch (service) {
-			case 'express':
-			case 'overnight':
-				return <TruckIcon className="w-5 h-5 text-orange-500" />
+		const mode = resolveProductDeliveryMode(service)
+
+		switch (mode) {
 			case 'pickup':
 				return <PackageIcon className="w-5 h-5 text-blue-500" />
 			case 'digital':
 				return <DownloadIcon className="w-5 h-5 text-purple-500" />
-			default:
-				return <TruckIcon className="w-5 h-5" />
+			case 'physical':
+				return <TruckIcon className={`w-5 h-5 ${service === 'express' || service === 'overnight' ? 'text-orange-500' : ''}`} />
 		}
-	}
-
-	const getServiceLabel = (service: string) => {
-		const serviceType = SERVICE_TYPES.find((s) => s.value === service)
-		return serviceType?.label || service
 	}
 
 	const getCountryName = (code: string) => {
@@ -295,21 +326,41 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 		return country?.name || code
 	}
 
+	const getPickupAddressSummary = () => {
+		const address = formData.pickupAddress
+		if (!address) return 'Pickup address not set'
+
+		return (
+			[address.street, address.city, address.state, address.postalCode, address.country].filter(Boolean).join(', ') ||
+			'Pickup address not set'
+		)
+	}
+
+	const getCoverageSummary = () => {
+		if (isWorldwide || formData.countries.length === 0) return 'Worldwide'
+		if (formData.countries.length === 1) return getCountryName(formData.countries[0])
+		return `${formData.countries.length} countries`
+	}
+
+	const getShippingOptionSummary = () => {
+		if (deliveryMode === 'digital') return 'Digital delivery • No shipping cost'
+		if (deliveryMode === 'pickup') return `Local pickup • ${getPickupAddressSummary()}`
+		return `${formData.price || '0'} ${formData.currency} • ${getCoverageSummary()} • Physical shipping`
+	}
+
+	const getModeDescription = () => {
+		if (deliveryMode === 'digital') return 'Digital delivery keeps shipping cost and country coverage out of this option.'
+		if (deliveryMode === 'pickup') return 'Local pickup uses pickup address and instructions. Shipping cost is not configured here.'
+		return 'Physical shipping uses base cost, coverage, and optional package constraints.'
+	}
+
 	const triggerContent = isEditing ? (
 		<div className="min-w-0 flex-1">
 			<div className="font-medium truncate">{formData.title}</div>
 			{/* Stack details vertically on mobile, inline on desktop */}
 			<div className="text-sm text-muted-foreground">
-				<div className="hidden md:block truncate">
-					{formData.price} {formData.currency} • {formData.countries.map(getCountryName).join(', ')} • {getServiceLabel(formData.service)}
-				</div>
-				<div className="md:hidden space-y-1">
-					<div className="truncate">
-						{formData.price} {formData.currency}
-					</div>
-					<div className="truncate">{formData.countries.map(getCountryName).join(', ')}</div>
-					<div className="truncate">{getServiceLabel(formData.service)}</div>
-				</div>
+				<div className="hidden md:block truncate">{getShippingOptionSummary()}</div>
+				<div className="md:hidden truncate">{getShippingOptionSummary()}</div>
 			</div>
 		</div>
 	) : (
@@ -344,9 +395,7 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 									onValueChange={(templateName) => {
 										const template = SHIPPING_TEMPLATES.find((t) => t.name === templateName)
 										if (template) {
-											// Check if template is worldwide (countries is null)
 											const isWorldwideTemplate = template.countries === null
-											setIsWorldwide(isWorldwideTemplate)
 
 											// Determine service type based on template name
 											let serviceType: 'standard' | 'express' | 'overnight' | 'pickup' | 'digital' = 'standard'
@@ -359,14 +408,16 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 											} else if (template.name.toLowerCase().includes('overnight')) {
 												serviceType = 'overnight'
 											}
+											const nextDeliveryMode = resolveProductDeliveryMode(serviceType)
 
 											setFormData((prev) => ({
 												...prev,
 												title: template.name,
-												price: template.cost,
-												countries: template.countries || [],
+												price: productDeliveryModeRequiresShippingCost(nextDeliveryMode) ? template.cost : '0',
+												countries: productDeliveryModeUsesCoverage(nextDeliveryMode) ? template.countries || [] : [],
 												service: serviceType,
 											}))
+											setIsWorldwide(nextDeliveryMode === 'digital' || (nextDeliveryMode === 'physical' && isWorldwideTemplate))
 										}
 									}}
 								>
@@ -422,23 +473,22 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 									value={formData.service}
 									onValueChange={(value: any) => {
 										setFormData((prev) => {
+											const nextDeliveryMode = resolveProductDeliveryMode(value)
 											const newFormData = { ...prev, service: value }
-											// Auto-populate country and price for pickup services
-											if (value === 'pickup') {
-												// Set price to 0 for pickup services
+
+											if (nextDeliveryMode === 'pickup') {
 												newFormData.price = '0'
-												// Auto-populate country from pickup address if available
 												if (prev.pickupAddress?.country && !prev.countries.includes(prev.pickupAddress.country)) {
 													newFormData.countries = [prev.pickupAddress.country]
 												} else if (!prev.countries.length) {
-													// Default to USA if no country is set
 													newFormData.countries = ['USA']
 												}
-											} else if (value === 'digital') {
-												// Set price to 0 and clear countries for digital delivery
+											} else if (nextDeliveryMode === 'digital') {
 												newFormData.price = '0'
 												newFormData.countries = []
 												setIsWorldwide(true)
+											} else {
+												setIsWorldwide(false)
 											}
 											return newFormData
 										})
@@ -458,15 +508,19 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 										))}
 									</SelectContent>
 								</Select>
+								<p className="text-sm text-muted-foreground">
+									{getProductDeliveryModeLabel(deliveryMode)}: {getModeDescription()}
+								</p>
 							</div>
 
-							{/* Price - Hide for digital delivery (always free) */}
-							{formData.service !== 'digital' && (
+							{shouldShowShippingCost && (
 								<div className="space-y-2">
 									<Label htmlFor="price" className="font-medium">
 										Base Cost *
 									</Label>
-									<p className="text-sm text-muted-foreground">Can be adjusted per product</p>
+									<p className="text-sm text-muted-foreground">
+										Physical shipping base cost. Product-specific extra cost is configured per product.
+									</p>
 									<div className="flex gap-2">
 										<Input
 											id="price"
@@ -517,11 +571,10 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 								</div>
 							)}
 
-							{/* Countries - Hide for pickup and digital delivery services */}
-							{formData.service !== 'pickup' && formData.service !== 'digital' && (
+							{shouldShowCoverage && (
 								<div className="space-y-2">
 									<Label htmlFor="countries" className="font-medium">
-										Countries *
+										Physical Coverage *
 									</Label>
 
 									{/* Worldwide Checkbox */}
@@ -616,7 +669,11 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 
 						<div className="space-y-2">
 							<Label htmlFor="description" className="font-medium">
-								Description *
+								{deliveryMode === 'pickup'
+									? 'Pickup Instructions *'
+									: deliveryMode === 'digital'
+										? 'Digital Fulfillment Instructions *'
+										: 'Description *'}
 							</Label>
 							<Textarea
 								id="description"
@@ -628,7 +685,13 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 										setFieldErrors((prev) => ({ ...prev, description: '' }))
 									}
 								}}
-								placeholder="Describe your shipping option..."
+								placeholder={
+									deliveryMode === 'pickup'
+										? 'Describe pickup hours, handoff details, or what the buyer should bring.'
+										: deliveryMode === 'digital'
+											? 'Describe how the buyer will receive or access the digital item after purchase.'
+											: 'Describe your physical shipping option...'
+								}
 								rows={3}
 								className={fieldErrors.description ? 'border-red-500' : ''}
 							/>
@@ -640,9 +703,18 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 							)}
 						</div>
 
-						{/* Pickup Address - Only show for pickup service */}
-						{formData.service === 'pickup' && (
+						{deliveryMode === 'digital' && (
+							<div className="rounded-md border p-3 text-sm text-muted-foreground">
+								Digital delivery has no shipping cost and no country coverage controls. Use the instructions above to describe post-purchase
+								fulfillment.
+							</div>
+						)}
+
+						{deliveryMode === 'pickup' && (
 							<div className="space-y-4">
+								<div className="rounded-md border p-3 text-sm text-muted-foreground">
+									Local pickup has no shipping cost. The pickup address and instructions are used for buyer handoff.
+								</div>
 								<Label className="font-medium text-base">Pickup Address *</Label>
 								<div className="grid grid-cols-1 gap-4">
 									<div className="space-y-2">
@@ -765,8 +837,11 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 																country: e.target.value,
 															},
 														}
-														// Auto-populate countries for pickup services
-														if (prev.service === 'pickup' && e.target.value && !prev.countries.includes(e.target.value)) {
+														if (
+															resolveProductDeliveryMode(prev.service) === 'pickup' &&
+															e.target.value &&
+															!prev.countries.includes(e.target.value)
+														) {
 															newFormData.countries = [e.target.value]
 														}
 														return newFormData
@@ -781,342 +856,343 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 						)}
 					</div>
 
-					{/* Optional Details */}
-					<Collapsible open={isOptionalDetailsOpen} onOpenChange={setIsOptionalDetailsOpen}>
-						<CollapsibleTrigger asChild>
-							<div className="group flex w-full justify-between items-center cursor-pointer">
-								<h3 className="text-lg font-semibold">Optional Details</h3>
-								<ChevronLeftIcon className="w-4 h-4 transition-transform duration-200 group-data-[state=open]:-rotate-90" />
-							</div>
-						</CollapsibleTrigger>
-						<CollapsibleContent>
-							<div className="space-y-4 pt-4">
-								<div className="space-y-2">
-									<Label htmlFor="carrier" className="font-medium">
-										Carrier
-									</Label>
-									<Input
-										id="carrier"
-										value={formData.carrier || ''}
-										onChange={(e) => setFormData((prev) => ({ ...prev, carrier: e.target.value }))}
-										placeholder="e.g., FedEx, UPS, DHL"
-									/>
+					{deliveryMode === 'physical' && (
+						<Collapsible open={isOptionalDetailsOpen} onOpenChange={setIsOptionalDetailsOpen}>
+							<CollapsibleTrigger asChild>
+								<div className="group flex w-full justify-between items-center cursor-pointer">
+									<h3 className="text-lg font-semibold">Physical Shipping Details</h3>
+									<ChevronLeftIcon className="w-4 h-4 transition-transform duration-200 group-data-[state=open]:-rotate-90" />
 								</div>
-
-								<div className="space-y-2">
-									<Label htmlFor="location" className="font-medium">
-										Location
-									</Label>
-									<Input
-										id="location"
-										value={formData.location || ''}
-										onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
-										placeholder="e.g., 123 Main St, Downtown, FL"
-									/>
-								</div>
-
-								<div className="space-y-2">
-									<Label htmlFor="region" className="font-medium">
-										Region
-									</Label>
-									<Input
-										id="region"
-										value={formData.region || ''}
-										onChange={(e) => setFormData((prev) => ({ ...prev, region: e.target.value }))}
-										placeholder="e.g., US-FL (ISO 3166-2 format)"
-									/>
-								</div>
-
-								<div className="space-y-2">
-									<Label htmlFor="geohash" className="font-medium">
-										Geohash
-									</Label>
-									<Input
-										id="geohash"
-										value={formData.geohash || ''}
-										onChange={(e) => setFormData((prev) => ({ ...prev, geohash: e.target.value }))}
-										placeholder="e.g., dhwm9c4ws (precise location hash)"
-									/>
-								</div>
-
-								{/* Duration */}
-								<div className="space-y-2">
-									<Label className="font-medium">Delivery Duration</Label>
-									<div className="flex flex-col gap-2">
-										<Select
-											value={formData.duration?.unit || 'D'}
-											onValueChange={(value: any) =>
-												setFormData((prev) => ({
-													...prev,
-													duration: {
-														...prev.duration,
-														min: prev.duration?.min || '1',
-														max: prev.duration?.max || '1',
-														unit: value,
-													},
-												}))
-											}
-										>
-											<SelectTrigger className="w-full">
-												<SelectValue />
-											</SelectTrigger>
-											<SelectContent>
-												{DURATION_UNITS.map((unit) => (
-													<SelectItem key={unit.value} value={unit.value}>
-														{unit.label}
-													</SelectItem>
-												))}
-											</SelectContent>
-										</Select>
+							</CollapsibleTrigger>
+							<CollapsibleContent>
+								<div className="space-y-4 pt-4">
+									<div className="space-y-2">
+										<Label htmlFor="carrier" className="font-medium">
+											Carrier
+										</Label>
 										<Input
-											type="number"
-											min="1"
-											value={formData.duration?.min || ''}
-											onChange={(e) =>
-												setFormData((prev) => ({
-													...prev,
-													duration: {
-														...prev.duration,
-														min: e.target.value,
-														max: prev.duration?.max || e.target.value,
-														unit: prev.duration?.unit || 'D',
-													},
-												}))
-											}
-											placeholder="Min"
-											className="w-full"
-										/>
-										<Input
-											type="number"
-											min="1"
-											value={formData.duration?.max || ''}
-											onChange={(e) =>
-												setFormData((prev) => ({
-													...prev,
-													duration: {
-														...prev.duration,
-														min: prev.duration?.min || '1',
-														max: e.target.value,
-														unit: prev.duration?.unit || 'D',
-													},
-												}))
-											}
-											placeholder="Max"
-											className="w-full"
+											id="carrier"
+											value={formData.carrier || ''}
+											onChange={(e) => setFormData((prev) => ({ ...prev, carrier: e.target.value }))}
+											placeholder="e.g., FedEx, UPS, DHL"
 										/>
 									</div>
-								</div>
 
-								{/* Weight Limits */}
-								<div className="space-y-2">
-									<Label className="font-medium">Weight Limits</Label>
-									<div className="space-y-4">
-										<div className="flex gap-2 items-center">
-											<Input
-												type="number"
-												step="0.1"
-												min="0"
-												value={formData.weightLimits?.min?.value || ''}
-												onChange={(e) =>
-													setFormData((prev) => ({
-														...prev,
-														weightLimits: {
-															...prev.weightLimits,
-															min: {
-																value: e.target.value,
-																unit: prev.weightLimits?.min?.unit || 'kg',
-															},
-														},
-													}))
-												}
-												placeholder="Min e.g. 0.0"
-												className="flex-1"
-											/>
+									<div className="space-y-2">
+										<Label htmlFor="location" className="font-medium">
+											Location
+										</Label>
+										<Input
+											id="location"
+											value={formData.location || ''}
+											onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
+											placeholder="e.g., 123 Main St, Downtown, FL"
+										/>
+									</div>
+
+									<div className="space-y-2">
+										<Label htmlFor="region" className="font-medium">
+											Region
+										</Label>
+										<Input
+											id="region"
+											value={formData.region || ''}
+											onChange={(e) => setFormData((prev) => ({ ...prev, region: e.target.value }))}
+											placeholder="e.g., US-FL (ISO 3166-2 format)"
+										/>
+									</div>
+
+									<div className="space-y-2">
+										<Label htmlFor="geohash" className="font-medium">
+											Geohash
+										</Label>
+										<Input
+											id="geohash"
+											value={formData.geohash || ''}
+											onChange={(e) => setFormData((prev) => ({ ...prev, geohash: e.target.value }))}
+											placeholder="e.g., dhwm9c4ws (precise location hash)"
+										/>
+									</div>
+
+									{/* Duration */}
+									<div className="space-y-2">
+										<Label className="font-medium">Delivery Duration</Label>
+										<div className="flex flex-col gap-2">
 											<Select
-												value={formData.weightLimits?.min?.unit || 'kg'}
-												onValueChange={(value) =>
+												value={formData.duration?.unit || 'D'}
+												onValueChange={(value: any) =>
 													setFormData((prev) => ({
 														...prev,
-														weightLimits: {
-															...prev.weightLimits,
-															min: {
-																value: prev.weightLimits?.min?.value || '0',
-																unit: value,
-															},
+														duration: {
+															...prev.duration,
+															min: prev.duration?.min || '1',
+															max: prev.duration?.max || '1',
+															unit: value,
 														},
 													}))
 												}
 											>
-												<SelectTrigger className="w-20">
+												<SelectTrigger className="w-full">
 													<SelectValue />
 												</SelectTrigger>
 												<SelectContent>
-													{WEIGHT_UNITS.map((unit) => (
-														<SelectItem key={unit} value={unit}>
-															{unit}
+													{DURATION_UNITS.map((unit) => (
+														<SelectItem key={unit.value} value={unit.value}>
+															{unit.label}
 														</SelectItem>
 													))}
 												</SelectContent>
 											</Select>
-										</div>
-
-										<div className="flex gap-2 items-center">
 											<Input
 												type="number"
-												step="0.1"
-												min="0"
-												value={formData.weightLimits?.max?.value || ''}
+												min="1"
+												value={formData.duration?.min || ''}
 												onChange={(e) =>
 													setFormData((prev) => ({
 														...prev,
-														weightLimits: {
-															...prev.weightLimits,
-															max: {
-																value: e.target.value,
-																unit: prev.weightLimits?.max?.unit || 'kg',
-															},
+														duration: {
+															...prev.duration,
+															min: e.target.value,
+															max: prev.duration?.max || e.target.value,
+															unit: prev.duration?.unit || 'D',
 														},
 													}))
 												}
-												placeholder="Max e.g. 0.0"
-												className="flex-1"
+												placeholder="Min"
+												className="w-full"
 											/>
-											<Select
-												value={formData.weightLimits?.max?.unit || 'kg'}
-												onValueChange={(value) =>
+											<Input
+												type="number"
+												min="1"
+												value={formData.duration?.max || ''}
+												onChange={(e) =>
 													setFormData((prev) => ({
 														...prev,
-														weightLimits: {
-															...prev.weightLimits,
-															max: {
-																value: prev.weightLimits?.max?.value || '0',
-																unit: value,
-															},
+														duration: {
+															...prev.duration,
+															min: prev.duration?.min || '1',
+															max: e.target.value,
+															unit: prev.duration?.unit || 'D',
 														},
 													}))
 												}
-											>
-												<SelectTrigger className="w-20">
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent>
-													{WEIGHT_UNITS.map((unit) => (
-														<SelectItem key={unit} value={unit}>
-															{unit}
-														</SelectItem>
-													))}
-												</SelectContent>
-											</Select>
+												placeholder="Max"
+												className="w-full"
+											/>
 										</div>
-										{fieldErrors.price && (
-											<div className="flex items-center gap-1 text-sm text-red-600">
-												<AlertCircleIcon className="h-4 w-4" />
-												{fieldErrors.price}
+									</div>
+
+									{/* Weight Limits */}
+									<div className="space-y-2">
+										<Label className="font-medium">Weight Limits</Label>
+										<div className="space-y-4">
+											<div className="flex gap-2 items-center">
+												<Input
+													type="number"
+													step="0.1"
+													min="0"
+													value={formData.weightLimits?.min?.value || ''}
+													onChange={(e) =>
+														setFormData((prev) => ({
+															...prev,
+															weightLimits: {
+																...prev.weightLimits,
+																min: {
+																	value: e.target.value,
+																	unit: prev.weightLimits?.min?.unit || 'kg',
+																},
+															},
+														}))
+													}
+													placeholder="Min e.g. 0.0"
+													className="flex-1"
+												/>
+												<Select
+													value={formData.weightLimits?.min?.unit || 'kg'}
+													onValueChange={(value) =>
+														setFormData((prev) => ({
+															...prev,
+															weightLimits: {
+																...prev.weightLimits,
+																min: {
+																	value: prev.weightLimits?.min?.value || '0',
+																	unit: value,
+																},
+															},
+														}))
+													}
+												>
+													<SelectTrigger className="w-20">
+														<SelectValue />
+													</SelectTrigger>
+													<SelectContent>
+														{WEIGHT_UNITS.map((unit) => (
+															<SelectItem key={unit} value={unit}>
+																{unit}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
 											</div>
-										)}
-									</div>
-								</div>
 
-								{/* Dimension Limits (LxWxH) */}
-								<div className="space-y-2">
-									<Label className="font-medium">Dimension Limits (LxWxH)</Label>
-									<div className="space-y-4">
-										<div className="flex gap-2 items-center">
-											<Input
-												value={formData.dimensionLimits?.min?.value || ''}
-												onChange={(e) =>
-													setFormData((prev) => ({
-														...prev,
-														dimensionLimits: {
-															...prev.dimensionLimits,
-															min: {
-																value: e.target.value,
-																unit: prev.dimensionLimits?.min?.unit || 'cm',
+											<div className="flex gap-2 items-center">
+												<Input
+													type="number"
+													step="0.1"
+													min="0"
+													value={formData.weightLimits?.max?.value || ''}
+													onChange={(e) =>
+														setFormData((prev) => ({
+															...prev,
+															weightLimits: {
+																...prev.weightLimits,
+																max: {
+																	value: e.target.value,
+																	unit: prev.weightLimits?.max?.unit || 'kg',
+																},
 															},
-														},
-													}))
-												}
-												placeholder="Min e.g. 10x10x10"
-												className="flex-1"
-											/>
-											<Select
-												value={formData.dimensionLimits?.min?.unit || 'cm'}
-												onValueChange={(value) =>
-													setFormData((prev) => ({
-														...prev,
-														dimensionLimits: {
-															...prev.dimensionLimits,
-															min: {
-																value: prev.dimensionLimits?.min?.value || '',
-																unit: value,
+														}))
+													}
+													placeholder="Max e.g. 0.0"
+													className="flex-1"
+												/>
+												<Select
+													value={formData.weightLimits?.max?.unit || 'kg'}
+													onValueChange={(value) =>
+														setFormData((prev) => ({
+															...prev,
+															weightLimits: {
+																...prev.weightLimits,
+																max: {
+																	value: prev.weightLimits?.max?.value || '0',
+																	unit: value,
+																},
 															},
-														},
-													}))
-												}
-											>
-												<SelectTrigger className="w-20">
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent>
-													{DIMENSION_UNITS.map((unit) => (
-														<SelectItem key={unit} value={unit}>
-															{unit}
-														</SelectItem>
-													))}
-												</SelectContent>
-											</Select>
-										</div>
-
-										<div className="flex gap-2 items-center">
-											<Input
-												value={formData.dimensionLimits?.max?.value || ''}
-												onChange={(e) =>
-													setFormData((prev) => ({
-														...prev,
-														dimensionLimits: {
-															...prev.dimensionLimits,
-															max: {
-																value: e.target.value,
-																unit: prev.dimensionLimits?.max?.unit || 'cm',
-															},
-														},
-													}))
-												}
-												placeholder="Max e.g. 100x100x100"
-												className="flex-1"
-											/>
-											<Select
-												value={formData.dimensionLimits?.max?.unit || 'cm'}
-												onValueChange={(value) =>
-													setFormData((prev) => ({
-														...prev,
-														dimensionLimits: {
-															...prev.dimensionLimits,
-															max: {
-																value: prev.dimensionLimits?.max?.value || '',
-																unit: value,
-															},
-														},
-													}))
-												}
-											>
-												<SelectTrigger className="w-20">
-													<SelectValue />
-												</SelectTrigger>
-												<SelectContent>
-													{DIMENSION_UNITS.map((unit) => (
-														<SelectItem key={unit} value={unit}>
-															{unit}
-														</SelectItem>
-													))}
-												</SelectContent>
-											</Select>
+														}))
+													}
+												>
+													<SelectTrigger className="w-20">
+														<SelectValue />
+													</SelectTrigger>
+													<SelectContent>
+														{WEIGHT_UNITS.map((unit) => (
+															<SelectItem key={unit} value={unit}>
+																{unit}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+											</div>
+											{fieldErrors.price && (
+												<div className="flex items-center gap-1 text-sm text-red-600">
+													<AlertCircleIcon className="h-4 w-4" />
+													{fieldErrors.price}
+												</div>
+											)}
 										</div>
 									</div>
+
+									{/* Dimension Limits (LxWxH) */}
+									<div className="space-y-2">
+										<Label className="font-medium">Dimension Limits (LxWxH)</Label>
+										<div className="space-y-4">
+											<div className="flex gap-2 items-center">
+												<Input
+													value={formData.dimensionLimits?.min?.value || ''}
+													onChange={(e) =>
+														setFormData((prev) => ({
+															...prev,
+															dimensionLimits: {
+																...prev.dimensionLimits,
+																min: {
+																	value: e.target.value,
+																	unit: prev.dimensionLimits?.min?.unit || 'cm',
+																},
+															},
+														}))
+													}
+													placeholder="Min e.g. 10x10x10"
+													className="flex-1"
+												/>
+												<Select
+													value={formData.dimensionLimits?.min?.unit || 'cm'}
+													onValueChange={(value) =>
+														setFormData((prev) => ({
+															...prev,
+															dimensionLimits: {
+																...prev.dimensionLimits,
+																min: {
+																	value: prev.dimensionLimits?.min?.value || '',
+																	unit: value,
+																},
+															},
+														}))
+													}
+												>
+													<SelectTrigger className="w-20">
+														<SelectValue />
+													</SelectTrigger>
+													<SelectContent>
+														{DIMENSION_UNITS.map((unit) => (
+															<SelectItem key={unit} value={unit}>
+																{unit}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+											</div>
+
+											<div className="flex gap-2 items-center">
+												<Input
+													value={formData.dimensionLimits?.max?.value || ''}
+													onChange={(e) =>
+														setFormData((prev) => ({
+															...prev,
+															dimensionLimits: {
+																...prev.dimensionLimits,
+																max: {
+																	value: e.target.value,
+																	unit: prev.dimensionLimits?.max?.unit || 'cm',
+																},
+															},
+														}))
+													}
+													placeholder="Max e.g. 100x100x100"
+													className="flex-1"
+												/>
+												<Select
+													value={formData.dimensionLimits?.max?.unit || 'cm'}
+													onValueChange={(value) =>
+														setFormData((prev) => ({
+															...prev,
+															dimensionLimits: {
+																...prev.dimensionLimits,
+																max: {
+																	value: prev.dimensionLimits?.max?.value || '',
+																	unit: value,
+																},
+															},
+														}))
+													}
+												>
+													<SelectTrigger className="w-20">
+														<SelectValue />
+													</SelectTrigger>
+													<SelectContent>
+														{DIMENSION_UNITS.map((unit) => (
+															<SelectItem key={unit} value={unit}>
+																{unit}
+															</SelectItem>
+														))}
+													</SelectContent>
+												</Select>
+											</div>
+										</div>
+									</div>
 								</div>
-							</div>
-						</CollapsibleContent>
-					</Collapsible>
+							</CollapsibleContent>
+						</Collapsible>
+					)}
 
 					{/* Actions */}
 					<div className="flex justify-end gap-2 pt-4">

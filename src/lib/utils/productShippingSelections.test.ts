@@ -54,14 +54,14 @@ describe('product shipping selection normalization', () => {
 			normalizeProductShippingSelections([
 				{
 					shippingRef: '30406:merchant:digital',
-					service: 'digital',
+					service: 'digital-delivery',
 					extraCost: '12.50',
 				},
 			]),
 		).toEqual([
 			{
 				shippingRef: '30406:merchant:digital',
-				service: 'digital',
+				service: 'digital-delivery',
 				extraCost: '',
 			},
 		])
@@ -90,14 +90,14 @@ describe('product shipping selection normalization', () => {
 			normalizeProductShippingSelections([
 				{
 					shippingRef: '30406:merchant:standard',
-					service: 'standard',
+					service: 'worldwide-standard',
 					extraCost: '4.567',
 				},
 			]),
 		).toEqual([
 			{
 				shippingRef: '30406:merchant:standard',
-				service: 'standard',
+				service: 'worldwide-standard',
 				extraCost: '4.56',
 			},
 		])
