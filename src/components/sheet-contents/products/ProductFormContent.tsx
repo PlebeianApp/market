@@ -1,10 +1,11 @@
 import { ProductAuthoringStageNavigator } from '@/components/product-authoring/ProductAuthoringStageNavigator'
 import { Button } from '@/components/ui/button'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ProductWorkflowResolution } from '@/lib/workflow/productWorkflowResolver'
 import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
-import { productFormActions, productFormStore } from '@/lib/stores/product'
+import { productFormActions, productFormStore, type ProductFormTab } from '@/lib/stores/product'
 import { uiActions } from '@/lib/stores/ui'
 import { hasProductFormDraft } from '@/lib/utils/productFormStorage'
 import {
@@ -28,6 +29,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { NameTab } from './NameTab'
 import { CategoryTab, DetailTab, ImagesTab, ShippingTab, SpecTab } from './tabs'
+
+const LEGACY_PRODUCT_FORM_TABS: Array<{ tab: ProductFormTab; label: string; testId: string }> = [
+	{ tab: 'name', label: 'Name', testId: 'product-tab-name' },
+	{ tab: 'detail', label: 'Detail', testId: 'product-tab-detail' },
+	{ tab: 'spec', label: 'Spec', testId: 'product-tab-spec' },
+	{ tab: 'category', label: 'Category', testId: 'product-tab-category' },
+	{ tab: 'images', label: 'Images', testId: 'product-tab-images' },
+	{ tab: 'shipping', label: 'Shipping', testId: 'product-tab-shipping' },
+]
 
 export function ProductFormContent({
 	className = '',
@@ -131,6 +141,7 @@ export function ProductFormContent({
 		})
 
 	const selectedStage = resolvedStageResolution.selectedStage
+	const stageValidation = resolvedStageResolution.validation
 	const renderedTabs = getProductAuthoringTabsForStage(selectedStage)
 	const previousStage = getPreviousProductAuthoringStage(selectedStage)
 	const nextStage = getNextProductAuthoringStage(selectedStage)
@@ -148,6 +159,15 @@ export function ProductFormContent({
 			}
 		},
 		[onStageSelect],
+	)
+	const handleLegacyTabSelect = useCallback(
+		(tab: string) => {
+			const legacyTab = tab as ProductFormTab
+
+			selectStage(getProductAuthoringStageForTab(legacyTab))
+			productFormActions.setActiveTab(legacyTab)
+		},
+		[selectStage],
 	)
 	const handleBack = useCallback(() => {
 		if (onStageBack) {
@@ -337,6 +357,21 @@ export function ProductFormContent({
 		>
 			<div className="flex-1 flex flex-col min-h-0 overflow-hidden max-h-[calc(100vh-200px)]">
 				<ProductAuthoringStageNavigator resolution={resolvedStageResolution} onStageSelect={selectStage} />
+				<Tabs value={activeTab} onValueChange={handleLegacyTabSelect} className="w-full">
+					<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-[1px]">
+						{LEGACY_PRODUCT_FORM_TABS.map(({ tab, label, testId }) => (
+							<TabsTrigger
+								key={tab}
+								value={tab}
+								className="flex-1 px-4 py-2 text-xs font-medium data-[state=active]:bg-secondary data-[state=active]:text-white data-[state=inactive]:bg-gray-100 data-[state=inactive]:text-black rounded-none"
+								data-testid={testId}
+							>
+								{label}
+								{stageValidation.issuesByTab[tab]?.length ? <span className="ml-1 text-red-500">*</span> : null}
+							</TabsTrigger>
+						))}
+					</TabsList>
+				</Tabs>
 
 				<div className="flex-1 overflow-y-auto min-h-0">{selectedStageContent}</div>
 			</div>
