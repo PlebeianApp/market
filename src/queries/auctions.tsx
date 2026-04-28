@@ -10,6 +10,7 @@ import {
 	getAuctionEndAt as getAuctionEndAtValue,
 	getAuctionExtensionRule as parseAuctionExtensionRule,
 	getAuctionMaxEndAt as getAuctionMaxEndAtValue,
+	getAuctionSettlementGrace as getAuctionSettlementGraceValue,
 	getAuctionRootEventId as getAuctionRootEventIdValue,
 	getAuctionStartAt as getAuctionStartAtValue,
 	getAuctionWindowValidBids,
@@ -212,6 +213,45 @@ export const fetchAuctionByATag = async (pubkey: string, dTag: string) => {
 	return resolveCanonicalAuctionEvent(ndk, versionEvents)
 }
 
+/**
+ * Batch-fetch bids for a set of auctions in a single relay subscription.
+ *
+ * The auctions list page may render hundreds of cards; if every card runs its
+ * own `useAuctionBids` (which polls every 5s), we issue hundreds of parallel
+ * subscriptions to the relay, saturate it, and end up with empty/stale price
+ * displays. Instead the list resolves all visible auctions' bids in one
+ * `kinds: [1023], '#e': [...ids]` filter and slices the result per auction in
+ * memory.
+ *
+ * Returns a Map<rootEventId, NDKEvent[]> keyed by the auction root event id.
+ */
+export const fetchAuctionBidsForList = async (auctionRootEventIds: string[], limit: number = 1000): Promise<Map<string, NDKEvent[]>> => {
+	const ids = Array.from(new Set(auctionRootEventIds.filter(Boolean)))
+	if (ids.length === 0) return new Map()
+	const ndk = ndkActions.getNDK()
+	if (!ndk) return new Map()
+
+	const events = await ndkActions.fetchEventsWithTimeout(
+		{
+			kinds: [AUCTION_BID_KIND],
+			'#e': ids,
+			limit,
+		},
+		{ timeoutMs: 8000 },
+	)
+
+	const byAuctionId = new Map<string, NDKEvent[]>()
+	for (const id of ids) byAuctionId.set(id, [])
+	for (const bid of filterBlacklistedEvents(Array.from(events))) {
+		const auctionEventId = bid.tags.find((tag) => tag[0] === 'e')?.[1]
+		if (!auctionEventId) continue
+		const bucket = byAuctionId.get(auctionEventId)
+		if (bucket) bucket.push(bid)
+	}
+	byAuctionId.forEach((bucket) => bucket.sort((a: NDKEvent, b: NDKEvent) => (a.created_at || 0) - (b.created_at || 0)))
+	return byAuctionId
+}
+
 export const fetchAuctionBids = async (auctionEventId: string, limit: number = 500, auctionCoordinates?: string) => {
 	if (!auctionEventId && !auctionCoordinates) return []
 	const ndk = ndkActions.getNDK()
@@ -309,6 +349,28 @@ export const auctionByATagQueryOptions = (pubkey: string, dTag: string) =>
 		enabled: !!(pubkey && dTag),
 	})
 
+/**
+ * Query options for the batched list-page bid fetch. The query key is keyed by
+ * the *sorted* set of auction ids so different list orderings don't bust the
+ * cache. The interval is intentionally slower than the per-detail subscription
+ * — list pages don't need second-level freshness for every card.
+ */
+export const auctionBidsForListQueryOptions = (auctionRootEventIds: string[], limit: number = 1000) => {
+	const stableKey = Array.from(new Set(auctionRootEventIds.filter(Boolean))).sort()
+	return queryOptions({
+		queryKey: [...auctionKeys.all, 'bids', 'forList', stableKey],
+		queryFn: () => fetchAuctionBidsForList(stableKey, limit),
+		enabled: stableKey.length > 0,
+		staleTime: 15000,
+		refetchInterval: 15000,
+	})
+}
+
+export const useAuctionBidsForList = (auctionRootEventIds: string[], limit: number = 1000) =>
+	useQuery({
+		...auctionBidsForListQueryOptions(auctionRootEventIds, limit),
+	})
+
 export const auctionBidsQueryOptions = (auctionEventId: string, limit: number = 500, auctionCoordinates?: string) =>
 	queryOptions({
 		queryKey: [...auctionKeys.bids(auctionEventId || auctionCoordinates || ''), auctionCoordinates || ''],
@@ -373,6 +435,8 @@ export const getAuctionEffectiveEndAt = (event: NDKEvent | null, bids: NDKEvent[
 }
 
 export const getAuctionMaxEndAt = (event: NDKEvent | null): number => (event ? getAuctionMaxEndAtValue(event) : 0)
+
+export const getAuctionSettlementGrace = (event: NDKEvent | null): number => (event ? getAuctionSettlementGraceValue(event) : 0)
 
 export const getAuctionExtensionRule = (event: NDKEvent | null): string => (event ? parseAuctionExtensionRule(event).raw : 'none')
 

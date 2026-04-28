@@ -161,21 +161,18 @@ const NIP60_WALLET_START_TIMEOUT_MS = 7000
 const AUCTION_KIND = 30408 as unknown as NonNullable<NDKFilter['kinds']>[number]
 const AUCTION_BID_KIND = 1023 as unknown as NonNullable<NDKFilter['kinds']>[number]
 /**
- * Seconds added between the auction's nominal end and the Cashu P2PK locktime
- * on each bid leg. This is the window the seller has to settle before bidders
- * can walk away with their collateral via the refund path.
+ * Default `settlement_grace` value (seconds) baked into a freshly-created
+ * auction event. Per-auction grace is authoritative at bid time — the bidder
+ * reads `settlement_grace` from the auction event itself (see AUCTIONS.md
+ * §4.1). This constant only seeds the default; quick-settle dev fixtures
+ * override to a much shorter value, see scripts/seed.ts.
  *
- * Production: 3600s (1 h) — comfortably covers settlement + occasional retries.
- * Dev / local / staging: 30s — fast enough to exercise the reclaim flow end-to-end
- *   in a single test run (quick-settle auctions end ~2 min out, so a 30s grace
- *   makes reclaim open ~2.5 min after bid placement).
+ * 7200s (2 h) gives the seller a comfortable window to publish the kind-1024
+ * settlement after bidding closes, without locking losers' capital
+ * unreasonably long.
  */
-const AUCTION_SETTLEMENT_GRACE_PROD_SECONDS = 3600
-const AUCTION_SETTLEMENT_GRACE_DEV_SECONDS = 30
-export const getAuctionSettlementGraceSeconds = (): number =>
-	isNip60WalletDevModeEnabled() ? AUCTION_SETTLEMENT_GRACE_DEV_SECONDS : AUCTION_SETTLEMENT_GRACE_PROD_SECONDS
-/** @deprecated prefer `getAuctionSettlementGraceSeconds()`; still exported for legacy consumers. */
-export const AUCTION_SETTLEMENT_GRACE_SECONDS = AUCTION_SETTLEMENT_GRACE_PROD_SECONDS
+export const AUCTION_SETTLEMENT_GRACE_DEFAULT_SECONDS = 7200
+export const getAuctionSettlementGraceSeconds = (): number => AUCTION_SETTLEMENT_GRACE_DEFAULT_SECONDS
 /**
  * Wall-clock skew buffer added on top of a proof's embedded P2PK locktime before
  * the client attempts a refund-path reclaim. Guards against the local clock
@@ -1918,6 +1915,7 @@ export const nip60Actions = {
 			acceptedMints: string[]
 			pathIssuerPubkey: string
 			p2pkXpub: string
+			settlementGraceSeconds: number
 		}
 
 		const candidates: CandidateAuction[] = auctionEvents
@@ -1931,6 +1929,7 @@ export const nip60Actions = {
 				const acceptedMints = getTagValues(event, 'mint').map(normalizeMintUrl)
 				const pathIssuerPubkey = getFirstTagValue(event, 'path_issuer') || event.pubkey
 				const p2pkXpub = getFirstTagValue(event, 'p2pk_xpub')
+				const settlementGraceSeconds = parseNonNegativeInt(getFirstTagValue(event, 'settlement_grace'), 0)
 				return {
 					event,
 					dTag,
@@ -1942,6 +1941,7 @@ export const nip60Actions = {
 					acceptedMints,
 					pathIssuerPubkey,
 					p2pkXpub,
+					settlementGraceSeconds,
 				}
 			})
 			.filter((auction) => {
@@ -2001,7 +2001,11 @@ export const nip60Actions = {
 		}
 
 		const auctionCoordinates = `30408:${selected.event.pubkey}:${selected.dTag}`
-		const locktime = Math.max(selected.endAt + getAuctionSettlementGraceSeconds(), now + 60)
+		// Honour the auction's own settlement_grace tag rather than a global
+		// default — quick-settle dev fixtures use 30s, normal seeded auctions
+		// use 7200s, and the dev-bid placeholder lock should match either.
+		const settlementGraceSeconds = selected.settlementGraceSeconds || getAuctionSettlementGraceSeconds()
+		const locktime = Math.max(selected.endAt + settlementGraceSeconds, now + 60)
 		const bidderRefundPubkey = await nip60Actions.getWalletCashuP2pk()
 
 		// Path-oracle flow: request a fresh derivation path from the issuer HTTP

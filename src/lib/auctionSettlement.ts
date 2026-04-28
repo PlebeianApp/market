@@ -22,6 +22,7 @@ const AUCTION_IMMUTABLE_SINGLE_TAGS = [
 	'p2pk_xpub',
 	'extension_rule',
 	'max_end_at',
+	'settlement_grace',
 	'settlement_policy',
 	'schema',
 ]
@@ -104,6 +105,13 @@ export const getAuctionStartAt = (auctionEvent: NDKEvent): number =>
 export const getAuctionEndAt = (auctionEvent: NDKEvent): number => parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'end_at'), 0)
 export const getAuctionMaxEndAt = (auctionEvent: NDKEvent): number =>
 	parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'max_end_at'), 0)
+/**
+ * Per-auction settlement grace in seconds (the gap between `max_end_at` and
+ * the bid's Cashu locktime — see AUCTIONS.md §4.1 / §6.0). Auctions are
+ * required to emit this; a 0 fallback signals a malformed (legacy) event.
+ */
+export const getAuctionSettlementGrace = (auctionEvent: NDKEvent): number =>
+	parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'settlement_grace'), 0)
 export const getAuctionRootEventId = (auctionEvent: NDKEvent): string =>
 	getAuctionTagValue(auctionEvent, AUCTION_ROOT_EVENT_ID_TAG) || auctionEvent.id
 export const getAuctionCoordinate = (auctionEvent: NDKEvent): string => {

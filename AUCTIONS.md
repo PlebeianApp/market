@@ -105,6 +105,15 @@ There is intentionally no product reference (`a` tag) in v1.
   MUST equal `end_at`; when anti-sniping is enabled this MUST equal
   `end_at + max_extensions × extension_seconds`. Always required so the
   Cashu locktime is computable from auction tags alone.
+- `settlement_grace`: seconds between `max_end_at` and the bid's Cashu
+  locktime — i.e. the window in which the seller has to publish the
+  settlement after bidding closes. Together with `max_end_at` this fully
+  determines `T_unlock` (see §6.0):
+  `locktime = max_end_at + settlement_grace`. v1 default: `7200` (2 h).
+  Auctions MAY use shorter values (e.g. `30` for dev quick-settle test
+  fixtures); production deployments SHOULD use values comfortably above
+  the worst-case time required to fetch a path release, derive child
+  privkeys, swap each leg at the mint, and publish the kind-1024 event.
 
 ### Optional auction tags
 
@@ -147,6 +156,7 @@ Immutable after first publish:
 - `path_issuer`
 - `extension_rule`
 - `max_end_at`
+- `settlement_grace`
 - `settlement_policy`
 - `key_scheme`
 - `reserve`
@@ -179,6 +189,7 @@ Important:
 		["start_at", "1766202000"],
 		["end_at", "1766288400"],
 		["max_end_at", "1766288400"], // == end_at when anti-sniping disabled
+		["settlement_grace", "7200"], // 2 h seller-settlement window
 		["currency", "SAT"],
 		["reserve", "50000"],
 		["bid_increment", "1000"],
@@ -371,13 +382,13 @@ Use NUT-11 P2PK secret with:
 - **Single** lock pubkey: the HD-derived seller child pubkey assigned to
   this bid by the path issuer. No Cashu cosigner.
 - `n_sigs`: omitted (default 1). The lock is 1-of-1.
-- `locktime`: `max_end_at + settlement_grace_seconds` if anti-sniping is
-  enabled, otherwise `end_at + settlement_grace_seconds`.
+- `locktime`: `max_end_at + settlement_grace` (the auction's
+  `settlement_grace` tag — see §4.1).
 - `refund`: bidder refund pubkey.
 - `n_sigs_refund=1`.
 - `sigflag=SIG_INPUTS` (v1).
 
-`settlement_grace_seconds` default: 3600 seconds.
+`settlement_grace` is per-auction (see §4.1). v1 default: 7200 seconds (2 h).
 
 This yields:
 
@@ -547,7 +558,7 @@ The invariants:
 
 ```
 T_end  ≤  T_cutoff  ≤  T_unlock
-T_unlock = T_cutoff + settlement_grace_seconds
+T_unlock = T_cutoff + settlement_grace
 ```
 
 **The gap `T_unlock − T_cutoff` is the seller's settlement window.** It must be wide enough to absorb worst-case settlement work — receive a path
@@ -571,7 +582,7 @@ If you collapse any two:
 - Anti-sniping enabled with `n` extensions of `ext` seconds →
   `max_end_at = end_at + n × ext`.
 
-`settlement_grace_seconds` is a protocol parameter — currently a constant
+`settlement_grace` is a protocol parameter — currently a constant
 on the issuer and embedded into each bid's locktime via `locktime =
 max_end_at + grace`. Sub-minute values are unsafe on shared infrastructure;
 sub-10-minute values are questionable in production. Dev environments use a
@@ -598,7 +609,7 @@ Critical policy:
   equals `end_at` and acts as a no-op cap; with anti-sniping enabled it
   caps the snipe extension.
 - Bid locktime MUST be fixed up front to
-  `max_end_at + settlement_grace_seconds`, so existing bidders never need
+  `max_end_at + settlement_grace`, so existing bidders never need
   to re-sign bids when the auction is extended.
 - Bids submitted at or after `max_end_at` MUST be rejected by both client
   and issuer. Late bids would need a longer locktime than the chain's
@@ -644,8 +655,8 @@ Validation rules (MUST):
 - `derivation_path` tag MUST NOT be present.
 - Encrypted token decodes and commitment matches.
 - Locktime policy matches auction rule
-  (`max_end_at + settlement_grace_seconds`, or `end_at +
-settlement_grace_seconds` when anti-sniping is off).
+  (`max_end_at + settlement_grace`, or `end_at +
+settlement_grace` when anti-sniping is off).
 - Refund key is present and correctly bound to bidder (compressed
   secp256k1).
 - DLEQ proofs are valid for declared mint keyset.
@@ -961,7 +972,7 @@ Unchanged from prior drafts:
 
 1. Confirm kind mapping (`30408` listing, `1023` bid, `1024` settlement,
    `30410` path registry) for initial implementation.
-2. Canonical default `settlement_grace_seconds` value (v1 default: 3600).
+2. Canonical default `settlement_grace` value (v1 default: 3600).
 3. Grant expiry window (how long an `auction_path_grant_v1` is valid
    before the bidder must re-request).
 4. Exact refund transport UX:

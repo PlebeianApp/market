@@ -12,11 +12,12 @@ import {
 	auctionsQueryOptions,
 	filterNSFWAuctions,
 	getAuctionCategories,
-	getAuctionEndAt,
 	getAuctionImages,
 	getAuctionMaxEndAt,
+	getAuctionRootEventId,
 	getAuctionStartingBid,
 	getAuctionTitle,
+	useAuctionBidsForList,
 } from '@/queries/auctions'
 import { useConfigQuery } from '@/queries/config'
 import { useFeaturedAuctions } from '@/queries/featured'
@@ -88,6 +89,16 @@ function AuctionsRoute() {
 
 	const auctions = filterNSFWAuctions((auctionsQuery.data ?? []) as NDKEvent[], showNSFWContent)
 
+	// One batched bid query for the whole list — see queries/auctions.tsx
+	// (auctionBidsForListQueryOptions) for rationale. Each AuctionCard reads
+	// its own bid bucket from this Map instead of mounting its own polling
+	// subscription.
+	const auctionRootEventIdsForBids = useMemo(
+		() => auctions.map((auction) => getAuctionRootEventId(auction) || auction.id),
+		[auctions],
+	)
+	const { data: bidsByAuctionId } = useAuctionBidsForList(auctionRootEventIdsForBids)
+
 	const { data: config } = useConfigQuery()
 	const { data: featuredAuctionsData } = useFeaturedAuctions(config?.appPublicKey || '')
 	const featuredAuctionEvents = useFeaturedAuctionEvents(featuredAuctionsData?.featuredAuctions)
@@ -117,7 +128,7 @@ function AuctionsRoute() {
 
 		if (!filters.showEnded) {
 			filtered = filtered.filter((auction) => {
-				const visibleEndAt = getAuctionMaxEndAt(auction) || getAuctionEndAt(auction)
+				const visibleEndAt = getAuctionMaxEndAt(auction)
 				return visibleEndAt > 0 && visibleEndAt > now
 			})
 		}
@@ -129,8 +140,8 @@ function AuctionsRoute() {
 				break
 			case 'ending-soon':
 				sorted.sort((a, b) => {
-					const aEnd = getAuctionMaxEndAt(a) || getAuctionEndAt(a)
-					const bEnd = getAuctionMaxEndAt(b) || getAuctionEndAt(b)
+					const aEnd = getAuctionMaxEndAt(a)
+					const bEnd = getAuctionMaxEndAt(b)
 					const aEnded = aEnd > 0 && aEnd <= now
 					const bEnded = bEnd > 0 && bEnd <= now
 					if (aEnded !== bEnded) return aEnded ? 1 : -1
@@ -384,7 +395,11 @@ function AuctionsRoute() {
 				) : (
 					<ItemGrid className="gap-4 sm:gap-8">
 						{filteredAndSortedAuctions.map((auction) => (
-							<AuctionCard key={auction.id} auction={auction} />
+							<AuctionCard
+								key={auction.id}
+								auction={auction}
+								bids={bidsByAuctionId?.get(getAuctionRootEventId(auction) || auction.id)}
+							/>
 						))}
 					</ItemGrid>
 				)}

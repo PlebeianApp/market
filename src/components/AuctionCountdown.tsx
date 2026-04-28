@@ -195,13 +195,25 @@ export function useAuctionCountdown(endAt: number, options?: { showSeconds?: boo
 	}, [endAt, now, showSeconds])
 }
 
-export function AuctionCountdown({ auction, className, compact = false }: { auction: NDKEvent; className?: string; compact?: boolean }) {
+export function AuctionCountdown({
+	auction,
+	bids: bidsProp,
+	className,
+	compact = false,
+}: {
+	auction: NDKEvent
+	/** Pre-fetched bids from a parent. Skip the internal bid subscription when provided. */
+	bids?: NDKEvent[]
+	className?: string
+	compact?: boolean
+}) {
 	const auctionDTag = getAuctionId(auction)
 	const auctionRootEventId = getAuctionRootEventId(auction)
 	const auctionCoordinates = auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 
-	const bidsQuery = useAuctionBids(auctionRootEventId || auction.id, 500, auctionCoordinates)
-	const bids = bidsQuery.data ?? []
+	const shouldFetchBids = bidsProp === undefined
+	const bidsQuery = useAuctionBids(shouldFetchBids ? auctionRootEventId || auction.id : '', 500, shouldFetchBids ? auctionCoordinates : undefined)
+	const bids = bidsProp ?? bidsQuery.data ?? []
 	const endTime = getAuctionEndAt(auction)
 	const endTimeEffective = getAuctionEffectiveEndAt(auction, bids) || endTime
 	const currentTime = Date.now() / 1000

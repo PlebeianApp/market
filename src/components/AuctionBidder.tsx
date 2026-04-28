@@ -14,6 +14,7 @@ import {
 	getAuctionRootEventId,
 	getAuctionPathIssuer,
 	getAuctionMaxEndAt,
+	getAuctionSettlementGrace,
 	getAuctionCurrentPriceFromBids,
 } from '@/queries/auctions'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -27,12 +28,14 @@ import { TooltipToggleGroupItem } from './shared/TooltipToggleGroupItem'
 
 interface AuctionBidderProps {
 	auction: NDKEvent
+	/** Pre-fetched bids from a parent. Skip the internal bid subscription when provided. */
+	bids?: NDKEvent[]
 	currentUserPubkey?: string
 	onBidSuccess?: () => void
 	compact?: boolean
 }
 
-export function AuctionBidder({ auction, currentUserPubkey, onBidSuccess, compact = false }: AuctionBidderProps) {
+export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBidSuccess, compact = false }: AuctionBidderProps) {
 	const bidMutation = usePublishAuctionBidMutation()
 
 	// Derive auction state
@@ -47,8 +50,9 @@ export function AuctionBidder({ auction, currentUserPubkey, onBidSuccess, compac
 	const auctionCoordinates = auctionDTag && auction ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 
 	const auctionRootEventId = getAuctionRootEventId(auction)
-	const bidsQuery = useAuctionBids(auctionRootEventId || auctionId, 500, auctionCoordinates)
-	const bids = bidsQuery.data ?? []
+	const shouldFetchBids = bidsProp === undefined
+	const bidsQuery = useAuctionBids(shouldFetchBids ? auctionRootEventId || auctionId : '', 500, shouldFetchBids ? auctionCoordinates : undefined)
+	const bids = bidsProp ?? bidsQuery.data ?? []
 	const endAt = getAuctionEndAt(auction)
 	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
 	const countdown = useAuctionCountdown(effectiveEndAt, { showSeconds: true })
@@ -128,7 +132,8 @@ export function AuctionBidder({ auction, currentUserPubkey, onBidSuccess, compac
 				auctionCoordinates,
 				amount: parsedAmount,
 				auctionEffectiveEndAt: effectiveEndAt,
-				auctionLocktimeAt: getAuctionMaxEndAt(auction) || effectiveEndAt,
+				auctionLocktimeAt: getAuctionMaxEndAt(auction),
+				settlementGraceSeconds: getAuctionSettlementGrace(auction),
 				sellerPubkey: auction.pubkey,
 				pathIssuerPubkey,
 				p2pkXpub,

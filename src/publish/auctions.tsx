@@ -66,6 +66,13 @@ export interface AuctionBidFormData {
 	amount: number
 	auctionEffectiveEndAt: number
 	auctionLocktimeAt: number
+	/**
+	 * Per-auction settlement grace in seconds (the gap between max_end_at and
+	 * the Cashu locktime). Read from the auction event's `settlement_grace`
+	 * tag — see AUCTIONS.md §4.1. Authoritative at bid time; the locktime
+	 * stamped into the proof is `auctionLocktimeAt + settlementGraceSeconds`.
+	 */
+	settlementGraceSeconds: number
 	sellerPubkey: string
 	/**
 	 * Nostr pubkey of the auction's path issuer (the oracle). The bidder
@@ -265,6 +272,7 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 		['path_issuer', pathIssuerPubkey],
 		['extension_rule', extensionRule],
 		['max_end_at', String(maxEndAt)],
+		['settlement_grace', String(getAuctionSettlementGraceSeconds())],
 		['key_scheme', keyScheme],
 		['p2pk_xpub', p2pkXpub],
 		['settlement_policy', AUCTION_SETTLEMENT_POLICY],
@@ -499,7 +507,10 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 
 	const bidderWalletP2pk = await nip60Actions.getWalletCashuP2pk()
 	const bidNonce = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-	const locktime = Math.max(formData.auctionLocktimeAt + getAuctionSettlementGraceSeconds(), now + 60)
+	if (!Number.isFinite(formData.settlementGraceSeconds) || formData.settlementGraceSeconds <= 0) {
+		throw new Error('Auction is missing settlement_grace — refusing to lock without an authoritative grace period')
+	}
+	const locktime = Math.max(formData.auctionLocktimeAt + formData.settlementGraceSeconds, now + 60)
 
 	// Path-oracle pre-bid step: request and verify a derivation path. The
 	// bidder-side verifyAuctionPathGrant inside requestAuctionPathGrant is the

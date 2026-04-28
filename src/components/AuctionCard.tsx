@@ -17,6 +17,7 @@ import {
 	getAuctionP2pkXpub,
 	getAuctionPathIssuer,
 	getAuctionRootEventId,
+	getAuctionSettlementGrace,
 	getAuctionStartingBid,
 	getAuctionTitle,
 	useAuctionBids,
@@ -26,7 +27,7 @@ import { Link } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 import { AuctionBidder } from './AuctionBidder'
 
-export function AuctionCard({ auction }: { auction: NDKEvent }) {
+export function AuctionCard({ auction, bids: bidsProp }: { auction: NDKEvent; bids?: NDKEvent[] }) {
 	const title = getAuctionTitle(auction)
 	const images = getAuctionImages(auction)
 	const endAt = getAuctionEndAt(auction)
@@ -41,8 +42,11 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 	const auctionCoordinates = auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 	const [bidAmountInput, setBidAmountInput] = useState('')
 	const [isOwnAuction, setIsOwnAuction] = useState(false)
-	const bidsQuery = useAuctionBids(auctionRootEventId || auction.id, 500, auctionCoordinates)
-	const bids = bidsQuery.data ?? []
+	// When a parent (the auctions list) supplies bids in bulk, skip the per-
+	// card subscription. Empty-string args disable the underlying query.
+	const shouldFetchBids = bidsProp === undefined
+	const bidsQuery = useAuctionBids(shouldFetchBids ? auctionRootEventId || auction.id : '', 500, shouldFetchBids ? auctionCoordinates : undefined)
+	const bids = bidsProp ?? bidsQuery.data ?? []
 	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
 	const countdown = useAuctionCountdown(effectiveEndAt, { showSeconds: true })
 	const bidMutation = usePublishAuctionBidMutation()
@@ -83,7 +87,8 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 				auctionCoordinates,
 				amount: parsedAmount,
 				auctionEffectiveEndAt: effectiveEndAt,
-				auctionLocktimeAt: getAuctionMaxEndAt(auction) || effectiveEndAt,
+				auctionLocktimeAt: getAuctionMaxEndAt(auction),
+				settlementGraceSeconds: getAuctionSettlementGrace(auction),
 				sellerPubkey: auction.pubkey,
 				pathIssuerPubkey,
 				p2pkXpub,
@@ -128,10 +133,10 @@ export function AuctionCard({ auction }: { auction: NDKEvent }) {
 				</div>
 
 				<div className="text-xs text-gray-600">
-					<AuctionCountdown auction={auction} className="w-full justify-between" compact />
+					<AuctionCountdown auction={auction} bids={bids} className="w-full justify-between" compact />
 				</div>
 
-				<AuctionBidder auction={auction} compact />
+				<AuctionBidder auction={auction} bids={bids} compact />
 			</div>
 		</div>
 	)

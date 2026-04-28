@@ -11,6 +11,13 @@ export type GeneratedAuctionData = {
 	tags: NDKTag[]
 }
 
+/**
+ * Default `settlement_grace` (seconds) for seeded normal auctions. 2h gives
+ * the seller a realistic settlement window. Quick-settle dev fixtures (in
+ * seed.ts) override this to 30s for fast end-to-end iteration.
+ */
+export const DEFAULT_SEED_SETTLEMENT_GRACE_SECONDS = 7200
+
 export function generateAuctionData(params: {
 	sellerPubkey: string
 	pathIssuerPubkey: string
@@ -18,8 +25,10 @@ export function generateAuctionData(params: {
 	trustedMints?: string[]
 	status?: AuctionStatus
 	p2pkXpub?: string
+	settlementGraceSeconds?: number
 }): GeneratedAuctionData {
 	const { pathIssuerPubkey, availableShippingRefs = [], trustedMints = ['https://nofees.testnut.cashu.space'] } = params
+	const settlementGraceSeconds = params.settlementGraceSeconds ?? DEFAULT_SEED_SETTLEMENT_GRACE_SECONDS
 	const status = params.status ?? (Math.random() < 0.2 ? 'ended' : 'live')
 	const p2pkXpub = params.p2pkXpub?.trim() || ''
 	if (!p2pkXpub) {
@@ -89,6 +98,7 @@ export function generateAuctionData(params: {
 			// Seeded auctions don't enable anti-sniping, so the hard
 			// bidding cutoff equals the nominal close (see AUCTIONS.md §6.0).
 			['max_end_at', String(endAt)],
+			['settlement_grace', String(settlementGraceSeconds)],
 			['extension_rule', 'none'],
 			['currency', 'SAT'],
 			['price', String(startingBid), 'SAT'],
@@ -131,31 +141,74 @@ export async function createAuctionEvent(
 	}
 }
 
+/**
+ * Seeds a kind-1023 bid event for UI / display testing.
+ *
+ * NOTE: This bypasses the path-oracle bid flow — no real Cashu lock is
+ * created at the mint, no path is requested from the issuer, and the
+ * cryptographic fields below (`commitment`, `locktime`, `refund_pubkey`,
+ * `child_pubkey`) are placeholder values. The event is **structurally**
+ * spec-compliant (all required AUCTIONS.md §4.2 tags emitted) so list
+ * rendering, price aggregation, and bid-count UI work correctly, but it
+ * cannot be settled — the issuer registry has no entry for the placeholder
+ * `child_pubkey`, so settlement would (correctly) skip these.
+ */
 export async function createAuctionBidEvent(params: {
 	signer: NDKPrivateKeySigner
 	ndk: NDK
 	auctionEventId: string
 	auctionCoordinates: string
+	sellerPubkey: string
 	amount: number
 	mint: string
+	endAt: number
+	settlementGraceSeconds: number
 	createdAt?: number
 }): Promise<boolean> {
-	const { signer, ndk, auctionEventId, auctionCoordinates, amount, mint, createdAt } = params
+	const { signer, ndk, auctionEventId, auctionCoordinates, sellerPubkey, amount, mint, endAt, settlementGraceSeconds, createdAt } = params
+	const bidder = await signer.user()
+	const bidNonce = `seed-${faker.string.alphanumeric(16)}`
+	// Placeholder commitment — real bids hash a private payload that
+	// includes the encoded Cashu token; seeded bids have no token.
+	const placeholderCommitment = faker.string.hexadecimal({ length: 64, prefix: '', casing: 'lower' })
+	// Placeholder compressed secp256k1 pubkeys (66 hex chars, 02/03 prefix).
+	const placeholderChildPubkey = `02${faker.string.hexadecimal({ length: 64, prefix: '', casing: 'lower' })}`
+	const placeholderRefundPubkey = `02${faker.string.hexadecimal({ length: 64, prefix: '', casing: 'lower' })}`
+	// Locktime mirrors what publishAuctionBid would compute for a real bid
+	// against this auction: max_end_at + settlement_grace.
+	const placeholderLocktime = endAt + settlementGraceSeconds
+
 	const event = new NDKEvent(ndk)
 	event.kind = 1023
 	event.content = JSON.stringify({
 		type: 'cashu_bid_commitment',
 		amount,
+		delta_amount: amount,
+		prev_amount: 0,
 		mint,
+		commitment: placeholderCommitment,
+		key_scheme: 'hd_p2pk',
+		seeded: true,
 	})
 	event.tags = [
 		['e', auctionEventId],
 		['a', auctionCoordinates],
+		['p', sellerPubkey],
 		['amount', String(amount), 'SAT'],
+		['delta_amount', String(amount), 'SAT'],
+		['currency', 'SAT'],
 		['mint', mint],
+		['commitment', placeholderCommitment],
+		['locktime', String(placeholderLocktime)],
+		['refund_pubkey', placeholderRefundPubkey],
+		['created_for_end_at', String(endAt)],
+		['bid_nonce', bidNonce],
+		['key_scheme', 'hd_p2pk'],
 		['status', 'locked'],
 		['schema', 'auction_bid_v1'],
+		['child_pubkey', placeholderChildPubkey],
 	]
+	void bidder
 	if (createdAt) {
 		event.created_at = createdAt
 	}

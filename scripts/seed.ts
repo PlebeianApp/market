@@ -30,7 +30,7 @@ import {
 } from './gen_orders'
 import { createPaymentDetailEvent, generateLightningPaymentDetail, generateOnChainPaymentDetail } from './gen_payment_details'
 import { createProductEvent, generateProductData } from './gen_products'
-import { createAuctionBidEvent, createAuctionEvent, generateAuctionData } from './gen_auctions'
+import { createAuctionBidEvent, createAuctionEvent, DEFAULT_SEED_SETTLEMENT_GRACE_SECONDS, generateAuctionData } from './gen_auctions'
 import { createNip15ProductEvent, generateNip15ProductData } from './gen_nip15_products'
 import { createReviewEvent, generateReviewData } from './gen_review'
 import { createShippingEvent, generatePickupShippingData, generateShippingData } from './gen_shipping'
@@ -164,6 +164,7 @@ async function seedData() {
 		startingBid: number
 		bidIncrement: number
 		mint: string
+		settlementGraceSeconds: number
 	}> = []
 	const seededBidAuctionEvents: Array<{
 		eventId: string
@@ -174,6 +175,7 @@ async function seedData() {
 		startingBid: number
 		bidIncrement: number
 		mint: string
+		settlementGraceSeconds: number
 	}> = []
 	const shippingsByUser: Record<string, string[]> = {}
 	const userPubkeys: string[] = []
@@ -339,12 +341,19 @@ async function seedData() {
 		const auctionWallet = await ensureAuctionWalletForSeller(signer, pubkey, trustedAuctionMints)
 		for (let j = 0; j < AUCTIONS_PER_USER; j++) {
 			const isQuickSettleAuction = j < QUICK_END_AUCTIONS_PER_USER
+			// Quick-settle fixtures want a tight settlement window so a dev can
+			// exercise the seller-publishes-1024 → loser-reclaims flow inside
+			// a single test run. Normal auctions get the realistic 2h grace
+			// (DEFAULT_SEED_SETTLEMENT_GRACE_SECONDS) so bids and the loser
+			// reclaim countdown match what production behaviour would look like.
+			const settlementGraceSeconds = isQuickSettleAuction ? 30 : DEFAULT_SEED_SETTLEMENT_GRACE_SECONDS
 			const auctionData = generateAuctionData({
 				sellerPubkey: pubkey,
 				pathIssuerPubkey: APP_PUBKEY!,
 				availableShippingRefs: shippingsByUser[pubkey] || [],
 				trustedMints: trustedAuctionMints,
 				p2pkXpub: auctionWallet.p2pkXpub,
+				settlementGraceSeconds,
 			})
 
 			if (isQuickSettleAuction) {
@@ -353,6 +362,9 @@ async function seedData() {
 				const quickStartAt = quickEndNow - 60
 				setTagValue(auctionData.tags, 'start_at', String(quickStartAt))
 				setTagValue(auctionData.tags, 'end_at', String(quickEndAt))
+				// Quick-settle auctions also have max_end_at == end_at since
+				// they run with no anti-sniping; keep the invariant intact.
+				setTagValue(auctionData.tags, 'max_end_at', String(quickEndAt))
 				setTagValue(auctionData.tags, 'title', `Quick settle auction for ${pubkey.slice(0, 8)}`)
 				setTagValue(auctionData.tags, 'summary', 'Fixture auction for settlement testing. No seeded bids.')
 				setTagValue(auctionData.tags, 'reserve', '0')
@@ -380,6 +392,7 @@ async function seedData() {
 				startingBid,
 				bidIncrement,
 				mint,
+				settlementGraceSeconds,
 			})
 			if (!isQuickSettleAuction) {
 				seededBidAuctionEvents.push({
@@ -391,6 +404,7 @@ async function seedData() {
 					startingBid,
 					bidIncrement,
 					mint,
+					settlementGraceSeconds,
 				})
 			}
 		}
@@ -418,8 +432,11 @@ async function seedData() {
 				ndk,
 				auctionEventId: auction.eventId,
 				auctionCoordinates: auction.auctionCoordinates,
+				sellerPubkey: auction.sellerPubkey,
 				amount: currentBidAmount,
 				mint: auction.mint,
+				endAt: auction.endAt,
+				settlementGraceSeconds: auction.settlementGraceSeconds,
 				createdAt: bidTimestamp,
 			})
 		}
