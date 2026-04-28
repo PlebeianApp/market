@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { normalizeProductShippingSelections, resolveProductShippingSelections } from '@/lib/utils/productShippingSelections'
+import {
+	normalizeProductShippingExtraCost,
+	normalizeProductShippingSelections,
+	resolveProductShippingSelections,
+	sanitizeProductShippingExtraCostInput,
+} from '@/lib/utils/productShippingSelections'
 import { DEFAULT_FORM_STATE, productFormActions, productFormStore } from '@/lib/stores/product'
 
 describe('product shipping selection normalization', () => {
@@ -63,5 +68,18 @@ describe('product shipping selection normalization', () => {
 				isResolved: false,
 			},
 		])
+	})
+
+	test('shipping extra cost normalization rejects garbage and dashed strings', () => {
+		expect(normalizeProductShippingExtraCost('15.213123-212-1')).toBe('')
+		expect(normalizeProductShippingExtraCost('-1')).toBe('')
+		expect(normalizeProductShippingExtraCost('abc')).toBe('')
+	})
+
+	test('shipping extra cost input keeps non-negative two-decimal precision', () => {
+		expect(sanitizeProductShippingExtraCostInput('15.213')).toBe('15.21')
+		expect(sanitizeProductShippingExtraCostInput('15.2')).toBe('15.2')
+		expect(sanitizeProductShippingExtraCostInput('0')).toBe('0')
+		expect(sanitizeProductShippingExtraCostInput('15-2')).toBeNull()
 	})
 })

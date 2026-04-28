@@ -18,6 +18,25 @@ export type ResolvedProductShippingSelection = ProductShippingSelection & {
 	isResolved: boolean
 }
 
+export const sanitizeProductShippingExtraCostInput = (input: string): string | null => {
+	const value = input.trim()
+	if (!value) return ''
+	if (!/^\d*(?:\.\d*)?$/.test(value)) return null
+
+	const [whole = '', decimal = ''] = value.split('.')
+	if (value.includes('.') && decimal.length > 2) {
+		return `${whole || '0'}.${decimal.slice(0, 2)}`
+	}
+
+	return value
+}
+
+export const normalizeProductShippingExtraCost = (input: string | null | undefined): string => {
+	const sanitized = sanitizeProductShippingExtraCostInput(input ?? '')
+	if (!sanitized || sanitized === '.') return ''
+	return sanitized.endsWith('.') ? sanitized.slice(0, -1) : sanitized
+}
+
 export const normalizeProductShippingSelection = (input: ProductShippingSelectionInput): ProductShippingSelection | null => {
 	const shippingRef =
 		(typeof input.shippingRef === 'string' && input.shippingRef.trim()) ||
@@ -28,7 +47,7 @@ export const normalizeProductShippingSelection = (input: ProductShippingSelectio
 
 	return {
 		shippingRef,
-		extraCost: typeof input.extraCost === 'string' ? input.extraCost : '',
+		extraCost: normalizeProductShippingExtraCost(input.extraCost),
 	}
 }
 

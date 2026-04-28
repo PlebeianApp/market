@@ -11,7 +11,11 @@ import { useNDK } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore } from '@/lib/stores/product'
 import { uiStore } from '@/lib/stores/ui'
 import { attachShippingOptionByRef } from '@/lib/utils/productShippingQuickCreate'
-import { resolveProductShippingSelections } from '@/lib/utils/productShippingSelections'
+import {
+	normalizeProductShippingExtraCost,
+	resolveProductShippingSelections,
+	sanitizeProductShippingExtraCostInput,
+} from '@/lib/utils/productShippingSelections'
 import { MempoolService } from '@/lib/utils/mempool'
 import { useBtcExchangeRates, type SupportedCurrency } from '@/queries/external'
 import { usePublishShippingOptionMutation, type ShippingFormData } from '@/publish/shipping'
@@ -814,10 +818,27 @@ export function ShippingTab() {
 	}
 
 	const updateExtraCost = (index: number, extraCost: string) => {
+		const sanitizedExtraCost = sanitizeProductShippingExtraCostInput(extraCost)
+		if (sanitizedExtraCost === null) return
+
 		const updatedShippings = [...shippings]
 		updatedShippings[index] = {
 			...updatedShippings[index],
-			extraCost,
+			extraCost: sanitizedExtraCost,
+		}
+		productFormActions.updateValues({
+			shippings: updatedShippings,
+		})
+	}
+
+	const normalizeExtraCost = (index: number) => {
+		const normalizedExtraCost = normalizeProductShippingExtraCost(shippings[index]?.extraCost)
+		if (normalizedExtraCost === shippings[index]?.extraCost) return
+
+		const updatedShippings = [...shippings]
+		updatedShippings[index] = {
+			...updatedShippings[index],
+			extraCost: normalizedExtraCost,
 		}
 		productFormActions.updateValues({
 			shippings: updatedShippings,
@@ -913,15 +934,21 @@ export function ShippingTab() {
 										)}
 									</div>
 									<div className="flex items-center gap-2">
-										<Input
-											type="number"
-											step="0.01"
-											min="0"
-											value={shipping.extraCost}
-											onChange={(e) => updateExtraCost(index, e.target.value)}
-											placeholder="Add cost specific to this product"
-											className="w-40 sm:w-56 md:w-76 text-sm"
-										/>
+										{option?.service === 'digital' || option?.service === 'pickup' ? (
+											<div className="w-40 sm:w-56 md:w-76 text-sm text-gray-500">No product-specific extra cost</div>
+										) : (
+											<Input
+												type="number"
+												inputMode="decimal"
+												step="0.01"
+												min="0"
+												value={shipping.extraCost}
+												onChange={(e) => updateExtraCost(index, e.target.value)}
+												onBlur={() => normalizeExtraCost(index)}
+												placeholder="Add cost specific to this product"
+												className="w-40 sm:w-56 md:w-76 text-sm"
+											/>
+										)}
 										<Button
 											type="button"
 											variant="outline"
