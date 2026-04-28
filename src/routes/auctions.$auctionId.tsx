@@ -466,7 +466,7 @@ function AuctionDetailRoute() {
 										Seller & fulfilment
 									</div>
 									<div className="mt-4 space-y-1">
-										<ShopperInfoRow label="Seller" value={<AvatarUser pubkey={auction.pubkey} />} />
+										<ShopperInfoRow label="Seller" value={<AvatarUser pubkey={auction.pubkey} colored deterministicFallbackText />} />
 										<ShopperInfoRow
 											label="Categories"
 											value={
@@ -647,7 +647,7 @@ function AuctionDetailRoute() {
 												</div>
 
 												<div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-zinc-700">
-													<AvatarUser pubkey={bidEvent.pubkey} />
+													<AvatarUser pubkey={bidEvent.pubkey} colored deterministicFallbackText />
 													<span className="text-zinc-400">•</span>
 													<span>{getBidMint(bidEvent) || 'No mint declared'}</span>
 												</div>
@@ -685,7 +685,7 @@ function AuctionDetailRoute() {
 									Seller
 								</div>
 								<div className="mt-4">
-									<AvatarUser pubkey={auction.pubkey} />
+									<AvatarUser pubkey={auction.pubkey} colored deterministicFallbackText />
 								</div>
 								<div className="mt-5 space-y-1">
 									<ShopperInfoRow label="Seller key" value={shortenHex(auction.pubkey)} />
