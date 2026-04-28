@@ -3,12 +3,14 @@ import type { RichShippingInfo } from '@/lib/stores/cart'
 export type ProductShippingSelection = {
 	shippingRef: string
 	extraCost: string
+	service?: string
 }
 
 export type LegacyProductShippingSelection = {
 	shippingRef?: string | null
-	shipping?: Pick<RichShippingInfo, 'id' | 'name'> | null
+	shipping?: Pick<RichShippingInfo, 'id' | 'name' | 'service'> | null
 	extraCost?: string | null
+	service?: string | null
 }
 
 export type ProductShippingSelectionInput = ProductShippingSelection | LegacyProductShippingSelection
@@ -37,17 +39,26 @@ export const normalizeProductShippingExtraCost = (input: string | null | undefin
 	return sanitized.endsWith('.') ? sanitized.slice(0, -1) : sanitized
 }
 
+export const shippingServiceDisallowsProductExtraCost = (service: string | null | undefined): boolean => {
+	return service === 'digital' || service === 'pickup'
+}
+
 export const normalizeProductShippingSelection = (input: ProductShippingSelectionInput): ProductShippingSelection | null => {
 	const shippingRef =
 		(typeof input.shippingRef === 'string' && input.shippingRef.trim()) ||
 		(typeof input.shipping?.id === 'string' && input.shipping.id.trim()) ||
 		''
+	const service =
+		(typeof input.service === 'string' && input.service.trim()) ||
+		(typeof input.shipping?.service === 'string' && input.shipping.service.trim()) ||
+		undefined
 
 	if (!shippingRef) return null
 
 	return {
 		shippingRef,
-		extraCost: normalizeProductShippingExtraCost(input.extraCost),
+		extraCost: shippingServiceDisallowsProductExtraCost(service) ? '' : normalizeProductShippingExtraCost(input.extraCost),
+		...(service ? { service } : {}),
 	}
 }
 
@@ -67,9 +78,13 @@ export const resolveProductShippingSelections = (
 ): ResolvedProductShippingSelection[] => {
 	return selections.map((selection) => {
 		const option = availableOptions.find((availableOption) => availableOption.id === selection.shippingRef) ?? null
+		const service = option?.service || selection.service
+		const extraCost = shippingServiceDisallowsProductExtraCost(service) ? '' : normalizeProductShippingExtraCost(selection.extraCost)
 
 		return {
 			...selection,
+			extraCost,
+			...(service ? { service } : {}),
 			option,
 			isResolved: option !== null,
 		}

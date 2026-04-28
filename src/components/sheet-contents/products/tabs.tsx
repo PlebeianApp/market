@@ -719,7 +719,11 @@ export function ShippingTab() {
 			const publishedShipping = await publishShippingMutation.mutateAsync(formData)
 
 			productFormActions.updateValues({
-				shippings: attachShippingOptionByRef(productFormStore.state.shippings, publishedShipping.shippingRef),
+				shippings: [
+					...attachShippingOptionByRef(productFormStore.state.shippings, publishedShipping.shippingRef).map((shipping) =>
+						shipping.shippingRef === publishedShipping.shippingRef ? { ...shipping, service: template.service } : shipping,
+					),
+				],
 			})
 
 			toast.success(`${template.name} shipping option created and added!`)
@@ -760,7 +764,11 @@ export function ShippingTab() {
 			const publishedShipping = await publishShippingMutation.mutateAsync(formData)
 
 			productFormActions.updateValues({
-				shippings: attachShippingOptionByRef(productFormStore.state.shippings, publishedShipping.shippingRef),
+				shippings: [
+					...attachShippingOptionByRef(productFormStore.state.shippings, publishedShipping.shippingRef).map((shipping) =>
+						shipping.shippingRef === publishedShipping.shippingRef ? { ...shipping, service: 'pickup' } : shipping,
+					),
+				],
 			})
 
 			toast.success('Local Pickup shipping option created and added!')
@@ -799,12 +807,16 @@ export function ShippingTab() {
 	const addShippingOption = (option: RichShippingInfo) => {
 		if (!hasResolvedSellerShippingState) return
 
-		const nextShippings = attachShippingOptionByRef(productFormStore.state.shippings, option.id)
+		const attachedShippings = attachShippingOptionByRef(productFormStore.state.shippings, option.id)
 
-		if (nextShippings === productFormStore.state.shippings) {
+		if (attachedShippings === productFormStore.state.shippings) {
 			toast.error('This shipping option is already added')
 			return
 		}
+
+		const nextShippings = attachedShippings.map((shipping) =>
+			shipping.shippingRef === option.id ? { ...shipping, service: option.service } : shipping,
+		)
 
 		productFormActions.updateValues({
 			shippings: nextShippings,
@@ -861,6 +873,26 @@ export function ShippingTab() {
 		() => resolveProductShippingSelections(shippings, availableShippingOptions),
 		[shippings, availableShippingOptions],
 	)
+
+	useEffect(() => {
+		const normalizedShippings = resolvedSelectedShippings.map(({ option: _option, isResolved: _isResolved, ...shipping }) => shipping)
+		const hasChanged =
+			normalizedShippings.length !== shippings.length ||
+			normalizedShippings.some((shipping, index) => {
+				const current = shippings[index]
+				return (
+					shipping.shippingRef !== current?.shippingRef ||
+					shipping.extraCost !== current?.extraCost ||
+					shipping.service !== current?.service
+				)
+			})
+
+		if (!hasChanged) return
+
+		productFormActions.updateValues({
+			shippings: normalizedShippings,
+		})
+	}, [resolvedSelectedShippings, shippings])
 
 	const selectedShippingRefs = useMemo(
 		() => new Set(shippings.map((shipping) => shipping.shippingRef).filter((shippingRef): shippingRef is string => !!shippingRef)),

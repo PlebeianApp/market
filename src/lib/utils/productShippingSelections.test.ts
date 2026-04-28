@@ -49,6 +49,60 @@ describe('product shipping selection normalization', () => {
 		])
 	})
 
+	test('stale product-specific extra cost is stripped from digital selections', () => {
+		expect(
+			normalizeProductShippingSelections([
+				{
+					shippingRef: '30406:merchant:digital',
+					service: 'digital',
+					extraCost: '12.50',
+				},
+			]),
+		).toEqual([
+			{
+				shippingRef: '30406:merchant:digital',
+				service: 'digital',
+				extraCost: '',
+			},
+		])
+	})
+
+	test('stale product-specific extra cost is stripped from pickup selections', () => {
+		expect(
+			normalizeProductShippingSelections([
+				{
+					shippingRef: '30406:merchant:pickup',
+					service: 'pickup',
+					extraCost: '7',
+				},
+			]),
+		).toEqual([
+			{
+				shippingRef: '30406:merchant:pickup',
+				service: 'pickup',
+				extraCost: '',
+			},
+		])
+	})
+
+	test('physical shipping extra cost is preserved and normalized', () => {
+		expect(
+			normalizeProductShippingSelections([
+				{
+					shippingRef: '30406:merchant:standard',
+					service: 'standard',
+					extraCost: '4.567',
+				},
+			]),
+		).toEqual([
+			{
+				shippingRef: '30406:merchant:standard',
+				service: 'standard',
+				extraCost: '4.56',
+			},
+		])
+	})
+
 	test('unresolved shipping refs are surfaced as unavailable', () => {
 		const resolvedSelections = resolveProductShippingSelections(
 			[
@@ -67,6 +121,36 @@ describe('product shipping selection normalization', () => {
 				option: null,
 				isResolved: false,
 			},
+		])
+	})
+
+	test('resolved digital and pickup services strip stale extra cost', () => {
+		const resolvedSelections = resolveProductShippingSelections(
+			[
+				{
+					shippingRef: '30406:merchant:digital',
+					extraCost: '9.99',
+				},
+				{
+					shippingRef: '30406:merchant:pickup',
+					extraCost: '3',
+				},
+				{
+					shippingRef: '30406:merchant:standard',
+					extraCost: '2.125',
+				},
+			],
+			[
+				{ id: '30406:merchant:digital', service: 'digital' },
+				{ id: '30406:merchant:pickup', service: 'pickup' },
+				{ id: '30406:merchant:standard', service: 'standard' },
+			],
+		)
+
+		expect(resolvedSelections.map(({ shippingRef, extraCost, service }) => ({ shippingRef, extraCost, service }))).toEqual([
+			{ shippingRef: '30406:merchant:digital', extraCost: '', service: 'digital' },
+			{ shippingRef: '30406:merchant:pickup', extraCost: '', service: 'pickup' },
+			{ shippingRef: '30406:merchant:standard', extraCost: '2.12', service: 'standard' },
 		])
 	})
 
