@@ -149,7 +149,7 @@ function AuctionBasicInfo({ auction }: { auction: NDKEvent }) {
 						Ends: <span className="font-medium">{formatMaybeDate(effectiveEndAt)}</span>
 					</p>
 					<div className="col-span-2">
-						<AuctionCountdown endAt={effectiveEndAt} showSeconds variant="inline" className="max-w-full" />
+						<AuctionCountdown auction={auction} className="max-w-full" />
 					</div>
 				</div>
 
@@ -263,7 +263,7 @@ function AuctionListItem({
 				<p className="font-semibold truncate">{getAuctionTitle(auction)}</p>
 				<div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
 					<span>{status}</span>
-					<AuctionCountdown endAt={effectiveEndAt} showSeconds variant="inline" className="px-2 py-1 text-[10px]" />
+					<AuctionCountdown auction={auction} compact className="px-2 py-1 text-[10px]" />
 				</div>
 			</div>
 		</div>

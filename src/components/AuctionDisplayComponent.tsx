@@ -73,9 +73,11 @@ export function AuctionDisplayComponent({
 				<div className="flex-1 min-w-0">
 					<h3 className="font-semibold text-sm truncate">{title}</h3>
 					<p className="text-xs text-gray-600 mt-1 line-clamp-2">{summary}</p>
-					<div className="mt-2">
-						<AuctionCountdown endAt={effectiveEndAt} showSeconds variant="inline" className="max-w-full" />
-					</div>
+					{auction && (
+						<div className="mt-2">
+							<AuctionCountdown auction={auction} className="max-w-full" />
+						</div>
+					)}
 					<p className="text-xs text-gray-500 mt-1">Closes: {endAtLabel}</p>
 					<p className="text-xs text-gray-400 mt-1">ID: {coords.identifier}</p>
 				</div>
