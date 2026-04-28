@@ -64,13 +64,30 @@ const DURATION_UNITS = [
 	{ value: 'M', label: 'Months' },
 ] as const
 
-const normalizeShippingFormDataForDeliveryMode = (formData: ShippingFormData, defaultCurrency: string): ShippingFormData => {
+const withoutPhysicalOnlyFields = (formData: ShippingFormData): ShippingFormData => {
+	const {
+		carrier: _carrier,
+		location: _location,
+		region: _region,
+		additionalRegions: _additionalRegions,
+		geohash: _geohash,
+		duration: _duration,
+		weightLimits: _weightLimits,
+		dimensionLimits: _dimensionLimits,
+		priceCalculations: _priceCalculations,
+		...nonPhysicalFormData
+	} = formData
+
+	return nonPhysicalFormData
+}
+
+export const normalizeShippingFormDataForDeliveryMode = (formData: ShippingFormData, defaultCurrency: string): ShippingFormData => {
 	const service = canonicalizeProductDeliveryService(formData.service)
 	const deliveryMode = resolveProductDeliveryMode(service)
 
 	if (deliveryMode === 'digital') {
 		return {
-			...formData,
+			...withoutPhysicalOnlyFields(formData),
 			service,
 			price: '0',
 			currency: formData.currency || defaultCurrency,
@@ -82,7 +99,7 @@ const normalizeShippingFormDataForDeliveryMode = (formData: ShippingFormData, de
 		const pickupCountry = formData.pickupAddress?.country || formData.countries[0]
 
 		return {
-			...formData,
+			...withoutPhysicalOnlyFields(formData),
 			service,
 			price: '0',
 			currency: formData.currency || defaultCurrency,
