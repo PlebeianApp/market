@@ -70,6 +70,7 @@ export function ProductFormContent({
 	const { activeTab, editingProductId, isDirty } = formState
 	const nextCompatibilityStage = getProductAuthoringStageForTab(activeTab)
 	const [editCompatibilityStage, setEditCompatibilityStage] = useState<ProductAuthoringStage>(() => nextCompatibilityStage)
+	const previousActiveTabRef = useRef(activeTab)
 	const resolvedWorkflow: ProductWorkflowResolution = workflow ?? {
 		mode: editingProductId ? 'edit' : 'create',
 		isBootstrapReady: true,
@@ -87,11 +88,15 @@ export function ProductFormContent({
 	}, [workflow, editingProductId, resolvedWorkflow.mode])
 
 	useEffect(() => {
+		const previousActiveTab = previousActiveTabRef.current
+		previousActiveTabRef.current = activeTab
+
 		if (stageResolution || resolvedWorkflow.mode !== 'edit') return
+		if (previousActiveTab === activeTab) return
 		if (nextCompatibilityStage === editCompatibilityStage) return
 
 		setEditCompatibilityStage(nextCompatibilityStage)
-	}, [editCompatibilityStage, nextCompatibilityStage, resolvedWorkflow.mode, stageResolution])
+	}, [activeTab, editCompatibilityStage, nextCompatibilityStage, resolvedWorkflow.mode, stageResolution])
 
 	// Get user pubkey from auth store directly to avoid timing issues
 	const authState = useStore(authStore)
@@ -148,6 +153,7 @@ export function ProductFormContent({
 
 	const selectedStage = resolvedStageResolution.selectedStage
 	const stageValidation = resolvedStageResolution.validation
+	const shouldHideLegacyTabs = resolvedWorkflow.mode === 'create'
 	const renderedTabs = getProductAuthoringTabsForStage(selectedStage)
 	const previousStage = getPreviousProductAuthoringStage(selectedStage)
 	const nextStage = getNextProductAuthoringStage(selectedStage)
@@ -363,7 +369,7 @@ export function ProductFormContent({
 		>
 			<div className="flex-1 flex flex-col min-h-0 overflow-hidden max-h-[calc(100vh-200px)]">
 				<ProductAuthoringStageNavigator resolution={resolvedStageResolution} onStageSelect={selectStage} />
-				<Tabs value={activeTab} onValueChange={handleLegacyTabSelect} className="w-full">
+				<Tabs value={activeTab} onValueChange={handleLegacyTabSelect} className={shouldHideLegacyTabs ? 'sr-only' : 'w-full'}>
 					<TabsList className="w-full bg-transparent h-auto p-0 flex flex-wrap gap-[1px]">
 						{LEGACY_PRODUCT_FORM_TABS.map(({ tab, label, testId }) => (
 							<TabsTrigger
