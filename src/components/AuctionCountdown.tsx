@@ -212,7 +212,11 @@ export function AuctionCountdown({
 	const auctionCoordinates = auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 
 	const shouldFetchBids = bidsProp === undefined
-	const bidsQuery = useAuctionBids(shouldFetchBids ? auctionRootEventId || auction.id : '', 500, shouldFetchBids ? auctionCoordinates : undefined)
+	const bidsQuery = useAuctionBids(
+		shouldFetchBids ? auctionRootEventId || auction.id : '',
+		500,
+		shouldFetchBids ? auctionCoordinates : undefined,
+	)
 	const bids = bidsProp ?? bidsQuery.data ?? []
 	const endTime = getAuctionEndAt(auction)
 	const endTimeEffective = getAuctionEffectiveEndAt(auction, bids) || endTime

@@ -45,7 +45,11 @@ export function AuctionCard({ auction, bids: bidsProp }: { auction: NDKEvent; bi
 	// When a parent (the auctions list) supplies bids in bulk, skip the per-
 	// card subscription. Empty-string args disable the underlying query.
 	const shouldFetchBids = bidsProp === undefined
-	const bidsQuery = useAuctionBids(shouldFetchBids ? auctionRootEventId || auction.id : '', 500, shouldFetchBids ? auctionCoordinates : undefined)
+	const bidsQuery = useAuctionBids(
+		shouldFetchBids ? auctionRootEventId || auction.id : '',
+		500,
+		shouldFetchBids ? auctionCoordinates : undefined,
+	)
 	const bids = bidsProp ?? bidsQuery.data ?? []
 	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
 	const countdown = useAuctionCountdown(effectiveEndAt, { showSeconds: true })

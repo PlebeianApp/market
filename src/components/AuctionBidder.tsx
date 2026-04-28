@@ -51,7 +51,11 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 	const auctionRootEventId = getAuctionRootEventId(auction)
 	const shouldFetchBids = bidsProp === undefined
-	const bidsQuery = useAuctionBids(shouldFetchBids ? auctionRootEventId || auctionId : '', 500, shouldFetchBids ? auctionCoordinates : undefined)
+	const bidsQuery = useAuctionBids(
+		shouldFetchBids ? auctionRootEventId || auctionId : '',
+		500,
+		shouldFetchBids ? auctionCoordinates : undefined,
+	)
 	const bids = bidsProp ?? bidsQuery.data ?? []
 	const endAt = getAuctionEndAt(auction)
 	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt

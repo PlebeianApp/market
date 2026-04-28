@@ -93,10 +93,7 @@ function AuctionsRoute() {
 	// (auctionBidsForListQueryOptions) for rationale. Each AuctionCard reads
 	// its own bid bucket from this Map instead of mounting its own polling
 	// subscription.
-	const auctionRootEventIdsForBids = useMemo(
-		() => auctions.map((auction) => getAuctionRootEventId(auction) || auction.id),
-		[auctions],
-	)
+	const auctionRootEventIdsForBids = useMemo(() => auctions.map((auction) => getAuctionRootEventId(auction) || auction.id), [auctions])
 	const { data: bidsByAuctionId } = useAuctionBidsForList(auctionRootEventIdsForBids)
 
 	const { data: config } = useConfigQuery()
@@ -395,11 +392,7 @@ function AuctionsRoute() {
 				) : (
 					<ItemGrid className="gap-4 sm:gap-8">
 						{filteredAndSortedAuctions.map((auction) => (
-							<AuctionCard
-								key={auction.id}
-								auction={auction}
-								bids={bidsByAuctionId?.get(getAuctionRootEventId(auction) || auction.id)}
-							/>
+							<AuctionCard key={auction.id} auction={auction} bids={bidsByAuctionId?.get(getAuctionRootEventId(auction) || auction.id)} />
 						))}
 					</ItemGrid>
 				)}
