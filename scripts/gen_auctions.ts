@@ -86,6 +86,10 @@ export function generateAuctionData(params: {
 			['auction_type', 'english'],
 			['start_at', String(startAt)],
 			['end_at', String(endAt)],
+			// Seeded auctions don't enable anti-sniping, so the hard
+			// bidding cutoff equals the nominal close (see AUCTIONS.md §6.0).
+			['max_end_at', String(endAt)],
+			['extension_rule', 'none'],
 			['currency', 'SAT'],
 			['price', String(startingBid), 'SAT'],
 			['starting_bid', String(startingBid), 'SAT'],

@@ -71,7 +71,9 @@ const makeAuction = (params: {
 			['schema', 'auction_v1'],
 			...(params.rootEventId ? ([['auction_root_event_id', params.rootEventId]] as string[][]) : []),
 			...(params.extensionRule ? ([['extension_rule', params.extensionRule]] as string[][]) : [['extension_rule', 'none']]),
-			...(params.maxEndAt ? ([['max_end_at', String(params.maxEndAt)]] as string[][]) : []),
+			// Mirror the production invariant: max_end_at is always present.
+			// Defaults to end_at when no anti-sniping is configured.
+			['max_end_at', String(params.maxEndAt ?? params.endAt)],
 		],
 	}) as NDKEvent
 

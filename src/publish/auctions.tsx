@@ -216,7 +216,14 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 		? parsePositiveInt(formData.antiSnipingMaxExtensions, 'Max anti-sniping extensions')
 		: 0
 	const extensionRule = antiSnipingEnabled ? `anti_sniping:${antiSnipingWindowSeconds}:${antiSnipingExtensionSeconds}` : 'none'
-	const maxEndAt = antiSnipingEnabled ? endAt + antiSnipingExtensionSeconds * antiSnipingMaxExtensions : 0
+	// `max_end_at` is the SECOND of the three protocol timestamps:
+	//   end_at      → nominal close (extendable via anti-sniping)
+	//   max_end_at  → hard bidding cutoff (this value)
+	//   locktime    → max_end_at + settlement_grace_seconds, mint-enforced refund opens
+	// We always emit it — even when anti-sniping is off — so the locktime
+	// computation downstream is unambiguous and bidders never have to guess
+	// from a missing tag. With anti-sniping off, it equals end_at.
+	const maxEndAt = antiSnipingEnabled ? endAt + antiSnipingExtensionSeconds * antiSnipingMaxExtensions : endAt
 	const trustedMints = formData.trustedMints.length > 0 ? formData.trustedMints : [DEFAULT_AUCTION_MINT]
 	const keyScheme: AuctionP2pkKeyScheme = 'hd_p2pk'
 	const pathIssuerPubkey = getAuctionPathIssuerPubkeyOrThrow()
@@ -257,7 +264,7 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 		...trustedMints.map((mint) => ['mint', mint] as NDKTag),
 		['path_issuer', pathIssuerPubkey],
 		['extension_rule', extensionRule],
-		...(antiSnipingEnabled ? ([['max_end_at', String(maxEndAt)] as NDKTag] as NDKTag[]) : []),
+		['max_end_at', String(maxEndAt)],
 		['key_scheme', keyScheme],
 		['p2pk_xpub', p2pkXpub],
 		['settlement_policy', AUCTION_SETTLEMENT_POLICY],
@@ -447,6 +454,14 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 	const now = Math.floor(Date.now() / 1000)
 	if (now >= formData.auctionEffectiveEndAt) {
 		throw new Error('Auction already ended')
+	}
+	// Hard bidding cutoff. Even if effective_end_at is somehow further out
+	// (stale fetch, anti-sniping race), max_end_at is the final wall — no
+	// bids can be accepted past it because new bids would need a locktime
+	// past the existing chain's locktime, which we can't grant without
+	// breaking the uniform-locktime invariant.
+	if (now >= formData.auctionLocktimeAt) {
+		throw new Error('Auction has reached its hard bidding cutoff')
 	}
 
 	const bidderPubkey = (await signer.user()).pubkey

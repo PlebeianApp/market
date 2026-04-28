@@ -284,13 +284,16 @@ async function buildAuctionPathGrant(params: {
 	const now = Math.floor(Date.now() / 1000)
 	const startAt = Number(getAuctionTagValue(auctionEvent, 'start_at') || 0)
 	const endAt = Number(getAuctionTagValue(auctionEvent, 'end_at') || 0)
-	const maxEndAt = Number(getAuctionTagValue(auctionEvent, 'max_end_at') || 0)
-	const effectiveEnd = Math.max(endAt, maxEndAt) || endAt
+	// max_end_at is the hard bidding cutoff (timestamp #2 of the three-
+	// timestamp protocol invariant: end_at → max_end_at → locktime). New
+	// auctions always emit it; older auctions without the tag fall back to
+	// end_at so we don't accidentally allow bids forever on legacy data.
+	const maxEndAt = Number(getAuctionTagValue(auctionEvent, 'max_end_at') || 0) || endAt
 	if (startAt && now < startAt) {
 		throw new Error('Auction has not started yet')
 	}
-	if (effectiveEnd && now >= effectiveEnd) {
-		throw new Error('Auction already ended')
+	if (maxEndAt && now >= maxEndAt) {
+		throw new Error('Auction has reached its hard bidding cutoff')
 	}
 
 	const registry = (await fetchAuctionPathRegistry(params.auctionEventId)) ?? {

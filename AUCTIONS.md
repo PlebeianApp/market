@@ -100,13 +100,16 @@ There is intentionally no product reference (`a` tag) in v1.
 - `settlement_policy`: `cashu_p2pk_path_oracle_v1`.
 - `key_scheme`: `hd_p2pk`.
 - `p2pk_xpub`: seller HD xpub used for per-bid seller child key derivation.
+- `max_end_at`: **hard bidding cutoff** in unix seconds. The second of the
+  three protocol timestamps (see §6.0). When anti-sniping is disabled this
+  MUST equal `end_at`; when anti-sniping is enabled this MUST equal
+  `end_at + max_extensions × extension_seconds`. Always required so the
+  Cashu locktime is computable from auction tags alone.
 
 ### Optional auction tags
 
 - `extension_rule`: `none` (v1 default),
   `anti_sniping:<window_seconds>:<extension_seconds>`.
-- `max_end_at`: hard upper bound for `effective_end_at`. REQUIRED if
-  anti-sniping is enabled.
 - `vadium_ratio_bps`: default `10000` (100%).
 - `schema`: version marker, e.g. `auction_v1`.
 - `path_issuer`: Nostr pubkey of the path oracle (defaults to the app's
@@ -175,6 +178,7 @@ Important:
 		["auction_type", "english"],
 		["start_at", "1766202000"],
 		["end_at", "1766288400"],
+		["max_end_at", "1766288400"], // == end_at when anti-sniping disabled
 		["currency", "SAT"],
 		["reserve", "50000"],
 		["bid_increment", "1000"],
@@ -184,6 +188,7 @@ Important:
 		["key_scheme", "hd_p2pk"],
 		["p2pk_xpub", "xpub6Bk...sellerAuctionXpub"],
 		["path_issuer", "<app-path-oracle-nostr-pubkey>"],
+		["extension_rule", "none"],
 		["schema", "auction_v1"],
 
 		// Product-shaped fields
@@ -526,6 +531,52 @@ Deterministic close input set:
 - all valid bids accepted by the anti-sniping time algorithm
 - tie-breaker policy
 
+## 6.0 The three timestamps (structural invariant)
+
+Every path-oracle auction is parameterised by three monotonically ordered
+timestamps. Implementations MUST treat each as a separate concern; collapsing
+any two of them into one is unsafe.
+
+| Tag / value          | Symbol     | Meaning                                                                                                |
+| -------------------- | ---------- | ------------------------------------------------------------------------------------------------------ |
+| `end_at`             | `T_end`    | Nominal close. Bidders compete up to (or near) this moment. Extendable via anti-sniping.               |
+| `max_end_at`         | `T_cutoff` | **Hard bidding cutoff.** No new bids accepted past this. Equals `T_end` when anti-sniping is off.      |
+| `locktime` (per bid) | `T_unlock` | Unix-seconds value embedded in every Cashu P2PK secret. The mint opens the refund path at this moment. |
+
+The invariants:
+
+```
+T_end  ≤  T_cutoff  ≤  T_unlock
+T_unlock = T_cutoff + settlement_grace_seconds
+```
+
+**The gap `T_unlock − T_cutoff` is the seller's settlement window.** It must be wide enough to absorb worst-case settlement work — receive a path
+release from the issuer, derive every child privkey in the winner's chain,
+swap each leg at the mint, sign and publish the kind-1024 event, and absorb
+retries from transient mint 429s or relay failures.
+
+If you collapse any two:
+
+- `T_end == T_unlock` (no grace): bidders reclaim the moment bidding closes.
+  Seller never has a window. Auction never completes.
+- `T_cutoff == T_unlock` (zero grace, anti-sniping pushes effective end to
+  `T_cutoff` = `T_unlock`): same problem, just delayed.
+- `T_end == T_cutoff` with no anti-sniping: fine — this is just "auction has
+  a fixed close". With anti-sniping enabled, the distinction is required —
+  `T_end` is what gets extended; `T_cutoff` is what caps the extension.
+
+`max_end_at` MUST therefore be present on every auction event:
+
+- Anti-sniping disabled → `max_end_at = end_at`.
+- Anti-sniping enabled with `n` extensions of `ext` seconds →
+  `max_end_at = end_at + n × ext`.
+
+`settlement_grace_seconds` is a protocol parameter — currently a constant
+on the issuer and embedded into each bid's locktime via `locktime =
+max_end_at + grace`. Sub-minute values are unsafe on shared infrastructure;
+sub-10-minute values are questionable in production. Dev environments use a
+shorter value (≈ 30 s) for test velocity, not as a design example.
+
 ## 6.1 Effective end time (anti-sniping)
 
 If `extension_rule=anti_sniping:<window_seconds>:<extension_seconds>` is
@@ -543,11 +594,16 @@ for each valid bid ordered by (created_at, id):
 Critical policy:
 
 - Settlement MUST use `effective_end_at`, not raw `end_at`.
-- Anti-sniping is only acceptable with a hard upper bound (`max_end_at`).
+- `max_end_at` is always present (see §6.0). With anti-sniping disabled it
+  equals `end_at` and acts as a no-op cap; with anti-sniping enabled it
+  caps the snipe extension.
 - Bid locktime MUST be fixed up front to
   `max_end_at + settlement_grace_seconds`, so existing bidders never need
   to re-sign bids when the auction is extended.
-- Without a hard upper bound, anti-sniping is not acceptable.
+- Bids submitted at or after `max_end_at` MUST be rejected by both client
+  and issuer. Late bids would need a longer locktime than the chain's
+  existing legs and break the uniform-locktime invariant — see the design
+  caveats note for the full reasoning.
 
 ---
 
