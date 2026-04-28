@@ -284,7 +284,6 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 		}
 
 		setIsSubmitting(true)
-		setFormData(normalizedFormData)
 
 		try {
 			if (isEditing) {
@@ -497,8 +496,17 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 									value={formData.service}
 									onValueChange={(value: any) => {
 										setFormData((prev) => {
+											const previousDeliveryMode = resolveProductDeliveryMode(prev.service)
 											const nextDeliveryMode = resolveProductDeliveryMode(value)
 											const newFormData = { ...prev, service: value }
+
+											if (previousDeliveryMode !== nextDeliveryMode) {
+												if (nextDeliveryMode === 'digital') {
+													setIsWorldwide(true)
+												} else if (nextDeliveryMode === 'physical') {
+													setIsWorldwide(false)
+												}
+											}
 
 											if (nextDeliveryMode === 'pickup') {
 												newFormData.price = '0'
@@ -510,9 +518,6 @@ function ShippingOptionForm({ shippingOption, isOpen, onOpenChange, onSuccess }:
 											} else if (nextDeliveryMode === 'digital') {
 												newFormData.price = '0'
 												newFormData.countries = []
-												setIsWorldwide(true)
-											} else {
-												setIsWorldwide(false)
 											}
 											return newFormData
 										})
