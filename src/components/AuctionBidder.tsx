@@ -152,13 +152,13 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	}
 
 	return (
-		<div className="flex flex-col gap-2 w-full max-w-md">
+		<div className="flex flex-col gap-2 w-full">
 			{/* Main Action Area */}
 			<div className={cn('flex flex-col sm:flex-row gap-2 items-stretch sm:items-center')}>
 				{!compact &&
 					(isEditing ? (
 						// EDIT MODE: Input Field
-						<InputGroup>
+						<InputGroup className="grow w-auto">
 							<InputGroupInput
 								type="number"
 								min={minBid}
@@ -190,7 +190,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 									setIsEditing(true)
 								}
 							}}
-							className={cn('w-full sm:w-auto')}
+							className={cn('flex w-auto')}
 						>
 							<TooltipToggleGroupItem
 								value="inc1"
@@ -198,7 +198,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 								size="sm"
 								tooltip="Minimum Bid Increment"
 								disabled={isDisabledInput}
-								className={cn('cursor-pointer flex-1 sm:flex-none')}
+								className={cn('cursor-pointer flex')}
 							>
 								{minBid.toLocaleString()} sats
 							</TooltipToggleGroupItem>
@@ -209,7 +209,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 								size="sm"
 								tooltip="2x Minimum Bid Increment"
 								disabled={isDisabledInput}
-								className="flex-1 sm:flex-none cursor-pointer"
+								className="flex cursor-pointer"
 							>
 								{(minBid + bidIncrement).toLocaleString()} sats
 							</TooltipToggleGroupItem>
@@ -219,7 +219,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 								size="sm"
 								tooltip="2x Current Bid"
 								disabled={isDisabledInput}
-								className="flex-none cursor-pointer"
+								className="flex cursor-pointer"
 							>
 								<X className="size-3 mr-1" /> 2
 							</TooltipToggleGroupItem>
@@ -232,7 +232,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 									getSelectedValue() === 'edit' ? 'Custom Bid: ' + bidAmountInput.toLocaleString() + ' SATS' : 'Customize Bid Amount'
 								}
 								disabled={isDisabledInput}
-								className="flex-none cursor-pointer"
+								className="flex cursor-pointer"
 								title="Customize bid"
 							>
 								<Pencil className="h-3 w-3" />
@@ -244,8 +244,8 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				<Button
 					onClick={handleSubmitBid}
 					disabled={isDisabledBid}
-					variant={isOwnAuction ? 'secondary' : 'primary'}
-					className={cn('whitespace-nowrap w-full', compact && 'w-full')}
+					variant={isOwnAuction ? 'secondary' : 'default'}
+					className={cn('whitespace-nowrap flex grow')}
 				>
 					{buttonText}
 				</Button>
