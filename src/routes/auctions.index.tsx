@@ -241,31 +241,35 @@ function AuctionsRoute() {
 	}
 
 	const renderHomepageHero = () => (
-		<div className="flex flex-col items-center justify-center text-white text-center lg:col-span-2 relative z-20 mt-4 lg:mt-0">
-			<div className="mb-2 h-40 lg:h-48 flex items-center justify-center">
-				<Button variant="focus" size="lg" onClick={handleCreateAuction}>
-					Create Auction
-				</Button>
-			</div>
-
-			<div className="flex items-center justify-center h-16 lg:h-20">
-				<h1 className="text-2xl lg:text-4xl font-theylive transition-opacity duration-500">Browse Auctions</h1>
-			</div>
-
-			{totalSlides > 1 && (
-				<div className="flex justify-center gap-2">
-					{Array.from({ length: totalSlides }).map((_, index) => (
-						<button
-							key={index}
-							onClick={() => handleDotClick(index)}
-							className={`w-3 h-3 rounded-full transition-all duration-300 ${
-								index === currentSlideIndex ? 'bg-white scale-125' : 'bg-white/40 hover:bg-white/60'
-							}`}
-							aria-label={`View ${index === 0 ? 'homepage' : `auction ${index}`}`}
-						/>
-					))}
+		<div className="z-20 relative flex flex-col justify-center items-center lg:col-span-2 mt-4 lg:mt-0 text-white text-center">
+			<div className="flex flex-col gap-6 items-center">
+				<div className="flex justify-center items-center h-24 lg:h-32">
+					<h1 className="font-theylive text-4xl lg:text-5xl transition-opacity duration-500">Browse Auctions</h1>
 				</div>
-			)}
+
+				<Button variant="secondary" size="lg" onClick={handleCreateAuction} className="bg-focus rounded hover:bg-focus-foreground-hover">
+					<span className="flex items-center gap-2">
+						<span className="size-6 i-nostr" />
+						Create Auction
+					</span>
+				</Button>
+
+				{/* Pagination dots */}
+				{totalSlides > 1 && (
+					<div className="flex justify-center gap-2">
+						{Array.from({ length: totalSlides }).map((_, index) => (
+							<button
+								key={index}
+								onClick={() => handleDotClick(index)}
+								className={`w-3 h-3 rounded-full transition-all duration-300 ${
+									index === currentSlideIndex ? 'bg-white scale-125' : 'bg-white/40 hover:bg-white/60'
+								}`}
+								aria-label={`View ${index === 0 ? 'homepage' : `auction ${index}`}`}
+							/>
+						))}
+					</div>
+				)}
+			</div>
 		</div>
 	)
 
