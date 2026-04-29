@@ -4,6 +4,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { DEFAULT_FORM_STATE, productFormActions, productFormStore, type ProductFormState } from '@/lib/stores/product'
 import { validateProductDraft } from '@/lib/workflow/productDraftValidation'
 import {
+	canSelectProductAuthoringStage,
 	getNextProductAuthoringStage,
 	getPreviousProductAuthoringStage,
 	getPrimaryProductAuthoringTabForStage,
@@ -104,23 +105,29 @@ export function ProductCreateShell({ userPubkey, entrypoint, className = '', for
 			}),
 		[draftValidation, selectedStage, workflow],
 	)
-	const selectStage = useCallback((stage: ProductAuthoringStage) => {
-		setSelectedStage(stage)
+	const selectStage = useCallback(
+		(stage: ProductAuthoringStage) => {
+			if (!canSelectProductAuthoringStage(stage, stageResolution)) return
 
-		// Legacy tabs remain a rendering bridge only. Publish intentionally has no tab to sync.
-		const primaryTab = getPrimaryProductAuthoringTabForStage(stage)
-		if (primaryTab) {
-			productFormActions.setActiveTab(primaryTab)
-		}
-	}, [])
+			setSelectedStage(stage)
+
+			// Legacy tabs remain a rendering bridge only. Publish intentionally has no tab to sync.
+			const primaryTab = getPrimaryProductAuthoringTabForStage(stage)
+			if (primaryTab) {
+				productFormActions.setActiveTab(primaryTab)
+			}
+		},
+		[stageResolution],
+	)
 	const selectPreviousStage = useCallback(() => {
 		const previousStage = getPreviousProductAuthoringStage(selectedStage)
 		if (previousStage) selectStage(previousStage)
 	}, [selectStage, selectedStage])
 	const selectNextStage = useCallback(() => {
 		const nextStage = getNextProductAuthoringStage(selectedStage)
+		if (!stageResolution.canAdvanceToNextStage) return
 		if (nextStage) selectStage(nextStage)
-	}, [selectStage, selectedStage])
+	}, [selectStage, selectedStage, stageResolution.canAdvanceToNextStage])
 
 	useEffect(() => {
 		hasBootstrappedRef.current = false

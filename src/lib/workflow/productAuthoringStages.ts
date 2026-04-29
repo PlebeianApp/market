@@ -23,6 +23,13 @@ export const PRODUCT_AUTHORING_STAGE_TABS: Record<ProductAuthoringStage, Product
 	publish: [],
 }
 
+export type ProductAuthoringStageGate = {
+	stage: ProductAuthoringStage
+	canAdvance: boolean
+	issues: string[]
+	firstBlockingTab: ProductFormTab | null
+}
+
 export type ProductAuthoringStageState = {
 	stage: ProductAuthoringStage
 	label: string
@@ -31,13 +38,20 @@ export type ProductAuthoringStageState = {
 	isComplete: boolean
 	isSelected: boolean
 	isFirstIncomplete: boolean
+	canAdvance: boolean
+	canSelect: boolean
+	firstBlockingTab: ProductFormTab | null
 	issues: string[]
 }
 
 export type ProductAuthoringStageResolution = {
 	stages: ProductAuthoringStageState[]
+	stageGates: ProductAuthoringStageGate[]
 	selectedStage: ProductAuthoringStage
 	firstIncompleteStage: ProductAuthoringStage | null
+	currentStageGate: ProductAuthoringStageGate
+	forwardBlocker: ProductAuthoringStageGate | null
+	canAdvanceToNextStage: boolean
 	canPublish: boolean
 	publishIssues: string[]
 	validation: ProductDraftValidation
@@ -76,6 +90,30 @@ export function getPreviousProductAuthoringStage(stage: ProductAuthoringStage): 
 	return index > 0 ? PRODUCT_AUTHORING_STAGES[index - 1] : null
 }
 
+export function getProductAuthoringStageGate(
+	resolution: ProductAuthoringStageResolution,
+	stage: ProductAuthoringStage,
+): ProductAuthoringStageGate {
+	return resolution.stageGates.find((gate) => gate.stage === stage) ?? resolution.currentStageGate
+}
+
+export function canSelectProductAuthoringStage(targetStage: ProductAuthoringStage, resolution: ProductAuthoringStageResolution): boolean {
+	const selectedIndex = PRODUCT_AUTHORING_STAGES.indexOf(resolution.selectedStage)
+	const targetIndex = PRODUCT_AUTHORING_STAGES.indexOf(targetStage)
+	if (selectedIndex === -1 || targetIndex === -1) return false
+	if (targetIndex <= selectedIndex) return true
+
+	return PRODUCT_AUTHORING_STAGES.slice(0, targetIndex).every((stage) => getProductAuthoringStageGate(resolution, stage).canAdvance)
+}
+
+function getFirstBlockingTabForStage(stage: ProductAuthoringStage, validation: ProductDraftValidation): ProductFormTab | null {
+	if (stage === 'publish') {
+		return validation.allRequiredFieldsValid ? null : validation.firstIncompleteTab
+	}
+
+	return getProductAuthoringTabsForStage(stage).find((tab) => validation.issuesByTab[tab]?.length) ?? null
+}
+
 export function resolveProductAuthoringStages({
 	selectedStage,
 	validation,
@@ -100,25 +138,64 @@ export function resolveProductAuthoringStages({
 	const canPublish = validation.allRequiredFieldsValid && workflow.isBootstrapReady && !workflow.requiresV4VSetup
 	stageIssues.publish = canPublish ? [] : publishIssues
 
+	const stageGates: ProductAuthoringStageGate[] = PRODUCT_AUTHORING_STAGES.map((stage) => {
+		const issues = stageIssues[stage]
+		const canAdvance = stage === 'publish' ? canPublish : issues.length === 0
+
+		return {
+			stage,
+			canAdvance,
+			issues,
+			firstBlockingTab: canAdvance ? null : getFirstBlockingTabForStage(stage, validation),
+		}
+	})
+
+	const getGate = (stage: ProductAuthoringStage): ProductAuthoringStageGate =>
+		stageGates.find((gate) => gate.stage === stage) ?? stageGates[0]
+	const selectedStageIndex = PRODUCT_AUTHORING_STAGES.indexOf(selectedStage)
+	const nextStage = getNextProductAuthoringStage(selectedStage)
+	const forwardBlocker =
+		nextStage && selectedStageIndex >= 0
+			? (PRODUCT_AUTHORING_STAGES.slice(0, PRODUCT_AUTHORING_STAGES.indexOf(nextStage)).find((stage) => !getGate(stage).canAdvance) ?? null)
+			: null
+	const currentStageGate = getGate(selectedStage)
+	const canAdvanceToNextStage = !!nextStage && !forwardBlocker
+
 	const firstIncompleteStage =
 		PRODUCT_AUTHORING_STAGES.find((stage) => {
-			if (stage === 'publish') return !canPublish
-			return stageIssues[stage].length > 0
+			return !getGate(stage).canAdvance
 		}) ?? null
 
 	return {
-		stages: PRODUCT_AUTHORING_STAGES.map((stage) => ({
-			stage,
-			label: PRODUCT_AUTHORING_STAGE_LABELS[stage],
-			tabs: PRODUCT_AUTHORING_STAGE_TABS[stage],
-			primaryTab: getPrimaryProductAuthoringTabForStage(stage),
-			isComplete: stage === 'publish' ? canPublish : stageIssues[stage].length === 0,
-			isSelected: stage === selectedStage,
-			isFirstIncomplete: stage === firstIncompleteStage,
-			issues: stageIssues[stage],
-		})),
+		stages: PRODUCT_AUTHORING_STAGES.map((stage) => {
+			const gate = getGate(stage)
+
+			return {
+				stage,
+				label: PRODUCT_AUTHORING_STAGE_LABELS[stage],
+				tabs: PRODUCT_AUTHORING_STAGE_TABS[stage],
+				primaryTab: getPrimaryProductAuthoringTabForStage(stage),
+				isComplete: gate.canAdvance,
+				isSelected: stage === selectedStage,
+				isFirstIncomplete: stage === firstIncompleteStage,
+				canAdvance: gate.canAdvance,
+				canSelect:
+					selectedStageIndex >= 0 &&
+					PRODUCT_AUTHORING_STAGES.indexOf(stage) >= 0 &&
+					(PRODUCT_AUTHORING_STAGES.indexOf(stage) <= selectedStageIndex ||
+						PRODUCT_AUTHORING_STAGES.slice(0, PRODUCT_AUTHORING_STAGES.indexOf(stage)).every(
+							(previousStage) => getGate(previousStage).canAdvance,
+						)),
+				firstBlockingTab: gate.firstBlockingTab,
+				issues: gate.issues,
+			}
+		}),
+		stageGates,
 		selectedStage,
 		firstIncompleteStage,
+		currentStageGate,
+		forwardBlocker: forwardBlocker ? getGate(forwardBlocker) : null,
+		canAdvanceToNextStage,
 		canPublish,
 		publishIssues,
 		validation,

@@ -21,6 +21,7 @@ export function ProductAuthoringStageNavigator({
 						variant={stageState.isSelected ? 'secondary' : 'outline'}
 						className="h-auto flex-1 min-w-[8rem] justify-start gap-2 px-3 py-2 text-left normal-case"
 						onClick={() => onStageSelect(stageState.stage)}
+						disabled={!stageState.canSelect}
 						aria-current={stageState.isSelected ? 'step' : undefined}
 					>
 						<span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs">

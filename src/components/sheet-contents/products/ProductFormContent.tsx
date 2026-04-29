@@ -9,6 +9,7 @@ import { productFormActions, productFormStore, type ProductFormTab } from '@/lib
 import { uiActions } from '@/lib/stores/ui'
 import { hasProductFormDraft } from '@/lib/utils/productFormStorage'
 import {
+	canSelectProductAuthoringStage,
 	getNextProductAuthoringStage,
 	getPreviousProductAuthoringStage,
 	getPrimaryProductAuthoringTabForStage,
@@ -154,11 +155,16 @@ export function ProductFormContent({
 	const selectedStage = resolvedStageResolution.selectedStage
 	const stageValidation = resolvedStageResolution.validation
 	const shouldHideLegacyTabs = resolvedWorkflow.mode === 'create'
+	const forwardBlocker = resolvedStageResolution.forwardBlocker
+	const forwardIssues = forwardBlocker?.issues ?? []
 	const renderedTabs = getProductAuthoringTabsForStage(selectedStage)
 	const previousStage = getPreviousProductAuthoringStage(selectedStage)
 	const nextStage = getNextProductAuthoringStage(selectedStage)
+	const isNextDisabled = !nextStage || !resolvedStageResolution.canAdvanceToNextStage
 	const selectStage = useCallback(
 		(stage: ProductAuthoringStage) => {
+			if (!canSelectProductAuthoringStage(stage, resolvedStageResolution)) return
+
 			if (onStageSelect) {
 				onStageSelect(stage)
 				return
@@ -170,16 +176,18 @@ export function ProductFormContent({
 				productFormActions.setActiveTab(primaryTab)
 			}
 		},
-		[onStageSelect],
+		[onStageSelect, resolvedStageResolution],
 	)
 	const handleLegacyTabSelect = useCallback(
 		(tab: string) => {
 			const legacyTab = tab as ProductFormTab
+			const legacyStage = getProductAuthoringStageForTab(legacyTab)
+			if (!canSelectProductAuthoringStage(legacyStage, resolvedStageResolution)) return
 
-			selectStage(getProductAuthoringStageForTab(legacyTab))
+			selectStage(legacyStage)
 			productFormActions.setActiveTab(legacyTab)
 		},
-		[selectStage],
+		[resolvedStageResolution, selectStage],
 	)
 	const handleBack = useCallback(() => {
 		if (onStageBack) {
@@ -190,13 +198,15 @@ export function ProductFormContent({
 		if (previousStage) selectStage(previousStage)
 	}, [onStageBack, previousStage, selectStage])
 	const handleNext = useCallback(() => {
+		if (!nextStage || !resolvedStageResolution.canAdvanceToNextStage) return
+
 		if (onStageNext) {
 			onStageNext()
 			return
 		}
 
-		if (nextStage) selectStage(nextStage)
-	}, [nextStage, onStageNext, selectStage])
+		selectStage(nextStage)
+	}, [nextStage, onStageNext, resolvedStageResolution.canAdvanceToNextStage, selectStage])
 
 	// Check for persisted draft on mount (for drafts from previous sessions)
 	const checkForPersistedDraft = useCallback(async () => {
@@ -481,16 +491,37 @@ export function ProductFormContent({
 								}}
 							/>
 						) : (
-							<Button
-								type="button"
-								variant="secondary"
-								className="flex-1 uppercase"
-								onClick={handleNext}
-								disabled={!nextStage}
-								data-testid="product-next-button"
-							>
-								Next
-							</Button>
+							<TooltipProvider>
+								<Tooltip>
+									<TooltipTrigger asChild>
+										<span className="flex-1">
+											<Button
+												type="button"
+												variant="secondary"
+												className="w-full uppercase"
+												onClick={handleNext}
+												disabled={isNextDisabled}
+												data-testid="product-next-button"
+											>
+												Next
+											</Button>
+										</span>
+									</TooltipTrigger>
+									{isNextDisabled && nextStage && (
+										<TooltipContent>
+											{forwardIssues.length > 0 ? (
+												<ul className="list-disc list-inside space-y-1">
+													{forwardIssues.map((issue, i) => (
+														<li key={i}>{issue}</li>
+													))}
+												</ul>
+											) : (
+												<p>Complete the current stage before continuing.</p>
+											)}
+										</TooltipContent>
+									)}
+								</Tooltip>
+							</TooltipProvider>
 						)}
 					</div>
 				</div>
