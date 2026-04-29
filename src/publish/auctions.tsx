@@ -13,15 +13,12 @@ import {
 	type AuctionSettlementPlanResponse,
 	type AuctionSettlementPublishStatus,
 } from '@/lib/auctionSettlement'
+import { AUCTION_MIN_DURATION_SECONDS, validateAuctionPublishInput } from '@/lib/auctionPublishValidation'
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { configStore } from '@/lib/stores/config'
 import { ndkActions } from '@/lib/stores/ndk'
 import { getAuctionSettlementGraceSeconds, nip60Actions, type AuctionP2pkKeyScheme } from '@/lib/stores/nip60'
-import {
-	normalizeProductShippingSelections,
-	type ProductShippingSelection,
-	type ProductShippingSelectionInput,
-} from '@/lib/utils/productShippingSelections'
+import type { ProductShippingSelectionInput } from '@/lib/utils/productShippingSelections'
 import { verifyAuctionPathGrant } from '@/lib/auctionP2pk'
 import { rememberAuctionPathGrant } from '@/lib/auctionPathOracle'
 import { getBidAmount, getBidStatus, markAuctionAsDeleted } from '@/queries/auctions'
@@ -30,8 +27,6 @@ import NDK, { NDKEvent, NDKUser, type NDKFilter, type NDKSigner, type NDKTag } f
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
-
-const DEFAULT_AUCTION_MINT = 'https://nofees.testnut.cashu.space'
 
 export interface AuctionSpecEntry {
 	key: string
@@ -164,21 +159,6 @@ export interface AuctionSettlementFormData {
 	reason?: string
 }
 
-const parseUnixTimestamp = (isoDateTime?: string): number | null => {
-	if (!isoDateTime) return null
-	const timestampMs = new Date(isoDateTime).getTime()
-	if (Number.isNaN(timestampMs)) return null
-	return Math.floor(timestampMs / 1000)
-}
-
-const parsePositiveInt = (value: string, fieldName: string): number => {
-	const parsed = parseInt(value, 10)
-	if (!Number.isFinite(parsed) || parsed <= 0) {
-		throw new Error(`${fieldName} must be greater than 0`)
-	}
-	return parsed
-}
-
 const getAuctionPathIssuerPubkeyOrThrow = (): string => {
 	const appPubkey = configStore.state.config.appPublicKey?.trim()
 	if (!appPubkey) {
@@ -202,27 +182,18 @@ const tagBidError = (step: string, cause: unknown): Error => {
 }
 
 export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKSigner, ndk: NDK, auctionId?: string): Promise<NDKEvent> => {
+	const validated = validateAuctionPublishInput(formData, { minDurationSeconds: AUCTION_MIN_DURATION_SECONDS })
 	const event = new NDKEvent(ndk)
 	event.kind = 30408
-	event.content = formData.description
+	event.content = validated.description
 
 	const id = auctionId || `auction_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
-	const now = Math.floor(Date.now() / 1000)
-
-	const startAt = parseUnixTimestamp(formData.startAt) ?? now
-	const endAt = parseUnixTimestamp(formData.endAt) ?? now + 86400
-	const startingBid = formData.startingBid.trim() || '0'
-	const bidIncrement = formData.bidIncrement.trim() || '1'
-	const reserve = formData.reserve.trim() || '0'
-	const antiSnipingEnabled = formData.antiSnipingEnabled === true
-	const antiSnipingWindowSeconds = antiSnipingEnabled ? parsePositiveInt(formData.antiSnipingWindowSeconds, 'Anti-sniping window') : 0
-	const antiSnipingExtensionSeconds = antiSnipingEnabled
-		? parsePositiveInt(formData.antiSnipingExtensionSeconds, 'Anti-sniping extension')
-		: 0
-	const antiSnipingMaxExtensions = antiSnipingEnabled
-		? parsePositiveInt(formData.antiSnipingMaxExtensions, 'Max anti-sniping extensions')
-		: 0
-	const extensionRule = antiSnipingEnabled ? `anti_sniping:${antiSnipingWindowSeconds}:${antiSnipingExtensionSeconds}` : 'none'
+	const startingBid = String(validated.startingBid)
+	const bidIncrement = String(validated.bidIncrement)
+	const reserve = String(validated.reserve)
+	const extensionRule = validated.antiSnipingEnabled
+		? `anti_sniping:${validated.antiSnipingWindowSeconds}:${validated.antiSnipingExtensionSeconds}`
+		: 'none'
 	// `max_end_at` is the SECOND of the three protocol timestamps:
 	//   end_at      → nominal close (extendable via anti-sniping)
 	//   max_end_at  → hard bidding cutoff (this value)
@@ -230,13 +201,11 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 	// We always emit it — even when anti-sniping is off — so the locktime
 	// computation downstream is unambiguous and bidders never have to guess
 	// from a missing tag. With anti-sniping off, it equals end_at.
-	const maxEndAt = antiSnipingEnabled ? endAt + antiSnipingExtensionSeconds * antiSnipingMaxExtensions : endAt
-	const trustedMints = formData.trustedMints.length > 0 ? formData.trustedMints : [DEFAULT_AUCTION_MINT]
 	const keyScheme: AuctionP2pkKeyScheme = 'hd_p2pk'
 	const pathIssuerPubkey = getAuctionPathIssuerPubkeyOrThrow()
 	const p2pkXpub = await nip60Actions.getAuctionP2pkXpub()
 
-	const imageTags = formData.imageUrls.map((url, index) => ['image', url, '800x600', String(index)] as NDKTag)
+	const imageTags = validated.imageUrls.map((url, index) => ['image', url, '800x600', String(index)] as NDKTag)
 	const categoryTags: NDKTag[] = []
 	if (formData.mainCategory) {
 		categoryTags.push(['t', formData.mainCategory] as NDKTag)
@@ -251,27 +220,26 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 		.filter((spec) => spec && spec.key.trim() && spec.value.trim())
 		.map((spec) => ['spec', spec.key.trim(), spec.value.trim()] as NDKTag)
 
-	const normalizedShippings: ProductShippingSelection[] = normalizeProductShippingSelections(formData.shippings)
-	const shippingTags: NDKTag[] = normalizedShippings.map((ship) =>
+	const shippingTags: NDKTag[] = validated.shippings.map((ship) =>
 		ship.extraCost ? (['shipping_option', ship.shippingRef, ship.extraCost] as NDKTag) : (['shipping_option', ship.shippingRef] as NDKTag),
 	)
 
 	event.tags = [
 		['d', id],
-		['title', formData.title],
-		...(formData.summary.trim() ? ([['summary', formData.summary.trim()] as NDKTag] as NDKTag[]) : []),
+		['title', validated.title],
+		...(validated.summary ? ([['summary', validated.summary] as NDKTag] as NDKTag[]) : []),
 		['auction_type', 'english'],
-		['start_at', String(startAt)],
-		['end_at', String(endAt)],
+		['start_at', String(validated.startAt)],
+		['end_at', String(validated.endAt)],
 		['currency', 'SAT'],
 		['price', startingBid, 'SAT'],
 		['starting_bid', startingBid, 'SAT'],
 		['bid_increment', bidIncrement],
 		['reserve', reserve],
-		...trustedMints.map((mint) => ['mint', mint] as NDKTag),
+		...validated.trustedMints.map((mint) => ['mint', mint] as NDKTag),
 		['path_issuer', pathIssuerPubkey],
 		['extension_rule', extensionRule],
-		['max_end_at', String(maxEndAt)],
+		['max_end_at', String(validated.maxEndAt)],
 		['settlement_grace', String(getAuctionSettlementGraceSeconds())],
 		['key_scheme', keyScheme],
 		['p2pk_xpub', p2pkXpub],
@@ -288,39 +256,7 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 }
 
 export const publishAuction = async (formData: AuctionFormData, signer: NDKSigner, ndk: NDK, auctionId?: string): Promise<string> => {
-	if (!formData.title.trim()) {
-		throw new Error('Auction title is required')
-	}
-	if (!formData.description.trim()) {
-		throw new Error('Auction description is required')
-	}
-	if (!formData.startingBid.trim() || isNaN(Number(formData.startingBid)) || Number(formData.startingBid) < 0) {
-		throw new Error('Valid starting bid is required')
-	}
-	if (!formData.bidIncrement.trim() || isNaN(Number(formData.bidIncrement)) || Number(formData.bidIncrement) <= 0) {
-		throw new Error('Bid increment must be greater than 0')
-	}
-	if (!formData.endAt) {
-		throw new Error('Auction end time is required')
-	}
-
-	const now = Math.floor(Date.now() / 1000)
-	const startAtTs = parseUnixTimestamp(formData.startAt) ?? now
-	const endAtTs = parseUnixTimestamp(formData.endAt)
-	if (!endAtTs) {
-		throw new Error('Invalid auction end time')
-	}
-	if (endAtTs <= startAtTs) {
-		throw new Error('Auction end time must be after start time')
-	}
-	if (formData.antiSnipingEnabled) {
-		parsePositiveInt(formData.antiSnipingWindowSeconds, 'Anti-sniping window')
-		parsePositiveInt(formData.antiSnipingExtensionSeconds, 'Anti-sniping extension')
-		parsePositiveInt(formData.antiSnipingMaxExtensions, 'Max anti-sniping extensions')
-	}
-	if (formData.imageUrls.length === 0) {
-		throw new Error('At least one image is required')
-	}
+	validateAuctionPublishInput(formData, { minDurationSeconds: AUCTION_MIN_DURATION_SECONDS })
 
 	const event = await createAuctionEvent(formData, signer, ndk, auctionId)
 	await event.sign(signer)

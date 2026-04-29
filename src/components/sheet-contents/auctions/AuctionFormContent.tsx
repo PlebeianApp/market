@@ -7,6 +7,13 @@ import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+	AUCTION_MIN_DURATION_SECONDS,
+	getAuctionPublishValidationIssues,
+	validateAuctionPublishInput,
+	type AuctionPublishValidationField,
+	type AuctionPublishValidationIssue,
+} from '@/lib/auctionPublishValidation'
 import { DEFAULT_TRUSTED_MINTS, PRODUCT_CATEGORIES } from '@/lib/constants'
 import { authStore } from '@/lib/stores/auth'
 import { configStore } from '@/lib/stores/config'
@@ -17,11 +24,12 @@ import { createShippingReference, getShippingInfo, isShippingDeleted, useShippin
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { CalendarIcon, Plus, X } from 'lucide-react'
-import { useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import { useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from 'react'
 
 type AuctionImage = { imageUrl: string; imageOrder: number }
 
 type AuctionTab = 'name' | 'auction' | 'category' | 'spec' | 'images' | 'shipping'
+type ValidationMessages = Partial<Record<AuctionPublishValidationField, string>>
 
 const INITIAL_FORM: AuctionFormData = {
 	title: '',
@@ -50,6 +58,27 @@ function parseListInput(value: string): string[] {
 		.split(/[\n,]/)
 		.map((item) => item.trim())
 		.filter(Boolean)
+}
+
+function toValidationMessages(issues: AuctionPublishValidationIssue[]): ValidationMessages {
+	const messages: ValidationMessages = {}
+	for (const issue of issues) {
+		messages[issue.field] ??= issue.message
+	}
+	return messages
+}
+
+function toIndexedValidationMessages(
+	issues: AuctionPublishValidationIssue[],
+	field: AuctionPublishValidationField,
+): Record<number, string> {
+	const messages: Record<number, string> = {}
+	for (const issue of issues) {
+		if (issue.field === field && issue.index !== undefined) {
+			messages[issue.index] ??= issue.message
+		}
+	}
+	return messages
 }
 
 type TabProps = {
@@ -286,6 +315,7 @@ function AuctionTabContent({
 	setEndMode,
 	durationSeconds,
 	setDurationSeconds,
+	validationMessages,
 }: TabProps & {
 	availableMints: readonly string[]
 	startMode: StartMode
@@ -294,6 +324,7 @@ function AuctionTabContent({
 	setEndMode: Dispatch<SetStateAction<EndMode>>
 	durationSeconds: number
 	setDurationSeconds: Dispatch<SetStateAction<number>>
+	validationMessages: ValidationMessages
 }) {
 	const selectedMints = formData.trustedMints
 	const unselectedMints = availableMints.filter((mint) => !selectedMints.includes(mint))
@@ -315,6 +346,7 @@ function AuctionTabContent({
 	const antiSnipingWindowSeconds = parseInt(formData.antiSnipingWindowSeconds, 10)
 	const antiSnipingExtensionSeconds = parseInt(formData.antiSnipingExtensionSeconds, 10)
 	const antiSnipingMaxExtensions = parseInt(formData.antiSnipingMaxExtensions, 10)
+	const endTimeError = validationMessages.endAt ?? validationMessages.duration ?? validationMessages.startAt
 
 	const effectiveStartSeconds = useMemo(() => {
 		if (startMode === 'immediate') return Math.floor(Date.now() / 1000)
@@ -381,6 +413,7 @@ function AuctionTabContent({
 						value={formData.startingBid}
 						onChange={(e) => setFormData((prev) => ({ ...prev, startingBid: e.target.value }))}
 					/>
+					{validationMessages.startingBid && <p className="text-xs text-red-600">{validationMessages.startingBid}</p>}
 				</div>
 				<div className="grid w-full gap-1.5">
 					<Label htmlFor="auction-bid-increment">
@@ -393,6 +426,7 @@ function AuctionTabContent({
 						value={formData.bidIncrement}
 						onChange={(e) => setFormData((prev) => ({ ...prev, bidIncrement: e.target.value }))}
 					/>
+					{validationMessages.bidIncrement && <p className="text-xs text-red-600">{validationMessages.bidIncrement}</p>}
 				</div>
 			</div>
 
@@ -405,6 +439,7 @@ function AuctionTabContent({
 					value={formData.reserve}
 					onChange={(e) => setFormData((prev) => ({ ...prev, reserve: e.target.value }))}
 				/>
+				{validationMessages.reserve && <p className="text-xs text-red-600">{validationMessages.reserve}</p>}
 			</div>
 
 			<BidLadderViz startingBid={startingBidNum} bidIncrement={bidIncrementNum} reserve={reserveNum} />
@@ -510,6 +545,7 @@ function AuctionTabContent({
 								<span className="font-semibold text-zinc-900">Ends:</span> {formatAbsolute(virtualEndSeconds)}
 							</p>
 						</div>
+						{endTimeError && <p className="text-xs text-red-600">{endTimeError}</p>}
 					</div>
 				) : (
 					<div className="space-y-2">
@@ -521,6 +557,7 @@ function AuctionTabContent({
 						{virtualEndSeconds > 0 && (
 							<p className="text-xs text-zinc-500">Runs for approximately {formatDuration(virtualDurationSeconds)}.</p>
 						)}
+						{endTimeError && <p className="text-xs text-red-600">{endTimeError}</p>}
 					</div>
 				)}
 			</div>
@@ -555,6 +592,9 @@ function AuctionTabContent({
 									value={formData.antiSnipingWindowSeconds}
 									onChange={(e) => setFormData((prev) => ({ ...prev, antiSnipingWindowSeconds: e.target.value }))}
 								/>
+								{validationMessages.antiSnipingWindowSeconds && (
+									<p className="text-xs text-red-600">{validationMessages.antiSnipingWindowSeconds}</p>
+								)}
 							</div>
 							<div className="grid w-full gap-1.5">
 								<Label htmlFor="auction-anti-sniping-extension">Extension (seconds)</Label>
@@ -565,6 +605,9 @@ function AuctionTabContent({
 									value={formData.antiSnipingExtensionSeconds}
 									onChange={(e) => setFormData((prev) => ({ ...prev, antiSnipingExtensionSeconds: e.target.value }))}
 								/>
+								{validationMessages.antiSnipingExtensionSeconds && (
+									<p className="text-xs text-red-600">{validationMessages.antiSnipingExtensionSeconds}</p>
+								)}
 							</div>
 							<div className="grid w-full gap-1.5">
 								<Label htmlFor="auction-anti-sniping-max-extensions">Max extensions</Label>
@@ -575,6 +618,9 @@ function AuctionTabContent({
 									value={formData.antiSnipingMaxExtensions}
 									onChange={(e) => setFormData((prev) => ({ ...prev, antiSnipingMaxExtensions: e.target.value }))}
 								/>
+								{validationMessages.antiSnipingMaxExtensions && (
+									<p className="text-xs text-red-600">{validationMessages.antiSnipingMaxExtensions}</p>
+								)}
 							</div>
 						</div>
 
@@ -601,6 +647,7 @@ function AuctionTabContent({
 				<p className="text-xs text-zinc-500">
 					Bids will be rejected unless the token is minted by one of these mints. At least one is required.
 				</p>
+				{validationMessages.trustedMints && <p className="text-xs text-red-600">{validationMessages.trustedMints}</p>}
 
 				<div className="space-y-2 mt-1">
 					{selectedMints.map((mint) => (
@@ -747,7 +794,15 @@ function SpecTab({ formData, setFormData }: TabProps) {
 	)
 }
 
-function ImagesTab({ images, setImages }: { images: AuctionImage[]; setImages: Dispatch<SetStateAction<AuctionImage[]>> }) {
+function ImagesTab({
+	images,
+	setImages,
+	error,
+}: {
+	images: AuctionImage[]
+	setImages: Dispatch<SetStateAction<AuctionImage[]>>
+	error?: string
+}) {
 	const [needsUploader, setNeedsUploader] = useState(true)
 
 	const handleSaveImage = ({ url, index }: { url: string; index: number }) => {
@@ -797,7 +852,7 @@ function ImagesTab({ images, setImages }: { images: AuctionImage[]; setImages: D
 				<Label>
 					<span className="after:content-['*'] after:ml-0.5 after:text-red-500">Image Upload</span>
 					<span className="sr-only">required</span>
-					{images.length === 0 && <span className="text-sm text-red-500 ml-2">(At least one image required)</span>}
+					{error && <span className="text-sm text-red-500 ml-2">({error})</span>}
 				</Label>
 
 				{images.map((image, i) => (
@@ -837,7 +892,12 @@ type AvailableShipping = {
 	carrier: string | undefined
 }
 
-function ShippingTab({ formData, setFormData, userPubkey }: TabProps & { userPubkey: string }) {
+function ShippingTab({
+	formData,
+	setFormData,
+	userPubkey,
+	shippingExtraCostErrors,
+}: TabProps & { userPubkey: string; shippingExtraCostErrors: Record<number, string> }) {
 	const shippingOptionsQuery = useShippingOptionsByPubkey(userPubkey)
 
 	const availableShippingOptions = useMemo<AvailableShipping[]>(() => {
@@ -940,6 +1000,7 @@ function ShippingTab({ formData, setFormData, userPubkey }: TabProps & { userPub
 									value={selection.extraCost}
 									onChange={(e) => updateExtraCost(index, e.target.value)}
 								/>
+								{shippingExtraCostErrors[index] && <p className="text-xs text-red-600">{shippingExtraCostErrors[index]}</p>}
 							</div>
 						</div>
 					))}
@@ -1010,37 +1071,16 @@ export function AuctionFormContent() {
 	const [endMode, setEndMode] = useState<EndMode>('duration')
 	const [durationSeconds, setDurationSeconds] = useState<number>(24 * 60 * 60)
 
-	const hasValidName = formData.title.trim().length > 0
-	const hasValidDescription = formData.description.trim().length > 0
-	const hasValidBiddingAmounts = formData.startingBid.trim().length > 0 && formData.bidIncrement.trim().length > 0
-	const hasValidEndTime = endMode === 'duration' ? durationSeconds > 0 : formData.endAt.trim().length > 0
-	const hasValidAntiSniping =
-		!formData.antiSnipingEnabled ||
-		(formData.antiSnipingWindowSeconds.trim().length > 0 &&
-			parseInt(formData.antiSnipingWindowSeconds, 10) > 0 &&
-			formData.antiSnipingExtensionSeconds.trim().length > 0 &&
-			parseInt(formData.antiSnipingExtensionSeconds, 10) > 0 &&
-			formData.antiSnipingMaxExtensions.trim().length > 0 &&
-			parseInt(formData.antiSnipingMaxExtensions, 10) > 0)
-	const hasValidBidding = hasValidBiddingAmounts && hasValidEndTime && hasValidAntiSniping
-	const hasValidImages = images.filter((img) => img.imageUrl.trim().length > 0).length > 0
-	const hasValidMints = formData.trustedMints.length > 0
-
-	const canSubmit = hasValidName && hasValidDescription && hasValidBidding && hasValidImages && hasValidMints
-
-	const handleSubmit = async (event: React.BaseSyntheticEvent) => {
-		event.preventDefault()
-		event.stopPropagation()
-
+	const buildPublishFormData = (nowSeconds: number): AuctionFormData => {
 		const effectiveStartAt = startMode === 'immediate' ? '' : (formData.startAt ?? '')
 		let effectiveEndAt = formData.endAt
 		if (endMode === 'duration') {
 			const parsedStart = formData.startAt ? parseDatetimeLocalSeconds(formData.startAt) : null
-			const startSeconds = startMode === 'immediate' ? Math.floor(Date.now() / 1000) : (parsedStart ?? Math.floor(Date.now() / 1000))
+			const startSeconds = startMode === 'immediate' ? nowSeconds : (parsedStart ?? nowSeconds)
 			effectiveEndAt = toDatetimeLocal(new Date((startSeconds + durationSeconds) * 1000))
 		}
 
-		const nextFormData: AuctionFormData = {
+		return {
 			...formData,
 			startAt: effectiveStartAt,
 			endAt: effectiveEndAt,
@@ -1052,8 +1092,42 @@ export function AuctionFormContent() {
 			categories: parseListInput(subCategoryInput),
 			specs: formData.specs.filter((spec: AuctionSpecEntry) => spec.key.trim() && spec.value.trim()),
 		}
+	}
+
+	const validationNowSeconds = Math.floor(Date.now() / 1000)
+	const validationIssues = getAuctionPublishValidationIssues(buildPublishFormData(validationNowSeconds), {
+		nowSeconds: validationNowSeconds,
+		minDurationSeconds: AUCTION_MIN_DURATION_SECONDS,
+	})
+	const validationMessages = toValidationMessages(validationIssues)
+	const shippingExtraCostErrors = toIndexedValidationMessages(validationIssues, 'shippingExtraCost')
+
+	const hasValidName = !validationMessages.title
+	const hasValidDescription = !validationMessages.description
+	const hasValidBidding =
+		!validationMessages.startingBid &&
+		!validationMessages.bidIncrement &&
+		!validationMessages.reserve &&
+		!validationMessages.startAt &&
+		!validationMessages.endAt &&
+		!validationMessages.duration &&
+		!validationMessages.antiSnipingWindowSeconds &&
+		!validationMessages.antiSnipingExtensionSeconds &&
+		!validationMessages.antiSnipingMaxExtensions
+	const hasValidImages = !validationMessages.imageUrls
+	const hasValidMints = !validationMessages.trustedMints
+
+	const canSubmit = validationIssues.length === 0
+
+	const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+		event.preventDefault()
+		event.stopPropagation()
+
+		const nowSeconds = Math.floor(Date.now() / 1000)
+		const nextFormData = buildPublishFormData(nowSeconds)
 
 		try {
+			validateAuctionPublishInput(nextFormData, { nowSeconds, minDurationSeconds: AUCTION_MIN_DURATION_SECONDS })
 			const publishedEventId = await publishMutation.mutateAsync(nextFormData)
 			if (!publishedEventId) return
 
@@ -1070,7 +1144,7 @@ export function AuctionFormContent() {
 		{ value: 'category', label: 'Category', showAsterisk: false },
 		{ value: 'spec', label: 'Spec', showAsterisk: false },
 		{ value: 'images', label: 'Images', showAsterisk: !hasValidImages },
-		{ value: 'shipping', label: 'Shipping', showAsterisk: false },
+		{ value: 'shipping', label: 'Shipping', showAsterisk: Object.keys(shippingExtraCostErrors).length > 0 },
 	]
 
 	return (
@@ -1109,6 +1183,7 @@ export function AuctionFormContent() {
 								setEndMode={setEndMode}
 								durationSeconds={durationSeconds}
 								setDurationSeconds={setDurationSeconds}
+								validationMessages={validationMessages}
 							/>
 						</TabsContent>
 						<TabsContent value="category" className="mt-4">
@@ -1123,10 +1198,15 @@ export function AuctionFormContent() {
 							<SpecTab formData={formData} setFormData={setFormData} />
 						</TabsContent>
 						<TabsContent value="images" className="mt-4">
-							<ImagesTab images={images} setImages={setImages} />
+							<ImagesTab images={images} setImages={setImages} error={validationMessages.imageUrls} />
 						</TabsContent>
 						<TabsContent value="shipping" className="mt-4">
-							<ShippingTab formData={formData} setFormData={setFormData} userPubkey={userPubkey} />
+							<ShippingTab
+								formData={formData}
+								setFormData={setFormData}
+								userPubkey={userPubkey}
+								shippingExtraCostErrors={shippingExtraCostErrors}
+							/>
 						</TabsContent>
 					</div>
 				</Tabs>
