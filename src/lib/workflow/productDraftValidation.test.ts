@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { DEFAULT_FORM_STATE, type ProductFormState } from '@/lib/stores/product'
-import { validateProductDraft } from '@/lib/workflow/productDraftValidation'
+import { validateProductDraft, validateProductPublishDraft } from '@/lib/workflow/productDraftValidation'
 
 const makeState = (overrides: Partial<ProductFormState> = {}): ProductFormState => ({
 	...DEFAULT_FORM_STATE,
@@ -17,13 +17,18 @@ describe('validateProductDraft', () => {
 
 		expect(validation.issues).toEqual([
 			'Product name is required',
-			'Description is required',
-			'At least one image is required',
+			'Product description is required',
+			'Valid product price is required',
+			'Valid product quantity is required',
+			'Main category is required',
+			'At least one product image is required',
 			'At least one shipping option is required',
 		])
 		expect(validation.issuesByTab).toEqual({
-			name: ['Product name is required', 'Description is required'],
-			images: ['At least one image is required'],
+			name: ['Product name is required', 'Product description is required'],
+			detail: ['Valid product price is required', 'Valid product quantity is required'],
+			category: ['Main category is required'],
+			images: ['At least one product image is required'],
 			shipping: ['At least one shipping option is required'],
 		})
 		expect(validation.firstIncompleteTab).toBe('name')
@@ -35,6 +40,9 @@ describe('validateProductDraft', () => {
 			state: makeState({
 				name: 'Valid product',
 				description: 'Valid description',
+				price: '1000',
+				quantity: '1',
+				mainCategory: 'Bitcoin',
 				images: [{ imageUrl: 'https://example.com/image.png', imageOrder: 0 }],
 				shippings: [{ shippingRef: 'seller-pubkey:standard', extraCost: '100' }],
 			}),
@@ -56,6 +64,9 @@ describe('validateProductDraft', () => {
 		const state = makeState({
 			name: 'Valid product',
 			description: 'Valid description',
+			price: '1000',
+			quantity: '1',
+			mainCategory: 'Bitcoin',
 			images: [{ imageUrl: 'https://example.com/image.png', imageOrder: 0 }],
 			shippings: [{ shippingRef: 'seller-pubkey:standard', extraCost: '' }],
 		})
@@ -83,5 +94,21 @@ describe('validateProductDraft', () => {
 				isShippingFetched: true,
 			}).allRequiredFieldsValid,
 		).toBe(true)
+	})
+
+	test('canonical publish validation rejects missing price and category', () => {
+		const validation = validateProductPublishDraft({
+			name: 'Valid product',
+			description: 'Valid description',
+			price: '',
+			quantity: '1',
+			mainCategory: null,
+			images: [{ imageUrl: 'https://example.com/image.png', imageOrder: 0 }],
+			shippings: [{ shippingRef: 'seller-pubkey:standard', extraCost: '' }],
+		})
+
+		expect(validation.isValid).toBe(false)
+		expect(validation.issues).toContain('Valid product price is required')
+		expect(validation.issues).toContain('Main category is required')
 	})
 })
