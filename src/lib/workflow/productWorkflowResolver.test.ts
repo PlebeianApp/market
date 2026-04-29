@@ -19,15 +19,15 @@ describe('resolveProductWorkflow', () => {
 		})
 	})
 
-	test('routes new sessions to shipping first when setup truth says shipping is empty', () => {
+	test('does not route new sessions to shipping first when setup truth says shipping is empty', () => {
 		const resolution = resolveProductWorkflow({
 			mode: 'create',
 			shippingState: 'empty',
 			v4vConfigurationState: 'configured-zero',
 		})
 
-		expect(resolution.initialTab).toBe('shipping')
-		expect(resolution.shouldStartAtShipping).toBe(true)
+		expect(resolution.initialTab).toBe('name')
+		expect(resolution.shouldStartAtShipping).toBe(false)
 		expect(resolution.requiresV4VSetup).toBe(false)
 	})
 
@@ -53,7 +53,7 @@ describe('resolveProductWorkflow', () => {
 		expect(resolution.initialTab).toBe('name')
 	})
 
-	test('does not allow requestedTab to bypass shipping-first bootstrap in create flow', () => {
+	test('allows requestedTab even when shipping setup truth says shipping is empty', () => {
 		const resolution = resolveProductWorkflow({
 			mode: 'create',
 			shippingState: 'empty',
@@ -62,11 +62,12 @@ describe('resolveProductWorkflow', () => {
 		})
 
 		expect(resolution.isBootstrapReady).toBe(true)
-		expect(resolution.initialTab).toBe('shipping')
+		expect(resolution.initialTab).toBe('images')
+		expect(resolution.shouldStartAtShipping).toBe(false)
 		expect(resolution.requiresV4VSetup).toBe(true)
 	})
 
-	test('may honor requestedTab for create flow only when bootstrap policy is not forcing shipping', () => {
+	test('may honor requestedTab for create flow when shipping is ready', () => {
 		const resolution = resolveProductWorkflow({
 			mode: 'create',
 			shippingState: 'ready',
@@ -77,6 +78,19 @@ describe('resolveProductWorkflow', () => {
 		expect(resolution.isBootstrapReady).toBe(true)
 		expect(resolution.initialTab).toBe('images')
 		expect(resolution.shouldStartAtShipping).toBe(false)
+	})
+
+	test('shipping emptiness affects readiness, not first-step policy', () => {
+		const resolution = resolveProductWorkflow({
+			mode: 'create',
+			shippingState: 'empty',
+			v4vConfigurationState: 'never-configured',
+		})
+
+		expect(resolution.initialTab).toBe('name')
+		expect(resolution.shouldStartAtShipping).toBe(false)
+		expect(resolution.requiresV4VSetup).toBe(true)
+		expect(resolution.isBootstrapReady).toBe(true)
 	})
 
 	test('may honor requestedTab more freely in edit flow', () => {

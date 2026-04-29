@@ -38,14 +38,11 @@ export function resolveProductWorkflow(input: ProductWorkflowResolverInput): Pro
 		}
 	}
 
-	const shouldStartAtShipping = input.shippingState === 'empty'
-	const initialTab: ProductFormTab = shouldStartAtShipping ? 'shipping' : (requestedTab ?? 'name')
-
 	return {
 		mode,
 		isBootstrapReady: input.shippingState !== 'loading',
-		initialTab,
-		shouldStartAtShipping,
+		initialTab: requestedTab ?? 'name',
+		shouldStartAtShipping: false,
 		requiresV4VSetup: input.v4vConfigurationState === 'never-configured',
 	}
 }

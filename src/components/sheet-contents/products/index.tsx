@@ -1,3 +1,4 @@
+import { ProductCreateShell } from '@/components/product-authoring/ProductCreateShell'
 import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { authActions, authStore } from '@/lib/stores/auth'
 import type { ProductFormState } from '@/lib/stores/product'
@@ -24,6 +25,7 @@ export function NewProductContent({
 
 	// Get user and authentication status from auth store
 	const { user, isAuthenticated } = useStore(authStore)
+	const userPubkey = user?.pubkey ?? ''
 
 	// Function to check if the form has been modified from its default state
 	const isFormModified = (currentState: ProductFormState) => {
@@ -97,7 +99,7 @@ export function NewProductContent({
 				<SheetDescription className="hidden">{description || defaultDescription}</SheetDescription>
 			</SheetHeader>
 
-			<ProductFormContent />
+			{editingProductId ? <ProductFormContent /> : <ProductCreateShell userPubkey={userPubkey} entrypoint="homepage-sheet" />}
 		</SheetContent>
 	)
 }

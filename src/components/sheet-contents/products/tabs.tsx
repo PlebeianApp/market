@@ -8,17 +8,27 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CURRENCIES, PRODUCT_CATEGORIES } from '@/lib/constants'
 import type { RichShippingInfo } from '@/lib/stores/cart'
 import { useNDK } from '@/lib/stores/ndk'
-import { productFormActions, productFormStore, type ProductShippingForm } from '@/lib/stores/product'
+import { productFormActions, productFormStore } from '@/lib/stores/product'
 import { uiStore } from '@/lib/stores/ui'
+import {
+	getProductDeliveryModeLabel,
+	productDeliveryModeAllowsProductExtraCost,
+	resolveProductDeliveryMode,
+	type ProductDeliveryMode,
+} from '@/lib/workflow/productDeliveryModes'
 import { attachShippingOptionByRef } from '@/lib/utils/productShippingQuickCreate'
-import { resolveProductShippingSelections } from '@/lib/utils/productShippingSelections'
+import {
+	normalizeProductShippingExtraCost,
+	resolveProductShippingSelections,
+	sanitizeProductShippingExtraCostInput,
+} from '@/lib/utils/productShippingSelections'
 import { MempoolService } from '@/lib/utils/mempool'
 import { useBtcExchangeRates, type SupportedCurrency } from '@/queries/external'
 import { usePublishShippingOptionMutation, type ShippingFormData } from '@/publish/shipping'
-import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
+import { createShippingReference, getShippingInfo, getShippingPickupAddress, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useForm } from '@tanstack/react-form'
 import { useStore } from '@tanstack/react-store'
-import { Info, ArrowRightLeft, DownloadIcon, Loader2, PackageIcon, PlusIcon, TruckIcon, X, AlertTriangle } from 'lucide-react'
+import { ArrowRightLeft, DownloadIcon, Loader2, PackageIcon, PlusIcon, TruckIcon, X, AlertTriangle } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -628,11 +638,23 @@ export function ImagesTab() {
 	)
 }
 
+type QuickShippingTemplateService = Extract<ShippingFormData['service'], 'digital' | 'standard' | 'pickup'>
+
+const normalizeQuickShippingTemplateService = (service: string | null | undefined): QuickShippingTemplateService | null => {
+	const normalizedService = service?.trim().toLowerCase()
+
+	if (normalizedService === 'digital' || normalizedService === 'standard' || normalizedService === 'pickup') {
+		return normalizedService
+	}
+
+	return null
+}
+
 // Quick-create shipping templates for new users
 const QUICK_SHIPPING_TEMPLATES: Array<{
 	name: string
 	description: string
-	service: ShippingFormData['service']
+	service: QuickShippingTemplateService
 	icon: 'digital' | 'worldwide' | 'pickup'
 }> = [
 	{
@@ -655,6 +677,47 @@ const QUICK_SHIPPING_TEMPLATES: Array<{
 	},
 ]
 
+const formatPickupAddress = (address: RichShippingInfo['pickupAddress']): string | null => {
+	if (!address || typeof address !== 'object') return null
+
+	const parts = [address.street, address.city, address.state, address.postalCode, address.country].filter(
+		(part): part is string => typeof part === 'string' && part.trim().length > 0,
+	)
+
+	return parts.length ? parts.join(', ') : null
+}
+
+const formatCoverageSummary = (countries: string[] | undefined): string => {
+	if (!countries || countries.length === 0) return 'Worldwide'
+	if (countries.length === 1) return countries[0]
+	return `${countries.length} countries`
+}
+
+const getSelectedShippingSummary = (option: RichShippingInfo, deliveryMode: ProductDeliveryMode): string => {
+	if (deliveryMode === 'pickup') {
+		return formatPickupAddress(option.pickupAddress) || option.location || 'Pickup location configured by seller'
+	}
+
+	if (deliveryMode === 'digital') {
+		return option.description || 'Delivered digitally after purchase'
+	}
+
+	return `${option.cost ?? 0} ${option.currency || ''} • ${formatCoverageSummary(option.countries)} • ${option.service || 'Physical shipping'}`
+}
+
+const getProductDeliveryModeNote = (deliveryMode: ProductDeliveryMode, option: RichShippingInfo | null): string => {
+	if (deliveryMode === 'pickup') {
+		const address = formatPickupAddress(option?.pickupAddress)
+		return address ? `Pickup at ${address}` : 'Pickup instructions come from the seller shipping option'
+	}
+
+	if (deliveryMode === 'digital') {
+		return 'Delivered digitally after purchase. No shipping cost.'
+	}
+
+	return 'Optional product-specific extra shipping cost'
+}
+
 export function ShippingTab() {
 	const { shippings } = useStore(productFormStore)
 	const { getUser } = useNDK()
@@ -676,10 +739,12 @@ export function ShippingTab() {
 	}, [getUser])
 
 	const shippingOptionsQuery = useShippingOptionsByPubkey(user?.pubkey || '')
+	const hasResolvedSellerShippingState = shippingOptionsQuery.isSuccess || shippingOptionsQuery.data !== undefined
+	const sellerShippingStateIsUnresolvedError = !hasResolvedSellerShippingState && shippingOptionsQuery.isError
 
 	// Quick-create a shipping option from template
 	const handleQuickCreate = async (template: (typeof QUICK_SHIPPING_TEMPLATES)[number]) => {
-		if (isCreatingShipping || !user?.pubkey) return
+		if (isCreatingShipping || !user?.pubkey || !hasResolvedSellerShippingState) return
 
 		// For pickup, show the address form instead of creating immediately
 		if (template.service === 'pickup') {
@@ -701,7 +766,11 @@ export function ShippingTab() {
 			const publishedShipping = await publishShippingMutation.mutateAsync(formData)
 
 			productFormActions.updateValues({
-				shippings: attachShippingOptionByRef(productFormStore.state.shippings, publishedShipping.shippingRef),
+				shippings: [
+					...attachShippingOptionByRef(productFormStore.state.shippings, publishedShipping.shippingRef).map((shipping) =>
+						shipping.shippingRef === publishedShipping.shippingRef ? { ...shipping, service: template.service } : shipping,
+					),
+				],
 			})
 
 			toast.success(`${template.name} shipping option created and added!`)
@@ -715,7 +784,7 @@ export function ShippingTab() {
 
 	// Handle pickup address form submission
 	const handlePickupSubmit = async () => {
-		if (!user?.pubkey) return
+		if (!user?.pubkey || !hasResolvedSellerShippingState) return
 
 		// Validate required fields
 		if (!pickupAddress.street.trim()) {
@@ -742,7 +811,11 @@ export function ShippingTab() {
 			const publishedShipping = await publishShippingMutation.mutateAsync(formData)
 
 			productFormActions.updateValues({
-				shippings: attachShippingOptionByRef(productFormStore.state.shippings, publishedShipping.shippingRef),
+				shippings: [
+					...attachShippingOptionByRef(productFormStore.state.shippings, publishedShipping.shippingRef).map((shipping) =>
+						shipping.shippingRef === publishedShipping.shippingRef ? { ...shipping, service: 'pickup' } : shipping,
+					),
+				],
 			})
 
 			toast.success('Local Pickup shipping option created and added!')
@@ -768,31 +841,35 @@ export function ShippingTab() {
 				return {
 					id,
 					name: info.title,
+					description: info.description,
 					cost: parseFloat(info.price.amount),
 					currency: info.price.currency,
 					countries: info.countries || [],
 					service: info.service || '',
 					carrier: info.carrier || '',
+					location: info.location || '',
+					pickupAddress: getShippingPickupAddress(event),
 				}
 			})
 			.filter(Boolean) as RichShippingInfo[]
 	}, [shippingOptionsQuery.data, user?.pubkey])
 
 	const addShippingOption = (option: RichShippingInfo) => {
-		// Check if shipping option is already added
-		const isAlreadyAdded = shippings.some((s) => s.shippingRef === option.id)
-		if (isAlreadyAdded) {
+		if (!hasResolvedSellerShippingState) return
+
+		const attachedShippings = attachShippingOptionByRef(productFormStore.state.shippings, option.id)
+
+		if (attachedShippings === productFormStore.state.shippings) {
 			toast.error('This shipping option is already added')
 			return
 		}
 
-		const newShipping: ProductShippingForm = {
-			shippingRef: option.id,
-			extraCost: '',
-		}
+		const nextShippings = attachedShippings.map((shipping) =>
+			shipping.shippingRef === option.id ? { ...shipping, service: option.service } : shipping,
+		)
 
 		productFormActions.updateValues({
-			shippings: [...shippings, newShipping],
+			shippings: nextShippings,
 		})
 	}
 
@@ -803,10 +880,27 @@ export function ShippingTab() {
 	}
 
 	const updateExtraCost = (index: number, extraCost: string) => {
+		const sanitizedExtraCost = sanitizeProductShippingExtraCostInput(extraCost)
+		if (sanitizedExtraCost === null) return
+
 		const updatedShippings = [...shippings]
 		updatedShippings[index] = {
 			...updatedShippings[index],
-			extraCost,
+			extraCost: sanitizedExtraCost,
+		}
+		productFormActions.updateValues({
+			shippings: updatedShippings,
+		})
+	}
+
+	const normalizeExtraCost = (index: number) => {
+		const normalizedExtraCost = normalizeProductShippingExtraCost(shippings[index]?.extraCost)
+		if (normalizedExtraCost === shippings[index]?.extraCost) return
+
+		const updatedShippings = [...shippings]
+		updatedShippings[index] = {
+			...updatedShippings[index],
+			extraCost: normalizedExtraCost,
 		}
 		productFormActions.updateValues({
 			shippings: updatedShippings,
@@ -814,20 +908,66 @@ export function ShippingTab() {
 	}
 
 	const ServiceIcon = ({ service }: { service: string }) => {
-		switch (service) {
-			case 'express':
-			case 'overnight':
-				return <TruckIcon className="w-4 h-4 text-orange-500" />
+		const deliveryMode = resolveProductDeliveryMode(service)
+
+		switch (deliveryMode) {
+			case 'digital':
+				return <DownloadIcon className="w-4 h-4 text-purple-500" />
 			case 'pickup':
 				return <PackageIcon className="w-4 h-4 text-blue-500" />
-			default:
-				return <TruckIcon className="w-4 h-4" />
+			case 'physical':
+				return <TruckIcon className={`w-4 h-4 ${service === 'express' || service === 'overnight' ? 'text-orange-500' : ''}`} />
 		}
 	}
 
 	const resolvedSelectedShippings = useMemo(
 		() => resolveProductShippingSelections(shippings, availableShippingOptions),
 		[shippings, availableShippingOptions],
+	)
+
+	useEffect(() => {
+		const normalizedShippings = resolvedSelectedShippings.map(({ option: _option, isResolved: _isResolved, ...shipping }) => shipping)
+		const hasChanged =
+			normalizedShippings.length !== shippings.length ||
+			normalizedShippings.some((shipping, index) => {
+				const current = shippings[index]
+				return (
+					shipping.shippingRef !== current?.shippingRef ||
+					shipping.extraCost !== current?.extraCost ||
+					shipping.service !== current?.service
+				)
+			})
+
+		if (!hasChanged) return
+
+		productFormActions.updateValues({
+			shippings: normalizedShippings,
+		})
+	}, [resolvedSelectedShippings, shippings])
+
+	const selectedShippingRefs = useMemo(
+		() => new Set(shippings.map((shipping) => shipping.shippingRef).filter((shippingRef): shippingRef is string => !!shippingRef)),
+		[shippings],
+	)
+
+	const availableMerchantShippingOptions = useMemo(
+		() => availableShippingOptions.filter((option) => !selectedShippingRefs.has(option.id)),
+		[availableShippingOptions, selectedShippingRefs],
+	)
+
+	const savedMerchantQuickTemplateServices = useMemo(
+		() =>
+			new Set(
+				availableShippingOptions
+					.map((option) => normalizeQuickShippingTemplateService(option.service))
+					.filter((service): service is QuickShippingTemplateService => !!service),
+			),
+		[availableShippingOptions],
+	)
+
+	const remainingQuickShippingTemplates = useMemo(
+		() => QUICK_SHIPPING_TEMPLATES.filter((template) => !savedMerchantQuickTemplateServices.has(template.service)),
+		[savedMerchantQuickTemplateServices],
 	)
 
 	const hasValidShipping = shippingOptionsQuery.isFetched
@@ -846,12 +986,18 @@ export function ShippingTab() {
 			</div>
 
 			{/* Selected Shipping Options */}
-			{shippings.length > 0 && (
-				<div className="space-y-4">
+			<div className="space-y-4">
+				<div>
 					<h3 className="font-medium">Selected Shipping Options</h3>
+					<p className="text-sm text-gray-500">Shipping options attached to this product draft.</p>
+				</div>
+				{shippings.length > 0 ? (
 					<div className="space-y-3">
 						{resolvedSelectedShippings.map((shipping, index) => {
 							const option = shipping.option
+							const deliveryMode = resolveProductDeliveryMode(option?.service || shipping.service)
+							const allowsProductExtraCost = productDeliveryModeAllowsProductExtraCost(deliveryMode)
+
 							return (
 								<div key={index} className="flex items-center gap-3 p-3 border rounded-md bg-gray-50">
 									{option?.service ? <ServiceIcon service={option.service} /> : <AlertTriangle className="w-4 h-4 text-amber-500" />}
@@ -861,11 +1007,7 @@ export function ShippingTab() {
 										</div>
 										{option ? (
 											<div className="text-sm text-gray-500">
-												{option.cost} {option.currency} •{' '}
-												{option.countries && option.countries.length > 1
-													? `${option.countries.length} countries`
-													: option.countries?.[0] || 'No countries'}{' '}
-												• {option.service || 'Unknown service'}
+												{getProductDeliveryModeLabel(deliveryMode)} • {getSelectedShippingSummary(option, deliveryMode)}
 											</div>
 										) : shippingOptionsQuery.isFetched ? (
 											<div className="text-sm text-amber-600">This shipping reference is no longer available: {shipping.shippingRef}</div>
@@ -874,15 +1016,21 @@ export function ShippingTab() {
 										)}
 									</div>
 									<div className="flex items-center gap-2">
-										<Input
-											type="number"
-											step="0.01"
-											min="0"
-											value={shipping.extraCost}
-											onChange={(e) => updateExtraCost(index, e.target.value)}
-											placeholder="Add cost specific to this product"
-											className="w-40 sm:w-56 md:w-76 text-sm"
-										/>
+										{allowsProductExtraCost ? (
+											<Input
+												type="number"
+												inputMode="decimal"
+												step="0.01"
+												min="0"
+												value={shipping.extraCost}
+												onChange={(e) => updateExtraCost(index, e.target.value)}
+												onBlur={() => normalizeExtraCost(index)}
+												placeholder="Add cost specific to this product"
+												className="w-40 sm:w-56 md:w-76 text-sm"
+											/>
+										) : (
+											<div className="w-40 sm:w-56 md:w-76 text-sm text-gray-500">{getProductDeliveryModeNote(deliveryMode, option)}</div>
+										)}
 										<Button
 											type="button"
 											variant="outline"
@@ -897,173 +1045,199 @@ export function ShippingTab() {
 							)
 						})}
 					</div>
-				</div>
-			)}
+				) : (
+					<div className="p-4 border rounded-md text-sm text-gray-500">No shipping options selected for this product yet.</div>
+				)}
+			</div>
 
-			{/* Available Shipping Options */}
+			{/* Saved Merchant Shipping Options */}
 			<div className="space-y-4">
-				<h3 className="font-medium">Available Shipping Options</h3>
-				{shippingOptionsQuery.isLoading ? (
+				<div>
+					<h3 className="font-medium">Saved Merchant Shipping Options</h3>
+					<p className="text-sm text-gray-500">Reusable seller-level shipping options that can be attached to this product.</p>
+				</div>
+				{!hasResolvedSellerShippingState && sellerShippingStateIsUnresolvedError ? (
+					<div className="p-4 border rounded-md text-sm text-amber-600">Saved merchant shipping options are unavailable right now.</div>
+				) : !hasResolvedSellerShippingState ? (
 					<div className="flex items-center justify-center p-8">
 						<Loader2 className="w-6 h-6 animate-spin" />
 						<span className="ml-2">Loading shipping options...</span>
 					</div>
 				) : availableShippingOptions.length === 0 ? (
-					<div className="space-y-4">
-						<div className="text-center p-4 text-gray-500">
-							<p>No shipping options available.</p>
-							<p className="text-sm mt-2">Quick-create a shipping option to get started:</p>
-						</div>
-						{showPickupForm ? (
-							<div className="border rounded-md p-4 space-y-4 bg-gray-50">
-								<div className="flex items-center gap-2">
-									<PackageIcon className="w-5 h-5 text-green-500" />
-									<h4 className="font-medium">Local Pickup Address</h4>
-								</div>
-								<p className="text-sm text-gray-500">Enter the address where customers can pick up their orders:</p>
-								<div className="space-y-3">
-									<div>
-										<Label htmlFor="pickup-street" className="text-sm">
-											Street Address <span className="text-red-500">*</span>
-										</Label>
-										<Input
-											id="pickup-street"
-											value={pickupAddress.street}
-											onChange={(e) => setPickupAddress((prev) => ({ ...prev, street: e.target.value }))}
-											placeholder="123 Main Street"
-											className="mt-1"
-										/>
-									</div>
-									<div className="grid grid-cols-2 gap-3">
-										<div>
-											<Label htmlFor="pickup-city" className="text-sm">
-												City <span className="text-red-500">*</span>
-											</Label>
-											<Input
-												id="pickup-city"
-												value={pickupAddress.city}
-												onChange={(e) => setPickupAddress((prev) => ({ ...prev, city: e.target.value }))}
-												placeholder="New York"
-												className="mt-1"
-											/>
-										</div>
-										<div>
-											<Label htmlFor="pickup-state" className="text-sm">
-												State/Province
-											</Label>
-											<Input
-												id="pickup-state"
-												value={pickupAddress.state}
-												onChange={(e) => setPickupAddress((prev) => ({ ...prev, state: e.target.value }))}
-												placeholder="NY"
-												className="mt-1"
-											/>
-										</div>
-									</div>
-									<div className="grid grid-cols-2 gap-3">
-										<div>
-											<Label htmlFor="pickup-postal" className="text-sm">
-												Postal Code
-											</Label>
-											<Input
-												id="pickup-postal"
-												value={pickupAddress.postalCode}
-												onChange={(e) => setPickupAddress((prev) => ({ ...prev, postalCode: e.target.value }))}
-												placeholder="10001"
-												className="mt-1"
-											/>
-										</div>
-										<div>
-											<Label htmlFor="pickup-country" className="text-sm">
-												Country
-											</Label>
-											<Input
-												id="pickup-country"
-												value={pickupAddress.country}
-												onChange={(e) => setPickupAddress((prev) => ({ ...prev, country: e.target.value }))}
-												placeholder="USA"
-												className="mt-1"
-											/>
-										</div>
-									</div>
-								</div>
-								<div className="flex gap-2 pt-2">
-									<Button
-										type="button"
-										variant="outline"
-										onClick={() => {
-											setShowPickupForm(false)
-											setPickupAddress({ street: '', city: '', state: '', postalCode: '', country: '' })
-										}}
-										disabled={isCreatingShipping}
-										className="flex-1"
-									>
-										Cancel
-									</Button>
-									<Button type="button" onClick={handlePickupSubmit} disabled={isCreatingShipping} className="flex-1">
-										{isCreatingShipping ? (
-											<>
-												<Loader2 className="w-4 h-4 animate-spin mr-2" />
-												Creating...
-											</>
-										) : (
-											'Create Pickup Option'
-										)}
-									</Button>
-								</div>
-							</div>
-						) : (
-							<div className="grid gap-3">
-								{QUICK_SHIPPING_TEMPLATES.map((template) => (
-									<button
-										key={template.name}
-										type="button"
-										onClick={() => handleQuickCreate(template)}
-										disabled={isCreatingShipping}
-										className="flex items-center gap-3 p-4 border rounded-md hover:bg-gray-50 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-									>
-										{template.icon === 'digital' && <DownloadIcon className="w-5 h-5 text-purple-500 flex-shrink-0" />}
-										{template.icon === 'worldwide' && <TruckIcon className="w-5 h-5 text-blue-500 flex-shrink-0" />}
-										{template.icon === 'pickup' && <PackageIcon className="w-5 h-5 text-green-500 flex-shrink-0" />}
-										<div className="flex-1 min-w-0">
-											<div className="font-medium">{template.name}</div>
-											<div className="text-sm text-gray-500">{template.description}</div>
-										</div>
-										{isCreatingShipping ? (
-											<Loader2 className="w-5 h-5 animate-spin text-gray-400" />
-										) : (
-											<PlusIcon className="w-5 h-5 text-gray-400" />
-										)}
-									</button>
-								))}
-							</div>
-						)}
-						<p className="text-xs text-gray-400 text-center">You can customize these options later in Dashboard → Shipping Options</p>
+					<div className="p-4 border rounded-md text-sm text-gray-500">No saved merchant shipping options yet.</div>
+				) : availableMerchantShippingOptions.length === 0 ? (
+					<div className="p-4 border rounded-md text-sm text-gray-500">
+						All saved merchant shipping options are already selected for this product.
 					</div>
 				) : (
 					<div className="grid gap-3">
-						{availableShippingOptions
-							.filter((option) => !shippings.some((s) => s.shippingRef === option.id))
-							.map((option) => (
+						{availableMerchantShippingOptions.map((option) => {
+							const deliveryMode = resolveProductDeliveryMode(option.service)
+
+							return (
 								<div key={option.id} className="flex items-center gap-3 p-3 border rounded-md hover:bg-gray-50">
 									{option.service && <ServiceIcon service={option.service} />}
 									<div className="flex-1">
 										<div className="font-medium">{option.name}</div>
 										<div className="text-sm text-gray-500">
-											{option.cost} {option.currency} •{' '}
-											{option.countries && option.countries.length > 1
-												? `${option.countries.length} countries`
-												: option.countries?.[0] || 'Worldwide'}{' '}
-											• {option.service || 'Unknown service'}
+											{getProductDeliveryModeLabel(deliveryMode)} • {getSelectedShippingSummary(option, deliveryMode)}
 										</div>
 									</div>
 									<Button type="button" variant="outline" size="sm" onClick={() => addShippingOption(option)}>
 										Add
 									</Button>
 								</div>
-							))}
+							)
+						})}
 					</div>
 				)}
+			</div>
+
+			{/* Quick-create Delivery Templates */}
+			<div className="space-y-4">
+				<div>
+					<h3 className="font-medium">Quick-create Delivery Templates</h3>
+					<p className="text-sm text-gray-500">Common merchant-level templates that have not been saved for this seller yet.</p>
+				</div>
+
+				{!hasResolvedSellerShippingState && sellerShippingStateIsUnresolvedError ? (
+					<div className="p-4 border rounded-md text-sm text-amber-600">
+						Quick-create templates are unavailable until seller shipping options resolve.
+					</div>
+				) : !hasResolvedSellerShippingState ? (
+					<div className="flex items-center justify-center p-8">
+						<Loader2 className="w-6 h-6 animate-spin" />
+						<span className="ml-2">Loading quick-create templates...</span>
+					</div>
+				) : showPickupForm ? (
+					<div className="border rounded-md p-4 space-y-4 bg-gray-50">
+						<div className="flex items-center gap-2">
+							<PackageIcon className="w-5 h-5 text-green-500" />
+							<h4 className="font-medium">Local Pickup Address</h4>
+						</div>
+						<p className="text-sm text-gray-500">Enter the address where customers can pick up their orders:</p>
+						<div className="space-y-3">
+							<div>
+								<Label htmlFor="pickup-street" className="text-sm">
+									Street Address <span className="text-red-500">*</span>
+								</Label>
+								<Input
+									id="pickup-street"
+									value={pickupAddress.street}
+									onChange={(e) => setPickupAddress((prev) => ({ ...prev, street: e.target.value }))}
+									placeholder="123 Main Street"
+									className="mt-1"
+								/>
+							</div>
+							<div className="grid grid-cols-2 gap-3">
+								<div>
+									<Label htmlFor="pickup-city" className="text-sm">
+										City <span className="text-red-500">*</span>
+									</Label>
+									<Input
+										id="pickup-city"
+										value={pickupAddress.city}
+										onChange={(e) => setPickupAddress((prev) => ({ ...prev, city: e.target.value }))}
+										placeholder="New York"
+										className="mt-1"
+									/>
+								</div>
+								<div>
+									<Label htmlFor="pickup-state" className="text-sm">
+										State/Province
+									</Label>
+									<Input
+										id="pickup-state"
+										value={pickupAddress.state}
+										onChange={(e) => setPickupAddress((prev) => ({ ...prev, state: e.target.value }))}
+										placeholder="NY"
+										className="mt-1"
+									/>
+								</div>
+							</div>
+							<div className="grid grid-cols-2 gap-3">
+								<div>
+									<Label htmlFor="pickup-postal" className="text-sm">
+										Postal Code
+									</Label>
+									<Input
+										id="pickup-postal"
+										value={pickupAddress.postalCode}
+										onChange={(e) => setPickupAddress((prev) => ({ ...prev, postalCode: e.target.value }))}
+										placeholder="10001"
+										className="mt-1"
+									/>
+								</div>
+								<div>
+									<Label htmlFor="pickup-country" className="text-sm">
+										Country
+									</Label>
+									<Input
+										id="pickup-country"
+										value={pickupAddress.country}
+										onChange={(e) => setPickupAddress((prev) => ({ ...prev, country: e.target.value }))}
+										placeholder="USA"
+										className="mt-1"
+									/>
+								</div>
+							</div>
+						</div>
+						<div className="flex gap-2 pt-2">
+							<Button
+								type="button"
+								variant="outline"
+								onClick={() => {
+									setShowPickupForm(false)
+									setPickupAddress({ street: '', city: '', state: '', postalCode: '', country: '' })
+								}}
+								disabled={isCreatingShipping}
+								className="flex-1"
+							>
+								Cancel
+							</Button>
+							<Button type="button" onClick={handlePickupSubmit} disabled={isCreatingShipping} className="flex-1">
+								{isCreatingShipping ? (
+									<>
+										<Loader2 className="w-4 h-4 animate-spin mr-2" />
+										Creating...
+									</>
+								) : (
+									'Create Pickup Option'
+								)}
+							</Button>
+						</div>
+					</div>
+				) : remainingQuickShippingTemplates.length > 0 ? (
+					<div className="grid gap-3">
+						{remainingQuickShippingTemplates.map((template) => (
+							<button
+								key={template.service}
+								type="button"
+								onClick={() => handleQuickCreate(template)}
+								disabled={isCreatingShipping}
+								className="flex items-center gap-3 p-4 border rounded-md hover:bg-gray-50 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+							>
+								{template.icon === 'digital' && <DownloadIcon className="w-5 h-5 text-purple-500 flex-shrink-0" />}
+								{template.icon === 'worldwide' && <TruckIcon className="w-5 h-5 text-blue-500 flex-shrink-0" />}
+								{template.icon === 'pickup' && <PackageIcon className="w-5 h-5 text-green-500 flex-shrink-0" />}
+								<div className="flex-1 min-w-0">
+									<div className="font-medium">{template.name}</div>
+									<div className="text-sm text-gray-500">{template.description}</div>
+								</div>
+								{isCreatingShipping ? (
+									<Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+								) : (
+									<PlusIcon className="w-5 h-5 text-gray-400" />
+								)}
+							</button>
+						))}
+					</div>
+				) : (
+					<div className="p-4 border rounded-md text-sm text-gray-500">
+						All common quick-create templates already exist for this seller.
+					</div>
+				)}
+				<p className="text-xs text-gray-400 text-center">You can customize these options later in Dashboard → Shipping Options</p>
 			</div>
 		</div>
 	)
