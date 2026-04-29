@@ -21,6 +21,7 @@ import {
 	getAuctionSummary,
 	getAuctionTitle,
 	useAuctionBids,
+	useAuctionBidsForList,
 	useAuctionSettlements,
 } from '@/queries/auctions'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -31,9 +32,13 @@ import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from '@tans
 import { useStore } from '@tanstack/react-store'
 import { Clock, Eye, ExternalLink, Gavel, Loader2, Pencil } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { toast } from 'sonner'
-
-type AuctionOrder = 'newest' | 'oldest' | 'ending-soon' | 'ending-latest'
+import {
+	auctionSortOptionValues,
+	defaultAuctionFilters,
+	getAuctionSortOptionTitle,
+	useFilteredAuctions,
+	type AuctionSortOption,
+} from '@/lib/utils/auctions'
 
 function formatAuctionStatus(startAt: number, endAt: number, now: number): string {
 	if (endAt > 0 && now >= endAt) return 'Ended'
@@ -263,7 +268,7 @@ function AuctionsOverviewComponent() {
 	const navigate = useNavigate()
 	const matchRoute = useMatchRoute()
 	const [expandedAuction, setExpandedAuction] = useState<string | null>(null)
-	const [orderBy, setOrderBy] = useState<AuctionOrder>('newest')
+	const [sort, setSort] = useState<AuctionSortOption>(defaultAuctionFilters.sort ?? 'ending-soon')
 	const settlementMutation = usePublishAuctionSettlementMutation()
 	const [settlingAuctionId, setSettlingAuctionId] = useState<string | null>(null)
 	const [animationParent] = useAutoAnimate()
@@ -284,19 +289,12 @@ function AuctionsOverviewComponent() {
 		enabled: !!user?.pubkey && isAuthenticated,
 	})
 
-	const sortedAuctions = useMemo(() => {
-		if (!auctions) return []
-		const now = Math.floor(Date.now() / 1000)
-		return [...auctions].sort((a, b) => {
-			if (orderBy === 'newest') return (b.created_at || 0) - (a.created_at || 0)
-			if (orderBy === 'oldest') return (a.created_at || 0) - (b.created_at || 0)
-
-			const aEnd = getAuctionEndAt(a) || now
-			const bEnd = getAuctionEndAt(b) || now
-			if (orderBy === 'ending-soon') return aEnd - bEnd
-			return bEnd - aEnd
-		})
-	}, [auctions, orderBy])
+	const auctionRootEventIdsForBids = useMemo(
+		() => (auctions ?? []).map((auction) => getAuctionRootEventId(auction) || auction.id),
+		[auctions],
+	)
+	const { data: bidsByAuctionId } = useAuctionBidsForList(auctionRootEventIdsForBids)
+	const sortedAuctions = useFilteredAuctions({ auctions: auctions ?? [], filters: { sort: sort }, bidsByAuctionId, tag: undefined })
 
 	const handlePublishSettlement = async (auction: NDKEvent) => {
 		const auctionRootEventId = getAuctionRootEventId(auction)
@@ -344,15 +342,14 @@ function AuctionsOverviewComponent() {
 			<div className="hidden lg:flex sticky top-0 z-10 bg-white border-b py-4 px-4 lg:px-6 items-center justify-between">
 				<h1 className="text-2xl font-bold">Auctions</h1>
 				<div className="flex items-center gap-4">
-					<Select value={orderBy} onValueChange={(value) => setOrderBy(value as AuctionOrder)}>
+					<Select value={sort} onValueChange={(value) => setSort(value as AuctionSortOption)}>
 						<SelectTrigger className="w-56">
 							<SelectValue placeholder="Order By" />
 						</SelectTrigger>
 						<SelectContent>
-							<SelectItem value="newest">Newest First</SelectItem>
-							<SelectItem value="oldest">Oldest First</SelectItem>
-							<SelectItem value="ending-soon">Ending Soon</SelectItem>
-							<SelectItem value="ending-latest">Ending Latest</SelectItem>
+							{auctionSortOptionValues.map((value) => (
+								<SelectItem value={value}>{getAuctionSortOptionTitle(value)}</SelectItem>
+							))}
 						</SelectContent>
 					</Select>
 					<Link to="/auctions">
@@ -373,15 +370,14 @@ function AuctionsOverviewComponent() {
 
 			<div className="space-y-6 p-4 lg:p-6">
 				<div className="lg:hidden space-y-4">
-					<Select value={orderBy} onValueChange={(value) => setOrderBy(value as AuctionOrder)}>
+					<Select value={sort} onValueChange={(value) => setSort(value as AuctionSortOption)}>
 						<SelectTrigger className="w-full">
 							<SelectValue placeholder="Order By" />
 						</SelectTrigger>
 						<SelectContent>
-							<SelectItem value="newest">Newest First</SelectItem>
-							<SelectItem value="oldest">Oldest First</SelectItem>
-							<SelectItem value="ending-soon">Ending Soon</SelectItem>
-							<SelectItem value="ending-latest">Ending Latest</SelectItem>
+							{auctionSortOptionValues.map((value) => (
+								<SelectItem value={value}>{getAuctionSortOptionTitle(value)}</SelectItem>
+							))}
 						</SelectContent>
 					</Select>
 					<Button

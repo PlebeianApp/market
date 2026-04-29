@@ -1,5 +1,5 @@
 import { AuctionCard } from '@/components/AuctionCard'
-import { AuctionFilters, defaultAuctionFilters, type AuctionFilterState } from '@/components/AuctionFilters'
+import { AuctionFilters } from '@/components/AuctionFilters'
 import { ItemGrid } from '@/components/ItemGrid'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -7,6 +7,7 @@ import { PRODUCT_CATEGORIES } from '@/lib/constants'
 import { authStore } from '@/lib/stores/auth'
 import { uiStore } from '@/lib/stores/ui'
 import { uiActions } from '@/lib/stores/ui'
+import { defaultAuctionFilters, useFilteredAuctions, type AuctionFilterState } from '@/lib/utils/auctions'
 import {
 	auctionByATagQueryOptions,
 	auctionsQueryOptions,
@@ -89,10 +90,6 @@ function AuctionsRoute() {
 
 	const auctions = filterNSFWAuctions((auctionsQuery.data ?? []) as NDKEvent[], showNSFWContent)
 
-	// One batched bid query for the whole list — see queries/auctions.tsx
-	// (auctionBidsForListQueryOptions) for rationale. Each AuctionCard reads
-	// its own bid bucket from this Map instead of mounting its own polling
-	// subscription.
 	const auctionRootEventIdsForBids = useMemo(() => auctions.map((auction) => getAuctionRootEventId(auction) || auction.id), [auctions])
 	const { data: bidsByAuctionId } = useAuctionBidsForList(auctionRootEventIdsForBids)
 
@@ -115,50 +112,7 @@ function AuctionsRoute() {
 
 	const defaultTags: string[] = PRODUCT_CATEGORIES.filter((category) => allTags.includes(category))
 
-	const filteredAndSortedAuctions = useMemo(() => {
-		const now = Math.floor(Date.now() / 1000)
-		let filtered = auctions
-
-		if (tag) {
-			filtered = filtered.filter((auction) => getAuctionCategories(auction).includes(tag))
-		}
-
-		if (!filters.showEnded) {
-			filtered = filtered.filter((auction) => {
-				const visibleEndAt = getAuctionMaxEndAt(auction)
-				return visibleEndAt > 0 && visibleEndAt > now
-			})
-		}
-
-		const sorted = [...filtered]
-		switch (filters.sort) {
-			case 'oldest':
-				sorted.sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
-				break
-			case 'ending-soon':
-				sorted.sort((a, b) => {
-					const aEnd = getAuctionMaxEndAt(a)
-					const bEnd = getAuctionMaxEndAt(b)
-					const aEnded = aEnd > 0 && aEnd <= now
-					const bEnded = bEnd > 0 && bEnd <= now
-					if (aEnded !== bEnded) return aEnded ? 1 : -1
-					return aEnd - bEnd
-				})
-				break
-			case 'highest-starting-bid':
-				sorted.sort((a, b) => getAuctionStartingBid(b) - getAuctionStartingBid(a))
-				break
-			case 'title-a-z':
-				sorted.sort((a, b) => getAuctionTitle(a).localeCompare(getAuctionTitle(b)))
-				break
-			case 'newest':
-			default:
-				sorted.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
-				break
-		}
-
-		return sorted
-	}, [auctions, filters, tag])
+	const filteredAndSortedAuctions = useFilteredAuctions({ auctions, filters, tag, bidsByAuctionId })
 
 	const handleTagClick = (selectedTag: string) => {
 		if (tag === selectedTag) {
