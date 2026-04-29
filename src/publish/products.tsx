@@ -1,6 +1,7 @@
 import { SHIPPING_KIND } from '@/lib/schemas/shippingOption'
 import { ndkActions } from '@/lib/stores/ndk'
 import { normalizeProductShippingSelections, type ProductShippingSelectionInput } from '@/lib/utils/productShippingSelections'
+import { validateProductPublishDraft } from '@/lib/workflow/productDraftValidation'
 import { productKeys } from '@/queries/queryKeyFactory'
 import { markProductAsDeleted } from '@/queries/products'
 import NDK, { NDKEvent, type NDKSigner, type NDKTag } from '@nostr-dev-kit/ndk'
@@ -26,6 +27,13 @@ export interface ProductFormData {
 	weight: { value: string; unit: string } | null
 	dimensions: { value: string; unit: string } | null
 	isNSFW: boolean
+}
+
+const assertValidProductPublishData = (formData: ProductFormData) => {
+	const validation = validateProductPublishDraft(formData)
+	if (!validation.isValid) {
+		throw new Error(validation.issues[0])
+	}
 }
 
 /**
@@ -109,36 +117,7 @@ export const createProductEvent = (
  * Publishes a new product
  */
 export const publishProduct = async (formData: ProductFormData, signer: NDKSigner, ndk: NDK): Promise<string> => {
-	// Validation
-	if (!formData.name.trim()) {
-		throw new Error('Product name is required')
-	}
-
-	if (!formData.description.trim()) {
-		throw new Error('Product description is required')
-	}
-
-	if (!formData.price.trim() || isNaN(Number(formData.price))) {
-		throw new Error('Valid product price is required')
-	}
-
-	if (!formData.quantity.trim() || isNaN(Number(formData.quantity))) {
-		throw new Error('Valid product quantity is required')
-	}
-
-	if (formData.images.length === 0) {
-		throw new Error('At least one product image is required')
-	}
-
-	if (!formData.mainCategory) {
-		throw new Error('Main category is required')
-	}
-
-	// Validate shipping options
-	const validShippings = normalizeProductShippingSelections(formData.shippings).filter((ship) => ship.shippingRef)
-	if (validShippings.length === 0) {
-		throw new Error('At least one shipping option is required')
-	}
+	assertValidProductPublishData(formData)
 
 	const event = createProductEvent(formData, signer, ndk)
 
@@ -162,35 +141,7 @@ export const updateProduct = async (
 		throw new Error('Product d tag is required for updates')
 	}
 
-	if (!formData.name.trim()) {
-		throw new Error('Product name is required')
-	}
-
-	if (!formData.description.trim()) {
-		throw new Error('Product description is required')
-	}
-
-	if (!formData.price.trim() || isNaN(Number(formData.price))) {
-		throw new Error('Valid product price is required')
-	}
-
-	if (!formData.quantity.trim() || isNaN(Number(formData.quantity))) {
-		throw new Error('Valid product quantity is required')
-	}
-
-	if (formData.images.length === 0) {
-		throw new Error('At least one product image is required')
-	}
-
-	if (!formData.mainCategory) {
-		throw new Error('Main category is required')
-	}
-
-	// Validate shipping options
-	const validShippings = normalizeProductShippingSelections(formData.shippings).filter((ship) => ship.shippingRef)
-	if (validShippings.length === 0) {
-		throw new Error('At least one shipping option is required')
-	}
+	assertValidProductPublishData(formData)
 
 	// Create event with the same d tag to update the existing product
 	const event = createProductEvent(formData, signer, ndk, productDTag)
