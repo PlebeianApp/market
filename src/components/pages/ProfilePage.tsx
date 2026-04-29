@@ -22,6 +22,7 @@ import { productsByPubkeyQueryOptions } from '@/queries/products'
 import { profileByIdentifierQueryOptions } from '@/queries/profiles'
 import { useShippingOptionsByPubkey, getShippingService, getShippingPickupAddress, getShippingTitle } from '@/queries/shipping'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
+import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useSuspenseQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Edit, MapPin, MessageCircle, Minus, Plus, Share2, Timer } from 'lucide-react'
@@ -112,7 +113,7 @@ export function ProfilePage({ profileId }: ProfilePageProps) {
 	// Handle add product
 	const handleAddProduct = () => {
 		productFormActions.reset()
-		navigate({ to: '/dashboard/products/draft' })
+		navigate({ to: '/dashboard/products/products/new' })
 	}
 
 	// Handle message button
