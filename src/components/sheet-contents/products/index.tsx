@@ -1,11 +1,10 @@
+import { ProductCreateShell } from '@/components/product-authoring/ProductCreateShell'
 import { SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { authActions, authStore } from '@/lib/stores/auth'
 import type { ProductFormState } from '@/lib/stores/product'
-import { DEFAULT_FORM_STATE, productFormActions, productFormStore } from '@/lib/stores/product'
-import { resolveProductWorkflow } from '@/lib/workflow/productWorkflowResolver'
-import { useProductCreateReadiness } from '@/lib/workflow/useProductCreateReadiness'
+import { DEFAULT_FORM_STATE, productFormStore } from '@/lib/stores/product'
 import { useStore } from '@tanstack/react-store'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ProductFormContent } from './ProductFormContent'
 import { ProductWelcomeScreen } from './ProductWelcomeScreen'
 
@@ -27,8 +26,6 @@ export function NewProductContent({
 	// Get user and authentication status from auth store
 	const { user, isAuthenticated } = useStore(authStore)
 	const userPubkey = user?.pubkey ?? ''
-	const hasBootstrappedRef = useRef(false)
-	const readiness = useProductCreateReadiness(userPubkey)
 
 	// Function to check if the form has been modified from its default state
 	const isFormModified = (currentState: ProductFormState) => {
@@ -54,17 +51,6 @@ export function NewProductContent({
 
 	const [showForm, setShowForm] = useState(hasStartedFormOrIsEditing)
 
-	const workflow = useMemo(
-		() =>
-			resolveProductWorkflow({
-				mode: editingProductId ? 'edit' : 'create',
-				editingProductId,
-				shippingState: readiness.shippingState,
-				v4vConfigurationState: readiness.v4vConfigurationState,
-			}),
-		[editingProductId, readiness.shippingState, readiness.v4vConfigurationState],
-	)
-
 	// Check if user has products when component mounts or user changes
 	useEffect(() => {
 		const checkUserProducts = async () => {
@@ -85,19 +71,6 @@ export function NewProductContent({
 			setShowForm(true)
 		}
 	}, [hasStartedFormOrIsEditing, hasProducts, showForm, editingProductId])
-
-	useEffect(() => {
-		if (!showForm || editingProductId) {
-			hasBootstrappedRef.current = false
-			return
-		}
-
-		if (!workflow.isBootstrapReady || hasStartedFormOrIsEditing || hasBootstrappedRef.current) return
-
-		productFormActions.startCreateProductSession()
-		productFormActions.setActiveTab(workflow.initialTab)
-		hasBootstrappedRef.current = true
-	}, [showForm, editingProductId, workflow.isBootstrapReady, workflow.initialTab, hasStartedFormOrIsEditing])
 
 	// Default titles
 	const defaultTitle = editingProductId ? 'Edit Product' : 'Add A Product'
@@ -126,7 +99,7 @@ export function NewProductContent({
 				<SheetDescription className="hidden">{description || defaultDescription}</SheetDescription>
 			</SheetHeader>
 
-			<ProductFormContent workflow={workflow} />
+			{editingProductId ? <ProductFormContent /> : <ProductCreateShell userPubkey={userPubkey} entrypoint="homepage-sheet" />}
 		</SheetContent>
 	)
 }

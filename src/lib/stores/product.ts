@@ -22,6 +22,7 @@ import {
 import { productKeys } from '@/queries/queryKeyFactory'
 import { clearProductFormDraft, getProductFormDraft, saveProductFormDraft } from '@/lib/utils/productFormStorage'
 import { normalizeProductShippingSelections, type ProductShippingSelection } from '@/lib/utils/productShippingSelections'
+import { getProductFormPublishValidationInput, validateProductPublishDraft } from '@/lib/workflow/productDraftValidation'
 import { uiActions, uiStore } from '@/lib/stores/ui'
 import NDK, { type NDKSigner } from '@nostr-dev-kit/ndk'
 import { QueryClient } from '@tanstack/react-query'
@@ -423,6 +424,11 @@ export const productFormActions = {
 
 	continuePublishing: async (signer: NDKSigner, ndk: NDK, queryClient?: QueryClient): Promise<boolean | string> => {
 		const state = productFormStore.state
+		const publishValidation = validateProductPublishDraft(getProductFormPublishValidationInput(state))
+		if (!publishValidation.isValid) {
+			console.error('Product draft validation failed:', publishValidation.issues)
+			return false
+		}
 
 		// Apply currency conversion logic before publishing
 		let finalPrice = state.price
