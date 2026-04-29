@@ -10,15 +10,25 @@ import type { RichShippingInfo } from '@/lib/stores/cart'
 import { useNDK } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore } from '@/lib/stores/product'
 import { uiStore } from '@/lib/stores/ui'
+import {
+	getProductDeliveryModeLabel,
+	productDeliveryModeAllowsProductExtraCost,
+	resolveProductDeliveryMode,
+	type ProductDeliveryMode,
+} from '@/lib/workflow/productDeliveryModes'
 import { attachShippingOptionByRef } from '@/lib/utils/productShippingQuickCreate'
-import { resolveProductShippingSelections } from '@/lib/utils/productShippingSelections'
+import {
+	normalizeProductShippingExtraCost,
+	resolveProductShippingSelections,
+	sanitizeProductShippingExtraCostInput,
+} from '@/lib/utils/productShippingSelections'
 import { MempoolService } from '@/lib/utils/mempool'
 import { useBtcExchangeRates, type SupportedCurrency } from '@/queries/external'
 import { usePublishShippingOptionMutation, type ShippingFormData } from '@/publish/shipping'
-import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
+import { createShippingReference, getShippingInfo, getShippingPickupAddress, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useForm } from '@tanstack/react-form'
 import { useStore } from '@tanstack/react-store'
-import { Info, ArrowRightLeft, DownloadIcon, Loader2, PackageIcon, PlusIcon, TruckIcon, X, AlertTriangle } from 'lucide-react'
+import { ArrowRightLeft, DownloadIcon, Loader2, PackageIcon, PlusIcon, TruckIcon, X, AlertTriangle } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -667,6 +677,47 @@ const QUICK_SHIPPING_TEMPLATES: Array<{
 	},
 ]
 
+const formatPickupAddress = (address: RichShippingInfo['pickupAddress']): string | null => {
+	if (!address || typeof address !== 'object') return null
+
+	const parts = [address.street, address.city, address.state, address.postalCode, address.country].filter(
+		(part): part is string => typeof part === 'string' && part.trim().length > 0,
+	)
+
+	return parts.length ? parts.join(', ') : null
+}
+
+const formatCoverageSummary = (countries: string[] | undefined): string => {
+	if (!countries || countries.length === 0) return 'Worldwide'
+	if (countries.length === 1) return countries[0]
+	return `${countries.length} countries`
+}
+
+const getSelectedShippingSummary = (option: RichShippingInfo, deliveryMode: ProductDeliveryMode): string => {
+	if (deliveryMode === 'pickup') {
+		return formatPickupAddress(option.pickupAddress) || option.location || 'Pickup location configured by seller'
+	}
+
+	if (deliveryMode === 'digital') {
+		return option.description || 'Delivered digitally after purchase'
+	}
+
+	return `${option.cost ?? 0} ${option.currency || ''} • ${formatCoverageSummary(option.countries)} • ${option.service || 'Physical shipping'}`
+}
+
+const getProductDeliveryModeNote = (deliveryMode: ProductDeliveryMode, option: RichShippingInfo | null): string => {
+	if (deliveryMode === 'pickup') {
+		const address = formatPickupAddress(option?.pickupAddress)
+		return address ? `Pickup at ${address}` : 'Pickup instructions come from the seller shipping option'
+	}
+
+	if (deliveryMode === 'digital') {
+		return 'Delivered digitally after purchase. No shipping cost.'
+	}
+
+	return 'Optional product-specific extra shipping cost'
+}
+
 export function ShippingTab() {
 	const { shippings } = useStore(productFormStore)
 	const { getUser } = useNDK()
@@ -715,7 +766,11 @@ export function ShippingTab() {
 			const publishedShipping = await publishShippingMutation.mutateAsync(formData)
 
 			productFormActions.updateValues({
-				shippings: attachShippingOptionByRef(productFormStore.state.shippings, publishedShipping.shippingRef),
+				shippings: [
+					...attachShippingOptionByRef(productFormStore.state.shippings, publishedShipping.shippingRef).map((shipping) =>
+						shipping.shippingRef === publishedShipping.shippingRef ? { ...shipping, service: template.service } : shipping,
+					),
+				],
 			})
 
 			toast.success(`${template.name} shipping option created and added!`)
@@ -756,7 +811,11 @@ export function ShippingTab() {
 			const publishedShipping = await publishShippingMutation.mutateAsync(formData)
 
 			productFormActions.updateValues({
-				shippings: attachShippingOptionByRef(productFormStore.state.shippings, publishedShipping.shippingRef),
+				shippings: [
+					...attachShippingOptionByRef(productFormStore.state.shippings, publishedShipping.shippingRef).map((shipping) =>
+						shipping.shippingRef === publishedShipping.shippingRef ? { ...shipping, service: 'pickup' } : shipping,
+					),
+				],
 			})
 
 			toast.success('Local Pickup shipping option created and added!')
@@ -782,11 +841,14 @@ export function ShippingTab() {
 				return {
 					id,
 					name: info.title,
+					description: info.description,
 					cost: parseFloat(info.price.amount),
 					currency: info.price.currency,
 					countries: info.countries || [],
 					service: info.service || '',
 					carrier: info.carrier || '',
+					location: info.location || '',
+					pickupAddress: getShippingPickupAddress(event),
 				}
 			})
 			.filter(Boolean) as RichShippingInfo[]
@@ -795,12 +857,16 @@ export function ShippingTab() {
 	const addShippingOption = (option: RichShippingInfo) => {
 		if (!hasResolvedSellerShippingState) return
 
-		const nextShippings = attachShippingOptionByRef(productFormStore.state.shippings, option.id)
+		const attachedShippings = attachShippingOptionByRef(productFormStore.state.shippings, option.id)
 
-		if (nextShippings === productFormStore.state.shippings) {
+		if (attachedShippings === productFormStore.state.shippings) {
 			toast.error('This shipping option is already added')
 			return
 		}
+
+		const nextShippings = attachedShippings.map((shipping) =>
+			shipping.shippingRef === option.id ? { ...shipping, service: option.service } : shipping,
+		)
 
 		productFormActions.updateValues({
 			shippings: nextShippings,
@@ -814,10 +880,27 @@ export function ShippingTab() {
 	}
 
 	const updateExtraCost = (index: number, extraCost: string) => {
+		const sanitizedExtraCost = sanitizeProductShippingExtraCostInput(extraCost)
+		if (sanitizedExtraCost === null) return
+
 		const updatedShippings = [...shippings]
 		updatedShippings[index] = {
 			...updatedShippings[index],
-			extraCost,
+			extraCost: sanitizedExtraCost,
+		}
+		productFormActions.updateValues({
+			shippings: updatedShippings,
+		})
+	}
+
+	const normalizeExtraCost = (index: number) => {
+		const normalizedExtraCost = normalizeProductShippingExtraCost(shippings[index]?.extraCost)
+		if (normalizedExtraCost === shippings[index]?.extraCost) return
+
+		const updatedShippings = [...shippings]
+		updatedShippings[index] = {
+			...updatedShippings[index],
+			extraCost: normalizedExtraCost,
 		}
 		productFormActions.updateValues({
 			shippings: updatedShippings,
@@ -825,14 +908,15 @@ export function ShippingTab() {
 	}
 
 	const ServiceIcon = ({ service }: { service: string }) => {
-		switch (service) {
-			case 'express':
-			case 'overnight':
-				return <TruckIcon className="w-4 h-4 text-orange-500" />
+		const deliveryMode = resolveProductDeliveryMode(service)
+
+		switch (deliveryMode) {
+			case 'digital':
+				return <DownloadIcon className="w-4 h-4 text-purple-500" />
 			case 'pickup':
 				return <PackageIcon className="w-4 h-4 text-blue-500" />
-			default:
-				return <TruckIcon className="w-4 h-4" />
+			case 'physical':
+				return <TruckIcon className={`w-4 h-4 ${service === 'express' || service === 'overnight' ? 'text-orange-500' : ''}`} />
 		}
 	}
 
@@ -840,6 +924,26 @@ export function ShippingTab() {
 		() => resolveProductShippingSelections(shippings, availableShippingOptions),
 		[shippings, availableShippingOptions],
 	)
+
+	useEffect(() => {
+		const normalizedShippings = resolvedSelectedShippings.map(({ option: _option, isResolved: _isResolved, ...shipping }) => shipping)
+		const hasChanged =
+			normalizedShippings.length !== shippings.length ||
+			normalizedShippings.some((shipping, index) => {
+				const current = shippings[index]
+				return (
+					shipping.shippingRef !== current?.shippingRef ||
+					shipping.extraCost !== current?.extraCost ||
+					shipping.service !== current?.service
+				)
+			})
+
+		if (!hasChanged) return
+
+		productFormActions.updateValues({
+			shippings: normalizedShippings,
+		})
+	}, [resolvedSelectedShippings, shippings])
 
 	const selectedShippingRefs = useMemo(
 		() => new Set(shippings.map((shipping) => shipping.shippingRef).filter((shippingRef): shippingRef is string => !!shippingRef)),
@@ -891,6 +995,9 @@ export function ShippingTab() {
 					<div className="space-y-3">
 						{resolvedSelectedShippings.map((shipping, index) => {
 							const option = shipping.option
+							const deliveryMode = resolveProductDeliveryMode(option?.service || shipping.service)
+							const allowsProductExtraCost = productDeliveryModeAllowsProductExtraCost(deliveryMode)
+
 							return (
 								<div key={index} className="flex items-center gap-3 p-3 border rounded-md bg-gray-50">
 									{option?.service ? <ServiceIcon service={option.service} /> : <AlertTriangle className="w-4 h-4 text-amber-500" />}
@@ -900,11 +1007,7 @@ export function ShippingTab() {
 										</div>
 										{option ? (
 											<div className="text-sm text-gray-500">
-												{option.cost} {option.currency} •{' '}
-												{option.countries && option.countries.length > 1
-													? `${option.countries.length} countries`
-													: option.countries?.[0] || 'No countries'}{' '}
-												• {option.service || 'Unknown service'}
+												{getProductDeliveryModeLabel(deliveryMode)} • {getSelectedShippingSummary(option, deliveryMode)}
 											</div>
 										) : shippingOptionsQuery.isFetched ? (
 											<div className="text-sm text-amber-600">This shipping reference is no longer available: {shipping.shippingRef}</div>
@@ -913,15 +1016,21 @@ export function ShippingTab() {
 										)}
 									</div>
 									<div className="flex items-center gap-2">
-										<Input
-											type="number"
-											step="0.01"
-											min="0"
-											value={shipping.extraCost}
-											onChange={(e) => updateExtraCost(index, e.target.value)}
-											placeholder="Add cost specific to this product"
-											className="w-40 sm:w-56 md:w-76 text-sm"
-										/>
+										{allowsProductExtraCost ? (
+											<Input
+												type="number"
+												inputMode="decimal"
+												step="0.01"
+												min="0"
+												value={shipping.extraCost}
+												onChange={(e) => updateExtraCost(index, e.target.value)}
+												onBlur={() => normalizeExtraCost(index)}
+												placeholder="Add cost specific to this product"
+												className="w-40 sm:w-56 md:w-76 text-sm"
+											/>
+										) : (
+											<div className="w-40 sm:w-56 md:w-76 text-sm text-gray-500">{getProductDeliveryModeNote(deliveryMode, option)}</div>
+										)}
 										<Button
 											type="button"
 											variant="outline"
@@ -962,24 +1071,24 @@ export function ShippingTab() {
 					</div>
 				) : (
 					<div className="grid gap-3">
-						{availableMerchantShippingOptions.map((option) => (
-							<div key={option.id} className="flex items-center gap-3 p-3 border rounded-md hover:bg-gray-50">
-								{option.service && <ServiceIcon service={option.service} />}
-								<div className="flex-1">
-									<div className="font-medium">{option.name}</div>
-									<div className="text-sm text-gray-500">
-										{option.cost} {option.currency} •{' '}
-										{option.countries && option.countries.length > 1
-											? `${option.countries.length} countries`
-											: option.countries?.[0] || 'Worldwide'}{' '}
-										• {option.service || 'Unknown service'}
+						{availableMerchantShippingOptions.map((option) => {
+							const deliveryMode = resolveProductDeliveryMode(option.service)
+
+							return (
+								<div key={option.id} className="flex items-center gap-3 p-3 border rounded-md hover:bg-gray-50">
+									{option.service && <ServiceIcon service={option.service} />}
+									<div className="flex-1">
+										<div className="font-medium">{option.name}</div>
+										<div className="text-sm text-gray-500">
+											{getProductDeliveryModeLabel(deliveryMode)} • {getSelectedShippingSummary(option, deliveryMode)}
+										</div>
 									</div>
+									<Button type="button" variant="outline" size="sm" onClick={() => addShippingOption(option)}>
+										Add
+									</Button>
 								</div>
-								<Button type="button" variant="outline" size="sm" onClick={() => addShippingOption(option)}>
-									Add
-								</Button>
-							</div>
-						))}
+							)
+						})}
 					</div>
 				)}
 			</div>

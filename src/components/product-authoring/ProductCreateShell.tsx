@@ -2,10 +2,20 @@ import { ProductFormContent } from '@/components/sheet-contents/products/Product
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { DEFAULT_FORM_STATE, productFormActions, productFormStore, type ProductFormState } from '@/lib/stores/product'
+import { validateProductDraft } from '@/lib/workflow/productDraftValidation'
+import {
+	canSelectProductAuthoringStage,
+	getNextProductAuthoringStage,
+	getPreviousProductAuthoringStage,
+	getPrimaryProductAuthoringTabForStage,
+	getProductAuthoringStageForTab,
+	resolveProductAuthoringStages,
+	type ProductAuthoringStage,
+} from '@/lib/workflow/productAuthoringStages'
 import { resolveProductWorkflow } from '@/lib/workflow/productWorkflowResolver'
 import { useProductCreateReadiness } from '@/lib/workflow/useProductCreateReadiness'
 import { useStore } from '@tanstack/react-store'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 type ProductCreateShellProps = {
 	userPubkey?: string | null
@@ -61,6 +71,7 @@ export function ProductCreateShell({ userPubkey, entrypoint, className = '', for
 	const formState = useStore(productFormStore)
 	const readiness = useProductCreateReadiness(normalizedUserPubkey)
 	const [isBootstrapped, setIsBootstrapped] = useState(false)
+	const [selectedStage, setSelectedStage] = useState<ProductAuthoringStage>('basics')
 	const hasBootstrappedRef = useRef(false)
 	const hasStartedCreateDraftState = hasStartedCreateDraft(formState)
 
@@ -74,9 +85,54 @@ export function ProductCreateShell({ userPubkey, entrypoint, className = '', for
 		[readiness.shippingState, readiness.v4vConfigurationState],
 	)
 
+	const resolvedShippingRefs = useMemo(() => new Set(readiness.savedShippingRefs), [readiness.savedShippingRefs])
+	const isShippingFetched = readiness.shippingState !== 'loading'
+	const draftValidation = useMemo(
+		() =>
+			validateProductDraft({
+				state: formState,
+				resolvedShippingRefs,
+				isShippingFetched,
+			}),
+		[formState, isShippingFetched, resolvedShippingRefs],
+	)
+	const stageResolution = useMemo(
+		() =>
+			resolveProductAuthoringStages({
+				selectedStage,
+				validation: draftValidation,
+				workflow,
+			}),
+		[draftValidation, selectedStage, workflow],
+	)
+	const selectStage = useCallback(
+		(stage: ProductAuthoringStage) => {
+			if (!canSelectProductAuthoringStage(stage, stageResolution)) return
+
+			setSelectedStage(stage)
+
+			// Legacy tabs remain a rendering bridge only. Publish intentionally has no tab to sync.
+			const primaryTab = getPrimaryProductAuthoringTabForStage(stage)
+			if (primaryTab) {
+				productFormActions.setActiveTab(primaryTab)
+			}
+		},
+		[stageResolution],
+	)
+	const selectPreviousStage = useCallback(() => {
+		const previousStage = getPreviousProductAuthoringStage(selectedStage)
+		if (previousStage) selectStage(previousStage)
+	}, [selectStage, selectedStage])
+	const selectNextStage = useCallback(() => {
+		const nextStage = getNextProductAuthoringStage(selectedStage)
+		if (!stageResolution.canAdvanceToNextStage) return
+		if (nextStage) selectStage(nextStage)
+	}, [selectStage, selectedStage, stageResolution.canAdvanceToNextStage])
+
 	useEffect(() => {
 		hasBootstrappedRef.current = false
 		setIsBootstrapped(false)
+		setSelectedStage('basics')
 	}, [normalizedUserPubkey])
 
 	useEffect(() => {
@@ -89,6 +145,9 @@ export function ProductCreateShell({ userPubkey, entrypoint, className = '', for
 		if (!shouldResumeCreateDraft) {
 			productFormActions.startCreateProductSession()
 			productFormActions.setActiveTab(workflow.initialTab)
+			setSelectedStage(getProductAuthoringStageForTab(workflow.initialTab))
+		} else {
+			setSelectedStage(getProductAuthoringStageForTab(productFormStore.state.activeTab))
 		}
 
 		lastCreateShellBootstrapIdentity = normalizedUserPubkey
@@ -100,7 +159,15 @@ export function ProductCreateShell({ userPubkey, entrypoint, className = '', for
 		!workflow.isBootstrapReady || !isBootstrapped ? (
 			<ProductCreateLoadingState />
 		) : (
-			<ProductFormContent className={formClassName} showFooter={showFooter} workflow={workflow} />
+			<ProductFormContent
+				className={formClassName}
+				showFooter={showFooter}
+				workflow={workflow}
+				stageResolution={stageResolution}
+				onStageSelect={selectStage}
+				onStageBack={selectPreviousStage}
+				onStageNext={selectNextStage}
+			/>
 		)
 
 	return className ? <div className={className}>{content}</div> : content
