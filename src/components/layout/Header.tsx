@@ -24,7 +24,7 @@ import { TooltipButton } from '../shared/TooltipButton'
 const LoginButton = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>((props, ref) => {
 	return (
 		<TooltipButton
-			className="relative p-2 btn-border-highlight hover:[&>span]:text-secondary"
+			className="relative p-2 btn-border-highlight w-11 h-10 hover:[&>span]:text-secondary"
 			data-testid="login-button"
 			ref={ref}
 			tooltip="Log In"
@@ -39,7 +39,7 @@ const LoginButton = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTM
 const LogoutButton = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement>>((props, ref) => {
 	return (
 		<TooltipButton
-			className="relative p-2 btn-border-highlight hover:[&>svg]:text-secondary"
+			className="relative p-2 btn-border-highlight w-11 h-10 hover:[&>svg]:text-secondary"
 			data-testid="logout-button"
 			ref={ref}
 			tooltip="Log Out"
@@ -76,7 +76,7 @@ const ProfileButton = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<H
 	// Both desktop and mobile - simple button that navigates to profile when authenticated
 	return (
 		<TooltipButton
-			className={cn('relative p-2 btn-border-highlight', isOnOwnProfile && 'btn-active')}
+			className={cn('relative p-2 btn-border-highlight w-11 h-10', isOnOwnProfile && 'btn-active')}
 			ref={ref}
 			tooltip="Go to profile"
 			{...props}
@@ -101,7 +101,7 @@ const CartButton = forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTML
 	return (
 		<TooltipButton
 			tooltip="View cart"
-			className="relative p-2 btn-border-highlight hover:text-secondary"
+			className="relative p-2 btn-border-highlight w-11 h-10 hover:text-secondary"
 			ref={ref}
 			{...props}
 			onClick={handleClick}
@@ -126,7 +126,7 @@ const DashboardButton = forwardRef<HTMLButtonElement, DashboardButtonProps>((pro
 	return (
 		<Link to="/dashboard" data-testid="dashboard-link" className="relative">
 			<TooltipButton
-				className={`btn-border-highlight p-2 relative hover:[&>span]:text-secondary ${
+				className={`btn-border-highlight p-2 relative w-11 h-10 hover:[&>span]:text-secondary ${
 					location.pathname.startsWith('/dashboard') ? 'btn-active' : ''
 				}`}
 				data-testid="dashboard-button"
@@ -151,7 +151,7 @@ function WalletButton() {
 			<PopoverTrigger asChild>
 				<TooltipButton
 					tooltip="Wallet"
-					className="relative p-2 btn-border-highlight hover:[&>svg]:text-secondary"
+					className="relative p-2 btn-border-highlight w-11 h-10 hover:[&>svg]:text-secondary"
 					data-testid="wallet-button"
 				>
 					<Wallet className="size-4" />
@@ -184,7 +184,7 @@ export function BugReportButton({ className }: BugReportButtonProps) {
 				onClick={handleBugReport}
 				tooltip="Report a bug"
 				className={cn(
-					'right-16 bottom-16 z-50 fixed bg-black hover:bg-black shadow-lg px-4 py-2 rounded-full w-10 h-10 text-white hover:text-secondary transition-colors',
+					'right-16 bottom-16 z-50 fixed bg-black hover:bg-black shadow-lg px-4 py-2 rounded-full w-11 h-10 text-white hover:text-secondary transition-colors',
 					className,
 				)}
 				aria-label="Report a bug"

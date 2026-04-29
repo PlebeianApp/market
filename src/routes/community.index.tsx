@@ -130,13 +130,9 @@ function CommunityRoute() {
 		return () => clearInterval(interval)
 	}, [totalSlides])
 
-	// Current slide data - homepage banner is now at index 1
-	const isHomepageSlide = currentSlideIndex === 1
-	const currentCollection = isHomepageSlide
-		? null
-		: currentSlideIndex === 0
-			? collectionsForSlides[0]
-			: collectionsForSlides[currentSlideIndex - 1]
+	// Current slide data - homepage banner is index 0
+	const isHomepageSlide = currentSlideIndex === 0
+	const currentCollection = isHomepageSlide ? null : collectionsForSlides[currentSlideIndex - 1]
 	const currentCollectionId = currentCollection ? getCollectionId(currentCollection) : undefined
 
 	// Get current collections data (only if not homepage slide)
@@ -210,10 +206,11 @@ function CommunityRoute() {
 				<h1 className="font-theylive text-4xl lg:text-5xl transition-opacity duration-500">Browse Collections</h1>
 			</div>
 
-			<div className="flex flex-col gap-6">
-				<Button variant="secondary" size="lg" onClick={handleStartSelling}>
+			<div className="flex flex-col gap-6 items-center">
+				<Button variant="secondary" size="lg" onClick={handleStartSelling} className="bg-focus rounded hover:bg-focus-foreground-hover">
 					<span className="flex items-center gap-2">
-						<span className="size-6 i-nostr"></span>Start Selling
+						<span className="size-6 i-nostr" />
+						Start Selling
 					</span>
 				</Button>
 

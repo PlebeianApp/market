@@ -24,7 +24,7 @@ export function CurrencyDropdown() {
 			<Tooltip open={isOpen ? false : undefined}>
 				<TooltipTrigger asChild>
 					<Button
-						className="relative flex items-center gap-1 p-2 px-3 btn-border-highlight hover:[&>span]:text-secondary hover:[&>svg]:text-secondary"
+						className="relative flex items-center gap-1 p-2 px-3 btn-border-highlight hover:[&>span]:text-secondary hover:[&>svg]:text-secondary h-10"
 						onClick={toggleDropdown}
 						data-testid="currency-dropdown-button"
 					>
