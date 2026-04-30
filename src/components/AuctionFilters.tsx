@@ -20,11 +20,13 @@ interface AuctionFiltersProps {
 
 export const defaultAuctionFilters: AuctionFilterState = {
 	showEnded: true,
-	sort: 'newest',
+	sort: 'ending-soon',
 }
 
 export function AuctionFilters({ filters, onFiltersChange, className }: AuctionFiltersProps) {
-	const hasActiveFilters = !filters.showEnded || filters.sort !== 'newest'
+	const hasFilterHideEnded = filters.showEnded === defaultAuctionFilters.showEnded
+	const hasFilterSortLatest = filters.sort === defaultAuctionFilters.sort
+	const hasActiveFilters = hasFilterHideEnded || hasFilterSortLatest
 
 	const handleShowEndedChange = (checked: boolean) => {
 		onFiltersChange({ ...filters, showEnded: checked })
@@ -47,7 +49,7 @@ export function AuctionFilters({ filters, onFiltersChange, className }: AuctionF
 						<span>Filter & Sort</span>
 						{hasActiveFilters && (
 							<span className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
-								{(filters.showEnded ? 0 : 1) + (filters.sort !== 'newest' ? 1 : 0)}
+								{(hasFilterHideEnded ? 1 : 0) + (hasFilterSortLatest ? 1 : 0)}
 							</span>
 						)}
 					</Button>
@@ -58,9 +60,13 @@ export function AuctionFilters({ filters, onFiltersChange, className }: AuctionF
 
 						<div className="space-y-3">
 							<div className="flex items-center space-x-2">
-								<Checkbox id="showEndedAuctions" checked={filters.showEnded} onCheckedChange={handleShowEndedChange} />
+								<Checkbox
+									id="showEndedAuctions"
+									checked={hasFilterHideEnded}
+									onCheckedChange={() => handleShowEndedChange(hasFilterHideEnded)}
+								/>
 								<Label htmlFor="showEndedAuctions" className="text-sm font-normal cursor-pointer">
-									Show ended auctions
+									Hide ended auctions
 								</Label>
 							</div>
 						</div>
@@ -75,11 +81,11 @@ export function AuctionFilters({ filters, onFiltersChange, className }: AuctionF
 									<SelectValue />
 								</SelectTrigger>
 								<SelectContent>
-									<SelectItem value="newest">Newest first</SelectItem>
-									<SelectItem value="oldest">Oldest first</SelectItem>
 									<SelectItem value="ending-soon">Ending soon</SelectItem>
+									<SelectItem value="newest">Newest first</SelectItem>
 									<SelectItem value="highest-starting-bid">Highest starting bid</SelectItem>
 									<SelectItem value="title-a-z">Title (A-Z)</SelectItem>
+									<SelectItem value="oldest">Oldest first</SelectItem>
 								</SelectContent>
 							</Select>
 						</div>

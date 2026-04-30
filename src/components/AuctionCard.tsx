@@ -26,8 +26,13 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Link } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 import { AuctionBidder } from './AuctionBidder'
+import { cn } from '@/lib/utils'
 
-export function AuctionCard({ auction, bids: bidsProp }: { auction: NDKEvent; bids?: NDKEvent[] }) {
+export function AuctionCard({
+	auction,
+	bids: bidsProp,
+	...props
+}: { auction: NDKEvent; bids?: NDKEvent[] } & React.HTMLAttributes<HTMLDivElement>) {
 	const title = getAuctionTitle(auction)
 	const images = getAuctionImages(auction)
 	const endAt = getAuctionEndAt(auction)
@@ -103,8 +108,16 @@ export function AuctionCard({ auction, bids: bidsProp }: { auction: NDKEvent; bi
 		}
 	}
 
+	const className = props.className
+
 	return (
-		<div className="border border-zinc-800 rounded-lg bg-white shadow-sm flex flex-col w-full max-w-full overflow-hidden hover:shadow-md transition-shadow duration-200">
+		<div
+			{...props}
+			className={cn(
+				'border border-primary rounded-lg bg-background shadow-sm flex flex-col w-full max-w-full overflow-hidden hover:shadow-md transition-shadow duration-200',
+				className,
+			)}
+		>
 			<Link to={`/auctions/${auction.id}`} className="relative aspect-square overflow-hidden border-b border-zinc-800 block">
 				{images.length > 0 ? (
 					<img
@@ -133,7 +146,9 @@ export function AuctionCard({ auction, bids: bidsProp }: { auction: NDKEvent; bi
 
 				<div className="flex justify-between items-center">
 					<div className="text-sm font-semibold">{currentPrice.toLocaleString()} sats</div>
-					<div className="bg-[var(--light-gray)] font-medium px-4 py-1 rounded-full text-xs">{bidsCount} bids</div>
+					<div className="bg-[var(--light-gray)] font-medium px-4 py-1 rounded-full text-xs">
+						{bidsCount} {bidsCount === 1 ? 'Bid' : 'Bids'}
+					</div>
 				</div>
 
 				<div className="text-xs text-gray-600">

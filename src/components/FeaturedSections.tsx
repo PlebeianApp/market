@@ -45,7 +45,7 @@ function FeaturedProductItem({ productCoords, ...props }: { productCoords: strin
 }
 
 // Component for displaying a featured collection
-function FeaturedCollectionItem({ collectionCoords, ...props }: { collectionCoords: string } & React.HTMLAttributes<'div'>) {
+function FeaturedCollectionItem({ collectionCoords, ...props }: { collectionCoords: string } & React.HTMLAttributes<HTMLDivElement>) {
 	// Extract pubkey and dTag from coordinates (format: kind:pubkey:dtag)
 	const coordsParts = collectionCoords.split(':')
 	const pubkey = coordsParts[1] || ''
@@ -71,7 +71,7 @@ function FeaturedCollectionItem({ collectionCoords, ...props }: { collectionCoor
 	return <CollectionCard collection={collection} {...props} />
 }
 
-function FeaturedAuctionItem({ auctionCoords }: { auctionCoords: string }) {
+function FeaturedAuctionItem({ auctionCoords, ...props }: { auctionCoords: string } & React.HTMLAttributes<HTMLDivElement>) {
 	const [, pubkey, dTag] = auctionCoords.split(':')
 
 	const { data: auction, isLoading } = useQuery({
@@ -91,7 +91,7 @@ function FeaturedAuctionItem({ auctionCoords }: { auctionCoords: string }) {
 
 	if (!auction) return null
 
-	return <AuctionCard auction={auction} />
+	return <AuctionCard auction={auction} {...props} />
 }
 
 // FeaturedUserItem has been replaced with FeaturedUserCard component
@@ -147,12 +147,12 @@ export function FeaturedSections({ className, maxItemsPerSection = 5 }: Featured
 
 			{/* Featured Auctions */}
 			{displayAuctions.length > 0 && (
-				<section className={cn('w-full max-w-full py-12 overflow-hidden', sectionIndex++ % 2 === 0 ? 'bg-transparent' : 'bg-off-black')}>
+				<section className={cn('w-full max-w-full py-12 overflow-hidden', sectionIndex++ % 2 === 0 ? 'bg-transparent' : classNameDark)}>
 					<div className="px-4 sm:px-8 max-w-full">
 						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-2">
 							<div className="flex items-center gap-3">
-								<Gavel className="w-6 h-6 text-primary text-white shrink-0" />
-								<h2 className="text-xl sm:text-2xl font-heading text-white">Featured Auctions</h2>
+								<Gavel className="w-6 h-6 shrink-0" />
+								<h2 className="text-xl sm:text-2xl font-heading">Featured Auctions</h2>
 							</div>
 							{featuredAuctions?.featuredAuctions && featuredAuctions.featuredAuctions.length > maxItemsPerSection && (
 								<div className="w-full sm:w-auto flex justify-end">
@@ -166,7 +166,7 @@ export function FeaturedSections({ className, maxItemsPerSection = 5 }: Featured
 						</div>
 						<ItemGrid className="gap-4 sm:gap-8">
 							{displayAuctions.map((auctionCoords: string) => (
-								<FeaturedAuctionItem key={auctionCoords} auctionCoords={auctionCoords} />
+								<FeaturedAuctionItem key={auctionCoords} auctionCoords={auctionCoords} className={classNameLight} />
 							))}
 						</ItemGrid>
 					</div>
@@ -179,8 +179,8 @@ export function FeaturedSections({ className, maxItemsPerSection = 5 }: Featured
 					<div className="px-4 sm:px-8 max-w-full">
 						<div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-6 gap-2">
 							<div className="flex items-center gap-3">
-								<FolderOpen className="w-6 h-6 text-primary text-black shrink-0" />
-								<h2 className="text-xl sm:text-2xl font-heading text-black">Featured Collections</h2>
+								<FolderOpen className="w-6 h-6 shrink-0" />
+								<h2 className="text-xl sm:text-2xl font-heading">Featured Collections</h2>
 							</div>
 							{featuredCollections?.featuredCollections && featuredCollections.featuredCollections.length > maxItemsPerSection && (
 								<div className="w-full sm:w-auto flex justify-end">
