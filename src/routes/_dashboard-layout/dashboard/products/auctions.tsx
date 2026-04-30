@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { authStore } from '@/lib/stores/auth'
 import { uiActions } from '@/lib/stores/ui'
-import { useDeleteAuctionMutation, usePublishAuctionSettlementMutation } from '@/publish/auctions'
+import { usePublishAuctionSettlementMutation } from '@/publish/auctions'
 import {
 	auctionsByPubkeyQueryOptions,
 	getAuctionBidCountFromBids,
@@ -29,7 +29,7 @@ import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Clock, Eye, ExternalLink, Gavel, Loader2, Pencil, Trash } from 'lucide-react'
+import { Clock, Eye, ExternalLink, Gavel, Loader2, Pencil } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -176,18 +176,14 @@ function AuctionListItem({
 	isExpanded,
 	onToggleExpanded,
 	onManage,
-	onDelete,
 	onPublishSettlement,
-	isDeleting,
 	isSettling,
 }: {
 	auction: NDKEvent
 	isExpanded: boolean
 	onToggleExpanded: () => void
 	onManage: () => void
-	onDelete: () => void
 	onPublishSettlement: () => void
-	isDeleting: boolean
 	isSettling: boolean
 }) {
 	const startAt = getAuctionStartAt(auction)
@@ -199,7 +195,6 @@ function AuctionListItem({
 	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
 	const now = Math.floor(Date.now() / 1000)
 	const status = formatAuctionStatus(startAt, effectiveEndAt, now)
-	const isLiveAuction = status === 'Live'
 	const images = getAuctionImages(auction)
 	const thumbnailUrl = images.length > 0 ? images[0][1] : null
 
@@ -236,7 +231,7 @@ function AuctionListItem({
 					<Eye className="w-4 h-4" />
 				</Button>
 			</Link>
-			{!isLiveAuction && (
+			{status === 'Scheduled' && (
 				<Button
 					variant="ghost"
 					size="sm"
@@ -249,22 +244,6 @@ function AuctionListItem({
 					<Pencil className="w-4 h-4" />
 				</Button>
 			)}
-			<Button
-				variant="ghost"
-				size="sm"
-				onClick={(e) => {
-					e.stopPropagation()
-					onDelete()
-				}}
-				aria-label={`Delete ${getAuctionTitle(auction)}`}
-				disabled={isDeleting}
-			>
-				{isDeleting ? (
-					<div className="animate-spin h-4 w-4 border-2 border-destructive border-t-transparent rounded-full" />
-				) : (
-					<Trash className="w-4 h-4 text-destructive" />
-				)}
-			</Button>
 		</>
 	)
 
@@ -274,7 +253,6 @@ function AuctionListItem({
 			onOpenChange={onToggleExpanded}
 			triggerContent={triggerContent}
 			actions={actions}
-			isDeleting={isDeleting}
 			icon={false}
 		>
 			<AuctionListBody auction={auction} onPublishSettlement={onPublishSettlement} isSettling={isSettling} />
@@ -292,7 +270,6 @@ function AuctionsOverviewComponent() {
 	const matchRoute = useMatchRoute()
 	const [expandedAuction, setExpandedAuction] = useState<string | null>(null)
 	const [orderBy, setOrderBy] = useState<AuctionOrder>('newest')
-	const deleteMutation = useDeleteAuctionMutation()
 	const settlementMutation = usePublishAuctionSettlementMutation()
 	const [settlingAuctionId, setSettlingAuctionId] = useState<string | null>(null)
 	const [animationParent] = useAutoAnimate()
@@ -326,15 +303,6 @@ function AuctionsOverviewComponent() {
 			return bEnd - aEnd
 		})
 	}, [auctions, orderBy])
-
-	const handleDeleteAuction = (auction: NDKEvent) => {
-		const auctionDTag = getAuctionId(auction)
-		if (!auctionDTag) return
-
-		if (confirm(`Delete auction "${getAuctionTitle(auction)}"?`)) {
-			deleteMutation.mutate(auctionDTag)
-		}
-	}
 
 	const handlePublishSettlement = async (auction: NDKEvent) => {
 		const auctionRootEventId = getAuctionRootEventId(auction)
@@ -465,9 +433,7 @@ function AuctionsOverviewComponent() {
 										isExpanded={expandedAuction === auction.id}
 										onToggleExpanded={() => setExpandedAuction((prev) => (prev === auction.id ? null : auction.id))}
 										onManage={() => handleManageAuction(auction.id)}
-										onDelete={() => handleDeleteAuction(auction)}
 										onPublishSettlement={() => void handlePublishSettlement(auction)}
-										isDeleting={deleteMutation.isPending && deleteMutation.variables === getAuctionId(auction)}
 										isSettling={settlingAuctionId === auction.id && settlementMutation.isPending}
 									/>
 								</li>
