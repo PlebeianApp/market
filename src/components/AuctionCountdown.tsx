@@ -1,4 +1,10 @@
 import { cn } from '@/lib/utils'
+import {
+	formatAuctionCountdownDetailed,
+	formatAuctionEndTimeLabel,
+	formatAuctionTimeLeft,
+	getAuctionCountdownLabels,
+} from '@/lib/auctionCountdownLabels'
 import { useEffect, useMemo, useState } from 'react'
 import ProgressBar from './shared/ProgressBar'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
@@ -53,99 +59,6 @@ function getProgressColor(urgency: AuctionCountdownUrgency): string {
 	}
 }
 
-/**
- * Formats seconds into a simple, human-readable string (e.g., "2 days left", "45 minutes left").
- * Prioritizes the largest unit of time.
- */
-function formatTimeLeftSimple(seconds: number): string {
-	if (seconds <= 0) return 'Ended'
-
-	const days = Math.floor(seconds / 86400)
-	const hours = Math.floor((seconds % 86400) / 3600)
-	const minutes = Math.floor((seconds % 3600) / 60)
-	const secs = Math.round(seconds % 60)
-
-	if (days > 0) {
-		return `${days} day${days > 1 ? 's' : ''} left`
-	}
-	if (hours > 0) {
-		return `${hours} hour${hours > 1 ? 's' : ''} left`
-	}
-
-	if (minutes > 0) {
-		return `${minutes} minute${minutes > 1 ? 's' : ''} left`
-	}
-	// Fallback for very short times
-	return `${secs} second${secs !== 1 ? 's' : ''} left`
-}
-
-/**
- * Formats seconds into a detailed countdown: DDd HH:MM:SS or HH:MM:SS or MM:SS.
- * - Always shows Minutes and Seconds (MM:SS).
- * - Shows Hours conditionally if > 1 hour.
- * - Shows Days conditionally if > 1 day.
- */
-function formatCountdownDetailed(seconds: number): string {
-	if (seconds <= 0) return '--:--'
-
-	const days = Math.floor(seconds / 86400)
-	const hours = Math.floor((seconds % 86400) / 3600)
-	const minutes = Math.floor((seconds % 3600) / 60)
-	const secs = seconds % 60
-
-	// Format the core MM:SS part
-	const mm = minutes.toString().padStart(2, '0')
-	const ss = Math.round(secs).toString().padStart(2, '0')
-	const coreTime = `${mm}:${ss}`
-
-	// Add Hours if > 0 (but we only show HH if days are 0, otherwise we show days)
-	// Actually, the prompt says: "hours and days should show conditionally if the time is larger than one hour and one day"
-	// Usually, if days > 0, we show days. If days == 0 but hours > 0, we show hours.
-
-	if (days > 0) {
-		const hh = hours.toString().padStart(2, '0')
-		return `${days}d ${hh}:${mm}:${ss}`
-	}
-
-	if (hours > 0) {
-		const hh = hours.toString().padStart(2, '0')
-		return `${hh}:${mm}:${ss}`
-	}
-
-	// If less than an hour, just MM:SS
-	return coreTime
-}
-
-// Helper to format the End Time label (Today/Tomorrow/Date)
-function formatEndTimeLabel(endTimestamp: number, isEnded: boolean): string {
-	const endDate = new Date(endTimestamp * 1000)
-	const now = new Date()
-
-	// Normalize to start of day for comparison
-	const endDateStr = endDate.toDateString()
-	const todayStr = now.toDateString()
-
-	// Check for tomorrow
-	const tomorrow = new Date(now)
-	tomorrow.setDate(tomorrow.getDate() + 1)
-	const tomorrowStr = tomorrow.toDateString()
-
-	const timeStr = endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-
-	if (isEnded) {
-		return `Ended on ${endDate.toLocaleDateString()} at ${timeStr}`
-	}
-
-	if (endDateStr === todayStr) {
-		return `Ends today at ${timeStr}`
-	}
-	if (endDateStr === tomorrowStr) {
-		return `Ends tomorrow at ${timeStr}`
-	}
-
-	return `Ends on ${endDate.toLocaleDateString()} at ${timeStr}`
-}
-
 // Map urgency to the new CSS class names
 function getBadgeClassName(urgency: AuctionCountdownUrgency): string {
 	switch (urgency) {
@@ -179,17 +92,18 @@ export function useAuctionCountdown(endAt: number, options?: { showSeconds?: boo
 	}, [endAt])
 
 	return useMemo(() => {
-		const secondsRemaining = endAt > 0 ? Math.max(0, endAt - now) : 0
+		const countdownLabels = getAuctionCountdownLabels(endAt, now, { showSeconds })
+		const secondsRemaining = countdownLabels.secondsRemaining
 		const totalDuration = endAt > 0 ? endAt - (Math.floor(Date.now() / 1000) - secondsRemaining) : 0
 		const safeTotalDuration = totalDuration > 0 ? totalDuration : 86400 * 30
 
 		return {
 			now,
 			secondsRemaining,
-			isEnded: endAt > 0 ? secondsRemaining <= 0 : false,
+			isEnded: countdownLabels.isEnded,
 			urgency: endAt > 0 ? getUrgency(secondsRemaining) : 'ended',
-			displayLabel: endAt > 0 ? 'Ended' : 'No end date',
-			absoluteLabel: endAt > 0 ? new Date(endAt * 1000).toLocaleString() : 'No end date',
+			displayLabel: countdownLabels.displayLabel,
+			absoluteLabel: countdownLabels.absoluteLabel,
 			totalDuration: safeTotalDuration,
 		}
 	}, [endAt, now, showSeconds])
@@ -273,18 +187,20 @@ export function AuctionCountdown({
 							' bg-primary hover:bg-primary text-primary-foreground hover:text-primary-foreground border-primary-border hover:border-primary-border',
 						)}
 					>
-						{formatTimeLeftSimple(remaining)}
+						{formatAuctionTimeLeft(remaining)}
 					</Badge>
 					{!compact && (
-						<span className="text-foreground whitespace-nowrap text-base font-semibold">{formatCountdownDetailed(remaining)}</span>
+						<span className="text-foreground whitespace-nowrap text-base font-semibold">{formatAuctionCountdownDetailed(remaining)}</span>
 					)}
 				</div>
 
 				{/* Rightmost Element: "Absolute" end time */}
 				{compact ? (
-					<span className="text-foreground whitespace-nowrap text-base text-end font-semibold">{formatCountdownDetailed(remaining)}</span>
+					<span className="text-foreground whitespace-nowrap text-base text-end font-semibold">
+						{formatAuctionCountdownDetailed(remaining)}
+					</span>
 				) : (
-					<span className="text-foreground/80 text-end">{formatEndTimeLabel(endTime, remaining <= 0)}</span>
+					<span className="text-foreground/80 text-end">{formatAuctionEndTimeLabel(endTimeEffective, remaining <= 0)}</span>
 				)}
 			</div>
 
