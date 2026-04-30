@@ -18,6 +18,12 @@ export type ResolvedProductShippingSelection = ProductShippingSelection & {
 	isResolved: boolean
 }
 
+export type ResolvedProductPageShippingOption = RichShippingInfo & {
+	shippingRef: string
+	extraCost: string
+	isResolved: true
+}
+
 export const normalizeProductShippingSelection = (input: ProductShippingSelectionInput): ProductShippingSelection | null => {
 	const shippingRef =
 		(typeof input.shippingRef === 'string' && input.shippingRef.trim()) ||
@@ -42,6 +48,19 @@ export const normalizeProductShippingSelections = (
 		.filter((input): input is ProductShippingSelection => input !== null)
 }
 
+export const normalizePublishedProductShippingTags = (tags: string[][] | null | undefined): ProductShippingSelection[] => {
+	if (!tags || tags.length === 0) return []
+
+	return normalizeProductShippingSelections(
+		tags
+			.filter((tag) => tag[0] === 'shipping_option')
+			.map((tag) => ({
+				shippingRef: tag[1] ?? '',
+				extraCost: tag[2] ?? '',
+			})),
+	)
+}
+
 export const resolveProductShippingSelections = (
 	selections: ProductShippingSelection[],
 	availableOptions: RichShippingInfo[],
@@ -55,4 +74,36 @@ export const resolveProductShippingSelections = (
 			isResolved: option !== null,
 		}
 	})
+}
+
+const parseShippingCost = (cost: unknown): number => {
+	const parsedCost = typeof cost === 'number' ? cost : Number(cost || 0)
+	return Number.isFinite(parsedCost) ? parsedCost : 0
+}
+
+export const resolvePublishedProductShippingOptions = ({
+	publishedSelections,
+	availableOptions,
+}: {
+	publishedSelections: ProductShippingSelection[]
+	availableOptions: RichShippingInfo[]
+}): ResolvedProductPageShippingOption[] => {
+	return resolveProductShippingSelections(publishedSelections, availableOptions)
+		.filter(
+			(selection): selection is ResolvedProductShippingSelection & { option: RichShippingInfo } =>
+				selection.isResolved && selection.option !== null,
+		)
+		.map((selection) => {
+			const extraCost = parseShippingCost(selection.extraCost)
+			const baseCost = parseShippingCost(selection.option.cost)
+
+			return {
+				...selection.option,
+				id: selection.option.id,
+				cost: baseCost + extraCost,
+				shippingRef: selection.shippingRef,
+				extraCost: selection.extraCost,
+				isResolved: true,
+			}
+		})
 }

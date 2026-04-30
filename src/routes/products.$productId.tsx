@@ -35,6 +35,7 @@ import {
 	getProductSpecs,
 	getProductStock,
 	getProductSummary,
+	getProductShippingOptions,
 	getProductTitle,
 	getProductType,
 	getProductVisibility,
@@ -44,16 +45,27 @@ import {
 	productsByPubkeyQueryOptions,
 	getProductLocation,
 } from '@/queries/products'
+import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
 import { AlertTriangle, ArrowLeft, Edit, Minus, Plus, Truck } from 'lucide-react'
-import { useEffect, useRef, useState, type JSXElementConstructor, type ReactElement, type ReactNode, type ReactPortal } from 'react'
+import {
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	type JSXElementConstructor,
+	type ReactElement,
+	type ReactNode,
+	type ReactPortal,
+} from 'react'
 import { toast } from 'sonner'
 import { ShareButton } from '@/components/social/ShareButton'
 import SocialInteractions from '@/components/social/SocialInteractions'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { scrollToElementWithOffset } from '@/lib/utils/ui'
+import { normalizePublishedProductShippingTags, resolvePublishedProductShippingOptions } from '@/lib/utils/productShippingSelections'
 
 // Hook to inject dynamic CSS
 function useHeroBackground(imageUrl: string, className: string) {
@@ -100,7 +112,37 @@ enum TabProductPage {
  */
 const getIsTabDisabled = (tab: TabProductPage) => tab === TabProductPage.reviews
 
-const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView: boolean) => {
+type ProductPageShippingState =
+	| { status: 'no-published-refs' }
+	| { status: 'loading' }
+	| { status: 'unavailable' }
+	| { status: 'resolved-empty' }
+	| { status: 'resolved'; options: RichShippingInfo[] }
+
+const renderProductShippingSelector = (shippingState: ProductPageShippingState, eventProduct: NDKEvent, className: string) => {
+	switch (shippingState.status) {
+		case 'no-published-refs':
+			return <div className="text-sm text-muted-foreground">No shipping options are published for this product.</div>
+		case 'loading':
+			return <div className="text-sm text-muted-foreground">Loading shipping options...</div>
+		case 'unavailable':
+			return <div className="text-sm text-red-500">Shipping options unavailable</div>
+		case 'resolved-empty':
+			return <div className="text-sm text-muted-foreground">No published shipping options could be resolved for this product.</div>
+		case 'resolved':
+			return (
+				<ShippingSelector
+					options={shippingState.options}
+					onSelect={(option: RichShippingInfo) => {
+						void cartActions.setShippingMethod(eventProduct.id, option)
+					}}
+					className={className}
+				/>
+			)
+	}
+}
+
+const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView: boolean, shippingState: ProductPageShippingState) => {
 	const wrapContent = (content: ReactNode) => <div className="bg-white shadow-md p-6 rounded-lg">{content}</div>
 
 	const summary = getProductSummary(eventProduct)
@@ -163,15 +205,7 @@ const getTabContent = (tab: TabProductPage, eventProduct: NDKEvent, isMobileView
 						<div className="w-full md:w-1/2 min-w-0">
 							<p className="mb-4 text-gray-500 text-sm">Select a shipping method to see estimated costs and delivery times.</p>
 
-							<div className="w-full">
-								<ShippingSelector
-									productId={eventProduct.id}
-									onSelect={(option: RichShippingInfo) => {
-										// Optional notification could go here
-									}}
-									className="w-full"
-								/>
-							</div>
+							<div className="w-full">{renderProductShippingSelector(shippingState, eventProduct, 'w-full')}</div>
 
 							<div className="mt-4">
 								<p className="text-gray-500 text-sm">Shipping costs will be added to the final price in the cart.</p>
@@ -248,6 +282,52 @@ function RouteComponent() {
 	const stockTag = getProductStock(product)
 	const visibilityTag = getProductVisibility(product)
 	const pubkey = getProductPubkey(product) || ''
+	const sellerShippingOptionsQuery = useShippingOptionsByPubkey(pubkey)
+
+	const sellerShippingOptions = useMemo<RichShippingInfo[]>(() => {
+		if (!sellerShippingOptionsQuery.data || !pubkey) return []
+
+		return sellerShippingOptionsQuery.data
+			.map((event) => {
+				const info = getShippingInfo(event)
+				if (!info || !info.id || typeof info.id !== 'string' || info.id.trim().length === 0) return null
+
+				return {
+					id: createShippingReference(pubkey, info.id),
+					name: info.title,
+					cost: parseFloat(info.price.amount),
+					currency: info.price.currency,
+					countries: info.countries,
+					service: info.service,
+					carrier: info.carrier,
+				}
+			})
+			.filter((option): option is RichShippingInfo => option !== null)
+	}, [sellerShippingOptionsQuery.data, pubkey])
+
+	const productShippingSelections = useMemo(() => normalizePublishedProductShippingTags(getProductShippingOptions(product)), [product])
+
+	const productShippingOptions = useMemo(
+		() =>
+			resolvePublishedProductShippingOptions({
+				publishedSelections: productShippingSelections,
+				availableOptions: sellerShippingOptions,
+			}),
+		[productShippingSelections, sellerShippingOptions],
+	)
+	const hasResolvedSellerShippingState = sellerShippingOptionsQuery.isSuccess || sellerShippingOptionsQuery.data !== undefined
+
+	const productShippingState = useMemo<ProductPageShippingState>(() => {
+		if (productShippingSelections.length === 0) return { status: 'no-published-refs' }
+		if (!hasResolvedSellerShippingState && sellerShippingOptionsQuery.isError) return { status: 'unavailable' }
+		if (!hasResolvedSellerShippingState) return { status: 'loading' }
+		if (productShippingOptions.length === 0) return { status: 'resolved-empty' }
+
+		return {
+			status: 'resolved',
+			options: productShippingOptions,
+		}
+	}, [hasResolvedSellerShippingState, productShippingOptions, productShippingSelections.length, sellerShippingOptionsQuery.isError])
 
 	const handleBackClick = () => {
 		if (navigation.originalResultsPath) {
@@ -640,7 +720,7 @@ function RouteComponent() {
 									!getIsTabDisabled(tab) && (
 										<div>
 											<div className="bg-secondary px-4 py-2 rounded-t-md font-medium text-white text-sm">{tab}</div>
-											{getTabContent(tab, product, true)}
+											{getTabContent(tab, product, true, productShippingState)}
 										</div>
 									),
 							)}
@@ -662,7 +742,7 @@ function RouteComponent() {
 
 							{Object.values(TabProductPage).map((tab) => (
 								<TabsContent value={tab} className="bg-tertiary mt-4 border-secondary border-t-3">
-									{getTabContent(tab, product, false)}
+									{getTabContent(tab, product, false, productShippingState)}
 								</TabsContent>
 							))}
 						</Tabs>
