@@ -283,6 +283,8 @@ function AuctionTabContent({
 	setEndMode,
 	durationSeconds,
 	setDurationSeconds,
+	userRemovedMints,
+	onUserRemovedMintsChange,
 }: TabProps & {
 	availableMints: readonly string[]
 	startMode: StartMode
@@ -291,7 +293,10 @@ function AuctionTabContent({
 	setEndMode: Dispatch<SetStateAction<EndMode>>
 	durationSeconds: number
 	setDurationSeconds: Dispatch<SetStateAction<number>>
+	userRemovedMints: Set<string>
+	onUserRemovedMintsChange: (next: Set<string>) => void
 }) {
+	const [customMintInput, setCustomMintInput] = useState('')
 	const selectedMints = formData.trustedMints
 	const unselectedMints = availableMints.filter((mint) => !selectedMints.includes(mint))
 	const canRemoveMint = selectedMints.length > 1
@@ -299,11 +304,24 @@ function AuctionTabContent({
 	const removeMint = (mint: string) => {
 		if (!canRemoveMint) return
 		setFormData((prev) => ({ ...prev, trustedMints: prev.trustedMints.filter((m) => m !== mint) }))
+		onUserRemovedMintsChange(new Set(userRemovedMints).add(mint))
 	}
 
 	const addMint = (mint: string) => {
 		if (selectedMints.includes(mint)) return
 		setFormData((prev) => ({ ...prev, trustedMints: [...prev.trustedMints, mint] }))
+		if (userRemovedMints.has(mint)) {
+			const next = new Set(userRemovedMints)
+			next.delete(mint)
+			onUserRemovedMintsChange(next)
+		}
+	}
+
+	const addCustomMint = () => {
+		const trimmed = customMintInput.trim()
+		if (!trimmed) return
+		addMint(trimmed)
+		setCustomMintInput('')
 	}
 
 	const startingBidNum = parseInt(formData.startingBid, 10)
@@ -556,6 +574,24 @@ function AuctionTabContent({
 						))}
 					</div>
 				)}
+
+				<div className="flex gap-2 mt-3">
+					<Input
+						placeholder="Enter mint URL..."
+						value={customMintInput}
+						onChange={(e) => setCustomMintInput(e.target.value)}
+						onKeyDown={(e) => {
+							if (e.key === 'Enter') {
+								e.preventDefault()
+								addCustomMint()
+							}
+						}}
+						className="flex-1"
+					/>
+					<Button type="button" variant="outline" size="sm" onClick={addCustomMint} disabled={!customMintInput.trim()}>
+						<Plus className="w-4 h-4" />
+					</Button>
+				</div>
 			</div>
 
 			<div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
@@ -919,6 +955,11 @@ export function AuctionFormContent() {
 
 	const [formData, setFormData] = useState<AuctionFormData>(() => ({ ...INITIAL_FORM, trustedMints: [...availableMints] }))
 	const prevAvailableMintsRef = useRef(availableMints)
+	const userRemovedMintsRef = useRef<Set<string>>(new Set())
+
+	const setUserRemovedMints = (next: Set<string>) => {
+		userRemovedMintsRef.current = next
+	}
 
 	useEffect(() => {
 		const prev = prevAvailableMintsRef.current
@@ -926,7 +967,7 @@ export function AuctionFormContent() {
 
 		setFormData((prevForm) => ({
 			...prevForm,
-			trustedMints: syncMintSelection(prev, availableMints, prevForm.trustedMints),
+			trustedMints: syncMintSelection(prev, availableMints, prevForm.trustedMints, userRemovedMintsRef.current),
 		}))
 
 		prevAvailableMintsRef.current = availableMints
@@ -1029,6 +1070,8 @@ export function AuctionFormContent() {
 								setEndMode={setEndMode}
 								durationSeconds={durationSeconds}
 								setDurationSeconds={setDurationSeconds}
+								userRemovedMints={userRemovedMintsRef.current}
+								onUserRemovedMintsChange={setUserRemovedMints}
 							/>
 						</TabsContent>
 						<TabsContent value="category" className="mt-4">

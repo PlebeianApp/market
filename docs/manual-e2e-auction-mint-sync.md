@@ -9,23 +9,31 @@ Happy path verification for the `fix/auction-trusted-mint-state-ownership` branc
 
 ## 1. Unit Tests
 
-Run the unit test suite. The 7 `syncMintSelection` tests in `src/lib/__tests__/auctionMintSync.test.ts` must pass alongside all other unit tests.
+Run the unit test suite. The 11 `syncMintSelection` tests in `src/lib/__tests__/auctionMintSync.test.ts` must pass alongside all other unit tests.
 
 ```bash
 make test-unit
 ```
 
-**Expected:** 89 pass, 0 fail
+**Expected:** 93 pass, 0 fail (89 pre-existing + 4 new for auction mint sync)
 
 ## 2. E2E Mint State Tests
 
-Run the Playwright tests for auction mint state. These verify mint initialization and removal in the form.
+Run the Playwright tests for auction mint state. These verify mint initialization, removal, custom input, and re-addition in the form.
 
 ```bash
 make test-e2e-mint
 ```
 
-**Expected:** 2 pass, 0 fail
+**Expected:** 5 pass, 0 fail
+
+Tests:
+
+1. Trusted mints initialize with available mints
+2. User can remove a mint and the form stays valid
+3. User can add a custom mint URL via text input
+4. User can re-add a previously removed mint via text input
+5. Empty text input does not add a mint
 
 ## 3. Format Check
 
@@ -80,7 +88,39 @@ Starting from the open form with all 5 mints selected:
 - The mint moves back to the selected section
 - The selected count increases by 1
 
-## 6. Manual Browser — Full Form Submission
+## 6. Manual Browser — Custom Mint URL Input
+
+Starting from the open form:
+
+1. Locate the text input below the "Add a mint" section (placeholder: "Enter mint URL...")
+2. Type: `https://my-custom-mint.example.com`
+3. Press **Enter** or click the **+** button
+
+**Verify:**
+
+- The custom mint URL appears in the selected list
+- The text input is cleared
+
+## 7. Manual Browser — Re-add Removed Mint via Text Input
+
+1. Remove a mint (e.g. `https://testnut.cashu.space`) via the X button
+2. Type the exact same URL into the text input
+3. Press **Enter**
+
+**Verify:**
+
+- The mint reappears in the selected list
+
+## 8. Manual Browser — Empty Input Validation
+
+1. Ensure the text input is empty
+2. Observe the **+** button next to the input
+
+**Verify:**
+
+- The + button is **disabled** when input is empty
+
+## 9. Manual Browser — Full Form Submission
 
 Starting from a fresh **Create Auction** form:
 

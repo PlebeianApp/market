@@ -1,6 +1,10 @@
-export function syncMintSelection(prevAvailable: string[], currentAvailable: string[], currentSelection: string[]): string[] {
-	const removedMints = prevAvailable.filter((m) => !currentAvailable.includes(m))
-	const addedMints = currentAvailable.filter((m) => !prevAvailable.includes(m))
+export function syncMintSelection(
+	prevAvailable: string[],
+	currentAvailable: string[],
+	currentSelection: string[],
+	userRemovedMints: Set<string>,
+): string[] {
+	const addedMints = currentAvailable.filter((m) => !prevAvailable.includes(m) && !userRemovedMints.has(m) && !currentSelection.includes(m))
 
-	return [...currentSelection.filter((m) => !removedMints.includes(m)), ...addedMints]
+	return [...currentSelection, ...addedMints]
 }
