@@ -248,13 +248,7 @@ function AuctionListItem({
 	)
 
 	return (
-		<DashboardListItem
-			isOpen={isExpanded}
-			onOpenChange={onToggleExpanded}
-			triggerContent={triggerContent}
-			actions={actions}
-			icon={false}
-		>
+		<DashboardListItem isOpen={isExpanded} onOpenChange={onToggleExpanded} triggerContent={triggerContent} actions={actions} icon={false}>
 			<AuctionListBody auction={auction} onPublishSettlement={onPublishSettlement} isSettling={isSettling} />
 		</DashboardListItem>
 	)
