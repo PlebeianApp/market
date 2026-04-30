@@ -1,5 +1,7 @@
+import { AuctionClaimDialog } from '@/components/AuctionClaimDialog'
 import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
 import { AvatarUser } from '@/components/AvatarUser'
+import { ProfileName } from '@/components/ProfileName'
 import { OrderActions } from '@/components/orders/OrderActions'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Badge } from '@/components/ui/badge'
@@ -27,6 +29,7 @@ import {
 	getAuctionRootEventId,
 	getAuctionSchema,
 	getAuctionSettlementFinalAmount,
+	getAuctionSettlementGrace,
 	getAuctionSettlementPolicy,
 	getAuctionSettlementStatus,
 	getAuctionSettlementWinner,
@@ -48,8 +51,8 @@ import { useDashboardTitle } from '@/routes/_dashboard-layout'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Clock, Copy, ExternalLink, Gavel, Package, Shield } from 'lucide-react'
-import { useMemo } from 'react'
+import { Clock, Copy, ExternalLink, Gavel, MapPin, Package, Shield, Trophy } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
 const AUCTION_STATUS_STYLES: Record<string, string> = {
@@ -100,11 +103,28 @@ function StatCard({ label, value, eyebrow }: { label: string; value: string; eye
 	)
 }
 
-function OverviewItem({ label, value, helper }: { label: string; value: string; helper?: string }) {
+function OverviewItem({ label, value, helper }: { label: string; value: React.ReactNode; helper?: string }) {
 	return (
 		<div className="rounded-xl border border-zinc-200 bg-white p-4">
 			<p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">{label}</p>
-			<p className="mt-2 text-sm font-medium text-zinc-950">{value}</p>
+			<div className="mt-2 text-sm font-medium text-zinc-950">{value}</div>
+			{helper && <p className="mt-1 text-xs text-zinc-500">{helper}</p>}
+		</div>
+	)
+}
+
+function PartyRow({ label, pubkey, helper }: { label: string; pubkey: string; helper?: string }) {
+	return (
+		<div className="rounded-xl border border-zinc-200 bg-white p-4">
+			<p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">{label}</p>
+			<div className="mt-2 flex items-center gap-2">
+				<AvatarUser pubkey={pubkey} colored className="h-7 w-7" />
+				{pubkey ? (
+					<ProfileName pubkey={pubkey} className="text-sm font-medium text-zinc-950" />
+				) : (
+					<span className="text-sm font-medium text-zinc-950">N/A</span>
+				)}
+			</div>
 			{helper && <p className="mt-1 text-xs text-zinc-500">{helper}</p>}
 		</div>
 	)
@@ -153,6 +173,7 @@ function DashboardAuctionDetailRoute() {
 	const { auctionId } = Route.useParams()
 	useDashboardTitle('Auction Details')
 	const { user } = useStore(authStore)
+	const [isClaimDialogOpen, setIsClaimDialogOpen] = useState(false)
 
 	const auctionQuery = useQuery({
 		...auctionQueryOptions(auctionId),
@@ -172,7 +193,6 @@ function DashboardAuctionDetailRoute() {
 	const bidIncrement = getAuctionBidIncrement(auction)
 	const startAt = getAuctionStartAt(auction)
 	const endAt = getAuctionEndAt(auction)
-	const isOwner = !!(auction && user?.pubkey && auction.pubkey === user.pubkey)
 	const auctionType = getAuctionType(auction)
 	const currency = getAuctionCurrency(auction)
 	const trustedMints = getAuctionMints(auction)
@@ -216,7 +236,17 @@ function DashboardAuctionDetailRoute() {
 	const latestSettlementStatus = latestSettlement ? getAuctionSettlementStatus(latestSettlement) : 'unknown'
 	const reserveLabel = bidCount === 0 ? 'Waiting for bids' : reserveMet ? 'Reserve met' : 'Below reserve'
 
-	// Auction claim order (winner's shipping details)
+	// Settlement window: bids are Cashu-locked until `max_end_at + settlement_grace`
+	// (the per-auction "locktime" — see AUCTIONS.md §4.1). Once now is past the
+	// locktime, bidders can reclaim their locked collateral, so the seller can
+	// no longer settle this auction.
+	const maxEndAt = auction ? getAuctionMaxEndAt(auction) : 0
+	const settlementGrace = auction ? getAuctionSettlementGrace(auction) : 0
+	const settlementLocktimeAt = maxEndAt > 0 && settlementGrace > 0 ? maxEndAt + settlementGrace : 0
+	const settlementWindowExpired = settlementLocktimeAt > 0 && now >= settlementLocktimeAt
+	const canSettleNow = ended && !settlementLocked && !settlementWindowExpired
+
+	// Settlement / claim ordering data — needed by both perspectives.
 	const settlementWinner = getAuctionSettlementWinner(latestSettlement)
 	const claimOrdersQuery = useAuctionClaimOrders(auctionCoordinates)
 	const claimOrders = claimOrdersQuery.data ?? []
@@ -225,6 +255,18 @@ function DashboardAuctionDetailRoute() {
 
 	const claimOrderDetailQuery = useOrderById(winnerClaimOrderId)
 	const claimOrderWithEvents: OrderWithRelatedEvents | null = claimOrderDetailQuery.data ?? null
+
+	// --- Perspective ----------------------------------------------------------
+	// The dashboard auction detail route is consumed by both sellers and buyers
+	// (and any logged-in viewer). What's rendered below depends on which role
+	// the current user holds. Sellers see settlement + outgoing fulfilment;
+	// winners see "submit your address" + incoming fulfilment; viewers see the
+	// public state only. OrderActions itself handles per-role action gating.
+	const isOwner = !!(auction && user?.pubkey && auction.pubkey === user.pubkey)
+	const isWinner = !!(user?.pubkey && settlementWinner && user.pubkey === settlementWinner)
+	const isSettled = latestSettlementStatus === 'settled'
+	const winnerHasClaimed = !!winnerClaimOrder
+	const winnerNeedsAddress = isSettled && isWinner && !winnerHasClaimed
 
 	const submitSettlement = async () => {
 		if (!auction) return
@@ -276,6 +318,8 @@ function DashboardAuctionDetailRoute() {
 		)
 	}
 
+	const perspectiveLabel = isOwner ? 'Seller view' : isWinner ? 'Winner view' : 'Browsing'
+
 	return (
 		<div className="space-y-4 p-3 lg:p-4">
 			<Card className="overflow-hidden border-black/10 bg-[radial-gradient(circle_at_top_left,_rgba(244,114,182,0.18),_transparent_28%),linear-gradient(135deg,_#fff9fc,_#f8f8fb_58%,_#f2f4f7)] shadow-[0_20px_60px_-40px_rgba(17,24,39,0.45)]">
@@ -309,7 +353,7 @@ function DashboardAuctionDetailRoute() {
 					<div className="space-y-6 p-5 lg:p-8">
 						<div className="flex flex-wrap items-start justify-between gap-4">
 							<div className="space-y-3">
-								<p className="text-xs font-semibold uppercase tracking-[0.24em] text-zinc-500">Seller view</p>
+								<p className="text-xs font-semibold uppercase tracking-[0.24em] text-zinc-500">{perspectiveLabel}</p>
 								<div className="space-y-2">
 									<h2 className="text-3xl font-bold tracking-tight text-zinc-950">{getAuctionTitle(auction)}</h2>
 									<p className="max-w-2xl text-sm leading-6 text-zinc-600">{summary}</p>
@@ -336,50 +380,28 @@ function DashboardAuctionDetailRoute() {
 							<OverviewItem label="Bid increment" value={formatSats(bidIncrement)} helper="Minimum raise between bids." />
 							<OverviewItem label="Schedule" value={`${formatMaybeDate(startAt)} to ${formatMaybeDate(effectiveEndAt)}`} />
 						</div>
+
+						{/* Parties — pubkeys resolved via AvatarUser for both perspectives */}
+						<div className="grid gap-3 md:grid-cols-2">
+							<PartyRow label="Seller" pubkey={auction.pubkey} helper={isOwner ? 'You' : undefined} />
+							{isSettled && settlementWinner && <PartyRow label="Winner" pubkey={settlementWinner} helper={isWinner ? 'You' : undefined} />}
+						</div>
 					</div>
 				</div>
 			</Card>
 
 			<div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_360px]">
 				<div className="space-y-6">
-					<Card className="border-black/10 shadow-sm">
-						<CardHeader className="pb-4">
-							<CardTitle className="flex items-center gap-2 text-xl">
-								<Gavel className="h-5 w-5" />
-								Auction Snapshot
-							</CardTitle>
-							<CardDescription>
-								Only the seller-facing information stays visible by default. Event IDs and key material are tucked into Advanced details.
-							</CardDescription>
-						</CardHeader>
-						<CardContent className="grid gap-3 md:grid-cols-2">
-							<OverviewItem label="Status" value={status} helper={ended ? 'Bidding has closed.' : 'Auction is still collecting bids.'} />
-							<OverviewItem
-								label="Bid activity"
-								value={`${bidCount} ${bidCount === 1 ? 'bid' : 'bids'}`}
-								helper={topBid ? `Highest bid is ${formatSats(getBidAmount(topBid))}.` : 'No bids placed yet.'}
-							/>
-							<OverviewItem
-								label="Reserve position"
-								value={reserveLabel}
-								helper={reserveMet ? 'Eligible for winner settlement.' : 'Auction cannot settle to winner yet.'}
-							/>
-							<OverviewItem
-								label="Settlement lock"
-								value={settlementLocked ? 'Published' : 'Open'}
-								helper={settlementLocked ? 'A settlement record already exists.' : 'You can still publish a settlement.'}
-							/>
-						</CardContent>
-					</Card>
-
+					{/* Public bid feed — visible to all */}
 					<Card className="border-black/10 shadow-sm">
 						<CardHeader className="pb-4">
 							<CardTitle className="flex items-center gap-2 text-xl">
 								<Clock className="h-5 w-5" />
-								Live Bids
+								Bids
 							</CardTitle>
 							<CardDescription>
-								Amounts stay front and center. Bidder keys, bid event IDs, and mint wiring live behind each bid&apos;s technical panel.
+								Public bid feed for this auction. Bidder pubkeys, bid event IDs, and mint wiring live behind each bid&apos;s technical
+								panel.
 							</CardDescription>
 						</CardHeader>
 						<CardContent className="space-y-4">
@@ -393,9 +415,12 @@ function DashboardAuctionDetailRoute() {
 											<div className="mt-2 flex flex-wrap items-end justify-between gap-3">
 												<div>
 													<p className="text-2xl font-bold text-emerald-950">{formatSats(getBidAmount(topBid))}</p>
-													<p className="mt-1 text-sm text-emerald-800">
-														Placed {topBid.created_at ? new Date(topBid.created_at * 1000).toLocaleString() : 'at an unknown time'}
-													</p>
+													<div className="mt-1 flex items-center gap-2 text-sm text-emerald-800">
+														<AvatarUser pubkey={topBid.pubkey} colored className="h-5 w-5" />
+														<span>
+															Placed {topBid.created_at ? new Date(topBid.created_at * 1000).toLocaleString() : 'at an unknown time'}
+														</span>
+													</div>
 												</div>
 												<Badge className="border-emerald-200 bg-white text-emerald-800" variant="outline">
 													Highest offer
@@ -411,15 +436,17 @@ function DashboardAuctionDetailRoute() {
 											const locktime = bidEvent.tags.find((tag) => tag[0] === 'locktime')?.[1]
 											const keyScheme = bidEvent.tags.find((tag) => tag[0] === 'key_scheme')?.[1] || 'hd_p2pk'
 											const createdAt = bidEvent.created_at ? new Date(bidEvent.created_at * 1000).toLocaleString() : 'N/A'
+											const isOwnBid = !!user?.pubkey && bidEvent.pubkey === user.pubkey
 
 											return (
 												<div key={bidEvent.id} className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
 													<div className="flex flex-wrap items-start justify-between gap-3">
-														<div>
+														<div className="space-y-1">
 															<p className="text-xl font-semibold text-zinc-950">{formatSats(amount)}</p>
-															<p className="mt-1 text-sm text-zinc-500">
-																{isTop ? 'Currently leading the auction.' : 'Recorded bid in the live auction feed.'}
-															</p>
+															<div className="flex items-center gap-2 text-sm text-zinc-500">
+																<AvatarUser pubkey={bidEvent.pubkey} colored className="h-5 w-5" />
+																<span className="break-all">{isOwnBid ? 'You' : isTop ? 'Currently leading' : 'Bidder'}</span>
+															</div>
 														</div>
 														<div className="flex flex-wrap gap-2">
 															{isTop && (
@@ -467,9 +494,41 @@ function DashboardAuctionDetailRoute() {
 							)}
 						</CardContent>
 					</Card>
+
+					{/* Operational panel — only the seller sees this */}
+					{isOwner && (
+						<Card className="border-black/10 shadow-sm">
+							<CardHeader className="pb-4">
+								<CardTitle className="flex items-center gap-2 text-xl">
+									<Gavel className="h-5 w-5" />
+									Auction Snapshot
+								</CardTitle>
+								<CardDescription>Seller-facing operational state. Public viewers see only the bid feed above.</CardDescription>
+							</CardHeader>
+							<CardContent className="grid gap-3 md:grid-cols-2">
+								<OverviewItem label="Status" value={status} helper={ended ? 'Bidding has closed.' : 'Auction is still collecting bids.'} />
+								<OverviewItem
+									label="Bid activity"
+									value={`${bidCount} ${bidCount === 1 ? 'bid' : 'bids'}`}
+									helper={topBid ? `Highest bid is ${formatSats(getBidAmount(topBid))}.` : 'No bids placed yet.'}
+								/>
+								<OverviewItem
+									label="Reserve position"
+									value={reserveLabel}
+									helper={reserveMet ? 'Eligible for winner settlement.' : 'Auction cannot settle to winner yet.'}
+								/>
+								<OverviewItem
+									label="Settlement lock"
+									value={settlementLocked ? 'Published' : 'Open'}
+									helper={settlementLocked ? 'A settlement record already exists.' : 'You can still publish a settlement.'}
+								/>
+							</CardContent>
+						</Card>
+					)}
 				</div>
 
 				<div className="space-y-6">
+					{/* Settlement card — content depends on perspective */}
 					<Card className="border-black/10 bg-[linear-gradient(180deg,_rgba(249,250,251,0.96),_rgba(244,244,245,0.86))] shadow-sm">
 						<CardHeader className="pb-4">
 							<CardTitle className="flex items-center gap-2 text-xl">
@@ -477,7 +536,11 @@ function DashboardAuctionDetailRoute() {
 								Settlement
 							</CardTitle>
 							<CardDescription>
-								Keep the operational state visible. Escrow keys, xpubs, and event wiring stay in Advanced details.
+								{isOwner
+									? 'Publish the kind-1024 settlement event to close the auction. Operational details stay visible; raw event wiring is in Advanced details.'
+									: isWinner
+										? 'You won this auction. Submit your shipping address so the seller can fulfil it.'
+										: 'Public settlement state for this auction.'}
 							</CardDescription>
 						</CardHeader>
 						<CardContent className="space-y-4">
@@ -494,7 +557,7 @@ function DashboardAuctionDetailRoute() {
 										}
 										variant="outline"
 									>
-										{latestSettlement ? latestSettlementStatus.replaceAll('_', ' ') : ended ? 'Ready to settle' : 'Awaiting close'}
+										{latestSettlement ? latestSettlementStatus.replace(/_/g, ' ') : ended ? 'Ready to settle' : 'Awaiting close'}
 									</Badge>
 								</div>
 								<div className="mt-4 space-y-3">
@@ -505,7 +568,7 @@ function DashboardAuctionDetailRoute() {
 											latestSettlement
 												? latestSettlementStatus === 'settled'
 													? 'Winning bidder selected'
-													: latestSettlementStatus.replaceAll('_', ' ')
+													: latestSettlementStatus.replace(/_/g, ' ')
 												: 'No settlement published yet'
 										}
 										helper={
@@ -514,38 +577,82 @@ function DashboardAuctionDetailRoute() {
 													? `Final amount: ${formatSats(getAuctionSettlementFinalAmount(latestSettlement))}`
 													: 'No final amount recorded.'
 												: ended
-													? 'You can publish a settlement once you decide the outcome.'
+													? 'Settlement can be published now.'
 													: 'Settlement options unlock after the auction ends.'
 										}
 									/>
 								</div>
 							</div>
 
-							<div className="space-y-2">
-								<p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Settlement action</p>
-								<Button
-									className="w-full"
-									disabled={!isOwner || settlementLocked || !ended || settlementMutation.isPending}
-									onClick={() => void submitSettlement()}
-								>
-									{settlementMutation.isPending ? 'Publishing…' : 'Publish Settlement'}
-								</Button>
-								<p className="text-[11px] leading-relaxed text-zinc-500">
-									{topBid && reserveMet
-										? `Will settle winner at ${getBidAmount(topBid).toLocaleString()} sats.`
-										: topBid
-											? 'Top bid is below the reserve — settlement will record reserve_not_met.'
-											: 'No valid bids — settlement will record reserve_not_met.'}
-								</p>
-							</div>
+							{/* Seller-only settlement publish action */}
+							{isOwner && (
+								<div className="space-y-2">
+									<p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">Settlement action</p>
+									{settlementWindowExpired && !settlementLocked ? (
+										<div className="space-y-2 rounded-2xl border border-rose-200 bg-rose-50 p-4">
+											<p className="flex items-center gap-2 text-sm font-semibold text-rose-900">
+												<Clock className="h-4 w-4" /> Settlement window expired
+											</p>
+											<p className="text-xs leading-relaxed text-rose-800">
+												The Cashu locktime passed on {formatMaybeDate(settlementLocktimeAt)}. Bidders can now reclaim their locked
+												collateral, so this auction can no longer be settled. Any bids that haven't been reclaimed yet may still be
+												claimable, but you can't bind a winner anymore.
+											</p>
+										</div>
+									) : (
+										<>
+											<Button
+												className="w-full"
+												disabled={!isOwner || settlementLocked || !ended || settlementWindowExpired || settlementMutation.isPending}
+												onClick={() => void submitSettlement()}
+											>
+												{settlementMutation.isPending ? 'Publishing…' : 'Publish Settlement'}
+											</Button>
+											<p className="text-[11px] leading-relaxed text-zinc-500">
+												{topBid && reserveMet
+													? `Will settle winner at ${getBidAmount(topBid).toLocaleString()} sats.`
+													: topBid
+														? 'Top bid is below the reserve — settlement will record reserve_not_met.'
+														: 'No valid bids — settlement will record reserve_not_met.'}
+											</p>
+											<div className="rounded-xl border border-dashed border-zinc-300 bg-white/70 p-3 text-xs text-zinc-600">
+												{!ended && 'Settlement to a winner or reserve outcome unlocks after the auction ends.'}
+												{ended && settlementLocked && 'A settlement event already exists for this auction.'}
+												{canSettleNow &&
+													`Review the latest bid state, then publish the final auction outcome before ${formatMaybeDate(settlementLocktimeAt)} (locktime).`}
+											</div>
+										</>
+									)}
+								</div>
+							)}
 
-							<div className="rounded-xl border border-dashed border-zinc-300 bg-white/70 p-3 text-xs text-zinc-600">
-								{!isOwner && 'Only the auction owner can publish a settlement.'}
-								{isOwner && !ended && 'Settlement to a winner or reserve outcome unlocks after the auction ends.'}
-								{isOwner && ended && settlementLocked && 'A settlement event already exists for this auction.'}
-								{isOwner && ended && !settlementLocked && 'Review the latest bid state, then publish the final auction outcome.'}
-							</div>
+							{/* Winner-only claim address action */}
+							{winnerNeedsAddress && (
+								<div className="space-y-2 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+									<p className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+										<MapPin className="h-4 w-4" /> Shipping address required
+									</p>
+									<p className="text-xs leading-relaxed text-amber-800">
+										You won this auction at {formatSats(getAuctionSettlementFinalAmount(latestSettlement))}. Submit your shipping address so
+										the seller can ship the item to you.
+									</p>
+									<Button onClick={() => setIsClaimDialogOpen(true)} className="w-full sm:w-auto">
+										Submit Shipping Address
+									</Button>
+								</div>
+							)}
 
+							{/* Winner who has already claimed */}
+							{isWinner && winnerHasClaimed && (
+								<div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+									<p className="flex items-center gap-2 font-semibold">
+										<Trophy className="h-4 w-4" /> Address sent
+									</p>
+									<p className="mt-1 text-xs">Your shipping address was delivered to the seller. Track fulfilment progress below.</p>
+								</div>
+							)}
+
+							{/* Tech accordion — visible to all but only really useful for seller / debugging */}
 							<Accordion type="multiple" className="rounded-2xl border border-zinc-200 bg-white px-4">
 								<AccordionItem value="settlement-config">
 									<AccordionTrigger className="text-sm font-semibold hover:no-underline">Advanced settlement wiring</AccordionTrigger>
@@ -555,9 +662,9 @@ function DashboardAuctionDetailRoute() {
 											value={getAuctionPathIssuer(auction) || 'N/A'}
 											copyValue={getAuctionPathIssuer(auction) || undefined}
 										/>
-										<TechnicalRow label="Key scheme" value={getAuctionKeyScheme(auction)} />
-										{p2pkXpub && <TechnicalRow label="P2PK xpub" value={p2pkXpub} copyValue={p2pkXpub} />}
 										<TechnicalRow label="Settlement policy" value={getAuctionSettlementPolicy(auction) || 'N/A'} />
+										<TechnicalRow label="Lock key derivation" value={getAuctionKeyScheme(auction)} />
+										{p2pkXpub && <TechnicalRow label="P2PK xpub" value={p2pkXpub} copyValue={p2pkXpub} />}
 										<TechnicalRow label="Schema" value={getAuctionSchema(auction) || 'N/A'} />
 										<TechnicalRow label="Trusted mints" value={trustedMints.length > 0 ? trustedMints.join('\n') : 'N/A'} stacked={true} />
 									</AccordionContent>
@@ -568,7 +675,7 @@ function DashboardAuctionDetailRoute() {
 									<AccordionContent className="space-y-3">
 										{latestSettlement ? (
 											<>
-												<TechnicalRow label="Settlement status" value={getAuctionSettlementStatus(latestSettlement).replaceAll('_', ' ')} />
+												<TechnicalRow label="Settlement status" value={getAuctionSettlementStatus(latestSettlement).replace(/_/g, ' ')} />
 												<TechnicalRow
 													label="Winner pubkey"
 													value={getAuctionSettlementWinner(latestSettlement) || 'N/A'}
@@ -599,6 +706,10 @@ function DashboardAuctionDetailRoute() {
 										<TechnicalRow label="d tag" value={getAuctionId(auction) || 'N/A'} copyValue={getAuctionId(auction) || undefined} />
 										<TechnicalRow label="Seller pubkey" value={auction.pubkey} copyValue={auction.pubkey} />
 										<TechnicalRow
+											label="Max end at"
+											value={getAuctionMaxEndAt(auction) ? formatMaybeDate(getAuctionMaxEndAt(auction)) : 'N/A'}
+										/>
+										<TechnicalRow
 											label="Created at"
 											value={auction.created_at ? new Date(auction.created_at * 1000).toLocaleString() : 'N/A'}
 										/>
@@ -608,8 +719,8 @@ function DashboardAuctionDetailRoute() {
 						</CardContent>
 					</Card>
 
-					{/* Fulfilment — only visible once settled with a winner */}
-					{latestSettlementStatus === 'settled' && settlementWinner && (
+					{/* Fulfilment — visible to seller and winner, once settled with a winner */}
+					{isSettled && settlementWinner && (isOwner || isWinner) && (
 						<Card className="border-black/10 shadow-sm">
 							<CardHeader className="pb-4">
 								<CardTitle className="flex items-center gap-2 text-xl">
@@ -617,27 +728,27 @@ function DashboardAuctionDetailRoute() {
 									Fulfilment
 								</CardTitle>
 								<CardDescription>
-									Post-settlement delivery flow. Once the winner submits their address you can process and ship the item using the same
-									controls as regular orders.
+									{isOwner
+										? "Once the winner submits their address you'll see it here. Use the order controls to confirm, process, and ship."
+										: 'Track the seller as they confirm payment, prepare your item, and ship it. You can mark received once it arrives.'}
 								</CardDescription>
 							</CardHeader>
 							<CardContent className="space-y-4">
 								<div className="rounded-2xl border border-zinc-200 bg-white p-4">
-									<div className="flex items-center justify-between gap-2">
-										<p className="text-sm font-medium text-zinc-600">Winner</p>
-										<AvatarUser pubkey={settlementWinner} />
+									<div className="grid gap-3 sm:grid-cols-2">
+										<PartyRow label="Seller" pubkey={auction.pubkey} helper={isOwner ? 'You' : undefined} />
+										<PartyRow label="Winner" pubkey={settlementWinner} helper={isWinner ? 'You' : undefined} />
 									</div>
 									<div className="mt-3">
-										<OverviewItem
-											label="Final amount"
-											value={`${getAuctionSettlementFinalAmount(latestSettlement).toLocaleString()} sats`}
-										/>
+										<OverviewItem label="Final amount" value={formatSats(getAuctionSettlementFinalAmount(latestSettlement))} />
 									</div>
 								</div>
 
 								{!winnerClaimOrder && (
 									<div className="rounded-xl border border-dashed border-amber-300 bg-amber-50/70 p-4 text-sm text-amber-800">
-										Waiting for the winner to submit their shipping address.
+										{isOwner
+											? 'Waiting for the winner to submit their shipping address.'
+											: 'Submit your shipping address above so fulfilment can start.'}
 									</div>
 								)}
 
@@ -647,10 +758,11 @@ function DashboardAuctionDetailRoute() {
 
 								{claimOrderWithEvents && user?.pubkey && (
 									<div className="space-y-3">
-										{/* Shipping address from the claim order */}
+										{/* Shipping address — visible to seller, hidden from public/buyer to keep PII tight */}
 										{(() => {
 											const addressTag = claimOrderWithEvents.order.tags.find((t) => t[0] === 'address')?.[1]
 											if (!addressTag) return null
+											if (!isOwner && !isWinner) return null
 											return (
 												<div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
 													<p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Shipping address</p>
@@ -659,14 +771,13 @@ function DashboardAuctionDetailRoute() {
 											)
 										})()}
 
-										{/* Email if provided */}
 										{(() => {
 											const email = claimOrderWithEvents.order.tags.find((t) => t[0] === 'email')?.[1]
-											if (!email) return null
+											if (!email || (!isOwner && !isWinner)) return null
 											return <OverviewItem label="Contact email" value={email} />
 										})()}
 
-										{/* Order actions — reuses the standard confirm → process → ship flow */}
+										{/* Order controls — perspective-aware via OrderActions itself */}
 										<div className="rounded-xl border border-zinc-200 bg-white p-4">
 											<p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Order progress</p>
 											<OrderActions order={claimOrderWithEvents} userPubkey={user.pubkey} />
@@ -676,32 +787,21 @@ function DashboardAuctionDetailRoute() {
 							</CardContent>
 						</Card>
 					)}
-
-					<Card className="border-black/10 shadow-sm">
-						<CardHeader className="pb-4">
-							<CardTitle className="text-lg">Operational checks</CardTitle>
-							<CardDescription>High-signal details for the seller without exposing raw identifiers.</CardDescription>
-						</CardHeader>
-						<CardContent className="space-y-3">
-							<OverviewItem
-								label="Settlement policy"
-								value={getAuctionSettlementPolicy(auction) || 'Not configured'}
-								helper="The raw settlement wiring remains in Advanced settlement details."
-							/>
-							<OverviewItem
-								label="Trusted mints"
-								value={trustedMints.length > 0 ? `${trustedMints.length} configured` : 'None configured'}
-								helper={trustedMints.length > 0 ? 'Full mint URLs are hidden in Advanced settlement wiring.' : undefined}
-							/>
-							<OverviewItem
-								label="Metadata visibility"
-								value="Hidden by default"
-								helper="Auction IDs, coordinates, keys, and settlement records live behind the advanced accordions."
-							/>
-						</CardContent>
-					</Card>
 				</div>
 			</div>
+
+			{/* Claim address dialog — opened from the winner's "Submit Shipping Address" button */}
+			{auction && latestSettlement && isWinner && (
+				<AuctionClaimDialog
+					open={isClaimDialogOpen}
+					onOpenChange={setIsClaimDialogOpen}
+					auctionEventId={auctionRootEventId || auction.id}
+					auctionCoordinates={auctionCoordinates}
+					settlementEventId={latestSettlement.id}
+					sellerPubkey={auction.pubkey}
+					finalAmount={getAuctionSettlementFinalAmount(latestSettlement)}
+				/>
+			)}
 		</div>
 	)
 }
