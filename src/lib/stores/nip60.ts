@@ -39,6 +39,7 @@ import { NDKCashuDeposit, NDKCashuWallet, NDKWalletStatus, type NDKWalletTransac
 import { HDKey } from '@scure/bip32'
 import { Store } from '@tanstack/store'
 import { ndkActions, ndkStore } from './ndk'
+import { signedFetch } from '@/lib/nip98Fetch'
 import { configStore } from './config'
 
 const DEFAULT_MINT_KEY = 'nip60_default_mint'
@@ -2010,7 +2011,14 @@ export const nip60Actions = {
 
 		// Path-oracle flow: request a fresh derivation path from the issuer HTTP
 		// endpoint, verify it against the auction's p2pk_xpub (§5.6), then lock.
-		const pathResponse = await fetch('/api/auctions/path-request', {
+		// AUCTIONS.md §7.5.1: the request MUST authenticate the bidder. Use
+		// signedFetch (NIP-98) so the issuer can verify the caller controls
+		// `bidderPubkey` before issuing a path.
+		const pathRequestNdk = ndkActions.getNDK()
+		const pathRequestSigner = ndkActions.getSigner()
+		if (!pathRequestSigner) throw new Error('No signer available — cannot request a path grant')
+		if (!pathRequestNdk) throw new Error('NDK is not initialised')
+		const pathResponse = await signedFetch('/api/auctions/path-request', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({
@@ -2019,6 +2027,8 @@ export const nip60Actions = {
 				bidderPubkey,
 				bidderRefundPubkey,
 			}),
+			signer: pathRequestSigner,
+			ndk: pathRequestNdk,
 		})
 		if (!pathResponse.ok) {
 			const error = (await pathResponse.json().catch(() => null)) as { error?: string } | null

@@ -16,6 +16,7 @@ import {
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { configStore } from '@/lib/stores/config'
 import { ndkActions } from '@/lib/stores/ndk'
+import { signedFetch } from '@/lib/nip98Fetch'
 import { getAuctionSettlementGraceSeconds, nip60Actions, type AuctionP2pkKeyScheme } from '@/lib/stores/nip60'
 import {
 	normalizeProductShippingSelections,
@@ -114,16 +115,23 @@ export const requestAuctionPathGrant = async (params: {
 	expectedXpub: string
 }): Promise<AuctionPathGrantResponse> => {
 	const requestId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-	const response = await fetch('/api/auctions/path-request', {
+	const ndk = ndkActions.getNDK()
+	const signer = ndkActions.getSigner()
+	if (!signer) throw new Error('No signer available — sign in to bid')
+	if (!ndk) throw new Error('NDK is not initialised')
+	const requestBody = JSON.stringify({
+		requestId,
+		auctionEventId: params.auctionEventId,
+		auctionCoordinates: params.auctionCoordinates,
+		bidderPubkey: params.bidderPubkey,
+		bidderRefundPubkey: params.bidderRefundPubkey,
+	})
+	const response = await signedFetch('/api/auctions/path-request', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({
-			requestId,
-			auctionEventId: params.auctionEventId,
-			auctionCoordinates: params.auctionCoordinates,
-			bidderPubkey: params.bidderPubkey,
-			bidderRefundPubkey: params.bidderRefundPubkey,
-		}),
+		body: requestBody,
+		signer,
+		ndk,
 	})
 	if (!response.ok) {
 		const err = (await response.json().catch(() => null)) as { error?: string } | null
@@ -731,15 +739,18 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	if (walletAuctionXpub !== auctionP2pkXpub) {
 		throw new Error('Auction p2pk_xpub does not match the current wallet-derived auction HD root')
 	}
-	const settlementPlanResponse = await fetch('/api/auctions/settlement-plan', {
+	const settlementPlanBody = JSON.stringify({
+		auctionEventId: formData.auctionEventId,
+		auctionCoordinates,
+		// status deliberately omitted — backend derives the correct outcome
+		// from bids + reserve so the client never has to pick.
+	})
+	const settlementPlanResponse = await signedFetch('/api/auctions/settlement-plan', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({
-			auctionEventId: formData.auctionEventId,
-			auctionCoordinates,
-			// status deliberately omitted — backend derives the correct outcome
-			// from bids + reserve so the client never has to pick.
-		}),
+		body: settlementPlanBody,
+		signer,
+		ndk,
 	})
 	if (!settlementPlanResponse.ok) {
 		const error = (await settlementPlanResponse.json().catch(() => null)) as { error?: string } | null
