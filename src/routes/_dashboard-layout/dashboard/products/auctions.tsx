@@ -247,6 +247,7 @@ function AuctionListItem({
 	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
 	const now = Math.floor(Date.now() / 1000)
 	const status = formatAuctionStatus(startAt, effectiveEndAt, now)
+	const isLiveAuction = status === 'Live'
 	const images = getAuctionImages(auction)
 	const thumbnailUrl = images.length > 0 ? images[0][1] : null
 
@@ -260,10 +261,12 @@ function AuctionListItem({
 				</div>
 			)}
 			<div className="min-w-0">
-				<p className="font-semibold truncate">{getAuctionTitle(auction)}</p>
-				<div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-					<span>{status}</span>
+				<div className="flex flex-wrap items-center gap-2">
+					<p className="font-semibold truncate">{getAuctionTitle(auction)}</p>
 					<AuctionCountdown auction={auction} compact className="px-2 py-1 text-[10px]" />
+				</div>
+				<div className="mt-1 text-xs text-muted-foreground">
+					<span>{status}</span>
 				</div>
 			</div>
 		</div>
@@ -293,17 +296,19 @@ function AuctionListItem({
 			>
 				<Copy className="w-4 h-4" />
 			</Button>
-			<Button
-				variant="ghost"
-				size="sm"
-				onClick={(e) => {
-					e.stopPropagation()
-					onManage()
-				}}
-				aria-label={`Manage ${getAuctionTitle(auction)}`}
-			>
-				<Pencil className="w-4 h-4" />
-			</Button>
+			{!isLiveAuction && (
+				<Button
+					variant="ghost"
+					size="sm"
+					onClick={(e) => {
+						e.stopPropagation()
+						onManage()
+					}}
+					aria-label={`Manage ${getAuctionTitle(auction)}`}
+				>
+					<Pencil className="w-4 h-4" />
+				</Button>
+			)}
 			<Button
 				variant="ghost"
 				size="sm"
