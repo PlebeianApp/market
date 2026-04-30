@@ -20,6 +20,7 @@ import {
 	getAuctionSettlementGrace,
 	getAuctionTagValue,
 	getAuctionWindowValidBids,
+	resolveAuctionVersionSet,
 	type AuctionSettlementPlanResponse,
 	type AuctionSettlementPublishStatus,
 } from './lib/auctionSettlement'
@@ -233,21 +234,113 @@ async function publishAuctionPathRegistry(registry: AuctionPathRegistry): Promis
 	pathRegistryCache.set(registry.auctionEventId, { registry, fetchedAtMs: Date.now() })
 }
 
+/**
+ * Load an auction event and resolve it through the immutable-fields filter.
+ *
+ * AUCTIONS.md §4.1 / §9.3: the listing kind 30408 is addressable
+ * (replaceable), so a seller can publish many versions of the same
+ * `(pubkey, d)` coordinate. The protocol pins immutable fields after the
+ * first publish; a shadow update that changes `start_at` / `end_at` / mint
+ * allowlist / `p2pk_xpub` / etc. MUST be rejected. We fetch the entire
+ * version set, run it through `resolveAuctionVersionSet`, and refuse to
+ * issue any path / settlement against an event that violates the rule.
+ *
+ * Callers MUST pass the root event id (per spec §4.1: "Bids MUST reference
+ * `auction_root_event_id`"). Passing a non-root id is rejected.
+ */
 async function loadAuctionEvent(auctionEventId: string): Promise<NDKEvent> {
 	const ndk = await ensureInvoiceNdkConnected()
-	const auctionEvent = await ndk.fetchEvent({
+	const initialEvent = await ndk.fetchEvent({
 		kinds: [30408 as NDKKind],
 		ids: [auctionEventId],
 	})
-	if (!auctionEvent) {
+	if (!initialEvent) {
 		throw new Error('Auction not found')
 	}
+
+	const dTag = getAuctionTagValue(initialEvent, 'd')
+	let candidateEvents: NDKEvent[] = [initialEvent]
+	if (dTag) {
+		const versionSet = await ndk.fetchEvents({
+			kinds: [30408 as NDKKind],
+			authors: [initialEvent.pubkey],
+			'#d': [dTag],
+			limit: 50,
+		})
+		candidateEvents = Array.from(versionSet)
+		if (!candidateEvents.some((event) => event.id === initialEvent.id)) {
+			candidateEvents.push(initialEvent)
+		}
+	}
+
+	const resolved = resolveAuctionVersionSet(candidateEvents)
+	if (!resolved) {
+		throw new Error('Auction not found')
+	}
+	if (resolved.rootEventId !== auctionEventId) {
+		throw new Error('auctionEventId must reference the root event for this auction')
+	}
+	if (resolved.rejectedEventIds.length > 0) {
+		// We tolerate this — the canonical (root + compatible) chain still
+		// wins — but log so operators can spot a misbehaving seller.
+		console.warn('[auction] Discarded auction updates that violate immutable fields:', {
+			auctionEventId,
+			rejected: resolved.rejectedEventIds,
+		})
+	}
+
+	const auctionEvent = resolved.displayEvent
 	const policy = getAuctionTagValue(auctionEvent, 'settlement_policy')
 	if (policy && policy !== AUCTION_SETTLEMENT_POLICY) {
 		throw new Error(`Auction settlement policy ${policy} is not supported`)
 	}
 	return auctionEvent
 }
+
+// AUCTIONS.md §7.5.1: the issuer applies rate limits per bidder per
+// auction and deduplicates by `(auctionEventId, bidderPubkey, requestId)`.
+// We do this in-process — Bun runs a single issuer instance, and the
+// registry on Nostr is the durable record. Restarting the process resets
+// these caches; per-bidder rate limits are a courtesy, not a security
+// boundary (the durable spam control is the path-allocation cost).
+const AUCTION_PATH_REQUEST_DEDUP_WINDOW_S = 30 * 60
+const AUCTION_PATH_REQUEST_RATE_LIMIT_WINDOW_S = 60
+const AUCTION_PATH_REQUEST_RATE_LIMIT_MAX = 10
+const auctionPathRequestSeen = new Map<string, number>()
+const auctionPathRequestRecentByBidder = new Map<string, number[]>()
+
+const enforceAuctionPathRequestRateLimit = (params: {
+	auctionEventId: string
+	bidderPubkey: string
+	requestId: string
+}): void => {
+	const now = Math.floor(Date.now() / 1000)
+
+	// Periodic GC so the maps don't grow unbounded across long-lived runs.
+	if (auctionPathRequestSeen.size > 4096) {
+		for (const [key, ts] of Array.from(auctionPathRequestSeen.entries())) {
+			if (now - ts > AUCTION_PATH_REQUEST_DEDUP_WINDOW_S) auctionPathRequestSeen.delete(key)
+		}
+	}
+
+	const dedupKey = `${params.auctionEventId}:${params.bidderPubkey}:${params.requestId}`
+	if (auctionPathRequestSeen.has(dedupKey)) {
+		throw new Error('Duplicate path request id (already processed)')
+	}
+
+	const rateKey = `${params.auctionEventId}:${params.bidderPubkey}`
+	const cutoff = now - AUCTION_PATH_REQUEST_RATE_LIMIT_WINDOW_S
+	const recent = (auctionPathRequestRecentByBidder.get(rateKey) ?? []).filter((ts) => ts > cutoff)
+	if (recent.length >= AUCTION_PATH_REQUEST_RATE_LIMIT_MAX) {
+		throw new Error('Too many path requests for this auction; please slow down')
+	}
+	recent.push(now)
+	auctionPathRequestRecentByBidder.set(rateKey, recent)
+	auctionPathRequestSeen.set(dedupKey, now)
+}
+
+const NOSTR_PUBKEY_HEX_RE = /^[0-9a-f]{64}$/i
+const COMPRESSED_SECP256K1_PUBKEY_HEX_RE = /^0[23][0-9a-f]{64}$/i
 
 function getAuctionPathIssuerFromEvent(auctionEvent: NDKEvent): string {
 	return getAuctionTagValue(auctionEvent, 'path_issuer') || auctionEvent.pubkey
@@ -272,6 +365,24 @@ async function buildAuctionPathGrant(params: {
 	issuedAt: number
 	expiresAt: number
 }> {
+	// AUCTIONS.md §7.5.1 input validation. The HTTP endpoint already enforces
+	// NIP-98 caller identity == bidderPubkey, so by the time we get here we
+	// know who we're talking to — but we still validate the raw fields so
+	// downstream code (path-derivation, registry persistence) gets clean
+	// inputs only.
+	if (!NOSTR_PUBKEY_HEX_RE.test(params.bidderPubkey)) {
+		throw new Error('bidderPubkey must be a 32-byte hex Nostr pubkey')
+	}
+	if (!COMPRESSED_SECP256K1_PUBKEY_HEX_RE.test(params.bidderRefundPubkey)) {
+		throw new Error('bidderRefundPubkey must be a compressed secp256k1 pubkey (33 bytes hex, 02/03 prefix)')
+	}
+
+	enforceAuctionPathRequestRateLimit({
+		auctionEventId: params.auctionEventId,
+		bidderPubkey: params.bidderPubkey,
+		requestId: params.requestId,
+	})
+
 	const appPubkey = getAppPublicKeyOrThrow()
 	const auctionEvent = await loadAuctionEvent(params.auctionEventId)
 	const issuerPubkey = getAuctionPathIssuerFromEvent(auctionEvent)
@@ -600,6 +711,155 @@ async function buildAuctionSettlementPlan(params: {
 	}
 }
 
+/**
+ * AUCTIONS.md §11 / §7.1 — long-lived issuer-side listener for incoming
+ * `auction_bid_token_v1` envelopes. The bidder DM-delivers the locked
+ * Cashu token (kind 14) right after publishing the public kind-1023
+ * commitment. Without this listener:
+ *   - registry entries stay `issued` forever (never advance to `locked`),
+ *   - bids that fail spec checks at settlement are only caught after the
+ *     UI already showed them as live,
+ *   - we have no record of *which* of the granted paths were ever actually
+ *     locked vs. abandoned.
+ *
+ * The listener performs the envelope-side §7 MUST checks. Bid-event-side
+ * checks (commitment match, derivation_path absence, mint/locktime tag
+ * cross-check) still also run at settlement — defence in depth.
+ *
+ * Open follow-ups intentionally deferred:
+ *   - DLEQ verification of the proofs
+ *   - NUT-07 unspent state check at the mint
+ *   - sending an explicit ack/reject DM back to the bidder
+ *   - cross-checking against the kind-1023 event (currently the listener
+ *     trusts the envelope; settlement does the cross-check).
+ */
+async function processAuctionBidTokenEnvelope(rawEvent: Event): Promise<void> {
+	const ndk = await ensureInvoiceNdkConnected()
+	const appSigner = await getAppAuctionSigner()
+	const appPubkey = getAppPublicKeyOrThrow()
+
+	const decryptable = new NDKEvent(ndk, rawEvent)
+	try {
+		await decryptable.decrypt(new NDKUser({ pubkey: rawEvent.pubkey }), appSigner, 'nip44')
+	} catch (error) {
+		console.warn('[auction] bid-token: failed to decrypt envelope', { id: rawEvent.id, error })
+		return
+	}
+	const envelope = parseAuctionBidTokenEnvelope(decryptable.content)
+	if (!envelope) {
+		console.warn('[auction] bid-token: malformed envelope', { id: rawEvent.id })
+		return
+	}
+
+	// §7 MUST — bidder identity matches DM signer.
+	if (envelope.bidderPubkey !== rawEvent.pubkey) {
+		console.warn('[auction] bid-token: bidderPubkey ≠ DM signer', { id: rawEvent.id })
+		return
+	}
+	if (envelope.pathIssuerPubkey !== appPubkey) return
+
+	// Token integrity: SHA-256(token) == commitment.
+	const tokenCommitment = await sha256Hex(envelope.token)
+	if (tokenCommitment !== envelope.commitment) {
+		console.warn('[auction] bid-token: token/commitment mismatch', { id: rawEvent.id })
+		return
+	}
+
+	let auctionEvent: NDKEvent
+	try {
+		auctionEvent = await loadAuctionEvent(envelope.auctionEventId)
+	} catch (error) {
+		console.warn('[auction] bid-token: cannot resolve auction', { id: rawEvent.id, error })
+		return
+	}
+
+	// §7 MUST — auction is in active window at envelope receipt time.
+	const now = Math.floor(Date.now() / 1000)
+	const startAt = Number(getAuctionTagValue(auctionEvent, 'start_at') || 0)
+	const maxEndAt = getAuctionMaxEndAt(auctionEvent)
+	if (startAt && now < startAt) return
+	if (maxEndAt && now >= maxEndAt) return
+
+	// §7 MUST — mint in seller's trusted list.
+	const trustedMints = new Set(auctionEvent.tags.filter((tag) => tag[0] === 'mint' && !!tag[1]).map((tag) => tag[1]))
+	if (!trustedMints.has(envelope.mintUrl)) {
+		console.warn('[auction] bid-token: mint not in allowlist', { id: rawEvent.id, mint: envelope.mintUrl })
+		return
+	}
+
+	// §4.1 / §6.0 — locktime invariant.
+	const settlementGrace = getAuctionSettlementGrace(auctionEvent)
+	const expectedLocktime = maxEndAt && settlementGrace ? maxEndAt + settlementGrace : 0
+	if (expectedLocktime > 0 && envelope.locktime !== expectedLocktime) {
+		console.warn('[auction] bid-token: locktime ≠ max_end_at + settlement_grace', {
+			id: rawEvent.id,
+			got: envelope.locktime,
+			want: expectedLocktime,
+		})
+		return
+	}
+
+	const xpub = getAuctionTagValue(auctionEvent, 'p2pk_xpub').trim()
+	if (!xpub) return
+
+	// §9.1 — child_pubkey must be in the registry (was actually granted by us).
+	const registry = await fetchAuctionPathRegistry(envelope.auctionEventId)
+	const entry = findAuctionPathEntryByChildPubkey(registry, envelope.lockPubkey)
+	if (!entry) {
+		console.warn('[auction] bid-token: child_pubkey not in registry', { id: rawEvent.id, lockPubkey: envelope.lockPubkey })
+		return
+	}
+	if (entry.bidderPubkey !== envelope.bidderPubkey) {
+		console.warn('[auction] bid-token: registry bidder mismatch', { id: rawEvent.id })
+		return
+	}
+	// Idempotent: already locked to this bidEventId — nothing to do.
+	if (entry.status === 'locked' && entry.bidEventId === envelope.bidEventId) return
+
+	const updatedEntries = upsertAuctionPathEntry(registry?.entries ?? [], {
+		...entry,
+		status: 'locked',
+		bidEventId: envelope.bidEventId,
+	})
+	await publishAuctionPathRegistry(
+		buildAuctionPathRegistry({
+			auctionEventId: envelope.auctionEventId,
+			auctionCoordinates: envelope.auctionCoordinates || registry?.auctionCoordinates || '',
+			xpub,
+			entries: updatedEntries,
+		}),
+	)
+	console.log('[auction] bid-token: registry advanced to locked', {
+		grantId: entry.grantId,
+		bidEventId: envelope.bidEventId,
+		amount: envelope.amount,
+	})
+}
+
+async function startAuctionBidTokenListener(): Promise<void> {
+	const ndk = await ensureInvoiceNdkConnected()
+	const appPubkey = getAppPublicKeyOrThrow()
+	// Backstop for restarts: replay the last hour. The processor is
+	// idempotent (matching `bidEventId` short-circuits), so duplicates
+	// from the replay window are harmless.
+	const since = Math.floor(Date.now() / 1000) - 60 * 60
+	const sub = ndk.subscribe(
+		{
+			kinds: [14 as NDKKind],
+			'#p': [appPubkey],
+			'#t': [AUCTION_BID_TOKEN_TOPIC],
+			since,
+		},
+		{ closeOnEose: false },
+	)
+	sub.on('event', (event: NDKEvent) => {
+		void processAuctionBidTokenEnvelope(event.rawEvent() as Event).catch((error) => {
+			console.error('[auction] bid-token listener processor crashed:', error)
+		})
+	})
+	console.log('[auction] bid-token listener started, replaying since', new Date(since * 1000).toISOString())
+}
+
 async function getAppLightningIdentifier(): Promise<string> {
 	const envValue =
 		process.env.APP_LIGHTNING_ADDRESS || process.env.APP_LUD16 || process.env.APP_LN_ADDRESS || process.env.APP_LIGHTNING_IDENTIFIER
@@ -645,6 +905,17 @@ async function initializeAppSettings() {
 	} catch (error) {
 		console.error('Failed to initialize app settings:', error)
 		process.exit(1)
+	}
+
+	// AUCTIONS.md §11: the path-issuer is expected to run a long-lived
+	// listener for incoming kind-14 DMs. Failure here is non-fatal — the
+	// settlement-time replay still validates everything before releasing
+	// paths — but without it registry entries never advance to `locked`
+	// in real time.
+	try {
+		await startAuctionBidTokenListener()
+	} catch (error) {
+		console.error('[auction] failed to start bid-token listener:', error)
 	}
 }
 ;(async () => await initializeAppSettings())()
