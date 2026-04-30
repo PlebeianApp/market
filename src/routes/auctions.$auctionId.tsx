@@ -9,6 +9,7 @@ import { ItemGrid } from '@/components/ItemGrid'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { getUniqueAuctionShippingRefs } from '@/lib/auctionShippingRefs'
 import { ndkActions } from '@/lib/stores/ndk'
 import { uiStore } from '@/lib/stores/ui'
 import { usePublishAuctionBidMutation } from '@/publish/auctions'
@@ -185,34 +186,29 @@ function AuctionDetailRoute() {
 	const auctionRootEventId = getAuctionRootEventId(auction)
 	const auctionCoordinates = auctionDTag && auction ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 
-	const parsedShippingRefs = useMemo(
-		() =>
-			shippingOptions.map((item) => {
-				const parts = item.shippingRef.split(':')
-				if (parts.length === 3 && parts[0] === '30406') {
-					return { ...item, pubkey: parts[1], dTag: parts[2] }
-				}
-				return { ...item, pubkey: '', dTag: '' }
-			}),
-		[shippingOptions],
-	)
+	const parsedShippingRefs = useMemo(() => getUniqueAuctionShippingRefs(shippingOptions), [shippingOptions])
+	const validShippingRefs = useMemo(() => parsedShippingRefs.filter((entry) => entry.status === 'valid'), [parsedShippingRefs])
 
 	const shippingQueryResults = useQueries({
-		queries: parsedShippingRefs.map(({ pubkey, dTag }) => ({
+		queries: validShippingRefs.map(({ pubkey, dTag }) => ({
 			...shippingOptionByCoordinatesQueryOptions(pubkey, dTag),
-			enabled: !!pubkey && !!dTag,
+			enabled: true,
 		})),
 	})
 
-	const resolvedShippingOptions = useMemo(
-		() =>
-			parsedShippingRefs.map((entry, index) => {
-				const event = shippingQueryResults[index]?.data ?? null
-				const info = event ? getShippingInfo(event) : null
-				return { ...entry, info }
-			}),
-		[parsedShippingRefs, shippingQueryResults],
-	)
+	const resolvedShippingOptions = useMemo(() => {
+		const shippingInfoByRef = new Map<string, ReturnType<typeof getShippingInfo> | null>()
+		validShippingRefs.forEach((entry, index) => {
+			const event = shippingQueryResults[index]?.data ?? null
+			const info = event ? getShippingInfo(event) : null
+			shippingInfoByRef.set(entry.shippingRef, info)
+		})
+
+		return parsedShippingRefs.map((entry) => ({
+			...entry,
+			info: entry.status === 'valid' ? (shippingInfoByRef.get(entry.shippingRef) ?? null) : null,
+		}))
+	}, [parsedShippingRefs, validShippingRefs, shippingQueryResults])
 
 	const bidsQuery = useAuctionBids(auctionRootEventId || auctionId, 500, auctionCoordinates)
 	const bids = bidsQuery.data ?? []
@@ -485,7 +481,7 @@ function AuctionDetailRoute() {
 										/>
 										<ShopperInfoRow
 											label="Shipping options"
-											value={shippingOptions.length > 0 ? `${shippingOptions.length} listed` : 'None listed'}
+											value={resolvedShippingOptions.length > 0 ? `${resolvedShippingOptions.length} listed` : 'None listed'}
 										/>
 									</div>
 
@@ -583,7 +579,12 @@ function AuctionDetailRoute() {
 													const hasExtraCost = !Number.isNaN(extraCostNumber) && extraCostNumber > 0
 													return (
 														<li key={`${option.shippingRef}-${index}`} className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
-															{option.info ? (
+															{option.status === 'invalid' ? (
+																<div className="space-y-1">
+																	<p className="font-medium text-zinc-900">Invalid shipping reference</p>
+																	<p className="break-all text-xs text-zinc-500">{option.shippingRef}</p>
+																</div>
+															) : option.info ? (
 																<div className="space-y-1">
 																	<p className="font-medium text-zinc-900">{option.info.title}</p>
 																	<p className="text-xs text-zinc-600">
@@ -594,7 +595,10 @@ function AuctionDetailRoute() {
 																	{hasExtraCost && <p className="text-xs text-zinc-600">Auction extra cost: {extraCostNumber}</p>}
 																</div>
 															) : (
-																<p className="break-all text-xs text-zinc-500">{option.shippingRef}</p>
+																<div className="space-y-1">
+																	<p className="font-medium text-zinc-900">Shipping option unavailable</p>
+																	<p className="break-all text-xs text-zinc-500">{option.shippingRef}</p>
+																</div>
 															)}
 														</li>
 													)
