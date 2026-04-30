@@ -1,5 +1,6 @@
-import { AuctionClaimDialog } from '@/components/AuctionClaimDialog'
 import { AuctionCountdown } from '@/components/AuctionCountdown'
+import { AvatarUser } from '@/components/AvatarUser'
+import { ProfileName } from '@/components/ProfileName'
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -10,8 +11,6 @@ import {
 	auctionClaimOrdersQueryOptions,
 	auctionQueryOptions,
 	auctionSettlementsQueryOptions,
-	getAuctionId,
-	getAuctionSettlementFinalAmount,
 	getAuctionSettlementStatus,
 	getAuctionSettlementWinner,
 	getAuctionSettlementWinningBid,
@@ -48,14 +47,6 @@ const formatMaybeDate = (timestamp: number): string => {
 	if (!timestamp) return 'N/A'
 	return new Date(timestamp * 1000).toLocaleString()
 }
-
-const shortenHex = (value: string, left: number = 12, right: number = 10): string => {
-	if (!value) return 'N/A'
-	if (value.length <= left + right + 1) return value
-	return `${value.slice(0, left)}...${value.slice(-right)}`
-}
-
-const shortenBidRef = (value: string): string => shortenHex(value, 10, 8)
 
 const getPendingAuctionBidTokens = (tokens: PendingNip60Token[]): PendingNip60Token[] =>
 	tokens.filter((token) => token.context?.kind === 'auction_bid')
@@ -113,7 +104,7 @@ const getBidGroupState = (
 	if (winningBidId === group.latestBid.id && winnerPubkey === userPubkey) {
 		return {
 			label: 'Winning bid',
-			helper: 'This bid won the auction and should settle to the seller.',
+			helper: 'This bid won the auction. Submit your shipping address from the auction page.',
 			toneClass: 'border-emerald-200 bg-emerald-50 text-emerald-700',
 			reclaimableTokens: [],
 			reclaimReadyAt,
@@ -151,7 +142,6 @@ const getBidGroupState = (
 	}
 
 	const waitingForReclaim = pendingTokens.length > 0 && reclaimReadyAt > now
-	// Sentinel helper value — the renderer replaces this with a live countdown.
 	const countdownHelper = `__COUNTDOWN__:${reclaimReadyAt}`
 
 	if (settlementStatus === 'settled') {
@@ -243,7 +233,6 @@ function BidsOverviewComponent() {
 		const id = window.setInterval(() => setNowTick(Math.floor(Date.now() / 1000)), 1000)
 		return () => window.clearInterval(id)
 	}, [])
-	const [claimDialogGroup, setClaimDialogGroup] = useState<string | null>(null)
 	const [animationParent] = useAutoAnimate()
 
 	const { data: myBids, isLoading, error } = useAuctionBidsByBidder(user?.pubkey ?? '', 500)
@@ -284,7 +273,7 @@ function BidsOverviewComponent() {
 			})
 		}
 
-		for (const group of groups.values()) {
+		for (const group of Array.from(groups.values())) {
 			group.latestBid = getLatestBidForGroup(group.bids)
 			const groupBidIds = new Set(group.bids.map((bid: NDKEvent) => bid.id))
 			group.pendingTokens = auctionBidTokens
@@ -393,8 +382,6 @@ function BidsOverviewComponent() {
 				toast.success(`Reclaimed ${reclaimedCount} bid ${reclaimedCount === 1 ? 'leg' : 'legs'} for ${auctionTitle}`)
 			}
 			if (failures.length > 0) {
-				// Surface the underlying mint/wallet error rather than hiding behind
-				// a generic "no bid legs could be reclaimed" toast.
 				toast.error(failures[0])
 			}
 		} finally {
@@ -482,21 +469,18 @@ function BidsOverviewComponent() {
 								? `Reclaim opens in ${formatReclaimWaitSeconds(state.reclaimReadyAt - now)}`
 								: state.helper
 							const totalTrackedAmount = group.pendingTokens.reduce((sum, token) => sum + token.amount, 0)
-							const claimedCount = group.pendingTokens.filter((token) => token.status === 'claimed').length
-							const reclaimedCount = group.pendingTokens.filter((token) => token.status === 'reclaimed').length
-							const pendingCount = group.pendingTokens.filter((token) => token.status === 'pending').length
 							const latestBidAmount = getBidAmount(group.latestBid)
-							const latestLocktime = group.pendingTokens.reduce(
-								(max, token) => Math.max(max, getPendingTokenLocktime(token)),
-								getBidLocktime(group.latestBid),
-							)
 							const mintLabel = getMintHostname(getBidMint(group.latestBid) || group.pendingTokens[0]?.mintUrl || '') || 'Unknown mint'
 
-							// Fulfilment state for winning bids
 							const isWinningBid = state.label === 'Winning bid'
 							const claimOrders = claimOrderResults[index]?.data ?? []
 							const myClaimOrder = claimOrders.find((o) => o.pubkey === user.pubkey)
 							const hasClaimed = !!myClaimOrder
+
+							// Bid legs: every bid this user placed on this auction, in
+							// chronological order. The "headline" bid amount lives on the
+							// most recent leg; earlier legs are the rebid chain.
+							const legs = [...group.bids].sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
 
 							return (
 								<li key={group.key}>
@@ -508,7 +492,7 @@ function BidsOverviewComponent() {
 											<div className="flex items-center gap-3">
 												<div className="min-w-0 flex-1">
 													<p className="font-semibold truncate">
-														{getAuctionTitle(auction) || `Auction ${shortenBidRef(group.auctionEventId)}`}
+														{getAuctionTitle(auction) || `Auction ${group.auctionEventId.slice(0, 10)}…`}
 													</p>
 													<div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
 														<span>Your bid: {latestBidAmount.toLocaleString()} sats</span>
@@ -546,137 +530,110 @@ function BidsOverviewComponent() {
 											</div>
 										}
 										actions={
-											<Button
-												variant="ghost"
-												size="sm"
-												onClick={(e) => {
-													e.stopPropagation()
-													void handleReclaimBidGroup(group, state.reclaimableTokens)
-												}}
-												disabled={state.reclaimableTokens.length === 0 || reclaimingGroup === group.key}
-												aria-label={`Reclaim bid for ${getAuctionTitle(auction) || 'auction'}`}
-											>
-												{reclaimingGroup === group.key ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
-											</Button>
-										}
-									>
-										<div className="space-y-4">
-											<div className={`rounded-lg border px-3 py-2 text-sm ${state.toneClass}`}>
-												<p className="font-semibold">{state.label}</p>
-												<p className="mt-1 text-xs">{helperText}</p>
-											</div>
-
-											<div className="grid grid-cols-2 gap-3 text-sm">
-												<p className="text-gray-600">
-													Latest bid: <span className="font-medium text-foreground">{latestBidAmount.toLocaleString()} sats</span>
-												</p>
-												<p className="text-gray-600">
-													Tracked collateral:{' '}
-													<span className="font-medium text-foreground">{totalTrackedAmount.toLocaleString()} sats</span>
-												</p>
-												<p className="text-gray-600">
-													Pending legs: <span className="font-medium text-foreground">{pendingCount}</span>
-												</p>
-												<p className="text-gray-600">
-													Claimed/refunded: <span className="font-medium text-foreground">{claimedCount}</span>
-												</p>
-												<p className="text-gray-600">
-													Reclaimed manually: <span className="font-medium text-foreground">{reclaimedCount}</span>
-												</p>
-												<p className="text-gray-600">
-													Locktime:{' '}
-													<span className="font-medium text-foreground">{latestLocktime ? formatMaybeDate(latestLocktime) : 'N/A'}</span>
-												</p>
-												<p className="text-gray-600 col-span-2">
-													Seller: <span className="font-medium text-foreground">{shortenBidRef(group.sellerPubkey)}</span>
-												</p>
-												<p className="text-gray-600 col-span-2">
-													Bid event: <span className="font-medium text-foreground break-all">{group.latestBid.id}</span>
-												</p>
-											</div>
-
-											{settlement && (
-												<div className="rounded-lg border bg-gray-50 px-3 py-2 text-sm space-y-1">
-													<p className="font-semibold">Settlement</p>
-													<p className="text-gray-600">
-														Status: <span className="font-medium text-foreground">{getAuctionSettlementStatus(settlement)}</span>
-													</p>
-													<p className="text-gray-600">
-														Final amount:{' '}
-														<span className="font-medium text-foreground">
-															{getAuctionSettlementFinalAmount(settlement).toLocaleString()} sats
-														</span>
-													</p>
-													<p className="text-gray-600 break-all">
-														Winner: <span className="font-medium text-foreground">{getAuctionSettlementWinner(settlement) || 'None'}</span>
-													</p>
-												</div>
-											)}
-
-											{/* Fulfilment section for winning bids */}
-											{isWinningBid && settlement && (
-												<div
-													className={`rounded-lg border px-3 py-3 text-sm ${hasClaimed ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}
+											<>
+												<Link
+													to="/dashboard/products/auctions/$auctionId"
+													params={{ auctionId: group.auctionEventId }}
+													onClick={(e) => e.stopPropagation()}
+													aria-label={`Open auction route for ${getAuctionTitle(auction) || 'auction'}`}
 												>
-													<p className="font-semibold flex items-center gap-2">
-														{hasClaimed ? (
-															<>
-																<CheckCircle className="h-4 w-4 text-emerald-600" /> Shipping details submitted
-															</>
-														) : (
-															<>
-																<MapPin className="h-4 w-4 text-amber-600" /> Shipping address required
-															</>
-														)}
-													</p>
-													{hasClaimed ? (
-														<p className="mt-1 text-xs text-emerald-700">
-															Your address has been sent to the seller. Track order progress on the auction page.
-														</p>
-													) : (
-														<div className="mt-2">
-															<p className="text-xs text-amber-700 mb-2">
-																Submit your shipping address so the seller can send you the item.
-															</p>
-															<Button size="sm" onClick={() => setClaimDialogGroup(group.key)}>
-																Submit Shipping Address
-															</Button>
-														</div>
-													)}
-												</div>
-											)}
-
-											<div className="flex flex-wrap items-center gap-2">
-												<Link to={`/auctions/${group.auctionEventId}`}>
-													<Button variant="outline" size="sm" className="gap-2">
-														<ExternalLink className="w-3.5 h-3.5" />
-														View Auction
+													<Button variant="ghost" size="sm">
+														<ExternalLink className="w-4 h-4" />
 													</Button>
 												</Link>
 												<Button
 													variant="ghost"
 													size="sm"
-													onClick={() =>
-														navigator.clipboard
-															.writeText(group.latestBid.id)
-															.then(() => toast.success('Bid event ID copied'))
-															.catch(() => toast.error('Failed to copy bid event ID'))
-													}
+													onClick={(e) => {
+														e.stopPropagation()
+														void handleReclaimBidGroup(group, state.reclaimableTokens)
+													}}
+													disabled={state.reclaimableTokens.length === 0 || reclaimingGroup === group.key}
+													aria-label={`Reclaim bid for ${getAuctionTitle(auction) || 'auction'}`}
 												>
-													Copy Bid ID
+													{reclaimingGroup === group.key ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
 												</Button>
-												<Button
-													variant="ghost"
-													size="sm"
-													onClick={() =>
-														navigator.clipboard
-															.writeText(group.auctionEventId)
-															.then(() => toast.success('Auction event ID copied'))
-															.catch(() => toast.error('Failed to copy auction event ID'))
-													}
-												>
-													Copy Auction ID
-												</Button>
+											</>
+										}
+									>
+										<div className="space-y-4 p-4 bg-gray-50 border-t">
+											{/* Status banner with countdown if applicable */}
+											<div className={`rounded-lg border px-3 py-2 text-sm ${state.toneClass}`}>
+												<p className="font-semibold">{state.label}</p>
+												<p className="mt-1 text-xs">{helperText}</p>
+											</div>
+
+											{/* Compact auction info — full detail lives on the auction route */}
+											<div className="grid grid-cols-2 gap-3 text-sm">
+												<p className="text-gray-600">
+													Latest bid: <span className="font-medium text-foreground">{latestBidAmount.toLocaleString()} sats</span>
+												</p>
+												<p className="text-gray-600">
+													Locked collateral: <span className="font-medium text-foreground">{totalTrackedAmount.toLocaleString()} sats</span>
+												</p>
+												<div className="text-gray-600 col-span-2 flex items-center gap-2">
+													<span>Seller:</span>
+													<AvatarUser pubkey={group.sellerPubkey} colored className="h-5 w-5" />
+													<ProfileName pubkey={group.sellerPubkey} className="font-medium text-foreground" />
+												</div>
+											</div>
+
+											{/* Bid legs / rebid chain — every leg this user placed on this auction */}
+											<div className="rounded-md border bg-white">
+												<div className="px-3 py-2 border-b">
+													<p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Your bid legs ({legs.length})</p>
+													<p className="mt-0.5 text-[11px] text-gray-500">
+														Each leg is a Cashu lock from one of your bids or rebids on this auction. The chain settles together.
+													</p>
+												</div>
+												<ul className="divide-y">
+													{legs.map((leg, i) => {
+														const legAmount = getBidAmount(leg)
+														const legLocktime = getBidLocktime(leg)
+														const createdAt = leg.created_at ? new Date(leg.created_at * 1000).toLocaleString() : 'N/A'
+														const matchingPending = group.pendingTokens.find((t) => t.context?.bidEventId === leg.id)
+														return (
+															<li key={leg.id} className="flex flex-wrap items-start justify-between gap-2 px-3 py-2 text-xs">
+																<div className="min-w-0">
+																	<p className="font-semibold text-zinc-900">
+																		Leg {i + 1}
+																		{i === legs.length - 1 ? ' (latest)' : ''} — {legAmount.toLocaleString()} sats
+																	</p>
+																	<p className="mt-0.5 text-zinc-500">{createdAt}</p>
+																	{legLocktime > 0 && <p className="text-zinc-500">Locktime: {formatMaybeDate(legLocktime)}</p>}
+																</div>
+																<div className="flex flex-col items-end text-right">
+																	{matchingPending ? (
+																		<span
+																			className={`text-[10px] font-medium ${
+																				matchingPending.status === 'reclaimed'
+																					? 'text-sky-700'
+																					: matchingPending.status === 'claimed'
+																						? 'text-emerald-700'
+																						: 'text-blue-700'
+																			}`}
+																		>
+																			{matchingPending.status}
+																		</span>
+																	) : (
+																		<span className="text-[10px] text-zinc-400">no local lock</span>
+																	)}
+																</div>
+															</li>
+														)
+													})}
+												</ul>
+											</div>
+
+											{/* Action footer — primary action is "open the auction route" where
+											    settlement / shipping / fulfilment all live. */}
+											<div className="flex flex-wrap items-center gap-2">
+												<Link to="/dashboard/products/auctions/$auctionId" params={{ auctionId: group.auctionEventId }}>
+													<Button variant="default" size="sm" className="gap-2">
+														<ExternalLink className="w-3.5 h-3.5" />
+														Open Auction
+													</Button>
+												</Link>
 												<Button
 													variant="outline"
 													size="sm"
@@ -700,34 +657,6 @@ function BidsOverviewComponent() {
 					</ul>
 				)}
 			</div>
-
-			{/* Claim dialog for winning bids — rendered once, driven by claimDialogGroup state */}
-			{(() => {
-				if (!claimDialogGroup) return null
-				const groupIndex = bidGroups.findIndex((g) => g.key === claimDialogGroup)
-				if (groupIndex === -1) return null
-				const group = bidGroups[groupIndex]
-				const auction = auctionResults[groupIndex]?.data ?? null
-				const settlement = settlementResults[groupIndex]?.data?.[0] ?? null
-				if (!auction || !settlement) return null
-
-				const dTag = getAuctionId(auction)
-				const coordinates = dTag ? `30408:${auction.pubkey}:${dTag}` : group.auctionCoordinates || ''
-
-				return (
-					<AuctionClaimDialog
-						open
-						onOpenChange={(open) => {
-							if (!open) setClaimDialogGroup(null)
-						}}
-						auctionEventId={group.auctionEventId}
-						auctionCoordinates={coordinates}
-						settlementEventId={settlement.id}
-						sellerPubkey={group.sellerPubkey}
-						finalAmount={getAuctionSettlementFinalAmount(settlement)}
-					/>
-				)
-			})()}
 		</div>
 	)
 }

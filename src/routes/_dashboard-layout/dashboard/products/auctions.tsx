@@ -4,30 +4,24 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { authStore } from '@/lib/stores/auth'
 import { uiActions } from '@/lib/stores/ui'
-import { useDeleteAuctionMutation } from '@/publish/auctions'
+import { useDeleteAuctionMutation, usePublishAuctionSettlementMutation } from '@/publish/auctions'
 import {
 	auctionsByPubkeyQueryOptions,
-	getAuctionBidIncrement,
 	getAuctionBidCountFromBids,
-	getAuctionCurrency,
 	getAuctionCurrentPriceFromBids,
 	getAuctionEffectiveEndAt,
 	getAuctionEndAt,
-	getAuctionPathIssuer,
 	getAuctionId,
 	getAuctionImages,
-	getAuctionKeyScheme,
-	getAuctionMints,
 	getAuctionReserve,
 	getAuctionRootEventId,
-	getAuctionSchema,
-	getAuctionSettlementPolicy,
+	getAuctionSettlementStatus,
 	getAuctionStartAt,
 	getAuctionStartingBid,
 	getAuctionSummary,
 	getAuctionTitle,
-	getAuctionType,
 	useAuctionBids,
+	useAuctionSettlements,
 } from '@/queries/auctions'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useDashboardTitle } from '@/routes/_dashboard-layout'
@@ -35,7 +29,7 @@ import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Clock, Copy, ExternalLink, Gavel, Pencil, Shield, Trash } from 'lucide-react'
+import { Clock, ExternalLink, Gavel, Loader2, Pencil, Trash } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -47,15 +41,9 @@ function formatAuctionStatus(startAt: number, endAt: number, now: number): strin
 	return 'Live'
 }
 
-const formatMaybeDate = (timestamp: number): string => {
+function formatMaybeDate(timestamp: number): string {
 	if (!timestamp) return 'N/A'
 	return new Date(timestamp * 1000).toLocaleString()
-}
-
-const shortenHex = (value: string, left: number = 12, right: number = 10): string => {
-	if (!value) return 'N/A'
-	if (value.length <= left + right + 1) return value
-	return `${value.slice(0, left)}...${value.slice(-right)}`
 }
 
 const getAuctionCoordinates = (auction: NDKEvent): string => {
@@ -63,42 +51,56 @@ const getAuctionCoordinates = (auction: NDKEvent): string => {
 	return auctionDTag ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 }
 
-function AuctionBasicInfo({ auction }: { auction: NDKEvent }) {
+/**
+ * Compact body for a seller's auction row. The auction detail route is the
+ * one place to look at the full thing; this collapsible deliberately keeps
+ * only the "what's the headline state" essentials plus the inline settlement
+ * action so a seller can close ended auctions without a navigation hop.
+ * Anything that resembles tech-debt (event IDs, mint URLs, settlement-policy
+ * strings, etc.) lives on the detail route behind accordions.
+ */
+function AuctionListBody({
+	auction,
+	onPublishSettlement,
+	isSettling,
+}: {
+	auction: NDKEvent
+	onPublishSettlement: () => void
+	isSettling: boolean
+}) {
 	const summary = getAuctionSummary(auction) || auction.content || 'No description'
 	const images = getAuctionImages(auction)
 	const startingBid = getAuctionStartingBid(auction)
-	const auctionDTag = getAuctionId(auction)
+	const reserve = getAuctionReserve(auction)
 	const auctionRootEventId = getAuctionRootEventId(auction)
 	const auctionCoordinates = getAuctionCoordinates(auction)
 	const startAt = getAuctionStartAt(auction)
 	const endAt = getAuctionEndAt(auction)
+
 	const bidsQuery = useAuctionBids(auctionRootEventId || auction.id, 500, auctionCoordinates)
 	const bids = bidsQuery.data ?? []
 	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
 	const now = Math.floor(Date.now() / 1000)
 	const status = formatAuctionStatus(startAt, effectiveEndAt, now)
+	const ended = status === 'Ended'
 	const currentBid = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
 	const bidsCount = getAuctionBidCountFromBids(auction, bids)
-	const reserve = getAuctionReserve(auction)
-	const bidIncrement = getAuctionBidIncrement(auction)
-	const auctionType = getAuctionType(auction)
-	const currency = getAuctionCurrency(auction)
-	const pathIssuer = getAuctionPathIssuer(auction)
-	const keyScheme = getAuctionKeyScheme(auction)
-	const settlementPolicy = getAuctionSettlementPolicy(auction)
-	const schema = getAuctionSchema(auction)
-	const trustedMints = getAuctionMints(auction)
-	const publicAuctionPath = `/auctions/${auction.id}`
 
-	const copyText = async (label: string, value: string) => {
-		try {
-			await navigator.clipboard.writeText(value)
-			toast.success(`${label} copied`)
-		} catch (error) {
-			console.error(`Failed to copy ${label.toLowerCase()}:`, error)
-			toast.error(`Failed to copy ${label.toLowerCase()}`)
-		}
-	}
+	const settlementsQuery = useAuctionSettlements(auctionRootEventId || auction.id, 5, auctionCoordinates)
+	const latestSettlement = settlementsQuery.data?.[0] ?? null
+	const settlementStatus = latestSettlement ? getAuctionSettlementStatus(latestSettlement) : 'unknown'
+	const settlementLocked = !!latestSettlement
+	const reserveMet = currentBid >= reserve
+
+	const settlementHelper = settlementLocked
+		? `Settlement already published (${settlementStatus.replace(/_/g, ' ')}).`
+		: !ended
+			? 'Settlement unlocks once the auction ends.'
+			: bidsCount === 0
+				? 'No bids — settlement will record reserve_not_met.'
+				: reserveMet
+					? `Settlement will record settled at ${currentBid.toLocaleString()} sats.`
+					: 'Top bid is below reserve — settlement will record reserve_not_met.'
 
 	return (
 		<div className="block p-4 bg-gray-50 border-t">
@@ -131,19 +133,7 @@ function AuctionBasicInfo({ auction }: { auction: NDKEvent }) {
 						Current bid: <span className="font-medium">{currentBid.toLocaleString()} sats</span>
 					</p>
 					<p className="text-gray-600">
-						Bid increment: <span className="font-medium">{bidIncrement.toLocaleString()} sats</span>
-					</p>
-					<p className="text-gray-600">
 						Reserve: <span className="font-medium">{reserve.toLocaleString()} sats</span>
-					</p>
-					<p className="text-gray-600">
-						Type: <span className="font-medium capitalize">{auctionType}</span>
-					</p>
-					<p className="text-gray-600">
-						Currency: <span className="font-medium">{currency}</span>
-					</p>
-					<p className="text-gray-600 col-span-2">
-						Starts: <span className="font-medium">{formatMaybeDate(startAt)}</span>
 					</p>
 					<p className="text-gray-600 col-span-2">
 						Ends: <span className="font-medium">{formatMaybeDate(effectiveEndAt)}</span>
@@ -153,66 +143,28 @@ function AuctionBasicInfo({ auction }: { auction: NDKEvent }) {
 					</div>
 				</div>
 
-				<div className="p-3 rounded-md border bg-white space-y-2">
-					<p className="text-sm font-semibold flex items-center gap-2">
-						<Shield className="w-4 h-4" />
-						Settlement & Locking
-					</p>
-					<p className="text-xs text-gray-600">
-						Path issuer: <span className="font-medium text-foreground">{shortenHex(pathIssuer) || 'N/A'}</span>
-					</p>
-					<p className="text-xs text-gray-600">
-						Key scheme: <span className="font-medium text-foreground">{keyScheme}</span>
-					</p>
-					<p className="text-xs text-gray-600">
-						Settlement policy: <span className="font-medium text-foreground">{settlementPolicy || 'N/A'}</span>
-					</p>
-					<p className="text-xs text-gray-600">
-						Schema: <span className="font-medium text-foreground">{schema || 'N/A'}</span>
-					</p>
-					<div className="text-xs text-gray-600">
-						Trusted mints:
-						{trustedMints.length > 0 ? (
-							<ul className="mt-1 list-disc pl-4 space-y-0.5">
-								{trustedMints.map((mint) => (
-									<li key={mint} className="break-all">
-										{mint}
-									</li>
-								))}
-							</ul>
+				<div className="rounded-md border bg-white px-3 py-3 space-y-2">
+					<p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Settlement</p>
+					<p className="text-xs text-gray-600">{settlementHelper}</p>
+					<Button className="w-full" size="sm" onClick={onPublishSettlement} disabled={!ended || settlementLocked || isSettling}>
+						{isSettling ? (
+							<>
+								<Loader2 className="w-3.5 h-3.5 animate-spin mr-2" />
+								Publishing…
+							</>
 						) : (
-							<span className="font-medium text-foreground ml-1">N/A</span>
+							'Publish Settlement'
 						)}
-					</div>
-				</div>
-
-				<div className="grid gap-2 text-xs text-gray-600">
-					<p className="break-all">
-						Event id: <span className="font-medium text-foreground">{auction.id}</span>
-					</p>
-					<p className="break-all">
-						Coordinate: <span className="font-medium text-foreground">{auctionCoordinates || 'N/A'}</span>
-					</p>
-					<p className="break-all">
-						d tag: <span className="font-medium text-foreground">{auctionDTag || 'N/A'}</span>
-					</p>
+					</Button>
 				</div>
 
 				<div className="flex flex-wrap items-center gap-2 pt-1">
-					<Link to={publicAuctionPath}>
+					<Link to="/dashboard/products/auctions/$auctionId" params={{ auctionId: auction.id }}>
 						<Button variant="outline" size="sm" className="gap-2">
 							<ExternalLink className="w-3.5 h-3.5" />
-							View Public Auction
+							View Auction
 						</Button>
 					</Link>
-					<Button variant="ghost" size="sm" onClick={() => copyText('Event ID', auction.id)}>
-						Copy Event ID
-					</Button>
-					{auctionCoordinates && (
-						<Button variant="ghost" size="sm" onClick={() => copyText('Auction Coordinate', auctionCoordinates)}>
-							Copy Coordinate
-						</Button>
-					)}
 				</div>
 			</div>
 		</div>
@@ -225,18 +177,18 @@ function AuctionListItem({
 	onToggleExpanded,
 	onManage,
 	onDelete,
-	onCopyId,
-	onCopyUrl,
+	onPublishSettlement,
 	isDeleting,
+	isSettling,
 }: {
 	auction: NDKEvent
 	isExpanded: boolean
 	onToggleExpanded: () => void
 	onManage: () => void
 	onDelete: () => void
-	onCopyId: () => void
-	onCopyUrl: () => void
+	onPublishSettlement: () => void
 	isDeleting: boolean
+	isSettling: boolean
 }) {
 	const startAt = getAuctionStartAt(auction)
 	const endAt = getAuctionEndAt(auction)
@@ -274,28 +226,16 @@ function AuctionListItem({
 
 	const actions = (
 		<>
-			<Button
-				variant="ghost"
-				size="sm"
-				onClick={(e) => {
-					e.stopPropagation()
-					onCopyUrl()
-				}}
-				aria-label={`Copy public auction URL for ${getAuctionTitle(auction)}`}
+			<Link
+				to="/dashboard/products/auctions/$auctionId"
+				params={{ auctionId: auction.id }}
+				onClick={(e) => e.stopPropagation()}
+				aria-label={`Open auction route for ${getAuctionTitle(auction)}`}
 			>
-				<ExternalLink className="w-4 h-4" />
-			</Button>
-			<Button
-				variant="ghost"
-				size="sm"
-				onClick={(e) => {
-					e.stopPropagation()
-					onCopyId()
-				}}
-				aria-label={`Copy event id for ${getAuctionTitle(auction)}`}
-			>
-				<Copy className="w-4 h-4" />
-			</Button>
+				<Button variant="ghost" size="sm">
+					<ExternalLink className="w-4 h-4" />
+				</Button>
+			</Link>
 			{!isLiveAuction && (
 				<Button
 					variant="ghost"
@@ -337,7 +277,7 @@ function AuctionListItem({
 			isDeleting={isDeleting}
 			icon={false}
 		>
-			<AuctionBasicInfo auction={auction} />
+			<AuctionListBody auction={auction} onPublishSettlement={onPublishSettlement} isSettling={isSettling} />
 		</DashboardListItem>
 	)
 }
@@ -353,6 +293,8 @@ function AuctionsOverviewComponent() {
 	const [expandedAuction, setExpandedAuction] = useState<string | null>(null)
 	const [orderBy, setOrderBy] = useState<AuctionOrder>('newest')
 	const deleteMutation = useDeleteAuctionMutation()
+	const settlementMutation = usePublishAuctionSettlementMutation()
+	const [settlingAuctionId, setSettlingAuctionId] = useState<string | null>(null)
 	const [animationParent] = useAutoAnimate()
 
 	const isOnChildRoute = matchRoute({
@@ -394,24 +336,21 @@ function AuctionsOverviewComponent() {
 		}
 	}
 
-	const handleCopyAuctionId = async (auction: NDKEvent) => {
+	const handlePublishSettlement = async (auction: NDKEvent) => {
+		const auctionRootEventId = getAuctionRootEventId(auction)
+		const auctionCoordinates = getAuctionCoordinates(auction)
+		setSettlingAuctionId(auction.id)
 		try {
-			await navigator.clipboard.writeText(auction.id)
-			toast.success('Auction event ID copied')
-		} catch (error) {
-			console.error('Failed to copy auction id:', error)
-			toast.error('Failed to copy auction id')
-		}
-	}
-
-	const handleCopyAuctionUrl = async (auction: NDKEvent) => {
-		try {
-			const url = `${window.location.origin}/auctions/${auction.id}`
-			await navigator.clipboard.writeText(url)
-			toast.success('Auction URL copied')
-		} catch (error) {
-			console.error('Failed to copy auction URL:', error)
-			toast.error('Failed to copy auction URL')
+			// Backend computes the actual outcome (settled / reserve_not_met)
+			// from bids + reserve; we don't pre-pick a status here.
+			await settlementMutation.mutateAsync({
+				auctionEventId: auctionRootEventId || auction.id,
+				auctionCoordinates,
+			})
+		} catch {
+			// Toast handled by mutation hook.
+		} finally {
+			setSettlingAuctionId(null)
 		}
 	}
 
@@ -527,9 +466,9 @@ function AuctionsOverviewComponent() {
 										onToggleExpanded={() => setExpandedAuction((prev) => (prev === auction.id ? null : auction.id))}
 										onManage={() => handleManageAuction(auction.id)}
 										onDelete={() => handleDeleteAuction(auction)}
-										onCopyId={() => handleCopyAuctionId(auction)}
-										onCopyUrl={() => handleCopyAuctionUrl(auction)}
+										onPublishSettlement={() => void handlePublishSettlement(auction)}
 										isDeleting={deleteMutation.isPending && deleteMutation.variables === getAuctionId(auction)}
+										isSettling={settlingAuctionId === auction.id && settlementMutation.isPending}
 									/>
 								</li>
 							))}
