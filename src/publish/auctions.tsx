@@ -16,6 +16,7 @@ import {
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { configStore } from '@/lib/stores/config'
 import { ndkActions } from '@/lib/stores/ndk'
+import { signedFetch } from '@/lib/nip98Fetch'
 import { getAuctionSettlementGraceSeconds, nip60Actions, type AuctionP2pkKeyScheme } from '@/lib/stores/nip60'
 import {
 	normalizeProductShippingSelections,
@@ -64,6 +65,14 @@ export interface AuctionBidFormData {
 	auctionEventId: string
 	auctionCoordinates: string
 	amount: number
+	/**
+	 * Auction `start_at` (unix seconds). Required so the publish path can
+	 * refuse bids placed before the auction has officially opened. Without
+	 * this gate, bids land on the relay with `created_at < start_at` and are
+	 * silently rejected by the settlement filter — the seller and bidder both
+	 * see "0 bids / starting price" while the events sit on the relay.
+	 */
+	auctionStartAt: number
 	auctionEffectiveEndAt: number
 	auctionLocktimeAt: number
 	/**
@@ -106,16 +115,23 @@ export const requestAuctionPathGrant = async (params: {
 	expectedXpub: string
 }): Promise<AuctionPathGrantResponse> => {
 	const requestId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-	const response = await fetch('/api/auctions/path-request', {
+	const ndk = ndkActions.getNDK()
+	const signer = ndkActions.getSigner()
+	if (!signer) throw new Error('No signer available — sign in to bid')
+	if (!ndk) throw new Error('NDK is not initialised')
+	const requestBody = JSON.stringify({
+		requestId,
+		auctionEventId: params.auctionEventId,
+		auctionCoordinates: params.auctionCoordinates,
+		bidderPubkey: params.bidderPubkey,
+		bidderRefundPubkey: params.bidderRefundPubkey,
+	})
+	const response = await signedFetch('/api/auctions/path-request', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({
-			requestId,
-			auctionEventId: params.auctionEventId,
-			auctionCoordinates: params.auctionCoordinates,
-			bidderPubkey: params.bidderPubkey,
-			bidderRefundPubkey: params.bidderRefundPubkey,
-		}),
+		body: requestBody,
+		signer,
+		ndk,
 	})
 	if (!response.ok) {
 		const err = (await response.json().catch(() => null)) as { error?: string } | null
@@ -452,6 +468,9 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 	if (!formData.pathIssuerPubkey) throw new Error('Auction path issuer pubkey is required')
 	if (!formData.p2pkXpub) throw new Error('Auction p2pk_xpub is required for path verification')
 	if (!Number.isFinite(formData.amount) || formData.amount <= 0) throw new Error('Bid amount must be a positive number')
+	if (!Number.isFinite(formData.auctionStartAt) || formData.auctionStartAt <= 0) {
+		throw new Error('Auction start time is required for bidding')
+	}
 	if (!Number.isFinite(formData.auctionEffectiveEndAt) || formData.auctionEffectiveEndAt <= 0) {
 		throw new Error('Auction effective end time is required for bidding')
 	}
@@ -460,6 +479,12 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 	}
 
 	const now = Math.floor(Date.now() / 1000)
+	// Lower bound: an auction is only open for bids once `start_at` has
+	// elapsed. Without this gate we publish bids whose created_at lands
+	// before the auction's start, which the settlement filter then rejects.
+	if (now < formData.auctionStartAt) {
+		throw new Error('Auction has not started yet')
+	}
 	if (now >= formData.auctionEffectiveEndAt) {
 		throw new Error('Auction already ended')
 	}
@@ -714,15 +739,18 @@ export const publishAuctionSettlement = async (formData: AuctionSettlementFormDa
 	if (walletAuctionXpub !== auctionP2pkXpub) {
 		throw new Error('Auction p2pk_xpub does not match the current wallet-derived auction HD root')
 	}
-	const settlementPlanResponse = await fetch('/api/auctions/settlement-plan', {
+	const settlementPlanBody = JSON.stringify({
+		auctionEventId: formData.auctionEventId,
+		auctionCoordinates,
+		// status deliberately omitted — backend derives the correct outcome
+		// from bids + reserve so the client never has to pick.
+	})
+	const settlementPlanResponse = await signedFetch('/api/auctions/settlement-plan', {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({
-			auctionEventId: formData.auctionEventId,
-			auctionCoordinates,
-			// status deliberately omitted — backend derives the correct outcome
-			// from bids + reserve so the client never has to pick.
-		}),
+		body: settlementPlanBody,
+		signer,
+		ndk,
 	})
 	if (!settlementPlanResponse.ok) {
 		const error = (await settlementPlanResponse.json().catch(() => null)) as { error?: string } | null

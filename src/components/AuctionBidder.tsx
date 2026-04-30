@@ -5,6 +5,7 @@ import { usePublishAuctionBidMutation } from '@/publish/auctions'
 import {
 	getAuctionEndAt,
 	getAuctionBidIncrement,
+	getAuctionStartAt,
 	getAuctionStartingBid,
 	getAuctionP2pkXpub,
 	getAuctionMints,
@@ -58,9 +59,14 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	)
 	const bids = bidsProp ?? bidsQuery.data ?? []
 	const endAt = getAuctionEndAt(auction)
+	const startAt = getAuctionStartAt(auction)
 	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
 	const countdown = useAuctionCountdown(effectiveEndAt, { showSeconds: true })
 	const ended = countdown.isEnded
+	// Lower-bound gate: bidding is closed until start_at elapses. Using the
+	// countdown's ticking `now` keeps this reactive — the UI flips from
+	// "Not started yet" to "Place Bid" the moment start_at passes.
+	const notStarted = startAt > 0 && countdown.now < startAt
 
 	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
 	const minBid = Math.max(startingBid, currentPrice + Math.max(1, bidIncrement))
@@ -83,7 +89,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	}, [minBid])
 
 	// Disable logic
-	const isDisabledInput = ended || isOwnAuction || bidMutation.isPending
+	const isDisabledInput = ended || notStarted || isOwnAuction || bidMutation.isPending
 	const isDisabledBid = isDisabledInput || !Number.isFinite(parsedBidAmount) || parsedBidAmount < minBid
 
 	// Determine which toggle is active based on current input
@@ -107,14 +113,15 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const buttonText = useMemo(() => {
 		if (isOwnAuction) return 'Your Auction'
 		if (ended) return 'Auction Ended'
+		if (notStarted) return 'Bidding not started'
 		if (bidMutation.isPending) return 'Submitting...'
 		const selectedValue = getSelectedValue()
 		if (compact || selectedValue === 'edit' || selectedValue === 'mult2') return 'Bid ' + parsedBidAmount.toLocaleString() + ' sats'
 		return 'Place Bid'
-	}, [isOwnAuction, ended, bidMutation.isPending, parsedBidAmount])
+	}, [isOwnAuction, ended, notStarted, bidMutation.isPending, parsedBidAmount])
 
 	const handleSubmitBid = async () => {
-		if (!auction || !auctionCoordinates || ended || isOwnAuction) return
+		if (!auction || !auctionCoordinates || ended || notStarted || isOwnAuction) return
 
 		const parsedAmount = parseInt(bidAmountInput || '0', 10)
 		if (!Number.isFinite(parsedAmount) || parsedAmount < minBid) {
@@ -135,6 +142,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				auctionEventId: auctionRootEventId || auction.id,
 				auctionCoordinates,
 				amount: parsedAmount,
+				auctionStartAt: startAt,
 				auctionEffectiveEndAt: effectiveEndAt,
 				auctionLocktimeAt: getAuctionMaxEndAt(auction),
 				settlementGraceSeconds: getAuctionSettlementGrace(auction),

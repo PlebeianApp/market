@@ -18,6 +18,7 @@ import {
 	getAuctionPathIssuer,
 	getAuctionRootEventId,
 	getAuctionSettlementGrace,
+	getAuctionStartAt,
 	getAuctionStartingBid,
 	getAuctionTitle,
 	useAuctionBids,
@@ -56,6 +57,7 @@ export function AuctionCard({
 		shouldFetchBids ? auctionCoordinates : undefined,
 	)
 	const bids = bidsProp ?? bidsQuery.data ?? []
+	const startAt = getAuctionStartAt(auction)
 	const effectiveEndAt = getAuctionEffectiveEndAt(auction, bids) || endAt
 	const countdown = useAuctionCountdown(effectiveEndAt, { showSeconds: true })
 	const bidMutation = usePublishAuctionBidMutation()
@@ -63,6 +65,10 @@ export function AuctionCard({
 	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
 	const bidsCount = getAuctionBidCountFromBids(auction, bids)
 	const ended = countdown.isEnded
+	// Lower-bound gate: bids cannot be placed before start_at. Mirrors the
+	// hard refusal in `publishAuctionBid` so users don't see a bid form for
+	// auctions that haven't opened yet.
+	const notStarted = startAt > 0 && countdown.now < startAt
 	const parsedBidAmount = parseInt(bidAmountInput || '0', 10)
 
 	const minBid = useMemo(() => {
@@ -85,7 +91,7 @@ export function AuctionCard({
 	}, [minBid])
 
 	const handleSubmitBid = async () => {
-		if (!auctionCoordinates || !auctionDTag || ended || isOwnAuction) return
+		if (!auctionCoordinates || !auctionDTag || ended || notStarted || isOwnAuction) return
 
 		const parsedAmount = parseInt(bidAmountInput || '0', 10)
 		if (!Number.isFinite(parsedAmount) || parsedAmount < minBid) return
@@ -95,6 +101,7 @@ export function AuctionCard({
 				auctionEventId: auctionRootEventId || auction.id,
 				auctionCoordinates,
 				amount: parsedAmount,
+				auctionStartAt: startAt,
 				auctionEffectiveEndAt: effectiveEndAt,
 				auctionLocktimeAt: getAuctionMaxEndAt(auction),
 				settlementGraceSeconds: getAuctionSettlementGrace(auction),
@@ -131,9 +138,11 @@ export function AuctionCard({
 					</div>
 				)}
 				<div
-					className={`absolute top-2 right-2 text-[10px] font-bold px-2 py-1 rounded ${ended ? 'bg-zinc-700 text-white' : 'bg-green-600 text-white'}`}
+					className={`absolute top-2 right-2 text-[10px] font-bold px-2 py-1 rounded ${
+						ended ? 'bg-zinc-700 text-white' : notStarted ? 'bg-sky-600 text-white' : 'bg-green-600 text-white'
+					}`}
 				>
-					{ended ? 'ENDED' : 'LIVE'}
+					{ended ? 'ENDED' : notStarted ? 'SCHEDULED' : 'LIVE'}
 				</div>
 			</Link>
 
