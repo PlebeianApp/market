@@ -64,6 +64,14 @@ export interface AuctionBidFormData {
 	auctionEventId: string
 	auctionCoordinates: string
 	amount: number
+	/**
+	 * Auction `start_at` (unix seconds). Required so the publish path can
+	 * refuse bids placed before the auction has officially opened. Without
+	 * this gate, bids land on the relay with `created_at < start_at` and are
+	 * silently rejected by the settlement filter — the seller and bidder both
+	 * see "0 bids / starting price" while the events sit on the relay.
+	 */
+	auctionStartAt: number
 	auctionEffectiveEndAt: number
 	auctionLocktimeAt: number
 	/**
@@ -452,6 +460,9 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 	if (!formData.pathIssuerPubkey) throw new Error('Auction path issuer pubkey is required')
 	if (!formData.p2pkXpub) throw new Error('Auction p2pk_xpub is required for path verification')
 	if (!Number.isFinite(formData.amount) || formData.amount <= 0) throw new Error('Bid amount must be a positive number')
+	if (!Number.isFinite(formData.auctionStartAt) || formData.auctionStartAt <= 0) {
+		throw new Error('Auction start time is required for bidding')
+	}
 	if (!Number.isFinite(formData.auctionEffectiveEndAt) || formData.auctionEffectiveEndAt <= 0) {
 		throw new Error('Auction effective end time is required for bidding')
 	}
@@ -460,6 +471,12 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 	}
 
 	const now = Math.floor(Date.now() / 1000)
+	// Lower bound: an auction is only open for bids once `start_at` has
+	// elapsed. Without this gate we publish bids whose created_at lands
+	// before the auction's start, which the settlement filter then rejects.
+	if (now < formData.auctionStartAt) {
+		throw new Error('Auction has not started yet')
+	}
 	if (now >= formData.auctionEffectiveEndAt) {
 		throw new Error('Auction already ended')
 	}
