@@ -1,6 +1,8 @@
 import { AuctionCountdown, useAuctionCountdown } from '@/components/AuctionCountdown'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { getAuctionBidderStatus, type AuctionBidderStatusKind } from '@/lib/auctionBidderStatus'
+import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
 import { usePublishAuctionBidMutation } from '@/publish/auctions'
 import {
@@ -25,15 +27,28 @@ import {
 } from '@/queries/auctions'
 import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { Link } from '@tanstack/react-router'
+import { useStore } from '@tanstack/react-store'
 import { useEffect, useMemo, useState } from 'react'
 import { AuctionBidder } from './AuctionBidder'
 import { cn } from '@/lib/utils'
+
+const bidderStatusClassName = (status: AuctionBidderStatusKind): string => {
+	switch (status) {
+		case 'winning':
+		case 'won':
+			return 'bg-emerald-100 text-emerald-900 border-emerald-200'
+		case 'outbid':
+		case 'was_outbid':
+			return 'bg-amber-100 text-amber-950 border-amber-200'
+	}
+}
 
 export function AuctionCard({
 	auction,
 	bids: bidsProp,
 	...props
 }: { auction: NDKEvent; bids?: NDKEvent[] } & React.HTMLAttributes<HTMLDivElement>) {
+	const { user: currentUser } = useStore(authStore)
 	const title = getAuctionTitle(auction)
 	const images = getAuctionImages(auction)
 	const endAt = getAuctionEndAt(auction)
@@ -70,6 +85,16 @@ export function AuctionCard({
 	// auctions that haven't opened yet.
 	const notStarted = startAt > 0 && countdown.now < startAt
 	const parsedBidAmount = parseInt(bidAmountInput || '0', 10)
+	const bidderStatus = useMemo(
+		() =>
+			getAuctionBidderStatus({
+				currentUserPubkey: currentUser?.pubkey,
+				auction,
+				bids,
+				isEnded: ended,
+			}),
+		[currentUser?.pubkey, auction, bids, ended],
+	)
 
 	const minBid = useMemo(() => {
 		const floorBid = currentPrice + Math.max(1, bidIncrement)
@@ -153,10 +178,17 @@ export function AuctionCard({
 					</Link>
 				</h2>
 
-				<div className="flex justify-between items-center">
+				<div className="flex flex-wrap justify-between items-center gap-2">
 					<div className="text-sm font-semibold">{currentPrice.toLocaleString()} sats</div>
-					<div className="bg-[var(--light-gray)] font-medium px-4 py-1 rounded-full text-xs">
-						{bidsCount} {bidsCount === 1 ? 'Bid' : 'Bids'}
+					<div className="flex items-center gap-2">
+						{bidderStatus && (
+							<div className={`border font-semibold px-3 py-1 rounded-full text-xs ${bidderStatusClassName(bidderStatus.status)}`}>
+								{bidderStatus.label}
+							</div>
+						)}
+						<div className="bg-[var(--light-gray)] font-medium px-4 py-1 rounded-full text-xs">
+							{bidsCount} {bidsCount === 1 ? 'Bid' : 'Bids'}
+						</div>
 					</div>
 				</div>
 
