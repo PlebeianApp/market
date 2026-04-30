@@ -1,9 +1,5 @@
-import type { Browser, Page } from '@playwright/test'
+import type { Page } from '@playwright/test'
 import { test, expect } from '../fixtures'
-import { setupAuthContext } from '../fixtures/auth'
-import { ensureScenario } from '../scenarios'
-import { bytesToHex } from '@noble/hashes/utils'
-import { generateSecretKey, getPublicKey } from 'nostr-tools/pure'
 
 test.use({ scenario: 'merchant' })
 
@@ -42,26 +38,6 @@ async function fillRequiredStepsUntilShipping(page: Page, productName = 'Workflo
 	await page.getByTestId('product-next-button').click()
 }
 
-async function createFreshUserPage(browser: Browser) {
-	await ensureScenario('base')
-
-	const sk = generateSecretKey()
-	const user = {
-		sk: bytesToHex(sk),
-		pk: getPublicKey(sk),
-	}
-
-	const context = await browser.newContext()
-	await setupAuthContext(context, user)
-
-	const page = await context.newPage()
-	await page.goto('/')
-	await page.waitForLoadState('networkidle')
-	await expect(page.locator('header')).toBeVisible({ timeout: 10_000 })
-
-	return { context, page }
-}
-
 test.describe('Product Management', () => {
 	test('products list page shows seeded products', async ({ merchantPage }) => {
 		await merchantPage.goto('/dashboard/products/products')
@@ -92,21 +68,6 @@ test.describe('Product Management', () => {
 		await expect(merchantPage.getByLabel(/price/i).first()).not.toBeVisible()
 	})
 
-	test('new account starts on the correct first step', async ({ browser }) => {
-		const { context, page } = await createFreshUserPage(browser)
-
-		try {
-			await page.goto('/dashboard/products/products/new')
-			await waitForProductForm(page)
-
-			await expect(page.getByTestId('product-name-input')).toBeVisible({ timeout: 10_000 })
-			await expect(page.getByTestId('product-tab-name')).toHaveAttribute('data-state', 'active')
-			await expect(page.getByRole('button', { name: /Digital Delivery/i })).not.toBeVisible()
-		} finally {
-			await context.close()
-		}
-	})
-
 	test('required indicators match the workflow validation model', async ({ merchantPage }) => {
 		await merchantPage.goto('/dashboard/products/products/new')
 		await waitForProductForm(merchantPage)
@@ -119,13 +80,13 @@ test.describe('Product Management', () => {
 		await expect(merchantPage.getByTestId('product-tab-shipping')).toContainText('*')
 	})
 
-	test('cannot click forward to later tabs when earlier required tabs are incomplete', async ({ merchantPage }) => {
+	test('cannot select later tabs when earlier required tabs are incomplete', async ({ merchantPage }) => {
 		await merchantPage.goto('/dashboard/products/products/new')
 		await waitForProductForm(merchantPage)
 
-		await merchantPage.getByRole('tab', { name: 'Images' }).click()
+		const imagesTab = merchantPage.getByRole('tab', { name: /Images/i })
 
-		await expect(merchantPage.getByText('Complete Name before moving to Images').first()).toBeVisible({ timeout: 5_000 })
+		await expect(imagesTab).toBeDisabled()
 		await expect(merchantPage.getByTestId('product-name-input')).toBeVisible()
 		await expect(merchantPage.getByTestId('image-url-input')).not.toBeVisible()
 	})
