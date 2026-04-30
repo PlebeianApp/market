@@ -1,9 +1,5 @@
 import { NDKEvent, type NDKKind } from '@nostr-dev-kit/ndk'
-import {
-	AUCTION_SETTLEMENT_POLICY,
-	getAuctionTagValue,
-	resolveAuctionVersionSet,
-} from '../../lib/auctionSettlement'
+import { AUCTION_SETTLEMENT_POLICY, getAuctionTagValue, resolveAuctionVersionSet } from '../../lib/auctionSettlement'
 import { ensureInvoiceNdkConnected } from '../ndk'
 
 /**

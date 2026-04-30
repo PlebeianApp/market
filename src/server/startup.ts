@@ -2,13 +2,7 @@ import { getPublicKey } from 'nostr-tools/pure'
 import { fetchAppSettings } from '../lib/appSettings'
 import { startAuctionBidTokenListener } from './auction/bidTokenListener'
 import { getEventHandler } from './EventHandler'
-import {
-	APP_PRIVATE_KEY,
-	RELAY_URL,
-	setAppPublicKey,
-	setAppSettings,
-	setEventHandlerReady,
-} from './runtime'
+import { APP_PRIVATE_KEY, RELAY_URL, setAppPublicKey, setAppSettings, setEventHandlerReady } from './runtime'
 
 /**
  * Initialise process-level state required by every other server module.

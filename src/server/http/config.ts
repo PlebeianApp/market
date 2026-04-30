@@ -1,4 +1,12 @@
-import { determineStage, getAppPublicKeyOrThrow, getAppSettings, getCvmServerPublicKey, isEventHandlerReady, NIP46_RELAY_URL, RELAY_URL } from '../runtime'
+import {
+	determineStage,
+	getAppPublicKeyOrThrow,
+	getAppSettings,
+	getCvmServerPublicKey,
+	isEventHandlerReady,
+	NIP46_RELAY_URL,
+	RELAY_URL,
+} from '../runtime'
 import type { BunRoutes } from './types'
 
 export const configRoutes: BunRoutes = {

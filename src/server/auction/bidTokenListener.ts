@@ -1,16 +1,8 @@
 import { NDKEvent, NDKUser, type NDKKind } from '@nostr-dev-kit/ndk'
 import type { Event } from 'nostr-tools/pure'
-import {
-	getAuctionMaxEndAt,
-	getAuctionSettlementGrace,
-	getAuctionTagValue,
-} from '../../lib/auctionSettlement'
+import { getAuctionMaxEndAt, getAuctionSettlementGrace, getAuctionTagValue } from '../../lib/auctionSettlement'
 import { AUCTION_BID_TOKEN_TOPIC, parseAuctionBidTokenEnvelope } from '../../lib/auctionTransfers'
-import {
-	buildAuctionPathRegistry,
-	findAuctionPathEntryByChildPubkey,
-	upsertAuctionPathEntry,
-} from '../../lib/auctionPathOracle'
+import { buildAuctionPathRegistry, findAuctionPathEntryByChildPubkey, upsertAuctionPathEntry } from '../../lib/auctionPathOracle'
 import { ensureInvoiceNdkConnected, getAppAuctionSigner } from '../ndk'
 import { getAppPublicKeyOrThrow } from '../runtime'
 import { sha256Hex } from '../util/sha256'

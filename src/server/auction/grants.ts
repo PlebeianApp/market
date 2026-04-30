@@ -25,11 +25,7 @@ const AUCTION_PATH_REQUEST_RATE_LIMIT_MAX = 10
 const auctionPathRequestSeen = new Map<string, number>()
 const auctionPathRequestRecentByBidder = new Map<string, number[]>()
 
-const enforceAuctionPathRequestRateLimit = (params: {
-	auctionEventId: string
-	bidderPubkey: string
-	requestId: string
-}): void => {
+const enforceAuctionPathRequestRateLimit = (params: { auctionEventId: string; bidderPubkey: string; requestId: string }): void => {
 	const now = Math.floor(Date.now() / 1000)
 
 	// Periodic GC so the maps don't grow unbounded across long-lived runs.

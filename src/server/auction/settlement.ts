@@ -17,11 +17,7 @@ import {
 } from '../../lib/auctionSettlement'
 import { auctionP2pkPubkeysMatch, deriveAuctionChildP2pkPubkeyFromXpub, normalizeAuctionP2pkPubkey } from '../../lib/auctionP2pk'
 import { AUCTION_BID_TOKEN_TOPIC, parseAuctionBidTokenEnvelope } from '../../lib/auctionTransfers'
-import {
-	buildAuctionPathRegistry,
-	findAuctionPathEntryByChildPubkey,
-	type AuctionPathRegistryEntry,
-} from '../../lib/auctionPathOracle'
+import { buildAuctionPathRegistry, findAuctionPathEntryByChildPubkey, type AuctionPathRegistryEntry } from '../../lib/auctionPathOracle'
 import { ensureInvoiceNdkConnected, getAppAuctionSigner } from '../ndk'
 import { getAppPublicKeyOrThrow } from '../runtime'
 import { sha256Hex } from '../util/sha256'
@@ -136,11 +132,7 @@ export async function buildAuctionSettlementPlan(params: {
 	//   - locktime exactly `max_end_at + settlement_grace` (§4.1, §6.0 invariant)
 	//   - `derivation_path` tag MUST NOT appear (§4.2 forbidden tag, §13)
 	// We compute these once per auction outside the chain loop.
-	const trustedMints = new Set(
-		auctionEvent.tags
-			.filter((tag) => tag[0] === 'mint' && !!tag[1])
-			.map((tag) => tag[1]),
-	)
+	const trustedMints = new Set(auctionEvent.tags.filter((tag) => tag[0] === 'mint' && !!tag[1]).map((tag) => tag[1]))
 	const auctionMaxEndAt = getAuctionMaxEndAt(auctionEvent)
 	const auctionSettlementGrace = getAuctionSettlementGrace(auctionEvent)
 	const expectedLocktime = auctionMaxEndAt && auctionSettlementGrace ? auctionMaxEndAt + auctionSettlementGrace : 0
