@@ -29,7 +29,7 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { useQueries } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { CheckCircle, Clock, ExternalLink, Loader2, MapPin, RotateCcw, Trophy } from 'lucide-react'
+import { CheckCircle, Clock, Eye, Loader2, MapPin, RotateCcw, Trophy } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -538,7 +538,7 @@ function BidsOverviewComponent() {
 													aria-label={`Open auction route for ${getAuctionTitle(auction) || 'auction'}`}
 												>
 													<Button variant="ghost" size="sm">
-														<ExternalLink className="w-4 h-4" />
+														<Eye className="w-4 h-4" />
 													</Button>
 												</Link>
 												<Button
@@ -630,7 +630,7 @@ function BidsOverviewComponent() {
 											<div className="flex flex-wrap items-center gap-2">
 												<Link to="/dashboard/products/auctions/$auctionId" params={{ auctionId: group.auctionEventId }}>
 													<Button variant="default" size="sm" className="gap-2">
-														<ExternalLink className="w-3.5 h-3.5" />
+														<Eye className="w-3.5 h-3.5" />
 														Open Auction
 													</Button>
 												</Link>

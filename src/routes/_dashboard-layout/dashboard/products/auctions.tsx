@@ -29,7 +29,7 @@ import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, useMatchRoute, useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { Clock, ExternalLink, Gavel, Loader2, Pencil, Trash } from 'lucide-react'
+import { Clock, Eye, ExternalLink, Gavel, Loader2, Pencil, Trash } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { toast } from 'sonner'
 
@@ -161,7 +161,7 @@ function AuctionListBody({
 				<div className="flex flex-wrap items-center gap-2 pt-1">
 					<Link to="/dashboard/products/auctions/$auctionId" params={{ auctionId: auction.id }}>
 						<Button variant="outline" size="sm" className="gap-2">
-							<ExternalLink className="w-3.5 h-3.5" />
+							<Eye className="w-3.5 h-3.5" />
 							View Auction
 						</Button>
 					</Link>
@@ -233,7 +233,7 @@ function AuctionListItem({
 				aria-label={`Open auction route for ${getAuctionTitle(auction)}`}
 			>
 				<Button variant="ghost" size="sm">
-					<ExternalLink className="w-4 h-4" />
+					<Eye className="w-4 h-4" />
 				</Button>
 			</Link>
 			{!isLiveAuction && (

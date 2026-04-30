@@ -481,9 +481,17 @@ export const getAuctionMints = (event: NDKEvent | null): string[] => {
 	return event.tags.filter((tag) => tag[0] === 'mint' && !!tag[1]).map((tag) => tag[1])
 }
 
+/**
+ * Lock-key derivation method recorded on the auction event (`key_scheme` tag).
+ * Currently always `hd_p2pk` — the bidder's destination is an HD-derived P2PK
+ * pubkey. Note that this is the *lock-derivation* method, not the overall
+ * settlement scheme (which lives in the `settlement_policy` tag, e.g.
+ * `cashu_p2pk_path_oracle_v1`).
+ */
 export const getAuctionKeyScheme = (event: NDKEvent | null): 'hd_p2pk' => {
 	if (!event) return 'hd_p2pk'
-	return 'hd_p2pk'
+	const raw = event.tags.find((tag) => tag[0] === 'key_scheme')?.[1]
+	return raw === 'hd_p2pk' ? raw : 'hd_p2pk'
 }
 
 export const getAuctionP2pkXpub = (event: NDKEvent | null): string => event?.tags.find((tag) => tag[0] === 'p2pk_xpub')?.[1] || ''

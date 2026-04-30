@@ -662,9 +662,9 @@ function DashboardAuctionDetailRoute() {
 											value={getAuctionPathIssuer(auction) || 'N/A'}
 											copyValue={getAuctionPathIssuer(auction) || undefined}
 										/>
-										<TechnicalRow label="Key scheme" value={getAuctionKeyScheme(auction)} />
-										{p2pkXpub && <TechnicalRow label="P2PK xpub" value={p2pkXpub} copyValue={p2pkXpub} />}
 										<TechnicalRow label="Settlement policy" value={getAuctionSettlementPolicy(auction) || 'N/A'} />
+										<TechnicalRow label="Lock key derivation" value={getAuctionKeyScheme(auction)} />
+										{p2pkXpub && <TechnicalRow label="P2PK xpub" value={p2pkXpub} copyValue={p2pkXpub} />}
 										<TechnicalRow label="Schema" value={getAuctionSchema(auction) || 'N/A'} />
 										<TechnicalRow label="Trusted mints" value={trustedMints.length > 0 ? trustedMints.join('\n') : 'N/A'} stacked={true} />
 									</AccordionContent>
