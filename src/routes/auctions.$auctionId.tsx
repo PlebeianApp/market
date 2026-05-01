@@ -8,6 +8,7 @@ import { ImageViewerModal } from '@/components/ImageViewerModal'
 import { ItemGrid } from '@/components/ItemGrid'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { dedupeAndParseShippingRefs } from '@/lib/auctionShippingUtils'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ndkActions } from '@/lib/stores/ndk'
 import { uiStore } from '@/lib/stores/ui'
@@ -180,17 +181,7 @@ function AuctionDetailRoute() {
 	const auctionDTag = getAuctionId(auction)
 	const auctionCoordinates = auctionDTag && auction ? `30408:${auction.pubkey}:${auctionDTag}` : ''
 
-	const parsedShippingRefs = useMemo(
-		() =>
-			shippingOptions.map((item) => {
-				const parts = item.shippingRef.split(':')
-				if (parts.length === 3 && parts[0] === '30406') {
-					return { ...item, pubkey: parts[1], dTag: parts[2] }
-				}
-				return { ...item, pubkey: '', dTag: '' }
-			}),
-		[shippingOptions],
-	)
+	const parsedShippingRefs = useMemo(() => dedupeAndParseShippingRefs(shippingOptions), [shippingOptions])
 
 	const shippingQueryResults = useQueries({
 		queries: parsedShippingRefs.map(({ pubkey, dTag }) => ({
@@ -202,9 +193,15 @@ function AuctionDetailRoute() {
 	const resolvedShippingOptions = useMemo(
 		() =>
 			parsedShippingRefs.map((entry, index) => {
-				const event = shippingQueryResults[index]?.data ?? null
+				const queryResult = shippingQueryResults[index]
+				const event = queryResult?.data ?? null
 				const info = event ? getShippingInfo(event) : null
-				return { ...entry, info }
+				return {
+					...entry,
+					info,
+					isLoading: (queryResult?.isLoading ?? false) && !queryResult?.data,
+					isError: queryResult?.isError ?? false,
+				}
 			}),
 		[parsedShippingRefs, shippingQueryResults],
 	)
@@ -620,8 +617,15 @@ function AuctionDetailRoute() {
 													const extraCostNumber = option.extraCost ? Number(option.extraCost) : 0
 													const hasExtraCost = !Number.isNaN(extraCostNumber) && extraCostNumber > 0
 													return (
-														<li key={`${option.shippingRef}-${index}`} className="rounded-lg border border-zinc-200 bg-white px-3 py-2">
-															{option.info ? (
+														<li
+															key={`${option.shippingRef}-${option.extraCost}-${index}`}
+															className="rounded-lg border border-zinc-200 bg-white px-3 py-2"
+														>
+															{!option.isValid ? (
+																<p className="text-xs text-amber-600">Invalid shipping reference</p>
+															) : option.isLoading ? (
+																<p className="text-xs text-zinc-400">Loading shipping details...</p>
+															) : option.info ? (
 																<div className="space-y-1">
 																	<p className="font-medium text-zinc-900">{option.info.title}</p>
 																	<p className="text-xs text-zinc-600">
@@ -632,7 +636,7 @@ function AuctionDetailRoute() {
 																	{hasExtraCost && <p className="text-xs text-zinc-600">Auction extra cost: {extraCostNumber}</p>}
 																</div>
 															) : (
-																<p className="break-all text-xs text-zinc-500">{option.shippingRef}</p>
+																<p className="text-xs text-zinc-500">Shipping option not found</p>
 															)}
 														</li>
 													)
