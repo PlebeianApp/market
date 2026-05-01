@@ -48,11 +48,11 @@ Ports: app=34568, relay=10548
 
 | # | Scenario | Status |
 |---|----------|--------|
-| 1 | Mint initialization | ⬜ pending (manual) |
-| 2 | Remove a mint | ⬜ pending (manual) |
-| 3 | Cannot remove last mint | ⬜ pending (manual) |
-| 4 | Re-add a mint via suggestion button | ⬜ pending (manual) |
-| 5 | Add a custom mint via text input | ⬜ pending (manual) |
-| 6 | Empty input doesn't add | ⬜ pending (manual) |
-| 7 | Re-add a removed mint via text input | ⬜ pending (manual) |
-| 8 | Full form submission (publish auction) | ⬜ pending (manual) |
+| 1 | Mint initialization | ✅ pass |
+| 2 | Remove a mint | ✅ pass |
+| 3 | Cannot remove last mint | ✅ pass |
+| 4 | Re-add a mint via suggestion button | ✅ pass |
+| 5 | Add a custom mint via text input | ✅ pass |
+| 6 | Empty input doesn't add | ✅ pass |
+| 7 | Re-add a removed mint via text input | ✅ pass |
+| 8 | Full form submission (publish auction) | ⏭️ skipped — requires NIP-60 wallet seed data (out of scope) |

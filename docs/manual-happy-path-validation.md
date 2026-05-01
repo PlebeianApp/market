@@ -14,6 +14,26 @@ Run a local relay + dev server on the VPS, then manually verify the auction form
 
 ---
 
+## Current Deployment
+
+**VPS IP:** `23.182.128.51`
+**Date deployed:** 2026-04-30
+
+| Service | PID | Port | Command |
+|---|---|---|---|
+| Nostr relay (nak) | 557721 | 10548 | `nak serve --hostname 0.0.0.0 --port 10548` |
+| Plebeian Market dev server | 557816 | 34568 | `bun --hot src/index.tsx --host 0.0.0.0` |
+
+### Login
+
+| Field | Value |
+|---|---|
+| URL | `http://23.182.128.51:34568` |
+| nsec (browser login) | `nsec18cmyxjcca6y8s3yhegt7nmrcxw9pn4ugnqe68jfc8km3sr2c5d2srsltll` |
+| hex PK | `86a82cab18b293f53cbaaae8cdcbee3f7ec427fdf9f9c933db77800bb5ef38a0` |
+
+---
+
 ## Prerequisites
 
 ```bash
