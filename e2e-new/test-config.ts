@@ -12,6 +12,8 @@ export const TEST_APP_PRIVATE_KEY = process.env.TEST_APP_PRIVATE_KEY || 'e2e0000
 
 export const TEST_APP_PUBLIC_KEY = getPublicKey(hexToBytes(TEST_APP_PRIVATE_KEY))
 
-export const RELAY_URL = process.env.RELAY_URL || 'ws://localhost:10547'
-export const TEST_PORT = parseInt(process.env.TEST_PORT || '34567', 10)
+export const RELAY_URL = 'ws://localhost:10547'
+// Use a dedicated high port to prevent reusing a production-connected dev server
+// and to avoid common local conflicts on more frequently used low ports.
+export const TEST_PORT = 34567
 export const BASE_URL = `http://localhost:${TEST_PORT}`

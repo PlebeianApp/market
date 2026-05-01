@@ -4,7 +4,6 @@ import { defineConfig, devices } from '@playwright/test'
 import { TEST_APP_PRIVATE_KEY, RELAY_URL, BASE_URL, TEST_PORT } from './test-config'
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const RELAY_PORT = parseInt(RELAY_URL.split(':').pop()!, 10)
 
 export default defineConfig({
 	testDir: './tests',
@@ -35,8 +34,8 @@ export default defineConfig({
 		? []
 		: [
 				{
-					command: `nak serve --hostname 0.0.0.0 --port ${RELAY_PORT}`,
-					port: RELAY_PORT,
+					command: 'nak serve --hostname 0.0.0.0',
+					port: 10547,
 					reuseExistingServer: true,
 					stdout: 'pipe',
 					stderr: 'pipe',
@@ -54,7 +53,6 @@ export default defineConfig({
 					env: {
 						NODE_ENV: 'test',
 						PORT: String(TEST_PORT),
-						RELAY_URL: RELAY_URL,
 						APP_RELAY_URL: RELAY_URL,
 						APP_PRIVATE_KEY: TEST_APP_PRIVATE_KEY,
 						LOCAL_RELAY_ONLY: 'true',
