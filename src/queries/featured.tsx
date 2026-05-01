@@ -1,6 +1,6 @@
 import { ndkActions } from '@/lib/stores/ndk'
 import { FEATURED_ITEMS_CONFIG } from '@/lib/schemas/featured'
-import type { FeaturedProducts, FeaturedCollections, FeaturedUsers } from '@/lib/schemas/featured'
+import type { FeaturedProducts, FeaturedCollections, FeaturedAuctions, FeaturedUsers } from '@/lib/schemas/featured'
 import { naddrFromAddress } from '@/lib/nostr/naddr'
 import { configKeys } from '@/queries/queryKeyFactory'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -53,6 +53,33 @@ export const fetchFeaturedCollections = async (appPubkey: string): Promise<Featu
 
 	return {
 		featuredCollections,
+		lastUpdated: event.created_at || Date.now() / 1000,
+	}
+}
+
+/**
+ * Fetches featured auctions settings (kind 30409)
+ * @param appPubkey The app's pubkey
+ * @returns Featured auctions data or null
+ */
+export const fetchFeaturedAuctions = async (appPubkey: string): Promise<FeaturedAuctions | null> => {
+	const ndk = ndkActions.getNDK()
+	if (!ndk) throw new Error('NDK not initialized')
+
+	const naddr = naddrFromAddress(FEATURED_ITEMS_CONFIG.AUCTIONS.kind, appPubkey, FEATURED_ITEMS_CONFIG.AUCTIONS.dTag)
+	const event = await ndk.fetchEvent(naddr)
+
+	if (!event) return null
+
+	const rawAuctions = event.tags.filter((tag) => tag[0] === 'a' && tag[1]?.startsWith('30408:')).map((tag) => tag[1])
+	const featuredAuctions = rawAuctions.filter((coords) => {
+		const parts = coords.split(':')
+		if (parts.length !== 3 || !parts[1] || !parts[2]) return false
+		return filterBlacklistedPubkeys([parts[1]]).length > 0
+	})
+
+	return {
+		featuredAuctions,
 		lastUpdated: event.created_at || Date.now() / 1000,
 	}
 }
@@ -138,6 +165,18 @@ export const useFeaturedCollections = (appPubkey: string) => {
 	return useQuery({
 		queryKey,
 		queryFn: () => fetchFeaturedCollections(appPubkey),
+		enabled: !!appPubkey,
+		staleTime: 5 * 60 * 1000, // 5 minutes
+	})
+}
+
+/**
+ * Hook to fetch featured auctions
+ */
+export const useFeaturedAuctions = (appPubkey: string) => {
+	return useQuery({
+		queryKey: configKeys.featuredAuctions(appPubkey),
+		queryFn: () => fetchFeaturedAuctions(appPubkey),
 		enabled: !!appPubkey,
 		staleTime: 5 * 60 * 1000, // 5 minutes
 	})
