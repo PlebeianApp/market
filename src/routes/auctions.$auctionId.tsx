@@ -9,7 +9,9 @@ import { ItemGrid } from '@/components/ItemGrid'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { getAuctionBidderStatus, type AuctionBidderStatusKind } from '@/lib/auctionBidderStatus'
 import { getUniqueAuctionShippingRefs } from '@/lib/auctionShippingRefs'
+import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
 import { uiStore } from '@/lib/stores/ui'
 import { usePublishAuctionBidMutation } from '@/publish/auctions'
@@ -125,6 +127,17 @@ function TechnicalDataRow({ label, value }: { label: string; value: ReactNode })
 	)
 }
 
+const detailBidderStatusClassName = (status: AuctionBidderStatusKind): string => {
+	switch (status) {
+		case 'winning':
+		case 'won':
+			return 'border-emerald-300 bg-emerald-100 text-emerald-950'
+		case 'outbid':
+		case 'was_outbid':
+			return 'border-amber-300 bg-amber-100 text-amber-950'
+	}
+}
+
 export const Route = createFileRoute('/auctions/$auctionId')({
 	component: AuctionDetailRoute,
 })
@@ -132,11 +145,13 @@ export const Route = createFileRoute('/auctions/$auctionId')({
 function AuctionDetailRoute() {
 	const { auctionId } = Route.useParams()
 	const { showNSFWContent } = useStore(uiStore)
+	const { user: authUser } = useStore(authStore)
 	const [selectedImageIndex, setSelectedImageIndex] = useState(0)
 	const [imageViewerOpen, setImageViewerOpen] = useState(false)
 	const [bidAmountInput, setBidAmountInput] = useState('')
 	const [isOwnAuction, setIsOwnAuction] = useState(false)
 	const [currentUserPubkey, setCurrentUserPubkey] = useState('')
+	const activeUserPubkey = authUser?.pubkey || currentUserPubkey
 	const [claimDialogOpen, setClaimDialogOpen] = useState(false)
 	const bidMutation = usePublishAuctionBidMutation()
 
@@ -220,6 +235,16 @@ function AuctionDetailRoute() {
 	const minBid = Math.max(startingBid, currentPrice + Math.max(1, bidIncrement))
 	const parsedBidAmount = parseInt(bidAmountInput || '0', 10)
 	const newestBids = useMemo(() => [...bids].sort((a, b) => (b.created_at || 0) - (a.created_at || 0)), [bids])
+	const bidderStatus = useMemo(
+		() =>
+			getAuctionBidderStatus({
+				currentUserPubkey: activeUserPubkey,
+				auction,
+				bids,
+				isEnded: ended,
+			}),
+		[activeUserPubkey, auction, bids, ended],
+	)
 
 	const sellerAuctionsQuery = useQuery({
 		...auctionsByPubkeyQueryOptions(auction?.pubkey || '', 20),
@@ -355,6 +380,16 @@ function AuctionDetailRoute() {
 								</div>
 							</div>
 							<AuctionCountdown auction={auction} className="w-full gap-3" />
+							{bidderStatus && (
+								<div
+									aria-live="polite"
+									className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-xs font-semibold ${detailBidderStatusClassName(
+										bidderStatus.status,
+									)}`}
+								>
+									{bidderStatus.label}
+								</div>
+							)}
 							<AuctionBidder auction={auction} />
 						</div>
 					</div>
