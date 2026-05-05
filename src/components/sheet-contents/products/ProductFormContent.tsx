@@ -1,12 +1,10 @@
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import type { ProductWorkflowResolution } from '@/lib/workflow/productWorkflowResolver'
-import { authStore } from '@/lib/stores/auth'
 import { ndkActions } from '@/lib/stores/ndk'
 import { productFormActions, productFormStore, type ProductFormState, type ProductFormTab } from '@/lib/stores/product'
 import { uiActions } from '@/lib/stores/ui'
 import { hasProductFormDraft } from '@/lib/utils/productFormStorage'
-import { createShippingReference, getShippingInfo, useShippingOptionsByPubkey, isShippingDeleted } from '@/queries/shipping'
+import type { ProductWorkflowResolution } from '@/lib/workflow/productWorkflowResolver'
 import { useForm } from '@tanstack/react-form'
 import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
@@ -105,12 +103,10 @@ export function ProductFormContent({
 
 	// Get form state from store, including editingProductId
 	const formState = useStore(productFormStore)
-	const { activeTab, editingProductId, isDirty, shippings } = formState
+	const { activeTab, editingProductId, isDirty } = formState
 	const resolvedWorkflow: ProductWorkflowResolution = workflow ?? {
 		mode: editingProductId ? 'edit' : 'create',
-		isBootstrapReady: true,
 		initialTab: activeTab,
-		shouldStartAtShipping: false,
 		requiresV4VSetup: false,
 	}
 
@@ -124,47 +120,6 @@ export function ProductFormContent({
 	)
 	const currentTabValidationIssues = validationIssuesByTab[activeTab]
 	const formValidationIssues = useMemo(() => getFormValidationIssues(formState), [formState])
-
-	// Get user pubkey from auth store directly to avoid timing issues
-	const authState = useStore(authStore)
-	const userPubkey = authState.user?.pubkey || ''
-
-	// Check if user has any shipping options configured (for tab ordering)
-	// Query is only enabled when userPubkey is available
-	const { data: userShippingOptions, isFetched: isShippingFetched } = useShippingOptionsByPubkey(userPubkey)
-
-	const resolvedShippingRefs = useMemo(() => {
-		if (!userShippingOptions) return new Set<string>()
-
-		return new Set(
-			userShippingOptions
-				.filter((event) => {
-					const dTag = event.tags?.find((t: string[]) => t[0] === 'd')?.[1]
-					return dTag ? !isShippingDeleted(dTag, event.created_at) : true
-				})
-				.map((event) => {
-					const info = getShippingInfo(event)
-					return info ? createShippingReference(event.pubkey, info.id) : null
-				})
-				.filter((shippingRef): shippingRef is string => !!shippingRef),
-		)
-	}, [userShippingOptions])
-
-	const hasSelectedShipping = useMemo(() => {
-		return shippings.some((ship) => !!ship.shippingRef)
-	}, [shippings])
-
-	const hasValidShipping = useMemo(() => {
-		return shippings.some((ship) => ship.shippingRef && (!isShippingFetched || resolvedShippingRefs.has(ship.shippingRef)))
-	}, [shippings, isShippingFetched, resolvedShippingRefs])
-
-	// Once the draft has a shipping reference, move out of the shipping-first bootstrap step
-	// without waiting for query cache propagation to catch up.
-	useEffect(() => {
-		if (resolvedWorkflow.shouldStartAtShipping && hasSelectedShipping && activeTab === 'shipping') {
-			productFormActions.setActiveTab('name')
-		}
-	}, [resolvedWorkflow.shouldStartAtShipping, hasSelectedShipping, activeTab])
 
 	// Check for persisted draft on mount (for drafts from previous sessions)
 	const checkForPersistedDraft = useCallback(async () => {
@@ -362,7 +317,6 @@ export function ProductFormContent({
 			}}
 			className={`flex h-full min-h-0 flex-col overflow-hidden ${className}`}
 			data-testid="product-form"
-			data-shipping-loaded={isShippingFetched || !userPubkey || !!editingProductId}
 		>
 			<div className="flex-1 flex flex-col min-h-0 overflow-hidden max-h-[calc(100vh-200px)]">
 				{/* Single level tabs: Name, Detail, Spec, Category, Images, Shipping */}
@@ -479,18 +433,7 @@ export function ProductFormContent({
 							</Button>
 						)}
 
-						{/* Show 'Next' button when shipping tab is the resolved first step and user is still onboarding shipping */}
-						{resolvedWorkflow.shouldStartAtShipping && activeTab === 'shipping' && !hasValidShipping ? (
-							<Button
-								type="button"
-								variant="secondary"
-								className="flex-1 uppercase"
-								onClick={() => productFormActions.setActiveTab('name')}
-								data-testid="product-next-button"
-							>
-								Next
-							</Button>
-						) : activeTab === 'shipping' || editingProductId ? (
+						{activeTab === 'shipping' || editingProductId ? (
 							<form.Subscribe
 								selector={(state) => [state.canSubmit, state.isSubmitting]}
 								children={([, isSubmitting]) => {

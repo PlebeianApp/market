@@ -8,7 +8,7 @@ import { generateSecretKey, getPublicKey } from 'nostr-tools/pure'
 test.use({ scenario: 'merchant' })
 
 async function waitForProductForm(page: Page) {
-	const productForm = page.locator('[data-testid="product-form"][data-shipping-loaded="true"]')
+	const productForm = page.locator('[data-testid="product-form"]')
 	await expect(productForm).toBeVisible({ timeout: 15_000 })
 	return productForm
 }
@@ -235,7 +235,7 @@ test.describe('Product Management', () => {
 		await merchantPage.goto('/dashboard/products/products/new')
 
 		// Wait for product-form initialization to settle before interacting.
-		const productForm = merchantPage.locator('[data-testid="product-form"][data-shipping-loaded="true"]')
+		const productForm = merchantPage.locator('[data-testid="product-form"]')
 		await expect(productForm).toBeVisible({ timeout: 15_000 })
 
 		// --- Name Tab ---
@@ -330,8 +330,8 @@ test.describe('Product Management', () => {
 		// Click edit button on "Bitcoin Hardware Wallet"
 		await merchantPage.getByRole('button', { name: 'Edit Bitcoin Hardware Wallet' }).click()
 
-		// Wait for the edit form to load with shipping data
-		const productForm = merchantPage.locator('[data-testid="product-form"][data-shipping-loaded="true"]')
+		// Wait for the edit form to load
+		const productForm = merchantPage.locator('[data-testid="product-form"]')
 		await expect(productForm).toBeVisible({ timeout: 15_000 })
 
 		// Verify the form is pre-populated with existing title
