@@ -14,9 +14,7 @@ import {
 	filterNSFWAuctions,
 	getAuctionCategories,
 	getAuctionImages,
-	getAuctionMaxEndAt,
 	getAuctionRootEventId,
-	getAuctionStartingBid,
 	getAuctionTitle,
 	useAuctionBidsForList,
 } from '@/queries/auctions'
