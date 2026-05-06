@@ -97,7 +97,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 	}
 
 	return (
-		<div className={`flex flex-col h-full overflow-hidden px-4 sm:px-6 ${className}`}>
+		<div className={`flex min-h-0 flex-1 flex-col overflow-hidden px-4 sm:px-6 ${className}`}>
 			{missingShippingCount > 0 && (
 				<div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
 					<div className="flex">
@@ -110,7 +110,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 				</div>
 			)}
 
-			<ScrollArea className="flex-1 overflow-y-auto py-2 min-h-0">
+			<ScrollArea className="min-h-0 flex-1 overflow-y-auto py-2">
 				<div className="space-y-6" ref={parent}>
 					{Object.entries(productsBySeller)
 						.filter(([sellerPubkey]) => sellerPubkey && sellerPubkey.length > 0 && sellerPubkey !== 'unknown')
@@ -202,7 +202,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 				</div>
 			</ScrollArea>
 
-			<div className="pt-4 pb-6 sm:pb-4 mt-auto flex-shrink-0">
+			<div className="mt-auto shrink-0 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4">
 				<div className="space-y-3 w-full">
 					<div className="space-y-1 mb-2">
 						<div className="flex justify-between">
