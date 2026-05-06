@@ -7,39 +7,47 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { v4 as uuidv4 } from 'uuid'
 import type { CheckoutFormData } from '@/components/checkout/ShippingAddressForm'
+import {
+	isValidDigitalDeliveryContact,
+	resolveCheckoutDeliveryRequirements,
+	type CheckoutDeliveryRequirements,
+} from '@/lib/checkout/deliveryRequirements'
 import { fetchProfileByIdentifier } from '@/queries/profiles'
 import { getShippingEvent, getShippingService } from '@/queries/shipping'
 // import type { CartProduct, SellerData, V4VShare } from '@/lib/stores/cart'
 
-/**
- * Helper function to check if all products require no shipping address
- * (either pickup or digital delivery)
- */
-async function checkIfNoAddressRequired(products: CartProduct[]): Promise<boolean> {
-	try {
-		const checks = await Promise.all(
-			products.map(async (product) => {
-				if (!product.shippingMethodId) return false
+async function resolveDeliveryRequirementsForProducts(
+	products: Array<{ id: string; shippingMethodId?: string | null }>,
+): Promise<CheckoutDeliveryRequirements> {
+	const shippingRefs = Array.from(new Set(products.map((product) => product.shippingMethodId?.trim()).filter(Boolean) as string[]))
+	const servicesByShippingRef: Record<string, string | null> = {}
 
-				try {
-					const shippingEvent = await getShippingEvent(product.shippingMethodId)
-					if (!shippingEvent) return false
+	await Promise.all(
+		shippingRefs.map(async (shippingRef) => {
+			try {
+				const shippingEvent = await getShippingEvent(shippingRef)
+				servicesByShippingRef[shippingRef] = shippingEvent ? getShippingService(shippingEvent)?.[1] || null : null
+			} catch (error) {
+				console.error('Error resolving shipping service:', error)
+				servicesByShippingRef[shippingRef] = null
+			}
+		}),
+	)
 
-					const serviceTag = getShippingService(shippingEvent)
-					const serviceType = serviceTag?.[1]
-					return serviceType === 'pickup' || serviceType === 'digital'
-				} catch (error) {
-					console.error('Error checking shipping service:', error)
-					return false
-				}
-			}),
-		)
+	return resolveCheckoutDeliveryRequirements({
+		products,
+		servicesByShippingRef,
+	})
+}
 
-		return checks.every((noAddress) => noAddress)
-	} catch (error) {
-		console.error('Error checking if no address required:', error)
-		return false
-	}
+function hasRequiredPhysicalAddress(shippingData: CheckoutFormData): boolean {
+	return Boolean(
+		shippingData.name.trim() &&
+		shippingData.firstLineOfAddress.trim() &&
+		shippingData.city.trim() &&
+		shippingData.zipPostcode.trim() &&
+		shippingData.country.trim(),
+	)
 }
 
 // Temporary type definitions - ideally these should be imported from a central types file
@@ -705,6 +713,14 @@ export interface PublishOrderDependenciesParams {
 	v4vShares: Record<string, V4VShare[]>
 }
 
+type SellerOrderPreflight = {
+	sellerPubkey: string
+	sellerProducts: CartProduct[]
+	data: SellerData
+	requirements: CheckoutDeliveryRequirements
+	shippingRef?: string
+}
+
 /**
  * Creates and publishes a spec-compliant order for each seller,
  * then creates and publishes all necessary payment requests (merchant + V4V).
@@ -723,7 +739,12 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 		throw new Error('No active user found for order creation')
 	}
 
-	const newOrderIds: string[] = []
+	const buyerEmail = shippingData.email.trim()
+	if (buyerEmail && !isValidDigitalDeliveryContact(buyerEmail)) {
+		throw new Error('Enter a valid email address before creating the order')
+	}
+
+	const preflight: SellerOrderPreflight[] = []
 
 	for (const sellerPubkey of sellers) {
 		const sellerProducts = productsBySeller[sellerPubkey] || []
@@ -731,12 +752,31 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 
 		if (sellerProducts.length === 0 || !data) continue
 
-		// Check if all products require no shipping address (pickup or digital)
-		const noAddressRequired = await checkIfNoAddressRequired(sellerProducts)
+		const requirements = await resolveDeliveryRequirementsForProducts(sellerProducts)
+		if (!requirements.isResolved) {
+			throw new Error('Delivery requirements could not be verified for one or more selected shipping options')
+		}
 
-		// Extract shippingRef from the first product that has a shipping method
-		const shippingRef = sellerProducts.find((p) => p.shippingMethodId)?.shippingMethodId || undefined
+		if (requirements.needsDigitalDeliveryContact && !isValidDigitalDeliveryContact(buyerEmail)) {
+			throw new Error('Digital delivery contact is required before creating the order')
+		}
 
+		if (requirements.needsPhysicalAddress && !hasRequiredPhysicalAddress(shippingData)) {
+			throw new Error('Shipping address is required before creating the order')
+		}
+
+		preflight.push({
+			sellerPubkey,
+			sellerProducts,
+			data,
+			requirements,
+			shippingRef: sellerProducts.find((p) => p.shippingMethodId)?.shippingMethodId || undefined,
+		})
+	}
+
+	const newOrderIds: string[] = []
+
+	for (const { sellerPubkey, sellerProducts, data, requirements, shippingRef } of preflight) {
 		const orderData: OrderCreationData = {
 			merchantPubkey: sellerPubkey,
 			buyerPubkey: buyerPubkey,
@@ -746,8 +786,10 @@ export async function publishOrderWithDependencies(params: PublishOrderDependenc
 			})),
 			totalAmountSats: data.satsTotal,
 			shippingRef: shippingRef || undefined,
-			shippingAddress: noAddressRequired ? undefined : shippingData,
-			email: shippingData.email || 'customer@example.com',
+			shippingAddress: requirements.needsPhysicalAddress ? shippingData : undefined,
+			// Current app order metadata uses the existing email tag for v1 digital delivery contact.
+			// This is not a NIP-99 listing change.
+			email: buyerEmail || undefined,
 			notes: `Order for ${sellerProducts.length} item(s) from seller.`,
 		}
 
