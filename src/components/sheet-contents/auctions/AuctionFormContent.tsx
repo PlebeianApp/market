@@ -296,7 +296,6 @@ function AuctionTabContent({
 	userRemovedMints: Set<string>
 	onUserRemovedMintsChange: (next: Set<string>) => void
 }) {
-	const [customMintInput, setCustomMintInput] = useState('')
 	const selectedMints = formData.trustedMints
 	const unselectedMints = availableMints.filter((mint) => !selectedMints.includes(mint))
 	const canRemoveMint = selectedMints.length > 1
@@ -315,13 +314,6 @@ function AuctionTabContent({
 			next.delete(mint)
 			onUserRemovedMintsChange(next)
 		}
-	}
-
-	const addCustomMint = () => {
-		const trimmed = customMintInput.trim()
-		if (!trimmed) return
-		addMint(trimmed)
-		setCustomMintInput('')
 	}
 
 	const startingBidNum = parseInt(formData.startingBid, 10)
@@ -574,24 +566,6 @@ function AuctionTabContent({
 						))}
 					</div>
 				)}
-
-				<div className="flex gap-2 mt-3">
-					<Input
-						placeholder="Enter mint URL..."
-						value={customMintInput}
-						onChange={(e) => setCustomMintInput(e.target.value)}
-						onKeyDown={(e) => {
-							if (e.key === 'Enter') {
-								e.preventDefault()
-								addCustomMint()
-							}
-						}}
-						className="flex-1"
-					/>
-					<Button type="button" variant="outline" size="sm" onClick={addCustomMint} disabled={!customMintInput.trim()}>
-						<Plus className="w-4 h-4" />
-					</Button>
-				</div>
 			</div>
 
 			<div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
