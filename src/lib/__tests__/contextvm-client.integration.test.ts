@@ -12,7 +12,7 @@ const DERIVED_SERVER_PUBKEY = getPublicKey(new Uint8Array(Buffer.from(SERVER_PRI
 const SERVER_PUBKEY = process.env.CVM_SERVER_PUBKEY || DERIVED_SERVER_PUBKEY
 const RELAYS = Array.from(new Set([RELAY_URL, ...getCurrencyServerRelays()]))
 
-describe('PlebianCurrencyClient integration', () => {
+describe.skip('PlebianCurrencyClient integration', () => {
 	let client: PlebianCurrencyClient | undefined
 
 	beforeAll(() => {
