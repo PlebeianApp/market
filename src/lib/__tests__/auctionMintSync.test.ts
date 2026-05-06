@@ -51,6 +51,11 @@ describe('syncMintSelection', () => {
 		expect(result).toEqual(['mint-a', 'mint-b'])
 	})
 
+	test('custom mint not in availableMints is preserved in selection', () => {
+		const result = syncMintSelection(['mint-a'], ['mint-a'], ['mint-a', 'https://custom.mint.example'], EMPTY)
+		expect(result).toEqual(['mint-a', 'https://custom.mint.example'])
+	})
+
 	test('does not duplicate mints already in selection', () => {
 		const result = syncMintSelection(['mint-a'], ['mint-a', 'mint-b'], ['mint-a', 'mint-b'], EMPTY)
 		expect(result).toEqual(['mint-a', 'mint-b'])
