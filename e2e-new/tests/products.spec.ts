@@ -1,10 +1,14 @@
-import type { Page } from '@playwright/test'
+import type { Browser, Page } from '@playwright/test'
 import { test, expect } from '../fixtures'
+import { setupAuthContext } from '../fixtures/auth'
+import { ensureScenario } from '../scenarios'
+import { bytesToHex } from '@noble/hashes/utils'
+import { generateSecretKey, getPublicKey } from 'nostr-tools/pure'
 
 test.use({ scenario: 'merchant' })
 
 async function waitForProductForm(page: Page) {
-	const productForm = page.locator('[data-testid="product-form"][data-shipping-loaded="true"]')
+	const productForm = page.locator('[data-testid="product-form"]')
 	await expect(productForm).toBeVisible({ timeout: 15_000 })
 	return productForm
 }
@@ -38,6 +42,26 @@ async function fillRequiredStepsUntilShipping(page: Page, productName = 'Workflo
 	await page.getByTestId('product-next-button').click()
 }
 
+async function createFreshUserPage(browser: Browser) {
+	await ensureScenario('base')
+
+	const sk = generateSecretKey()
+	const user = {
+		sk: bytesToHex(sk),
+		pk: getPublicKey(sk),
+	}
+
+	const context = await browser.newContext()
+	await setupAuthContext(context, user)
+
+	const page = await context.newPage()
+	await page.goto('/')
+	await page.waitForLoadState('networkidle')
+	await expect(page.locator('header')).toBeVisible({ timeout: 10_000 })
+
+	return { context, page }
+}
+
 test.describe('Product Management', () => {
 	test('products list page shows seeded products', async ({ merchantPage }) => {
 		await merchantPage.goto('/dashboard/products/products')
@@ -66,6 +90,21 @@ test.describe('Product Management', () => {
 		await expect(merchantPage.getByTestId('product-next-button')).toBeDisabled()
 		await expect(merchantPage.getByTestId('product-name-input')).toBeVisible()
 		await expect(merchantPage.getByLabel(/price/i).first()).not.toBeVisible()
+	})
+
+	test('new account starts on the correct first step', async ({ browser }) => {
+		const { context, page } = await createFreshUserPage(browser)
+
+		try {
+			await page.goto('/dashboard/products/products/new')
+			await waitForProductForm(page)
+
+			await expect(page.getByTestId('product-name-input')).toBeVisible({ timeout: 10_000 })
+			await expect(page.getByTestId('product-tab-name')).toHaveAttribute('data-state', 'active')
+			await expect(page.getByRole('button', { name: /Digital Delivery/i })).not.toBeVisible()
+		} finally {
+			await context.close()
+		}
 	})
 
 	test('required indicators match the workflow validation model', async ({ merchantPage }) => {
@@ -196,7 +235,7 @@ test.describe('Product Management', () => {
 		await merchantPage.goto('/dashboard/products/products/new')
 
 		// Wait for product-form initialization to settle before interacting.
-		const productForm = merchantPage.locator('[data-testid="product-form"][data-shipping-loaded="true"]')
+		const productForm = merchantPage.locator('[data-testid="product-form"]')
 		await expect(productForm).toBeVisible({ timeout: 15_000 })
 
 		// --- Name Tab ---
@@ -291,8 +330,8 @@ test.describe('Product Management', () => {
 		// Click edit button on "Bitcoin Hardware Wallet"
 		await merchantPage.getByRole('button', { name: 'Edit Bitcoin Hardware Wallet' }).click()
 
-		// Wait for the edit form to load with shipping data
-		const productForm = merchantPage.locator('[data-testid="product-form"][data-shipping-loaded="true"]')
+		// Wait for the edit form to load
+		const productForm = merchantPage.locator('[data-testid="product-form"]')
 		await expect(productForm).toBeVisible({ timeout: 15_000 })
 
 		// Verify the form is pre-populated with existing title
