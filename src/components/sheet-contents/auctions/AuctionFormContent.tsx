@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DEFAULT_TRUSTED_MINTS, PRODUCT_CATEGORIES } from '@/lib/constants'
 import { syncMintSelection } from '@/lib/auctionMintSync'
+import { validateMintUrl } from '@/lib/validateMintUrl'
 import { authStore } from '@/lib/stores/auth'
 import { configStore } from '@/lib/stores/config'
 import { isNip60WalletDevModeEnabled, NIP60_DEV_TEST_MINTS } from '@/lib/stores/nip60'
@@ -297,6 +298,9 @@ function AuctionTabContent({
 	onUserRemovedMintsChange: (next: Set<string>) => void
 }) {
 	const [customMintInput, setCustomMintInput] = useState('')
+	const [mintValidation, setMintValidation] = useState<{ status: 'idle' | 'loading' | 'error'; error?: string }>({
+		status: 'idle',
+	})
 	const selectedMints = formData.trustedMints
 	const unselectedMints = availableMints.filter((mint) => !selectedMints.includes(mint))
 	const canRemoveMint = selectedMints.length > 1
@@ -317,11 +321,21 @@ function AuctionTabContent({
 		}
 	}
 
-	const addCustomMint = () => {
+	const addCustomMint = async () => {
 		const trimmed = customMintInput.trim()
 		if (!trimmed) return
+
+		setMintValidation({ status: 'loading' })
+		const result = await validateMintUrl(trimmed)
+
+		if (!result.valid) {
+			setMintValidation({ status: 'error', error: result.error })
+			return
+		}
+
 		addMint(trimmed)
 		setCustomMintInput('')
+		setMintValidation({ status: 'idle' })
 	}
 
 	const startingBidNum = parseInt(formData.startingBid, 10)
@@ -579,7 +593,12 @@ function AuctionTabContent({
 					<Input
 						placeholder="Enter mint URL..."
 						value={customMintInput}
-						onChange={(e) => setCustomMintInput(e.target.value)}
+						onChange={(e) => {
+							setCustomMintInput(e.target.value)
+							if (mintValidation.status !== 'idle') {
+								setMintValidation({ status: 'idle' })
+							}
+						}}
 						onKeyDown={(e) => {
 							if (e.key === 'Enter') {
 								e.preventDefault()
@@ -587,11 +606,19 @@ function AuctionTabContent({
 							}
 						}}
 						className="flex-1"
+						disabled={mintValidation.status === 'loading'}
 					/>
-					<Button type="button" variant="outline" size="sm" onClick={addCustomMint} disabled={!customMintInput.trim()}>
-						<Plus className="w-4 h-4" />
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={addCustomMint}
+						disabled={!customMintInput.trim() || mintValidation.status === 'loading'}
+					>
+						{mintValidation.status === 'loading' ? <span className="text-xs">Checking...</span> : <Plus className="w-4 h-4" />}
 					</Button>
 				</div>
+				{mintValidation.status === 'error' && mintValidation.error && <p className="text-xs text-red-600 mt-1">{mintValidation.error}</p>}
 			</div>
 
 			<div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">

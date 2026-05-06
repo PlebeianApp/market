@@ -1,211 +1,59 @@
 # Handover: Custom Mint URL Support for Auctions
 
-## Context
+## Status: IMPLEMENTED
 
-This branch (`feat/auction-custom-mint-support`) is for a **separate PR** that adds custom mint URL entry to the auction form. It was extracted from PR #840 (`fix/auction-trusted-mint-state-ownership`) at the request of reviewers.
+This branch (`feat/auction-custom-mint-support`) has the custom mint feature **fully implemented** with hard-block validation. The mint URL is verified against the Cashu `/v1/info` endpoint before it can be added.
 
-**Why it was split out:** Both Franchovy and maximotodev requested that custom mint support be removed from the state-ownership fix PR because trusted mints become signed auction tags (Cashu trust policy). Allowing arbitrary custom mints without security review introduces rug-pull risk for auction bidders. See PR #840 review comments for full discussion.
+## What Was Done
 
-## What to Do
+### New files
 
-### 1. Re-add the custom mint code
+| File                                                    | Purpose                                                                                                                                                     |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/validateMintUrl.ts`                            | Async validation: normalizes URL, checks https, calls `CashuMint.getInfo()` with 5s timeout. Returns `{ valid: true }` or `{ valid: false, error: string }` |
+| `src/lib/__tests__/validateMintUrl.test.ts`             | 7 unit tests (all mocked): valid mint, empty, whitespace, non-https, network error, timeout, trailing slash normalization                                   |
+| `src/lib/__tests__/validateMintUrl.integration.test.ts` | 2 integration tests (real HTTP): known good mint (`testnut.cashu.space`), non-existent domain                                                               |
 
-The commit `de9a646f` (on `fix/auction-trusted-mint-state-ownership`) **removed** the custom mint functionality. You need to reverse that commit's changes to the 3 files below. The easiest way:
+### Modified files
 
-```bash
-# Cherry-pick the parent commit (32fb8b0d) which had the custom mint code,
-# then selectively keep only the custom-mint parts.
-# OR simply reverse-apply the removal:
-git show de9a646f | git apply -R
-```
+| File                         | Changes                                                                                                                            |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `AuctionFormContent.tsx`     | Added `mintValidation` state, `addCustomMint()` now async with validation gate, UI shows "Checking..." spinner + red error message |
+| `auctionMintSync.test.ts`    | Restored custom-mint-preserved test (11 total)                                                                                     |
+| `auction-mint-state.spec.ts` | 6 Playwright E2E tests including invalid-URL validation test                                                                       |
 
-If `git apply -R` has conflicts (unlikely since this branch starts from that exact commit), apply the changes manually using the sections below.
+### Test coverage
 
-### 2. Files and exact changes needed
+| Level                                               | Tests   | Status                                                                                                        |
+| --------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------- |
+| Unit (`validateMintUrl.test.ts`)                    | 7 pass  | Mocked CashuMint                                                                                              |
+| Unit (`auctionMintSync.test.ts`)                    | 11 pass | Pure function                                                                                                 |
+| Integration (`validateMintUrl.integration.test.ts`) | 2 pass  | Real HTTP to testnut.cashu.space                                                                              |
+| E2E (`auction-mint-state.spec.ts`)                  | 6 tests | Playwright (pre-existing env issue — app crashes with `Cannot read properties of undefined (reading 'atom')`) |
 
-#### `src/components/sheet-contents/auctions/AuctionFormContent.tsx`
+### How validation works (hard block)
 
-Add back in `AuctionTabContent` function body:
+1. User types a mint URL and presses Enter or clicks +
+2. UI shows "Checking..." spinner, input and button are disabled
+3. `validateMintUrl()` is called: normalizes URL, checks `https://`, calls `CashuMint.getInfo()` with 5s timeout
+4. If valid → mint is added to selection, input cleared
+5. If invalid → red error message appears below input (e.g. "Could not verify mint: network failure"), mint is NOT added
+6. User can edit the URL to try again — typing clears the error
 
-```typescript
-// After line: const [customMintInput, setCustomMintInput] = useState('')
-// This state goes BEFORE the existing selectedMints line.
-const [customMintInput, setCustomMintInput] = useState('')
-```
+### Known mint for testing
 
-```typescript
-// After the addMint() function, add back:
-const addCustomMint = () => {
-	const trimmed = customMintInput.trim()
-	if (!trimmed) return
-	addMint(trimmed)
-	setCustomMintInput('')
-}
-```
+The test mint `https://testnut.cashu.space` is used in integration and E2E tests. It's already in `NIP60_DEV_TEST_MINTS` in the codebase.
 
-```typescript
-// After the closing </div> of the unselected mints section (the one with the + buttons),
-// add back the text input + button block:
-				<div className="flex gap-2 mt-3">
-					<Input
-						placeholder="Enter mint URL..."
-						value={customMintInput}
-						onChange={(e) => setCustomMintInput(e.target.value)}
-						onKeyDown={(e) => {
-							if (e.key === 'Enter') {
-								e.preventDefault()
-								addCustomMint()
-							}
-						}}
-						className="flex-1"
-					/>
-					<Button type="button" variant="outline" size="sm" onClick={addCustomMint} disabled={!customMintInput.trim()}>
-						<Plus className="w-4 h-4" />
-					</Button>
-				</div>
-```
+## Remaining Work Before Merge
 
-#### `src/lib/__tests__/auctionMintSync.test.ts`
-
-Add back this test before the "does not duplicate" test:
-
-```typescript
-	test('custom mint not in availableMints is preserved in selection', () => {
-		const result = syncMintSelection(['mint-a'], ['mint-a'], ['mint-a', 'https://custom.mint.example'], EMPTY)
-		expect(result).toEqual(['mint-a', 'https://custom.mint.example'])
-	})
-```
-
-#### `e2e-new/tests/auction-mint-state.spec.ts`
-
-**Remove** the `unselectedMintLocator` helper function and the "user can re-add a previously removed mint via unselected list" test.
-
-**Add back** these 3 tests:
-
-```typescript
-	test('user can add a custom mint URL via text input', async ({ merchantPage }) => {
-		test.setTimeout(60_000)
-
-		const customMintUrl = 'https://custom-test-mint.example.com'
-
-		await merchantPage.goto('/auctions')
-		await merchantPage.waitForLoadState('networkidle')
-
-		await merchantPage.getByRole('button', { name: /create.*auction/i }).click()
-
-		await merchantPage.getByRole('tab', { name: 'Auction' }).click()
-
-		await merchantPage.getByPlaceholder('Enter mint URL...').fill(customMintUrl)
-
-		await merchantPage.getByPlaceholder('Enter mint URL...').press('Enter')
-
-		await expect(merchantPage.locator(`span[title="${customMintUrl}"]`)).toBeVisible({ timeout: 10_000 })
-
-		const removeButtons = merchantPage.getByTitle('Remove mint')
-		const afterCount = await removeButtons.count()
-		expect(afterCount).toBeGreaterThanOrEqual(DEFAULT_TRUSTED_MINTS.length + 1)
-	})
-
-	test('user can re-add a previously removed mint via text input', async ({ merchantPage }) => {
-		test.setTimeout(60_000)
-
-		await merchantPage.goto('/auctions')
-		await merchantPage.waitForLoadState('networkidle')
-
-		await merchantPage.getByRole('button', { name: /create.*auction/i }).click()
-
-		await merchantPage.getByRole('tab', { name: 'Auction' }).click()
-
-		const removeButtons = merchantPage.getByTitle('Remove mint')
-		await expect(removeButtons.first()).toBeVisible({ timeout: 10_000 })
-
-		const firstSelectedRow = removeButtons.first().locator('..')
-		const removedMintSpan = firstSelectedRow.locator('span[title]')
-		const removedMintUrl = (await removedMintSpan.getAttribute('title')) ?? ''
-
-		await removeButtons.first().click()
-
-		await expect(selectedMintLocator(merchantPage, removedMintUrl)).not.toBeVisible()
-
-		await merchantPage.getByPlaceholder('Enter mint URL...').fill(removedMintUrl)
-		await merchantPage.getByPlaceholder('Enter mint URL...').press('Enter')
-
-		await expect(selectedMintLocator(merchantPage, removedMintUrl)).toBeVisible({ timeout: 10_000 })
-	})
-
-	test('empty text input does not add a mint', async ({ merchantPage }) => {
-		test.setTimeout(60_000)
-
-		await merchantPage.goto('/auctions')
-		await merchantPage.waitForLoadState('networkidle')
-
-		await merchantPage.getByRole('button', { name: /create.*auction/i }).click()
-
-		await merchantPage.getByRole('tab', { name: 'Auction' }).click()
-
-		const removeButtons = merchantPage.getByTitle('Remove mint')
-		await expect(removeButtons.first()).toBeVisible({ timeout: 10_000 })
-
-		const initialCount = await removeButtons.count()
-
-		const input = merchantPage.getByPlaceholder('Enter mint URL...')
-		await input.clear()
-
-		const container = input.locator('xpath=../..')
-		const addButton = container.locator('> button')
-		await expect(addButton).toBeDisabled()
-
-		const afterCount = await removeButtons.count()
-		expect(afterCount).toBe(initialCount)
-	})
-```
-
-### 3. Security enhancements (REQUIRED before merge)
-
-The reviewers explicitly called out that custom mint support needs its own threat model. At minimum, add:
-
-- **URL validation**: The input should validate that the entered string is a valid HTTPS URL
-- **Buyer-facing warning**: Add a note in the UI explaining that custom mints are not vetted and buyers should verify trust
-- **Mint reachability check** (optional but recommended): Warn if the mint URL is unreachable before allowing it
-
-### 4. Target branch for PR
-
-Per Franchovy's comment on PR #840, the target branch should be `origin/auctions/cashu-p2pk-path-oracle-v1` (not `feature/auctions-better-auction-submission-form`). Rebase accordingly before opening the PR.
-
-### 5. Testing
-
-```bash
-# Unit tests (should be 11 pass after re-adding the custom mint test)
-bun test src/lib/__tests__/auctionMintSync.test.ts
-
-# Prettier
-bunx prettier --check "src/components/sheet-contents/auctions/AuctionFormContent.tsx" \
-  "src/lib/__tests__/auctionMintSync.test.ts" \
-  "e2e-new/tests/auction-mint-state.spec.ts"
-
-# E2E (Playwright) — requires relay + dev server running
-# See e2e-new/playwright.config.ts for setup
-npx playwright test --config e2e-new/playwright.config.ts e2e-new/tests/auction-mint-state.spec.ts
-```
-
-### 6. Commit and push
-
-```bash
-git add -A
-git commit -m "feat(auctions): add custom mint URL support for trusted mints"
-git push -u origin feat/auction-custom-mint-support
-```
-
-Then open a PR targeting `auctions/cashu-p2pk-path-oracle-v1`.
+1. **Buyer-facing warning UI** — Add a note near the custom mint input explaining that custom mints are not vetted by the platform and buyers should verify trust
+2. **Target branch** — Per Franchovy on PR #840, retarget PR to `origin/auctions/cashu-p2pk-path-oracle-v1`
+3. **E2E environment fix** — The Playwright E2E test suite has a pre-existing crash (`Cannot read properties of undefined (reading 'atom')`) that prevents any E2E test from running. This affects ALL tests, not just ours. Needs investigation.
 
 ## Key Commit References
 
-| Hash | Description |
-|------|-------------|
-| `32fb8b0d` | Original commit that added custom mint + offline mint preservation |
-| `de9a646f` | Removal commit — reverse this to get custom mint code back |
-| `9a55da5b` | Clean base commit for the state-ownership PR (no custom mints) |
-
-## syncMintSelection (no changes needed)
-
-The pure sync function in `src/lib/auctionMintSync.ts` already handles preserving mints not in `availableMints` (custom or offline). No changes needed there.
+| Hash       | Description                                                                                   |
+| ---------- | --------------------------------------------------------------------------------------------- |
+| `de9a646f` | Removal commit on `fix/auction-trusted-mint-state-ownership` (custom mints removed for scope) |
+| `16e71e12` | Initial restore of custom mint code on this branch                                            |
+| HEAD       | This commit — adds validation, tests, UI feedback                                             |

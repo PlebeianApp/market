@@ -46,10 +46,10 @@ test.describe('Auction Mint State', () => {
 		await expect(merchantPage.getByTitle('At least one mint is required').or(merchantPage.getByTitle('Remove mint')).first()).toBeVisible()
 	})
 
-	test('user can add a custom mint URL via text input', async ({ merchantPage }) => {
+	test('user can add a valid custom mint URL via text input', async ({ merchantPage }) => {
 		test.setTimeout(60_000)
 
-		const customMintUrl = 'https://custom-test-mint.example.com'
+		const validMintUrl = 'https://testnut.cashu.space'
 
 		await merchantPage.goto('/auctions')
 		await merchantPage.waitForLoadState('networkidle')
@@ -58,15 +58,41 @@ test.describe('Auction Mint State', () => {
 
 		await merchantPage.getByRole('tab', { name: 'Auction' }).click()
 
-		await merchantPage.getByPlaceholder('Enter mint URL...').fill(customMintUrl)
+		await merchantPage.getByPlaceholder('Enter mint URL...').fill(validMintUrl)
 
 		await merchantPage.getByPlaceholder('Enter mint URL...').press('Enter')
 
-		await expect(merchantPage.locator(`span[title="${customMintUrl}"]`)).toBeVisible({ timeout: 10_000 })
+		await expect(merchantPage.locator(`span[title="${validMintUrl}"]`)).toBeVisible({ timeout: 15_000 })
 
 		const removeButtons = merchantPage.getByTitle('Remove mint')
 		const afterCount = await removeButtons.count()
 		expect(afterCount).toBeGreaterThanOrEqual(DEFAULT_TRUSTED_MINTS.length + 1)
+	})
+
+	test('user sees error when entering an invalid mint URL', async ({ merchantPage }) => {
+		test.setTimeout(60_000)
+
+		const invalidMintUrl = 'https://this-mint-does-not-exist.example.com'
+
+		await merchantPage.goto('/auctions')
+		await merchantPage.waitForLoadState('networkidle')
+
+		await merchantPage.getByRole('button', { name: /create.*auction/i }).click()
+
+		await merchantPage.getByRole('tab', { name: 'Auction' }).click()
+
+		const removeButtons = merchantPage.getByTitle('Remove mint')
+		await expect(removeButtons.first()).toBeVisible({ timeout: 10_000 })
+		const initialCount = await removeButtons.count()
+
+		await merchantPage.getByPlaceholder('Enter mint URL...').fill(invalidMintUrl)
+
+		await merchantPage.getByPlaceholder('Enter mint URL...').press('Enter')
+
+		await expect(merchantPage.getByText('Could not verify mint')).toBeVisible({ timeout: 15_000 })
+
+		const afterCount = await removeButtons.count()
+		expect(afterCount).toBe(initialCount)
 	})
 
 	test('user can re-add a previously removed mint via text input', async ({ merchantPage }) => {
@@ -93,7 +119,7 @@ test.describe('Auction Mint State', () => {
 		await merchantPage.getByPlaceholder('Enter mint URL...').fill(removedMintUrl)
 		await merchantPage.getByPlaceholder('Enter mint URL...').press('Enter')
 
-		await expect(selectedMintLocator(merchantPage, removedMintUrl)).toBeVisible({ timeout: 10_000 })
+		await expect(selectedMintLocator(merchantPage, removedMintUrl)).toBeVisible({ timeout: 15_000 })
 	})
 
 	test('empty text input does not add a mint', async ({ merchantPage }) => {
