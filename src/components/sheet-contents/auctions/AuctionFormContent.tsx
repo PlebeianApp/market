@@ -20,6 +20,7 @@ import { configStore } from '@/lib/stores/config'
 import { isNip60WalletDevModeEnabled, NIP60_DEV_TEST_MINTS } from '@/lib/stores/nip60'
 import { normalizeProductShippingSelections, type ProductShippingSelection } from '@/lib/utils/productShippingSelections'
 import { usePublishAuctionMutation, type AuctionFormData, type AuctionSpecEntry } from '@/publish/auctions'
+import { AuctionOracleSelector } from './AuctionOracleSelector'
 import { createShippingReference, getShippingInfo, isShippingDeleted, useShippingOptionsByPubkey } from '@/queries/shipping'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
@@ -51,6 +52,10 @@ const INITIAL_FORM: AuctionFormData = {
 	shippings: [],
 	trustedMints: [],
 	isNSFW: false,
+	// `AuctionOracleSelector` populates this once the CEP-15 directory
+	// query resolves; empty string means "fall back to app default" so
+	// nothing breaks if the seller submits before discovery completes.
+	pathIssuerPubkey: '',
 }
 
 function parseListInput(value: string): string[] {
@@ -690,10 +695,7 @@ function AuctionTabContent({
 				)}
 			</div>
 
-			<div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
-				<p className="font-medium text-zinc-950">Lock key scheme: hd_p2pk</p>
-				<p className="mt-1">The auction xpub is derived from your NIP-60 wallet automatically when you publish.</p>
-			</div>
+			<AuctionOracleSelector formData={formData} setFormData={setFormData} />
 		</div>
 	)
 }

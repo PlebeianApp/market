@@ -18,6 +18,11 @@ export const auctionKeys = {
 	byATag: (pubkey: string, dTag: string) => [...auctionKeys.all, 'byATag', pubkey, dTag] as const,
 } as const
 
+export const auctionOracleKeys = {
+	all: ['auctionOracles'] as const,
+	directory: () => [...auctionOracleKeys.all, 'directory'] as const,
+} as const
+
 export const orderKeys = {
 	all: ['orders'] as const,
 	details: (id: string) => [...orderKeys.all, id] as const,

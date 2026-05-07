@@ -1096,6 +1096,28 @@ V1 MUST enforce:
   the CVM server first, waits for the ready signal, then runs
   `scripts/seed.ts` — every seeded bid calls `request_path` against the
   live server so the registry on the dev relay has real entries.
+- **Seller-side oracle discovery** lives in
+  `src/queries/auctionOracles.ts` and the
+  `<AuctionOracleSelector>` component in
+  `src/components/sheet-contents/auctions/`. The query subscribes to
+  `kind 11317` (`TOOLS_LIST_KIND`) filtered on
+  `#k = io.contextvm/common-schema`, then accepts any author whose
+  `i` tags cover one of the four `english_auction_path_oracle_v1`
+  tool names (`request_path`, `submit_bid_token`, `request_settlement`,
+  `get_auction_state`). Authors are enriched with their kind-11316
+  server-info announcement (name / about / website / picture). The
+  app's configured default oracle is always included as a fallback so
+  the form has something to pre-select before discovery resolves —
+  it's marked `source: 'configured'` until a matching announcement
+  is observed, at which point the discovered record (with fresher
+  metadata) takes over.
+- The CVM server announces in every environment
+  (`isAnnouncedServer: true`). The SDK's
+  `getDiscoverabilityPublishRelayUrls` already detects when every
+  operational relay is local (`isLocalRelayUrl(...)`) and skips the
+  public-bootstrap relay list in that case, so dev announcements stay
+  on `ws://localhost:10547` and never leak into the public CEP-15
+  discovery feeds.
 
 ## 11.1 Platform / issuer responsibilities
 

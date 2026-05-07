@@ -51,6 +51,14 @@ export interface AuctionFormData {
 	shippings: ProductShippingSelectionInput[]
 	trustedMints: string[]
 	isNSFW: boolean
+	/**
+	 * Pubkey of the path-oracle the seller wants to use for this auction.
+	 * Empty string = "use the app's configured default" (resolved at
+	 * publish time via `getAuctionPathIssuerPubkeyOrThrow`). The form's
+	 * oracle picker writes a non-empty value once the seller has chosen a
+	 * specific announcement from the CEP-15 directory.
+	 */
+	pathIssuerPubkey: string
 }
 
 export interface AuctionBidFormData {
@@ -203,11 +211,28 @@ export interface AuctionSettlementFormData {
 	reason?: string
 }
 
-const getAuctionPathIssuerPubkeyOrThrow = (): string => {
-	// AUCTIONS.md §4.5 — the path issuer is the ContextVM server. Sellers
-	// bake the facilitator's pubkey into `path_issuer` at auction-create
-	// time. The bun server exposes its configured CVM server pubkey via
-	// `/api/config` so the auction creation form has a default to use.
+const HEX_PUBKEY_RE = /^[0-9a-f]{64}$/i
+
+/**
+ * Resolve the path-oracle pubkey to bake into a new auction's
+ * `path_issuer` tag. Selection priority:
+ *
+ *   1. The seller's explicit choice from the form's CEP-15 oracle
+ *      picker (`formData.pathIssuerPubkey`). Validated as 32-byte hex.
+ *   2. The app's configured default (`configStore.config.cvmServerPubkey`).
+ *
+ * Throws when neither is available — the form is supposed to have
+ * pre-selected the default before submit, so reaching this branch
+ * usually means the app's `/api/config` hasn't loaded yet.
+ */
+const getAuctionPathIssuerPubkeyOrThrow = (formPathIssuerPubkey?: string): string => {
+	const explicit = formPathIssuerPubkey?.trim()
+	if (explicit) {
+		if (!HEX_PUBKEY_RE.test(explicit)) {
+			throw new Error('Selected path-oracle pubkey is not a 32-byte hex Nostr pubkey.')
+		}
+		return explicit
+	}
 	const cvmPubkey = configStore.state.config.cvmServerPubkey?.trim()
 	if (!cvmPubkey) {
 		throw new Error('CVM server pubkey (path-issuer) is unavailable. Wait for app config to load and try again.')
@@ -250,7 +275,7 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 	// computation downstream is unambiguous and bidders never have to guess
 	// from a missing tag. With anti-sniping off, it equals end_at.
 	const keyScheme: AuctionP2pkKeyScheme = 'hd_p2pk'
-	const pathIssuerPubkey = getAuctionPathIssuerPubkeyOrThrow()
+	const pathIssuerPubkey = getAuctionPathIssuerPubkeyOrThrow(formData.pathIssuerPubkey)
 	const p2pkXpub = await nip60Actions.getAuctionP2pkXpub()
 
 	const imageTags = validated.imageUrls.map((url, index) => ['image', url, '800x600', String(index)] as NDKTag)

@@ -240,10 +240,15 @@ async function main() {
 	const serverTransport = new NostrServerTransport({
 		signer,
 		relayHandler: relayPool,
-		// Public-facing kind 11316-11320 announcements only on production
-		// (one server per environment per the CEP-15 plan — staging/dev
-		// announcements would otherwise pollute the public discovery feed).
-		isAnnouncedServer: isPublic,
+		// Always announce. The SDK's `getDiscoverabilityPublishRelayUrls`
+		// already detects when every operational relay is local
+		// (`isLocalRelayUrl(...)`) and skips the public-bootstrap relay
+		// list in that case — so dev announcements stay on
+		// `ws://localhost:10547` and never leak into public CEP-15
+		// discovery feeds. Announcing in dev is what lets the auction-
+		// creation form's oracle picker discover the local server via
+		// `kind 11317 + #k io.contextvm/common-schema`.
+		isAnnouncedServer: true,
 		// Force kind-1059 (persistent gift wraps) for both inbound and
 		// outbound. Why:
 		//   1. The SDK's default (`OPTIONAL`) auto-promotes any client that
