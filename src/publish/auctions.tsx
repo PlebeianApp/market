@@ -10,11 +10,7 @@ import { AUCTION_MIN_DURATION_SECONDS, validateAuctionPublishInput } from '@/lib
 import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { configStore } from '@/lib/stores/config'
 import { ndkActions } from '@/lib/stores/ndk'
-import {
-	PlebeianAuctionClient,
-	type RequestPathOutput,
-	type RequestSettlementOutput,
-} from '@/lib/ctxcn-clients/PlebeianAuctionClient'
+import { PlebeianAuctionClient, type RequestPathOutput, type RequestSettlementOutput } from '@/lib/ctxcn-clients/PlebeianAuctionClient'
 import { getAuctionSettlementGraceSeconds, nip60Actions, type AuctionP2pkKeyScheme } from '@/lib/stores/nip60'
 import type { ProductShippingSelectionInput } from '@/lib/utils/productShippingSelections'
 import { verifyAuctionPathGrant } from '@/lib/auctionP2pk'
@@ -151,12 +147,7 @@ export const requestAuctionPathGrant = async (params: {
 	})
 	let grant: RequestPathOutput
 	try {
-		grant = await client.RequestPath(
-			params.auctionEventId,
-			params.auctionCoordinates,
-			params.bidderRefundPubkey,
-			params.intendedAmount,
-		)
+		grant = await client.RequestPath(params.auctionEventId, params.auctionCoordinates, params.bidderRefundPubkey, params.intendedAmount)
 	} finally {
 		await client.disconnect()
 	}

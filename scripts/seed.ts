@@ -444,9 +444,7 @@ async function seedData() {
 
 	console.log('Creating auction bids (each calls request_path on the CVM server)...')
 	for (const auction of seededBidAuctionEvents) {
-		const eligibleBidders = userPubkeys
-			.map((pubkey, index) => ({ pubkey, index }))
-			.filter((user) => user.pubkey !== auction.sellerPubkey)
+		const eligibleBidders = userPubkeys.map((pubkey, index) => ({ pubkey, index })).filter((user) => user.pubkey !== auction.sellerPubkey)
 
 		const bidsCount = faker.number.int({ min: 1, max: 6 })
 		let currentBidAmount = auction.startingBid

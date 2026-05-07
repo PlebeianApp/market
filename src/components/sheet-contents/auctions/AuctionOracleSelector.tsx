@@ -39,10 +39,7 @@ const ALL_AUCTION_TOOLS = ['request_path', 'submit_bid_token', 'request_settleme
 const truncatePubkey = (pubkey: string): string => `${pubkey.slice(0, 8)}…${pubkey.slice(-4)}`
 
 const StatusDot = ({ announced }: { announced: boolean }) => (
-	<span
-		aria-hidden
-		className={`inline-block size-2 rounded-full shrink-0 ${announced ? 'bg-emerald-500' : 'bg-amber-500'}`}
-	/>
+	<span aria-hidden className={`inline-block size-2 rounded-full shrink-0 ${announced ? 'bg-emerald-500' : 'bg-amber-500'}`} />
 )
 
 const StatusBadge = ({ record }: { record: AuctionOracleRecord }) => {
@@ -117,9 +114,7 @@ export function AuctionOracleSelector({ formData, setFormData }: Props) {
 		if (records.length === 0) return
 		const preferred = defaultPubkey ? records.find((record) => record.pubkey === defaultPubkey) : undefined
 		const fallback = preferred ?? records[0]
-		setFormData((prev) =>
-			prev.pathIssuerPubkey === fallback.pubkey ? prev : { ...prev, pathIssuerPubkey: fallback.pubkey },
-		)
+		setFormData((prev) => (prev.pathIssuerPubkey === fallback.pubkey ? prev : { ...prev, pathIssuerPubkey: fallback.pubkey }))
 	}, [records, defaultPubkey, formData.pathIssuerPubkey, setFormData])
 
 	const selected = records.find((record) => record.pubkey === formData.pathIssuerPubkey)
@@ -137,9 +132,7 @@ export function AuctionOracleSelector({ formData, setFormData }: Props) {
 					</div>
 					{!isLoading && (
 						<span className="text-[11px] text-zinc-500 normal-case">
-							{announcedCount === 0
-								? 'No live announcements'
-								: `${announcedCount} live ${announcedCount === 1 ? 'oracle' : 'oracles'}`}
+							{announcedCount === 0 ? 'No live announcements' : `${announcedCount} live ${announcedCount === 1 ? 'oracle' : 'oracles'}`}
 						</span>
 					)}
 				</div>
@@ -173,9 +166,7 @@ export function AuctionOracleSelector({ formData, setFormData }: Props) {
 										<span className="font-medium text-zinc-950">{formatAuctionOracleLabel(record)}</span>
 										<span className="font-mono text-[11px] text-zinc-500">{truncatePubkey(record.pubkey)}</span>
 									</span>
-									{record.about && (
-										<span className="line-clamp-1 pl-4 text-[11px] text-zinc-500">{record.about}</span>
-									)}
+									{record.about && <span className="line-clamp-1 pl-4 text-[11px] text-zinc-500">{record.about}</span>}
 								</span>
 							</SelectItem>
 						))}
@@ -229,15 +220,17 @@ export function AuctionOracleSelector({ formData, setFormData }: Props) {
 
 							{selected.source === 'configured' && (
 								<p className="text-[11px] text-amber-700 normal-case">
-									This oracle is the app's configured default — no live CEP-15 announcement has been observed on the relay yet. The
-									pubkey is still routable; bids will simply hang if the server isn't actually online.
+									This oracle is the app's configured default — no live CEP-15 announcement has been observed on the relay yet. The pubkey
+									is still routable; bids will simply hang if the server isn't actually online.
 								</p>
 							)}
 						</div>
 					</div>
 				)}
 
-				<p className="text-[11px] text-zinc-500 normal-case">Lock key scheme: hd_p2pk — auction xpub is derived from your NIP-60 wallet at publish time.</p>
+				<p className="text-[11px] text-zinc-500 normal-case">
+					Lock key scheme: hd_p2pk — auction xpub is derived from your NIP-60 wallet at publish time.
+				</p>
 			</div>
 		</div>
 	)

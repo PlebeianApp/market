@@ -1,9 +1,5 @@
 {
-  "source": "src/lib/ctxcn-clients",
-  "relays": [
-    "ws://localhost:10547"
-  ],
-  "addedClients": [
-    "29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15"
-  ]
+	"source": "src/lib/ctxcn-clients",
+	"relays": ["ws://localhost:10547"],
+	"addedClients": ["29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15"]
 }

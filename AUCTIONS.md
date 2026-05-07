@@ -362,12 +362,12 @@ querying for the family's per-tool schema hash (kind 11317 with `#i`).
 
 ### Tool family
 
-| Tool name             | Direction        | Purpose                                                                                                                          |
-| --------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `request_path`        | Bidder → Issuer  | Request a fresh derivation path before locking. Bidder MUST verify the returned path against the auction `p2pk_xpub` (§5.6).     |
-| `submit_bid_token`    | Bidder → Issuer  | After publishing the kind-1023 commitment, deliver the locked Cashu token + lock parameters. Issuer advances registry → `locked`.|
-| `request_settlement`  | Seller → Issuer  | Ask for the winning chain's derivation paths + locked tokens. Reserve-not-met returns an empty `releases` array.                 |
-| `get_auction_state`   | Anyone → Issuer  | Read-only view of phase, current floor, top bid, and registry health. No caller identity required.                               |
+| Tool name            | Direction       | Purpose                                                                                                                           |
+| -------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `request_path`       | Bidder → Issuer | Request a fresh derivation path before locking. Bidder MUST verify the returned path against the auction `p2pk_xpub` (§5.6).      |
+| `submit_bid_token`   | Bidder → Issuer | After publishing the kind-1023 commitment, deliver the locked Cashu token + lock parameters. Issuer advances registry → `locked`. |
+| `request_settlement` | Seller → Issuer | Ask for the winning chain's derivation paths + locked tokens. Reserve-not-met returns an empty `releases` array.                  |
+| `get_auction_state`  | Anyone → Issuer | Read-only view of phase, current floor, top bid, and registry health. No caller identity required.                                |
 
 Tool input/output schemas live in `contextvm/auction-schemas.ts`. Each
 tool's CEP-15 `schemaHash` is computed by the SDK helper
@@ -758,9 +758,9 @@ Input:
 ```ts
 interface RequestPathInput {
 	auctionEventId: string
-	auctionCoordinates: string         // 30408:<seller-pubkey>:<d-tag>
-	bidderRefundPubkey: string         // compressed secp256k1
-	intendedAmount: number             // sats
+	auctionCoordinates: string // 30408:<seller-pubkey>:<d-tag>
+	bidderRefundPubkey: string // compressed secp256k1
+	intendedAmount: number // sats
 }
 ```
 
@@ -770,12 +770,12 @@ Output:
 interface RequestPathOutput {
 	grantId: string
 	derivationPath: string
-	childPubkey: string                 // compressed secp256k1
-	xpub: string                        // echo of auction p2pk_xpub
+	childPubkey: string // compressed secp256k1
+	xpub: string // echo of auction p2pk_xpub
 	pathIssuerPubkey: string
 	issuedAt: number
 	expiresAt: number
-	acceptedFloor: number               // floor enforced for this grant
+	acceptedFloor: number // floor enforced for this grant
 }
 ```
 
@@ -802,17 +802,17 @@ Input:
 interface SubmitBidTokenInput {
 	auctionEventId: string
 	auctionCoordinates: string
-	bidEventId: string                  // kind-1023 event id
-	grantId: string                     // pins this lock to a request_path grant
-	lockPubkey: string                  // MUST equal grant.childPubkey
-	refundPubkey: string                // compressed secp256k1
-	mintUrl: string                     // MUST be in the auction allowlist
+	bidEventId: string // kind-1023 event id
+	grantId: string // pins this lock to a request_path grant
+	lockPubkey: string // MUST equal grant.childPubkey
+	refundPubkey: string // compressed secp256k1
+	mintUrl: string // MUST be in the auction allowlist
 	amount: number
 	totalBidAmount: number
-	commitment: string                  // hex SHA-256 of `token`
+	commitment: string // hex SHA-256 of `token`
 	bidNonce: string
-	locktime: number                    // MUST equal max_end_at + settlement_grace
-	token: string                       // encoded Cashu token
+	locktime: number // MUST equal max_end_at + settlement_grace
+	token: string // encoded Cashu token
 }
 ```
 
@@ -822,7 +822,7 @@ Output:
 interface SubmitBidTokenOutput {
 	bidEventId: string
 	registryStatus: 'locked' | 'rejected'
-	rejectReason?: string               // present iff registryStatus === 'rejected'
+	rejectReason?: string // present iff registryStatus === 'rejected'
 }
 ```
 
@@ -860,8 +860,8 @@ interface RequestSettlementOutput {
 	closeAt: number
 	reserve: number
 	finalAmount: number
-	winningBidEventId: string            // empty when no winner
-	winnerPubkey: string                 // empty when no winner
+	winningBidEventId: string // empty when no winner
+	winnerPubkey: string // empty when no winner
 	releaseId?: string
 	releases: Array<{
 		bidEventId: string
@@ -874,7 +874,7 @@ interface RequestSettlementOutput {
 		commitment: string
 		locktime: number
 		refundPubkey: string
-		token: string                     // encoded Cashu token
+		token: string // encoded Cashu token
 	}>
 }
 ```
@@ -901,7 +901,7 @@ interface GetAuctionStateOutput {
 	endAt: number
 	effectiveEndAt: number
 	maxEndAt: number
-	currentFloor: number                 // min acceptable bid right now
+	currentFloor: number // min acceptable bid right now
 	topBidAmount: number
 	bidCount: number
 	pathsIssued: number
@@ -1116,11 +1116,11 @@ V1 MUST enforce:
   reach is stage-gated** in `contextvm/server.ts` via
   `getOperationalRelays()` + `getBootstrapRelayUrls()`. The matrix:
 
-  | Stage (`APP_STAGE`) | Operational relays | Announcement bootstrap relays |
-  | --- | --- | --- |
-  | `production` | `APP_RELAY_URL` (`wss://relay.plebeian.market`) + `wss://relay.contextvm.org` + `wss://relay2.contextvm.org` | SDK default (`damus.io` / `primal.net` / `nos.lol` / `snort.social` / `nostr.mom` / `nostr.oxtr.dev`) |
-  | `staging` (covers both `auctionsdev` + `staging`) | `APP_RELAY_URL` only (`wss://relay.staging.plebeian.market`). **No** public CEP-15 relays. Throws at startup if `APP_RELAY_URL` is unset. | `[]` — announcements confined to the staging relay |
-  | `development` | `APP_RELAY_URL` only (default `ws://localhost:10547`) | `[]` — confined to localhost (the SDK's local-relay auto-skip would also cover this; explicit `[]` defends against config drift) |
+  | Stage (`APP_STAGE`)                               | Operational relays                                                                                                                        | Announcement bootstrap relays                                                                                                    |
+  | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+  | `production`                                      | `APP_RELAY_URL` (`wss://relay.plebeian.market`) + `wss://relay.contextvm.org` + `wss://relay2.contextvm.org`                              | SDK default (`damus.io` / `primal.net` / `nos.lol` / `snort.social` / `nostr.mom` / `nostr.oxtr.dev`)                            |
+  | `staging` (covers both `auctionsdev` + `staging`) | `APP_RELAY_URL` only (`wss://relay.staging.plebeian.market`). **No** public CEP-15 relays. Throws at startup if `APP_RELAY_URL` is unset. | `[]` — announcements confined to the staging relay                                                                               |
+  | `development`                                     | `APP_RELAY_URL` only (default `ws://localhost:10547`)                                                                                     | `[]` — confined to localhost (the SDK's local-relay auto-skip would also cover this; explicit `[]` defends against config drift) |
 
   `bootstrapRelayUrls: []` (vs. `undefined`) sets the SDK's
   `hasExplicitBootstrapRelayUrls=true`, which disables the
@@ -1128,8 +1128,8 @@ V1 MUST enforce:
   `getDiscoverabilityPublishRelayUrls`. Without that, staging
   announcements would silently land on the public Nostr discovery
   relays even though the operational pool is staging-only.
-- Announcements (kinds 11316/11317/11318/11319/11320 + relay-list
-  10002) are published exactly once per server start — `start()` calls
+
+- Announcements (kinds 11316/11317/11318/11319/11320 + relay-list 10002) are published exactly once per server start — `start()` calls
   `publishPublicAnnouncements()` on connect, then never again unless
   the process restarts. The PM2 staging deploy restarts the
   `market-contextvm-staging` process on each release, so each deploy

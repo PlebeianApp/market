@@ -97,12 +97,7 @@ export class AuctionStateStore {
 	 *
 	 * Throws on rejection; the message is stable so handlers can surface it.
 	 */
-	enforcePathRequestRateLimit(params: {
-		issuerPubkey: string
-		auctionEventId: string
-		bidderPubkey: string
-		requestId: string
-	}): void {
+	enforcePathRequestRateLimit(params: { issuerPubkey: string; auctionEventId: string; bidderPubkey: string; requestId: string }): void {
 		const now = Math.floor(Date.now() / 1000)
 
 		// Periodic GC — cheap because of the seen_at / requested_at indexes.
@@ -110,20 +105,13 @@ export class AuctionStateStore {
 		this.dedupGcStmt.run(now - DEDUP_WINDOW_S)
 		this.rateGcStmt.run(now - RATE_WINDOW_S * 10)
 
-		const dedupHit = this.dedupExistsStmt.get(
-			params.issuerPubkey,
-			params.auctionEventId,
-			params.bidderPubkey,
-			params.requestId,
-		)
+		const dedupHit = this.dedupExistsStmt.get(params.issuerPubkey, params.auctionEventId, params.bidderPubkey, params.requestId)
 		if (dedupHit) {
 			throw new Error('Duplicate path request id (already processed)')
 		}
 
 		const cutoff = now - RATE_WINDOW_S
-		const row = this.rateCountStmt.get(params.issuerPubkey, params.auctionEventId, params.bidderPubkey, cutoff) as
-			| { n: number }
-			| undefined
+		const row = this.rateCountStmt.get(params.issuerPubkey, params.auctionEventId, params.bidderPubkey, cutoff) as { n: number } | undefined
 		if (row && row.n >= RATE_MAX_PER_WINDOW) {
 			throw new Error('Too many path requests for this auction; please slow down')
 		}

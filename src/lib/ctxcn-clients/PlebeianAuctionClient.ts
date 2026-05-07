@@ -175,7 +175,12 @@ export class PlebeianAuctionClient {
 				pending.reject(new Error(errMessage))
 				return
 			}
-			if (structured && typeof structured === 'object' && 'error' in structured && typeof (structured as { error?: unknown }).error === 'string') {
+			if (
+				structured &&
+				typeof structured === 'object' &&
+				'error' in structured &&
+				typeof (structured as { error?: unknown }).error === 'string'
+			) {
 				pending.reject(new Error((structured as { error: string }).error))
 				return
 			}
