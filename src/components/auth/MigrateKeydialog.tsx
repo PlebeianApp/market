@@ -18,7 +18,7 @@ export function MigratePrivateKeyDialog() {
 			return
 		}
 
-		if (password.length < 8) {
+		if (process.env.NODE_ENV === 'production' && password.length < 8) {
 			setError('Password must be at least 8 characters long')
 			return
 		}
