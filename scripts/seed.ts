@@ -10,7 +10,7 @@ import {
 	createFeaturedProductsEvent,
 	createFeaturedUsersEvent,
 } from '@/publish/featured'
-import { hexToBytes } from '@noble/hashes/utils'
+import { hexToBytes } from '@noble/hashes/utils.js'
 import { NDKPrivateKeySigner, NDKEvent } from '@nostr-dev-kit/ndk'
 import { config } from 'dotenv'
 import { getPublicKey } from 'nostr-tools/pure'
@@ -141,6 +141,26 @@ async function ensureAuctionWalletForSeller(signer: NDKPrivateKeySigner, pubkey:
 	}
 }
 
+/**
+ * Derive the running CVM server's pubkey from `CVM_SERVER_KEY`. Seeded
+ * auctions advertise this as their `path_issuer` so seeded bidders
+ * (and the dev UI) talk to the same server that's actually listening.
+ */
+function getSeedCvmServerPubkey(): string {
+	const explicit = process.env.CVM_SERVER_PUBKEY?.trim()
+	if (explicit) return explicit
+	const key = process.env.CVM_SERVER_KEY || '2300f5fff5642341946758cad8214f2c54f3c40fba5ba51b616452b197fd3e71'
+	if (!/^[0-9a-fA-F]{64}$/.test(key)) {
+		throw new Error('CVM_SERVER_KEY is not a valid 32-byte hex string')
+	}
+	return getPublicKey(new Uint8Array(Buffer.from(key, 'hex')))
+}
+
+function getSeedCvmRelays(): string[] {
+	const appRelay = process.env.APP_RELAY_URL || 'ws://localhost:10547'
+	return [appRelay]
+}
+
 async function seedData() {
 	const PRODUCTS_PER_USER = 10
 	const SHIPPING_OPTIONS_PER_USER = 4
@@ -148,6 +168,11 @@ async function seedData() {
 	const REVIEWS_PER_USER = 2
 	const AUCTIONS_PER_USER = 5
 	const ORDERS_PER_PAIR = 6 // Increased to demonstrate all order states
+
+	const CVM_SERVER_PUBKEY = getSeedCvmServerPubkey()
+	const CVM_RELAYS = getSeedCvmRelays()
+	console.log(`Seed will route auctions to CVM path_issuer = ${CVM_SERVER_PUBKEY}`)
+	console.log(`Seed will use CVM relays = ${CVM_RELAYS.join(', ')}`)
 
 	console.log('Connecting to Nostr...')
 	console.log(ndkActions.getNDK()?.explicitRelayUrls)
@@ -349,7 +374,7 @@ async function seedData() {
 			const settlementGraceSeconds = isQuickSettleAuction ? 30 : DEFAULT_SEED_SETTLEMENT_GRACE_SECONDS
 			const auctionData = generateAuctionData({
 				sellerPubkey: pubkey,
-				pathIssuerPubkey: APP_PUBKEY!,
+				pathIssuerPubkey: CVM_SERVER_PUBKEY,
 				availableShippingRefs: shippingsByUser[pubkey] || [],
 				trustedMints: trustedAuctionMints,
 				p2pkXpub: auctionWallet.p2pkXpub,
@@ -394,7 +419,14 @@ async function seedData() {
 				mint,
 				settlementGraceSeconds,
 			})
-			if (!isQuickSettleAuction) {
+			// Only seed bids on auctions that are still in the active
+			// window. `generateAuctionData` randomly marks ~20% of seeded
+			// auctions as 'ended' (endAt in the past); request_path on
+			// those would correctly reject ("auction has reached its hard
+			// bidding cutoff"). Excluding them upfront keeps the seed
+			// log clean.
+			const isLiveForBids = !isQuickSettleAuction && endAt > Math.floor(Date.now() / 1000) + 60
+			if (isLiveForBids) {
 				seededBidAuctionEvents.push({
 					eventId: auctionEvent.id,
 					auctionCoordinates: coords,
@@ -410,9 +442,11 @@ async function seedData() {
 		}
 	}
 
-	console.log('Creating auction bids...')
+	console.log('Creating auction bids (each calls request_path on the CVM server)...')
 	for (const auction of seededBidAuctionEvents) {
-		const eligibleBidders = userPubkeys.map((pubkey, index) => ({ pubkey, index })).filter((user) => user.pubkey !== auction.sellerPubkey)
+		const eligibleBidders = userPubkeys
+			.map((pubkey, index) => ({ pubkey, index }))
+			.filter((user) => user.pubkey !== auction.sellerPubkey)
 
 		const bidsCount = faker.number.int({ min: 1, max: 6 })
 		let currentBidAmount = auction.startingBid
@@ -433,6 +467,9 @@ async function seedData() {
 				auctionEventId: auction.eventId,
 				auctionCoordinates: auction.auctionCoordinates,
 				sellerPubkey: auction.sellerPubkey,
+				pathIssuerPubkey: CVM_SERVER_PUBKEY,
+				cvmRelays: CVM_RELAYS,
+				bidderPrivateKeyHex: devUsers[bidder.index].sk,
 				amount: currentBidAmount,
 				mint: auction.mint,
 				endAt: auction.endAt,

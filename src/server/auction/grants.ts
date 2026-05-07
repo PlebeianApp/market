@@ -7,49 +7,17 @@ import {
 	upsertAuctionPathEntry,
 	type AuctionPathRegistryEntry,
 } from '../../lib/auctionPathOracle'
-import { getAppPublicKeyOrThrow } from '../runtime'
+import type { AuctionContext } from './context'
 import { fetchAuctionPathRegistry, publishAuctionPathRegistry } from './registry'
 import { getAuctionPathIssuerFromEvent, loadAuctionEvent } from './loadAuction'
 
 /**
- * AUCTIONS.md §7.5.1: the issuer applies rate limits per bidder per
- * auction and deduplicates by `(auctionEventId, bidderPubkey, requestId)`.
- * We do this in-process — Bun runs a single issuer instance, and the
- * registry on Nostr is the durable record. Restarting the process resets
- * these caches; per-bidder rate limits are a courtesy, not a security
- * boundary (the durable spam control is the path-allocation cost).
+ * AUCTIONS.md §7.5.1 — the issuer rate-limits per bidder per auction
+ * and deduplicates by `(auctionEventId, bidderPubkey, requestId)`. The
+ * counters live in the `AuctionContext.stateStore` (SQLite) so they
+ * survive process restarts; a misbehaving bidder can't reset their
+ * window by triggering a reload.
  */
-const AUCTION_PATH_REQUEST_DEDUP_WINDOW_S = 30 * 60
-const AUCTION_PATH_REQUEST_RATE_LIMIT_WINDOW_S = 60
-const AUCTION_PATH_REQUEST_RATE_LIMIT_MAX = 10
-const auctionPathRequestSeen = new Map<string, number>()
-const auctionPathRequestRecentByBidder = new Map<string, number[]>()
-
-const enforceAuctionPathRequestRateLimit = (params: { auctionEventId: string; bidderPubkey: string; requestId: string }): void => {
-	const now = Math.floor(Date.now() / 1000)
-
-	// Periodic GC so the maps don't grow unbounded across long-lived runs.
-	if (auctionPathRequestSeen.size > 4096) {
-		for (const [key, ts] of Array.from(auctionPathRequestSeen.entries())) {
-			if (now - ts > AUCTION_PATH_REQUEST_DEDUP_WINDOW_S) auctionPathRequestSeen.delete(key)
-		}
-	}
-
-	const dedupKey = `${params.auctionEventId}:${params.bidderPubkey}:${params.requestId}`
-	if (auctionPathRequestSeen.has(dedupKey)) {
-		throw new Error('Duplicate path request id (already processed)')
-	}
-
-	const rateKey = `${params.auctionEventId}:${params.bidderPubkey}`
-	const cutoff = now - AUCTION_PATH_REQUEST_RATE_LIMIT_WINDOW_S
-	const recent = (auctionPathRequestRecentByBidder.get(rateKey) ?? []).filter((ts) => ts > cutoff)
-	if (recent.length >= AUCTION_PATH_REQUEST_RATE_LIMIT_MAX) {
-		throw new Error('Too many path requests for this auction; please slow down')
-	}
-	recent.push(now)
-	auctionPathRequestRecentByBidder.set(rateKey, recent)
-	auctionPathRequestSeen.set(dedupKey, now)
-}
 
 const NOSTR_PUBKEY_HEX_RE = /^[0-9a-f]{64}$/i
 const COMPRESSED_SECP256K1_PUBKEY_HEX_RE = /^0[23][0-9a-f]{64}$/i
@@ -68,18 +36,20 @@ export interface AuctionPathGrant {
 	expiresAt: number
 }
 
-export async function buildAuctionPathGrant(params: {
-	requestId: string
-	auctionEventId: string
-	auctionCoordinates: string
-	bidderPubkey: string
-	bidderRefundPubkey: string
-}): Promise<AuctionPathGrant> {
-	// AUCTIONS.md §7.5.1 input validation. The HTTP endpoint already enforces
-	// NIP-98 caller identity == bidderPubkey, so by the time we get here we
-	// know who we're talking to — but we still validate the raw fields so
-	// downstream code (path-derivation, registry persistence) gets clean
-	// inputs only.
+export async function buildAuctionPathGrant(
+	ctx: AuctionContext,
+	params: {
+		requestId: string
+		auctionEventId: string
+		auctionCoordinates: string
+		bidderPubkey: string
+		bidderRefundPubkey: string
+	},
+): Promise<AuctionPathGrant> {
+	// AUCTIONS.md §7.5.1 input validation. The transport (HTTP NIP-98 or
+	// ContextVM kind-25910) authenticates the caller; we still validate
+	// raw fields so downstream code (path-derivation, registry persistence)
+	// gets clean inputs only.
 	if (!NOSTR_PUBKEY_HEX_RE.test(params.bidderPubkey)) {
 		throw new Error('bidderPubkey must be a 32-byte hex Nostr pubkey')
 	}
@@ -87,16 +57,16 @@ export async function buildAuctionPathGrant(params: {
 		throw new Error('bidderRefundPubkey must be a compressed secp256k1 pubkey (33 bytes hex, 02/03 prefix)')
 	}
 
-	enforceAuctionPathRequestRateLimit({
+	ctx.stateStore.enforcePathRequestRateLimit({
+		issuerPubkey: ctx.issuerPubkey,
 		auctionEventId: params.auctionEventId,
 		bidderPubkey: params.bidderPubkey,
 		requestId: params.requestId,
 	})
 
-	const appPubkey = getAppPublicKeyOrThrow()
-	const auctionEvent = await loadAuctionEvent(params.auctionEventId)
+	const auctionEvent = await loadAuctionEvent(ctx, params.auctionEventId)
 	const issuerPubkey = getAuctionPathIssuerFromEvent(auctionEvent)
-	if (issuerPubkey !== appPubkey) {
+	if (issuerPubkey !== ctx.issuerPubkey) {
 		throw new Error('Auction is not configured for this path issuer')
 	}
 
@@ -120,7 +90,7 @@ export async function buildAuctionPathGrant(params: {
 		throw new Error('Auction has reached its hard bidding cutoff')
 	}
 
-	const registry = (await fetchAuctionPathRegistry(params.auctionEventId)) ?? {
+	const registry = (await fetchAuctionPathRegistry(ctx, params.auctionEventId)) ?? {
 		type: AUCTION_PATH_REGISTRY_SCHEMA,
 		auctionEventId: params.auctionEventId,
 		auctionCoordinates: params.auctionCoordinates,
@@ -154,7 +124,7 @@ export async function buildAuctionPathGrant(params: {
 		xpub,
 		entries: upsertAuctionPathEntry(registry.entries, newEntry),
 	})
-	await publishAuctionPathRegistry(updatedRegistry)
+	await publishAuctionPathRegistry(ctx, updatedRegistry)
 
 	const issuedAt = allocated.grantedAt
 	const expiresAt = issuedAt + AUCTION_PATH_GRANT_DEFAULT_TTL_SECONDS

@@ -1,13 +1,32 @@
-import type { NDKTag } from '@nostr-dev-kit/ndk'
+/**
+ * Auction transfer schemas.
+ *
+ * Historically this module defined a kind-14 NIP-44 DM topic family for
+ * the path-oracle protocol (`auction_path_request_v1`, `auction_path_grant_v1`,
+ * `auction_path_release_v1`, `auction_bid_token_v1`, `auction_refund_v1`).
+ * The path-oracle has since moved to ContextVM `tools/call` over Nostr per
+ * AUCTIONS.md §4.5 / §7.5; the DM topics are no longer the wire format.
+ *
+ * What remains here:
+ *   - `AuctionBidTokenEnvelope` is the canonical shape of the locked-token
+ *     payload the bidder hands to the issuer. It used to ride a kind-14
+ *     DM; it now rides as the `submit_bid_token` tool's input fields.
+ *     The shape is reused by the issuer's inline validator so the
+ *     existing helpers (commitment SHA-256 etc.) keep working.
+ *   - `AuctionPathGrantEnvelope` is the canonical shape of a grant
+ *     response, kept for the §5.6 bidder-side verifier
+ *     (`verifyAuctionPathGrantEnvelope` in `auctionPathOracle.ts`) and
+ *     its test. The actual transport is now MCP — see
+ *     `src/lib/ctxcn-clients/PlebeianServerClient.ts` (generated via
+ *     `bunx ctxcn add <facilitator-pubkey>`).
+ *
+ * Removed: refund / path-request / path-release DM envelope shapes —
+ * losers self-refund at locktime under path-oracle, and the request/
+ * release exchanges are MCP `tools/call` invocations.
+ */
 
-export const AUCTION_TRANSFER_DM_KIND = 14
 export const AUCTION_BID_TOKEN_TOPIC = 'auction_bid_token_v1'
-export const AUCTION_REFUND_TOPIC = 'auction_refund_v1'
-export const AUCTION_PATH_REQUEST_TOPIC = 'auction_path_request_v1'
 export const AUCTION_PATH_GRANT_TOPIC = 'auction_path_grant_v1'
-export const AUCTION_PATH_RELEASE_TOPIC = 'auction_path_release_v1'
-export const AUCTION_BID_ENVELOPE_MARKER = 'bid'
-export const AUCTION_REFUND_SOURCE_MARKER = 'refund_source'
 
 export interface AuctionBidTokenEnvelope {
 	type: typeof AUCTION_BID_TOKEN_TOPIC
@@ -30,34 +49,6 @@ export interface AuctionBidTokenEnvelope {
 	createdAt: number
 }
 
-export interface AuctionRefundTransfer {
-	mintUrl: string
-	amount: number
-	token: string
-}
-
-export interface AuctionRefundEnvelope {
-	type: typeof AUCTION_REFUND_TOPIC
-	auctionEventId: string
-	auctionCoordinates?: string
-	settlementEventId?: string
-	senderPubkey: string
-	recipientPubkey: string
-	sourceBidEventIds: string[]
-	refunds: AuctionRefundTransfer[]
-	createdAt: number
-}
-
-export interface AuctionPathRequestEnvelope {
-	type: typeof AUCTION_PATH_REQUEST_TOPIC
-	requestId: string
-	auctionEventId: string
-	auctionCoordinates: string
-	bidderPubkey: string
-	bidderRefundPubkey: string
-	createdAt: number
-}
-
 export interface AuctionPathGrantEnvelope {
 	type: typeof AUCTION_PATH_GRANT_TOPIC
 	grantId: string
@@ -73,28 +64,7 @@ export interface AuctionPathGrantEnvelope {
 	expiresAt: number
 }
 
-export interface AuctionPathReleaseEntry {
-	bidEventId: string
-	derivationPath: string
-	childPubkey: string
-}
-
-export interface AuctionPathReleaseEnvelope {
-	type: typeof AUCTION_PATH_RELEASE_TOPIC
-	releaseId: string
-	auctionEventId: string
-	auctionCoordinates: string
-	sellerPubkey: string
-	pathIssuerPubkey: string
-	winningBidEventId: string
-	winnerPubkey: string
-	releases: AuctionPathReleaseEntry[]
-	finalAmount: number
-	releasedAt: number
-}
-
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
-
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.length > 0
 
 export const parseAuctionBidTokenEnvelope = (value: string): AuctionBidTokenEnvelope | null => {
@@ -132,68 +102,6 @@ export const parseAuctionBidTokenEnvelope = (value: string): AuctionBidTokenEnve
 	}
 }
 
-export const parseAuctionRefundEnvelope = (value: string): AuctionRefundEnvelope | null => {
-	try {
-		const parsed = JSON.parse(value)
-		if (!isRecord(parsed) || parsed.type !== AUCTION_REFUND_TOPIC) return null
-		if (!isNonEmptyString(parsed.auctionEventId) || !isNonEmptyString(parsed.recipientPubkey)) return null
-		const senderPubkey = isNonEmptyString(parsed.senderPubkey)
-			? parsed.senderPubkey
-			: isNonEmptyString((parsed as { sellerPubkey?: unknown }).sellerPubkey)
-				? (parsed as { sellerPubkey: string }).sellerPubkey
-				: null
-		if (!senderPubkey) return null
-		if (!Array.isArray(parsed.sourceBidEventIds) || !Array.isArray(parsed.refunds)) return null
-		const sourceBidEventIds = parsed.sourceBidEventIds.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0)
-		const refunds = parsed.refunds
-			.map((entry) => {
-				if (!isRecord(entry)) return null
-				if (typeof entry.mintUrl !== 'string' || typeof entry.token !== 'string' || typeof entry.amount !== 'number') return null
-				return {
-					mintUrl: entry.mintUrl,
-					token: entry.token,
-					amount: entry.amount,
-				}
-			})
-			.filter((entry): entry is AuctionRefundTransfer => !!entry)
-
-		return {
-			type: AUCTION_REFUND_TOPIC,
-			auctionEventId: parsed.auctionEventId,
-			auctionCoordinates: typeof parsed.auctionCoordinates === 'string' ? parsed.auctionCoordinates : undefined,
-			settlementEventId: typeof parsed.settlementEventId === 'string' ? parsed.settlementEventId : undefined,
-			senderPubkey,
-			recipientPubkey: parsed.recipientPubkey,
-			sourceBidEventIds,
-			refunds,
-			createdAt: typeof parsed.createdAt === 'number' ? parsed.createdAt : Date.now(),
-		}
-	} catch {
-		return null
-	}
-}
-
-export const parseAuctionPathRequestEnvelope = (value: string): AuctionPathRequestEnvelope | null => {
-	try {
-		const parsed = JSON.parse(value)
-		if (!isRecord(parsed) || parsed.type !== AUCTION_PATH_REQUEST_TOPIC) return null
-		if (!isNonEmptyString(parsed.requestId) || !isNonEmptyString(parsed.auctionEventId)) return null
-		if (!isNonEmptyString(parsed.auctionCoordinates) || !isNonEmptyString(parsed.bidderPubkey)) return null
-		if (!isNonEmptyString(parsed.bidderRefundPubkey)) return null
-		return {
-			type: AUCTION_PATH_REQUEST_TOPIC,
-			requestId: parsed.requestId,
-			auctionEventId: parsed.auctionEventId,
-			auctionCoordinates: parsed.auctionCoordinates,
-			bidderPubkey: parsed.bidderPubkey,
-			bidderRefundPubkey: parsed.bidderRefundPubkey,
-			createdAt: typeof parsed.createdAt === 'number' ? parsed.createdAt : Date.now(),
-		}
-	} catch {
-		return null
-	}
-}
-
 export const parseAuctionPathGrantEnvelope = (value: string): AuctionPathGrantEnvelope | null => {
 	try {
 		const parsed = JSON.parse(value)
@@ -221,48 +129,3 @@ export const parseAuctionPathGrantEnvelope = (value: string): AuctionPathGrantEn
 		return null
 	}
 }
-
-export const parseAuctionPathReleaseEnvelope = (value: string): AuctionPathReleaseEnvelope | null => {
-	try {
-		const parsed = JSON.parse(value)
-		if (!isRecord(parsed) || parsed.type !== AUCTION_PATH_RELEASE_TOPIC) return null
-		if (!isNonEmptyString(parsed.releaseId) || !isNonEmptyString(parsed.auctionEventId)) return null
-		if (!isNonEmptyString(parsed.auctionCoordinates) || !isNonEmptyString(parsed.sellerPubkey)) return null
-		if (!isNonEmptyString(parsed.pathIssuerPubkey) || !isNonEmptyString(parsed.winningBidEventId)) return null
-		if (!isNonEmptyString(parsed.winnerPubkey)) return null
-		if (!Array.isArray(parsed.releases)) return null
-		const releases = parsed.releases
-			.map((entry) => {
-				if (!isRecord(entry)) return null
-				if (!isNonEmptyString(entry.bidEventId) || !isNonEmptyString(entry.derivationPath) || !isNonEmptyString(entry.childPubkey)) {
-					return null
-				}
-				return {
-					bidEventId: entry.bidEventId,
-					derivationPath: entry.derivationPath,
-					childPubkey: entry.childPubkey,
-				}
-			})
-			.filter((entry): entry is AuctionPathReleaseEntry => !!entry)
-		if (!releases.length) return null
-		if (typeof parsed.finalAmount !== 'number') return null
-		return {
-			type: AUCTION_PATH_RELEASE_TOPIC,
-			releaseId: parsed.releaseId,
-			auctionEventId: parsed.auctionEventId,
-			auctionCoordinates: parsed.auctionCoordinates,
-			sellerPubkey: parsed.sellerPubkey,
-			pathIssuerPubkey: parsed.pathIssuerPubkey,
-			winningBidEventId: parsed.winningBidEventId,
-			winnerPubkey: parsed.winnerPubkey,
-			releases,
-			finalAmount: parsed.finalAmount,
-			releasedAt: typeof parsed.releasedAt === 'number' ? parsed.releasedAt : Date.now(),
-		}
-	} catch {
-		return null
-	}
-}
-
-export const getMarkedEventIds = (tags: NDKTag[], marker: string): string[] =>
-	tags.filter((tag) => tag[0] === 'e' && tag[1] && tag[3] === marker).map((tag) => tag[1])

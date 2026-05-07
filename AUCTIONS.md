@@ -351,20 +351,63 @@ interface AuctionPathRegistryEntry {
   registry. It is published to Nostr for issuer-side resilience (recovery
   across processes/instances) rather than for public consumption.
 
-## 4.5 DM envelopes (kind `14`, NIP-44)
+## 4.5 Issuer transport: ContextVM tools (CEP-15)
 
-The path-oracle introduces three new encrypted DM topics in addition to the
-existing bid-token/refund envelopes:
+All bidder ↔ issuer and seller ↔ issuer communication runs over
+**ContextVM / MCP-over-Nostr** — there is no privileged HTTP API and no
+custom NIP-44 DM topic family. The path issuer is published as a
+ContextVM server announcing the `english_auction_path_oracle_v1`
+**common-schema family** per CEP-15. Clients discover facilitators by
+querying for the family's per-tool schema hash (kind 11317 with `#i`).
 
-| Topic                     | Direction       | Purpose                                                   |
-| ------------------------- | --------------- | --------------------------------------------------------- |
-| `auction_path_request_v1` | Bidder → Issuer | Request a derivation path for an intended bid             |
-| `auction_path_grant_v1`   | Issuer → Bidder | Grant a derivation path + matching child pubkey           |
-| `auction_bid_token_v1`    | Bidder → Issuer | Deliver the locked Cashu token and lock parameters        |
-| `auction_path_release_v1` | Issuer → Seller | Release the derivation path for an authorised winning bid |
-| `auction_refund_v1`       | Issuer → Bidder | Deliver refund Cashu tokens to a non-winning bidder       |
+### Tool family
 
-See §7.5 for the full sequence.
+| Tool name             | Direction        | Purpose                                                                                                                          |
+| --------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `request_path`        | Bidder → Issuer  | Request a fresh derivation path before locking. Bidder MUST verify the returned path against the auction `p2pk_xpub` (§5.6).     |
+| `submit_bid_token`    | Bidder → Issuer  | After publishing the kind-1023 commitment, deliver the locked Cashu token + lock parameters. Issuer advances registry → `locked`.|
+| `request_settlement`  | Seller → Issuer  | Ask for the winning chain's derivation paths + locked tokens. Reserve-not-met returns an empty `releases` array.                 |
+| `get_auction_state`   | Anyone → Issuer  | Read-only view of phase, current floor, top bid, and registry health. No caller identity required.                               |
+
+Tool input/output schemas live in `contextvm/auction-schemas.ts`. Each
+tool's CEP-15 `schemaHash` is computed by the SDK helper
+`computeCommonSchemaHash({ name, inputSchema, outputSchema })` after
+RFC 8785 (JCS) canonicalization with documentation fields stripped — see
+`@contextvm/sdk/core/utils/common-schema.ts`. The schema hash is **part
+of the family identity**: bumping any field of any input/output schema
+requires a `_v2` tool name.
+
+### Caller identity (§7.5.1)
+
+The MCP transport authenticates the caller. The wrapping kind-25910
+(or kind-1059 gift-wrap) is signed by the bidder/seller, and the SDK
+injects that pubkey into the inbound message's `_meta` field
+(`injectClientPubkey: true`). Tool handlers read `extra._meta.clientPubkey`
+to identify the caller — no `bidderPubkey` / `sellerPubkey` field is
+accepted in the input schema, which closes the §7.5.1 identity-proof
+requirement automatically.
+
+### Discovery (CEP-15)
+
+A facilitator announces its tools via kind 11317 with one `["i", "<schemaHash>", "<toolName>"]`
+tag per common-schema tool. A client discovers facilitators implementing
+this family by querying `{ kinds: [11317], "#i": ["<request_path schema hash>"] }`,
+deduplicating by event author, and presenting the resulting list to
+the seller during auction creation. The selected facilitator's pubkey
+is recorded in the auction event's `path_issuer` tag.
+
+### Forbidden / removed
+
+- The kind-14 `auction_path_request_v1` / `auction_path_grant_v1` /
+  `auction_path_release_v1` / `auction_refund_v1` DM topics MUST NOT be
+  used. Any envelope shapes for them in
+  `src/lib/auctionTransfers.ts` are vestigial and slated for removal.
+- The `/api/auctions/path-request` and `/api/auctions/settlement-plan`
+  HTTP endpoints are deprecated; ContextVM is the sole transport.
+- `auction_bid_token_v1` is retained only as a transitional shape for
+  in-flight migration; under the new transport the token is shipped
+  as `submit_bid_token` arguments and is never published as a kind-14
+  envelope.
 
 ---
 
@@ -502,15 +545,16 @@ Seller UX impact:
 
 ## 5.6 Bidder-side path verification (normative)
 
-On receipt of an `auction_path_grant_v1` envelope, the bidder MUST verify:
+On receipt of a successful `request_path` response, the bidder MUST
+verify:
 
-1. `envelope.auctionEventId` matches the auction root event id the bidder
-   requested.
-2. `envelope.pathIssuerPubkey` matches the auction's `path_issuer` (or
-   the resolved default).
-3. `envelope.xpub` matches the auction's `p2pk_xpub`.
-4. `HDKey.fromExtendedKey(envelope.xpub).derive(envelope.derivationPath).publicKey`
-   serialises to exactly `envelope.childPubkey` (compressed secp256k1
+1. The response was returned by the ContextVM server whose pubkey is the
+   auction's `path_issuer` (the `NostrClientTransport` was instantiated
+   with that `serverPubkey`, and the SDK's correlation store guarantees
+   the response originated from it).
+2. `response.xpub` matches the auction's `p2pk_xpub`.
+3. `HDKey.fromExtendedKey(response.xpub).derive(response.derivationPath).publicKey`
+   serialises to exactly `response.childPubkey` (compressed secp256k1
    66-hex form).
 
 If any check fails, the bidder MUST abort and MUST NOT lock funds.
@@ -623,24 +667,24 @@ Critical policy:
 ```mermaid
 sequenceDiagram
     participant B as Bidder
-    participant I as Path Issuer (App)
+    participant I as Path Issuer (ContextVM server)
     participant W as Bidder NIP-60 Wallet
     participant R as Relay
     participant S as Seller
 
-    B->>I: NIP-44 DM auction_path_request_v1 (auction id, bidder pubkey, refund pubkey)
-    I->>I: validate auction active, bidder not rate-limited, derive (path, childPubkey)
+    B->>I: tools/call request_path { auctionEventId, refundPubkey, intendedAmount }
+    I->>I: validate auction active, rate-limit, derive (path, childPubkey)
     I->>R: publish kind 30410 path registry (updated)
-    I-->>B: NIP-44 DM auction_path_grant_v1 (path, childPubkey, xpub, issuer)
+    I-->>B: { grantId, derivationPath, childPubkey, xpub, pathIssuerPubkey, expiresAt, acceptedFloor }
 
     B->>B: verify HDKey(xpub).derive(path) == childPubkey (§5.6)
     B->>W: Build 1-of-1 P2PK locked Cashu bid token (childPubkey + locktime + refund)
     W-->>B: encoded token + commitment material
     B->>R: Publish kind 1023 commitment event (child_pubkey, NO derivation_path)
-    B->>I: NIP-44 DM auction_bid_token_v1 (token + lock params)
-    I->>I: Verify signature, commitment, mint whitelist, amount, unspent proofs
+    B->>I: tools/call submit_bid_token { bidEventId, grantId, lockPubkey, token, lockParams... }
+    I->>I: Verify mint allowlist, locktime invariant, grant binding
     I->>R: publish kind 30410 path registry (entry status: locked, bidEventId bound)
-    I-->>B: Ack or reject (app feedback, optional)
+    I-->>B: { bidEventId, registryStatus: locked }
 ```
 
 Validation rules (MUST):
@@ -702,28 +746,46 @@ Operational notes:
 
 ## 7.5 Path Oracle Protocol (normative)
 
-This section defines the DM exchanges that constitute the path oracle. All
-envelopes are JSON-encoded and delivered over kind `14` NIP-44 DMs.
+This section defines the ContextVM tool surface that constitutes the
+path oracle. All requests are MCP `tools/call` invocations carried over
+ContextVM kind 25910 (or kind 1059 gift-wrap). The wrapping signer
+pubkey is the authoritative caller identity (see §4.5).
 
-### 7.5.1 `auction_path_request_v1` (Bidder → Issuer)
+### 7.5.1 `request_path` (Bidder → Issuer)
+
+Input:
 
 ```ts
-interface AuctionPathRequestEnvelope {
-	type: 'auction_path_request_v1'
-	requestId: string // client-chosen nonce
+interface RequestPathInput {
 	auctionEventId: string
-	auctionCoordinates: string
-	bidderPubkey: string
-	bidderRefundPubkey: string // compressed secp256k1
-	createdAt: number
+	auctionCoordinates: string         // 30408:<seller-pubkey>:<d-tag>
+	bidderRefundPubkey: string         // compressed secp256k1
+	intendedAmount: number             // sats
+}
+```
+
+Output:
+
+```ts
+interface RequestPathOutput {
+	grantId: string
+	derivationPath: string
+	childPubkey: string                 // compressed secp256k1
+	xpub: string                        // echo of auction p2pk_xpub
+	pathIssuerPubkey: string
+	issuedAt: number
+	expiresAt: number
+	acceptedFloor: number               // floor enforced for this grant
 }
 ```
 
 Issuer MUST:
 
 - Verify the auction exists and is in `Active` state.
-- Verify `bidderPubkey` matches the signer of the wrapping kind `14` DM.
-- Deduplicate by `(auctionEventId, bidderPubkey, requestId)`.
+- Use `extra._meta.clientPubkey` (SDK-injected) as the authenticated
+  bidder pubkey; reject if absent or malformed.
+- Deduplicate by `(auctionEventId, bidderPubkey, requestId)` — the
+  request id is generated server-side from a per-call nonce.
 - Apply rate limiting per bidder per auction.
 
 Issuer MAY:
@@ -732,62 +794,113 @@ Issuer MAY:
 - Reuse an existing un-locked grant if one exists for the same
   `(auction, bidder)` within a short reissue window.
 
-### 7.5.2 `auction_path_grant_v1` (Issuer → Bidder)
+### 7.5.2 `submit_bid_token` (Bidder → Issuer)
+
+Input:
 
 ```ts
-interface AuctionPathGrantEnvelope {
-	type: 'auction_path_grant_v1'
-	grantId: string
-	requestId: string
+interface SubmitBidTokenInput {
 	auctionEventId: string
 	auctionCoordinates: string
-	bidderPubkey: string
-	pathIssuerPubkey: string
-	xpub: string
-	derivationPath: string
-	childPubkey: string
-	issuedAt: number
-	expiresAt: number // after this, grant is stale
+	bidEventId: string                  // kind-1023 event id
+	grantId: string                     // pins this lock to a request_path grant
+	lockPubkey: string                  // MUST equal grant.childPubkey
+	refundPubkey: string                // compressed secp256k1
+	mintUrl: string                     // MUST be in the auction allowlist
+	amount: number
+	totalBidAmount: number
+	commitment: string                  // hex SHA-256 of `token`
+	bidNonce: string
+	locktime: number                    // MUST equal max_end_at + settlement_grace
+	token: string                       // encoded Cashu token
 }
 ```
 
-Bidder MUST verify per §5.6 before locking. The grant is single-use; once
-the matching `auction_bid_token_v1` is received by the issuer, the grant
-is considered consumed.
-
-### 7.5.3 `auction_path_release_v1` (Issuer → Seller)
+Output:
 
 ```ts
-interface AuctionPathReleaseEnvelope {
-	type: 'auction_path_release_v1'
-	releaseId: string
+interface SubmitBidTokenOutput {
+	bidEventId: string
+	registryStatus: 'locked' | 'rejected'
+	rejectReason?: string               // present iff registryStatus === 'rejected'
+}
+```
+
+Bidder MUST verify the `request_path` response per §5.6 before calling
+`submit_bid_token`. The grant is single-use; once the matching
+`submit_bid_token` succeeds, the registry entry advances to `locked`
+and further submissions for the same grant are idempotent.
+
+### 7.5.3 `request_settlement` (Seller → Issuer)
+
+Input:
+
+```ts
+interface RequestSettlementInput {
 	auctionEventId: string
-	auctionCoordinates: string
-	sellerPubkey: string
-	winningBidEventId: string
-	winnerPubkey: string
+	auctionCoordinates?: string
+}
+```
+
+Output:
+
+```ts
+interface RequestSettlementOutput {
+	status: 'settled' | 'reserve_not_met' | 'cancelled'
+	closeAt: number
+	reserve: number
+	finalAmount: number
+	winningBidEventId: string            // empty when no winner
+	winnerPubkey: string                 // empty when no winner
+	releaseId?: string
 	releases: Array<{
 		bidEventId: string
 		derivationPath: string
 		childPubkey: string
+		bidderPubkey: string
+		mintUrl: string
+		amount: number
+		totalBidAmount: number
+		commitment: string
+		locktime: number
+		refundPubkey: string
+		token: string                     // encoded Cashu token
 	}>
-	finalAmount: number
-	releasedAt: number
 }
 ```
 
-Issuer emits this only after confirming:
+Issuer responds successfully only after confirming:
 
+- The authenticated caller pubkey (`extra._meta.clientPubkey`) equals
+  the auction event's `pubkey`.
 - `effective_end_at` has passed.
-- The claimed winning bid chain is the highest valid chain by
-  §8 tie-break rules.
-- `finalAmount >= reserve`.
-- The seller requesting the release is the auction author.
+- No prior kind-1024 settlement exists for this auction.
 
-The seller derives child privkeys from its xpriv using the enclosed paths
-and redeems each locked proof (1-of-1 P2PK). Multiple paths may appear
-because the winning bid chain may span several rebid events (each a
-separate locked token).
+`releases` is empty for `reserve_not_met` outcomes (no winner). For
+`status === 'settled'`, the seller derives child privkeys from its xpriv
+using the enclosed paths and redeems each locked proof (1-of-1 P2PK).
+
+### 7.5.4 `get_auction_state` (Anyone → Issuer)
+
+Read-only. No caller-identity gate. Returns:
+
+```ts
+interface GetAuctionStateOutput {
+	phase: 'scheduled' | 'active' | 'closing' | 'ended'
+	startAt: number
+	endAt: number
+	effectiveEndAt: number
+	maxEndAt: number
+	currentFloor: number                 // min acceptable bid right now
+	topBidAmount: number
+	bidCount: number
+	pathsIssued: number
+	pathsLocked: number
+}
+```
+
+Useful for bidder UIs that want a live "min bid right now" reading and
+for facilitator dashboards showing registry health.
 
 ---
 
@@ -796,28 +909,28 @@ separate locked token).
 ```mermaid
 sequenceDiagram
     participant S as Seller
-    participant I as Path Issuer (App)
+    participant I as Path Issuer (ContextVM server)
     participant M as Cashu Mint
     participant W as Winner
     participant L as Losing Bidder
     participant R as Relay
 
     Note over I: Waits for effective_end_at
-    S->>I: Request settlement (via DM or client UI trigger)
-    I->>I: Compute winner; verify reserve & timing
+    S->>I: tools/call request_settlement { auctionEventId }
+    I->>I: Compute winner; verify reserve & timing; auth caller == auction author
     alt Reserve met & valid winner
-        I->>S: auction_path_release_v1 (winner path(s))
+        I-->>S: { status: 'settled', releases: [{ derivationPath, token, ... }, ...] }
         S->>M: Redeem winner locked token(s) with child privkey (1-of-1)
-        I->>L: auction_refund_v1 DMs with refund tokens
         S->>R: Publish kind 1024 settlement (status: settled)
+        Note over L,M: Losers self-refund via locktime path (see §8.1)
     else Reserve not met / no valid bids
-        I->>S: Refuse release, status=reserve_not_met
+        I-->>S: { status: 'reserve_not_met', releases: [] }
         S->>R: Publish kind 1024 settlement (status: reserve_not_met)
         Note over L,M: Losers self-refund via locktime path
     end
 
     R-->>W: Winner observes settlement
-    R-->>L: Refund observable
+    R-->>L: Settlement observable
 ```
 
 Tie-break rule (v1):
@@ -829,16 +942,22 @@ Tie-break rule (v1):
 ## 8.1 Settlement edge cases
 
 - `no_bids`: publish settlement with empty winner fields; no paths released.
-- `reserve_not_met`: publish settlement; all bids follow locktime refund
-  path (or issuer-sent `auction_refund_v1` DMs).
+- `reserve_not_met`: publish settlement; all bids follow locktime refund path.
 - `cancelled` before first valid bid: allowed.
 - `cancelled` after first valid bid: SHOULD be forbidden in v1 policy.
-- `seller_offline`: bidders recover via refund key after locktime. Issuer
-  MAY still publish `auction_refund_v1` envelopes pro-actively.
+- `seller_offline`: bidders recover via refund key after locktime — no
+  issuer involvement is required.
 - `issuer_offline`: no paths can be released → all bids unredeemable pre
   locktime → locktime refund for everyone. **Safe fail.**
 - `mint_outage`: settlement should pause/retry; after timeout, emit
   machine-readable failure reason.
+
+> **Refund delivery note**: under the path-oracle profile the issuer
+> holds no Cashu key material and cannot proactively spend a loser's
+> locked proofs. Losing bidders therefore self-refund at locktime via
+> the proof's refund-pubkey condition. A potential future
+> `claim_refund` tool — needing a different mechanism (e.g. issuer-
+> signed unlock paths for losers) — is out of scope for v1.
 
 ---
 
@@ -927,24 +1046,46 @@ V1 MUST enforce:
 
 - Integrate bid lock generation with existing NIP-60 wallet path; the
   `lockAuctionBidFunds` function accepts a pre-resolved `lockPubkey`
-  (child pubkey from an `AuctionPathGrantEnvelope`) rather than an xpub
-  - generated path.
+  (child pubkey from a `request_path` response) rather than an xpub-
+  generated path.
 - Add auction schema validators similar to existing `src/lib/schemas/*`.
 - Keep a local index keyed by `auction_root_event_id`.
 - Persist immutable root snapshot and enforce on updates.
 - Store bidder-side grant receipts in `localStorage` so the bidder can
   audit after the fact.
-- Path issuer runs a long-lived listener (a scripted process with the
-  issuer's Nostr key) that:
-  - subscribes to kind `14` DMs with the issuer as `p`;
-  - decrypts and dispatches by envelope `type`;
-  - writes registry updates to kind `30410`;
-  - emits `auction_path_grant_v1` / `auction_refund_v1` /
-    `auction_path_release_v1` envelopes in response to legitimate
-    requests.
-- Local caches (issuer-side and bidder-side) are secondary; Nostr is the
-  source of truth. The cache is rebuilt from kind `30410` events on
-  restart.
+- The path issuer runs as a **ContextVM server** (`contextvm/server.ts`)
+  that:
+  - announces itself via CEP-6 (kinds 11316–11320) with CEP-15 schema
+    hashes for the four `english_auction_path_oracle_v1` tools;
+  - registers the four MCP tools (`request_path`, `submit_bid_token`,
+    `request_settlement`, `get_auction_state`) on the same MCP server
+    process as any other ContextVM tools the deployment exposes;
+  - sets `injectClientPubkey: true` so each tool handler receives the
+    authenticated caller pubkey from the wrapping kind-25910 / 1059
+    signer;
+  - persists registry state as kind 30410 events (encrypted to the
+    issuer's own pubkey via NIP-44).
+- Tool handlers re-use the transport-agnostic domain modules in
+  `src/server/auction/{registry,loadAuction,grants,settlement}.ts`,
+  parameterized through an `AuctionContext` (NDK + signer + issuer
+  pubkey + state store).
+- **Issuer-private durable state** lives in a `bun:sqlite` database at
+  `AUCTION_STATE_PATH` (default: `./contextvm/data/auction-state.sqlite`),
+  encapsulated by `src/server/auction/state-store.ts`. Today it carries
+  the §7.5.1 rate-limit window and the path-request dedup table —
+  state that doesn't belong on a relay but must survive process
+  restarts so a misbehaving bidder can't reset their counters by
+  triggering a reload.
+- The kind `30410` registry on Nostr remains the canonical store for
+  granted paths. SQLite is for issuer-private observations. On restart,
+  the registry rebuilds from relay replay; the SQLite tables persist
+  unchanged.
+- Bidder-side typed clients are generated via [ctxcn](https://github.com/ContextVM/ctxcn)
+  pointed at the deployed facilitator's pubkey. Generated artefacts live
+  under `src/lib/ctxcn-clients/`. The dev seed (`bun dev:seed`) spawns
+  the CVM server first, waits for the ready signal, then runs
+  `scripts/seed.ts` — every seeded bid calls `request_path` against the
+  live server so the registry on the dev relay has real entries.
 
 ## 11.1 Platform / issuer responsibilities
 
@@ -993,6 +1134,9 @@ Unchanged from prior drafts:
 ## 13. Minimal Compliance Checklist (v1)
 
 - Supports kind `30408`, `1023`, `1024`, `30410` as defined.
+- Issuer is reachable as a ContextVM server announcing CEP-15 schema
+  hashes for `request_path`, `submit_bid_token`, `request_settlement`,
+  and `get_auction_state` (the `english_auction_path_oracle_v1` family).
 - Rejects bids without valid locked value.
 - Rejects bids whose `child_pubkey` was not granted by the auction's
   `path_issuer`.
@@ -1002,7 +1146,7 @@ Unchanged from prior drafts:
 - Pins immutable root auction event ID and immutable fields.
 - Deterministic close and tie-break behavior.
 - Bidder performs §5.6 child pubkey verification before locking.
-- Emits settlement result and refund status.
+- Emits settlement result.
 
 ## 14. Security model summary
 

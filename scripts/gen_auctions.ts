@@ -1,4 +1,5 @@
 import { PRODUCT_CATEGORIES } from '@/lib/constants'
+import { PlebeianServerClient } from '@/lib/ctxcn-clients/PlebeianServerClient'
 import { faker } from '@faker-js/faker'
 import NDK, { NDKEvent, type NDKPrivateKeySigner, type NDKTag } from '@nostr-dev-kit/ndk'
 
@@ -142,16 +143,19 @@ export async function createAuctionEvent(
 }
 
 /**
- * Seeds a kind-1023 bid event for UI / display testing.
+ * Seeds a kind-1023 bid event with a real path-oracle grant.
  *
- * NOTE: This bypasses the path-oracle bid flow — no real Cashu lock is
- * created at the mint, no path is requested from the issuer, and the
- * cryptographic fields below (`commitment`, `locktime`, `refund_pubkey`,
- * `child_pubkey`) are placeholder values. The event is **structurally**
- * spec-compliant (all required AUCTIONS.md §4.2 tags emitted) so list
- * rendering, price aggregation, and bid-count UI work correctly, but it
- * cannot be settled — the issuer registry has no entry for the placeholder
- * `child_pubkey`, so settlement would (correctly) skip these.
+ * Calls `request_path` on the running CVM server to allocate a derivation
+ * path + child pubkey from the auction's `p2pk_xpub`. The returned values
+ * are stamped onto the kind-1023 event so the registry has a real entry
+ * for this bidder and the seller could (in principle) settle.
+ *
+ * Cashu lock is intentionally placeholder — seeded bidders don't have
+ * pre-funded NIP-60 wallets, so the encoded `token` field would have no
+ * real proofs to back it. `commitment` is therefore a placeholder hash
+ * and `submit_bid_token` is NOT called. The registry entry stays at
+ * status `issued` (not `locked`), and settlement will correctly skip
+ * these bids — but every spec field is real except the token itself.
  */
 export async function createAuctionBidEvent(params: {
 	signer: NDKPrivateKeySigner
@@ -159,24 +163,58 @@ export async function createAuctionBidEvent(params: {
 	auctionEventId: string
 	auctionCoordinates: string
 	sellerPubkey: string
+	pathIssuerPubkey: string
+	cvmRelays: string[]
+	bidderPrivateKeyHex: string
 	amount: number
 	mint: string
 	endAt: number
 	settlementGraceSeconds: number
 	createdAt?: number
 }): Promise<boolean> {
-	const { signer, ndk, auctionEventId, auctionCoordinates, sellerPubkey, amount, mint, endAt, settlementGraceSeconds, createdAt } = params
-	const bidder = await signer.user()
+	const {
+		signer,
+		ndk,
+		auctionEventId,
+		auctionCoordinates,
+		sellerPubkey,
+		pathIssuerPubkey,
+		cvmRelays,
+		bidderPrivateKeyHex,
+		amount,
+		mint,
+		endAt,
+		settlementGraceSeconds,
+		createdAt,
+	} = params
 	const bidNonce = `seed-${faker.string.alphanumeric(16)}`
-	// Placeholder commitment — real bids hash a private payload that
-	// includes the encoded Cashu token; seeded bids have no token.
-	const placeholderCommitment = faker.string.hexadecimal({ length: 64, prefix: '', casing: 'lower' })
-	// Placeholder compressed secp256k1 pubkeys (66 hex chars, 02/03 prefix).
-	const placeholderChildPubkey = `02${faker.string.hexadecimal({ length: 64, prefix: '', casing: 'lower' })}`
 	const placeholderRefundPubkey = `02${faker.string.hexadecimal({ length: 64, prefix: '', casing: 'lower' })}`
-	// Locktime mirrors what publishAuctionBid would compute for a real bid
-	// against this auction: max_end_at + settlement_grace.
-	const placeholderLocktime = endAt + settlementGraceSeconds
+	const locktime = endAt + settlementGraceSeconds
+
+	// Real path issuance against the running CVM server — ensures the
+	// kind-30410 registry has a genuine entry for this bid and the
+	// child_pubkey on the event is derived from the auction's p2pk_xpub.
+	const auctionClient = new PlebeianServerClient({
+		privateKey: bidderPrivateKeyHex,
+		relays: cvmRelays,
+		serverPubkey: pathIssuerPubkey,
+	})
+	let grant
+	try {
+		grant = await auctionClient.RequestPath(auctionEventId, auctionCoordinates, placeholderRefundPubkey, amount)
+	} catch (error) {
+		console.error('[seed] request_path failed for bidder', error instanceof Error ? error.message : error)
+		await auctionClient.disconnect()
+		return false
+	} finally {
+		await auctionClient.disconnect()
+	}
+
+	// Placeholder commitment — real bids hash a private payload that
+	// includes the encoded Cashu token; seeded bidders have no funded
+	// NIP-60 wallet so we skip `submit_bid_token` entirely. The
+	// registry entry stays at status `issued`.
+	const placeholderCommitment = faker.string.hexadecimal({ length: 64, prefix: '', casing: 'lower' })
 
 	const event = new NDKEvent(ndk)
 	event.kind = 1023
@@ -199,16 +237,17 @@ export async function createAuctionBidEvent(params: {
 		['currency', 'SAT'],
 		['mint', mint],
 		['commitment', placeholderCommitment],
-		['locktime', String(placeholderLocktime)],
+		['locktime', String(locktime)],
 		['refund_pubkey', placeholderRefundPubkey],
 		['created_for_end_at', String(endAt)],
 		['bid_nonce', bidNonce],
 		['key_scheme', 'hd_p2pk'],
 		['status', 'locked'],
 		['schema', 'auction_bid_v1'],
-		['child_pubkey', placeholderChildPubkey],
+		['child_pubkey', grant.childPubkey],
+		['path_issuer', grant.pathIssuerPubkey],
+		['path_grant_id', grant.grantId],
 	]
-	void bidder
 	if (createdAt) {
 		event.created_at = createdAt
 	}

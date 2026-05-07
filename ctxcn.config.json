@@ -1,9 +1,9 @@
 {
-	"client": {
-		"source": "src/lib/ctxcn-client.ts"
-	},
-	"notes": [
-		"Checked in client artifact for browser-safe ContextVM usage.",
-		"The legacy wrapper has been removed; the checked-in client is the source of truth."
-	]
+  "source": "src/lib/ctxcn-clients",
+  "relays": [
+    "ws://localhost:10547"
+  ],
+  "addedClients": [
+    "29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15"
+  ]
 }

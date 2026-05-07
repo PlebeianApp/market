@@ -8,13 +8,6 @@ import {
 	type PendingTokenContext,
 } from '@/lib/wallet'
 import {
-	AUCTION_BID_ENVELOPE_MARKER,
-	AUCTION_BID_TOKEN_TOPIC,
-	AUCTION_REFUND_TOPIC,
-	AUCTION_TRANSFER_DM_KIND,
-	parseAuctionRefundEnvelope,
-} from '@/lib/auctionTransfers'
-import {
 	auctionP2pkPubkeysMatch,
 	deriveAuctionChildP2pkPubkeyFromXpub,
 	normalizeAuctionDerivationPath,
@@ -39,12 +32,10 @@ import { NDKCashuDeposit, NDKCashuWallet, NDKWalletStatus, type NDKWalletTransac
 import { HDKey } from '@scure/bip32'
 import { Store } from '@tanstack/store'
 import { ndkActions, ndkStore } from './ndk'
-import { signedFetch } from '@/lib/nip98Fetch'
 import { configStore } from './config'
 
 const DEFAULT_MINT_KEY = 'nip60_default_mint'
 const PENDING_TOKENS_KEY = 'nip60_pending_tokens'
-const AUCTION_TRANSFER_MESSAGE_IDS_KEY = 'nip60_auction_transfer_message_ids'
 
 // Re-export for backward compatibility
 export type PendingNip60Token = PendingToken
@@ -493,10 +484,6 @@ export const NIP60_WALLET_DEV_MODE = isNip60WalletDevModeEnabled()
 const loadPendingTokens = (): PendingToken[] => loadUserData<PendingToken[]>(PENDING_TOKENS_KEY, [])
 
 const savePendingTokens = (tokens: PendingToken[]): void => saveUserData(PENDING_TOKENS_KEY, tokens)
-
-const loadAuctionTransferMessageIds = (): string[] => loadUserData<string[]>(AUCTION_TRANSFER_MESSAGE_IDS_KEY, [])
-
-const saveAuctionTransferMessageIds = (messageIds: string[]): void => saveUserData(AUCTION_TRANSFER_MESSAGE_IDS_KEY, messageIds)
 
 const updatePendingTokenRecord = (tokenId: string, updater: (token: PendingNip60Token) => PendingNip60Token): PendingNip60Token | null => {
 	let updatedToken: PendingNip60Token | null = null
@@ -2009,49 +1996,47 @@ export const nip60Actions = {
 		const locktime = Math.max(selected.endAt + settlementGraceSeconds, now + 60)
 		const bidderRefundPubkey = await nip60Actions.getWalletCashuP2pk()
 
-		// Path-oracle flow: request a fresh derivation path from the issuer HTTP
-		// endpoint, verify it against the auction's p2pk_xpub (§5.6), then lock.
-		// AUCTIONS.md §7.5.1: the request MUST authenticate the bidder. Use
-		// signedFetch (NIP-98) so the issuer can verify the caller controls
-		// `bidderPubkey` before issuing a path.
+		// AUCTIONS.md §7.5 — path issuance + bid-token submission run as
+		// MCP tools/call over CEP-15. Same identity assertion as before
+		// (the wrapping kind-25910 / 1059 signature is the §7.5.1 caller
+		// proof) but no HTTP / NIP-98.
 		const pathRequestNdk = ndkActions.getNDK()
 		const pathRequestSigner = ndkActions.getSigner()
 		if (!pathRequestSigner) throw new Error('No signer available — cannot request a path grant')
 		if (!pathRequestNdk) throw new Error('NDK is not initialised')
-		const pathResponse = await signedFetch('/api/auctions/path-request', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				auctionEventId: selected.event.id,
-				auctionCoordinates,
-				bidderPubkey,
-				bidderRefundPubkey,
-			}),
+		// Browser-safe client (the SDK's pino logger crashes the browser
+		// bundle at module init). The Bun-side seed script uses the
+		// ctxcn-generated `PlebeianServerClient` instead.
+		const { PlebeianAuctionClient } = await import('@/lib/ctxcn-clients/PlebeianAuctionClient')
+		const auctionRelays = configStore.state.config.appRelay ? [configStore.state.config.appRelay] : []
+		if (!auctionRelays.length) throw new Error('App relay URL is unavailable for the auction client')
+		const auctionClient = new PlebeianAuctionClient({
 			signer: pathRequestSigner,
 			ndk: pathRequestNdk,
+			relays: auctionRelays,
+			serverPubkey: selected.pathIssuerPubkey,
 		})
-		if (!pathResponse.ok) {
-			const error = (await pathResponse.json().catch(() => null)) as { error?: string } | null
-			throw new Error(error?.error || `Failed to obtain auction path grant (${pathResponse.status})`)
-		}
-		const pathGrant = (await pathResponse.json()) as {
-			grantId: string
-			derivationPath: string
-			childPubkey: string
-			pathIssuerPubkey: string
-			xpub: string
-			issuedAt: number
-			expiresAt: number
+		let pathGrant
+		try {
+			pathGrant = await auctionClient.RequestPath(selected.event.id, auctionCoordinates, bidderRefundPubkey, bidAmount)
+		} catch (error) {
+			await auctionClient.disconnect()
+			throw error
 		}
 		const { verifyAuctionPathGrant } = await import('@/lib/auctionP2pk')
-		verifyAuctionPathGrant({
-			xpub: pathGrant.xpub,
-			derivationPath: pathGrant.derivationPath,
-			childPubkey: pathGrant.childPubkey,
-			expectedXpub: selected.p2pkXpub,
-			expectedIssuer: selected.pathIssuerPubkey,
-			grantIssuer: pathGrant.pathIssuerPubkey,
-		})
+		try {
+			verifyAuctionPathGrant({
+				xpub: pathGrant.xpub,
+				derivationPath: pathGrant.derivationPath,
+				childPubkey: pathGrant.childPubkey,
+				expectedXpub: selected.p2pkXpub,
+				expectedIssuer: selected.pathIssuerPubkey,
+				grantIssuer: pathGrant.pathIssuerPubkey,
+			})
+		} catch (error) {
+			await auctionClient.disconnect()
+			throw error
+		}
 
 		const lockedBid = await nip60Actions.lockAuctionBidFunds({
 			amount: deltaAmount,
@@ -2107,47 +2092,31 @@ export const nip60Actions = {
 		}
 
 		await bidEvent.sign(signer)
-		const bidEnvelopeContent = {
-			type: AUCTION_BID_TOKEN_TOPIC,
-			auctionEventId: selected.event.id,
-			auctionCoordinates,
-			bidEventId: bidEvent.id,
-			bidderPubkey,
-			sellerPubkey: selected.event.pubkey,
-			pathIssuerPubkey: pathGrant.pathIssuerPubkey,
-			refundPubkey: lockedBid.refundPubkey,
-			lockPubkey: lockedBid.lockPubkey,
-			locktime: lockedBid.locktime,
-			mintUrl: lockedBid.mintUrl,
-			amount: lockedBid.amount,
-			totalBidAmount: bidAmount,
-			commitment: lockedBid.commitment,
-			bidNonce,
-			grantId: lockedBid.grantId,
-			token: lockedBid.token,
-			createdAt: Date.now(),
-		}
-		const bidEnvelopeTags: NDKTag[] = [
-			['t', AUCTION_BID_TOKEN_TOPIC],
-			['e', selected.event.id],
-			['e', bidEvent.id, '', AUCTION_BID_ENVELOPE_MARKER],
-			['a', auctionCoordinates],
-			['mint', lockedBid.mintUrl],
-			['commitment', lockedBid.commitment],
-		]
-		// In path-oracle mode only the path issuer needs the private token envelope;
-		// the seller obtains the path (and therefore redemption ability) via the
-		// settlement release DM. We still DM the seller for visibility/audit.
-		for (const recipientPubkey of Array.from(new Set([pathGrant.pathIssuerPubkey, selected.event.pubkey]))) {
-			const bidEnvelopeEvent = new NDKEvent(ndk)
-			bidEnvelopeEvent.kind = AUCTION_TRANSFER_DM_KIND
-			bidEnvelopeEvent.content = JSON.stringify(bidEnvelopeContent)
-			bidEnvelopeEvent.tags = [['p', recipientPubkey], ...bidEnvelopeTags]
-			await bidEnvelopeEvent.encrypt(new NDKUser({ pubkey: recipientPubkey }), signer, 'nip44')
-			await bidEnvelopeEvent.sign(signer)
-			await ndkActions.publishEvent(bidEnvelopeEvent)
-		}
+		// Publish the kind-1023 commitment first so the issuer receives a
+		// matching event id from the relay before we call submit_bid_token.
 		await ndkActions.publishEvent(bidEvent)
+		try {
+			const submission = await auctionClient.SubmitBidToken(
+				selected.event.id,
+				auctionCoordinates,
+				bidEvent.id,
+				pathGrant.grantId,
+				lockedBid.lockPubkey,
+				lockedBid.refundPubkey,
+				lockedBid.mintUrl,
+				lockedBid.amount,
+				bidAmount,
+				lockedBid.commitment,
+				bidNonce,
+				lockedBid.locktime,
+				lockedBid.token,
+			)
+			if (submission.registryStatus !== 'locked') {
+				throw new Error(submission.rejectReason || 'Issuer rejected the bid token')
+			}
+		} finally {
+			await auctionClient.disconnect()
+		}
 		nip60Actions.updatePendingTokenContext(lockedBid.tokenId, {
 			kind: 'auction_bid',
 			auctionEventId: selected.event.id,
@@ -2215,57 +2184,15 @@ export const nip60Actions = {
 		}
 	},
 
+	/**
+	 * Auction transfer sweep — under the path-oracle profile this is just
+	 * the locktime-refund auto-sweep (AUCTIONS.md §8.1). The legacy
+	 * `auction_refund_v1` DM ingestion has been removed: refund delivery
+	 * isn't part of the v1 path-oracle protocol because the issuer holds
+	 * no Cashu key material and can't proactively spend a loser's locked
+	 * proofs (see spec §8.1). Losing bidders self-refund here.
+	 */
 	syncAuctionTransfers: async (): Promise<void> => {
-		const wallet = nip60Store.state.wallet
-		const ndk = ndkStore.state.ndk
-		const signer = ndk?.signer
-		if (!wallet || !ndk || !signer || nip60Store.state.status !== 'ready') return
-
-		const recipientPubkey = (await signer.user()).pubkey
-		const processedIds = new Set(loadAuctionTransferMessageIds())
-		const refundEvents = Array.from(
-			await ndkActions.fetchEventsWithTimeout(
-				{
-					kinds: [AUCTION_TRANSFER_DM_KIND],
-					'#p': [recipientPubkey],
-					'#t': [AUCTION_REFUND_TOPIC],
-					limit: 200,
-				},
-				{ timeoutMs: 4000 },
-			),
-		).sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
-
-		let changed = false
-
-		for (const event of refundEvents) {
-			if (processedIds.has(event.id)) continue
-
-			try {
-				const decryptable = new NDKEvent(ndk, event.rawEvent())
-				await decryptable.decrypt(new NDKUser({ pubkey: event.pubkey }), signer, 'nip44')
-				const envelope = parseAuctionRefundEnvelope(decryptable.content)
-				if (!envelope || envelope.recipientPubkey !== recipientPubkey) continue
-
-				for (const refund of envelope.refunds) {
-					await receiveTokenIntoWallet(wallet, refund.token)
-				}
-
-				markPendingTokensByBidEventIds(envelope.sourceBidEventIds, 'claimed')
-				processedIds.add(event.id)
-				changed = true
-			} catch (err) {
-				console.error('[nip60] Failed to sync auction refund message:', err)
-			}
-		}
-
-		if (changed) {
-			saveAuctionTransferMessageIds(Array.from(processedIds))
-			await nip60Actions.refresh()
-		}
-
-		// After ingesting any issuer-sent refund envelopes, sweep remaining
-		// pending bids whose locktime has expired. This is the "losers self-
-		// refund via locktime path" from AUCTIONS.md §8.1 — made automatic.
 		await nip60Actions.autoReclaimTimelockedBids()
 	},
 

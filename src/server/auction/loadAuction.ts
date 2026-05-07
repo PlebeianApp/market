@@ -1,6 +1,6 @@
 import { NDKEvent, type NDKKind } from '@nostr-dev-kit/ndk'
 import { AUCTION_SETTLEMENT_POLICY, getAuctionTagValue, resolveAuctionVersionSet } from '../../lib/auctionSettlement'
-import { ensureInvoiceNdkConnected } from '../ndk'
+import type { AuctionContext } from './context'
 
 /**
  * Load an auction event and resolve it through the immutable-fields filter.
@@ -16,9 +16,8 @@ import { ensureInvoiceNdkConnected } from '../ndk'
  * Callers MUST pass the root event id (per spec §4.1: "Bids MUST reference
  * `auction_root_event_id`"). Passing a non-root id is rejected.
  */
-export async function loadAuctionEvent(auctionEventId: string): Promise<NDKEvent> {
-	const ndk = await ensureInvoiceNdkConnected()
-	const initialEvent = await ndk.fetchEvent({
+export async function loadAuctionEvent(ctx: AuctionContext, auctionEventId: string): Promise<NDKEvent> {
+	const initialEvent = await ctx.ndk.fetchEvent({
 		kinds: [30408 as NDKKind],
 		ids: [auctionEventId],
 	})
@@ -29,7 +28,7 @@ export async function loadAuctionEvent(auctionEventId: string): Promise<NDKEvent
 	const dTag = getAuctionTagValue(initialEvent, 'd')
 	let candidateEvents: NDKEvent[] = [initialEvent]
 	if (dTag) {
-		const versionSet = await ndk.fetchEvents({
+		const versionSet = await ctx.ndk.fetchEvents({
 			kinds: [30408 as NDKKind],
 			authors: [initialEvent.pubkey],
 			'#d': [dTag],

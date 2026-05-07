@@ -18,30 +18,29 @@ import {
 import { auctionP2pkPubkeysMatch, deriveAuctionChildP2pkPubkeyFromXpub, normalizeAuctionP2pkPubkey } from '../../lib/auctionP2pk'
 import { AUCTION_BID_TOKEN_TOPIC, parseAuctionBidTokenEnvelope } from '../../lib/auctionTransfers'
 import { buildAuctionPathRegistry, findAuctionPathEntryByChildPubkey, type AuctionPathRegistryEntry } from '../../lib/auctionPathOracle'
-import { ensureInvoiceNdkConnected, getAppAuctionSigner } from '../ndk'
-import { getAppPublicKeyOrThrow } from '../runtime'
 import { sha256Hex } from '../util/sha256'
+import type { AuctionContext } from './context'
 import { fetchAuctionPathRegistry, publishAuctionPathRegistry } from './registry'
 import { getAuctionPathIssuerFromEvent, loadAuctionEvent } from './loadAuction'
 
-export async function buildAuctionSettlementPlan(params: {
-	auctionEventId: string
-	auctionCoordinates?: string
-	/**
-	 * Seller's best guess at the outcome. Optional — when omitted the backend
-	 * computes the status itself. When provided, backend will still reject a
-	 * mismatch so the seller never publishes the wrong outcome.
-	 */
-	status?: AuctionSettlementPublishStatus
-}): Promise<AuctionSettlementPlanResponse> {
-	const ndk = await ensureInvoiceNdkConnected()
-	const appPubkey = getAppPublicKeyOrThrow()
-	const appSigner = await getAppAuctionSigner()
+export async function buildAuctionSettlementPlan(
+	ctx: AuctionContext,
+	params: {
+		auctionEventId: string
+		auctionCoordinates?: string
+		/**
+		 * Seller's best guess at the outcome. Optional — when omitted the backend
+		 * computes the status itself. When provided, backend will still reject a
+		 * mismatch so the seller never publishes the wrong outcome.
+		 */
+		status?: AuctionSettlementPublishStatus
+	},
+): Promise<AuctionSettlementPlanResponse> {
 	const closeAt = Math.floor(Date.now() / 1000)
 
-	const auctionEvent = await loadAuctionEvent(params.auctionEventId)
+	const auctionEvent = await loadAuctionEvent(ctx, params.auctionEventId)
 	const issuerPubkey = getAuctionPathIssuerFromEvent(auctionEvent)
-	if (issuerPubkey !== appPubkey) {
+	if (issuerPubkey !== ctx.issuerPubkey) {
 		throw new Error('Auction is not configured for this path issuer')
 	}
 
@@ -50,7 +49,7 @@ export async function buildAuctionSettlementPlan(params: {
 		throw new Error('Auction is missing p2pk_xpub')
 	}
 
-	const existingSettlements = await ndk.fetchEvents({
+	const existingSettlements = await ctx.ndk.fetchEvents({
 		kinds: [AUCTION_SETTLEMENT_KIND],
 		'#e': [params.auctionEventId],
 		limit: 20,
@@ -82,7 +81,7 @@ export async function buildAuctionSettlementPlan(params: {
 				]
 			: []),
 	]
-	const bidEvents = Array.from(await ndk.fetchEvents(bidFilters.length === 1 ? bidFilters[0] : bidFilters))
+	const bidEvents = Array.from(await ctx.ndk.fetchEvents(bidFilters.length === 1 ? bidFilters[0] : bidFilters))
 	const effectiveEndAt = getAuctionEffectiveEndAt(auctionEvent, bidEvents)
 	const nominalEndAt = getAuctionEndAt(auctionEvent)
 	if (!nominalEndAt || closeAt < effectiveEndAt) {
@@ -92,7 +91,7 @@ export async function buildAuctionSettlementPlan(params: {
 	const envelopeFilters = [
 		{
 			kinds: [14],
-			'#p': [appPubkey],
+			'#p': [ctx.issuerPubkey],
 			'#t': [AUCTION_BID_TOKEN_TOPIC],
 			'#e': [params.auctionEventId],
 			limit: 500,
@@ -101,7 +100,7 @@ export async function buildAuctionSettlementPlan(params: {
 			? [
 					{
 						kinds: [14],
-						'#p': [appPubkey],
+						'#p': [ctx.issuerPubkey],
 						'#t': [AUCTION_BID_TOKEN_TOPIC],
 						'#a': [auctionCoordinates],
 						limit: 500,
@@ -109,16 +108,16 @@ export async function buildAuctionSettlementPlan(params: {
 				]
 			: []),
 	]
-	const envelopeEvents = Array.from(await ndk.fetchEvents(envelopeFilters.length === 1 ? envelopeFilters[0] : envelopeFilters))
+	const envelopeEvents = Array.from(await ctx.ndk.fetchEvents(envelopeFilters.length === 1 ? envelopeFilters[0] : envelopeFilters))
 	const envelopeByBidId = new Map<string, ReturnType<typeof parseAuctionBidTokenEnvelope>>()
 
 	for (const event of envelopeEvents) {
 		try {
-			const decryptable = new NDKEvent(ndk, event.rawEvent())
-			await decryptable.decrypt(new NDKUser({ pubkey: event.pubkey }), appSigner, 'nip44')
+			const decryptable = new NDKEvent(ctx.ndk, event.rawEvent())
+			await decryptable.decrypt(new NDKUser({ pubkey: event.pubkey }), ctx.signer, 'nip44')
 			const envelope = parseAuctionBidTokenEnvelope(decryptable.content)
 			if (!envelope || envelope.auctionEventId !== params.auctionEventId) continue
-			if (envelope.pathIssuerPubkey !== appPubkey) continue
+			if (envelope.pathIssuerPubkey !== ctx.issuerPubkey) continue
 			const tokenCommitment = await sha256Hex(envelope.token)
 			if (tokenCommitment !== envelope.commitment) continue
 			envelopeByBidId.set(envelope.bidEventId, envelope)
@@ -137,7 +136,7 @@ export async function buildAuctionSettlementPlan(params: {
 	const auctionSettlementGrace = getAuctionSettlementGrace(auctionEvent)
 	const expectedLocktime = auctionMaxEndAt && auctionSettlementGrace ? auctionMaxEndAt + auctionSettlementGrace : 0
 
-	const registry = await fetchAuctionPathRegistry(params.auctionEventId)
+	const registry = await fetchAuctionPathRegistry(ctx, params.auctionEventId)
 	const eligibleChains = buildActiveAuctionBidChains(getAuctionWindowValidBids(auctionEvent, bidEvents))
 		.filter((group) =>
 			group.chain.every((bid) => {
@@ -245,6 +244,7 @@ export async function buildAuctionSettlementPlan(params: {
 
 	if (registry && releasedEntries.length) {
 		await publishAuctionPathRegistry(
+			ctx,
 			buildAuctionPathRegistry({
 				auctionEventId: params.auctionEventId,
 				auctionCoordinates: auctionCoordinates || registry.auctionCoordinates,

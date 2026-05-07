@@ -1,5 +1,4 @@
 import { serve, type Server } from 'bun'
-import { auctionRoutes } from './http/auctions'
 import { configRoutes } from './http/config'
 import { nip05Routes } from './http/nip05'
 import { staticRoutes } from './http/static'
@@ -25,10 +24,15 @@ export interface BuildServerOptions {
 }
 
 export function buildServer({ indexHtml }: BuildServerOptions): Server<undefined> {
+	// Auction issuer endpoints used to live on this HTTP server
+	// (`/api/auctions/path-request`, `/api/auctions/settlement-plan`).
+	// They've moved to ContextVM `tools/call` over Nostr — see
+	// `contextvm/server.ts` and AUCTIONS.md §4.5 / §7.5. The bun web
+	// server only serves the SPA, the config endpoint, zap purchase, and
+	// static assets now.
 	const routes: BunRoutes = {
 		...configRoutes,
 		...zapPurchaseRoutes,
-		...auctionRoutes,
 		...nip05Routes,
 		...staticRoutes,
 		// Catch-all for the SPA — must be registered last so explicit

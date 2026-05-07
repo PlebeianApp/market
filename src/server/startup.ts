@@ -1,6 +1,5 @@
 import { getPublicKey } from 'nostr-tools/pure'
 import { fetchAppSettings } from '../lib/appSettings'
-import { startAuctionBidTokenListener } from './auction/bidTokenListener'
 import { getEventHandler } from './EventHandler'
 import { APP_PRIVATE_KEY, RELAY_URL, setAppPublicKey, setAppSettings, setEventHandlerReady } from './runtime'
 
@@ -32,16 +31,11 @@ export async function initializeAppSettings(): Promise<void> {
 		process.exit(1)
 	}
 
-	// AUCTIONS.md §11: the path-issuer is expected to run a long-lived
-	// listener for incoming kind-14 DMs. Failure here is non-fatal — the
-	// settlement-time replay still validates everything before releasing
-	// paths — but without it registry entries never advance to `locked`
-	// in real time.
-	try {
-		await startAuctionBidTokenListener()
-	} catch (error) {
-		console.error('[auction] failed to start bid-token listener:', error)
-	}
+	// Path-issuer functionality (kind-14 bid-token listener, registry
+	// writes, etc.) used to live in this process. It now lives in the
+	// ContextVM server (`contextvm/server.ts`) — see AUCTIONS.md §11.
+	// The bun web server is a SPA + config + nip05 host; auction-issuer
+	// concerns are entirely on the CVM side.
 }
 
 /**
