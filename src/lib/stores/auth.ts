@@ -7,6 +7,7 @@ import { hasAcceptedTerms, TERMS_ACCEPTED_KEY } from '@/components/dialogs/Terms
 import { uiActions } from './ui'
 import { getPublicKey, nip19 } from 'nostr-tools'
 import { decrypt, encrypt } from 'nostr-tools/nip49'
+import { hexToBytes } from 'nostr-tools/utils'
 
 export const NOSTR_CONNECT_KEY = 'nostr_connect_url'
 export const NOSTR_LOCAL_SIGNER_KEY = 'nostr_local_signer_key'
@@ -19,6 +20,7 @@ interface AuthState {
 	isAuthenticated: boolean
 	needsDecryptionPassword: boolean
 	isAuthenticating: boolean
+	needsMigration: boolean
 }
 
 const initialState: AuthState = {
@@ -26,6 +28,7 @@ const initialState: AuthState = {
 	isAuthenticated: false,
 	needsDecryptionPassword: false,
 	isAuthenticating: false,
+	needsMigration: false,
 }
 
 export const authStore = new Store<AuthState>(initialState)
@@ -37,16 +40,27 @@ export const authActions = {
 			if (autoLogin !== 'true') return
 
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
-			const privateKey = localStorage.getItem(NOSTR_LOCAL_SIGNER_KEY)
+			const privateKeySigner = localStorage.getItem(NOSTR_LOCAL_SIGNER_KEY)
 			const bunkerUrl = localStorage.getItem(NOSTR_CONNECT_KEY)
-			if (privateKey && bunkerUrl) {
-				await authActions.loginWithNip46(bunkerUrl, new NDKPrivateKeySigner(privateKey))
+
+			if (privateKeySigner && bunkerUrl) {
+				await authActions.loginWithNip46(bunkerUrl, new NDKPrivateKeySigner(privateKeySigner))
 				authActions.checkAndShowTermsDialog()
 				return
 			}
 
-			const encryptedPrivateKey = localStorage.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
-			if (encryptedPrivateKey) {
+			const privateKey = localStorage.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
+			console.log('private key:', privateKey)
+			if (privateKey) {
+				// Check for migration first
+				if (privateKey && authActions.getNeedsMigration()) {
+					authStore.setState((state) => ({
+						...state,
+						needsMigration: true,
+					}))
+					return
+				}
+
 				authStore.setState((state) => ({ ...state, needsDecryptionPassword: true }))
 				return
 			}
@@ -89,13 +103,12 @@ export const authActions = {
 		}
 	},
 
-	// New method to encrypt and save private key using nostr-tools
 	encryptAndSavePrivateKey: async (privateKey: string, password: string, logN: number = 18) => {
 		try {
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
 
 			// Normalize the private key
-			const normalizedKey = privateKey.startsWith('nsec1') ? privateKey : nip19.nsecEncode(new Uint8Array(32).fill(0)) // This would need proper conversion
+			const normalizedKey = privateKey.startsWith('nsec1') ? privateKey : nip19.nsecEncode(hexToBytes(privateKey))
 
 			const { data: secretKeyBytes } = nip19.decode(normalizedKey) as { data: Uint8Array }
 			const pubkey = getPublicKey(secretKeyBytes)
@@ -103,14 +116,8 @@ export const authActions = {
 			// Use nostr-tools encrypt function
 			const encryptedKey = encrypt(secretKeyBytes, password, logN, 1)
 
-			// Save encrypted key in format: "pubkey:ncryptsec..."
+			// Replace encrypted key with format: "pubkey:ncryptsec..."
 			localStorage.setItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY, `${pubkey}:${encryptedKey}`)
-
-			// Remove unencrypted key
-			localStorage.removeItem(NOSTR_LOCAL_SIGNER_KEY)
-
-			// Enable auto-login
-			localStorage.setItem(NOSTR_AUTO_LOGIN, 'true')
 
 			return true
 		} catch (error) {
@@ -273,6 +280,56 @@ export const authActions = {
 		} catch (error) {
 			console.error('Failed to check user products:', error)
 			return false
+		}
+	},
+
+	getNeedsMigration: (): boolean => {
+		const authData = localStorage.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
+
+		if (authData) {
+			const privateKey = authData.split(':').at(1)
+
+			// Validate if private key has been stored in raw format ("nsec...")
+			try {
+				if (privateKey?.startsWith('nsec') && nip19.decode(privateKey).type === 'nsec') {
+					return true
+				}
+			} catch {
+				// Silence decode errors since migration is not possible.
+			}
+		}
+
+		return false
+	},
+
+	migrateToEncryptedKey: async (password: string) => {
+		try {
+			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
+
+			// Get the unencrypted private key
+			const authData = localStorage.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
+			const privateKey = authData?.split(':').at(1)
+
+			if (!privateKey) {
+				throw new Error('No private key found to migrate')
+			}
+
+			authActions.encryptAndSavePrivateKey(privateKey, password)
+
+			// Update auth state
+			authStore.setState((state) => ({
+				...state,
+				needsMigration: false,
+				needsDecryptionPassword: false,
+			}))
+
+			// Continue with login using the unencrypted key (it will be wiped after)
+			await authActions.loginWithPrivateKey(privateKey)
+		} catch (error) {
+			console.error('Migration failed:', error)
+			throw error
+		} finally {
+			authStore.setState((state) => ({ ...state, isAuthenticating: false }))
 		}
 	},
 }
