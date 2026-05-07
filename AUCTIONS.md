@@ -1235,8 +1235,8 @@ carries commitment only; token is sent via encrypted NIP-17 payload.
 
 ```ts
 import { CashuMint, CashuWallet, getEncodedToken, type Proof } from '@cashu/cashu-ts'
-import { sha256 } from '@noble/hashes/sha256'
-import { bytesToHex } from '@noble/hashes/utils'
+import { sha256 } from '@noble/hashes/sha256.js'
+import { bytesToHex } from '@noble/hashes/utils.js'
 
 type CreateBidInput = {
 	mintUrl: string

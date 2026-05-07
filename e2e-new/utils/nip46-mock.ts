@@ -16,7 +16,7 @@
  */
 
 import { finalizeEvent, getPublicKey, type EventTemplate } from 'nostr-tools/pure'
-import { hexToBytes } from '@noble/hashes/utils'
+import { hexToBytes } from '@noble/hashes/utils.js'
 import { encrypt as nip04Encrypt, decrypt as nip04Decrypt } from 'nostr-tools/nip04'
 import { v2 as nip44 } from 'nostr-tools/nip44'
 import WebSocket from 'ws'

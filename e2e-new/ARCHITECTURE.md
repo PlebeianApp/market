@@ -126,7 +126,7 @@ All constants live in a single file imported by both the Playwright config and s
 
 ```ts
 import { getPublicKey } from 'nostr-tools/pure'
-import { hexToBytes } from '@noble/hashes/utils'
+import { hexToBytes } from '@noble/hashes/utils.js'
 
 export const TEST_APP_PRIVATE_KEY = 'e2e0000000000000000000000000000000000000000000000000000000000001'
 export const TEST_APP_PUBLIC_KEY = getPublicKey(hexToBytes(TEST_APP_PRIVATE_KEY))
