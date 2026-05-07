@@ -1,7 +1,5 @@
 import CartItem from '@/components/CartItem'
-import { ShippingSelector } from '@/components/ShippingSelector'
 import { Separator } from '@/components/ui/separator'
-import type { RichShippingInfo } from '@/lib/stores/cart'
 import { cartActions, cartStore } from '@/lib/stores/cart'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useStore } from '@tanstack/react-store'
@@ -22,19 +20,9 @@ export function CartSummary({
 	allowShippingChanges = true,
 	showExpandedDetails = false,
 }: CartSummaryProps) {
-	const {
-		cart,
-		sellerData,
-		productsBySeller,
-		totalInSats,
-		totalShippingInSats,
-		totalByCurrency,
-		shippingByCurrency,
-		sellerShippingOptions,
-	} = useStore(cartStore)
+	const { cart, sellerData, productsBySeller, totalInSats, totalShippingInSats, totalByCurrency, shippingByCurrency } = useStore(cartStore)
 
 	const [parent, enableAnimations] = useAutoAnimate()
-	const [selectedShippingByUser, setSelectedShippingByUser] = useState<Record<string, string>>({})
 	const [detailsExpanded, setDetailsExpanded] = useState(showExpandedDetails)
 
 	const totalItems = useMemo(() => {
@@ -57,16 +45,7 @@ export function CartSummary({
 		if (Object.keys(cart.products).length > 0) {
 			cartActions.groupProductsBySeller()
 			cartActions.updateSellerData()
-			cartActions.fetchAndSetSellerShippingOptions()
 		}
-
-		const initialSelected: Record<string, string> = {}
-		Object.values(cart.products).forEach((product) => {
-			if (product.sellerPubkey && product.shippingMethodId && !initialSelected[product.sellerPubkey]) {
-				initialSelected[product.sellerPubkey] = product.shippingMethodId
-			}
-		})
-		setSelectedShippingByUser(initialSelected)
 	}, [cart.products])
 
 	useEffect(() => {
@@ -83,21 +62,6 @@ export function CartSummary({
 		if (allowQuantityChanges) {
 			cartActions.handleProductUpdate('remove', productId)
 		}
-	}
-
-	const handleShippingSelect = async (sellerPubkey: string, shippingOption: RichShippingInfo) => {
-		if (!allowShippingChanges) return
-
-		setSelectedShippingByUser((prev) => ({
-			...prev,
-			[sellerPubkey]: shippingOption.id,
-		}))
-
-		const products = productsBySeller[sellerPubkey] || []
-		for (const product of products) {
-			await cartActions.setShippingMethod(product.id, shippingOption)
-		}
-		await cartActions.updateSellerData()
 	}
 
 	return (
@@ -123,8 +87,6 @@ export function CartSummary({
 						shippingSats: 0,
 					}
 
-					const optionsForThisSeller = sellerShippingOptions[sellerPubkey] || []
-
 					return (
 						<div key={sellerPubkey} className="p-4 rounded-lg border shadow-md bg-white">
 							<div className="mb-4">
@@ -140,22 +102,11 @@ export function CartSummary({
 											amount={product.amount}
 											onQuantityChange={allowQuantityChanges ? handleQuantityChange : () => {}}
 											onRemove={allowQuantityChanges ? handleRemoveProduct : () => {}}
-											hideShipping={true}
+											hideShipping={!allowShippingChanges}
 										/>
 									</div>
 								))}
 							</ul>
-
-							{allowShippingChanges && (
-								<div className="mt-4">
-									<ShippingSelector
-										options={optionsForThisSeller}
-										selectedId={selectedShippingByUser[sellerPubkey]}
-										onSelect={(option) => handleShippingSelect(sellerPubkey, option)}
-										className="w-full"
-									/>
-								</div>
-							)}
 
 							{Object.entries(data.currencyTotals).map(([currency, amount]) => (
 								<div key={`${sellerPubkey}-${currency}`} className="flex justify-between mt-4">

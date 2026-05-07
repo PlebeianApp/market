@@ -36,6 +36,17 @@ const getBestShippingOptions = (options: RichShippingInfo[], selectedId?: string
 	return limitedOptions
 }
 
+const hasAdditiveShippingMetadata = (
+	option: RichShippingInfo,
+): option is RichShippingInfo & { baseCost: number; extraCostAmount: number } => {
+	return Number.isFinite(option.baseCost) && Number.isFinite(option.extraCostAmount)
+}
+
+const formatShippingCost = (cost: number | undefined): string => {
+	if (!Number.isFinite(cost)) return '0'
+	return Number(cost).toLocaleString()
+}
+
 export function ShippingSelector({
 	productId,
 	options: propOptions,
@@ -141,7 +152,16 @@ export function ShippingSelector({
 						<SelectLabel>Shipping Options</SelectLabel>
 						{options.map((option: RichShippingInfo) => (
 							<SelectItem key={option.id} value={option.id} className="break-all">
-								{option.name} - {option.cost} {option.currency}
+								<div className="flex flex-col">
+									<span>
+										{option.name} - {formatShippingCost(option.cost)} {option.currency}
+									</span>
+									{hasAdditiveShippingMetadata(option) && option.extraCostAmount !== 0 && (
+										<span className="text-xs text-muted-foreground">
+											{formatShippingCost(option.baseCost)} base + {formatShippingCost(option.extraCostAmount)} product extra
+										</span>
+									)}
+								</div>
 							</SelectItem>
 						))}
 					</SelectGroup>

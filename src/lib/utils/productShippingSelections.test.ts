@@ -108,7 +108,9 @@ describe('product shipping selection normalization', () => {
 				cost: 12,
 				currency: 'USD',
 				shippingRef: '30406:merchant:standard',
+				baseCost: 10,
 				extraCost: '2',
+				extraCostAmount: 2,
 				isResolved: true,
 			},
 			{
@@ -117,9 +119,51 @@ describe('product shipping selection normalization', () => {
 				cost: 0,
 				currency: 'USD',
 				shippingRef: '30406:merchant:pickup',
+				baseCost: 0,
 				extraCost: '',
+				extraCostAmount: 0,
 				isResolved: true,
 			},
+		])
+	})
+
+	test('invalid or missing product extra cost resolves as zero while preserving final cost compatibility', () => {
+		const resolvedOptions = resolvePublishedProductShippingOptions({
+			publishedSelections: normalizePublishedProductShippingTags([
+				['shipping_option', '30406:merchant:standard', 'not-a-number'],
+				['shipping_option', '30406:merchant:pickup'],
+			]),
+			availableOptions: [
+				{
+					id: '30406:merchant:standard',
+					name: 'Worldwide Standard',
+					cost: 10,
+					currency: 'USD',
+				},
+				{
+					id: '30406:merchant:pickup',
+					name: 'Local Pickup',
+					cost: 0,
+					currency: 'USD',
+				},
+			],
+		})
+
+		expect(resolvedOptions).toEqual([
+			expect.objectContaining({
+				id: '30406:merchant:standard',
+				baseCost: 10,
+				extraCost: 'not-a-number',
+				extraCostAmount: 0,
+				cost: 10,
+			}),
+			expect.objectContaining({
+				id: '30406:merchant:pickup',
+				baseCost: 0,
+				extraCost: '',
+				extraCostAmount: 0,
+				cost: 0,
+			}),
 		])
 	})
 })

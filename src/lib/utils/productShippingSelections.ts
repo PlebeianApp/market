@@ -20,7 +20,9 @@ export type ResolvedProductShippingSelection = ProductShippingSelection & {
 
 export type ResolvedProductPageShippingOption = RichShippingInfo & {
 	shippingRef: string
+	baseCost: number
 	extraCost: string
+	extraCostAmount: number
 	isResolved: true
 }
 
@@ -102,7 +104,9 @@ export const resolvePublishedProductShippingOptions = ({
 				id: selection.option.id,
 				cost: baseCost + extraCost,
 				shippingRef: selection.shippingRef,
+				baseCost,
 				extraCost: selection.extraCost,
+				extraCostAmount: extraCost,
 				isResolved: true,
 			}
 		})
