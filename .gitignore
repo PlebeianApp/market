@@ -51,4 +51,3 @@ test-results
 __pycache__/
 
 .opencode/
-contextvm/
