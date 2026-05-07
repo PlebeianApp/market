@@ -45,6 +45,11 @@ jobs:
           mkdir -p deploy-package
           cp -r dist deploy-package/
           cp -r src deploy-package/
+          # `contextvm/` ships the path-oracle CVM server (`contextvm/server.ts`)
+          # which PM2 launches as `market-contextvm-auctionsdev`. Without
+          # this, the rollback log shows
+          # `Script not found: /home/.../market-auctionsdev/contextvm/server.ts`.
+          cp -r contextvm deploy-package/
           cp package.json bun.lock tsconfig.json deploy-package/
 
       - name: Upload artifact
