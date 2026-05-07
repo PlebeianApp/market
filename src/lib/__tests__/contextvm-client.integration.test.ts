@@ -2,7 +2,7 @@ import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { config } from 'dotenv'
 import { getPublicKey } from 'nostr-tools/pure'
 import { PlebianCurrencyClient } from '../ctxcn-client'
-import { getCurrencyServerRelays } from '@/lib/constants'
+import { getCurrencyServerRelays, PUBLIC_CVM_RELAYS } from '@/lib/constants'
 
 config({ path: ['.env.local', '.env'] })
 
@@ -10,7 +10,11 @@ const RELAY_URL = process.env.RELAY_URL || process.env.APP_RELAY_URL || 'ws://lo
 const SERVER_PRIVATE_KEY = process.env.CVM_SERVER_KEY || '2300f5fff5642341946758cad8214f2c54f3c40fba5ba51b616452b197fd3e71'
 const DERIVED_SERVER_PUBKEY = getPublicKey(new Uint8Array(Buffer.from(SERVER_PRIVATE_KEY, 'hex')))
 const SERVER_PUBKEY = process.env.CVM_SERVER_PUBKEY || DERIVED_SERVER_PUBKEY
-const RELAYS = Array.from(new Set([RELAY_URL, ...getCurrencyServerRelays()]))
+// Pass `'production'` so the test exercises the same relay-set the prod
+// browser would actually compose — public CVM relays alongside the local
+// app relay. Earlier this test relied on `process.env.NODE_ENV` leaking
+// into the helper; the helper now takes the stage as an argument.
+const RELAYS = Array.from(new Set([RELAY_URL, ...getCurrencyServerRelays('production')]))
 
 describe('PlebianCurrencyClient integration', () => {
 	let client: PlebianCurrencyClient | undefined
@@ -34,6 +38,12 @@ describe('PlebianCurrencyClient integration', () => {
 		expect(SERVER_PUBKEY).toBe(DERIVED_SERVER_PUBKEY)
 		expect(RELAYS).toContain('ws://localhost:10547')
 		expect(RELAYS.length).toBeGreaterThan(0)
+		// Production stage should also include the public CVM relays.
+		for (const publicRelay of PUBLIC_CVM_RELAYS) expect(RELAYS).toContain(publicRelay)
+		// Non-prod stages should NOT include them — verify the gate works.
+		expect(getCurrencyServerRelays('staging')).toEqual([])
+		expect(getCurrencyServerRelays('development')).toEqual([])
+		expect(getCurrencyServerRelays(undefined)).toEqual([])
 		expect(() => {
 			client = new PlebianCurrencyClient({
 				privateKey: crypto.getRandomValues(new Uint8Array(32)),

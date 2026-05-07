@@ -1138,6 +1138,37 @@ V1 MUST enforce:
   to a single live record per kind. There is no auto-deletion on
   shutdown — the SDK's `deleteAnnouncement(reason)` exists but is
   not wired to `close()`.
+- **Deploy gotcha:** `deploy-auctionsdev.yml` (triggered by
+  `auctions/**` pushes) only restarts the **web app** (`market-auctionsdev`),
+  not the CVM server. The staging CVM server (`market-contextvm-staging`)
+  is restarted by `deploy.yml`, which runs on `master` push after E2E
+  passes. So changes to `contextvm/server.ts` (e.g. announcement
+  gating, gift-wrap mode) only take effect on auctionsdev once
+  `master` ships. If you push to `auctions/*` and the auctionsdev UI
+  still shows "no live announcements", redeploy via
+  `gh workflow run deploy.yml` once your `auctions/*` branch has been
+  merged to `master`.
+
+### 11.0.1 Browser-side relay matrix
+
+The browser's relay choices follow the same stage gating as the CVM
+server. The build inlines `process.env.NODE_ENV='production'` for both
+staging and prod deploys, so we read the canonical stage from
+`/api/config` (`configStore.state.config.stage`) at runtime.
+
+| Stage         | Currency client (`getCurrencyClient` in `src/queries/external.tsx`)                                                                                          | Auction-oracle picker (`fetchAuctionOracleDirectory` in `src/queries/auctionOracles.ts`)  |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `production`  | App relay (`wss://relay.plebeian.market`) + `PUBLIC_CVM_RELAYS` (`relay.contextvm.org` / `relay2.contextvm.org`) — global discoverability of the BTC oracle. | App relay only (via `relayUrls` + `exclusiveRelay`). The prod CVM server announces there. |
+| `staging`     | App relay only (`wss://relay.staging.plebeian.market`). `getCurrencyServerRelays('staging') === []`.                                                         | App relay only.                                                                           |
+| `development` | App relay only (`ws://localhost:10547`). `getCurrencyServerRelays('development') === []`.                                                                    | App relay only.                                                                           |
+
+`fetchAuctionOracleDirectory` passes `exclusiveRelay: true` to NDK
+so the discovery query ignores any kind-11317 events arriving from
+relays that NDK happens to be connected to for general traffic
+(`DEFAULT_PUBLIC_RELAYS` like `damus.io` / `nos.lol` are in NDK's pool
+but never speak for auction oracles). Without this, a stray
+prod-CVM announcement on `damus.io` would show up in the staging
+picker.
 
 ## 11.1 Platform / issuer responsibilities
 

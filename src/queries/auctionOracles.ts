@@ -106,13 +106,30 @@ const readTag = (event: NDKEvent | undefined, tagName: string): string | undefin
  * common-schema discriminator), then kind 11316 for the matching
  * authors. Both are bounded by `DISCOVERY_FETCH_TIMEOUT_MS` so the form
  * never hangs the publish flow waiting on a missing relay.
+ *
+ * The query is **pinned to the app relay** via `relayUrls` +
+ * `exclusiveRelay: true`. NDK on staging/dev otherwise also subscribes
+ * to `DEFAULT_PUBLIC_RELAYS` (`damus.io`, `nos.lol`, etc.); we don't
+ * want a stray prod-CVM announcement on a public relay to leak into
+ * the staging picker. Production gets its own `wss://relay.plebeian.market`
+ * which is where the prod CVM server announces.
  */
 export const fetchAuctionOracleDirectory = async (defaultPubkey: string | undefined): Promise<AuctionOracleRecord[]> => {
 	const ndk = ndkActions.getNDK()
-	if (!ndk) {
-		// Without NDK we still surface the configured default so the form
-		// can submit. The selector UI shows it as 'configured'.
+	const appRelay = configStore.state.config.appRelay?.trim()
+	if (!ndk || !appRelay) {
+		// Without NDK / config we still surface the configured default
+		// so the form can submit. The selector UI shows it as
+		// 'configured'.
 		return defaultPubkey ? [buildConfiguredFallback(defaultPubkey)] : []
+	}
+
+	// `exclusiveRelay: true` makes NDK ignore events arriving from any
+	// other relay it happens to be connected to.
+	const discoveryOpts = {
+		relayUrls: [appRelay],
+		exclusiveRelay: true,
+		timeoutMs: DISCOVERY_FETCH_TIMEOUT_MS,
 	}
 
 	const toolsListFilter: NDKFilter = {
@@ -121,7 +138,7 @@ export const fetchAuctionOracleDirectory = async (defaultPubkey: string | undefi
 		limit: 200,
 	}
 
-	const toolsListEvents = Array.from(await ndkActions.fetchEventsWithTimeout(toolsListFilter, { timeoutMs: DISCOVERY_FETCH_TIMEOUT_MS }))
+	const toolsListEvents = Array.from(await ndkActions.fetchEventsWithTimeout(toolsListFilter, discoveryOpts))
 
 	// Group by author. Multiple kind-11317s per author are possible if the
 	// server has been re-announced; latest wins.
@@ -147,7 +164,10 @@ export const fetchAuctionOracleDirectory = async (defaultPubkey: string | undefi
 			limit: announcedPubkeys.length * 2,
 		}
 		const serverAnnouncementEvents = Array.from(
-			await ndkActions.fetchEventsWithTimeout(serverAnnouncementFilter, { timeoutMs: DISCOVERY_FETCH_TIMEOUT_MS }),
+			// Pin to the same app relay as the tools-list fetch — keeps
+			// auctionsdev/staging from picking up enrichment metadata
+			// from public Nostr relays.
+			await ndkActions.fetchEventsWithTimeout(serverAnnouncementFilter, discoveryOpts),
 		)
 		serverAnnouncementByPubkey = new Map<string, NDKEvent>()
 		for (const event of serverAnnouncementEvents) {

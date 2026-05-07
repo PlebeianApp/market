@@ -102,18 +102,34 @@ export const CURRENCIES = [
 	'NGN', // Nigerian Naira
 ] as const
 
-const CURRENCY_CVM_RELAYS = ['wss://relay.contextvm.org', 'wss://relay2.contextvm.org']
+/**
+ * Public CEP-15 relays for the currency / auction CVM family. ONLY the
+ * production CVM server publishes here; staging/dev publish only to
+ * their own app relay.
+ */
+export const PUBLIC_CVM_RELAYS = ['wss://relay.contextvm.org', 'wss://relay2.contextvm.org'] as const
 
-export function getCurrencyServerRelays(): string[] {
-	const env = process.env.NODE_ENV || 'development'
-	switch (env) {
-		case 'production':
-			return [...CURRENCY_CVM_RELAYS]
-		case 'staging':
-			return [...CURRENCY_CVM_RELAYS]
-		default:
-			return ['ws://localhost:10547', ...CURRENCY_CVM_RELAYS]
-	}
+/**
+ * Stage-gated public CVM relay list for the BROWSER currency client.
+ *
+ * The bun build inlines `process.env.NODE_ENV='production'` into the
+ * browser bundle for *all* deploys (staging and prod alike), so we
+ * can't distinguish them at build time. The runtime `/api/config`
+ * carries the canonical stage — the caller is expected to pass it in
+ * (typically read from `configStore.state.config.stage`).
+ *
+ *   production → `PUBLIC_CVM_RELAYS`. The prod CVM server announces
+ *                there too, so global clients can hit our oracle
+ *                without needing the app relay first.
+ *   staging    → []. The staging CVM server announces only on
+ *                `wss://relay.staging.plebeian.market`; the app relay
+ *                is added separately by `getCurrencyClient`.
+ *   development→ []. Local CVM server lives on the app relay
+ *                (`ws://localhost:10547`).
+ */
+export function getCurrencyServerRelays(stage?: Stage): string[] {
+	if (stage === 'production') return [...PUBLIC_CVM_RELAYS]
+	return []
 }
 
 export const CVM_SERVER_PUBKEY = process.env.CVM_SERVER_PUBKEY || '29bd6461f780c07b29c89b4df8017db90973d5608a3cd811a0522b15c1064f15'

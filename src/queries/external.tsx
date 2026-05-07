@@ -28,7 +28,16 @@ async function getCurrencyClient() {
 			const privateKey = crypto.getRandomValues(new Uint8Array(32))
 
 			const mainRelay = typeof window !== 'undefined' ? await getMainRelayFromConfig() : undefined
-			const cvmRelays = getCurrencyServerRelays()
+			// Stage-gated. `getCurrencyServerRelays` returns the public CVM
+			// relay list only for production — staging/dev get `[]` so the
+			// browser doesn't open WebSockets to `relay.contextvm.org` etc.
+			// from non-prod deploys. `configStore.state.config.stage` is
+			// populated from `/api/config`, which already resolved before
+			// `getCurrencyClient` is invoked (the call below also reads
+			// `configStore.state.config.cvmServerPubkey` from the same
+			// snapshot).
+			const stage = configStore.state.config.stage
+			const cvmRelays = getCurrencyServerRelays(stage)
 			const relays = mainRelay ? [mainRelay, ...cvmRelays] : cvmRelays
 
 			const client = new PlebianCurrencyClient({
