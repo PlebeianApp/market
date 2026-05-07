@@ -36,10 +36,25 @@ export const authStore = new Store<AuthState>(initialState)
 export const authActions = {
 	getAuthFromLocalStorageAndLogin: async () => {
 		try {
+			// Check for migration (unencrypted private key) first
+			if (authActions.getNeedsMigration()) {
+				authStore.setState((state) => ({
+					...state,
+					needsMigration: true,
+				}))
+
+				return
+			}
+
+			// Only trigger auth check if auto-login is enabled
+
 			const autoLogin = localStorage.getItem(NOSTR_AUTO_LOGIN)
 			if (autoLogin !== 'true') return
 
 			authStore.setState((state) => ({ ...state, isAuthenticating: true }))
+
+			// Signer / Bunker URL
+
 			const privateKeySigner = localStorage.getItem(NOSTR_LOCAL_SIGNER_KEY)
 			const bunkerUrl = localStorage.getItem(NOSTR_CONNECT_KEY)
 
@@ -49,21 +64,16 @@ export const authActions = {
 				return
 			}
 
-			const privateKey = localStorage.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
-			console.log('private key:', privateKey)
-			if (privateKey) {
-				// Check for migration first
-				if (privateKey && authActions.getNeedsMigration()) {
-					authStore.setState((state) => ({
-						...state,
-						needsMigration: true,
-					}))
-					return
-				}
+			// Private key decryption
 
+			const privateKey = localStorage.getItem(NOSTR_LOCAL_ENCRYPTED_SIGNER_KEY)
+
+			if (privateKey) {
 				authStore.setState((state) => ({ ...state, needsDecryptionPassword: true }))
 				return
 			}
+
+			// Else, login with extension
 
 			await authActions.loginWithExtension()
 			authActions.checkAndShowTermsDialog()
