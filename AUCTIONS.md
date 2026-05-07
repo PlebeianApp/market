@@ -1138,16 +1138,32 @@ V1 MUST enforce:
   to a single live record per kind. There is no auto-deletion on
   shutdown — the SDK's `deleteAnnouncement(reason)` exists but is
   not wired to `close()`.
-- **Deploy gotcha:** `deploy-auctionsdev.yml` (triggered by
-  `auctions/**` pushes) only restarts the **web app** (`market-auctionsdev`),
-  not the CVM server. The staging CVM server (`market-contextvm-staging`)
-  is restarted by `deploy.yml`, which runs on `master` push after E2E
-  passes. So changes to `contextvm/server.ts` (e.g. announcement
-  gating, gift-wrap mode) only take effect on auctionsdev once
-  `master` ships. If you push to `auctions/*` and the auctionsdev UI
-  still shows "no live announcements", redeploy via
-  `gh workflow run deploy.yml` once your `auctions/*` branch has been
-  merged to `master`.
+- **Auctionsdev runs its own parallel CVM server.** The
+  `auctions/**` feature lives independently of `master` for weeks at a
+  time, so `deploy-auctionsdev.yml` deploys **two** PM2 apps onto the
+  staging host: `market-auctionsdev` (the web app) and
+  `market-contextvm-auctionsdev` (a dedicated CVM server). The
+  auctionsdev CVM uses a separate `CVM_SERVER_KEY` (GitHub secret
+  `AUCTIONSDEV_CVM_SERVER_KEY`, falling back to
+  `STAGING_CVM_SERVER_KEY` if unset) — so it has its own pubkey and
+  publishes its own kind-11316/11317 announcements on
+  `wss://relay.staging.plebeian.market` alongside whatever
+  `market-contextvm-staging` (deployed from `master`) is broadcasting.
+  The auctionsdev oracle picker shows both; the auctionsdev oracle is
+  pre-selected because that's what the auctionsdev web app's
+  `/api/config.cvmServerPubkey` resolves to.
+
+  Required GitHub secret to give auctionsdev a distinct identity:
+
+  ```
+  AUCTIONSDEV_CVM_SERVER_KEY=<new 32-byte hex private key>
+  ```
+
+  Both PM2 apps share the same `cwd`
+  (`/home/deployer/market-auctionsdev`) and `.env`, so changes to
+  `contextvm/server.ts`, the auction-domain modules, or the
+  `auction-state.sqlite` schema take effect on auctionsdev as soon as
+  the `auctions/*` branch is pushed — no master merge required.
 
 ### 11.0.1 Browser-side relay matrix
 

@@ -96,6 +96,40 @@ jobs:
                 wait_ready: true,
                 listen_timeout: 10000,
               },
+              // Auctionsdev runs its OWN parallel CVM server (a "second
+              // oracle") alongside the staging one (`market-contextvm-staging`).
+              // Both publish on `wss://relay.staging.plebeian.market` —
+              // each with its own pubkey derived from a separate
+              // `CVM_SERVER_KEY` — so the auctions/* feature branch can
+              // be exercised end-to-end (announcement publishing, gift-
+              // wrap mode, oracle-picker discovery) without waiting for
+              // the staging CVM to be redeployed via master.
+              //
+              // Same `cwd` as the web app so they share `.env` (same
+              // APP_RELAY_URL, APP_STAGE=staging, CVM_SERVER_KEY).
+              // Bidder/seller clients on auctionsdev will see BOTH
+              // oracles in the picker (staging's + auctionsdev's), with
+              // auctionsdev's pre-selected because it's what
+              // `/api/config.cvmServerPubkey` resolves to here.
+              {
+                name: 'market-contextvm-auctionsdev',
+                script: 'contextvm/server.ts',
+                interpreter: process.env.HOME + '/.bun/bin/bun',
+                cwd: '/home/deployer/market-auctionsdev',
+                instances: 1,
+                exec_mode: 'fork',
+                env_file: '.env',
+                error_file: '/home/deployer/logs/market-contextvm-auctionsdev-error.log',
+                out_file: '/home/deployer/logs/market-contextvm-auctionsdev-out.log',
+                log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
+                merge_logs: true,
+                autorestart: true,
+                max_restarts: 10,
+                min_uptime: '10s',
+                restart_delay: 5000,
+                max_memory_restart: '500M',
+                kill_timeout: 5000,
+              },
             ],
           };
           EOF
@@ -108,7 +142,17 @@ jobs:
           PORT=3002
           APP_RELAY_URL=${{ secrets.STAGING_RELAY_URL }}
           APP_PRIVATE_KEY=${{ secrets.STAGING_APP_PRIVATE_KEY }}
-          CVM_SERVER_KEY=${{ secrets.STAGING_CVM_SERVER_KEY }}
+          # Auctionsdev runs its OWN CVM server with a dedicated key so
+          # it announces itself separately from `market-contextvm-staging`
+          # on `wss://relay.staging.plebeian.market`. The web app's
+          # `/api/config.cvmServerPubkey` is derived from this same key,
+          # so the auctionsdev oracle picker pre-selects the auctionsdev
+          # oracle (the staging one still appears as a second option).
+          # Falls back to STAGING_CVM_SERVER_KEY if the dedicated secret
+          # isn't set yet — running both apps under the same key just
+          # means PM2 spawns a duplicate signer; the duplicate will lose
+          # the announcement race but is otherwise harmless.
+          CVM_SERVER_KEY=${{ secrets.AUCTIONSDEV_CVM_SERVER_KEY || secrets.STAGING_CVM_SERVER_KEY }}
           NIP46_RELAY_URL=wss://relay.nsec.app
           EOF
 
@@ -176,6 +220,7 @@ jobs:
                 ln -sfn "$PREVIOUS_RELEASE" "$APP_DIR"
                 cd "$APP_DIR"
                 pm2 startOrReload ecosystem.config.cjs --only market-auctionsdev || true
+                pm2 startOrReload ecosystem.config.cjs --only market-contextvm-auctionsdev || true
                 pm2 save --force || true
               fi
             }
@@ -187,11 +232,13 @@ jobs:
             bun install --production
 
             pm2 stop market-auctionsdev 2>/dev/null || true
+            pm2 stop market-contextvm-auctionsdev 2>/dev/null || true
 
             ln -sfn "$RELEASE_DIR" "$APP_DIR"
 
             cd "$APP_DIR"
             pm2 startOrReload ecosystem.config.cjs --only market-auctionsdev
+            pm2 startOrReload ecosystem.config.cjs --only market-contextvm-auctionsdev
             pm2 save --force
 
             grep -q 'auctionsdev\.plebeian\.market' /tmp/Caddyfile.staging
@@ -202,6 +249,23 @@ jobs:
             grep -q 'auctionsdev\.plebeian\.market' /etc/caddy/Caddyfile
 
             curl -sf http://localhost:3002/api/config >/dev/null
+
+            # CVM server liveness — no HTTP surface, so we tail PM2's
+            # status. PM2 reports `online` once the bun process is up;
+            # the SDK's `Server is running` log marker comes a few
+            # seconds later but isn't required for liveness here.
+            for i in $(seq 1 15); do
+              if pm2 describe market-contextvm-auctionsdev 2>/dev/null | grep -q 'status .* online'; then
+                echo "CVM server is online"
+                break
+              fi
+              sleep 1
+              if [ "$i" = "15" ]; then
+                echo "CVM server failed to come online; recent logs:"
+                pm2 logs market-contextvm-auctionsdev --lines 50 --nostream || true
+                exit 1
+              fi
+            done
 
             cd /home/deployer/releases
             ls -t | grep '^market-auctionsdev' | tail -n +4 | xargs -r rm -rf
