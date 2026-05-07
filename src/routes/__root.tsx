@@ -17,7 +17,7 @@ import { useStore } from '@tanstack/react-store'
 import { authStore } from '@/lib/stores/auth'
 import { notificationActions } from '@/lib/stores/notifications'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { MigratePrivateKeyDialog } from '@/components/auth/MigrateKeydialog'
+import { MigratePrivateKeyDialog } from '@/components/auth/MigratePrivateKeyDialog'
 
 export const Route = createRootRoute({
 	component: RootComponent,
