@@ -1112,12 +1112,32 @@ V1 MUST enforce:
   is observed, at which point the discovered record (with fresher
   metadata) takes over.
 - The CVM server announces in every environment
-  (`isAnnouncedServer: true`). The SDK's
-  `getDiscoverabilityPublishRelayUrls` already detects when every
-  operational relay is local (`isLocalRelayUrl(...)`) and skips the
-  public-bootstrap relay list in that case, so dev announcements stay
-  on `ws://localhost:10547` and never leak into the public CEP-15
-  discovery feeds.
+  (`isAnnouncedServer: true`), but **what relays the announcements
+  reach is stage-gated** in `contextvm/server.ts` via
+  `getOperationalRelays()` + `getBootstrapRelayUrls()`. The matrix:
+
+  | Stage (`APP_STAGE`) | Operational relays | Announcement bootstrap relays |
+  | --- | --- | --- |
+  | `production` | `APP_RELAY_URL` (`wss://relay.plebeian.market`) + `wss://relay.contextvm.org` + `wss://relay2.contextvm.org` | SDK default (`damus.io` / `primal.net` / `nos.lol` / `snort.social` / `nostr.mom` / `nostr.oxtr.dev`) |
+  | `staging` (covers both `auctionsdev` + `staging`) | `APP_RELAY_URL` only (`wss://relay.staging.plebeian.market`). **No** public CEP-15 relays. Throws at startup if `APP_RELAY_URL` is unset. | `[]` — announcements confined to the staging relay |
+  | `development` | `APP_RELAY_URL` only (default `ws://localhost:10547`) | `[]` — confined to localhost (the SDK's local-relay auto-skip would also cover this; explicit `[]` defends against config drift) |
+
+  `bootstrapRelayUrls: []` (vs. `undefined`) sets the SDK's
+  `hasExplicitBootstrapRelayUrls=true`, which disables the
+  `DEFAULT_BOOTSTRAP_RELAY_URLS` fallback inside
+  `getDiscoverabilityPublishRelayUrls`. Without that, staging
+  announcements would silently land on the public Nostr discovery
+  relays even though the operational pool is staging-only.
+- Announcements (kinds 11316/11317/11318/11319/11320 + relay-list
+  10002) are published exactly once per server start — `start()` calls
+  `publishPublicAnnouncements()` on connect, then never again unless
+  the process restarts. The PM2 staging deploy restarts the
+  `market-contextvm-staging` process on each release, so each deploy
+  re-emits a fresh announcement set; the relay's addressable-event
+  semantics (replaceable by `(pubkey, kind, d-tag)`) collapse them
+  to a single live record per kind. There is no auto-deletion on
+  shutdown — the SDK's `deleteAnnouncement(reason)` exists but is
+  not wired to `close()`.
 
 ## 11.1 Platform / issuer responsibilities
 

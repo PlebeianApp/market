@@ -30,17 +30,89 @@ import { dirname } from 'node:path'
 
 const SERVER_PRIVATE_KEY = process.env.CVM_SERVER_KEY || '2300f5fff5642341946758cad8214f2c54f3c40fba5ba51b616452b197fd3e71'
 
-const NODE_ENV = process.env.NODE_ENV || 'development'
+type DeployStage = 'production' | 'staging' | 'development'
 
-function getRelays(): string[] {
-	const appRelay = process.env.APP_RELAY_URL
-	const publicRelays = ['wss://relay.contextvm.org', 'wss://relay2.contextvm.org']
-
-	if (NODE_ENV === 'production') {
-		return [appRelay || 'wss://relay.plebeian.market', ...publicRelays]
+/**
+ * Resolve the deployment stage. `APP_STAGE` is canonical (matches
+ * `src/server/runtime.ts:determineStage`); we fall back to `NODE_ENV` so
+ * the default `bun run contextvm/server.ts` invocation (no APP_STAGE
+ * set) still works locally.
+ *
+ * Stage controls TWO things in this file:
+ *   - which relays the server connects to as its operational pool
+ *     (`getOperationalRelays`); and
+ *   - whether announcements are allowed to leave that pool
+ *     (`getBootstrapRelayUrls`).
+ */
+function determineStage(): DeployStage {
+	const explicit = process.env.APP_STAGE
+	if (explicit === 'production' || explicit === 'staging' || explicit === 'development') {
+		return explicit
 	}
+	const env = process.env.NODE_ENV
+	if (env === 'production') return 'production'
+	if (env === 'staging') return 'staging'
+	return 'development'
+}
 
+const STAGE: DeployStage = determineStage()
+
+/**
+ * Operational relays — every kind-1059 gift-wrap response, every
+ * kind-30410 path-registry write, every CEP-15 announcement (subject
+ * to the bootstrap-relay gate below) gets published here.
+ *
+ *   production → app relay + the two public CEP-15 facilitator relays
+ *                (`relay.contextvm.org`, `relay2.contextvm.org`) so
+ *                global clients can reach the server without an
+ *                allow-list.
+ *   staging    → ONLY the staging app relay
+ *                (`wss://relay.staging.plebeian.market`). NO public
+ *                CEP-15 relays — staging events must not appear on
+ *                production discovery feeds.
+ *   development→ ONLY `APP_RELAY_URL` (default `ws://localhost:10547`).
+ */
+function getOperationalRelays(): string[] {
+	const appRelay = process.env.APP_RELAY_URL?.trim()
+	const publicCvmRelays = ['wss://relay.contextvm.org', 'wss://relay2.contextvm.org']
+
+	if (STAGE === 'production') {
+		return [appRelay || 'wss://relay.plebeian.market', ...publicCvmRelays]
+	}
+	if (STAGE === 'staging') {
+		// The staging deploys (auctionsdev + staging) share
+		// `wss://relay.staging.plebeian.market`. If `APP_RELAY_URL` isn't
+		// configured there's no sane fallback — bail loudly so we don't
+		// silently start announcing to a randomly chosen relay.
+		if (!appRelay) {
+			throw new Error('APP_RELAY_URL must be set for APP_STAGE=staging')
+		}
+		return [appRelay]
+	}
+	// development
 	return [appRelay || 'ws://localhost:10547']
+}
+
+/**
+ * Discoverability bootstrap relays — relays the SDK additionally
+ * publishes announcements to (kind 11316/11317/10002 etc.), beyond
+ * the operational pool. Returning `[]` (NOT `undefined`) is the
+ * SDK's documented opt-out: it sets `hasExplicitBootstrapRelayUrls`
+ * which disables the default `DEFAULT_BOOTSTRAP_RELAY_URLS` fallback.
+ *
+ *   production → `undefined` (let the SDK use its public bootstrap
+ *                list — `damus.io`, `primal.net`, `nos.lol`,
+ *                `snort.social`, `nostr.mom`, `nostr.oxtr.dev`).
+ *   staging    → `[]` — confine announcements to the staging relay.
+ *   development→ `[]` — confine announcements to localhost. The SDK
+ *                already auto-skips when every operational relay is
+ *                local, but being explicit guards against accidental
+ *                config drift (e.g. someone runs dev pointed at a
+ *                public relay).
+ */
+function getBootstrapRelayUrls(): readonly string[] | undefined {
+	if (STAGE === 'production') return undefined
+	return []
 }
 
 function getCachePath(): string {
@@ -76,16 +148,24 @@ async function getRates(forceRefresh = false): Promise<AggregatedRates> {
 
 async function main() {
 	const signer = new PrivateKeySigner(SERVER_PRIVATE_KEY)
-	const relays = getRelays()
+	const relays = getOperationalRelays()
+	const bootstrapRelayUrls = getBootstrapRelayUrls()
 	const relayPool = new ApplesauceRelayPool(relays)
 	const serverPubkey = await signer.getPublicKey()
-	const isPublic = NODE_ENV === 'production'
 
 	console.log(`=== Plebeian Currency ContextVM Server ===`)
 	console.log(`Public key: ${serverPubkey}`)
-	console.log(`Environment: ${NODE_ENV}`)
-	console.log(`Public server: ${isPublic}`)
-	console.log(`Relays: ${relays.join(', ')}`)
+	console.log(`Stage: ${STAGE} (NODE_ENV=${process.env.NODE_ENV ?? 'unset'}, APP_STAGE=${process.env.APP_STAGE ?? 'unset'})`)
+	console.log(`Operational relays: ${relays.join(', ')}`)
+	console.log(
+		`Announcement bootstrap relays: ${
+			bootstrapRelayUrls === undefined
+				? 'SDK default (public CEP-15 + Nostr discovery relays)'
+				: bootstrapRelayUrls.length === 0
+					? '[] — announcements confined to operational relays'
+					: bootstrapRelayUrls.join(', ')
+		}`,
+	)
 	console.log(`Cache TTL: ${CACHE_TTL_MS / 1000}s`)
 	console.log(`Cache path: ${getCachePath()}`)
 	console.log(`Supported currencies: ${SUPPORTED_FIAT.length}`)
@@ -240,15 +320,23 @@ async function main() {
 	const serverTransport = new NostrServerTransport({
 		signer,
 		relayHandler: relayPool,
-		// Always announce. The SDK's `getDiscoverabilityPublishRelayUrls`
-		// already detects when every operational relay is local
-		// (`isLocalRelayUrl(...)`) and skips the public-bootstrap relay
-		// list in that case — so dev announcements stay on
-		// `ws://localhost:10547` and never leak into public CEP-15
-		// discovery feeds. Announcing in dev is what lets the auction-
-		// creation form's oracle picker discover the local server via
-		// `kind 11317 + #k io.contextvm/common-schema`.
+		// Always announce — the dev oracle picker relies on this to
+		// discover the local server via `kind 11317 + #k io.contextvm/common-schema`,
+		// and prod/staging clients want it for the same reason. The
+		// `bootstrapRelayUrls` setting below is what actually controls
+		// whether announcements leak past the operational relay pool.
 		isAnnouncedServer: true,
+		// Stage-gated. `getBootstrapRelayUrls()` returns:
+		//   - production  → `undefined` → SDK uses its default public
+		//     bootstrap list (damus.io / primal.net / nos.lol / etc.)
+		//     so the prod CVM oracle is globally discoverable.
+		//   - staging     → `[]` → SDK skips bootstrap relays entirely.
+		//     Auctionsdev and staging share `relay.staging.plebeian.market`;
+		//     announcements stay there.
+		//   - development → `[]` → localhost only.
+		// `[]` (vs `undefined`) sets `hasExplicitBootstrapRelayUrls=true`
+		// in the SDK, which disables the default fallback.
+		bootstrapRelayUrls,
 		// Force kind-1059 (persistent gift wraps) for both inbound and
 		// outbound. Why:
 		//   1. The SDK's default (`OPTIONAL`) auto-promotes any client that
