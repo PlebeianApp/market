@@ -1,6 +1,4 @@
-import { seedShippingOptionForUser } from 'e2e-new/scenarios'
-import { test, expect } from '../fixtures'
-import { devUser2 } from '@/lib/fixtures'
+import { expect, test } from '../fixtures'
 
 test.use({ scenario: 'merchant' })
 
