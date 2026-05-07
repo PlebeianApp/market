@@ -831,6 +831,16 @@ Bidder MUST verify the `request_path` response per §5.6 before calling
 `submit_bid_token` succeeds, the registry entry advances to `locked`
 and further submissions for the same grant are idempotent.
 
+On successful lock the issuer attaches the token payload
+(`mintUrl`, `amount`, `totalBidAmount`, `commitment`, `bidNonce`,
+`locktime`, `refundPubkey`, `token`) to the registry entry's
+`lockPayload`. The path-registry kind-30410 event is NIP-44 encrypted
+to the issuer's own pubkey, so the token stays issuer-private at rest.
+This replaces the legacy kind-14 DM envelope that used to carry the
+token alongside the kind-1023 commitment — `request_settlement` reads
+the lockPayload directly off each registry entry rather than
+re-decrypting a separate Nostr event.
+
 ### 7.5.3 `request_settlement` (Seller → Issuer)
 
 Input:

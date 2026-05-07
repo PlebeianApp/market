@@ -1,4 +1,3 @@
-import { NDKEvent, NDKUser } from '@nostr-dev-kit/ndk'
 import {
 	AUCTION_BID_KIND,
 	AUCTION_SETTLEMENT_KIND,
@@ -16,9 +15,7 @@ import {
 	type AuctionSettlementPublishStatus,
 } from '../../lib/auctionSettlement'
 import { auctionP2pkPubkeysMatch, deriveAuctionChildP2pkPubkeyFromXpub, normalizeAuctionP2pkPubkey } from '../../lib/auctionP2pk'
-import { AUCTION_BID_TOKEN_TOPIC, parseAuctionBidTokenEnvelope } from '../../lib/auctionTransfers'
 import { buildAuctionPathRegistry, findAuctionPathEntryByChildPubkey, type AuctionPathRegistryEntry } from '../../lib/auctionPathOracle'
-import { sha256Hex } from '../util/sha256'
 import type { AuctionContext } from './context'
 import { fetchAuctionPathRegistry, publishAuctionPathRegistry } from './registry'
 import { getAuctionPathIssuerFromEvent, loadAuctionEvent } from './loadAuction'
@@ -88,44 +85,6 @@ export async function buildAuctionSettlementPlan(
 		throw new Error('Auction has not ended yet')
 	}
 
-	const envelopeFilters = [
-		{
-			kinds: [14],
-			'#p': [ctx.issuerPubkey],
-			'#t': [AUCTION_BID_TOKEN_TOPIC],
-			'#e': [params.auctionEventId],
-			limit: 500,
-		},
-		...(auctionCoordinates
-			? [
-					{
-						kinds: [14],
-						'#p': [ctx.issuerPubkey],
-						'#t': [AUCTION_BID_TOKEN_TOPIC],
-						'#a': [auctionCoordinates],
-						limit: 500,
-					},
-				]
-			: []),
-	]
-	const envelopeEvents = Array.from(await ctx.ndk.fetchEvents(envelopeFilters.length === 1 ? envelopeFilters[0] : envelopeFilters))
-	const envelopeByBidId = new Map<string, ReturnType<typeof parseAuctionBidTokenEnvelope>>()
-
-	for (const event of envelopeEvents) {
-		try {
-			const decryptable = new NDKEvent(ctx.ndk, event.rawEvent())
-			await decryptable.decrypt(new NDKUser({ pubkey: event.pubkey }), ctx.signer, 'nip44')
-			const envelope = parseAuctionBidTokenEnvelope(decryptable.content)
-			if (!envelope || envelope.auctionEventId !== params.auctionEventId) continue
-			if (envelope.pathIssuerPubkey !== ctx.issuerPubkey) continue
-			const tokenCommitment = await sha256Hex(envelope.token)
-			if (tokenCommitment !== envelope.commitment) continue
-			envelopeByBidId.set(envelope.bidEventId, envelope)
-		} catch (error) {
-			console.error('[auction] Failed to decrypt app bid envelope:', error)
-		}
-	}
-
 	// Settlement-time policy checks. AUCTIONS.md §7 MUST list:
 	//   - mint in seller trusted list
 	//   - locktime exactly `max_end_at + settlement_grace` (§4.1, §6.0 invariant)
@@ -136,38 +95,47 @@ export async function buildAuctionSettlementPlan(
 	const auctionSettlementGrace = getAuctionSettlementGrace(auctionEvent)
 	const expectedLocktime = auctionMaxEndAt && auctionSettlementGrace ? auctionMaxEndAt + auctionSettlementGrace : 0
 
+	// AUCTIONS.md §7.5.2: the locked Cashu token now lives on the registry
+	// entry's `lockPayload`, populated by `submit_bid_token`. The legacy
+	// kind-14 DM envelope path was removed when we pivoted to ContextVM
+	// — fetching kind 14s here would always return zero, which is what
+	// caused every settlement to resolve to `reserve_not_met` no matter
+	// what the bid amount was.
 	const registry = await fetchAuctionPathRegistry(ctx, params.auctionEventId)
 	const eligibleChains = buildActiveAuctionBidChains(getAuctionWindowValidBids(auctionEvent, bidEvents))
 		.filter((group) =>
 			group.chain.every((bid) => {
-				const envelope = envelopeByBidId.get(bid.id)
-				if (!envelope) return false
-				if (getAuctionTagValue(bid, 'commitment') !== envelope.commitment) return false
+				const bidChildPubkey = getAuctionTagValue(bid, 'child_pubkey')
+				if (!bidChildPubkey) return false
+				const entry = findAuctionPathEntryByChildPubkey(registry, bidChildPubkey)
+				if (!entry) return false
+				// Bid must have been locked via `submit_bid_token` — the
+				// lockPayload is the issuer's record of the actual Cashu
+				// token. Without it there's nothing to release, so the
+				// chain is ineligible regardless of how the kind 1023 looks.
+				const lockPayload = entry.lockPayload
+				if (!lockPayload || entry.status !== 'locked') return false
+				if (entry.bidEventId !== bid.id) return false
+				if (getAuctionTagValue(bid, 'commitment') !== lockPayload.commitment) return false
 				// §4.2 forbidden tag: a path-oracle bid MUST NOT carry a
 				// `derivation_path` tag. Bidders that self-generate paths
 				// would be allowed to redeem early — see §9.1.
 				if (getAuctionTagValue(bid, 'derivation_path')) return false
 				// §7 MUST: mint in seller's trusted list. Check both the bid
-				// tag and the envelope's mintUrl so a bidder can't lie via
+				// tag and the lockPayload's mintUrl so a bidder can't lie via
 				// either side.
 				const bidMint = getAuctionTagValue(bid, 'mint')
 				if (!bidMint || !trustedMints.has(bidMint)) return false
-				if (!trustedMints.has(envelope.mintUrl)) return false
+				if (!trustedMints.has(lockPayload.mintUrl)) return false
 				// §4.1 / §6.0 invariant: locktime must equal
 				// `max_end_at + settlement_grace`. Drift here would let a
 				// bidder either reclaim early or block the chain past spec.
 				if (expectedLocktime > 0) {
 					const bidLocktime = parseInt(getAuctionTagValue(bid, 'locktime') || '0', 10)
 					if (!Number.isFinite(bidLocktime) || bidLocktime !== expectedLocktime) return false
-					if (envelope.locktime !== expectedLocktime) return false
+					if (lockPayload.locktime !== expectedLocktime) return false
 				}
-				// Every bid in a valid chain must come from a path that the
-				// issuer actually granted (otherwise the bidder self-generated
-				// a path and the seller could redeem prematurely — see §9.1).
-				const bidChildPubkey = getAuctionTagValue(bid, 'child_pubkey')
-				if (!bidChildPubkey) return false
-				const entry = findAuctionPathEntryByChildPubkey(registry, bidChildPubkey)
-				return !!entry
+				return true
 			}),
 		)
 		.sort(compareAuctionBidChainPriority)
@@ -200,10 +168,6 @@ export async function buildAuctionSettlementPlan(
 	const winnerTokens: AuctionSettlementPlanResponse['winnerTokens'] = []
 	const releasedEntries: AuctionPathRegistryEntry[] = registry?.entries ? [...registry.entries] : []
 	for (const bid of winnerChain.chain) {
-		const envelope = envelopeByBidId.get(bid.id)
-		if (!envelope) {
-			throw new Error(`Missing private token envelope for winning bid ${bid.id}`)
-		}
 		const bidChildPubkey = getAuctionTagValue(bid, 'child_pubkey')
 		if (!bidChildPubkey) {
 			throw new Error(`Winning bid ${bid.id} is missing child_pubkey`)
@@ -211,6 +175,14 @@ export async function buildAuctionSettlementPlan(
 		const registryEntry = findAuctionPathEntryByChildPubkey(registry, bidChildPubkey)
 		if (!registryEntry) {
 			throw new Error(`Winning bid ${bid.id} was not granted by the path oracle`)
+		}
+		const lockPayload = registryEntry.lockPayload
+		if (!lockPayload) {
+			// The chain filter above already rejects any chain whose bids
+			// aren't fully locked, so reaching here means the registry was
+			// mutated between filter and release — bail rather than emit a
+			// half-built settlement.
+			throw new Error(`Winning bid ${bid.id} has no locked Cashu payload on the registry entry`)
 		}
 		// Defence-in-depth: re-derive the pubkey from xpub + stored path. If
 		// the registry entry was tampered with, this throws before releasing.
@@ -220,16 +192,16 @@ export async function buildAuctionSettlementPlan(
 		}
 		winnerTokens.push({
 			bidEventId: bid.id,
-			bidderPubkey: envelope.bidderPubkey,
+			bidderPubkey: registryEntry.bidderPubkey,
 			derivationPath: registryEntry.derivationPath,
 			childPubkey: normalizeAuctionP2pkPubkey(registryEntry.childPubkey),
-			mintUrl: envelope.mintUrl,
-			amount: envelope.amount,
-			totalBidAmount: envelope.totalBidAmount,
-			commitment: envelope.commitment,
-			locktime: envelope.locktime,
-			refundPubkey: envelope.refundPubkey,
-			token: envelope.token,
+			mintUrl: lockPayload.mintUrl,
+			amount: lockPayload.amount,
+			totalBidAmount: lockPayload.totalBidAmount,
+			commitment: lockPayload.commitment,
+			locktime: lockPayload.locktime,
+			refundPubkey: lockPayload.refundPubkey,
+			token: lockPayload.token,
 		})
 		const updated: AuctionPathRegistryEntry = {
 			...registryEntry,

@@ -13,6 +13,41 @@ export const AUCTION_PATH_HD_MAX_INDEX = 0x7fffffff
 
 export type AuctionPathEntryStatus = 'issued' | 'locked' | 'released' | 'refunded' | 'expired'
 
+/**
+ * Locked Cashu token payload attached to a registry entry once the bidder
+ * has called `submit_bid_token`. Holds everything `request_settlement` needs
+ * to release the token to the seller — the settlement code reads this in
+ * lieu of the legacy kind-14 envelope (which the ContextVM transport
+ * removed). See AUCTIONS.md §7.5.2.
+ *
+ * Fields:
+ *   - `mintUrl`         Mint that issued the locked token (must be in the
+ *                       seller's `mint` allowlist at settlement time).
+ *   - `amount`          Lock value of this Cashu envelope, in sats.
+ *   - `totalBidAmount`  Headline bid amount the bidder committed to in
+ *                       kind 1023 — equals or exceeds `amount` after the
+ *                       proportional refund deduction.
+ *   - `commitment`      `sha256(token)`, also published on the kind 1023
+ *                       bid event; the issuer cross-checks both sides.
+ *   - `bidNonce`        Anti-replay nonce echoed back into the kind 1023
+ *                       commitment input. Stored for diagnostics.
+ *   - `locktime`        Cashu locktime; MUST equal `max_end_at +
+ *                       settlement_grace` (§4.1 / §6.0 invariant).
+ *   - `refundPubkey`    Bidder's secp256k1 pubkey for the refund branch
+ *                       of the P2PK lock (33-byte compressed hex).
+ *   - `token`           Serialised Cashu V4 token (the actual lock).
+ */
+export interface AuctionPathLockPayload {
+	mintUrl: string
+	amount: number
+	totalBidAmount: number
+	commitment: string
+	bidNonce: string
+	locktime: number
+	refundPubkey: string
+	token: string
+}
+
 export interface AuctionPathRegistryEntry {
 	bidderPubkey: string
 	derivationPath: string
@@ -23,6 +58,13 @@ export interface AuctionPathRegistryEntry {
 	status: AuctionPathEntryStatus
 	releasedAt?: number
 	releaseTargetPubkey?: string
+	/**
+	 * Present once `submit_bid_token` advances the entry to `'locked'`.
+	 * The registry is NIP-44-encrypted to the issuer's own pubkey, so this
+	 * field is only ever readable by the issuer. Settlement reads from
+	 * here to release tokens to the seller.
+	 */
+	lockPayload?: AuctionPathLockPayload
 }
 
 export interface AuctionPathRegistry {
@@ -60,6 +102,37 @@ export const generateAuctionDerivationPath = (): string => {
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null
 const isNonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.length > 0
 
+/**
+ * Best-effort parser for a registry entry's optional `lockPayload`.
+ *
+ * Returns `undefined` for any malformed/missing field rather than throwing —
+ * a stale registry written under an older schema (no lockPayload) is normal
+ * for entries still in `'issued'` status, and we don't want to break-load the
+ * whole registry over it. Callers that require a payload (i.e. settlement)
+ * branch on `undefined` themselves.
+ */
+const parseAuctionPathLockPayload = (raw: unknown): AuctionPathLockPayload | undefined => {
+	if (!isRecord(raw)) return undefined
+	if (!isNonEmptyString(raw.mintUrl)) return undefined
+	if (!isNonEmptyString(raw.commitment)) return undefined
+	if (!isNonEmptyString(raw.bidNonce)) return undefined
+	if (!isNonEmptyString(raw.refundPubkey)) return undefined
+	if (!isNonEmptyString(raw.token)) return undefined
+	if (typeof raw.amount !== 'number' || !Number.isFinite(raw.amount)) return undefined
+	if (typeof raw.totalBidAmount !== 'number' || !Number.isFinite(raw.totalBidAmount)) return undefined
+	if (typeof raw.locktime !== 'number' || !Number.isFinite(raw.locktime)) return undefined
+	return {
+		mintUrl: raw.mintUrl,
+		amount: raw.amount,
+		totalBidAmount: raw.totalBidAmount,
+		commitment: raw.commitment,
+		bidNonce: raw.bidNonce,
+		locktime: raw.locktime,
+		refundPubkey: raw.refundPubkey,
+		token: raw.token,
+	}
+}
+
 export const parseAuctionPathRegistry = (value: string): AuctionPathRegistry | null => {
 	try {
 		const parsed = JSON.parse(value)
@@ -84,6 +157,7 @@ export const parseAuctionPathRegistry = (value: string): AuctionPathRegistry | n
 					status,
 					releasedAt: typeof raw.releasedAt === 'number' ? raw.releasedAt : undefined,
 					releaseTargetPubkey: isNonEmptyString(raw.releaseTargetPubkey) ? raw.releaseTargetPubkey : undefined,
+					lockPayload: parseAuctionPathLockPayload(raw.lockPayload),
 				}
 			})
 			.filter((entry): entry is AuctionPathRegistryEntry => !!entry)
