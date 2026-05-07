@@ -160,7 +160,10 @@ async function main() {
 	const serverTransport = new NostrServerTransport({
 		signer,
 		relayHandler: relayPool,
-		isPublicServer: isPublic,
+		// Public-facing kind 11316-11320 announcements only on production
+		// (one server per environment per the CEP-15 plan — staging/dev
+		// announcements would otherwise pollute the public discovery feed).
+		isAnnouncedServer: isPublic,
 		serverInfo: {
 			name: 'Plebeian Currency Server',
 			website: 'https://plebeian.market',
