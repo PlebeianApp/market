@@ -67,14 +67,10 @@ async function fetchFromContextVm(): Promise<Record<string, number> | null> {
 		const startedAt = Date.now()
 		console.info(`ContextVM BTC fetch starting (timeout ${CONTEXTVM_CALL_TIMEOUT}ms)`)
 		const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), CONTEXTVM_CALL_TIMEOUT))
-		const callPromise = client
-			.callTool({
-				name: 'get_btc_price',
-				arguments: {},
-			})
-			.catch((reason) => {
-				console.warn(reason)
-			})
+		const callPromise = client.callTool({
+			name: 'get_btc_price',
+			arguments: {},
+		})
 
 		const result = await Promise.race([callPromise, timeout])
 		if (result === null) {
