@@ -3,6 +3,7 @@ import { currencyKeys } from './queryKeyFactory'
 import { CURRENCIES } from '@/lib/constants'
 import { CVM_SERVER_PUBKEY, getCurrencyServerRelays } from '@/lib/constants'
 import { configStore } from '@/lib/stores/config'
+import { PlebianCurrencyClient } from '@/lib/ctxcn-client'
 
 const numSatsInBtc = 100000000
 export type SupportedCurrency = (typeof CURRENCIES)[number]
@@ -14,17 +15,15 @@ export const CURRENCY_CACHE_CONFIG = {
 	RESOLVE_TIMEOUT: 5000,
 } as const
 
-let currencyClient: InstanceType<typeof import('@/lib/ctxcn-client').PlebianCurrencyClient> | null = null
+let currencyClient: PlebianCurrencyClient | null = null
 let currencyClientInitPromise: Promise<any> | null = null
 
-async function getCurrencyClient() {
+async function getCurrencyClient(): Promise<PlebianCurrencyClient> {
 	if (currencyClient) return currencyClient
 	if (currencyClientInitPromise) return currencyClientInitPromise
 
 	currencyClientInitPromise = (async () => {
 		try {
-			const { PlebianCurrencyClient } = await import('@/lib/ctxcn-client')
-
 			const privateKey = crypto.getRandomValues(new Uint8Array(32))
 
 			const mainRelay = typeof window !== 'undefined' ? await getMainRelayFromConfig() : undefined
