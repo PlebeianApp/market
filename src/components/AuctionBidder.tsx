@@ -21,12 +21,15 @@ import {
 import { computeAuctionBidFloor, getAuctionMinBidCurve } from '@/lib/auctionSettlement'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { toast } from 'sonner'
-import { useMemo, useState, useEffect, useRef } from 'react'
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import { useAuctionCountdown } from './AuctionCountdown'
 import { Pencil, Plus, Minus, X, CircleX, TheaterIcon } from 'lucide-react'
 import { InputGroup, InputGroupAddon, InputGroupInput } from './ui/input-group'
 import { cn } from '@/lib/utils'
 import { TooltipToggleGroupItem } from './shared/TooltipToggleGroupItem'
+import { useStore } from '@tanstack/react-store'
+import { nip60Store } from '@/lib/stores/nip60'
+import { resolveAuctionMintSelection, type AvailableMint, type MintSelectionResult } from '@/lib/auctionMintSelection'
 
 interface AuctionBidderProps {
 	auction: NDKEvent
@@ -35,6 +38,38 @@ interface AuctionBidderProps {
 	currentUserPubkey?: string
 	onBidSuccess?: () => void
 	compact?: boolean
+}
+
+export function useAuctionMintSelection(trustedMints: string[], bidAmount: number) {
+	const nip60State = useStore(nip60Store)
+	const [manualMint, setManualMint] = useState<string | null>(null)
+
+	const result = useMemo<MintSelectionResult>(
+		() =>
+			resolveAuctionMintSelection({
+				trustedMints,
+				walletMints: nip60State.mints ?? [],
+				mintBalances: nip60State.mintBalances ?? {},
+				bidAmount,
+			}),
+		[trustedMints, nip60State.mints, nip60State.mintBalances, bidAmount],
+	)
+
+	const selectedMint = manualMint && result.availableMints.some((m) => m.mintUrl === manualMint) ? manualMint : result.selectedMint
+
+	const setSelectedMint = useCallback((mintUrl: string | null) => {
+		setManualMint(mintUrl)
+	}, [])
+
+	return {
+		selectedMint,
+		availableMints: result.availableMints,
+		eligibleMints: result.eligibleMints,
+		insufficientBalanceMints: result.insufficientBalanceMints,
+		mintError: result.error,
+		setSelectedMint,
+		showMintSelector: result.availableMints.filter((m) => m.balance > 0).length > 1,
+	}
 }
 
 export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBidSuccess, compact = false }: AuctionBidderProps) {
@@ -111,6 +146,11 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 		return Number.isFinite(val) ? val : NaN
 	}, [bidAmountInput])
 
+	const { selectedMint, availableMints, showMintSelector, mintError, setSelectedMint } = useAuctionMintSelection(
+		trustedMints,
+		Number.isFinite(parsedBidAmount) ? parsedBidAmount : 0,
+	)
+
 	// Initialize input to min bid on mount or when min changes
 	useEffect(() => {
 		setBidAmountInput(String(minBid))
@@ -166,6 +206,10 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				toast.error('This auction is missing a p2pk_xpub and cannot accept bids.')
 				return
 			}
+			if (!selectedMint) {
+				toast.error(mintError || 'No suitable mint available for bidding.')
+				return
+			}
 			await bidMutation.mutateAsync({
 				auctionEventId: auctionRootEventId || auction.id,
 				auctionCoordinates,
@@ -177,13 +221,9 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				sellerPubkey: auction.pubkey,
 				pathIssuerPubkey,
 				p2pkXpub,
-				// Hand the lock flow ALL the seller's trusted mints in
-				// declared order. `lockAuctionBidFunds` picks the first
-				// one where this bidder's wallet has enough balance —
-				// previously we hard-coded `trustedMints[0]`, so a
-				// bidder with funds on mint #4 would get a "0 sats on
-				// minibits" error.
-				mintCandidates: trustedMints,
+				mintCandidates: selectedMint
+					? [selectedMint, ...trustedMints.filter((m) => m !== selectedMint)]
+					: trustedMints,
 			})
 			toast.success('Bid placed successfully')
 			setIsEditing(false)
@@ -210,6 +250,35 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				</div>
 			)}
 
+			{!compact && showMintSelector && (
+				<div className="flex items-center gap-2">
+					<span className="text-xs text-foreground/60 whitespace-nowrap">Mint:</span>
+					<ToggleGroup
+						type="single"
+						value={selectedMint ?? ''}
+						onValueChange={(val) => {
+							if (val) setSelectedMint(val)
+						}}
+						className="flex flex-wrap gap-1"
+					>
+						{availableMints
+							.filter((m) => m.balance > 0)
+							.map((m) => (
+								<TooltipToggleGroupItem
+									key={m.mintUrl}
+									value={m.mintUrl}
+									variant="outline"
+									size="sm"
+									tooltip={`${m.mintUrl} — ${m.balance.toLocaleString()} sats`}
+									disabled={isDisabledInput}
+									className={cn('cursor-pointer flex text-xs', !m.hasSufficientBalance && 'opacity-60')}
+								>
+									{m.hostname} <span className="text-foreground/50">({m.balance.toLocaleString()})</span>
+								</TooltipToggleGroupItem>
+							))}
+					</ToggleGroup>
+				</div>
+			)}
 			{/* Main Action Area */}
 			<div className={cn('flex flex-col sm:flex-row gap-2 items-stretch sm:items-center')}>
 				{!compact &&
@@ -310,6 +379,7 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 			{/* Minimum Bid Info */}
 			{!compact && !ended && <div className="text-xs text-foreground/80 pl-1">Minimum allowed bid: {minBid.toLocaleString()} sats</div>}
+			{mintError && !compact && <div className="text-xs text-red-500 pl-1">{mintError}</div>}
 		</div>
 	)
 }
