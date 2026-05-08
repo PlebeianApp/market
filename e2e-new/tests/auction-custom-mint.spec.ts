@@ -71,8 +71,7 @@ test.describe('Auction Custom Mint URL', () => {
 		const input = merchantPage.getByPlaceholder('Enter mint URL...')
 		await input.clear()
 
-		const container = input.locator('xpath=../..')
-		const addButton = container.locator('> button')
+		const addButton = input.locator('xpath=..').locator('button[type="button"]')
 		await expect(addButton).toBeDisabled()
 
 		const afterCount = await removeButtons.count()
