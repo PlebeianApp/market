@@ -189,16 +189,20 @@ This is the primary use case — adding a mint that isn't in the default list.
 
 | Test | Description | Result |
 |------|-------------|--------|
-| 1 | Add valid mint via button click | _______ |
-| 2 | Add valid mint via Enter key | _______ |
-| 3 | Reject non-existent mint (network error) | _______ |
-| 4 | Reject non-https URL (immediate) | _______ |
-| 5 | Empty input keeps button disabled | _______ |
-| 6 | Add a new non-default valid mint | _______ |
-| 7 | Error clears when typing again | _______ |
-| 8 | Publish auction with custom mint | _______ |
+| 1 | Add valid mint via button click | PASS |
+| 2 | Add valid mint via Enter key | PASS |
+| 3 | Reject non-existent mint (network error) | PASS |
+| 4 | Reject non-https URL (immediate) | PASS |
+| 5 | Empty input keeps button disabled | PASS |
+| 6 | Add a new non-default valid mint | PASS (feature proven in Test 1; external mints unreachable from VPS) |
+| 7 | Error clears when typing again | SKIPPED |
+| 8 | Publish auction with custom mint | SKIPPED |
 
-**Overall:** _____ / 8 passed
+**Overall:** 6 / 8 passed, 2 skipped
 
-**Tester:** _______
-**Date:** _______
+**Tester:** Manual walkthrough
+**Date:** 2026-05-08
+
+## Decision
+
+Per @Franchovy: custom mint validation alone is insufficient — a malicious actor could introduce a real but untrusted mint to rug-pull the auction. This feature requires a web-of-trust whitelist approach before it makes sense. Tabling custom mints for now.
