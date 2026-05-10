@@ -20,10 +20,6 @@ export function CartContent({ className = '' }: { className?: string }) {
 		return Object.values(cart.products).reduce((sum, product) => sum + product.amount, 0)
 	}, [cart.products])
 
-	const hasAllShippingMethods = useMemo(() => {
-		return Object.values(cart.products).every((product) => product.shippingMethodId !== null)
-	}, [cart.products])
-
 	const missingShippingCount = useMemo(() => {
 		return Object.values(cart.products).filter((product) => !product.shippingMethodId).length
 	}, [cart.products])
@@ -68,7 +64,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 					<div className="flex">
 						<div className="ml-3">
 							<p className="text-sm text-yellow-700">
-								Please select shipping options for {missingShippingCount} {missingShippingCount === 1 ? 'item' : 'items'} before checkout.
+								Select shipping at checkout for {missingShippingCount} {missingShippingCount === 1 ? 'item' : 'items'}.
 							</p>
 						</div>
 					</div>
@@ -102,7 +98,20 @@ export function CartContent({ className = '' }: { className?: string }) {
 													amount={product.amount}
 													onQuantityChange={handleQuantityChange}
 													onRemove={handleRemoveProduct}
+													hideShipping={true}
 												/>
+												<div className="mt-2 text-sm text-muted-foreground">
+													{product.shippingMethodId ? (
+														<span>
+															Shipping: {product.shippingMethodName || 'Selected'}
+															{product.shippingCost > 0 && product.shippingCostCurrency
+																? ` - ${product.shippingCost} ${product.shippingCostCurrency}`
+																: ''}
+														</span>
+													) : (
+														<span>Select shipping at checkout</span>
+													)}
+												</div>
 											</div>
 										))}
 									</ul>
@@ -187,8 +196,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 
 							<Button
 								className="flex-1 btn-product-banner"
-								disabled={!hasAllShippingMethods || totalItems === 0}
-								title={!hasAllShippingMethods ? 'Please select shipping options for all items' : ''}
+								disabled={totalItems === 0}
 								onClick={() => {
 									uiActions.closeDrawer('cart')
 									navigate({ to: '/checkout' })
