@@ -15,6 +15,12 @@ import { v4VForUserQuery } from '@/queries/v4v'
 import { publishCartSnapshot } from '@/publish/cart'
 import type { PersistedCartContent } from '@/lib/schemas/cartPersistence'
 import { ndkActions } from '@/lib/stores/ndk'
+import {
+	findReusablePublishedShippingSelection,
+	normalizePublishedProductShippingTags,
+	resolvePublishedProductShippingOptions,
+	type ProductShippingSelection,
+} from '@/lib/utils/productShippingSelections'
 import NDK, { NDKEvent, type NDKSigner } from '@nostr-dev-kit/ndk'
 import { QueryClient } from '@tanstack/react-query'
 import { useStore } from '@tanstack/react-store'
@@ -389,6 +395,36 @@ const getProductEvent = async (id: string, sellerPubkey?: string): Promise<NDKEv
 export const getShippingEvent = async (shippingReferenceId: string): Promise<NDKEvent | null> =>
 	cartSyncDependencies.getShippingEvent(shippingReferenceId)
 
+const resolveCartProductShippingOptions = async (sellerPubkey: string, productShippingSelections: ProductShippingSelection[]) => {
+	const availableOptions: RichShippingInfo[] = []
+
+	for (const selection of productShippingSelections) {
+		const shippingCoords = parseCoordinateRef(selection.shippingRef, String(SHIPPING_KIND))
+		if (!shippingCoords || shippingCoords.pubkey !== sellerPubkey) continue
+
+		const shippingEvent = await getShippingEvent(selection.shippingRef)
+		if (!shippingEvent || shippingEvent.pubkey !== shippingCoords.pubkey) continue
+
+		const info = getShippingInfo(shippingEvent)
+		if (!info || !info.id || typeof info.id !== 'string' || info.id.trim() !== shippingCoords.identifier) continue
+
+		availableOptions.push({
+			id: selection.shippingRef,
+			name: info.title,
+			cost: parseFloat(info.price.amount),
+			currency: info.price.currency,
+			countries: info.countries,
+			service: info.service,
+			carrier: info.carrier,
+		})
+	}
+
+	return resolvePublishedProductShippingOptions({
+		publishedSelections: productShippingSelections,
+		availableOptions,
+	})
+}
+
 export const cartActions = {
 	saveToStorage: async (cart: NormalizedCart, updatedAt: number | null = cartStore.state.lastCartIntentUpdatedAt) => {
 		if (typeof sessionStorage !== 'undefined') {
@@ -599,6 +635,7 @@ export const cartActions = {
 		let productId: string
 		let sellerPubkey: string
 		let amount = 1
+		let productEventForShippingRefs: NDKEvent | null = null
 		const updatedAt = cartSyncDependencies.now()
 
 		if (typeof productData === 'string') {
@@ -611,6 +648,7 @@ export const cartActions = {
 				return
 			}
 		} else if (productData instanceof NDKEvent) {
+			productEventForShippingRefs = productData
 			// Use the product's d-tag as the ID, not the event.id
 			// This ensures correct product references in orders (30402:pubkey:dTag format)
 			const productDTag = getProductId(productData)
@@ -630,6 +668,25 @@ export const cartActions = {
 			return
 		}
 
+		const existingProducts = Object.values(cartStore.state.cart.products)
+		const isNewProduct = !cartStore.state.cart.products[productId]
+		let reusableShippingSelection: ReturnType<typeof findReusablePublishedShippingSelection> = null
+		if (isNewProduct) {
+			if (!productEventForShippingRefs) {
+				productEventForShippingRefs = await getProductEvent(productId, sellerPubkey)
+			}
+
+			const productShippingSelections = normalizePublishedProductShippingTags(productEventForShippingRefs?.tags ?? [])
+			const resolvedShippingOptions = await resolveCartProductShippingOptions(sellerPubkey, productShippingSelections)
+
+			reusableShippingSelection = findReusablePublishedShippingSelection({
+				currentProductId: productId,
+				sellerPubkey,
+				products: existingProducts,
+				resolvedShippingOptions,
+			})
+		}
+
 		cartStore.setState((state) => {
 			const cart = { ...state.cart }
 			const seller = cartActions.findOrCreateSeller(cart, sellerPubkey)
@@ -640,10 +697,10 @@ export const cartActions = {
 				cart.products[productId] = {
 					id: productId,
 					amount: amount,
-					shippingMethodId: null,
-					shippingMethodName: null,
-					shippingCost: 0,
-					shippingCostCurrency: null,
+					shippingMethodId: reusableShippingSelection?.shippingMethodId ?? null,
+					shippingMethodName: reusableShippingSelection?.shippingMethodName ?? null,
+					shippingCost: reusableShippingSelection?.shippingCost ?? 0,
+					shippingCostCurrency: reusableShippingSelection?.shippingCostCurrency ?? null,
 					sellerPubkey,
 				}
 				seller.productIds.push(productId)

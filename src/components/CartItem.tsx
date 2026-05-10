@@ -54,12 +54,12 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 	const sellerShippingOptions = useMemo<RichShippingInfo[]>(() => {
 		if (!sellerShippingOptionsQuery.data || !sellerPubkey) return []
 
-		return sellerShippingOptionsQuery.data
-			.map((event) => {
-				const info = getShippingInfo(event)
-				if (!info || !info.id || typeof info.id !== 'string' || info.id.trim().length === 0) return null
+		return sellerShippingOptionsQuery.data.flatMap((event) => {
+			const info = getShippingInfo(event)
+			if (!info || !info.id || typeof info.id !== 'string' || info.id.trim().length === 0) return []
 
-				return {
+			return [
+				{
 					id: createShippingReference(sellerPubkey, info.id),
 					name: info.title,
 					cost: parseFloat(info.price.amount),
@@ -67,9 +67,9 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 					countries: info.countries,
 					service: info.service,
 					carrier: info.carrier,
-				}
-			})
-			.filter((option): option is RichShippingInfo => option !== null)
+				},
+			]
+		})
 	}, [sellerPubkey, sellerShippingOptionsQuery.data])
 
 	const productShippingSelections = useMemo(

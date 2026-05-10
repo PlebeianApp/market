@@ -26,6 +26,77 @@ export type ResolvedProductPageShippingOption = RichShippingInfo & {
 	isResolved: true
 }
 
+export type ReusableShippingSelectionCandidate = {
+	id: string
+	sellerPubkey?: string | null
+	shippingMethodId?: string | null
+}
+
+export type ReusableResolvedShippingOption = {
+	id: string
+	shippingRef?: string | null
+	name?: string | null
+	cost?: number | null
+	currency?: string | null
+}
+
+export type ReusablePublishedShippingSelection = {
+	shippingMethodId: string
+	shippingMethodName: string | null
+	shippingCost: number
+	shippingCostCurrency: string
+}
+
+const nonEmptyString = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0
+
+export const findReusablePublishedShippingSelection = ({
+	currentProductId,
+	sellerPubkey,
+	products,
+	resolvedShippingOptions,
+}: {
+	currentProductId: string
+	sellerPubkey: string
+	products: ReusableShippingSelectionCandidate[]
+	resolvedShippingOptions: ReusableResolvedShippingOption[]
+}): ReusablePublishedShippingSelection | null => {
+	const resolvedOptionsByRef = new Map(
+		resolvedShippingOptions
+			.map((option) => {
+				const shippingRef = nonEmptyString(option.shippingRef)
+					? option.shippingRef.trim()
+					: nonEmptyString(option.id)
+						? option.id.trim()
+						: ''
+				return [shippingRef, option] as const
+			})
+			.filter(([shippingRef]) => shippingRef.length > 0),
+	)
+	if (resolvedOptionsByRef.size === 0) return null
+
+	for (const product of products) {
+		if (product.id === currentProductId) continue
+		if (product.sellerPubkey !== sellerPubkey) continue
+
+		const shippingMethodId = nonEmptyString(product.shippingMethodId) ? product.shippingMethodId.trim() : ''
+		const matchingOption = shippingMethodId ? resolvedOptionsByRef.get(shippingMethodId) : null
+		if (!matchingOption) continue
+		if (typeof matchingOption.cost !== 'number' || !Number.isFinite(matchingOption.cost)) continue
+
+		const shippingCostCurrency = nonEmptyString(matchingOption.currency) ? matchingOption.currency.trim() : ''
+		if (!shippingCostCurrency) continue
+
+		return {
+			shippingMethodId,
+			shippingMethodName: nonEmptyString(matchingOption.name) ? matchingOption.name : null,
+			shippingCost: matchingOption.cost,
+			shippingCostCurrency,
+		}
+	}
+
+	return null
+}
+
 export const normalizeProductShippingSelection = (input: ProductShippingSelectionInput): ProductShippingSelection | null => {
 	const shippingRef =
 		(typeof input.shippingRef === 'string' && input.shippingRef.trim()) ||
