@@ -100,9 +100,10 @@ export function CartSummary({
 											productId={product.id}
 											sellerPubkey={product.sellerPubkey}
 											amount={product.amount}
-											onQuantityChange={allowQuantityChanges ? handleQuantityChange : () => {}}
-											onRemove={allowQuantityChanges ? handleRemoveProduct : () => {}}
+											onQuantityChange={handleQuantityChange}
+											onRemove={handleRemoveProduct}
 											hideShipping={!allowShippingChanges}
+											isEditable={allowQuantityChanges}
 										/>
 									</div>
 								))}

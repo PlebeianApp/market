@@ -145,6 +145,8 @@ function RouteComponent() {
 
 	const [orderInvoiceSets, setOrderInvoiceSets] = useState<Record<string, OrderInvoiceSet>>({})
 	const [specOrderIds, setSpecOrderIds] = useState<string[]>([])
+	const hasCheckoutArtifacts = specOrderIds.length > 0 || invoices.length > 0
+	const isCartEditable = currentStep === 'shipping' && !hasCheckoutArtifacts
 	// Use auto-animate with error handling to prevent DOM manipulation errors
 	const [animationParent] = (() => {
 		try {
@@ -763,6 +765,10 @@ function RouteComponent() {
 
 	const goBackToPreviousStep = () => {
 		if (currentStep === 'summary') {
+			if (hasCheckoutArtifacts) {
+				toast.info('Cart edits are locked after order creation.')
+				return
+			}
 			setCurrentStep('shipping')
 		} else if (currentStep === 'payment') {
 			if (currentInvoiceIndex > 0) {
@@ -851,6 +857,7 @@ function RouteComponent() {
 					progress={progress}
 					stepDescription={stepDescription}
 					onBackClick={handleBackClick}
+					showBackButton={currentStep !== 'complete'}
 				/>
 			</div>
 
@@ -912,11 +919,7 @@ function RouteComponent() {
 									</>
 								) : (
 									<div className="max-h-[50vh] overflow-y-auto">
-										<CartSummary
-											allowQuantityChanges={currentStep === 'shipping'}
-											allowShippingChanges={currentStep === 'shipping'}
-											showExpandedDetails={false}
-										/>
+										<CartSummary allowQuantityChanges={isCartEditable} allowShippingChanges={isCartEditable} showExpandedDetails={false} />
 									</div>
 								)}
 							</CardContent>
@@ -1139,8 +1142,8 @@ function RouteComponent() {
 							<ScrollArea className="h-full">
 								<CartSummary
 									className="pb-6"
-									allowQuantityChanges={currentStep === 'shipping'}
-									allowShippingChanges={currentStep === 'shipping'}
+									allowQuantityChanges={isCartEditable}
+									allowShippingChanges={isCartEditable}
 									showExpandedDetails={false}
 								/>
 							</ScrollArea>

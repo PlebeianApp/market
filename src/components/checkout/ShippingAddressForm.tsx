@@ -444,15 +444,15 @@ export function ShippingAddressForm({
 			</div>
 			<div className="flex-shrink-0 bg-white border-t pt-4">
 				<form.Subscribe
-					selector={(state: any) => [state.canSubmit, state.isSubmitting]}
-					children={([canSubmit, isSubmitting]: [boolean, boolean]) => (
+					selector={(state: any) => state.isSubmitting}
+					children={(isSubmitting: boolean) => (
 						<Button
 							form="shipping-form"
 							type="submit"
 							className="w-full btn-black"
-							disabled={!canSubmit || !hasAllShippingMethods || deliveryRequirementsBlocked || isSubmitting}
+							disabled={!hasAllShippingMethods || deliveryRequirementsBlocked || isSubmitting}
 						>
-							{isSubmitting ? 'Processing...' : 'Continue to Payment'}
+							{isSubmitting ? 'Processing...' : 'Continue to Review'}
 						</Button>
 					)}
 				/>
