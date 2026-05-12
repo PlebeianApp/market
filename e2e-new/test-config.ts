@@ -1,5 +1,5 @@
 import { getPublicKey } from 'nostr-tools/pure'
-import { hexToBytes } from '@noble/hashes/utils'
+import { hexToBytes } from '@noble/hashes/utils.js'
 
 /**
  * Fixed test app private key used by both the Playwright config (for the dev server)

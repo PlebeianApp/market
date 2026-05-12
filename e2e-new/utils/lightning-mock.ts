@@ -15,7 +15,7 @@ import type { Page } from '@playwright/test'
 import { finalizeEvent, type EventTemplate } from 'nostr-tools/pure'
 import { Relay, useWebSocketImplementation } from 'nostr-tools/relay'
 import { getPublicKey } from 'nostr-tools/pure'
-import { hexToBytes } from '@noble/hashes/utils'
+import { hexToBytes } from '@noble/hashes/utils.js'
 import WebSocket from 'ws'
 import { RELAY_URL } from '../test-config'
 

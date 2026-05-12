@@ -6,7 +6,7 @@
  */
 import { finalizeEvent, type EventTemplate } from 'nostr-tools/pure'
 import { Relay } from 'nostr-tools/relay'
-import { hexToBytes } from '@noble/hashes/utils'
+import { hexToBytes } from '@noble/hashes/utils.js'
 import { devUser1 } from '../src/lib/fixtures'
 import { TEST_APP_PRIVATE_KEY, TEST_APP_PUBLIC_KEY, RELAY_URL } from './test-config'
 

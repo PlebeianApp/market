@@ -11,7 +11,7 @@
  */
 import { finalizeEvent, type EventTemplate } from 'nostr-tools/pure'
 import { Relay } from 'nostr-tools/relay'
-import { hexToBytes } from '@noble/hashes/utils'
+import { hexToBytes } from '@noble/hashes/utils.js'
 
 const FIXTURE_USERS = [
 	{

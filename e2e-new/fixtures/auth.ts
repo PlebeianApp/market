@@ -1,6 +1,6 @@
 import type { BrowserContext, Page } from '@playwright/test'
 import { getPublicKey, finalizeEvent, type UnsignedEvent } from 'nostr-tools/pure'
-import { hexToBytes, bytesToHex } from '@noble/hashes/utils'
+import { hexToBytes, bytesToHex } from '@noble/hashes/utils.js'
 
 export interface TestUser {
 	sk: string // hex private key
