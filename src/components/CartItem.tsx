@@ -29,7 +29,6 @@ interface CartItemProps {
 
 export default function CartItem({ productId, sellerPubkey, amount, onQuantityChange, onRemove, hideShipping = false }: CartItemProps) {
 	const [quantity, setQuantity] = useState(amount)
-	const [showShipping, setShowShipping] = useState(false)
 
 	// Fetch product data - pass sellerPubkey to support d-tag lookups
 	const { data: title, isLoading: isTitleLoading } = useProductTitle(productId, sellerPubkey)
@@ -86,6 +85,11 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 		[productShippingSelections, sellerShippingOptions],
 	)
 
+	const selectedShippingOption = useMemo(() => {
+		if (!currentShippingId) return null
+		return productShippingOptions.find((option) => option.shippingRef === currentShippingId || option.id === currentShippingId) ?? null
+	}, [currentShippingId, productShippingOptions])
+
 	const hasResolvedSellerShippingState = sellerShippingOptionsQuery.isSuccess || sellerShippingOptionsQuery.data !== undefined
 	const isShippingOptionsLoading = productQuery.isLoading || (productShippingSelections.length > 0 && !hasResolvedSellerShippingState)
 	const isShippingOptionsUnavailable = productQuery.isError || (!hasResolvedSellerShippingState && sellerShippingOptionsQuery.isError)
@@ -125,15 +129,42 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 		setQuantity(amount)
 	}, [amount])
 
-	// Get shipping cost from the cart state
-	const getSelectedShipping = () => {
-		const cart = cartStore.state.cart
-		const product = cart.products[productId]
-		return {
-			cost: product?.shippingCost || 0,
-			currency: product?.shippingCostCurrency || currency,
-		}
+	const formatShippingCost = (cost: number | null | undefined): string => {
+		return typeof cost === 'number' && Number.isFinite(cost) ? cost.toLocaleString() : ''
 	}
+
+	const formatShippingAmount = (cost: number | null | undefined, shippingCurrency?: string | null): string => {
+		return [formatShippingCost(cost), shippingCurrency?.trim()].filter(Boolean).join(' ')
+	}
+
+	const cartSelectedShipping = (() => {
+		const product = cartStore.state.cart.products[productId]
+		if (!product || typeof product.shippingCost !== 'number' || !Number.isFinite(product.shippingCost)) return null
+		return {
+			cost: product.shippingCost,
+			currency: product.shippingCostCurrency,
+		}
+	})()
+
+	const selectedShippingCost = selectedShippingOption
+		? {
+				cost: selectedShippingOption.cost,
+				currency: selectedShippingOption.currency,
+			}
+		: cartSelectedShipping
+
+	const selectedShippingCostText = selectedShippingCost
+		? formatShippingAmount(selectedShippingCost.cost, selectedShippingCost.currency)
+		: ''
+	const hasAdditiveShippingMetadata =
+		selectedShippingOption && Number.isFinite(selectedShippingOption.baseCost) && Number.isFinite(selectedShippingOption.extraCostAmount)
+	const selectedShippingBreakdownText =
+		hasAdditiveShippingMetadata && selectedShippingOption.extraCostAmount !== 0
+			? `${formatShippingAmount(selectedShippingOption.baseCost, selectedShippingOption.currency)} base cost + ${formatShippingAmount(
+					selectedShippingOption.extraCostAmount,
+					selectedShippingOption.currency,
+				)} product cost`
+			: ''
 
 	if (isLoading) {
 		return (
@@ -229,45 +260,27 @@ export default function CartItem({ productId, sellerPubkey, amount, onQuantityCh
 			{/* Shipping Section - only show if not hidden */}
 			{!hideShipping && (
 				<div className="sm:ml-24 ml-0 mt-3 flex flex-col gap-2">
-					<button
-						className={`text-sm ${
-							!hasShipping ? 'text-red-600 hover:text-red-800 font-medium' : 'text-blue-600 hover:text-blue-800'
-						} text-left w-fit flex items-center gap-2`}
-						onClick={() => setShowShipping(!showShipping)}
-					>
-						{!hasShipping && <span className="i-warning w-4 h-4" />}
-						{showShipping ? 'Hide shipping options' : hasShipping ? 'Change shipping' : 'Select shipping (required)'}
-					</button>
-
-					{showShipping && (
-						<div className={`flex flex-col gap-2 ${!hasShipping ? 'border-l-2 border-yellow-400 pl-2' : ''}`}>
-							{isShippingOptionsLoading ? (
-								<div className="text-sm text-muted-foreground">Loading shipping options...</div>
-							) : isShippingOptionsUnavailable ? (
-								<div className="text-sm text-red-500">Shipping options unavailable</div>
-							) : (
-								<ShippingSelector
-									productId={productId}
-									options={productShippingOptions}
-									selectedId={currentShippingId ?? undefined}
-									className="w-full max-w-xs"
-									onSelect={() => {}} // No-op since ShippingSelector updates cart when productId is provided
-								/>
-							)}
-
-							{getSelectedShipping().cost > 0 && (
-								<div className="text-sm text-muted-foreground">
-									Shipping cost: {getSelectedShipping().cost} {getSelectedShipping().currency}
-								</div>
-							)}
-						</div>
+					{isShippingOptionsLoading ? (
+						<div className="text-sm text-muted-foreground">Loading shipping options...</div>
+					) : isShippingOptionsUnavailable ? (
+						<div className="text-sm text-red-500">Shipping options unavailable</div>
+					) : (
+						<ShippingSelector
+							productId={productId}
+							options={productShippingOptions}
+							selectedId={currentShippingId ?? undefined}
+							className="w-full max-w-xs"
+							onSelect={() => {}} // No-op since ShippingSelector updates cart when productId is provided
+						/>
 					)}
 
-					{!showShipping && currentShippingId && getSelectedShipping().cost > 0 && (
-						<div className="text-sm text-muted-foreground">
-							Shipping: {getSelectedShipping().cost} {getSelectedShipping().currency}
-						</div>
+					{!hasShipping && <div className="text-sm font-medium text-red-600">Select a shipping option before continuing.</div>}
+
+					{hasShipping && selectedShippingCostText && (
+						<div className="text-sm text-muted-foreground">Shipping cost: {selectedShippingCostText}</div>
 					)}
+
+					{selectedShippingBreakdownText && <div className="text-xs text-muted-foreground">{selectedShippingBreakdownText}</div>}
 				</div>
 			)}
 		</li>
