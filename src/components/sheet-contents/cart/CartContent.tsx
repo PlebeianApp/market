@@ -1,39 +1,23 @@
 import CartItem from '@/components/CartItem'
-import { ShippingSelector } from '@/components/ShippingSelector'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import type { RichShippingInfo } from '@/lib/stores/cart'
 import { cartActions, cartStore } from '@/lib/stores/cart'
 import { uiActions } from '@/lib/stores/ui'
 import { useAutoAnimate } from '@formkit/auto-animate/react'
 import { useNavigate } from '@tanstack/react-router'
 import { useStore } from '@tanstack/react-store'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { EmptyCartScreen } from './EmptyCartScreen'
 import { UserCard } from '@/components/UserCard'
 
 export function CartContent({ className = '' }: { className?: string }) {
-	const {
-		cart,
-		sellerData,
-		productsBySeller,
-		totalInSats,
-		totalShippingInSats,
-		totalByCurrency,
-		shippingByCurrency,
-		sellerShippingOptions,
-	} = useStore(cartStore)
+	const { cart, sellerData, productsBySeller, totalInSats, totalShippingInSats, totalByCurrency, shippingByCurrency } = useStore(cartStore)
 
 	const [parent, enableAnimations] = useAutoAnimate()
-	const [selectedShippingByUser, setSelectedShippingByUser] = useState<Record<string, string>>({})
 	const navigate = useNavigate()
 
 	const totalItems = useMemo(() => {
 		return Object.values(cart.products).reduce((sum, product) => sum + product.amount, 0)
-	}, [cart.products])
-
-	const hasAllShippingMethods = useMemo(() => {
-		return Object.values(cart.products).every((product) => product.shippingMethodId !== null)
 	}, [cart.products])
 
 	const missingShippingCount = useMemo(() => {
@@ -56,17 +40,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 		if (Object.keys(cart.products).length > 0) {
 			cartActions.groupProductsBySeller()
 			cartActions.updateSellerData()
-
-			cartActions.fetchAndSetSellerShippingOptions()
 		}
-
-		const initialSelected: Record<string, string> = {}
-		Object.values(cart.products).forEach((product) => {
-			if (product.sellerPubkey && product.shippingMethodId && !initialSelected[product.sellerPubkey]) {
-				initialSelected[product.sellerPubkey] = product.shippingMethodId
-			}
-		})
-		setSelectedShippingByUser(initialSelected)
 	}, [cart.products])
 
 	const handleQuantityChange = (productId: string, newAmount: number) => {
@@ -77,19 +51,6 @@ export function CartContent({ className = '' }: { className?: string }) {
 	const handleRemoveProduct = (productId: string) => {
 		// Updated function signature - no longer needs buyerPubkey
 		cartActions.handleProductUpdate('remove', productId)
-	}
-
-	const handleShippingSelect = async (sellerPubkey: string, shippingOption: RichShippingInfo) => {
-		setSelectedShippingByUser((prev) => ({
-			...prev,
-			[sellerPubkey]: shippingOption.id,
-		}))
-
-		const products = productsBySeller[sellerPubkey] || []
-		for (const product of products) {
-			await cartActions.setShippingMethod(product.id, shippingOption)
-		}
-		await cartActions.updateSellerData()
 	}
 
 	if (isCartEmpty) {
@@ -103,7 +64,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 					<div className="flex">
 						<div className="ml-3">
 							<p className="text-sm text-yellow-700">
-								Please select shipping options for {missingShippingCount} {missingShippingCount === 1 ? 'item' : 'items'} before checkout.
+								Select shipping at checkout for {missingShippingCount} {missingShippingCount === 1 ? 'item' : 'items'}.
 							</p>
 						</div>
 					</div>
@@ -122,8 +83,6 @@ export function CartContent({ className = '' }: { className?: string }) {
 								shippingSats: 0,
 							}
 
-							const optionsForThisSeller = sellerShippingOptions[sellerPubkey] || []
-
 							return (
 								<div key={sellerPubkey} className="p-4 rounded-lg border shadow-md bg-white">
 									<div className="mb-3">
@@ -141,18 +100,21 @@ export function CartContent({ className = '' }: { className?: string }) {
 													onRemove={handleRemoveProduct}
 													hideShipping={true}
 												/>
+												<div className="mt-2 text-sm text-muted-foreground">
+													{product.shippingMethodId ? (
+														<span>
+															Shipping: {product.shippingMethodName || 'Selected'}
+															{product.shippingCost > 0 && product.shippingCostCurrency
+																? ` - ${product.shippingCost} ${product.shippingCostCurrency}`
+																: ''}
+														</span>
+													) : (
+														<span>Select shipping at checkout</span>
+													)}
+												</div>
 											</div>
 										))}
 									</ul>
-
-									<div className={`mt-4 ${!selectedShippingByUser[sellerPubkey] ? 'border-l-4 border-yellow-400 pl-2' : ''}`}>
-										<ShippingSelector
-											options={optionsForThisSeller}
-											selectedId={selectedShippingByUser[sellerPubkey]}
-											onSelect={(option) => handleShippingSelect(sellerPubkey, option)}
-											className="w-full"
-										/>
-									</div>
 
 									{Object.entries(data.currencyTotals).map(([currency, amount]) => (
 										<div key={`${sellerPubkey}-${currency}`} className="flex justify-between mt-4">
@@ -234,8 +196,7 @@ export function CartContent({ className = '' }: { className?: string }) {
 
 							<Button
 								className="flex-1 btn-product-banner"
-								disabled={!hasAllShippingMethods || totalItems === 0}
-								title={!hasAllShippingMethods ? 'Please select shipping options for all items' : ''}
+								disabled={totalItems === 0}
 								onClick={() => {
 									uiActions.closeDrawer('cart')
 									navigate({ to: '/checkout' })

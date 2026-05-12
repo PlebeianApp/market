@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import {
+	findReusablePublishedShippingSelection,
 	normalizeProductShippingSelections,
 	normalizePublishedProductShippingTags,
 	resolveProductShippingSelections,
@@ -108,7 +109,9 @@ describe('product shipping selection normalization', () => {
 				cost: 12,
 				currency: 'USD',
 				shippingRef: '30406:merchant:standard',
+				baseCost: 10,
 				extraCost: '2',
+				extraCostAmount: 2,
 				isResolved: true,
 			},
 			{
@@ -117,9 +120,174 @@ describe('product shipping selection normalization', () => {
 				cost: 0,
 				currency: 'USD',
 				shippingRef: '30406:merchant:pickup',
+				baseCost: 0,
 				extraCost: '',
+				extraCostAmount: 0,
 				isResolved: true,
 			},
 		])
+	})
+
+	test('invalid or missing product extra cost resolves as zero while preserving final cost compatibility', () => {
+		const resolvedOptions = resolvePublishedProductShippingOptions({
+			publishedSelections: normalizePublishedProductShippingTags([
+				['shipping_option', '30406:merchant:standard', 'not-a-number'],
+				['shipping_option', '30406:merchant:pickup'],
+			]),
+			availableOptions: [
+				{
+					id: '30406:merchant:standard',
+					name: 'Worldwide Standard',
+					cost: 10,
+					currency: 'USD',
+				},
+				{
+					id: '30406:merchant:pickup',
+					name: 'Local Pickup',
+					cost: 0,
+					currency: 'USD',
+				},
+			],
+		})
+
+		expect(resolvedOptions).toEqual([
+			expect.objectContaining({
+				id: '30406:merchant:standard',
+				baseCost: 10,
+				extraCost: 'not-a-number',
+				extraCostAmount: 0,
+				cost: 10,
+			}),
+			expect.objectContaining({
+				id: '30406:merchant:pickup',
+				baseCost: 0,
+				extraCost: '',
+				extraCostAmount: 0,
+				cost: 0,
+			}),
+		])
+	})
+})
+
+describe('findReusablePublishedShippingSelection', () => {
+	const sellerPubkey = 'seller-a'
+	const reusableShippingRef = '30406:seller-a:standard'
+	const reusableProduct = {
+		id: 'existing-product',
+		sellerPubkey,
+		shippingMethodId: reusableShippingRef,
+	}
+	const resolvedShippingOption = {
+		id: reusableShippingRef,
+		shippingRef: reusableShippingRef,
+		name: 'Standard Shipping',
+		cost: 25,
+		currency: 'USD',
+	}
+
+	test('inherits same-seller shipping when the new product resolves the selected ref', () => {
+		expect(
+			findReusablePublishedShippingSelection({
+				currentProductId: 'new-product',
+				sellerPubkey,
+				products: [reusableProduct],
+				resolvedShippingOptions: [resolvedShippingOption],
+			}),
+		).toEqual({
+			shippingMethodId: reusableShippingRef,
+			shippingMethodName: 'Standard Shipping',
+			shippingCost: 25,
+			shippingCostCurrency: 'USD',
+		})
+	})
+
+	test('inherits the method but uses the new product resolved cost for a different product extra cost', () => {
+		const productWithOldStoredCost = {
+			...reusableProduct,
+			shippingMethodName: 'Old Product Shipping',
+			shippingCost: 40,
+			shippingCostCurrency: 'USD',
+		}
+
+		expect(
+			findReusablePublishedShippingSelection({
+				currentProductId: 'new-product',
+				sellerPubkey,
+				products: [productWithOldStoredCost],
+				resolvedShippingOptions: [{ ...resolvedShippingOption, cost: 30 }],
+			}),
+		).toEqual({
+			shippingMethodId: reusableShippingRef,
+			shippingMethodName: 'Standard Shipping',
+			shippingCost: 30,
+			shippingCostCurrency: 'USD',
+		})
+	})
+
+	test('does not inherit when the selected ref is not resolved for the new product', () => {
+		expect(
+			findReusablePublishedShippingSelection({
+				currentProductId: 'new-product',
+				sellerPubkey,
+				products: [reusableProduct],
+				resolvedShippingOptions: [{ ...resolvedShippingOption, id: '30406:seller-a:pickup', shippingRef: '30406:seller-a:pickup' }],
+			}),
+		).toBeNull()
+	})
+
+	test('does not inherit from a different seller', () => {
+		expect(
+			findReusablePublishedShippingSelection({
+				currentProductId: 'new-product',
+				sellerPubkey,
+				products: [{ ...reusableProduct, sellerPubkey: 'seller-b' }],
+				resolvedShippingOptions: [resolvedShippingOption],
+			}),
+		).toBeNull()
+	})
+
+	test('does not inherit incomplete selected shipping ref state', () => {
+		expect(
+			findReusablePublishedShippingSelection({
+				currentProductId: 'new-product',
+				sellerPubkey,
+				products: [{ ...reusableProduct, shippingMethodId: null }],
+				resolvedShippingOptions: [resolvedShippingOption],
+			}),
+		).toBeNull()
+	})
+
+	test('does not inherit when no matching option is resolved for the new product', () => {
+		expect(
+			findReusablePublishedShippingSelection({
+				currentProductId: 'new-product',
+				sellerPubkey,
+				products: [reusableProduct],
+				resolvedShippingOptions: [],
+			}),
+		).toBeNull()
+	})
+
+	test('uses the new resolved option name, cost, and currency instead of old cart product values', () => {
+		const productWithOldStoredValues = {
+			...reusableProduct,
+			shippingMethodName: 'Old Product Shipping',
+			shippingCost: 999,
+			shippingCostCurrency: 'OLD',
+		}
+
+		const selection = findReusablePublishedShippingSelection({
+			currentProductId: 'new-product',
+			sellerPubkey,
+			products: [productWithOldStoredValues],
+			resolvedShippingOptions: [{ ...resolvedShippingOption, name: 'New Product Shipping', cost: 5, currency: 'SATS' }],
+		})
+
+		expect(selection).toEqual({
+			shippingMethodId: reusableShippingRef,
+			shippingMethodName: 'New Product Shipping',
+			shippingCost: 5,
+			shippingCostCurrency: 'SATS',
+		})
 	})
 })

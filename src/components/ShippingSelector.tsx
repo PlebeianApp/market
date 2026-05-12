@@ -36,6 +36,15 @@ const getBestShippingOptions = (options: RichShippingInfo[], selectedId?: string
 	return limitedOptions
 }
 
+const formatShippingCost = (cost: number | undefined): string => {
+	if (!Number.isFinite(cost)) return '0'
+	return Number(cost).toLocaleString()
+}
+
+const formatShippingAmount = (cost: number | undefined, currency?: string): string => {
+	return [formatShippingCost(cost), currency?.trim()].filter(Boolean).join(' ')
+}
+
 export function ShippingSelector({
 	productId,
 	options: propOptions,
@@ -140,8 +149,8 @@ export function ShippingSelector({
 					<SelectGroup>
 						<SelectLabel>Shipping Options</SelectLabel>
 						{options.map((option: RichShippingInfo) => (
-							<SelectItem key={option.id} value={option.id} className="break-all">
-								{option.name} - {option.cost} {option.currency}
+							<SelectItem key={option.id} value={option.id} className="whitespace-normal">
+								{option.name} - {formatShippingAmount(option.cost, option.currency)}
 							</SelectItem>
 						))}
 					</SelectGroup>
