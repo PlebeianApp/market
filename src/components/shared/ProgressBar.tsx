@@ -22,6 +22,8 @@ interface ProgressBarProps extends React.HTMLAttributes<HTMLDivElement> {
 	stripeSpeed?: number
 	/** Angle of the stripes in degrees (default: 45) */
 	stripeAngle?: number
+	/** Render with badge-like visuals (pill corners + lighter border weight). */
+	badgeStyle?: boolean
 }
 
 const ProgressBar: React.FC<ProgressBarProps> = ({
@@ -35,6 +37,7 @@ const ProgressBar: React.FC<ProgressBarProps> = ({
 	stripeOpacity = 0.3,
 	stripeSpeed = 1,
 	stripeAngle = 45,
+	badgeStyle = false,
 	className,
 	style,
 	...props
@@ -77,11 +80,12 @@ const ProgressBar: React.FC<ProgressBarProps> = ({
 	const containerStyle: React.CSSProperties = {
 		padding: '2px',
 		width: '100%',
-		border: `3px solid ${color}`,
+		border: `${badgeStyle ? 2 : 3}px solid ${color}`,
 		height: `${height}px`,
-		borderRadius: '4px',
+		borderRadius: badgeStyle ? '9999px' : '4px',
 		overflow: 'hidden',
 		position: 'relative',
+		backgroundColor: badgeStyle ? 'rgba(255, 255, 255, 0.08)' : undefined,
 		// Apply glow animation if enabled
 		animation: glow ? `pulse-glow-${instanceId} 2s ease-in-out infinite` : 'none',
 	}
@@ -90,6 +94,7 @@ const ProgressBar: React.FC<ProgressBarProps> = ({
 		height: '100%',
 		width: `${progressPct}%`,
 		backgroundColor: color,
+		borderRadius: badgeStyle ? '9999px' : undefined,
 
 		// Dynamic Gradient
 		backgroundImage: `repeating-linear-gradient(

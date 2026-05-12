@@ -1,3 +1,4 @@
+import { cn } from '@/lib/utils'
 import { AuctionCountdown } from '@/components/AuctionCountdown'
 import { DashboardListItem } from '@/components/layout/DashboardListItem'
 import { Button } from '@/components/ui/button'
@@ -207,13 +208,23 @@ function AuctionListItem({
 					<Gavel className="w-5 h-5 text-gray-400" />
 				</div>
 			)}
-			<div className="min-w-0">
-				<div className="flex flex-wrap items-center gap-2">
-					<p className="font-semibold truncate">{getAuctionTitle(auction)}</p>
-					<AuctionCountdown auction={auction} compact className="px-2 py-1 text-[10px]" />
+			<div className="min-w-0 flex-1">
+				<div className="flex items-start justify-between gap-3 min-w-0">
+					<p className="font-semibold text-sm truncate text-foreground">{getAuctionTitle(auction)}</p>
 				</div>
-				<div className="mt-1 text-xs text-muted-foreground">
-					<span>{status}</span>
+				<div className="mt-2 flex flex-wrap items-center gap-2">
+					<span
+						className={cn(
+							'inline-flex items-center rounded-full px-2 py-1 text-xs font-medium',
+							status === 'Live'
+								? 'bg-emerald-100 text-emerald-800'
+								: status === 'Scheduled'
+									? 'bg-sky-100 text-sky-800'
+									: 'bg-zinc-100 text-zinc-800',
+						)}
+					>
+						{status}
+					</span>
 				</div>
 			</div>
 		</div>
@@ -221,6 +232,9 @@ function AuctionListItem({
 
 	const actions = (
 		<>
+			<div className="w-52 md:w-56">
+				<AuctionCountdown auction={auction} compact className="w-full" />
+			</div>
 			<Link
 				to="/dashboard/products/auctions/$auctionId"
 				params={{ auctionId: auction.id }}
