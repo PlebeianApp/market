@@ -15,9 +15,10 @@ export type AuctionPublishValidationField =
 	| 'startAt'
 	| 'endAt'
 	| 'duration'
-	| 'antiSnipingWindowSeconds'
-	| 'antiSnipingExtensionSeconds'
-	| 'antiSnipingMaxExtensions'
+	| 'antiSnipeWindowMinutes'
+	| 'minBidCurveShape'
+	| 'minBidCurvePeakMultiplier'
+	| 'settlementGracePreset'
 	| 'shippingExtraCost'
 	| 'trustedMints'
 	| 'imageUrls'
@@ -37,10 +38,20 @@ export type AuctionPublishValidationInput = {
 	reserve?: string | number | null
 	startAt?: string | null
 	endAt?: string | null
-	antiSnipingEnabled?: boolean | null
-	antiSnipingWindowSeconds?: string | number | null
-	antiSnipingExtensionSeconds?: string | number | null
-	antiSnipingMaxExtensions?: string | number | null
+	/**
+	 * Anti-snipe window in minutes — added to `end_at` to compute
+	 * `max_end_at`. `0` (default) disables the curve entirely.
+	 * Allowed values are enforced by `AUCTION_ANTI_SNIPE_WINDOW_PRESETS_MINUTES`
+	 * in `publish/auctions.tsx`; the validator just checks the integer
+	 * is non-negative.
+	 */
+	antiSnipeWindowMinutes?: number | null
+	/** `'none' | 'linear' | 'exponential'`. */
+	minBidCurveShape?: string | null
+	/** Peak multiplier preset: 2, 5, or 10. */
+	minBidCurvePeakMultiplier?: number | null
+	/** `'5min' | '1h' | '3h'`. */
+	settlementGracePreset?: string | null
 	imageUrls?: string[] | null
 	shippings?: ProductShippingSelectionInput[] | null
 	trustedMints?: string[] | null
@@ -56,10 +67,11 @@ export type ValidatedAuctionPublishData = {
 	startAt: number
 	endAt: number
 	durationSeconds: number
-	antiSnipingEnabled: boolean
-	antiSnipingWindowSeconds: number
-	antiSnipingExtensionSeconds: number
-	antiSnipingMaxExtensions: number
+	/** Anti-snipe window in seconds (`antiSnipeWindowMinutes × 60`). */
+	antiSnipeWindowSeconds: number
+	minBidCurveShape: 'none' | 'linear' | 'exponential'
+	minBidCurvePeakMultiplier: number
+	settlementGracePreset: '5min' | '1h' | '3h'
 	maxEndAt: number
 	imageUrls: string[]
 	shippings: ProductShippingSelection[]
@@ -224,16 +236,47 @@ const normalizeAuctionPublishInput = (
 		issues.push({ field: 'duration', message: 'Auction duration must be at least 30 minutes' })
 	}
 
-	const antiSnipingEnabled = input.antiSnipingEnabled === true
-	const antiSnipingWindowSeconds = antiSnipingEnabled
-		? parsePositiveInteger(input.antiSnipingWindowSeconds, 'antiSnipingWindowSeconds', 'Anti-sniping window', issues)
-		: 0
-	const antiSnipingExtensionSeconds = antiSnipingEnabled
-		? parsePositiveInteger(input.antiSnipingExtensionSeconds, 'antiSnipingExtensionSeconds', 'Anti-sniping extension', issues)
-		: 0
-	const antiSnipingMaxExtensions = antiSnipingEnabled
-		? parsePositiveInteger(input.antiSnipingMaxExtensions, 'antiSnipingMaxExtensions', 'Max anti-sniping extensions', issues)
-		: 0
+	// Anti-snipe window in minutes → seconds. `0` means no window
+	// (max_end_at = end_at, curve disabled regardless of shape).
+	// AUCTIONS.md §6.0 / §6.1.
+	const rawWindowMinutes = typeof input.antiSnipeWindowMinutes === 'number' ? input.antiSnipeWindowMinutes : 0
+	const antiSnipeWindowMinutes = Number.isFinite(rawWindowMinutes) && rawWindowMinutes >= 0 ? Math.floor(rawWindowMinutes) : 0
+	if (!Number.isFinite(rawWindowMinutes) || rawWindowMinutes < 0) {
+		issues.push({ field: 'antiSnipeWindowMinutes', message: 'Anti-snipe window must be a non-negative number of minutes' })
+	}
+	const antiSnipeWindowSeconds = antiSnipeWindowMinutes * 60
+
+	const minBidCurveShapeRaw = typeof input.minBidCurveShape === 'string' ? input.minBidCurveShape : 'none'
+	const minBidCurveShape: 'none' | 'linear' | 'exponential' =
+		minBidCurveShapeRaw === 'linear' || minBidCurveShapeRaw === 'exponential' ? minBidCurveShapeRaw : 'none'
+	if (minBidCurveShape !== minBidCurveShapeRaw && minBidCurveShapeRaw !== 'none') {
+		issues.push({ field: 'minBidCurveShape', message: 'Anti-snipe curve shape must be none, linear, or exponential' })
+	}
+
+	const peakRaw = typeof input.minBidCurvePeakMultiplier === 'number' ? input.minBidCurvePeakMultiplier : 2
+	const minBidCurvePeakMultiplier = Number.isFinite(peakRaw) && peakRaw >= 1 && peakRaw <= 100 ? peakRaw : 2
+	if (!Number.isFinite(peakRaw) || peakRaw < 1 || peakRaw > 100) {
+		issues.push({
+			field: 'minBidCurvePeakMultiplier',
+			message: 'Anti-snipe peak multiplier must be a number in [1, 100]',
+		})
+	}
+	// If the seller chose a curve but no window, the curve has zero
+	// duration — surface that as a validation hint so the form can
+	// either nudge them to widen the window or pick 'none'.
+	if (minBidCurveShape !== 'none' && antiSnipeWindowMinutes === 0) {
+		issues.push({
+			field: 'antiSnipeWindowMinutes',
+			message: 'Pick an anti-snipe window so the curve has time to ramp, or set the curve shape to none.',
+		})
+	}
+
+	const settlementGraceRaw = typeof input.settlementGracePreset === 'string' ? input.settlementGracePreset : '1h'
+	const settlementGracePreset: '5min' | '1h' | '3h' =
+		settlementGraceRaw === '5min' || settlementGraceRaw === '1h' || settlementGraceRaw === '3h' ? settlementGraceRaw : '1h'
+	if (settlementGracePreset !== settlementGraceRaw) {
+		issues.push({ field: 'settlementGracePreset', message: 'Settlement grace must be 5min, 1h, or 3h' })
+	}
 
 	const imageUrls = normalizeImages(input.imageUrls)
 	if (imageUrls.length === 0) {
@@ -247,10 +290,8 @@ const normalizeAuctionPublishInput = (
 
 	const shippings = normalizeShippingSelections(input.shippings, issues)
 
-	const maxEndAt =
-		antiSnipingEnabled && antiSnipingExtensionSeconds !== null && antiSnipingMaxExtensions !== null
-			? endAt + antiSnipingExtensionSeconds * antiSnipingMaxExtensions
-			: endAt
+	// max_end_at = end_at + window (no dynamic shifting per AUCTIONS.md §6.1).
+	const maxEndAt = endAt + antiSnipeWindowSeconds
 
 	return {
 		value: {
@@ -263,10 +304,10 @@ const normalizeAuctionPublishInput = (
 			startAt,
 			endAt,
 			durationSeconds,
-			antiSnipingEnabled,
-			antiSnipingWindowSeconds: antiSnipingWindowSeconds ?? 0,
-			antiSnipingExtensionSeconds: antiSnipingExtensionSeconds ?? 0,
-			antiSnipingMaxExtensions: antiSnipingMaxExtensions ?? 0,
+			antiSnipeWindowSeconds,
+			minBidCurveShape,
+			minBidCurvePeakMultiplier,
+			settlementGracePreset,
 			maxEndAt,
 			imageUrls,
 			shippings,

@@ -20,9 +20,13 @@ const AUCTION_IMMUTABLE_SINGLE_TAGS = [
 	'path_issuer',
 	'key_scheme',
 	'p2pk_xpub',
+	// `extension_rule` is retired in v1 (AUCTIONS.md §6.1) but kept in the
+	// immutable list so that auctions which still emit it (legacy auctions
+	// or backwards-compatible publishers) can't switch its value post-publish.
 	'extension_rule',
 	'max_end_at',
 	'settlement_grace',
+	'min_bid_curve',
 	'settlement_policy',
 	'schema',
 ]
@@ -112,6 +116,132 @@ export const getAuctionMaxEndAt = (auctionEvent: NDKEvent): number =>
  */
 export const getAuctionSettlementGrace = (auctionEvent: NDKEvent): number =>
 	parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'settlement_grace'), 0)
+
+/**
+ * AUCTIONS.md §6.1 — Lag tolerance applied server-side when computing
+ * the bid floor. `request_path` evaluates the curve at
+ * `effective_t = max(server_now - GRACE, end_at)`; `request_settlement`
+ * per-bid re-check uses
+ * `effective_t = clamp(bid.created_at - GRACE, end_at, max_end_at)`.
+ *
+ * Single-sided (only the server is lenient) so the bidder client can
+ * display the floor at `client_now` without inflation and trust that a
+ * bid at the displayed price will be accepted within 5 s of click→relay
+ * latency.
+ */
+export const BID_FLOOR_TIME_GRACE_SECONDS = 5
+
+export const getAuctionStartingBid = (auctionEvent: NDKEvent): number =>
+	parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'starting_bid'), 0)
+
+export const getAuctionBidIncrement = (auctionEvent: NDKEvent): number =>
+	parseAuctionNonNegativeInt(getAuctionTagValue(auctionEvent, 'bid_increment'), 0)
+
+export type AuctionMinBidCurveShape = 'none' | 'linear' | 'exponential'
+
+export interface AuctionMinBidCurve {
+	shape: AuctionMinBidCurveShape
+	/** Multiplier applied to the baseline floor at `t = max_end_at`. */
+	peakMultiplier: number
+	/** Raw tag value for diagnostics. `''` when the tag is missing. */
+	raw: string
+}
+
+const MIN_BID_CURVE_MIN_PEAK = 1
+const MIN_BID_CURVE_MAX_PEAK = 100
+
+const parseMinBidCurvePeak = (value: string): number => {
+	const parsed = Number.parseFloat(value)
+	if (!Number.isFinite(parsed)) return MIN_BID_CURVE_MIN_PEAK
+	if (parsed < MIN_BID_CURVE_MIN_PEAK) return MIN_BID_CURVE_MIN_PEAK
+	if (parsed > MIN_BID_CURVE_MAX_PEAK) return MIN_BID_CURVE_MAX_PEAK
+	return parsed
+}
+
+/**
+ * Parse the `min_bid_curve` tag value `<shape>:<peak_multiplier>`.
+ *
+ * Returns `shape: 'none'` (with multiplier `1`) for missing/unrecognised
+ * tags so callers can treat "no curve" as the safe default: floor stays
+ * flat through the whole bidding window. See AUCTIONS.md §4.1 / §6.1.
+ */
+export const getAuctionMinBidCurve = (auctionEvent: NDKEvent): AuctionMinBidCurve => {
+	const raw = getAuctionTagValue(auctionEvent, 'min_bid_curve')
+	if (!raw) return { shape: 'none', peakMultiplier: 1, raw: '' }
+	const [shapeRaw, peakRaw] = raw.split(':')
+	if (shapeRaw === 'none') return { shape: 'none', peakMultiplier: 1, raw }
+	if (shapeRaw === 'linear' || shapeRaw === 'exponential') {
+		return { shape: shapeRaw, peakMultiplier: parseMinBidCurvePeak(peakRaw ?? ''), raw }
+	}
+	// Unrecognised shape — treat as no curve. Be permissive (don't throw)
+	// because malformed tags shouldn't brick the bidder UI.
+	return { shape: 'none', peakMultiplier: 1, raw }
+}
+
+/**
+ * Compute the minimum acceptable bid amount for an auction at a given
+ * unix-seconds moment, per AUCTIONS.md §6.1.
+ *
+ * Pure function — same inputs always yield the same output. Used in three
+ * places:
+ *   - bidder UI: live display of "your bid floor right now is X sats"
+ *   - CVM `request_path`: enforced gate before issuing a derivation path
+ *   - CVM `request_settlement`: per-bid re-check
+ *
+ * Floor formula:
+ *   `baseline = topBid === 0 ? startingBid : topBid + bidIncrement`
+ *   `multiplier(t) = 1` outside the curve window or when shape='none'
+ *   `multiplier(t) = peakMultiplier` at or past `max_end_at`
+ *   `multiplier(t) = linearly/exponentially interpolated otherwise`
+ *   `floor = baseline × multiplier(t)`
+ *
+ * Returns a positive integer (rounded up — bidder must pay at least the
+ * computed floor; rounding down would let bidders shave a sat off).
+ */
+export const computeAuctionBidFloor = (auctionEvent: NDKEvent, topBid: number, atSeconds: number): number => {
+	const endAt = getAuctionEndAt(auctionEvent)
+	const maxEndAt = getAuctionMaxEndAt(auctionEvent) || endAt
+	const startingBid = getAuctionStartingBid(auctionEvent)
+	const bidIncrement = getAuctionBidIncrement(auctionEvent)
+	const curve = getAuctionMinBidCurve(auctionEvent)
+
+	const baseline = topBid > 0 ? topBid + bidIncrement : startingBid
+	const multiplier = computeAuctionFloorMultiplier({
+		atSeconds,
+		endAt,
+		maxEndAt,
+		shape: curve.shape,
+		peakMultiplier: curve.peakMultiplier,
+	})
+
+	// `Math.ceil` so a fractional multiplier still requires the bidder to
+	// pay AT LEAST the floor — never less. (E.g. baseline=100,
+	// multiplier=1.5 → floor=150 exactly; multiplier=1.501 → 151.)
+	return Math.max(0, Math.ceil(baseline * multiplier))
+}
+
+/**
+ * Floor multiplier at `atSeconds`. Extracted so the seller's
+ * curve-preview UI can plot the curve without a full auction event in
+ * hand. Same monotonic behaviour as `computeAuctionBidFloor`.
+ */
+export const computeAuctionFloorMultiplier = (params: {
+	atSeconds: number
+	endAt: number
+	maxEndAt: number
+	shape: AuctionMinBidCurveShape
+	peakMultiplier: number
+}): number => {
+	const { atSeconds, endAt, maxEndAt, shape, peakMultiplier } = params
+	if (shape === 'none' || peakMultiplier <= 1) return 1
+	if (maxEndAt <= endAt) return 1 // zero-duration window → curve disabled
+	if (atSeconds <= endAt) return 1
+	if (atSeconds >= maxEndAt) return peakMultiplier
+	const tNorm = (atSeconds - endAt) / (maxEndAt - endAt)
+	if (shape === 'linear') return 1 + (peakMultiplier - 1) * tNorm
+	// exponential
+	return Math.pow(peakMultiplier, tNorm)
+}
 export const getAuctionRootEventId = (auctionEvent: NDKEvent): string =>
 	getAuctionTagValue(auctionEvent, AUCTION_ROOT_EVENT_ID_TAG) || auctionEvent.id
 export const getAuctionCoordinate = (auctionEvent: NDKEvent): string => {

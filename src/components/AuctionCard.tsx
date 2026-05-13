@@ -133,7 +133,11 @@ export function AuctionCard({
 				sellerPubkey: auction.pubkey,
 				pathIssuerPubkey,
 				p2pkXpub,
-				mint: acceptedMints[0],
+				// See AuctionBidder.tsx for why this is a list, not a single
+				// mint: `lockAuctionBidFunds` walks it in seller-declared
+				// order and picks the first mint where the bidder has the
+				// balance for the delta amount.
+				mintCandidates: acceptedMints,
 			})
 		} catch {
 			// Error toast is handled by mutation onError.

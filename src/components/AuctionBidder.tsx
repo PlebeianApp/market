@@ -18,6 +18,7 @@ import {
 	getAuctionSettlementGrace,
 	getAuctionCurrentPriceFromBids,
 } from '@/queries/auctions'
+import { computeAuctionBidFloor, getAuctionMinBidCurve } from '@/lib/auctionSettlement'
 import { NDKEvent } from '@nostr-dev-kit/ndk'
 import { toast } from 'sonner'
 import { useMemo, useState, useEffect } from 'react'
@@ -69,7 +70,17 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 	const notStarted = startAt > 0 && countdown.now < startAt
 
 	const currentPrice = getAuctionCurrentPriceFromBids(auction, bids, startingBid)
-	const minBid = Math.max(startingBid, currentPrice + Math.max(1, bidIncrement))
+	// AUCTIONS.md §6.1 — bidder-side live floor. Display the floor at
+	// `client_now` (no inflation). The CVM server is more lenient by
+	// `BID_FLOOR_TIME_GRACE_SECONDS = 5`, so a click at the displayed
+	// price is always accepted within the GRACE window. Recomputes
+	// every tick via `useAuctionCountdown.now`, so the bidder watches
+	// the floor rise in real time once the curve window opens.
+	const curveFloor = useMemo(() => computeAuctionBidFloor(auction, currentPrice, countdown.now), [auction, currentPrice, countdown.now])
+	const flatFloor = Math.max(startingBid, currentPrice + Math.max(1, bidIncrement))
+	const minBid = Math.max(flatFloor, curveFloor)
+	const inCurveWindow = countdown.now > endAt && countdown.now < (getAuctionMaxEndAt(auction) || endAt)
+	const auctionCurve = useMemo(() => getAuctionMinBidCurve(auction), [auction])
 
 	const isOwnAuction = currentUserPubkey === auction.pubkey
 
@@ -149,7 +160,13 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 				sellerPubkey: auction.pubkey,
 				pathIssuerPubkey,
 				p2pkXpub,
-				mint: trustedMints[0],
+				// Hand the lock flow ALL the seller's trusted mints in
+				// declared order. `lockAuctionBidFunds` picks the first
+				// one where this bidder's wallet has enough balance —
+				// previously we hard-coded `trustedMints[0]`, so a
+				// bidder with funds on mint #4 would get a "0 sats on
+				// minibits" error.
+				mintCandidates: trustedMints,
 			})
 			toast.success('Bid placed successfully')
 			setIsEditing(false)
@@ -161,6 +178,21 @@ export function AuctionBidder({ auction, bids: bidsProp, currentUserPubkey, onBi
 
 	return (
 		<div className="flex flex-col gap-2 w-full">
+			{/* Anti-snipe curve banner — visible only when we're inside
+			    `(end_at, max_end_at]` AND the auction has a non-`none` curve.
+			    Tells the bidder why the floor is higher than they'd expect
+			    from the flat `currentPrice + bidIncrement`. AUCTIONS.md §6.1. */}
+			{inCurveWindow && auctionCurve.shape !== 'none' && (
+				<div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+					<p className="font-semibold">Anti-snipe window — minimum bid rising</p>
+					<p className="mt-0.5 text-amber-700">
+						The auction's nominal end has passed. Bids are still accepted until the absolute end, but the floor ramps up{' '}
+						<span className="font-semibold">{auctionCurve.shape}</span>ly to {auctionCurve.peakMultiplier}× by then. Floor right now:{' '}
+						<span className="font-semibold">{minBid.toLocaleString()} sats</span>.
+					</p>
+				</div>
+			)}
+
 			{/* Main Action Area */}
 			<div className={cn('flex flex-col sm:flex-row gap-2 items-stretch sm:items-center')}>
 				{!compact &&
