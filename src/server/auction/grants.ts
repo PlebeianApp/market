@@ -1,4 +1,10 @@
-import { getAuctionTagValue } from '../../lib/auctionSettlement'
+import {
+	AUCTION_BID_KIND,
+	BID_FLOOR_TIME_GRACE_SECONDS,
+	computeAuctionBidFloor,
+	getAuctionBidAmount,
+	getAuctionTagValue,
+} from '../../lib/auctionSettlement'
 import {
 	AUCTION_PATH_GRANT_DEFAULT_TTL_SECONDS,
 	AUCTION_PATH_REGISTRY_SCHEMA,
@@ -34,6 +40,13 @@ export interface AuctionPathGrant {
 	childPubkey: string
 	issuedAt: number
 	expiresAt: number
+	/**
+	 * Bid floor enforced for this grant at request time (AUCTIONS.md §6.1).
+	 * Lower bound on `intendedAmount`; the bidder's kind-1023 amount MUST
+	 * be ≥ this value, and settlement re-checks against the floor at the
+	 * bid's own `created_at`.
+	 */
+	acceptedFloor: number
 }
 
 export async function buildAuctionPathGrant(
@@ -44,6 +57,7 @@ export async function buildAuctionPathGrant(
 		auctionCoordinates: string
 		bidderPubkey: string
 		bidderRefundPubkey: string
+		intendedAmount: number
 	},
 ): Promise<AuctionPathGrant> {
 	// AUCTIONS.md §7.5.1 input validation. The transport (HTTP NIP-98 or
@@ -56,6 +70,9 @@ export async function buildAuctionPathGrant(
 	if (!COMPRESSED_SECP256K1_PUBKEY_HEX_RE.test(params.bidderRefundPubkey)) {
 		throw new Error('bidderRefundPubkey must be a compressed secp256k1 pubkey (33 bytes hex, 02/03 prefix)')
 	}
+	if (!Number.isFinite(params.intendedAmount) || params.intendedAmount <= 0) {
+		throw new Error('intendedAmount must be a positive integer (sats)')
+	}
 
 	ctx.stateStore.enforcePathRequestRateLimit({
 		issuerPubkey: ctx.issuerPubkey,
@@ -65,6 +82,16 @@ export async function buildAuctionPathGrant(
 	})
 
 	const auctionEvent = await loadAuctionEvent(ctx, params.auctionEventId)
+
+	// AUCTIONS.md §7.5.1 — seller self-bid block. A seller bidding on
+	// their own auction could pump the floor against honest bidders
+	// without ever paying out (the kind-1023 → submit_bid_token loop
+	// would still settle to themselves, but the curve would have
+	// inflated the cost for legitimate participants in the meantime).
+	if (params.bidderPubkey.toLowerCase() === auctionEvent.pubkey.toLowerCase()) {
+		throw new Error('Sellers MUST NOT bid on their own auction')
+	}
+
 	const issuerPubkey = getAuctionPathIssuerFromEvent(auctionEvent)
 	if (issuerPubkey !== ctx.issuerPubkey) {
 		throw new Error('Auction is not configured for this path issuer')
@@ -88,6 +115,20 @@ export async function buildAuctionPathGrant(
 	}
 	if (maxEndAt && now >= maxEndAt) {
 		throw new Error('Auction has reached its hard bidding cutoff')
+	}
+
+	// AUCTIONS.md §6.1 — anti-snipe curve enforcement. Compute the floor
+	// at `now - GRACE` (server is lenient by 5 s to absorb relay/network
+	// latency between the bidder clicking "Bid" and us receiving the
+	// kind-25910). The floor uses the relay-current top bid; we fetch a
+	// fresh slice rather than trusting any client-supplied state.
+	const topBidAmount = await fetchCurrentTopBidAmount(ctx, params.auctionEventId, params.auctionCoordinates)
+	const effectiveT = Math.max(now - BID_FLOOR_TIME_GRACE_SECONDS, endAt)
+	const acceptedFloor = computeAuctionBidFloor(auctionEvent, topBidAmount, effectiveT)
+	if (params.intendedAmount < acceptedFloor) {
+		throw new Error(
+			`intendedAmount ${params.intendedAmount} is below the current bid floor ${acceptedFloor} sats — wait for the next floor update or bid higher`,
+		)
 	}
 
 	const registry = (await fetchAuctionPathRegistry(ctx, params.auctionEventId)) ?? {
@@ -140,5 +181,60 @@ export async function buildAuctionPathGrant(
 		childPubkey: allocated.childPubkey,
 		issuedAt,
 		expiresAt,
+		acceptedFloor,
+	}
+}
+
+/**
+ * Fetch every kind-1023 bid event for the auction and return the highest
+ * `amount` we see. Used by `buildAuctionPathGrant` to compute the
+ * curve-aware floor.
+ *
+ * Returns `0` when no bids exist yet, which makes
+ * `computeAuctionBidFloor` fall back to `starting_bid` for the baseline
+ * (the "first bid" case in AUCTIONS.md §6.1).
+ *
+ * We deliberately don't enforce chain priority or any of settlement's
+ * stricter checks here — those guard the actual release. For floor
+ * enforcement we want the loosest possible interpretation of "what's
+ * the current top": a bid that's structurally invalid is still
+ * something a bidder might have committed to outbid.
+ */
+async function fetchCurrentTopBidAmount(
+	ctx: AuctionContext,
+	auctionEventId: string,
+	auctionCoordinates: string,
+): Promise<number> {
+	const filters = [
+		{
+			kinds: [AUCTION_BID_KIND],
+			'#e': [auctionEventId],
+			limit: 200,
+		},
+		...(auctionCoordinates
+			? [
+					{
+						kinds: [AUCTION_BID_KIND],
+						'#a': [auctionCoordinates],
+						limit: 200,
+					},
+				]
+			: []),
+	]
+	try {
+		const bidEvents = Array.from(await ctx.ndk.fetchEvents(filters.length === 1 ? filters[0] : filters))
+		let top = 0
+		for (const bid of bidEvents) {
+			const amount = getAuctionBidAmount(bid)
+			if (amount > top) top = amount
+		}
+		return top
+	} catch (error) {
+		// On relay error, fall back to "no top bid" — the floor degrades
+		// to `starting_bid × multiplier`. The bidder's UI shows the same
+		// number (it doesn't know about the failure), so behaviour stays
+		// consistent. Log so operators see persistent issues.
+		console.warn('[auction] fetchCurrentTopBidAmount failed; falling back to top=0', error)
+		return 0
 	}
 }

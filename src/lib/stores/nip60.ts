@@ -71,7 +71,20 @@ export type AuctionP2pkKeyScheme = 'hd_p2pk'
 
 export interface LockAuctionBidFundsParams {
 	amount: number
+	/**
+	 * Single mint URL — kept for backwards compatibility with non-auction
+	 * callers (e.g. legacy lock flows). If both `mint` and
+	 * `preferredMints` are provided, `mint` wins (interpreted as an
+	 * explicit override). Most call sites should pass `preferredMints`.
+	 */
 	mint?: string
+	/**
+	 * Ordered list of trusted mints (seller-declared). Walked in order;
+	 * the first mint where the bidder's wallet has at least `amount`
+	 * sats is used. When omitted, falls back to the wallet's default
+	 * mint or any mint with sufficient balance.
+	 */
+	preferredMints?: string[]
 	locktime: number
 	refundPubkey: string
 	/**
@@ -1478,9 +1491,33 @@ export const nip60Actions = {
 			throw new Error(`Lock pubkey is invalid: ${error instanceof Error ? error.message : String(error)}`)
 		}
 
+		// Mint selection order (AUCTIONS.md §4.1 + bid flow):
+		//   1. `params.mint` explicit override — legacy callers only.
+		//   2. `params.preferredMints` in order — auction's trusted mints
+		//      walked seller-declared first; pick the first one where the
+		//      bidder has enough balance for `amount` (delta).
+		//   3. wallet's `defaultMint` — only when no preferred list given.
+		//   4. any mint in the wallet with enough balance — last resort.
+		// Falling through all four with no match yields a clear error
+		// listing per-trusted-mint balances so the bidder knows where
+		// to top up.
 		const { totalBalance, mintBalances } = getBalancesFromState(wallet)
-		let targetMint = params.mint ?? state.defaultMint ?? undefined
-		if (!targetMint) {
+		let targetMint: string | undefined
+		if (params.mint) {
+			targetMint = params.mint
+		} else if (params.preferredMints && params.preferredMints.length > 0) {
+			targetMint = params.preferredMints.find((mint) => (mintBalances[mint] ?? 0) >= amount)
+			if (!targetMint) {
+				const breakdown = params.preferredMints
+					.map((mint) => `${getMintHostname(mint)}: ${mintBalances[mint] ?? 0} sats`)
+					.join(', ')
+				throw new Error(
+					`No trusted mint has ${amount} sats. ${breakdown}. Deposit to one of the auction's trusted mints (or move existing funds there) and try again.`,
+				)
+			}
+		} else if (state.defaultMint && (mintBalances[state.defaultMint] ?? 0) >= amount) {
+			targetMint = state.defaultMint
+		} else {
 			targetMint = Object.keys(mintBalances).find((mint) => mintBalances[mint] >= amount)
 		}
 		if (!targetMint) {

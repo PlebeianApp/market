@@ -101,24 +101,40 @@ There is intentionally no product reference (`a` tag) in v1.
 - `key_scheme`: `hd_p2pk`.
 - `p2pk_xpub`: seller HD xpub used for per-bid seller child key derivation.
 - `max_end_at`: **hard bidding cutoff** in unix seconds. The second of the
-  three protocol timestamps (see §6.0). When anti-sniping is disabled this
-  MUST equal `end_at`; when anti-sniping is enabled this MUST equal
-  `end_at + max_extensions × extension_seconds`. Always required so the
-  Cashu locktime is computable from auction tags alone.
+  three protocol timestamps (see §6.0). Either equals `end_at` (no
+  anti-snipe window) or sits later — `max_end_at = end_at + window` where
+  `window` is the seller-chosen anti-snipe window (typically minutes).
+  Bids submitted in `[start_at, end_at]` pay the flat floor; bids in
+  `(end_at, max_end_at]` pay the curve floor (see `min_bid_curve` below).
+  Always required so the Cashu locktime is computable from auction tags
+  alone.
 - `settlement_grace`: seconds between `max_end_at` and the bid's Cashu
   locktime — i.e. the window in which the seller has to publish the
   settlement after bidding closes. Together with `max_end_at` this fully
   determines `T_unlock` (see §6.0):
-  `locktime = max_end_at + settlement_grace`. v1 default: `7200` (2 h).
-  Auctions MAY use shorter values (e.g. `30` for dev quick-settle test
-  fixtures); production deployments SHOULD use values comfortably above
-  the worst-case time required to fetch a path release, derive child
-  privkeys, swap each leg at the mint, and publish the kind-1024 event.
+  `locktime = max_end_at + settlement_grace`. v1 form presets: `300`
+  (5 min), `3600` (1 h), `10800` (3 h). Auctions MAY use shorter values
+  (e.g. `30` for dev quick-settle test fixtures); production
+  deployments SHOULD use values comfortably above the worst-case time
+  required to fetch a path release, derive child privkeys, swap each
+  leg at the mint, and publish the kind-1024 event.
+- `min_bid_curve`: anti-snipe floor curve applied in `(end_at, max_end_at]`.
+  Format `<shape>:<peak_multiplier>` where `shape ∈ {none, linear,
+  exponential}` and `peak_multiplier` is a decimal in `[1.0, 100.0]`.
+  Floor computed as `baseline × multiplier(t)`:
+  - `baseline = top_bid === 0 ? starting_bid : top_bid + bid_increment`
+  - `multiplier(t) = 1` when `t ≤ end_at` or `shape = none`
+  - `multiplier(t) = peak_multiplier` when `t ≥ max_end_at`
+  - In `(end_at, max_end_at)` with `t_norm = (t - end_at) / (max_end_at - end_at)`:
+    - `shape = linear` → `1 + (peak_multiplier - 1) × t_norm`
+    - `shape = exponential` → `peak_multiplier ^ t_norm`
+  v1 form presets for `peak_multiplier`: `2.0` / `5.0` / `10.0`. Default
+  when tag is missing: `none:1.0` (no curve, flat floor through the
+  whole bidding window). The path issuer enforces this floor at
+  `request_path` time and re-checks at settlement per-bid.
 
 ### Optional auction tags
 
-- `extension_rule`: `none` (v1 default),
-  `anti_sniping:<window_seconds>:<extension_seconds>`.
 - `vadium_ratio_bps`: default `10000` (100%).
 - `schema`: version marker, e.g. `auction_v1`.
 - `path_issuer`: Nostr pubkey of the path oracle (defaults to the app's
@@ -154,13 +170,19 @@ Immutable after first publish:
 - `mint` set
 - `p2pk_xpub`
 - `path_issuer`
-- `extension_rule`
 - `max_end_at`
 - `settlement_grace`
+- `min_bid_curve`
 - `settlement_policy`
 - `key_scheme`
 - `reserve`
 - `bid_increment`
+
+`extension_rule` was used in earlier drafts (v0) to describe a dynamic
+`end_at`-shifting anti-snipe scheme. v1 retires it: the curve in
+`min_bid_curve` replaces it, and `max_end_at` is now fixed at publish
+time. Implementations MAY emit `['extension_rule', 'none']` for
+backwards compatibility, but any non-`none` value MUST be ignored.
 
 Mutable:
 
@@ -188,8 +210,9 @@ Important:
 		["auction_type", "english"],
 		["start_at", "1766202000"],
 		["end_at", "1766288400"],
-		["max_end_at", "1766288400"], // == end_at when anti-sniping disabled
-		["settlement_grace", "7200"], // 2 h seller-settlement window
+		["max_end_at", "1766289000"], // end_at + 600s anti-snipe window
+		["settlement_grace", "3600"], // 1 h seller-settlement window
+		["min_bid_curve", "exponential:5.0"], // 5× floor at max_end_at
 		["currency", "SAT"],
 		["reserve", "50000"],
 		["bid_increment", "1000"],
@@ -199,7 +222,6 @@ Important:
 		["key_scheme", "hd_p2pk"],
 		["p2pk_xpub", "xpub6Bk...sellerAuctionXpub"],
 		["path_issuer", "<app-path-oracle-nostr-pubkey>"],
-		["extension_rule", "none"],
 		["schema", "auction_v1"],
 
 		// Product-shaped fields
@@ -592,11 +614,11 @@ Every path-oracle auction is parameterised by three monotonically ordered
 timestamps. Implementations MUST treat each as a separate concern; collapsing
 any two of them into one is unsafe.
 
-| Tag / value          | Symbol     | Meaning                                                                                                |
-| -------------------- | ---------- | ------------------------------------------------------------------------------------------------------ |
-| `end_at`             | `T_end`    | Nominal close. Bidders compete up to (or near) this moment. Extendable via anti-sniping.               |
-| `max_end_at`         | `T_cutoff` | **Hard bidding cutoff.** No new bids accepted past this. Equals `T_end` when anti-sniping is off.      |
-| `locktime` (per bid) | `T_unlock` | Unix-seconds value embedded in every Cashu P2PK secret. The mint opens the refund path at this moment. |
+| Tag / value          | Symbol     | Meaning                                                                                                                                                                              |
+| -------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `end_at`             | `T_end`    | Nominal close. Floor stays flat in `[start_at, end_at]`. After this point the curve in `min_bid_curve` ramps the floor up.                                                           |
+| `max_end_at`         | `T_cutoff` | **Hard bidding cutoff.** No new bids accepted past this. Equals `T_end` when the seller chose no anti-snipe window; otherwise sits `(max_end_at − end_at)` seconds later by tag.    |
+| `locktime` (per bid) | `T_unlock` | Unix-seconds value embedded in every Cashu P2PK secret. The mint opens the refund path at this moment.                                                                               |
 
 The invariants:
 
@@ -622,36 +644,61 @@ If you collapse any two:
 
 `max_end_at` MUST therefore be present on every auction event:
 
-- Anti-sniping disabled → `max_end_at = end_at`.
-- Anti-sniping enabled with `n` extensions of `ext` seconds →
-  `max_end_at = end_at + n × ext`.
+- No anti-snipe window → `max_end_at = end_at`.
+- Anti-snipe window of `window` seconds (seller-chosen at publish time) →
+  `max_end_at = end_at + window`. The window is fixed at publish, not
+  dynamically extended.
 
-`settlement_grace` is a protocol parameter — currently a constant
-on the issuer and embedded into each bid's locktime via `locktime =
-max_end_at + grace`. Sub-minute values are unsafe on shared infrastructure;
-sub-10-minute values are questionable in production. Dev environments use a
-shorter value (≈ 30 s) for test velocity, not as a design example.
+`settlement_grace` is per-auction (see §4.1). v1 form presets:
+`300` (5 min), `3600` (1 h), `10800` (3 h). Sub-minute values are unsafe
+on shared infrastructure; sub-10-minute values are questionable in
+production. Dev environments use a shorter value (≈ 30 s) for test
+velocity, not as a design example.
 
-## 6.1 Effective end time (anti-sniping)
+## 6.1 Bid floor and the anti-snipe curve
 
-If `extension_rule=anti_sniping:<window_seconds>:<extension_seconds>` is
-enabled, clients/indexers compute `effective_end_at` deterministically and
-cap it at `max_end_at`:
+v1 retires the dynamic `extension_rule` model. There is no
+`effective_end_at` that shifts as bids land — `max_end_at` is fixed at
+publish time. Instead, the **bid floor rises** in `(end_at, max_end_at]`
+per the `min_bid_curve` tag (see §4.1). A path issuer enforces the
+floor at `request_path` time and a settlement check re-verifies each
+bid against the floor at its `created_at`.
 
 ```text
-effective_end_at = end_at
-for each valid bid ordered by (created_at, id):
-  remaining = effective_end_at - bid.created_at
-  if 0 < remaining < snipe_window_seconds:
-    effective_end_at = min(effective_end_at + snipe_extension_seconds, max_end_at)
+baseline(top_bid)      = top_bid === 0 ? starting_bid : top_bid + bid_increment
+multiplier(t):
+  if t ≤ end_at OR shape = none:   return 1
+  if t ≥ max_end_at:                return peak_multiplier
+  t_norm = (t - end_at) / (max_end_at - end_at)
+  if shape = linear:                return 1 + (peak_multiplier - 1) × t_norm
+  if shape = exponential:           return peak_multiplier ^ t_norm
+floor(top_bid, t)      = baseline(top_bid) × multiplier(t)
 ```
+
+**Lag tolerance.** A protocol constant `BID_FLOOR_TIME_GRACE_SECONDS = 5`
+is applied server-side in two places:
+
+- `request_path` computes `effective_t = max(server_now - GRACE, end_at)`
+  before evaluating the floor. Gives bidders ~5 s of latency budget
+  between clicking "Bid" and the server receiving the request.
+- `request_settlement` per-bid re-check uses
+  `effective_t = clamp(bid.created_at - GRACE, end_at, max_end_at)`.
+  Bidders whose kind-1023 takes a few seconds to propagate aren't
+  penalised. A bidder who delays publishing kind-1023 for > 5 s after
+  receiving a grant pays the curve at the actual publish time, so
+  grants can't be sat on as cheap snipe ammunition.
+
+The bidder client displays the floor at `client_now` (no inflation) —
+the server is more lenient than the displayed value, so a click at
+the displayed price is always accepted within the GRACE window.
 
 Critical policy:
 
-- Settlement MUST use `effective_end_at`, not raw `end_at`.
-- `max_end_at` is always present (see §6.0). With anti-sniping disabled it
-  equals `end_at` and acts as a no-op cap; with anti-sniping enabled it
-  caps the snipe extension.
+- Settlement MUST use `max_end_at`, not raw `end_at`, when deciding
+  whether the auction can be settled.
+- `max_end_at` is always present (see §6.0). With no anti-snipe window
+  it equals `end_at` and the curve has zero duration (effectively
+  disabled regardless of `min_bid_curve` shape).
 - Bid locktime MUST be fixed up front to
   `max_end_at + settlement_grace`, so existing bidders never need
   to re-sign bids when the auction is extended.
@@ -784,6 +831,16 @@ Issuer MUST:
 - Verify the auction exists and is in `Active` state.
 - Use `extra._meta.clientPubkey` (SDK-injected) as the authenticated
   bidder pubkey; reject if absent or malformed.
+- **Reject self-bids:** if `bidderPubkey === auctionEvent.pubkey`,
+  refuse the path request. Sellers MUST NOT bid on their own
+  auctions; allowing it would let a seller pump the floor against
+  honest bidders.
+- **Enforce the bid floor:** compute the curve-aware floor at
+  `effective_t = max(server_now - BID_FLOOR_TIME_GRACE_SECONDS, end_at)`
+  using `min_bid_curve`, the current `top_bid` on the relay, and the
+  auction's `bid_increment` / `starting_bid`. Reject if
+  `intendedAmount < floor`. Return the enforced floor as
+  `acceptedFloor` in the response so the bidder UI can surface it.
 - Deduplicate by `(auctionEventId, bidderPubkey, requestId)` — the
   request id is generated server-side from a per-call nonce.
 - Apply rate limiting per bidder per auction.

@@ -14,10 +14,10 @@ const baseInput = {
 	reserve: '100',
 	startAt: at(NOW_SECONDS + 60),
 	endAt: at(NOW_SECONDS + 3_600),
-	antiSnipingEnabled: false,
-	antiSnipingWindowSeconds: '300',
-	antiSnipingExtensionSeconds: '300',
-	antiSnipingMaxExtensions: '12',
+	antiSnipeWindowMinutes: 0 as number,
+	minBidCurveShape: 'none' as 'none' | 'linear' | 'exponential',
+	minBidCurvePeakMultiplier: 2 as number,
+	settlementGracePreset: '1h' as '5min' | '1h' | '3h',
 	imageUrls: ['https://example.com/auction.png'],
 	shippings: [{ shippingRef: '30406:seller:standard', extraCost: '' }],
 	trustedMints: ['https://mint.example'],
@@ -81,10 +81,10 @@ describe('auction publish validation', () => {
 			startingBid: '00100',
 			bidIncrement: '0010',
 			reserve: '00120',
-			antiSnipingEnabled: true,
-			antiSnipingWindowSeconds: '0300',
-			antiSnipingExtensionSeconds: '0600',
-			antiSnipingMaxExtensions: '02',
+			antiSnipeWindowMinutes: 15,
+			minBidCurveShape: 'exponential',
+			minBidCurvePeakMultiplier: 5,
+			settlementGracePreset: '1h',
 			imageUrls: ['  https://example.com/auction.png  '],
 			shippings: [{ shippingRef: ' 30406:seller:standard ', extraCost: '0005' }],
 			trustedMints: ['  https://mint.example  '],
@@ -95,12 +95,13 @@ describe('auction publish validation', () => {
 		expect(validated.startingBid).toBe(100)
 		expect(validated.bidIncrement).toBe(10)
 		expect(validated.reserve).toBe(120)
-		expect(validated.antiSnipingWindowSeconds).toBe(300)
-		expect(validated.antiSnipingExtensionSeconds).toBe(600)
-		expect(validated.antiSnipingMaxExtensions).toBe(2)
+		expect(validated.antiSnipeWindowSeconds).toBe(15 * 60)
+		expect(validated.minBidCurveShape).toBe('exponential')
+		expect(validated.minBidCurvePeakMultiplier).toBe(5)
+		expect(validated.settlementGracePreset).toBe('1h')
 		expect(validated.imageUrls).toEqual(['https://example.com/auction.png'])
 		expect(validated.shippings).toEqual([{ shippingRef: '30406:seller:standard', extraCost: '5' }])
 		expect(validated.trustedMints).toEqual(['https://mint.example'])
-		expect(validated.maxEndAt).toBe(validated.endAt + 1_200)
+		expect(validated.maxEndAt).toBe(validated.endAt + 15 * 60)
 	})
 })

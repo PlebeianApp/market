@@ -1,8 +1,10 @@
 import {
 	AUCTION_BID_KIND,
 	AUCTION_SETTLEMENT_KIND,
+	BID_FLOOR_TIME_GRACE_SECONDS,
 	buildActiveAuctionBidChains,
 	compareAuctionBidChainPriority,
+	computeAuctionBidFloor,
 	getAuctionBidAmount,
 	getAuctionEffectiveEndAt,
 	getAuctionEndAt,
@@ -14,6 +16,7 @@ import {
 	type AuctionSettlementPlanResponse,
 	type AuctionSettlementPublishStatus,
 } from '../../lib/auctionSettlement'
+import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import { auctionP2pkPubkeysMatch, deriveAuctionChildP2pkPubkeyFromXpub, normalizeAuctionP2pkPubkey } from '../../lib/auctionP2pk'
 import { buildAuctionPathRegistry, findAuctionPathEntryByChildPubkey, type AuctionPathRegistryEntry } from '../../lib/auctionPathOracle'
 import type { AuctionContext } from './context'
@@ -102,7 +105,30 @@ export async function buildAuctionSettlementPlan(
 	// caused every settlement to resolve to `reserve_not_met` no matter
 	// what the bid amount was.
 	const registry = await fetchAuctionPathRegistry(ctx, params.auctionEventId)
-	const eligibleChains = buildActiveAuctionBidChains(getAuctionWindowValidBids(auctionEvent, bidEvents))
+
+	// AUCTIONS.md §6.1 — pre-compute the "top bid AT THE MOMENT just before
+	// this bid landed", per-bid. The floor for a bid B depends on the
+	// auction-wide top bid that B was trying to outbid, not the chain-
+	// internal predecessor. We walk bids in time order, keeping a running
+	// max and stamping each bid with the max-before-it.
+	const allWindowBids = getAuctionWindowValidBids(auctionEvent, bidEvents)
+	const bidsByTime = [...allWindowBids].sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
+	const topBidBeforeByBidId = new Map<string, number>()
+	{
+		let runningMax = 0
+		for (const bid of bidsByTime) {
+			topBidBeforeByBidId.set(bid.id, runningMax)
+			const amount = getAuctionBidAmount(bid)
+			if (amount > runningMax) runningMax = amount
+		}
+	}
+	const computeBidFloorAtCreated = (bid: NDKEvent): number => {
+		const topBefore = topBidBeforeByBidId.get(bid.id) ?? 0
+		const effectiveT = (bid.created_at || 0) - BID_FLOOR_TIME_GRACE_SECONDS
+		return computeAuctionBidFloor(auctionEvent, topBefore, effectiveT)
+	}
+
+	const eligibleChains = buildActiveAuctionBidChains(allWindowBids)
 		.filter((group) =>
 			group.chain.every((bid) => {
 				const bidChildPubkey = getAuctionTagValue(bid, 'child_pubkey')
@@ -135,6 +161,13 @@ export async function buildAuctionSettlementPlan(
 					if (!Number.isFinite(bidLocktime) || bidLocktime !== expectedLocktime) return false
 					if (lockPayload.locktime !== expectedLocktime) return false
 				}
+				// §6.1 — bid amount must clear the curve-aware floor at its
+				// own `created_at` (minus GRACE). A bidder who got a grant
+				// early then delayed publishing into the curve window can't
+				// cheat: the floor at publish time is what counts.
+				const bidAmount = getAuctionBidAmount(bid)
+				const floorAtBid = computeBidFloorAtCreated(bid)
+				if (bidAmount < floorAtBid) return false
 				return true
 			}),
 		)

@@ -3,8 +3,11 @@ import type { NDKEvent } from '@nostr-dev-kit/ndk'
 import {
 	buildActiveAuctionBidChains,
 	compareAuctionBidChainPriority,
+	computeAuctionBidFloor,
+	computeAuctionFloorMultiplier,
 	getAuctionCurrentPrice,
 	getAuctionEffectiveEndAt,
+	getAuctionMinBidCurve,
 	getAuctionRootEventId,
 	getAuctionWindowValidBids,
 	resolveAuctionVersionSet,
@@ -46,6 +49,8 @@ const makeAuction = (params: {
 	rootEventId?: string
 	extensionRule?: string
 	maxEndAt?: number
+	/** `<shape>:<peak>` (e.g. `linear:5.0`). Omit for no curve. */
+	minBidCurve?: string
 }): NDKEvent =>
 	({
 		id: params.id,
@@ -74,6 +79,7 @@ const makeAuction = (params: {
 			// Mirror the production invariant: max_end_at is always present.
 			// Defaults to end_at when no anti-sniping is configured.
 			['max_end_at', String(params.maxEndAt ?? params.endAt)],
+			...(params.minBidCurve ? ([['min_bid_curve', params.minBidCurve]] as string[][]) : []),
 		],
 	}) as NDKEvent
 
@@ -177,5 +183,139 @@ describe('auctionSettlement helpers', () => {
 		expect(getAuctionEffectiveEndAt(auction, bids)).toBe(320)
 		expect(getAuctionWindowValidBids(auction, bids).map((bid) => bid.id)).toEqual(['bid-early', 'bid-snipe-1', 'bid-snipe-2'])
 		expect(getAuctionCurrentPrice(auction, bids, 1000)).toBe(1300)
+	})
+})
+
+describe('min_bid_curve parsing + floor multiplier (AUCTIONS.md §6.1)', () => {
+	test('missing tag → none/1.0, no boost', () => {
+		const auction = makeAuction({ id: 'a', endAt: 200 })
+		expect(getAuctionMinBidCurve(auction).shape).toBe('none')
+		expect(getAuctionMinBidCurve(auction).peakMultiplier).toBe(1)
+		expect(computeAuctionFloorMultiplier({ atSeconds: 250, endAt: 200, maxEndAt: 300, shape: 'none', peakMultiplier: 1 })).toBe(1)
+	})
+
+	test('shape=none is a no-op regardless of peak', () => {
+		expect(
+			computeAuctionFloorMultiplier({ atSeconds: 300, endAt: 200, maxEndAt: 300, shape: 'none', peakMultiplier: 10 }),
+		).toBe(1)
+	})
+
+	test('zero-duration window disables the curve', () => {
+		// max_end_at == end_at — no anti-snipe window picked by seller.
+		expect(
+			computeAuctionFloorMultiplier({ atSeconds: 300, endAt: 200, maxEndAt: 200, shape: 'exponential', peakMultiplier: 5 }),
+		).toBe(1)
+	})
+
+	test('peak=1 is a no-op (no flat-floor regression)', () => {
+		expect(
+			computeAuctionFloorMultiplier({ atSeconds: 250, endAt: 200, maxEndAt: 300, shape: 'linear', peakMultiplier: 1 }),
+		).toBe(1)
+	})
+
+	test('linear: midpoint = (1 + peak) / 2', () => {
+		expect(
+			computeAuctionFloorMultiplier({ atSeconds: 250, endAt: 200, maxEndAt: 300, shape: 'linear', peakMultiplier: 5 }),
+		).toBeCloseTo(3, 10)
+	})
+
+	test('exponential: midpoint = sqrt(peak)', () => {
+		const result = computeAuctionFloorMultiplier({ atSeconds: 250, endAt: 200, maxEndAt: 300, shape: 'exponential', peakMultiplier: 9 })
+		expect(result).toBeCloseTo(3, 10)
+	})
+
+	test('boundary: at exactly end_at → multiplier = 1', () => {
+		expect(
+			computeAuctionFloorMultiplier({ atSeconds: 200, endAt: 200, maxEndAt: 300, shape: 'exponential', peakMultiplier: 10 }),
+		).toBe(1)
+	})
+
+	test('boundary: at or beyond max_end_at → multiplier = peak', () => {
+		expect(
+			computeAuctionFloorMultiplier({ atSeconds: 300, endAt: 200, maxEndAt: 300, shape: 'linear', peakMultiplier: 7 }),
+		).toBe(7)
+		expect(
+			computeAuctionFloorMultiplier({ atSeconds: 500, endAt: 200, maxEndAt: 300, shape: 'exponential', peakMultiplier: 7 }),
+		).toBe(7)
+	})
+
+	test('parser clamps absurd peak to [1, 100]', () => {
+		const auction = makeAuction({ id: 'a', endAt: 200, minBidCurve: 'linear:9999.0' })
+		expect(getAuctionMinBidCurve(auction).peakMultiplier).toBe(100)
+	})
+
+	test('parser tolerates malformed tag → falls back to none/1', () => {
+		const auction = makeAuction({ id: 'a', endAt: 200, minBidCurve: 'jellybean:42' })
+		expect(getAuctionMinBidCurve(auction).shape).toBe('none')
+		expect(getAuctionMinBidCurve(auction).peakMultiplier).toBe(1)
+	})
+})
+
+describe('computeAuctionBidFloor (AUCTIONS.md §6.1)', () => {
+	test('first-bid case (top_bid=0): floor = starting_bid × multiplier', () => {
+		const auction = makeAuction({
+			id: 'a',
+			startAt: 100,
+			endAt: 200,
+			maxEndAt: 300,
+			startingBid: 1000,
+			bidIncrement: 50,
+			minBidCurve: 'linear:5.0',
+		})
+		// At end_at: multiplier=1 → floor = starting_bid
+		expect(computeAuctionBidFloor(auction, 0, 200)).toBe(1000)
+		// Midpoint of window: multiplier=3 → floor = 3000
+		expect(computeAuctionBidFloor(auction, 0, 250)).toBe(3000)
+		// At max_end_at: multiplier=5 → floor = 5000
+		expect(computeAuctionBidFloor(auction, 0, 300)).toBe(5000)
+	})
+
+	test('subsequent-bid case: floor = (top_bid + bid_increment) × multiplier', () => {
+		const auction = makeAuction({
+			id: 'a',
+			startAt: 100,
+			endAt: 200,
+			maxEndAt: 300,
+			startingBid: 1000,
+			bidIncrement: 50,
+			minBidCurve: 'linear:5.0',
+		})
+		// Before curve: floor = top + increment = 2050
+		expect(computeAuctionBidFloor(auction, 2000, 150)).toBe(2050)
+		// Midpoint: (top + inc) × 3 = 2050 × 3 = 6150
+		expect(computeAuctionBidFloor(auction, 2000, 250)).toBe(6150)
+	})
+
+	test('rounds up: fractional multiplier is never shaved by the bidder', () => {
+		const auction = makeAuction({
+			id: 'a',
+			startAt: 100,
+			endAt: 200,
+			maxEndAt: 300,
+			startingBid: 100,
+			bidIncrement: 1,
+			minBidCurve: 'exponential:2.0',
+		})
+		// At t=210 (10% into 100-second window) with exp+peak=2: multiplier = 2^0.1 ≈ 1.0718
+		// floor for first bid = ceil(100 × 1.0718) = 108
+		expect(computeAuctionBidFloor(auction, 0, 210)).toBe(108)
+	})
+
+	test('monotonic non-decreasing over time (no surprises for bidders)', () => {
+		const auction = makeAuction({
+			id: 'a',
+			startAt: 100,
+			endAt: 200,
+			maxEndAt: 300,
+			startingBid: 1000,
+			bidIncrement: 50,
+			minBidCurve: 'exponential:10.0',
+		})
+		let previous = -Infinity
+		for (let t = 150; t <= 320; t += 1) {
+			const floor = computeAuctionBidFloor(auction, 5000, t)
+			expect(floor).toBeGreaterThanOrEqual(previous)
+			previous = floor
+		}
 	})
 })

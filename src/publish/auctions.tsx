@@ -11,7 +11,7 @@ import { ORDER_MESSAGE_TYPE, ORDER_PROCESS_KIND } from '@/lib/schemas/order'
 import { configStore } from '@/lib/stores/config'
 import { ndkActions } from '@/lib/stores/ndk'
 import { PlebeianAuctionClient, type RequestPathOutput, type RequestSettlementOutput } from '@/lib/ctxcn-clients/PlebeianAuctionClient'
-import { getAuctionSettlementGraceSeconds, nip60Actions, type AuctionP2pkKeyScheme } from '@/lib/stores/nip60'
+import { nip60Actions, type AuctionP2pkKeyScheme } from '@/lib/stores/nip60'
 import type { ProductShippingSelectionInput } from '@/lib/utils/productShippingSelections'
 import { verifyAuctionPathGrant } from '@/lib/auctionP2pk'
 import { rememberAuctionPathGrant } from '@/lib/auctionPathOracle'
@@ -27,6 +27,40 @@ export interface AuctionSpecEntry {
 	value: string
 }
 
+/**
+ * Settlement grace presets (AUCTIONS.md §4.1). Seconds between
+ * `max_end_at` and the bid's Cashu locktime — i.e. how long the seller
+ * has to publish the kind-1024 settlement after bidding closes.
+ */
+export const AUCTION_SETTLEMENT_GRACE_PRESETS = {
+	'5min': 300,
+	'1h': 3600,
+	'3h': 10800,
+} as const
+export type AuctionSettlementGracePreset = keyof typeof AUCTION_SETTLEMENT_GRACE_PRESETS
+
+/**
+ * Anti-snipe curve shapes (AUCTIONS.md §6.1). Controls how the bid
+ * floor scales in `(end_at, max_end_at]`.
+ */
+export type AuctionMinBidCurveShape = 'none' | 'linear' | 'exponential'
+
+/**
+ * Peak-multiplier presets for the anti-snipe curve. Applied as
+ * `floor = baseline × peak` at `t = max_end_at`. 1.0 is implicit when
+ * `shape = 'none'`.
+ */
+export const AUCTION_MIN_BID_CURVE_PEAK_PRESETS = [2, 5, 10] as const
+export type AuctionMinBidCurvePeakPreset = (typeof AUCTION_MIN_BID_CURVE_PEAK_PRESETS)[number]
+
+/**
+ * Anti-snipe window presets — minutes added to `end_at` to compute
+ * `max_end_at`. Drives the duration of the curve. `0` disables the
+ * window entirely (max_end_at = end_at, no curve regardless of shape).
+ */
+export const AUCTION_ANTI_SNIPE_WINDOW_PRESETS_MINUTES = [0, 5, 15, 30] as const
+export type AuctionAntiSnipeWindowMinutesPreset = (typeof AUCTION_ANTI_SNIPE_WINDOW_PRESETS_MINUTES)[number]
+
 export interface AuctionFormData {
 	title: string
 	summary: string
@@ -36,10 +70,22 @@ export interface AuctionFormData {
 	reserve: string
 	startAt?: string
 	endAt: string
-	antiSnipingEnabled: boolean
-	antiSnipingWindowSeconds: string
-	antiSnipingExtensionSeconds: string
-	antiSnipingMaxExtensions: string
+	/**
+	 * Seconds added to `end_at` to compute `max_end_at`. Zero = no
+	 * anti-snipe window. When zero the curve has zero duration and is
+	 * effectively disabled regardless of `minBidCurveShape`.
+	 */
+	antiSnipeWindowMinutes: AuctionAntiSnipeWindowMinutesPreset
+	/** Shape of the anti-snipe floor curve in the `(end_at, max_end_at]` window. */
+	minBidCurveShape: AuctionMinBidCurveShape
+	/** Floor multiplier applied at `t = max_end_at`. Only relevant when shape ≠ none. */
+	minBidCurvePeakMultiplier: AuctionMinBidCurvePeakPreset
+	/**
+	 * Settlement grace preset — chosen as `5min`/`1h`/`3h` in the UI,
+	 * mapped to seconds at publish time via
+	 * `AUCTION_SETTLEMENT_GRACE_PRESETS[preset]`.
+	 */
+	settlementGracePreset: AuctionSettlementGracePreset
 	mainCategory: string
 	categories: string[]
 	imageUrls: string[]
@@ -85,7 +131,18 @@ export interface AuctionBidFormData {
 	 */
 	pathIssuerPubkey: string
 	p2pkXpub: string
-	mint?: string
+	/**
+	 * Ordered list of the auction's trusted mints (`mint` tags on
+	 * kind 30408). The lock flow walks this list and picks the first
+	 * one where the bidder's NIP-60 wallet has enough balance for the
+	 * delta amount. Falls back to `DEFAULT_BID_MINT` only when the list
+	 * is empty (legacy bid forms that didn't pass mints).
+	 *
+	 * Replaces the older `mint?: string` field which always picked
+	 * the seller's first declared mint regardless of whether the
+	 * bidder actually had any sats there.
+	 */
+	mintCandidates: string[]
 }
 
 export interface AuctionPathGrantResponse {
@@ -255,16 +312,19 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 	const startingBid = String(validated.startingBid)
 	const bidIncrement = String(validated.bidIncrement)
 	const reserve = String(validated.reserve)
-	const extensionRule = validated.antiSnipingEnabled
-		? `anti_sniping:${validated.antiSnipingWindowSeconds}:${validated.antiSnipingExtensionSeconds}`
-		: 'none'
-	// `max_end_at` is the SECOND of the three protocol timestamps:
-	//   end_at      → nominal close (extendable via anti-sniping)
-	//   max_end_at  → hard bidding cutoff (this value)
-	//   locktime    → max_end_at + settlement_grace_seconds, mint-enforced refund opens
-	// We always emit it — even when anti-sniping is off — so the locktime
-	// computation downstream is unambiguous and bidders never have to guess
-	// from a missing tag. With anti-sniping off, it equals end_at.
+	// AUCTIONS.md §6.0 — the three timestamps:
+	//   end_at      → nominal close. Floor stays flat in [start_at, end_at].
+	//   max_end_at  → hard bidding cutoff. Equals end_at + window_seconds
+	//                 where window_seconds is the seller-chosen anti-snipe
+	//                 window (or 0 → max_end_at = end_at, no curve).
+	//   locktime    → max_end_at + settlement_grace, mint-enforced refund opens.
+	//
+	// `min_bid_curve` defines the floor ramp in `(end_at, max_end_at]`.
+	// AUCTIONS.md §6.1 — replaces the legacy `extension_rule:anti_sniping:*`
+	// scheme. Floor is monotonic over time; bidder UI displays the floor
+	// at `client_now`, server enforces with a 5 s grace.
+	const minBidCurveTagValue = formData.minBidCurveShape === 'none' ? 'none:1.0' : `${formData.minBidCurveShape}:${formData.minBidCurvePeakMultiplier}.0`
+	const settlementGraceSeconds = AUCTION_SETTLEMENT_GRACE_PRESETS[formData.settlementGracePreset]
 	const keyScheme: AuctionP2pkKeyScheme = 'hd_p2pk'
 	const pathIssuerPubkey = getAuctionPathIssuerPubkeyOrThrow(formData.pathIssuerPubkey)
 	const p2pkXpub = await nip60Actions.getAuctionP2pkXpub()
@@ -302,9 +362,9 @@ export const createAuctionEvent = async (formData: AuctionFormData, signer: NDKS
 		['reserve', reserve],
 		...validated.trustedMints.map((mint) => ['mint', mint] as NDKTag),
 		['path_issuer', pathIssuerPubkey],
-		['extension_rule', extensionRule],
 		['max_end_at', String(validated.maxEndAt)],
-		['settlement_grace', String(getAuctionSettlementGraceSeconds())],
+		['settlement_grace', String(settlementGraceSeconds)],
+		['min_bid_curve', minBidCurveTagValue],
 		['key_scheme', keyScheme],
 		['p2pk_xpub', p2pkXpub],
 		['settlement_policy', AUCTION_SETTLEMENT_POLICY],
@@ -520,7 +580,12 @@ export const publishAuctionBid = async (formData: AuctionBidFormData, signer: ND
 
 	const lockedBid = await nip60Actions.lockAuctionBidFunds({
 		amount: deltaAmount,
-		mint: formData.mint || DEFAULT_BID_MINT,
+		// Pass the auction's full trusted-mint list. `lockAuctionBidFunds`
+		// walks it in seller-declared order and picks the first mint
+		// where the bidder's wallet has enough balance for the delta —
+		// fixes the "wrong mint" failure when the bidder has funds at
+		// e.g. mint #4 but the seller listed minibits first.
+		preferredMints: formData.mintCandidates.length > 0 ? formData.mintCandidates : [DEFAULT_BID_MINT],
 		locktime,
 		refundPubkey: bidderWalletP2pk,
 		lockPubkey: grant.childPubkey,

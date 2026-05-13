@@ -26,6 +26,7 @@ export const createRequestPathHandler = (ctx: AuctionContext) => {
 				auctionCoordinates: args.auctionCoordinates,
 				bidderPubkey,
 				bidderRefundPubkey: args.bidderRefundPubkey,
+				intendedAmount: args.intendedAmount,
 			})
 			return {
 				content: [],
@@ -37,10 +38,10 @@ export const createRequestPathHandler = (ctx: AuctionContext) => {
 					pathIssuerPubkey: grant.pathIssuerPubkey,
 					issuedAt: grant.issuedAt,
 					expiresAt: grant.expiresAt,
-					// `acceptedFloor` is the floor enforced for this grant.
-					// For now equals `intendedAmount`; the upcoming anti-
-					// snipe curve will override this server-side.
-					acceptedFloor: args.intendedAmount,
+					// AUCTIONS.md §6.1 — the curve-aware floor the issuer
+					// enforced at request time. Bidder UI surfaces this
+					// so the next click can be priced correctly.
+					acceptedFloor: grant.acceptedFloor,
 				},
 			}
 		} catch (error) {
